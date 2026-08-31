@@ -5,13 +5,13 @@
       "label": "Plaster wall",
       "unit": "vtmb:material:plaster/609stuc",
       "material": "/ElysiumBaked/Materials/plaster/MI_609stuc",
-      "shape": "both"
+      "shape": "sphere"
     },
     {
       "label": "Brick wall",
       "unit": "vtmb:material:brick/bldg261la",
       "material": "/ElysiumBaked/Materials/brick/MI_bldg261la",
-      "shape": "both"
+      "shape": "sphere"
     },
     {
       "label": "Tiled floor",
@@ -41,12 +41,12 @@
       "label": "Authored fixed cube (envmap/hav)",
       "unit": "vtmb:material:brick/building1windowa",
       "material": "/ElysiumBaked/Materials/brick/MI_building1windowa",
-      "shape": "both"
+      "shape": "sphere"
     },
     {
-      "label": "Glass (translucent)",
-      "unit": "vtmb:material:glass/glass01",
-      "material": "/ElysiumBaked/Materials/glass/MI_glass01",
+      "label": "Glass (translucent, fixed cube)",
+      "unit": "vtmb:material:maps/sm_tattoo/glass/glass01",
+      "material": "/ElysiumBaked/Materials/maps/sm_tattoo/glass/MI_glass01",
       "shape": "plane"
     },
     {
@@ -113,12 +113,24 @@
       "label": "Concrete (Lit baseline)",
       "unit": "vtmb:material:concrete/concrete5",
       "material": "/ElysiumBaked/Materials/concrete/MI_concrete5",
-      "shape": "both"
+      "shape": "sphere"
     },
     {
       "label": "Wood floor",
       "unit": "vtmb:material:wood/aspflra",
       "material": "/ElysiumBaked/Materials/wood/MI_aspflra",
+      "shape": "plane"
+    },
+    {
+      "label": "Patched glass (map copy instance)",
+      "unit": "vtmb:material:maps/ch_cloud_1/glass/glass01",
+      "material": "/ElysiumBaked/Materials/maps/ch_cloud_1/glass/MI_glass01",
+      "shape": "plane"
+    },
+    {
+      "label": "Patched water depth insert",
+      "unit": "vtmb:material:maps/ch_hub_1/water/warrenwater_depth_20",
+      "material": "/ElysiumBaked/Materials/maps/ch_hub_1/water/MI_warrenwater_depth_20",
       "shape": "plane"
     }
   ]

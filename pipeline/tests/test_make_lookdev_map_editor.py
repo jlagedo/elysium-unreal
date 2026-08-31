@@ -57,6 +57,9 @@ class FakeActor:
     def set_actor_label(self, label):
         self.label = label
 
+    def get_actor_label(self):
+        return self.label
+
     def set_actor_scale3d(self, scale):
         self.scale = scale
 
@@ -80,6 +83,9 @@ class FakeActorSubsystem:
         actor = FakeActor(getattr(cls, "__name__", str(cls)), location, rotation)
         self.editor.actors.append(actor)
         return actor
+
+    def get_all_level_actors(self):
+        return list(self.editor.actors)
 
 
 class FakeAsset:
@@ -141,6 +147,7 @@ def _fake_unreal(editor):
         ComponentMobility=SimpleNamespace(MOVABLE="MOVABLE"),
         SkyLightSourceType=SimpleNamespace(SLS_SPECIFIED_CUBEMAP="SLS_SPECIFIED_CUBEMAP"),
         AutoExposureMethod=SimpleNamespace(AEM_MANUAL="AEM_MANUAL"),
+        HorizTextAligment=SimpleNamespace(EHTA_CENTER="EHTA_CENTER"),
         GameModeBase=type("GameModeBase", (), {}),
     )
 
@@ -152,10 +159,17 @@ def _load(editor):
     module = importlib.util.module_from_spec(spec)
     fake = _fake_unreal(editor)
     with mock.patch.dict(sys.modules, {"unreal": fake}):
-        spec.loader.exec_module(module)   # main() runs once at import, against the tracked set
+        with pytest.raises(SystemExit):
+            # main() runs once at import, against the tracked set; every entry in it is missing
+            # against this empty fake registry, so the run now fails loudly (finding D) instead
+            # of quietly succeeding -- expected here, not this test's scenario.
+            spec.loader.exec_module(module)
     module.unreal = fake
-    # The import-time run is real (it reads the tracked, committed lookdev_set.json against an
-    # empty fake asset registry) but is not any one test's scenario -- start each test clean.
+    # The engine debug material the placeholder path names always exists on a real machine; the
+    # fake registry starts empty, so every test that exercises a placeholder needs it registered.
+    editor.assets.setdefault(
+        module.PLACEHOLDER_MATERIAL_PATH, FakeAsset(module.PLACEHOLDER_MATERIAL_PATH))
+    # Start each test clean.
     editor.actors.clear()
     editor.saved.clear()
     editor.worlds.clear()
@@ -175,27 +189,30 @@ def _entry(label, unit, material, shape):
     return {"label": label, "unit": unit, "material": material, "shape": shape}
 
 
-# --- the default tracked set loads and runs cleanly at import ------------------------------------
+# --- the default tracked set loads and runs at import, and now fails loudly on missing ---------
 
 
-def test_module_import_runs_the_default_tracked_set():
+def test_module_import_runs_the_default_tracked_set_and_fails_loudly():
     editor = FakeEditor()
     # Before _load()'s own cleanup, the import-time `main()` call already built the tracked,
     # committed review set (no -LookdevSet= override) against an editor with no assets at all --
-    # every entry lands as a placeholder, and the map still saves. Check that directly.
+    # every entry lands on the loud placeholder, the map still saves, and the run then exits
+    # non-zero because nothing passed -LookdevAllowMissing=1. Check that directly.
     spec = importlib.util.spec_from_file_location(
         "elysium_test_make_lookdev_map_default", REPO / "pipeline/unreal/make_lookdev_map.py")
     module = importlib.util.module_from_spec(spec)
     fake = _fake_unreal(editor)
     with mock.patch.dict(sys.modules, {"unreal": fake}):
-        spec.loader.exec_module(module)
+        with pytest.raises(SystemExit) as failed:
+            spec.loader.exec_module(module)
+    assert failed.value.code == 1
     tracked = json.loads((REPO / "pipeline/unreal/lookdev_set.json").read_text(encoding="utf-8"))
     entry_count = len(tracked["entries"])
     assert len(editor.warnings) == entry_count      # every entry missing against an empty registry
     assert editor.saved == [(editor.worlds[0], module.DEFAULT_MAP_PATH)]
 
 
-# --- grid positions are deterministic --------------------------------------------------------
+# --- grid positions and centroid are deterministic --------------------------------------------
 
 
 def test_grid_positions_are_deterministic():
@@ -206,6 +223,33 @@ def test_grid_positions_are_deterministic():
     assert module.grid_position(7) == (2100.0, 0.0)
     assert module.grid_position(8) == (0.0, 300.0)         # wraps after GRID_COLUMNS
     assert module.grid_position(9) == (300.0, 300.0)
+
+
+def test_grid_centroid_covers_a_partial_last_row():
+    editor = FakeEditor()
+    module = _load(editor)
+    assert module.grid_centroid(0) == (0.0, 0.0)
+    assert module.grid_centroid(1) == (0.0, 0.0)
+    assert module.grid_centroid(8) == (1050.0, 0.0)
+    assert module.grid_centroid(22) == (1050.0, 300.0)      # 3 rows, last one partial
+
+
+# --- label wrapping -----------------------------------------------------------------------------
+
+
+def test_wrap_label_leaves_short_text_on_one_line():
+    editor = FakeEditor()
+    module = _load(editor)
+    assert module.wrap_label("Chrome fixture") == "Chrome fixture"
+
+
+def test_wrap_label_keeps_every_line_within_the_pitch_budget():
+    editor = FakeEditor()
+    module = _load(editor)
+    text = "Glass (translucent, fixed cube)"
+    wrapped = module.wrap_label(text)
+    assert all(len(line) <= module.LABEL_MAX_CHARS_PER_LINE for line in wrapped.split("\n"))
+    assert wrapped.replace("\n", " ") == text                # no word dropped or reordered
 
 
 # --- shapes place the right actor set ---------------------------------------------------------
@@ -244,26 +288,27 @@ def test_plane_shape_places_only_one_plane_and_a_label():
     assert classes == ["StaticMeshActor", "TextRenderActor"]
 
 
-def test_both_shape_places_two_planes_and_a_sphere():
+def test_label_actor_is_rotated_to_face_the_aisle_and_sits_in_front_not_under():
     editor = FakeEditor()
     module = _load(editor)
-    material_path = "/ElysiumBaked/Materials/plaster/MI_609stuc"
+    material_path = "/ElysiumBaked/Materials/tile/MI_apaflra"
     editor.assets[material_path] = FakeAsset(material_path)
-    entry = _entry("Plaster wall", "vtmb:material:plaster/609stuc", material_path, "both")
+    entry = _entry("Tiled floor", "vtmb:material:tile/apaflra", material_path, "plane")
 
-    module.place_entry(editor.actor_subsystem, 2, entry)
+    module.place_entry(editor.actor_subsystem, 1, entry)
 
-    classes = [a.class_name for a in editor.actors]
-    assert classes == ["StaticMeshActor", "StaticMeshActor", "StaticMeshActor", "TextRenderActor"]
-    first_plane, sphere, second_plane, _label = editor.actors
-    assert first_plane.location == (600.0, 0.0, 0.0)
-    assert second_plane.location == (600.0, 0.0 + module.SECOND_PLANE_OFFSET_CM, 0.0)
-
-
-# --- missing asset is a labelled placeholder, not a crash --------------------------------------
+    label = next(a for a in editor.actors if a.class_name == "TextRenderActor")
+    x, y = module.grid_position(1)
+    assert label.location == (x, y - module.LABEL_FRONT_OFFSET_CM, module.LABEL_Z_CM)
+    assert label.location[2] > 0.0                            # above the floor, not under it
+    assert label.rotation == (0.0, module.LABEL_YAW_DEGREES, 0.0)
+    assert label.text_render.props["horizontal_alignment"] == "EHTA_CENTER"
 
 
-def test_missing_material_is_a_placeholder_not_a_crash():
+# --- missing asset is a loud placeholder, not a crash -------------------------------------------
+
+
+def test_missing_material_is_a_loud_placeholder_not_a_crash():
     editor = FakeEditor()
     module = _load(editor)
     entry = _entry(
@@ -274,9 +319,12 @@ def test_missing_material_is_a_placeholder_not_a_crash():
 
     assert placed is False
     plane = editor.actors[0]
-    assert "materials" not in plane.static_mesh_component.props
+    assert (plane.static_mesh_component.props["materials"][0].path
+            == module.PLACEHOLDER_MATERIAL_PATH)
     assert len(editor.warnings) == 1
     assert "vtmb:material:nowhere/absent" in editor.warnings[0]
+    label = next(a for a in editor.actors if a.class_name == "TextRenderActor")
+    assert "[MISSING]" in label.text_render.props["text"]
 
 
 # --- WorldSettings.default_game_mode is the boot-plan bypass ------------------------------------
@@ -293,7 +341,8 @@ def test_build_sets_default_game_mode_and_saves(tmp_path):
                "/ElysiumBaked/Materials/nowhere/MI_absent", "plane"),
     ])
 
-    placed, missing = module.build(str(set_path), "/ElysiumBaked/Lookdev/Materials")
+    placed, missing = module.build(
+        str(set_path), "/ElysiumBaked/Lookdev/Materials", str(tmp_path / "lookdev_report.json"))
 
     assert (placed, missing) == (1, 1)
     world = editor.worlds[-1]
@@ -310,7 +359,31 @@ def test_build_sets_default_game_mode_and_saves(tmp_path):
     assert rig_classes.count("PlayerStart") == 1
 
 
-def test_post_process_volume_pins_manual_exposure_unbound():
+def test_build_writes_a_report_beside_placed_missing_and_actors(tmp_path):
+    editor = FakeEditor()
+    module = _load(editor)
+    material_path = "/ElysiumBaked/Materials/plaster/MI_609stuc"
+    editor.assets[material_path] = FakeAsset(material_path)
+    set_path = _write_set(tmp_path, [
+        _entry("Plaster wall", "vtmb:material:plaster/609stuc", material_path, "sphere"),
+        _entry("Ghost", "vtmb:material:nowhere/absent",
+               "/ElysiumBaked/Materials/nowhere/MI_absent", "plane"),
+    ])
+    report_path = tmp_path / "lookdev_report.json"
+
+    placed, missing = module.build(
+        str(set_path), "/ElysiumBaked/Lookdev/Materials", str(report_path))
+
+    assert (placed, missing) == (1, 1)
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["map"] == "/ElysiumBaked/Lookdev/Materials"
+    assert report["placed"] == 1
+    assert [row["label"] for row in report["missing"]] == ["Ghost"]
+    assert report["missing"][0]["unit"] == "vtmb:material:nowhere/absent"
+    assert "PlayerStart" in report["actors"]
+
+
+def test_post_process_volume_pins_manual_exposure_without_the_physical_camera():
     editor = FakeEditor()
     module = _load(editor)
     module.place_rig(editor.actor_subsystem)
@@ -318,9 +391,15 @@ def test_post_process_volume_pins_manual_exposure_unbound():
     ppv = next(a for a in editor.actors if a.class_name == "PostProcessVolume")
     assert ppv.props["unbound"] is True
     settings = ppv.props["settings"]
+    assert settings.props["bOverride_AutoExposureMethod"] is True
     assert settings.props["auto_exposure_method"] == "AEM_MANUAL"
-    assert settings.props["auto_exposure_min_brightness"] == 1.0
-    assert settings.props["auto_exposure_max_brightness"] == 1.0
+    # The white point AEM_Manual computes comes from the physical-camera fields unless this is
+    # off (PostProcessEyeAdaptation.cpp's CalculateManualAutoExposure) -- pinned off so the rig
+    # is correct on its own, not because some other cvar happens to help it.
+    assert settings.props["bOverride_AutoExposureApplyPhysicalCameraExposure"] is True
+    assert settings.props["AutoExposureApplyPhysicalCameraExposure"] is False
+    assert settings.props["bOverride_AutoExposureBias"] is True
+    assert settings.props["AutoExposureBias"] == 0.0
 
 
 def test_directional_light_pitch_and_intensity():
@@ -332,6 +411,23 @@ def test_directional_light_pitch_and_intensity():
     assert sun.rotation == (-45.0, 0.0, 0.0)
     assert sun.light_component.props["intensity"] == 3.0
     assert sun.light_component.props["mobility"] == "MOVABLE"
+
+
+def test_point_lights_are_centred_on_the_grid_and_reach_across_it():
+    editor = FakeEditor()
+    module = _load(editor)
+    centroid = (900.0, 300.0)
+
+    module.place_rig(editor.actor_subsystem, centroid)
+
+    points = [a for a in editor.actors if a.class_name == "PointLight"]
+    assert len(points) == 3
+    cx, cy = centroid
+    for point, (px, py, pz) in zip(points, module.POINT_LIGHT_OFFSETS_CM):
+        assert point.location == (cx + px, cy + py, pz)
+        assert point.light_component.props["mobility"] == "MOVABLE"
+        assert (point.light_component.props["attenuation_radius"]
+                == module.POINT_LIGHT_ATTENUATION_RADIUS_CM)
 
 
 def test_player_start_location():
@@ -377,6 +473,39 @@ def test_main_exits_non_zero_when_save_map_fails(tmp_path):
     assert editor.errors
 
 
+def test_main_exits_non_zero_when_entries_are_missing(tmp_path):
+    editor = FakeEditor()
+    module = _load(editor)
+    set_path = _write_set(tmp_path, [
+        _entry("Ghost", "vtmb:material:nowhere/absent",
+               "/ElysiumBaked/Materials/nowhere/MI_absent", "plane"),
+    ])
+    editor.command_line = '"-LookdevSet=%s" "-LookdevMap=/ElysiumBaked/Lookdev/Materials"' % set_path
+
+    with pytest.raises(SystemExit) as failed:
+        module.main()
+
+    assert failed.value.code == 1
+    assert editor.saved                                       # still saved before failing
+
+
+def test_main_allows_missing_entries_with_the_override_flag(tmp_path):
+    editor = FakeEditor()
+    module = _load(editor)
+    set_path = _write_set(tmp_path, [
+        _entry("Ghost", "vtmb:material:nowhere/absent",
+               "/ElysiumBaked/Materials/nowhere/MI_absent", "plane"),
+    ])
+    editor.command_line = (
+        '"-LookdevSet=%s" "-LookdevMap=/ElysiumBaked/Lookdev/Materials" -LookdevAllowMissing=1'
+        % set_path
+    )
+
+    module.main()                                             # does not raise
+
+    assert editor.saved
+
+
 def test_main_honours_command_line_overrides(tmp_path):
     editor = FakeEditor()
     module = _load(editor)
@@ -384,8 +513,13 @@ def test_main_honours_command_line_overrides(tmp_path):
     editor.assets[material_path] = FakeAsset(material_path)
     set_path = _write_set(
         tmp_path, [_entry("Plaster wall", "vtmb:material:plaster/609stuc", material_path, "sphere")])
-    editor.command_line = '"-LookdevSet=%s" "-LookdevMap=/Test/CustomMap"' % set_path
+    report_path = tmp_path / "custom_report.json"
+    editor.command_line = (
+        '"-LookdevSet=%s" "-LookdevMap=/Test/CustomMap" "-LookdevReport=%s"'
+        % (set_path, report_path)
+    )
 
     module.main()
 
     assert editor.saved and editor.saved[0][1] == "/Test/CustomMap"
+    assert report_path.is_file()

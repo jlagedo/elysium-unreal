@@ -452,16 +452,42 @@ def import_materials(config, runner, manifest_path, *, force: bool = False) -> N
 #: editor boot plus a scene build and a save, so anything past this is a hang, not a long run.
 LOOKDEV_MAP_TIMEOUT_SECONDS = 15 * 60.0
 
+#: Mirrors `pipeline/unreal/make_lookdev_map.py`'s own `DEFAULT_SET_PATH`/`DEFAULT_MAP_PATH` --
+#: kept here too so this launcher can pass both flags explicitly on every run rather than only
+#: when a caller overrides one, which is what let a caller override the map but silently keep the
+#: default set, or vice-versa, unnoticed.
+LOOKDEV_SET_PATH = "pipeline/unreal/lookdev_set.json"
+LOOKDEV_MAP_PATH = "/ElysiumBaked/Lookdev/Materials"
+LOOKDEV_REPORT_NAME = "lookdev_report.json"
 
-def make_lookdev_map(config, runner, *, set_path=None) -> None:
+
+def lookdev_report_path(config) -> Path:
+    if config.work_root is None:
+        raise UnrealFailure("the lookdev map needs ELYSIUM_WORK_ROOT for its report")
+    return config.work_root / "reports" / "lookdev" / LOOKDEV_REPORT_NAME
+
+
+def make_lookdev_map(config, runner, *, set_path=None, map_path=None,
+                      allow_missing: bool = False) -> dict | None:
     """Run `pipeline/unreal/make_lookdev_map.py`, SF-4.7's generated review map.
 
     Lays the tracked review set (`pipeline/unreal/lookdev_set.json`, or `set_path` when given)
-    out on a grid under `/ElysiumBaked/Lookdev/Materials` and saves it. A review-set entry whose
-    `MI_` instance does not exist yet is placed as a labelled placeholder rather than failing the
-    run, so this can be generated before Phase 4's editor import (SF-4.5) has landed every asset
-    (`docs/project/seam_migration.md` -> Plan -> SF-4.7).
+    out on a grid under `/ElysiumBaked/Lookdev/Materials` (or `map_path`) and saves it. A
+    review-set entry whose `MI_` instance does not exist yet is placed on a loud placeholder
+    material rather than a crash, so this can be generated before Phase 4's editor import (SF-4.5)
+    has landed every asset (`docs/project/seam_migration.md` -> Plan -> SF-4.7) -- but the editor
+    process itself now exits non-zero, raising `UnrealFailure` here, when any entry is missing,
+    unless `allow_missing` says that is expected right now.
+
+    Returns the `lookdev_report.json` body (`{map, placed, missing: [...], actors: [...]}`) when
+    the report file is on disk after the run, else None -- best-effort, since a run that raised
+    `UnrealFailure` for an unrelated reason (a bad path, a crash) may never have gotten there.
+    Raises `UnrealFailure` (propagated from a non-zero editor exit, e.g. missing entries with
+    `allow_missing` False) after the report -- if any -- is already on disk, so a caller that
+    wants the placed/missing counts on failure too can call `read_lookdev_report` itself.
     """
+    report_path = lookdev_report_path(config)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     _run(
         config,
         runner,
@@ -470,7 +496,10 @@ def make_lookdev_map(config, runner, *, set_path=None) -> None:
             str(config.project),
             "-run=pythonscript",
             f"-script={config.repo_root / 'pipeline/unreal/make_lookdev_map.py'}",
-            *([f"-LookdevSet={set_path}"] if set_path else []),
+            f"-LookdevSet={set_path or (config.repo_root / LOOKDEV_SET_PATH)}",
+            f"-LookdevMap={map_path or LOOKDEV_MAP_PATH}",
+            f"-LookdevReport={report_path}",
+            *(["-LookdevAllowMissing=1"] if allow_missing else []),
             "-AllowCommandletRendering",
             "-unattended",
             "-nosplash",
@@ -480,6 +509,18 @@ def make_lookdev_map(config, runner, *, set_path=None) -> None:
         ],
         timeout=LOOKDEV_MAP_TIMEOUT_SECONDS,
     )
+    return read_lookdev_report(report_path)
+
+
+def read_lookdev_report(report_path: Path) -> dict | None:
+    """The `lookdev_report.json` body, or None when it is missing or unreadable."""
+    if not report_path.is_file():
+        return None
+    try:
+        with report_path.open(encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
 
 
 #: Maps per editor process. The commandlet garbage-collects between maps, but loaded texture

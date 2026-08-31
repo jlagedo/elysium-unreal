@@ -1825,6 +1825,16 @@ def import_materials(
         False, "--lookdev",
         help="Run only SF-4.7's lookdev map generator; skip staging and instance import.",
     ),
+    lookdev_set: str | None = typer.Option(
+        None, "--lookdev-set",
+        help="Only with --lookdev: review-set JSON to use instead of the tracked "
+        "pipeline/unreal/lookdev_set.json.",
+    ),
+    lookdev_allow_missing: bool = typer.Option(
+        False, "--lookdev-allow-missing",
+        help="Only with --lookdev: do not fail when a review-set entry's MI_ is not imported "
+        "yet; it is still placed on a loud placeholder.",
+    ),
 ) -> None:
     """Import the material corpus from the published GLB units into /ElysiumBaked/Materials."""
 
@@ -1832,10 +1842,29 @@ def import_materials(
         from elysium_pipeline import unreal
 
         if lookdev:
-            # SF-4.7's generator needs the engine and the work root (for logs) but neither the
-            # published GLB corpus nor a texture staging tree: it only lays out and saves a map.
-            unreal.make_lookdev_map(config, runner)
-            console.print("lookdev map generated")
+            if select or force:
+                raise ConfigError(
+                    "--lookdev generates the review map only; it does not stage or import, so "
+                    "--select and --force do not apply -- drop them (or --lookdev-set if you "
+                    "meant to narrow the review set, not the corpus)"
+                )
+            # SF-4.7's generator needs the engine and the work root (for the report) but neither
+            # the published GLB corpus nor a texture staging tree: it only lays out and saves a
+            # map.
+            report = unreal.make_lookdev_map(
+                config, runner, set_path=lookdev_set, allow_missing=lookdev_allow_missing
+            )
+            if report:
+                missing = report.get("missing") or []
+                console.print(
+                    f"lookdev map generated: {report.get('placed', 0)} placed, "
+                    f"{len(missing)} missing"
+                )
+                for row in missing[:10]:
+                    console.print(f"[yellow]  {row.get('label')}: {row.get('unit')}[/yellow]",
+                                  markup=True)
+            else:
+                console.print("lookdev map generated")
             return
 
         from elysium_pipeline.importers import materials as importer
@@ -1877,6 +1906,10 @@ def import_materials(
                 console.print(
                     f"[yellow]  {row.get('assetPath')}: {row.get('reason')}[/yellow]", markup=True
                 )
+            anomaly_counts = report.get("anomalyCounts") or {}
+            if anomaly_counts:
+                rollup = ", ".join(f"{kind}={count}" for kind, count in sorted(anomaly_counts.items()))
+                console.print(f"  anomalies: {rollup}")
         problems = []
         if staged.failures:
             problems.append(f"{len(staged.failures)} unit(s) could not be staged")

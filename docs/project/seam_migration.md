@@ -596,10 +596,16 @@ to 0.
   units, run against one master's post-lighting terms on fixed inputs; extend per 4.3 family.
   Lighting terms excluded by design.
 - **SF-4.7 Lookdev map** [new]. A generated `/ElysiumBaked/Lookdev/Materials.umap`: a grid of
-  spheres and planes, one per selected `MI_` (a named review set: a plaster wall, a tiled floor,
-  a chrome fixture, Asylum glass, a wet street, an eye, water), lit by a neutral rig. This is how
-  the new masters are looked at before any real map uses them, and it is the PIE window for
-  Phase 5. Touches nothing legacy.
+  spheres and planes, one per selected `MI_` (a named review set of 20-24 entries: a plaster
+  wall, a tiled floor, a chrome fixture, Asylum glass, a wet street, an eye, water, a translucent
+  fixed-cube glass and two patched map instances so the instance-of-instance path is on the map
+  too), lit by a rig of point lights centred on the grid and an exposure pinned independent of
+  the physical camera. This is how the new masters are looked at before any real map uses them,
+  and it is the PIE window for Phase 5. A review-set entry whose `MI_` is not staged yet renders
+  on a loud, unmistakable placeholder and the generator run itself fails
+  (`uv run elysium import materials --lookdev --lookdev-allow-missing` to accept that on
+  purpose); `lookdev_report.json` under `$ELYSIUM_WORK_ROOT/reports/lookdev/` carries the
+  placed/missing counts the CLI prints. Touches nothing legacy.
 
 ### Phase 5 — owner tunes on knobs (lookdev)
 
@@ -620,8 +626,10 @@ Material Instance editor are throwaway: the next `uv run elysium import material
 instance from its manifest, by design (no per-material tuning layer). After a knob or class-table
 edit, `uv run elysium import materials --lookdev` regenerates the review map so the next PIE look
 reflects it; `pipeline/unreal/lookdev_set.json` is the review list the owner extends when a surface
-needs its own sphere/plane in the grid. No status marks belong in this note — `roadmap.md` owns
-task status.
+needs its own sphere/plane in the grid, and `--lookdev-set <path>` points the generator at a
+different one (a scratch set while drafting new entries, say) without touching the tracked file.
+`--lookdev` never accepts `--select`/`--force` — those are the corpus-staging flags, and
+`--lookdev` stages nothing. No status marks belong in this note — `roadmap.md` owns task status.
 
 - **SF-5.1 Defaults** [C1]. Owner opens the lookdev map in PIE, tunes the 4.1 globals in Project
   Settings, Ctrl+S. The committed ini is the deliverable.
