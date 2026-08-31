@@ -22,7 +22,7 @@ namespace
 	// non-empty proxies[] and an $envmap -- copied out of a real `uv run elysium import materials`
 	// stage run (E:\elysium-work\import\materials\brick\floorasan.provenance.json) rather than
 	// hand-authored, so the shape here is exactly what `stage_unit` writes, not what the reader
-	// used to assume it wrote (C2). `assetPath`/`unitGlb`/`sourceSha256`/`physMaterial` are added
+	// used to assume it wrote (C2). `assetPath`/`unitGlb`/`sourceMembersSha256`/`physMaterial` are added
 	// as the top-level keys `pipeline/unreal/import_materials.py` merges in from the manifest
 	// entry before calling `ApplyJson` -- see `FromJson`'s "--- identity ---" comment. The real
 	// floorasan sidecar's own `anomalies`/`comments` are both empty; one row of each is folded in
@@ -79,7 +79,7 @@ namespace
   "shaderFamily": "lightmappedgeneric",
   "shaderResolved": true,
   "sourceShader": "LightmappedGeneric",
-  "sourceSha256": "source-sha",
+  "sourceMembersSha256": "source-sha",
   "spriteOrientation": null,
   "spriteOrigin": null,
   "subdivSize": null,
@@ -95,6 +95,76 @@ namespace
   "unitSchemaVersion": "1.1.0",
   "unitSha256": "73ea5df0614356dabd15cad310024a6b36de7bfe3419fd7f0152855f62ed80fd",
   "wetnessScale": 1.0
+})json");
+
+	// Review finding 9: a second real fixture, this one a *patched* unit (an instance-of-instance
+	// -- `PatchOf`/`PatchKind`/the `environment{}` probe fields all read differently on a patch
+	// than on an install unit, and `GSidecar` above never exercises that path). The `patched`/
+	// `patchOf`/`patchKind`/`environment` shape is copied verbatim out of a real staged sidecar
+	// (E:\elysium-work\import\materials\maps\ch_cloud_1\glass\glass01_-120_244_44.provenance.json,
+	// a `$envmap`-only map patch of `glass/glass01`); that unit's own `materialReferences` and
+	// `spriteOrigin` are both empty/null (patched units rarely carry either), so one row of each
+	// is folded in from two other real staged sidecars --
+	// glass/breaksurf/break_glass_1.provenance.json's `materialReferences` (`$crackmaterial`) and
+	// march/primogen.provenance.json's `spriteOrigin` (`[0.5, 1.5]`) -- the same "compose real
+	// shapes, never hand-invent one" discipline `GSidecar`'s own comment states.
+	const TCHAR* GSidecarPatched = TEXT(R"json({
+  "assetId": "vtmb:material:maps/ch_cloud_1/glass/glass01_-120_244_44",
+  "assetPath": "/ElysiumBaked/Materials/maps/ch_cloud_1/glass/MI_glass01_-120_244_44",
+  "unitGlb": "materials/maps/ch_cloud_1/glass/glass01_-120_244_44.glb",
+  "sourceMembersSha256": "patched-source-sha",
+  "physMaterial": null,
+  "materialPath": "maps/ch_cloud_1/glass/glass01_-120_244_44",
+  "unitSchemaVersion": "1.1.0",
+  "unitSha256": "05f1881920f78169215125c2c7dad3368c59d345cd2989db57c2843d9f0cc081",
+  "settingsVersion": "elysium-material-import-v2",
+  "shader": "patch",
+  "sourceShader": "patch",
+  "shaderFamily": "patch",
+  "shaderResolved": false,
+  "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_LitTranslucent",
+  "blendMode": null,
+  "twoSided": false,
+  "surfaceClass": null,
+  "surfaceClassIndex": null,
+  "surfaceClassSource": null,
+  "physMaterialFallback": null,
+  "patched": true,
+  "patchBase": "vtmb:material:glass/glass01",
+  "patchOf": {"x": -120, "y": 244, "z": 44},
+  "patchKind": ["insert"],
+  "environment": {
+    "envMapSymbol": "maps/ch_cloud_1/c-120_244_44",
+    "envMapAssetId": "vtmb:texture:maps/ch_cloud_1/c-120_244_44",
+    "envMapProbePath": "/ElysiumBaked/Textures/maps/ch_cloud_1/TC_c_120_244_44",
+    "patchedProbe": true
+  },
+  "isDecalSurface": false,
+  "ignoreZ": false,
+  "ignoreZNamedDivergence": false,
+  "spriteOrigin": [0.5, 1.5],
+  "spriteOrientation": null,
+  "minLight": null,
+  "maxLight": null,
+  "wetnessScale": null,
+  "subdivSize": null,
+  "curve": null,
+  "textureBindings": [],
+  "materialReferences": [
+    {"parameter": "$crackmaterial", "asset": "vtmb:texture:glass/glassb"}
+  ],
+  "parameters": [
+    {"index": 0, "block": "", "key": "include", "sourceKey": "include", "value": "GLASS/GLASS01", "valueType": "string", "offset": 13},
+    {"index": 1, "block": "insert#1", "key": "$envmap", "sourceKey": "$envmap", "value": "maps/ch_cloud_1/c-120_244_44", "valueType": "string", "offset": 58}
+  ],
+  "proxies": [],
+  "runtime": [],
+  "anomalies": [],
+  "omissions": [
+    {"reason": "separator-bytes-carry-no-keyvalues-meaning", "role": "keyvalues-insignificant-whitespace"}
+  ],
+  "comments": [],
+  "coverage": {"totalKeys": 2, "unmappedKeys": []}
 })json");
 
 	UMaterialInstanceConstant* NewInstance()
@@ -120,7 +190,8 @@ bool FElysiumMaterialProvenanceApplyJsonTest::RunTest(const FString&)
 	TestTrue(TEXT("the record is outered to the material"), Record->GetOuter() == Instance);
 
 	// --- identity: AssetId/MaterialPath/UnitSchemaVersion/UnitSha256/SettingsVersion come from the
-	// sidecar proper; AssetPath/UnitGlb/SourceSha256 come from the manifest-entry keys the importer
+	// sidecar proper; AssetPath/UnitGlb/SourceSha256 (the merged JSON key is now
+	// `sourceMembersSha256`, review finding 9) come from the manifest-entry keys the importer
 	// merges in.
 	TestEqual(TEXT("AssetId"), Record->AssetId, FString(TEXT("vtmb:material:brick/floorasan")));
 	TestEqual(TEXT("MaterialPath"), Record->MaterialPath, FString(TEXT("brick/floorasan")));
@@ -223,6 +294,48 @@ bool FElysiumMaterialProvenanceApplyJsonTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("CoverageTotalKeys"), Record->CoverageTotalKeys, 4);
 	TestTrue(TEXT("CoverageUnmappedKeys empty"), Record->CoverageUnmappedKeys.IsEmpty());
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialProvenancePatchedUnitTest,
+	"Elysium.Substrate.MaterialProvenance.PatchedUnit", GElysiumMaterialProvenanceTestFlags)
+bool FElysiumMaterialProvenancePatchedUnitTest::RunTest(const FString&)
+{
+	// Review finding 9: a second fixture, from a real patched (instance-of-instance) unit, so
+	// PatchOf/PatchKind/EnvMap*/Dependencies/SpriteOrigin are all exercised non-default -- GSidecar
+	// above is an install unit and leaves every one of those at its zero/empty default.
+	UMaterialInstanceConstant* Instance = NewInstance();
+	FString Error;
+	UElysiumMaterialProvenance* Record = UElysiumMaterialProvenance::ApplyJson(Instance, GSidecarPatched, Error);
+	if (!Record)
+	{
+		AddError(FString::Printf(TEXT("ApplyJson rejected the patched sidecar: %s"), *Error));
+		return false;
+	}
+
+	TestTrue(TEXT("Patched"), Record->PatchOf == FString(TEXT("vtmb:material:glass/glass01")));
+	TestEqual(TEXT("PatchKind"), Record->PatchKind, FString(TEXT("insert")));
+	// Review finding 7: a patched instance's own provenance `master` is now the *root* master the
+	// offline stage walked to (`materials.py::stage_materials`'s `_root_master`), not empty.
+	TestEqual(TEXT("Master (walked to the root base, review finding 7)"), Record->Master,
+		FString(TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_LitTranslucent")));
+
+	TestEqual(TEXT("EnvMapSymbol"), Record->EnvMapSymbol, FString(TEXT("maps/ch_cloud_1/c-120_244_44")));
+	TestEqual(TEXT("EnvMapAssetId"), Record->EnvMapAssetId,
+		FString(TEXT("vtmb:texture:maps/ch_cloud_1/c-120_244_44")));
+	TestEqual(TEXT("EnvMapProbePath"), Record->EnvMapProbePath,
+		FSoftObjectPath(TEXT("/ElysiumBaked/Textures/maps/ch_cloud_1/TC_c_120_244_44")));
+	TestTrue(TEXT("bPatchedProbe"), Record->bPatchedProbe);
+
+	if (TestEqual(TEXT("Dependencies count (materialReferences[])"), Record->Dependencies.Num(), 1))
+	{
+		TestEqual(TEXT("dependency 0 parameter"), Record->Dependencies[0].Parameter, FString(TEXT("$crackmaterial")));
+		TestEqual(TEXT("dependency 0 asset"), Record->Dependencies[0].Asset, FString(TEXT("vtmb:texture:glass/glassb")));
+	}
+
+	TestEqual(TEXT("SpriteOrigin"), Record->SpriteOrigin, FVector2D(0.5, 1.5));
+	TestEqual(TEXT("SourceSha256 (merged, patched entry)"), Record->SourceSha256, FString(TEXT("patched-source-sha")));
 
 	return true;
 }
@@ -360,7 +473,7 @@ bool FElysiumMaterialProvenanceSidecarKeysAreCoveredTest::RunTest(const FString&
 		TEXT("parameters"), TEXT("patchBase"), TEXT("patchKind"), TEXT("patchOf"), TEXT("patched"),
 		TEXT("physMaterial"), TEXT("physMaterialFallback"), TEXT("proxies"), TEXT("runtime"),
 		TEXT("settingsVersion"), TEXT("shader"), TEXT("shaderFamily"), TEXT("shaderResolved"),
-		TEXT("sourceShader"), TEXT("sourceSha256"), TEXT("spriteOrientation"), TEXT("spriteOrigin"),
+		TEXT("sourceShader"), TEXT("sourceMembersSha256"), TEXT("spriteOrientation"), TEXT("spriteOrigin"),
 		TEXT("subdivSize"), TEXT("surfaceClass"), TEXT("surfaceClassIndex"), TEXT("surfaceClassSource"),
 		TEXT("textureBindings"), TEXT("twoSided"), TEXT("unitGlb"), TEXT("unitSchemaVersion"),
 		TEXT("unitSha256"), TEXT("wetnessScale"),
@@ -370,7 +483,7 @@ bool FElysiumMaterialProvenanceSidecarKeysAreCoveredTest::RunTest(const FString&
 	// discipline the pipeline test file uses in the other direction.
 	static const TCHAR* ReadByFromJson[] = {
 		TEXT("assetId"), TEXT("materialPath"), TEXT("assetPath"), TEXT("unitGlb"),
-		TEXT("unitSchemaVersion"), TEXT("unitSha256"), TEXT("sourceSha256"), TEXT("settingsVersion"),
+		TEXT("unitSchemaVersion"), TEXT("unitSha256"), TEXT("sourceMembersSha256"), TEXT("settingsVersion"),
 		TEXT("shader"), TEXT("sourceShader"), TEXT("shaderFamily"), TEXT("shaderResolved"),
 		TEXT("master"), TEXT("blendMode"), TEXT("twoSided"), TEXT("surfaceClass"), TEXT("surfaceClassIndex"),
 		TEXT("surfaceClassSource"), TEXT("physMaterialFallback"), TEXT("environment"), TEXT("physMaterial"),

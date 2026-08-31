@@ -52,20 +52,27 @@ def _cpp_max_rows() -> int:
     return int(match.group(1))
 
 
-#: One `Name=Value` row of a `UPROPERTY(..., Config, ...) float Name = Value;` declaration, in
-#: `ElysiumSurfaceSettings.h`. Matches the same 15 scalars `ScalarBindings()` pins, so this and
-#: `_cpp_scalar_bindings()` agree on which fields count as a "knob" even though they read
+#: One `UPROPERTY(<specifiers>) float Name = Value;` declaration, in `ElysiumSurfaceSettings.h`.
+#: `(?:[^()]|\([^()]*\))*` captures the specifier list allowing exactly one level of nested
+#: parens (`meta = (ClampMin = "0.0", ...)`) without matching past the macro's own closing paren;
+#: `re.DOTALL` lets the specifier list -- or the gap between `UPROPERTY(...)` and `float` -- wrap
+#: across lines, and `EditAnywhere`/`Config` are checked as separate substrings below rather than
+#: pinned to one order, so reordering the specifier list (`Config, EditAnywhere, ...`) or wrapping
+#: the macro onto two lines still parses. Matches the same 15 scalars `ScalarBindings()` pins, so
+#: this and `_cpp_scalar_bindings()` agree on which fields count as a "knob" even though they read
 #: different files.
 _HEADER_FIELD_RE = re.compile(
-    r"UPROPERTY\(EditAnywhere, Config,.*\)\s*\n\s*float\s+(\w+)\s*=\s*([-\d.]+)f?;"
+    r"UPROPERTY\(((?:[^()]|\([^()]*\))*)\)\s*float\s+(\w+)\s*=\s*([-\d.]+)f?;", re.DOTALL,
 )
+_CONFIG_SPECIFIER_RE = re.compile(r"(?<![\w])Config(?![\w])")
 
 
 def _cpp_header_scalar_defaults() -> dict[str, float]:
     text = SETTINGS_H.read_text(encoding="utf-8")
-    fields = dict(
-        (name, float(value)) for name, value in _HEADER_FIELD_RE.findall(text)
-    )
+    fields = {}
+    for specifiers, name, value in _HEADER_FIELD_RE.findall(text):
+        if "EditAnywhere" in specifiers and _CONFIG_SPECIFIER_RE.search(specifiers):
+            fields[name] = float(value)
     assert fields, "no `UPROPERTY(..., Config, ...) float Name = Value;` fields parsed from ElysiumSurfaceSettings.h"
     return fields
 
@@ -148,6 +155,55 @@ def test_surface_classes_seed_order_is_default_first():
     assert len(SURFACE_CLASSES) <= _cpp_max_rows(), (
         "SURFACE_CLASSES (%d entries) exceeds UElysiumSurfaceCalibration::MaxRows (%d)"
         % (len(SURFACE_CLASSES), _cpp_max_rows())
+    )
+
+
+#: `ScalarBindings()` names that `make_v2_materials.py` legitimately never reads through
+#: `g.mpc("<Name>", ...)` -- each one is consumed somewhere other than a `M_V2_*` material graph
+#: node, so its absence from that file is not the same defect a genuinely dropped knob would be.
+_MAKE_V2_MATERIALS_UNREAD_SCALAR_BINDINGS = {
+    "LightSpecularScale": (
+        "applied by the runtime lighting path (`FElysiumSurfaceSettings`'s C++ consumer), never "
+        "sampled as a material-graph node"
+    ),
+    "ChromaThreshold": (
+        "read offline, in Python, by `importers/materials.py::_read_chroma_threshold` (the "
+        "envmaptint grey/chromatic split happens at stage time, not in the material graph)"
+    ),
+    "DecalDepthOffset": (
+        "consumed by the decal placement lane (SF placement code), not a `M_V2_Decal` graph node"
+    ),
+    "CaptureRadius": (
+        "consumed by the reflection-capture actor placement lane (SF-6.2), not a material graph "
+        "node"
+    ),
+}
+
+
+def test_every_scalar_binding_is_read_by_make_v2_materials_or_named_as_unread():
+    """Every `ScalarBindings()` name is either an `mpc("<Name>", ...)` node in
+    `make_v2_materials.py` (the nine generated masters' own file, not owned by this test file's
+    review pass) or is named in `_MAKE_V2_MATERIALS_UNREAD_SCALAR_BINDINGS` with a reason -- so a
+    knob silently dropped from every master's graph fails here instead of only showing up as an
+    inert `MPC_ElysiumSurfaces` row nothing samples."""
+    make_v2_materials = REPO / "pipeline" / "unreal" / "make_v2_materials.py"
+    text = make_v2_materials.read_text(encoding="utf-8")
+    read_names = set(re.findall(r'g\.mpc\("(\w+)"', text))
+    cpp_names = _cpp_scalar_bindings()
+    assert cpp_names, "no scalar bindings parsed from ElysiumSurfaceSettings.cpp"
+    unaccounted = cpp_names - read_names - set(_MAKE_V2_MATERIALS_UNREAD_SCALAR_BINDINGS)
+    assert not unaccounted, (
+        "ScalarBindings() name(s) %r are neither read via g.mpc(...) in make_v2_materials.py nor "
+        "named in _MAKE_V2_MATERIALS_UNREAD_SCALAR_BINDINGS" % sorted(unaccounted)
+    )
+    # And the skip-list itself never grows stale: every name in it is a real binding, and it
+    # never claims a name that actually is read.
+    stale = set(_MAKE_V2_MATERIALS_UNREAD_SCALAR_BINDINGS) - cpp_names
+    assert not stale, "skip-listed name(s) %r are not ScalarBindings() names at all" % sorted(stale)
+    wrongly_skipped = set(_MAKE_V2_MATERIALS_UNREAD_SCALAR_BINDINGS) & read_names
+    assert not wrongly_skipped, (
+        "skip-listed name(s) %r are actually read via g.mpc(...) -- remove them from the skip list"
+        % sorted(wrongly_skipped)
     )
 
 

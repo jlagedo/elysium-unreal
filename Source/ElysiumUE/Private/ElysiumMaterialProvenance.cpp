@@ -265,7 +265,11 @@ void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 	UnitGlb = Str(O, TEXT("unitGlb"));
 	UnitSchemaVersion = Str(O, TEXT("unitSchemaVersion"));
 	UnitSha256 = Str(O, TEXT("unitSha256"));
-	SourceSha256 = Str(O, TEXT("sourceSha256"));
+	// Review finding 9: the manifest entry key is `sourceMembersSha256` now (renamed from
+	// `sourceSha256` -- a digest over every `sourceResolution.members[]` row, not one file), read
+	// under its new name; `SourceSha256` (the `FString` member) keeps its existing name, since
+	// only the JSON key changed here.
+	SourceSha256 = Str(O, TEXT("sourceMembersSha256"));
 	SettingsVersion = Str(O, TEXT("settingsVersion"));
 
 	// --- shader --- top-level `shaderFamily`/`shaderResolved`, not a nested `shaderResolution`
