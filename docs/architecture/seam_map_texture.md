@@ -672,6 +672,16 @@ mapping is accepted by two headless checks, not by eye: **parity** — each stag
 the game draws today; and **seam continuity** — across the twelve cube edges the emitted
 orientation scores lower than every other per-face rotation (`texture_cube.seam_error`). The
 sidecar records the applied `faceMapping`. A rendered frame is a courtesy when a reader flips.
+
+The corpus also carries a human-readable witness: `shadertest/cubedemo` (`TC_cubedemo`, 64×64,
+seven levels) is a shipped Source shader-test cube whose faces are labelled `RT`, `LF`, `BK`,
+`FT`, `UP`, `DN` with direction arrows. Decoding the staged DDS beside the legacy
+`tex_to_png.decode_cubemap` output of the same `.tth`/`.ttz` (2026-08-31) put `RT`/`LF`/`BK`/
+`FT`/`UP`/`DN` in D3D slots `+X`/`−X`/`+Y`/`−Y`/`+Z`/`−Z`, every label upright, max texel
+difference 1/255 and best-fit rotation `k=0` on all six faces; Unreal's built face 0 (DXT1) shows
+`RT` in the same orientation. The labels read mirrored on both paths because cube faces are
+authored as seen from inside the cube; that is the handedness the material corrects, not a face
+slip. A rerun is the `cubedemo` unit through `stage_textures` and `decode_cubemap` side by side.
 The exporter's in-face block rotation is exact only for levels of at least 4×4; import applies the
 exact inverse, so a 2×2 or 1×1 BC face round-trips byte-for-byte, but the payload's own
 orientation at those levels is an open exporter defect (tracked in `seam_migration.md` open
