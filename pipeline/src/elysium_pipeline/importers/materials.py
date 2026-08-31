@@ -74,51 +74,20 @@ class MaterialImportError(RuntimeError):
 
 
 # --- surface class table (SF-4.1 seeds its data asset from this same list) -----------------------
-
-#: The 63 `scripts/surfaceproperties.txt` entry names this corpus's `$surfaceprop` values resolve
-#: against (`uv run elysium import surface-properties`, 2026-08-31 run), `default` first. Every
-#: name in this tuple gets a real `PM_<name>` physical-material asset (SF-2); everything else in
-#: `SURFACE_CLASSES` below falls back to `PM_default` (`physMaterialFallback`).
-_SURFACEPROP_NAMES = (
-    "default", "armorflesh", "bottle", "boulder", "brick", "can_pop", "can_pop_crushed",
-    "canister", "cardboard", "carpet", "computer", "concrete", "default_silent", "dirt",
-    "fish_fresh", "fish_frozen", "flesh", "gargoyle", "glass", "glass_shard", "glassbottle",
-    "grass", "gravel", "grenade", "gunship", "ice", "kitchen_pan", "kitchen_pot",
-    "kitchen_utensils", "ladder", "metal", "metal_barrel", "metalgrate", "metalpanel",
-    "metalvent", "ming_xiao", "ming_xiao_tentacle", "mud", "paper", "papercup", "plaster",
-    "plastic", "player", "player_control_clip", "popcan", "quiet", "ring", "rivet", "rock",
-    "roller", "rubber", "sand", "snow", "stone", "strider", "tile", "tin", "wade", "water",
-    "watermelon", "weapon", "wood", "woodpanel",
+#
+# The table itself lives in `elysium_pipeline.importers.surface_classes` (no imports, so
+# `pipeline/unreal/make_surface_knobs.py` -- running inside Unreal's embedded editor Python, which
+# carries no `numpy` -- can import it directly instead of a hand-mirrored copy). Re-exported here
+# so every existing call site in this module (and its importers) keeps working unchanged.
+from elysium_pipeline.importers.surface_classes import (  # noqa: E402
+    FAMILY_DEFAULT_CLASS,
+    SURFACE_CLASS_INDEX,
+    SURFACE_CLASSES,
+    TOP_DIRECTORY_CLASSES,
+    _SURFACEPROP_NAMES,
+    _TIER1_ADDITIONS,
+    _TOP_DIRECTORY_ONLY,
 )
-#: VMT top-directory names the design's tier-2 fallback names (`seam_map_material.md` -> "Identity
-#: and naming") that are not already a `$surfaceprop` entry name.
-_TOP_DIRECTORY_ONLY = ("asphalt", "blends", "cable", "drapery", "grates", "ground")
-#: The four `$surfaceprop` values the 63-entry table does not define, each getting a class row of
-#: its own; `asphalt` is already counted via `_TOP_DIRECTORY_ONLY` above, so only three are new
-#: here -- the revision's own accounting (`seam_migration.md` -> "Revised after review").
-_TIER1_ADDITIONS = ("bone", "cloth", "leather")
-#: The ordered class table: `default` at index 0 (the class LUT's row 0), everything else sorted so
-#: the table is stable across regeneration. 72 rows: 63 (`_SURFACEPROP_NAMES`, `default` included)
-#: + 6 (`_TOP_DIRECTORY_ONLY`) + 3 (`_TIER1_ADDITIONS`). SF-4.1's `UElysiumSurfaceCalibration` seeds
-#: its rows from this same list, so the index this lane writes as `SurfaceClassIndex` is the row
-#: that class asset defines.
-SURFACE_CLASSES: tuple[str, ...] = ("default",) + tuple(
-    sorted(set(_SURFACEPROP_NAMES[1:]) | set(_TOP_DIRECTORY_ONLY) | set(_TIER1_ADDITIONS))
-)
-SURFACE_CLASS_INDEX = {name: index for index, name in enumerate(SURFACE_CLASSES)}
-#: The curated 16-name top-directory allowlist (tier 2), stated verbatim rather than derived, per
-#: "Identity and naming": `plaster`, `wood`, `stone`, `blends`, `brick`, `ground`, `metal`, `tile`,
-#: `drapery`, `carpet`, `cable`, `glass`, `grates`, `asphalt`, `water`, `grass`.
-TOP_DIRECTORY_CLASSES: frozenset[str] = frozenset({
-    "plaster", "wood", "stone", "blends", "brick", "ground", "metal", "tile", "drapery",
-    "carpet", "cable", "glass", "grates", "asphalt", "water", "grass",
-})
-#: Tier-3 per-family default class row, keyed by the resolved master.
-FAMILY_DEFAULT_CLASS: dict[str, str] = {
-    "M_V2_Lit": "default", "M_V2_LitTranslucent": "default", "M_V2_Unlit": "default",
-    "M_V2_Eyes": "flesh", "M_V2_Water": "water", "M_V2_Sprite": "default",
-    "M_V2_Decal": "default", "M_V2_TwoTexture": "default", "M_V2_Refract": "glass",
-}
 
 
 def _read_chroma_threshold(root: Path | None = None) -> float:
@@ -465,6 +434,10 @@ PROVENANCE_ONLY_KEYS = frozenset({
     "%compileskip", "%compilesky", "%compilewanderclip", "%compilewet", "$compilepassbullets",
     "%keywords", "%detailtype", "%notooltexture",
     "$envmapcontrast", "$envmapmode", "$desaturate", "$modintensity", "$blur", "$soft",
+    # $nooverbright (3 units): provenance only -- this lane has no per-instance opt-out of the
+    # `_x2 c0` overbright doubling, so `UElysiumSurfaceSettings::Overbright` (the single global
+    # knob every lit master reads) still applies to these three instances. A named deliberate
+    # divergence from retail, not a silently dropped flag.
     "$multipass", "$nooverbright", "$no_fullbright", "$nofog", "$polyoffset", "$trilinear",
     "$nomip", "nomip", "$noclip", "$noztest", "$comparez", "$writez", "$decalscale",
     "$animatedtexturevar", "$animatedtextureframenumvar", "$animatedtextureframerate",
@@ -575,6 +548,18 @@ def _base_key_from_asset_id(asset_id: str) -> str:
 
 
 _PATCH_COORD_RE = re.compile(r"_(-?\d+)_(-?\d+)_(-?\d+)$")
+
+
+def _source_sha256(document: dict) -> str:
+    """sha256 over `sourceResolution.members[].sha256`, sorted for determinism: the install bytes
+    this unit was read from, distinct from `unit_sha256` (the exported GLB's own bytes). Empty
+    when the unit carries no `sourceResolution` (a synthetic or malformed unit)."""
+
+    members = (document.get("sourceResolution") or {}).get("members") or ()
+    member_hashes = sorted(str(member.get("sha256") or "") for member in members if isinstance(member, dict))
+    if not member_hashes:
+        return ""
+    return hashlib.sha256("".join(member_hashes).encode("utf-8")).hexdigest()
 
 
 def _resolve_patch_of(stem: str) -> dict | None:
@@ -1268,6 +1253,7 @@ def stage_unit(
         "unit": asset_id,
         "unitGlb": f"{FAMILY}/{key}.glb",
         "unitSha256": unit_sha256,
+        "sourceSha256": _source_sha256(document),
         "parent": parent,
         "patched": patched,
         "provenanceOnly": provenance_only,

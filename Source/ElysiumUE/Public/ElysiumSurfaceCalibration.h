@@ -92,18 +92,28 @@ public:
 #endif
 
 	/**
-	 * Replace `Rows` with one default-valued row per name in `ClassNames`, in the given order,
-	 * `Index` assigned `0..ClassNames.Num()-1` in that same order -- what
-	 * `pipeline/unreal/make_surface_knobs.py` calls right after creating the data asset, seeded
-	 * from the pipeline's `SURFACE_CLASSES` list (`default` already first there), so the editor
-	 * and the importer agree on row order and index without either hand-authoring the other's
-	 * data. Fails rather than truncating when `ClassNames` exceeds `MaxRows` or contains a
-	 * duplicate name, so a corpus-list growth or collision is a loud stage failure and never a
-	 * silently dropped or aliased class.
+	 * Merge `Rows` with one row per name in `ClassNames`, in the given order: a name that already
+	 * has a row keeps that row's `Index`/`Roughness`/`Specular`/`Metallic` untouched (a human's
+	 * tuning, or a prior run's index assignment, survives verbatim); a name with no existing row
+	 * is appended with a default-valued row at the first `Index` not already claimed. Rows are
+	 * never renumbered and never removed, even when their name has fallen out of `ClassNames` --
+	 * a corpus-list shrink must not silently invalidate an already-imported instance's
+	 * `SurfaceClassIndex`. What `pipeline/unreal/make_surface_knobs.py` calls right after
+	 * creating the data asset, seeded from the pipeline's `SURFACE_CLASSES` list (`default`
+	 * already first there), so the editor and the importer agree on row order and index without
+	 * either hand-authoring the other's data, and without a rerun wiping a value the owner tuned
+	 * by eye. Fails rather than truncating when the merged row count would exceed `MaxRows` or
+	 * `ClassNames` contains a duplicate name, so a corpus-list growth or collision is a loud stage
+	 * failure and never a silently dropped or aliased class.
 	 *
-	 * Python: `unreal.ElysiumSurfaceCalibration.seed_default_rows(asset, class_names)` → `(ok, error)`.
+	 * `OutAdded`/`OutKept` count the names newly appended and the names whose existing row was
+	 * left alone, so a caller (or a test) can assert a rerun is non-destructive without diffing
+	 * `Rows` by hand.
+	 *
+	 * Python: `unreal.ElysiumSurfaceCalibration.seed_default_rows(asset, class_names)` →
+	 * `(ok, error, added, kept)`.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Surfaces")
 	static void SeedDefaultRows(UElysiumSurfaceCalibration* Calibration, const TArray<FString>& ClassNames,
-		bool& bOutOk, FString& OutError);
+		bool& bOutOk, FString& OutError, int32& OutAdded, int32& OutKept);
 };

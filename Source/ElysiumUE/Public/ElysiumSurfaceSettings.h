@@ -21,6 +21,13 @@ class UMaterialParameterCollection;
  * every edit, no Ctrl+S needed (`SSettingsEditor.cpp:441`). `PostEditChangeProperty` pushes the
  * new values into the collection's asset defaults and every live world instance, so PIE follows
  * the slider without a restart.
+ *
+ * Editor-only: the ini is what a human tunes and what this object pushes into the collection's
+ * *asset* defaults, but a packaged game never runs `UDeveloperSettings`'s ini-loaded values
+ * through `PushToCollection` again -- it loads `MPC_ElysiumSurfaces` as cooked data and reads
+ * whatever scalar values were baked into it as of the last editor push. `OnPostEngineInit` below
+ * re-pushes the ini's values on every editor boot precisely so the cooked collection never drifts
+ * from the ini between an edit and the next cook; nothing pushes at runtime in a packaged build.
  */
 UCLASS(Config = Elysium, DefaultConfig, meta = (DisplayName = "Surfaces"))
 class ELYSIUMUE_API UElysiumSurfaceSettings : public UDeveloperSettings
@@ -40,6 +47,19 @@ public:
 
 	UPROPERTY(EditAnywhere, Config, Category = "Defaults", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float DefaultMetallic = 0.0f;
+
+	/**
+	 * The `Default*` triple's own weight against the per-class calibration row: every master
+	 * computes `Roughness = lerp(DefaultRoughness, ClassRoughness, ClassInfluence)` (and the same
+	 * `lerp` for Specular and Metallic), so at `0.0` the whole world follows the three global
+	 * `Default*` knobs above and the 72-row class table (`UElysiumSurfaceCalibration`) has no
+	 * effect at all, and at `1.0` (the default) every surface follows its class row exactly as it
+	 * always has. This is the knob that actually makes `Default*` reachable: until this lerp
+	 * existed, a master read the class table unconditionally and `Default*` was written but never
+	 * sampled.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category = "Defaults", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ClassInfluence = 1.0f;
 
 	// --- lighting -----------------------------------------------------------------------------
 	/** The one global specular-response scale the light rig reads (SF-6.2); no per-map override. */
@@ -126,6 +146,20 @@ public:
 #endif
 
 private:
+	// Substrate-only: lets FElysiumSurfaceSettingsCollectionPushTest push into a `/Temp/`-package
+	// collection directly, rather than through LoadCollection()'s hardcoded CollectionPath() --
+	// exercising the collection-mutation logic without ever touching (or shadowing in memory) the
+	// production `MPC_ElysiumSurfaces` asset path.
+	friend class FElysiumSurfaceSettingsCollectionPushTest;
+
+	/**
+	 * `LoadObject<UMaterialParameterCollection>` at `CollectionPath()`, or null with a logged
+	 * warning when the asset does not exist yet (the generator creates it). Shared by
+	 * `PushToCollection` and the interactive-drag branch of `PostEditChangeProperty`, so both
+	 * resolve the collection the same way.
+	 */
+	static UMaterialParameterCollection* LoadCollection();
+
 	/** Asset-defaults half of `PushToCollection`; editor-only, `WITH_EDITOR`-guarded body. */
 	void PushToCollectionDefaults(UMaterialParameterCollection* Collection) const;
 

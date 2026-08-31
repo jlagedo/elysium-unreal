@@ -7,17 +7,16 @@
 
 #if WITH_EDITOR
 #include "AssetRegistry/AssetRegistryModule.h"
-#include "Misc/PackageName.h"
 #endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSurfaceCalibration, Log, All);
 
 namespace
 {
-	/** `/Game/ElysiumGenerated/Materials/V2/T_SurfaceClassLUT`, beside the calibration data asset. */
-	const TCHAR* LutPackagePath()
+	/** The LUT's object name, inside the calibration data asset's own package. */
+	const TCHAR* LutObjectName()
 	{
-		return TEXT("/Game/ElysiumGenerated/Materials/V2/T_SurfaceClassLUT");
+		return TEXT("T_SurfaceClassLUT");
 	}
 }
 
@@ -79,31 +78,19 @@ void UElysiumSurfaceCalibration::RegenerateLut(bool& bOutOk, FString& OutError)
 
 	if (!Lut)
 	{
-		// LoadObject first, not FindObject: a prior run (or another lane's placeholder importer)
-		// may have left a real asset on disk at this path with different platform/bulk data than
-		// a freshly NewObject'd texture would carry, and overwriting that mismatch in place at
-		// save time is what corrupts the package. Loading it properly first, exactly as the
-		// production texture-import lane does, gives Source.Init below a texture whose bulk data
-		// plumbing is actually wired up, so replacing its source cleanly replaces the payload too.
-		const FString ObjectPath = FString(LutPackagePath()) + TEXT(".") + FPackageName::GetShortName(LutPackagePath());
-		Lut = LoadObject<UTexture2D>(nullptr, *ObjectPath);
+		// Created inside this data asset's own package (outer `this`), never a sibling package at
+		// a hand-guessed path: a transient calibration (a Substrate test's NewObject'd instance)
+		// must never touch the production `/Game/.../DA_SurfaceCalibration` package's disk state
+		// via a LoadObject/CreatePackage fallback, and a saved calibration's LUT living in its own
+		// package is what makes Ctrl+S on the data asset save the LUT along with it -- no second
+		// asset to remember to save, no sibling-package divergence.
+		Lut = NewObject<UTexture2D>(this, LutObjectName(), RF_Public | RF_Standalone);
 		if (!Lut)
 		{
-			UPackage* Package = CreatePackage(LutPackagePath());
-			if (!Package)
-			{
-				OutError = FString::Printf(TEXT("could not create package %s"), LutPackagePath());
-				return;
-			}
-			const FString AssetName = FPackageName::GetShortName(LutPackagePath());
-			Lut = NewObject<UTexture2D>(Package, *AssetName, RF_Public | RF_Standalone);
-			if (!Lut)
-			{
-				OutError = TEXT("could not create the LUT texture object");
-				return;
-			}
-			FAssetRegistryModule::AssetCreated(Lut);
+			OutError = TEXT("could not create the LUT texture object");
+			return;
 		}
+		FAssetRegistryModule::AssetCreated(Lut);
 	}
 
 	// One texel per row, written at that row's own Index. A texel no row claims holds the struct's
@@ -127,6 +114,11 @@ void UElysiumSurfaceCalibration::RegenerateLut(bool& bOutOk, FString& OutError)
 		WriteTexel(&Texels[Row.Index * 4], Row);
 	}
 
+	// PreEditChange/PostEditChange around a source replacement is the engine's own idiom
+	// (Texture.h:219): it invalidates the texture's render-thread resource and any cached
+	// derived data before Source.Init rewrites the payload, rather than leaving UpdateResource
+	// alone to reconcile a source that changed size or format out from under a live resource.
+	Lut->PreEditChange(nullptr);
 	Lut->Source.Init(MaxRows, 1, /*NumSlices*/ 1, /*NumMips*/ 1, TSF_BGRA8, Texels);
 	Lut->SRGB = false;
 	Lut->CompressionSettings = TC_VectorDisplacementmap;
@@ -136,7 +128,7 @@ void UElysiumSurfaceCalibration::RegenerateLut(bool& bOutOk, FString& OutError)
 	Lut->AddressX = TA_Clamp;
 	Lut->AddressY = TA_Clamp;
 	Lut->LossyCompressionAmount = TLCA_None;
-	Lut->UpdateResource();
+	Lut->PostEditChange();
 	Lut->MarkPackageDirty();
 	MarkPackageDirty();
 
@@ -148,6 +140,14 @@ void UElysiumSurfaceCalibration::RegenerateLut(bool& bOutOk, FString& OutError)
 void UElysiumSurfaceCalibration::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
+	// An interactive change (a slider being dragged in the details panel) fires this on every
+	// tick of the drag; regenerating and re-uploading a 128-texel source on every one of those
+	// ticks is wasted work the drag never needs to see finished until it lets go. Regenerate on
+	// the terminal ValueSet (mouse-up, or a typed value committed) only.
+	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive)
+	{
+		return;
+	}
 	bool bOk = false;
 	FString Error;
 	RegenerateLut(bOk, Error);
@@ -159,24 +159,21 @@ void UElysiumSurfaceCalibration::PostEditChangeProperty(FPropertyChangedEvent& P
 #endif
 
 void UElysiumSurfaceCalibration::SeedDefaultRows(UElysiumSurfaceCalibration* Calibration,
-	const TArray<FString>& ClassNames, bool& bOutOk, FString& OutError)
+	const TArray<FString>& ClassNames, bool& bOutOk, FString& OutError, int32& OutAdded, int32& OutKept)
 {
 	bOutOk = false;
 	OutError.Reset();
+	OutAdded = 0;
+	OutKept = 0;
 	if (!Calibration)
 	{
 		OutError = TEXT("no calibration asset");
 		return;
 	}
-	if (ClassNames.Num() > UElysiumSurfaceCalibration::MaxRows)
-	{
-		OutError = FString::Printf(TEXT("%d class names exceeds the %d-row limit"),
-			ClassNames.Num(), UElysiumSurfaceCalibration::MaxRows);
-		return;
-	}
 
-	// Index is assigned 0..N-1 in the caller's own order -- the pipeline's SURFACE_CLASSES list
-	// already puts `default` first, so this function trusts that order rather than re-deriving it.
+	// Index is assigned 0..N-1 in the caller's own order only for a name with no existing row --
+	// the pipeline's SURFACE_CLASSES list already puts `default` first, so a brand-new asset ends
+	// up in that same order, but a rerun over an asset that already has rows never renumbers one.
 	TSet<FString> SeenNames;
 	for (const FString& Name : ClassNames)
 	{
@@ -189,17 +186,66 @@ void UElysiumSurfaceCalibration::SeedDefaultRows(UElysiumSurfaceCalibration* Cal
 		}
 	}
 
-	TArray<FElysiumSurfaceClassRow> NewRows;
-	NewRows.Reserve(ClassNames.Num());
-	for (int32 Index = 0; Index < ClassNames.Num(); ++Index)
+	TSet<FString> ExistingLowerNames;
+	TSet<int32> ClaimedIndices;
+	ExistingLowerNames.Reserve(Calibration->Rows.Num());
+	for (const FElysiumSurfaceClassRow& Row : Calibration->Rows)
 	{
-		FElysiumSurfaceClassRow Row;
-		Row.Name = FName(*ClassNames[Index]);
-		Row.Index = Index;
-		NewRows.Add(Row);
+		ExistingLowerNames.Add(Row.Name.ToString().ToLower());
+		ClaimedIndices.Add(Row.Index);
 	}
 
-	Calibration->Rows = MoveTemp(NewRows);
-	Calibration->MarkPackageDirty();
+	// A name with no existing row will be appended; count how many that is and refuse before
+	// mutating anything when the merged total would exceed MaxRows, so a rejected seed leaves
+	// Rows exactly as it found it, just like the pre-merge behavior.
+	int32 UnseenCount = 0;
+	for (const FString& Name : ClassNames)
+	{
+		if (!ExistingLowerNames.Contains(Name.ToLower()))
+		{
+			++UnseenCount;
+		}
+	}
+	const int32 MergedCount = Calibration->Rows.Num() + UnseenCount;
+	if (MergedCount > UElysiumSurfaceCalibration::MaxRows)
+	{
+		OutError = FString::Printf(TEXT("merged row count %d exceeds the %d-row limit"),
+			MergedCount, UElysiumSurfaceCalibration::MaxRows);
+		return;
+	}
+
+	int32 NextFreeIndex = 0;
+	auto ClaimNextFreeIndex = [&ClaimedIndices, &NextFreeIndex]() -> int32
+	{
+		while (ClaimedIndices.Contains(NextFreeIndex))
+		{
+			++NextFreeIndex;
+		}
+		ClaimedIndices.Add(NextFreeIndex);
+		return NextFreeIndex;
+	};
+
+	int32 Added = 0;
+	int32 Kept = 0;
+	for (const FString& Name : ClassNames)
+	{
+		if (ExistingLowerNames.Contains(Name.ToLower()))
+		{
+			++Kept;
+			continue;
+		}
+		FElysiumSurfaceClassRow Row;
+		Row.Name = FName(*Name);
+		Row.Index = ClaimNextFreeIndex();
+		Calibration->Rows.Add(Row);
+		++Added;
+	}
+
+	if (Added > 0)
+	{
+		Calibration->MarkPackageDirty();
+	}
+	OutAdded = Added;
+	OutKept = Kept;
 	bOutOk = true;
 }

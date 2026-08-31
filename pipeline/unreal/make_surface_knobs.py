@@ -22,24 +22,11 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from elysium_pipeline import mounts
-
-# A mirrored copy of elysium_pipeline.importers.materials.SURFACE_CLASSES, not an import of it:
-# materials.py pulls in textures.py, which imports numpy at module scope, and Unreal's embedded
-# editor Python (this script's runtime) carries no numpy -- importing materials.py here raises
-# ModuleNotFoundError before a single asset is touched. pipeline/tests/test_make_surface_knobs.py
-# imports the real SURFACE_CLASSES (outside the editor, where numpy is present) and asserts this
-# tuple equals it, so the two lists cannot drift silently.
-SURFACE_CLASSES = (
-    "default", "armorflesh", "asphalt", "blends", "bone", "bottle", "boulder", "brick",
-    "cable", "can_pop", "can_pop_crushed", "canister", "cardboard", "carpet", "cloth", "computer",
-    "concrete", "default_silent", "dirt", "drapery", "fish_fresh", "fish_frozen", "flesh", "gargoyle",
-    "glass", "glass_shard", "glassbottle", "grass", "grates", "gravel", "grenade", "ground",
-    "gunship", "ice", "kitchen_pan", "kitchen_pot", "kitchen_utensils", "ladder", "leather", "metal",
-    "metal_barrel", "metalgrate", "metalpanel", "metalvent", "ming_xiao", "ming_xiao_tentacle", "mud", "paper",
-    "papercup", "plaster", "plastic", "player", "player_control_clip", "popcan", "quiet", "ring",
-    "rivet", "rock", "roller", "rubber", "sand", "snow", "stone", "strider",
-    "tile", "tin", "wade", "water", "watermelon", "weapon", "wood", "woodpanel",
-)
+# `elysium_pipeline.importers.surface_classes` carries no imports of its own (unlike
+# `elysium_pipeline.importers.materials`, which pulls in `textures.py`, which imports `numpy` at
+# module scope -- unavailable in Unreal's embedded editor Python, this script's runtime) so it is
+# safe to import directly here rather than mirroring the list by hand.
+from elysium_pipeline.importers.surface_classes import SURFACE_CLASSES
 
 PKG = mounts.MATERIALS_V2
 COLLECTION_NAME = "MPC_ElysiumSurfaces"
@@ -47,26 +34,20 @@ CALIBRATION_NAME = "DA_SurfaceCalibration"
 
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 
-#: Name -> class default, mirroring `UElysiumSurfaceSettings`'s declared field defaults exactly
-#: (and `Config/DefaultElysium.ini`, which restates the same values for a fresh checkout). Order
-#: does not matter to the collection; it is written in declaration order for readability.
-SCALAR_NAMES = {
-    "DefaultSpecular": 0.5,
-    "DefaultRoughness": 0.6,
-    "DefaultMetallic": 0.0,
-    "LightSpecularScale": 1.0,
-    "Overbright": 2.0,
-    "MaskRoughnessMin": 0.08,
-    "MaskRoughnessMax": 0.9,
-    "MaskSpecularScale": 1.0,
-    "MaskMetallicMax": 1.0,
-    "EnvTintScale": 1.0,
-    "FixedCubeStrength": 1.0,
-    "ChromaticTintStrength": 1.0,
-    "ChromaThreshold": 0.02,
-    "DecalDepthOffset": 0.0,
-    "CaptureRadius": 1500.0,
-}
+#: Every scalar `UElysiumSurfaceSettings::ScalarBindings()` declares, name only -- no mirrored
+#: default literal. A row this generator creates gets a placeholder 0.0 (see `make_collection`)
+#: because `main()` unconditionally calls `settings.push_to_collection()` immediately afterward,
+#: which is the single writer of a row's *value* (`ElysiumSurfaceSettings.h`'s own doc comment);
+#: a second literal default here was dead the moment that call landed, and dead in a way a future
+#: edit to one side and not the other could silently drift without a test catching it. Order does
+#: not matter to the collection; it is written in declaration order for readability.
+SCALAR_NAMES = (
+    "DefaultSpecular", "DefaultRoughness", "DefaultMetallic", "ClassInfluence",
+    "LightSpecularScale", "Overbright",
+    "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale", "MaskMetallicMax", "EnvTintScale",
+    "FixedCubeStrength", "ChromaticTintStrength", "ChromaThreshold", "DecalDepthOffset",
+    "CaptureRadius",
+)
 
 
 def _fail(msg):
@@ -94,7 +75,10 @@ def make_collection():
         for name in missing:
             parameter = unreal.CollectionScalarParameter()
             parameter.set_editor_property("parameter_name", name)
-            parameter.set_editor_property("default_value", SCALAR_NAMES[name])
+            # A placeholder, not a class default: main() unconditionally calls
+            # settings.push_to_collection() right after this function returns, which overwrites
+            # every row (missing or pre-existing alike) with UElysiumSurfaceSettings's real value.
+            parameter.set_editor_property("default_value", 0.0)
             existing.append(parameter)
         collection.set_editor_property("scalar_parameters", existing)
         if not unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False):
@@ -103,10 +87,11 @@ def make_collection():
 
 
 def make_calibration():
-    """Create `DA_SurfaceCalibration` (idempotent), seed its rows from `SURFACE_CLASSES` (`default`
-    first) and bake the LUT. Reseeding on every run keeps the asset's row order in lockstep with
-    the pipeline's class table; `SeedDefaultRows`/`RegenerateLut` are pure functions of that list,
-    so a rerun over an unchanged `SURFACE_CLASSES` writes back the same bytes."""
+    """Create `DA_SurfaceCalibration` (idempotent), merge its rows with `SURFACE_CLASSES` (`default`
+    first) by name and bake the LUT. `SeedDefaultRows` keeps an existing row's Index/Roughness/
+    Specular/Metallic untouched and only appends a name `SURFACE_CLASSES` has and the asset does
+    not -- so a rerun over an asset a human has tuned in the editor preserves every tuned value and
+    every already-assigned Index; only a genuinely new class name gets a fresh row."""
     asset = "%s/%s" % (PKG, CALIBRATION_NAME)
     calibration = unreal.load_asset(asset)
     if not calibration:
@@ -117,19 +102,21 @@ def make_calibration():
     if not calibration:
         _fail("could not create %s" % asset)
 
-    ok, error = unreal.ElysiumSurfaceCalibration.seed_default_rows(calibration, list(SURFACE_CLASSES))
+    ok, error, added, kept = unreal.ElysiumSurfaceCalibration.seed_default_rows(calibration, list(SURFACE_CLASSES))
     if not ok:
         _fail("SeedDefaultRows failed: %s" % error)
+    unreal.log("[make_surface_knobs] %s: %d row(s) added, %d row(s) kept as-is" % (
+        CALIBRATION_NAME, added, kept))
 
     ok, error = calibration.regenerate_lut()
     if not ok:
         _fail("RegenerateLut failed: %s" % error)
 
+    # The LUT now lives inside DA_SurfaceCalibration's own package (RegenerateLut creates it with
+    # the data asset as its outer, not a sibling `/T_SurfaceClassLUT` package) -- saving the
+    # calibration asset saves the LUT along with it, so there is no second asset path to save.
     if not unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False):
         _fail("could not save %s" % asset)
-    lut = calibration.get_editor_property("lut")
-    if lut:
-        unreal.EditorAssetLibrary.save_asset(lut.get_path_name(), only_if_is_dirty=False)
     return calibration
 
 
