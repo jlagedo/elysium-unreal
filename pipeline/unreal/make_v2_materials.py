@@ -2445,6 +2445,101 @@ def make_decal():
     return mat
 
 
+# ============================================================================================
+# MI_V2_Missing -- the one instance every proven-missing material slot binds
+# ============================================================================================
+
+#: The checker's tile count across the texture and the two colours of a square. VtMB substitutes
+#: its own `___error` magenta/black checkerboard for exactly the slots this instance binds, so
+#: this is that checkerboard's stand-in rather than a divergence from it.
+MISSING_CHECKER_SIZE = 64
+MISSING_CHECKER_SQUARE = 8
+MISSING_CHECKER_COLOURS = ((255, 0, 255), (0, 0, 0))
+
+
+def _make_missing_checker(force=False):
+    """`T_V2_MissingChecker`: a generated magenta/black checkerboard, authored here beside the
+    masters exactly as `T_LinearWhiteMask` and `T_V2_DefaultFrames` are."""
+    rows = []
+    for y in range(MISSING_CHECKER_SIZE):
+        row = bytearray(b"\x00")  # PNG filter type 0
+        for x in range(MISSING_CHECKER_SIZE):
+            odd = ((x // MISSING_CHECKER_SQUARE) + (y // MISSING_CHECKER_SQUARE)) % 2
+            row.extend(bytes(MISSING_CHECKER_COLOURS[odd]))
+        rows.append(bytes(row))
+    png = (b"\x89PNG\r\n\x1a\n"
+           + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", MISSING_CHECKER_SIZE,
+                                             MISSING_CHECKER_SIZE, 8, 2, 0, 0, 0))
+           + _png_chunk(b"IDAT", zlib.compress(b"".join(rows)))
+           + _png_chunk(b"IEND", b""))
+    return _import_png("T_V2_MissingChecker", png, srgb=True,
+                       compression=unreal.TextureCompressionSettings.TC_DEFAULT, force=force)
+
+
+#: Every switch `M_V2_Unlit` exposes, stated explicitly on the instance: only the base texture is
+#: on, so the checker is the whole surface and nothing else -- env map, cloud alpha, animated
+#: frames -- can quietly change what a missing slot looks like.
+MISSING_SWITCHES = {name: (name == UnlitParams.Switches.UseBaseTexture)
+                    for name in UNLIT_PARAM_TABLE["switches"]}
+
+
+def make_missing():
+    """`MI_V2_Missing`: one tracked `M_V2_Unlit` instance wearing the checker.
+
+    Every `vtmb:missing-material:` sentinel slot in the model corpus binds this one asset
+    (`docs/architecture/seam_map_model.md` -> "Import" -> "Material binding"): 1,328 slots over 461
+    referenced units. It is deliberately loud, and being `BLEND_Opaque` it never vetoes Nanite.
+    """
+    name = "MI_V2_Missing"
+    asset = "%s/%s" % (PKG, name)
+    master_asset = "%s/M_V2_Unlit" % PKG
+    recipe = {
+        "sourceHash": _source_hash(),
+        "master": master_asset,
+        "texture": "%s/T_V2_MissingChecker" % PKG,
+        "checker": {"size": MISSING_CHECKER_SIZE, "square": MISSING_CHECKER_SQUARE,
+                    "colours": MISSING_CHECKER_COLOURS},
+        "switches": MISSING_SWITCHES,
+        "blendMode": "Opaque",
+        "twoSided": False,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    master = unreal.load_asset(master_asset)
+    if not master:
+        _fail("%s not found -- make_unlit() must run before make_missing()" % master_asset)
+    texture = _make_missing_checker(force=force)
+
+    mic = bl.make_material_instance(name, PKG, master)
+    if not mic:
+        _fail("could not author %s" % asset)
+    bl.set_tex_param(mic, UnlitParams.Textures.BaseTexture, texture)
+    for switch, value in sorted(MISSING_SWITCHES.items()):
+        mel.set_material_instance_static_switch_parameter_value(
+            mic, switch, value, update_material_instance=False)
+
+    # Stated explicitly rather than inherited: this instance's whole job is to look the same
+    # wherever it lands, so a later change to the master's own blend or sidedness must not move it.
+    bpo = mic.get_editor_property("base_property_overrides")
+    bpo.set_editor_property("override_blend_mode", True)
+    bpo.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
+    bpo.set_editor_property("override_two_sided", True)
+    bpo.set_editor_property("two_sided", False)
+    mic.set_editor_property("base_property_overrides", bpo)
+    mel.update_material_instance(mic)
+
+    bl.stamp_recipe(mic, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mic
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -2467,3 +2562,4 @@ make_water()
 make_sprite()
 make_refract()
 make_decal()
+make_missing()

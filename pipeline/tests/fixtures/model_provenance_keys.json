@@ -1,0 +1,97 @@
+{
+ "_comment": [
+  "The provenance sidecar `importers/models.py::stage_unit` writes beside each model unit, key by",
+  "key. Pinned from the Python side by `pipeline/tests/test_model_provenance_keys.py` and cited by",
+  "the C++ reader's own fixture in `Source/ElysiumUE/Private/Tests/ElysiumModelProvenanceTests.cpp`,",
+  "so `UElysiumModelProvenance::FromJson` cannot drift from the shape the stage writes. The",
+  "materials lane learned this the hard way: a reader composed to a contract nobody diffed against",
+  "the stage read a shape the stage never wrote, and ~60% of the fields were silently empty.",
+  "",
+  "`editorAdded` is the one key the editor import (`pipeline/unreal/import_models.py`) adds on top",
+  "of the sidecar before `apply_json`: the cooked simple-collision shape count, which the offline",
+  "stage cannot know. `rowLabelKeys` are the two label spellings each anomaly/omission array",
+  "carries -- this lane's own rows say `kind`, the unit's own export rows say `row` (anomalies) or",
+  "`reason` (omissions) -- because the stage merges both sources verbatim."
+ ],
+ "topLevel": [
+  "anomalies",
+  "assetId",
+  "bNanite",
+  "collisionMode",
+  "collisionTraceFlag",
+  "coverage",
+  "family",
+  "familyCount",
+  "hullBounds",
+  "hullCount",
+  "jointIdentity",
+  "lods",
+  "massKg",
+  "modelPath",
+  "naniteVetoMaterial",
+  "naniteVetoSlot",
+  "omissions",
+  "physMaterial",
+  "roles",
+  "settingsVersion",
+  "shape",
+  "skinFamilies",
+  "slots",
+  "solidCount",
+  "sourceSha256",
+  "stem",
+  "surfaceProperty",
+  "surfacePropertySource",
+  "unitSchemaVersion",
+  "unitSha256"
+ ],
+ "editorAdded": [
+  "shapeCount"
+ ],
+ "slot": [
+  "index",
+  "isSentinel",
+  "materialAsset",
+  "materialId",
+  "mdlSlotIndex",
+  "resolved",
+  "skinReference",
+  "slotName",
+  "sourceName",
+  "sourcePath",
+  "surfaceProperty"
+ ],
+ "skinFamily": [
+  "family",
+  "materialIds",
+  "materials",
+  "slots"
+ ],
+ "lod": [
+  "dropped",
+  "index",
+  "mesh",
+  "primitiveCount",
+  "screenSize",
+  "sections",
+  "switchPoint",
+  "triangles"
+ ],
+ "hullBounds": [
+  "max",
+  "min"
+ ],
+ "sourceSha256Row": [
+  "role",
+  "sha256"
+ ],
+ "rowLabelKeys": {
+  "anomalies": ["kind", "row"],
+  "omissions": ["reason", "kind"]
+ },
+ "readBy": [
+  "Source/ElysiumUE/Private/ElysiumModelProvenance.cpp",
+  "Source/ElysiumUE/Private/Tests/ElysiumModelProvenanceTests.cpp",
+  "pipeline/unreal/import_models.py"
+ ]
+}

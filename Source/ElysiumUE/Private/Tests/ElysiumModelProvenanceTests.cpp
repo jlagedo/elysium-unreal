@@ -1,10 +1,15 @@
 // Content-free Substrate automation for UElysiumModelProvenance: the record a baked static mesh
 // carries from its `vtmb:model:` unit (docs/architecture/seam_map_model.md -> "Import" ->
-// "Provenance and idempotency"). The model-import Python stage is being implemented in parallel by
-// another agent from the same contract, so the fixture below is composed to the contract's own
-// field list rather than copied from a real staged sidecar (unlike the material lane's tests,
-// which have a real one to copy) -- it exercises every field FromJson reads, camelCase-transliterated
-// from the contract's own field names the same way the material lane's sidecar keys are.
+// "Provenance and idempotency").
+//
+// Reconciled against the landed stage (R1.4): this fixture is now the shape
+// `importers/models.py::stage_unit` actually writes, not the camelCase transliteration an earlier
+// draft of this file guessed while the Python side was still being written in parallel. The key
+// set is pinned on the Python side by `pipeline/tests/test_model_provenance_keys.py` against
+// `pipeline/tests/fixtures/model_provenance_keys.json`, which this file's fixture is composed
+// from; neither may drift without the other failing. `shapeCount` is the one key the editor
+// import adds on top of the sidecar (the cooked simple-shape count, which the offline stage
+// cannot know).
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -28,39 +33,50 @@ namespace
   "stem": "models_character_npc_unique_downtown_lacroix_lacroix",
   "unitSchemaVersion": "2.0.0",
   "unitSha256": "unit-sha",
-  "sourceSha256": ["mdl-sha", "vtx-sha", "vtx-cmp-sha", "phy-sha"],
+  "sourceSha256": [
+    {"role": "mdl", "sha256": "mdl-sha"},
+    {"role": "vtx-dx80", "sha256": "vtx-sha"},
+    {"role": "vtx-dx7-2bone", "sha256": "vtx-cmp-sha"},
+    {"role": "phy", "sha256": "phy-sha"}
+  ],
   "settingsVersion": "elysium-model-import-v2",
   "shape": "skeletal",
   "family": "character",
   "roles": ["character-body"],
   "slots": [
-    {"index": 0, "slotName": "tankwht", "sourceName": "tankwht", "sourcePath": "materials/character/lacroix/tankwht.vmt", "materialAssetId": "vtmb:material:character/lacroix/tankwht", "materialAsset": "/ElysiumBaked/Materials/character/lacroix/MI_tankwht", "resolved": true, "isSentinel": false},
-    {"index": 1, "slotName": "metalox", "sourceName": "metalox", "sourcePath": "", "materialAssetId": "vtmb:missing-material:1:metalox", "materialAsset": "/Game/ElysiumGenerated/Materials/V2/MI_V2_Missing", "resolved": false, "isSentinel": true}
+    {"index": 0, "slotName": "tankwht", "sourceName": "tankwht", "sourcePath": "materials/character/lacroix/tankwht.vmt", "skinReference": 0, "mdlSlotIndex": 0, "materialId": "vtmb:material:character/lacroix/tankwht", "materialAsset": "/ElysiumBaked/Materials/character/lacroix/MI_tankwht", "resolved": true, "isSentinel": false, "surfaceProperty": "flesh"},
+    {"index": 1, "slotName": "metalox", "sourceName": "metalox", "sourcePath": "", "skinReference": 1, "mdlSlotIndex": 1, "materialId": "vtmb:missing-material:1:metalox", "materialAsset": "/Game/ElysiumGenerated/Materials/V2/MI_V2_Missing", "resolved": false, "isSentinel": true, "surfaceProperty": ""}
   ],
   "skinFamilies": [
-    {"family": 0, "overrides": []},
-    {"family": 1, "overrides": [{"slotName": "tankwht", "materialAsset": "/ElysiumBaked/Materials/character/lacroix/MI_tankwht_alt"}]}
+    {"family": 0, "slots": ["tankwht", "metalox"], "materials": ["/ElysiumBaked/Materials/character/lacroix/MI_tankwht", "/Game/ElysiumGenerated/Materials/V2/MI_V2_Missing"], "materialIds": ["vtmb:material:character/lacroix/tankwht", null]},
+    {"family": 1, "slots": ["tankwht", "metalox"], "materials": ["/ElysiumBaked/Materials/character/lacroix/MI_tankwht_alt", "/Game/ElysiumGenerated/Materials/V2/MI_V2_Missing"], "materialIds": ["vtmb:material:character/lacroix/tankwht_alt", null]}
   ],
+  "familyCount": 2,
   "lods": [
-    {"index": 0, "switchPoint": 0.0, "screenSize": 1.0, "sections": 3, "triangles": 5000, "dropped": false},
-    {"index": 1, "switchPoint": 10.0, "screenSize": 0.1, "sections": 3, "triangles": 2000, "dropped": false}
+    {"index": 0, "mesh": 0, "switchPoint": 0.0, "screenSize": 1.0, "sections": 3, "triangles": 5000, "primitiveCount": 3, "dropped": false},
+    {"index": 1, "mesh": 1, "switchPoint": 10.0, "screenSize": 0.1, "sections": 3, "triangles": 2000, "primitiveCount": 3, "dropped": false}
   ],
-  "nanite": true,
+  "bNanite": true,
   "naniteVetoSlot": "",
   "naniteVetoMaterial": "",
   "collisionMode": "phy",
   "hullCount": 15,
+  "solidCount": 1,
   "shapeCount": 15,
   "massKg": 82.5,
+  "collisionTraceFlag": "CTF_UseSimpleAndComplex",
   "hullBounds": {"min": [-10.0, -10.0, 0.0], "max": [10.0, 10.0, 180.0]},
+  "jointIdentity": null,
   "surfaceProperty": "flesh",
   "surfacePropertySource": "physSolid",
   "physMaterial": "/ElysiumBaked/SurfaceProperties/PM_flesh",
   "anomalies": [
-    {"kind": "duplicateSlotName", "collided": "tankwht"}
+    {"kind": "duplicateSlotName", "collided": "tankwht"},
+    {"row": "degenerate-normal", "vertex": 12, "lod": 0}
   ],
   "omissions": [
-    {"reason": "reserved-field", "field": "mdl.keyValues"}
+    {"row": "reserved-field", "reason": "v2531-has-no-header-keyvalues-region", "field": "mdl.keyValues"},
+    {"kind": "noPhysicsSolidsBoxFallback", "hullBounds": null}
   ],
   "coverage": {"unresolved": "0", "unsupported": "0"}
 })json");
@@ -93,10 +109,12 @@ bool FElysiumModelProvenanceApplyJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("Stem"), Record->Stem,
 		FString(TEXT("models_character_npc_unique_downtown_lacroix_lacroix")));
 	TestEqual(TEXT("UnitSha256"), Record->UnitSha256, FString(TEXT("unit-sha")));
+	// One `{role, sha256}` row per source member, flattened `role:sha256` -- which member a digest
+	// belongs to is the reason this field is an array on the model lane at all.
 	if (TestEqual(TEXT("SourceSha256 count (mdl, both vtx variants, phy)"), Record->SourceSha256.Num(), 4))
 	{
-		TestEqual(TEXT("SourceSha256[0]"), Record->SourceSha256[0], FString(TEXT("mdl-sha")));
-		TestEqual(TEXT("SourceSha256[3]"), Record->SourceSha256[3], FString(TEXT("phy-sha")));
+		TestEqual(TEXT("SourceSha256[0]"), Record->SourceSha256[0], FString(TEXT("mdl:mdl-sha")));
+		TestEqual(TEXT("SourceSha256[3]"), Record->SourceSha256[3], FString(TEXT("phy:phy-sha")));
 	}
 	TestEqual(TEXT("Shape"), Record->Shape, FString(TEXT("skeletal")));
 	TestEqual(TEXT("Family"), Record->Family, FString(TEXT("character")));
@@ -112,16 +130,28 @@ bool FElysiumModelProvenanceApplyJsonTest::RunTest(const FString&)
 		TestTrue(TEXT("slot 0 Resolved"), Record->Slots[0].Resolved);
 		TestFalse(TEXT("slot 0 not a sentinel"), Record->Slots[0].IsSentinel);
 		TestTrue(TEXT("slot 1 IsSentinel"), Record->Slots[1].IsSentinel);
+		TestEqual(TEXT("slot 0 MaterialAssetId reads the stage's `materialId`"),
+			Record->Slots[0].MaterialAssetId,
+			FString(TEXT("vtmb:material:character/lacroix/tankwht")));
 		TestEqual(TEXT("slot 1 MaterialAsset (sentinel)"), Record->Slots[1].MaterialAsset,
 			FString(TEXT("/Game/ElysiumGenerated/Materials/V2/MI_V2_Missing")));
 	}
+	// Each staged family carries parallel `slots`/`materials` arrays over every skin-table column;
+	// the record zips them, so a family states what it paints at each slot.
 	if (TestEqual(TEXT("SkinFamilies count"), Record->SkinFamilies.Num(), 2))
 	{
-		TestTrue(TEXT("family 0 has no overrides"), Record->SkinFamilies[0].Overrides.IsEmpty());
-		if (TestEqual(TEXT("family 1 override count"), Record->SkinFamilies[1].Overrides.Num(), 1))
+		if (TestEqual(TEXT("family 0 override count"), Record->SkinFamilies[0].Overrides.Num(), 2))
+		{
+			TestEqual(TEXT("family 0 slot 0"), Record->SkinFamilies[0].Overrides[0].SlotName,
+				FString(TEXT("tankwht")));
+		}
+		if (TestEqual(TEXT("family 1 override count"), Record->SkinFamilies[1].Overrides.Num(), 2))
 		{
 			TestEqual(TEXT("family 1 override slot"), Record->SkinFamilies[1].Overrides[0].SlotName,
 				FString(TEXT("tankwht")));
+			TestEqual(TEXT("family 1 override material"),
+				Record->SkinFamilies[1].Overrides[0].MaterialAsset,
+				FString(TEXT("/ElysiumBaked/Materials/character/lacroix/MI_tankwht_alt")));
 		}
 	}
 
@@ -148,7 +178,9 @@ bool FElysiumModelProvenanceApplyJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("PhysMaterial"), Record->PhysMaterial, FString(TEXT("/ElysiumBaked/SurfaceProperties/PM_flesh")));
 
 	// --- content ---
-	if (TestEqual(TEXT("Anomalies count"), Record->Anomalies.Num(), 1))
+	// Two row spellings share each array: this lane's own rows label with `kind`, and the unit's
+	// own export rows -- merged in verbatim by the stage -- label with `row`. Both must read.
+	if (TestEqual(TEXT("Anomalies count"), Record->Anomalies.Num(), 2))
 	{
 		TestEqual(TEXT("anomaly 0 kind"), Record->Anomalies[0].Kind, FString(TEXT("duplicateSlotName")));
 		if (const FString* Collided = Record->Anomalies[0].Extra.Find(TEXT("collided")))
@@ -159,10 +191,23 @@ bool FElysiumModelProvenanceApplyJsonTest::RunTest(const FString&)
 		{
 			AddError(TEXT("anomaly 0 has no collided in Extra"));
 		}
+		TestEqual(TEXT("anomaly 1 kind falls back to the unit's own `row`"),
+			Record->Anomalies[1].Kind, FString(TEXT("degenerate-normal")));
 	}
-	if (TestEqual(TEXT("Omissions count"), Record->Omissions.Num(), 1))
+	if (TestEqual(TEXT("Omissions count"), Record->Omissions.Num(), 2))
 	{
-		TestEqual(TEXT("omission 0 reason"), Record->Omissions[0].Reason, FString(TEXT("reserved-field")));
+		TestEqual(TEXT("omission 0 reason"), Record->Omissions[0].Reason,
+			FString(TEXT("v2531-has-no-header-keyvalues-region")));
+		if (const FString* Row = Record->Omissions[0].Extra.Find(TEXT("row")))
+		{
+			TestEqual(TEXT("omission 0 extra.row"), *Row, FString(TEXT("reserved-field")));
+		}
+		else
+		{
+			AddError(TEXT("omission 0 has no row in Extra"));
+		}
+		TestEqual(TEXT("omission 1 reason falls back to this lane's own `kind`"),
+			Record->Omissions[1].Reason, FString(TEXT("noPhysicsSolidsBoxFallback")));
 	}
 	if (const FString* Unresolved = Record->Coverage.Find(TEXT("unresolved")))
 	{

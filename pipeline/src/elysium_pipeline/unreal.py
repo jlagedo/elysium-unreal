@@ -447,6 +447,51 @@ def import_materials(config, runner, manifest_path, *, force: bool = False) -> N
     )
 
 
+#: The whole referenced model corpus (3,661 static meshes, each a mesh build plus a collision cook
+#: and, for most, a Nanite build) through one editor process. Sized like the material import: cold
+#: DDC, first full run. A map-scoped run is minutes, not hours, and exits far inside this.
+MODEL_IMPORT_TIMEOUT_SECONDS = 4 * 3600.0
+
+
+def import_models(config, runner, manifest_path, *, force: bool = False) -> None:
+    """Run the editor phase of `import models` over one staged manifest.
+
+    `pipeline/unreal/import_models.py` (R1.4) reads the manifest, reads each unit's GLB geometry
+    out of the export corpus, authors or reuses one `UStaticMesh` per unit under
+    `/ElysiumBaked/Meshes`, cooks its collision, attaches provenance, stamps the recipe and
+    prunes. Per-asset reuse is the commandlet's own decision off the recipe stamp, so a current
+    corpus launches, reports every asset reused, and exits.
+
+    The unit root travels as its own flag: the manifest's `unitGlb` rows are relative to
+    `$ELYSIUM_EXPORT_V2_ROOT` and the manifest -- written by the offline stage, which never
+    records a machine path -- does not carry it.
+    """
+    if config.export_v2_root is None:
+        raise UnrealFailure("the model import needs ELYSIUM_EXPORT_V2_ROOT")
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/import_models.py'}",
+            f"-ImportModels={manifest_path}",
+            f"-ImportUnitRoot={config.export_v2_root}",
+            *(["-ImportForce=1"] if force else []),
+            # The mesh build cooks Nanite data and platform render data; the corpus bake runs
+            # with rendering allowed for the same reason.
+            "-AllowCommandletRendering",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=MODEL_IMPORT_TIMEOUT_SECONDS,
+    )
+
+
 #: A grid of ~20 static-mesh actors, TextRenderActors and a five-actor lighting rig -- no import,
 #: no compile, no DDC touched. Short leash like the surface-property import: the whole run is
 #: editor boot plus a scene build and a save, so anything past this is a hang, not a long run.

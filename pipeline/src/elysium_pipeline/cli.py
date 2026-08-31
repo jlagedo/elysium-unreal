@@ -1986,17 +1986,22 @@ def import_models(
         help="Owner-approved whole-corpus run: every published, referenced model (R1.1's 3,661). "
              "Long-running; --maps is the working mode.",
     ),
+    force: bool = typer.Option(
+        False, "--force", help="Re-import every asset even when its recipe stamp is current."
+    ),
     stage_only: bool = typer.Option(
         False, "--stage-only",
-        help="Write the manifest and provenance sidecars; launch no editor. Currently required -- "
-             "the editor import phase (R1.4) has not landed yet.",
+        help="Write the manifest and provenance sidecars; launch no editor.",
     ),
 ) -> None:
-    """Stage the referenced model corpus from the published GLB units into a manifest under
-    `import/models/` (`docs/architecture/seam_map_model.md` -> "Import"). R1.3 of the props lane:
-    the offline stage phase only -- R1.4 lands the headless editor import this manifest feeds."""
+    """Import the referenced model corpus from the published GLB units into /ElysiumBaked/Meshes.
 
-    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+    Stages every model the selection names into a manifest under `import/models/` and then runs
+    the headless editor import over it (`docs/architecture/seam_map_model.md` -> "Import").
+    """
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import unreal
         from elysium_pipeline.importers import materials as material_importer
         from elysium_pipeline.importers import models as importer
 
@@ -2004,11 +2009,6 @@ def import_models(
             raise ConfigError(
                 "ELYSIUM_EXPORT_V2_ROOT and ELYSIUM_WORK_ROOT must be configured; copy "
                 "dev/paths.example.env to .elysium.local.env and set the local paths"
-            )
-        if not stage_only:
-            raise ConfigError(
-                "the model lane's editor import phase (R1.4) has not landed yet -- pass "
-                "--stage-only"
             )
         root = importer.staging_root(config.work_root)
         materials_root = material_importer.staging_root(config.work_root)
@@ -2022,19 +2022,54 @@ def import_models(
             console.print(f"[yellow]  {key}: {detail}[/yellow]", markup=True)
         for key, detail in staged.skips[:10]:
             console.print(f"[yellow]  skipped {key}: {detail}[/yellow]", markup=True)
-        if staged.failures:
-            raise RuntimeError(f"{len(staged.failures)} model unit(s) could not be staged")
+        if stage_only:
+            if staged.failures:
+                raise RuntimeError(f"{len(staged.failures)} model unit(s) could not be staged")
+            return
 
-    # The stage is a file transform over the published units; it needs no engine and no game
-    # install, only the export corpus and the work root the manifest and sidecars land under.
+        editor_failure: Exception | None = None
+        try:
+            unreal.import_models(config, runner, staged.manifest_path, force=force)
+        except unreal.UnrealFailure as error:
+            editor_failure = error
+        report = _read_json(root / importer.IMPORT_REPORT_NAME)
+        failed_assets = (report.get("failed") or []) if report else []
+        if report:
+            console.print(
+                "model import: "
+                f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
+                f"{report.get('pruned', 0)} pruned, {len(failed_assets)} failed"
+            )
+            for row in failed_assets[:10]:
+                console.print(
+                    f"[yellow]  {row.get('assetPath')}: {row.get('reason')}[/yellow]", markup=True
+                )
+            phases = report.get("phaseSeconds") or {}
+            if phases:
+                console.print(
+                    "  phases: "
+                    + ", ".join(f"{name}={seconds}s" for name, seconds in sorted(phases.items()))
+                )
+        problems = []
+        if staged.failures:
+            problems.append(f"{len(staged.failures)} unit(s) could not be staged")
+        if failed_assets:
+            problems.append(f"{len(failed_assets)} asset(s) failed to import")
+        if editor_failure is not None:
+            problems.append(str(editor_failure))
+        if problems:
+            raise RuntimeError("; ".join(problems))
+
+    # The stage is a file transform over the published units; the editor phase needs the engine
+    # and the export corpus (it reads each unit's geometry), never the game install.
     _execute(
         _state(ctx),
         "import models",
-        ExitCode.OFFLINE_EXPORT,
+        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
         action,
         require_work=True,
-        require_ue=False,
-        activity=False,
+        require_ue=not stage_only,
+        activity=not stage_only,
     )
 
 

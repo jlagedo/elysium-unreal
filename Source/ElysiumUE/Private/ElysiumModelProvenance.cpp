@@ -64,7 +64,37 @@ namespace
 		}
 	}
 
-	/** `anomalies[]`: every row carries `kind`; every other field lands in `Extra` (C-2). */
+	/**
+	 * The label key of an anomaly or omission row, which is not one spelling.
+	 *
+	 * `importers/models.py` merges two row sources into each array verbatim: this lane's own rows
+	 * (`{"kind": "missingMaterialSentinel", ...}`, `{"kind": "noPhysicsSolidsBoxFallback", ...}`)
+	 * and the unit's own `anomalies[]`/`omissions[]` straight out of the GLB extension, whose rows
+	 * are `{"row": "degenerate-normal", ...}` and `{"row": "reserved-field", "reason": ...}`. The
+	 * stage cannot rename a foreign row without rewriting it, so the reader takes the first key
+	 * that is present, in the order this lane's own rows use it, and the unused one still lands in
+	 * `Extra`. Pinned against the staged shape by
+	 * `pipeline/tests/test_model_provenance_keys.py`.
+	 */
+	FString ReadRowLabel(const TSharedRef<FJsonObject>& Row, const TCHAR* Preferred,
+		const TCHAR* Fallback, const TCHAR*& OutUsedKey)
+	{
+		FString Label;
+		if (Row->TryGetStringField(Preferred, Label))
+		{
+			OutUsedKey = Preferred;
+			return Label;
+		}
+		if (Row->TryGetStringField(Fallback, Label))
+		{
+			OutUsedKey = Fallback;
+			return Label;
+		}
+		OutUsedKey = Preferred;
+		return FString();
+	}
+
+	/** `anomalies[]`: `kind` (this lane's rows) or `row` (the unit's); the rest lands in `Extra`. */
 	void ReadAnomalies(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceAnomaly>& Out)
 	{
 		Out.Reset();
@@ -82,12 +112,13 @@ namespace
 			}
 			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
 			FElysiumProvenanceAnomaly& Anomaly = Out.AddDefaulted_GetRef();
-			Anomaly.Kind = Str(Row, TEXT("kind"));
-			ReadExtraFields(Row, TEXT("kind"), Anomaly.Extra);
+			const TCHAR* UsedKey = nullptr;
+			Anomaly.Kind = ReadRowLabel(Row, TEXT("kind"), TEXT("row"), UsedKey);
+			ReadExtraFields(Row, UsedKey, Anomaly.Extra);
 		}
 	}
 
-	/** `omissions[]`: every row carries `reason`; every other field lands in `Extra` (C-2). */
+	/** `omissions[]`: `reason` (the unit's rows) or `kind` (this lane's); the rest lands in `Extra`. */
 	void ReadOmissions(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceNote>& Out)
 	{
 		Out.Reset();
@@ -105,8 +136,50 @@ namespace
 			}
 			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
 			FElysiumProvenanceNote& Note = Out.AddDefaulted_GetRef();
-			Note.Reason = Str(Row, TEXT("reason"));
-			ReadExtraFields(Row, TEXT("reason"), Note.Extra);
+			const TCHAR* UsedKey = nullptr;
+			Note.Reason = ReadRowLabel(Row, TEXT("reason"), TEXT("kind"), UsedKey);
+			ReadExtraFields(Row, UsedKey, Note.Extra);
+		}
+	}
+
+	/**
+	 * `sourceSha256[]`: one `{"role", "sha256"}` row per source member ("Source closure" -- the
+	 * MDL, both VTX variants, and the PHY when the model ships one), flattened to `role:sha256`.
+	 *
+	 * The role is kept rather than dropped because a model unit is assembled from several
+	 * independently-resolved members and "which member" is the whole reason this field is an array
+	 * here and a single string on the material and texture lanes. A plain string element is taken
+	 * as-is, so a future stage that flattens the rows itself still reads.
+	 */
+	void ReadSourceSha256(const TSharedRef<FJsonObject>& O, TArray<FString>& Out)
+	{
+		Out.Reset();
+		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("sourceSha256"));
+		if (!Rows)
+		{
+			return;
+		}
+		for (const TSharedPtr<FJsonValue>& Value : *Rows)
+		{
+			if (!Value.IsValid())
+			{
+				continue;
+			}
+			FString Plain;
+			if (Value->TryGetString(Plain))
+			{
+				Out.Add(Plain);
+				continue;
+			}
+			const TSharedPtr<FJsonObject>* RowPtr = nullptr;
+			if (!Value->TryGetObject(RowPtr) || !RowPtr)
+			{
+				continue;
+			}
+			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
+			const FString Role = Str(Row, TEXT("role"));
+			const FString Digest = Str(Row, TEXT("sha256"));
+			Out.Add(Role.IsEmpty() ? Digest : Role + TEXT(":") + Digest);
 		}
 	}
 
@@ -132,14 +205,26 @@ namespace
 			Slot.SlotName = Str(Row, TEXT("slotName"));
 			Slot.SourceName = Str(Row, TEXT("sourceName"));
 			Slot.SourcePath = Str(Row, TEXT("sourcePath"));
-			Slot.MaterialAssetId = Str(Row, TEXT("materialAssetId"));
+			// `materialId` is the key the stage writes ("Material binding": a `vtmb:material:` id
+			// or a `vtmb:missing-material:<slot>:<name>` sentinel); the field it fills is named
+			// MaterialAssetId to say what kind of id it is.
+			Slot.MaterialAssetId = Str(Row, TEXT("materialId"));
 			Slot.MaterialAsset = Str(Row, TEXT("materialAsset"));
 			Slot.Resolved = Bool(Row, TEXT("resolved"));
 			Slot.IsSentinel = Bool(Row, TEXT("isSentinel"));
 		}
 	}
 
-	/** `skinFamilies[]`: `materialBindings.skinFamilies`, as written into `DA_ElysiumPropSkins`. */
+	/**
+	 * `skinFamilies[]`: `materialBindings.skinFamilies`, resolved to `MI_` paths by the stage.
+	 *
+	 * Each staged row is `{"family": n, "slots": [name, ...], "materials": [path, ...],
+	 * "materialIds": [...]}` -- two parallel arrays over *every* column of the model's skin table,
+	 * drawn by LOD 0 or not, because the whole table is what `DA_ElysiumPropSkins` is written from
+	 * (R1.5). The pair is zipped into `Overrides` here, so the record states what each family
+	 * paints at each slot; the diff-against-family-0 fold that makes the *table's* rows short is
+	 * the table's own, not this record's, and `Slots[]` above already states family 0 on its own.
+	 */
 	void ReadSkinFamilies(const TSharedRef<FJsonObject>& O, TArray<FElysiumModelSkinFamilyProvenance>& Out)
 	{
 		Out.Reset();
@@ -158,20 +243,14 @@ namespace
 			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
 			FElysiumModelSkinFamilyProvenance& Family = Out.AddDefaulted_GetRef();
 			Family.Family = static_cast<int32>(Int(Row, TEXT("family"), Out.Num() - 1));
-			if (const TArray<TSharedPtr<FJsonValue>>* Overrides = Arr(Row, TEXT("overrides")))
+			const TArray<FString> SlotNames = Strings(Row, TEXT("slots"));
+			const TArray<FString> Materials = Strings(Row, TEXT("materials"));
+			const int32 Count = FMath::Min(SlotNames.Num(), Materials.Num());
+			for (int32 Index = 0; Index < Count; ++Index)
 			{
-				for (const TSharedPtr<FJsonValue>& OverrideValue : *Overrides)
-				{
-					const TSharedPtr<FJsonObject>* OverridePtr = nullptr;
-					if (!OverrideValue.IsValid() || !OverrideValue->TryGetObject(OverridePtr) || !OverridePtr)
-					{
-						continue;
-					}
-					const TSharedRef<FJsonObject> OverrideRow = (*OverridePtr).ToSharedRef();
-					FElysiumModelSkinOverride& Override = Family.Overrides.AddDefaulted_GetRef();
-					Override.SlotName = Str(OverrideRow, TEXT("slotName"));
-					Override.MaterialAsset = Str(OverrideRow, TEXT("materialAsset"));
-				}
+				FElysiumModelSkinOverride& Override = Family.Overrides.AddDefaulted_GetRef();
+				Override.SlotName = SlotNames[Index];
+				Override.MaterialAsset = Materials[Index];
 			}
 		}
 	}
@@ -239,7 +318,7 @@ void UElysiumModelProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 	Stem = Str(O, TEXT("stem"));
 	UnitSchemaVersion = Str(O, TEXT("unitSchemaVersion"));
 	UnitSha256 = Str(O, TEXT("unitSha256"));
-	SourceSha256 = Strings(O, TEXT("sourceSha256"));
+	ReadSourceSha256(O, SourceSha256);
 	SettingsVersion = Str(O, TEXT("settingsVersion"));
 
 	// --- identity classification ---
@@ -253,7 +332,9 @@ void UElysiumModelProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 
 	// --- geometry ---
 	ReadLods(O, Lods);
-	bNanite = Bool(O, TEXT("nanite"));
+	// `bNanite` is the key the stage writes -- the field's own name, Unreal's boolean prefix and
+	// all, not a `nanite` transliteration of it.
+	bNanite = Bool(O, TEXT("bNanite"));
 	NaniteVetoSlot = Str(O, TEXT("naniteVetoSlot"));
 	NaniteVetoMaterial = Str(O, TEXT("naniteVetoMaterial"));
 

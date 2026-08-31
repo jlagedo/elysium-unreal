@@ -1,0 +1,133 @@
+[
+ {
+  "unit": "vtmb:model:character/monster/rat/rat",
+  "modelPath": "models/character/monster/rat/rat.mdl",
+  "stem": "models_character_monster_rat_rat",
+  "asset": "SM_models_character_monster_rat_rat",
+  "assetPath": "/ElysiumBaked/Meshes/SM_models_character_monster_rat_rat",
+  "slots": [
+   {
+    "sourceName": "Rat",
+    "slotName": "Rat"
+   }
+  ]
+ },
+ {
+  "unit": "vtmb:model:character/npc/unique/society_of_leopold/average_vampire_hunter/average_vampire_hunter",
+  "modelPath": "models/character/npc/unique/society_of_leopold/average_vampire_hunter/average_vampire_hunter.mdl",
+  "stem": "models_character_npc_unique_society_of_leopold_average_vampire_hunter_average_vampire_hunter",
+  "asset": "SM_models_character_npc_unique_society_of_leopold_average_vampire_hunter_average_vampire_hunter",
+  "assetPath": "/ElysiumBaked/Meshes/SM_models_character_npc_unique_society_of_leopold_average_vampire_hunter_average_vampire_hunter",
+  "slots": [
+   {
+    "sourceName": "AvgHunterBody",
+    "slotName": "AvgHunterBody"
+   },
+   {
+    "sourceName": "AVHHead",
+    "slotName": "AVHHead"
+   },
+   {
+    "sourceName": "lowerteeth",
+    "slotName": "lowerteeth"
+   },
+   {
+    "sourceName": "upperteeth",
+    "slotName": "upperteeth"
+   }
+  ]
+ },
+ {
+  "unit": "vtmb:model:character/npc/common/citizen/female2/female_citizen_2",
+  "modelPath": "models/character/npc/common/citizen/female2/female_citizen_2.mdl",
+  "stem": "models_character_npc_common_citizen_female2_female_citizen_2",
+  "asset": "SM_models_character_npc_common_citizen_female2_female_citizen_2",
+  "assetPath": "/ElysiumBaked/Meshes/SM_models_character_npc_common_citizen_female2_female_citizen_2",
+  "slots": [
+   {
+    "sourceName": "femcitizen2body",
+    "slotName": "femcitizen2body"
+   },
+   {
+    "sourceName": "Eyeball_r",
+    "slotName": "Eyeball_r"
+   },
+   {
+    "sourceName": "Eyeball_l",
+    "slotName": "Eyeball_l"
+   },
+   {
+    "sourceName": "upperteeth",
+    "slotName": "upperteeth"
+   }
+  ]
+ },
+ {
+  "unit": "vtmb:model:items/linedpaper/ground/linedpaper",
+  "modelPath": "models/items/linedpaper/ground/linedpaper.mdl",
+  "stem": "models_items_linedpaper_ground_linedpaper",
+  "asset": "SM_models_items_linedpaper_ground_linedpaper",
+  "assetPath": "/ElysiumBaked/Meshes/SM_models_items_linedpaper_ground_linedpaper",
+  "slots": [
+   {
+    "sourceName": "LinedPaper",
+    "slotName": "LinedPaper"
+   }
+  ]
+ },
+ {
+  "unit": "vtmb:model:weapons/knife/wield/w_m_knife",
+  "modelPath": "models/weapons/knife/wield/w_m_knife.mdl",
+  "stem": "models_weapons_knife_wield_w_m_knife",
+  "asset": "SM_models_weapons_knife_wield_w_m_knife",
+  "assetPath": "/ElysiumBaked/Meshes/SM_models_weapons_knife_wield_w_m_knife",
+  "slots": [
+   {
+    "sourceName": "KNIFE01",
+    "slotName": "KNIFE01"
+   }
+  ]
+ },
+ {
+  "unit": "vtmb:model:scenery/signs/cliff-danger",
+  "modelPath": "models/scenery/signs/cliff-danger.mdl",
+  "stem": "models_scenery_signs_cliff-danger",
+  "asset": "SM_models_scenery_signs_cliff_danger",
+  "assetPath": "/ElysiumBaked/Meshes/SM_models_scenery_signs_cliff_danger",
+  "slots": [
+   {
+    "sourceName": "signbacka",
+    "slotName": "signbacka"
+   },
+   {
+    "sourceName": "cliff-danger",
+    "slotName": "cliff_danger"
+   }
+  ]
+ },
+ {
+  "unit": "vtmb:model:scenery/furniture/fancybed/fancybed",
+  "modelPath": "models/scenery/furniture/fancybed/fancybed.mdl",
+  "stem": "models_scenery_furniture_fancybed_fancybed",
+  "asset": "SM_models_scenery_furniture_fancybed_fancybed",
+  "assetPath": "/ElysiumBaked/Meshes/SM_models_scenery_furniture_fancybed_fancybed",
+  "slots": [
+   {
+    "sourceName": "bed_col1",
+    "slotName": "bed_col1"
+   },
+   {
+    "sourceName": "fancybed",
+    "slotName": "fancybed"
+   },
+   {
+    "sourceName": "null",
+    "slotName": "null"
+   },
+   {
+    "sourceName": "null",
+    "slotName": "null_3"
+   }
+  ]
+ }
+]
