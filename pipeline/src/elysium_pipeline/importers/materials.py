@@ -246,7 +246,7 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
         },
     ),
     "M_V2_Sprite": _merged(_SHARED_PARAMS, _BASE_ANIM_LANE, {
-        "BaseTexture": "T", "UseVertexColor": "#",
+        "BaseTexture": "T", "UseVertexColor": "#", "UseVertexAlpha": "#",
     }),
     "M_V2_Refract": _merged(_SHARED_PARAMS, {
         "BaseTexture": "T", "DuDvMap": "T", "NormalMap": "T", "EnvMap": "T",

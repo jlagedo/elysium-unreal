@@ -321,6 +321,7 @@ MASTERS = [
     ("M_V2_TwoTexture", "TwoTextureParams", "BLEND.BLEND_OPAQUE"),
     ("M_V2_Eyes", "EyesParams", "BLEND.BLEND_OPAQUE"),
     ("M_V2_Water", "WaterParams", "BLEND.BLEND_TRANSLUCENT"),
+    ("M_V2_Sprite", "SpriteParams", "BLEND.BLEND_TRANSLUCENT"),
 ]
 
 

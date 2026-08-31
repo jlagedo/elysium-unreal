@@ -14,8 +14,8 @@
 // This revision (SF-4.3 part 2) reconciled M_V2_Lit to the design revision 2026-08-31 ("Revise
 // the material import design after review") and added M_V2_LitTranslucent, M_V2_Unlit and
 // M_V2_TwoTexture. Part 3 adds the remaining five masters family-by-family (mechanics doc
-// "Ordering, concurrency, tests, risks"): this revision adds M_V2_Water (M_V2_Eyes already
-// landed).
+// "Ordering, concurrency, tests, risks"): this revision adds M_V2_Sprite (M_V2_Eyes and
+// M_V2_Water already landed).
 //
 // Every V2 master exposes SurfaceClassIndex, SurfaceClassLUT, Alpha and Color -- the four
 // parameters the design doc states once, "on every master", rather than repeating in each
@@ -292,5 +292,31 @@ namespace ElysiumSurfaceParamsWater
 		inline const FName UseBaseTexture(TEXT("UseBaseTexture"));
 		inline const FName UseNormalMap(TEXT("UseNormalMap"));
 		inline const FName UseAnimatedNormalFrames(TEXT("UseAnimatedNormalFrames"));
+	}
+}
+
+// `M_V2_Sprite` -- `sprite` family plus the 5 `unlitgeneric` `$ignorez` world units re-routed here
+// (design doc "Master inventory"). Unlit, two-sided, `bDisableDepthTest` set on the master itself
+// (material-only, never per-instance). `UseVertexAlpha` is the SF-4.3-part-3 orchestrator ruling:
+// it absorbs the rerouted `$ignorez` unit (`engine/vertexcolorblend`) that authors `$vertexalpha`.
+namespace ElysiumSurfaceParamsSprite
+{
+	namespace Textures
+	{
+		inline const FName BaseTexture(TEXT("BaseTexture"));
+		inline const FName BaseTextureFrames(TEXT("BaseTextureFrames"));
+	}
+
+	namespace Scalars
+	{
+		inline const FName FrameRate(TEXT("FrameRate"));
+		inline const FName FrameCount(TEXT("FrameCount"));
+	}
+
+	namespace Switches
+	{
+		inline const FName UseVertexColor(TEXT("UseVertexColor"));
+		inline const FName UseVertexAlpha(TEXT("UseVertexAlpha"));
+		inline const FName UseAnimatedFrames(TEXT("UseAnimatedFrames"));
 	}
 }

@@ -697,6 +697,7 @@ tessellation size — geometry, owned by the map lane, provenance only here.
 | `BaseTexture` | T2D | `/Engine/EngineResources/DefaultTexture` | colour |
 | the base-animation lane | | | 12 of 62 host an `animatedtexture` |
 | `UseVertexColor` | # | `false` | `SpriteRenderTransColor` and the `*_vertexcolor` vertex programs |
+| `UseVertexAlpha` | # | `false` | `$vertexalpha` — SF-4.3 part 3 orchestrator ruling: absorbs the rerouted `$ignorez` unit (`engine/vertexcolorblend`, one of the 5 `unlitgeneric` units re-routed to this master) that authors `$vertexalpha`, so it stages cleanly instead of failing "not exposed" (see "Per-unit divergences" below — this one is *not* in that allowlist, because it now has a real destination) |
 
 `$spriterendermode` is **not** a parameter: it selects blend state, and blend state is a
 per-instance override. `$spriteorigin` (54 units) is **not** a parameter either — like

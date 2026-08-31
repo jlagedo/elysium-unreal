@@ -1624,6 +1624,147 @@ def make_water():
     return mat
 
 
+# ============================================================================================
+# M_V2_Sprite
+# ============================================================================================
+
+
+class SpriteParams:
+    class Textures:
+        BaseTexture = "BaseTexture"
+        BaseTextureFrames = "BaseTextureFrames"
+        SurfaceClassLUT = "SurfaceClassLUT"
+
+    class Scalars:
+        Alpha = "Alpha"
+        SurfaceClassIndex = "SurfaceClassIndex"
+        FrameRate = "FrameRate"
+        FrameCount = "FrameCount"
+
+    class Vectors:
+        Color = "Color"
+
+    class Switches:
+        UseVertexColor = "UseVertexColor"
+        # `UseVertexAlpha` is the SF-4.3-part-3 orchestrator ruling: it absorbs the rerouted
+        # `$ignorez` unit that authors `$vertexalpha` (design doc "Master inventory" -> the 5
+        # `unlitgeneric` `$ignorez` units re-routed here; one, `engine/vertexcolorblend`, also
+        # authors `$vertexalpha`) so that unit stages cleanly instead of failing "not exposed".
+        UseVertexAlpha = "UseVertexAlpha"
+        UseAnimatedFrames = "UseAnimatedFrames"
+
+
+SPRITE_PARAM_TABLE = {
+    "textures": sorted(vars(SpriteParams.Textures)[k] for k in vars(SpriteParams.Textures) if not k.startswith("_")),
+    "scalars": sorted(vars(SpriteParams.Scalars)[k] for k in vars(SpriteParams.Scalars) if not k.startswith("_")),
+    "vectors": sorted(vars(SpriteParams.Vectors)[k] for k in vars(SpriteParams.Vectors) if not k.startswith("_")),
+    "switches": sorted(vars(SpriteParams.Switches)[k] for k in vars(SpriteParams.Switches) if not k.startswith("_")),
+}
+
+
+def _set_disable_depth_test(mat):
+    """The property name has moved across engine versions (`make_gizmo_material.py`'s own
+    precedent); guard so the asset still builds if it is absent, rather than failing the whole
+    content build over a rename. `M_V2_Sprite` sets this unconditionally, on the master itself --
+    the design doc's own "Master inventory" states `bDisableDepthTest` (from `$ignorez`) is
+    material-only, never a per-instance override, unlike `BlendMode`/`TwoSided`/the opacity clip."""
+    for prop in ("disable_depth_test", "b_disable_depth_test"):
+        try:
+            mat.set_editor_property(prop, True)
+            return
+        except Exception:
+            continue
+    unreal.log_warning(
+        "[make_v2_materials] M_V2_Sprite: no disable_depth_test property found on this engine "
+        "build -- shipped Sprite depth-test-off behaviour is not reproduced")
+
+
+def _build_sprite(mat, collection, lut_texture, default_frames):
+    """The `SpriteRender*` programs are all compiled-only (design doc "M_V2_Sprite" post-lighting
+    math): "Base Color -> Emissive, Color x vertex colour, blend from the row" -- `$spriterendermode`
+    picks the *blend state* (a per-instance override, design doc's blend table), not a material
+    parameter, so nothing about it lives in this graph. There is no `UseBaseTexture` switch on this
+    master (unlike Lit/Unlit/Water/Refract) -- every one of the design's 67 units binds a base
+    texture, so the slot is always sampled, unconditionally."""
+    g = Graph(mat, collection=collection)
+    P = SpriteParams
+
+    uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1100, -600)
+    base_tex_2d = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
+    connect(uv0, "", base_tex_2d, "UVs")
+    base_tex = _flipbook_sample(
+        g, base_tex_2d, P.Textures.BaseTextureFrames, uv0,
+        P.Scalars.FrameRate, P.Scalars.FrameCount, P.Switches.UseAnimatedFrames, default_frames,
+        -1100, -600, sampler="color")
+    base_rgb = g.mask(base_tex, "rgb", -900, -420)
+    base_a = g.mask(base_tex, "a", -900, -340)
+
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
+    tinted = g.mul(base_rgb, "", color, "", -700, -400)
+    vertex_color = g.vertex_color(-1100, -680)
+    vc_rgb = g.mask(vertex_color, "rgb", -900, -680)
+    with_vc = g.mul(tinted, "", vc_rgb, "", -500, -440)
+    vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, -300, -400, default=False)
+    g.to(vc_selected, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    g.to(vc_selected, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # -- class LUT declared for contract completeness ("every master exposes SurfaceClassLUT");
+    # Unlit shading model ignores MP_ROUGHNESS/SPECULAR/METALLIC, not wired to anything ---------
+    _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+
+    # -- Opacity: Alpha x BaseTexture.a, x VertexColor.a under UseVertexAlpha -------------------
+    alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+    alpha_with_basetex = g.mul(alpha_param, "", base_a, "", 1900, 0)
+    # `VertexColor`'s outputs are all unnamed FNames -- connect straight to its own "A" output
+    # (already 1-wide) rather than through a ComponentMask; see M_V2_Lit's Opacity section.
+    alpha_with_vc = g.mul(alpha_with_basetex, "", vertex_color, "A", 2100, 40)
+    opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_with_basetex,
+                             2300, 20, default=False)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY_MASK)
+
+
+def make_sprite():
+    name = "M_V2_Sprite"
+    asset = "%s/%s" % (PKG, name)
+    collection = _load_surfaces_collection()
+    lut_texture = _load_class_lut()
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "citedUnits": {},  # SpriteRender* ships compiled-only; no readable shader-source unit
+        "params": SPRITE_PARAM_TABLE,
+        "mpcScalars": REQUIRED_MPC_SCALARS,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    default_frames = _make_default_frames_array()
+
+    mat, asset = _fresh(name, niagara_sprites=True)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property("two_sided", True)
+    _set_disable_depth_test(mat)
+
+    _build_sprite(mat, collection, lut_texture, default_frames)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -1643,3 +1784,4 @@ make_unlit()
 make_two_texture()
 make_eyes()
 make_water()
+make_sprite()
