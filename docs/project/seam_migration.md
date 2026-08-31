@@ -232,17 +232,19 @@ settings and the class table are the whole authoring surface, and an edit to an 
 is a throwaway experiment the next import overwrites; **class key** is `$surfaceprop` when
 present, else the VMT's top directory (`brick/`, `concrete/`, `metal/`, `glass/`, `wood/`, …),
 else the shader-family default row; **light specular scale is one global knob**, no per-map
-override; **SF-C0 runs before Track A.** The settings object is the single writer of
+override; SF-C0-before-Track-A was superseded the same day by "new pipeline first" (see the Plan). The settings object is the single writer of
 `MPC_ElysiumEnvironment`'s surface scalars — the Cog Environment window's sliders become views
 onto the same settings object rather than a second writer. Knobs are editor-only; a packaged build
 reads the saved ini.
 
-## Plan — surfaces track (export gap, surface properties, reflections, materials)
+## Plan — surfaces track (export gap, surface properties, materials, reflections)
 
-Owner instruction (2026-08-31): review the whole surface chain and plan it in the smallest
-possible tasks. This section is the plan; scheduling and status go to `roadmap.md` when a task is
-picked up. IDs are `SF-<track><n>`. Tracks A and C are independent and can run together; B is
-small and precedes D; D is the material slice proper.
+Owner instructions (2026-08-31): plan the whole surface chain in the smallest possible tasks;
+**do not touch the legacy pipeline** (`bake_map.py`, `make_*_materials.py`, the runtime factory)
+until the new one is buttoned up layer by layer — export first, then each import layer, then the
+owner tunes on knobs, and only then is anything wired to consumers. This section is the plan;
+scheduling and status go to `roadmap.md` when a task is picked up. IDs are `SF-<phase>.<n>`; the
+earlier `SF-A/B/C/D` names are kept in brackets where a task moved.
 
 **Finding that reorders everything.** The full export_v2 run is complete for install members, but
 the texture and material seams enumerate VPK and loose files only. The 9,576 files embedded in the
@@ -253,114 +255,133 @@ the corpus index under each map's `embedded[]` with `asset: null` ("became nothi
 `cubemaps[].resolved` and `pakfile.entries[].unit` resolve against the zip, not against a unit on
 disk, so nothing failed. The contract exists; the exporter half was never built.
 
-### Track A — close the PAKFILE export gap (export_v2)
+### Phase 1 — export layer complete (export_v2)
 
-- **SF-A1 Make the gap visible.** Corpus index `summary` counts embedded members with
+- **SF-1.1 Make the gap visible** [A1]. Corpus index `summary` counts embedded members with
   `asset: null`; `uv run elysium doctor` reports the number. Done when the count (9,576) prints and
   a test pins it. No behaviour change.
-- **SF-A2 Probe textures as units.** The texture seam takes a second enumeration over each BSP's
-  PAKFILE `.tth`/`.ttz` pairs and emits `textures/maps/<map>/c<x>_<y>_<z>.glb` with the
-  `bsp-pakfile` origin, capsule bytes included. First establish what the 575 `.tth` without a
-  `.ttz` are (header-only? mip-less?) and record it in `seam_map_texture.md`. Done when 1,325
-  units exist and validate.
-- **SF-A3 Patched materials as units.** The material seam does the same for PAKFILE `.vmt`,
-  emitting `materials/maps/<map>/<mat>_<x>_<y>_<z>.glb`; `$envmap` resolves to the A2 texture unit;
-  the base material and the probe origin are recorded as dependencies (`role: material`,
+- **SF-1.2 Answer the 575** [new]. Establish what the `.tth` probes without a `.ttz` twin are
+  (header-only? mip-less?) and record it in `seam_map_texture.md`. Read-only investigation.
+- **SF-1.3 Probe textures as units** [A2]. The texture seam takes a second enumeration over each
+  BSP's PAKFILE `.tth`/`.ttz` and emits `textures/maps/<map>/c<x>_<y>_<z>.glb` with the
+  `bsp-pakfile` origin, capsule bytes included. Done when 1,325 units exist and validate.
+- **SF-1.4 Patched materials as units** [A3]. The material seam does the same for PAKFILE `.vmt`,
+  emitting `materials/maps/<map>/<mat>_<x>_<y>_<z>.glb`; `$envmap` resolves to the 1.3 texture
+  unit; the base material and the probe origin are recorded as dependencies (`role: material`,
   `patchOf`; `cubemapOrigin`). Done when 7,501 units exist and validate.
-- **SF-A4 Index claims them.** `_pakfile_members` finds every embedded key claimed; the A1 count
-  goes to 0; the map validator fails a map whose `cubemaps[]`/`textures[]`/`pakfile.entries[]`
-  names a unit that is not on disk. Same task: texture edges in `index.glb` carry `parameter`
-  (slice-2 follow-up).
-- **SF-A5 Re-export and re-import textures.** Full `export_v2` run, doctor, then
+- **SF-1.5 Index claims them** [A4]. `_pakfile_members` finds every embedded key claimed; the 1.1
+  count goes to 0; the map validator fails a map whose `cubemaps[]`/`textures[]`/
+  `pakfile.entries[]` names a unit that is not on disk. Same task: texture edges in `index.glb`
+  carry `parameter` (slice-2 follow-up).
+- **SF-1.6 Re-export, re-import textures** [A5]. Full `export_v2` run, doctor, then
   `uv run elysium import textures` picks up the 1,325 probes as `TC_` under
   `/ElysiumBaked/Textures/maps/<map>/`. Ledger rows and counts in this file updated.
 
-### Track B — surface properties import (slice 3, tiny)
+### Phase 2 — import layer: surface properties (slice 3)
 
-- **SF-B1 Asset class.** `UElysiumPhysicalMaterial : UPhysicalMaterial` with the fields Unreal
-  lacks (movement, footstep pools, impact matrix, sound-script IDs, `gameMaterial`), a provenance
-  `UAssetUserData`, and `EPhysicalSurface` entries in `DefaultEngine.ini` for the compact classes.
-  Substrate test for the JSON apply.
-- **SF-B2 Stage.** Python resolves each unit's `base` chain to flat values (the doc says
+- **SF-2.1 Asset class** [B1]. `UElysiumPhysicalMaterial : UPhysicalMaterial` with the fields
+  Unreal lacks (movement, footstep pools, impact matrix, sound-script IDs, `gameMaterial`), a
+  provenance `UAssetUserData`, and `EPhysicalSurface` entries in `DefaultEngine.ini` for the
+  compact classes. Substrate test for the JSON apply.
+- **SF-2.2 Stage** [B2]. Python resolves each unit's `base` chain to flat values (the doc says
   inheritance is the consumer's), writes a manifest + sidecar. Test: `weapon` root, a three-deep
   chain, a repeated-scalar anomaly.
-- **SF-B3 Import.** Editor script writes `/ElysiumBaked/SurfaceProperties/PM_<name>` (63), recipe
-  stamps, registry tags, idempotent rerun. Sound references stored as asset IDs; they flip to
-  hard `USoundWave` refs in the sound slice.
-- **SF-B4 Docs.** `seam_map_surface_property.md` gains "## Import"; ledger row here.
+- **SF-2.3 Import** [B3]. Editor script writes `/ElysiumBaked/SurfaceProperties/PM_<name>` (63),
+  recipe stamps, registry tags, idempotent rerun. Sound references stored as asset IDs; they flip
+  to hard `USoundWave` refs in the sound slice.
+- **SF-2.4 Docs** [B4]. `seam_map_surface_property.md` gains "## Import"; ledger row here.
 
-### Track C — reflections: knobs first, then the owner tunes in PIE
+### Phase 3 — import layer: materials, design (slice 4, docs only)
 
-- **SF-C0 Knobs.** (1) `UElysiumSurfaceSettings : UDeveloperSettings` — `DefaultSpecular`,
-  `DefaultRoughness`, `DefaultMetallic`, `LightSpecularScale`, `MaskRoughnessMin/Max`,
-  `MaskSpecularScale`, `EnvTintScale`, `FixedCubeStrength`; `PostEditChangeProperty` writes them
-  into `MPC_ElysiumEnvironment` and the map light rig, so a PIE session follows the slider.
-  (2) `UElysiumSurfaceCalibration : UDataAsset` — one row per surface class (roughness, specular,
-  metallic), regenerating a 64×1 lookup texture on edit; masters sample it by a class index the
-  instance carries. (3) The legacy world masters read the collection and the LUT instead of
-  `ROUGH_BASE`/`SPEC_BASE`/`ROUGH_REFLECT`/`SPEC_REFLECT`; `bake_map.py` reads the settings class
-  for `specular_scale` instead of the literal. Done when dragging `DefaultSpecular` in Project
-  Settings changes a running PIE map and Ctrl+S persists it to `Config/DefaultElysium.ini`.
-- **SF-C1 Owner tunes the defaults.** Open a baked map in PIE, tune the C0 globals, save. No agent
-  in the loop; the committed ini is the deliverable. Optional: `shots_diff.py` before/after as a
-  record.
-- **SF-C2 Owner tunes the class table.** Fill the C0 data asset (rows keyed by `$surfaceprop`,
-  then by VMT top directory, then one shader-family default row — the class index is resolved at
-  bake/import and stamped on the instance), tune in PIE, save. The asset is the deliverable;
-  `docs/vtmb/surface_properties.md` only points at it.
-- **SF-C3 Probe origins → reflection captures.** `bake_map.py` reads the export_v2 map unit's
-  `cubemaps[]` origins and places one `SphereReflectionCapture` per origin; the capture radius is
-  a C0 setting. Faithful placement, modern content. Independent of A2/A3 — origins are in the map
-  root already.
-- **SF-C4 Mask and tint mapping.** The mask → roughness/specular curve and the `$envmaptint`
-  grey-vs-chromatic split are C0 settings; the owner tunes them on two masked surfaces in PIE and
-  the result is written as a Settled entry here and as the `EnvMap` feature spec for D1.
-- **SF-C5 Authored fixed cubes.** `FixedCubeStrength` from C0 on the ~340 `envmap/*`-naming
-  materials and the `$envmapmode` sphere variant (80); the owner looks at the Asylum cube once in
-  PIE and settles literal-sample-or-not.
-
-### Track D — materials import (slice 4)
-
-- **SF-D1 Master inventory.** Table: 42 resolved programs + the 8 real unresolved families
+- **SF-3.1 Master inventory** [D1]. Table: 42 resolved programs + the 8 real unresolved families
   (`worldvertextransition`, `decalmodulate`, `refract`, `cable`, `shatteredglass`, `cloud`,
   `heatglow`, `worldtwotextureblend`) → master → blend mode → parameters. Each row cites its
-  shader-program unit. Debug/tool families listed as "no master, provenance only".
-- **SF-D2 Parameter table.** All 229 VMT keys → destination (texture / scalar / vector / static
-  switch / master choice / physical material / runtime / provenance-only). Rule: a key with no
-  destination fails staging.
-- **SF-D3 Proxy policy.** The 20 proxy kinds → shader-time node (`Sine`, `TextureScroll`,
+  shader-program unit. Debug/tool families listed as "no master, provenance only". The `EnvMap`
+  feature is specified here with knobs, not values: mask → roughness/specular curve,
+  `$envmaptint` grey-vs-chromatic split, authored fixed cube as a literal additive sample scaled
+  by a knob, `$envmapmode` sphere variant [C4, C5 as specs].
+- **SF-3.2 Parameter table** [D2]. All 229 VMT keys → destination (texture / scalar / vector /
+  static switch / master choice / physical material / runtime / provenance-only). Rule: a key with
+  no destination fails staging.
+- **SF-3.3 Proxy policy** [D3]. The 20 proxy kinds → shader-time node (`Sine`, `TextureScroll`,
   `AnimatedTexture`, `TextureTransform`, noise), runtime C++ (`PlayerProximity`, `PlayerPosition`,
   `PlayerSpeed`, `GlobalWetness`, `TextConsole`), or provenance-only. One table.
-- **SF-D4 Naming and identity.** `/ElysiumBaked/Materials/<dir>/MI_<stem>`; patched map materials
-  under `maps/<map>/`; masters stay in `Content/ElysiumGenerated/Materials/`. Settled entry.
-- **SF-D5 Provenance class.** `UElysiumMaterialProvenance : UAssetUserData` (raw ordered
+- **SF-3.4 Naming, identity, knob contract** [D4]. `/ElysiumBaked/Materials/<dir>/MI_<stem>`;
+  patched map materials under `maps/<map>/`; new masters under
+  `Content/ElysiumGenerated/Materials/V2/` beside, not over, the legacy set. The knob contract:
+  which values are settings, which are class-table rows, which are per-instance from the VMT.
+  Settled entry.
+
+### Phase 4 — import layer: materials, build (slice 4)
+
+- **SF-4.1 Knobs** [C0, legacy rewire removed]. (1) `UElysiumSurfaceSettings : UDeveloperSettings`
+  — `DefaultSpecular`, `DefaultRoughness`, `DefaultMetallic`, `LightSpecularScale`,
+  `MaskRoughnessMin/Max`, `MaskSpecularScale`, `EnvTintScale`, `FixedCubeStrength`,
+  `CaptureRadius`; `PostEditChangeProperty` writes them into a new `MPC_ElysiumSurfaces`
+  collection, so a PIE session follows the slider; saved to git-tracked
+  `Config/DefaultElysium.ini`. (2) `UElysiumSurfaceCalibration : UDataAsset` — one row per surface
+  class (roughness, specular, metallic), regenerating a 64×1 lookup texture on edit. Nothing legacy
+  reads either. Done when a Substrate test round-trips both and the ini persists an edit.
+- **SF-4.2 Provenance class** [D5]. `UElysiumMaterialProvenance : UAssetUserData` (raw ordered
   parameters, source SHA, resolved program, proxies, anomalies, coverage) + registry tags
   (`ElysiumShaderProgram`, `ElysiumMaster`). Substrate test.
-- **SF-D6 Masters, one task per family, transcribed from the shader units:** D6a Lit
-  (opaque/masked/translucent; selfillum, envmap, bump switches), D6b Unlit (+`$ignorez`,
-  `$vertexcolor`/`$vertexalpha`), D6c Eyes, D6d Water, D6e Sprite, D6f Refract, D6g Decal,
-  D6h Additive, D6i TwoTexture/VertexTransition. Each rewrites its `make_*_materials.py` graph
-  and cites the program it transcribes; lighting terms (`v0`, lightmap) are Lumen's.
-- **SF-D7 Stage.** GLB → manifest: master by resolved program; texture params →
+- **SF-4.3 Masters, one task per family, transcribed from the shader units** [D6]: 4.3a Lit
+  (opaque/masked/translucent; selfillum, envmap, bump switches), 4.3b Unlit (+`$ignorez`,
+  `$vertexcolor`/`$vertexalpha`), 4.3c Eyes, 4.3d Water, 4.3e Sprite, 4.3f Refract, 4.3g Decal,
+  4.3h Additive, 4.3i TwoTexture/VertexTransition. New `make_v2_materials.py`, one graph per
+  family, each citing the program it transcribes; every master reads `MPC_ElysiumSurfaces` and
+  the class LUT; lighting terms (`v0`, lightmap) are Lumen's. Legacy `make_*_materials.py`
+  untouched.
+- **SF-4.4 Stage** [D7]. GLB → manifest: master by resolved program; texture params →
   `/ElysiumBaked/Textures` (`_linear` twin for data-class bindings); scalars/vectors/switches by
-  D2; `PhysMaterial` by `$surfaceprop`; `$envmap` concrete → `TC_`, symbol → runtime bind; proxies
-  by D3. Every unmapped key is a listed stage failure.
-- **SF-D8 Import.** Editor script writes the `MI_` assets, applies provenance, stamps, saves;
-  compile check per instance; `import_report.json`; full corpus first run; idempotent rerun.
-- **SF-D9 Parity oracle.** A numpy ps.1.x interpreter over `shader-programs/source/*` units, run
-  against one master's post-lighting terms on fixed inputs; extend per D6 family. Lighting terms
-  excluded by design.
-- **SF-D10 Consumers, one task each:** D10a `bake_map.material_for` → `MI_`; D10b character bake
-  slots and skin families; D10c `FElysiumMaterialFactory::Create(MI_)` with runtime binds
-  (`env_cubemap` symbol, D3 runtime proxies, fog primitive data); D10d wield/UI sprites.
-- **SF-D11 Retire.** Per-map material packages, `/ElysiumBaked/Shared/Textures`, the legacy
-  `SourceCube` wetness path (owner decision under C4), `tex/cube/` sidecars. Ledger rows here
-  move to retired.
+  3.2; `PhysMaterial` by `$surfaceprop` (Phase 2 assets); class index by `$surfaceprop` → VMT top
+  directory → family default; `$envmap` concrete → `TC_`, symbol → runtime bind; proxies by 3.3.
+  Every unmapped key is a listed stage failure.
+- **SF-4.5 Import** [D8]. Editor script writes the `MI_` assets, applies provenance, stamps,
+  saves; compile check per instance; `import_report.json`; full corpus first run; idempotent
+  rerun.
+- **SF-4.6 Parity oracle** [D9]. A numpy ps.1.x interpreter over `shader-programs/source/*`
+  units, run against one master's post-lighting terms on fixed inputs; extend per 4.3 family.
+  Lighting terms excluded by design.
+- **SF-4.7 Lookdev map** [new]. A generated `/ElysiumBaked/Lookdev/Materials.umap`: a grid of
+  spheres and planes, one per selected `MI_` (a named review set: a plaster wall, a tiled floor,
+  a chrome fixture, Asylum glass, a wet street, an eye, water), lit by a neutral rig. This is how
+  the new masters are looked at before any real map uses them, and it is the PIE window for
+  Phase 5. Touches nothing legacy.
 
-### Deferred from slice 2, unchanged
+### Phase 5 — owner tunes on knobs (lookdev)
 
-Sky cube faces, rope/cable materials and eye irises still read loose files (`shared/tex`,
-`npc/tex`, `retex_dds`, `tex_hi`); they flip after D10c since they are material consumers.
+- **SF-5.1 Defaults** [C1]. Owner opens the lookdev map in PIE, tunes the 4.1 globals in Project
+  Settings, Ctrl+S. The committed ini is the deliverable.
+- **SF-5.2 Class table** [C2]. Owner fills and tunes the 4.1 data asset rows in PIE, saves. The
+  asset is the deliverable; `docs/vtmb/surface_properties.md` only points at it.
+- **SF-5.3 EnvMap knobs** [C4, C5]. Owner tunes the mask curve, tint split and fixed-cube
+  strength on the review set's masked and Asylum surfaces; the result is written as a Settled
+  entry here.
+
+### Phase 6 — wiring (the only phase that touches consumers)
+
+- **SF-6.1 Map materials** [D10a]. The map bake's `material_for` returns the imported `MI_` by
+  `vtmb:material:*`; the per-map material packages stop being written. First real-map PIE look.
+- **SF-6.2 Reflection captures** [C3]. The map bake places one `SphereReflectionCapture` per
+  `cubemaps[]` origin from the export_v2 map unit, radius from the 4.1 setting; light
+  `specular_scale` comes from `LightSpecularScale`.
+- **SF-6.3 Characters** [D10b]. Character bake slots and skin families → `MI_`.
+- **SF-6.4 Runtime factory** [D10c]. `FElysiumMaterialFactory::Create(MI_)` with the runtime
+  binds only (`env_cubemap` symbol, 3.3 runtime proxies, fog primitive data); Cog Environment
+  sliders become views onto `UElysiumSurfaceSettings`.
+- **SF-6.5 Wield and UI sprites** [D10d].
+- **SF-6.6 Deferred readers from slice 2.** Sky cube faces, rope/cable materials, eye irises,
+  `tex_hi` flip off loose files (`shared/tex`, `npc/tex`, `retex_dds`).
+- **SF-6.7 Second tuning pass** [new]. Owner re-tunes 5.1–5.3 on real maps (Santa Monica street,
+  Asylum bar, Venture Tower lobby) in PIE; commits ini and asset.
+
+### Phase 7 — retire
+
+- **SF-7.1 Retire legacy** [D11]. Legacy masters, per-map material packages,
+  `/ElysiumBaked/Shared/Textures`, the legacy `SourceCube` wetness path (owner decision under
+  5.3), `tex/cube/` sidecars, `MPC_ElysiumEnvironment`'s surface scalars. Ledger rows here move
+  to retired.
 
 ## Open questions
 
