@@ -227,6 +227,16 @@ taste living in a Python or C++ literal. `validation/shots_diff.py` may record b
 never the tuning method. PIE is the viewing window (`debug-tooling.md`: PIE is a viewer, and it
 picks up settings and collection edits without restart).
 
+Owner answers on the knob set (2026-08-31): **no per-material tuning layer** — the global
+settings and the class table are the whole authoring surface, and an edit to an imported `MI_`
+is a throwaway experiment the next import overwrites; **class key** is `$surfaceprop` when
+present, else the VMT's top directory (`brick/`, `concrete/`, `metal/`, `glass/`, `wood/`, …),
+else the shader-family default row; **light specular scale is one global knob**, no per-map
+override; **SF-C0 runs before Track A.** The settings object is the single writer of
+`MPC_ElysiumEnvironment`'s surface scalars — the Cog Environment window's sliders become views
+onto the same settings object rather than a second writer. Knobs are editor-only; a packaged build
+reads the saved ini.
+
 ## Plan — surfaces track (export gap, surface properties, reflections, materials)
 
 Owner instruction (2026-08-31): review the whole surface chain and plan it in the smallest
@@ -294,9 +304,10 @@ disk, so nothing failed. The contract exists; the exporter half was never built.
 - **SF-C1 Owner tunes the defaults.** Open a baked map in PIE, tune the C0 globals, save. No agent
   in the loop; the committed ini is the deliverable. Optional: `shots_diff.py` before/after as a
   record.
-- **SF-C2 Owner tunes the class table.** Fill the C0 data asset (classes keyed by `$surfaceprop`;
-  materials with none fall back to the shader-family default row), tune in PIE, save. The asset
-  is the deliverable; `docs/vtmb/surface_properties.md` only points at it.
+- **SF-C2 Owner tunes the class table.** Fill the C0 data asset (rows keyed by `$surfaceprop`,
+  then by VMT top directory, then one shader-family default row — the class index is resolved at
+  bake/import and stamped on the instance), tune in PIE, save. The asset is the deliverable;
+  `docs/vtmb/surface_properties.md` only points at it.
 - **SF-C3 Probe origins → reflection captures.** `bake_map.py` reads the export_v2 map unit's
   `cubemaps[]` origins and places one `SphereReflectionCapture` per origin; the capture radius is
   a C0 setting. Faithful placement, modern content. Independent of A2/A3 — origins are in the map
