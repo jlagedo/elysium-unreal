@@ -250,6 +250,61 @@ override; SF-C0-before-Track-A was superseded the same day by "new pipeline firs
 onto the same settings object rather than a second writer. Knobs are editor-only; a packaged build
 reads the saved ini.
 
+**Material import design (2026-08-31).** SF-3.1–3.4, docs only. The whole design is
+`docs/architecture/seam_map_material.md` → "Import"; the numbers come from a corrected scan of all
+11,624 install material units (`$ELYSIUM_WORK_ROOT/import/design/scan_materials_v2.py`).
+
+**Master set.** Nine masters under `Content/ElysiumGenerated/Materials/V2/`: `M_V2_Lit`,
+`M_V2_LitTranslucent`, `M_V2_Unlit`, `M_V2_Eyes`, `M_V2_Water`, `M_V2_Sprite`, `M_V2_Refract`,
+`M_V2_Decal`, `M_V2_TwoTexture`. The split is by Unreal *material-only* property — shading model,
+translucency lighting mode, refraction, the modulate blend — because blend mode, two-sidedness and
+the opacity-mask clip value are per-instance `BasePropertyOverrides` and therefore do not multiply
+masters. That is why there is no separate Additive master, and why one Lit master carries opaque
+and masked alike. All 54 resolved pixel+vertex program pairs map into those nine; 11,544 of the
+11,624 units take a master and the remaining 80, in 36 debug and tool families, are imported as
+provenance-only instances. The `vertexlitgeneric` bump-mapping second pass is *replaced* rather
+than transcribed — it is a normal-mapped cube reflection, which is what Lumen already does — so it
+collapses into two switches on the first-pass instance instead of a tenth master.
+
+**Naming.** `vtmb:material:<dir>/<stem>` → `/ElysiumBaked/Materials/<dir>/MI_<safe stem>`, mirroring
+the install path exactly as the texture slice mirrors it; SF-1.4's 7,501 patched map materials land
+under `maps/<map>/<dir>/` and are parented to **their base instance, not to a master**, overriding
+only what their `replace`/`insert` blocks name — VtMB's `include` semantics in the one Unreal
+mechanism with the same shape. The class index and the `PhysMaterial` come from one resolution —
+`$surfaceprop` (4,605 units), else the VMT's top directory when it names a surface class (558),
+else the shader family's default row (6,461) — so a surface's sound and its shine can never
+disagree.
+
+**No silent drop.** All 229 authored parameter keys of the install corpus — plus `include`, the
+one key the patched corpus adds — all 25 proxy kinds and all 54 program pairs have a named
+destination in the doc. A unit carrying anything not in those three tables is a stage
+failure with the unit named, never an instance written with the unknown part quietly missing.
+
+**Proxy policy.** Of the 25 kinds over 217 materials, `sine`, `animatedtexture`, `texturescroll`,
+`texturetransform`, `linearramp` and the `add`/`subtract`/`multiply`/`abs`/`exponential` arithmetic
+become material-graph nodes; `globalwetness`, `playerproximity`, `playerposition`, `playerspeed`,
+`textconsole`, `shadow` and `breakablesurface` are bound later by the runtime factory; `camo`,
+`waterlod`, `lampbeam`, `lamphalo` and `particlesphereproxy` are provenance only. `lessorequal`
+(a branch that selects between two parameters *by name*) and the two noise proxies (per-frame
+random) are honestly not expressible as nodes, so any chain containing one goes to the runtime
+whole — never half a chain in the graph and half in C++.
+
+**Reflection contract.** `$envmap` presence (2,610 units) means the surface is reflective and
+nothing more; the image is Lumen's. The masks — `$envmapmask` 2,368, `$normalmapalphaenvmapmask`
+136, `$basealphaenvmapmask` 14 (inverted), none 92 — drive roughness and specular through the
+`MaskRoughnessMin/Max` and `MaskSpecularScale` knobs, never opacity. `$envmaptint` splits on a
+measured 0.02 channel spread into 362 grey (a specular scale through `EnvTintScale`) and 104
+chromatic (metallic plus base-colour tint — VtMB's own hand-authored metal mask). The 2,217
+`env_cubemap` symbols bind no asset and rely on the reflection captures SF-6.2 places; a patched
+map material's concrete `TC_maps/<map>/c…` is recorded on the instance and never sampled, because
+probes are not reflection content — and since 7,448 of the 7,501 patch rows set nothing but
+`$envmap`, most patched instances override nothing at all; only the 342 authored `envmap/*` cubes
+keep a literal additive cube sample, scaled by `FixedCubeStrength` and switched to black for ray and Lumen-card passes.
+The `$envmapsphere` variant needs no master and no switch: of its 12 users, ten are `shadertest/`
+or `dev/` and the other two are one break-glass pair, one of which has no `$envmap` at all.
+Non-`$envmap` surfaces take `DefaultSpecular`/`DefaultRoughness`/`DefaultMetallic` modulated by
+their class-table row — the repudiated three-zeroes rule's replacement.
+
 ## Plan — surfaces track (export gap, surface properties, materials, reflections)
 
 Owner instructions (2026-08-31): plan the whole surface chain in the smallest possible tasks;
