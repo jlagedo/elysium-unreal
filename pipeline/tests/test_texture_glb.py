@@ -10,7 +10,7 @@ import zlib
 import pytest
 
 from elysium_pipeline.exporters import texture_glb
-from elysium_pipeline.formats.texture_glb import decode_texture
+from elysium_pipeline.formats.texture_glb import decode_texture, source as texture_source
 from elysium_pipeline.formats.texture_glb.decode import (
     ENVMAP,
     FORMATS,
@@ -19,6 +19,61 @@ from elysium_pipeline.formats.texture_glb.decode import (
 )
 from elysium_pipeline.formats.texture_glb.source import SourceMember, TextureSourceClosure
 from elysium_pipeline.validation import texture_glb as validation
+
+_BSP_HEADER_BYTES = 8 + 64 * 16 + 4
+
+
+def _zip_member(name: str, payload: bytes) -> tuple[bytes, bytes, int]:
+    """One stored ZIP member: its local record, its encoded name, and its length."""
+
+    raw = name.encode("latin-1")
+    local = struct.pack(
+        "<IHHHHHIIIHH", 0x04034B50, 20, 0, 0, 0, 0, zlib.crc32(payload), len(payload),
+        len(payload), len(raw), 0,
+    ) + raw + payload
+    return local, raw, len(payload)
+
+
+def _pakfile_zip(members: dict[str, bytes]) -> bytes:
+    """A minimal stored-only ZIP, the same layout the compiler writes into BSP lump 40."""
+
+    body = bytearray()
+    central = bytearray()
+    for name, payload in members.items():
+        offset = len(body)
+        local, raw, size = _zip_member(name, payload)
+        body.extend(local)
+        central.extend(
+            struct.pack(
+                "<IHHHHHHIIIHHHHHII", 0x02014B50, 20, 20, 0, 0, 0, 0, zlib.crc32(payload),
+                size, size, len(raw), 0, 0, 0, 0, 0, offset,
+            )
+            + raw
+        )
+    central_offset = len(body)
+    body.extend(central)
+    body.extend(
+        struct.pack(
+            "<IHHHHIIH", 0x06054B50, 0, 0, len(members), len(members), len(central),
+            central_offset, 0,
+        )
+    )
+    return bytes(body)
+
+
+def _bsp_with_pakfile(members: dict[str, bytes]) -> bytes:
+    """A synthetic BSP whose only populated lump is PAKFILE (lump 40)."""
+
+    payload = _pakfile_zip(members)
+    header = bytearray(struct.pack("<4si", b"VBSP", 17))
+    for index in range(64):
+        if index == 40:
+            header.extend(struct.pack("<iii4s", _BSP_HEADER_BYTES, len(payload), 0, b"\0\0\0\0"))
+        else:
+            header.extend(struct.pack("<iii4s", 0, 0, 0, b"\0\0\0\0"))
+    header.extend(struct.pack("<i", 7))
+    assert len(header) == _BSP_HEADER_BYTES
+    return bytes(header) + payload
 
 
 def _source(role, path, data):
@@ -325,3 +380,103 @@ def test_prepublication_validation_compares_decoded_pixels():
     )
     assert summary["mips"] == 3
     assert summary["sourceBytes"] == summary["accountedBytes"]
+
+
+# --------------------------------------------------------------------------------------------
+# SF-1.3: PAKFILE reflection probes as texture units.
+# --------------------------------------------------------------------------------------------
+
+
+def _pakfile_probe_install():
+    """A synthetic install: one loose texture and one map BSP with two PAKFILE probes.
+
+    `c0_0_0` carries a `.ttz` twin (mips=2, inline=1 spills the second mip external); the
+    `cubemapdefault` probe is `.tth`-only (mips=1, inline=1 keeps the whole pyramid inline), the
+    same case SF-1.2 found for 575 of the 1,325 shipped probes.
+    """
+
+    tth_with_ttz, ttz = _pair(13, width=4, height=4, mips=2, inline=1)
+    tth_only, none_ttz = _pair(13, width=4, height=4, mips=1, inline=1)
+    assert none_ttz is None
+    bsp = _bsp_with_pakfile(
+        {
+            "materials/maps/testmap/c0_0_0.tth": tth_with_ttz,
+            "materials/maps/testmap/c0_0_0.ttz": ttz,
+            "materials/maps/testmap/cubemapdefault.tth": tth_only,
+        }
+    )
+    index = {
+        "maps/testmap.bsp": ("loose", "synthetic/maps/testmap.bsp"),
+        "materials/synthetic/texture.tth": ("loose", "synthetic/texture.tth"),
+    }
+    files = {
+        "maps/testmap.bsp": bsp,
+        "materials/synthetic/texture.tth": b"install-tth-bytes",
+    }
+    return index, files
+
+
+def test_source_keys_lists_install_textures_and_pakfile_probes():
+    index, files = _pakfile_probe_install()
+    keys = texture_source.source_keys(index, read_bytes=lambda _index, key: files.get(key))
+    assert "synthetic/texture" in keys
+    assert "maps/testmap/c0_0_0" in keys
+    assert "maps/testmap/cubemapdefault" in keys
+    assert keys == sorted(keys)
+
+
+def test_pakfile_probe_with_ttz_round_trips_with_bsp_pakfile_origin(tmp_path):
+    index, files = _pakfile_probe_install()
+    destination = texture_glb.export(
+        index, "maps/testmap/c0_0_0", tmp_path, read_bytes=lambda _index, key: files.get(key)
+    )
+    summary = validation.validate(destination)
+    assert summary["asset"] == "vtmb:texture:maps/testmap/c0_0_0"
+    document, _binary = validation.read_glb(destination)
+    extension = document["extensions"]["ELYSIUM_vtmb_texture"]
+    members = {member["role"]: member for member in extension["sourceResolution"]["members"]}
+    assert set(members) == {"tth", "ttz"}
+    for member in members.values():
+        origin = member["origin"]
+        assert origin["kind"] == "bsp-pakfile"
+        assert origin["map"] == "testmap"
+        assert origin["member"].startswith("materials/maps/testmap/c0_0_0.")
+        assert origin["origin"] == {"kind": "loose", "root": "loose"}
+
+
+def test_pakfile_probe_without_ttz_round_trips_and_validates(tmp_path):
+    index, files = _pakfile_probe_install()
+    destination = texture_glb.export(
+        index,
+        "maps/testmap/cubemapdefault",
+        tmp_path,
+        read_bytes=lambda _index, key: files.get(key),
+    )
+    summary = validation.validate(destination)
+    assert summary["asset"] == "vtmb:texture:maps/testmap/cubemapdefault"
+    document, _binary = validation.read_glb(destination)
+    extension = document["extensions"]["ELYSIUM_vtmb_texture"]
+    members = extension["sourceResolution"]["members"]
+    assert {member["role"] for member in members} == {"tth"}
+    assert members[0]["origin"]["kind"] == "bsp-pakfile"
+
+
+def test_pakfile_members_are_parsed_once_per_index():
+    """`pakfile_members` memoises per install index identity, so repeated closures over the same
+    index do not re-open and re-unzip the BSP."""
+
+    from elysium_pipeline.formats.map_glb import pakfile_index
+
+    index, files = _pakfile_probe_install()
+    read_bytes = lambda _index, key: files.get(key)
+    reads = []
+
+    def counting_read(idx, key):
+        if key == "maps/testmap.bsp":
+            reads.append(key)
+        return read_bytes(idx, key)
+
+    first = pakfile_index.pakfile_members(index, read_bytes=counting_read)
+    second = pakfile_index.pakfile_members(index, read_bytes=counting_read)
+    assert first is second
+    assert reads == ["maps/testmap.bsp"]

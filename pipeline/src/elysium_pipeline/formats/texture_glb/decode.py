@@ -301,15 +301,25 @@ def decode_texture(closure) -> TextureModel:
         # pyramid, and sliding the chain onto the tail would compose every level below the first
         # out of unrelated bytes. Admit the full-resolution image alone.
         top = source_level_sizes[-1][3]
-        if actual_inline >= image_mip_count or len(compressed) < top:
+        if actual_inline >= image_mip_count:
+            # The admitted chain is already complete from the inline blob alone -- the shape
+            # SF-1.2 found in 27 of the shipped reflection probes, whose pyramid fits wholly
+            # inline yet still ships a TTZ. There is no level left for the external stream to
+            # supply, so none of it is selected; it is unexplained storage in full below.
+            selected_start, selected_end = 0, actual_inline
+            external_auxiliary = len(compressed)
+            stream = trailing
+            unexplained_stream = True
+        elif len(compressed) < top:
             raise TextureDecodeError(
                 f"{closure.texture_path}: a TTZ stream of {len(compressed)} bytes matches neither "
                 f"the declared mip chain nor one full-resolution image"
             )
-        selected_start, selected_end = image_mip_count - 1, image_mip_count
-        external_auxiliary = len(compressed) - top
-        stream = compressed[external_auxiliary:]
-        unexplained_stream = True
+        else:
+            selected_start, selected_end = image_mip_count - 1, image_mip_count
+            external_auxiliary = len(compressed) - top
+            stream = compressed[external_auxiliary:]
+            unexplained_stream = True
     else:
         external_auxiliary = len(compressed) - expected_external
         primary_external = compressed[external_auxiliary:]
