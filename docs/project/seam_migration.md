@@ -577,8 +577,9 @@ and reversed three specifics:
   components from it. Adoption-by-tag for bodies is rejected outright.
 - *"Merge-by-name" light overrides cannot exist.* `dworldlight_t` rows are anonymous; the Cog
   overlay, the baked `elysium.src` tag and the rig's `RowBySource` join are all keyed by `.lights`
-  line index. The stable key becomes the lump-15 record ordinal, with a one-shot remapper for
-  existing `_lights/*.json`.
+  line index. The stable key becomes the lump-15 record ordinal. (The one-shot remapper
+  planned here was dropped the same day: no `_lights/*.json` exists on disk, and the owner
+  re-tunes in the editor.)
 - *Lights, sky, fog and the skylight cubemap stay runtime-tunable.* Lightstyles animate per frame;
   `LightScale`/`LightFit`/`LightCurve`/`SkyProbe`/`EnhancedTextures` are open calibrations; fog is
   per-primitive CPD so the miniature and world fog differently at equal depth. These values move
@@ -608,309 +609,240 @@ rebind is the win), lightstyle flicker dead-flat everywhere, detail props (`dprp
 never placed, water shipped as a flat translucent film beside a finished `M_V2_Water`, the
 `.sprites` corona sidecar written and never read, ~7,487 of 7,501 cubemap-patched materials
 falling back to generic reflection, and an untouched steam/embers/fire/beam entity family. The
-plan is "## Plan — maps track" below; the shared-MI switch (SF-6.1) is blocked until decal fog
-and wetness have a home that is not a per-map material instance.
+plan lives in "## Roadmap — one pipeline" below (the maps track was merged into it the same
+day); the shared-MI switch is blocked until decal fog and wetness have a home that is not a
+per-map material instance (R5.3).
 
-## Plan — surfaces track (export gap, surface properties, materials, reflections)
+**The Unreal editor is the tuning surface (2026-08-31).** Owner ruling, generalising the knobs
+mandate: "we are simplifying and adopting Unreal — if something needs tuning we already have a
+full editor surface." Cog was an early-days debug tool; anything it tunes that the editor can
+tune is dropped from Cog, not migrated within it. The full audit (15 windows, 74 cvars, ~100
+commands) classified every surface: **keep as debug** — entity inspector, I/O wire debugging,
+event-queue stepping, logic quick-fire, maps/travel, world viz, audio probe, NPC window, scripting
+VM, the green room (which keeps the Cog plugin alive; it is debug tooling, not a tuning UI);
+**drop to editor** — every lights/sky/fog/rig slider, the per-light edit grid, weather
+enhancement/streak values, green-room eye tuning; **delete** — the light-leak A/B scaffolding,
+`elysium.SkyProbe` (RE-A2 closed), the `MaterialOverrides` cvar group (superseded by
+`UElysiumSurfaceSettings`), dead `elysium.RainMist`. Seven more taste values live only in C++
+literals behind cvars (`MenuScrim`, `JawSpeechLevel`, `JawSmoothing`, `CameraCutSeconds`,
+`MusicCrossfade`, `SchemeRandomBase`, `LoadingScreenMinTime`) — same defect, same cure: settings
+pages. Lane verdicts: **lights** — the bake writes final calibrated values (plus the MegaLights
+properties, today restated every load); global calibration moves to a
+`UElysiumLightingSettings : UDeveloperSettings` page pushing per-world on terminal value-set; per-
+light hand-tunes are a per-map `UElysiumLightCalibration : UDataAsset` keyed by the lump-15
+ordinal (merge rows, rebake-proof) that a **slim runtime rig** applies — the rig survives because
+lightstyles animate per frame, but its wholesale re-derivation dies. No `_lights/*.json` remapper:
+no such file exists on disk and the owner re-tunes in the editor. **Sky** — fully bakeable: cube
+import keyed by sky name (six game-wide), `SLS_SpecifiedCubemap` assignment, and the
+`CubeUpperMean` intensity join all run at bake; the runtime sky-assembly path deletes whole.
+**Fog** — the per-primitive CPD values are a pure function of `.env` with no taste in them; they
+move to the per-map asset feeding the unchanged stamping path, and the height-fog actor is edited
+directly (its Cog sliders were already being discarded on save). Residual constraints: the green
+room parses `sp_theatre.ents` directly and must move to the entity asset before the readers die;
+`Elysium.Substrate.LightRig` asserts the runtime derivation and re-homes to bake verification; the
+seven "Enhanced rain" literals exist nowhere but a Cog button and get captured into their settings
+home before the window goes.
 
-Owner instructions (2026-08-31): plan the whole surface chain in the smallest possible tasks;
-**do not touch the legacy pipeline** (`bake_map.py`, `make_*_materials.py`, the runtime factory)
-until the new one is buttoned up layer by layer — export first, then each import layer, then the
-owner tunes on knobs, and only then is anything wired to consumers. This section is the plan;
-scheduling and status go to `roadmap.md` when a task is picked up. IDs are `SF-<phase>.<n>`; the
-earlier `SF-A/B/C/D` names are kept in brackets where a task moved.
+**Props/models seam validated — the next lane, and it goes first (2026-08-31).** Owner ruling:
+props are built and baked before maps — maps place props by name, props are where the V2
+materials meet meshes, and the legacy shared CorpusBake must die with the old pipeline anyway.
+Corpus verdict: **ready, no export gap.** 4,445 model units on disk (5.90 GB, the largest seam);
+every `models/**.mdl` install member is a unit; index `unclaimed: 0`, 10/10 cross-unit checks;
+the 96 orphan `.vtx`/`.phy` residue rows are proven unreachable. Full-graph closure: 10,613
+`role=model` edges, **zero unresolved from any of the 108 maps** (36 danglers are retail data
+bugs from entities/vdata — doppleganger, `models/missing.mdl`, item placeholders → shipped
+placeholder). Placement census: 26,203 static-prop records over 1,922 models (1,468 with
+`skin != 0`), 143,412 detail-prop records over 41 models. Dependency closure: materials **green**
+(10,265 model→material edges 100 % resolved, all 4,850 targets have their `MI_` on disk),
+textures **green**, surface properties **amber** (79 edges over 17 unknown names — `cloth`,
+`bone`, the shipped typo `defualt`… → documented fallback to default), physics **amber**
+(VPhysics present on 2,211 of 3,185 placed models and cookable, but **collision authority is the
+placement record**: 2,530 records demand VPHYSICS on 264 models with no `.phy`, 3,428 override a
+present `.phy`, 6,971 place with no collision at all). Identity join verified end-to-end: map
+`staticProps[].asset`, detail-prop nodes, entity `model.asset` and the unit's `identity.asset`
+all speak `vtmb:model:*`; the per-placement `skin` joins by `props[i].node`. Gaps the import
+contract must decide (ranked): the `vtmb:missing-material:` sentinel is **invisible to every
+closure check** (1,523 slots / 597 units corpus-wide; 98 slots on 66 placed static props;
+`warnings_for` never reads `coverage.omittedProven`, and the index keeps only the first reason
+per label — both validator bugs to fix); skin families are a consumer join and **59 placements
+index out of range** (engine clamps — the import must too), and the primitive's
+`ELYSIUM_material_reference` is the family-0 answer only — the lane reads
+`materialBindings.skinFamilies[skin][skinReference]`; `seam_map_model.md` has two false claims to
+correct (v2531 has **no** header KeyValues region — `prop_data` does not exist in the seam; mass
+and surfaceprop come from `physics.solids[].properties` — and static units **do** carry one
+reference-pose animation); LOD policy undecided (VTX LOD chains up to 7 deep, `switchPoints` with
+`-1.0` shadow rows, plus per-placement fade distances); bodygroups have no seam vocabulary (14
+multi-submodel models; `sprp` carries no selector — static props bake submodel 0); no
+`TEXCOORD_1` anywhere (Lumen-only, or generate lightmap UVs); 7 units with no admitted VTX
+topology (none placed — skip loudly); 784 published units nothing references (import the 3,677
+referenced; the rest provenance-only). The legacy naming contract is **load-bearing**: four
+independent C++ call sites recompute `static_stem` live, so the fold
+(`mdl.sanitize` + `safe_name`), the flat `SM_<stem>` layout under the shared mesh root, and
+material **slot names** (`safe_name(material)` — skin swaps and the skeletal twin's
+`BindMapMaterials` bind by slot name) must be reproduced exactly; mesh source format, LOD
+strategy, the 7-master MIC scheme and verification (none exists today over the shared corpus) are
+free to change.
 
-**Finding that reorders everything.** The full export_v2 run is complete for install members, but
-the texture and material seams enumerate VPK and loose files only. The 9,576 files embedded in the
-108 BSPs' PAKFILE zips — 7,501 patched `.vmt`, 1,325 probe `.tth`, 750 `.ttz` — are recorded by
-the corpus index under each map's `embedded[]` with `asset: null` ("became nothing"), while
-`seam_map_map.md` → "PAKFILE routing" states they become ordinary units and
-`unit_contract/origin.py` already defines the `bsp-pakfile` origin. The map root's
-`cubemaps[].resolved` and `pakfile.entries[].unit` resolve against the zip, not against a unit on
-disk, so nothing failed. The contract exists; the exporter half was never built. Phase 1 closes
-this finding: SF-1.3/1.4 publish the 1,325 probe and 7,501 patched-material units and SF-1.5
-claims every one of them in the corpus index's `embedded[]`, driving `summary.embeddedUnclaimed`
-to 0.
+## Roadmap — one pipeline
 
-### Phase 1 — export layer complete (export_v2)
+The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
+two disconnected paths, they both interchange"); old `SF-`/`MP-` ids are kept in brackets where a
+task moved. Governing principle: **the Unreal editor is the tuning surface** — the bake writes
+final values, runtime applies state, never taste; anything tunable gets a settings page, a data-
+asset grid, or a direct actor edit, and nothing else. Cutover is gated per map, never per system.
+Each task is one small deliverable; a landed task moves its result to Settled and comes off this
+list.
 
-- **SF-1.1 Make the gap visible** [A1]. Corpus index `summary` counts embedded members with
-  `asset: null`; `uv run elysium doctor` reports the number. Done when the count (9,576) prints and
-  a test pins it. No behaviour change.
-- **SF-1.2 Answer the 575** [new]. Establish what the `.tth` probes without a `.ttz` twin are
-  (header-only? mip-less?) and record it in `seam_map_texture.md`. Read-only investigation.
-- **SF-1.3 Probe textures as units** [A2]. The texture seam takes a second enumeration over each
-  BSP's PAKFILE `.tth`/`.ttz` and emits `textures/maps/<map>/c<x>_<y>_<z>.glb` with the
-  `bsp-pakfile` origin, capsule bytes included. Done when 1,325 units exist and validate.
-- **SF-1.4 Patched materials as units** [A3]. The material seam does the same for PAKFILE `.vmt`,
-  emitting `materials/maps/<map>/<mat>_<x>_<y>_<z>.glb`; `$envmap` resolves to the 1.3 texture
-  unit; the base material and the probe origin are recorded as dependencies (`role: material`,
-  `patchOf`; `cubemapOrigin`). Done when 7,501 units exist and validate.
-- **SF-1.5 Index claims them** [A4]. `_pakfile_members` finds every embedded key claimed; the 1.1
-  count goes to 0; the map validator fails a map whose `cubemaps[]`/`textures[]`/
-  `pakfile.entries[]` names a unit that is not on disk. Same task: texture edges in `index.glb`
-  carry `parameter` (slice-2 follow-up).
-- **SF-1.6 Re-export, re-import textures** [A5]. Full `export_v2` run, doctor, then
-  `uv run elysium import textures` picks up the 1,325 probes as `TC_` under
-  `/ElysiumBaked/Textures/maps/<map>/`. Ledger rows and counts in this file updated.
+**Landed and closed (was surfaces Phases 1–5):** textures including the 1,325 PAKFILE probes;
+surface properties (63 `PM_`); the nine V2 masters and 19,121 `MI_` with provenance and
+idempotency; the 16-knob settings page + `DA_SurfaceCalibration`; the lookdev map. Full record in
+the Settled entries above. The owner's lookdev tuning session (was SF-5.1–5.3) is open-ended and
+runs whenever — the second pass on real maps is R7.8.
 
-### Phase 2 — import layer: surface properties (slice 3)
+### R1 — props (the models lane; first, everything downstream places these)
 
-- **SF-2.1 Asset class** [B1]. `UElysiumPhysicalMaterial : UPhysicalMaterial` with the fields
-  Unreal lacks (movement, footstep pools, impact matrix, sound-script IDs, `gameMaterial`), a
-  provenance `UAssetUserData`, and `EPhysicalSurface` entries in `DefaultEngine.ini` for the
-  compact classes. Substrate test for the JSON apply.
-- **SF-2.2 Stage** [B2]. Python resolves each unit's `base` chain to flat values (the doc says
-  inheritance is the consumer's), writes a manifest + sidecar. Test: `weapon` root, a three-deep
-  chain, a repeated-scalar anomaly.
-- **SF-2.3 Import** [B3]. Editor script writes `/ElysiumBaked/SurfaceProperties/PM_<name>` (63),
-  recipe stamps, registry tags, idempotent rerun. Sound references stored as asset IDs; they flip
-  to hard `USoundWave` refs in the sound slice.
-- **SF-2.4 Docs** [B4]. `seam_map_surface_property.md` gains "## Import"; ledger row here.
+- **R1.1 Import contract + doc corrections.** `seam_map_model.md` gains `## Import` and loses its
+  two false claims (no header KeyValues region in v2531 — mass/surfaceprop come from
+  `physics.solids[].properties`; static units carry one reference-pose animation). The contract
+  decides, from the validation: naming pinned to the legacy fold (`SM_<safe_name(static_stem)>`,
+  flat shared layout, slot names `safe_name(material)` — with a Python↔C++ twin test against
+  `FElysiumContentPaths`), material join via `materialBindings.skinFamilies[skin][skinReference]`
+  with the out-of-range clamp, sentinel slots → one shared loud `MI_V2_Missing`, VTX LODs adopted
+  with the `-1.0` shadow rows dropped, submodel 0 for static props, collision cooked per model
+  from VPhysics with the **placement** selecting the mode (and the bbox rule for VPHYSICS-without-
+  `.phy`), surfaceprop fallback to default (recorded anomaly), Lumen-only lighting (no
+  `TEXCOORD_1`), scope = the 3,677 referenced units. → lands: the binding contract.
+- **R1.2 Validator sees the invisible.** `warnings_for` (or a new cross-unit check) surfaces
+  `vtmb:missing-material:` sentinel slots; the corpus-index first-reason-per-label under-reporting
+  is fixed; pytest pins both. → lands: sentinel counts in `doctor`.
+- **R1.3 Stage.** Per-model manifest: mesh accessors, slots→`MI_` paths, skin table, collision
+  solids, LODs, provenance; every undecidable input a loud listed failure. → lands: staged
+  manifest for 3,677 units + report.
+- **R1.4 Import.** Editor commandlet writes the `SM_` corpus: named slots bound to V2 `MI_`,
+  cooked convex collision, Nanite per the opacity rule, provenance `UAssetUserData`, recipe
+  idempotency, `import_report.json`. → lands: the shared prop meshes on the new pipeline, at the
+  exact paths the four substrate call sites already resolve.
+- **R1.5 Skins asset.** The corpus skin table regenerated from `skinFamilies` (successor of
+  `DA_ElysiumPropSkins`), slot-name parity with `ApplyPropSkin`/`ApplyAnimatedPropSkin`.
+  → lands: skin swaps work on the new meshes.
+- **R1.6 Verify + lookdev.** First-ever shared-corpus parity check (every referenced model has
+  its mesh; slot and collision audits) as a Content-tier test, plus a props row set in the
+  lookdev map. → lands: the props lane is provable and reviewable.
 
-### Phase 3 — import layer: materials, design (slice 4, docs only)
+### R2 — instruments and guards (nothing else moves first) [MP-1]
 
-- **SF-3.1 Master inventory** [D1]. Table: 42 resolved programs + the 8 real unresolved families
-  (`worldvertextransition`, `decalmodulate`, `refract`, `cable`, `shatteredglass`, `cloud`,
-  `heatglow`, `worldtwotextureblend`) → master → blend mode → parameters. Each row cites its
-  shader-program unit. Debug/tool families listed as "no master, provenance only". The `EnvMap`
-  feature is specified here with knobs, not values: mask → roughness/specular curve,
-  `$envmaptint` grey-vs-chromatic split, authored fixed cube as a literal additive sample scaled
-  by a knob, `$envmapmode` sphere variant [C4, C5 as specs].
-- **SF-3.2 Parameter table** [D2]. All 229 VMT keys → destination (texture / scalar / vector /
-  static switch / master choice / physical material / runtime / provenance-only). Rule: a key with
-  no destination fails staging.
-- **SF-3.3 Proxy policy** [D3]. The 20 proxy kinds → shader-time node (`Sine`, `TextureScroll`,
-  `AnimatedTexture`, `TextureTransform`, noise), runtime C++ (`PlayerProximity`, `PlayerPosition`,
-  `PlayerSpeed`, `GlobalWetness`, `TextConsole`), or provenance-only. One table.
-- **SF-3.4 Naming, identity, knob contract** [D4]. `/ElysiumBaked/Materials/<dir>/MI_<stem>`;
-  patched map materials under `maps/<map>/`; new masters under
-  `Content/ElysiumGenerated/Materials/V2/` beside, not over, the legacy set. The knob contract:
-  which values are settings, which are class-table rows, which are per-instance from the VMT.
-  Settled entry.
+- **R2.1 Baseline shots** [MP-1.1]. `shots_diff.py` reference frames, every hub + one of each
+  district type. → lands: the only instrument the rendered half has.
+- **R2.2 Censuses** [MP-1.2]. Per-map entity/light/effects-class censuses pinned as JSON.
+  → lands: the differ's and R7's ground truth.
+- **R2.3 Recipe closes over what it absorbs** [MP-1.3]. `level_sidecar_recipe` extended to
+  `.ents`, `.hulls`, `.dispcol`, `.ropes`; a touched sidecar provably dirties the `.umap`.
+  → lands: no stale-level failure mode.
+- **R2.4 Travel-gate successor** [MP-1.4]. The new lane's readiness artifact defined; `Travel`
+  accepts either; the gate is never absent. → lands: maps stay bootable through the cutover.
 
-### Phase 4 — import layer: materials, build (slice 4)
+### R3 — map producer parity (game untouched) [MP-2]
 
-- **SF-4.1 Knobs** [C0, legacy rewire removed]. (1) `UElysiumSurfaceSettings : UDeveloperSettings`
-  — `DefaultSpecular`, `DefaultRoughness`, `DefaultMetallic`, `LightSpecularScale`,
-  `MaskRoughnessMin/Max`, `MaskSpecularScale`, `EnvTintScale`, `FixedCubeStrength`,
-  `CaptureRadius`; `PostEditChangeProperty` writes them into a new `MPC_ElysiumSurfaces`
-  collection, so a PIE session follows the slider; saved to git-tracked
-  `Config/DefaultElysium.ini`. (2) `UElysiumSurfaceCalibration : UDataAsset` — one row per surface
-  class (roughness, specular, metallic), regenerating a 64×1 lookup texture on edit. Nothing legacy
-  reads either. Done when a Substrate test round-trips both and the ini persists an edit.
-- **SF-4.2 Provenance class** [D5]. `UElysiumMaterialProvenance : UAssetUserData` (raw ordered
-  parameters, source SHA, resolved program, proxies, anomalies, coverage) + registry tags
-  (`ElysiumShaderProgram`, `ElysiumMaster`). Substrate test.
-- **SF-4.3 Masters, one task per family, transcribed from the shader units** [D6]: 4.3a Lit
-  (opaque/masked/translucent; selfillum, envmap, bump switches), 4.3b Unlit (+`$ignorez`,
-  `$vertexcolor`/`$vertexalpha`), 4.3c Eyes, 4.3d Water, 4.3e Sprite, 4.3f Refract, 4.3g Decal,
-  4.3h Additive, 4.3i TwoTexture/VertexTransition. New `make_v2_materials.py`, one graph per
-  family, each citing the program it transcribes; every master reads `MPC_ElysiumSurfaces` and
-  the class LUT; lighting terms (`v0`, lightmap) are Lumen's. Legacy `make_*_materials.py`
-  untouched.
-- **SF-4.4 Stage** [D7]. GLB → manifest: master by resolved program; texture params →
-  `/ElysiumBaked/Textures` (`_linear` twin for data-class bindings); scalars/vectors/switches by
-  3.2; `PhysMaterial` by `$surfaceprop` (Phase 2 assets); class index by `$surfaceprop` → VMT top
-  directory → family default; `$envmap` concrete → `TC_`, symbol → runtime bind; proxies by 3.3.
-  Every unmapped key is a listed stage failure.
-- **SF-4.5 Import** [D8]. Editor script writes the `MI_` assets, applies provenance, stamps,
-  saves; compile check per instance; `import_report.json`; full corpus first run; idempotent
-  rerun.
-- **SF-4.6 Parity oracle** [D9]. A numpy ps.1.x interpreter over `shader-programs/source/*`
-  units, run against one master's post-lighting terms on fixed inputs; extend per 4.3 family.
-  Lighting terms excluded by design.
-- **SF-4.7 Lookdev map** [new]. A generated `/ElysiumBaked/Lookdev/Materials.umap`: a grid of
-  spheres and planes, one per selected `MI_` (a named review set of 20-24 entries: a plaster
-  wall, a tiled floor, a chrome fixture, Asylum glass, a wet street, an eye, water, a translucent
-  fixed-cube glass and two patched map instances so the instance-of-instance path is on the map
-  too), lit by a rig of point lights centred on the grid and an exposure pinned independent of
-  the physical camera. This is how the new masters are looked at before any real map uses them,
-  and it is the PIE window for Phase 5. A review-set entry whose `MI_` is not staged yet renders
-  on a loud, unmistakable placeholder and the generator run itself fails
-  (`uv run elysium import materials --lookdev --lookdev-allow-missing` to accept that on
-  purpose); `lookdev_report.json` under `$ELYSIUM_WORK_ROOT/reports/lookdev/` carries the
-  placed/missing counts the CLI prints. Touches nothing legacy.
+- **R3.1 The join, stated** [MP-2.1]. Entities+root join specified in `seam_map_map.md` (hulls,
+  contents, `blocks_player`, `brush_mesh`, sky-membership are root-lump facts); the hull solver
+  ports verbatim; the world-space-hulls invariant verified on a rotating door. → lands: the
+  producer's contract.
+- **R3.2 Producer emits legacy sidecars** [MP-2.2]. `map_sidecars` reads the four map units (+
+  the nav-graph seam) and emits byte-comparable `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/
+  `.sky`/`.spawn`/`.ropes`. → lands: the new source proven with zero game change.
+- **R3.3 The differ** [MP-2.3]. All 108 maps against the legacy exporter; hull vertex counts and
+  AABBs compared explicitly. → lands: byte-equal or named-divergence-only.
+- **R3.4 Named divergences, one commit each** [MP-2.4]. Datamap output typing (+
+  `FElysiumSaveVersion` bump, the `OutputTimesRemaining` gate made loud), key folding, `param`
+  stripping, `delay` atof, `extra`, `times` normalization ownership. → lands: each divergence
+  shot-diffed and pinned.
+- **R3.5 Legacy exporter retired** [MP-2.5]. `.weather`/`.particles` re-pointed;
+  `UE_bsp_to_scene.py` deleted. → lands: one exporter.
 
-### Phase 5 — owner tunes on knobs (lookdev)
+### R4 — transport: assets instead of loose files [MP-3]
 
-**How the owner tunes (2026-08-31).** The concrete procedure, once the material import and lookdev
-map are current: open the editor; open `/ElysiumBaked/Lookdev/Materials`; Alt+P to play in the
-editor (PIE stays on the lookdev map — a `GameMode` override, not a real-map launch). Edit → Project
-Settings → Elysium → Surfaces exposes the sixteen global knobs — `ClassInfluence`,
-`DefaultRoughness`/`DefaultSpecular`/`DefaultMetallic`, `MaskRoughnessMin`/`MaskRoughnessMax`,
-`MaskSpecularScale`, `MaskMetallicMax`, `EnvTintScale`, `ChromaticTintStrength`, `ChromaThreshold`,
-`FixedCubeStrength`, `Overbright`, `LightSpecularScale`, `CaptureRadius`, `DecalDepthOffset` — and an
-edit auto-writes the git-tracked `Config/DefaultElysium.ini` (`UElysiumSurfaceSettings`'s
-`PostEditChangeProperty` mirrors it into `MPC_ElysiumSurfaces` live, so PIE follows the slider with
-no restart); commit the ini. Content Browser → `/Game/ElysiumGenerated/Materials/V2/
-DA_SurfaceCalibration` is the per-class table (72 rows): edit a row's roughness/specular/metallic and
-Ctrl+S saves the LUT texture regeneration together with the asset — the generator (`make_surface_
-knobs.py`) never resets a tuned row on a later run. Per-material `MI_` edits made directly in the
-Material Instance editor are throwaway: the next `uv run elysium import materials` overwrites every
-instance from its manifest, by design (no per-material tuning layer). After a knob or class-table
-edit, `uv run elysium import materials --lookdev` regenerates the review map so the next PIE look
-reflects it; `pipeline/unreal/lookdev_set.json` is the review list the owner extends when a surface
-needs its own sphere/plane in the grid, and `--lookdev-set <path>` points the generator at a
-different one (a scratch set while drafting new entries, say) without touching the tracked file.
-`--lookdev` never accepts `--select`/`--force` — those are the corpus-staging flags, and
-`--lookdev` stages nothing. No status marks belong in this note — `roadmap.md` owns task status.
+- **R4.1 Entity asset** [MP-3.1]. Per-map `UElysiumMapEntities` deserializing into
+  `FElysiumEntityDef` (the plain struct stays; Substrate tier untouched), def-count and index
+  parity asserted, the green room's direct `sp_theatre.ents` read moved onto it, then the `.ents`
+  reader deleted. → lands: entities ship as cooked content; save index key intact.
+- **R4.2 Hull payload asset** [MP-3.2]. Cooked collision per map (convex per brush entity,
+  trimesh via an `IInterface_CollisionDataProvider` vessel); `ElysiumMapCollision::Build` and
+  `BuildBrushBody` consume it; nav bounds and the readiness barrier keep their sources.
+  → lands: no runtime cook; `.hulls`/`.dispcol` readers deleted.
+- **R4.3 Lighting surfaces.** `UElysiumLightingSettings` (Project Settings → Elysium → Lighting,
+  tracked ini, per-world push on terminal value-set) + per-map `UElysiumLightCalibration` data
+  asset (lump-15 ordinal, merge rows); the rig shrinks to asset-overrides + lightstyles;
+  `Elysium.Substrate.LightRig` re-homed to bake verification; the Cog Lights tuning tabs deleted.
+  No remapper — nothing to migrate, the owner re-tunes in the editor. → lands: light tuning is an
+  editor surface.
+- **R4.4 Environment asset.** The `.env`/`.sky`/`.spawn` values as the per-map map-info asset
+  (fog CPD values are taste-free passthrough; the height-fog actor is edited directly); `.env`/
+  `.sky`/`.spawn` readers deleted. → lands: environment ships as cooked content.
+- **R4.5 Orphan taste values get editor homes.** The seven cvar-only knobs onto settings pages;
+  the seven "Enhanced rain" literals into the weather settings home; green-room eye tuning into
+  `DA_EyeTuning`; delete `RainMist`, the `MaterialOverrides` group, `SkyProbe`, the leak A/B.
+  → lands: zero taste values living in C++ literals or cvars.
+- **R4.6 First map on assets** [MP-3.4]. The per-map cutover flag; one hub converted and
+  shot-diffed against R2.1. → lands: proof of the transport end-to-end.
 
-- **SF-5.1 Defaults** [C1]. Owner opens the lookdev map in PIE, tunes the 4.1 globals in Project
-  Settings, Ctrl+S. The committed ini is the deliverable.
-- **SF-5.2 Class table** [C2]. Owner fills and tunes the 4.1 data asset rows in PIE, saves. The
-  asset is the deliverable; `docs/vtmb/surface_properties.md` only points at it.
-- **SF-5.3 EnvMap knobs** [C4, C5]. Owner tunes the mask curve, tint split and fixed-cube
-  strength on the review set's masked and Asylum surfaces; the result is written as a Settled
-  entry here.
+### R5 — the map bake rebuilt on the GLB corpus [MP-4]
 
-### Phase 6 — wiring (the only phase that touches consumers)
+- **R5.1 Geometry and props from the root unit** [MP-4.1]. World/sky/brush meshes from the
+  root scenes; props placed from `staticProps[]` referencing the R1 meshes with per-placement
+  solid/skin/fade applied; the `.obj` gate flips to the R2.4 artifact. Closes the "Where do the
+  props go?" open question. → lands: a map authored wholly from GLB.
+- **R5.2 Sky baked.** Cube imported per sky name (six), `SLS_SpecifiedCubemap` assigned, the
+  intensity join computed at bake, the sky-dome mesh authored; the runtime sky assembly deleted.
+  → lands: editor shows the true sky.
+- **R5.3 Decal fog and wetness homes** [MP-4.2]. The two per-map-state axes that force per-map
+  material instances, parameters sourced from the R4.4 asset. → lands: unblocks R5.4.
+- **R5.4 V2 materials wired** [MP-4.3, SF-6.1]. `material_for` returns `MI_` by
+  `vtmb:material:*`; per-map material packages stop; the ~217 proxy-animated materials come alive
+  by the rebind. → lands: maps render through the V2 masters.
+- **R5.5 Reflection captures** [MP-4.4, SF-6.2]. Per `cubemaps[]` origin, radius from settings,
+  built under `-AllowCommandletRendering`; `LightSpecularScale` flip rides along. → lands: the
+  Lumen fallback lane.
+- **R5.6 Lights final** [MP-4.5]. The bake writes calibrated values from `worldLights[]` plus the
+  MegaLights properties; the runtime derivation deleted (the rig applies only the R4.3 asset and
+  lightstyles); `.lights` reader deleted. → lands: the editor level is the truth.
 
-- **SF-6.1 Map materials** [D10a]. The map bake's `material_for` returns the imported `MI_` by
-  `vtmb:material:*`; the per-map material packages stop being written. First real-map PIE look.
-- **SF-6.2 Reflection captures** [C3]. The map bake places one `SphereReflectionCapture` per
-  `cubemaps[]` origin from the export_v2 map unit, radius from the 4.1 setting; light
-  `specular_scale` comes from `LightSpecularScale`.
-- **SF-6.3 Characters** [D10b]. Character bake slots and skin families → `MI_`.
-- **SF-6.4 Runtime factory** [D10c]. `FElysiumMaterialFactory::Create(MI_)` with the runtime
-  binds only (`env_cubemap` symbol, 3.3 runtime proxies, fog primitive data); Cog Environment
-  sliders become views onto `UElysiumSurfaceSettings`.
-- **SF-6.5 Wield and UI sprites** [D10d].
-- **SF-6.6 Deferred readers from slice 2.** Sky cube faces, rope/cable materials, eye irises,
-  `tex_hi` flip off loose files (`shared/tex`, `npc/tex`, `retex_dds`).
-- **SF-6.7 Second tuning pass** [new]. Owner re-tunes 5.1–5.3 on real maps (Santa Monica street,
-  Asylum bar, Venture Tower lobby) in PIE; commits ini and asset.
+### R6 — consumers beyond maps [SF-6.3–6.6]
 
-### Phase 7 — retire
+- **R6.1 Characters** [SF-6.3]. Character bake slots and skin families → `MI_`. → lands: bodies
+  on V2.
+- **R6.2 Runtime factory** [SF-6.4]. `FElysiumMaterialFactory::Create(MI_)` with runtime binds
+  only (`env_cubemap` symbol, runtime proxies, fog primitive data); the Cog environment sliders
+  die in favour of the settings pages. → lands: dynamic materials on V2.
+- **R6.3 Wield and UI sprites** [SF-6.5]. → lands: items on V2.
+- **R6.4 Deferred slice-2 readers** [SF-6.6]. Sky cube faces, rope/cable materials, eye irises,
+  `tex_hi` flip off loose files. → lands: no loose-file texture reads.
 
-- **SF-7.1 Retire legacy** [D11]. Legacy masters, per-map material packages,
-  `/ElysiumBaked/Shared/Textures`, the legacy `SourceCube` wetness path (owner decision under
-  5.3), `tex/cube/` sidecars, `MPC_ElysiumEnvironment`'s surface scalars. Ledger rows here move
-  to retired.
+### R7 — life (each task one visible lane, shot-diffed) [MP-5]
 
-## Plan — maps track (sidecar convergence, entity contract, map life)
+- **R7.1 Lightstyles everywhere** [MP-5.1]. → lands: flicker and pulse, the VtMB signature.
+- **R7.2 Water** [MP-5.2]. `M_V2_Water` on water surfaces; leaf data and extents wired. → lands:
+  water that behaves like water.
+- **R7.3 Detail props** [MP-5.3]. The 143,412 `dprp` placements over 41 models as instanced
+  meshes/cards, `detailPropLighting[]` consulted. → lands: exteriors stop reading bare.
+- **R7.4 Sprites and coronas** [MP-5.4]. `env_sprite` via the V2 Sprite master. → lands: glows.
+- **R7.5 Effects entity family** [MP-5.5]. From the R2.2 census, by prevalence: `point_spotlight`
+  beams, `env_steam`, `env_embers`, `env_fire`, `env_lightglow`, `env_sun`. → lands: the ambient
+  set.
+- **R7.6 Decals on the V2 Decal master** [MP-5.6]. → lands: legacy `M_Decal` retired.
+- **R7.7 3D-skybox composition pass** [MP-5.7]. → lands: miniature richness reviewed.
+- **R7.8 Owner tuning pass on real maps** [SF-6.7]. In the editor, on the converted hubs; ini and
+  assets committed. → lands: the look, signed.
 
-Owner instructions (2026-08-31): converge the runtime sidecars into the Unreal map — real level
-objects where the validation says they can be, per-map assets where they cannot — wire the V2
-materials, cubemaps, fog and every dormant visual lane, and finish able to **drop the legacy
-pipeline entirely and run the game on the new one**. The I/O contract must not break. Tasks are
-the smallest possible; IDs are `MP-<phase>.<n>`. The validation findings this plan answers are in
-the Settled entry "Map convergence validated" above. Cutover is gated **per map, never per
-system** — `LoadMap`'s failure ladder is conjunctive (collision, entity world and nav all fail the
-barrier outright), so a system half-migrated across all maps boots nothing, while an unmigrated
-map on the legacy path always boots.
+### R8 — retire [MP-6, SF-7.1]
 
-### Phase 1 — instruments and guards (nothing moves yet)
-
-- **MP-1.1 Baseline shots.** `validation/shots_diff.py` reference frames for a representative map
-  set (every hub + one instance of each district type), captured on the current build. The
-  rendered half of this refactor (lights, fog, sky, materials) has no test tier; this is its only
-  instrument. Nothing moves until the baseline exists.
-- **MP-1.2 Censuses.** Per-map `.ents` census (entity count, brush/hull/output totals per class),
-  light census (rows per type, styled-light count), and an effects-entity census
-  (`env_sprite`/`env_steam`/`env_fire`/`env_embers`/`point_spotlight`/… occurrences per map — the
-  life sweep left prevalence unverified). Pinned as a JSON the differ and later phases read.
-- **MP-1.3 Recipe closes over what it absorbs.** `level_sidecar_recipe` covers `.props`,
-  `.decals`, `.lights`, `.env`, `.sky`, `.spawn` only; extend it to `.ents`, `.hulls`, `.dispcol`,
-  `.ropes` and `_lights/<map>.json` **before** any content moves into the level, and verify a
-  touched sidecar dirties the `.umap`. Otherwise the tracker serves stale levels that look like
-  runtime bugs.
-- **MP-1.4 Travel gate successor.** `Travel` refuses a map without `<map>.obj`. Define the new
-  lane's readiness artifact, teach the gate to accept either, and have the new lane emit it from
-  day one — the gate must never be absent between lanes.
-
-### Phase 2 — the new producer, byte-comparable (game untouched)
-
-- **MP-2.1 The join, stated.** The entities GLB is lump 0 only; `hulls`, `contents`,
-  `blocks_player`, `brush_mesh` and sky-membership are root-unit facts. Either publish them on the
-  root unit as stated fields or specify the root+entities join the producer performs — decided in
-  `seam_map_map.md` before code. The hull solver ports **verbatim** (its tolerances are
-  load-bearing); the world-space-hulls-with-origin-relative-attachment invariant is verified on a
-  rotating door and then stated once in the seam doc.
-- **MP-2.2 Producer emits legacy sidecars.** A new `map_sidecars` producer reads the four GLB
-  units (+ nav-graph seam, the fifth source the "4 units" framing omitted) and emits
-  byte-comparable `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/`.sky`/`.spawn`/`.ropes` — proving
-  the join with every existing test tier still valid and the game completely untouched.
-- **MP-2.3 The differ.** Per-map differ against the legacy exporter's output over all 108 maps;
-  hull vertex counts and AABBs per brush entity compared explicitly. Byte-equal or
-  named-divergence-only is the acceptance.
-- **MP-2.4 Named divergences, one commit each.** Datamap output typing (`outputLike` demotions —
-  with the `FElysiumSaveVersion` bump and the `OutputTimesRemaining` length-gate turned into a
-  loud warning), key folding, `param` stripping, `delay` atof-vs-float, `extra` retention,
-  `times==0→-1` ownership (exactly one owner). Each with its own shot diff and Substrate pin
-  (`Outputs.Num()` per class on a golden def set). None ride along inside the format change.
-- **MP-2.5 Legacy exporter retired.** `.weather`/`.particles` re-pointed at the new producer
-  (they re-read the `.ents` the old exporter wrote); `UE_bsp_to_scene.py` deleted. The game is
-  byte-identical at this point.
-
-### Phase 3 — transport: assets instead of loose files
-
-- **MP-3.1 Entity asset.** Per-map `UElysiumMapEntities` data asset the producer generates;
-  it deserializes **into** `FElysiumEntityDef` (the plain struct stays — the whole Substrate tier
-  constructs it directly), asserts def-count and index parity against the `.ents` it replaces,
-  then the `.ents` reader is deleted. One row per lump block, lump order, `worldspawn` included,
-  no drops — the entity index is the save file's primary key.
-- **MP-3.2 Hull payload asset.** Cooked collision (convex elements per brush entity, trimesh for
-  world/displacement) as a per-map asset with an `IInterface_CollisionDataProvider` vessel;
-  `ElysiumMapCollision::Build` and `BuildBrushBody` consume it. Component ownership, spawnflag
-  solidity, dormancy and mobility stay at runtime; the nav volume keeps its bounds source and the
-  collision-ready barrier its signal. `.hulls`/`.dispcol` readers deleted after Content-tier
-  parity.
-- **MP-3.3 Environment assets.** `.env`/`.sky`/`.spawn` values into a per-map map-info asset
-  (fog stays per-primitive CPD — the values feed the same stamping path); the light overlay
-  re-keyed to the lump-15 ordinal with a one-shot `_lights/*.json` remapper; Cog windows read and
-  write the assets. Regenerating an asset must not require a level rebake — that property is what
-  the sidecars were for, and it is kept.
-- **MP-3.4 Per-map cutover flag.** A map on the new transport boots from assets; any other map
-  boots the legacy path unchanged. First converted map: one hub, shot-diffed against MP-1.1.
-
-### Phase 4 — the map bake rebuilt on the new lane
-
-- **MP-4.1 Geometry from GLB.** World/sky/brush meshes and props baked from the root unit's
-  scenes instead of `.obj`/`.props` (placements are already scene nodes — this also settles the
-  "Where do the props go?" open question: placements fold into the level, the census stays in
-  provenance). The `.obj` gate flips to the MP-1.4 artifact.
-- **MP-4.2 Decal fog and wetness homes.** The two per-map-state axes that force per-map material
-  instances today: decal fog (a `UDecalComponent` carries no CPD) and weather wetness. Design
-  task — candidate answers: MID-at-load for decals only, or a per-map MIC child of the V2 master
-  with the fog/wetness parameters as the only overrides. Blocks MP-4.3.
-- **MP-4.3 V2 materials wired (SF-6.1 lands here).** `material_for` returns the imported `MI_` by
-  `vtmb:material:*`; per-map material packages stop being written; PAKFILE-patched units resolve
-  by their `maps/<map>/` unit ids. The ~217 proxy-animated materials come alive by the rebind
-  alone. Shot-diff per map; the legacy master set stays until Phase 6.
-- **MP-4.4 Reflection captures (SF-6.2 lands here).** `SphereReflectionCapture` per `cubemaps[]`
-  origin, radius from `CaptureRadius`, built under `-AllowCommandletRendering` — a Lumen fallback
-  lane, knob-scaled, per the settled reflections direction.
-- **MP-4.5 Light values from the lighting unit.** The bake reads `worldLights[]` (lump-15
-  ordinals) instead of `.lights`; editor levels stop lying (the rig's calibration knobs and
-  per-frame lightstyle animation stay runtime, reading the MP-3.3 assets).
-
-### Phase 5 — life (each task is one visible lane, shot-diffed)
-
-- **MP-5.1 Lightstyles everywhere.** The rig's pattern animator (styles 0–11 exist) driven for
-  every styled light row, not only the animated-rig path. VtMB's flicker is atmosphere signature.
-- **MP-5.2 Water.** `M_V2_Water` bound on water surfaces; leaf data (lumps 36/46) and the
-  `.water` sidecar's successor feed extents and cheap-water distances; `EElysiumWaterLevel`
-  already reads the volumes.
-- **MP-5.3 Detail props.** `dprp` placements baked (instanced static meshes / sprite cards),
-  `detailPropLighting[]` consulted; exteriors stop reading as bare.
-- **MP-5.4 Sprites and coronas.** The `.sprites` lane's successor consumed: `env_sprite` glows
-  via the V2 Sprite master (the exported-but-never-read regression closed).
-- **MP-5.5 Effects entity family.** From the MP-1.2 census, implement by prevalence:
-  `point_spotlight` beams, `env_steam`, `env_embers`, `env_fire`, `env_lightglow`, `env_sun` —
-  Niagara/material lanes per class, provenance-only where the census says a class never ships.
-- **MP-5.6 Decals on the V2 Decal master.** After MP-4.2; legacy `M_Decal` retired with Phase 6.
-- **MP-5.7 3D-skybox composition pass.** Miniature richness (props, fog banding) reviewed on the
-  converted hubs; owner tuning session on the existing knobs.
-
-### Phase 6 — retire (with SF-7.1)
-
-- **MP-6.1 Runtime readers deleted.** The per-map sidecar parsers (`.ents`, `.hulls`, `.dispcol`,
-  `.ropes`, `.env`, `.lights`, `.sky`, `.spawn`) go once all 108 maps are on the new transport;
-  the boot map / green room (`BuildStageWorld`, no sidecars by design) keeps working throughout.
-- **MP-6.2 Legacy bake and masters deleted.** `bake_map.py`'s legacy lanes, the legacy world
-  master set, per-map material packages — folded with SF-7.1's list. Full-corpus rebake, doctor,
-  full shot-diff set against MP-1.1, and a playthrough smoke of the hub chain is the acceptance.
+- **R8.1 Runtime readers deleted** [MP-6.1]. Every per-map sidecar parser, once all 108 maps are
+  on the new transport; the boot map / green room stage world keeps working throughout. → lands:
+  the game reads cooked content and the corpus only.
+- **R8.2 Legacy bake, masters and Cog tuning deleted** [MP-6.2]. `bake_map.py` legacy lanes, the
+  legacy world/prop master set, per-map material packages, `/ElysiumBaked/Shared/Textures`, the
+  Cog tuning tabs and calibration cvars (the debug windows stay). Acceptance: full-corpus rebake,
+  doctor, the full R2.1 shot set, and a hub-chain playthrough. → lands: **one pipeline, and the
+  game runs on it.**
 
 ## Open questions
 
@@ -926,8 +858,8 @@ bake side, and there are two candidate answers:
 
 What would settle it: whether anything needs to change prop placement without rebaking the level
 (a debug surface, a live tweak, a per-session variation), and whether folding them in breaks the
-shared-vs-per-map split the corpus bake depends on. Needs a test, not an argument. The maps track
-picks the fold-into-the-level answer (MP-4.1); this question closes when that task lands.
+shared-vs-per-map split the corpus bake depends on. Needs a test, not an argument. The roadmap
+picks the fold-into-the-level answer (R5.1); this question closes when that task lands.
 
 **Cubemap block rotation below 4×4.** The texture exporter rotates a BC-compressed cube face
 into glTF orientation by permuting its 4×4 blocks and rewriting selector bits, which is exact only
