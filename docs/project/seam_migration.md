@@ -683,6 +683,35 @@ material **slot names** (`safe_name(material)` — skin swaps and the skeletal t
 strategy, the 7-master MIC scheme and verification (none exists today over the shared corpus) are
 free to change.
 
+**Props lane, R1.1–R1.4 landed on the test corpus (2026-08-31).** `seam_map_model.md` gained its
+`## Import` contract (+516 lines) and lost two false claims (v2531 has no header KeyValues region;
+static units carry one reference-pose animation). Decisions the contract took beyond the settled
+list, all flagged: V2 root `/ElysiumBaked/Meshes` (flip = `FElysiumContentPaths::BakedSharedMeshes()`
+alone, R5.1); import set 3,661 (16 of the 3,677 referenced ids are dangling → `SM_elysium_missing_model`);
+LOD `ScreenSize = clamp(LodSwitchConstant / switchPoint, floor, ceiling)` on a
+`UElysiumModelSettings` page (bake-time inputs, no runtime push); a `mdl.header.surfaceProperty`
+tier between physics solid and default; duplicate folded slot names disambiguated `<name>_<slot>`
+(fixes a latent legacy bug — Unreal resolves a duplicate slot name to the first index); uniform
+`CTF_UseSimpleAndComplex` with the header-hull bbox **carried** by the asset when no `.phy` exists
+while the placement decides use-vs-inert (VtMB stands such a prop inert). Validator: sentinel
+slots now surface per unit and as `sentinelReferences` in the index summary + a doctor line
+(backward-safe); the first-reason-per-label dedupe bug is fixed. Stage: `uv run elysium import
+models --maps …` (unscoped refused), 414 units for the three test maps in ~6 s, 0 failed, anomalies
+`missingMaterialSentinel=1, multiSubmodelBakedZero=3, surfacePropertyUnknown=2`. Import: **414
+imported, 0 failed, 129.5 s** (`author` 77 s, `geometry` 21 s, `collision` 4.9 s), rerun **0
+imported / 414 reused, 17.4 s**; `noPhysicsSolidsBoxFallback=131`. Spot-checks: a 7-LOD skeletal
+unit lands as 6 LODs (the `-1.0` row dropped) with 15 convex shapes and authored mass; the
+sentinel unit binds `MI_V2_Missing` (magenta/black checker on `M_V2_Unlit`, authored beside the
+masters); a Nanite veto is recorded by slot and material. The provenance-shape bug recurred as
+predicted (six real key mismatches between the parallel-built stage and reader — every one would
+have read back empty) and was caught: the reader changed, and
+`test_the_sidecar_key_set_is_exactly_the_pinned_one` pins the shared key set; the naming twin is
+a golden `model_names.json` read by both a pytest and `Elysium.Substrate.ModelNames.PropModelStem`.
+Non-manifold sections are predicted in Python and unwelded before `FDynamicMesh3` sees them (one
+section on one unit in the 414). Tests: 8 + 8 + 5 pytest, 7 + 1 Substrate; Substrate 416/416.
+Follow-ups carried to R1.6: `POLICY_GENERATOR_OUTPUTS` does not yet list `MI_V2_Missing`/
+`T_V2_MissingChecker`.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -708,32 +737,12 @@ deliberately **after** this roadmap — see "Wire first, tune later" below.
 
 ### R1 — props (the models lane; first, everything downstream places these)
 
-- **R1.1 Import contract + doc corrections.** `seam_map_model.md` gains `## Import` and loses its
-  two false claims (no header KeyValues region in v2531 — mass/surfaceprop come from
-  `physics.solids[].properties`; static units carry one reference-pose animation). The contract
-  decides, from the validation: naming pinned to the legacy fold (`SM_<safe_name(static_stem)>`,
-  flat shared layout, slot names `safe_name(material)` — with a Python↔C++ twin test against
-  `FElysiumContentPaths`), material join via `materialBindings.skinFamilies[skin][skinReference]`
-  with the out-of-range clamp, sentinel slots → one shared loud `MI_V2_Missing`, VTX LODs adopted
-  with the `-1.0` shadow rows dropped, submodel 0 for static props, collision cooked per model
-  from VPhysics with the **placement** selecting the mode (and the bbox rule for VPHYSICS-without-
-  `.phy`), surfaceprop fallback to default (recorded anomaly), Lumen-only lighting (no
-  `TEXCOORD_1`), scope = the 3,677 referenced units. Written (R1.1's own call, matching the V2
-  masters' beside-not-over principle) to the **V2 sibling root `/ElysiumBaked/Meshes`** — not over
-  `/ElysiumBaked/Shared/Meshes` — with stems, asset names and slot names preserved exactly, so the
-  runtime resolver's flip is one accessor and is a named wiring task of its own (R5.1).
-  → lands: the binding contract.
-- **R1.2 Validator sees the invisible.** `warnings_for` (or a new cross-unit check) surfaces
-  `vtmb:missing-material:` sentinel slots; the corpus-index first-reason-per-label under-reporting
-  is fixed; pytest pins both. → lands: sentinel counts in `doctor`.
-- **R1.3 Stage.** Per-model manifest: mesh accessors, slots→`MI_` paths, skin table, collision
-  solids, LODs, provenance; every undecidable input a loud listed failure. → lands: staged
-  manifest for 3,677 units + report.
-- **R1.4 Import.** Editor commandlet writes the `SM_` corpus: named slots bound to V2 `MI_`,
-  cooked convex collision, Nanite per the opacity rule, provenance `UAssetUserData`, recipe
-  idempotency, `import_report.json`. → lands: the shared prop meshes on the new pipeline under
-  `/ElysiumBaked/Meshes`, with the stems and slot names the four substrate call sites already
-  compute, so the flip to them is a root change and nothing else.
+**R1.1–R1.4 landed (2026-08-31)** — contract (`afe67526`), validator visibility (`b66262f5`),
+stage (`4218c32d`), C++ provenance/settings (`12339a27`), editor import (`5416ba8f`); numbers in
+the Settled entry "Props lane, R1.1–R1.4 landed on the test corpus". Working corpus for the whole
+of R1 is `sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1` (414 models); the full 3,661-unit run is a
+separately approved step after R1.6.
+
 - **R1.5 Skins asset.** The corpus skin table regenerated from `skinFamilies` (successor of
   `DA_ElysiumPropSkins`), slot-name parity with `ApplyPropSkin`/`ApplyAnimatedPropSkin`.
   → lands: skin swaps work on the new meshes.
