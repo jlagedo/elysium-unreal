@@ -18,12 +18,18 @@ editor:
   * `bl.make_material_instance`, bind every texture (through a small LRU so an 11k-unit run does
     not hold every texture's platform data resident), every scalar and vector, every static switch
     (`update_material_instance=False` per switch, one `update_material_instance` per instance),
-    the base-property overrides, the physical material;
+    the base-property overrides, the physical material -- the entry's `switches` states every
+    switch its master exposes explicitly (`True`/`False`), `basePropertyOverrides` states
+    `twoSided`/`opacityMaskClipValue` explicitly too (a value or the override cleared), and
+    `physMaterial` is always applied (the loaded asset or `None`), so a stale decision from an
+    earlier recipe never survives a re-import that no longer wants it (review finding 2);
   * read back the parent and every texture parameter -- a parameter name the master does not
     expose is an entry failure naming it, not a silently dropped bind;
-  * compile-probe (`MaterialEditingLibrary.get_statistics`) only the first instance of each
-    `(parent, switch-combination, blend override)` triple this run actually built, and fail it
-    when the probe reports zero pixel-shader instructions;
+  * compile-probe (`MaterialEditingLibrary.get_statistics`, `get_num_shader_types`, `list_shaders`)
+    only the first instance of each `(parent, switch-combination, blend override, two-sided,
+    opacity-clip)` tuple this run actually built, and fail it when the probe reports zero
+    pixel-shader instructions, zero shader types, or no hit-proxy/depth-only/base-pass shader
+    among the compiled types (review finding 3);
   * attach the provenance record (`UElysiumMaterialProvenance.apply_json`), publish its registry
     tags, stamp the recipe, save;
   * prune every asset inside the manifest's `pruneScope` folder that the manifest neither names
@@ -295,7 +301,7 @@ class Tracker(object):
 
 
 class Report(object):
-    def __init__(self, manifest_path, package_root, select=None):
+    def __init__(self, manifest_path, package_root, select=None, anomaly_counts=None, omission_counts=None):
         self.manifest = manifest_path
         self.package_root = package_root
         self.select = select
@@ -305,6 +311,12 @@ class Report(object):
         self.provenance_only = 0
         self.failures = []
         self.compiled_permutations = []
+        # Review finding 5: the offline stage already tallied every anomaly/omission kind across
+        # the whole corpus (`materials.py::stage_materials`); carried straight through into
+        # `import_report.json` rather than re-derived here from 19,125 provenance sidecars a
+        # second time.
+        self.anomaly_counts = dict(anomaly_counts or {})
+        self.omission_counts = dict(omission_counts or {})
         self.started = time.time()
 
     def failed(self, entry, reason):
@@ -325,6 +337,8 @@ class Report(object):
             "provenanceOnly": self.provenance_only,
             "failed": self.failures,
             "compiledPermutations": self.compiled_permutations,
+            "anomalyCounts": self.anomaly_counts,
+            "omissionCounts": self.omission_counts,
             "seconds": round(time.time() - self.started, 1),
         }
 
@@ -341,18 +355,28 @@ def _blend_mode_value(name):
 
 
 def _apply_base_property_overrides(mic, overrides):
-    if not overrides:
-        return
+    """Every override flag is set explicitly, true-with-a-value or false -- never left untouched
+    (review finding 2). A patched instance's `overrides == {}` (never authors a blend/two-sided/
+    clip decision of its own) clears all three explicitly rather than leaving whatever a previous
+    run's stamp left behind; `materials.py::_resolve_blend` always states `blendMode`/`twoSided`
+    for a non-patched entry, and `opacityMaskClipValue` only for a `Masked` blend (absent, not
+    `None`, on every other blend mode -- both read the same way here)."""
     bpo = mic.get_editor_property("base_property_overrides")
-    if "blendMode" in overrides:
-        bpo.set_editor_property("override_blend_mode", True)
-        bpo.set_editor_property("blend_mode", _blend_mode_value(overrides["blendMode"]))
+
+    blend_mode = overrides.get("blendMode")
+    bpo.set_editor_property("override_blend_mode", blend_mode is not None)
+    if blend_mode is not None:
+        bpo.set_editor_property("blend_mode", _blend_mode_value(blend_mode))
+
+    bpo.set_editor_property("override_two_sided", "twoSided" in overrides)
     if "twoSided" in overrides:
-        bpo.set_editor_property("override_two_sided", True)
         bpo.set_editor_property("two_sided", bool(overrides["twoSided"]))
-    if "opacityMaskClipValue" in overrides:
-        bpo.set_editor_property("override_opacity_mask_clip_value", True)
-        bpo.set_editor_property("opacity_mask_clip_value", float(overrides["opacityMaskClipValue"]))
+
+    clip = overrides.get("opacityMaskClipValue")
+    bpo.set_editor_property("override_opacity_mask_clip_value", clip is not None)
+    if clip is not None:
+        bpo.set_editor_property("opacity_mask_clip_value", float(clip))
+
     mic.set_editor_property("base_property_overrides", bpo)
 
 
@@ -365,8 +389,22 @@ def _apply_switches(mic, switches):
 
 
 def _permutation_key(entry):
+    # Review finding 3: the base-property overrides are part of the compiled permutation too --
+    # `TwoSided` and a non-default `OpacityMaskClipValue` each select their own shader map the
+    # same way a static switch does (`_finish_entry`'s own `update_material_instance` comment
+    # explains why `TwoSided` alone forces a fresh hit-proxy permutation) -- `blendMode` alone
+    # measured 963 keys against 1,000 real permutations; folding all three in closes that gap.
+    overrides = entry["basePropertyOverrides"]
     return (entry["parent"], tuple(sorted(entry["switches"].items())),
-            entry["basePropertyOverrides"].get("blendMode"))
+            overrides.get("blendMode"), bool(overrides.get("twoSided")),
+            overrides.get("opacityMaskClipValue"))
+
+
+#: Substrings (case-insensitive) `list_shaders`' `shader_type_name` is checked against: the probe
+#: must find at least one hit-proxy shader (editor selection/outlining -- `SceneHitProxyRendering.cpp`)
+#: and one depth shader (`FDepthOnlyVS`/`FDepthOnlyPS` and friends) among the compiled types, not
+#: only a non-zero base-pass instruction count.
+_REQUIRED_SHADER_TYPE_SUBSTRINGS = ("hitproxy", "depthonly", "basepass")
 
 
 def _compile_probe(mic, entry, report, probed):
@@ -378,16 +416,38 @@ def _compile_probe(mic, entry, report, probed):
     instructions = getattr(stats, "num_pixel_shader_instructions", None)
     if instructions is None:
         instructions = stats.get_editor_property("num_pixel_shader_instructions")
+
+    num_shader_types = _mel.get_num_shader_types(mic)
+    shader_type_names = sorted({
+        str(getattr(row, "shader_type_name", "") or row.get_editor_property("shader_type_name"))
+        for row in _mel.list_shaders(mic)
+    })
+    lowered = [name.lower() for name in shader_type_names]
+    missing_required = [
+        needle for needle in _REQUIRED_SHADER_TYPE_SUBSTRINGS
+        if not any(needle in name for name in lowered)
+    ]
+
     report.compiled_permutations.append({
         "assetPath": entry["assetPath"],
         "parent": entry["parent"],
         "switches": dict(entry["switches"]),
         "blendMode": entry["basePropertyOverrides"].get("blendMode"),
+        "twoSided": bool(entry["basePropertyOverrides"].get("twoSided")),
+        "opacityMaskClipValue": entry["basePropertyOverrides"].get("opacityMaskClipValue"),
         "numPixelShaderInstructions": instructions,
+        "numShaderTypes": num_shader_types,
+        "probedShaderTypes": shader_type_names,
     })
     if instructions <= 0:
         raise RuntimeError(
             "compile probe reports %d pixel-shader instructions" % instructions)
+    if num_shader_types <= 0:
+        raise RuntimeError("compile probe reports 0 shader types")
+    if missing_required:
+        raise RuntimeError(
+            "compile probe found no %s shader among %d compiled type(s)"
+            % (" or ".join(missing_required), num_shader_types))
 
 
 def _finish_entry(entry, staging_root, tracker, report, textures, probed):
@@ -428,12 +488,14 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
     # the shader map's cache key and its live `ShouldCache` evaluation looking at the same state.
     _mel.update_material_instance(mic)
 
+    # Review finding 2: always explicit, even when the entry's own is `None` (a patched instance,
+    # or a unit whose physical material fallback resolved to nothing) -- a stale `PhysMaterial`
+    # from a prior recipe would otherwise survive a re-import that no longer wants one.
     phys_material_path = entry.get("physMaterial")
-    if phys_material_path:
-        phys_material = unreal.load_asset(phys_material_path)
-        if phys_material is None:
-            raise RuntimeError("phys material not found: %s" % phys_material_path)
-        mic.set_editor_property("phys_material", phys_material)
+    phys_material = unreal.load_asset(phys_material_path) if phys_material_path else None
+    if phys_material_path and phys_material is None:
+        raise RuntimeError("phys material not found: %s" % phys_material_path)
+    mic.set_editor_property("phys_material", phys_material)
 
     # Read-back: the parent is the manifest's, and every texture parameter reads back the asset
     # this entry bound -- a parameter name the master (or, for a patched unit, the base instance)
@@ -455,11 +517,12 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
 
     # Four fields `UElysiumMaterialProvenance::FromJson` reads live in the manifest entry, not the
     # provenance sidecar itself: `assetPath` and `unitGlb` are staged only once, on the entry, not
-    # duplicated onto every unit's sidecar; `sourceSha256` sits beside `unitSha256` on the entry;
-    # `physMaterial` is the entry's resolved phys-material asset path (`SurfacePropertyAsset`,
-    # mirroring `PhysMaterial`). Added as top-level keys on the object `apply_json` parses, not a
-    # nested `"manifest"` object, so `FromJson` reads them exactly like every other top-level field.
-    for key in ("assetPath", "unitGlb", "sourceSha256", "physMaterial"):
+    # duplicated onto every unit's sidecar; `sourceMembersSha256` (review finding 9, renamed from
+    # `sourceSha256`) sits beside `unitSha256` on the entry; `physMaterial` is the entry's resolved
+    # phys-material asset path (`SurfacePropertyAsset`, mirroring `PhysMaterial`). Added as
+    # top-level keys on the object `apply_json` parses, not a nested `"manifest"` object, so
+    # `FromJson` reads them exactly like every other top-level field.
+    for key in ("assetPath", "unitGlb", "sourceMembersSha256", "physMaterial"):
         if key in entry:
             sidecar[key] = entry[key]
 
@@ -548,7 +611,9 @@ def run(manifest_path, force=False):
     package_root = manifest["packageRoot"]
     master_root = manifest["masterRoot"]
     select = manifest.get("select")
-    report = Report(manifest_path, package_root, select)
+    report = Report(manifest_path, package_root, select,
+                    anomaly_counts=manifest.get("anomalyCounts"),
+                    omission_counts=manifest.get("omissionCounts"))
     log("manifest %s: %d asset(s) -> %s%s%s" % (
         manifest_path, len(manifest["assets"]), package_root,
         " (select %s)" % select if select else "", " (forced)" if force else ""))

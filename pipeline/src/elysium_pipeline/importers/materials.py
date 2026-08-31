@@ -345,6 +345,14 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
 EXPOSED_PARAMS["M_V2_LitTranslucent"] = EXPOSED_PARAMS["M_V2_Lit"]
 
 
+def _switch_names(master: str) -> list[str]:
+    """Every static-switch name `master` exposes, sorted -- the full-state list review finding 2
+    stages per entry so the import phase can set every one of them explicitly (entry value or
+    `False`) instead of writing additively onto whatever a previous run left behind."""
+
+    return sorted(name for name, kind in EXPOSED_PARAMS[master].items() if kind == "#")
+
+
 def _validate_exposed(params: "_Params", master: str) -> None:
     exposed = EXPOSED_PARAMS[master]
     for bucket_name, bucket in (
@@ -630,16 +638,25 @@ def _base_key_from_asset_id(asset_id: str) -> str:
 _PATCH_COORD_RE = re.compile(r"_(-?\d+)_(-?\d+)_(-?\d+)$")
 
 
-def _source_sha256(document: dict) -> str:
-    """sha256 over `sourceResolution.members[].sha256`, sorted for determinism: the install bytes
-    this unit was read from, distinct from `unit_sha256` (the exported GLB's own bytes). Empty
-    when the unit carries no `sourceResolution` (a synthetic or malformed unit)."""
+def _source_members_sha256(document: dict) -> str:
+    """sha256 over `"\\n".join(f"{role}:{sha256}")` for every `sourceResolution.members[]` row, in
+    member order (the order `material_glb.build_document` writes them, itself `model.sources`'
+    order -- never re-sorted): the install bytes this unit was read from, distinct from
+    `unit_sha256` (the exported GLB's own bytes) and carrying the member's role, not just its
+    digest, so two members that happen to share a sha256 under different roles still fingerprint
+    differently. Empty when the unit carries no `sourceResolution` (a synthetic or malformed
+    unit). Named `sourceMembersSha256` (review finding 9, renamed from `sourceSha256`) because a
+    plain `sourceSha256` reads as "the source file's hash", singular, when it is actually a digest
+    over every resolved source member."""
 
     members = (document.get("sourceResolution") or {}).get("members") or ()
-    member_hashes = sorted(str(member.get("sha256") or "") for member in members if isinstance(member, dict))
-    if not member_hashes:
+    rows = [
+        f"{member.get('role') or ''}:{member.get('sha256') or ''}"
+        for member in members if isinstance(member, dict)
+    ]
+    if not rows:
         return ""
-    return hashlib.sha256("".join(member_hashes).encode("utf-8")).hexdigest()
+    return hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest()
 
 
 def _resolve_patch_of(stem: str) -> dict | None:
@@ -667,13 +684,23 @@ class StageResult:
     patched: int = 0
     failures: list[tuple[str, str]] = field(default_factory=list)
     protected: int = 0
+    #: Review finding 5: every anomaly/omission kind this run recorded, by name -> count, over
+    #: every staged unit (not only the failed ones) -- "restore the rule 'never an instance
+    #: written with the unknown part quietly missing'": a caller reading `summary()` alone sees
+    #: `textureClassMismatch=105` and `animatedFramesArrayUnavailable=12` without walking 19,125
+    #: provenance sidecars by hand.
+    anomaly_counts: dict[str, int] = field(default_factory=dict)
+    omission_counts: dict[str, int] = field(default_factory=dict)
 
     def summary(self) -> str:
+        rollup = ", ".join(f"{kind}={count}" for kind, count in sorted(self.anomaly_counts.items()))
         return (
             f"material staging: {self.assets} instances ({self.patched} patched, "
             f"{self.provenance_only} provenance-only) from {self.staged} units, "
             f"{self.pruned} pruned, {len(self.failures)} failed "
-            f"({self.protected} asset paths protected) -> {self.staging_root}"
+            f"({self.protected} asset paths protected)"
+            + (f" -- anomalies: {rollup}" if rollup else "")
+            + f" -> {self.staging_root}"
         )
 
 
@@ -1211,6 +1238,37 @@ def _apply_texture_switch_pairs(params: _Params, master: str) -> None:
             params.switches[switch_name] = True
 
 
+#: Review finding 5: per-master required texture slots. Every real master requires
+#: `BaseTexture` -- it is the only slot with no other colour source on any of the nine masters
+#: (`EnvMap`/`EnvMapMask`/`NormalMap`/etc. are all optional shading inputs, never the base
+#: colour). A `textureClassMismatch` anomaly (`_bind_texture`) that leaves a required slot
+#: unbound is a per-unit stage failure (`_check_required_slots`), not merely a recorded anomaly --
+#: "never an instance written with the unknown part quietly missing" applies in full to the slot
+#: that carries the surface's own colour.
+REQUIRED_TEXTURE_SLOTS: dict[str, frozenset[str]] = {
+    master: frozenset({"BaseTexture"}) for master in EXPOSED_PARAMS
+}
+
+
+def _check_required_slots(params: _Params, master: str) -> None:
+    """Raise when a required slot's only candidate texture was a `textureClassMismatch` -- the
+    unit authored the key, it resolved, but the referenced texture staged as the wrong class, so
+    the slot ends up unbound rather than deliberately absent (an unauthored key just leaves the
+    slot at the master's own default, never a failure)."""
+
+    required = REQUIRED_TEXTURE_SLOTS.get(master, frozenset())
+    mismatched = {
+        anomaly["parameter"] for anomaly in params.anomalies
+        if anomaly.get("kind") == "textureClassMismatch"
+    }
+    missing = (required & mismatched) - set(params.textures)
+    if missing:
+        raise MaterialImportError(
+            f"{master} requires {sorted(missing)}, but its referenced texture(s) staged as the "
+            f"wrong class -- see the textureClassMismatch anomaly"
+        )
+
+
 _SPRITE_BLEND_ROWS = {
     0: "Opaque", 1: "Translucent", 2: "Translucent", 3: "Translucent", 4: "Translucent",
     9: "Translucent", 5: "Additive", 7: "Additive", 8: "Additive",
@@ -1251,8 +1309,12 @@ def _resolve_blend(params: _Params, family: str) -> dict:
         overrides["blendMode"] = "Modulate"
     else:
         overrides["blendMode"] = "Opaque"
-    if _truthy(flags.get("$nocull", "0")):
-        overrides["twoSided"] = True
+    # Review finding 2: `twoSided` and `opacityMaskClipValue` are stated explicitly every time,
+    # never merely omitted when off -- the importer clears a stale override by seeing an explicit
+    # `False`/`None` here, not by an absent key it would have to remember to leave alone. Only
+    # `blendMode` is always present already (every branch above sets it).
+    overrides["twoSided"] = _truthy(flags.get("$nocull", "0"))
+    overrides.setdefault("opacityMaskClipValue", None)
     return overrides
 
 
@@ -1530,18 +1592,30 @@ def stage_unit(
             if master in _USE_BASE_TEXTURE_MASTERS:
                 params.switches["UseBaseTexture"] = _resolve_use_base_texture(params, document)
             _apply_texture_switch_pairs(params, master)
+            _check_required_slots(params, master)
+        # Review finding 2: state every switch the resolved master exposes, not only the ones a
+        # rule above happened to turn on -- an entry re-imported after a corpus/design change that
+        # used to turn a switch on and no longer does must land that switch's `False` explicitly,
+        # or a stale `MaterialInstanceConstant` (`clear_all_material_instance_parameters` clears
+        # non-static parameters only, never a static switch) keeps its old `True` forever.
+        params.switches = {name: bool(params.switches.get(name, False)) for name in _switch_names(master)}
         surface_class, surface_class_index, class_source = _resolve_surface_class(
             params.surfaceprop_value, directories, master)
         physmat_fallback = surface_class not in _SURFACEPROP_NAMES
         params.scalars["SurfaceClassIndex"] = surface_class_index
         _validate_exposed(params, master)
 
+    phys_material_path = (f"/ElysiumBaked/SurfaceProperties/PM_default"
+                          if (not patched and physmat_fallback) else
+                          (f"/ElysiumBaked/SurfaceProperties/PM_{safe_name(surface_class)}"
+                           if not patched else None))
+
     entry = {
         "assetPath": asset_path_for(key),
         "unit": asset_id,
         "unitGlb": f"{FAMILY}/{key}.glb",
         "unitSha256": unit_sha256,
-        "sourceSha256": _source_sha256(document),
+        "sourceMembersSha256": _source_members_sha256(document),
         "parent": parent,
         "patched": patched,
         "provenanceOnly": provenance_only,
@@ -1549,11 +1623,13 @@ def stage_unit(
         "scalars": dict(sorted(params.scalars.items())),
         "vectors": {k: v for k, v in sorted(params.vectors.items())},
         "switches": dict(sorted(params.switches.items())),
+        # Review finding 2: the full list of static-switch names the entry's master exposes
+        # (empty for a patched instance, which has no master of its own and never touches a
+        # switch) -- `switches` above already states every one of these explicitly, so this is
+        # the audit trail for that claim, not a second source the importer must also consult.
+        "allSwitches": [] if patched else _switch_names(master),
         "basePropertyOverrides": base_property_overrides,
-        "physMaterial": (f"/ElysiumBaked/SurfaceProperties/PM_default"
-                         if (not patched and physmat_fallback) else
-                         (f"/ElysiumBaked/SurfaceProperties/PM_{safe_name(surface_class)}"
-                          if not patched else None)),
+        "physMaterial": phys_material_path,
         "physMaterialFallback": physmat_fallback if not patched else None,
         "surfaceClass": surface_class,
         "surfaceClassIndex": surface_class_index,
@@ -1564,11 +1640,21 @@ def stage_unit(
             "parent": parent,
             "settingsVersion": SETTINGS_VERSION,
             "chromaThreshold": chroma_threshold,
+            # Review finding 4: the recipe now covers every stated fact about the instance and its
+            # provenance, not just the parameter map -- the physical material path (a stale
+            # `PhysMaterial` from an earlier recipe shape would otherwise survive re-import
+            # unnoticed) and a digest of the sidecar bytes themselves (any provenance-only change,
+            # e.g. a corrected anomaly or an added omission row, changes the sidecar without
+            # changing a single bound parameter, and the policy is that *any* such change bumps
+            # this recipe hash, forcing a re-import that re-stamps and re-saves the instance).
+            "physMaterial": phys_material_path,
+            "provenanceSha256": None,  # filled below, once `provenance` itself is built
             "params": {
                 "textures": dict(sorted(params.textures.items())),
                 "scalars": dict(sorted(params.scalars.items())),
                 "vectors": {k: v for k, v in sorted(params.vectors.items())},
                 "switches": dict(sorted(params.switches.items())),
+                "allSwitches": [] if patched else _switch_names(master),
                 "basePropertyOverrides": base_property_overrides,
             },
         },
@@ -1630,6 +1716,10 @@ def stage_unit(
             "unmappedKeys": [],
         },
     }
+    # sha256 over the exact bytes `_write_if_changed` writes for this unit's sidecar (canonical
+    # JSON, sorted keys) -- review finding 4's "recipe covers the sidecar too" (see the comment on
+    # `entry["recipe"]` above).
+    entry["recipe"]["provenanceSha256"] = hashlib.sha256(_json_bytes(provenance)).hexdigest()
     return entry, provenance
 
 
@@ -1705,6 +1795,8 @@ def stage_materials(
     produced: set[Path] = set()
     provenance_only_keys: list[str] = []
     failed_keys: list[str] = []
+    provenance_by_path: dict[str, dict] = {}
+    sidecar_path_by_path: dict[str, Path] = {}
 
     def failed(key: str, reason: str) -> None:
         result.failures.append((key, reason))
@@ -1734,6 +1826,16 @@ def stage_materials(
         if entry["provenanceOnly"]:
             result.provenance_only += 1
             provenance_only_keys.append(key)
+        # Review finding 5: the rollup counts every staged unit's anomalies/omissions, not only
+        # those a caller happens to walk provenance to find.
+        for row in provenance["anomalies"]:
+            kind = row.get("kind") if isinstance(row, dict) else None
+            if kind:
+                result.anomaly_counts[kind] = result.anomaly_counts.get(kind, 0) + 1
+        for row in provenance["omissions"]:
+            kind = row.get("kind") if isinstance(row, dict) else None
+            if kind:
+                result.omission_counts[kind] = result.omission_counts.get(kind, 0) + 1
         entries.append(entry)
 
         directories, stem = _check_key(key)
@@ -1745,6 +1847,8 @@ def stage_materials(
             entries.pop()
             continue
         produced.add(sidecar_path)
+        provenance_by_path[entry["assetPath"]] = provenance
+        sidecar_path_by_path[entry["assetPath"]] = sidecar_path
 
     # Two units folding to one asset path is a defect in the fold, not a race one wins.
     owners: dict[str, list[str]] = {}
@@ -1774,6 +1878,41 @@ def stage_materials(
             based.append(entry)
     entries = based
 
+    # Review finding 7: the registry tag `ElysiumMaster` walks empty for a patched instance
+    # because its own provenance `master` is `None` (an instance-of-instance has no master of its
+    # own -- `bake_lib.make_material_instance` parents it onto another `MI_`, never a `M_V2_*`
+    # asset). Walk `parent` through this run's own entries to the base unit's master and stamp
+    # *that* onto the patched unit's provenance `master` field, so the Content Browser filter
+    # covers every one of the corpus's 7,499 patched instances too, not only the un-patched ones.
+    # A base that itself failed to stage (absent from `entries_by_path`) or a cycle (defensive;
+    # `topo_order` in the editor phase would also catch it) leaves the patched provenance's
+    # `master` at `None`, unchanged -- no worse than before this fix.
+    entries_by_path = {entry["assetPath"]: entry for entry in entries}
+
+    def _root_master(entry: dict) -> str | None:
+        seen: set[str] = set()
+        current = entry
+        while current.get("patched"):
+            parent_path = current["parent"]
+            if parent_path in seen or parent_path not in entries_by_path:
+                return None
+            seen.add(parent_path)
+            current = entries_by_path[parent_path]
+        return provenance_by_path[current["assetPath"]].get("master")
+
+    for entry in entries:
+        if not entry["patched"]:
+            continue
+        root_master = _root_master(entry)
+        if not root_master:
+            continue
+        provenance = provenance_by_path[entry["assetPath"]]
+        if provenance.get("master") == root_master:
+            continue
+        provenance["master"] = root_master
+        entry["recipe"]["provenanceSha256"] = hashlib.sha256(_json_bytes(provenance)).hexdigest()
+        _write_if_changed(sidecar_path_by_path[entry["assetPath"]], _json_bytes(provenance))
+
     keep: set[str] = set()
     for key in failed_keys:
         try:
@@ -1797,6 +1936,11 @@ def stage_materials(
         "stageFailures": [{"unit": key, "reason": reason} for key, reason in result.failures],
         "provenanceOnly": sorted(set(provenance_only_keys)),
         "surfaceClasses": list(SURFACE_CLASSES),
+        # Review finding 5: the same rollup `StageResult.summary()` prints, carried into the
+        # manifest so the editor phase can fold it into `import_report.json` without re-parsing
+        # every provenance sidecar a second time.
+        "anomalyCounts": dict(sorted(result.anomaly_counts.items())),
+        "omissionCounts": dict(sorted(result.omission_counts.items())),
         "assets": entries,
     }
     root.mkdir(parents=True, exist_ok=True)

@@ -307,8 +307,9 @@ map material's concrete `TC_maps/<map>/c…` is recorded on the instance and nev
 probes are not reflection content — and since 7,448 of the 7,501 patch rows set nothing but
 `$envmap`, most patched instances override nothing at all; only the 342 authored `envmap/*` cubes
 keep a literal additive cube sample, scaled by `FixedCubeStrength` and switched to black for ray and Lumen-card passes.
-The `$envmapsphere` variant needs no master and no switch: of its 12 users, ten are `shadertest/`
-or `dev/` and the other two are one break-glass pair, one of which has no `$envmap` at all.
+The `$envmapsphere` variant needs no master and no switch: of its 11 users (review finding 8 —
+corrected from an earlier miscount of 12), nine are `shadertest/` or `dev/` and the other two are
+one break-glass pair, one of which has no `$envmap` at all.
 Non-`$envmap` surfaces take `DefaultSpecular`/`DefaultRoughness`/`DefaultMetallic` modulated by
 their class-table row — the repudiated three-zeroes rule's replacement.
 
@@ -365,9 +366,10 @@ Provisional owner calls now open, all listed in the design: the `$alphatest` cli
 `decalmodulate` → `BLEND_Modulate` instead of retail's wireframe fallback (Unlit, out of the Lumen
 surface cache, not Nanite-compatible; and the `Ray Tracing Quality Switch` does not gate the path
 tracer, so the path tracer sees the fixed-cube add); the fixed cube going to **Emissive** behind
-that switch rather than VtMB's pre-lighting composite point; **`$envmapsphere` gets nothing** — 10
-of its 12 users select a `*_EnvMapSphere*` vertex program but ten are `shadertest/`/`dev/` and the
-two shipped users are one break-glass pair; **`$ignorez`** — the 5 `unlitgeneric` world users
+that switch rather than VtMB's pre-lighting composite point; **`$envmapsphere` gets nothing** — 9
+of its 11 users (review finding 8 — corrected from an earlier miscount of 12/10) select a
+`*_EnvMapSphere*` vertex program but are `shadertest/`/`dev/` and the two shipped users are one
+break-glass pair; **`$ignorez`** — the 5 `unlitgeneric` world users
 re-route to `M_V2_Sprite` (already Unlit, two-sided, depth-test-off), the 3 `sprite` ones are
 already there, the 9 `wireframe` ones are no-master, and the 1 `vertexlitgeneric` keeps `M_V2_Lit`
 with the flag as a named divergence — no `M_V2_UnlitNoDepth`; and **`Detail` is dropped** — all 28
@@ -434,6 +436,40 @@ instructions. First full run: 11,141 imported, 7,984 reused (from an earlier par
 0 failed, 681 s wall time. Rerun for idempotency: 0 imported, 19,125 reused, 0 failed, 8 s.
 Lookdev: all 20 review-set entries placed (0 missing), 32 `StaticMeshActor`s all resolved to a real
 `MI_` instance (0 placeholders).
+
+**Revised the same day — the review pass closing findings 1-9.** The offline stage
+(`--stage-only`) against the same corpus, with every finding above applied, now stages **19,077**
+of the 19,125 units and **fails 48 loudly** — `REQUIRED_TEXTURE_SLOTS` (finding 5) turns a
+`textureClassMismatch` on `BaseTexture` from a silent anomaly into a per-unit stage failure
+whenever the slot is the surface's only colour source (mostly `sprites/`, `particle/` and
+`objects/` flipbook/UI units whose referenced texture staged as a `Texture2DArray`/`TextureCube`
+instead of a plain `Texture2D`, plus a handful of `M_V2_Lit`/`M_V2_Water` units with the same
+defect) — named per-unit in `manifest.json`'s `stageFailures`. Anomaly rollup over the 19,077
+staged units: `textureClassMismatch` 53, `selfIllumOnUnlitSurface` 9, `misspelledKey` 4,
+`translucentValue` 2. Omission rollup: `unitDivergenceProvenanceOnly` 15,
+`proxyTargetProvenanceOnly` 13, `animatedFramesArrayUnavailable` 12 — the same 12 units this
+finding's "known-stale" list names (`sprites/mflash_{colt,mac10,shotgun}`,
+`models/scenery/structural/controlpanel/screenf`,
+`models/scenery/structural/sewerparts/water_fall_{big,small}`,
+`models/scenery/structural/temple/water_fall_small`,
+`models/scenery/structural/plaguebearer_sewer/plague_waterfall{,01}`,
+`models/scenery/structural/warrens/warr01_waterslide`,
+`models/scenery/structural/bradbury/blood_pool`), spot-checked directly in the manifest: every one
+now stages with `UseAnimatedFrames`/`UseAnimatedNormalFrames` explicit `False`, not merely absent.
+A 500-unit sample of the corpus's 7,499 patched instances resolves a non-empty root `master` in
+every case (finding 7). `uv run elysium import materials` (the full editor pass, re-landing all
+19,077 staged instances against the new recipe shape — every entry's recipe hash changed, since
+`switches`/`basePropertyOverrides` are now full-state and `recipe` now covers `physMaterial` and a
+sidecar digest, so this is a one-time full re-import) was launched the same session; it takes
+noticeably longer per instance than the 681 s baseline above (the compile probe now runs per
+`(parent, switch-combination, blend, two-sided, opacity-clip)` tuple instead of per
+`(parent, switch-combination, blend)`, and additionally calls `get_num_shader_types`/`list_shaders`
+per probed instance) — see the commit history for the final imported/reused/failed/seconds count
+once that run's `import_report.json` is captured. One cross-cutting consequence for the lookdev
+lane (owned by another agent, not touched here): `lookdev_set.json`'s `"Sprite (coplights)"` entry
+names `sprites/coplights`, one of the 48 newly-loud failures, so `--lookdev` will not find that
+asset in the manifest until the review set is pointed at a unit whose `BaseTexture` actually
+stages.
 
 **Closing verification run confirmed the masters against a real editor pass (2026-08-31).** The
 numbers above were recorded from an import that ran against the *old* on-disk masters — the

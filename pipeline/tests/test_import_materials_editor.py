@@ -120,6 +120,8 @@ class FakeEditor:
         self.save_refuses = set()
         #: assetPath -> pixel-shader-instruction count `get_statistics` reports; default 128.
         self.compile_instructions = {}
+        #: assetPath -> `list_shaders` row names; default `_DEFAULT_SHADER_TYPE_NAMES`.
+        self.shader_type_names = {}
         self.compile_calls = []          # asset paths probed, in order
         self.parent_calls = []           # (mic path, parent path)
         self.readback_calls = []         # (mic path, parameter)
@@ -236,6 +238,22 @@ class FakeEditor:
         instructions = self.compile_instructions.get(mic.path, 128)
         return SimpleNamespace(num_pixel_shader_instructions=instructions)
 
+    #: assetPath -> `list_shaders` row names, default a realistic base-pass/depth/hit-proxy set
+    #: (review finding 3: the probe now requires all three to be present).
+    _DEFAULT_SHADER_TYPE_NAMES = (
+        "TBasePassVSFPrecomputedVolumetricLightmapLightingPolicy",
+        "TBasePassPSFPrecomputedVolumetricLightmapLightingPolicy",
+        "FDepthOnlyVS", "FDepthOnlyPS", "FHitProxyVS", "FHitProxyPS",
+    )
+
+    def get_num_shader_types(self, mic):
+        return len(self.shader_type_names.get(mic.path, self._DEFAULT_SHADER_TYPE_NAMES))
+
+    def list_shaders(self, mic):
+        names = self.shader_type_names.get(mic.path, self._DEFAULT_SHADER_TYPE_NAMES)
+        return [SimpleNamespace(vertex_factory_name="FLocalVertexFactory", shader_type_name=name)
+                for name in names]
+
 
 def _fake_unreal(editor):
     def apply_json(mic, text):
@@ -292,6 +310,8 @@ def _fake_unreal(editor):
             editor.set_material_instance_static_switch_parameter_value),
         update_material_instance=editor.update_material_instance,
         get_statistics=editor.get_statistics,
+        get_num_shader_types=editor.get_num_shader_types,
+        list_shaders=editor.list_shaders,
     )
     return SimpleNamespace(
         AssetToolsHelpers=SimpleNamespace(
@@ -448,6 +468,24 @@ def test_a_fresh_run_creates_binds_probes_stamps_and_saves(tmp_path):
     assert written["imported"] == 1 and written["failed"] == []
     assert len(written["compiledPermutations"]) == 1
     assert written["compiledPermutations"][0]["numPixelShaderInstructions"] == 128
+
+
+def test_source_members_sha256_merges_into_the_sidecar_under_its_new_name(tmp_path):
+    """Review finding 9: the manifest entry's `sourceMembersSha256` (renamed from `sourceSha256`)
+    merges into the sidecar object under the same name `UElysiumMaterialProvenance::FromJson`
+    reads (`ElysiumMaterialProvenance.cpp`'s `Str(O, TEXT("sourceMembersSha256"))`)."""
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+    module = _load(editor)
+    entry = _entry("brick", sourceMembersSha256="deadbeef")
+    manifest = _stage(tmp_path, [entry])
+
+    report = module.run(manifest)
+
+    assert report.failures == []
+    mic = editor.assets[ROOT + "/art/MI_brick"]
+    assert mic.sidecar["sourceMembersSha256"] == "deadbeef"
+    assert "sourceSha256" not in mic.sidecar
 
 
 def test_a_second_run_reuses_every_stamped_asset(tmp_path):
@@ -666,6 +704,63 @@ def test_two_sided_and_opacity_clip_overrides_are_applied_only_when_present(tmp_
     assert props["two_sided"] is True
 
 
+def test_a_stale_two_sided_and_clip_override_is_explicitly_cleared_on_reimport(tmp_path):
+    """Review finding 2: `override_blend_mode`/`override_two_sided`/`override_opacity_mask_clip_value`
+    are set explicitly every entry, true-with-a-value or false -- an entry re-imported (`--force`)
+    with a plainer state than before must actually clear a stale `True` override, not merely leave
+    it untouched because this entry's own overrides no longer mention it."""
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+    module = _load(editor)
+    stale = _entry("brick", basePropertyOverrides={
+        "blendMode": "Masked", "opacityMaskClipValue": 0.75, "twoSided": True})
+    module.run(_stage(tmp_path, [stale]))
+    mic = editor.assets[ROOT + "/art/MI_brick"]
+    assert mic.base_property_overrides.props["override_two_sided"] is True
+
+    plain = _entry("brick", basePropertyOverrides={
+        "blendMode": "Opaque", "opacityMaskClipValue": None, "twoSided": False})
+    module.run(_stage(tmp_path, [plain]), force=True)
+
+    props = mic.base_property_overrides.props
+    assert props["override_two_sided"] is True and props["two_sided"] is False
+    assert props["override_opacity_mask_clip_value"] is False
+
+
+def test_a_stale_static_switch_is_explicitly_cleared_on_reimport(tmp_path):
+    """The 12 known-stale flipbook/water assets: `clear_all_material_instance_parameters` never
+    touches a static switch, so a switch that was `True` in an earlier import and is `False` in
+    this one must land as an explicit `set_material_instance_static_switch_parameter_value` call,
+    not silently persist."""
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+    module = _load(editor)
+    was_animated = _entry("brick", switches={"UseAnimatedFrames": True})
+    module.run(_stage(tmp_path, [was_animated]))
+    mic = editor.assets[ROOT + "/art/MI_brick"]
+    assert mic.switches["UseAnimatedFrames"] is True
+
+    no_longer_animated = _entry("brick", switches={"UseAnimatedFrames": False})
+    module.run(_stage(tmp_path, [no_longer_animated]), force=True)
+
+    assert mic.switches["UseAnimatedFrames"] is False
+
+
+def test_a_stale_phys_material_is_cleared_when_the_entry_no_longer_wants_one(tmp_path):
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+    module = _load(editor)
+    with_phys = _entry("brick", physMaterial="/ElysiumBaked/SurfaceProperties/PM_default")
+    module.run(_stage(tmp_path, [with_phys]))
+    mic = editor.assets[ROOT + "/art/MI_brick"]
+    assert mic.phys_material is not None
+
+    without_phys = _entry("brick", physMaterial=None)
+    module.run(_stage(tmp_path, [without_phys]), force=True)
+
+    assert mic.phys_material is None
+
+
 # --- compile probe --------------------------------------------------------------------------------
 
 
@@ -705,6 +800,57 @@ def test_zero_pixel_shader_instructions_fails_the_probed_entry(tmp_path):
 
     assert report.built == 0
     assert "0 pixel-shader instructions" in report.failures[0]["reason"]
+
+
+def test_the_permutation_key_distinguishes_two_sided_and_clip_value(tmp_path):
+    """Review finding 3: a `twoSided`/`opacityMaskClipValue` difference alone used to share a
+    probe with an entry that had neither -- 963 measured keys against 1,000 real permutations.
+    Two entries that agree on parent/switches/blendMode but differ on `twoSided` must each get
+    their own compile probe."""
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_a")
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_b")
+    module = _load(editor)
+    entries = [
+        _entry("a", textures={"BaseTexture": "/ElysiumBaked/Textures/art/T_a"},
+              basePropertyOverrides={"blendMode": "Opaque", "twoSided": False}),
+        _entry("b", textures={"BaseTexture": "/ElysiumBaked/Textures/art/T_b"},
+              basePropertyOverrides={"blendMode": "Opaque", "twoSided": True}),
+    ]
+    manifest = _stage(tmp_path, entries)
+
+    report = module.run(manifest)
+
+    assert report.failures == []
+    assert editor.compile_calls == [ROOT + "/art/MI_a", ROOT + "/art/MI_b"]
+    assert len(report.compiled_permutations) == 2
+
+
+def test_compile_probe_fails_without_a_hit_proxy_or_depth_shader(tmp_path):
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+    editor.shader_type_names[ROOT + "/art/MI_brick"] = ("TBasePassPS",)  # no hit-proxy/depth
+    module = _load(editor)
+    manifest = _stage(tmp_path, [_entry("brick")])
+
+    report = module.run(manifest)
+
+    assert report.built == 0
+    assert "hitproxy" in report.failures[0]["reason"] or "depthonly" in report.failures[0]["reason"]
+
+
+def test_compiled_permutations_record_probed_shader_types(tmp_path):
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+    module = _load(editor)
+    manifest = _stage(tmp_path, [_entry("brick")])
+
+    report = module.run(manifest)
+
+    assert report.failures == []
+    row = report.compiled_permutations[0]
+    assert row["probedShaderTypes"]
+    assert row["numShaderTypes"] == len(row["probedShaderTypes"])
 
 
 # --- pruning ---------------------------------------------------------------------------------------

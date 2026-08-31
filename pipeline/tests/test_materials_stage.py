@@ -122,7 +122,9 @@ def test_lit_unit_binds_base_mask_and_grey_tint(tmp_path):
     assert entry["physMaterial"] == "/ElysiumBaked/SurfaceProperties/PM_brick"
     assert entry["switches"]["UseEnvMap"] is True
     assert entry["switches"]["UseEnvMapMask"] is True
-    assert entry["basePropertyOverrides"] == {"blendMode": "Opaque"}
+    assert entry["basePropertyOverrides"] == {
+        "blendMode": "Opaque", "twoSided": False, "opacityMaskClipValue": None,
+    }
 
 
 def test_chromatic_tint_is_recorded_the_same_way_as_grey(tmp_path):
@@ -159,7 +161,9 @@ def test_translucent_flag_sets_blend_mode(tmp_path):
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/glass/MI_pane"]
     assert entry["parent"] == f"{importer.MASTER_ROOT}/M_V2_LitTranslucent"
-    assert entry["basePropertyOverrides"] == {"blendMode": "Translucent"}
+    assert entry["basePropertyOverrides"] == {
+        "blendMode": "Translucent", "twoSided": False, "opacityMaskClipValue": None,
+    }
 
 
 def test_alphatest_flag_sets_masked_and_clip_value(tmp_path):
@@ -175,7 +179,9 @@ def test_alphatest_flag_sets_masked_and_clip_value(tmp_path):
     result = importer.stage_materials(export, tmp_path / "stage")
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/grates/MI_gate"]
-    assert entry["basePropertyOverrides"] == {"blendMode": "Masked", "opacityMaskClipValue": 0.5}
+    assert entry["basePropertyOverrides"] == {
+        "blendMode": "Masked", "opacityMaskClipValue": 0.5, "twoSided": False,
+    }
 
 
 # --- envmap shapes ----------------------------------------------------------------------------------
@@ -732,7 +738,9 @@ def test_sprite_rendermode_8_sets_additive_blend(tmp_path):
     result = importer.stage_materials(export, tmp_path / "stage")
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/sprites/MI_muzzleflash"]
-    assert entry["basePropertyOverrides"] == {"blendMode": "Additive"}
+    assert entry["basePropertyOverrides"] == {
+        "blendMode": "Additive", "twoSided": False, "opacityMaskClipValue": None,
+    }
 
 
 def test_sprite_rendermode_6_is_a_stage_failure(tmp_path):
@@ -769,7 +777,9 @@ def test_alphatestreference_overrides_the_default_clip_value(tmp_path):
     result = importer.stage_materials(export, tmp_path / "stage")
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/grates/MI_gate2"]
-    assert entry["basePropertyOverrides"] == {"blendMode": "Masked", "opacityMaskClipValue": 0.75}
+    assert entry["basePropertyOverrides"] == {
+        "blendMode": "Masked", "opacityMaskClipValue": 0.75, "twoSided": False,
+    }
 
 
 # --- decal surfaces: $decal is a provenance flag, not a switch -------------------------------------
@@ -804,7 +814,9 @@ def test_decalmodulate_family_takes_decal_master_and_modulate_blend(tmp_path):
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/decals/MI_splat"]
     assert entry["parent"] == f"{importer.MASTER_ROOT}/M_V2_Decal"
-    assert entry["basePropertyOverrides"] == {"blendMode": "Modulate"}
+    assert entry["basePropertyOverrides"] == {
+        "blendMode": "Modulate", "twoSided": False, "opacityMaskClipValue": None,
+    }
 
 
 # --- exposed-parameter refusal ----------------------------------------------------------------------
@@ -994,7 +1006,9 @@ def test_animatedtexture_leaves_the_switch_off_without_a_staged_frames_array(tmp
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_anim"]
     assert entry["scalars"]["NormalFrameRate"] == 10.0
-    assert "UseAnimatedNormalFrames" not in entry["switches"]
+    # Review finding 2: full-state switches now stage every one of the master's switch names
+    # explicitly, so the omitted-array case lands `False`, not an absent key.
+    assert entry["switches"]["UseAnimatedNormalFrames"] is False
     assert "NormalMapFrames" not in entry["textures"]
     provenance = _provenance(tmp_path / "stage", entry)
     assert any(row.get("kind") == "animatedFramesArrayUnavailable" for row in provenance["omissions"])
@@ -1208,7 +1222,7 @@ def test_material_provenance_sidecar_keys_are_covered_by_fromjson(tmp_path):
 
     # The four fields import_materials.py merges into the sidecar object as top-level keys before
     # calling ApplyJson (see FromJson's "--- identity ---" comment).
-    for key in ("assetPath", "unitGlb", "sourceSha256", "physMaterial"):
+    for key in ("assetPath", "unitGlb", "sourceMembersSha256", "physMaterial"):
         sidecar[key] = entry.get(key, "")
 
     sidecar_keys = set(sidecar.keys())
@@ -1421,3 +1435,216 @@ def test_texture_switch_pairs_table_only_names_exposed_switches():
     for texture_name, switch_name in importer._TEXTURE_SWITCH_PAIRS.items():
         assert texture_name in all_textures, texture_name
         assert switch_name in all_switches, switch_name
+
+
+# --- review finding 5: required texture slots -------------------------------------------------------
+
+
+def test_basetexture_class_mismatch_on_a_real_master_fails_the_unit(tmp_path):
+    """A `$basetexture` that resolves but staged as the wrong class (a cubemap where a plain
+    `Texture2D` is wanted) leaves `BaseTexture` unbound on every real master -- the master's only
+    colour source -- so this is a per-unit stage failure, not merely a `textureClassMismatch`
+    anomaly (review finding 5)."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "sprites" / ("muzzleflash" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"faces": 6}), encoding="utf-8")  # staged as a TextureCube
+    _publish(export, "sprites/muzzleflash", _unit(
+        "sprites/muzzleflash", shader="sprite",
+        parameters=[_param(0, "$basetexture", "sprites/muzzleflash")],
+        dependencies=[_texture_dep("$basetexture", "sprites/muzzleflash")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert len(result.failures) == 1
+    key, reason = result.failures[0]
+    assert key == "sprites/muzzleflash"
+    assert "BaseTexture" in reason
+    assert "/ElysiumBaked/Materials/sprites/MI_muzzleflash" not in _entries(tmp_path / "stage")
+
+
+def test_basetexture_class_mismatch_on_an_optional_slot_stays_an_anomaly(tmp_path):
+    """The same mismatch on an optional slot (`EnvMapMask`) is recorded and the unit still
+    stages -- only a *required* slot escalates to a failure."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "brick" / ("wall_ref" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"faces": 6}), encoding="utf-8")
+    _publish(export, "brick/wall", _unit(
+        "brick/wall",
+        parameters=[_param(0, "$basetexture", "brick/wall"),
+                    _param(1, "$envmapmask", "brick/wall_ref")],
+        dependencies=[_texture_dep("$basetexture", "brick/wall"),
+                      _texture_dep("$envmapmask", "brick/wall_ref")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_wall"]
+    assert "EnvMapMask" not in entry["textures"]
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row["kind"] == "textureClassMismatch" and row["parameter"] == "EnvMapMask"
+              for row in provenance["anomalies"])
+
+
+# --- review finding 2: full-state switches ------------------------------------------------------------
+
+
+def test_all_switches_lists_every_switch_name_the_master_exposes(tmp_path):
+    export = tmp_path / "v2"
+    _publish(export, "brick/wall", _unit(
+        "brick/wall",
+        parameters=[_param(0, "$basetexture", "brick/wall")],
+        dependencies=[_texture_dep("$basetexture", "brick/wall")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_wall"]
+    expected = sorted(name for name, kind in importer.EXPOSED_PARAMS["M_V2_Lit"].items() if kind == "#")
+    assert entry["allSwitches"] == expected
+    assert sorted(entry["switches"]) == expected
+    assert entry["recipe"]["params"]["allSwitches"] == expected
+
+
+def test_patched_instance_carries_no_switches_or_all_switches(tmp_path):
+    export = tmp_path / "v2"
+    _publish(export, "glass/pane", _unit(
+        "glass/pane", shader="vertexlitgeneric",
+        parameters=[_param(0, "$basetexture", "glass/pane")],
+        dependencies=[_texture_dep("$basetexture", "glass/pane")],
+    ))
+    _publish(export, "maps/ch_cloud_1/glass/pane", _unit(
+        "maps/ch_cloud_1/glass/pane", shader="patch", family="patch", resolved=False,
+        parameters=[_param(0, "include", "glass/pane")],
+        patch={"include": "glass/pane", "asset": "vtmb:material:glass/pane", "operations": []},
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    patched = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/maps/ch_cloud_1/glass/MI_pane"]
+    assert patched["allSwitches"] == []
+
+
+# --- review finding 7: patched instances stamp the root master ---------------------------------------
+
+
+def test_patched_instance_provenance_master_walks_to_the_root_base(tmp_path):
+    """A patched unit's own provenance `master` used to be `null` (`ElysiumMaterialProvenance`'s
+    `Master`/`ElysiumMaster` registry tag then stamps empty) -- walked to the base unit's own
+    master instead, so the Content Browser filter covers a patched instance too."""
+    export = tmp_path / "v2"
+    _publish(export, "glass/pane", _unit(
+        "glass/pane", shader="vertexlitgeneric",
+        parameters=[_param(0, "$basetexture", "glass/pane")],
+        dependencies=[_texture_dep("$basetexture", "glass/pane")],
+    ))
+    _publish(export, "maps/ch_cloud_1/glass/pane", _unit(
+        "maps/ch_cloud_1/glass/pane", shader="patch", family="patch", resolved=False,
+        parameters=[_param(0, "include", "glass/pane")],
+        patch={"include": "glass/pane", "asset": "vtmb:material:glass/pane", "operations": []},
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entries = _entries(tmp_path / "stage")
+    patched = entries["/ElysiumBaked/Materials/maps/ch_cloud_1/glass/MI_pane"]
+    provenance = _provenance(tmp_path / "stage", patched)
+    assert provenance["master"] == f"{importer.MASTER_ROOT}/M_V2_Lit"
+
+
+# --- review finding 9: sourceMembersSha256 --------------------------------------------------------
+
+
+def test_source_members_sha256_is_role_and_order_sensitive(tmp_path):
+    export = tmp_path / "v2"
+
+    def _document_with_members(members):
+        document = _unit(
+            "brick/wall",
+            parameters=[_param(0, "$basetexture", "brick/wall")],
+            dependencies=[_texture_dep("$basetexture", "brick/wall")],
+        )
+        document["sourceResolution"] = {"policy": "up-first", "members": members}
+        return document
+
+    a = [{"role": "vmt", "sha256": "aa"}, {"role": "psh", "sha256": "bb"}]
+    b = [{"role": "psh", "sha256": "bb"}, {"role": "vmt", "sha256": "aa"}]  # reordered
+    c = [{"role": "vmt", "sha256": "bb"}, {"role": "psh", "sha256": "aa"}]  # roles swapped
+
+    _publish(export, "brick/wall", _document_with_members(a))
+    result_a = importer.stage_materials(export, tmp_path / "stage-a")
+    assert result_a.failures == []
+    entry_a = _entries(tmp_path / "stage-a")["/ElysiumBaked/Materials/brick/MI_wall"]
+
+    _publish(export, "brick/wall", _document_with_members(b))
+    result_b = importer.stage_materials(export, tmp_path / "stage-b")
+    entry_b = _entries(tmp_path / "stage-b")["/ElysiumBaked/Materials/brick/MI_wall"]
+
+    _publish(export, "brick/wall", _document_with_members(c))
+    result_c = importer.stage_materials(export, tmp_path / "stage-c")
+    entry_c = _entries(tmp_path / "stage-c")["/ElysiumBaked/Materials/brick/MI_wall"]
+
+    assert entry_a["sourceMembersSha256"] == hashlib.sha256(b"vmt:aa\npsh:bb").hexdigest()
+    assert entry_a["sourceMembersSha256"] != entry_b["sourceMembersSha256"]
+    assert entry_a["sourceMembersSha256"] != entry_c["sourceMembersSha256"]
+
+
+# --- review finding 4: recipe covers the sidecar and the physical material -------------------------
+
+
+def test_recipe_covers_provenance_bytes_and_phys_material(tmp_path):
+    export = tmp_path / "v2"
+    _publish(export, "brick/wall", _unit(
+        "brick/wall",
+        parameters=[_param(0, "$basetexture", "brick/wall"), _param(1, "$surfaceprop", "brick")],
+        dependencies=[_texture_dep("$basetexture", "brick/wall")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_wall"]
+    provenance = _provenance(tmp_path / "stage", entry)
+    expected_bytes = (json.dumps(provenance, indent=1, sort_keys=True) + "\n").encode("utf-8")
+    assert entry["recipe"]["provenanceSha256"] == hashlib.sha256(expected_bytes).hexdigest()
+    assert entry["recipe"]["physMaterial"] == entry["physMaterial"] == "/ElysiumBaked/SurfaceProperties/PM_brick"
+
+
+def test_a_provenance_only_change_bumps_the_recipe_fingerprint():
+    """The policy sentence: any change to what the instance or its provenance carries bumps the
+    recipe hash, even when not one bound parameter changed. `$curve` lands only in provenance
+    (`misc_provenance`), never in `params`, so this isolates the sidecar-hash coverage."""
+    without_curve = _unit(
+        "brick/wall", parameters=[_param(0, "$basetexture", "brick/wall")],
+        dependencies=[_texture_dep("$basetexture", "brick/wall")],
+    )
+    with_curve = _unit(
+        "brick/wall",
+        parameters=[_param(0, "$basetexture", "brick/wall"), _param(1, "$curve", "1.5")],
+        dependencies=[_texture_dep("$basetexture", "brick/wall")],
+    )
+    entry_without, _ = importer.stage_unit("brick/wall", without_curve, "0" * 64)
+    entry_with, _ = importer.stage_unit("brick/wall", with_curve, "0" * 64)
+    assert entry_without["recipe"]["provenanceSha256"] != entry_with["recipe"]["provenanceSha256"]
+    # And nothing bound actually changed:
+    assert entry_without["recipe"]["params"] == entry_with["recipe"]["params"]
+
+
+# --- review finding 5: anomaly/omission rollup --------------------------------------------------------
+
+
+def test_anomaly_rollup_counts_by_kind_in_manifest_and_summary(tmp_path):
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "brick" / ("wall_ref" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"faces": 6}), encoding="utf-8")
+    _publish(export, "brick/wall", _unit(
+        "brick/wall",
+        parameters=[_param(0, "$basetexture", "brick/wall"),
+                    _param(1, "$envmapmask", "brick/wall_ref")],
+        dependencies=[_texture_dep("$basetexture", "brick/wall"),
+                      _texture_dep("$envmapmask", "brick/wall_ref")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert result.failures == []
+    assert result.anomaly_counts.get("textureClassMismatch") == 1
+    assert "textureClassMismatch=1" in result.summary()
+    manifest = _manifest(tmp_path / "stage")
+    assert manifest["anomalyCounts"]["textureClassMismatch"] == 1

@@ -227,11 +227,12 @@ the proxy table, or a resolved program pair that is not in the master inventory 
 failure** with the unit named and the reason printed — never an instance written with the unknown
 part quietly missing. That is the rule the three tables exist to make checkable.
 
-**Landed (2026-08-31).** `uv run elysium import materials` lands the full 19,125-instance corpus
-with 0 failures (11,141 imported, 7,984 reused, 681 s; a rerun for idempotency reuses all 19,125 in
-8 s), and `uv run elysium import materials --lookdev` places all 20 tracked review-set entries with
-0 placeholders. Real numbers: `docs/project/seam_migration.md` → "Material import landed
-(2026-08-31)".
+**Landed (2026-08-31), revised the same day (review pass — findings 1-9).** `uv run elysium import
+materials` lands the corpus with the required-slot rule (below) now enforced: 19,077 of the
+19,125 units stage (48 fail loudly, `textureClassMismatch` on the one slot with no other colour
+source), and `uv run elysium import materials --lookdev` places every tracked review-set entry
+still named in `lookdev_set.json`. Real numbers: `docs/project/seam_migration.md` → "Material
+import landed (2026-08-31)".
 
 ### Identity and naming
 
@@ -419,8 +420,16 @@ pair, and the corpus realizes **61 distinct combinations on `M_V2_Lit`/`M_V2_Lit
 **31 on `M_V2_Unlit`**; every other master realizes fewer than ten. Those are the numbers that
 matter, because a static switch costs a *shader permutation per realized combination*, not per
 declared switch: the cook builds 61 + 31 + the rest, not 2^15. SF-4.5 compiles the **first instance
-of each (parent, switch-combination)** and records `compiledPermutations` so the number is measured
-on every run rather than assumed.
+of each (parent, switch-combination, blend mode, `TwoSided`, `OpacityMaskClipValue`)** tuple
+(review finding 3 — the base-property overrides select their own shader map exactly like a static
+switch does, so folding only `blendMode` in under-measured the corpus: 963 keys against 1,000 real
+permutations) and records `compiledPermutations` so the number is measured on every run rather
+than assumed. The probe itself checks more than a non-zero base-pass instruction count: it also
+requires `MaterialEditingLibrary.get_num_shader_types` to report at least one shader type and
+`list_shaders` to include a hit-proxy, a depth-only and a base-pass shader among them, failing the
+entry (naming the missing kind) rather than accepting a shader map with a real base pass but a
+silently-missing editor-only permutation. `probedShaderTypes` (every compiled type's name) rides in
+`import_report.json` beside `numPixelShaderInstructions`.
 
 #### Program pairs to masters
 
@@ -1581,7 +1590,18 @@ packaged game reads it), attached the way `UElysiumTextureProvenance` is (SF-4.2
 the texture provenance does. Three fields are published as asset-registry tags in
 `MetaDataTagsForAssetRegistry` beside `ElysiumRecipe`, so the Content Browser filters without
 loading: **`ElysiumAssetId`**, **`ElysiumShaderProgram`** (the default-condition pixel program, or
-the family name when unresolved) and **`ElysiumMaster`**.
+the family name when unresolved) and **`ElysiumMaster`** (review finding 7: now the *root* master
+for a patched instance too, walked through `parent` at stage time — see "Idempotency, pruning and
+failure" below).
+
+**Where to look for what (review finding 8).** `Alpha` and `Color` are ordinary bound instance
+parameters — they show in the Material Instance Editor's own "Parameters" panel like any other
+scalar/vector, the same place `BaseTexture` or `SelfIllumAmount` does. Every other field this
+section describes (`SurfaceClass`, `EnvMapSymbol`, `PatchOf`, the anomaly/omission rows, …) is
+`UElysiumMaterialProvenance` user data: not a material parameter at all, invisible in the
+Parameters panel, read instead from the asset's Details panel (`UAssetUserData` array) in the
+editor, from the three published registry tags above without loading the asset, or from
+`bake_verify.py`/a Python script calling `unreal.ElysiumMaterialProvenance.find(instance)`.
 
 ### Knob contract
 
