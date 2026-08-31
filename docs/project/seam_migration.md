@@ -435,6 +435,33 @@ instructions. First full run: 11,141 imported, 7,984 reused (from an earlier par
 Lookdev: all 20 review-set entries placed (0 missing), 32 `StaticMeshActor`s all resolved to a real
 `MI_` instance (0 placeholders).
 
+**Closing verification run confirmed the masters against a real editor pass (2026-08-31).** The
+numbers above were recorded from an import that ran against the *old* on-disk masters — the
+graph-authoring edits in `make_v2_materials.py` (flipbook sampler, water refraction/fog, vampire
+eyes, fixed-cube strength, `UseBaseTexture` defaults, plus the module's own
+`_probe_all_switches_true` compile probe) had landed as source but never actually gone through a
+real headless-editor `-PolicyForce=1` rebuild. This run did that: `UnrealEditor-Cmd.exe
+ElysiumUE.uproject -run=pythonscript -script=pipeline/unreal/build_content.py
+-AllowCommandletRendering -PolicyGenerators=make_v2_materials.py -PolicyForce=1` (the CLI's
+`generate_policy_content` does not itself plumb `-PolicyForce`, so a from-scratch master rebuild is
+this direct commandlet invocation, with `PYTHONPATH`/`UE_PYTHONPATH` set to the repo root and
+`pipeline/src` the way `ProjectConfig.apply_environment` sets them for every other launch). All nine
+masters recompiled clean and the all-switches-true probe passed for each — `M_V2_Lit`,
+`M_V2_LitTranslucent`, `M_V2_Unlit`, `M_V2_Eyes`, `M_V2_Water`, `M_V2_Sprite`, `M_V2_Refract`,
+`M_V2_Decal`, `M_V2_TwoTexture` — 0 errors, 7 warnings (benign linker "Error opening file" notices
+from the forced texture-asset delete/recreate, and a "reference gathering" mode switch), commandlet
+exit 0. `uv run elysium test Elysium.Policy.V2MasterParams`: 1 of 1 passed. Re-running `uv run
+elysium import materials` against the rebuilt masters reused the existing stage: 0 imported, 19,125
+reused, 0 pruned, 0 failed, 5 s — the manifest's parameter values (including the switches
+`34e3fc01` staged) had already landed on every instance in the prior run, so only the master graphs
+needed the real rebuild; the immediate idempotency rerun reported the identical 0/19,125/0/0. The
+manifest carries `UseNormalMap: true` on 534 instances, `UseBaseTexture: false` on 338 (21,702
+`true`), and 118 `BaseTextureFrames`/`NormalMapFrames` texture-array bindings (68/50).
+`--lookdev` regenerated `/ElysiumBaked/Lookdev/Materials`: 20/20 entries placed, 0 missing.
+`uv run elysium build` (0 errors), `uv run elysium test Substrate` (407/407), `uv run elysium
+doctor` (repository policy passed, 22 pre-existing warnings) and `uv run pytest` (2981 passed) all
+confirmed clean on the same run.
+
 Two editor-only defects surfaced and were fixed:
 - `import_materials.py` called `MaterialEditingLibrary.get_statistics` (the compile probe) on an
   instance whose static-switch `update_material_instance()` had already run *before* its
@@ -575,6 +602,26 @@ to 0.
   Phase 5. Touches nothing legacy.
 
 ### Phase 5 — owner tunes on knobs (lookdev)
+
+**How the owner tunes (2026-08-31).** The concrete procedure, once the material import and lookdev
+map are current: open the editor; open `/ElysiumBaked/Lookdev/Materials`; Alt+P to play in the
+editor (PIE stays on the lookdev map — a `GameMode` override, not a real-map launch). Edit → Project
+Settings → Elysium → Surfaces exposes the sixteen global knobs — `ClassInfluence`,
+`DefaultRoughness`/`DefaultSpecular`/`DefaultMetallic`, `MaskRoughnessMin`/`MaskRoughnessMax`,
+`MaskSpecularScale`, `MaskMetallicMax`, `EnvTintScale`, `ChromaticTintStrength`, `ChromaThreshold`,
+`FixedCubeStrength`, `Overbright`, `LightSpecularScale`, `CaptureRadius`, `DecalDepthOffset` — and an
+edit auto-writes the git-tracked `Config/DefaultElysium.ini` (`UElysiumSurfaceSettings`'s
+`PostEditChangeProperty` mirrors it into `MPC_ElysiumSurfaces` live, so PIE follows the slider with
+no restart); commit the ini. Content Browser → `/Game/ElysiumGenerated/Materials/V2/
+DA_SurfaceCalibration` is the per-class table (72 rows): edit a row's roughness/specular/metallic and
+Ctrl+S saves the LUT texture regeneration together with the asset — the generator (`make_surface_
+knobs.py`) never resets a tuned row on a later run. Per-material `MI_` edits made directly in the
+Material Instance editor are throwaway: the next `uv run elysium import materials` overwrites every
+instance from its manifest, by design (no per-material tuning layer). After a knob or class-table
+edit, `uv run elysium import materials --lookdev` regenerates the review map so the next PIE look
+reflects it; `pipeline/unreal/lookdev_set.json` is the review list the owner extends when a surface
+needs its own sphere/plane in the grid. No status marks belong in this note — `roadmap.md` owns
+task status.
 
 - **SF-5.1 Defaults** [C1]. Owner opens the lookdev map in PIE, tunes the 4.1 globals in Project
   Settings, Ctrl+S. The committed ini is the deliverable.
