@@ -408,10 +408,11 @@ MATERIAL_IMPORT_TIMEOUT_SECONDS = 4 * 3600.0
 def import_materials(config, runner, manifest_path, *, force: bool = False) -> None:
     """Run the editor phase of `import materials` over one staged manifest.
 
-    `pipeline/unreal/import_materials.py` is SF-4.5's deliverable, not this one's, and does not
-    exist yet: this launcher gives `cli.py`'s `import materials` command a stable call site to
-    invoke once it lands. Until then it refuses clearly rather than launching an editor process
-    against a script that is not there.
+    `pipeline/unreal/import_materials.py` (SF-4.5) reads the manifest, authors or reuses one
+    `MaterialInstanceConstant` per unit (a master for an ordinary unit, another instance for a
+    patched map material), attaches provenance, stamps the recipe and prunes. Per-asset reuse is
+    the commandlet's own decision off the recipe stamp, so a current corpus launches, reports
+    every asset reused, and exits.
     """
     script = config.repo_root / "pipeline/unreal/import_materials.py"
     if not script.is_file():
@@ -437,6 +438,41 @@ def import_materials(config, runner, manifest_path, *, force: bool = False) -> N
             "-FullStdOutLogOutput",
         ],
         timeout=MATERIAL_IMPORT_TIMEOUT_SECONDS,
+    )
+
+
+#: A grid of ~20 static-mesh actors, TextRenderActors and a five-actor lighting rig -- no import,
+#: no compile, no DDC touched. Short leash like the surface-property import: the whole run is
+#: editor boot plus a scene build and a save, so anything past this is a hang, not a long run.
+LOOKDEV_MAP_TIMEOUT_SECONDS = 15 * 60.0
+
+
+def make_lookdev_map(config, runner, *, set_path=None) -> None:
+    """Run `pipeline/unreal/make_lookdev_map.py`, SF-4.7's generated review map.
+
+    Lays the tracked review set (`pipeline/unreal/lookdev_set.json`, or `set_path` when given)
+    out on a grid under `/ElysiumBaked/Lookdev/Materials` and saves it. A review-set entry whose
+    `MI_` instance does not exist yet is placed as a labelled placeholder rather than failing the
+    run, so this can be generated before Phase 4's editor import (SF-4.5) has landed every asset
+    (`docs/project/seam_migration.md` -> Plan -> SF-4.7).
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/make_lookdev_map.py'}",
+            *([f"-LookdevSet={set_path}"] if set_path else []),
+            "-AllowCommandletRendering",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=LOOKDEV_MAP_TIMEOUT_SECONDS,
     )
 
 
