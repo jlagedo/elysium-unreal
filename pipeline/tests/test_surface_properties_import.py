@@ -117,7 +117,11 @@ def test_an_entry_that_declares_nothing_but_its_name_is_a_complete_asset(tmp_pat
     assert sidecar["assetId"] == "vtmb:surface-property:weapon"
     assert sidecar["assetPath"] == "/ElysiumBaked/SurfaceProperties/PM_weapon"
     assert sidecar["baseChain"] == []
-    assert sidecar["physics"] == {} and sidecar["movement"] == {}
+    # Every physics/movement scalar is emitted always, `null` when no unit in the chain declares
+    # it, so a re-import can reset a scalar the source stops declaring (S2).
+    assert sidecar["physics"] == {"friction": None, "elasticity": None, "density": None,
+                                  "rawDensity": None, "thickness": None}
+    assert sidecar["movement"] == {"maxSpeedFactor": None, "jumpFactor": None, "climbable": None}
     assert sidecar["footsteps"] == {"left": [], "right": []}
     assert sidecar["impacts"] == {} and sidecar["bulletImpactLegacy"] == []
     assert sidecar["fieldOrigins"] == {}
@@ -162,9 +166,11 @@ def test_a_three_deep_chain_flattens_root_first_with_local_overrides(tmp_path):
 
     sidecar = _sidecar(result, "canister")
     assert sidecar["baseChain"] == ["metal", "metalgrate", "metalpanel"]
-    # Inherited from the root, overridden one step up, and declared locally.
-    assert sidecar["physics"] == {"friction": 0.8, "elasticity": 0.2, "density": 2700.0,
-                                  "thickness": 0.1}
+    # Inherited from the root, overridden one step up, and declared locally. `density` converts
+    # from the table's kg/m3 (2700.0, authored) to the engine's g/cm3 (2.7); `rawDensity` keeps
+    # the authored value.
+    assert sidecar["physics"] == {"friction": 0.8, "elasticity": 0.2, "density": 2.7,
+                                  "rawDensity": 2700.0, "thickness": 0.1}
     assert sidecar["movement"] == {"maxSpeedFactor": 1.0, "jumpFactor": 1.0, "climbable": False}
     origins = sidecar["fieldOrigins"]
     assert origins["physics.friction"] == "metal"
@@ -172,10 +178,12 @@ def test_a_three_deep_chain_flattens_root_first_with_local_overrides(tmp_path):
     assert origins["physics.thickness"] == "canister"
     assert origins["movement.jumpFactor"] == "metal"
 
-    # A unit halfway up carries the values it inherited at that point, not the leaf's.
+    # A unit halfway up carries the values it inherited at that point, not the leaf's; `thickness`
+    # is not declared anywhere in its own chain, so it stays `null`.
     grate = _sidecar(result, "metalgrate")
     assert grate["baseChain"] == ["metal"]
-    assert grate["physics"] == {"friction": 0.8, "elasticity": 0.2, "density": 2700.0}
+    assert grate["physics"] == {"friction": 0.8, "elasticity": 0.2, "density": 2.7,
+                                "rawDensity": 2700.0, "thickness": None}
     assert "physics.thickness" not in grate["fieldOrigins"]
 
 
@@ -260,13 +268,29 @@ def test_a_game_material_with_no_surface_row_fails_that_unit_only(tmp_path):
 
 
 def test_every_surface_row_the_table_names_is_declared_in_default_engine_ini():
-    """The ini rows and the staging table are one mapping; a letter added to one needs the other."""
+    """The ini rows and the staging table are one mapping; a letter added to one needs the other.
 
-    text = (REPO / "Config" / "DefaultEngine.ini").read_text(encoding="utf-8")
-    declared = {line.strip() for line in text.splitlines() if "PhysicalSurfaces=" in line}
-    expected = {f'+PhysicalSurfaces=(Type={row},Name="{name}")'
-                for row, name in importer.surface_type_rows()}
-    assert declared == expected
+    The pin is the block immediately under `[/Script/Engine.PhysicsSettings]`, not any
+    `PhysicalSurfaces=` line anywhere in the file: another section could carry a stray line with
+    the same text and a substring search over the whole file would not catch a row landing in the
+    wrong section, or a row this section does not declare because another section's line matched
+    instead.
+    """
+
+    lines = (REPO / "Config" / "DefaultEngine.ini").read_text(encoding="utf-8").splitlines()
+    heading = lines.index("[/Script/Engine.PhysicsSettings]")
+    block: list[str] = []
+    for line in lines[heading + 1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith(";"):
+            continue   # blank lines and comments may separate the heading from its first row
+        if not stripped.startswith("+PhysicalSurfaces="):
+            break   # the block ends at the first line that is neither: another key, or a section
+        block.append(stripped)
+
+    expected = [f'+PhysicalSurfaces=(Type={row},Name="{name}")'
+                for row, name in importer.surface_type_rows()]
+    assert block == expected
     assert len(expected) == len(importer.GAME_MATERIALS) == 17
 
 
@@ -285,7 +309,8 @@ def test_a_repeated_scalar_anomaly_reaches_the_sidecar(tmp_path):
     assert result.failures == []
     sidecar = _sidecar(result, "odd")
     assert sidecar["anomalies"] == ["repeated-scalar-key key=friction offset=42"]
-    assert sidecar["physics"] == {"friction": 0.9}
+    assert sidecar["physics"] == {"friction": 0.9, "elasticity": None, "density": None,
+                                  "rawDensity": None, "thickness": None}
     assert sidecar["coverage"] == {"percent": 100.0, "unresolved": [], "unsupported": []}
 
 
@@ -412,3 +437,56 @@ def test_a_unit_leaving_the_corpus_prunes_its_staged_sidecar(tmp_path):
     assert not (second.staging_root / "canister.provenance.json").exists()
     # The root reports are never pruned.
     assert (second.staging_root / importer.MANIFEST_NAME).is_file()
+
+
+# --- density units (S1) ---------------------------------------------------------------------------
+
+
+def test_density_converts_from_kg_per_cubic_metre_to_grams_per_cubic_centimetre(tmp_path):
+    """`density` in the table is kg/m3 (water 1000); `UPhysicalMaterial::Density` is g/cm3
+    (`BodySetup.cpp` multiplies by 0.001), so the stage divides by 1000 and keeps the authored
+    value as `rawDensity` -- otherwise a 700 kg/m3 crate imports as a 700 g/cm3 one, ~700x too
+    dense."""
+
+    units = _corpus(tmp_path)
+    _unit(units, "wood", physics={"density": 700.0})
+    result = _stage(tmp_path)
+
+    sidecar = _sidecar(result, "wood")
+    assert sidecar["physics"]["rawDensity"] == 700.0
+    assert sidecar["physics"]["density"] == pytest.approx(0.7)
+
+
+# --- case-folded lookup (S4) ------------------------------------------------------------------------
+
+
+def test_asset_path_for_folds_case():
+    """The cross-lane contract a VMT's `$surfaceprop` resolves through: the table spells names in
+    mixed case (`Metal`), so `asset_path_for` must fold before naming the asset."""
+
+    assert importer.asset_path_for("Metal") == importer.asset_path_for("metal")
+    assert importer.asset_path_for(" Metal ") == importer.asset_path_for("metal")
+
+
+# --- assetPath collisions (S5) ----------------------------------------------------------------------
+
+
+def test_two_keys_that_fold_to_the_same_asset_path_both_fail(tmp_path):
+    """`safe_name` collapses `foo-bar` and `foo_bar` to the same object name. `load_manifest`
+    refuses a manifest that lists one assetPath twice wholesale, so this lane fails both units
+    that collide rather than silently picking one, and keeps staging the rest of the corpus."""
+
+    units = _corpus(tmp_path)
+    _unit(units, "foo-bar", physics={"friction": 0.5})
+    _unit(units, "foo_bar", physics={"friction": 0.6})
+    _unit(units, "clean")
+    result = _stage(tmp_path)
+
+    assert result.assets == 1
+    assert sorted(key for key, _ in result.failures) == ["foo-bar", "foo_bar"]
+    for _, reason in result.failures:
+        assert "collides" in reason
+    manifest = _manifest(result)
+    assert manifest["assets"][0]["unitKey"] == "clean"
+    assert manifest["keep"] == ["/ElysiumBaked/SurfaceProperties/PM_foo_bar"]
+    assert result.protected == 1

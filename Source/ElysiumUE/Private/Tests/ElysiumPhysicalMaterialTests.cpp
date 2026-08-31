@@ -32,11 +32,11 @@ namespace
   "unitGlb": "surface-properties/canister.glb",
   "unitSchemaVersion": "1.0.0",
   "unitSha256": "unit-sha",
-  "settingsVersion": "elysium-surfaceproperty-import-v1",
+  "settingsVersion": "elysium-surfaceproperty-import-v2",
   "baseChain": ["metal", "metalgrate", "metalpanel"],
   "gameMaterial": "M",
   "surfaceType": "SurfaceType7",
-  "physics": {"friction": 0.8, "elasticity": 2.0, "density": 2700.0, "thickness": 0.1},
+  "physics": {"friction": 0.8, "elasticity": 2.0, "density": 2.7, "rawDensity": 2700.0, "thickness": 0.1},
   "movement": {"maxSpeedFactor": 0.5, "jumpFactor": 0.25, "climbable": true},
   "footsteps": {
     "left": ["vtmb:sound:surfaces/metal/stepleft1.wav", "vtmb:sound:surfaces/metal/stepleft2.wav"],
@@ -88,7 +88,10 @@ bool FElysiumPhysicalMaterialApplyJsonTest::RunTest(const FString&)
 
 	// Native slots.
 	TestEqual(TEXT("Friction"), Surface->Friction, 0.8f);
-	TestEqual(TEXT("Density"), Surface->Density, 2700.0f);
+	// `density` in the sidecar is already the engine's g/cm3 (the stage divides the table's kg/m3
+	// by 1000); `RawDensity` is the authored kg/m3 value, mirroring RawElasticity.
+	TestEqual(TEXT("Density"), Surface->Density, 2.7f);
+	TestEqual(TEXT("RawDensity"), Surface->RawDensity, 2700.0f);
 	TestEqual(TEXT("SurfaceType"), int32(Surface->SurfaceType.GetValue()), int32(SurfaceType7));
 
 	// Elysium slots.
@@ -144,7 +147,7 @@ bool FElysiumPhysicalMaterialApplyJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("record UnitGlb"), Record->UnitGlb, FString(TEXT("surface-properties/canister.glb")));
 	TestEqual(TEXT("record UnitSha256"), Record->UnitSha256, FString(TEXT("unit-sha")));
 	TestEqual(TEXT("record SettingsVersion"), Record->SettingsVersion,
-		FString(TEXT("elysium-surfaceproperty-import-v1")));
+		FString(TEXT("elysium-surfaceproperty-import-v2")));
 	TestEqual(TEXT("record BaseChain"), Record->BaseChain.Num(), 3);
 	TestEqual(TEXT("record Anomalies"), Record->Anomalies.Num(), 1);
 	TestEqual(TEXT("record CoveragePercent"), Record->CoveragePercent, 100.0f);
@@ -195,6 +198,22 @@ bool FElysiumPhysicalMaterialClampsTest::RunTest(const FString&)
 	TestTrue(TEXT("the friction sidecar applied"), bOk);
 	TestEqual(TEXT("Friction is carried as written"), Surface->Friction, 100.0f);
 
+	// An undeclared `elasticity` resets Restitution and RawElasticity independently to their own
+	// class defaults -- not to a derived zero. Restitution's own default is 0.3 and
+	// RawElasticity's is 0.0, so only a declared value ties the two together: a sidecar that
+	// declares a value drives both, and one that omits `elasticity` reverts both to their own
+	// defaults, whatever the asset carried before.
+	const UElysiumPhysicalMaterial* Defaults = GetDefault<UElysiumPhysicalMaterial>();
+	UElysiumPhysicalMaterial::ApplyJson(Surface, TEXT("{\"physics\": {\"elasticity\": 0.6}}"), bOk, Error);
+	TestTrue(TEXT("the elasticity sidecar applied"), bOk);
+	TestEqual(TEXT("Restitution takes the declared elasticity"), Surface->Restitution, 0.6f);
+	UElysiumPhysicalMaterial::ApplyJson(Surface, TEXT("{\"physics\": {\"friction\": 0.5}}"), bOk, Error);
+	TestTrue(TEXT("the elasticity-less sidecar applied"), bOk);
+	TestEqual(TEXT("Restitution resets to the class default, not 0"), Surface->Restitution,
+		Defaults->Restitution);
+	TestEqual(TEXT("RawElasticity resets to the class default"), Surface->RawElasticity,
+		Defaults->RawElasticity);
+
 	// An entry with no `gamematerial` anywhere in its chain gets the default row, not a guess.
 	UElysiumPhysicalMaterial* Weapon = NewSurface();
 	UElysiumPhysicalMaterial::ApplyJson(
@@ -224,8 +243,10 @@ bool FElysiumPhysicalMaterialReapplyReplacesTest::RunTest(const FString&)
 	TestTrue(TEXT("the first apply landed"), bOk);
 
 	// A re-import re-authors in place. The pools are rebuilt rather than appended to, the record
-	// is replaced rather than accumulated, and a key the second sidecar omits keeps its value --
-	// which is what lets the stage add a field without re-importing the whole corpus.
+	// is replaced rather than accumulated, and a physics/movement scalar the second sidecar omits
+	// resets to its class default rather than keeping the first apply's value -- the stage emits
+	// every one of those keys on every apply, so an absent key means the source stopped declaring
+	// it, not that the field is new.
 	UElysiumPhysicalMaterial::ApplyJson(Surface, TEXT(R"json({
       "assetId": "vtmb:surface-property:metal",
       "sourceName": "metal",
@@ -247,8 +268,15 @@ bool FElysiumPhysicalMaterialReapplyReplacesTest::RunTest(const FString&)
 	TestEqual(TEXT("the impact matrix is the second sidecar's"), Surface->Impacts.Num(), 1);
 	TestTrue(TEXT("the second matrix has the fist row"), Surface->Impacts.Contains(TEXT("fist")));
 	TestEqual(TEXT("sound scripts cleared"), Surface->SoundScriptImpact.Num(), 0);
-	// Omitted keys keep the value they had.
-	TestEqual(TEXT("an omitted physics block keeps its values"), Surface->Friction, 0.8f);
+	// An omitted physics block resets every physics scalar to its class default (S2), rather than
+	// keeping the first apply's 0.8 -- the omission means the second sidecar's unit declares none.
+	const UElysiumPhysicalMaterial* Defaults = GetDefault<UElysiumPhysicalMaterial>();
+	TestEqual(TEXT("an omitted physics block resets Friction to the class default"),
+		Surface->Friction, Defaults->Friction);
+	TestEqual(TEXT("...and Restitution"), Surface->Restitution, Defaults->Restitution);
+	TestEqual(TEXT("...and RawElasticity"), Surface->RawElasticity, Defaults->RawElasticity);
+	TestEqual(TEXT("...and Density"), Surface->Density, Defaults->Density);
+	TestEqual(TEXT("...and RawDensity"), Surface->RawDensity, Defaults->RawDensity);
 
 	int32 Records = 0;
 	if (const TArray<UAssetUserData*>* All = Surface->GetAssetUserDataArray())

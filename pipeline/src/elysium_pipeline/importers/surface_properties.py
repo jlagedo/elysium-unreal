@@ -51,7 +51,11 @@ FAMILY = "surface-properties"
 #: The package every asset lands under.
 PACKAGE_ROOT = "/ElysiumBaked/SurfaceProperties"
 #: Bumped whenever the flattening or the manifest mapping changes in a way that must re-import.
-SETTINGS_VERSION = "elysium-surfaceproperty-import-v1"
+#: v2: `physics.density` converts to g/cm3 (`UPhysicalMaterial::Density`'s own unit) and the
+#: authored kg/m3 value moves to `physics.rawDensity`; every physics/movement scalar is emitted
+#: always, `null` when no unit in the chain declares it, so a re-import resets a scalar the source
+#: stops declaring instead of leaving it stale.
+SETTINGS_VERSION = "elysium-surfaceproperty-import-v2"
 MANIFEST_SCHEMA = "1.0.0"
 MANIFEST_NAME = "manifest.json"
 #: Written by the editor phase; read back by the CLI for its summary.
@@ -126,18 +130,25 @@ def unit_key(unit: Path) -> str:
 
 
 def check_key(key: str) -> str:
-    """`key` if it can name an asset, else a refusal. The family is one flat directory."""
+    """`key`, case-folded, if it can name an asset, else a refusal.
 
-    if not key or "/" in key or "\\" in key or ":" in key or key in (".", ".."):
+    The family is one flat directory, so folding happens once, here: every caller that turns a
+    name into a unit key or an asset path goes through this, including `asset_path_for`, which is
+    the cross-lane contract a VMT's `$surfaceprop` (`Metal`, mixed case) resolves through.
+    """
+
+    folded = key.strip().lower() if isinstance(key, str) else key
+    if not folded or "/" in folded or "\\" in folded or ":" in folded or folded in (".", ".."):
         raise SurfacePropertyImportError(f"{key!r} is not a surface-property key")
-    return key
+    return folded
 
 
 def asset_path_for(key: str) -> str:
     """`canister` -> `/ElysiumBaked/SurfaceProperties/PM_canister`.
 
     Load-bearing beyond this lane: the material slice resolves a VMT's `$surfaceprop` and a
-    model's `SurfacePropIndex` to this path by folding the name the same way.
+    model's `SurfacePropIndex` to this path by folding the name the same way -- `check_key` folding
+    case first is what makes `Metal` and `metal` name the same asset.
     """
 
     return f"{PACKAGE_ROOT}/{ASSET_PREFIX}{safe_name(check_key(key))}"
@@ -256,7 +267,12 @@ def _line(row: object) -> str:
 
 
 def _pool(rows: object) -> list[str] | None:
-    """A published variation pool as its ordered asset IDs, or None when the unit declares none."""
+    """A published variation pool as its ordered asset IDs, or None when the unit declares none.
+
+    The rule this feeds is "a non-empty declared pool replaces": an empty `rows` returns None, the
+    same as never declaring the slot at all, so a child cannot clear a pool it inherited by
+    redeclaring the key with nothing in it -- it can only replace the pool with another one.
+    """
 
     if not isinstance(rows, list) or not rows:
         return None
@@ -372,12 +388,21 @@ def sidecar_for(unit: Unit, chain: list[str], by_key: dict[str, Unit]) -> dict:
     letter = values.get("gameMaterial")
     letter = letter if isinstance(letter, str) else None
 
-    physics = {name: values[f"physics.{name}"]
-               for name in ("friction", "elasticity", "density", "thickness")
-               if f"physics.{name}" in values}
-    movement = {name: values[f"movement.{name}"]
-                for name in ("maxSpeedFactor", "jumpFactor", "climbable")
-                if f"movement.{name}" in values}
+    # Every physics/movement scalar is emitted always -- `null` when no unit in the chain
+    # declares it -- so a re-import can tell "still not declared" from "the sidecar predates this
+    # field" and `ApplyJson` resets the asset's scalar to the class default rather than leaving a
+    # value the source stopped declaring.
+    physics = {name: values.get(f"physics.{name}")
+               for name in ("friction", "elasticity", "density", "thickness")}
+    # `density` in the table is kg/m3 (water 1000); `UPhysicalMaterial::Density` is g/cm3
+    # (`BodySetup.cpp` multiplies by 0.001 to reach kg). The authored value survives as
+    # `rawDensity` -- mirroring `elasticity` -> `Restitution`/`RawElasticity` -- and `density`
+    # becomes the engine's own unit so a solid crate does not weigh 1000x too much.
+    raw_density = physics["density"]
+    physics["rawDensity"] = raw_density
+    physics["density"] = raw_density / 1000.0 if raw_density is not None else None
+    movement = {name: values.get(f"movement.{name}")
+                for name in ("maxSpeedFactor", "jumpFactor", "climbable")}
     footsteps = {side: values.get(f"footsteps.{side}", []) for side in ("left", "right")}
     impacts: dict[str, dict[str, list[str]]] = {}
     for weapon in IMPACT_WEAPONS:
@@ -526,9 +551,6 @@ def stage_surface_properties(export_v2_root: Path, staging_root_path: Path) -> S
             failed(key, str(error))
             continue
 
-        result.roots += 1 if not chain else 0
-        result.inherited += 1 if chain else 0
-        result.deepest_depth = max(result.deepest_depth, len(chain) + 1)
         assets.append({
             "assetPath": sidecar["assetPath"],
             "class": ASSET_CLASS,
@@ -542,6 +564,27 @@ def stage_surface_properties(export_v2_root: Path, staging_root_path: Path) -> S
             "baseChain": list(chain),
             "recipe": recipe,
         })
+
+    # Two keys can fold to the same `safe_name` (`Foo-Bar` and `foo_bar`) and land on one
+    # assetPath. `load_manifest` refuses a manifest with the same assetPath listed twice wholesale,
+    # so a collision here is a per-unit failure for every unit in it, not a silent pick of one --
+    # the rest of the corpus stages normally and the colliding paths are protected from the prune
+    # below rather than left orphaned.
+    by_path: dict[str, list[str]] = {}
+    for entry in assets:
+        by_path.setdefault(entry["assetPath"], []).append(entry["unitKey"])
+    colliding = {path: keys for path, keys in by_path.items() if len(keys) > 1}
+    if colliding:
+        assets = [entry for entry in assets if entry["assetPath"] not in colliding]
+        for asset_path, keys in colliding.items():
+            for key in sorted(keys):
+                others = ", ".join(other for other in sorted(keys) if other != key)
+                failed(key, f"assetPath {asset_path} collides with {others}")
+
+    for entry in assets:
+        result.roots += 1 if not entry["baseChain"] else 0
+        result.inherited += 1 if entry["baseChain"] else 0
+        result.deepest_depth = max(result.deepest_depth, len(entry["baseChain"]) + 1)
 
     # A failed unit keeps whatever it already has: its asset path stays out of the editor prune.
     keep: set[str] = set()

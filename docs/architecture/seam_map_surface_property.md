@@ -171,14 +171,23 @@ the unit knows, and nothing here reads the install.
 vtmb:surface-property:<name>  ->  /ElysiumBaked/SurfaceProperties/PM_<safe name>
 ```
 
-`<safe name>` is `asset_names.safe_name` over the unit key, which is already the entry name folded
-to lower case. The source spelling (`Kitchen_Pan`) lives on the asset and in its provenance, so
+`<safe name>` is `asset_names.safe_name` over the unit key, which `asset_path_for` first folds with
+`strip().lower()` — the entry name is already lower-cased at the unit's own key, but the function
+is the cross-lane contract, so it folds unconditionally rather than trusting every caller to have
+folded first. The source spelling (`Kitchen_Pan`) lives on the asset and in its provenance, so
 folding is never a loss.
 
 The path is load-bearing beyond this lane: Phase 4's material import resolves a VMT's
-`$surfaceprop` — and later a model's `SurfacePropIndex` — to this exact path by folding the name
-the same way, falling back to `PM_default` on a name the table never gained
-(`docs/vtmb/surface_properties.md` → "Names used but never defined").
+`$surfaceprop` — spelled freely, `Metal` beside `metal` — and later a model's `SurfacePropIndex`
+— to this exact path by folding the name the same way, falling back to `PM_default` on a name the
+table never gained (`docs/vtmb/surface_properties.md` → "Names used but never defined").
+
+Two distinct keys can fold to the same safe name (`foo-bar` and `foo_bar` both become
+`foo_bar`) and collide on one `assetPath`. `load_manifest` refuses a manifest that lists the same
+`assetPath` twice wholesale, so the stage detects a collision itself: every unit sharing the path
+fails as a per-unit stage failure naming the others it collides with, the path is protected under
+`keep` so the editor phase does not prune whatever it already holds, and the rest of the corpus
+stages normally. The shipped table has no collision, so this is a guard, not a path.
 
 ### Identity is the asset, not an `EPhysicalSurface` row
 
@@ -218,11 +227,12 @@ re-parses the child's keys over the copy, so
 
 - a **scalar** a child declares (`friction`, `elasticity`, `density`, `thickness`,
   `maxspeedfactor`, `jumpfactor`, `climbable`, `gamematerial`) overrides the parent's;
-- a **pool** a child declares **replaces** the parent's whole pool *for that slot*. An entry that
-  names one `stepleft` supplies the entire left-footstep pool; it does not append a fifth
-  alternate to the four it inherited. The slot is the key, so redeclaring `stepleft` leaves
+- a **non-empty pool** a child declares **replaces** the parent's whole pool *for that slot*. An
+  entry that names one `stepleft` supplies the entire left-footstep pool; it does not append a
+  fifth alternate to the four it inherited. The slot is the key, so redeclaring `stepleft` leaves
   `stepright` inherited whole, and redeclaring `bullet_norm_impact` leaves `bullet_crit_impact`
-  alone.
+  alone. An entry whose pool resolves empty is the same as declaring none at all: a child cannot
+  *clear* a pool it inherited, only replace it with another one.
 
 The walk is root first, so a nearer entry's declaration lands last and wins, and **which unit
 supplied each field is recorded per field** in the provenance (`fieldOrigins`).
@@ -289,27 +299,35 @@ One sidecar per unit, `<name>.provenance.json`, holding the flattened values:
   "unitGlb": "surface-properties/canister.glb",
   "unitSchemaVersion": "1.0.0",
   "unitSha256": "…",
-  "settingsVersion": "elysium-surfaceproperty-import-v1",
+  "settingsVersion": "elysium-surfaceproperty-import-v2",
   "baseChain": ["metal", "metalgrate", "metalpanel"],
   "gameMaterial": "M",
   "surfaceType": "SurfaceType7",
-  "physics": {"density": 2700.0, "elasticity": 0.2, "friction": 0.8, "thickness": 0.1},
-  "movement": {},
-  "footsteps": {"left": ["vtmb:sound:surfaces/metalgrate/stepleft1.wav"], "right": []},
+  "physics": {"friction": 0.8, "elasticity": 0.2, "density": 2.7, "rawDensity": 2700.0,
+              "thickness": 0.1},
+  "movement": {"maxSpeedFactor": null, "jumpFactor": null, "climbable": null},
+  "footsteps": {"left": ["vtmb:sound:surfaces/metalgrate/stepleft1.wav"],
+                "right": ["vtmb:sound:surfaces/metal/stepright1.wav"]},
   "impacts": {"bullet": {"soak": [], "norm": ["vtmb:sound:…"], "crit": []}},
   "bulletImpactLegacy": [],
   "sounds": {"impact": ["vtmb:sound-script:metalgrate.impact"], "scrape": []},
-  "fieldOrigins": {"physics.friction": "metalpanel", "footsteps.left": "metalgrate"},
+  "fieldOrigins": {"physics.friction": "metalpanel", "footsteps.left": "metalgrate",
+                   "footsteps.right": "metal"},
   "anomalies": [],
   "coverage": {"percent": 100.0, "unresolved": [], "unsupported": []}
 }
 ```
 
+`physics` and `movement` carry every scalar key on every sidecar, `null` where no unit in the
+chain declares it — `canister`'s own chain never declares a movement value, so all three are
+`null` here — so a re-import can tell "still undeclared" from "the sidecar predates this key".
+
 | Sidecar | Asset |
 |---|---|
 | `physics.friction` | `Friction` (native; **not** clamped — Unreal's friction is not a 0–1 quantity and the table runs to 100) |
 | `physics.elasticity` | `Restitution` (native, clamped 0–1) and `RawElasticity` (the authored value, which runs to 2) |
-| `physics.density` | `Density` (native) |
+| `physics.density` | `Density` (native), converted from the table's kg/m³ to the engine's own g/cm³ (÷1000) |
+| `physics.rawDensity` | `RawDensity`, the authored kg/m³ value the conversion was computed from — mirrors `elasticity` → `RawElasticity` |
 | `physics.thickness` | `Thickness` (0 = the chain declared none, the volumetrically solid case) |
 | `surfaceType` | `SurfaceType` (native), resolved through the reflected `EPhysicalSurface` |
 | `movement.*` | `MaxSpeedFactor`, `JumpFactor`, `bClimbable` |
@@ -319,11 +337,15 @@ One sidecar per unit, `<name>.provenance.json`, holding the flattened values:
 | `sounds.impact` / `.scrape` | `SoundScriptImpact` / `SoundScriptScrape`, `vtmb:sound-script:` names |
 | `assetId`, `sourceName`, `gameMaterial`, `baseChain` | `AssetId`, `SourceName`, `GameMaterial`, `BaseChain` |
 
-`ApplyJson` tolerates a missing key: a missing **scalar** leaves that field at the value it had,
-so the stage can add a field without re-importing the corpus, while every **list, map and chain**
-is replaced by what the sidecar carries — a stale variation pool surviving a re-import would be
-worse than an empty one. Only a body that is not a JSON object, and a target that is not a
-`UElysiumPhysicalMaterial`, are refused.
+`ApplyJson` tolerates a missing key: a missing or `null` **physics/movement scalar** resets that
+field to the class default (the CDO value), not to whatever the asset already carried — the stage
+emits every one of those keys on every sidecar, so an absent value means no unit in the chain
+declares it, and an asset a source stops declaring a value for must revert rather than keep a
+stale one. (Restitution and RawElasticity reset independently to their own defaults — 0.3 and 0.0
+— rather than one being derived from the other's default, because only a *declared* elasticity
+ties them together.) Every **list, map and chain** is replaced by what the sidecar carries — a
+stale variation pool surviving a re-import would be worse than an empty one. Only a body that is
+not a JSON object, and a target that is not a `UElysiumPhysicalMaterial`, are refused.
 
 **Sound references stay strings.** Every footstep, impact and script reference is carried as its
 `vtmb:sound:` / `vtmb:sound-script:` asset ID, not as a `USoundWave` reference. The sound slice
@@ -361,7 +383,7 @@ are not copied: they are the export's proof and live in the unit.
 ```json
 {
   "schemaVersion": "1.0.0",
-  "settingsVersion": "elysium-surfaceproperty-import-v1",
+  "settingsVersion": "elysium-surfaceproperty-import-v2",
   "packageRoot": "/ElysiumBaked/SurfaceProperties",
   "select": null,
   "pruneScope": "/ElysiumBaked/SurfaceProperties/",
@@ -379,7 +401,7 @@ are not copied: they are the export's proof and live in the unit.
       "surfaceType": "SurfaceType7",
       "gameMaterial": "M",
       "baseChain": ["metal", "metalgrate", "metalpanel"],
-      "recipe": {"settingsVersion": "elysium-surfaceproperty-import-v1",
+      "recipe": {"settingsVersion": "elysium-surfaceproperty-import-v2",
                  "unitSha256": "…", "chainSha256": "…", "surfaceType": "SurfaceType7"}
     }
   ]

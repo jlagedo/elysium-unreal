@@ -5,7 +5,6 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "UObject/Package.h"
-#include "UObject/UnrealType.h"
 #if WITH_EDITORONLY_DATA
 #include "UObject/MetaData.h"
 #endif
@@ -48,26 +47,45 @@ void UElysiumPhysicalMaterial::FromJson(const TSharedRef<FJsonObject>& Object)
 	GameMaterial = Str(Object, TEXT("gameMaterial"), GameMaterial);
 	SurfaceType = SurfaceTypeByName(Str(Object, TEXT("surfaceType")));
 
-	if (const TSharedPtr<FJsonObject> Physics = Obj(Object, TEXT("physics")))
+	// A missing or `null` physics/movement scalar resets to the class default (the CDO value)
+	// rather than keeping whatever this asset already had: the stage emits every one of these keys
+	// on every apply, so an absent key means no unit in the chain declares it, and an asset a
+	// source stops declaring a value for must revert rather than carry a stale one (a scalar the
+	// stage has not yet learned to emit would instead need a settings-version bump, the same as
+	// any other staging change).
+	const UElysiumPhysicalMaterial* Defaults = GetDefault<UElysiumPhysicalMaterial>();
+
+	const TSharedPtr<FJsonObject> PhysicsBlock = Obj(Object, TEXT("physics"));
+	const TSharedRef<FJsonObject> Physics = PhysicsBlock.IsValid() ? PhysicsBlock.ToSharedRef()
+		: MakeShared<FJsonObject>();
+	Friction = Float(Physics, TEXT("friction"), Defaults->Friction);
+	Density = Float(Physics, TEXT("density"), Defaults->Density);
+	RawDensity = Float(Physics, TEXT("rawDensity"), Defaults->RawDensity);
+	Thickness = Float(Physics, TEXT("thickness"), Defaults->Thickness);
+	// `elasticity` runs to 2 in the shipped table and the engine's Restitution is a 0-1 bounciness,
+	// so a declared value drives both: the clamp the solver can use, and the number the entry
+	// actually wrote. An undeclared elasticity resets each independently to its own class default
+	// rather than deriving Restitution from RawElasticity's default -- the two are unrelated
+	// engine properties (Restitution's own default is 0.3; RawElasticity's is 0.0) and only a
+	// declared value ties them together.
+	double ElasticityValue = 0.0;
+	if (Physics->TryGetNumberField(TEXT("elasticity"), ElasticityValue))
 	{
-		const TSharedRef<FJsonObject> Ref = Physics.ToSharedRef();
-		Friction = Float(Ref, TEXT("friction"), Friction);
-		Density = Float(Ref, TEXT("density"), Density);
-		Thickness = Float(Ref, TEXT("thickness"), Thickness);
-		// `elasticity` runs to 2 in the shipped table and the engine's Restitution is a 0-1
-		// bounciness, so the asset carries both: the clamp the solver can use, and the number the
-		// entry actually wrote.
-		RawElasticity = Float(Ref, TEXT("elasticity"), RawElasticity);
+		RawElasticity = static_cast<float>(ElasticityValue);
 		Restitution = FMath::Clamp(RawElasticity, 0.0f, 1.0f);
 	}
-
-	if (const TSharedPtr<FJsonObject> Movement = Obj(Object, TEXT("movement")))
+	else
 	{
-		const TSharedRef<FJsonObject> Ref = Movement.ToSharedRef();
-		MaxSpeedFactor = Float(Ref, TEXT("maxSpeedFactor"), MaxSpeedFactor);
-		JumpFactor = Float(Ref, TEXT("jumpFactor"), JumpFactor);
-		bClimbable = Bool(Ref, TEXT("climbable"), bClimbable);
+		RawElasticity = Defaults->RawElasticity;
+		Restitution = Defaults->Restitution;
 	}
+
+	const TSharedPtr<FJsonObject> MovementBlock = Obj(Object, TEXT("movement"));
+	const TSharedRef<FJsonObject> Movement = MovementBlock.IsValid() ? MovementBlock.ToSharedRef()
+		: MakeShared<FJsonObject>();
+	MaxSpeedFactor = Float(Movement, TEXT("maxSpeedFactor"), Defaults->MaxSpeedFactor);
+	JumpFactor = Float(Movement, TEXT("jumpFactor"), Defaults->JumpFactor);
+	bClimbable = Bool(Movement, TEXT("climbable"), Defaults->bClimbable);
 
 	FootstepsLeft.Reset();
 	FootstepsRight.Reset();

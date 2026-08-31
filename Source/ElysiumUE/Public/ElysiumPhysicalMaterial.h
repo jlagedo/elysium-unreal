@@ -48,7 +48,9 @@ struct FElysiumImpactOutcomes
  * unit in the chain supplied each one is in the attached `UElysiumSurfacePropertyProvenance`.
  *
  * Native slots this fills from the unit: `Friction` ← `friction`, `Restitution` ← `elasticity`
- * (clamped to 0–1; the raw value stays in `RawElasticity`), `Density` ← `density`.
+ * (clamped to 0–1; the raw value stays in `RawElasticity`), `Density` ← `density`, already
+ * converted at the stage from the table's kg/m³ to this engine property's own g/cm³ (the raw
+ * authored value stays in `RawDensity`, mirroring `RawElasticity`).
  */
 UCLASS(BlueprintType)
 class ELYSIUMUE_API UElysiumPhysicalMaterial : public UPhysicalMaterial, public IInterface_AssetUserData
@@ -68,13 +70,27 @@ public:
 	 * is the 0–1 clamp of this, so a value the engine cannot hold is recorded rather than lost.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") float RawElasticity = 0.0f;
+	/**
+	 * `density` exactly as the table wrote it, in kg/m³ (water is 1000). `Density` is the engine's
+	 * own g/cm³ (`UPhysicalMaterial::Density`, consumed as `Density * 0.001` in `BodySetup.cpp`),
+	 * so this is the authored number the g/cm³ conversion was computed from -- mirroring
+	 * `RawElasticity`.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") float RawDensity = 0.0f;
 
 	// --- movement -------------------------------------------------------------------------------
-	/** `maxspeedfactor`. Declared on `default` alone, so every surface inherits 1.0. */
+	/**
+	 * `maxspeedfactor`. Declared on `default` alone, and `default` is a childless root that no
+	 * entry bases on -- not an implicit parent -- so the other 62 entries never inherit it; they
+	 * keep this member initialiser, which is `default`'s own value.
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") float MaxSpeedFactor = 1.0f;
-	/** `jumpfactor`. Declared on `default` alone, so every surface inherits 1.0. */
+	/** `jumpfactor`. Same as `MaxSpeedFactor`: `default` declares it alone and inherits to no one. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") float JumpFactor = 1.0f;
-	/** `climbable`. Declared on `default` alone, so no shipped surface is climbable. */
+	/**
+	 * `climbable`. Declared on `default` alone; no entry bases on `default`, so no shipped surface
+	 * carries a declared `true` and every surface keeps this member initialiser.
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Elysium|Surface") bool bClimbable = false;
 
 	// --- audio references (asset IDs until the sound slice) ---------------------------------------
@@ -110,10 +126,14 @@ public:
 	 *
 	 * Refuses a null material, a material that is not a `UElysiumPhysicalMaterial`, and a body
 	 * that does not parse as JSON or is not a JSON object. Individual missing keys are tolerated:
-	 * a missing **scalar** leaves that field at the value it already had, so the stage can add a
-	 * field without re-importing the corpus, while every **list, map and chain** is replaced by
-	 * what the sidecar carries — a stale variation pool surviving a re-import would be worse than
-	 * an empty one, and `SurfaceType` is derived from the sidecar's row name every time.
+	 * a missing or `null` **physics/movement scalar** resets that field to its class default (the
+	 * CDO value) rather than keeping whatever the asset already had, because the stage emits every
+	 * one of those keys on every apply — a scalar that is absent means no unit in the chain
+	 * declares it, not that the field grew after this sidecar was written, so an asset a source
+	 * stops declaring a value for reverts rather than keeping a stale one. Every **list, map and
+	 * chain** is replaced by what the sidecar carries — a stale variation pool surviving a
+	 * re-import would be worse than an empty one — and `SurfaceType` is derived from the sidecar's
+	 * row name every time.
 	 *
 	 * Python: `unreal.ElysiumPhysicalMaterial.apply_json(material, text)` → `(ok, error)`.
 	 * Success travels in an out-parameter rather than the return value on purpose: the editor's
@@ -155,7 +175,10 @@ public:
 	//~ End IInterface_AssetUserData
 
 private:
-	/** Fill this material from a parsed sidecar object. Missing keys keep their current values. */
+	/**
+	 * Fill this material from a parsed sidecar object. A missing or `null` physics/movement scalar
+	 * resets to the class default; every list, map and chain is replaced wholesale.
+	 */
 	void FromJson(const TSharedRef<FJsonObject>& Object);
 
 	UPROPERTY()

@@ -56,6 +56,11 @@ The file's own header comment documents these, and the values bear it out.
 `elasticity` and `friction` exceed their documented 0–1 ranges on a few entries, so a consumer
 clamps rather than assumes.
 
+`density`'s unit is the table's own, kg/m³; `UPhysicalMaterial::Density` is g/cm³, so
+`uv run elysium import surface-properties` converts on the way in and keeps the authored kg/m³
+value alongside it (`docs/architecture/seam_map_surface_property.md` → "Import" → "The staged
+sidecar, and what it becomes").
+
 ### Movement
 
 `maxspeedfactor` (`1.0`), `jumpfactor` (`1.0`) and `climbable` (`0`) appear on **`default` alone**,
