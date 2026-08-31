@@ -560,6 +560,57 @@ confirmed on `sprites/candle` and `particle/smokeb`: `UseAnimatedFrames` on and 
 20 to 22 entries in the same window as the frame-0 fix, unrelated to it). `uv run pytest`: 3,045
 passed. `uv run elysium doctor`: repository policy passed, 22 pre-existing warnings (unchanged).
 
+**Map convergence validated, and three of its five opening premises reversed (2026-08-31).** The
+owner's direction: converge the map sidecars into the Unreal map — real objects where that is
+true, assets where it is not — wire the V2 materials, cubemaps, fog and every dormant visual lane
+into the maps, and end with the legacy exporter+bake+runtime-sidecar path deleted and the game
+running entirely off the new lane. A four-angle validation (adversarial design review, engine-source
+fact-check against the UE 5.8 install, a field-by-field `.ents`-vs-entities-GLB contract diff, and
+a corpus-wide missing-life sweep) confirmed the framing — new lane beside legacy, then delete —
+and reversed three specifics:
+
+- *Brush bodies are not baked as level actors.* Ownership (`RouteTouch` casts `GetOwner()` to the
+  map actor), per-entity spawnflag solidity patched after spawn, dormancy's forced
+  `UpdateOverlaps`, Movable mobility under the mover, and the entity-index save key all live on
+  map-actor components built at load. The bake ships the cooked **hull payload** (the expensive
+  part) as a per-map asset; `BuildBrushBody`/`ElysiumMapCollision::Build` keep constructing the
+  components from it. Adoption-by-tag for bodies is rejected outright.
+- *"Merge-by-name" light overrides cannot exist.* `dworldlight_t` rows are anonymous; the Cog
+  overlay, the baked `elysium.src` tag and the rig's `RowBySource` join are all keyed by `.lights`
+  line index. The stable key becomes the lump-15 record ordinal, with a one-shot remapper for
+  existing `_lights/*.json`.
+- *Lights, sky, fog and the skylight cubemap stay runtime-tunable.* Lightstyles animate per frame;
+  `LightScale`/`LightFit`/`LightCurve`/`SkyProbe`/`EnhancedTextures` are open calibrations; fog is
+  per-primitive CPD so the miniature and world fog differently at equal depth. These values move
+  from loose sidecars to per-map **data assets** (regenerable without a level rebake, editable
+  live — the knobs mandate), never to baked actor mutation.
+
+The contract diff established that `.ents` is a *join*, not a projection: hulls, contents,
+`blocks_player`, `brush_mesh` and sky-membership come from root-unit lumps the entities GLB never
+carries, and the exporter's hull solver tolerances (1e-6 determinant, 0.05 halfspace, 0.1 dedupe)
+are load-bearing. Save games apply entity state **by index** (`ElysiumEntityWorldPersistence.cpp`),
+so the replacement must emit one row per lump block in lump order, no drops, no reorders, and the
+cutover bumps `FElysiumSaveVersion` so old snapshots are refused rather than misapplied. Output
+typing moves to the datamap (`outputLike` demotions) as a *named* divergence with its own
+save-schema bump — the restore path length-gates `OutputTimesRemaining` and silently drops
+counters on a cardinality change. Engine-source verdicts (all confirmed): custom trimesh collision
+needs an `IInterface_CollisionDataProvider` outer (the ProceduralMeshComponent pattern) or Chaos
+silently cooks nothing; physics cooking is paid once at the normal cook, not at bake-save;
+`UCableComponent` rebuilds sim state from saved properties; reflection captures build headlessly
+under `-AllowCommandletRendering` and remain a Lumen *fallback* lane (consistent with "baked
+probes are not reflection content" above — a capture of the Lumen-lit scene is the intended
+image, not a regression); `SLS_SpecifiedCubemap` refilters automatically on registration; classic
+persistent levels carry no 5.8 deprecation pressure; per-map `UDataAsset`s hard-referenced from a
+level actor cook and load with it; 400–700 Movable lights ride VSM page caching but owe a real
+profiling pass. The life sweep found the wiring targets: ~217 world materials with animation
+proxies flattened to static by the legacy `.mtl` path (the V2 masters already implement them — a
+rebind is the win), lightstyle flicker dead-flat everywhere, detail props (`dprp`) exported and
+never placed, water shipped as a flat translucent film beside a finished `M_V2_Water`, the
+`.sprites` corona sidecar written and never read, ~7,487 of 7,501 cubemap-patched materials
+falling back to generic reflection, and an untouched steam/embers/fire/beam entity family. The
+plan is "## Plan — maps track" below; the shared-MI switch (SF-6.1) is blocked until decal fog
+and wetness have a home that is not a per-map material instance.
+
 ## Plan — surfaces track (export gap, surface properties, materials, reflections)
 
 Owner instructions (2026-08-31): plan the whole surface chain in the smallest possible tasks;
@@ -737,6 +788,130 @@ different one (a scratch set while drafting new entries, say) without touching t
   5.3), `tex/cube/` sidecars, `MPC_ElysiumEnvironment`'s surface scalars. Ledger rows here move
   to retired.
 
+## Plan — maps track (sidecar convergence, entity contract, map life)
+
+Owner instructions (2026-08-31): converge the runtime sidecars into the Unreal map — real level
+objects where the validation says they can be, per-map assets where they cannot — wire the V2
+materials, cubemaps, fog and every dormant visual lane, and finish able to **drop the legacy
+pipeline entirely and run the game on the new one**. The I/O contract must not break. Tasks are
+the smallest possible; IDs are `MP-<phase>.<n>`. The validation findings this plan answers are in
+the Settled entry "Map convergence validated" above. Cutover is gated **per map, never per
+system** — `LoadMap`'s failure ladder is conjunctive (collision, entity world and nav all fail the
+barrier outright), so a system half-migrated across all maps boots nothing, while an unmigrated
+map on the legacy path always boots.
+
+### Phase 1 — instruments and guards (nothing moves yet)
+
+- **MP-1.1 Baseline shots.** `validation/shots_diff.py` reference frames for a representative map
+  set (every hub + one instance of each district type), captured on the current build. The
+  rendered half of this refactor (lights, fog, sky, materials) has no test tier; this is its only
+  instrument. Nothing moves until the baseline exists.
+- **MP-1.2 Censuses.** Per-map `.ents` census (entity count, brush/hull/output totals per class),
+  light census (rows per type, styled-light count), and an effects-entity census
+  (`env_sprite`/`env_steam`/`env_fire`/`env_embers`/`point_spotlight`/… occurrences per map — the
+  life sweep left prevalence unverified). Pinned as a JSON the differ and later phases read.
+- **MP-1.3 Recipe closes over what it absorbs.** `level_sidecar_recipe` covers `.props`,
+  `.decals`, `.lights`, `.env`, `.sky`, `.spawn` only; extend it to `.ents`, `.hulls`, `.dispcol`,
+  `.ropes` and `_lights/<map>.json` **before** any content moves into the level, and verify a
+  touched sidecar dirties the `.umap`. Otherwise the tracker serves stale levels that look like
+  runtime bugs.
+- **MP-1.4 Travel gate successor.** `Travel` refuses a map without `<map>.obj`. Define the new
+  lane's readiness artifact, teach the gate to accept either, and have the new lane emit it from
+  day one — the gate must never be absent between lanes.
+
+### Phase 2 — the new producer, byte-comparable (game untouched)
+
+- **MP-2.1 The join, stated.** The entities GLB is lump 0 only; `hulls`, `contents`,
+  `blocks_player`, `brush_mesh` and sky-membership are root-unit facts. Either publish them on the
+  root unit as stated fields or specify the root+entities join the producer performs — decided in
+  `seam_map_map.md` before code. The hull solver ports **verbatim** (its tolerances are
+  load-bearing); the world-space-hulls-with-origin-relative-attachment invariant is verified on a
+  rotating door and then stated once in the seam doc.
+- **MP-2.2 Producer emits legacy sidecars.** A new `map_sidecars` producer reads the four GLB
+  units (+ nav-graph seam, the fifth source the "4 units" framing omitted) and emits
+  byte-comparable `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/`.sky`/`.spawn`/`.ropes` — proving
+  the join with every existing test tier still valid and the game completely untouched.
+- **MP-2.3 The differ.** Per-map differ against the legacy exporter's output over all 108 maps;
+  hull vertex counts and AABBs per brush entity compared explicitly. Byte-equal or
+  named-divergence-only is the acceptance.
+- **MP-2.4 Named divergences, one commit each.** Datamap output typing (`outputLike` demotions —
+  with the `FElysiumSaveVersion` bump and the `OutputTimesRemaining` length-gate turned into a
+  loud warning), key folding, `param` stripping, `delay` atof-vs-float, `extra` retention,
+  `times==0→-1` ownership (exactly one owner). Each with its own shot diff and Substrate pin
+  (`Outputs.Num()` per class on a golden def set). None ride along inside the format change.
+- **MP-2.5 Legacy exporter retired.** `.weather`/`.particles` re-pointed at the new producer
+  (they re-read the `.ents` the old exporter wrote); `UE_bsp_to_scene.py` deleted. The game is
+  byte-identical at this point.
+
+### Phase 3 — transport: assets instead of loose files
+
+- **MP-3.1 Entity asset.** Per-map `UElysiumMapEntities` data asset the producer generates;
+  it deserializes **into** `FElysiumEntityDef` (the plain struct stays — the whole Substrate tier
+  constructs it directly), asserts def-count and index parity against the `.ents` it replaces,
+  then the `.ents` reader is deleted. One row per lump block, lump order, `worldspawn` included,
+  no drops — the entity index is the save file's primary key.
+- **MP-3.2 Hull payload asset.** Cooked collision (convex elements per brush entity, trimesh for
+  world/displacement) as a per-map asset with an `IInterface_CollisionDataProvider` vessel;
+  `ElysiumMapCollision::Build` and `BuildBrushBody` consume it. Component ownership, spawnflag
+  solidity, dormancy and mobility stay at runtime; the nav volume keeps its bounds source and the
+  collision-ready barrier its signal. `.hulls`/`.dispcol` readers deleted after Content-tier
+  parity.
+- **MP-3.3 Environment assets.** `.env`/`.sky`/`.spawn` values into a per-map map-info asset
+  (fog stays per-primitive CPD — the values feed the same stamping path); the light overlay
+  re-keyed to the lump-15 ordinal with a one-shot `_lights/*.json` remapper; Cog windows read and
+  write the assets. Regenerating an asset must not require a level rebake — that property is what
+  the sidecars were for, and it is kept.
+- **MP-3.4 Per-map cutover flag.** A map on the new transport boots from assets; any other map
+  boots the legacy path unchanged. First converted map: one hub, shot-diffed against MP-1.1.
+
+### Phase 4 — the map bake rebuilt on the new lane
+
+- **MP-4.1 Geometry from GLB.** World/sky/brush meshes and props baked from the root unit's
+  scenes instead of `.obj`/`.props` (placements are already scene nodes — this also settles the
+  "Where do the props go?" open question: placements fold into the level, the census stays in
+  provenance). The `.obj` gate flips to the MP-1.4 artifact.
+- **MP-4.2 Decal fog and wetness homes.** The two per-map-state axes that force per-map material
+  instances today: decal fog (a `UDecalComponent` carries no CPD) and weather wetness. Design
+  task — candidate answers: MID-at-load for decals only, or a per-map MIC child of the V2 master
+  with the fog/wetness parameters as the only overrides. Blocks MP-4.3.
+- **MP-4.3 V2 materials wired (SF-6.1 lands here).** `material_for` returns the imported `MI_` by
+  `vtmb:material:*`; per-map material packages stop being written; PAKFILE-patched units resolve
+  by their `maps/<map>/` unit ids. The ~217 proxy-animated materials come alive by the rebind
+  alone. Shot-diff per map; the legacy master set stays until Phase 6.
+- **MP-4.4 Reflection captures (SF-6.2 lands here).** `SphereReflectionCapture` per `cubemaps[]`
+  origin, radius from `CaptureRadius`, built under `-AllowCommandletRendering` — a Lumen fallback
+  lane, knob-scaled, per the settled reflections direction.
+- **MP-4.5 Light values from the lighting unit.** The bake reads `worldLights[]` (lump-15
+  ordinals) instead of `.lights`; editor levels stop lying (the rig's calibration knobs and
+  per-frame lightstyle animation stay runtime, reading the MP-3.3 assets).
+
+### Phase 5 — life (each task is one visible lane, shot-diffed)
+
+- **MP-5.1 Lightstyles everywhere.** The rig's pattern animator (styles 0–11 exist) driven for
+  every styled light row, not only the animated-rig path. VtMB's flicker is atmosphere signature.
+- **MP-5.2 Water.** `M_V2_Water` bound on water surfaces; leaf data (lumps 36/46) and the
+  `.water` sidecar's successor feed extents and cheap-water distances; `EElysiumWaterLevel`
+  already reads the volumes.
+- **MP-5.3 Detail props.** `dprp` placements baked (instanced static meshes / sprite cards),
+  `detailPropLighting[]` consulted; exteriors stop reading as bare.
+- **MP-5.4 Sprites and coronas.** The `.sprites` lane's successor consumed: `env_sprite` glows
+  via the V2 Sprite master (the exported-but-never-read regression closed).
+- **MP-5.5 Effects entity family.** From the MP-1.2 census, implement by prevalence:
+  `point_spotlight` beams, `env_steam`, `env_embers`, `env_fire`, `env_lightglow`, `env_sun` —
+  Niagara/material lanes per class, provenance-only where the census says a class never ships.
+- **MP-5.6 Decals on the V2 Decal master.** After MP-4.2; legacy `M_Decal` retired with Phase 6.
+- **MP-5.7 3D-skybox composition pass.** Miniature richness (props, fog banding) reviewed on the
+  converted hubs; owner tuning session on the existing knobs.
+
+### Phase 6 — retire (with SF-7.1)
+
+- **MP-6.1 Runtime readers deleted.** The per-map sidecar parsers (`.ents`, `.hulls`, `.dispcol`,
+  `.ropes`, `.env`, `.lights`, `.sky`, `.spawn`) go once all 108 maps are on the new transport;
+  the boot map / green room (`BuildStageWorld`, no sidecars by design) keeps working throughout.
+- **MP-6.2 Legacy bake and masters deleted.** `bake_map.py`'s legacy lanes, the legacy world
+  master set, per-map material packages — folded with SF-7.1's list. Full-corpus rebake, doctor,
+  full shot-diff set against MP-1.1, and a playthrough smoke of the hub chain is the acceptance.
+
 ## Open questions
 
 **Where do the props go?** A map's geometry, materials and textures already bake to `.uasset`, but
@@ -751,7 +926,8 @@ bake side, and there are two candidate answers:
 
 What would settle it: whether anything needs to change prop placement without rebaking the level
 (a debug surface, a live tweak, a per-session variation), and whether folding them in breaks the
-shared-vs-per-map split the corpus bake depends on. Needs a test, not an argument.
+shared-vs-per-map split the corpus bake depends on. Needs a test, not an argument. The maps track
+picks the fold-into-the-level answer (MP-4.1); this question closes when that task lands.
 
 **Cubemap block rotation below 4×4.** The texture exporter rotates a BC-compressed cube face
 into glTF orientation by permuting its 4×4 blocks and rewriting selector bits, which is exact only
