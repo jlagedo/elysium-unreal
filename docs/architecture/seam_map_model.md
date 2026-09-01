@@ -633,8 +633,11 @@ lane owes is therefore: **the per-model asset carries what each mode needs**, so
 
 **The hulls are reproduced, not approximated.** Each ledge is already convex (the export asserts
 it), so it is handed to the collision builder one at a time with `max_convex_hulls_per_mesh = 1`
-and `simplify_hulls = False`, and the results are combined — that reproduces the authored hull
-rather than decomposing or re-fitting it. Solid counts run 1 (2,573 units), 15 (289), 18 (9),
+and `simplify_hulls = False`, and with `bAutoDetectBoxes`/`bAutoDetectSpheres`/`bAutoDetectCapsules`
+all off — GeometryScript's `GetDetectedSimpleShape` runs ahead of the convex path even at one hull
+per mesh, so leaving them at the engine default re-fits a box-shaped ledge as an `FKBoxElem` (96 of
+the test corpus's 283 `.phy` meshes did exactly that before the flags were pinned) — and the results
+are combined; that reproduces the authored hull rather than decomposing or re-fitting it. Solid counts run 1 (2,573 units), 15 (289), 18 (9),
 3 (7), 17 (5), 2 (3), 19 (2) and 7 (2); a cooked shape count that disagrees with the ledge count
 is a stage failure naming both, exactly as the legacy bake failed it.
 

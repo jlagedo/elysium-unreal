@@ -722,7 +722,7 @@ staged manifest as ground truth against the real baked `SM_` corpus (slot names,
 plus a 6-mesh props row in the tracked lookdev map; closed the `POLICY_GENERATOR_OUTPUTS` follow-up
 above (`MI_V2_Missing`/`T_V2_MissingChecker` now listed).
 
-**Collision auto-detection divergence found and fixed same day (2026-08-31), owner: (a).** R1.6's
+**Collision auto-detection divergence found and fixed same day (2026-08-31), ruled by the existing contract.** R1.6's
 own parity test discovered `bake_lib.set_phy_collision` left `GeometryScriptCollisionFromMeshOptions`'s
 `bAutoDetectBoxes`/`bAutoDetectSpheres`/`bAutoDetectCapsules` at the engine default (**true**), so a
 box-shaped `.phy` ledge silently cooked as an `FKBoxElem` instead of the `FKConvexElem` the
