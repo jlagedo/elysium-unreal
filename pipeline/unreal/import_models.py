@@ -28,6 +28,10 @@ cannot carry: the geometry (`docs/architecture/seam_map_model.md` -> "Import").
     plus this lane's own `shapeCount`, publish its registry tags, stamp the recipe, save;
   * author the two shipped placeholders the manifest names: `SM_elysium_missing_model` (a unit
     cube wearing `MI_V2_Missing`) for a dangling `vtmb:model:` reference;
+  * as a finalize step over the whole manifest (R1.5, not per entry): fold every entry's own
+    `skinFamilies`/`familyCount` down to `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`, the
+    corpus-wide `UElysiumPropSkinSet` (`docs/architecture/seam_map_model.md` -> "Import" ->
+    "Skins table");
   * prune inside the manifest's `pruneScope` -- `null` on a map-scoped run, which prunes nothing,
     because only `--all` knows the whole keep set;
   * write `import_report.json` beside the manifest and exit non-zero if any entry failed.
@@ -882,9 +886,10 @@ def _finish_entry(entry, unit_root, staging_root, tracker, report, materials_cac
     report.built += 1
 
 
-def import_entries(manifest, unit_root, staging_root, tracker, report):
+def import_entries(manifest, unit_root, staging_root, tracker, report, materials_cache=None):
     entries = manifest["assets"]
-    materials_cache = MaterialCache()
+    if materials_cache is None:
+        materials_cache = MaterialCache()
     for index, entry in enumerate(entries):
         try:
             if tracker.needs_import(entry):
@@ -937,6 +942,98 @@ def author_missing_model(asset_path, material_path, tracker_force=False):
     if not bl.save(asset_path):
         raise RuntimeError("save failed: %s" % asset_path)
     return True
+
+
+# --- skins table (R1.5) ---------------------------------------------------------------------------
+
+
+#: The class the skin-table asset must already carry to be reused rather than recreated.
+SKIN_SET_CLASS = "ElysiumPropSkinSet"
+
+
+def author_skin_set(manifest, materials_cache, force=False):
+    """Regenerate `/ElysiumBaked/Meshes/DA_ElysiumPropSkins` -- the corpus skin table
+    (`docs/architecture/seam_map_model.md` -> "Import" -> "Skins table") -- from this run's own
+    manifest, a finalize step over every entry rather than a per-entry one.
+
+    The diff-against-family-0 fold that turns each entry's full, undiffed `skinFamilies` into the
+    table's own short rows is `importers.model_skins.build_skin_table`, pure data with no Unreal
+    (or `numpy`) dependency, so it is both pytest-tested directly and importable inside Unreal's
+    embedded Python, unlike `importers.models` itself; this function only turns that data into
+    `unreal.ElysiumPropSkinModel`/`ElysiumSkinFamily`/`ElysiumSkinOverride` objects and saves them,
+    mirroring `pipeline/unreal/bake_map.py`'s legacy `_author_skin_set` -- same struct shape, same
+    asset name -- but reading the new manifest and binding V2 `MI_` paths instead of the legacy
+    per-map `.skins` sidecars.
+
+    A whole-manifest recipe stamp skips the rebuild when nothing this run staged actually changed
+    the table (map-scoped runs regenerate the same handful of multi-family models over and over
+    otherwise); `force` bypasses it exactly like every other entry's stamp.
+    """
+    from elysium_pipeline.importers import model_skins
+
+    object_path = model_skins.skin_set_asset_path()
+    package_root, asset_name = split_asset_path(object_path)
+    rows = model_skins.build_skin_table(manifest["assets"])
+
+    recipe = {"rows": [
+        (row["stem"], row["familyCount"],
+         [(family["family"], family["overrides"]) for family in row["families"]])
+        for row in rows
+    ]}
+    fingerprint = bl.recipe_fingerprint(STAGE + ".skins", object_path, recipe)
+    if (not force and unreal.EditorAssetLibrary.does_asset_exist(object_path)
+            and bl.asset_class_name(object_path) == SKIN_SET_CLASS
+            and bl.stored_recipe(object_path) == fingerprint):
+        return {"stems": len(rows), "rows": sum(len(row["families"]) for row in rows),
+                "maxFamilyCount": max((row["familyCount"] for row in rows), default=0),
+                "rebuilt": False}
+
+    models = []
+    total_rows = 0
+    for row in rows:
+        family_rows = []
+        for family in row["families"]:
+            items = []
+            for slot_name, material_path in family["overrides"]:
+                material = materials_cache.load(material_path)
+                if material is None:
+                    raise RuntimeError("skin table %s family %d: material not found: %s"
+                                       % (row["stem"], family["family"], material_path))
+                item = unreal.ElysiumSkinOverride()
+                item.set_editor_property("slot_name", slot_name)
+                item.set_editor_property("material", material)
+                items.append(item)
+            family_row = unreal.ElysiumSkinFamily()
+            family_row.set_editor_property("overrides", items)
+            # Pad every family below this one that repaints nothing (including family 0) so the
+            # array index stays the VtMB skin number the row states -- the same convention
+            # `bake_lib.make_skin_set` uses.
+            while len(family_rows) < family["family"]:
+                family_rows.append(unreal.ElysiumSkinFamily())
+            family_rows.append(family_row)
+        model = unreal.ElysiumPropSkinModel()
+        model.set_editor_property("stem", row["stem"])
+        model.set_editor_property("families", family_rows)
+        model.set_editor_property("family_count", row["familyCount"])
+        models.append(model)
+        total_rows += len(row["families"])
+
+    bl.ensure_dir(package_root)
+    asset = unreal.load_asset(object_path)
+    if asset is None:
+        factory = unreal.DataAssetFactory()
+        factory.set_editor_property("data_asset_class", unreal.ElysiumPropSkinSet)
+        asset = unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+            asset_name, package_root, unreal.ElysiumPropSkinSet, factory)
+    if asset is None:
+        raise RuntimeError("could not create %s" % object_path)
+    asset.set_editor_property("models", models)
+    bl.stamp_recipe(asset, fingerprint)
+    if not bl.save(object_path):
+        raise RuntimeError("save failed: %s" % object_path)
+    return {"stems": len(rows), "rows": total_rows,
+            "maxFamilyCount": max((row["familyCount"] for row in rows), default=0),
+            "rebuilt": True}
 
 
 # --- prune ---------------------------------------------------------------------------------------
@@ -1002,9 +1099,26 @@ def run(manifest_path, unit_root, force=False):
             report.failures.append({"assetPath": placeholder, "unit": "", "reason": "%s" % exc})
             fail("%s: %s" % (placeholder, exc))
 
-    import_entries(manifest, unit_root, staging_root, Tracker(force), report)
+    materials_cache = MaterialCache()
+    import_entries(manifest, unit_root, staging_root, Tracker(force), report, materials_cache)
+
+    # The corpus skin table (R1.5): a finalize step over the whole manifest, run once every meshes
+    # this run staged are on the mount, so its skin families resolve the same `MI_` paths the
+    # meshes above were just bound to.
+    from elysium_pipeline.importers import model_skins
+    skin_set_path = model_skins.skin_set_asset_path()
     try:
-        protected = {entry["assetPath"] for entry in manifest["assets"]} | set(manifest["keep"])
+        skin_stats = author_skin_set(manifest, materials_cache, force=force)
+        log("prop skins: %d stem(s) / %d row(s) / max FamilyCount %d%s -> %s"
+            % (skin_stats["stems"], skin_stats["rows"], skin_stats["maxFamilyCount"],
+               "" if skin_stats["rebuilt"] else " (reused)", skin_set_path))
+    except Exception as exc:  # noqa: BLE001
+        report.failures.append({"assetPath": skin_set_path, "unit": "", "reason": "%s" % exc})
+        fail("%s: %s" % (skin_set_path, exc))
+
+    try:
+        protected = ({entry["assetPath"] for entry in manifest["assets"]}
+                    | set(manifest["keep"]) | {skin_set_path})
         report.pruned = prune(package_root, protected, manifest.get("pruneScope"))
     except Exception as exc:  # noqa: BLE001
         report.failures.append({"assetPath": package_root, "unit": "",

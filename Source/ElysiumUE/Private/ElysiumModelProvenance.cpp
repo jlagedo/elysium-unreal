@@ -23,9 +23,12 @@ namespace
 	 * A JSON field's value as text regardless of its JSON type, mirroring
 	 * `ElysiumMaterialProvenance.cpp`'s own `StringifyField` -- the Coverage map stringifies
 	 * whatever shape the sidecar's `coverage` object turns out to carry (C-2), the same tolerance
-	 * `Anomalies[].Extra`/`Omissions[].Extra` already need.
+	 * `Anomalies[].Extra`/`Omissions[].Extra` already need. Named distinctly from the material
+	 * lane's identical helper (`Model` suffix throughout this anonymous namespace) so a unity
+	 * build that ever merges both `.cpp` files into one translation unit does not collide two
+	 * same-named internal-linkage functions.
 	 */
-	FString StringifyField(const TSharedRef<FJsonObject>& Object, const TCHAR* Key)
+	FString StringifyModelField(const TSharedRef<FJsonObject>& Object, const TCHAR* Key)
 	{
 		const TSharedPtr<FJsonValue> Value = Object->TryGetField(Key);
 		if (!Value.IsValid())
@@ -51,7 +54,7 @@ namespace
 	}
 
 	/** Every field of `Row` besides `SkipKey`, stringified the tolerant way (C-2's catch-all). */
-	void ReadExtraFields(const TSharedRef<FJsonObject>& Row, const TCHAR* SkipKey, TMap<FString, FString>& Out)
+	void ReadModelExtraFields(const TSharedRef<FJsonObject>& Row, const TCHAR* SkipKey, TMap<FString, FString>& Out)
 	{
 		for (const auto& Field : Row->Values)
 		{
@@ -60,7 +63,7 @@ namespace
 			{
 				continue;
 			}
-			Out.Add(Key, StringifyField(Row, *Key));
+			Out.Add(Key, StringifyModelField(Row, *Key));
 		}
 	}
 
@@ -95,7 +98,7 @@ namespace
 	}
 
 	/** `anomalies[]`: `kind` (this lane's rows) or `row` (the unit's); the rest lands in `Extra`. */
-	void ReadAnomalies(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceAnomaly>& Out)
+	void ReadModelAnomalies(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceAnomaly>& Out)
 	{
 		Out.Reset();
 		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("anomalies"));
@@ -114,12 +117,12 @@ namespace
 			FElysiumProvenanceAnomaly& Anomaly = Out.AddDefaulted_GetRef();
 			const TCHAR* UsedKey = nullptr;
 			Anomaly.Kind = ReadRowLabel(Row, TEXT("kind"), TEXT("row"), UsedKey);
-			ReadExtraFields(Row, UsedKey, Anomaly.Extra);
+			ReadModelExtraFields(Row, UsedKey, Anomaly.Extra);
 		}
 	}
 
 	/** `omissions[]`: `reason` (the unit's rows) or `kind` (this lane's); the rest lands in `Extra`. */
-	void ReadOmissions(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceNote>& Out)
+	void ReadModelOmissions(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceNote>& Out)
 	{
 		Out.Reset();
 		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("omissions"));
@@ -138,7 +141,7 @@ namespace
 			FElysiumProvenanceNote& Note = Out.AddDefaulted_GetRef();
 			const TCHAR* UsedKey = nullptr;
 			Note.Reason = ReadRowLabel(Row, TEXT("reason"), TEXT("kind"), UsedKey);
-			ReadExtraFields(Row, UsedKey, Note.Extra);
+			ReadModelExtraFields(Row, UsedKey, Note.Extra);
 		}
 	}
 
@@ -351,12 +354,12 @@ void UElysiumModelProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 	PhysMaterial = Str(O, TEXT("physMaterial"));
 
 	// --- content ---
-	ReadAnomalies(O, Anomalies);
-	ReadOmissions(O, Omissions);
+	ReadModelAnomalies(O, Anomalies);
+	ReadModelOmissions(O, Omissions);
 	Coverage.Reset();
 	if (TSharedPtr<FJsonObject> CoverageObject = Obj(O, TEXT("coverage")))
 	{
-		ReadExtraFields(CoverageObject.ToSharedRef(), TEXT(""), Coverage);
+		ReadModelExtraFields(CoverageObject.ToSharedRef(), TEXT(""), Coverage);
 	}
 }
 

@@ -50,14 +50,27 @@ struct FElysiumPropSkinModel
 
 	UPROPERTY(EditAnywhere) FName Stem;
 
-	// Index = VtMB's skin number. Element 0 is the authored set and is always empty.
+	// Index = VtMB's skin number. Element 0 is the authored set and is always empty. A family
+	// identical to family 0 produces no row either, so this array may be shorter than FamilyCount
+	// -- trimmed after the last family that actually repaints something
+	// (docs/architecture/seam_map_model.md -> "Import" -> "Skins table").
 	UPROPERTY(EditAnywhere) TArray<FElysiumSkinFamily> Families;
+
+	// The stem's true family count (`materialBindings.skinFamilies.Num()`), so `Find` can clamp an
+	// out-of-range placement index to the last family without loading the mesh -- "the skin-index
+	// clamp is engine behaviour, and the import reproduces it" (VtMB clamps rather than falling
+	// back to 0 or refusing to draw). Left at its default (0) on an asset authored before this
+	// field existed, which `Find` reads as "no clamp table for this stem" and falls back to the
+	// plain array bound it always used, so an old asset's behaviour is unchanged.
+	UPROPERTY(EditAnywhere) int32 FamilyCount = 0;
 };
 
-// The map's whole prop-skin table, authored by pipeline/unreal/bake_map.py next to the prop meshes. One asset
-// per map rather than one per model: a map carries ~23 multi-family models, so a single asset loads
-// once at map load and costs one lookup, and the hard references keep every alternate material
-// reachable from the level.
+// The corpus prop-skin table. Authored either by pipeline/unreal/bake_map.py (the legacy shared
+// bake, one asset for the whole corpus under `/ElysiumBaked/Shared/Meshes`) or by
+// pipeline/unreal/import_models.py (the V2 lane, `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`,
+// docs/architecture/seam_map_model.md -> "Import" -> "Skins table") -- one asset either way, never
+// per map, so a single load reaches every alternate material in the corpus and the hard references
+// keep them all reachable from a level that places any of them.
 UCLASS(BlueprintType)
 class ELYSIUMUE_API UElysiumPropSkinSet : public UDataAsset
 {
@@ -67,8 +80,13 @@ public:
 	UPROPERTY(EditAnywhere) TArray<FElysiumPropSkinModel> Models;
 
 	// The overrides for one model's skin family, or null when the model has no alternate families,
-	// the family is out of range, or it repaints nothing. Out-of-range is not an error: VtMB's
-	// `skin` keyfield/input is an unclamped int write, so a map can name a family the model lacks.
+	// the resolved family repaints nothing, or (family 0) it IS the authored set. `Family` is
+	// clamped to `Model.FamilyCount - 1` first when it names an index at or past `FamilyCount` --
+	// VtMB's `skin` keyfield/input is an unclamped int write, so a placement can and does (59 of
+	// them in the corpus) name a family past the model's own count, and the engine clamps to the
+	// last family rather than falling back to 0 or refusing to draw. A model with no `FamilyCount`
+	// on record (an asset authored before that field existed) skips the clamp and is bounded by the
+	// array alone, exactly as before.
 	const FElysiumSkinFamily* Find(FName Stem, int32 Family) const;
 
 private:

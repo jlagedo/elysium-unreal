@@ -40,6 +40,7 @@ from elysium_pipeline.formats.map_glb import model as map_model
 from elysium_pipeline.formats.model_glb import model as model_unit_model
 from elysium_pipeline.formats.unit_contract.container import GlbContainerError, decode_glb
 from elysium_pipeline.importers import materials
+from elysium_pipeline.importers import model_skins
 from elysium_pipeline.importers import surface_properties
 from elysium_pipeline.importers.surface_classes import _SURFACEPROP_NAMES
 
@@ -964,3 +965,15 @@ def stage_models(
     result.manifest_path = manifest_path
     result.pruned = _prune_stale(root, produced) if all_models else 0
     return result
+
+
+# --- skins table (R1.5) -------------------------------------------------------------------------
+#
+# The fold itself (`build_skin_table`) and its asset path (`skin_set_asset_path`) live in
+# `importers.model_skins`, a module with no `numpy`-reaching import chain, so
+# `pipeline/unreal/import_models.py` -- which runs inside Unreal's embedded Python and has no
+# `numpy` -- can import that module directly without pulling in this one's MDL/VTX decoders.
+# Re-exported here so a caller that already imports the stage module sees no difference.
+
+skin_set_asset_path = model_skins.skin_set_asset_path
+build_skin_table = model_skins.build_skin_table
