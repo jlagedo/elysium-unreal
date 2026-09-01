@@ -120,8 +120,14 @@ def export_maps(
     ``available`` is the discovered map inventory; a profile run passes its one
     `install.all_map_names()` result rather than re-walking the install."""
 
-    from elysium_pipeline.exporters import UE_bsp_to_scene
-    from elysium_pipeline.formats import install
+    # `UE_map_sidecars`/`particles`/`weather` are imported here, in `export_maps`'s own body,
+    # rather than inside `rewrite_sidecars_via_producer` below, so the incremental-build
+    # fingerprint sees them: `_map_tasks` hashes `_DecoderClosures.function_entries('...export_all',
+    # 'export_maps')`, which walks only this function's own AST, not a sibling function's. An
+    # import hidden in `rewrite_sidecars_via_producer` would be invisible to that closure, so an
+    # edit to `UE_map_sidecars` (etc.) would not invalidate the incremental cache.
+    from elysium_pipeline.exporters import UE_bsp_to_scene, UE_map_sidecars
+    from elysium_pipeline.formats import install, particles, weather
 
     requested = list(dict.fromkeys(names))
     available = set(available if available is not None else install.all_map_names())
@@ -152,7 +158,11 @@ def export_maps(
                 out_dir,
                 index=shared_index,
             )
-            rewrite_sidecars_via_producer(name, out_dir, shared_index, legacy_report)
+            rewrite_sidecars_via_producer(
+                name, out_dir, shared_index, legacy_report,
+                sidecars_module=UE_map_sidecars, particles_module=particles,
+                weather_module=weather,
+            )
             results.append(
                 ExportTaskResult(
                     name=name,
@@ -180,6 +190,10 @@ def rewrite_sidecars_via_producer(
     out_dir: Path,
     index: dict[str, Any],
     legacy_report: dict[str, Any] | None,
+    *,
+    sidecars_module: Any = None,
+    particles_module: Any = None,
+    weather_module: Any = None,
 ) -> dict[str, Any]:
     """R3.5: the R3.2 producer is the default source of the eight legacy sidecars.
 
@@ -199,23 +213,32 @@ def rewrite_sidecars_via_producer(
     written exactly as before -- the only change there is one additive `return` at the end of
     `main`, handing back the geometry `.weather` needs. It is only unwired from this default path
     (deletion is R8, once the 108-map differ has run against it).
+
+    ``sidecars_module``/``particles_module``/``weather_module`` let `export_maps` hand in the
+    modules it already imported in its own body -- see the comment there -- rather than this
+    function re-importing them itself; a direct caller (a test) may omit them and get the same
+    lazily-imported singleton modules.
     """
 
-    from elysium_pipeline.exporters import UE_map_sidecars
-    from elysium_pipeline.formats import particles, weather
+    if sidecars_module is None:
+        from elysium_pipeline.exporters import UE_map_sidecars as sidecars_module
+    if particles_module is None or weather_module is None:
+        from elysium_pipeline.formats import particles as _particles, weather as _weather
+        particles_module = particles_module or _particles
+        weather_module = weather_module or _weather
 
-    producer_report = UE_map_sidecars.write_sidecars(name, out_dir=out_dir)
+    producer_report = sidecars_module.write_sidecars(name, out_dir=out_dir)
 
     with open(out_dir / f"{name}.ents", encoding="utf-8") as ents_file:
         entity_document = json.load(ents_file)
-    particles_path = particles.write_particles(name, out_dir, entity_document, index)
+    particles_path = particles_module.write_particles(name, out_dir, entity_document, index)
     if particles_path:
         print(f"wrote {particles_path}")
 
     weather_inputs = (legacy_report or {}).get("weather_inputs")
     if weather_inputs:
         cover_triangles, bounds_min, bounds_max = weather_inputs
-        weather_path = weather.write_weather(
+        weather_path = weather_module.write_weather(
             name, out_dir, entity_document, index, cover_triangles, bounds_min, bounds_max
         )
         if weather_path:

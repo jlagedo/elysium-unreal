@@ -175,3 +175,28 @@ def test_diff_map_classifies_byte_equal_named_divergence_and_unexpected(tmp_path
                           producer_root=tmp_path / "does-not-exist-either")
     assert named_map["classification"] == "named_divergence_only"
     assert "planenum" in named_map["reason"]
+
+
+def test_diff_map_refuses_a_self_comparison(tmp_path):
+    """Code-review fix on R3.5: since `rewrite_sidecars_via_producer` now overwrites the legacy
+    directory with the producer's own bytes (and its `.ready` marker), a differ run against the
+    default roots with no `--legacy-root` would silently compare the producer against itself.
+    Only the producer ever writes `<map>.ready` (`UE_map_sidecars.write_sidecars`), so its
+    presence in the *legacy* directory is exact, disk-only evidence of that condition.
+    """
+
+    legacy_root, producer_root = tmp_path / "legacy", tmp_path / "producer"
+    legacy_dir, producer_dir = legacy_root / "selfcmp", producer_root / "_sidecars" / "selfcmp"
+    legacy_dir.mkdir(parents=True)
+    producer_dir.mkdir(parents=True)
+    ents_doc = json.dumps({"map": "selfcmp", "entities": [{"classname": "worldspawn"}]})
+    (legacy_dir / "selfcmp.ents").write_text(ents_doc, encoding="ascii")
+    (producer_dir / "selfcmp.ents").write_text(ents_doc, encoding="ascii")
+    # R3.5's rewrite path leaves the producer's readiness marker in the legacy directory too.
+    (legacy_dir / "selfcmp.ready").write_text("{}", encoding="ascii")
+
+    result = diff_map("selfcmp", legacy_root=legacy_root, producer_root=producer_root)
+
+    assert result["classification"] == "self_comparison"
+    assert "--legacy-root" in result["reason"]
+    assert result["files"] == {}

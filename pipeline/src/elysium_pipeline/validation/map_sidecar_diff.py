@@ -2,11 +2,20 @@
 map list (`docs/project/seam_migration.md` -> "Roadmap -- one pipeline" R3.3, MP-2.3).
 
 Every sidecar R3.2 reproduces (`.ents`, `.hulls`, `.dispcol`, `.lights`, `.env`, `.sky`, `.spawn`,
-`.ropes`) is compared byte for byte between `$ELYSIUM_EXPORT_ROOT/<map>/` (the legacy exporter's
-output) and `$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/` (the producer's, R3.2). `.ents` additionally
+`.ropes`) is compared byte for byte between a legacy directory (default `$ELYSIUM_EXPORT_ROOT/<map>/`)
+and `$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/` (the producer's, R3.2). `.ents` additionally
 gets a structural diff -- per-entity field diff, hull vertex counts and AABBs per brush entity, and
 the `outputs` list -- because a byte difference there needs to say *which* entity and *which*
 field moved, not just that the files differ.
+
+R3.5 made the producer the default writer of `$ELYSIUM_EXPORT_ROOT/<map>/`'s eight legacy sidecars,
+so that directory is no longer the legacy exporter's own output unless the caller points this tool
+somewhere else. `--legacy-root` (or `diff_map(..., legacy_root=...)`) lets a caller supply a scratch
+tree built by calling `UE_bsp_to_scene.main` directly. Because only the producer ever writes the
+R2.4 readiness marker `<map>.ready` (the legacy exporter never did, and R3.5 now writes that marker
+into `$ELYSIUM_EXPORT_ROOT/<map>/` too), `diff_map` treats a legacy directory carrying that marker
+as a self-comparison and refuses to classify it as `byte_equal`/`unexpected_divergence` -- see
+`classification == "self_comparison"` below.
 
 Two divergences are pre-declared in the roadmap and are expected **by name**, not treated as a
 defect this tool found:
@@ -69,6 +78,17 @@ KNOWN_MAP_DIVERGENCES: dict[str, str] = {
 
 #: `$ELYSIUM_WORK_ROOT/exports_v2/_sidecar_diff/<map>.json`.
 DIFF_DIR_NAME = "_sidecar_diff"
+
+#: R3.5 made the producer the default writer of the legacy directory, so it now also carries the
+#: R2.4 readiness marker the legacy exporter never wrote (`UE_map_sidecars.write_sidecars`,
+#: "written last and only when every sidecar Travel depends on is on disk"). Its presence in the
+#: *legacy* directory is exact evidence the two sides being compared are the same producer output.
+SELF_COMPARISON_REASON = (
+    "the legacy directory carries the producer-only R2.4 '.ready' marker (R3.5 made the producer "
+    "the default writer of $ELYSIUM_EXPORT_ROOT/<map>/'s sidecars), so this run would be comparing "
+    "the producer's output against itself; pass --legacy-root (or legacy_root=) pointed at a tree "
+    "built by calling UE_bsp_to_scene.main directly to get a real comparison."
+)
 
 
 # ---------------------------------------------------------------- file-level (byte) comparison
@@ -266,6 +286,15 @@ def diff_map(
     legacy_base = legacy_dir(map_name, legacy_root)
     producer_base = producer_dir(map_name, producer_root)
 
+    if (legacy_base / f"{map_name}.ready").is_file():
+        return {
+            "map": map_name,
+            "classification": "self_comparison",
+            "reason": SELF_COMPARISON_REASON,
+            "files": {},
+            "ents": None,
+        }
+
     files: dict[str, Any] = {}
     for suffix in SIDECAR_SUFFIXES:
         legacy_path = legacy_base / f"{map_name}{suffix}"
@@ -319,20 +348,33 @@ def write_diff(map_name: str, *, root: Path | None = None, **kwargs: Any) -> Pat
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("maps", nargs="+", help="map stems to diff (e.g. sp_tutorial_1)")
+    parser.add_argument(
+        "--legacy-root", type=Path, default=None,
+        help="directory holding <map>/ legacy sidecar trees to compare against the producer's "
+             "(default $ELYSIUM_EXPORT_ROOT). Since R3.5 the default root is normally the "
+             "producer's own output -- point this at a scratch tree built by calling "
+             "UE_bsp_to_scene.main directly for a real comparison.",
+    )
     args = parser.parse_args(argv)
 
     unexpected_maps = []
+    self_comparison_maps = []
     for map_name in args.maps:
-        destination = write_diff(map_name)
+        destination = write_diff(map_name, legacy_root=args.legacy_root)
         report = json.loads(destination.read_text(encoding="utf-8"))
         classification = report["classification"]
         if classification == "unexpected_divergence":
             unexpected_maps.append(map_name)
+        elif classification == "self_comparison":
+            self_comparison_maps.append(map_name)
         print(f"{map_name}: {classification} -> {destination}")
+    if self_comparison_maps:
+        print(f"\n{len(self_comparison_maps)} map(s) compared the producer against itself "
+              f"(pass --legacy-root): {', '.join(self_comparison_maps)}")
     if unexpected_maps:
         print(f"\n{len(unexpected_maps)} map(s) with an unexpected divergence: "
               f"{', '.join(unexpected_maps)}")
-    return 1 if unexpected_maps else 0
+    return 1 if unexpected_maps or self_comparison_maps else 0
 
 
 if __name__ == "__main__":

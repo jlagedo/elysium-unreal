@@ -97,8 +97,15 @@ def test_export_maps_calls_the_producer_after_the_legacy_export(tmp_path, monkey
         calls.append(("main", Path(out_dir)))
         return {"weather_inputs": None}
 
-    def fake_rewrite(name, out_dir, index, legacy_report):
+    def fake_rewrite(name, out_dir, index, legacy_report, **kwargs):
         calls.append(("rewrite", name, out_dir, index, legacy_report))
+        # `export_maps` must hand in the modules it imported in its own body -- see the comment
+        # there -- so the incremental-build fingerprint (`_DecoderClosures.function_entries`)
+        # sees `UE_map_sidecars`/`particles`/`weather` as this function's own imports.
+        assert set(kwargs) == {"sidecars_module", "particles_module", "weather_module"}
+        assert kwargs["sidecars_module"] is UE_map_sidecars
+        assert kwargs["particles_module"] is particles
+        assert kwargs["weather_module"] is weather
 
     monkeypatch.setattr(UE_bsp_to_scene, "main", fake_main)
     monkeypatch.setattr(export_all, "rewrite_sidecars_via_producer", fake_rewrite)
@@ -114,3 +121,26 @@ def test_export_maps_calls_the_producer_after_the_legacy_export(tmp_path, monkey
         "sp_tutorial_1", tmp_path / "sp_tutorial_1", index, {"weather_inputs": None}
     )
     assert results[0].status == "ok"
+
+
+def test_export_maps_closure_includes_the_sidecar_producer():
+    """Pins the code-review fix on R3.5: `export_maps`'s own body imports `UE_map_sidecars` (and
+    `particles`/`weather`) directly, rather than only the sibling `rewrite_sidecars_via_producer`
+    doing so, because `_map_tasks`'s incremental-build fingerprint is
+    `_DecoderClosures.function_entries('...export_all', 'export_maps')` -- which walks only
+    `export_maps`'s own AST. An import hidden in the sibling function is invisible to it, so an
+    edit to `UE_map_sidecars.py` (an `EntityDivergences` default, a hull/rope fix) would not
+    invalidate a map's cached export task without `--force`.
+    """
+    from elysium_pipeline.export_manager import _DecoderClosures
+
+    package_root = Path(export_all.__file__).resolve().parent.parent
+    closures = _DecoderClosures(package_root)
+    entries = closures.function_entries("elysium_pipeline.exporters.export_all", "export_maps")
+
+    assert "elysium_pipeline.exporters.UE_map_sidecars" in entries
+    assert "elysium_pipeline.formats.particles" in entries
+    assert "elysium_pipeline.formats.weather" in entries
+
+    closure_names = {path.name for path in closures.closure_files(entries)}
+    assert "UE_map_sidecars.py" in closure_names

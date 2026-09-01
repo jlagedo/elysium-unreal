@@ -1159,12 +1159,24 @@ function it owns is untouched, only unwired from this default path; it stays dir
 
 Verified on a **real scoped bake**, not just the offline export: `uv run elysium export map
 sp_tutorial_1 sm_pawnshop_1 sm_hub_1 --force` (full bake, not `--intermediate-only`) — 452+ assets
-saved, 0 failed, all three `/ElysiumBaked/<map>/<map>` levels saved. Re-running R3.3's differ after
-the bake: all three maps now `byte_equal` (not merely `named_divergence_only`) — overwriting the
-legacy tree with the producer's bytes closes the one prior divergence (`.dispcol`) by construction,
-since both sides are now the same bytes. `uv run elysium debug shots sp_tutorial_1 sm_pawnshop_1
-sm_hub_1` captured 6/6, 4/4, 4/4 vantages (14/14), matching R2.1's counts exactly — all three maps
-still boot headlessly end to end.
+saved, 0 failed, all three `/ElysiumBaked/<map>/<map>` levels saved. `uv run elysium debug shots
+sp_tutorial_1 sm_pawnshop_1 sm_hub_1` captured 6/6, 4/4, 4/4 vantages (14/14), matching R2.1's
+counts exactly — all three maps still boot headlessly end to end.
+
+**Review correction (2026-09-01):** the original report re-ran R3.3's differ against its default
+roots after the bake and read the resulting `byte_equal` on all three maps as the `.dispcol`
+divergence closing "by construction". That was a self-comparison, not a result: `rewrite_sidecars_
+via_producer` overwrites `$ELYSIUM_EXPORT_ROOT/<map>/` — the differ's default `legacy_dir()` — with
+the producer's own bytes (including the R2.4 `.ready` marker `UE_map_sidecars.write_sidecars`
+writes), so the default-rooted differ compares the producer against itself and could never report
+anything but `byte_equal` after this task's change lands. `map_sidecar_diff.py` now detects this
+exactly (a `<map>.ready` marker inside the *legacy* directory) and returns a distinct
+`self_comparison` classification instead of `byte_equal`, with a `--legacy-root` flag to point the
+differ at a real legacy tree (built by calling `UE_bsp_to_scene.main` directly). No re-bake was
+needed for this correction: `pipeline/tests/test_map_sidecar_diff.py` pins the new classification
+on a synthetic tree. The R3.3 `named_divergence_only`-only-on-`.dispcol` result this task's own
+Settled entry recorded (pre-R3.5, real legacy tree) is the last trustworthy comparison; a real
+post-R3.5 comparison needs a fresh `--legacy-root` run, not yet done here.
 
 The shot-diff against the R2.1 baseline (`8077e5b5f902`) is clean for two of three maps —
 `sm_pawnshop_1` and `sm_hub_1` both 0.00% changed on every vantage, pixel-identical — but
@@ -1191,6 +1203,18 @@ suites: `pipeline/tests/test_map_sidecars.py pipeline/tests/test_map_producer_jo
 pipeline/tests/test_export_orchestration.py pipeline/tests/test_area_portal_window_translation.py
 pipeline/tests/test_item_models.py` — 152 passed. No C++ touched, so no `Elysium.Substrate`/`build`
 re-run.
+
+**Review correction (2026-09-01), incremental-cache visibility:** `rewrite_sidecars_via_producer`'s
+`UE_map_sidecars`/`particles`/`weather` imports lived in that sibling function's own body, not
+`export_maps`'s. `_map_tasks`'s incremental-build fingerprint is
+`_DecoderClosures.function_entries('...export_all', 'export_maps')`, which walks only
+`export_maps`'s own AST — so an edit to `UE_map_sidecars.py` (an `EntityDivergences` default, a
+hull/rope fix) would not invalidate a map's cached export task without `--force`, silently falsifying
+the "the BSP is the only file input" invariant `_map_tasks`'s own comment states. Fixed by hoisting
+the three imports into `export_maps`'s body and handing the modules into
+`rewrite_sidecars_via_producer` as keyword arguments; pinned by a new
+`test_export_maps_closure_includes_the_sidecar_producer` asserting `UE_map_sidecars`/`particles`/
+`weather` are in that closure.
 
 ## Roadmap — one pipeline
 
