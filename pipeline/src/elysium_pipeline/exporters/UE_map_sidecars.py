@@ -11,11 +11,14 @@ already state.
 Two rules govern every line below.
 
 **Byte-comparability, not equivalence.** The output is diffed against `UE_bsp_to_scene.py`'s
-sidecars by the R3.3 differ, so every legacy quirk is reproduced verbatim -- the `^(On|Out)`
-output test rather than the datamap typing the entities unit uses, unfolded keys, `param` left
-unstripped, `delay` through a plain `float()`, the dropped `extra` field, `times` normalized to
-`-1`. Those six are named divergences owned by R3.4; changing one here would be a silent
-divergence, which is the one thing this task must not produce.
+sidecars by the R3.3 differ, so every legacy quirk is reproduced verbatim by default -- the
+`^(On|Out)` output test rather than the datamap typing the entities unit uses, unfolded keys,
+`param` left unstripped, `delay` through a plain `float()`, the dropped `extra` field, `times`
+normalized to `-1`. Those six are named divergences owned by R3.4. Six landed as an opt-in flag on
+`EntityDivergences` (default: legacy/off, so a caller that asks for nothing still gets the
+byte-comparable sidecars R3.3 diffs) plus a doc line at the flag; the sixth -- `times`
+normalization -- has exactly one owner already (`ElysiumEntityDefs.cpp`, not the exporter) and
+needed no flag. Silently changing a default would be the one thing this task must not produce.
 
 **Binary32.** Root positional tables are published in glTF metres and the BSP stores them as
 float32, so every recovered plane, vertex and bound is rounded back to binary32 before it is used
@@ -51,6 +54,7 @@ from elysium_pipeline.formats.bsp import (
     source_dir_to_unreal,
     source_to_unreal,
 )
+from elysium_pipeline.formats.map_entities_glb import model as entity_model
 from elysium_pipeline.formats.map_entities_glb.model import MAP_ENTITIES_EXTENSION
 from elysium_pipeline.formats.map_glb.model import MAP_EXTENSION
 from elysium_pipeline.formats.map_lighting_glb.model import MAP_LIGHTING_EXTENSION
@@ -243,6 +247,59 @@ def hull_vertices(points: np.ndarray) -> list[float]:
 
 
 # ---------------------------------------------------------------- the entity lump
+
+
+@dataclass(frozen=True)
+class EntityDivergences:
+    """Opt-in switches for the `.ents` behaviours where the legacy sidecar and the entities unit's
+    own reading disagree (`seam_migration.md` -> R3.4; `seam_map_map.md` -> "Producer join", the
+    six-item list). Every flag defaults to the legacy behaviour, so `write_sidecars` stays
+    byte-comparable against `UE_bsp_to_scene.py` unless a caller asks for the corrected reading --
+    each flag is documented at its own R3.4 commit.
+    """
+
+    #: `False` (legacy, default): a key is an output when it matches `^(On|Out)` case-insensitively
+    #: and its value holds >= 4 commas. `True`: the class's datamap decides instead
+    #: (`entity_model.OUTPUT_KEY`/`NOT_OUTPUT_KEYS`/`OUTPUT_KEYS_BY_CLASS`/`DISABLED_KEY_SUFFIX`),
+    #: matching the entities unit's own `outputLike` demotions and promotions
+    #: (`seam_map_map_entities.md` -> "Outputs"). Measured zero effect on the three-map corpus:
+    #: `game_ui`'s promoted keys and `trigger_player_activity_level`'s demotion are both authored
+    #: on maps outside it (`la_hub_1`, `sm_diner_1`).
+    datamap_output_typing: bool = False
+
+
+#: The default: every flag legacy, so a caller that asks for nothing gets the byte-comparable
+#: sidecars R3.3 diffs against `UE_bsp_to_scene.py`.
+LEGACY_ENTITY_FIELDS = EntityDivergences()
+
+
+def _is_datamap_output(classname: str, source_key: str) -> bool:
+    """Mirrors `map_entities_glb.decode._is_output` verbatim: whether the class's datamap types
+    `source_key` as an output. Restated here rather than imported because that function is private
+    to the entities-unit decode, and this producer's byte-comparable default must not depend on it
+    -- only the opt-in `datamap_output_typing` path does."""
+
+    folded = source_key.lower()
+    if folded.endswith(entity_model.DISABLED_KEY_SUFFIX):
+        return False
+    folded_class = (classname or "").strip().lower()
+    if (folded_class, folded) in entity_model.NOT_OUTPUT_KEYS:
+        return False
+    if entity_model.OUTPUT_KEY.match(source_key) is not None:
+        return True
+    return folded in entity_model.OUTPUT_KEYS_BY_CLASS.get(folded_class, frozenset())
+
+
+def is_output_key(
+    classname: str, key: str, fields: EntityDivergences = LEGACY_ENTITY_FIELDS
+) -> bool:
+    """Whether one keyvalue's key is tried as an output row at all -- the gate `write_entities`
+    applies before `split_output`. `fields.datamap_output_typing` picks which of the two rules in
+    `seam_map_map.md` -> "Producer join" decides it."""
+
+    if fields.datamap_output_typing:
+        return _is_datamap_output(classname, key)
+    return bool(re.match(r"^(On|Out)", key, re.I))
 
 
 def split_output(value: str) -> dict[str, Any] | None:
@@ -751,13 +808,15 @@ def write_entities(
     blocks: Sequence[Sequence[tuple[str, str]]],
     brush_meshes: dict[int, str],
     out_dir: Path,
+    fields: EntityDivergences = LEGACY_ENTITY_FIELDS,
 ) -> dict[str, int]:
     """`<map>.ents`: every entity's keyvalues and outputs, plus the root-lump join.
 
     The field list, its emission order and every rounding are `seam_map_map.md` -> "The field list
     `.ents` must reproduce". `entities[]` is one row per lump block in lump order with no drops and
     no reorders: `ElysiumEntityWorldPersistence.cpp` applies saved entity state by index, so the
-    ordinal is a save key.
+    ordinal is a save key. `fields` opts into the R3.4 divergences one at a time; the default
+    reproduces `UE_bsp_to_scene.py` byte for byte.
     """
 
     planes = source_planes(units.root["planes"])
@@ -773,8 +832,14 @@ def write_entities(
     for pairs in blocks:
         keys: dict[str, str] = {}
         outputs: list[dict[str, Any]] = []
+        # Only the datamap-typing path needs the classname before its own pair is popped below;
+        # a plain last-wins scan over the raw pairs is cheap and never wrong (`classname` is never
+        # output-shaped, so it always reaches `keys` regardless of which gate below is active).
+        classname_probe = next(
+            (v for k, v in reversed(pairs) if k.strip().lower() == "classname"), ""
+        )
         for key, value in pairs:
-            row = split_output(value) if re.match(r"^(On|Out)", key, re.I) else None
+            row = split_output(value) if is_output_key(classname_probe, key, fields) else None
             if row:
                 row["name"] = key
                 outputs.append(row)
@@ -1161,12 +1226,14 @@ def write_sidecars(
     root: Path | None = None,
     out_dir: Path | None = None,
     corpus_root: Path | None = None,
+    entity_fields: EntityDivergences = LEGACY_ENTITY_FIELDS,
 ) -> dict[str, Any]:
     """Produce one map's legacy sidecars from its published units and return the run's numbers.
 
     The `.ready` marker is written **last** and only when every sidecar Travel depends on is on
     disk, which is exactly what `docs/architecture/map-architecture.md` -> "The export-readiness
-    gate" defines it to mean (R2.4).
+    gate" defines it to mean (R2.4). `entity_fields` opts `.ents` into the R3.4 divergences one at
+    a time; the default keeps this run byte-comparable to `UE_bsp_to_scene.py`.
     """
 
     units = read_units(map_name, root)
@@ -1190,7 +1257,7 @@ def write_sidecars(
 
     report: dict[str, Any] = {"map": map_name, "outputDir": str(out_dir)}
     report["hulls"] = write_hulls(units, sky, out_dir)
-    report["ents"] = write_entities(units, sky, pair_blocks, brush_meshes, out_dir)
+    report["ents"] = write_entities(units, sky, pair_blocks, brush_meshes, out_dir, entity_fields)
     report["lights"] = write_lights(units, sky, out_dir)
     report["env"] = write_environment(units, sky, text_blocks, out_dir, corpus_root)
     report["sky"] = write_sky(units, sky, bool(scenes["sky"]), out_dir)

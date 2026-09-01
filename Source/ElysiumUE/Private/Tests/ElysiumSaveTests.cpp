@@ -373,6 +373,80 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 	return true;
 }
 
+// R3.4/MP-2.4: `OutputTimesRemaining` is indexed by def row (§8), so a build whose def now
+// carries a different output count for the same entity cannot restore it positionally. The gate
+// used to drop the mismatch silently (`ElysiumEntityWorldPersistence.cpp`); it must warn instead
+// and leave the freshly-built (post-`Activate`) counters alone.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOutputCardinalityMismatchTest,
+	"Elysium.Substrate.SaveOutputCardinality", GElysiumTestFlags)
+bool FElysiumOutputCardinalityMismatchTest::RunTest(const FString&)
+{
+	FElysiumEntityWorld A(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	A.Load(MakeSaveTestDefs());
+	A.Activate(0.0);
+	FElysiumEntity* Relay = A.FindByName(TEXT("relay1"));
+	if (!TestNotNull(TEXT("relay1"), Relay))
+	{
+		return false;
+	}
+	TestEqual(TEXT("relay1 starts with one output row"), Relay->OutputTimesRemaining.Num(), 1);
+	// Firing it once moves its counter off the freshly-built baseline, so the omission rule
+	// (§5 above) actually writes a record for it -- an untouched entity is omitted entirely and
+	// the cardinality gate this test targets would never run.
+	A.EnqueueInput(TEXT("!self"), FName(TEXT("Trigger")), FElysiumVariant::Void(), 0.0,
+		FElysiumEntityHandle::Invalid(), Relay->Handle);
+	A.Tick(0.0);
+	TestEqual(TEXT("firing it once counts the row down"), Relay->OutputTimesRemaining[0], 1);
+
+	FElysiumMapSnapshot Snapshot;
+	A.Freeze(Snapshot);
+
+	// A later build whose def gained a second OnTrigger row for the same entity.
+	FElysiumEntityDefs GrownDefs = MakeSaveTestDefs();
+	FElysiumEntityDef* GrownRelay = GrownDefs.Defs.FindByPredicate(
+		[](const FElysiumEntityDef& D) { return D.TargetName == TEXT("relay1"); });
+	if (!TestNotNull(TEXT("relay1 def"), GrownRelay))
+	{
+		return false;
+	}
+	FElysiumOutputDef SecondWire;
+	SecondWire.Name = TEXT("OnTrigger");
+	SecondWire.Target = TEXT("counter1");
+	SecondWire.Input = TEXT("Subtract");
+	SecondWire.Times = 1;
+	GrownRelay->Outputs.Add(SecondWire);
+
+	FElysiumEntityWorld B(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	B.Load(MoveTemp(GrownDefs));
+	B.Activate(0.0);
+	FElysiumEntity* RelayB = B.FindByName(TEXT("relay1"));
+	if (!TestNotNull(TEXT("relay1 in the grown build"), RelayB))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the grown build's relay starts with two output rows"),
+		RelayB->OutputTimesRemaining.Num(), 2);
+	const TArray<int32> FreshCounters = RelayB->OutputTimesRemaining;
+
+	AddExpectedError(TEXT("has 1 saved output rows but this build's def has 2"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	B.ApplySnapshot(Snapshot);
+
+	FElysiumEntity* RelayAfter = B.FindByName(TEXT("relay1"));
+	if (TestNotNull(TEXT("relay1 survives the mismatched apply"), RelayAfter)
+		&& TestEqual(TEXT("its output-row count is unchanged"),
+			RelayAfter->OutputTimesRemaining.Num(), FreshCounters.Num()))
+	{
+		for (int32 i = 0; i < FreshCounters.Num(); ++i)
+		{
+			TestEqual(FString::Printf(TEXT("a cardinality mismatch leaves row %d's counter alone"), i),
+				RelayAfter->OutputTimesRemaining[i], FreshCounters[i]);
+		}
+	}
+
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSavePayloadTest, "Elysium.Substrate.SavePayload",
 	GElysiumTestFlags)
 bool FElysiumSavePayloadTest::RunTest(const FString&)

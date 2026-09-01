@@ -418,6 +418,27 @@ read with `atof` rather than `float()`, the dropped `extra` field, and `times` n
 authored `0` to unlimited. Each is a **named divergence with its own commit**, owned by
 `seam_migration.md` → R3.4, not something the producer decides while porting.
 
+### R3.4 — the six divergences
+
+Each landed as an opt-in flag on `UE_map_sidecars.EntityDivergences`, defaulting to the legacy
+behaviour above so `write_sidecars` stays byte-comparable unless a caller asks for the corrected
+reading; the R3.3 differ was re-run with each flag on (`producer_root` pointed at a scratch
+`_sidecars/` tree) to measure the delta it actually produces on the three-map corpus.
+
+- **Datamap output typing** (`datamap_output_typing`). `True` swaps the `^(On|Out)` shape test for
+  the class's datamap (`entity_model.OUTPUT_KEY`/`NOT_OUTPUT_KEYS`/`OUTPUT_KEYS_BY_CLASS`/
+  `DISABLED_KEY_SUFFIX`, the same tables `map_entities_glb.decode._is_output` reads), matching the
+  entities unit's own `outputLike` demotions and promotions (`seam_map_map_entities.md` →
+  "Outputs"). **Measured delta: zero** on `sp_tutorial_1`/`sm_pawnshop_1`/`sm_hub_1` —
+  `entityDiffCount` stayed 0 on all three with the flag on, because both shipped examples
+  (`game_ui`'s promoted button events, `trigger_player_activity_level`'s demoted `OnTrigger`) are
+  authored on `la_hub_1` and `sm_diner_1`, outside the working corpus. The runtime side of this
+  divergence — `ElysiumEntityWorldPersistence.cpp`'s `OutputTimesRemaining` restore, which silently
+  dropped a cardinality mismatch — now logs a warning instead
+  (`Elysium.Substrate.SaveOutputCardinality`); no `FElysiumSaveVersion` bump, per the roadmap's
+  2026-09-01 "no save-file compatibility at build time" ruling, which supersedes the bump this
+  section's history once called for.
+
 ### Verification
 
 The join above was executed against the published V2 units alone — root plus entities, no BSP read

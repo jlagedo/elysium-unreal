@@ -15,8 +15,10 @@ from __future__ import annotations
 import numpy as np
 
 from elysium_pipeline.exporters.UE_map_sidecars import (
+    EntityDivergences,
     brush_hull,
     entity_lump_text,
+    is_output_key,
     parse_entity_blocks,
     source_planes,
     source_position,
@@ -91,6 +93,26 @@ def test_source_position_inverts_the_transform_in_binary32():
     planes = source_planes([{"normal": [0.0, 1.0, -0.0], "dist": -3.4036}])
     assert planes.dtype == np.float32
     assert list(planes[0]) == [0.0, 0.0, 1.0, np.float32(-134.0)]
+
+
+def test_is_output_key_default_is_the_legacy_shape_test():
+    # `^(On|Out)` case-insensitively, regardless of what any datamap declares -- the legacy
+    # sidecar's rule, and `write_entities`'s default.
+    assert is_output_key("game_ui", "PlayerOn", EntityDivergences()) is False
+    assert is_output_key("logic_relay", "OnTrigger", EntityDivergences()) is True
+    assert is_output_key("trigger_player_activity_level", "OnTrigger", EntityDivergences()) is True
+
+
+def test_is_output_key_datamap_typing_promotes_and_demotes():
+    # R3.4: opting in swaps the shape test for the class's datamap. `game_ui`'s `PlayerOn` is
+    # declared under a name the shape test misses (promoted); `trigger_player_activity_level`'s
+    # `OnTrigger` is shape-matched but the datamap does not declare it (demoted) -- the shipped
+    # example `seam_map_map_entities.md` -> "Outputs" names on `sm_diner_1`.
+    typed = EntityDivergences(datamap_output_typing=True)
+    assert is_output_key("game_ui", "PlayerOn", typed) is True
+    assert is_output_key("trigger_player_activity_level", "OnTrigger", typed) is False
+    # An ordinary output is unaffected either way.
+    assert is_output_key("logic_relay", "OnTrigger", typed) is True
 
 
 def test_entity_lump_text_reproduces_the_embedded_quote_the_legacy_regex_trips_on():

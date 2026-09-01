@@ -381,6 +381,19 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 	{
 		E->OutputTimesRemaining = S.OutputTimesRemaining;
 	}
+	else
+	{
+		// A cardinality change only happens when this build's def carries a different output row
+		// count than the one the snapshot was taken against (R3.4/MP-2.4: a def edit, or the
+		// datamap-output-typing divergence changing which keyvalues became rows). Restoring
+		// anyway would misalign every row after the split, so the live def's freshly-seeded
+		// counters are kept instead — loud, because a silent drop here is exactly the "reads clean,
+		// countdowns are wrong" bug this gate exists to catch.
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("snapshot '%s': #%d has %d saved output rows but this build's def has %d — ")
+			TEXT("output countdowns were not restored"),
+			*SnapshotMapName, S.Index, S.OutputTimesRemaining.Num(), E->OutputTimesRemaining.Num());
+	}
 
 	if (S.LeafState.Num() > 0)
 	{
