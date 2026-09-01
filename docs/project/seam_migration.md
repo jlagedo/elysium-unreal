@@ -742,6 +742,23 @@ otherwise. `make_missing()` (the code `5416ba8f` broke and `ab550d12` only patch
 for) gained its own coverage: parent master, bound checker texture, every switch, and the blend/
 two-sided overrides, plus reuse-vs-`-PolicyForce` behavior.
 
+**Baseline shots landed on the test corpus (2026-09-01).** R2.1 (`shots_diff.py`, no C++ change —
+`FElysiumShotRun`/`ElysiumVantages.h` already existed from P2.9/sky-ambience B6). `--save` now
+writes a `baseline.json` beside every promoted map's copied capture, naming the build commit
+(`git rev-parse HEAD`, `"unknown"` off a checkout), the map, and the camera set — the sorted
+vantage names whose capture actually `ok`'d, so a failed vantage never earns a place in what a
+later diff compares against. `uv run elysium debug shots <map>` captured every configured vantage
+for the three-map test corpus real-RHI at DX12/SM6, 2560×1440: `sp_tutorial_1` 6/6 (`spawn`,
+`t1`–`t4`, `t1sky`), `sm_pawnshop_1` 4/4 (`spawn`, `p1`–`p3`), `sm_hub_1` 4/4 (`spawn`, `h1`,
+`h2`, `h1sky`) — 14/14 `ok: true`, none dropped. `--save` promoted all three under
+`$ELYSIUM_WORK_ROOT/exports/_shots/_baseline/` at commit `8077e5b5f9027362140a12e5c36b8d69aa065709`;
+a same-commit re-diff proved the comparator end to end — 14 vantage(s) compared, 0 over the
+default 0.5%-changed / 2-level tolerance. This is a regression witness only, per the "wire first,
+tune later" rule below: nothing here judges a look, only whether a later change moved one.
+`pipeline/tests/test_shots_diff.py` (5 tests) pins the `baseline.json` shape (the three keys, the
+sorted camera list, an excluded failed capture), `git_commit`'s unknown-outside-a-checkout and
+real-HEAD cases, and a `--save` integration case that writes the file for real.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -780,9 +797,10 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R2 — instruments and guards (nothing else moves first) [MP-1]
 
-- **R2.1 Baseline shots** [MP-1.1]. `shots_diff.py` reference frames, every hub + one of each
-  district type. A regression witness only — did it appear, did it vanish, did an untouched map
-  change; never a tuning judge. → lands: the only regression instrument the rendered half has.
+**R2.1 landed (2026-09-01)** — `baseline.json` commit/map/camera manifest (`shots_diff.py`) +
+14/14 baseline vantages captured for the test corpus; numbers in the Settled entry "Baseline
+shots landed on the test corpus".
+
 - **R2.2 Censuses** [MP-1.2]. Per-map entity/light/effects-class censuses pinned as JSON.
   → lands: the differ's and R7's ground truth.
 - **R2.3 Recipe closes over what it absorbs** [MP-1.3]. `level_sidecar_recipe` extended to

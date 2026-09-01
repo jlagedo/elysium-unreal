@@ -7,7 +7,10 @@ run you trust to `$ELYSIUM_EXPORT_ROOT/_shots/_baseline/<map>/`, and every later
 regression becomes a number and a heat map instead of an eyeball and a memory.
 
 Baselines live under `$ELYSIUM_EXPORT_ROOT/`, so they are game-derived and gitignored like every capture. They
-are a local instrument, not a committed fixture.
+are a local instrument, not a committed fixture. `--save` writes a `baseline.json` beside each
+promoted map naming the build commit, the map and the camera set it was captured against (R2.1,
+MP-1.1), so a regression report can state what it is comparing against rather than "whatever HEAD
+happened to be that day".
 
 This comparison is an internal library module, not a public project-tooling
 entrypoint. `uv run elysium debug shots` captures screenshots but does not promote
@@ -19,15 +22,54 @@ than `--tol` levels, so it can gate a change rather than merely report on one.
 import argparse
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
-from elysium_pipeline.paths import export_root
+from elysium_pipeline.paths import export_root, repo_root
 
 OUT = export_root() / "_shots"
 BASELINE = OUT / "_baseline"
 DIFFDIR = OUT / "_diff"
+
+#: R2.1 (MP-1.1): a baseline is only a useful regression witness if it names the build it was
+#: captured against, so a later "did an untouched map change" question can be answered against the
+#: right commit rather than "whatever HEAD happened to be that day".
+BASELINE_MANIFEST = "baseline.json"
+
+
+def git_commit(root: Path) -> str:
+    """The working tree's HEAD commit, or `"unknown"` when git is unavailable (never raises --
+    a baseline capture is a local, gitignored artifact and must not fail on a missing git binary).
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=root,
+            capture_output=True, text=True, check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    commit = result.stdout.strip()
+    return commit or "unknown"
+
+
+def baseline_manifest(map_name: str, cameras, *, commit: str | None = None) -> dict:
+    """The `baseline.json` shape: build commit + map + camera set, so a promoted baseline states
+    what it was captured against without needing to cross-reference the copied capture manifest.
+    """
+    return {
+        "commit": commit if commit is not None else git_commit(repo_root()),
+        "map": map_name,
+        "cameras": sorted(cameras),
+    }
+
+
+def write_baseline_manifest(dst: Path, map_name: str, cameras) -> dict:
+    manifest = baseline_manifest(map_name, cameras)
+    (dst / BASELINE_MANIFEST).write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    return manifest
 
 
 def runs(map_filter=None):
@@ -85,7 +127,9 @@ def main():
             if dst.exists():
                 shutil.rmtree(dst)
             shutil.copytree(OUT / name, dst)
-            print(f"baseline: {name} <- {len(shots_of(dst))} shot(s)")
+            cameras = sorted(shots_of(dst))
+            manifest = write_baseline_manifest(dst, name, cameras)
+            print(f"baseline: {name} <- {len(cameras)} shot(s) @ {manifest['commit'][:12]}")
         return
 
     DIFFDIR.mkdir(parents=True, exist_ok=True)
