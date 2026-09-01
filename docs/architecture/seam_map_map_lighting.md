@@ -324,6 +324,81 @@ map to fall back to, and the asset's own presence already is the only fact that 
 bake, which retires the `.lights` derivation outright, is what eventually gives this path a real
 legacy-vs-new split to gate.
 
+### Sky baked (R5.2)
+
+R5.2 finishes the SkyLight actor `pipeline/unreal/bake_map.py::_place_sky` has always placed
+half-empty: it authors the actor (`SLS_SpecifiedCubemap`, `LowerHemisphereIsBlack`) with a null
+`Cubemap` and the raw `emit_skyambient` magnitude as `Intensity`, and says so in its own comment —
+"handed its real cubemap at load" — because the cube is assembled from six loose face PNGs, which
+until this task only `ElysiumEnvironment::BuildSkyCubeFrom` could do, at runtime, every load. R5.2
+does not replace that join; it asks the SAME function to build a PERSISTENT asset instead, once, at
+bake, and gives the placeholder actor its real values.
+
+**Cube identity: one per sky NAME, not per map.** The game shares six skies between 108 maps
+(`ApplyEnvironment`'s comment on the runtime path already says so); the bake follows the same rule
+rather than duplicating six images per converted map:
+
+```text
+/ElysiumBaked/Sky/Textures/TC_Sky_<SkyName>          UTextureCube, one per distinct .env skyname
+/ElysiumBaked/Sky/Meshes/SM_SkyDome                  UStaticMesh, ONE — the backdrop box is the
+                                                      same geometry (BuildSkyBox's own half-extent,
+                                                      500000 cm) whatever sky samples it
+/ElysiumBaked/Sky/Materials/MI_Sky_<SkyName>          UMaterialInstanceConstant off M_Sky,
+                                                      SkyCube = the sky's cube, Brightness = 1
+```
+
+**The faithful face set only, never `tex_hi`.** `elysium.EnhancedTextures` is a per-user runtime
+toggle with no baked-asset equivalent; a bake is asked once, so it has to pick one set, and the
+faithful decode is VtMB's own data while the enhanced set is an opt-in visual substitution (B5) —
+"wire first, tune later" reads that as content selection, not taste, and picks the faithful one.
+Converted maps therefore stop honouring `elysium.EnhancedTextures` for their sky specifically (every
+other reader of that cvar is unaffected); R6.4's "sky cube faces" deferred-reader entry is the face
+PNGs' own eventual promotion to first-class imported textures (provenance, corpus dedup), a
+different question from which set this bake samples today.
+
+**The join, computed once instead of every load.** `UElysiumSkyBakeLibrary::BakeSkyCubeAsset`
+(`Source/ElysiumUE/Public/ElysiumSkyBakeLibrary.h`) is a thin `UFUNCTION` face onto
+`ElysiumEnvironment::BuildSkyCubeFrom` — literally the runtime's own function, now given a real
+`Outer`/`Name` instead of `GetTransientPackage()`/`NAME_None` — so the pixel decode, the K1 x K2
+face/rotation table and the solid-angle-weighted upper-hemisphere mean (`CubeUpperMean`) are one
+computation asked from two call sites, not two computations that merely claim to agree. `_place_sky`
+calls it once per distinct sky name the three-map corpus uses, then applies the exact policy
+`UElysiumMapVisuals::SkyAmbientIntensity` states in C++: no pair or a pair reading zero -> intensity
+0; a black cube (`CubeUpperMean` at or below `KINDA_SMALL_NUMBER`) with a nonzero pair -> intensity
+0, logged, rather than a divide that would ship an infinity; otherwise `Mag / CubeUpperMean`. `Mag`
+is the same `(color, mag)` `_load_lights` already parses off `<map>.lights`' first type-5 row for
+the placeholder path — no new sidecar reader, only a later use of the same tuple.
+
+**The dome.** `SM_SkyDome` is `ElysiumMapVisuals::BuildSkyBox`'s own vertex/triangle table
+(`bake_lib.build_dynamic_mesh` + `create_static_mesh`, no collision, no Nanite — the box is meant to
+enclose the whole scene and is excluded from ray tracing exactly as the runtime backdrop was), placed
+as a `StaticMeshActor` at the origin, tagged `elysium.skydome` (`ElysiumBakedTags::SkyDome`) rather
+than `elysium.sky` — the 3D-skybox miniature's own tag — so `ApplySceneFog`'s sky-fog stamping, which
+walks `SkyActors`, never touches it. `AdoptBakedLevel` captures it into `BakedSkyDomeActor`, and
+`elysium.togglesky` (`ToggleSkybox`) hides/shows it alongside the miniature, the same as the
+runtime-built `SkyDomeMesh` it stands in for.
+
+**Cutover: `MapsOnV2Models`, not a new list.** R5.1's own entry already scoped the dome here ("the
+sky *dome* is R5.2's — this lane authors only the miniature's own geometry"); the cube and the
+SkyLight's real values ride the same flag because neither means anything without the geometry that
+displays them, and because a converted map's bake already runs the `_place_sky` stage this section
+changes on every pass. `ElysiumMapVisuals::ApplyEnvironment` gained a `MapName` parameter for
+exactly this test: on a `MapsOnV2Models` map it runs `ApplySceneFog` (unaffected — R5.3's) and
+returns, never touching `SkyLight`, `SkyDomeMesh` or `SkyMid`; every other map runs precisely the
+runtime path this file described before R5.2, unchanged. Deleting that runtime path outright is
+R8's, matching every other legacy-path retirement in this roadmap.
+
+Each map's own bake re-authors its sky's `TC_Sky_<name>`/`SM_SkyDome`/`MI_Sky_<name>` package rather
+than skipping a found asset: the six source PNGs never change between bakes, so a second map that
+shares a sky reproduces byte-identical content into the same package — idempotent by construction,
+not by an existence check.
+
+**Measured (2026-09-01, the three working maps).** Two distinct skies across the three:
+`sp_tutorial_1` is `la` (cube upper-hemisphere mean 0.00335), `sm_pawnshop_1` and `sm_hub_1` both
+`pier` (0.01120, identical to five significant figures on both bakes — the same bytes, reproduced,
+not cached). Numbers, boot and shot-diff results are in `docs/project/seam_migration.md` under this
+task's Settled entry.
+
 ### Cog Lights window: viewer, not editor
 
 The window (`ElysiumCogWindow_Lights`) is now **read-only**. Deleted outright: the "Rig tuning" tab

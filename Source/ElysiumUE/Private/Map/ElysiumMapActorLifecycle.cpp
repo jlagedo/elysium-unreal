@@ -298,8 +298,9 @@ void AElysiumMapActor::LoadMap()
 	Visuals->BuildRopes(MapName);
 	Phase(TEXT("Ropes"));
 
-	// Sky cubemap + backdrop and the sky light's IBL off the same cube.
-	Visuals->ApplyEnvironment(EnvDef);
+	// Sky cubemap + backdrop and the sky light's IBL off the same cube (skipped on a baked,
+	// `MapsOnV2Models` map — R5.2 — whose SkyLight and dome already carry the real values).
+	Visuals->ApplyEnvironment(EnvDef, MapName);
 	Phase(TEXT("Environment"));
 
 	UE_LOG(LogElysium, Log,

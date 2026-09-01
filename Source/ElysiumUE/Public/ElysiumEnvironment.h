@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+class UObject;
 class UTextureCube;
 
 // The `<map>.env` sidecar: the 2D skybox flag/name, the face-orientation convention, and the
@@ -90,8 +91,16 @@ namespace ElysiumEnvironment
 	// into a SkyLight intensity: VtMB states the sky's radiance as one number, so scaling the
 	// cube so its own average matches that number gives the sky VtMB's *level* while keeping
 	// the cube's *direction* (C1). 0 when the cube could not be built.
+	//
+	// `Outer`/`Name` let the exact same pixel path build a PERSISTENT asset instead of the
+	// runtime's transient one (R5.2, `ElysiumSkyBakeLibrary::BakeSkyCubeAsset`): pass a real
+	// package and a name to get a savable `UTextureCube` with `RF_Public | RF_Standalone`,
+	// or leave both at their defaults for the runtime's own transient cube. Nothing about the
+	// face read, the rotation table or the upper-hemisphere measurement changes either way —
+	// only where the result lives — which is what makes the bake's join and the runtime's join
+	// the same computation rather than two that are merely supposed to agree.
 	UTextureCube* BuildSkyCubeFrom(const FString& Dir, const FString& Prefix,
-		float* OutUpperMean = nullptr);
+		float* OutUpperMean = nullptr, UObject* Outer = nullptr, FName Name = NAME_None);
 
 	// A cube of one flat colour, for a SkyLight that has no sky to capture. The green room's stage
 	// world is empty by construction, so a captured-scene SkyLight there would capture black; this

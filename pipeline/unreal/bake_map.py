@@ -93,6 +93,23 @@ TAG_SKYLIGHT = "elysium.skylight"
 TAG_FOG = "elysium.fog"
 TAG_DECAL = "elysium.decal"
 TAG_PPV = "elysium.ppv"
+# The baked 2D-sky backdrop dome (R5.2, `MapsOnV2Models` maps only). Distinct from TAG_SKY -- the
+# 3D-skybox miniature's own tag -- so the miniature's sky-fog stamping pass never walks the dome.
+TAG_SKYDOME = "elysium.skydome"
+
+# `/ElysiumBaked/Sky/...` (R5.2): one cube/mesh/material set per SKY NAME, shared by every
+# converted map that uses it -- the game's six skies are shared between 108 maps, so the bake
+# follows the runtime's own naming (`ApplyEnvironment`) rather than duplicating per map.
+SKY_PKG = "%s/Sky" % MOUNT
+SKY_TEX_PKG = "%s/Textures" % SKY_PKG
+SKY_MESH_PKG = "%s/Meshes" % SKY_PKG
+SKY_MAT_PKG = "%s/Materials" % SKY_PKG
+# `ElysiumMapVisuals.cpp`'s own `SkyDomeHalfExtentCm` -- the baked dome has to be the identical
+# box the runtime built at load, or the two would silently draw different backdrops.
+SKY_DOME_HALF_EXTENT_CM = 500000.0
+# UE's own KINDA_SMALL_NUMBER -- the black-cube guard `SkyAmbientIntensity` applies before
+# dividing `emit_skyambient`'s magnitude by the cube's upper-hemisphere mean.
+KINDA_SMALL_NUMBER = 1e-4
 
 # A deferred decal's projection box reaches this far (cm) either way along its projection
 # axis. Kept shallow so a decal catches its host wall and not the geometry behind it.
@@ -241,6 +258,52 @@ def set_fog(component, data):
     """Stamp a fog set onto one primitive. The default (serialized) slot, not the transient one:
     the level has to look right when it is opened in the editor, before any game runs."""
     component.set_default_custom_primitive_data_float_array(FOG_CPD_COLOR, data)
+
+
+def sky_join_intensity(mag, upper_mean, sky_name=""):
+    """`ElysiumMapVisuals::SkyAmbientIntensity`'s own policy (C1/C2), computed once at bake
+    (R5.2) instead of every load: no pair or a pair reading zero -> 0 (an authored zero is a
+    reading, not a missing one); a cube whose upper hemisphere is at or below UE's own
+    `KINDA_SMALL_NUMBER` -> 0, logged, rather than a divide that would ship an infinity;
+    otherwise the factor that makes the cube deliver VtMB's stated sky radiance, `mag /
+    upper_mean`."""
+    if mag <= 0.0:
+        return 0.0
+    if upper_mean <= KINDA_SMALL_NUMBER:
+        log("sky '%s': type-5 magnitude %.5f but the cube's upper hemisphere is black -- no IBL "
+            "level" % (sky_name, mag))
+        return 0.0
+    return mag / upper_mean
+
+
+def sky_dome_geometry():
+    """`(positions, normals, uvs, tris)` for the baked 2D-sky backdrop (R5.2):
+    `ElysiumMapVisuals.cpp`'s own `BuildSkyBox(SkyDomeHalfExtentCm, ...)`, reproduced
+    vertex-for-vertex (same 8 corners, same six-quad/twelve-triangle winding, same all-up
+    normals and all-zero UVs — the runtime's box has neither, since M_Sky samples the cube by
+    view direction, not by surface attribute) so the mesh the bake authors is the identical box
+    the runtime built at load on every map before this one converted. Plain Python, no `unreal`
+    import, so it is unit-testable without a fake editor module.
+    """
+    h = SKY_DOME_HALF_EXTENT_CM
+    positions = [
+        (-h, -h, -h), (h, -h, -h), (h, h, -h), (-h, h, -h),
+        (-h, -h, h), (h, -h, h), (h, h, h), (-h, h, h),
+    ]
+    quads = ((0, 1, 2, 3), (7, 6, 5, 4), (4, 5, 1, 0), (3, 2, 6, 7), (1, 5, 6, 2), (4, 0, 3, 7))
+    tris = []
+    for a, b, c, d in quads:
+        tris.extend((a, b, c, a, c, d))
+    normals = [(0.0, 0.0, 1.0)] * 8
+    uvs = [(0.0, 0.0)] * 8
+    return positions, normals, uvs, tris
+
+
+def _build_sky_dome_dynamic_mesh():
+    """The `UDynamicMesh` build of `sky_dome_geometry()` -- one shared mesh, every sky samples
+    the same box through its own `MI_Sky_<name>`."""
+    positions, normals, uvs, tris = sky_dome_geometry()
+    return bl.build_dynamic_mesh([(positions, normals, uvs, None, tris)])
 
 
 def cmdline_arg(key, default=""):
@@ -1659,36 +1722,125 @@ class Bake(object):
                 sky_placed += is_sky
         return placed, sky_placed, sky_ambient
 
+    def _bake_sky_cube(self, sky_name):
+        """`/ElysiumBaked/Sky/Textures/TC_Sky_<SkyName>` (R5.2): the same
+        `ElysiumEnvironment::BuildSkyCubeFrom` join the runtime still runs at load for every map
+        this settings page has not converted, aimed at a persistent package instead of a
+        transient one through `UElysiumSkyBakeLibrary::BakeSkyCubeAsset`. Faithful faces only --
+        see `seam_map_map_lighting.md` -> "## Import" -> "Sky baked (R5.2)" for why never
+        `tex_hi`. Returns `(cube_or_None, upper_hemisphere_mean)`; `None` when the six
+        `shared/tex/skybox_<name><face>.png` faces are missing or malformed, the same failure the
+        runtime's own `HasSkyFaces`/`BuildSkyCubeFrom` report."""
+        bl.ensure_dir(SKY_TEX_PKG)
+        asset_name = "TC_Sky_%s" % bl.safe_name(sky_name)
+        asset_path = "%s/%s" % (SKY_TEX_PKG, asset_name)
+        result = unreal.ElysiumSkyBakeLibrary.bake_sky_cube_asset(sky_name, asset_path)
+        cube, upper_mean = result if isinstance(result, tuple) else (result, 0.0)
+        if cube is None:
+            log("sky '%s': cube bake failed -- faces missing under shared/tex" % sky_name)
+            return None, 0.0
+        unreal.EditorAssetLibrary.save_asset(asset_path)
+        log("sky '%s': cube baked into %s (upper-hemisphere mean %.5f)"
+            % (sky_name, asset_path, upper_mean))
+        return cube, upper_mean
+
+    def _place_sky_dome(self, actors, sky_name, cube):
+        """The baked 2D-sky backdrop (R5.2): the shared `SM_SkyDome` box
+        (`_build_sky_dome_dynamic_mesh`, the runtime's own `BuildSkyBox`) through a per-sky
+        `MI_Sky_<SkyName>` bound to `cube`. Tagged `elysium.skydome`, not `elysium.sky` -- see
+        `TAG_SKYDOME`'s own comment."""
+        bl.ensure_dir(SKY_MAT_PKG)
+        master = unreal.EditorAssetLibrary.load_asset("%s/M_Sky" % mounts.MATERIALS)
+        if master is None:
+            log("sky dome: M_Sky master not found -- run make_sky_material.py")
+            return
+        mi_name = "MI_Sky_%s" % bl.safe_name(sky_name)
+        mi = bl.make_material_instance(mi_name, SKY_MAT_PKG, master)
+        if mi is None:
+            log("sky dome: %s could not be created" % mi_name)
+            return
+        bl.set_tex_param(mi, "SkyCube", cube)
+        # The faithful default: VtMB's own sky transfer is the identity (D7), matching
+        # ElysiumMapVisuals::ApplySkyBrightness's un-driven CVarSkyBrightness default.
+        bl.set_scalar_param(mi, "Brightness", 1.0)
+        unreal.EditorAssetLibrary.save_asset("%s/%s" % (SKY_MAT_PKG, mi_name))
+
+        bl.ensure_dir(SKY_MESH_PKG)
+        mesh_path = "%s/SM_SkyDome" % SKY_MESH_PKG
+        dome_mesh = bl.create_static_mesh(
+            _build_sky_dome_dynamic_mesh(), mesh_path, [mi], ["Sky"], nanite=False,
+            collision=False)
+        if dome_mesh is None:
+            log("sky dome: mesh build failed")
+            return
+        unreal.EditorAssetLibrary.save_asset(mesh_path)
+
+        actor = actors.spawn_actor_from_class(unreal.StaticMeshActor, unreal.Vector(0.0, 0.0, 0.0))
+        if not actor:
+            return
+        component = actor.static_mesh_component
+        component.set_static_mesh(dome_mesh)
+        # Non-solid backdrop, same as the runtime's own SkyDomeMesh: no collision, no shadow, and
+        # excluded from ray tracing (a box that encloses the whole scene is the canonical
+        # hardware-ray-tracing overlap cost).
+        component.set_collision_enabled(unreal.CollisionEnabled.NO_COLLISION)
+        component.set_cast_shadow(False)
+        component.set_editor_property("visible_in_ray_tracing", False)
+        actor.set_actor_label("SkyDome")
+        actor.tags = [TAG_SKYDOME]
+        actor.set_folder_path("Environment")
+
     def _place_sky(self, actors, sky_ambient):
         """The sky light and the map's height fog.
 
-        The sky light is placed empty here and handed its real cubemap at load
-        (AElysiumMapActor::ApplyEnvironment), because the cube is assembled from the six
-        exported sky face images rather than being an asset. What matters is that it is a
-        cubemap sky light at all: that is what gives Lumen sky occlusion, so an interior goes
-        dark because it cannot see the sky instead of being washed by a constant fill through
-        solid walls. Lower hemisphere black, or the sky would light the world's undersides and
-        defeat the occlusion.
+        On a map still on the legacy transport, the sky light is placed empty here and handed
+        its real cubemap at load (AElysiumMapActor::ApplyEnvironment), because the cube is
+        assembled from the six exported sky face images rather than being an asset. What matters
+        is that it is a cubemap sky light at all: that is what gives Lumen sky occlusion, so an
+        interior goes dark because it cannot see the sky instead of being washed by a constant
+        fill through solid walls. Lower hemisphere black, or the sky would light the world's
+        undersides and defeat the occlusion. Its INTENSITY is likewise the runtime's to set
+        (C1/C2): the level comes from the map's type-5 `emit_skyambient` magnitude divided by the
+        cube's own mean radiance, and the cube does not exist until load. What is written here is
+        that magnitude alone, so the actor carries the map's real data in the editor rather than
+        a placeholder constant -- 0 on the 83 maps with no sky pair, which is the policy, not an
+        absence.
 
-        Its INTENSITY is likewise the runtime's to set (C1/C2): the level comes from the map's
-        type-5 `emit_skyambient` magnitude divided by the cube's own mean radiance, and the cube
-        does not exist until load. What is written here is that magnitude alone, so the actor
-        carries the map's real data in the editor rather than a placeholder constant -- 0 on the
-        83 maps with no sky pair, which is the policy, not an absence."""
+        On a `MapsOnV2Models` map (R5.2), this stage finishes the job instead of deferring it: it
+        bakes the real cube, joins it with the same magnitude through
+        `ElysiumMapVisuals::SkyAmbientIntensity`'s own policy, and authors the backdrop dome --
+        the runtime then skips its half of this entirely (`ApplyEnvironment`'s `MapsOnV2Models`
+        early return)."""
+        color, mag = sky_ambient if sky_ambient else (None, 0.0)
+        baked_sky = map_transport.is_map_on_v2_models(self.map)
+        skybox = self.env.get("skybox", ["0"])[0] == "1"
+        sky_name = self.env.get("skyname", [""])[0]
+
+        cube = None
+        intensity = mag   # the legacy placeholder; only meaningful when not baked_sky
+        if baked_sky:
+            intensity = 0.0
+            if skybox and sky_name:
+                cube, upper_mean = self._bake_sky_cube(sky_name)
+                if cube is not None:
+                    intensity = sky_join_intensity(mag, upper_mean, sky_name)
+
         actor = actors.spawn_actor_from_class(unreal.SkyLight, unreal.Vector(0.0, 0.0, 0.0))
         if actor:
-            color, mag = sky_ambient if sky_ambient else (None, 0.0)
             component = actor.light_component
             component.set_mobility(unreal.ComponentMobility.MOVABLE)
             component.set_editor_property("source_type",
                                           unreal.SkyLightSourceType.SLS_SPECIFIED_CUBEMAP)
-            component.set_editor_property("cubemap", None)
+            component.set_editor_property("cubemap", cube)
             component.set_editor_property("lower_hemisphere_is_black", True)
-            component.set_editor_property("intensity", mag)
+            component.set_editor_property("intensity", intensity)
             component.set_light_color(color or SKYLIGHT_FALLBACK_COLOR)
             actor.set_actor_label("SkyLight")
             actor.tags = [TAG_SKYLIGHT]
             actor.set_folder_path("Environment")
+
+        if baked_sky and cube is not None:
+            self._place_sky_dome(actors, sky_name, cube)
 
         # The height fog is NOT the map's distance fog -- that is a per-primitive material term
         # now (B8b), because the world and the miniature carry two different fogs and share

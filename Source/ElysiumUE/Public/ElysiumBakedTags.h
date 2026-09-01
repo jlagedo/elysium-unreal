@@ -22,6 +22,10 @@ namespace ElysiumBakedTags
 	// The sky light and the height fog, adopted so `UElysiumMapVisuals` can drive their values.
 	inline const FName SkyLight(TEXT("elysium.skylight"));
 	inline const FName Fog(TEXT("elysium.fog"));
+	// The baked 2D-sky backdrop dome (R5.2, `MapsOnV2Models` maps only) — a StaticMeshActor,
+	// distinct from `Sky` (the 3D-skybox miniature) so it does not fall into the miniature's
+	// sky-fog stamping bucket.
+	inline const FName SkyDome(TEXT("elysium.skydome"));
 	// One projected decal.
 	inline const FName Decal(TEXT("elysium.decal"));
 	// The map's unbound PostProcessVolume — where a per-map Lumen art-direction value lives

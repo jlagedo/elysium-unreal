@@ -61,10 +61,16 @@ public:
 	// they cannot see the sky, instead of receiving a constant fill through solid walls.
 	// `Env` is the map's already-resolved `.env` values — the baked `UElysiumMapEnvironment` when
 	// R4.4 converted this map, the sidecar otherwise — resolved once by the caller alongside SkyDef
-	// (`ElysiumMapEnvironmentSource::Load`), not re-read here. Takes no `MapName`: every path this
-	// function still touches (the sky-face directories) is keyed by the sky's own name in `Env`,
-	// not the map's.
-	void ApplyEnvironment(const FElysiumEnvDef& Env);
+	// (`ElysiumMapEnvironmentSource::Load`), not re-read here.
+	//
+	// `MapName` is used for exactly one question (R5.2): is this map on `MapsOnV2Models`? A map on
+	// that flag was baked with its own real SkyLight (`SLS_SpecifiedCubemap`, the true cube, the
+	// true intensity) and its own real backdrop dome — both authored once at bake by the same
+	// `ElysiumEnvironment::BuildSkyCubeFrom` join this function still runs for every other map — so
+	// this function returns right after `ApplySceneFog` and touches neither: rebuilding a transient
+	// cube here would not merely waste the work, it would silently fight the baked asset on the
+	// SkyLight's next `RecaptureSky`.
+	void ApplyEnvironment(const FElysiumEnvDef& Env, const FString& MapName);
 
 	// Run at map activation, once everything the map places is standing: walk every mesh component
 	// in the level and report the mesh assets carrying a slot bound to nothing or to the engine's
@@ -142,6 +148,10 @@ private:
 	UPROPERTY() TObjectPtr<UProceduralMeshComponent> SkyDomeMesh;
 	// The backdrop's own MID (off M_Sky), kept so elysium.SkyBrightness can re-apply live.
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> SkyMid;
+	// The BAKED backdrop (R5.2, `MapsOnV2Models` maps only): a StaticMeshActor adopted off the
+	// `elysium.skydome` tag instead of built at runtime. `SkyDomeMesh`/`SkyMid` stay null on
+	// these maps — `ApplyEnvironment` returns before ever touching them.
+	UPROPERTY() TObjectPtr<AStaticMeshActor> BakedSkyDomeActor;
 	UPROPERTY() TObjectPtr<UElysiumLightRig> LightRig;
 
 	// `<map>.env`: the sky name and orientation convention, and the map's TWO fog sets

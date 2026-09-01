@@ -361,7 +361,7 @@ bool ElysiumEnvironment::HasSkyFaces(const FString& Dir, const FString& Prefix)
 }
 
 UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FString& Prefix,
-	float* OutUpperMean)
+	float* OutUpperMean, UObject* Outer, FName Name)
 {
 	if (OutUpperMean)
 	{
@@ -390,7 +390,12 @@ UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FSt
 		}
 	}
 
-	UTextureCube* Cube = NewObject<UTextureCube>(GetTransientPackage(), NAME_None, RF_Transient);
+	// A persistent bake asset (Outer given) is public/standalone so it survives the package save
+	// with no other referencer keeping it alive; the runtime's own transient cube (Outer null)
+	// is exactly as before.
+	UTextureCube* Cube = Outer
+		? NewObject<UTextureCube>(Outer, Name, RF_Public | RF_Standalone)
+		: NewObject<UTextureCube>(GetTransientPackage(), NAME_None, RF_Transient);
 	Cube->SRGB = true;
 	Cube->NeverStream = true;
 

@@ -1610,6 +1610,66 @@ every later task in R5; detail props (`dprp`) are R7.3's and this lane skips the
 is R5.3/R5.4/R5.6's; `--all` has still never run, so the V2 corpus stays a 536-model subset and the
 flag list stays three maps.
 
+**R5.2 — sky baked (2026-09-01).** Finishes the SkyLight actor `_place_sky` had always placed
+half-empty (null cubemap, the raw `emit_skyambient` magnitude as a placeholder intensity, "handed
+its real cubemap at load" by its own comment) instead of replacing it: the runtime's own
+`ElysiumEnvironment::BuildSkyCubeFrom` — the K1 x K2 face-rotation table and the solid-angle-weighted
+upper-hemisphere mean, unchanged — now runs once at bake, aimed at a persistent package through a
+one-function editor library, `UElysiumSkyBakeLibrary::BakeSkyCubeAsset`
+(`Source/ElysiumUE/Public/ElysiumSkyBakeLibrary.h`), instead of a transient one at every load.
+Contract in `seam_map_map_lighting.md` -> "## Import" -> "Sky baked (R5.2)".
+
+**One cube per sky NAME, not per map** — `/ElysiumBaked/Sky/Textures/TC_Sky_<name>` — because the
+game shares six skies between 108 maps; `/ElysiumBaked/Sky/Meshes/SM_SkyDome` is one shared box
+(`ElysiumMapVisuals.cpp`'s own `BuildSkyBox`, reproduced vertex-for-vertex in Python via
+`bake_lib.build_dynamic_mesh`/`create_static_mesh`, no `unreal` import needed to state or test the
+geometry itself); `/ElysiumBaked/Sky/Materials/MI_Sky_<name>` binds each sky's cube at `Brightness`
+1 (the faithful default). The faithful (non-`tex_hi`) face set only — a bake is asked once, so it
+picks VtMB's own data over the opt-in enhanced substitution, which stops applying to a converted
+map's sky specifically. **Cutover rides `MapsOnV2Models`, not a new list** — R5.1's own entry had
+already scoped the dome there, and the cube/SkyLight values mean nothing without the geometry that
+displays them. `ElysiumMapVisuals::ApplyEnvironment` gained a `MapName` parameter for exactly this
+gate: on a `MapsOnV2Models` map it runs `ApplySceneFog` and returns, never touching `SkyLight`,
+`SkyDomeMesh` or `SkyMid` — the baked actor (adopted as before, off `elysium.skylight`) and the new
+baked backdrop (adopted off the new `elysium.skydome` tag into `BakedSkyDomeActor`, wired into
+`elysium.togglesky`) already carry the real values. Every other map's runtime path is byte-identical
+to before. Deleting that path outright stays R8's, matching every other legacy-path retirement in
+this roadmap — this task **bypasses**, it does not delete, exactly as the task notes said it should.
+
+**Bake, on the three maps (2026-09-01, `uv run elysium export map sp_tutorial_1 sm_pawnshop_1
+sm_hub_1 --force`).** Two distinct skies: `sp_tutorial_1` is `la` (cube upper-hemisphere mean
+0.00335), `sm_pawnshop_1` and `sm_hub_1` both `pier` (0.01120, identical to five significant figures
+on both bakes — the same six source PNGs reproduced, not cached; the bake re-authors each sky's
+package on every run rather than skipping a found asset, since content-addressed skipping was not
+worth the complexity at three maps sharing two skies). One `SM_SkyDome`, two `TC_Sky_*`, two
+`MI_Sky_*` assets landed under `/ElysiumBaked/Sky/`, confirmed on disk. First bake attempt raised
+`StaticMeshComponent: Failed to find property 'collision_enabled'` — `set_editor_property` does not
+reach a component's collision state; fixed to the dedicated `set_collision_enabled` call, re-run
+clean.
+
+**Headless boot, all three maps, 14/14 vantages (6 + 4 + 4), each map's log carrying the new gate's
+own line** (`sky '<name>': baked (MapsOnV2Models) — runtime assembly skipped`) confirming the
+runtime path is actually bypassed, not merely present alongside the old one. Per R5.1's own
+measurement that the shot harness disagrees with itself by up to 94% of pixels between two identical
+captures, no pixel-regression comparison is drawn here either — this is a did-it-boot /
+did-it-appear witness only, as that entry already established for the rest of R5.
+
+Tests: 5 pytest (`pipeline/tests/test_bake_map_sky.py` — the intensity join's three cases,
+including the black-cube/`KINDA_SMALL_NUMBER` guard, the dome geometry against the runtime's own
+vertex/triangle table, and the sky packages named by sky rather than by map) and 2 C++
+(`Elysium.Substrate.SkyBake.MissingFacesReturnsNull`, `.BadPackagePathReturnsNull` — the two
+failure paths that need no staged corpus; the join's success path is `BuildSkyCubeFrom`'s own,
+unchanged, and is exercised by the real bake above). `uv run elysium build`: Succeeded. `uv run
+elysium test Elysium.Substrate`: **438 of 438 in 4.2 s** (436 before, +2 new).
+`uv run elysium test Elysium.Content.Map`: **7 of 7**. `uv run pytest` over the touched modules:
+**101 passed**.
+
+Follow-ups: no per-content-hash skip for the sky bake (every map re-decodes its six PNGs even when
+unchanged — cheap at three maps and two skies, worth revisiting once more maps join the flag);
+`ToggleSkybox`'s baked-dome half is wired but not itself tested; R6.4 is still where the sky face
+PNGs themselves become first-class imported textures with provenance, a different question from
+which set this bake samples; R8.1 still owns deleting the runtime path this task only bypassed.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1667,9 +1727,8 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 **R5.1 landed (2026-09-01)** — see Settled.
 
-- **R5.2 Sky baked.** Cube imported per sky name (six), `SLS_SpecifiedCubemap` assigned, the
-  intensity join computed at bake, the sky-dome mesh authored; the runtime sky assembly deleted.
-  → lands: editor shows the true sky.
+**R5.2 landed (2026-09-01)** — see Settled.
+
 - **R5.3 Decal fog and wetness homes** [MP-4.2]. The two per-map-state axes that force per-map
   material instances, parameters sourced from the R4.4 asset. → lands: unblocks R5.4.
 - **R5.4 V2 materials wired** [MP-4.3, SF-6.1]. `material_for` returns `MI_` by

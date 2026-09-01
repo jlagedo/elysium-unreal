@@ -5,6 +5,7 @@
 #include "ElysiumFog.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumMapTransportSettings.h"
 #include "ElysiumReflections.h"
 #include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMaterialFactory.h"
@@ -162,6 +163,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	SkyLight = nullptr;
 	HeightFog = nullptr;
 	PostProcess = nullptr;
+	BakedSkyDomeActor = nullptr;
 	DecalCount = 0;
 
 	// One pass over the level. A light's `.lights` line index rides a second tag, so the rig can
@@ -229,6 +231,10 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Decal))
 		{
 			++DecalCount;
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::SkyDome))
+		{
+			BakedSkyDomeActor = Cast<AStaticMeshActor>(Actor);
 		}
 		else
 		{
@@ -492,7 +498,7 @@ void UElysiumMapVisuals::BuildRopes(const FString& MapName)
 	UE_LOG(LogElysiumVisuals, Log, TEXT("ropes: %d cables"), RopeCount);
 }
 
-void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env)
+void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env, const FString& MapName)
 {
 	// `Env` already resolved (asset or sidecar) by the caller
 	// (`ElysiumMapEnvironmentSource::Load`), which logs which source answered.
@@ -501,6 +507,19 @@ void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env)
 	// Before anything sky-shaped: the fog belongs to every primitive in the level, including on
 	// the 65 maps with no sky_camera and the ones whose faces did not decode.
 	ApplySceneFog();
+
+	if (ElysiumMapTransport::IsMapOnV2Models(MapName))
+	{
+		// R5.2: this map's SkyLight (`SLS_SpecifiedCubemap`, the real baked cube, the real
+		// `emit_skyambient`-joined intensity) and its backdrop dome are already standing —
+		// `pipeline/unreal/bake_map.py::_place_sky` authored both from the exact same
+		// `ElysiumEnvironment::BuildSkyCubeFrom` join this function runs below for every map
+		// still on the legacy path. Nothing here would improve on that; re-running it would
+		// silently fight the baked asset the next time something calls `RecaptureSky`.
+		UE_LOG(LogElysiumVisuals, Log, TEXT("sky '%s': baked (MapsOnV2Models) — runtime assembly skipped"),
+			*Env.SkyName);
+		return;
+	}
 
 	if (!Env.bSky)
 	{
@@ -744,6 +763,10 @@ void UElysiumMapVisuals::ToggleSkybox()
 	if (SkyDomeMesh)
 	{
 		SkyDomeMesh->SetVisibility(bSkyVisible && SkyDomeMesh->GetNumSections() > 0);
+	}
+	if (BakedSkyDomeActor)
+	{
+		BakedSkyDomeActor->SetActorHiddenInGame(!bSkyVisible);
 	}
 }
 
