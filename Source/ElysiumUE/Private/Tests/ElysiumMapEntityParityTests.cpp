@@ -19,6 +19,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumMapEntities.h"
+#include "ElysiumMapTransportSettings.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/FileHelper.h"
@@ -110,8 +111,10 @@ namespace
 }
 
 // Def count and transport: every staged map's asset produces exactly as many defs as its `.ents`
-// does, and `ElysiumEntityDefSource::Load` answers from the asset once one exists (R4.1's cutover
-// is the asset's presence, so this is the assertion that the cutover actually fires).
+// does, and `ElysiumEntityDefSource::Load` answers from the asset for a map listed on
+// `UElysiumMapTransportSettings::MapsOnNewTransport`, and from the sidecar for one that is staged
+// but not listed (R4.6's cutover is the explicit flag, not the asset's mere presence, so this is the
+// assertion that the cutover actually fires -- and only for the maps it was told to fire for).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEntityDefCountParityTest,
 	"Elysium.Content.MapEntities.DefCountParity", GElysiumMapEntityParityTestFlags)
 bool FElysiumMapEntityDefCountParityTest::RunTest(const FString&)
@@ -139,12 +142,15 @@ bool FElysiumMapEntityDefCountParityTest::RunTest(const FString&)
 		TestEqual(FString::Printf(TEXT("%s: the asset names its own map"), *Map),
 			FromAsset.MapName, FromSidecar.MapName);
 
-		// The resolver must actually choose the asset for a converted map; a silent fallback would
-		// make every other assertion here true of a transport nobody is using.
+		// The resolver must choose the asset for a map listed on MapsOnNewTransport, and the
+		// sidecar for a staged map that is not listed; a mismatch either way would make every
+		// other assertion here true of a transport nobody is actually running.
 		FElysiumEntityDefs Resolved;
 		const EElysiumEntityDefSource Source = ElysiumEntityDefSource::Load(Map, Resolved);
-		TestEqual(FString::Printf(TEXT("%s: the resolver reads the asset, not the sidecar"), *Map),
-			FString(ElysiumEntityDefSource::ToString(Source)), FString(TEXT("asset")));
+		const bool bListed = ElysiumMapTransport::IsMapOnNewTransport(Map);
+		const FString ExpectedSource = bListed ? TEXT("asset") : TEXT("sidecar");
+		TestEqual(FString::Printf(TEXT("%s: the resolver's transport matches MapsOnNewTransport"),
+			*Map), FString(ElysiumEntityDefSource::ToString(Source)), ExpectedSource);
 		TestEqual(FString::Printf(TEXT("%s: the resolver's def count"), *Map),
 			Resolved.Num(), FromSidecar.Num());
 	}
