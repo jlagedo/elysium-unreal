@@ -141,10 +141,17 @@ def main():
             continue
         cur, old = shots_of(OUT / name), shots_of(base)
         manifest_path = base / BASELINE_MANIFEST
+        manifest = None
         if manifest_path.is_file():
-            baseline_commit = json.loads(manifest_path.read_text(encoding="utf-8")).get("commit", "unknown")
-            print(f"{name}: (baseline {baseline_commit[:12]}, {len(old)} cam)")
-        else:
+            try:
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                print(f"{name}: (baseline manifest unreadable — {exc}, treating as pre-R2.1 capture)")
+        if manifest is not None:
+            baseline_commit = manifest.get("commit", "unknown")
+            cam_count = len(manifest.get("cameras") or []) or len(old)
+            print(f"{name}: (baseline {baseline_commit[:12]}, {cam_count} cam)")
+        elif not manifest_path.is_file():
             print(f"{name}: (baseline commit unknown — pre-R2.1 capture, no {BASELINE_MANIFEST})")
         for cam in sorted(set(cur) | set(old)):
             if cam not in cur or cam not in old:
