@@ -449,6 +449,12 @@ reading; the R3.3 differ was re-run with each flag on (`producer_root` pointed a
   the way `target`/`input`/`python` are already stripped, instead of carrying it verbatim
   (`seam_map_map.md`'s field list above: "`param` **not** stripped"). **Measured delta: zero** —
   no output's `parameter` on the three-map corpus carries leading or trailing whitespace.
+- **`delay` via `atof`** (`delay_atof`). `True` reads the output row's `delay` field (index 3)
+  with this module's own `atof()` — the longest numeric prefix, `0.0` when there is none — instead
+  of a plain `float()`, matching every other number `.ents` carries (`origin`, `hingeaxis`,
+  `floor1..8`). **Measured delta: zero** — every authored `delay` on the three-map corpus is
+  already a plain-`float()`-parseable token; the flag is pinned with a synthetic trailing-junk
+  case instead.
 
 ### Verification
 

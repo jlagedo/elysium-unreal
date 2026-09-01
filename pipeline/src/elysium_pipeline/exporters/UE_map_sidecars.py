@@ -284,6 +284,15 @@ class EntityDivergences:
     #: corpus: no output's `parameter` carries leading or trailing whitespace.
     strip_param: bool = False
 
+    #: `False` (legacy, default): an output row's `delay` field (index 3) is read with a plain
+    #: `float()`, `0.0` on any parse failure -- reject-the-whole-token, unlike every positional
+    #: keyvalue in `.ents` (`origin`, `hingeaxis`, `floor1..8`), which reads with `atof`, the
+    #: engine's own longest-numeric-prefix rule (`seam_map_map.md` -> "Producer join": "`delay` a
+    #: plain `float()` with `0.0` on failure"). `True`: `delay` reads with this module's own
+    #: `atof()` instead, matching every other number `.ents` carries. Measured zero effect on the
+    #: three-map corpus: every authored `delay` is already a plain `float()`-parseable token.
+    delay_atof: bool = False
+
 
 #: The default: every flag legacy, so a caller that asks for nothing gets the byte-comparable
 #: sidecars R3.3 diffs against `UE_bsp_to_scene.py`.
@@ -366,7 +375,8 @@ def split_output(
     `param` is **not** stripped, `delay` is a plain `float()` (not `atof`), `times` normalizes an
     authored `0` to `-1`, and field 6 (`extra`) is dropped. A value with fewer than four commas is
     not an output at all and stays a plain keyvalue. `fields.strip_param` opts field 2 into the
-    same whitespace strip every other string field already gets.
+    same whitespace strip every other string field already gets; `fields.delay_atof` opts field 3
+    into the module's own `atof()` instead of a plain `float()`.
     """
 
     if value.count(",") < 4:
@@ -383,7 +393,7 @@ def split_output(
         "target": parts[0].strip(),
         "input": parts[1].strip(),
         "param": parts[2].strip() if fields.strip_param else parts[2],
-        "delay": number(parts[3], 0.0),
+        "delay": atof(parts[3]) if fields.delay_atof else number(parts[3], 0.0),
         "times": int(number(parts[4], -1)),
         "python": parts[5].strip() if len(parts) > 5 else "",
     }

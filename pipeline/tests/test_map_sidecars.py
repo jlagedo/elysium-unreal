@@ -88,6 +88,15 @@ def test_split_output_strip_param_opts_field_2_into_the_common_strip():
     assert row["param"] == "slow"
 
 
+def test_split_output_delay_atof_reads_the_longest_numeric_prefix():
+    # R3.4: a trailing-junk delay parses the way every other `.ents` number does (`atof`, the
+    # longest numeric prefix) instead of rejecting the whole token to 0.0.
+    value = "door,Open,slow,3.5s,5,x"
+    assert split_output(value)["delay"] == 0.0   # legacy: not a plain float() -> the 0.0 default
+    row = split_output(value, EntityDivergences(delay_atof=True))
+    assert row["delay"] == 3.5
+
+
 def test_source_position_inverts_the_transform_in_binary32():
     # 1.5 Source inches -- the half-thickness of sm_pawnshop_1's `havenrm` door panel -- does not
     # come back bit-exactly in binary64, and does in binary32. Solving hulls on the binary64 value
