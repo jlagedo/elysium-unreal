@@ -15,6 +15,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import re
 import sys
 import tempfile
 from types import SimpleNamespace
@@ -90,22 +91,50 @@ def test_normal_pair_scales_by_the_cubes_own_mean(module) -> None:
     assert module.sky_join_intensity(0.1, 0.25) == pytest.approx(0.4)
 
 
+def _runtime_build_sky_box():
+    """Parses `ElysiumMapVisuals.cpp`'s own `BuildSkyBox` -- the `Verts`/`Quads` tables it
+    literally contains -- rather than restating a second, hand-copied literal of them, so this
+    test actually breaks when the C++ table drifts instead of only when this file's own copy
+    does. Signs, not numbers: `Verts` is read as +/-H per axis and compared against
+    `sky_dome_geometry`'s the same way, since the C++ side only ever spells the half-extent as
+    the parameter `H`.
+    """
+    src = (REPO / "Source/ElysiumUE/Private/Visual/ElysiumMapVisuals.cpp").read_text(
+        encoding="utf-8")
+    body_match = re.search(r"void BuildSkyBox\([^)]*\)\s*\{(.*?)\n\t\}", src, re.DOTALL)
+    assert body_match, "BuildSkyBox not found in ElysiumMapVisuals.cpp"
+    body = body_match.group(1)
+
+    verts_match = re.search(r"Verts\s*=\s*\{(.*?)\};", body, re.DOTALL)
+    assert verts_match, "Verts table not found in BuildSkyBox"
+    sign = {"-H": -1, "H": 1}
+    verts = [
+        tuple(sign[term.strip()] for term in vert.split(","))
+        for vert in re.findall(r"\{([^{}]*)\}", verts_match.group(1))
+    ]
+
+    quads_match = re.search(r"Quads\[6\]\[4\]\s*=\s*\{(.*?)\};", body, re.DOTALL)
+    assert quads_match, "Quads table not found in BuildSkyBox"
+    quads = [
+        tuple(int(index) for index in quad.split(","))
+        for quad in re.findall(r"\{([^{}]*)\}", quads_match.group(1))
+    ]
+    return verts, quads
+
+
 def test_sky_dome_geometry_matches_the_runtime_box(module) -> None:
     positions, normals, uvs, tris = module.sky_dome_geometry()
     h = module.SKY_DOME_HALF_EXTENT_CM
-    assert positions == [
-        (-h, -h, -h), (h, -h, -h), (h, h, -h), (-h, h, -h),
-        (-h, -h, h), (h, -h, h), (h, h, h), (-h, h, h),
-    ]
-    # Six quads, two triangles each -- ElysiumMapVisuals.cpp's own Quads table, same winding.
-    assert tris == [
-        0, 1, 2, 0, 2, 3,
-        7, 6, 5, 7, 5, 4,
-        4, 5, 1, 4, 1, 0,
-        3, 2, 6, 3, 6, 7,
-        1, 5, 6, 1, 6, 2,
-        4, 0, 3, 4, 3, 7,
-    ]
+    runtime_verts, runtime_quads = _runtime_build_sky_box()
+
+    assert len(runtime_verts) == 8
+    assert positions == [tuple(sign * h for sign in vert) for vert in runtime_verts]
+
+    expected_tris = []
+    for a, b, c, d in runtime_quads:
+        expected_tris.extend((a, b, c, a, c, d))
+    assert tris == expected_tris
+
     assert len(normals) == len(uvs) == 8
     assert set(normals) == {(0.0, 0.0, 1.0)}
 

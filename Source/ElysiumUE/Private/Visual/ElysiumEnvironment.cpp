@@ -396,6 +396,16 @@ UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FSt
 	UTextureCube* Cube = Outer
 		? NewObject<UTextureCube>(Outer, Name, RF_Public | RF_Standalone)
 		: NewObject<UTextureCube>(GetTransientPackage(), NAME_None, RF_Transient);
+	if (Outer)
+	{
+		// PreEditChange/PostEditChange around a source replacement is the engine's own idiom
+		// (Texture.h: "All changes to Texture properties must be wrapped in PreEditChange/
+		// PostEditChange"). It matters here specifically because a saved, uncooked package
+		// serializes UTexture::Source, not FTexturePlatformData -- the transient runtime cube
+		// below only ever needed the platform data (it is rebuilt every load), but a persistent
+		// bake asset with no Source would round-trip through SavePackage as an empty texture.
+		Cube->PreEditChange(nullptr);
+	}
 	Cube->SRGB = true;
 	Cube->NeverStream = true;
 
@@ -421,9 +431,20 @@ UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FSt
 	{
 		*OutUpperMean = UpperHemisphereMean(Dest, Size);
 	}
+	if (Outer)
+	{
+		// Same rotated BGRA8 bytes as the mip above, copied into the texture's own Source while
+		// Dest is still mapped -- Source.Init copies the buffer rather than aliasing it, so this
+		// is independent of the Mip's bulk data being unlocked right after.
+		Cube->Source.Init(Size, Size, 6, 1, TSF_BGRA8, Dest);
+	}
 	Mip->BulkData.Unlock();
 
 	Cube->SetPlatformData(PD);
+	if (Outer)
+	{
+		Cube->PostEditChange();
+	}
 	Cube->UpdateResource();
 	return Cube;
 }
