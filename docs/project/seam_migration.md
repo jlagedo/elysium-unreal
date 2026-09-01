@@ -837,6 +837,84 @@ Elysium.Substrate`: 423 of 423 test(s) executed in 5.9s, exit code 0 (up from 42
 two additions). Nothing emits `MapExportReady` yet; R3.2 is the first producer, and R5.1 retires the
 `.obj` branch once the bake itself stops reading `.obj`.
 
+**Roadmap R2 landed (2026-08-31).** Stage "R2 — instruments and guards" (MP-1) is done, four
+tasks, each already has its own detailed Settled entry above; this rolls the stage up.
+
+- **R2.1** (`dd5cc68b`, review fixes `fd2087fd`, `98d3b942`, `c9201d4f`) — `shots_diff.py --save`
+  writes a `baseline.json` (build commit, map, sorted vantage list of only the vantages that `ok`'d)
+  beside every promoted capture. 14/14 vantages captured real-RHI DX12/SM6 2560×1440 across the
+  three-map test corpus (`sp_tutorial_1` 6/6, `sm_pawnshop_1` 4/4, `sm_hub_1` 4/4), saved at
+  `8077e5b5f902`; a same-commit re-diff proved the comparator end to end (14 compared, 0 over
+  tolerance). Review rounds added: the comparator names the baseline commit/camera count in each
+  map's header, states explicitly when a baseline predates R2.1, and degrades to a per-map
+  "manifest unreadable" line on a corrupt manifest instead of aborting. `test_shots_diff.py` pins
+  the manifest shape, `git_commit`'s unknown-outside-a-checkout/real-HEAD cases, a real `--save`
+  integration case and all three header branches. Known gap, still open: `compare()` itself has no
+  direct unit coverage. Scoped to the three-map corpus; the original wider reach (every hub + one
+  district type) re-promotes when the corpus widens.
+- **R2.2** (`441f6a32`) — `validation/map_census.py` aggregates each map's root/entities/lighting
+  export_v2 units into one pinned JSON: `entities.classes[]` (count/`brushCount`/`hullCount`/
+  `outputCount`), `lights.types[]` (count/`styledCount`), and zero-filled counts for the ten R7.5
+  effects classes. Run at `c9201d4f`: `sp_tutorial_1` 1,868 entities/80 classes, 396 lights (224
+  point/14 styled, 170 spot/4 styled, sky pair), 96 `env_sprite`; `sm_pawnshop_1` 468 entities/57
+  classes, 161 lights (43 point, 118 spot, 0 styled), 74 `env_sprite`; `sm_hub_1` 2,597 entities/71
+  classes, 687 lights (20 emit_surface, 300 point/1 styled, 367 spot, no sky pair), 309
+  `env_sprite`. On all three, every brush-model class's `hullCount` equals its `brushCount` — first
+  evidence for R3.1's world-space-hulls invariant, though the reviewer's own recount calls it
+  near-tautological (vbsp emits a PHYSCOLLIDE for every brush model) and flags it as an invariant
+  witness rather than a class-handler discriminator. `test_map_census.py` pins the three
+  aggregation functions plus one end-to-end `write_glb`-built fixture. Decisions: `hullCount` reads
+  literally off `physics.models[]`, `styledCount` off `style != 0`; the tool is an internal library
+  module (importable + `argparse main()`) like `shots_diff.py`, not wired into the public CLI;
+  output is pinned under `$ELYSIUM_WORK_ROOT/exports_v2/_census/<map>.json`, local and gitignored.
+  Follow-ups: R3.3/R7.5 to decide staleness detection or regen-on-demand for the pinned JSONs;
+  the hullCount==brushCount hypothesis wants checking across all 108 maps, not just three. Review
+  nits recorded, none blocking: classname matching is case-sensitive (an `Env_Sprite` misspelling
+  would miss the effects vocabulary — matches the exporter's own census, so consistent rather than
+  wrong); `sourceCommit` is computed off the `pipeline/` directory rather than the repo root
+  (same answer, inconsistent spelling versus `shots_diff.py`); no test covers `main()` or a null
+  classname (both untriggered on the three test maps); the roadmap's R2.1 entry is dated
+  2026-09-01 while sitting above R2.2's 2026-08-31 — a pre-existing date typo worth a one-word fix
+  next touch.
+- **R2.3** (`c2ea28c8`) — `level_sidecar_recipe` (`pipeline/unreal/bake_map.py`) gained a
+  `runtime_sidecars` block: a whole-file SHA-256 per `.ents`/`.hulls`/`.dispcol`/`.ropes` (`None`
+  when absent, as `sm_pawnshop_1`'s missing `.dispcol` proves), so a change to a sidecar the bake
+  never parses (read only by `AElysiumMapActor` at load) still dirties the level's fingerprint
+  instead of leaving a stale package. Nothing is parsed from these files into a baked actor; the
+  digest exists purely to feed the existing stamp compare, routed through `Bake._file_sha256`/
+  `ContentDigestCache` so a repeat bake pays no rehash. 7 pytest cases (parametrized four ways)
+  prove per-sidecar isolation, an untouched set reproducing the same recipe dict, and the
+  missing-file→`None` case; `uv run pytest` across the three touched test files: 87 passed. Two
+  stale doc claims ("outside every bake fingerprint") in `uasset-bake-spike.md` and
+  `runtime-data-compilation.md` were corrected in the same commit; the separate runtime-side G3 gap
+  (the running game still has no receipt of its own) stays open. Side effect worth flagging: this
+  changes every map's level fingerprint, so the next scoped bake re-authors all three `.umap`s once
+  rather than reusing — intended, not a defect. Review nit: the implementer's own task report was a
+  placeholder (`'summary': 'test'` etc.); the commit itself was reviewed directly and is sound, but
+  the reported numbers for this task should not be trusted, only the commit and the doc text it
+  produced. Minor coverage gaps noted, not blocking: assertions are on the recipe dict rather than
+  `bake_lib.recipe_fingerprint`'s serialized output, and nothing exercises the `digest=` injection
+  path into `Bake._file_sha256`.
+- **R2.4** (`7b1ab6d5`) — `docs/architecture/map-architecture.md` gained "The export-readiness
+  gate": `FElysiumContentPaths::MapExportReady(Map)` names an empty, presence-only `<map>.ready`
+  marker beside a map's other sidecars, which the R3.2 producer will write once its sidecars are
+  complete — nothing emits it yet. `Travel`'s `.obj`-only refusal and the separately-duplicated
+  check in `ExportedMaps()` now both route through one static predicate,
+  `UElysiumMapSubsystem::HasTravelableExport(Map)`, accepting either `MapObj` or `MapExportReady`
+  so the two call sites can never diverge. Two new `Elysium.Substrate` tests
+  (`ElysiumMapExportGateTests.cpp`) cover both-accept, neither-refuse and presence-only semantics
+  (a non-empty marker still accepts; a same-named directory does not). `uv run elysium build`
+  succeeded; `Elysium.Substrate` 423/423 (up from 421). Decision: kept deliberately distinct from
+  the existing "MapReady" runtime-activation vocabulary, called out in the doc. Follow-ups: R3.2 is
+  the only intended writer, untested against a real producer until it lands; R5.1 retires the
+  `.obj` branch once the bake stops reading `.obj`. Review nits, none blocking: the test name
+  `MapExportGate` is a strict string prefix of `MapExportGateMarkerIsPresenceOnly` (both still run,
+  since Unreal splits on `.`, but a filter of the short name can't isolate the first test alone);
+  one scratch-root leaf string doesn't match its test's own name; the "Travel actually consults
+  this predicate" coupling is asserted only by reading the source, not by a Policy-tier test; the
+  per-map sidecar tables in `rebuild-strategy.md`/`uasset-bake-spike.md` don't list `.ready` yet —
+  add the row when R3.2 starts writing it.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -875,23 +953,7 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R2 — instruments and guards (nothing else moves first) [MP-1]
 
-**R2.1 landed (2026-09-01)** — `baseline.json` commit/map/camera manifest (`shots_diff.py`) +
-14/14 baseline vantages captured for the test corpus; numbers in the Settled entry "Baseline
-shots landed on the test corpus". Scoped to the three-map test corpus; the original R2.1 reach
-(every hub + one of each district type) re-promotes when the corpus widens.
-
-**R2.2 landed (2026-08-31)** — `validation/map_census.py`, censuses pinned for the three-map test
-corpus; numbers in the Settled entry "Per-map censuses landed on the test corpus".
-
-**R2.3 landed (2026-08-31)** — `level_sidecar_recipe` extended to `.ents`, `.hulls`, `.dispcol`,
-`.ropes` (a whole-file digest per sidecar, no field parsing); numbers in the Settled entry "Level
-recipe closes over its runtime sidecars".
-
-**R2.4 landed (2026-08-31)** — the new lane's readiness artifact defined
-(`FElysiumContentPaths::MapExportReady`, ruled in `map-architecture.md`); `Travel` and
-`ExportedMaps` both accept it or the legacy `.obj` through one shared predicate,
-`UElysiumMapSubsystem::HasTravelableExport`; numbers in the Settled entry "Travel's export gate
-accepts the new lane's marker". R2 is done; R3 is next.
+**R2 landed** — see Settled.
 
 ### R3 — map producer parity (game untouched) [MP-2]
 
