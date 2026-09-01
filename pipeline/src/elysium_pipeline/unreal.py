@@ -560,6 +560,39 @@ def import_map_collision(config, runner, manifest_path, *, force: bool = False) 
     )
 
 
+#: One data asset per map, a dozen or so scalar/vector properties and no build of any kind --
+#: shorter than even `import map-entities`' leash. Anything past this is a hang, not a long job.
+MAP_ENVIRONMENT_IMPORT_TIMEOUT_SECONDS = 15 * 60.0
+
+
+def import_map_environment(config, runner, manifest_path, *, force: bool = False) -> None:
+    """Run the editor phase of `import map-environment` over one staged manifest.
+
+    `pipeline/unreal/import_map_environment.py` (R4.4) reads the manifest and authors one
+    `UElysiumMapEnvironment` per map under `/ElysiumBaked/<map>/`
+    (`docs/architecture/seam_map_map.md` -> "Import — environment"). No unit root travels: the
+    stage already read the sidecars and carried every value in the manifest.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/import_map_environment.py'}",
+            f"-ImportMapEnvironment={manifest_path}",
+            *(["-ImportForce=1"] if force else []),
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=MAP_ENVIRONMENT_IMPORT_TIMEOUT_SECONDS,
+    )
+
+
 #: A grid of ~20 static-mesh actors, TextRenderActors and a five-actor lighting rig -- no import,
 #: no compile, no DDC touched. Short leash like the surface-property import: the whole run is
 #: editor boot plus a scene build and a save, so anything past this is a hang, not a long run.

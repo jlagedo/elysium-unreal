@@ -104,7 +104,7 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
 #: last two are not corpus families at all but per-map lanes (R4.1, R4.2), which is why they refuse
 #: to run unscoped where a corpus lane takes `--all`.
 IMPORT_COMMANDS = ("vdata", "textures", "surface-properties", "materials", "models",
-                   "map-entities", "map-collision")
+                   "map-entities", "map-collision", "map-environment")
 
 
 def test_import_registers_exactly_the_migrated_import_lanes() -> None:

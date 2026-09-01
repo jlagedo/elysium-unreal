@@ -695,3 +695,114 @@ other (1.3–3.6 s on these maps, dominated by navigation, audio and animation p
 sidecar's asynchronous cook finishes inside that window anyway. The claim R4.2 lands is
 "the cook happens once, offline", not "the map loads faster"; making the adopt asynchronous is a
 tuning question and deliberately not this task's.
+
+## Import — environment
+
+R4.4 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves the map's **environment**
+— `<map>.env`'s 2D-sky flag and its two fog sets, `<map>.sky`'s 3D-skybox miniature placement
+transform, and `<map>.spawn`'s initial player spawn — off the three loose sidecars and onto one
+`UElysiumMapEnvironment` per map. Like R4.1/R4.2 this is a transport change and nothing else: every
+value the asset carries is the value the sidecar already states, copied straight into the plain
+`FElysiumEnvDef` / `FElysiumSkyDef` / `FElysiumSpawnDef` structs the runtime has always consumed.
+There is no cook and nothing derived — the whole asset is a dozen scalars, a couple of colours and
+two vectors.
+
+**What is deliberately NOT here.** None of these three sidecars carries a taste value in the sense
+R4.3's light calibration or R4.5's orphan knobs do. The fog numbers are `ApplySceneFog`'s inputs
+unchanged — a per-primitive custom-primitive-data stamp, not a look decision — and the sky/spawn
+transforms are placement, not appearance. The one genuinely tunable neighbour, the baked
+`AExponentialHeightFog` actor's own component properties (density, height falloff, and so on), is
+**not** part of this asset: it is placed by the bake and now has no Cog surface at all (R4.3 retired
+the "Sky & fog" tab's height-fog sliders along with the rest of the rig-tuning tabs), so the editor
+level *is* the tuning surface for it — an owner edits the actor's `Fog` component directly, the same
+direct-actor-edit lane the roadmap line names. This asset does not reach it and never will.
+
+### Identity and naming
+
+```text
+$ELYSIUM_EXPORT_ROOT/<map>/<map>.env + .sky + .spawn   (the sidecars this lane replaces)
+  -> /ElysiumBaked/<map>/DA_<map>_Environment           (UElysiumMapEnvironment)
+```
+
+One asset per map, in the map's own baked package folder beside its `.umap` and beside
+`DA_<map>_Entities`/`DA_<map>_Collision` — the environment is a property of one map.
+`FElysiumContentPaths::BakedMapEnvironment` is the one C++ accessor; its Python twin is
+`elysium_pipeline.importers.map_environment.asset_path`.
+
+### What the asset carries
+
+Three independent value sets, because the three sidecars answer three independent questions and a
+map can have any combination present:
+
+| Member | Source | Absent state |
+|---|---|---|
+| `bSky`/`SkyName`/`SkyConvention`, `bFog`/`FogColor`/`FogStartCm`/`FogEndCm`, `bSkyFog`/`SkyFogColor`/`SkyFogStartCm`/`SkyFogEndCm` | `<map>.env` | all-zero/false row (`FElysiumEnvDef`'s own default) |
+| `bHasSkyMiniature`, `SkyOriginCm`, `SkyScale` | `<map>.sky` | `bHasSkyMiniature = false`, the identity scale 1 |
+| `bHasSpawn`, `SpawnOriginCm`, `SpawnYawDeg` | `<map>.spawn` | `bHasSpawn = false` |
+
+`.env` is written for every map in the corpus (a map with no `sky_camera` still states its world
+fog), so `bSky`/`bFog`/`bSkyFog` false is itself the authored reading on the maps that carry it, not
+an absence. `.sky` and `.spawn` are each written only when their entity exists (`sky_camera`,
+`info_player_start`), so their `bHasSkyMiniature`/`bHasSpawn` flags distinguish "authored, present"
+from "this map has none" — exactly what `FElysiumSkyDef::Parse`/`FElysiumSpawnDef::Parse` returning
+`false` already meant, now carried as data instead of read off a missing file.
+
+`UElysiumMapEnvironment::ToEnvDef`/`ToSkyDef`/`ToSpawnDef` are the three conversions back to the
+plain structs — a field-for-field copy, asserted by `Elysium.Substrate.MapEnvironment.*`.
+
+### Producer and stage
+
+`uv run elysium import map-environment --maps <map>…` stages one manifest under
+`$ELYSIUM_WORK_ROOT/import/map_environment/` and then authors the assets in a headless editor
+(`pipeline/unreal/import_map_environment.py`) — the same two-phase shape `import map-entities` and
+`import map-collision` have, and it refuses to run unscoped. The rows come from the sidecars
+themselves: since R3.5 `<map>.env`/`.sky`/`.spawn` are written by the R3.2 producer straight off the
+BSP entity lump (`UE_map_sidecars.write_environment`/`write_sky`/`write_spawn`), so this stage is a
+pure carry rather than a second implementation of anything.
+
+**Parity is asserted at both ends, and the two assertions are not the same assertion**, exactly as
+R4.1/R4.2 state it:
+
+1. *At stage time*: the staged `env`/`sky`/`spawn` values are compared field for field against the
+   sidecar rows they were read from, and a mismatch refuses the manifest.
+2. *At load time*: `Elysium.Content.MapEnvironment.*` loads the real baked asset and the real
+   sidecars and compares what each **C++** reader produces — `UElysiumMapEnvironment::ToEnvDef`/
+   `ToSkyDef`/`ToSpawnDef` against `FElysiumEnvDef::Parse`/`FElysiumSkyDef::Parse`/
+   `FElysiumSpawnDef::Parse`. That is the parity that matters: the stage's own comparison proves
+   nothing about whether the C++ side the running game actually uses agrees.
+
+### Consumption and cutover
+
+`ElysiumMapEnvironmentSource::Load` is the one entry point, called once per map load
+(`AElysiumMapActor::LoadMap`, before `AdoptBakedLevel` — the same "read `.sky` first" ordering R4.1
+documented, because the light rig, the `.ents` join and the miniature body all need `SkyDef`). The
+baked asset wins whole when it exists; the three sidecars answer independently otherwise, each
+exactly as `FElysiumEnvDef`/`FElysiumSkyDef`/`FElysiumSpawnDef::Parse` always has. Downstream:
+
+- `UElysiumMapVisuals::ApplyEnvironment` now takes the resolved `FElysiumEnvDef` as a parameter
+  instead of parsing `<map>.env` itself — `ApplySceneFog`'s stamping and the sky-cube assembly are
+  otherwise untouched.
+- `SkyDef` (the member `AElysiumMapActor` already carried) is filled from the resolver instead of a
+  direct `FElysiumSkyDef::Parse` call; every consumer of it (the light rig's `Adopt`, `.ents`'s
+  sky-scope transform via `ElysiumEntityDefSource::Load`, the miniature body's mesh scale) is
+  unaware anything changed, because the type crossing the boundary did not.
+- `AElysiumMapActor::ReadSpawn` is retired; the resolver's spawn output feeds
+  `PendingSpawnLoc`/`PendingSpawnYaw` directly, still Source feet with the capsule-centre lift left
+  to the readiness poll, exactly as before.
+
+**The asset's presence is the cutover flag**, as in R4.1/R4.2/R4.3 — a map with an asset reads
+cooked content and a map without one keeps the three sidecars, with no per-map entry anywhere saying
+which. The `.env`/`.sky`/`.spawn` readers stay: they are the fallback for every unconverted map, and
+R8.1 owns their deletion once all 108 maps are converted.
+
+### Measured (2026-09-01, the three working maps)
+
+| Map | Sky name | World fog | 3D-skybox fog | Sky miniature scale | Spawn |
+|---|---|---|---:|---:|---|
+| `sp_tutorial_1` | `la` | off | off | 16 | `(-35.56, -19032.22, -416.56)`, yaw -270° |
+| `sm_pawnshop_1` | `pier` | on, 1270→12700cm | on, 20320→203200cm | 16 | `(-5032.04, 6568.26, 388.62)`, yaw 0° |
+| `sm_hub_1` | `pier` | on, 1270→12700cm | on, 20320→203200cm | 16 | `(-4321.25, 7938.54, -261.62)`, yaw 0° |
+
+All three maps carry all three sidecars, so all three assets have `bHasSkyMiniature = true` and
+`bHasSpawn = true`; the identity/absent paths above are exercised by
+`Elysium.Substrate.MapEnvironment.*`'s synthetic assets, not by this corpus slice.

@@ -1513,9 +1513,16 @@ applies the calibration asset's overrides + lightstyles **in addition to**, not 
 existing per-load derivation; and `Elysium.Substrate.LightRig`'s derivation assertions stay put
 rather than moving, since R5.6's bake (their stated destination) does not exist yet for them to be
 verified against — re-homed is what R5.6 does when it lands, not something achievable here.
-- **R4.4 Environment asset.** The `.env`/`.sky`/`.spawn` values as the per-map map-info asset
-  (fog CPD values are taste-free passthrough; the height-fog actor is edited directly); `.env`/
-  `.sky`/`.spawn` readers deleted. → lands: environment ships as cooked content.
+**R4.4 landed (2026-09-01)** — per-map `UElysiumMapEnvironment` (`<map>.env`'s 2D-sky flag and two
+fog sets, `<map>.sky`'s 3D-skybox miniature transform, `<map>.spawn`'s initial player placement),
+the `import map-environment` lane and `ElysiumMapEnvironmentSource::Load`; contract in
+`seam_map_map.md` → "## Import — environment", numbers in that section's own "Measured" table. The
+fog values are the unchanged, taste-free `ApplySceneFog` inputs the line calls for; the height-fog
+actor's own component properties remain the direct-edit tuning surface R4.3 left them as (no Cog
+surface reaches them, and this asset does not either). One correction to the line's original text:
+the `.env`/`.sky`/`.spawn` readers were **kept**, not deleted (the fallback for every unconverted
+map, and R4.6's proof needs both paths alive to diff); reader deletion moves to R8.1, matching
+R4.1's and R4.2's own corrections.
 - **R4.5 Orphan taste values get editor homes.** The seven cvar-only knobs onto settings pages;
   the seven "Enhanced rain" literals into the weather settings home; green-room eye tuning into
   `DA_EyeTuning`; delete `RainMist`, the `MaterialOverrides` group, `SkyProbe`, the leak A/B.

@@ -11,6 +11,7 @@
 #include "ElysiumEntityWorld.h"           // the Track-B world this actor builds and owns
 #include "ElysiumGameStateSubsystem.h"    // the clock, the level script, map snapshots
 #include "ElysiumMapEntities.h"           // ElysiumEntityDefSource::Load — the asset-or-sidecar transport
+#include "ElysiumMapEnvironment.h"        // ElysiumMapEnvironmentSource::Load — the .env/.sky/.spawn transport
 #include "ElysiumMapSubsystem.h"          // epochs, backdrop state, landmark/restore placements
 #include "ElysiumPlayerBody.h"            // IElysiumPlayerBody — placement and the movement freeze
 #include "ElysiumPresentationSubsystem.h" // the fourth world service
@@ -28,7 +29,6 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "GameFramework/PlayerController.h"
-#include "Misc/FileHelper.h"
 #include "NavMesh/NavMeshBoundsVolume.h"
 #include "NavMesh/RecastNavMesh.h"
 #include "NavigationSystem.h"
@@ -254,12 +254,21 @@ void AElysiumMapActor::LoadMap()
 	LoadedMap = MapName;
 	Bodies->SetMap(MapName);
 
-	// The 3D-skybox miniature's placement transform (`<map>.sky`), read first because three
-	// later steps need it: the light rig scales a miniature source's reach by it, the `.ents`
-	// parser carries sky-scope entities through it, and a miniature body takes its mesh scale
-	// from it. The identity (scale 1) on the 65 maps with no `sky_camera`.
+	// This map's environment (R4.4, `docs/architecture/seam_map_map.md` -> "Import —
+	// environment"): the baked `UElysiumMapEnvironment` when this map has one, the
+	// `.env`/`.sky`/`.spawn` sidecars otherwise. Resolved first because three later steps need
+	// SkyDef: the light rig scales a miniature source's reach by it, the `.ents` parser carries
+	// sky-scope entities through it, and a miniature body takes its mesh scale from it. The
+	// identity (scale 1) on a map with no `sky_camera`.
 	SkyDef = FElysiumSkyDef();
-	FElysiumSkyDef::Parse(FElysiumContentPaths::MapSky(MapName), SkyDef);
+	FElysiumEnvDef EnvDef;
+	bool bHasSpawnDef = false;
+	FVector SpawnDefLocation = FVector::ZeroVector;
+	float SpawnDefYaw = 0.f;
+	const EElysiumMapEnvironmentSource EnvSource = ElysiumMapEnvironmentSource::Load(
+		MapName, EnvDef, SkyDef, bHasSpawnDef, SpawnDefLocation, SpawnDefYaw);
+	UE_LOG(LogElysium, Log, TEXT("%s: environment from %s"), *MapName,
+		ElysiumMapEnvironmentSource::ToString(EnvSource));
 
 	// Label the map actor and drop it in an Elysium Outliner folder, so the PIE World
 	// Outliner reads as a live scene browser (debug-tooling.md Layer 0).
@@ -290,7 +299,7 @@ void AElysiumMapActor::LoadMap()
 	Phase(TEXT("Ropes"));
 
 	// Sky cubemap + backdrop, the sky light's IBL off the same cube, and the map's PPV knobs.
-	Visuals->ApplyEnvironment(MapName);
+	Visuals->ApplyEnvironment(EnvDef);
 	Visuals->ApplyPostProcessKnobs();
 	Phase(TEXT("Environment"));
 
@@ -300,8 +309,13 @@ void AElysiumMapActor::LoadMap()
 		Visuals->PropInstanceCount, Visuals->DecalCount, Visuals->WorldLightCount,
 		Collision->HullCount);
 
-	if (!bMenuBackdrop && ReadSpawn(PendingSpawnLoc, PendingSpawnYaw))
+	if (!bMenuBackdrop && bHasSpawnDef)
 	{
+		// Authored Source origins are feet. The readiness poll adds the active body's exact
+		// half-height once the pawn exists; keeping the logical placement in feet avoids a magic
+		// 100 cm lift.
+		PendingSpawnLoc = SpawnDefLocation;
+		PendingSpawnYaw = SpawnDefYaw;
 		PendingSpawnSpace = EElysiumPlayerPlacementSpace::Feet;
 		bSpawnPending = true;
 	}
@@ -430,46 +444,6 @@ void AElysiumMapActor::LoadMap()
 	UE_LOG(LogElysium, Log, TEXT("loaded %s in %.2fs"), *MapName, TotalMs / 1000.0);
 }
 
-bool AElysiumMapActor::ReadSpawn(FVector& OutLocation, float& OutYaw) const
-{
-	TArray<FString> Lines;
-	if (!FFileHelper::LoadFileToStringArray(Lines, *FElysiumContentPaths::MapSpawn(MapName)))
-	{
-		return false;
-	}
-
-	bool bHasOrigin = false;
-	float YawSrc = 0.f;
-	FVector Origin = FVector::ZeroVector;
-
-	for (const FString& Line : Lines)
-	{
-		TArray<FString> Tok;
-		Line.ParseIntoArray(Tok, TEXT(" "), true);
-		if (Tok.Num() == 4 && Tok[0] == TEXT("origin"))
-		{
-			Origin = FVector(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]), FCString::Atod(*Tok[3]));
-			bHasOrigin = true;
-		}
-		else if (Tok.Num() == 2 && Tok[0] == TEXT("yaw"))
-		{
-			YawSrc = FCString::Atof(*Tok[1]);
-		}
-	}
-
-	if (!bHasOrigin)
-	{
-		return false;
-	}
-
-	// Authored Source origins are feet. The readiness poll adds the active body's exact half-height
-	// once the pawn exists; keeping the logical placement in feet avoids a magic 100 cm lift.
-	OutLocation = Origin;
-	// .spawn already carries Unreal-space yaw (UE_bsp_to_scene negates it at export).
-	OutYaw = YawSrc;
-	return true;
-}
-
 void AElysiumMapActor::ResolveLandmarkSpawn()
 {
 	UGameInstance* GI = GetGameInstance();
@@ -482,7 +456,7 @@ void AElysiumMapActor::ResolveLandmarkSpawn()
 	FString Landmark; FVector Offset; float Yaw; bool bHasYaw;
 	if (!Maps->ConsumeLandmarkSpawn(Landmark, Offset, Yaw, bHasYaw))
 	{
-		return;   // not a landmark transition — keep the info_player_start placement (ReadSpawn)
+		return;   // not a landmark transition — keep the info_player_start placement above
 	}
 
 	FElysiumEntity* Lm = EntityWorld->FindLandmark(Landmark);

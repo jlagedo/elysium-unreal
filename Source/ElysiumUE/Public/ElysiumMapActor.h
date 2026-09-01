@@ -667,7 +667,6 @@ private:
 	// No baked level, no collision, no sidecars, so the activation barrier's world-content inputs
 	// are satisfied by their own "intentionally absent" states rather than skipped.
 	void BuildStageWorld();
-	bool ReadSpawn(FVector& OutLocation, float& OutYaw) const;
 	// If this load is a landmark transition (the map subsystem has a queued landmark spawn),
 	// override the info_player_start placement: resolve the destination `info_landmark` in the just-
 	// built entity world and seat the player at landmark origin + the carried offset. Fires the

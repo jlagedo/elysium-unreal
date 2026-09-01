@@ -50,6 +50,18 @@ struct FElysiumSkyDef
 	static bool Parse(const FString& SkyPath, FElysiumSkyDef& Out);
 };
 
+// The `<map>.spawn` sidecar: `info_player_start`'s origin (Source feet, carried verbatim) and yaw.
+// Absent on a map with no `info_player_start` (a backdrop-only map, say) -- `bValid` stays false
+// and the caller keeps whatever placement it already had.
+struct FElysiumSpawnDef
+{
+	bool bValid = false;
+	FVector OriginCm = FVector::ZeroVector;   // feet, not the capsule center
+	float YawDeg = 0.f;                       // already Unreal-space (UE_bsp_to_scene negates it)
+
+	static bool Parse(const FString& SpawnPath, FElysiumSpawnDef& Out);
+};
+
 namespace ElysiumEnvironment
 {
 	// The sky-face orientation contract this build assembles cubes under, matched against the

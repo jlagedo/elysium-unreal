@@ -109,6 +109,35 @@ bool FElysiumSkyDef::Parse(const FString& SkyPath, FElysiumSkyDef& Out)
 	return Out.bValid;
 }
 
+bool FElysiumSpawnDef::Parse(const FString& SpawnPath, FElysiumSpawnDef& Out)
+{
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *SpawnPath))
+	{
+		return false;
+	}
+
+	bool bHasOrigin = false;
+	for (const FString& Line : Lines)
+	{
+		TArray<FString> Tok;
+		Line.ParseIntoArray(Tok, TEXT(" "), true);
+		if (Tok.Num() == 4 && Tok[0] == TEXT("origin"))
+		{
+			Out.OriginCm = FVector(FCString::Atod(*Tok[1]), FCString::Atod(*Tok[2]),
+				FCString::Atod(*Tok[3]));
+			bHasOrigin = true;
+		}
+		else if (Tok.Num() == 2 && Tok[0] == TEXT("yaw"))
+		{
+			Out.YawDeg = FCString::Atof(*Tok[1]);
+		}
+	}
+
+	Out.bValid = bHasOrigin;
+	return Out.bValid;
+}
+
 namespace
 {
 	// Decode a PNG on disk into tightly packed BGRA8. Returns false (and leaves OutSize 0)

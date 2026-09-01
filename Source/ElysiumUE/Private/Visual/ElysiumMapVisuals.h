@@ -61,7 +61,12 @@ public:
 	// backdrop on SkyDomeMesh (through M_Sky), and as the adopted SkyLight's IBL source. A real
 	// cubemap on the sky light is what gives Lumen sky occlusion — interiors then darken because
 	// they cannot see the sky, instead of receiving a constant fill through solid walls.
-	void ApplyEnvironment(const FString& MapName);
+	// `Env` is the map's already-resolved `.env` values — the baked `UElysiumMapEnvironment` when
+	// R4.4 converted this map, the sidecar otherwise — resolved once by the caller alongside SkyDef
+	// (`ElysiumMapEnvironmentSource::Load`), not re-read here. Takes no `MapName`: every path this
+	// function still touches (the sky-face directories) is keyed by the sky's own name in `Env`,
+	// not the map's.
+	void ApplyEnvironment(const FElysiumEnvDef& Env);
 
 	// Run at map activation, once everything the map places is standing: walk every mesh component
 	// in the level and report the mesh assets carrying a slot bound to nothing or to the engine's

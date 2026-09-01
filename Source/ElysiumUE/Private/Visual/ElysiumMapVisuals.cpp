@@ -761,17 +761,17 @@ void UElysiumMapVisuals::BuildRopes(const FString& MapName)
 	UE_LOG(LogElysiumVisuals, Log, TEXT("ropes: %d cables"), RopeCount);
 }
 
-void UElysiumMapVisuals::ApplyEnvironment(const FString& MapName)
+void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env)
 {
-	FElysiumEnvDef Env;
-	const bool bHaveEnv = FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), Env);
+	// `Env` already resolved (asset or sidecar) by the caller
+	// (`ElysiumMapEnvironmentSource::Load`), which logs which source answered.
 	EnvDef = Env;
 
 	// Before anything sky-shaped: the fog belongs to every primitive in the level, including on
 	// the 65 maps with no sky_camera and the ones whose faces did not decode.
 	ApplySceneFog();
 
-	if (!bHaveEnv || !Env.bSky)
+	if (!Env.bSky)
 	{
 		// No sky faces to build a cube from — but the SkyLight's *level* is still data (D2), and
 		// leaving it on the bake's placeholder is exactly the cubemap-less constant fill this

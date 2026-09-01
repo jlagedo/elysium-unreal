@@ -169,6 +169,16 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("DA_") + Map + TEXT("_LightCalibration");
 		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
 	}
+	// This map's environment as cooked content (R4.4): the `UElysiumMapEnvironment` that replaces
+	// `<map>.env`, `<map>.sky` and `<map>.spawn` -- the 2D-sky/fog set, the 3D-skybox miniature's
+	// placement transform, and the initial player spawn. One asset per map, beside
+	// `DA_<map>_Entities`/`DA_<map>_Collision`. Its Python twin is
+	// `elysium_pipeline.importers.map_environment.asset_path`.
+	static FString BakedMapEnvironment(const FString& Map)
+	{
+		const FString Asset = TEXT("DA_") + Map + TEXT("_Environment");
+		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
+	}
 	// Shared corpus (`pipeline/unreal/bake_map.py` CorpusBake).
 	// A texture, a material and a static model belong to the user's install, not to a map:
 	// `materials/metal/metalox` decodes to the same bytes whichever BSP named it, and one doorknob

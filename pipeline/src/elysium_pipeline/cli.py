@@ -2252,6 +2252,88 @@ def import_map_collision(
     )
 
 
+@import_app.command("map-environment")
+def import_map_environment(
+    ctx: typer.Context,
+    maps: list[str] = typer.Option(
+        None, "--maps",
+        help="Map stem this run stages the environment for (repeatable: --maps sp_tutorial_1 "
+             "--maps sm_hub_1). Required -- the stage refuses to run unscoped.",
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Re-author every asset even when its recipe stamp is current."
+    ),
+    stage_only: bool = typer.Option(
+        False, "--stage-only", help="Write the manifest; launch no editor.",
+    ),
+) -> None:
+    """Import each named map's environment into /ElysiumBaked/<map>/DA_<map>_Environment.
+
+    Reads `<map>.env`, `<map>.sky` and `<map>.spawn` verbatim, asserts parity against them, and
+    then authors one `UElysiumMapEnvironment` per map in a headless editor
+    (`docs/architecture/seam_map_map.md` -> "Import — environment").
+    """
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import unreal
+        from elysium_pipeline.importers import map_environment as importer
+
+        if config.work_root is None or config.export_root is None:
+            raise ConfigError(
+                "ELYSIUM_EXPORT_ROOT and ELYSIUM_WORK_ROOT must be configured; copy "
+                "dev/paths.example.env to .elysium.local.env and set the local paths"
+            )
+        root = importer.staging_root(config.work_root)
+        staged = importer.stage_map_environment(
+            root, maps=maps or [], sidecar_dir=lambda stem: config.export_root / stem,
+        )
+        console.print(staged.summary())
+        for name, detail in staged.failures:
+            console.print(f"[yellow]  {name}: {detail}[/yellow]", markup=True)
+        if stage_only:
+            if staged.failures:
+                raise RuntimeError(f"{len(staged.failures)} map(s) could not be staged")
+            return
+
+        editor_failure: Exception | None = None
+        try:
+            unreal.import_map_environment(config, runner, staged.manifest_path, force=force)
+        except unreal.UnrealFailure as error:
+            editor_failure = error
+        report = _read_json(root / importer.IMPORT_REPORT_NAME)
+        failed = (report.get("failed") or []) if report else []
+        if report:
+            console.print(
+                "map-environment import: "
+                f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
+                f"{len(failed)} failed"
+            )
+            for row in failed[:10]:
+                console.print(f"[yellow]  {row.get('map')}: {row.get('reason')}[/yellow]",
+                              markup=True)
+        problems = []
+        if staged.failures:
+            problems.append(f"{len(staged.failures)} map(s) could not be staged")
+        if failed:
+            problems.append(f"{len(failed)} map(s) failed to import")
+        if editor_failure is not None:
+            problems.append(str(editor_failure))
+        if problems:
+            raise RuntimeError("; ".join(problems))
+
+    # The stage reads the loose environment sidecars and nothing else; the editor phase needs the
+    # engine and nothing else -- every value travels in the manifest.
+    _execute(
+        _state(ctx),
+        "import map-environment",
+        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
+        action,
+        require_work=True,
+        require_ue=not stage_only,
+        activity=not stage_only,
+    )
+
+
 def _read_json(path: Path) -> dict | None:
     """A JSON object a child process may have written, or None when absent or unreadable."""
 
