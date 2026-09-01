@@ -269,3 +269,168 @@ independently of the writer and compares record counts and values, checks every 
 against its primitive span, every displacement's vertex grid against its accessor, every
 PHYSCOLLIDE hull against its accessors, every `sprp` node against its record, the PAKFILE
 directory against the ZIP, and every material name against a `dependencies` row.
+
+## Producer join: the entities+root join behind `.ents`
+
+The legacy `.ents` sidecar is a **join, not a projection**. The entities unit owns lump 0 and
+nothing else, so `hulls`, `contents`, `blocks_player`, `brush_mesh` and the 3D-skybox `sky` flag —
+five of the fields the running game reads — are root-lump facts that no entities row carries. This
+section states that join, the hull solver it runs and the field list it emits, so the sidecar
+producer of `docs/project/seam_migration.md` → "Roadmap — one pipeline" (R3.2) is written from a
+specification rather than from a reading of `exporters/UE_bsp_to_scene.py::write_entities`.
+
+Every number below is measured over the three-map working corpus — `sp_tutorial_1`,
+`sm_pawnshop_1`, `sm_hub_1`; 4,933 entities, 377 of them brush entities — against the published
+V2 units and the legacy sidecars on disk, 2026-08-31.
+
+### Which table owns which fact
+
+The producer walks the entities unit in `entities[].index` order and, for every row whose
+`model.kind` is `brush`, resolves the brush index `N = model.index` against the root unit:
+
+| `.ents` field | Root unit path | Entities unit part |
+|---|---|---|
+| `hulls` | `models[N].headNode` → `bsp.nodes[].children` → `bsp.leafs[].firstLeafBrush`/`numLeafBrushes` → `bsp.leafBrushes.values[]` → `collision.brushes[]` → `collision.brushSides[].plane`/`.bevel` → `planes[]` | `model.index` |
+| `contents` | `collision.brushes[].contents`, OR-ed over the model's **hull-producing** brushes only | — |
+| `blocks_player` | `contents & 0x1400B` — `SOLID\|WINDOW\|GRATE\|MOVEABLE\|PLAYERCLIP`; water and pure `MONSTERCLIP` stay passable | — |
+| `brush_mesh` | `models[N].firstFace`/`numFaces` → `faces[].numEdges`/`.texInfo` → `texinfos[].texData` → `textures[].asset`; the model is meshed when **any** face survives | the `func_areaportalwindow` → `target` → `targetname` → `model` join that suppresses render-only visibility backings |
+| `sky` | `bsp.nodes[]` + `planes[]` point-leaf walk of model 0, `bsp.leafs[].area`, `models[N].mins`/`maxs` for the brush-entity classification point | the first `sky_camera` block's `origin` and `scale` |
+
+`models[N].origin` is **not** part of the join: it is `(0, 0, 0)` on all 368 models of the three
+maps and the exporter never reads it. The entity's `origin` keyvalue is the only translation.
+
+Root positional tables are stated in glTF metres, Y-up (`seam_map_unit_contract.md` →
+"Coordinate transform"), so the producer inverts the transform before solving: source normal
+`(nx, ny, nz) = (x, -z, y)`, source distance `d_src = d_gltf / 0.0254`, source position
+`(sx, sy, sz) = (x, -z, y) / 0.0254`. **The recovered plane rows are held as binary32**, the width
+the BSP stores and the width the legacy solver runs at. That is load-bearing, not a detail: over
+the three maps' 35,594 planes, 4,772 distances do not return bit-exactly in binary64 (max
+|Δ| 9.09e-13 Source inches, an artefact of the `× 0.0254` / `÷ 0.0254` pair), while **zero** fail
+to return bit-exactly in binary32. Solving in binary64 changes hull vertex sets; solving in
+binary32 does not.
+
+### The hull solver
+
+Ported verbatim from `_model_brushes` and `_brush_hull`. Model brushes first:
+
+1. Depth-first from `models[N].headNode` over `bsp.nodes[].children`. A child `c < 0` is leaf
+   `-c - 1`; take its `firstLeafBrush`/`numLeafBrushes` window of `bsp.leafBrushes.values[]`
+   (stride 2, `uint16`) into a **set**. `headNode` 0 is the world model — world plus `func_detail`,
+   and never a separate brush entity's brushes.
+2. Emit hulls in **ascending brush index** over that set.
+
+Then, per brush, the hull is the convex intersection of its sides' halfspaces `n·x ≤ d`:
+
+1. Collect the brush's `numSides` sides from `firstSide`; **skip every side with `bevel` set**
+   (bevels are redundant AABB planes). Fewer than four survivors ⇒ no hull for this brush.
+2. For every ordered triple `a < b < c` of surviving planes, build `A = [n_a; n_b; n_c]`. Skip the
+   triple when `|det A| < 1e-6`.
+3. Solve `A x = (d_a, d_b, d_c)`; keep `x` when `n_i · x - d_i ≤ 0.05` for **every** surviving
+   plane `i` of the brush, including the three that generated it.
+4. Fewer than four accepted points ⇒ no hull for this brush, and the brush's `contents` is **not**
+   OR-ed into the entity's `contents`.
+5. Dedupe the accepted points in Source units on the key `(round(x, 1), round(y, 1), round(z, 1))`.
+   The map keeps first-appearance **order** and last-seen **value**, which is what a Python dict
+   comprehension over the point list does, and what a port must reproduce to stay byte-comparable.
+6. Transform each surviving point with `(x, y, z)_unreal = (sx, -sy, sz) × 2.54`, round to 4
+   decimals, and flatten: one hull is one flat array of `3 × vertexCount` Unreal centimetres.
+
+The three tolerances — `1e-6` determinant, `0.05` halfspace, `0.1` dedupe (Source units) — are the
+contract. They are not derived from anything; they are the numbers the shipped collision was built
+with, and changing one changes hull vertex counts on real maps.
+
+**One pre-declared divergence, from a latent defect in the legacy reader.** `_brush_hull` unpacks
+`dbrushside_t` as `"<hhhh"`, so `planenum` is read **signed**. Exactly one of the 108 maps overflows
+it: `la_hub_1` carries 33,294 planes, and 216 of its 63,096 brushsides name a plane index ≥ 32,768,
+which the legacy reader turns into a negative index that wraps to the tail of the plane array and
+silently produces a wrong hull. The root unit stores `brushSides[].plane` unsigned, so a faithful
+port **diverges from the legacy exporter on `la_hub_1` and only there**. That divergence is a fix;
+the differ must expect it by name rather than report it as a regression.
+
+### The hull frame: world-space hulls, origin-relative attachment
+
+The solver reads world planes and applies no per-entity transform, so a hull comes out in whatever
+frame vbsp compiled the brush model into, and the sidecar's rule is uniform and unconditional:
+**world = entity `origin` + hull vertex.** `source_to_unreal` is linear, so converting the origin
+and the vertices separately and adding is the same as converting the sum, which is why the runtime
+may seat an entity-local body at `Ent.Origin` and read the hull verbatim.
+
+Verified on a real rotating door, 2026-08-31, from `sm_pawnshop_1`'s legacy `.ents` and its V2
+root unit, no game run: `havenrm`, `func_door_rotating`, `model "*18"`, `origin` key
+`-2008.5 -2559 199` → Unreal `[-5101.59, 6499.86, 505.46]`. Its single hull is 8 vertices spanning
+Unreal `[-3.81, -2.54, -139.7] … [3.81, 134.62, 139.7]` — a 3 × 54 × 110 Source-unit slab that is
+exactly `models[18]`'s own `mins`/`maxs` (`(-1.5, -53, -55) … (1.5, 1, 55)` in Source units), and
+`models[18].origin` is zero. The hull is therefore **not** in world space for this entity: vbsp
+re-centred the model on the origin brush, `origin` is simultaneously the door's hinge (the 3-unit-
+thick panel's near edge sits one Source unit past it and the leaf runs 53 units the other way), and
+only `origin + hull` places the door inside the map. The decisive evidence is instancing, not
+magnitude: 8 of `sm_pawnshop_1`'s 10
+`func_door_rotating` entities share just three brush models (`*18` twice, `*31` three times, `*33`
+three times) at eight distinct origins, which is impossible if a hull carried a world position.
+The converse case is authored in the same corpus — `sp_tutorial_1`'s `trigger_changelevel` family
+mixes both, `trig_leave_tutorial`'s `*74` centred on its origin and `trig_theater_to_tutorial`'s
+`*142` left thousands of units away from it — so the producer must **never** classify: it applies
+the one rule and lets vbsp's choice of frame ride through untouched.
+
+### The field list `.ents` must reproduce
+
+The document is `{"map": "<stem>", "entities": [...]}` written with `json.dump(...,
+separators=(",", ":"))` and default `ensure_ascii`. `entities[]` is one row **per lump block, in
+lump order, with no drops and no reorders** — `ElysiumEntityWorldPersistence.cpp` applies saved
+entity state by index, so the ordinal is a save key.
+
+Blocks come from `re.findall(r"\{([^{}]*)\}", …, re.S)` over the lump decoded `ascii`/`replace`;
+pairs from `re.findall(r'"([^"]*)"\s+"([^"]*)"', block)`. Keys are **not** folded, and a plain
+keyvalue is **last-wins**: a repeated scalar key keeps its final occurrence and its authored
+spelling.
+
+| Field | Present | Value |
+|---|---|---|
+| `classname` | always | the last `classname`, removed from `keys` |
+| `targetname` | always | the last `targetname`, removed from `keys`, `""` when absent |
+| `origin` | always | `[3]`, Unreal cm, 5 decimals; C `atof` of each token of the last `origin` value when it splits into exactly three whitespace tokens, else `[0,0,0]`. The keyvalue **stays** in `keys` |
+| `sky` | when true | the BSP-area test above |
+| `hinge_axis` | when `hingeaxis` and `origin` both split into three tokens | `[3]`, 6 decimals; `source_dir_to_unreal(hingeaxis − origin)` normalized; a norm ≤ 1e-6 gives `[0,0,1]` |
+| `model` | brush entities | `N` from `*N`, only when `48·(N+1) ≤ len(lump 14)`; an out-of-range index emits **no** `model`/`hulls`/`contents`/`blocks_player` at all |
+| `hulls` | with `model` | the solver's output, ascending brush index |
+| `contents` | with `model` | OR over hull-producing brushes |
+| `blocks_player` | with `model` | `contents & 0x1400B ≠ 0` |
+| `brush_mesh` | with `model`, when meshed | `"brush_<N>"` |
+| `elevator_floors` | `classname.lower() == "func_elevator"` | `[8]`, Unreal cm Z, 5 decimals; `floor1`…`floor8` (exact-case keys), `atof`, default `"0"` |
+| `start_hidden` | always | `keys.get("StartHidden", "0") == "1"`, exact-case key |
+| `outputs` | when non-empty | below |
+| `keys` | always | every remaining keyvalue, authored spelling, last-wins |
+| `model_mesh` | studio-model entities | the shared-corpus stem; skipped when `classname` starts with `npc_` (the skeletal lane owns those) or the `model` value (backslashes folded to slashes, lowercased) does not end `.mdl` |
+| `model_quat` | with `model_mesh` | `[4]`, 6 decimals, `source_angles_to_unreal_quat` of the `angles` triple, identity when absent or short |
+
+Key order in the emitted object is the order of that table; a byte-comparing differ depends on it.
+
+An output row is emitted for a keyvalue whose key matches `^(On|Out)` case-insensitively **and**
+whose value holds at least four commas, and carries `target`, `input`, `param`, `delay`, `times`,
+`python`, `name` in that order: `target`/`input`/`python` stripped, `param` **not** stripped,
+`delay` a plain `float()` with `0.0` on failure, `times` `int(float())` with `-1` on failure, field
+6 (`extra`) dropped. Every such keyvalue is removed from `keys`; an `On*`/`Out*` key with fewer
+than four commas stays a plain keyvalue.
+
+Six of those rules disagree with the entities unit's own reading — datamap output typing versus the
+`^(On|Out)` prefix test (the unit's `outputLike` demotions), key folding, `param` stripping, `delay`
+read with `atof` rather than `float()`, the dropped `extra` field, and `times` normalization of an
+authored `0` to unlimited. Each is a **named divergence with its own commit**, owned by
+`seam_migration.md` → R3.4, not something the producer decides while porting.
+
+### Verification
+
+The join above was executed against the published V2 units alone — root plus entities, no BSP read
+— and diffed against the legacy sidecars on disk, 2026-08-31:
+
+| Map | Brush entities | Hulls | Hull vertices | `hulls` / `contents` / `blocks_player` diffs | Meshed models (`brush_mesh` rows) | `sky` rows |
+|---|---:|---:|---:|---:|---:|---:|
+| `sp_tutorial_1` | 185 | 466 | 3,794 | 0 / 0 / 0 | 73 (73) | 59 |
+| `sm_pawnshop_1` | 45 | 139 | 1,054 | 0 / 0 / 0 | 28 (33) | 79 |
+| `sm_hub_1` | 147 | 345 | 2,694 | 0 / 0 / 0 | 55 (60) | 123 |
+
+950 hulls and 7,542 hull vertices reproduced exactly, every `contents` word and `blocks_player`
+bit equal, the meshed-model sets equal (with 5 and 8 `func_areaportalwindow` backing models
+correctly suppressed on `sp_tutorial_1` and `sm_hub_1`), and all 261 `sky` rows equal. The five
+joined facts are therefore recoverable from the V2 units, and the remaining risk in R3.2 is the
+field list above, not the join.

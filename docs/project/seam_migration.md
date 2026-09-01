@@ -915,6 +915,65 @@ tasks, each already has its own detailed Settled entry above; this rolls the sta
   per-map sidecar tables in `rebuild-strategy.md`/`uasset-bake-spike.md` don't list `.ready` yet —
   add the row when R3.2 starts writing it.
 
+**The `.ents` join is stated, and reproduced from the V2 units (2026-08-31).** R3.1/MP-2.1
+(`docs/architecture/seam_map_map.md` → "Producer join: the entities+root join behind `.ents`"; docs
+plus one pytest module, no producer code). The section names, per `entities[].model` brush index,
+the exact root-unit path behind each of the five joined facts — `hulls` through
+`models[N].headNode` → `bsp.nodes[].children` → `bsp.leafs[].firstLeafBrush`/`numLeafBrushes` →
+`bsp.leafBrushes.values[]` → `collision.brushes[]`/`brushSides[]` → `planes[]`; `contents` as the OR
+over **hull-producing** brushes only; `blocks_player` as `contents & 0x1400B`; `brush_mesh` from
+`models[N].firstFace`/`numFaces` → `faces[]` → `texinfos[]` → `textures[].asset` minus TOOLS
+materials and minus the entities unit's `func_areaportalwindow` backing join; `sky` from the
+model-0 point-leaf walk plus `bsp.leafs[].area` and the first `sky_camera`. `models[N].origin` is
+explicitly *not* part of the join (zero on every brush model). The hull solver is stated verbatim
+from `_model_brushes`/`_brush_hull` — bevel sides skipped, `<4` survivors ⇒ no hull, every plane
+triple with `|det| ≥ 1e-6` solved, a point kept when `n·x − d ≤ 0.05` for *every* surviving plane,
+dedupe on `round(·, 1)` Source units keeping first-appearance order and last-seen value, then
+`× 2.54` with the Y flip and `round(·, 4)`.
+
+Two numeric facts the port depends on, both measured. **Precision:** root planes are published in
+glTF metres, and inverting that transform in binary64 leaves 4,772 of the three maps' 35,594 plane
+distances not bit-equal to the BSP's float32 (max |Δ| 9.09e-13 Source inches) while **zero** fail in
+binary32 — the solver must hold recovered planes as float32, and solving in float64 measurably
+changes hull vertex sets (a first pass at float64 mis-matched 96 of 377 brush entities; float32
+matched all 377). **One pre-declared divergence:** `_brush_hull` unpacks `dbrushside_t` as `"<hhhh"`,
+so `planenum` is signed; `la_hub_1` alone carries 33,294 planes and 216 of its 63,096 brushsides
+name a plane ≥ 32,768, which the legacy reader wraps to the tail of the plane array. A faithful port
+reading the root unit's unsigned `brushSides[].plane` therefore diverges from the legacy exporter on
+`la_hub_1` and nowhere else; the R3.3 differ must expect that by name — it is a fix, not a
+regression.
+
+**The hull frame, verified once on a real rotating door** (`sm_pawnshop_1` `havenrm`,
+`func_door_rotating`, `model "*18"`, legacy `.ents` + V2 root unit, data check, no game run): the
+solver applies no per-entity transform, so a hull rides in whatever frame vbsp compiled, and the
+rule is unconditional — **world = entity `origin` + hull vertex**. The door's `origin` key
+`-2008.5 -2559 199` → Unreal `[-5101.59, 6499.86, 505.46]`; its single 8-vertex hull spans
+`[-3.81, -2.54, -139.7] … [3.81, 134.62, 139.7]` cm, exactly `models[18]`'s own bbox
+(`(-1.5, -53, -55) … (1.5, 1, 55)` Source) with `models[18].origin` zero — so for this entity the
+hull is *not* world-space, `origin` is simultaneously the hinge, and only `origin + hull` lands the
+door in the map. The decisive evidence is instancing rather than magnitude: 8 of `sm_pawnshop_1`'s
+10 `func_door_rotating` entities share three brush models (`*18` ×2, `*31` ×3, `*33` ×3) at eight
+distinct origins. The converse is authored in the same corpus — `sp_tutorial_1`'s
+`trigger_changelevel` family mixes both, `*74` re-centred on its origin and `*142` left thousands of
+units from it — so the producer classifies nothing and applies the one rule.
+
+**The whole join was then executed against the published V2 units alone** (root + entities, no BSP
+read) and diffed against the legacy sidecars for the three-map corpus: 377 brush entities, 950
+hulls, **7,542 hull vertices reproduced exactly**, 0 `contents` and 0 `blocks_player` mismatches,
+the meshed-model sets equal (`sp_tutorial_1` 73, `sm_pawnshop_1` 28, `sm_hub_1` 55, with 5 and 8
+`func_areaportalwindow` backings correctly suppressed), and all 261 `sky` rows equal. The section
+also transcribes the full `.ents` field list the producer must reproduce — emission order, per-field
+rounding (origin 5, hinge 6, hull 4, quat 6), last-wins unfolded keys, the exact-case `StartHidden`
+and `floor1`…`floor8` lookups, the `*N` range guard, `npc_*` exclusion for `model_mesh`, the output
+row's seven members and `separators=(",", ":")` — and points the six known field-level differences
+(datamap output typing, key folding, `param` stripping, `delay` via `atof`, dropped `extra`, `times`
+normalization) at R3.4 rather than deciding them here. `pipeline/tests/test_map_producer_join.py`
+pins the solver (box corners with a bevel side ignored, dedupe under a duplicated plane, the
+`<4`-sides abstain, the headnode-scoped tree walk) and the door invariant against the real corpus;
+5 passed in 0.40 s. Follow-ups: R3.2 owes the field list, which is where the remaining risk now
+lives — the join itself is proven; the float32 rule and the `la_hub_1` overflow both want asserting
+in the R3.3 differ; the invariant was verified on three maps, not 108.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -957,10 +1016,12 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R3 — map producer parity (game untouched) [MP-2]
 
-- **R3.1 The join, stated** [MP-2.1]. Entities+root join specified in `seam_map_map.md` (hulls,
-  contents, `blocks_player`, `brush_mesh`, sky-membership are root-lump facts); the hull solver
-  ports verbatim; the world-space-hulls invariant verified on a rotating door. → lands: the
-  producer's contract.
+**R3.1 landed (2026-08-31)** [MP-2.1] — the entities+root join, the hull solver's exact algorithm
+and tolerances, the hull-frame invariant (verified on `sm_pawnshop_1`'s `havenrm`
+`func_door_rotating`) and the `.ents` field list are stated in `seam_map_map.md` → "Producer join";
+the join reproduces the legacy hulls, contents, `blocks_player`, `brush_mesh` and `sky` exactly from
+the V2 units on the three test maps. Numbers in the Settled entry "The `.ents` join is stated, and
+reproduced from the V2 units".
 - **R3.2 Producer emits legacy sidecars** [MP-2.2]. `map_sidecars` reads the four map units (+
   the nav-graph seam) and emits byte-comparable `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/
   `.sky`/`.spawn`/`.ropes`. → lands: the new source proven with zero game change.
