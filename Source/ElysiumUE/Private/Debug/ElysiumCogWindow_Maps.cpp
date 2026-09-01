@@ -139,8 +139,9 @@ void FElysiumCogWindow_Maps::RenderContent()
 		Row("Failure", Map->GetRuntimeFailureReason());
 	}
 	Row("Surfaces", FString::Printf(TEXT("%d world · %d sky"), Visuals->WorldSurfaceCount, Visuals->SkySurfaceCount));
-	Row("Collision", FString::Printf(TEXT("%s · %d hulls · %d disp tris"),
+	Row("Collision", FString::Printf(TEXT("%s · %s · %d hulls · %d disp tris"),
 		ElysiumCollisionBuildStateName(Collision->GetBuildState()),
+		ElysiumCollisionSourceName(Collision->GetSource()),
 		Collision->HullCount, Collision->DispTriCount));
 	Row("Lights", FString::Printf(TEXT("%d"), Visuals->WorldLightCount));
 	Row("Props", FString::Printf(TEXT("%d inst · %d models"), Visuals->PropInstanceCount, Visuals->PropModelCount));

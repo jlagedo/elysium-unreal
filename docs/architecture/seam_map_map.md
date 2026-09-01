@@ -517,3 +517,181 @@ bit equal, the meshed-model sets equal (with 5 and 8 `func_areaportalwindow` bac
 correctly suppressed on `sp_tutorial_1` and `sm_hub_1`), and all 261 `sky` rows equal. The five
 joined facts are therefore recoverable from the V2 units, and the remaining risk in R3.2 is the
 field list above, not the join.
+
+## Import
+
+R4.2 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves the map's **collision**
+off the loose `<map>.hulls` / `<map>.dispcol` documents and off the per-entity runtime cook, into
+cooked content: one `UElysiumMapCollisionPayload` per map. Like R4.1's entity table this changes
+transport and not geometry — the convex sets and the triangle soup are the same numbers the
+sidecars carry — but unlike R4.1 it also changes *when the cook happens*, and that is the point of
+the task.
+
+**What the cook costs today.** `UElysiumMapCollision::LoadHulls` parses a text point cloud and
+hands `SetCollisionConvexMeshes` 2,371 / 1,376 / 3,842 convex sets on the three working maps;
+`FElysiumEntityWorld::BuildBrushBody` builds and *synchronously* cooks one `UBodySetup` per brush
+entity, 185 / 45 / 147 of them. Every one of those cooks runs on every map load, and every one
+mints `FGuid::NewGuid()`, so nothing is cacheable even in principle. The payload's body setups are
+authored once, offline, with a stable `BodySetupGuid` saved in the package: the editor derives them
+into the DDC on the first load after an import and never again, and a cooked build carries the
+cooked buffers in the package. That is the "no runtime cook" the roadmap line asks for.
+
+### Identity and naming
+
+```text
+$ELYSIUM_EXPORT_ROOT/<map>/<map>.hulls + .dispcol + .ents   (the sidecars this lane replaces)
+  -> /ElysiumBaked/<map>/DA_<map>_Collision                 (UElysiumMapCollisionPayload)
+```
+
+One asset per map, in the map's own baked package folder beside its `.umap` and beside
+`DA_<map>_Entities` — collision is a property of one map. `FElysiumContentPaths::BakedMapCollision`
+is the one C++ accessor; its Python twin is
+`elysium_pipeline.importers.map_collision.asset_path(map)`, and the two must agree exactly.
+
+### What the payload carries
+
+Three payloads, because the running game builds three colliders and they are not interchangeable:
+
+| Member | Source | Shape |
+|---|---|---|
+| `WorldHulls` | `<map>.hulls` | one `UBodySetup`, one `FKConvexElem` per solid world brush |
+| `Displacement` + `DisplacementVertices`/`DisplacementIndices` | `<map>.dispcol` | one `UBodySetup` whose trimesh is cooked from the asset's own triangle soup |
+| `BrushBodies[]` | the `.ents` join's `hulls` | one `UBodySetup` per **brush entity**, keyed by lump ordinal |
+
+The convex vertices live in the body setups' `AggGeom` and nowhere else — the payload carries no
+loose vertex table beside them, so a brush entity's hulls are not duplicated between this asset and
+`DA_<map>_Entities`: that asset states the entity's *definition* (which the substrate reads for
+picks, gizmos and mover geometry), this one states its *cooked collision*.
+
+**The asset is the collision data provider.** A `UBodySetup` reads trimesh source from
+`Cast<IInterface_CollisionDataProvider>(GetOuter())`, so the displacement setup is outered to the
+payload and `UElysiumMapCollisionPayload` implements that interface — the `UProceduralMeshComponent`
+pattern with the asset, not a component, as the vessel. Convex elements need no provider; they cook
+from `AggGeom` directly.
+
+**Body-setup settings are stated, not inherited.** Each authored setup reproduces the recipe the
+runtime builds by hand today, so the two paths are the same physics:
+
+| | `WorldHulls` | `Displacement` | `BrushBodies[]` |
+|---|---|---|---|
+| `CollisionTraceFlag` | `CTF_UseDefault` | `CTF_UseComplexAsSimple` | `CTF_UseSimpleAsComplex` |
+| `bDoubleSidedGeometry` | `true` | `true` | `false` |
+| `bGenerateMirroredCollision` | `false` | `false` | `false` |
+
+`CTF_UseDefault` and `bDoubleSidedGeometry = true` on the world hulls are not a choice made here:
+they are what `UProceduralMeshComponent::CreateBodySetupHelper` gives the component today with
+`bUseComplexAsSimpleCollision = false`, and the brush component's `CTF_UseSimpleAsComplex` is what
+`InitBrush` sets. **One deliberate divergence:** the displacement trimesh is cooked with
+`bFastCook = false` and `bDeformableMesh = false`, where the procedural-mesh component sets both
+`true`. Those two flags exist because a procedural mesh cooks while the game runs; this payload
+cooks offline, so it takes the full-quality cook. Nothing else in the trimesh contract changes —
+`bFlipNormals` stays `true`, matching the component, and a Chaos trimesh is two-sided either way.
+
+### Frames, and the one transform the stage applies
+
+World hulls are already in the frame the world collider is registered at (component at the actor
+origin, vertices verbatim), exactly as `.hulls` is read today. Brush-entity hulls are
+**entity-local** — `world = entity origin + hull vertex`, the rule "The hull frame" above states —
+and the payload stores them local, because the body component is seated at the live origin and that
+origin is not a load-time constant (a mover moves).
+
+The exception is the 3D skybox. `UElysiumMapEntities::Deserialize` scales a `sky` brush entity's
+hulls by the `<map>.sky` scale (`world(v) = scale · (v − skyOrigin)`, hulls taking the scale and not
+the translation), so the def the runtime holds is *not* what the `.ents` document stores. A cooked
+convex cannot be rescaled after the fact, so **the stage applies that scale when it authors a `sky`
+brush entity's body**, from the map's own `.sky`, and the load-time parity test compares the
+payload's convex vertices against the deserialized def's hulls — the one place the two rules can
+disagree, asserted rather than assumed. On the working corpus this is 4 brush entities of 377 (2 on
+`sm_pawnshop_1`, 2 on `sm_hub_1`, 0 on `sp_tutorial_1`), all at scale 16. World hulls need no such
+rule: `write_hulls` drops the miniature's own brushes outright.
+
+### Producer and stage
+
+`uv run elysium import map-collision --maps <map>…` stages one manifest under
+`$ELYSIUM_WORK_ROOT/import/map_collision/` and then authors the assets in a headless editor
+(`pipeline/unreal/import_map_collision.py`) — the same two-phase shape `import models` and
+`import map-entities` have, and it refuses to run unscoped. The rows come from the loose sidecars
+this lane replaces rather than from a second port of the hull solver: `<map>.hulls`,
+`<map>.dispcol` and the `.ents` join's `hulls`, which since R3.5 are all written by the R3.2
+producer from the published GLB units. Re-deriving them here would be a second implementation of
+`brush_hull` with its own tolerances, which is exactly the divergence "Producer join" exists to
+prevent.
+
+**Parity is asserted at both ends, and the two assertions are not the same assertion.**
+
+1. *At stage time*: the staged convex sets are compared against the sidecar rows they were read
+   from, count for count and vertex for vertex, and a mismatch refuses the manifest. This proves
+   the manifest carries the sidecar unchanged.
+2. *At load time*: `Elysium.Content.MapCollision.*` loads the real baked asset and the real
+   sidecars and compares what each **C++** path produces — convex count and per-hull vertex counts
+   for the world set, triangle count for the displacement set, and per-entity convex geometry
+   against `ElysiumEntityDefSource::Load`'s own defs (which is where the sky scale is proved). That
+   is the parity that matters: it is the only check that the cooked asset and the loose files
+   describe the same solid world.
+
+### Consumption and cutover
+
+`UElysiumMapCollision::Build` loads the payload first and falls back to the sidecar readers,
+logging which source answered (`EElysiumCollisionSource`). On the payload path the two colliders
+are still the collision-only `UProceduralMeshComponent`s the map has always used — same profiles,
+same `ELYSIUM_USE`/`ELYSIUM_PICK` ignores, same registration order — with the payload's setup
+assigned into `ProcMeshBodySetup` instead of one cooked from parsed text.
+
+Both barriers keep their sources, as the roadmap line requires:
+
+- **The collision-ready barrier** still reads the components' own body setups
+  (`bCreatedPhysicsMeshes` / `bFailedToCreatePhysicsMeshes`), not a payload flag. On the payload
+  path `Build` calls `CreatePhysicsMeshes()` before registering, so the state moves Cooking → Ready
+  on the first poll instead of after an async cook; a payload whose meshes fail to create is
+  `Failed`, exactly as a failed cook is today.
+- **The runtime nav bounds** are still the union of the live components' bounds
+  (`GetWorldBounds`). A collision-only procedural mesh has no render section to bound it, which is
+  why `UElysiumHullCollisionComponent` already carries explicit local bounds; the payload path
+  states those bounds from the geometry it just adopted (the convex `ElemBox` union, the trimesh
+  vertex AABB) and the displacement component gains the same explicit bounds, which it needs on
+  this path for the same reason — an unbounded component is invisible to the navigation octree.
+
+`FElysiumEntityWorld::BuildBrushBody` asks the payload for the body of the entity it is building, by
+lump ordinal, and cooks from `Def.Hulls` when there is no payload or no row for that ordinal. A
+runtime-created entity (`CreateRuntimeEntityNoSpawn`, whose index runs past the map's def array)
+therefore always cooks, which is correct: it has no authored collision to have baked.
+
+**The asset's presence is the cutover flag**, as in R4.1 — a map with a payload loads cooked
+collision, a map without one keeps the sidecars, and no map needs an entry anywhere saying which.
+The `.hulls`/`.dispcol` readers stay: they are the fallback for every unconverted map, and R8.1
+owns their deletion once all 108 maps are converted.
+
+### Measured (2026-09-01, the three working maps)
+
+| Map | World hulls | Hull vertices | Displacement triangles | Brush bodies (of them `sky`) | Asset |
+|---|---:|---:|---:|---:|---:|
+| `sp_tutorial_1` | 2,371 | 18,931 | 3,584 | 185 (0) | 3.09 MB |
+| `sm_pawnshop_1` | 1,376 | 10,826 | 0 | 45 (2) | 1.53 MB |
+| `sm_hub_1` | 3,842 | 28,751 | 288 | 147 (2) | 2.98 MB |
+
+Every count is the sidecar's own, asserted by `Elysium.Content.MapCollision.WorldParity` (convex
+count, per-hull vertex values, displacement triangle count) and `…BrushParity` (377 brush bodies
+compared convex for convex against the defs `ElysiumEntityDefSource::Load` produces, 0 differing —
+the four `sky` bodies included, which is the sky-scale proof).
+
+**The load-time cost, honestly.** A headless boot of each map (`-nullrhi -unattended
+-testexit="Activating after"`) reaches the collision-ready barrier on both transports; the
+per-transport A/B, same machine, same build, warm DDC:
+
+| Map | `Build` from payload | `Build` from sidecar |
+|---|---:|---:|
+| `sp_tutorial_1` | 143.1 ms | 21.1 ms |
+| `sm_pawnshop_1` | 93.2 ms | 7.6 ms |
+| `sm_hub_1` | 185.9 ms | 20.5 ms |
+
+Those two numbers do not measure the same work, and the payload is not "slower" in the sense the
+table reads. The sidecar's `Build` only *parses* and *schedules*: `bUseAsyncCooking` sends the cook
+to worker threads, so its cook cost is spent after `Build` returns and never appears here. The
+payload's `Build` loads a multi-megabyte package and creates the Chaos structures for 48–187 body
+setups synchronously before it returns, and in an **editor** build each of those is a DDC lookup —
+a cooked build reads the buffers inline from the package. Both transports report the barrier
+`Ready` by the time construction completes, and the total activation times are within noise of each
+other (1.3–3.6 s on these maps, dominated by navigation, audio and animation preload) because the
+sidecar's asynchronous cook finishes inside that window anyway. The claim R4.2 lands is
+"the cook happens once, offline", not "the map loads faster"; making the adopt asynchronous is a
+tuning question and deliberately not this task's.

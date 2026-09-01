@@ -6,6 +6,7 @@
 #include "ElysiumEditorLabels.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumLineService.h"
+#include "ElysiumMapCollisionPayload.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
@@ -345,6 +346,11 @@ void FElysiumEntityWorld::Activate(double Now)
 		Now, *Defs.MapName, Epoch);
 }
 
+void FElysiumEntityWorld::SetCollisionPayload(const UElysiumMapCollisionPayload* InPayload)
+{
+	CollisionPayload = InPayload;
+}
+
 void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 {
 	// Only brush entities get a body; point/logic entities never do. A killed entity (a
@@ -385,7 +391,19 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 		Ent.Handle.Index, *EntName, *Ent.Def->Classname));
 #endif
 	UElysiumBrushComponent* Body = NewObject<UElysiumBrushComponent>(Owner, BodyName);
-	Body->InitBrush(Ent.Handle, Ent.Def->Hulls, Sol);
+	// The map's cooked payload answers by lump ordinal (R4.2). A runtime-created entity's index
+	// runs past the map's def array and finds nothing there, which is correct: it has no authored
+	// collision to have been baked, so it cooks from its own hulls like every unconverted map does.
+	const UElysiumMapCollisionPayload* Cooked = CollisionPayload.Get();
+	UBodySetup* CookedBody = Cooked ? Cooked->FindBrushBody(Ent.Handle.Index) : nullptr;
+	if (CookedBody)
+	{
+		Body->InitBrushFromPayload(Ent.Handle, CookedBody, Sol);
+	}
+	else
+	{
+		Body->InitBrush(Ent.Handle, Ent.Def->Hulls, Sol);
+	}
 	Body->SetupAttachment(Root);
 	Body->SetRelativeLocation(Ent.Origin);   // hulls are entity-local; the live origin places them
 	Body->RegisterComponent();

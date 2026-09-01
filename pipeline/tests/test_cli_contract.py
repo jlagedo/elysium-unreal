@@ -98,21 +98,23 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
         assert command in result.output, command
 
 
-#: Every command the corpus-import family registers, one per export_v2 family whose slice has
-#: migrated off the legacy export; `seam_migration.md` owns which those are. The destination is
-#: per lane, not one tree: `vdata` deploys loose bytes to `Content/ElysiumCorpus`, while
-#: `textures` and `surface-properties` author `.uasset` content under `/ElysiumBaked`.
-IMPORT_COMMANDS = ("vdata", "textures", "surface-properties", "materials", "models")
+#: Every command the import family registers; `seam_migration.md` owns which those are. The
+#: destination is per lane, not one tree: `vdata` deploys loose bytes to `Content/ElysiumCorpus`,
+#: while `textures` and `surface-properties` author `.uasset` content under `/ElysiumBaked`. The
+#: last two are not corpus families at all but per-map lanes (R4.1, R4.2), which is why they refuse
+#: to run unscoped where a corpus lane takes `--all`.
+IMPORT_COMMANDS = ("vdata", "textures", "surface-properties", "materials", "models",
+                   "map-entities", "map-collision")
 
 
-def test_import_registers_exactly_the_migrated_corpus_families() -> None:
+def test_import_registers_exactly_the_migrated_import_lanes() -> None:
     from elysium_pipeline.cli import import_app
 
     registered = {command.name for command in import_app.registered_commands}
     assert registered == set(IMPORT_COMMANDS)
 
 
-def test_import_help_names_every_corpus_family() -> None:
+def test_import_help_names_every_import_lane() -> None:
     result = RUNNER.invoke(app, ["import", "--help"], env={"COLUMNS": "200"})
     assert result.exit_code == 0, result.output
     for command in IMPORT_COMMANDS:

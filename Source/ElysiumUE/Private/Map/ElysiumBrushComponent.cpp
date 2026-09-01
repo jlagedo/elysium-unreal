@@ -43,11 +43,9 @@ UElysiumBrushComponent::UElysiumBrushComponent()
 void UElysiumBrushComponent::InitBrush(const FElysiumEntityHandle& InOwner,
 	const TArray<FElysiumConvexHull>& Hulls, EElysiumBrushSolidity Solidity)
 {
-	OwningEntity = InOwner;
-	BuiltSolidity = Solidity;
-
 	// One convex element per hull, cooked once. Same recipe as the world .hulls: simple-as-complex,
-	// verts verbatim (entity-local cm).
+	// verts verbatim (entity-local cm). This is the fallback path since R4.2 — a map with a cooked
+	// payload adopts a setup authored offline from these same hulls instead of cooking here.
 	BrushBodySetup = NewObject<UBodySetup>(this);
 	BrushBodySetup->CollisionTraceFlag = CTF_UseSimpleAsComplex;
 	BrushBodySetup->bGenerateMirroredCollision = false;
@@ -69,6 +67,33 @@ void UElysiumBrushComponent::InitBrush(const FElysiumEntityHandle& InOwner,
 	BrushBodySetup->InvalidatePhysicsData();
 	BrushBodySetup->CreatePhysicsMeshes();
 
+	FinishInit(InOwner, Solidity);
+}
+
+void UElysiumBrushComponent::InitBrushFromPayload(const FElysiumEntityHandle& InOwner,
+	UBodySetup* Cooked, EElysiumBrushSolidity Solidity)
+{
+	// The setup arrives already cooked (offline, or off this machine's DDC on the payload's first
+	// load), so nothing is built here — the bounds are read back off the elements the import
+	// authored rather than recomputed from a vertex list this path never sees.
+	BrushBodySetup = Cooked;
+	LocalBounds = FBox(ForceInit);
+	if (Cooked)
+	{
+		for (const FKConvexElem& Convex : Cooked->AggGeom.ConvexElems)
+		{
+			LocalBounds += Convex.ElemBox;
+		}
+	}
+
+	FinishInit(InOwner, Solidity);
+}
+
+void UElysiumBrushComponent::FinishInit(const FElysiumEntityHandle& InOwner,
+	EElysiumBrushSolidity Solidity)
+{
+	OwningEntity = InOwner;
+	BuiltSolidity = Solidity;
 	ApplySolidity(Solidity);
 
 	// The single overlap tap (bound once; events fire only after RegisterComponent).

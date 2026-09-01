@@ -27,6 +27,7 @@ namespace ElysiumNpcWitness { class FElysiumLawEventBus; }
 class AActor;
 class UElysiumBrushComponent;
 class UElysiumGameStateSubsystem;
+class UElysiumMapCollisionPayload;
 class UPhysicsConstraintComponent;
 class UPrimitiveComponent;
 class USkeletalMeshComponent;
@@ -64,6 +65,11 @@ public:
 	// substrate is dormant: construction may queue work, but no think, event, cursor or physical
 	// touch ingress is admitted until Activate.
 	void Load(FElysiumEntityDefs&& InDefs);
+	// The map's cooked collision payload (R4.2), or null when this map has none. Set before Load,
+	// by the one caller that owns the map's transports; a brush entity whose lump ordinal has a
+	// body there adopts it instead of cooking one. The world holds it weakly and reads nothing else
+	// from it — the payload belongs to UElysiumMapCollision, which outlives the load pass.
+	void SetCollisionPayload(const UElysiumMapCollisionPayload* InPayload);
 	// Walk the dormant map's animation references after the player and restored state exist. This is
 	// deliberately separate from Load: the map actor owns the engine-side batch completion that must
 	// follow it before the activation gate opens.
@@ -675,6 +681,9 @@ private:
 	// Brush bodies: the map actor owns them (they are its components); we hold weak refs to
 	// gate them and to destroy them on teardown (the world logically owns the embodiments).
 	TArray<TWeakObjectPtr<UElysiumBrushComponent>> Bodies;
+	// This map's cooked per-entity collision, when it has any (R4.2). Weak: owned by
+	// UElysiumMapCollision, read only while brush bodies are being built.
+	TWeakObjectPtr<const UElysiumMapCollisionPayload> CollisionPayload;
 	// NPC skeletal bodies (built on the map actor, gated by their leaf on dormancy): weak refs held
 	// so a world rebuild on a surviving actor destroys them, like Bodies.
 	TArray<TWeakObjectPtr<USkeletalMeshComponent>> NpcBodies;

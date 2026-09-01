@@ -354,6 +354,10 @@ void AElysiumMapActor::LoadMap()
 				Services.Weather    = this;
 				Services.Camera     = LocalCameraService(this);
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
+				// The map's cooked per-entity collision, when Collision->Build adopted a payload
+				// above (R4.2 — `seam_map_map.md` -> "Import"). Null on an unconverted map, and
+				// then every brush body cooks from its def's hulls as it always has.
+				EntityWorld->SetCollisionPayload(Collision ? Collision->GetPayload() : nullptr);
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();
 

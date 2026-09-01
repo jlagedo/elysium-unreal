@@ -45,6 +45,13 @@ public:
 	void InitBrush(const FElysiumEntityHandle& InOwner, const TArray<FElysiumConvexHull>& Hulls,
 		EElysiumBrushSolidity Solidity);
 
+	// The same body, adopted from the map's R4.2 cooked collision payload instead of cooked here:
+	// `Cooked` is one entity's `UBodySetup`, authored offline from these same hulls
+	// (`docs/architecture/seam_map_map.md` -> "Import"). The component keeps the setup but does not
+	// own it — the payload asset does, and it outlives the map load.
+	void InitBrushFromPayload(const FElysiumEntityHandle& InOwner, UBodySetup* Cooked,
+		EElysiumBrushSolidity Solidity);
+
 	// Dormancy: dormant → collision off (cannot be touched/traced) and visual hidden;
 	// active → restore the built solidity and attached visual.
 	void SetDormant(bool bDormant);
@@ -67,6 +74,8 @@ private:
 	FBox LocalBounds = FBox(ForceInit);
 
 	void ApplySolidity(EElysiumBrushSolidity Solidity);
+	// The tail both InitBrush paths share: solidity, and the one overlap tap.
+	void FinishInit(const FElysiumEntityHandle& InOwner, EElysiumBrushSolidity Solidity);
 
 	// Overlap taps — forward to the entity world (resolved through the owning map actor), so a
 	// stale world pointer is impossible: teardown drops the actor's world before the actor's

@@ -1326,6 +1326,61 @@ asset. Tests: 7 pytest (`test_map_entity_asset.py`), 2 Substrate
 (`Elysium.Substrate.MapEntities.DeserializeRows`/`SkyTransform`), 2 Content; Substrate 426/426,
 34 pytest over the five producer/importer modules, `doctor` clean.
 
+**R4.2 — collision ships as cooked content (2026-09-01).** Per-map `UElysiumMapCollisionPayload`
+(`/ElysiumBaked/<map>/DA_<map>_Collision`), a `UDataAsset` that implements
+`IInterface_CollisionDataProvider` and carries three authored `UBodySetup`s: the world's convex
+brush set (`<map>.hulls`), the displacement trimesh (`<map>.dispcol`, cooked from the asset's own
+triangle soup, which is what the interface exists for) and one convex body per brush entity, keyed
+by lump ordinal. The contract is `seam_map_map.md` → "## Import" (new, +170 lines), written before
+any code: identity, the three payloads, the body-setup flag table, the frames, the one transform,
+both parity assertions and the cutover.
+
+The lane is the two-phase shape `import models` and `import map-entities` have: `uv run elysium
+import map-collision --maps <stem>…` (refuses to run unscoped, no `--all`) stages
+`$ELYSIUM_WORK_ROOT/import/map_collision/manifest.json` from the sidecars themselves — **not** from
+a second port of `brush_hull`, which would be a second set of tolerances — and
+`pipeline/unreal/import_map_collision.py` authors and cooks the assets headless.
+
+Numbers, three maps: staged 7,589 world hulls / 58,508 hull vertices / 3,872 displacement
+triangles / 377 brush bodies into a 2.29 MB manifest; authored and cooked in **4.4 s** total (3.55
+/ 0.22 / 0.61 s per asset), assets 3.09 / 1.53 / 2.98 MB. `Elysium.Content.MapCollision.WorldParity`
+compares convex count and every hull's vertices against `<map>.hulls` and the triangle count against
+`<map>.dispcol`; `…BrushParity` compares **377 brush bodies convex for convex against the defs
+`ElysiumEntityDefSource::Load` produces, 0 differing**; `…PhysicsMeshes` asserts every setup creates
+its Chaos structures. Headless boot of all three maps (`-nullrhi -testexit="Activating after"`):
+the payload is adopted, the collision-ready barrier is satisfied, activation completes.
+
+**The one transform, and why it is not optional.** `UElysiumMapEntities::Deserialize` scales a
+`sky` brush entity's hulls by the map's `.sky` scale, so the def the runtime holds is not what the
+`.ents` document stores — and a cooked convex cannot be rescaled afterwards. The stage therefore
+applies that scale when it authors a `sky` body (4 entities of 377 on this corpus, all at scale
+16), and `BrushParity` compares against the *deserialized* def, which is the only place the two
+rules could disagree.
+
+**The load-time number, stated honestly.** A per-transport A/B (payload assets moved aside and
+restored) gives `Build` at 143.1 / 93.2 / 185.9 ms from the payload against 21.1 / 7.6 / 20.5 ms
+from the sidecars — but those measure different work. The sidecar path's `Build` only parses and
+*schedules*: `bUseAsyncCooking` spends the cook on worker threads after `Build` returns. The
+payload path loads a multi-megabyte package and creates every Chaos structure synchronously, and in
+an editor build each is a DDC lookup where a cooked build reads the package's own buffers. Both
+report the barrier `Ready` by the time construction completes and total activation is within noise
+(1.3–3.6 s, dominated by navigation/audio/animation preload). What R4.2 lands is "the cook happens
+once, offline", not "the map loads faster"; an asynchronous adopt is a tuning question left open.
+
+Cutover: `UElysiumMapCollision::Build` tries the payload and falls back to `LoadHulls`/`LoadDispCol`,
+reporting `EElysiumCollisionSource`; `FElysiumEntityWorld::BuildBrushBody` adopts the payload's body
+for its lump ordinal and cooks from `Def.Hulls` otherwise (a runtime-created entity always cooks,
+correctly — it has no authored collision). **The asset's presence is the flag**, as in R4.1. Both
+barriers keep their sources: the readiness barrier still polls the components' own body setups, and
+the nav bounds are still the union of the live components' bounds — the displacement component
+gained explicit local bounds (`UElysiumCollisionOnlyMeshComponent`, extracted from the hull
+component so both share one rule) because on the payload path it has no render section to bound it
+and an unbounded component is invisible to the navigation octree. The roadmap line said the
+`.hulls`/`.dispcol` readers would be **deleted** here; they are **kept** — they are the fallback for
+every unconverted map and R8.1 owns reader deletion, which is where the line now points. Tests: 6
+pytest (`test_map_collision_asset.py`), 3 Content (`Elysium.Content.MapCollision.*`); Substrate
+426/426, Policy 9/9, `Elysium.Content.Map*` 6/6.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1383,10 +1438,14 @@ the Settled entry "R4.1 — the entity table ships as cooked content". The `.ent
 **kept**, not deleted (it is the fallback for every unconverted map and R4.6 needs both paths to
 diff); its deletion moves to R4.6's tail.
 
-- **R4.2 Hull payload asset** [MP-3.2]. Cooked collision per map (convex per brush entity,
-  trimesh via an `IInterface_CollisionDataProvider` vessel); `ElysiumMapCollision::Build` and
-  `BuildBrushBody` consume it; nav bounds and the readiness barrier keep their sources.
-  → lands: no runtime cook; `.hulls`/`.dispcol` readers deleted.
+**R4.2 landed (2026-09-01)** — per-map `UElysiumMapCollisionPayload`, the `import map-collision`
+lane, `UElysiumMapCollision::Build`'s payload-first adopt and `BuildBrushBody`'s per-ordinal
+lookup; contract in `seam_map_map.md` → "## Import", numbers in the Settled entry "R4.2 — collision
+ships as cooked content". Nav bounds and the readiness barrier kept their sources. The
+`.hulls`/`.dispcol` readers were **kept**, not deleted (they are the fallback for every unconverted
+map, and R4.6's proof needs both paths alive to diff); reader deletion is R8.1's, which is where
+this line's original "readers deleted" now points.
+
 - **R4.3 Lighting surfaces.** `UElysiumLightingSettings` (Project Settings → Elysium → Lighting,
   tracked ini, per-world push on terminal value-set) + per-map `UElysiumLightCalibration` data
   asset (lump-15 ordinal, merge rows); the rig shrinks to asset-overrides + lightstyles;

@@ -2,6 +2,7 @@
 
 #include "Debug/ElysiumPick.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumMapCollisionPayload.h"
 #include "ElysiumUseIcons.h"
 
 #include "AI/NavigationSystemBase.h"
@@ -25,17 +26,27 @@ UElysiumMapCollision::UElysiumMapCollision()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-void UElysiumHullCollisionComponent::SetLocalCollisionBounds(const FBox& InBounds)
+void UElysiumCollisionOnlyMeshComponent::SetLocalCollisionBounds(const FBox& InBounds)
 {
 	LocalCollisionBounds = InBounds;
 	UpdateBounds();
 }
 
-FBoxSphereBounds UElysiumHullCollisionComponent::CalcBounds(const FTransform& LocalToWorld) const
+FBoxSphereBounds UElysiumCollisionOnlyMeshComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
 	return LocalCollisionBounds.IsValid
 		? FBoxSphereBounds(LocalCollisionBounds.TransformBy(LocalToWorld))
 		: Super::CalcBounds(LocalToWorld);
+}
+
+const TCHAR* ElysiumCollisionSourceName(EElysiumCollisionSource Source)
+{
+	switch (Source)
+	{
+	case EElysiumCollisionSource::Payload: return TEXT("payload");
+	case EElysiumCollisionSource::Sidecar: return TEXT("sidecar");
+	default:                               return TEXT("none");
+	}
 }
 
 const TCHAR* ElysiumCollisionBuildStateName(EElysiumCollisionBuildState State)
@@ -58,6 +69,8 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 	FailureReason.Reset();
 	HullCollision = nullptr;
 	DispCollision = nullptr;
+	Payload = nullptr;
+	Source = EElysiumCollisionSource::None;
 
 	if (CVarBrushCollision.GetValueOnGameThread() == 0)
 	{
@@ -66,7 +79,19 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 		return false;
 	}
 
-	if (!LoadHulls(MapName))
+	// Cooked content first, the loose sidecars second — the payload's presence is R4.2's cutover
+	// flag, and a map without one is the normal case until every map is converted.
+	const double Started = FPlatformTime::Seconds();
+	if (AdoptPayload(MapName))
+	{
+		Source = EElysiumCollisionSource::Payload;
+	}
+	else if (LoadHulls(MapName))
+	{
+		Source = EElysiumCollisionSource::Sidecar;
+		LoadDispCol(MapName);
+	}
+	else
 	{
 		BuildState = EElysiumCollisionBuildState::Failed;
 		FailureReason = FString::Printf(TEXT("required world collision is missing or empty: %s"),
@@ -76,8 +101,96 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 	}
 
 	bBrushCollision = true;
-	LoadDispCol(MapName);
 	BuildState = EElysiumCollisionBuildState::Cooking;
+	// The one number that says what the transport cost: the payload path reads a cooked asset, the
+	// sidecar path parses text and schedules a Chaos cook, and this is where the two are comparable.
+	UE_LOG(LogElysiumCollision, Log,
+		TEXT("world collider '%s' from %s: %d hulls, %d displacement triangles in %.1f ms"),
+		*MapName, ElysiumCollisionSourceName(Source), HullCount, DispTriCount,
+		(FPlatformTime::Seconds() - Started) * 1000.0);
+	return true;
+}
+
+UElysiumHullCollisionComponent* UElysiumMapCollision::MakeHullComponent(AActor* Owner,
+	const FBox& LocalBounds)
+{
+	// No render sections (never drawn), simple = convex. One FKConvexElem per solid brush, so pawn
+	// capsule sweeps (which query simple collision) hit the brushes and their invisible clip
+	// volumes.
+	UElysiumHullCollisionComponent* Component =
+		NewObject<UElysiumHullCollisionComponent>(Owner, TEXT("HullCollision"));
+	Component->SetupAttachment(this);
+	Component->bUseComplexAsSimpleCollision = false;
+	Component->bUseAsyncCooking = true;
+	Component->SetCollisionProfileName(TEXT("BlockAll"));
+	// .hulls include PLAYERCLIP. BlockAll would steal the +use ray (and the debug pick) from
+	// door/button brushes the way unprofiled baked world would — ElysiumPickOnly exists for that.
+	Component->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
+	Component->SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
+	Component->SetLocalCollisionBounds(LocalBounds);
+	return Component;
+}
+
+UElysiumDispCollisionComponent* UElysiumMapCollision::MakeDispComponent(AActor* Owner)
+{
+	UElysiumDispCollisionComponent* Component =
+		NewObject<UElysiumDispCollisionComponent>(Owner, TEXT("DispCollision"));
+	Component->SetupAttachment(this);
+	Component->bUseComplexAsSimpleCollision = true;
+	Component->bUseAsyncCooking = true;
+	Component->SetCollisionProfileName(TEXT("BlockAll"));
+	Component->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
+	Component->SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
+	Component->SetVisibility(false);
+	return Component;
+}
+
+bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
+{
+	AActor* Owner = GetOwner();
+	if (Owner == nullptr)
+	{
+		return false;
+	}
+	const FString AssetPath = FElysiumContentPaths::BakedMapCollision(MapName);
+	// Quiet: a map with no payload is the normal case until every map is converted, and the
+	// sidecar readers are the answer rather than a warning.
+	UElysiumMapCollisionPayload* Asset = LoadObject<UElysiumMapCollisionPayload>(
+		nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (Asset == nullptr || Asset->GetWorldHulls() == nullptr || Asset->WorldHullCount() == 0)
+	{
+		return false;
+	}
+
+	// The cook already happened offline; this materialises it (a DDC read in the editor, the
+	// package's own buffers in a cooked build) before either component registers, because
+	// UPrimitiveComponent creates its body from GetBodySetup() at registration.
+	if (!Asset->CreatePhysicsMeshes())
+	{
+		UE_LOG(LogElysiumCollision, Error,
+			TEXT("%s: cooked collision failed to create physics meshes; falling back to the sidecars"),
+			*AssetPath);
+		return false;
+	}
+
+	Payload = Asset;
+	HullCollision = MakeHullComponent(Owner, Asset->WorldHullBounds());
+	HullCollision->ProcMeshBodySetup = Asset->GetWorldHulls();
+	HullCollision->RegisterComponent();
+	HullCount = Asset->WorldHullCount();
+
+	if (UBodySetup* DispSetup = Asset->GetDisplacement())
+	{
+		DispCollision = MakeDispComponent(Owner);
+		DispCollision->SetLocalCollisionBounds(Asset->DisplacementBounds());
+		DispCollision->ProcMeshBodySetup = DispSetup;
+		DispCollision->RegisterComponent();
+		DispTriCount = Asset->DisplacementTriangleCount();
+	}
+
+	UE_LOG(LogElysiumCollision, Log,
+		TEXT("cooked collision '%s': %d convex hulls, %d displacement triangles, %d brush bodies"),
+		*AssetPath, HullCount, DispTriCount, Asset->BrushBodies.Num());
 	return true;
 }
 
@@ -187,20 +300,10 @@ bool UElysiumMapCollision::LoadHulls(const FString& MapName)
 		return false;
 	}
 
-	// No render sections (never drawn), simple = convex. One FKConvexElem per solid brush, so pawn
-	// capsule sweeps (which query simple collision) hit the brushes and their invisible clip
-	// volumes. Cooked async — hundreds of synchronous Chaos cooks stall the game thread, and the
-	// map actor's spawn teleport waits for ground before releasing the pawn.
-	HullCollision = NewObject<UElysiumHullCollisionComponent>(Owner, TEXT("HullCollision"));
-	HullCollision->SetupAttachment(this);
-	HullCollision->bUseComplexAsSimpleCollision = false;
-	HullCollision->bUseAsyncCooking = true;
-	HullCollision->SetCollisionProfileName(TEXT("BlockAll"));
-	// .hulls include PLAYERCLIP. BlockAll would steal the +use ray (and the debug pick) from
-	// door/button brushes the way unprofiled baked world would — ElysiumPickOnly exists for that.
-	HullCollision->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
-	HullCollision->SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
-	HullCollision->SetLocalCollisionBounds(HullBounds);
+	// Cooked async — hundreds of synchronous Chaos cooks stall the game thread, and the map actor's
+	// spawn teleport waits for ground before releasing the pawn. (R4.2's payload path has no cook
+	// to schedule; this one is the fallback for an unconverted map.)
+	HullCollision = MakeHullComponent(Owner, HullBounds);
 	HullCollision->RegisterComponent();
 
 	HullCount = Hulls.Num();
@@ -250,14 +353,9 @@ void UElysiumMapCollision::LoadDispCol(const FString& MapName)
 		return;
 	}
 
-	DispCollision = NewObject<UElysiumDispCollisionComponent>(Owner, TEXT("DispCollision"));
-	DispCollision->SetupAttachment(this);
-	DispCollision->bUseComplexAsSimpleCollision = true;
-	DispCollision->bUseAsyncCooking = true;
-	DispCollision->SetCollisionProfileName(TEXT("BlockAll"));
-	DispCollision->SetCollisionResponseToChannel(ELYSIUM_USE_CHANNEL, ECR_Ignore);
-	DispCollision->SetCollisionResponseToChannel(ELYSIUM_PICK_CHANNEL, ECR_Ignore);
-	DispCollision->SetVisibility(false);
+	// The render section this path creates bounds the component; the payload path has none, which
+	// is why it states the trimesh AABB explicitly instead.
+	DispCollision = MakeDispComponent(Owner);
 	DispCollision->RegisterComponent();
 
 	DispTriCount = Tris.Num() / 3;

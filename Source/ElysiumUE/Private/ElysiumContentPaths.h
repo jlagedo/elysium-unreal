@@ -151,6 +151,15 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("DA_") + Map + TEXT("_Entities");
 		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
 	}
+	// This map's collision as cooked content (R4.2): the `UElysiumMapCollisionPayload` that
+	// replaces `<map>.hulls`, `<map>.dispcol` and the per-brush-entity runtime cook. One asset per
+	// map, beside `DA_<map>_Entities`. Its Python twin is
+	// `elysium_pipeline.importers.map_collision.asset_path`.
+	static FString BakedMapCollision(const FString& Map)
+	{
+		const FString Asset = TEXT("DA_") + Map + TEXT("_Collision");
+		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
+	}
 	// Shared corpus (`pipeline/unreal/bake_map.py` CorpusBake).
 	// A texture, a material and a static model belong to the user's install, not to a map:
 	// `materials/metal/metalox` decodes to the same bytes whichever BSP named it, and one doorknob

@@ -526,6 +526,40 @@ def import_map_entities(config, runner, manifest_path, *, force: bool = False) -
     )
 
 
+#: One data asset per map: a few thousand convex hulls and a triangle soup, plus the Chaos cook of
+#: each. The cook is the work here (the entity lane has none), and a cold DDC pays for all of it,
+#: so this leash is longer than `import map-entities`' -- but still a leash, not a budget.
+MAP_COLLISION_IMPORT_TIMEOUT_SECONDS = 60 * 60.0
+
+
+def import_map_collision(config, runner, manifest_path, *, force: bool = False) -> None:
+    """Run the editor phase of `import map-collision` over one staged manifest.
+
+    `pipeline/unreal/import_map_collision.py` (R4.2) reads the manifest and authors one
+    `UElysiumMapCollisionPayload` per map under `/ElysiumBaked/<map>/`
+    (`docs/architecture/seam_map_map.md` -> "Import"). No unit root travels: the stage already read
+    the sidecars and carried every number in the manifest.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/import_map_collision.py'}",
+            f"-ImportMapCollision={manifest_path}",
+            *(["-ImportForce=1"] if force else []),
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=MAP_COLLISION_IMPORT_TIMEOUT_SECONDS,
+    )
+
+
 #: A grid of ~20 static-mesh actors, TextRenderActors and a five-actor lighting rig -- no import,
 #: no compile, no DDC touched. Short leash like the surface-property import: the whole run is
 #: editor boot plus a scene build and a save, so anything past this is a hang, not a long run.
