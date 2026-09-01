@@ -2,10 +2,10 @@
 
 #include "Debug/ElysiumGreenRoomShared.h"
 
-#include "ElysiumContentPaths.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMapEntities.h"
 #include "ElysiumMapActor.h"
 #include "Substrate/ElysiumCameraTrack.h"
 
@@ -30,10 +30,15 @@ bool FElysiumGreenRoomRun::PrepareTheatreCase()
 	World->SelectTrackCameraRole(false, TheatrePositionOwner);
 	World->SelectTrackCameraRole(true, TheatreTargetOwner);
 
+	// sp_theatre's own entity table, read for the embrace camera track alone: the green room stands
+	// its case in whatever map is loaded, so the track's authored points come off the theatre's
+	// defs rather than the live world. Through the R4.1 transport resolver (baked asset first,
+	// `.ents` second) like every other def read — `seam_map_map_entities.md` -> "Import".
 	FElysiumEntityDefs Defs;
-	if (!FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(TEXT("sp_theatre")), Defs))
+	if (ElysiumEntityDefSource::Load(TEXT("sp_theatre"), Defs) == EElysiumEntityDefSource::None)
 	{
-		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("embrace room could not parse sp_theatre.ents"));
+		UE_LOG(LogElysiumGreenRoom, Warning,
+			TEXT("embrace room found no sp_theatre entity table (no baked asset, no .ents)"));
 		return false;
 	}
 	TMap<FString, const FElysiumEntityDef*> Named;

@@ -1289,6 +1289,43 @@ R3.4's warning log and its test; `seam_map_map.md` → "Producer join" is now th
 hull solver, field list, the six R3.4 divergences, the two the port surfaced); `UE_bsp_to_scene.py`
 is unwired but not deleted (R8's job). R4 (transport: assets instead of loose files) is next.
 
+**R4.1 — the entity table ships as cooked content (2026-09-01).** Per-map `UElysiumMapEntities`
+(`/ElysiumBaked/<map>/DA_<map>_Entities`), one reflected row per lump block, deserializing into the
+unchanged plain `FElysiumEntityDef`; the contract is `seam_map_map_entities.md` → "## Import"
+(new, +125 lines). The lane is the two-phase shape `import models` has: `uv run elysium import
+map-entities --maps <stem>…` (refuses to run unscoped, no `--all`) stages
+`$ELYSIUM_WORK_ROOT/import/map_entities/manifest.json` from the R3.2 producer's own entity join and
+`pipeline/unreal/import_map_entities.py` authors the assets headless. `UE_map_sidecars.write_entities`
+was split into `build_entities` (the rows) + a thin writer, and its preamble into `prepare_join`, so
+the `.ents` file and the asset read **one** join and neither can drift; the three maps' `.ents`
+bytes are unchanged by the split (848,942 / 206,930 / 1,064,174 — byte-identical to the shipped
+files).
+
+Numbers: staged 4,933 rows over the three test maps in **4.2 s**, parity `mismatchCount: 0` on all
+three; authored in **15.6 s** wall (1.48 / 0.09 / 0.39 s per asset), re-run **0 imported / 4
+reused**. Asset sizes 2.23 MB (`sp_tutorial_1`, 1,868 rows) and 2.87 MB (`sm_hub_1`, 2,597) against
+`.ents` of 0.85 MB / 1.06 MB. `Elysium.Content.MapEntities.FieldParity`: **5,700 entity defs
+compared field for field over four maps, 0 differing**; `DefCountParity` also asserts the resolver
+answers `asset`, so the cutover is proven to fire rather than assumed.
+
+**The parity test earned its keep on its first run.** A reflected `FQuat` property does not survive
+a package save at its authored width — `0.707107` reads back `0.7071070075035095`, the nearest
+binary32 — while `FVector` (three doubles) round-trips exactly. 226 of the 4,933 entities differed
+on `model_quat` alone; the row now stores four `double` components and composes the quat in
+`ModelRotation()`. Found by the test, not by inspection, and recorded in the seam doc.
+
+Cutover: `ElysiumEntityDefSource::Load` is the one entry point (asset first, `.ents` second, which
+source answered logged and returned). **The asset's presence is R4.1's flag** — no per-map switch
+was introduced, because the mount already answers the question and R4.6 owns the explicit flag. The
+`.ents` reader stays: it is the fallback for the 100+ unconverted maps, and R4.6's proof needs both
+paths alive to diff. Consumers moved: `ElysiumMapActorLifecycle.cpp`'s map load and the green
+room's `sp_theatre` camera-track read (the one direct `Parse` call outside map load) — `sp_theatre`
+therefore got its asset too (767 rows, entities only: no export, no bake, no geometry), a
+deliberate fourth map named here because the green room cannot otherwise be shown to be on the
+asset. Tests: 7 pytest (`test_map_entity_asset.py`), 2 Substrate
+(`Elysium.Substrate.MapEntities.DeserializeRows`/`SkyTransform`), 2 Content; Substrate 426/426,
+34 pytest over the five producer/importer modules, `doctor` clean.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1340,10 +1377,12 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R4 — transport: assets instead of loose files [MP-3]
 
-- **R4.1 Entity asset** [MP-3.1]. Per-map `UElysiumMapEntities` deserializing into
-  `FElysiumEntityDef` (the plain struct stays; Substrate tier untouched), def-count and index
-  parity asserted, the green room's direct `sp_theatre.ents` read moved onto it, then the `.ents`
-  reader deleted. → lands: entities ship as cooked content; save index key intact.
+**R4.1 landed (2026-09-01)** — per-map `UElysiumMapEntities`, the `import map-entities` lane and
+`ElysiumEntityDefSource::Load`; contract in `seam_map_map_entities.md` → "## Import", numbers in
+the Settled entry "R4.1 — the entity table ships as cooked content". The `.ents` reader was
+**kept**, not deleted (it is the fallback for every unconverted map and R4.6 needs both paths to
+diff); its deletion moves to R4.6's tail.
+
 - **R4.2 Hull payload asset** [MP-3.2]. Cooked collision per map (convex per brush entity,
   trimesh via an `IInterface_CollisionDataProvider` vessel); `ElysiumMapCollision::Build` and
   `BuildBrushBody` consume it; nav bounds and the readiness barrier keep their sources.

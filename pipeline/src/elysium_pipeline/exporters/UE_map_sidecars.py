@@ -884,21 +884,24 @@ def write_lights(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int
     return {"lights": len(lines), "skyLights": in_sky_total}
 
 
-def write_entities(
+def build_entities(
     units: MapUnits,
     sky: SkyScope,
     blocks: Sequence[Sequence[tuple[str, str]]],
     brush_meshes: dict[int, str],
-    out_dir: Path,
     fields: EntityDivergences = LEGACY_ENTITY_FIELDS,
-) -> dict[str, int]:
-    """`<map>.ents`: every entity's keyvalues and outputs, plus the root-lump join.
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """The `.ents` entity rows and this run's numbers -- the join, without the file.
 
     The field list, its emission order and every rounding are `seam_map_map.md` -> "The field list
     `.ents` must reproduce". `entities[]` is one row per lump block in lump order with no drops and
     no reorders: `ElysiumEntityWorldPersistence.cpp` applies saved entity state by index, so the
     ordinal is a save key. `fields` opts into the R3.4 divergences one at a time; the default
     reproduces `UE_bsp_to_scene.py` byte for byte.
+
+    `write_entities` writes these rows to `<map>.ents`; R4.1's `UElysiumMapEntities` stage
+    (`importers/map_entities.py`, `seam_map_map_entities.md` -> "Import") lands the same rows as
+    cooked content. Both read the join here so neither can drift from the other.
     """
 
     planes = source_planes(units.root["planes"])
@@ -1001,10 +1004,7 @@ def write_entities(
             round(float(c), 6) for c in source_angles_to_unreal_quat(*pitch_yaw_roll)
         ]
 
-    path = out_dir / f"{units.name}.ents"
-    with path.open("w", encoding="ascii") as handle:
-        json.dump({"map": units.name, "entities": out}, handle, separators=(",", ":"))
-    return {
+    return out, {
         "entities": len(out),
         "brushEntities": brush_count,
         "hulls": hull_count,
@@ -1012,6 +1012,23 @@ def write_entities(
         "skyEntities": sky_count,
         "modelMeshes": placed,
     }
+
+
+def write_entities(
+    units: MapUnits,
+    sky: SkyScope,
+    blocks: Sequence[Sequence[tuple[str, str]]],
+    brush_meshes: dict[int, str],
+    out_dir: Path,
+    fields: EntityDivergences = LEGACY_ENTITY_FIELDS,
+) -> dict[str, int]:
+    """`<map>.ents`: `build_entities`' rows, written as the one JSON document the runtime reads."""
+
+    out, stats = build_entities(units, sky, blocks, brush_meshes, fields)
+    path = out_dir / f"{units.name}.ents"
+    with path.open("w", encoding="ascii") as handle:
+        json.dump({"map": units.name, "entities": out}, handle, separators=(",", ":"))
+    return stats
 
 
 def _block_number(block: str, key: str, default: float = 0.0) -> float:
@@ -1288,6 +1305,37 @@ def sidecar_dir(map_name: str, root: Path | None = None) -> Path:
     return (root or paths.export_v2_root()) / SIDECAR_DIR_NAME / map_name
 
 
+@dataclass(frozen=True)
+class MapJoin:
+    """One map's published units plus the derived tables every sidecar writer shares.
+
+    The join is stated once here because two callers need it: `write_sidecars` (which writes all
+    eight legacy files) and R4.1's entity-asset stage (which needs only `entities`, and must read
+    exactly the same join or the asset and the file it replaces could disagree).
+    """
+
+    units: MapUnits
+    sky: SkyScope
+    pair_blocks: list[list[tuple[str, str]]]
+    text_blocks: list[str]
+    scenes: dict[str, Any]
+    brush_meshes: dict[int, str]
+
+
+def prepare_join(map_name: str, root: Path | None = None) -> MapJoin:
+    """Read one map's units and derive the shared tables (`seam_map_map.md` -> "Producer join")."""
+
+    units = read_units(map_name, root)
+    lump_text = entity_lump_text(units.entities["entities"])
+    pair_blocks = parse_entity_blocks(lump_text)
+    text_blocks = entity_block_texts(lump_text)
+    sky = SkyScope(units, text_blocks)
+    backings = visibility_backing_models(pair_blocks)
+    scenes = meshed_faces(units, sky, backings)
+    brush_meshes = {index: f"brush_{index}" for index in sorted(scenes["brush"])}
+    return MapJoin(units, sky, pair_blocks, text_blocks, scenes, brush_meshes)
+
+
 def write_sidecars(
     map_name: str,
     *,
@@ -1304,19 +1352,17 @@ def write_sidecars(
     a time; the default keeps this run byte-comparable to `UE_bsp_to_scene.py`.
     """
 
-    units = read_units(map_name, root)
+    join = prepare_join(map_name, root)
+    units = join.units
     out_dir = Path(out_dir) if out_dir is not None else sidecar_dir(map_name, root)
     out_dir.mkdir(parents=True, exist_ok=True)
     corpus_root = Path(corpus_root) if corpus_root is not None else paths.export_root()
 
-    lump_text = entity_lump_text(units.entities["entities"])
-    pair_blocks = parse_entity_blocks(lump_text)
-    text_blocks = entity_block_texts(lump_text)
-
-    sky = SkyScope(units, text_blocks)
-    backings = visibility_backing_models(pair_blocks)
-    scenes = meshed_faces(units, sky, backings)
-    brush_meshes = {index: f"brush_{index}" for index in sorted(scenes["brush"])}
+    pair_blocks = join.pair_blocks
+    text_blocks = join.text_blocks
+    sky = join.sky
+    scenes = join.scenes
+    brush_meshes = join.brush_meshes
 
     # The marker vouches for the sidecars of *this* run, so a stale one comes off before the run
     # starts: a crash halfway through must leave the directory un-ready, not falsely ready.

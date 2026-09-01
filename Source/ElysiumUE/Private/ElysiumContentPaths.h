@@ -142,6 +142,15 @@ struct FElysiumContentPaths
 	static FString BakedMapDir(const FString& Map) { return BakedMount() / Map; }
 	// The .umap UElysiumMapSubsystem::Travel opens for this map.
 	static FString BakedLevel(const FString& Map) { return BakedMapDir(Map) / Map; }
+	// This map's entity table as cooked content (R4.1): the `UElysiumMapEntities` that replaces
+	// `<map>.ents`. One asset per map, beside the map's own .umap, because an entity table is a
+	// property of one map and of nothing else. Its Python twin is
+	// `elysium_pipeline.importers.map_entities.asset_path`.
+	static FString BakedMapEntities(const FString& Map)
+	{
+		const FString Asset = TEXT("DA_") + Map + TEXT("_Entities");
+		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
+	}
 	// Shared corpus (`pipeline/unreal/bake_map.py` CorpusBake).
 	// A texture, a material and a static model belong to the user's install, not to a map:
 	// `materials/metal/metalox` decodes to the same bytes whichever BSP named it, and one doorknob

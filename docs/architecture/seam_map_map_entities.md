@@ -190,3 +190,121 @@ and checks block count, every pair's text and offset, every output's fields agai
 every `*N` model index against the root's model count, and every `references[]` row against a
 `dependencies` row. The standalone validator checks the ledger, the scene-less rule, and that
 every `entities[i].outputs[]` row back-links to an existing `keyValues[]` index.
+
+## Import
+
+R4.1 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves the map's entity table
+off the loose `<map>.ents` file and into cooked content: one `UElysiumMapEntities` data asset per
+map. The asset is a **transport change and nothing else** — it carries the same rows the `.ents`
+document carries, in the same order, and deserializes into the same plain `FElysiumEntityDef`
+array the JSON reader has always produced. No field is added, dropped, retyped or re-derived on
+the way through, so a map that loads from the asset and the same map loaded from the sidecar
+stand up byte-identical entity worlds.
+
+### Identity and naming
+
+```text
+$ELYSIUM_EXPORT_V2_ROOT/maps/<map>.entities.glb + <map>.glb   (the producer join)
+  -> /ElysiumBaked/<map>/DA_<map>_Entities                    (UElysiumMapEntities)
+```
+
+One asset per map, in the map's own baked package folder beside its `.umap` — the entity table is
+a property of one map and of nothing else, which is why it is not a shared corpus asset like
+`DA_ElysiumPropSkins`. The asset name repeats the map stem so it is unique across the mount and
+reads unambiguously in the content browser and the asset registry.
+`FElysiumContentPaths::BakedMapEntities(Map)` is the one C++ accessor; its Python twin is
+`elysium_pipeline.importers.map_entities.asset_path(map)`, and the two must agree exactly.
+
+### The row shape
+
+`UElysiumMapEntities.Entities[]` is one `FElysiumMapEntityRow` per lump block, **in lump order,
+with no drops and no reorders** — the ordinal is the running game's entity handle and a save key
+(`seam_map_map.md` → "The field list `.ents` must reproduce"). The row is a field-for-field mirror
+of the `.ents` document's own row, and therefore of `FElysiumEntityDef`:
+
+| `.ents` field | Row property | `FElysiumEntityDef` |
+|---|---|---|
+| `classname` | `Classname` | `Classname` |
+| `targetname` | `TargetName` | `TargetName` |
+| `origin` | `Origin` (`FVector`, Unreal cm) | `Origin` |
+| `keys` | `Keys` (`TMap<FString, FString>`) | `Keys` |
+| `model` | `Model` (`INDEX_NONE` when absent) | `Model` |
+| `hulls` | `Hulls[].Vertices` (`FVector`, entity-local cm) | `Hulls` |
+| `contents` | `Contents` | `Contents` |
+| `blocks_player` | `bBlocksPlayer` | `bBlocksPlayer` |
+| `brush_mesh` | `BrushMesh` | `BrushMesh` |
+| `elevator_floors` | `ElevatorFloors` | `ElevatorFloors` |
+| `start_hidden` | `bStartHidden` | `bStartHidden` |
+| `sky` | `bSky` | `bSky` |
+| `model_mesh` | `ModelMesh` | `ModelMesh` |
+| `model_quat` | `ModelQuatX`/`Y`/`Z`/`W` | `ModelQuat` |
+| `hinge_axis` | `HingeAxis` | `HingeAxis` |
+| `outputs[]` | `Outputs[]` (`Name`/`Target`/`Input`/`Param`/`Delay`/`Times`/`Python`) | `Outputs` |
+
+Coordinates are stored **double**, not float: the `.ents` document's numbers are decimal text the
+JSON reader turns into doubles, and storing the asset's copy at the same width is what lets the
+two paths be compared for exact equality rather than under a tolerance.
+
+**The placement rotation is four `double` properties, not an `FQuat`.** Measured on the real corpus
+(2026-09-01, and found by the parity test rather than assumed): a reflected `FQuat` property does
+not survive a package save at its authored width — an authored `0.707107` reads back as
+`0.7071070075035095`, the nearest binary32 — while `FVector`, three doubles, round-trips exactly.
+226 of the three test maps' 4,933 entities differed on `model_quat` alone on the first authored
+pass. `FElysiumMapEntityRow::ModelRotation()` composes the `FQuat` the def carries.
+
+Two reads that the JSON path performs at parse time stay exactly where they are, in
+`UElysiumMapEntities::Deserialize`, so the asset carries the authored value and one owner
+normalizes it:
+
+- **`times` 0 → −1.** Retail seeds `times` at −1 and rewrites an authored `0` back to unlimited
+  (R3.4 confirmed `ElysiumEntityDefs.cpp` as that rule's single owner). The row stores what was
+  authored; `Deserialize` applies the rewrite.
+- **The 3D-skybox transform.** `world(v) = scale · (v − skyOrigin)` for a `bSky` row, with hulls
+  taking the scale and not the translation. The scale and origin are the map's `.sky` values,
+  which are **not** in this asset (they are R4.4's), so `Deserialize` takes them as arguments
+  exactly as `FElysiumEntityDefs::Parse` does, and the asset stores the untransformed miniature
+  coordinates the `.ents` document stores.
+
+### Producer and stage
+
+The rows come from the R3.2 producer's own entity join — `UE_map_sidecars.build_entities`, the
+function `write_entities` writes the `.ents` document from — run over the published GLB units, not
+from a re-read of the sidecar file. The R3.4 divergence flags stay at their legacy defaults: the
+asset must reproduce the file the runtime reads today, and flipping a flag is that flag's own task.
+
+`uv run elysium import map-entities --maps <map>…` stages one manifest under
+`$ELYSIUM_WORK_ROOT/import/map_entities/` and then authors the assets in a headless editor
+(`pipeline/unreal/import_map_entities.py`), the same two-phase shape `import models` has. The
+stage refuses to run unscoped.
+
+**Parity is asserted at both ends, and the two assertions are not the same assertion.**
+
+1. *At stage time*, the freshly built rows are compared against the `<map>.ents` document on disk
+   — the file the asset replaces — for def count and for per-index equality of every field above.
+   A mismatch is a stage failure, not a warning. Since R3.5 that file is written by this same
+   producer, so this check proves the GLB-derived rows and the shipped file agree (staleness, a
+   changed flag default, a JSON round-trip loss) rather than proving two independent readings of
+   the lump agree; it is not a substitute for (2).
+2. *At load time*, `Elysium.Content.MapEntities.*` loads the real baked asset and the real
+   `.ents`, runs each through **its own** deserializer — `UElysiumMapEntities::Deserialize` and
+   `FElysiumEntityDefs::Parse` — and asserts def count and per-index field equality on the two
+   `FElysiumEntityDef` arrays. That is the parity that matters: it is the only check that both
+   C++ readers produce the same defs.
+
+### Cutover
+
+`ElysiumEntityDefSource::Load(Map, Out, SkyScale, SkyOrigin)` is the one entry point every
+consumer uses. It tries `BakedMapEntities(Map)` first and falls back to
+`FElysiumEntityDefs::Parse(MapEnts(Map), …)`, logs which source answered, and returns it. **The
+asset's presence is the cutover flag** for R4.1 — a map with an asset loads from cooked content, a
+map without one keeps the sidecar, and no map needs an entry anywhere to say which. The explicit
+per-map flag is R4.6's, and it is deliberately not introduced early: R4.1 needs no switch that the
+mount does not already answer.
+
+The `.ents` reader stays. It is the fallback for the 100+ maps with no asset yet, and R4.6's
+converted-map proof needs both paths alive to diff one against the other. Deleting it is a later
+task, once every map is on the asset.
+
+Consumers on the resolver: `AElysiumMapActor`'s map load (`ElysiumMapActorLifecycle.cpp`) and the
+green room's `sp_theatre` camera-track read (`ElysiumGreenRoomTheatre.cpp`), which was the one
+direct `FElysiumEntityDefs::Parse` call outside the map load.

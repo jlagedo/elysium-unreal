@@ -492,6 +492,40 @@ def import_models(config, runner, manifest_path, *, force: bool = False) -> None
     )
 
 
+#: One data asset per map, each a few thousand reflected rows and no build of any kind. A whole
+#: scoped run is seconds of work behind the editor's own boot, so this is a short leash: anything
+#: past it is a hang, not a long job.
+MAP_ENTITY_IMPORT_TIMEOUT_SECONDS = 30 * 60.0
+
+
+def import_map_entities(config, runner, manifest_path, *, force: bool = False) -> None:
+    """Run the editor phase of `import map-entities` over one staged manifest.
+
+    `pipeline/unreal/import_map_entities.py` (R4.1) reads the manifest and authors one
+    `UElysiumMapEntities` per map under `/ElysiumBaked/<map>/`
+    (`docs/architecture/seam_map_map_entities.md` -> "Import"). No unit root travels: the stage
+    already read the GLB units and carried every row in the manifest.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/import_map_entities.py'}",
+            f"-ImportMapEntities={manifest_path}",
+            *(["-ImportForce=1"] if force else []),
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=MAP_ENTITY_IMPORT_TIMEOUT_SECONDS,
+    )
+
+
 #: A grid of ~20 static-mesh actors, TextRenderActors and a five-actor lighting rig -- no import,
 #: no compile, no DDC touched. Short leash like the surface-property import: the whole run is
 #: editor boot plus a scene build and a save, so anything past this is a hang, not a long run.

@@ -10,6 +10,7 @@
 #include "ElysiumEntityDefs.h"            // FElysiumEntityDefs — the .ents parse
 #include "ElysiumEntityWorld.h"           // the Track-B world this actor builds and owns
 #include "ElysiumGameStateSubsystem.h"    // the clock, the level script, map snapshots
+#include "ElysiumMapEntities.h"           // ElysiumEntityDefSource::Load — the asset-or-sidecar transport
 #include "ElysiumMapSubsystem.h"          // epochs, backdrop state, landmark/restore placements
 #include "ElysiumPlayerBody.h"            // IElysiumPlayerBody — placement and the movement freeze
 #include "ElysiumPresentationSubsystem.h" // the fourth world service
@@ -318,8 +319,12 @@ void AElysiumMapActor::LoadMap()
 		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
 		{
 			FElysiumEntityDefs EntDefs;
-			if (FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(MapName), EntDefs,
-				SkyDef.Scale, SkyDef.OriginCm))
+			// The baked `UElysiumMapEntities` when this map has one, the `.ents` sidecar when it
+			// does not (R4.1 — `seam_map_map_entities.md` -> "Import" -> "Cutover"). Same defs
+			// either way; nothing below this line knows which transport answered.
+			const EElysiumEntityDefSource DefSource = ElysiumEntityDefSource::Load(
+				MapName, EntDefs, SkyDef.Scale, SkyDef.OriginCm);
+			if (DefSource != EElysiumEntityDefSource::None)
 			{
 				EntityCount = EntDefs.Num();
 
@@ -384,7 +389,9 @@ void AElysiumMapActor::LoadMap()
 			}
 			else
 			{
-				UE_LOG(LogElysium, Log, TEXT("no %s.ents — entity world not built"), *MapName);
+				UE_LOG(LogElysium, Log,
+					TEXT("no entity table for %s (no baked asset, no .ents) — entity world not built"),
+					*MapName);
 			}
 		}
 	}
