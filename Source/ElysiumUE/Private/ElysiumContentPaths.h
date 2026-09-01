@@ -160,6 +160,15 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("DA_") + Map + TEXT("_Collision");
 		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
 	}
+	// This map's hand-tuned light overrides (R4.3): the `UElysiumLightCalibration` merge-row asset
+	// `UElysiumLightRig::Adopt` applies on top of the calibrated baseline. One asset per map, beside
+	// `DA_<map>_Entities`/`DA_<map>_Collision`; unlike those, no producer writes it -- authored
+	// directly in the editor, absent until an owner hand-tunes a map.
+	static FString BakedMapLightCalibration(const FString& Map)
+	{
+		const FString Asset = TEXT("DA_") + Map + TEXT("_LightCalibration");
+		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
+	}
 	// Shared corpus (`pipeline/unreal/bake_map.py` CorpusBake).
 	// A texture, a material and a static model belong to the user's install, not to a map:
 	// `materials/metal/metalox` decodes to the same bytes whichever BSP named it, and one doorknob
@@ -635,10 +644,8 @@ struct FElysiumContentPaths
 	// the per-map `tex/sky_<face>.png`. `elysium.SkyProbe 1` builds the cube from these.
 	static FString SkyProbeDir() { return Root() / TEXT("_skyprobe"); }
 
-	// Light-edit sessions (debug). The Lights Cog window's Save writes one JSON per map — the
-	// hand-disabled set plus every hand-set attribute, keyed by `.lights` line index — so a survey
-	// done by eye in-game comes back out as data. One file per map, overwritten each save; under
-	// Root(), so it is game-derived and gitignored like the rest.
+	// Light-probe output (debug, `ElysiumLightProbe.cpp`). R4.3 retired the Lights Cog window's
+	// hand-survey JSON that used to share this directory (`UElysiumLightCalibration` replaces it as
+	// cooked content); the probe's own `<map>.probe.json` still lands here.
 	static FString LightEditsDir() { return Root() / TEXT("_lights"); }
-	static FString LightEdits(const FString& Map) { return LightEditsDir() / (Map + TEXT(".json")); }
 };

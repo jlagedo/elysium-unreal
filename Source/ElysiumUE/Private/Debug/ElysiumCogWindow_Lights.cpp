@@ -4,36 +4,24 @@
 
 #include "Debug/ElysiumCogStyle.h"
 #include "Debug/ElysiumPick.h"
-#include "ElysiumContentPaths.h"
-#include "Visual/ElysiumLightRig.h"
-#include "ElysiumEnvironment.h"
 #include "ElysiumMapActor.h"
+#include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMapVisuals.h"
 
 #include "Camera/PlayerCameraManager.h"
 #include "CollisionQueryParams.h"
 #include "Components/DirectionalLightComponent.h"
-#include "Components/ExponentialHeightFogComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/LocalLightComponent.h"
 #include "Components/PointLightComponent.h"
-#include "Components/SkyLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "CogImguiContext.h"
 #include "CogImguiHelper.h"
-#include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogSubsystem.h"
-#include "CogWidgets.h"
 #include "Engine/HitResult.h"
-#include "Engine/PostProcessVolume.h"
-#include "Engine/TextureCube.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
-#include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
-#include "Misc/DateTime.h"
-#include "Misc/FileHelper.h"
-#include "Serialization/JsonWriter.h"
 #include "imgui.h"
 
 namespace
@@ -58,65 +46,6 @@ namespace
 	{
 		return A.Type == B.Type && A.Style == B.Style && A.Mag == B.Mag
 			&& A.RadiusCm == B.RadiusCm && A.Color == B.Color;
-	}
-
-	IConsoleVariable* FindCVar(const TCHAR* Name)
-	{
-		return IConsoleManager::Get().FindConsoleVariable(Name);
-	}
-
-	float ReadCVarFloat(const TCHAR* Name, float Fallback)
-	{
-		const IConsoleVariable* Variable = FindCVar(Name);
-		return Variable ? Variable->GetFloat() : Fallback;
-	}
-
-	void WriteCVarFloat(const TCHAR* Name, float Value)
-	{
-		if (IConsoleVariable* Variable = FindCVar(Name))
-		{
-			Variable->Set(Value);
-		}
-	}
-
-	bool SliderWithReset(const char* Label, float& Value, float Min, float Max, float Reset,
-		const char* Format, ImGuiSliderFlags Flags = ImGuiSliderFlags_None)
-	{
-		bool bChanged = ImGui::SliderFloat(Label, &Value, Min, Max, Format, Flags);
-		if (ImGui::BeginPopupContextItem(Label))
-		{
-			if (ImGui::Selectable("Reset"))
-			{
-				Value = Reset;
-				bChanged = true;
-			}
-			ImGui::EndPopup();
-		}
-		return bChanged;
-	}
-
-	// Optional PPV override: a negative cvar means "leave the volume alone". The checkbox is the
-	// override; the slider is the value. First enable lands on FirstValue rather than 0, so turning
-	// it on is a visible A/B instead of a silent no-op.
-	void OptionalCVarSlider(const char* EnableLabel, const char* SliderLabel, const TCHAR* Name,
-		float Minimum, float Maximum, float FirstValue, float SliderWidth, const char* Format)
-	{
-		const float Current = ReadCVarFloat(Name, -1.f);
-		bool bOverride = Current >= 0.f;
-		if (ImGui::Checkbox(EnableLabel, &bOverride))
-		{
-			WriteCVarFloat(Name, bOverride ? FirstValue : -1.f);
-		}
-		if (!bOverride)
-		{
-			return;
-		}
-		float Value = FMath::Clamp(Current >= 0.f ? Current : FirstValue, Minimum, Maximum);
-		ImGui::SetNextItemWidth(SliderWidth);
-		if (SliderWithReset(SliderLabel, Value, Minimum, Maximum, FirstValue, Format))
-		{
-			WriteCVarFloat(Name, Value);
-		}
 	}
 
 	// World -> imgui screen for the per-light markers. Same shape as the inspector's projector, in
@@ -178,27 +107,18 @@ void FElysiumCogWindow_Lights::Initialize()
 void FElysiumCogWindow_Lights::RenderHelp()
 {
 	ImGui::Text(
-		"Real-time light rig (one Unreal light per VtMB WORLDLIGHTS source). Toggle rig visibility, "
-		"tune the calibration live (the sliders re-derive every light's intensity/reach with no map "
-		"reload), and browse the per-source list. These are the same knobs as the elysium.LightScale "
-		"cvar and the rig's editor properties; reload the map to re-read the sidecar from scratch.\n\n"
-		"Select one light — click its row, or click its marker in the world — to edit that light on "
-		"its own: output, Lumen bounce, source shape, cone, shadows, and a 3D gizmo on its transform. An edited "
-		"light is marked overridden (*), so the calibration sliders and the lightstyle flicker stop "
-		"driving it and leave the hand-set value alone. Isolate hides every other light, which is the "
-		"quickest way to find which fixture a row is.\n\n"
-		"Enabled switches one light out of the map (x) without touching its values. Copy-pasted lights "
-		"(an identical colour/mag/radius/type/style tuple) form a batch that can be cycled or switched "
-		"together. Volumetric lights on/off is the project term for every non-spot source; it changes "
-		"Enabled, not Unreal's fog-scattering value.\n\n"
-		"Save writes the calibration, switched-off set, and every hand-set attribute, keyed by .lights "
-		"line index, to $ELYSIUM_EXPORT_ROOT/_lights/<map>.json. Map load restores that complete state "
-		"(elysium.LightSurvey 0 returns to the full faithful rig), and Load deterministically reapplies "
-		"the file mid-session. Revert restores every owned attribute from the sidecar and calibration.\n\n"
-		"Sky & fog owns the adopted SkyLight and height fog. Skylight leaking bleeds sky into "
-		"rooms Lumen would leave black. The authored night cube is nearly black, so turning "
-		"leaking on swaps in a flat cube and a non-zero intensity for the A/B; turning it off "
-		"puts the authored sky back.");
+		"Read-only viewer for the real-time light rig (one Unreal light per VtMB WORLDLIGHTS "
+		"source). Toggle rig visibility (also elysium.lights / the pawn's L key), select one light "
+		"— click its row, or click its marker in the world — to see its resolved values, and browse "
+		"the per-source list.\n\n"
+		"This window no longer tunes anything (R4.3): the global calibration lives at Project "
+		"Settings -> Elysium -> Lighting (UElysiumLightingSettings), and per-light hand-tunes are "
+		"the map's own UElysiumLightCalibration data asset, both edited the ordinary Unreal way. "
+		"Copy-pasted lights (an identical colour/mag/radius/type/style tuple) form a batch, shown "
+		"as a count on the selected light — the same authored-batches finding this project's hand "
+		"survey used, documented in docs/vtmb/light-attribution.md.\n\n"
+		"Isolate hides every other light, which is the quickest way to find which fixture a row is; "
+		"it is lifted automatically while this window is closed and touches no light's values.");
 }
 
 void FElysiumCogWindow_Lights::RenderTick(float DeltaTime)
@@ -226,9 +146,6 @@ void FElysiumCogWindow_Lights::RenderTick(float DeltaTime)
 		}
 
 		ActiveRig = Rig;
-		SkyCubemap.Reset();
-		bLeakingOwnsSkySource = false;
-		SkyIntensityBeforeLeaking = -1.f;
 		SelectedSource = INDEX_NONE;
 		HoveredSource = INDEX_NONE;
 		bScrollToSelected = false;
@@ -236,8 +153,6 @@ void FElysiumCogWindow_Lights::RenderTick(float DeltaTime)
 		bIsolateApplied = false;
 		bSelectPending = false;
 		bClearPending = false;
-		SaveStatus.Reset();
-		bSaveFailed = false;
 	}
 	if (Rig == nullptr)
 	{
@@ -390,7 +305,8 @@ void FElysiumCogWindow_Lights::TickMarkersAndPick(UElysiumLightRig& Rig)
 
 		if (bSelected)
 		{
-			// Gold ring + crosshair, matching the inspector's "this is the committed selection".
+			// Gold ring + crosshair, matching the selected-light readout's "this is the committed
+			// selection".
 			const ImU32 Ring = IM_COL32(240, 195, 110, 255);
 			const float Outer = Scale * 13.0f;
 			DrawList->AddCircle(P, Outer, Ring, 0, Scale * 2.0f);
@@ -419,7 +335,7 @@ void FElysiumCogWindow_Lights::TickMarkersAndPick(UElysiumLightRig& Rig)
 		}
 	}
 
-	// Noted, not applied: CommitPendingPick resolves it once the gizmo has had the click.
+	// Noted, not applied: CommitPendingPick resolves it once the frame's other widgets are done.
 	HoveredSource = Nearest;
 	bSelectPending = ImGui::IsMouseClicked(ImGuiMouseButton_Left) && Nearest != INDEX_NONE;
 	bClearPending = ImGui::IsMouseClicked(ImGuiMouseButton_Right);
@@ -427,20 +343,14 @@ void FElysiumCogWindow_Lights::TickMarkersAndPick(UElysiumLightRig& Rig)
 
 void FElysiumCogWindow_Lights::CommitPendingPick()
 {
-	// The gizmo owns the click whenever it is mid-drag — including the frame it grabbed on, since
-	// it submits before this runs.
-	const bool bGizmoBusy = Gizmo.DraggedElementType != ECogDebug_GizmoElementType::MAX;
-	if (!bGizmoBusy)
+	if (bSelectPending)
 	{
-		if (bSelectPending)
-		{
-			SelectedSource = HoveredSource;
-			bScrollToSelected = true;
-		}
-		else if (bClearPending)
-		{
-			SelectedSource = INDEX_NONE;
-		}
+		SelectedSource = HoveredSource;
+		bScrollToSelected = true;
+	}
+	else if (bClearPending)
+	{
+		SelectedSource = INDEX_NONE;
 	}
 	bSelectPending = false;
 	bClearPending = false;
@@ -496,299 +406,8 @@ void FElysiumCogWindow_Lights::RenderContent()
 	ImGui::Checkbox("Markers", &bDrawMarkers);
 	ImGui::SetItemTooltip("Draw a dot per light the camera can see, in that light's own colour. "
 		"Walls occlude. Hollow = hidden.");
-	const float LabelGutter = ImGui::CalcTextSize("Volumetric scattering").x
-		+ ImGui::GetStyle().ItemInnerSpacing.x;
-	const float SliderWidth = FMath::Max(GetDpiScale() * 110.0f,
-		ImGui::GetContentRegionAvail().x - LabelGutter);
-	if (!ImGui::BeginTabBar("##LightingViews"))
-	{
-		CommitPendingPick();
-		return;
-	}
 
-	if (ImGui::BeginTabItem("Rig tuning"))
-	{
-	ImGui::TextDisabled("Global controls update every light that has not been individually overridden.");
-
-	// Wide-range quantities use logarithmic sliders and human-facing multipliers/metres. Ctrl-click
-	// still accepts an exact number; right-click restores the faithful default.
-	bool bChanged = false;
-	float PointSpotMult = Rig->PointSpotScale / 0.003f;
-	ImGui::SetNextItemWidth(SliderWidth);
-	if (SliderWithReset("Point/spot brightness", PointSpotMult, 0.05f, 5.f, 1.f, "%.2fx",
-		ImGuiSliderFlags_Logarithmic))
-	{
-		Rig->PointSpotScale = PointSpotMult * 0.003f;
-		bChanged = true;
-	}
-	ImGui::SetItemTooltip("Multiplier over the calibrated unitless brightness. Ctrl-click for an "
-		"exact value; right-click to reset.");
-
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= SliderWithReset("Brightness ceiling", Rig->MaxBrightness, 0.25f, 32.f, 8.f,
-		"%.2f", ImGuiSliderFlags_Logarithmic);
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= SliderWithReset("Falloff exponent", Rig->FalloffExponent, 0.25f, 4.f, 1.f,
-		"%.2f", ImGuiSliderFlags_Logarithmic);
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= SliderWithReset("Reach", Rig->RadiusScale, 0.25f, 4.f, 1.f, "%.2fx",
-		ImGuiSliderFlags_Logarithmic);
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= SliderWithReset("Lumen bounce contribution", Rig->IndirectLightingScale,
-		0.f, 4.f, 1.f, "%.2fx");
-	ImGui::SetItemTooltip("Per-light Indirect Lighting Intensity. This scales each light's Lumen "
-		"surface-cache injection; it is not the inert post-process precomputed-lighting control.");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= SliderWithReset("Volumetric scattering", Rig->VolumetricScatteringScale,
-		0.f, 4.f, 1.f, "%.2fx");
-
-	float SunMult = Rig->SunScaleLux / 8.f;
-	ImGui::SetNextItemWidth(SliderWidth);
-	if (SliderWithReset("Sun brightness", SunMult, 0.1f, 4.f, 1.f, "%.2fx",
-		ImGuiSliderFlags_Logarithmic))
-	{
-		Rig->SunScaleLux = SunMult * 8.f;
-		bChanged = true;
-	}
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= SliderWithReset("Sun source angle", Rig->SunSourceAngleDegrees,
-		0.05f, 5.f, 0.5357f, "%.3f deg", ImGuiSliderFlags_Logarithmic);
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= SliderWithReset("Sun soft angle", Rig->SunSoftSourceAngleDegrees,
-		0.f, 5.f, 0.f, "%.3f deg");
-	ImGui::SetNextItemWidth(SliderWidth);
-	bChanged |= SliderWithReset("Specular", Rig->SpecularScale, 0.f, 1.f, 0.f, "%.2f");
-	ImGui::SetItemTooltip("Faithful baseline is zero: VtMB's world-light contribution is Lambertian. "
-		"This is the same live value exposed by Elysium.Environment.");
-
-	if (ImGui::CollapsingHeader("Advanced calibration"))
-	{
-		bool bPointShadows = Rig->bPointShadows;
-		bool bSpotShadows = Rig->bSpotShadows;
-		bool bSunShadows = Rig->bSunShadows;
-		if (ImGui::Checkbox("Point shadows", &bPointShadows))
-		{
-			Rig->bPointShadows = bPointShadows;
-			bChanged = true;
-		}
-		ImGui::SameLine();
-		if (ImGui::Checkbox("Spot shadows", &bSpotShadows))
-		{
-			Rig->bSpotShadows = bSpotShadows;
-			bChanged = true;
-		}
-		ImGui::SameLine();
-		if (ImGui::Checkbox("Sun shadows", &bSunShadows))
-		{
-			Rig->bSunShadows = bSunShadows;
-			bChanged = true;
-		}
-	}
-	ImGui::TextDisabled("Ctrl-click = type value · right-click = reset");
-
-	if (bChanged)
-	{
-		Rig->ApplyLiveTuning();
-	}
-		ImGui::EndTabItem();
-	}
-
-	if (ImGui::BeginTabItem("Sky & fog"))
-	{
-	// The sky light and height fog are actors baked into the level, adopted by the map actor. They
-	// belong here because they are the other half of the same calibration: with a real cubemap on
-	// the sky light Lumen occludes it properly, so how much the sky contributes and how much the
-	// per-source rig has to carry are one decision, not two.
-	if (USkyLightComponent* Sky = Visuals->GetSkyLight())
-	{
-		float Intensity = Sky->Intensity;
-		ImGui::SetNextItemWidth(SliderWidth);
-		FCogWidgets::SliderWithReset("Sky intensity", &Intensity, 0.0f, 4.0f, 1.0f, "%.2f");
-		if (Intensity != Sky->Intensity)
-		{
-			Sky->SetIntensity(Intensity);
-			SkyIntensityBeforeLeaking = -1.f;
-		}
-
-		FLinearColor Color = Sky->GetLightColor();
-		ImGui::SetNextItemWidth(SliderWidth);
-		if (ImGui::ColorEdit3("Sky colour", &Color.R))
-		{
-			Sky->SetLightColor(Color);
-		}
-
-		// Cubemap off falls back to a flat constant ambient of the light colour — the sky light
-		// without the authored cube. Kept togglable because it shows what sky occlusion is actually
-		// buying while the map is being recalibrated.
-		const bool bUsingAuthoredCube = Sky->Cubemap != nullptr
-			&& Sky->Cubemap != ConstantSkyCube.Get();
-		bool bUseCube = bUsingAuthoredCube;
-		if (ImGui::Checkbox("Sky cubemap (occluded IBL)", &bUseCube))
-		{
-			if (bUseCube)
-			{
-				if (UTextureCube* Authored = SkyCubemap.Get())
-				{
-					Sky->SetCubemap(Authored);
-				}
-			}
-			else
-			{
-				if (Sky->Cubemap && Sky->Cubemap != ConstantSkyCube.Get())
-				{
-					SkyCubemap = Sky->Cubemap;
-				}
-				if (!ConstantSkyCube.IsValid())
-				{
-					ConstantSkyCube.Reset(ElysiumEnvironment::BuildConstantCube(
-						FLinearColor(0.55f, 0.58f, 0.68f)));
-				}
-				Sky->SetCubemap(ConstantSkyCube.Get());
-			}
-			Sky->RecaptureSky();
-		}
-
-		bool bLowerBlack = Sky->bLowerHemisphereIsBlack;
-		if (ImGui::Checkbox("Lower hemisphere black", &bLowerBlack))
-		{
-			Sky->bLowerHemisphereIsBlack = bLowerBlack;
-			Sky->RecaptureSky();
-		}
-
-		ImGui::SeparatorText("Skylight leaking");
-		const float LeakNow = ReadCVarFloat(TEXT("elysium.SkylightLeaking"), -1.f);
-		bool bLeak = LeakNow >= 0.f;
-		if (ImGui::Checkbox("Override skylight leaking", &bLeak))
-		{
-			if (bLeak)
-			{
-				if (!ConstantSkyCube.IsValid())
-				{
-					ConstantSkyCube.Reset(ElysiumEnvironment::BuildConstantCube(
-						FLinearColor(0.55f, 0.58f, 0.68f)));
-				}
-				if (Sky->Cubemap && Sky->Cubemap != ConstantSkyCube.Get())
-				{
-					SkyCubemap = Sky->Cubemap;
-				}
-				Sky->SetCubemap(ConstantSkyCube.Get());
-				if (Sky->Intensity <= KINDA_SMALL_NUMBER)
-				{
-					SkyIntensityBeforeLeaking = Sky->Intensity;
-					Sky->SetIntensity(0.5f);
-				}
-				bLeakingOwnsSkySource = true;
-				Sky->RecaptureSky();
-				WriteCVarFloat(TEXT("elysium.SkylightLeaking"), 0.15f);
-				if (ReadCVarFloat(TEXT("elysium.SkylightLeakingDistance"), -1.f) < 0.f)
-				{
-					WriteCVarFloat(TEXT("elysium.SkylightLeakingDistance"), 1000.f);
-				}
-			}
-			else
-			{
-				WriteCVarFloat(TEXT("elysium.SkylightLeaking"), -1.f);
-				WriteCVarFloat(TEXT("elysium.SkylightLeakingDistance"), -1.f);
-				if (bLeakingOwnsSkySource)
-				{
-					Sky->SetCubemap(SkyCubemap.Get());
-					bLeakingOwnsSkySource = false;
-				}
-				if (SkyIntensityBeforeLeaking >= 0.f)
-				{
-					Sky->SetIntensity(SkyIntensityBeforeLeaking);
-					SkyIntensityBeforeLeaking = -1.f;
-				}
-				Sky->RecaptureSky();
-			}
-		}
-		ImGui::SetItemTooltip("Bleeds sky into rooms Lumen would leave black. The authored night "
-			"cube is nearly black, so this swaps in a flat studio cube and a non-zero intensity "
-			"while the override is on.");
-		if (bLeak)
-		{
-			float LeakAmount = FMath::Clamp(LeakNow >= 0.f ? LeakNow : 0.15f, 0.f, 1.f);
-			ImGui::SetNextItemWidth(SliderWidth);
-			if (SliderWithReset("Leak amount", LeakAmount, 0.f, 1.f, 0.15f, "%.2f"))
-			{
-				WriteCVarFloat(TEXT("elysium.SkylightLeaking"), LeakAmount);
-			}
-			OptionalCVarSlider("Override leaking distance", "Full leak at (cm)",
-				TEXT("elysium.SkylightLeakingDistance"), 100.f, 2000.f, 1000.f,
-				SliderWidth, "%.0f");
-			ImGui::SetItemTooltip("Smaller is flatter indoor fill; larger reads as AO. Epic's "
-				"default is 1000 cm.");
-			ImGui::SetNextItemWidth(SliderWidth);
-			if (ImGui::ColorEdit3("Leak tint", &LeakTint.R))
-			{
-				// Applied below; the PPV is the live consumer.
-			}
-		}
-		if (APostProcessVolume* PPV = Visuals->GetPostProcess())
-		{
-			PPV->Settings.bOverride_LumenSkylightLeakingTint = bLeak;
-			if (bLeak)
-			{
-				PPV->Settings.LumenSkylightLeakingTint = LeakTint;
-			}
-			PPV->MarkComponentsRenderStateDirty();
-		}
-		if (bLeak)
-		{
-			ImGui::TextDisabled("Leaking samples a flat cube, not the night photo.");
-		}
-	}
-	else
-	{
-		ImGui::TextDisabled("No sky light in this level.");
-	}
-
-	if (UExponentialHeightFogComponent* Fog = Visuals->GetHeightFog())
-	{
-		float Density = Fog->FogDensity;
-		ImGui::SetNextItemWidth(SliderWidth);
-		FCogWidgets::SliderWithReset("Fog density", &Density, 0.0f, 0.05f, 0.002f, "%.4f");
-		if (Density != Fog->FogDensity)
-		{
-			Fog->SetFogDensity(Density);
-		}
-
-		float Start = Fog->StartDistance;
-		ImGui::SetNextItemWidth(SliderWidth);
-		FCogWidgets::SliderWithReset("Fog start (cm)", &Start, 0.0f, 20000.0f, 0.0f, "%.0f");
-		if (Start != Fog->StartDistance)
-		{
-			Fog->SetStartDistance(Start);
-		}
-
-		bool bVolumetric = Fog->bEnableVolumetricFog;
-		if (ImGui::Checkbox("Volumetric fog", &bVolumetric))
-		{
-			Fog->SetVolumetricFog(bVolumetric);
-		}
-		if (bVolumetric)
-		{
-			float Extinction = Fog->VolumetricFogExtinctionScale;
-			ImGui::SetNextItemWidth(SliderWidth);
-			FCogWidgets::SliderWithReset("Volumetric extinction", &Extinction, 0.0f, 10.0f, 1.0f, "%.2f");
-			if (Extinction != Fog->VolumetricFogExtinctionScale)
-			{
-				Fog->SetVolumetricFogExtinctionScale(Extinction);
-			}
-		}
-	}
-	else
-	{
-		ImGui::TextDisabled("No height fog in this level (the map's .env has fog off).");
-	}
-		ImGui::EndTabItem();
-	}
-
-	const ImGuiTabItemFlags EditorTabFlags = bSelectEditorTab ? ImGuiTabItemFlags_SetSelected : 0;
-	if (ImGui::BeginTabItem("Edit lights", nullptr, EditorTabFlags))
-	{
-	// Above the source list, not below it: the list is a picker you visit once, while the editor is
-	// what the map is actually being worked through, so it sits with the other live controls.
+	// Above the source list, not below it: this is what the window is opened to look at.
 	ImGui::SeparatorText("Selected light");
 	if (Sources.IsValidIndex(SelectedSource))
 	{
@@ -798,7 +417,6 @@ void FElysiumCogWindow_Lights::RenderContent()
 	{
 		ImGui::TextDisabled("Click a row below, or a marker in the world.");
 	}
-	RenderEditActions(*Rig, Map->MapName);
 
 	// Per-source list.
 	ImGui::SeparatorText("Sources");
@@ -890,7 +508,7 @@ void FElysiumCogWindow_Lights::RenderContent()
 				else
 				{
 					// Reach off the live component, not re-derived from the sidecar row: an
-					// overridden light's radius is whatever the inspector set it to.
+					// overridden light's radius is whatever the calibration asset set it to.
 					const ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light);
 					ImGui::Text("%.2f · reach %.0f m", S.BaseIntensity,
 						(Local ? Local->AttenuationRadius : 0.f) / 100.f);
@@ -911,323 +529,64 @@ void FElysiumCogWindow_Lights::RenderContent()
 		ImGui::EndTable();
 	}
 	bScrollToSelected = false;
-	ImGui::TextDisabled("* overridden · x switched off");
-		ImGui::EndTabItem();
-	}
-	bSelectEditorTab = false;
-	ImGui::EndTabBar();
+	ImGui::TextDisabled("* overridden (calibration asset or a stale hand edit) · x switched off");
 
-	// After the gizmo, so a click that grabbed a handle is not also read as a new selection.
+	// After every other widget, so a click already consumed elsewhere (a table row selectable, for
+	// instance) is not also read as a fresh world pick.
 	CommitPendingPick();
-}
-
-void FElysiumCogWindow_Lights::RenderEditActions(UElysiumLightRig& Rig, const FString& MapName)
-{
-	const TArray<UElysiumLightRig::FLightSource>& Sources = Rig.Sources();
-	int32 NumDisabled = 0, NumOverridden = 0;
-	for (const UElysiumLightRig::FLightSource& S : Sources)
-	{
-		NumDisabled += S.bDisabled ? 1 : 0;
-		NumOverridden += S.bOverridden ? 1 : 0;
-	}
-
-	if (ImGui::Button("Save edits"))
-	{
-		FString Message;
-		bSaveFailed = !SaveEdits(Rig, MapName, Message);
-		SaveStatus = Message;
-	}
-	ImGui::SetItemTooltip("Write calibration, switched-off sources, transforms and every hand-set "
-		"light attribute to $ELYSIUM_EXPORT_ROOT/_lights/<map>.json. One file per map.");
-	ImGui::SameLine();
-	ImGui::TextColored(NumDisabled + NumOverridden > 0 ? ElysiumCogStyle::ColWarn : ElysiumCogStyle::ColDim,
-		"%d off · %d overridden", NumDisabled, NumOverridden);
-
-	if (ImGui::CollapsingHeader("Map-wide actions"))
-	{
-		if (ImGui::Button("Reload saved edits"))
-		{
-			FString Message;
-			bSaveFailed = !Rig.LoadSurvey(Message);
-			SaveStatus = Message;
-		}
-		ImGui::SetItemTooltip("Restore the saved calibration, disabled sources and complete overrides.");
-		ImGui::SameLine();
-		ImGui::BeginDisabled(NumOverridden == 0);
-		if (ImGui::Button("Revert overrides"))
-		{
-			Rig.RevertAllSources();
-		}
-		ImGui::EndDisabled();
-		ImGui::SameLine();
-		ImGui::BeginDisabled(NumDisabled == 0);
-		if (ImGui::Button("Enable all"))
-		{
-			Rig.EnableAllSources();
-		}
-		ImGui::EndDisabled();
-
-		if (ImGui::Button("Volumetric lights on"))
-		{
-			Rig.SetNonSpotSourcesDisabled(false);
-		}
-		ImGui::SetItemTooltip("Enable every non-spot source: texlights, points and the sun.");
-		ImGui::SameLine();
-		if (ImGui::Button("Volumetric lights off"))
-		{
-			Rig.SetNonSpotSourcesDisabled(true);
-		}
-		ImGui::SetItemTooltip("Disable non-spot sources while leaving spotlights unchanged.");
-	}
-
-	if (!SaveStatus.IsEmpty())
-	{
-		ImGui::TextColored(bSaveFailed ? ElysiumCogStyle::ColError : ElysiumCogStyle::ColOk,
-			"%s", COG_TCHAR_TO_CHAR(*SaveStatus));
-	}
-}
-
-bool FElysiumCogWindow_Lights::SaveEdits(UElysiumLightRig& Rig, const FString& MapName,
-	FString& OutMessage)
-{
-	const TArray<UElysiumLightRig::FLightSource>& Sources = Rig.Sources();
-
-	int32 NumDisabled = 0, NumOverridden = 0, NumEdits = 0;
-	for (const UElysiumLightRig::FLightSource& S : Sources)
-	{
-		NumDisabled += S.bDisabled ? 1 : 0;
-		NumOverridden += S.bOverridden ? 1 : 0;
-		NumEdits += (S.bDisabled || S.bOverridden) ? 1 : 0;
-	}
-
-	FString Json;
-	const TSharedRef<TJsonWriter<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>> W =
-		TJsonWriterFactory<TCHAR, TPrettyJsonPrintPolicy<TCHAR>>::Create(&Json);
-
-	W->WriteObjectStart();
-	W->WriteValue(TEXT("schema"), 2);
-	W->WriteValue(TEXT("map"), MapName);
-	W->WriteValue(TEXT("saved_utc"), FDateTime::UtcNow().ToIso8601());
-
-	// The denominator, so "how many were left on" is answerable from the file alone.
-	W->WriteObjectStart(TEXT("counts"));
-	W->WriteValue(TEXT("sources"), Sources.Num());
-	W->WriteValue(TEXT("disabled"), NumDisabled);
-	W->WriteValue(TEXT("overridden"), NumOverridden);
-	W->WriteObjectEnd();
-
-	// The calibration the survey was made under: which lights read as redundant depends on how
-	// bright the rig was driving all of them, so the judgement is only interpretable with it.
-	W->WriteObjectStart(TEXT("calibration"));
-	W->WriteValue(TEXT("point_spot_scale"), Rig.PointSpotScale);
-	W->WriteValue(TEXT("max_brightness"), Rig.MaxBrightness);
-	W->WriteValue(TEXT("falloff_exponent"), Rig.FalloffExponent);
-	W->WriteValue(TEXT("radius_scale"), Rig.RadiusScale);
-	W->WriteValue(TEXT("specular_scale"), Rig.SpecularScale);
-	W->WriteValue(TEXT("indirect_lighting_scale"), Rig.IndirectLightingScale);
-	W->WriteValue(TEXT("volumetric_scattering_scale"), Rig.VolumetricScatteringScale);
-	W->WriteValue(TEXT("sun_lux_scale"), Rig.SunScaleLux);
-	W->WriteValue(TEXT("sun_source_angle_deg"), Rig.SunSourceAngleDegrees);
-	W->WriteValue(TEXT("sun_soft_source_angle_deg"), Rig.SunSoftSourceAngleDegrees);
-	W->WriteValue(TEXT("point_shadows"), Rig.bPointShadows);
-	W->WriteValue(TEXT("spot_shadows"), Rig.bSpotShadows);
-	W->WriteValue(TEXT("sun_shadows"), Rig.bSunShadows);
-	W->WriteObjectEnd();
-
-	// Only the edited sources. `index` is the source's `<map>.lights` line, so the untouched
-	// complement joins back from the sidecar rather than being carried in every save. `row` is the
-	// position in the window's list, which is what the UI numbers rows by — the two differ (the
-	// skyambient row is skipped and adoption order is the baked level's), so both are written
-	// rather than leaving a reader to guess which one a bare index meant.
-	W->WriteArrayStart(TEXT("edits"));
-	for (int32 Index = 0; Index < Sources.Num(); ++Index)
-	{
-		const UElysiumLightRig::FLightSource& S = Sources[Index];
-		if (!S.bDisabled && !S.bOverridden)
-		{
-			continue;
-		}
-		const ULightComponent* Light = S.Light.Get();
-
-		W->WriteObjectStart();
-		W->WriteValue(TEXT("index"), S.SourceIndex);
-		W->WriteValue(TEXT("row"), Index);
-		W->WriteValue(TEXT("type"), FString(ANSI_TO_TCHAR(TypeLabel(S.Type))));
-		W->WriteValue(TEXT("disabled"), S.bDisabled);
-		W->WriteValue(TEXT("overridden"), S.bOverridden);
-		// Raw sidecar row, so a light is identifiable without the join.
-		W->WriteValue(TEXT("mag"), S.Mag);
-		W->WriteValue(TEXT("radius_cm"), S.RadiusCm);
-		W->WriteValue(TEXT("style"), S.Style);
-		W->WriteValue(TEXT("intensity"), S.BaseIntensity);
-		if (Light != nullptr)
-		{
-			const FVector P = Light->GetComponentLocation();
-			W->WriteArrayStart(TEXT("pos_cm"));
-			W->WriteValue(P.X); W->WriteValue(P.Y); W->WriteValue(P.Z);
-			W->WriteArrayEnd();
-			const FRotator R = Light->GetComponentRotation();
-			W->WriteArrayStart(TEXT("rot_deg"));
-			W->WriteValue(R.Pitch); W->WriteValue(R.Yaw); W->WriteValue(R.Roll);
-			W->WriteArrayEnd();
-
-			const FLinearColor C = Light->GetLightColor();
-			W->WriteArrayStart(TEXT("color"));
-			W->WriteValue(C.R); W->WriteValue(C.G); W->WriteValue(C.B);
-			W->WriteArrayEnd();
-			W->WriteValue(TEXT("indirect_lighting_scale"), Light->IndirectLightingIntensity);
-			W->WriteValue(TEXT("volumetric_scatter"), Light->VolumetricScatteringIntensity);
-			W->WriteValue(TEXT("specular_scale"), Light->SpecularScale);
-			W->WriteValue(TEXT("cast_shadows"), Light->CastShadows != 0);
-			W->WriteValue(TEXT("cast_volumetric_shadow"), Light->bCastVolumetricShadow != 0);
-
-			if (const ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light))
-			{
-				W->WriteValue(TEXT("reach_cm"), Local->AttenuationRadius);
-			}
-			if (const UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
-			{
-				W->WriteValue(TEXT("falloff_exponent"), Point->LightFalloffExponent);
-				W->WriteValue(TEXT("source_radius_cm"), Point->SourceRadius);
-				W->WriteValue(TEXT("soft_source_radius_cm"), Point->SoftSourceRadius);
-				W->WriteValue(TEXT("source_length_cm"), Point->SourceLength);
-			}
-			if (const USpotLightComponent* Spot = Cast<USpotLightComponent>(Light))
-			{
-				W->WriteValue(TEXT("inner_cone_deg"), Spot->InnerConeAngle);
-				W->WriteValue(TEXT("outer_cone_deg"), Spot->OuterConeAngle);
-			}
-			if (const UDirectionalLightComponent* Sun = Cast<UDirectionalLightComponent>(Light))
-			{
-				W->WriteValue(TEXT("source_angle_deg"), Sun->LightSourceAngle);
-				W->WriteValue(TEXT("soft_source_angle_deg"), Sun->LightSourceSoftAngle);
-			}
-		}
-		W->WriteObjectEnd();
-	}
-	W->WriteArrayEnd();
-	W->WriteObjectEnd();
-	W->Close();
-
-	const FString Path = FElysiumContentPaths::LightEdits(MapName);
-	IFileManager::Get().MakeDirectory(*FElysiumContentPaths::LightEditsDir(), /*Tree*/ true);
-	if (!FFileHelper::SaveStringToFile(Json, *Path))
-	{
-		OutMessage = FString::Printf(TEXT("save failed: %s"), *Path);
-		return false;
-	}
-	OutMessage = FString::Printf(TEXT("saved %d edit%s to %s"),
-		NumEdits, NumEdits == 1 ? TEXT("") : TEXT("s"),
-		*Path);
-	return true;
 }
 
 void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32 Index)
 {
 	const UElysiumLightRig::FLightSource& S = Rig.Sources()[Index];
-	ULightComponent* Light = Rig.SourceLight(Index);
+	const ULightComponent* Light = Rig.SourceLight(Index);
 	if (Light == nullptr)
 	{
 		ImGui::TextDisabled("Light %d is gone (map reloaded?).", Index);
 		return;
 	}
 
-	// Several visible names intentionally mirror the global calibration controls (Reach, Lumen
-	// bounce, sun angles and Specular). ImGui labels are identities, not just captions, so scope the
-	// whole editor by both its role and selected row instead of maintaining fragile label suffixes.
-	ImGui::PushID("SelectedSourceEditor");
-	ImGui::PushID(Index);
-
-	// Both numbers, because the list row and the sidecar line are not the same and the saved JSON
-	// keys on the latter.
+	// Both numbers, because the list row and the sidecar line are not the same: `SourceIndex` is
+	// the `.lights` line a `UElysiumLightCalibration` row would key on.
 	ImGui::Text("#%d · src %d · %s%s", Index, S.SourceIndex, TypeLabel(S.Type),
 		S.Style >= 1 ? " · styled" : "");
-	ImGui::SetItemTooltip("#row in this list · the .lights line it was built from (what a save "
-		"records).");
+	ImGui::SetItemTooltip("#row in this list · the .lights line it was built from (what a "
+		"UElysiumLightCalibration row keys on).");
 	ImGui::SameLine();
 	if (S.bOverridden)
 	{
-		ImGui::TextColored(ImVec4(0.94f, 0.76f, 0.43f, 1.0f), "· overridden");
-		ImGui::SetItemTooltip("This light is off the global calibration and the lightstyle "
-			"animation until it is reverted.");
+		ImGui::TextColored(ElysiumCogStyle::ColWarn, "· overridden");
+		ImGui::SetItemTooltip("A UElysiumLightCalibration row (or a stale in-session hand edit) has "
+			"taken this light off the global calibration and the lightstyle animation.");
 	}
 	else
 	{
 		ImGui::TextDisabled("· following the calibration");
 	}
-
-	// Enabled is orthogonal to attribute overrides: switching a source back on restores exactly the
-	// values it held before it was disabled.
-	bool bEnabled = !S.bDisabled;
-	if (ImGui::Checkbox("Enabled", &bEnabled))
-	{
-		Rig.SetSourceDisabled(Index, !bEnabled);
-	}
-	ImGui::SetItemTooltip("Take this one light out of the map without touching its values. Held "
-		"against the rig's master toggle and against Isolate, and written to the save file.");
 	ImGui::SameLine();
-	if (ImGui::Button("Revert"))
-	{
-		Rig.RevertSource(Index);
-	}
-	ImGui::SetItemTooltip("Re-derive this light from its sidecar row and the current calibration "
-		"sliders, and hand it back to them. Leaves the Enabled switch alone.");
+	ImGui::Text(S.bDisabled ? "· switched off" : "· enabled");
 	ImGui::SameLine();
 	ImGui::Checkbox("Isolate", &bIsolate);
 	ImGui::SetItemTooltip("Hide every other light, to see what this one alone is doing. Lifted "
-		"automatically while this window is closed.");
+		"automatically while this window is closed; touches no light's values.");
 
-	// The authored batch.
-	// Copy-pasted lights share one authored decision, so navigation and enable/disable are offered
-	// per batch. Recomputed per frame — a few hundred tuple compares.
+	// The authored batch, read-only: how many other sources share this one's exact raw tuple.
 	{
 		const TArray<UElysiumLightRig::FLightSource>& All = Rig.Sources();
-		TArray<int32> Batch;
-		for (int32 I = 0; I < All.Num(); ++I)
+		int32 BatchCount = 0, BatchOff = 0;
+		for (const UElysiumLightRig::FLightSource& Other : All)
 		{
-			if (SameBatch(All[I], S))
+			if (SameBatch(Other, S))
 			{
-				Batch.Add(I);
+				++BatchCount;
+				BatchOff += Other.bDisabled ? 1 : 0;
 			}
 		}
-		if (Batch.Num() > 1)
+		if (BatchCount > 1)
 		{
-			int32 NumOff = 0;
-			for (const int32 I : Batch)
-			{
-				NumOff += All[I].bDisabled ? 1 : 0;
-			}
-			ImGui::Text("batch x%d", Batch.Num());
+			ImGui::Text("batch x%d (%d off)", BatchCount, BatchOff);
 			ImGui::SetItemTooltip("Lights whose raw colour/mag/radius/type/style tuple is identical "
-				"to this one's — a copy-pasted authored batch.");
-			ImGui::SameLine();
-			ImGui::TextDisabled("(%d off)", NumOff);
-			ImGui::SameLine();
-			if (ImGui::Button("Next in batch"))
-			{
-				const int32 At = Batch.IndexOfByKey(Index);
-				SelectedSource = Batch[(At + 1) % Batch.Num()];
-				bScrollToSelected = true;
-			}
-			ImGui::SetItemTooltip("Step the selection through the batch's members.");
-			ImGui::SameLine();
-			if (ImGui::Button("Batch off"))
-			{
-				for (const int32 I : Batch)
-				{
-					Rig.SetSourceDisabled(I, true);
-				}
-			}
-			ImGui::SetItemTooltip("Switch the whole authored batch off.");
-			ImGui::SameLine();
-			if (ImGui::Button("Batch on"))
-			{
-				for (const int32 I : Batch)
-				{
-					Rig.SetSourceDisabled(I, false);
-				}
-			}
-			ImGui::SetItemTooltip("Switch the whole authored batch back on.");
+				"to this one's — a copy-pasted authored batch (docs/vtmb/light-attribution.md).");
 		}
 		else
 		{
@@ -1235,177 +594,38 @@ void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32
 		}
 	}
 
-	const float LabelGutter = ImGui::CalcTextSize("Lumen bounce contribution").x
-		+ ImGui::GetStyle().ItemInnerSpacing.x;
-	const float Width = FMath::Max(GetDpiScale() * 110.0f, ImGui::GetContentRegionAvail().x - LabelGutter);
-
-	// Every edit below marks the source overridden through the rig, which is what stops
-	// ApplyLiveTuning and the style tick from writing back over it on the next frame.
-	ImGui::SeparatorText("Output");
-	float Intensity = S.BaseIntensity;
-	ImGui::SetNextItemWidth(Width);
-	if (ImGui::DragFloat("Intensity", &Intensity, S.Type == 3 ? 0.02f : 0.005f, 0.0f,
-		S.Type == 3 ? 50.f : 32.f,
-		S.Type == 3 ? "%.2f lux" : "%.3f"))
+	// Resolved values, read-only.
+	ImGui::SeparatorText("Resolved");
+	ImGui::Text("colour %.2f %.2f %.2f · mag %.0f", S.Color.R, S.Color.G, S.Color.B, S.Mag);
+	if (S.Type == 3)
 	{
-		Rig.SetSourceIntensity(Index, FMath::Max(Intensity, 0.0f));
+		ImGui::Text("intensity %.2f lux", S.BaseIntensity);
 	}
-
-	FLinearColor Color = Light->GetLightColor();
-	ImGui::SetNextItemWidth(Width);
-	if (ImGui::ColorEdit3("Colour", &Color.R))
+	else
 	{
-		Light->SetLightColor(Color);
-		Rig.SetSourceOverridden(Index, true);
+		const ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light);
+		ImGui::Text("intensity %.3f · reach %.0f cm", S.BaseIntensity,
+			Local ? Local->AttenuationRadius : 0.f);
 	}
-
-	float Indirect = Light->IndirectLightingIntensity;
-	ImGui::SetNextItemWidth(Width);
-	if (SliderWithReset("Lumen bounce contribution", Indirect, 0.f, 4.f,
-		Rig.IndirectLightingScale, "%.2fx"))
+	if (const UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
 	{
-		Light->SetIndirectLightingIntensity(Indirect);
-		Rig.SetSourceOverridden(Index, true);
+		ImGui::Text("falloff %.2f · source radius %.0f cm", Point->LightFalloffExponent,
+			Point->SourceRadius);
 	}
-	ImGui::SetItemTooltip("Scales this source in Lumen's indirect-light injection. Zero keeps its "
-		"direct light but removes its bounce contribution.");
-
-	float Scatter = Light->VolumetricScatteringIntensity;
-	ImGui::SetNextItemWidth(Width);
-	if (SliderWithReset("Fog scattering", Scatter, 0.f, 4.f,
-		Rig.VolumetricScatteringScale, "%.2fx"))
+	if (const USpotLightComponent* Spot = Cast<USpotLightComponent>(Light))
 	{
-		Light->SetVolumetricScatteringIntensity(Scatter);
-		Rig.SetSourceOverridden(Index, true);
+		ImGui::Text("cone %.1f / %.1f deg (inner/outer)", Spot->InnerConeAngle, Spot->OuterConeAngle);
 	}
-	ImGui::SetItemTooltip("How strongly this source appears in volumetric fog. This is unrelated "
-		"to the Volumetric lights on/off group above.");
-
-	ImGui::SeparatorText("Shape and reach");
-	if (ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light))
+	if (const UDirectionalLightComponent* Sun = Cast<UDirectionalLightComponent>(Light))
 	{
-		float ReachM = Local->AttenuationRadius / 100.f;
-		ImGui::SetNextItemWidth(Width);
-		if (ImGui::DragFloat("Reach", &ReachM, 0.1f, 0.1f, 1000.f, "%.1f m"))
-		{
-			Local->SetAttenuationRadius(ReachM * 100.f);
-			Rig.SetSourceOverridden(Index, true);
-		}
+		ImGui::Text("sun angle %.3f deg · soft %.3f deg", Sun->LightSourceAngle,
+			Sun->LightSourceSoftAngle);
 	}
+	ImGui::Text("shadows %s · fog shadow %s", Light->CastShadows ? "on" : "off",
+		Light->bCastVolumetricShadow ? "on" : "off");
 
-	if (UPointLightComponent* Point = Cast<UPointLightComponent>(Light))
-	{
-		float Falloff = Point->LightFalloffExponent;
-		ImGui::SetNextItemWidth(Width);
-		if (SliderWithReset("Falloff", Falloff, 0.25f, 4.f,
-			Rig.FalloffExponent, "%.2f", ImGuiSliderFlags_Logarithmic))
-		{
-			Point->SetLightFalloffExponent(Falloff);
-			Rig.SetSourceOverridden(Index, true);
-		}
-
-		float SourceRadiusM = Point->SourceRadius / 100.f;
-		ImGui::SetNextItemWidth(Width);
-		if (ImGui::DragFloat("Source radius", &SourceRadiusM, 0.01f, 0.f, 10.f, "%.2f m"))
-		{
-			Point->SetSourceRadius(SourceRadiusM * 100.f);
-			Rig.SetSourceOverridden(Index, true);
-		}
-		ImGui::SetItemTooltip("Physical emitter radius used by ray-traced MegaLights area shadows.");
-
-		float SoftRadiusM = Point->SoftSourceRadius / 100.f;
-		ImGui::SetNextItemWidth(Width);
-		if (ImGui::DragFloat("Soft source radius", &SoftRadiusM, 0.01f, 0.f, 10.f, "%.2f m"))
-		{
-			Point->SetSoftSourceRadius(SoftRadiusM * 100.f);
-			Rig.SetSourceOverridden(Index, true);
-		}
-
-		float SourceLengthM = Point->SourceLength / 100.f;
-		ImGui::SetNextItemWidth(Width);
-		if (ImGui::DragFloat("Source length", &SourceLengthM, 0.01f, 0.f, 20.f, "%.2f m"))
-		{
-			Point->SetSourceLength(SourceLengthM * 100.f);
-			Rig.SetSourceOverridden(Index, true);
-		}
-	}
-
-	if (USpotLightComponent* Spot = Cast<USpotLightComponent>(Light))
-	{
-		float Inner = Spot->InnerConeAngle;
-		float Outer = Spot->OuterConeAngle;
-		ImGui::SetNextItemWidth(Width);
-		if (ImGui::SliderFloat("Inner cone", &Inner, 0.f, Outer, "%.1f deg"))
-		{
-			Spot->SetInnerConeAngle(FMath::Min(Inner, Outer));
-			Rig.SetSourceOverridden(Index, true);
-		}
-		ImGui::SetNextItemWidth(Width);
-		if (ImGui::SliderFloat("Outer cone", &Outer, 1.f, 80.f, "%.1f deg"))
-		{
-			Spot->SetOuterConeAngle(Outer);
-			Spot->SetInnerConeAngle(FMath::Min(Spot->InnerConeAngle, Outer));
-			Rig.SetSourceOverridden(Index, true);
-		}
-	}
-
-	if (UDirectionalLightComponent* Sun = Cast<UDirectionalLightComponent>(Light))
-	{
-		float Angle = Sun->LightSourceAngle;
-		ImGui::SetNextItemWidth(Width);
-		if (SliderWithReset("Sun source angle", Angle, 0.05f, 5.f,
-			Rig.SunSourceAngleDegrees, "%.3f deg", ImGuiSliderFlags_Logarithmic))
-		{
-			Sun->SetLightSourceAngle(Angle);
-			Rig.SetSourceOverridden(Index, true);
-		}
-		float SoftAngle = Sun->LightSourceSoftAngle;
-		ImGui::SetNextItemWidth(Width);
-		if (SliderWithReset("Sun soft angle", SoftAngle, 0.f, 5.f,
-			Rig.SunSoftSourceAngleDegrees, "%.3f deg"))
-		{
-			Sun->SetLightSourceSoftAngle(SoftAngle);
-			Rig.SetSourceOverridden(Index, true);
-		}
-	}
-
-	ImGui::SeparatorText("Shadows");
-	bool bShadows = Light->CastShadows;
-	if (ImGui::Checkbox("Cast shadows", &bShadows))
-	{
-		Light->SetCastShadows(bShadows);
-		Rig.SetSourceOverridden(Index, true);
-	}
-	ImGui::SameLine();
-	bool bVolumetricShadows = Light->bCastVolumetricShadow;
-	if (ImGui::Checkbox("Shadow fog", &bVolumetricShadows))
-	{
-		Light->bCastVolumetricShadow = bVolumetricShadows;
-		Light->MarkRenderStateDirty();
-		Rig.SetSourceOverridden(Index, true);
-	}
-	ImGui::SetItemTooltip("Let this source shadow volumetric fog. Disable only when the fog-shadow "
-		"cost is measurable and the missing occlusion is acceptable.");
-
-	if (ImGui::CollapsingHeader("Advanced source"))
-	{
-		float Specular = Light->SpecularScale;
-		ImGui::SetNextItemWidth(Width);
-		if (SliderWithReset("Specular", Specular, 0.f, 1.f, Rig.SpecularScale, "%.2f"))
-		{
-			Light->SpecularScale = Specular;
-			Light->MarkRenderStateDirty();
-			Rig.SetSourceOverridden(Index, true);
-		}
-		ImGui::SetItemTooltip("Faithful baseline is zero; non-zero is an explicit presentation edit.");
-	}
-
-	// Transform.
-	// The 3D gizmo. Scale means nothing to a light, and neither does the orientation of a point
-	// light, so both are taken off the handle rather than offered and ignored.
 	const FVector Pos = Light->GetComponentLocation();
 	ImGui::Text("pos %.0f %.0f %.0f", Pos.X, Pos.Y, Pos.Z);
-
 	if (const APlayerController* PC = GetLocalPlayerController())
 	{
 		if (PC->PlayerCameraManager != nullptr)
@@ -1414,20 +634,7 @@ void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32
 			ImGui::TextDisabled("(%.1f m away)",
 				FVector::Dist(Pos, PC->PlayerCameraManager->GetCameraLocation()) / 100.f);
 		}
-
-		ECogDebug_GizmoFlags Flags = ECogDebug_GizmoFlags::NoScale;
-		if (S.Type == 0 || S.Type == 1)
-		{
-			Flags |= ECogDebug_GizmoFlags::NoRotation;
-		}
-		if (Gizmo.Draw("ElysiumLight", *PC, *Light, Flags))
-		{
-			Rig.SetSourceOverridden(Index, true);
-		}
 	}
-
-	ImGui::PopID();
-	ImGui::PopID();
 }
 
 #endif // ENABLE_COG

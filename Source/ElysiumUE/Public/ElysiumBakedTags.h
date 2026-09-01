@@ -19,7 +19,7 @@ namespace ElysiumBakedTags
 	// One WORLDLIGHTS source. Carries a second tag, Source(i), naming its `.lights` line so the
 	// light rig can bind it back to the raw source data it re-derives intensity and reach from.
 	inline const FName Light(TEXT("elysium.light"));
-	// The sky light and the height fog, adopted so the Lights Cog window can tune ambience live.
+	// The sky light and the height fog, adopted so `UElysiumMapVisuals` can drive their values.
 	inline const FName SkyLight(TEXT("elysium.skylight"));
 	inline const FName Fog(TEXT("elysium.fog"));
 	// One projected decal.

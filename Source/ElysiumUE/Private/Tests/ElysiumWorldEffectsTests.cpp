@@ -26,6 +26,8 @@
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumLightRig.h"
+#include "ElysiumLightCalibration.h"
+#include "ElysiumLightingSettings.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -87,7 +89,6 @@
 #include "Scripting/ElysiumScriptNatives.h"
 #include "Tests/ElysiumDialogueTestHelpers.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
-#include "Tests/ElysiumScratchContentRoot.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumUseIcons.h"
@@ -302,6 +303,13 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigTest,
 	"Elysium.Substrate.LightRig", GElysiumTestFlags)
 
+// R4.3 (`docs/project/seam_migration.md`): the derivation-math assertions below (non-inverse-square
+// falloff, MegaLights, shadows-from-calibration, spot cone from stopdot/stopdot2) exercise exactly
+// the formulas `ApplyToSource` computes fresh on every map load today and R5.6 will instead compute
+// once at bake time -- the roadmap line's "re-homed to bake verification" describes moving these
+// assertions onto that bake's own output once it exists, not something R5.6's own predecessor task
+// can do yet (there is no baked light asset to verify against before R5.6 lands). Until then this is
+// where the formulas they check are proven, and R5.6 re-homes them rather than duplicating them.
 bool FElysiumLightRigTest::RunTest(const FString&)
 {
 	IFileManager::Get().MakeDirectory(*FPaths::AutomationTransientDir(), /*Tree*/ true);
@@ -351,67 +359,55 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 	TestTrue(TEXT("revert restores authored transform"),
 		Point->GetComponentLocation().Equals(FVector(100.f, 200.f, 300.f)));
 
-	// The map-load contract restores global calibration first, then the complete override by the
-	// stable sidecar index. `LightEdits` resolves under the export root, so the survey is written
-	// beneath a scratch one: a Substrate test must not create a directory inside the user's real
-	// corpus, and the scratch root removes the tree on the way out.
-	const FElysiumScratchContentRoot Scratch(TEXT("LightRig"));
-	const FString EditPath = FElysiumContentPaths::LightEdits(FPaths::GetBaseFilename(LightsPath));
-	if (!TestTrue(TEXT("the light survey resolves under the scratch content root"),
-		FPaths::IsUnderDirectory(EditPath, Scratch.Root)))
-	{
-		return false;
-	}
-	IFileManager::Get().MakeDirectory(*FElysiumContentPaths::LightEditsDir(), /*Tree*/ true);
-	const FString SavedEdit = TEXT(R"JSON({
-		"calibration": {
-			"point_spot_scale": 0.004,
-			"max_brightness": 12.0,
-			"falloff_exponent": 1.5,
-			"radius_scale": 1.25,
-			"indirect_lighting_scale": 1.5,
-			"volumetric_scattering_scale": 0.75,
-			"point_shadows": false
-		},
-		"edits": [{
-			"index": 0,
-			"disabled": true,
-			"overridden": true,
-			"intensity": 2.5,
-			"pos_cm": [10.0, 20.0, 30.0],
-			"rot_deg": [0.0, 45.0, 0.0],
-			"color": [0.2, 0.4, 0.8],
-			"reach_cm": 3456.0,
-			"falloff_exponent": 2.25,
-			"source_radius_cm": 75.0,
-			"soft_source_radius_cm": 50.0,
-			"source_length_cm": 120.0,
-			"indirect_lighting_scale": 2.0,
-			"volumetric_scatter": 0.5,
-			"specular_scale": 0.25,
-			"cast_shadows": true,
-			"cast_volumetric_shadow": false
-		}]
-	})JSON");
-	TestTrue(TEXT("synthetic light edit writes"), FFileHelper::SaveStringToFile(SavedEdit, *EditPath));
-	FString LoadMessage;
-	TestTrue(TEXT("saved light edit loads"), Rig->LoadSurvey(LoadMessage));
-	TestTrue(TEXT("saved calibration restores"), FMath::IsNearlyEqual(Rig->PointSpotScale, 0.004f));
-	TestTrue(TEXT("saved override restores"), Rig->IsSourceOverridden(0));
-	TestTrue(TEXT("saved disabled state restores"), Rig->IsSourceDisabled(0));
-	TestTrue(TEXT("saved intensity restores"), FMath::IsNearlyEqual(Point->Intensity, 2.5f));
-	TestTrue(TEXT("saved transform restores"), Point->GetComponentLocation().Equals(FVector(10.f, 20.f, 30.f)));
-	TestTrue(TEXT("saved reach restores"), FMath::IsNearlyEqual(Point->AttenuationRadius, 3456.f));
-	TestTrue(TEXT("saved source shape restores"),
-		FMath::IsNearlyEqual(Point->SourceRadius, 75.f)
-		&& FMath::IsNearlyEqual(Point->SoftSourceRadius, 50.f)
-		&& FMath::IsNearlyEqual(Point->SourceLength, 120.f));
-	TestTrue(TEXT("saved light transport restores"),
-		FMath::IsNearlyEqual(Point->IndirectLightingIntensity, 2.f)
-		&& FMath::IsNearlyEqual(Point->VolumetricScatteringIntensity, 0.5f)
-		&& FMath::IsNearlyEqual(Point->SpecularScale, 0.25f));
-	TestTrue(TEXT("saved shadow overrides restore"), Point->CastShadows != 0
-		&& Point->bCastVolumetricShadow == 0);
+	// R4.3: global calibration comes from `UElysiumLightingSettings`, not the rig's own hardcoded
+	// defaults. `ApplySettings` is a pure field copy plus `ApplyLiveTuning`, exercised directly
+	// (not through the CDO `GetDefault<>` Adopt() reads) so the test needs no project-settings
+	// fixture and cannot see another test's mutation of the real settings object.
+	UElysiumLightingSettings* Settings = NewObject<UElysiumLightingSettings>();
+	Settings->PointSpotScale = 0.004f;
+	Settings->MaxBrightness = 12.f;
+	Settings->bPointShadows = false;
+	Rig->ApplySettings(*Settings);
+	Rig->ApplyLiveTuning();
+	TestTrue(TEXT("settings push updates the rig's own calibration mirror"),
+		FMath::IsNearlyEqual(Rig->PointSpotScale, 0.004f));
+	TestTrue(TEXT("settings push re-derives shadows for non-overridden sources"),
+		Point->CastShadows == 0);
+
+	// R4.3: a per-map `UElysiumLightCalibration`'s merge rows apply through the same per-source
+	// setters a hand edit uses, so an overridden row survives the next `ApplyLiveTuning` untouched.
+	UElysiumLightCalibration* Calibration = NewObject<UElysiumLightCalibration>();
+	FElysiumLightCalibrationRow Row;
+	Row.SourceIndex = 1;   // the spot's `.lights` line
+	Row.bOverrideIntensity = true;
+	Row.Intensity = 2.5f;
+	Row.bOverrideReach = true;
+	Row.ReachCm = 3456.f;
+	Row.bOverrideColor = true;
+	Row.Color = FLinearColor(0.2f, 0.4f, 0.8f);
+	Calibration->Rows.Add(Row);
+	FElysiumLightCalibrationRow StaleRow;
+	StaleRow.SourceIndex = 99;   // no live source at this line -- must be skipped, not asserted on
+	StaleRow.bDisabled = true;
+	Calibration->Rows.Add(StaleRow);
+
+	TestEqual(TEXT("calibration asset applies exactly its matching row"),
+		Rig->ApplyCalibrationAsset(Calibration), 1);
+	TestTrue(TEXT("calibration row marks its source overridden"), Rig->IsSourceOverridden(1));
+	TestTrue(TEXT("calibration row's intensity reaches the component"),
+		FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
+	TestTrue(TEXT("calibration row's reach reaches the component"),
+		FMath::IsNearlyEqual(Spot->AttenuationRadius, 3456.f));
+	// `ULightComponentBase::LightColor` is an 8-bit sRGB `FColor`; `SetLightColor`/`GetLightColor`
+	// round-trip through it, so the expected value is the same quantization, not the authored float.
+	const FLinearColor SpotColor = Spot->GetLightColor();
+	const FLinearColor ExpectedSpotColor(Row.Color.ToFColor(/*bSRGB*/ true));
+	TestTrue(TEXT("calibration row's colour reaches the component"),
+		SpotColor.Equals(ExpectedSpotColor, 0.001f));
+
+	Rig->ApplyLiveTuning();
+	TestTrue(TEXT("an overridden source survives the next ApplyLiveTuning unchanged"),
+		FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
 
 	IFileManager::Get().Delete(*LightsPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
 	return true;

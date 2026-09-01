@@ -5,30 +5,22 @@
 #if ENABLE_COG
 
 #include "CoreMinimal.h"
-#include "CogDebugGizmo.h"
 #include "Debug/ElysiumCogWindow.h"
 #include "Math/Color.h"
-#include "UObject/StrongObjectPtr.h"
 
 class UElysiumLightRig;
 
-// F1-first surface for the real-time light rig (UElysiumLightRig). A
-// visibility toggle, human-scale live calibration controls (brightness, reach, Lumen bounce,
-// fog scattering, source shape, shadows and sun) that re-tune the running rig with no map reload, and
-// a scrollable per-source list (type / colour / raw magnitude / reach / lightstyle). It also owns
-// the map's ambience — the baked sky light's intensity/colour/cubemap and the height fog — because
-// how much the sky contributes and how much the per-source rig must carry is one calibration, not
-// two. Skylight leaking lives on the same tab: the override checkboxes drive the map's post-process
-// knobs. Subsumes the Canvas HUD's lights readout.
+// F1-first **read-only viewer** for the real-time light rig (UElysiumLightRig): a visibility
+// toggle, a per-source list (type / colour / raw magnitude / reach / lightstyle), and per-light
+// identification by clicking a marker in the world. Subsumes the Canvas HUD's lights readout.
 //
-// Per-light inspector: one source is selected at a time, from the list or by clicking its marker
-// in the world, and its output/transport/shape/cone/shadow is edited directly, with a 3D gizmo on
-// its transform. Editing a light marks it overridden in the rig, which keeps the global
-// sliders and the lightstyle animation from writing back over the edit. A separate Enabled switch
-// takes one light out of the map without touching its values.
-//
-// Save writes the complete calibration, disabled set and overrides as JSON (one file per map under
-// `_lights/`, overwritten each time); map load restores it by stable `.lights` source index.
+// R4.3 (`docs/architecture/seam_map_map_lighting.md` -> "Import") retired every tuning affordance
+// this window used to carry -- global calibration sliders, the sky-light/height-fog panel and
+// skylight-leaking A/B, the per-light editor and gizmo, batch enable/disable, and the JSON survey's
+// Save/Load -- in favour of `UElysiumLightingSettings` (Project Settings -> Elysium -> Lighting) and
+// the per-map `UElysiumLightCalibration` data asset, both edited the ordinary Unreal way ("the
+// Unreal editor is the tuning surface", `docs/project/seam_migration.md`). What is left is exactly
+// what a human still needs Cog for: seeing which light in the world a `.lights` row is.
 //
 // Lights carry no collision, so the world pick here is its own thing rather than ElysiumPick — it
 // is a screen-space nearest-marker test among the sources the camera can see. A light slightly
@@ -46,36 +38,18 @@ protected:
 	virtual void RenderContent() override;
 
 private:
-	// The selected source's own attributes, plus its transform gizmo. Returns nothing; every edit
-	// goes straight to the live component.
+	// The selected source's own attributes, read-only. Returns nothing; there is nothing here to
+	// write back.
 	void RenderSelectedSource(UElysiumLightRig& Rig, int32 Index);
-	// The map-wide edit actions (revert/enable/non-spot batch/save), rendered whether or not a source
-	// is selected — they act on the whole rig, not on the selection.
-	void RenderEditActions(UElysiumLightRig& Rig, const FString& MapName);
-	// Write the map's edits to FElysiumContentPaths::LightEdits(MapName), overwriting any previous
-	// save. Returns false and fills OutMessage on failure. (The Load button is the rig's own
-	// LoadSurvey — the same pass Adopt auto-applies at map load.)
-	static bool SaveEdits(UElysiumLightRig& Rig, const FString& MapName, FString& OutMessage);
 	// Draw a marker per light over the world and, when armed, note which one a click would take.
 	void TickMarkersAndPick(UElysiumLightRig& Rig);
-	// Apply a click noted by TickMarkersAndPick, unless the gizmo took it. Runs at the end of
-	// RenderContent because that is where the gizmo submits: the gizmo grabs on LMB without
-	// setting WantCaptureMouse, so a pick resolved in RenderTick would steal the click that
-	// starts a drag and re-select whatever light happened to be behind the handle.
+	// Apply a click noted by TickMarkersAndPick. Runs at the end of RenderContent, after every other
+	// widget has had a chance to consume the frame's input.
 	void CommitPendingPick();
-	// Enforce/lift the isolate ("solo") state, which hides every light but the selected one.
+	// Enforce/lift the isolate ("solo") state, which hides every light but the selected one. A
+	// viewing aid, not a value edit: nothing it touches survives a re-select or a map reload.
 	void TickSolo(UElysiumLightRig& Rig);
 
-	// Parked here while the sky cubemap is toggled off, so switching back does not need the map
-	// to reload and rebuild it from the six exported face images. Weak: the cube is outer'd to the
-	// map actor, so a map unload takes it and the toggle simply disappears with the sky light.
-	TWeakObjectPtr<class UTextureCube> SkyCubemap;
-	// Flat cube leaking samples while the override is on. The authored night photo cube
-	// integrates to nearly nothing, so leaking it is a silent no-op.
-	TStrongObjectPtr<class UTextureCube> ConstantSkyCube;
-	bool bLeakingOwnsSkySource = false;
-	float SkyIntensityBeforeLeaking = -1.f;
-	FLinearColor LeakTint = FLinearColor(0.45f, 0.55f, 0.72f);
 	// Row indices and all editor-only state below belong to one adopted rig. A rig change clears
 	// them so travel cannot apply a previous map's selection or isolate state to the next map.
 	TWeakObjectPtr<UElysiumLightRig> ActiveRig;
@@ -84,7 +58,6 @@ private:
 	bool bClickToSelect = true;          // LMB over the world selects the nearest light marker
 	bool bDrawMarkers = true;            // draw the per-light markers over the world
 	bool bScrollToSelected = false;      // a world pick asks the list to scroll its row into view
-	bool bSelectEditorTab = true;         // first open lands on the task this window is primarily for
 
 	// Isolate: while on, every light but the selected one is hidden, which is the fastest way to
 	// tell which fixture a row actually is. Tracked separately from the selection so changing the
@@ -96,13 +69,6 @@ private:
 	int32 HoveredSource = INDEX_NONE;
 	bool bSelectPending = false;
 	bool bClearPending = false;
-
-	// The last save's outcome, shown under the button so a write is visibly confirmed (the file
-	// lands outside the game window, where nothing else would report it).
-	FString SaveStatus;
-	bool bSaveFailed = false;
-
-	FCogDebug_Gizmo Gizmo;
 };
 
 #endif // ENABLE_COG

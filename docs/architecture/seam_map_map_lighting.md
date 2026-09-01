@@ -220,3 +220,126 @@ disjoint, in range and together with the orphan runs cover the lump exactly, com
 record, and verifies each `derived` face row against the root. The standalone validator checks
 the accessors' lengths and digests, the ledger, and that every `faces[].spans[]` entry lies inside
 the `samples` accessor.
+
+## Import
+
+R4.3 of `docs/project/seam_migration.md` -> "Roadmap — one pipeline" moves the real-time light
+rig's **calibration**, not its geometry, off cvars/C++ literals and a per-map JSON survey file and
+onto two editor surfaces: `UElysiumLightingSettings` (global, Project Settings -> Elysium ->
+Lighting) and `UElysiumLightCalibration` (per-map, a data asset). `worldLights[]` above is
+unaffected -- this section is about what a light's *raw* row is turned into at runtime, not about
+the row itself, and the runtime still reads `<map>.lights` (`UE_bsp_to_scene`'s restatement of
+`worldLights[]`) to adopt and derive every source. R5.6 is the task that bakes the derived values
+and deletes that reader; this one is scoped to where the human-tunable numbers live.
+
+### `UElysiumLightingSettings` — the global half
+
+`Config = Elysium`, `DefaultConfig`, Project Settings -> Elysium -> Lighting, tracked at
+`Config/DefaultElysium.ini` — the same pattern `UElysiumSurfaceSettings` established
+(`seam_map_material.md` -> "Import" -> "Knob contract"). Every field is `UElysiumLightRig`'s own
+former hardcoded default (`ElysiumLightRig.h`, historically lines ~157-188) or one of three retired
+console variables, carried over at the same faithful value -- this task moves *where* the numbers
+live, never what they are (`docs/project/seam_migration.md`, "Wire first, tune later"):
+
+| Settings field | Was |
+|---|---|
+| `PointSpotScale`, `MaxBrightness`, `ExtendedMaxBrightness`, `FalloffExponent`, `RadiusScale`, `FallbackRadiusCm`, `SpecularScale`, `IndirectLightingScale`, `VolumetricScatteringScale`, `SunScaleLux`, `SunSourceAngleDegrees`, `SunSoftSourceAngleDegrees`, `MinSkyReachCm`, `bPointShadows`, `bSpotShadows`, `bSunShadows` | `UElysiumLightRig`'s own `UPROPERTY` defaults |
+| `bUseExtendedBrightnessCeiling` | `elysium.LightCurve` (0/1) |
+| `bApplyLightFit` | `elysium.LightFit` (0/1) |
+| — (retired outright) | `elysium.LightScale` — redundant once `PointSpotScale` is itself the editable value; no override concept survives it |
+
+`SkyReachScale` stays a per-instance rig field, not a settings field: it is set from the map's own
+`<map>.sky` scale at `Adopt`, not a human calibration.
+
+`UElysiumLightRig::ApplySettings(const UElysiumLightingSettings&)` copies every field above into
+the rig's own like-named mirrors (kept as separate fields, not a pointer to the settings singleton,
+so a per-instance PIE edit in the component's own Details panel still works and `ApplyToSource`
+keeps one cheap, uniform read path). `Adopt` calls it first, from `GetDefault<UElysiumLightingSettings>()`,
+so a fresh map load always starts from the current Project Settings page.
+
+**Push timing diverges from `UElysiumSurfaceSettings` on purpose.** The surfaces page follows an
+interactive slider drag live because it only has to touch one parameter collection; a light rig is
+a per-world scene component with real per-light state (shadows, MegaLights, source shape), and
+re-deriving 400+ lights on every tick of a drag is not what a slider needs to pay for.
+`PostEditChangeProperty` therefore drops the interactive branch entirely — nothing pushes until
+`EPropertyChangeType::Interactive` is *not* set in the change event, i.e. the drag's terminal
+`ValueSet` — and only then does `PushToWorlds` walk every world context, find its
+`UElysiumMapSubsystem`'s current map, call `ApplySettings` + `ApplyLiveTuning` on its light rig if
+it has one, and move on.
+
+### `UElysiumLightCalibration` — the per-map half
+
+```text
+/ElysiumBaked/<map>/DA_<map>_LightCalibration
+```
+
+One optional asset per map, beside `DA_<map>_Entities`/`DA_<map>_Collision`
+(`FElysiumContentPaths::BakedMapLightCalibration`) — but unlike those two, **no producer writes
+it**. It replaces the Lights Cog window's JSON survey (`UElysiumLightRig::LoadSurvey`,
+`$ELYSIUM_EXPORT_ROOT/_lights/<map>.json`, deleted this task), which likewise had no generator and
+existed only once a human ran a hand pass and pressed Save. `FElysiumLightCalibrationRow` restates
+that survey's per-light shape as reflected `UPROPERTY` fields instead of JSON keys, authored
+directly in the Content Browser's property panel:
+
+| Field | Semantics |
+|---|---|
+| `SourceIndex` | the `.lights` line this row overrides (`worldLights[]`'s `sourceOffset` order) — stable across a re-export, unlike the rig's live array position, which drops the skyambient row and any row with no matching baked actor |
+| `bDisabled` | switches the source off; independent of every override below |
+| `bOverrideIntensity` / `Intensity` | |
+| `bOverrideReach` / `ReachCm` | local/spot attenuation radius; no effect on the sun |
+| `bOverrideColor` / `Color` | |
+
+**A row is a merge, not a replacement.** Each override is its own on/off switch plus a value, not
+one struct-wide flag — a hand pass can move one light's reach without restating its colour,
+intensity and every other attribute the calibrated baseline already got right. A source with no
+row keeps exactly the value `ApplyToSource` derives for it.
+
+`UElysiumLightRig::ApplyCalibrationAsset` joins `Rows` onto the rig's live sources by `SourceIndex`
+(the same join `LoadSurvey` used to do against its own JSON `edits[]`) and applies each override
+through the ordinary per-source setters (`SetSourceDisabled`, `SetSourceIntensity`,
+`SetSourceReach`, `SetSourceColor` — the last two new this task, `SetSourceReach` matching
+`SetSourceIntensity`'s existing shape and `SetSourceColor` deliberately leaving `FLightSource::Color`
+— the calibrated baseline `RevertSource` restores to — untouched). Every setter marks its source
+overridden, which is what takes it out of both `ApplyLiveTuning` (so a later settings push does not
+write over it) and the per-frame lightstyle tick, exactly as a hand edit through the old Cog editor
+did. A row whose `SourceIndex` matches no live source (a stale row after a re-export) is silently
+skipped, counted but not asserted on.
+
+`Adopt` resolves the asset itself, quietly (`LoadObject<UElysiumLightCalibration>` with
+`LOAD_NoWarn | LOAD_Quiet` at `BakedMapLightCalibration(MapName)`, `MapName` being the `.lights`
+file's own base name) after the base derivation pass (`ApplyLiveTuning`) has run, so calibration
+rows apply on top of the calibrated baseline rather than instead of it. **The asset's presence is
+the cutover flag**, exactly as R4.1/R4.2: a map with one gets its rows applied, a map without one —
+every map today — runs exactly as R4.2 left it. No remapper exists or is planned: no `_lights/*.json`
+survey was ever saved to disk on this corpus (confirmed empty at the time this task landed), so
+there is nothing to migrate, and the owner re-tunes each map fresh in the editor.
+
+### Cog Lights window: viewer, not editor
+
+The window (`ElysiumCogWindow_Lights`) is now **read-only**. Deleted outright: the "Rig tuning" tab
+(every global calibration slider — `UElysiumLightingSettings` is the surface now), the "Sky & fog"
+tab (sky light intensity/colour/cubemap, height fog, the skylight-leaking A/B — these have no live
+tuning surface until R4.4's per-map environment asset lands, which is a known, accepted gap: their
+*derived* values still apply at load, only the interactive override is gone), the per-light editor
+and its 3D gizmo, batch enable/disable, and the JSON survey's Save/Reload. Kept: the visibility
+toggle, the per-source list/table, world-marker click-to-select, Isolate (a display-only hide pass,
+touches no light's value) and a read-only "Selected light" readout (identity, override/disabled
+state, resolved values) — the viewing surface the roadmap line names explicitly. `RenderSelectedSource`
+retained its `SameBatch` authored-batch identification as read-only text (count and off-count only,
+no batch on/off buttons), since it is exactly the information `docs/vtmb/light-attribution.md`'s
+hand survey used to identify a copy-pasted decision.
+
+### Test re-homing
+
+`Elysium.Substrate.LightRig`'s JSON-survey assertions (`LoadSurvey`) were deleted with the code
+they exercised and replaced with coverage of `ApplySettings` and `ApplyCalibrationAsset` (a
+synthetic `UElysiumLightingSettings`/`UElysiumLightCalibration`, `NewObject`-constructed in the
+test, exercising the merge-row join and per-source setters directly — no baked asset, no scratch
+content root needed, since nothing under test reads through `FElysiumContentPaths`). The
+derivation-math assertions the same test already carried (non-inverse-square falloff, MegaLights,
+shadows-from-calibration, spot cone from `stopdot`/`stopdot2`) are **not yet moved**: the roadmap
+line's "re-homed to bake verification" describes where they belong once R5.6 bakes final light
+values and gives them something to be verified against — there is no baked light asset to compare
+before that task lands, so re-homing them now would mean deleting coverage of `ApplyToSource`'s
+formulas with nothing to replace it. They stay in `Elysium.Substrate.LightRig` until R5.6 gives them
+a destination.

@@ -109,11 +109,12 @@ public:
 	const TArray<TObjectPtr<AStaticMeshActor>>& GetSkyActors() const { return SkyActors; }
 	const TArray<TObjectPtr<AStaticMeshActor>>& GetPropActors() const { return PropActors; }
 
-	// The real-time light rig for this map (the Lights Cog window's source list + live tuning), or
-	// null before the map is built.
+	// The real-time light rig for this map (the Cog Lights window's read-only viewer reaches it
+	// through here), or null before the map is built.
 	UElysiumLightRig* GetLightRig() const { return LightRig; }
-	// The baked sky light and height fog, adopted from the level so the Lights Cog window can tune
-	// the map's ambience live. Null if the bake did not place them.
+	// The baked sky light and height fog, adopted from the level. Null if the bake did not place
+	// them. Ambience tuning has no live surface yet (R4.4's per-map environment asset owns it); this
+	// is exposed for the actors that already touch it directly (SkyAmbientIntensity, ApplySceneFog).
 	USkyLightComponent* GetSkyLight() const { return SkyLight; }
 	UExponentialHeightFogComponent* GetHeightFog() const { return HeightFog; }
 	APostProcessVolume* GetPostProcess() const { return PostProcess; }
@@ -155,8 +156,7 @@ private:
 	// `elysium.Fog` can re-stamp the primitives live.
 	FElysiumEnvDef EnvDef;
 
-	// Adopted from the baked level (not owned): the map's ambience. Their tuning fields are driven
-	// by the light rig so the Lights Cog window reaches them.
+	// Adopted from the baked level (not owned): the map's ambience.
 	UPROPERTY() TObjectPtr<USkyLightComponent> SkyLight;
 	UPROPERTY() TObjectPtr<UExponentialHeightFogComponent> HeightFog;
 	// C3/D3 — the map's unbound PostProcessVolume, where a per-map Lumen art-direction value lives.

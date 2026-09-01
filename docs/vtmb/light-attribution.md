@@ -1,9 +1,19 @@
 # Light attribution — separating VtMB's real fixtures from its fill lights
 
-The per-map light set is curated **by hand** in the Lights Cog window — VtMB's lights are authored like a painting, for the baked result rather than as
-physical fixtures, so no automatic rule ships — and the saved survey auto-applies at map load.
-The classifier below is a candidate-ranker/advisor for that hand pass. Per-task status:
-`docs/project/roadmap.md`.
+The per-map light set was curated **by hand** in the Lights Cog window — VtMB's lights are authored like a painting, for the baked result rather than as
+physical fixtures, so no automatic rule ships. The classifier below is a candidate-ranker/advisor
+for that hand pass. Per-task status: `docs/project/roadmap.md`.
+
+**2026-09-01 (R4.3):** the Lights Cog window's editing surface described below — the per-light
+Enabled/override grid, batch on/off, and the JSON survey's Save/Load
+(`UElysiumLightRig::LoadSurvey`, `$ELYSIUM_EXPORT_ROOT/_lights/<map>.json`) — was deleted; the
+window is now a read-only viewer (`docs/architecture/seam_map_map_lighting.md` -> "Import"). A
+per-map hand pass now edits the map's `UElysiumLightCalibration` data asset directly in the
+Content Browser, keyed the same way (the `.lights` line / `SourceIndex`) the JSON survey's `index`
+used. No survey file existed on disk to migrate, and the classifier's own output
+(`<map>.proposal.json`, `ElysiumLightProbe`) is unaffected — only the load-into-Cog step it used to
+feed is gone. The rest of this document describes the retired tooling as it operated; a future task
+owns re-homing the proposal-list-to-calibration-asset load this leaves undone.
 
 ## The question
 

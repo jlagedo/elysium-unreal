@@ -1381,6 +1381,63 @@ every unconverted map and R8.1 owns reader deletion, which is where the line now
 pytest (`test_map_collision_asset.py`), 3 Content (`Elysium.Content.MapCollision.*`); Substrate
 426/426, Policy 9/9, `Elysium.Content.Map*` 6/6.
 
+**R4.3 — light tuning is an editor surface (2026-09-01).** Global calibration moved off
+`UElysiumLightRig`'s own hardcoded field defaults and three console variables
+(`elysium.LightScale`/`LightFit`/`LightCurve`) onto `UElysiumLightingSettings : UDeveloperSettings`
+(Project Settings → Elysium → Lighting, tracked `Config/DefaultElysium.ini`); per-light hand-tunes
+moved off the Lights Cog window's `_lights/<map>.json` survey onto a per-map
+`UElysiumLightCalibration : UDataAsset` (`/ElysiumBaked/<map>/DA_<map>_LightCalibration`) with
+merge rows keyed by the `.lights` line (`SourceIndex`) — each override its own on/off switch plus a
+value, so a hand pass moves one attribute without restating the rest of the light. The contract is
+`seam_map_map_lighting.md` → "## Import" (new, +90 lines), written before any code: the settings
+field table (mapping every retired literal/cvar to its new home), the row schema, the join and
+cutover, and the Cog window's new scope.
+
+Every value shipped is today's faithful default, unchanged — no look-tuning, per "Wire first, tune
+later". **No remapper**: no `_lights/*.json` survey existed on disk anywhere in the corpus at the
+time this task landed (confirmed empty), so there was nothing to migrate; the calibration asset
+ships with zero rows for every map and the owner re-tunes fresh in the editor. Two new rig methods
+carry the join: `ApplySettings` copies the settings object's fields into the rig's own mirrors
+(kept separate, not a pointer, so a per-instance PIE edit still works) and `ApplyCalibrationAsset`
+applies a calibration asset's rows through the existing per-source setters plus two new ones,
+`SetSourceReach`/`SetSourceColor` (matching `SetSourceIntensity`'s shape). `Adopt` calls both, in
+order (settings first, then a quiet `LoadObject<UElysiumLightCalibration>` at
+`FElysiumContentPaths::BakedMapLightCalibration`, `LOAD_NoWarn | LOAD_Quiet`) — the asset's presence
+is the cutover flag, as in R4.1/R4.2. `UElysiumLightingSettings::PushToWorlds` pushes on the
+terminal `ValueSet` only (unlike `UElysiumSurfaceSettings`, which follows an interactive drag live):
+a light rig carries real per-light state (shadows, MegaLights, source shape) that 60 ticks of one
+slider drag should not pay to re-derive.
+
+The Cog Lights window is now **read-only**: deleted the "Rig tuning" tab (every calibration
+slider), the "Sky & fog" tab (sky light/height fog/skylight-leaking, which have no live tuning
+surface until R4.4's environment asset — a known, accepted gap; their *derived* values still apply
+at load), the per-light editor and its gizmo, batch enable/disable, and the JSON survey's
+Save/Reload. Kept — the viewing tab the roadmap line names: visibility toggle, per-source list,
+world-marker click-to-select, Isolate (display-only), and a read-only per-light readout including
+the authored-batch identification `docs/vtmb/light-attribution.md`'s hand survey used (now count
+text, not on/off buttons). That doc gained a correction note pointing hand-survey work at the new
+calibration asset.
+
+`Elysium.Substrate.LightRig`'s JSON-survey assertions were deleted with `LoadSurvey` and replaced
+with coverage of `ApplySettings`/`ApplyCalibrationAsset` (synthetic, `NewObject`-built settings and
+calibration objects — no baked asset, no scratch content root needed, since the test calls the rig
+directly rather than reading through `FElysiumContentPaths`). The existing derivation-math
+assertions (non-inverse-square falloff, MegaLights, shadows-from-calibration, spot cone) are **not**
+re-homed yet: the roadmap line's "re-homed to bake verification" is where they belong once R5.6
+bakes final light values and gives them something to be verified against, which does not exist
+before that task lands — re-homing now would delete `ApplyToSource` coverage with nothing to
+replace it. Substrate 426/426 tests (`Elysium.Substrate.LightRig` now covers two more behaviors
+alongside its existing derivation assertions); Content `Elysium.Content.MapEntities.*` 2/2 and
+`Elysium.Content.MapCollision.*` 3/3, re-run as a regression check even though R4.3 touches neither
+lane directly.
+
+**Incidental fix, same commit.** `Elysium.Content.MapEntities.*`'s helper functions
+(`ManifestPath`/`StagedMaps`, anonymous-namespace) were byte-identical duplicates of
+`Elysium.Content.MapCollision.*`'s own — dormant until this task's edits shifted the adaptive-unity
+build's file bucketing and put both files in the same translation unit for the first time, where an
+anonymous namespace is TU-wide and the duplicate definitions became a hard redefinition error.
+Renamed the entity-side pair to `EntityManifestPath`/`StagedEntityMaps`; no behavior change.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1446,12 +1503,16 @@ ships as cooked content". Nav bounds and the readiness barrier kept their source
 map, and R4.6's proof needs both paths alive to diff); reader deletion is R8.1's, which is where
 this line's original "readers deleted" now points.
 
-- **R4.3 Lighting surfaces.** `UElysiumLightingSettings` (Project Settings → Elysium → Lighting,
-  tracked ini, per-world push on terminal value-set) + per-map `UElysiumLightCalibration` data
-  asset (lump-15 ordinal, merge rows); the rig shrinks to asset-overrides + lightstyles;
-  `Elysium.Substrate.LightRig` re-homed to bake verification; the Cog Lights tuning tabs deleted.
-  No remapper — nothing to migrate, the owner re-tunes in the editor. → lands: light tuning is an
-  editor surface.
+**R4.3 landed (2026-09-01)** — `UElysiumLightingSettings` (global calibration) + per-map
+`UElysiumLightCalibration` (merge-row hand-tunes, lump-15 `SourceIndex`); contract in
+`seam_map_map_lighting.md` → "## Import", numbers in the Settled entry "R4.3 — light tuning is an
+editor surface". The Cog Lights tuning tabs are deleted; the viewing tab is kept, as the line
+requires. Two corrections to the line's original text: the rig's *wholesale re-derivation from
+`.lights`* does not yet die — that is R5.6's bake, still ahead — so this task states the rig
+applies the calibration asset's overrides + lightstyles **in addition to**, not instead of, the
+existing per-load derivation; and `Elysium.Substrate.LightRig`'s derivation assertions stay put
+rather than moving, since R5.6's bake (their stated destination) does not exist yet for them to be
+verified against — re-homed is what R5.6 does when it lands, not something achievable here.
 - **R4.4 Environment asset.** The `.env`/`.sky`/`.spawn` values as the per-map map-info asset
   (fog CPD values are taste-free passthrough; the height-fog actor is edited directly); `.env`/
   `.sky`/`.spawn` readers deleted. → lands: environment ships as cooked content.

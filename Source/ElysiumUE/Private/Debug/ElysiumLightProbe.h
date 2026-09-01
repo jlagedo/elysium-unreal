@@ -9,7 +9,7 @@ class UWorld;
 
 // Light attribution probe (`elysium.lightprobe`). For every source in the map's UElysiumLightRig
 // it casts a ray fan against the real baked scene and records what that light is actually near,
-// writing one JSON per map next to the Lights window's hand survey.
+// writing one JSON per map under `FElysiumContentPaths::LightEditsDir()` (`_lights/<map>.probe.json`).
 //
 // The question it answers is "is this light standing in for a source, or standing in for bounce".
 // VtMB has no global illumination, so a map's WORLDLIGHTS mix real fixtures with soft wide lights

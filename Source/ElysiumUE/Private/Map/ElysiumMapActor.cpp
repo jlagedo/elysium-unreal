@@ -1619,9 +1619,9 @@ float AElysiumMapActor::QueryLightAtPoint(const FVector& PointCm) const
 		// is a directional term with no position, and folding it in untraced would read every
 		// interior as fully lit — the occlusion half of this query's stated divergence.
 		//
-		// A source switched off by hand in the Lights window is genuinely dark and is skipped. The
-		// MASTER visibility toggle deliberately is not consulted: `elysium.lights 0` is a debug view
-		// and must not change what an NPC perceives.
+		// A source a `UElysiumLightCalibration` row (or a stale in-session hand edit) switched off is
+		// genuinely dark and is skipped. The MASTER visibility toggle deliberately is not consulted:
+		// `elysium.lights 0` is a debug view and must not change what an NPC perceives.
 		if (Source.bSky || Source.Type == SunSourceType || Rig->IsSourceDisabled(Index))
 		{
 			continue;
