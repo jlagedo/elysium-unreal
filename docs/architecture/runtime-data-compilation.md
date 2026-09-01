@@ -106,10 +106,12 @@ JSON families use their own version fields and failure shapes. A valid but stale
 be structurally accepted without proving that it belongs to the export inputs expected by the
 running build.
 
-The bake's per-asset recipe stamps solve this for baked packages, but `.ents`, `.hulls`, `.dispcol` and
-`.ropes` deliberately remain outside the Unreal bake fingerprints. A separate runtime-data receipt
-and source digest are needed; adding these inputs to the visual bake would conflate two independent
-invalidation domains.
+The bake's per-asset recipe stamps solve this for baked packages. `.ents`, `.hulls`, `.dispcol`
+and `.ropes` now carry a whole-file digest in the level recipe too (R2.3/MP-1.3), but only so a
+touched sidecar dirties the `.umap` the bake writes -- the bake still does not parse their fields
+into any baked actor, and the digest is invisible to the running game. The runtime side of this
+gap is unchanged: a separate runtime-data receipt and source digest are still needed for the
+build the game itself loads, distinct from the bake's own invalidation domain.
 
 ### G4 — Some metadata is separated from the Unreal asset that gives it meaning
 

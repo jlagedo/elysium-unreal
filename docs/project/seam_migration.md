@@ -789,6 +789,32 @@ functions against synthetic rows (brush/hull/output totals, type grouping with a
 zero-filled effects classes) and one `write_glb`-built fixture through `census_for_map`/
 `write_census` end to end, plus the named error on a unit that has not been exported.
 
+**Level recipe closes over its runtime sidecars (2026-08-31).** R2.3/MP-1.3
+(`pipeline/unreal/bake_map.py`, no C++ change, no rebake run). `level_sidecar_recipe` parsed only
+`.props`/`.decals`/`.lights`/`.env`/`.sky`/`.spawn` into the level's recipe fingerprint; `.ents`,
+`.hulls`, `.dispcol` and `.ropes` are read by `AElysiumMapActor` at map load, not by the bake, so a
+touched one moved no field the tracker compared and the level kept whatever stamp it already
+carried — a stale level that would read as a runtime bug. The recipe now carries a
+`runtime_sidecars` block with a whole-file SHA-256 per sidecar (`ents_sha256`, `hulls_sha256`,
+`dispcol_sha256`, `ropes_sha256`, each `None` when the file is absent — `sm_pawnshop_1` ships no
+`.dispcol`, the real shape a synthetic-only test would have missed). Nothing is parsed into a
+baked actor from these files; the digest exists only so the tracker's existing stamp-compare
+dirties the level package. `_level_recipe` routes the digest through `Bake._file_sha256`
+(`ContentDigestCache`), the same cache every other content hash in the map bake already uses, so a
+repeat bake over unchanged sidecars pays no rehash. `pipeline/tests/test_level_sidecar_recipe.py`
+(7 cases, loading the real module through the existing `unreal`-stub pattern) prove: all four
+sidecars carry a digest; touching any one of the four changes the recipe and only that sidecar's
+own digest key, leaving the other three digests and every parsed field (`props`, `decals`,
+`lights`, `environment`, `sky`, `spawn`) unchanged; two calls over an untouched sidecar set produce
+byte-identical recipes; and a missing sidecar digests to `None` rather than failing. `uv run
+pytest pipeline/tests/test_level_sidecar_recipe.py pipeline/tests/test_contracts.py
+pipeline/tests/test_bake_orchestration.py`: 87 passed. Two stale doc claims from before this
+decision landed corrected in the same commit: `uasset-bake-spike.md`'s "outside every bake
+fingerprint" and `runtime-data-compilation.md`'s "deliberately remain outside the Unreal bake
+fingerprints" both predate the 2026-08-31 owner decision (`814905ee`) that put MP-1.3 on the maps
+track; the runtime-side gap (G3) they otherwise describe — the running game has no receipt of its
+own — is unchanged and still open.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -835,9 +861,10 @@ shots landed on the test corpus". Scoped to the three-map test corpus; the origi
 **R2.2 landed (2026-08-31)** — `validation/map_census.py`, censuses pinned for the three-map test
 corpus; numbers in the Settled entry "Per-map censuses landed on the test corpus".
 
-- **R2.3 Recipe closes over what it absorbs** [MP-1.3]. `level_sidecar_recipe` extended to
-  `.ents`, `.hulls`, `.dispcol`, `.ropes`; a touched sidecar provably dirties the `.umap`.
-  → lands: no stale-level failure mode.
+**R2.3 landed (2026-08-31)** — `level_sidecar_recipe` extended to `.ents`, `.hulls`, `.dispcol`,
+`.ropes` (a whole-file digest per sidecar, no field parsing); numbers in the Settled entry "Level
+recipe closes over its runtime sidecars".
+
 - **R2.4 Travel-gate successor** [MP-1.4]. The new lane's readiness artifact defined; `Travel`
   accepts either; the gate is never absent. → lands: maps stay bootable through the cutover.
 

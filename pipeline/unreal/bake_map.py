@@ -15,6 +15,7 @@
 #       -BakeMap=sp_tutorial_1 -unattended -nosplash -nopause
 #
 # Optional -BakeForce=1 re-authors every asset whether or not its stamped recipe matches.
+import hashlib
 import math
 import json
 import os
@@ -256,12 +257,33 @@ def _asset_path(asset):
     return path.split(".", 1)[0]
 
 
-def level_sidecar_recipe(map_root: Path, map_name: str) -> dict:
+def level_sidecar_recipe(map_root: Path, map_name: str, digest=None) -> dict:
     """Parse only the values that affect authored level actors.
 
     Formatting, comments, and ignored Source fields do not dirty the level package.  Ordered
     rows stay ordered because decal sort order and light source indices are authored output.
+
+    `.ents`, `.hulls`, `.dispcol` and `.ropes` are runtime-only -- nothing here parses their
+    fields, because no baked actor is authored from them (MP-1.3/R2.3). Their whole-file digest
+    still has to be part of the recipe: they are read at map load, not at bake time, so nothing
+    else notices a touched one, and the tracker would keep serving a level stamped against an
+    input that no longer matches -- a stale level that reads as a runtime bug. `digest` lets a
+    caller route the hash through a cache (`Bake._file_sha256`); the default hashes the file
+    directly, which is what a standalone call (a test, a differ) needs.
     """
+
+    def _digest(path: Path) -> str:
+        if digest is not None:
+            return digest(path)
+        hasher = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+
+    def sidecar_digest(suffix: str):
+        path = map_root / f"{map_name}.{suffix}"
+        return _digest(path) if path.is_file() else None
 
     def lines(suffix: str):
         path = map_root / f"{map_name}.{suffix}"
@@ -351,6 +373,12 @@ def level_sidecar_recipe(map_root: Path, map_name: str) -> dict:
         "environment": env,
         "sky": sky,
         "spawn": spawn,
+        "runtime_sidecars": {
+            "ents_sha256": sidecar_digest("ents"),
+            "hulls_sha256": sidecar_digest("hulls"),
+            "dispcol_sha256": sidecar_digest("dispcol"),
+            "ropes_sha256": sidecar_digest("ropes"),
+        },
     }
 
 
@@ -1730,7 +1758,8 @@ class Bake(object):
                 brushes.append(path)
 
         return {
-            "placement": level_sidecar_recipe(Path(self.dir), self.map),
+            "placement": level_sidecar_recipe(
+                Path(self.dir), self.map, digest=self._file_sha256),
             "world_sky_meshes": sorted(world_sky),
             # Only the models this map places. Enumerating the whole shared package would make
             # every level stale whenever any of the corpus's 3,000 meshes changed, which is the

@@ -69,12 +69,15 @@ closure; and the level hashes parsed placement/environment values plus reference
 inventories. Pixel changes therefore do not dirty materials, and in-place mesh or material
 changes do not dirty the level.
 
-Runtime-only sidecars such as `.ents`, `.hulls`, `.dispcol`, and `.ropes` are outside every bake
-fingerprint. No cross-asset dependency is tracked, because Unreal does not need one: a level
-references its meshes and materials by package path and picks up new content at load, and
-derived data re-keys off content in the DDC. A bake-code change that alters output without
-changing inputs is expressed by bumping a version literal inside the affected recipes;
-`-BakeForce=1` (`--force`) re-authors everything regardless of stamps.
+Runtime-only sidecars such as `.ents`, `.hulls`, `.dispcol`, and `.ropes` author no baked actor,
+so the level recipe does not parse their fields -- but their whole-file digest is part of the
+recipe (R2.3/MP-1.3, `level_sidecar_recipe` in `pipeline/unreal/bake_map.py`), because they are
+read at map load, not at bake time, and nothing else would notice a touched one. No cross-asset
+dependency is tracked otherwise, because Unreal does not need one: a level references its meshes
+and materials by package path and picks up new content at load, and derived data re-keys off
+content in the DDC. A bake-code change that alters output without changing inputs is expressed by
+bumping a version literal inside the affected recipes; `-BakeForce=1` (`--force`) re-authors
+everything regardless of stamps.
 
 Every export launches the bake: a fully current scope launches, reports every asset reused, and
 exits. Deep verification (`bake_verify.py`) runs only on request — `--verify` on an export, or
