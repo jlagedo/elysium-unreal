@@ -31,7 +31,7 @@ static constexpr EAutomationTestFlags GElysiumMapEntityParityTestFlags =
 namespace
 {
 	// `$ELYSIUM_WORK_ROOT/import/map_entities/manifest.json`, or empty when the root is unset.
-	FString ManifestPath()
+	FString EntityManifestPath()
 	{
 		const FString WorkRoot = FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_WORK_ROOT"));
 		if (WorkRoot.IsEmpty())
@@ -42,9 +42,9 @@ namespace
 	}
 
 	// The map stems the last stage run named, or an abstention already recorded and false.
-	bool StagedMaps(FAutomationTestBase& Test, TArray<FString>& OutMaps)
+	bool StagedEntityMaps(FAutomationTestBase& Test, TArray<FString>& OutMaps)
 	{
-		const FString Path = ManifestPath();
+		const FString Path = EntityManifestPath();
 		if (Path.IsEmpty())
 		{
 			Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: ELYSIUM_WORK_ROOT is not configured"));
@@ -117,7 +117,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEntityDefCountParityTest,
 bool FElysiumMapEntityDefCountParityTest::RunTest(const FString&)
 {
 	TArray<FString> Maps;
-	if (!StagedMaps(*this, Maps))
+	if (!StagedEntityMaps(*this, Maps))
 	{
 		return true;
 	}
@@ -171,7 +171,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapEntityFieldParityTest,
 bool FElysiumMapEntityFieldParityTest::RunTest(const FString&)
 {
 	TArray<FString> Maps;
-	if (!StagedMaps(*this, Maps))
+	if (!StagedEntityMaps(*this, Maps))
 	{
 		return true;
 	}
