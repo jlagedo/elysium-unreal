@@ -831,6 +831,14 @@ def set_phy_collision(static_mesh, phys):
     opts.set_editor_property("max_convex_hulls_per_mesh", 1)
     opts.set_editor_property("simplify_hulls", False)
     opts.set_editor_property("emit_transaction", False)
+    # The engine default is True for all three: GetDetectedSimpleShape runs before the convex
+    # path even at max_convex_hulls_per_mesh=1, so a box- or sphere/capsule-shaped ledge would
+    # be silently swapped for a fitted primitive instead of the authored hull. The contract
+    # (seam_map_model.md "### Collision") is "reproduced, not approximated" -- off, so every
+    # ledge always comes back as the FKConvexElem the .phy actually authored.
+    opts.set_editor_property("auto_detect_spheres", False)
+    opts.set_editor_property("auto_detect_boxes", False)
+    opts.set_editor_property("auto_detect_capsules", False)
 
     parts = []
     for verts, tris in phys["hulls"]:

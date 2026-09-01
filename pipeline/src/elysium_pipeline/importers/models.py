@@ -58,7 +58,11 @@ MISSING_MODEL_ASSET_PATH = f"{PACKAGE_ROOT}/SM_elysium_missing_model"
 #: The sentinel material every `vtmb:missing-material:` slot binds.
 MI_V2_MISSING = f"{materials.MASTER_ROOT}/MI_V2_Missing"
 #: Bumped whenever this lane's mapping changes in a way that must re-stage every unit.
-SETTINGS_VERSION = "elysium-model-import-v1"
+#: v2: bake_lib.set_phy_collision now disables GeometryScript's box/sphere/capsule
+#: auto-detection so every .phy ledge reproduces as its own convex hull (the Settled
+#: "not approximated" contract in seam_map_model.md "### Collision"), instead of a
+#: box- or primitive-shaped ledge being silently substituted with a fitted shape.
+SETTINGS_VERSION = "elysium-model-import-v2"
 MANIFEST_SCHEMA = "1.0.0"
 MANIFEST_NAME = "manifest.json"
 #: Written by the editor phase (R1.4), not this module; kept here so the CLI has one name to read.

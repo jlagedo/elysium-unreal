@@ -105,8 +105,8 @@ namespace
 // The main parity sweep: every asset the staged manifest lists resolves to a real `UStaticMesh`
 // with the manifest's own slot names, in order, and a collision setup that matches the manifest's
 // own `mode`/`hullCount`/`massKg` (`docs/architecture/seam_map_model.md` -> "Import" -> "Collision").
-// Abstains entirely (no per-asset failures logged) when the very first asset does not load -- the
-// baked mount itself is absent on this run, not a genuine parity gap.
+// The loop always runs to completion; only the verdict afterward decides abstain vs. fail (below),
+// so one broken asset among many resolved ones is a failure, never a silent abstain.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelParitySlotsAndCollisionTest,
 	"Elysium.Content.ModelParity.SlotsAndCollision", GElysiumModelParityTestFlags)
 bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
@@ -122,22 +122,12 @@ bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
 		return false;
 	}
 
-	// The baked-mount probe: if the very first referenced model's SM_ does not load, nothing under
-	// /ElysiumBaked/Meshes has been imported into this run's content -- abstain rather than firing
-	// hundreds of individual failures that all say the same thing.
-	const TSharedPtr<FJsonObject> First = Assets[0]->AsObject();
-	const FString FirstObjectPath = ObjectPathFor(First->GetStringField(TEXT("assetPath")));
-	if (LoadObject<UStaticMesh>(nullptr, *FirstObjectPath) == nullptr)
-	{
-		AddInfo(FString::Printf(
-			TEXT("ELYSIUM_TEST_ABSTAIN: the baked mount has no mesh at %s (run: uv run elysium ")
-			TEXT("import models --maps sp_tutorial_1 --maps sm_pawnshop_1 --maps sm_hub_1)"),
-			*FirstObjectPath));
-		return true;
-	}
-
 	int32 MissingMeshes = 0, SlotMismatches = 0, CollisionMismatches = 0;
 	int32 BboxAudited = 0, PhyAudited = 0;
+	// Missing-mesh errors are deferred until after the full sweep: whether they are a genuine
+	// per-asset failure or the whole run should abstain (nothing under /ElysiumBaked/Meshes was
+	// ever imported) is a verdict only the total miss count can answer -- see below.
+	TArray<TPair<FString, FString>> MissingMeshRows;
 
 	for (const TSharedPtr<FJsonValue>& AssetValue : Assets)
 	{
@@ -150,8 +140,7 @@ bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
 		if (Mesh == nullptr)
 		{
 			++MissingMeshes;
-			AddError(FString::Printf(TEXT("%s: referenced model has no baked SM_ at %s"),
-				*Stem, *ObjectPath));
+			MissingMeshRows.Emplace(Stem, ObjectPath);
 			continue;
 		}
 
@@ -201,12 +190,13 @@ bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
 			{
 				++PhyAudited;
 				// `bake_lib.set_phy_collision` cooks each `.phy` ledge through GeometryScript's
-				// convex-hull generator with box auto-detection on (its default), so a box-shaped
-				// ledge -- a support beam, a crate -- lands as a `FKBoxElem` rather than a
-				// `FKConvexElem`: the *shape* count matches the ledge count, not the convex count
-				// alone (seam_map_model.md -> "Import" -> "Collision": "a cooked shape count that
+				// convex-hull generator with box/sphere/capsule auto-detection explicitly off, so
+				// every ledge lands as its own `FKConvexElem` -- the hull is reproduced, not
+				// approximated (seam_map_model.md -> "Import" -> "Collision": "one convex shape per
+				// `physics.solids[i].hulls[j]` ledge, unsimplified" / "a cooked shape count that
 				// disagrees with the ledge count is a stage failure").
-				bCollisionMatches = Body->AggGeom.GetElementCount() == ExpectedHullCount;
+				bCollisionMatches = Body->AggGeom.ConvexElems.Num() == ExpectedHullCount
+					&& Body->AggGeom.GetElementCount() == ExpectedHullCount;
 				double MassKg = 0.0;
 				if (bCollisionMatches && Collision->TryGetNumberField(TEXT("massKg"), MassKg))
 				{
@@ -235,6 +225,25 @@ bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
 				Body ? Body->AggGeom.GetElementCount() : -1,
 				Body ? Body->AggGeom.ConvexElems.Num() : -1, Body ? Body->AggGeom.BoxElems.Num() : -1));
 		}
+	}
+
+	// The verdict: nothing at all resolved (every referenced asset missing) means the baked mount
+	// itself is absent from this run's content -- abstain, not hundreds of failures that all say
+	// the same thing. Anything short of that -- even one resolved asset among many missing ones --
+	// is a genuine parity gap and fails loudly, closing the hole where a probe that only checked
+	// `Assets[0]` would abstain the whole sweep on exactly the failure it exists to catch.
+	if (MissingMeshes == Assets.Num())
+	{
+		AddInfo(FString::Printf(
+			TEXT("ELYSIUM_TEST_ABSTAIN: the baked mount has no mesh for any of the %d referenced ")
+			TEXT("model(s) (run: uv run elysium import models --maps sp_tutorial_1 --maps ")
+			TEXT("sm_pawnshop_1 --maps sm_hub_1)"), Assets.Num()));
+		return true;
+	}
+	for (const TPair<FString, FString>& Row : MissingMeshRows)
+	{
+		AddError(FString::Printf(TEXT("%s: referenced model has no baked SM_ at %s"),
+			*Row.Key, *Row.Value));
 	}
 
 	TestEqual(TEXT("every referenced model has a baked SM_"), MissingMeshes, 0);
@@ -284,10 +293,12 @@ bool FElysiumModelParitySentinelUnitTest::RunTest(const FString&)
 		TestEqual(TEXT("the sentinel unit cooks simple AND complex collision"),
 			Body->CollisionTraceFlag, CTF_UseSimpleAndComplex);
 		// The manifest's own record: one `.phy` solid, one hull -- not the bbox fallback, since
-		// this unit ships a `.phy` despite its slot's material being unresolved. One *shape*, not
-		// necessarily one `FKConvexElem`: GeometryScript's box auto-detection (on by default,
-		// `bake_lib.set_phy_collision`) lands a box-shaped ledge -- exactly what a "floorblock" is
-		// -- as an `FKBoxElem` instead.
+		// this unit ships a `.phy` despite its slot's material being unresolved. Exactly one
+		// `FKConvexElem`, not a substituted `FKBoxElem`: `bake_lib.set_phy_collision` disables
+		// GeometryScript's box/sphere/capsule auto-detection, so a box-shaped ledge -- exactly
+		// what a "floorblock" is -- still reproduces as the authored convex hull.
+		TestEqual(TEXT("the sentinel unit cooks exactly one convex hull"),
+			Body->AggGeom.ConvexElems.Num(), 1);
 		TestEqual(TEXT("the sentinel unit cooks exactly one simple shape"),
 			Body->AggGeom.GetElementCount(), 1);
 		TestTrue(TEXT("the sentinel unit carries its authored mass"),

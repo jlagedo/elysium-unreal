@@ -692,3 +692,63 @@ def test_missing_class_lut_fails_loudly_rather_than_seeding_a_placeholder(tmp_pa
     with pytest.raises(SystemExit):
         _load(editor, tmp_path, monkeypatch, seed=False)
     assert any("DA_SurfaceCalibration" in message for message in editor.errors)
+
+
+def test_make_missing_binds_the_checker_on_m_v2_unlit(tmp_path, monkeypatch):
+    """`make_missing()` (`pipeline/unreal/make_v2_materials.py`) is what `5416ba8f` broke and
+    `ab550d12` only taught the doubles to tolerate -- nothing asserted MI_V2_Missing's own shape.
+    Pins the parent master, the bound checker texture, every switch stated explicitly (only
+    `UseBaseTexture` on, matching `MISSING_SWITCHES`), and the blend/two-sided overrides that keep
+    a later master change from moving what a missing slot looks like."""
+    editor = FakeEditor()
+    module = _load(editor, tmp_path, monkeypatch)
+
+    missing_path = "%s/MI_V2_Missing" % PKG
+    checker_path = "%s/T_V2_MissingChecker" % PKG
+    mic = editor.assets.get(missing_path)
+    assert mic is not None, "MI_V2_Missing was not authored"
+    assert mic.get_class().get_name() == "MaterialInstanceConstant"
+    assert mic.props.get("parent") is editor.assets["%s/M_V2_Unlit" % PKG]
+    assert "ElysiumRecipe" in mic.metadata
+    assert missing_path in editor.saved
+
+    checker = editor.assets.get(checker_path)
+    assert checker is not None, "T_V2_MissingChecker was not authored"
+    assert mic.props.get("textures", {}).get(module.UnlitParams.Textures.BaseTexture) is checker
+
+    # Every switch M_V2_Unlit exposes is stated explicitly, and only UseBaseTexture is on.
+    switches = mic.props.get("switches", {})
+    assert switches == module.MISSING_SWITCHES
+    assert switches[module.UnlitParams.Switches.UseBaseTexture] is True
+    assert all(value is False for name, value in switches.items()
+               if name != module.UnlitParams.Switches.UseBaseTexture)
+
+    bpo = mic.props["base_property_overrides"]
+    assert bpo.get_editor_property("override_blend_mode") is True
+    assert bpo.get_editor_property("blend_mode") == "BLEND.BLEND_OPAQUE"
+    assert bpo.get_editor_property("override_two_sided") is True
+    assert bpo.get_editor_property("two_sided") is False
+
+
+def test_make_missing_is_reused_when_current_and_force_rebuilt(tmp_path, monkeypatch):
+    """Matches the `test_wrongly_classed_*_is_rebuilt_not_reused` / `test_policy_force_rebuilds_
+    even_when_current` style for the masters: a no-op rerun reuses MI_V2_Missing (recipe stamp
+    unchanged, not re-saved), and `-PolicyForce` rebuilds it even though nothing changed."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    missing_path = "%s/MI_V2_Missing" % PKG
+    stamped = editor.assets[missing_path].metadata["ElysiumRecipe"]
+
+    editor2 = FakeEditor()
+    editor2.assets = editor.assets
+    editor2.command_line = ""
+    _load(editor2, tmp_path, monkeypatch, seed=False)
+    assert missing_path not in editor2.saved
+    assert editor2.assets[missing_path].metadata["ElysiumRecipe"] == stamped
+
+    editor3 = FakeEditor()
+    editor3.assets = editor.assets
+    editor3.command_line = "-PolicyForce=1"
+    _load(editor3, tmp_path, monkeypatch, seed=False)
+    assert missing_path in editor3.saved
+    assert editor3.assets[missing_path].metadata["ElysiumRecipe"] == stamped

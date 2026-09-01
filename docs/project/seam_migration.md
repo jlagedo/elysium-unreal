@@ -709,8 +709,38 @@ have read back empty) and was caught: the reader changed, and
 a golden `model_names.json` read by both a pytest and `Elysium.Substrate.ModelNames.PropModelStem`.
 Non-manifold sections are predicted in Python and unwelded before `FDynamicMesh3` sees them (one
 section on one unit in the 414). Tests: 8 + 8 + 5 pytest, 7 + 1 Substrate; Substrate 416/416.
-Follow-ups carried to R1.6: `POLICY_GENERATOR_OUTPUTS` does not yet list `MI_V2_Missing`/
-`T_V2_MissingChecker`.
+
+**Props lane, R1.5–R1.6 landed on the test corpus (2026-08-31).** R1.5 (`15a3fb28`): the corpus
+skin table, `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`, authored as a finalize step of `import
+models` from the staged manifest's per-unit `skinFamilies`/`familyCount` — family 0 and any family
+identical to it get no row, and `FamilyCount` rides beside the trimmed `Families` array so
+`UElysiumPropSkinSet::Find` clamps an out-of-range skin index to the model's last family (the 59
+placements the R1.1–R1.4 census found) without loading the mesh; legacy `DA_ElysiumPropSkins` is
+untouched and `Find` falls back to its pre-clamp behavior when `FamilyCount` is unset. R1.6
+(`ab550d12`): the first shared-corpus parity check, `Elysium.Content.ModelParity.*`, reading the
+staged manifest as ground truth against the real baked `SM_` corpus (slot names, collision setup),
+plus a 6-mesh props row in the tracked lookdev map; closed the `POLICY_GENERATOR_OUTPUTS` follow-up
+above (`MI_V2_Missing`/`T_V2_MissingChecker` now listed).
+
+**Collision auto-detection divergence found and fixed same day (2026-08-31), owner: (a).** R1.6's
+own parity test discovered `bake_lib.set_phy_collision` left `GeometryScriptCollisionFromMeshOptions`'s
+`bAutoDetectBoxes`/`bAutoDetectSpheres`/`bAutoDetectCapsules` at the engine default (**true**), so a
+box-shaped `.phy` ledge silently cooked as an `FKBoxElem` instead of the `FKConvexElem` the
+"### Collision" contract above promises ("one convex shape per ledge... reproduced, not
+approximated"); measured on the landed 414: 96 of 283 `.phy`-bearing meshes carried at least one
+`FKBoxElem` (83 box-only, 13 mixed, 187 convex-only), and 0 sphere/capsule substitutions fired in
+this corpus but the full 3,661-unit run (the step right after R1.6) was the real exposure. Ruling:
+the contract is correct as written, so `set_phy_collision` now sets all three auto-detect flags
+`False` and `SETTINGS_VERSION` bumped to `elysium-model-import-v2` to force a re-import; the 414
+were re-baked (`uv run elysium import models --maps sp_tutorial_1 --maps sm_pawnshop_1 --maps
+sm_hub_1`, 414 imported / 0 reused / 0 failed, 257.0 s), and `Elysium.Content.ModelParity.
+SlotsAndCollision` now asserts `ConvexElems.Num() == hullCount` (not just total shape count) —
+3 of 3 ModelParity tests pass, "414 audited (131 bbox, 283 phy), 0 missing, 0 slot mismatch(es), 0
+collision mismatch(es)". The same test's mount-liveness probe used to abstain the entire sweep on
+`Assets[0]` alone; it now runs every asset and abstains only when none resolve, failing loudly
+otherwise. `make_missing()` (the code `5416ba8f` broke and `ab550d12` only patched the test doubles
+for) gained its own coverage: parent master, bound checker texture, every switch, and the blend/
+two-sided overrides, plus reuse-vs-`-PolicyForce` behavior.
 
 ## Roadmap — one pipeline
 
@@ -741,14 +771,12 @@ deliberately **after** this roadmap — see "Wire first, tune later" below.
 stage (`4218c32d`), C++ provenance/settings (`12339a27`), editor import (`5416ba8f`); numbers in
 the Settled entry "Props lane, R1.1–R1.4 landed on the test corpus". Working corpus for the whole
 of R1 is `sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1` (414 models); the full 3,661-unit run is a
-separately approved step after R1.6.
+separately approved step, still pending.
 
-- **R1.5 Skins asset.** The corpus skin table regenerated from `skinFamilies` (successor of
-  `DA_ElysiumPropSkins`), slot-name parity with `ApplyPropSkin`/`ApplyAnimatedPropSkin`.
-  → lands: skin swaps work on the new meshes.
-- **R1.6 Verify + lookdev.** First-ever shared-corpus parity check (every referenced model has
-  its mesh; slot and collision audits) as a Content-tier test, plus a props row set in the
-  lookdev map. → lands: the props lane is provable and reviewable.
+**R1.5–R1.6 landed (2026-08-31)** — skins asset (`15a3fb28`), verify + lookdev (`ab550d12`), review
+fix for the collision auto-detection divergence the verify step's own test found (same day);
+numbers in the Settled entries "Props lane, R1.5–R1.6 landed on the test corpus" and "Collision
+auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R2 — instruments and guards (nothing else moves first) [MP-1]
 
