@@ -799,7 +799,8 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 **R2.1 landed (2026-09-01)** — `baseline.json` commit/map/camera manifest (`shots_diff.py`) +
 14/14 baseline vantages captured for the test corpus; numbers in the Settled entry "Baseline
-shots landed on the test corpus".
+shots landed on the test corpus". Scoped to the three-map test corpus; the original R2.1 reach
+(every hub + one of each district type) re-promotes when the corpus widens.
 
 - **R2.2 Censuses** [MP-1.2]. Per-map entity/light/effects-class censuses pinned as JSON.
   → lands: the differ's and R7's ground truth.

@@ -140,7 +140,12 @@ def main():
             print(f"{name}: no baseline (run --save on a capture you trust)")
             continue
         cur, old = shots_of(OUT / name), shots_of(base)
-        print(f"{name}:")
+        manifest_path = base / BASELINE_MANIFEST
+        if manifest_path.is_file():
+            baseline_commit = json.loads(manifest_path.read_text(encoding="utf-8")).get("commit", "unknown")
+            print(f"{name}: (baseline {baseline_commit[:12]}, {len(old)} cam)")
+        else:
+            print(f"{name}: (baseline commit unknown — pre-R2.1 capture, no {BASELINE_MANIFEST})")
         for cam in sorted(set(cur) | set(old)):
             if cam not in cur or cam not in old:
                 print(f"   {cam:<8} only in {'current' if cam in cur else 'baseline'}")
