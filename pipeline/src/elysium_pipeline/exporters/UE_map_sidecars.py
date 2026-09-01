@@ -277,6 +277,13 @@ class EntityDivergences:
     #: Measured zero effect on the three-map corpus: no entity repeats a key under two spellings.
     fold_keys: bool = False
 
+    #: `False` (legacy, default): an output row's `param` field (index 2) is carried verbatim,
+    #: whitespace and all -- the one string field `split_output` does not `.strip()`
+    #: (`seam_map_map.md` -> "Producer join": "`param` **not** stripped"). `True`: `param` gets the
+    #: same strip every other string field already gets. Measured zero effect on the three-map
+    #: corpus: no output's `parameter` carries leading or trailing whitespace.
+    strip_param: bool = False
+
 
 #: The default: every flag legacy, so a caller that asks for nothing gets the byte-comparable
 #: sidecars R3.3 diffs against `UE_bsp_to_scene.py`.
@@ -335,7 +342,7 @@ def collect_entity_fields(
     keys: dict[str, str] = {}
     fold_index: dict[str, str] = {}   # folded key -> the spelling currently holding `keys`'s slot
     for key, value in pairs:
-        row = split_output(value) if is_output_key(classname_probe, key, fields) else None
+        row = split_output(value, fields) if is_output_key(classname_probe, key, fields) else None
         if row:
             row["name"] = key
             outputs.append(row)
@@ -350,18 +357,21 @@ def collect_entity_fields(
     return outputs, keys
 
 
-def split_output(value: str) -> dict[str, Any] | None:
+def split_output(
+    value: str, fields: EntityDivergences = LEGACY_ENTITY_FIELDS
+) -> dict[str, Any] | None:
     """`target,input,param,delay,times[,python[,extra]]` -> a `.ents` output row, or `None`.
 
-    Ported verbatim from `UE_bsp_to_scene._split_output`, including the four quirks R3.4 owns:
+    Ported verbatim from `UE_bsp_to_scene._split_output` by default, including the R3.4 quirks:
     `param` is **not** stripped, `delay` is a plain `float()` (not `atof`), `times` normalizes an
     authored `0` to `-1`, and field 6 (`extra`) is dropped. A value with fewer than four commas is
-    not an output at all and stays a plain keyvalue.
+    not an output at all and stays a plain keyvalue. `fields.strip_param` opts field 2 into the
+    same whitespace strip every other string field already gets.
     """
 
     if value.count(",") < 4:
         return None
-    fields = value.split(",")
+    parts = value.split(",")
 
     def number(text: str, default: float) -> float:
         try:
@@ -370,12 +380,12 @@ def split_output(value: str) -> dict[str, Any] | None:
             return default
 
     return {
-        "target": fields[0].strip(),
-        "input": fields[1].strip(),
-        "param": fields[2],
-        "delay": number(fields[3], 0.0),
-        "times": int(number(fields[4], -1)),
-        "python": fields[5].strip() if len(fields) > 5 else "",
+        "target": parts[0].strip(),
+        "input": parts[1].strip(),
+        "param": parts[2].strip() if fields.strip_param else parts[2],
+        "delay": number(parts[3], 0.0),
+        "times": int(number(parts[4], -1)),
+        "python": parts[5].strip() if len(parts) > 5 else "",
     }
 
 

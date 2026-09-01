@@ -81,6 +81,13 @@ def test_split_output_keeps_the_four_legacy_field_rules():
     assert split_output("door,Open,,0") is None
 
 
+def test_split_output_strip_param_opts_field_2_into_the_common_strip():
+    # R3.4: `param` gets the same strip every other string field already gets.
+    row = split_output(" door , Open , slow  , 0.35 , x , taxi() , dropped ",
+                        EntityDivergences(strip_param=True))
+    assert row["param"] == "slow"
+
+
 def test_source_position_inverts_the_transform_in_binary32():
     # 1.5 Source inches -- the half-thickness of sm_pawnshop_1's `havenrm` door panel -- does not
     # come back bit-exactly in binary64, and does in binary32. Solving hulls on the binary64 value

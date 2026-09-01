@@ -445,6 +445,10 @@ reading; the R3.3 differ was re-run with each flag on (`producer_root` pointed a
   flag changes which occurrences collide, never the "authored spelling" rule this same section's
   field-list table states for `keys`. **Measured delta: zero** — none of the 4,933 entities across
   the three maps repeats a key under two spellings.
+- **`param` stripping** (`strip_param`). `True` strips the output row's `param` field (index 2)
+  the way `target`/`input`/`python` are already stripped, instead of carrying it verbatim
+  (`seam_map_map.md`'s field list above: "`param` **not** stripped"). **Measured delta: zero** —
+  no output's `parameter` on the three-map corpus carries leading or trailing whitespace.
 
 ### Verification
 
