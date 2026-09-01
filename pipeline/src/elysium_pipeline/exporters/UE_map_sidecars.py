@@ -267,6 +267,16 @@ class EntityDivergences:
     #: on maps outside it (`la_hub_1`, `sm_diner_1`).
     datamap_output_typing: bool = False
 
+    #: `False` (legacy, default): a repeated key is the same `keys` slot only when it repeats under
+    #: the *exact same spelling*, so `"Origin"` and `"origin"` survive as two independent last-wins
+    #: slots (`seam_map_map.md` -> "Producer join": "Keys are **not** folded"). `True`: two spellings
+    #: of one key are the same slot -- the entities unit's own identity rule (`decode.py`'s
+    #: `occurrences` map, keyed by the already-folded `pair.key`) -- and the slot's value and its
+    #: printed spelling both become the *last* occurrence's, in that occurrence's own casing (never
+    #: forced lowercase: `seam_map_map.md`'s "authored spelling" rule for `keys` still holds).
+    #: Measured zero effect on the three-map corpus: no entity repeats a key under two spellings.
+    fold_keys: bool = False
+
 
 #: The default: every flag legacy, so a caller that asks for nothing gets the byte-comparable
 #: sidecars R3.3 diffs against `UE_bsp_to_scene.py`.
@@ -300,6 +310,44 @@ def is_output_key(
     if fields.datamap_output_typing:
         return _is_datamap_output(classname, key)
     return bool(re.match(r"^(On|Out)", key, re.I))
+
+
+def collect_entity_fields(
+    pairs: Sequence[tuple[str, str]], fields: EntityDivergences = LEGACY_ENTITY_FIELDS
+) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    """One block's pairs split into output rows and the `keys` catch-all, the R3.4-aware read
+    `write_entities` performs per entity.
+
+    The `keys` catch-all is always emitted with **authored spelling** (`seam_map_map.md` ->
+    "Producer join": "every remaining keyvalue, authored spelling, last-wins") -- what `fold_keys`
+    changes is only *which* occurrences are considered the same slot. Legacy (`fold_keys=False`)
+    treats `"Origin"` and `"origin"` as two independent slots, each keeping its own last value.
+    `fold_keys=True` treats them as one slot -- the entities unit's own identity rule (`decode.py`'s
+    `occurrences` map, keyed by the already-folded `pair.key`) -- so the slot's *spelling* becomes
+    whichever occurrence was last, in **that** occurrence's own casing, not a forced lowercase: an
+    entity that never repeats a key under two spellings is unaffected either way.
+    """
+
+    classname_probe = next(
+        (v for k, v in reversed(pairs) if k.strip().lower() == "classname"), ""
+    )
+    outputs: list[dict[str, Any]] = []
+    keys: dict[str, str] = {}
+    fold_index: dict[str, str] = {}   # folded key -> the spelling currently holding `keys`'s slot
+    for key, value in pairs:
+        row = split_output(value) if is_output_key(classname_probe, key, fields) else None
+        if row:
+            row["name"] = key
+            outputs.append(row)
+            continue
+        if fields.fold_keys:
+            folded = key.lower()
+            previous = fold_index.get(folded)
+            if previous is not None and previous != key:
+                del keys[previous]
+            fold_index[folded] = key
+        keys[key] = value                             # last wins for plain keyvalues
+    return outputs, keys
 
 
 def split_output(value: str) -> dict[str, Any] | None:
@@ -830,21 +878,7 @@ def write_entities(
     out: list[dict[str, Any]] = []
     brush_count = hull_count = output_count = sky_count = 0
     for pairs in blocks:
-        keys: dict[str, str] = {}
-        outputs: list[dict[str, Any]] = []
-        # Only the datamap-typing path needs the classname before its own pair is popped below;
-        # a plain last-wins scan over the raw pairs is cheap and never wrong (`classname` is never
-        # output-shaped, so it always reaches `keys` regardless of which gate below is active).
-        classname_probe = next(
-            (v for k, v in reversed(pairs) if k.strip().lower() == "classname"), ""
-        )
-        for key, value in pairs:
-            row = split_output(value) if is_output_key(classname_probe, key, fields) else None
-            if row:
-                row["name"] = key
-                outputs.append(row)
-            else:
-                keys[key] = value                    # last wins for plain keyvalues
+        outputs, keys = collect_entity_fields(pairs, fields)
         output_count += len(outputs)
         entity: dict[str, Any] = {
             "classname": keys.pop("classname", ""),

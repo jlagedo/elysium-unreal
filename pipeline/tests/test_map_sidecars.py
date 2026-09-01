@@ -17,6 +17,7 @@ import numpy as np
 from elysium_pipeline.exporters.UE_map_sidecars import (
     EntityDivergences,
     brush_hull,
+    collect_entity_fields,
     entity_lump_text,
     is_output_key,
     parse_entity_blocks,
@@ -113,6 +114,25 @@ def test_is_output_key_datamap_typing_promotes_and_demotes():
     assert is_output_key("trigger_player_activity_level", "OnTrigger", typed) is False
     # An ordinary output is unaffected either way.
     assert is_output_key("logic_relay", "OnTrigger", typed) is True
+
+
+def test_collect_entity_fields_default_keeps_case_variants_as_separate_slots():
+    # Legacy: "Frob" and "frob" are two different `keys` slots, each keeping its own last value.
+    _outputs, keys = collect_entity_fields([("Frob", "1"), ("frob", "2")])
+    assert keys == {"Frob": "1", "frob": "2"}
+
+
+def test_collect_entity_fields_fold_keys_collapses_case_variants_and_keeps_last_spelling():
+    # R3.4: opting in matches the entities unit's own identity rule (`decode.py`'s `occurrences`
+    # map, keyed by the already-folded key) -- one slot, spelled the way the *last* occurrence
+    # authored it, not forced lowercase.
+    fields = EntityDivergences(fold_keys=True)
+    _outputs, keys = collect_entity_fields([("Frob", "1"), ("frob", "2")], fields)
+    assert keys == {"frob": "2"}
+
+    # An entity that never repeats a key under two spellings is unaffected either way.
+    _outputs, unaffected = collect_entity_fields([("RenderColor", "255 0 0")], fields)
+    assert unaffected == {"RenderColor": "255 0 0"}
 
 
 def test_entity_lump_text_reproduces_the_embedded_quote_the_legacy_regex_trips_on():

@@ -438,6 +438,13 @@ reading; the R3.3 differ was re-run with each flag on (`producer_root` pointed a
   (`Elysium.Substrate.SaveOutputCardinality`); no `FElysiumSaveVersion` bump, per the roadmap's
   2026-09-01 "no save-file compatibility at build time" ruling, which supersedes the bump this
   section's history once called for.
+- **Key folding** (`fold_keys`). `True` treats two spellings of one key (`"Origin"`/`"origin"`) as
+  the same `keys` slot instead of two independent ones, matching the entities unit's own identity
+  rule (`decode.py`'s `occurrences` map, keyed by the already-folded key). The slot's *value* and
+  its *printed spelling* both become the last occurrence's, in that occurrence's own casing — the
+  flag changes which occurrences collide, never the "authored spelling" rule this same section's
+  field-list table states for `keys`. **Measured delta: zero** — none of the 4,933 entities across
+  the three maps repeats a key under two spellings.
 
 ### Verification
 
