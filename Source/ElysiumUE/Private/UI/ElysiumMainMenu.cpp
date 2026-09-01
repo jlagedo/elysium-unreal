@@ -6,6 +6,7 @@
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumUISettings.h"
 #include "UI/ElysiumUIStrings.h"
 #include "UI/ElysiumUIStyle.h"
 #include "UI/ElysiumUISubsystem.h"
@@ -29,16 +30,6 @@
 #include "Widgets/Text/STextBlock.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMenu, Log, All);
-
-// How far the backdrop is knocked back behind the menu, 0..1. The column layout's global dimmer:
-// it darkens the whole frame, because a centred column can land on anything the camera framed. The
-// rail layout does not use it — its veil is local, so the lit half of the scene is never paid for.
-// Live — the menu re-reads it on rebuild.
-static TAutoConsoleVariable<float> CVarMenuScrim(
-	TEXT("elysium.MenuScrim"),
-	0.22f,
-	TEXT("Classic-layout backdrop dimming, 0 (none) .. 1 (black)."),
-	ECVF_Default);
 
 // Which layout the screen builds. 1 = the rail (default); 0 = `CVMainMenu::PerformLayout`'s centred
 // column.
@@ -743,7 +734,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildClassic(const TArray<FMenuEntry>& Ite
 	}
 	{
 		FLinearColor Scrim = ElysiumUI::Palette::Scrim;
-		Scrim.A = FMath::Clamp(CVarMenuScrim.GetValueOnGameThread(), 0.0f, 1.0f);
+		Scrim.A = FMath::Clamp(GetDefault<UElysiumUISettings>()->MenuScrim, 0.0f, 1.0f);
 		ScrimBrush->TintColor = FSlateColor(Scrim);
 	}
 

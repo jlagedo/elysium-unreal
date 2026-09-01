@@ -89,6 +89,14 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("DA_ClothTuning");
 		return AuthoredMount() / TEXT("Cloth") / Asset + TEXT(".") + Asset;
 	}
+	// The corpus-wide iris size / eye shift baseline every rendered eye composes against, typed by
+	// Public/ElysiumEyeTuningConfig.h (R4.5). Beside AuthoredClothTuning(), the same "authored
+	// judgement with no generator" shape.
+	static FString AuthoredEyeTuning()
+	{
+		const FString Asset = TEXT("DA_EyeTuning");
+		return AuthoredMount() / TEXT("Eyes") / Asset + TEXT(".") + Asset;
+	}
 
 	// The project's own top-level `/Game/ElysiumGenerated` namespace: every package this project
 	// itself generates rather than authors or decodes from the VtMB install. A text prefix of
@@ -646,13 +654,6 @@ struct FElysiumContentPaths
 	// weights. RelPath is `npc_index.json`'s own `npcs[stem].eyes` value ("eyes/<stem>.json").
 	// Named separately from the flex rig because a player body carries eyeballs and no flex rig.
 	static FString NpcEyes(const FString& RelPath) { return NpcDir() / RelPath; }
-
-	// The labelled sky set (debug). Six self-describing face images —
-	// suffix, predicted axis, TOP banner, up arrow, tagged corners, edge neighbours — authored by
-	// research/tooling/probes/sky_probe.py, which also installs them into the *original* game so the two ends of the
-	// orientation chain are checked against one set of faces. Named `<skyname><face>.png`, unlike
-	// the per-map `tex/sky_<face>.png`. `elysium.SkyProbe 1` builds the cube from these.
-	static FString SkyProbeDir() { return Root() / TEXT("_skyprobe"); }
 
 	// Light-probe output (debug, `ElysiumLightProbe.cpp`). R4.3 retired the Lights Cog window's
 	// hand-survey JSON that used to share this directory (`UElysiumLightCalibration` replaces it as

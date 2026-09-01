@@ -40,8 +40,6 @@ static TAutoConsoleVariable<float> CVarRainStreakLength(
 	TEXT("elysium.RainStreakLength"), 55.0f, TEXT("Follow-rain streak length in cm."));
 static TAutoConsoleVariable<float> CVarRainStreakAlpha(
 	TEXT("elysium.RainStreakAlpha"), 0.18f, TEXT("Follow-rain streak opacity."));
-static TAutoConsoleVariable<float> CVarRainMist(
-	TEXT("elysium.RainMist"), 0.20f, TEXT("Additional enhanced rain mist amount."));
 static TAutoConsoleVariable<float> CVarRainWetDarken(
 	TEXT("elysium.RainWetDarken"), 0.06f, TEXT("Maximum enhanced full-wet base-color darkening."));
 static TAutoConsoleVariable<float> CVarRainWetRoughness(

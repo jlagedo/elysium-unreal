@@ -144,9 +144,11 @@ it, so the readout claims a body the stage does not have.
 - [ ] **[3.6 Pinned exposure](plans/world.md)** · **[3.7 Grade/tonemapper fidelity](plans/world.md)** ·
   **[3.8 Texture prewarm](plans/world.md)** · **[3.9 Lightstyle clock pin](plans/world.md)** ·
   **[3.10 Volumetric fog calibration](plans/world.md)** ·
-  **[3.11 Verify `elysium.LumenDiffuseBoost`](plans/world.md)** ·
   **[3.12 `sm_hub_1` fill adjudication](plans/world.md)** ·
   **[3.13 Decal fog: accept or extend](plans/world.md)**
+- [x] **3.11 Verify `elysium.LumenDiffuseBoost`** — retired, not wired: R4.5
+  (`docs/project/seam_migration.md`) deleted the cvar A/B with the rest of the light-leak
+  scaffolding; a bake-time value is R5.6's.
 
 ## P4 — Interaction *(design: `docs/architecture/engine-core.md`, `docs/vtmb/animation_and_movers.md` B)*
 

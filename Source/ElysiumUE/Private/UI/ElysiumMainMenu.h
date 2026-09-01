@@ -40,7 +40,7 @@ enum class EElysiumMenuCommand : uint8
 //    diverges from the recovered law: `docs/architecture/ui-architecture.md`.
 //  - Column (0) — `CVMainMenu::PerformLayout`: every item sized to the widest label plus 20x4
 //    virtual px, stacked at `pitch = height + 2`, the column centred, the whole screen behind it
-//    knocked back by `elysium.MenuScrim`.
+//    knocked back by `UElysiumUISettings::MenuScrim` (Project Settings -> Elysium -> UI).
 //
 // Type is vector small caps, not a bitmap atlas.
 UCLASS()

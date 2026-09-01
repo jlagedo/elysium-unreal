@@ -1383,6 +1383,20 @@ acceleration from becoming an unbounded physics impulse; it is not an equivalenc
 parked calibration slice (LIFE9) supplies fitted settings, and cannot promote AnimDynamics into a
 faithful solver without the game-independent retail replay.
 
+**Eye tuning is the fourth authored layer, R4.5** (`docs/project/seam_migration.md`). Retail's own
+`eyeball_size`/eye-shift offsets have no per-model authored source in the installed data
+(`docs/vtmb/facial_animation.md` -> Eyes); before this task the corpus-wide baseline for both was an
+implicit zero on `FElysiumEyeTuning`'s own C++ default (`ElysiumEyeRig.h`), reachable from nowhere
+but the Green Room's "Reset tuning" button — a permanent nudge had no home short of a hand-edited
+literal and a rebuild. `/Game/ElysiumAuthored/Eyes/DA_EyeTuning` (`UElysiumEyeTuningConfig`), beside
+`Cloth/DA_ClothTuning`, is that home: two fields, `EyeSize` and `EyeShift`, both `0` at ship (the
+same neutral the implicit default carried). `ElysiumEyes::ComposeTuning` (pure, `ElysiumEyeRig.h`)
+adds the asset's baseline to the Green Room's own live debug nudge (`FElysiumEyeDebug::Tuning`)
+component-wise, so an untouched asset and an untouched debug state both compose to exactly what
+rendered before this asset existed; `FElysiumEyePass::TickEyes` is the one caller, so the baseline
+reaches every rendered eye, player and NPC alike, not only the lab. `bEyeMove` stays the Green
+Room's own gaze-mode switch — a debug concern, not a size/shift value the asset carries.
+
 **The persistent partial-update behaviour is a divergence.** Retail refreshes only the bones a mask
 selects, so bones legitimately carry matrices composed against older roots; those mask bits are
 loader-written and cannot be recovered from the installed file

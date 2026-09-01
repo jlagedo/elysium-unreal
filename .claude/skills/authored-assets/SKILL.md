@@ -1,6 +1,6 @@
 ---
 name: authored-assets
-description: Edit a live-authored Unreal package under Content/ElysiumAuthored — rain, melee weapon trails, hair dynamics, cloth tuning. Use when a task touches those effects or names NS_ElysiumRain, NS_ElysiumMeleeTrail, M_ElysiumRain, M_ElysiumMeleeTrail, MI_ElysiumRain*, T_Rain*, DA_HairDynamics, DA_ClothTuning, /Game/ElysiumAuthored, or asks to change a Niagara system, material, or tuning data asset the project owns. These have no generator and never come off the export/bake path; they are read and written through the `elysium` editor MCP server.
+description: Edit a live-authored Unreal package under Content/ElysiumAuthored — rain, melee weapon trails, hair dynamics, cloth tuning, eye tuning. Use when a task touches those effects or names NS_ElysiumRain, NS_ElysiumMeleeTrail, M_ElysiumRain, M_ElysiumMeleeTrail, MI_ElysiumRain*, T_Rain*, DA_HairDynamics, DA_ClothTuning, DA_EyeTuning, /Game/ElysiumAuthored, or asks to change a Niagara system, material, or tuning data asset the project owns. These have no generator and never come off the export/bake path; they are read and written through the `elysium` editor MCP server.
 ---
 
 # Live-authored Unreal packages
@@ -14,7 +14,7 @@ isn't one, and adding one is a defect.
 
 ## The register, and what is *not* authored
 
-Three of the four effects are split: the **system and its tuning** are authored, the
+Four of the five effects are split: the **system and its tuning** are authored, the
 **game-derived payload** they consume is generated. Change the wrong half and you either lose
 work on the next `reconstruct` or put game-derived bytes inside the tracked set.
 
@@ -24,6 +24,7 @@ work on the next `reconstruct` or put game-derived bytes inside the tracked set.
 | Melee weapon trail | `VFX/NS_ElysiumMeleeTrail`, `M_ElysiumMeleeTrail` | the wield mesh's `TrailTip` socket, baked with the mesh (`ElysiumMeleeTrail.cpp` drives `User.TrailPointA/B` off it) |
 | Hair dynamics | `Hair/DA_HairDynamics` — the chain set and every parameter | the `SK_*` bodies and `SKEL_*` skeletons the chains name |
 | Cloth | `Cloth/DA_ClothTuning` — material and solver judgment values | `/ElysiumBaked/Characters/Cloth/CLOTH_<stem>`, built by `pipeline/unreal/make_cloth_assets.py` |
+| Eye tuning (R4.5) | `Eyes/DA_EyeTuning` — the corpus-wide `EyeSize`/`EyeShift` baseline | none — no generated payload pairs with it; every rendered eye composes against the same two scalars (`ElysiumEyes::ComposeTuning`) |
 
 Design and behaviour for these live in `docs/architecture/effects-architecture.md`,
 `docs/architecture/animation-architecture.md` §8, and `docs/architecture/bouncy-boobs-dynamics.md`.
@@ -67,7 +68,7 @@ call_tool(toolset_name="editor_toolset.toolsets.object.ObjectTools",
 
 Which toolset applies:
 
-- **Data assets** (`DA_HairDynamics`, `DA_ClothTuning`) — `ObjectTools`, as above.
+- **Data assets** (`DA_HairDynamics`, `DA_ClothTuning`, `DA_EyeTuning`) — `ObjectTools`, as above.
 - **Material instances** — `MaterialInstanceTools`, or `ObjectTools` for raw properties.
 - **Niagara systems** (`NS_*`) — **there is no Niagara toolset.** Graph and emitter edits are the
   owner's, in the editor UI. Read state and report a concrete recommendation; do not claim a

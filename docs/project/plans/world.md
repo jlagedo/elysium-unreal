@@ -56,13 +56,6 @@ current density — a mechanism, not yet a look. Calibrate it for its own sake; 
 rides the distance-fog numbers. Presentation layer, adjudicated by the direction test; A/B via
 `elysium.Fog` + fog cvars.
 
-### 3.11 Verify `elysium.LumenDiffuseBoost`
-
-The knob drives `LumenDiffuseColorBoost` but produced no measurable change live or across a map
-load; suspected (unproven) cause: consumed where the surface cache is written. Test at
-bake/boot time (config var before first capture); wire it or retire it. The sanctioned bounce
-knob depends on the answer.
-
 ### 3.12 `sm_hub_1` fill adjudication
 
 The one map where hand survey and classifier genuinely disagree (104 of 409 fill candidates

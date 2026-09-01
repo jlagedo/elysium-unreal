@@ -54,7 +54,8 @@ namespace ElysiumCameraTrack
 	// duration is re-attributed to a neighbouring pause rather than spent in place, and both ends of
 	// the segment are forced to corners. sp_theatre's courtroom chain writes 87 of its edits as
 	// `MoveTime 0.03` and sm_gallery_1 writes 7 as `0.01`, so the fold is what makes those read as
-	// cuts instead of 30-millisecond slews. Threshold via `elysium.CameraCutSeconds` (retail: 0.05).
+	// cuts instead of 30-millisecond slews. Threshold via `UElysiumChoreoSettings::CameraCutSeconds`
+	// (retail: 0.05).
 	float FoldSeconds();
 	bool ShouldFold(bool bTimeControl, float MoveTime);
 	// Exact-zero only — by sampling time the fold has already happened.

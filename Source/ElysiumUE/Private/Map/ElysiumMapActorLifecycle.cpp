@@ -278,7 +278,7 @@ void AElysiumMapActor::LoadMap()
 #endif
 
 	// The look is already here — this actor was spawned into the map's baked level. The visuals
-	// take hold of its actors, hand the light rig its sources, and stand the material overrides up.
+	// take hold of its actors and hand the light rig its sources.
 	const int32 Adopted = Visuals->AdoptBakedLevel(MapName, SkyDef);
 	Phase(TEXT("Adopt baked level"));
 
@@ -298,9 +298,8 @@ void AElysiumMapActor::LoadMap()
 	Visuals->BuildRopes(MapName);
 	Phase(TEXT("Ropes"));
 
-	// Sky cubemap + backdrop, the sky light's IBL off the same cube, and the map's PPV knobs.
+	// Sky cubemap + backdrop and the sky light's IBL off the same cube.
 	Visuals->ApplyEnvironment(EnvDef);
-	Visuals->ApplyPostProcessKnobs();
 	Phase(TEXT("Environment"));
 
 	UE_LOG(LogElysium, Log,

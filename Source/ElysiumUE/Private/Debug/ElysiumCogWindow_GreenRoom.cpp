@@ -1420,12 +1420,14 @@ void FElysiumCogWindow_GreenRoom::RenderEyes(FElysiumGreenRoomRun& Lab)
 		ImGui::TextDisabled("The envelope drives the material either way; a morph needs a facial rig.");
 	}
 
-	// The renderer's own knobs.
+	// The renderer's own knobs. A live NUDGE on top of the corpus-wide baseline
+	// (`UElysiumEyeTuningConfig`, `/ElysiumAuthored/Eyes/DA_EyeTuning`, R4.5); the two add, so 0 here
+	// means "the authored baseline, unnudged" rather than "no size/shift ever".
 	ImGui::SeparatorText("Tuning");
 	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
 	ImGui::SliderFloat("Iris size", &Debug.Tuning.EyeSize, -1.f, 2.f, "%.2f");
 	ImGui::TextDisabled("Retail's eyeball_size: enters as 1/(1/iris_scale + this), so it widens the");
-	ImGui::TextDisabled("iris upward and narrows it downward. 0 is the shipped config.");
+	ImGui::TextDisabled("iris upward and narrows it downward. 0 adds nothing to DA_EyeTuning.");
 	float Shift[3] = {
 		static_cast<float>(Debug.Tuning.EyeShift.X),
 		static_cast<float>(Debug.Tuning.EyeShift.Y),
@@ -1437,7 +1439,7 @@ void FElysiumCogWindow_GreenRoom::RenderEyes(FElysiumGreenRoomRun& Lab)
 	}
 	ImGui::TextDisabled("Applied by the sign of each component, so a mirrored pair moves apart. It");
 	ImGui::TextDisabled("shifts the iris planes but deliberately not the shading origin.");
-	if (ImGui::Button("Reset tuning"))
+	if (ImGui::Button("Reset nudge"))
 	{
 		Debug.Tuning = FElysiumEyeTuning();
 	}

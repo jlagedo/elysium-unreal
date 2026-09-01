@@ -202,9 +202,13 @@ authored cube, mask, tint, wetness state, or map lighting.
 - **What a reflection can and cannot see** remains constrained by Lumen. The 2D backdrop and the
   3D-skybox miniature are excluded from ray tracing; sky radiance reaches Lumen only through the
   map's authored Sky Light level.
-- **A live knob costs texture streaming.** `ApplyMaterialOverrides` is lazy precisely because a
-  runtime `SetMaterial` drops the primitive's built streaming data; during an A/B session the
-  world can be briefly blurry while mips settle. Acceptable for tuning, wrong for a shipped path.
+- **The runtime A/B is gone, not replaced yet.** `ApplyMaterialOverrides` (a dynamic-instance pass
+  standing a MID in front of each baked material so `elysium.RoughBase`/`SpecBase`/`RoughReflect`/
+  `SpecReflect`/`EnvReflect` could be turned live) was retired in R4.5
+  (`docs/project/seam_migration.md`), superseded by `UElysiumSurfaceSettings` as the project's one
+  taste-tuning surface. It reached only the pre-V2 baked per-map materials and is not yet wired to
+  them; per-material reflection tuning on that path is bake-time (`pipeline/unreal/make_world_materials.py`)
+  until R5.4 rebinds maps onto the V2 masters `UElysiumSurfaceSettings` already drives.
 
 ## How to re-measure
 

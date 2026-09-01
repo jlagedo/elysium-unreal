@@ -16,9 +16,11 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumCameraSolve.h"   // FElysiumCameraShot, a by-value member of the recording services
+#include "ElysiumChoreoSettings.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumEyeTuningConfig.h"
 #include "ElysiumLineService.h"
 #include "Substrate/ElysiumLipTrack.h"
 #include "Substrate/ElysiumSceneData.h"
@@ -585,6 +587,44 @@ bool FElysiumEyeSolveTest::RunTest(const FString&)
 	TestEqual(TEXT("the nudge is sideways only — up is untouched"),
 		static_cast<float>(FVector::DotProduct(State.Up, Offset.Eyeballs[0].Up)), 1.f, 1e-4f);
 	TestTrue(TEXT("and the aim actually moved"), FMath::Abs(State.Forward.X) > 1e-3f);
+
+	return true;
+}
+
+// R4.5: the corpus-wide baseline (`UElysiumEyeTuningConfig`, `/ElysiumAuthored/Eyes/DA_EyeTuning`)
+// composes additively with the Green Room's live debug nudge, and an absent asset leaves the debug
+// state untouched — both are what let the asset's defaults equal today's behaviour exactly.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeTuningComposeTest,
+	"Elysium.Substrate.EyeTuningCompose", GElysiumFacialTestFlags)
+bool FElysiumEyeTuningComposeTest::RunTest(const FString&)
+{
+	FElysiumEyeTuning DebugTuning;
+	DebugTuning.EyeSize = 0.1f;
+	DebugTuning.EyeShift = FVector(0.5f, -0.25f, 0.f);
+	DebugTuning.bEyeMove = false;
+
+	const FElysiumEyeTuning NoAsset = ElysiumEyes::ComposeTuning(DebugTuning, nullptr);
+	TestEqual(TEXT("a null config leaves EyeSize untouched"), NoAsset.EyeSize, DebugTuning.EyeSize);
+	TestTrue(TEXT("a null config leaves EyeShift untouched"),
+		NoAsset.EyeShift.Equals(DebugTuning.EyeShift, 1e-6f));
+	TestFalse(TEXT("a null config leaves bEyeMove untouched"), NoAsset.bEyeMove);
+
+	UElysiumEyeTuningConfig* Config = NewObject<UElysiumEyeTuningConfig>();
+	Config->EyeSize = 0.2f;
+	Config->EyeShift = FVector(1.0f, 0.0f, 0.5f);
+	const FElysiumEyeTuning Composed = ElysiumEyes::ComposeTuning(DebugTuning, Config);
+	TestEqual(TEXT("EyeSize adds"), Composed.EyeSize, 0.3f, 1e-6f);
+	TestTrue(TEXT("EyeShift adds component-wise"),
+		Composed.EyeShift.Equals(FVector(1.5f, -0.25f, 0.5f), 1e-6f));
+	TestFalse(TEXT("bEyeMove is the debug state's alone"), Composed.bEyeMove);
+
+	// Today's shipped defaults are neutral on both sides, so an unedited asset composes to exactly
+	// the unedited debug state — the round-trip a "values = today's defaults exactly" claim rests on.
+	UElysiumEyeTuningConfig* Defaults = NewObject<UElysiumEyeTuningConfig>();
+	const FElysiumEyeTuning Neutral = ElysiumEyes::ComposeTuning(FElysiumEyeTuning(), Defaults);
+	TestEqual(TEXT("default asset + default debug state composes to zero size"), Neutral.EyeSize, 0.f);
+	TestTrue(TEXT("default asset + default debug state composes to zero shift"),
+		Neutral.EyeShift.Equals(FVector::ZeroVector, 1e-6f));
 
 	return true;
 }
@@ -1198,34 +1238,23 @@ bool FElysiumSceneExpressionTest::RunTest(const FString&)
 // carries it was dispatched a mixahead early, the envelope borrowed from a line's own `.vcd`, the
 // lag between levels, and the return to a shut mouth when the scene ends.
 
-namespace
-{
-	// Set a float cvar and hand back the old value, so a test restores what it changed.
-	float SwapFloatCVar(const TCHAR* Name, float Value)
-	{
-		IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(Name);
-		if (Var == nullptr)
-		{
-			return 0.f;
-		}
-		const float Was = Var->GetFloat();
-		Var->Set(Value, ECVF_SetByCode);
-		return Was;
-	}
-}
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneJawTest, "Elysium.Substrate.SceneJaw", GElysiumFacialTestFlags)
 bool FElysiumSceneJawTest::RunTest(const FString&)
 {
 	AddExpectedError(TEXT("scene 'test/nolineenvelope.vcd' not found"),
 		EAutomationExpectedErrorFlags::Contains, 1);
-	// Exact levels rather than an asymptote: the lag has its own section below.
-	const float WasSmoothing = SwapFloatCVar(TEXT("elysium.JawSmoothing"), 0.f);
-	const float WasSpeech = SwapFloatCVar(TEXT("elysium.JawSpeechLevel"), 0.5f);
+	// Exact levels rather than an asymptote: the lag has its own section below. R4.5 moved these
+	// off cvars onto `UElysiumChoreoSettings`; the CDO is mutated and restored the same way
+	// SwapFloatCVar used to swap the cvar.
+	UElysiumChoreoSettings* ChoreoSettings = GetMutableDefault<UElysiumChoreoSettings>();
+	const float WasSmoothing = ChoreoSettings->JawSmoothing;
+	const float WasSpeech = ChoreoSettings->JawSpeechLevel;
+	ChoreoSettings->JawSmoothing = 0.f;
+	ChoreoSettings->JawSpeechLevel = 0.5f;
 	ON_SCOPE_EXIT
 	{
-		SwapFloatCVar(TEXT("elysium.JawSmoothing"), WasSmoothing);
-		SwapFloatCVar(TEXT("elysium.JawSpeechLevel"), WasSpeech);
+		ChoreoSettings->JawSmoothing = WasSmoothing;
+		ChoreoSettings->JawSpeechLevel = WasSpeech;
 	};
 
 	// `Marked` carries the shipped shape: a `speak` on one channel and a `Speech Triggers` channel
@@ -1372,7 +1401,7 @@ bool FElysiumSceneJawTest::RunTest(const FString&)
 	// look: a first-order lag closes 1 - 1/e = 63.2 % of the remaining distance in one time constant.
 	// At the shipped 0.05 s, one 0.05 s step into the second loud span must land partway — a step
 	// would already be at 1, and a longer constant short of 0.816.
-	SwapFloatCVar(TEXT("elysium.JawSmoothing"), 0.05f);
+	ChoreoSettings->JawSmoothing = 0.05f;
 	T = 4.0;  World.Tick(T);   // settled at the speaking level over a long step
 	T = 4.4;  World.Tick(T);   // still unmarked, and a settled level does not drift
 	TestEqual(TEXT("a settled level does not drift under smoothing"),

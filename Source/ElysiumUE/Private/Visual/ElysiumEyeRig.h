@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 
+class UElysiumEyeTuningConfig;
+
 // VtMB's eye system, as data plus the arithmetic over it. Plain C++ with no UObject
 // reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands one out is
 // `UElysiumAnimSubsystem`, and the per-body application is `UElysiumEntityBodies`.
@@ -163,6 +165,16 @@ namespace ElysiumEyes
 	// Pure: no component, no world, no skeleton. The whole of it is assertable under `-nullrhi`.
 	void BuildState(const FElysiumEyeball& Eye, const FTransform& BoneToSpace, const FVector& Target,
 		const FElysiumEyeTuning& Tuning, FElysiumEyeState& Out);
+
+	// The Green Room's live debug nudge (`DebugTuning`) composed additively with the corpus-wide
+	// baseline (`Config`, `UElysiumEyeTuningConfig` / `/ElysiumAuthored/Eyes/DA_EyeTuning`, R4.5).
+	// `Config` may be null (asset not on the mount), which composes as neutral — an untouched debug
+	// state and an absent asset both leave `DebugTuning` unchanged. `bEyeMove` is the debug state's
+	// alone; the asset carries no gaze-mode switch.
+	//
+	// Pure: no component, no world, no asset load (the caller already resolved `Config`). Assertable
+	// under `-nullrhi` with a synthetic `UElysiumEyeTuningConfig` or none at all.
+	FElysiumEyeTuning ComposeTuning(const FElysiumEyeTuning& DebugTuning, const UElysiumEyeTuningConfig* Config);
 
 	// Centimetres per eyeball unit. The records are authored in the model's own inches and the
 	// geometry is imported to centimetres, so anything that crosses the two — only the iris plane

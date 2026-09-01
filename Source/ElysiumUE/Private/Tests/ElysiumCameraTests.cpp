@@ -3,7 +3,6 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-#include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
 #include "ElysiumAppState.h"
 #include "ElysiumAudioLatency.h"
@@ -14,6 +13,7 @@
 #include "ElysiumCameraRig.h"
 #include "ElysiumCameraSolve.h"
 #include "Substrate/ElysiumCameraTrack.h"
+#include "ElysiumChoreoSettings.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
 #include "ElysiumContentPaths.h"
@@ -1172,14 +1172,16 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 
 	// The A/B: at a threshold of 0 nothing folds, which leaves the theatre's edits as 30-millisecond
 	// slews. An exact authored zero is still a cut either way — that one never needed folding.
-	if (IConsoleVariable* CutCvar = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.CameraCutSeconds")))
+	// R4.5 moved the threshold off a cvar onto `UElysiumChoreoSettings::CameraCutSeconds`; the CDO
+	// is mutated and restored directly.
 	{
-		const float Restore = CutCvar->GetFloat();
-		CutCvar->Set(0.0f, ECVF_SetByCode);
-		TestFalse(TEXT("elysium.CameraCutSeconds 0 disables the fold"), ShouldFold(true, 0.03f));
+		UElysiumChoreoSettings* ChoreoSettings = GetMutableDefault<UElysiumChoreoSettings>();
+		const float Restore = ChoreoSettings->CameraCutSeconds;
+		ChoreoSettings->CameraCutSeconds = 0.0f;
+		TestFalse(TEXT("CameraCutSeconds 0 disables the fold"), ShouldFold(true, 0.03f));
 		A.MoveTime = 0.0f;
 		TestTrue(TEXT("an exact zero is a cut with the fold disabled"), IsHardCut(A));
-		CutCvar->Set(Restore, ECVF_SetByCode);
+		ChoreoSettings->CameraCutSeconds = Restore;
 	}
 
 	UElysiumCameraComponent* TemporalCamera = NewObject<UElysiumCameraComponent>();

@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"   // FElysiumEntityWorld::Detach — New Game's session disclaim
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumSessionSettings.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "ElysiumMapSubsystem.h"
@@ -49,14 +50,6 @@ static TAutoConsoleVariable<int32> CVarLoadingScreen(
 	TEXT("elysium.LoadingScreen"),
 	1,
 	TEXT("1 = show the loading screen over a map load; 0 = A/B it away."),
-	ECVF_Default);
-
-// The floor stops a fast local load reading as a flicker. Spent inside the engine's own
-// WaitForMovieToFinish, i.e. before the map actor's build pass.
-static TAutoConsoleVariable<float> CVarLoadingScreenMinTime(
-	TEXT("elysium.LoadingScreenMinTime"),
-	0.75f,
-	TEXT("Minimum seconds the loading screen stays up."),
 	ECVF_Default);
 
 // Lifetime.
@@ -1010,7 +1003,7 @@ void UElysiumGameFlowSubsystem::OnPrepareLoadingScreen()
 		NSLOCTEXT("Elysium", "Loading", "LOADING"), /*bShowThrobber*/ true);
 	Attributes.bAutoCompleteWhenLoadingCompletes = true;
 	Attributes.bMoviesAreSkippable = false;
-	Attributes.MinimumLoadingScreenDisplayTime = CVarLoadingScreenMinTime.GetValueOnGameThread();
+	Attributes.MinimumLoadingScreenDisplayTime = GetDefault<UElysiumSessionSettings>()->LoadingScreenMinTime;
 	GetMoviePlayer()->SetupLoadingScreen(Attributes);
 }
 

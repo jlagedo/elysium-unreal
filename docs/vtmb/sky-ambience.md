@@ -8,8 +8,11 @@ live in the tracker set:
 
 - **Status and next work:** `docs/project/roadmap.md` — the SKY row (done), and the open residue promoted
   to **3.6/3.7** (the measured tonemapper toe — the one remaining visible gap to displayed
-  parity), **3.10** (volumetric fog layer calibration), **3.11** (`elysium.LumenDiffuseBoost`
-  verification), **3.12** (`sm_hub_1` fill adjudication), and **3.13** (decal fog liveness).
+  parity), **3.10** (volumetric fog layer calibration), **3.12** (`sm_hub_1` fill adjudication),
+  and **3.13** (decal fog liveness). **3.11** (`elysium.LumenDiffuseBoost` verification) is
+  retired: R4.5 (`docs/project/seam_migration.md`) deleted the live cvar A/B along with the
+  rest of the light-leak scaffolding, unwired and unverified, in favour of a future bake-time
+  value (R5.6).
 - **The decisions** (D1–D7; D6 dissolved, D4 amended, D3 corrected) are stated as facts in the
   sections below.
 

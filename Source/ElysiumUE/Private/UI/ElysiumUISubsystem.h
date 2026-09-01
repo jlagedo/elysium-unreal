@@ -52,7 +52,7 @@ public:
 	void HideMenu();
 
 	// Rebuild the open screen in place, keeping its mode. The look knobs (`elysium.MenuLayout`,
-	// `elysium.MenuScrim`) are read when the tree is built, so a console change has to take the
+	// `UElysiumUISettings::MenuScrim`) are read when the tree is built, so a change has to take the
 	// screen down and put it back up; no-op when no screen is up.
 	void RebuildMenu();
 	bool IsMenuOpen() const { return Menu != nullptr; }

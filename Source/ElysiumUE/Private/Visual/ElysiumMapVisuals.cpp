@@ -65,88 +65,6 @@ static TAutoConsoleVariable<int32> CVarEnhancedTextures(
 	     "Applied at map load."),
 	ECVF_Default);
 
-// The two Lumen art-direction knobs D3 sanctions, as live cvars over the map's baked
-// PostProcessVolume. **Negative = neutral**, which is the shipped state: the override is
-// cleared rather than set to a nominal default, so "we are not touching this" and "we set it to
-// what it would have been" stay distinguishable. A non-neutral value is a divergence and wants
-// a per-map decision; these exist so C4/C5 can measure whether one is
-// justified without a rebuild.
-//
-// Skylight Leaking is the sanctioned replacement for VtMB's load-bearing author fill — the
-// soft lights it sprays where a real bounce would have come from, which Lumen cannot reproduce
-// where there is nothing in the room to bounce off.
-//
-// The bounce-strength knob is **Lumen Diffuse Color Boost**, not Indirect Lighting Intensity.
-// D3 named the latter, but on this render path it does nothing: it reaches the shaders as
-// `View.PrecomputedIndirectLightingColorScale`, which scales *precomputed* indirect lighting
-// only, and no shader under Lumen/ reads it — measured, an IndirectLightingIntensity of 3
-// changes not one pixel here. `LumenDiffuseColorBoost` is Lumen's own control
-// (`LumenDiffuseColorBoost.ush`: `pow(DiffuseLum, Boost)`, so **below 1 brightens** and 1 is
-// neutral) and it raises the albedo the bounce sees, which is the term VtMB's look actually
-// lives on.
-//
-// Ambient Cubemap is deliberately absent: a flat occlusion-ignoring term is the contrast-killer
-// both Epic and the direction charter warn against.
-static TAutoConsoleVariable<float> CVarSkylightLeaking(
-	TEXT("elysium.SkylightLeaking"), -1.f,
-	TEXT("Lumen skylight leaking on the map's PPV (0..1). Negative = neutral (no override)."),
-	ECVF_Default);
-
-static TAutoConsoleVariable<float> CVarSkylightLeakingDistance(
-	TEXT("elysium.SkylightLeakingDistance"), -1.f,
-	TEXT("Distance (cm) over which skylight leaking reaches full strength. Negative = neutral."),
-	ECVF_Default);
-
-static TAutoConsoleVariable<float> CVarDiffuseColorBoost(
-	TEXT("elysium.LumenDiffuseBoost"), -1.f,
-	TEXT("Lumen diffuse colour boost on the map's PPV: pow(albedo, boost), so below 1 brightens "
-	     "the bounce and 1 is neutral. Negative = neutral (no override)."),
-	ECVF_Default);
-
-// The $envmap reflection channel, live over the baked materials.
-//
-// The bake authors MaterialInstanceConstants, and a constant has no runtime setter — so without
-// ApplyMaterialOverrides standing a MID in front of each, every one of these is dead on the path
-// that actually renders. The pass reads each knob's BAKED value off the parent instance and
-// writes the adjusted one onto the MID, so applying twice is idempotent and a per-material value
-// the bake computed (the grey-$envmaptint dim-down on SpecReflect, say) is never flattened by a
-// global knob.
-//
-// EnvReflect SCALES the baked EnvStrength, so it cannot make a matte surface reflective: a
-// surface with no $envmap has a baked strength of 0 and stays at 0 whatever the multiplier.
-// The three level knobs pin a parameter across every reflective material and follow the
-// "negative = neutral" convention the PPV knobs above use — the override is *not applied* rather
-// than set to a nominal default, so "not touching this" and "set to what it would have been"
-// stay distinguishable.
-static TAutoConsoleVariable<int32> CVarMaterialOverrides(
-	TEXT("elysium.MaterialOverrides"), 1,
-	TEXT("Stand a dynamic instance in front of each baked material (1) so the elysium.* material "
-	     "knobs reach it, or render the baked instances exactly as authored (0). Applied at map load."),
-	ECVF_Default);
-
-static TAutoConsoleVariable<float> CVarRoughBase(
-	TEXT("elysium.RoughBase"), -1.f,
-	TEXT("Roughness of a NON-reflective surface (VtMB's world is Lambert, so 1). "
-	     "Negative = neutral (keep the baked value)."),
-	ECVF_Default);
-
-static TAutoConsoleVariable<float> CVarRoughReflect(
-	TEXT("elysium.RoughReflect"), -1.f,
-	TEXT("Roughness a fully $envmapmask-ed texel reaches. Negative = neutral (keep the baked value)."),
-	ECVF_Default);
-
-static TAutoConsoleVariable<float> CVarSpecBase(
-	TEXT("elysium.SpecBase"), -1.f,
-	TEXT("Specular level of a NON-reflective surface. 0 is the Lambert floor VtMB's material data "
-	     "states; UE's own default is 0.5. Negative = neutral (keep the baked value)."),
-	ECVF_Default);
-
-static TAutoConsoleVariable<float> CVarSpecReflect(
-	TEXT("elysium.SpecReflect"), -1.f,
-	TEXT("Specular level a fully $envmapmask-ed texel reaches. Pinning this overrides the "
-	     "per-material grey-$envmaptint dim-down. Negative = neutral (keep the baked value)."),
-	ECVF_Default);
-
 // Source's distance fog, on (1) or off (0), for A/B. It is a per-primitive material term rather
 // than the height fog actor because the world and the 3D-skybox miniature carry two different
 // fogs and share screen depth — the reasoning and its measurement are in ElysiumFog.h. Live:
@@ -157,18 +75,6 @@ static TAutoConsoleVariable<int32> CVarFog(
 	TEXT("elysium.Fog"), 1,
 	TEXT("Apply the map's authored distance fog (1) or none (0). World and 3D-skybox miniature "
 	     "take their own sets, from worldspawn and sky_camera."),
-	ECVF_Default);
-
-// Assemble the sky cube from the labelled RE-A2 probe faces instead of the map's own (0/1).
-// Each face states its suffix, the axis it belongs on, which way is up and which face each of
-// its edges meets, so a wrong slice binding, a rotation, a mirror and a broken seam are four
-// visibly different failures. It is the acceptance check on the B3 assembly, run against the
-// same six images the shipped VtMB engine drew for RE-A2 — so both ends of the orientation
-// chain are checked with one set of faces. Read at map load; elysium.reload to apply.
-static TAutoConsoleVariable<int32> CVarSkyProbe(
-	TEXT("elysium.SkyProbe"), 0,
-	TEXT("Build the sky cube from the labelled $ELYSIUM_EXPORT_ROOT/_skyprobe faces (1) or the map's own (0). "
-	     "Applied at map load."),
 	ECVF_Default);
 
 namespace
@@ -233,29 +139,6 @@ void UElysiumMapVisuals::BeginPlay()
 	CVarSkyBrightness.AsVariable()->SetOnChangedCallback(
 		FConsoleVariableDelegate::CreateWeakLambda(this,
 			[this](IConsoleVariable*) { ApplySkyBrightness(); }));
-
-	// The D3 knobs are for finding a value by eye against a live scene, so they apply as they
-	// change rather than at load.
-	const FConsoleVariableDelegate Knobs = FConsoleVariableDelegate::CreateWeakLambda(this,
-		[this](IConsoleVariable*) { ApplyPostProcessKnobs(); });
-	CVarSkylightLeaking.AsVariable()->SetOnChangedCallback(Knobs);
-	CVarSkylightLeakingDistance.AsVariable()->SetOnChangedCallback(Knobs);
-	CVarDiffuseColorBoost.AsVariable()->SetOnChangedCallback(Knobs);
-
-	// The reflection channel is found by eye against a live scene too, so its knobs re-apply as
-	// they change. ApplyMaterialOverrides re-reads each baked value before adjusting it, so
-	// re-running it is idempotent rather than cumulative.
-	const FConsoleVariableDelegate Reflect = FConsoleVariableDelegate::CreateWeakLambda(this,
-		[this](IConsoleVariable*) { ApplyMaterialOverrides(); });
-	CVarRoughBase.AsVariable()->SetOnChangedCallback(Reflect);
-	CVarRoughReflect.AsVariable()->SetOnChangedCallback(Reflect);
-	CVarSpecBase.AsVariable()->SetOnChangedCallback(Reflect);
-	CVarSpecReflect.AsVariable()->SetOnChangedCallback(Reflect);
-	if (IConsoleVariable* EnvReflectVar =
-		IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.EnvReflect")))
-	{
-		EnvReflectVar->SetOnChangedCallback(Reflect);
-	}
 
 	// Same for the fog A/B: it re-stamps the primitives already placed.
 	CVarFog.AsVariable()->SetOnChangedCallback(
@@ -378,12 +261,6 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		WorldLightCount = LightRig->Adopt(Adopted, FElysiumContentPaths::MapLights(MapName), SkyDef.Scale);
 	}
 
-	// Stand dynamic instances in front of the baked materials so the look-tuning cvars reach them;
-	// without this a baked MaterialInstanceConstant has no runtime setter and every elysium.*
-	// material knob is dead on the path that renders.
-	MaterialOverrides.Reset();
-	ApplyMaterialOverrides();
-
 	if (Tagged == 0)
 	{
 		UE_LOG(LogElysiumVisuals, Warning,
@@ -395,152 +272,6 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	UE_LOG(LogElysiumVisuals, Log, TEXT("adopted '%s': %d tagged actors, ppv %s"),
 		*MapName, Tagged, PostProcess ? TEXT("yes") : TEXT("MISSING"));
 	return Tagged;
-}
-
-void UElysiumMapVisuals::ApplyMaterialOverrides()
-{
-	if (CVarMaterialOverrides.GetValueOnGameThread() == 0)
-	{
-		return;
-	}
-
-	// elysium.EnvReflect is registered by ElysiumMaterialFactory.cpp (it also binds it onto the
-	// rope MIDs, which are built at runtime and not baked), so it is reached by name rather than
-	// duplicated here — one cvar, both consumers.
-	static IConsoleVariable* EnvReflectVar =
-		IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.EnvReflect"));
-	const float EnvReflect = EnvReflectVar ? FMath::Max(0.f, EnvReflectVar->GetFloat()) : 1.f;
-	const float RoughBase = CVarRoughBase.GetValueOnGameThread();
-	const float RoughReflect = CVarRoughReflect.GetValueOnGameThread();
-	const float SpecBase = CVarSpecBase.GetValueOnGameThread();
-	const float SpecReflect = CVarSpecReflect.GetValueOnGameThread();
-
-	// Nothing to override until a knob is actually turned, and standing a dynamic instance in
-	// front of a baked one is not free: a runtime SetMaterial drops the primitive's built texture
-	// streaming data, and the textures fall back to a low mip until the streamer catches up (a
-	// visibly blurry world). So the shipped path creates no MIDs at all and renders the baked
-	// instances exactly as authored; they appear only for an A/B session, where a transient mip
-	// settle is an acceptable price for a live knob.
-	const bool bWanted = !FMath::IsNearlyEqual(EnvReflect, 1.f)
-		|| RoughBase >= 0.f || RoughReflect >= 0.f || SpecBase >= 0.f || SpecReflect >= 0.f;
-	if (!bWanted && MaterialOverrides.Num() == 0)
-	{
-		return;
-	}
-
-	// Build the MID set once per map. Keyed by the baked material, so a material shared by many
-	// components yields one MID — the same one-MID-per-material shape the runtime-built path had,
-	// and the reason this is ~700 objects on the tutorial rather than ~1,400 slot-wise.
-	if (MaterialOverrides.Num() == 0)
-	{
-		auto Cover = [this](const TArray<TObjectPtr<AStaticMeshActor>>& Actors)
-		{
-			for (const TObjectPtr<AStaticMeshActor>& Actor : Actors)
-			{
-				UStaticMeshComponent* Comp = Actor ? Actor->GetStaticMeshComponent() : nullptr;
-				if (Comp == nullptr)
-				{
-					continue;
-				}
-				const int32 Num = Comp->GetNumMaterials();
-				for (int32 Slot = 0; Slot < Num; ++Slot)
-				{
-					UMaterialInterface* Baked = Comp->GetMaterial(Slot);
-					// Already covered (a material shared across two of the buckets), or nothing
-					// bound at all.
-					if (Baked == nullptr || Baked->IsA<UMaterialInstanceDynamic>())
-					{
-						continue;
-					}
-					TObjectPtr<UMaterialInstanceDynamic>& Mid = MaterialOverrides.FindOrAdd(Baked);
-					if (Mid == nullptr)
-					{
-						Mid = UMaterialInstanceDynamic::Create(Baked, this);
-					}
-					if (Mid != nullptr)
-					{
-						Comp->SetMaterial(Slot, Mid);
-					}
-				}
-			}
-		};
-		Cover(WorldActors);
-		Cover(SkyActors);
-		Cover(PropActors);
-		auto CoverComponents = [this](const TArray<TObjectPtr<UStaticMeshComponent>>& Components)
-		{
-			for (UStaticMeshComponent* Comp : Components)
-			{
-				if (!Comp)
-				{
-					continue;
-				}
-				for (int32 Slot = 0; Slot < Comp->GetNumMaterials(); ++Slot)
-				{
-					UMaterialInterface* Baked = Comp->GetMaterial(Slot);
-					if (!Baked || Baked->IsA<UMaterialInstanceDynamic>())
-					{
-						continue;
-					}
-					TObjectPtr<UMaterialInstanceDynamic>& Mid = MaterialOverrides.FindOrAdd(Baked);
-					if (!Mid)
-					{
-						Mid = UMaterialInstanceDynamic::Create(Baked, this);
-					}
-					if (Mid)
-					{
-						Comp->SetMaterial(Slot, Mid);
-					}
-				}
-			}
-		};
-		CoverComponents(RuntimeWorldBrushes);
-		CoverComponents(RuntimeSkyBrushes);
-	}
-
-	for (const TPair<TObjectPtr<UMaterialInterface>, TObjectPtr<UMaterialInstanceDynamic>>& Pair
-		: MaterialOverrides)
-	{
-		UMaterialInterface* Baked = Pair.Key;
-		UMaterialInstanceDynamic* Mid = Pair.Value;
-		if (Baked == nullptr || Mid == nullptr)
-		{
-			continue;
-		}
-
-		// Every parameter is read off the BAKED instance and written whole, so the pass is
-		// idempotent and a knob returned to neutral restores the authored value exactly —
-		// rather than leaving the last pinned one behind, which would make an A/B one-way.
-		auto Pin = [Baked, Mid](const FName& Param, float Knob)
-		{
-			float Value = 0.f;
-			if (!Baked->GetScalarParameterValue(Param, Value))
-			{
-				return;   // this master has no such parameter (M_Additive is unlit)
-			}
-			Mid->SetScalarParameterValue(Param, Knob >= 0.f ? Knob : Value);
-		};
-
-		// The Lambert base is the whole world's, not just the reflective set's — it is what
-		// decides whether a non-$envmap surface takes any Lumen specular at all.
-		Pin(ElysiumReflections::Params::RoughBase, RoughBase);
-		Pin(ElysiumReflections::Params::SpecBase, SpecBase);
-		// The reflective end. Inert on a matte surface, whose lerp alpha is 0 there.
-		Pin(ElysiumReflections::Params::RoughReflect, RoughReflect);
-		Pin(ElysiumReflections::Params::SpecReflect, SpecReflect);
-
-		// EnvStrength is SCALED rather than pinned, because it carries no single right value:
-		// it is the per-material reflection reach. Reading the baked value each time is what
-		// keeps repeated calls from compounding the multiplier. Scaling is also what keeps a
-		// matte surface matte — its baked strength is 0, so no multiplier gives it a reflection.
-		float BakedEnvStrength = 0.f;
-		if (Baked->GetScalarParameterValue(ElysiumReflections::Params::EnvStrength, BakedEnvStrength)
-			&& BakedEnvStrength > 0.f)
-		{
-			Mid->SetScalarParameterValue(ElysiumReflections::Params::EnvStrength,
-				BakedEnvStrength * EnvReflect);
-		}
-	}
 }
 
 void UElysiumMapVisuals::AuditMaterials(const FString& MapName) const
@@ -795,35 +526,23 @@ void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env)
 			*Env.SkyName, Env.SkyConvention, ElysiumEnvironment::SkyConventionVersion);
 	}
 
-	// Faces come from one of three sets: the labelled probe (B1), the enhanced set (B5), or the
-	// faithful decode. The enhanced set is opt-in, so a sky without one silently keeps the
-	// faithful faces rather than losing its sky.
+	// Faces come from one of two sets: the enhanced set (B5), opt-in, or the faithful decode.
+	// A sky without an enhanced set silently keeps the faithful faces rather than losing its sky.
 	//
-	// All three are addressed by the sky's OWN name, because the faces belong to the sky rather
-	// than to the map showing it: the game's maps share six distinct skies between them, and a
+	// Both are addressed by the sky's OWN name, because the faces belong to the sky rather than
+	// to the map showing it: the game's maps share six distinct skies between them, and a
 	// map-local `sky_<face>` alias would give one name several sets of bytes.
-	const bool bProbe = CVarSkyProbe.GetValueOnGameThread() != 0 && !Env.SkyName.IsEmpty();
-	const FString Prefix = bProbe
-		? Env.SkyName
-		: FElysiumContentPaths::SkyFacePrefix(Env.SkyName);
+	const FString Prefix = FElysiumContentPaths::SkyFacePrefix(Env.SkyName);
 	const FString TexHi = FElysiumContentPaths::SharedTexHiDir();
-	const bool bEnhanced = !bProbe && CVarEnhancedTextures.GetValueOnGameThread() != 0
+	const bool bEnhanced = CVarEnhancedTextures.GetValueOnGameThread() != 0
 		&& ElysiumEnvironment::HasSkyFaces(TexHi, Prefix);
 
 	float CubeUpperMean = 0.f;
 	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCubeFrom(
-		bProbe    ? FElysiumContentPaths::SkyProbeDir() :
-		bEnhanced ? TexHi
-		          : FElysiumContentPaths::SharedTexDir(),
+		bEnhanced ? TexHi : FElysiumContentPaths::SharedTexDir(),
 		Prefix, &CubeUpperMean);
 	if (Cube == nullptr)
 	{
-		if (bProbe)
-		{
-			UE_LOG(LogElysiumVisuals, Warning,
-				TEXT("elysium.SkyProbe: no labelled '%s' face set under %s — run research/tooling/probes/sky_probe.py"),
-				*Env.SkyName, *FElysiumContentPaths::SkyProbeDir());
-		}
 		return;
 	}
 
@@ -882,7 +601,7 @@ void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env)
 			TEXT("sky '%s': %s faces, cube upper-hemisphere mean %.5f, skyambient %.5f -> "
 			     "SkyLight intensity %.3f"),
 			*Env.SkyName,
-			bProbe ? TEXT("labelled probe") : bEnhanced ? TEXT("enhanced") : TEXT("faithful"),
+			bEnhanced ? TEXT("enhanced") : TEXT("faithful"),
 			CubeUpperMean, LightRig ? LightRig->SkyAmbientMag : 0.f,
 			SkyAmbientIntensity(CubeUpperMean));
 	}
@@ -924,38 +643,6 @@ float UElysiumMapVisuals::SkyAmbientIntensity(float CubeUpperMean) const
 		return 0.f;
 	}
 	return Mag / CubeUpperMean;
-}
-
-void UElysiumMapVisuals::ApplyPostProcessKnobs()
-{
-	if (!PostProcess)
-	{
-		return;
-	}
-	FPostProcessSettings& S = PostProcess->Settings;
-
-	const float Leak = CVarSkylightLeaking.GetValueOnGameThread();
-	S.bOverride_LumenSkylightLeaking = Leak >= 0.f;
-	if (Leak >= 0.f)
-	{
-		S.LumenSkylightLeaking = Leak;
-	}
-
-	const float LeakDist = CVarSkylightLeakingDistance.GetValueOnGameThread();
-	S.bOverride_LumenFullSkylightLeakingDistance = LeakDist >= 0.f;
-	if (LeakDist >= 0.f)
-	{
-		S.LumenFullSkylightLeakingDistance = LeakDist;
-	}
-
-	const float Boost = CVarDiffuseColorBoost.GetValueOnGameThread();
-	S.bOverride_LumenDiffuseColorBoost = Boost >= 0.f;
-	if (Boost >= 0.f)
-	{
-		S.LumenDiffuseColorBoost = Boost;
-	}
-
-	PostProcess->MarkComponentsRenderStateDirty();
 }
 
 void UElysiumMapVisuals::ApplySkyBrightness()
@@ -1034,31 +721,6 @@ void UElysiumMapVisuals::RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool b
 	}
 	(bSky ? RuntimeSkyBrushes : RuntimeWorldBrushes).Add(Comp);
 	ApplySceneFog();
-
-	// If an A/B material override session is already live, bring the late-created mover into
-	// the same MID set. In the neutral shipped state MaterialOverrides is empty and the baked
-	// instances remain untouched.
-	if (MaterialOverrides.Num() > 0)
-	{
-		for (int32 Slot = 0; Slot < Comp->GetNumMaterials(); ++Slot)
-		{
-			UMaterialInterface* Baked = Comp->GetMaterial(Slot);
-			if (!Baked || Baked->IsA<UMaterialInstanceDynamic>())
-			{
-				continue;
-			}
-			TObjectPtr<UMaterialInstanceDynamic>& Mid = MaterialOverrides.FindOrAdd(Baked);
-			if (!Mid)
-			{
-				Mid = UMaterialInstanceDynamic::Create(Baked, this);
-			}
-			if (Mid)
-			{
-				Comp->SetMaterial(Slot, Mid);
-			}
-		}
-		ApplyMaterialOverrides();
-	}
 }
 
 void UElysiumMapVisuals::ToggleProps()

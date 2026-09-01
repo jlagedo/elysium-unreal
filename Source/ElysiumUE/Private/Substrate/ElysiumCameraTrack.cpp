@@ -1,5 +1,6 @@
 #include "Substrate/ElysiumCameraTrack.h"
 
+#include "ElysiumChoreoSettings.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -7,19 +8,7 @@
 #include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumClassFields.h"
 
-#include "HAL/IConsoleManager.h"
-
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCameraTrack, Log, All);
-
-// A/B for the short-segment fold. 0 disables it, which leaves sp_theatre's courtroom edits as
-// 30-millisecond camera moves.
-static TAutoConsoleVariable<float> CVarCameraCutSeconds(
-	TEXT("elysium.CameraCutSeconds"),
-	0.05f,
-	TEXT("camera_keyframe: a TimeControl segment at or below this many seconds is folded to a hard "
-	     "cut at spawn, the way CCameraKeyFrame::Activate does (retail's threshold is 0.05). "
-	     "0 disables the fold and leaves short segments as camera movement."),
-	ECVF_Default);
 
 namespace ElysiumCameraTrack
 {
@@ -80,7 +69,7 @@ namespace ElysiumCameraTrack
 
 	float FoldSeconds()
 	{
-		return FMath::Max(0.0f, CVarCameraCutSeconds.GetValueOnAnyThread());
+		return FMath::Max(0.0f, GetDefault<UElysiumChoreoSettings>()->CameraCutSeconds);
 	}
 
 	bool ShouldFold(bool bTimeControl, float MoveTime)

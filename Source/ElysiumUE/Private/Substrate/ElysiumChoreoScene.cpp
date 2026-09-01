@@ -22,7 +22,8 @@
 //   - `silence`/`loud` (21,898 uses) drive the jaw through `mstudiomouth_t`'s flexdesc rather than
 //     through the flex controllers the expression track writes. Two divergences ride on that track
 //     and are named where they are made: the envelope a `speak` event borrows from its own per-line
-//     `.vcd` (ResolveLineEnvelope), and the smoothing between marker levels (`elysium.JawSmoothing`).
+//     `.vcd` (ResolveLineEnvelope), and the smoothing between marker levels
+//     (`UElysiumChoreoSettings::JawSmoothing`).
 //   - `gesture` and `sequence` both play through the one clip player. Source layers a gesture
 //     additively over a sequence; this runtime has a single clip slot, so the two collapse — the
 //     same class of stated simplification as `scripted_sequence`'s missing locomotion.
@@ -34,6 +35,7 @@
 //
 // Format, event enum, keyvalues, the completion contract: `docs/vtmb/choreographed_scenes.md`.
 
+#include "ElysiumChoreoSettings.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumLineService.h"
@@ -143,36 +145,9 @@ namespace
 		     "per-line .vcd beside its audio (1, default) or flaps only on its scene's own markers (0)."),
 		ECVF_Default);
 
-	// The jaw's resting level while a line is being spoken and no marker claims the instant.
-	//
-	// Measured, not chosen. Decoding each line's audio and taking the RMS envelope normalised to the
-	// line's own 99th percentile, over 110 lines of the dialogue corpus and 35 of the courtroom cast's
-	// own: a `silence` span averages **0.037**, a `loud` span **0.640**, and the uncovered time
-	// between them **0.312**. Pinning `loud` at a fully open jaw, because that is what the marker
-	// means and its own span peak runs above the line's p99 reference, puts the between level at
-	// 0.312 / 0.640 = **0.49** and silence at 0.06, i.e. shut.
-	TAutoConsoleVariable<float> CVarJawSpeechLevel(
-		TEXT("elysium.JawSpeechLevel"),
-		0.49f,
-		TEXT("Jaw weight while a line plays and no silence/loud marker claims the instant."),
-		ECVF_Default);
-
-	// **A divergence, and the only invented mechanism in this track.** Nothing in the `.vcd` says a
-	// marker ramps — `event_ramp` exists and all 1,401 authored uses sit on `expression` and
-	// `gesture`, never on `silence` or `loud` — and what the engine does with the event after handing
-	// it to the actor's AI object is not decoded. Stepping between the three levels at the span
-	// boundaries is therefore the literal reading, and it reads as a hinge rather than a jaw.
-	//
-	// The constant is measured rather than picked: across 187 lines the wav's own envelope takes a
-	// median **100 ms** to rise 10->90 % into a `loud` span and **150 ms** to fall 90->10 % into a
-	// `silence` span. A first-order lag covers 10->90 % in ln(9) = 2.2 time constants, so those are
-	// tau = 45 ms and tau = 68 ms; one constant of 50 ms sits between them and still lets the
-	// shortest authored `loud` span (50 ms) reach most of its target.
-	TAutoConsoleVariable<float> CVarJawSmoothing(
-		TEXT("elysium.JawSmoothing"),
-		0.05f,
-		TEXT("Time constant (seconds) the jaw lags its target by; 0 steps at the span boundary."),
-		ECVF_Default);
+	// The jaw's resting level while a line is being spoken and no marker claims the instant, and the
+	// smoothing between marker levels, both moved off their own hardcoded cvar defaults onto
+	// `UElysiumChoreoSettings` (R4.5) — see that class for the measurement each value is read from.
 
 	// Subclass-member field accessor. Deliberately file-local rather than the shared
 	// ElysiumAddClassField (Substrate/ElysiumClassFields.h): its bool setter keeps Python
@@ -1553,7 +1528,7 @@ public:
 	// second slice and not here.
 	//
 	// Hence three levels, in this precedence: a live `loud` opens the jaw fully, a live `silence`
-	// shuts it, and a line playing under neither holds `elysium.JawSpeechLevel`. `loud` outranks
+	// shuts it, and a line playing under neither holds `UElysiumChoreoSettings::JawSpeechLevel`. `loud` outranks
 	// `silence` because it is the stronger claim and because the two overlap once in the whole corpus.
 	// Cancel and completion: every jaw this scene moved shuts NOW rather than lagging down over the
 	// smoothing constant, because there is no next frame to lag it in — the scene stops thinking.
@@ -1733,7 +1708,7 @@ public:
 			}
 		}
 
-		const float SpeechLevel = FMath::Clamp(CVarJawSpeechLevel.GetValueOnGameThread(), 0.f, 1.f);
+		const float SpeechLevel = FMath::Clamp(GetDefault<UElysiumChoreoSettings>()->JawSpeechLevel, 0.f, 1.f);
 		for (const TPair<int32, FJawState>& Pair : State)
 		{
 			const FJawState& S = Pair.Value;
@@ -1761,7 +1736,7 @@ public:
 
 		// A first-order lag, framerate-independent. Tau 0 steps, which is the literal reading of the
 		// authored spans and the debug-switch baseline for the smoothing divergence.
-		const float Tau = FMath::Max(0.f, CVarJawSmoothing.GetValueOnGameThread());
+		const float Tau = FMath::Max(0.f, GetDefault<UElysiumChoreoSettings>()->JawSmoothing);
 		const float Alpha = (Tau <= 0.f || DeltaSeconds <= 0.f)
 			? 1.f : 1.f - FMath::Exp(-DeltaSeconds / Tau);
 

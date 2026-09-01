@@ -21,9 +21,8 @@ struct FElysiumTextureCache;
 
 // The map's LOOK. A component on AElysiumMapActor holding everything that decides what the map
 // renders and nothing that decides what it does: the baked level's actors and the handles onto
-// them, the material-override MIDs the look-tuning cvars reach through, the sky cube and its
-// backdrop, the sky light's level, the two fog sets, the Lumen art-direction knobs on the map's
-// PostProcessVolume, the light rig, and the overhead cables.
+// them, the sky cube and its backdrop, the sky light's level, the two fog sets, the light rig, and
+// the overhead cables.
 //
 // The split is the module's engine/rendering seam made physical:
 // the map actor orchestrates the load and IS the substrate's engine side (`ElysiumWorldServices.h`),
@@ -47,8 +46,7 @@ public:
 	// Walk the baked level once and bucket its actors by the tag pipeline/unreal/bake_map.py stamped on them
 	// (elysium.world / .sky / .prop / .light / .skylight / .fog / .postprocess / .decal), filling the
 	// actor buckets, SkyLight, HeightFog and PostProcess, and handing the light rig its sources to
-	// adopt. Stands the material overrides up in the same pass. Returns the number of tagged actors
-	// found; 0 means this world is not a baked level.
+	// adopt. Returns the number of tagged actors found; 0 means this world is not a baked level.
 	int32 AdoptBakedLevel(const FString& MapName, const FElysiumSkyDef& SkyDef);
 
 	// Build the overhead cables from <map>.ropes: one Verlet UCableComponent per segment,
@@ -76,16 +74,6 @@ public:
 	void AuditMaterials(const FString& MapName) const;
 
 	// The live knobs (each is also a cvar callback, so each is idempotent).
-	// Stand a UMaterialInstanceDynamic in front of every unique baked material on the world, sky
-	// and prop components, so the look-tuning cvars can reach them (a baked MaterialInstanceConstant
-	// has no runtime setter). Builds the MID set on the first call and re-applies the current cvar
-	// values on every call, so a cvar callback is just a re-run. No-op under
-	// elysium.MaterialOverrides 0, which leaves the baked values exactly as authored.
-	void ApplyMaterialOverrides();
-	// Push the elysium.* art-direction cvars onto the adopted PPV. A negative value means "leave it
-	// neutral" — the override is cleared, not set to a default — so the shipped state and an
-	// experiment are distinguishable rather than merely equal-looking.
-	void ApplyPostProcessKnobs();
 	// Push elysium.SkyBrightness onto the live backdrop MID. The faithful value is 1 (D7): VtMB's
 	// sky transfer is the identity, so this is an A/B knob, not a calibration. No-op with no sky.
 	void ApplySkyBrightness();
@@ -165,8 +153,9 @@ private:
 	UPROPERTY() TObjectPtr<USkyLightComponent> SkyLight;
 	UPROPERTY() TObjectPtr<UExponentialHeightFogComponent> HeightFog;
 	// C3/D3 — the map's unbound PostProcessVolume, where a per-map Lumen art-direction value lives.
-	// Baked neutral (nothing overridden), so it changes no pixel until someone puts a number on it;
-	// `elysium.SkylightLeaking` / `elysium.LumenDiffuseBoost` are how C4/C5 try one without a rebuild.
+	// Baked neutral (nothing overridden), so it changes no pixel until a future bake puts a number
+	// on it (the R4.5-retired live A/B knobs are gone; the settled home for these values is a bake
+	// output, not a runtime override).
 	UPROPERTY() TObjectPtr<APostProcessVolume> PostProcess;
 
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> WorldActors;
@@ -176,13 +165,6 @@ private:
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeSkyBrushes;
 	bool bPropsVisible = true;
 	bool bSkyVisible = true;
-
-	// One MID per unique baked material, standing in front of the level's own instances so the
-	// look-tuning cvars reach real surfaces. The bake authors MaterialInstanceConstants; a constant
-	// has no runtime setter, so without this every elysium.* material knob is dead on the path that
-	// actually renders. Keyed by the baked material so a material shared by 40 components makes one
-	// MID, not 40. Populated by ApplyMaterialOverrides at adopt; dropped with the component.
-	UPROPERTY() TMap<TObjectPtr<UMaterialInterface>, TObjectPtr<UMaterialInstanceDynamic>> MaterialOverrides;
 
 	// Ropes: one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
 	// alive for the map's lifetime. MIDs off M_World_Opaque bound to the decoded RopeMaterial

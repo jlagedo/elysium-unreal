@@ -1,6 +1,7 @@
 #include "Visual/ElysiumEyeRig.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumEyeTuningConfig.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
@@ -164,6 +165,18 @@ float ElysiumEyes::BlinkWeight(float SecondsRemaining)
 	}
 	const float W = 2.f * FMath::Sqrt(C);
 	return W > 1.f ? 2.f - W : W;
+}
+
+FElysiumEyeTuning ElysiumEyes::ComposeTuning(const FElysiumEyeTuning& DebugTuning,
+	const UElysiumEyeTuningConfig* Config)
+{
+	FElysiumEyeTuning Composed = DebugTuning;
+	if (Config != nullptr)
+	{
+		Composed.EyeSize += Config->EyeSize;
+		Composed.EyeShift += Config->EyeShift;
+	}
+	return Composed;
 }
 
 void ElysiumEyes::BuildState(const FElysiumEyeball& Eye, const FTransform& BoneToSpace,

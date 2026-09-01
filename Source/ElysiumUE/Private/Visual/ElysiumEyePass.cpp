@@ -1,6 +1,7 @@
 #include "Visual/ElysiumEyePass.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumEyeTuningConfig.h"
 #include "Visual/ElysiumBodyAnimInstance.h"
 #include "Visual/ElysiumEntityBodiesLog.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -335,7 +336,11 @@ void FElysiumEyePass::TickEyes(const UObject* Context, float)
 		// fallback true. It defaults on, so leaving it alone with no gaze point does not rest the eye —
 		// it aims at the target a zero vector names, which is the world origin. That reads as a whole
 		// cast staring at one arbitrary point in the map and at nothing on a stage built far from it.
-		FElysiumEyeTuning Tuning = Debug.Tuning;
+		// The Green Room's live nudge composes ON TOP of the corpus-wide baseline (R4.5,
+		// `UElysiumEyeTuningConfig`, `/ElysiumAuthored/Eyes/DA_EyeTuning`, `ElysiumEyes::ComposeTuning`)
+		// — an untouched debug state and an untouched (or absent) asset both leave every eye exactly
+		// where it was before this asset existed.
+		FElysiumEyeTuning Tuning = ElysiumEyes::ComposeTuning(Debug.Tuning, UElysiumEyeTuningConfig::Load());
 		FVector GazeWorld = FVector::ZeroVector;
 		bool bHaveGaze = false;
 		if (Debug.Gaze == FElysiumEyeDebug::EGaze::Rest)

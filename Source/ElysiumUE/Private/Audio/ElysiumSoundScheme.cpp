@@ -7,6 +7,7 @@
 
 #include "Audio/ElysiumSoundScheme.h"
 
+#include "ElysiumAudioSettings.h"
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumContentPaths.h"
@@ -22,12 +23,10 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumScheme, Log, All);
 
-// Tunables (debug/calibration).
-static TAutoConsoleVariable<float> CVarMusicCrossfade(
-	TEXT("elysium.MusicCrossfade"), 2.0f,
-	TEXT("SoundScheme music state-change crossfade time in seconds (explore<->combat<->alert)."),
-	ECVF_Default);
-
+// Tunables (debug/calibration). The crossfade time and the random-sound cadence base moved to
+// `UElysiumAudioSettings` (R4.5); these two stay cvars — they are debug A/Bs with a live Cog
+// surface (elysium.MusicState is the Cog Sound Schemes window's own echo of combat scoring), not
+// orphan taste values.
 static TAutoConsoleVariable<int32> CVarMusicState(
 	TEXT("elysium.MusicState"), 0,
 	TEXT("Force the SoundScheme music state: 0 = Explore (safe), 1 = Combat, 2 = Alert. The real "
@@ -37,12 +36,6 @@ static TAutoConsoleVariable<int32> CVarMusicState(
 static TAutoConsoleVariable<int32> CVarSchemeRandom(
 	TEXT("elysium.SchemeRandom"), 1,
 	TEXT("Play a scheme's RandomSound polar one-shots (1, default) or suppress them (0)."),
-	ECVF_Default);
-
-static TAutoConsoleVariable<float> CVarSchemeRandomBase(
-	TEXT("elysium.SchemeRandomBase"), 8.0f,
-	TEXT("Mean seconds between plays of a Frequency-10 RandomSound; a scheme's per-sound cadence "
-	     "scales as base * 10 / Frequency. (VtMB's exact Frequency curve is client-side, not RE'd.)"),
 	ECVF_Default);
 
 namespace
@@ -294,7 +287,7 @@ void FElysiumSoundSchemeManager::StartActiveVoices(UElysiumAudioSubsystem* Audio
 	Active.RandomNextTime.SetNum(S.RandomSounds.Num());
 	for (int32 i = 0; i < S.RandomSounds.Num(); ++i)
 	{
-		const float Mean = CVarSchemeRandomBase.GetValueOnGameThread() * 10.f / FMath::Max(1, S.RandomSounds[i].Frequency);
+		const float Mean = GetDefault<UElysiumAudioSettings>()->SchemeRandomBase * 10.f / FMath::Max(1, S.RandomSounds[i].Frequency);
 		Active.RandomNextTime[i] = Elapsed + FMath::FRandRange(0.2f, 1.0f) * Mean;
 	}
 }
@@ -321,7 +314,7 @@ void FElysiumSoundSchemeManager::SetMusicState(UElysiumAudioSubsystem* Audio, EE
 		return;
 	}
 	CurrentMusicState = NewState;
-	const float Fade = CrossfadeSeconds >= 0.f ? CrossfadeSeconds : CVarMusicCrossfade.GetValueOnGameThread();
+	const float Fade = CrossfadeSeconds >= 0.f ? CrossfadeSeconds : GetDefault<UElysiumAudioSettings>()->MusicCrossfade;
 	ApplyMusicVolumes(Audio, Fade);
 }
 
@@ -337,7 +330,7 @@ void FElysiumSoundSchemeManager::TickRandom(UElysiumAudioSubsystem* Audio, const
 	Active.RandomVoices.RemoveAll([Audio](const FElysiumAudioVoiceHandle& H) { return !Audio->IsVoicePlaying(H); });
 
 	const int32 Cap = FMath::Max(0, S.RandomSoundCount);
-	const float Base = CVarSchemeRandomBase.GetValueOnGameThread();
+	const float Base = GetDefault<UElysiumAudioSettings>()->SchemeRandomBase;
 
 	for (int32 i = 0; i < S.RandomSounds.Num(); ++i)
 	{
@@ -402,7 +395,7 @@ void FElysiumSoundSchemeManager::StopAll(UElysiumAudioSubsystem* Audio)
 {
 	if (Audio && Active.IsSet())
 	{
-		const float Fade = CVarMusicCrossfade.GetValueOnGameThread();
+		const float Fade = GetDefault<UElysiumAudioSettings>()->MusicCrossfade;
 		Audio->StopVoice(Active.Bed, Fade);
 		Audio->StopVoice(Active.Explore, Fade);
 		Audio->StopVoice(Active.Combat, Fade);
@@ -466,7 +459,7 @@ private:
 	static float FadeTime(const FElysiumVariant& Param)
 	{
 		const float P = Param.ToFloat();
-		return P > 0.f ? P : CVarMusicCrossfade.GetValueOnGameThread();
+		return P > 0.f ? P : GetDefault<UElysiumAudioSettings>()->MusicCrossfade;
 	}
 
 	FString SchemeRel;

@@ -6,6 +6,7 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumUISettings.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -77,19 +78,23 @@ void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]() { HideMenu(); }),
 		ECVF_Default));
 
-	// The two look knobs are read at tree-build time, so an open screen has to be rebuilt for a
-	// console change to show. They are declared by the menu's own translation unit (they are its
-	// knobs); this subsystem is what owns a live screen, so the sink lives here. Found rather than
-	// referenced because a static TAutoConsoleVariable in another TU has no header.
-	static const TCHAR* const LookCvars[] = { TEXT("elysium.MenuLayout"), TEXT("elysium.MenuScrim") };
-	for (const TCHAR* Name : LookCvars)
+	// The layout knob is read at tree-build time, so an open screen has to be rebuilt for a console
+	// change to show. It is declared by the menu's own translation unit (it is its knob); this
+	// subsystem is what owns a live screen, so the sink lives here. Found rather than referenced
+	// because a static TAutoConsoleVariable in another TU has no header.
+	if (IConsoleVariable* Var = Console.FindConsoleVariable(TEXT("elysium.MenuLayout")))
 	{
-		if (IConsoleVariable* Var = Console.FindConsoleVariable(Name))
-		{
-			Var->SetOnChangedCallback(FConsoleVariableDelegate::CreateWeakLambda(
-				this, [this](IConsoleVariable*) { RebuildMenu(); }));
-		}
+		Var->SetOnChangedCallback(FConsoleVariableDelegate::CreateWeakLambda(
+			this, [this](IConsoleVariable*) { RebuildMenu(); }));
 	}
+
+#if WITH_EDITOR
+	// `UElysiumUISettings::MenuScrim` is a Project Settings field, not a cvar: the same "an open
+	// screen has to be rebuilt" rule applies, sunk through the stock `UDeveloperSettings` broadcast
+	// rather than a console callback. Editor-only, matching the broadcast itself.
+	GetMutableDefault<UElysiumUISettings>()->OnSettingChanged().AddWeakLambda(
+		this, [this](UObject*, FPropertyChangedEvent&) { RebuildMenu(); });
+#endif
 
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.charscreen"),

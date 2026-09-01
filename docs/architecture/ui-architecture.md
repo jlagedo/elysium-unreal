@@ -216,8 +216,11 @@ transparent — its menu floats over a dark particle field, where the type never
 backdrop is not that reliable: how much dimming the type needs is a property of where the camera
 points. Two answers, one per menu layout (§7):
 
-- `elysium.MenuScrim` (default `0.22`) — the **classic** layout's global dimmer, applied to the
-  whole frame because a centred column can land on anything the camera framed.
+- `UElysiumUISettings::MenuScrim` (Project Settings -> Elysium -> UI, default `0.22`; a
+  `Config = Elysium, DefaultConfig` `UDeveloperSettings` page since R4.5 — it was
+  `elysium.MenuScrim`, a hardcoded cvar default with no editor home) — the **classic** layout's
+  global dimmer, applied to the whole frame because a centred column can land on anything the
+  camera framed.
 - The **rail** layout's veil — a horizontal ramp reaching zero by mid-frame, so only the strip the
   type sits on is paid for and the lit half of the backdrop is untouched. `MenuScrim` does not
   reach it.
@@ -331,7 +334,7 @@ design shape and constraints, not a second completion ledger.
 
   **Classic (0).** `CVMainMenu::PerformLayout` verbatim: every item sized to the widest label +
   `20×4` virtual px, `pitch = height + 2`, the column centred, blood red at rest, the whole frame
-  behind it knocked back by `elysium.MenuScrim`. Kept so the divergence stays measurable rather than
+  behind it knocked back by `UElysiumUISettings::MenuScrim`. Kept so the divergence stays measurable rather than
   asserted.
 
   Both knobs are read at tree-build time, so `UElysiumUISubsystem::RebuildMenu` (a console-variable

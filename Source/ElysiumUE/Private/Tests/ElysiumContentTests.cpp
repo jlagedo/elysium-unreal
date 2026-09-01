@@ -884,8 +884,8 @@ bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 }
 
 // 7.5 — the reflection channel is bound BY NAME from three places (pipeline/unreal/make_world_materials.py
-// authors it, pipeline/unreal/bake_map.py binds it onto each baked instance, FElysiumMaterialFactory and
-// AElysiumMapActor::ApplyMaterialOverrides bind it at runtime). A rename that misses one of them
+// authors it, pipeline/unreal/bake_map.py binds it onto each baked instance, FElysiumMaterialFactory binds
+// it onto runtime-built MIDs). A rename that misses one of them
 // binds nothing and fails silently in the frame, so the contract is asserted here instead: every
 // lit master must carry every parameter ElysiumReflections names.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReflectionParamsTest,

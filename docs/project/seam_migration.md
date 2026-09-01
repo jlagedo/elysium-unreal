@@ -1523,10 +1523,49 @@ surface reaches them, and this asset does not either). One correction to the lin
 the `.env`/`.sky`/`.spawn` readers were **kept**, not deleted (the fallback for every unconverted
 map, and R4.6's proof needs both paths alive to diff); reader deletion moves to R8.1, matching
 R4.1's and R4.2's own corrections.
-- **R4.5 Orphan taste values get editor homes.** The seven cvar-only knobs onto settings pages;
-  the seven "Enhanced rain" literals into the weather settings home; green-room eye tuning into
-  `DA_EyeTuning`; delete `RainMist`, the `MaterialOverrides` group, `SkyProbe`, the leak A/B.
-  → lands: zero taste values living in C++ literals or cvars.
+**R4.5 landed (2026-09-01)** — the seven cvar-only knobs each moved to a `Config = Elysium,
+DefaultConfig` `UDeveloperSettings` page, grouped sensibly as the line asked: `UElysiumUISettings`
+(`MenuScrim`), `UElysiumChoreoSettings` (`JawSpeechLevel`, `JawSmoothing`, `CameraCutSeconds`),
+`UElysiumAudioSettings` (`MusicCrossfade`, `SchemeRandomBase`), `UElysiumSessionSettings`
+(`LoadingScreenMinTime`) — five pages, not seven, since the line's own grouping instruction (UI /
+Choreo / Audio / Session) collapses the seven values onto four homes. Every default is the retired
+cvar's own default, unchanged. The seven "Enhanced rain" literals the Cog Environment window's
+"Enhanced defaults" button hardcoded (`ElysiumCogWindow_Environment.cpp` ~429–439) moved to a new
+`UElysiumWeatherSettings` page, and the button is deleted; every value it set already has its own
+live Cog slider, so nothing lost a tuning surface. Green-room eye tuning (`iris size`, `eye shift`)
+moved to `/Game/ElysiumAuthored/Eyes/DA_EyeTuning` (`UElysiumEyeTuningConfig`), a real authored
+asset created and saved through the `elysium` editor MCP, beside `Cloth/DA_ClothTuning`
+(`docs/architecture/animation-architecture.md` §8 gained the design note). Unlike the settings
+pages, this baseline did not previously reach the whole game from any surface at all — it was
+reachable only from the Green Room's own "Reset tuning" button — so landing it needed a real
+composition rule, not just a relocation: `ElysiumEyes::ComposeTuning` (pure, `ElysiumEyeRig.h`)
+adds the asset's `EyeSize`/`EyeShift` to the Green Room's live debug nudge component-wise, and
+`FElysiumEyePass::TickEyes` is the one caller, so the baseline now reaches every rendered eye,
+player and NPC alike. Both compose to a no-op at their shipped zero defaults, so "values = today's
+defaults exactly" holds for both the settings pages and the asset.
+
+Deleted, not homed: `elysium.RainMist` (declared, read nowhere — confirmed dead before deletion);
+`elysium.SkyProbe` and its `_skyprobe` assembly path in `ElysiumMapVisuals.cpp` (RE-A2 closed, so
+the labelled-probe sky-cube source has no reason left to exist as a runtime branch); the light-leak
+A/B (`elysium.SkylightLeaking`/`SkylightLeakingDistance`/`LumenDiffuseBoost` and
+`ApplyPostProcessKnobs` — the Cog tab that drove them was already gone since R4.3, leaving three
+cvars and a PPV-override pass with no way left to reach them); and the `MaterialOverrides` cvar
+group (`elysium.MaterialOverrides`/`RoughBase`/`RoughReflect`/`SpecBase`/`SpecReflect` and
+`ApplyMaterialOverrides`, the whole dynamic-MID-in-front-of-every-baked-material pass). One honest
+correction on that last deletion: the line called it "superseded by `UElysiumSurfaceSettings`,"
+which is true of *purpose* (both exist so a human tunes reflectivity in the editor rather than by
+cvar) but not of *wiring* — `UElysiumSurfaceSettings` pushes into `MPC_ElysiumSurfaces`, which only
+the V2 masters read (R5.4's rebind), not the pre-V2 per-map baked materials `ApplyMaterialOverrides`
+stood MIDs in front of. Wiring the old baked-material path onto the new settings object was not
+attempted — R5.4 replaces that whole path days from now, and every default cvar in the deleted
+group sat at its neutral value (`RoughBase`/etc. at `-1`, `MaterialOverrides` itself the only
+non-neutral one, gating a pass that no-ops when nothing else is turned), so the shipped render is
+provably identical with the mechanism gone: `bWanted` was false by default, `MaterialOverrides.Num()`
+stayed `0`, and the baked instances rendered exactly as authored either way. `docs/vtmb/reflections.md`
+and `docs/vtmb/sky-ambience.md` were updated to point at this task instead of the retired mechanisms;
+`docs/project/roadmap.md` 3.11 (which asked to "wire it or retire it") is marked landed as retired,
+its `plans/world.md` entry deleted per the docs house rule. → lands: zero taste values living in
+C++ literals or cvars.
 - **R4.6 First map on assets** [MP-3.4]. The per-map cutover flag; one hub converted and
   shot-diffed against R2.1. → lands: proof of the transport end-to-end.
 

@@ -415,6 +415,9 @@ void FElysiumCogWindow_Environment::RenderContent()
 	SliderCVar("Rain light response", TEXT("elysium.RainLightResponse"), 0.0f, 1.0f, "%.2f");
 	ImGui::TextDisabled(
 		"Writes the MPC and a Niagara user value. The unlit follow material does not sample it.");
+	// R4.5 retired the "Enhanced defaults" one-click preset that used to sit here: the seven values
+	// it hardcoded now live at `UElysiumWeatherSettings` (Project Settings -> Elysium -> Weather),
+	// and every one of them already has its own live slider above/below.
 	if (ImGui::Button("Source reference"))
 	{
 		WriteFloat(TEXT("elysium.RainEnhancement"), 0.0f);
@@ -424,18 +427,6 @@ void FElysiumCogWindow_Environment::RenderContent()
 			LightRig->SpecularScale = 0.0f;
 			LightRig->ApplyLiveTuning();
 		}
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Enhanced defaults"))
-	{
-		WriteFloat(TEXT("elysium.RainEnhancement"), 1.0f);
-		WriteFloat(TEXT("elysium.RainWetDarken"), 0.06f);
-		WriteFloat(TEXT("elysium.RainWetRoughness"), 0.10f);
-		WriteFloat(TEXT("elysium.RainLightResponse"), 0.25f);
-		WriteFloat(TEXT("elysium.RainSourceRetain"), 1.0f);
-		WriteFloat(TEXT("elysium.RainWetSpecular"), 0.50f);
-		WriteInt(TEXT("elysium.RainReflectionDebug"), 0);
-		WriteFloat(TEXT("elysium.EnvironmentWetnessScale"), 1.0f);
 	}
 
 	ImGui::SeparatorText("Reflection energy");
