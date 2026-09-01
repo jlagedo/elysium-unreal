@@ -464,6 +464,15 @@ reading; the R3.3 differ was re-run with each flag on (`producer_root` pointed a
   `sp_tutorial_1`, **121 of 121** on `sm_pawnshop_1`, and **800 of 802** on `sm_hub_1` — moving
   338/34/228 `.ents` entity rows off `byte_equal` (`entityDiffCount`; every difference is exactly
   the added `outputs[].extra` key, nothing else).
+- **`times` normalization** — no flag; already landed with exactly one owner. Legacy `.ents`
+  carries an authored `0` as literal `0`, not `-1`, so this divergence cannot be a producer flag
+  the way the other five are: the exporter must keep shipping the literal value, because
+  `ElysiumEntityDefs.cpp`'s def loader already applies the `0` → `-1` rewrite once, at read time
+  (`if (OutDef.Times == 0) { OutDef.Times = -1; }`, "normalised here rather than in the exporter,
+  so an already-exported corpus behaves"). A producer-side option here would give the normalization
+  two owners and risk a double-application; the field list's existing `times` rule
+  (`int(float())` with `-1` on failure) is therefore final, and this bullet exists only to record
+  that R3.4 checked it and found nothing left to land.
 
 ### Verification
 
