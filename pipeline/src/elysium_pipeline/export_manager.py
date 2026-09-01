@@ -626,6 +626,11 @@ POLICY_GENERATOR_OUTPUTS = {
         "Input/IMC_Player_Gamepad.uasset"),
     "make_dialogue_camera_set.py": ("Camera/DA_ElysiumDialogueCameraSet.uasset",),
     "make_boot_map.py": ("Boot.umap",),
+    # `make_missing()`'s two products (docs/project/seam_migration.md R1.6 follow-up): every
+    # `vtmb:missing-material:` sentinel slot in the model corpus binds `MI_V2_Missing`, so an
+    # umbrella rerun that silently failed to author it must not report complete.
+    "make_v2_materials.py": (
+        "Materials/V2/MI_V2_Missing.uasset", "Materials/V2/T_V2_MissingChecker.uasset"),
 }
 
 WORLD_MATERIAL_GENERATOR = "make_world_materials.py"

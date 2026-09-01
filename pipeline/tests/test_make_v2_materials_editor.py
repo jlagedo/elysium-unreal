@@ -54,6 +54,21 @@ class FakeNode:
         return SimpleNamespace(get_name=lambda: getattr(self.cls, "__name__", str(self.cls)))
 
 
+class FakeStruct:
+    """A minimal editor-property struct standing in for a value type such as
+    `MaterialInstanceBasePropertyOverrides` -- `get_editor_property`/`set_editor_property`
+    round-trip through a plain dict, nothing more."""
+
+    def __init__(self):
+        self.props = {}
+
+    def set_editor_property(self, name, value):
+        self.props[name] = value
+
+    def get_editor_property(self, name):
+        return self.props.get(name)
+
+
 class FakeAsset:
     def __init__(self, name, package, cls):
         self.name = name
@@ -68,6 +83,11 @@ class FakeAsset:
         self.props[name] = value
 
     def get_editor_property(self, name):
+        if name == "base_property_overrides":
+            # Struct property: the real editor hands back a live, mutable value the caller
+            # edits in place before writing it back with `set_editor_property` -- lazily
+            # materialize one rather than returning `None`, matching that shape.
+            return self.props.setdefault(name, FakeStruct())
         return self.props.get(name, [] if name in ("scalar_parameters", "vector_parameters") else None)
 
     def get_class(self):
@@ -196,6 +216,9 @@ class FakeMel:
     def set_material_instance_static_switch_parameter_value(
         self, mic, name, value, update_material_instance=True):
         mic.props.setdefault("switches", {})[name] = value
+
+    def set_material_instance_texture_parameter_value(self, mic, name, texture):
+        mic.props.setdefault("textures", {})[name] = texture
 
     def update_material_instance(self, mic):
         mic.props["updated"] = True

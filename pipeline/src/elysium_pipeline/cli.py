@@ -1868,6 +1868,11 @@ def import_materials(
         help="Only with --lookdev: review-set JSON to use instead of the tracked "
         "pipeline/unreal/lookdev_set.json.",
     ),
+    lookdev_props_set: str | None = typer.Option(
+        None, "--lookdev-props-set",
+        help="Only with --lookdev: props row-set JSON to use instead of the tracked "
+        "pipeline/unreal/lookdev_props_set.json.",
+    ),
     lookdev_allow_missing: bool = typer.Option(
         False, "--lookdev-allow-missing",
         help="Only with --lookdev: do not fail when a review-set entry's MI_ is not imported "
@@ -1890,15 +1895,21 @@ def import_materials(
             # the published GLB corpus nor a texture staging tree: it only lays out and saves a
             # map.
             report = unreal.make_lookdev_map(
-                config, runner, set_path=lookdev_set, allow_missing=lookdev_allow_missing
+                config, runner, set_path=lookdev_set, props_set_path=lookdev_props_set,
+                allow_missing=lookdev_allow_missing
             )
             if report:
                 missing = report.get("missing") or []
+                props_missing = report.get("propsMissing") or []
                 console.print(
                     f"lookdev map generated: {report.get('placed', 0)} placed, "
-                    f"{len(missing)} missing"
+                    f"{len(missing)} missing; {report.get('propsPlaced', 0)} props placed, "
+                    f"{len(props_missing)} props missing"
                 )
                 for row in missing[:10]:
+                    console.print(f"[yellow]  {row.get('label')}: {row.get('unit')}[/yellow]",
+                                  markup=True)
+                for row in props_missing[:10]:
                     console.print(f"[yellow]  {row.get('label')}: {row.get('unit')}[/yellow]",
                                   markup=True)
             else:

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0.0",
+  "entries": [
+    {
+      "label": "Bench (multi-LOD)",
+      "unit": "vtmb:model:scenery/furniture/bench/bencha",
+      "mesh": "/ElysiumBaked/Meshes/SM_models_scenery_furniture_bench_bencha"
+    },
+    {
+      "label": "Warrens floorblock (sentinel material)",
+      "unit": "vtmb:model:scenery/structural/warrens/floorblock",
+      "mesh": "/ElysiumBaked/Meshes/SM_models_scenery_structural_warrens_floorblock"
+    },
+    {
+      "label": "Candle (bbox collision)",
+      "unit": "vtmb:model:scenery/furniture/ascandle/ascandle",
+      "mesh": "/ElysiumBaked/Meshes/SM_models_scenery_furniture_ascandle_ascandle"
+    },
+    {
+      "label": "Sewer rat (skeletal-shape)",
+      "unit": "vtmb:model:character/monster/rat/rat",
+      "mesh": "/ElysiumBaked/Meshes/SM_models_character_monster_rat_rat"
+    },
+    {
+      "label": "Chandelier (multi-LOD, bbox)",
+      "unit": "vtmb:model:scenery/furniture/chandelier/chandelierb",
+      "mesh": "/ElysiumBaked/Meshes/SM_models_scenery_furniture_chandelier_chandelierb"
+    },
+    {
+      "label": "Coffee maker (multi-LOD, hull collision)",
+      "unit": "vtmb:model:scenery/furniture/coffemaker/coffemaker",
+      "mesh": "/ElysiumBaked/Meshes/SM_models_scenery_furniture_coffemaker_coffemaker"
+    }
+  ]
+}

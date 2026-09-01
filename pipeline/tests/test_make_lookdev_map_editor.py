@@ -189,6 +189,16 @@ def _entry(label, unit, material, shape):
     return {"label": label, "unit": unit, "material": material, "shape": shape}
 
 
+def _prop_entry(label, unit, mesh):
+    return {"label": label, "unit": unit, "mesh": mesh}
+
+
+def _write_props_set(tmp_path, entries, name="lookdev_props_set.json"):
+    path = tmp_path / name
+    path.write_text(json.dumps({"schemaVersion": "1.0.0", "entries": entries}), encoding="utf-8")
+    return path
+
+
 # --- the default tracked set loads and runs at import, and now fails loudly on missing ---------
 
 
@@ -207,7 +217,9 @@ def test_module_import_runs_the_default_tracked_set_and_fails_loudly():
             spec.loader.exec_module(module)
     assert failed.value.code == 1
     tracked = json.loads((REPO / "pipeline/unreal/lookdev_set.json").read_text(encoding="utf-8"))
-    entry_count = len(tracked["entries"])
+    tracked_props = json.loads(
+        (REPO / "pipeline/unreal/lookdev_props_set.json").read_text(encoding="utf-8"))
+    entry_count = len(tracked["entries"]) + len(tracked_props["entries"])
     assert len(editor.warnings) == entry_count      # every entry missing against an empty registry
     assert editor.saved == [(editor.worlds[0], module.DEFAULT_MAP_PATH)]
 
@@ -325,6 +337,93 @@ def test_missing_material_is_a_loud_placeholder_not_a_crash():
     assert "vtmb:material:nowhere/absent" in editor.warnings[0]
     label = next(a for a in editor.actors if a.class_name == "TextRenderActor")
     assert "[MISSING]" in label.text_render.props["text"]
+
+
+# --- props row (R1.6) -----------------------------------------------------------------------
+
+
+def test_props_row_position_continues_the_grid_pitch_below_start_row():
+    editor = FakeEditor()
+    module = _load(editor)
+    assert module.props_row_position(0, 3) == (0.0, 900.0)          # row 3, column 0
+    assert module.props_row_position(1, 3) == (300.0, 900.0)
+    assert module.props_row_position(8, 3) == (0.0, 1200.0)         # wraps into row 4
+
+
+def test_place_prop_entry_spawns_the_mesh_alone_with_no_plane_or_sphere():
+    editor = FakeEditor()
+    module = _load(editor)
+    mesh_path = "/ElysiumBaked/Meshes/SM_models_scenery_furniture_bench_bencha"
+    editor.assets[mesh_path] = FakeAsset(mesh_path)
+    entry = _prop_entry("Bench", "vtmb:model:scenery/furniture/bench/bencha", mesh_path)
+
+    placed = module.place_prop_entry(editor.actor_subsystem, 0, entry, 3)
+
+    assert placed is True
+    classes = [a.class_name for a in editor.actors]
+    assert classes == ["StaticMeshActor", "TextRenderActor"]        # no plane, no separate sphere
+    mesh_actor, label = editor.actors
+    assert mesh_actor.static_mesh_component.props["static_mesh"].path == mesh_path
+    assert "materials" not in mesh_actor.static_mesh_component.props  # no material override
+    assert label.text_render.props["text"] == "Bench"
+
+
+def test_place_prop_entry_missing_mesh_is_a_loud_placeholder_sphere():
+    editor = FakeEditor()
+    module = _load(editor)
+    entry = _prop_entry(
+        "Ghost prop", "vtmb:model:nowhere/absent", "/ElysiumBaked/Meshes/SM_nowhere_absent")
+
+    placed = module.place_prop_entry(editor.actor_subsystem, 0, entry, 3)
+
+    assert placed is False
+    sphere = editor.actors[0]
+    assert sphere.static_mesh_component.props["materials"][0].path == module.PLACEHOLDER_MATERIAL_PATH
+    assert len(editor.warnings) == 1
+    assert "vtmb:model:nowhere/absent" in editor.warnings[0]
+    label = next(a for a in editor.actors if a.class_name == "TextRenderActor")
+    assert "[MISSING]" in label.text_render.props["text"]
+
+
+def test_build_with_no_props_set_path_places_no_props_row(tmp_path):
+    """The default (`props_set_path=None`) shape every pre-existing caller relies on."""
+    editor = FakeEditor()
+    module = _load(editor)
+    material_path = "/ElysiumBaked/Materials/plaster/MI_609stuc"
+    editor.assets[material_path] = FakeAsset(material_path)
+    set_path = _write_set(tmp_path, [
+        _entry("Plaster wall", "vtmb:material:plaster/609stuc", material_path, "sphere")])
+
+    placed, missing = module.build(
+        str(set_path), "/ElysiumBaked/Lookdev/Materials", str(tmp_path / "lookdev_report.json"))
+
+    assert (placed, missing) == (1, 0)
+    assert not any((a.label or "").startswith("Prop_") for a in editor.actors)
+
+
+def test_build_places_a_props_row_below_the_material_grid(tmp_path):
+    editor = FakeEditor()
+    module = _load(editor)
+    material_path = "/ElysiumBaked/Materials/plaster/MI_609stuc"
+    editor.assets[material_path] = FakeAsset(material_path)
+    set_path = _write_set(tmp_path, [
+        _entry("Plaster wall", "vtmb:material:plaster/609stuc", material_path, "sphere")])
+    mesh_path = "/ElysiumBaked/Meshes/SM_models_scenery_furniture_bench_bencha"
+    editor.assets[mesh_path] = FakeAsset(mesh_path)
+    props_set_path = _write_props_set(
+        tmp_path, [_prop_entry("Bench", "vtmb:model:scenery/furniture/bench/bencha", mesh_path)])
+
+    placed, missing = module.build(
+        str(set_path), "/ElysiumBaked/Lookdev/Materials", str(tmp_path / "lookdev_report.json"),
+        str(props_set_path))
+
+    assert (placed, missing) == (2, 0)                                # 1 material bay + 1 prop
+    prop_actor = next(a for a in editor.actors if a.label == "Prop_00_Bench")
+    # start_row = ceil(1/8) + PROPS_ROW_GAP = 1 + 1 = 2, one row below the single-bay grid.
+    assert prop_actor.location == (0.0, 2 * module.GRID_PITCH_CM, 0.0)
+    report = json.loads((tmp_path / "lookdev_report.json").read_text(encoding="utf-8"))
+    assert report["propsPlaced"] == 1
+    assert report["propsMissing"] == []
 
 
 # --- WorldSettings.default_game_mode is the boot-plan bypass ------------------------------------
@@ -513,10 +612,14 @@ def test_main_honours_command_line_overrides(tmp_path):
     editor.assets[material_path] = FakeAsset(material_path)
     set_path = _write_set(
         tmp_path, [_entry("Plaster wall", "vtmb:material:plaster/609stuc", material_path, "sphere")])
+    mesh_path = "/ElysiumBaked/Meshes/SM_models_scenery_furniture_ascandle_ascandle"
+    editor.assets[mesh_path] = FakeAsset(mesh_path)
+    props_set_path = _write_props_set(
+        tmp_path, [_prop_entry("Candle", "vtmb:model:scenery/furniture/ascandle/ascandle", mesh_path)])
     report_path = tmp_path / "custom_report.json"
     editor.command_line = (
-        '"-LookdevSet=%s" "-LookdevMap=/Test/CustomMap" "-LookdevReport=%s"'
-        % (set_path, report_path)
+        '"-LookdevSet=%s" "-LookdevPropsSet=%s" "-LookdevMap=/Test/CustomMap" "-LookdevReport=%s"'
+        % (set_path, props_set_path, report_path)
     )
 
     module.main()

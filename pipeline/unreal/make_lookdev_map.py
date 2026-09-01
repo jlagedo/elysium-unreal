@@ -22,13 +22,24 @@ hides a material's real values, plus a `PlayerStart` so PIE has somewhere to spa
 -- the boot-plan bypass `phase4_mechanics.md` names, so PIE does not travel off the generated map
 through `AElysiumGameMode::BeginPlay` -> `NotifyWorldReady` -> `EnterFrontEnd`. No C++ change.
 
+Below the material grid, one more row (R1.6, `docs/project/seam_migration.md` -> Roadmap ->
+"R1.6 Verify + lookdev") carries a handful of the props lane's own baked `SM_` meshes, read from
+`-LookdevPropsSet=` (default `lookdev_props_set.json`, tracked). Each prop stands on its own --
+no plane tile, no material override, since the point is to look at the mesh the props importer
+actually baked, materials and all -- and a mesh that does not resolve gets the same loud
+placeholder sphere the material grid uses, rather than an invisible gap. `props_set_path=None`
+(the default for every direct `build()` call other than `main()`'s own) skips the row entirely,
+so nothing here changes the material-grid-only shape existing callers already rely on.
+
 Command line:
   -LookdevSet=<path>          review-set JSON (default: pipeline/unreal/lookdev_set.json, tracked)
+  -LookdevPropsSet=<path>     props row-set JSON (default: pipeline/unreal/lookdev_props_set.json,
+                               tracked)
   -LookdevMap=<path>          destination package path (default: /ElysiumBaked/Lookdev/Materials)
   -LookdevReport=<path>       OS path for `lookdev_report.json` (default: a temp-dir path; the
                                real launcher, `elysium_pipeline.unreal.make_lookdev_map`, always
                                passes one under `$ELYSIUM_WORK_ROOT/reports/lookdev/`)
-  -LookdevAllowMissing=1      do not fail the run when a review-set entry's `MI_` is missing
+  -LookdevAllowMissing=1      do not fail the run when a review-set entry's `MI_`/`SM_` is missing
 
 `pipeline/CLAUDE.md` documents the convention this script follows: `main()` runs at module scope,
 with no `if __name__ == "__main__":` guard, exactly like `make_player_anim_bp.py` -- the commandlet
@@ -81,7 +92,11 @@ LABEL_Z_CM = 20.0
 LABEL_WORLD_SIZE = 20.0
 
 DEFAULT_SET_PATH = os.path.join(os.path.dirname(__file__), "lookdev_set.json")
+DEFAULT_PROPS_SET_PATH = os.path.join(os.path.dirname(__file__), "lookdev_props_set.json")
 DEFAULT_MAP_PATH = "/ElysiumBaked/Lookdev/Materials"
+#: One blank row of clearance between the material grid's last row and the props row below it, so
+#: a prop's own label never overlaps the material grid's last bay.
+PROPS_ROW_GAP = 1
 #: Only used when nobody passes `-LookdevReport=`; the real launcher
 #: (`elysium_pipeline.unreal.make_lookdev_map`) always does, so this is a fallback for a bare
 #: manual run, not a location anything durable should read from.
@@ -201,6 +216,22 @@ def _spawn_mesh(actors, mesh_path, location, label):
     return actor, component
 
 
+def _place_label(actors, x, y, label, placed, actor_label):
+    """The bay/row label shared by `place_entry` and `place_prop_entry`: a `TextRenderActor` in
+    front of the bay (toward the aisle), suffixed `MISSING_SUFFIX` when nothing real was found."""
+    text_actor = actors.spawn_actor_from_class(
+        unreal.TextRenderActor, unreal.Vector(x, y - LABEL_FRONT_OFFSET_CM, LABEL_Z_CM),
+        unreal.Rotator(0.0, LABEL_YAW_DEGREES, 0.0))
+    text_actor.set_actor_label(actor_label)
+    text_component = text_actor.text_render
+    display_label = label if placed else label + MISSING_SUFFIX
+    text_component.set_editor_property("text", unreal.Text(wrap_label(display_label)))
+    text_component.set_editor_property("world_size", LABEL_WORLD_SIZE)
+    text_component.set_editor_property(
+        "horizontal_alignment", unreal.HorizTextAligment.EHTA_CENTER)
+    return text_actor
+
+
 def place_entry(actors, index, entry):
     """Spawn one bay's plane, sphere (if any) and label. Returns True iff its MI_ was found."""
     x, y = grid_position(index)
@@ -232,16 +263,40 @@ def place_entry(actors, index, entry):
             "Sphere_%02d_%s" % (index, label))
         apply(sphere_component)
 
-    text_actor = actors.spawn_actor_from_class(
-        unreal.TextRenderActor, unreal.Vector(x, y - LABEL_FRONT_OFFSET_CM, LABEL_Z_CM),
-        unreal.Rotator(0.0, LABEL_YAW_DEGREES, 0.0))
-    text_actor.set_actor_label("Label_%02d" % index)
-    text_component = text_actor.text_render
-    display_label = label if placed else label + MISSING_SUFFIX
-    text_component.set_editor_property("text", unreal.Text(wrap_label(display_label)))
-    text_component.set_editor_property("world_size", LABEL_WORLD_SIZE)
-    text_component.set_editor_property(
-        "horizontal_alignment", unreal.HorizTextAligment.EHTA_CENTER)
+    _place_label(actors, x, y, label, placed, "Label_%02d" % index)
+
+    return placed
+
+
+def props_row_position(index, start_row):
+    """(x, y) centre of the props row's `index`-th bay -- the same `GRID_COLUMNS` pitch as the
+    material grid, continued `start_row` rows below it rather than mixed into its bays."""
+    column = index % GRID_COLUMNS
+    row = start_row + index // GRID_COLUMNS
+    return column * GRID_PITCH_CM, row * GRID_PITCH_CM
+
+
+def place_prop_entry(actors, index, entry, start_row):
+    """Spawn one baked props-lane `SM_` on its own -- no plane tile, no material override, since
+    the point of this row is the mesh the props importer actually baked, materials and all.
+    Returns True iff its `SM_` was found; a miss lands on the same loud placeholder sphere +
+    material the review grid falls back to, rather than an invisible gap."""
+    x, y = props_row_position(index, start_row)
+    label = entry["label"]
+    mesh_path = entry.get("mesh")
+    mesh = unreal.load_asset(mesh_path) if mesh_path else None
+    placed = mesh is not None
+    if placed:
+        _spawn_mesh(actors, mesh_path, unreal.Vector(x, y, 0.0), "Prop_%02d_%s" % (index, label))
+    else:
+        warn("%s: mesh asset not found: %s (placed on a loud placeholder sphere)" % (
+            entry.get("unit", label), mesh_path))
+        _, sphere_component = _spawn_mesh(
+            actors, SPHERE_MESH_PATH, unreal.Vector(x, y, SPHERE_Z),
+            "Prop_%02d_%s" % (index, label))
+        sphere_component.set_material(0, unreal.load_asset(PLACEHOLDER_MATERIAL_PATH))
+
+    _place_label(actors, x, y, label, placed, "PropLabel_%02d" % index)
 
     return placed
 
@@ -315,15 +370,22 @@ def place_rig(actors, centroid=(0.0, 0.0)):
     start.set_actor_label("PlayerStart")
 
 
-def _write_report(report_path, map_path, placed, missing_details, actor_labels):
-    """`lookdev_report.json`: `{map, placed, missing: [...], actors: [...]}`. Read back by
-    `elysium_pipeline.unreal.make_lookdev_map` (and, through it, the CLI) so the owner sees the
-    same placed/missing counts this run's log already carries, without scraping the log."""
+def _write_report(report_path, map_path, placed, missing_details, actor_labels,
+                  props_placed=0, props_missing_details=None):
+    """`lookdev_report.json`: `{map, placed, missing: [...], actors: [...], propsPlaced,
+    propsMissing: [...]}`. Read back by `elysium_pipeline.unreal.make_lookdev_map` (and, through
+    it, the CLI) so the owner sees the same placed/missing counts this run's log already carries,
+    without scraping the log. `placed`/`missing` stay the material-grid-only counts a caller that
+    never passes `props_set_path` already reads; the props row's own counts ride the two new keys
+    alongside them rather than folding in, so neither shape has to guess which row a number came
+    from."""
     payload = {
         "map": map_path,
         "placed": placed,
         "missing": missing_details,
         "actors": actor_labels,
+        "propsPlaced": props_placed,
+        "propsMissing": props_missing_details or [],
     }
     directory = os.path.dirname(report_path)
     if directory:
@@ -333,7 +395,11 @@ def _write_report(report_path, map_path, placed, missing_details, actor_labels):
         handle.write("\n")
 
 
-def build(set_path, map_path, report_path=None):
+def build(set_path, map_path, report_path=None, props_set_path=None):
+    """`props_set_path=None` (every direct call other than `main()`'s own) places no props row at
+    all -- the material-grid-only shape this function has always had. Passing one places a
+    props row `PROPS_ROW_GAP` rows below the material grid, from that JSON's own `entries`
+    (`place_prop_entry`'s shape, `label`/`unit`/`mesh`)."""
     entries = load_review_set(set_path)
 
     world = unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
@@ -353,6 +419,21 @@ def build(set_path, map_path, report_path=None):
                 "material": entry.get("material"),
             })
 
+    props_placed = 0
+    props_missing_details = []
+    if props_set_path:
+        prop_entries = load_review_set(props_set_path)
+        start_row = math.ceil(len(entries) / GRID_COLUMNS) + PROPS_ROW_GAP
+        for index, entry in enumerate(prop_entries):
+            if place_prop_entry(actors, index, entry, start_row):
+                props_placed += 1
+            else:
+                props_missing_details.append({
+                    "label": entry.get("label"),
+                    "unit": entry.get("unit"),
+                    "mesh": entry.get("mesh"),
+                })
+
     place_rig(actors, grid_centroid(len(entries)))
 
     # The boot-plan bypass (phase4_mechanics.md -> "6."): pin this generated map's own game mode
@@ -366,27 +447,30 @@ def build(set_path, map_path, report_path=None):
 
     actor_labels = [actor.get_actor_label() for actor in actors.get_all_level_actors()]
     _write_report(report_path or DEFAULT_REPORT_PATH, map_path, placed, missing_details,
-                  actor_labels)
+                  actor_labels, props_placed, props_missing_details)
 
-    missing = len(missing_details)
-    log("%s: %d entr%s placed, %d missing (%s)" % (
-        map_path, placed, "y" if placed == 1 else "ies", missing, set_path))
-    return placed, missing
+    missing = len(missing_details) + len(props_missing_details)
+    log("%s: %d entr%s placed, %d missing, %d prop%s placed, %d prop%s missing (%s)" % (
+        map_path, placed, "y" if placed == 1 else "ies", len(missing_details),
+        props_placed, "" if props_placed == 1 else "s",
+        len(props_missing_details), "" if len(props_missing_details) == 1 else "s", set_path))
+    return placed + props_placed, missing
 
 
 def main():
     set_path = cmdline_arg("LookdevSet", DEFAULT_SET_PATH)
+    props_set_path = cmdline_arg("LookdevPropsSet", DEFAULT_PROPS_SET_PATH)
     map_path = cmdline_arg("LookdevMap", DEFAULT_MAP_PATH)
     report_path = cmdline_arg("LookdevReport", DEFAULT_REPORT_PATH)
     allow_missing = flag(cmdline_arg("LookdevAllowMissing", "0"))
     try:
-        placed, missing = build(set_path, map_path, report_path)
+        placed, missing = build(set_path, map_path, report_path, props_set_path)
     except (OSError, ValueError, RuntimeError) as exc:
         unreal.log_error("[lookdev] refused: %s" % exc)
         raise SystemExit(1)
     if missing and not allow_missing:
         unreal.log_error(
-            "[lookdev] %d of %d entries have no real MI_ asset yet; rerun with "
+            "[lookdev] %d of %d entries have no real MI_/SM_ asset yet; rerun with "
             "-LookdevAllowMissing=1 to accept placeholders, or import the corpus first "
             "(see %s)" % (missing, placed + missing, report_path))
         raise SystemExit(1)
