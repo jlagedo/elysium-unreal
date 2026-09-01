@@ -24,3 +24,7 @@ as a playable game — **remastered** — on **Unreal Engine 5.8 + C++**.
   `Content/ElysiumAuthored/**` - Manual authored assets git tracked
   `Content/ElysiumGenerated/**` - Generated content from pipeline (vtmb based or generated helpers)
 - `Plugins/` — assets directly generated from VTMB install and baked into Unreal Assets.
+
+## Project rules
+
+- Save game files are disposable, we have not released and don't try to migrate or keep compatibility
