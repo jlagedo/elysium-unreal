@@ -128,6 +128,7 @@ All under `$ELYSIUM_EXPORT_ROOT/<map>/`. Formats are fixed by the pipeline:
 | `.decals` | infodecal projectors: `material centre normal s_dir t_dir hw hh` (one deferred UDecalComponent per line) | text, Unreal cm (dirs unit; extents cm) |
 | `.ropes` | move_rope/keyframe_rope cables, chain-resolved to segments: `tex ax ay az bx by bz width_cm rest_cm nodes texscale flags` (one UCableComponent per line) | text, Unreal cm (width/rest cm; `rest_cm` is the RE'd simulated rest length and may be shorter than the span — a taut cable; `-` tex = decode miss) |
 | `npc/*.eskm` | skeletal characters (mdl_skel → UE_mdl_skeletal) | ESKM container |
+| `.ready` | the export-readiness marker: presence means every sidecar `Travel` depends on is complete on disk (`map-architecture.md` → "The export-readiness gate", R2.4). Written only by the R3.2 producer `exporters/UE_map_sidecars.py`; the legacy exporter never emits it | empty file, presence-only |
 
 ---
 

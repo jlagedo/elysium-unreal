@@ -974,6 +974,68 @@ pins the solver (box corners with a bevel side ignored, dedupe under a duplicate
 lives — the join itself is proven; the float32 rule and the `la_hub_1` overflow both want asserting
 in the R3.3 differ; the invariant was verified on three maps, not 108.
 
+**The producer emits the legacy sidecars, byte for byte bar one (2026-08-31).** R3.2/MP-2.2
+(`pipeline/src/elysium_pipeline/exporters/UE_map_sidecars.py`, one new pytest module, no game
+change, no legacy file touched). The producer reads a map's root, entities and lighting units and
+writes `.ents`, `.hulls`, `.dispcol`, `.lights`, `.env`, `.sky`, `.spawn`, `.ropes` plus the R2.4
+`<map>.ready` marker into `$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/` — a separate tree from the
+legacy export root, so nothing it writes can shadow a legacy sidecar. It takes the `UE_` prefix
+because it emits Unreal-native centimetres (`pipeline/CLAUDE.md` → "Coordinate contract"); it is
+run directly (`uv run python -m elysium_pipeline.exporters.UE_map_sidecars <map>…`), not wired into
+`uv run elysium`, mirroring `map_census`. The visibility unit is listed in `unit_paths` for
+completeness and read by nothing: no sidecar in this set needs a lump it owns. The nav-graph seam
+is likewise untouched — the legacy exporter reads none of it.
+
+**Result on the three-map corpus, against the sidecars `UE_bsp_to_scene.py` wrote:** 21 of the 23
+files byte-identical — `.ents`, `.hulls`, `.lights`, `.env`, `.sky`, `.spawn`, `.ropes` on all
+three maps; the two `.dispcol` (only `sp_tutorial_1` and `sm_hub_1` have one) are the exception —
+**4,119,685 bytes identical**, including 4,933 `.ents` entity rows, 7,589 world brush hulls
+(2,371 + 1,376 + 3,842,
+with 190/12/69 3D-skybox brushes dropped), 1,244 worldlights, and 167 rope segments. Run time 8 s
+for all three maps.
+
+Three legacy facts the port had to reproduce that the R3.1 field list did not name, all found by
+the byte diff and none of them a choice made here. **(1) Line endings.** Every legacy writer is a
+bare `open(path, "w")`, so the shipped sidecars carry CRLF; forcing LF shortened
+`sm_pawnshop_1.hulls` by exactly its 1,376 rows. **(2) The entity lump is read as text, and the
+text is not what the entities unit publishes.** `sm_hub_1`'s block 1611 `logic_auto` authors
+`setArea(\"santa_monica\")` inside an output value; the legacy pair regex `"([^"]*)"\s+"([^"]*)"`
+stops at the escaped quote and re-pairs the rest of the block, so the shipped `.ents` loses that
+entity's `origin` (it emits `[0,0,0]`) and gains a key spelled `),`. The producer therefore
+reconstructs the lump text from the unit's ordered `keyValues[]` and runs the legacy regexes
+verbatim, rather than reading the unit structurally and silently "fixing" the entity. **(3) The
+escapes have to go back in**: the unit's lexer unescapes `\"`, so the reconstruction re-escapes and
+checks every keyvalue against the unit's own `byteLength` — an escape rule that does not round-trip
+raises instead of quietly producing a different lump. That check passed on all 4,933 entities.
+
+**One measured divergence, and it is a seam limit rather than a port defect: `.dispcol`.** The
+legacy exporter builds each displacement grid vertex in binary64 from the VERTEXES and DISP_VERTS
+lumps. The root unit publishes neither numerically — a displacement face contributes no
+world-scene vertices (`map_glb/decode.py`: "the displacement mesh states this face's geometry")
+and `displacements[]` carries no `vector`/`dist` rows — so the only published form of that geometry
+is the displacement mesh's float32 `POSITION` accessor. Row count and row order reproduce exactly
+(3,584 rows on `sp_tutorial_1`, 288 on `sm_hub_1`), and the binary32 rule brings the values within
+0.0019 cm, but that still moves the 4th decimal the sidecar prints: 228 of 3,584 and 100 of 288
+rows come out byte-identical, 17,908 of 32,256 and 372 of 2,592 printed floats differ, max |Δ|
+0.0019 cm and 0.0006 cm. This is the second pre-declared divergence after R3.1's `la_hub_1`
+`planenum` overflow, and R3.3's differ must expect it by name. **Open decision for R3.4:** publish
+DISP_VERTS (or the raw VERTEXES table) numerically in the map root unit so `.dispcol` becomes
+byte-reproducible, or accept the 4th-decimal divergence as named. Nothing here decides that.
+
+`pipeline/tests/test_map_sidecars.py` pins the four pure functions a whole-map differ could only
+report as an unexplained delta — the hull solver's bevel skip and its `<4`-sides abstain, the
+output splitter's four legacy field rules (`param` unstripped, `delay` via `float()`, `times` to
+`-1`, `extra` dropped), the binary32 coordinate inversion (1.5 Source inches does not return
+bit-exactly in binary64 and does in binary32; plus a plane row's normal/distance split), and the
+entity-lump reconstruction of the embedded quote. 5 passed in 0.18 s; `test_map_producer_join.py`
+and `test_contracts.py` re-run green beside them (68 passed in 2.25 s). Follow-ups: `.ready` now
+has a writer, so R2.4's "untested against a real producer" is closed for these three maps only;
+`.sprites`, `.props`, `.decals`, `.water`, `.cube`, the `.obj`/`.mtl`/`.blend` set and the
+`brushes/` meshes are still legacy-only and are R5.1's, not this task's; the `.env` `skybox` flag
+and the `.ropes` material files resolve against the shared corpus (`UE_extract_corpus`'s output,
+not the map exporter's), which is what the legacy exporter did and what survives R3.5; the run
+covered 3 maps of 108, and `la_hub_1` is expected to diverge by name.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1022,14 +1084,21 @@ and tolerances, the hull-frame invariant (verified on `sm_pawnshop_1`'s `havenrm
 the join reproduces the legacy hulls, contents, `blocks_player`, `brush_mesh` and `sky` exactly from
 the V2 units on the three test maps. Numbers in the Settled entry "The `.ents` join is stated, and
 reproduced from the V2 units".
-- **R3.2 Producer emits legacy sidecars** [MP-2.2]. `map_sidecars` reads the four map units (+
-  the nav-graph seam) and emits byte-comparable `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/
-  `.sky`/`.spawn`/`.ropes`. → lands: the new source proven with zero game change.
+**R3.2 landed (2026-08-31)** [MP-2.2] — `exporters/UE_map_sidecars.py` reads a map's root,
+entities and lighting units and writes `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/`.sky`/
+`.spawn`/`.ropes` plus the R2.4 `.ready` marker into `$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/`.
+21 of the 23 files byte-identical to the legacy sidecars on the three test maps (4,119,685 bytes);
+the two `.dispcol` are the one divergence and it is a seam-precision limit. Numbers in the Settled entry
+"The producer emits the legacy sidecars, byte for byte bar one".
 - **R3.3 The differ** [MP-2.3]. All 108 maps against the legacy exporter; hull vertex counts and
-  AABBs compared explicitly. → lands: byte-equal or named-divergence-only.
+  AABBs compared explicitly. Two divergences are pre-declared and must be expected by name:
+  `la_hub_1`'s signed-`planenum` hulls (R3.1) and `.dispcol`'s 4th decimal on the 48 maps that
+  have displacements (R3.2). → lands: byte-equal or named-divergence-only.
 - **R3.4 Named divergences, one commit each** [MP-2.4]. Datamap output typing (+
   `FElysiumSaveVersion` bump, the `OutputTimesRemaining` gate made loud), key folding, `param`
-  stripping, `delay` atof, `extra`, `times` normalization ownership. → lands: each divergence
+  stripping, `delay` atof, `extra`, `times` normalization ownership. Plus the two the port
+  surfaced: `.dispcol` precision (publish DISP_VERTS numerically in the map root unit, or accept
+  the named divergence) and `sm_hub_1`'s embedded-quote entity block. → lands: each divergence
   shot-diffed and pinned.
 - **R3.5 Legacy exporter retired** [MP-2.5]. `.weather`/`.particles` re-pointed;
   `UE_bsp_to_scene.py` deleted. → lands: one exporter.
