@@ -755,9 +755,16 @@ for the three-map test corpus real-RHI at DX12/SM6, 2560×1440: `sp_tutorial_1` 
 a same-commit re-diff proved the comparator end to end — 14 vantage(s) compared, 0 over the
 default 0.5%-changed / 2-level tolerance. This is a regression witness only, per the "wire first,
 tune later" rule below: nothing here judges a look, only whether a later change moved one.
-`pipeline/tests/test_shots_diff.py` (5 tests) pins the `baseline.json` shape (the three keys, the
-sorted camera list, an excluded failed capture), `git_commit`'s unknown-outside-a-checkout and
-real-HEAD cases, and a `--save` integration case that writes the file for real.
+The comparator reads that `baseline.json` back on every diff and names the baseline commit and
+camera count in each map's header (`sm_hub_1: (baseline 8077e5b5f902, 4 cam)`), says so explicitly
+when a baseline predates R2.1, and degrades to a per-map "manifest unreadable" line on a
+truncated or mis-encoded manifest instead of aborting the run (`fd2087fd`, `98d3b942`).
+`pipeline/tests/test_shots_diff.py` pins the `baseline.json` shape (the three keys, the sorted
+camera list, an excluded failed capture), `git_commit`'s unknown-outside-a-checkout and real-HEAD
+cases, a `--save` integration case that writes the file for real, and the three header branches
+(named commit, pre-R2.1, corrupt manifest). Known gap: `compare()` — the pixel-diff core — still
+has no direct unit coverage; the shape-mismatch and changed-percent branches are exercised only by
+the real-data run.
 
 ## Roadmap — one pipeline
 
