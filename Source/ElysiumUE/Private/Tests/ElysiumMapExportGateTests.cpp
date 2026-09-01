@@ -7,10 +7,12 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumMapTransportSettings.h"
 #include "Tests/ElysiumScratchContentRoot.h"
 
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
+#include "UObject/UObjectGlobals.h"
 
 static constexpr EAutomationTestFlags GElysiumMapExportGateTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -99,6 +101,45 @@ bool FElysiumMapExportGateMarkerIsPresenceOnlyTest::RunTest(const FString&)
 	IFileManager::Get().MakeDirectory(*FElysiumContentPaths::MapExportReady(OtherMap), /*Tree*/ true);
 	TestFalse(TEXT("a directory at the marker's path does not satisfy the gate"),
 		UElysiumMapSubsystem::HasTravelableExport(OtherMap));
+
+	return true;
+}
+
+// R5.1 narrows the `.obj` half of the gate: once a map is on `MapsOnV2Models` nothing reads its
+// `.obj`, so a stale one left on disk from an older export must not vouch for the sidecars beside
+// it (`docs/architecture/seam_map_map.md` -> "## Import -- geometry and placements" -> "Travel's
+// gate follows the same flag"). The marker still accepts on either lane -- the branch is about
+// which artifact is EVIDENCE, not about which maps may travel.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapExportGateObjOnlyCountsOffTheV2LaneTest,
+	"Elysium.Substrate.MapExportGateObjOnlyCountsOffTheV2Lane", GElysiumMapExportGateTestFlags)
+bool FElysiumMapExportGateObjOnlyCountsOffTheV2LaneTest::RunTest(const FString&)
+{
+	FElysiumScratchContentRoot Scratch(TEXT("MapExportGateObjOnlyCountsOffTheV2Lane"));
+	if (!TestTrue(TEXT("the scratch content root installed"), Scratch.IsInstalled()))
+	{
+		return false;
+	}
+
+	static const FString Map(TEXT("sm_gatetest_4"));
+	IFileManager::Get().MakeDirectory(*FElysiumContentPaths::MapDir(Map), /*Tree*/ true);
+	TestTrue(TEXT("writing the .obj"), TouchFile(FElysiumContentPaths::MapObj(Map)));
+	TestTrue(TEXT("off the V2 lane, the legacy .obj alone accepts the map"),
+		UElysiumMapSubsystem::HasTravelableExport(Map));
+
+	UElysiumMapTransportSettings* Settings = GetMutableDefault<UElysiumMapTransportSettings>();
+	const TArray<FName> Was = Settings->MapsOnV2Models;
+	Settings->MapsOnV2Models.Add(FName(*Map));
+
+	TestFalse(TEXT("on the V2 lane, a stale .obj alone no longer accepts the map"),
+		UElysiumMapSubsystem::HasTravelableExport(Map));
+	TestTrue(TEXT("writing the readiness marker"),
+		TouchFile(FElysiumContentPaths::MapExportReady(Map)));
+	TestTrue(TEXT("on the V2 lane, the readiness marker accepts the map"),
+		UElysiumMapSubsystem::HasTravelableExport(Map));
+
+	Settings->MapsOnV2Models = Was;
+	TestTrue(TEXT("back off the V2 lane, the map still travels"),
+		UElysiumMapSubsystem::HasTravelableExport(Map));
 
 	return true;
 }

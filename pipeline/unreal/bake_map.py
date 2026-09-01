@@ -27,7 +27,9 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
+from pipeline.unreal import bake_map_v2 as v2  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
+from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import placed_models as PM, shared_corpus as SC  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 from elysium_pipeline.tasking import ContentDigestCache, DIGEST_CACHE_FILE  # noqa: E402
@@ -2239,9 +2241,18 @@ def bake_corpus(digest_cache, force=False):
 
 
 def bake_one(map_name, digest_cache, force=False):
-    """Bake one map in the current editor process."""
+    """Bake one map in the current editor process.
+
+    Which lane authors its geometry and placements is the tracked per-map flag's call, never this
+    process's: a map listed under `MapsOnV2Models` in `Config/DefaultElysium.ini` is authored from
+    its published root unit (R5.1, `bake_map_v2`), and every other map keeps the legacy `.obj`/
+    `.props` path byte for byte (`docs/architecture/seam_map_map.md` -> "## Import -- geometry and
+    placements (R5.1)").
+    """
     tracker = AssetTracker(map_name, digest_cache, force=force)
-    bake = Bake(map_name, tracker, digest_cache)
+    on_v2 = map_transport.is_map_on_v2_models(map_name)
+    log("%s: %s lane" % (map_name, "V2 (map root unit)" if on_v2 else "legacy (.obj/.props)"))
+    bake = (v2.bake_class() if on_v2 else Bake)(map_name, tracker, digest_cache)
     if not bake.load_masters() or not bake.load_sources():
         return False
     bake.stage_textures()
@@ -2262,6 +2273,14 @@ def bake_one(map_name, digest_cache, force=False):
         return False
     log("%s done" % map_name)
     return True
+
+
+# The V2 lane builds its `Bake` subclass on this module's own classes and constants, so it is handed
+# this namespace rather than importing it -- `bake_map` is an editor script that calls `main()` at
+# module scope, and importing it a second time would run a second bake. It is `globals()` rather
+# than `sys.modules[__name__]` because `-run=pythonscript` execs the script into a namespace that is
+# not the interpreter's `__main__` module.
+v2.bind(globals())
 
 
 #: Whether this launch authors the map's Niagara systems, set from `-BakeParticles=1`.

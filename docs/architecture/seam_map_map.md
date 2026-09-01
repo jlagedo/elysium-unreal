@@ -896,3 +896,155 @@ once all 108 maps are converted and listed.
 All three maps carry all three sidecars, so all three assets have `bHasSkyMiniature = true` and
 `bHasSpawn = true`; the identity/absent paths above are exercised by
 `Elysium.Substrate.MapEnvironment.*`'s synthetic assets, not by this corpus slice.
+
+## Import — geometry and placements
+
+R5.1 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves a map's **geometry** and
+its **static-prop placements** off the legacy `<map>.obj`, `<map>_sky.obj`, `brushes/*.obj` and
+`<map>.props` sidecars and onto the published map root unit — the `world`, `brushModels`,
+`displacements` and `placements` scenes this document defines above. It is the first task that
+authors a map from the corpus rather than from the legacy exporter's own intermediate files.
+
+**Geometry only, and props onto the R1 corpus.** Materials are R5.4's, the sky dome is R5.2's,
+reflection captures are R5.5's and lights are R5.6's; this lane changes where the triangles and the
+placements come from and nothing else. A V2 surface therefore binds the *same*
+`MaterialInstanceConstant` the legacy surface bound, resolved through the same `<map>.mtl` table, so
+a shot-diff of this task sees geometry, not shading.
+
+### Identity and naming
+
+```text
+$ELYSIUM_EXPORT_V2_ROOT/maps/<map>.glb        (vtmb:map:<map>, the root unit)
+  -> /ElysiumBaked/<map>/Meshes/SM_World_<cx>_<cy>_<cz>      world chunks (T_ prefix: non-Nanite)
+  -> /ElysiumBaked/<map>/Meshes/SM_Sky_<cx>_<cy>_<cz>        3D-skybox miniature chunks
+  -> /ElysiumBaked/<map>/Brushes/SM_brush_<n>                one local-pivot mesh per BSP submodel
+  -> /ElysiumBaked/<map>/<map>.umap                          placements, on /ElysiumBaked/Meshes/SM_*
+```
+
+Every asset path, chunk key, slot name and brush stem is the legacy lane's, unchanged: this is a
+change of **producer**, not of layout, so a map can be moved between the two lanes without renaming
+a single asset and the runtime's `brush_mesh` join keeps resolving. The offline half is
+`elysium_pipeline.importers.map_geometry` (no editor, so pytest walks a real map); the editor half is
+`pipeline/unreal/bake_map_v2.py`, a `bake_map.Bake` subclass that replaces two inputs and one stage.
+
+**The split is forced, not stylistic.** Reading the unit needs `numpy` — the sky-area BSP walk and
+the accessor decode — and Unreal's embedded CPython does not carry it. So the read runs offline, in
+the `uv` interpreter, and writes one `manifest.json` plus one packed little-endian vertex file per
+map under `$ELYSIUM_WORK_ROOT/import/map_geometry/<map>/`; the editor half reads that pair with
+`json`, `struct` and `array` alone. The stage runs from `unreal.bake_maps`, immediately before the
+commandlet launches and only for maps on the flag, so the bake's inputs and the published unit can
+never be a version apart — it costs about 1.5 s per map. This is the offline-stage / editor-import
+shape the model, material and texture lanes already have.
+
+**One classifier, not two.** The world / 3D-sky / brush-model face split, the sub-three-edge and
+missing-texinfo drops, the `tools/` namespace drop (`tools/black` and `tools/toolsblack` excepted),
+the `func_areaportalwindow` backing-model drop, and the sky-area membership test are the R3.2
+producer's own (`exporters.UE_map_sidecars.prepare_join`), imported rather than re-derived. Two
+implementations of "which faces are the miniature" is exactly the divergence R3.3 exists to catch,
+and the map bake and the `.hulls`/`.ents` sidecars have to agree by construction.
+
+### The frame
+
+The unit publishes glTF metres, Y-up, right-handed; the bake wants Unreal centimetres, Z-up,
+left-handed. `(x, y, z)_gltf -> (x, z, y)_unreal x 100` is a reflection, so every triangle's winding
+is reversed on the way out — the same reversal `UE_bsp_to_scene` applied at OBJ-write time and for
+the same reason (`formats.bsp.source_to_unreal`). A rotation composes the unit's own
+`(x, y, z, w)_gltf = (x, z, -y, w)_source` with `source_quat_to_unreal`'s `(-x, y, -z, w)`, giving
+`(-x, -z, -y, w)` — the legacy `.props` quaternion up to the overall sign a quaternion is free in.
+
+**UVs.** `TEXCOORD_0` is the unit's own planar projection, normalized by the TEXDATA size, which is
+the legacy `emit()` formula unchanged. A **displacement** primitive carries `POSITION`, `NORMAL` and
+`_ALPHA` and no `TEXCOORD_0` — the unit states the sculpted geometry, not its albedo frame — so this
+lane recomputes the grid's UV from the map face's own `texinfo` vectors, the same projection applied
+to the same points. `_ALPHA` is the `WorldVertexTransition` blend weight the legacy `.blend` sidecar
+carried and becomes vertex `COLOR.r` exactly as before.
+
+**Vertex sharing is the source's.** Each face owns its own vertex run in the unit's primitive
+(`firstVertex`/`vertexCount`), and a displacement owns its grid, so corners are shared within one
+face's fan and within one displacement and never across a face boundary — which is what makes
+recomputed normals come out flat across a BSP face boundary and smooth inside a displacement, the
+same shading the legacy OBJ produced.
+
+### Placements: solid, skin and fade
+
+The `staticProps[]` record is the authority, not the model — `seam_map_model.md` → "Import" →
+"Collision" states the per-model asset carries what each mode needs precisely so this lane can
+choose without going back to the source. The three per-placement facts are baked in, because a
+`GAME_LUMP` prop is not an entity and never changes any of them at run time:
+
+| Record field | Baked as |
+|---|---|
+| `solid` (`SolidType_t`) | `SOLID_NONE` (0) → the `ElysiumPickOnly` profile (drawn, touched by nothing but the debug pick); every other value → `ElysiumPropSolid`, blocking on whatever simple collision the model asset carries |
+| `skin` | the family's slot overrides from `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`, applied as component material overrides |
+| `flags & 0x1` (`FADES`) with `fadeMaxDist > 0` | `LDMaxDrawDistance = fadeMaxDist x 2.54` cm |
+
+**Ruling — a VPHYSICS placement of a model that ships no `.phy` still blocks.** The model lane left
+this open ("stood inert (faithful) or given the box (playable) is the placement lane's ruling"), and
+this lane takes the box. Three reasons, in order. (1) The warning path that ruling cites,
+`CPhysicsProp::CreateVPhysics` → `ERROR!: Can't create physics object`
+(`docs/vtmb/phy_vphysics.md` → "Missing collision"), is the *entity* path — a `prop_physics` that
+must simulate. A `GAME_LUMP` static prop never simulates; it only needs a shape to block against.
+(2) A placement authored `solid 6` is authored to block, and the missing `.phy` is a gap in the
+**model**, not a statement about the placement. (3) The legacy lane already blocked on these props
+(via complex-as-simple on the render mesh), so standing them inert would be a gameplay regression
+introduced by a transport change, which is the one thing a cutover task must not do. The rule is
+therefore uniform and needs no census branch: **`solid != 0` blocks, `solid == 0` does not**, and
+the model asset's own simple collision — the `.phy` ledges when it has them, the studio-header box
+when it does not — is what it blocks with.
+
+**Ruling — the miniature is never solid.** A 3D-skybox placement takes `ElysiumPickOnly` whatever
+its `solid` byte says, and is scaled, shadow-less and out of the ray-tracing scene, exactly as the
+legacy lane placed it: it is scenery the player can never reach, and at 16x it would wall the map
+off.
+
+**Detail props are not this lane's.** The `placements` scene's other node family (`dprp`, 143,412
+records over 41 models corpus-wide) is R7.3's: they want instancing and a lighting join, not one
+actor each.
+
+### The per-map cutover flag
+
+A second list on the R4.6 settings page, `UElysiumMapTransportSettings::MapsOnV2Models`, tracked in
+`Config/DefaultElysium.ini` beside `MapsOnNewTransport`. A listed map is authored from its root unit
+by `bake_map_v2` and resolves its prop meshes and skin table under `/ElysiumBaked/Meshes` (R1); an
+unlisted map keeps the legacy `.obj`/`.props` bake and `/ElysiumBaked/Shared/Meshes`, byte for byte.
+
+**It is deliberately not the same list as `MapsOnNewTransport`.** The two answer different questions
+over different map sets: `sp_theatre` is on the entity/collision/environment transport because those
+assets exist for it, but the R1 model import is map-scoped and has staged only the three-map working
+corpus, so pointing `sp_theatre`'s prop resolver at the V2 root would resolve nothing. A map joins
+`MapsOnV2Models` when its models have been imported **and** its level re-baked on this lane — a
+different event from its entity assets landing.
+
+**The flip is one accessor.** `FElysiumContentPaths::BakedMeshesFor(Map)` returns `BakedMeshes()`
+(`/ElysiumBaked/Meshes`) for a listed map and `BakedSharedMeshes()` otherwise, and `BakedPropMesh`,
+`BakedItemMesh` and `BakedPropSkins` all compose from it. Each now **requires** a map argument, so no
+call site can silently land on the legacy root for a map that has been cut over. The four substrate
+sites that recompute the stem live (`ElysiumItemContainer`, `ElysiumItemClasses`, `ElysiumLockable`,
+`ElysiumTerminal`) are untouched: they produce a stem and hand it to `UElysiumEntityBodies`, which
+knows the map.
+
+**Travel's gate follows the same flag.** `UElysiumMapSubsystem::HasTravelableExport` still accepts
+the R2.4 `<map>.ready` marker for every map, but accepts the legacy `<map>.obj` **only** for a map
+not on `MapsOnV2Models`: once a map is cut over nothing reads its `.obj`, so a stale one left on disk
+must not vouch for the sidecars beside it. The `.obj` branch is not retired outright — 105 maps are
+still on the legacy lane and only the three converted maps carry a `.ready` marker today — and R8.1
+owns its deletion, as R2.4 said it would.
+
+### Verification
+
+The reader is checked against the legacy exporter's own output on the three working maps, which is
+the strongest available witness that "producer changed" and "geometry changed" are separable:
+`pipeline/tests/test_map_geometry.py` pins the transform algebra and the placement mapping, and the
+corpus comparison below was run against `$ELYSIUM_EXPORT_ROOT/<map>/`.
+
+| Map | World verts / tris / groups | Sky verts / tris | Brush models | Placements | Max abs dpos | Max abs duv |
+|---|---|---|---:|---:|---:|---:|
+| `sp_tutorial_1` | 38,971 / 24,799 / 276 | 5,997 / 3,573 | 73 | 809 | 0.0008 cm | 1.2e-5 |
+| `sm_pawnshop_1` | 15,507 / 9,177 / 132 | 930 / 488 | 28 | 194 | 0.0004 cm | 7.2e-5 |
+| `sm_hub_1` | 41,901 / 24,434 / 278 | 1,037 / 539 | 55 | 1,043 | 0.0008 cm | 3.0e-5 |
+
+Every count is **identical** to the legacy `.obj`/`.props` on all three maps — vertex count, group
+count, per-group triangle count, brush-model set and every placement's stem, position, rotation,
+`solid`, `skin` and 3D-skybox flag. The residual positional and UV deltas are the unit's binary32
+`POSITION` accessor against the legacy OBJ's four printed decimals: 8 microns at worst, which is the
+same seam-precision limit R3.2 measured on `.dispcol` and not a difference in the geometry.

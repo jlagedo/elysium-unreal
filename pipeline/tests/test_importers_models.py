@@ -252,7 +252,14 @@ def test_map_scoped_selection_matches_real_corpus():
     assert len(selection["perMap"]["sp_tutorial_1"]) == 242
     assert len(selection["perMap"]["sm_pawnshop_1"]) == 95
     assert len(selection["perMap"]["sm_hub_1"]) == 178
-    assert len(selection["keys"]) == 414
+    # The union is the three maps' 414 unit-referenced models plus the whole item ground corpus,
+    # which no map unit names and which any map can show (R5.1 measured the hole: 18 stems over 41
+    # placements drew nothing the moment the runtime's model root flipped). 124 ground models, one
+    # of them already unit-referenced.
+    assert len(selection["itemGround"]) == 124
+    assert set(selection["keys"]) == set(selection["itemGround"]).union(
+        *selection["perMap"].values())
+    assert len(selection["keys"]) == 537
 
 
 def test_stage_refuses_to_run_unscoped(tmp_path):

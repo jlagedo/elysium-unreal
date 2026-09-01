@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumMapTransportSettings.h"
 #include "HAL/FileManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/CommandLine.h"
@@ -199,24 +200,46 @@ struct FElysiumContentPaths
 	static FString BakedSharedTextures() { return BakedSharedDir() / TEXT("Textures"); }
 	static FString BakedSharedMaterials() { return BakedSharedDir() / TEXT("Materials"); }
 	static FString BakedSharedMeshes() { return BakedSharedDir() / TEXT("Meshes"); }
-	// One baked static model, by the same OBJ stem the .props sidecar and `model_mesh` name. The
-	// exporter already emits safe stems, so the bake's own safe_name() is a no-op on them and the
-	// stem maps to the asset name verbatim. Package path is <dir>/SM_<stem>.SM_<stem>.
-	static FString BakedPropMesh(const FString& Stem)
+	// The V2 model corpus (R1): one `UStaticMesh` per referenced model unit, imported from the
+	// published GLB with its slots bound to the V2 material instances and its collision cooked from
+	// VtMB's own convex hulls (docs/architecture/seam_map_model.md -> "Import" -> "Identity and
+	// naming"). A sibling of the legacy shared bake at the mount root, never over it: the two
+	// corpora carry the same asset names, stems and slot names, so which root a map reads is the
+	// only difference between them. Its Python twin is
+	// `elysium_pipeline.importers.models.PACKAGE_ROOT`.
+	static FString BakedMeshes() { return BakedMount() / TEXT("Meshes"); }
+	// Which model corpus one map's props resolve against (R5.1). Per map, never per system: a map
+	// listed under `MapsOnV2Models` reads the V2 corpus, every other map keeps the legacy shared
+	// bake exactly as it always has. The two lists on that settings page are deliberately distinct
+	// -- `sp_theatre` is on the R4.6 entity/collision/environment transport but its models have not
+	// been imported, so its props must keep resolving at the legacy root.
+	static FString BakedMeshesFor(const FString& Map)
+	{
+		return ElysiumMapTransport::IsMapOnV2Models(Map) ? BakedMeshes() : BakedSharedMeshes();
+	}
+	// One baked static model, by the same stem the `.props` sidecar, `model_mesh` and the V2 lane
+	// all name (the whole model path folded -- `PropModelStem` below). Package path is
+	// <dir>/SM_<stem>.SM_<stem>. The map is required rather than defaulted so no call site can
+	// silently land on the legacy root for a map that has been cut over.
+	static FString BakedPropMesh(const FString& Stem, const FString& Map)
 	{
 		const FString Asset = TEXT("SM_") + Stem;
-		return BakedSharedMeshes() / Asset + TEXT(".") + Asset;
+		return BakedMeshesFor(Map) / Asset + TEXT(".") + Asset;
 	}
 	// An item's ground model is a static model like any other and sits in the same corpus. The
 	// separate name is kept because the caller's intent differs, not because the asset does.
-	static FString BakedItemMesh(const FString& Stem) { return BakedPropMesh(Stem); }
-	// The prop skin table: every alternate skin family of every model, resolved to the shared
-	// material instances at bake time. One table, because a model's skin families and the
-	// materials they repaint are both properties of the install rather than of a map.
-	static FString BakedPropSkins()
+	static FString BakedItemMesh(const FString& Stem, const FString& Map)
+	{
+		return BakedPropMesh(Stem, Map);
+	}
+	// The prop skin table: every alternate skin family of every model, resolved to the material
+	// instances at bake time. One table per corpus, because a model's skin families and the
+	// materials they repaint are both properties of the install rather than of a map -- but which
+	// of the two corpora a map reads is still the map's own cutover call.
+	static FString BakedPropSkins(const FString& Map)
 	{
 		const FString Asset = TEXT("DA_ElysiumPropSkins");
-		return BakedSharedMeshes() / Asset + TEXT(".") + Asset;
+		return BakedMeshesFor(Map) / Asset + TEXT(".") + Asset;
 	}
 	static FString BakedBrushMesh(const FString& Map, const FString& Stem)
 	{

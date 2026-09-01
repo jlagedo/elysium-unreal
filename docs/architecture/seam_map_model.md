@@ -400,6 +400,31 @@ None of the three names a dangling id. A map-scoped run sets `pruneScope: null` 
 nothing — only `--all` prunes, because only `--all` knows the whole `keep` set. That asymmetry is
 the point of the flag: a scoped run can never delete a model another map still stands.
 
+**A map-scoped run also stages the whole item ground corpus (R5.1, 2026-09-01).** An `item_*` entity
+carries no `model` keyvalue: the runtime folds a stem out of the item's own `vdata/items`
+`playermodel` path and resolves it through `items/ground_models.json`
+(`FElysiumContentPaths::ItemGroundModels`; `ElysiumItemContainer`, `ElysiumItemClasses`,
+`ElysiumLockable` and `ElysiumTerminal` are its four call sites). The map units' `dependencies[]`
+therefore do not name those models, and a `--maps` run that staged only what those units name left
+the running game with no mesh for them the moment R5.1 pointed the runtime's model root at this
+corpus — **measured, not predicted: 18 stems over 41 placements across the three working maps**
+(`items/key`, `items/bloodpack`, `weapons/thirtyeight`, `weapons/baton`, …), each one a
+`prop '<stem>': no baked mesh` warning and an item that drew nothing.
+
+The **whole** table is staged rather than a per-map subset, because item placement is not a map
+fact: the player can drop any carried item on any map, so "which items can this map show" has no
+map-scoped answer. `select_for_maps` returns the addition separately as `itemGround` so the
+per-map sets above stay exactly what the map units reference.
+
+| Selection part | Models |
+|---|---:|
+| the three maps' unit-referenced set | 414 |
+| the item ground corpus (`items/ground_models.json`) | 124 (123 new, 1 already referenced) |
+| **staged union for the three working maps** | **537** |
+
+`--all` is unaffected: every one of the 124 is a published, referenced unit and is already inside
+its 3,661.
+
 ### Identity and naming
 
 ```text

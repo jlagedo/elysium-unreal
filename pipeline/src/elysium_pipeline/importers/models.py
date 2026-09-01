@@ -17,7 +17,8 @@ never an asset written with the unknown part quietly missing (see "Loud failures
 the models the named maps' root units (`staticProps`/detail props) and entities units (every
 `model.asset`) reference, through each unit's own `dependencies[]` role `model` rows -- the same
 inverse relationship the corpus index's `identity.roles` publishes, read directly off the two map
-units rather than off the whole-corpus index file. `--all` (`select_all`) is the owner-approved
+units rather than off the whole-corpus index file, **plus the whole item ground corpus**, which no
+map unit names (R5.1; see `item_ground_models`). `--all` (`select_all`) is the owner-approved
 whole-corpus run: every published model unit whose own `identity.roles` (written back by the
 corpus-index pass) is non-empty. Only `--all` prunes; a map-scoped run's `pruneScope` is `null`.
 """
@@ -100,7 +101,10 @@ def _read_model_settings(root: Path | None = None) -> tuple[float, float, float]
     )
     ini_path = (Path(root) if root is not None else paths.repo_root()) / "Config" / "DefaultElysium.ini"
     try:
-        parser = configparser.ConfigParser(interpolation=None)
+        # `strict=False`: the same ini carries Unreal's `+Key=` array syntax (one line per element),
+        # which a strict parser rejects as a duplicate option and which would otherwise send this
+        # whole read down the `except` path to the defaults.
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
         parser.read(ini_path, encoding="utf-8")
         if parser.has_section(_MODEL_INI_SECTION):
             constant = parser.getfloat(_MODEL_INI_SECTION, "LodSwitchConstant", fallback=constant)
@@ -194,10 +198,49 @@ def referenced_models_for_map(export_v2_root: Path, map_stem: str) -> set[str]:
     return keys
 
 
-def select_for_maps(export_v2_root: Path, map_stems: Sequence[str]) -> dict[str, Any]:
-    """`{"perMap": {stem: sorted [key, ...]}, "keys": sorted union}` -- the map-scoped selection
-    the contract's `--maps` flag names. Every stem is resolved independently; the union is what
-    gets staged."""
+def item_ground_models(export_root_path: Path | None = None) -> set[str]:
+    """Every model key the item ground table names -- the models no map unit references.
+
+    An `item_*` entity carries no `model` keyvalue: the runtime folds a stem out of the item's own
+    `vdata/items` `playermodel` path and resolves it through `items/ground_models.json`
+    (`FElysiumContentPaths::ItemGroundModels`, and `ElysiumItemContainer`/`ElysiumItemClasses`/
+    `ElysiumLockable`/`ElysiumTerminal` are its four call sites). So the map units' `dependencies[]`
+    do not name these models, and a map-scoped run that staged only what those units name left the
+    running game with no mesh for them -- measured by R5.1 as 18 stems over 41 placements on the
+    three-map working corpus, the moment the runtime's model root was flipped.
+
+    The whole table is staged rather than a per-map subset, because item placement is not a map
+    fact: the player can drop any carried item on any map, so "which items can this map show" has no
+    map-scoped answer. 124 models, 123 of them outside the three maps' unit-referenced set.
+
+    Read from the same manifest the runtime resolves through, so the selection cannot name something
+    the consumer does not, or miss something it does. An absent manifest is an empty set: a corpus
+    that has not run the item pass yet stages nothing extra rather than failing the model run.
+    """
+
+    root = Path(export_root_path) if export_root_path is not None else paths.export_root()
+    manifest = root / "items" / "ground_models.json"
+    if not manifest.is_file():
+        return set()
+    try:
+        document = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ModelImportError(f"{manifest} is unreadable: {error}") from error
+    return {
+        map_model.model_key(path)
+        for path in (document.get("models") or {})
+        if isinstance(path, str) and path
+    }
+
+
+def select_for_maps(export_v2_root: Path, map_stems: Sequence[str],
+                    export_root_path: Path | None = None) -> dict[str, Any]:
+    """`{"perMap": ..., "itemGround": ..., "keys": sorted union}` -- the map-scoped selection the
+    contract's `--maps` flag names.
+
+    `perMap` is each stem's own unit-referenced set, resolved independently; `itemGround` is the
+    map-independent item corpus above. The union of both is what gets staged.
+    """
 
     if not map_stems:
         raise ModelImportError(
@@ -210,7 +253,9 @@ def select_for_maps(export_v2_root: Path, map_stems: Sequence[str]) -> dict[str,
         found = referenced_models_for_map(export_v2_root, normalized)
         per_map[normalized] = sorted(found)
         union |= found
-    return {"perMap": per_map, "keys": sorted(union)}
+    ground = item_ground_models(export_root_path)
+    union |= ground
+    return {"perMap": per_map, "itemGround": sorted(ground), "keys": sorted(union)}
 
 
 def select_all(export_v2_root: Path) -> list[str]:

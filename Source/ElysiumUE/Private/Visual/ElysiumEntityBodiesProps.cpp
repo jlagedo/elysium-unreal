@@ -533,7 +533,7 @@ void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 	{
 		bPropSkinsLoaded = true;
 		PropSkins = LoadObject<UElysiumPropSkinSet>(
-			nullptr, *FElysiumContentPaths::BakedPropSkins());
+			nullptr, *FElysiumContentPaths::BakedPropSkins(MapName));
 	}
 	// A skeletal prop's authored surfaces are overrides copied off its static twin, so clearing them
 	// drops the body onto the skeletal asset's own neutral materials. Re-bind that base first and let
@@ -622,7 +622,7 @@ UStaticMesh* UElysiumEntityBodies::ResolvePropMesh(const FString& Stem)
 	}
 	// One mesh per model, wherever it stands: a prop, an item's ground body and a piece of map
 	// dressing are all the same static model, so they are all this one asset.
-	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(Stem));
+	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(Stem, MapName));
 	if (Mesh == nullptr)
 	{
 		UE_LOG(LogElysiumBodies, Warning,
@@ -687,7 +687,7 @@ void UElysiumEntityBodies::ApplyPropSkin(UStaticMeshComponent* Comp, const FStri
 	{
 		bPropSkinsLoaded = true;
 		PropSkins = LoadObject<UElysiumPropSkinSet>(
-			nullptr, *FElysiumContentPaths::BakedPropSkins());
+			nullptr, *FElysiumContentPaths::BakedPropSkins(MapName));
 	}
 
 	// Restore first, so a swap back to skin 0 -- or to a family this model does not carry, which

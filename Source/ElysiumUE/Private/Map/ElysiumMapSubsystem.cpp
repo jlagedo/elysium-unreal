@@ -308,8 +308,16 @@ void UElysiumMapSubsystem::Deinitialize()
 
 bool UElysiumMapSubsystem::HasTravelableExport(const FString& Map)
 {
-	return FPaths::FileExists(FElysiumContentPaths::MapObj(Map))
-		|| FPaths::FileExists(FElysiumContentPaths::MapExportReady(Map));
+	// The new lane's marker always vouches for an export. The legacy `.obj` vouches for one only
+	// while the map still HAS a legacy lane: once a map is cut over to the V2 geometry bake (R5.1)
+	// nothing reads its `.obj` any more, so a stale one left on disk from an older export must not
+	// be allowed to say the sidecars beside it are current.
+	if (FPaths::FileExists(FElysiumContentPaths::MapExportReady(Map)))
+	{
+		return true;
+	}
+	return !ElysiumMapTransport::IsMapOnV2Models(Map)
+		&& FPaths::FileExists(FElysiumContentPaths::MapObj(Map));
 }
 
 bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
@@ -341,9 +349,13 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	// export-readiness gate").
 	if (!HasTravelableExport(Map))
 	{
-		UE_LOG(LogElysiumMap, Warning, TEXT("no exported map '%s' under %s (neither '%s' nor '%s')"),
-			*Map, *FElysiumContentPaths::Root(), *FElysiumContentPaths::MapObj(Map),
-			*FElysiumContentPaths::MapExportReady(Map));
+		UE_LOG(LogElysiumMap, Warning,
+			TEXT("no exported map '%s' under %s (no '%s'%s)"),
+			*Map, *FElysiumContentPaths::Root(),
+			*FElysiumContentPaths::MapExportReady(Map),
+			ElysiumMapTransport::IsMapOnV2Models(Map)
+				? TEXT("; this map is on the V2 lane, so its '.obj' no longer counts")
+				: *FString::Printf(TEXT(" and no '%s'"), *FElysiumContentPaths::MapObj(Map)));
 		return false;
 	}
 

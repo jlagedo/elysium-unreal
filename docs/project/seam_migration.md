@@ -1498,6 +1498,118 @@ owns deleting the `.ents`/`.hulls`/`.dispcol`/`.env`/`.sky`/`.spawn` sidecar rea
 each kept as fallback. The R2.1 shot baseline re-save is an open owner call. A `--legacy-root`
 parity comparison remains owed from earlier stages and untouched here.
 
+**R5.1 — a map's geometry and props come off the root unit (2026-09-01).** The first task that
+authors a map from the corpus instead of from the legacy exporter's intermediates. New offline
+reader `elysium_pipeline.importers.map_geometry` + new editor lane `pipeline/unreal/bake_map_v2.py`
+(a `bake_map.Bake` subclass that replaces two inputs and one stage and nothing else); contract in
+`seam_map_map.md` → "## Import — geometry and placements" (+150 lines). Selected per map by a second
+tracked list on the R4.6 settings page, `MapsOnV2Models`; every other map's bake is untouched.
+
+**Parity is exact, and it is the real verification.** The reader reproduces the legacy
+`.obj`/`_sky.obj`/`brushes/`/`.props`/`.blend` output on all three working maps — **identical**
+vertex counts, group counts, per-group triangle counts, brush-model sets, and every placement's
+stem, position, rotation, `solid`, `skin` and 3D-skybox flag: `sp_tutorial_1` 38,971 verts / 24,799
+tris / 276 groups + 5,997 / 3,573 sky + 73 brush models + 809 placements; `sm_pawnshop_1` 15,507 /
+9,177 / 132 + 930 / 488 + 28 + 194; `sm_hub_1` 41,901 / 24,434 / 278 + 1,037 / 539 + 55 + 1,043.
+The only residual is the unit's binary32 `POSITION` against the legacy OBJ's four printed decimals:
+max |Δ| 0.0008 cm and 7.2e-5 UV, the same seam-precision limit R3.2 measured on `.dispcol`. The
+world/sky/brush face split, the `tools/` and areaportal-backing drops and the sky-area test are the
+R3.2 producer's own (`prepare_join`), imported rather than re-derived, so the map bake and the
+`.hulls`/`.ents` sidecars cannot diverge.
+
+**Two things the parity run caught that no triangle count would have.** (1) The unit publishes a
+`DISP_VERT` alpha as the lump's own 0..255 byte where the bake's blend channel is 0..1; unnormalized
+it would have tinted every sculpted surface hard onto tex2 with every count still matching (the
+pytest case now pins the `.blend` sidecar to 1e-4). (2) 43 placements over the three maps stand on
+authored skeletal rest poses through `npc_index` rather than on a static twin; the first draft of
+`_place_props` dropped that path, which the legacy lane had.
+
+**The staged pair, and why the lane is split.** Reading the unit needs `numpy` (sky-area BSP walk,
+accessor decode) and Unreal's embedded CPython does not carry it — the first bake attempt died on
+exactly that. So the read runs offline from `unreal.bake_maps` right before the commandlet launches
+and lands `manifest.json` + a packed little-endian vertex file under
+`$ELYSIUM_WORK_ROOT/import/map_geometry/<map>/` (1.70 / 0.55 / 1.50 MB, ~1.5 s per map); the editor
+half reads it with `json`/`array` alone. Same shape as the model, material and texture lanes.
+
+**Bake, on the three maps:** 508 assets saved, 0 failed, all three `/ElysiumBaked/<map>/<map>` levels
+saved — `sp_tutorial_1` 110 world chunks + 73 brush + 2 sky meshes, 809 prop actors (30 miniature,
+611 solid, 30 skinned, 367 distance-faded, 4 on rest poses); `sm_pawnshop_1` 38 + 28 + 4, 194 props
+(21, 121, 0, 80, 0); `sm_hub_1` 194 + 55 + 4, 1,043 props (49, 666, 11, 424, 39). One pre-existing
+warning survives, not a regression: `sp_tutorial_1`'s single sky chunk has 86 material sections and
+Nanite caps at 64, so it renders without Nanite — the legacy `_sky.obj` had the same 86 groups in
+the same cell.
+
+**Rulings written into `seam_map_map.md` before the code.** The model lane left "a VPHYSICS
+placement of a model that ships no `.phy`: inert (faithful) or boxed (playable)" to the placement
+lane; this lane takes **boxed**, and the rule collapses to `solid != 0` blocks / `solid == 0` does
+not, on whatever simple collision the model asset carries. Reasons in the doc, in order: the
+`CPhysicsProp::CreateVPhysics` warning path that ruling cites is the *entity* path and a GAME_LUMP
+prop never simulates; a placement authored `solid 6` is authored to block and the missing `.phy` is
+a gap in the model, not a statement about the placement; and the legacy lane already blocked on them
+(complex-as-simple), so standing them inert would be a gameplay regression introduced by a transport
+change. Fade is `flags & 0x1` **and** `fadeMaxDist > 0` → `LDMaxDrawDistance = fadeMaxDist × 2.54`
+(442 of `sp_tutorial_1`'s 809 records carry `(0, 0)`, and culling those at zero would empty the map).
+A miniature placement is never solid whatever its byte says. This closes the "Where do the props
+go?" open question on the fold-into-the-level answer.
+
+**The flip, and why it is a second list.** `FElysiumContentPaths::BakedMeshes()` is the V2 root and
+`BakedMeshesFor(Map)` chooses between it and `BakedSharedMeshes()`; `BakedPropMesh`, `BakedItemMesh`
+and `BakedPropSkins` compose from it and each now **requires** a map argument, so no call site can
+silently land on the legacy root for a converted map. It is deliberately **not**
+`MapsOnNewTransport`: `sp_theatre` is on that list (its entity assets exist) but its models have not
+been imported, so reusing it would point its props at an empty root. `Travel`'s gate follows the
+same flag — the R2.4 `.ready` marker always accepts, the legacy `.obj` accepts only off the V2 lane,
+because once a map is cut over nothing reads its `.obj` and a stale one must not vouch for the
+sidecars beside it. The `.obj` branch is not retired outright: 105 maps are still on the legacy lane
+and only three carry a `.ready` marker today, so R8.1 keeps that deletion, as R2.4 said it would.
+
+**The flip found a real hole in R1's map-scoped selection, and it is closed.** An `item_*` entity
+carries no `model` keyvalue — the runtime folds a stem out of `vdata/items` and resolves it through
+`items/ground_models.json` — so the map units' `dependencies[]` never name item ground models and
+R1's `--maps` run had not staged them. The moment the runtime's model root flipped, **18 stems over
+41 placements** across the three maps drew nothing (`prop '<stem>': no baked mesh`, 21/14/6 per map,
+0 in every pre-R5.1 run). `select_for_maps` now also stages the whole item ground corpus (124
+models; the whole table, because the player can drop any carried item on any map, so the question
+has no map-scoped answer), documented in `seam_map_model.md` → "Scope and selection". Re-staged
+537 / 536 (one loud skip: `weapons/w_null` declares body parts and publishes no VTX topology),
+imported **122 new, 414 reused, 0 failed, 0 pruned in 19.0 s**, corpus 414 → 536 meshes. Re-run:
+**0 unresolved on all three maps.**
+
+**Headless boot: all three maps boot and capture, 6/6 + 4/4 + 4/4 = 14/14 vantages.** The pixel
+comparison, however, could not attribute anything, and the measurement says why: **two consecutive
+captures of the identical build and the identical baked levels differ by up to 94.05% of pixels**
+(`sp_tutorial_1` spawn, mean 27.4, p99 169) — `sm_pawnshop_1` spawn 85.88%, `sm_hub_1` spawn
+51.93%, six of the fourteen vantages over 40%. The V2-vs-legacy numbers are the same order on the
+same vantages (worst 95.09%), so at this vantage set the shot harness is a **did-it-boot /
+did-it-appear witness only**, not a pixel-regression witness; its own noise floor exceeds the
+signal. The V2-vs-legacy heat maps show whole-frame edge shimmer with identical scene composition —
+nothing missing, nothing moved. This also re-reads R4.6's "a control run reproduces the same
+magnitudes": the shared cause is the harness, not accumulated drift. Filed as a follow-up, not
+fixed here (it is an instrument problem and out of a cutover task's scope).
+
+Tests: 5 pytest cases (`pipeline/tests/test_map_geometry.py`, 9 with parametrization) — the frame
+algebra against `source_to_unreal`/`source_quat_to_unreal`, the placement mapping (`solid` 0..6,
+fade needing both the flag and a distance), the scene split and `.blend` against the legacy exporter
+on the real corpus, every `.props` row field for field, and that the two cutover lists are distinct;
+3 C++ (`Elysium.Substrate.ModelCorpusRoot.FlagIsItsOwnList`, `.PathsFollowTheFlag` — the first
+assertion anywhere that the tracked ini reaches a path accessor — and
+`Elysium.Substrate.MapExportGateObjOnlyCountsOffTheV2Lane`). `uv run elysium build`: Succeeded.
+`uv run elysium test Elysium.Substrate`: **436 of 436 in 4.0 s**. `uv run pytest` over the five
+touched modules: **56 passed**.
+
+Side finding, fixed in passing: `importers.models._read_model_settings` has been silently returning
+its defaults since R4.6, because `configparser` rejects Unreal's `+Key=` array syntax as a duplicate
+option and the read is wrapped in `except configparser.Error`. `strict=False` now, and the new
+`elysium_pipeline.map_transport` (the Python twin of `ElysiumMapTransport`) reads the ini line by
+line, which is what that format actually is.
+
+Follow-ups: the shot harness's run-to-run non-determinism above, which blocks pixel regression for
+every later task in R5; detail props (`dprp`) are R7.3's and this lane skips them by name; the sky
+*dome* is R5.2's (this lane authors only the miniature's own geometry); the V2 lane still reads
+`<map>.mtl`, `.env`, `.decals`, `.weather` and `.lights` for everything that is not geometry, which
+is R5.3/R5.4/R5.6's; `--all` has still never run, so the V2 corpus stays a 536-model subset and the
+flag list stays three maps.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1553,13 +1665,8 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R5 — the map bake rebuilt on the GLB corpus [MP-4]
 
-- **R5.1 Geometry and props from the root unit** [MP-4.1]. World/sky/brush meshes from the
-  root scenes; props placed from `staticProps[]` referencing the R1 meshes with per-placement
-  solid/skin/fade applied; the `.obj` gate flips to the R2.4 artifact.
-  `FElysiumContentPaths::BakedSharedMeshes()` flips from `/ElysiumBaked/Shared/Meshes` to R1's
-  `/ElysiumBaked/Meshes` here — one accessor, since `BakedPropMesh`/`BakedItemMesh`/
-  `BakedPropSkins` all compose from it and the stems and slot names are identical. Closes the
-  "Where do the props go?" open question. → lands: a map authored wholly from GLB.
+**R5.1 landed (2026-09-01)** — see Settled.
+
 - **R5.2 Sky baked.** Cube imported per sky name (six), `SLS_SpecifiedCubemap` assigned, the
   intensity join computed at bake, the sky-dome mesh authored; the runtime sky assembly deleted.
   → lands: editor shows the true sky.
@@ -1625,10 +1732,14 @@ bake side, and there are two candidate answers:
 - emit a companion `UDataAsset` the runtime spawns from, keeping placement inspectable and
   reloadable without a level rebake.
 
-What would settle it: whether anything needs to change prop placement without rebaking the level
-(a debug surface, a live tweak, a per-session variation), and whether folding them in breaks the
-shared-vs-per-map split the corpus bake depends on. Needs a test, not an argument. The roadmap
-picks the fold-into-the-level answer (R5.1); this question closes when that task lands.
+**Closed (2026-09-01, R5.1): folded into the level.** Every `staticProps[]` record is one actor in
+the baked `.umap`, on the R1 corpus mesh, with `solid`, `skin` and the FADES cull distance baked
+onto the component. Nothing needs to change a GAME_LUMP placement without a level rebake — it is not
+an entity, it has no I/O, and it never changes skin or solidity at run time — so the companion
+`UDataAsset` would have bought reloadability nobody asks for at the cost of a second placement
+authority. The shared-vs-per-map split is untouched: the map's level references the corpus meshes,
+it does not copy them. Ruling and the per-placement mapping: `seam_map_map.md` → "## Import —
+geometry and placements".
 
 **Cubemap block rotation below 4×4.** The texture exporter rotates a BC-compressed cube face
 into glTF orientation by permuting its 4×4 blocks and rewriting selector bits, which is exact only

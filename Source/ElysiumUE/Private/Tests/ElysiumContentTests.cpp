@@ -376,7 +376,7 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 			// cooks it alongside the per-poly shape the debug pick traces. Self-skips when the map
 			// has not been baked, the same way the tier self-skips an unexported map.
 			UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr,
-				*FElysiumContentPaths::BakedPropMesh(Survey.AnyPhysStem));
+				*FElysiumContentPaths::BakedPropMesh(Survey.AnyPhysStem, TEXT("sp_tutorial_1")));
 			if (Mesh == nullptr)
 			{
 				AddInfo(FString::Printf(

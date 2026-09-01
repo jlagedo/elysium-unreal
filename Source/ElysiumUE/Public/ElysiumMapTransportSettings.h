@@ -35,6 +35,24 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, Config, Category = "Cutover")
 	TArray<FName> MapsOnNewTransport;
+
+	/**
+	 * Map stems whose **geometry and props** are on the V2 lanes (R5.1): the bake authors this
+	 * map's world, 3D-sky and brush meshes and its static-prop placements from the published map
+	 * root unit (`vtmb:map:<map>`) instead of the `.obj`/`.props` sidecars, and the runtime
+	 * resolves its prop meshes and skin table under `/ElysiumBaked/Meshes` (the R1 model corpus)
+	 * instead of `/ElysiumBaked/Shared/Meshes`. Matched case-insensitively.
+	 *
+	 * Deliberately a second list rather than a reuse of `MapsOnNewTransport`: the two answer
+	 * different questions and, today, over different map sets. `sp_theatre` is on the entity/
+	 * collision/environment transport because those assets exist for it, but the R1 model import is
+	 * map-scoped and has only staged the three-map working corpus, so pointing `sp_theatre`'s prop
+	 * resolver at the V2 root would resolve nothing. A map joins this list when its models have
+	 * been imported and its level re-baked on the V2 lane, which is a different event from its
+	 * entity assets landing.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category = "Cutover")
+	TArray<FName> MapsOnV2Models;
 };
 
 namespace ElysiumMapTransport
@@ -47,4 +65,9 @@ namespace ElysiumMapTransport
 
 	// The live entry point every resolver calls: reads GetDefault<UElysiumMapTransportSettings>().
 	ELYSIUMUE_API bool IsMapOnNewTransport(const FString& MapName);
+
+	// The same rule over `MapsOnV2Models` (R5.1): is this map's model corpus the V2 one?
+	ELYSIUMUE_API bool IsMapOnV2Models(const FString& MapName,
+		const UElysiumMapTransportSettings& Settings);
+	ELYSIUMUE_API bool IsMapOnV2Models(const FString& MapName);
 }
