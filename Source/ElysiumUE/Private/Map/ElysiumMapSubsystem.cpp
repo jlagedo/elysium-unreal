@@ -306,6 +306,12 @@ void UElysiumMapSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+bool UElysiumMapSubsystem::HasTravelableExport(const FString& Map)
+{
+	return FPaths::FileExists(FElysiumContentPaths::MapObj(Map))
+		|| FPaths::FileExists(FElysiumContentPaths::MapExportReady(Map));
+}
+
 bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 {
 	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
@@ -330,10 +336,14 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 		return false;
 	}
 	// The sidecars the runtime still reads (.ents, .hulls, .ropes, .spawn) live beside the export,
-	// so a baked level with no export would build a world with no entities at all.
-	if (!FPaths::FileExists(FElysiumContentPaths::MapObj(Map)))
+	// so a baked level with no export would build a world with no entities at all. Either producer's
+	// own proof that it ran satisfies this (docs/architecture/map-architecture.md "The
+	// export-readiness gate").
+	if (!HasTravelableExport(Map))
 	{
-		UE_LOG(LogElysiumMap, Warning, TEXT("no exported map '%s' under %s"), *Map, *FElysiumContentPaths::Root());
+		UE_LOG(LogElysiumMap, Warning, TEXT("no exported map '%s' under %s (neither '%s' nor '%s')"),
+			*Map, *FElysiumContentPaths::Root(), *FElysiumContentPaths::MapObj(Map),
+			*FElysiumContentPaths::MapExportReady(Map));
 		return false;
 	}
 
@@ -659,8 +669,8 @@ TArray<FString> UElysiumMapSubsystem::ExportedMaps() const
 	{
 		// Both halves are required to enter a map: the baked level carries the look, the export
 		// carries the sidecars the runtime still reads. An export with no bake is listed nowhere,
-		// because Travel would refuse it.
-		if (FPaths::FileExists(FElysiumContentPaths::MapObj(Dir))
+		// because Travel would refuse it -- the same predicate Travel itself checks.
+		if (HasTravelableExport(Dir)
 			&& FPackageName::DoesPackageExist(FElysiumContentPaths::BakedLevel(Dir)))
 		{
 			Names.Add(Dir);

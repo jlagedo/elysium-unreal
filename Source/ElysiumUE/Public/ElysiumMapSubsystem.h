@@ -43,6 +43,13 @@ public:
 	// landmark's facing) instead of info_player_start — the console/direct entry to the landmark path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
+	// Whether Travel would accept Map: either producer's own proof that it ran is on disk for it --
+	// the legacy exporter's `.obj` or the new lane's readiness marker (R2.4,
+	// docs/architecture/map-architecture.md "The export-readiness gate"). Static and file-only, so a
+	// test can drive it with a scratch content root and no UWorld or subsystem instance; `Travel` and
+	// `ExportedMaps` both route through this one predicate so the two can never disagree.
+	static bool HasTravelableExport(const FString& Map);
+
 	// Enter the empty `/Game/ElysiumGenerated/Boot` front-end shell. If it is already the current
 	// world (cold boot), this only latches front-end mode and reports no travel. From a game map it
 	// hard-travels back to the shell and reports that travel through bOutTravelStarted.

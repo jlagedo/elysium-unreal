@@ -421,6 +421,12 @@ struct FElysiumContentPaths
 	// per map and per position. Every surface texture is the corpus's.
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
 	static FString MapObj(const FString& Map) { return MapDir(Map) / (Map + TEXT(".obj")); }
+	// The new export lane's readiness marker (docs/project/seam_migration.md R2.4; the ruling is
+	// `docs/architecture/map-architecture.md` "The export-readiness gate"). An empty file a new-lane
+	// producer writes only once every sidecar `Travel` depends on is complete on disk for this map --
+	// `UElysiumMapSubsystem::HasTravelableExport` accepts this OR MapObj, so the gate never goes
+	// without both while the lanes coexist. Nothing writes it yet; R3.2 is the first producer.
+	static FString MapExportReady(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ready")); }
 	static FString MapSkyObj(const FString& Map) { return MapDir(Map) / (Map + TEXT("_sky.obj")); }
 	static FString MapSpawn(const FString& Map) { return MapDir(Map) / (Map + TEXT(".spawn")); }
 	static FString MapSky(const FString& Map) { return MapDir(Map) / (Map + TEXT(".sky")); }

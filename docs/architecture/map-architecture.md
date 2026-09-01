@@ -45,6 +45,40 @@ The `.ents` sidecar for every map already contains the original game's transitio
 
 So "advancing in the game" is: player enters a changelevel volume → `Travel(map, landmark)`.
 
+## The export-readiness gate
+
+Before it opens a map's baked level, `Travel` proves a producer actually ran for that map — a
+baked `.umap` with no sidecars beside it would build a world with no entities, no collision and no
+spawn transform (`UElysiumMapSubsystem::Travel`,
+`Source/ElysiumUE/Private/Map/ElysiumMapSubsystem.cpp`). Two producers can leave that proof, and the
+gate accepts whichever one did:
+
+- **The legacy exporter's `.obj`** (`FElysiumContentPaths::MapObj`) — `UE_bsp_to_scene.py`'s own
+  signature that it ran for this map; the only artifact that exists today.
+- **The new lane's readiness marker** (`FElysiumContentPaths::MapExportReady`, `<map>.ready` beside
+  the map's other sidecars under `FElysiumContentPaths::MapDir`) — an empty file a new-lane producer
+  writes only after every sidecar `Travel` currently depends on is confirmed complete on disk for
+  that map, so a partial or crashed emission never satisfies the gate. `docs/project/seam_migration.md`
+  **R3.2** ("Producer emits legacy sidecars") is the first writer; nothing emits it before then, and
+  the file simply not existing means "this map has not converted lanes yet", the ordinary case until
+  it lands.
+
+`UElysiumMapSubsystem::HasTravelableExport(Map)` is the one predicate both `Travel` and
+`ExportedMaps` call, so the list of maps `Travel` will accept can never diverge from what `Travel`
+itself checks. Neither artifact is read for content, only for presence — the gate proves *a*
+producer ran, not which values it wrote; that proof is `seam_map_map.md`'s and R3's job once the new
+producer exists.
+
+This marker is deliberately a different thing from the runtime's own `MapReady` (the
+post-activation-barrier delegate a *loaded* map publishes once play begins, below): the marker is an
+export-time file checked before the world even opens, and the two must never be confused for one
+another.
+
+`docs/project/seam_migration.md` **R5.1** ("Geometry and props from the root unit") retires the
+`.obj` branch once the bake itself stops reading `.obj` for world/sky/brush geometry — "the `.obj`
+gate flips to the R2.4 artifact." Until then both branches stay live, because the legacy exporter is
+still what every already-exported map has.
+
 ## Components
 
 

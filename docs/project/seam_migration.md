@@ -815,6 +815,28 @@ fingerprints" both predate the 2026-08-31 owner decision (`814905ee`) that put M
 track; the runtime-side gap (G3) they otherwise describe — the running game has no receipt of its
 own — is unchanged and still open.
 
+**Travel's export gate accepts the new lane's marker (2026-08-31).** R2.4/MP-1.4
+(`Source/ElysiumUE/Private/ElysiumContentPaths.h`, `.../Public/ElysiumMapSubsystem.h`,
+`.../Private/Map/ElysiumMapSubsystem.cpp`, docs only besides). The ruling is in
+`docs/architecture/map-architecture.md` "The export-readiness gate": a new
+`FElysiumContentPaths::MapExportReady(Map)` names `<map>.ready`, an empty presence-only marker
+beside a map's other sidecars under `MapDir`, that the R3.2 producer will write once every sidecar
+`Travel` depends on is confirmed complete on disk for that map — nothing writes it yet. `Travel`'s
+`.obj`-only refusal (`ElysiumMapSubsystem.cpp` ~L334) and the separate, previously-duplicated check
+in `ExportedMaps()` both now route through one new predicate, `UElysiumMapSubsystem::
+HasTravelableExport(Map)` (static, file-only, no `UWorld`), which accepts either `MapObj` or
+`MapExportReady` — so the two call sites can never disagree on what Travel will accept, and the gate
+is satisfied by whichever producer ran, never by both. Two new `Elysium.Substrate` tests
+(`ElysiumMapExportGateTests.cpp`, `FElysiumScratchContentRoot`): `MapExportGate` drives all four
+states over one map — neither artifact (refused), `.obj` alone (accepted), the marker alone with no
+`.obj` present (accepted), both together (accepted, not required) —
+`MapExportGateMarkerIsPresenceOnly` proves the marker's bytes are never read (a non-empty marker
+still accepts) and that a same-named directory at the marker's path does not satisfy the
+`FPaths::FileExists` check. `uv run elysium build`: `Result: Succeeded`. `uv run elysium test
+Elysium.Substrate`: 423 of 423 test(s) executed in 5.9s, exit code 0 (up from 421 before this task's
+two additions). Nothing emits `MapExportReady` yet; R3.2 is the first producer, and R5.1 retires the
+`.obj` branch once the bake itself stops reading `.obj`.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -865,8 +887,11 @@ corpus; numbers in the Settled entry "Per-map censuses landed on the test corpus
 `.ropes` (a whole-file digest per sidecar, no field parsing); numbers in the Settled entry "Level
 recipe closes over its runtime sidecars".
 
-- **R2.4 Travel-gate successor** [MP-1.4]. The new lane's readiness artifact defined; `Travel`
-  accepts either; the gate is never absent. → lands: maps stay bootable through the cutover.
+**R2.4 landed (2026-08-31)** — the new lane's readiness artifact defined
+(`FElysiumContentPaths::MapExportReady`, ruled in `map-architecture.md`); `Travel` and
+`ExportedMaps` both accept it or the legacy `.obj` through one shared predicate,
+`UElysiumMapSubsystem::HasTravelableExport`; numbers in the Settled entry "Travel's export gate
+accepts the new lane's marker". R2 is done; R3 is next.
 
 ### R3 — map producer parity (game untouched) [MP-2]
 
