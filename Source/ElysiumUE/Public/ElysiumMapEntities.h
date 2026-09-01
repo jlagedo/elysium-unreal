@@ -128,11 +128,10 @@ enum class EElysiumEntityDefSource : uint8
 
 namespace ElysiumEntityDefSource
 {
-	// The one entry point for "give me this map's defs". The baked asset wins when it exists; the
-	// `.ents` sidecar answers otherwise. The asset's presence IS R4.1's cutover flag -- a map with
-	// an asset loads from cooked content and a map without one keeps the sidecar, with no per-map
-	// entry anywhere saying which (the explicit flag is R4.6's,
-	// `docs/architecture/seam_map_map_entities.md` -> "Import" -> "Cutover").
+	// The one entry point for "give me this map's defs". A map listed in
+	// `UElysiumMapTransportSettings::MapsOnNewTransport` (R4.6) tries the baked asset first, falling
+	// back to the `.ents` sidecar if it turns out missing; an unlisted map goes straight to the
+	// sidecar (`docs/architecture/seam_map_map_entities.md` -> "Import" -> "Cutover").
 	ELYSIUMUE_API EElysiumEntityDefSource Load(const FString& MapName, FElysiumEntityDefs& Out,
 		float SkyScale = 1.f, const FVector& SkyOrigin = FVector::ZeroVector);
 

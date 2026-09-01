@@ -314,6 +314,16 @@ every map today — runs exactly as R4.2 left it. No remapper exists or is plann
 survey was ever saved to disk on this corpus (confirmed empty at the time this task landed), so
 there is nothing to migrate, and the owner re-tunes each map fresh in the editor.
 
+**R4.6's explicit `UElysiumMapTransportSettings` list does not gate this path**
+(`seam_map_map.md` -> "## Import" -> "The explicit per-map cutover flag (R4.6)"), unlike the three
+whole-swap transports (entities, collision, environment). Those three replace a legacy read
+outright, so an unlisted map needs a flag telling its resolver to keep ignoring an asset that may
+already exist; calibration never replaces anything — it merges on top of the derivation this file
+states above, which keeps running unconditionally — so there is no legacy behavior for an unlisted
+map to fall back to, and the asset's own presence already is the only fact that matters. R5.6's
+bake, which retires the `.lights` derivation outright, is what eventually gives this path a real
+legacy-vs-new split to gate.
+
 ### Cog Lights window: viewer, not editor
 
 The window (`ElysiumCogWindow_Lights`) is now **read-only**. Deleted outright: the "Rig tuning" tab

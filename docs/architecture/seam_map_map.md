@@ -656,10 +656,98 @@ lump ordinal, and cooks from `Def.Hulls` when there is no payload or no row for 
 runtime-created entity (`CreateRuntimeEntityNoSpawn`, whose index runs past the map's def array)
 therefore always cooks, which is correct: it has no authored collision to have baked.
 
-**The asset's presence is the cutover flag**, as in R4.1 — a map with a payload loads cooked
-collision, a map without one keeps the sidecars, and no map needs an entry anywhere saying which.
-The `.hulls`/`.dispcol` readers stay: they are the fallback for every unconverted map, and R8.1
-owns their deletion once all 108 maps are converted.
+**The asset's presence was the cutover flag through R4.2** — a map with a payload loaded cooked
+collision, a map without one kept the sidecars, and no map needed an entry anywhere saying which.
+R4.6 replaces that implicit rule with an explicit one (below); the outcome for an already-converted
+map is unchanged, but the decision now lives in a tracked, reviewable place instead of in whichever
+producer happened to run. The `.hulls`/`.dispcol` readers stay: they are the fallback for every
+unlisted map, and R8.1 owns their deletion once all 108 maps are converted and listed.
+
+### The explicit per-map cutover flag (R4.6)
+
+Four resolvers each independently grew an "asset wins when present" rule (R4.1's
+`ElysiumEntityDefSource::Load`, R4.2's `UElysiumMapCollision::AdoptPayload` above, R4.3's
+`UElysiumLightRig::Adopt`, R4.4's `ElysiumMapEnvironmentSource::Load`) — correct for landing each
+transport in isolation, but it means "is this map on the new transport" has no single answer: it is
+whatever a producer happened to leave on disk, map by map, feature by feature. R4.6 adds one
+tracked, explicit switch that answers that question for the three whole-swap transports (entities,
+collision, environment) and states, by omission, that lighting calibration is not one of them.
+
+`UElysiumMapTransportSettings` (`Config = Elysium, DefaultConfig`, Project Settings -> Elysium ->
+Map Transport) carries one property, `MapsOnNewTransport` (`TArray<FName>`, map stems,
+case-insensitive) — a tracked config list rather than a per-map asset, so adding a map to it is a
+one-line, reviewable `Config/DefaultElysium.ini` edit and needs no recompile.
+`ElysiumMapTransport::IsMapOnNewTransport(MapName)` (`ElysiumMapTransportSettings.h`) is the one
+entry point; a second, pure overload takes an explicit `UElysiumMapTransportSettings` reference so
+the resolution logic is testable without touching Project Settings or `GConfig`, matching
+`UElysiumLightRig::ApplySettings`'s own synthetic-settings test shape (R4.3).
+
+Each whole-swap resolver now checks the flag **before** its own `LoadObject` — an unlisted map
+never even attempts to load its asset and falls straight to the sidecar path, exactly as it would
+if the asset did not exist, regardless of whether one has in fact been baked for it:
+
+- `ElysiumEntityDefSource::Load` (`ElysiumMapEntities.cpp`)
+- `UElysiumMapCollision::AdoptPayload` (this file's `Build`, above) — `FElysiumEntityWorld::
+  BuildBrushBody` needs no separate gate, since it only ever sees a payload `AdoptPayload` chose to
+  set
+- `ElysiumMapEnvironmentSource::Load` (`ElysiumMapEnvironment.cpp`)
+
+A listed map whose asset is missing or unreadable still falls back to its sidecars — the flag names
+intent, not a hard requirement that the asset exist, so an owner can list a map ahead of its bake
+without bricking it. This means "unlisted maps boot the legacy path unchanged" is exact for the
+common case (no asset yet) and merely conservative for the corner case (an asset exists early); the
+line's actual guarantee is that an unlisted map's *behavior* never changes, not that its bytes are
+inert.
+
+**Deliberately not gated: R4.3's `UElysiumLightCalibration` merge-row apply.** That path is
+additive — it applies calibration rows *on top of* the sidecar-derived baseline, never *instead of*
+it (`seam_map_map_lighting.md` -> "Import" -> "Cutover") — so there is no legacy behavior for an
+unlisted map to fall back to; the calibration asset's own presence already answers "does this map
+have hand-tunes" for itself, and gating it on this list would only hide a hand-tune from a map an
+owner has not yet flagged for the *other* three transports. R5.6's bake is what eventually retires
+the `.lights` derivation this asset augments, and that is the task that gives lighting a real
+legacy-vs-new split to gate.
+
+`Elysium.Substrate.MapTransport.FlagResolution` exercises the pure resolver against synthetic
+`NewObject`-built settings: an empty list resolves every map to the legacy path, a listed stem
+resolves case-insensitively, and an unlisted stem stays on the legacy path even with others listed.
+(A `NewObject<UElysiumMapTransportSettings>()` inherits the CDO's config-loaded array rather than
+starting genuinely empty once `Config/DefaultElysium.ini` lists real maps, so the "empty list"
+case clears `MapsOnNewTransport` explicitly instead of assuming a fresh `NewObject` is empty.)
+`Elysium.Substrate.MapTransport.IniRoundTrip` proves the list round-trips through
+`TryUpdateDefaultConfigFile`/`GConfig` on a scratch ini, the same shape every other
+`Config = Elysium, DefaultConfig` page uses.
+
+### Shot-diff against the R2.1 baseline (2026-09-01)
+
+`sm_pawnshop_1`, `sp_tutorial_1` and `sm_hub_1` were headlessly booted (`uv run elysium debug
+shots <map>`) with all three listed on `MapsOnNewTransport`, then compared against the R2.1
+baseline (`8077e5b5f902`). All 14 vantages across the three maps fail `shots_diff.py`'s default
+tolerance, at magnitudes matching the `sp_tutorial_1`-only failure R3.5 already found and filed as
+a stale/anomalous baseline rather than a regression:
+
+| Map | Vantages | Changed-pixels range |
+|---|---|---|
+| `sm_pawnshop_1` | 4 | 1.9%–98.2% |
+| `sp_tutorial_1` | 6 | 79.6%–97.3% |
+| `sm_hub_1` | 4 | 43.8%–77.7% |
+
+Unlike R3.5, this run has all three maps failing, including `sm_pawnshop_1` and `sm_hub_1`, which
+R3.5 recorded as pixel-identical (0.00% changed) against the same baseline. That gap is R4.1–R4.5
+landing in between: those tasks changed the light rig (R4.3, additive calibration on top of the
+existing derivation), the environment resolver (R4.4) and several rendering-adjacent settings
+(R4.5), any of which can legitimately move rendered pixels even though none of them is this task's
+own change. A control run proves the point directly: with `MapsOnNewTransport` emptied (every map
+forced onto the 100%-legacy path, the same condition the R2.1 baseline was captured under),
+re-shooting `sm_pawnshop_1` reproduces the same magnitudes (`p1` 1.56%, `p2` 95.24%, `p3` 92.32%,
+`spawn` 99.34%) as the run with the flag set. The explicit cutover flag this task adds is
+therefore not the source of the divergence — an already-converted map's resolved transport is
+identical with the flag on or the flag entirely absent, exactly as "the outcome for an
+already-converted map is unchanged" (above) states. This is a regression **witness**, not a fix:
+per "wire first, tune later" and the standing house rule against reading screenshots to judge
+looks, no look-tuning was attempted. Re-saving the baseline is an owner call, as R3.5 already
+filed for `sp_tutorial_1`; this task extends that same finding to all three maps and leaves the
+`_diff/<map>_*.png` artifacts under `$ELYSIUM_WORK_ROOT/exports/_shots/` for that review.
 
 ### Measured (2026-09-01, the three working maps)
 
@@ -790,10 +878,12 @@ exactly as `FElysiumEnvDef`/`FElysiumSkyDef`/`FElysiumSpawnDef::Parse` always ha
   `PendingSpawnLoc`/`PendingSpawnYaw` directly, still Source feet with the capsule-centre lift left
   to the readiness poll, exactly as before.
 
-**The asset's presence is the cutover flag**, as in R4.1/R4.2/R4.3 — a map with an asset reads
-cooked content and a map without one keeps the three sidecars, with no per-map entry anywhere saying
-which. The `.env`/`.sky`/`.spawn` readers stay: they are the fallback for every unconverted map, and
-R8.1 owns their deletion once all 108 maps are converted.
+**The explicit per-map cutover flag gates this resolver too**, as of R4.6 (this file's "## Import"
+-> "The explicit per-map cutover flag (R4.6)", above): `ElysiumMapEnvironmentSource::Load` checks
+`ElysiumMapTransport::IsMapOnNewTransport(MapName)` before its `LoadObject`, so an unlisted map
+reads the three sidecars unconditionally, the same as before R4.4 existed. The `.env`/`.sky`/
+`.spawn` readers stay: they are the fallback for every unlisted map, and R8.1 owns their deletion
+once all 108 maps are converted and listed.
 
 ### Measured (2026-09-01, the three working maps)
 

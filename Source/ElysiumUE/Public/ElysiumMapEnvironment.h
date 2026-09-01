@@ -91,11 +91,11 @@ enum class EElysiumMapEnvironmentSource : uint8
 
 namespace ElysiumMapEnvironmentSource
 {
-	// The one entry point for "give me this map's environment". The baked asset wins, whole, when
-	// it exists; the `.env`/`.sky`/`.spawn` sidecars answer otherwise, each parsed independently as
-	// `AElysiumMapActor`/`UElysiumMapVisuals` have always parsed them. The asset's presence IS the
-	// cutover flag, as in R4.1/R4.2/R4.3 -- a map with an asset reads cooked content and a map
-	// without one keeps the sidecars, with no per-map entry anywhere saying which.
+	// The one entry point for "give me this map's environment". A map listed in
+	// `UElysiumMapTransportSettings::MapsOnNewTransport` (R4.6) tries the baked asset first, falling
+	// back if it turns out missing; an unlisted map goes straight to the `.env`/`.sky`/`.spawn`
+	// sidecars, each parsed independently as `AElysiumMapActor`/`UElysiumMapVisuals` have always
+	// parsed them.
 	ELYSIUMUE_API EElysiumMapEnvironmentSource Load(const FString& MapName, FElysiumEnvDef& OutEnv,
 		FElysiumSkyDef& OutSky, bool& bOutHasSpawn, FVector& OutSpawnLocation, float& OutSpawnYaw);
 

@@ -1,6 +1,7 @@
 #include "ElysiumMapEntities.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumMapTransportSettings.h"
 #include "UObject/Package.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMapEntities, Log, All);
@@ -98,17 +99,21 @@ namespace ElysiumEntityDefSource
 		float SkyScale, const FVector& SkyOrigin)
 	{
 		const FString AssetPath = FElysiumContentPaths::BakedMapEntities(MapName);
-		// The asset is used and released inside this call; nothing retains it, so the defs it
-		// produced outlive it by value the same way the parsed sidecar's do.
-		// Quiet: a map with no asset is the normal case until R4.6 converts them all, and the
-		// fallback below is the answer, not a warning.
-		if (const UElysiumMapEntities* Asset = LoadObject<UElysiumMapEntities>(
-			nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
+		// R4.6: an unlisted map never attempts the asset, even if one exists on disk -- the tracked
+		// flag list, not asset presence, decides the transport from here forward.
+		if (ElysiumMapTransport::IsMapOnNewTransport(MapName))
 		{
-			Asset->Deserialize(Out, SkyScale, SkyOrigin);
-			UE_LOG(LogElysiumMapEntities, Log, TEXT("%s: %d entity def(s) from %s"),
-				*MapName, Out.Num(), *AssetPath);
-			return EElysiumEntityDefSource::Asset;
+			// The asset is used and released inside this call; nothing retains it, so the defs it
+			// produced outlive it by value the same way the parsed sidecar's do.
+			// Quiet: a listed map whose asset is not yet baked falls back below rather than warning.
+			if (const UElysiumMapEntities* Asset = LoadObject<UElysiumMapEntities>(
+				nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				Asset->Deserialize(Out, SkyScale, SkyOrigin);
+				UE_LOG(LogElysiumMapEntities, Log, TEXT("%s: %d entity def(s) from %s"),
+					*MapName, Out.Num(), *AssetPath);
+				return EElysiumEntityDefSource::Asset;
+			}
 		}
 
 		if (FElysiumEntityDefs::Parse(FElysiumContentPaths::MapEnts(MapName), Out,

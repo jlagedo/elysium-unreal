@@ -1,6 +1,7 @@
 #include "ElysiumMapEnvironment.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumMapTransportSettings.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMapEnvironment, Log, All);
 
@@ -63,20 +64,24 @@ namespace ElysiumMapEnvironmentSource
 		OutSpawnYaw = 0.f;
 
 		const FString AssetPath = FElysiumContentPaths::BakedMapEnvironment(MapName);
-		// Quiet: a map with no asset is the normal case until every map is converted, and the
-		// sidecar fallback below is the answer, not a warning.
-		if (const UElysiumMapEnvironment* Asset = LoadObject<UElysiumMapEnvironment>(
-			nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
+		// R4.6: an unlisted map never attempts the asset, even if one exists on disk -- the tracked
+		// flag list, not asset presence, decides the transport from here forward.
+		if (ElysiumMapTransport::IsMapOnNewTransport(MapName))
 		{
-			OutEnv = Asset->ToEnvDef();
-			OutSky = Asset->ToSkyDef();
-			const FElysiumSpawnDef Spawn = Asset->ToSpawnDef();
-			bOutHasSpawn = Spawn.bValid;
-			OutSpawnLocation = Spawn.OriginCm;
-			OutSpawnYaw = Spawn.YawDeg;
-			UE_LOG(LogElysiumMapEnvironment, Log, TEXT("%s: environment from %s"), *MapName,
-				*AssetPath);
-			return EElysiumMapEnvironmentSource::Asset;
+			// Quiet: a listed map whose asset is not yet baked falls back below rather than warning.
+			if (const UElysiumMapEnvironment* Asset = LoadObject<UElysiumMapEnvironment>(
+				nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
+			{
+				OutEnv = Asset->ToEnvDef();
+				OutSky = Asset->ToSkyDef();
+				const FElysiumSpawnDef Spawn = Asset->ToSpawnDef();
+				bOutHasSpawn = Spawn.bValid;
+				OutSpawnLocation = Spawn.OriginCm;
+				OutSpawnYaw = Spawn.YawDeg;
+				UE_LOG(LogElysiumMapEnvironment, Log, TEXT("%s: environment from %s"), *MapName,
+					*AssetPath);
+				return EElysiumMapEnvironmentSource::Asset;
+			}
 		}
 
 		const bool bHaveEnv = FElysiumEnvDef::Parse(FElysiumContentPaths::MapEnv(MapName), OutEnv);

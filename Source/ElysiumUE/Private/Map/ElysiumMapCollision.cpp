@@ -3,6 +3,7 @@
 #include "Debug/ElysiumPick.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapCollisionPayload.h"
+#include "ElysiumMapTransportSettings.h"
 #include "ElysiumUseIcons.h"
 
 #include "AI/NavigationSystemBase.h"
@@ -79,8 +80,8 @@ bool UElysiumMapCollision::Build(const FString& MapName)
 		return false;
 	}
 
-	// Cooked content first, the loose sidecars second — the payload's presence is R4.2's cutover
-	// flag, and a map without one is the normal case until every map is converted.
+	// Cooked content first, the loose sidecars second — whether this map is on the payload path at
+	// all is R4.6's explicit `UElysiumMapTransportSettings` list, not the payload's own presence.
 	const double Started = FPlatformTime::Seconds();
 	if (AdoptPayload(MapName))
 	{
@@ -152,9 +153,16 @@ bool UElysiumMapCollision::AdoptPayload(const FString& MapName)
 	{
 		return false;
 	}
+	// R4.6: an unlisted map never attempts the payload, even if one exists on disk -- the tracked
+	// flag list, not asset presence, decides the transport from here forward.
+	if (!ElysiumMapTransport::IsMapOnNewTransport(MapName))
+	{
+		return false;
+	}
+
 	const FString AssetPath = FElysiumContentPaths::BakedMapCollision(MapName);
-	// Quiet: a map with no payload is the normal case until every map is converted, and the
-	// sidecar readers are the answer rather than a warning.
+	// Quiet: a listed map whose payload is not yet baked falls back to the sidecar readers rather
+	// than warning.
 	UElysiumMapCollisionPayload* Asset = LoadObject<UElysiumMapCollisionPayload>(
 		nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_Quiet);
 	if (Asset == nullptr || Asset->GetWorldHulls() == nullptr || Asset->WorldHullCount() == 0)

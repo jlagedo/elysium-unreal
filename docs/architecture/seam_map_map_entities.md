@@ -294,16 +294,17 @@ stage refuses to run unscoped.
 ### Cutover
 
 `ElysiumEntityDefSource::Load(Map, Out, SkyScale, SkyOrigin)` is the one entry point every
-consumer uses. It tries `BakedMapEntities(Map)` first and falls back to
-`FElysiumEntityDefs::Parse(MapEnts(Map), …)`, logs which source answered, and returns it. **The
-asset's presence is the cutover flag** for R4.1 — a map with an asset loads from cooked content, a
-map without one keeps the sidecar, and no map needs an entry anywhere to say which. The explicit
-per-map flag is R4.6's, and it is deliberately not introduced early: R4.1 needs no switch that the
-mount does not already answer.
+consumer uses. Since R4.6 it first checks `ElysiumMapTransport::IsMapOnNewTransport(Map)`
+(`UElysiumMapTransportSettings`, `seam_map_map.md` -> "## Import" -> "The explicit per-map cutover
+flag (R4.6)") — only a listed map attempts `BakedMapEntities(Map)`; an unlisted map goes straight
+to `FElysiumEntityDefs::Parse(MapEnts(Map), …)`. Either way `Load` logs which source answered and
+returns it. Through R4.1–R4.5 the asset's own presence was the whole rule; R4.6 makes the decision
+explicit and tracked (`Config/DefaultElysium.ini`'s `MapsOnNewTransport`) rather than implicit in
+whichever producer last ran, with no change in outcome for a map that was already converted.
 
-The `.ents` reader stays. It is the fallback for the 100+ maps with no asset yet, and R4.6's
+The `.ents` reader stays. It is the fallback for the 100+ maps not yet listed, and R4.6's
 converted-map proof needs both paths alive to diff one against the other. Deleting it is a later
-task, once every map is on the asset.
+task, once every map is on the asset and listed.
 
 Consumers on the resolver: `AElysiumMapActor`'s map load (`ElysiumMapActorLifecycle.cpp`) and the
 green room's `sp_theatre` camera-track read (`ElysiumGreenRoomTheatre.cpp`), which was the one

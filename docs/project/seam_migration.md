@@ -1566,8 +1566,26 @@ and `docs/vtmb/sky-ambience.md` were updated to point at this task instead of th
 `docs/project/roadmap.md` 3.11 (which asked to "wire it or retire it") is marked landed as retired,
 its `plans/world.md` entry deleted per the docs house rule. → lands: zero taste values living in
 C++ literals or cvars.
-- **R4.6 First map on assets** [MP-3.4]. The per-map cutover flag; one hub converted and
-  shot-diffed against R2.1. → lands: proof of the transport end-to-end.
+
+**R4.6 landed (2026-09-01)** — `UElysiumMapTransportSettings` (`Config = Elysium, DefaultConfig`,
+`MapsOnNewTransport: TArray<FName>`), the one tracked, reviewable list answering "is this map on
+the new transport" for the three whole-swap resolvers (`ElysiumEntityDefSource::Load`,
+`UElysiumMapCollision::AdoptPayload`, `ElysiumMapEnvironmentSource::Load`); each now checks
+`ElysiumMapTransport::IsMapOnNewTransport(MapName)` before its own `LoadObject`, replacing the
+implicit "asset wins when present" rule R4.1/R4.2/R4.4 each grew independently, with no outcome
+change for an already-converted map. Contract in `seam_map_map.md` → "## Import" → "The explicit
+per-map cutover flag (R4.6)"; R4.3's light-calibration merge is deliberately not gated (additive,
+no legacy behavior to fall back to — `seam_map_map_lighting.md` → "## Import"). `Config/
+DefaultElysium.ini` lists `sm_pawnshop_1`, `sp_tutorial_1`, `sm_hub_1`, in that order, matching the
+task's own staging instruction. Two Substrate tests
+(`Elysium.Substrate.MapTransport.FlagResolution`, `.IniRoundTrip`); Substrate 433/433. All three
+maps were headlessly booted and shot-diffed against the R2.1 baseline (`8077e5b5f902`): all 14
+vantages fail the default tolerance, but a `MapsOnNewTransport`-emptied control run reproduces the
+same magnitudes for `sm_pawnshop_1` (`p1`/`p2`/`p3`/`spawn` within noise of the flag-set run),
+proving the divergence is accumulated R4.1–R4.5 drift, not this task's flag — numbers and the full
+finding in `seam_map_map.md` → "## Import" → "Shot-diff against the R2.1 baseline (2026-09-01)".
+Re-saving the baseline is an owner call, left open the same way R3.5 already filed it for
+`sp_tutorial_1` alone.
 
 ### R5 — the map bake rebuilt on the GLB corpus [MP-4]
 
