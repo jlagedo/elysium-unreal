@@ -1036,6 +1036,49 @@ and the `.ropes` material files resolve against the shared corpus (`UE_extract_c
 not the map exporter's), which is what the legacy exporter did and what survives R3.5; the run
 covered 3 maps of 108, and `la_hub_1` is expected to diverge by name.
 
+**The differ lands: byte-equal or named-divergence-only on the three-map corpus (2026-09-01).**
+R3.3/MP-2.3 (`pipeline/src/elysium_pipeline/validation/map_sidecar_diff.py`, one new pytest
+module, no exporter change). Compares the R3.2 producer's sidecars under
+`$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/` against the legacy exporter's under
+`$ELYSIUM_EXPORT_ROOT/<map>/` for each of the eight sidecars (`.ready` is producer-only and never
+compared): a byte comparison for every suffix, plus a structural diff for `.ents` — per-entity
+field diff by lump-order index (added/removed/changed keys, the `outputs` list), and `hulls`
+reported as per-hull vertex counts and one AABB per brush-entity row rather than the raw flat
+arrays. `.dispcol` gets its own classifier, `classify_dispcol`, which only accepts a difference as
+the pre-declared seam-precision limit when row count and row shape match exactly and every row's
+max |Δ| stays under a 0.01 cm tolerance (measured max on the corpus is 0.0019 cm) — a shape
+mismatch or a larger delta reports `"unexpected"` instead. `la_hub_1`'s pre-declared
+`planenum`-overflow divergence (R3.1) short-circuits `diff_map` by name before any file is read, so
+a future 108-map run never byte-compares a map the legacy exporter itself corrupted. A map's
+`classification` rolls up to `"byte_equal"`, `"named_divergence_only"`, or
+`"unexpected_divergence"` — only the first two are a pass.
+
+Run on the scoped three-map corpus (`uv run python -m elysium_pipeline.validation.map_sidecar_diff
+sp_tutorial_1 sm_pawnshop_1 sm_hub_1`, reports pinned under
+`$ELYSIUM_WORK_ROOT/exports_v2/_sidecar_diff/<map>.json`): `sm_pawnshop_1` is `"byte_equal"` (no
+`.dispcol` on either side); `sp_tutorial_1` and `sm_hub_1` are `"named_divergence_only"` — in both,
+every sidecar but `.dispcol` is byte-identical (`.ents` 848,942 / 1,064,174 bytes, `.hulls` 601,377
+/ 898,511 bytes, `.lights`, `.env`, `.sky`, `.spawn`, `.ropes` all equal) and `classify_dispcol`
+proves the `.dispcol` divergence is the named one, not a fresh defect. The `.ents` structural diff
+finds **zero** entity-level differences across all three maps' 1,868 + 468 + 2,597 = 4,933 entity
+rows — the same byte-equality the R3.2 SHA comparison already showed, now demonstrated at the field
+level rather than assumed from whole-file equality. `pipeline/tests/test_map_sidecar_diff.py` (5
+cases) pins `file_diff`'s three presence states, `classify_dispcol`'s tolerance boundary and its
+shape-mismatch rejection, `entity_field_diff`'s five diff kinds (added/removed/changed/outputs/
+hull-count/AABB) against synthetic rows, `ents_structural_diff`'s index alignment including a
+producer-only extra row, and `diff_map`'s three classifications plus the `la_hub_1` short-circuit,
+all against `tmp_path` fixtures rather than the real corpus. `uv run pytest
+pipeline/tests/test_map_sidecar_diff.py pipeline/tests/test_map_sidecars.py
+pipeline/tests/test_map_producer_join.py pipeline/tests/test_map_census.py`: 20 passed in 0.55 s.
+
+Scope: this run covers the three-map test corpus only, per this task's explicit instruction; the
+108-map run R3.3's roadmap text names is a separately owner-approved step and was not run here.
+`la_hub_1`'s short-circuit is therefore unexercised against a real file on disk in this run — it is
+covered by a synthetic `tmp_path` test instead, since the map is outside the working corpus. The
+`.dispcol` tolerance (0.01 cm) is a margin chosen above the two measured maxima (0.0019 cm,
+0.0006 cm), not a re-derivation from a third data point; a future map with a larger seam-precision
+gap would need the constant revisited, not assumed forever safe.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1095,10 +1138,14 @@ entities and lighting units and writes `.ents`/`.hulls`/`.dispcol`/`.lights`/`.e
 21 of the 23 files byte-identical to the legacy sidecars on the three test maps (4,119,685 bytes);
 the two `.dispcol` are the one divergence and it is a seam-precision limit. Numbers in the Settled entry
 "The producer emits the legacy sidecars, byte for byte bar one".
-- **R3.3 The differ** [MP-2.3]. All 108 maps against the legacy exporter; hull vertex counts and
-  AABBs compared explicitly. Two divergences are pre-declared and must be expected by name:
-  `la_hub_1`'s signed-`planenum` hulls (R3.1) and `.dispcol`'s 4th decimal on the 48 maps that
-  have displacements (R3.2). → lands: byte-equal or named-divergence-only.
+**R3.3 landed (2026-09-01)** [MP-2.3] — `validation/map_sidecar_diff.py` byte-diffs the R3.2
+producer's sidecars against the legacy exporter's, plus a structural `.ents` diff (per-entity field
+diff by lump-order index, hull vertex counts and AABBs, `outputs`), with `.dispcol` and `la_hub_1`
+recognized as pre-declared named divergences rather than defects. Run on the three-map test corpus:
+`sm_pawnshop_1` byte-equal, `sp_tutorial_1`/`sm_hub_1` named-divergence-only (`.dispcol` only), zero
+entity-level `.ents` differences across 4,933 rows. The 108-map run stays a later owner-approved
+step. Numbers in the Settled entry "The differ lands: byte-equal or named-divergence-only on the
+three-map corpus".
 - **R3.4 Named divergences, one commit each** [MP-2.4]. Datamap output typing (+
   `FElysiumSaveVersion` bump, the `OutputTimesRemaining` gate made loud), key folding, `param`
   stripping, `delay` atof, `extra`, `times` normalization ownership. Plus the two the port
