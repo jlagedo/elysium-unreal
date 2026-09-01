@@ -766,6 +766,29 @@ cases, a `--save` integration case that writes the file for real, and the three 
 has no direct unit coverage; the shape-mismatch and changed-percent branches are exercised only by
 the real-data run.
 
+**Per-map censuses landed on the test corpus (2026-08-31).** R2.2 (`validation/map_census.py`, no
+C++ change): re-aggregates the entities, lighting and root export_v2 GLB units into one JSON
+document per map — `entities.classes[]` (count, `brushCount`, `hullCount`, `outputCount` per
+classname; `brushCount` is the class's entities whose `model` names a brush model, `hullCount` the
+subset whose brush model also owns a `physics.models[]` entry in the root unit), `lights.types[]`
+(count and `styledCount`, i.e. `style != 0`, per `dworldlight_t.type`), and zero-filled occurrence
+counts for the R7.5 effects vocabulary (`env_sprite`, `env_steam`, `env_fire`, `env_embers`,
+`env_lightglow`, `point_spotlight`, `env_sun`, `env_smoketrail`, `func_smokevolume`,
+`env_dustmote`). Run on the three-map test corpus at `c9201d4fc5a55a21ff6a4239adc63be8b7516dc1` and
+pinned under `$ELYSIUM_WORK_ROOT/exports_v2/_census/<map>.json`: `sp_tutorial_1` 1,868 entities/80
+classes, 396 lights (224 point/14 styled, 170 spot/4 styled, 1 skylight, 1 skyambient — the sky
+pair together, as `seam_map_map_lighting.md` states), 96 `env_sprite`, no other effects class;
+`sm_pawnshop_1` 468 entities/57 classes, 161 lights (43 point, 118 spot, none styled), 74
+`env_sprite`; `sm_hub_1` 2,597 entities/71 classes, 687 lights (20 emit_surface, 300 point/1
+styled, 367 spot, no sky pair — matching the lighting seam's stated corpus fact), 309 `env_sprite`.
+On all three maps every brush-model entity's `hullCount` equals its `brushCount` — vbsp compiles a
+PHYSCOLLIDE entry for every brush model, not only the ones a class handler treats specially — so
+the census's own numbers are the first evidence for R3.1's "world-space-hulls invariant" rather
+than an assumption going in. `pipeline/tests/test_map_census.py` pins the three aggregation
+functions against synthetic rows (brush/hull/output totals, type grouping with a styled light,
+zero-filled effects classes) and one `write_glb`-built fixture through `census_for_map`/
+`write_census` end to end, plus the named error on a unit that has not been exported.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -809,8 +832,9 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 shots landed on the test corpus". Scoped to the three-map test corpus; the original R2.1 reach
 (every hub + one of each district type) re-promotes when the corpus widens.
 
-- **R2.2 Censuses** [MP-1.2]. Per-map entity/light/effects-class censuses pinned as JSON.
-  → lands: the differ's and R7's ground truth.
+**R2.2 landed (2026-08-31)** — `validation/map_census.py`, censuses pinned for the three-map test
+corpus; numbers in the Settled entry "Per-map censuses landed on the test corpus".
+
 - **R2.3 Recipe closes over what it absorbs** [MP-1.3]. `level_sidecar_recipe` extended to
   `.ents`, `.hulls`, `.dispcol`, `.ropes`; a touched sidecar provably dirties the `.umap`.
   → lands: no stale-level failure mode.
