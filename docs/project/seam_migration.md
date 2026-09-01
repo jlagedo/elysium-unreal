@@ -1079,6 +1079,71 @@ covered by a synthetic `tmp_path` test instead, since the map is outside the wor
 0.0006 cm), not a re-derivation from a third data point; a future map with a larger seam-precision
 gap would need the constant revisited, not assumed forever safe.
 
+**The six named `.ents` divergences land as producer flags, decided or measured (2026-09-01).**
+R3.4/MP-2.4, eight commits, `pipeline/src/elysium_pipeline/exporters/UE_map_sidecars.py` +
+`pipeline/tests/test_map_sidecars.py` + `docs/architecture/seam_map_map.md` → "Producer join": new
+"R3.4 — the six divergences" and "R3.4 — the two the port surfaced" subsections, plus one C++
+change (`ElysiumEntityWorldPersistence.cpp` + a new Substrate test). Each of the six field-list
+divergences `seam_map_map.md` named lands as a flag on a new `EntityDivergences` dataclass, every
+flag defaulting to the legacy/byte-comparable reading so `write_sidecars`'s default output is
+unchanged (re-verified against the three-map corpus: `sm_pawnshop_1` still `byte_equal`,
+`sp_tutorial_1`/`sm_hub_1` still `named_divergence_only` with `.dispcol` the only file that
+differs, exactly as R3.3 measured):
+
+1. **Datamap output typing** (`datamap_output_typing`) swaps the `^(On|Out)` shape test for the
+   class's datamap (the same tables `map_entities_glb.decode._is_output` reads). Measured delta on
+   the three-map corpus: **zero** — both shipped examples (`game_ui`'s promotions,
+   `trigger_player_activity_level`'s demotion) live on `la_hub_1`/`sm_diner_1`, outside it.
+2. **Key folding** (`fold_keys`) makes two spellings of one key one `keys` slot instead of two,
+   matching the entities unit's own folded-identity rule; the winning slot keeps the *last*
+   occurrence's own spelling, never a forced lowercase. Measured delta: **zero** — no entity among
+   the 4,933 repeats a key under two spellings.
+3. **`param` stripping** (`strip_param`) strips the output row's `param` field the way the other
+   string fields already are. Measured delta: **zero** — no authored `parameter` carries
+   whitespace.
+4. **`delay` via `atof`** (`delay_atof`) reads `delay` with the module's own longest-numeric-prefix
+   `atof()` instead of a plain `float()`. Measured delta: **zero** — every authored `delay` is
+   already `float()`-parseable.
+5. **`extra` field** (`keep_extra`) adds field 6 verbatim, present only when authored. **Not**
+   zero: retail writes seven fields on almost every output, so this flag measures `extra: ""` added
+   to 1,027/1,028 outputs on `sp_tutorial_1`, 121/121 on `sm_pawnshop_1` and 800/802 on `sm_hub_1`,
+   moving 338/34/228 `.ents` entity rows off `byte_equal` — the one flag of the six whose corpus
+   delta is large rather than a synthetic-only edge case.
+6. **`times` normalization** needed no flag: `ElysiumEntityDefs.cpp` already rewrites an authored
+   `0` to `-1` once, at read time, with exactly one owner (not the exporter) — R3.4's only action
+   was confirming that and recording it.
+
+The two divergences the port surfaced (not from the field-list comparison) were decided rather
+than coded: **`.dispcol` precision** stays a named divergence — the measured drift (max
+0.0019 cm / 0.0006 cm) is already under `map_sidecar_diff`'s 0.01 cm tolerance and feeds collision
+only, and publishing `DISP_VERTS` numerically would be a schema change to the map root unit (a
+different seam) for precision nothing downstream needs. **`sm_hub_1`'s embedded-quote block** needs
+no producer option: the corruption is an artifact of this producer's text-reconstruction-plus-regex
+path, absent from the entities unit's own structural read, so R4.1's `UElysiumMapEntities`
+inherits the fix by construction once it deserializes the entities unit directly.
+
+The `OutputTimesRemaining` restore gate in `ElysiumEntityWorldPersistence.cpp` (datamap output
+typing's runtime half) now logs a warning on a cardinality mismatch instead of silently keeping the
+freshly-built counters, pinned by a new `Elysium.Substrate.SaveOutputCardinality` test. No
+`FElysiumSaveVersion` bump: the roadmap's own 2026-09-01 "no save-file compatibility at build time"
+ruling — recorded in this file the same day, ahead of this task — supersedes the bump this
+section's history and `seam_map_map.md`'s prior text once called for; the docs were followed over
+the older task note.
+
+`uv run pytest pipeline/tests/test_map_sidecars.py pipeline/tests/test_map_producer_join.py`: 17
+passed in 0.4 s (7 new test cases pin the flags, including the two synthetic edge cases the
+three-map corpus does not exercise itself: a case-variant key repeat and a trailing-junk delay).
+`uv run elysium test Substrate`: 424 of 424 passed in 3.8 s, including the new cardinality test.
+`uv run elysium build`: succeeded. Each flag's re-run of the R3.3 differ used a scratch
+`producer_root` (`diff_map(map, producer_root=scratch)`) rather than the default `_sidecars/`
+tree, so the default corpus output was never overwritten mid-task; a final default-flags run
+re-confirmed the unchanged classification. Follow-ups: the flags are `UE_map_sidecars.py`'s own,
+not yet consumed by any caller — R4.1's `UElysiumMapEntities` deserializer is a separate module
+that reads the entities GLB unit directly and was always going to need its own datamap-typing/
+key-folding/atof logic rather than importing this producer's; these flags exist to prove and
+measure the corrected reading ahead of that work, not to be imported by it. The 108-map run stays
+out of scope, as it has for the whole R3 track.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1146,12 +1211,14 @@ recognized as pre-declared named divergences rather than defects. Run on the thr
 entity-level `.ents` differences across 4,933 rows. The 108-map run stays a later owner-approved
 step. Numbers in the Settled entry "The differ lands: byte-equal or named-divergence-only on the
 three-map corpus".
-- **R3.4 Named divergences, one commit each** [MP-2.4]. Datamap output typing (+
-  `FElysiumSaveVersion` bump, the `OutputTimesRemaining` gate made loud), key folding, `param`
-  stripping, `delay` atof, `extra`, `times` normalization ownership. Plus the two the port
-  surfaced: `.dispcol` precision (publish DISP_VERTS numerically in the map root unit, or accept
-  the named divergence) and `sm_hub_1`'s embedded-quote entity block. → lands: each divergence
-  shot-diffed and pinned.
+**R3.4 landed (2026-09-01)** [MP-2.4] — the six named `.ents` divergences each land as an opt-in
+`EntityDivergences` flag on `UE_map_sidecars.py` (default: legacy/off, so the producer stays
+byte-comparable) plus a doc line, one commit per flag; the two the port surfaced (`.dispcol`
+precision, `sm_hub_1`'s embedded-quote block) are decided rather than coded. No
+`FElysiumSaveVersion` bump, per the roadmap's own 2026-09-01 "no save-file compatibility at build
+time" ruling; the `OutputTimesRemaining` restore gate now warns instead of silently dropping a
+cardinality mismatch. Numbers in the Settled entry "The six named `.ents` divergences land as
+producer flags, decided or measured".
 - **R3.5 Legacy exporter retired** [MP-2.5]. `.weather`/`.particles` re-pointed;
   `UE_bsp_to_scene.py` deleted. → lands: one exporter.
 
