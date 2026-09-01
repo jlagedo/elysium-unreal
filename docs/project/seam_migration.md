@@ -1046,6 +1046,11 @@ asset grid, or a direct actor edit, and nothing else. Cutover is gated per map, 
 Each task is one small deliverable; a landed task moves its result to Settled and comes off this
 list.
 
+**No save-file compatibility at build time (owner, 2026-09-01).** Old snapshots are disposable
+until the pipeline is one; no task spends effort on `FElysiumSaveVersion` gates, refusal paths or
+index remapping for saves that predate it. Entity order = lump order remains a rule only because
+the index is the running game's own handle; it owes nothing to yesterday's save.
+
 **Wire first, tune later (owner, 2026-08-31).** This roadmap makes things go live — appear,
 move, work. Exposure, brightness, look-tuning of any kind are **not in it**: nothing can be
 judged until everything is live, so every knob and settings surface built here ships with the
