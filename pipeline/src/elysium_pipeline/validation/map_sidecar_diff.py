@@ -58,7 +58,8 @@ DISPCOL_TOLERANCE_CM = 0.01
 DISPCOL_NAMED_DIVERGENCE = (
     "seam-precision limit: DISP_VERTS is not published numerically in the root unit, so the "
     "producer recovers displacement geometry from the mesh's float32 POSITION accessor instead "
-    "(UE_map_sidecars.displacement_triangles); R3.4 owns the fix."
+    "(UE_map_sidecars.displacement_triangles); R3.4 decided to accept this rather than publish "
+    "DISP_VERTS numerically (seam_map_map.md -> \"R3.4 -- the two the port surfaced\")."
 )
 KNOWN_MAP_DIVERGENCES: dict[str, str] = {
     "la_hub_1": "the legacy exporter's own signed-int16 planenum overflow corrupts its "

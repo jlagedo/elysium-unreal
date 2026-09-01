@@ -474,6 +474,33 @@ reading; the R3.3 differ was re-run with each flag on (`producer_root` pointed a
   (`int(float())` with `-1` on failure) is therefore final, and this bullet exists only to record
   that R3.4 checked it and found nothing left to land.
 
+### R3.4 — the two the port surfaced
+
+Two more divergences came up during R3.2's port, not from the field-list comparison above; R3.4
+is where the roadmap assigns their decisions.
+
+- **`.dispcol` precision — decided: accept the named divergence.** `displacement_triangles`
+  documents the open choice: publish `DISP_VERTS`/`VERTEXES` numerically in the map root unit so
+  `.dispcol` becomes byte-reproducible, or accept the measured 4th-decimal drift (max 0.0019 cm /
+  0.0006 cm on the three-map corpus, both under `map_sidecar_diff.DISPCOL_TOLERANCE_CM`'s 0.01 cm
+  margin) as named. Publishing the raw lumps numerically is a schema change to a *different* GLB
+  unit (`map_glb`, owned by R2's work, not R3.4's), for a value nothing downstream reads at
+  sub-millimetre precision — `.dispcol` only ever feeds collision. Per "wire first, tune later" and
+  R3.4's own scope (a producer-option task, not a root-unit schema task), the divergence stays
+  named rather than chased: `classify_dispcol`'s tolerance-gated classification (already landed in
+  R3.3) is the final answer, not an interim one.
+- **`sm_hub_1`'s embedded-quote entity block — decided: no producer option, already correct by
+  construction.** `entity_lump_text`/`_requote` reproduce the legacy corruption verbatim (R3.2,
+  pinned by `test_entity_lump_text_reproduces_the_embedded_quote_the_legacy_regex_trips_on`)
+  because `write_sidecars` stays byte-comparable against a text-and-regex legacy reader. That
+  corruption is purely an artifact of *reconstructing lump text and re-running the legacy regexes*
+  — the entities unit's own `entities[].keyValues[]` never loses `logic_auto`'s `origin` in the
+  first place, because it reads the lump structurally and never re-derives it from reconstructed
+  text. R4.1's `UElysiumMapEntities` deserializes the entities unit directly, not through this
+  producer's regex path, so it inherits the fix by construction and needs no flag here — unlike the
+  six divergences above, there is no "byte-comparable default vs. corrected opt-in" axis to add:
+  the correct reading is simply *not running this producer's text reconstruction at all*.
+
 ### Verification
 
 The join above was executed against the published V2 units alone — root plus entities, no BSP read

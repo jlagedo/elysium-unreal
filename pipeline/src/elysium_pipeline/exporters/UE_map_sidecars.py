@@ -770,7 +770,8 @@ def displacement_triangles(units: MapUnits, world_faces: Sequence[int]) -> list[
     exactly (3,584 rows on `sp_tutorial_1`, 288 on `sm_hub_1`), 228 and 100 of those rows are
     byte-identical, 17,908 of 32,256 and 372 of 2,592 printed floats differ, max |delta| 0.0019 cm
     and 0.0006 cm. That is a seam-precision limit, not a choice made here; R3.3 must expect it by
-    name and R3.4 owns the fix (publish DISP_VERTS numerically, or accept the named divergence).
+    name; R3.4 decided to accept it rather than publish DISP_VERTS numerically in the root unit
+    (`seam_map_map.md` -> "R3.4 -- the two the port surfaced").
     """
 
     faces = units.root["faces"]
