@@ -1438,6 +1438,66 @@ build's file bucketing and put both files in the same translation unit for the f
 anonymous namespace is TU-wide and the duplicate definitions became a hard redefinition error.
 Renamed the entity-side pair to `EntityManifestPath`/`StagedEntityMaps`; no behavior change.
 
+**Roadmap R4 landed (2026-08-31).** All six R4 tasks are in on `main`; R4.1–R4.3 have their own
+Settled entries above (commits `807ccefe`/`1b187f57`/`de6c0a94`), so this entry covers the stage as
+a whole and gives R4.4–R4.6 the detail they never got their own entry for.
+
+R4.4 (`71d6b455`) put the map's environment on cooked content: per-map `UElysiumMapEnvironment`
+(`<map>.env`'s 2D-sky flag and two fog sets, `<map>.sky`'s 3D-skybox miniature transform,
+`<map>.spawn`'s initial placement), the `import map-environment` lane and
+`ElysiumMapEnvironmentSource::Load`; contract in `seam_map_map.md` → "## Import — environment",
+numbers in that section's "Measured" table. Fog values are the unchanged, taste-free
+`ApplySceneFog` inputs; the height-fog actor's own component properties stayed the direct-edit
+tuning surface R4.3 left them as. The `.env`/`.sky`/`.spawn` readers were kept, not deleted (R4.6's
+proof needs both paths alive to diff); reader deletion moved to R8.1, matching R4.1/R4.2.
+
+R4.5 (`31a1222e`) gave the seven orphan cvar-only knobs editor homes: five `Config = Elysium,
+DefaultConfig` `UDeveloperSettings` pages (`UElysiumUISettings`, `UElysiumChoreoSettings`,
+`UElysiumAudioSettings`, `UElysiumSessionSettings`, plus the Cog "Enhanced defaults" literals into a
+new `UElysiumWeatherSettings`), every default the retired cvar's own unchanged default, and
+green-room eye tuning onto a real authored asset (`/Game/ElysiumAuthored/Eyes/DA_EyeTuning`,
+`UElysiumEyeTuningConfig`) composed component-wise with the Green Room's live nudge via
+`ElysiumEyes::ComposeTuning`, both landing as a no-op at shipped zero defaults. Three dead
+mechanisms were deleted outright rather than homed (`elysium.RainMist`, `elysium.SkyProbe` +
+`_skyprobe`, the skylight-leak A/B cvars and `ApplyPostProcessKnobs`), plus the `MaterialOverrides`
+cvar group and `ApplyMaterialOverrides` — the last one honestly flagged as superseded in *purpose*
+by `UElysiumSurfaceSettings` but not in *wiring* (that settings object only reaches the post-R5.4
+V2 masters), with the shipped render proved identical anyway since every retired default sat
+neutral. → lands: zero taste values living in C++ literals or cvars.
+
+R4.6 (`3ea1c790`, fixed by `f3d2c871`) replaced the implicit "asset wins when present" rule
+R4.1/R4.2/R4.4 each grew independently with one tracked, reviewable flag:
+`UElysiumMapTransportSettings` (`Config = Elysium, DefaultConfig`, `MapsOnNewTransport:
+TArray<FName>`), checked by all three whole-swap resolvers via
+`ElysiumMapTransport::IsMapOnNewTransport(MapName)` before their own `LoadObject`. Contract in
+`seam_map_map.md` → "## Import" → "The explicit per-map cutover flag (R4.6)"; R4.3's light
+calibration stays deliberately ungated (additive, no legacy fallback). The first landing's
+`Config/DefaultElysium.ini` listed only the three corpus maps and missed `sp_theatre` — a fourth
+already-converted map (asset exists, read live by the green room's theatre camera track) — which
+made `Elysium.Content.MapEntities.DefCountParity` go red (5/7 pass) and, more importantly, made
+`ElysiumEntityDefSource::Load` silently fall back to the sidecar for a map the running game reads
+live: a real transport regression, not just a test one, caught by review and closed same-day by
+`f3d2c871`, which added `sp_theatre` to the ini (no bake) and rewrote `DefCountParity` to assert the
+resolver's source against `IsMapOnNewTransport` per map instead of hardcoding `"asset"`, so it stays
+correct as more maps get baked ahead of their ini line. `Elysium.Content.Map` tier back to 7/7;
+`Elysium.Substrate.MapTransport` 2/2 throughout. All three corpus maps were headlessly booted and
+shot-diffed against the R2.1 baseline (`8077e5b5f902`): all 14 vantages fail default tolerance, but
+a `MapsOnNewTransport`-emptied control run reproduces the same magnitudes, proving the divergence is
+accumulated R4.1–R4.5 drift, not R4.6's flag — full numbers in `seam_map_map.md` → "## Import" →
+"Shot-diff against the R2.1 baseline (2026-09-01)". Re-saving the baseline is an owner call, open
+the same way R3.5 already filed it for `sp_tutorial_1` alone.
+
+Open follow-ups carried out of the stage: `Elysium.Content.MapEnvironmentParityTests.cpp` still
+hardcodes its resolver assertion to `"asset"` rather than checking `IsMapOnNewTransport` — the same
+failure mode `f3d2c871` just fixed for entities, latent until an environment asset ships ahead of
+its ini line (not a defect today: all three env assets on disk match the three listed maps).
+`Elysium.Content.MapCollision.*` has no equivalent resolver assertion at all. No Substrate test
+asserts the tracked `Config/DefaultElysium.ini` actually loads into
+`GetDefault<UElysiumMapTransportSettings>()`; only the Content tier observes that today. R8.1 still
+owns deleting the `.ents`/`.hulls`/`.dispcol`/`.env`/`.sky`/`.spawn` sidecar readers R4.1/R4.2/R4.4
+each kept as fallback. The R2.1 shot baseline re-save is an open owner call. A `--legacy-root`
+parity comparison remains owed from earlier stages and untouched here.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1489,103 +1549,7 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R4 — transport: assets instead of loose files [MP-3]
 
-**R4.1 landed (2026-09-01)** — per-map `UElysiumMapEntities`, the `import map-entities` lane and
-`ElysiumEntityDefSource::Load`; contract in `seam_map_map_entities.md` → "## Import", numbers in
-the Settled entry "R4.1 — the entity table ships as cooked content". The `.ents` reader was
-**kept**, not deleted (it is the fallback for every unconverted map and R4.6 needs both paths to
-diff); its deletion moves to R4.6's tail.
-
-**R4.2 landed (2026-09-01)** — per-map `UElysiumMapCollisionPayload`, the `import map-collision`
-lane, `UElysiumMapCollision::Build`'s payload-first adopt and `BuildBrushBody`'s per-ordinal
-lookup; contract in `seam_map_map.md` → "## Import", numbers in the Settled entry "R4.2 — collision
-ships as cooked content". Nav bounds and the readiness barrier kept their sources. The
-`.hulls`/`.dispcol` readers were **kept**, not deleted (they are the fallback for every unconverted
-map, and R4.6's proof needs both paths alive to diff); reader deletion is R8.1's, which is where
-this line's original "readers deleted" now points.
-
-**R4.3 landed (2026-09-01)** — `UElysiumLightingSettings` (global calibration) + per-map
-`UElysiumLightCalibration` (merge-row hand-tunes, lump-15 `SourceIndex`); contract in
-`seam_map_map_lighting.md` → "## Import", numbers in the Settled entry "R4.3 — light tuning is an
-editor surface". The Cog Lights tuning tabs are deleted; the viewing tab is kept, as the line
-requires. Two corrections to the line's original text: the rig's *wholesale re-derivation from
-`.lights`* does not yet die — that is R5.6's bake, still ahead — so this task states the rig
-applies the calibration asset's overrides + lightstyles **in addition to**, not instead of, the
-existing per-load derivation; and `Elysium.Substrate.LightRig`'s derivation assertions stay put
-rather than moving, since R5.6's bake (their stated destination) does not exist yet for them to be
-verified against — re-homed is what R5.6 does when it lands, not something achievable here.
-**R4.4 landed (2026-09-01)** — per-map `UElysiumMapEnvironment` (`<map>.env`'s 2D-sky flag and two
-fog sets, `<map>.sky`'s 3D-skybox miniature transform, `<map>.spawn`'s initial player placement),
-the `import map-environment` lane and `ElysiumMapEnvironmentSource::Load`; contract in
-`seam_map_map.md` → "## Import — environment", numbers in that section's own "Measured" table. The
-fog values are the unchanged, taste-free `ApplySceneFog` inputs the line calls for; the height-fog
-actor's own component properties remain the direct-edit tuning surface R4.3 left them as (no Cog
-surface reaches them, and this asset does not either). One correction to the line's original text:
-the `.env`/`.sky`/`.spawn` readers were **kept**, not deleted (the fallback for every unconverted
-map, and R4.6's proof needs both paths alive to diff); reader deletion moves to R8.1, matching
-R4.1's and R4.2's own corrections.
-**R4.5 landed (2026-09-01)** — the seven cvar-only knobs each moved to a `Config = Elysium,
-DefaultConfig` `UDeveloperSettings` page, grouped sensibly as the line asked: `UElysiumUISettings`
-(`MenuScrim`), `UElysiumChoreoSettings` (`JawSpeechLevel`, `JawSmoothing`, `CameraCutSeconds`),
-`UElysiumAudioSettings` (`MusicCrossfade`, `SchemeRandomBase`), `UElysiumSessionSettings`
-(`LoadingScreenMinTime`) — five pages, not seven, since the line's own grouping instruction (UI /
-Choreo / Audio / Session) collapses the seven values onto four homes. Every default is the retired
-cvar's own default, unchanged. The seven "Enhanced rain" literals the Cog Environment window's
-"Enhanced defaults" button hardcoded (`ElysiumCogWindow_Environment.cpp` ~429–439) moved to a new
-`UElysiumWeatherSettings` page, and the button is deleted; every value it set already has its own
-live Cog slider, so nothing lost a tuning surface. Green-room eye tuning (`iris size`, `eye shift`)
-moved to `/Game/ElysiumAuthored/Eyes/DA_EyeTuning` (`UElysiumEyeTuningConfig`), a real authored
-asset created and saved through the `elysium` editor MCP, beside `Cloth/DA_ClothTuning`
-(`docs/architecture/animation-architecture.md` §8 gained the design note). Unlike the settings
-pages, this baseline did not previously reach the whole game from any surface at all — it was
-reachable only from the Green Room's own "Reset tuning" button — so landing it needed a real
-composition rule, not just a relocation: `ElysiumEyes::ComposeTuning` (pure, `ElysiumEyeRig.h`)
-adds the asset's `EyeSize`/`EyeShift` to the Green Room's live debug nudge component-wise, and
-`FElysiumEyePass::TickEyes` is the one caller, so the baseline now reaches every rendered eye,
-player and NPC alike. Both compose to a no-op at their shipped zero defaults, so "values = today's
-defaults exactly" holds for both the settings pages and the asset.
-
-Deleted, not homed: `elysium.RainMist` (declared, read nowhere — confirmed dead before deletion);
-`elysium.SkyProbe` and its `_skyprobe` assembly path in `ElysiumMapVisuals.cpp` (RE-A2 closed, so
-the labelled-probe sky-cube source has no reason left to exist as a runtime branch); the light-leak
-A/B (`elysium.SkylightLeaking`/`SkylightLeakingDistance`/`LumenDiffuseBoost` and
-`ApplyPostProcessKnobs` — the Cog tab that drove them was already gone since R4.3, leaving three
-cvars and a PPV-override pass with no way left to reach them); and the `MaterialOverrides` cvar
-group (`elysium.MaterialOverrides`/`RoughBase`/`RoughReflect`/`SpecBase`/`SpecReflect` and
-`ApplyMaterialOverrides`, the whole dynamic-MID-in-front-of-every-baked-material pass). One honest
-correction on that last deletion: the line called it "superseded by `UElysiumSurfaceSettings`,"
-which is true of *purpose* (both exist so a human tunes reflectivity in the editor rather than by
-cvar) but not of *wiring* — `UElysiumSurfaceSettings` pushes into `MPC_ElysiumSurfaces`, which only
-the V2 masters read (R5.4's rebind), not the pre-V2 per-map baked materials `ApplyMaterialOverrides`
-stood MIDs in front of. Wiring the old baked-material path onto the new settings object was not
-attempted — R5.4 replaces that whole path days from now, and every default cvar in the deleted
-group sat at its neutral value (`RoughBase`/etc. at `-1`, `MaterialOverrides` itself the only
-non-neutral one, gating a pass that no-ops when nothing else is turned), so the shipped render is
-provably identical with the mechanism gone: `bWanted` was false by default, `MaterialOverrides.Num()`
-stayed `0`, and the baked instances rendered exactly as authored either way. `docs/vtmb/reflections.md`
-and `docs/vtmb/sky-ambience.md` were updated to point at this task instead of the retired mechanisms;
-`docs/project/roadmap.md` 3.11 (which asked to "wire it or retire it") is marked landed as retired,
-its `plans/world.md` entry deleted per the docs house rule. → lands: zero taste values living in
-C++ literals or cvars.
-
-**R4.6 landed (2026-09-01)** — `UElysiumMapTransportSettings` (`Config = Elysium, DefaultConfig`,
-`MapsOnNewTransport: TArray<FName>`), the one tracked, reviewable list answering "is this map on
-the new transport" for the three whole-swap resolvers (`ElysiumEntityDefSource::Load`,
-`UElysiumMapCollision::AdoptPayload`, `ElysiumMapEnvironmentSource::Load`); each now checks
-`ElysiumMapTransport::IsMapOnNewTransport(MapName)` before its own `LoadObject`, replacing the
-implicit "asset wins when present" rule R4.1/R4.2/R4.4 each grew independently, with no outcome
-change for an already-converted map. Contract in `seam_map_map.md` → "## Import" → "The explicit
-per-map cutover flag (R4.6)"; R4.3's light-calibration merge is deliberately not gated (additive,
-no legacy behavior to fall back to — `seam_map_map_lighting.md` → "## Import"). `Config/
-DefaultElysium.ini` lists `sm_pawnshop_1`, `sp_tutorial_1`, `sm_hub_1`, in that order, matching the
-task's own staging instruction. Two Substrate tests
-(`Elysium.Substrate.MapTransport.FlagResolution`, `.IniRoundTrip`); Substrate 433/433. All three
-maps were headlessly booted and shot-diffed against the R2.1 baseline (`8077e5b5f902`): all 14
-vantages fail the default tolerance, but a `MapsOnNewTransport`-emptied control run reproduces the
-same magnitudes for `sm_pawnshop_1` (`p1`/`p2`/`p3`/`spawn` within noise of the flag-set run),
-proving the divergence is accumulated R4.1–R4.5 drift, not this task's flag — numbers and the full
-finding in `seam_map_map.md` → "## Import" → "Shot-diff against the R2.1 baseline (2026-09-01)".
-Re-saving the baseline is an owner call, left open the same way R3.5 already filed it for
-`sp_tutorial_1` alone.
+**R4 landed** — see Settled.
 
 ### R5 — the map bake rebuilt on the GLB corpus [MP-4]
 
