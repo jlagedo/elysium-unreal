@@ -293,6 +293,16 @@ class EntityDivergences:
     #: three-map corpus: every authored `delay` is already a plain `float()`-parseable token.
     delay_atof: bool = False
 
+    #: `False` (legacy, default): field 6 (`extra`, everything after `python`) is dropped -- the
+    #: legacy split reads exactly six fields and never looks past them (`seam_map_map.md`'s field
+    #: list: "field 6 (`extra`) dropped"). `True`: `extra` is added to the row, verbatim and
+    #: unjoined-comma-restored (`",".join(fields[6:])`, matching the entities unit's own
+    #: `Output.extra`), present only when the value's split actually reached a 7th field. **Not**
+    #: zero effect: retail always writes seven comma-separated fields even when the 7th is empty,
+    #: so this is the one R3.4 flag whose measured delta is the size of the whole `outputs` list,
+    #: not a rare edge case -- see the R3.4 doc line in `seam_map_map.md` for the exact count.
+    keep_extra: bool = False
+
 
 #: The default: every flag legacy, so a caller that asks for nothing gets the byte-comparable
 #: sidecars R3.3 diffs against `UE_bsp_to_scene.py`.
@@ -389,7 +399,7 @@ def split_output(
         except ValueError:
             return default
 
-    return {
+    row = {
         "target": parts[0].strip(),
         "input": parts[1].strip(),
         "param": parts[2].strip() if fields.strip_param else parts[2],
@@ -397,6 +407,9 @@ def split_output(
         "times": int(number(parts[4], -1)),
         "python": parts[5].strip() if len(parts) > 5 else "",
     }
+    if fields.keep_extra and len(parts) > 6:
+        row["extra"] = ",".join(parts[6:])   # verbatim; commas past field 6 are part of it
+    return row
 
 
 def _requote(text: str, quoted: bool) -> str:

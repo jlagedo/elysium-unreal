@@ -455,6 +455,15 @@ reading; the R3.3 differ was re-run with each flag on (`producer_root` pointed a
   `floor1..8`). **Measured delta: zero** — every authored `delay` on the three-map corpus is
   already a plain-`float()`-parseable token; the flag is pinned with a synthetic trailing-junk
   case instead.
+- **`extra` field** (`keep_extra`). `True` adds field 6 (`extra`, everything past `python`,
+  verbatim including any further commas) to the output row, present only when the value's split
+  actually reaches it — matching the entities unit's own `Output.extra`
+  (`map_entities_glb.decode._output_row`'s `",".join(fields[residue:])`). **Not** a zero-effect
+  flag: retail writes seven comma-separated fields on almost every output even when the 7th is
+  empty, so `keep_extra` is measured to add `extra: ""` to **1,027 of 1,028** outputs on
+  `sp_tutorial_1`, **121 of 121** on `sm_pawnshop_1`, and **800 of 802** on `sm_hub_1` — moving
+  338/34/228 `.ents` entity rows off `byte_equal` (`entityDiffCount`; every difference is exactly
+  the added `outputs[].extra` key, nothing else).
 
 ### Verification
 

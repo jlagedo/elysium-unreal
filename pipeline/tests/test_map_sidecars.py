@@ -88,6 +88,16 @@ def test_split_output_strip_param_opts_field_2_into_the_common_strip():
     assert row["param"] == "slow"
 
 
+def test_split_output_keep_extra_adds_field_6_verbatim_only_when_authored():
+    # R3.4: `extra` (field 6, everything past `python`) is present only when the split actually
+    # reaches it, verbatim including any further commas (`FUN_100ccf90`'s residue join).
+    fields = EntityDivergences(keep_extra=True)
+    assert split_output(" door , Open , slow  , 0.35 , x , taxi() , a,b ", fields)["extra"] == " a,b "
+    six_field = split_output("door,Open,slow,0.35,1,py", fields)
+    assert "extra" not in six_field
+    assert "extra" not in split_output("door,Open,slow,0.35,1,py")   # legacy default: dropped
+
+
 def test_split_output_delay_atof_reads_the_longest_numeric_prefix():
     # R3.4: a trailing-junk delay parses the way every other `.ents` number does (`atof`, the
     # longest numeric prefix) instead of rejecting the whole token to 0.0.
