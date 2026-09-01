@@ -1216,6 +1216,79 @@ the three imports into `export_maps`'s body and handing the modules into
 `test_export_maps_closure_includes_the_sidecar_producer` asserting `UE_map_sidecars`/`particles`/
 `weather` are in that closure.
 
+**Roadmap R3 landed (2026-08-31).** Map producer parity, five tasks, `5047bef2` → `b6065f8f`, all
+on the three-map test corpus (`sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`); this is a rollup of the
+per-task Settled entries above.
+
+R3.1 (`5047bef2`, MP-2.1, docs + one pytest module) states the entities+root join and the hull
+solver verbatim in `seam_map_map.md` → "Producer join" and reproduces it against the V2 units
+alone: 377 brush entities, 950 hulls, 7,542 hull vertices, 261 sky rows, 0 `contents`/
+`blocks_player` mismatches. Decided: recovered planes must be held as binary32 (float64
+mis-matched 96/377 brush entities' hulls; binary32 matched all 377); hulls ride in vbsp's compiled
+model frame, `world = origin + hull` unconditionally, verified on both extremes (`havenrm`'s `*18`
+door, `sp_tutorial_1`'s `trigger_changelevel` pair); `la_hub_1`'s signed-`planenum` int16 overflow
+(216 of 63,096 brushsides, 33,294 planes) is a pre-declared, named divergence, not a future
+regression. Follow-up: the field list is R3.2's; the 108-map run stays owner-approved and unrun.
+Owner note: the "world-space hulls" heading in `seam_map_map.md` still contradicts the ruling its
+own body states — cosmetic, unfixed.
+
+R3.2 (`cecac0ab`, MP-2.2, new `UE_map_sidecars.py`) writes `.ents`/`.hulls`/`.dispcol`/`.lights`/
+`.env`/`.sky`/`.spawn`/`.ropes` + `.ready` into `_sidecars/<map>/`; 21 of 23 files byte-identical to
+legacy (4,119,685 bytes), only `.dispcol` differs (max |Δ| 0.0019/0.0006 cm — a seam-precision
+limit, the root unit publishes no DISP_VERTS, only the coarser float32 mesh POSITION accessor, not
+a port defect). Three undocumented legacy behaviours reproduced by the byte diff: CRLF line
+endings, `sm_hub_1`'s embedded-quote `logic_auto` block reconstructed from `keyValues[]` and
+re-escaped verbatim rather than silently "fixed", and per-keyvalue `byteLength` round-trip
+validation (4,933/4,933 passed). Follow-up owed to R3.4: the `.dispcol` ruling. Owner notes: the
+rope `atof` default fallback isn't fully verbatim (bites only a non-numeric-but-present value,
+unreached on this corpus); `.ents` reconstruction is unverified against non-ASCII entity bytes
+off-corpus; `.ready` landed under `_sidecars/`, not yet at `MapExportReady`'s path (converges at
+R3.5).
+
+R3.3 (`f89f3dca`, MP-2.3, new `map_sidecar_diff.py`) byte-diffs plus structurally diffs `.ents`,
+adds `classify_dispcol` (0.01 cm tolerance) and a named `la_hub_1` short-circuit. Run on the
+three-map corpus: `sm_pawnshop_1` byte-equal, `sp_tutorial_1`/`sm_hub_1` named-divergence-only
+(`.dispcol` only), 0 structural diffs across 4,933 `.ents` rows. The 108-map run was explicitly not
+run, per this task's scope. Owner note: the `la_hub_1` short-circuit is wider than the doc's
+declared divergence — it silently absorbs any suffix, not just `.hulls`/`.ents`, worth narrowing
+before a 108-map run.
+
+R3.4 (`db3f1460`…`4c8a25f4`, 8 commits, MP-2.4) lands the six named `.ents` divergences as opt-in
+`EntityDivergences` flags on `UE_map_sidecars.py`, defaulting off so the byte-comparable default
+output is unchanged (re-confirmed against R3.3's classification). Measured per-flag entity-diff
+counts on the three-map corpus: `datamap_output_typing`/`fold_keys`/`strip_param`/`delay_atof` all
+0/0/0 (their trigger cases live outside the corpus, on `la_hub_1`/`sm_diner_1`); `keep_extra`
+338/34/228 (every diff is the added `extra:""` field — retail writes 7 output fields almost
+everywhere); `times` normalization needed no flag, already single-owned by `ElysiumEntityDefs.cpp`.
+Decided rather than coded: `.dispcol` stays a named divergence (already under the differ's
+tolerance; fixing it is a schema change to a different seam); `sm_hub_1`'s embedded-quote
+corruption needs no flag (R4.1's direct GLB read inherits the fix by construction). The
+`OutputTimesRemaining` silent-drop now warns instead (new Substrate test); no `FElysiumSaveVersion`
+bump, per the roadmap's own 2026-09-01 no-save-compatibility ruling overriding the older task note.
+Owner note: no pin exists yet for the `times` single-owner invariant (prose only); a stale
+docstring in `split_output` still contradicts both the shipped code and this ruling.
+
+R3.5 (`20aa7b9f`, `b6065f8f`, MP-2.5) wires the R3.2 producer into `export_maps` as the default
+sidecar path, overwriting the legacy writer's own output in place; `.weather`/`.particles` re-run
+against the producer's `.ents`. Verified on a real scoped bake: `--force` full bake, 452+ assets
+saved / 0 failed on all three maps, 14/14 shot vantages captured. Two CONFIRMED review findings both
+fixed the same day (`b6065f8f`): the incremental-build fingerprint wasn't seeing edits to
+`UE_map_sidecars`/`particles`/`weather` (imports hoisted into `export_maps`'s own body, a closure
+test added), and the differ's default legacy root pointed at the producer's own overwritten output,
+so a default-rooted post-bake run could only ever report `byte_equal` against itself — fixed with a
+new `self_comparison` classification and a `--legacy-root` flag; the earlier "`.dispcol` closes by
+construction" claim was corrected in place as the self-comparison artifact it was.
+`sp_tutorial_1`'s shot-diff failure against the R2.1 baseline (69–97%) was shown, by a full
+revert-and-rebake control, to be a pre-existing stale baseline, not an R3.5 regression. Follow-up: a
+real post-R3.5 parity comparison via `--legacy-root` has still not been run; owed before R8 deletes
+`UE_bsp_to_scene.py`.
+
+Across R3: the three-map corpus stayed the only one touched throughout (the 108-map differ run is
+named five separate times as a still-pending, separately owner-approved step); no C++ change beyond
+R3.4's warning log and its test; `seam_map_map.md` → "Producer join" is now the full spec (join,
+hull solver, field list, the six R3.4 divergences, the two the port surfaced); `UE_bsp_to_scene.py`
+is unwired but not deleted (R8's job). R4 (transport: assets instead of loose files) is next.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1263,43 +1336,7 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R3 — map producer parity (game untouched) [MP-2]
 
-**R3.1 landed (2026-08-31)** [MP-2.1] — the entities+root join, the hull solver's exact algorithm
-and tolerances, the hull-frame invariant (verified on `sm_pawnshop_1`'s `havenrm`
-`func_door_rotating`) and the `.ents` field list are stated in `seam_map_map.md` → "Producer join";
-the join reproduces the legacy hulls, contents, `blocks_player`, `brush_mesh` and `sky` exactly from
-the V2 units on the three test maps. Numbers in the Settled entry "The `.ents` join is stated, and
-reproduced from the V2 units".
-**R3.2 landed (2026-08-31)** [MP-2.2] — `exporters/UE_map_sidecars.py` reads a map's root,
-entities and lighting units and writes `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/`.sky`/
-`.spawn`/`.ropes` plus the R2.4 `.ready` marker into `$ELYSIUM_EXPORT_V2_ROOT/_sidecars/<map>/`.
-21 of the 23 files byte-identical to the legacy sidecars on the three test maps (4,119,685 bytes);
-the two `.dispcol` are the one divergence and it is a seam-precision limit. Numbers in the Settled entry
-"The producer emits the legacy sidecars, byte for byte bar one".
-**R3.3 landed (2026-09-01)** [MP-2.3] — `validation/map_sidecar_diff.py` byte-diffs the R3.2
-producer's sidecars against the legacy exporter's, plus a structural `.ents` diff (per-entity field
-diff by lump-order index, hull vertex counts and AABBs, `outputs`), with `.dispcol` and `la_hub_1`
-recognized as pre-declared named divergences rather than defects. Run on the three-map test corpus:
-`sm_pawnshop_1` byte-equal, `sp_tutorial_1`/`sm_hub_1` named-divergence-only (`.dispcol` only), zero
-entity-level `.ents` differences across 4,933 rows. The 108-map run stays a later owner-approved
-step. Numbers in the Settled entry "The differ lands: byte-equal or named-divergence-only on the
-three-map corpus".
-**R3.4 landed (2026-09-01)** [MP-2.4] — the six named `.ents` divergences each land as an opt-in
-`EntityDivergences` flag on `UE_map_sidecars.py` (default: legacy/off, so the producer stays
-byte-comparable) plus a doc line, one commit per flag; the two the port surfaced (`.dispcol`
-precision, `sm_hub_1`'s embedded-quote block) are decided rather than coded. No
-`FElysiumSaveVersion` bump, per the roadmap's own 2026-09-01 "no save-file compatibility at build
-time" ruling; the `OutputTimesRemaining` restore gate now warns instead of silently dropping a
-cardinality mismatch. Numbers in the Settled entry "The six named `.ents` divergences land as
-producer flags, decided or measured".
-**R3.5 landed (2026-09-01)** [MP-2.5] — `exporters/export_all.export_maps` now calls the R3.2
-producer (`rewrite_sidecars_via_producer`) right after `UE_bsp_to_scene.main` on every map export,
-overwriting the eight legacy sidecars it just wrote with the producer's bytes in the same
-directory; `.weather`/`.particles` are re-run against the producer's `.ents` (`UE_bsp_to_scene.main`
-gained one additive `return` handing back sm_hub_1's mesh-derived `cover_triangles`/bounds so the
-re-run needs no recomputation). `UE_bsp_to_scene.py` is **not** deleted — its body is otherwise
-untouched and it stays importable/callable directly for the 108-map differ (R3.3); deletion is R8,
-once that wider run has built confidence. Numbers in the Settled entry "The producer becomes the
-default sidecar path, proven on a real scoped bake".
+**R3 landed** — see Settled.
 
 ### R4 — transport: assets instead of loose files [MP-3]
 
