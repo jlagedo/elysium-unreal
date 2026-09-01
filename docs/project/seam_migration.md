@@ -1144,6 +1144,54 @@ key-folding/atof logic rather than importing this producer's; these flags exist 
 measure the corrected reading ahead of that work, not to be imported by it. The 108-map run stays
 out of scope, as it has for the whole R3 track.
 
+**The producer becomes the default sidecar path, proven on a real scoped bake (2026-09-01).**
+R3.5/MP-2.5, `pipeline/src/elysium_pipeline/exporters/export_all.py` (+7 lines, new
+`rewrite_sidecars_via_producer`) and `pipeline/src/elysium_pipeline/exporters/UE_bsp_to_scene.py`
+(one additive `return` at the end of `main`, nothing removed). `export_maps` now calls the R3.2
+producer (`UE_map_sidecars.write_sidecars`) immediately after `UE_bsp_to_scene.main` on every
+export, overwriting the eight legacy sidecars `main` just wrote into the same directory with the
+producer's bytes; `.weather`/`.particles` are then re-run against the producer's `.ents` rather than
+the legacy one `main` already used and discarded. Weather's mesh-derived `cover_triangles`/bounds
+are geometry, not entity data, so `main` hands them back in its new return value instead of the
+re-run recomputing them. `UE_bsp_to_scene.py` is not deleted or gutted — every sidecar-writing
+function it owns is untouched, only unwired from this default path; it stays directly callable
+(e.g. by a future 108-map differ run) — deletion is R8, once that wider run has built confidence.
+
+Verified on a **real scoped bake**, not just the offline export: `uv run elysium export map
+sp_tutorial_1 sm_pawnshop_1 sm_hub_1 --force` (full bake, not `--intermediate-only`) — 452+ assets
+saved, 0 failed, all three `/ElysiumBaked/<map>/<map>` levels saved. Re-running R3.3's differ after
+the bake: all three maps now `byte_equal` (not merely `named_divergence_only`) — overwriting the
+legacy tree with the producer's bytes closes the one prior divergence (`.dispcol`) by construction,
+since both sides are now the same bytes. `uv run elysium debug shots sp_tutorial_1 sm_pawnshop_1
+sm_hub_1` captured 6/6, 4/4, 4/4 vantages (14/14), matching R2.1's counts exactly — all three maps
+still boot headlessly end to end.
+
+The shot-diff against the R2.1 baseline (`8077e5b5f902`) is clean for two of three maps —
+`sm_pawnshop_1` and `sm_hub_1` both 0.00% changed on every vantage, pixel-identical — but
+`sp_tutorial_1` fails all 6 vantages (69–97% changed). This is **not** an R3.5 regression: a control
+run with this task's two source changes fully reverted (`git stash`), rebaking `sp_tutorial_1` on
+the 100%-legacy path and re-diffing, reproduced the same failure with the same magnitudes (spawn
+97.27%, t1 87.91%, t1sky 85.09%, t2 80.02%, t3 78.18%, t4 71.14% — within noise of the R3.5-path
+numbers). Visual inspection of both the R3.5-path and legacy-only captures against the baseline
+shows identical scene composition (same geometry, same decal/prop placement); the divergence is the
+baseline images themselves carrying a whole-frame vertical-streak blur artifact that neither a
+fresh legacy bake nor a fresh producer bake reproduces, plus one close-up vantage (`t4`) with a
+face-only diff consistent with idle-animation phase, not geometry. `sp_tutorial_1`'s bake had not
+been fully rebaked since 2026-08-22 (`logs/20260822*-export-map.log`) until this task's runs — ten
+days and R1.5 through R3.4 of independent work — which is the far more likely source than a same-
+bytes sidecar swap this task's own differ run proves byte-identical. Filed as a stale/anomalous
+`sp_tutorial_1` baseline rather than fixed here: re-saving a baseline is a call for the owner, not a
+scoped task, and out of the "wire first, tune later" mandate for this task. Follow-up: re-`--save`
+the `sp_tutorial_1` baseline once an owner has looked at the `_diff/sp_tutorial_1_*.png` artifacts
+this run left under `$ELYSIUM_WORK_ROOT/exports/_shots/`.
+
+`uv run pytest pipeline/tests/test_map_sidecar_default_path.py` (3 new cases, orchestration-level,
+mocking the producer/`weather`/`particles` so no BSP or V2 units are needed) plus the touched
+suites: `pipeline/tests/test_map_sidecars.py pipeline/tests/test_map_producer_join.py
+pipeline/tests/test_export_orchestration.py pipeline/tests/test_area_portal_window_translation.py
+pipeline/tests/test_item_models.py` — 152 passed. No C++ touched, so no `Elysium.Substrate`/`build`
+re-run.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1219,8 +1267,15 @@ precision, `sm_hub_1`'s embedded-quote block) are decided rather than coded. No
 time" ruling; the `OutputTimesRemaining` restore gate now warns instead of silently dropping a
 cardinality mismatch. Numbers in the Settled entry "The six named `.ents` divergences land as
 producer flags, decided or measured".
-- **R3.5 Legacy exporter retired** [MP-2.5]. `.weather`/`.particles` re-pointed;
-  `UE_bsp_to_scene.py` deleted. → lands: one exporter.
+**R3.5 landed (2026-09-01)** [MP-2.5] — `exporters/export_all.export_maps` now calls the R3.2
+producer (`rewrite_sidecars_via_producer`) right after `UE_bsp_to_scene.main` on every map export,
+overwriting the eight legacy sidecars it just wrote with the producer's bytes in the same
+directory; `.weather`/`.particles` are re-run against the producer's `.ents` (`UE_bsp_to_scene.main`
+gained one additive `return` handing back sm_hub_1's mesh-derived `cover_triangles`/bounds so the
+re-run needs no recomputation). `UE_bsp_to_scene.py` is **not** deleted — its body is otherwise
+untouched and it stays importable/callable directly for the 108-map differ (R3.3); deletion is R8,
+once that wider run has built confidence. Numbers in the Settled entry "The producer becomes the
+default sidecar path, proven on a real scoped bake".
 
 ### R4 — transport: assets instead of loose files [MP-3]
 

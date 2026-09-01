@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+import json
 import time
 import tomllib
 import traceback
@@ -146,11 +147,12 @@ def export_maps(
         print(f"\n[{position}/{len(requested)}] {name} ...", flush=True)
         try:
             out_dir.mkdir(parents=True, exist_ok=True)
-            UE_bsp_to_scene.main(
+            legacy_report = UE_bsp_to_scene.main(
                 install.map_path(name),
                 out_dir,
                 index=shared_index,
             )
+            rewrite_sidecars_via_producer(name, out_dir, shared_index, legacy_report)
             results.append(
                 ExportTaskResult(
                     name=name,
@@ -171,6 +173,55 @@ def export_maps(
             if not continue_on_error:
                 break
     return results
+
+
+def rewrite_sidecars_via_producer(
+    name: str,
+    out_dir: Path,
+    index: dict[str, Any],
+    legacy_report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """R3.5: the R3.2 producer is the default source of the eight legacy sidecars.
+
+    `UE_bsp_to_scene.main` has just written `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/`.sky`/
+    `.spawn`/`.ropes` into ``out_dir`` (plus `.obj`/`.mtl`/`.props`/`.decals`/`.water`/`.sprites`,
+    which the producer does not reproduce and this call leaves alone). `UE_map_sidecars.write_sidecars`
+    (`docs/architecture/seam_map_map.md` -> "Producer join") overwrites the eight it does own with
+    its own bytes, reading the map's published V2 units rather than the BSP.
+
+    `.weather`/`.particles` read `.ents` back off disk, so they are re-run here against the
+    producer's `.ents` instead of the legacy one `UE_bsp_to_scene.main` already used and discarded
+    -- see `seam_migration.md` -> "Roadmap -- one pipeline" R3.5. Weather's mesh-derived inputs
+    (`cover_triangles`/bounds) are geometry, not entity data, so `UE_bsp_to_scene.main` hands them
+    back in ``legacy_report`` rather than this call recomputing them.
+
+    `UE_bsp_to_scene.py` itself is not deleted, and every sidecar it writes internally is still
+    written exactly as before -- the only change there is one additive `return` at the end of
+    `main`, handing back the geometry `.weather` needs. It is only unwired from this default path
+    (deletion is R8, once the 108-map differ has run against it).
+    """
+
+    from elysium_pipeline.exporters import UE_map_sidecars
+    from elysium_pipeline.formats import particles, weather
+
+    producer_report = UE_map_sidecars.write_sidecars(name, out_dir=out_dir)
+
+    with open(out_dir / f"{name}.ents", encoding="utf-8") as ents_file:
+        entity_document = json.load(ents_file)
+    particles_path = particles.write_particles(name, out_dir, entity_document, index)
+    if particles_path:
+        print(f"wrote {particles_path}")
+
+    weather_inputs = (legacy_report or {}).get("weather_inputs")
+    if weather_inputs:
+        cover_triangles, bounds_min, bounds_max = weather_inputs
+        weather_path = weather.write_weather(
+            name, out_dir, entity_document, index, cover_triangles, bounds_min, bounds_max
+        )
+        if weather_path:
+            print(f"weather: re-pointed at the producer's .ents -> {weather_path.name}")
+
+    return producer_report
 
 
 def _run_bundle(

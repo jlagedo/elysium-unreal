@@ -1833,6 +1833,13 @@ def main(bsp_path, out_dir, *, index=None):
     if particles_path:
         print(f"wrote {particles_path}")
 
+    # R3.5: `cover_triangles`/`bounds_min`/`bounds_max` are pure mesh geometry -- independent of
+    # which `.ents` a caller reads -- so a caller that overwrites `.ents` with a different producer
+    # (`UE_map_sidecars.write_sidecars`) can re-run `weather.write_weather` against the new entity
+    # document without recomputing the geometry. `None` on every map but `sm_hub_1`, which is the
+    # only one with a weather sidecar at all.
+    return {"weather_inputs": (cover_triangles, bounds_min, bounds_max) if base == "sm_hub_1" else None}
+
 # The default library output is the configured external export root.
 from elysium_pipeline.paths import export_root
 
