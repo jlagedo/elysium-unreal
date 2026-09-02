@@ -470,6 +470,43 @@ def test_globalwetness_proxy_writes_wetness_scale_and_runtime_row(tmp_path):
     assert any(row["kind"] == "globalwetness" for row in provenance["runtime"])
 
 
+def test_additive_blend_writes_fog_inscatter_zero_on_a_scene_fog_master(tmp_path):
+    """R5.4 (seam_map_material.md -> "Scene fog on the world masters"): Source forces the fog colour
+    to black under additive blending, so an `Additive` instance of a scene-fog master carries
+    `FogInscatter = 0` and fades out in fog instead of adding the haze on top. Every other
+    instance leaves the master's default (1.0) untouched, and the three primitive-driven names
+    are never written by the stage at all."""
+    export = tmp_path / "v2"
+    _publish(export, "signs/ticker", _unit(
+        "signs/ticker", shader="unlitgeneric",
+        parameters=[_param(0, "$basetexture", "signs/ticker"), _param(1, "$additive", "1")],
+        dependencies=[_texture_dep("$basetexture", "signs/ticker")],
+    ))
+    _publish(export, "signs/plain", _unit(
+        "signs/plain", shader="unlitgeneric",
+        parameters=[_param(0, "$basetexture", "signs/plain")],
+        dependencies=[_texture_dep("$basetexture", "signs/plain")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entries = _entries(tmp_path / "stage")
+    additive = entries["/ElysiumBaked/Materials/signs/MI_ticker"]
+    assert additive["parent"] == f"{importer.MASTER_ROOT}/M_V2_Unlit"
+    assert additive["basePropertyOverrides"]["blendMode"] == "Additive"
+    assert additive["scalars"]["FogInscatter"] == 0.0
+    plain = entries["/ElysiumBaked/Materials/signs/MI_plain"]
+    assert "FogInscatter" not in plain["scalars"]
+    for entry in (additive, plain):
+        assert not {"FogColor", "FogStart", "FogInvRange"} & (
+            set(entry["scalars"]) | set(entry["vectors"]))
+    # The lane is declared on exactly the masters a map surface or prop slot can bind.
+    for master in importer.SCENE_FOG_MASTERS:
+        assert {"FogColor": "V", "FogStart": "S", "FogInvRange": "S", "FogInscatter": "S"}.items() \
+            <= importer.EXPOSED_PARAMS[master].items()
+    for master in ("M_V2_Water", "M_V2_Sprite", "M_V2_Eyes", "M_V2_Decal"):
+        assert "FogInscatter" not in importer.EXPOSED_PARAMS[master]
+
+
 # --- determinism ---------------------------------------------------------------------------------------
 
 

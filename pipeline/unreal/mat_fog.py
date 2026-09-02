@@ -67,6 +67,10 @@ SPECULAR_DEFAULT = 0.5
 P_COLOR = "FogColor"
 P_START = "FogStart"
 P_INV_RANGE = "FogInvRange"
+# R5.4, the V2 masters only (`make_v2_materials._scene_fog`): the instance-side gate on the
+# inscatter term. Source forces the fog colour to black under additive blending, so an Additive
+# instance carries 0 and fades out instead of adding the haze; every other instance carries 1.
+P_INSCATTER = "FogInscatter"
 
 
 def _scalar(mat, name, x, y, cpd_index=None, default=0.0):

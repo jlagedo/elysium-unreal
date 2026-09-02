@@ -716,6 +716,16 @@ def bake_maps(
         print(f"staged V2 geometry for {name}: {manifest['counts']} "
               f"({manifest['vertexBytes']} vertex bytes, "
               f"{len(manifest['placements'])} placements)")
+        # R5.4: every surface binds an imported MI_ resolved through the material lane's own
+        # manifest; the counts are the provenance report's, written beside the staged pair.
+        report = manifest.get("materialReport") or {}
+        print(f"staged V2 materials for {name}: {report.get('materials', 0)} MI_ bound "
+              f"({report.get('patched', 0)} PAKFILE-patched, "
+              f"{report.get('animatedNow', 0)} animated now, "
+              f"{report.get('classChanged', 0)} appearance class changed, "
+              f"{report.get('wetnessDriven', 0)} wetness-driven; by master "
+              f"{report.get('byV2Master', {})}) -- "
+              f"{map_geometry.staging_dir(name) / map_geometry.MATERIAL_REPORT_NAME}")
 
     step = max(1, batch_size) if batch_size else max(1, len(maps))
     for offset in range(0, len(maps), step):

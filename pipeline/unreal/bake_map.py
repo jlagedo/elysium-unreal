@@ -815,6 +815,15 @@ class Bake(object):
         """A map imports only the textures that are its own: the baked env cubemaps and the rain
         height field. Every surface texture is the corpus's, imported once by its own scope."""
         self._drop_superseded_packages()
+        self._stage_wet_cubemaps()
+        self._stage_weather_texture()
+        log("textures: %s" % self.tracker.summary("textures"))
+
+    def _stage_wet_cubemaps(self):
+        """The legacy wetness path's `SourceCube`: sm_hub_1's baked `cubemapdefault`, stamped into
+        its per-map wet material instances. The V2 lane (R5.4) has no per-map material instance
+        to stamp it into -- wetness rides `MPC_ElysiumEnvironment` and the shared `MI_` (R5.3) --
+        and overrides this to prune the package instead."""
         wet_materials = [mat for mat in self.world_mats.values() if mat.wet]
         if self.map == "sm_hub_1":
             if len(wet_materials) != 14:
@@ -844,6 +853,9 @@ class Bake(object):
         else:
             pruned = bl.prune_package(self.cube_pkg, set(), self.prune_scope)
             self.tracker.pruned("textures", pruned)
+
+    def _stage_weather_texture(self):
+        """The rain height field, the one map-owned texture both lanes import."""
         if self.weather:
             relative = self.weather["height_texture"]["path"]
             source = os.path.join(self.dir, relative.replace("/", os.sep))
@@ -861,7 +873,6 @@ class Bake(object):
             if unreal.EditorAssetLibrary.does_asset_exist(path):
                 bl.delete_owned_asset(path)
                 self.tracker.pruned("textures", 1)
-        log("textures: %s" % self.tracker.summary("textures"))
 
     def _all_prop_mats(self):
         """Every prop material, by its corpus key. A model names a material; the key it resolved

@@ -767,3 +767,60 @@ def test_make_missing_is_reused_when_current_and_force_rebuilt(tmp_path, monkeyp
     _load(editor3, tmp_path, monkeypatch, seed=False)
     assert missing_path in editor3.saved
     assert editor3.assets[missing_path].metadata["ElysiumRecipe"] == stamped
+
+
+# --- R5.4: the scene-fog term reads the slots ApplySceneFog stamps ---------------------------------
+
+_FOG_HEADER = REPO / "Source/ElysiumUE/Public/ElysiumFog.h"
+_SCENE_FOG_MASTERS = ("M_V2_Lit", "M_V2_LitTranslucent", "M_V2_Unlit", "M_V2_TwoTexture",
+                      "M_V2_Refract")
+
+
+def _fog_slots_from_header():
+    """`{SlotColor, SlotStart, SlotInvRange}` off `ElysiumFog.h`, parsed rather than restated --
+    the header is the one contract between the bake's stamp, `ApplySceneFog` and the graph."""
+    import re
+    text = _FOG_HEADER.read_text(encoding="utf-8")
+    return {name: int(value) for name, value in re.findall(
+        r"inline constexpr int32 (Slot\w+) = (\d+);", text)}
+
+
+def test_scene_fog_masters_read_the_custom_primitive_data_slots_apply_scene_fog_stamps(
+        tmp_path, monkeypatch):
+    """`UElysiumMapVisuals::ApplySceneFog` writes `ElysiumFog::Pack`'s six floats at
+    `SetCustomPrimitiveDataFloatArray(ElysiumFog::SlotColor, ...)`; the bake stamps the same
+    block as default primitive data. A master reads them only if its three fog parameters are
+    CPD-driven at exactly those indices -- a name-only match would compile and fog nothing."""
+    editor = FakeEditor()
+    module = _load(editor, tmp_path, monkeypatch)
+    slots = _fog_slots_from_header()
+    assert slots == {"SlotColor": 0, "SlotStart": 4, "SlotInvRange": 5}
+    mat_fog = module.mat_fog
+    assert (mat_fog.CPD_COLOR, mat_fog.CPD_START, mat_fog.CPD_INV_RANGE) == (
+        slots["SlotColor"], slots["SlotStart"], slots["SlotInvRange"])
+
+    expected = {
+        mat_fog.P_COLOR: slots["SlotColor"],
+        mat_fog.P_START: slots["SlotStart"],
+        mat_fog.P_INV_RANGE: slots["SlotInvRange"],
+    }
+    for name in _SCENE_FOG_MASTERS:
+        asset = editor.assets["%s/%s" % (PKG, name)]
+        by_name = {n.props.get("parameter_name"): n for n in asset.expressions
+                   if "parameter_name" in n.props}
+        for param, index in expected.items():
+            node = by_name.get(param)
+            assert node is not None, "%s: %s not on the graph" % (name, param)
+            assert node.props.get("use_custom_primitive_data") is True, (name, param)
+            assert node.props.get("primitive_data_index") == index, (name, param)
+        gate = by_name.get(mat_fog.P_INSCATTER)
+        assert gate is not None and gate.props.get("default_value") == 1.0, name
+        assert not gate.props.get("use_custom_primitive_data"), name
+
+    # The masters that do NOT carry the lane carry none of the primitive-driven names either --
+    # M_V2_Water's `FogColor`/`FogStart` are the VMT's own water-fog keys, instance-driven.
+    for name in ("M_V2_Water", "M_V2_Sprite", "M_V2_Eyes", "M_V2_Decal"):
+        asset = editor.assets["%s/%s" % (PKG, name)]
+        cpd = [n.props.get("parameter_name") for n in asset.expressions
+               if n.props.get("use_custom_primitive_data")]
+        assert cpd == [], (name, cpd)

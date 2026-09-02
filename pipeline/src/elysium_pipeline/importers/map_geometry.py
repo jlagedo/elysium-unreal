@@ -24,6 +24,18 @@ the `.hulls`/`.ents` sidecars must agree by construction.
 centimetres, Z-up, left-handed. That is `(x, y, z)_gltf -> (x, z, y)_unreal * 100`, a reflection, so
 every triangle's winding is reversed on the way out -- the same reversal `UE_bsp_to_scene` applied at
 OBJ-write time, for the same reason (`formats.bsp.source_to_unreal`).
+
+**Materials (R5.4).** Every face group also names its material *unit* -- the `vtmb:material:<key>`
+the root unit's `textures[]` row resolved, a PAKFILE-patched face by its `maps/<map>/...` id -- and
+the stage resolves each one through the material lane's own staged provenance sidecars
+(`$ELYSIUM_WORK_ROOT/import/materials/<key>.provenance.json`) to the imported `MI_` asset path
+(`importers.materials.asset_path_for`, the same pure function that named the asset), the root
+master and the blend mode (`seam_map_map.md` -> "## Import -- materials (R5.4)"). The sidecars,
+not `manifest.json`: that manifest describes the material lane's LAST run, which a `--select`
+narrows to one directory, while every staged unit's sidecar stays on disk until its own scope
+prunes it. The editor half binds exactly that asset; no `<map>.mtl` table and no per-map material
+package is consulted for a surface. A unit the material lane has not staged is a loud
+`MapGeometryError`, never a silently unbound slot.
 """
 
 from __future__ import annotations
@@ -46,7 +58,42 @@ FAMILY = "map_geometry"
 MANIFEST_NAME = "manifest.json"
 VERTEX_NAME = "geometry.bin"
 MANIFEST_SCHEMA = "elysium.map-geometry"
-MANIFEST_VERSION = 1
+#: 2 (R5.4): the manifest carries `materials`, one row per face group, and `materialReport`.
+MANIFEST_VERSION = 2
+#: The R5.4 material report beside the manifest -- every material the map binds, classified from
+#: the import lane's provenance against the legacy `.mtl` lane's own master choice.
+MATERIAL_REPORT_NAME = "materials_report.json"
+
+#: The V2 blend modes a Nanite chunk may carry (Nanite is opaque/masked only), i.e. the
+#: `basePropertyOverrides.blendMode` values of the root entry the legacy `MatDef.opaque` predicate
+#: answered from the corpus flags.
+NANITE_BLEND_MODES = frozenset({"Opaque", "Masked"})
+
+#: The legacy `bake_map.Bake._master_for` selection, restated over a `shared/materials.json` record
+#: so the R5.4 report can say what master a surface WAS on before the rebind (data, not a look
+#: judgement). Same order as the bake's own if/elif chain.
+LEGACY_MASTER_RULES = (
+    ("decal", "M_Decal"), ("additive", "M_Additive"), ("refract", "M_Refract"),
+    ("glass", "M_World_Glass"), ("water", "M_World_Translucent"), ("blend", "M_World_Translucent"),
+    ("scissor", "M_World_Masked"),
+)
+LEGACY_MASTER_DEFAULT = "M_World_Opaque"
+
+#: The proxy kinds the V2 masters implement live (`seam_map_material.md` -> "Proxy policy"); a
+#: material carrying one of these on its V2 instance is animated now where the legacy `.mtl` lane
+#: flattened it to a static bind. `animatedtexture` only animates when its frames array staged --
+#: the provenance omission `animatedFramesArrayUnavailable` says when it did not.
+ANIMATED_PROXY_KINDS = frozenset({"sine", "animatedtexture", "texturescroll"})
+FRAMES_UNAVAILABLE_OMISSION = "animatedFramesArrayUnavailable"
+
+#: The appearance CLASS a master + blend pair renders as, on either lane, so the report can say
+#: whether the rebind moved a surface between classes (translucent -> opaque, glass ->
+#: translucent, ...) rather than merely renamed its master. Data, never a look judgement.
+LEGACY_MASTER_CLASS = {
+    "M_World_Opaque": "opaque", "M_World_Masked": "masked", "M_World_Translucent": "translucent",
+    "M_World_Glass": "translucent", "M_Refract": "refract", "M_Additive": "additive",
+    "M_Decal": "decal",
+}
 
 #: glTF metres -> Unreal centimetres. One Source inch is 0.0254 glTF metres and 2.54 centimetres.
 GLTF_TO_UNREAL = 100.0
@@ -122,6 +169,10 @@ class Scene:
     uvs: list[tuple[float, float]] = field(default_factory=list)
     blend: list[float] = field(default_factory=list)
     groups: dict[str, list[int]] = field(default_factory=dict)
+    #: R5.4: group key -> the material unit key its faces resolved (`vtmb:material:<key>` without
+    #: the prefix; a patched face keeps its `maps/<map>/...` id). One unit per group by
+    #: construction -- `group_key` is a function of the raw key alone.
+    units: dict[str, str] = field(default_factory=dict)
 
     @property
     def tri_count(self) -> int:
@@ -166,6 +217,37 @@ class Placement:
         return bool(self.flags & STATIC_PROP_FLAG_FADES) and self.fade_max_cm > 0.0
 
 
+@dataclass(frozen=True)
+class MaterialBinding:
+    """One face group's material, resolved through the material lane's staged manifest (R5.4).
+
+    `asset` is the imported `MI_` the editor half binds; `master`/`blend_mode` are the ROOT unit's
+    (a patched `maps/<map>/...` instance parents to its base instance, which parents to a master),
+    so `opaque` answers the Nanite question the legacy `MatDef.opaque` answered from the corpus
+    flags. `provenance` is the root unit's key (its sidecar is `<key>.provenance.json` below the
+    material staging root).
+    """
+
+    key: str
+    unit: str
+    asset: str
+    master: str
+    blend_mode: str
+    patched: bool
+    provenance: str
+
+    @property
+    def opaque(self) -> bool:
+        return self.blend_mode in NANITE_BLEND_MODES
+
+    def as_row(self) -> dict[str, Any]:
+        return {
+            "unit": self.unit, "asset": self.asset, "master": self.master,
+            "blendMode": self.blend_mode, "opaque": self.opaque, "patched": self.patched,
+            "provenance": self.provenance,
+        }
+
+
 @dataclass
 class MapGeometry:
     """One map's root unit, as much of it as the V2 bake authors."""
@@ -187,6 +269,19 @@ class MapGeometry:
         body finds the same asset the legacy lane authored."""
 
         return {index: f"brush_{index}" for index in sorted(self.brushes)}
+
+    def material_units(self) -> dict[str, str]:
+        """Every face group over every scene -> its material unit key (R5.4). Two scenes naming
+        one group key name one unit, by `group_key`'s construction; anything else is a defect."""
+
+        merged: dict[str, str] = {}
+        for scene in (self.world, self.sky, *self.brushes.values()):
+            for key, unit in scene.units.items():
+                if merged.setdefault(key, unit) != unit:
+                    raise MapGeometryError(
+                        f"{self.map_name}: face group {key!r} resolves two material units "
+                        f"({merged[key]!r}, {unit!r})")
+        return merged
 
 
 # --------------------------------------------------------------------------------- accessors
@@ -351,6 +446,11 @@ def _build_scene(
         key = group_key(units, face, map_name)
         if key is None:
             continue
+        raw = sidecars._face_material(units, face)
+        if scene.units.setdefault(key, raw) != raw:
+            raise MapGeometryError(
+                f"{units.name}: face group {key!r} resolves two material units "
+                f"({scene.units[key]!r}, {raw!r})")
         tris = scene.groups.setdefault(key, [])
         if int(face["dispInfo"]) >= 0:
             _append_displacement(scene, tris, units, prims, face)
@@ -358,6 +458,7 @@ def _build_scene(
             _append_face(scene, tris, units, prims, mesh, face)
     # A group that meshed nothing would otherwise become an empty material slot on the asset.
     scene.groups = {key: tris for key, tris in scene.groups.items() if tris}
+    scene.units = {key: unit for key, unit in scene.units.items() if key in scene.groups}
     return scene
 
 
@@ -470,6 +571,250 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+# --------------------------------------------------------------------------------- materials
+
+
+def material_staging_root(work_root: Path | None = None) -> Path:
+    """The material lane's own staging tree (`importers.materials.staging_root`), whose per-unit
+    `<key>.provenance.json` sidecars say what each `vtmb:material:*` id became."""
+
+    from elysium_pipeline.importers import materials as material_lane
+
+    root = Path(work_root) if work_root is not None else paths.work_root()
+    return material_lane.staging_root(root)
+
+
+def sidecar_reader(staging: Path):
+    """`unit key -> provenance dict | None` over one material staging tree, cached per key."""
+
+    from elysium_pipeline.importers import materials as material_lane
+
+    cache: dict[str, dict[str, Any] | None] = {}
+
+    def read(unit_key: str) -> dict[str, Any] | None:
+        if unit_key in cache:
+            return cache[unit_key]
+        path = staging / (unit_key + material_lane.PROVENANCE_SUFFIX)
+        document = None
+        if path.is_file():
+            with open(path, "r", encoding="utf-8") as handle:
+                document = json.load(handle)
+        cache[unit_key] = document
+        return document
+
+    return read
+
+
+def resolve_material_table(
+    units_by_group: dict[str, str], read_sidecar, *, map_name: str = "",
+) -> dict[str, MaterialBinding]:
+    """Every face group's `MI_`, master and blend mode, through the material lane's staged
+    provenance sidecars (R5.4).
+
+    `read_sidecar(unit key)` returns the unit's provenance document or None. The asset path is
+    `importers.materials.asset_path_for`, the pure function that named the asset at import; the
+    master is the sidecar's own `master` (the import lane already walks a patched unit's `patch`
+    chain to its root master); the blend mode is the root unit's, reached through `patchBase`. A
+    unit with no sidecar -- or a patch chain that leaves the staging tree -- fails the whole map
+    with every missing key named: binding nothing would draw the master's placeholder with no line
+    in the log to say why.
+    """
+
+    from elysium_pipeline.importers import materials as material_lane
+
+    table: dict[str, MaterialBinding] = {}
+    missing: list[str] = []
+    broken: list[str] = []
+    for key in sorted(units_by_group):
+        unit_key = units_by_group[key]
+        document = read_sidecar(unit_key)
+        if document is None:
+            missing.append(unit_key)
+            continue
+        root_key = unit_key
+        root = document
+        hops = 0
+        while root is not None and root.get("patched"):
+            base = str(root.get("patchBase") or "")
+            if not base.startswith("vtmb:material:") or hops > 8:
+                root = None
+                break
+            root_key = base[len("vtmb:material:"):]
+            root = read_sidecar(root_key)
+            hops += 1
+        master = str((root or {}).get("master") or document.get("master") or "").rsplit("/", 1)[-1]
+        if root is None or not master:
+            broken.append(unit_key)
+            continue
+        table[key] = MaterialBinding(
+            key=key, unit=f"vtmb:material:{unit_key}",
+            asset=material_lane.asset_path_for(unit_key), master=master,
+            blend_mode=str(root.get("blendMode") or "Opaque"),
+            patched=bool(document.get("patched")), provenance=root_key,
+        )
+    if missing or broken:
+        parts = []
+        if missing:
+            parts.append(f"{len(missing)} material unit(s) not staged by the material lane "
+                         f"(run: uv run elysium import materials): "
+                         + ", ".join(missing[:8]))
+        if broken:
+            parts.append(f"{len(broken)} patched unit(s) whose base chain leaves the staging "
+                         f"tree or names no master: " + ", ".join(broken[:8]))
+        raise MapGeometryError(f"{map_name or 'map'}: " + "; ".join(parts))
+    return table
+
+
+def legacy_master_for(record: dict[str, Any] | None) -> str | None:
+    """The legacy world master a `shared/materials.json` record selected (`Bake._master_for`)."""
+
+    if record is None:
+        return None
+    for flag, master in LEGACY_MASTER_RULES:
+        if record.get(flag):
+            return master
+    return LEGACY_MASTER_DEFAULT
+
+
+def appearance_class(master: str, blend_mode: str) -> str:
+    """The class a V2 (master, blend) pair renders as -- the blend mode, except where the master
+    itself is the distinction (`M_V2_Refract`, `M_V2_Water`, `M_V2_Decal`)."""
+
+    if master == "M_V2_Refract":
+        return "refract"
+    if master == "M_V2_Water":
+        return "water"
+    if master == "M_V2_Decal":
+        return "decal"
+    return str(blend_mode or "Opaque").lower()
+
+
+def classify_material(
+    binding: MaterialBinding, provenance: dict[str, Any] | None,
+    legacy_record: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """One report row: what the surface binds now, what it bound before, and whether the rebind
+    changed its appearance CLASS -- the blend/master class, or a proxy the legacy `.mtl` lane
+    flattened to a static bind and the V2 instance runs live. Data only; no look judgement.
+
+    `provenance` is the ROOT unit's sidecar (the instance whose proxies the animation lanes were
+    written from), `legacy_record` the corpus row the legacy `.mtl` resolved for the same base
+    material.
+    """
+
+    provenance = provenance or {}
+    proxies = [str(row.get("kind") or "") for row in provenance.get("proxies") or ()]
+    omissions = {str(row.get("reason") or "") for row in provenance.get("omissions") or ()}
+    frames_unavailable = FRAMES_UNAVAILABLE_OMISSION in omissions
+    live = sorted({
+        kind for kind in proxies
+        if kind in ANIMATED_PROXY_KINDS and not (kind == "animatedtexture" and frames_unavailable)
+    })
+    animated_now = bool(live)
+    legacy_master = legacy_master_for(legacy_record)
+    legacy_class = LEGACY_MASTER_CLASS.get(legacy_master or "", None)
+    v2_class = appearance_class(binding.master, binding.blend_mode)
+    return {
+        "key": binding.key,
+        "unit": binding.unit,
+        "asset": binding.asset,
+        "patched": binding.patched,
+        "v2Master": binding.master,
+        "v2BlendMode": binding.blend_mode,
+        "v2Class": v2_class,
+        "legacyMaster": legacy_master,
+        "legacyClass": legacy_class,
+        "legacyRecordFound": legacy_record is not None,
+        "classChanged": legacy_class is not None and legacy_class != v2_class,
+        "proxies": proxies,
+        "liveProxies": live,
+        "animatedNow": animated_now,
+        "animatedFramesUnavailable": frames_unavailable and "animatedtexture" in proxies,
+        "surfaceClass": provenance.get("surfaceClass"),
+        "wetnessScale": provenance.get("wetnessScale"),
+        "wetnessDriven": provenance.get("wetnessScale") is not None
+        and binding.master in ("M_V2_Lit", "M_V2_LitTranslucent"),
+        "isDecalSurface": bool(provenance.get("isDecalSurface")),
+    }
+
+
+def material_report(
+    map_name: str, table: dict[str, MaterialBinding], read_sidecar, *,
+    legacy_materials: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """The R5.4 provenance report for one map: every bound material classified
+    (`classify_material`) plus the summary counts the bake prints. Written beside the staged pair
+    as `materials_report.json` by `stage_map`."""
+
+    if legacy_materials is None:
+        legacy_materials = _legacy_material_records(map_name)
+
+    rows = []
+    for key in sorted(table):
+        binding = table[key]
+        base_key = shared_corpus.base_material(binding.unit[len("vtmb:material:"):])
+        rows.append(classify_material(
+            binding, read_sidecar(binding.provenance), legacy_materials.get(base_key)))
+
+    animated = [row["key"] for row in rows if row["animatedNow"]]
+    changed = [row for row in rows if row["classChanged"]]
+    return {
+        "schema": "elysium.map-materials-report",
+        "version": 1,
+        "map": map_name,
+        "counts": {
+            "materials": len(rows),
+            "patched": sum(1 for row in rows if row["patched"]),
+            "animatedNow": len(animated),
+            "classChanged": len(changed),
+            "wetnessDriven": sum(1 for row in rows if row["wetnessDriven"]),
+            "decalSurfaces": sum(1 for row in rows if row["isDecalSurface"]),
+            "byV2Master": _count_by(rows, "v2Master"),
+            "byV2Class": _count_by(rows, "v2Class"),
+            "byLegacyClass": _count_by(rows, "legacyClass"),
+            "legacyRecordMissing": sum(1 for row in rows if not row["legacyRecordFound"]),
+        },
+        "animatedNow": [
+            {"key": row["key"], "liveProxies": row["liveProxies"], "v2Master": row["v2Master"]}
+            for row in rows if row["animatedNow"]
+        ],
+        "classChanged": [
+            {"key": row["key"], "legacyMaster": row["legacyMaster"], "legacyClass": row["legacyClass"],
+             "v2Master": row["v2Master"], "v2Class": row["v2Class"]}
+            for row in changed
+        ],
+        "materials": rows,
+    }
+
+
+def _count_by(rows: list[dict[str, Any]], field_name: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[str(row.get(field_name))] = counts.get(str(row.get(field_name)), 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _legacy_material_records(map_name: str) -> dict[str, Any]:
+    """The corpus `shared/materials.json` rows plus the map's own PAKFILE-only rows, keyed as the
+    legacy `.mtl`'s `mat` lines key them. Empty when the legacy export is not on this machine --
+    the report then states `legacyRecordFound: false` rather than failing the stage."""
+
+    records: dict[str, Any] = {}
+    try:
+        export = paths.export_root()
+    except RuntimeError:
+        return records
+    corpus = shared_corpus.materials_path(export)
+    if corpus.is_file():
+        with open(corpus, "r", encoding="utf-8") as handle:
+            records.update(json.load(handle).get("materials") or {})
+    local = export / map_name / f"{map_name}.materials.json"
+    if local.is_file():
+        with open(local, "r", encoding="utf-8") as handle:
+            records.update(json.load(handle).get("materials") or {})
+    return records
+
+
 # --------------------------------------------------------------------------------- staging
 
 
@@ -530,9 +875,19 @@ def stage_map(map_name: str, root: Path | None = None,
 
     Returns the manifest. Overwrites whatever was staged before: the manifest describes exactly the
     bytes beside it, so a half-written pair from a crashed run can never be read as current.
+
+    R5.4: the manifest also carries `materials` -- every face group resolved to its imported `MI_`
+    through the material lane's staged manifest -- and the material report lands beside it.
     """
 
     geometry = read_geometry(map_name, root)
+    staging = material_staging_root(work_root)
+    if not staging.is_dir():
+        raise MapGeometryError(
+            f"no material staging tree at {staging} (run: uv run elysium import materials)")
+    read_sidecar = sidecar_reader(staging)
+    materials = resolve_material_table(geometry.material_units(), read_sidecar, map_name=map_name)
+    report = material_report(map_name, materials, read_sidecar)
     buffer = bytearray()
     scenes = {
         "world": _scene_block(geometry.world, buffer),
@@ -557,6 +912,8 @@ def stage_map(map_name: str, root: Path | None = None,
         },
         "scenes": scenes,
         "brushStems": {str(index): stem for index, stem in stems.items()},
+        "materials": {key: binding.as_row() for key, binding in sorted(materials.items())},
+        "materialReport": dict(report["counts"]),
         "placements": [
             {
                 "index": placement.index,
@@ -581,6 +938,8 @@ def stage_map(map_name: str, root: Path | None = None,
     (out_dir / VERTEX_NAME).write_bytes(bytes(buffer))
     (out_dir / MANIFEST_NAME).write_text(
         json.dumps(manifest, indent=1, sort_keys=False), encoding="utf-8")
+    (out_dir / MATERIAL_REPORT_NAME).write_text(
+        json.dumps(report, indent=1, sort_keys=False), encoding="utf-8")
     return manifest
 
 

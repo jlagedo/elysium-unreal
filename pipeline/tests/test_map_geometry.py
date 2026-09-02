@@ -13,6 +13,8 @@ geometry changed" are separable -- and skip, loudly, when that corpus is not on 
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from elysium_pipeline import map_transport, paths, shared_corpus
@@ -167,3 +169,148 @@ def _read_obj_groups(path):
         elif token[0] == "f":
             groups[current] = groups.get(current, 0) + 1
     return vertices, {key: value for key, value in groups.items() if value}
+
+
+# --- R5.4: the materials table ---------------------------------------------------------------------
+#
+# `seam_map_map.md` -> "## Import -- materials (R5.4)": every face group binds the imported `MI_`
+# its `vtmb:material:*` unit became, resolved through the material lane's own provenance sidecars.
+# The cases below pin the resolution (a patched `maps/<map>/...` id lands on its own map-scoped
+# instance, the root master/blend come from the base through `patchBase`), the loud failure for a
+# unit the material lane never staged, and the report's classification -- then walk the real
+# three-map corpus against the staging tree actually on this machine.
+
+
+def _sidecars(rows):
+    """`unit key -> provenance dict` reader over an in-memory sidecar set."""
+    return lambda key: rows.get(key)
+
+
+_BASE = {
+    "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_LitTranslucent", "blendMode": "Translucent",
+    "patched": False, "patchBase": None, "proxies": [], "omissions": [],
+}
+_PATCH = {
+    "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_LitTranslucent", "blendMode": None,
+    "patched": True, "patchBase": "vtmb:material:brick/window", "proxies": [], "omissions": [],
+}
+
+
+def test_material_table_binds_patched_units_by_their_map_scoped_id_and_roots_them_on_the_base():
+    read = _sidecars({
+        "brick/window": _BASE,
+        "maps/sm_test/brick/window_1_2_3": _PATCH,
+        "stone/wall": {**_BASE, "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_Lit",
+                       "blendMode": "Masked"},
+    })
+    table = MG.resolve_material_table({
+        "brick/window": "brick/window",
+        "brick/window@c_1_2_3": "maps/sm_test/brick/window_1_2_3",
+        "stone/wall": "stone/wall",
+    }, read, map_name="sm_test")
+
+    patched = table["brick/window@c_1_2_3"]
+    assert patched.asset == "/ElysiumBaked/Materials/maps/sm_test/brick/MI_window_1_2_3"
+    assert patched.unit == "vtmb:material:maps/sm_test/brick/window_1_2_3"
+    assert patched.patched is True
+    # The root master and blend are the BASE's, reached through `patchBase`, so the Nanite
+    # question is answered exactly as it is for the unpatched surface.
+    assert patched.master == "M_V2_LitTranslucent"
+    assert patched.blend_mode == "Translucent"
+    assert patched.opaque is False
+    assert patched.provenance == "brick/window"
+
+    assert table["brick/window"].asset == "/ElysiumBaked/Materials/brick/MI_window"
+    assert table["stone/wall"].master == "M_V2_Lit"
+    assert table["stone/wall"].opaque is True   # Masked chunks are Nanite-able, like Opaque
+    assert table["stone/wall"].as_row()["opaque"] is True
+
+
+def test_material_table_fails_loudly_naming_every_unit_the_material_lane_never_staged():
+    read = _sidecars({"brick/window": _BASE, "maps/sm_test/brick/orphan": {
+        **_PATCH, "patchBase": "vtmb:material:brick/never_staged"}})
+    with pytest.raises(MG.MapGeometryError) as caught:
+        MG.resolve_material_table({
+            "brick/window": "brick/window",
+            "tile/missing": "tile/missing",
+            "brick/orphan@cubemapdefault": "maps/sm_test/brick/orphan",
+        }, read, map_name="sm_test")
+    message = str(caught.value)
+    assert "sm_test" in message
+    assert "tile/missing" in message and "uv run elysium import materials" in message
+    assert "maps/sm_test/brick/orphan" in message
+
+
+def test_material_report_classifies_animation_and_appearance_class_from_provenance():
+    binding = MG.MaterialBinding(
+        key="signs/ticker", unit="vtmb:material:signs/ticker",
+        asset="/ElysiumBaked/Materials/signs/MI_ticker", master="M_V2_Unlit",
+        blend_mode="Additive", patched=False, provenance="signs/ticker")
+    provenance = {**_BASE, "proxies": [{"kind": "texturescroll"}, {"kind": "animatedtexture"}],
+                  "omissions": [{"reason": MG.FRAMES_UNAVAILABLE_OMISSION}],
+                  "wetnessScale": None, "isDecalSurface": False}
+    row = MG.classify_material(binding, provenance, {"additive": True})
+    # `texturescroll` runs live on the V2 instance; `animatedtexture` does not, because its frames
+    # array never staged -- the provenance says so, and the row must say the same.
+    assert row["animatedNow"] is True
+    assert row["liveProxies"] == ["texturescroll"]
+    assert row["animatedFramesUnavailable"] is True
+    # Legacy `additive 1` -> M_Additive -> class "additive"; V2 Additive blend -> "additive".
+    assert row["legacyMaster"] == "M_Additive"
+    assert row["classChanged"] is False
+
+    # A `$decal` world face the legacy lane bound to the deferred-decal master is a class change
+    # on the rebind (it renders as an ordinary translucent surface now).
+    decal = MG.MaterialBinding(
+        key="decals/n0", unit="vtmb:material:decals/n0", asset="/ElysiumBaked/Materials/decals/MI_n0",
+        master="M_V2_LitTranslucent", blend_mode="Translucent", patched=False, provenance="decals/n0")
+    row = MG.classify_material(decal, {**_BASE, "isDecalSurface": True}, {"decal": True})
+    assert (row["legacyClass"], row["v2Class"], row["classChanged"]) == ("decal", "translucent", True)
+    assert row["isDecalSurface"] is True
+
+    # No legacy record at all (a PAKFILE-only material the legacy corpus never saw) is stated,
+    # never guessed.
+    row = MG.classify_material(decal, {**_BASE}, None)
+    assert row["legacyRecordFound"] is False and row["classChanged"] is False
+
+    report = MG.material_report(
+        "sm_test", {"signs/ticker": binding, "decals/n0": decal},
+        _sidecars({"signs/ticker": provenance, "decals/n0": {**_BASE, "isDecalSurface": True}}),
+        legacy_materials={"signs/ticker": {"additive": True}, "decals/n0": {"decal": True}})
+    assert report["counts"]["materials"] == 2
+    assert report["counts"]["animatedNow"] == 1 and report["counts"]["classChanged"] == 1
+    assert [row["key"] for row in report["animatedNow"]] == ["signs/ticker"]
+    assert [row["key"] for row in report["classChanged"]] == ["decals/n0"]
+
+
+@pytest.mark.parametrize("map_name", WORKING_MAPS)
+def test_every_face_group_on_the_working_corpus_resolves_a_staged_and_imported_instance(map_name):
+    unit = MG.sidecars.unit_paths(map_name)["root"]
+    if not unit.is_file():
+        pytest.skip(f"no exported map root unit at {unit}")
+    staging = MG.material_staging_root()
+    if not staging.is_dir():
+        pytest.skip(f"no material staging tree at {staging}")
+
+    geometry = MG.read_geometry(map_name)
+    units = geometry.material_units()
+    # Every group over every scene names a unit, and a patched face names its map-scoped id.
+    assert set(units) == (set(geometry.world.groups) | set(geometry.sky.groups)
+                          | {key for scene in geometry.brushes.values() for key in scene.groups})
+    assert all(units[key].startswith(f"maps/{map_name}/") for key in units
+               if shared_corpus.CUBEMAP_TAG in key)
+
+    table = MG.resolve_material_table(units, MG.sidecar_reader(staging), map_name=map_name)
+    assert set(table) == set(units)
+    # The `MI_` the editor half will load has to be on disk already: the material lane imports
+    # map-scoped, and the map it did not import is exactly the map this would silently unbind.
+    content = paths.repo_root() / "Plugins/ElysiumBaked/Content"
+    missing = sorted(
+        binding.asset for binding in table.values()
+        if not (content / (binding.asset[len("/ElysiumBaked/"):] + ".uasset")).is_file())
+    assert missing == [], f"{len(missing)} staged instance(s) not imported: {missing[:8]}"
+
+    report = MG.material_report(map_name, table, MG.sidecar_reader(staging))
+    assert report["counts"]["materials"] == len(table)
+    assert report["counts"]["legacyRecordMissing"] == 0
+    assert json.dumps(report)   # serialisable as written beside the staged pair

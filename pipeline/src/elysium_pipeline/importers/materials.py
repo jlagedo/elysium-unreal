@@ -265,6 +265,23 @@ _NORMAL_ANIM_LANE = {
     "NormalFrameRate": "S", "NormalFrameCount": "S", "NormalMapFrames": "T",
     "UseAnimatedNormalFrames": "#",
 }
+#: R5.4 (seam_map_material.md -> "Scene fog on the world masters (R5.4)"): Source's per-map
+#: distance fog as the Custom-Primitive-Data-driven term every world / 3D-skybox / prop primitive
+#: carries (`ElysiumFog.h`, `mat_fog.fog_from_primitive`). `FogColor`/`FogStart`/`FogInvRange` are
+#: read off the primitive (slots 0..3, 4, 5), never off the instance, so the stage never writes
+#: them -- the bake stamps the primitive and `UElysiumMapVisuals::ApplySceneFog` re-stamps it live.
+#: `FogInscatter` is the one instance value: Source fogs an additive surface to BLACK (its fog
+#: colour is forced to zero under additive blending, or the haze would brighten the scene), so the
+#: stage writes `0.0` for an `Additive` blend and leaves every other instance on the default `1.0`.
+_SCENE_FOG_LANE = {
+    "FogColor": "V", "FogStart": "S", "FogInvRange": "S", "FogInscatter": "S",
+}
+#: The masters that carry the scene-fog lane: every master a map's world/brush/sky face or a prop
+#: slot binds. `M_V2_Water` is R7.2's (its `FogColor`/`FogStart`/`FogEnd` are the VMT's own
+#: water-fog keys, a different term under the same names), `M_V2_Sprite` R7.4's, `M_V2_Eyes`
+#: R6.1's, and `M_V2_Decal` carries the instance-parameter variant (R5.3).
+SCENE_FOG_MASTERS = frozenset({"M_V2_Lit", "M_V2_LitTranslucent", "M_V2_Unlit", "M_V2_TwoTexture",
+                               "M_V2_Refract"})
 
 
 def _merged(*dicts: dict[str, str]) -> dict[str, str]:
@@ -280,7 +297,7 @@ def _merged(*dicts: dict[str, str]) -> dict[str, str]:
 EXPOSED_PARAMS: dict[str, dict[str, str]] = {
     "M_V2_Lit": _merged(
         _SHARED_PARAMS, _BASE_SCROLL_LANE, _BUMP_SCROLL_LANE, _BASE_ANIM_LANE, _NORMAL_ANIM_LANE,
-        _SINE_LANE,
+        _SINE_LANE, _SCENE_FOG_LANE,
         {
             "BaseTexture": "T", "NormalMap": "T", "EnvMapMask": "T", "EnvMap": "T",
             "SelfIllumAmount": "S", "EnvMapMaskScale": "S", "BumpScale": "S",
@@ -298,7 +315,7 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
         },
     ),
     "M_V2_Unlit": _merged(
-        _SHARED_PARAMS, _BASE_SCROLL_LANE, _BASE_ANIM_LANE, _SINE_LANE,
+        _SHARED_PARAMS, _BASE_SCROLL_LANE, _BASE_ANIM_LANE, _SINE_LANE, _SCENE_FOG_LANE,
         {
             "BaseTexture": "T", "EnvMapMask": "T", "EnvMap": "T", "CloudAlphaTexture": "T",
             "EnvMapMaskScale": "S",
@@ -331,7 +348,7 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
     "M_V2_Sprite": _merged(_SHARED_PARAMS, _BASE_ANIM_LANE, {
         "BaseTexture": "T", "UseVertexColor": "#", "UseVertexAlpha": "#",
     }),
-    "M_V2_Refract": _merged(_SHARED_PARAMS, {
+    "M_V2_Refract": _merged(_SHARED_PARAMS, _SCENE_FOG_LANE, {
         "BaseTexture": "T", "DuDvMap": "T", "NormalMap": "T", "EnvMap": "T",
         "RefractAmount": "S", "RefractTint": "V", "EnvMapTint": "V",
         "UseBaseTexture": "#", "UseNormalMap": "#", "UseEnvMap": "#", "UseFixedCube": "#",
@@ -346,7 +363,7 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
         "FogColor": "V", "FogStart": "S", "FogInvRange": "S",
     }),
     "M_V2_TwoTexture": _merged(
-        _SHARED_PARAMS, _BASE_SCROLL_LANE, _SINE_LANE,
+        _SHARED_PARAMS, _BASE_SCROLL_LANE, _SINE_LANE, _SCENE_FOG_LANE,
         {
             "BaseTexture": "T", "BaseTexture2": "T", "NormalMap": "T",
             "AlphaBias": "S",
@@ -1417,6 +1434,19 @@ def _resolve_blend(params: _Params, family: str) -> dict:
     return overrides
 
 
+def _apply_scene_fog_inscatter(params: _Params, master: str, blend_mode: str) -> None:
+    """R5.4: the one scene-fog value that is an instance fact rather than a primitive one.
+
+    Source forces the fog colour to black under additive blending (an additive surface fades
+    OUT in fog; inscattering the haze colour on top of it would brighten the scene), so an
+    `Additive` instance of a scene-fog master gets `FogInscatter = 0.0`. Every other instance is
+    left on the master's default `1.0`, which is `lerp(shaded, fogColour, f)` unchanged.
+    """
+
+    if master in SCENE_FOG_MASTERS and blend_mode == "Additive":
+        params.scalars["FogInscatter"] = 0.0
+
+
 def _resolve_surface_class(
     surfaceprop_value: str | None, directories: list[str], master: str,
 ) -> tuple[str, int, str]:
@@ -1708,6 +1738,7 @@ def stage_unit(
             _apply_texture_switch_pairs(params, master)
             _apply_static_frame_fallback(params, master, texture_staging_root)
             _check_required_slots(params, master)
+            _apply_scene_fog_inscatter(params, master, blend_mode)
         # Review finding 2: state every switch the resolved master exposes, not only the ones a
         # rule above happened to turn on -- an entry re-imported after a corpus/design change that
         # used to turn a switch on and no longer does must land that switch's `False` explicitly,

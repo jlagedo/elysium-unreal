@@ -88,6 +88,14 @@ namespace ElysiumSurfaceParamsLit
 		// (0 on every instance the stage never marked wetness-driven).
 		inline const FName WetnessScale(TEXT("WetnessScale"));
 		inline const FName WetnessDriven(TEXT("WetnessDriven"));
+		// R5.4 (docs/architecture/seam_map_material.md -> "Scene fog on the world masters"):
+		// Source's per-map distance fog, read off the primitive's Custom Primitive Data (slots
+		// ElysiumFog::SlotStart / SlotInvRange, `mat_fog.fog_from_primitive`), never off the
+		// instance -- the stage writes neither. `FogInscatter` is the instance half: 0 on an
+		// Additive blend (Source fogs additive surfaces to black), 1 everywhere else.
+		inline const FName FogStart(TEXT("FogStart"));
+		inline const FName FogInvRange(TEXT("FogInvRange"));
+		inline const FName FogInscatter(TEXT("FogInscatter"));
 	}
 
 	namespace Vectors
@@ -97,6 +105,8 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName TexScaleOffset(TEXT("TexScaleOffset"));
 		inline const FName SineTargetMask(TEXT("SineTargetMask"));
 		inline const FName SineChannelMask(TEXT("SineChannelMask"));
+		// R5.4: the fog colour, Custom Primitive Data slots ElysiumFog::SlotColor .. +3.
+		inline const FName FogColor(TEXT("FogColor"));
 	}
 
 	// Named `Use...`/`MetallicTint` nowhere `bUse...` -- the design's own table
@@ -145,6 +155,14 @@ namespace ElysiumSurfaceParamsUnlit
 		inline const FName SineMax(TEXT("SineMax"));
 		inline const FName SinePeriod(TEXT("SinePeriod"));
 		inline const FName SineTimeOffset(TEXT("SineTimeOffset"));
+		// R5.4 (docs/architecture/seam_map_material.md -> "Scene fog on the world masters"):
+		// Source's per-map distance fog, read off the primitive's Custom Primitive Data (slots
+		// ElysiumFog::SlotStart / SlotInvRange, `mat_fog.fog_from_primitive`), never off the
+		// instance -- the stage writes neither. `FogInscatter` is the instance half: 0 on an
+		// Additive blend (Source fogs additive surfaces to black), 1 everywhere else.
+		inline const FName FogStart(TEXT("FogStart"));
+		inline const FName FogInvRange(TEXT("FogInvRange"));
+		inline const FName FogInscatter(TEXT("FogInscatter"));
 	}
 
 	namespace Vectors
@@ -154,6 +172,8 @@ namespace ElysiumSurfaceParamsUnlit
 		inline const FName CloudScale(TEXT("CloudScale"));
 		inline const FName SineTargetMask(TEXT("SineTargetMask"));
 		inline const FName SineChannelMask(TEXT("SineChannelMask"));
+		// R5.4: the fog colour, Custom Primitive Data slots ElysiumFog::SlotColor .. +3.
+		inline const FName FogColor(TEXT("FogColor"));
 	}
 
 	namespace Switches
@@ -194,6 +214,14 @@ namespace ElysiumSurfaceParamsTwoTexture
 		inline const FName SineMax(TEXT("SineMax"));
 		inline const FName SinePeriod(TEXT("SinePeriod"));
 		inline const FName SineTimeOffset(TEXT("SineTimeOffset"));
+		// R5.4 (docs/architecture/seam_map_material.md -> "Scene fog on the world masters"):
+		// Source's per-map distance fog, read off the primitive's Custom Primitive Data (slots
+		// ElysiumFog::SlotStart / SlotInvRange, `mat_fog.fog_from_primitive`), never off the
+		// instance -- the stage writes neither. `FogInscatter` is the instance half: 0 on an
+		// Additive blend (Source fogs additive surfaces to black), 1 everywhere else.
+		inline const FName FogStart(TEXT("FogStart"));
+		inline const FName FogInvRange(TEXT("FogInvRange"));
+		inline const FName FogInscatter(TEXT("FogInscatter"));
 	}
 
 	namespace Vectors
@@ -202,6 +230,8 @@ namespace ElysiumSurfaceParamsTwoTexture
 		inline const FName Texture2ScaleOffset(TEXT("Texture2ScaleOffset"));
 		inline const FName SineTargetMask(TEXT("SineTargetMask"));
 		inline const FName SineChannelMask(TEXT("SineChannelMask"));
+		// R5.4: the fog colour, Custom Primitive Data slots ElysiumFog::SlotColor .. +3.
+		inline const FName FogColor(TEXT("FogColor"));
 	}
 
 	namespace Switches
@@ -353,12 +383,22 @@ namespace ElysiumSurfaceParamsRefract
 	namespace Scalars
 	{
 		inline const FName RefractAmount(TEXT("RefractAmount"));
+		// R5.4 (docs/architecture/seam_map_material.md -> "Scene fog on the world masters"):
+		// Source's per-map distance fog, read off the primitive's Custom Primitive Data (slots
+		// ElysiumFog::SlotStart / SlotInvRange, `mat_fog.fog_from_primitive`), never off the
+		// instance -- the stage writes neither. `FogInscatter` is the instance half: 0 on an
+		// Additive blend (Source fogs additive surfaces to black), 1 everywhere else.
+		inline const FName FogStart(TEXT("FogStart"));
+		inline const FName FogInvRange(TEXT("FogInvRange"));
+		inline const FName FogInscatter(TEXT("FogInscatter"));
 	}
 
 	namespace Vectors
 	{
 		inline const FName RefractTint(TEXT("RefractTint"));
 		inline const FName EnvMapTint(TEXT("EnvMapTint"));
+		// R5.4: the fog colour, Custom Primitive Data slots ElysiumFog::SlotColor .. +3.
+		inline const FName FogColor(TEXT("FogColor"));
 	}
 
 	namespace Switches

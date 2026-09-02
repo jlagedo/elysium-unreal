@@ -71,6 +71,9 @@ namespace
 		ElysiumSurfaceParamsLit::Scalars::SineTimeOffset,
 		ElysiumSurfaceParamsLit::Scalars::WetnessScale,
 		ElysiumSurfaceParamsLit::Scalars::WetnessDriven,
+		ElysiumSurfaceParamsLit::Scalars::FogStart,
+		ElysiumSurfaceParamsLit::Scalars::FogInvRange,
+		ElysiumSurfaceParamsLit::Scalars::FogInscatter,
 	};
 	static const FName LitVectors[] = {
 		ElysiumSurfaceParamsShared::Vectors::Color,
@@ -79,6 +82,7 @@ namespace
 		ElysiumSurfaceParamsLit::Vectors::TexScaleOffset,
 		ElysiumSurfaceParamsLit::Vectors::SineTargetMask,
 		ElysiumSurfaceParamsLit::Vectors::SineChannelMask,
+		ElysiumSurfaceParamsLit::Vectors::FogColor,
 	};
 	static const FName LitSwitches[] = {
 		ElysiumSurfaceParamsLit::Switches::UseBaseTexture,
@@ -116,6 +120,9 @@ namespace
 		ElysiumSurfaceParamsUnlit::Scalars::SineMax,
 		ElysiumSurfaceParamsUnlit::Scalars::SinePeriod,
 		ElysiumSurfaceParamsUnlit::Scalars::SineTimeOffset,
+		ElysiumSurfaceParamsUnlit::Scalars::FogStart,
+		ElysiumSurfaceParamsUnlit::Scalars::FogInvRange,
+		ElysiumSurfaceParamsUnlit::Scalars::FogInscatter,
 	};
 	static const FName UnlitVectors[] = {
 		ElysiumSurfaceParamsShared::Vectors::Color,
@@ -124,6 +131,7 @@ namespace
 		ElysiumSurfaceParamsUnlit::Vectors::CloudScale,
 		ElysiumSurfaceParamsUnlit::Vectors::SineTargetMask,
 		ElysiumSurfaceParamsUnlit::Vectors::SineChannelMask,
+		ElysiumSurfaceParamsUnlit::Vectors::FogColor,
 	};
 	static const FName UnlitSwitches[] = {
 		ElysiumSurfaceParamsUnlit::Switches::UseBaseTexture,
@@ -154,6 +162,9 @@ namespace
 		ElysiumSurfaceParamsTwoTexture::Scalars::SineMax,
 		ElysiumSurfaceParamsTwoTexture::Scalars::SinePeriod,
 		ElysiumSurfaceParamsTwoTexture::Scalars::SineTimeOffset,
+		ElysiumSurfaceParamsTwoTexture::Scalars::FogStart,
+		ElysiumSurfaceParamsTwoTexture::Scalars::FogInvRange,
+		ElysiumSurfaceParamsTwoTexture::Scalars::FogInscatter,
 	};
 	static const FName TwoTextureVectors[] = {
 		ElysiumSurfaceParamsShared::Vectors::Color,
@@ -161,6 +172,7 @@ namespace
 		ElysiumSurfaceParamsTwoTexture::Vectors::Texture2ScaleOffset,
 		ElysiumSurfaceParamsTwoTexture::Vectors::SineTargetMask,
 		ElysiumSurfaceParamsTwoTexture::Vectors::SineChannelMask,
+		ElysiumSurfaceParamsTwoTexture::Vectors::FogColor,
 	};
 	static const FName TwoTextureSwitches[] = {
 		ElysiumSurfaceParamsTwoTexture::Switches::UseBaseTexture2,
@@ -273,11 +285,15 @@ namespace
 		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
 		ElysiumSurfaceParamsShared::Scalars::Alpha,
 		ElysiumSurfaceParamsRefract::Scalars::RefractAmount,
+		ElysiumSurfaceParamsRefract::Scalars::FogStart,
+		ElysiumSurfaceParamsRefract::Scalars::FogInvRange,
+		ElysiumSurfaceParamsRefract::Scalars::FogInscatter,
 	};
 	static const FName RefractVectors[] = {
 		ElysiumSurfaceParamsShared::Vectors::Color,
 		ElysiumSurfaceParamsRefract::Vectors::RefractTint,
 		ElysiumSurfaceParamsRefract::Vectors::EnvMapTint,
+		ElysiumSurfaceParamsRefract::Vectors::FogColor,
 	};
 	static const FName RefractSwitches[] = {
 		ElysiumSurfaceParamsRefract::Switches::UseBaseTexture,

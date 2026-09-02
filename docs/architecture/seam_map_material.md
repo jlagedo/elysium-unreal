@@ -650,6 +650,7 @@ runtime factory **whole**, exactly as the chain rule in "Proxy policy" already r
 | `EnvMapMaskScale` | `1.0` | | `EnvMapTint` | `(1, 1, 1, 1)` |
 | `BumpScale` | `1.0` | | `TexScaleOffset` | `(1, 1, 0, 0)` — `(scaleU, scaleV, offsetU, offsetV)` |
 | the animation, scroll and sine lanes above | | | `SineTargetMask`, `SineChannelMask` | as above |
+| the scene-fog lane (R5.4, below) — `FogStart`, `FogInvRange` primitive-driven, `FogInscatter` `1.0` | | | `FogColor` | primitive-driven (CPD 0..3) |
 
 | Static switch | Default | Set by |
 |---|---|---|
@@ -686,6 +687,7 @@ dead slot added.
 | the base-scroll, base-animation and sine lanes | | | `TexScaleOffset` | `(1, 1, 0, 0)` |
 | | | | `CloudScale` | `(1, 1, 1, 0)` — `$cloudscale` is a **vector** (`[2 2 2]`), not a scalar |
 | | | | `SineTargetMask`, `SineChannelMask` | as above (`.z` unused: no `SelfIllumTint`) |
+| the scene-fog lane (R5.4) — `FogStart`, `FogInvRange` primitive-driven, `FogInscatter` `1.0` | | | `FogColor` | primitive-driven (CPD 0..3) |
 
 Static switches: `UseBaseTexture` `true`; `UseVertexColor`, `UseVertexAlpha`, `UseEnvMap`,
 `UseEnvMapMask`, `UseBaseAlphaEnvMapMask`, `UseFixedCube`, `MetallicTint`, `UseAnimatedFrames`,
@@ -821,6 +823,7 @@ may use ISM, not only Niagara particles).
 | `RefractAmount` | S | `20.0` | `$refractamount` |
 | `RefractTint` | V | `(1, 1, 1, 1)` | `$refracttint` |
 | `EnvMapTint` | V | `(1, 1, 1, 1)` | `$envmaptint` (7) |
+| `FogColor`, `FogStart`, `FogInvRange`, `FogInscatter` | V, S, S, S | primitive-driven, primitive-driven, primitive-driven, `1.0` | the scene-fog lane (R5.4, "Scene fog on the world masters") |
 | `UseBaseTexture`, `UseNormalMap`, `UseEnvMap`, `UseFixedCube` | # | `false` | `UseBaseTexture` defaults `false` on the master (both heatglow units and most refract units bind no `$basetexture`); the stage resolves it explicitly per unit, same rule as Lit/Unlit/Water |
 
 `ForceRefract` is **dropped**: `$forcerefract` is set by **0** of the 11,624 units and by no
@@ -857,6 +860,7 @@ completeness with the other eight masters), simply with nothing downstream of it
 | Scalar | Default | From | | Vector | Default | From |
 |---|---|---|---|---|---|---|
 | `AlphaBias` | `0.0` | `$alpha_bias` (4, float `0.2`) | | `TexScaleOffset` | `(1, 1, 0, 0)` | `$texscale` (4, **scalar** `.25`) → `.xy`; `$texoffset` (4, **vector** `[0 0]`) → `.zw`; also `$basetexturetransform` |
+| the scene-fog lane (R5.4) — `FogStart`, `FogInvRange` primitive-driven, `FogInscatter` `1.0` | | | | `FogColor` | primitive-driven (CPD 0..3) | `ElysiumFog::Pack`, never the VMT |
 | the base-scroll and sine lanes | | | | `Texture2ScaleOffset` | `(1, 1, 0, 0)` | `$tex2scale` (4, **scalar**) and `$texture2scale` (1, **scalar** `10.0`) → `.xy`; `$tex2offset` (4, **vector**) → `.zw`. The proxy component targets land here too: `$tex2offset[1]` → `.w`, `$texture2offset[0]` → `.z`, `$texture2transform` → the whole vector |
 
 Static switches: `UseBaseTexture2` (`false`), `UseNormalMap` (`false`), **`UseBumpOnBaseTexture2`**
@@ -989,6 +993,71 @@ job**: the decal placement lane actually calling `ElysiumFog::ApplyToDecalMID` (
 `_place_decals` still binds the legacy per-map `M_Decal` MIC — R5.4 is what stops per-map material
 packages), and any live corpus re-import/re-bake of the three maps, which needs the exclusive
 editor commandlet lane R5.4 already owns.
+
+#### Scene fog on the world masters (R5.4)
+
+R5.4 rebinds every world, brush-model and 3D-skybox face of a converted map onto the imported
+`MI_` its `vtmb:material:*` unit became (`seam_map_map.md` → "## Import — materials (R5.4)"), and
+the task's own acceptance line asked for one check first: *"the V2 Unlit/Lit masters' fog CPD path
+must match what `ApplySceneFog` stamps."* The check found that **no V2 master had a scene-fog term
+at all.** `mat_fog.fog_from_primitive` — Source's per-map distance fog as the Custom-Primitive-Data
+term `ElysiumFog.h` calls *"the whole contract between the material graph, the bake and
+`AElysiumMapActor::ApplySceneFog`"* — was wired into every legacy `M_World_*`/`M_Refract`/
+`M_Additive` master and into none of the nine V2 masters; only `M_V2_Decal` read `mat_fog` at all,
+through R5.3's instance-parameter variant. The R5.3 ruling above leaned on *"the world/sky/prop
+mesh mechanism (CPD, already shared-MI-safe because the value rides the primitive)"* as though it
+already reached the V2 masters — it did not, and every R1 prop already standing on a V2 `MI_` on
+the three converted maps was being stamped by `ApplySceneFog` and fogging nothing.
+
+**Ruling (R5.4): the five masters a map surface or prop slot binds carry the primitive term,
+verbatim from the legacy graph.** `M_V2_Lit`, `M_V2_LitTranslucent`, `M_V2_Unlit`,
+`M_V2_TwoTexture` and `M_V2_Refract` (`importers.materials.SCENE_FOG_MASTERS`) each end with
+`make_v2_materials._scene_fog`: `mat_fog.fog_from_primitive` reading `FogColor` (CPD 0..3),
+`FogStart` (CPD 4) and `FogInvRange` (CPD 5) — the slots `ElysiumFog::Pack` writes, the bake
+stamps as default primitive data and `UElysiumMapVisuals::ApplySceneFog` re-stamps live — and
+applying it so the shaded result is exactly `lerp(shaded, fogColour, f)`: `BaseColor *= 1 - f`,
+`Specular *= 1 - f` (or a Lumen reflection shines through the haze), `Emissive = Emissive · (1 - f)
++ fogColour · f`. Neutral by construction — an unwritten slot reads 0, `f = 0`, nothing changes —
+so a prop standing in the lookdev map or a character on `M_V2_Lit` (R6.1) renders exactly as
+before. `M_V2_Unlit` has no specular pin and its shading model renders `Emissive` alone, so the
+inscatter lands there; `M_V2_TwoTexture` has no emissive of its own, so its fogged emissive is the
+inscatter alone.
+
+**One instance value, `FogInscatter` (S, default `1.0`).** Source forces the fog colour to black
+under additive blending — an additive surface *fades out* in fog; inscattering the haze on top of
+it would brighten the scene — and the graph cannot read its own blend mode, so the stage writes
+`FogInscatter = 0` for an `Additive` instance of a scene-fog master (`_apply_scene_fog_inscatter`)
+and nothing for any other. The three primitive-driven names are never written by the stage: they
+are declared (`ElysiumSurfaceParams{Lit,Unlit,TwoTexture,Refract}`, `EXPOSED_PARAMS`) so the
+three-way name pin (`header ↔ EXPOSED_PARAMS ↔ *_PARAM_TABLE ↔ graph`) covers them, and a fourth
+pin checks the *indices*: `test_scene_fog_masters_read_the_custom_primitive_data_slots_apply_scene_fog_stamps`
+parses `ElysiumFog.h`'s `SlotColor`/`SlotStart`/`SlotInvRange` and asserts each fog parameter node
+on each of the five masters is CPD-driven at exactly that index — a name-only match would compile
+and fog nothing.
+
+**Not on the lane, and why.** `M_V2_Water` already exposes `FogColor`/`FogStart`/`FogEnd` as the
+VMT's own *water-fog* keys (`$fogcolor`/`$fogstart`/`$fogend`, the `watercheap` program's tail), a
+different term under the same names; the scene term on water is R7.2's, which owns the water
+surfaces this rebind puts onto `M_V2_Water` (2 on `sm_hub_1`). `M_V2_Sprite` is R7.4's,
+`M_V2_Eyes` R6.1's, and `M_V2_Decal` keeps R5.3's instance-parameter variant.
+
+**The decal placement lane does not rebind in R5.4 — a domain fact, not a scope call.** The R5.3
+ruling above planned the placement lane's `ADecalActor` onto an MID parented to the shared
+`MI_<unit>` with `ElysiumFog::ApplyToDecalMID` setting the three parameters. Two facts checked
+while wiring it: (1) `UDecalComponent` renders **only** an `MD_DeferredDecal`-domain material —
+`DecalComponent.cpp` (5.8) substitutes `UMaterial::GetDefaultMaterial(MD_DeferredDecal)` for
+anything else (lines 51–58, 97–99, 553) — and every V2 master, `M_V2_Decal` included, is
+`MD_Surface`; (2) the materials the three maps' `.decals` lines name are not `decalmodulate` units
+at all but ordinary `$decal` surfaces — 96 of the 97 distinct decal materials over the three maps
+resolve to `M_V2_LitTranslucent`, one to `M_V2_Unlit`. So there is no V2 asset a decal component
+could draw today; `_place_decals` keeps binding the legacy per-map `M_Decal` MIC (its fog baked in
+by `fog_from_params`, as before), and `/ElysiumBaked/<map>/Materials/Decals` is the one per-map
+material package a converted map still authors. Which V2 master the placement lane should bind —
+a deferred-decal-domain twin of `M_V2_LitTranslucent` for the `$decal` surfaces, or a different
+placement mechanism altogether — is **R7.6's ruling** ("Decals on the V2 Decal master → legacy
+`M_Decal` retired"), recorded here so R7.6 starts from the domain fact rather than from R5.3's
+plan. `ElysiumFog::ApplyToDecalMID` and `Elysium.Substrate.FogDecalMID` stay as the shared setter
+that lane will call.
 
 #### Texture slots, roles and the `_linear` twin
 

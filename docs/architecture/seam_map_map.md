@@ -1048,3 +1048,148 @@ count, per-group triangle count, brush-model set and every placement's stem, pos
 `solid`, `skin` and 3D-skybox flag. The residual positional and UV deltas are the unit's binary32
 `POSITION` accessor against the legacy OBJ's four printed decimals: 8 microns at worst, which is the
 same seam-precision limit R3.2 measured on `.dispcol` and not a difference in the geometry.
+
+## Import — materials (R5.4)
+
+R5.4 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" moves a converted map's
+**surface materials** off the legacy `<map>.mtl` table and the per-map material packages the legacy
+bake authored from it, and onto the `MI_` instances the material lane already imported for every
+`vtmb:material:*` unit (`seam_map_material.md` → "## Import"). R5.1 left the geometry lane binding
+*"the same `MaterialInstanceConstant` the legacy surface bound, resolved through the same `<map>.mtl`
+table, so a shot-diff sees geometry, not shading"*; this task is the shading half. Lights are still
+R5.6's; reflection captures R5.5's.
+
+### Identity and resolution
+
+```text
+face -> textures[texinfo.texData].asset          vtmb:material:<key>   (the root unit, unchanged)
+     -> maps/<map>/<dir>/<stem>[_x_y_z]           a PAKFILE-patched face keeps its map-scoped id
+  -> $ELYSIUM_WORK_ROOT/import/materials/<key>.provenance.json     the material lane's own sidecar
+  -> /ElysiumBaked/Materials/<dir>/MI_<safe stem>                   importers.materials.asset_path_for
+  -> /ElysiumBaked/Materials/maps/<map>/<dir>/MI_<safe stem>        (patched: parented to its base MI_)
+```
+
+The map root unit already names every face's material unit — `textures[]` joins each TEXDATA row to
+its `vtmb:material:*` id, and a VBSP-patched face names the PAKFILE unit (`seam_map_map.md` →
+"Dependencies": *"patched names resolve to their pakfile unit"*). The R5.1 reader keeps its group
+key (`<material>` or `<material>@<cubemap>`, the legacy `.mtl`'s own split) so every mesh slot name
+and every chunk is unchanged, and now records, per group, the unit that group's faces resolved
+(`Scene.units`, `MapGeometry.material_units`). The offline stage resolves each unit through the
+material lane's **provenance sidecar** — not its `manifest.json`, which describes that lane's *last*
+run and shrinks to one directory under `--select`, while every staged unit's sidecar stays on disk
+until its own scope prunes it — to the asset path (`asset_path_for`, the same pure function that
+named the asset at import), the root master (the sidecar's `master`, already walked to the base for
+a patched unit) and the root blend mode (the base's `blendMode`, reached through `patchBase`). That
+tuple is the `materials` table in the staged manifest (`MANIFEST_VERSION` 2), one row per face
+group; the editor half (`bake_map_v2.MapBakeV2`) loads exactly those assets and `material_for`
+answers from that table alone.
+
+**The Nanite question moves with the binding.** The legacy chunker split a cell into a Nanite mesh
+(opaque + masked) and a non-Nanite sibling (`T_` prefix) by `MatDef.opaque`, read off the corpus
+flags. The V2 lane answers the same question from the root instance's blend mode
+(`NANITE_BLEND_MODES = {Opaque, Masked}`), so the chunk naming, the section order and the slot
+names are byte-for-byte the R5.1 lane's — only the bound asset changes.
+
+**A unit the material lane has not staged fails the map**, naming every missing key and the command
+that stages it (`uv run elysium import materials`); a patched unit whose `patchBase` chain leaves
+the staging tree fails the same way. An instance the stage resolved but the editor cannot load is a
+second loud failure (`resolve_materials`), because the material lane imports map-scoped and the map
+it did not import is exactly the map this would silently unbind. Nothing on this lane binds the
+master's placeholder quietly.
+
+### What stops, and what does not
+
+- **The per-map world material package stops.** `_material_sets` on the V2 lane returns an empty
+  world set, so `stage_materials` prunes `/ElysiumBaked/<map>/Materials` instead of authoring it,
+  and the legacy per-map wet-cubemap import (`sm_hub_1`'s `TC_cubemapdefault` stamped into
+  per-map wet instances as `SourceCube`) is pruned too: wetness rides `MPC_ElysiumEnvironment` and
+  the shared instance's own `WetnessScale`/`WetnessDriven` (R5.3), never a per-map copy. The
+  cubemap-patched materials — the ~7,487 corpus-wide that R2's sweep found falling back to generic
+  reflection — bind their own map-scoped `MI_` (a parented instance of the base, overriding nothing
+  today; the probe join is R5.5's).
+- **The decal package does not stop here.** `_place_decals` still binds the legacy per-map
+  `M_Decal` MIC from `/ElysiumBaked/<map>/Materials/Decals`, and the V2 lane still reads the
+  `.mtl` for exactly those rows. The reason is a domain fact, recorded in `seam_map_material.md` →
+  "Scene fog on the world masters (R5.4)": a `UDecalComponent` renders only an
+  `MD_DeferredDecal`-domain material, every V2 master is `MD_Surface`, and the `.decals` materials
+  are `$decal` surfaces on `M_V2_LitTranslucent`/`M_V2_Unlit`, not `decalmodulate` units. R7.6
+  owns the decal rebind and the legacy `M_Decal` retirement.
+- **Props were already there.** An R1 prop mesh under `/ElysiumBaked/Meshes` binds its V2 `MI_`
+  from its own import; this task changes nothing about props except that their fog now works
+  (below).
+
+### Scene fog is now a V2 term
+
+The rebind would have shipped every world surface unfogged: no V2 master carried the per-primitive
+distance-fog term `ElysiumFog.h` names as the contract between the material graph, the bake and
+`UElysiumMapVisuals::ApplySceneFog`. R5.4 wires `mat_fog.fog_from_primitive` — the legacy graph's
+own term — into the five masters a map surface or prop slot binds, reading the exact CPD slots
+`ElysiumFog::Pack` writes and the bake's `set_fog` stamps (colour 0..3, start 4, 1/range 5), with
+one instance-side gate (`FogInscatter`, 0 on an `Additive` blend because Source fogs additive
+surfaces to black). The bake-side stamping (`stage_level`'s `set_fog` on every world/sky/prop
+component) and the runtime's re-stamp are unchanged; the ruling and the parameter rows are in
+`seam_map_material.md` → "Scene fog on the world masters (R5.4)".
+
+### The provenance report
+
+Beside the staged pair, `materials_report.json` classifies every material the map binds — as data,
+never as a look judgement: its V2 master, blend mode and appearance class (`opaque`, `masked`,
+`translucent`, `additive`, `refract`, `water`, `decal`); the legacy master the `.mtl` lane would
+have selected for the same base material (`Bake._master_for`'s own rule order, restated over the
+corpus record) and *its* class; whether the class changed on the rebind; the unit's proxies and
+which of them run live on the V2 instance (`sine`, `texturescroll`, and `animatedtexture` unless
+the provenance's `animatedFramesArrayUnavailable` omission says its frames array never staged);
+whether it is wetness-driven (`wetnessScale` authored on a Lit-family unit); and whether it is a
+`$decal` surface. `uv run elysium export map <map>` prints the counts as it stages.
+
+### Measured (2026-09-02, the three working maps)
+
+Staged from the material lane's sidecars in 2.2 / 0.7 / 2.0 s per map, and every unit resolved:
+
+| Map | Face groups bound | PAKFILE-patched | By master | Animated now | Class changed | Wetness-driven |
+|---|---:|---:|---|---:|---:|---:|
+| `sp_tutorial_1` | 419 | 241 | Lit 384, LitTranslucent 29, TwoTexture 5, Unlit 1 | 0 | 0 | 0 |
+| `sm_pawnshop_1` | 160 | 66 | Lit 137, LitTranslucent 16, Unlit 6, TwoTexture 1 | 2 | 3 | 9 |
+| `sm_hub_1` | 323 | 134 | Lit 302, LitTranslucent 14, Unlit 4, Water 2, TwoTexture 1 | 2 | 6 | 14 |
+
+**Animated now** (proxies the legacy `.mtl` lane flattened, live on the V2 instance):
+`sm_pawnshop_1` — `dev/dev_tvmonitor1a` (`sine`, TwoTexture), `signs/newsticker` (`texturescroll`,
+Unlit); `sm_hub_1` — `dev/dev_waterbeneath2@cubemapdefault` and `water/sewer_water`
+(`animatedtexture` + `texturescroll`, both on `M_V2_Water`). Four of the corpus's ~217, because the
+three maps bind 902 face groups of the 19,121 units; the count scales with the flag list.
+
+**Appearance class changed** — every one a `$decal` world face (`decals/signs/number{0,5,8}` on
+`sm_pawnshop_1`; `decals/stains/bloodbg{a,b}`, `decals/stains/blooddrip{c,d}` on `sm_hub_1`) that
+the legacy lane bound to the deferred-decal-domain `M_Decal` **as a static-mesh slot** (which a
+surface mesh cannot draw) and that is now an ordinary `M_V2_LitTranslucent` translucent surface,
+plus the two `sm_hub_1` water surfaces, legacy `M_World_Translucent` → `M_V2_Water` with the
+material lane's own `Opaque` blend override (`water` VMTs author no `$translucent`; R7.2's).
+Because the Nanite split now follows the root instance's blend, `sm_hub_1` chunks 194 → 175
+(158 Nanite + 17 `T_`): the two water materials joined the Nanite buckets and the seven
+decal/glass-flagged ones left them; `sp_tutorial_1` 110 and `sm_pawnshop_1` 38 are unchanged.
+
+**The instances were behind the masters.** The staged sidecars and the imported `MI_` predated
+R5.3 (Aug 31 09:02): none of `sm_hub_1`'s 14 `globalwetness` units carried `WetnessScale`/
+`WetnessDriven`. Re-staged and re-imported by directory, never the corpus — `asphalt` 1 imported /
+15 reused, `concrete` 4 / 157, `grass` 1 / 2, `ground` 7 / 91, `tile` 1 / 136, `dev` 1 / 89 (+ the
+2 pre-existing `dev/ocean*` stage failures the material doc already names), `signs` 1 / 65 — 16
+instances rewritten, exactly the 14 wet units plus the 2 `Additive` ones (`FogInscatter = 0`).
+
+**Bake** (`uv run elysium export map sp_tutorial_1 sm_pawnshop_1 sm_hub_1`, no `--force`; the
+recipes changed): 185 / 70 / 234 assets saved, 0 failed, all three levels; `/ElysiumBaked/<map>/
+Materials` holds only `Decals/` (27 / 14 / 61 legacy `M_Decal` MICs) and `Textures/Cubes` is empty on
+all three. A byte scan of every baked world chunk and brush mesh finds **1,399 / 361 / 1,439**
+references into `/ElysiumBaked/Materials/…` (base and `maps/<map>/…` alike) and **0** into
+`/ElysiumBaked/<map>/Materials/` or `/ElysiumBaked/Shared/Materials/`.
+
+**Headless boot, 6 + 4 + 4 = 14/14 vantages**, material audit `0 with unbound or default-bound
+slots` on 464 / 179 / 483 mesh assets, `ApplySceneFog` stamping 885+32 / 211+25 / 1,130+53
+primitives (world + miniature; `sp_tutorial_1` authors no fog, the other two `1270->12700cm`).
+Pixel numbers, as data only: against the pre-R5.4 captures of the same build, `sm_pawnshop_1`
+mean |Δ| 47–71 / p99 77–191 / 96.5–99.9 % of pixels, `sm_hub_1` 42–44 / 119–156 / 97.7–98.1 %;
+frame mean RGB rose from (95–197, 107–175, 87–146) to (141–237, 147–218, 127–195) on
+`sm_pawnshop_1` and from (46, 31, 14) to (85, 62, 33) on `sm_hub_1` — every surface changed
+shading model, so the harness's 94 % noise floor (R5.1) is not the ceiling here and no regression
+verdict is drawn from it; the boot, the audit and the byte scan are the witnesses. One harness
+observation for the follow-up list: `sm_hub_1`'s four vantages report identical frame means
+before and after, which they did before this task too.

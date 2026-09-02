@@ -5,12 +5,21 @@
 # Roadmap R5.1 (`docs/project/seam_migration.md` -> "Roadmap -- one pipeline"); the ruling is
 # `docs/architecture/seam_map_map.md` -> "## Import -- geometry and placements (R5.1)".
 #
-# **Beside the legacy bake, not over it.** This module holds only the inputs and the two stages that
-# differ; everything else -- textures, materials, lights, decals, fog, the 3D-skybox transform, the
-# player start, pruning, recipes and receipts -- is `bake_map.Bake`'s, unchanged, and a map that is
-# not on the R5.1 flag never reaches a line of this file. The two lanes are selected per map by
+# **Beside the legacy bake, not over it.** This module holds only the inputs and the stages that
+# differ; everything else -- lights, decals, fog stamping, the 3D-skybox transform, the player
+# start, pruning, recipes and receipts -- is `bake_map.Bake`'s, unchanged, and a map that is not on
+# the R5.1 flag never reaches a line of this file. The two lanes are selected per map by
 # `elysium_pipeline.map_transport.is_map_on_v2_models`, the tracked list in
 # `Config/DefaultElysium.ini`.
+#
+# **Materials (R5.4, `seam_map_map.md` -> "## Import -- materials").** A V2 surface binds the
+# imported `MI_` the material lane already made for its `vtmb:material:*` unit -- a PAKFILE-patched
+# face by its `maps/<map>/...` id -- resolved offline into the staged manifest's `materials` table
+# and loaded here by asset path. No per-map WORLD material package is authored for a V2 map: the
+# `/ElysiumBaked/<map>/Materials` set is pruned. The one per-map material set that survives is the
+# decal lane's `Materials/Decals` (legacy `M_Decal` MICs): a `UDecalComponent` renders only an
+# `MD_DeferredDecal`-domain material and every V2 master is `MD_Surface`, so the decal rebind is
+# R7.6's, not this task's.
 #
 # **This half reads a staged pair, not the GLB.** Decoding the unit needs `numpy` -- the sky-area BSP
 # walk and the accessor decode -- and Unreal's embedded CPython does not carry it, so the read runs
@@ -43,7 +52,12 @@ from elysium_pipeline import placed_models as PM  # noqa: E402
 FAMILY = "map_geometry"
 MANIFEST_NAME = "manifest.json"
 MANIFEST_SCHEMA = "elysium.map-geometry"
-MANIFEST_VERSION = 1
+#: 2 (R5.4): the manifest carries the `materials` table this lane binds from.
+MANIFEST_VERSION = 2
+
+#: The key space the staged `MI_` instances live under in `Bake.materials` -- beside the legacy
+#: `(package, key)` pairs, never colliding with one.
+V2_MATERIAL_SCOPE = "v2"
 
 
 #: The R1 model corpus (`docs/architecture/seam_map_model.md` -> "Import" -> "Identity and
@@ -105,6 +119,8 @@ def _build_class():
             self.geometry = None       # _StagedGeometry
             self.sky_model = None      # bl.ObjModel for the miniature
             self.sky_blend = []
+            self.v2_materials = {}     # face group key -> _V2Material (R5.4)
+            self.decal_mats = {}       # the legacy `.mtl` rows the decal lane still authors from
             self.v2_skins = {}         # stem -> (family count, [ {slot: material path} ])
             self.placed_index = {}     # catalogue stem -> npc_index row
             self.placed_index_version = 0
@@ -113,12 +129,12 @@ def _build_class():
         # -------------------------------------------------------------------------- inputs
 
         def load_sources(self):
-            """The map root unit's geometry and placements, plus the map-scoped inputs the shared
-            stages still own (`.mtl` material table, `.env`, `.decals`, `.weather`).
+            """The map root unit's geometry, placements and materials, plus the map-scoped inputs
+            the shared stages still own (`.env`, `.decals`, `.weather`, and the `.mtl` rows the
+            decal lane alone still reads).
 
-            Materials, fog and lights are R5.3/R5.4/R5.6's, not this task's: this lane changes where
-            the *geometry* and the *placements* come from and nothing else, so the surfaces it
-            authors bind exactly the material instances the legacy lane bound.
+            Lights are R5.6's. Every surface's material is the staged `materials` table's (R5.4);
+            the `.mtl` is consulted for nothing but the decal lane's legacy `M_Decal` instances.
             """
 
             staged = _staging_dir(self.map)
@@ -143,9 +159,15 @@ def _build_class():
                 self.brush_models[stem] = model
                 self.brush_blend[stem] = blend
 
-            self.world_mats = bl.read_mtl(
+            # R5.4: the surfaces' materials are the staged table's; `world_mats` is what the shared
+            # chunking/Nanite predicate reads (`.opaque`), and it is the same objects.
+            self.v2_materials = {
+                key: _V2Material(key, row) for key, row in self.geometry.materials.items()}
+            self.world_mats = self.v2_materials
+            legacy_rows = bl.read_mtl(
                 os.path.join(self.dir, "%s.mtl" % self.map),
                 corpus=self.corpus_materials, local=self.local_materials)
+            self.decal_mats = {key: mat for key, mat in legacy_rows.items() if mat.decal}
             self.decals = bl.read_decals(os.path.join(self.dir, "%s.decals" % self.map))
             weather_path = os.path.join(self.dir, "%s.weather.json" % self.map)
             if os.path.isfile(weather_path):
@@ -167,17 +189,24 @@ def _build_class():
                 counts["brushModels"], counts["brushTriangles"],
                 len(self.geometry.placements)))
 
-            # Every material name the unit's faces resolved has to exist in the map's `.mtl`, or a
-            # surface would bind the shared error material without anyone saying why.
+            # Every material group the unit's faces resolved has to be in the staged table, or a
+            # surface would bind the shared error material without anyone saying why. The offline
+            # stage already failed the map if a unit was not staged; this is the cheap re-check
+            # that the pair on disk is the pair that stage wrote.
             unknown = sorted(
                 set(self.world_obj.groups) | set(self.sky_model.groups)
                 | {key for model in self.brush_models.values() for key in model.groups}
             )
-            unknown = [key for key in unknown if key not in self.world_mats]
+            unknown = [key for key in unknown if key not in self.v2_materials]
             if unknown:
-                fail("%d unit material group(s) absent from %s.mtl: %s"
-                     % (len(unknown), self.map, ", ".join(unknown[:8])))
+                fail("%d unit material group(s) absent from the staged materials table: %s"
+                     % (len(unknown), ", ".join(unknown[:8])))
                 return False
+            log("v2 materials: %d MI_ bound (%d PAKFILE-patched; %s)" % (
+                len(self.v2_materials),
+                sum(1 for mat in self.v2_materials.values() if mat.patched),
+                ", ".join("%s %d" % item for item in sorted(
+                    _count_by_master(self.v2_materials).items()))))
             self._load_v2_skins()
             self._load_placed_index()
             return True
@@ -224,6 +253,56 @@ def _build_class():
                 self.v2_skins[stem] = (
                     int(model.get_editor_property("family_count")), families)
             log("v2 skins: %d model(s) with alternate families" % len(self.v2_skins))
+
+        # ----------------------------------------------------------------------- materials
+
+        def _stage_wet_cubemaps(self):
+            """No per-map wet instance exists to stamp a `SourceCube` into (R5.3/R5.4): wetness
+            rides `MPC_ElysiumEnvironment` and the shared `MI_`. The legacy lane's cube package is
+            pruned rather than authored."""
+            pruned = bl.prune_package(self.cube_pkg, set(), self.prune_scope)
+            self.tracker.pruned("textures", pruned)
+
+        def _material_sets(self):
+            """The world set is EMPTY on this lane, so `stage_materials` prunes the per-map
+            `Materials` package instead of authoring it; the decal set is the legacy lane's,
+            unchanged, until R7.6 gives decals a deferred-decal-domain V2 master."""
+            return (({}, self.mat_pkg, self.shared_tex_pkg),
+                    (self.decal_mats, self.decal_mat_pkg, self.shared_tex_pkg))
+
+        def _shared_material_keys(self):
+            """Nothing is resolved out of the legacy shared corpus package on this lane."""
+            return {}
+
+        def resolve_materials(self):
+            """The decal MICs (legacy, `Bake.resolve_materials`) plus every staged `MI_`, loaded by
+            asset path. A missing instance is a named failure, not a grey surface: the material
+            lane imports map-scoped, and the map it did not import is exactly the map this would
+            silently unbind."""
+            Bake.resolve_materials(self)
+            loaded = {}
+            missing = []
+            for key, mat in sorted(self.v2_materials.items()):
+                asset = loaded.get(mat.asset)
+                if asset is None and mat.asset not in loaded:
+                    asset = unreal.EditorAssetLibrary.load_asset(mat.asset)
+                    loaded[mat.asset] = asset
+                if asset is None:
+                    missing.append(mat.asset)
+                    continue
+                self.materials[(V2_MATERIAL_SCOPE, key)] = asset
+            if missing:
+                fail("%d staged material instance(s) are not imported "
+                     "(run: uv run elysium import materials): %s"
+                     % (len(missing), ", ".join(sorted(set(missing))[:8])))
+                raise SystemExit(1)
+            log("v2 materials: %d instance(s) loaded" % len(loaded))
+
+        def material_for(self, key):
+            """The imported `MI_` one surface binds, by its face group key."""
+            if key not in self.v2_materials:
+                return self.error_bind(key, self.map)
+            return self.materials.get((V2_MATERIAL_SCOPE, key))
 
         # -------------------------------------------------------------------------- stages
 
@@ -285,6 +364,7 @@ def _build_class():
             recipe = Bake._level_recipe(self)
             recipe["lane"] = self.lane
             recipe["unit_sha256"] = self.geometry.unit_sha256
+            recipe["v2_materials"] = sorted({mat.asset for mat in self.v2_materials.values()})
             recipe["props"] = sorted(
                 "%s/SM_%s" % (V2_MESH_PACKAGE, placement.stem)
                 for placement in self.geometry.placements
@@ -453,6 +533,36 @@ def _staging_dir(map_name):
     return os.path.join(os.fspath(paths.work_root()), "import", FAMILY, map_name)
 
 
+class _V2Material(object):
+    """One staged `materials` row (`map_geometry.MaterialBinding.as_row`): the imported `MI_` a
+    face group binds, and the root master/blend it renders through. `opaque` is the one predicate
+    the shared chunking stage reads (a Nanite chunk is opaque/masked only), exactly the question
+    the legacy `MatDef.opaque` answered from the corpus flags."""
+
+    __slots__ = ("key", "unit", "asset", "master", "blend_mode", "opaque", "patched")
+
+    #: The legacy per-map wetness path (`Bake.resolve_textures`'s sm_hub_1 `SourceCube` join)
+    #: reads this off every world row; no V2 surface takes it -- wetness is the shared
+    #: instance's own lane (R5.3), never a per-map cube stamped at bake.
+    wet = False
+
+    def __init__(self, key, row):
+        self.key = key
+        self.unit = row["unit"]
+        self.asset = row["asset"]
+        self.master = row["master"]
+        self.blend_mode = row["blendMode"]
+        self.opaque = bool(row["opaque"])
+        self.patched = bool(row.get("patched"))
+
+
+def _count_by_master(materials):
+    counts = {}
+    for mat in materials.values():
+        counts[mat.master] = counts.get(mat.master, 0) + 1
+    return counts
+
+
 class _Placement(object):
     """One staged `staticProps[]` row, in the shape `map_geometry.Placement` publishes."""
 
@@ -514,6 +624,7 @@ class _StagedGeometry(object):
         self.sky_origin = tuple(float(v) for v in self.manifest["sky"]["origin"])
         self.sky_ok = bool(self.manifest["sky"]["ok"])
         self.placements = [_Placement(row) for row in self.manifest["placements"]]
+        self.materials = dict(self.manifest["materials"])
 
     def brush_stems(self):
         return {int(index): stem

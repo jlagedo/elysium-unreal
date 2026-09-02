@@ -1670,6 +1670,83 @@ unchanged — cheap at three maps and two skies, worth revisiting once more maps
 PNGs themselves become first-class imported textures with provenance, a different question from
 which set this bake samples; R8.1 still owns deleting the runtime path this task only bypassed.
 
+**R5.4 — V2 materials wired (2026-09-02).** A converted map's every world, brush-model and
+3D-skybox face binds the `MI_` the material lane imported for its `vtmb:material:*` unit — a
+PAKFILE-patched face by its `maps/<map>/…` id — and no per-map world material package is written
+for it any more. Contract in `seam_map_map.md` → "## Import — materials (R5.4)"; the master-side
+ruling in `seam_map_material.md` → "Scene fog on the world masters (R5.4)".
+
+**Resolution is offline, through the material lane's own sidecars.** The R5.1 reader now records
+the unit each face group resolved (`Scene.units`), and `map_geometry.stage_map` turns that into the
+manifest's `materials` table — asset path by `importers.materials.asset_path_for`, root master and
+blend through the sidecar's `master`/`patchBase` — reading `<key>.provenance.json` rather than
+`manifest.json`, which describes the material lane's last run and shrinks to one directory under
+`--select`. A unit the lane never staged fails the map naming every missing key; an instance the
+editor cannot load fails again by asset path. `bake_map_v2.MapBakeV2` overrides `material_for`,
+`resolve_materials`, `_material_sets` (world set empty → `/ElysiumBaked/<map>/Materials` pruned)
+and the wet-cubemap import; `_chunk_world`'s Nanite predicate reads the root instance's blend.
+Measured: 419 / 160 / 323 face groups bound (241 / 66 / 134 patched), 0 unresolved; every baked
+chunk and brush references only `/ElysiumBaked/Materials/…` (1,399 / 361 / 1,439 refs, 0 per-map,
+0 legacy shared); 185 / 70 / 234 assets saved; 14/14 vantages boot with `0 unbound or
+default-bound slots`.
+
+**The acceptance check found the fog gap, and it is closed.** *"The V2 Unlit/Lit masters' fog CPD
+path must match what `ApplySceneFog` stamps"* — there was none: no V2 master read
+`mat_fog.fog_from_primitive`, so the rebind (and every R1 prop already on a V2 `MI_`) would have
+fogged nothing while `ApplySceneFog` stamped 885 / 211 / 1,130 primitives. `M_V2_Lit`,
+`M_V2_LitTranslucent`, `M_V2_Unlit`, `M_V2_TwoTexture` and `M_V2_Refract` now end with
+`make_v2_materials._scene_fog` — the legacy graph's own term, CPD 0..3 / 4 / 5, `lerp(shaded,
+fogColour, f)` over BaseColor, Specular and Emissive — with one instance value, `FogInscatter`
+(0 on an `Additive` blend: Source fogs additive surfaces to black; the stage writes it). Declared
+in `ElysiumSurfaceParams.h` / `EXPOSED_PARAMS` / the `*_PARAM_TABLE`s (the three-way pin) and
+pinned a fourth way by index: the new offline test parses `ElysiumFog.h`'s slots and asserts each
+fog node on each of the five masters is CPD-driven at exactly that index. `GRAPH_VERSION` 4;
+`uv run elysium export bundle policy` regenerated the nine masters.
+
+**Decals do not rebind, on a domain fact recorded for R7.6.** `UDecalComponent` renders only an
+`MD_DeferredDecal` material (`DecalComponent.cpp` substitutes the default decal material for
+anything else) and every V2 master is `MD_Surface`; the three maps' 97 distinct `.decals`
+materials are `$decal` surfaces on `M_V2_LitTranslucent` (96) / `M_V2_Unlit` (1), not
+`decalmodulate` units. So `_place_decals` keeps the legacy per-map `M_Decal` MIC —
+`/ElysiumBaked/<map>/Materials/Decals` (27 / 14 / 61) is the one per-map material package a
+converted map still authors — and R5.3's "MID-at-load" plan becomes R7.6's ruling to make, with
+`ElysiumFog::ApplyToDecalMID` waiting for it.
+
+**Provenance report, as data.** `materials_report.json` beside each staged pair classifies every
+bound material (V2 master/blend/class, the legacy master `Bake._master_for` would have chosen and
+its class, live proxies, wetness, `$decal`). Animated now: `sm_pawnshop_1` `dev/dev_tvmonitor1a`
+(sine) and `signs/newsticker` (texturescroll); `sm_hub_1` `dev/dev_waterbeneath2@cubemapdefault`
+and `water/sewer_water` (animatedtexture + texturescroll, on `M_V2_Water`) — 4 of the ~217,
+because the three maps bind 902 groups of 19,121 units. Appearance class changed: 3 + 6 — seven
+`$decal` world faces the legacy lane bound to the deferred-decal `M_Decal` as a mesh slot (a
+surface mesh cannot draw that domain) and now draw as translucent surfaces, plus the two `sm_hub_1`
+water faces on `M_V2_Water` with the lane's `Opaque` override (R7.2's). Wetness-driven: 0 / 9 /
+14. The imported instances predated R5.3, so the 14 `sm_hub_1` wet units and the 2 additive units
+were re-staged and re-imported **by directory** (7 launches, 16 instances rewritten, 555 reused,
+never the corpus).
+
+**Not a look verdict.** Frame means rose on every vantage (`sm_hub_1` (46, 31, 14) → (85, 62,
+33); `sm_pawnshop_1` similar) and 96–100 % of pixels moved against the pre-R5.4 captures — every
+surface changed shading model, so the R5.1 noise floor is not the ceiling and no pixel verdict is
+drawn; boot, audit and the byte scan are the witnesses.
+
+Tests: 4 pytest in `test_map_geometry.py` (patched-id resolution and root blend, loud failure
+naming every unstaged unit, the report's classification, and the real three-map corpus resolving
+every group to an instance that exists on disk), 1 in `test_materials_stage.py`
+(`FogInscatter` on Additive only, the lane declared on exactly the five masters), 1 in
+`test_make_v2_materials_editor.py` (CPD indices against `ElysiumFog.h`); the existing
+header/table pins cover the new names, `Elysium.Policy.V2MasterParams` grew the four names per
+master. `uv run elysium build`: Succeeded. `Elysium.Policy`: **9 of 9**. `Elysium.Substrate`:
+**439 of 439**. `uv run pytest` over the eight touched modules: **290 passed**.
+
+Follow-ups: R7.6 decides the decal master (deferred-decal domain); R7.2 owns the scene-fog term
+on `M_V2_Water` (its `FogColor`/`FogStart`/`FogEnd` are the VMT water-fog keys) and the two
+water surfaces now on it with an `Opaque` override; R5.5 gives the 441 map-scoped patched
+instances their probe; the material lane's `manifest.json` is per-run and a `--select` import
+leaves it describing one directory — nothing in this task reads it any more, but `bake_verify`
+and the lookdev should be checked before anyone else relies on it; the shot harness's identical
+`sm_hub_1` frame means across four vantages predate this task.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1729,11 +1806,11 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 **R5.2 landed (2026-09-01)** — see Settled.
 
-- **R5.3 Decal fog and wetness homes** [MP-4.2]. The two per-map-state axes that force per-map
-  material instances, parameters sourced from the R4.4 asset. → lands: unblocks R5.4.
-- **R5.4 V2 materials wired** [MP-4.3, SF-6.1]. `material_for` returns `MI_` by
-  `vtmb:material:*`; per-map material packages stop; the ~217 proxy-animated materials come alive
-  by the rebind. → lands: maps render through the V2 masters.
+**R5.3 landed (2026-09-01)** — ruling and landing note in `seam_map_material.md` → "Decal fog and
+wetness homes (R5.3)".
+
+**R5.4 landed (2026-09-02)** — see Settled. The decal half of R5.3's plan moved to R7.6 on a domain
+fact (a `UDecalComponent` renders only `MD_DeferredDecal`; every V2 master is `MD_Surface`).
 - **R5.5 Reflection captures** [MP-4.4, SF-6.2]. Per `cubemaps[]` origin, radius from settings,
   built under `-AllowCommandletRendering`; `LightSpecularScale` flip rides along. → lands: the
   Lumen fallback lane.

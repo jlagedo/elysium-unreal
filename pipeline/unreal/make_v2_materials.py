@@ -59,7 +59,7 @@ DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 #: it up through the recipe stamp even when nothing on disk changed. `_source_hash()` below is the
 #: exhaustive safety net (it catches an edit this constant was not bumped for); this constant
 #: stays as the human-readable marker of the shape revision.
-GRAPH_VERSION = 3
+GRAPH_VERSION = 4
 
 #: `MPC_ElysiumSurfaces` (SF-4.1, C++, landed) owns every one of these rows and their defaults --
 #: `make_surface_knobs.py` (`build_content.py` runs it before this file). This generator is a
@@ -757,6 +757,37 @@ def _class_lut_influenced(g, lut_param_name, lut_texture, index_name, x, y):
 # ============================================================================================
 
 
+def _scene_fog(g, base_color, base_out, emissive, emissive_out, specular, specular_out, x, y):
+    """R5.4 (`seam_map_material.md` -> "Scene fog on the world masters"): Source's per-map distance
+    fog as the per-primitive Custom Primitive Data term every world / 3D-skybox / prop primitive
+    carries -- `mat_fog.fog_from_primitive`, the exact graph the legacy `M_World_*` masters run,
+    reading the slots `ElysiumFog::Pack` writes (colour 0..3, start 4, 1/range 5) and
+    `UElysiumMapVisuals::ApplySceneFog` re-stamps live. Neutral by construction: an unwritten slot
+    reads 0, so `f = 0` and every output passes through untouched.
+
+    Applied so the shaded result is exactly `lerp(shaded, fogColour, f)`, as the legacy graph does:
+    `BaseColor *= 1 - f`, `Specular *= 1 - f` (or a Lumen reflection shines through the haze),
+    `Emissive = Emissive * (1 - f) + fogColour * f * FogInscatter`. `FogInscatter` is the one
+    instance-side value (`ElysiumSurfaceParams*::Scalars::FogInscatter`, default 1): the stage
+    writes 0 for an `Additive` blend, because Source forces the fog colour to black under additive
+    blending -- an additive surface fades out in fog rather than adding the haze on top.
+
+    Returns `(base_color, emissive, specular)` nodes; `specular` is None when none was handed in
+    (an Unlit shading model has no specular pin to fade).
+    """
+    fog_f, fog_inv, fog_color = mat_fog.fog_from_primitive(g.mat, x=x, y=y)
+    inscatter_gate = g.scalar(mat_fog.P_INSCATTER, 1.0, x + 900, y - 180)
+    fog_color_gated = g.mul(fog_color, "", inscatter_gate, "", x + 1080, y - 160)
+    base_faded = mat_fog.fade(g.mat, base_color, base_out, fog_inv, x + 1100, y)
+    emissive_faded = mat_fog.fade(g.mat, emissive, emissive_out, fog_inv, x + 1100, y + 120)
+    emissive_fogged = mat_fog.inscatter(g.mat, emissive_faded, fog_f, fog_color_gated,
+                                        x + 1300, y + 120)
+    specular_faded = None
+    if specular is not None:
+        specular_faded = mat_fog.fade(g.mat, specular, specular_out, fog_inv, x + 1100, y + 300)
+    return base_faded, emissive_fogged, specular_faded
+
+
 class LitParams:
     class Textures:
         BaseTexture = "BaseTexture"
@@ -787,6 +818,9 @@ class LitParams:
         SineTimeOffset = "SineTimeOffset"
         WetnessScale = "WetnessScale"
         WetnessDriven = "WetnessDriven"
+        FogStart = mat_fog.P_START
+        FogInvRange = mat_fog.P_INV_RANGE
+        FogInscatter = mat_fog.P_INSCATTER
 
     class Vectors:
         Color = "Color"
@@ -795,6 +829,7 @@ class LitParams:
         TexScaleOffset = "TexScaleOffset"
         SineTargetMask = "SineTargetMask"
         SineChannelMask = "SineChannelMask"
+        FogColor = mat_fog.P_COLOR
 
     class Switches:
         UseBaseTexture = "UseBaseTexture"
@@ -968,7 +1003,6 @@ def _build_lit(mat, collection, environment_collection, lut_texture, default_fra
                                  base_color_chromatic_gated, 1200, -280, default=False)
     base_color_final = g.switch(P.Switches.UseEnvMap, base_color_envmap, overbright_base,
                                 1300, -280, default=False)
-    g.to(base_color_final, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
     # -- Normal ---------------------------------------------------------------------------------
     flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
@@ -1001,8 +1035,13 @@ def _build_lit(mat, collection, environment_collection, lut_texture, default_fra
                               default=False)
 
     total_emissive = g.add(selfillum_emissive, "", fixed_emissive, "", -300, 780)
-    g.to(total_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    g.to(specular_final, "", unreal.MaterialProperty.MP_SPECULAR)
+
+    # -- Scene fog (R5.4): the per-primitive CPD term, last, over the three outputs it fades -----
+    base_color_fogged, emissive_fogged, specular_fogged = _scene_fog(
+        g, base_color_final, "", total_emissive, "", specular_final, "", -1600, 3000)
+    g.to(base_color_fogged, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    g.to(emissive_fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    g.to(specular_fogged, "", unreal.MaterialProperty.MP_SPECULAR)
     g.to(roughness_final, "", unreal.MaterialProperty.MP_ROUGHNESS)
     g.to(metallic_final, "", unreal.MaterialProperty.MP_METALLIC)
 
@@ -1128,6 +1167,9 @@ class UnlitParams:
         SineMax = "SineMax"
         SinePeriod = "SinePeriod"
         SineTimeOffset = "SineTimeOffset"
+        FogStart = mat_fog.P_START
+        FogInvRange = mat_fog.P_INV_RANGE
+        FogInscatter = mat_fog.P_INSCATTER
 
     class Vectors:
         Color = "Color"
@@ -1136,6 +1178,7 @@ class UnlitParams:
         CloudScale = "CloudScale"
         SineTargetMask = "SineTargetMask"
         SineChannelMask = "SineChannelMask"
+        FogColor = mat_fog.P_COLOR
 
     class Switches:
         UseBaseTexture = "UseBaseTexture"
@@ -1237,8 +1280,13 @@ def _build_unlit(mat, collection, lut_texture, default_frames):
             -300, 2160, default=False)
 
     total_emissive = g.add(vc_selected, "", cube_emissive, "", 560, -200)
-    g.to(total_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    g.to(vc_selected, "", unreal.MaterialProperty.MP_BASE_COLOR)
+
+    # -- Scene fog (R5.4): an Unlit shading model renders Emissive alone, so the inscatter lands
+    # there; BaseColor takes the same fade for the property's own consumers (no specular pin) ----
+    base_color_fogged, emissive_fogged, _ = _scene_fog(
+        g, vc_selected, "", total_emissive, "", None, "", -1600, 3000)
+    g.to(emissive_fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    g.to(base_color_fogged, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
     # -- Opacity: BaseTexture.a x VertexColor.a (design doc "M_V2_Unlit" post-lighting math --
     # unlitgeneric_envmapmask.psh's co-issued `mul r0.a, t0, v0`), gated by Alpha and the sine
@@ -1365,6 +1413,9 @@ class TwoTextureParams:
         SineMax = "SineMax"
         SinePeriod = "SinePeriod"
         SineTimeOffset = "SineTimeOffset"
+        FogStart = mat_fog.P_START
+        FogInvRange = mat_fog.P_INV_RANGE
+        FogInscatter = mat_fog.P_INSCATTER
 
     class Vectors:
         Color = "Color"
@@ -1372,6 +1423,7 @@ class TwoTextureParams:
         Texture2ScaleOffset = "Texture2ScaleOffset"
         SineTargetMask = "SineTargetMask"
         SineChannelMask = "SineChannelMask"
+        FogColor = mat_fog.P_COLOR
 
     class Switches:
         UseBaseTexture2 = "UseBaseTexture2"
@@ -1436,7 +1488,6 @@ def _build_two_texture(mat, collection, lut_texture):
 
     overbright = g.mpc("Overbright", -1100, -820)
     overbright_base = g.mul(vc_selected, "", overbright, "", 560, -360)
-    g.to(overbright_base, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
     # -- Normal: one shared NormalMap slot, but which layer's UV feeds it is now real (minor
     # review fix: `UseBumpOnBaseTexture2` used to be declared and never wired to anything --
@@ -1456,8 +1507,16 @@ def _build_two_texture(mat, collection, lut_texture):
     # uses; see the module docstring's doc-gap note #1) ---------------------------------------
     class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+
+    # -- Scene fog (R5.4): this master has no emissive term of its own, so the fogged emissive is
+    # the inscatter alone (`black * (1 - f) + fogColour * f`) ------------------------------------
+    black3 = g.const3(0.0, 0.0, 0.0, -1700, 2900)
+    base_color_fogged, emissive_fogged, specular_fogged = _scene_fog(
+        g, overbright_base, "", black3, "", class_specular, "", -1600, 3000)
+    g.to(base_color_fogged, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    g.to(emissive_fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
-    g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
+    g.to(specular_fogged, "", unreal.MaterialProperty.MP_SPECULAR)
     g.to(class_metallic, "", unreal.MaterialProperty.MP_METALLIC)
 
     # -- Opacity / OpacityMask: Alpha + AlphaBias (x VertexColor.a under UseVertexAlpha), saturated
@@ -2219,11 +2278,15 @@ class RefractParams:
         Alpha = "Alpha"
         SurfaceClassIndex = "SurfaceClassIndex"
         RefractAmount = "RefractAmount"
+        FogStart = mat_fog.P_START
+        FogInvRange = mat_fog.P_INV_RANGE
+        FogInscatter = mat_fog.P_INSCATTER
 
     class Vectors:
         Color = "Color"
         RefractTint = "RefractTint"
         EnvMapTint = "EnvMapTint"
+        FogColor = mat_fog.P_COLOR
 
     class Switches:
         UseBaseTexture = "UseBaseTexture"
@@ -2286,7 +2349,6 @@ def _build_refract(mat, collection, lut_texture):
     refract_tint = g.vec3(P.Vectors.RefractTint, (1.0, 1.0, 1.0, 1.0), -1100, -680)
     base_color_final = g.mul(g.mul(base_selected, "", color, "", -500, -420), "", refract_tint, "",
                              -300, -460)
-    g.to(base_color_final, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
     # -- Normal: NormalMap (lit bump, gated UseNormalMap) plus DuDvMap's ripple, scaled by
     # `NormalMap.a x RefractAmount` -- `fxc/refract_ps20`'s own `scale = normalMap.a x
@@ -2320,7 +2382,6 @@ def _build_refract(mat, collection, lut_texture):
     class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
     g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
-    g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
     g.to(class_metallic, "", unreal.MaterialProperty.MP_METALLIC)
 
     # `UseEnvMap` is declared but not wired -- see the function docstring -----------------------
@@ -2340,7 +2401,13 @@ def _build_refract(mat, collection, lut_texture):
     connect(g.const3(0.0, 0.0, 0.0, -1100, 2480), "", lumen_safe_fixed, "RayTraced")
     fixed_emissive = g.switch(P.Switches.UseFixedCube, lumen_safe_fixed,
                               g.const3(0.0, 0.0, 0.0, -900, 2400), -900, 2360, default=False)
-    g.to(fixed_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # -- Scene fog (R5.4), last, over the three outputs it fades ---------------------------------
+    base_color_fogged, emissive_fogged, specular_fogged = _scene_fog(
+        g, base_color_final, "", fixed_emissive, "", class_specular, "", -1600, 3000)
+    g.to(base_color_fogged, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    g.to(emissive_fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    g.to(specular_fogged, "", unreal.MaterialProperty.MP_SPECULAR)
 
     # -- Opacity: Alpha x BaseTexture.a (translucent, no vertex-color/alpha lane on this master) -
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
