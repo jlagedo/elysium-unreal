@@ -315,7 +315,7 @@ struct FElysiumClothGarmentDefinitions
  * `/Game/ElysiumAuthored/Cloth/DA_ClothTuning` — what every VtMB garment is MADE of, in Chaos's own
  * terms.
  *
- * Project-authored remaster content: nothing here is copied out of the user's game. What VtMB
+ * Project-authored reconstruction content: nothing here is copied out of the user's game. What VtMB
  * itself authored — particle rest positions, the anchored prefix, the constraint graph, the
  * collider set and the per-garment gravity scale — is read at build time from the gitignored export
  * sidecar and is never restated here.

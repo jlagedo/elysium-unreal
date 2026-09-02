@@ -1,4 +1,4 @@
-// Content-free Substrate automation: camera solve, remaster rig, authored tracks, shots, and published view state.
+// Content-free Substrate automation: camera solve, reconstruction rig, authored tracks, shots, and published view state.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

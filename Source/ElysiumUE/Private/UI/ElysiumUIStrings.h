@@ -4,7 +4,7 @@
 
 // VtMB's authored UI string table, read verbatim from the user's install (`resource/gameui_english.txt`
 // mirrored to `out/ui/strings.json`). Every player-facing string in the UI comes from here — the
-// remaster re-skins the craft, never the content (`docs/project/remaster-direction.md` axis 1).
+// reconstruction re-skins the craft, never the content (`docs/project/reconstruction-direction.md` axis 1).
 //
 // Two namespaces live in the one table and the distinction is load-bearing: `#GameUI_*` skins
 // `GameUI.dll`'s dialogs, while the main menu's own labels are **`VMainMenu_BTN_*`** tokens

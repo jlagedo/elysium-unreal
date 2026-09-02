@@ -1,6 +1,6 @@
 """Mirror the VtMB UI source -- layouts, schemes and strings -- into `$ELYSIUM_EXPORT_ROOT/ui/`.
 
-Roadmap **PL8**. The UI has no classic mode (`docs/project/remaster-direction.md` axis 1), so this
+Roadmap **PL8**. The UI has no classic mode (`docs/project/reconstruction-direction.md` axis 1), so this
 is an extractor of **design intent**, not of a runtime layout engine: the `.res` trees and the
 two schemes are copied verbatim as the record of what each screen contains and how it is
 grouped, and the localized string table is the one thing the runtime reads.

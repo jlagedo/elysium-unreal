@@ -1,9 +1,9 @@
 # Camera architecture
 
-This document owns the Unreal-side camera design for the remaster: player view modes, third-person
+This document owns the Unreal-side camera design for the reconstruction: player view modes, third-person
 behaviour, dialogue framing, prop focus, camera triggers, scripted shots, and authored cinematics.
 `docs/vtmb/camera-view-modes.md` owns the recovered VtMB behaviour and source-data contracts.
-`docs/project/remaster-direction.md` owns the deliberate divergence from that behaviour, and
+`docs/project/reconstruction-direction.md` owns the deliberate divergence from that behaviour, and
 `docs/project/roadmap.md` owns implementation status and sequencing.
 
 The camera is a player-facing system, not a pawn feature with a growing list of exceptions. The
@@ -376,7 +376,7 @@ Runtime props expose `UElysiumCameraFocusableComponent` or the engine-neutral eq
 minimum/maximum distance, orbit limits, and fallback. It does not hold a camera, input component,
 or widget.
 
-Two focus forms cover the remaster:
+Two focus forms cover the reconstruction:
 
 - **Soft focus** keeps the player's base position and applies a capped look-at/framing assist. It is
   suitable for a map trigger briefly drawing attention to a door, NPC, or event and is always
@@ -468,7 +468,7 @@ than being guessed into new cinematography.
 
 ### Sequencer and project-authored cutscenes
 
-New remaster cinematics use `ULevelSequence` with spawnable Cine Camera Actors and a Camera Cut
+New project-authored cinematics use `ULevelSequence` with spawnable Cine Camera Actors and a Camera Cut
 Track. `UElysiumSequenceCameraBridge` acquires one `Sequence` request when playback gains camera
 authority and releases it on stop, abort, skip, travel, or owner destruction.
 
@@ -479,7 +479,7 @@ never both. The sequence also publishes its input/HUD policy through the request
 
 Original VCDs and Worldcraft tracks are not bulk-converted to Level Sequences. That would replace
 known timing and I/O semantics with authored approximations. Sequencer is the authoring surface for
-new project-owned scenes and deliberate remaster overrides only.
+new project-owned scenes and deliberate modernization overrides only.
 
 ## Input, settings, and presentation
 

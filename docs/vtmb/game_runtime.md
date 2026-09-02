@@ -604,7 +604,7 @@ group in `strings_internal.txt` and are what select the tier split above; `Start
 the `Attributes` block but have no trait behind them, so a reader that stores the block as
 name → int loses them entirely and reads both orders as ordering 0.
 
-**Two marked divergences in our chargen** (`docs/project/remaster-direction.md` — logic layer, so both are
+**Two marked divergences in our chargen** (`docs/project/reconstruction-direction.md` — logic layer, so both are
 recorded beside the faithful behaviour rather than silently taken):
 
 - **Route 3 of the entry popup is omitted.** `Help_Popup0`'s third action — the Unofficial Patch's

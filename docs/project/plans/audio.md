@@ -19,7 +19,7 @@ Three tiers on one cumulative ladder — a rung consumes the one below it and no
   to it. Correctness of *what* plays and *when*, not of how it sits in the mix.
 - **Tier 1 — it sounds like VtMB** (AUD5–AUD8). Levels, ducking, ambience behaviour, music state
   and room DSP — parity with what the original does, adjudicated as Feel/Logic by
-  `docs/project/remaster-direction.md`.
+  `docs/project/reconstruction-direction.md`.
 - **Tier 2 — beyond VtMB** (AUD9). Enhancements the original never had, parked behind the
   presentation freeze.
 
@@ -172,7 +172,7 @@ brush volumes, the active scheme's `RoomDSP`, interior/exterior filtering and re
 explicit scripted overrides — resolved by an explicit priority stack, retaining the previous zone
 for hysteresis, publishing one interpolated listener environment to the submix graph. VtMB DSP
 preset ids map to generated local reverb/submix presets through a data table, preset `0` neutral;
-the signal processing is a presentation-layer remaster choice and its calibration differences are
+the signal processing is a presentation-layer modernization choice and its calibration differences are
 recorded beside the preset mapping, while the authored preset selection and transition behaviour
 are logic to reproduce. Settle RE30 — the precedence between brush `room_type`, scheme `RoomDSP`
 and the player's networked room fields. *Acceptance:* the tutorial's 16 authored
@@ -197,9 +197,9 @@ spatialization, reverb transitions, ducking, loop continuity and device behaviou
 ### AUD9 Enhancement — parked
 
 **Parked: presentation polish behind the graphics freeze (playable-path rule 2); revisit at the
-thaw.** Each candidate is a separate owner call under the remaster direction's presentation test,
+thaw.** Each candidate is a separate owner call under the reconstruction direction's presentation test,
 and none lands as a feature flag or A/B toggle without approval by name. Every one is
-remaster-native content: it consumes no game-derived bytes into a tracked asset, and the faithful
+Elysium-native content: it consumes no game-derived bytes into a tracked asset, and the faithful
 behaviour stays the default and stays recoverable.
 
 Candidates, none committed:

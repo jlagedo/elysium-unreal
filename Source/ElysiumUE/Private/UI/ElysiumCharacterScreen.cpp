@@ -1441,7 +1441,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(FName GroupId,
 
 	// A row of selectable words rather than a dropdown: at chargen every list is short enough to
 	// show whole, and a list that is always open is one fewer state than a combo box. The UI has
-	// no classic mode (`docs/project/remaster-direction.md`).
+	// no classic mode (`docs/project/reconstruction-direction.md`).
 	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
 	for (int32 i = 0; i < Options.Num(); ++i)
 	{

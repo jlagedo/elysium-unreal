@@ -524,7 +524,7 @@ and the command bus. Three things become free:
 - **headless play** — inject a command stream with no input device (§12);
 - **replay** — record `{FElysiumUserCmd, clock, RNG seed}` and re-run it; a movement or feel
   regression becomes a diff, which is how a feel delta is compared against the faithful baseline
-  without a runtime A/B mechanism (`docs/project/remaster-direction.md`);
+  without a runtime A/B mechanism (`docs/project/reconstruction-direction.md`);
 - **the `+speed` gait** and every other VtMB button behave as buttons, bindable like the original's.
 
 ### 8.4 The player body must be a box
@@ -551,7 +551,7 @@ view can retarget to are not all pawns; nothing outside it names a concrete pawn
 
 ## 9. The camera
 
-`docs/architecture/camera-architecture.md` owns the remaster integration. The spine supplies its
+`docs/architecture/camera-architecture.md` owns that integration. The spine supplies its
 lifetime and dependency boundaries:
 
 - `AElysiumPlayerCameraManager` is the one final-view authority per local player;
@@ -797,7 +797,7 @@ Numbered like `docs/architecture/engine-core.md`'s R1–R8, and orthogonal to th
   rule (§7).
 - **S12 — Unreal owns the engine; the substrate owns the game.** A system is reproduced in this
   runtime only when authored content or a game rule names it — the Ownership test in
-  `docs/project/remaster-direction.md`. Everything the world merely needs in order to work —
+  `docs/project/reconstruction-direction.md`. Everything the world merely needs in order to work —
   traces, visibility, pathfinding, physics solving, skinning, mixing — is Unreal's, reached
   through a query (S11). Reproducing Source's rules (formulas, call order, thresholds) is
   faithful; porting Source's mechanisms is a defect. The deliberate reproductions are the closed

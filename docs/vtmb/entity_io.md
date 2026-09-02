@@ -431,7 +431,7 @@ a few `trigger_multiple` in the patch pick up `73 valve`, absent from retail.
 
 ### Modern targeting policy [owner-called Feel divergence]
 
-The remaster reproduces the entity-side facts above — eligibility, hidden/locked state, icons,
+The reconstruction reproduces the entity-side facts above — eligibility, hidden/locked state, icons,
 logical owner, `Use`, and class outputs — but deliberately does not reproduce the retail client's
 near-object/look-cursor search. Player `+use` selection is a modern camera-driven policy shared by
 first and third person:

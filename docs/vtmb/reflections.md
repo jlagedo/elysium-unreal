@@ -1,7 +1,7 @@
 # Reflections — `$envmap` and the Unreal channel
 
 What VtMB's cubemap reflection actually is, measured out of the shipped shader assembly and
-the whole-game material set, and how the remaster reproduces it on a fully-dynamic Lumen path.
+the whole-game material set, and how the reconstruction reproduces it on a fully-dynamic Lumen path.
 
 Per-task status belongs in `docs/project/roadmap.md` (7.5). Related: `docs/architecture/rendering-perf.md` (the render path,
 and → "Lumen surface-cache engine facts" for why the surface cache is what a reflection ray

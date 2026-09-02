@@ -140,4 +140,4 @@ the texture lane stages beside the faithful set, selected on the editor surfaces
 `elysium.EnhancedTextures` loose-file toggle retired at R6.5). *Acceptance:* the faithful
 assets remain byte-for-byte faithful; curated Tier 0/1 outputs meet the floor budget; no game-derived output
 committed. *Deps:* PP6, 10.3, 7.4. Design: `docs/architecture/asset-enhancement.md`; governing
-test: `docs/project/remaster-direction.md`.
+test: `docs/project/reconstruction-direction.md`.

@@ -206,7 +206,7 @@
       "confidence": "confirmed",
       "fact": "The inherited CHL2 suit-power branch is still called but is Source mechanism baggage rather than an evidenced VtMB-authored rule.",
       "evidence": "Vtable slot 472 resolves to 0x103528d0. Its body charges or drains +0x2464 from active-device bits +0x252c and load +0x2530, matching the inherited suit-power transaction; none of those names appears in the player datamap or established VtMB content contract.",
-      "consequence": "The remaster must not reproduce auxiliary suit power merely because the retail executable still executes its dormant bookkeeping; an authored VtMB consumer would be required."
+      "consequence": "The reconstruction must not reproduce auxiliary suit power merely because the retail executable still executes its dormant bookkeeping; an authored VtMB consumer would be required."
     },
     {
       "confidence": "confirmed",

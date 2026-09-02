@@ -1,6 +1,8 @@
 # Elysium-Unreal
 
-Elysium-Unreal recreates *Vampire: The Masquerade – Bloodlines* gameplay on Unreal Engine 5.8 using your own copy of the original game as source data.
+Elysium-Unreal is a research project that reconstructs *Vampire: The Masquerade – Bloodlines* (2004) gameplay on Unreal Engine 5.8, reading your own installed copy of the original game as source data.
+
+It exists to study how the retail game actually works and to see how far a modern engine can be driven from recovered behavior. It ships no game content: assets, scripts and maps are read from your installation at build time and never leave your machine. See [`NOTICE.md`](NOTICE.md).
 
 This is a **reconstruction** workflow, not a port:
 
@@ -88,11 +90,30 @@ uv run elysium debug greenroom
 uv run elysium debug modelroom
 ```
 
+## How this was built
+
+Every line of code in this repository was written by AI agents. The author's contribution is
+direction and review: goals, architecture, acceptance criteria, and the research questions the
+agents were pointed at. No source file here was hand-written.
+
+Two consequences worth stating plainly:
+
+- Purely AI-generated work may not attract copyright in most jurisdictions, so the MIT grant in
+  [`LICENSE`](LICENSE) may have limited force over much of this codebase. It stands as a statement
+  of intent: use it freely.
+- Read the code before you trust it, as you would any generated artifact.
+
+## Legal
+
+No game content is distributed here, and nothing in the pipeline circumvents copy protection.
+[`NOTICE.md`](NOTICE.md) states the project's position on affiliation, trademarks, game content,
+reverse engineering and contributions in full.
+
 ## Useful docs
 
 - Status and task tracking: [docs/project/roadmap.md](docs/project/roadmap.md)
 - Core strategy and ownership model: [docs/project/rebuild-strategy.md](docs/project/rebuild-strategy.md)
-- Remaster contract: [docs/project/remaster-direction.md](docs/project/remaster-direction.md)
+- Reconstruction contract: [docs/project/reconstruction-direction.md](docs/project/reconstruction-direction.md)
 - Runtime architecture: [docs/architecture/](docs/architecture/)
 - VtMB factual notes: [docs/vtmb/](docs/vtmb/)
 - Repository policy and commands: [docs/operations/repository.md](docs/operations/repository.md)

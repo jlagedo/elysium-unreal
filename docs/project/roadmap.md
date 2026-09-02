@@ -22,12 +22,12 @@ archive and no decision log.
 
 ## North star
 
-Rebuild VtMB as a playable game — remastered — on UE 5.8 + C++ from this repo's own exported
+Rebuild VtMB as a playable game — modernized — on UE 5.8 + C++ from this repo's own exported
 intermediates; bring-your-own-game holds (`docs/project/rebuild-strategy.md`). The world's look
 is baked offline into the gitignored `/ElysiumBaked` mount; collision, entities, scripting,
 audio and NPCs stay runtime-built. Everything is proven on `sp_tutorial_1` (1,226 entities, 75
 classnames), then scaled across ~100 maps. Direction — the presentation/feel/logic layers, the
-three adjudication tests, default-to-reproduce: `docs/project/remaster-direction.md`.
+three adjudication tests, default-to-reproduce: `docs/project/reconstruction-direction.md`.
 
 ## The playable path (PP0–PP6) — the master sequence
 
@@ -502,7 +502,7 @@ The ladder:
   **11.8 Presentation seam** · **11.9 Save/load** · **11.11 Move-first frame order** ·
   **11.12 Map activation barrier**.
 - [ ] **[11.10 Play test tier](plans/spine.md)** — the beat-script driver; PP0's finish.
-- [~] **[11.13 Remaster camera director](plans/spine.md)** — a–c landed via CCC2; d–h open.
+- [~] **[11.13 Reconstruction camera director](plans/spine.md)** — a–c landed via CCC2; d–h open.
 - [x] **11.14 The reachability query** → `docs/architecture/gameplay-systems-architecture.md` §5.5.4.
 - [x] **11.15 The perception queries** → `docs/architecture/gameplay-systems-architecture.md` §5.5.3.
 

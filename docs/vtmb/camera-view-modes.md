@@ -355,7 +355,7 @@ The solver `0x100fd350`:
 
 *Elysium divergence, owner-called.* The recovered sweep is a `UTIL_TraceHull` **box** of half-extents
 `±cam_trace_radius`; Elysium sweeps a **sphere** of that radius on its own camera channel. Geometry
-queries belong to the engine (`docs/project/remaster-direction.md` → the Ownership test), so the
+queries belong to the engine (`docs/project/reconstruction-direction.md` → the Ownership test), so the
 recovered *rule* — probe from the eye toward the desired point at the authored radius, allow
 `dist * fraction`, skip entirely under `cam_collide 0` — is reproduced while the query itself is
 Unreal's. A sphere rounds the corners a box would catch, so the camera clears a doorway jamb slightly
@@ -726,7 +726,7 @@ architecture is `docs/architecture/camera-architecture.md`.
   does not arbitrate dialogue, focus, Sequencer, or player modes itself; the manager does.
 - The console/cvar bridge reproduces VtMB's camera names so `config.cfg`, patch aliases, and original
   scripts continue to resolve. Those settings tune the recovered rules and the one boom, not the
-  remaster's user preference or project-authored profiles.
+  Elysium's user preference or project-authored profiles.
 - Game-derived `vdata/camerashots/`, map entities, and VCDs stay external runtime inputs. Original
   project camera profiles and Level Sequences may be authored under `/Game/ElysiumAuthored/**` but
   do not replace source data silently.
@@ -782,7 +782,7 @@ at **2.0/s × player time scale**, apply the recovered latch priority, smooth wi
 the two-constant Hooke damper, and blend offset/rotation once. `cdamp_on 0` remains the direct A/B
 bypass.
 
-This path deliberately does not constrain the remaster third-person rig. The modern player rig uses
+This path deliberately does not constrain Elysium's third-person rig. The modern player rig uses
 Unreal's Spring Arm obstruction model, independent camera orbit and explicit character-facing
 policies; the camera manager arbitrates its output with every scoped request. `SetViewTargetWithBlend`
 is not a public gameplay API, and Unreal's experimental Gameplay Camera System is not the production
@@ -946,7 +946,7 @@ behind the standard 36 mm horizontal-gate conversion
 `FOV = 2 * atan(18 / focalMm)`; non-positive values preserve the player's FOV, where retail instead
 clamps an out-of-range focal length once at spawn to a default of the same `18 / sin k` form (§6 —
 the default's exact value is not pinned). Both streams and their elapsed/output latches are runtime
-session state. The remaster refuses a save while an authored legacy or Sequencer camera track is
+session state. Elysium refuses a save while an authored legacy or Sequencer camera track is
 active, so those latches are neither serialized nor republished after load
 (`docs/architecture/save-architecture.md`).
 

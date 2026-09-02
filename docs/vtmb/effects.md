@@ -5,7 +5,7 @@ authored a text-driven particle language under `particles/`, then placed it from
 entities, animation events, discipline records, weapon items, an impact table, and the
 main menu. Separate Source leftovers (`env_steam`, `func_dustmotes`, `env_shake`,
 `env_fade`) and two physics-impulse entities sit beside that system. This document is
-the inventory of those families and the contracts a remaster has to cover.
+the inventory of those families and the contracts a reconstruction has to cover.
 
 Unreal reproduction — modern look, reproduced logic — lives in
 `docs/architecture/effects-architecture.md`. Rain, wetness and the particle-definition
@@ -47,7 +47,7 @@ A typical junkyard barrel is therefore four authored pieces, not one:
    (`Explosion2_emitter`), and a sound.
 4. `env_physexplosion` — the kick that throws the barrel.
 
-The remaster has to keep those four roles distinct. Combining them into "the fire
+The reconstruction has to keep those four roles distinct. Combining them into "the fire
 effect" loses either the look, the damage, or the physics.
 
 ---
@@ -132,7 +132,7 @@ whole map. Across the 23 exported maps, 21 roots fail for these reasons:
 | malformed brace files | hand-edited / patch-broken text | `fire2_emitter`, Tourette suicide |
 
 `refract` + `normal` is the one that takes out every barrel fire. The heat card is a
-presentation layer on top of flames/smoke/embers; a remaster can drop the 2004
+presentation layer on top of flames/smoke/embers; a reconstruction can drop the 2004
 refraction trick and still keep the fire.
 
 ---
@@ -441,7 +441,7 @@ three emitter groups (clouds + fire, clan seals, blood cels). Reconstruction:
 
 ---
 
-## 4. Effect families the remaster has to handle
+## 4. Effect families the reconstruction has to handle
 
 This is the closed list of *kinds*. Every shipped effect is one of these, or a bundle
 of them (the barrel in §1).
@@ -605,7 +605,7 @@ Decoded and in the export:
 - `.phy` → `.phys` for physics props;
 - rain / wetness contract for `sm_hub_1` (`docs/vtmb/weather.md`).
 
-Open, and they matter for a remaster even if the *look* is modernized:
+Open, and they matter for a reconstruction even if the *look* is modernized:
 
 - `attach_type` values above 3 (5, 9, 10, 11) — 11 is the rain-follow hypothesis. The
   runtime enum is wider than the four values maps use: the emitter's mode field drives a

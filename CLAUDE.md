@@ -1,7 +1,7 @@
 # Elysium-Unreal
 
 Elysium-Unreal is *Vampire: The Masquerade – Bloodlines* (VtMB, 2004, early Source engine) rebuilt
-as a playable game — **remastered** — on **Unreal Engine 5.8 + C++**.
+as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 
 ## Build & run (Windows)
 

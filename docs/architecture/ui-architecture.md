@@ -7,7 +7,7 @@ like `docs/vtmb/controls.md` ↔ `docs/architecture/input-architecture.md`: a ne
 about *ours* goes here. Per-task status: `docs/project/roadmap.md` (8.6, 8.8, 8.9, 8.10).
 
 **The direction**: VtMB's screen structure, palette, iconography and strings are kept; its craft is
-replaced (`docs/project/remaster-direction.md` axis 1). There is no classic UI mode.
+replaced (`docs/project/reconstruction-direction.md` axis 1). There is no classic UI mode.
 
 ---
 
@@ -387,7 +387,7 @@ the original's even where the backing system is missing.
   **The Base tab is chargen's only extra body**: clan, gender and history as rows of selectable
   words with a framed write-up beside them, and a single `NEXT` in the footer. Retail draws three
   dropdowns; at chargen every list is short enough to show whole, and a list that is always open is
-  one fewer state than a combo box — the UI has no classic mode (`docs/project/remaster-direction.md` axis 1).
+  one fewer state than a combo box — the UI has no classic mode (`docs/project/reconstruction-direction.md` axis 1).
 
   **Info is still a framed placeholder.**
 

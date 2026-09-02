@@ -400,7 +400,7 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 	];
 
 	// The focused victim's blood pool. Retail places this as a single horizontal bar at the top and
-	// keeps the side HUD visible; the remaster preserves that screen structure with vector/SafeZone
+	// keeps the side HUD visible; the reconstruction preserves that screen structure with vector/SafeZone
 	// composition. Its value is a projection only — the substrate pulse clock remains authoritative.
 	Content->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0, 38, 0, 0)
 	[

@@ -185,7 +185,7 @@ grids for the ones the player is next to.
 - **Niagara 3D Fluids on every placed emitter.** Same reason.
 - **Porting `particles/*.tga` as the long-term look.** Keep them as *reference*
   and as a fallback albedo. New flipbooks / tilable noise for fire, smoke, blood
-  are the remaster.
+  are the reconstruction.
 - **One Niagara system per Troika file.** 1,698 systems is unmaintainable. One
   (or a few) systems *per family* in §4, parameterized by the compiled JSON
   (rate, colour, size, attach).
@@ -301,7 +301,7 @@ weather already claimed.
 - `docs/vtmb/effects.md` — the inventory this mapping covers.
 - `docs/vtmb/weather.md` — rain as the worked example of the same seam.
 - `docs/vtmb/phy_vphysics.md` — collision, not FX.
-- `docs/project/remaster-direction.md` — presentation may modernize; logic
+- `docs/project/reconstruction-direction.md` — presentation may modernize; logic
   reproduces.
 - `docs/architecture/uasset-bake-spike.md` — the `particles` bake stage.
 - `docs/architecture/rendering-perf.md` — the budget these systems share.

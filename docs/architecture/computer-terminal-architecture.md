@@ -9,7 +9,7 @@ The terminal reproduces the original gameplay contract — content, authored cha
 meaning, passwords, skill checks, scripts, outputs, email state and one-user authority — through a
 modern presentation. It does not reuse VtMB's terminal font, VGUI styling or 512×512 character
 texture. This is the explicit Presentation-layer divergence allowed by
-`docs/project/remaster-direction.md`: the rules remain faithful while their renderer is replaced.
+`docs/project/reconstruction-direction.md`: the rules remain faithful while their renderer is replaced.
 
 ## 1. Design in one page
 
@@ -288,7 +288,7 @@ material that the model's own UVs address means it is bounded to the glass, is l
 the rest of the prop, and cannot leak onto the viewport when another screen is on top. The
 presentation binds the render target through one texture parameter, so the effect is independent of
 everything the terminal draws. This is a Presentation-layer modernization under
-`docs/project/remaster-direction.md`: the monitor the fiction depicts is a CRT, so the treatment
+`docs/project/reconstruction-direction.md`: the monitor the fiction depicts is a CRT, so the treatment
 serves the original direction rather than overriding an artist decision, and it carries no classic
 mode.
 

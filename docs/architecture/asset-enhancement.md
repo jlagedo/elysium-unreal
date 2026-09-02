@@ -1,6 +1,6 @@
-# Asset enhancement — code-driven remaster of VtMB's own art
+# Asset enhancement — code-driven modernization of VtMB's own art
 
-**Remaster axis 2** (`docs/project/remaster-direction.md`). Work and sequencing are tracked only in
+**Reconstruction axis 2** (`docs/project/reconstruction-direction.md`). Work and sequencing are tracked only in
 `docs/project/roadmap.md` P10.
 
 ## North star
@@ -8,12 +8,12 @@
 The **world** baseline is faithful — dynamic GI anchored to VtMB's own baked lightmaps
 (`docs/architecture/rendering-perf.md` → the calibration), geometry and placement read 1:1. On top of that
 baseline sits this **enhancement layer**: raise the *fidelity* of VtMB's assets with offline,
-code-driven passes while **preserving its art direction**. This is a *remaster* stance (fix +
+code-driven passes while **preserving its art direction**. This is a *modernization* stance (fix +
 enrich the shipped art), not a *remake* (re-author it) — the same stance the whole project
-takes (`docs/project/remaster-direction.md`), applied to surfaces.
+takes (`docs/project/reconstruction-direction.md`), applied to surfaces.
 
 (The **UI** has no faithful path to sit on: its 2004 craft is a hardware constraint rather than
-an art decision, so it is re-skinned outright rather than toggled — `docs/project/remaster-direction.md` axis
+an art decision, so it is re-skinned outright rather than toggled — `docs/project/reconstruction-direction.md` axis
 1. Surfaces are not that case; the faithful set stays.)
 
 The layer is always a **toggle**, never a fork — the same A/B discipline as
@@ -25,7 +25,7 @@ richer surfaces just respond to it — they don't redefine it).
 
 ### The adjudication test
 
-Every candidate uses `docs/project/remaster-direction.md`'s presentation test. The tiers below apply that
+Every candidate uses `docs/project/reconstruction-direction.md`'s presentation test. The tiers below apply that
 single project-wide rule to surfaces; they do not define a second version of it.
 
 ### Three tiers
@@ -33,7 +33,7 @@ single project-wide rule to surfaces; they do not define a second version of it.
 - **Tier 0 — technical-deficit fixes (unconditional).** These correct data that is objectively
   wrong for a dynamically-relit engine; they pass even the strict "faithful only" reading.
   *Delighting the albedo* and *super-resolution to kill DXT block artifacts + 2004 resolution*.
-- **Tier 1 — style-anchored enhancement (the remaster layer; toggleable).** Adds detail the
+- **Tier 1 — style-anchored enhancement (the modernization layer; toggleable).** Adds detail the
   source never had, constrained to VtMB's material vocabulary. *PBR material synthesis*
   (roughness / normal / height / AO / envmask), curated. Allowed, but anchored and reviewed.
 - **Tier 2 — out of bounds.** Glossy/chrome-everything, de-griming, saturation/contrast

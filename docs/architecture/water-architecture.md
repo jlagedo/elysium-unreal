@@ -29,7 +29,7 @@ reproduced.**
   volume, not `waterwarp.vcs`. Splashes are Niagara, not `point_16` cards.
 - **One presentation, not two.** There is no "classic water" mode that
   composites the 2004 RTs. Cheap vs expensive in Source is a cost LOD; the
-  remaster has one look, scaled by the authored numbers (murkier fog, stronger
+  Elysium has one look, scaled by the authored numbers (murkier fog, stronger
   tint, less opacity), not by swapping shaders.
 
 This matches the weather and effects rules
@@ -388,5 +388,5 @@ and a 3D FLIP pool and a Water Body Ocean is not.
 - `docs/architecture/effects-architecture.md` — the same seam for fire,
   steam, blood.
 - `docs/architecture/rendering-perf.md` — the budget.
-- `docs/project/remaster-direction.md` — presentation may modernize; logic
+- `docs/project/reconstruction-direction.md` — presentation may modernize; logic
   reproduces.

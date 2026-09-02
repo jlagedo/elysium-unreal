@@ -2,7 +2,7 @@
 
 Engine-neutral facts about VtMB's user interface: which code owns which screen, what data
 drives it, where the art lives, and the coordinate model it is authored in. This is the
-**design intent** the modern re-skin is checked against (`docs/project/remaster-direction.md` axis 1 — the
+**design intent** the modern re-skin is checked against (`docs/project/reconstruction-direction.md` axis 1 — the
 UI has no classic mode), not a port target.
 
 Its Unreal counterpart is **`docs/architecture/ui-architecture.md`** (the CommonUI/Slate stack, the design tokens,
@@ -361,7 +361,7 @@ and metrics: `docs/vtmb/m0_menu_build.md` §3.
 
 What matters for the re-skin is not the atlases but what they are drawn as: **every label in the
 game is small-caps with wide tracking**, and body copy drops to a plain sans — an authored art
-decision, not a hardware constraint, so it survives into the remaster even though the atlases do
+decision, not a hardware constraint, so it survives into the reconstruction even though the atlases do
 not. The 640×480-tier font aliasing does not survive — vector type scales continuously.
 
 ---

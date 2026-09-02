@@ -67,7 +67,7 @@ the body. Details: `docs/vtmb/camera-view-modes.md` § 5.
 
 ## Divergences
 
-Recorded here beside the faithful behaviour, per `docs/project/remaster-direction.md`.
+Recorded here beside the faithful behaviour, per `docs/project/reconstruction-direction.md`.
 
 **A fixed-step accumulator.** Retail has no tick: `Host_FilterTime` bounds a *variable* frametime to
 `[0.001, 0.1]` seconds and returns — no accumulator, no fixed-interval loop

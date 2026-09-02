@@ -224,7 +224,7 @@ status is acceptable. The resolver remains application-owned so the same semanti
 stable Audio Volumes or direct submix overrides without changing map entities.
 
 Translating selected VtMB/Miles DSP graphs into Unreal reverb and submix presets is a
-**presentation-layer remaster choice**. The authored preset selection and transition behavior are
+**presentation-layer modernization choice**. The authored preset selection and transition behavior are
 logic to reproduce; the signal-processing implementation is not a bit-identical Miles emulator.
 Calibration differences live beside the generated preset mapping.
 
@@ -337,7 +337,7 @@ and device behavior.
 - **Quartz:** precise music-stem and cinematic scheduling, not every ordinary one-shot.
 - **Audio Gameplay Volumes:** optional adapter behind our zone resolver while Epic labels the
   feature beta.
-- **MetaSounds:** reserved for generated, game-agnostic remaster-native procedural sound design or
+- **MetaSounds:** reserved for generated, game-agnostic Elysium-native procedural sound design or
   reusable authored DSP templates. Loose VtMB files do not become one MetaSound asset per sound,
   and MetaSounds do not replace the resolver, voice scheduler or mixer graph.
 

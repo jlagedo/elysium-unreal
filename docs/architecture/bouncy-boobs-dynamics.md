@@ -199,14 +199,14 @@ slice. Commons (blood dolls, dancers, strippers) are a later slice.
    than the hair formula.
 4. Whether gravity 3 on player armours is in or out of the first slice.
 5. Whether one-bone **hair curls** ship with the same primitive or wait.
-6. Whether a still chest on a remastered close-up is an acceptable
+6. Whether a still chest on a modernized close-up is an acceptable
    presentation divergence if the clamped look is rejected.
 
-Default remaster rule is reproduce. Secondary motion on this project is
+Default project rule is reproduce. Secondary motion on this project is
 already an Unreal presentation approximation (AnimDynamics, not the retail
 point/segment Verlet solve). A clamped cone is a recorded presentation
 choice beside the authored ceiling; leaving breasts rigid is the current
-proof's choice, not a settled remaster divergence.
+proof's choice, not a settled modernization divergence.
 
 ## Out of scope
 

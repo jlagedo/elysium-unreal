@@ -41,7 +41,7 @@ clan bodies `clandoc000.txt` names (roadmap PL13) have no flexdescs, no
 controllers, no rules and no `StudioFlex` records at all. The PC's face is authored only in the
 NPC-model portraits VtMB shows elsewhere; on the body itself there is nothing to drive. So the
 lipsync and expression layers (12.3, 12.5) apply to NPCs, and any PC facial performance would be
-a remaster addition under `docs/project/remaster-direction.md`'s rule, not a reproduction.
+a reconstruction addition under `docs/project/reconstruction-direction.md`'s rule, not a reproduction.
 
 **The PC's eyes are the exception, and they cut the other way.** 57 of those 59 player models
 carry a full pair of `StudioEyeball` records. Eye aiming needs no flex data — it is a
@@ -187,7 +187,7 @@ the opposite brow's lowerer.
 
 **Reproduce it.** The behaviour is visible rather than inert — unlike `mouth`, every rule
 here reaches a morph — so symmetrising the three rules changes what a face does and is a
-Logic-layer change under `docs/project/remaster-direction.md`, not a decode fix. Nothing in
+Logic-layer change under `docs/project/reconstruction-direction.md`, not a decode fix. Nothing in
 Elysium's replay special-cases them: the rules ship as data in the facial sidecar and are
 evaluated as written.
 

@@ -1,6 +1,6 @@
-# Remaster direction — what "Elysium" is and is not
+# Reconstruction direction — what "Elysium" is and is not
 
-**Target: VtMB *remastered*.** Keep the game — its tone, its ambience, its feel, its logic —
+**Target: VtMB *modernized*.** Keep the game — its tone, its ambience, its feel, its logic —
 and raise the craft with tools 2004 did not have. Not a pixel-perfect recreation: where the
 original made a choice, we keep it; where the original was *constrained*, we are not.
 
@@ -163,7 +163,7 @@ without an explicit owner approval by name; the faithful behaviour stays recover
 history and the owning doc's record.
 
 **Camera owner call — deliberate divergence.** VtMB's recovered camera remains the executable
-compatibility/reference evaluator, but it is not the shipped feel target. The remaster provides
+compatibility/reference evaluator, but it is not the shipped feel target. The reconstruction provides
 persistent, complete first- and third-person player modes; never changes that preference because a
 weapon, dialogue, focus target, or cutscene temporarily needs another view; separates third-person
 orbit from character facing and navigation; and restores the exact prior player state after every
@@ -210,6 +210,6 @@ Difficulty and balance are **not** QoL — they are the logic layer, governed by
 Project implementation status and sequencing live in `docs/project/roadmap.md`, including its
 CAP, ANM and CCC programme sections. Topic design remains split by
 concern: `docs/architecture/ui-architecture.md` for the Unreal UI,
-`docs/architecture/camera-architecture.md` for the remaster camera,
+`docs/architecture/camera-architecture.md` for the Elysium camera,
 `docs/architecture/asset-enhancement.md` for surfaces, and the owning behavior doc for every
 deliberate divergence.

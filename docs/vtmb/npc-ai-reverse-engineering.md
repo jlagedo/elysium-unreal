@@ -1637,7 +1637,7 @@ The dependency order suggested by the evidence is:
     pedestrians, vampire combatants, animals, hunters, bosses, followers, hubs, and maker waves.
 
 This order is faithful-first: it keeps the recovered behavior available for comparison before any
-explicit remaster delta. It also prevents a visually convincing animation graph from becoming the
+explicit reconstruction delta. It also prevents a visually convincing animation graph from becoming the
 unintended owner of AI state.
 
 ## Current rebuild coverage and gap boundary

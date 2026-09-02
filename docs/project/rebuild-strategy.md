@@ -1,6 +1,6 @@
 # Elysium-Unreal — Rebuild Strategy
 
-North star: rebuild VtMB as a **playable game — remastered** — in Unreal Engine 5.8 + C++,
+North star: rebuild VtMB as a **playable game — modernized** — in Unreal Engine 5.8 + C++,
 consuming engine-neutral intermediates produced by this repo's own decode/export pipeline
 (`pipeline/`). Game content converted into `.uasset`s — the offline look bake — lands on a
 **gitignored, regenerable mount** (`/ElysiumBaked`): **no original game content is ever
@@ -8,11 +8,11 @@ committed in any form.** Generated Unreal packages under `Content/` stay local; 
 source fonts and original project-owned packages under `Content/ElysiumAuthored/` are the tracked
 content inputs.
 
-**Remaster, not pixel-perfect recreation.** Tone, ambience, feel and game logic are kept; craft
+**Modernization, not pixel-perfect recreation.** Tone, ambience, feel and game logic are kept; craft
 is raised with tools 2004 did not have — modern UI and typography first, then assets, feel, and
 quality-of-life. The stance, the three change layers (presentation / feel / logic), the three adjudication
 tests, and the rule that **every behavioural divergence needs the RE done first and an explicit
-owner's call** live in **`docs/project/remaster-direction.md`** — read it with this doc.
+owner's call** live in **`docs/project/reconstruction-direction.md`** — read it with this doc.
 
 Two tracks run in parallel:
 
@@ -65,12 +65,12 @@ Two tracks run in parallel:
    `docs/vtmb/m0_menu_build.md` (the original UI's structure + `GameUI.dll` findings — reference for the
    re-skin, not a port target), and `recovered/dice-system.md`. Do not re-derive what those already
    state.
-7. **Remaster stance governs every target below.** The change layers, adjudication tests, and
-   default-to-reproduce rule live only in `docs/project/remaster-direction.md`; divergences are recorded in
+7. **Reconstruction stance governs every target below.** The change layers, adjudication tests, and
+   default-to-reproduce rule live only in `docs/project/reconstruction-direction.md`; divergences are recorded in
    the topic doc that owns the system.
 8. **The world keeps its faithful baseline; the UI does not.** Asset enhancement is an A/B
    layer over that world baseline, never a fork. Its surface-specific design is
-   `docs/architecture/asset-enhancement.md`; its governing test remains `docs/project/remaster-direction.md`.
+   `docs/architecture/asset-enhancement.md`; its governing test remains `docs/project/reconstruction-direction.md`.
 
 ## Cross-system invariants
 
@@ -153,7 +153,7 @@ movement, Unreal-native throughout:
 | `.env` | sky material from six sky PNGs + a **per-primitive distance-fog term** in the surface masters (`ElysiumFog.h`); `UExponentialHeightFogComponent` keeps the volumetric layer — native. The distance fog cannot be an engine fog: the world and the 3D-skybox miniature carry two authored sets and share screen depth. |
 | custom `UCharacterMovementComponent` override | port the Source `CGameMovement` math line-by-line — `docs/vtmb/source_movement.md` is the reference. Friction/accel/airaccel/StepMove constants verified against the decompile. |
 | one baked `SM_*` per unique model, placed as `AStaticMeshActor`s | baked offline from `props/*.obj` with skins, collision and authored mass on the asset (`props/*.skins`, `props/*.phys`); the map actor adopts the placements by tag. |
-| **modern Slate/UMG UI** (not a VGUI port) | Screen inventory, panel anatomy, hierarchy and iconography carry over from `.res`/`trackerscheme.res`; the runtime is a resolution-independent Slate/UMG stack with vector type. No 640×480 scale box, no bitmap `.fnt` atlas, no classic mode. `docs/project/remaster-direction.md` → axis 1; `docs/vtmb/m0_menu_build.md` is structural reference. |
+| **modern Slate/UMG UI** (not a VGUI port) | Screen inventory, panel anatomy, hierarchy and iconography carry over from `.res`/`trackerscheme.res`; the runtime is a resolution-independent Slate/UMG stack with vector type. No 640×480 scale box, no bitmap `.fnt` atlas, no classic mode. `docs/project/reconstruction-direction.md` → axis 1; `docs/vtmb/m0_menu_build.md` is structural reference. |
 | engine console commands now; Slate console only if it earns its keep | `elysium.*` commands cover current needs. |
 
 **Success criterion for Track A**: slice acceptance for P7, `docs/project/roadmap.md`.
@@ -383,7 +383,7 @@ plays end-to-end.
 ## The ownership register — what Unreal owns, what this repo reproduces
 
 Which half builds a system is adjudicated before the work by the **Ownership test** in
-`docs/project/remaster-direction.md`: a system is reproduced here only when authored content or a
+`docs/project/reconstruction-direction.md`: a system is reproduced here only when authored content or a
 game rule names it; everything the world merely needs in order to work is Unreal's. Troika's
 source is the RE oracle for rules, orders, thresholds and data — never an implementation to
 port. This register is the closed set on both sides. **A reproduction of a Source subsystem that

@@ -15,7 +15,7 @@ Every number a player can observe is authored VtMB data or a recovered VtMB cons
 `totalmass`, a joint's per-axis limit, the grab's reach and cone, the throw force, the death
 impulse. Nothing of Source's machinery is reproduced — not IVP, not the shadow controller, not
 `CGrabController`'s convergence terms, not `CWeaponPhysCannon`. Porting any of those is the
-mechanism port the Ownership test in `docs/project/remaster-direction.md` forbids; reproducing
+mechanism port the Ownership test in `docs/project/reconstruction-direction.md` forbids; reproducing
 their *numbers* is faithful work.
 
 Two corollaries that decide most arguments:

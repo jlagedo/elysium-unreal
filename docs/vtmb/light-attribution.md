@@ -252,4 +252,4 @@ that the classifier ranks as fill. The map's authored sky term is documented in
 **No classifier-driven change to the light rig is justified yet.** Hand-authored curation is
 decided and running; an *automatic*
 removal or attenuation of a light class would be a further divergence needing the `sm_hub_1`
-question closed and its own dated decision, per the remaster charter.
+question closed and its own dated decision, per the direction charter.

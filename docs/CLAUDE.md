@@ -10,7 +10,7 @@ Documentation records design intent, VtMB reverse-engineering facts, and project
   (world, gameplay, audio, characters-ui, input, spine, theatre, animation, three-cs,
   pipeline). A plan file carries **no status marks**; landing a task deletes its entry.
 - `project/rebuild-strategy.md` owns strategy, milestone vocabulary, and sidecar contracts.
-- `project/remaster-direction.md` owns modernization boundaries.
+- `project/reconstruction-direction.md` owns modernization boundaries.
 - `architecture/` owns Unreal system designs and integration seams.
 - `vtmb/` owns engine-neutral VtMB formats and behavior.
 - `recovered/` owns explicitly uncertain reconstructions and their confidence.

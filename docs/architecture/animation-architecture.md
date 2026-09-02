@@ -1226,7 +1226,7 @@ engine was taught to tolerate: the flagged bone's rotation is stored in model sp
 other bone's is parent-relative, and `docs/vtmb/animation_and_movers.md` records that all 373
 flagged bones' `poseToBone` inverse binds are ordinary hierarchy FK — the animators authored a
 conventional pose and only the storage frame disagreed. Under
-`docs/project/remaster-direction.md`'s Behaviour test that is a defect fixed at bake, and §2 says
+`docs/project/reconstruction-direction.md`'s Behaviour test that is a defect fixed at bake, and §2 says
 how each of the two cases is written.
 
 This stage is **correctness, not feel** — the irreducible delta between reading VtMB's rigs and not

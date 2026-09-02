@@ -28,7 +28,7 @@ tools (`input_inject`, `beat_run`, `save`/`load`, `time`). *Acceptance:*
 `uv run elysium test Play` walks the tutorial opening unassisted and fails loudly on a beat
 regression — P9's slice acceptance becomes a CI run. *Deps:* 11.6, 2.7, 2.9.
 
-### 11.13 Remaster camera director — remaining
+### 11.13 Reconstruction camera director — remaining
 
 11.13a–c are landed via CCC2. Remaining:
 

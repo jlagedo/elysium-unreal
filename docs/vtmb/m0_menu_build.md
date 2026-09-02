@@ -8,7 +8,7 @@
 > and alias tables (§4), the dialog `.res` inventory (§6), and the particle-scene structure (§9).
 
 > **Reference, not a port target. Elysium-Unreal does not port VGUI.** The direction is
-> *remaster* (`docs/project/remaster-direction.md` axis 1): VtMB's screen **structure** — inventory,
+> *reconstruction* (`docs/project/reconstruction-direction.md` axis 1): VtMB's screen **structure** — inventory,
 > panel anatomy, reading order, palette, iconography, strings — is kept and re-skinned on a
 > modern resolution-independent Slate/UMG stack with vector type (roadmap **8.6**). No classic
 > UI mode, no 640×480 scale box, no runtime `.fnt` bitmap atlas.
