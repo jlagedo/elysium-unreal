@@ -1985,6 +1985,70 @@ carries one.
 Follow-ups: the `func_areaportalwindow` owner call above (R7 list); `bake_verify.py`'s 77
 pre-existing findings are unchanged and still R5.6's follow-up.
 
+**R6.2 — switched lights and lightstyles everywhere (2026-09-02).** `light` and `light_spot` are
+a real leaf (`ElysiumLightClasses.cpp`, `FElysiumLight`) and the rig owns Source's lightstyle
+pattern table. The join is by **style**, as VRAD made it: the leaf never touches a source — its
+`TurnOn`/`TurnOff`/`Toggle`/`SetPattern`/`FadeToPattern` write its style's pattern through
+`IElysiumEmbodiment::SetLightStylePattern` (map actor → `UElysiumLightRig::SetStylePattern`), and
+the rig's per-frame tick scales every source tagged `elysium.style=<s>` (R5.6) by that pattern on
+its own clock — texlight rows included, since a type-0 row carries the same tag. The rig's
+64-entry table is seeded with the twelve engine patterns and `"m"` elsewhere and survives
+`Adopt`/`AdoptBaked`; **styles ≥ 12 are no longer clamped to 0 on either lane**, so the entity-
+switched rows animate. Semantics read off the corpus, not HL2: `CLight::Spawn` (`10130460`;
+`START_OFF` → `"a"`, else the authored `pattern`, else `"m"`), on (`10130610`; the pattern only
+when ≥ 2 letters and not starting `'a'`, else `"m"`), off (`10130690`; `"a"`), toggle
+(`101306f0`), `SetPattern` (`10130780`), `FadeToPattern` (`10130800`) and `FadeThink`
+(`101308d0`; one letter per step towards the target's first letter, the whole pattern on arrival,
+re-thinking every `fade_time` — VtMB's own key, `0.05` on every corpus light, floored at 0.05
+where retail floors against an unrecovered cvar); `ScriptHide`/`Kill` turn off first and
+`ScriptUnhide` turns on, as retail's overrides do. A style < 32 takes no input. Pattern and fade
+state save in the leaf's block and re-publish on load. `light_dynamic` (`FElysiumLightDynamic`)
+is the one light with no lump-15 row: a runtime point/spot through the legacy `ApplyToSource`
+path — new `UElysiumLightRig::AddRuntimeSource`/`RemoveRuntimeSource` build a non-baked
+`FLightSource` from the raw magnitude, reach and cosines and derive it under the page (retires
+with the `.lights` lane, R9) — with `TurnOn`/`TurnOff`/`Toggle` by visibility, on at spawn
+(`CDynamicLight::Spawn` `10056a90`), and `parentname` attachment through the ordinary
+`ResolveParentAttachment` walk via the new `FElysiumEntity::GetAttachChild()` hook. Its magnitude
+is a **stated convention** (no VRAD row exists): `pow(c/255, 2.2) × S × 100/2.55` is the lump-15
+intensity a `light` receives for `_light "r g b S"` (fitted ratio-exact on `sp_tutorial_1`'s
+switched rows), with `S = 100 × 2^brightness`. The two stub rows for `light`/`light_spot` are
+gone. Ruling in `seam_map_map_lighting.md` → "## Import" → "Switched lights and lightstyles
+(R6.2)".
+
+**Boot witness, through the rig's own log (no screenshot read).** `uv run elysium debug shots
+sp_tutorial_1 --no-open`: `LightRig: adopted 395 baked lights (final values, MapsOnV2Models; 18
+animated, 8 switched) +sun` — the R5.6 line read `10 animated` with the 8 rows on styles 32–34
+clamped to 0; they are the 8 switched. The leaf's spawn writes follow in the same log, one per
+light entity: `LightRig: style 32 <- 'm' (2 sources)` ×2 (both `chop_light` rows), `style 33 <-
+'m' (1 source)` (`houselights`), `style 34 <- 'm' (5 sources)` ×5 (`tunnel_lights`) — every
+switched row reached by its own light's pattern, all `'m'` because no corpus light on the map
+authors `START_OFF` or a `pattern`. `sm_pawnshop_1`: `161 … 0 animated, 0 switched`; `sm_hub_1`:
+`687 … 1 animated, 0 switched` (its one styled row is style 10, engine-animated). All three exit
+0, 6/6 + 4/4 + 4/4 vantages, material audit 0 unbound (464/1191, 179/322, 502/1534). No
+`light_dynamic` exists on the working corpus (36 rows elsewhere), so its witness is the Substrate
+leaf only. Ritual runs for the record: `export map` on the three maps reused every asset (no bake
+input changed), `verify maps` still exits 5 with the same 77 pre-existing findings, brush cull
+8/12/13 and lights parity 395/161/687 unchanged.
+
+Tests: `uv run elysium build`: Succeeded. `uv run elysium test Substrate`: **445 of 445 in
+6.5 s** — `Elysium.Substrate.LightSwitch` (spawn writes for on / `START_OFF` / authored pattern
+and nothing for style 0; the tutorial's `prop_switch → chop_light.Toggle` off and on; `TurnOn`
+on a dark pattern writing `"m"` and restoring a multi-letter one; `SetPattern` verbatim;
+`FadeToPattern` stepping `n`, `o` on the world clock at `fade_time` and finishing on `"pq"` then
+stopping; `ScriptHide`/`ScriptUnhide`; the rig keeping style 32 on an adopted source, counting it
+switched, `'a'` → multiplier 0 and `'m'` → 1, refusing an empty pattern and style 64) and
+`Elysium.Substrate.LightDynamic` (a spot and a point stood through `BuildDynamicLight`, the
+white/brightness-0 spec at `100 × 100/2.55`, reach `distance × 2.54`, the spot offered as the
+attach child, on at spawn, `TurnOff`/`Toggle` by visibility). The first run of `LightSwitch`
+failed on the test, not the leaf: it expected the fade to start from `'m'` after a `TurnOn`,
+but retail's `TurnOn` leaves `m_iszPattern` untouched (the leaf does too), so the test now sets
+the pattern before fading. No pytest module is touched (no producer change).
+
+Follow-ups: the `light_dynamic` magnitude convention above is stated, not recovered — a
+`light_dynamic` map (none on the working corpus) is where it gets its first look, with the
+`.lights` lane it rides on until R9; the Cog Lights viewer does not yet show the pattern table
+(the leaf's debug state shows its own style, pattern and the rig's current pattern).
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2073,18 +2137,6 @@ surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot
   sprite scene proxy the project does not have yet — that proxy is the task's one piece of new
   rendering code. `<map>.sprites` (written, read by nobody) retires. → lands: halos, light
   shafts, candles, cop flashers, lightning.
-- **R6.2 Switched lights and lightstyles everywhere** [R7.1 / MP-5.1]. The rig already
-  animates styles on every map (R5.6). What is unwired: `light` and `light_spot` are **stub
-  classes** — `TurnOn`/`TurnOff`/`Toggle`/`SetPattern`/`FadeToPattern` reach nothing, so the rows
-  on entity-switched styles 32–34 clamp to 0 forever — and `light_dynamic` (36) has no class.
-  The join is by **style**, as in Source: VRAD gives every named light its own style ≥ 32 (901
-  named `light`/`light_spot` corpus-wide, styles 32–38+), so the leaf's `TurnOn`/`TurnOff`/
-  `SetPattern`/`FadeToPattern` write that style's pattern on the rig's clock, which already reads
-  the baked `elysium.style` tag (R5.6) — no per-source join is needed. `light_dynamic` (36 rows,
-  `_light`/`brightness`/`distance`/`_cone`, mostly parented to movers) is the one light not in
-  lump 15: a runtime point/spot derived through the legacy `ApplyToSource` path that stays until
-  R9, with its I/O. Texlight (`emit_surface`) styles ride the same clock. → lands: switches, flicker and pulse,
-  the VtMB signature, on every map.
 - **R6.3 Detail props** [R7.3 / MP-5.3]. The 143,412 `dprp` placements over 41 models as one
   instanced component per model per map off the root unit (records carry model, leaf, node,
   per-record lighting and `swayAmount`; no sprite-type details on the corpus maps), culled at

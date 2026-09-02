@@ -44,16 +44,15 @@ namespace
 			1.f, 80.f);
 	}
 
-	// Current intensity multiplier (0..~2) for a style, lerped between 10 Hz keyframes.
-	// Style 0, the unanimated 12-31, and the switchable 32+ all return 1 (held ON).
-	float StyleIntensity(int32 Style, float Time)
+	// Current intensity multiplier (0..~2) for a pattern, lerped between 10 Hz keyframes. A
+	// one-letter pattern (a switched light's "a"/"m") is that letter, held.
+	float PatternIntensity(const FString& Pattern, float Time)
 	{
-		if (Style <= 0 || Style >= LsCount)
+		const int32 Len = Pattern.Len();
+		if (Len <= 0)
 		{
 			return 1.f;
 		}
-		const char* P = LsPatterns[Style];
-		const int32 Len = FCStringAnsi::Strlen(P);
 		const float T = Time * LsFps;
 		const float Floor = FMath::FloorToFloat(T);
 		int32 I0 = ((int32)Floor) % Len;
@@ -62,15 +61,105 @@ namespace
 			I0 += Len;
 		}
 		const int32 I1 = (I0 + 1) % Len;
-		const float V0 = (P[I0] - 'a') / 12.f;
-		const float V1 = (P[I1] - 'a') / 12.f;
+		const float V0 = (Pattern[I0] - TEXT('a')) / 12.f;
+		const float V1 = (Pattern[I1] - TEXT('a')) / 12.f;
 		return FMath::Lerp(V0, V1, T - Floor);
+	}
+
+	// A style as the two lanes carry it: 0..63 verbatim, anything else 0 (unanimated). R6.2 stopped
+	// clamping the entity-switched 32+ to 0; a `light`'s pattern write is what drives them now.
+	int32 ClampStyle(int32 Style)
+	{
+		return (Style >= 1 && Style < UElysiumLightRig::MaxLightStyles) ? Style : 0;
 	}
 }
 
 UElysiumLightRig::UElysiumLightRig()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	// Source seeds 0-11 at map load (CWorld::Precache) and leaves every other style at full.
+	for (int32 Style = 0; Style < MaxLightStyles; ++Style)
+	{
+		StylePatterns[Style] = Style < LsCount ? FString(ANSI_TO_TCHAR(LsPatterns[Style])) : TEXT("m");
+	}
+}
+
+bool UElysiumLightRig::SetStylePattern(int32 Style, const FString& Pattern)
+{
+	if (Style < 0 || Style >= MaxLightStyles || Pattern.IsEmpty())
+	{
+		return false;
+	}
+	StylePatterns[Style] = Pattern;
+	int32 Reached = 0;
+	for (const FLightSource& S : LightSources)
+	{
+		Reached += (S.Style == Style) ? 1 : 0;
+	}
+	UE_LOG(LogElysiumLights, Log, TEXT("LightRig: style %d <- '%s' (%d source%s)"),
+		Style, *Pattern, Reached, Reached == 1 ? TEXT("") : TEXT("s"));
+	return true;
+}
+
+FString UElysiumLightRig::StylePattern(int32 Style) const
+{
+	return (Style >= 0 && Style < MaxLightStyles) ? StylePatterns[Style] : FString();
+}
+
+float UElysiumLightRig::StyleMultiplier(int32 Style) const
+{
+	return (Style >= 0 && Style < MaxLightStyles) ? PatternIntensity(StylePatterns[Style], StyleTime) : 1.f;
+}
+
+int32 UElysiumLightRig::SwitchedSourceCount() const
+{
+	int32 Count = 0;
+	for (const FLightSource& S : LightSources)
+	{
+		Count += (S.Style >= 32) ? 1 : 0;
+	}
+	return Count;
+}
+
+int32 UElysiumLightRig::AddRuntimeSource(ULightComponent* Light, int32 Type, const FLinearColor& Color,
+	float Mag, float RadiusCm, float StopDot, float StopDot2, int32 Style)
+{
+	if (Light == nullptr || Mag <= 0.f)
+	{
+		return INDEX_NONE;
+	}
+	Lights.Add(Light);
+	FLightSource Source;
+	Source.Light = Light;
+	Source.SourceIndex = INDEX_NONE;   // no lump-15 row: no calibration-asset key, no tag
+	Source.Type = Type;
+	Source.Mag = Mag;
+	Source.RadiusCm = RadiusCm;
+	Source.StopDot = StopDot;
+	Source.StopDot2 = StopDot2;
+	Source.Style = ClampStyle(Style);
+	Source.Color = Color;
+	Source.AuthoredTransform = Light->GetComponentTransform();
+	Source.bAuthoredCastVolumetricShadow = Light->bCastVolumetricShadow;
+	Light->SetLightColor(Color);
+	const int32 Index = LightSources.Add(MoveTemp(Source));
+	ApplyToSource(LightSources[Index]);
+	++LightCount;
+	return Index;
+}
+
+void UElysiumLightRig::RemoveRuntimeSource(ULightComponent* Light)
+{
+	if (Light == nullptr)
+	{
+		return;
+	}
+	const int32 Removed = LightSources.RemoveAll([Light](const FLightSource& S)
+	{
+		return S.SourceIndex == INDEX_NONE && S.Light.Get() == Light;
+	});
+	Lights.Remove(Light);
+	LightCount -= Removed;
 }
 
 int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath,
@@ -171,8 +260,7 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		Row.StopDot2 = FCString::Atof(*P[12]);
 		// Field 16 (optional on older exports): the source lights the 3D-skybox miniature.
 		Row.bSky = P.Num() >= 16 && FCString::Atoi(*P[15]) != 0;
-		const int32 Style = FCString::Atoi(*P[14]);
-		Row.Style = (Style >= 1 && Style < LsCount) ? Style : 0;
+		Row.Style = ClampStyle(FCString::Atoi(*P[14]));
 		Row.Color = Color;
 	}
 
@@ -238,8 +326,8 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 		ClippedNum += (S.Type != 3 && S.Mag * PointSpotScale * S.FitMult > Ceiling) ? 1 : 0;
 	}
 	UE_LOG(LogElysiumLights, Log,
-		TEXT("LightRig: adopted %d baked lights (%d animated)%s%s%s%s · ceiling %.1f%s clips %d"),
-		LightCount, AnimatedNum,
+		TEXT("LightRig: adopted %d baked lights (%d animated, %d switched)%s%s%s%s · ceiling %.1f%s clips %d"),
+		LightCount, AnimatedNum, SwitchedSourceCount(),
 		bHasSun ? TEXT(" +sun") : TEXT(""),
 		bHasSkyAmbient ? TEXT(" +skyambient") : TEXT(""),
 		bApplyFit ? TEXT(" +lightfit") : TEXT(""),
@@ -299,7 +387,7 @@ int32 UElysiumLightRig::AdoptBaked(const TArray<FAdoptedLight>& Adopted, const F
 		Source.Light = Entry.Light;
 		Source.SourceIndex = Entry.SourceIndex;
 		Source.Type = Entry.Type;
-		Source.Style = (Entry.Style >= 1 && Entry.Style < LsCount) ? Entry.Style : 0;
+		Source.Style = ClampStyle(Entry.Style);
 		Source.bBaked = true;
 		Source.BakedIntensity = Entry.Light->Intensity;
 		Source.BaseIntensity = Entry.Light->Intensity;
@@ -328,8 +416,8 @@ int32 UElysiumLightRig::AdoptBaked(const TArray<FAdoptedLight>& Adopted, const F
 		AnimatedNum += (S.Style >= 1) ? 1 : 0;
 	}
 	UE_LOG(LogElysiumLights, Log,
-		TEXT("LightRig: adopted %d baked lights (final values, MapsOnV2Models; %d animated)%s%s"),
-		LightCount, AnimatedNum,
+		TEXT("LightRig: adopted %d baked lights (final values, MapsOnV2Models; %d animated, %d switched)%s%s"),
+		LightCount, AnimatedNum, SwitchedSourceCount(),
 		bHasSun ? TEXT(" +sun") : TEXT(""),
 		Untagged > 0 ? *FString::Printf(TEXT(" (%d untagged)"), Untagged) : TEXT(""));
 
@@ -687,7 +775,7 @@ void UElysiumLightRig::TickComponent(float DeltaTime, ELevelTick TickType,
 		// point of the override is that nothing writes over a hand-set value.
 		if (S.Style >= 1 && !S.bOverridden && S.Light.IsValid())
 		{
-			S.Light->SetIntensity(S.BaseIntensity * StyleIntensity(S.Style, StyleTime));
+			S.Light->SetIntensity(S.BaseIntensity * PatternIntensity(StylePatterns[S.Style], StyleTime));
 		}
 	}
 }

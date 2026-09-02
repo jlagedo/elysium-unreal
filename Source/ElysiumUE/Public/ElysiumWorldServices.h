@@ -292,6 +292,21 @@ struct FElysiumSwingSweep
 // The player half is here because the pawn IS the player's body (S3); player state lives on the
 // entity, and these calls are ordinary entity operations.
 // --------------------------------------------------------------------------------------------
+// R6.2: what a `light_dynamic` publishes to stand its light -- the same raw terms a `.lights` row
+// carries, so the rig derives it through `ApplyToSource` like any legacy source.
+struct FElysiumDynamicLightSpec
+{
+	FVector LocationCm = FVector::ZeroVector;
+	FVector Forward = FVector(1.f, 0.f, 0.f);   // Unreal frame; a spot points along it
+	FLinearColor Color = FLinearColor::White;   // rgb / max(rgb)
+	float Mag = 0.f;                            // the VRAD-scale magnitude (max of rgb)
+	float RadiusCm = 0.f;                       // `distance` x 2.54; 0 = the rig's fallback reach
+	float StopDot = 0.f;                        // cos(_inner_cone); spot only
+	float StopDot2 = 0.f;                       // cos(_cone); spot only
+	int32 Style = 0;
+	bool bSpot = false;                         // `_cone` > 0
+};
+
 class IElysiumEmbodiment
 {
 public:
@@ -858,6 +873,19 @@ public:
 	// a point in a lit room's shadow reads as lit; and it ignores the sky/sun terms, which are
 	// unoccluded whole-map values that would otherwise read every interior as fully lit.
 	virtual float QueryLightAtPoint(const FVector& PointCm) const { return 1.0f; }
+
+	// R6.2 (`seam_map_map_lighting.md` -> "Switched lights and lightstyles"): Source's
+	// `engine->LightStyle(style, pattern)`. A `light`/`light_spot` writes its style's pattern here
+	// and the rig's clock reaches every baked source carrying that style. Headless: nothing.
+	virtual void SetLightStylePattern(int32 Style, const FString& Pattern) {}
+	virtual FString LightStylePattern(int32 Style) const { return FString(); }
+	// R6.2: a `light_dynamic`'s runtime light, stood on the legacy derivation path (a raw
+	// magnitude, reach and cosines the rig derives from). Attached under `Parent` when given, at
+	// the spec's world transform. Null headless. `DestroyDynamicLight` unregisters it from the rig
+	// and the actor; the leaf calls it on Kill and teardown.
+	virtual class ULightComponent* BuildDynamicLight(const struct FElysiumDynamicLightSpec& Spec,
+		USceneComponent* Parent) { return nullptr; }
+	virtual void DestroyDynamicLight(class ULightComponent* Light) {}
 
 	// Is the player's body in the sneak posture? (13.1, `docs/vtmb/stealth.md` -> "Player
 	// target-surface update", step 3.)

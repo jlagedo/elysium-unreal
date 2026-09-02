@@ -74,6 +74,30 @@ public:
 	// lightstyle animation off the `elysium.style` tag. Returns the number of lights bound.
 	int32 AdoptBaked(const TArray<FAdoptedLight>& Adopted, const FString& InMapName);
 
+	// R6.2 (`seam_map_map_lighting.md` -> "Switched lights and lightstyles"): the lightstyle
+	// pattern table, Source's `engine->LightStyle(style, pattern)`. 64 entries (MAX_LIGHTSTYLES):
+	// 0-11 the engine's own animated patterns, everything else "m" (full) until an entity writes
+	// it -- a named `light`'s TurnOn/TurnOff/SetPattern/FadeToPattern lands here, keyed by the
+	// style VRAD gave it (>= 32), and reaches every source carrying that style on the next tick.
+	// The table outlives Adopt/AdoptBaked, so the entity world may spawn before or after the rig
+	// adopts. Returns false for a style outside 0..63 or an empty pattern (nothing written).
+	static constexpr int32 MaxLightStyles = 64;
+	bool SetStylePattern(int32 Style, const FString& Pattern);
+	FString StylePattern(int32 Style) const;
+	// The multiplier the tick applies right now for a style: 'a' = 0, 'm' = 1, 'z' ~ 2.08, 10 Hz
+	// keyframes lerped on the rig's own clock. 1 for a style outside the table.
+	float StyleMultiplier(int32 Style) const;
+	// How many adopted sources carry a style >= 32 (entity-switched), for the readout.
+	int32 SwitchedSourceCount() const;
+
+	// R6.2: a `light_dynamic` -- the one light with no lump-15 row -- stands through the legacy
+	// derivation: `Light` becomes a non-baked source with the raw magnitude, reach (cm), spot
+	// cosines and style, and `ApplyToSource` derives it under the page's calibration exactly as a
+	// `.lights` row is (retires with that lane, R9). Returns the source index, or INDEX_NONE.
+	int32 AddRuntimeSource(ULightComponent* Light, int32 Type, const FLinearColor& Color, float Mag,
+		float RadiusCm, float StopDot, float StopDot2, int32 Style);
+	void RemoveRuntimeSource(ULightComponent* Light);
+
 	// Show/hide every spawned light (bound to elysium.lights / the pawn's L key).
 	void SetLightsVisible(bool bShow);
 	bool AreLightsVisible() const { return bLightsVisible; }
@@ -235,6 +259,8 @@ private:
 	// live from this data (ApplyLiveTuning).
 	TArray<FLightSource> LightSources;
 	float StyleTime = 0.f;
+	// The 64 lightstyle patterns (R6.2), seeded by the constructor.
+	FString StylePatterns[MaxLightStyles];
 	bool bLightsVisible = true;
 
 	// Per-area rebalance and extended-ceiling toggles, mirrored from `UElysiumLightingSettings` by

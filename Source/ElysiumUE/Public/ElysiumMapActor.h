@@ -444,6 +444,12 @@ public:
 	// The two perception queries. Geometry only; every threshold stays substrate.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
+	// R6.2: the lightstyle pattern table and the runtime `light_dynamic` source, both on the rig.
+	virtual void SetLightStylePattern(int32 Style, const FString& Pattern) override;
+	virtual FString LightStylePattern(int32 Style) const override;
+	virtual ULightComponent* BuildDynamicLight(const FElysiumDynamicLightSpec& Spec,
+		USceneComponent* Parent) override;
+	virtual void DestroyDynamicLight(ULightComponent* Light) override;
 	virtual bool IsPlayerSneaking() const override;
 	virtual bool IsPlayerOnGround() const override;
 	virtual FString GetPlayerBaseActivity() const override;

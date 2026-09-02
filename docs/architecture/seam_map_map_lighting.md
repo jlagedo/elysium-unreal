@@ -487,6 +487,79 @@ baked value survives adopt and a settings push, a calibration row applies by `So
 `type`/`style` tags reach the source the per-frame tick reads (the tick itself asserts on an
 unregistered component, so it is not driven there), and a revert returns to the bake.
 
+### Switched lights and lightstyles (R6.2)
+
+R6.2 of `docs/project/seam_migration.md` -> "Roadmap -- one pipeline" [R7.1 / MP-5.1] wires the
+light entities to the rig's lightstyle clock. Nothing here is a bake change: the bake already tags
+every actor `elysium.style=<s>` (R5.6) and the rig already animates styles per frame; what was
+missing is the writer of a style's **pattern** -- in Source that is `engine->LightStyle(style,
+pattern)`, called by the `light` entity, and the join is by **style number**, never by source.
+VRAD gives every named `light`/`light_spot` its own style >= 32 (`sp_tutorial_1`: `chop_light` 32
+on two rows, `houselights` 33, `tunnel_lights` 34 on five), and every lump-15 row of that light
+carries the number, so one pattern write reaches every source of the light, texlights included.
+
+**The rig owns a 64-entry pattern table**, `UElysiumLightRig::StylePatterns` (Source's
+`MAX_LIGHTSTYLES`), seeded in the constructor with the twelve engine patterns (styles 0-11, the
+`LsPatterns` table that already drove the tick) and `"m"` everywhere else -- the engine's own
+default for an unset style is full brightness. `SetStylePattern(style, pattern)` replaces one
+entry; `StylePattern(style)` reads it back; `StyleMultiplier(style)` is the current per-frame
+value (`'a'` = 0, `'m'` = 1, `'z'` ~ 2.08, 10 Hz keyframes lerped, on the rig's own `StyleTime`
+clock, exactly as before). The table survives `Adopt`/`AdoptBaked` -- the entity world spawns
+after the rig adopts (`LoadMap`: adopt, then the substrate), but a pattern must never depend on
+that order. **Styles are no longer clamped to 0 above 11** on either lane: a source's `Style` is the
+tag's (or the `.lights` row's) value 0..63, and the tick scales every source with `Style >= 1` by
+its style's multiplier. A switched light's `"a"` therefore drives its sources to intensity 0 --
+the clamp the R5.6 entry recorded ("the 8 rows on styles 32-34 clamp to 0") is gone, and the adopt
+log now reports `N animated, M switched` (styles >= 32) so a boot log witnesses the join.
+
+**`light` / `light_spot` (`ElysiumLightClasses.cpp`, `FElysiumLight`)** restate `CLight`
+(vampire.dll `10130460` Spawn, `10130610` on, `10130690` off, `101306f0` toggle, `10130780`
+SetPattern, `10130800` FadeToPattern, `101308d0` FadeThink), read off the corpus:
+
+| Input | Writes (style >= 32 only; a style < 32 light takes no input, as in retail) |
+|---|---|
+| Spawn | `START_OFF` (spawnflags 1) -> `"a"`, and the pattern becomes `"a"`; else the authored `pattern` if any, else `"m"` (and the pattern becomes `"m"`). An unnamed light is removed in retail; here it stays inert (nothing can reach it) |
+| `TurnOn` | the pattern if it is at least two characters and does not start with `'a'`, else `"m"`; clears `START_OFF` |
+| `TurnOff` | `"a"`; sets `START_OFF` |
+| `Toggle` | `START_OFF` set -> `TurnOn`, else `TurnOff` |
+| `SetPattern` | the parameter becomes the pattern and is written as is; clears `START_OFF` |
+| `FadeToPattern` | `current = pattern[0]`, `target = param[0]`, the pattern becomes the parameter, `FadeThink` scheduled now; clears `START_OFF` |
+| `FadeThink` | steps `current` one letter towards `target`; if it arrives, writes the **whole** pattern and stops, else writes the single letter and re-thinks after `fade_time` seconds |
+| `ScriptHide` / `Kill` | `TurnOff` first, then the base input; `ScriptUnhide` is `TurnOn` then the base |
+
+`fade_time` is VtMB's own key (every corpus light authors `0.05`); retail floors it against a
+cvar the corpus does not name, so the floor here is `0.05` and never bites on shipped data. The
+pattern and the on/off bit are saved in the leaf's block and re-published on load. Every write
+goes through `IElysiumEmbodiment::SetLightStylePattern` -- the map actor forwards to the rig; the
+headless default is a no-op and the recording double keeps a table the Substrate tests read.
+
+**`light_dynamic` (`FElysiumLightDynamic`)** is the one light with no lump-15 row (36 corpus rows,
+none on the three working maps): a runtime point or spot standing through the **legacy
+`ApplyToSource` path** -- `UElysiumLightRig::AddRuntimeSource` builds a non-baked `FLightSource`
+from a raw magnitude, reach and cosines and derives it with the page's calibration, exactly as the
+`.lights` lane does, so it retires with that lane at R9. `CDynamicLight` (vampire.dll `100568a0`
+KeyValue, `10056a90` Spawn, `10056a00` TurnOn) reads `_light` (render colour), `pitch` (negated
+into the angles), `spawnflags` (the illumination mask, carried), and by datamap `style`,
+`distance` (`m_Radius`), `brightness` (`m_Exponent`), `_inner_cone`, `_cone`, `spotlight_radius`;
+it spawns **on** (`m_On = 1`), and `TurnOn`/`TurnOff`/`Toggle` flip `m_On`. The mapping to a rig
+source: colour `rgb / max(rgb)`; reach `distance x 2.54`; a `_cone > 0` is a spot with
+`stopdot2 = cos(_cone)`, `stopdot = cos(_inner_cone)`, forward from `(pitch, angles.yaw)` in the
+reflected frame; a `_cone` of 0 is a point. The magnitude has no VRAD row to copy, so it is
+**stated as a convention**: the lump-15 intensity a `light` with `_light "r g b S"` receives is
+`pow(c / 255, 2.2) x S x 100 / 2.55` (fitted on `sp_tutorial_1`'s switched rows -- `238 211 185
+150` -> `5053.96 3877.79 2903.62`, `198 157 81 800` -> `17981.46 10792.96 2516.68`, ratio-exact to
+four digits), and a dynamic light's `S` is `100 x 2^brightness`, `brightness` being the dlight's
+`ColorRGBExp32` exponent (each step doubles). No knob: it is the faithful derivation as far as the
+data allows, and the light is on/off by the component's visibility. The light attaches to its
+`parentname` body through the ordinary `ResolveParentAttachment` walk -- `FElysiumEntity::
+GetAttachChild()` lets a leaf with no primitive body offer a scene component to hang.
+
+**Verification.** `Elysium.Substrate.LightSwitch`: spawn writes for the three spawn states, every
+input's write from the table above, `FadeToPattern` stepping on the world clock at `fade_time`
+and finishing on the whole pattern, a style < 32 taking nothing, and the rig's multiplier for
+`"a"`/`"m"` on an adopted source. `Elysium.Substrate.LightDynamic`: the spec the leaf publishes
+for a point and a spot, on at spawn, off on `TurnOff`, parented to a named body.
+
 ### Cog Lights window: viewer, not editor
 
 The window (`ElysiumCogWindow_Lights`) is now **read-only**. Deleted outright: the "Rig tuning" tab

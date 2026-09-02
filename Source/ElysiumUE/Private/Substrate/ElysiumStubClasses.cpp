@@ -43,8 +43,6 @@ namespace
 	{
 		{ TEXT("ambient_soundscheme"),           TEXT("FadeIn FadeOut Disable"),
 		  TEXT("the SoundScheme manager owns the scheme file, but no entity class receives its wires") },
-		{ TEXT("light_spot"),                    TEXT("FadeToPattern TurnOff TurnOn SetPattern"),
-		  TEXT("lights are re-derived from .lights at load; no entity class, so light switching is unbuilt") },
 		{ TEXT("camera_cinematic"),              TEXT("EndShot StartShot"),
 		  TEXT("the scripted-shot channel") },
 		{ TEXT("func_particle"),                 TEXT("TurnOff TurnOn"),
@@ -59,8 +57,6 @@ namespace
 		  TEXT("the HUD particle layer") },
 		{ TEXT("npc_VVampireBoss"),              TEXT("StartPlayerDialog TransformModel ClearPatrolPath FollowPatrolPath SetBodyAsCameraTarget SetupPatrolType WillTalk"),
 		  TEXT("the boss NPC leaf") },
-		{ TEXT("light"),                         TEXT("SetPattern TurnOff Toggle TurnOn"),
-		  TEXT("lights are re-derived from .lights at load; no entity class, so light switching is unbuilt") },
 		{ TEXT("env_shake"),                     TEXT("StartShake StopShake"),
 		  TEXT("screen shake") },
 		{ TEXT("prop_slashable"),                TEXT("Skin"),
@@ -121,7 +117,7 @@ namespace
 		  TEXT("scripted explosions") },
 	};
 
-	// One thunk for all 74 rows. It reads its own name off the dispatch context rather than being
+	// One thunk for every row. It reads its own name off the dispatch context rather than being
 	// generated per row, which is the whole reason FElysiumInputArgs carries `Input`.
 	void StubInput(FElysiumEntity& Self, const FElysiumInputArgs& Args)
 	{

@@ -28,7 +28,9 @@
 #include "Substrate/ElysiumDisposition.h"
 #include "Visual/ElysiumBodyAnimInstance.h"   // the live clip-phase forward below
 
+#include "Components/PointLightComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
@@ -1340,6 +1342,39 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("QueryLightAtPoint %s = %.2f"), *PointCm.ToString(),
 			LightAtPoint));
 		return LightAtPoint;
+	}
+	// R6.2: the lightstyle table a `light` writes, kept so a test reads the pattern by style.
+	TMap<int32, FString> LightStylePatterns;
+	virtual void SetLightStylePattern(int32 Style, const FString& Pattern) override
+	{
+		Record(FString::Printf(TEXT("SetLightStylePattern %d %s"), Style, *Pattern));
+		LightStylePatterns.Add(Style, Pattern);
+	}
+	virtual FString LightStylePattern(int32 Style) const override
+	{
+		const FString* Found = LightStylePatterns.Find(Style);
+		return Found ? *Found : FString(TEXT("m"));
+	}
+	FElysiumDynamicLightSpec LastDynamicLight;
+	virtual ULightComponent* BuildDynamicLight(const FElysiumDynamicLightSpec& Spec,
+		USceneComponent* Parent) override
+	{
+		Record(FString::Printf(TEXT("BuildDynamicLight %s mag=%.1f reach=%.1f style=%d%s"),
+			Spec.bSpot ? TEXT("spot") : TEXT("point"), Spec.Mag, Spec.RadiusCm, Spec.Style,
+			Parent ? TEXT(" parented") : TEXT("")));
+		LastDynamicLight = Spec;
+		ULightComponent* Light = Spec.bSpot
+			? static_cast<ULightComponent*>(NewComponent<USpotLightComponent>())
+			: static_cast<ULightComponent*>(NewComponent<UPointLightComponent>());
+		if (Parent)
+		{
+			Light->SetupAttachment(Parent);
+		}
+		return Light;
+	}
+	virtual void DestroyDynamicLight(ULightComponent* Light) override
+	{
+		Record(TEXT("DestroyDynamicLight"));
 	}
 	// 13.1 — the stealth eligibility predicate's one world term. Default false is the interface's
 	// stated headless answer (the non-stealth fallback), so a case that does not care about stealth

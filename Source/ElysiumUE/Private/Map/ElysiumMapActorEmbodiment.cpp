@@ -16,6 +16,9 @@
 #include "Player/ElysiumCameraShots.h"   // FElysiumCameraDirector — the scripted-shot stack
 #include "Visual/ElysiumAnimSubsystem.h" // the cinematic bank index
 #include "Visual/ElysiumEntityBodies.h"  // the body factory every mesh forward lands on
+#include "Visual/ElysiumLightRig.h"      // R6.2: lightstyle patterns and the runtime light source
+#include "Components/PointLightComponent.h"
+#include "Components/SpotLightComponent.h"
 #include "Visual/ElysiumMapVisuals.h"    // RegisterRuntimeBrush — runtime brush visuals join the look
 #include "Visual/ElysiumNpcBody.h"       // AElysiumNpcBody — the NPC motor actor
 
@@ -475,6 +478,56 @@ void AElysiumMapActor::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 	{
 		Bodies->ApplyAnimatedPropSkin(Comp, StaticStem, Family);
 	}
+}
+
+void AElysiumMapActor::SetLightStylePattern(int32 Style, const FString& Pattern)
+{
+	if (UElysiumLightRig* Rig = Visuals ? Visuals->GetLightRig() : nullptr)
+	{
+		Rig->SetStylePattern(Style, Pattern);
+	}
+}
+
+FString AElysiumMapActor::LightStylePattern(int32 Style) const
+{
+	const UElysiumLightRig* Rig = Visuals ? Visuals->GetLightRig() : nullptr;
+	return Rig ? Rig->StylePattern(Style) : FString();
+}
+
+ULightComponent* AElysiumMapActor::BuildDynamicLight(const FElysiumDynamicLightSpec& Spec,
+	USceneComponent* Parent)
+{
+	UElysiumLightRig* Rig = Visuals ? Visuals->GetLightRig() : nullptr;
+	USceneComponent* Root = GetRootComponent();
+	if (!Rig || !Root || Spec.Mag <= 0.f)
+	{
+		return nullptr;
+	}
+	ULocalLightComponent* Light = Spec.bSpot
+		? static_cast<ULocalLightComponent*>(NewObject<USpotLightComponent>(this))
+		: static_cast<ULocalLightComponent*>(NewObject<UPointLightComponent>(this));
+	Light->SetMobility(EComponentMobility::Movable);
+	Light->SetupAttachment(Parent ? Parent : Root);
+	Light->SetWorldLocationAndRotation(Spec.LocationCm, FRotationMatrix::MakeFromX(Spec.Forward).ToQuat());
+	Light->RegisterComponent();
+	AddInstanceComponent(Light);
+	Rig->AddRuntimeSource(Light, Spec.bSpot ? 2 : 1, Spec.Color, Spec.Mag, Spec.RadiusCm,
+		Spec.StopDot, Spec.StopDot2, Spec.Style);
+	return Light;
+}
+
+void AElysiumMapActor::DestroyDynamicLight(ULightComponent* Light)
+{
+	if (!Light)
+	{
+		return;
+	}
+	if (UElysiumLightRig* Rig = Visuals ? Visuals->GetLightRig() : nullptr)
+	{
+		Rig->RemoveRuntimeSource(Light);
+	}
+	RemoveInstanceComponent(Light);
+	Light->DestroyComponent();
 }
 
 UStaticMeshComponent* AElysiumMapActor::BuildBrushVisual(const FString& Stem,

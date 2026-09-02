@@ -180,6 +180,11 @@ UPrimitiveComponent* FElysiumEntity::GetAttachBody() const
 		: static_cast<UPrimitiveComponent*>(GenericModelBody);
 }
 
+USceneComponent* FElysiumEntity::GetAttachChild() const
+{
+	return GetAttachBody();
+}
+
 void FElysiumEntity::EnsurePlacedModelBody()
 {
 	if (GetAttachBody() || !World || !Def || Model.IsEmpty() || Def->ModelMesh.IsEmpty())
@@ -236,7 +241,7 @@ bool FElysiumEntity::ResolveParentAttachment(bool bWarnIfPending)
 	}
 	MoveParent = Parent->Handle;
 
-	UPrimitiveComponent* ChildBody = GetAttachBody();
+	USceneComponent* ChildBody = GetAttachChild();
 	if (!ChildBody)
 	{
 		return true; // valid logical parenting between entities that need no scene component

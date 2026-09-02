@@ -279,6 +279,9 @@ public:
 	// point props return their standing component and physics props return their simulating body.
 	// Null = nothing physical to attach.
 	virtual class UPrimitiveComponent* GetAttachBody() const;
+	// The component this entity hangs under its `parentname` body: the attach body, unless a leaf
+	// with no primitive body offers a scene component of its own (a `light_dynamic`'s light, R6.2).
+	virtual class USceneComponent* GetAttachChild() const;
 	void EnsurePlacedModelBody();
 
 	// The skeletal body a camera shot's `Bone:` / `Attachment:` attach point resolves against,
