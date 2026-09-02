@@ -8,9 +8,8 @@ No module constructs a repository-relative output path or assumes a current dire
 
 ## Tests
 
-Python tests are `pytest`, run from the repository root as `uv run pytest`. Running one module,
-choosing a scope, and the approvals a broad export/bake/reconstruct run needs are the
-**`elysium-testing`** skill.
+Python tests are `pytest`, run from the repository root as `uv run pytest`. Running one module
+and choosing a scope are the **`elysium-testing`** skill.
 
 `sqlite3.connect()` used as a context manager commits but does not close. On Windows the
 open handle blocks `tmp_path` cleanup, so a test that opens a session database closes it

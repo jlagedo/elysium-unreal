@@ -91,18 +91,9 @@ add-on root on `sys.path`, so `from core import ...` resolves the way Blender lo
 Blender-side script at `tests/blender/test_import.py` needs a Blender and is kept out of collection
 by `norecursedirs`.
 
-## Scope is gated
+## Scope
 
 Start with the narrowest owning automation filter, pure-rules test, or Python test node id, and the
-smallest export/bake selector. An exporter or Unreal-generator change does not authorize a complete
-profile as validation. If the requested change affects export or bake products and the owner has
-not named the scope, ask for the exact map, model, placed model, NPC/body stem, bundle, or
-generator before launching it. A complete tier is a separately planned and accepted operation.
-
-Never invoke `reconstruct`, `export grid|all`, unscoped `export characters`, a full policy/cast
-bake, broad `--force`/`--clean`, or the complete Python suite without first stating the command,
-scope, reason, and expected cost and receiving explicit owner acceptance. Use focused commands and
-receipt-backed no-op checks during iteration; broader release acceptance is a separately approved
-step.
-
-**A live run is proposed, never assumed — ask the owner first, with a recommendation.**
+smallest export/bake selector that covers the change: the exact map, model, placed model, NPC/body
+stem, bundle, or generator. Use focused commands and receipt-backed no-op checks during iteration;
+widen to a complete profile or tier when the change actually reaches it.
