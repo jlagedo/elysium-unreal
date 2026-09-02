@@ -233,6 +233,7 @@ of the `.ents` document's own row, and therefore of `FElysiumEntityDef`:
 | `contents` | `Contents` | `Contents` |
 | `blocks_player` | `bBlocksPlayer` | `bBlocksPlayer` |
 | `brush_mesh` | `BrushMesh` | `BrushMesh` |
+| `cull_max_cm` | `CullMaxCm` (`0` when absent) | `CullMaxCm` (R6.4, `seam_map_map.md` → "Brush fade distances") |
 | `elevator_floors` | `ElevatorFloors` | `ElevatorFloors` |
 | `start_hidden` | `bStartHidden` | `bStartHidden` |
 | `sky` | `bSky` | `bSky` |

@@ -145,6 +145,8 @@ def make_entity_row(row):
     out.set_editor_property("contents", int(row.get("contents", 0)))
     out.set_editor_property("blocks_player", bool(row.get("blocks_player", False)))
     out.set_editor_property("brush_mesh", row.get("brush_mesh", ""))
+    # R6.4: absent means "never culled by distance", which the C++ reader spells 0.
+    out.set_editor_property("cull_max_cm", float(row.get("cull_max_cm", 0.0)))
     out.set_editor_property("elevator_floors",
                             [float(z) for z in row.get("elevator_floors", [])])
     out.set_editor_property("start_hidden", bool(row.get("start_hidden", False)))

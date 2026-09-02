@@ -26,6 +26,7 @@ void UElysiumMapEntities::Deserialize(FElysiumEntityDefs& Out, float SkyScale,
 		Def.Contents = Row.Contents;
 		Def.bBlocksPlayer = Row.bBlocksPlayer;
 		Def.BrushMesh = Row.BrushMesh;
+		Def.CullMaxCm = Row.CullMaxCm;
 		Def.ElevatorFloors = Row.ElevatorFloors;
 		Def.bStartHidden = Row.bStartHidden;
 		Def.bSky = Row.bSky;

@@ -40,7 +40,7 @@ MANIFEST_NAME = "manifest.json"
 IMPORT_REPORT_NAME = "import_report.json"
 
 #: Bumped whenever this lane's mapping changes in a way that must re-author every asset.
-RECIPE_VERSION = 1
+RECIPE_VERSION = 2   # 2: R6.4 `cull_max_cm` rides the row
 
 #: The mount every per-map asset lands under. The C++ twin is
 #: `FElysiumContentPaths::BakedMapDir` / `BakedMapEntities`.

@@ -53,6 +53,9 @@ struct FElysiumEntityDef
 	// Renderable BSP brush model, baked under /ElysiumBaked/<map>/Brushes. Empty for
 	// tools-only triggers and other collision-only brush entities.
 	FString BrushMesh;
+	// R6.4: the distance (Unreal cm) beyond which `BrushMesh` is not drawn -- a `func_lod`'s
+	// `DisappearDist x 2.54`, derived once by the producer like `ElevatorFloors`. 0 = never culled.
+	float CullMaxCm = 0.f;
 
 	// CFuncElevator's eight absolute floor Z coordinates, pre-converted by the UE_ exporter
 	// into Unreal centimetres. Empty for non-elevators and older exports.

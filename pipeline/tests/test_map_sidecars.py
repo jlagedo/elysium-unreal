@@ -12,10 +12,17 @@ pin the pieces a differ could only report as an unexplained delta.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
+import pytest
+
+from elysium_pipeline import paths
 
 from elysium_pipeline.exporters.UE_map_sidecars import (
     EntityDivergences,
+    brush_cull_max_cm,
     brush_hull,
     collect_entity_fields,
     entity_lump_text,
@@ -189,3 +196,43 @@ def test_entity_lump_text_reproduces_the_embedded_quote_the_legacy_regex_trips_o
         ("OnMapLoad", ",,,0,-1,setArea(\\"),
         ("),", "origin"),
     ]
+
+
+# --- R6.4: brush fade distances (`seam_map_map.md` -> "Brush fade distances") ------------------
+
+
+@pytest.mark.parametrize(
+    ("classname", "keys", "expected"),
+    [
+        ("func_lod", {"DisappearDist": "2500"}, 6350.0),          # sp_tutorial_1's own rows
+        ("func_lod", {"DisappearDist": "2200"}, 5588.0),
+        ("FUNC_LOD", {"DisappearDist": "3000.5abc"}, 7621.27),    # C atof: the longest numeric prefix
+        ("func_lod", {"DisappearDist": "0"}, None),               # zero is "never culled", not "at zero"
+        ("func_lod", {}, None),
+        ("func_areaportalwindow", {"FadeStartDist": "1000", "FadeDist": "1280"}, None),  # the R7 owner call
+        ("func_brush", {"DisappearDist": "2500"}, None),          # the key means nothing on another class
+    ],
+)
+def test_brush_cull_max_cm_is_disappear_dist_times_2_54_on_func_lod_only(classname, keys, expected):
+    assert brush_cull_max_cm(classname, keys) == expected
+
+
+WORKING_MAPS = ("sp_tutorial_1", "sm_pawnshop_1", "sm_hub_1")
+
+
+@pytest.mark.parametrize("map_name", WORKING_MAPS)
+def test_every_meshed_func_lod_row_carries_its_cull_range_in_the_ents(map_name):
+    """Corpus-gated: the shipped `.ents` (the file the R4.1 asset must reproduce) carries
+    `cull_max_cm` on every meshed `func_lod`, equal to its own `DisappearDist x 2.54`, and on no
+    other row."""
+
+    ents = paths.export_root() / map_name / f"{map_name}.ents"
+    if not ents.is_file():
+        pytest.skip(f"{ents} is not exported on this machine")
+    rows = json.loads(ents.read_text(encoding="ascii"))["entities"]
+    lods = [row for row in rows if row["classname"].lower() == "func_lod" and row.get("brush_mesh")]
+    assert lods, f"{map_name} has no meshed func_lod row"
+    for row in lods:
+        assert row["cull_max_cm"] == brush_cull_max_cm("func_lod", row["keys"])
+        assert row["brush_mesh"] == f"brush_{row['model']}"
+    assert [row for row in rows if "cull_max_cm" in row] == lods

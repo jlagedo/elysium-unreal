@@ -422,8 +422,16 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 	{
 		if (IElysiumEmbodiment* Embodiment = WorldServices.Embodiment)
 		{
+			const float BodyScale = Embodiment->BodyScaleFor(*Ent.Def);
 			Body->SetVisual(Embodiment->BuildBrushVisual(
-				Ent.Def->BrushMesh, Body, Embodiment->BodyScaleFor(*Ent.Def), Ent.Def->bSky));
+				Ent.Def->BrushMesh, Body, BodyScale, Ent.Def->bSky));
+			// R6.4: the producer wrote the cull range (`cull_max_cm`, a func_lod's DisappearDist
+			// in cm); the runtime applies it and derives nothing. A miniature brush's distance is
+			// authored in miniature units, so it scales with the body, like its hulls.
+			if (UStaticMeshComponent* Visual = Body->GetVisual(); Visual && Ent.Def->CullMaxCm > 0.f)
+			{
+				Visual->SetCullDistance(Ent.Def->CullMaxCm * BodyScale);
+			}
 		}
 	}
 

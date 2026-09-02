@@ -915,6 +915,25 @@ def write_lights(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int
     return {"lights": len(rows), "skyLights": sum(row["sky"] for row in rows)}
 
 
+def brush_cull_max_cm(classname: str, keys: dict[str, str]) -> float | None:
+    """R6.4 (`seam_map_map.md` -> "Brush fade distances"): the distance beyond which a brush
+    entity's baked mesh is not drawn, in Unreal centimetres, or None when the row has none.
+
+    Only `func_lod` carries one -- `DisappearDist`, VtMB's hard client-side draw cutoff
+    (`C_Func_LOD::ShouldDraw`), read with C `atof` like every other keyvalue and converted
+    exactly as R5.1 converts a FADES prop's `fadeMaxDist`. A zero or negative distance is "never
+    culled", not "culled at zero". `func_areaportalwindow`'s `FadeDist` governs the black backing
+    brush the exporter omits, so it is deliberately not mapped here (the R7 owner call).
+    """
+
+    if classname.lower() != "func_lod":
+        return None
+    distance = atof(keys.get("DisappearDist", "0"))
+    if distance <= 0.0:
+        return None
+    return round(distance * INCH_TO_CM, 4)
+
+
 def build_entities(
     units: MapUnits,
     sky: SkyScope,
@@ -1002,6 +1021,9 @@ def build_entities(
                 entity["blocks_player"] = bool(contents_or & BLOCK_MASK)
                 if index in brush_meshes:
                     entity["brush_mesh"] = brush_meshes[index]
+                    cull = brush_cull_max_cm(entity["classname"], keys)
+                    if cull is not None:
+                        entity["cull_max_cm"] = cull
                 brush_count += 1
                 hull_count += len(hulls)
 

@@ -718,7 +718,7 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 	// all, and one real class to prove the quiet path.
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__test__");
-	for (const TCHAR* Pair : { TEXT("env_shake|quake1"), TEXT("func_lod|lod1"), TEXT("math_counter|counter1") })
+	for (const TCHAR* Pair : { TEXT("env_shake|quake1"), TEXT("info_node_cover_corner|lod1"), TEXT("math_counter|counter1") })
 	{
 		FString Class, Name;
 		FString(Pair).Split(TEXT("|"), &Class, &Name);
@@ -782,7 +782,7 @@ bool FElysiumStubReportTest::RunTest(const FString&)
 	//    stub table does not enumerate.
 	FireAt(TEXT("lod1"), TEXT("Frobnicate"));
 	TestEqual(TEXT("an unresolvable input reports"),
-		CountFor(TEXT("input"), TEXT("func_lod.Frobnicate")), 1);
+		CountFor(TEXT("input"), TEXT("info_node_cover_corner.Frobnicate")), 1);
 
 	// 3. A wire naming an entity the map does not contain is an authored/runtime-state outcome, not
 	//    an unimplemented surface: retail data carries stale wires, and a valid target can be killed

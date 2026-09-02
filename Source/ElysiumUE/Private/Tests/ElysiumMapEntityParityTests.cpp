@@ -213,6 +213,7 @@ bool FElysiumMapEntityFieldParityTest::RunTest(const FString&)
 			if (A.Contents != S.Contents) { Fields.Add(TEXT("contents")); }
 			if (A.bBlocksPlayer != S.bBlocksPlayer) { Fields.Add(TEXT("blocks_player")); }
 			if (A.BrushMesh != S.BrushMesh) { Fields.Add(TEXT("brush_mesh")); }
+			if (A.CullMaxCm != S.CullMaxCm) { Fields.Add(TEXT("cull_max_cm")); }
 			if (A.bStartHidden != S.bStartHidden) { Fields.Add(TEXT("start_hidden")); }
 			if (A.bSky != S.bSky) { Fields.Add(TEXT("sky")); }
 			if (A.ModelMesh != S.ModelMesh) { Fields.Add(TEXT("model_mesh")); }

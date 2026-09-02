@@ -127,6 +127,11 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
 		E->TryGetNumberField(TEXT("contents"), Def.Contents);
 		E->TryGetBoolField(TEXT("blocks_player"), Def.bBlocksPlayer);
 		E->TryGetStringField(TEXT("brush_mesh"), Def.BrushMesh);
+		double CullMaxCm = 0.0;
+		if (E->TryGetNumberField(TEXT("cull_max_cm"), CullMaxCm))
+		{
+			Def.CullMaxCm = static_cast<float>(CullMaxCm);
+		}
 
 		const TArray<TSharedPtr<FJsonValue>>* FloorsArr = nullptr;
 		if (E->TryGetArrayField(TEXT("elevator_floors"), FloorsArr))

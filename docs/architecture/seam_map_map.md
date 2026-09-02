@@ -396,6 +396,7 @@ spelling.
 | `contents` | with `model` | OR over hull-producing brushes |
 | `blocks_player` | with `model` | `contents & 0x1400B ≠ 0` |
 | `brush_mesh` | with `model`, when meshed | `"brush_<N>"` |
+| `cull_max_cm` | with `brush_mesh`, `classname.lower() == "func_lod"`, `DisappearDist > 0` | `atof(DisappearDist) × 2.54`, 4 decimals (R6.4, below) |
 | `elevator_floors` | `classname.lower() == "func_elevator"` | `[8]`, Unreal cm Z, 5 decimals; `floor1`…`floor8` (exact-case keys), `atof`, default `"0"` |
 | `start_hidden` | always | `keys.get("StartHidden", "0") == "1"`, exact-case key |
 | `outputs` | when non-empty | below |
@@ -1000,6 +1001,48 @@ off.
 **Detail props are not this lane's.** The `placements` scene's other node family (`dprp`, 143,412
 records over 41 models corpus-wide) is R7.3's: they want instancing and a lighting join, not one
 actor each.
+
+### Brush fade distances (R6.4)
+
+R6.4 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" gives the two distance-culled
+brush classes the FADES treatment above. **The bake has no brush actor to write onto**: a brush
+entity's mesh is `SM_brush_<N>` under `/ElysiumBaked/<map>/Brushes`, never placed in the level —
+the runtime attaches it to the convex entity body that owns movement, collision, hiding and
+teardown (`FElysiumEntityWorld::BuildBrushBody` → `IElysiumEmbodiment::BuildBrushVisual`). So the
+bake's product for a brush entity is its **entity-table row**, and that is where the distance is
+written, exactly as `elevator_floors` and `blocks_player` already are: derived once by the
+producer, applied by the runtime, never re-read from a keyvalue at load.
+
+| Row | Rule |
+|---|---|
+| `func_lod` with a `brush_mesh` and `DisappearDist > 0` | `cull_max_cm = DisappearDist × 2.54`; the world sets `SetCullDistance(cull_max_cm × body scale)` on the brush visual the moment it is attached |
+| any other row | no `cull_max_cm`; the visual keeps Unreal's default (never culled by distance) |
+
+The join is the row's **own** `model` (`brush_mesh` is `"brush_<model>"`): a `func_lod` owns the
+brush it hides. VtMB's client side (`C_Func_LOD::ShouldDraw`, client.dll `100bb710`) is a hard
+draw/no-draw on the view distance to the entity origin with a hysteresis band beyond
+`DisappearDist`, not an alpha fade, so `LDMaxDrawDistance` is the faithful equivalent — the same
+mapping R5.1 gives a `FADES` prop (`fadeMaxDist × 2.54`). The three working maps carry 8 / 12 / 13
+`func_lod` rows, every one meshed, at 2,200–4,000 units.
+
+**`func_areaportalwindow` writes nothing here, and that is an owner call filed to R7.** All 13 rows
+on the three maps (and 246 corpus-wide by the R6 census) are point rows: none carries a `model`.
+The distances `FadeStartDist`/`FadeDist` govern the **`target`** brush — the black backing whose
+mesh the exporter omits by the ruling in `docs/vtmb/entity_io.md` → "`func_areaportalwindow`:
+Source visibility backing" — and `BackgroundBModel` names the foreground glass VtMB keeps fully
+drawn at every distance, so culling it at `FadeDist` would invert the behaviour (the glass would
+vanish, the interior would show). The one faithful reading — re-mesh the backing and give it
+`MinDrawDistance = FadeDist × 2.54` (transparent near, black far, VtMB's two end states) —
+reverses that earlier ruling, so it is not taken here. The class exists (`ElysiumBrushFadeClasses.cpp`)
+and carries the parsed distances, target and background names for the debug view; the choice is
+stated in the R7 list.
+
+**Transport.** `UE_map_sidecars.brush_cull_max_cm` is the pure rule, `build_entities` writes the
+field, `FElysiumEntityDefs::Parse` reads `cull_max_cm`, `FElysiumMapEntityRow::CullMaxCm` carries
+it through the R4.1 asset (`seam_map_map_entities.md` → "The row shape"; recipe version 2 so every
+listed map's asset re-authors), and both parity checks compare it. `bake_verify.verify_brush_cull`
+asserts, per map, every `func_lod` row's `cull_max_cm` against its own `DisappearDist` in the
+`.ents` and in the baked asset.
 
 ### The per-map cutover flag
 

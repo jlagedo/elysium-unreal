@@ -376,6 +376,13 @@ their collision hulls, but omits the brush mesh of the entity named by
 `func_areaportalwindow.target`. `BackgroundBModel` remains an ordinary renderable brush, so its
 authored glass material is the visible window. `tools/black` remains renderable everywhere else.
 
+R6.4 (2026-09-02) gave `func_areaportalwindow` a class that carries `FadeStartDist`/`FadeDist`/
+`TranslucencyLimit` and the two names, but writes no cull range: the only brush those distances
+govern is the omitted backing above. Whether to re-mesh the backing with a minimum draw distance
+(transparent near, black far — VtMB's two end states) is the owner call recorded in
+`docs/project/seam_migration.md` → R7; `func_lod`'s `DisappearDist` lands as `cull_max_cm`
+(`docs/architecture/seam_map_map.md` → "Brush fade distances (R6.4)").
+
 ## The `<map>.ents` sidecar
 
 The complete JSON contract is `docs/project/rebuild-strategy.md` → "Sidecar contracts." Entity I/O relies

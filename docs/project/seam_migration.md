@@ -1926,6 +1926,65 @@ the bake consumes to 0 (viewer-only); the cross-check between `NANITE_CAPABLE_MA
 (`map_geometry.py`) and `make_v2_materials.py`'s `nanite=True` call sites is still hand-maintained,
 not a shared constant or pytest.
 
+**R6.4 — brush fade distances (2026-09-02).** `func_lod`'s `DisappearDist` reaches the brush it
+hides as a cull range, and both distance-culled brush classes have a class. **The bake has no
+brush actor to write onto** — a brush entity's mesh (`SM_brush_<N>`) is never placed in the level;
+the runtime attaches it to the convex entity body (`BuildBrushBody` → `BuildBrushVisual`) — so the
+bake's product for a brush entity is its entity-table row, and the distance lands there the way
+`elevator_floors` and `blocks_player` already do: `UE_map_sidecars.brush_cull_max_cm` is the pure
+rule (`func_lod` with a `brush_mesh` and `DisappearDist > 0` → `cull_max_cm = DisappearDist ×
+2.54`, C `atof`, 4 decimals; nothing else), `build_entities` writes the field, the `.ents` reader,
+the R4.1 asset row (`FElysiumMapEntityRow::CullMaxCm`, stage recipe version 2) and both parity
+checks carry it, and `FElysiumEntityWorld::BuildBrushBody` calls `SetCullDistance(cull_max_cm ×
+body scale)` on the visual the moment it is attached — the runtime derives nothing. The join is
+the row's own `model`; VtMB's `C_Func_LOD::ShouldDraw` (client.dll `100bb710`) is a hard draw/no-
+draw on view distance with a hysteresis band, not an alpha fade, so `LDMaxDrawDistance` is the
+faithful mapping and the same one R5.1 gives a `FADES` prop. New leaves `func_lod`
+(`DisappearDist`) and `func_areaportalwindow` (`FadeStartDist`/`FadeDist`/`TranslucencyLimit`/
+`BackgroundBModel`, for the debug view) in `ElysiumBrushFadeClasses.cpp`; the `Stubs` test's
+"unregistered classname" moved to `info_node_cover_corner`. Ruling in `seam_map_map.md` →
+"Import — geometry and placements" → "Brush fade distances (R6.4)", the field-list row beside
+`brush_mesh`, and the row-shape table in `seam_map_map_entities.md`.
+
+**`func_areaportalwindow` writes no cull range, and that is an owner call filed to R7.** All 13
+rows on the three maps are point rows (`model` absent — 0 of 13 carry one; the R6 census's 246 are
+the same shape): the distances govern the `target` backing brush whose mesh the exporter omits by
+the standing ruling in `docs/vtmb/entity_io.md`, and `BackgroundBModel` is the foreground glass
+VtMB keeps drawn at every distance, so culling it at `FadeDist` would invert the behaviour. The
+one faithful reading — re-mesh the backing and give it `MinDrawDistance = FadeDist × 2.54`
+(transparent near, black far, VtMB's two end states) — reverses that ruling, so it is stated in the
+R7 list rather than taken here. The class exists and the numbers are inspectable.
+
+**Measured.** `uv run elysium export map sp_tutorial_1 sm_pawnshop_1 sm_hub_1` (no `--force`; the
+map tasks re-ran on the producer change, the bake reused every asset — the level recipe is
+untouched): `.ents` rewritten with `cull_max_cm` on **8 / 12 / 13** `func_lod` rows (every meshed
+`func_lod` on the three maps; 2,200–4,000 units → 5,588–10,160 cm; 0 rows of any other class carry
+one). `uv run elysium import map-entities --maps sp_tutorial_1 --maps sm_pawnshop_1 --maps
+sm_hub_1`: staged 4,933 rows, parity **0 mismatches** on all three, **3 imported / 0 reused / 0
+failed** (recipe v2 re-authored every listed map). `uv run elysium verify maps …`: new
+`verify_brush_cull` reports `8 func_lod row(s) with a cull range in sp_tutorial_1.ents, 8 matched
+in /ElysiumBaked/sp_tutorial_1/DA_sp_tutorial_1_Entities`, **12 / 12**, **13 / 13**; the command
+still exits 5 with the same **77** pre-existing non-light findings (R5.6's `.mtl` glass and prop
+alpha checks), **0 new**. Boot witness, `uv run elysium debug shots <map> --no-open`, one process
+at a time, all three exit 0: defs from the re-authored `DA_<map>_Entities` asset on each, rig
+`adopted 395 / 161 / 687 baked lights` unchanged, material audit 0 unbound slots (464/1191,
+179/322, 502/1534), **6/6 + 4/4 + 4/4** vantages captured; no `brush '…': no baked mesh` warning.
+No screenshot was read.
+
+Tests: `uv run elysium build`: Succeeded. `uv run elysium test Substrate`: **443 of 443 in 6.4 s**,
+the new leaf `Elysium.Substrate.BrushCull` (a func_lod's `cull_max_cm` is the attached visual's
+`LDMaxDrawDistance` unchanged, a miniature func_lod's rides the ×16 body scale, a brush with no
+range stays at 0, both classes spawn as real classes, the areaportalwindow carries its names and
+has no body). `uv run pytest pipeline/tests/test_map_sidecars.py
+pipeline/tests/test_map_entity_asset.py`: **29 passed** — 7 parametrized cases pin
+`brush_cull_max_cm` (the ×2.54, the `atof` prefix read, zero and absent as "never culled", the
+other classes and the areaportalwindow as `None`) and a corpus-gated case per map asserts every
+meshed `func_lod` row's `cull_max_cm` against its own `DisappearDist` and that no other row
+carries one.
+
+Follow-ups: the `func_areaportalwindow` owner call above (R7 list); `bake_verify.py`'s 77
+pre-existing findings are unchanged and still R5.6's follow-up.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2033,10 +2092,6 @@ surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot
   term on the instanced material, fed by the per-instance `swayAmount`, on a shared wind clock —
   the value is in the data and VtMB's weeds move. → lands: exteriors stop reading bare, and the
   grass moves.
-- **R6.4 Brush fade distances.** `func_areaportalwindow` (246: `FadeStartDist`/`FadeDist`) and
-  `func_lod` (357: `DisappearDist`) have no class; the bake writes their distances onto the brush
-  actor's cull range exactly as R5.1's FADES does for props. → lands: distance windows and LOD
-  brushes behave.
 - **R6.5 Ropes on `MI_`, and the factory shape** [R6.4 part / SF-6.6, R6.2 part / SF-6.4]. The
   `.ropes` producer carries the `vtmb:material` id; the cable binds the imported `MI_`; the last
   `FElysiumMaterialFactory::Build` caller dies and with it the six legacy world masters' runtime
@@ -2097,6 +2152,20 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   130 (shatter); `shadow` (2); `playerproximity` 3 / `playerposition` 4 / `playerspeed` 6;
   `lessorequal` 4. Reflect/refract go with R7.1; the obfuscate noise chains are R8's. → lands:
   screens, shatter, player-driven surfaces.
+- **R7.5 `func_areaportalwindow` distance cover** [owner call surfaced by R6.4, 2026-09-02].
+  R6.4 landed `func_lod`'s cull range and gave `func_areaportalwindow` a class, but wrote no
+  distance for it: all 246 corpus rows (13 on the working maps) are **point** rows, and their
+  `FadeStartDist`/`FadeDist` govern the black `target` backing brush whose mesh the exporter omits
+  by the standing ruling in `docs/vtmb/entity_io.md` ("Elysium does not reproduce this
+  distance-faded PVS cover"), while `BackgroundBModel` is the foreground glass VtMB keeps fully
+  drawn — culling *that* at `FadeDist` would invert the behaviour. **The choice:** (a) keep the
+  standing divergence — windows stay open at every distance, the exterior shows through, and the
+  class stays a record of its numbers; or (b) re-mesh the backing (drop `visibility_backing_models`
+  from the producer join, which changes the R5.1 parity counts by 5 / 0 / 8 brush models) and give
+  it `MinDrawDistance = FadeDist × 2.54` — transparent within `FadeStartDist`, black beyond
+  `FadeDist`, VtMB's two end states without the `TranslucencyLimit` 0.2 near-blend — so distance
+  windows read black from afar as in 2004, at the cost of one black brush per window standing
+  in Lumen's scene. Nothing else in R6/R7 depends on the answer.
 
 **Owned elsewhere, not deferred.** Two groups the census surfaces belong to other plans and are
 named here so they are not lost: the unread audio products (`audio/maps/*.json`, `schemes.json`,

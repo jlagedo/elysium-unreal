@@ -65,6 +65,8 @@ struct FElysiumMapEntityRow
 	UPROPERTY(EditAnywhere, Category = "Brush") int32 Contents = 0;
 	UPROPERTY(EditAnywhere, Category = "Brush") bool bBlocksPlayer = false;
 	UPROPERTY(EditAnywhere, Category = "Brush") FString BrushMesh;
+	// R6.4: `cull_max_cm`, 0 when the `.ents` row carries none.
+	UPROPERTY(EditAnywhere, Category = "Brush") float CullMaxCm = 0.f;
 
 	UPROPERTY(EditAnywhere, Category = "Entity") TArray<float> ElevatorFloors;
 	UPROPERTY(EditAnywhere, Category = "Entity") bool bStartHidden = false;

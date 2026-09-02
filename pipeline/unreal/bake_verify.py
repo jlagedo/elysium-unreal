@@ -8,6 +8,7 @@
 import json
 import math
 import os
+import re
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
@@ -458,6 +459,67 @@ def verify_lights_baked(actors, world_dir, map_name):
     return errors
 
 
+def _atof(text):
+    """C `atof`: the longest numeric prefix, 0.0 when there is none (the producer's own reader;
+    `UE_map_sidecars` needs numpy and cannot be imported here)."""
+    match = re.match(r"\s*[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?", text or "")
+    return float(match.group(0)) if match else 0.0
+
+
+def verify_brush_cull(map_name, ents_path):
+    """R6.4 (`seam_map_map.md` -> "Brush fade distances"): every meshed `func_lod` row carries
+    `cull_max_cm == DisappearDist x 2.54` in the `.ents`, no other row carries one, and the R4.1
+    entity asset (`DA_<map>_Entities`, the transport a listed map actually loads) says the same
+    number at the same index."""
+
+    errors = []
+    if not os.path.isfile(ents_path):
+        return errors
+    with open(ents_path, "r", encoding="utf-8") as handle:
+        rows = json.load(handle).get("entities", [])
+    expected = {}
+    for index, row in enumerate(rows):
+        classname = row.get("classname", "").lower()
+        keys = row.get("keys", {})
+        cull = row.get("cull_max_cm")
+        if classname == "func_lod" and row.get("brush_mesh"):
+            distance = _atof(keys.get("DisappearDist", "0"))
+            want = round(distance * 2.54, 4) if distance > 0 else None
+            if cull != want:
+                errors.append("%s: entity %d func_lod %s cull_max_cm %r, DisappearDist %s says %r"
+                              % (map_name, index, row.get("brush_mesh"), cull,
+                                 keys.get("DisappearDist"), want))
+            if want is not None:
+                expected[index] = want
+        elif cull is not None:
+            errors.append("%s: entity %d (%s) carries cull_max_cm %r but is not a meshed func_lod"
+                          % (map_name, index, classname, cull))
+    asset_path = "%s/%s/DA_%s_Entities" % (MOUNT, map_name, map_name)
+    asset = unreal.EditorAssetLibrary.load_asset(asset_path)
+    asset_rows = asset.get_editor_property("entities") if asset else None
+    matched = 0
+    if asset_rows is None:
+        if map_transport.is_map_on_new_transport(map_name):
+            errors.append("%s: on MapsOnNewTransport but %s does not load" % (map_name, asset_path))
+    elif len(asset_rows) != len(rows):
+        errors.append("%s: %s has %d rows, %s has %d" % (
+            map_name, asset_path, len(asset_rows), os.path.basename(ents_path), len(rows)))
+    else:
+        for index, row in enumerate(asset_rows):
+            got = float(row.get_editor_property("cull_max_cm"))
+            want = expected.get(index, 0.0)
+            if abs(got - want) > 1e-3:
+                errors.append("%s: %s row %d cull_max_cm %.4f, .ents says %.4f"
+                              % (map_name, asset_path, index, got, want))
+            elif index in expected:
+                matched += 1
+    unreal.log("[verify] brush cull: %d func_lod row(s) with a cull range in %s.ents, %d matched in %s"
+               % (len(expected), map_name, matched, asset_path))
+    for message in errors:
+        unreal.log_error("[verify] " + message)
+    return errors
+
+
 def verify_map(map_name):
     errors = []
     package = "%s/%s" % (MOUNT, map_name)
@@ -818,6 +880,7 @@ def verify_map(map_name):
                 stem = name[3:]
                 baked.add(stem)
                 baked_assets[stem] = data.get_asset()
+    errors.extend(verify_brush_cull(map_name, ents_path))
     missing = sorted(annotated - baked)
     stale = sorted(baked - annotated)
     unreal.log("[verify] brush meshes %d annotated / %d baked / %d missing / %d stale" % (
