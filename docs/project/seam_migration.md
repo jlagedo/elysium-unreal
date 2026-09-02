@@ -1867,6 +1867,65 @@ converted map for reasons that predate this task (above); the Cog Lights viewer 
 concern, filed not fixed; the `.lights` reader, `Adopt` and the `Elysium.Substrate.LightRig`
 derivation assertions retire together at R8.1.
 
+**Roadmap R5 landed (2026-08-31).** Stage "R5 — the map bake rebuilt on the GLB corpus" (MP-4) is
+done, six tasks; R5.1, R5.2, R5.4, R5.5 and R5.6 each already have their own detailed Settled
+entries above (commits `d4000638`; `5d9efdb7`/`44c9e56d`; `cc5062d9`/`4963ab17`; `eb87314e`;
+`f29191d7`), so this entry rolls the stage up and gives R5.3 the detail it never got its own entry
+for in this file — its ruling lives in `seam_map_material.md` → "Decal fog and wetness homes
+(R5.3)".
+
+- **R5.1** (`d4000638`) — a map's geometry and props come off the root unit: every `staticProps[]`
+  record becomes one baked actor on the R1 corpus mesh, folded into the level rather than a
+  companion data asset. See "R5.1 — a map's geometry and props come off the root unit" above.
+- **R5.2** (`5d9efdb7`, fix `44c9e56d`) — the SkyLight actor's cubemap is baked from the root unit
+  instead of left blank; the fix closed an empty-`Source` regression the first landing shipped.
+  See "R5.2 — sky baked" above.
+- **R5.3** (`a2df23de`) — decal fog and wetness get a V2-master home. `M_V2_Decal` declares
+  `FogColor`/`FogStart`/`FogInvRange` (`mat_fog.fog_from_params`) with `ElysiumFog::
+  ApplyToDecalMID` (`Source/ElysiumUE/Public/ElysiumFog.h`) as the one shared setter for both a
+  future runtime decal spawn and the bake-time placement call, defaulting neutral/unfogged;
+  wetness needed no per-map or per-placement instance at all, since its live half is already the
+  global `MPC_ElysiumEnvironment` (`GlobalWetness`/`WetnessOutputScale`,
+  `AElysiumMapActor::ApplyWeatherTuning`'s sole writer) — only the static per-unit multiplier
+  (`WetnessScale`, plus its `WetnessDriven` gate) needed to become a real scalar, added to
+  `M_V2_Lit`/`M_V2_LitTranslucent`, reversing that one table row's earlier "provenance only" call
+  for those two masters specifically. Ruling picked MID-at-load for fog over a per-map
+  `MaterialInstanceConstant` child, because the latter would keep every decal/wetness-bearing
+  material map-scoped forever (19 `globalwetness` + 38 `decalmodulate` units), defeating R5.4's
+  shared-`MI_` switch for exactly the surfaces that need it most. Verified after commit: build ok,
+  `Elysium.Substrate` 439/439 (new `FogDecalMID`), Policy 9/9 after `uv run elysium export bundle
+  policy` regenerated the stale V2 masters (gitignored), pytest 118/118. Not landed in this commit,
+  explicitly deferred to R5.4 and landed there: the decal placement lane actually calling
+  `ApplyToDecalMID` (`_place_decals` still bound the legacy per-map `M_Decal` MIC at R5.3 time) and
+  any live re-import/re-bake of the three maps. Follow-up, pre-existing and untracked: legacy
+  `M_Decal` fails to compile for `PCD3D_SM6`.
+- **R5.4** (`cc5062d9`, review fix `4963ab17`) — the V2 bake's `material_for` binds the imported
+  `MI_` by `vtmb:material` id and per-map material packages stop for converted maps; the review fix
+  gated Nanite on the bound master's own capability rather than blend mode alone, restoring
+  `sm_hub_1`'s chunk count 175→194 and clearing 2 "missing usage flag Nanite" boot warnings. The
+  decal half of R5.3's plan moved out to R7.6 on a domain fact found here: a `UDecalComponent`
+  renders only `MD_DeferredDecal`, and every V2 master is `MD_Surface`. See "R5.4 — V2 materials
+  wired" above.
+- **R5.5** (`eb87314e`) — one `SphereReflectionCapture` per `cubemaps[]` row of the root unit,
+  radius from the `UElysiumSurfaceSettings` CDO, built via `BuildReflectionCaptures` with a
+  fail-if-mismatch guard against the placed count; `LightSpecularScale` reaches the rig and every
+  non-overridden light from the same CDO. See "R5.5 — reflection captures" above.
+- **R5.6** (`f29191d7`) — lights final: one `light_rows()` producer feeds both the staged
+  `lights[]` table (manifest v4) and the legacy `.lights` sidecar; `derive_light` restates
+  `ApplyToSource` in pure Python off the `UElysiumLightingSettings` CDO; `MapsOnV2Models` maps
+  route through `AdoptBaked` (actor snapshot as baseline; `.lights` reader bypassed, not deleted —
+  R8.1 owns deletion, 105 maps still adopt through it). See "R5.6 — lights final" above.
+
+Follow-ups carried out of the stage: `bake_verify.py`'s legacy `.mtl` glass-`MI_` check and the
+prop alpha/albedo texture checks fail every converted map for pre-R5.6 reasons (R5.4 stopped
+per-map material packages) — `uv run elysium verify maps` on the three corpus maps exits 5 with 77
+non-light findings, filed as needing a V2-lane-aware rewrite; no shot baseline has been promoted
+since `8077e5b5` (pre-R5), so the harness's run-to-run noise floor still blocks pixel regression
+for every R5 task; the Cog Lights viewer and `ElysiumLightProbe` read a baked source's `Mag`, which
+the bake consumes to 0 (viewer-only); the cross-check between `NANITE_CAPABLE_MASTERS`
+(`map_geometry.py`) and `make_v2_materials.py`'s `nanite=True` call sites is still hand-maintained,
+not a shared constant or pytest.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1922,21 +1981,7 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R5 — the map bake rebuilt on the GLB corpus [MP-4]
 
-**R5.1 landed (2026-09-01)** — see Settled.
-
-**R5.2 landed (2026-09-01)** — see Settled.
-
-**R5.3 landed (2026-09-01)** — ruling and landing note in `seam_map_material.md` → "Decal fog and
-wetness homes (R5.3)".
-
-**R5.4 landed (2026-09-02)** — see Settled. The decal half of R5.3's plan moved to R7.6 on a domain
-fact (a `UDecalComponent` renders only `MD_DeferredDecal`; every V2 master is `MD_Surface`).
-
-**R5.5 landed (2026-09-02)** — see Settled.
-
-**R5.6 landed (2026-09-02)** — see Settled. The `.lights` reader is bypassed on `MapsOnV2Models`
-maps, not deleted: 105 maps still adopt through it, and R8.1 owns its deletion as it owns every
-other legacy-path retirement.
+**R5 landed** — see Settled.
 
 ### R6 — consumers beyond maps [SF-6.3–6.6]
 
