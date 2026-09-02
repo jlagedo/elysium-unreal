@@ -21,8 +21,8 @@ sky's brightness one-for-one, and one that reshapes the histogram changes its co
 resolution change may not smuggle in a grade.
 
 Internal enhancement experiment; not a public project-tooling entrypoint. It writes
-`$ELYSIUM_EXPORT_ROOT/shared/tex_hi/<sky><face>.png` -- the set the runtime reads when
-`elysium.EnhancedTextures` is on -- and `$ELYSIUM_EXPORT_ROOT/<sky>_sky_compare.png`.
+`$ELYSIUM_EXPORT_ROOT/shared/tex_hi/<sky><face>.png` -- a review set no runtime reader picks up
+since R6.5 retired `elysium.EnhancedTextures` -- and `$ELYSIUM_EXPORT_ROOT/<sky>_sky_compare.png`.
 
 A sky belongs to the corpus, not to a map: the same six faces serve every map whose `.sky`
 names them, so they are upscaled once under their own name.

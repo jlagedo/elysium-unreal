@@ -350,13 +350,12 @@ rather than duplicating six images per converted map:
                                                       SkyCube = the sky's cube, Brightness = 1
 ```
 
-**The faithful face set only, never `tex_hi`.** `elysium.EnhancedTextures` is a per-user runtime
-toggle with no baked-asset equivalent; a bake is asked once, so it has to pick one set, and the
-faithful decode is VtMB's own data while the enhanced set is an opt-in visual substitution (B5) —
-"wire first, tune later" reads that as content selection, not taste, and picks the faithful one.
-Converted maps therefore stop honouring `elysium.EnhancedTextures` for their sky specifically (every
-other reader of that cvar is unaffected); R6.4's "sky cube faces" deferred-reader entry is the face
-PNGs' own eventual promotion to first-class imported textures (provenance, corpus dedup), a
+**The faithful face set only, never `tex_hi`.** A bake is asked once, so it has to pick one set,
+and the faithful decode is VtMB's own data while the enhanced set is an opt-in visual substitution
+(B5) — "wire first, tune later" reads that as content selection, not taste, and picks the faithful
+one. (`elysium.EnhancedTextures`, the per-user runtime toggle this ruling first carved the sky out
+of, retired outright at R6.5 — the legacy sky assembly now samples the faithful set too.) The face
+PNGs' own eventual promotion to first-class imported textures (provenance, corpus dedup) is a
 different question from which set this bake samples today.
 
 **The join, computed once instead of every load.** `UElysiumSkyBakeLibrary::BakeSkyCubeAsset`

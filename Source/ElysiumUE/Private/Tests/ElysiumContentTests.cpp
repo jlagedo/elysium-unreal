@@ -740,9 +740,9 @@ bool FElysiumTutorialDecalsTest::RunTest(const FString&)
 
 // Ropes — the `<map>.ropes` cable sidecar. Validates that every segment is a well-formed
 // cable (distinct endpoints, positive width, non-negative slack, a node count inside VtMB's
-// [2, 10] ROPE_MAX_SEGMENTS bound) and
-// that its decoded RopeMaterial texture exists on disk, so the runtime's BuildRopes always finds
-// an albedo for each UCableComponent. The tutorial strings its telephone lines this way.
+// [2, 10] ROPE_MAX_SEGMENTS bound) and that its `vtmb:material:` id resolves to an imported
+// `MI_` package under /ElysiumBaked/Materials (R6.5), so the runtime's BuildRopes always finds
+// the instance for each UCableComponent. The tutorial strings its telephone lines this way.
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialRopesTest,
@@ -768,8 +768,8 @@ bool FElysiumTutorialRopesTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("tutorial carries cable segments"), Defs.Num() > 0);
 
-	const FString Dir = FElysiumContentPaths::MapDir(Map);
-	int32 Degenerate = 0, BadWidth = 0, BadRest = 0, BadNodes = 0, MissingTex = 0, Masked = 0;
+	int32 Degenerate = 0, BadWidth = 0, BadRest = 0, BadNodes = 0, Unresolved = 0, Chains = 0;
+	TSet<FString> Checked;
 	for (const FElysiumRopeDef& D : Defs)
 	{
 		if (FVector::DistSquared(D.A, D.B) < 1.0)   // endpoints < 1 cm apart — no cable to draw
@@ -790,28 +790,40 @@ bool FElysiumTutorialRopesTest::RunTest(const FString&)
 		{
 			++BadNodes;
 		}
-		// A "-" tex is a legitimate decode miss (runtime uses a plain MID); a named tex must exist.
-		if (D.Tex != TEXT("-") && !IFileManager::Get().FileExists(*(Dir / D.Tex)))
+		// Every id folds to a package under the material lane's root, and that package exists:
+		// the `MI_` is what carries the chain's $alphatest, so an unresolved id would draw a
+		// solid tube with a chain painted on it.
+		if (!Checked.Contains(D.MaterialId))
 		{
-			++MissingTex;
+			Checked.Add(D.MaterialId);
+			const FString ObjectPath = FElysiumContentPaths::BakedMaterial(D.MaterialId);
+			FString PackagePath = ObjectPath;
+			int32 Dot = INDEX_NONE;
+			if (PackagePath.FindLastChar(TEXT('.'), Dot))
+			{
+				PackagePath.LeftInline(Dot);
+			}
+			if (!PackagePath.StartsWith(FElysiumContentPaths::BakedMaterialsDir() / TEXT(""))
+				|| !FPackageName::DoesPackageExist(PackagePath))
+			{
+				AddError(FString::Printf(TEXT("rope material '%s' -> '%s' is not an imported MI_"),
+					*D.MaterialId, *ObjectPath));
+				++Unresolved;
+			}
 		}
-		if (D.Bump != TEXT("-") && !IFileManager::Get().FileExists(*(Dir / D.Bump)))
+		if (D.MaterialId == TEXT("vtmb:material:cable/chain"))
 		{
-			++MissingTex;
-		}
-		// The chains are the reason matflags exists — assert the tutorial still carries a masked
-		// rope, so a regression that flattens every material back to opaque fails here.
-		if ((D.MatFlags & FElysiumRopeDef::Masked) != 0)
-		{
-			++Masked;
+			++Chains;
 		}
 	}
-	TestTrue(TEXT("tutorial carries at least one $alphatest (chain) rope"), Masked > 0);
+	// The chains are why the id matters — assert the tutorial still names one, so a regression
+	// that folds every rope to cable/cable fails here.
+	TestTrue(TEXT("tutorial carries at least one cable/chain rope"), Chains > 0);
 	TestEqual(TEXT("every cable has distinct endpoints"), Degenerate, 0);
 	TestEqual(TEXT("every cable has positive width"), BadWidth, 0);
 	TestEqual(TEXT("every cable has non-negative rest length"), BadRest, 0);
 	TestEqual(TEXT("every cable's node count is inside VtMB's [2, 10] bound"), BadNodes, 0);
-	TestEqual(TEXT("every named rope texture exists on disk"), MissingTex, 0);
+	TestEqual(TEXT("every rope material id resolves to an imported MI_"), Unresolved, 0);
 
 	return true;
 }
@@ -883,9 +895,9 @@ bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 	return true;
 }
 
-// 7.5 — the reflection channel is bound BY NAME from three places (pipeline/unreal/make_world_materials.py
-// authors it, pipeline/unreal/bake_map.py binds it onto each baked instance, FElysiumMaterialFactory binds
-// it onto runtime-built MIDs). A rename that misses one of them
+// 7.5 — the reflection channel is bound BY NAME from two places (pipeline/unreal/make_world_materials.py
+// authors it, pipeline/unreal/bake_map.py binds it onto each baked instance on an unconverted map;
+// the runtime builder that used to be the third retired at R6.5). A rename that misses one of them
 // binds nothing and fails silently in the frame, so the contract is asserted here instead: every
 // lit master must carry every parameter ElysiumReflections names.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReflectionParamsTest,

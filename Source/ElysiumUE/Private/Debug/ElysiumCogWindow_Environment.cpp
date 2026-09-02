@@ -82,11 +82,6 @@ namespace
 		return true;
 	}
 
-	float MaterialResponse(float Wetness, float OutputScale, float AuthoredScale)
-	{
-		return FMath::Clamp(Wetness * OutputScale * AuthoredScale, 0.0f, 1.0f);
-	}
-
 	struct FSourceBindingSummary
 	{
 		int32 Responding = 0;
@@ -163,7 +158,6 @@ void FElysiumCogWindow_Environment::RenderContent()
 
 	const FElysiumWeatherTransition& Authored = Map->GetWetnessTransition();
 	const float Presented = Map->GetPresentedWetness();
-	const float OutputScale = Map->GetPresentedWetnessScale();
 	const bool bOverrideApplied = Map->IsEnvironmentWetnessOverridden();
 	UElysiumMapVisuals* Visuals = Map->GetVisuals();
 	UElysiumLightRig* LightRig = Visuals ? Visuals->GetLightRig() : nullptr;
@@ -353,26 +347,8 @@ void FElysiumCogWindow_Environment::RenderContent()
 	if (ImGui::BeginTabItem("Material look"))
 	{
 	SliderCVar("Output scale", TEXT("elysium.EnvironmentWetnessScale"), 0.0f, 4.0f, "%.2fx");
-	ImGui::TextDisabled("Multiplies, then saturates, each patch-authored material scale.");
-	if (ImGui::BeginTable("##WetnessScales", 3,
-		ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp))
-	{
-		ImGui::TableSetupColumn("Patch group");
-		ImGui::TableSetupColumn("Authored", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 65.0f);
-		ImGui::TableSetupColumn("Live", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 65.0f);
-		ImGui::TableHeadersRow();
-		auto Row = [&](const char* Label, float Scale)
-		{
-			ImGui::TableNextRow();
-			ImGui::TableNextColumn(); ImGui::TextUnformatted(Label);
-			ImGui::TableNextColumn(); ImGui::Text("%.2f", Scale);
-			ImGui::TableNextColumn(); ImGui::Text("%.3f", MaterialResponse(Presented, OutputScale, Scale));
-		};
-		Row("Asphalt", 0.56f);
-		Row("Six streets", 0.60f);
-		Row("Seven surfaces", 1.00f);
-		ImGui::EndTable();
-	}
+	ImGui::TextDisabled(
+		"Multiplies, then saturates, each material's own WetnessScale (on its imported MI_).");
 
 	if (ImGui::CollapsingHeader("Source cube diagnostics"))
 	{

@@ -658,6 +658,67 @@ def verify_sprites(actors, map_name):
     return errors
 
 
+def verify_ropes(world_dir, map_name):
+    """R6.5 (`seam_map_material.md` -> "Ropes on `MI_`, and the factory shape"): every line of
+    `<map>.ropes` names a `vtmb:material:` id that folds, by the R5.4 rule
+    (`importers.materials.asset_path_for`), to an existing `MaterialInstanceConstant` package under
+    `/ElysiumBaked/Materials/`. The runtime binds exactly that asset; nothing else on the line is
+    a look."""
+    # `importers.materials.asset_path_for` restated: that module imports numpy transitively and
+    # the editor's Python has none (`bake_map_v2` restates its roots for the same reason). The
+    # fold is `asset_names.safe_name` per path part, `MI_` on the stem, under this root.
+    from elysium_pipeline.asset_names import safe_name
+
+    package_root = "/ElysiumBaked/Materials"
+
+    def asset_path_for(key):
+        parts = key.split("/")
+        folded = "/".join(safe_name(part) for part in parts[:-1])
+        name = "MI_" + safe_name(parts[-1])
+        return f"{package_root}/{folded}/{name}" if folded else f"{package_root}/{name}"
+
+    errors = []
+    path = os.path.join(world_dir, map_name + ".ropes")
+    if not os.path.isfile(path):
+        unreal.log("[verify] ropes: no %s.ropes (the map strings no cables)" % map_name)
+        return errors
+    segments = 0
+    ids = {}
+    with open(path, "r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            tokens = line.split()
+            if not tokens:
+                continue
+            segments += 1
+            if len(tokens) != 12 or not tokens[0].startswith("vtmb:material:"):
+                errors.append("%s.ropes line %d: not a 12-token R6.5 line: %r"
+                              % (map_name, line_number, line.strip()[:80]))
+                continue
+            ids.setdefault(tokens[0], 0)
+            ids[tokens[0]] += 1
+    resolved = 0
+    for material_id in sorted(ids):
+        package = asset_path_for(material_id[len("vtmb:material:"):])
+        if not package.startswith(package_root + "/"):
+            errors.append("%s: rope material %s folds outside %s: %s"
+                          % (map_name, material_id, package_root, package))
+            continue
+        asset = unreal.EditorAssetLibrary.load_asset(package) \
+            if unreal.EditorAssetLibrary.does_asset_exist(package) else None
+        if asset is None:
+            errors.append("%s: rope material %s -> %s is not imported "
+                          "(run: uv run elysium import materials)" % (map_name, material_id, package))
+            continue
+        if not isinstance(asset, unreal.MaterialInstanceConstant):
+            errors.append("%s: rope material %s -> %s is a %s, not a MaterialInstanceConstant"
+                          % (map_name, material_id, package, asset.get_class().get_name()))
+            continue
+        resolved += 1
+    unreal.log("[verify] ropes: %d segments over %d material(s), %d bound under %s/"
+               % (segments, len(ids), resolved, package_root))
+    return errors
+
+
 def _atof(text):
     """C `atof`: the longest numeric prefix, 0.0 when there is none (the producer's own reader;
     `UE_map_sidecars` needs numpy and cannot be imported here)."""
@@ -1148,6 +1209,7 @@ def verify_map(map_name):
         errors.extend(verify_lights_baked(actors, world_dir, map_name))
         errors.extend(verify_details(actors, map_name))
         errors.extend(verify_sprites(actors, map_name))
+        errors.extend(verify_ropes(world_dir, map_name))
         errors.extend(verify_captures(
             actors, unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()))
     else:

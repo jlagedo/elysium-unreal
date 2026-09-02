@@ -2,8 +2,9 @@
 
 #include "CoreMinimal.h"
 
-// The $envmap reflection channel, shared by everything that binds it: the
-// runtime material factory, the map actor's live overrides, and the tests.
+// The $envmap reflection channel on the legacy world masters, shared by everything that binds
+// it: the legacy bake lane, the map actor's live overrides, and the tests. (The runtime builder
+// that used to bind it retired at R6.5; a converted map's reflections are the V2 `MI_`'s own.)
 //
 // VtMB composites its cubemap reflection as `(base + cube*mask*tint) * lightmap * 2` -- an
 // ALBEDO term the light then multiplies, not an additive overlay -- so a reflective surface in

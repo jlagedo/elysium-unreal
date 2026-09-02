@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -28,10 +29,13 @@ from elysium_pipeline.exporters.UE_map_sidecars import (
     entity_lump_text,
     is_output_key,
     parse_entity_blocks,
+    rope_material_id,
     source_planes,
     source_position,
     split_output,
+    write_ropes,
 )
+from elysium_pipeline.importers.materials import asset_path_for
 
 # A 20 x 40 x 60 box centred on the model frame, as six halfspaces n.x <= d, plus a seventh
 # plane at x <= 5 that only a bevel side names.
@@ -236,3 +240,60 @@ def test_every_meshed_func_lod_row_carries_its_cull_range_in_the_ents(map_name):
         assert row["cull_max_cm"] == brush_cull_max_cm("func_lod", row["keys"])
         assert row["brush_mesh"] == f"brush_{row['model']}"
     assert [row for row in rows if "cull_max_cm" in row] == lods
+
+
+
+# --- R6.5: the `.ropes` line carries the material's unit id, and nothing about its look -----
+
+@pytest.mark.parametrize("keys, expected", [
+    ({}, "vtmb:material:cable/cable"),
+    ({"ropeshader": "2"}, "vtmb:material:cable/chain"),
+    ({"ropeshader": "1", "ropematerial": "cable/rope_x"}, "vtmb:material:cable/rope"),
+    ({"ropematerial": "Cable\\ChainB"}, "vtmb:material:cable/chainb"),
+    ({"ropematerial": "materials/cable/metalcable.vmt"}, "vtmb:material:cable/metalcable"),
+])
+def test_rope_material_id_is_the_shader_row_or_the_authored_material(keys, expected):
+    # `RopeShader` wins over `RopeMaterial` (CRopeKeyframe::KeyValue); the key is
+    # `shared_corpus.material_key`, so the runtime's fold lands on the imported `MI_`.
+    assert rope_material_id(keys) == expected
+    assert asset_path_for(expected[len("vtmb:material:"):]).startswith("/ElysiumBaked/Materials/")
+
+
+def test_write_ropes_emits_twelve_tokens_led_by_the_material_id(tmp_path):
+    blocks = [
+        [("classname", "move_rope"), ("targetname", "a1"), ("NextKey", "a2"),
+         ("origin", "0 0 0"), ("RopeShader", "2"), ("Type", "2"), ("Width", "2"),
+         ("Slack", "25"), ("Dangling", "1")],
+        [("classname", "keyframe_rope"), ("targetname", "a2"), ("origin", "100 0 0"),
+         ("RopeMaterial", "cable/rope")],
+        # a chain end with no NextKey emits no segment
+    ]
+    units = SimpleNamespace(name="synthetic")
+    report = write_ropes(units, blocks, tmp_path)
+    assert report == {"segments": 1, "nodes": 2}
+    lines = (tmp_path / "synthetic.ropes").read_text().splitlines()
+    assert len(lines) == 1
+    tokens = lines[0].split()
+    assert len(tokens) == 12
+    assert tokens[0] == "vtmb:material:cable/chain"          # the start node's shader row
+    assert tokens[9] == "2"                                   # Type 2 -> two nodes
+    assert tokens[11] == "1"                                  # Dangling
+    assert asset_path_for("cable/chain") == "/ElysiumBaked/Materials/cable/MI_chain"
+
+
+@pytest.mark.parametrize("map_name", ["sp_tutorial_1", "sm_pawnshop_1", "sm_hub_1"])
+def test_every_exported_rope_line_names_an_importable_material(map_name):
+    # Corpus-gated: the three working maps' `.ropes` as the runtime reads them.
+    try:
+        path = paths.export_root() / map_name / f"{map_name}.ropes"
+    except Exception:  # noqa: BLE001 - no roots on this machine
+        pytest.skip("no export root")
+    if not path.is_file():
+        pytest.skip(f"no exported .ropes for {map_name}")
+    lines = [line.split() for line in path.read_text().splitlines() if line.strip()]
+    assert lines
+    for tokens in lines:
+        assert len(tokens) == 12
+        assert tokens[0].startswith("vtmb:material:")
+        assert asset_path_for(tokens[0][len("vtmb:material:"):]).startswith(
+            "/ElysiumBaked/Materials/")

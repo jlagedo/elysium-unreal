@@ -85,7 +85,6 @@ ROPE_TYPE_NODES = {0: 10, 1: 4}
 ROPE_DEFAULT_NODES = 5
 #: The flat shortening `RecomputeSprings` applies, in Source units (client.dll 0x100bf1a1).
 ROPE_SLACK_FUDGE = -100
-ROPE_MAT_MASKED, ROPE_MAT_TRANSLUCENT, ROPE_MAT_ENVMAP = 1, 2, 4
 
 #: C `atof`: the longest numeric prefix, 0.0 when there is none. Verbatim from the legacy `_ATOF`.
 _ATOF = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
@@ -1198,11 +1197,30 @@ def write_spawn(units: MapUnits, blocks: Sequence[str], out_dir: Path) -> bool:
     return False
 
 
+def rope_material_id(start: dict[str, str]) -> str:
+    """The `vtmb:material:<key>` id one rope segment binds (R6.5).
+
+    `RopeShader` (0/1/2 -> `cable/cable`, `cable/rope`, `cable/chain`, from
+    `CRopeKeyframe::KeyValue`) overrides `RopeMaterial`; a node authoring neither is
+    `cable/cable`. The key is `shared_corpus.material_key`, the identity every other placement
+    lane names a material by, so the runtime resolves it through the R5.4 rule
+    (`importers.materials.asset_path_for`) to the imported `MI_`.
+    """
+    if "ropeshader" in start:
+        try:
+            shader = int(atof(start.get("ropeshader", "0")))
+        except ValueError:
+            shader = 0
+        material = ROPE_SHADER.get(shader, "cable/cable")
+    else:
+        material = (start.get("ropematerial") or "cable/cable").replace("\\", "/").lower()
+    return "vtmb:material:" + shared_corpus.material_key(material)
+
+
 def write_ropes(
     units: MapUnits,
     blocks: Sequence[Sequence[tuple[str, str]]],
     out_dir: Path,
-    corpus_root: Path,
 ) -> dict[str, int]:
     """`<map>.ropes`: the overhead cables VtMB strings between poles and buildings.
 
@@ -1210,28 +1228,10 @@ def write_ropes(
     construct the same `CRopeKeyframe`, so the roles are resolved topologically. Every parameter
     here is the RE'd runtime state rather than the raw keyvalue -- the rest length applies `Slack`
     twice, subtracts a flat 100 units and truncates through an integer divide; `nodes` comes from
-    `Type`, not `Subdiv`. All of it is ported from `UE_bsp_to_scene.write_ropes`; the material
-    files and their shader flags resolve against the same shared corpus the legacy exporter read.
+    `Type`, not `Subdiv`. All of it is ported from `UE_bsp_to_scene.write_ropes`. R6.5: the line
+    carries the material's `vtmb:material:` id (`seam_map_material.md` -> "Ropes on `MI_`") and no
+    decoded texture or shader flag -- the imported `MI_` owns those.
     """
-
-    materials = _corpus_materials(corpus_root)
-    cache: dict[str, tuple[str | None, str | None, int]] = {}
-
-    def rope_material(name: str) -> tuple[str | None, str | None, int]:
-        if name not in cache:
-            albedo = bump = None
-            flags = 0
-            record = materials.get(shared_corpus.material_key(name))
-            if record:
-                albedo = os.path.basename(record["albedo"]) or None
-                bump = os.path.basename(record["bump"]) or None
-                flags = (
-                    (ROPE_MAT_MASKED if record["scissor"] else 0)
-                    | (ROPE_MAT_TRANSLUCENT if record["blend"] else 0)
-                    | (ROPE_MAT_ENVMAP if record["env_cube"] else 0)
-                )
-            cache[name] = (albedo, bump, flags)
-        return cache[name]
 
     nodes: list[dict[str, str]] = []
     by_name: dict[str, dict[str, str]] = {}
@@ -1264,11 +1264,7 @@ def write_ropes(
             continue
         if sum((x - y) ** 2 for x, y in zip(a, b)) < 1.0:      # < 1 cm apart
             continue
-        if "ropeshader" in start:
-            material = ROPE_SHADER.get(int(number(start, "ropeshader", "0")), "cable/cable")
-        else:
-            material = (start.get("ropematerial") or "cable/cable").replace("\\", "/").lower()
-        albedo, bump, matflags = rope_material(material)
+        material_id = rope_material_id(start)
         width_cm = number(start, "width", "2") * INCH_TO_CM
         node_count = (
             max(2, min(10, ROPE_TYPE_NODES.get(int(number(start, "type", "0")), 2)))
@@ -1289,11 +1285,9 @@ def write_ropes(
             | (8 if number(start, "breakable", "0") else 0)
         )
         lines.append(
-            f"{shared_corpus.map_relative(albedo) if albedo else '-'} "
+            f"{material_id} "
             f"{a[0]:.4f} {a[1]:.4f} {a[2]:.4f} {b[0]:.4f} {b[1]:.4f} {b[2]:.4f} "
-            f"{width_cm:.4f} {rest_cm:.4f} {node_count} {texscale:.4f} {flags} "
-            f"{shared_corpus.map_relative(bump) if bump else '-'} "
-            f"{matflags}"
+            f"{width_cm:.4f} {rest_cm:.4f} {node_count} {texscale:.4f} {flags}"
         )
     if lines:
         write_sidecar_lines(out_dir / f"{units.name}.ropes", lines)
@@ -1341,10 +1335,6 @@ def _corpus(root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
         manifest = shared_corpus.check_manifest(json.load(handle))
     _CORPUS_CACHE[root] = (materials, manifest["textures"])
     return _CORPUS_CACHE[root]
-
-
-def _corpus_materials(root: Path) -> dict[str, Any]:
-    return _corpus(root)[0]
 
 
 def _corpus_textures(root: Path) -> dict[str, Any]:
@@ -1429,7 +1419,7 @@ def write_sidecars(
     report["env"] = write_environment(units, sky, text_blocks, out_dir, corpus_root)
     report["sky"] = write_sky(units, sky, bool(scenes["sky"]), out_dir)
     report["spawn"] = write_spawn(units, text_blocks, out_dir)
-    report["ropes"] = write_ropes(units, pair_blocks, out_dir, corpus_root)
+    report["ropes"] = write_ropes(units, pair_blocks, out_dir)
     report["dispcol"] = write_displacement_collision(units, scenes["world"], out_dir)
     report["brushMeshes"] = len(brush_meshes)
     report["skyArea"] = sky.area if sky.ok else None

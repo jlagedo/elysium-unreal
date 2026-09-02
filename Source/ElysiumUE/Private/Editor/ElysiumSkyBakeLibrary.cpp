@@ -32,7 +32,7 @@ UTextureCube* UElysiumSkyBakeLibrary::BakeSkyCubeAsset(const FString& SkyName,
 	}
 	Package->FullyLoad();
 
-	// Faithful set only (see the header) — always `SharedTexDir`, never `SharedTexHiDir`.
+	// Faithful set only (see the header) — `SharedTexDir`; the `tex_hi/` toggle retired at R6.5.
 	const FString Prefix = FElysiumContentPaths::SkyFacePrefix(SkyName);
 	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCubeFrom(FElysiumContentPaths::SharedTexDir(),
 		Prefix, &OutUpperMean, Package, FName(*AssetName));

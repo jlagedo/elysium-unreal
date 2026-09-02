@@ -91,7 +91,7 @@ mel.connect_material_property(mat_fog.specular(mat, fog_inv, -450, 1400),
 
 # Emissive: the per-decal alpha-masked self-illum map (rare -- glowing signs/graffiti), mirroring
 # M_VtMB_World. EmissiveScale defaults to 0, so a decal without a bound `map_Ke` never glows; the
-# material factory sets it to elysium.EmissiveScale only for a decal that carries one.
+# legacy bake binds it only for a decal that carries one.
 emis = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, -520, 300)
 emis.set_editor_property("parameter_name", "Emissive")
 emis.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)

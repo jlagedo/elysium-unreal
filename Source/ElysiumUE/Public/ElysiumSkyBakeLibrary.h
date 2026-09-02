@@ -34,9 +34,9 @@ public:
 	 * radiance, the same number `ElysiumMapVisuals::SkyAmbientIntensity` divides
 	 * `emit_skyambient`'s magnitude by at runtime.
 	 *
-	 * The faithful set only — never `tex_hi` — because a bake is asked once and the enhanced
-	 * substitution is a runtime opt-in (`elysium.EnhancedTextures`) with no baked-asset
-	 * equivalent yet (R6.4 is where face PNGs themselves become first-class imported textures).
+	 * The faithful set only — never `tex_hi` — because a bake is asked once and the faithful
+	 * decode is VtMB's own data (the runtime `elysium.EnhancedTextures` opt-in retired at R6.5;
+	 * the face PNGs' own promotion to first-class imported textures is a later task).
 	 *
 	 * Returns null, `OutUpperMean` 0, and creates nothing when any of the six faces is missing
 	 * or non-square — the same failure the runtime's own `HasSkyFaces`/`BuildSkyCubeFrom` report.

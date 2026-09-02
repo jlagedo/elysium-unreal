@@ -126,7 +126,7 @@ All under `$ELYSIUM_EXPORT_ROOT/<map>/`. Formats are fixed by the pipeline:
 | `.water` | per-material plane, normalmap, fogcolor/dist, reflecttint | text, Unreal cm (plane Z + fogdist) |
 | `.cube` | color-grade LUT | Adobe .cube |
 | `.decals` | infodecal projectors: `material centre normal s_dir t_dir hw hh` (one deferred UDecalComponent per line) | text, Unreal cm (dirs unit; extents cm) |
-| `.ropes` | move_rope/keyframe_rope cables, chain-resolved to segments: `tex ax ay az bx by bz width_cm rest_cm nodes texscale flags` (one UCableComponent per line) | text, Unreal cm (width/rest cm; `rest_cm` is the RE'd simulated rest length and may be shorter than the span — a taut cable; `-` tex = decode miss) |
+| `.ropes` | move_rope/keyframe_rope cables, chain-resolved to segments: `vtmb:material:<key> ax ay az bx by bz width_cm rest_cm nodes texscale flags` (one UCableComponent per line, bound to the imported `MI_` the id names — R6.5) | text, Unreal cm (width/rest cm; `rest_cm` is the RE'd simulated rest length and may be shorter than the span — a taut cable) |
 | `npc/*.eskm` | skeletal characters (mdl_skel → UE_mdl_skeletal) | ESKM container |
 | `.ready` | the export-readiness marker: presence means every sidecar `Travel` depends on is complete on disk (`map-architecture.md` → "The export-readiness gate", R2.4). Written only by the R3.2 producer `exporters/UE_map_sidecars.py`; the legacy exporter never emits it | empty file, presence-only |
 
@@ -166,9 +166,10 @@ generators produce a small, game-agnostic set with parameter slots:
 - `M_VtMB_World` (albedo + alpha-masked selfillum emissive) — grows into
   `M_World_Opaque` (bump, envmap mask + cube, WVT second layer + vertex-color blend). The
   `$selfillum` path: the exporter bakes the base texture's alpha-masked RGB into `*_ke.png`
-  and writes `map_Ke`; the runtime binds it onto the `Emissive` texture parameter and turns
-  `EmissiveScale` on (`elysium.EmissiveScale`, default 1.5; the param defaults to 0 so
-  non-selfillum surfaces never glow). Authored by `pipeline/unreal/make_world_materials.py`.
+  and writes `map_Ke`; the legacy bake binds it onto the `Emissive` texture parameter and turns
+  `EmissiveScale` on (the param defaults to 0 so non-selfillum surfaces never glow; the runtime
+  builder and its `elysium.EmissiveScale` cvar retired at R6.5). Authored by
+  `pipeline/unreal/make_world_materials.py`.
 - `M_World_Masked` (alphatest) and `M_World_Translucent` (generic authored alpha)
 - `M_World_Glass` for lit reflective `LightmappedGeneric`/`VertexLitGeneric` glass: UE Thin
   Translucent + Surface Forward Shading, Pixel Normal Offset, exact authored alpha as surface

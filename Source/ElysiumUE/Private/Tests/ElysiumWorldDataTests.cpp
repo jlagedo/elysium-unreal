@@ -173,29 +173,34 @@ bool FElysiumDecalsTest::RunTest(const FString&)
 
 // =====================================================================================
 // FElysiumRopes — the `.ropes` cable sidecar parser + the rest-length contract BuildRopes builds
-// each UCableComponent from. Pure data + math, no RHI.
+// each UCableComponent from, and (R6.5) the material-id fold the cable binds its `MI_` through.
+// Pure data + math, no RHI.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRopesTest, "Elysium.Substrate.Ropes", GElysiumTestFlags)
 bool FElysiumRopesTest::RunTest(const FString&)
 {
-	// --- parse: 14 tokens -> one def with fields in order; malformed lines dropped ---
+	// --- parse: 12 tokens -> one def with fields in order; malformed lines dropped ---
 	TArray<FString> Lines;
-	Lines.Add(TEXT("tex/rope_cable_cable.png 0 0 300 400 0 300 2.54 203.2 10 0.2 0 tex/rope_cable_cable_n.png 0"));
+	Lines.Add(TEXT("vtmb:material:cable/cable 0 0 300 400 0 300 2.54 203.2 10 0.2 0"));
 	Lines.Add(TEXT("# too few tokens -> skipped"));
-	// "-" = no decoded texture; Type-2 + Dangling; $alphatest + $envmap (the cable/chain case)
-	Lines.Add(TEXT("- 0 0 0 0 0 100 5 0 2 1 1 - 5"));
-	Lines.Add(TEXT("- 0 0 0 0 0 100 5 0 99 1 0 - 0"));  // out-of-range node count -> clamped to 10
+	// Type-2 + Dangling, on the chain material
+	Lines.Add(TEXT("vtmb:material:cable/chain 0 0 0 0 0 100 5 0 2 1 1"));
+	Lines.Add(TEXT("vtmb:material:cable/rope 0 0 0 0 0 100 5 0 99 1 0"));  // out-of-range node count -> clamped to 10
+	// A pre-R6.5 line (decoded texture path, 14 tokens) names no unit and is dropped, not bound.
+	Lines.Add(TEXT("../shared/tex/cable_cable.png 0 0 0 0 0 100 5 0 2 1 0 - 0"));
+	// A 12-token line whose first token is not a material id is dropped too.
+	Lines.Add(TEXT("cable/cable 0 0 0 0 0 100 5 0 2 1 0"));
 	Lines.Add(FString());   // blank -> skipped
 
 	TArray<FElysiumRopeDef> Defs;
 	FElysiumRopes::ParseLines(Lines, Defs);
-	TestEqual(TEXT("three valid ropes parsed (two junk lines dropped)"), Defs.Num(), 3);
+	TestEqual(TEXT("three valid ropes parsed (four junk lines dropped)"), Defs.Num(), 3);
 
 	if (Defs.Num() >= 1)
 	{
 		const FElysiumRopeDef& D = Defs[0];
-		TestEqual(TEXT("texture path"), D.Tex, FString(TEXT("tex/rope_cable_cable.png")));
+		TestEqual(TEXT("material id"), D.MaterialId, FString(TEXT("vtmb:material:cable/cable")));
 		TestTrue(TEXT("endpoint A parsed"), D.A.Equals(FVector(0, 0, 300)));
 		TestTrue(TEXT("endpoint B parsed"), D.B.Equals(FVector(400, 0, 300)));
 		TestEqual(TEXT("width cm"), D.WidthCm, 2.54f);
@@ -203,11 +208,9 @@ bool FElysiumRopesTest::RunTest(const FString&)
 		TestEqual(TEXT("nodes"), D.Nodes, 10);
 		TestEqual(TEXT("texscale"), D.TexScale, 0.2f);
 		TestEqual(TEXT("flags"), static_cast<int32>(D.Flags), 0);
-		TestEqual(TEXT("bump path"), D.Bump, FString(TEXT("tex/rope_cable_cable_n.png")));
-		TestEqual(TEXT("matflags"), static_cast<int32>(D.MatFlags), 0);
 
 		// --- rest-length contract: BuildRopes feeds RestCm straight into CableLength, and the
-		// exporter has already resolved VtMB's own arithmetic into it. Rest *below* the straight
+		// producer has already resolved VtMB's own arithmetic into it. Rest *below* the straight
 		// span is the normal case, not a bug: `RecomputeSprings` subtracts a flat 100 units, so a
 		// 4 m span at 2.032 m rest is a taut cable the solver draws along the chord. ---
 		TestTrue(TEXT("rest length below the span -> taut, no sag"),
@@ -217,20 +220,12 @@ bool FElysiumRopesTest::RunTest(const FString&)
 	if (Defs.Num() >= 2)
 	{
 		const FElysiumRopeDef& D = Defs[1];
-		TestEqual(TEXT("dashed texture kept verbatim (runtime falls back to a plain MID)"),
-			D.Tex, FString(TEXT("-")));
+		TestEqual(TEXT("chain material id"), D.MaterialId, FString(TEXT("vtmb:material:cable/chain")));
 		// A Type-2 rope has two nodes, so BuildRopes gives it one span — a straight line that
 		// cannot sag, which is the whole point of the type.
 		TestEqual(TEXT("Type-2 rope keeps two nodes"), D.Nodes, 2);
 		TestEqual(TEXT("Type-2 rope is one cable span"), FMath::Max(1, D.Nodes - 1), 1);
 		TestTrue(TEXT("Dangling flag parsed"), (D.Flags & FElysiumRopeDef::Dangling) != 0);
-		// $alphatest must survive to the runtime or BuildRopes instances the opaque master and
-		// fills in the ~47% of the chain texture that is cut out between the links.
-		TestTrue(TEXT("Masked matflag parsed"), (D.MatFlags & FElysiumRopeDef::Masked) != 0);
-		TestTrue(TEXT("Envmap matflag parsed"), (D.MatFlags & FElysiumRopeDef::Envmap) != 0);
-		TestFalse(TEXT("Translucent matflag not set"),
-			(D.MatFlags & FElysiumRopeDef::Translucent) != 0);
-		TestEqual(TEXT("dashed bump kept verbatim"), D.Bump, FString(TEXT("-")));
 	}
 
 	if (Defs.Num() >= 3)
@@ -239,6 +234,29 @@ bool FElysiumRopesTest::RunTest(const FString&)
 		// sidecar cannot ask for an unbounded Verlet chain.
 		TestEqual(TEXT("node count clamped to VtMB's ROPE_MAX_SEGMENTS"), Defs[2].Nodes, 10);
 	}
+
+	// --- the R5.4 naming rule in C++ (`importers.materials.asset_path_for` + `asset_names.safe_name`),
+	// which is how a cable finds the `MI_` the material lane imported for its id. ---
+	TestEqual(TEXT("install unit -> /ElysiumBaked/Materials/<dir>/MI_<stem>"),
+		FElysiumContentPaths::BakedMaterial(TEXT("vtmb:material:cable/chain")),
+		FString(TEXT("/ElysiumBaked/Materials/cable/MI_chain.MI_chain")));
+	TestEqual(TEXT("nested directories are kept as package folders"),
+		FElysiumContentPaths::BakedMaterial(TEXT("vtmb:material:models/scenery/misc/spike")),
+		FString(TEXT("/ElysiumBaked/Materials/models/scenery/misc/MI_spike.MI_spike")));
+	TestEqual(TEXT("a patched map unit keeps its maps/<map>/ prefix"),
+		FElysiumContentPaths::BakedMaterial(TEXT("vtmb:material:maps/sm_hub_1/dev/dev_waterbeneath2")),
+		FString(TEXT("/ElysiumBaked/Materials/maps/sm_hub_1/dev/MI_dev_waterbeneath2.MI_dev_waterbeneath2")));
+	TestEqual(TEXT("safe_name folds a run of illegal characters to one underscore and strips the ends"),
+		FElysiumContentPaths::MaterialSafeName(TEXT("-brick.wall 01-")), FString(TEXT("brick_wall_01")));
+	TestEqual(TEXT("safe_name of nothing legal is 'unnamed'"),
+		FElysiumContentPaths::MaterialSafeName(TEXT("--")), FString(TEXT("unnamed")));
+	TestEqual(TEXT("a stem with a cubemap patch coordinate folds like the Python"),
+		FElysiumContentPaths::BakedMaterial(TEXT("vtmb:material:maps/sm_hub_1/metal/metalox_-64_128_0")),
+		FString(TEXT("/ElysiumBaked/Materials/maps/sm_hub_1/metal/MI_metalox__64_128_0.MI_metalox__64_128_0")));
+	TestTrue(TEXT("anything that is not a vtmb:material: id folds to no path"),
+		FElysiumContentPaths::BakedMaterial(TEXT("../shared/tex/cable_cable.png")).IsEmpty());
+	TestTrue(TEXT("an empty key folds to no path"),
+		FElysiumContentPaths::BakedMaterial(TEXT("vtmb:material:")).IsEmpty());
 
 	return true;
 }

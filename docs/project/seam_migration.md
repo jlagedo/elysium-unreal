@@ -66,10 +66,10 @@ runtime (the set `Content/ElysiumCorpus` must carry until that slice migrates); 
 | --- | --- | --- |
 | `<map>.obj`/`.mtl`, `<map>_sky.obj`, `brushes/*` | UE_bsp_to_scene | bake (`.obj` also runtime existence gate) |
 | `<map>.ents`, `.lights`, `.env`, `.sky` | UE_bsp_to_scene | **both** |
-| `<map>.hulls`, `.dispcol`, `.spawn`, `.ropes` | UE_bsp_to_scene | runtime |
+| `<map>.hulls`, `.dispcol`, `.spawn`, `.ropes` | UE_bsp_to_scene | runtime (`.ropes` carries a `vtmb:material:` id since R6.5; the cable binds the imported `MI_`) |
 | `<map>.props`, `.decals`, `.water`, `.materials.json`, `.weather.json`, `.particles.json`, `tex/cube/*` | UE_bsp_to_scene | bake |
 | `<map>.sprites` | UE_bsp_to_scene | **retired** (R6.1: the V2 bake places the sprites off the staged `sprites[]` table) |
-| `shared/tex/*` (+ `tex_hi/`), `npc/tex/*` | UE_extract_corpus, npc_export | **both** (runtime: sky cube faces, rope/cable materials via `FElysiumTextureCache`, eye irises) |
+| `shared/tex/*`, `npc/tex/*` | UE_extract_corpus, npc_export | **both** (runtime: legacy-map sky cube faces, eye irises; rope/cable materials stopped at R6.5, and `tex_hi/` has no reader) |
 | `shared/props/*`, `manifest.json`, `materials.json` | UE_extract_corpus | bake |
 | `items/ground_models.json` | UE_extract_items | runtime |
 | `items/wield/**`, `wield_models.json` | UE_extract_wield | bake |
@@ -2229,6 +2229,72 @@ lane); a sprite takes no scene-fog stamp (the master carries no fog term); a cor
 its quad out to 200 m, past which the frustum test drops it; the `MI_Sprite_*` children are shared
 and unpruned like the R6.3 sway children.
 
+**R6.5 — ropes on `MI_`, and the factory shape (2026-09-02).** The overhead cables were the last
+runtime consumer of the six legacy world masters, and `FElysiumMaterialFactory::Build` — master by
+blend flag, textures through `FElysiumTextureCache`, three cvars for the feature scalars — existed
+for them alone. Now the `.ropes` line is **12 tokens led by the material's unit id**
+(`vtmb:material:<key> ax ay az bx by bz width_cm rest_cm nodes texscale flags`; `RopeShader` 0/1/2
+→ `cable/cable`/`cable/rope`/`cable/chain`, else `RopeMaterial`, through `shared_corpus.material_key`),
+written identically by `UE_map_sidecars.write_ropes` (the R3.5 default) and `UE_bsp_to_scene.write_ropes`
+(the byte-comparable twin the R3.3 differ still diffs), and neither reads the shared corpus any
+more: the decoded `tex`/`bump` paths and the `matflags` bits restated what the `MI_` already
+carries. `UElysiumMapVisuals::BuildRopes` resolves the id by the R5.4 naming rule in C++
+(`FElysiumContentPaths::BakedMaterial` = `importers.materials.asset_path_for`, `MaterialSafeName` =
+`asset_names.safe_name`, pinned against the Python's own outputs including the `metalox_-64_128_0`
+→ `metalox__64_128_0` double underscore), loads one `MI_` per distinct id per map and binds
+`FElysiumMaterialFactory::Create(MI_, this)` — the whole factory now: a `UMaterialInstanceDynamic`
+parented to the imported instance with **no override of its own**, wetness staying the
+`MPC_ElysiumEnvironment` write and scene fog the primitive stamp. An id whose asset does not load
+is a warning naming the path and a cable on the engine default, never another master. Retired with
+the builder: `elysium.EmissiveScale`/`BumpScale`/`EnvReflect`, `elysium.EnhancedTextures` and
+`SharedTexHiDir` (the legacy sky assembly samples the faithful `tex/` set, as the R5.2 bake already
+did), the map visuals' texture cache, and the Cog "Material look" tab's hardcoded
+Asphalt/Six-streets/Seven-surfaces wetness table. The six legacy masters, `make_world_materials.py`
+and the legacy `bake_map.py` binding on unconverted maps stay for R9.2 — they now have **no runtime
+reader**. Not gated on `MapsOnV2Models`: the material lane imported the whole install, so every
+map's ropes resolve, and one code path is the point. Ruling in `seam_map_material.md` → "Ropes on
+`MI_`, and the factory shape (R6.5)".
+
+**Measured on the scoped rebake, `uv run elysium export map sp_tutorial_1 sm_pawnshop_1 sm_hub_1`**
+(no `--force`; the producer edit invalidated the sidecar stage, the three levels re-authored and
+saved, `REBAKE_EXIT=0`): `ropes: 70 cable segments (107 nodes, 3 materials)`, `21 (30 nodes, 2)`,
+`76 (99 nodes, 3)` — sp_tutorial_1 48 `cable/cable` + 19 `cable/chain` + 3 `cable/chainb`,
+sm_pawnshop_1 20 `cable/cable` + 1 `cable/chainb`, sm_hub_1 72 `cable/cable` + 3
+`cable/cautiontape` + 1 `cable/chainb`. `uv run elysium verify maps …`: the new `verify_ropes`
+reports `70 segments over 3 material(s), 3 bound under /ElysiumBaked/Materials/`, `21 / 2 / 2`,
+`76 / 3 / 3` (every id folds to an existing `MaterialInstanceConstant`; the first run instead
+tripped on `importers.materials` importing numpy, which the editor's Python lacks, so the verify
+restates the fold through the pure `asset_names.safe_name` the way `bake_map_v2` restates its
+roots); **77 findings, the same 77 pre-existing `.mtl` glass / prop alpha ones, 0 new**, still
+exit 5 (R5.6's follow-up). Boot witness, `uv run elysium debug shots <map> --no-open`, one at a
+time, all exit 0: `ropes: 70 cables over 3 material(s), 0 unresolved`, `21 / 2 / 0`, `76 / 3 / 0`
+(no `LogElysiumVisuals: Warning: ropes` on any map); `baked 'sp_tutorial_1': 1544 actors …`,
+`'sm_pawnshop_1': 513 …`, `'sm_hub_1': 2463 …` unchanged from R6.1; material audit **0 unbound** on
+all three (470/1197, 179/322, 505/1537); **6/6 + 4/4 + 4/4** vantages captured. No screenshot was
+read; per R5.1 the harness attributes nothing to this task.
+
+Tests: `uv run elysium build`: Succeeded (twice — the first Substrate run caught my own wrong
+expectation for the double-underscore fold, not the code). `uv run elysium test Substrate`: **392 of
+392 in 6.6 s** by the report's own count (391 + 1), the new leaf `Elysium.Substrate.MaterialFactory`
+(`Create(nullptr)` → null; `Create(MI_)`'s parent is the instance itself, not its master; zero
+scalar, vector, texture and static-switch overrides) and `Elysium.Substrate.Ropes` re-pinned on the
+12-token line (the material id, a pre-R6.5 14-token line and a bare-key line both dropped, the
+Type-2/Dangling/clamp cases kept) plus eight `BakedMaterial`/`MaterialSafeName` cases (install,
+nested, patched-map and cubemap-coordinate keys, the strip and `unnamed` rules, non-ids folding to
+nothing). `uv run elysium test Elysium.Content.TutorialRopes`: 1 of 1 — every id on the tutorial
+folds to a package that exists under `/ElysiumBaked/Materials/`, and the tutorial still names
+`cable/chain`. `uv run pytest test_map_sidecars.py test_map_sidecar_diff.py
+test_map_sidecar_default_path.py test_bake_orchestration.py`: **63 passed** — `rope_material_id`
+over the shader row / authored material / backslash / `materials/…vmt` spellings, `write_ropes` on
+a synthetic chain (12 tokens, the start node's shader row, Type 2 → two nodes, Dangling), and —
+corpus-gated — every exported line of the three maps folding under the package root.
+
+Follow-ups: `ElysiumLightProbe`'s emissive test still reads the legacy `EmissiveScale` name and
+sees no V2 `SelfIllumAmount` (a viewer concern, filed not fixed); the `elysium.Ropes` A/B cvar
+predates this task and is untouched; the R3.3 differ still compares `.ropes` byte for byte and
+both producers moved together, so a 108-map run owes no divergence entry; the cable takes no
+scene-fog stamp (it never did); the six legacy masters and their bake lane retire at R9.2.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2296,14 +2362,6 @@ stages**: every product the legacy ledger marks *none* and every visual entity c
 places has a task below or a named owner elsewhere (end of R7). A task in this stage that
 surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot-diffed.
 
-- **R6.5 Ropes on `MI_`, and the factory shape** [R6.4 part / SF-6.6, R6.2 part / SF-6.4]. The
-  `.ropes` producer carries the `vtmb:material` id; the cable binds the imported `MI_`; the last
-  `FElysiumMaterialFactory::Build` caller dies and with it the six legacy world masters' runtime
-  use. The factory becomes `Create(MI_)`: an MID child of the imported instance carrying runtime
-  binds only (wetness stays the `MPC_ElysiumEnvironment` write). The `tex_hi` toggle and the
-  `elysium.EmissiveScale`/`BumpScale`/`EnvReflect` cvars retire (enhancement is post-roadmap
-  tuning; nothing reads them), as does the Cog "Material look" tab's hardcoded wetness table. →
-  lands: cables on V2; no runtime material is built from loose textures.
 - **R6.6 UI art off loose files** [R6.3 UI half / SF-6.5]. **Not a HUD rework**: the HUD, main
   menu, chargen, character sheet and signs keep their widgets and layout; only the image source
   moves. The ~10 `LoadPngTexture` sites and `ElysiumUiArtCache` resolve the `T_` assets the

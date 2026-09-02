@@ -2,7 +2,6 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
-#include "Templates/PimplPtr.h"
 #include "ElysiumEnvironment.h"   // FElysiumEnvDef — a plain by-value member
 #include "ElysiumMapVisuals.generated.h"
 
@@ -19,7 +18,6 @@ class UProceduralMeshComponent;
 class UStaticMeshComponent;
 class USkyLightComponent;
 struct FElysiumSkyDef;
-struct FElysiumTextureCache;
 
 // The map's LOOK. A component on AElysiumMapActor holding everything that decides what the map
 // renders and nothing that decides what it does: the baked level's actors and the handles onto
@@ -53,8 +51,9 @@ public:
 
 	// Build the overhead cables from <map>.ropes: one Verlet UCableComponent per segment,
 	// fixed at both endpoints, rest length straight off the sidecar (below the span for a taut cable,
-	// above it for one that hangs), width/texture from the sidecar, material a MID off M_World_Opaque.
-	// No-op when the sidecar is absent or elysium.Ropes is 0.
+	// above it for one that hangs), width from the sidecar, material a dynamic child of the `MI_`
+	// the sidecar's `vtmb:material:` id names (R6.5). No-op when the sidecar is absent or
+	// elysium.Ropes is 0.
 	void BuildRopes(const FString& MapName);
 
 	// Assemble the six exported sky faces into one UTextureCube and use it twice: as the visible
@@ -127,10 +126,6 @@ public:
 	UExponentialHeightFogComponent* GetHeightFog() const { return HeightFog; }
 	APostProcessVolume* GetPostProcess() const { return PostProcess; }
 
-	// This map's decoded-texture dedup index, created with the component and released with it.
-	// Anything building a material at runtime off this map's images shares it.
-	FElysiumTextureCache& TextureCache() const { return *TexCache; }
-
 	// Live stats for the debug overlay, filled by the build. The geometry counts are actors adopted
 	// from the baked level, not surfaces built at runtime.
 	int32 WorldSurfaceCount = 0;
@@ -198,12 +193,7 @@ private:
 	bool bSkyVisible = true;
 
 	// Ropes: one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
-	// alive for the map's lifetime. MIDs off M_World_Opaque bound to the decoded RopeMaterial
-	// texture; the cable's fixed endpoints and rest length come straight from the sidecar.
+	// alive for the map's lifetime. Each binds a dynamic child of the imported `MI_` its line
+	// names; the cable's fixed endpoints and rest length come straight from the sidecar.
 	UPROPERTY() TArray<TObjectPtr<UCableComponent>> Ropes;
-
-	// This map's decoded-texture dedup index. A plain C++ object owned here, so its strong texture
-	// refs drop when the component is torn down on unload and GC reclaims the textures — no
-	// process-wide cache, no manual flush.
-	TPimplPtr<FElysiumTextureCache> TexCache;
 };

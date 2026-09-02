@@ -1114,6 +1114,74 @@ models is `scenery/`).
 `GRAPH_VERSION` 4 → 5 (the topology changed on three masters); `Elysium.Policy.V2MasterParams`
 pins the switch on the three, and `_probe_all_switches_true` compiles the WPO branch on each.
 
+#### Ropes on `MI_`, and the factory shape (R6.5)
+
+R6.5 (`seam_migration.md` → "Roadmap — one pipeline") takes the last runtime consumer of the six
+legacy world masters — the overhead cables — onto this lane, and with it retires the runtime
+material *builder*. Three rulings, all wiring:
+
+**The `.ropes` sidecar carries the material's identity, not its pixels.** One line per cable
+segment, **12** whitespace-separated tokens:
+
+```text
+vtmb:material:<key>  ax ay az  bx by bz  width_cm rest_cm nodes texscale flags
+```
+
+`<key>` is `shared_corpus.material_key` over the entity's `RopeMaterial` (or the `RopeShader`
+row: 0 → `cable/cable`, 1 → `cable/rope`, 2 → `cable/chain`), the same key every other placement
+lane names a material by; the eleven numbers are unchanged from the 14-token line
+(`docs/vtmb/entity_visuals.md` → §5). The decoded `tex`/`bump` PNG paths and the `matflags`
+shader-mode bits are gone: every one of them was a restatement of the VMT that the material
+lane's `MI_` already carries (`$alphatest` → `BlendMode Masked`, `$translucent`, `$bumpmap` →
+`NormalMap`, `$envmap` → `UseEnvMap`), and the runtime no longer selects a master or binds a
+texture. Both producers — `UE_map_sidecars.write_ropes` (the default, R3.5) and
+`UE_bsp_to_scene.write_ropes` (the byte-comparable legacy twin the R3.3 differ still diffs) —
+write the same 12 tokens, and neither reads the shared corpus any more.
+
+**The cable binds the imported `MI_`, resolved by the R5.4 rule.** `UElysiumMapVisuals::
+BuildRopes` reads the id and resolves it exactly as `importers.materials.asset_path_for` named
+the asset at import (`### Identity and naming` above):
+
+```text
+vtmb:material:<dir>/<stem>  ->  /ElysiumBaked/Materials/<dir>/MI_<safe stem>
+                                <safe> = runs of [^A-Za-z0-9_] -> "_", leading/trailing "_" stripped,
+                                          "unnamed" when nothing survives   (asset_names.safe_name)
+```
+
+`FElysiumContentPaths::BakedMaterial(id)` is that fold in C++, pinned against the Python by
+`Elysium.Substrate.Ropes`. One `MI_` per distinct id per map, loaded once; an id whose asset does
+not load is a **warning naming the path** and a cable left on the engine default — never a
+silent fallback to another master. On the working corpus every rope is one of `cable/cable`,
+`cable/chain`, `cable/chainb` and `cable/cautiontape` (`MI_cable`, `MI_chain`, `MI_chainb`,
+`MI_cautiontape` under `/ElysiumBaked/Materials/cable/`), and `bake_verify.verify_ropes` asserts, for every line of the three maps' `.ropes`, that the id folds
+to a package under `/ElysiumBaked/Materials/` that exists and is a `MaterialInstanceConstant`.
+This resolution is not gated on `MapsOnV2Models`: the material lane imported the whole install,
+the `MI_` exists for every map's ropes, and one code path is the point.
+
+**`FElysiumMaterialFactory` is `Create(MI_, Outer)`, nothing else.** The factory no longer
+*builds* a material — no master selection by blend flag, no texture load through
+`FElysiumTextureCache`, no feature switch. It returns a `UMaterialInstanceDynamic` whose parent is
+the imported instance and which carries **no parameter override of its own**: every VMT-derived
+value is inherited from the `MI_`, wetness arrives through the `MPC_ElysiumEnvironment` write
+(`Decal fog and wetness homes (R5.3)`), scene fog through custom primitive data (`Scene fog on
+the world masters (R5.4)`). The MID exists so that a runtime bind, when one is ruled, has a
+per-map-actor home that dies with the map — today nothing writes one, and
+`Elysium.Substrate.MaterialFactory` pins both halves (parent is the instance; zero scalar, vector
+and texture overrides; `nullptr` in → `nullptr` out). With the builder gone the six legacy world
+masters (`M_World_Opaque`/`_Masked`/`_Translucent`/`_Glass`, `M_Refract`, `M_Additive`) have **no
+runtime reader**; the assets, `make_world_materials.py` and the legacy `bake_map.py` lane that
+still binds them on unconverted maps stay until R9.2.
+
+**What retires with the builder.** `elysium.EmissiveScale`, `elysium.BumpScale` and
+`elysium.EnvReflect` (the three cvars only the builder read; enhancement is post-roadmap tuning on
+the editor surfaces, not a console multiplier); `elysium.EnhancedTextures` and
+`FElysiumContentPaths::SharedTexHiDir` (the `tex_hi/` toggle — its one remaining reader was the
+legacy sky assembly, which now takes the faithful `tex/` set unconditionally, as the R5.2 bake
+already did); `UElysiumMapVisuals`'s `FElysiumTextureCache` (no reader once no map material is
+built from loose images; the eye pass keeps its own); and the Cog "Material look" tab's hardcoded
+"Asphalt 0.56 / Six streets 0.60 / Seven surfaces 1.00" wetness table (`MaterialResponse`), which
+restated three numbers that live on the `MI_`s' `WetnessScale`.
+
 #### Texture slots, roles and the `_linear` twin
 
 Two slot rules, because the same VMT key means different things per family:

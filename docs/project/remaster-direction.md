@@ -142,9 +142,10 @@ anchored to VtMB's own data and the lightmap calibration, with enhancement as a 
 
 The `docs/architecture/asset-enhancement.md` track is **in scope**: delight → super-resolve → style-anchored PBR
 synthesis, tiered, curated per material family, and budget-gated by the hardware floor in
-`docs/architecture/rendering-perf.md`. The `elysium.EnhancedTextures` A/B toggle is the regression guard that keeps
-the enhanced set honest
-against the faithful reference; the faithful set stays the reference forever.
+`docs/architecture/rendering-perf.md`. The enhanced set enters through the texture lane as its own
+assets, reviewed against the faithful reference on the editor surfaces (the runtime
+`elysium.EnhancedTextures` loose-file toggle retired at R6.5); the faithful set stays the
+reference forever.
 
 Tier 0 (delight, super-resolve) is a technical-deficit fix for a dynamically-relit engine and
 needs no special pleading. Tier 1 (normal/roughness/AO/envmask synthesis) is style-anchored

@@ -30,9 +30,10 @@ namespace
 	// itself the signal — a light with no geometry within 30 m is not lighting an object.
 	constexpr float ProbeReach = 3000.0f;
 
-	// A surface counts as a light source when its bound material actually emits. The world master
-	// leaves EmissiveScale at 0 for everything without a $selfillum map (map_Ke), so a non-zero
-	// value is exactly "this texture glows" — the same switch FElysiumMaterialFactory sets.
+	// A surface counts as a light source when its bound material actually emits. The legacy world
+	// master leaves EmissiveScale at 0 for everything without a $selfillum map (map_Ke), so a
+	// non-zero value is exactly "this texture glows". A V2 `MI_` spells it `SelfIllumAmount`
+	// behind `UseSelfIllum` and is not read here yet — a viewer concern, filed at R6.5.
 	bool IsEmissiveMaterial(const UMaterialInterface* Mat)
 	{
 		if (Mat == nullptr)

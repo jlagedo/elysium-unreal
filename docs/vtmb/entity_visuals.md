@@ -188,14 +188,16 @@ code-created-rope path only: `CalcRopeStartingConditions(v1, v2, ROPE_MAX_SEGMEN
 `m_RopeLength` 0x6cc, `m_Slack` 0x6d0, `m_TextureScale` 0x6d4, `m_fLockedPoints` 0x6d8, `m_Width` 0x6dc.
 The embedded `CRopePhysics<10>` starts at 0x458, so its node count is 0x464 and its node array 0x460.
 
-**The `.ropes` sidecar** (`write_ropes`) emits one line per segment, 14 whitespace-separated tokens:
-`tex ax ay az bx by bz width_cm rest_cm nodes texscale flags bump matflags`. `tex`/`bump` are the
-decoded rope material PNGs or `-` when absent/undecodable; `a`/`b` are the two node origins (Unreal
-cm); the segment parameters (`width_cm`, `rest_cm`, `nodes`, `texscale`, `flags`) come from the
-*start* node A, computed per the RE above rather than passed through raw. `matflags` carries the rope
-VMT's shader mode (1 = `$alphatest`, 2 = `$translucent`, 4 = `$envmap`) — load-bearing for
-`cable/chain`/`cable/chainb`, which are `$alphatest 1` over a texture ~47% cut out (the gaps between
-the links); rendering them opaque turns a chain into a solid tube with a chain painted on it.
+**The `.ropes` sidecar** (`write_ropes`) emits one line per segment, 12 whitespace-separated tokens
+(R6.5): `vtmb:material:<key> ax ay az bx by bz width_cm rest_cm nodes texscale flags`. The first
+token is the rope material's unit id (`RopeShader` 0/1/2 → `cable/cable`/`cable/rope`/`cable/chain`,
+else `RopeMaterial`, else `cable/cable`), which the runtime resolves to the imported `MI_`
+(`docs/architecture/seam_map_material.md` → "Ropes on `MI_`"); `a`/`b` are the two node origins
+(Unreal cm); the segment parameters (`width_cm`, `rest_cm`, `nodes`, `texscale`, `flags`) come from
+the *start* node A, computed per the RE above rather than passed through raw. The shader mode is
+the `MI_`'s own — load-bearing for `cable/chain`/`cable/chainb`, which are `$alphatest 1` over a
+texture ~47% cut out (the gaps between the links); rendering them opaque turns a chain into a solid
+tube with a chain painted on it.
 
 ---
 

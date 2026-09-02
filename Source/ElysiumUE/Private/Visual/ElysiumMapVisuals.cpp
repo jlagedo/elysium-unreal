@@ -12,9 +12,7 @@
 #include "ElysiumReflections.h"
 #include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMaterialFactory.h"
-#include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumRopes.h"
-#include "Visual/ElysiumTextureCache.h"
 
 #include "CableComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
@@ -57,17 +55,6 @@ static TAutoConsoleVariable<int32> CVarRopes(
 static TAutoConsoleVariable<float> CVarSkyBrightness(
 	TEXT("elysium.SkyBrightness"), 1.f,
 	TEXT("Debug multiplier on the sky backdrop texel. 1 = parity with VtMB's identity transfer."),
-	ECVF_Default);
-
-// The offline enhancement track's A/B (docs/architecture/asset-enhancement.md), off by default: prefer the
-// super-resolved `tex_hi/` set over the faithful `tex/` decode wherever a map has one. The sky
-// is its first consumer; the world/prop texture path joins it as that track lands. Faithful is
-// the default everywhere, per the direction charter — this is an opt-in layer, not a
-// replacement. Read at map load; elysium.reload to apply.
-static TAutoConsoleVariable<int32> CVarEnhancedTextures(
-	TEXT("elysium.EnhancedTextures"), 0,
-	TEXT("Prefer the offline-enhanced tex_hi/ texture set (1) over the faithful decode (0). "
-	     "Applied at map load."),
 	ECVF_Default);
 
 // Source's distance fog, on (1) or off (0), for A/B. It is a per-primitive material term rather
@@ -121,9 +108,6 @@ namespace
 UElysiumMapVisuals::UElysiumMapVisuals()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-	// Must exist before the first material is built, and lives for the component's lifetime so a
-	// runtime prop/NPC spawn reuses it.
-	TexCache = MakePimpl<FElysiumTextureCache>();
 }
 
 void UElysiumMapVisuals::BeginPlay()
@@ -465,41 +449,34 @@ void UElysiumMapVisuals::BuildRopes(const FString& MapName)
 		return;
 	}
 
-	const FString Dir = FElysiumContentPaths::MapDir(MapName);
-
-	// One MID per unique rope texture (every cable/cable rope shares one; the exporter names the PNG
-	// after the material, so the albedo path identifies the material). Built through the same factory
-	// the world/prop surfaces use, so the sidecar's matflags pick the master: `cable/chain`/`chainb`
-	// are $alphatest over a texture that is ~47% cut out, and instancing them opaque fills the gaps
-	// between the links in — a chain then reads as a solid tube with a chain painted on it. A "-" tex
-	// (decode failed) yields a solid dark-cable fallback from the def's Kd colour.
-	TMap<FString, UMaterialInstanceDynamic*> MidByTex;
+	// One MID per distinct material id (every cable/cable rope shares one): the `MI_` the material
+	// lane imported for the unit, resolved by the R5.4 naming rule (`FElysiumContentPaths::
+	// BakedMaterial`) and wrapped once through `FElysiumMaterialFactory::Create`. The instance
+	// carries the texture, the normal map and the shader mode — `cable/chain`/`chainb` are
+	// `$alphatest` over a texture ~47% cut out, and the `MI_`'s own Masked blend is what keeps the
+	// gaps between the links open. An id whose asset does not load is a warning naming the path
+	// and a cable left on the engine default: never a quiet fallback to another master.
+	TMap<FString, UMaterialInstanceDynamic*> MidById;
+	int32 Unresolved = 0;
 	auto MidFor = [&](const FElysiumRopeDef& D) -> UMaterialInstanceDynamic*
 	{
-		if (UMaterialInstanceDynamic** Found = MidByTex.Find(D.Tex))
+		if (UMaterialInstanceDynamic** Found = MidById.Find(D.MaterialId))
 		{
 			return *Found;
 		}
-		FElysiumMaterialDef MatDef;
-		MatDef.Name = TEXT("rope");
-		if (D.Tex != TEXT("-"))
+		const FString AssetPath = FElysiumContentPaths::BakedMaterial(D.MaterialId);
+		UMaterialInterface* Imported = AssetPath.IsEmpty()
+			? nullptr
+			: LoadObject<UMaterialInterface>(nullptr, *AssetPath);
+		if (Imported == nullptr)
 		{
-			MatDef.Albedo = D.Tex;
+			UE_LOG(LogElysiumVisuals, Warning,
+				TEXT("ropes: material '%s' resolves to '%s', which did not load (run: uv run elysium import materials)"),
+				*D.MaterialId, *AssetPath);
+			++Unresolved;
 		}
-		else
-		{
-			MatDef.Color = FLinearColor(0.05f, 0.05f, 0.05f);
-		}
-		if (D.Bump != TEXT("-"))
-		{
-			MatDef.Bump = D.Bump;
-		}
-		MatDef.bScissor = (D.MatFlags & FElysiumRopeDef::Masked) != 0;
-		MatDef.bBlend = (D.MatFlags & FElysiumRopeDef::Translucent) != 0;
-		// $envmap with no separate mask ($normalmapalphaenvmapmask) — the uniform-reflectivity path.
-		MatDef.bEnvmap = (D.MatFlags & FElysiumRopeDef::Envmap) != 0;
-		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Build(&MatDef, Dir, this, *TexCache);
-		MidByTex.Add(D.Tex, Mid);
+		UMaterialInstanceDynamic* Mid = FElysiumMaterialFactory::Create(Imported, this);
+		MidById.Add(D.MaterialId, Mid);
 		return Mid;
 	};
 
@@ -550,7 +527,8 @@ void UElysiumMapVisuals::BuildRopes(const FString& MapName)
 		Ropes.Add(Cable);
 	}
 	RopeCount = Ropes.Num();
-	UE_LOG(LogElysiumVisuals, Log, TEXT("ropes: %d cables"), RopeCount);
+	UE_LOG(LogElysiumVisuals, Log, TEXT("ropes: %d cables over %d material(s), %d unresolved"),
+		RopeCount, MidById.Num(), Unresolved);
 }
 
 void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env, const FString& MapName)
@@ -600,21 +578,17 @@ void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env, const FStri
 			*Env.SkyName, Env.SkyConvention, ElysiumEnvironment::SkyConventionVersion);
 	}
 
-	// Faces come from one of two sets: the enhanced set (B5), opt-in, or the faithful decode.
-	// A sky without an enhanced set silently keeps the faithful faces rather than losing its sky.
+	// The faithful decode, always (R6.5 retired the `tex_hi/` toggle: the R5.2 bake already
+	// samples this set and only this set).
 	//
-	// Both are addressed by the sky's OWN name, because the faces belong to the sky rather than
+	// Faces are addressed by the sky's OWN name, because they belong to the sky rather than
 	// to the map showing it: the game's maps share six distinct skies between them, and a
 	// map-local `sky_<face>` alias would give one name several sets of bytes.
 	const FString Prefix = FElysiumContentPaths::SkyFacePrefix(Env.SkyName);
-	const FString TexHi = FElysiumContentPaths::SharedTexHiDir();
-	const bool bEnhanced = CVarEnhancedTextures.GetValueOnGameThread() != 0
-		&& ElysiumEnvironment::HasSkyFaces(TexHi, Prefix);
 
 	float CubeUpperMean = 0.f;
 	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCubeFrom(
-		bEnhanced ? TexHi : FElysiumContentPaths::SharedTexDir(),
-		Prefix, &CubeUpperMean);
+		FElysiumContentPaths::SharedTexDir(), Prefix, &CubeUpperMean);
 	if (Cube == nullptr)
 	{
 		return;
@@ -672,10 +646,9 @@ void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env, const FStri
 		SkyDomeMesh->SetVisibleInRayTracing(false);
 		SkyDomeMesh->SetVisibility(bSkyVisible);
 		UE_LOG(LogElysiumVisuals, Log,
-			TEXT("sky '%s': %s faces, cube upper-hemisphere mean %.5f, skyambient %.5f -> "
+			TEXT("sky '%s': faithful faces, cube upper-hemisphere mean %.5f, skyambient %.5f -> "
 			     "SkyLight intensity %.3f"),
 			*Env.SkyName,
-			bEnhanced ? TEXT("enhanced") : TEXT("faithful"),
 			CubeUpperMean, LightRig ? LightRig->SkyAmbientMag : 0.f,
 			SkyAmbientIntensity(CubeUpperMean));
 	}

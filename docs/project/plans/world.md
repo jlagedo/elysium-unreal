@@ -135,8 +135,9 @@ Lumen tuning ladder, light culling/max-influence cap, scale-up scalability tier 
 
 ### 10.9 Asset enhancement
 
-Run the offline delight → super-resolve → style-anchored PBR pipeline as an
-`elysium.EnhancedTextures` A/B layer over the faithful world. *Acceptance:* toggle-off remains
-byte-for-byte faithful; curated Tier 0/1 outputs meet the floor budget; no game-derived output
+Run the offline delight → super-resolve → style-anchored PBR pipeline as imported `T_` siblings
+the texture lane stages beside the faithful set, selected on the editor surfaces (the runtime
+`elysium.EnhancedTextures` loose-file toggle retired at R6.5). *Acceptance:* the faithful
+assets remain byte-for-byte faithful; curated Tier 0/1 outputs meet the floor budget; no game-derived output
 committed. *Deps:* PP6, 10.3, 7.4. Design: `docs/architecture/asset-enhancement.md`; governing
 test: `docs/project/remaster-direction.md`.

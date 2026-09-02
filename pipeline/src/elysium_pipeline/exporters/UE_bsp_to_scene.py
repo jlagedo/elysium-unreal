@@ -346,12 +346,14 @@ def write_ropes(data, out_dir, base, idx, ents=None):
     resolved topologically here, not by classname. Each consecutive pair is one cable
     segment; the runtime (roadmap 8.7) builds one `UCableComponent` per line.
 
-    One line per segment, 14 whitespace-separated tokens:
-      `tex ax ay az bx by bz width_cm rest_cm nodes texscale flags bump matflags`
+    One line per segment, 12 whitespace-separated tokens (R6.5):
+      `vtmb:material:<key> ax ay az bx by bz width_cm rest_cm nodes texscale flags`
 
-    `tex`/`bump` are the decoded rope material PNGs (`tex/rope_*.png`, `tex/rope_*_n.png`) or `-`
-    when absent or undecodable, `a`/`b` are the two node origins (Unreal cm, source_to_unreal like
-    `.ents`), and the segment parameters come from the *start* node A.
+    The first token is the rope material's unit id (`shared_corpus.material_key` over the
+    `RopeMaterial`/`RopeShader` resolution below); the runtime binds the imported `MI_` it names,
+    which carries the texture, the normal map and the shader mode. `a`/`b` are the two node
+    origins (Unreal cm, source_to_unreal like `.ents`), and the segment parameters come from the
+    *start* node A.
 
     The parameters are the RE'd `CRopeKeyframe` state, not the raw keyvalues:
 
@@ -385,12 +387,9 @@ def write_ropes(data, out_dir, base, idx, ents=None):
       clamped to [0.1, 10]).
     - `flags` — the RE'd bits `KeyValue` sets: 1 = `Dangling` (clears `ROPE_LOCK_END_POINT` in
       `m_fLockedPoints`, so the far end hangs free), 2 = `Collide`, 4 = `Barbed`, 8 = `Breakable`.
-    - `matflags` — the rope VMT's shader mode, so the runtime instances the right world master
-      rather than assuming opaque: 1 = `$alphatest`, 2 = `$translucent`, 4 = `$envmap`. This is
-      load-bearing for chains — `cable/chain` and `cable/chainb` are `$alphatest 1` over a texture
-      that is ~47% cut out (the gaps between the links), so rendering them opaque turns a chain
-      into a solid tube with a chain painted on it. Their `$envmap` mask is the normal map's alpha
-      (`$normalmapalphaenvmapmask`), which needs no separate texture.
+    - the shader mode (`$alphatest` on `cable/chain`/`cable/chainb`, whose texture is ~47% cut
+      out between the links; `$bumpmap` on every one; `$envmap` masked by the normal map's alpha)
+      is the imported `MI_`'s own blend mode and bindings -- nothing here restates it.
 
     `RopeShader` (0/1/2 -> `cable/cable`, `cable/rope`, `cable/chain`) overrides `RopeMaterial`
     when present, matching `KeyValue`. `MoveSpeed`/`MoveTime`/`Tension`/`PositionInterpolator`
@@ -412,7 +411,9 @@ def write_ropes(data, out_dir, base, idx, ents=None):
         b = read_bytes(key)
         return b.decode("ascii", "replace") if b is not None else None
 
-    # (rope materials resolve through the shared corpus; nothing is decoded here)
+    # R6.5: the line names the rope material by its `vtmb:material:` id; the imported `MI_`
+    # carries the texture, the normal map and the shader mode, so nothing is decoded or
+    # flagged here (docs/architecture/seam_map_material.md -> "Ropes on `MI_`").
 
     # RopeShader index -> material, from CRopeKeyframe::KeyValue (0x1019f2b0).
     ROPE_SHADER = {0: "cable/cable", 1: "cable/rope", 2: "cable/chain"}
@@ -423,35 +424,7 @@ def write_ropes(data, out_dir, base, idx, ents=None):
     # The flat shortening RecomputeSprings applies, in Source units (client.dll 0x100bf1a1:
     # `LEA EAX,[EAX + EDX*0x1 + -0x64]`).
     SLACK_FUDGE = -100
-    # `matflags` bits — the rope VMT's shader mode, mirroring the .mtl's illum 4 / blend / envmap.
-    MAT_MASKED, MAT_TRANSLUCENT, MAT_ENVMAP = 1, 2, 4
-
-    corpus = _corpus(out_dir)
-    rope_cache = {}   # rope material -> (albedo file, bump file, matflags)
-
-    def decode_rope_mat(mat):
-        """Rope material -> (albedo_png, bump_png, matflags). Both PNGs may be None.
-
-        The rope VMTs are not plain opaque: `cable/chain` and `cable/chainb` are `$alphatest 1`
-        with a texture that is ~47% cut out (the gaps between the links), and every one of them
-        carries a `$bumpmap`. Dropping those renders a chain as a solid tube with a chain painted
-        on it, so the shader flags travel with the segment.
-        """
-        if mat not in rope_cache:
-            albedo = bump = None
-            flags = 0
-            record = corpus.materials.get(shared_corpus.material_key(mat))
-            if record:
-                albedo = os.path.basename(record["albedo"]) or None
-                bump = os.path.basename(record["bump"]) or None
-                flags = ((MAT_MASKED if record["scissor"] else 0)
-                         | (MAT_TRANSLUCENT if record["blend"] else 0)
-                         # $envmap on a rope is always `env_cubemap` and the mask is the normal
-                         # map's alpha ($normalmapalphaenvmapmask), so there is no separate mask
-                         # texture to emit — the runtime's uniform-envmap path covers it.
-                         | (MAT_ENVMAP if record["env_cube"] else 0))
-            rope_cache[mat] = (albedo, bump, flags)
-        return rope_cache[mat]
+    materials_seen = set()
 
     # Collect every rope node, and index EVERY named entity for NextKey lookup. A node may itself
     # lack a targetname (it can only be a chain *start* then, never a NextKey target) — so iterate
@@ -521,7 +494,8 @@ def write_ropes(data, out_dir, base, idx, ents=None):
             mat = ROPE_SHADER.get(int(fnum(a, "ropeshader", "0")), "cable/cable")
         else:
             mat = (a.get("ropematerial") or "cable/cable").replace("\\", "/").lower()
-        png, bump_png, matflags = decode_rope_mat(mat)
+        material_id = "vtmb:material:" + shared_corpus.material_key(mat)
+        materials_seen.add(material_id)
         width_cm = fnum(a, "width", "2") * INCH_TO_CM
         nodes = (max(2, min(10, TYPE_NODES.get(int(fnum(a, "type", "0")), 2)))
                  if "type" in a else DEFAULT_NODES)
@@ -538,17 +512,15 @@ def write_ropes(data, out_dir, base, idx, ents=None):
                  | (2 if fnum(a, "collide", "0") else 0)
                  | (4 if fnum(a, "barbed", "0") else 0)
                  | (8 if fnum(a, "breakable", "0") else 0))
-        lines.append(f"{shared_corpus.map_relative(png) if png else '-'} "
+        lines.append(f"{material_id} "
                      f"{pa[0]:.4f} {pa[1]:.4f} {pa[2]:.4f} {pb[0]:.4f} {pb[1]:.4f} {pb[2]:.4f} "
-                     f"{width_cm:.4f} {rest_cm:.4f} {nodes} {texscale:.4f} {flags} "
-                     f"{shared_corpus.map_relative(bump_png) if bump_png else '-'} "
-                     f"{matflags}")
+                     f"{width_cm:.4f} {rest_cm:.4f} {nodes} {texscale:.4f} {flags}")
 
     if lines:
         with open(os.path.join(out_dir, base + ".ropes"), "w") as f:
             f.write("\n".join(lines) + "\n")
     print(f"ropes: {len(lines)} cable segments ({len(rope_nodes)} nodes, "
-          f"{sum(1 for v in rope_cache.values() if v[0])} textures) -> {base}.ropes")
+          f"{len(materials_seen)} materials) -> {base}.ropes")
     if dangling:
         print(f"  ! {len(dangling)} NextKey name(s) match no rope node (map data): "
               f"{', '.join(dangling[:6])}{' ...' if len(dangling) > 6 else ''}")

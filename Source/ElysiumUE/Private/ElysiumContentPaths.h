@@ -200,6 +200,64 @@ struct FElysiumContentPaths
 	static FString BakedSharedTextures() { return BakedSharedDir() / TEXT("Textures"); }
 	static FString BakedSharedMaterials() { return BakedSharedDir() / TEXT("Materials"); }
 	static FString BakedSharedMeshes() { return BakedSharedDir() / TEXT("Meshes"); }
+	// The material lane's package root (`uv run elysium import materials`): one `MI_` per
+	// `vtmb:material:` unit, `docs/architecture/seam_map_material.md` -> "Identity and naming".
+	static FString BakedMaterialsDir() { return BakedMount() / TEXT("Materials"); }
+	// `vtmb:material:<dir>/<stem>` -> `/ElysiumBaked/Materials/<dir>/MI_<safe stem>.MI_<safe stem>`,
+	// the object path of the imported instance. The C++ twin of
+	// `importers.materials.asset_path_for`: every path part goes through `MaterialSafeName`
+	// (`asset_names.safe_name`), the stem takes the `MI_` prefix. Empty for anything that is not a
+	// `vtmb:material:` id, so a stale sidecar token never folds to a path that happens to exist.
+	static FString BakedMaterial(const FString& MaterialId)
+	{
+		static const FString Prefix(TEXT("vtmb:material:"));
+		if (!MaterialId.StartsWith(Prefix))
+		{
+			return FString();
+		}
+		TArray<FString> Parts;
+		MaterialId.Mid(Prefix.Len()).ParseIntoArray(Parts, TEXT("/"), true);
+		if (Parts.Num() == 0)
+		{
+			return FString();
+		}
+		FString Package = BakedMaterialsDir();
+		for (int32 I = 0; I < Parts.Num() - 1; ++I)
+		{
+			Package /= MaterialSafeName(Parts[I]);
+		}
+		const FString Asset = TEXT("MI_") + MaterialSafeName(Parts.Last());
+		return Package / Asset + TEXT(".") + Asset;
+	}
+	// `asset_names.safe_name`: every run of characters outside [A-Za-z0-9_] becomes one
+	// underscore, leading and trailing underscores are stripped, and a name that folds away
+	// entirely is `unnamed`. NOT BakedAssetName (which keeps the leading/trailing run) and NOT
+	// PropModelStem (which keeps `.` and `-` and lower-cases) — three folds, three contracts.
+	static FString MaterialSafeName(const FString& Text)
+	{
+		FString Out;
+		Out.Reserve(Text.Len());
+		bool bInRun = false;
+		for (TCHAR Ch : Text)
+		{
+			const bool bLegal = (Ch >= TEXT('a') && Ch <= TEXT('z')) ||
+				(Ch >= TEXT('A') && Ch <= TEXT('Z')) ||
+				(Ch >= TEXT('0') && Ch <= TEXT('9')) || Ch == TEXT('_');
+			if (bLegal)
+			{
+				Out.AppendChar(Ch);
+				bInRun = false;
+			}
+			else if (!bInRun)
+			{
+				Out.AppendChar(TEXT('_'));
+				bInRun = true;
+			}
+		}
+		while (Out.RemoveFromStart(TEXT("_"))) {}
+		while (Out.RemoveFromEnd(TEXT("_"))) {}
+		return Out.IsEmpty() ? FString(TEXT("unnamed")) : Out;
+	}
 	// The V2 model corpus (R1): one `UStaticMesh` per referenced model unit, imported from the
 	// published GLB with its slots bound to the V2 material instances and its collision cooked from
 	// VtMB's own convex hulls (docs/architecture/seam_map_model.md -> "Import" -> "Identity and
@@ -454,12 +512,6 @@ struct FElysiumContentPaths
 	// decode per source identity, so nothing here is addressed by a map.
 	static FString SharedDir() { return Root() / TEXT("shared"); }
 	static FString SharedTexDir() { return SharedDir() / TEXT("tex"); }
-	// The offline enhancement track's parallel set (docs/architecture/asset-enhancement.md): the
-	// super-resolved siblings of `tex/`, same keys and same file names, written by
-	// pipeline/src/elysium_pipeline/enhancement/sky_upscale.py and its successors. Optional;
-	// `elysium.EnhancedTextures` selects between the two, faithful by default, and every reader
-	// tests before preferring it.
-	static FString SharedTexHiDir() { return SharedDir() / TEXT("tex_hi"); }
 	static FString SharedPropsDir() { return SharedDir() / TEXT("props"); }
 	static FString SharedManifest() { return SharedDir() / TEXT("manifest.json"); }
 	static FString SharedMaterials() { return SharedDir() / TEXT("materials.json"); }

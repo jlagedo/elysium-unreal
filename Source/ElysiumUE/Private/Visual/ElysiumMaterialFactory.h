@@ -2,19 +2,19 @@
 
 #include "CoreMinimal.h"
 
-struct FElysiumMaterialDef;
-struct FElysiumTextureCache;
 class UMaterialInstanceDynamic;
+class UMaterialInterface;
 
-// Builds a material instance for one OBJ surface. The OBJ material's blend flags pick one of the
-// six hand-authored world masters (M_World_Opaque / _Masked / _Translucent / _Glass /
-// M_Refract / M_Additive); the
-// surface's textures bind that master's named parameters (Albedo, Emissive, BumpMap, EnvMask,
-// BaseTex2) with the feature scalars switched on only where a channel is present. Surfaces with no
-// albedo get a 1x1 solid fallback (Kd colour). Used by both the world mesh and the prop ISMs.
+// The runtime's one material shape on a converted map (R6.5, docs/architecture/seam_map_material.md
+// -> "Ropes on `MI_`, and the factory shape"): a dynamic child of the `MI_` the material lane
+// imported for a `vtmb:material:` unit. It builds nothing — no master selection, no texture load,
+// no feature switch: every VMT-derived value is the instance's own, wetness arrives through the
+// `MPC_ElysiumEnvironment` write and scene fog through custom primitive data. The MID exists so
+// that a runtime bind, when one is ruled, has a per-map-actor home that dies with the map; today
+// nothing writes one, and the Substrate tier pins that the child carries no override of its own.
 struct FElysiumMaterialFactory
 {
-	// Cache is the owning map's texture dedup index (all textures bound here belong to that map).
-	static UMaterialInstanceDynamic* Build(const FElysiumMaterialDef* Def, const FString& Dir,
-		UObject* Outer, FElysiumTextureCache& Cache);
+	// A `UMaterialInstanceDynamic` parented to `Imported`, outered to `Outer`, with no parameter
+	// override. Null in, null out.
+	static UMaterialInstanceDynamic* Create(UMaterialInterface* Imported, UObject* Outer);
 };

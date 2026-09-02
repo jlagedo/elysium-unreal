@@ -86,10 +86,11 @@ recipe and the guard against the generic-upscaler failure mode
   and need real GPU compression, or VRAM and bandwidth balloon (see the floor below). Delight
   + PBR inference run as `pipeline/` passes (the same spandrel/torch optional-dependency footprint the
   upscalers already declare; a delighter/PBR model swaps in like any other `.pth`).
-- **Runtime:** `FElysiumMaterialFactory` binds the `_hi` albedo and the PBR siblings into
-  `M_VtMB_World`'s slots when present; a cvar (`elysium.EnhancedTextures`, off by default)
-  selects `tex` vs `tex_hi` and enables the extra bindings. Absent maps → the faithful path
-  runs unchanged. This is one more A/B toggle, consistent with the rest of the runtime.
+- **Runtime:** nothing. R6.5 retired the runtime material builder and the `elysium.EnhancedTextures`
+  / `tex_hi/` toggle with it: a converted map binds the `MI_` the material lane imported, so an
+  enhanced texture reaches the frame as an imported `T_` asset the texture lane stages beside the
+  faithful one, selected on the editor surfaces (a data-asset grid or the instance itself), never
+  by a loose-file cvar. Absent enhancement → the faithful asset, unchanged.
 - **Curation, not per-texture handwork:** ~thousands of textures across ~100 maps rules out
   hand-authoring each. The workflow is *one tuned recipe per material family* (concrete /
   metal / fabric / brick / skin), a batch run, and a spot-review contact sheet per map —
