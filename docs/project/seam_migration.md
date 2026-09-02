@@ -2464,6 +2464,61 @@ still reads the legacy `.sky` for a sky source's reach scale (the check is R4.3'
 and the `.ents` join's `sky` field are the runtime's own and untouched; the legacy lane's
 `_read_sky` and `write_sky` stay for the 105 unconverted maps until R9.
 
+**Roadmap R6 landed (2026-09-02).** Stage "R6 — wiring: what is already understood goes live on
+the V2 lane" (was R6.3–6.4 in part, R7.1, R7.3, R7.4, R7.7 before the owner's re-cut of
+2026-09-02, which split the old "consumers beyond maps" and "life" stages by how much was still
+undecided: R6 wiring with no design doubt, R7 the families that need a ruling first, R8 the
+skeletal lane, R9 retire; nothing deferred out of the three stages, a surfaced owner call moves
+to R7 rather than blocking the stage) is done, seven tasks, each with its own detailed Settled
+entry above (commits `7bb14f1a`; `823c65b2`; `d9dc0d64`; `3d7800f6`; `b4a55186`; `b8882c96`;
+`be2d539e`), landed in the order R6.4, R6.2, R6.3, R6.1, R6.5, R6.6, R6.7. None was reported
+blocked or partial. Per map, on the three working-corpus maps (`MapsOnV2Models`); `--all` has
+still never run.
+
+- **R6.1** (`3d7800f6`) — sprites on the V2 Sprite master: every `env_sprite` is one
+  `AElysiumSpriteActor` in the baked level off the staged `sprites[]` table (manifest v6), the
+  glow rule and its per-sprite GPU occlusion query in a custom proxy, seven `UElysiumSpriteSettings`
+  fields at VtMB's values, `FElysiumEnvSprite` driving visibility by entity index. See "R6.1 —
+  sprites on the V2 Sprite master" above.
+- **R6.2** (`823c65b2`) — switched lights and lightstyles everywhere: `light`/`light_spot` write
+  their style's pattern on the rig's clock through `ApplyToSource`, `light_dynamic` stands
+  through the same path. See "R6.2 — switched lights and lightstyles everywhere" above.
+- **R6.3** (`d9dc0d64`) — detail props: every `dprp` record instanced off the root unit (manifest
+  v5), one `AElysiumDetailPropActor` per model per map, culled at `cl_detaildist` /
+  `cl_detailfade` from the Models page, swaying by `swayAmount` behind the masters'
+  `UseDetailSway` switch. See "R6.3 — detail props" above.
+- **R6.4** (`7bb14f1a`) — brush fade distances: `func_lod`'s `DisappearDist` rides the entity row
+  as `cull_max_cm` and the world applies it to the attached brush visual. See "R6.4 — brush fade
+  distances" above.
+- **R6.5** (`b4a55186`) — ropes on `MI_`: the `.ropes` line carries the `vtmb:material` id, the
+  cable binds the imported instance, `FElysiumMaterialFactory::Create(MI_)` is the whole factory,
+  the legacy world masters lose their last runtime reader. See "R6.5 — ropes on `MI_`, and the
+  factory shape" above.
+- **R6.6** (`b8882c96`) — UI art off loose files: every screen draws the texture lane's `T_` assets
+  by install path through `ElysiumUI::ArtTexture`, the use-icon atlas and the PNG decoder are gone,
+  sign backgrounds draw. See "R6.6 — UI art off loose files" above.
+- **R6.7** (`be2d539e`) — 3D-skybox composition: the V2 lane places the miniature through the
+  manifest's own transform, miniature detail components and sprites carry the `elysium.sky`
+  scope marker, the runtime fogs and toggles them with the miniature, `bake_verify` counts the
+  miniature back. See "R6.7 — 3D-skybox composition" above.
+
+Follow-ups carried out of the stage: `bake_verify.py`'s 77 pre-existing non-light findings
+(46 legacy glass `MI_`, 31 prop alpha/albedo) still fail every converted map with exit 5 and
+need the V2-lane-aware rewrite R5 filed; the shot harness's run-to-run noise floor still blocks
+pixel regression (no baseline promoted since `8077e5b5`); the `func_areaportalwindow` owner call
+(R6.4) and the detail sway amplitude (R6.3 → R7.6), the depth-tested plain sprites question
+(R6.1 → R7.7, now carrying the sprite master's missing fog term from R6.1/R6.7) sit on the R7
+list; VtMB's alpha ramp over the `cl_detailfade` band is not reproduced (R6.3); `$spriteorigin`,
+`$spriteorientation oriented`, `frame`/`framerate` and the 200 m corona bounds are R6.1's open
+edges; the `MI_DetailSway_*` and `MI_Sprite_*` children are shared and unpruned by any map bake;
+`light_dynamic`'s magnitude convention is stated, not recovered, and the Cog Lights viewer shows
+no pattern table (R6.2); `ElysiumLightProbe` still reads the legacy `EmissiveScale` and the cable
+takes no scene-fog stamp (R6.5); the sign background draws as the panel's plate rather than at the
+authored rect, `ui/strings.json` and `signs/*.txt` stay loose reads for R9.2, and the `_sel`/`_hud`
+art variants and armour portraits stay unresolved by the HUD (R6.6); `verify_lights` still reads
+the legacy `.sky` and the legacy lane keeps `_read_sky`/`write_sky` for the 105 unconverted maps
+until R9 (R6.7).
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2523,14 +2578,7 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 ### R6 — wiring: what is already understood goes live on the V2 lane [was R6.3–6.4 in part, R7.1, R7.3, R7.4, R7.7]
 
-**Split of 2026-09-02 (owner).** The old R6 "consumers beyond maps" and R7 "life" are re-cut by
-how much is still undecided, not by which consumer they touch: R6 is wiring with no design
-doubt, R7 is the families that need a ruling first, R8 is the skeletal lane (characters, wield,
-animated props), R9 is retire. Old ids stay in brackets. **Nothing is deferred out of the three
-stages**: every product the legacy ledger marks *none* and every visual entity class the corpus
-places has a task below or a named owner elsewhere (end of R7). A task in this stage that
-surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot-diffed.
-
+**R6 landed** — see Settled.
 
 ### R7 — design: the families with a choice to make first [was R7.2, R7.5, R7.6, R6.2 remainder]
 
