@@ -305,11 +305,13 @@ void AElysiumMapActor::LoadMap()
 
 	UE_LOG(LogElysium, Log,
 		TEXT("baked '%s': %d actors (%d world, %d sky, %d props, %d decals), %d lights, %d hulls, "
-			 "%d detail instances over %d models, %d sprites (%d glow)"),
+			 "%d detail instances over %d models (%d components in the 3D skybox), "
+			 "%d sprites (%d glow, %d in the 3D skybox)"),
 		*MapName, Adopted, Visuals->WorldSurfaceCount, Visuals->SkySurfaceCount,
 		Visuals->PropInstanceCount, Visuals->DecalCount, Visuals->WorldLightCount,
 		Collision->HullCount, Visuals->DetailInstanceCount, Visuals->DetailModelCount,
-		Visuals->SpriteCount, Visuals->SpriteGlowCount);
+		Visuals->DetailSkyComponentCount, Visuals->SpriteCount, Visuals->SpriteGlowCount,
+		Visuals->SpriteSkyCount);
 
 	if (!bMenuBackdrop && bHasSpawnDef)
 	{

@@ -12,7 +12,12 @@ namespace ElysiumBakedTags
 {
 	// One spatial cell of the world's baked geometry.
 	inline const FName World(TEXT("elysium.world"));
-	// The 3D-skybox miniature (sky_camera) geometry, already scaled/offset by the bake.
+	// The 3D-skybox miniature (sky_camera) geometry, already scaled/offset by the bake -- and,
+	// since R6.7, the miniature's scope marker for every class placed inside it
+	// (`seam_map_map.md` -> "3D-skybox composition (R6.7)"): a sky chunk and a sky prop carry
+	// it INSTEAD of a class tag (both AStaticMeshActors, one bucket), a Detail or Sprite actor
+	// inside the miniature carries it BESIDE its class tag. AdoptBakedLevel therefore buckets by
+	// the class tags first and reads InMiniature() second.
 	inline const FName Sky(TEXT("elysium.sky"));
 	// One GAME_LUMP static prop.
 	inline const FName Prop(TEXT("elysium.prop"));
@@ -76,6 +81,14 @@ namespace ElysiumBakedTags
 	inline FName DetailModel(const FString& Stem)
 	{
 		return FName(*FString::Printf(TEXT("elysium.model=%s"), *Stem));
+	}
+
+	// R6.7: whether a Detail or Sprite actor's tags put it inside the 3D-skybox miniature -- the
+	// fact ApplySceneFog stamps by (the `sky_camera`'s set, not `worldspawn`'s) and ToggleSkybox
+	// hides by.
+	inline bool InMiniature(const TArray<FName>& Tags)
+	{
+		return Tags.Contains(Sky);
 	}
 
 	// The text after `Prefix` on the first tag carrying it, or empty if no tag does.

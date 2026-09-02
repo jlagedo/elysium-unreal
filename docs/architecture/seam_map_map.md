@@ -1075,7 +1075,7 @@ prop's is (`run: uv run elysium import models --maps <map>`), never an empty fie
 | Record / rule | Baked as |
 |---|---|
 | origin, angles | one instance transform (world space), the placements-scene node's, in the R5.1 frame |
-| a record inside the 3D-skybox area | the miniature transform, exactly as a static prop: position `scale × (p − origin)`, uniform scale `scale`, its own `_sky` component, `visible_in_ray_tracing = false`. None on the three working maps |
+| a record inside the 3D-skybox area | the miniature transform, exactly as a static prop: position `scale × (p − origin)`, uniform scale `scale`, its own `_sky` component carrying the `elysium.sky` scope marker beside its class tags (R6.7), `visible_in_ray_tracing = false`. None on the three working maps |
 | collision | **none** (`NoCollision`). `dprp` is read by `client.dll` alone (`CDetailObjectSystem`, `CDetailModel` — `100e0d90`, `100e0250`…); the server never sees a detail object and nothing in VtMB ever collides with one |
 | shadows | `CastShadow = false`. VRAD never lights the world by a detail prop, and the engine drew them without shadows; the record's `lighting` (`ColorRGBExp32`) and `lightStyles` are VRAD's baked *answer* for the 2004 renderer (`CDetailModel::vfunc13` `100e0300` multiplies them into the draw colour) — on the V2 lane the R5.6 light actors light the instances, so the bytes are not applied |
 | draw distance | `Instances->SetCullDistances(start, end)` with `end = DetailDrawDistanceCm`, `start = end − DetailFadeRangeCm`, both off `UElysiumModelSettings` (Project Settings → Elysium → Models → Detail Props). **Defaults are VtMB's own**: `cl_detaildist` **600** and `cl_detailfade` **300** inches → **1524 cm** and **762 cm** (`CDetailObjectSystem::vfunc10` `100e0d90` registers both ConVars; their default strings sit at `102b9fa0` = `"600"` and `102b9f8c` = `"300"` in `client.dll`, read off the shipped binary). VtMB's fade over the band is an alpha ramp, `1 − (d² − (dist − fade)²) / (dist² − (dist − fade)²)`, which that function computes as the per-frame factor; the ISM culls hard at `end` and exposes the band as `PerInstanceFadeAmount`, which no master reads — the shipped rule is the cutoff at `cl_detaildist`, the ramp is named in the entry's follow-ups |
@@ -1163,7 +1163,7 @@ modulation and `renderamt/255` as the blend, depth-tested by the material's own 
 | colour | `rendercolor` (default 255 255 255) and `renderamt` (default 255) as the component's `Color`; `renderfx` carried for the NoDissipation rule |
 | orientation | `parallel_upright` in the VMT's `$spriteorientation` row → `bUpright` (a yaw-only billboard about world Z); `vp_parallel`, `oriented` (3 units, treated as full billboards — a named divergence) and absent → full camera-facing |
 | initial state | `bHiddenAtSpawn = start_hidden or (named and not spawnflag 1)` — `CSprite::Spawn`'s own rule, written by the bake so the level reads right in the editor and published again by the leaf at spawn so the two can never disagree |
-| 3D skybox | a row inside the sky area takes the miniature transform a prop takes: position `scale × (p − origin)`, actor scale `scale`, its own `_sky` label and folder |
+| 3D skybox | a row inside the sky area takes the miniature transform a prop takes: position `scale × (p − origin)`, actor scale `scale`, its own `_sky` label and folder, and the `elysium.sky` scope marker beside its two tags (R6.7) |
 | collision, shadow, fog | none, none, none: a sprite is a client-side card in VtMB; `M_V2_Sprite` carries no scene-fog term |
 
 **The runtime half — `UElysiumSpriteComponent` and its proxy, the task's one piece of rendering
@@ -1220,6 +1220,47 @@ spawn rule and every input on the recording double, and `Elysium.Substrate.Sprit
 settings defaults, the glow size/brightness/smoothing formulas (`ElysiumSpriteGlow.h`, the pure
 functions the proxy calls), the tag helpers and the actor's shape. Measured numbers are in the
 R6.1 Settled entry of `docs/project/seam_migration.md`.
+
+### 3D-skybox composition (R6.7)
+
+The miniature is one render in VtMB — `Draw3dSkyboxworld` walks one BSP area's leaves through the
+same client leaf system the main scene uses, under one view transform and one fog set
+(`docs/vtmb/sky-ambience.md` → "The pass, step by step") — so it is one rule here, applied to
+every content class the corpus places in that area, never a per-lane re-derivation:
+
+| Fact | The one answer, for every lane |
+|---|---|
+| membership | `SkyScope.is_sky(p)`: `area(point_leaf(p)) == area(point_leaf(sky_camera.origin))`, computed once by the producer join and carried on every staged row as its `sky` flag (`placements[].sky`, `details.records[][10]`, `sprites[].sky`, `lights[].sky`, `cubemaps[].sky`) |
+| transform | `world(v) = scale × (v − origin)`, uniform scale `scale`, no rotation — the inverse of the pass's view (`origin /= scale; origin += sky_origin`) |
+| where the transform comes from | the staged manifest's own `sky` block (`scale`, `origin` in Unreal cm, `ok`), written by `map_geometry.stage_map` off the unit's join. The V2 lane reads **nothing else** for it: `MapBakeV2._read_sky` answers from `_StagedGeometry` (`miniature_transform`), and the legacy `<map>.sky` sidecar is never opened on a converted map. Same numbers by construction (both are `source_to_unreal(sky_camera.origin)` and the camera's `scale`), but a unit-authored map must not depend on a sidecar it no longer needs, and a map with a `sky_camera` but no sky *faces* has no `.sky` at all (`write_sky` gates on geometry) while it may still place a sky-flagged prop or sprite |
+| fog | the `sky_camera`'s set (`skyfog*` of `.env`, distances already `× scale`) as the primitive's fog CPD (`ElysiumFog.h`), stamped by the bake on every miniature primitive that carries the term — sky chunks, sky props, sky detail components — and re-stamped by `UElysiumMapVisuals::ApplySceneFog` from `EnvDef`, so a `.env` re-export or the `elysium.Fog` A/B reaches them without a re-bake. A sky sprite carries no stamp: `M_V2_Sprite` has no fog term (the R6.1 follow-up stands; Source's sprite shader fogs a card — to the fog colour, or to black when additive — so the miniature's sprites are the one class drawn unfogged) |
+| scope marker | `elysium.sky` is the miniature's tag. A sky chunk and a sky prop carry it *instead of* their class tag (R5.1, `AStaticMeshActor`s both, bucketed together as `SkyActors`); a detail component actor and a sprite actor carry it *beside* their class tag (`elysium.detail` + `elysium.model=` + `elysium.sky`; `elysium.sprite` + `elysium.ent=` + `elysium.sky`), because their class is what the runtime buckets by and the scope is a second fact about the same actor. `AdoptBakedLevel` therefore tests the class tags first and `elysium.sky` last, so a tagged detail or sprite actor never lands in the static-mesh sky bucket |
+| what the runtime does with the marker | `ApplySceneFog` stamps a detail component with the sky set when its actor carries `elysium.sky`, the world set otherwise (before R6.7 the runtime stamped no detail component at all and the bake's default slot was the only writer); `ToggleSkybox` (`elysium.togglesky`) hides the miniature's details and sprites with its chunks and props, since the miniature reads as one thing; the boot line and the Cog Maps/Status rows count them (`n in the 3D skybox`) |
+| the other classes | unchanged and already composed: a sky prop (R5.1 — never solid, no shadow, not in ray tracing, `Sky/Props`), a sky light (R5.6 — position and reach through the same transform, `Sky/Lights`), a sky capture (R5.5), a sky-scope brush entity (runtime, `RegisterRuntimeBrush(Comp, bSky)` off the `.ents` join's `sky` field, `RuntimeSkyBrushes` re-stamped with the sky set) |
+
+The bake writes every miniature transform once; the runtime moves nothing. A sky sprite's actor
+scale is the miniature's (R6.1), so a fixed-size card scales with the miniature and a mode-3 glow
+stays screen-constant either way — the pass's own behaviour, since the glow's size is a function
+of view distance and the miniature view is the player's view at `1/scale`.
+
+#### Verification (R6.7)
+
+`pipeline/tests/test_bake_map_sky_scope.py` pins, per lane, that a sky-flagged record takes the
+miniature transform and the marker: a `sprites[]` row (`sprite_actor_values`: position `scale ×
+(p − origin)`, actor scale `scale`, tags `elysium.sprite` / `elysium.ent=` / `elysium.sky`), a
+`details.records[]` row (`detail_instance_rows` puts it in its own `(stem, sky)` component at the
+transform; `detail_actor_tags` adds `elysium.sky`), and that the lane's transform is the manifest's
+`sky` block (`miniature_transform`). `bake_verify.verify_sky_scope` loads the level of a
+`MapsOnV2Models` map whose manifest says `sky.ok` and counts every class back against the staged
+rows: sky props (`elysium.sky` static-mesh actors labelled `Prop_`, position and scale per row),
+sky detail components (`elysium.detail` + `elysium.sky`, one per staged sky model group, instance
+scale `scale`), sky sprites (`elysium.sprite` + `elysium.sky`, position and scale per row) — and
+that every sky prop and sky detail component carries the same fog slots the sky chunks carry.
+`Elysium.Substrate.SkyScope` pins the runtime half content-free: a level of one sky chunk, one
+prop, a world and a sky detail actor and a sky sprite buckets by class first, `ApplySceneFog`
+stamps the sky detail with the sky set and the world detail with the world set, and
+`ToggleSkybox` hides the miniature's detail and sprite with its chunk. Measured numbers are in the
+R6.7 Settled entry of `docs/project/seam_migration.md`.
 
 ### The per-map cutover flag
 

@@ -84,15 +84,18 @@ public:
 	// Push elysium.SkyBrightness onto the live backdrop MID. The faithful value is 1 (D7): VtMB's
 	// sky transfer is the identity, so this is an A/B knob, not a calibration. No-op with no sky.
 	void ApplySkyBrightness();
-	// Stamp each adopted primitive with the fog set that owns it: `worldspawn`'s on the world
-	// and its props, the `sky_camera`'s on the 3D-skybox miniature. Custom primitive data, because
-	// the two share screen depth and a deferred fog pass cannot scope by anything else
-	// (ElysiumFog.h). Re-run by elysium.Fog, which stamps zeros instead.
+	// Stamp each adopted primitive with the fog set that owns it: `worldspawn`'s on the world,
+	// its props and its detail components, the `sky_camera`'s on the 3D-skybox miniature -- its
+	// chunks, its props and (R6.7) the detail components whose actor carries the `elysium.sky`
+	// marker. Custom primitive data, because the two share screen depth and a deferred fog pass
+	// cannot scope by anything else (ElysiumFog.h). Re-run by elysium.Fog, which stamps zeros
+	// instead. A sprite carries no stamp: `M_V2_Sprite` has no fog term (R6.1 follow-up).
 	void ApplySceneFog();
 	void RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool bSky);
 
 	// Visibility A/Bs.
-	// Show/hide the 3D skybox miniature and the backdrop dome together (elysium.togglesky).
+	// Show/hide the 3D skybox miniature -- its chunks, props, detail components and sprites
+	// (R6.7, by the `elysium.sky` marker) -- and the backdrop dome together (elysium.togglesky).
 	void ToggleSkybox();
 	bool IsSkyboxVisible() const { return bSkyVisible; }
 	// Show/hide the static-prop instances (elysium.props).
@@ -137,10 +140,14 @@ public:
 	// distinct models behind them.
 	int32 DetailInstanceCount = 0;
 	int32 DetailModelCount = 0;
+	// R6.7: how many of the detail components stand inside the 3D-skybox miniature.
+	int32 DetailSkyComponentCount = 0;
 	// Sprites (R6.1): the adopted `elysium.sprite` actors, and how many of them are coronas
 	// (rendermode 3/9, the glow rule and its occlusion query).
 	int32 SpriteCount = 0;
 	int32 SpriteGlowCount = 0;
+	// R6.7: how many of the sprites stand inside the 3D-skybox miniature.
+	int32 SpriteSkyCount = 0;
 	// Decals: number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
 	// Ropes: number of UCableComponents built from <map>.ropes (0 if the map has no ropes or

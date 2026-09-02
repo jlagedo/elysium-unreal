@@ -145,8 +145,8 @@ void FElysiumCogWindow_Maps::RenderContent()
 		Collision->HullCount, Collision->DispTriCount));
 	Row("Lights", FString::Printf(TEXT("%d"), Visuals->WorldLightCount));
 	Row("Props", FString::Printf(TEXT("%d inst · %d models"), Visuals->PropInstanceCount, Visuals->PropModelCount));
-	Row("Details", FString::Printf(TEXT("%d inst · %d models"), Visuals->DetailInstanceCount, Visuals->DetailModelCount));
-	Row("Sprites", FString::Printf(TEXT("%d · %d glow"), Visuals->SpriteCount, Visuals->SpriteGlowCount));
+	Row("Details", FString::Printf(TEXT("%d inst · %d models · %d sky"), Visuals->DetailInstanceCount, Visuals->DetailModelCount, Visuals->DetailSkyComponentCount));
+	Row("Sprites", FString::Printf(TEXT("%d · %d glow · %d sky"), Visuals->SpriteCount, Visuals->SpriteGlowCount, Visuals->SpriteSkyCount));
 	Row("Decals", FString::Printf(TEXT("%d"), Visuals->DecalCount));
 	Row("Entities", FString::Printf(TEXT("%d rec · %d bodies"), Map->EntityCount, Map->BrushBodyCount));
 	Row("Entered via", Map->EntryLandmark.IsEmpty()

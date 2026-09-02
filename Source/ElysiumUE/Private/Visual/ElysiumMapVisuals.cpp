@@ -151,6 +151,8 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	SpritesByEntity.Reset();
 	SpriteCount = 0;
 	SpriteGlowCount = 0;
+	SpriteSkyCount = 0;
+	DetailSkyComponentCount = 0;
 	RuntimeWorldBrushes.Reset();
 	RuntimeSkyBrushes.Reset();
 	SkyLight = nullptr;
@@ -170,21 +172,16 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		{
 			continue;
 		}
-		if (Actor->ActorHasTag(ElysiumBakedTags::World))
+		// The class tags first (R6.7): a detail or sprite actor inside the 3D-skybox miniature also
+		// carries `elysium.sky` as its scope marker, and the static-mesh sky bucket must never
+		// see it (`ElysiumBakedTags.h`).
+		if (Actor->ActorHasTag(ElysiumBakedTags::Detail))
 		{
-			WorldActors.Add(Cast<AStaticMeshActor>(Actor));
-		}
-		else if (Actor->ActorHasTag(ElysiumBakedTags::Sky))
-		{
-			SkyActors.Add(Cast<AStaticMeshActor>(Actor));
-		}
-		else if (Actor->ActorHasTag(ElysiumBakedTags::Prop))
-		{
-			PropActors.Add(Cast<AStaticMeshActor>(Actor));
-		}
-		else if (Actor->ActorHasTag(ElysiumBakedTags::Detail))
-		{
-			DetailActors.Add(Cast<AElysiumDetailPropActor>(Actor));
+			if (AElysiumDetailPropActor* DetailActor = Cast<AElysiumDetailPropActor>(Actor))
+			{
+				DetailActors.Add(DetailActor);
+				DetailSkyComponentCount += ElysiumBakedTags::InMiniature(Actor->Tags) ? 1 : 0;
+			}
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Sprite))
 		{
@@ -202,7 +199,20 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 				{
 					++SpriteGlowCount;
 				}
+				SpriteSkyCount += ElysiumBakedTags::InMiniature(Actor->Tags) ? 1 : 0;
 			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::World))
+		{
+			WorldActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Sky))
+		{
+			SkyActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Prop))
+		{
+			PropActors.Add(Cast<AStaticMeshActor>(Actor));
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Light))
 		{
@@ -747,6 +757,20 @@ void UElysiumMapVisuals::ApplySceneFog()
 	};
 	const int32 RuntimeWorldStamped = StampComponents(RuntimeWorldBrushes, WorldData);
 	const int32 RuntimeSkyStamped = StampComponents(RuntimeSkyBrushes, SkyData);
+	// R6.7: a detail component takes the set its scope marker names -- the `sky_camera`'s
+	// inside the miniature, `worldspawn`'s everywhere else -- so a `.env` re-export or the
+	// elysium.Fog A/B reaches the instanced grass exactly as it reaches the chunks and props.
+	int32 DetailWorldStamped = 0;
+	int32 DetailSkyStamped = 0;
+	for (const TObjectPtr<AElysiumDetailPropActor>& Detail : DetailActors)
+	{
+		if (UInstancedStaticMeshComponent* Instances = Detail ? Detail->Instances.Get() : nullptr)
+		{
+			const bool bSky = ElysiumBakedTags::InMiniature(Detail->Tags);
+			Instances->SetCustomPrimitiveDataFloatArray(ElysiumFog::SlotColor, bSky ? SkyData : WorldData);
+			(bSky ? DetailSkyStamped : DetailWorldStamped) += 1;
+		}
+	}
 
 	auto Describe = [](const TArray<float>& Data)
 	{
@@ -756,8 +780,8 @@ void UElysiumMapVisuals::ApplySceneFog()
 			: FString(TEXT("off"));
 	};
 	UE_LOG(LogElysiumVisuals, Log, TEXT("fog: world %s on %d primitives, 3D skybox %s on %d"),
-		*Describe(WorldData), WorldStamped + RuntimeWorldStamped,
-		*Describe(SkyData), SkyStamped + RuntimeSkyStamped);
+		*Describe(WorldData), WorldStamped + RuntimeWorldStamped + DetailWorldStamped,
+		*Describe(SkyData), SkyStamped + RuntimeSkyStamped + DetailSkyStamped);
 }
 
 void UElysiumMapVisuals::RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool bSky)
@@ -804,6 +828,21 @@ void UElysiumMapVisuals::ToggleSkybox()
 	for (const TObjectPtr<AStaticMeshActor>& Sky : SkyActors)
 	{
 		Sky->SetActorHiddenInGame(!bSkyVisible);
+	}
+	// R6.7: the miniature's detail components and sprites are the miniature too.
+	for (const TObjectPtr<AElysiumDetailPropActor>& Detail : DetailActors)
+	{
+		if (Detail && ElysiumBakedTags::InMiniature(Detail->Tags))
+		{
+			Detail->SetActorHiddenInGame(!bSkyVisible);
+		}
+	}
+	for (const TObjectPtr<AElysiumSpriteActor>& SpriteActor : SpriteActors)
+	{
+		if (SpriteActor && ElysiumBakedTags::InMiniature(SpriteActor->Tags))
+		{
+			SpriteActor->SetActorHiddenInGame(!bSkyVisible);
+		}
 	}
 	if (SkyDomeMesh)
 	{

@@ -8,7 +8,7 @@
 #include "Styling/SlateBrush.h"
 #include "Widgets/Layout/SBorder.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumUiArt, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumUiArtCache, Log, All);
 
 FElysiumUiArtCache::FElysiumUiArtCache() = default;
 FElysiumUiArtCache::~FElysiumUiArtCache() = default;
@@ -37,7 +37,7 @@ const FSlateBrush* FElysiumUiArtCache::Art(const TCHAR* RelPath, const FLinearCo
 		{
 			// Not fatal anywhere: every caller draws the token version instead. Verbose because a
 			// clone with no import would otherwise log a dozen warnings per open.
-			UE_LOG(LogElysiumUiArt, Verbose,
+			UE_LOG(LogElysiumUiArtCache, Verbose,
 				TEXT("no sheet art for %s — run: uv run elysium import textures"), *Key);
 			ArtMissing.Add(Key);
 			return nullptr;

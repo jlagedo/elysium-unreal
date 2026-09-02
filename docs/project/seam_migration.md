@@ -2369,6 +2369,101 @@ not art) for R9.2; the `_sel`/`_hud` art variants and the armour portraits stay 
 HUD as they were (the fallback join would serve them the day the HUD names them); `elysium.
 DrawSigns` predates this task.
 
+**R6.7 — 3D-skybox composition (2026-09-02).** The wiring pass over the miniature: with R5.1
+(props), R5.5 (captures), R5.6 (lights), R6.1 (sprites) and R6.3 (detail props) live, every class
+the corpus places inside the `sky_camera`'s area already carried the producer join's `sky` flag
+and was placed through `world(v) = scale × (v − origin)` — the audit found the composition
+**almost** complete and closed three gaps, none of them a look. Ruling in `seam_map_map.md` →
+"3D-skybox composition (R6.7)": one membership rule, one transform, one fog set, one scope marker,
+for every lane. (1) **The transform's source.** `MapBakeV2` still inherited `Bake._read_sky`, so a
+converted map's sky chunks, props, details, sprites, lights and captures were placed through the
+legacy `<map>.sky` sidecar while the staged manifest carried the unit's own `sky` block beside
+them; `_read_sky` now answers from `_StagedGeometry` (`miniature_transform`), the block is in the
+level recipe, and a map with a `sky_camera` but no sky *faces* — which `write_sky` never writes a
+sidecar for — no longer collapses its sky-flagged props onto `16 × p`. (2) **The scope marker.** A
+miniature detail component and a miniature sprite carried only their class tags (`Sky/Details`,
+`Sky/Sprites` folders are editor-only metadata), so the runtime could not tell them from the
+world's: `UElysiumMapVisuals::ApplySceneFog` stamped **no** detail component at all (the bake's
+default slot was the only writer, so `elysium.Fog` and a `.env` re-export never reached the
+instanced grass) and `ToggleSkybox` left a miniature's details and sprites standing. Both now
+carry `elysium.sky` beside their class tag (`detail_actor_tags`, `sprite_actor_values`;
+`ElysiumBakedTags::InMiniature`), `AdoptBakedLevel` buckets by the class tags first so the marker
+never lands a detail or sprite in the static-mesh sky bucket, `ApplySceneFog` stamps every detail
+component with the set its marker names, `ToggleSkybox` hides the miniature's details and sprites
+with its chunks and props, and the boot line and Cog rows count them (`n components in the 3D
+skybox`, `n in the 3D skybox`). `DETAIL_ACTOR_SHAPE` 2 / `SPRITE_ACTOR_SHAPE` 3 re-author the
+levels. (3) **Nothing counted the miniature back.** `bake_verify.verify_sky_scope` now matches, on
+every `MapsOnV2Models` map whose manifest says `sky.ok`, the sky-flagged placements, detail groups
+and sprite rows to their `elysium.sky` actors through the transform (position and scale per row,
+instance 0 of a sky detail component) and checks that every sky prop and sky detail component
+carries the same fog slots the sky chunks carry. The sky *fog* itself needed no change: the
+`sky_camera`'s set was already stamped on sky chunks, sky props and sky detail components at bake
+and re-stamped on the first two at load; the third is the runtime gap (2) closed.
+
+**What the corpus says.** All three working maps have a `sky_camera` (`scale` 16; `sp_tutorial_1`
+at `(6825.6, −4500.9, 7248.5)` cm, `sm_pawnshop_1` and `sm_hub_1` share `(−3152.1, −57.2,
+12647.3)`), not two: the miniature holds **30 / 21 / 49** props, **0 / 40 / 54** sprites, **58 /
+31 / 60** lights, **0 / 0 / 0** detail records and **0 / 0 / 0** cubemap samples. `sp_tutorial_1`
+authors no fog on either set; the other two fog the world `1270→12700 cm` and the miniature
+`20320→203200 cm` (`.env`, distances already `× 16`). No corpus map places a detail record in its
+miniature, so the sky detail path is exercised by the Substrate leaf and the verify rule, not by a
+baked actor.
+
+**Measured on the scoped rebake, `uv run elysium export map sp_tutorial_1 sm_pawnshop_1
+sm_hub_1`** (all three levels re-authored by the recipe terms; "all 3 map bake(s) completed"):
+`level: 809 prop actors (30 in the 3D skybox)` / `194 (21)` / `1043 (49)`; `sprites: 96 placed
+(…, 0 in the 3D skybox)` / `74 (…, 40 in the 3D skybox)` / `309 (…, 54 in the 3D skybox)`;
+`details: 6031 instances over 6 component(s) (0 in the 3D skybox, …)` / none / `528 over 3 (0 in
+the 3D skybox, 231 swaying)`; `fog: world off, 3D skybox off` / `world 1270->12700cm, 3D skybox
+20320->203200cm` ×2; lights 395 (58) / 161 (31) / 687 (60); levels saved in 9.1 / 4.4 / 9.6 s.
+`uv run elysium verify maps …`: `sky scope: scale 16 about (6825.6, -4500.9, 7248.5); props 30
+actors / 30 staged / 30 matched; details 0 / 0 / 0; sprites 0 / 0 / 0; sky chunk fog slots start
+20320, 1/range 0.000000`, `(-3152.1, -57.1, 12647.3); props 21 / 21 / 21; details 0 / 0 / 0;
+sprites 40 / 40 / 40; … start 20320, 1/range 0.000005`, `props 49 / 49 / 49; details 0 / 0 / 0;
+sprites 54 / 54 / 54; … 1/range 0.000005` (`1 / (203200 − 20320)`); lights parity 395 / 161 /
+687, details 6 / 0 / 3 matched, sprites 96 / 74 / 309 matched; **77 findings, the same 77
+pre-existing non-light ones (46 legacy glass `MI_`, 31 prop alpha/albedo), 0 new** (still exit 5,
+still R5.6's follow-up). Boot witness, `uv run elysium debug shots <map> --no-open`, one at a
+time, all exit 0: `fog: world off on 891 primitives, 3D skybox off on 32` (110 chunks + 775 props
++ 6 detail components; 2 sky chunks + 30 sky props), `world 1270->12700cm on 211 primitives, 3D
+skybox 20320->203200cm on 25`, `on 1152 primitives, … on 53` — the detail components are in the
+world count for the first time; `baked 'sp_tutorial_1': 1544 actors (110 world, 32 sky, 775
+props, 123 decals), 395 lights, 2371 hulls, 6031 detail instances over 6 models (0 components in
+the 3D skybox), 96 sprites (87 glow, 0 in the 3D skybox)`, `'sm_pawnshop_1': 513 actors (38, 25,
+173, 38), 161 lights, 1376 hulls, 0 detail instances …, 74 sprites (28 glow, 40 in the 3D
+skybox)`, `'sm_hub_1': 2463 actors (194, 53, 955, 219), 687 lights, 3842 hulls, 528 detail
+instances over 3 models (0 …), 309 sprites (113 glow, 54 in the 3D skybox)`; material audit **0
+unbound** on all three (470/1197, 179/322, 505/1537); **6/6 + 4/4 + 4/4** vantages captured. No
+screenshot was read; per R5.1 the harness attributes nothing to this task.
+
+Tests: `uv run elysium build`: Succeeded (after one side fix, below). `uv run elysium test
+Substrate`: **450 of 450 in 4.0 s**, the new leaf `Elysium.Substrate.SkyScope` (the marker
+helper beside the model and entity tags; a spawned level of one sky chunk, one prop, a world and
+a sky detail component and a sky sprite adopted by class first with the two sky counts read off
+the marker; `ApplyEnvironment` with the world set off and the sky set `100..200 cm` stamping the
+sky chunk and the sky detail with `1/range 0.01` and the prop and the world detail with 0;
+`ToggleSkybox` hiding the chunk, the sky detail and the sky sprite and leaving the prop and the
+world detail standing, then showing them again). `uv run pytest` over `test_bake_map_sky_scope.py
+test_bake_map_sprites.py test_bake_map_details.py test_map_geometry.py test_bake_map_lights.py
+test_bake_map_captures.py test_bake_map_sky.py test_bake_orchestration.py`: **74 passed** — the
+three new cases pin, per lane, a sky-flagged sprite row and a sky-flagged detail record to the
+miniature transform (`(1010, 2020, 3030)` about a camera at `(1000, 2000, 3000)` → `(160, 320,
+480)`, scale 16) and the marker beside the class tags, a world row to neither, and the lane's
+transform to the manifest's own `sky` block.
+
+Side finding, fixed in passing: R6.6 defined the static log category `LogElysiumUiArt` in both
+`ElysiumUiArt.cpp` and `ElysiumUiArtCache.cpp`; the new test file shifted the unity blobs so the
+two landed in one translation unit and the build failed on a struct redefinition. The cache's is
+`LogElysiumUiArtCache` now.
+
+Follow-ups: a sky sprite is the one miniature class drawn unfogged — `M_V2_Sprite` carries no fog
+term (R6.1's follow-up; Source's sprite shader fogs a card to the fog colour, or to black when
+additive), so the term belongs with whatever next touches that master (R7.7); `verify_lights`
+still reads the legacy `.sky` for a sky source's reach scale (the check is R4.3's, against the
+`.lights` sidecar, and retires with it at R9); `RegisterRuntimeBrush`'s sky-scope brush entities
+and the `.ents` join's `sky` field are the runtime's own and untouched; the legacy lane's
+`_read_sky` and `write_sky` stay for the 105 unconverted maps until R9.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2436,9 +2531,6 @@ stages**: every product the legacy ledger marks *none* and every visual entity c
 places has a task below or a named owner elsewhere (end of R7). A task in this stage that
 surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot-diffed.
 
-- **R6.7 3D-skybox wiring pass** [R7.7 / MP-5.7]. Last, once R6.1–R6.3 are live: miniature
-  props, sprites, detail props and fog composed in the 44 `sky_camera` maps; no look judgement.
-  → lands: the miniature complete.
 
 ### R7 — design: the families with a choice to make first [was R7.2, R7.5, R7.6, R6.2 remainder]
 
@@ -2519,7 +2611,8 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   lane a depth-tested twin of the master (`M_V2_SpriteZ`, `bDisableDepthTest` off, the same graph)
   and have the bake parent the mode-1/5 children to it — VtMB's exact clipping at the cost of a
   second sprite master and one more row in the master inventory. Nothing else depends on the
-  answer; the query stays either way.
+  answer; the query stays either way. Whichever way it goes, the sprite master's missing fog term
+  (R6.1/R6.7 follow-up: a miniature sprite is drawn unfogged) rides on the same edit.
 - **R7.8 The menu seal's source art** [owner call surfaced by R6.6, 2026-09-02]. VtMB's front-end
   seals are the menu particle scene's `particles/mm_<clan>.tga` sprites (15 of them: the seven
   playable clans, the Camarilla ankh `mm_cam`, and the sects and hunter factions) — loose TGAs

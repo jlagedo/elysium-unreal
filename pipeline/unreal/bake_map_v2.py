@@ -6,9 +6,10 @@
 # `docs/architecture/seam_map_map.md` -> "## Import -- geometry and placements (R5.1)".
 #
 # **Beside the legacy bake, not over it.** This module holds only the inputs and the stages that
-# differ; everything else -- decals, fog stamping, the 3D-skybox transform, the player start,
-# pruning, recipes and receipts -- is `bake_map.Bake`'s, unchanged, and a map that is not on the
-# R5.1 flag never reaches a line of this file.
+# differ; everything else -- decals, fog stamping, the player start, pruning, recipes and
+# receipts -- is `bake_map.Bake`'s, unchanged, and a map that is not on the R5.1 flag never
+# reaches a line of this file. The 3D-skybox transform is this lane's own since R6.7
+# (`_read_sky` answers from the staged manifest, never from `<map>.sky`).
 #
 # **Lights (R5.6, `seam_map_map_lighting.md` -> "## Import" -> "Lights final").** One actor per
 # lump-15 `worldLights[]` row, from the staged `lights` table (`UE_map_sidecars.light_rows`, the
@@ -105,6 +106,14 @@ V2_DETAIL_MATERIAL_PACKAGE = "%s/Detail" % V2_MESH_PACKAGE
 DETAIL_SWAY_SWITCH = "UseDetailSway"
 #: The tags the runtime buckets a detail actor by (`ElysiumBakedTags::Detail` / `DetailModel`).
 TAG_DETAIL = "elysium.detail"
+#: R6.7: the miniature's scope marker (`bake_map.TAG_SKY` / `ElysiumBakedTags::Sky` restated so the
+#: pure placement functions can carry it). A sky chunk or sky prop carries it *instead of* a class
+#: tag; a detail component actor or a sprite actor carries it *beside* its class tag
+#: (`seam_map_map.md` -> "3D-skybox composition (R6.7)").
+TAG_SKY = "elysium.sky"
+#: The shape `_place_details` writes a group as -- bumped when the writer changes what it puts on
+#: the actor for the same staged rows (2: the R6.7 scope marker), so the level re-authors.
+DETAIL_ACTOR_SHAPE = 2
 #: `swayAmount` is a byte; the custom data float is its unit fraction.
 DETAIL_SWAY_FULL = 255.0
 #: R6.1: the per-blend children of the imported sprite `MI_` -- map-independent like the detail
@@ -117,8 +126,9 @@ SPRITE_SWITCHES = ("UseVertexColor", "UseVertexAlpha")
 TAG_SPRITE = "elysium.sprite"
 TAG_ENTITY_PREFIX = "elysium.ent="
 #: The shape `_place_sprites` writes a row as -- bumped when the writer changes what it puts on
-#: the actor for the same staged row (2: the BGRA colour fix), so the level re-authors.
-SPRITE_ACTOR_SHAPE = 2
+#: the actor for the same staged row (2: the BGRA colour fix; 3: the R6.7 scope marker), so the
+#: level re-authors.
+SPRITE_ACTOR_SHAPE = 3
 #: `BlendMode` member per staged blend name (`import_materials.BLEND_MODE_MEMBERS`, restated).
 SPRITE_BLEND_MEMBERS = {
     "Opaque": "BLEND_OPAQUE", "Masked": "BLEND_MASKED", "Translucent": "BLEND_TRANSLUCENT",
@@ -444,6 +454,15 @@ def _build_class():
                 "%s/SM_%s" % (V2_MESH_PACKAGE, model["stem"])
                 for model in self.geometry.detail_models)
             recipe["detail_cull_cm"] = list(detail_cull())
+            recipe["detail_actor_shape"] = DETAIL_ACTOR_SHAPE
+            # R6.7: the miniature transform every sky-flagged row is placed through is the
+            # manifest's own, so a moved `sky_camera` re-authors the level (the legacy `.sky`
+            # digest in the host's recipe no longer describes what this lane reads).
+            recipe["sky"] = {
+                "scale": self.geometry.sky_scale,
+                "origin": list(self.geometry.sky_origin),
+                "ok": self.geometry.sky_ok,
+            }
             # R6.1: every sprite row is an input to its actor; the children are named so a
             # re-authored child (a master graph bump) re-authors the level that binds it.
             recipe["sprites"] = [row.as_dict() for row in self.geometry.sprites]
@@ -465,6 +484,14 @@ def _build_class():
             # its lump index, so it belongs in the recipe: a re-deal has to re-author the level.
             recipe["rest_poses"] = dict(sorted(self.rest_labels.items()))
             return recipe
+
+        def _read_sky(self):
+            """R6.7: the miniature transform is the staged manifest's own `sky` block (the unit's
+            `sky_camera` join), never the legacy `<map>.sky` sidecar -- `seam_map_map.md` ->
+            "3D-skybox composition (R6.7)". Every sky-flagged row of every lane, and the sky
+            chunks the host's `stage_level` places, go through this one answer."""
+
+            return self.geometry.sky_scale, self.geometry.sky_origin
 
         def _place_props(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0),
                          world_fog=None, sky_fog=None):
@@ -620,7 +647,7 @@ def _build_class():
                     sky_components += 1
                 actor.set_editor_property("model_stem", stem)
                 actor.set_actor_label("Detail_%s%s" % (stem, "_sky" if sky else ""))
-                actor.tags = [TAG_DETAIL, "elysium.model=%s" % stem]
+                actor.tags = list(detail_actor_tags(stem, sky))
                 actor.set_folder_path("Sky/Details" if sky else "Details")
                 instances += len(rows)
                 components += 1
@@ -1085,8 +1112,29 @@ def sprite_actor_values(row, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
         "size_inches": (row.scale * row.width, row.scale * row.height),
         "label": "Sprite_%d_%s%s" % (row.index, stem, "_sky" if row.sky else ""),
         "folder": "Sky/Sprites" if row.sky else "Sprites",
-        "tags": (TAG_SPRITE, "%s%d" % (TAG_ENTITY_PREFIX, row.index)),
+        "tags": (TAG_SPRITE, "%s%d" % (TAG_ENTITY_PREFIX, row.index))
+                + ((TAG_SKY,) if row.sky else ()),
     }
+
+
+def detail_actor_tags(stem, sky):
+    """The tags `_place_details` writes on one component actor (R6.3 + R6.7): the class tag and
+    the model tag the runtime buckets by, plus the miniature's scope marker for a sky group --
+    so `ApplySceneFog` stamps it with the `sky_camera`'s set and `ToggleSkybox` hides it with
+    the miniature. Pure, so a pytest pins it."""
+
+    tags = (TAG_DETAIL, "elysium.model=%s" % stem)
+    return tags + ((TAG_SKY,) if sky else ())
+
+
+def miniature_transform(sky_block):
+    """`(scale, origin)` from the staged manifest's `sky` block (R6.7): the one transform every
+    sky-flagged row is placed through, `world(v) = scale * (v - origin)`. The block is always
+    written (`map_geometry.stage_map`); a map with no `sky_camera` carries Source's default
+    scale 16 and the world origin, and flags nothing sky, so the numbers are never applied."""
+
+    return (float(sky_block["scale"]),
+            tuple(float(value) for value in sky_block["origin"]))
 
 
 #: The `UElysiumModelSettings` fields the detail cull range reads (R6.3), C++ name -> Python name.
@@ -1407,8 +1455,7 @@ class _StagedGeometry(object):
         self.unit = self.manifest["unit"]
         self.unit_sha256 = self.manifest["unitSha256"]
         self.counts = self.manifest["counts"]
-        self.sky_scale = float(self.manifest["sky"]["scale"])
-        self.sky_origin = tuple(float(v) for v in self.manifest["sky"]["origin"])
+        self.sky_scale, self.sky_origin = miniature_transform(self.manifest["sky"])
         self.sky_ok = bool(self.manifest["sky"]["ok"])
         self.placements = [_Placement(row) for row in self.manifest["placements"]]
         self.materials = dict(self.manifest["materials"])

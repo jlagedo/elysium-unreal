@@ -658,6 +658,200 @@ def verify_sprites(actors, map_name):
     return errors
 
 
+SKY_TAG = "elysium.sky"
+
+
+def _staged_manifest(map_name):
+    """The whole staged manifest (`map_geometry.stage_map`), or None when the pair is absent."""
+    path = os.path.join(os.fspath(work_root()), "import", "map_geometry", map_name, "manifest.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _fog_slots(component):
+    """The six fog floats the bake stamped as the primitive's default custom data
+    (`ElysiumFog.h`: colour 0..3, start 4, 1/range 5), or None when the slot was never written."""
+    data = component.get_editor_property("custom_primitive_data")
+    values = [float(v) for v in data.get_editor_property("data")] if data is not None else []
+    return tuple(values[:6]) if len(values) >= 6 else None
+
+
+def verify_sky_scope(actors, map_name):
+    """R6.7 (`seam_map_map.md` -> "3D-skybox composition (R6.7)"), `MapsOnV2Models` maps whose
+    manifest says `sky.ok`: every class the corpus places in the miniature counted back against
+    the staged rows through the one transform -- sky props (`elysium.sky` static-mesh actors
+    labelled `Prop_`; position `scale * (p - origin)` and actor scale `scale` per row), sky detail
+    components (`elysium.detail` + `elysium.sky`, one per staged sky model group, instance scale
+    `scale`), sky sprites (`elysium.sprite` + `elysium.sky`, position and scale per row) -- and
+    that every sky prop and sky detail component carries the same fog slots the sky chunks do."""
+    errors = []
+    if not map_transport.is_map_on_v2_models(map_name):
+        return errors
+    manifest = _staged_manifest(map_name)
+    if manifest is None:
+        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count the "
+                      "3D skybox against (run: uv run elysium export map %s)" % (map_name, map_name))
+        return errors
+    sky = manifest.get("sky") or {}
+    if not sky.get("ok"):
+        unreal.log("[verify] sky scope: %s has no sky_camera; nothing is in the miniature" % map_name)
+        return errors
+    scale = float(sky["scale"])
+    origin = tuple(float(v) for v in sky["origin"])
+
+    def transform(position):
+        return tuple(scale * (float(position[i]) - origin[i]) for i in range(3))
+
+    def near(a, b, tol=0.05):
+        return all(abs(float(a[i]) - float(b[i])) <= tol for i in range(3))
+
+    props_by_index = {}
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if SKY_TAG in tags and DETAIL_TAG not in tags and SPRITE_TAG not in tags:
+            label = str(actor.get_actor_label())
+            if label.startswith("Prop_"):
+                props_by_index[int(label.split("_")[1])] = actor
+    staged_props = {int(row["index"]): row for row in manifest.get("placements") or []
+                    if row.get("sky")}
+    chunk_slots = None
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if SKY_TAG in tags and str(actor.get_actor_label()).startswith("SM_Sky_"):
+            chunk_slots = _fog_slots(actor.get_editor_property("static_mesh_component"))
+            break
+
+    matched_props = 0
+    for index, row in sorted(staged_props.items()):
+        actor = props_by_index.get(index)
+        if actor is None:
+            errors.append("%s: sky prop %d (%s) has no elysium.sky actor" % (
+                map_name, index, row["stem"]))
+            continue
+        problems = []
+        location = actor.get_actor_location()
+        want = transform(row["position"])
+        if not near((location.x, location.y, location.z), want):
+            problems.append("at (%.1f, %.1f, %.1f), the transform says (%.1f, %.1f, %.1f)" % (
+                location.x, location.y, location.z, want[0], want[1], want[2]))
+        actor_scale = actor.get_actor_scale3d()
+        if not near((actor_scale.x, actor_scale.y, actor_scale.z), (scale,) * 3, 1e-3):
+            problems.append("scale %.2f, the miniature's is %.2f" % (actor_scale.x, scale))
+        component = actor.get_editor_property("static_mesh_component") \
+            if isinstance(actor, unreal.StaticMeshActor) else None
+        if component is not None and chunk_slots is not None \
+                and _fog_slots(component) != chunk_slots:
+            problems.append("fog slots %s, the sky chunks carry %s" % (
+                _fog_slots(component), chunk_slots))
+        if problems:
+            errors.append("%s: sky prop %d (%s): %s" % (
+                map_name, index, row["stem"], "; ".join(problems)))
+        else:
+            matched_props += 1
+    for index in sorted(set(props_by_index) - set(staged_props)):
+        errors.append("%s: elysium.sky prop actor %s stands for no sky-flagged placement" % (
+            map_name, props_by_index[index].get_actor_label()))
+
+    details = manifest.get("details") or {}
+    stems = {int(model["model"]): str(model["stem"]) for model in details.get("models") or []}
+    staged_detail_groups = {}
+    for row in details.get("records") or []:
+        if row[10]:
+            staged_detail_groups.setdefault(stems[int(row[1])], []).append(row)
+    sky_detail_actors = {}
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if DETAIL_TAG in tags and SKY_TAG in tags:
+            stem = next((tag[len(DETAIL_MODEL_TAG_PREFIX):] for tag in tags
+                         if tag.startswith(DETAIL_MODEL_TAG_PREFIX)), "")
+            sky_detail_actors[stem] = actor
+    matched_details = 0
+    for stem, rows in sorted(staged_detail_groups.items()):
+        actor = sky_detail_actors.get(stem)
+        if actor is None:
+            errors.append("%s: %d sky detail record(s) of %s have no elysium.sky component" % (
+                map_name, len(rows), stem))
+            continue
+        component = actor.get_editor_property("instances")
+        problems = []
+        if component is None or int(component.get_instance_count()) != len(rows):
+            problems.append("%s instances, the unit stages %d" % (
+                "no" if component is None else int(component.get_instance_count()), len(rows)))
+        else:
+            first = component.get_instance_transform(0, True)
+            want = transform(rows[0][2:5])
+            if not near((first.translation.x, first.translation.y, first.translation.z), want):
+                problems.append("instance 0 at (%.1f, %.1f, %.1f), the transform says "
+                                "(%.1f, %.1f, %.1f)" % (
+                                    first.translation.x, first.translation.y,
+                                    first.translation.z, want[0], want[1], want[2]))
+            if not near((first.scale3d.x, first.scale3d.y, first.scale3d.z), (scale,) * 3, 1e-3):
+                problems.append("instance scale %.2f, the miniature's is %.2f" % (
+                    first.scale3d.x, scale))
+            if chunk_slots is not None and _fog_slots(component) != chunk_slots:
+                problems.append("fog slots %s, the sky chunks carry %s" % (
+                    _fog_slots(component), chunk_slots))
+        if problems:
+            errors.append("%s: sky detail %s: %s" % (map_name, stem, "; ".join(problems)))
+        else:
+            matched_details += 1
+    for stem in sorted(set(sky_detail_actors) - set(staged_detail_groups)):
+        errors.append("%s: elysium.sky detail component %s has no sky-flagged records" % (
+            map_name, stem))
+
+    staged_sprites = {int(row["index"]): row for row in manifest.get("sprites") or []
+                      if row.get("sky")}
+    sky_sprite_actors = {}
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if SPRITE_TAG in tags and SKY_TAG in tags:
+            index = next((int(tag[len(SPRITE_ENTITY_TAG_PREFIX):]) for tag in tags
+                          if tag.startswith(SPRITE_ENTITY_TAG_PREFIX)), -1)
+            sky_sprite_actors[index] = actor
+    matched_sprites = 0
+    for index, row in sorted(staged_sprites.items()):
+        actor = sky_sprite_actors.get(index)
+        if actor is None:
+            errors.append("%s: sky env_sprite %d (%s) has no elysium.sky actor" % (
+                map_name, index, row["material"]))
+            continue
+        problems = []
+        location = actor.get_actor_location()
+        want = transform(row["position"])
+        if not near((location.x, location.y, location.z), want):
+            problems.append("at (%.1f, %.1f, %.1f), the transform says (%.1f, %.1f, %.1f)" % (
+                location.x, location.y, location.z, want[0], want[1], want[2]))
+        actor_scale = actor.get_actor_scale3d()
+        if not near((actor_scale.x, actor_scale.y, actor_scale.z), (scale,) * 3, 1e-3):
+            problems.append("scale %.2f, the miniature's is %.2f" % (actor_scale.x, scale))
+        if problems:
+            errors.append("%s: sky env_sprite %d (%s): %s" % (
+                map_name, index, row["material"], "; ".join(problems)))
+        else:
+            matched_sprites += 1
+    for index in sorted(set(sky_sprite_actors) - set(staged_sprites)):
+        errors.append("%s: elysium.sky sprite actor %s stands for no sky-flagged env_sprite" % (
+            map_name, sky_sprite_actors[index].get_actor_label()))
+
+    unreal.log("[verify] sky scope: scale %.0f about (%.1f, %.1f, %.1f); props %d actors / %d "
+               "staged / %d matched; details %d components / %d staged groups / %d matched; "
+               "sprites %d actors / %d staged / %d matched; sky chunk fog slots %s" % (
+                   scale, origin[0], origin[1], origin[2],
+                   len(props_by_index), len(staged_props), matched_props,
+                   len(sky_detail_actors), len(staged_detail_groups), matched_details,
+                   len(sky_sprite_actors), len(staged_sprites), matched_sprites,
+                   "unstamped" if chunk_slots is None else
+                   "start %.0f, 1/range %.6f" % (chunk_slots[4], chunk_slots[5])))
+    for message in errors[:8]:
+        unreal.log_error("[verify] " + message)
+    if len(errors) > 8:
+        unreal.log_error("[verify] ... and %d more sky-scope finding(s) on %s"
+                         % (len(errors) - 8, map_name))
+    return errors
+
+
 def verify_ropes(world_dir, map_name):
     """R6.5 (`seam_map_material.md` -> "Ropes on `MI_`, and the factory shape"): every line of
     `<map>.ropes` names a `vtmb:material:` id that folds, by the R5.4 rule
@@ -1209,6 +1403,7 @@ def verify_map(map_name):
         errors.extend(verify_lights_baked(actors, world_dir, map_name))
         errors.extend(verify_details(actors, map_name))
         errors.extend(verify_sprites(actors, map_name))
+        errors.extend(verify_sky_scope(actors, map_name))
         errors.extend(verify_ropes(world_dir, map_name))
         errors.extend(verify_captures(
             actors, unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()))
