@@ -49,6 +49,7 @@ SCALAR_NAMES = (
     "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale", "MaskMetallicMax", "EnvTintScale",
     "FixedCubeStrength", "ChromaticTintStrength", "ChromaThreshold", "DecalDepthOffset",
     "CaptureRadius",
+    "DetailSwayAmplitude",
 )
 
 

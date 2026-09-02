@@ -16,6 +16,10 @@ namespace ElysiumBakedTags
 	inline const FName Sky(TEXT("elysium.sky"));
 	// One GAME_LUMP static prop.
 	inline const FName Prop(TEXT("elysium.prop"));
+	// One GAME_LUMP detail model's instanced component (R6.3, `MapsOnV2Models` maps only): an
+	// AElysiumDetailPropActor carrying every `dprp` record of one model in lump order. Carries a
+	// second tag, DetailModel(stem), naming the corpus mesh it draws.
+	inline const FName Detail(TEXT("elysium.detail"));
 	// One WORLDLIGHTS source. Carries a second tag, Source(i), naming its `.lights` line so the
 	// light rig can bind it back to the raw source data it re-derives intensity and reach from.
 	inline const FName Light(TEXT("elysium.light"));
@@ -55,6 +59,32 @@ namespace ElysiumBakedTags
 	inline FName LightStyle(int32 Style)
 	{
 		return FName(*FString::Printf(TEXT("elysium.style=%d"), Style));
+	}
+
+	// The R1 corpus stem a detail actor draws, e.g. "elysium.model=models_scenery_plants_grass_grassa".
+	inline FName DetailModel(const FString& Stem)
+	{
+		return FName(*FString::Printf(TEXT("elysium.model=%s"), *Stem));
+	}
+
+	// The text after `Prefix` on the first tag carrying it, or empty if no tag does.
+	inline FString ParseTagText(const TArray<FName>& Tags, const FString& Prefix)
+	{
+		for (const FName& Tag : Tags)
+		{
+			const FString Text = Tag.ToString();
+			if (Text.StartsWith(Prefix, ESearchCase::CaseSensitive))
+			{
+				return Text.RightChop(Prefix.Len());
+			}
+		}
+		return FString();
+	}
+
+	// The stem a Detail actor carries (R6.3), or empty if it has no model tag.
+	inline FString ParseDetailModel(const TArray<FName>& Tags)
+	{
+		return ParseTagText(Tags, TEXT("elysium.model="));
 	}
 
 	// The integer after `Prefix` on the first tag carrying it, or `Default` if no tag does.

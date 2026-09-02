@@ -666,6 +666,7 @@ runtime factory **whole**, exactly as the chain rule in "Proxy policy" already r
 | `UseFixedCube` | `false` | `$envmap` names an `envmap/*` image |
 | `MetallicTint` | `false` | `$envmaptint` is chromatic |
 | `UseAnimatedFrames`, `UseAnimatedNormalFrames` | `false` | an `animatedtexture` proxy on that lane |
+| `UseDetailSway` | `false` | **never the stage** — only the map bake's `MI_DetailSway_*` child of an imported instance (R6.3, "Detail sway on the model masters" below) |
 
 ##### `M_V2_Unlit`
 
@@ -691,7 +692,7 @@ dead slot added.
 
 Static switches: `UseBaseTexture` `true`; `UseVertexColor`, `UseVertexAlpha`, `UseEnvMap`,
 `UseEnvMapMask`, `UseBaseAlphaEnvMapMask`, `UseFixedCube`, `MetallicTint`, `UseAnimatedFrames`,
-`UseCloudAlpha` — all `false`. `$selfillum` on an unlit surface (9 units) is meaningless — the
+`UseCloudAlpha`, `UseDetailSway` — all `false` (`UseDetailSway` is never the stage's to set; R6.3 below). `$selfillum` on an unlit surface (9 units) is meaningless — the
 surface is already pure emissive — and is recorded as an anomaly, not a switch.
 
 **Usage flags** (H4 review fix, corrected from an earlier draft that carried only the world/ISM
@@ -1058,6 +1059,60 @@ placement mechanism altogether — is **R7.6's ruling** ("Decals on the V2 Decal
 `M_Decal` retired"), recorded here so R7.6 starts from the domain fact rather than from R5.3's
 plan. `ElysiumFog::ApplyToDecalMID` and `Elysium.Substrate.FogDecalMID` stay as the shared setter
 that lane will call.
+
+#### Detail sway on the model masters (R6.3)
+
+R6.3 (`seam_map_map.md` → "Detail props (R6.3)") places the `dprp` game lump as instanced
+components, and the owner ruled that **sway is wired**: the record's `swayAmount` byte is in the
+data on 35,521 of the 143,412 records, so the weeds move. The three masters a model family can
+land on — `M_V2_Lit`, `M_V2_LitTranslucent` and `M_V2_Unlit` (every detail material on the working
+corpus is `unlitgeneric` → `M_V2_Unlit`: `grassa`/`grassb`, `weedb`/`weedbleaves`, `weedc`,
+`weedda`/`weeddb`, `rocksmall`, `trashpile`) — carry one World Position Offset term,
+`make_v2_materials._detail_sway`, behind one static switch, `UseDetailSway` (default `false`):
+
+```text
+sway    = PerInstanceCustomData[0]                      -- swayAmount / 255, 0 on any non-instanced draw
+weight  = saturate((local.z - bounds.min.z) / (bounds.max.z - bounds.min.z))
+                                                        -- local = TransformPosition(WorldPosition, World -> Instance),
+                                                        -- bounds = ObjectLocalBounds: the base stays put, the tip moves
+phase   = (world.x + world.y) / 2.54                    -- Source's own per-object phase, in its own inches
+s       = sin(Time + phase)
+WPO     = (s, s, 0) * sway * weight * DetailSwayAmplitude
+```
+
+`Time` is the material's shared clock — the one wind every instance on every map swings to — and
+`DetailSwayAmplitude` is the **one knob**, a `UElysiumSurfaceSettings` scalar pushed into
+`MPC_ElysiumSurfaces` like every other surface knob (Project Settings → Elysium → Surfaces →
+Detail Props), in centimetres.
+
+**Why the amplitude is an owner call, and what it defaults to.** VtMB's own client never reads the
+byte: `CDetailModel` in `client.dll` is five functions (`100e0250`…`100e0300`) — construct,
+destroy, the lighting product and a draw-colour multiply — and `CDetailObjectSystem::vfunc10`
+(`100e0d90`) registers only `cl_detaildist`/`cl_detailfade`; there is no sway cvar and no sine
+anywhere in the detail path. The byte was authored by VBSP for a feature this build of the engine
+shipped without. So there is no VtMB amplitude to transcribe; the closest faithful number is the
+first Source build that *did* read it, whose sprite-sway amplitude is `swayAmount / 255 ×
+cl_detail_max_sway` with Valve's shipped value **5 world units**, and that is the default:
+**12.7 cm**. The choice — keep Source's 5 units, or another number once the weeds are seen live —
+is filed in the R7 list of `seam_migration.md`; nothing here is tuned.
+
+**Why a static switch and a child instance, not a term on the shared `MI_`.** The translator
+marks a material as using WPO only when the compiled chain is not a constant zero
+(`HLSLMaterialTranslator::IsMaterialPropertyUsed`, `MP_WorldPositionOffset`), and a Nanite mesh on
+a WPO material goes through the programmable raster path. With the switch off, the branch is not
+compiled at all and every world chunk, brush, prop and character on these masters keeps the
+shader it had. The map bake (`bake_map_v2._detail_sway_material`) authors, once per detail
+material, `/ElysiumBaked/Meshes/Detail/MI_DetailSway_<material path>`: a `MaterialInstanceConstant`
+whose parent is the imported `MI_` (so every VMT-derived binding is inherited, never restated) and
+whose only own value is `UseDetailSway = true`, bound on the instanced component's slots. The stage
+(`importers/materials.py`) declares the switch in `EXPOSED_PARAMS` for the three-way name pin and
+**never writes it** — it has no VMT key; a material on a master without the switch (`M_V2_Eyes`,
+`M_V2_Water`, `M_V2_Sprite`, `M_V2_Refract`, `M_V2_Decal`, `M_V2_TwoTexture`) fails the map bake by
+name if a detail model ever binds one (none does on the corpus census: every one of the 41 detail
+models is `scenery/`).
+
+`GRAPH_VERSION` 4 → 5 (the topology changed on three masters); `Elysium.Policy.V2MasterParams`
+pins the switch on the three, and `_probe_all_switches_true` compiles the WPO branch on each.
 
 #### Texture slots, roles and the `_linear` twin
 
@@ -1769,6 +1824,7 @@ Python or C++ literal (`seam_migration.md`, "Calibration happens on knobs inside
 | `ChromaticTintStrength` | settings scalar | same | how far the chromatic branch tints Base Color; `0` disables the metal hypothesis without a re-import |
 | `ChromaThreshold` | settings scalar, default **0.02** | same, and read **by the stage from the ini** | the grey/chromatic split of `$envmaptint`; never a literal in the stage |
 | `EnvTintScale` | settings scalar | same | the grey-tint specular scale |
+| `DetailSwayAmplitude` | settings scalar, default **12.7 cm** (Source's `cl_detail_max_sway` 5 units × 2.54) | same | the `UseDetailSway` World Position Offset term on `M_V2_Lit`/`M_V2_LitTranslucent`/`M_V2_Unlit` (R6.3, "Detail sway on the model masters") |
 | `FixedCubeStrength` | settings scalar | same | the 342 authored-cube instances |
 | `Overbright` | settings scalar, default **2.0** | same | `mul_x2 c0` in every lit program — the `_x2` and the `overbrightFactor/2` constant together |
 | `DecalDepthOffset` | settings scalar | same | the **decal component** the placement lane spawns over an `isDecalSurface` instance; not a material parameter (no `MP_PIXEL_DEPTH_OFFSET` in this build's Python API) |

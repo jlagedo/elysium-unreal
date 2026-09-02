@@ -2049,6 +2049,106 @@ Follow-ups: the `light_dynamic` magnitude convention above is stated, not recove
 `.lights` lane it rides on until R9; the Cog Lights viewer does not yet show the pattern table
 (the leaf's debug state shows its own style, pattern and the rig's current pattern).
 
+**R6.3 — detail props (2026-09-02).** The `dprp` game lump is placed: **143,412 records over 41
+models on 52 of 108 maps** corpus-wide (every one a version-2 model record, no sprites; 35,521
+with a non-zero `swayAmount`), and on the working corpus `sp_tutorial_1` **6,031 over 6 models**
+(`grassa`/`grassb`, three `rocks/small*`, `junk4`; every `swayAmount` 0), `sm_pawnshop_1` **0**,
+`sm_hub_1` **528 over 3** (`weedb`/`weedc`/`weedd`; 231 swaying). The offline reader
+(`map_geometry._detail_placements`, manifest **v5**, `details.models[]` + compact
+`details.records[]` rows) resolves every record in lump order to its R1 stem through the frame a
+static prop takes, and the editor half (`bake_map_v2._place_details`) spawns **one
+`AElysiumDetailPropActor` per model per map** — a plain actor whose root is a
+`UInstancedStaticMeshComponent` on `/ElysiumBaked/Meshes/SM_<stem>` — with one instance per
+record in lump order, so instance `k` is the model's `k`-th record and `bake_verify` counts them
+back. No detail model needed staging: each record is already a `dependencies[]` model row, so
+R1's map-scoped selection had all nine on disk. Ruling in `seam_map_map.md` → "Detail props
+(R6.3)"; the record contract in `docs/vtmb/bsp_format.md`.
+
+**What the record bakes to.** No collision (`dprp` is read by `client.dll` alone —
+`CDetailObjectSystem`/`CDetailModel`, `100e0d90`/`100e0250`…; the server never sees a detail
+object), no shadow (VRAD never lit by one; the record's `lighting`/`lightStyles` are its baked
+answer for the 2004 renderer and the R5.6 actors light the instances instead, so the bytes are not
+applied), the scene-fog CPD stamp every prop takes, a miniature record on the static prop's sky
+transform in its own `_sky` component (none on the three maps), and **the cull range is VtMB's
+own**: `Instances->SetCullDistances(762, 1524)` cm from two new Models-page fields,
+`DetailDrawDistanceCm` = `cl_detaildist` **600 in** and `DetailFadeRangeCm` = `cl_detailfade`
+**300 in** — read off the shipped `client.dll` (`CDetailObjectSystem::vfunc10` registers both;
+the default strings `"600"`/`"300"` sit at `102b9fa0`/`102b9f8c`), never a literal. VtMB's alpha
+ramp over the band (`1 − (d² − (dist − fade)²)/(dist² − (dist − fade)²)`, the factor that function
+computes) is not reproduced: the ISM culls hard at `cl_detaildist` and exposes the band as
+`PerInstanceFadeAmount`, filed below.
+
+**Sway is wired, and the amplitude is an owner call (→ R7.6).** `swayAmount / 255` rides as
+per-instance custom data float 0 and the three model masters (`M_V2_Lit`, `M_V2_LitTranslucent`,
+`M_V2_Unlit` — every corpus detail material is `unlitgeneric` → Unlit) carry one World Position
+Offset term, `make_v2_materials._detail_sway` (`GRAPH_VERSION` 4 → 5): `sin(Time + (x + y)/2.54) ×
+sway × saturate((local.z − min.z)/(max.z − min.z)) × DetailSwayAmplitude` along world `(1, 1, 0)`,
+behind a static switch **`UseDetailSway`** (default off) so a switched-off branch compiles to the
+constant zero `HLSLMaterialTranslator::IsMaterialPropertyUsed` does not count as a WPO use and no
+world chunk, prop or character on the master pays for it. The bake authors, once per detail
+material, `/ElysiumBaked/Meshes/Detail/MI_DetailSway_<material path>` — a child of the imported
+`MI_` whose only own value is the switch — and binds it on the component's slots (**9** on the
+corpus: `grassa`, `grassb`, `rocksmall`, `trashpile`, `weedb`, `weedbleaves`, `weedc`, `weedda`,
+`weeddb`); a detail material on a master without the switch is a named bake failure. The
+amplitude is `UElysiumSurfaceSettings.DetailSwayAmplitude` → `MPC_ElysiumSurfaces`, default
+**12.7 cm**: VtMB's client never reads the byte (no sway cvar, no sine in `CDetailModel`), so the
+number is Source's own first reading of it (`cl_detail_max_sway` 5 units) and the choice is on the
+R7 list. Ruling in `seam_map_material.md` → "Detail sway on the model masters (R6.3)", the switch
+in the Lit/Unlit tables, the knob in the knob contract. `UElysiumModelSettings` gained
+`BlueprintType` so the editor's Python can read the page (`unreal.ElysiumModelSettings` was not
+exported — the lighting page is only because of its `BlueprintCallable` push).
+
+**Runtime.** `ElysiumBakedTags::Detail` (`elysium.detail`) + `DetailModel(stem)`;
+`UElysiumMapVisuals::AdoptBakedLevel` buckets the actors, sums `DetailInstanceCount` /
+`DetailModelCount` (Cog Maps/Status rows, the boot line), and `elysium.props` hides them with the
+static props. `AuditMaterials` walks the new components like any other.
+
+**Measured on the scoped rebake, `uv run elysium export map sp_tutorial_1 sm_pawnshop_1
+sm_hub_1`** (all three levels re-authored; `REBAKE_EXIT=0`): staged `detailProps` **6,031 / 0 /
+528**; bake `details: 6031 instances over 6 component(s) (0 in the 3D skybox, 0 swaying); cull
+762..1524 cm; 4 sway material(s)`, `the unit places no detail props`, `528 instances over 3
+component(s) (0 in the 3D skybox, 231 swaying); cull 762..1524 cm; 5 sway material(s)`; levels
+saved in 48.6 / 6.5 s / hub in the same run. `uv run elysium verify maps …`:
+`details: 6031 instances over 6 component(s), 6031 staged records over 6 model group(s), 6
+matched; cull 762..1524 cm`, `0 / 0 / 0 matched` on the pawnshop, `528 / 3 / 3 matched` on the
+hub; **77 findings, the same 77 pre-existing non-light ones, 0 new** (still exit 5, still R5.6's
+follow-up). Boot witness, `uv run elysium debug shots <map> --no-open`, one at a time, all exit
+0: `baked 'sp_tutorial_1': 1448 actors (…), 395 lights, 2371 hulls, 6031 detail instances over 6
+models`, `'sm_pawnshop_1': … 0 detail instances over 0 models`, `'sm_hub_1': … 528 detail
+instances over 3 models`; material audit **0 unbound** on all three (470/1197, 179/322, 505/1537
+— the six and three instanced components are in the walk); **6/6 + 4/4 + 4/4** vantages
+captured. No screenshot was read; per R5.1 the harness attributes nothing to this task.
+
+Tests: `uv run elysium build`: Succeeded. `uv run elysium export bundle policy`: the nine masters
+regenerated, all-switches-true probes 320 / 1,908 / 189 pixel-shader instructions on
+Lit / LitTranslucent / Unlit (the sway branch compiled on each). `uv run elysium test Policy`:
+**9 of 9** (`V2MasterParams` now pins `UseDetailSway` on the three). `uv run elysium test
+Substrate`: **446 of 446 in 6.6 s**, the new leaf `Elysium.Substrate.DetailProps` (the two page
+defaults as `600 × 2.54` / `300 × 2.54`, `DetailSwayAmplitude` as `5 × 2.54` and bound, the tag
+helpers, and the spawned actor's shape: ISM root, static, `NoCollision`, no shadow, one custom
+data float). `uv run pytest` over `test_map_geometry.py test_bake_map_details.py
+test_bake_map_lights.py test_make_v2_materials_editor.py test_materials_stage.py
+test_bake_map_captures.py test_bake_map_sky.py test_bake_orchestration.py test_matgraph.py
+test_import_materials_editor.py`: **196 passed** — the record → placement mapping on a synthetic
+unit (dictionary join, lump order, the frame, backslashed paths, the raw byte, the miniature flag,
+the loud out-of-range failure), the corpus-gated "every record of the root unit is placed and the
+per-model counts are the unit's own" on the three maps, the editor half's grouping and sway
+normalisation and sky transform, the eleven-column row round-trip and the shared manifest
+version, and the existing three-way name pin now covering `UseDetailSway`.
+
+Side finding, fixed in passing: the generator's fake editor accepts any pin name, so the first
+policy run failed live on `TransformPosition`'s unnamed input (`connect(…, "Input")` refused;
+`""` is the first pin) — the fake still cannot see this class of error.
+
+Follow-ups: VtMB's alpha ramp over the `cl_detailfade` band (a dithered opacity on
+`PerInstanceFadeAmount`, masked masters only — Unreal has no per-instance alpha on an opaque
+draw) is not reproduced, the hard cutoff is; the sway amplitude is R7.6's owner call; the
+`MI_DetailSway_*` children are not pruned by any map bake (shared package, like the meshes) and a
+retired detail material leaves its child behind until a corpus-scoped prune exists; the 32
+detail models outside the working corpus are staged like any other model when their maps join
+`MapsOnV2Models`, and every one of the 41 is `scenery/`, so the master check has no known
+failing case.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2137,13 +2237,6 @@ surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot
   sprite scene proxy the project does not have yet — that proxy is the task's one piece of new
   rendering code. `<map>.sprites` (written, read by nobody) retires. → lands: halos, light
   shafts, candles, cop flashers, lightning.
-- **R6.3 Detail props** [R7.3 / MP-5.3]. The 143,412 `dprp` placements over 41 models as one
-  instanced component per model per map off the root unit (records carry model, leaf, node,
-  per-record lighting and `swayAmount`; no sprite-type details on the corpus maps), culled at
-  Source's detail distance. **Sway is wired** (owner call, 2026-09-02): one vertex-offset wind
-  term on the instanced material, fed by the per-instance `swayAmount`, on a shared wind clock —
-  the value is in the data and VtMB's weeds move. → lands: exteriors stop reading bare, and the
-  grass moves.
 - **R6.5 Ropes on `MI_`, and the factory shape** [R6.4 part / SF-6.6, R6.2 part / SF-6.4]. The
   `.ropes` producer carries the `vtmb:material` id; the cable binds the imported `MI_`; the last
   `FElysiumMaterialFactory::Build` caller dies and with it the six legacy world masters' runtime
@@ -2218,6 +2311,21 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   `FadeDist`, VtMB's two end states without the `TranslucencyLimit` 0.2 near-blend — so distance
   windows read black from afar as in 2004, at the cost of one black brush per window standing
   in Lumen's scene. Nothing else in R6/R7 depends on the answer.
+- **R7.6 Detail sway amplitude** [owner call surfaced by R6.3, 2026-09-02]. R6.3 wired the sway
+  the owner asked for — `swayAmount / 255` per instance into one World Position Offset term on
+  `M_V2_Lit`/`M_V2_LitTranslucent`/`M_V2_Unlit`, on the shared `Time` clock — and found that
+  **VtMB's own client never reads the byte**: `CDetailModel` in `client.dll` is five functions
+  (construct, destroy, the lighting product and a draw-colour multiply, `100e0250`…`100e0300`),
+  `CDetailObjectSystem::vfunc10` (`100e0d90`) registers only `cl_detaildist`/`cl_detailfade`, and no
+  sine or sway cvar exists in the detail path. VBSP authored the byte (35,521 non-zero records)
+  for a feature this engine build shipped without, so there is no VtMB amplitude to transcribe.
+  The shipped default is the first Source build's that did read it — `swayAmount / 255 ×
+  cl_detail_max_sway`, Valve's shipped 5 world units, **12.7 cm** on the Surfaces page
+  (`DetailSwayAmplitude`), with the base pinned and the tip moving and Source's per-object phase
+  `(x + y)` in inches. **The choice:** keep Source's 5 units (the weeds move as a 2007 Source map's
+  would), set another number once the `sm_hub_1` weeds are seen live, or 0 (the byte carried, the
+  term compiled, nothing moving — VtMB's own 2004 behaviour). Nothing else depends on the answer;
+  it is one settings field, no rebake.
 
 **Owned elsewhere, not deferred.** Two groups the census surfaces belong to other plans and are
 named here so they are not lost: the unread audio products (`audio/maps/*.json`, `schemes.json`,

@@ -127,6 +127,10 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName MetallicTint(TEXT("MetallicTint"));
 		inline const FName UseAnimatedFrames(TEXT("UseAnimatedFrames"));
 		inline const FName UseAnimatedNormalFrames(TEXT("UseAnimatedNormalFrames"));
+		// R6.3 (docs/architecture/seam_map_material.md -> "Detail sway on the model masters"):
+		// the World Position Offset term's gate. Never the stage's to set -- only the map bake's
+		// `MI_DetailSway_*` child of an imported instance turns it on.
+		inline const FName UseDetailSway(TEXT("UseDetailSway"));
 	}
 }
 
@@ -188,6 +192,8 @@ namespace ElysiumSurfaceParamsUnlit
 		inline const FName MetallicTint(TEXT("MetallicTint"));
 		inline const FName UseAnimatedFrames(TEXT("UseAnimatedFrames"));
 		inline const FName UseCloudAlpha(TEXT("UseCloudAlpha"));
+		// R6.3: as on M_V2_Lit -- every corpus detail material is `unlitgeneric`.
+		inline const FName UseDetailSway(TEXT("UseDetailSway"));
 	}
 }
 

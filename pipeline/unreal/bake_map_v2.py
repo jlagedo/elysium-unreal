@@ -36,6 +36,14 @@
 # `array` alone -- the same offline-stage / editor-import split the model, material and texture
 # lanes use.
 #
+# **Detail props (R6.3, `seam_map_map.md` -> "Detail props (R6.3)").** Every `dprp` record of the
+# staged `details` table becomes one instance of an `AElysiumDetailPropActor`'s instanced component
+# -- one actor per model (and per 3D-skybox half) per map, on the R1 corpus mesh, instances in lump
+# order, no collision, no shadow, culled at VtMB's `cl_detaildist`/`cl_detailfade` off the Models
+# page, the record's `swayAmount / 255` as per-instance custom data float 0, and the material lane's
+# `MI_` re-bound through a `MI_DetailSway_*` child that switches the master's `UseDetailSway` term
+# on (`seam_map_material.md` -> "Detail sway on the model masters (R6.3)").
+#
 # `bake_map.py` is an editor *script* (`-run=pythonscript`), so it calls `main()` at module scope.
 # Importing it from here would run a second whole bake, so the dependency goes the other way:
 # `bake_map` calls `bind(sys.modules[__name__])` and then `bake_class()`, and this module reaches
@@ -63,7 +71,8 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 2 (R5.4): the manifest carries the `materials` table this lane binds from.
 #: 3 (R5.5): and the `cubemaps` table this lane stands reflection captures at.
 #: 4 (R5.6): and the `lights` table this lane derives every light actor from.
-MANIFEST_VERSION = 4
+#: 5 (R6.3): and the `details` table this lane instances.
+MANIFEST_VERSION = 5
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -79,6 +88,15 @@ V2_MATERIAL_SCOPE = "v2"
 #: after this task's flip is `FElysiumContentPaths::BakedMeshes`.
 V2_MESH_PACKAGE = "/ElysiumBaked/Meshes"
 V2_SKIN_ASSET = "%s/DA_ElysiumPropSkins" % V2_MESH_PACKAGE
+#: R6.3: the sway children of the imported `MI_` a detail model binds -- map-independent like the
+#: mesh they dress, so they live beside the corpus meshes and no map's prune scope reaches them.
+V2_DETAIL_MATERIAL_PACKAGE = "%s/Detail" % V2_MESH_PACKAGE
+#: The one static switch a sway child sets (`ElysiumSurfaceParams{Lit,Unlit}::Switches`).
+DETAIL_SWAY_SWITCH = "UseDetailSway"
+#: The tags the runtime buckets a detail actor by (`ElysiumBakedTags::Detail` / `DetailModel`).
+TAG_DETAIL = "elysium.detail"
+#: `swayAmount` is a byte; the custom data float is its unit fraction.
+DETAIL_SWAY_FULL = 255.0
 
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
 #: so this module reads `HOST.Bake` rather than a dict subscript, and read lazily so binding does not
@@ -139,6 +157,7 @@ def _build_class():
             self.placed_index = {}     # catalogue stem -> npc_index row
             self.placed_index_version = 0
             self.rest_labels = {}      # placement index -> the rest clip it was dealt
+            self.detail_materials = {}  # imported MI_ path -> its MI_DetailSway_* child path
 
         # -------------------------------------------------------------------------- inputs
 
@@ -389,6 +408,14 @@ def _build_class():
                 for placement in self.geometry.placements if placement.skin
             )
             recipe["placements"] = len(self.geometry.placements)
+            # R6.3: every detail record and the two page distances are inputs to the level's
+            # instanced components; the sway children are named so a re-authored child (a master
+            # graph bump) re-authors the level that binds it.
+            recipe["details"] = [row.as_row() for row in self.geometry.details]
+            recipe["detail_models"] = sorted(
+                "%s/SM_%s" % (V2_MESH_PACKAGE, model["stem"])
+                for model in self.geometry.detail_models)
+            recipe["detail_cull_cm"] = list(detail_cull())
             # R5.5: a moved sample or an edited `CaptureRadius` re-authors the level, because the
             # capture's contents live in the level's own MapBuildData and nowhere else.
             recipe["capture_radius"] = HOST.capture_radius()
@@ -495,7 +522,147 @@ def _build_class():
                 solid_count, skinned, faded))
             if skeletal_placed:
                 log("level: %d placements held on authored skeletal rest poses" % skeletal_placed)
+            self._place_details(actors, sky_scale, sky_origin, world_fog, sky_fog)
             return placed, sky_placed
+
+        # ------------------------------------------------------------- detail props (R6.3)
+
+        def _place_details(self, actors, sky_scale, sky_origin, world_fog, sky_fog):
+            """Every staged `details.records[]` row as one instance of an
+            `AElysiumDetailPropActor`'s instanced component -- one actor per `(model, sky)` group,
+            instances in lump order (`seam_map_map.md` -> "Detail props (R6.3)").
+
+            The record is the whole authority: transform from the placements-scene node, no
+            collision (the lump is client-only in VtMB), no shadow (VRAD never lit by one), the
+            page's `cl_detaildist`/`cl_detailfade` as the instance cull range, `swayAmount / 255`
+            as custom data float 0, and the scene-fog stamp every prop takes. Returns
+            `(instances, components)`.
+            """
+
+            groups = detail_instance_rows(self.geometry.details, sky_scale, sky_origin)
+            if not groups:
+                log("details: the unit places no detail props")
+                return 0, 0
+            start_cm, end_cm = detail_cull()
+            cache = {}
+            missing = {}
+            instances = components = swaying = sky_components = 0
+            for (stem, sky), rows in groups.items():
+                mesh = cache.get(stem)
+                if mesh is None and stem not in cache:
+                    mesh = unreal.EditorAssetLibrary.load_asset(
+                        "%s/SM_%s" % (V2_MESH_PACKAGE, stem))
+                    cache[stem] = mesh
+                if not mesh:
+                    missing[stem] = missing.get(stem, 0) + len(rows)
+                    continue
+                actor = actors.spawn_actor_from_class(
+                    unreal.ElysiumDetailPropActor, unreal.Vector(0.0, 0.0, 0.0))
+                if not actor:
+                    fail("details: spawn failed for %s" % stem)
+                    raise SystemExit(1)
+                component = actor.instances
+                component.set_static_mesh(mesh)
+                for slot, child in self._detail_sway_materials(mesh):
+                    component.set_material(slot, child)
+                component.set_num_custom_data_floats(1)
+                component.set_cull_distances(int(round(start_cm)), int(round(end_cm)))
+                transforms = []
+                for position, rotation, scale, _sway in rows:
+                    transform = unreal.Transform()
+                    transform.translation = unreal.Vector(*position)
+                    transform.rotation = unreal.Quat(*rotation)
+                    transform.scale3d = unreal.Vector(scale, scale, scale)
+                    transforms.append(transform)
+                component.add_instances(transforms, False, True)
+                for index, (_position, _rotation, _scale, sway) in enumerate(rows):
+                    if sway:
+                        component.set_custom_data_value(index, 0, sway, False)
+                        swaying += 1
+                fog = sky_fog if sky else world_fog
+                if fog:
+                    HOST.set_fog(component, fog)
+                if sky:
+                    component.set_editor_property("visible_in_ray_tracing", False)
+                    sky_components += 1
+                actor.set_editor_property("model_stem", stem)
+                actor.set_actor_label("Detail_%s%s" % (stem, "_sky" if sky else ""))
+                actor.tags = [TAG_DETAIL, "elysium.model=%s" % stem]
+                actor.set_folder_path("Sky/Details" if sky else "Details")
+                instances += len(rows)
+                components += 1
+            if missing:
+                fail("%d detail record(s) over %d model(s) have no %s asset "
+                     "(run: uv run elysium import models --maps %s): %s"
+                     % (sum(missing.values()), len(missing), V2_MESH_PACKAGE, self.map,
+                        ", ".join(sorted(missing)[:8])))
+                raise SystemExit(1)
+            log("details: %d instances over %d component(s) (%d in the 3D skybox, %d swaying); "
+                "cull %.0f..%.0f cm; %d sway material(s)" % (
+                    instances, components, sky_components, swaying, start_cm, end_cm,
+                    len(self.detail_materials)))
+            return instances, components
+
+        def _detail_sway_materials(self, mesh):
+            """`[(slot index, MI_DetailSway_* child)]` for every slot of a detail model's mesh:
+            the imported `MI_` the slot already binds, re-parented once through a child whose only
+            own value is `UseDetailSway = true`, authored under `V2_DETAIL_MATERIAL_PACKAGE` and
+            recipe-stamped on the parent path and the master's graph version. A slot whose master
+            has no such switch is a named failure -- the weed would stand still with nobody
+            saying why."""
+
+            out = []
+            for slot, entry in enumerate(mesh.get_editor_property("static_materials")):
+                parent = entry.get_editor_property("material_interface")
+                if parent is None:
+                    continue
+                parent_path = parent.get_path_name().split(".", 1)[0]
+                child_path = self.detail_materials.get(parent_path)
+                if child_path is None:
+                    child_path = self._author_detail_sway_material(parent, parent_path)
+                    self.detail_materials[parent_path] = child_path
+                child = unreal.EditorAssetLibrary.load_asset(child_path)
+                if not child:
+                    fail("details: sway material %s did not load" % child_path)
+                    raise SystemExit(1)
+                out.append((slot, child))
+            return out
+
+        def _author_detail_sway_material(self, parent, parent_path):
+            master = parent.get_base_material()
+            master_path = master.get_path_name().split(".", 1)[0] if master else ""
+            switches = []
+            if master:
+                switches = [str(name) for name in
+                            unreal.MaterialEditingLibrary.get_static_switch_parameter_names(master)]
+            if DETAIL_SWAY_SWITCH not in switches:
+                fail("details: %s is on %s, which exposes no %s switch (the detail sway term "
+                     "lives on M_V2_Lit / M_V2_LitTranslucent / M_V2_Unlit)"
+                     % (parent_path, master_path or "no master", DETAIL_SWAY_SWITCH))
+                raise SystemExit(1)
+            name = "MI_DetailSway_" + bl.safe_name(
+                parent_path.replace(mounts.BAKED + "/Materials/", "").replace("/MI_", "/"))
+            child_path = "%s/%s" % (V2_DETAIL_MATERIAL_PACKAGE, name)
+            recipe = {
+                "parent": parent_path,
+                "master": master_path,
+                "master_recipe": bl.stored_recipe(master_path) if master_path else "",
+                "switch": DETAIL_SWAY_SWITCH,
+            }
+            if self.tracker.register("materials", child_path, recipe,
+                                     expected_class="MaterialInstanceConstant"):
+                child = bl.make_material_instance(name, V2_DETAIL_MATERIAL_PACKAGE, parent)
+                if not child:
+                    fail("details: could not author %s" % child_path)
+                    raise SystemExit(1)
+                bl.set_static_switch_param(child, DETAIL_SWAY_SWITCH, True)
+                unreal.MaterialEditingLibrary.update_material_instance(child)
+                self.tracker.stamp(child, child_path)
+                if not bl.save(child_path):
+                    fail("details: save failed: %s" % child_path)
+                    raise SystemExit(1)
+                self.tracker.built("materials")
+            return child_path
 
         # ------------------------------------------------------------------ lights (R5.6)
 
@@ -716,6 +883,48 @@ def capture_placement(position, sky, sky_scale, sky_origin, radius):
     return scaled, float(radius) * float(sky_scale)
 
 
+def detail_instance_rows(details, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+    """The staged `details.records[]` rows grouped into instanced components (R6.3): an ordered
+    `{(stem, sky): [(position, rotation, scale, sway), ...]}`, groups in first-record order and
+    rows in lump order inside each group, so instance `k` of a component is the model's `k`-th
+    record. `sway` is `swayAmount / 255` (0.0 exactly for an unswayed record); a 3D-skybox record
+    takes the miniature transform a static prop takes -- `scale * (p - origin)` and uniform scale
+    `scale`. Pure, no `unreal`, so a pytest pins it."""
+
+    groups = {}
+    for detail in details:
+        position = tuple(float(v) for v in detail.position)
+        scale = 1.0
+        if detail.sky:
+            position = tuple(
+                float(sky_scale) * (position[i] - float(sky_origin[i])) for i in range(3))
+            scale = float(sky_scale)
+        sway = float(detail.sway) / DETAIL_SWAY_FULL if detail.sway else 0.0
+        groups.setdefault((detail.stem, bool(detail.sky)), []).append(
+            (position, tuple(float(v) for v in detail.rotation), scale, sway))
+    return groups
+
+
+#: The `UElysiumModelSettings` fields the detail cull range reads (R6.3), C++ name -> Python name.
+DETAIL_SETTINGS_FIELDS = (
+    ("DetailDrawDistanceCm", "detail_draw_distance_cm"),
+    ("DetailFadeRangeCm", "detail_fade_range_cm"),
+)
+
+
+def detail_cull():
+    """`(start_cm, end_cm)` for every detail component: `end` is the Models page's
+    `DetailDrawDistanceCm` (VtMB `cl_detaildist` 600 in), `start` is `end - DetailFadeRangeCm`
+    (`cl_detailfade` 300 in), floored at 0. Read off the CDO -- the tracked ini -- never a
+    literal."""
+
+    page = unreal.get_default_object(unreal.ElysiumModelSettings)
+    values = {cpp: float(page.get_editor_property(py)) for cpp, py in DETAIL_SETTINGS_FIELDS}
+    end = max(0.0, values["DetailDrawDistanceCm"])
+    start = max(0.0, end - max(0.0, values["DetailFadeRangeCm"]))
+    return start, end
+
+
 #: The `UElysiumLightingSettings` fields `derive_light` reads, by their C++ name, with the Python
 #: reflection name each is read through (`b` prefix dropped, snake_case). Restated here so a
 #: renamed page field fails the bake loudly instead of silently deriving from a default.
@@ -884,6 +1093,27 @@ class _Placement(object):
         return bool(self.flags & 0x1) and self.fade_max_cm > 0.0
 
 
+class _DetailPlacement(object):
+    """One staged `details.records[]` row (R6.3), in `map_geometry.DETAIL_RECORD_FIELDS` order:
+    `[index, model, px, py, pz, qx, qy, qz, qw, sway, sky]`; `stem` is joined from
+    `details.models[]` by the row's `model`."""
+
+    __slots__ = ("index", "model", "stem", "position", "rotation", "sway", "sky")
+
+    def __init__(self, row, stems):
+        self.index = int(row[0])
+        self.model = int(row[1])
+        self.stem = stems[self.model]
+        self.position = tuple(float(v) for v in row[2:5])
+        self.rotation = tuple(float(v) for v in row[5:9])
+        self.sway = int(row[9])
+        self.sky = bool(row[10])
+
+    def as_row(self):
+        return [self.index, self.model, list(self.position), list(self.rotation), self.sway,
+                int(self.sky)]
+
+
 class _CubemapSample(object):
     """One staged `cubemaps[]` row (R5.5): where a reflection capture stands."""
 
@@ -962,6 +1192,10 @@ class _StagedGeometry(object):
         self.materials = dict(self.manifest["materials"])
         self.cubemaps = [_CubemapSample(row) for row in self.manifest.get("cubemaps") or []]
         self.lights = [_LightRow(row) for row in self.manifest.get("lights") or []]
+        details = self.manifest.get("details") or {}
+        self.detail_models = list(details.get("models") or [])
+        stems = {int(model["model"]): str(model["stem"]) for model in self.detail_models}
+        self.details = [_DetailPlacement(row, stems) for row in details.get("records") or []]
 
     def brush_stems(self):
         return {int(index): stem

@@ -348,6 +348,9 @@ def _fake_unreal(editor):
         "MaterialExpressionReflectionVectorWS", "MaterialExpressionTextureCoordinate",
         "MaterialExpressionRayTracingQualitySwitch", "MaterialExpressionIf",
         "MaterialExpressionPixelDepth",
+        # R6.3: the detail-sway World Position Offset lane (`_detail_sway`).
+        "MaterialExpressionPerInstanceCustomData", "MaterialExpressionWorldPosition",
+        "MaterialExpressionTransformPosition", "MaterialExpressionObjectLocalBounds",
     ]
 
     ns = SimpleNamespace(
@@ -385,6 +388,8 @@ def _fake_unreal(editor):
         TranslucencyLightingMode=_enum("TLM", "TLM_SURFACE_PER_PIXEL_LIGHTING"),
         MaterialShadingModel=_enum("MSM", "MSM_UNLIT"),
         RefractionMode=_enum("RM", "RM_PIXEL_NORMAL_OFFSET"),
+        MaterialPositionTransformSource=_enum(
+            "TRANSFORMPOSSOURCE", "TRANSFORMPOSSOURCE_WORLD", "TRANSFORMPOSSOURCE_INSTANCE"),
         # `unreal.MaterialProperty` in this 5.8 build exposes no `MP_PIXEL_DEPTH_OFFSET`
         # (phase4_mechanics.md section 0, confirmed against the real editor's own
         # `dir(unreal.MaterialProperty)`) -- the fake used to carry it, which let a
@@ -393,7 +398,8 @@ def _fake_unreal(editor):
         # reality instead of papering over the gap.
         MaterialProperty=_enum(
             "MP", "MP_BASE_COLOR", "MP_NORMAL", "MP_EMISSIVE_COLOR", "MP_SPECULAR",
-            "MP_ROUGHNESS", "MP_METALLIC", "MP_OPACITY", "MP_OPACITY_MASK", "MP_REFRACTION"),
+            "MP_ROUGHNESS", "MP_METALLIC", "MP_OPACITY", "MP_OPACITY_MASK", "MP_REFRACTION",
+            "MP_WORLD_POSITION_OFFSET"),
     )
     for name in material_expression_names:
         setattr(ns, name, type(name, (), {}))
@@ -413,6 +419,7 @@ REQUIRED_MPC_SCALARS = [
     "Overbright", "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale",
     "MaskMetallicMax", "ChromaticTintStrength", "EnvTintScale", "FixedCubeStrength",
     "DefaultRoughness", "DefaultSpecular", "DefaultMetallic", "ClassInfluence",
+    "DetailSwayAmplitude",
 ]
 
 

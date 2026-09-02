@@ -998,9 +998,9 @@ its `solid` byte says, and is scaled, shadow-less and out of the ray-tracing sce
 legacy lane placed it: it is scenery the player can never reach, and at 16x it would wall the map
 off.
 
-**Detail props are not this lane's.** The `placements` scene's other node family (`dprp`, 143,412
-records over 41 models corpus-wide) is R7.3's: they want instancing and a lighting join, not one
-actor each.
+**Detail props are the same lane's second placement family, instanced.** The `placements` scene's
+other node family (`dprp`, 143,412 records over 41 models corpus-wide) is placed by "Detail props
+(R6.3)" below: one instanced component per model per map, not one actor each.
 
 ### Brush fade distances (R6.4)
 
@@ -1043,6 +1043,81 @@ it through the R4.1 asset (`seam_map_map_entities.md` → "The row shape"; recip
 listed map's asset re-authors), and both parity checks compare it. `bake_verify.verify_brush_cull`
 asserts, per map, every `func_lod` row's `cull_max_cm` against its own `DisappearDist` in the
 `.ents` and in the baked asset.
+
+### Detail props (R6.3)
+
+R6.3 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" places the `dprp` game lump.
+The corpus: **143,412 records over 41 models on 52 of 108 maps**, every one a `dprp` version 2
+record (`formats/map_glb/gamelump.py`: origin, angles, `detailModel`, `leaf`, `lighting`,
+`lightStyles`, `lightStyleCount`, `swayAmount`, `shapeAngle`, `shapeSize`; no sprite dictionary —
+every corpus detail is a model), 35,521 of them with a non-zero `swayAmount`. On the three working
+maps: `sp_tutorial_1` 6,031 over 6 models (`grassa`/`grassb`, `rocks/smalla`/`smallb`/`smallc`,
+`junk4`; every `swayAmount` 0), `sm_pawnshop_1` 0, `sm_hub_1` 528 over 3 (`weedb`/`weedc`/`weedd`,
+231 swaying). Each record is a node of the `placements` scene already (`detailProp[<i>]`, with
+`ELYSIUM_model_reference`), and its model is a `dependencies[]` row under role `model`, so the R1
+map-scoped selection (`select_for_maps`) already stages every detail model beside the static
+props — all nine on the working corpus were in `/ElysiumBaked/Meshes` before this task.
+
+**Ruling — one `AElysiumDetailPropActor` per model per map, one instance per record.** The offline
+reader (`map_geometry._detail_placements`) resolves every record in lump order to its R1 stem
+(`shared_corpus.static_stem`, the same key a static prop uses), takes the node's transform through
+the same `gltf_position_to_unreal`/`gltf_quat_to_unreal` a static prop takes, and stages them as
+`details.models[]` + `details.records[]` (manifest **v5**). The editor half (`bake_map_v2.
+_place_details`) groups records by `(model, sky)` and spawns one `AElysiumDetailPropActor` per group
+— a plain actor whose root is a `UInstancedStaticMeshComponent` (`Instances`) on the corpus mesh
+`/ElysiumBaked/Meshes/SM_<stem>` — and adds the group's records as instances **in lump order**, so
+instance index `k` of a model's component is that model's `k`-th record and `bake_verify` can count
+them back against the staged table. A model with no `SM_` asset is the same loud failure a static
+prop's is (`run: uv run elysium import models --maps <map>`), never an empty field. Labelled
+`Detail_<stem>` / `Detail_<stem>_sky`, folder `Details` / `Sky/Details`, tags
+`elysium.detail` + `elysium.model=<stem>` (`ElysiumBakedTags::Detail` / `DetailModel`).
+
+| Record / rule | Baked as |
+|---|---|
+| origin, angles | one instance transform (world space), the placements-scene node's, in the R5.1 frame |
+| a record inside the 3D-skybox area | the miniature transform, exactly as a static prop: position `scale × (p − origin)`, uniform scale `scale`, its own `_sky` component, `visible_in_ray_tracing = false`. None on the three working maps |
+| collision | **none** (`NoCollision`). `dprp` is read by `client.dll` alone (`CDetailObjectSystem`, `CDetailModel` — `100e0d90`, `100e0250`…); the server never sees a detail object and nothing in VtMB ever collides with one |
+| shadows | `CastShadow = false`. VRAD never lights the world by a detail prop, and the engine drew them without shadows; the record's `lighting` (`ColorRGBExp32`) and `lightStyles` are VRAD's baked *answer* for the 2004 renderer (`CDetailModel::vfunc13` `100e0300` multiplies them into the draw colour) — on the V2 lane the R5.6 light actors light the instances, so the bytes are not applied |
+| draw distance | `Instances->SetCullDistances(start, end)` with `end = DetailDrawDistanceCm`, `start = end − DetailFadeRangeCm`, both off `UElysiumModelSettings` (Project Settings → Elysium → Models → Detail Props). **Defaults are VtMB's own**: `cl_detaildist` **600** and `cl_detailfade` **300** inches → **1524 cm** and **762 cm** (`CDetailObjectSystem::vfunc10` `100e0d90` registers both ConVars; their default strings sit at `102b9fa0` = `"600"` and `102b9f8c` = `"300"` in `client.dll`, read off the shipped binary). VtMB's fade over the band is an alpha ramp, `1 − (d² − (dist − fade)²) / (dist² − (dist − fade)²)`, which that function computes as the per-frame factor; the ISM culls hard at `end` and exposes the band as `PerInstanceFadeAmount`, which no master reads — the shipped rule is the cutoff at `cl_detaildist`, the ramp is named in the entry's follow-ups |
+| `swayAmount` (0..255) | per-instance custom data float **0** = `swayAmount / 255`, read by the master's `UseDetailSway` term (`seam_map_material.md` → "Detail sway on the model masters (R6.3)"). A record with `swayAmount = 0` gets an exact 0 and never moves |
+| scene fog | `set_fog(Instances, world_fog | sky_fog)` — the same Custom Primitive Data stamp every prop takes (`ElysiumFog.h`); one stamp per component |
+| `leaf`, `shapeAngle`, `shapeSize`, `lightStyleCount` | not carried: the leaf is the BSP's own culling key (Unreal culls by bounds), the shape fields describe sprite details (0 sprites on the corpus), and the lightstyle table is the baked lighting above |
+
+**The sway material is a child instance, never a rewrite of the shared `MI_`.** A detail model's
+slots bind the material lane's own imported `MI_` (the model asset already carries them), and
+that instance is shared by every static prop and every other map that draws the same VMT. The
+sway term must therefore be switched **on** only where an instanced draw feeds it, or every Nanite
+chunk and every prop on the master would pay a World Position Offset it never uses
+(`HLSLMaterialTranslator::IsMaterialPropertyUsed`: a constant-zero WPO is *not* "used", a
+switched-off branch compiles to exactly that). So the bake authors, once per detail material,
+`/ElysiumBaked/Meshes/Detail/MI_DetailSway_<material path>` — a `MaterialInstanceConstant`
+parented to the imported `MI_` with the one static switch `UseDetailSway = true`, recipe-stamped on
+the parent's path and the master's graph version — and binds it as the component's slot override.
+Map-independent, like the mesh it dresses. A detail material whose master has no `UseDetailSway`
+switch is a named bake failure, not a silently still weed. The instances are not pruned by a map
+bake (the package is shared, like `/ElysiumBaked/Meshes`; a map's prune scope never reaches it).
+
+**Runtime.** `UElysiumMapVisuals::AdoptBakedLevel` buckets `elysium.detail` actors into
+`DetailActors`, sums their instance counts into `DetailInstanceCount` / `DetailModelCount` (the
+Cog Maps/Status rows and the boot log line `baked '<map>': … %d detail instances over %d models`),
+and `elysium.props` hides them with the static props. Nothing else reads a detail actor: it is
+scenery with no entity, no collision and no input.
+
+#### Verification (R6.3)
+
+`pipeline/tests/test_map_geometry.py` pins the record → placement mapping (model index → stem,
+lump order preserved, the frame, `swayAmount` carried raw, the miniature flag) and, corpus-gated,
+that every record on the three maps resolves to a staged model and the per-model counts match the
+root unit's own records. `pipeline/tests/test_bake_map_details.py` pins the editor half's pure
+grouping (`detail_instance_rows`: by `(stem, sky)`, lump order inside a group, `swayAmount / 255`,
+the sky transform) and the manifest version the two halves share. `bake_verify.verify_details`
+loads the level and counts every `elysium.detail` actor's instances against the staged
+`details.records[]` per model — one component per `(model, sky)`, the same count, no model missing
+and none extra — and checks the cull range against the settings page and that every component
+carries exactly one custom-data float. `Elysium.Substrate.DetailProps` pins the settings defaults
+(`600 × 2.54`, `300 × 2.54`, `5 × 2.54`), the `DetailSwayAmplitude` binding, the tag helpers and
+the actor's own shape (ISM root, `NoCollision`, no shadow). Measured numbers are in the R6.3
+Settled entry of `docs/project/seam_migration.md`.
 
 ### The per-map cutover flag
 

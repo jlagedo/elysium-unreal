@@ -98,6 +98,7 @@ namespace
 		ElysiumSurfaceParamsLit::Switches::MetallicTint,
 		ElysiumSurfaceParamsLit::Switches::UseAnimatedFrames,
 		ElysiumSurfaceParamsLit::Switches::UseAnimatedNormalFrames,
+		ElysiumSurfaceParamsLit::Switches::UseDetailSway,
 	};
 
 	static const FName UnlitTextures[] = {
@@ -144,6 +145,7 @@ namespace
 		ElysiumSurfaceParamsUnlit::Switches::MetallicTint,
 		ElysiumSurfaceParamsUnlit::Switches::UseAnimatedFrames,
 		ElysiumSurfaceParamsUnlit::Switches::UseCloudAlpha,
+		ElysiumSurfaceParamsUnlit::Switches::UseDetailSway,
 	};
 
 	static const FName TwoTextureTextures[] = {

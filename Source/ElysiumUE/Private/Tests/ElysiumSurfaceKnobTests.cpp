@@ -59,6 +59,7 @@ bool FElysiumSurfaceSettingsDefaultsTest::RunTest(const FString&)
 		TEXT("MaskRoughnessMax"), TEXT("MaskSpecularScale"), TEXT("MaskMetallicMax"),
 		TEXT("EnvTintScale"), TEXT("FixedCubeStrength"), TEXT("ChromaticTintStrength"),
 		TEXT("ChromaThreshold"), TEXT("DecalDepthOffset"), TEXT("CaptureRadius"),
+		TEXT("DetailSwayAmplitude"),
 	};
 	for (const TCHAR* Name : Expected)
 	{

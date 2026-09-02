@@ -2,6 +2,7 @@
 
 #include "ElysiumBakedTags.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumDetailPropActor.h"
 #include "ElysiumFog.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
@@ -15,6 +16,7 @@
 
 #include "CableComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Components/MeshComponent.h"
 #include "Components/SkinnedMeshComponent.h"
 #include "Components/SkyLightComponent.h"
@@ -158,6 +160,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	WorldActors.Reset();
 	SkyActors.Reset();
 	PropActors.Reset();
+	DetailActors.Reset();
 	RuntimeWorldBrushes.Reset();
 	RuntimeSkyBrushes.Reset();
 	SkyLight = nullptr;
@@ -188,6 +191,10 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Prop))
 		{
 			PropActors.Add(Cast<AStaticMeshActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Detail))
+		{
+			DetailActors.Add(Cast<AElysiumDetailPropActor>(Actor));
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Light))
 		{
@@ -251,6 +258,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	WorldActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
 	SkyActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
 	PropActors.RemoveAll([](const TObjectPtr<AStaticMeshActor>& A) { return A == nullptr; });
+	DetailActors.RemoveAll([](const TObjectPtr<AElysiumDetailPropActor>& A) { return A == nullptr; });
 
 	WorldSurfaceCount = WorldActors.Num();
 	SkySurfaceCount = SkyActors.Num();
@@ -265,6 +273,20 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		}
 	}
 	PropModelCount = Models.Num();
+
+	// R6.3: a detail actor is one model's whole placement set; the instance count is the
+	// component's own, written by the bake, so the stat reads the lump's record count back.
+	DetailInstanceCount = 0;
+	TSet<const UStaticMesh*> DetailModels;
+	for (const TObjectPtr<AElysiumDetailPropActor>& Detail : DetailActors)
+	{
+		if (const UInstancedStaticMeshComponent* Instances = Detail->Instances)
+		{
+			DetailInstanceCount += Instances->GetInstanceCount();
+			DetailModels.Add(Instances->GetStaticMesh());
+		}
+	}
+	DetailModelCount = DetailModels.Num();
 
 	if (LightRig)
 	{
@@ -756,6 +778,11 @@ void UElysiumMapVisuals::ToggleProps()
 	for (const TObjectPtr<AStaticMeshActor>& Prop : PropActors)
 	{
 		Prop->SetActorHiddenInGame(!bPropsVisible);
+	}
+	// The detail props are props to the eye, so the one toggle covers both placement families.
+	for (const TObjectPtr<AElysiumDetailPropActor>& Detail : DetailActors)
+	{
+		Detail->SetActorHiddenInGame(!bPropsVisible);
 	}
 }
 

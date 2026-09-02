@@ -59,7 +59,7 @@ DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 #: it up through the recipe stamp even when nothing on disk changed. `_source_hash()` below is the
 #: exhaustive safety net (it catches an edit this constant was not bumped for); this constant
 #: stays as the human-readable marker of the shape revision.
-GRAPH_VERSION = 4
+GRAPH_VERSION = 5
 
 #: `MPC_ElysiumSurfaces` (SF-4.1, C++, landed) owns every one of these rows and their defaults --
 #: `make_surface_knobs.py` (`build_content.py` runs it before this file). This generator is a
@@ -75,6 +75,8 @@ REQUIRED_MPC_SCALARS = sorted([
     "Overbright", "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale",
     "MaskMetallicMax", "ChromaticTintStrength", "EnvTintScale", "FixedCubeStrength",
     "DefaultRoughness", "DefaultSpecular", "DefaultMetallic", "ClassInfluence",
+    # R6.3: the detail-sway amplitude (`_detail_sway`), on Lit/LitTranslucent/Unlit.
+    "DetailSwayAmplitude",
 ])
 
 # The shader-source units each master's post-lighting math transcribes (design doc "Post-lighting
@@ -563,6 +565,61 @@ def _probe_all_switches_true(mat, asset, switch_names):
 # ============================================================================================
 
 
+def _detail_sway(g, switch_name, x, y):
+    """R6.3 (`seam_map_material.md` -> "Detail sway on the model masters"): one World Position
+    Offset term behind the static switch `switch_name` (default off):
+
+        sway   = PerInstanceCustomData[0]           -- swayAmount / 255; 0 on a non-instanced draw
+        weight = saturate((local.z - min.z) / (max.z - min.z))
+                                                    -- the base stays put, the tip moves
+        phase  = (world.x + world.y) / 2.54         -- Source's per-object phase, in its inches
+        WPO    = sin(Time + phase) * sway * weight * DetailSwayAmplitude, along world (1, 1, 0)
+
+    Off, the branch compiles to the constant zero the translator does NOT count as a WPO use
+    (`IsMaterialPropertyUsed`), so every Nanite chunk, prop and character on the master keeps the
+    shader it had; only the map bake's `MI_DetailSway_*` children turn it on. `Time` is the shared
+    wind clock, `DetailSwayAmplitude` (cm) the one knob, off `MPC_ElysiumSurfaces`."""
+
+    custom = g.node(unreal.MaterialExpressionPerInstanceCustomData, x, y)
+    custom.set_editor_property("data_index", 0)
+    custom.set_editor_property("const_default_value", 0.0)
+
+    world_pos = g.node(unreal.MaterialExpressionWorldPosition, x, y + 120)
+    local = g.node(unreal.MaterialExpressionTransformPosition, x + 200, y + 120)
+    local.set_editor_property(
+        "transform_source_type",
+        unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_WORLD)
+    local.set_editor_property(
+        "transform_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_INSTANCE)
+    # The unnamed first input: `GetExpressionInputByName` takes "" as "the first pin".
+    connect(world_pos, "", local, "")
+    bounds = g.node(unreal.MaterialExpressionObjectLocalBounds, x, y + 260)
+    local_z = g.mask(local, "b", x + 400, y + 120)
+    min_z = g.mask(bounds, "b", x + 200, y + 260, src_out="Min")
+    max_z = g.mask(bounds, "b", x + 200, y + 340, src_out="Max")
+    height = g.sub(max_z, "", min_z, "", x + 400, y + 300)
+    rise = g.sub(local_z, "", min_z, "", x + 600, y + 200)
+    weight = g.sat(g.div(rise, "", height, "", x + 800, y + 240), "", x + 1000, y + 240)
+
+    phase_sum = g.add(g.mask(world_pos, "r", x + 200, y + 440), "",
+                      g.mask(world_pos, "g", x + 200, y + 520), "", x + 400, y + 480)
+    phase = g.mul(phase_sum, "", g.const(1.0 / 2.54, x + 400, y + 560), "", x + 600, y + 480)
+    clock = g.add(g.time(x + 600, y + 400), "", phase, "", x + 800, y + 440)
+    wave = g.sine(clock, "", x + 1000, y + 440)
+    # `Period` 0 is the raw sine of the input (`UMaterialExpressionSine::Compile`); the default
+    # 1.0 would wrap the clock once per second.
+    wave.set_editor_property("period", 0.0)
+
+    amplitude = g.mpc("DetailSwayAmplitude", x + 1000, y + 600)
+    magnitude = g.mul(g.mul(wave, "", custom, "", x + 1200, y + 440), "",
+                      g.mul(weight, "", amplitude, "", x + 1200, y + 560), "", x + 1400, y + 500)
+    planar = g.append(magnitude, "", magnitude, "", x + 1600, y + 500)
+    offset = g.append(planar, "", g.const(0.0, x + 1600, y + 580), "", x + 1800, y + 520)
+    still = g.const3(0.0, 0.0, 0.0, x + 1800, y + 640)
+    final = g.switch(switch_name, offset, still, x + 2000, y + 540, default=False)
+    g.to(final, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
+
+
 def _uv_lanes(g, tex_scale_offset_name, *, base_scroll_names, bump_scroll_names=None):
     """`TexScaleOffset` transform (shared by every UV-consuming slot on the material), then one
     independent `Panner` per lane it is asked for. `(0, 0)` scroll rates are an exact `Panner`
@@ -845,6 +902,7 @@ class LitParams:
         MetallicTint = "MetallicTint"
         UseAnimatedFrames = "UseAnimatedFrames"
         UseAnimatedNormalFrames = "UseAnimatedNormalFrames"
+        UseDetailSway = "UseDetailSway"
 
 
 LIT_PARAM_TABLE = {
@@ -1075,6 +1133,9 @@ def _build_lit(mat, collection, environment_collection, lut_texture, default_fra
                             default=False)
     g.to(opacity_mask, "", unreal.MaterialProperty.MP_OPACITY_MASK)
 
+    # -- Detail sway (R6.3): the one World Position Offset term, behind UseDetailSway ----------
+    _detail_sway(g, P.Switches.UseDetailSway, -1900, 3400)
+
 
 def _lit_recipe(cited_units):
     return {
@@ -1191,6 +1252,7 @@ class UnlitParams:
         MetallicTint = "MetallicTint"
         UseAnimatedFrames = "UseAnimatedFrames"
         UseCloudAlpha = "UseCloudAlpha"
+        UseDetailSway = "UseDetailSway"
 
 
 UNLIT_PARAM_TABLE = {
@@ -1334,6 +1396,10 @@ def _build_unlit(mat, collection, lut_texture, default_frames):
     # class LUT declared for contract completeness ("every master exposes SurfaceClassLUT"); an
     # Unlit shading model ignores MP_ROUGHNESS/SPECULAR/METALLIC, so it is not wired to anything.
     _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+
+    # -- Detail sway (R6.3): every corpus detail material is `unlitgeneric`, so this is the master
+    # the weeds actually swing on. Same term, same switch, as the Lit pair. --------------------
+    _detail_sway(g, P.Switches.UseDetailSway, -1900, 2400)
 
 
 def make_unlit():

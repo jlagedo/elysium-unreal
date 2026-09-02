@@ -6,6 +6,7 @@
 #include "ElysiumEnvironment.h"   // FElysiumEnvDef — a plain by-value member
 #include "ElysiumMapVisuals.generated.h"
 
+class AElysiumDetailPropActor;
 class AStaticMeshActor;
 class APostProcessVolume;
 class UCableComponent;
@@ -107,6 +108,8 @@ public:
 	const TArray<TObjectPtr<AStaticMeshActor>>& GetWorldActors() const { return WorldActors; }
 	const TArray<TObjectPtr<AStaticMeshActor>>& GetSkyActors() const { return SkyActors; }
 	const TArray<TObjectPtr<AStaticMeshActor>>& GetPropActors() const { return PropActors; }
+	// R6.3: one per detail model per map, every `dprp` record of that model as an instance.
+	const TArray<TObjectPtr<AElysiumDetailPropActor>>& GetDetailActors() const { return DetailActors; }
 
 	// The real-time light rig for this map (the Cog Lights window's read-only viewer reaches it
 	// through here), or null before the map is built.
@@ -129,6 +132,10 @@ public:
 	int32 WorldLightCount = 0;
 	int32 PropInstanceCount = 0;
 	int32 PropModelCount = 0;
+	// Detail props (R6.3): instances summed over the adopted `elysium.detail` actors, and the
+	// distinct models behind them.
+	int32 DetailInstanceCount = 0;
+	int32 DetailModelCount = 0;
 	// Decals: number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
 	// Ropes: number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
@@ -171,6 +178,7 @@ private:
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> WorldActors;
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> SkyActors;
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> PropActors;
+	UPROPERTY() TArray<TObjectPtr<AElysiumDetailPropActor>> DetailActors;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeWorldBrushes;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeSkyBrushes;
 	bool bPropsVisible = true;

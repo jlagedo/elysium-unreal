@@ -312,6 +312,10 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
             # live `MPC_ElysiumEnvironment` read in the graph, so no per-map material instance is
             # needed for the live half either.
             "WetnessScale": "S", "WetnessDriven": "S",
+            # R6.3 (seam_map_material.md -> "Detail sway on the model masters"): declared for the
+            # three-way name pin; no VMT key maps to it and the stage never sets it true -- only
+            # the map bake's `MI_DetailSway_*` child of an imported instance does.
+            "UseDetailSway": "#",
         },
     ),
     "M_V2_Unlit": _merged(
@@ -323,6 +327,7 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
             "UseBaseTexture": "#", "UseVertexColor": "#", "UseVertexAlpha": "#", "UseEnvMap": "#",
             "UseEnvMapMask": "#", "UseBaseAlphaEnvMapMask": "#", "UseFixedCube": "#",
             "MetallicTint": "#", "UseCloudAlpha": "#",
+            "UseDetailSway": "#",  # R6.3, as on M_V2_Lit
         },
     ),
     "M_V2_Eyes": _merged(_SHARED_PARAMS, {

@@ -15,7 +15,7 @@ from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
-from elysium_pipeline.paths import export_root  # noqa: E402
+from elysium_pipeline.paths import export_root, work_root  # noqa: E402
 from elysium_pipeline.validation.png_alpha import alpha_range  # noqa: E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 
@@ -456,6 +456,98 @@ def verify_lights_baked(actors, world_dir, map_name):
     if len(errors) > 8:
         unreal.log_error("[verify] ... and %d more baked-light finding(s) on %s"
                          % (len(errors) - 8, map_name))
+    return errors
+
+
+DETAIL_TAG = "elysium.detail"
+DETAIL_MODEL_TAG_PREFIX = "elysium.model="
+
+
+def _staged_details(map_name):
+    """The staged `details` table the V2 bake instanced from (`map_geometry.stage_map`, manifest
+    v5, under `$ELYSIUM_WORK_ROOT/import/map_geometry/<map>/`), or None when the pair is absent."""
+    path = os.path.join(os.fspath(work_root()), "import", "map_geometry", map_name, "manifest.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    return manifest.get("details") or {"models": [], "records": []}
+
+
+def verify_details(actors, map_name):
+    """R6.3 (`seam_map_map.md` -> "Detail props (R6.3)"), `MapsOnV2Models` maps only: every
+    `elysium.detail` actor's instanced component counted back against the staged `details`
+    table -- one component per `(model, sky)` group, the same instance count, no model missing and
+    none extra -- plus the cull range the Models page names and exactly one custom-data float per
+    component (the `swayAmount / 255` slot)."""
+    errors = []
+    if not map_transport.is_map_on_v2_models(map_name):
+        return errors
+    details = _staged_details(map_name)
+    if details is None:
+        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count "
+                      "detail props against (run: uv run elysium export map %s)"
+                      % (map_name, map_name))
+        return errors
+    stems = {int(model["model"]): str(model["stem"]) for model in details.get("models") or []}
+    expected = {}
+    for row in details.get("records") or []:
+        key = (stems[int(row[1])], bool(row[10]))
+        expected[key] = expected.get(key, 0) + 1
+
+    page = unreal.get_default_object(unreal.ElysiumModelSettings)
+    end_cm = max(0.0, float(page.get_editor_property("detail_draw_distance_cm")))
+    start_cm = max(0.0, end_cm - max(0.0, float(page.get_editor_property("detail_fade_range_cm"))))
+
+    found = {}
+    instances = 0
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if DETAIL_TAG not in tags:
+            continue
+        stem = next((tag[len(DETAIL_MODEL_TAG_PREFIX):] for tag in tags
+                     if tag.startswith(DETAIL_MODEL_TAG_PREFIX)), "")
+        sky = str(actor.get_folder_path()).startswith("Sky")
+        component = actor.get_editor_property("instances")
+        if component is None:
+            errors.append("%s: detail actor %s has no instanced component"
+                          % (map_name, actor.get_actor_label()))
+            continue
+        count = int(component.get_instance_count())
+        key = (stem, sky)
+        if key in found:
+            errors.append("%s: two detail components for %s%s"
+                          % (map_name, stem, " (sky)" if sky else ""))
+        found[key] = count
+        instances += count
+        if int(component.get_editor_property("num_custom_data_floats")) != 1:
+            errors.append("%s: detail %s carries %d custom data floats, not 1" % (
+                map_name, stem, int(component.get_editor_property("num_custom_data_floats"))))
+        got_start = int(component.get_editor_property("instance_start_cull_distance"))
+        got_end = int(component.get_editor_property("instance_end_cull_distance"))
+        if got_start != int(round(start_cm)) or got_end != int(round(end_cm)):
+            errors.append("%s: detail %s culls %d..%d cm, the Models page says %d..%d" % (
+                map_name, stem, got_start, got_end, int(round(start_cm)), int(round(end_cm))))
+    matched = 0
+    for key, want in sorted(expected.items()):
+        got = found.get(key)
+        if got is None:
+            errors.append("%s: no detail component for %s%s (%d staged records)"
+                          % (map_name, key[0], " (sky)" if key[1] else "", want))
+        elif got != want:
+            errors.append("%s: detail %s%s has %d instances, the unit stages %d"
+                          % (map_name, key[0], " (sky)" if key[1] else "", got, want))
+        else:
+            matched += 1
+    for key in sorted(set(found) - set(expected)):
+        errors.append("%s: detail component %s%s has no staged records"
+                      % (map_name, key[0], " (sky)" if key[1] else ""))
+    unreal.log("[verify] details: %d instances over %d component(s), %d staged records over "
+               "%d model group(s), %d matched; cull %d..%d cm" % (
+                   instances, len(found), len(details.get("records") or []), len(expected),
+                   matched, int(round(start_cm)), int(round(end_cm))))
+    for message in errors:
+        unreal.log_error("[verify] " + message)
     return errors
 
 
@@ -947,6 +1039,7 @@ def verify_map(map_name):
             unreal.log("[verify]   %-28s %d" % (key, census[key]))
         errors.extend(verify_lights(actors, world_dir, map_name))
         errors.extend(verify_lights_baked(actors, world_dir, map_name))
+        errors.extend(verify_details(actors, map_name))
         errors.extend(verify_captures(
             actors, unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()))
     else:

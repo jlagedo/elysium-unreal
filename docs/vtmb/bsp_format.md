@@ -91,6 +91,20 @@ angles; uint16 propType (→modelDict); uint16 firstLeaf, leafCount; byte solid,
 float fadeMin, fadeMax; Vector lightingOrigin`. (`ch_hub_1` = 500 props / 124 models; `la_hub_1`
 = 864.)
 
+The `dprp` payload is **version 2** on all 108 maps: `int nameCount; char[128] modelDict[]; int
+objectCount; DetailObject obj[]` — no sprite dictionary between the two, and every record is a
+model. `DetailObject` is 40 bytes: `Vector origin; QAngle angles; uint16 detailModel (→modelDict);
+uint16 leaf; ColorRGBExp32 lighting; uint32 lightStyles; byte lightStyleCount; byte swayAmount;
+byte shapeAngle; byte shapeSize`. Corpus: 143,412 records over 41 models on 52 maps; 35,521 carry
+a non-zero `swayAmount`, which **this client never reads** (`CDetailModel`, `client.dll`
+`100e0250`…`100e0300`, is construct/destroy/lighting only — the byte is VBSP's, authored for a
+feature this engine build shipped without). The lump is client-only: `CDetailObjectSystem`
+(`client.dll`) decodes it, the server never does, and a detail object has no collision.
+`CDetailObjectSystem::vfunc10` (`100e0d90`) registers the two draw-distance ConVars,
+`cl_detaildist` default **`"600"`** (`102b9fa0`) and `cl_detailfade` default **`"300"`**
+(`102b9f8c`), inches, and computes the per-frame fade factor `1 / (dist² − (dist − fade)²)` for an
+alpha ramp from `dist − fade` to `dist`.
+
 ## `TOOLS/*` materials
 
 `toolsnodraw`, `toolsclip`, `toolstrigger`, `toolsskybox`, `toolshint`, `toolsareaportal`, … are

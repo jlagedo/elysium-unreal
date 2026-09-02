@@ -113,6 +113,17 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category = "Capture", meta = (ClampMin = "100.0"))
 	float CaptureRadius = 1500.0f;
 
+	// --- detail props (R6.3) -------------------------------------------------------------------
+	/**
+	 * The peak World Position Offset, in centimetres, of a fully swaying detail instance
+	 * (`swayAmount` 255) -- the `UseDetailSway` term on `M_V2_Lit`/`M_V2_LitTranslucent`/
+	 * `M_V2_Unlit` (`seam_map_material.md` -> "Detail sway on the model masters (R6.3)"). VtMB's
+	 * own client never read the byte, so the default is the first Source build's that did:
+	 * `cl_detail_max_sway` 5 world units (owner call filed to R7; wire first, tune later).
+	 */
+	UPROPERTY(EditAnywhere, Config, Category = "Detail Props", meta = (ClampMin = "0.0"))
+	float DetailSwayAmplitude = 5.0f * 2.54f;
+
 	/** `/Game/ElysiumGenerated/Materials/V2/MPC_ElysiumSurfaces`, the collection every V2 master reads. */
 	static const TCHAR* CollectionPath();
 

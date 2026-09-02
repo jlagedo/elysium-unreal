@@ -68,6 +68,7 @@ const TArray<TPair<FName, float UElysiumSurfaceSettings::*>>& UElysiumSurfaceSet
 		{FName(TEXT("ChromaThreshold")), &UElysiumSurfaceSettings::ChromaThreshold},
 		{FName(TEXT("DecalDepthOffset")), &UElysiumSurfaceSettings::DecalDepthOffset},
 		{FName(TEXT("CaptureRadius")), &UElysiumSurfaceSettings::CaptureRadius},
+		{FName(TEXT("DetailSwayAmplitude")), &UElysiumSurfaceSettings::DetailSwayAmplitude},
 	};
 	return Bindings;
 }

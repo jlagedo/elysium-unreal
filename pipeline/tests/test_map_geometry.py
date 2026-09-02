@@ -13,7 +13,9 @@ geometry changed" are separable -- and skip, loudly, when that corpus is not on 
 """
 from __future__ import annotations
 
+from collections import Counter
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -138,6 +140,108 @@ def test_reader_reproduces_every_legacy_props_row_on_the_working_corpus(map_name
         assert placement.solid == int(row[8])
         assert placement.skin == int(row[9])
         assert placement.sky is bool(int(row[10]))
+
+
+# --- R6.3: detail props -----------------------------------------------------------------------------
+#
+# `seam_map_map.md` -> "Detail props (R6.3)": every `dprp` record becomes one instance of its
+# model's instanced component, in lump order, through the same frame a static prop takes, with the
+# record's `swayAmount` carried raw. The first case pins the mapping on a synthetic unit (the
+# dictionary join, the order, the frame, the miniature flag, the loud out-of-range failure); the
+# corpus case walks the three maps against the root unit's own records.
+
+
+class _FakeSky:
+    def __init__(self, threshold_x):
+        self.threshold_x = threshold_x
+
+    def is_sky(self, source_point):
+        return source_point[0] > self.threshold_x
+
+
+def _detail_units(records, dictionary):
+    nodes = []
+    for record in records:
+        record["node"] = len(nodes)
+        nodes.append({"translation": record.pop("translation"),
+                      "rotation": record.pop("rotation")})
+    return SimpleNamespace(
+        name="fake_map",
+        root={"detailProps": {"dictionary": [{"index": i, "name": name}
+                                               for i, name in enumerate(dictionary)],
+                              "records": records}},
+        document={"nodes": nodes},
+    )
+
+
+def test_detail_records_map_to_instanced_placements_in_lump_order():
+    dictionary = ["models\\scenery\\plants\\weedc\\weedc.mdl",
+                  "models/scenery/plants/grass/grassa.mdl"]
+    # Source (128, -64, 32) publishes as glTF (128, 32, 64) * 0.0254 and a source quaternion
+    # (x, y, z, w) as (x, z, -y, w); the sky record sits past x.
+    records = [
+        {"index": 0, "detailModel": 1, "swayAmount": 0,
+         "translation": [128 * 0.0254, 32 * 0.0254, 64 * 0.0254],
+         "rotation": [0.0, 0.7071067811865476, 0.0, 0.7071067811865476]},
+        {"index": 1, "detailModel": 0, "swayAmount": 37,
+         "translation": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0]},
+        {"index": 2, "detailModel": 1, "swayAmount": 255,
+         "translation": [9000 * 0.0254, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0]},
+    ]
+    details = MG._detail_placements(_detail_units(records, dictionary), _FakeSky(5000.0))
+
+    assert [detail.index for detail in details] == [0, 1, 2]
+    assert [detail.model for detail in details] == [1, 0, 1]
+    assert [detail.stem for detail in details] == [
+        "models_scenery_plants_grass_grassa", "models_scenery_plants_weedc_weedc",
+        "models_scenery_plants_grass_grassa"]
+    # A backslashed dictionary entry (sm_hub_1 authors them) folds to the same stem and path.
+    assert details[1].model_path == "models/scenery/plants/weedc/weedc.mdl"
+    assert details[1].stem == shared_corpus.static_stem("models/scenery/plants/weedc/weedc.mdl")
+    # The frame is the static prop's: Source (128, -64, 32) in Unreal centimetres.
+    assert details[0].position == pytest.approx(source_to_unreal(128.0, -64.0, 32.0), abs=1e-6)
+    expected = source_quat_to_unreal(0.0, 0.0, 0.7071067811865476, 0.7071067811865476)
+    assert (details[0].rotation == pytest.approx(expected, abs=1e-12)
+            or details[0].rotation == pytest.approx(tuple(-v for v in expected), abs=1e-12))
+    # `swayAmount` is carried raw; the bake normalises it.
+    assert [detail.sway for detail in details] == [0, 37, 255]
+    assert [detail.sky for detail in details] == [False, False, True]
+
+    # A record outside the dictionary is the decoder's own anomaly and never a silent skip.
+    broken = [{"index": 0, "detailModel": 5, "swayAmount": 0,
+               "translation": [0.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0]}]
+    with pytest.raises(MG.MapGeometryError):
+        MG._detail_placements(_detail_units(broken, dictionary), _FakeSky(5000.0))
+
+
+@pytest.mark.parametrize("map_name", WORKING_MAPS)
+def test_reader_places_every_detail_record_of_the_root_unit(map_name):
+    unit = MG.sidecars.unit_paths(map_name)["root"]
+    if not unit.is_file():
+        pytest.skip(f"no exported map root unit at {unit}")
+
+    geometry = MG.read_geometry(map_name)
+    block = MG.sidecars.read_units(map_name).root.get("detailProps") or {}
+    records = block.get("records") or []
+    dictionary = [row["name"] for row in block.get("dictionary") or []]
+
+    # One placement per record, lump order, each resolving to its own dictionary entry.
+    assert [detail.index for detail in geometry.details] == [r["index"] for r in records]
+    assert geometry.counts["detailProps"] == len(records)
+    by_model = Counter(r["detailModel"] for r in records)
+    assert Counter(detail.model for detail in geometry.details) == by_model
+    models = geometry.detail_models()
+    assert {row["model"]: row["count"] for row in models} == dict(by_model)
+    for row in models:
+        assert row["stem"] == shared_corpus.static_stem(dictionary[row["model"]])
+        assert row["stem"] and " " not in row["stem"]
+    for detail, record in zip(geometry.details, records):
+        assert detail.sway == record["swayAmount"]
+        assert 0 <= detail.sway <= 255
+        assert detail.sky in (False, True)
+    # Every staged row carries the eleven columns the editor half reads positionally.
+    assert all(len(MG.detail_record_row(d)) == len(MG.DETAIL_RECORD_FIELDS)
+               for d in geometry.details)
 
 
 def test_the_v2_model_flag_is_its_own_list_and_excludes_sp_theatre():
@@ -380,7 +484,7 @@ def test_cubemap_sample_takes_the_placement_frame_and_the_sky_area_rule():
         "position": list(samples[0].position), "sky": False}
     # The manifest the editor half reads bumped for the new table; the two constants are restated
     # on either side of the numpy boundary and have to agree.
-    assert MG.MANIFEST_VERSION == 4
+    assert MG.MANIFEST_VERSION == 5
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)

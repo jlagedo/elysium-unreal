@@ -64,7 +64,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 4 (R5.6): the manifest carries `lights`, one row per lump-15 `worldLights[]` record in lump
 #: order (`UE_map_sidecars.light_rows`, the `.lights` producer's own rows), the light placements
 #: (`docs/architecture/seam_map_map_lighting.md` -> "## Import" -> "Lights final (R5.6)").
-MANIFEST_VERSION = 4
+#: 5 (R6.3): the manifest carries `details`, the `dprp` game lump as `models[]` (the model
+#: dictionary resolved to R1 stems) and `records[]` (one row per detail record, lump order), the
+#: instanced placements (`docs/architecture/seam_map_map.md` -> "Detail props (R6.3)").
+MANIFEST_VERSION = 5
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -234,6 +237,29 @@ class Placement:
 
 
 @dataclass(frozen=True)
+class DetailPlacement:
+    """One `detailProps.records[]` record (`dprp` v2), resolved for the bake (R6.3,
+    `seam_map_map.md` -> "Detail props (R6.3)").
+
+    `model` is the record's index into the lump's own dictionary and `stem` that entry's R1 corpus
+    stem -- the same `static_stem` fold a static prop uses, so the instanced component and a static
+    placement of the same model draw the same `/ElysiumBaked/Meshes/SM_<stem>`. `sway` is the
+    record's `swayAmount` byte, raw (0..255); the editor half normalises it into the per-instance
+    custom data float. The record's `lighting`/`lightStyles` are VRAD's baked answer for the 2004
+    renderer and are not carried: the V2 lane lights the instances through the R5.6 light actors.
+    """
+
+    index: int
+    model: int
+    stem: str
+    model_path: str
+    position: tuple[float, float, float]
+    rotation: tuple[float, float, float, float]
+    sway: int
+    sky: bool
+
+
+@dataclass(frozen=True)
 class CubemapSample:
     """One `cubemaps[]` row (lump 42), resolved to where the V2 bake stands a reflection capture
     (R5.5). `origin` is the row's own Source-inch integer triple -- the probe file name's, kept for
@@ -303,6 +329,8 @@ class MapGeometry:
     sky: Scene
     brushes: dict[int, Scene]
     placements: list[Placement]
+    #: R6.3: every `dprp` record in lump order, resolved to its R1 stem (`DetailPlacement`).
+    details: list[DetailPlacement]
     cubemaps: list[CubemapSample]
     #: R5.6: `UE_map_sidecars.light_rows` verbatim -- one dict per lump-15 record, the same rows
     #: `<map>.lights` is formatted from, so the staged table and the sidecar agree by construction.
@@ -317,6 +345,18 @@ class MapGeometry:
         body finds the same asset the legacy lane authored."""
 
         return {index: f"brush_{index}" for index in sorted(self.brushes)}
+
+    def detail_models(self) -> list[dict[str, Any]]:
+        """The `dprp` dictionary as the staged `details.models[]` rows: one per dictionary entry
+        the records actually use, in dictionary order, `{"model", "stem", "modelPath", "count"}`."""
+
+        by_model: dict[int, dict[str, Any]] = {}
+        for detail in self.details:
+            row = by_model.setdefault(detail.model, {
+                "model": detail.model, "stem": detail.stem, "modelPath": detail.model_path,
+                "count": 0})
+            row["count"] += 1
+        return [by_model[model] for model in sorted(by_model)]
 
     def material_units(self) -> dict[str, str]:
         """Every face group over every scene -> its material unit key (R5.4). Two scenes naming
@@ -559,6 +599,46 @@ def _placements(units: sidecars.MapUnits, sky: sidecars.SkyScope) -> list[Placem
     return out
 
 
+def _detail_placements(units: sidecars.MapUnits, sky: sidecars.SkyScope) -> list[DetailPlacement]:
+    """Every `detailProps.records[]` record, in lump order, resolved to the R1 corpus stem (R6.3).
+
+    The record's node in the `placements` scene carries the transform (glTF metres, Y-up), read
+    through the same frame a static prop's node is. The dictionary entry is the model path; a
+    record whose `detailModel` is outside the dictionary is the decoder's own
+    `detail-prop-dictionary-range` anomaly and has no node, so it is a loud error here rather than
+    a silently skipped instance.
+    """
+
+    block = units.root.get("detailProps") or {}
+    dictionary = [str(row.get("name") or "") for row in block.get("dictionary") or []]
+    nodes = units.document["nodes"]
+    out: list[DetailPlacement] = []
+    for record in block.get("records") or []:
+        model = int(record.get("detailModel", -1))
+        node_index = record.get("node")
+        if not (0 <= model < len(dictionary)) or node_index is None:
+            raise MapGeometryError(
+                f"{units.name}: detailProp {record['index']} names no model (detailModel {model})"
+            )
+        model_path = dictionary[model].replace("\\", "/")
+        node = nodes[int(node_index)]
+        translation = node.get("translation") or [0.0, 0.0, 0.0]
+        rotation = node.get("rotation") or [0.0, 0.0, 0.0, 1.0]
+        out.append(
+            DetailPlacement(
+                index=int(record["index"]),
+                model=model,
+                stem=shared_corpus.static_stem(model_path),
+                model_path=model_path,
+                position=gltf_position_to_unreal(translation),
+                rotation=gltf_quat_to_unreal(rotation),
+                sway=int(record.get("swayAmount", 0)),
+                sky=sky.is_sky(sidecars.source_position(translation)),
+            )
+        )
+    return out
+
+
 def _cubemaps(units: sidecars.MapUnits, sky: sidecars.SkyScope) -> list[CubemapSample]:
     """Every `cubemaps[]` sample, in lump order, as a capture placement (R5.5).
 
@@ -621,6 +701,7 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
         sky=sky_scene,
         brushes=brushes,
         placements=_placements(units, join.sky),
+        details=_detail_placements(units, join.sky),
         cubemaps=_cubemaps(units, join.sky),
         lights=sidecars.light_rows(units, join.sky),
         sky_scale=float(join.sky.scale),
@@ -635,6 +716,7 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
             "brushTriangles": sum(scene.tri_count for scene in brushes.values()),
             "cubemaps": len(units.root.get("cubemaps") or []),
             "worldLights": len(units.lighting.get("worldLights") or []),
+            "detailProps": len((units.root.get("detailProps") or {}).get("records") or []),
         },
     )
 
@@ -894,6 +976,19 @@ def _legacy_material_records(map_name: str) -> dict[str, Any]:
 # --------------------------------------------------------------------------------- staging
 
 
+#: The staged `details.records[]` row layout (R6.3): compact lists rather than one dict per
+#: record, because a map carries thousands (6,031 on `sp_tutorial_1`) and the editor half reads
+#: them positionally (`bake_map_v2._DetailPlacement`). `sway` is the raw `swayAmount` byte.
+DETAIL_RECORD_FIELDS = ("index", "model", "px", "py", "pz", "qx", "qy", "qz", "qw", "sway", "sky")
+
+
+def detail_record_row(detail: DetailPlacement) -> list[Any]:
+    """One `DetailPlacement` as its staged `details.records[]` row (`DETAIL_RECORD_FIELDS`)."""
+
+    return [detail.index, detail.model, *detail.position, *detail.rotation, detail.sway,
+            int(detail.sky)]
+
+
 def staging_root(work_root: Path | None = None) -> Path:
     """`$ELYSIUM_WORK_ROOT/import/map_geometry` -- beside the model lane's own staging tree."""
 
@@ -957,6 +1052,9 @@ def stage_map(map_name: str, root: Path | None = None,
     R5.5: and `cubemaps` -- every lump-42 sample as a reflection-capture placement.
     R5.6: and `lights` -- every lump-15 record as the `.lights` producer's own row, the light
     placements the editor half derives final actor values from.
+    R6.3: and `details` -- the `dprp` dictionary as `models[]` and every record as one compact
+    `records[]` row, `[index, model, px, py, pz, qx, qy, qz, qw, swayAmount, sky]`, the instanced
+    placements (`DETAIL_RECORD_FIELDS`).
     """
 
     geometry = read_geometry(map_name, root)
@@ -1011,6 +1109,11 @@ def stage_map(map_name: str, root: Path | None = None,
         ],
         "cubemaps": [sample.as_row() for sample in geometry.cubemaps],
         "lights": list(geometry.lights),
+        "details": {
+            "fields": list(DETAIL_RECORD_FIELDS),
+            "models": geometry.detail_models(),
+            "records": [detail_record_row(detail) for detail in geometry.details],
+        },
         "counts": dict(geometry.counts),
     }
 
