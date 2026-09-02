@@ -1983,40 +1983,173 @@ auto-detection divergence found and fixed same day". R1 is done; R2 is next.
 
 **R5 landed** — see Settled.
 
-### R6 — consumers beyond maps [SF-6.3–6.6]
+### R6 — wiring: what is already understood goes live on the V2 lane [was R6.3–6.4 in part, R7.1, R7.3, R7.4, R7.7]
 
-- **R6.1 Characters** [SF-6.3]. Character bake slots and skin families → `MI_`. → lands: bodies
-  on V2.
-- **R6.2 Runtime factory** [SF-6.4]. `FElysiumMaterialFactory::Create(MI_)` with runtime binds
-  only (`env_cubemap` symbol, runtime proxies, fog primitive data); the Cog environment sliders
-  die in favour of the settings pages. → lands: dynamic materials on V2.
-- **R6.3 Wield and UI sprites** [SF-6.5]. → lands: items on V2.
-- **R6.4 Deferred slice-2 readers** [SF-6.6]. Sky cube faces, rope/cable materials, eye irises,
-  `tex_hi` flip off loose files. → lands: no loose-file texture reads.
+**Split of 2026-09-02 (owner).** The old R6 "consumers beyond maps" and R7 "life" are re-cut by
+how much is still undecided, not by which consumer they touch: R6 is wiring with no design
+doubt, R7 is the families that need a ruling first, R8 is the skeletal lane (characters, wield,
+animated props), R9 is retire. Old ids stay in brackets. **Nothing is deferred out of the three
+stages**: every product the legacy ledger marks *none* and every visual entity class the corpus
+places has a task below or a named owner elsewhere (end of R7). A task in this stage that
+surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot-diffed.
 
-### R7 — life (each task one visible lane, shot-diffed) [MP-5]
+- **R6.1 Sprites on the V2 Sprite master** [R7.4 / MP-5.4]. Corpus: **6,449** `env_sprite`
+  over 108 maps, 1,286 named, 86 `start_hidden`, and 500+ wires fired at them (`HideSprite` 218,
+  `ShowSprite` 108, `TurnOn` 100, `TurnOff` 66). By `rendermode`: **3 (Glow) 4,347 + 9
+  (WorldGlow) 77** — Source's coronas, a screen-constant-size billboard whose brightness is a
+  pixel-visibility query at the bulb (`glowa`/`glowb`, 4,801 placements); **5 (Additive) 1,552**
+  and **1 (Color) 472** — plain billboards: `volumelight*` shafts 653, `candle` 282,
+  `streetlight3_proxyfade` 251, `coplights` 49, `lightning*` 86. **Ruling (owner, 2026-09-02):
+  all of them are drawn, coronas included** — a lamp's halo is part of the VtMB night look, and
+  Lumen lights surfaces, not the air in front of a bulb. Every sprite becomes one billboard actor
+  per entity in the baked level: the imported `MI_` of the sprite VMT (blend from the
+  `$spriterendermode` rows), world size `scale × texture`, `rendercolor`/`renderamt`,
+  `parallel_upright` vs full billboard, `start_hidden` honoured, tagged with the entity index so
+  `FElysiumEnvSprite`'s accepted-and-ignored inputs drive visibility. Rendermode 3/9 reproduce
+  Source's glow rule faithfully — apparent size held constant with distance (the billboard
+  component's screen-space size), brightness scaled by the **visible fraction from a per-corona
+  GPU occlusion query** (owner call, 2026-09-02, over a depth-buffer fade: a halo half behind a
+  railing or behind glass fades by how much of it shows, as in 2004). Cost accepted with eyes
+  open: one query per corona per frame (309 on `sm_hub_1`), one frame of latency, and a custom
+  sprite scene proxy the project does not have yet — that proxy is the task's one piece of new
+  rendering code. `<map>.sprites` (written, read by nobody) retires. → lands: halos, light
+  shafts, candles, cop flashers, lightning.
+- **R6.2 Switched lights and lightstyles everywhere** [R7.1 / MP-5.1]. The rig already
+  animates styles on every map (R5.6). What is unwired: `light` and `light_spot` are **stub
+  classes** — `TurnOn`/`TurnOff`/`Toggle`/`SetPattern`/`FadeToPattern` reach nothing, so the rows
+  on entity-switched styles 32–34 clamp to 0 forever — and `light_dynamic` (36) has no class.
+  The join is by **style**, as in Source: VRAD gives every named light its own style ≥ 32 (901
+  named `light`/`light_spot` corpus-wide, styles 32–38+), so the leaf's `TurnOn`/`TurnOff`/
+  `SetPattern`/`FadeToPattern` write that style's pattern on the rig's clock, which already reads
+  the baked `elysium.style` tag (R5.6) — no per-source join is needed. `light_dynamic` (36 rows,
+  `_light`/`brightness`/`distance`/`_cone`, mostly parented to movers) is the one light not in
+  lump 15: a runtime point/spot derived through the legacy `ApplyToSource` path that stays until
+  R9, with its I/O. Texlight (`emit_surface`) styles ride the same clock. → lands: switches, flicker and pulse,
+  the VtMB signature, on every map.
+- **R6.3 Detail props** [R7.3 / MP-5.3]. The 143,412 `dprp` placements over 41 models as one
+  instanced component per model per map off the root unit (records carry model, leaf, node,
+  per-record lighting and `swayAmount`; no sprite-type details on the corpus maps), culled at
+  Source's detail distance. **Sway is wired** (owner call, 2026-09-02): one vertex-offset wind
+  term on the instanced material, fed by the per-instance `swayAmount`, on a shared wind clock —
+  the value is in the data and VtMB's weeds move. → lands: exteriors stop reading bare, and the
+  grass moves.
+- **R6.4 Brush fade distances.** `func_areaportalwindow` (246: `FadeStartDist`/`FadeDist`) and
+  `func_lod` (357: `DisappearDist`) have no class; the bake writes their distances onto the brush
+  actor's cull range exactly as R5.1's FADES does for props. → lands: distance windows and LOD
+  brushes behave.
+- **R6.5 Ropes on `MI_`, and the factory shape** [R6.4 part / SF-6.6, R6.2 part / SF-6.4]. The
+  `.ropes` producer carries the `vtmb:material` id; the cable binds the imported `MI_`; the last
+  `FElysiumMaterialFactory::Build` caller dies and with it the six legacy world masters' runtime
+  use. The factory becomes `Create(MI_)`: an MID child of the imported instance carrying runtime
+  binds only (wetness stays the `MPC_ElysiumEnvironment` write). The `tex_hi` toggle and the
+  `elysium.EmissiveScale`/`BumpScale`/`EnvReflect` cvars retire (enhancement is post-roadmap
+  tuning; nothing reads them), as does the Cog "Material look" tab's hardcoded wetness table. →
+  lands: cables on V2; no runtime material is built from loose textures.
+- **R6.6 UI art off loose files** [R6.3 UI half / SF-6.5]. **Not a HUD rework**: the HUD, main
+  menu, chargen, character sheet and signs keep their widgets and layout; only the image source
+  moves. The ~10 `LoadPngTexture` sites and `ElysiumUiArtCache` resolve the `T_` assets the
+  texture lane already publishes (`hud/` 666, `interface/` 142, `vgui/` 23, `fonts/` 242 units) by
+  the same install path; the use-icon ring drops its composited atlas and draws its **72 icons
+  as brushes on the imported `T_` assets** (owner call, 2026-09-02) — the one HUD draw that does
+  change, accepted because it deletes `UE_use_icons` and its compositor rather than porting them,
+  and each icon stays an inspectable asset; sign backgrounds (`signs/tex` + `backgrounds.json`, written and read by nobody, while
+  `ElysiumSignData` already parses `BackgroundImage`) draw from `T_`; the menu title, wallpaper,
+  clan seals and the six `MM_Skybox` faces (unread) come from assets. `ui/art`, `ui/menu`,
+  `signs/tex` and `hud/use_icons.png` retire from the loose root. → lands: no PNG read at draw
+  time.
+- **R6.7 3D-skybox wiring pass** [R7.7 / MP-5.7]. Last, once R6.1–R6.3 are live: miniature
+  props, sprites, detail props and fog composed in the 44 `sky_camera` maps; no look judgement.
+  → lands: the miniature complete.
 
-- **R7.1 Lightstyles everywhere** [MP-5.1]. → lands: flicker and pulse, the VtMB signature.
-- **R7.2 Water** [MP-5.2]. `M_V2_Water` on water surfaces; leaf data and extents wired. → lands:
-  water that behaves like water.
-- **R7.3 Detail props** [MP-5.3]. The 143,412 `dprp` placements over 41 models as instanced
-  meshes/cards, `detailPropLighting[]` consulted. → lands: exteriors stop reading bare.
-- **R7.4 Sprites and coronas** [MP-5.4]. `env_sprite` via the V2 Sprite master. → lands: glows.
-- **R7.5 Effects entity family** [MP-5.5]. From the R2.2 census, by prevalence: `point_spotlight`
-  beams, `env_steam`, `env_embers`, `env_fire`, `env_lightglow`, `env_sun`. → lands: the ambient
-  set.
-- **R7.6 Decals on the V2 Decal master** [MP-5.6]. → lands: legacy `M_Decal` retired.
-- **R7.7 3D-skybox wiring pass** [MP-5.7]. Miniature props/fog wired so the skybox composes with
-  everything the earlier stages made live; no look judgement. → lands: the miniature complete.
+### R7 — design: the families with a choice to make first [was R7.2, R7.5, R7.6, R6.2 remainder]
 
-### R8 — retire [MP-6, SF-7.1]
+Each task opens with its ruling, written into the owning seam doc before code; exploration is
+allowed the way `effects-architecture.md` §6 says (scratch folder, no bake, no game code), then
+wiring. Independent of R8; **order is R6 → R7 → R8** (owner call, 2026-09-02): the visible world
+upgrades land first and the design questions are settled while the map work is fresh, at the
+cost of the biggest rewrite and the retire stage waiting behind them.
 
-- **R8.1 Runtime readers deleted** [MP-6.1]. Every per-map sidecar parser, once all 108 maps are
-  on the new transport; the boot map / green room stage world keeps working throughout. → lands:
-  the game reads cooked content and the corpus only.
-- **R8.2 Legacy bake, masters and Cog tuning deleted** [MP-6.2]. `bake_map.py` legacy lanes, the
-  legacy world/prop master set, per-map material packages, `/ElysiumBaked/Shared/Textures`, the
-  Cog tuning tabs and calibration cvars (the debug windows stay). Acceptance: full-corpus rebake,
+- **R7.1 Water** [R7.2 / MP-5.2]. 22 maps carry water; the root unit publishes `leafData[]` and
+  `leafMinDist[]`; `M_V2_Water` exists with the VMT water-fog keys and two `sm_hub_1` faces
+  already sit on it under an `Opaque` override. Rulings: Single Layer Water versus the
+  translucent master (SLW answers `$reflecttexture` 19 and `$refracttexture` 17 and the scene fog
+  term in one place), `$bottommaterial` (provenance only today), underwater from `leafMinDist`,
+  and `docs/vtmb/water.md`'s open questions. → lands: water that behaves like water.
+- **R7.2 Decals** [R7.6 / MP-5.6]. Domain ruling first: `UDecalComponent` renders only
+  `MD_DeferredDecal` and every V2 master is `MD_Surface`, so either a deferred-decal V2 master or
+  mesh decals as translucent surfaces. 5,143 `infodecal` + `.decals`, 38 `decalmodulate` units;
+  `ElysiumFog::ApplyToDecalMID` and `M_V2_Decal`'s fog parameters are waiting; the legacy per-map
+  `M_Decal` (fails to compile for SM6) retires. → lands: legacy `M_Decal` retired.
+- **R7.3 Effects families** [R7.5 / MP-5.5] — **on the real census.** R2.2's vocabulary was a
+  guess: `env_fire`, `env_embers`, `env_lightglow`, `point_spotlight`, `env_sun` have **0**
+  placements in 108 maps. What the corpus places: `env_particle` 1,304 (class exists, per-map
+  Niagara flatten baked; presentation per family, `effects-architecture.md` §4), `params_particle`
+  227 (conversation auras), `func_particle` 98 (stub), `func_dustmotes` 82 (no class), `env_beam`
+  47 (no class), `env_steam` 11 (no class), the explosion bundle — `point_explosion` 93,
+  `params_explosion` 52, `env_physexplosion` 61, `env_physimpact` 130, `env_shake` 60, `env_shooter`
+  21 (stubs; the impulse is `physics-architecture.md`'s seam) — `env_particle_hud` 3, and the
+  main-menu particle scene (`menu/particles`, written and unread). One authored system per
+  family, parameters from the compiled JSON, I/O reproduced. → lands: the ambient set and the
+  explosion bundle.
+- **R7.4 Runtime material binds** [R6.2 remainder / SF-6.4]. Through R6.5's `Create(MI_)`:
+  `textconsole` (4) with `func_monitor` 22 / `point_camera` 37 / `security_camera` 18 as
+  render-target screens; `breakablesurface` (2) + `$crackmaterial` with `func_breakable_surf`
+  130 (shatter); `shadow` (2); `playerproximity` 3 / `playerposition` 4 / `playerspeed` 6;
+  `lessorequal` 4. Reflect/refract go with R7.1; the obfuscate noise chains are R8's. → lands:
+  screens, shatter, player-driven surfaces.
+
+**Owned elsewhere, not deferred.** Two groups the census surfaces belong to other plans and are
+named here so they are not lost: the unread audio products (`audio/maps/*.json`, `schemes.json`,
+`entity_events.json`) and the `ambient_soundscheme` stub (179) are `plans/audio.md`'s; gameplay
+and AI classes with no leaf (`prop_haunted` 145, `prop_ragdoll` 52, `prop_destructable` 45,
+`mover_keyframe`/`func_keyframed_mover` 177, `trigger_push` 27, `prop_keypad` 17, `func_pushable`
+11, the `npc_*` leaves) are `plans/gameplay.md` and `plans/three-cs.md`'s. This roadmap is the
+asset lane.
+
+### R8 — characters: the skeletal lane rebuilt on the GLB corpus [was R6.1 / SF-6.3, R6.3 wield / SF-6.5, R6.4 irises]
+
+Cutover is gated **per body** (the cast partition), not per map. The V2 side is further along
+than the old R6.1 implied: characters and weapons are already `vtmb:model:` units (489 under
+`models/character`, 206 under `models/weapons`), each carrying `materialBindings.slots[]` and
+`skinFamilies[]` by `vtmb:material` id, and `importers/models.py` already resolves families to
+`MI_` for props. What is legacy is everything from the unit to the mount: `npc_export` (1,404
+lines), `UE_mdl_skeletal` (1,711), `UE_mdl_cloth`, the `.eskm` container, the six sidecar
+families, `bake_characters.py` (922), `bake_wield.py` (974), three master families and nine
+runtime readers under `npc/`.
+
+- **R8.1 Producer parity.** `.eskm`, `clips/`, `facial/`, `procedural/`, `blends/`, `eyes/`,
+  `garment/`, `npc_index.json` and `wield_models.json` re-emitted from the V2 model and
+  animation-bank units, byte-equal or named-divergence-only against the legacy exporters (the R3
+  shape, with the differ). → lands: one producer for the cast.
+- **R8.2 Skeletal bake off the unit.** Skeleton, mesh, slots and skin families → `MI_` by the
+  props lane's own resolution. Two master rulings, written into `seam_map_material.md` first:
+  `ModelAlpha` — the player's dither fade — on `M_V2_Lit`'s masked path or a per-body MID; and
+  `M_V2_Eyes` gaining the eye-basis planes (`IrisOrigin`/`IrisU`/`IrisV`) and the runtime
+  `Vampire` scalar `FElysiumEyePass` drives, with `Iris` bound on the instance so the `npc/` iris
+  read dies. `M_PlayerBody` and `M_Eyes` retire. → lands: bodies on V2.
+- **R8.3 Wield off the unit.** The 206 weapon units through the same skeletal build; the item
+  join stays the `vtmb:vdata:` unit's; the `M_Wield_*` family and `UE_extract_wield`'s private
+  texture closure retire. → lands: items on V2.
+- **R8.4 Animated props.** Skeletal props bind their `MI_` directly; `BindMapMaterials`'s
+  static-twin copy and `ApplyAnimatedPropSkin` retire in favour of the V2 skins table. → lands:
+  one material authority for a placed model.
+- **R8.5 Clips, banks, blends, facial, procedural, cloth cooked.** From the model and
+  animation-bank units; the nine `npc/` runtime readers, `FElysiumTextureCache` and its DDS
+  reader retire; `mouthshader` binds through `Create(MI_)`; the Nosferatu/Malkavian obfuscate
+  noise chains go to the runtime whole. → lands: no loose read under `npc/`.
+
+### R9 — retire [was R8; MP-6, SF-7.1]
+
+Settled entries above and the seam docs written before 2026-09-02 say **R8.1 / R8.2** for these
+two tasks; they are the same tasks.
+
+- **R9.1 Runtime readers deleted** [R8.1 / MP-6.1]. Every per-map sidecar parser, once all 108
+  maps are on the new transport; the boot map / green room stage world keeps working throughout.
+  → lands: the game reads cooked content and the corpus only.
+- **R9.2 Legacy bake, masters and Cog tuning deleted** [R8.2 / MP-6.2]. `bake_map.py` legacy
+  lanes, the legacy world/prop master set, per-map material packages,
+  `/ElysiumBaked/Shared/Textures`, the `UE_extract_*` family the R8 producers replaced, the Cog
+  tuning tabs and calibration cvars (the debug windows stay). Acceptance: full-corpus rebake,
   doctor, the full R2.1 shot set, and a hub-chain playthrough. → lands: **one pipeline, and the
   game runs on it.**
 

@@ -161,7 +161,7 @@ grids for the ones the player is next to.
 
 | Intent | Unreal primitive | Notes |
 |---|---|---|
-| Coronas / volume-light shafts / candle / cop flash / lightning | `UMaterialBillboardComponent` or a 1-particle Niagara | already the `.sprites` plan. Lumen + bloom replace a lot of `glowa`. |
+| Coronas / volume-light shafts / candle / cop flash / lightning | `UMaterialBillboardComponent` or a 1-particle Niagara | **All 6,449 `env_sprite` are drawn, coronas included (owner, 2026-09-02):** one billboard actor per entity on `M_V2_Sprite`, I/O driving visibility. Rendermode 3/9 (4,424, the `glowa`/`glowb` halo at a bulb) keep Source's glow rule — size constant with distance, brightness fading with occlusion — with a per-corona GPU occlusion query reproducing the pixel-visibility fade (owner call, one query per corona per frame). `seam_migration.md` R6.1. |
 | Authored decals | `UDecalComponent` | already baked |
 | Runtime blood / rain stains | Niagara Decal renderer, or spawn a short-lived `UDecalComponent` | particle `collide.decal` |
 | Screen fade | `env_fade` (done) | |
@@ -269,8 +269,8 @@ Suggested order, each one is a single proven example:
    beat.
 5. **`HangingParticulates`** — warehouse air. Compare to `func_dustmotes`
    (rate 30, size 5–15, colour 203 202 217, alpha 90).
-6. **Billboard corona** — one `glowa` at a lamp, additive, Lumen on. Decide how
-   much of the 969 coronas Lumen + bloom already replace.
+6. **Billboard corona** — answered (owner, 2026-09-02): coronas are drawn, all of them, on
+   `M_V2_Sprite` with Source's glow rule. See §3.3 and `seam_migration.md` R6.1.
 7. **Ribbon** — answered: `NS_ElysiumMeleeTrail` is a shipping
    `LocationBasedRibbon`-derived system (blade-spanning strip via
    `CustomSideVector` facing over two user positions), so ribbons are the
