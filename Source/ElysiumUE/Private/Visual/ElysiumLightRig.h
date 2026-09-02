@@ -7,6 +7,7 @@
 class ULightComponent;
 class UElysiumLightCalibration;
 class UElysiumLightingSettings;
+class UElysiumSurfaceSettings;
 
 // Real-time light rig: one Unreal light per VtMB WORLDLIGHTS source. The light *actors* are baked
 // into the map's level (pipeline/unreal/bake_map.py, one per `<map>.lights` line, tagged with its line
@@ -129,11 +130,12 @@ public:
 	// Should this source be lit right now, per the master toggle and its own disable?
 	bool ShouldSourceBeLit(int32 Index) const;
 
-	// Copy every calibration field from `Settings` (`UElysiumLightingSettings`) into this rig's own
-	// mirrors. Called at Adopt (so a fresh map load always starts from the current Project Settings
-	// page) and by `UElysiumLightingSettings::PushToWorlds` on every live rig when the settings page
-	// is edited. Does not re-derive sources on its own; call `ApplyLiveTuning` after.
-	void ApplySettings(const UElysiumLightingSettings& Settings);
+	// Copy every calibration field from `Settings` (`UElysiumLightingSettings`) -- plus the one
+	// light-specular knob, `UElysiumSurfaceSettings::LightSpecularScale` (R5.5) -- into this rig's
+	// own mirrors. Called at Adopt (so a fresh map load always starts from the current Project
+	// Settings pages) and by `UElysiumLightingSettings::PushToWorlds` on every live rig when either
+	// page is edited. Does not re-derive sources on its own; call `ApplyLiveTuning` after.
+	void ApplySettings(const UElysiumLightingSettings& Settings, const UElysiumSurfaceSettings& Surfaces);
 
 	// Apply a per-map `UElysiumLightCalibration`'s merge rows on top of the calibrated baseline:
 	// a row's `bDisabled` and each of its set overrides are applied through the same per-source
@@ -167,7 +169,8 @@ public:
 	//
 	// Point/spot use Unreal's *non*-inverse-square falloff with a gentle exponent, matching VtMB's
 	// soft baked look: inverse-square + candela read too hard — hot speculars, over-bright at the
-	// source, then a cliff to black. Specular is killed (VtMB world is pure Lambert). Intensity
+	// source, then a cliff to black. Specular is the surfaces page's `LightSpecularScale` (R5.5;
+	// the legacy 0 was the "pure Lambert" premise the owner repudiated). Intensity
 	// (unitless) = clamp(max(rgb) * PointSpotScale, 0, MaxBrightness); reach = radius * RadiusScale.
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float PointSpotScale = 0.003f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float MaxBrightness = 8.0f;
@@ -182,7 +185,7 @@ public:
 	// within its authored radius, so a gentle exponent + authored reach, not inverse-square.
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float FalloffExponent = 1.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float RadiusScale = 1.0f;
-	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SpecularScale = 0.0f;
+	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SpecularScale = 1.0f;
 	// Per-light Lumen injection multiplier (not the post-process precomputed-lighting control).
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float IndirectLightingScale = 1.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float VolumetricScatteringScale = 1.0f;

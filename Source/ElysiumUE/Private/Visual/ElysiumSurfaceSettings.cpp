@@ -1,5 +1,7 @@
 #include "ElysiumSurfaceSettings.h"
 
+#include "ElysiumLightingSettings.h"
+
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Materials/MaterialParameterCollection.h"
@@ -202,5 +204,13 @@ void UElysiumSurfaceSettings::PostEditChangeProperty(FPropertyChangedEvent& Prop
 		return;
 	}
 	PushToCollection();
+	// `LightSpecularScale` is read by the light rig, not by a material (R5.5): a terminal edit
+	// re-derives every live rig through the lighting page's own push, which reads this object's
+	// value back. Terminal only, for the same 400-light reason that page never follows a drag.
+	if (PropertyChangedEvent.GetPropertyName()
+		== GET_MEMBER_NAME_CHECKED(UElysiumSurfaceSettings, LightSpecularScale))
+	{
+		GetDefault<UElysiumLightingSettings>()->PushToWorlds();
+	}
 }
 #endif

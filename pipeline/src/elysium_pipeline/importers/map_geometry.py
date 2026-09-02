@@ -59,7 +59,9 @@ MANIFEST_NAME = "manifest.json"
 VERTEX_NAME = "geometry.bin"
 MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 2 (R5.4): the manifest carries `materials`, one row per face group, and `materialReport`.
-MANIFEST_VERSION = 2
+#: 3 (R5.5): the manifest carries `cubemaps`, one row per lump-42 sample, the reflection-capture
+#: placements (`docs/architecture/seam_map_map.md` -> "## Import -- reflection captures (R5.5)").
+MANIFEST_VERSION = 3
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -229,6 +231,32 @@ class Placement:
 
 
 @dataclass(frozen=True)
+class CubemapSample:
+    """One `cubemaps[]` row (lump 42), resolved to where the V2 bake stands a reflection capture
+    (R5.5). `origin` is the row's own Source-inch integer triple -- the probe file name's, kept for
+    provenance -- and `position` is the node translation in the bake's frame, the same
+    `gltf_position_to_unreal` every placement takes. `sky` is the 3D-skybox area rule every content
+    class shares, so a miniature sample takes the sky transform like a miniature light. The row's
+    `size` (Source's capture resolution; 0 = default on the whole working corpus) is not carried:
+    the capture's radius is the editor knob `UElysiumSurfaceSettings.CaptureRadius`, never a
+    transcription.
+    """
+
+    index: int
+    origin: tuple[int, int, int]
+    position: tuple[float, float, float]
+    sky: bool
+
+    def as_row(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "origin": list(self.origin),
+            "position": list(self.position),
+            "sky": self.sky,
+        }
+
+
+@dataclass(frozen=True)
 class MaterialBinding:
     """One face group's material, resolved through the material lane's staged manifest (R5.4).
 
@@ -272,6 +300,7 @@ class MapGeometry:
     sky: Scene
     brushes: dict[int, Scene]
     placements: list[Placement]
+    cubemaps: list[CubemapSample]
     sky_scale: float
     sky_origin: tuple[float, float, float]
     sky_ok: bool
@@ -524,6 +553,30 @@ def _placements(units: sidecars.MapUnits, sky: sidecars.SkyScope) -> list[Placem
     return out
 
 
+def _cubemaps(units: sidecars.MapUnits, sky: sidecars.SkyScope) -> list[CubemapSample]:
+    """Every `cubemaps[]` sample, in lump order, as a capture placement (R5.5).
+
+    The node holds the position (glTF metres); the row holds the Source-inch origin the compiler
+    named the probe by. Both are carried, and the position is the one the bake spawns at.
+    """
+
+    nodes = units.document["nodes"]
+    out: list[CubemapSample] = []
+    for record in units.root.get("cubemaps") or []:
+        node = nodes[int(record["node"])]
+        translation = node.get("translation") or [0.0, 0.0, 0.0]
+        origin = record.get("origin") or [0, 0, 0]
+        out.append(
+            CubemapSample(
+                index=int(record["index"]),
+                origin=(int(origin[0]), int(origin[1]), int(origin[2])),
+                position=gltf_position_to_unreal(translation),
+                sky=sky.is_sky(sidecars.source_position(translation)),
+            )
+        )
+    return out
+
+
 # --------------------------------------------------------------------------------- entry point
 
 
@@ -562,6 +615,7 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
         sky=sky_scene,
         brushes=brushes,
         placements=_placements(units, join.sky),
+        cubemaps=_cubemaps(units, join.sky),
         sky_scale=float(join.sky.scale),
         sky_origin=sky_origin,
         sky_ok=bool(join.sky.ok),
@@ -572,6 +626,7 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
             "worldTriangles": world.tri_count,
             "skyTriangles": sky_scene.tri_count,
             "brushTriangles": sum(scene.tri_count for scene in brushes.values()),
+            "cubemaps": len(units.root.get("cubemaps") or []),
         },
     )
 
@@ -891,6 +946,7 @@ def stage_map(map_name: str, root: Path | None = None,
 
     R5.4: the manifest also carries `materials` -- every face group resolved to its imported `MI_`
     through the material lane's staged manifest -- and the material report lands beside it.
+    R5.5: and `cubemaps` -- every lump-42 sample as a reflection-capture placement.
     """
 
     geometry = read_geometry(map_name, root)
@@ -943,6 +999,7 @@ def stage_map(map_name: str, root: Path | None = None,
             }
             for placement in geometry.placements
         ],
+        "cubemaps": [sample.as_row() for sample in geometry.cubemaps],
         "counts": dict(geometry.counts),
     }
 

@@ -28,6 +28,10 @@ namespace ElysiumBakedTags
 	inline const FName SkyDome(TEXT("elysium.skydome"));
 	// One projected decal.
 	inline const FName Decal(TEXT("elysium.decal"));
+	// One reflection capture at a `cubemaps[]` sample (R5.5, `MapsOnV2Models` maps only). Carries a
+	// second tag, Source(i), naming its lump-42 row. Its image lives in the level's MapBuildData,
+	// uploaded at registration; the runtime adopts nothing from it.
+	inline const FName Capture(TEXT("elysium.capture"));
 	// The map's unbound PostProcessVolume — where a per-map Lumen art-direction value lives
 	// (D3). It ships neutral: nothing overridden, so it changes no pixel until an owner call
 	// puts a number on it.

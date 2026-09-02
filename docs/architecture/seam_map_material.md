@@ -1772,8 +1772,8 @@ Python or C++ literal (`seam_migration.md`, "Calibration happens on knobs inside
 | `FixedCubeStrength` | settings scalar | same | the 342 authored-cube instances |
 | `Overbright` | settings scalar, default **2.0** | same | `mul_x2 c0` in every lit program — the `_x2` and the `overbrightFactor/2` constant together |
 | `DecalDepthOffset` | settings scalar | same | the **decal component** the placement lane spawns over an `isDecalSurface` instance; not a material parameter (no `MP_PIXEL_DEPTH_OFFSET` in this build's Python API) |
-| `LightSpecularScale` | settings scalar | same | the light rig (SF-6.2), one global, no per-map override |
-| `CaptureRadius` | settings scalar | same | the reflection-capture placement (SF-6.2) |
+| `LightSpecularScale` | settings scalar, default **1.0** | same | the light rig (R5.5, was SF-6.2): `UElysiumLightRig::ApplySettings` copies it into every non-overridden light's `SpecularScale`; one global, no per-map override; the bake stamps the same value (`seam_map_map.md` → "Import — reflection captures (R5.5)") |
+| `CaptureRadius` | settings scalar, default **1,500 cm** | same | the reflection-capture placement (R5.5, was SF-6.2): every `ASphereReflectionCapture` the V2 bake spawns at a `cubemaps[]` origin takes it as `InfluenceRadius` |
 | `ClassInfluence` | settings scalar | `UElysiumSurfaceSettings` → `MPC_ElysiumSurfaces` | the `Default*`-vs-class-table lerp weight every master applies before sampling `SurfaceClassLUT` |
 | roughness / specular / metallic per surface class | class-table row (72 seeded, each with a fixed `Index`) | `UElysiumSurfaceCalibration` (`UDataAsset`) → a **128×1** lookup texture `T_SurfaceClassLUT`, created *inside* the data asset's own package (never a sibling asset) | every master, through `SurfaceClassLUT` at `SurfaceClassIndex` |
 | `BaseTexture`, `BaseTexture2`, `NormalMap`, `DuDvMap`, `EnvMap`, `EnvMapMask`, `Iris`, `Glint`, `CloudAlphaTexture`, `*Frames` | per-instance texture | the VMT, via the stage | the master's texture slots |

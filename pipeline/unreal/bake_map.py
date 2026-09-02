@@ -71,7 +71,6 @@ POINT_SPOT_SCALE = 0.003
 MAX_BRIGHTNESS = 8.0
 FALLOFF_EXPONENT = 1.0
 RADIUS_SCALE = 1.0
-SPECULAR_SCALE = 0.0
 SUN_SCALE_LUX = 8.0
 FALLBACK_RADIUS_CM = 2500.0
 # Floor on a 3D-skybox light's reach after the miniature's uniform scale. A miniature light's
@@ -93,6 +92,9 @@ TAG_SKYLIGHT = "elysium.skylight"
 TAG_FOG = "elysium.fog"
 TAG_DECAL = "elysium.decal"
 TAG_PPV = "elysium.ppv"
+# One reflection capture at a `cubemaps[]` sample (R5.5, V2 lane only). Carries a second
+# `elysium.src=<index>` tag naming its lump-42 row, like a light names its `.lights` line.
+TAG_CAPTURE = "elysium.capture"
 # The baked 2D-sky backdrop dome (R5.2, `MapsOnV2Models` maps only). Distinct from TAG_SKY -- the
 # 3D-skybox miniature's own tag -- so the miniature's sky-fog stamping pass never walks the dome.
 TAG_SKYDOME = "elysium.skydome"
@@ -304,6 +306,22 @@ def _build_sky_dome_dynamic_mesh():
     the same box through its own `MI_Sky_<name>`."""
     positions, normals, uvs, tris = sky_dome_geometry()
     return bl.build_dynamic_mesh([(positions, normals, uvs, None, tris)])
+
+
+def light_specular_scale():
+    """`UElysiumSurfaceSettings.LightSpecularScale`, the one global light-specular knob (R5.5,
+    `seam_map_map.md` -> "Import -- reflection captures (R5.5)" -> "`LightSpecularScale` rides
+    along"): the bake stamps the same value the rig re-applies at adopt, so the level in the editor
+    and the adopted level in the game agree. Read from the settings CDO -- the ini -- never a
+    literal; the legacy `SPECULAR_SCALE = 0.0` was the third of the repudiated three zeroes."""
+    settings = unreal.get_default_object(unreal.ElysiumSurfaceSettings)
+    return float(settings.get_editor_property("light_specular_scale"))
+
+
+def capture_radius():
+    """`UElysiumSurfaceSettings.CaptureRadius`: every reflection capture's influence radius."""
+    settings = unreal.get_default_object(unreal.ElysiumSurfaceSettings)
+    return float(settings.get_editor_property("capture_radius"))
 
 
 def cmdline_arg(key, default=""):
@@ -1621,7 +1639,8 @@ class Bake(object):
     def _place_lights(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
         """One light actor per WORLDLIGHTS `.lights` line, with UElysiumLightRig's calibration
         applied verbatim: 16 fields `type x y z dx dy dz r g b radius stopdot stopdot2 _ style sky`,
-        soft non-inverse-square falloff, specular killed, everything Movable.
+        soft non-inverse-square falloff, specular at the settings page's `LightSpecularScale`
+        (R5.5), everything Movable.
 
         Lightstyle animation (field 15) has no baked equivalent -- a styled source is placed at
         its unanimated base intensity.
@@ -1636,6 +1655,7 @@ class Bake(object):
             return 0, 0, None
         placed = sky_placed = 0
         sky_ambient = None
+        specular_scale = light_specular_scale()
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
             for index, line in enumerate(handle):
                 tok = line.split()
@@ -1719,8 +1739,9 @@ class Bake(object):
                     component.set_editor_property("use_inverse_squared_falloff", False)
                     component.set_editor_property("light_falloff_exponent", FALLOFF_EXPONENT)
                 component.set_light_color(color)
-                # The VtMB world is pure Lambert -- kill specular so lights do not glare.
-                component.set_editor_property("specular_scale", SPECULAR_SCALE)
+                # The one global knob, not the legacy zero (the matte-world premise is repudiated,
+                # `seam_migration.md` 2026-08-31); the rig re-derives from the same page at adopt.
+                component.set_editor_property("specular_scale", specular_scale)
                 actor.set_actor_label("Light_%d_%s%s" % (
                     index, {0: "tex", 1: "point", 2: "spot", 3: "sun"}[kind],
                     "_sky" if is_sky else ""))
@@ -1732,6 +1753,16 @@ class Bake(object):
                 placed += 1
                 sky_placed += is_sky
         return placed, sky_placed, sky_ambient
+
+    def _place_captures(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+        """Reflection captures are the V2 lane's (R5.5, `bake_map_v2.MapBakeV2._place_captures`):
+        the legacy lane reads no `cubemaps[]` and places none. Returns the placed count."""
+        return 0
+
+    def _build_captures(self, world, placed):
+        """Render the placed captures' contents into the level's MapBuildData (R5.5). Nothing to
+        build on the legacy lane; the V2 lane overrides and asserts the count."""
+        return 0
 
     def _bake_sky_cube(self, sky_name):
         """`/ElysiumBaked/Sky/Textures/TC_Sky_<SkyName>` (R5.2): the same
@@ -2013,6 +2044,12 @@ class Bake(object):
         log("level: %d light actors (%d in the 3D skybox)" % (lights, sky_lights))
         self._place_sky(actors, sky_ambient)
         self._place_player_start(actors)
+        # R5.5: captures last, so every surface, prop, light and the sky are in the render; the
+        # build writes `<map>_BuiltData`, which `save_map` below saves beside the level.
+        captures = self._place_captures(actors, sky_scale, sky_origin)
+        if captures:
+            built = self._build_captures(world, captures)
+            log("level: %d reflection capture actors, %d built" % (captures, built))
 
         self.tracker.stamp(world, map_path)
         if unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):

@@ -341,3 +341,63 @@ def test_every_face_group_on_the_working_corpus_resolves_a_staged_and_imported_i
     assert report["counts"]["materials"] == len(table)
     assert report["counts"]["legacyRecordMissing"] == 0
     assert json.dumps(report)   # serialisable as written beside the staged pair
+
+
+# ------------------------------------------------------------------ reflection captures (R5.5)
+
+
+def _fake_units_with_cubemaps(rows, translations):
+    from types import SimpleNamespace
+    nodes = [{"name": f"cubemap[{i}]", "translation": list(t)} for i, t in enumerate(translations)]
+    root = {"cubemaps": [{"index": i, "origin": list(o), "size": 0, "node": i}
+                         for i, o in enumerate(rows)]}
+    return SimpleNamespace(name="fake", document={"nodes": nodes}, root=root)
+
+
+def test_cubemap_sample_takes_the_placement_frame_and_the_sky_area_rule():
+    # `seam_map_map.md` -> "Import -- reflection captures (R5.5)": position is the node translation
+    # through the one placement frame, `origin` is the row's Source-inch triple carried verbatim,
+    # and sky membership is the same area rule a prop or a light takes -- asked of the SOURCE
+    # position, not the glTF one.
+    origins = [(-160, 328, 51), (1310, -174, 562)]
+    translations = [(x * 0.0254, z * 0.0254, -y * 0.0254) for x, y, z in origins]
+    asked = []
+
+    class Sky:
+        def is_sky(self, source_position):
+            asked.append(tuple(round(v, 6) for v in source_position))
+            return source_position[0] > 0
+
+    samples = MG._cubemaps(_fake_units_with_cubemaps(origins, translations), Sky())
+    assert [s.index for s in samples] == [0, 1]
+    assert [s.origin for s in samples] == origins
+    for sample, (x, y, z) in zip(samples, origins):
+        assert sample.position == pytest.approx(source_to_unreal(x, y, z), abs=1e-6)
+    assert asked == [tuple(float(v) for v in o) for o in origins]
+    assert [s.sky for s in samples] == [False, True]
+    assert samples[0].as_row() == {
+        "index": 0, "origin": [-160, 328, 51],
+        "position": list(samples[0].position), "sky": False}
+    # The manifest the editor half reads bumped for the new table; the two constants are restated
+    # on either side of the numpy boundary and have to agree.
+    assert MG.MANIFEST_VERSION == 3
+
+
+@pytest.mark.parametrize("map_name", WORKING_MAPS)
+def test_reader_stands_one_capture_per_lump_42_sample_on_the_working_corpus(map_name):
+    unit = MG.sidecars.unit_paths(map_name)["root"]
+    if not unit.is_file():
+        pytest.skip(f"no exported map root unit at {unit}")
+    geometry = MG.read_geometry(map_name)
+    rows = MG.sidecars.read_units(map_name).root["cubemaps"]
+    assert len(geometry.cubemaps) == len(rows) == geometry.counts["cubemaps"] > 0
+    for sample, row in zip(geometry.cubemaps, rows):
+        assert sample.index == row["index"]
+        assert sample.origin == tuple(row["origin"])
+        # The node translation and the row's own Source-inch origin are one point in two frames:
+        # the placement frame has to land the translation on `source_to_unreal(origin)`.
+        assert sample.position == pytest.approx(
+            source_to_unreal(*(float(v) for v in row["origin"])), abs=0.01)
+    # No working map authors an env_cubemap inside its 3D-skybox miniature; the rule is kept for
+    # the map that does, and this pins the corpus fact the doc states (0 of 57).
+    assert not any(sample.sky for sample in geometry.cubemaps)

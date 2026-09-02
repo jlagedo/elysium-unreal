@@ -237,6 +237,29 @@ LIGHT_RADIUS_SCALE = 1.0
 LIGHT_FALLBACK_RADIUS_CM = 2500.0
 LIGHT_SKY_SCALE = 16.0
 LIGHT_MIN_SKY_REACH_CM = 5000.0
+#: `bake_map_v2` writes this onto every reflection capture it places (R5.5).
+CAPTURE_TAG = "elysium.capture"
+
+
+def verify_captures(actors, world):
+    """Every placed reflection capture carries built MapBuildData (R5.5).
+
+    The capture's image lives in `<map>_BuiltData`, not on the actor, so a level that saved with
+    its captures placed but never built looks identical in a census; only the registry says. The
+    count comes from the same library call the bake asserted with, over the loaded level.
+    """
+    errors = []
+    placed = sum(1 for actor in actors if CAPTURE_TAG in [str(tag) for tag in actor.tags])
+    if not placed:
+        return errors
+    counted = unreal.ElysiumMapBakeLibrary.count_built_reflection_captures(world)
+    built, components = (counted if isinstance(counted, tuple) else (int(counted), placed))
+    unreal.log("[verify] %d reflection capture(s) placed, %d component(s), %d with MapBuildData"
+               % (placed, components, built))
+    if built != placed:
+        errors.append("reflection captures: %d placed, %d built into MapBuildData"
+                      % (placed, built))
+    return errors
 
 
 def verify_lights(actors, world_dir, map_name):
@@ -754,6 +777,8 @@ def verify_map(map_name):
         for key in sorted(census, key=lambda k: -census[k]):
             unreal.log("[verify]   %-28s %d" % (key, census[key]))
         errors.extend(verify_lights(actors, world_dir, map_name))
+        errors.extend(verify_captures(
+            actors, unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()))
     else:
         message = "level missing: %s" % level
         unreal.log_error("[verify] " + message)

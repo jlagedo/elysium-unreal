@@ -60,9 +60,9 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category = "Point/Spot", meta = (ClampMin = "1.0"))
 	float FallbackRadiusCm = 2500.f;
 
-	/** VtMB's world-light contribution is Lambertian; faithful baseline is zero. */
-	UPROPERTY(EditAnywhere, Config, Category = "Point/Spot", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float SpecularScale = 0.0f;
+	// No `SpecularScale` here (R5.5): the light rig's specular scale is
+	// `UElysiumSurfaceSettings::LightSpecularScale`, one global knob on the surfaces page, and a
+	// second field for the same number would be a second writer.
 
 	// --- per-area rebalance --------------------------------------------------------------------
 	/**

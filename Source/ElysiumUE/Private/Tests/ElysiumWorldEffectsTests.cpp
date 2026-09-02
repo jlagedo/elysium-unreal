@@ -28,6 +28,7 @@
 #include "Visual/ElysiumLightRig.h"
 #include "ElysiumLightCalibration.h"
 #include "ElysiumLightingSettings.h"
+#include "ElysiumSurfaceSettings.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -367,12 +368,21 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 	Settings->PointSpotScale = 0.004f;
 	Settings->MaxBrightness = 12.f;
 	Settings->bPointShadows = false;
-	Rig->ApplySettings(*Settings);
+	// R5.5: the light-specular knob is the surfaces page's `LightSpecularScale`, one global value,
+	// and reaches the component through the same push (the legacy 0 is gone: the rig's own default
+	// is 1, and a synthetic page value must land on the light verbatim).
+	UElysiumSurfaceSettings* Surfaces = NewObject<UElysiumSurfaceSettings>();
+	Surfaces->LightSpecularScale = 0.7f;
+	Rig->ApplySettings(*Settings, *Surfaces);
 	Rig->ApplyLiveTuning();
 	TestTrue(TEXT("settings push updates the rig's own calibration mirror"),
 		FMath::IsNearlyEqual(Rig->PointSpotScale, 0.004f));
 	TestTrue(TEXT("settings push re-derives shadows for non-overridden sources"),
 		Point->CastShadows == 0);
+	TestTrue(TEXT("surfaces page's LightSpecularScale is the rig's specular mirror"),
+		FMath::IsNearlyEqual(Rig->SpecularScale, 0.7f));
+	TestTrue(TEXT("LightSpecularScale reaches a non-overridden light's SpecularScale"),
+		FMath::IsNearlyEqual(Point->SpecularScale, 0.7f));
 
 	// R4.3: a per-map `UElysiumLightCalibration`'s merge rows apply through the same per-source
 	// setters a hand edit uses, so an overridden row survives the next `ApplyLiveTuning` untouched.

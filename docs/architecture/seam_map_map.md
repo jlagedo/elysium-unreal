@@ -1213,3 +1213,97 @@ shading model, so the harness's 94 % noise floor (R5.1) is not the ceiling here 
 verdict is drawn from it; the boot, the audit and the byte scan are the witnesses. One harness
 observation for the follow-up list: `sm_hub_1`'s four vantages report identical frame means
 before and after, which they did before this task too.
+
+## Import — reflection captures (R5.5)
+
+R5.5 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" [MP-4.4, SF-6.2] gives a
+converted map its **reflection captures**: one `ASphereReflectionCapture` per `cubemaps[]` row of
+the map root unit, built inside the bake, and the light rig's specular response flipped off the
+legacy zero. Nothing here binds a texture to a material: the reflection contract
+(`seam_map_material.md` → "Import", "`env_cubemap` is not a runtime bind") stands — the 2,217
+`env_cubemap` symbols and the 441 map-scoped patched `MI_` on the three working maps get their image
+from these captures and from Lumen, never from the VtMB probe pixels, which stay provenance.
+
+**A Lumen fallback lane, not the reflection.** Under Lumen the captures are what a surface reads
+when Lumen reflections have nothing better — the rough end of the roughness range, ray misses, the
+Lumen-off scalability tier — and a capture of the Lumen-lit baked scene is the intended image
+(`seam_migration.md` → the maps-plan Settled entry: "reflection captures build headlessly under
+`-AllowCommandletRendering` and remain a Lumen *fallback* lane"). Where VtMB placed an
+`env_cubemap` is exactly where its artists wanted a local reflection sampled from, which is the one
+fact the sample rows carry that a runtime cannot invent; the size field is `0` on all 57 samples of
+the working corpus (Source's default resolution) and is not read.
+
+### Identity and placement
+
+| Fact | Source | Rule |
+|---|---|---|
+| Count and order | `cubemaps[]` (lump 42), one row each, lump order | one `ASphereReflectionCapture` per row; label `Capture_<index>`, tags `elysium.capture` + `elysium.src=<index>`, Outliner folder `Captures` |
+| Position | the row's node `translation` (glTF metres) through `gltf_position_to_unreal`, the same frame every placement takes (`### The frame` above); the row's integer `origin` is the Source-inch triple the probe file name is built from and is carried for provenance only | `(x, z, y)_gltf × 100` |
+| Radius | `UElysiumSurfaceSettings::CaptureRadius` (Project Settings → Elysium → Surfaces, `Config/DefaultElysium.ini`, 1,500 cm) | `InfluenceRadius`, one global knob, no per-sample override — the sample row carries no radius to transcribe |
+| 3D-skybox membership | `SkyScope.is_sky(source_position(translation))`, the area rule every content class shares | a miniature sample takes the sky transform like a miniature light: position `scale × (p − sky_origin)`, radius `× scale`, folder `Sky/Captures`; 0 of 57 on the working corpus, kept as a rule so a map that authors one is not silently mis-scaled |
+| Mobility / source | Unreal defaults | `Static`, `CapturedScene`; `Brightness` 1 |
+
+The offline stage (`importers.map_geometry.stage_map`) writes the rows into the staged manifest as
+`cubemaps[]` (`index`, `origin`, `position` in Unreal cm, `sky`), manifest **version 3**, and
+`bake_map_v2.MapBakeV2._place_captures` spawns from that table — same split as geometry and
+placements: the numpy-bound read offline, the editor spawn from the staged pair. The legacy lane
+places no capture (`Bake._place_captures` returns 0): it is not on the corpus and R5 does not
+extend it.
+
+### Build
+
+The capture contents are rendered by the bake itself, not left to the editor's Build menu:
+`stage_level` populates the level, then calls
+`UElysiumMapBakeLibrary::BuildReflectionCaptures(World)` — a thin `UFUNCTION` face over
+`UEditorEngine::BuildReflectionCaptures`, the same call the editor's *Build → Reflection Captures*
+makes (waits for every pending shader and asset compile so no capture sees the default material,
+refreshes the sky captures, then `UReflectionCaptureComponent::UpdateReflectionCaptureContents`) —
+and only then saves. The commandlet already runs under `-AllowCommandletRendering` (`unreal.bake_maps`),
+which is the precondition; the sky light the R5.2 lane places (`TC_Sky_<name>`, `SLS_SpecifiedCubemap`)
+is refreshed first by that same engine call so the sky is in the capture.
+
+Where the data lands: `ULevel::MapBuildData`, the `UMapBuildDataRegistry` in the sibling package
+`/ElysiumBaked/<map>/<map>_BuiltData`, one `FReflectionCaptureMapBuildData` per component
+`MapBuildDataId` (`CubemapSize`, `AverageBrightness`, the full-HDR cube bytes). `UWorld::Rename`
+carries the registry through `save_map`'s untitled-to-final rename and `FEditorFileUtils::SaveWorld`
+saves the `_BuiltData` package beside the level, so one save writes both. A packaged or `-game` boot
+loads the registry with the level (a hard `UPROPERTY` reference) and uploads the cubes at
+registration; nothing at runtime re-captures.
+
+**The bake asserts the build.** `BuildReflectionCaptures` returns the number of capture components
+whose `MapBuildDataId` resolves to a registry entry with `CubemapSize > 0` and captured bytes;
+`MapBakeV2._build_captures` fails the map when that number is short of the placed count, because a
+capture that placed but never rendered is a black probe the running game would read as "no
+reflection here" with nobody saying why. `bake_verify.py` re-counts on the loaded level through the
+same library call (`CountBuiltReflectionCaptures`), and the Content tier's
+`Elysium.Content.MapBake.ReflectionCapturesBuilt` loads each `MapsOnV2Models` level package and
+checks every placed capture has its registry entry.
+
+**Recipe.** The level recipe names the capture table (index, position, radius) and the radius knob,
+so a `CaptureRadius` edit or a re-export that moves a sample re-authors the level rather than
+reusing it.
+
+### `LightSpecularScale` rides along
+
+The legacy bake wrote `specular_scale = 0` onto every light and `UElysiumLightRig` re-applied a
+`SpecularScale = 0` at adopt ("VtMB world is pure Lambert") — the third of the three zeroes the
+owner repudiated (`seam_migration.md` → "The matte-world premise is repudiated"; the surface
+two, Specular 0 / Roughness 1, already flipped with the V2 masters). R5.5 flips the light one:
+
+- **One knob.** `UElysiumSurfaceSettings::LightSpecularScale` (default **1.0**, the ini) is the
+  light rig's specular scale — "one global knob, no per-map override" (the owner's knob-set answer,
+  2026-08-31; `seam_map_material.md` → "Knob contract"). `UElysiumLightingSettings::SpecularScale`,
+  the R4.3 carry-over of the same number at the old zero, is **deleted** rather than left as a
+  second writer; `UElysiumLightRig::ApplySettings(const UElysiumLightingSettings&, const
+  UElysiumSurfaceSettings&)` copies it into the rig's `SpecularScale` mirror and `ApplyToSource`
+  writes it on every non-overridden light as before.
+- **Live.** A terminal edit of `LightSpecularScale` on the Surfaces page pushes through
+  `UElysiumLightingSettings::PushToWorlds` to every live rig (the interactive drag does not, for
+  the same 400-light reason the Lighting page never did).
+- **The bake writes the same value.** `Bake._place_lights` stamps `specular_scale` from the
+  settings CDO rather than a `SPECULAR_SCALE` literal, so the level in the editor and the adopted
+  level in the game agree; the rig re-derives at load regardless.
+- **No look judgement.** 1.0 is Unreal's own neutral, the value at which the surface knobs
+  (`DefaultSpecular`, the mask term, the class table) are what decide a highlight; the owner's
+  tuning session moves it on the page, never here. The Cog Environment window's local-light
+  specular slider stays what it was — a per-session view onto the live rig.

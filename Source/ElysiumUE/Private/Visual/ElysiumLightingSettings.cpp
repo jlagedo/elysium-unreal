@@ -2,6 +2,7 @@
 
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumSurfaceSettings.h"
 #include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMapVisuals.h"
 
@@ -33,7 +34,7 @@ void UElysiumLightingSettings::PushToWorlds() const
 		{
 			continue;
 		}
-		Rig->ApplySettings(*this);
+		Rig->ApplySettings(*this, *GetDefault<UElysiumSurfaceSettings>());
 		Rig->ApplyLiveTuning();
 	}
 }

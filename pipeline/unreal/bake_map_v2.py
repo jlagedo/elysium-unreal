@@ -53,7 +53,8 @@ FAMILY = "map_geometry"
 MANIFEST_NAME = "manifest.json"
 MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 2 (R5.4): the manifest carries the `materials` table this lane binds from.
-MANIFEST_VERSION = 2
+#: 3 (R5.5): and the `cubemaps` table this lane stands reflection captures at.
+MANIFEST_VERSION = 3
 
 #: The key space the staged `MI_` instances live under in `Bake.materials` -- beside the legacy
 #: `(package, key)` pairs, never colliding with one.
@@ -374,6 +375,13 @@ def _build_class():
                 for placement in self.geometry.placements if placement.skin
             )
             recipe["placements"] = len(self.geometry.placements)
+            # R5.5: a moved sample or an edited `CaptureRadius` re-authors the level, because the
+            # capture's contents live in the level's own MapBuildData and nowhere else.
+            recipe["capture_radius"] = HOST.capture_radius()
+            recipe["captures"] = [
+                [sample.index, list(sample.position), sample.sky]
+                for sample in self.geometry.cubemaps
+            ]
             # The rest clip a skeletal-rest placement is dealt is a function of its model path and
             # its lump index, so it belongs in the recipe: a re-deal has to re-author the level.
             recipe["rest_poses"] = dict(sorted(self.rest_labels.items()))
@@ -469,6 +477,57 @@ def _build_class():
                 log("level: %d placements held on authored skeletal rest poses" % skeletal_placed)
             return placed, sky_placed
 
+        # ---------------------------------------------------------------- captures (R5.5)
+
+        def _place_captures(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+            """One `ASphereReflectionCapture` per `cubemaps[]` sample, at the sample's own
+            position and at the settings page's `CaptureRadius` (`seam_map_map.md` -> "Import --
+            reflection captures (R5.5)"). A sample inside the 3D-skybox miniature takes the sky
+            transform like a miniature light: position scaled about the sky origin, radius scaled
+            by the same factor. The VtMB probe the sample names is provenance; the capture renders
+            the baked scene."""
+
+            radius = HOST.capture_radius()
+            placed = sky_placed = 0
+            for sample in self.geometry.cubemaps:
+                position, influence = capture_placement(
+                    sample.position, sample.sky, sky_scale, sky_origin, radius)
+                actor = actors.spawn_actor_from_class(
+                    unreal.SphereReflectionCapture, unreal.Vector(*position))
+                if not actor:
+                    fail("capture %d: spawn failed at %s" % (sample.index, position))
+                    raise SystemExit(1)
+                component = actor.get_editor_property("capture_component")
+                component.set_editor_property("influence_radius", influence)
+                actor.set_actor_label("Capture_%d%s" % (
+                    sample.index, "_sky" if sample.sky else ""))
+                actor.tags = [HOST.TAG_CAPTURE, "elysium.src=%d" % sample.index]
+                actor.set_folder_path("Sky/Captures" if sample.sky else "Captures")
+                placed += 1
+                sky_placed += sample.sky
+            log("captures: %d placed (%d in the 3D skybox) at %.0f cm" % (
+                placed, sky_placed, radius))
+            return placed
+
+        def _build_captures(self, world, placed):
+            """`UElysiumMapBakeLibrary.build_reflection_captures`: the editor's own Build ->
+            Reflection Captures over this world, under the commandlet's
+            `-AllowCommandletRendering`. Returns the built count and fails the map when it is short
+            of `placed`: a capture that placed but never rendered is a black probe the game would
+            read as "no reflection here" with nobody saying why."""
+
+            start = time.time()
+            built = int(unreal.ElysiumMapBakeLibrary.build_reflection_captures(world))
+            if built < 0:
+                fail("captures: the build could not run (no editor, or no world)")
+                raise SystemExit(1)
+            if built != placed:
+                fail("captures: %d placed but %d carry MapBuildData after the build"
+                     % (placed, built))
+                raise SystemExit(1)
+            log("captures: %d built into MapBuildData (%.1fs)" % (built, time.time() - start))
+            return built
+
         def _configure_rest(self, actor, placement, record, mesh, solid):
             """One placement whose model has no static equivalent: the skeletal body, the rest clip
             the catalogue deals it, and the static mesh as its collision proxy.
@@ -525,6 +584,18 @@ def _build_class():
             return 1 if applied else 0
 
     return MapBakeV2
+
+
+def capture_placement(position, sky, sky_scale, sky_origin, radius):
+    """`(position, influence_radius)` for one capture: a world sample is placed as-is at
+    `radius`; a 3D-skybox sample takes the miniature's transform -- `scale * (p - origin)` and
+    `radius * scale` -- the same rule a miniature light's position and reach take."""
+
+    if not sky:
+        return tuple(float(v) for v in position), float(radius)
+    scaled = tuple(float(sky_scale) * (float(position[i]) - float(sky_origin[i]))
+                   for i in range(3))
+    return scaled, float(radius) * float(sky_scale)
 
 
 def _staging_dir(map_name):
@@ -591,6 +662,18 @@ class _Placement(object):
         return bool(self.flags & 0x1) and self.fade_max_cm > 0.0
 
 
+class _CubemapSample(object):
+    """One staged `cubemaps[]` row (R5.5): where a reflection capture stands."""
+
+    __slots__ = ("index", "origin", "position", "sky")
+
+    def __init__(self, row):
+        self.index = int(row["index"])
+        self.origin = tuple(int(v) for v in row["origin"])
+        self.position = tuple(float(v) for v in row["position"])
+        self.sky = bool(row["sky"])
+
+
 class _StagedGeometry(object):
     """The staged manifest plus its packed vertex file, read with no third-party module.
 
@@ -625,6 +708,7 @@ class _StagedGeometry(object):
         self.sky_ok = bool(self.manifest["sky"]["ok"])
         self.placements = [_Placement(row) for row in self.manifest["placements"]]
         self.materials = dict(self.manifest["materials"])
+        self.cubemaps = [_CubemapSample(row) for row in self.manifest.get("cubemaps") or []]
 
     def brush_stems(self):
         return {int(index): stem

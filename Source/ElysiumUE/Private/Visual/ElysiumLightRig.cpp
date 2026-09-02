@@ -4,6 +4,7 @@
 #include "ElysiumEditorLabels.h"
 #include "ElysiumLightCalibration.h"
 #include "ElysiumLightingSettings.h"
+#include "ElysiumSurfaceSettings.h"
 
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
@@ -94,7 +95,7 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 	// Global calibration always starts from the current Project Settings page (R4.3), so a fresh map
 	// load never disagrees with the page an owner is looking at, whether or not any live rig has had
 	// a settings push yet.
-	ApplySettings(*GetDefault<UElysiumLightingSettings>());
+	ApplySettings(*GetDefault<UElysiumLightingSettings>(), *GetDefault<UElysiumSurfaceSettings>());
 
 	// Optional per-area rebalance: one multiplier per `.lights` line, in the same order.
 	TArray<float> Fit;
@@ -263,7 +264,8 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 	return LightCount;
 }
 
-void UElysiumLightRig::ApplySettings(const UElysiumLightingSettings& Settings)
+void UElysiumLightRig::ApplySettings(const UElysiumLightingSettings& Settings,
+	const UElysiumSurfaceSettings& Surfaces)
 {
 	PointSpotScale = Settings.PointSpotScale;
 	MaxBrightness = Settings.MaxBrightness;
@@ -272,7 +274,9 @@ void UElysiumLightRig::ApplySettings(const UElysiumLightingSettings& Settings)
 	FalloffExponent = Settings.FalloffExponent;
 	RadiusScale = Settings.RadiusScale;
 	FallbackRadiusCm = Settings.FallbackRadiusCm;
-	SpecularScale = Settings.SpecularScale;
+	// The one global light-specular knob lives on the surfaces page (R5.5), beside the surface
+	// knobs it is balanced against; the lighting page carries no second copy of it.
+	SpecularScale = Surfaces.LightSpecularScale;
 	bApplyLightFit = Settings.bApplyLightFit;
 	IndirectLightingScale = Settings.IndirectLightingScale;
 	VolumetricScatteringScale = Settings.VolumetricScatteringScale;

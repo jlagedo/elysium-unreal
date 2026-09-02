@@ -1766,6 +1766,39 @@ assets, and zero `missing usage flag Nanite` lines in the rebuilt boot log (2 oc
 the fix, one per affected instance, `20260902T015018.928063Z-debug-shots.log:1711/1713`). `uv run
 pytest pipeline/tests/test_map_geometry.py pipeline/tests/test_materials_stage.py`: **91 passed**.
 
+**R5.5 — reflection captures (2026-09-02).** Per `cubemaps[]` origin (the one placement frame the
+node translation already uses; a sample inside the 3D-skybox area takes the miniature transform for
+both position and radius, the same owner-call rule miniature lights and props already follow — 0
+such samples on the working corpus), one `SphereReflectionCapture` is placed at
+`UElysiumSurfaceSettings.CaptureRadius` and the bake calls `UElysiumMapBakeLibrary::
+BuildReflectionCaptures` (`GEditor->BuildReflectionCaptures` under `WITH_EDITOR`) before saving, so
+`<map>_BuiltData` carries a rendered cube per capture rather than an empty actor. Contract in
+`seam_map_map.md` → "## Import — reflection captures (R5.5)". `LightSpecularScale` flips 0→1 with
+the capture work, riding the same settings CDO the lights now stamp from
+(`light_specular_scale()`) instead of a deleted `UElysiumLightingSettings::SpecularScale` literal.
+
+**Measured on the scoped rebake, `uv run elysium export map sp_tutorial_1 sm_pawnshop_1
+sm_hub_1`.** Captures placed / built into `MapBuildData`: sp_tutorial_1 24/24, sm_pawnshop_1 14/14,
+sm_hub_1 19/19 (57/57, 0 in a 3D skybox, `CaptureRadius` 1500 cm); "all 3 map bake(s) completed",
+`REBAKE_EXIT=0`. `/ElysiumBaked/<map>/<map>_BuiltData.uasset` (physically
+`Plugins/ElysiumBaked/Content/<map>/<map>_BuiltData.uasset`) exists and is fresh for all three.
+Boot witness, `uv run elysium debug shots <map> --no-open` per map, one process at a time: all
+three exit 0 with `0 unbound or default-bound slots` (sp_tutorial_1 464 mesh assets / 1191
+components / 6 vantages; sm_pawnshop_1 179 mesh assets / 322 components / 4 vantages; sm_hub_1 502
+mesh assets / 1534 components / 4 vantages). `Elysium.Content.MapBake.ReflectionCapturesBuilt`
+(the registry re-count, `Level->MapBuildData->GetReflectionCaptureBuildData` read directly off the
+loaded package): **Success**, 0 failed, 0 warnings, all three baked `MapsOnV2Models` levels checked
+(none abstained) — `placed == components == built` on every map.
+
+Tests: `uv run elysium build`: Succeeded. `uv run elysium test Substrate`: **441 of 441**, including
+the two content-free `Elysium.Substrate.MapBake.*` rows (null world, empty world) and the extended
+`Elysium.Substrate.LightRig` (`LightSpecularScale` reaches the rig mirror and the point light).
+`uv run pytest pipeline/tests/test_map_geometry.py pipeline/tests/test_bake_map_captures.py
+pipeline/tests/test_bake_map_sky.py pipeline/tests/test_unreal_launch_args.py
+pipeline/tests/test_bake_orchestration.py`: **54 passed**, including the corpus-gated
+`test_reader_stands_one_capture_per_lump_42_sample_on_the_working_corpus` (24/14/19, matching the
+bake).
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1830,9 +1863,8 @@ wetness homes (R5.3)".
 
 **R5.4 landed (2026-09-02)** — see Settled. The decal half of R5.3's plan moved to R7.6 on a domain
 fact (a `UDecalComponent` renders only `MD_DeferredDecal`; every V2 master is `MD_Surface`).
-- **R5.5 Reflection captures** [MP-4.4, SF-6.2]. Per `cubemaps[]` origin, radius from settings,
-  built under `-AllowCommandletRendering`; `LightSpecularScale` flip rides along. → lands: the
-  Lumen fallback lane.
+
+**R5.5 landed (2026-09-02)** — see Settled.
 - **R5.6 Lights final** [MP-4.5]. The bake writes the VtMB-derived values from `worldLights[]`
   plus the MegaLights properties; the runtime derivation deleted (the rig applies only the R4.3
   asset and lightstyles); `.lights` reader deleted. No look-tuning — the derivation is the same

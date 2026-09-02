@@ -243,19 +243,21 @@ live, never what they are (`docs/project/seam_migration.md`, "Wire first, tune l
 
 | Settings field | Was |
 |---|---|
-| `PointSpotScale`, `MaxBrightness`, `ExtendedMaxBrightness`, `FalloffExponent`, `RadiusScale`, `FallbackRadiusCm`, `SpecularScale`, `IndirectLightingScale`, `VolumetricScatteringScale`, `SunScaleLux`, `SunSourceAngleDegrees`, `SunSoftSourceAngleDegrees`, `MinSkyReachCm`, `bPointShadows`, `bSpotShadows`, `bSunShadows` | `UElysiumLightRig`'s own `UPROPERTY` defaults |
+| `PointSpotScale`, `MaxBrightness`, `ExtendedMaxBrightness`, `FalloffExponent`, `RadiusScale`, `FallbackRadiusCm`, `IndirectLightingScale`, `VolumetricScatteringScale`, `SunScaleLux`, `SunSourceAngleDegrees`, `SunSoftSourceAngleDegrees`, `MinSkyReachCm`, `bPointShadows`, `bSpotShadows`, `bSunShadows` | `UElysiumLightRig`'s own `UPROPERTY` defaults |
 | `bUseExtendedBrightnessCeiling` | `elysium.LightCurve` (0/1) |
 | `bApplyLightFit` | `elysium.LightFit` (0/1) |
 | — (retired outright) | `elysium.LightScale` — redundant once `PointSpotScale` is itself the editable value; no override concept survives it |
+| — (deleted, R5.5) | `SpecularScale` — carried here at the legacy `0.0` by R4.3, then superseded: the light rig's specular scale is `UElysiumSurfaceSettings::LightSpecularScale` (one global knob, default 1.0; `seam_map_map.md` → "Import — reflection captures (R5.5)" → "`LightSpecularScale` rides along"), and a second field for the same number would be a second writer |
 
 `SkyReachScale` stays a per-instance rig field, not a settings field: it is set from the map's own
 `<map>.sky` scale at `Adopt`, not a human calibration.
 
-`UElysiumLightRig::ApplySettings(const UElysiumLightingSettings&)` copies every field above into
+`UElysiumLightRig::ApplySettings(const UElysiumLightingSettings&, const UElysiumSurfaceSettings&)`
+copies every field above — plus `LightSpecularScale` from the surfaces page (R5.5) — into
 the rig's own like-named mirrors (kept as separate fields, not a pointer to the settings singleton,
 so a per-instance PIE edit in the component's own Details panel still works and `ApplyToSource`
-keeps one cheap, uniform read path). `Adopt` calls it first, from `GetDefault<UElysiumLightingSettings>()`,
-so a fresh map load always starts from the current Project Settings page.
+keeps one cheap, uniform read path). `Adopt` calls it first, from the two `GetDefault<>` objects,
+so a fresh map load always starts from the current Project Settings pages.
 
 **Push timing diverges from `UElysiumSurfaceSettings` on purpose.** The surfaces page follows an
 interactive slider drag live because it only has to touch one parameter collection; a light rig is
