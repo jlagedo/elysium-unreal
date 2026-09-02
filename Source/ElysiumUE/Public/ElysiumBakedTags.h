@@ -43,10 +43,23 @@ namespace ElysiumBakedTags
 		return FName(*FString::Printf(TEXT("elysium.src=%d"), Index));
 	}
 
-	// The line index a Light actor carries, or INDEX_NONE if it has no source tag.
-	inline int32 ParseSourceIndex(const TArray<FName>& Tags)
+	// R5.6 (`MapsOnV2Models` maps): the two facts a baked light carries because the runtime rig
+	// still needs them after every derived value is baked -- the VtMB light type (0 texlight,
+	// 1 point, 2 spot, 3 sun) for the viewer's readout and the non-spot batch toggle, and the
+	// lightstyle index the rig animates per frame. Nothing else rides along: magnitude, radius and
+	// cosines are inputs to a derivation a converted map no longer performs at load.
+	inline FName LightType(int32 Type)
 	{
-		static const FString Prefix(TEXT("elysium.src="));
+		return FName(*FString::Printf(TEXT("elysium.type=%d"), Type));
+	}
+	inline FName LightStyle(int32 Style)
+	{
+		return FName(*FString::Printf(TEXT("elysium.style=%d"), Style));
+	}
+
+	// The integer after `Prefix` on the first tag carrying it, or `Default` if no tag does.
+	inline int32 ParseTagInt(const TArray<FName>& Tags, const FString& Prefix, int32 Default)
+	{
 		for (const FName& Tag : Tags)
 		{
 			const FString Text = Tag.ToString();
@@ -55,6 +68,22 @@ namespace ElysiumBakedTags
 				return FCString::Atoi(*Text.RightChop(Prefix.Len()));
 			}
 		}
-		return INDEX_NONE;
+		return Default;
+	}
+
+	// The line index a Light actor carries, or INDEX_NONE if it has no source tag.
+	inline int32 ParseSourceIndex(const TArray<FName>& Tags)
+	{
+		return ParseTagInt(Tags, TEXT("elysium.src="), INDEX_NONE);
+	}
+	// The VtMB light type a baked light carries (R5.6), or `Default` (a legacy-lane actor has none).
+	inline int32 ParseLightType(const TArray<FName>& Tags, int32 Default = 1)
+	{
+		return ParseTagInt(Tags, TEXT("elysium.type="), Default);
+	}
+	// The lightstyle index a baked light carries (R5.6); 0, unanimated, when it has none.
+	inline int32 ParseLightStyle(const TArray<FName>& Tags)
+	{
+		return ParseTagInt(Tags, TEXT("elysium.style="), 0);
 	}
 }

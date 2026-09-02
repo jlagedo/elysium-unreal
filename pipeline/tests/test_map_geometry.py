@@ -380,7 +380,7 @@ def test_cubemap_sample_takes_the_placement_frame_and_the_sky_area_rule():
         "position": list(samples[0].position), "sky": False}
     # The manifest the editor half reads bumped for the new table; the two constants are restated
     # on either side of the numpy boundary and have to agree.
-    assert MG.MANIFEST_VERSION == 3
+    assert MG.MANIFEST_VERSION == 4
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)

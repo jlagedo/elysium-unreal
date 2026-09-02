@@ -84,7 +84,7 @@ def test_sky_sample_takes_the_miniature_transform_for_position_and_radius(module
 
 
 def test_editor_lane_reads_the_manifest_version_the_stage_writes(module) -> None:
-    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 3
+    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 4
     sample = module._CubemapSample(
         {"index": 3, "origin": [1, -2, 3], "position": [2.54, 5.08, 7.62], "sky": False})
     assert (sample.index, sample.origin, sample.position, sample.sky) == (

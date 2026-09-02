@@ -6,9 +6,16 @@
 # `docs/architecture/seam_map_map.md` -> "## Import -- geometry and placements (R5.1)".
 #
 # **Beside the legacy bake, not over it.** This module holds only the inputs and the stages that
-# differ; everything else -- lights, decals, fog stamping, the 3D-skybox transform, the player
-# start, pruning, recipes and receipts -- is `bake_map.Bake`'s, unchanged, and a map that is not on
-# the R5.1 flag never reaches a line of this file. The two lanes are selected per map by
+# differ; everything else -- decals, fog stamping, the 3D-skybox transform, the player start,
+# pruning, recipes and receipts -- is `bake_map.Bake`'s, unchanged, and a map that is not on the
+# R5.1 flag never reaches a line of this file.
+#
+# **Lights (R5.6, `seam_map_map_lighting.md` -> "## Import" -> "Lights final").** One actor per
+# lump-15 `worldLights[]` row, from the staged `lights` table (`UE_map_sidecars.light_rows`, the
+# `.lights` producer's own rows), with every value `UElysiumLightRig::ApplyToSource` used to derive
+# at load written here once by `derive_light` from the `UElysiumLightingSettings` page, plus the
+# MegaLights policy. The runtime rig on a converted map snapshots the actor (`AdoptBaked`) and
+# applies only the R4.3 calibration asset and the lightstyle animation. The two lanes are selected per map by
 # `elysium_pipeline.map_transport.is_map_on_v2_models`, the tracked list in
 # `Config/DefaultElysium.ini`.
 #
@@ -35,6 +42,7 @@
 # its host through `HOST`.
 from array import array
 import json
+import math
 import os
 import sys
 import time
@@ -54,7 +62,12 @@ MANIFEST_NAME = "manifest.json"
 MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 2 (R5.4): the manifest carries the `materials` table this lane binds from.
 #: 3 (R5.5): and the `cubemaps` table this lane stands reflection captures at.
-MANIFEST_VERSION = 3
+#: 4 (R5.6): and the `lights` table this lane derives every light actor from.
+MANIFEST_VERSION = 4
+
+#: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
+#: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
+LIGHT_KIND_LABELS = {0: "tex", 1: "point", 2: "spot", 3: "sun"}
 
 #: The key space the staged `MI_` instances live under in `Bake.materials` -- beside the legacy
 #: `(package, key)` pairs, never colliding with one.
@@ -134,8 +147,9 @@ def _build_class():
             the shared stages still own (`.env`, `.decals`, `.weather`, and the `.mtl` rows the
             decal lane alone still reads).
 
-            Lights are R5.6's. Every surface's material is the staged `materials` table's (R5.4);
-            the `.mtl` is consulted for nothing but the decal lane's legacy `M_Decal` instances.
+            Lights are the staged `lights` table's (R5.6). Every surface's material is the staged
+            `materials` table's (R5.4); the `.mtl` is consulted for nothing but the decal lane's
+            legacy `M_Decal` instances.
             """
 
             staged = _staging_dir(self.map)
@@ -382,6 +396,12 @@ def _build_class():
                 [sample.index, list(sample.position), sample.sky]
                 for sample in self.geometry.cubemaps
             ]
+            # R5.6: the light actors carry FINAL values, so both their inputs -- every staged
+            # row and every calibration field of the lighting page -- are in the recipe; an
+            # edited page or a re-exported unit re-authors the level rather than reusing it
+            # (the runtime no longer re-derives on a converted map).
+            recipe["lights"] = [row.as_dict() for row in self.geometry.lights]
+            recipe["lighting"] = lighting_calibration()
             # The rest clip a skeletal-rest placement is dealt is a function of its model path and
             # its lump index, so it belongs in the recipe: a re-deal has to re-author the level.
             recipe["rest_poses"] = dict(sorted(self.rest_labels.items()))
@@ -476,6 +496,104 @@ def _build_class():
             if skeletal_placed:
                 log("level: %d placements held on authored skeletal rest poses" % skeletal_placed)
             return placed, sky_placed
+
+        # ------------------------------------------------------------------ lights (R5.6)
+
+        def _place_lights(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+            """One light actor per staged `lights[]` row, carrying its FINAL values
+            (`seam_map_map_lighting.md` -> "## Import" -> "Lights final (R5.6)").
+
+            `derive_light` is `UElysiumLightRig::ApplyToSource` restated, fed from the
+            `UElysiumLightingSettings` page and the surfaces page's `LightSpecularScale`; the
+            runtime rig on this map snapshots the actor and derives nothing. A styled source is
+            placed at its unanimated base intensity (the rig animates it per frame off the
+            `elysium.style` tag). A row inside the 3D-skybox miniature takes the sky transform
+            for position and reach, the owner call of 2026-07-26. Returns
+            `(placed, sky_placed, sky_ambient)` in the host's shape: `sky_ambient` is the first
+            type-5 row's `(colour, magnitude)` (first wins, by lump order -- VRAD resolves the
+            sky ambient once, globally, and the engine's multi-`light_environment` rule is
+            first-wins too, RE-A3/RE-A5), which `_place_sky` joins with the baked cube (R5.2)."""
+
+            calibration = lighting_calibration()
+            placed = sky_placed = 0
+            sky_ambient = None
+            for row in self.geometry.lights:
+                mag = max(row.rgb)
+                if mag <= 0.0:
+                    continue
+                if row.type == 5:
+                    if sky_ambient is None:
+                        sky_ambient = (unreal.LinearColor(
+                            row.rgb[0] / mag, row.rgb[1] / mag, row.rgb[2] / mag, 1.0), mag)
+                    continue
+                if row.type not in LIGHT_KIND_LABELS:
+                    continue
+                final = derive_light(row.as_dict(), calibration, sky_scale, sky_origin)
+                origin = unreal.Vector(*final["position"])
+                direction = unreal.Vector(*row.direction)
+                if row.type in (0, 1):
+                    actor = actors.spawn_actor_from_class(unreal.PointLight, origin)
+                    component = actor.point_light_component if actor else None
+                elif row.type == 2:
+                    actor = actors.spawn_actor_from_class(
+                        unreal.SpotLight, origin, HOST._dir_rotator(direction))
+                    component = actor.spot_light_component if actor else None
+                else:
+                    actor = actors.spawn_actor_from_class(
+                        unreal.DirectionalLight, origin, HOST._dir_rotator(direction))
+                    # ADirectionalLight exposes only ALight's generic component property.
+                    component = actor.light_component if actor else None
+                if not actor or not component:
+                    fail("light %d: spawn failed at %s" % (row.index, final["position"]))
+                    raise SystemExit(1)
+                # Movable FIRST: radius and cone writes are dropped in silence on a Stationary
+                # light (`bake_map._make_movable`).
+                HOST._make_movable(component)
+                component.set_light_color(unreal.LinearColor(*final["color"], 1.0))
+                component.set_intensity(final["intensity"])
+                component.set_cast_shadows(final["cast_shadows"])
+                component.set_editor_property("specular_scale", final["specular_scale"])
+                component.set_editor_property(
+                    "indirect_lighting_intensity", final["indirect_lighting_intensity"])
+                component.set_editor_property(
+                    "volumetric_scattering_intensity", final["volumetric_scattering_intensity"])
+                if row.type in (0, 1, 2):
+                    component.set_attenuation_radius(final["reach_cm"])
+                    # VtMB light is ~flat within its authored radius, so gentle-exponent
+                    # falloff, not inverse-square (docs/architecture/rendering-perf.md).
+                    component.set_editor_property("use_inverse_squared_falloff", False)
+                    component.set_editor_property(
+                        "light_falloff_exponent", final["falloff_exponent"])
+                    # Elysium's hundreds of movable local lights depend on fixed-cost RT
+                    # MegaLights: a renderer contract the rig used to restate every load.
+                    component.set_editor_property("allow_mega_lights", True)
+                    component.set_editor_property(
+                        "mega_lights_shadow_method",
+                        unreal.MegaLightsShadowMethod.RAY_TRACING)
+                if row.type == 2:
+                    component.set_outer_cone_angle(final["outer_cone_deg"])
+                    component.set_inner_cone_angle(final["inner_cone_deg"])
+                if row.type == 3:
+                    component.set_editor_property(
+                        "light_source_angle", final["sun_source_angle_deg"])
+                    component.set_editor_property(
+                        "light_source_soft_angle", final["sun_soft_source_angle_deg"])
+                actor.set_actor_label("Light_%d_%s%s" % (
+                    row.index, LIGHT_KIND_LABELS[row.type], "_sky" if row.sky else ""))
+                # The lump-15 ordinal is the R4.3 calibration asset's key and the type/style
+                # tags are the two facts the slim rig still needs (`ElysiumBakedTags`).
+                actor.tags = [HOST.TAG_LIGHT, "elysium.src=%d" % row.index,
+                              "elysium.type=%d" % row.type, "elysium.style=%d" % row.style]
+                actor.set_folder_path("Sky/Lights" if row.sky else "Lights")
+                placed += 1
+                sky_placed += 1 if row.sky else 0
+            log("lights: %d placed (%d in the 3D skybox) with final values; ceiling %.1f%s" % (
+                placed, sky_placed,
+                calibration["ExtendedMaxBrightness"]
+                if calibration["bUseExtendedBrightnessCeiling"]
+                else calibration["MaxBrightness"],
+                " (extended)" if calibration["bUseExtendedBrightnessCeiling"] else ""))
+            return placed, sky_placed, sky_ambient
 
         # ---------------------------------------------------------------- captures (R5.5)
 
@@ -598,6 +716,110 @@ def capture_placement(position, sky, sky_scale, sky_origin, radius):
     return scaled, float(radius) * float(sky_scale)
 
 
+#: The `UElysiumLightingSettings` fields `derive_light` reads, by their C++ name, with the Python
+#: reflection name each is read through (`b` prefix dropped, snake_case). Restated here so a
+#: renamed page field fails the bake loudly instead of silently deriving from a default.
+LIGHTING_SETTINGS_FIELDS = (
+    ("PointSpotScale", "point_spot_scale"),
+    ("MaxBrightness", "max_brightness"),
+    ("ExtendedMaxBrightness", "extended_max_brightness"),
+    ("bUseExtendedBrightnessCeiling", "use_extended_brightness_ceiling"),
+    ("FalloffExponent", "falloff_exponent"),
+    ("RadiusScale", "radius_scale"),
+    ("FallbackRadiusCm", "fallback_radius_cm"),
+    ("IndirectLightingScale", "indirect_lighting_scale"),
+    ("VolumetricScatteringScale", "volumetric_scattering_scale"),
+    ("SunScaleLux", "sun_scale_lux"),
+    ("SunSourceAngleDegrees", "sun_source_angle_degrees"),
+    ("SunSoftSourceAngleDegrees", "sun_soft_source_angle_degrees"),
+    ("MinSkyReachCm", "min_sky_reach_cm"),
+    ("bPointShadows", "point_shadows"),
+    ("bSpotShadows", "spot_shadows"),
+    ("bSunShadows", "sun_shadows"),
+)
+
+
+def lighting_calibration():
+    """The lighting page (`UElysiumLightingSettings`, Project Settings -> Elysium -> Lighting,
+    the tracked ini) plus the surfaces page's `LightSpecularScale` (R5.5), as one plain dict --
+    never a literal (`seam_map_map_lighting.md` -> "Import"). Read off the CDOs so the level in
+    the editor and the values an owner sees on the page are the same numbers, and returned as
+    plain Python so `derive_light` needs no `unreal` and the recipe can carry it."""
+
+    page = unreal.get_default_object(unreal.ElysiumLightingSettings)
+    calibration = {}
+    for cpp_name, python_name in LIGHTING_SETTINGS_FIELDS:
+        value = page.get_editor_property(python_name)
+        calibration[cpp_name] = bool(value) if cpp_name.startswith("b") else float(value)
+    calibration["LightSpecularScale"] = HOST.light_specular_scale()
+    return calibration
+
+
+def _cone_degrees(cosine):
+    """`ConeDegrees` in `ElysiumLightRig.cpp`: the cone half-angle a stopdot cosine names,
+    clamped to the 1..80 degrees a spot light accepts."""
+
+    return max(1.0, min(80.0, math.degrees(math.acos(max(-1.0, min(1.0, float(cosine)))))))
+
+
+def derive_light(row, calibration, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+    """`UElysiumLightRig::ApplyToSource`, once, at bake (R5.6): the final actor values for one
+    staged `lights[]` row under one lighting-page calibration. Pure -- no `unreal` -- so a pytest
+    can pin it against the rig's formulas. `row` is `UE_map_sidecars.light_rows`' dict; the
+    caller has already dropped rows with `max(rgb) <= 0` and the type-5 skyambient.
+
+    The table in `seam_map_map_lighting.md` -> "Lights final (R5.6)" is this function."""
+
+    kind = int(row["type"])
+    rgb = [float(v) for v in row["rgb"]]
+    mag = max(rgb)
+    sky = bool(row["sky"])
+    position = [float(v) for v in row["position"]]
+    if sky:
+        position = [float(sky_scale) * (position[i] - float(sky_origin[i])) for i in range(3)]
+
+    if kind == 3:
+        intensity = max(mag * calibration["SunScaleLux"], 0.01)
+        reach = 0.0
+    else:
+        ceiling = (calibration["ExtendedMaxBrightness"]
+                   if calibration["bUseExtendedBrightnessCeiling"]
+                   else calibration["MaxBrightness"])
+        intensity = min(mag * calibration["PointSpotScale"], ceiling)
+        radius_cm = float(row["radiusCm"])
+        reach = (radius_cm if radius_cm > 1.0 else calibration["FallbackRadiusCm"]) \
+            * calibration["RadiusScale"]
+        # A miniature light's reach is authored in miniature units, so it scales with the
+        # geometry it lights; the floor keeps a degenerate authored radius from collapsing.
+        if sky:
+            reach = max(reach * float(sky_scale), calibration["MinSkyReachCm"])
+
+    outer = _cone_degrees(row["stopdot2"])
+    inner = min(_cone_degrees(row["stopdot"]), outer)
+    cast_shadows = (False if kind == 0
+                    else calibration["bSpotShadows"] if kind == 2
+                    else calibration["bSunShadows"] if kind == 3
+                    else calibration["bPointShadows"])
+    return {
+        "kind": kind,
+        "position": position,
+        "color": [rgb[0] / mag, rgb[1] / mag, rgb[2] / mag],
+        "intensity": intensity,
+        "reach_cm": reach,
+        "falloff_exponent": calibration["FalloffExponent"],
+        "outer_cone_deg": outer,
+        "inner_cone_deg": inner,
+        "cast_shadows": bool(cast_shadows),
+        "specular_scale": calibration["LightSpecularScale"],
+        "indirect_lighting_intensity": max(0.0, min(6.0, calibration["IndirectLightingScale"])),
+        "volumetric_scattering_intensity":
+            max(0.0, min(4.0, calibration["VolumetricScatteringScale"])),
+        "sun_source_angle_deg": max(0.0, min(5.0, calibration["SunSourceAngleDegrees"])),
+        "sun_soft_source_angle_deg": max(0.0, min(5.0, calibration["SunSoftSourceAngleDegrees"])),
+        "allow_mega_lights": kind != 3,
+    }
+
+
 def _staging_dir(map_name):
     """`$ELYSIUM_WORK_ROOT/import/map_geometry/<map>` -- `map_geometry.staging_dir`'s twin."""
 
@@ -674,6 +896,36 @@ class _CubemapSample(object):
         self.sky = bool(row["sky"])
 
 
+class _LightRow(object):
+    """One staged `lights[]` row (R5.6): `UE_map_sidecars.light_rows`' dict, the `.lights`
+    producer's own row, in Unreal space with the engine's load-time fixups applied."""
+
+    __slots__ = ("index", "type", "position", "direction", "rgb", "radius_cm", "stopdot",
+                 "stopdot2", "exponent", "style", "sky")
+
+    def __init__(self, row):
+        self.index = int(row["index"])
+        self.type = int(row["type"])
+        self.position = tuple(float(v) for v in row["position"])
+        self.direction = tuple(float(v) for v in row["direction"])
+        self.rgb = tuple(float(v) for v in row["rgb"])
+        self.radius_cm = float(row["radiusCm"])
+        self.stopdot = float(row["stopdot"])
+        self.stopdot2 = float(row["stopdot2"])
+        self.exponent = float(row["exponent"])
+        self.style = int(row["style"])
+        self.sky = bool(row["sky"])
+
+    def as_dict(self):
+        """The row back in the staged shape -- what `derive_light` reads and the recipe carries."""
+        return {
+            "index": self.index, "type": self.type, "position": list(self.position),
+            "direction": list(self.direction), "rgb": list(self.rgb),
+            "radiusCm": self.radius_cm, "stopdot": self.stopdot, "stopdot2": self.stopdot2,
+            "exponent": self.exponent, "style": self.style, "sky": int(self.sky),
+        }
+
+
 class _StagedGeometry(object):
     """The staged manifest plus its packed vertex file, read with no third-party module.
 
@@ -709,6 +961,7 @@ class _StagedGeometry(object):
         self.placements = [_Placement(row) for row in self.manifest["placements"]]
         self.materials = dict(self.manifest["materials"])
         self.cubemaps = [_CubemapSample(row) for row in self.manifest.get("cubemaps") or []]
+        self.lights = [_LightRow(row) for row in self.manifest.get("lights") or []]
 
     def brush_stems(self):
         return {int(index): stem

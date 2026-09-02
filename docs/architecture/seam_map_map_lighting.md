@@ -228,9 +228,10 @@ rig's **calibration**, not its geometry, off cvars/C++ literals and a per-map JS
 onto two editor surfaces: `UElysiumLightingSettings` (global, Project Settings -> Elysium ->
 Lighting) and `UElysiumLightCalibration` (per-map, a data asset). `worldLights[]` above is
 unaffected -- this section is about what a light's *raw* row is turned into at runtime, not about
-the row itself, and the runtime still reads `<map>.lights` (`UE_bsp_to_scene`'s restatement of
-`worldLights[]`) to adopt and derive every source. R5.6 is the task that bakes the derived values
-and deletes that reader; this one is scoped to where the human-tunable numbers live.
+the row itself. On a map still on the legacy lane the runtime reads `<map>.lights`
+(`UE_map_sidecars`' restatement of `worldLights[]`) to adopt and derive every source; on a
+`MapsOnV2Models` map the bake writes the derived values once and the runtime derives nothing
+("Lights final (R5.6)" below). R4.3 is scoped to where the human-tunable numbers live.
 
 ### `UElysiumLightingSettings` — the global half
 
@@ -401,6 +402,91 @@ not by an existence check.
 not cached). Numbers, boot and shot-diff results are in `docs/project/seam_migration.md` under this
 task's Settled entry.
 
+### Lights final (R5.6)
+
+R5.6 of `docs/project/seam_migration.md` -> "Roadmap -- one pipeline" [MP-4.5] makes the baked
+light actor the truth on a converted map: the bake writes every VtMB-derived value `ApplyToSource`
+used to compute at every load -- the same math, computed once -- plus the two MegaLights properties
+the rig used to restate, and the runtime rig on that map derives nothing. It applies the R4.3
+calibration asset's merge rows and animates lightstyles; that is the whole of the "slim rig" the
+2026-08-31 ruling asked for. Every number is the faithful default the settings page already
+carries; no look-tuning.
+
+**Source: `worldLights[]`, through the one producer.** The offline stage
+(`importers.map_geometry.stage_map`) writes a `lights[]` table into the staged manifest (**version
+4**), one row per lump-15 record in lump order, by calling `UE_map_sidecars.light_rows` -- the very
+function `write_lights` formats `<map>.lights` from, refactored into rows-then-format so the two
+outputs cannot disagree. A row carries the engine's own `Mod_LoadWorldlights` fixups exactly as the
+sidecar did (a `radius < 1` is no cutoff, a spot `exponent == 0` is `1`), the Unreal-frame position
+and direction, the linear RGB intensity, `radiusCm`, `stopdot`/`stopdot2`, `style`, and the
+3D-skybox flag (`SkyScope.is_sky`, never for the sun or the skyambient). The row's `index` is the
+lump-15 ordinal, which is also the `.lights` line index, which is also the actor's
+`elysium.src=<n>` tag and the R4.3 calibration asset's `SourceIndex`: one key, four spellings,
+identical by construction, and `test_bake_map_lights.py` proves the staged rows format back to the
+`.lights` file byte for byte on the three working maps.
+
+**Derivation: `derive_light`, the rig's formulas in Python, fed from the settings page.**
+`bake_map_v2.derive_light(row, calibration, sky_scale, sky_origin)` is a pure function (no `unreal`
+import) restating `UElysiumLightRig::ApplyToSource` line for line; `calibration` is a dict read
+from the `UElysiumLightingSettings` CDO -- the tracked ini, never a literal -- plus the surfaces
+page's `LightSpecularScale` (R5.5):
+
+| Actor value | Rule (unchanged from `ApplyToSource`) |
+|---|---|
+| position | the row's; a sky source `scale * (p - sky_origin)`, the miniature transform |
+| colour | `rgb / max(rgb)`; a row with `max(rgb) <= 0` places no actor, as before |
+| intensity, point/spot | `min(max(rgb) * PointSpotScale, ceiling)`, `ceiling` = `ExtendedMaxBrightness` when `bUseExtendedBrightnessCeiling` else `MaxBrightness` |
+| intensity, sun | `max(max(rgb) * SunScaleLux, 0.01)` |
+| reach | `(radiusCm if radiusCm > 1 else FallbackRadiusCm) * RadiusScale`; a sky source `max(reach * scale, MinSkyReachCm)` |
+| falloff | `bUseInverseSquaredFalloff = false`, `LightFalloffExponent = FalloffExponent` |
+| spot cone | outer `clamp(acos(stopdot2), 1, 80)`, inner `min(clamp(acos(stopdot), 1, 80), outer)` |
+| shadows | type 0 texlight never; 1 `bPointShadows`; 2 `bSpotShadows`; 3 `bSunShadows` |
+| Lumen / fog | `IndirectLightingIntensity = clamp(IndirectLightingScale, 0, 6)`, `VolumetricScatteringIntensity = clamp(VolumetricScatteringScale, 0, 4)` |
+| specular | `SpecularScale = LightSpecularScale` (surfaces page) |
+| sun source | `LightSourceAngle`/`LightSourceSoftAngle` = the two sun angles, clamped 0..5 |
+| MegaLights | every non-sun light `bAllowMegaLights = true`, `MegaLightsShadowMethod = RayTracing` -- the renderer contract the rig used to re-stamp every load, now baked |
+| mobility | Movable, set before any radius/cone write (the silent-Stationary trap `_make_movable` documents) |
+
+Lightstyle animation has no baked equivalent: a styled source is placed at its unanimated base
+intensity, and the rig scales it per frame at runtime exactly as before. The per-area `.lightfit`
+rebalance (`bApplyLightFit`) is a legacy-lane instrument -- no `.lightfit` exists for any map on
+disk -- and a V2 row's multiplier is 1.
+
+**The actor carries what the rig needs and nothing the bake already resolved.** Tags:
+`elysium.light`, `elysium.src=<n>` (unchanged), and two new ones, `elysium.type=<t>` and
+`elysium.style=<s>` (`ElysiumBakedTags::LightType`/`LightStyle`) -- the type for the Cog viewer's
+readout and the non-spot batch toggle, the style for the per-frame animation. No magnitude, radius
+or cosine rides along: those are inputs to a derivation the runtime no longer performs. The type-5
+skyambient row never places an actor; its first-wins `(colour, magnitude)` feeds `_place_sky`'s
+R5.2 join as before.
+
+**Runtime: `AdoptBaked`, gated on `MapsOnV2Models`.** `UElysiumMapVisuals::AdoptBakedLevel` calls
+`UElysiumLightRig::AdoptBaked(Adopted, MapName)` for a listed map and the legacy `Adopt(...,
+MapLights(MapName), SkyScale)` otherwise. `AdoptBaked` opens no file: each `FLightSource` is built
+from the actor itself (`bBaked = true`, the baked intensity/reach/colour/transform snapshot as its
+baseline, `Type`/`Style` from the tags) and `ApplyToSource` on a baked source **restores that
+snapshot** rather than deriving -- so `RevertSource` means "back to the bake", `ApplyLiveTuning`
+(a settings-page push) leaves a converted map exactly as baked, and the R4.3 calibration asset
+applies through the same per-source setters keyed by the same `SourceIndex`. The settings page
+therefore reaches a converted map through the **bake**: every calibration field is in the level
+recipe, so an edited page re-authors the level on the next `export map` instead of re-deriving at
+load. Every map not on the flag runs the legacy path byte for byte; the `.lights` reader's deletion
+is R8.1's, matching every other legacy-path retirement in this roadmap. The rig's log line names
+the lane (`adopted N baked lights (final values, MapsOnV2Models)`), so a boot log proves which path
+ran.
+
+**Verification, re-homed.** `bake_verify.py` on a converted map: light-count parity -- the number
+of `elysium.light` actors equals the number of `.lights` rows that place one (type 0-3 with
+`max(rgb) > 0`) and every actor's `elysium.src` resolves to exactly one such row; the existing
+reach and cone checks against the `.lights` row (the same math, the sidecar as an independent
+witness); and, new, the four assertions `Elysium.Substrate.LightRig` carried for the runtime
+derivation, now against the baked actor: non-inverse-square falloff, MegaLights allowed with the
+RT shadow method, shadows per the page's flags and the type, and the `type`/`style` tags equal to
+the row. `Elysium.Substrate.LightRigBaked` covers the runtime half on synthetic components: a
+baked value survives adopt and a settings push, a calibration row applies by `SourceIndex`, the
+`type`/`style` tags reach the source the per-frame tick reads (the tick itself asserts on an
+unregistered component, so it is not driven there), and a revert returns to the bake.
+
 ### Cog Lights window: viewer, not editor
 
 The window (`ElysiumCogWindow_Lights`) is now **read-only**. Deleted outright: the "Rig tuning" tab
@@ -428,5 +514,7 @@ shadows-from-calibration, spot cone from `stopdot`/`stopdot2`) are **not yet mov
 line's "re-homed to bake verification" describes where they belong once R5.6 bakes final light
 values and gives them something to be verified against — there is no baked light asset to compare
 before that task lands, so re-homing them now would mean deleting coverage of `ApplyToSource`'s
-formulas with nothing to replace it. They stay in `Elysium.Substrate.LightRig` until R5.6 gives them
-a destination.
+formulas with nothing to replace it. They stay in `Elysium.Substrate.LightRig` for as long as the legacy
+`Adopt` path exists (105 maps, R8.1's deletion); R5.6 re-homed the same four assertions onto the
+bake's own output in `bake_verify.py` ("Lights final (R5.6)" above), which is where a converted
+map's values are proven.

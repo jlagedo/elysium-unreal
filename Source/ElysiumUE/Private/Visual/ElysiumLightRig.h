@@ -41,16 +41,20 @@ public:
 		FActorComponentTickFunction* ThisTickFunction) override;
 
 	// One light actor the baked level offered up, with the `<map>.lights` line it was baked from.
+	// `Type` and `Style` are the R5.6 `elysium.type=`/`elysium.style=` tags a converted map's
+	// actors carry; the legacy `Adopt` ignores them (it reads both off the sidecar row).
 	struct FAdoptedLight
 	{
 		ULightComponent* Light = nullptr;
 		int32 SourceIndex = INDEX_NONE;
+		int32 Type = 1;
+		int32 Style = 0;
 	};
 
-	// Bind the baked level's light components to their sidecar rows and take ownership of their
-	// values: every intensity, reach and falloff is re-derived here from the raw source data, so
-	// the live calibration — not whatever the bake happened to write — is what the map renders.
-	// Returns the number of lights bound.
+	// Legacy lane. Bind the baked level's light components to their sidecar rows and take
+	// ownership of their values: every intensity, reach and falloff is re-derived here from the
+	// raw source data, so the live calibration — not whatever the bake happened to write — is
+	// what the map renders. Returns the number of lights bound.
 	//
 	// `SkyReach` is the 3D-skybox miniature's uniform scale (`<map>.sky`, 16 where there is one,
 	// 1 otherwise). A source flagged sky in the sidecar lit the *miniature*, never the playable
@@ -58,6 +62,17 @@ public:
 	// its reach is authored in miniature units and has to scale with the geometry it lights.
 	// Its position is already scaled by the bake; only the reach is re-derived here.
 	int32 Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath, float SkyReach = 1.f);
+
+	// V2 lane (R5.6, `MapsOnV2Models`; `seam_map_map_lighting.md` -> "Import" -> "Lights final").
+	// The bake already wrote every derived value -- intensity, reach, falloff, cone, shadows,
+	// specular, Lumen/fog scales and the MegaLights policy -- from `worldLights[]` through the same
+	// formulas `ApplyToSource` holds, so this opens no file and derives nothing: each source is
+	// snapshotted from its actor (the baked values are its baseline; `RevertSource` returns to
+	// them, and a settings-page push leaves them alone -- the page reaches a converted map through
+	// the bake's recipe). What the rig still owns here is the R4.3 calibration asset's merge rows
+	// (keyed by the same lump-15 ordinal the `elysium.src` tag carries) and the per-frame
+	// lightstyle animation off the `elysium.style` tag. Returns the number of lights bound.
+	int32 AdoptBaked(const TArray<FAdoptedLight>& Adopted, const FString& InMapName);
 
 	// Show/hide every spawned light (bound to elysium.lights / the pawn's L key).
 	void SetLightsVisible(bool bShow);
@@ -90,6 +105,12 @@ public:
 		bool bOverridden = false;   // set by a calibration-asset row or a hand edit; calibration passes skip it
 		bool bDisabled = false;     // switched off by a calibration-asset row or a hand edit
 		bool bSky = false;          // lights the 3D-skybox miniature, not the playable world
+		// R5.6: adopted off a converted map's actor, whose baked values are the baseline. `Mag`,
+		// `RadiusCm` and the cosines above are 0 on such a source -- the bake consumed them --
+		// and `ApplyToSource` restores this snapshot instead of deriving.
+		bool bBaked = false;
+		float BakedIntensity = 0.f;
+		float BakedReachCm = 0.f;
 	};
 
 	// The spawned light sources, for the Cog Lights window's read-only viewer. Skyambient (type 5)

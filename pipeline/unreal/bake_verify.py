@@ -11,6 +11,7 @@ import os
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
@@ -348,6 +349,111 @@ def verify_lights(actors, world_dir, map_name):
         unreal.log_error("[verify] " + message)
     if len(errors) > 8:
         unreal.log_error("[verify] ... and %d more baked light(s) disagree with %s.lights"
+                         % (len(errors) - 8, map_name))
+    return errors
+
+
+def _lights_rows_that_place(path):
+    """The `.lights` rows the bake places an actor for: type 0-3 with `max(rgb) > 0`, keyed by
+    line index (the lump-15 ordinal). Type 5 skyambient tints the SkyLight and places none."""
+    rows = {}
+    with open(path, "r", encoding="utf-8", errors="replace") as handle:
+        for index, line in enumerate(handle):
+            tok = line.split()
+            if len(tok) < 15:
+                continue
+            if int(tok[0]) in (0, 1, 2, 3) and max(float(v) for v in tok[7:10]) > 0.0:
+                rows[index] = tok
+    return rows
+
+
+def verify_lights_baked(actors, world_dir, map_name):
+    """R5.6, `MapsOnV2Models` maps only: light-count parity against the legacy `.lights`, and the
+    four derivation assertions re-homed from `Elysium.Substrate.LightRig` onto the bake's own
+    output (`seam_map_map_lighting.md` -> "Lights final (R5.6)" -> "Verification, re-homed").
+
+    Parity: one `elysium.light` actor per `.lights` row that places one (type 0-3, `max(rgb) > 0`),
+    every actor's `elysium.src` resolving to exactly one such row, no row placed twice. The
+    sidecar is the independent witness here -- it is written by the same `light_rows` the staged
+    table is, so a disagreement means the editor half dropped or doubled a row.
+
+    Baked values: non-inverse-square falloff, MegaLights allowed with the RT shadow method on every
+    local light, shadows per the lighting page's flags and the type (a texlight never), and the
+    `elysium.type`/`elysium.style` tags equal to the row's -- the two facts the slim rig reads.
+    """
+    errors = []
+    if not map_transport.is_map_on_v2_models(map_name):
+        return errors
+    path = os.path.join(world_dir, "%s.lights" % map_name)
+    if not os.path.isfile(path):
+        errors.append("%s: on MapsOnV2Models but no %s.lights to check parity against"
+                      % (map_name, map_name))
+        return errors
+    rows = _lights_rows_that_place(path)
+    page = unreal.get_default_object(unreal.ElysiumLightingSettings)
+    shadows = {
+        0: False,
+        1: bool(page.get_editor_property("point_shadows")),
+        2: bool(page.get_editor_property("spot_shadows")),
+        3: bool(page.get_editor_property("sun_shadows")),
+    }
+
+    seen = {}
+    lights = [actor for actor in actors if LIGHT_TAG in [str(tag) for tag in actor.tags]]
+    for actor in lights:
+        tags = [str(tag) for tag in actor.tags]
+        label = actor.get_actor_label()
+
+        def tag_int(prefix):
+            value = next((t[len(prefix):] for t in tags if t.startswith(prefix)), "")
+            return int(value) if value.lstrip("-").isdigit() else None
+
+        source = tag_int("elysium.src=")
+        tok = rows.get(source) if source is not None else None
+        if tok is None:
+            errors.append("%s: elysium.src=%s names no placing .lights row" % (label, source))
+            continue
+        if source in seen:
+            errors.append("%s: .lights row %d is also %s" % (label, source, seen[source]))
+            continue
+        seen[source] = label
+        kind = int(tok[0])
+        if tag_int("elysium.type=") != kind:
+            errors.append("%s: elysium.type tag %s, .lights type %d"
+                          % (label, tag_int("elysium.type="), kind))
+        if tag_int("elysium.style=") != int(tok[14]):
+            errors.append("%s: elysium.style tag %s, .lights style %s"
+                          % (label, tag_int("elysium.style="), tok[14]))
+        component = actor.light_component
+        if component is None:
+            errors.append("%s: has no light component" % label)
+            continue
+        if bool(component.get_editor_property("cast_shadows")) != shadows[kind]:
+            errors.append("%s: cast_shadows %s, the page says %s for type %d"
+                          % (label, component.get_editor_property("cast_shadows"),
+                             shadows[kind], kind))
+        if kind in (0, 1, 2):
+            if component.get_editor_property("use_inverse_squared_falloff"):
+                errors.append("%s: inverse-square falloff on a baked local light" % label)
+            if not component.get_editor_property("allow_mega_lights"):
+                errors.append("%s: MegaLights not allowed on a baked local light" % label)
+            method = component.get_editor_property("mega_lights_shadow_method")
+            if method != unreal.MegaLightsShadowMethod.RAY_TRACING:
+                errors.append("%s: MegaLights shadow method %s, not RayTracing" % (label, method))
+    missing = sorted(set(rows) - set(seen))
+    if missing:
+        errors.append("%d placing .lights row(s) have no actor: %s%s" % (
+            len(missing), ", ".join(str(i) for i in missing[:8]),
+            " ..." if len(missing) > 8 else ""))
+    unreal.log("[verify] lights parity: %d actor(s) / %d placing .lights row(s) / %d matched"
+               % (len(lights), len(rows), len(seen)))
+    if len(lights) != len(rows):
+        errors.append("light-count parity: %d actors, %d placing .lights rows"
+                      % (len(lights), len(rows)))
+    for message in errors[:8]:
+        unreal.log_error("[verify] " + message)
+    if len(errors) > 8:
+        unreal.log_error("[verify] ... and %d more baked-light finding(s) on %s"
                          % (len(errors) - 8, map_name))
     return errors
 
@@ -777,6 +883,7 @@ def verify_map(map_name):
         for key in sorted(census, key=lambda k: -census[k]):
             unreal.log("[verify]   %-28s %d" % (key, census[key]))
         errors.extend(verify_lights(actors, world_dir, map_name))
+        errors.extend(verify_lights_baked(actors, world_dir, map_name))
         errors.extend(verify_captures(
             actors, unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()))
     else:

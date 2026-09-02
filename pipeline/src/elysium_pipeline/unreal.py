@@ -716,7 +716,8 @@ def bake_maps(
         print(f"staged V2 geometry for {name}: {manifest['counts']} "
               f"({manifest['vertexBytes']} vertex bytes, "
               f"{len(manifest['placements'])} placements, "
-              f"{len(manifest.get('cubemaps') or [])} reflection-capture samples)")
+              f"{len(manifest.get('cubemaps') or [])} reflection-capture samples, "
+              f"{len(manifest.get('lights') or [])} world-light rows)")
         # R5.4: every surface binds an imported MI_ resolved through the material lane's own
         # manifest; the counts are the provenance report's, written beside the staged pair.
         report = manifest.get("materialReport") or {}

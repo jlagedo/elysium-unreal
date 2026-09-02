@@ -61,7 +61,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 2 (R5.4): the manifest carries `materials`, one row per face group, and `materialReport`.
 #: 3 (R5.5): the manifest carries `cubemaps`, one row per lump-42 sample, the reflection-capture
 #: placements (`docs/architecture/seam_map_map.md` -> "## Import -- reflection captures (R5.5)").
-MANIFEST_VERSION = 3
+#: 4 (R5.6): the manifest carries `lights`, one row per lump-15 `worldLights[]` record in lump
+#: order (`UE_map_sidecars.light_rows`, the `.lights` producer's own rows), the light placements
+#: (`docs/architecture/seam_map_map_lighting.md` -> "## Import" -> "Lights final (R5.6)").
+MANIFEST_VERSION = 4
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -301,6 +304,9 @@ class MapGeometry:
     brushes: dict[int, Scene]
     placements: list[Placement]
     cubemaps: list[CubemapSample]
+    #: R5.6: `UE_map_sidecars.light_rows` verbatim -- one dict per lump-15 record, the same rows
+    #: `<map>.lights` is formatted from, so the staged table and the sidecar agree by construction.
+    lights: list[dict[str, Any]]
     sky_scale: float
     sky_origin: tuple[float, float, float]
     sky_ok: bool
@@ -616,6 +622,7 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
         brushes=brushes,
         placements=_placements(units, join.sky),
         cubemaps=_cubemaps(units, join.sky),
+        lights=sidecars.light_rows(units, join.sky),
         sky_scale=float(join.sky.scale),
         sky_origin=sky_origin,
         sky_ok=bool(join.sky.ok),
@@ -627,6 +634,7 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
             "skyTriangles": sky_scene.tri_count,
             "brushTriangles": sum(scene.tri_count for scene in brushes.values()),
             "cubemaps": len(units.root.get("cubemaps") or []),
+            "worldLights": len(units.lighting.get("worldLights") or []),
         },
     )
 
@@ -947,6 +955,8 @@ def stage_map(map_name: str, root: Path | None = None,
     R5.4: the manifest also carries `materials` -- every face group resolved to its imported `MI_`
     through the material lane's staged manifest -- and the material report lands beside it.
     R5.5: and `cubemaps` -- every lump-42 sample as a reflection-capture placement.
+    R5.6: and `lights` -- every lump-15 record as the `.lights` producer's own row, the light
+    placements the editor half derives final actor values from.
     """
 
     geometry = read_geometry(map_name, root)
@@ -1000,6 +1010,7 @@ def stage_map(map_name: str, root: Path | None = None,
             for placement in geometry.placements
         ],
         "cubemaps": [sample.as_row() for sample in geometry.cubemaps],
+        "lights": list(geometry.lights),
         "counts": dict(geometry.counts),
     }
 

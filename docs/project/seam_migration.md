@@ -1426,7 +1426,7 @@ assertions (non-inverse-square falloff, MegaLights, shadows-from-calibration, sp
 re-homed yet: the roadmap line's "re-homed to bake verification" is where they belong once R5.6
 bakes final light values and gives them something to be verified against, which does not exist
 before that task lands — re-homing now would delete `ApplyToSource` coverage with nothing to
-replace it. Substrate 426/426 tests (`Elysium.Substrate.LightRig` now covers two more behaviors
+replace it (done at R5.6: `bake_verify.verify_lights_baked`, see that Settled entry). Substrate 426/426 tests (`Elysium.Substrate.LightRig` now covers two more behaviors
 alongside its existing derivation assertions); Content `Elysium.Content.MapEntities.*` 2/2 and
 `Elysium.Content.MapCollision.*` 3/3, re-run as a regression check even though R4.3 touches neither
 lane directly.
@@ -1799,6 +1799,74 @@ pipeline/tests/test_bake_orchestration.py`: **54 passed**, including the corpus-
 `test_reader_stands_one_capture_per_lump_42_sample_on_the_working_corpus` (24/14/19, matching the
 bake).
 
+**R5.6 — lights final (2026-09-02).** On a `MapsOnV2Models` map the baked light actor is the truth:
+`bake_map_v2._place_lights` places one actor per lump-15 `worldLights[]` row of the staged
+`lights[]` table (manifest **v4**; `UE_map_sidecars.light_rows` is the one producer both the
+staged table and `<map>.lights` are formatted from, so the two agree by construction) and writes
+every value `UElysiumLightRig::ApplyToSource` used to derive at every load — position (miniature
+transform for a sky row), normalised colour, intensity under the page's ceiling, reach with the
+fallback/sky floor, non-inverse-square falloff with the page's exponent, spot cones from the
+stopdot cosines, shadows per type and page flag, `SpecularScale` (R5.5's CDO), the Lumen/fog
+scales, the sun angles — plus `bAllowMegaLights = true` / `MegaLightsShadowMethod = RayTracing` on
+every local light. `derive_light` is that derivation as a pure Python function fed from the
+`UElysiumLightingSettings` CDO (`lighting_calibration()`; every field is in the level recipe, so an
+edited page re-authors the level on the next `export map`). Runtime: `UElysiumMapVisuals::
+AdoptBakedLevel` routes a converted map to `UElysiumLightRig::AdoptBaked`, which opens no file and
+derives nothing — the actor's values are the source's baseline, `RevertSource`/`ApplyLiveTuning`
+return to them, and the rig still applies the R4.3 calibration asset by the same `SourceIndex` =
+lump-15 ordinal = `elysium.src=<n>` tag and animates lightstyles off the new `elysium.style=<s>`
+tag (`elysium.type=<t>` feeds the viewer and the batch toggle). Every other map runs `Adopt` on
+`<map>.lights` byte for byte; the reader's deletion is R8.1's. Ruling in `seam_map_map_lighting.md`
+→ "## Import" → "Lights final (R5.6)"; the four derivation assertions the R4.3 entry left in
+`Elysium.Substrate.LightRig` are re-homed onto the bake's own output in
+`bake_verify.verify_lights_baked` (falloff, MegaLights + RT method, shadows-per-page, `type`/`style`
+tags) beside a light-count parity check against the legacy `.lights`.
+
+**Measured on the scoped rebake, `uv run elysium export map sp_tutorial_1 sm_pawnshop_1
+sm_hub_1`** (the recipe tracker resumed the interrupted first run; no `--force`): staged rows
+396 / 161 / 687 (`worldLights` count, lump order); placed sp_tutorial_1 **395** (58 in the 3D
+skybox; the 396th row is the type-5 skyambient, which tints the SkyLight and places none),
+sm_pawnshop_1 **161** (31 sky), sm_hub_1 **687** (60 sky; 20 of them texlights); 0 rows with
+`max(rgb) <= 0`; captures unchanged at 24/14/19 built; "all 3 map bake(s) completed",
+`REBAKE_EXIT=0`. `uv run elysium verify maps sp_tutorial_1 sm_pawnshop_1 sm_hub_1`: lights parity
+**395 actors / 395 placing rows / 395 matched**, **161 / 161 / 161**, **687 / 687 / 687**; the
+pre-existing per-row reach and cone checks (`verify_lights`, `737683ba`) pass on all 395 / 161 /
+687 against the `.lights` sidecar; **0 light findings**. The command still exits 5 with 77
+findings on the three maps, none about lights and none new here: `baked glass material instance
+missing: /ElysiumBaked/<map>/Materials/MI_glass_*` (the legacy `.mtl` glass check still expects
+the per-map `MI_` packages R5.4 stopped writing for converted maps) and the prop `alpha material
+exported an RGB albedo` / `baked glass albedo is not alpha-capable` texture checks — a follow-up
+for the verify script, filed below. Boot witness, `uv run elysium debug shots <map> --no-open`,
+one process at a time, all three exit 0: rig log `LightRig: adopted 395 baked lights (final
+values, MapsOnV2Models; 10 animated) +sun` (styles 1 and 6 animate; the 8 rows on styles 32–34
+are entity-switched and clamp to 0 exactly as the legacy `Adopt` does), `161 baked lights (…; 0
+animated)`, `687 baked lights (…; 1 animated)`; no calibration asset exists for any of the three,
+so no rows applied; material audit 0 unbound slots on all three (464/1191, 179/322, 502/1534);
+6/6 + 4/4 + 4/4 vantages captured. `shots_diff.py` against the only promoted baseline
+(`8077e5b5`, R2.1, pre-R5): all 14 vantages over 0.5% (95.69–100.00% changed, sp_tutorial_1 mean
+44.66–66.12, sm_pawnshop_1 59.17–68.11, sm_hub_1 32.93–37.17) — the same magnitude R5.1 measured
+between two captures of an identical build, so per that finding the harness remains a
+did-it-boot / did-it-appear witness and attributes nothing to this task. No screenshot was read.
+
+Tests: `uv run elysium build`: Succeeded. `uv run elysium test Substrate`: **442 of 442 in 3.9 s**,
+the new leaf `Elysium.Substrate.LightRigBaked` (tag parse with legacy defaults, adopt keeps the
+actor's values, a settings push leaves them alone, a calibration row applies by `SourceIndex`, the
+`type`/`style` tags reach the source, revert returns to the bake). `uv run pytest
+pipeline/tests/test_bake_map_lights.py pipeline/tests/test_map_geometry.py
+pipeline/tests/test_bake_map_captures.py pipeline/tests/test_bake_map_sky.py
+pipeline/tests/test_unreal_launch_args.py pipeline/tests/test_bake_orchestration.py`: **61
+passed** — the lights module's 7 cases pin `derive_light` against `ApplyToSource` (ceiling and
+extended ceiling, texlight no-shadow and fallback reach, spot cones and the inner≤outer clamp, sun
+lux floor and no MegaLights, the miniature transform and reach floor), `light_rows`' load-time
+fixups and the exact `.lights` line, the shared manifest version, and — corpus-gated — that the
+staged rows format back to all three `.lights` files line for line (396 / 161 / 687).
+
+Follow-ups: `bake_verify.py`'s `.mtl` glass check and the prop alpha-texture checks fail every
+converted map for reasons that predate this task (above); the Cog Lights viewer and
+`ElysiumLightProbe` read a source's `Mag` (0 on a baked source, the bake consumed it) — a viewer
+concern, filed not fixed; the `.lights` reader, `Adopt` and the `Elysium.Substrate.LightRig`
+derivation assertions retire together at R8.1.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -1865,10 +1933,10 @@ wetness homes (R5.3)".
 fact (a `UDecalComponent` renders only `MD_DeferredDecal`; every V2 master is `MD_Surface`).
 
 **R5.5 landed (2026-09-02)** — see Settled.
-- **R5.6 Lights final** [MP-4.5]. The bake writes the VtMB-derived values from `worldLights[]`
-  plus the MegaLights properties; the runtime derivation deleted (the rig applies only the R4.3
-  asset and lightstyles); `.lights` reader deleted. No look-tuning — the derivation is the same
-  math, computed once at bake. → lands: the editor level is the truth.
+
+**R5.6 landed (2026-09-02)** — see Settled. The `.lights` reader is bypassed on `MapsOnV2Models`
+maps, not deleted: 105 maps still adopt through it, and R8.1 owns its deletion as it owns every
+other legacy-path retirement.
 
 ### R6 — consumers beyond maps [SF-6.3–6.6]
 

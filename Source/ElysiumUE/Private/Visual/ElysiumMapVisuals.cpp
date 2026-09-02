@@ -193,8 +193,12 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		{
 			if (ALight* Light = Cast<ALight>(Actor))
 			{
+				// R5.6: the type and style tags are only ever written by the V2 bake; on a
+				// legacy-lane actor they read as their defaults and `Adopt` ignores them anyway.
 				Adopted.Add({ Light->GetLightComponent(),
-					ElysiumBakedTags::ParseSourceIndex(Actor->Tags) });
+					ElysiumBakedTags::ParseSourceIndex(Actor->Tags),
+					ElysiumBakedTags::ParseLightType(Actor->Tags),
+					ElysiumBakedTags::ParseLightStyle(Actor->Tags) });
 			}
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::SkyLight))
@@ -264,7 +268,11 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 
 	if (LightRig)
 	{
-		WorldLightCount = LightRig->Adopt(Adopted, FElysiumContentPaths::MapLights(MapName), SkyDef.Scale);
+		// R5.6: a converted map's actors already carry every derived value, so the rig snapshots
+		// them (`AdoptBaked`); every other map re-derives from `<map>.lights` exactly as before.
+		WorldLightCount = ElysiumMapTransport::IsMapOnV2Models(MapName)
+			? LightRig->AdoptBaked(Adopted, MapName)
+			: LightRig->Adopt(Adopted, FElysiumContentPaths::MapLights(MapName), SkyDef.Scale);
 	}
 
 	if (Tagged == 0)

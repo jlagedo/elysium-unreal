@@ -841,19 +841,22 @@ def write_hulls(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int]
     return {"brushes": written, "skyBrushes": skipped_sky}
 
 
-def write_lights(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int]:
-    """`<map>.lights`: one WORLDLIGHTS source per line, in Unreal space.
+def light_rows(units: MapUnits, sky: SkyScope) -> list[dict[str, Any]]:
+    """Every WORLDLIGHTS source as one row, in lump order, in Unreal space -- the one statement
+    both `<map>.lights` (`write_lights`) and the V2 map bake's staged `lights[]` table
+    (`importers.map_geometry.stage_map`, R5.6) are formatted from, so the two cannot disagree.
 
-    Line: `type ox oy oz  dx dy dz  ir ig ib  radius_cm  stopdot stopdot2 exponent  style  sky`.
     The engine's own load-time fixups from `Mod_LoadWorldlights` are applied here, because the
     lighting unit publishes lump 15 verbatim and the values the game lit with are the fixed ones:
     a type 1/2 with no attenuation gets `quadratic = 1`, a type 2 with `exponent == 0` gets
     `exponent = 1`, and any `radius < 1` becomes no cutoff at all rather than a tiny one.
+
+    A row's `index` is the lump-15 ordinal: the `.lights` line index, the baked actor's
+    `elysium.src=<n>` tag and the `UElysiumLightCalibration` row key, one number.
     """
 
-    lines: list[str] = []
-    in_sky_total = 0
-    for light in units.lighting["worldLights"]:
+    rows: list[dict[str, Any]] = []
+    for index, light in enumerate(units.lighting["worldLights"]):
         light_type = int(light["type"])
         origin = tuple(float(c) for c in light["origin"]["source"])
         ox, oy, oz = source_to_unreal(*origin)
@@ -872,16 +875,44 @@ def write_lights(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int
             radius = 0.0
         # The sun and the skyambient are directionless global terms, never miniature content.
         in_sky = int(light_type not in (3, 5) and sky.is_sky(origin))
-        in_sky_total += in_sky
-        lines.append(
-            f"{light_type} {ox:.4f} {oy:.4f} {oz:.4f} "
-            f"{ux:.4f} {uy:.4f} {uz:.4f} "
-            f"{red:.6f} {green:.6f} {blue:.6f} {radius * INCH_TO_CM:.4f} "
-            f"{float(light['stopdot']):.4f} {float(light['stopdot2']):.4f} {exponent:.3f} "
-            f"{int(light['style'])} {in_sky}"
-        )
-    write_sidecar_lines(out_dir / f"{units.name}.lights", lines)
-    return {"lights": len(lines), "skyLights": in_sky_total}
+        rows.append({
+            "index": index,
+            "type": light_type,
+            "position": [ox, oy, oz],
+            "direction": [ux, uy, uz],
+            "rgb": [red, green, blue],
+            "radiusCm": radius * INCH_TO_CM,
+            "stopdot": float(light["stopdot"]),
+            "stopdot2": float(light["stopdot2"]),
+            "exponent": exponent,
+            "style": int(light["style"]),
+            "sky": in_sky,
+        })
+    return rows
+
+
+def format_light_line(row: dict[str, Any]) -> str:
+    """One `.lights` line: `type ox oy oz  dx dy dz  ir ig ib  radius_cm  stopdot stopdot2
+    exponent  style  sky`."""
+
+    ox, oy, oz = row["position"]
+    ux, uy, uz = row["direction"]
+    red, green, blue = row["rgb"]
+    return (
+        f"{row['type']} {ox:.4f} {oy:.4f} {oz:.4f} "
+        f"{ux:.4f} {uy:.4f} {uz:.4f} "
+        f"{red:.6f} {green:.6f} {blue:.6f} {row['radiusCm']:.4f} "
+        f"{row['stopdot']:.4f} {row['stopdot2']:.4f} {row['exponent']:.3f} "
+        f"{row['style']} {row['sky']}"
+    )
+
+
+def write_lights(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int]:
+    """`<map>.lights`: one WORLDLIGHTS source per line (`light_rows`, `format_light_line`)."""
+
+    rows = light_rows(units, sky)
+    write_sidecar_lines(out_dir / f"{units.name}.lights", [format_light_line(row) for row in rows])
+    return {"lights": len(rows), "skyLights": sum(row["sky"] for row in rows)}
 
 
 def build_entities(

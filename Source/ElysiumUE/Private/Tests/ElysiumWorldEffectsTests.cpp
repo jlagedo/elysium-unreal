@@ -26,6 +26,7 @@
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumLightRig.h"
+#include "ElysiumBakedTags.h"
 #include "ElysiumLightCalibration.h"
 #include "ElysiumLightingSettings.h"
 #include "ElysiumSurfaceSettings.h"
@@ -420,6 +421,104 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 		FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
 
 	IFileManager::Get().Delete(*LightsPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigBakedTest,
+	"Elysium.Substrate.LightRigBaked", GElysiumTestFlags)
+
+// R5.6 (`seam_map_map_lighting.md` -> "Import" -> "Lights final"): on a `MapsOnV2Models` map the
+// bake wrote every derived value, so `AdoptBaked` opens no sidecar and derives nothing -- the
+// actor's values are the baseline, a settings push leaves them alone, a revert returns to them,
+// and the R4.3 calibration asset still applies by the same lump-15 ordinal. No tick here: an
+// unregistered component asserts in `UActorComponent::TickComponent`, so the per-frame lightstyle
+// path is covered by proving the style tag reaches the source the tick reads.
+bool FElysiumLightRigBakedTest::RunTest(const FString&)
+{
+	UElysiumLightRig* Rig = NewObject<UElysiumLightRig>();
+	UPointLightComponent* Point = NewObject<UPointLightComponent>();
+	USpotLightComponent* Spot = NewObject<USpotLightComponent>();
+	// The values a V2 bake writes, as the level carries them before adopt.
+	Point->SetMobility(EComponentMobility::Movable);
+	Point->SetIntensity(3.75f);
+	Point->SetAttenuationRadius(1234.f);
+	Point->SetLightColor(FLinearColor(0.5f, 0.25f, 1.f));
+	Point->SetWorldLocation(FVector(10.f, 20.f, 30.f));
+	Spot->SetMobility(EComponentMobility::Movable);
+	Spot->SetIntensity(1.5f);
+	Spot->SetAttenuationRadius(2000.f);
+
+	// Tags as the bake writes them, parsed the way `AdoptBakedLevel` parses them.
+	TArray<FName> Tags;
+	Tags.Add(ElysiumBakedTags::Light);
+	Tags.Add(ElysiumBakedTags::SourceIndex(7));
+	Tags.Add(ElysiumBakedTags::LightType(1));
+	Tags.Add(ElysiumBakedTags::LightStyle(4));
+	TestEqual(TEXT("elysium.src parses"), ElysiumBakedTags::ParseSourceIndex(Tags), 7);
+	TestEqual(TEXT("elysium.type parses"), ElysiumBakedTags::ParseLightType(Tags), 1);
+	TestEqual(TEXT("elysium.style parses"), ElysiumBakedTags::ParseLightStyle(Tags), 4);
+	const TArray<FName> Legacy = { ElysiumBakedTags::Light, ElysiumBakedTags::SourceIndex(3) };
+	TestEqual(TEXT("a legacy actor's type defaults to point"), ElysiumBakedTags::ParseLightType(Legacy), 1);
+	TestEqual(TEXT("a legacy actor's style defaults to unanimated"), ElysiumBakedTags::ParseLightStyle(Legacy), 0);
+
+	TArray<UElysiumLightRig::FAdoptedLight> Adopted;
+	Adopted.Add({ Point, 7, 1, 4 });
+	Adopted.Add({ Spot, 12, 2, 0 });
+	Adopted.Add({ Spot, INDEX_NONE, 2, 0 });   // untagged: counted, never bound
+	TestEqual(TEXT("baked adopt binds every tagged source"), Rig->AdoptBaked(Adopted, TEXT("sm_test_1")), 2);
+
+	TestTrue(TEXT("baked adopt keeps the actor's intensity"), FMath::IsNearlyEqual(Point->Intensity, 3.75f));
+	TestTrue(TEXT("baked adopt keeps the actor's reach"), FMath::IsNearlyEqual(Point->AttenuationRadius, 1234.f));
+	if (TestEqual(TEXT("two sources adopted"), Rig->Sources().Num(), 2))
+	{
+		const UElysiumLightRig::FLightSource& S = Rig->Sources()[0];
+		TestTrue(TEXT("source is marked baked"), S.bBaked);
+		TestEqual(TEXT("source keys on the lump-15 ordinal"), S.SourceIndex, 7);
+		TestEqual(TEXT("type comes from the tag"), S.Type, 1);
+		TestEqual(TEXT("style comes from the tag, for the per-frame tick"), S.Style, 4);
+		TestTrue(TEXT("styled base is the baked intensity"), FMath::IsNearlyEqual(S.BaseIntensity, 3.75f));
+	}
+
+	// A settings push re-derives nothing on a converted map: the page reaches it through the bake.
+	UElysiumLightingSettings* Settings = NewObject<UElysiumLightingSettings>();
+	Settings->PointSpotScale = 99.f;
+	Settings->FallbackRadiusCm = 5.f;
+	Settings->RadiusScale = 0.01f;
+	UElysiumSurfaceSettings* Surfaces = NewObject<UElysiumSurfaceSettings>();
+	Rig->ApplySettings(*Settings, *Surfaces);
+	Rig->ApplyLiveTuning();
+	TestTrue(TEXT("settings push leaves a baked intensity alone"), FMath::IsNearlyEqual(Point->Intensity, 3.75f));
+	TestTrue(TEXT("settings push leaves a baked reach alone"), FMath::IsNearlyEqual(Point->AttenuationRadius, 1234.f));
+
+	// The R4.3 asset still applies, keyed by the same ordinal the `elysium.src` tag carries.
+	UElysiumLightCalibration* Calibration = NewObject<UElysiumLightCalibration>();
+	FElysiumLightCalibrationRow Row;
+	Row.SourceIndex = 12;
+	Row.bOverrideIntensity = true;
+	Row.Intensity = 2.5f;
+	Row.bOverrideReach = true;
+	Row.ReachCm = 3456.f;
+	Calibration->Rows.Add(Row);
+	FElysiumLightCalibrationRow StaleRow;
+	StaleRow.SourceIndex = 99;
+	StaleRow.bDisabled = true;
+	Calibration->Rows.Add(StaleRow);
+	TestEqual(TEXT("calibration applies its one matching row"), Rig->ApplyCalibrationAsset(Calibration), 1);
+	TestTrue(TEXT("calibration intensity reaches the baked spot"), FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
+	TestTrue(TEXT("calibration reach reaches the baked spot"), FMath::IsNearlyEqual(Spot->AttenuationRadius, 3456.f));
+	Rig->ApplyLiveTuning();
+	TestTrue(TEXT("an overridden baked source survives the next push"), FMath::IsNearlyEqual(Spot->Intensity, 2.5f));
+
+	// Revert means "back to the bake", not "re-derive".
+	Rig->SetSourceIntensity(0, 9.f);
+	Rig->SetSourceReach(0, 42.f);
+	Point->SetWorldLocation(FVector(999.f));
+	Rig->RevertSource(0);
+	TestFalse(TEXT("revert drops the override"), Rig->IsSourceOverridden(0));
+	TestTrue(TEXT("revert restores the baked intensity"), FMath::IsNearlyEqual(Point->Intensity, 3.75f));
+	TestTrue(TEXT("revert restores the baked reach"), FMath::IsNearlyEqual(Point->AttenuationRadius, 1234.f));
+	TestTrue(TEXT("revert restores the baked transform"),
+		Point->GetComponentLocation().Equals(FVector(10.f, 20.f, 30.f)));
 	return true;
 }
 

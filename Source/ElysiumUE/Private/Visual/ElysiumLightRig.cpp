@@ -264,6 +264,91 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 	return LightCount;
 }
 
+int32 UElysiumLightRig::AdoptBaked(const TArray<FAdoptedLight>& Adopted, const FString& InMapName)
+{
+	SkyReachScale = 1.f;
+	Lights.Reset();
+	LightSources.Reset();
+	LightCount = 0;
+	bHasSun = false;
+	// The type-5 skyambient row never places an actor and its join ran at bake (R5.2); nothing on
+	// a converted map reads these, but they are stated rather than left from a previous adopt.
+	bHasSkyAmbient = false;
+	SkyAmbientMag = 0.f;
+
+	// The mirrors still start from the page so the viewer reads the current values, but nothing
+	// below derives from them: a converted map's page edit takes at the next bake, by recipe.
+	ApplySettings(*GetDefault<UElysiumLightingSettings>(), *GetDefault<UElysiumSurfaceSettings>());
+
+	int32 Untagged = 0;
+	for (const FAdoptedLight& Entry : Adopted)
+	{
+		if (Entry.Light == nullptr)
+		{
+			continue;
+		}
+		if (Entry.SourceIndex == INDEX_NONE)
+		{
+			// A light with no source tag cannot be keyed by a calibration row; it keeps its baked
+			// values, but say so rather than silently fold it in.
+			++Untagged;
+			continue;
+		}
+		Lights.Add(Entry.Light);
+		FLightSource Source;
+		Source.Light = Entry.Light;
+		Source.SourceIndex = Entry.SourceIndex;
+		Source.Type = Entry.Type;
+		Source.Style = (Entry.Style >= 1 && Entry.Style < LsCount) ? Entry.Style : 0;
+		Source.bBaked = true;
+		Source.BakedIntensity = Entry.Light->Intensity;
+		Source.BaseIntensity = Entry.Light->Intensity;
+		Source.Color = Entry.Light->GetLightColor();
+		Source.AuthoredTransform = Entry.Light->GetComponentTransform();
+		Source.bAuthoredCastVolumetricShadow = Entry.Light->bCastVolumetricShadow;
+		if (const ULocalLightComponent* Local = Cast<ULocalLightComponent>(Entry.Light))
+		{
+			Source.BakedReachCm = Local->AttenuationRadius;
+			Source.RadiusCm = Local->AttenuationRadius;
+		}
+		if (const UPointLightComponent* Point = Cast<UPointLightComponent>(Entry.Light))
+		{
+			Source.AuthoredSourceRadiusCm = Point->SourceRadius;
+			Source.AuthoredSoftSourceRadiusCm = Point->SoftSourceRadius;
+			Source.AuthoredSourceLengthCm = Point->SourceLength;
+		}
+		LightSources.Add(MoveTemp(Source));
+		bHasSun |= (Entry.Type == 3);
+		++LightCount;
+	}
+
+	int32 AnimatedNum = 0;
+	for (const FLightSource& S : LightSources)
+	{
+		AnimatedNum += (S.Style >= 1) ? 1 : 0;
+	}
+	UE_LOG(LogElysiumLights, Log,
+		TEXT("LightRig: adopted %d baked lights (final values, MapsOnV2Models; %d animated)%s%s"),
+		LightCount, AnimatedNum,
+		bHasSun ? TEXT(" +sun") : TEXT(""),
+		Untagged > 0 ? *FString::Printf(TEXT(" (%d untagged)"), Untagged) : TEXT(""));
+
+	// The one thing the rig still applies on top of the bake: the map's hand-tuned rows (R4.3),
+	// keyed by the same lump-15 ordinal the `elysium.src` tag carries.
+	MapName = InMapName;
+	const UElysiumLightCalibration* Calibration = LoadObject<UElysiumLightCalibration>(
+		nullptr, *FElysiumContentPaths::BakedMapLightCalibration(MapName), nullptr,
+		LOAD_NoWarn | LOAD_Quiet);
+	if (Calibration != nullptr)
+	{
+		const int32 NumApplied = ApplyCalibrationAsset(Calibration);
+		UE_LOG(LogElysiumLights, Log, TEXT("LightRig: applied %d calibration row%s from %s"),
+			NumApplied, NumApplied == 1 ? TEXT("") : TEXT("s"),
+			*FElysiumContentPaths::BakedMapLightCalibration(MapName));
+	}
+	return LightCount;
+}
+
 void UElysiumLightRig::ApplySettings(const UElysiumLightingSettings& Settings,
 	const UElysiumSurfaceSettings& Surfaces)
 {
@@ -509,6 +594,22 @@ void UElysiumLightRig::ApplyToSource(FLightSource& S)
 	// silently surviving after the runtime takes ownership.
 	Light->SetWorldTransform(S.AuthoredTransform);
 	Light->SetLightColor(S.Color);
+
+	if (S.bBaked)
+	{
+		// R5.6: on a converted map the bake IS the calibration. The baseline this restores is the
+		// snapshot `AdoptBaked` took off the actor -- intensity and reach here, colour and
+		// transform above -- and nothing is derived from the page: every other attribute (falloff,
+		// cone, shadows, specular, Lumen/fog scales, MegaLights) was written by the bake and is
+		// never touched by the rig, so there is nothing to put back.
+		S.BaseIntensity = S.BakedIntensity;
+		if (ULocalLightComponent* Local = Cast<ULocalLightComponent>(Light))
+		{
+			Local->SetAttenuationRadius(S.BakedReachCm);
+		}
+		Light->SetIntensity(S.BaseIntensity);
+		return;
+	}
 
 	if (S.Type == 3)
 	{
