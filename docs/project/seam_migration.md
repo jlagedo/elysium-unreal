@@ -83,11 +83,12 @@ runtime (the set `Content/ElysiumCorpus` must carry until that slice migrates); 
 | `cfg/*` | UE_extract_cfg | runtime |
 | `vdata/**` | UE_extract_vdata | runtime (also npc_export input) |
 | `signs/*.txt` | UE_extract_signs | runtime |
-| `signs/tex/*`, `backgrounds.json` | UE_extract_signs | none |
-| `ui/strings.json`, `ui/art/**`, `ui/menu/title.png` + `sprites/`, `ui/effects/*` | UE_extract_ui | runtime |
-| `ui/resource/`, `ui/menu/skybox/`, `ui/menu/particles/`, `ui/manifest.json` | UE_extract_ui | none |
+| `signs/tex/*`, `backgrounds.json` | UE_extract_signs | **retired** (R6.6: sign backgrounds are the texture lane's `T_`) |
+| `ui/strings.json` | UE_extract_ui | runtime |
+| `ui/art/**`, `ui/menu/**`, `ui/effects/*` | UE_extract_ui | **retired** (R6.6: every UI image is the texture lane's `T_`; the wallpaper is `UElysiumUISettings::MenuWallpaper`) |
+| `ui/resource/`, `ui/manifest.json` | UE_extract_ui | none |
 | `particles/**` (raw mirror + `*.png`) | UE_extract_particles | bake |
-| `hud/use_icons.png` + `.json` | UE_use_icons | runtime |
+| `hud/use_icons.png` + `.json` | UE_use_icons | **retired** (R6.6: 72 brushes on the `hud/context_icons/` `T_` assets; the exporter is deleted) |
 
 ## Proposal
 
@@ -2295,6 +2296,79 @@ predates this task and is untouched; the R3.3 differ still compares `.ropes` byt
 both producers moved together, so a 108-map run owes no divergence entry; the cable takes no
 scene-fog stamp (it never did); the six legacy masters and their bake lane retire at R9.2.
 
+**R6.6 — UI art off loose files (2026-09-02).** Not a HUD rework: every widget and layout stands
+as it was, and only the image source moved. `ElysiumUI::LoadPngTexture` — the runtime PNG decode
+behind ten sites — is deleted, and every picture a screen draws is now the **`T_` asset the
+texture lane already publishes**, resolved by the same install path the screen always named:
+`ElysiumUI::ArtTexture(path)` (`Private/UI/ElysiumUiArt.h`) normalises the key (case, `\`,
+`materials/`, a trailing `.png`) and folds it through `FElysiumContentPaths::BakedTexture` —
+the C++ twin of `importers.textures.asset_path_for(key, "Texture2D")` — to
+`/ElysiumBaked/Textures/<dir>/T_<safe stem>`; a path whose `T_` does not exist falls through to the
+`MI_` of the same path and its `BaseTexture`, the material lane's own VMT join, because **317 of
+the 1,078 UI-tree materials name another texture** (`hud/disciplines/bloodheal_hud` →
+`bloodheal_base`, every `_sel`, `general_items/flyer` → `lillyonbeachphoto`; measured over the
+install, and identity for every path a screen names by hand). `FElysiumUiArtCache` (the sheet),
+`UElysiumChargenPopup::Art` and `UElysiumHUDWidget::HudArtBrush` keep their caches, UV
+sub-rectangles and 9-slices and swap only the load. **The use-icon ring drops its composited
+atlas** (owner call): `ElysiumUseIconName(N)` is the one table, `ElysiumUI::UseIconArt(N)` folds it
+to `hud/context_icons/<name>` with the compositor's two on-disk aliases (`Stakeable` → `stakable`,
+`valve` → `valvewheel`), and the widget holds 72 brushes on 72 `T_` plus the ring's — the same
+48-px cell, full UV; `UE_use_icons.py`, `hud/use_icons.png/.json` and the `use-icons` bundle are
+gone. **Sign backgrounds draw**: `FElysiumSignData::Background.ImageName` (parsed since the sign
+work, read by nothing until now) resolves to its `T_` and becomes the panel's inner plate behind
+the body text, width and padding unchanged. The title lockup is `interface/mainmenu/vtm_title`, the
+feed-vision mask `effects/spotlight`, the character stage's wallpaper quad
+`interface/charactermaintenance/background`. The menu seal draws the clan's
+`cm_clan_symbol_<clan>` and nothing in the front end (VtMB's `mm_*` seals are `particles/*.tga`, a
+source no lane publishes — the named divergence, filed as **R7.8**); the front-end wallpaper, never
+VtMB art, is `UElysiumUISettings::MenuWallpaper` (Project Settings → Elysium → UI → Menu, a soft
+texture reference, unset by default). Retired from the loose root and the exporters: `ui/art/**`,
+`ui/menu/**` (title, sprites, the six `MM_Skybox` faces, the particle closure), `ui/effects/`,
+`signs/tex/` + `backgrounds.json`, `hud/use_icons.*`; `UE_extract_ui` keeps `resource/*.res`,
+`strings.json`, `manifest.json`, `UE_extract_signs` keeps the definitions, and the eight
+`FElysiumContentPaths::Ui*`/`Sign*` art helpers are deleted. Ruling in `ui-architecture.md` → "9.
+Art from assets (R6.6)", the consumer note in `seam_map_texture.md` → "## Import".
+
+**Measured.** No bake input changed; `uv run elysium export map sp_tutorial_1 sm_pawnshop_1
+sm_hub_1` resumed as a no-op on the three levels (`REBAKE_EXIT=0`) and `uv run elysium verify maps
+…` reports the R6.5 numbers unchanged (`ropes: 70 / 3 / 3`, `21 / 2 / 2`, `76 / 3 / 3` bound; **77
+findings, the same 77 pre-existing, 0 new**, exit 5). Live witness through the editor bridge, `uv
+run elysium run play` driven by the MCP tools (a diagnosis aid, not acceptance): the front end
+came up with the title lockup drawn off `T_vtm_title` (`menu shown (main)`; `menu wallpaper: none
+set (UElysiumUISettings::MenuWallpaper)`, the one wallpaper line, is the settings field being
+empty), `elysium_new_game` → sp_tutorial_1 with `spawn_done` and `sign_active: true`: the first
+tutorial popup drew on its `hud/signs` background with the HUD's clothing icon, life bar, blood
+hearts and Masquerade/Humanity chrome around it; the whole session log holds **zero** `LoadPng`,
+"no HUD art", "no sheet art", "no imported art", "no menu seal" or "no title lockup" lines, and its
+only `.png` mentions are the two screenshots the bridge saved. Boot witness, `uv run elysium debug
+shots <map> --no-open`, one at a time, all exit 0: `baked 'sp_tutorial_1': 1544 actors …`,
+`'sm_pawnshop_1': 513 …`, `'sm_hub_1': 2463 …`, ropes `70 / 21 / 76` with 0 unresolved, material
+audit **0 unbound** on all three (470/1197, 179/322, 505/1537), **6/6 + 4/4 + 4/4** vantages, 0
+PNG-read or art-miss lines in any of the three logs. The two bridge screenshots were read as
+did-it-appear only.
+
+Tests: `uv run elysium build`: Succeeded. `uv run elysium test Substrate`: **393 of 393 in 6.8 s**,
+the new leaf `Elysium.Substrate.UiArt` (the `BakedTexture` fold for nested, bare and
+illegal-character keys and the empty key; `ArtKey`'s normalisation of authored spellings and
+legacy `.png` names; `UseIconArt` for slots 1, 9, 11, 65, 72, 0 and 73, all 72 slots naming
+`hud/context_icons/` art and the three duplicate pairs agreeing; `ClanSigilArt` over 2, 8, 0, 1
+and 9). `uv run elysium test Elysium.Content.UiArt` (new, `ElysiumContentTests.cpp`): **151 of 151
+names resolved** — the literal HUD tables (area, category, section glyphs), the sheet, popup, title
+and mask paths, the seven sigils, the ring and the 72 icons, plus every `BackgroundImage` the
+runtime's own `FElysiumSignData::Load` reads out of the 278 exported definitions (246 carry one) —
+against the real `/ElysiumBaked/Textures` mount. `uv run pytest` over
+`test_profile_package_contract.py test_export_orchestration.py test_cli_contract.py`: **136
+passed** (the profiles' bundle set without `use-icons`, the bundle task table, the CLI contract).
+
+Follow-ups: the sign background is drawn as the panel's plate, not at the authored `XPos/YPos/
+Wide/Tall` through `ElysiumSign::RectToScreen` (the panel keeps its own 620-px layout; the
+authored rect is parsed and unused, as before); `FElysiumSignData::Load` warns once per
+`newspaper_*` dispatch wrapper it opens (30 files with no `SignData` block — the Content test walks
+them all and inherits the noise); `ui/strings.json` and `signs/*.txt` are still loose reads (text,
+not art) for R9.2; the `_sel`/`_hud` art variants and the armour portraits stay unresolved by the
+HUD as they were (the fallback join would serve them the day the HUD names them); `elysium.
+DrawSigns` predates this task.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2362,18 +2436,6 @@ stages**: every product the legacy ledger marks *none* and every visual entity c
 places has a task below or a named owner elsewhere (end of R7). A task in this stage that
 surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot-diffed.
 
-- **R6.6 UI art off loose files** [R6.3 UI half / SF-6.5]. **Not a HUD rework**: the HUD, main
-  menu, chargen, character sheet and signs keep their widgets and layout; only the image source
-  moves. The ~10 `LoadPngTexture` sites and `ElysiumUiArtCache` resolve the `T_` assets the
-  texture lane already publishes (`hud/` 666, `interface/` 142, `vgui/` 23, `fonts/` 242 units) by
-  the same install path; the use-icon ring drops its composited atlas and draws its **72 icons
-  as brushes on the imported `T_` assets** (owner call, 2026-09-02) — the one HUD draw that does
-  change, accepted because it deletes `UE_use_icons` and its compositor rather than porting them,
-  and each icon stays an inspectable asset; sign backgrounds (`signs/tex` + `backgrounds.json`, written and read by nobody, while
-  `ElysiumSignData` already parses `BackgroundImage`) draw from `T_`; the menu title, wallpaper,
-  clan seals and the six `MM_Skybox` faces (unread) come from assets. `ui/art`, `ui/menu`,
-  `signs/tex` and `hud/use_icons.png` retire from the loose root. → lands: no PNG read at draw
-  time.
 - **R6.7 3D-skybox wiring pass** [R7.7 / MP-5.7]. Last, once R6.1–R6.3 are live: miniature
   props, sprites, detail props and fog composed in the 44 `sky_camera` maps; no look judgement.
   → lands: the miniature complete.
@@ -2458,6 +2520,19 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   and have the bake parent the mode-1/5 children to it — VtMB's exact clipping at the cost of a
   second sprite master and one more row in the master inventory. Nothing else depends on the
   answer; the query stays either way.
+- **R7.8 The menu seal's source art** [owner call surfaced by R6.6, 2026-09-02]. VtMB's front-end
+  seals are the menu particle scene's `particles/mm_<clan>.tga` sprites (15 of them: the seven
+  playable clans, the Camarilla ankh `mm_cam`, and the sects and hunter factions) — loose TGAs
+  under `particles/`, which no lane publishes: the texture lane's units are `materials/**`
+  `.tth/.ttz` pairs. R6.6 retired the PNG read and draws the rail's watermark from the same clan's
+  `interface/charactermaintenance/cm_clan_symbol_<clan>` `T_` — the sigil the character sheet
+  already flies — and **nothing in the front end**, where no character exists and the ankh has
+  no material twin. **The choice:** (a) keep that (one art path per clan, no new unit family, the
+  front end unwatermarked); or (b) admit `particles/*.tga` as texture units so the fifteen
+  `mm_*` sprites — and the blood cels and glow the same scene draws — import as `T_` and the rail
+  flies VtMB's own seal, `mm_cam` in the front end, at the cost of a new source kind in the
+  texture producer (`seam_map_texture.md` → "Texture unit") and its provenance. Nothing else
+  depends on the answer.
 
 **Owned elsewhere, not deferred.** Two groups the census surfaces belong to other plans and are
 named here so they are not lost: the unread audio products (`audio/maps/*.json`, `schemes.json`,

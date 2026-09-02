@@ -315,7 +315,7 @@ as retail's saved arrays do. Throw force is `player_throwforce` 1000, converted 
 Source impulse unit; that conversion is derived from the unit convention rather than measured, and
 a visibly wrong throw arc is the cheap test that it is right.
 
-**The cursor already exists.** `use_icons.json` slot 9 is `PhysicsHand` and slot 1 is `CarryBody`;
+**The cursor already exists.** `use_icon` slot 9 is `PhysicsHand` and slot 1 is `CarryBody` (their `hud/context_icons/` `T_` assets, R6.6);
 the hands publish the icon into `FElysiumInteractionView`, which today only entities produce.
 
 *Acceptance:* in `sp_tutorial_1`, from real input, the office chair (`chairoffice`, 1.00 kg) can be

@@ -1,10 +1,9 @@
 #include "UI/ElysiumChargenPopup.h"
 
-#include "ElysiumContentPaths.h"
 #include "Player/ElysiumCommandBus.h"
 #include "UI/ElysiumActionButton.h"
+#include "UI/ElysiumUiArt.h"
 #include "UI/ElysiumUIStyle.h"
-#include "UI/ElysiumUITexture.h"
 
 #include "Engine/GameViewportClient.h"
 #include "Engine/Texture2D.h"
@@ -39,17 +38,15 @@ namespace
 		inline constexpr float AnswerPadX = 30.0f;
 	}
 
-	// `Bkg_Image "Interface/Pop_Ups/Pop_Up_1"` -> `out/ui/art/interface/pop_ups/pop_up_1.png`. The
-	// data spells it with the engine's own capitalisation and no extension.
+	// `Bkg_Image "Interface/Pop_Ups/Pop_Up_1"` -> the imported `interface/pop_ups/pop_up_1`. The
+	// data spells it with the engine's own capitalisation and no extension; `ArtKey` folds it.
 	FString ArtRelFor(const FString& BkgImage)
 	{
-		return BkgImage.IsEmpty()
-			? FString()
-			: BkgImage.ToLower().Replace(TEXT("\\"), TEXT("/")) + TEXT(".png");
+		return ElysiumUI::ArtKey(BkgImage);
 	}
 
 	// The separator rule VtMB draws between multi-line answers.
-	const TCHAR* GSeparator = TEXT("interface/pop_ups/pop_up_line.png");
+	const TCHAR* GSeparator = TEXT("interface/pop_ups/pop_up_line");
 }
 
 UElysiumChargenPopup::UElysiumChargenPopup()
@@ -107,7 +104,7 @@ const FSlateBrush* UElysiumChargenPopup::Art(const FString& RelPath)
 	TObjectPtr<UTexture2D>* Cached = ArtTextures.Find(RelPath);
 	if (!Cached)
 	{
-		UTexture2D* Loaded = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiArt(RelPath));
+		UTexture2D* Loaded = ElysiumUI::ArtTexture(RelPath);
 		if (!Loaded)
 		{
 			ArtMissing.Add(RelPath);

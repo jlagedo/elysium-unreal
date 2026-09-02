@@ -9,9 +9,9 @@
 // (entity_io.md "use_icon enum", recovered from the client.dll pointer array at file offset
 // 0x2700b4). `use_icon N` selects entry N-1; `use_icon 0` means no icon. `locked_icon` is the
 // reticle when the entity is use-locked (VtMB GetUseIcon = FUN_100c8940 returns locked_icon when
-// the locked byte +0x5c4 is set). The offline `UE_use_icons.py` bakes the 72 materials + the ring/
-// back frame into `out/hud/use_icons.png` + `.json` (per-icon atlas UVs); the runtime HUD draws
-// the cell for GetUseIcon() over the reticle, and the Cog Entity Inspector names the index below.
+// the locked byte +0x5c4 is set). The runtime HUD draws the icon's own imported `T_`
+// (`UI/ElysiumUiArt.h`, `ElysiumUI::UseIconArt`, R6.6 -- the composited atlas is gone) over the
+// reticle, and the Cog Entity Inspector names the index below.
 
 // The dedicated +use trace channel. Declared in Config/DefaultEngine.ini as
 // ECC_GameTraceChannel1 = "ElysiumUse" (a trace type, DefaultResponse Block). Keep the two in sync.
@@ -20,8 +20,8 @@ inline constexpr ECollisionChannel ELYSIUM_USE_CHANNEL = ECC_GameTraceChannel1;
 // The 72-entry use_icon name table (1-based, matching the keyvalue). Names are the engine-neutral
 // `hud/Context_Icons/<name>` identifiers from entity_io.md; 42/43 (phonograph), 49/56 (bustopmap)
 // and 54/55 (breakable) are genuine duplicate slots. Returns "(none)" for 0 and "?" out of range.
-// Used by the Cog inspector to label an entity's use_icon/locked_icon; the HUD reads atlas UVs from
-// the JSON, so this table carries no layout — only the human-readable name.
+// Used by the Cog inspector to label an entity's use_icon/locked_icon and by `ElysiumUI::UseIconArt`
+// to name its art; this table carries no layout — only the engine's own name.
 inline const TCHAR* ElysiumUseIconName(int32 N)
 {
 	static const TCHAR* Names[] = {

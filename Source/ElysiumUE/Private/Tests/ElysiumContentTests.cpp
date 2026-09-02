@@ -27,6 +27,9 @@
 #include "ElysiumMoveSolve.h"                 // ElysiumMove::StandHeight / U — the +use reach's units
 #include "ElysiumPawn.h"
 #include "ElysiumUseIcons.h"                  // ELYSIUM_USE_CHANNEL
+#include "UI/ElysiumUiArt.h"
+#include "Substrate/ElysiumSignData.h"
+#include "ElysiumHUDTypes.h"
 #include "GameFramework/PlayerController.h"
 #include "Tests/AutomationCommon.h"           // FTestWorldWrapper
 #include "ElysiumInputAssets.h"
@@ -825,6 +828,98 @@ bool FElysiumTutorialRopesTest::RunTest(const FString&)
 	TestEqual(TEXT("every cable's node count is inside VtMB's [2, 10] bound"), BadNodes, 0);
 	TestEqual(TEXT("every rope material id resolves to an imported MI_"), Unresolved, 0);
 
+	return true;
+}
+
+// UI art (R6.6) — every image the screens can name resolves to an imported `T_` under the baked
+// mount: the literal HUD tables, the 72 use icons and the ring, the sheet chrome, the chargen
+// separator, the title, the feed mask, and every `BackgroundImage` the exported sign definitions
+// author. A miss here is a hole in a screen; the boot witness only proves the screens opened.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUiArtContentTest,
+	"Elysium.Content.UiArt", GElysiumContentTestFlags)
+bool FElysiumUiArtContentTest::RunTest(const FString&)
+{
+	if (SkipIncompleteCorpus(*this, { TEXT("signs") })) return true;
+	// The texture lane's presence, probed through the same fold the test exercises: the ring's
+	// package. Absent means the lane never ran here, which is an abstention, not a hole.
+	{
+		FString RingPackage = FElysiumContentPaths::BakedTexture(ElysiumUI::UseRingArt);
+		int32 Dot = INDEX_NONE;
+		if (RingPackage.FindLastChar(TEXT('.'), Dot))
+		{
+			RingPackage.LeftInline(Dot);
+		}
+		if (!FPackageName::DoesPackageExist(RingPackage))
+		{
+			AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no imported textures under %s (run: uv run elysium import textures)"),
+				*FElysiumContentPaths::BakedTexturesDir()));
+			return true;
+		}
+	}
+
+	TArray<FString> Names = {
+		TEXT("interface/mainmenu/vtm_title"),
+		TEXT("effects/spotlight"),
+		TEXT("interface/charactermaintenance/background"),
+		TEXT("interface/pop_ups/pop_up_line"),
+		TEXT("hud/inventory_images/weapons_melee/fists"),
+		TEXT("hud/inventory_images/general_items/lockpicks"),
+		TEXT("hud/inventory_images/general_items/key"),
+		TEXT("hud/disciplines/bloodheal"),
+	};
+	for (const EElysiumZoneState Zone : { EElysiumZoneState::Combat, EElysiumZoneState::Masquerade, EElysiumZoneState::Elysium })
+	{
+		Names.Add(ElysiumHUDArt::Area(Zone).ToString());
+	}
+	for (const EElysiumWeaponClass Class : { EElysiumWeaponClass::Unarmed, EElysiumWeaponClass::Melee, EElysiumWeaponClass::Ranged, EElysiumWeaponClass::Thrown })
+	{
+		Names.Add(ElysiumHUDArt::Category(Class).ToString());
+	}
+	for (const EElysiumInvSection Section : { EElysiumInvSection::WeaponMelee, EElysiumInvSection::WeaponRanged, EElysiumInvSection::WeaponThrown, EElysiumInvSection::Armor, EElysiumInvSection::Generic })
+	{
+		Names.Add(ElysiumHUDArt::SectionGlyph(Section).ToString());
+	}
+	for (int32 Clan = 2; Clan <= 8; ++Clan)
+	{
+		Names.Add(ElysiumUI::ClanSigilArt(Clan));
+	}
+	Names.Add(ElysiumUI::UseRingArt);
+	for (int32 N = 1; N <= 72; ++N)
+	{
+		Names.Add(ElysiumUI::UseIconArt(N));
+	}
+
+	// Every sign definition's BackgroundImage, parsed by the runtime's own reader.
+	TArray<FString> SignFiles;
+	IFileManager::Get().FindFiles(SignFiles, *(FElysiumContentPaths::SignsDir() / TEXT("*.txt")), true, false);
+	int32 Backgrounds = 0;
+	for (const FString& Leaf : SignFiles)
+	{
+		FElysiumSignData Sign;
+		if (FElysiumSignData::Load(Leaf, Sign, nullptr) && Sign.Background.bValid
+			&& !Sign.Background.ImageName.IsEmpty())
+		{
+			Names.AddUnique(Sign.Background.ImageName);
+			++Backgrounds;
+		}
+	}
+	TestTrue(TEXT("the exported signs author backgrounds"), Backgrounds > 0);
+
+	int32 Resolved = 0;
+	for (const FString& Name : Names)
+	{
+		if (ElysiumUI::ArtTexture(Name) != nullptr)
+		{
+			++Resolved;
+		}
+		else
+		{
+			AddError(FString::Printf(TEXT("UI art '%s' resolves to no imported texture (%s)"),
+				*Name, *FElysiumContentPaths::BakedTexture(ElysiumUI::ArtKey(Name))));
+		}
+	}
+	AddInfo(FString::Printf(TEXT("UI art: %d of %d names resolved (%d sign backgrounds over %d definitions)"),
+		Resolved, Names.Num(), Backgrounds, SignFiles.Num()));
 	return true;
 }
 

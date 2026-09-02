@@ -1,7 +1,6 @@
 #include "UI/ElysiumMainMenu.h"
 
 #include "UI/ElysiumActionButton.h"
-#include "ElysiumContentPaths.h"
 #include "Player/ElysiumCommandBus.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -10,6 +9,7 @@
 #include "UI/ElysiumUIStrings.h"
 #include "UI/ElysiumUIStyle.h"
 #include "UI/ElysiumUISubsystem.h"
+#include "UI/ElysiumUiArt.h"
 #include "UI/ElysiumUITexture.h"
 
 #include "Engine/Engine.h"
@@ -96,18 +96,6 @@ namespace
 			}
 		}
 		return 0;
-	}
-
-	// A `mm_<clan>` sprite stem for the 2..8 level-script clan encoding (`FElysiumSheet::Clan`).
-	// The sheet ships nine slots with 0/1 unused, and the sprite sheet ships all seven playable
-	// clans, so the table is total over the valid range.
-	const TCHAR* ClanSealStem(int32 Clan)
-	{
-		static const TCHAR* Stems[] = {
-			TEXT("mm_cam"), TEXT("mm_cam"),    // 0/1 unused -> the sect seal
-			TEXT("mm_bru"), TEXT("mm_gan"), TEXT("mm_mal"), TEXT("mm_nos"),
-			TEXT("mm_tor"), TEXT("mm_tre"), TEXT("mm_ven") };
-		return FElysiumSheet::IsValidClan(Clan) ? Stems[Clan] : TEXT("mm_cam");
 	}
 
 	// Small caps want air. FSlateFontInfo takes tracking in 1/1000 em, so it rides the drawn size
@@ -260,9 +248,10 @@ FReply UElysiumMainMenu::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEv
 
 UTexture2D* UElysiumMainMenu::ResolveSeal()
 {
-	// The front end has no character yet, so it flies the sect's own mark; a session flies the PC's
-	// clan. `PlayerSheet()` already resolves live-entity-first, record-otherwise, so this reads the
-	// same clan the sheet screens will.
+	// A session flies the PC's clan sigil -- the same `cm_clan_symbol_<clan>` the character sheet
+	// draws (R6.6; VtMB's own `mm_<clan>` menu sprites are loose TGAs no lane publishes, the R7
+	// owner call). The front end has no character yet and flies nothing. `PlayerSheet()` already
+	// resolves live-entity-first, record-otherwise, so this reads the same clan the sheet will.
 	int32 Clan = 0;
 	if (Mode != EElysiumMenuMode::Main)
 	{
@@ -274,13 +263,13 @@ UTexture2D* UElysiumMainMenu::ResolveSeal()
 			}
 		}
 	}
-	const FString Path = FElysiumContentPaths::UiMenuSprite(ClanSealStem(Clan));
-	UTexture2D* Tex = ElysiumUI::LoadPngTexture(Path);
-	if (!Tex)
+	const FString Art = ElysiumUI::ClanSigilArt(Clan);
+	UTexture2D* Tex = Art.IsEmpty() ? nullptr : ElysiumUI::ArtTexture(Art);
+	if (!Tex && !Art.IsEmpty())
 	{
 		// The rail reads without it — it is a watermark, not a load-bearing element.
 		UE_LOG(LogElysiumMenu, Verbose,
-			TEXT("no menu seal at %s — run: uv run elysium export bundle ui"), *Path);
+			TEXT("no menu seal for %s — run: uv run elysium import textures"), *Art);
 	}
 	return Tex;
 }
@@ -402,7 +391,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 	{
 		if (!TitleTexture)
 		{
-			TitleTexture = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiTitle());
+			TitleTexture = ElysiumUI::ArtTexture(TEXT("interface/mainmenu/vtm_title"));
 		}
 		if (TitleTexture)
 		{
@@ -414,11 +403,10 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 		}
 		else
 		{
-			// Absent (no export) -> the wordmark is set in type instead, so the menu still
+			// Absent (no import) -> the wordmark is set in type instead, so the menu still
 			// reads rather than showing a hole.
 			UE_LOG(LogElysiumMenu, Warning,
-				TEXT("no title lockup at %s — run: uv run elysium export bundle ui"),
-				*FElysiumContentPaths::UiTitle());
+				TEXT("no title lockup (interface/mainmenu/vtm_title) — run: uv run elysium import textures"));
 			Head = SNew(STextBlock)
 				.Text(NSLOCTEXT("Elysium", "TitleFallback", "Elysium"))
 				.Font(Fonts.Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
@@ -704,7 +692,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildClassic(const TArray<FMenuEntry>& Ite
 	{
 		if (!TitleTexture)
 		{
-			TitleTexture = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiTitle());
+			TitleTexture = ElysiumUI::ArtTexture(TEXT("interface/mainmenu/vtm_title"));
 		}
 		if (TitleTexture)
 		{
@@ -807,11 +795,12 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 	}
 	if (!WallpaperTexture)
 	{
-		WallpaperTexture = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiMenuWallpaper());
+		// The plate is a Project Settings field (Elysium -> UI -> Menu), not VtMB art; unset means
+		// the rail stands on the boot world's black, which is a complete menu.
+		WallpaperTexture = GetDefault<UElysiumUISettings>()->MenuWallpaper.LoadSynchronous();
 		if (!WallpaperTexture)
 		{
-			UE_LOG(LogElysiumMenu, Warning, TEXT("menu wallpaper not found or invalid: %s"),
-				*FElysiumContentPaths::UiMenuWallpaper());
+			UE_LOG(LogElysiumMenu, Log, TEXT("menu wallpaper: none set (UElysiumUISettings::MenuWallpaper)"));
 			FinalizeNavigationBuild(Items.IsEmpty() ? NAME_None : FName(Items[0].Token));
 			return MenuLayout;
 		}

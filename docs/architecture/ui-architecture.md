@@ -262,10 +262,12 @@ Two constraints:
 
 ## 6. The menu plate
 
-The front end stays in the genuinely empty `/Game/ElysiumGenerated/Boot` boot world and draws the local
-`$ELYSIUM_EXPORT_ROOT/ui/menu/elysium_main_wallpaper_4k.png` plate beneath the CommonUI menu. Cold
-boot therefore loads no VtMB map, creates no map actor or entity substrate, and waits on no runtime
-activation barrier. New Game's story entry is the process's first VtMB map load.
+The front end stays in the genuinely empty `/Game/ElysiumGenerated/Boot` boot world and draws the
+plate `UElysiumUISettings::MenuWallpaper` names (Project Settings → Elysium → UI → Menu, a
+`TSoftObjectPtr<UTexture2D>`; unset by default, in which case the rail stands on the boot world's
+black — R6.6, §9) beneath the CommonUI menu. Cold boot therefore loads no VtMB map, creates no map
+actor or entity substrate, and waits on no runtime activation barrier. New Game's story entry is
+the process's first VtMB map load.
 
 The plate is 3840×2160 and uses uniform cover scaling: no distortion or letterbox at other aspect
 ratios, with the longer axis clipped. Its composition reserves a dark right-hand field for the rail.
@@ -307,8 +309,8 @@ design shape and constraints, not a second completion ledger.
   `VMainMenu_BTN_*` against the authored table with retail English as the fallback in both, which is
   what `CVMainMenu` itself does.
 
-  **Rail (1, the default).** The menu stands in a right-hand rail: title lockup (from
-  `$ELYSIUM_EXPORT_ROOT/ui/menu/title.png`, the user's own art) on the bottom edge of a fixed head block, then the
+  **Rail (1, the default).** The menu stands in a right-hand rail: title lockup (the imported
+  `interface/mainmenu/vtm_title`, §9) on the bottom edge of a fixed head block, then the
   item column right-aligned against a gold hairline, then a reserved caption line. Every horizontal
   constant is measured **from the right edge**, never as a fraction of 1024 — the virtual canvas
   scales with the aspect ratio (§2), so a fraction would drift the rail inward on ultrawide. Three
@@ -393,9 +395,9 @@ the original's even where the backing system is missing.
   teardown: the screen changes tab from inside its own key handler, and destroying the widget there
   would drop keyboard focus and churn the input scope for what is a content change.
 
-  **The chrome is VtMB's own decoded sheet art**, every piece guarded — `$ELYSIUM_EXPORT_ROOT/ui/art/` is gitignored,
-  so each image degrades to a token-drawn equivalent and logs Verbose once rather than leaving a
-  hole. The panel frames are 9-sliced from a **measured UV sub-rectangle**: each is a power-of-two
+  **The chrome is VtMB's own sheet art**, every piece guarded — the `T_` assets live in the
+  gitignored `/ElysiumBaked` mount (§9), so each image degrades to a token-drawn equivalent and
+  logs Verbose once rather than leaving a hole. The panel frames are 9-sliced from a **measured UV sub-rectangle**: each is a power-of-two
   page with the frame drawn top-left and the rest transparent, so the region is the frame's own
   extent and the margin is the corner scroll's share of it. `cm_divider` carries a curl at both ends,
   so the two rule terminals are two sub-rectangles of one page rather than one image mirrored.
@@ -464,3 +466,63 @@ the original's even where the backing system is missing.
   Scope `ElysiumInput::Priority::Terminal` (42) is UI-only, above Dialogue and below Character. Camera,
   projection, controller, lifetime and acceptance contracts:
   `docs/architecture/computer-terminal-architecture.md`.
+
+## 9. Art from assets (R6.6)
+
+**Ruling (R6.6, `docs/project/seam_migration.md` → "Roadmap — one pipeline").** No screen reads an
+image off the loose export root. Every piece of VtMB art the UI draws — HUD frames and icons, the
+character sheet's chrome, the chargen popup pages, the sign backgrounds, the title lockup, the
+clan sigils, the feed-vision mask — is the **`T_` asset the texture lane already publishes**
+(`seam_map_texture.md` → "Import"), named by the same install path the screen always named:
+
+```text
+<dir>/<stem>   (a materials/ path, no extension; "hud/area_icons/area_icon_combat")
+   -> /ElysiumBaked/Textures/<dir>/T_<safe stem>            FElysiumContentPaths::BakedTexture
+   -> else the imported MI_ of the same path, its BaseTexture  (the material lane's own VMT join)
+```
+
+`ElysiumUI::ArtTexture(MaterialPath)` is that resolution (`Private/UI/ElysiumUiArt.h`). The
+second step exists because a UI *material* path is not always its *texture* path: 317 of the
+1,078 install materials under the UI trees name another texture in their VMT (`hud/disciplines/
+bloodheal_hud` → `bloodheal_base`, every `_sel` variant, `general_items/flyer` →
+`lillyonbeachphoto`), and the material lane already resolved that join once, on the `MI_`. For
+every path a screen names by hand today the two steps agree (measured 2026-09-02; the HUD, sheet,
+popup, menu and the 57 sign backgrounds are all identity), so the fallback is exactness for the
+data-driven names — inventory art by item classname, sign `BackgroundImage`, chargen `Bkg_Image`
+— not a second lane. Paths are normalised (lower-case, `\` → `/`, a leading `materials/` and a
+trailing `.png` dropped) so authored data spells them as it always did. The Substrate tier pins the
+fold (`Elysium.Substrate.UiArt`); the Content tier walks every name the runtime can form — the
+literal tables, the 72 use icons and the ring, every `BackgroundImage` in the exported sign
+definitions — and asserts each resolves (`Elysium.Content.UiArt`).
+
+**What each site does now.** `FElysiumUiArtCache` (character screen), `UElysiumChargenPopup::Art`
+and `UElysiumHUDWidget::HudArtBrush` keep their caches, brushes, UV sub-rectangles and 9-slices and
+swap only the load. **The use-icon ring drops its composited atlas** (`UE_use_icons.py`,
+`hud/use_icons.png/.json`; owner call, 2026-09-02): `ElysiumUseIconName(N)` is now the one table,
+`ElysiumUI::UseIconArt(N)` folds it to `hud/context_icons/<name>` with the two on-disk aliases the
+compositor carried (`Stakeable` → `stakable`, `valve` → `valvewheel`), and the widget holds 72
+brushes on 72 `T_` assets plus the ring's (`context_icon_ring`) — the same 48-px cell, full UV.
+**Sign backgrounds draw**: `FElysiumSignData::Background.ImageName` (already parsed) resolves to its
+`T_` and becomes the panel's border image behind the body text, the panel's width and padding
+unchanged; a sign with no background keeps the dark plate. The title lockup is
+`interface/mainmenu/vtm_title`; the feed-vision mask is `effects/spotlight`; the character stage's
+wallpaper quad is `interface/charactermaintenance/background`.
+
+**The menu seal (named divergence, owner call filed in R7).** VtMB's front-end seals are the
+particle scene's `particles/mm_<clan>.tga` sprites — loose TGAs, not `materials/` textures, so no
+lane publishes them. The rail now draws the same clan's `interface/charactermaintenance/
+cm_clan_symbol_<clan>` — the sigil the character sheet already flies for that clan — and, in the
+front end where no character exists, **no seal** (the sect ankh `mm_cam` has no material twin).
+The alternative is to admit `particles/*.tga` as texture units; that is the R7 question.
+
+**The wallpaper** is not VtMB art and never was in the install: `UElysiumUISettings::
+MenuWallpaper` is its home (§6), set in the editor, unset by default.
+
+**Retired.** `ElysiumUI::LoadPngTexture` and the `ImageWrapper` decode behind it (the screenshot
+writer keeps its own); `FElysiumContentPaths::UiArt/UiTitle/UiMenuDir/UiMenuSprite/
+UiMenuWallpaper/UiFeedVisionMask/SignTexDir/SignBackgrounds`; the exporter outputs `ui/art/**`,
+`ui/menu/**` (title, sprites, skybox faces, particle scripts), `ui/effects/`, `signs/tex/` +
+`signs/backgrounds.json` and `hud/use_icons.*`, with `UE_use_icons.py` deleted and the `use-icons`
+bundle gone from the profiles. `UE_extract_ui` keeps `resource/*.res`, `strings.json` and
+`manifest.json`; `UE_extract_signs` keeps the definitions. `ui/strings.json` and `signs/*.txt` are
+still loose reads (text, not art); their asset homes are R9.2's.

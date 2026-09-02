@@ -314,7 +314,7 @@ the four hub tables and the four tabs cover the whole catalogue.
 | `materials/hud` | 73 | the retail chrome: `bloodbar_*`, `healthgraphic*`, `lightgauge_0..4`, `frenzybar_*`, `feedbar`, `sneak_icon_*`, `lockcursor_*`, `ammodis_frame_*`, targeting cursors |
 | `materials/hud/new_ui` | 62 | the shipped in-game bar set: `bloodbarframe`, `healthbarframe`, `stealthframe`, `firstbar…fourthbar` frames + lace + colour fills |
 | `materials/hud/disciplines` | 92 | per-discipline icons |
-| `materials/hud/context_icons` | 83 | the 72-entry `use_icon` enum — owned by `UE_use_icons.py`, packed to one atlas (PL3) |
+| `materials/hud/context_icons` | 83 | the 72-entry `use_icon` enum — drawn as 72 brushes on the texture lane's `T_` assets (R6.6; the PL3 atlas is retired) |
 | `materials/hud/infobar_icons` | 27 | info-bar glyphs |
 | `materials/hud/crosshairs` | 19 | per-weapon reticles |
 | `materials/hud/signs` | 69 | in-world sign art |

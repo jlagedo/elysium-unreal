@@ -1,8 +1,7 @@
 #include "UI/ElysiumUiArtCache.h"
 
-#include "ElysiumContentPaths.h"
+#include "UI/ElysiumUiArt.h"
 #include "UI/ElysiumUIStyle.h"
-#include "UI/ElysiumUITexture.h"
 
 #include "Engine/Texture2D.h"
 #include "Styling/CoreStyle.h"
@@ -33,14 +32,13 @@ const FSlateBrush* FElysiumUiArtCache::Art(const TCHAR* RelPath, const FLinearCo
 	TStrongObjectPtr<UTexture2D>* Cached = ArtTextures.Find(Key);
 	if (!Cached)
 	{
-		const FString Path = FElysiumContentPaths::UiArt(Key);
-		UTexture2D* Loaded = ElysiumUI::LoadPngTexture(Path);
+		UTexture2D* Loaded = ElysiumUI::ArtTexture(Key);
 		if (!Loaded)
 		{
 			// Not fatal anywhere: every caller draws the token version instead. Verbose because a
-			// clone with no export would otherwise log a dozen warnings per open.
+			// clone with no import would otherwise log a dozen warnings per open.
 			UE_LOG(LogElysiumUiArt, Verbose,
-				TEXT("no sheet art at %s — run: uv run elysium export bundle ui"), *Path);
+				TEXT("no sheet art for %s — run: uv run elysium import textures"), *Key);
 			ArtMissing.Add(Key);
 			return nullptr;
 		}

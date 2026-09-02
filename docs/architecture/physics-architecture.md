@@ -39,7 +39,7 @@ Two corollaries that decide most arguments:
 | `StartBodyRagdoll` | `IElysiumEmbodiment`, `UElysiumEntityBodies` | hands a killed body to Chaos from its current pose; returns false and warns once because no baked mesh carries a `UPhysicsAsset` |
 | `HoldBodyFinalPose` | same | the recorded stand-in the death handoff falls back to |
 | The `+use` seam | `ElysiumInteraction.h`, `FElysiumEntityWorld::UpdatePlayerInteraction`, `IElysiumEmbodiment::QueryPlayerUse` | candidate query, exact/assisted tiers, `EElysiumUseSessionKind::WhileHeld`, `BeginPlayerUse`/`EndPlayerUse` |
-| The use-icon atlas | `UE_use_icons.py` → `$ELYSIUM_EXPORT_ROOT/hud/use_icons.{png,json}` | the 72-entry enum, already packed — **slot 9 is `PhysicsHand`** and slot 1 is `CarryBody` |
+| The use icons | `ElysiumUseIconName` + `ElysiumUI::UseIconArt` → the `hud/context_icons/` `T_` assets (R6.6) | the 72-entry enum — **slot 9 is `PhysicsHand`** and slot 1 is `CarryBody` |
 | Impulse targets | `FBodyInstance::AddImpulse` / `AddRadialImpulse` | named by `docs/architecture/effects-architecture.md` for `env_physimpact` / `env_physexplosion`, which are stubs today |
 | Surface materials | `docs/vtmb/surface_properties.md` | `surfaceprop` → physical material, the ragdoll solids' `flesh` included |
 
@@ -277,8 +277,8 @@ take it; `BeginPlayerUse` returns `FElysiumUseBeginResult::Started(EElysiumUseSe
 `EndPlayerUse(..., Released)` releases or throws. Nothing new is invented for hold-to-carry, because
 `WhileHeld` was built for it.
 
-**The cursor is already exported.** `use_icons.json` slot **9** is `PhysicsHand` and slot **1** is
-`CarryBody`. The hands publish the icon into `FElysiumInteractionView` when a candidate is eligible,
+**The cursor is already imported.** `use_icon` slot **9** is `PhysicsHand` and slot **1** is
+`CarryBody` (`hud/context_icons/physicshand` and `carrybody`, the texture lane's `T_` assets). The hands publish the icon into `FElysiumInteractionView` when a candidate is eligible,
 so the HUD needs no new art path — only a producer for an icon that today only entities publish.
 
 ---

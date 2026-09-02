@@ -65,17 +65,17 @@ namespace
 	// The decoded sheet chrome. Paths are relative to `out/ui/art/`.
 	namespace ArtPath
 	{
-		inline const TCHAR* Backdrop  = TEXT("interface/charactermaintenance/background.png");
-		inline const TCHAR* TopBar    = TEXT("interface/charactermaintenance/cm_topbar.png");
-		inline const TCHAR* Divider   = TEXT("interface/charactermaintenance/cm_divider.png");
-		inline const TCHAR* BubbleOn  = TEXT("interface/charactermaintenance/cm_bubble_filled.png");
-		inline const TCHAR* BubbleOff = TEXT("interface/charactermaintenance/cm_bubble_empty.png");
-		inline const TCHAR* Strike    = TEXT("interface/charactermaintenance/cm_masquerade_strike.png");
+		inline const TCHAR* Backdrop  = TEXT("interface/charactermaintenance/background");
+		inline const TCHAR* TopBar    = TEXT("interface/charactermaintenance/cm_topbar");
+		inline const TCHAR* Divider   = TEXT("interface/charactermaintenance/cm_divider");
+		inline const TCHAR* BubbleOn  = TEXT("interface/charactermaintenance/cm_bubble_filled");
+		inline const TCHAR* BubbleOff = TEXT("interface/charactermaintenance/cm_bubble_empty");
+		inline const TCHAR* Strike    = TEXT("interface/charactermaintenance/cm_masquerade_strike");
 		// A dot bought this session but not yet committed, and a dot the trait-effect layer added on
 		// top of the base. VtMB ships both as their own art, so the sheet distinguishes four states.
-		inline const TCHAR* BubblePending = TEXT("interface/charactermaintenance/cm_bubble_pending.png");
-		inline const TCHAR* BubbleBonus   = TEXT("interface/charactermaintenance/cm_bubble_bonus.png");
-		inline const TCHAR* Leader        = TEXT("interface/charactermaintenance/cm_stat_underscore.png");
+		inline const TCHAR* BubblePending = TEXT("interface/charactermaintenance/cm_bubble_pending");
+		inline const TCHAR* BubbleBonus   = TEXT("interface/charactermaintenance/cm_bubble_bonus");
+		inline const TCHAR* Leader        = TEXT("interface/charactermaintenance/cm_stat_underscore");
 	}
 
 	// A category's display name. The headings are data — `strings.txt` numbers its three attribute
@@ -133,36 +133,36 @@ namespace
 
 	const FFrameArt FrameActive
 	{
-		TEXT("interface/charactermaintenance/activequestwindow.png"),
+		TEXT("interface/charactermaintenance/activequestwindow"),
 		FBox2f(FVector2f(0.0f, 0.0f), FVector2f(0.5840f, 0.5479f)),
 		FMargin(0.050f, 0.053f, 0.050f, 0.053f)
 	};
 	const FFrameArt FrameCompleted
 	{
-		TEXT("interface/charactermaintenance/completedquest.png"),
+		TEXT("interface/charactermaintenance/completedquest"),
 		FBox2f(FVector2f(0.0f, 0.0f), FVector2f(0.7090f, 0.9961f)),
 		FMargin(0.083f, 0.118f, 0.083f, 0.118f)
 	};
 	const FFrameArt FrameFailed
 	{
-		TEXT("interface/charactermaintenance/failedquest.png"),
+		TEXT("interface/charactermaintenance/failedquest"),
 		FBox2f(FVector2f(0.0f, 0.0f), FVector2f(0.7090f, 0.9883f)),
 		FMargin(0.083f, 0.119f, 0.083f, 0.119f)
 	};
 	const FFrameArt FrameInfo
 	{
-		TEXT("interface/charactermaintenance/infowindow2.png"),
+		TEXT("interface/charactermaintenance/infowindow2"),
 		FBox2f(FVector2f(0.0f, 0.0f), FVector2f(0.9688f, 0.8223f)),
 		FMargin(0.060f, 0.071f, 0.060f, 0.071f)
 	};
 	const FFrameArt FrameFeats
 	{
-		TEXT("interface/charactermaintenance/featwindow.png"),
+		TEXT("interface/charactermaintenance/featwindow"),
 		FBox2f(FVector2f(0.0469f, 0.0f), FVector2f(0.9531f, 1.0f)),
 		FMargin(0.129f, 0.059f, 0.129f, 0.059f)
 	};
 
-	// `cm_clan_symbol_<stem>.png`. Indexed by VtMB's clan encoding, which starts at 2 — 0 and 1 are
+	// `cm_clan_symbol_<stem>`. Indexed by VtMB's clan encoding, which starts at 2 — 0 and 1 are
 	// unused, and a run with no clan yet flies nothing rather than flying Brujah.
 	const TCHAR* ClanSigilStem(int32 Clan)
 	{
@@ -437,7 +437,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildHeader()
 	if (const TCHAR* Stem = ClanSigilStem(Clan))
 	{
 		const FString Rel = FString::Printf(
-			TEXT("interface/charactermaintenance/cm_clan_symbol_%s.png"), Stem);
+			TEXT("interface/charactermaintenance/cm_clan_symbol_%s"), Stem);
 		if (const FSlateBrush* Sigil = Art(*Rel, FLinearColor::White))
 		{
 			Who->AddSlot().AutoWidth().VAlign(VAlign_Center)

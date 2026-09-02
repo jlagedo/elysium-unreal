@@ -252,7 +252,6 @@ def _run_bundle(
     *,
     maps: Sequence[str],
     force: bool,
-    inventory: bool,
     index: dict[str, Any] | None,
 ) -> None:
     """Invoke one existing global exporter without duplicating its policy."""
@@ -299,11 +298,7 @@ def _run_bundle(
     elif name == "ui":
         from elysium_pipeline.exporters import UE_extract_ui
 
-        UE_extract_ui.main(inventory=inventory, force=force, index=index)
-    elif name == "use-icons":
-        from elysium_pipeline.exporters import UE_use_icons
-
-        UE_use_icons.main(index=index, strict=True)
+        UE_extract_ui.main(force=force, index=index)
     elif name == "npc":
         from elysium_pipeline.exporters import npc_export
 
@@ -317,7 +312,6 @@ def export_bundles(
     *,
     maps: Sequence[str] = (),
     force: bool = False,
-    inventory: bool = True,
     index: dict[str, Any] | None = None,
     continue_on_error: bool = True,
 ) -> list[ExportTaskResult]:
@@ -332,7 +326,6 @@ def export_bundles(
                 name,
                 maps=maps,
                 force=force,
-                inventory=inventory,
                 index=index,
             )
             results.append(
@@ -390,7 +383,6 @@ def export_profile(
             bundles_for_profile(name),
             maps=completed,
             force=force,
-            inventory=True,
             index=shared_index,
             continue_on_error=continue_on_error,
         )

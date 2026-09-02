@@ -27,7 +27,7 @@ protected:
 
 private:
 	float VirtualScale() const;
-	void EnsureUseIconAtlas();
+	void EnsureUseIcons();
 	void EnsureContrastVeils();
 	const FSlateBrush* UseIconBrush() const;
 	const FSlateBrush* UseBindingBrush() const;
@@ -37,8 +37,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumHUDModel> Model;
 
+	// The 72 use icons and the ring, one imported `T_` each (R6.6), pinned against GC for the
+	// widget's lifetime; the brushes below reference them.
 	UPROPERTY(Transient)
-	TObjectPtr<UTexture2D> UseAtlas;
+	TArray<TObjectPtr<UTexture2D>> UseIconTextures;
 
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UTexture2D>> HudArtTextures;
@@ -55,6 +57,6 @@ private:
 	TMap<FName, FSlateBrush> HudArtBrushes;
 	FSlateBrush LeftContrastBrush;
 	FSlateBrush RightContrastBrush;
-	bool bUseAtlasLoadAttempted = false;
+	bool bUseIconsLoadAttempted = false;
 	bool bContrastVeilsBuilt = false;
 };

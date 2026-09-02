@@ -9,12 +9,12 @@ class UTexture2D;
 struct FMargin;
 struct FSlateBrush;
 
-// A cache over the decoded UI art under `out/ui/art/`: one cache rather than a member per image,
-// because a screen draws a dozen pieces and they all want the same load-once-guard-everywhere
-// treatment. Textures are keyed by file and held for the cache's lifetime; brushes are keyed by
-// variant, so one texture can back several (a sub-rectangle, a different tint), and are dropped
-// per widget tree through `ResetBrushes`. `out/ui/art/` is gitignored, so every image degrades to
-// a caller-drawn token equivalent rather than leaving a hole.
+// A cache over the imported UI art (`ElysiumUiArt.h`, R6.6): one cache rather than a member per
+// image, because a screen draws a dozen pieces and they all want the same load-once-guard-
+// everywhere treatment. Textures are keyed by art path and held for the cache's lifetime; brushes
+// are keyed by variant, so one texture can back several (a sub-rectangle, a different tint), and
+// are dropped per widget tree through `ResetBrushes`. The `/ElysiumBaked` mount is gitignored, so
+// every image degrades to a caller-drawn token equivalent rather than leaving a hole.
 class FElysiumUiArtCache
 {
 public:
@@ -23,8 +23,8 @@ public:
 	FElysiumUiArtCache(const FElysiumUiArtCache&) = delete;
 	FElysiumUiArtCache& operator=(const FElysiumUiArtCache&) = delete;
 
-	// Returns null when the file is absent, which every caller handles by drawing the token
-	// version instead. `Uv` selects a sub-rectangle of the page — every one of these textures is a
+	// Returns null when the asset is absent, which every caller handles by drawing the token
+	// version instead. `RelPath` is the art's `materials/`-relative path, no extension. `Uv` selects a sub-rectangle of the page — every one of these textures is a
 	// power-of-two page with the art in one corner, and several carry two usable pieces (a
 	// divider's two curled ends). The whole page is the default.
 	const FSlateBrush* Art(const TCHAR* RelPath, const FLinearColor& Tint,
@@ -41,11 +41,11 @@ public:
 	void ResetBrushes();
 
 private:
-	// Keyed by file. The strong pointer holds each loaded texture against GC, since the cache
+	// Keyed by art path. The strong pointer holds each loaded texture against GC, since the cache
 	// lives outside any `UPROPERTY`.
 	TMap<FString, TStrongObjectPtr<UTexture2D>> ArtTextures;
 
 	TMap<FString, TSharedPtr<FSlateBrush>> ArtBrushes;
-	// A miss is cached so a rebuild does not re-hit the disk for a file that is not there.
+	// A miss is cached so a rebuild does not re-probe the registry for an asset that is not there.
 	TSet<FString> ArtMissing;
 };

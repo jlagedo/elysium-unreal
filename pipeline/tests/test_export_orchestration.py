@@ -732,7 +732,7 @@ def test_only_ents_consuming_bundles_wait_on_the_maps() -> None:
 
     bundles = [
         "audio", "particles", "scripts", "signs", "vdata", "items",
-        "cfg", "scenes", "ui", "use-icons", "npc",
+        "cfg", "scenes", "ui", "npc",
     ]
     config = SimpleNamespace(export_root=Path("/fake/export/root"))
     tasks = export_manager._bundle_tasks(

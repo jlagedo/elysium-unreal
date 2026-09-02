@@ -290,7 +290,7 @@ def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
         "audio": (export_root / "audio" / "catalog.json",),
         "particles": (export_root / "particles" / "manifest.json",),
         "scripts": (export_root / "scripts", export_root / "dlg"),
-        "signs": (export_root / "signs" / "backgrounds.json",),
+        "signs": (export_root / "signs",),
         "vdata": (export_root / "vdata",),
         "items": (
             export_root / "items" / "ground_models.json",
@@ -299,10 +299,6 @@ def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
         "cfg": (export_root / "cfg",),
         "scenes": (export_root / "scenes",),
         "ui": (export_root / "ui" / "strings.json",),
-        "use-icons": (
-            export_root / "hud" / "use_icons.json",
-            export_root / "hud" / "use_icons.png",
-        ),
         "npc": (export_root / "npc" / "npc_index.json",),
     }
     return mapping.get(bundle, ())
@@ -347,7 +343,6 @@ def _bundle_tasks(
                     [bundle_name],
                     maps=maps,
                     force=True,
-                    inventory=True,
                     index=index,
                     continue_on_error=False,
                 )

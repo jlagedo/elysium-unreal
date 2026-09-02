@@ -2822,7 +2822,7 @@ def export_bundle(
 ) -> None:
     allowed = {
         "audio", "corpus", "particles", "scripts", "signs", "vdata", "items", "cfg", "scenes",
-        "ui", "use-icons", "npc", "policy",
+        "ui", "npc", "policy",
     }
     if bundle not in allowed:
         raise typer.BadParameter("bundle must be one of: " + ", ".join(sorted(allowed)))

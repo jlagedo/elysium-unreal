@@ -200,6 +200,30 @@ struct FElysiumContentPaths
 	static FString BakedSharedTextures() { return BakedSharedDir() / TEXT("Textures"); }
 	static FString BakedSharedMaterials() { return BakedSharedDir() / TEXT("Materials"); }
 	static FString BakedSharedMeshes() { return BakedSharedDir() / TEXT("Meshes"); }
+	// The texture lane's package root (`uv run elysium import textures`): one `T_` per
+	// `vtmb:texture:` unit, `docs/architecture/seam_map_texture.md` -> "Identity and naming".
+	static FString BakedTexturesDir() { return BakedMount() / TEXT("Textures"); }
+	// `<dir>/<stem>` (a `materials/`-relative path, the bare unit key) ->
+	// `/ElysiumBaked/Textures/<dir>/T_<safe stem>.T_<safe stem>`, the object path of the imported 2D
+	// texture. The C++ twin of `importers.textures.asset_path_for(key, "Texture2D")`: every path
+	// part through `MaterialSafeName` (`asset_names.safe_name`), the stem with the `T_` prefix. The
+	// UI names its art by exactly this key (`UI/ElysiumUiArt.h`). Empty for an empty key.
+	static FString BakedTexture(const FString& Key)
+	{
+		TArray<FString> Parts;
+		Key.ParseIntoArray(Parts, TEXT("/"), true);
+		if (Parts.Num() == 0)
+		{
+			return FString();
+		}
+		FString Package = BakedTexturesDir();
+		for (int32 I = 0; I < Parts.Num() - 1; ++I)
+		{
+			Package /= MaterialSafeName(Parts[I]);
+		}
+		const FString Asset = TEXT("T_") + MaterialSafeName(Parts.Last());
+		return Package / Asset + TEXT(".") + Asset;
+	}
 	// The material lane's package root (`uv run elysium import materials`): one `MI_` per
 	// `vtmb:material:` unit, `docs/architecture/seam_map_material.md` -> "Identity and naming".
 	static FString BakedMaterialsDir() { return BakedMount() / TEXT("Materials"); }
@@ -628,35 +652,17 @@ struct FElysiumContentPaths
 	// mirrored flat and lowercased under the export root's signs/ directory by
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_signs.py (a `definition_file`
 	// keyvalue's `vdata/Signs/` prefix and authored case are dropped). Their `BackgroundImage`
-	// materials decode to signs/tex/, keyed by signs/backgrounds.json.
+	// materials are the imported `T_` assets (`UI/ElysiumUiArt.h`, R6.6).
 	static FString SignsDir() { return Root() / TEXT("signs"); }
 	static FString SignFile(const FString& Leaf) { return SignsDir() / Leaf; }
-	static FString SignTexDir() { return SignsDir() / TEXT("tex"); }
-	static FString SignBackgrounds() { return SignsDir() / TEXT("backgrounds.json"); }
 
 	// UI source (pipeline/src/elysium_pipeline/exporters/UE_extract_ui.py). The `.res` layouts and both schemes are
 	// mirrored as **design intent** and are not executed as layout; what the runtime actually reads
-	// is the authored string table (menu labels are `VMainMenu_BTN_*` tokens — docs/vtmb/vtmb-ui.md §2)
-	// and the decoded art (the title lockup, HUD frames, clan icons). Game-derived, so gitignored
-	// and regenerable like every other exported mirror.
+	// is the authored string table (menu labels are `VMainMenu_BTN_*` tokens — docs/vtmb/vtmb-ui.md §2).
+	// Every picture the UI draws is an imported `T_` asset (`UI/ElysiumUiArt.h`, R6.6); no art is
+	// read off this tree. Game-derived, so gitignored and regenerable like every other exported mirror.
 	static FString UiDir() { return Root() / TEXT("ui"); }
 	static FString UiStrings() { return UiDir() / TEXT("strings.json"); }
-	static FString UiMenuDir() { return UiDir() / TEXT("menu"); }
-	static FString UiTitle() { return UiMenuDir() / TEXT("title.png"); }
-	// `effects/spotlight`, the exact 128x128 radial mask `DrawFeedingView` uses to isolate the
-	// desaturated world. Exported with the other global presentation art; loaded as a transient
-	// renderer texture so no game-derived bytes enter the tracked project.
-	static FString UiFeedVisionMask() { return UiDir() / TEXT("effects/feed_spotlight.png"); }
-	// Local Elysium key art used by the empty front-end shell. It is deliberately below the
-	// gitignored export root: the plate incorporates the user's decoded clan art and must never be
-	// tracked. The menu remains usable over black when the optional local plate is absent.
-	static FString UiMenuWallpaper() { return UiMenuDir() / TEXT("elysium_main_wallpaper_4k.png"); }
-	// The menu particle scene's sprite sheet, decoded to PNG: the blood cels, the glow, and the 15
-	// `mm_<clan>` sect/clan sigils VtMB drifts across its own menu backdrop. The menu draws one of
-	// them as its seal (`mm_cam` in the front end, the PC's clan in a session), so the emitter graph
-	// is not reproduced but its art is. Stem is the sprite name without extension.
-	static FString UiMenuSprite(const FString& Stem) { return UiMenuDir() / TEXT("sprites") / (Stem + TEXT(".png")); }
-	static FString UiArt(const FString& Rel) { return UiDir() / TEXT("art") / Rel; }
 
 	// Fonts. The sign/popup panel's typeface set — hand-authored/game-agnostic OFL faces committed
 	// under Content/Fonts (not the game-derived export root), mapping VtMB's authored face names

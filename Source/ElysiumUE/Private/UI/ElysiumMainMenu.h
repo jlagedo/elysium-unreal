@@ -103,25 +103,25 @@ private:
 	// rather than by querying geometry.
 	TSharedRef<SWidget> BuildRailRow(const FMenuEntry& Item, const FText& Label, int32 Index, float& RowTop);
 
-	// The sect/clan sigil this mode draws: the Camarilla ankh in the front end (no character exists
-	// yet), the PC's own clan once a session does. Null when the sprite sheet is not exported.
+	// The clan sigil this mode draws: nothing in the front end (no character exists yet), the PC's
+	// own clan's imported `cm_clan_symbol` once a session does. Null when the asset is not imported.
 	UTexture2D* ResolveSeal();
 
 	// Viewport height in pixels -> the virtual-canvas scale. Reads the live viewport so a resize
 	// re-scales without a rebuild.
 	float VirtualScale() const;
 
-	// The front end's static plate and title lockup. Both are loose, local PNGs below the export
-	// root and are held as UPROPERTYs so their transient textures survive GC for the widget's
-	// lifetime. Pause/game-over modes leave WallpaperTexture unused and show the held game world.
+	// The front end's static plate (`UElysiumUISettings::MenuWallpaper`) and title lockup (the
+	// imported `interface/mainmenu/vtm_title`), held as UPROPERTYs for the widget's lifetime.
+	// Pause/game-over modes leave WallpaperTexture unused and show the held game world.
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> WallpaperTexture;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> TitleTexture;
 
-	// The rail's own art: the clan seal off the menu sprite sheet, plus three code-authored alpha
-	// ramps (the veil, the hairline, the tick's solid bar) whose colour comes from the brush tint.
+	// The rail's own art: the clan sigil asset, plus three code-authored alpha ramps (the veil,
+	// the hairline, the tick's solid bar) whose colour comes from the brush tint.
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> SealTexture;
 

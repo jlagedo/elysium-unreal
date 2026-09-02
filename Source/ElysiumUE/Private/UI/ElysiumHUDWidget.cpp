@@ -1,19 +1,15 @@
 #include "UI/ElysiumHUDWidget.h"
 
-#include "ElysiumContentPaths.h"
 #include "ElysiumHUDModel.h"
 #include "UI/ElysiumCommonUIInputData.h"
+#include "UI/ElysiumUiArt.h"
 #include "UI/ElysiumUIStyle.h"
 #include "UI/ElysiumUITexture.h"
 
 #include "CommonInputSubsystem.h"
-#include "Dom/JsonObject.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Engine/Texture2D.h"
-#include "Misc/FileHelper.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/Layout/SBorder.h"
@@ -122,7 +118,7 @@ namespace
 
 TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 {
-	EnsureUseIconAtlas();
+	EnsureUseIcons();
 	EnsureContrastVeils();
 	UElysiumHUDModel* M = Model;
 	const FSlateBrush* White = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
@@ -1035,54 +1031,32 @@ const FSlateBrush* UElysiumHUDWidget::UseBindingBrush() const
 	return CurrentUseBindingBrush.GetResourceObject() ? &CurrentUseBindingBrush : nullptr;
 }
 
-void UElysiumHUDWidget::EnsureUseIconAtlas()
+void UElysiumHUDWidget::EnsureUseIcons()
 {
-	if (bUseAtlasLoadAttempted)
+	if (bUseIconsLoadAttempted)
 	{
 		return;
 	}
-	bUseAtlasLoadAttempted = true;
-	FString JsonText;
-	if (!FFileHelper::LoadFileToString(JsonText,
-		*(FElysiumContentPaths::Root() / TEXT("hud/use_icons.json"))))
+	bUseIconsLoadAttempted = true;
+	// One brush per enum slot on the icon's own imported `T_` (R6.6): the 48-px cell the atlas
+	// used to carve, now the whole texture. A slot whose art is not imported draws nothing, which
+	// `UseIconBrush` reports as no icon rather than a hole.
+	auto Configure = [this](FSlateBrush& Brush, UTexture2D* Texture)
 	{
-		return;
-	}
-	TSharedPtr<FJsonObject> Root;
-	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
-	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-	{
-		return;
-	}
-	UseAtlas = ElysiumUI::LoadPngTexture(FElysiumContentPaths::Root() / TEXT("hud/use_icons.png"));
-	if (!UseAtlas)
-	{
-		return;
-	}
-	auto Configure = [this](FSlateBrush& Brush, const TSharedPtr<FJsonObject>& Object)
-	{
-		Brush.SetResourceObject(UseAtlas);
+		UseIconTextures.Add(Texture);
+		Brush.SetResourceObject(Texture);
 		Brush.DrawAs = ESlateBrushDrawType::Image;
 		Brush.ImageSize = FVector2D(48, 48);
-		Brush.SetUVRegion(FBox2f(
-			FVector2f(Object->GetNumberField(TEXT("u0")), Object->GetNumberField(TEXT("v0"))),
-			FVector2f(Object->GetNumberField(TEXT("u1")), Object->GetNumberField(TEXT("v1")))));
 	};
-	if (const TSharedPtr<FJsonObject>* Ring; Root->TryGetObjectField(TEXT("ring"), Ring))
+	if (UTexture2D* Ring = ElysiumUI::ArtTexture(ElysiumUI::UseRingArt))
 	{
-		Configure(UseRingBrush, *Ring);
+		Configure(UseRingBrush, Ring);
 	}
-	const TArray<TSharedPtr<FJsonValue>>* Icons = nullptr;
-	if (Root->TryGetArrayField(TEXT("icons"), Icons))
+	for (int32 N = 1; N <= 72; ++N)
 	{
-		for (const TSharedPtr<FJsonValue>& Value : *Icons)
+		if (UTexture2D* Icon = ElysiumUI::ArtTexture(ElysiumUI::UseIconArt(N)))
 		{
-			const TSharedPtr<FJsonObject> Object = Value->AsObject();
-			if (Object)
-			{
-				FSlateBrush& Brush = UseIconBrushes.Add((int32)Object->GetNumberField(TEXT("n")));
-				Configure(Brush, Object);
-			}
+			Configure(UseIconBrushes.Add(N), Icon);
 		}
 	}
 }
@@ -1142,12 +1116,11 @@ const FSlateBrush* UElysiumHUDWidget::HudArtBrush(FName ArtPath)
 		return Found->GetResourceObject() ? Found : nullptr;
 	}
 
-	const FString Path = FElysiumContentPaths::UiArt(ArtPath.ToString() + TEXT(".png"));
-	UTexture2D* Texture = ElysiumUI::LoadPngTexture(Path);
+	UTexture2D* Texture = ElysiumUI::ArtTexture(ArtPath.ToString());
 	if (!Texture)
 	{
 		UE_LOG(LogElysiumHUDWidget, Verbose,
-			TEXT("no HUD art at %s — run: uv run elysium export bundle ui"), *Path);
+			TEXT("no HUD art for %s — run: uv run elysium import textures"), *ArtPath.ToString());
 		HudArtTextures.Add(ArtPath, nullptr);
 		HudArtBrushes.Add(ArtPath, FSlateBrush());
 		return nullptr;

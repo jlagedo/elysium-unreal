@@ -2,11 +2,13 @@
 
 #include "Substrate/ElysiumSignData.h"
 #include "UI/ElysiumNavigableScreen.h"
+#include "Styling/SlateBrush.h"
 
 #include "ElysiumSignScreen.generated.h"
 
 class SBox;
 class UElysiumActionButton;
+class UTexture2D;
 
 // CommonUI host for game_sign/tutorial text. SignData supplies the message and dismissal policy;
 // presentation is a project-owned, resolution-independent floating panel with one Continue action.
@@ -36,6 +38,12 @@ private:
 
 	FElysiumSignData Sign;
 	bool bDismissible = false;
+
+	// The sign's authored `BackgroundImage` as the imported `T_` (R6.6), behind the body text;
+	// null for a sign that names none, which keeps the dark plate.
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> BackgroundTexture;
+	FSlateBrush BackgroundBrush;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumActionButton> PanelAction;

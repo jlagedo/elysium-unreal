@@ -16,7 +16,9 @@ def test_all_profile_discovers_and_sorts_patch_first_names() -> None:
     ) == ["sm_hub_1", "sp_theatre", "sp_tutorial_1"])
 
 
-def test_complete_profiles_include_use_icons_and_every_global_bundle() -> None:
+def test_complete_profiles_include_every_global_bundle() -> None:
+    # R6.6: `use-icons` is gone -- the HUD draws the 72 context icons off the texture lane's
+    # `T_` assets, so no profile composites an atlas any more.
     expected = {
         "audio",
         "particles",
@@ -27,7 +29,6 @@ def test_complete_profiles_include_use_icons_and_every_global_bundle() -> None:
         "cfg",
         "scenes",
         "ui",
-        "use-icons",
         "npc",
     }
     for profile in ("grid", "all"):

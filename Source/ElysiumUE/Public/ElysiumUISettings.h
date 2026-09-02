@@ -2,15 +2,16 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "Engine/Texture2D.h"
 
 #include "ElysiumUISettings.generated.h"
 
 /**
  * Screen-presentation taste knobs, Project Settings -> Elysium -> UI, tracked at
  * `Config/DefaultElysium.ini` (R4.5, `docs/project/seam_migration.md` -> "Wire first, tune later").
- * `elysium.MenuScrim` was the only orphan value in this domain -- a hardcoded cvar default with no
- * settings-page home -- so this page carries just the one field today; it is the group's home for
- * whatever else the UI lane migrates next.
+ * `elysium.MenuScrim` was the first orphan value in this domain -- a hardcoded cvar default with no
+ * settings-page home; R6.6 added the front end's wallpaper plate, which is not VtMB art and so has
+ * no lane to import it. This page is the group's home for whatever else the UI lane migrates next.
  *
  * Unlike `UElysiumSurfaceSettings`, nothing here drives a live scalar a running material samples:
  * the value is read at Slate rebuild time (`UElysiumMainMenu::RebuildWidget`), so an edit only has
@@ -33,4 +34,13 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, Config, Category = "Menu", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float MenuScrim = 0.22f;
+
+	/**
+	 * The front end's static plate, drawn beneath the rail with uniform cover scaling (R6.6,
+	 * `docs/architecture/ui-architecture.md` -> "6. The menu plate"). Project art, never a VtMB
+	 * texture, so it is an authored asset reference rather than an import; unset, the rail stands
+	 * on the boot world's black. Pause and game-over menus never use it.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category = "Menu")
+	TSoftObjectPtr<UTexture2D> MenuWallpaper;
 };

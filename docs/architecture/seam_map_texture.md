@@ -550,6 +550,14 @@ below `/ElysiumBaked/Textures`. It is the second slice of the seam migration
 material, model and map lanes follow: the unit is the only input, the asset carries everything
 the unit knows, and nothing here reads the install.
 
+**Consumers beyond materials (R6.6).** The UI draws its art straight off this lane's `T_` assets
+— HUD frames and icons, the 72 use icons, the sheet chrome, the chargen pages, the sign
+backgrounds, the title lockup, the clan sigils, the feed-vision mask — by the same install path
+the screen names (`ElysiumUI::ArtTexture`, `docs/architecture/ui-architecture.md` → "9. Art from
+assets"); `FElysiumContentPaths::BakedTexture` is the naming rule below in C++, pinned against
+`asset_path_for` by `Elysium.Substrate.UiArt`. A UI material whose VMT names another texture
+resolves through the material lane's `MI_` (its `BaseTexture`), never through a second decode.
+
 ### Identity and naming
 
 ```text

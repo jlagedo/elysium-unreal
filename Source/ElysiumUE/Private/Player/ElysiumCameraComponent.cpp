@@ -7,7 +7,7 @@
 #include "ElysiumPlayerBody.h"
 #include "ElysiumStub.h"
 #include "ElysiumUserSettings.h"
-#include "UI/ElysiumUITexture.h"
+#include "UI/ElysiumUiArt.h"
 
 #include "Camera/PlayerCameraManager.h"
 #include "CollisionQueryParams.h"
@@ -235,13 +235,13 @@ void UElysiumCameraComponent::EnsureFeedVisionMask()
 		return;
 	}
 	bFeedVisionMaskAttempted = true;
-	const FString Path = FElysiumContentPaths::UiFeedVisionMask();
-	FeedVisionMask = ElysiumUI::LoadPngTexture(Path);
+	// `effects/spotlight`, the exact 128x128 radial mask `DrawFeedingView` samples, as the
+	// texture lane imported it (R6.6).
+	FeedVisionMask = ElysiumUI::ArtTexture(TEXT("effects/spotlight"));
 	if (!FeedVisionMask)
 	{
 		UE_LOG(LogElysiumCamera, Warning,
-			TEXT("ordinary feed vision cannot load the exported spotlight mask '%s'; using the renderer's oval fallback"),
-			*Path);
+			TEXT("ordinary feed vision cannot load the imported spotlight mask (effects/spotlight); using the renderer's oval fallback"));
 	}
 }
 // The apply point (`CAM_ApplyToView`, 0x100ffb00)

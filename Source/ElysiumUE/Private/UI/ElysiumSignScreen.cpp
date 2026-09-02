@@ -1,8 +1,10 @@
 #include "UI/ElysiumSignScreen.h"
 
 #include "UI/ElysiumActionButton.h"
+#include "UI/ElysiumUiArt.h"
 
 #include "Engine/Engine.h"
+#include "Engine/Texture2D.h"
 #include "Engine/GameViewportClient.h"
 #include "HAL/IConsoleManager.h"
 #include "Styling/CoreStyle.h"
@@ -122,14 +124,33 @@ TSharedRef<SWidget> UElysiumSignScreen::BuildPanelVisual()
 			.Justification(ETextJustify::Center)
 		]);
 
+	// The authored background, when the sign names one and the texture lane imported it: the
+	// panel's inner plate becomes that image, stretched over the same box the text always had.
+	BackgroundTexture = Sign.Background.bValid && !Sign.Background.ImageName.IsEmpty()
+		? ElysiumUI::ArtTexture(Sign.Background.ImageName)
+		: nullptr;
+	BackgroundBrush = FSlateBrush();
+	if (BackgroundTexture)
+	{
+		BackgroundBrush.SetResourceObject(BackgroundTexture);
+		BackgroundBrush.DrawAs = ESlateBrushDrawType::Image;
+		BackgroundBrush.ImageSize = FVector2D(BackgroundTexture->GetSizeX(), BackgroundTexture->GetSizeY());
+	}
+	const FSlateBrush* Plate = BackgroundTexture
+		? &BackgroundBrush
+		: FCoreStyle::Get().GetBrush("GenericWhiteBox");
+	const FLinearColor PlateTint = BackgroundTexture
+		? FLinearColor::White
+		: FLinearColor(0.018f, 0.016f, 0.020f, 0.97f);
+
 	TSharedRef<SWidget> Result = SNew(SBorder)
 		.BorderImage(FCoreStyle::Get().GetBrush("GenericWhiteBox"))
 		.BorderBackgroundColor(FSlateColor(FLinearColor(0.42f, 0.29f, 0.14f, 1.0f)))
 		.Padding(FMargin(2.0f))
 		[
 			SNew(SBorder)
-			.BorderImage(FCoreStyle::Get().GetBrush("GenericWhiteBox"))
-			.BorderBackgroundColor(FSlateColor(FLinearColor(0.018f, 0.016f, 0.020f, 0.97f)))
+			.BorderImage(Plate)
+			.BorderBackgroundColor(FSlateColor(PlateTint))
 			.Padding(FMargin(32.0f, 28.0f))
 			[
 				SNew(SBox)

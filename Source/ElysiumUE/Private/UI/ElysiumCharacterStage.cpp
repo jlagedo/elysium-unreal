@@ -1,7 +1,6 @@
 #include "UI/ElysiumCharacterStage.h"
 
-#include "ElysiumContentPaths.h"
-#include "UI/ElysiumUITexture.h"
+#include "UI/ElysiumUiArt.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
 
@@ -38,7 +37,7 @@ namespace
 		inline const FVector Origin(0.0f, 0.0f, 100000.0f);
 	}
 
-	const TCHAR* GBackdropArt = TEXT("interface/charactermaintenance/background.png");
+	const TCHAR* GBackdropArt = TEXT("interface/charactermaintenance/background");
 }
 
 FElysiumCharacterStage::~FElysiumCharacterStage()
@@ -95,7 +94,7 @@ void FElysiumCharacterStage::BuildBackdrop()
 	// The scene behind the body is a **fixed wallpaper**, not a rendered set: one unlit quad
 	// carrying the sheet's own painted street. Without the art there is no quad, and the screen's
 	// own scrim is the ground — which is what the panels already assume.
-	UTexture2D* Art = ElysiumUI::LoadPngTexture(FElysiumContentPaths::UiArt(GBackdropArt));
+	UTexture2D* Art = ElysiumUI::ArtTexture(GBackdropArt);
 	if (Art == nullptr)
 	{
 		return;

@@ -39,7 +39,6 @@ DOMAINS = (
     "scripts",
     "signs",
     "ui",
-    "use-icons",
     "vdata",
 )
 

@@ -33,7 +33,6 @@ bundles = [
   "cfg",
   "scenes",
   "ui",
-  "use-icons",
   "npc",
 ]
 
@@ -49,6 +48,5 @@ bundles = [
   "cfg",
   "scenes",
   "ui",
-  "use-icons",
   "npc",
 ]
