@@ -226,6 +226,33 @@ def test_material_table_binds_patched_units_by_their_map_scoped_id_and_roots_the
     assert table["stone/wall"].as_row()["opaque"] is True
 
 
+def test_material_table_gates_opaque_on_the_masters_own_nanite_capability():
+    # review fix, R5.4: an instance's `blendMode` override cannot make a non-Nanite master's
+    # chunk drawable -- `M_V2_Water` and `M_V2_Refract` never set `used_with_nanite`
+    # (`make_v2_materials.make_water`/`make_refract`), so a face bound to either master stays
+    # off the Nanite path even when the lane forces its instance blend to Opaque (the case
+    # `water/sewer_water` and `dev/dev_waterbeneath2` actually hit in sm_hub_1).
+    read = _sidecars({
+        "water/sewer_water": {**_BASE, "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_Water",
+                               "blendMode": "Opaque"},
+        "glass/refract_pane": {**_BASE, "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_Refract",
+                                "blendMode": "Opaque"},
+        "stone/wall": {**_BASE, "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_Lit",
+                       "blendMode": "Opaque"},
+    })
+    table = MG.resolve_material_table({
+        "water/sewer_water": "water/sewer_water", "glass/refract_pane": "glass/refract_pane",
+        "stone/wall": "stone/wall",
+    }, read, map_name="sm_hub_1")
+
+    assert table["water/sewer_water"].blend_mode == "Opaque"
+    assert table["water/sewer_water"].opaque is False
+    assert table["water/sewer_water"].as_row()["opaque"] is False
+    assert table["glass/refract_pane"].opaque is False
+    # A Nanite-capable master with the same Opaque blend still resolves true.
+    assert table["stone/wall"].opaque is True
+
+
 def test_material_table_fails_loudly_naming_every_unit_the_material_lane_never_staged():
     read = _sidecars({"brick/window": _BASE, "maps/sm_test/brick/orphan": {
         **_PATCH, "patchBase": "vtmb:material:brick/never_staged"}})

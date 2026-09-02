@@ -69,6 +69,17 @@ MATERIAL_REPORT_NAME = "materials_report.json"
 #: answered from the corpus flags.
 NANITE_BLEND_MODES = frozenset({"Opaque", "Masked"})
 
+#: The V2 masters `make_v2_materials.py` builds with `used_with_nanite=True`
+#: (`_make_lit_master` for `M_V2_Lit`/`M_V2_LitTranslucent`, `make_unlit`, `make_two_texture`).
+#: `M_V2_Water`, `M_V2_Refract`, `M_V2_Sprite`, `M_V2_Decal` and `M_V2_Eyes` deliberately do not
+#: set the flag (review fix, R5.4): a face on one of those masters can never draw in a Nanite
+#: chunk regardless of its instance's `blendMode` override, or Unreal falls back to the default
+#: material at render time (`LogMaterial: ... missing usage flag Nanite!`), a silent-looking
+#: failure the material-slot audit cannot see because it never touches Nanite usage.
+NANITE_CAPABLE_MASTERS = frozenset({
+    "M_V2_Lit", "M_V2_LitTranslucent", "M_V2_Unlit", "M_V2_TwoTexture",
+})
+
 #: The legacy `bake_map.Bake._master_for` selection, restated over a `shared/materials.json` record
 #: so the R5.4 report can say what master a surface WAS on before the rebind (data, not a look
 #: judgement). Same order as the bake's own if/elif chain.
@@ -224,8 +235,10 @@ class MaterialBinding:
     `asset` is the imported `MI_` the editor half binds; `master`/`blend_mode` are the ROOT unit's
     (a patched `maps/<map>/...` instance parents to its base instance, which parents to a master),
     so `opaque` answers the Nanite question the legacy `MatDef.opaque` answered from the corpus
-    flags. `provenance` is the root unit's key (its sidecar is `<key>.provenance.json` below the
-    material staging root).
+    flags -- gated on the master's own Nanite capability (`NANITE_CAPABLE_MASTERS`) as well as the
+    blend, since an instance's `blendMode` override (e.g. `water/sewer_water` on `M_V2_Water`,
+    forced Opaque) cannot make a non-Nanite master's chunk drawable. `provenance` is the root
+    unit's key (its sidecar is `<key>.provenance.json` below the material staging root).
     """
 
     key: str
@@ -238,7 +251,7 @@ class MaterialBinding:
 
     @property
     def opaque(self) -> bool:
-        return self.blend_mode in NANITE_BLEND_MODES
+        return self.blend_mode in NANITE_BLEND_MODES and self.master in NANITE_CAPABLE_MASTERS
 
     def as_row(self) -> dict[str, Any]:
         return {

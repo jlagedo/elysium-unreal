@@ -1747,6 +1747,25 @@ leaves it describing one directory — nothing in this task reads it any more, b
 and the lookdev should be checked before anyone else relies on it; the shot harness's identical
 `sm_hub_1` frame means across four vantages predate this task.
 
+**Review fix (2026-09-02): the Nanite predicate needed the master's own capability, not just the
+blend.** The landed `_chunk_world` gate above (`MaterialBinding.opaque`, "reads the root
+instance's blend") let the lane's `Opaque` override on `water/sewer_water` and
+`dev/dev_waterbeneath2` (both `M_V2_Water`, built without `used_with_nanite`) place both faces in
+a Nanite chunk; Unreal drew UE's default material for them in-game (`LogMaterial: Warning: ...
+missing usage flag Nanite!`, only visible in a boot log, not the bake exit or the material-slot
+audit). `MaterialBinding.opaque` now also requires the master be in `NANITE_CAPABLE_MASTERS`
+(`M_V2_Lit`, `M_V2_LitTranslucent`, `M_V2_Unlit`, `M_V2_TwoTexture` — the four `make_v2_materials`
+actually builds with `used_with_nanite=True`); a new `test_map_geometry.py` row pins an
+`Opaque`-overridden `M_V2_Water`/`M_V2_Refract` instance to `opaque is False` and a same-blend
+`M_V2_Lit` instance to `True`. Rescoped `uv run elysium export map sm_hub_1` (no `--force`) and
+`uv run elysium debug shots sm_hub_1 --no-open` confirm the fix: `world: 194 chunk meshes` (back
+to the pre-R5.4 total; 158 Nanite + 36 `T_`, up from 175's 158 + 17 because the two water faces
+and, transitively, the cells they shared with the seven legitimately-reclassified decal/glass
+faces now land in `T_`), material audit still `0 unbound or default-bound slots` over 502 mesh
+assets, and zero `missing usage flag Nanite` lines in the rebuilt boot log (2 occurrences before
+the fix, one per affected instance, `20260902T015018.928063Z-debug-shots.log:1711/1713`). `uv run
+pytest pipeline/tests/test_map_geometry.py pipeline/tests/test_materials_stage.py`: **91 passed**.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not

@@ -1087,8 +1087,16 @@ answers from that table alone.
 **The Nanite question moves with the binding.** The legacy chunker split a cell into a Nanite mesh
 (opaque + masked) and a non-Nanite sibling (`T_` prefix) by `MatDef.opaque`, read off the corpus
 flags. The V2 lane answers the same question from the root instance's blend mode
-(`NANITE_BLEND_MODES = {Opaque, Masked}`), so the chunk naming, the section order and the slot
-names are byte-for-byte the R5.1 lane's — only the bound asset changes.
+(`NANITE_BLEND_MODES = {Opaque, Masked}`) **gated on the bound V2 master's own Nanite capability**
+(`NANITE_CAPABLE_MASTERS = {M_V2_Lit, M_V2_LitTranslucent, M_V2_Unlit, M_V2_TwoTexture}`, review
+fix): `make_v2_materials.py` deliberately does not set `used_with_nanite` on `M_V2_Water`,
+`M_V2_Refract`, `M_V2_Sprite`, `M_V2_Decal` or `M_V2_Eyes`, so an instance's `blendMode` override
+alone (`water/sewer_water` and `maps/sm_hub_1/dev/dev_waterbeneath2` are lane-forced `Opaque` on
+`M_V2_Water`) cannot make that master's chunk drawable — Unreal falls back silently to the default
+material at render time (`LogMaterial: Warning: ... missing usage flag Nanite!`) rather than
+failing the bake, which is why the material-slot audit (a load-time check) never saw it. Bar that
+one gate, the chunk naming, the section order and the slot names are byte-for-byte the R5.1 lane's
+— only the bound asset changes.
 
 **A unit the material lane has not staged fails the map**, naming every missing key and the command
 that stages it (`uv run elysium import materials`); a patched unit whose `patchBase` chain leaves
@@ -1164,9 +1172,21 @@ the legacy lane bound to the deferred-decal-domain `M_Decal` **as a static-mesh 
 surface mesh cannot draw) and that is now an ordinary `M_V2_LitTranslucent` translucent surface,
 plus the two `sm_hub_1` water surfaces, legacy `M_World_Translucent` → `M_V2_Water` with the
 material lane's own `Opaque` blend override (`water` VMTs author no `$translucent`; R7.2's).
-Because the Nanite split now follows the root instance's blend, `sm_hub_1` chunks 194 → 175
-(158 Nanite + 17 `T_`): the two water materials joined the Nanite buckets and the seven
-decal/glass-flagged ones left them; `sp_tutorial_1` 110 and `sm_pawnshop_1` 38 are unchanged.
+Because the Nanite split now follows the root instance's blend, the seven decal/glass-flagged
+surfaces left the Nanite buckets; `sp_tutorial_1` 110 and `sm_pawnshop_1` 38 are unchanged.
+
+**Review fix, re-measured (2026-09-02).** The first landing answered the Nanite question from
+`blendMode` alone, so the lane's `Opaque` override on `water/sewer_water` and
+`dev/dev_waterbeneath2` (both `M_V2_Water`, a master built without `used_with_nanite`) put them in
+a Nanite chunk too — `sm_hub_1` chunks 194 → 175 (158 Nanite + 17 `T_`) and a post-boot log entry
+per surface: `LogMaterial: Warning: Material .../MI_sewer_water missing usage flag Nanite! Default
+Material will be used in game.` — UE's fallback default material in place of the water surface,
+not a bake failure, so nothing upstream of a boot log caught it. `MaterialBinding.opaque` now
+gates on `NANITE_CAPABLE_MASTERS` as well as blend; rebaking `sm_hub_1` (scoped, no `--force`)
+restores `world: 194 chunk meshes` (158 Nanite + 36 `T_`, the extra 19 `T_` chunks over the
+pre-R5.4 legacy split from the seven now-legitimately-reclassified decal/glass surfaces sharing
+cells with the two water ones), and the rebuilt boot log carries zero `missing usage flag Nanite`
+lines.
 
 **The instances were behind the masters.** The staged sidecars and the imported `MI_` predated
 R5.3 (Aug 31 09:02): none of `sm_hub_1`'s 14 `globalwetness` units carried `WetnessScale`/
