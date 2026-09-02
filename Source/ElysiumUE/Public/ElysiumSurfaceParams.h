@@ -42,9 +42,11 @@ namespace ElysiumSurfaceParamsShared
 // `M_V2_Lit` / `M_V2_LitTranslucent` (the same graph; LitTranslucent differs only in material
 // domain/blend, not in parameter set) -- the design doc's exposed-parameter table for the two
 // masters, verbatim, after the 2026-08-31 revision: Detail/DetailScale/UseDetail,
-// DecalDepthOffset/IsDecalSurface, MinLight/MaxLight, WetnessScale and the single ScrollRateU/V +
-// UseScroll lane are gone (each has a new, non-material home -- see the design doc's "Four
-// parameters that left the masters" and "`Detail` is dropped"); BaseScrollRateU/V,
+// DecalDepthOffset/IsDecalSurface, MinLight/MaxLight and the single ScrollRateU/V + UseScroll
+// lane are gone (each has a new, non-material home -- see the design doc's "Four parameters that
+// left the masters" and "`Detail` is dropped"). WetnessScale left with them on that revision but
+// is back (R5.3, "Decal fog and wetness homes") as a real per-instance scalar, alongside its
+// WetnessDriven gate -- see the Scalars namespace below; BaseScrollRateU/V,
 // BumpScrollRateU/V (two independent scroll lanes, no switch -- (0,0) is an exact Panner no-op),
 // FrameCount, BaseTextureFrames, NormalFrameRate/NormalFrameCount/NormalMapFrames/
 // UseAnimatedNormalFrames (the flipbook lanes) and SineTargetMask/SineChannelMask (the sine lane)
@@ -78,6 +80,14 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName SineMax(TEXT("SineMax"));
 		inline const FName SinePeriod(TEXT("SinePeriod"));
 		inline const FName SineTimeOffset(TEXT("SineTimeOffset"));
+		// R5.3 (docs/architecture/seam_map_material.md -> "Decal fog and wetness homes"):
+		// WetnessScale is back as a real per-instance scalar, reversing the 2026-08-31 revision's
+		// "gone" call above -- the master now reads the live global wetness value off
+		// MPC_ElysiumEnvironment itself (`_wetness_response` in make_v2_materials.py), so no
+		// per-map material instance is needed for either half of the term. WetnessDriven gates it
+		// (0 on every instance the stage never marked wetness-driven).
+		inline const FName WetnessScale(TEXT("WetnessScale"));
+		inline const FName WetnessDriven(TEXT("WetnessDriven"));
 	}
 
 	namespace Vectors
@@ -372,6 +382,23 @@ namespace ElysiumSurfaceParamsDecal
 	namespace Textures
 	{
 		inline const FName BaseTexture(TEXT("BaseTexture"));
+	}
+
+	// R5.3 (docs/architecture/seam_map_material.md -> "Decal fog and wetness homes"): the world's
+	// own distance fog as three named instance parameters -- a UDecalComponent carries no Custom
+	// Primitive Data of its own, unlike every mesh primitive. No corpus unit authors a fog key on
+	// a decalmodulate VMT, so the stage never writes these; the placement lane sets them per
+	// decal instance (an MID at load, ElysiumFog::ApplyToDecalMID) from the map's own
+	// `UElysiumMapEnvironment` (R4.4) fog, never from a per-map material package.
+	namespace Scalars
+	{
+		inline const FName FogStart(TEXT("FogStart"));
+		inline const FName FogInvRange(TEXT("FogInvRange"));
+	}
+
+	namespace Vectors
+	{
+		inline const FName FogColor(TEXT("FogColor"));
 	}
 
 	namespace Switches

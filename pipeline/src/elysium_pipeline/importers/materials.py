@@ -289,6 +289,12 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
             "UseVertexAlpha": "#", "UseEnvMap": "#", "UseEnvMapMask": "#",
             "UseBaseAlphaEnvMapMask": "#", "UseNormalMapAlphaEnvMapMask": "#", "UseFixedCube": "#",
             "MetallicTint": "#",
+            # R5.3 (seam_map_material.md -> "Decal fog and wetness homes"): a real per-instance
+            # scalar pair, not provenance-only -- `WetnessScale` is static per unit (baked once at
+            # import, same as every other instance scalar) and `WetnessDriven` gates a global,
+            # live `MPC_ElysiumEnvironment` read in the graph, so no per-map material instance is
+            # needed for the live half either.
+            "WetnessScale": "S", "WetnessDriven": "S",
         },
     ),
     "M_V2_Unlit": _merged(
@@ -330,7 +336,15 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
         "RefractAmount": "S", "RefractTint": "V", "EnvMapTint": "V",
         "UseBaseTexture": "#", "UseNormalMap": "#", "UseEnvMap": "#", "UseFixedCube": "#",
     }),
-    "M_V2_Decal": _merged(_SHARED_PARAMS, {"BaseTexture": "T", "UseVertexColor": "#"}),
+    "M_V2_Decal": _merged(_SHARED_PARAMS, {
+        "BaseTexture": "T", "UseVertexColor": "#",
+        # R5.3 (seam_map_material.md -> "Decal fog and wetness homes"): the world's own distance
+        # fog, as three named instance parameters -- a UDecalComponent carries no Custom
+        # Primitive Data of its own. No corpus unit authors these (decalmodulate ships no fog
+        # keys), so the stage never writes them; the placement lane sets them per decal instance
+        # from the map's own environment, never from a per-map material package.
+        "FogColor": "V", "FogStart": "S", "FogInvRange": "S",
+    }),
     "M_V2_TwoTexture": _merged(
         _SHARED_PARAMS, _BASE_SCROLL_LANE, _SINE_LANE,
         {
@@ -1553,12 +1567,21 @@ def _apply_proxies(
             params.scalars[u_name] = round(params.scalars.get(u_name, 0.0) + rate * math.cos(radians), 6)
             params.scalars[v_name] = round(params.scalars.get(v_name, 0.0) + rate * math.sin(radians), 6)
         elif kind == "globalwetness" and "scale" in args:
-            # WetnessScale left the masters: it is provenance only, read by
-            # `FElysiumMaterialFactory` at runtime, never sampled in the graph.
+            # R5.3 (seam_map_material.md -> "Decal fog and wetness homes"): a real per-instance
+            # scalar pair on M_V2_Lit/M_V2_LitTranslucent, which alone declare the wetness lane
+            # (`_wetness_response` in make_v2_materials.py, reading the live global
+            # `MPC_ElysiumEnvironment` value the same way every unit's own `WetnessScale` scales
+            # it) -- no per-map material instance needed for either half. Every other master still
+            # carries the value in provenance only, since it declares no wetness lane at all.
             try:
-                params.misc_provenance["wetnessScale"] = _parse_scalar(args["scale"])
+                scale_value = _parse_scalar(args["scale"])
             except ValueError:
-                pass
+                scale_value = None
+            if scale_value is not None:
+                params.misc_provenance["wetnessScale"] = scale_value
+                if family in _LIT_FAMILIES:
+                    params.scalars["WetnessScale"] = scale_value
+                    params.scalars["WetnessDriven"] = 1.0
 
         rows.append({"index": len(rows), "kind": kind, "sourceName": proxy.get("sourceName"),
                      "arguments": args, "destination": destination})

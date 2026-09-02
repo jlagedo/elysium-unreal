@@ -461,8 +461,10 @@ def test_globalwetness_proxy_writes_wetness_scale_and_runtime_row(tmp_path):
     result = importer.stage_materials(export, tmp_path / "stage")
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/asphalt/MI_wet"]
-    # WetnessScale left the masters: provenance only, never a material scalar.
-    assert "WetnessScale" not in entry["scalars"]
+    # R5.3: a real per-instance scalar pair on M_V2_Lit (the only master with a wetness lane),
+    # not provenance-only any more -- see "Decal fog and wetness homes" in seam_map_material.md.
+    assert entry["scalars"]["WetnessScale"] == 0.56
+    assert entry["scalars"]["WetnessDriven"] == 1.0
     provenance = _provenance(tmp_path / "stage", entry)
     assert provenance["wetnessScale"] == 0.56
     assert any(row["kind"] == "globalwetness" for row in provenance["runtime"])

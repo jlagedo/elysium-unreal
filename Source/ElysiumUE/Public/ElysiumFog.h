@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumSurfaceParams.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 // Source's distance fog, as the Custom Primitive Data slots every world / 3D-skybox / prop
 // primitive carries. This namespace is the whole contract between the material graph
@@ -67,5 +69,30 @@ namespace ElysiumFog
 		Out[SlotColor + 3] = 1.f;
 		Out[SlotStart] = StartCm;
 		Out[SlotInvRange] = (bEnabled && EndCm > StartCm) ? 1.f / (EndCm - StartCm) : 0.f;
+	}
+
+	// R5.3's chosen home for the decal axis (`seam_map_material.md` -> "Decal fog and wetness
+	// homes"): a `UDecalComponent` is a `USceneComponent`, not a `UPrimitiveComponent`, so it
+	// carries no Custom Primitive Data of its own and `Pack` above does not apply to it. A decal
+	// is only ever a world surface (`mat_fog.fog_from_params`'s own docstring), so it needs one
+	// per-map value, never a per-primitive one -- set here as the three named instance parameters
+	// `M_V2_Decal` declares (`ElysiumSurfaceParamsDecal`) on an MID created at decal-spawn time,
+	// parented to the shared imported `MI_<unit>`. Never a per-map material package: the same
+	// values `Pack` already computes for the mesh/prop CPD path, applied to one more instance.
+	inline void ApplyToDecalMID(UMaterialInstanceDynamic* Mid, bool bEnabled,
+		const FLinearColor& Color, float StartCm, float EndCm)
+	{
+		if (!Mid)
+		{
+			return;
+		}
+		TArray<float> Data;
+		Pack(bEnabled, Color, StartCm, EndCm, Data);
+		Mid->SetVectorParameterValue(ElysiumSurfaceParamsDecal::Vectors::FogColor,
+			FLinearColor(Data[SlotColor + 0], Data[SlotColor + 1], Data[SlotColor + 2],
+				Data[SlotColor + 3]));
+		Mid->SetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogStart, Data[SlotStart]);
+		Mid->SetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogInvRange,
+			Data[SlotInvRange]);
 	}
 }

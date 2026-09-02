@@ -40,6 +40,7 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl
+from pipeline.unreal import mat_fog
 from pipeline.unreal import matgraph
 from pipeline.unreal.matgraph import Graph, class_lut_uv, read_class_lut
 from elysium_pipeline import mounts
@@ -450,6 +451,58 @@ def _load_surfaces_collection():
     return collection
 
 
+#: `MPC_ElysiumEnvironment` (make_world_materials.py::make_environment_collection) is the live
+#: weather system's own collection -- `AElysiumMapActor::ApplyWeatherTuning` is its sole writer,
+#: pushing `GlobalWetness`/`WetnessOutputScale` once a tick, world-scoped, never per-map or
+#: per-instance. It is a *different* asset from `MPC_ElysiumSurfaces` (owned by
+#: `UElysiumSurfaceSettings`, "single writer" ruling in the knob contract), so wetness reads it
+#: through its own `CollectionParameter` node rather than folding it into the surfaces collection.
+#: This is R5.3's chosen home for the wetness axis (seam_map_material.md -> "Decal fog and
+#: wetness homes (R5.3)"): a global live value, never a per-map material instance.
+ENVIRONMENT_COLLECTION = "MPC_ElysiumEnvironment"
+
+
+def _load_environment_collection():
+    asset = "%s/%s" % (mounts.MATERIALS, ENVIRONMENT_COLLECTION)
+    collection = unreal.load_asset(asset)
+    if not collection:
+        _fail("%s not found -- run make_world_materials.py before make_v2_materials.py" % asset)
+    have = {str(p.get_editor_property("parameter_name"))
+            for p in collection.get_editor_property("scalar_parameters")}
+    missing = sorted(name for name in ("GlobalWetness", "WetnessOutputScale") if name not in have)
+    if missing:
+        _fail("%s is missing required scalar row(s): %s -- run make_world_materials.py"
+              % (asset, ", ".join(missing)))
+    return collection
+
+
+def _env_scalar(g, environment_collection, name, x, y):
+    """A `CollectionParameter` read off `MPC_ElysiumEnvironment` rather than `g.collection`
+    (`MPC_ElysiumSurfaces`) -- see `ENVIRONMENT_COLLECTION`'s own docstring above."""
+    n = g.node(unreal.MaterialExpressionCollectionParameter, x, y)
+    n.set_editor_property("collection", environment_collection)
+    n.set_editor_property("parameter_name", name)
+    return n
+
+
+def _wetness_response(g, environment_collection, P, x, y):
+    """`saturate(GlobalWetness x WetnessScale x WetnessOutputScale)`, gated by `WetnessDriven`
+    (`lerp(1, wet_amount, WetnessDriven)`) -- the exact term `make_world_materials.py`'s own
+    world masters already carry, ported onto a V2 master. `WetnessScale` is a real per-instance
+    scalar the stage now writes from the unit's own `globalwetness` proxy (never provenance-only
+    on a master that declares this lane); `WetnessDriven` is 0 on every instance that authors no
+    such proxy, so an unwetted surface's reflectiveness is untouched (`lerp(1, x, 0) == 1`)."""
+    global_wetness = _env_scalar(g, environment_collection, "GlobalWetness", x, y)
+    wetness_scale = g.scalar(P.Scalars.WetnessScale, 0.0, x, y + 80)
+    wetness_driven = g.scalar(P.Scalars.WetnessDriven, 0.0, x, y + 160)
+    wetness_output_scale = _env_scalar(g, environment_collection, "WetnessOutputScale", x, y + 240)
+    wet_authored = g.mul(global_wetness, "", wetness_scale, "", x + 220, y + 40)
+    wet_scaled = g.mul(wet_authored, "", wetness_output_scale, "", x + 380, y + 80)
+    wet_amount = g.sat(wet_scaled, "", x + 540, y + 80)
+    one = g.const(1.0, x + 540, y - 80)
+    return g.lerp(one, "", wet_amount, "", wetness_driven, "", x + 700, y)
+
+
 def _unit_sha256(stem):
     path = Path(export_v2_root()) / "shader-programs" / "source" / ("%s.glb" % stem)
     if not path.is_file():
@@ -732,6 +785,8 @@ class LitParams:
         SineMax = "SineMax"
         SinePeriod = "SinePeriod"
         SineTimeOffset = "SineTimeOffset"
+        WetnessScale = "WetnessScale"
+        WetnessDriven = "WetnessDriven"
 
     class Vectors:
         Color = "Color"
@@ -771,7 +826,8 @@ Params = LitParams
 PARAM_TABLE = LIT_PARAM_TABLE
 
 
-def _build_lit(mat, collection, lut_texture, default_frames, default_normal_frames, *, translucent):
+def _build_lit(mat, collection, environment_collection, lut_texture, default_frames,
+               default_normal_frames, *, translucent):
     """The shared M_V2_Lit / M_V2_LitTranslucent shading graph. `translucent` only changes how
     Opacity is wired (design doc: blend mode itself is a per-instance override, not a
     material-only property, so the two masters share every other pin)."""
@@ -853,7 +909,14 @@ def _build_lit(mat, collection, lut_texture, default_frames, default_normal_fram
                           default=False)
     env_mask_scale = g.scalar(P.Scalars.EnvMapMaskScale, 1.0, -900, 660)
     mask_scaled = g.mul(mask_step3, "", env_mask_scale, "", 100, 580)
-    mask_sat = g.sat(mask_scaled, "", 300, 580)
+    # Authored wetness (R5.3, `seam_map_material.md` -> "Decal fog and wetness homes (R5.3)")
+    # raises the reflection mask exactly like the legacy `M_World_*` masters' own `env_wet` term:
+    # a rain-slicked surface reads reflective even where its own $envmapmask does not say so. A
+    # surface with no `globalwetness` proxy carries `WetnessDriven` 0, so `wet_response` is
+    # exactly 1 and this multiply is a no-op.
+    wet_response = _wetness_response(g, environment_collection, P, -900, 2440)
+    mask_wet = g.mul(mask_scaled, "", wet_response, "", 200, 620)
+    mask_sat = g.sat(mask_wet, "", 300, 580)
 
     # -- specular / roughness / metallic -------------------------------------------------------
     mask_spec_scale = g.mpc("MaskSpecularScale", -1900, 1560)
@@ -990,6 +1053,7 @@ def _make_lit_master(name, *, translucent):
     # otherwise report "up to date, skipping" still fails loudly if a prerequisite asset (or one
     # of its rows) has since gone missing, rather than only checking it on the slow rebuild path.
     collection = _load_surfaces_collection()
+    environment_collection = _load_environment_collection()
     lut_texture = _load_class_lut()
     recipe = _lit_recipe(LIT_CITED_SHADER_UNITS)
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
@@ -1014,8 +1078,8 @@ def _make_lit_master(name, *, translucent):
         mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
     mat.set_editor_property("two_sided", False)
 
-    _build_lit(mat, collection, lut_texture, default_frames, default_normal_frames,
-              translucent=translucent)
+    _build_lit(mat, collection, environment_collection, lut_texture, default_frames,
+              default_normal_frames, translucent=translucent)
 
     errors = mel.recompile_material(mat)
     if errors:
@@ -2342,9 +2406,12 @@ class DecalParams:
     class Scalars:
         Alpha = "Alpha"
         SurfaceClassIndex = "SurfaceClassIndex"
+        FogStart = mat_fog.P_START
+        FogInvRange = mat_fog.P_INV_RANGE
 
     class Vectors:
         Color = "Color"
+        FogColor = mat_fog.P_COLOR
 
     class Switches:
         UseVertexColor = "UseVertexColor"
@@ -2373,6 +2440,13 @@ def _build_decal(mat, collection, lut_texture):
     reads separately -- the final `MP_EMISSIVE_COLOR` output *is* what gets multiplied onto the
     receiver, exactly like every other Unlit master in this file wires both property sinks to the
     same value. There is no Opacity pin to wire at all for this blend mode.
+
+    Carries the world's own distance fog as three named instance parameters
+    (`mat_fog.fog_from_params`) rather than Custom Primitive Data -- a `UDecalComponent` is a
+    `USceneComponent`, not a `UPrimitiveComponent`, so it carries none. This is R5.3's chosen home
+    for the fog axis (`seam_map_material.md` -> "Decal fog and wetness homes (R5.3)"): the three
+    params default neutral (unfogged), and the placement lane sets them per decal instance from
+    the map's own `UElysiumMapEnvironment` (R4.4) fog, never from a per-map material package.
     """
     g = Graph(mat, collection=collection)
     P = DecalParams
@@ -2393,8 +2467,13 @@ def _build_decal(mat, collection, lut_texture):
     # no opacity pin to feed -- declared, not wired, like every other master's genuinely inert knob.
     g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
 
-    g.to(vc_selected, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    g.to(vc_selected, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    fog_f, fog_inv, fog_color = mat_fog.fog_from_params(g.mat, x=-1400, y=1300)
+    faded = mat_fog.fade(g.mat, vc_selected, "", fog_inv, -100, 1120)
+    fogged = mat_fog.inscatter(g.mat, faded, fog_f, fog_color, 80, 1120)
+
+    g.to(fogged, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    g.to(fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    g.to(mat_fog.specular(g.mat, fog_inv, -450, 1600), "", unreal.MaterialProperty.MP_SPECULAR)
 
     # -- class LUT declared for contract completeness; Unlit ignores Roughness/Specular/Metallic -
     _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)

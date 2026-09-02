@@ -416,6 +416,12 @@ REQUIRED_MPC_SCALARS = [
 ]
 
 
+#: R5.3's own collection (`make_world_materials.py::make_environment_collection`,
+#: `AElysiumMapActor::ApplyWeatherTuning` its sole writer) -- a *different* asset from
+#: `MPC_ElysiumSurfaces` above, at the legacy materials package root, not under `V2`.
+ENVIRONMENT_PKG = "/Game/ElysiumGenerated/Materials"
+
+
 def _seed_surface_knobs(editor):
     mpc = FakeAsset("MPC_ElysiumSurfaces", PKG, "MaterialParameterCollection")
     scalars = []
@@ -425,6 +431,15 @@ def _seed_surface_knobs(editor):
         scalars.append(row)
     mpc.set_editor_property("scalar_parameters", scalars)
     editor.assets[mpc.path] = mpc
+
+    environment = FakeAsset("MPC_ElysiumEnvironment", ENVIRONMENT_PKG, "MaterialParameterCollection")
+    environment_scalars = []
+    for name in ("GlobalWetness", "WetnessOutputScale"):
+        row = FakeNode(None, 0, 0)
+        row.set_editor_property("parameter_name", name)
+        environment_scalars.append(row)
+    environment.set_editor_property("scalar_parameters", environment_scalars)
+    editor.assets[environment.path] = environment
 
     # `_load_class_lut` reads the LUT texture through `DA_SurfaceCalibration`'s own `Lut`
     # property, never a hard-coded texture path -- that is what stays correct whether the real

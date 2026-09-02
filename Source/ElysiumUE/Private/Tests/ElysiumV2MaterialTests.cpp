@@ -69,6 +69,8 @@ namespace
 		ElysiumSurfaceParamsLit::Scalars::SineMax,
 		ElysiumSurfaceParamsLit::Scalars::SinePeriod,
 		ElysiumSurfaceParamsLit::Scalars::SineTimeOffset,
+		ElysiumSurfaceParamsLit::Scalars::WetnessScale,
+		ElysiumSurfaceParamsLit::Scalars::WetnessDriven,
 	};
 	static const FName LitVectors[] = {
 		ElysiumSurfaceParamsShared::Vectors::Color,
@@ -291,9 +293,12 @@ namespace
 	static const FName DecalScalars[] = {
 		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
 		ElysiumSurfaceParamsShared::Scalars::Alpha,
+		ElysiumSurfaceParamsDecal::Scalars::FogStart,
+		ElysiumSurfaceParamsDecal::Scalars::FogInvRange,
 	};
 	static const FName DecalVectors[] = {
 		ElysiumSurfaceParamsShared::Vectors::Color,
+		ElysiumSurfaceParamsDecal::Vectors::FogColor,
 	};
 	static const FName DecalSwitches[] = {
 		ElysiumSurfaceParamsDecal::Switches::UseVertexColor,

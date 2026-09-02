@@ -908,7 +908,87 @@ writes and the graph ignores, each now has a real home.
 | `DecalDepthOffset` (S) | knob only, in `MPC_ElysiumSurfaces`; the bias is applied by the decal component | `MP_PIXEL_DEPTH_OFFSET` is not reachable from `unreal.MaterialProperty` in this 5.8 build |
 | `IsDecalSurface` (#) | provenance `isDecalSurface` (`$decal`, 550 units), read by the placement lane | with no depth-offset pin there was nothing for the switch to gate |
 | `MinLight`, `MaxLight` (S) | provenance only (11 units each) | they clamp Source's lightmap term; Lumen owns lighting, so there is no expression to feed. A named divergence |
-| `WetnessScale` (S) | provenance only | `globalwetness` is a **runtime** proxy: `FElysiumMaterialFactory` reads `WetnessScale` off provenance and writes `EnvMapTint` on the MID. Nothing samples it in the graph |
+
+`WetnessScale` **left this table** (R5.3, "Decal fog and wetness homes" below): it is a real
+per-instance scalar again on the two masters that carry a wetness lane (`M_V2_Lit`,
+`M_V2_LitTranslucent`), reversing the "provenance only" call this table made on 2026-08-31 for
+those two masters specifically — every other master still carries it in provenance only, since it
+declares no wetness lane at all.
+
+#### Decal fog and wetness homes (R5.3)
+
+Two axes vary **per map** (decal fog) or **live, per tick, world-scoped** (wetness), and neither
+had a home on a V2 master before this revision — both are new here, not a "provenance only" call
+being reversed like `WetnessScale`'s table row above is. The life sweep (`seam_migration.md`
+→ "## Roadmap — one pipeline") named the defect: *"the shared-MI switch is blocked until decal
+fog and wetness have a home that is not a per-map material instance."* R5.4's plan is one shared
+`MI_<unit>` per corpus material, resolved by `vtmb:material:*` and used identically on every map
+that places it — a home that bakes a map-specific value onto that shared instance (a per-map
+`MaterialInstanceConstant` package, which is exactly what the legacy `M_World_*`/`M_Decal` lane
+still does via `bake_map.py`'s `SC.is_map_scoped_material(decal=..., wetness_driven=...)`) would
+keep every decal- or wetness-bearing material map-scoped forever, defeating the switch for exactly
+the surfaces that need it most (**19** `globalwetness` units, **38** `decalmodulate` units).
+
+**Two candidates were on the table:**
+
+1. **MID-at-load for decals only** — an anonymous `UMaterialInstanceDynamic`, parented to the
+   shared `MI_<unit>`, created once per decal placement and never itself a tracked asset.
+2. **A per-map `MaterialInstanceConstant` child of the V2 master**, carrying only fog/wetness
+   parameters sourced from the R4.4 `UElysiumMapEnvironment` asset — i.e., continuing the legacy
+   lane's own pattern, ported onto the V2 masters.
+
+**Ruling (owner call, R5.3): candidate 1 for fog, and — because wetness turns out not to need
+either candidate — a third, lower-cost mechanism for wetness that neither the sweep nor the two
+candidates named, but which the legacy `make_world_materials.py` graph already proves live:**
+
+- **Decal fog is MID-at-load.** A `UDecalComponent` is a `USceneComponent`, not a
+  `UPrimitiveComponent` (`ElysiumFog.h`'s own "WHY IT IS PER-PRIMITIVE" note): it carries no
+  Custom Primitive Data, so the world/sky/prop mesh mechanism (CPD, already shared-MI-safe because
+  the value rides the *primitive*, never the material) does not reach it. `M_V2_Decal` now
+  declares three named instance parameters (`FogColor`/`FogStart`/`FogInvRange`,
+  `mat_fog.fog_from_params`, mirroring the already-shipped legacy `M_Decal` graph exactly) that
+  default neutral (unfogged) so an untouched instance renders exactly as before. `ElysiumFog::
+  ApplyToDecalMID` (`Source/ElysiumUE/Public/ElysiumFog.h`) is the one function both a future
+  runtime decal-spawn consumer and the placement lane's bake-time construction call, reusing the
+  exact `ElysiumFog::Pack` math the CPD path already uses. Decals are placed once each (never
+  batched across maps into one shared mesh instance — `bake_map.py`'s `_place_decals` places one
+  `ADecalActor` per `.decals` line), so an anonymous per-placement MID costs nothing the map does
+  not already pay for every decal actor it places, and it is never a tracked, prunable, per-map
+  `.uasset`. No corpus unit authors a fog VMT key on a `decalmodulate` shader (only two non-decal
+  families, `water/cheap_water` and `water/invisible_water`, do — both already provenance-only
+  divergences above), so the stage never populates these three parameters; only the placement lane
+  does, from the map's own fog, never from a per-map material package.
+- **Wetness needs no per-map or per-placement instance at all**, because the "live, per tick"
+  half of the term is genuinely global, not per-map: `MPC_ElysiumEnvironment`
+  (`make_world_materials.py::make_environment_collection`, `AElysiumMapActor::ApplyWeatherTuning`
+  its sole writer) already carries `GlobalWetness`/`WetnessOutputScale` as one world-scoped live
+  value, read into every legacy `M_World_*` graph today via a `CollectionParameter` node — the
+  exact "global settings page, never a per-instance literal" shape this doc's "Knob contract"
+  already mandates for every other live system value. The only thing missing on the V2 side was
+  the *static* half — `WetnessScale`, the per-unit multiplier `globalwetness`'s own `scale`
+  argument authors — which is an ordinary per-instance scalar like `Color` or `EnvMapTint`, no
+  different from every other value this stage bakes once at import. `M_V2_Lit`/
+  `M_V2_LitTranslucent` now declare `WetnessScale` and its `WetnessDriven` gate as real scalars
+  (`ElysiumSurfaceParamsLit::Scalars`) and read `GlobalWetness`/`WetnessOutputScale` off
+  `MPC_ElysiumEnvironment` through their own `CollectionParameter` node (`_wetness_response` in
+  `make_v2_materials.py`, ported verbatim from the legacy graph's own term), raising the
+  reflection mask exactly like `M_World_*`'s `env_wet` term does. `WetnessDriven` defaults 0, so
+  `lerp(1, wet_amount, 0) == 1` — a surface the stage never marked wetness-driven is untouched.
+  The stage writes both only for units whose family resolves to `M_V2_Lit`/`M_V2_LitTranslucent`
+  (`_LIT_FAMILIES`) — the only masters with a wetness lane; every other master still carries
+  `wetnessScale` in provenance only, per the table above.
+
+**Landed for the three-map corpus (R5.3, 2026-09-01):** the master-graph and stage-contract halves
+above are in `make_v2_materials.py`/`pipeline/src/elysium_pipeline/importers/materials.py`/
+`ElysiumSurfaceParams.h`/`ElysiumFog.h`, pinned by the existing offline parity tests
+(`test_param_tables_are_pinned_against_the_stages_exposed_params`,
+`test_lit_master_exposed_params_pinned_against_cpp_header`) plus a new one for decal
+(`test_decal_master_exposed_params_pinned_against_cpp_header`, already existed and now covers the
+three fog names too) and `Elysium.Substrate.FogDecalMID`. **Not landed here, and explicitly R5.4's
+job**: the decal placement lane actually calling `ElysiumFog::ApplyToDecalMID` (today's
+`_place_decals` still binds the legacy per-map `M_Decal` MIC — R5.4 is what stops per-map material
+packages), and any live corpus re-import/re-bake of the three maps, which needs the exclusive
+editor commandlet lane R5.4 already owns.
 
 #### Texture slots, roles and the `_linear` twin
 

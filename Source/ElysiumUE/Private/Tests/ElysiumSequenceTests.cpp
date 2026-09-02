@@ -34,6 +34,9 @@
 #include "ElysiumStub.h"
 #include "ElysiumWeatherState.h"
 #include "ElysiumFog.h"
+#include "ElysiumSurfaceParams.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
@@ -262,6 +265,56 @@ bool FElysiumFogPackTest::RunTest(const FString&)
 		TestEqual(TEXT("an unfogged set packs the same zero an unwritten slot reads"),
 			Data[ElysiumFog::SlotInvRange], 0.f);
 	}
+
+	return true;
+}
+
+// =====================================================================================
+// The decal axis of R5.3 (seam_map_material.md -> "Decal fog and wetness homes"): a
+// UDecalComponent carries no Custom Primitive Data, so the same fog values the CPD path packs
+// for a mesh primitive are applied to an MID's three named instance parameters instead. This
+// checks ApplyToDecalMID reproduces Pack's own numbers on those parameters, content-free (the
+// engine's own default material needs no project asset).
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFogDecalMIDTest, "Elysium.Substrate.FogDecalMID", GElysiumTestFlags)
+bool FElysiumFogDecalMIDTest::RunTest(const FString&)
+{
+	UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(
+		UMaterial::GetDefaultMaterial(MD_Surface), GetTransientPackage());
+	if (!TestNotNull(TEXT("a transient MID off the engine default material"), Mid))
+	{
+		return false;
+	}
+
+	const FLinearColor Color(0.25f, 0.5f, 0.75f, 1.f);
+	ElysiumFog::ApplyToDecalMID(Mid, /*bEnabled=*/true, Color, 1270.f, 12700.f);
+
+	FLinearColor GotColor = FLinearColor::Black;
+	TestTrue(TEXT("FogColor lands on the instance"),
+		Mid->GetVectorParameterValue(ElysiumSurfaceParamsDecal::Vectors::FogColor, GotColor));
+	for (int32 C = 0; C < 3; ++C)
+	{
+		TestTrue(FString::Printf(TEXT("FogColor channel %d matches Pack's own decode"), C),
+			FMath::IsNearlyEqual(GotColor.Component(C), FMath::Pow(Color.Component(C), 2.2f), 1e-6f));
+	}
+
+	float GotStart = 0.f, GotInvRange = 0.f;
+	TestTrue(TEXT("FogStart lands on the instance"),
+		Mid->GetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogStart, GotStart));
+	TestTrue(TEXT("FogInvRange lands on the instance"),
+		Mid->GetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogInvRange, GotInvRange));
+	TestEqual(TEXT("start passes through"), GotStart, 1270.f);
+	TestTrue(TEXT("the inverse range spans start->end"),
+		FMath::IsNearlyEqual(GotInvRange, 1.f / (12700.f - 1270.f), 1e-9f));
+
+	// A disabled fog set must land the same zero an unwritten CPD slot reads, so a decal with no
+	// map fog is untouched -- same "neutral by construction" property ApplyToDecalMID reuses from
+	// Pack, now checked on the instance API rather than the packed float array.
+	ElysiumFog::ApplyToDecalMID(Mid, /*bEnabled=*/false, Color, 1270.f, 12700.f);
+	Mid->GetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogInvRange, GotInvRange);
+	TestEqual(TEXT("a disabled fog set zeroes the inverse range on the instance too"),
+		GotInvRange, 0.f);
 
 	return true;
 }
