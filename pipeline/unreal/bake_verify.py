@@ -551,6 +551,113 @@ def verify_details(actors, map_name):
     return errors
 
 
+SPRITE_TAG = "elysium.sprite"
+SPRITE_ENTITY_TAG_PREFIX = "elysium.ent="
+
+
+def _staged_sprites(map_name):
+    """The staged `sprites` table the V2 bake placed billboards from (manifest v6), or None when
+    the pair is absent."""
+    path = os.path.join(os.fspath(work_root()), "import", "map_geometry", map_name, "manifest.json")
+    if not os.path.isfile(path):
+        return None
+    with open(path, "r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    return manifest.get("sprites") or []
+
+
+def verify_sprites(actors, map_name):
+    """R6.1 (`seam_map_map.md` -> "Sprites (R6.1)"), `MapsOnV2Models` maps only: every
+    `elysium.sprite` actor matched to its staged row by the entity index tag -- size, colour,
+    mode, orientation, the spawn-hidden state, and the material child's parent and blend -- no
+    row missing and no actor extra."""
+    errors = []
+    if not map_transport.is_map_on_v2_models(map_name):
+        return errors
+    rows = _staged_sprites(map_name)
+    if rows is None:
+        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count "
+                      "sprites against (run: uv run elysium export map %s)" % (map_name, map_name))
+        return errors
+    expected = {int(row["index"]): row for row in rows}
+    found = {}
+    glow = 0
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if SPRITE_TAG not in tags:
+            continue
+        index = next((int(tag[len(SPRITE_ENTITY_TAG_PREFIX):]) for tag in tags
+                      if tag.startswith(SPRITE_ENTITY_TAG_PREFIX)), -1)
+        if index in found:
+            errors.append("%s: two sprite actors carry entity index %d" % (map_name, index))
+        found[index] = actor
+    matched = 0
+    for index, row in sorted(expected.items()):
+        actor = found.get(index)
+        if actor is None:
+            errors.append("%s: no sprite actor for env_sprite %d (%s)"
+                          % (map_name, index, row["material"]))
+            continue
+        component = actor.get_editor_property("sprite")
+        if component is None:
+            errors.append("%s: sprite actor %s has no sprite component"
+                          % (map_name, actor.get_actor_label()))
+            continue
+        problems = []
+        size = component.get_editor_property("size_inches")
+        want = (float(row["scale"]) * int(row["width"]), float(row["scale"]) * int(row["height"]))
+        if abs(float(size.x) - want[0]) > 1e-3 or abs(float(size.y) - want[1]) > 1e-3:
+            problems.append("size %.2fx%.2f, staged %.2fx%.2f" % (size.x, size.y, want[0], want[1]))
+        color = component.get_editor_property("color")
+        got_color = (int(color.r), int(color.g), int(color.b), int(color.a))
+        want_color = tuple(int(v) for v in row["color"]) + (int(row["alpha"]),)
+        if got_color != want_color:
+            problems.append("colour %s, staged %s" % (got_color, want_color))
+        if int(component.get_editor_property("render_mode")) != int(row["mode"]):
+            problems.append("mode %d, staged %d" % (
+                int(component.get_editor_property("render_mode")), int(row["mode"])))
+        if bool(component.get_editor_property("upright")) != bool(row["upright"]):
+            problems.append("upright %s, staged %s" % (
+                bool(component.get_editor_property("upright")), bool(row["upright"])))
+        if bool(actor.get_editor_property("hidden")) != bool(row["hidden"]):
+            problems.append("hidden %s, staged %s" % (
+                bool(actor.get_editor_property("hidden")), bool(row["hidden"])))
+        if int(actor.get_editor_property("entity_index")) != index:
+            problems.append("entity_index %d, tag %d" % (
+                int(actor.get_editor_property("entity_index")), index))
+        material = component.get_editor_property("material")
+        if material is None:
+            problems.append("no material")
+        else:
+            parent = material.get_editor_property("parent")
+            parent_path = parent.get_path_name().split(".", 1)[0] if parent else ""
+            if parent_path != row["asset"]:
+                problems.append("material parent %s, staged %s" % (parent_path, row["asset"]))
+            overrides = material.get_editor_property("base_property_overrides")
+            blend = overrides.get_editor_property("blend_mode")
+            want_blend = getattr(unreal.BlendMode, "BLEND_" + row["blend"].upper(), None)
+            if not overrides.get_editor_property("override_blend_mode") or blend != want_blend:
+                problems.append("blend %s (override %s), staged %s" % (
+                    blend, bool(overrides.get_editor_property("override_blend_mode")), row["blend"]))
+        if problems:
+            errors.append("%s: env_sprite %d (%s): %s" % (
+                map_name, index, row["material"], "; ".join(problems)))
+        else:
+            matched += 1
+            glow += 1 if row["glow"] else 0
+    for index in sorted(set(found) - set(expected)):
+        errors.append("%s: sprite actor %s carries entity index %d, which stages no env_sprite"
+                      % (map_name, found[index].get_actor_label(), index))
+    unreal.log("[verify] sprites: %d actors, %d staged rows, %d matched (%d glow)" % (
+        len(found), len(expected), matched, glow))
+    for message in errors[:8]:
+        unreal.log_error("[verify] " + message)
+    if len(errors) > 8:
+        unreal.log_error("[verify] ... and %d more sprite finding(s) on %s"
+                         % (len(errors) - 8, map_name))
+    return errors
+
+
 def _atof(text):
     """C `atof`: the longest numeric prefix, 0.0 when there is none (the producer's own reader;
     `UE_map_sidecars` needs numpy and cannot be imported here)."""
@@ -1040,6 +1147,7 @@ def verify_map(map_name):
         errors.extend(verify_lights(actors, world_dir, map_name))
         errors.extend(verify_lights_baked(actors, world_dir, map_name))
         errors.extend(verify_details(actors, map_name))
+        errors.extend(verify_sprites(actors, map_name))
         errors.extend(verify_captures(
             actors, unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()))
     else:

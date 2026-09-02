@@ -1376,6 +1376,14 @@ struct FElysiumRecordingServices final
 	{
 		Record(TEXT("DestroyDynamicLight"));
 	}
+	// R6.1: the sprite draw switch an `env_sprite` writes, by entity index, kept so a test reads
+	// the last state published for each.
+	TMap<int32, bool> BakedSpriteVisible;
+	virtual void SetBakedSpriteVisible(int32 EntityIndex, bool bVisible) override
+	{
+		Record(FString::Printf(TEXT("SetBakedSpriteVisible %d %d"), EntityIndex, bVisible ? 1 : 0));
+		BakedSpriteVisible.Add(EntityIndex, bVisible);
+	}
 	// 13.1 — the stealth eligibility predicate's one world term. Default false is the interface's
 	// stated headless answer (the non-stealth fallback), so a case that does not care about stealth
 	// keeps reading exactly the surface it did before.

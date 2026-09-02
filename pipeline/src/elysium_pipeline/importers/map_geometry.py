@@ -52,6 +52,7 @@ import numpy as np
 
 from elysium_pipeline import paths, shared_corpus
 from elysium_pipeline.exporters import UE_map_sidecars as sidecars
+from elysium_pipeline.formats.bsp import source_to_unreal
 
 #: The staged pair the editor half reads, below `$ELYSIUM_WORK_ROOT/import/map_geometry/<map>/`.
 FAMILY = "map_geometry"
@@ -67,7 +68,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 5 (R6.3): the manifest carries `details`, the `dprp` game lump as `models[]` (the model
 #: dictionary resolved to R1 stems) and `records[]` (one row per detail record, lump order), the
 #: instanced placements (`docs/architecture/seam_map_map.md` -> "Detail props (R6.3)").
-MANIFEST_VERSION = 5
+#: 6 (R6.1): the manifest carries `sprites`, one row per `env_sprite` in lump order, resolved to
+#: the imported `MI_`, the texture size and the blend the entity's `rendermode` selects, the
+#: billboard placements (`docs/architecture/seam_map_map.md` -> "Sprites (R6.1)").
+MANIFEST_VERSION = 6
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -120,6 +124,22 @@ GLTF_TO_UNREAL = 100.0
 #: `DStaticPropV4.flags` bit 0: this placement fades out with distance (`fadeMinDist`/`fadeMaxDist`
 #: are Source inches; every other bit is a lighting/flashlight hint this lane does not consume).
 STATIC_PROP_FLAG_FADES = 0x1
+
+#: R6.1 (`seam_map_map.md` -> "Sprites (R6.1)"): the blend state an `env_sprite`'s `rendermode`
+#: selects, the `$spriterendermode` row table of `seam_map_material.md` -> `M_V2_Sprite` (VtMB's
+#: client writes the entity's mode into that material var at draw). Mode 6 (`kRenderEnvironmental`)
+#: has no program and is a named failure; every other value is a mode the table does not name.
+SPRITE_BLEND_BY_MODE = {
+    0: "Opaque", 1: "Translucent", 2: "Translucent", 3: "Translucent", 4: "Translucent",
+    5: "Additive", 7: "Additive", 8: "Additive", 9: "Translucent",
+}
+#: `kRenderGlow` / `kRenderWorldGlow`: the two modes `C_Sprite::DrawModel` routes through Source's
+#: glow rule (screen-constant size, `19000 / dist^2`, the pixel-visibility fade).
+SPRITE_GLOW_MODES = frozenset({3, 9})
+#: `CSprite::Spawn` (vampire.dll 1042e550) clamps `scale` to this range (`DAT_10516cec`).
+SPRITE_MAX_SCALE = 8.0
+#: `env_sprite` spawnflag 1, "Start On": a named sprite without it spawns undrawn (`EF_NODRAW`).
+SF_SPRITE_START_ON = 0x1
 
 #: A `DISP_VERT` alpha is published as the lump's own 0..255 byte value; the bake's blend channel
 #: (vertex `COLOR.r`, the `WorldVertexTransition` tex1/tex2 mix) is 0..1, exactly as the legacy
@@ -260,6 +280,31 @@ class DetailPlacement:
 
 
 @dataclass(frozen=True)
+class SpriteRecord:
+    """One `env_sprite` block of the entity lump, read for the bake (R6.1, `seam_map_map.md` ->
+    "Sprites (R6.1)") before its material is resolved.
+
+    `index` is the block's lump ordinal -- the entity's `FElysiumEntityHandle::Index`, the tag the
+    baked actor carries and the key the leaf's visibility writes land on. `material` is the
+    `model` key folded to its install key (`shared_corpus.material_key`); `scale` is already
+    clamped to `0..SPRITE_MAX_SCALE` with 0 (or absent) read as 1, `CSprite::Spawn`'s own reading;
+    `hidden` is `CSprite::Spawn`'s rule over `start_hidden`, the name and spawnflag 1.
+    """
+
+    index: int
+    name: str
+    material: str
+    position: tuple[float, float, float]
+    scale: float
+    mode: int
+    color: tuple[int, int, int]
+    alpha: int
+    fx: int
+    hidden: bool
+    sky: bool
+
+
+@dataclass(frozen=True)
 class CubemapSample:
     """One `cubemaps[]` row (lump 42), resolved to where the V2 bake stands a reflection capture
     (R5.5). `origin` is the row's own Source-inch integer triple -- the probe file name's, kept for
@@ -331,6 +376,9 @@ class MapGeometry:
     placements: list[Placement]
     #: R6.3: every `dprp` record in lump order, resolved to its R1 stem (`DetailPlacement`).
     details: list[DetailPlacement]
+    #: R6.1: every `env_sprite` block in lump order (`SpriteRecord`), unresolved -- `stage_map`
+    #: joins each one to the material and texture lanes' sidecars (`resolve_sprite_table`).
+    sprites: list[SpriteRecord]
     cubemaps: list[CubemapSample]
     #: R5.6: `UE_map_sidecars.light_rows` verbatim -- one dict per lump-15 record, the same rows
     #: `<map>.lights` is formatted from, so the staged table and the sidecar agree by construction.
@@ -639,6 +687,57 @@ def _detail_placements(units: sidecars.MapUnits, sky: sidecars.SkyScope) -> list
     return out
 
 
+def _number(keys: dict[str, str], name: str, default: float) -> float:
+    """One keyvalue as C `atof` reads it (`UE_map_sidecars.atof`), the default when absent."""
+
+    return sidecars.atof(keys[name]) if name in keys else default
+
+
+def _sprite_records(
+    blocks: Sequence[Sequence[tuple[str, str]]], sky: sidecars.SkyScope,
+) -> list[SpriteRecord]:
+    """Every `env_sprite` block of the entity lump, in lump order, as a `SpriteRecord` (R6.1).
+
+    `blocks` is the producer join's own `pair_blocks` (`prepare_join`), so a record's `index` is
+    the same ordinal `build_entities` writes to `.ents` and the runtime hands the leaf. Keys fold
+    case-insensitively, last spelling wins -- Source's `KeyValue` is called per pair in order.
+    """
+
+    out: list[SpriteRecord] = []
+    for index, pairs in enumerate(blocks):
+        keys = {key.lower(): value for key, value in pairs}
+        if keys.get("classname", "").lower() != "env_sprite":
+            continue
+        tokens = keys.get("origin", "").split()
+        origin_src = [sidecars.atof(t) for t in tokens] if len(tokens) == 3 else [0.0, 0.0, 0.0]
+        scale = _number(keys, "scale", 1.0)
+        scale = min(max(scale, 0.0), SPRITE_MAX_SCALE)
+        if scale == 0.0:
+            scale = 1.0
+        rgb = keys.get("rendercolor", "").split()
+        color = tuple(
+            max(0, min(255, int(sidecars.atof(rgb[i])))) if i < len(rgb) else 255 for i in range(3))
+        alpha = max(0, min(255, int(_number(keys, "renderamt", 255.0))))
+        name = keys.get("targetname", "")
+        spawnflags = int(_number(keys, "spawnflags", 0.0))
+        hidden = keys.get("starthidden", "0") == "1" or (
+            bool(name) and not (spawnflags & SF_SPRITE_START_ON))
+        out.append(SpriteRecord(
+            index=index,
+            name=name,
+            material=shared_corpus.material_key(keys.get("model", "")),
+            position=tuple(float(v) for v in source_to_unreal(*origin_src)),
+            scale=scale,
+            mode=int(_number(keys, "rendermode", 0.0)),
+            color=color,  # type: ignore[arg-type]
+            alpha=alpha,
+            fx=int(_number(keys, "renderfx", 0.0)),
+            hidden=hidden,
+            sky=sky.is_sky(origin_src),
+        ))
+    return out
+
+
 def _cubemaps(units: sidecars.MapUnits, sky: sidecars.SkyScope) -> list[CubemapSample]:
     """Every `cubemaps[]` sample, in lump order, as a capture placement (R5.5).
 
@@ -702,6 +801,7 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
         brushes=brushes,
         placements=_placements(units, join.sky),
         details=_detail_placements(units, join.sky),
+        sprites=_sprite_records(join.pair_blocks, join.sky),
         cubemaps=_cubemaps(units, join.sky),
         lights=sidecars.light_rows(units, join.sky),
         sky_scale=float(join.sky.scale),
@@ -717,6 +817,10 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
             "cubemaps": len(units.root.get("cubemaps") or []),
             "worldLights": len(units.lighting.get("worldLights") or []),
             "detailProps": len((units.root.get("detailProps") or {}).get("records") or []),
+            "sprites": sum(
+                1 for pairs in join.pair_blocks
+                if dict((k.lower(), v) for k, v in pairs).get("classname", "").lower()
+                == "env_sprite"),
         },
     )
 
@@ -761,6 +865,109 @@ def sidecar_reader(staging: Path):
         return document
 
     return read
+
+
+def texture_sidecar_reader(staging: Path):
+    """`texture key -> provenance dict | None` over the texture lane's staging tree
+    (`importers.textures.staging_root`), cached per key -- the sprite rows read a texture's
+    `width`/`height`/`assetPath` here (R6.1)."""
+
+    from elysium_pipeline.importers import textures as texture_lane
+
+    cache: dict[str, dict[str, Any] | None] = {}
+
+    def read(texture_key: str) -> dict[str, Any] | None:
+        if texture_key in cache:
+            return cache[texture_key]
+        path = staging / (texture_key + texture_lane.PROVENANCE_SUFFIX)
+        document = None
+        if path.is_file():
+            with open(path, "r", encoding="utf-8") as handle:
+                document = json.load(handle)
+        cache[texture_key] = document
+        return document
+
+    return read
+
+
+def sprite_row(record: SpriteRecord, material: dict[str, Any], texture: dict[str, Any],
+               asset: str) -> dict[str, Any]:
+    """One staged `sprites[]` row (R6.1): the record joined to its material sidecar (the
+    `$spriteorientation` parameter row) and its base texture's sidecar (`width`/`height`), with
+    the blend the mode selects. Pure; `resolve_sprite_table` does the lookups and the failures."""
+
+    if record.mode not in SPRITE_BLEND_BY_MODE:
+        raise MapGeometryError(
+            f"env_sprite {record.index} ({record.material}) has rendermode {record.mode}, which "
+            f"names no sprite program")
+    upright = False
+    for row in material.get("parameters") or []:
+        if str(row.get("key") or "").lower() == "$spriteorientation":
+            upright = str(row.get("value") or "").strip().lower() == "parallel_upright"
+    return {
+        "index": record.index,
+        "name": record.name,
+        "material": record.material,
+        "asset": asset,
+        "texture": str(texture.get("assetPath") or ""),
+        "width": int(texture.get("width") or 0),
+        "height": int(texture.get("height") or 0),
+        "position": list(record.position),
+        "scale": record.scale,
+        "mode": record.mode,
+        "blend": SPRITE_BLEND_BY_MODE[record.mode],
+        "glow": record.mode in SPRITE_GLOW_MODES,
+        "color": list(record.color),
+        "alpha": record.alpha,
+        "fx": record.fx,
+        "upright": upright,
+        "hidden": record.hidden,
+        "sky": record.sky,
+    }
+
+
+def resolve_sprite_table(
+    records: Sequence[SpriteRecord], read_sidecar, read_texture, *, map_name: str = "",
+) -> list[dict[str, Any]]:
+    """Every `SpriteRecord` as its staged row (R6.1), through the material lane's provenance
+    sidecar (the imported `MI_`'s path by `asset_path_for`, the VMT's `$spriteorientation`) and
+    the texture lane's sidecar for the `BaseTexture` binding (its size). A sprite whose material
+    or texture the lanes have not staged fails the whole map with every missing key named -- the
+    owner's ruling draws all of them, so a silently empty bulb is exactly the defect."""
+
+    from elysium_pipeline.importers import materials as material_lane
+
+    rows: list[dict[str, Any]] = []
+    missing_materials: list[str] = []
+    missing_textures: list[str] = []
+    for record in records:
+        document = read_sidecar(record.material)
+        if document is None:
+            missing_materials.append(record.material)
+            continue
+        texture_key = ""
+        for binding in document.get("textureBindings") or []:
+            if binding.get("parameter") == "BaseTexture":
+                texture_key = str(binding.get("asset") or "")
+        prefix = "vtmb:texture:"
+        texture = read_texture(texture_key[len(prefix):]) if texture_key.startswith(prefix) else None
+        if not texture or not int(texture.get("width") or 0) or not int(texture.get("height") or 0):
+            missing_textures.append(f"{record.material} -> {texture_key or 'no BaseTexture'}")
+            continue
+        rows.append(sprite_row(
+            record, document, texture, material_lane.asset_path_for(record.material)))
+    if missing_materials or missing_textures:
+        parts = []
+        if missing_materials:
+            parts.append(f"{len(missing_materials)} sprite material(s) not staged by the material "
+                         f"lane (run: uv run elysium import materials): "
+                         + ", ".join(sorted(set(missing_materials))[:8]))
+        if missing_textures:
+            parts.append(f"{len(missing_textures)} sprite texture(s) not staged by the texture "
+                         f"lane (run: uv run elysium import textures): "
+                         + ", ".join(sorted(set(missing_textures))[:8]))
+        raise MapGeometryError(f"{map_name or 'map'}: " + "; ".join(parts))
+    return rows
 
 
 def resolve_material_table(
@@ -1055,7 +1262,11 @@ def stage_map(map_name: str, root: Path | None = None,
     R6.3: and `details` -- the `dprp` dictionary as `models[]` and every record as one compact
     `records[]` row, `[index, model, px, py, pz, qx, qy, qz, qw, swayAmount, sky]`, the instanced
     placements (`DETAIL_RECORD_FIELDS`).
+    R6.1: and `sprites` -- every `env_sprite` block as one row, the billboard placements
+    (`resolve_sprite_table`).
     """
+
+    from elysium_pipeline.importers import textures as texture_lane
 
     geometry = read_geometry(map_name, root)
     staging = material_staging_root(work_root)
@@ -1064,6 +1275,11 @@ def stage_map(map_name: str, root: Path | None = None,
             f"no material staging tree at {staging} (run: uv run elysium import materials)")
     read_sidecar = sidecar_reader(staging)
     materials = resolve_material_table(geometry.material_units(), read_sidecar, map_name=map_name)
+    texture_staging = texture_lane.staging_root(
+        Path(work_root) if work_root is not None else paths.work_root())
+    sprites = resolve_sprite_table(
+        geometry.sprites, read_sidecar, texture_sidecar_reader(texture_staging),
+        map_name=map_name)
     report = material_report(map_name, materials, read_sidecar)
     buffer = bytearray()
     scenes = {
@@ -1114,6 +1330,7 @@ def stage_map(map_name: str, root: Path | None = None,
             "models": geometry.detail_models(),
             "records": [detail_record_row(detail) for detail in geometry.details],
         },
+        "sprites": sprites,
         "counts": dict(geometry.counts),
     }
 

@@ -530,6 +530,14 @@ void AElysiumMapActor::DestroyDynamicLight(ULightComponent* Light)
 	Light->DestroyComponent();
 }
 
+void AElysiumMapActor::SetBakedSpriteVisible(int32 EntityIndex, bool bVisible)
+{
+	if (Visuals)
+	{
+		Visuals->SetSpriteVisible(EntityIndex, bVisible);
+	}
+}
+
 UStaticMeshComponent* AElysiumMapActor::BuildBrushVisual(const FString& Stem,
 	USceneComponent* ParentBody, float UniformScale, bool bSky)
 {

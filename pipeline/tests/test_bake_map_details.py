@@ -110,7 +110,7 @@ def test_a_miniature_detail_takes_the_sky_transform_in_its_own_component(module)
 def test_the_staged_row_layout_round_trips_between_the_two_halves(module) -> None:
     # The offline stage writes positionally (`DETAIL_RECORD_FIELDS`) and the editor half reads
     # positionally (`_DetailPlacement`); the two must agree column for column, and on the version.
-    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 5
+    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 6
     detail = MG.DetailPlacement(
         index=7, model=2, stem="weedc", model_path="models/scenery/plants/weedc/weedc.mdl",
         position=(1.5, -2.5, 3.5), rotation=(0.1, 0.2, 0.3, 0.9), sway=42, sky=True)

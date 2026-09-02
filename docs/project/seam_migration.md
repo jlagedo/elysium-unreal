@@ -68,7 +68,7 @@ runtime (the set `Content/ElysiumCorpus` must carry until that slice migrates); 
 | `<map>.ents`, `.lights`, `.env`, `.sky` | UE_bsp_to_scene | **both** |
 | `<map>.hulls`, `.dispcol`, `.spawn`, `.ropes` | UE_bsp_to_scene | runtime |
 | `<map>.props`, `.decals`, `.water`, `.materials.json`, `.weather.json`, `.particles.json`, `tex/cube/*` | UE_bsp_to_scene | bake |
-| `<map>.sprites` | UE_bsp_to_scene | none |
+| `<map>.sprites` | UE_bsp_to_scene | **retired** (R6.1: the V2 bake places the sprites off the staged `sprites[]` table) |
 | `shared/tex/*` (+ `tex_hi/`), `npc/tex/*` | UE_extract_corpus, npc_export | **both** (runtime: sky cube faces, rope/cable materials via `FElysiumTextureCache`, eye irises) |
 | `shared/props/*`, `manifest.json`, `materials.json` | UE_extract_corpus | bake |
 | `items/ground_models.json` | UE_extract_items | runtime |
@@ -2149,6 +2149,86 @@ detail models outside the working corpus are staged like any other model when th
 `MapsOnV2Models`, and every one of the 41 is `scenery/`, so the master check has no known
 failing case.
 
+**R6.1 — sprites on the V2 Sprite master (2026-09-02).** Every `env_sprite` is drawn, coronas
+included (owner, 2026-09-02): the offline stage reads each `env_sprite` block of the producer join
+in lump order (`map_geometry._sprite_records`, manifest **v6**), resolves it through the material
+lane's provenance sidecar (the imported `MI_`, the VMT's `$spriteorientation`) and the texture
+lane's (the base texture's size) into one `sprites[]` row (`resolve_sprite_table`), and the editor
+half (`bake_map_v2._place_sprites`) spawns **one `AElysiumSpriteActor` per row**: the `MI_` re-parented
+once per `(MI_, blend)` through `/ElysiumBaked/Sprites/MI_Sprite_<material>_<blend>` (the blend
+the entity's `rendermode` selects through the `$spriterendermode` row table, `UseVertexColor` and
+`UseVertexAlpha` on), `SizeInches = (clamp(scale, 0, 8) or 1) × texture`, `rendercolor`/`renderamt`
+/`renderfx`, `parallel_upright`, `CSprite::Spawn`'s hidden rule (`start_hidden`, or named without
+spawnflag 1), the miniature transform for a sky row, and the tags `elysium.sprite` +
+`elysium.ent=<lump ordinal>`. The runtime half is the task's one piece of rendering code:
+`UElysiumSpriteComponent` / `FElysiumSpriteSceneProxy` draws one camera-facing (or yaw-only) quad
+per view with Source's glow rule read off `client.dll`'s `GlowBlend` (`100c24a0`) — a rendermode-3
+corona's width is `size × dist / 200` (screen-constant), its brightness `clamp(19000 / dist², 0.05,
+1)`, and every sprite's blend is multiplied by the **visible fraction of a per-sprite GPU occlusion
+query** — a `4 × 4` grid of sub-primitive boxes tiling a square `3/128` of the view distance at the
+origin, answered by the renderer one frame later and smoothed at `r_glowfadein` 0.2 s up /
+`r_glowfadeout` 0.1 s down. All seven numbers are `UElysiumSpriteSettings` fields (Project Settings →
+Elysium → Sprites) shipped at VtMB's values. `FElysiumEnvSprite` restates `CSprite` (spawn on when
+unnamed or Start On; `HideSprite`/`ShowSprite`/`TurnOn`/`TurnOff`/`ToggleSprite`; the base chain's
+`ScriptHide`/`ScriptUnhide`/`Kill`) and publishes `bOn && !IsInert()` through the new
+`IElysiumEmbodiment::SetBakedSpriteVisible(EntityIndex, bVisible)` → `UElysiumMapVisuals::
+SetSpriteVisible`, which finds the actor by its entity tag. `<map>.sprites` and
+`UE_bsp_to_scene.write_sprites` are gone. Ruling in `seam_map_map.md` → "Sprites (R6.1)".
+
+**Two corpus facts the bullet did not carry, read off the binaries.** `renderfx` 14
+(`kRenderFxNoDissipation`) skips the whole distance block of `GlowBlend` (`100c30e9`): no
+`19000 / dist²` and **no screen-constant scaling** — the corona stays at `scale × texture` and only
+the visibility fade applies; **207 of sm_hub_1's 309 rows and 55 of sp_tutorial_1's 96 carry it**,
+so most corpus coronas are fixed-size halos. And `kRenderWorldGlow` (9) keeps its world size too
+(`100c3197`); only mode 3 scales. Both are in the rule and its tests. The census: sm_hub_1's 309
+`env_sprite` rows are **113 mode 3 + 154 mode 5 + 42 mode 1** (the bullet's "309 coronas" was the
+row count), sp_tutorial_1 96 (87 + 9), sm_pawnshop_1 74 (28 + 46).
+
+**Measured on the scoped rebake, `uv run elysium export map sp_tutorial_1 sm_pawnshop_1
+sm_hub_1`** (all three levels re-authored; `REBAKE_EXIT=0`): `sprites: 96 placed (87 glow, 0 hidden
+at spawn, 0 in the 3D skybox); 4 material child(ren)`, `74 placed (28 glow, 6 hidden at spawn, 40 in
+the 3D skybox); 5 material child(ren)`, `309 placed (113 glow, 44 hidden at spawn, 54 in the 3D
+skybox); 9 material child(ren)`; levels saved in 18.3 / 5.7 / 12.2 s. `uv run elysium verify maps
+…`: `sprites: 96 actors, 96 staged rows, 96 matched (87 glow)`, `74 / 74 / 74 (28 glow)`, `309 /
+309 / 309 (113 glow)` — the first verify caught the bake writing `unreal.Color` positionally
+(FColor's BGRA layout swapped red and blue on every tinted corona), fixed with named channels and a
+`sprite_actor_shape` recipe term; **77 findings, the same 77 pre-existing non-light ones, 0 new**
+(still exit 5, still R5.6's follow-up). Boot witness, `uv run elysium debug shots <map> --no-open`,
+one at a time, all exit 0: `baked 'sp_tutorial_1': 1544 actors (110 world, 32 sky, 775 props, 123
+decals), 395 lights, 2371 hulls, 6031 detail instances over 6 models, 96 sprites (87 glow)`,
+`'sm_pawnshop_1': 513 actors (…), 161 lights, 1376 hulls, 0 detail instances over 0 models, 74
+sprites (28 glow)`, `'sm_hub_1': 2463 actors (194 world, 53 sky, 955 props, 219 decals), 687 lights,
+3842 hulls, 528 detail instances over 3 models, 309 sprites (113 glow)`; material audit **0
+unbound** on all three (470/1197, 179/322, 1537 components); **6/6 + 4/4 + 4/4** vantages captured.
+No screenshot was read; per R5.1 the harness attributes nothing to this task.
+
+Tests: `uv run elysium build`: Succeeded. `uv run elysium test Substrate`: **447 of 447 in 6.6 s**
+(446 − the retired `EnvSprite` no-op leaf of `ElysiumWorldEffectsTests.cpp`, whose premise this
+task reverses, + 2), the two new leaves `Elysium.Substrate.EnvSprite` (the spawn rule for unnamed / named / Start On /
+`start_hidden`, the five inputs, `ScriptHide`/`ScriptUnhide` restoring the leaf's own state, `Kill`,
+every write observed on the recording double by entity index) and `Elysium.Substrate.SpriteGlow`
+(the seven page defaults and `FromSettings`, the size rule for modes 3 / 3+fx14 / 9 / 5, the
+brightness clamp and its NoDissipation and plain-mode exits, the two smoothing rates, the query
+footprint, the tag helpers, the actor's shape and its two bounds). `uv run pytest` over
+`test_bake_map_sprites.py test_map_geometry.py test_bake_map_details.py test_bake_map_lights.py
+test_bake_map_captures.py test_bake_map_sky.py test_bake_orchestration.py test_map_entities_glb.py`:
+**144 passed** — the record reader on a synthetic join (lump ordinal, the frame, the scale clamp and
+zero default, colour clamps, the hidden rule, the sky flag), the sidecar join (asset path, texture
+size, orientation, the mode table with mode 6 failing, the loud missing-material and missing-texture
+errors), the editor half's `sprite_actor_values` (size, tags, label, the sky transform, the child
+name), the shared manifest version, and — corpus-gated — every `env_sprite` block of the three maps
+as a row with the hidden rule re-derived from its own keys.
+
+Follow-ups: the visible fraction is a 16-box boolean grid, not Source's pixel count (the page's
+`SpriteQueryGrid` is the one number with no VtMB twin); plain sprites (modes 1/5) ride the same
+query because `M_V2_Sprite` is depth-test-off on the master — the R7.7 owner call; `$spriteorigin`
+is not applied (every quad is centre-anchored; 54 corpus units author one, all `[0.5 0.5]` on the
+three maps' sprites) and `$spriteorientation oriented` (3 units) draws as a full billboard; the
+`frame`/`framerate` keys are not read (a `candle`'s animation is its `MI_`'s own `animatedtexture`
+lane); a sprite takes no scene-fog stamp (the master carries no fog term); a corona's bounds hold
+its quad out to 200 m, past which the frustum test drops it; the `MI_Sprite_*` children are shared
+and unpruned like the R6.3 sway children.
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2216,27 +2296,6 @@ stages**: every product the legacy ledger marks *none* and every visual entity c
 places has a task below or a named owner elsewhere (end of R7). A task in this stage that
 surfaces an owner call moves to R7 rather than blocking the stage. Per map, shot-diffed.
 
-- **R6.1 Sprites on the V2 Sprite master** [R7.4 / MP-5.4]. Corpus: **6,449** `env_sprite`
-  over 108 maps, 1,286 named, 86 `start_hidden`, and 500+ wires fired at them (`HideSprite` 218,
-  `ShowSprite` 108, `TurnOn` 100, `TurnOff` 66). By `rendermode`: **3 (Glow) 4,347 + 9
-  (WorldGlow) 77** — Source's coronas, a screen-constant-size billboard whose brightness is a
-  pixel-visibility query at the bulb (`glowa`/`glowb`, 4,801 placements); **5 (Additive) 1,552**
-  and **1 (Color) 472** — plain billboards: `volumelight*` shafts 653, `candle` 282,
-  `streetlight3_proxyfade` 251, `coplights` 49, `lightning*` 86. **Ruling (owner, 2026-09-02):
-  all of them are drawn, coronas included** — a lamp's halo is part of the VtMB night look, and
-  Lumen lights surfaces, not the air in front of a bulb. Every sprite becomes one billboard actor
-  per entity in the baked level: the imported `MI_` of the sprite VMT (blend from the
-  `$spriterendermode` rows), world size `scale × texture`, `rendercolor`/`renderamt`,
-  `parallel_upright` vs full billboard, `start_hidden` honoured, tagged with the entity index so
-  `FElysiumEnvSprite`'s accepted-and-ignored inputs drive visibility. Rendermode 3/9 reproduce
-  Source's glow rule faithfully — apparent size held constant with distance (the billboard
-  component's screen-space size), brightness scaled by the **visible fraction from a per-corona
-  GPU occlusion query** (owner call, 2026-09-02, over a depth-buffer fade: a halo half behind a
-  railing or behind glass fades by how much of it shows, as in 2004). Cost accepted with eyes
-  open: one query per corona per frame (309 on `sm_hub_1`), one frame of latency, and a custom
-  sprite scene proxy the project does not have yet — that proxy is the task's one piece of new
-  rendering code. `<map>.sprites` (written, read by nobody) retires. → lands: halos, light
-  shafts, candles, cop flashers, lightning.
 - **R6.5 Ropes on `MI_`, and the factory shape** [R6.4 part / SF-6.6, R6.2 part / SF-6.4]. The
   `.ropes` producer carries the `vtmb:material` id; the cable binds the imported `MI_`; the last
   `FElysiumMaterialFactory::Build` caller dies and with it the six legacy world masters' runtime
@@ -2326,6 +2385,21 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   would), set another number once the `sm_hub_1` weeds are seen live, or 0 (the byte carried, the
   term compiled, nothing moving — VtMB's own 2004 behaviour). Nothing else depends on the answer;
   it is one settings field, no rebake.
+
+- **R7.7 Depth-tested plain sprites** [owner call surfaced by R6.1, 2026-09-02]. R6.1 draws
+  every `env_sprite` on the imported `MI_` of `M_V2_Sprite`, and that master is
+  **depth-test-off** by the material lane's ruling (`$ignorez`, material-only, never a
+  per-instance override). Faithful for the coronas (Source's `kRenderGlow` never depth-tests; the
+  pixel-visibility query is what hides a halo behind a wall), wrong for the plain cards — modes
+  5 (Additive: `volumelight*` shafts 1,552 corpus-wide, `candle`, `lightning*`) and 1 (Color: 472)
+  are depth-tested in VtMB. R6.1's shipped rule gates every sprite by the same occlusion query, so
+  a shaft behind a wall does not draw through it, but a card half behind a table fades as a whole
+  instead of being clipped. **The choice:** (a) keep the query gating for the plain modes (no
+  draw-through, whole-card fading, nothing new in the material lane); or (b) give the material
+  lane a depth-tested twin of the master (`M_V2_SpriteZ`, `bDisableDepthTest` off, the same graph)
+  and have the bake parent the mode-1/5 children to it — VtMB's exact clipping at the cost of a
+  second sprite master and one more row in the master inventory. Nothing else depends on the
+  answer; the query stays either way.
 
 **Owned elsewhere, not deferred.** Two groups the census surfaces belong to other plans and are
 named here so they are not lost: the unread audio products (`audio/maps/*.json`, `schemes.json`,

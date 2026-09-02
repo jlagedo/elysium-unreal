@@ -20,6 +20,10 @@ namespace ElysiumBakedTags
 	// AElysiumDetailPropActor carrying every `dprp` record of one model in lump order. Carries a
 	// second tag, DetailModel(stem), naming the corpus mesh it draws.
 	inline const FName Detail(TEXT("elysium.detail"));
+	// One `env_sprite` billboard (R6.1, `MapsOnV2Models` maps only): an AElysiumSpriteActor
+	// carrying every value the bake wrote. Carries a second tag, EntityIndex(i), naming the
+	// entity's lump ordinal so the leaf's visibility writes find it.
+	inline const FName Sprite(TEXT("elysium.sprite"));
 	// One WORLDLIGHTS source. Carries a second tag, Source(i), naming its `.lights` line so the
 	// light rig can bind it back to the raw source data it re-derives intensity and reach from.
 	inline const FName Light(TEXT("elysium.light"));
@@ -59,6 +63,13 @@ namespace ElysiumBakedTags
 	inline FName LightStyle(int32 Style)
 	{
 		return FName(*FString::Printf(TEXT("elysium.style=%d"), Style));
+	}
+
+	// The entity lump ordinal a sprite actor stands for (R6.1), e.g. "elysium.ent=309" -- the
+	// `FElysiumEntityHandle::Index` of the `env_sprite` whose inputs drive it.
+	inline FName EntityIndex(int32 Index)
+	{
+		return FName(*FString::Printf(TEXT("elysium.ent=%d"), Index));
 	}
 
 	// The R1 corpus stem a detail actor draws, e.g. "elysium.model=models_scenery_plants_grass_grassa".
@@ -105,6 +116,11 @@ namespace ElysiumBakedTags
 	inline int32 ParseSourceIndex(const TArray<FName>& Tags)
 	{
 		return ParseTagInt(Tags, TEXT("elysium.src="), INDEX_NONE);
+	}
+	// The entity index a Sprite actor carries (R6.1), or INDEX_NONE if it has no entity tag.
+	inline int32 ParseEntityIndex(const TArray<FName>& Tags)
+	{
+		return ParseTagInt(Tags, TEXT("elysium.ent="), INDEX_NONE);
 	}
 	// The VtMB light type a baked light carries (R5.6), or `Default` (a legacy-lane actor has none).
 	inline int32 ParseLightType(const TArray<FName>& Tags, int32 Default = 1)

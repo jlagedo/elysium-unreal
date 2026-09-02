@@ -62,6 +62,7 @@ void FElysiumCogWindow_Status::RenderContent()
 	Row("Lights", FString::Printf(TEXT("%d"), Visuals->WorldLightCount));
 	Row("Props", FString::Printf(TEXT("%d inst · %d models"), Visuals->PropInstanceCount, Visuals->PropModelCount));
 	Row("Details", FString::Printf(TEXT("%d inst · %d models"), Visuals->DetailInstanceCount, Visuals->DetailModelCount));
+	Row("Sprites", FString::Printf(TEXT("%d · %d glow"), Visuals->SpriteCount, Visuals->SpriteGlowCount));
 	Row("Decals", FString::Printf(TEXT("%d"), Visuals->DecalCount));
 	Row("Records", FString::Printf(TEXT("%d"), Map->EntityCount));
 	Row("Brush bodies", FString::Printf(TEXT("%d"), Map->BrushBodyCount));

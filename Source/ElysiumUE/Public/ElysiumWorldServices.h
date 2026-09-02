@@ -886,6 +886,11 @@ public:
 	virtual class ULightComponent* BuildDynamicLight(const struct FElysiumDynamicLightSpec& Spec,
 		USceneComponent* Parent) { return nullptr; }
 	virtual void DestroyDynamicLight(class ULightComponent* Light) {}
+	// R6.1 (`seam_map_map.md` -> "Sprites (R6.1)"): CSprite's draw switch. The billboard is the
+	// bake's actor tagged with the entity's lump ordinal; the `env_sprite` leaf writes its
+	// `bOn && !IsInert()` here on spawn, on every input and on load. Headless, and on a map with
+	// no baked sprites: nothing.
+	virtual void SetBakedSpriteVisible(int32 EntityIndex, bool bVisible) {}
 
 	// Is the player's body in the sneak posture? (13.1, `docs/vtmb/stealth.md` -> "Player
 	// target-surface update", step 3.)

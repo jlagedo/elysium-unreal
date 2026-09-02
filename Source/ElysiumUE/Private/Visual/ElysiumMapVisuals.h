@@ -7,6 +7,7 @@
 #include "ElysiumMapVisuals.generated.h"
 
 class AElysiumDetailPropActor;
+class AElysiumSpriteActor;
 class AStaticMeshActor;
 class APostProcessVolume;
 class UCableComponent;
@@ -110,6 +111,11 @@ public:
 	const TArray<TObjectPtr<AStaticMeshActor>>& GetPropActors() const { return PropActors; }
 	// R6.3: one per detail model per map, every `dprp` record of that model as an instance.
 	const TArray<TObjectPtr<AElysiumDetailPropActor>>& GetDetailActors() const { return DetailActors; }
+	// R6.1: one per `env_sprite`, bucketed by the entity index its tag carries.
+	const TArray<TObjectPtr<AElysiumSpriteActor>>& GetSpriteActors() const { return SpriteActors; }
+	// R6.1: CSprite's draw switch for the sprite standing for `EntityIndex`. False when this map
+	// bakes no such sprite (a legacy-lane map, or an index that is not an env_sprite).
+	bool SetSpriteVisible(int32 EntityIndex, bool bShown);
 
 	// The real-time light rig for this map (the Cog Lights window's read-only viewer reaches it
 	// through here), or null before the map is built.
@@ -136,6 +142,10 @@ public:
 	// distinct models behind them.
 	int32 DetailInstanceCount = 0;
 	int32 DetailModelCount = 0;
+	// Sprites (R6.1): the adopted `elysium.sprite` actors, and how many of them are coronas
+	// (rendermode 3/9, the glow rule and its occlusion query).
+	int32 SpriteCount = 0;
+	int32 SpriteGlowCount = 0;
 	// Decals: number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
 	// Ropes: number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
@@ -179,6 +189,9 @@ private:
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> SkyActors;
 	UPROPERTY() TArray<TObjectPtr<AStaticMeshActor>> PropActors;
 	UPROPERTY() TArray<TObjectPtr<AElysiumDetailPropActor>> DetailActors;
+	UPROPERTY() TArray<TObjectPtr<AElysiumSpriteActor>> SpriteActors;
+	// The sprite actor per entity index, the key the leaf's writes arrive by.
+	TMap<int32, TWeakObjectPtr<AElysiumSpriteActor>> SpritesByEntity;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeWorldBrushes;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeSkyBrushes;
 	bool bPropsVisible = true;

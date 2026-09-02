@@ -198,7 +198,7 @@ def rewrite_sidecars_via_producer(
     """R3.5: the R3.2 producer is the default source of the eight legacy sidecars.
 
     `UE_bsp_to_scene.main` has just written `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/`.sky`/
-    `.spawn`/`.ropes` into ``out_dir`` (plus `.obj`/`.mtl`/`.props`/`.decals`/`.water`/`.sprites`,
+    `.spawn`/`.ropes` into ``out_dir`` (plus `.obj`/`.mtl`/`.props`/`.decals`/`.water`,
     which the producer does not reproduce and this call leaves alone). `UE_map_sidecars.write_sidecars`
     (`docs/architecture/seam_map_map.md` -> "Producer join") overwrites the eight it does own with
     its own bytes, reading the map's published V2 units rather than the BSP.

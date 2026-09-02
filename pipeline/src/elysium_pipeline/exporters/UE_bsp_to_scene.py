@@ -337,87 +337,6 @@ def write_lights(data, out_dir, base, sky=None):
 
 # --- env_sprite coronas: glow billboards at light sources -------------------
 
-def write_sprites(data, out_dir, base, idx, sky=None, ents=None):
-    """Emit `<base>.sprites`: env_sprite glow billboards (the soft coronas VtMB places at
-    lamps/bulbs). Each sprite's Sprite VMT `$basetexture` is decoded to `tex/spr_*.png`;
-    one line per sprite: `png ox oy oz w_cm h_cm r g b amt orient sky`, where the world size is
-    Source's `scale × textureSize` (inches → cm), `r g b`/`amt` are the entity's
-    `rendercolor`/`renderamt` (additive tint), and orient is 0 (`vp_parallel`, full
-    billboard) or 1 (`parallel_upright`, Y-axis only). `start_hidden` sprites are skipped
-    (entity I/O that would switch them on is not ported).
-
-    ``ents`` is the already-decoded entity lump text; ``main`` passes its one copy, and a
-    direct caller may omit it."""
-    if ents is None:
-        ents = read_lump(data, 0).decode("ascii", "replace")
-    blocks = _parse_ent_blocks(ents)
-    pak = read_pakfile(data)
-
-    def read_bytes(key):
-        key = key.lower()
-        return pak[key] if key in pak else install.read(idx, key)
-
-    def read_text(key):
-        b = read_bytes(key)
-        return b.decode("ascii", "replace") if b is not None else None
-
-    corpus = _corpus(out_dir)
-    _sprite_seen = set()
-
-    def sprite_texture(material):
-        """(corpus file name, width, height) for one `env_sprite` material, or (None, 0, 0).
-
-        The corona's texture is an ordinary install texture the corpus already decoded with its
-        alpha kept; its dimensions come off the manifest rather than a second decode here.
-        """
-        record = corpus.materials.get(material)
-        if not record or not record["albedo"]:
-            return (None, 0, 0)
-        size = corpus.textures.get(record["albedo_key"], {}).get("size")
-        if not size:
-            return (None, 0, 0)
-        _sprite_seen.add(record["albedo_key"])
-        return (os.path.basename(record["albedo"]), size[0], size[1])
-
-    lines, n_sky = [], 0
-    for b in blocks:
-        d = {k.lower(): v for k, v in b}
-        if d.get("classname") != "env_sprite" or d.get("starthidden") == "1":
-            continue
-        model = d.get("model", "")
-        vmt_txt = read_text(model if model.lower().endswith(".vmt") else model + ".vmt")
-        if not vmt_txt:
-            continue
-        png, w, h = sprite_texture(shared_corpus.material_key(model))
-        if not png:
-            continue
-        o = d.get("origin", "0 0 0").split()
-        ux, uy, uz = source_to_unreal(float(o[0]), float(o[1]), float(o[2]))
-        try:
-            scale = float(d.get("scale", "1") or 1)
-        except ValueError:
-            scale = 1.0
-        rc = (d.get("rendercolor", "255 255 255")).split()
-        r, g, bb = (int(float(rc[i])) if i < len(rc) else 255 for i in range(3))
-        try:
-            amt = int(float(d.get("renderamt", "255") or 255))
-        except ValueError:
-            amt = 255
-        orient = 1 if "parallel_upright" in vmt_txt.lower() else 0
-        # The moon and the lit-window glows are miniature content on every Santa Monica map
-        # (54 of sm_hub_1's sprites), so they carry the same sky flag everything else does.
-        in_sky = int(sky is not None and sky.is_sky((float(o[0]), float(o[1]), float(o[2]))))
-        n_sky += in_sky
-        lines.append(f"{shared_corpus.map_relative(png)} {ux:.4f} {uy:.4f} {uz:.4f} "
-                     f"{scale*w*INCH_TO_CM:.4f} {scale*h*INCH_TO_CM:.4f} "
-                     f"{r} {g} {bb} {amt} {orient} {in_sky}")
-
-    if lines:
-        with open(os.path.join(out_dir, base + ".sprites"), "w") as f:
-            f.write("\n".join(lines) + "\n")
-    print(f"sprites: {len(lines)} env_sprite coronas ({n_sky} sky, {len(_sprite_seen)} textures) "
-          f"-> {base}.sprites")
-
 def write_ropes(data, out_dir, base, idx, ents=None):
     """Emit `<base>.ropes`: the overhead cables VtMB strings between poles/buildings.
 
@@ -1715,7 +1634,6 @@ def main(bsp_path, out_dir, *, index=None):
     write_collision(data, out_dir, base, sky)
     write_entities(data, out_dir, base, idx, sky, brush_meshes, ents=ents)
     write_lights(data, out_dir, base, sky)
-    write_sprites(data, out_dir, base, idx, sky, ents=ents)
     write_ropes(data, out_dir, base, idx, ents=ents)
     # Concave displacement collision: one triangle per line (9 Unreal-space floats).
     # Convex brushes cannot represent sculpted terrain, so the runtime loads these

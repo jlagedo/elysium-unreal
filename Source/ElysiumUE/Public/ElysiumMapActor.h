@@ -450,6 +450,8 @@ public:
 	virtual ULightComponent* BuildDynamicLight(const FElysiumDynamicLightSpec& Spec,
 		USceneComponent* Parent) override;
 	virtual void DestroyDynamicLight(ULightComponent* Light) override;
+	// R6.1: the baked sprite actor's hidden state, through the visuals' entity-index bucket.
+	virtual void SetBakedSpriteVisible(int32 EntityIndex, bool bVisible) override;
 	virtual bool IsPlayerSneaking() const override;
 	virtual bool IsPlayerOnGround() const override;
 	virtual FString GetPlayerBaseActivity() const override;

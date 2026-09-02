@@ -57,7 +57,7 @@ Do not rebuild these to explore the look.
 | Niagara flatten | `pipeline/unreal/make_particle_systems.py` | one Fountain-based emitter per drawing leaf, `NS_<root>` |
 | Rain presentation | `/Game/ElysiumAuthored/VFX/NS_ElysiumRain` | tracked authored system; live follow-rain binds each map's baked height-masked material instances through `User.RainStreakMaterial`/`User.RainMistMaterial` (`ElysiumMapActorWeather.cpp`); other emitters load their baked `NS_*` |
 | Melee weapon trail | `/Game/ElysiumAuthored/VFX/NS_ElysiumMeleeTrail` | tracked authored ribbon; `ElysiumMeleeTrail.cpp` drives `User.TrailPointA/B` off the wield mesh's baked `TrailTip` socket during a live melee swing |
-| Sprites sidecar | `<map>.sprites` | `env_sprite` coronas |
+| Sprites (R6.1) | the staged `sprites[]` table → one `AElysiumSpriteActor` per row in the baked level (`<map>.sprites` retired) | `env_sprite` coronas, shafts, candles, flashers, lightning |
 | Decals | `<map>.decals` → `UDecalComponent` | authored `infodecal` |
 | `env_fade` | real entity class | screen fade |
 | Prop `.phy` | `props/<stem>.phys` → Chaos | the barrel's *body*, not its fire |

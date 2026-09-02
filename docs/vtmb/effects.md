@@ -600,7 +600,7 @@ Decoded and in the export:
 - per-map `<map>.particles.json` (placed `env_particle` + the
   `force_feeding_emitter` gameplay root + unresolved list);
 - sprite TGA → PNG;
-- `env_sprite` `.sprites` sidecar;
+- `env_sprite` rows: the staged `sprites[]` table of the V2 map bake (`<map>.sprites` retired, R6.1);
 - `infodecal` `.decals` sidecar;
 - `.phy` → `.phys` for physics props;
 - rain / wetness contract for `sm_hub_1` (`docs/vtmb/weather.md`).

@@ -44,6 +44,15 @@
 # `MI_` re-bound through a `MI_DetailSway_*` child that switches the master's `UseDetailSway` term
 # on (`seam_map_material.md` -> "Detail sway on the model masters (R6.3)").
 #
+# **Sprites (R6.1, `seam_map_map.md` -> "Sprites (R6.1)").** Every staged `sprites[]` row (one per
+# `env_sprite` block, lump order) becomes one `AElysiumSpriteActor`: the imported `MI_` of the
+# sprite VMT re-parented once per `(MI_, blend)` through an `MI_Sprite_*` child that overrides the
+# blend the entity's `rendermode` selects and switches the master's vertex colour/alpha on, the
+# world size `scale x texture` in Source units, `rendercolor`/`renderamt`, `parallel_upright`, the
+# `CSprite::Spawn` hidden rule, and the entity index as a tag so the leaf's inputs find it. The
+# glow rule (screen-constant size, `19000 / dist^2`, the occlusion-query fade) is the runtime
+# proxy's, off the Sprites settings page; the bake writes only the facts.
+#
 # `bake_map.py` is an editor *script* (`-run=pythonscript`), so it calls `main()` at module scope.
 # Importing it from here would run a second whole bake, so the dependency goes the other way:
 # `bake_map` calls `bind(sys.modules[__name__])` and then `bake_class()`, and this module reaches
@@ -72,7 +81,8 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 3 (R5.5): and the `cubemaps` table this lane stands reflection captures at.
 #: 4 (R5.6): and the `lights` table this lane derives every light actor from.
 #: 5 (R6.3): and the `details` table this lane instances.
-MANIFEST_VERSION = 5
+#: 6 (R6.1): and the `sprites` table this lane places billboards from.
+MANIFEST_VERSION = 6
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -97,6 +107,23 @@ DETAIL_SWAY_SWITCH = "UseDetailSway"
 TAG_DETAIL = "elysium.detail"
 #: `swayAmount` is a byte; the custom data float is its unit fraction.
 DETAIL_SWAY_FULL = 255.0
+#: R6.1: the per-blend children of the imported sprite `MI_` -- map-independent like the detail
+#: sway children, so they live beside the corpus and no map's prune scope reaches them.
+V2_SPRITE_MATERIAL_PACKAGE = "%s/Sprites" % mounts.BAKED
+#: The two static switches a sprite child sets (`SpriteParams.Switches`): the tint and the glow
+#: blend ride the quad's vertex colour, so no material is touched at runtime.
+SPRITE_SWITCHES = ("UseVertexColor", "UseVertexAlpha")
+#: The tags the runtime buckets a sprite actor by (`ElysiumBakedTags::Sprite` / `EntityIndex`).
+TAG_SPRITE = "elysium.sprite"
+TAG_ENTITY_PREFIX = "elysium.ent="
+#: The shape `_place_sprites` writes a row as -- bumped when the writer changes what it puts on
+#: the actor for the same staged row (2: the BGRA colour fix), so the level re-authors.
+SPRITE_ACTOR_SHAPE = 2
+#: `BlendMode` member per staged blend name (`import_materials.BLEND_MODE_MEMBERS`, restated).
+SPRITE_BLEND_MEMBERS = {
+    "Opaque": "BLEND_OPAQUE", "Masked": "BLEND_MASKED", "Translucent": "BLEND_TRANSLUCENT",
+    "Additive": "BLEND_ADDITIVE", "Modulate": "BLEND_MODULATE",
+}
 
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
 #: so this module reads `HOST.Bake` rather than a dict subscript, and read lazily so binding does not
@@ -158,6 +185,7 @@ def _build_class():
             self.placed_index_version = 0
             self.rest_labels = {}      # placement index -> the rest clip it was dealt
             self.detail_materials = {}  # imported MI_ path -> its MI_DetailSway_* child path
+            self.sprite_materials = {}  # (imported MI_ path, blend) -> its MI_Sprite_* child path
 
         # -------------------------------------------------------------------------- inputs
 
@@ -416,6 +444,10 @@ def _build_class():
                 "%s/SM_%s" % (V2_MESH_PACKAGE, model["stem"])
                 for model in self.geometry.detail_models)
             recipe["detail_cull_cm"] = list(detail_cull())
+            # R6.1: every sprite row is an input to its actor; the children are named so a
+            # re-authored child (a master graph bump) re-authors the level that binds it.
+            recipe["sprites"] = [row.as_dict() for row in self.geometry.sprites]
+            recipe["sprite_actor_shape"] = SPRITE_ACTOR_SHAPE
             # R5.5: a moved sample or an edited `CaptureRadius` re-authors the level, because the
             # capture's contents live in the level's own MapBuildData and nowhere else.
             recipe["capture_radius"] = HOST.capture_radius()
@@ -523,6 +555,7 @@ def _build_class():
             if skeletal_placed:
                 log("level: %d placements held on authored skeletal rest poses" % skeletal_placed)
             self._place_details(actors, sky_scale, sky_origin, world_fog, sky_fog)
+            self._place_sprites(actors, sky_scale, sky_origin)
             return placed, sky_placed
 
         # ------------------------------------------------------------- detail props (R6.3)
@@ -660,6 +693,126 @@ def _build_class():
                 self.tracker.stamp(child, child_path)
                 if not bl.save(child_path):
                     fail("details: save failed: %s" % child_path)
+                    raise SystemExit(1)
+                self.tracker.built("materials")
+            return child_path
+
+        # ------------------------------------------------------------------ sprites (R6.1)
+
+        def _place_sprites(self, actors, sky_scale, sky_origin):
+            """Every staged `sprites[]` row as one `AElysiumSpriteActor` (`seam_map_map.md` ->
+            "Sprites (R6.1)"): the imported `MI_` through its per-blend child, the size in Source
+            units, the colour, the mode, the orientation, the spawn-hidden rule and the entity
+            index tag. Returns `(placed, glow, hidden)`."""
+
+            rows = self.geometry.sprites
+            if not rows:
+                log("sprites: the map places no env_sprite")
+                return 0, 0, 0
+            placed = glow = hidden = sky_placed = 0
+            for row in rows:
+                values = sprite_actor_values(row, sky_scale, sky_origin)
+                material = self._sprite_material(row.asset, row.blend)
+                actor = actors.spawn_actor_from_class(
+                    unreal.ElysiumSpriteActor, unreal.Vector(*values["position"]))
+                if not actor:
+                    fail("sprites: spawn failed for env_sprite %d" % row.index)
+                    raise SystemExit(1)
+                component = actor.sprite
+                component.set_editor_property("material", material)
+                component.set_editor_property(
+                    "size_inches", unreal.Vector2D(*values["size_inches"]))
+                component.set_editor_property("render_mode", row.mode)
+                component.set_editor_property("render_fx", row.fx)
+                # `unreal.Color` is FColor's own BGRA layout: positional arguments would swap
+                # red and blue, so the channels are named.
+                component.set_editor_property(
+                    "color", unreal.Color(b=row.color[2], g=row.color[1], r=row.color[0],
+                                          a=row.alpha))
+                component.set_editor_property("upright", row.upright)
+                actor.set_editor_property("entity_index", row.index)
+                if values["scale"] != 1.0:
+                    actor.set_actor_scale3d(unreal.Vector(*([values["scale"]] * 3)))
+                if row.hidden:
+                    actor.set_actor_hidden_in_game(True)
+                    hidden += 1
+                actor.set_actor_label(values["label"])
+                actor.tags = list(values["tags"])
+                actor.set_folder_path(values["folder"])
+                placed += 1
+                glow += 1 if row.glow else 0
+                sky_placed += 1 if row.sky else 0
+            log("sprites: %d placed (%d glow, %d hidden at spawn, %d in the 3D skybox); "
+                "%d material child(ren)" % (
+                    placed, glow, hidden, sky_placed, len(self.sprite_materials)))
+            return placed, glow, hidden
+
+        def _sprite_material(self, parent_path, blend):
+            """The `MI_Sprite_<material>_<blend>` child of one imported sprite `MI_`: the blend
+            override the entity's mode selects and the master's two vertex switches on, authored
+            once per `(parent, blend)` under `V2_SPRITE_MATERIAL_PACKAGE`, recipe-stamped on the
+            parent path, the parent's own recipe, the blend and the switches. A parent whose
+            master exposes neither switch is a named failure -- the tint would silently drop."""
+
+            key = (parent_path, blend)
+            child_path = self.sprite_materials.get(key)
+            if child_path is None:
+                parent = unreal.EditorAssetLibrary.load_asset(parent_path)
+                if not parent:
+                    fail("sprites: %s is not imported (run: uv run elysium import materials)"
+                         % parent_path)
+                    raise SystemExit(1)
+                child_path = self._author_sprite_material(parent, parent_path, blend)
+                self.sprite_materials[key] = child_path
+            child = unreal.EditorAssetLibrary.load_asset(child_path)
+            if not child:
+                fail("sprites: material %s did not load" % child_path)
+                raise SystemExit(1)
+            return child
+
+        def _author_sprite_material(self, parent, parent_path, blend):
+            master = parent.get_base_material()
+            master_path = master.get_path_name().split(".", 1)[0] if master else ""
+            switches = []
+            if master:
+                switches = [str(name) for name in
+                            unreal.MaterialEditingLibrary.get_static_switch_parameter_names(master)]
+            missing = [name for name in SPRITE_SWITCHES if name not in switches]
+            if missing:
+                fail("sprites: %s is on %s, which exposes no %s switch (a sprite draws through "
+                     "M_V2_Sprite's vertex colour)" % (
+                         parent_path, master_path or "no master", "/".join(missing)))
+                raise SystemExit(1)
+            member = SPRITE_BLEND_MEMBERS.get(blend)
+            if member is None:
+                fail("sprites: blend %r names no BlendMode" % (blend,))
+                raise SystemExit(1)
+            name = sprite_child_name(parent_path, blend)
+            child_path = "%s/%s" % (V2_SPRITE_MATERIAL_PACKAGE, name)
+            recipe = {
+                "parent": parent_path,
+                "master": master_path,
+                "master_recipe": bl.stored_recipe(master_path) if master_path else "",
+                "parent_recipe": bl.stored_recipe(parent_path),
+                "blend": blend,
+                "switches": list(SPRITE_SWITCHES),
+            }
+            if self.tracker.register("materials", child_path, recipe,
+                                     expected_class="MaterialInstanceConstant"):
+                child = bl.make_material_instance(name, V2_SPRITE_MATERIAL_PACKAGE, parent)
+                if not child:
+                    fail("sprites: could not author %s" % child_path)
+                    raise SystemExit(1)
+                for switch in SPRITE_SWITCHES:
+                    bl.set_static_switch_param(child, switch, True)
+                overrides = child.get_editor_property("base_property_overrides")
+                overrides.set_editor_property("override_blend_mode", True)
+                overrides.set_editor_property("blend_mode", getattr(unreal.BlendMode, member))
+                child.set_editor_property("base_property_overrides", overrides)
+                unreal.MaterialEditingLibrary.update_material_instance(child)
+                self.tracker.stamp(child, child_path)
+                if not bl.save(child_path):
+                    fail("sprites: save failed: %s" % child_path)
                     raise SystemExit(1)
                 self.tracker.built("materials")
             return child_path
@@ -905,6 +1058,37 @@ def detail_instance_rows(details, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
     return groups
 
 
+def sprite_child_name(parent_path, blend):
+    """`MI_Sprite_<material path>_<blend>`: the child's asset name for one imported sprite `MI_`
+    and one blend, the same fold the detail sway children use."""
+
+    stem = parent_path.replace(mounts.BAKED + "/Materials/", "").replace("/MI_", "/")
+    return "MI_Sprite_" + bl.safe_name(stem) + "_" + blend
+
+
+def sprite_actor_values(row, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+    """The placement facts `_place_sprites` writes for one staged row (R6.1), pure so a pytest pins
+    them: the position (a 3D-skybox row takes the miniature transform a prop takes), the actor's
+    uniform scale (the miniature's, so a fixed-size card scales with the miniature), the size in
+    Source units (`scale x texture`), the label, the folder and the tags."""
+
+    position = tuple(float(v) for v in row.position)
+    scale = 1.0
+    if row.sky:
+        position = tuple(
+            float(sky_scale) * (position[i] - float(sky_origin[i])) for i in range(3))
+        scale = float(sky_scale)
+    stem = row.material.rsplit("/", 1)[-1]
+    return {
+        "position": position,
+        "scale": scale,
+        "size_inches": (row.scale * row.width, row.scale * row.height),
+        "label": "Sprite_%d_%s%s" % (row.index, stem, "_sky" if row.sky else ""),
+        "folder": "Sky/Sprites" if row.sky else "Sprites",
+        "tags": (TAG_SPRITE, "%s%d" % (TAG_ENTITY_PREFIX, row.index)),
+    }
+
+
 #: The `UElysiumModelSettings` fields the detail cull range reads (R6.3), C++ name -> Python name.
 DETAIL_SETTINGS_FIELDS = (
     ("DetailDrawDistanceCm", "detail_draw_distance_cm"),
@@ -1114,6 +1298,44 @@ class _DetailPlacement(object):
                 int(self.sky)]
 
 
+class _SpriteRow(object):
+    """One staged `sprites[]` row (R6.1), in the shape `map_geometry.sprite_row` publishes."""
+
+    __slots__ = ("index", "name", "material", "asset", "texture", "width", "height", "position",
+                 "scale", "mode", "blend", "glow", "color", "alpha", "fx", "upright", "hidden",
+                 "sky")
+
+    def __init__(self, row):
+        self.index = int(row["index"])
+        self.name = str(row.get("name") or "")
+        self.material = str(row["material"])
+        self.asset = str(row["asset"])
+        self.texture = str(row.get("texture") or "")
+        self.width = int(row["width"])
+        self.height = int(row["height"])
+        self.position = tuple(float(v) for v in row["position"])
+        self.scale = float(row["scale"])
+        self.mode = int(row["mode"])
+        self.blend = str(row["blend"])
+        self.glow = bool(row["glow"])
+        self.color = tuple(int(v) for v in row["color"])
+        self.alpha = int(row["alpha"])
+        self.fx = int(row.get("fx") or 0)
+        self.upright = bool(row["upright"])
+        self.hidden = bool(row["hidden"])
+        self.sky = bool(row["sky"])
+
+    def as_dict(self):
+        return {
+            "index": self.index, "name": self.name, "material": self.material,
+            "asset": self.asset, "texture": self.texture, "width": self.width,
+            "height": self.height, "position": list(self.position), "scale": self.scale,
+            "mode": self.mode, "blend": self.blend, "glow": self.glow,
+            "color": list(self.color), "alpha": self.alpha, "fx": self.fx,
+            "upright": self.upright, "hidden": self.hidden, "sky": self.sky,
+        }
+
+
 class _CubemapSample(object):
     """One staged `cubemaps[]` row (R5.5): where a reflection capture stands."""
 
@@ -1196,6 +1418,7 @@ class _StagedGeometry(object):
         self.detail_models = list(details.get("models") or [])
         stems = {int(model["model"]): str(model["stem"]) for model in self.detail_models}
         self.details = [_DetailPlacement(row, stems) for row in details.get("records") or []]
+        self.sprites = [_SpriteRow(row) for row in self.manifest.get("sprites") or []]
 
     def brush_stems(self):
         return {int(index): stem

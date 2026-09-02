@@ -3,6 +3,8 @@
 #include "ElysiumBakedTags.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumDetailPropActor.h"
+#include "ElysiumSpriteActor.h"
+#include "ElysiumSpriteComponent.h"
 #include "ElysiumFog.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
@@ -161,6 +163,10 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	SkyActors.Reset();
 	PropActors.Reset();
 	DetailActors.Reset();
+	SpriteActors.Reset();
+	SpritesByEntity.Reset();
+	SpriteCount = 0;
+	SpriteGlowCount = 0;
 	RuntimeWorldBrushes.Reset();
 	RuntimeSkyBrushes.Reset();
 	SkyLight = nullptr;
@@ -195,6 +201,24 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Detail))
 		{
 			DetailActors.Add(Cast<AElysiumDetailPropActor>(Actor));
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Sprite))
+		{
+			// R6.1: bucketed by the entity index the tag carries, so an `env_sprite` input
+			// reaches its billboard by the one number both halves share.
+			if (AElysiumSpriteActor* SpriteActor = Cast<AElysiumSpriteActor>(Actor))
+			{
+				SpriteActors.Add(SpriteActor);
+				const int32 EntityIndex = ElysiumBakedTags::ParseEntityIndex(Actor->Tags);
+				if (EntityIndex != INDEX_NONE)
+				{
+					SpritesByEntity.Add(EntityIndex, SpriteActor);
+				}
+				if (SpriteActor->Sprite && SpriteActor->Sprite->IsGlow())
+				{
+					++SpriteGlowCount;
+				}
+			}
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Light))
 		{
@@ -287,6 +311,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		}
 	}
 	DetailModelCount = DetailModels.Num();
+	SpriteCount = SpriteActors.Num();
 
 	if (LightRig)
 	{
@@ -770,6 +795,18 @@ void UElysiumMapVisuals::RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool b
 	}
 	(bSky ? RuntimeSkyBrushes : RuntimeWorldBrushes).Add(Comp);
 	ApplySceneFog();
+}
+
+bool UElysiumMapVisuals::SetSpriteVisible(int32 EntityIndex, bool bShown)
+{
+	const TWeakObjectPtr<AElysiumSpriteActor>* Found = SpritesByEntity.Find(EntityIndex);
+	AElysiumSpriteActor* Actor = Found ? Found->Get() : nullptr;
+	if (Actor == nullptr)
+	{
+		return false;
+	}
+	Actor->SetActorHiddenInGame(!bShown);
+	return true;
 }
 
 void UElysiumMapVisuals::ToggleProps()

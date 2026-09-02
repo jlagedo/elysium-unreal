@@ -1119,6 +1119,108 @@ carries exactly one custom-data float. `Elysium.Substrate.DetailProps` pins the 
 the actor's own shape (ISM root, `NoCollision`, no shadow). Measured numbers are in the R6.3
 Settled entry of `docs/project/seam_migration.md`.
 
+### Sprites (R6.1)
+
+R6.1 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" draws every `env_sprite`.
+The corpus: **6,449** rows over 108 maps, 1,286 named, 86 `start_hidden`; by `rendermode` **3
+(Glow) 4,347 + 9 (WorldGlow) 77** — Source's coronas (`glowa`/`glowb`) — **5 (Additive) 1,552**
+and **1 (Color) 472** — the plain billboards (`volumelight*` shafts, `candle`, `coplights`,
+`lightning*`). The owner's ruling (2026-09-02): **all of them are drawn, coronas included**, one
+billboard actor per entity in the baked level, on the imported `MI_` of the sprite VMT, and the
+entity's own inputs drive its visibility. VtMB's facts below are read off the shipped binaries;
+nothing here is a look judgement.
+
+**What VtMB does (`client.dll`, `vampire.dll`).** `CSprite::Spawn` (vampire.dll `1042e550`)
+clamps `scale` to `0..8` (`DAT_10516cec`, with a `LEVEL DESIGN ERROR` DevMsg) and starts the
+sprite **on when it is unnamed or carries spawnflag 1 (Start On), off otherwise** (`m_fEffects |=
+EF_NODRAW`, `1042ef40`); `HideSprite`/`TurnOff` clear the draw, `ShowSprite`/`TurnOn` restore it,
+`ToggleSprite` flips it (`1042f080`…`1042f130`). The client draw (`C_Sprite::DrawModel`
+`10136890` → `DrawSprite` `100c3480`) writes the entity's `rendermode` into the material's
+`$spriteRenderMode` var (`CEngineSprite::Init` `10136da0` caches it) — so **the entity's mode,
+not the VMT's, selects the blend** — and for modes **3 and 9 only** multiplies the blend by
+`GlowBlend` (`100c24a0`), Source's glow rule, whose constants are `.rdata` doubles:
+
+| Term | VtMB | Where |
+|---|---|---|
+| apparent size | `scale ← (scale or 1) × dist × 0.005` (dist in Source units; `1/200`) — **mode 3 only** (`100c3197` skips WorldGlow) | `102261e0` |
+| brightness | `clamp(19000 / dist², 0.05, 1.0)` | `102324b0`, `101e55b0`, `101e34e0` |
+| `renderfx` 14 (NoDissipation) | the whole block is skipped (`100c30e9`): no distance brightness, no screen-constant size, the visibility fade alone. 207 of sm_hub_1's 309 rows and 55 of sp_tutorial_1's 96 carry it | `100c24a0` |
+| visibility | pixels of a small quad at the origin that pass the depth test ÷ pixels drawn without it, clamped 0..1, **smoothed**: rises at `1 / r_glowfadein` (**0.2 s**) and falls at `1 / r_glowfadeout` (**0.1 s**) per second | `104a4378`, `104a4258`; defaults `102b1fd8`, `102b639c` |
+| query quad | half-size `dist × 3/128` for mode 3 (screen-constant), 3 units for mode 9 | `102324d0`, `10225158` |
+| final blend | `renderamt/255 × brightness × smoothed visibility` | `100c3480` |
+
+Every other mode draws the sprite at `scale × texture` world units, `rendercolor` as the colour
+modulation and `renderamt/255` as the blend, depth-tested by the material's own state.
+
+**Ruling — one `AElysiumSpriteActor` per row, the values written once, the glow rule live.**
+
+| Fact | Baked as |
+|---|---|
+| identity | `sprites[]` row `index` = the entity's lump ordinal = `FElysiumEntityHandle::Index`; tags `elysium.sprite` + `elysium.ent=<index>` (`ElysiumBakedTags::Sprite` / `EntityIndex`); label `Sprite_<index>_<material stem>`, folder `Sprites` / `Sky/Sprites` |
+| material | the imported `MI_` of `model` (`shared_corpus.material_key`, resolved through the material lane's staged provenance sidecar exactly as a face is), re-parented once per `(MI_, blend)` through `/ElysiumBaked/Sprites/MI_Sprite_<material>_<blend>` — a child whose own values are the blend override and `UseVertexColor = UseVertexAlpha = true`, so the tint and the per-frame glow blend ride the quad's vertex colour and no material is touched at runtime. Shared and map-independent like the R6.3 sway children |
+| blend | the entity's `rendermode` through the `$spriterendermode` row table (`seam_map_material.md` → `M_V2_Sprite`): 0 → Opaque; 1, 2, 3, 4, 9 → Translucent; 5, 7, 8 → Additive; 6 → a named bake failure |
+| size | `SizeInches = (clamp(scale, 0, 8) or 1) × (texture width, height)` in Source units, the texture's dimensions off the texture lane's sidecar. Mode 3 without `renderfx` 14: `SizeInches × dist_cm × GlowSizePerDistance` — screen-constant, per view. Every other row (mode 9, NoDissipation, the plain modes): the world quad is `SizeInches × 2.54` cm (× the actor scale, so a miniature sprite scales with the miniature) |
+| colour | `rendercolor` (default 255 255 255) and `renderamt` (default 255) as the component's `Color`; `renderfx` carried for the NoDissipation rule |
+| orientation | `parallel_upright` in the VMT's `$spriteorientation` row → `bUpright` (a yaw-only billboard about world Z); `vp_parallel`, `oriented` (3 units, treated as full billboards — a named divergence) and absent → full camera-facing |
+| initial state | `bHiddenAtSpawn = start_hidden or (named and not spawnflag 1)` — `CSprite::Spawn`'s own rule, written by the bake so the level reads right in the editor and published again by the leaf at spawn so the two can never disagree |
+| 3D skybox | a row inside the sky area takes the miniature transform a prop takes: position `scale × (p − origin)`, actor scale `scale`, its own `_sky` label and folder |
+| collision, shadow, fog | none, none, none: a sprite is a client-side card in VtMB; `M_V2_Sprite` carries no scene-fog term |
+
+**The runtime half — `UElysiumSpriteComponent` and its proxy, the task's one piece of rendering
+code.** `FElysiumSpriteSceneProxy` builds one camera-facing quad per view in
+`GetDynamicMeshElements` (a yaw-only quad for `bUpright`), sized by the rule above, with vertex
+colour `(rendercolor, renderamt/255 × brightness × visibility)`. For every sprite it declares
+**sub-primitive occlusion queries** (`HasSubprimitiveOcclusionQueries`/`GetOcclusionQueries`): a
+`SpriteQueryGrid × SpriteQueryGrid` grid of small boxes tiling a square of half-size `dist ×
+SpriteQueryFootprintPerDistance` at the origin, facing the view — Source's query quad, sampled as
+a grid because Unreal's sub-query answers are per-box booleans, not pixel counts. The renderer
+tests them against the scene depth on the GPU (hardware queries, HZB or occlusion feedback,
+whichever the platform runs) and hands the booleans back one frame later
+(`AcceptOcclusionResults`); the **visible fraction is the visible boxes over the grid**, and the
+proxy smooths it at `1/GlowFadeInSeconds` up and `1/GlowFadeOutSeconds` down on the render
+thread's clock, exactly VtMB's two cvars. `CanBeOccluded()` is forced true: the master is
+depth-test-off, and the engine's default would have skipped the queries. The fraction gates every
+sprite, not only the coronas: `M_V2_Sprite` disables the depth test on the master (the material
+lane's ruling, `$ignorez`), so a plain additive card behind a wall would otherwise draw through
+it; a card half behind a table fades as a whole instead of clipping — named below as the R7 call.
+No occlusion result yet (the first frame, or a renderer with queries off) reads as fully visible.
+
+Everything tunable is a field on **Project Settings → Elysium → Sprites** (`UElysiumSpriteSettings`),
+shipped with VtMB's own values and read by the proxy at creation: `GlowFalloff` **19000**,
+`GlowMinBrightness` **0.05**, `GlowSizePerDistance` **0.005**, `GlowFadeInSeconds` **0.2**,
+`GlowFadeOutSeconds` **0.1**, `SpriteQueryFootprintPerDistance` **3/128**, `SpriteQueryGrid`
+**4** (16 boxes; the one number with no VtMB twin — Source counted pixels). Cost accepted with
+eyes open: `grid²` sub-queries per sprite per view (sm_hub_1: 309 × 16), one frame of latency.
+
+**Visibility is the entity's.** `FElysiumEnvSprite` (`ElysiumEnvSprite.cpp`) restates `CSprite`:
+`Spawn` sets `bOn` by the unnamed-or-Start-On rule; `HideSprite`/`TurnOff` clear it,
+`ShowSprite`/`TurnOn` set it, `ToggleSprite` flips it; `ScriptHide`/`Kill` hide through the base
+chain and `ScriptUnhide` restores the last `bOn`; every change publishes `bOn && !IsInert()` through
+`IElysiumEmbodiment::SetBakedSpriteVisible(EntityIndex, bVisible)` → `AElysiumMapActor` →
+`UElysiumMapVisuals::SetSpriteVisible`, which finds the actor by its `elysium.ent` tag (bucketed
+once in `AdoptBakedLevel`) and sets it hidden in game. `bOn` is the leaf's one save field. A map
+off `MapsOnV2Models` has no sprite actors: the write finds nothing and the input is still accepted.
+
+**`<map>.sprites` retires.** `UE_bsp_to_scene.write_sprites` and its call are gone; the ledger
+row moves to *retired*.
+
+#### Verification (R6.1)
+
+`pipeline/tests/test_bake_map_sprites.py` pins the row → actor mapping on a synthetic join and
+fake sidecars (size from `scale × texture` with the 0..8 clamp and the zero-scale default, the
+colour and alpha, the blend from the mode table with mode 6 failing, `parallel_upright`, the
+spawn-off rule against `start_hidden`/name/spawnflag, the entity index, the sky flag), the
+editor half's pure placement (`sprite_actor_values`: the sky transform, the child name), the
+shared manifest version, and — corpus-gated — that every `env_sprite` block of the three maps
+is a row with the hidden rule re-derived from its own keys (sm_hub_1 places **309** rows, 113 of
+them mode 3). `bake_verify.verify_sprites` loads the level and matches every `elysium.sprite`
+actor to its staged row by entity index (size, colour, mode, upright, hidden, the child's parent
+and blend), no row missing and no actor extra. `Elysium.Substrate.EnvSprite` pins the leaf's
+spawn rule and every input on the recording double, and `Elysium.Substrate.SpriteGlow` pins the
+settings defaults, the glow size/brightness/smoothing formulas (`ElysiumSpriteGlow.h`, the pure
+functions the proxy calls), the tag helpers and the actor's shape. Measured numbers are in the
+R6.1 Settled entry of `docs/project/seam_migration.md`.
+
 ### The per-map cutover flag
 
 A second list on the R4.6 settings page, `UElysiumMapTransportSettings::MapsOnV2Models`, tracked in
