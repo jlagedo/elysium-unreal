@@ -8,6 +8,7 @@
 #include "ElysiumEntity.h"         // FElysiumEntity — the emitter parent attach resolve
 #include "ElysiumEntityDefs.h"     // FElysiumEntityDef — an emitter parent's authored origin
 #include "ElysiumEntityWorld.h"    // FindByName / EnqueueInput — the weather timer's entity I/O door
+#include "ElysiumMapTransportSettings.h"   // IsMapOnV2Models -- the R7.3 effects cutover
 #include "Map/ElysiumMapLog.h"
 
 #include "Engine/World.h"
@@ -151,8 +152,12 @@ bool IsFollowRainDefinition(const FString& Definition)
 
 void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 {
+	// R7.3: on a converted map the emitter is a bake-placed actor; the viewer-box modes 10/11 are
+	// weather's rain follow on either path (`effects-architecture.md` §5.7).
+	const bool bPlacedEffects = ElysiumMapTransport::IsMapOnV2Models(MapName);
+	const bool bViewerBox = Emitter.AttachType == 10 || Emitter.AttachType == 11;
 	// One viewer-volume system for every rain_follow_emitter. Two hub entities share it.
-	if (IsFollowRainDefinition(Emitter.ParticleDefinition))
+	if (IsFollowRainDefinition(Emitter.ParticleDefinition) || (bPlacedEffects && bViewerBox))
 	{
 		if (!Emitter.bActive)
 		{
@@ -162,6 +167,11 @@ void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 		}
 		RainEmitterStates.Add(Emitter.Entity.Index, Emitter);
 		RefreshFollowRain();
+		return;
+	}
+	if (bPlacedEffects)
+	{
+		ApplyEmitterToPlacedActor(Emitter);
 		return;
 	}
 	if (!Emitter.bActive)
@@ -311,6 +321,12 @@ void AElysiumMapActor::AttachEmitter(
 
 void AElysiumMapActor::RemoveEmitter(const FElysiumEntityHandle& Entity)
 {
+	if (const FElysiumWeatherEmitterState* Placed = EffectEmitterStates.Find(Entity.Index))
+	{
+		FElysiumWeatherEmitterState Dead = *Placed;
+		Dead.bDead = true;
+		ApplyEmitterToPlacedActor(Dead);
+	}
 	RainEmitterStates.Remove(Entity.Index);
 	if (TObjectPtr<UNiagaraComponent> Component; RainComponents.RemoveAndCopyValue(Entity.Index, Component))
 	{

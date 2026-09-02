@@ -1492,10 +1492,11 @@ def export_texture_glb(config, runner, texture: str) -> Path:
 
 
 def _texture_glb_sources(index: dict) -> list[str]:
-    """Every texture identity, from the seam's own selector."""
+    """Every texture identity, from the seam's own selectors: the `materials/**.tth` corpus plus
+    the PAKFILE probes (`source_keys`) and the particle sprites (`sprite_source_keys`, R7.3)."""
     from elysium_pipeline.formats import texture_glb
 
-    return texture_glb.source_keys(index)
+    return texture_glb.source_keys(index) + texture_glb.sprite_source_keys(index)
 
 
 def _texture_glb_one(index, texture: str, output_root: Path) -> dict:

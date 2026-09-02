@@ -612,7 +612,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE5, RE6, RE8–RE16 | dice; survey counts; fades; the sky chain | owning docs; rows in git history | [x] |
 | RE7 | retail `.sav` wire format | 10.7 import (non-goal) | [P] |
 | RE18–RE22 | script API; scenes; facial formats; frame order; hulls | owning docs | [x] |
-| RE23 | particle format — open: the `frames`/`fps` semantics and the `v(n)` keyframe position unit, each a reading the data supports and nothing confirms | `docs/vtmb/weather.md`; 7.9, PL12 | [ ] |
+| RE23 | particle format — the runtime is decoded from `engine.dll` (`frames`/`fps`, `v(n)`, the mode-8 blend, the emitter basis, collision, the 19-value attach enum; `docs/vtmb/effects.md` §2.4); open: whether `0x200d3840` is the `lighting` light sample, mode 3's per-segment tint, and the wetness time units | `docs/vtmb/weather.md`; 7.9, PL12 | [ ] |
 | RE24–RE29 | sheet; chargen; traits; quests; genesis exit; name matching | `docs/vtmb/game_runtime.md`, `entity_io.md` | [x] |
 | RE30, RE31 | env-audio DSP precedence; RandomSound scheduler | `docs/vtmb/audio_pipeline.md`; AUD7, AUD6 | [ ] |
 | RE32 | source-attributed `sp_theatre` run joined to bytes/export | `docs/vtmb/vtmb-animation-reverse-engineering.md`; 12.1 | [~] |

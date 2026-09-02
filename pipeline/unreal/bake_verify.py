@@ -658,6 +658,97 @@ def verify_sprites(actors, map_name):
     return errors
 
 
+EFFECT_TAG = "elysium.effect"
+#: The staged table -> the actor class the V2 bake places it as (`bake_map_v2.EFFECT_ACTOR_CLASSES`).
+EFFECT_ACTOR_CLASSES = {
+    "effects": "ElysiumEffectActor", "dustmotes": "ElysiumDustActor",
+    "steam": "ElysiumSteamActor", "beams": "ElysiumBeamActor",
+}
+
+
+def verify_effects(actors, map_name):
+    """R7.3 (`seam_map_map.md` -> "Import -- effects (R7.3)"), `MapsOnV2Models` maps only: every
+    `elysium.effect` actor matched to its staged row by the entity index tag -- the class per
+    table, and for an `effects[]` row the root, the attach data and the tree's leaf count -- no
+    row missing (an unresolved root places no actor, by VtMB's own rule) and no actor extra."""
+    errors = []
+    if not map_transport.is_map_on_v2_models(map_name):
+        return errors
+    manifest = _staged_manifest(map_name)
+    if manifest is None:
+        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count "
+                      "effects against (run: uv run elysium export map %s)" % (map_name, map_name))
+        return errors
+    expected = {}
+    for table in ("effects", "dustmotes", "steam", "beams"):
+        for row in manifest.get(table) or []:
+            if table == "effects" and not row.get("particle"):
+                continue
+            expected[int(row["index"])] = (table, row)
+    trees = manifest.get("particleTrees") or {}
+    found = {}
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if EFFECT_TAG not in tags:
+            continue
+        index = next((int(tag[len(SPRITE_ENTITY_TAG_PREFIX):]) for tag in tags
+                      if tag.startswith(SPRITE_ENTITY_TAG_PREFIX)), -1)
+        if index in found:
+            errors.append("%s: two effect actors carry entity index %d" % (map_name, index))
+        found[index] = actor
+    matched = 0
+    per_table = {}
+    for index, (table, row) in sorted(expected.items()):
+        actor = found.get(index)
+        if actor is None:
+            errors.append("%s: no effect actor for %s row %d" % (map_name, table, index))
+            continue
+        problems = []
+        class_name = actor.get_class().get_name()
+        if class_name != EFFECT_ACTOR_CLASSES[table]:
+            problems.append("class %s, staged table %s wants %s" % (
+                class_name, table, EFFECT_ACTOR_CLASSES[table]))
+        if int(actor.get_editor_property("entity_index")) != index:
+            problems.append("entity_index %d, tag %d" % (
+                int(actor.get_editor_property("entity_index")), index))
+        if table == "effects":
+            if str(actor.get_editor_property("root")) != row["particle"]:
+                problems.append("root %s, staged %s" % (
+                    actor.get_editor_property("root"), row["particle"]))
+            if int(actor.get_editor_property("attach_type")) != int(row["attach_type"]):
+                problems.append("attach_type %d, staged %d" % (
+                    int(actor.get_editor_property("attach_type")), int(row["attach_type"])))
+            if str(actor.get_editor_property("parent_name") or "") != str(row.get("parentname") or ""):
+                problems.append("parent_name %r, staged %r" % (
+                    actor.get_editor_property("parent_name"), row.get("parentname")))
+            tree = trees.get(row["particle"]) or {}
+            want_leaves = int((tree.get("stats") or {}).get("leafCount", 0))
+            try:
+                got_leaves = int(actor.get_editor_property("tree").get_editor_property("leaf_count"))
+            except Exception as error:  # noqa: BLE001 -- the property is the contract's
+                got_leaves = None
+                problems.append("tree unreadable (%s)" % error)
+            if got_leaves is not None and got_leaves != want_leaves:
+                problems.append("leaf_count %d, staged %d" % (got_leaves, want_leaves))
+        if problems:
+            errors.append("%s: %s row %d: %s" % (map_name, table, index, "; ".join(problems)))
+        else:
+            matched += 1
+            per_table[table] = per_table.get(table, 0) + 1
+    for index in sorted(set(found) - set(expected)):
+        errors.append("%s: effect actor %s carries entity index %d, which stages no effects row"
+                      % (map_name, found[index].get_actor_label(), index))
+    unreal.log("[verify] effects: %d actors, %d staged rows, %d matched (%s)" % (
+        len(found), len(expected), matched,
+        ", ".join("%d %s" % (n, t) for t, n in sorted(per_table.items())) or "none"))
+    for message in errors[:8]:
+        unreal.log_error("[verify] " + message)
+    if len(errors) > 8:
+        unreal.log_error("[verify] ... and %d more effect finding(s) on %s"
+                         % (len(errors) - 8, map_name))
+    return errors
+
+
 SKY_TAG = "elysium.sky"
 
 
@@ -1403,6 +1494,7 @@ def verify_map(map_name):
         errors.extend(verify_lights_baked(actors, world_dir, map_name))
         errors.extend(verify_details(actors, map_name))
         errors.extend(verify_sprites(actors, map_name))
+        errors.extend(verify_effects(actors, map_name))
         errors.extend(verify_sky_scope(actors, map_name))
         errors.extend(verify_ropes(world_dir, map_name))
         errors.extend(verify_captures(

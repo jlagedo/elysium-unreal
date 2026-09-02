@@ -29,6 +29,9 @@ class ANavMeshBoundsVolume;
 class APawn;
 class AElysiumNpcBody;
 class AElysiumMapActor;
+class AElysiumEffectActor;
+class UElysiumParticleTrees;
+struct FElysiumEffectAttachment;
 
 // Elysium's map lifecycle, distinct from Unreal's package/actor lifecycle. BeginPlay only starts
 // Building; authored gameplay is admitted exactly once at the Activating -> Active transaction.
@@ -378,6 +381,13 @@ public:
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) override;
 	virtual bool PlayAttachedEffect(USkeletalMeshComponent* Body, const FString& Definition,
 		FName Attachment) override;
+	// R7.3 (`effects-architecture.md` §5.9): the producer entry point -- one transient effect actor
+	// on the floor (or its family override), the tree from `DA_ElysiumParticleTrees`.
+	virtual FElysiumEffectHandle SpawnParticleRoot(const FString& Root,
+		const FElysiumEntityHandle* Parent, int32 AttachMode, FName AttachName, int32 AttachPoint,
+		const FVector& OriginCm, const FRotator& Angles) override;
+	virtual void StopParticleRoot(const FElysiumEffectHandle& Handle) override;
+	virtual void KillParticleRoot(const FElysiumEffectHandle& Handle) override;
 	virtual bool GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin,
 		float& OutMax) const override;
 	virtual bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget) override;
@@ -501,6 +511,10 @@ public:
 	virtual void ApplyWetness(const FElysiumWeatherTransition& Transition) override;
 	virtual void ApplyEmitter(const FElysiumWeatherEmitterState& Emitter) override;
 	virtual void RemoveEmitter(const FElysiumEntityHandle& Entity) override;
+	// R7.3: the three Valve classes' publishes, each to its bake-placed actor by entity index.
+	virtual void ApplyDust(const FElysiumDustState& Dust) override;
+	virtual void ApplySteam(const FElysiumSteamState& Steam) override;
+	virtual void ApplyBeam(const FElysiumBeamState& Beam) override;
 	void FireWeatherTimer(bool bRainOn);
 	FString GetWeatherDebugSummary() const;
 	const FElysiumWeatherTransition& GetWetnessTransition() const { return WetnessTransition; }
@@ -580,6 +594,22 @@ private:
 
 	/** Apply the recovered origin/tree/point attachment rule to one emitter component. */
 	void AttachEmitter(const struct FElysiumWeatherEmitterState& Emitter, UNiagaraComponent* Component);
+	// R7.3 (`ElysiumMapActorEffects.cpp`): the retarget for a `MapsOnV2Models` map -- drive the
+	// bake-placed AElysiumEffectActor by entity index instead of creating a component.
+	void ApplyEmitterToPlacedActor(const struct FElysiumWeatherEmitterState& Emitter);
+	// Resolve what an attach mode needs off the parent entity (§5.7): its body, its skeletal
+	// mesh, the socket the bone names, the reconstructed world location of a tree attach. False
+	// when the mode needs a parent it cannot have; the actor then keeps its placed origin.
+	bool ResolveEffectAttachment(FElysiumEntity* ParentEntity, int32 AttachType,
+		const FString& Bone, const FVector& AuthoredLocationCm, int32 EntityIndex,
+		const FString& Label, FElysiumEffectAttachment& Out);
+	// The last publish per placed effect, for the once-logged "no actor" warning and the
+	// weather debug summary.
+	TMap<int32, FElysiumWeatherEmitterState> EffectEmitterStates;
+	// §5.9's transient roots, by handle id.
+	TMap<int32, TWeakObjectPtr<AElysiumEffectActor>> TransientEffects;
+	int32 NextEffectId = 0;
+	UPROPERTY(Transient) TObjectPtr<UElysiumParticleTrees> ParticleTrees;
 	void RefreshFollowRain();
 	void UpdateFollowRainLocation();
 	TMap<int32, FElysiumWeatherEmitterState> RainEmitterStates;

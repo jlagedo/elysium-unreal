@@ -220,7 +220,7 @@ def test_sprite_actor_values_size_tags_and_the_sky_transform(module):
 
 
 def test_the_two_halves_share_the_manifest_version(module):
-    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 6
+    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 7
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)

@@ -8,7 +8,14 @@ import os
 from pathlib import Path
 from typing import Callable
 
-from elysium_pipeline.formats.texture_glb.model import SourceIdentity, asset_id, normalize_texture_path
+from elysium_pipeline.formats.texture_glb.model import (
+    SPRITE_FAMILY,
+    SPRITE_SUFFIX,
+    SourceIdentity,
+    asset_id,
+    is_sprite_key,
+    normalize_texture_path,
+)
 from elysium_pipeline.formats.unit_contract.origin import pakfile_origin
 
 
@@ -78,6 +85,24 @@ def source_keys(
             stem = name[len(prefix):] if name.startswith(prefix) else name
             keys.add(stem[:-len(suffix)])
     return sorted(keys)
+
+
+def sprite_source_keys(index: dict) -> list[str]:
+    """Every particle sprite the install resolves, as texture keys (`particles/<stem>`), sorted.
+
+    R7.3 (`seam_map_texture.md` -> "Texture unit" -> "Particle sprites"): the 318 raw
+    `particles/*.tga` members are texture units too, so the particle floor draws them off
+    `/ElysiumBaked/Textures/particles/T_<stem>`. Kept apart from `source_keys` on purpose: that
+    selector is the corpus index's disposition rule for `materials/**.tth`, and the `.tga` members
+    are already disposed under the image seam, which keeps publishing them as images.
+    """
+
+    prefix = SPRITE_FAMILY + "/"
+    return sorted(
+        path[:-len(SPRITE_SUFFIX)]
+        for path in index
+        if path.startswith(prefix) and path.endswith(SPRITE_SUFFIX) and "/" not in path[len(prefix):]
+    )
 
 
 def _origin(entry) -> dict[str, object]:
@@ -154,6 +179,11 @@ def load_source_closure(
 
         read_bytes = install.read
     normalized = normalize_texture_path(texture_path)
+    if is_sprite_key(normalized):
+        # A particle sprite: the raw `.tga` member is the whole closure (role `tga`, held in the
+        # primary slot); there is no `.ttz`.
+        tga = _member(index, normalized + SPRITE_SUFFIX, "tga", read_bytes, required=True)
+        return TextureSourceClosure(normalized, asset_id(normalized), tga, None)
     if normalized.startswith("maps/"):
         # An install member under `materials/maps/**` wins over the PAKFILE probe of the same
         # spelling (`source_keys`'s dedup rule); today the install carries none, so this is only

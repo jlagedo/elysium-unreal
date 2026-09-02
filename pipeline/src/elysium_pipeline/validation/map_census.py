@@ -1,11 +1,11 @@
-"""Per-map entity/light/effects-class censuses over the export_v2 GLB units (R2.2, MP-1.2).
+"""Per-map entity/light/effects-class censuses over the export_v2 GLB units (R2.2, MP-1.2; the effects vocabulary is R7.3's).
 
 The three units a map publishes already carry their own per-field census rows -- the entities
 unit's `classCensus[]`, the lighting unit's `lightTypeCensus[]` -- but neither states brush/hull/
-output totals per class, a light's styled share, or the fixed effects-class vocabulary R7.5 will
-consume by prevalence. This module re-aggregates those facts from the published units without
+output totals per class, a light's styled share, or the fixed effects-class vocabulary R7.3
+consumes by prevalence. This module re-aggregates those facts from the published units without
 touching the exporter or its independent validators, and pins the result as one JSON document per
-map so the differ (R3.3) and the effects work (R7.5) have a ground truth that does not require
+map so the differ (R3.3) and the effects work (R7.3) have a ground truth that does not require
 re-reading multi-hundred-megabyte GLBs.
 
 Like `shots_diff.py`, this is an internal library module: `uv run elysium` does not wire it in as
@@ -28,19 +28,27 @@ from elysium_pipeline.formats.unit_contract import read_glb
 from elysium_pipeline.paths import export_v2_root
 from elysium_pipeline.validation.shots_diff import git_commit
 
-#: The effects-entity family R7.5 (MP-5.5) lands by prevalence; a class this map never authors
-#: still gets a zero row, so a later diff sees the vocabulary hold steady across a re-export.
+#: The effects-entity family R7.3 lands (`docs/architecture/effects-architecture.md` section 5.8,
+#: the real census over the 108 maps -- R2.2's `env_fire` / `env_embers` / `env_lightglow` /
+#: `point_spotlight` / `env_sun` guesses have 0 placements and are gone); a class this map never
+#: authors still gets a zero row, so a later diff sees the vocabulary hold steady across a
+#: re-export. `env_sprite` is R6.1's billboard, kept because it is the one other placed
+#: effects-family class.
 EFFECTS_CLASSES = [
-    "env_sprite",
+    "env_particle",
+    "func_particle",
+    "func_dustmotes",
     "env_steam",
-    "env_fire",
-    "env_embers",
-    "env_lightglow",
-    "point_spotlight",
-    "env_sun",
-    "env_smoketrail",
-    "func_smokevolume",
-    "env_dustmote",
+    "env_beam",
+    "params_particle",
+    "params_explosion",
+    "point_explosion",
+    "env_shake",
+    "env_physexplosion",
+    "env_physimpact",
+    "env_shooter",
+    "env_particle_hud",
+    "env_sprite",
 ]
 
 #: `$ELYSIUM_WORK_ROOT/exports_v2/_census/<map>.json` -- beside the GLB units it summarizes,
@@ -128,7 +136,7 @@ def light_rows(world_lights: list[dict[str, Any]]) -> tuple[list[dict[str, Any]]
 
 
 def effects_class_counts(entities: list[dict[str, Any]]) -> dict[str, int]:
-    """Occurrences of the R7.5 effects-entity vocabulary, zero-filled for a class the map omits."""
+    """Occurrences of the R7.3 effects-entity vocabulary, zero-filled for a class the map omits."""
 
     counts = Counter(str(entity.get("classname") or "") for entity in entities)
     return {classname: counts.get(classname, 0) for classname in EFFECTS_CLASSES}

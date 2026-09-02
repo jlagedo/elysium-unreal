@@ -1666,37 +1666,60 @@ The datamap is at `0x105669d8` (`dataDesc` `0x10566a1c`, builder write at `0x100
 | `particle_definition` | `m_sParticleDefinition` | `+0x450` |
 | `attach_type` | `m_nAttachType` | `+0x458` |
 | `bone` | `m_sAttachName` | `+0x45c` |
+| `attach_point` | `m_nAttachPoint` | `+0x460` |
+| *(no key)* | `m_fRedScale` / `m_fGreenScale` / `m_fBlueScale` / `m_fMaskScale` / `m_fSizeScale` | `+0x464`…`+0x474` |
+| `active` | `m_bActive` | `+0x484` |
+| `ramp_scale` | `m_fRateScaleTarget` | `+0x48c` |
+| `ramp_time` | `m_fRampTime` | `+0x490` |
+| `spawnbounds` | `m_fSpawnBounds` | `+0x49c` |
+| `hud_draw_third` | `m_bHUDDrawThird` | `+0x4a0` |
 
-All three are plain keyfields with a null `inputFunc`. `attach_type` is a `FIELD_INTEGER`, so a map's
-numeric value lands directly; the same field is also settable **by name** from the particle definition,
-and that parser (`FUN_100fb620`) gives the low enum its names — a `__strcmpi` chain over
-`"origin"`, `"tree"`, `"point"`, `"treecolor"` writing `0`, `1`, `2`, `3` in that order:
+All are plain keyfields with a null `inputFunc`; the five scale fields have **no external name** —
+a map cannot author them, code writes them (the impact spawn's constant `0.8`), and they default to
+1. **The FGD's `bounds` is not in the datamap**: 1,110 corpus rows author it and nothing reads it;
+the extent key is `spawnbounds` (default 512, 228 rows author it, all 512). No spawnflag is read
+(`m_spawnflags` is the base field; the class never tests it). `attach_type` is a `FIELD_INTEGER`,
+so a map's numeric value lands directly; the same field is also settable **by name** from the
+particle definition, and that parser (`FUN_100fb620`) gives the low enum its names — a `__strcmpi`
+chain over `"origin"`, `"tree"`, `"point"`, `"treecolor"` writing `0`, `1`, `2`, `3` in that order.
+The whole enum has **19 values**, dumped at `0x105a7000`, and the animation-event spawn `mode`
+argument lands in the same field and is the same enum (verified):
 
-| Value | Name |
-| --- | --- |
-| `0` | `origin` |
-| `1` | `tree` |
-| `2` | `point` |
-| `3` | `treecolor` |
+| Value | Name | Value | Name |
+| --- | --- | --- | --- |
+| `0` | `FollowOrigin` (`origin`) | `10` | `PlayerBox` — the `spawnbounds` cube round the viewer, wrapping |
+| `1` | `BoneTree` (`tree`) | `11` | `PlayerSky` — as 10, spawns above the viewer (the rain follow) |
+| `2` | `BoneSinglePoint` (`point`) | `12` / `13` | `PlayerSphereEdge` / `FollowPlayerSphereEdge` |
+| `3` | `BoneTreeWithColors` (`treecolor`) | `14` | `ScreenCenter` |
+| `4` | `BoneHitboxVolumes` | `15` | `BrushEmitter` — forced by `func_particle` |
+| `5` | `ScreenBorder` | `16` | `ScreenRandom` |
+| `6` | `ModelAttachment` — origin and basis each tick | `17` | `ModelAttachmentNoFollow` |
+| `7` | `ScreenBottomAndSides` | `18` | random point on the parent's visible skin |
+| `8` | `EntitySimulatedPoint` | `9` | `EntityBox` — random point in the parent's render OBB |
 
-`2` = `point` is the attachment-point/bone follow, and the corpus agrees: all 17 `attach_type 2`
-emitters carry **both** `parentname` and `bone`, and no other value does. `attach_type 0` is the
-entity's own origin (135 of its 143 instances carry neither key).
-
-Values above `3` are **not resolved**. They are used but rare — `11` (3), `5`, `9`, `10` (1 each) —
-and appear in separate consumers: `FUN_100fbdc0` treats `10`–`13` as one family, `FUN_100fc500`
-compares against `5` and `7`, and `FUN_100fb3d0` range-checks `0`–`0x13`, so the enum runs to at least
-19. None occur in `sp_theatre`.
+`2` = `point` is the attachment-point/bone follow, and the corpus agrees: the `attach_type 2`
+emitters carry **both** `parentname` and `bone`. `attach_type 0` is the entity's own origin.
+Corpus usage over 1,304 rows: `0` 1,085 · `1` 111 · `2` 45 · `-1` 29 (the switch default; origin,
+INFERRED) · `11` 14 · `6` 11 · `17` 5 · `10` 2 · `9` 1 · `5` 1. Modes 4, 7, 8, 12–14, 16 and 18 are
+placed nowhere and reachable only from code that passes 1, 2 or 6. `Activate` removes the entity
+when the definition does not resolve.
 
 ### `TurnOn` restarts; `TurnOff` only stops feeding
 
 Both inputs forward to adjacent virtual slots (`vtable + 0x3c4` / `+0x3c8`) on `CEnvParticle`'s own
-vtable (`0x10455f1c`). `TurnOn` (`0x100fc570`) carries **no already-active guard**: every call
-re-issues the spawn/attach call and re-stamps the activation time (`m_bActive` `+0x484`, start time
-`+0x488`), so repeated `TurnOn` restarts the emitter rather than being swallowed. This is what lets a
-scene address two distinct emitters sharing one targetname with a single wire — each restarts its
-own. `TurnOff` (`0x100fb7d0`) is a bare `m_bActive = 0`: idempotent, and it does **not** kill live
-particles, which finish on their own timeline.
+vtable (`0x10455f1c`). `TurnOn` (`0x100fb7a0`; the `0x100fc570` an earlier pass cited is
+`CEnvParticleHUD`'s override) carries **no already-active guard**: every call re-issues the
+spawn/attach call and re-stamps the activation time (`m_bActive` `+0x484`, start time `+0x488`),
+and the client rebuilds the emitter whenever that timestamp changes — that is the restart. This
+is what lets a scene address two distinct emitters sharing one targetname with a single wire —
+each restarts its own. `TurnOff` (`0x100fb7d0`) is a bare `m_bActive = 0`: idempotent, and it does
+**not** kill live particles, which finish on their own timeline (the emitter's stop clears `loop`
+and stops feeding). Live particles **do** follow a moving parent — `parent_speed` (default 1) is
+the fraction of the parent's movement they inherit (`docs/vtmb/effects.md` §2.4).
+
+`SetRateScale` / `SetRampTime` write a target the client approaches **linearly** into the one
+per-emitter rate float that multiplies both `rate` and `burst`. **`JetLength` is not an input on
+this class**: the two map wires that send it (`env_particle`'s input surface below) are dead.
 
 `active` seeds spawn-time state through the plain field, and the constructor (`0x100fad50`) defaults
 it to `1`, so an emitter authoring no `active` key starts on. `ramp_scale` (`+0x48c`) and `ramp_time`
@@ -2205,7 +2228,7 @@ Counts are wires observed across all maps.
 | `env_sprite` | HideSprite(218) ShowSprite(108) TurnOn(96) TurnOff(62) ScriptUnhide(11) Kill(11) ScriptHide(10) |
 | `func_door_rotating` | Unlock(102) Open(82) Lock(69) Close(58) ScriptUnhide(31) ScriptHide(7) Toggle(6) Kill(4) |
 | `prop_button` | Lock(137) Unlock(105) SetState(69) Kill(2) |
-| `env_particle` | TurnOn(180) TurnOff(85) Kill(27) SetRateScale(5) JetLength(2) ScriptUnhide(2) SetParent(1) |
+| `env_particle` | TurnOn(180) TurnOff(85) Kill(27) SetRateScale(5) JetLength(2 — not an input on the class; dead wires) ScriptUnhide(2) SetParent(1) |
 | `trigger_changelevel` | ChangeNow(273) ScriptUnhide(18) ScriptHide(6) Enable(1) Kill(1) |
 | `func_door` | Open(157) Close(93) Unlock(15) Lock(12) Toggle(4) Kill(4) ScriptHide(2) |
 | `func_brush` | ScriptHide(104) ScriptUnhide(101) Kill(30) Disable(3) Enable(3) |

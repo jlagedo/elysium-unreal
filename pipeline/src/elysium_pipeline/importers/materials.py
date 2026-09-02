@@ -54,6 +54,16 @@ FAMILY = "materials"
 PACKAGE_ROOT = "/ElysiumBaked/Materials"
 #: The tracked package the nine hand-built masters (SF-4.3) live under.
 MASTER_ROOT = "/Game/ElysiumGenerated/Materials/V2"
+#: R7.3 (`docs/architecture/effects-architecture.md` section 5.4): the four particle material
+#: children `make_v2_materials.make_particle_children` authors below this lane's package root,
+#: beside the corpus instances and map-independent like them. They are not units of this lane, so
+#: the manifest names them under `keep` on every run and the editor phase's prune leaves them be.
+EFFECT_MATERIAL_CHILDREN = (
+    f"{PACKAGE_ROOT}/particles/MI_Particle",
+    f"{PACKAGE_ROOT}/particles/MI_ParticleLit",
+    f"{PACKAGE_ROOT}/particles/MI_ParticleNoZ",
+    f"{PACKAGE_ROOT}/particles/MI_ParticleRefract",
+)
 #: Bumped whenever the mapping below changes in a way that must re-stage every unit. v2: the
 #: revised design (`seam_migration.md` -> "Revised after review", 2026-08-31).
 SETTINGS_VERSION = "elysium-material-import-v2"
@@ -2074,6 +2084,7 @@ def stage_materials(
     named = {entry["assetPath"] for entry in entries}
     keep -= named
     result.protected = len(keep)
+    keep.update(EFFECT_MATERIAL_CHILDREN)   # R7.3: authored beside the corpus, never pruned
 
     entries.sort(key=lambda entry: entry["assetPath"].lower())
     manifest = {

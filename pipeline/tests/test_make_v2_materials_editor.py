@@ -384,8 +384,10 @@ def _fake_unreal(editor):
         TextureAddress=_enum("TA", "TA_CLAMP"),
         TextureLossyCompressionAmount=_enum("TLCA", "TLCA_NONE"),
         MaterialDomain=_enum("MD", "MD_SURFACE"),
-        BlendMode=_enum("BLEND", "BLEND_OPAQUE", "BLEND_TRANSLUCENT", "BLEND_MODULATE"),
-        TranslucencyLightingMode=_enum("TLM", "TLM_SURFACE_PER_PIXEL_LIGHTING"),
+        BlendMode=_enum("BLEND", "BLEND_OPAQUE", "BLEND_TRANSLUCENT", "BLEND_MODULATE",
+                        "BLEND_ALPHA_COMPOSITE"),
+        TranslucencyLightingMode=_enum("TLM", "TLM_SURFACE_PER_PIXEL_LIGHTING",
+                                       "TLM_VOLUMETRIC_PER_VERTEX_NON_DIRECTIONAL"),
         MaterialShadingModel=_enum("MSM", "MSM_UNLIT"),
         RefractionMode=_enum("RM", "RM_PIXEL_NORMAL_OFFSET"),
         MaterialPositionTransformSource=_enum(

@@ -29,6 +29,11 @@ namespace ElysiumBakedTags
 	// carrying every value the bake wrote. Carries a second tag, EntityIndex(i), naming the
 	// entity's lump ordinal so the leaf's visibility writes find it.
 	inline const FName Sprite(TEXT("elysium.sprite"));
+	// One effects entity (R7.3, `MapsOnV2Models` maps only): an AElysiumEffectActor (or its
+	// Dust / Steam / Beam subclass) carrying its staged row. Carries a second tag, EntityIndex(i),
+	// so the leaf's `ApplyEmitter` / `ApplyDust` / `ApplySteam` / `ApplyBeam` writes find it, and
+	// -- inside the miniature -- `Sky` beside it, like a sprite.
+	inline const FName Effect(TEXT("elysium.effect"));
 	// One WORLDLIGHTS source. Carries a second tag, Source(i), naming its `.lights` line so the
 	// light rig can bind it back to the raw source data it re-derives intensity and reach from.
 	inline const FName Light(TEXT("elysium.light"));

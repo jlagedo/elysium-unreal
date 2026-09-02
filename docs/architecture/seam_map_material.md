@@ -361,9 +361,23 @@ no separate "Additive" master, and why `M_V2_Lit` covers opaque and masked alike
 | `M_V2_Eyes` | Default Lit | Opaque | off | `eyes` | 406 |
 | `M_V2_Water` | Default Lit | Translucent | off | `water` | 24 |
 | `M_V2_Sprite` | Unlit, `bDisableDepthTest` | Translucent | on | `sprite`, plus the 5 `unlitgeneric` `$ignorez` world units | 67 |
+| `M_V2_SpriteZ` (R7.3) | Unlit, depth test **on** | Translucent | on | no VMT unit — `M_V2_Sprite`'s graph plus the `ElysiumFog` parameters (`FogColor` / `FogStart` / `FogInvRange`, by parameter, inscatter × opacity); the particle floor's `MI_Particle` | 0 |
+| `M_V2_SpriteZLit` (R7.3) | Default Lit, `TLM_VolumetricPerVertexNonDirectional` | Translucent | on | no VMT unit — the twin for the `lighting` leaves; `MI_ParticleLit` | 0 |
 | `M_V2_Refract` | Default Lit, refraction enabled | Translucent | off | `refract`, `heatglow` | 11 |
 | `M_V2_Decal` | Unlit | Modulate | off | `decalmodulate` | 38 |
 | `M_V2_TwoTexture` | Default Lit | Opaque | off | `unlittwotexture`, `worldvertextransition`, `worldtwotextureblend` | 95 |
+
+The two R7.3 twins exist because `bDisableDepthTest` is material-only and VtMB's particle mode 8
+is depth test *on* (`effects-architecture.md` §5.4); no VMT unit routes to them and the exposed-
+parameter table below does not list them. Beside them `make_v2_materials.make_particle_children`
+authors the four particle children under `/ElysiumBaked/Materials/particles/` — `MI_Particle`
+(`M_V2_SpriteZ`), `MI_ParticleLit` (`M_V2_SpriteZLit`), `MI_ParticleNoZ` (`M_V2_Sprite`), all
+three `BlendMode = AlphaComposite` + `UseVertexColor` / `UseVertexAlpha` on, and
+`MI_ParticleRefract` (`M_V2_Refract`, Translucent, `UseBaseTexture` on) — recipe-stamped on the
+master's own recipe like `MI_V2_Missing`; `importers/materials.py` names the four under the
+manifest's `keep` so the import lane's prune leaves them. `MI_ParticleNoZ` sits on `M_V2_Sprite`,
+whose parameter table is pinned to `ElysiumSurfaceParamsSprite` in C++, so it carries no fog
+parameters until that header grows them (the four `no_z_test` leaves draw unfogged).
 
 The **Default blend** column is the master asset's own property, not a prediction about its
 instances: every instance sets its own from the table below. It matters only for an instance the

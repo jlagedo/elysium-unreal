@@ -6,10 +6,12 @@
 #include "ElysiumMapVisuals.generated.h"
 
 class AElysiumDetailPropActor;
+class AElysiumEffectActor;
 class AElysiumSpriteActor;
 class AStaticMeshActor;
 class APostProcessVolume;
 class UCableComponent;
+class UElysiumEffectFamilies;
 class UElysiumLightRig;
 class UExponentialHeightFogComponent;
 class UMaterialInstanceDynamic;
@@ -118,6 +120,14 @@ public:
 	// R6.1: CSprite's draw switch for the sprite standing for `EntityIndex`. False when this map
 	// bakes no such sprite (a legacy-lane map, or an index that is not an env_sprite).
 	bool SetSpriteVisible(int32 EntityIndex, bool bShown);
+	// R7.3: one per effects entity (`elysium.effect`), bucketed by the entity index its tag
+	// carries; the leaf's publishes reach it through `FindEffectActor`. Null when this map bakes
+	// no such actor (a legacy-lane map, or an index that is not an effects entity).
+	const TArray<TObjectPtr<AElysiumEffectActor>>& GetEffectActors() const { return EffectActors; }
+	AElysiumEffectActor* FindEffectActor(int32 EntityIndex) const;
+	// The family overrides (`DA_EffectFamilies`), loaded once at adopt; null when the asset is
+	// absent (every effect plays the floor).
+	UElysiumEffectFamilies* GetEffectFamilies() const { return EffectFamilies; }
 
 	// The real-time light rig for this map (the Cog Lights window's read-only viewer reaches it
 	// through here), or null before the map is built.
@@ -148,6 +158,9 @@ public:
 	int32 SpriteGlowCount = 0;
 	// R6.7: how many of the sprites stand inside the 3D-skybox miniature.
 	int32 SpriteSkyCount = 0;
+	// Effects (R7.3): the adopted `elysium.effect` actors, and how many stand inside the miniature.
+	int32 EffectCount = 0;
+	int32 EffectSkyCount = 0;
 	// Decals: number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
 	// Ropes: number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
@@ -194,6 +207,9 @@ private:
 	UPROPERTY() TArray<TObjectPtr<AElysiumSpriteActor>> SpriteActors;
 	// The sprite actor per entity index, the key the leaf's writes arrive by.
 	TMap<int32, TWeakObjectPtr<AElysiumSpriteActor>> SpritesByEntity;
+	UPROPERTY() TArray<TObjectPtr<AElysiumEffectActor>> EffectActors;
+	TMap<int32, TWeakObjectPtr<AElysiumEffectActor>> EffectsByEntity;
+	UPROPERTY() TObjectPtr<UElysiumEffectFamilies> EffectFamilies;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeWorldBrushes;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeSkyBrushes;
 	bool bPropsVisible = true;

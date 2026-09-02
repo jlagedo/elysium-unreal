@@ -153,7 +153,120 @@ def _inflate_with_recovery(data: bytes) -> tuple[bytes, bool]:
         return bytes(output), bool(decoder.eof)
 
 
+def _decode_sprite(closure) -> TextureModel:
+    """R7.3: one raw `particles/<stem>.tga` member as a one-level BGRA8 texture unit
+    (`seam_map_texture.md` -> "Texture unit" -> "Particle sprites").
+
+    The pixels are the image seam's own TGA decode (`formats.image_glb.tga.decode_tga`: header,
+    optional colour map, uncompressed or RLE image, orientation put top-down), widened from
+    24-bit BGR to BGRA with an opaque alpha where the file stores no alpha -- the corpus is 279
+    BGRA8 uncompressed, 36 BGR8 uncompressed, 3 BGRA8 RLE. No VTF header exists, so the
+    `sourceFormat` block states the TGA's own fields under `tga` and reports the pixel format as
+    `BGRA8888` (VTF enum 12, the format the payload actually carries); the sampling flags are all
+    off (Source's particle atlas sampled with the defaults); there is one mip level.
+    """
+
+    from types import SimpleNamespace
+
+    from elysium_pipeline.formats.image_glb import ktx2 as image_ktx2
+    from elysium_pipeline.formats.image_glb.tga import TgaDecodeError, decode_tga
+
+    member = closure.tth
+    try:
+        image = decode_tga(SimpleNamespace(
+            member=SimpleNamespace(path=member.path, data=member.data),
+            image_path=member.path, asset_id=closure.asset_id, container="tga"))
+    except TgaDecodeError as error:
+        raise TextureDecodeError(str(error)) from error
+    pixels = image.pixel_data
+    if image.vk_format_value == image_ktx2.VK_FORMAT_B8G8R8_UNORM:
+        widened = bytearray(len(pixels) // 3 * 4)
+        widened[0::4] = pixels[0::3]
+        widened[1::4] = pixels[1::3]
+        widened[2::4] = pixels[2::3]
+        widened[3::4] = b"\xff" * (len(pixels) // 3)
+        pixels = bytes(widened)
+    elif image.vk_format_value != image_ktx2.VK_FORMAT_B8G8R8A8_UNORM:
+        raise TextureDecodeError(
+            f"{member.path}: TGA pixel format {image.vk_format_name} is not admitted as a texture "
+            f"unit (BGRA8 and BGR8 only)")
+    info = FORMATS[FMT_BGRA8888]
+    width, height = image.width, image.height
+
+    # The ledger: the image seam claims the same spans under its own owners; restated here under
+    # this seam's states so the unit's byte accountability is checked by this seam's validator.
+    data = member.data
+    ledger = ByteLedger(member.path, data)
+    ledger.claim(0, 18, "mapped", "tga.header")
+    cursor = 18
+    id_length = data[0]
+    if id_length:
+        ledger.claim(cursor, id_length, "mapped", "tga.imageId")
+        cursor += id_length
+    source = image.source_format
+    if int(source.get("colorMapType") or 0) == 1:
+        map_bytes = int(source.get("colorMapLength") or 0) * ((int(source.get("colorMapDepth") or 0) + 7) // 8)
+        if map_bytes:
+            ledger.claim(cursor, map_bytes, "mapped", "tga.colorMap")
+            cursor += map_bytes
+    pixel_size = int(source.get("pixelDepth") or 32) // 8
+    if int(source.get("imageType") or 2) in (9, 10, 11):
+        from elysium_pipeline.formats.image_glb.tga import _decode_rle
+
+        _pixels, consumed_to = _decode_rle(data, cursor, pixel_size, width * height)
+        ledger.claim(cursor, consumed_to - cursor, "derived", "tga.image")
+        cursor = consumed_to
+    else:
+        ledger.claim(cursor, width * height * pixel_size, "mapped", "tga.image")
+        cursor += width * height * pixel_size
+    if cursor < len(data):
+        ledger.claim(cursor, len(data) - cursor, "omitted-proven", "tga.trailing")
+
+    identities = [m.identity() for m in closure.members()]
+    return TextureModel(
+        texture_path=closure.texture_path,
+        asset_id=closure.asset_id,
+        sources=identities,
+        format=info,
+        width=width,
+        height=height,
+        declared_width=width,
+        declared_height=height,
+        frames=1,
+        cubemap=False,
+        mip_count=1,
+        levels=[TextureLevel(0, 0, width, height, (pixels,))],
+        header={
+            "tthVersion": 0,
+            "vtfVersion": "",
+            "flags": 0,
+            "startFrame": 0,
+            "reflectivity": [0.0, 0.0, 0.0],
+            "bumpScale": 0.0,
+            "declaredInlineMips": 1,
+            "resolvedInlineMips": 1,
+            "sourceFormat": info.source_name,
+            "sourceFormatEnum": info.source_enum,
+            "vtfMipCount": 1,
+            "sourceWidth": width,
+            "sourceHeight": height,
+            "sourceMipCount": 1,
+            "tthMipTableCount": 1,
+            "zlibStreamComplete": True,
+            "sourceContainer": "tga",
+            "tga": dict(source),
+            "tgaOrientation": dict(image.orientation),
+        },
+        sampling=_sampling(0),
+        faces=[],
+        omissions=[],
+        byte_coverage=[ledger.finish()],
+    )
+
+
 def decode_texture(closure) -> TextureModel:
+    if getattr(closure.tth, "role", "") == "tga":
+        return _decode_sprite(closure)
     tth = closure.tth.data
     if len(tth) < 20 or tth[:4] != b"TTH\0":
         raise TextureDecodeError(f"{closure.tth.path}: invalid TTH header")

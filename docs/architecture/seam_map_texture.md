@@ -79,6 +79,44 @@ It does not own colour space, texture role, or sampler binding as *meaning*: whe
 albedo, a normal map, an alpha mask, an iris or a refraction field is a property of the binding in
 the referencing material, not of the texture identity.
 
+### Particle sprites (R7.3)
+
+The 318 raw `particles/<sprite>.tga` members are texture units too (`effects-architecture.md`
+§5.4: the particle floor draws them off `T_` assets, so the legacy PNG derivative of
+`UE_extract_particles.py` retires with the legacy lane):
+
+```text
+<VTMB>/Vampire/pack*.vpk -> particles/<sprite>.tga
+  -> vtmb:texture:particles/<sprite>
+  -> $ELYSIUM_EXPORT_V2_ROOT/textures/particles/<sprite>.glb
+  -> /ElysiumBaked/Textures/particles/T_<safe sprite>          (the import lane, `<dir>` = particles)
+```
+
+The unit's one source member has role `tga` and sits in the primary slot; there is no `.ttz`.
+The decode is the image seam's own (`formats/image_glb/tga.py`: header, optional colour map,
+uncompressed or RLE image, orientation put top-down), and the payload is one KTX2 level in
+`VK_FORMAT_B8G8R8A8_UNORM` — a 24-bit BGR file widened with an opaque alpha (the corpus is 279
+BGRA8 uncompressed, 36 BGR8 uncompressed, 3 BGRA8 RLE; any other TGA shape is a named decode
+failure, not admitted). `sourceFormat` carries the TGA header under `tga` and `sourceContainer:
+"tga"`, reports the pixel format as `BGRA8888` (VTF enum 12, what the payload is) and zeroes the
+VTF-only fields; `sampling` is all off; `dimensions.mipCount` is 1. The byte ledger is this seam's
+(`tga.header` / `tga.imageId` / `tga.colorMap` / `tga.image` mapped or derived, `tga.trailing`
+omitted-proven), so the validator's decoded-pixel re-check runs unchanged.
+
+Selection: `sprite_source_keys(index)` (`formats/texture_glb/source.py`), which the corpus export
+(`export_v2 textures-glb`) adds to `source_keys`. It is deliberately **not** folded into
+`source_keys` itself: that selector is the corpus index's disposition rule for `materials/**.tth`,
+and `particles/*.tga` is already disposed under the image seam, which keeps publishing the same
+members as `vtmb:image:` units. The import lane needs no change: the key `particles/<stem>`
+lands as `/ElysiumBaked/Textures/particles/T_<stem>`, an uncompressed BGRA8 stage
+(`compression: uncompressed`, `TC_EditorIcon`, sRGB on — no material binds a sprite, so the role
+is `colour`), one level, `TMGS_NoMipmaps`, wrap/wrap. The effects stage reads the sidecar's
+`width` / `height` / `assetPath` for a leaf's `sprite` (`seam_map_map.md` → "Import — effects").
+
+Measured (2026-09-02): `sprite_source_keys` resolves 318 keys; all 318 export and validate
+(`test_particle_glb`'s witnesses `flamemass` 64×64, `dropletfast` 5×25, 100 % byte coverage);
+`stage_textures(select="particles")` stages 318 assets, 0 twins, 0 failures.
+
 ## Source closure covered by the specification
 
 | Source member | Texture ownership | GLB destination |

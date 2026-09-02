@@ -1643,6 +1643,24 @@ struct FElysiumRecordingServices final
 		Emitters.Remove(Entity.Index);
 		Record(FString::Printf(TEXT("RemoveEmitter #%d"), Entity.Index));
 	}
+	virtual void ApplyDust(const FElysiumDustState& Dust) override
+	{
+		DustStates.Add(Dust.Entity.Index, Dust);
+		Record(FString::Printf(TEXT("ApplyDust #%d %s points=%d"), Dust.Entity.Index,
+			Dust.bActive ? TEXT("on") : TEXT("off"), Dust.SpawnPointsCm.Num()));
+	}
+	virtual void ApplySteam(const FElysiumSteamState& Steam) override
+	{
+		SteamStates.Add(Steam.Entity.Index, Steam);
+		Record(FString::Printf(TEXT("ApplySteam #%d %s"), Steam.Entity.Index,
+			Steam.bActive ? TEXT("on") : TEXT("off")));
+	}
+	virtual void ApplyBeam(const FElysiumBeamState& Beam) override
+	{
+		BeamStates.Add(Beam.Entity.Index, Beam);
+		Record(FString::Printf(TEXT("ApplyBeam #%d %s"), Beam.Entity.Index,
+			Beam.bActive ? TEXT("on") : TEXT("off")));
+	}
 
 	FElysiumEntityHandle OpenSignOwner;
 	FElysiumEntityHandle OpenDialogOwner;
@@ -1650,6 +1668,9 @@ struct FElysiumRecordingServices final
 	FString ActiveScheme;
 	FElysiumWeatherTransition LastWetness;
 	TMap<int32, FElysiumWeatherEmitterState> Emitters;
+	TMap<int32, FElysiumDustState> DustStates;
+	TMap<int32, FElysiumSteamState> SteamStates;
+	TMap<int32, FElysiumBeamState> BeamStates;
 
 private:
 	void Record(FString&& Line) const { Calls.Add(MoveTemp(Line)); }

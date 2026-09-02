@@ -307,6 +307,14 @@ struct FElysiumDynamicLightSpec
 	bool bSpot = false;                         // `_cone` > 0
 };
 
+// R7.3 (`effects-architecture.md` §5.9): one transient particle root a producer started through
+// `SpawnParticleRoot`. Invalid when the root's tree is unknown or there is no world to stand it in.
+struct FElysiumEffectHandle
+{
+	int32 Id = INDEX_NONE;
+	bool IsValid() const { return Id != INDEX_NONE; }
+};
+
 class IElysiumEmbodiment
 {
 public:
@@ -652,6 +660,20 @@ public:
 	// the particle simulation. False means the body, socket, asset or spawn could not be resolved.
 	virtual bool PlayAttachedEffect(USkeletalMeshComponent* Body, const FString& Definition,
 		FName Attachment) { return false; }
+
+	// R7.3 (`effects-architecture.md` §5.9): "spawn root X at attachment Y with mode Z" -- one
+	// transient effect actor on the slotted floor (or its family override), the tree from the shared
+	// `DA_ElysiumParticleTrees`. `Root` is the folded `vtmb:particle` key or the bare root name;
+	// `Parent` may be null for a world spawn; `AttachMode` the 19-value enum; `AttachName` the bone /
+	// attachment string; `AttachPoint` the numbered attachment; `OriginCm` / `Angles` the Unreal
+	// placement for a world spawn. Supersedes PlayAttachedEffect for every deferred producer (impact
+	// table, muzzle pair, the 511x animation events, the discipline auras). No producer is wired at
+	// R7.3; the entry point stands. Invalid handle: unknown root, or headless.
+	virtual FElysiumEffectHandle SpawnParticleRoot(const FString& Root,
+		const FElysiumEntityHandle* Parent, int32 AttachMode, FName AttachName, int32 AttachPoint,
+		const FVector& OriginCm, const FRotator& Angles) { return FElysiumEffectHandle(); }
+	virtual void StopParticleRoot(const FElysiumEffectHandle& Handle) {}   // TurnOff: let finish
+	virtual void KillParticleRoot(const FElysiumEffectHandle& Handle) {}   // remove now
 
 	// 12.5 — this body's own phoneme filter (`studiohdr` +232/+236), the bounds a `.lip` phoneme's
 	// span is clamped to for the viseme envelope's blend width. A read rather than a write, and the
@@ -1136,18 +1158,81 @@ struct FElysiumWeatherEmitterState
 	FVector LocationCm = FVector::ZeroVector;
 	FString ParticleDefinition;
 	bool bActive = false;
-	// VtMB's `attach_type`. The definition-side parser names the low values origin/tree/point/
-	// treecolor, so 2 = `point`: ride `AttachBone` on `ParentName`'s body. Higher values are used
-	// but unresolved, and are carried rather than interpreted.
+	// The entity is dead (`Kill`): the placed actor is removed now rather than let finish.
+	bool bDead = false;
+	// Bumped by every `TurnOn` input. VtMB's client rebuilds the emitter whenever the activation
+	// timestamp changes, so a `TurnOn` on an already-active emitter restarts it; the embodiment
+	// restarts when this changes while `bActive` holds (`effects-architecture.md` §5.2).
+	uint32 TurnOnSerial = 0;
+	// VtMB's `attach_type`, the 19-value enum (`effects-architecture.md` §5.7). 0/-1 origin,
+	// 1/3 bone tree, 2 bone point, 6/17 attachment (follow / snap once), 9 the parent's box,
+	// 10/11 the viewer box (weather's rain follow), 15 the brush box (`func_particle`).
 	int32 AttachType = 0;
 	FString ParentName;
 	FString AttachBone;
-	float BoundsCm = 0.0f;
+	int32 AttachPoint = 0;           // `attach_point` (m_nAttachPoint), the numbered attachment
+	float BoundsCm = 0.0f;           // `spawnbounds` x 2.54 -- the viewer cube of modes 10/11
 	float RateScale = 0.0f;
 	float RampStartScale = 0.0f;
 	float RampTargetScale = 0.0f;
 	double RampStartTime = 0.0;
 	float RampDuration = 0.0f;
+	// `func_particle` only: the brush's world AABB (mode 15's spawn box) and CFuncParticle::
+	// Activate's size scalar, clamp(volume / 128^3, 0.01, 100), folded into the one rate float.
+	FBox BrushBoundsCm = FBox(ForceInit);
+	float VolumeScale = 1.0f;
+};
+
+// R7.3 (`effects-architecture.md` §5.6): what a `func_dustmotes` publishes to stand its motes.
+// Points are world cm, pre-sampled inside the brush solid by the leaf (ten retries each, the
+// convex set off the entity's own hulls); the actor re-expresses them in its own frame.
+struct FElysiumDustState
+{
+	FElysiumEntityHandle Entity;
+	bool bActive = false;
+	bool bFrozen = false;
+	TArray<FVector> SpawnPointsCm;
+	FBox BoundsCm = FBox(ForceInit);
+	float SpawnRate = 0.0f;          // motes / s
+	FLinearColor Color = FLinearColor::White;   // rgb = Color / 255, a = Alpha / 255
+	float SpeedMaxCm = 0.0f;
+	float SizeMinCm = 0.0f;
+	float SizeMaxCm = 0.0f;
+	float LifetimeMin = 0.0f;
+	float LifetimeMax = 0.0f;
+	float DistMaxCm = 0.0f;
+};
+
+// What an `env_steam` publishes: Valve's CSteamJet keys in cm / s / 0..1.
+struct FElysiumSteamState
+{
+	FElysiumEntityHandle Entity;
+	bool bActive = false;
+	int32 Type = 0;                  // 0 normal, 1 heatwave (the refract material)
+	float SpreadSpeedCm = 0.0f;
+	float SpeedCm = 0.0f;
+	float StartSizeCm = 0.0f;
+	float EndSizeCm = 0.0f;
+	float Rate = 0.0f;
+	float JetLengthCm = 0.0f;
+	float Lifetime = 0.0f;           // JetLength / Speed
+	FLinearColor Color = FLinearColor::White;   // rendercolor / 255, renderamt / 255
+};
+
+// What an `env_beam` publishes per strike or state change: the resolved endpoints (world cm),
+// the taper's start width, the raw noise amplitude (the actor scales it by length / 100), the
+// scroll rate and the colour. `bActive` is the continuous state or the striker's window.
+struct FElysiumBeamState
+{
+	FElysiumEntityHandle Entity;
+	bool bActive = false;
+	FVector StartCm = FVector::ZeroVector;
+	FVector EndCm = FVector::ZeroVector;
+	float WidthCm = 0.0f;
+	float NoiseAmplitudeCm = 0.0f;
+	float TextureScroll = 0.0f;
+	FString Texture;                 // `vtmb:material:sprites/beama`, the material lane's MI_
+	FLinearColor Color = FLinearColor::White;
 };
 
 class IElysiumWeather
@@ -1157,6 +1242,11 @@ public:
 	virtual void ApplyWetness(const FElysiumWeatherTransition& Transition) = 0;
 	virtual void ApplyEmitter(const FElysiumWeatherEmitterState& Emitter) = 0;
 	virtual void RemoveEmitter(const FElysiumEntityHandle& Entity) = 0;
+	// R7.3: the three Valve classes drive their bake-placed actors by entity index through here.
+	// Headless, and on a map that bakes no such actor: nothing.
+	virtual void ApplyDust(const FElysiumDustState& Dust) {}
+	virtual void ApplySteam(const FElysiumSteamState& Steam) {}
+	virtual void ApplyBeam(const FElysiumBeamState& Beam) {}
 };
 
 // The bundle FElysiumEntityWorld is constructed with. By value — four raw pointers to objects that

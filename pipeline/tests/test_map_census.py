@@ -67,15 +67,18 @@ def test_light_rows_group_by_type_and_count_styled_lights():
 
 def test_effects_class_counts_zero_fills_absent_classes():
     entities = [
-        _entity("env_sprite"), _entity("env_sprite"), _entity("point_spotlight"),
+        _entity("env_particle"), _entity("env_particle"), _entity("func_dustmotes"),
         _entity("func_door"),
     ]
     counts = map_census.effects_class_counts(entities)
 
-    assert counts["env_sprite"] == 2
-    assert counts["point_spotlight"] == 1
-    assert counts["env_dustmote"] == 0  # never authored by this map, still a zero row
+    assert counts["env_particle"] == 2
+    assert counts["func_dustmotes"] == 1
+    assert counts["env_beam"] == 0  # never authored by this map, still a zero row
     assert set(counts) == set(map_census.EFFECTS_CLASSES)
+    # R7.3: the vocabulary is the placed corpus's, not R2.2's guess (0 placements in 108 maps).
+    assert {"env_particle", "func_particle", "env_steam", "env_beam"} <= set(counts)
+    assert not {"env_fire", "env_embers", "env_lightglow", "point_spotlight", "env_sun"} & set(counts)
 
 
 def _write_fixture_units(root: Path, map_name: str) -> None:
@@ -128,7 +131,7 @@ def test_census_for_map_reads_the_three_units_and_pins_json(tmp_path: Path):
     assert on_disk["lights"]["total"] == 2
     assert on_disk["lights"]["styledCount"] == 0
     assert on_disk["effects"]["env_sprite"] == 1
-    assert on_disk["effects"]["env_dustmote"] == 0
+    assert on_disk["effects"]["func_dustmotes"] == 0
 
 
 def test_a_missing_unit_raises_a_named_error(tmp_path: Path):

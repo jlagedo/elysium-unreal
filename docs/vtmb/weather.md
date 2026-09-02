@@ -17,10 +17,12 @@ Related: `docs/vtmb/sky-ambience.md` (the 3D skybox miniature the rain draws ins
 
 The **entity inventory**, **patch-first particle closure**, **material proxy shape**, and
 `sm_hub_1` timer graph are verified from the user's current merged install and the generated
-intermediates. The **particle-definition grammar** is a partial reconstruction from the shipped
-data plus parser diagnostic strings in `engine.dll`; roles marked *(inferred)* are not confirmed
-against retail runtime behavior. `attach_type=11`, `bounds`, emitter ramp behavior, wetness time
-units, and `ambient_generic` rain fades remain retail-validation hypotheses.
+intermediates. The **particle-definition grammar and its runtime semantics** are decoded from
+`engine.dll`'s `CParticleManager` (2026-09-02; `docs/vtmb/effects.md` §2.4 owns the facts,
+`docs/architecture/seam_map_particle.md` → "Semantics" the unit rules): lifetime, ramps,
+emission, motion, size, the blend and `mask`, collision and the precipitation gate are
+VERIFIED. `attach_type=11` is the dumped enum's `PlayerSky`. Wetness time units and
+`ambient_generic` rain fades remain retail-validation hypotheses.
 
 ## It is not Source's weather
 
@@ -73,21 +75,21 @@ forms appear on the same classname in the same map set.
 | Key/input | Type | Default | Role |
 |---|---|---|---|
 | `active` | choice | `1` (Yes) | spawns active — the `start_hidden`-equivalent; there is no separate hidden flag |
-| `attach_type` | integer | `0` | undocumented even by the FGD's own author ("Unknown yet") |
-| `bone` | choice | `<none>` | attach point on a parent skeletal model (`Bip01 Head`/`L Hand`/`R Hand`/`Neck`/`Pelvis`/`Spine`…), untested |
+| `attach_type` | integer | `0` | the 19-value enum, dumped (`docs/vtmb/effects.md` §3.1); `11` = `PlayerSky`, `10` = `PlayerBox`, `15` = `BrushEmitter` (forced by `func_particle`) |
+| `bone` | choice | `<none>` | attach point on a parent skeletal model (`Bip01 Head`/`L Hand`/`R Hand`/`Neck`/`Pelvis`/`Spine`…) |
 | `particle_definition` | choice | `fire1_emitter` | the `particles/<name>.txt` file, matching the entity survey above |
-| `bounds` | integer | `512` | "Bounds (Intensity)", untested |
-| `ramp_scale` / `ramp_time` | float | `1` / `0` | undocumented |
-| `spawnflags` bit 1 | flag | off | undocumented even by the FGD's own author |
-| `TurnOn` / `TurnOff` | input | — | the standard on/off pair |
-| `SetAttachType` / `SetRateScale` / `SetRampTime` | input | — | live retune |
+| `bounds` | integer | `512` | **an FGD key the engine never reads** — `CEnvParticle`'s datamap has no such keyfield; the real one is `spawnbounds` (`m_fSpawnBounds`, default 512), authored on 228 rows corpus-wide, all 512 |
+| `ramp_scale` / `ramp_time` | float | `1` / `0` | `m_fRateScaleTarget` / `m_fRampTime`, read by `SetRateScale` / `SetRampTime` |
+| `spawnflags` bit 1 | flag | off | **no spawnflag is read** by the class |
+| `TurnOn` / `TurnOff` | input | — | the standard on/off pair; `TurnOn` restarts |
+| `SetAttachType` / `SetRateScale` / `SetRampTime` | input | — | live retune, approached linearly into the one rate float |
 
 This answers "what we do not know" item 7 below: scripts **can** turn a volume on and off
 per-instance (`TurnOn`/`TurnOff`), and the spawn state is the `active` keyvalue, not a
 spawnflag. Source: `vampire.fgd` (`@PointClass env_particle`, `@SolidClass func_particle`),
 fetched from the Antitribu Bloodlines-SDK mirror on GitHub — a public, community-authored
-file, not our own decompile, so treat the *values* as corroboration rather than as
-Ghidra-grade fact.
+file — corrected against the decompiled datamap (`docs/vtmb/entity_io.md` → "`env_particle`
+attachment"), which is why `bounds` above is dead and `spawnbounds` is not in the FGD at all.
 
 The `_follow_` / `_box_` split is the system's shape. A follow emitter tracks the viewer and
 supplies rain wherever they are; the boxes are fixed volumes. Both appear in `sm_hub_1`
@@ -136,8 +138,10 @@ enables the authored rain spots, and queues `world.FadeGlobalWetness 1` after te
 off event mirrors that graph with `StopSound`, `SetRateScale 0`, disabled rain spots, and a
 ten-second-delayed `FadeGlobalWetness 0`. The world then interpolates for its own authored 10 s
 wet or 20 s dry duration. Both emitters are born `active=1`, `ramp_scale=0`, `ramp_time=10`,
-share targetname `rain_emitter`, use `attach_type=11`, and have Source bounds 512 and 256
-(1,300.48 and 650.24 cm).
+share targetname `rain_emitter`, use `attach_type=11` (`PlayerSky`: the `spawnbounds` cube
+round the viewer, wrapping, spawning above the viewer), and author `bounds` 512 and 256 —
+a key the engine never reads, so **both run at the `spawnbounds` default of 512 units
+(1,300.48 cm)**.
 
 ### Lightning
 
@@ -254,13 +258,13 @@ Three forms, freely nested:
 | Form | Example | Meaning |
 |---|---|---|
 | scalar | `size "3"` | constant |
-| `a~b` | `theta "0~360"` | uniform random in range, rolled per particle |
-| `a,b,…` | `size "1,10"`, `red "0,100,100"` | keyframe ramp over the particle's life |
-| `v(n)` | `color "0,80(10)"` | a ramp keyframe with an explicit position *(inferred: frame index)* |
+| `a~b` | `theta "0~360"` | uniform random in range, rolled per particle (inside a keyframe too) |
+| `a,b,…` | `size "1,10"`, `red "0,100,100"` | keyframe ramp over the particle's **normalized age**, linear between keyframes, held after the last; angle keys interpolate the shortest way round |
+| `v(n)` | `color "0,80(10)"` | a keyframe pinned at **frame index `n` normalized by `frames`** (`t = n / frames`; negative `n` wraps from the end); the first keyframe must sit at 0 |
 
 The forms compose: `rate "15,5~50,20,5~50,15"` is a five-keyframe ramp whose second and fourth
 keyframes are random ranges, and `rotate "-180~180,-180~180"` ramps between two independent
-random rolls.
+random rolls. All VERIFIED from `CParticleManager` (`docs/vtmb/effects.md` §2.4).
 
 ### Keys observed
 
@@ -268,44 +272,48 @@ Emitter-level:
 
 | Key | Example | Role |
 |---|---|---|
-| `loop` | `"1"` | restart on expiry |
-| `fps` | `"20"` | tick rate *(inferred)* |
-| `frames` / `min_frames` / `max_frames` | `"70"` / `"20"` / `"80"` | lifetime in frames, with an optional random range *(inferred)* |
-| `precipitation` | `"1"` | gated by `particles_enable_precipitation` |
+| `loop` | `"1"` | wrap the normalized age on expiry |
+| `fps` | `"20"` | the frame rate `frames` counts in; default **30** |
+| `frames` / `min_frames` / `max_frames` | `"70"` / `"20"` / `"80"` | `lifetime = frames / fps` seconds; each particle rolls its inverse age rate in `[fps / max_frames, fps / min_frames]` |
+| `precipitation` | `"1"` | gated by `particles_enable_precipitation`, and at runtime by the leaf sky bit (below) |
 | `spawn { }` | — | child emission, repeatable |
 
-Inside `spawn`:
+Inside `spawn` (the 20-key table is `docs/vtmb/effects.md` §2.4):
 
 | Key | Example | Role |
 |---|---|---|
 | `particle` | `"raindrops2"` | child definition name |
-| `rate` | `"1000"` | particles per second |
-| `burst` | `"1"` | one-shot instead of continuous |
-| `radius` | `"1~200"` | spawn offset from the emitter origin |
+| `rate` | `"1000"` | particles per second through an accumulator, sub-frame interpolated along the emitter's movement; keyframed over the emitter's age |
+| `burst` | `"1"` | particles added when a keyframe fires (`RandomFloat(lo, hi)`); the one key allowed a first keyframe at `t ≠ 0` |
+| `radius` | `"1~200"` | spawn offset from the emitter origin, units |
 | `theta` / `phi` | `"0~360"` / `"0"` | spherical spawn direction, degrees |
+| `timescale` | `"2"` | divides the child's lifetime |
 
 Particle-level:
 
 | Key | Example | Role |
 |---|---|---|
-| `sprite` | `"DropletFast"` | resolves to `particles/<name>.tga`, case-insensitive |
-| `frames` | `"15"` | lifetime *(inferred)* |
+| `sprite` | `"DropletFast"` | resolves to `particles/<name>.tga`, case-insensitive; one atlas of all 318 |
+| `frames` | `"15"` | lifetime in frames at `fps` |
 | `movealign` | `"1"` | orient the sprite to its velocity — what makes rain a streak |
-| `X_speed` / `Y_speed` / `Z_speed` | `"20"` / `"20"` / `"-400~-600"` | initial velocity |
-| `theta_speed` / `phi_speed` / `radius_speed` | `"0"` / `"0"` / `"100,0"` | angular and radial motion |
-| `rotation` / `rotate` | `"0"` / `"-180~180,-180~180"` | sprite roll |
-| `size` | `"1,10"`, `"2~4"` | sprite size, rampable |
-| `height` | `"10"` | second axis, for stretched streaks *(inferred)* |
-| `red` / `green` / `blue` | `"0,100,100"` | per-channel ramp |
+| `X_speed` / `Y_speed` / `Z_speed` | `"20"` / `"20"` / `"-400~-600"` | velocity in the **emitter's basis** (X forward, Y up, Z right), units/s |
+| `theta_speed` / `phi_speed` / `radius_speed` | `"0"` / `"0"` / `"100,0"` | the spherical offset round the emitter origin, rebuilt each frame |
+| `rotation` | `"0"` | sprite roll, degrees (shortest arc); `rotate` on a particle body is not a runtime key |
+| `size` | `"1,10"`, `"2~4"` | the quad edge in units for a square sprite, rampable |
+| `height` / `width` | `"10"` | per-axis multipliers: `halfX = aspectX × width × size`, `halfY = aspectY × height × size`, the aspect being the sprite's normalized half-extents (long axis 0.5) |
+| `red` / `green` / `blue` | `"0,100,100"` | per-channel ramp, 255 = unity |
 | `color` | `"100,20"` | combined brightness ramp |
-| `mask` | `"180,0"` | alpha/mask ramp |
+| `mask` | `"180,0"` | the **blend interpolant**: 0 pure additive, 255 an occluding alpha-blended card (mode 8, `dst = tex × colour + dst × (1 − tex.a × mask)`) |
+| `parent_speed` | `"0"` | the fraction of the parent's movement live particles inherit; default 1 |
 | `precipitation` | `"1"` / `"0"` | the gate flag |
 | `collide { }` | — | collision response |
 
-Inside `collide`: a `spawn` block (with `friction` and `Bounce`) emitting a definition at the
-impact point, and a `decal` block laying one on the surface. `engine.dll` also carries
-`collide_axes`, `collide self` and `collide_wireframe`, so the collision path has more surface
-than the weather files exercise.
+Inside `collide`: a `spawn` block emitting a definition at the impact point, a `decal` block
+laying one on the surface, `self` with `bounce` / `friction` / `gravity` / `drag` keeping the
+particle alive (`v' = bounce × normal + friction × tangent`, then gravity and `pow(drag, dt)`),
+and `vdecal_first` / `vdecal_last` / `vdecal_angle_spread`. The trace runs against the world
+**and** brush entities (`SOLID | WINDOW | GRATE | MOVEABLE`). `raindrops2` writes its
+`friction` / `Bounce` inside the nested `spawn` block, where they are not spawn keys.
 
 ## The weather asset set
 
@@ -337,17 +345,23 @@ than the weather files exercise.
   has `particles/cloud.tga` and no `could.tga`. `rain_box_emitter` spawns `RainMist` live, not
   commented. Whether the engine substitutes a default or the mist silently fails to draw is
   unresolved — it needs a runtime check against the original.
-- **The `_NoPrecip` pairs are the shelter mechanism.** Definitions come in matched pairs
-  differing only in the `precipitation` flag, so a sheltered volume keeps rendering when
-  `particles_enable_precipitation` is off. This is an authored quality setting, not a
-  geometry-driven one.
+- **The `_NoPrecip` pairs are half of the shelter mechanism.** Definitions come in matched
+  pairs differing only in the `precipitation` flag, so a sheltered volume keeps rendering when
+  `particles_enable_precipitation` is off — an authored quality setting. The other half is
+  geometry: **a `precipitation "1"` particle dies the moment its BSP leaf lacks the
+  sky-visible bit** (`engine.dll 0x200d3f10`), so rain stops under cover regardless of the
+  pairs. Reproducing that gate needs the visibility unit's leaf sky bit — this plan's named
+  follow-up (`effects-architecture.md` §5.11).
 - **Only `raindrops2` collides in the resolved follow closure.** Its 1,000 drops/s spawn
   `rainsplash_new` and lay `rainstain`; `rainfog` has no collision relation.
 
-For `sm_hub_1`, the resolved Unreal-space contract is 7.62 × 25.4 cm motion-aligned droplets
-at `(50.8, -50.8, -1016…-1524)` cm/s, 63.5 cm maximum authored impact rings, 5.08–10.16 cm
-stains, and 1,270 cm fog sprites. Unsupported live fields anywhere in this five-definition,
-four-sprite closure are fatal rather than ignored.
+For `sm_hub_1`, the resolved Unreal-space contract is **1.5 × 76 cm** motion-aligned streaks
+(`DropletFast` 5 × 25, `size 3`, `height 10` through the aspect formula — not the 7.62 × 25.4
+the size key alone suggested) at `(50.8, 50.8 up, -1016…-1524)` cm/s in the emitter basis,
+63.5 cm maximum authored impact rings, 5.08–10.16 cm stains, and 1,270 cm fog sprites. On
+the V2 lane every live field in this closure is a staged tree field
+(`seam_map_map.md` → "Import — effects (R7.3)"); the legacy compiler still fails an
+unsupported field rather than ignoring it.
 
 ## What we do not know
 
@@ -357,21 +371,23 @@ Tracked as **RE23**.
    `$envmaptint` per channel, and `sm_hub_1`'s timers prove who targets it and when. Retail capture
    must still confirm that `10.0`/`20.0` and the emitter/audio ramps are seconds with linear
    interpolation.
-2. **`attach_type=11`.** Viewer-follow is the data-supported implementation hypothesis; retail
-   capture must confirm whether existing particles move with the viewer or only new spawns do.
-3. **`bounds`.** The current interpretation is the component/culling extent, not emission rate.
-   Retail density and movement across the two unequal values are the deciding evidence.
-4. **`frames` / `fps` semantics** — lifetime in ticks at a declared rate is the reading the
-   data supports, unconfirmed.
-5. **The `v(n)` keyframe position unit** — frame index or percentage.
-6. **Emitter volume sampling** — how `func_particle` distributes spawns through a brush volume,
-   and what `radius` means when the emitter is a volume rather than a point. The public FGD's
-   `func_particle` block adds nothing over `env_particle` (no per-axis density key), so this
-   stays a decompile-only question.
-7. **`func_particle` sampling.** `env_particle` I/O and the `active` spawn key are resolved, but
-   brush-volume spawn distribution is deferred with the fixed rain boxes.
-8. **Sprite render mode** — additive vs translucent, and whether `mask` is alpha or a separate
-   mask channel.
+2. ~~`attach_type=11`~~ **Closed (decompiled):** `PlayerSky` — the `spawnbounds` cube round
+   the viewer, wrapping, spawning above the viewer. Live particles follow a moving parent by
+   `parent_speed` (default 1); it is not only new spawns that move.
+3. ~~`bounds`~~ **Closed:** not a keyfield; the engine reads `spawnbounds` (default 512), so
+   both `sm_hub_1` emitters run the same 1,300.48 cm cube. It is the spawn extent, not a rate.
+4. ~~`frames` / `fps`~~ **Closed:** `lifetime = frames / fps` seconds, `fps` default 30,
+   normalized age in `[0, 1]`.
+5. ~~`v(n)`~~ **Closed:** a frame index normalized by `frames`, negative from the end, linear
+   in normalized age.
+6. ~~Emitter volume sampling~~ **Closed:** `func_particle` (`attach_type` 15) spawns at a
+   uniform random point in the brush's world-aligned AABB with no solid test, and scales
+   `rate` and `burst` by `|dx|·|dy|·|dz| × 2⁻²¹` clamped to `[0.01, 100]`; `radius` is the
+   per-particle spherical offset round that point, as for a point emitter.
+7. ~~`func_particle` sampling~~ **Closed** with 6; the rain boxes' *look* is still this plan's.
+8. ~~Sprite render mode~~ **Closed:** one material, `$spriterendermode 8`, `mask` is the
+   blend interpolant between additive (0) and an occluding alpha card (255)
+   (`docs/vtmb/effects.md` §2.4).
 
 The community record helps only partway: `vampire.fgd` defines both `env_particle` and
 `func_particle`, but annotates the wetness and particle-specific keys as untested or unknown.
@@ -402,10 +418,11 @@ preserve those relationships regardless of whether Niagara represents them as em
 states, or particle attributes.
 
 The owner constraint remains one presentation implementation with tuning, never separate faithful
-and enhanced systems. That constraint does not settle the internal Niagara topology before the
-retail semantics do. In particular, the source does not yet justify a sphere, box, cylinder, or
-screen-space spawn field for the `radius=0` drop block: `precipitation=1`, `attach_type=11`, and the
-two unequal `bounds` values are the missing part of that distribution rule.
+and enhanced systems. The distribution rule for the `radius=0` drop block is now decoded:
+`attach_type=11` is a `spawnbounds` **cube** round the viewer (512 units on both emitters — the
+authored `bounds` 512 / 256 are a dead key), wrapping, with spawns above the viewer; and
+`precipitation=1` kills a drop whose leaf has no sky bit. The drop count is `rate × the one
+rate float`, never the box volume (that scalar is `func_particle`'s, mode 15).
 
 ### Wetness presentation slice
 
@@ -505,9 +522,10 @@ indoor zones as competing solutions.
 The entity world can own wetness transitions and emitter ramps without deciding how they render;
 those values serialize so logic does not restart after a save. A presentation is not a faithful
 baseline until original-retail evidence settles initial dry, onset, sustained rain, cover, rain-off,
-time units, audio fades, density, `attach_type=11`, `bounds`, lifetime/keyframe units, and sprite
-blend/mask semantics. Apparent drop width, length, lifetime, fog visibility, impact frequency, and
-camera-motion behavior are comparison evidence, not artist tuning targets until then.
+time units, audio fades and density; `attach_type=11`, `spawnbounds`, lifetime/keyframe units and
+the sprite blend/`mask` semantics are settled from the binary (above). Apparent drop width, length,
+lifetime, fog visibility, impact frequency, and camera-motion behavior are comparison evidence,
+not artist tuning targets until then.
 
 Deferred source-defined work remains the sewer `WaterDrops_Timer` layer, fixed `func_particle`
 rain boxes, NPC shelter behavior, lightning, other maps, and the general particle runtime. The

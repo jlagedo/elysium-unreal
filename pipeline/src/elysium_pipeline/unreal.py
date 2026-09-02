@@ -728,6 +728,18 @@ def bake_maps(
               f"{report.get('wetnessDriven', 0)} wetness-driven; by master "
               f"{report.get('byV2Master', {})}) -- "
               f"{map_geometry.staging_dir(name) / map_geometry.MATERIAL_REPORT_NAME}")
+        # R7.3: every effects entity joined to its particle tree; the counts are the stage's own
+        # `effectStats`, the histogram being the floor's slot-shape check.
+        stats = manifest.get("effectStats") or {}
+        print(f"staged V2 effects for {name}: {(stats.get('rows') or {}).get('effects', 0)} "
+              f"effects over {stats.get('roots', 0)} roots "
+              f"({len(stats.get('unresolvedRoots') or [])} unresolved, "
+              f"{len(stats.get('unresolvedChildren') or [])} unresolved children, "
+              f"max depth {stats.get('maxDepth', 0)}, max leaves {stats.get('maxLeaves', 0)}, "
+              f"keyframes {stats.get('keyframeHistogram', {})}), "
+              f"{(stats.get('rows') or {}).get('dustmotes', 0)} dustmotes, "
+              f"{(stats.get('rows') or {}).get('steam', 0)} steam, "
+              f"{(stats.get('rows') or {}).get('beams', 0)} beams")
 
     step = max(1, batch_size) if batch_size else max(1, len(maps))
     for offset in range(0, len(maps), step):

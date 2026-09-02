@@ -181,7 +181,7 @@ def test_light_rows_apply_the_engines_load_time_fixups() -> None:
 
 
 def test_manifest_version_is_the_offline_stages(module) -> None:
-    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 6
+    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 7
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)

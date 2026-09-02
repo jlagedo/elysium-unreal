@@ -29,15 +29,18 @@ render mode. Treating a `.phys` sidecar as a smoke or fire asset is a category e
 Two map classes *do* carry `phys` in the classname. They are impulse sources, not
 collision files and not particle systems:
 
-| Class | Count on the 23 exported maps | Input | What it does |
+| Class | Count (108 maps) | Input | What it does [decompiled] |
 |---|---:|---|---|
-| `env_physimpact` | 11 | `Impact` | applies a directional impulse to one named physics body |
-| `env_physexplosion` | 8 | `Explode` | applies a radial impulse; `targetentityname` names the body |
+| `env_physimpact` | 130 | `Impact` | a trace from the entity along its direction (flag 2: infinite ray); `mag = (flags & 11) ? magnitude : (1 − trace.fraction) × magnitude` — flag 1 no fall-off, 4 multiply by mass, 8 ignore the surface normal — then `ApplyForceOffset(−normal × mag × phys_pushscale, endpos)` on the hit body. Corpus flags: 1 (60), 15 (16), 7 (14), 14 (12), 12 (10) |
+| `env_physexplosion` | 61 | `Explode` | reads **no spawnflags**; for each body within `radius` (else `magnitude × 2.5`) passes a zero force into `TakeDamage(DMG_BLAST, max(0, magnitude − dist × 0.4))`; the push is `CBaseEntity::VPhysicsTakeDamage` (`vampire.dll 0x100A1580`): a **world-only** trace from the explosion to the body; with clear LOS `force = normalize(body − origin) × damage × phys_pushscale` at the **centre of mass** (no torque, no division by mass); with blocked LOS, nothing |
 
 Both cluster on `sm_junkyard_1` (cars, exploding barrels) and `sm_warehouse_1` (the
 scripted blast). Keys: `magnitude`, plus `directionentityname` / `target_position`
 (`env_physimpact`) or `radius` / `targetentityname` (`env_physexplosion`). They move
-already-simulated Chaos/VPhysics bodies. They do not draw.
+already-simulated Chaos/VPhysics bodies. They do not draw. The Unreal impulse is
+`docs/architecture/physics-architecture.md`'s seam; `env_physexplosion`'s LOS-gated
+centre-of-mass push is **not** a linear-falloff radial impulse, and
+`effects-architecture.md` §5.10 states which seam call each class makes.
 
 A typical junkyard barrel is therefore four authored pieces, not one:
 
@@ -85,7 +88,7 @@ Roles, distinguished by content rather than by a declared type:
 | Both | 32 | draws and spawns children |
 | Neither | 22 | empty / template / broken |
 | `collide { }` | 81 | impact child and/or decal |
-| `precipitation "1"` | 17 | gated by `particles_enable_precipitation` |
+| `precipitation "1"` | 17 | gated by `particles_enable_precipitation`, and at runtime by the particle's leaf sky bit (§2.4) |
 
 The grammar — scalar / `a~b` range / `a,b(n)` keyframe, emitter vs particle keys — is
 `docs/vtmb/weather.md` → "The particle-definition format". This document does not
@@ -114,26 +117,122 @@ The unclassified remainder is still the same language: moths, flies, frost, elec
 strikes, HUD shock, drag sparks, health orbs, cutscene panels, demo clouds. There is
 no second particle format hiding in that tail.
 
-### 2.3 Keys the current compiler rejects
+### 2.3 Keys the legacy compiler rejects
 
-`compile_definition` is strict: a live key outside the known contract is an export
-error, and the map exporter records the root as `unresolved` rather than dropping the
-whole map. Across the 23 exported maps, 21 roots fail for these reasons:
+`compile_definition` (the legacy lane) is strict: a live key outside its closed contract is
+an export error, and the map exporter records the root as `unresolved` rather than dropping
+the whole map. Corpus-wide, **42 of the 155 placed roots never resolve, the top four among
+them** — `fire2_emitter` (204 rows, 6 maps), `fire3_emitter` (140, 13 maps),
+`barrelfireemitter` (115, **every map**), `moth_emitter` (31, 10 maps):
 
-| Unsupported field | What it means | Typical consumer |
+| Field the compiler rejects | What the runtime does with it (§2.4) | Typical consumer |
 |---|---|---|
-| `normal`, `refract` | a second texture used as a heat-haze / refraction card | `fire_heat` on every `barrelfireemitter` |
-| `rotate` (particle body; spawn already allows it) | sprite spin spelling variant | debris (`debries`) |
-| `timescale` (inside `spawn`) | moth path timing | `moth_emitter` |
-| `frames` inside `spawn` | per-child lifetime override | gasoline-trail fire |
-| `sortfront` enabled | translucent draw-order hint | blood-guardian, warehouse sparks |
-| `lighting` | lit vs unlit sprite | Potence death-blow smoke |
-| `radius` on a drawing particle | size-as-radius spelling | warehouse HUD explosion |
-| malformed brace files | hand-edited / patch-broken text | `fire2_emitter`, Tourette suicide |
+| `normal`, `refract` | a second sprite drawn as a DUDV refraction card on `engine/particlerefract` | `fire_heat` on every `barrelfireemitter` |
+| `timescale` (inside `spawn`) | divides the child's lifetime | `moth_emitter` |
+| `sortfront` enabled | forces the particle to the front of the sort | blood-guardian, warehouse sparks |
+| `lighting` | a per-particle branch sampling at the particle position | Potence death-blow smoke |
+| `rotate` (particle body), `radius` on a drawing particle, `frames` inside `spawn` | **not in the runtime's key tables — read by nothing** | debris (`debries`), warehouse HUD explosion, gasoline-trail fire |
+| malformed brace files | the engine's lexer structures what it can | `fire2_emitter`, Tourette suicide |
 
-`refract` + `normal` is the one that takes out every barrel fire. The heat card is a
-presentation layer on top of flames/smoke/embers; a reconstruction can drop the 2004
-refraction trick and still keep the fire.
+The V2 particle unit (`docs/architecture/seam_map_particle.md`) decodes every one of these
+like any other key, and only three placed references are truly broken
+(`d_animalism_pestilence_cast_emitter`, `smoke3`, a `{` typo). The heat card is authored
+intent, not an accident of 2004: it is wired on the refraction master, never dropped
+(`effects-architecture.md` §5.4).
+
+### 2.4 The runtime, decoded [decompiled]
+
+`CParticleManager` (`engine.dll`, vtable `0x201751a4`). The authored surface is **two key
+tables dumped from the binary** — 18 particle keys and 20 spawn keys, each
+`{name, default, isAngle}` — plus a dozen flags. There is nothing else.
+
+| Particle key (default) | Spawn key (default) |
+|---|---|
+| `red green blue color mask` (255) | `red green blue color mask` (255) |
+| `refract` (1), `width height size` (1) | `refract width height size` (1) |
+| `rotation` (0, angle) | `rotation` (0, angle) |
+| `radius_speed theta_speed phi_speed` (0) | `radius` (0), `theta phi` (0, angle) |
+| `x_speed y_speed z_speed elevation_speed` (0) | `x y z elevation` (0) |
+| `parent_speed` (1) | `timescale` (1), `rate` (0), `burst` (0) |
+
+Scalars and flags: `fps` (default **30**), `frames` (default = `fps`, a one-second life),
+`min_frames` / `max_frames` (default = `frames`), `loop`, `flat`, `sortfront`, `movealign`,
+`lighting`, `no_z_test`, `depth_offset`, `precipitation`, `surface_color` /
+`use_surface_color` / `ignore_surface_color`, `sprite`, `normal`, `spawn {}`, `collide {}`.
+Spawn blocks also accept `distance "1"` (rate becomes particles per unit travelled) and
+collide blocks accept `drag`, `self`, `vdecal_first` / `vdecal_last` / `vdecal_angle_spread`.
+
+- **Lifetime.** `lifetime = frames / fps` seconds; each particle rolls an inverse age rate in
+  `[fps / max_frames, fps / min_frames]` and advances a **normalized age in [0, 1]**. `loop`
+  wraps the age. `timescale` divides the child's lifetime.
+- **Ramps.** `a,b(n)`: `(n)` is a **frame index normalized by `frames`**, negative wraps from
+  the end; the first keyframe must sit at 0; interpolation is **linear in normalized age**;
+  the angle keys (`rotation`, `theta`, `phi`) interpolate the shortest way round. `a~b` inside
+  a keyframe is rolled per particle. This closes `weather.md`'s items 4 and 5 and RE23.
+- **Emission.** `rate` is particles per second through an accumulator, **sub-frame
+  interpolated** along the emitter's movement; `burst` is keyframe index 19 and adds
+  `RandomFloat(v0, v1)` to the accumulator when its keyframe fires (the only key allowed a
+  first keyframe at `t ≠ 0`). One per-emitter float (`particle + 0x19c`) multiplies **both**
+  `rate` and `burst`; `SetRateScale`, `func_particle`'s volume scalar and the rain follow all
+  drive that one float. No per-frame cap.
+- **Motion.** Every particle carries a spherical offset `(radius, theta, phi)` **around the
+  emitter origin**, rebuilt each frame from `radius_speed / theta_speed / phi_speed`;
+  `x/y/z_speed` are velocities in the **emitter's basis** (X forward, Y up, Z right);
+  `elevation_speed` is world Z. `parent_speed` (default **1**) is the fraction of the parent's
+  movement live particles inherit, so **live particles follow a moving parent**.
+- **Drawing: one material, one blend, and `mask` is a blend interpolant.** Every particle draws
+  on `engine/particlenormal.vmt`, shader `Sprite`, `$spriterendermode 8`, from one procedural
+  atlas of all 318 sprites (decoded at gamma 2.2), in batches of 1,024. Mode 8 in
+  `stdshader_dx8.dll` (`FUN_1000ECA0`) is `BlendFunc(ONE, ONE_MINUS_SRC_ALPHA)`, depth test
+  on, depth write off, vertex colour modulated:
+
+  ```
+  dst = tex.rgb × vcol.rgb  +  dst × (1 − tex.a × vcol.a)
+  ```
+
+  Vertex alpha never multiplies the source colour; it only erases the destination. `mask 0`
+  is **pure additive**, `mask 255` is an **occluding alpha-blended card**, and every value
+  between is a continuous additive↔translucent knob — which is why rain's `mask "0"` draws.
+  Intensity is `red/green/blue × color × the spawn-side scales`, folded by `1/255³` so
+  all-255 is unity. `surface_color 0` / `use_surface_color 0` / `ignore_surface_color 1` are
+  three spellings of one opt-out that pins the tint to white every frame; there is no
+  lightmap or surface sample anywhere in the particle code — the "surface colour" is the
+  creator's RGB triple (`env_particle`'s `m_fRed/Green/BlueScale`, or the impact spawn's
+  constant `0.8`).
+- **Facing, sort, depth.** `movealign` aligns the quad's vertical axis to the velocity; `flat`
+  uses the particle's own basis (also the forced mode of a collide decal); `sortfront` forces
+  the particle to the front of the sort; `no_z_test` is a second render list drawn after the
+  first; `lighting` takes a per-particle branch that samples at the particle position
+  (INFERRED that the sample is light — whether `0x200d3840` is that sample is the one open
+  item; six placed leaves use it); `depth_offset` is world units of view depth, applied to the
+  sort key and the quad centre. `normal` + `refract` draw the batch on
+  `engine/particlerefract` (a DUDV card, DX8+).
+- **Size.** The atlas stores normalized aspect half-extents (long axis 0.5), so `halfX =
+  aspectX × width × size × spawnWidth`, `halfY = aspectY × height × size × spawnHeight`. For a
+  square sprite `size` is the quad edge in inches; `raindrops2` (5 × 25 `DropletFast`,
+  `size 3`, `height 10`) is a **1.5 cm × 76 cm** streak, not the 7.6 × 25.4 `weather.md`
+  once read.
+- **Collision.** With `collide {}` authored, each frame's movement is traced with the engine
+  ray trace, mask `SOLID | WINDOW | GRATE | MOVEABLE` — world **and** brush entities. On hit
+  every collide record runs: a `particle` record spawns at the impact, a `vdecal_*` record
+  lays a random decal from the range, `self` keeps the particle alive with `v' = bounce ×
+  normal + friction × tangent`, then `gravity` and `pow(drag, dt)`. Defaults bounce 1,
+  friction 1, gravity 0, drag 1.
+- **Precipitation is geometry-gated at runtime** (`0x200d3f10`): a particle under a
+  `precipitation "1"` root dies the moment its BSP leaf lacks the sky-visible bit. Rain stops
+  under cover regardless of the authored `_NoPrecip` pairs.
+- **Emitter lifecycle.** create (`vfunc13`), tick returning world bounds (`vfunc15`), **stop =
+  clear `loop`, set flag 0x200, feeding stops, live particles finish** (`vfunc16`), free
+  (`vfunc14`).
+
+What the placed closures use (155 roots, definitions not placements): `movealign` 168,
+`depth_offset` 160, `width` 149, `burst` 72, `flat` 54, `sortfront` 34 (all Animalism /
+Dominate / blood-guardian casts), `precipitation` 19, `normal` + `refract` 8 (`fire_heat`, four
+discipline / boss cards, `warrens_tube_water_fx1`), `lighting` 6, `timescale` 4, `no_z_test` 4
+(the ethereal flame), `use_surface_color` 1, `distance` 0; `collide {}` on 26 roots / 209
+placements (rain, drips, blood, sparks), `decal {}` on 16 / 174, `self {}` on 3; twenty
+definitions are `both` roles (`drip`, `raindrops2`, `debries`, `airplaine`); the deepest placed
+root has 20 leaves at depth 4 (`blood_guardian_summon_emitter`), the fire roots 2–5.
 
 ---
 
@@ -165,10 +264,34 @@ Counts are over the 23 currently exported maps.
 | `point_explosion` | 1 | named consumer of a `params_explosion` |
 
 `env_particle` I/O is recovered (`docs/vtmb/entity_io.md` → "`env_particle` attachment"):
-`TurnOn` always restarts, `TurnOff` stops feeding and lets live particles finish,
-`SetRateScale` / `SetRampTime` own the fade, `attach_type` 0/1/2/3 are
-origin / tree / point / treecolor. Values 5, 9, 10, 11 appear and are not fully
-decoded; 11 is the rain follow-emitter.
+`TurnOn` (`0x100fb7a0`) always restarts — the client rebuilds the emitter whenever the
+activation timestamp changes; `TurnOff` stops feeding and lets live particles finish;
+`SetRateScale` / `SetRampTime` write a target the client approaches **linearly** into the one
+rate float of §2.4. The `attach_type` enum has **19 values**, dumped at `vampire.dll
+0x105a7000`, and the animation-event spawn `mode` argument is the same enum:
+
+| # | Name | # | Name |
+|---|---|---|---|
+| 0 | `FollowOrigin` | 10 | `PlayerBox` (`spawnbounds` cube round the viewer, wrapping) |
+| 1 | `BoneTree` | 11 | `PlayerSky` (as 10, spawns above the viewer — the rain follow) |
+| 2 | `BoneSinglePoint` | 12 / 13 | `PlayerSphereEdge` / `FollowPlayerSphereEdge` |
+| 3 | `BoneTreeWithColors` | 14 | `ScreenCenter` |
+| 4 | `BoneHitboxVolumes` | 15 | `BrushEmitter` (forced by `func_particle`) |
+| 5 | `ScreenBorder` | 16 | `ScreenRandom` |
+| 6 | `ModelAttachment` (origin **and basis** each tick; the muzzle mode) | 17 | `ModelAttachmentNoFollow` |
+| 7 | `ScreenBottomAndSides` | 18 | random point on the parent's visible skin |
+| 8 | `EntitySimulatedPoint` | 9 | `EntityBox` (random point in the parent's render OBB) |
+
+Corpus usage over 1,304 rows: `0` 1,085 · `1` 111 · `2` 45 · `-1` 29 (falls to the switch
+default; treated as origin, INFERRED) · `11` 14 · `6` 11 · `17` 5 · `10` 2 · `9` 1 · `5` 1 (the
+`sm_warehouse_1` HUD blast). Modes 4, 7, 8, 12–14, 16, 18 are placed nowhere and reachable only
+from code that passes 1, 2 or 6. **No spawnflag is read**; `active` (constructor 1) is the
+start-off (274 rows author `active 0`). The other keyfields: `attach_point` (`m_nAttachPoint`),
+`spawnbounds` (`m_fSpawnBounds`, default **512**; 228 rows author it) — the FGD's `bounds`
+(1,110 rows) is **not a keyfield** and is read by nothing — `ramp_scale` (16 rows at 2, 10 at
+0.5, 5 at 0), `ramp_time` (up to 10 s), and the code-only `m_fRed/Green/Blue/MaskScale` /
+`m_fSizeScale` (no key name, all 1). **`JetLength` is not an input on this class** — the two
+map wires are dead. `Activate` removes the entity if the definition does not resolve.
 
 Placed `env_particle` roots on those maps, collapsed by intent:
 
@@ -188,22 +311,47 @@ Placed `env_particle` roots on those maps, collapsed by intent:
 | `starynight_emitter` / `glowywierd_emitter` | 2 | decorative night motes |
 | discipline / cinematic one-offs | rest | wolf form, pestilence, obfuscate, potence, embrace bleed, prince decapitation, … |
 
-`func_particle` is rain only: 14× `rain_box_noprecip_emitter`, 10× `rain_box_emitter`.
+`func_particle` (98 rows corpus-wide) happens to be used only for rain boxes
+(`rain_box_noprecip_emitter`, `rain_box_emitter`), but the class has **no rain-specific
+behaviour** [decompiled]: it spawns at a uniform random point in the brush's **world-aligned
+AABB, with no solid test**; `Activate` sets `sizeScalar = |dx| · |dy| · |dz| × 2⁻²¹` (a
+128-unit cube = 1.0), clamped to `[0.01, 100]` with a warning, and **always forces
+`attach_type 15`**; the client writes `sizeScalar × rampedRateScale` into the one rate float,
+so the box volume scales `rate` and `burst` alike.
 
-`params_particle` is almost a constant pair on every map — `dominate_particles` and
-`presence_particles` at the origin, `attach_type` 2 — plus a few extras on the
-junkyard. The conversation powers look up this named template rather than spawning a
-fresh `env_particle`.
+`params_particle` (227 rows) is almost a constant pair on every map — `dominate_particles`
+and `presence_particles` at the origin, `attach_type` 2 — plus a few extras on the junkyard.
+**It is a precache stub** [decompiled]: its only reader is its own `Precache`. The dialog and
+discipline auras are created by name from the discipline record walker (`vampire.dll
+0x101dd090`), not by looking up this entity; there is nothing to build for it beyond an inert
+class.
 
-`env_steam` is **not** the Troika language. It is Valve's leftover jet:
-`SpreadSpeed`, `Speed`, `StartSize`, `EndSize`, `Rate`, `JetLength`, `rendercolor`.
-All five live on `sm_medical_1` pipe fittings. `env_particle` also receives a
-`JetLength` input (2 wires), so some Troika emitters were driven with the Valve
-length key; the particle files themselves do not declare it.
+`env_steam` (11 rows, all `type` 0 normal) is **not** the Troika language. It is Valve's
+leftover jet, `CSteamJet` [decompiled]: `lifetime = JetLength / Speed`; square spread
+`fwd · Speed + up · ±SpreadSpeed + right · ±SpreadSpeed`; roll `rand(0, 360)` spinning at a
+hardcoded `±8 deg/s`; `alpha = renderamt / 255 × sin(π · life / die)`; **size ramps by raw
+elapsed seconds**, `StartSize + (EndSize − StartSize) × t`, not by normalized life. Three
+parameter sets in the corpus (`Speed` 30 / 120 / 160, `JetLength` 128 / 80 / 120, `Rate` 26 /
+35 / 24). No `Rollspeed`, no `JetLength` input. The two `JetLength` wires on `env_particle`
+are dead (above); no Troika emitter was ever driven by the Valve key.
 
-`func_dustmotes` is also Valve: a brush volume (`model *N`), `SpawnRate` 30,
-`SpriteName materials/particle/sparkles.vmt`, pale colour, short life. Eight of them
-fill `sm_warehouse_1`. They never name a `particles/*.txt`.
+`func_dustmotes` (82 rows) is also Valve, `C_Func_Dust` [decompiled], CPU: a brush volume
+(`model *N`); it retries up to 10 times for a point **inside the brush solid**; velocity
+`±SpeedMax` on all axes, **no gravity**; X/Y ease toward the engine wind; `alpha = (viewZ /
+DistMax + 1) × sin(π · life / dieTime) × Alpha`, drawn only when `≥ 0.5`, culled past
+`DistMax`; SCALEMOTES gives constant screen size. Corpus values are nearly uniform: `SpawnRate`
+10 or 20, size 7–12, `SpeedMax` 2, life 3–5 s, `DistMax` 1024, colour `205 201 182`, alpha
+100; the warehouse eight are rate 30, size 5–15, `203 202 217`, alpha 90. They never name a
+`particles/*.txt`.
+
+`env_beam` (47 rows, all `sprites/beama`, `TextureScroll 35`, `Radius 256`) [decompiled]:
+**`EndWidth = BoltWidth × 0.1`** — every VtMB beam tapers; 42 are continuous (`life 0`), 5
+strike (`life .1`, `StrikeTime` 2–5); `NoiseAmplitude` (0, 15 or 200) scales by beam length
+/ 100 over 128 divisions; additive; a strobing beam is a **temp entity**, only the continuous
+one is a persistent `CBeam`; `damage` (8 rows at 1, 7 at 600, 5 at 100) is one trace along the
+straight axis. Troika's `impact_particle` (19 rows) and `faces_player` (26 rows at 1) are
+**inert**: the first is precached and never spawned, the second latches a send-prop no client
+code reads. No `HDRColorScale`, `TouchType`, `framerate`.
 
 ### 3.2 Animation events
 
@@ -216,13 +364,19 @@ anything attached to a playing sequence (`docs/vtmb/animation_and_movers.md`):
 | 5003 / 5013 / 5023 / 5033 | NPC muzzle flashes |
 | 5002 | disabled spark warning |
 | 5004 / 5005 | sound / `Disciplines/` sound |
-| 5103 | effect teardown |
-| 5111–5119 | attachment / origin emitter variants |
-| 5120 | options effect from weapon attachment `slampoint` |
+| 5103 | **remove all model decals** — not effect teardown; nothing in the bus stops an emitter |
+| 5111–5114 | emitter on attachment 1–4 |
+| 5115 / 5116 | emitter on `eyes` / `mouth` |
+| 5117 | emitter at the origin (mode 1) |
+| 5118 | emitter on a **bone named in a `;`-split option string** (mode 2) |
+| 5119 | emitter on `crotch` |
+| 5120 | emitter on the weapon's `slampoint` |
 | 6001–6004 | shell ejection on attachment 1..4, repeated |
 | 6011–6014 | clip ejection on attachment 1..4, once |
 
-The corpus actually uses 5001, 5003, 5005, 5101–5102, 5105, 5112, 5115–5118, 5120,
+Every 511x name is the raw `.mdl` option string, never an item or discipline record, and
+the spawn mode it passes is the `env_particle` enum of §3.1. The corpus actually uses 5001,
+5003, 5005, 5101–5102, 5105, 5112, 5115–5118, 5120,
 6001, 6002, 6013. Feeding starts `force_feeding_emitter` from event 5116
 (`docs/vtmb/feeding.md`). The two 60xx families are named by their own diagnostics —
 `"weapon does not have attachment for shell ejection!"` and the clip-ejection twin — in both
@@ -430,8 +584,13 @@ Weapon overrides that matter: shotgun / MAC-10 variants per surface, flaming-cro
 `flamethrower_hit_flame-emitter`, claws → `ImpactClaws_flesh_Emitter`, melee →
 `ImpactFX_Melee_Generic`, most firearms on flesh → `ImpactFX_Ranged_Generic`.
 
-Audio for the same hit is a different table (`docs/vtmb/surface_properties.md`). The
-impact particle and the impact sound are sibling lookups, not one asset.
+The table is read **client-side** off `C_TEGunshotDecal` [decompiled]: the surface character
+(a 23-entry table, soak-remapped `F → K`, Fortitude `R`, Bloodshield `Z`, misc `Q`, `A → B`)
+× the weapon column (`m_iImpactID`, an `item_w_`-stripped index fixed at precache). The decal
+is a **parallel** lookup on the **unremapped** character (`concrete / metal / wood / glass /
+flesh / soak` × 5 + scorch + blood). Audio for the same hit is a different table
+(`docs/vtmb/surface_properties.md`). The impact particle, the decal and the impact sound are
+sibling lookups, not one asset.
 
 ### 3.6 Main menu
 
@@ -474,7 +633,8 @@ Emitter wrappers spawn the same four drawing leaves: a flame card (`Flamemass` /
 discipline / boss casts.
 
 Intent: a local rising, flickering volume with sparks and a smoke plume. Not a
-fluid-dynamics authoring. The heat card is a 2004 refraction sprite.
+fluid-dynamics authoring. The heat card is a refraction sprite (`normal` + `refract`, §2.4)
+and is authored intent, reproduced on the refraction master rather than dropped.
 
 ### 4.3 Smoke, steam, fog, ash, cigars
 
@@ -532,13 +692,33 @@ Ming Xiao. A hit is a short burst at a contact point, sometimes with a decal.
 | `particle` | a Troika emitter (`Explosion2_emitter`, `LightBulb_Pop_emitter`, …) |
 | `snd_name` / `snd_dist` / `snd_pitch_*` | sound |
 
-`env_physexplosion` / `env_physimpact` are the physics half of the same beat.
-`env_shake` is the standalone shake (elevator, bobcat, warehouse blast).
+`params_explosion` has exactly **20 keys**; `damage_players / npcs / breakables` default
+**false**; there is no decal key and no decal path; `env_explosion` does not exist
+[decompiled]. `point_explosion`'s order: (1) the dynamic light if `dl_radius > 1` (`dl_color`,
+`dl_exponent`, `dl_radius`, `dl_time`, radius shrinking at `dl_decay` units/s); (2) damage if
+`dmg_amount > 0`, DMG_BLAST, `adjusted = dmg − dist × dmg / radius` floored at 1, an LOS ray
+unless flag 0x200, targets by the three bools; (3) `TE ParticleEffect(origin, angles, name)` —
+no mode argument; (4) `UTIL_ScreenShake`; (5) the sound with `snd_dist` PAS and a random
+pitch. Corpus: `explosion2_emitter` 25 of 52 recipes; spawnflags mostly 111 / 47.
+
+`env_physexplosion` / `env_physimpact` are the physics half of the same beat (§1).
+`env_shake` (60 rows) is the standalone shake (elevator, bobcat, warehouse blast). Its flags
+[decompiled]: 1 global (radius 0), 4 in-air, 8 physics (a vphysics motion controller on
+bodies in range; one row, `13`, in the corpus). `UTIL_ScreenShake` per player: `localAmp =
+amp × (1 − dist / radius)`, **linear**. The client's `CalcShake` per frame: every
+`1 / frequency` seconds re-roll `offset = ±amp` (3 axes) and `angle = ±amp × 0.25`;
+`frac = remaining / duration`; `s = frac² × sin(curtime × frequency / frac)`; view origin
+`+= s × offset`, **roll** `+= s × angle`; `amp −= amp × dt / (frequency × duration)`. Units:
+inches of translation, `amp × 0.25` degrees of roll.
 
 ### 4.10 Debris, gibs, breakables
 
-`env_shooter` launches one or more `.mdl`s (`models/gibs/hgibs*`) with velocity,
-variance, lifetime. Warehouse scripted dismemberment. `func_breakable` is the brush
+`env_shooter` (21 rows, all `Simulation` 0) launches one or more `.mdl`s (`models/gibs/*`,
+structural debris) [decompiled]: a real server gib per shot, `velocity = scatter(angles,
+variance) × m_flVelocity`, angular velocity `(100–200, 100–300, 0)`, life `±5 % ×
+m_flGibLife` (default **25 s**), `delay` default 0.001, **MOVETYPE_BOUNCE with a zero-extent
+bbox** (the gib bounces as a point), up to 5 blood decals on landing. `nogibshadows` /
+`gibgravityscale` do not exist. Warehouse scripted dismemberment. `func_breakable` is the brush
 that breaks; its *look* is a model swap plus whatever particle the mapper wired.
 Particle-side debris (`debries`, column-break, barrel explosion FX) is sprites, not
 gibs.
@@ -563,14 +743,19 @@ roots, often `attach_type` point/tree on a named parent.
 ### 4.13 Screen and HUD
 
 `env_fade` (already a real class) is a colour fade with duration / hold.
-`env_particle_hud` and the `d_*_hud_*` / `hud_*` definitions draw in view space.
-Menu particles are a dedicated scene.
+`env_particle_hud` (3 rows) and the `d_*_hud_*` / `hud_*` definitions draw in view space
+through attach modes 5 / 7 / 14 / 16; menu particles are a dedicated scene. **The HUD and the
+main menu are out of scope by owner decision (2026-09-02)** — new authored assets, not
+reproductions — so these rows and modes are inventory only.
 
 ### 4.14 Projected decals
 
 `infodecal` is the authored layer (blood, holes, graffiti) and is already a bake
 product (`UDecalComponent`). Particle `collide { decal { particle … } }` is a
-*runtime* decal spawned at an impact. Same Unreal primitive, different lifetime.
+*runtime* decal spawned at an impact (16 placed roots / 174 placements), and the
+`vdecal_first` / `vdecal_last` / `vdecal_angle_spread` collide keys lay a random decal from
+a numbered range (0 placed uses). Same Unreal primitive, different lifetime; the runtime
+spawn is R7.2's decal seam.
 
 ### 4.15 Water surface
 
@@ -605,24 +790,22 @@ Decoded and in the export:
 - `.phy` → `.phys` for physics props;
 - rain / wetness contract for `sm_hub_1` (`docs/vtmb/weather.md`).
 
+Closed by the 2026-09-02 decompile pass (§2.4, §3.1, §4.9–4.10): the 19-value
+`attach_type` enum and its identity with the animation-event spawn mode; `func_particle`'s
+AABB sampling and volume scalar; `frames` / `fps` / `v(n)` semantics; the mode-8 blend and
+`mask` as its interpolant; `env_steam` and `func_dustmotes` as Valve classes; the
+`env_physimpact` flag bits; the explosion order and defaults; the shake math; `env_shooter`.
+
 Open, and they matter for a reconstruction even if the *look* is modernized:
 
-- `attach_type` values above 3 (5, 9, 10, 11) — 11 is the rain-follow hypothesis. The
-  runtime enum is wider than the four values maps use: the emitter's mode field drives a
-  19-branch switch in `0x100af150`, and the muzzle-flash spawn passes **6**, whose branch
-  reads a matrix off the attachment. Whether the `env_particle` keyfield and that spawn
-  argument are the same enum is inferred from both landing in the same emitter field, not
-  captured;
-- `func_particle` volume sampling;
-- `frames` / `fps` / `v(n)` keyframe units (data-supported, not retail-captured);
-- sprite blend vs `mask` (additive vs translucent);
-- first-person / third-person particle lifetime across a camera swap;
-- `env_steam` / `func_dustmotes` as Valve classes (keys are public, runtime not RE'd
-  in this repo);
-- exact `env_physimpact` spawnflag bits.
+- first-person / third-person particle lifetime across a camera swap
+  (`docs/vtmb/camera-view-modes.md`'s open item);
+- whether `engine.dll 0x200d3840` is the `lighting` light sample (six placed leaves);
+- `BoneTreeWithColors` (mode 3): where its per-segment tint comes from;
+- what the 60xx shell / clip ejection integers select (§3.2).
 
-None of those block listing the families or choosing an Unreal stand-in. They
-constrain how faithfully a Niagara system is *driven*, not whether fire is fire.
+None of those block the families or the stand-ins. They constrain how faithfully a Niagara
+system is *driven*, not whether fire is fire.
 
 ---
 

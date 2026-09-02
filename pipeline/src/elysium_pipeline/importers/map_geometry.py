@@ -71,7 +71,11 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 6 (R6.1): the manifest carries `sprites`, one row per `env_sprite` in lump order, resolved to
 #: the imported `MI_`, the texture size and the blend the entity's `rendermode` selects, the
 #: billboard placements (`docs/architecture/seam_map_map.md` -> "Sprites (R6.1)").
-MANIFEST_VERSION = 6
+#: 7 (R7.3): the manifest carries `effects`, `particleTrees`, `dustmotes`, `steam`, `beams` and
+#: `effectStats` -- every effects entity joined to its particle closure, brush bounds and sprite
+#: textures (`importers.effects`; `docs/architecture/seam_map_map.md` -> "Import -- effects
+#: (R7.3)").
+MANIFEST_VERSION = 7
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -387,6 +391,9 @@ class MapGeometry:
     sky_origin: tuple[float, float, float]
     sky_ok: bool
     counts: dict[str, int]
+    #: R7.3: the producer join the reader walked (`UE_map_sidecars.MapJoin`), kept so the effects
+    #: stage reads the same entities unit, models and sky scope without a second decode.
+    join: Any = None
 
     def brush_stems(self) -> dict[int, str]:
         """`{model index: "brush_<n>"}` -- the stems `.ents`'s `brush_mesh` names, so the runtime
@@ -807,6 +814,7 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
         sky_scale=float(join.sky.scale),
         sky_origin=sky_origin,
         sky_ok=bool(join.sky.ok),
+        join=join,
         counts={
             "worldFaces": len(join.scenes["world"]),
             "skyFaces": len(join.scenes["sky"]),
@@ -821,6 +829,10 @@ def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
                 1 for pairs in join.pair_blocks
                 if dict((k.lower(), v) for k, v in pairs).get("classname", "").lower()
                 == "env_sprite"),
+            "effects": sum(
+                1 for row in units.entities["entities"]
+                if str(row.get("classname") or "").lower() in (
+                    "env_particle", "func_particle", "func_dustmotes", "env_steam", "env_beam")),
         },
     )
 
@@ -1264,8 +1276,12 @@ def stage_map(map_name: str, root: Path | None = None,
     placements (`DETAIL_RECORD_FIELDS`).
     R6.1: and `sprites` -- every `env_sprite` block as one row, the billboard placements
     (`resolve_sprite_table`).
+    R7.3: and `effects` / `particleTrees` / `dustmotes` / `steam` / `beams` / `effectStats` --
+    every effects entity joined to its particle closure (kept as a tree), its brush bounds and the
+    texture lane's sprite assets (`importers.effects.stage_effects_for_join`).
     """
 
+    from elysium_pipeline.importers import effects as effects_lane
     from elysium_pipeline.importers import textures as texture_lane
 
     geometry = read_geometry(map_name, root)
@@ -1281,6 +1297,9 @@ def stage_map(map_name: str, root: Path | None = None,
         geometry.sprites, read_sidecar, texture_sidecar_reader(texture_staging),
         map_name=map_name)
     report = material_report(map_name, materials, read_sidecar)
+    effects = effects_lane.stage_effects_for_join(
+        geometry.join, read_texture=texture_sidecar_reader(texture_staging),
+        read_material=read_sidecar, export_v2_root=root, map_name=map_name)
     buffer = bytearray()
     scenes = {
         "world": _scene_block(geometry.world, buffer),
@@ -1331,6 +1350,12 @@ def stage_map(map_name: str, root: Path | None = None,
             "records": [detail_record_row(detail) for detail in geometry.details],
         },
         "sprites": sprites,
+        "effects": effects["effects"],
+        "particleTrees": effects["particleTrees"],
+        "dustmotes": effects["dustmotes"],
+        "steam": effects["steam"],
+        "beams": effects["beams"],
+        "effectStats": effects["effectStats"],
         "counts": dict(geometry.counts),
     }
 

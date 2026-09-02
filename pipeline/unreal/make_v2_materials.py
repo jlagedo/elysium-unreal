@@ -2328,6 +2328,210 @@ def make_sprite():
 
 
 # ============================================================================================
+# M_V2_SpriteZ / M_V2_SpriteZLit -- the particle floor's depth-tested twins (R7.3)
+# ============================================================================================
+#
+# `docs/architecture/effects-architecture.md` section 5.4: VtMB draws every particle through
+# `$spriterendermode 8` -- `BlendFunc(ONE, ONE_MINUS_SRC_ALPHA)`, depth test ON, depth write off --
+# and `M_V2_Sprite` is depth-test-off on the master itself (`bDisableDepthTest` is material-only,
+# never a per-instance override), so the floor needs a twin with the same graph and the depth test
+# left on. `M_V2_SpriteZLit` is the same twin under `TLM_VolumetricPerVertexNonDirectional` for the
+# six `lighting` leaves. Both carry the `ElysiumFog` parameters (`FogColor` / `FogStart` /
+# `FogInvRange`, `mat_fog.fog_from_params` -- a Niagara sprite has no Custom Primitive Data) with the
+# inscatter scaled by the pixel's opacity, so an additive card (`mask 0`) fogs to black the way
+# Source's sprite shader does. Neither is in `importers/materials.py`'s routing: no VMT unit lands
+# on them; only the four `MI_Particle*` children below do.
+
+
+class SpriteZParams:
+    Textures = SpriteParams.Textures
+    Vectors = type("Vectors", (), {"Color": "Color", "FogColor": mat_fog.P_COLOR})
+    Scalars = type("Scalars", (), {
+        "Alpha": "Alpha", "SurfaceClassIndex": "SurfaceClassIndex", "FrameRate": "FrameRate",
+        "FrameCount": "FrameCount", "FogStart": mat_fog.P_START, "FogInvRange": mat_fog.P_INV_RANGE,
+    })
+    Switches = SpriteParams.Switches
+
+
+SPRITE_Z_PARAM_TABLE = {
+    "textures": SPRITE_PARAM_TABLE["textures"],
+    "scalars": sorted(vars(SpriteZParams.Scalars)[k] for k in vars(SpriteZParams.Scalars) if not k.startswith("_")),
+    "vectors": sorted(vars(SpriteZParams.Vectors)[k] for k in vars(SpriteZParams.Vectors) if not k.startswith("_")),
+    "switches": SPRITE_PARAM_TABLE["switches"],
+}
+
+
+def _build_sprite_z(mat, collection, lut_texture, default_frames):
+    """`_build_sprite`'s graph plus the fog term: `Emissive = shaded x (1 - f) + FogColor x f x
+    Opacity`, `BaseColor = shaded x (1 - f)`; the opacity is untouched."""
+    g = Graph(mat, collection=collection)
+    P = SpriteParams
+
+    uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1100, -600)
+    base_tex_2d = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
+    connect(uv0, "", base_tex_2d, "UVs")
+    base_tex = _flipbook_sample(
+        g, base_tex_2d, P.Textures.BaseTextureFrames, uv0,
+        P.Scalars.FrameRate, P.Scalars.FrameCount, P.Switches.UseAnimatedFrames, default_frames,
+        -1100, -600, sampler="linear")
+    base_rgb = g.mask(base_tex, "rgb", -900, -420)
+    base_a = g.mask(base_tex, "a", -900, -340)
+
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
+    tinted = g.mul(base_rgb, "", color, "", -700, -400)
+    vertex_color = g.vertex_color(-1100, -680)
+    vc_rgb = g.mask(vertex_color, "rgb", -900, -680)
+    with_vc = g.mul(tinted, "", vc_rgb, "", -500, -440)
+    vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, -300, -400, default=False)
+
+    _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+
+    alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+    alpha_with_basetex = g.mul(alpha_param, "", base_a, "", 1900, 0)
+    alpha_with_vc = g.mul(alpha_with_basetex, "", vertex_color, "A", 2100, 40)
+    opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_with_basetex,
+                             2300, 20, default=False)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY_MASK)
+
+    # -- the fog term, by parameter (no primitive data on a Niagara sprite), inscatter x opacity --
+    fog_f, fog_inv, fog_color = mat_fog.fog_from_params(mat, x=-1600, y=1600)
+    faded = mat_fog.fade(mat, vc_selected, "", fog_inv, -200, 1600)
+    haze = g.mul(g.mul(fog_color, "", fog_f, "", -200, 1800), "", opacity_final, "", 0, 1800)
+    emissive = g.add(faded, "", haze, "", 200, 1700)
+    g.to(faded, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    g.to(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
+def _make_sprite_z(name, *, lit):
+    asset = "%s/%s" % (PKG, name)
+    collection = _load_surfaces_collection()
+    lut_texture = _load_class_lut()
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "citedUnits": {},
+        "params": SPRITE_Z_PARAM_TABLE,
+        "mpcScalars": REQUIRED_MPC_SCALARS,
+        "lit": lit,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    default_frames = _make_default_frames_array(force=force)
+    mat, asset = _fresh(name, ism=True, niagara_sprites=True)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property("two_sided", True)
+    if lit:
+        # Default Lit is the material's own default shading model (as `M_V2_Lit` leaves it).
+        mat.set_editor_property(
+            "translucency_lighting_mode",
+            unreal.TranslucencyLightingMode.TLM_VOLUMETRIC_PER_VERTEX_NON_DIRECTIONAL)
+    else:
+        mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    # The depth test stays ON: that is the whole difference from `M_V2_Sprite`.
+
+    _build_sprite_z(mat, collection, lut_texture, default_frames)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    _probe_all_switches_true(mat, asset, SPRITE_Z_PARAM_TABLE["switches"])
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
+
+
+def make_sprite_z():
+    return _make_sprite_z("M_V2_SpriteZ", lit=False)
+
+
+def make_sprite_z_lit():
+    return _make_sprite_z("M_V2_SpriteZLit", lit=True)
+
+
+#: The four particle material children (`effects-architecture.md` section 5.4), authored below the
+#: material lane's package root beside the corpus instances (`importers/materials.py` names them
+#: under `keep`, so its prune leaves them). `(name, master, blend, switches on)`; the sprite
+#: children turn the two vertex switches on -- the tint and the mask ride the quad's vertex colour
+#: -- and take `BLEND_AlphaComposite`, VtMB's mode 8 (`src + dst x (1 - src.a)`); the refract child
+#: keeps `M_V2_Refract`'s translucent blend, its `DuDvMap` and `RefractAmount` are bound per slot
+#: at runtime (`User.Leaf<ii>.Normal`, the `Refract` ramp).
+PARTICLE_MATERIAL_PACKAGE = "%s/Materials/particles" % mounts.BAKED
+PARTICLE_CHILDREN = (
+    ("MI_Particle", "M_V2_SpriteZ", "BLEND_ALPHA_COMPOSITE", ("UseVertexColor", "UseVertexAlpha")),
+    ("MI_ParticleLit", "M_V2_SpriteZLit", "BLEND_ALPHA_COMPOSITE",
+     ("UseVertexColor", "UseVertexAlpha")),
+    ("MI_ParticleNoZ", "M_V2_Sprite", "BLEND_ALPHA_COMPOSITE", ("UseVertexColor", "UseVertexAlpha")),
+    ("MI_ParticleRefract", "M_V2_Refract", "BLEND_TRANSLUCENT", ("UseBaseTexture",)),
+)
+
+
+def make_particle_children():
+    """The four `MI_Particle*` children, one tracked instance each, recipe-stamped on the master's
+    own recipe, the blend and the switches (the `MI_V2_Missing` pattern)."""
+    made = []
+    for name, master_name, blend, switches_on in PARTICLE_CHILDREN:
+        asset = "%s/%s" % (PARTICLE_MATERIAL_PACKAGE, name)
+        master_asset = "%s/%s" % (PKG, master_name)
+        master = unreal.load_asset(master_asset)
+        if not master:
+            _fail("%s not found -- the masters must run before make_particle_children()"
+                  % master_asset)
+        # The master's switch set is its own param table (the graph was built from it); every
+        # switch is stated explicitly on the instance, as the material lane's own instances do.
+        table = REFRACT_PARAM_TABLE if master_name == "M_V2_Refract" else SPRITE_PARAM_TABLE
+        switch_names = list(table["switches"])
+        missing = [name_ for name_ in switches_on if name_ not in switch_names]
+        if missing:
+            _fail("%s exposes no %s switch for %s" % (master_asset, "/".join(missing), name))
+        switches = {name_: (name_ in switches_on) for name_ in switch_names}
+        recipe = {
+            "sourceHash": _source_hash(),
+            "master": master_asset,
+            "masterRecipe": bl.stored_recipe(master_asset),
+            "switches": switches,
+            "blendMode": blend,
+            "twoSided": True,
+        }
+        fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+        force = _flag(_cmdline_arg("PolicyForce", ""))
+        if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+                and bl.stored_recipe(asset) == fingerprint:
+            unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+            made.append(unreal.load_asset(asset))
+            continue
+        mic = bl.make_material_instance(name, PARTICLE_MATERIAL_PACKAGE, master)
+        if not mic:
+            _fail("could not author %s" % asset)
+        for switch, value in sorted(switches.items()):
+            mel.set_material_instance_static_switch_parameter_value(
+                mic, switch, value, update_material_instance=False)
+        bpo = mic.get_editor_property("base_property_overrides")
+        bpo.set_editor_property("override_blend_mode", True)
+        bpo.set_editor_property("blend_mode", getattr(unreal.BlendMode, blend))
+        bpo.set_editor_property("override_two_sided", True)
+        bpo.set_editor_property("two_sided", True)
+        mic.set_editor_property("base_property_overrides", bpo)
+        mel.update_material_instance(mic)
+        bl.stamp_recipe(mic, fingerprint)
+        if not bl.save(asset):
+            _fail("save failed: %s" % asset)
+        unreal.log("[make_v2_materials] saved %s" % asset)
+        made.append(mic)
+    return made
+
+
+# ============================================================================================
 # M_V2_Refract
 # ============================================================================================
 
@@ -2772,6 +2976,9 @@ make_two_texture()
 make_eyes()
 make_water()
 make_sprite()
+make_sprite_z()
+make_sprite_z_lit()
 make_refract()
 make_decal()
 make_missing()
+make_particle_children()

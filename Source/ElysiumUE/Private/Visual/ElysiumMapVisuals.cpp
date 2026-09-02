@@ -3,6 +3,8 @@
 #include "ElysiumBakedTags.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumDetailPropActor.h"
+#include "ElysiumEffectActor.h"
+#include "ElysiumEffectFamilies.h"
 #include "ElysiumSpriteActor.h"
 #include "ElysiumSpriteComponent.h"
 #include "ElysiumFog.h"
@@ -149,6 +151,10 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	DetailActors.Reset();
 	SpriteActors.Reset();
 	SpritesByEntity.Reset();
+	EffectActors.Reset();
+	EffectsByEntity.Reset();
+	EffectCount = 0;
+	EffectSkyCount = 0;
 	SpriteCount = 0;
 	SpriteGlowCount = 0;
 	SpriteSkyCount = 0;
@@ -200,6 +206,21 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 					++SpriteGlowCount;
 				}
 				SpriteSkyCount += ElysiumBakedTags::InMiniature(Actor->Tags) ? 1 : 0;
+			}
+		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Effect))
+		{
+			// R7.3: bucketed by the entity index its tag carries, the same number the leaf's
+			// `ApplyEmitter` / `ApplyDust` / `ApplySteam` / `ApplyBeam` publishes arrive by.
+			if (AElysiumEffectActor* Effect = Cast<AElysiumEffectActor>(Actor))
+			{
+				EffectActors.Add(Effect);
+				const int32 EntityIndex = ElysiumBakedTags::ParseEntityIndex(Actor->Tags);
+				if (EntityIndex != INDEX_NONE)
+				{
+					EffectsByEntity.Add(EntityIndex, Effect);
+				}
+				EffectSkyCount += ElysiumBakedTags::InMiniature(Actor->Tags) ? 1 : 0;
 			}
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::World))
@@ -306,6 +327,20 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	}
 	DetailModelCount = DetailModels.Num();
 	SpriteCount = SpriteActors.Num();
+	EffectCount = EffectActors.Num();
+
+	// R7.3 (§5.5): the family match is re-resolved at adopt so a data-asset edit needs no re-bake.
+	if (EffectActors.Num() > 0)
+	{
+		if (!EffectFamilies)
+		{
+			EffectFamilies = LoadObject<UElysiumEffectFamilies>(nullptr, ElysiumEffectAssets::Families);
+		}
+		for (const TObjectPtr<AElysiumEffectActor>& Effect : EffectActors)
+		{
+			Effect->ResolveFamily(EffectFamilies);
+		}
+	}
 
 	if (LightRig)
 	{
@@ -772,6 +807,25 @@ void UElysiumMapVisuals::ApplySceneFog()
 		}
 	}
 
+	// R7.3: an effect takes its set by the same marker, through the system's fog pins
+	// (`AElysiumEffectActor::ApplyFog`) rather than primitive data -- a Niagara renderer's
+	// material is reached through its parameter binding, not a custom-data slot.
+	int32 EffectWorldStamped = 0;
+	int32 EffectSkyStamped = 0;
+	for (const TObjectPtr<AElysiumEffectActor>& Effect : EffectActors)
+	{
+		if (!Effect)
+		{
+			continue;
+		}
+		const bool bSky = ElysiumBakedTags::InMiniature(Effect->Tags);
+		Effect->ApplyFog(bOn && (bSky ? EnvDef.bSkyFog : EnvDef.bFog),
+			bSky ? EnvDef.SkyFogColor : EnvDef.FogColor,
+			bSky ? EnvDef.SkyFogStartCm : EnvDef.FogStartCm,
+			bSky ? EnvDef.SkyFogEndCm : EnvDef.FogEndCm);
+		(bSky ? EffectSkyStamped : EffectWorldStamped) += 1;
+	}
+
 	auto Describe = [](const TArray<float>& Data)
 	{
 		return Data[ElysiumFog::SlotInvRange] > 0.f
@@ -780,8 +834,8 @@ void UElysiumMapVisuals::ApplySceneFog()
 			: FString(TEXT("off"));
 	};
 	UE_LOG(LogElysiumVisuals, Log, TEXT("fog: world %s on %d primitives, 3D skybox %s on %d"),
-		*Describe(WorldData), WorldStamped + RuntimeWorldStamped + DetailWorldStamped,
-		*Describe(SkyData), SkyStamped + RuntimeSkyStamped + DetailSkyStamped);
+		*Describe(WorldData), WorldStamped + RuntimeWorldStamped + DetailWorldStamped + EffectWorldStamped,
+		*Describe(SkyData), SkyStamped + RuntimeSkyStamped + DetailSkyStamped + EffectSkyStamped);
 }
 
 void UElysiumMapVisuals::RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool bSky)
@@ -792,6 +846,12 @@ void UElysiumMapVisuals::RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool b
 	}
 	(bSky ? RuntimeSkyBrushes : RuntimeWorldBrushes).Add(Comp);
 	ApplySceneFog();
+}
+
+AElysiumEffectActor* UElysiumMapVisuals::FindEffectActor(int32 EntityIndex) const
+{
+	const TWeakObjectPtr<AElysiumEffectActor>* Found = EffectsByEntity.Find(EntityIndex);
+	return Found ? Found->Get() : nullptr;
 }
 
 bool UElysiumMapVisuals::SetSpriteVisible(int32 EntityIndex, bool bShown)
@@ -842,6 +902,13 @@ void UElysiumMapVisuals::ToggleSkybox()
 		if (SpriteActor && ElysiumBakedTags::InMiniature(SpriteActor->Tags))
 		{
 			SpriteActor->SetActorHiddenInGame(!bSkyVisible);
+		}
+	}
+	for (const TObjectPtr<AElysiumEffectActor>& Effect : EffectActors)
+	{
+		if (Effect && ElysiumBakedTags::InMiniature(Effect->Tags) && !Effect->IsKilled())
+		{
+			Effect->SetActorHiddenInGame(!bSkyVisible);
 		}
 	}
 	if (SkyDomeMesh)

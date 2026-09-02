@@ -29,6 +29,8 @@ enum class EElysiumRngStream : uint8
 	NpcSchedule,   // the NPC idle branch: schedule selection and the disposition stance rolls
 	Reaction,      // the damage flinch's head/torso coin, its +-30 degree jitter and its
 	               // weighted-sequence draw
+	Effects,       // R7.3: the dust motes' in-solid sample points, an env_beam's endpoint pick
+	               // among duplicate targetnames, its random end point and its random restrike
 	Count
 };
 

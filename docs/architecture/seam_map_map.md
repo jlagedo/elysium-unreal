@@ -1568,3 +1568,274 @@ two, Specular 0 / Roughness 1, already flipped with the V2 masters). R5.5 flips 
   (`DefaultSpecular`, the mask term, the class table) are what decide a highlight; the owner's
   tuning session moves it on the page, never here. The Cog Environment window's local-light
   specular slider stays what it was — a per-session view onto the live rig.
+
+## Import — effects (R7.3)
+
+R7.3 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" places a converted map's
+**effects entities** as actors in the baked level: every `env_particle` / `func_particle` on the
+slotted generic floor `NS_ElysiumParticle` (or its family override), every `func_dustmotes`,
+`env_steam` and `env_beam` on its own authored family system. The owner's rulings (2026-09-02,
+`effects-architecture.md` §5): **A1** — stage off the V2 particle unit and retire the strict
+compiler for converted maps; **B3** — a generic floor with family overrides; **C1** — one actor per
+row, R6.1's sprite pattern; **P1** and the explosion bundle follow the ambient set. The corpus:
+`env_particle` 1,304 rows over 155 placed roots, `func_particle` 98, `func_dustmotes` 82,
+`env_steam` 11, `env_beam` 47 (108 maps). Nothing here is a look judgement; the projection rules
+are `seam_map_particle.md` → "Semantics".
+
+### Identity and naming
+
+```text
+vtmb:map-entities:<map>  entities[i]  (env_particle | func_particle | func_dustmotes | env_steam | env_beam)
+  + vtmb:particle:<root> and its closure            (the particle lane, seam_map_particle.md)
+  + vtmb:image:particles/<sprite>.tga               -> /ElysiumBaked/Textures/particles/T_<safe stem>   (the texture lane)
+  + vtmb:material:sprites/beama                     -> /ElysiumBaked/Materials/sprites/MI_beama        (the material lane)
+  + models[N]                                       (the root unit; brush bounds for func_particle / func_dustmotes)
+  -> $ELYSIUM_WORK_ROOT/import/map_geometry/<map>/manifest.json   effects[], particleTrees{}, dustmotes[], steam[], beams[], effectStats{}
+  -> /ElysiumBaked/<map>/<map>.umap                                one actor per row
+```
+
+| Row | Actor | Label | Folder | Tags |
+|---|---|---|---|---|
+| `effects[]` | `AElysiumEffectActor` | `Effect_<index>_<root stem>` | `Effects` / `Sky/Effects` | `elysium.effect` + `elysium.ent=<index>` (+ `elysium.sky`) |
+| `dustmotes[]` | `AElysiumDustActor` | `Dust_<index>` | `Effects` | `elysium.effect` + `elysium.ent=<index>` |
+| `steam[]` | `AElysiumSteamActor` | `Steam_<index>` | `Effects` | `elysium.effect` + `elysium.ent=<index>` |
+| `beams[]` | `AElysiumBeamActor` | `Beam_<index>` | `Effects` | `elysium.effect` + `elysium.ent=<index>` |
+
+`index` is the entity's lump ordinal = `FElysiumEntityHandle::Index`, the same number the sprite
+actors carry (`ElysiumBakedTags::EntityIndex`); the runtime buckets `elysium.effect` actors by
+C++ class in `AdoptBakedLevel` and finds one by its entity index exactly as `SetSpriteVisible`
+does. The particle sprites come off the texture lane: `particles/*.tga` (318) are admitted as
+texture units (`seam_map_texture.md` → "Texture unit"; `<dir>` = `particles`), so a leaf's sprite
+is `/ElysiumBaked/Textures/particles/T_<safe stem>` and the legacy PNG derivative retires with the
+legacy lane.
+
+### What the stage publishes
+
+The offline stage (`importers.map_geometry.stage_map`, manifest **version 7**) joins each effects
+entity row of the entities unit to its references and publishes five tables. Every field has a
+name, a unit and a source; a consumer reads these tables and never the install.
+
+#### `effects[]` — one row per `env_particle` / `func_particle`
+
+| Field | Unit | Source |
+|---|---|---|
+| `index` | int | `entities[i].index` (lump ordinal) |
+| `classname` | `env_particle` \| `func_particle` | `entities[i].classname` |
+| `targetname` | string \| null | key `targetname` |
+| `origin_cm` | `[x, y, z]` Unreal cm | `entities[i].origin.gltf` → `gltf_position_to_unreal` (the placements' frame); a `func_particle` without `origin` (46 of 98) is `[0, 0, 0]`, the brush frame's own origin |
+| `rotation` | `[qx, qy, qz, qw]` Unreal | `entities[i].angles.gltf` → `gltf_quat_to_unreal`; **the emitter basis** (particle X → actor forward, Y → up, Z → right) |
+| `angles_deg` | `[pitch, yaw, roll]` Source degrees | key `angles` as authored, provenance |
+| `attach_type` | int | key `attach_type` (`m_nAttachType`), default 0; `-1` carried as authored (the runtime's switch default → origin); **`func_particle` is always 15** (`CFuncParticle::Activate` forces it, whatever the key says) |
+| `parentname` | string \| null | key `parentname` |
+| `bone` | string \| null | key `bone` (`m_sAttachName`) |
+| `attach_point` | int | key `attach_point` (`m_nAttachPoint`, `+0x460`), default 0; authored on 0 rows |
+| `active` | bool | key `active`, default 1 (the constructor's); 274 rows author 0 |
+| `start_hidden` | bool | key `StartHidden`, the base-class hidden state |
+| `spawnbounds_cm` | float cm | key **`spawnbounds`** (`m_fSpawnBounds` `+0x49c`), default 512 in = **1300.48 cm**; authored on 228 rows, all 512. The FGD's `bounds` (1,110 rows: 512 ×1,108, 256, 128) is **not a keyfield on `CEnvParticle`** and is carried nowhere — `weather.md`'s "512 and 256" on `sm_hub_1` both run at the default |
+| `ramp_scale` | float | key `ramp_scale` (`m_fRateScaleTarget` `+0x48c`), default 1 |
+| `ramp_time` | float s | key `ramp_time` (`+0x490`), default 0 |
+| `bounds_cm` | `{min: [..], max: [..]}` Unreal cm \| null | `func_particle` only: the world AABB of `models[N]` (`entities[i].model.index`, the root unit's `models[]` bounds) through the placements' frame |
+| `volume_scale` | float | `func_particle` only: `clamp(|dx|·|dy|·|dz| × 2⁻²¹, 0.01, 100)` over the Source-unit extents (a 128-unit cube = 1) — `CFuncParticle::Activate`'s `sizeScalar`, the one the client multiplies into the rate float |
+| `particle` | `vtmb:particle:<key>` \| null | the `references[]` row of `particle_definition` (role `particle`, folded key, spaces kept); null with `unresolved: true` when the install lacks it — VtMB's `Activate` removes the entity, the bake places no actor, `effectStats.unresolvedRoots[]` names it |
+| `sky` | bool | `SkyScope.is_sky(origin)`, the R6.7 rule; a sky row takes the miniature transform a sprite takes |
+| `spawnflags` | int | key `spawnflags`, provenance only — the class reads no spawnflag |
+
+The `m_fRed/Green/Blue/MaskScale` and `m_fSizeScale` fields (`+0x464`…`+0x474`) have **no
+keyfield name** in the datamap: a map cannot author them, they default to 1, and code producers
+(the impact spawn's constant 0.8) write them. They are actor pins (`effects-architecture.md` §5),
+not staged fields.
+
+#### `particleTrees{}` — one entry per root id referenced by `effects[]`
+
+Keyed by the root's `vtmb:particle:<key>`. **The closure is kept as a tree**, never flattened:
+node 0 is the root, every other node is one definition reached through one block of its parent,
+and a definition reached through two blocks is two nodes (the block's keys differ). Ramps are
+keyframe lists `[[t, lo, hi], …]` in normalized age (`seam_map_particle.md` → "Ramps"); a scalar
+is `[[0, v, v]]`.
+
+| Field | Unit | Source |
+|---|---|---|
+| `root` | `vtmb:particle:<key>` | the entry's key; `name` as the entity spelled it |
+| `nodes[].index` | int | tree order, root first, parents before children |
+| `nodes[].id`, `.name` | `vtmb:particle:<key>`, string | the unit's identity |
+| `nodes[].kind` | `root` \| `spawn` \| `leaf` \| `both` | node 0 is `root`; otherwise the unit's `role`: `emitter` → `spawn`, `drawing` → `leaf`, `both` → `both` |
+| `nodes[].draws`, `.spawns` | bool, bool | the unit's `role` (a root that draws has `draws: true`) |
+| `nodes[].parent` | int \| null | the parent node |
+| `nodes[].via` | `spawn` \| `collide` | reached through the parent's `spawn {}` (spawns at the parent particle / the emitter) or its `collide { spawn {} }` (spawns at the impact) |
+| `nodes[].blockIndex` | int | the parent unit's `blocks[]` index the node was reached through |
+| `nodes[].depth` | int | 0 for the root |
+| `nodes[].resolved` | bool | false when the install lacks the definition (three references in the placed corpus: `d_animalism_pestilence_cast_emitter`, `smoke3`, a `{` typo) |
+| `nodes[].fps` | float | key `fps`, default 30 |
+| `nodes[].lifetime_s`, `.lifetime_min_s`, `.lifetime_max_s` | s | `frames / fps`, `min_frames / fps`, `max_frames / fps` (defaults `frames` = `fps`, min/max = `frames`); `timescale` on the reaching spawn block already divided in |
+| `nodes[].loop` | bool | key `loop` |
+| `nodes[].size_cm` | ramp, cm | key `size` × 2.54 |
+| `nodes[].width`, `.height` | ramp | keys `width`, `height` (dimensionless) |
+| `nodes[].rotation_deg` | ramp, deg | key `rotation` (shortest arc) |
+| `nodes[].red`, `.green`, `.blue`, `.color`, `.mask` | ramp, 0..1 | the five colour keys `/255` |
+| `nodes[].refract` | ramp | key `refract` |
+| `nodes[].radius_speed_cm_s` | ramp, cm/s | key `radius_speed` × 2.54 |
+| `nodes[].theta_speed_deg_s`, `.phi_speed_deg_s` | ramp, deg/s | keys `theta_speed`, `phi_speed` |
+| `nodes[].x_speed_cm_s`, `.y_speed_cm_s`, `.z_speed_cm_s` | ramp, cm/s in the emitter basis | keys `x_speed`, `y_speed`, `z_speed` × 2.54 |
+| `nodes[].elevation_speed_cm_s` | ramp, cm/s world up | key `elevation_speed` × 2.54 |
+| `nodes[].parent_speed` | ramp | key `parent_speed`, default 1 |
+| `nodes[].spawn` | object \| null | the reaching spawn block's keys (null on the root): `rate` (ramp, /s), `burst` (ramp, count; first keyframe may sit at `t ≠ 0`), `distance` (bool), `radius_cm`, `theta_deg`, `phi_deg`, `x_cm`, `y_cm`, `z_cm`, `elevation_cm`, `rotation_deg`, `width`, `height`, `size`, `red`, `green`, `blue`, `color`, `mask`, `refract` (ramps, the units above), `timescale` (scalar, default 1) |
+| `nodes[].movealign`, `.flat`, `.sortfront`, `.no_z_test`, `.lighting`, `.precipitation` | bool ×6 | the flags |
+| `nodes[].depth_offset_cm` | float cm | key `depth_offset` × 2.54 |
+| `nodes[].surface_color_optout` | bool | `surface_color 0` \| `use_surface_color 0` \| `ignore_surface_color 1` |
+| `nodes[].sprite` | `{id, texture, size_px, aspect}` \| null | `vtmb:image:particles/<sprite>.tga`; `texture` the texture lane's `T_` path; `size_px` `[w, h]` off the texture lane's sidecar; `aspect` `[0.5·w/max, 0.5·h/max]` |
+| `nodes[].normal` | same shape \| null | key `normal`, the DUDV sprite |
+| `nodes[].collide` | object \| null | `{bounce, friction, gravity, drag, self, nested, spawn: [node index…], decals: [{id, texture, angle_spread}], vdecal: {first, last, angle_spread} \| null}` — defaults 1, 1, 0, 1, false; `nested` true when the four scalars were read off a nested `spawn {}` (`raindrops2`) |
+| `stats.leafCount`, `.depth`, `.maxKeyframes` | int | the tree's drawing nodes, its depth, the longest ramp (the corpus maximum is 5 — the floor's slot count is checked against this histogram) |
+
+#### `dustmotes[]` — one row per `func_dustmotes` (Valve `C_Func_Dust`)
+
+| Field | Unit | Source |
+|---|---|---|
+| `index`, `targetname`, `sky` | | as `effects[]` |
+| `model` | int | `entities[i].model.index` (`*N`); the brush solid's convex set is the entity row's own `hulls` (`DA_<map>_Entities`, entity-local cm) — the actor samples inside them by entity index, so the row carries no vertices |
+| `bounds_cm` | `{min, max}` Unreal cm | `models[N]` world AABB |
+| `spawn_rate` | motes/s | key `SpawnRate` (10 ×48, 20 ×21, 30 ×7, 40 ×5, 60 ×1) |
+| `color` | `[r, g, b]` 0..1 | key `Color` `/255` (`205 201 182` ×64, `203 202 217` ×8, …) |
+| `alpha` | 0..1 | key `Alpha` `/255` (100 ×63, 90 ×8, …) |
+| `speed_max_cm_s` | cm/s | key `SpeedMax` × 2.54 (2 ×64, 4, 8, 13) |
+| `size_min_cm`, `size_max_cm` | cm | keys `SizeMin`, `SizeMax` × 2.54 (7–12 ×64, 5–15 ×8, …) |
+| `lifetime_min_s`, `lifetime_max_s` | s | keys `LifetimeMin`, `LifetimeMax` (3 / 5 on all 82) |
+| `dist_max_cm` | cm | key `DistMax` × 2.54 (1024 ×77, 512 ×5) |
+| `frozen` | bool | key `Frozen` (0 on all 82) |
+| `start_disabled` | bool | key `StartDisabled` |
+| `sprite` | `vtmb:material:particle/sparkles` | key `SpriteName` (`particle/sparkles` and the `materials/…vmt` spelling, one key) — provenance; the family system owns its look |
+
+#### `steam[]` — one row per `env_steam` (Valve `CSteamJet`)
+
+| Field | Unit | Source |
+|---|---|---|
+| `index`, `targetname`, `origin_cm`, `rotation`, `angles_deg`, `sky` | | as `effects[]`; the jet fires along the actor's forward |
+| `type` | 0 normal \| 1 heatwave | key `type` (0 on all 11) |
+| `initial_state` | bool | key `InitialState` (1 ×10, 0 ×1) |
+| `spread_speed_cm_s` | cm/s | key `SpreadSpeed` × 2.54 (4, 15, 12) |
+| `speed_cm_s` | cm/s | key `Speed` × 2.54 (30, 120, 160) |
+| `start_size_cm`, `end_size_cm` | cm | keys `StartSize`, `EndSize` × 2.54 (10→10, 5→10, 8→20) |
+| `rate` | particles/s | key `Rate` (26, 35, 24) |
+| `jet_length_cm` | cm | key `JetLength` × 2.54 (128, 80, 120) |
+| `lifetime_s` | s | derived: `JetLength / Speed` (4.27, 0.67, 0.75) |
+| `color` | `[r, g, b]` 0..1 | key `rendercolor` `/255` |
+| `alpha` | 0..1 | key `renderamt` `/255` |
+
+#### `beams[]` — one row per `env_beam` (`CEnvBeam`)
+
+| Field | Unit | Source |
+|---|---|---|
+| `index`, `targetname`, `origin_cm`, `sky` | | as `effects[]` |
+| `start`, `end` | string | keys `LightningStart`, `LightningEnd` — targetnames resolved at load (random pick among duplicates; `RandomArea` / `RandomPoint` within `radius_cm` when one is missing) |
+| `width_cm` | cm | key `BoltWidth` × 2.54 (6 ×26, 10 ×15, 1 ×6) |
+| `end_width_cm` | cm | derived: `width_cm × 0.1` — every VtMB beam tapers |
+| `noise_amplitude_cm` | cm | key `NoiseAmplitude` × 2.54 (0 ×21, 15 ×21, 200 ×5); the runtime scales it by `length / 100` over 128 divisions |
+| `texture` | `vtmb:material:sprites/beama` | key `texture` (`materials/sprites/beama.vmt` on all 47) → the material lane's `MI_` |
+| `texture_scroll` | units/s | key `TextureScroll` (35 on all 47) |
+| `radius_cm` | cm | key `Radius` × 2.54 (256 on all 47) |
+| `life_s` | s | key `life` (0 ×42 continuous, `.1` ×5 strikers) |
+| `strike_time_s` | s | key `StrikeTime` (0, 2, 3, 4, 5) |
+| `damage` | per trace | key `damage` (0 ×27, 1 ×8, 600 ×7, 100 ×5) — one trace along the straight axis |
+| `color`, `alpha` | 0..1 | keys `rendercolor`, `renderamt` `/255` |
+| `spawnflags` | int | key `spawnflags` (1 ×35, 0 ×7, 384 ×5 — Source's beam bits: 1 start on, 4 random strike, 128/256 shade start/end) |
+| `start_hidden` | bool | key `StartHidden` |
+| `impact_particle`, `faces_player`, `framerate`, `framestart`, `renderfx` | provenance | authored on 19 / 47 / 47 / 47 / 47 rows; `impact_particle` is precached and never spawned, `faces_player` latches a send-prop no client code reads — **inert in VtMB, carried for provenance, inert here** |
+
+#### `effectStats{}`
+
+`rows` per table, `roots` (distinct root ids), `unresolvedRoots[]` (`{index, particle_definition}`),
+`unresolvedChildren[]` (`{root, node, name}`), `keyframeHistogram` (`{count: rows}` over every
+ramp of every tree — the number the floor's slot shape is checked against), `maxDepth`,
+`maxLeaves`.
+
+### Producer and stage
+
+The stage is a new `importers.effects` module called from `stage_map`, reading three published
+units and nothing else: the entities unit (rows and `references[]`), the particle units of the
+closure (`keys[]`, `blocks[]`, `projection`, `dependencies[]` — walked from the root through
+`spawn.particle` and `collide.spawn.particle` / `collide.decal.particle` with a visited set per
+path), and the root unit's `models[]` for the brush bounds; sprite dimensions come off the texture
+lane's staged sidecar, like a sprite's (`sprites[]`), and a sprite the texture lane has not
+imported is the same loud failure a missing `SM_` is (`run: uv run elysium import textures`).
+The projection's `meaning` decides which table a key lands in; a key with `meaning: null` is a
+stage warning naming the definition, offset and key, never a silent drop. The differ gets an
+`effects` row (rows, roots, unresolved counts) beside `sprites`.
+
+`<map>.particles.json`, `formats/particles.py::compile_definition`, `make_particle_systems.py` and
+`UElysiumParticleAssetBuilder` are **not read by this lane**. They keep serving the legacy bake
+for every unlisted map (below) and retire with it in R9; nothing in R7.3 edits them.
+
+### Consumption and cutover
+
+`bake_map_v2._place_effects` spawns one actor per row of the four placed tables, writes the row
+onto the actor (`AElysiumEffectActor`'s fields are the row's fields with the same names, the tree
+as a `FElysiumParticleTree` of `FElysiumParticleNode`s), binds the leaf sprites and the family
+material children by path, and stamps the fog slots (`ElysiumFog.h`, world or sky set by the
+`sky` flag) — the same split as sprites: the numpy-bound read offline, the editor spawn from the
+staged table. A row whose root is unresolved places no actor (VtMB's own behaviour: `Activate`
+removes the entity). The level recipe names the effects tables so a re-export that changes a
+tree or a row re-authors the level.
+
+**The explicit per-map cutover.** A map on `UElysiumMapTransportSettings::MapsOnV2Models`
+(`Config/DefaultElysium.ini`, "The per-map cutover flag" above) gets its effects placed by this
+bake, and its `AElysiumMapActor::ApplyEmitter` drives the placed actor by entity index
+(`effects-architecture.md` §5). A map **not** on the list keeps the legacy path **unchanged**:
+`<map>.particles.json`, the per-map `NS_<root>` Fountain flatten under
+`/ElysiumBaked/<map>/Particles`, and `ApplyEmitter`'s lazily created `UNiagaraComponent` with
+`User.RateScale` — byte for byte, until R9 retires that lane once every map is listed. The
+substrate leaf `FElysiumEnvParticle` is the same object on both paths; only the embodiment's
+answer to `ApplyEmitter` differs, and it logs which path answered.
+
+**Deferred with a road, on this product** (`effects-architecture.md` §5, the fidelity ledger):
+the `precipitation` leaf gate (weather's, needs the visibility unit's leaf sky bit — the flag is
+staged), the runtime decals of `collide { decal }` (R7.2's runtime-stain seam — the collision
+event is wired, the decal spawn calls R7.2's name), the rain look of the `func_particle` boxes
+(weather's; the class body is this lane's).
+
+C3 — one Niagara Data Channel world system per map with actors writing islands entries — is
+recorded as the fallback if C1's instance count ever hurts (≈ 12 rows per map on average;
+`sm_hub_1` is the test, exploration check 10); not the first cut.
+
+#### Verification (R7.3)
+
+At the seam, in the count the note authorizes: one stage row in `pipeline/tests/test_effects.py`
+— `fire2_emitter` stages to a tree whose root runs the one-second default clock at `fps` 30 and
+whose two live leaves carry their own lifetimes (`Flames2` `frames 10` / `max_frames 15` →
+1/3 s, max 1/2 s; `FlameGlow2` `frames 60` → 2 s), and `barrelfireemitter` resolves with every
+child present (the top placed roots the legacy compiler failed);
+`bake_verify.verify_effects` loads the level and matches every `elysium.effect` actor to its
+staged row by entity index (class, root, attach data, leaf count), no row missing and none extra,
+and counts the dust / steam / beam actors the same way. The runtime rows (`Elysium.Policy`:
+`SetRateScale` ramps linearly into the actor's one rate float; `point_explosion` orders light →
+damage → particle → shake and honours the three damage bools; one Substrate pin on the shake
+pattern's `frac²` envelope) are `effects-architecture.md` §5's.
+
+### Measured (2026-09-02, the three working maps, the offline stage only)
+
+`importers.map_geometry.stage_map` (manifest **version 7**) on the three maps, after
+`import textures --select particles` had staged the 318 sprite sidecars; no bake ran:
+
+| Map | `effects[]` | roots | unresolved roots | max depth / leaves | keyframes per ramp (count of ramps) | dust / steam / beam |
+|---|---|---|---|---|---|---|
+| `sp_tutorial_1` | 29 | 16 | 1 | 4 / 8 | 1 ×2011, 2 ×74, 3 ×21, 4 ×29, 5 ×13, 6 ×5, 7 ×5, 8 ×2, 9 ×4, 10 ×2, 11 ×2, 15 ×4, 16 ×2, **83 ×1** | 0 / 0 / 0 |
+| `sm_pawnshop_1` | 1 | 1 | 0 | 2 / 4 | 1 ×163, 3 ×2, **42 ×1** | 0 / 0 / 0 |
+| `sm_hub_1` | 55 | 8 | 0 | 4 / 8 | 1 ×1148, 2 ×31, 3 ×10, 4 ×19, 5 ×3, 7 ×1, 9 ×2, 16 ×2, **42 ×1** | 0 / 0 / 0 |
+
+**The keyframe histogram corrects the note.** "The corpus maximum is five keyframes" was the
+*spawn-block* maximum (`rate "15,5~50,20,5~50,15"`); the *particle-body* ramps of the placed trees
+go far past it: `Airplaine` `mask` 42 keyframes (`airplane_emitter`, 22 maps), `FlameGlow1` /
+`FlameGlow2` `size` and `color` 15 (`fire1_emitter`, `fire2_emitter`), `Moth_Path` `theta_speed`
+16 (`moth_emitter`), `FlameEmbers1` `x_speed` / `y_speed` 9 (`barrelfireemitter`,
+`fire1_emitter`), `d_animalism_pestilence_fx4` `width` 83. The stage carries every keyframe
+(`effectStats.keyframeHistogram` is the count); a floor that holds five per ramp
+(`effects-architecture.md` §5.3, `User.Leaf<ii>.Ramps` at 37 × 5) must resample or widen — an
+open item for the floor's author, recorded here, not a stage decision.
+
+None of the three maps authors a `func_dustmotes`, `env_steam` or `env_beam`; the three tables
+were exercised on `ch_lotus_1` (39 dustmotes), `hw_hub_1` (2 steam) and `ch_fulab_1` (12 beams,
+`sprites/beama` staged) without staging them. Stage warnings the corpus produces
+(`effectStats.unreadKeys`): `ch_fulab_1`'s `pilot_flame_emitter` authors `fps` inside a spawn
+block and `flametrail*` a `rate` on the particle body (no row in the runtime's tables), and
+`impactfx_sparks_blue` a `maxframes` typo — all carried nowhere, as VtMB carries them nowhere.
+The `sparks_warrens_computers_fx*` colour ramps spell `255!,0!,…`; the stage reads the numeric
+prefix as the engine's `atof` does.

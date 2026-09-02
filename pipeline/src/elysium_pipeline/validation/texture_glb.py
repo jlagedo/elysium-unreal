@@ -210,7 +210,9 @@ def _check_decoded_pixels(extension: dict[str, Any], ktx: dict[str, Any], source
     from elysium_pipeline.formats.texture_glb.decode import decode_texture
     from elysium_pipeline.formats.texture_glb.source import TextureSourceClosure
 
-    tth = next((member for member in source_members if getattr(member, "role", None) == "tth"), None)
+    # The primary member: the TTH, or -- for a particle sprite (R7.3) -- the raw TGA.
+    tth = next((member for member in source_members
+                if getattr(member, "role", None) in ("tth", "tga")), None)
     if tth is None:
         raise TextureGlbValidationError("prepublication source members omit TTH")
     ttz = next((member for member in source_members if getattr(member, "role", None) == "ttz"), None)

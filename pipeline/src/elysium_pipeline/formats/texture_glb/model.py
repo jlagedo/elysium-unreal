@@ -63,11 +63,23 @@ class TextureModel:
     byte_coverage: list[dict[str, Any]]
 
 
+#: R7.3: the one install directory whose raw `.tga` members are admitted as texture units beside
+#: the `materials/**.tth` corpus -- the 318 particle sprites (`seam_map_texture.md` -> "Texture
+#: unit" -> "Particle sprites"). The key keeps the directory (`particles/<stem>`), so the asset
+#: lands under `/ElysiumBaked/Textures/particles/`.
+SPRITE_FAMILY = "particles"
+SPRITE_SUFFIX = ".tga"
+
+
+def is_sprite_key(normalized: str) -> bool:
+    return normalized.startswith(SPRITE_FAMILY + "/")
+
+
 def normalize_texture_path(path: str) -> str:
     normalized = path.replace("\\", "/").strip("/").lower()
     if normalized.startswith("materials/"):
         normalized = normalized[len("materials/"):]
-    for suffix in (".tth", ".ttz"):
+    for suffix in (".tth", ".ttz", SPRITE_SUFFIX):
         if normalized.endswith(suffix):
             normalized = normalized[:-len(suffix)]
             break

@@ -54,6 +54,17 @@
 # glow rule (screen-constant size, `19000 / dist^2`, the occlusion-query fade) is the runtime
 # proxy's, off the Sprites settings page; the bake writes only the facts.
 #
+# **Effects (R7.3, `seam_map_map.md` -> "Import -- effects (R7.3)").** Every staged `effects[]` row
+# (one per `env_particle` / `func_particle`, lump order, whose root resolved) becomes one
+# `AElysiumEffectActor` carrying the row's fields under the same names and its root's
+# `particleTrees{}` entry as the actor's `Tree`; every `dustmotes[]` / `steam[]` / `beams[]` row one
+# `AElysiumDustActor` / `AElysiumSteamActor` / `AElysiumBeamActor` carrying its row. The actor is
+# tagged `elysium.effect` + `elysium.ent=<index>` (+ `elysium.sky` inside the miniature, with the
+# miniature transform a sprite takes), so the leaf's inputs reach it by entity index. The bake writes
+# facts only: the Niagara user parameters are the actor's own writer at adopt (`effects-architecture.md`
+# section 5.3). A property the actor class does not expose is a loud failure naming it
+# (`EFFECT_ROW_FIELDS` / `EFFECT_NODE_FIELDS` are the one mapping both halves build to).
+#
 # `bake_map.py` is an editor *script* (`-run=pythonscript`), so it calls `main()` at module scope.
 # Importing it from here would run a second whole bake, so the dependency goes the other way:
 # `bake_map` calls `bind(sys.modules[__name__])` and then `bake_class()`, and this module reaches
@@ -83,7 +94,9 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 4 (R5.6): and the `lights` table this lane derives every light actor from.
 #: 5 (R6.3): and the `details` table this lane instances.
 #: 6 (R6.1): and the `sprites` table this lane places billboards from.
-MANIFEST_VERSION = 6
+#: 7 (R7.3): and the `effects` / `particleTrees` / `dustmotes` / `steam` / `beams` tables this
+#: lane places effect actors from.
+MANIFEST_VERSION = 7
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -134,6 +147,69 @@ SPRITE_BLEND_MEMBERS = {
     "Opaque": "BLEND_OPAQUE", "Masked": "BLEND_MASKED", "Translucent": "BLEND_TRANSLUCENT",
     "Additive": "BLEND_ADDITIVE", "Modulate": "BLEND_MODULATE",
 }
+
+#: R7.3: the tag the runtime buckets an effect actor by (`ElysiumBakedTags::Effect`).
+TAG_EFFECT = "elysium.effect"
+#: The shape `_place_effects` writes a row as -- bumped when the writer changes what it puts on
+#: the actor for the same staged row, so the level re-authors.
+EFFECT_ACTOR_SHAPE = 1
+#: The actor class per staged table (`effects-architecture.md` section 5.2 / 5.6).
+EFFECT_ACTOR_CLASSES = {
+    "effects": "ElysiumEffectActor", "dustmotes": "ElysiumDustActor",
+    "steam": "ElysiumSteamActor", "beams": "ElysiumBeamActor",
+}
+#: `effects[]` row field -> actor property (Unreal's Python spelling of the UPROPERTY the contract
+#: names: `EntityIndex` -> `entity_index`, `bActiveAtSpawn` -> `active_at_spawn`, ...). A row
+#: field absent here is placement data the writer consumes itself (`origin_cm`, `rotation`,
+#: `sky`, `unresolved`).
+EFFECT_ROW_FIELDS = (
+    ("index", "entity_index"), ("classname", "classname"), ("particle", "root"),
+    ("particle_definition", "root_name"), ("attach_type", "attach_type"),
+    ("parentname", "parent_name"), ("bone", "attach_bone"), ("attach_point", "attach_point"),
+    ("active", "active_at_spawn"), ("start_hidden", "start_hidden"),
+    ("spawnbounds_cm", "spawn_bounds_cm"), ("ramp_scale", "ramp_scale"),
+    ("ramp_time", "ramp_time"), ("bounds_cm", "bounds_cm"), ("volume_scale", "volume_scale"),
+    ("angles_deg", "angles_deg"), ("targetname", "target_name"), ("spawnflags", "spawn_flags"),
+)
+#: `dustmotes[]` / `steam[]` / `beams[]` row field -> actor property: the row's own names, in
+#: Unreal's Python spelling (a `_cm` / `_s` suffix kept as written). `color` + `alpha` fold into
+#: one `LinearColor` property `color`.
+FAMILY_ROW_SKIP = frozenset({"index", "sky", "origin_cm", "rotation", "alpha", "targetname"})
+#: `particleTrees{}.nodes[]` field -> `FElysiumParticleNode` property. Ramps (`[[t, lo, hi], ...]`)
+#: become arrays of `FElysiumRampKey {T, Lo, Hi}`; the spawn block's fields are prefixed `spawn_`;
+#: `sprite` / `normal` carry `texture` (path) and `aspect` (Vector2D); `collide` flattens to
+#: `collide` (bool) + `collide_*`.
+EFFECT_NODE_FIELDS = (
+    ("index", "index"), ("id", "id"), ("name", "name"), ("kind", "kind"), ("draws", "draws"),
+    ("spawns", "spawns"), ("parent", "parent"), ("via", "via"), ("blockIndex", "block_index"),
+    ("depth", "depth"), ("resolved", "resolved"), ("fps", "fps"),
+    ("lifetime_s", "lifetime"), ("lifetime_min_s", "lifetime_min"),
+    ("lifetime_max_s", "lifetime_max"), ("loop", "loop"),
+    ("size_cm", "size"), ("width", "width"), ("height", "height"), ("rotation_deg", "rotation"),
+    ("red", "red"), ("green", "green"), ("blue", "blue"), ("color", "color"), ("mask", "mask"),
+    ("refract", "refract"), ("radius_speed_cm_s", "radius_speed"),
+    ("theta_speed_deg_s", "theta_speed"), ("phi_speed_deg_s", "phi_speed"),
+    ("x_speed_cm_s", "x_speed"), ("y_speed_cm_s", "y_speed"), ("z_speed_cm_s", "z_speed"),
+    ("elevation_speed_cm_s", "elevation_speed"), ("parent_speed", "parent_speed"),
+    ("movealign", "move_align"), ("flat", "flat"), ("sortfront", "sort_front"),
+    ("no_z_test", "no_z_test"), ("lighting", "lighting"), ("precipitation", "precipitation"),
+    ("depth_offset_cm", "depth_offset_cm"), ("surface_color_optout", "surface_color_optout"),
+)
+EFFECT_SPAWN_FIELDS = (
+    ("rate", "spawn_rate"), ("burst", "spawn_burst"), ("distance", "spawn_distance"),
+    ("radius_cm", "spawn_radius"), ("theta_deg", "spawn_theta"), ("phi_deg", "spawn_phi"),
+    ("x_cm", "spawn_x"), ("y_cm", "spawn_y"), ("z_cm", "spawn_z"),
+    ("elevation_cm", "spawn_elevation"), ("rotation_deg", "spawn_rotation"),
+    ("width", "spawn_width"), ("height", "spawn_height"), ("size", "spawn_size"),
+    ("red", "spawn_red"), ("green", "spawn_green"), ("blue", "spawn_blue"),
+    ("color", "spawn_color"), ("mask", "spawn_mask"), ("refract", "spawn_refract"),
+    ("timescale", "spawn_timescale"),
+)
+EFFECT_COLLIDE_FIELDS = (
+    ("bounce", "collide_bounce"), ("friction", "collide_friction"),
+    ("gravity", "collide_gravity"), ("drag", "collide_drag"), ("self", "collide_self"),
+    ("nested", "collide_nested"), ("spawn", "collide_spawn"),
+)
 
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
 #: so this module reads `HOST.Bake` rather than a dict subscript, and read lazily so binding does not
@@ -467,6 +543,14 @@ def _build_class():
             # re-authored child (a master graph bump) re-authors the level that binds it.
             recipe["sprites"] = [row.as_dict() for row in self.geometry.sprites]
             recipe["sprite_actor_shape"] = SPRITE_ACTOR_SHAPE
+            # R7.3: every effects row and every tree it binds is an input to its actor; the
+            # material children are bound by the runtime writer, so they are not level inputs.
+            recipe["effects"] = self.geometry.effects
+            recipe["particle_trees"] = self.geometry.particle_trees
+            recipe["dustmotes"] = self.geometry.dustmotes
+            recipe["steam"] = self.geometry.steam
+            recipe["beams"] = self.geometry.beams
+            recipe["effect_actor_shape"] = EFFECT_ACTOR_SHAPE
             # R5.5: a moved sample or an edited `CaptureRadius` re-authors the level, because the
             # capture's contents live in the level's own MapBuildData and nowhere else.
             recipe["capture_radius"] = HOST.capture_radius()
@@ -583,6 +667,7 @@ def _build_class():
                 log("level: %d placements held on authored skeletal rest poses" % skeletal_placed)
             self._place_details(actors, sky_scale, sky_origin, world_fog, sky_fog)
             self._place_sprites(actors, sky_scale, sky_origin)
+            self._place_effects(actors, sky_scale, sky_origin, world_fog, sky_fog)
             return placed, sky_placed
 
         # ------------------------------------------------------------- detail props (R6.3)
@@ -843,6 +928,157 @@ def _build_class():
                     raise SystemExit(1)
                 self.tracker.built("materials")
             return child_path
+
+        # ------------------------------------------------------------------ effects (R7.3)
+
+        def _place_effects(self, actors, sky_scale, sky_origin, world_fog, sky_fog):
+            """Every staged `effects[]` row whose root resolved as one `AElysiumEffectActor`, and
+            every `dustmotes[]` / `steam[]` / `beams[]` row as its family actor
+            (`seam_map_map.md` -> "Import -- effects (R7.3)"). Returns the placed count."""
+
+            geometry = self.geometry
+            tables = (
+                ("effects", [row for row in geometry.effects if row.get("particle")]),
+                ("dustmotes", geometry.dustmotes), ("steam", geometry.steam),
+                ("beams", geometry.beams),
+            )
+            if not any(rows for _name, rows in tables):
+                log("effects: the map places no effects entity")
+                return 0
+            skipped = [row["index"] for row in geometry.effects if not row.get("particle")]
+            placed = sky_placed = 0
+            per_table = {}
+            for table, rows in tables:
+                class_name = EFFECT_ACTOR_CLASSES[table]
+                actor_class = getattr(unreal, class_name, None)
+                if rows and actor_class is None:
+                    fail("effects: unreal.%s is not registered (build Source/ElysiumUE first)"
+                         % class_name)
+                    raise SystemExit(1)
+                for row in rows:
+                    values = effect_actor_values(row, table, sky_scale, sky_origin)
+                    actor = actors.spawn_actor_from_class(
+                        actor_class, unreal.Vector(*values["position"]),
+                        unreal.Quat(*values["rotation"]).rotator())
+                    if not actor:
+                        fail("effects: spawn failed for %s %d" % (table, row["index"]))
+                        raise SystemExit(1)
+                    if table == "effects":
+                        self._write_effect_row(actor, row)
+                        self._write_tree(actor, geometry.particle_trees.get(row["particle"]))
+                    else:
+                        self._write_family_row(actor, row)
+                    component = actor.get_editor_property("root_component")
+                    fog = sky_fog if row.get("sky") else world_fog
+                    if fog and component is not None:
+                        try:
+                            HOST.set_fog(component, fog)
+                        except Exception:  # noqa: BLE001 -- a non-primitive root has no slots
+                            pass
+                    if values["scale"] != 1.0:
+                        actor.set_actor_scale3d(unreal.Vector(*([values["scale"]] * 3)))
+                    if row.get("start_hidden"):
+                        actor.set_actor_hidden_in_game(True)
+                    actor.set_actor_label(values["label"])
+                    actor.tags = list(values["tags"])
+                    actor.set_folder_path(values["folder"])
+                    placed += 1
+                    sky_placed += 1 if row.get("sky") else 0
+                    per_table[table] = per_table.get(table, 0) + 1
+            log("effects: %d placed (%s; %d in the 3D skybox); %d unresolved root(s) placed no "
+                "actor%s" % (placed, ", ".join("%d %s" % (n, t) for t, n in sorted(per_table.items())),
+                             sky_placed, len(skipped),
+                             (": entities %s" % skipped[:8]) if skipped else ""))
+            return placed
+
+        def _set(self, target, name, value, what):
+            """One property write that fails naming the property the class does not expose."""
+
+            try:
+                target.set_editor_property(name, value)
+            except Exception as error:  # noqa: BLE001 -- the mapping table is the contract
+                fail("effects: %s exposes no property %r for %s (%s)" % (
+                    target.get_class().get_name() if hasattr(target, "get_class") else target,
+                    name, what, error))
+                raise SystemExit(1)
+
+        def _write_effect_row(self, actor, row):
+            for field, prop in EFFECT_ROW_FIELDS:
+                value = row.get(field)
+                if field == "bounds_cm":
+                    box = unreal.Box()
+                    if value:
+                        box = unreal.Box(min=unreal.Vector(*value["min"]),
+                                         max=unreal.Vector(*value["max"]), is_valid=1)
+                    value = box
+                elif field == "angles_deg":
+                    value = unreal.Vector(*value)
+                elif field == "particle":
+                    value = str(value or "")
+                elif value is None:
+                    value = "" if field in ("parentname", "bone", "targetname") else 0
+                self._set(actor, prop, value, "effects[%d].%s" % (row["index"], field))
+
+        def _write_family_row(self, actor, row):
+            self._set(actor, "entity_index", int(row["index"]), "row.index")
+            for field, value in row.items():
+                if field in FAMILY_ROW_SKIP:
+                    continue
+                if field == "color":
+                    value = unreal.LinearColor(value[0], value[1], value[2],
+                                               float(row.get("alpha", 1.0)))
+                elif field == "bounds_cm":
+                    box = unreal.Box()
+                    if value:
+                        box = unreal.Box(min=unreal.Vector(*value["min"]),
+                                         max=unreal.Vector(*value["max"]), is_valid=1)
+                    value = box
+                elif value is None:
+                    value = ""
+                self._set(actor, field, value, "%s[%d].%s" % (
+                    row.get("classname", "row"), row["index"], field))
+
+        def _write_tree(self, actor, tree):
+            if not tree:
+                return
+            nodes = []
+            for node in tree["nodes"]:
+                struct = unreal.ElysiumParticleNode()
+                for field, prop in EFFECT_NODE_FIELDS:
+                    value = node.get(field)
+                    if isinstance(value, list) and value and isinstance(value[0], list):
+                        value = [unreal.ElysiumRampKey(t=k[0], lo=k[1], hi=k[2]) for k in value]
+                    elif value is None:
+                        value = -1 if field == "parent" else ""
+                    self._set(struct, prop, value, "node[%d].%s" % (node["index"], field))
+                spawn = node.get("spawn") or {}
+                self._set(struct, "has_spawn", bool(node.get("spawn")), "node.spawn")
+                for field, prop in EFFECT_SPAWN_FIELDS:
+                    if field not in spawn:
+                        continue
+                    value = spawn[field]
+                    if isinstance(value, list) and value and isinstance(value[0], list):
+                        value = [unreal.ElysiumRampKey(t=k[0], lo=k[1], hi=k[2]) for k in value]
+                    self._set(struct, prop, value, "node[%d].spawn.%s" % (node["index"], field))
+                for key in ("sprite", "normal"):
+                    image = node.get(key) or {}
+                    self._set(struct, key, str(image.get("texture") or ""), "node." + key)
+                    aspect = image.get("aspect") or [0.5, 0.5]
+                    self._set(struct, key + "_aspect", unreal.Vector2D(aspect[0], aspect[1]),
+                              "node." + key + ".aspect")
+                collide = node.get("collide")
+                self._set(struct, "collide", bool(collide), "node.collide")
+                if collide:
+                    for field, prop in EFFECT_COLLIDE_FIELDS:
+                        self._set(struct, prop, collide[field], "node.collide." + field)
+                nodes.append(struct)
+            tree_struct = unreal.ElysiumParticleTree()
+            self._set(tree_struct, "root", tree["root"], "tree.root")
+            self._set(tree_struct, "name", tree["name"], "tree.name")
+            self._set(tree_struct, "nodes", nodes, "tree.nodes")
+            self._set(tree_struct, "leaf_count", int(tree["stats"]["leafCount"]), "tree.leafCount")
+            self._set(tree_struct, "max_depth", int(tree["stats"]["depth"]), "tree.depth")
+            self._set(actor, "tree", tree_struct, "actor.tree")
 
         # ------------------------------------------------------------------ lights (R5.6)
 
@@ -1114,6 +1350,36 @@ def sprite_actor_values(row, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
         "folder": "Sky/Sprites" if row.sky else "Sprites",
         "tags": (TAG_SPRITE, "%s%d" % (TAG_ENTITY_PREFIX, row.index))
                 + ((TAG_SKY,) if row.sky else ()),
+    }
+
+
+def effect_actor_values(row, table, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+    """The placement facts `_place_effects` writes for one staged row (R7.3), pure so a pytest pins
+    them: the position and rotation (a 3D-skybox row takes the miniature transform a sprite
+    takes), the actor's uniform scale, the label, the folder and the tags."""
+
+    position = tuple(float(v) for v in (row.get("origin_cm") or (0.0, 0.0, 0.0)))
+    rotation = tuple(float(v) for v in (row.get("rotation") or (0.0, 0.0, 0.0, 1.0)))
+    scale = 1.0
+    sky = bool(row.get("sky"))
+    if sky:
+        position = tuple(
+            float(sky_scale) * (position[i] - float(sky_origin[i])) for i in range(3))
+        scale = float(sky_scale)
+    if table == "effects":
+        stem = str(row.get("particle") or "").rsplit(":", 1)[-1].replace(" ", "_")
+        label = "Effect_%d_%s" % (row["index"], stem)
+    else:
+        label = "%s_%d" % ({"dustmotes": "Dust", "steam": "Steam", "beams": "Beam"}[table],
+                           row["index"])
+    return {
+        "position": position,
+        "rotation": rotation,
+        "scale": scale,
+        "label": label + ("_sky" if sky else ""),
+        "folder": "Sky/Effects" if sky else "Effects",
+        "tags": (TAG_EFFECT, "%s%d" % (TAG_ENTITY_PREFIX, row["index"]))
+                + ((TAG_SKY,) if sky else ()),
     }
 
 
@@ -1466,6 +1732,13 @@ class _StagedGeometry(object):
         stems = {int(model["model"]): str(model["stem"]) for model in self.detail_models}
         self.details = [_DetailPlacement(row, stems) for row in details.get("records") or []]
         self.sprites = [_SpriteRow(row) for row in self.manifest.get("sprites") or []]
+        # R7.3: the effects tables, read as the stage wrote them (dicts; the writer maps fields).
+        self.effects = list(self.manifest.get("effects") or [])
+        self.particle_trees = dict(self.manifest.get("particleTrees") or {})
+        self.dustmotes = list(self.manifest.get("dustmotes") or [])
+        self.steam = list(self.manifest.get("steam") or [])
+        self.beams = list(self.manifest.get("beams") or [])
+        self.effect_stats = dict(self.manifest.get("effectStats") or {})
 
     def brush_stems(self):
         return {int(index): stem

@@ -45,8 +45,6 @@ namespace
 		  TEXT("the SoundScheme manager owns the scheme file, but no entity class receives its wires") },
 		{ TEXT("camera_cinematic"),              TEXT("EndShot StartShot"),
 		  TEXT("the scripted-shot channel") },
-		{ TEXT("func_particle"),                 TEXT("TurnOff TurnOn"),
-		  TEXT("brush-bound particle emitters") },
 		{ TEXT("env_physimpact"),                TEXT("Impact"),
 		  TEXT("scripted physics impulses") },
 		{ TEXT("intersting_place_conversation"), TEXT("PlayOneOffSound"),

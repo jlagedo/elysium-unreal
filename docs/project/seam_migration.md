@@ -2599,17 +2599,26 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   mesh decals as translucent surfaces. 5,143 `infodecal` + `.decals`, 38 `decalmodulate` units;
   `ElysiumFog::ApplyToDecalMID` and `M_V2_Decal`'s fog parameters are waiting; the legacy per-map
   `M_Decal` (fails to compile for SM6) retires. → lands: legacy `M_Decal` retired.
-- **R7.3 Effects families** [R7.5 / MP-5.5] — **on the real census.** R2.2's vocabulary was a
-  guess: `env_fire`, `env_embers`, `env_lightglow`, `point_spotlight`, `env_sun` have **0**
-  placements in 108 maps. What the corpus places: `env_particle` 1,304 (class exists, per-map
-  Niagara flatten baked; presentation per family, `effects-architecture.md` §4), `params_particle`
-  227 (conversation auras), `func_particle` 98 (stub), `func_dustmotes` 82 (no class), `env_beam`
-  47 (no class), `env_steam` 11 (no class), the explosion bundle — `point_explosion` 93,
-  `params_explosion` 52, `env_physexplosion` 61, `env_physimpact` 130, `env_shake` 60, `env_shooter`
-  21 (stubs; the impulse is `physics-architecture.md`'s seam) — `env_particle_hud` 3, and the
-  main-menu particle scene (`menu/particles`, written and unread). One authored system per
-  family, parameters from the compiled JSON, I/O reproduced. → lands: the ambient set and the
-  explosion bundle.
+- **R7.3 Effects families** [R7.5 / MP-5.5] — **on the real census, ruled 2026-09-02**
+  (`effects-architecture.md` §5). R2.2's vocabulary was a guess: `env_fire`, `env_embers`,
+  `env_lightglow`, `point_spotlight`, `env_sun` have **0** placements in 108 maps. What the
+  corpus places: `env_particle` 1,304 over 155 roots (class exists; the legacy Niagara flatten
+  fails the four most-placed fire roots), `func_particle` 98 (stub; a brush AABB emitter with a
+  volume scalar, no rain-specific body), `func_dustmotes` 82, `env_beam` 47, `env_steam` 11 (no
+  class), `params_particle` 227 (**a precache stub** — the dialog auras are created by name from
+  the discipline walker, nothing to build beyond an inert class), and the explosion bundle —
+  `point_explosion` 93, `params_explosion` 52 (an inert data holder), `env_physexplosion` 61,
+  `env_physimpact` 130, `env_shake` 60, `env_shooter` 21 (stubs; the impulse is
+  `physics-architecture.md`'s seam). `env_particle_hud` (3) and the main-menu particle scene are
+  **out of scope by owner decision** (the menu and HUD are new authored assets). The rulings:
+  A1 stage off the V2 particle unit (`seam_map_map.md` → "Import — effects (R7.3)": `effects[]`
+  + `particleTrees{}` + the dust / steam / beam rows), B3 one slotted generic floor
+  `NS_ElysiumParticle` with `DA_EffectFamilies` overrides, C1 one `AElysiumEffectActor` per row
+  in the baked level, the real family systems `NS_ElysiumDust` / `NS_ElysiumSteam` /
+  `NS_ElysiumBeam`, P1 the two impulse methods with the explosion bundle; the ambient set first
+  (stage product, floor, effect actor, `env_particle` retargeted, `func_particle`, dust / steam /
+  beam on the three working maps), then the explosion bundle on `sm_junkyard_1` /
+  `sm_warehouse_1`. → lands: the ambient set and the explosion bundle.
 - **R7.4 Runtime material binds** [R6.2 remainder / SF-6.4]. Through R6.5's `Create(MI_)`:
   `textconsole` (4) with `func_monitor` 22 / `point_camera` 37 / `security_camera` 18 as
   render-target screens; `breakablesurface` (2) + `$crackmaterial` with `func_breakable_surf`
@@ -2726,7 +2735,13 @@ two tasks; they are the same tasks.
 - **R9.2 Legacy bake, masters and Cog tuning deleted** [R8.2 / MP-6.2]. `bake_map.py` legacy
   lanes, the legacy world/prop master set, per-map material packages,
   `/ElysiumBaked/Shared/Textures`, the `UE_extract_*` family the R8 producers replaced, the Cog
-  tuning tabs and calibration cvars (the debug windows stay). Acceptance: full-corpus rebake,
+  tuning tabs and calibration cvars (the debug windows stay). Also the legacy particle lane R7.3
+  left in place because the 105 unconverted maps still run on it: `formats/particles.py::
+  compile_definition` and the `<map>.particles.json` writer (`UE_bsp_to_scene`), `make_particle_
+  systems.py` / `UElysiumParticleAssetBuilder` (the `NS_<root>` flatten behind `--particles`), and
+  `UE_extract_particles.py`'s PNG derivative (the rain material's sprite mirror,
+  `_ensure_particle_mirror`) — the converted maps read the `particles/<sprite>` texture units and
+  the staged `effects[]` instead. Acceptance: full-corpus rebake,
   doctor, the full R2.1 shot set, and a hub-chain playthrough. → lands: **one pipeline, and the
   game runs on it.**
 
