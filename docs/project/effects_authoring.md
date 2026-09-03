@@ -58,8 +58,8 @@ tutorial casts and `molotov_emitter` → A10.
 
 - [x] Checkpoint commit (f939f049); floor asset left at its committed state.
 - [x] Docs carry the revised ruling (effects-architecture §5, seam_map_map, seam_migration R7.3/R9.2, world plan, authored-assets skill).
-- [ ] Generator lane re-pointed: `make_particle_systems.py` + `UElysiumParticleAssetBuilder` read `particleTrees{}`, inherit from a base emitter, compile, gate on `IsReadyToRun()` + particle count, write to `Content/ElysiumGenerated/VFX/NS_<root>`.
-- [ ] Contact-sheet capture: witness pedestal + fixed camera, SIE and in-game screenshots per root.
+- [x] Generator lane: `pipeline/unreal/make_root_systems.py` + `UElysiumParticleAssetBuilder::BuildRootSystem` compose `NS_<root>` headless from `particleTrees{}`, compile, gate on `IsReadyToRun()`, save to `/Game/ElysiumGenerated/VFX/`. Spike passed 2026-09-03: 21 roots built in 43 s off the stock Fountain template, never opened in the editor; `NS_BarrelFireEmitter` activates on fresh load with particles in all four emitters (`sheets/barrelfire_fountain/`). Still open: ramps and collide→spawn writes, particle-count gate, bake wiring, `E_VtMBLeaf` base emitter.
+- [x] Contact-sheet capture, SIE half: `E:/elysium-work/scratch/effects/sheet.py <NS path> --label X` (pedestal, label, fixed camera, two frames, counts.txt). In-game half still needs a fixed view pose via `elysium_player_teleport` + `elysium_screenshot`.
 - [ ] Black card isolated in the hub (survives TurnOff; screen-space in the tutorial; suspect the depth-test-off material child).
 - [ ] A1 `BarrelFireEmitter` — base emitter, generated system, sheet, verdict.
 - [ ] A5 `SteamRelease_Constant_Emitter`

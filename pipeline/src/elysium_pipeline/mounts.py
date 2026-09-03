@@ -17,6 +17,11 @@ INPUT = "/Game/ElysiumGenerated/Input"
 BOOT_MAP = "/Game/ElysiumGenerated/Boot"
 CAMERA = "/Game/ElysiumGenerated/Camera"
 ANIMATION = "/Game/ElysiumGenerated/Animation"
+# One `NS_<root>` per VtMB particle root, composed by `pipeline/unreal/make_root_systems.py` from
+# an authored base emitter (`docs/project/niagara_authoring_strategy.md` 4.1). Generated, so
+# gitignored: the readable artifact is the handful of authored modules under
+# `Content/ElysiumAuthored/VFX/`, not the 1,698 systems built from them.
+VFX = "/Game/ElysiumGenerated/VFX"
 BAKED = "/ElysiumBaked"
 # Decoded from the user's own VtMB install (`mdl_cloth` sidecars), so it belongs with the rest of
 # the baked corpus rather than the pre-cooked `Content/` packages above.
