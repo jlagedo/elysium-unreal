@@ -278,6 +278,9 @@ protected:
 	UMaterialInterface* LoadMaterial(const TCHAR* Path);
 
 	bool bSystemBound = false;
+	/** The bound system is the bake's generated `NS_<root>`; the slot writes are not for it. */
+	bool bGeneratedSystem = false;
+	UNiagaraSystem* LoadGeneratedSystem();
 	bool bOn = false;
 	bool bKilled = false;
 	float CurrentRate = 0.f;

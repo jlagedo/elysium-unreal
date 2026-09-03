@@ -280,6 +280,40 @@ class Graph:
     def vertex_color(self, x, y):
         return self.node(unreal.MaterialExpressionVertexColor, x, y)
 
+    def particle_color(self, x, y):
+        """The per-particle colour a Niagara/Cascade emitter writes, for sprite/mesh-particle
+        masters. NOT interchangeable with `vertex_color`: `NiagaraSpriteVertexFactory.ush`'s
+        `GetMaterialPixelParameters` hardcodes `Result.VertexColor = 1` and only fills
+        `Result.Particle.Color`, so a *pixel*-shader expression (Emissive, Opacity) reading
+        `VertexColor` on a Niagara sprite silently reads white and the particle's own colour and
+        alpha are discarded. Outputs are `""` (rgb, float3), `"R"`, `"G"`, `"B"`, `"A"` -- the
+        default output is already three-wide, so it needs no ComponentMask."""
+        return self.node(unreal.MaterialExpressionParticleColor, x, y)
+
+    def dynamic_parameter(self, x, y, *, defaults=(1.0, 1.0, 1.0, 1.0), names=None, index=0):
+        """A `DynamicParameter` -- the per-particle float4 a Cascade/Niagara emitter writes into
+        `Particles.DynamicMaterialParameter` (Niagara's stock `DynamicMaterialParameters` module,
+        bound on the renderer's `Dynamic Material Parameter Binding`). Its four outputs are named
+        by `ParamNames`, so `connect(node, "Param1", ...)` picks the X lane.
+
+        `defaults` is what every *non*-particle draw reads: `MaterialTemplate.ush`'s
+        `GetDynamicParameter` returns the compiled-in default whenever the vertex factory is not a
+        Niagara one, or when the emitter never writes that lane (`DynamicParameterValidMask`). So
+        a default of 1.0 leaves world geometry and un-modulated emitters exactly where they were,
+        and only an emitter that actually authors the ramp moves off it.
+
+        Real-editor gotcha: `get_material_expression_output_names` lists `Param1..Param4, RGB,
+        RGBA` and `connect_material_expressions(node, "Param1", ...)` succeeds on a bare material,
+        but refuses (returns False) once the graph has other expressions in it -- measured, not
+        guessed. Take the lane through `Graph.mask(node, "r", ..., src_out="RGBA")` instead; the
+        `RGBA` output is the same float4 and the mask is stable."""
+        n = self.node(unreal.MaterialExpressionDynamicParameter, x, y)
+        n.set_editor_property("default_value", unreal.LinearColor(*defaults))
+        n.set_editor_property("parameter_index", index)
+        if names is not None:
+            n.set_editor_property("param_names", [str(name) for name in names])
+        return n
+
     def fresnel(self, x, y, *, exponent=None):
         """`exponent`, not `exponent_in` -- real-editor fact, confirmed against
         `MaterialExpressionFresnel.h`: the static property is `Exponent`, and `ExponentIn` (like

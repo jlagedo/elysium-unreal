@@ -60,8 +60,8 @@ tutorial casts and `molotov_emitter` → A10.
 - [x] Docs carry the revised ruling (effects-architecture §5, seam_map_map, seam_migration R7.3/R9.2, world plan, authored-assets skill).
 - [x] Generator lane: `pipeline/unreal/make_root_systems.py` + `UElysiumParticleAssetBuilder::BuildRootSystem` compose `NS_<root>` headless from `particleTrees{}`, compile, gate on `IsReadyToRun()`, save to `/Game/ElysiumGenerated/VFX/`. Spike passed 2026-09-03: 21 roots built in 43 s off the stock Fountain template, never opened in the editor; `NS_BarrelFireEmitter` activates on fresh load with particles in all four emitters (`sheets/barrelfire_fountain/`). Still open: ramps and collide→spawn writes, particle-count gate, bake wiring, `E_VtMBLeaf` base emitter.
 - [x] Contact-sheet capture, SIE half: `E:/elysium-work/scratch/effects/sheet.py <NS path> --label X` (pedestal, label, fixed camera, two frames, counts.txt). In-game half still needs a fixed view pose via `elysium_player_teleport` + `elysium_screenshot`.
-- [ ] Black card isolated in the hub (survives TurnOff; screen-space in the tutorial; suspect the depth-test-off material child).
-- [ ] A1 `BarrelFireEmitter` — base emitter `E_VtMBLeaf` authored (all stock modules, ramps as two curves lerped by `Particles.MaterialRandom`), `NS_BarrelFireEmitter` generated from it (4 emitters, inherited, 0 skipped writes), sheets `sheets/a1_barrelfire_hand/` and `sheets/a1_barrelfire_generated/`. **Awaiting the owner's verdict.**
+- [x] Black card explained by the A1 round-2 root cause (sprite masters read `VertexColor`, which Niagara hardcodes to white, so every card drew `tex.a` as opacity); confirm gone on the hub and the tutorial in the next play run.
+- [x] A1 `BarrelFireEmitter` — landed 2026-09-03 (three review rounds): base emitter `E_VtMBLeaf`, generated `NS_BarrelFireEmitter`, sprite masters on `ParticleColor`, refraction master on a DUDV offset with a per-particle strength, the effect actor binding `NS_<root>`. Sheets `sheets/a1_shipped_stripes/`, `sheets/a1_shipped_dark/`. Owner's in-game look on the hub barrels still to come.
 - [ ] A5 `SteamRelease_Constant_Emitter`
 - [ ] A8 `SteamRelease_Timer`
 - [ ] A2 `WaterDrops_Timer`
@@ -76,8 +76,54 @@ tutorial casts and `molotov_emitter` → A10.
 
 One entry per archetype: date, root, sheet folder, the owner's words, what changed.
 
-### A1 `BarrelFireEmitter` — 2026-09-03, pending
+### A1 `BarrelFireEmitter` — 2026-09-03, round 3: heat card fixed, landed
+
+- `M_V2_Refract`: refraction mode `RM_2D_OFFSET`; offset = `DuDvMap.rg` (normal sampler, `rg*2-1`) × `RefractAmount × DynamicParameter.x × 0.002` × the card's own alpha; opacity and base colour take `ParticleColor` like the sprite masters; the master now compiles a Niagara sprite permutation. `E_VtMBLeaf` carries a stock `DynamicMaterialParameters` module (`Index 0 Param 1` = two curves lerped by `Particles.MaterialRandom`, default 1). The generator binds `DuDvMap` to the leaf's `normal` sprite and writes the `refract` ramp into that module.
+- Sheets: `sheets/a1_heat_final_stripes/` (stripe edges bend around the flame, nothing else moves), `sheets/a1_shipped_stripes/` and `sheets/a1_shipped_dark/` on the re-authored shipped materials.
+- Also fixed on the way: the particle material instances could never be re-authored (created over an existing package; registry check blind in a commandlet); the generator read its arguments off `sys.argv` (empty under `-run=pythonscript`) and force-deleted loaded Niagara packages (crash).
+- Owner's words: pending the in-game look.
+
+### A1 `BarrelFireEmitter` — 2026-09-03, round 2: flame and smoke pass, heat card rejected
+
+- Root cause of round 1 (found in the live editor): Niagara's sprite vertex factory hardcodes `VertexColor` to white (`NiagaraSpriteVertexFactory.ush`, `GetMaterialPixelParameters`), and the three sprite masters built tint and opacity from a `VertexColor` node, so every `red/green/blue/color` and `mask` ramp was discarded and each card drew raw `tex.rgb` / `tex.a`. Fixed in `pipeline/unreal/matgraph.py` (`Graph.particle_color()`) and `make_v2_materials.py` (sprite masters read `ParticleColor`); needs the materials rebake. This is also the in-game black card and the hard-edged authored steam.
+- Sheets: `sheets/a1_round4_linear/sie_20260903T021608_t3s.png` (lit wall), `sheets/a1_round5_dark/sie_20260903T021821_t3s.png` (dark backdrop), `sheets/a1_round6_noheat/` (heat card off).
+- Owner's words: "looking fine without heat card, the refraction card is completely wrong".
+- Round 3: the heat card. `MI_ParticleRefract` gets a flat default DuDv map and a static strength; the `refract` ramp reaches nothing. Fix in progress: colour-sampled DuDv on `M_V2_Refract`, strength from a `DynamicParameter`, a `DynamicMaterialParameters` module on `E_VtMBLeaf`, the generator binding `DuDvMap` and writing the ramp.
+
+### A1 `BarrelFireEmitter` — 2026-09-03, rejected (round 1)
 
 - Sheets: `E:/elysium-work/scratch/effects/sheets/a1_barrelfire_generated/sie_20260903T014352_t3s.png`, `_t4s.png`; hand-set reference `sheets/a1_barrelfire_hand/sie_20260903T013509_t3s.png`.
 - Known before the verdict: `Fire_Heat` (refraction card) draws nothing yet, its `refract` ramp is a material parameter not bound; the smoke reads as a dark blob against the witness wall (ten `mask 0.235` cards compounding), which is the faithful blend and would read as a soft dark plume in a night alley; no spherical-offset motion yet (not needed for A1).
-- Owner's words: (pending)
+- Owner's words, with two VtMB screenshots of the hub barrel (`E:/elysium-work/scratch/effects/reference/vtmb_barrelfire_close.png`, `_wide.png`): "vtmb fire on barrel is much more translucent, and the smoke above is almost translucent, the dark stuff above dont exists, and the heat wave refractions not really working".
+- Round 2 must fix: flame translucency (soft, see-through, warm; not a saturated opaque ball), smoke nearly invisible (no dark blob: the mask is not reaching vertex alpha, or the alpha path is wrong), refraction card bound and visible.
+
+### A1 `BarrelFireEmitter` — 2026-09-03, round 2 (root cause: the sprite masters read `VertexColor`)
+
+- Sheets: `E:/elysium-work/scratch/effects/sheets/a1_round4_linear/sie_20260903T021608_t3s.png`
+  (lit witness wall, judged on this one), `sheets/a1_round5_dark/sie_20260903T021821_t3s.png`
+  (`sheet.py --dark`, the VtMB night alley), `sheets/a1_round6_noheat/sie_20260903T021902_t3s.png`
+  (`Fire_Heat` disabled, isolating the refraction card's speckle).
+- **Root cause of both colour complaints, one bug:** `NiagaraSpriteVertexFactory.ush`'s
+  `GetMaterialPixelParameters` hardcodes `Result.VertexColor = 1` and fills only
+  `Result.Particle.Color`. `M_V2_Sprite` / `M_V2_SpriteZ` / `M_V2_SpriteZLit` multiplied the tint
+  and the opacity by a `VertexColor` node, so on a Niagara sprite Emissive and Opacity read white:
+  every `red/green/blue/color`/`mask` ramp the generator writes into `Particles.Color` was
+  discarded and the cards drew at `tex.rgb` / `tex.a`. Proven by rewriting the `ScaleColor` curves
+  in the running editor and seeing no pixel move (`sheets/a1_round2/`), then by pointing the same
+  system at a scratch `ParticleColor` master and seeing the whole plume change
+  (`sheets/a1_round3_particlecolor/`).
+- The generator's numbers were right all along: `FirePlace_Flames` `Scale RGB` peaks 0.235 with
+  `Scale Alpha` flat 0, `Smoke1` `Scale Alpha` peaks 0.235 — verified through `GetStackInputData`.
+  No C++ change was needed and none was made.
+- Fix: `matgraph.Graph.particle_color()`, used by `_build_sprite` and `_build_sprite_z` in place of
+  `vertex_color`. `UseVertexColor` / `UseVertexAlpha` keep their names. **Needs a materials-v2
+  re-bake** — `_source_hash()` covers both files, so the three masters re-author themselves.
+- Measured on the lit wall: smoke transmittance 0.15 → 0.87 (no dark blob); flame core sRGB
+  0.79/0.49/0.11 → 0.51/0.32/0.20, against the VtMB reference's 0.65-0.77/0.35-0.44.
+- Still open: the heat card. `ConfigureRenderer` binds only `BaseTexture`, so `MI_ParticleRefract`
+  keeps `DuDvMap = DefaultNormal` (flat, an exact no-op) and a static `RefractAmount 20`; the
+  `refract` ramp (3 → 0) reaches nothing. It renders as white speckle, not a shimmer
+  (`a1_round6_noheat` is the same frame without it). Needs, together: a colour-sampled `DuDvMap`
+  slot on `M_V2_Refract` (the VtMB `normal` slot is a plain sprite, `T_cloud`, not a normal bake),
+  a `DynamicParameter` node driving `RefractAmount`, a `DynamicMaterialParameters` module on
+  `E_VtMBLeaf`, and the `normal` texture + `refract` ramp written by the generator.

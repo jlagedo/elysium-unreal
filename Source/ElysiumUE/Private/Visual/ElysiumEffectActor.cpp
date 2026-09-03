@@ -12,6 +12,7 @@
 #include "NiagaraDataInterfaceArrayFunctionLibrary.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
+#include "Misc/PackageName.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEffect, Log, All);
 
@@ -336,6 +337,33 @@ UNiagaraSystem* AElysiumEffectActor::LoadSystem(const TCHAR* Path)
 	return System;
 }
 
+UNiagaraSystem* AElysiumEffectActor::LoadGeneratedSystem()
+{
+	// `NS_<root>` in the definition's authored spelling (`make_root_systems.py::_asset_name`): the
+	// tree's name when it has one, else the entity's, with any include path and `.txt` stripped.
+	FString Stem = Tree.Name.IsEmpty() ? RootName : Tree.Name;
+	Stem.ReplaceInline(TEXT("\\"), TEXT("/"));
+	int32 Slash = INDEX_NONE;
+	if (Stem.FindLastChar(TEXT('/'), Slash))
+	{
+		Stem = Stem.Mid(Slash + 1);
+	}
+	if (Stem.EndsWith(TEXT(".txt"), ESearchCase::IgnoreCase))
+	{
+		Stem.LeftChopInline(4);
+	}
+	if (Stem.IsEmpty())
+	{
+		return nullptr;
+	}
+	const FString Package = FString::Printf(TEXT("/Game/ElysiumGenerated/VFX/NS_%s"), *Stem);
+	if (!FPackageName::DoesPackageExist(Package))
+	{
+		return nullptr;
+	}
+	return LoadObject<UNiagaraSystem>(nullptr, *FString::Printf(TEXT("%s.NS_%s"), *Package, *Stem));
+}
+
 UMaterialInterface* AElysiumEffectActor::LoadMaterial(const TCHAR* Path)
 {
 	UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, Path);
@@ -383,6 +411,13 @@ void AElysiumEffectActor::EnsureSystem()
 				EntityIndex, *RootName, *FamilySystem.ToString()));
 		}
 	}
+	bGeneratedSystem = false;
+	if (!System)
+	{
+		// B3 (revised 2026-09-03): the bake's generated `NS_<root>` when it exists, else the floor.
+		System = LoadGeneratedSystem();
+		bGeneratedSystem = System != nullptr;
+	}
 	if (!System)
 	{
 		System = LoadSystem(DefaultSystemPath());
@@ -428,6 +463,12 @@ void AElysiumEffectActor::WriteTree()
 	else if (!bHaveDriven)
 	{
 		Niagara->SetVariableInt(TEXT("User.SpawnShape"), 0);
+	}
+
+	if (bGeneratedSystem)
+	{
+		// The generated system carries its leaves as emitters; there are no slots to fill.
+		return;
 	}
 
 	// The fixed layout (ElysiumEffectFamilies.h): roots take slots 0..RootSlots-1, the parent

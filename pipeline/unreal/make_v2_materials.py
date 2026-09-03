@@ -59,7 +59,7 @@ DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 #: it up through the recipe stamp even when nothing on disk changed. `_source_hash()` below is the
 #: exhaustive safety net (it catches an edit this constant was not bumped for); this constant
 #: stays as the human-readable marker of the shape revision.
-GRAPH_VERSION = 5
+GRAPH_VERSION = 6
 
 #: `MPC_ElysiumSurfaces` (SF-4.1, C++, landed) owns every one of these rows and their defaults --
 #: `make_surface_knobs.py` (`build_content.py` runs it before this file). This generator is a
@@ -2259,9 +2259,16 @@ def _build_sprite(mat, collection, lut_texture, default_frames):
 
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     tinted = g.mul(base_rgb, "", color, "", -700, -400)
-    vertex_color = g.vertex_color(-1100, -680)
-    vc_rgb = g.mask(vertex_color, "rgb", -900, -680)
-    with_vc = g.mul(tinted, "", vc_rgb, "", -500, -440)
+    # The "vertex colour" the design doc means on a sprite is the *particle's* colour, and on a
+    # Niagara sprite those are two different things: `NiagaraSpriteVertexFactory.ush`'s
+    # `GetMaterialPixelParameters` hardcodes `Result.VertexColor = 1` and fills only
+    # `Result.Particle.Color`. Emissive and Opacity are pixel-shader outputs, so a `VertexColor`
+    # node here reads white no matter what the emitter writes -- which is exactly how the barrel
+    # fire came out an opaque saturated ball under an opaque black smoke card while its
+    # `ScaleColor` ramps held the right 0.235-peak numbers. `UseVertexColor`/`UseVertexAlpha` keep
+    # their names (they are the design's exposed-parameter table) and now gate the particle lane.
+    particle_color = g.particle_color(-1100, -680)
+    with_vc = g.mul(tinted, "", particle_color, "", -500, -440)
     vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, -300, -400, default=False)
     g.to(vc_selected, "", unreal.MaterialProperty.MP_BASE_COLOR)
     g.to(vc_selected, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
@@ -2270,12 +2277,11 @@ def _build_sprite(mat, collection, lut_texture, default_frames):
     # Unlit shading model ignores MP_ROUGHNESS/SPECULAR/METALLIC, not wired to anything ---------
     _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
-    # -- Opacity: Alpha x BaseTexture.a, x VertexColor.a under UseVertexAlpha -------------------
+    # -- Opacity: Alpha x BaseTexture.a, x ParticleColor.a under UseVertexAlpha ------------------
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
     alpha_with_basetex = g.mul(alpha_param, "", base_a, "", 1900, 0)
-    # `VertexColor`'s outputs are all unnamed FNames -- connect straight to its own "A" output
-    # (already 1-wide) rather than through a ComponentMask; see M_V2_Lit's Opacity section.
-    alpha_with_vc = g.mul(alpha_with_basetex, "", vertex_color, "A", 2100, 40)
+    # `ParticleColor`'s "A" output is already 1-wide, so no ComponentMask.
+    alpha_with_vc = g.mul(alpha_with_basetex, "", particle_color, "A", 2100, 40)
     opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_with_basetex,
                              2300, 20, default=False)
     g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
@@ -2379,16 +2385,18 @@ def _build_sprite_z(mat, collection, lut_texture, default_frames):
 
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     tinted = g.mul(base_rgb, "", color, "", -700, -400)
-    vertex_color = g.vertex_color(-1100, -680)
-    vc_rgb = g.mask(vertex_color, "rgb", -900, -680)
-    with_vc = g.mul(tinted, "", vc_rgb, "", -500, -440)
+    # `ParticleColor`, not `VertexColor` -- see `_build_sprite`'s own note. On a Niagara sprite
+    # `VertexColor` is a compile-time 1 in the pixel shader, which silently threw away every
+    # VtMB `red/green/blue/color` and `mask` ramp the particle lane writes into `Particles.Color`.
+    particle_color = g.particle_color(-1100, -680)
+    with_vc = g.mul(tinted, "", particle_color, "", -500, -440)
     vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, -300, -400, default=False)
 
     _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
     alpha_with_basetex = g.mul(alpha_param, "", base_a, "", 1900, 0)
-    alpha_with_vc = g.mul(alpha_with_basetex, "", vertex_color, "A", 2100, 40)
+    alpha_with_vc = g.mul(alpha_with_basetex, "", particle_color, "A", 2100, 40)
     opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_with_basetex,
                              2300, 20, default=False)
     g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
@@ -2510,6 +2518,14 @@ def make_particle_children():
             unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
             made.append(unreal.load_asset(asset))
             continue
+        # A stale instance (recipe changed, or `-PolicyForce`) is deleted first: `create_asset`
+        # over an existing package refuses unattended, and a failed delete must not fall through
+        # to an instance still parented to the previous master object.
+        # `load_asset`, not `does_asset_exist`: a commandlet's asset registry has not scanned
+        # the mount, so the file on disk reads as missing and `create_asset` then refuses it.
+        if unreal.load_asset(asset) is not None:
+            if not unreal.EditorAssetLibrary.delete_asset(asset):
+                _fail("could not delete stale %s before rebuilding" % asset)
         mic = bl.make_material_instance(name, PARTICLE_MATERIAL_PACKAGE, master)
         if not mic:
             _fail("could not author %s" % asset)
@@ -2565,6 +2581,17 @@ class RefractParams:
         UseFixedCube = "UseFixedCube"
 
 
+#: Screen-offset units per `RefractAmount x DuDvMap.rg x DynamicParameter.x`. `RM_2DOffset` hands
+#: the Refraction pin straight to `DistortionCommon.ush`, which then multiplies by the viewport
+#: width and Epic's own `OffsetFudgeFactor` (0.00023) -- so a 1920-wide view turns one unit of
+#: Refraction into roughly *half a screen* of displacement, and this constant is what brings that
+#: back to a heat haze. Tuned by eye against `Fire_Heat` on the witness pedestal with a striped
+#: backdrop (`sheet.py --stripes`, the only way a refraction card is visible in a still frame at
+#: all -- against a flat wall it displaces nothing you can see): 0.02 tears the background into
+#: blobs, 0.003 still reads as glass, 0.001 is invisible; 0.002 bends the stripe edges around the
+#: flame and leaves the rest of the wall alone.
+REFRACT_OFFSET_SCALE = 0.002
+
 REFRACT_PARAM_TABLE = {
     "textures": sorted(vars(RefractParams.Textures)[k] for k in vars(RefractParams.Textures) if not k.startswith("_")),
     "scalars": sorted(vars(RefractParams.Scalars)[k] for k in vars(RefractParams.Scalars) if not k.startswith("_")),
@@ -2576,18 +2603,36 @@ REFRACT_PARAM_TABLE = {
 def _build_refract(mat, collection, lut_texture):
     """No shipped source and no transcribed selector for this family (design doc "M_V2_Refract"):
     "the master is Unreal `Refraction` from `$dudvmap`/`$normalmap` scaled by `RefractAmount`,
-    tinted by `RefractTint`. Stated as a reconstruction, not a transcription." This reuses the
-    legacy `M_Refract`'s (`make_world_materials.py::make_refract`) own Pixel Normal Offset
-    technique and its "1.0 is neutral, `$refractamount` is added to one" convention verbatim,
-    rather than `M_V2_Water`'s different (normal-perturbation) wiring -- `M_Refract` is the closer
-    precedent here since this master has no `CheapWater`-style bypass switch to route around.
+    tinted by `RefractTint`. Stated as a reconstruction, not a transcription."
 
-    `DuDvMap` and `NormalMap` both feed the one shared `MP_NORMAL` -- `NormalMap` is the lit bump
-    (gated `UseNormalMap`, matching every other master's normal lane) and `DuDvMap` contributes an
-    additive ripple, sampled through the same UV, scaled by `NormalMap.a x RefractAmount` (review
-    fix: `fxc/refract_ps20`'s own `scale = normalMap.a x RefractAmount`, not wired at all before
-    this fix). DuDvMap's own default (`DefaultNormal`, flat) makes its delta from flat an exact
-    `(0,0,0)` no-op regardless of the scale for an unbound slot, the same way `M_V2_Water`'s does.
+    `DuDvMap` drives the refraction directly, as an **explicit 2D screen offset**
+    (`RM_2DOffset`), not through the shared pixel normal. That is what a DUDV card *is*: VtMB's
+    `engine/particlerefract` (and the world Refract/heatglow programs) displace the framebuffer
+    lookup by the map's own centred RG, scaled by `$refractamount` -- `EngineTypes.h`'s
+    "Explicit 2D screen offset ... the user is in charge of any strength and fading" is the one
+    Unreal mode that says the same thing. Pixel Normal Offset (what this master used before) is
+    the wrong shape for the particle case in particular: a camera-facing Niagara sprite's vertex
+    normal *is* the view direction, so the whole distortion collapses onto whatever survives the
+    normal round-trip, and the strength knob squares itself (it scaled the perturbation *and* the
+    `1 + RefractAmount/100` refraction magnitude).
+
+    `DuDvMap` stays on the **normal sampler** even though the corpus binds plain colour art to it
+    (`Fire_Heat`'s `T_cloud`). That is deliberate and not a mislabel: on desktop neither
+    `DXT5_NORMALMAPS` nor `LA_NORMALMAPS` is defined, so `Common.ush`'s `UnpackNormalMap` is
+    exactly `rg * 2 - 1` -- the centring a DUDV read needs, for free -- and it keeps
+    `DefaultNormal` (a valid, flat, `VerifySamplerType`-legal default) as the unbound-slot
+    texture, so a refract unit with no `$dudvmap` reads an exact `(0,0)` offset instead of
+    whatever a colour sampler's grey-checker default would smear across the screen.
+
+    `NormalMap` keeps the lit bump lane on `MP_NORMAL` alone (gated `UseNormalMap`, matching every
+    other master). The old `NormalMap.a x RefractAmount` scale on the DuDv term is gone with it:
+    under a normal sampler `UnpackNormalMap` returns `w = 1` unconditionally, so that factor was
+    structurally 1.0 and never carried `fxc/refract_ps20`'s intent at all.
+
+    `DynamicParameter.x` is the per-particle strength multiplier -- VtMB's `refract` ramp
+    (`Fire_Heat`: 3 -> 0 over a 2 s life), written by the emitter's stock
+    `DynamicMaterialParameters` module. It defaults to 1.0, which is what every world draw and
+    every emitter that does not author the ramp reads (`matgraph.Graph.dynamic_parameter`).
 
     `UseEnvMap` is declared per the exposed-parameter table but not separately wired: this master's
     per-family table states no reflection-mask/specular formula at all (unlike Lit/Water), so
@@ -2617,35 +2662,44 @@ def _build_refract(mat, collection, lut_texture):
 
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     refract_tint = g.vec3(P.Vectors.RefractTint, (1.0, 1.0, 1.0, 1.0), -1100, -680)
-    base_color_final = g.mul(g.mul(base_selected, "", color, "", -500, -420), "", refract_tint, "",
-                             -300, -460)
+    tinted = g.mul(g.mul(base_selected, "", color, "", -500, -420), "", refract_tint, "",
+                   -300, -460)
+    # The particle lane's own tint, the same `ParticleColor` (not `VertexColor`) the sprite
+    # masters read -- a refract leaf's `red/green/blue/color` ramps land in `Particles.Color`, and
+    # every non-particle draw reads the compiled-in `(1,1,1,1)` (`MaterialTemplate.ush`).
+    particle_color = g.particle_color(-1100, -760)
+    base_color_final = g.mul(tinted, "", particle_color, "", -100, -460)
 
-    # -- Normal: NormalMap (lit bump, gated UseNormalMap) plus DuDvMap's ripple, scaled by
-    # `NormalMap.a x RefractAmount` -- `fxc/refract_ps20`'s own `scale = normalMap.a x
-    # RefractAmount` (review fix: this master's DuDv delta was previously unconditional and
-    # unscaled, wired to neither NormalMap.a nor RefractAmount at all) ---------------------------
+    # -- Normal: NormalMap alone, the lit bump (gated UseNormalMap). DuDvMap is no longer folded
+    # in here -- it drives MP_REFRACTION as an explicit 2D offset instead; see the docstring. ----
     refract_amount = g.scalar(P.Scalars.RefractAmount, 20.0, -1100, 620)
-    dudv_tex = g.tex(P.Textures.DuDvMap, -1100, 60, kind="normal")
-    connect(uv0, "", dudv_tex, "UVs")
-    dudv_rgb = g.mask(dudv_tex, "rgb", -900, 60)
     normal_tex = g.tex(P.Textures.NormalMap, -1100, 260, kind="normal")
     connect(uv0, "", normal_tex, "UVs")
-    normal_tex_a = g.mask(normal_tex, "a", -900, 340, src_out="RGBA")
     flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
     normal_lit = g.switch(P.Switches.UseNormalMap, g.mask(normal_tex, "rgb", -700, 260),
                           flat_normal, -500, 220, default=False)
-    dudv_delta = g.sub(dudv_rgb, "", flat_normal, "", -700, 400)
-    dudv_scale = g.mul(normal_tex_a, "", refract_amount, "", -700, 480)
-    dudv_perturbation = g.mul(dudv_delta, "", dudv_scale, "", -500, 440)
-    combined_normal = g.add(normal_lit, "", dudv_perturbation, "", -300, 300)
-    g.to(combined_normal, "", unreal.MaterialProperty.MP_NORMAL)
+    g.to(normal_lit, "", unreal.MaterialProperty.MP_NORMAL)
 
-    # -- Refraction: `M_Refract`'s own "1.0 is neutral" convention -- `RefractAmount` is added to
-    # one rather than interpreted as glass IOR --------------------------------------------------
-    neutral = g.const(1.0, -1100, 700)
-    refraction_magnitude = g.add(neutral, "", g.div(refract_amount, "", g.const(100.0, -900, 780),
-                                                     "", -900, 700), "", -700, 700)
-    g.to(refraction_magnitude, "", unreal.MaterialProperty.MP_REFRACTION)
+    # -- Refraction: the DUDV card, as `RM_2DOffset`'s explicit screen offset ---------------------
+    # `DuDvMap.rg` (already centred to [-1,1] by the normal sampler's `UnpackNormalMap`), scaled by
+    # `RefractAmount x DynamicParameter.x x REFRACT_OFFSET_SCALE`, and masked by the card's own
+    # alpha -- the distortion pass does *not* mask by Opacity (`DistortAccumulatePS.usf` only reads
+    # Opacity as coverage under Substrate), so an unmasked card would push a hard rectangle of
+    # background around. VtMB's `Fire_Heat` is exactly that: `color 0, mask 0`, invisible, and the
+    # sprite's alpha is the only thing that shapes the distortion.
+    dudv_tex = g.tex(P.Textures.DuDvMap, -1100, 60, kind="normal")
+    connect(uv0, "", dudv_tex, "UVs")
+    dudv_xy = g.mask(dudv_tex, "rg", -900, 60)
+    refract_dynamic = g.dynamic_parameter(-1300, 780)
+    # `.x` through a ComponentMask on the `RGBA` output, not the node's own `Param1` output pin --
+    # see `Graph.dynamic_parameter`'s docstring for why the named pin refuses the connection.
+    refract_dynamic_x = g.mask(refract_dynamic, "r", -1100, 780, src_out="RGBA")
+    refract_strength = g.mul(
+        g.mul(refract_amount, "", refract_dynamic_x, "", -900, 700), "",
+        g.const(REFRACT_OFFSET_SCALE, -900, 860), "", -700, 720)
+    refract_offset = g.mul(g.mul(dudv_xy, "", refract_strength, "", -500, 120), "",
+                           base_a_selected, "", -300, 100)
+    g.to(refract_offset, "", unreal.MaterialProperty.MP_REFRACTION)
 
     # -- surface class lookup: no reflection-mask formula for this master, so Roughness/Specular/
     # Metallic are always the class row (like M_V2_Eyes/M_V2_TwoTexture) -----------------------
@@ -2679,9 +2733,14 @@ def _build_refract(mat, collection, lut_texture):
     g.to(emissive_fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     g.to(specular_fogged, "", unreal.MaterialProperty.MP_SPECULAR)
 
-    # -- Opacity: Alpha x BaseTexture.a (translucent, no vertex-color/alpha lane on this master) -
+    # -- Opacity: Alpha x BaseTexture.a x ParticleColor.a. The particle factor is what makes a
+    # `color 0, mask 0` heat card actually invisible: the distortion pass runs off MP_REFRACTION
+    # regardless of Opacity, so the card can distort while contributing no pixels at all. Without
+    # it `Fire_Heat` drew `T_cloud` as white speckle over the flame. Non-particle draws read
+    # `ParticleColor = (1,1,1,1)`, so world refract units are untouched.
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
-    opacity = g.mul(alpha_param, "", base_a_selected, "", 1900, 0)
+    opacity = g.mul(g.mul(alpha_param, "", base_a_selected, "", 1900, 0), "",
+                    particle_color, "A", 2100, 40)
     g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY)
 
 
@@ -2706,13 +2765,22 @@ def make_refract():
 
     # BLEND_Translucent is not Nanite-compatible -- this master deliberately does not set
     # used_with_nanite (review fix). used_with_instanced_static_meshes stays on.
-    mat, asset = _fresh(name, ism=True)
+    # `niagara_sprites` is on because `MI_ParticleRefract` is this master's child and every
+    # `normal` + `refract` leaf (`Fire_Heat` and the seven others) draws through it: without the
+    # flag the sprite permutation is compiled on demand in the editor and not at all in a
+    # packaged build, where the heat cards would fall back to the default grey material.
+    mat, asset = _fresh(name, ism=True, niagara_sprites=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
     mat.set_editor_property(
         "translucency_lighting_mode",
         unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
-    mat.set_editor_property("refraction_method", unreal.RefractionMode.RM_PIXEL_NORMAL_OFFSET)
+    # `RM_2D_OFFSET`, not Pixel Normal Offset: the Refraction pin is the DUDV card's own screen
+    # displacement (see `_build_refract`'s docstring). `refraction_depth_bias` stays at the
+    # default 0 -- `DistortionCommon.ush::PostProcessUVDistortion` reads it as a soft depth
+    # threshold, and 0 means "fade only what is level with the surface behind it", which is what
+    # keeps a heat card sitting on a barrel from smearing the barrel's own silhouette.
+    mat.set_editor_property("refraction_method", unreal.RefractionMode.RM_2D_OFFSET)
     mat.set_editor_property("two_sided", False)
 
     _build_refract(mat, collection, lut_texture)

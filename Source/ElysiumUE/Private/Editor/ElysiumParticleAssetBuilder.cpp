@@ -973,6 +973,7 @@ void ConfigureLeaf(
 	const TArray<FKey>* Blue = FindRamp(Node.Ramps, TEXT("blue"));
 	const TArray<FKey>* Colour = FindRamp(Node.Ramps, TEXT("color"));
 	const TArray<FKey>* Mask = FindRamp(Node.Ramps, TEXT("mask"));
+	const TArray<FKey>* Refract = FindRamp(Node.Ramps, TEXT("refract"));
 	for (int32 Side = 0; Side < 2; ++Side)
 	{
 		const bool bHi = Side == 1;
@@ -996,9 +997,19 @@ void ConfigureLeaf(
 			TArray<FName>({FName(TEXT("Scale Alpha")), FName(SideName), FName(TEXT("FloatCurve"))}),
 			DataInterfaceValue(FString::Printf(TEXT("{\"Curve\":%s}"),
 				*RichCurveJson(Mask, nullptr, bHi))));
+		// `refract` -- the DUDV card's strength, the one VtMB ramp that is a *material* input
+		// rather than a particle attribute. It rides `DynamicMaterialParameters`' float lane 0
+		// into `Particles.DynamicMaterialParameter.x`, which `M_V2_Refract` multiplies into its
+		// 2D screen offset. `RichCurveJson`'s default is 1.0, so a leaf without the key writes a
+		// flat 1 and the refract master's `RefractAmount` stands alone -- the same no-op the
+		// material's own `DynamicParameter` default produces for world geometry.
+		WriteInputPath(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
+			TEXT("DynamicMaterialParameters"),
+			TArray<FName>({FName(TEXT("Index 0 Param 1")), FName(SideName),
+				FName(TEXT("FloatCurve"))}),
+			DataInterfaceValue(FString::Printf(TEXT("{\"Curve\":%s}"),
+				*RichCurveJson(Refract, nullptr, bHi))));
 	}
-	// TODO(refract): the `refract` ramp belongs on MI_ParticleRefract's own RefractAmount, bound
-	// through the renderer's MaterialParameters rather than through a particle attribute.
 
 	// --- Particle Update: collision. TODO(A2): the base emitter carries no Collision module yet,
 	// so these land in Skipped until the A2 (WaterDrops_Timer) pass adds
@@ -1056,28 +1067,46 @@ void ConfigureRenderer(
 		Node.bMoveAlign ? TEXT("VelocityAligned") : TEXT("Unaligned"));
 	Properties->SetStringField(TEXT("FacingMode"), TEXT("FaceCamera"));
 
-	// The sprite rides the renderer's own material-parameter binding rather than a per-slot user
-	// texture: FNiagaraRendererMaterialTextureParameter holds a UTexture directly, so the four
+	// The sprites ride the renderer's own material-parameter bindings rather than per-slot user
+	// textures: FNiagaraRendererMaterialTextureParameter holds a UTexture directly, so the four
 	// MI_Particle* children stay shared and no per-sprite material instance has to be authored.
-	if (!Node.SpriteTexture.IsEmpty())
+	//
+	// A `normal` + `refract` leaf carries two: the drawn sprite on `BaseTexture` and the DUDV card
+	// on `DuDvMap`. Without the second binding `MI_ParticleRefract` keeps the master's flat
+	// `DefaultNormal` and the card distorts nothing at all -- which is how `Fire_Heat` came out as
+	// white `T_cloud` speckle around the flame instead of a heat shimmer. A leaf with only
+	// `normal` (no `sprite`) binds the same texture to both, so its alpha still masks the offset.
+	TArray<TPair<const TCHAR*, FString>> TextureBindings;
+	const FString& BaseSource = Node.SpriteTexture.IsEmpty() ? Node.NormalTexture : Node.SpriteTexture;
+	if (!BaseSource.IsEmpty())
 	{
-		if (UTexture* Sprite = LoadObject<UTexture>(nullptr, *Node.SpriteTexture))
-		{
-			TSharedPtr<FJsonObject> Binding = MakeShared<FJsonObject>();
-			Binding->SetStringField(TEXT("MaterialParameterName"), TEXT("BaseTexture"));
-			Binding->SetStringField(TEXT("Texture"), FString::Printf(TEXT("%s'%s'"),
-				*Sprite->GetClass()->GetPathName(), *Sprite->GetPathName()));
-			TArray<TSharedPtr<FJsonValue>> Textures;
-			Textures.Add(MakeShared<FJsonValueObject>(Binding));
-			TSharedPtr<FJsonObject> Parameters = MakeShared<FJsonObject>();
-			Parameters->SetArrayField(TEXT("TextureParameters"), Textures);
-			Properties->SetObjectField(TEXT("MaterialParameters"), Parameters);
-		}
-		else
+		TextureBindings.Emplace(TEXT("BaseTexture"), BaseSource);
+	}
+	if (!Node.NormalTexture.IsEmpty())
+	{
+		TextureBindings.Emplace(TEXT("DuDvMap"), Node.NormalTexture);
+	}
+	TArray<TSharedPtr<FJsonValue>> Textures;
+	for (const TPair<const TCHAR*, FString>& Pair : TextureBindings)
+	{
+		UTexture* Texture = LoadObject<UTexture>(nullptr, *Pair.Value);
+		if (!Texture)
 		{
 			Result.Skipped.Add(FString::Printf(TEXT("%s: sprite '%s' does not load"),
-				*Emitter.ToString(), *Node.SpriteTexture));
+				*Emitter.ToString(), *Pair.Value));
+			continue;
 		}
+		TSharedPtr<FJsonObject> Binding = MakeShared<FJsonObject>();
+		Binding->SetStringField(TEXT("MaterialParameterName"), Pair.Key);
+		Binding->SetStringField(TEXT("Texture"), FString::Printf(TEXT("%s'%s'"),
+			*Texture->GetClass()->GetPathName(), *Texture->GetPathName()));
+		Textures.Add(MakeShared<FJsonValueObject>(Binding));
+	}
+	if (Textures.Num() > 0)
+	{
+		TSharedPtr<FJsonObject> Parameters = MakeShared<FJsonObject>();
+		Parameters->SetArrayField(TEXT("TextureParameters"), Textures);
+		Properties->SetObjectField(TEXT("MaterialParameters"), Parameters);
 	}
 
 	FNiagaraExt_RendererData Data;

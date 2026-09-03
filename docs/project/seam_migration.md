@@ -2628,7 +2628,39 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   slot layout, so work was **paused 2026-09-02** pending a strategy
   (`niagara_authoring_strategy.md`) and **re-ruled 2026-09-03** to the generated lane above, with
   a per-archetype owner verdict recorded in `effects_authoring.md` before an archetype is scaled
-  to the corpus. → lands: the ambient set and the explosion bundle.
+  to the corpus.
+  **State on 2026-09-03 (end of day).** Landed on the generated lane: the headless generator
+  (`make_root_systems.py` + `UElysiumParticleAssetBuilder::BuildRootSystem`, compile +
+  `IsReadyToRun` gate, `Content/ElysiumGenerated/VFX/NS_<root>`), the first base emitter
+  `Content/ElysiumAuthored/VFX/Base/E_VtMBLeaf` (all stock modules; VtMB ramps as two curves
+  lerped by the particle's material random; a `DynamicMaterialParameters` lane for `refract`),
+  the effect actor binding `NS_<root>` when the package exists and the floor otherwise, and the
+  one approved archetype, A1 `BarrelFireEmitter` (three owner review rounds, sheets under
+  `E:/elysium-work/scratch/effects/sheets/`). Two material-lane defects fell out of the review:
+  Niagara's sprite vertex factory hardcodes `VertexColor` to white, so the three sprite masters
+  now read `ParticleColor` (this was the in-game "black card" and the hard-edged authored steam),
+  and `M_V2_Refract` is now a DUDV offset with a per-particle strength. **Missing:** the other
+  eight archetypes (A5 steam plume, A8 timer chain, A2 drip with collide → splash, A3
+  precipitation, A6 moth, A9 muzzle flash, A10 one-shot casts, A7 airplane carrier — order and
+  representative roots in `effects_authoring.md`); in the generator, the spherical-offset motion
+  (`theta`/`phi` spawn angles, `radius_speed`/`theta_speed`/`phi_speed`, needed from A5 on),
+  `collide → spawn` as Collision + collision events (A2), `spawn{rate|burst}` children through
+  the emitter-level attribute reader (A7; the module is added, unverified), a Collision module
+  on the base emitter, and the particle-count gate (`ProbeSystem` cannot build a system instance
+  in a commandlet); the generator is not yet a bake stage (run by hand from the staged document
+  at `E:/elysium-work/scratch/effects/staged.json`, which the census agent staged in memory — the
+  map producer does not write `particleTrees{}` to disk); the in-game half of the contact sheet;
+  the world refract/heatglow brushes after the `M_V2_Refract` mode change (unverified); the
+  authored `NS_ElysiumSteam` re-tuned on the corrected masters; `NS_ElysiumParticle` and the ~200
+  lines of slot fitting in `AElysiumEffectActor::WriteTree` deleted once no map falls back to
+  them; the seam test over every generated system (`effects-architecture.md` §5.3 gate 1); the
+  Measured lines and the Settled entry. **Next steps, in order:** (1) owner looks at the hub
+  barrels in game and confirms A1; (2) A5 `SteamRelease_Constant_Emitter` — the spherical-offset
+  module on `E_VtMBLeaf`, one generated system, sheet, verdict; (3) A8, then A2 (the collision
+  event seam, 41 placements on the working maps); (4) wire `make_root_systems.py` into the V2
+  bake behind the staged `particleTrees{}` and add the per-system seam test; (5) A3, A6, A9,
+  A10, A7; (6) scale to the three maps, play run, retire the floor, Measured + Settled.
+  → lands: the ambient set and the explosion bundle.
 - **R7.4 Runtime material binds** [R6.2 remainder / SF-6.4]. Through R6.5's `Create(MI_)`:
   `textconsole` (4) with `func_monitor` 22 / `point_camera` 37 / `security_camera` 18 as
   render-target screens; `breakablesurface` (2) + `$crackmaterial` with `func_breakable_surf`
