@@ -1,7 +1,7 @@
 # Niagara authoring strategy — research synthesis (2026-09-02)
 
-Owner call pending. Development on R7.3 is paused until a strategy is picked. Four research
-passes (engine source at `D:\Epic\UE_5.8`, Epic docs, Unreal Fest / CEDEC decks, forums,
+Owner call 2026-09-03: A+B adopted, with the review loop in `docs/project/effects_authoring.md`.
+Four research passes (engine source at `D:\Epic\UE_5.8`, Epic docs, Unreal Fest / CEDEC decks, forums,
 realtimevfx, GitHub) converge on the same answer; this note records the evidence and the
 proposal. Real effect examples the reconstruction should copy live in `docs/examples/`.
 

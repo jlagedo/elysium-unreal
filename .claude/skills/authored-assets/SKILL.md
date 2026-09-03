@@ -12,6 +12,26 @@ in place**. There is no generator, no text source, and no export or bake stage t
 If a task sends you looking for a Python generator or an exporter for one of these, stop — there
 isn't one, and adding one is a defect.
 
+## Two lanes, never mixed
+
+Niagara in this project runs on two lanes, and the split is the whole rule (owner call
+2026-09-03, `docs/architecture/effects-architecture.md` §5.3):
+
+- **Authored.** The hero systems (`NS_ElysiumRain`, `NS_ElysiumMeleeTrail`, `NS_ElysiumDust`,
+  `NS_ElysiumSteam`, `NS_ElysiumBeam`), plus the **base emitters and module scripts** under
+  `Content/ElysiumAuthored/VFX/Base/` — one base emitter per VtMB leaf archetype, stock Niagara
+  modules only, plus the project's own ramp sampler and spherical-offset module scripts. These
+  are hand-authored live in the editor, LFS-tracked, and reviewed like code. This skill covers
+  them.
+- **Generated.** One `NS_<root>` per placed VtMB particle root, written by the bake into
+  `Content/ElysiumGenerated/VFX/` (**gitignored**) by `pipeline/unreal/make_particle_systems.py`
+  → `UElysiumParticleAssetBuilder`, headless, inheriting the base emitters above and overriding
+  parameter values only. **Never hand-edit one**, never open one to "fix" it, never commit one —
+  change the generator or the base emitter and re-bake.
+
+So: a Python generator for a base emitter is a defect; a hand edit to an `NS_<root>` under
+`ElysiumGenerated` is a defect too, and it will be silently thrown away by the next bake.
+
 ## The register, and what is *not* authored
 
 Four of the five effects are split: the **system and its tuning** are authored, the

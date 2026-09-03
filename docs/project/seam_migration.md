@@ -2612,13 +2612,23 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   `physics-architecture.md`'s seam). `env_particle_hud` (3) and the main-menu particle scene are
   **out of scope by owner decision** (the menu and HUD are new authored assets). The rulings:
   A1 stage off the V2 particle unit (`seam_map_map.md` → "Import — effects (R7.3)": `effects[]`
-  + `particleTrees{}` + the dust / steam / beam rows), B3 one slotted generic floor
-  `NS_ElysiumParticle` with `DA_EffectFamilies` overrides, C1 one `AElysiumEffectActor` per row
-  in the baked level, the real family systems `NS_ElysiumDust` / `NS_ElysiumSteam` /
-  `NS_ElysiumBeam`, P1 the two impulse methods with the explosion bundle; the ambient set first
-  (stage product, floor, effect actor, `env_particle` retargeted, `func_particle`, dust / steam /
-  beam on the three working maps), then the explosion bundle on `sm_junkyard_1` /
-  `sm_warehouse_1`. → lands: the ambient set and the explosion bundle.
+  + `particleTrees{}` + the dust / steam / beam rows), **B3 (revised 2026-09-03)** one Niagara
+  system generated per placed root, `NS_<root>`, written by the bake into the gitignored
+  `Content/ElysiumGenerated/VFX/` and composed headlessly by `UElysiumParticleAssetBuilder` from
+  hand-authored base emitters under `Content/ElysiumAuthored/VFX/Base/` — one emitter per drawing
+  leaf, the leaf's numbers, curves, sprite and child relations written as parameter values, the
+  runtime writing system-level user parameters only — with `DA_EffectFamilies` overrides
+  unchanged, C1 one `AElysiumEffectActor` per row in the baked level, the real family systems
+  `NS_ElysiumDust` / `NS_ElysiumSteam` / `NS_ElysiumBeam`, P1 the two impulse methods with the
+  explosion bundle; the ambient set first (stage product, base emitters, the generator, effect
+  actor, `env_particle` retargeted, `func_particle`, dust / steam / beam on the three working
+  maps), then the explosion bundle on `sm_junkyard_1` / `sm_warehouse_1`. The first cut of B3 was
+  a single 20-slot floor asset `NS_ElysiumParticle`; it never compiled outside the Niagara
+  editor, needed per-instance emitter readers the engine forbids, and dropped leaves on its fixed
+  slot layout, so work was **paused 2026-09-02** pending a strategy
+  (`niagara_authoring_strategy.md`) and **re-ruled 2026-09-03** to the generated lane above, with
+  a per-archetype owner verdict recorded in `effects_authoring.md` before an archetype is scaled
+  to the corpus. → lands: the ambient set and the explosion bundle.
 - **R7.4 Runtime material binds** [R6.2 remainder / SF-6.4]. Through R6.5's `Create(MI_)`:
   `textconsole` (4) with `func_monitor` 22 / `point_camera` 37 / `security_camera` 18 as
   render-target screens; `breakablesurface` (2) + `$crackmaterial` with `func_breakable_surf`
@@ -2735,13 +2745,16 @@ two tasks; they are the same tasks.
 - **R9.2 Legacy bake, masters and Cog tuning deleted** [R8.2 / MP-6.2]. `bake_map.py` legacy
   lanes, the legacy world/prop master set, per-map material packages,
   `/ElysiumBaked/Shared/Textures`, the `UE_extract_*` family the R8 producers replaced, the Cog
-  tuning tabs and calibration cvars (the debug windows stay). Also the legacy particle lane R7.3
-  left in place because the 105 unconverted maps still run on it: `formats/particles.py::
-  compile_definition` and the `<map>.particles.json` writer (`UE_bsp_to_scene`), `make_particle_
-  systems.py` / `UElysiumParticleAssetBuilder` (the `NS_<root>` flatten behind `--particles`), and
+  tuning tabs and calibration cvars (the debug windows stay). Also what is left of the legacy
+  particle lane R7.3 kept alive because the 105 unconverted maps still run on it:
+  `formats/particles.py::compile_definition`, the `<map>.particles.json` writer
+  (`UE_bsp_to_scene`), the Fountain-template flatten granularity inside `make_particle_
+  systems.py` (its per-map `/ElysiumBaked/<map>/Particles/` output behind `--particles`), and
   `UE_extract_particles.py`'s PNG derivative (the rain material's sprite mirror,
   `_ensure_particle_mirror`) — the converted maps read the `particles/<sprite>` texture units and
-  the staged `effects[]` instead. Acceptance: full-corpus rebake,
+  the staged `effects[]` instead. `make_particle_systems.py` and `UElysiumParticleAssetBuilder`
+  themselves **stay**: under the revised B3 they are the generator of `NS_<root>`, and only the
+  legacy granularity retires with the legacy bake. Acceptance: full-corpus rebake,
   doctor, the full R2.1 shot set, and a hub-chain playthrough. → lands: **one pipeline, and the
   game runs on it.**
 

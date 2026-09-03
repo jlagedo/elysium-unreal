@@ -113,9 +113,12 @@ as data and logic; the patch-first controller slice is live through `IElysiumWea
 presentation shares 7.5's one-graph contract (bind `cubemapdefault` + linear mask for the
 source endpoint; keep the view-dependent cube out of the Surface Cache; coarse mask for the
 enhanced PBR response; one `RainEnhancement` value), with the panel exposing values and
-mask/cube/source debug views before tuning. `env_particle` presentation stays data-only while
-RE23 settles units/semantics. Deferred: sewer drips, fixed `func_particle` boxes, NPC shelter,
-lightning, other maps, a general particle runtime. *Deps:* 7.5 material slice, PL12, RE23.
+mask/cube/source debug views before tuning. `env_particle` presentation is **not this slice's**:
+it is R7.3's contract (`docs/architecture/effects-architecture.md` §5 — the staged `effects[]` /
+`particleTrees{}` product, one `AElysiumEffectActor` per row, the generated per-root `NS_<root>`),
+and weather only drives it by entity index through `IElysiumWeather::ApplyEmitter`. Deferred:
+sewer drips, fixed `func_particle` boxes, NPC shelter, lightning, other maps. *Deps:* 7.5 material
+slice, PL12, R7.3; RE23 still owes the wetness time units.
 
 ### 10.1 Horizontal scale-out
 

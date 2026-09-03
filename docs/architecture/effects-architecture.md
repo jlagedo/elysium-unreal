@@ -42,8 +42,8 @@ data and the engine allow; what cannot be wired now is deferred with a named roa
 dropped.* And: *where a VtMB behaviour is an engine limitation rather than authored intent
 and Unreal expresses the system better, chase the improvement* — a gib bounces on its own
 hull, not VtMB's zero-size point; §5.11's ledger names each such modernization beside the
-faithful behaviour. The generic floor draws the faithful behaviour; a family override is
-the modernization on top of it, one presentation per root, never two at once.
+faithful behaviour. The generated per-root systems draw the faithful behaviour; a family
+override is the modernization on top of them, one presentation per root, never two at once.
 
 **Out of scope by owner decision (2026-09-02):** the main menu and the HUD are new
 authored assets, not reproductions. The menu particle scene, `env_particle_hud` (3
@@ -68,7 +68,7 @@ Do not rebuild these to explore the look.
 | V2 particle lane | `exporters/particle_glb.py`, `formats/particle_glb/`, `validation/particle_glb.py` | one GLB unit per definition, tolerant, every key decoded; wired into `export_v2` (`GLB_SEAMS` step `particle`); its projection contract is `seam_map_particle.md` → "Semantics" |
 | Legacy compiler | `formats/particles.py::compile_definition` | strict closed vocabulary; 42 of the 155 placed roots never resolve (the top four fail: `fire2_emitter` 204 rows, `fire3_emitter` 140, `barrelfireemitter` 115 on every map, `moth_emitter` 31) — **legacy lane only** |
 | Per-map sidecar | `<map>.particles.json` | placed `env_particle` + closure + `unresolved`; written for all 108 maps by `UE_bsp_to_scene.py`; `bake_map_v2.py` never reads it — **legacy lane only** |
-| Niagara flatten | `pipeline/unreal/make_particle_systems.py` → `UElysiumParticleAssetBuilder` | one Fountain-based emitter per drawing leaf, `NS_<root>` per map, on the legacy `M_Additive`; built on `UNiagaraExternalEditUtilities`, which Epic marks **experimental** — **legacy lane only** |
+| Niagara generator | `pipeline/unreal/make_particle_systems.py` → `UElysiumParticleAssetBuilder` | today: one Fountain-based emitter per drawing leaf, `NS_<root>` per map, on the legacy `M_Additive`; built on `UNiagaraExternalEditUtilities` — **the lane the generator extends** (§5.3 re-points it at `particleTrees{}` and at the project's own base emitters) |
 | `env_particle` runtime | `FElysiumEnvParticle` (`ElysiumWeatherClasses.cpp`), `AElysiumMapActor::ApplyEmitter` (`ElysiumMapActorWeather.cpp`) | end to end: `TurnOn`/`TurnOff`/`SetRateScale`/`SetRampTime`/`SetAttachType`, the linear ramp, attach 0/1/2, start-off, parent follow; lazily creates one `UNiagaraComponent` per entity index and sets `User.RateScale` — only exercised by rain today |
 | Rain presentation | `/Game/ElysiumAuthored/VFX/NS_ElysiumRain` | tracked authored system (`RateScale`, `SpawnCenter`, `BoundsCm`, `LightResponse`, `Streak*`, `RainStreakMaterial`, `RainMistMaterial`); the follow-rain path (`RefreshFollowRain`) |
 | Melee weapon trail | `/Game/ElysiumAuthored/VFX/NS_ElysiumMeleeTrail` | tracked authored ribbon; `ElysiumMeleeTrail.cpp` drives `User.TrailPointA/B` |
@@ -140,8 +140,8 @@ RadialBurst SimpleExplosion`.
 | `BehaviorExamples/SubUVAnimation` | flipbook | candle, muzzle sheet, explosion sheet |
 | `BehaviorExamples/KillParticles` + `Collision/*` | collide | rain splash, blood decal, sparks on floor |
 
-Modules that map 1:1 onto Troika keys (`/Niagara/Content/Modules/`); the floor in §5.3
-transcribes them into one scratch-module emitter, the family systems use them as authored:
+Modules that map 1:1 onto Troika keys (`/Niagara/Content/Modules/`); §5.3's base emitters are
+built from them and the generator writes their inputs, the family systems use them as authored:
 
 | Troika idea | Niagara module |
 |---|---|
@@ -156,7 +156,7 @@ transcribes them into one scratch-module emitter, the family systems use them as
 | `depth_offset` / `sortfront` / `no_z_test` | the per-particle camera offset module; the renderer's `SortOrderHint` / translucency sort priority; a material with the depth test off — each has a native home |
 | `collide` spawn | CPU collision (scene queries against the world and any collision-enabled body, bounce/friction) → `Events/GenerateCollisionEvent` → `ReceiveCollisionEvent` |
 | `collide` decal | the collision event → `UNiagaraDecalRendererProperties` (any `UMaterialInterface`; the deferred-decal domain rule is R7.2's), or a short-lived `UDecalComponent` — the spawn calls R7.2's runtime-stain seam |
-| `both` nodes / child at the parent particle | `GenerateLocationEvent` → `ReceiveEvent` spawn between emitters of **one system** (events do not cross system instances — why the floor's leaves are slots of one system) |
+| `both` nodes / child at the parent particle | `GenerateLocationEvent` → `ReceiveEvent` spawn between emitters of **one system** (events do not cross system instances — why a root's leaves are emitters of one generated system) |
 | bone / point attach | `Spawn/Location/SocketLocation` / `SkeletalMeshLocation` |
 | parent follow | `Update/Position/InheritSourceMovement` (`parent_speed`) |
 | heat haze | the same sprite on `M_V2_Refract` with the `normal` sprite as DUDV — wired, not dropped |
@@ -198,7 +198,7 @@ radius, SubUV on an 8×8 smoke sheet, Z acceleration. That *is* Troika `Smoke1` 
 Plugin: `Engine/Plugins/FX/NiagaraFluids` (already present).
 
 Epic's own split: **2D templates are for games, 3D templates are for
-cinematics.** This project's floor is an RTX 4060 at 1440p with Lumen +
+cinematics.** This project's hardware floor is an RTX 4060 at 1440p with Lumen +
 MegaLights already on. 3D gas is a cutscene / one-off boss tool, not a barrel.
 
 Open these, in this order (`/NiagaraFluids/Content/Templates/`):
@@ -248,18 +248,21 @@ editor-only, no commandlet — there is no `FlipbookBaker`.
 - **Heterogeneous Volumes / Sparse Volume Textures.** Cinematic smoke. Wrong cost class
   for a 20k-triangle night street with hundreds of dynamic lights.
 - **Niagara 3D Fluids on every placed emitter.** Same reason.
-- **`UNiagaraExternalEditUtilities` for shipping assets.** Experimental, subject to change
-  without notice; the legacy flatten is the last thing built on it.
-- **One Niagara system per Troika file.** 1,698 systems is unmaintainable. One slotted floor
-  (§5.3) parameterized by the staged tree, plus one authored system per family override.
-- **A second "faithful" material path.** The floor draws Troika's sprites on the V2 masters
-  (§5.4); the family override is the modernized art. There is no third.
+- **The NiagaraToolsets MCP for shipping assets.** It is an inspection and one-off tweak tool
+  for authored assets: no compile call, no batch, a fresh system view model per call, and it
+  cannot touch lightweight emitters or data channels. `UNiagaraExternalEditUtilities` itself
+  **is** the generator's API (§5.3) — the experimental banner is acknowledged and the risk is
+  taken deliberately, because the generator runs headless in the bake, over regenerable
+  output, and the alternative (Epic's conversion-context / clipboard path) is reachable from
+  the same generator if the API moves.
+- **A second "faithful" material path.** The generated systems draw Troika's sprites on the V2
+  masters (§5.4); the family override is the modernized art. There is no third.
 
 ---
 
 ## 4. Family → Unreal stand-in
 
-The **floor draws every root** at R7.3; each row is what the *family override*
+A **generated `NS_<root>` draws every root** at R7.3 (§5.3); each row is what the *family override*
 (`DA_EffectFamilies`, §5.5) opens when the tuning session authors that family.
 
 | Family (`docs/vtmb/effects.md` §4) | First thing to open | Fallback if it is too expensive or too much look | Drive with |
@@ -267,10 +270,10 @@ The **floor draws every root** at R7.3; each row is what the *family override*
 | Fire / embers (barrel, stove, gasoline) | `Grid2D_Gas_SmokeFire` | Fountain × 3 (flame, smoke, ember) using the official sprite-smoke recipe for the plume | the staged tree: `barrelfireemitter` flame 40/s, smoke 5/s, ember 5/s; `Flamemass` / `FirePlace_Flames` / `Smoke1` / `FlameEmbers1` identify fire across all 200 fire files |
 | Steam (clinic `env_steam` + Troika steam) | `NS_ElysiumSteam` (§5.6) for the Valve class; Fountain or `Grid2D_Gas_Smoke` as the Troika override | DirectionalBurst looping | `steam[]` rows; Troika `rate` 50 |
 | Smoke / cigar / ash | Epic sprite-smoke how-to, then `BlowingParticles` | Fountain | the staged `radius_speed` / `elevation_speed` |
-| Rain / drips | existing `NS_ElysiumRain` | — | weather's; the drips are floor roots |
+| Rain / drips | existing `NS_ElysiumRain` | — | weather's; the drips are generated roots |
 | Lightning | `env_sprite` blink (already authored as timers) + a light pulse | — | timer graph in `docs/vtmb/weather.md` |
 | Beams | `NS_ElysiumBeam` (§5.6) | — | `beams[]` rows |
-| Dust motes / night motes | `NS_ElysiumDust` (§5.6) for `func_dustmotes`; `HangingParticulates` as the `starynight_emitter` override | Fountain at rate 30 | `dustmotes[]` rows; the floor for the Troika motes |
+| Dust motes / night motes | `NS_ElysiumDust` (§5.6) for `func_dustmotes`; `HangingParticulates` as the `starynight_emitter` override | Fountain at rate 30 | `dustmotes[]` rows; the generated system for the Troika motes |
 | Moths / flies | `HangingParticulates` + `CurlNoiseForce` | simple sprite with a wandering velocity | `moth_emitter` (its `timescale` is a staged field now) |
 | Blood hit / spray | `DirectionalBurst` | `SimpleSpriteBurst` | impact table + the staged blood trees |
 | Blood trail / return | `LocationBasedRibbon` | sprite streak with `movealign` | Thaumaturgy return emitters |
@@ -281,7 +284,7 @@ The **floor draws every root** at R7.3; each row is what the *family override*
 | Explosion light / damage / shake / impulse | point light + `ElysiumDamage` radial + `UElysiumCameraShakePattern` + the impulse seam | — | §5.10 |
 | Gibs | spawn the baked gib mesh, Chaos impulse | Niagara mesh renderer | `env_shooter.shootmodel` |
 | Dialog Dominate / Presence auras | small looping aura (Fountain or `Grid2D_Gas_Color`) attached to speaker/listener | sprite halo | created by name from the discipline record walker (`vampire.dll 0x101dd090`) through §5.9 — **`params_particle` is a precache stub and drives nothing** |
-| Discipline body FX | the floor through §5.9; overrides per family | — | `Particle_FirstPerson` / `ThirdPerson` / stats.txt (`plans/gameplay.md`) |
+| Discipline body FX | the generated system through §5.9; overrides per family | — | `Particle_FirstPerson` / `ThirdPerson` / stats.txt (`plans/gameplay.md`) |
 | Obfuscate / Celerity / Auspex vision | material / ribbon / post-process | do not fake with sprites | trait flags |
 | Screen fade | `env_fade` | — | already a class |
 | Runtime stain | Niagara decal or `UDecalComponent` | — | `collide.decal` → R7.2 |
@@ -290,13 +293,31 @@ The **floor draws every root** at R7.3; each row is what the *family override*
 
 ## 5. The R7.3 ruling — the contract
 
-Owner rulings, 2026-09-02 (`docs/project/effects_r7_3_options.md`, now folded in here):
-**A1** stage off the V2 particle unit; **B3** a slotted generic floor with family overrides;
+Owner rulings, 2026-09-02 (the options note that carried them is folded in here and deleted):
+**A1** stage off the V2 particle unit; **B3** the generic presentation with family overrides;
 **C1** one actor per row in the baked level; **D–H** as below; **P1** the two impulse methods
-land with the explosion bundle; order — **the ambient set first** (stage product, floor
-system, effect actor, `env_particle` retargeted, `func_particle`, dust / steam / beam, on
-the three working maps), **then the explosion bundle** with P1 on `sm_junkyard_1` /
+land with the explosion bundle; order — **the ambient set first** (stage product, the generic
+presentation, effect actor, `env_particle` retargeted, `func_particle`, dust / steam / beam,
+on the three working maps), **then the explosion bundle** with P1 on `sm_junkyard_1` /
 `sm_warehouse_1`.
+
+**B3, revised (owner call, 2026-09-03).** The 20-slot generic floor `NS_ElysiumParticle` is
+**retired**. It failed on four counts, all structural: it never compiled outside the Niagara
+editor (the toolset builds its view model with no auto-compile and `Activate` then defers
+silently); the per-instance parent/child readers it needed are impossible by engine design
+(`FNiagaraDataInterfaceEmitterBinding::ResolveHandle` requires the data interface's outer to
+be the system, and a user-parameter interface is copied onto the component); its fixed 8-root
+/ 12-child slot layout dropped drawing leaves on placed roots; and at 660 modules and ~3,000
+expression strings in one 37 MB blob nobody could read it. In its place: **one generated
+Niagara system per placed root**, `NS_<root>`, written by the bake into the gitignored
+`Content/ElysiumGenerated/VFX/` and composed headlessly by `UElysiumParticleAssetBuilder`,
+one emitter per drawing leaf inherited from a hand-authored **base emitter** for the leaf's
+archetype (§5.3). `DA_EffectFamilies`, `ET_ElysiumEffects`, the four `MI_Particle*` children
+and the authored family systems `NS_ElysiumDust` / `NS_ElysiumSteam` / `NS_ElysiumBeam` are
+unchanged, and so is the rest of the contract: A1, C1, D–H, P1 and the order above stand.
+The research behind the revision is `docs/project/niagara_authoring_strategy.md` and
+`docs/examples/`; the per-archetype owner verdicts are recorded in
+`docs/project/effects_authoring.md`.
 
 ### 5.1 The data path
 
@@ -304,8 +325,10 @@ The map stage publishes, per converted map, `effects[]`, `particleTrees{}`, `dus
 `steam[]`, `beams[]` — every field named, in cm / degrees / seconds / 0..1, with its source —
 and the V2 bake places one actor per row. That product is the contract
 (`seam_map_map.md` → "Import — effects (R7.3)"); the unit rules it converts on are
-`seam_map_particle.md` → "Semantics". The legacy `<map>.particles.json` / `NS_<root>` lane
-keeps serving every map not on `MapsOnV2Models`, byte for byte, until R9.
+`seam_map_particle.md` → "Semantics". The legacy `<map>.particles.json` lane and its per-map
+`/ElysiumBaked/<map>/Particles/NS_<root>` flatten keep serving every map not on
+`MapsOnV2Models`, byte for byte, until R9; the V2 systems of the same name live map-
+independently under `/Game/ElysiumGenerated/VFX/` (§5.3) and never collide with them.
 
 **C3 fallback, recorded:** one Niagara Data Channel world system per map, actors writing
 islands entries — if C1's instance count ever hurts (≈ 12 rows per map; `sm_hub_1` is the
@@ -343,7 +366,21 @@ UCLASS() class AElysiumEffectActor : public AActor
 `FElysiumParticleNode` mirrors a `particleTrees{}.nodes[]` row field for field
 (`Kind`, `Parent`, `Via`, the lifetimes, every ramp as `TArray<FElysiumRampKey>` of
 `{T, Lo, Hi}`, the spawn block, the flags, `DepthOffsetCm`, the sprite and normal texture
-paths with `Aspect`, the collide record).
+paths with `Aspect`, the collide record). The staged tree stays on the actor because it is
+the row's own data — the bake writes it, `bake_verify` reads it back, `DA_EffectFamilies`
+pins read from it — but **the actor no longer transcribes it into the system**.
+
+**Which system the actor plays.** `FamilySystem` if `DA_EffectFamilies` matched; otherwise
+`/Game/ElysiumGenerated/VFX/NS_<root>` (§5.3), resolved by root key through
+`DA_ElysiumParticleTrees` (§5.9) and set on the component with `SetAsset`. Every leaf's
+numbers, curves, sprite, material and child relation are already **inside** that asset, so
+the actor writes **system-level user parameters only** — `User.RateScale`, `User.Tint`,
+`User.SizeScale`, `User.SpawnShape`, `User.SpawnBoxMin` / `Max`, `User.SkeletalMesh`,
+`User.RootLifetime`, `User.RootLoop` and the fog three. The ~200 lines of per-slot fitting in
+`AElysiumEffectActor::WriteTree` (slot assignment, the ramp lookup tables, the per-slot
+texture and material writes) go away with the floor; what remains is the system-parameter
+write and the attach-mode spawn-shape switch. A root with no generated system is the same
+once-logged warning as an unresolved root, and the actor draws nothing.
 
 **Runtime behaviour** (VtMB's, `docs/vtmb/effects.md` §2.4, §3.1):
 
@@ -371,142 +408,140 @@ and `JetLength` is accepted as VtMB's own no-op (logged once). `FElysiumFuncPart
 from the leaf, forces `AttachType = 15` at activation, and carries the `TurnOn` / `TurnOff`
 pair.
 
-### 5.3 `NS_ElysiumParticle` — the slotted generic floor
+### 5.3 `NS_<root>` — the generated systems
 
-One authored system, `/Game/ElysiumAuthored/VFX/NS_ElysiumParticle`, effect type
-`ET_ElysiumEffects` (§5.5). **Twenty identical leaf emitter slots** (the placed corpus
-maximum is 20 drawing leaves, depth 4; `effectStats.maxLeaves` is the check), each
-transcribing one drawing node of the tree: spawn in the emitter basis with the spherical
-offset and its three speeds, normalized age with the per-particle random rate, linear ramps
-evaluated from keyframes (shortest arc for angles), `movealign` / `flat` facing,
-`parent_speed` inheritance, the camera-offset `depth_offset`, `sortfront` sort priority,
-`no_z_test` through the depth-test-off material child, the sprite and material by user
-parameter, AlphaComposite so `mask` is the blend interpolant. A slot whose node is a `both`
-child or a `collide → spawn` child receives a **location / collision event from its parent
-slot** and spawns at the parent particle — which is why the slots live in one system rather
-than one instance per leaf.
+**One Niagara system per placed root**, `NS_<root>`, generated by the bake into
+`/Game/ElysiumGenerated/VFX/` (gitignored, regenerable, never hand-edited), effect type
+`ET_ElysiumEffects` (§5.5). 155 placed roots today, 1,698 when the corpus is scaled; the
+generated assets are a DDC and editor cost, not a frame cost (§7).
 
-**The user parameters — exact names.** The actor writer (`AElysiumEffectActor::WriteTree`)
-and the Niagara author build to these and to nothing else. `<ii>` is the two-digit slot
-`00`…`19`; a slot the tree does not fill has `Active = false` and is never read.
+**The generator.** `pipeline/unreal/make_particle_systems.py` → `UElysiumParticleAssetBuilder`
+— the lane that already exists (§2), re-pointed twice: from the legacy `<map>.particles.json`
+flatten to the staged `particleTrees{}` product, and from the stock Fountain template to the
+project's own base emitters. It composes headlessly over `UNiagaraExternalEditUtilities`,
+**never opens the Niagara editor**, and runs inside the bake like every other generated asset.
+If that API moves under us, Epic's own conversion-context / clipboard path
+(`create_system_conversion_context` → `add_template_emitter` → `find_or_add_module_script` →
+`set_parameter` → `finalize`) is the same composition driven from the same generator.
 
-System-level:
+**Base emitters — authored once, by hand.** Under `Content/ElysiumAuthored/VFX/Base/`, tracked
+in LFS, **stock Niagara modules only** plus two small module scripts the project owns: the
+**VtMB ramp sampler** (two curves plus a per-particle random lerp between them, §5.11) and the
+**spherical offset** (radius / theta / phi round the emitter origin, in the emitter basis).
+Everything else is engine content. One base emitter per **leaf archetype**; the archetype list
+and the numbers each one fixes are `docs/project/effects_authoring.md`'s, filled in as the
+archetypes are authored and reviewed. A generated emitter **inherits** its base and overrides
+parameter values only — never graph topology — which is why an inherited emitter costs exactly
+what a standalone one costs at runtime (§7).
+
+**One emitter per drawing leaf.** The generator walks the staged tree, drops one inherited
+emitter per drawing node, names it after the node, and writes that node's numbers, curves,
+sprite, material and child relations as **parameter values on that emitter**. Nothing is a
+runtime slot index and nothing is an expression string. The corpus fits: 71% of roots have
+exactly one drawing leaf, 86% have two or fewer, the 99th percentile is 7 and the maximum 23
+(`niagara_authoring_strategy.md` §3). A root above Epic's 8-emitter validation budget is a
+warning on the asset, not a failure — `blood_guardian_summon_emitter`'s 20 leaves all draw,
+which the slotted floor could not do.
+
+**The mapping — VtMB key → stock module.** Every row is a parameter write on the base emitter,
+not a new graph:
+
+| VtMB key (`seam_map_particle.md` → "Semantics") | Niagara |
+|---|---|
+| `radius`, `theta`, `phi` (+ their spawn ramps) | Shape Location (sphere), plus the project's spherical-offset module for the emitter-basis roll |
+| `elevation_speed`, `x/y/z_speed` | Acceleration Force (world up) / Add Velocity in the emitter basis |
+| `radius_speed`, `theta_speed`, `phi_speed` | the spherical-offset module's velocity terms |
+| `parent_speed` | Inherit Velocity on the spawn script |
+| `size`, `width`, `height` ramps | Scale Sprite Size, curve inputs through the ramp module |
+| `red / green / blue / color / mask` ramps | Scale Color, curve inputs through the ramp module (`mask` on alpha; AlphaComposite makes it the blend interpolant) |
+| `rotation`, `spawn_rotation` | Sprite Rotation Rate / Initial Sprite Rotation, shortest-arc unwrapped by the generator |
+| `fps`, `frames`, `frame_min/max` | SubUV Animation (Linear mode, the frame range as the module's range) |
+| `movealign` | Sprite Facing / Alignment = **Velocity Aligned** on the renderer |
+| `flat` | renderer facing mode (custom facing vector, world up) — a base-emitter variant, since facing is per-renderer, not per-particle |
+| `sortfront`, `depth_offset` | renderer Sort Order Hint and Camera Offset |
+| `collide` | Collision (CPU, scene queries) |
+| `collide.bounce`, `.friction` | Collision Restitution / Friction |
+| `collide.gravity` | Gravity Force |
+| `collide.drag` | Drag |
+| `collide { spawn {} }` | Generate Collision Event on the parent emitter → Receive Collision Event + spawn on the child emitter |
+| `spawn { rate }` / `spawn { burst }` on a child | Spawn Particles from Other Emitter, with an **emitter-level** Particle Attribute Reader bound by emitter name — resolvable precisely because the binding now lives inside the asset instead of on a component user parameter |
+| `spawn { distance }` | the same spawn module in distance mode (rate × speed) |
+| `collide { decal }` | Decal Renderer, Source Mode = **Particles**, orientation from the collision normal (R7.2's stain seam) |
+| `no_z_test` | `MI_ParticleNoZ` on the renderer (§5.4) |
+| `lighting` | `MI_ParticleLit` |
+| `normal` + `refract` | `MI_ParticleRefract`, the DUDV sprite and the refract curve bound on the material |
+| `lifetime`, `lifetime_min/max`, `loop`, `timescale` | Emitter State loop behaviour + Initialize Particle lifetime (random range); `timescale` already divided in by the stage |
+| `surface_color_optout` | the generator pins that leaf's tint to white |
+
+**System-level user parameters — the only thing the runtime writes.** Exact names, as
+`AElysiumEffectActor` writes them today:
 
 | Parameter | Type | Meaning |
 |---|---|---|
-| `User.RateScale` | float | the one rate float: `rampedScale × VolumeScale`, multiplies every slot's `Rate` and `Burst` |
-| `User.LeafCount` | int32 | filled slots, `0..20` |
-| `User.Tint` | LinearColor | `(m_fRedScale, m_fGreenScale, m_fBlueScale, m_fMaskScale)`, default white; multiplies every slot's colour and mask |
+| `User.RateScale` | float | the one rate float: `rampedScale × VolumeScale`, multiplying every emitter's rate and burst |
+| `User.Tint` | LinearColor | `(m_fRedScale, m_fGreenScale, m_fBlueScale, m_fMaskScale)`, default white; multiplies every emitter's colour and mask |
 | `User.SizeScale` | float | `m_fSizeScale`, default 1 |
 | `User.SpawnShape` | int32 | `0` origin · `1` box (`SpawnBoxMin/Max`) · `2` skeleton segments (`SkeletalMesh`) |
 | `User.SpawnBoxMin`, `User.SpawnBoxMax` | Vector, component-local cm | mode 15's brush AABB; mode 9's parent render bounds, refreshed per tick |
 | `User.SkeletalMesh` | Skeletal Mesh DI | modes 1 / 3: the parent's mesh, spawn uniform along the skeleton segments |
-| `User.FogColor`, `User.FogStart`, `User.FogInvRange` | LinearColor, float, float | the project fog set (`ElysiumFog`), world or sky by the actor's `elysium.sky` marker; bound through the renderer's `MaterialParameters` to the material's `FogColor` / `FogStart` / `FogInvRange` |
-| `User.RootLifetime`, `User.RootLoop` | float s, bool | the root clock: the `lifetime_s` and `loop` of the **nearest non-drawing wrapper** above the root-spawned leaves (node 0 when they hang off it directly — VtMB's looping wrappers restart themselves forever, so `waterdrops_timer`'s 1.7 s one-shot root drips through its 0.67 s looping wrapper); every root-spawned slot's `Rate` / `Burst` run over `frac(age / RootLifetime)`, and an unlooped clock feeds only its first period. One clock per instance: the first root's wrapper, a disagreeing root is warned once |
+| `User.FogColor`, `User.FogStart`, `User.FogInvRange` | LinearColor, float, float | the project fog set (`ElysiumFog`), world or sky by the actor's `elysium.sky` marker; bound through the renderer's `MaterialParameters` to the material's fog names |
+| `User.RootLifetime`, `User.RootLoop` | float s, bool | the root clock: the `lifetime_s` and `loop` of the **nearest non-drawing wrapper** above the root-spawned leaves (node 0 when they hang off it directly — so `waterdrops_timer`'s 1.7 s one-shot root drips through its 0.67 s looping wrapper); every root-spawned emitter's rate and burst run over `frac(age / RootLifetime)`, and an unlooped clock feeds only its first period |
 
-Per slot, scalars:
+`User.LeafCount` and the whole `User.Leaf<ii>.*` family go away with the floor.
 
-| Parameter | Type | Source (tree node field) |
-|---|---|---|
-| `User.Leaf<ii>.Active` | bool | slot filled |
-| `User.Leaf<ii>.ParentLeaf` | int32 | the parent slot; `−1` = spawned by the root's own clock (`parent` is node 0 or a non-drawing wrapper chain). **The layout is fixed** (`ElysiumEffectFamilies.h`): slots `0..7` are root slots, the parent with the most drawing children first; child slots `8..19` each sample one fixed parent slot — three under slot 0 (`8, 9, 10`), three under slot 1 (`11, 12, 19`), one under each of `2..7` (`13..18`). The writer places a child in a free child slot of its parent's group; a child of a child, a ninth root or a fourth child under one parent is not drawn (the staged corpus has none). Each child slot's reader is an **emitter-level** Particle Attribute Reader bound `Other → Leaf<parent>`: a reader held by a user parameter never resolves at runtime, because the component copies every user DI onto itself and the reader looks the emitter up through its outer system (`FNiagaraDataInterfaceEmitterBinding::ResolveHandle`) |
-| `User.Leaf<ii>.SpawnOn` | int32 | `0` the parent's age (`Rate` / `Burst` over the parent's normalized age — `via: spawn`) · `1` the parent's collision (`via: collide` on the leaf or on any non-drawing wrapper between it and its drawing parent) |
-| `User.Leaf<ii>.Lifetime`, `.LifetimeMin`, `.LifetimeMax` | float s | `lifetime_s`, `lifetime_min_s`, `lifetime_max_s` (`timescale` already divided in) |
-| `User.Leaf<ii>.Loop` | bool | `loop` |
-| `User.Leaf<ii>.Distance` | bool | `spawn.distance` — `Rate` becomes particles per cm travelled |
-| `User.Leaf<ii>.DepthOffset` | float cm | `depth_offset_cm` (camera offset + sort key) |
-| `User.Leaf<ii>.MoveAlign`, `.Flat`, `.SortFront`, `.NoZTest` | bool ×4 | the flags (`NoZTest` also selects the material child) |
-| `User.Leaf<ii>.Sprite` | Texture2D | `sprite.texture` (`/ElysiumBaked/Textures/particles/T_<stem>`) |
-| `User.Leaf<ii>.Normal` | Texture2D | `normal.texture`, the DUDV sprite (refract leaves), else null |
-| `User.Leaf<ii>.SpriteAspect` | Vector2D | `sprite.aspect` `(ax, ay)` — half-extents `= aspect × width × height-or-size × spawn scales × SizeScale` |
-| `User.Leaf<ii>.Material` | MaterialInterface | the child from §5.4 by the flags (`NoZTest` → NoZ, `lighting` → Lit, `normal` → Refract, else the floor); the sprite renderer's material is bound to this parameter |
-| `User.Leaf<ii>.Collide` | bool | `collide` present — CPU collision against the world and every collision-enabled body |
-| `User.Leaf<ii>.CollideSelf` | bool | `collide.self` — survive the hit with the bounce rule; false = the particle ends at the hit |
-| `User.Leaf<ii>.Bounce`, `.Friction`, `.Gravity`, `.Drag` | float ×4 | `collide.bounce` 1, `.friction` 1, `.gravity` 0, `.drag` 1 |
+**The compile and readiness gate.** The generator compiles **explicitly** —
+`UNiagaraSystem::RequestCompile(false)` followed by a wait
+(`FAssetCompilingManager::FinishAllCompilation()`) — then asserts `IsReadyToRun()` before it
+saves. Neither step is optional: asset creation alone requests no compile,
+`GetSystemCompileState` reads a stale cache, and `UNiagaraComponent::Activate` then defers
+silently with no log at any verbosity (`bAwaitingActivationDueToNotReady`). That silence is
+exactly how the retired floor looked correct while drawing nothing.
 
-Per slot, the ramps — **one array, a lookup table per ramp**:
+**The three validation gates.** No archetype is scaled to the corpus until all three pass:
 
-| Parameter | Type | Layout |
-|---|---|---|
-| `User.Leaf<ii>.Ramps` | Vector array (`UNiagaraDataInterfaceArrayFloat3`, set with `UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector`) | `37 ramps × 32 samples = 1184` entries; ramp `r` owns entries `r × 32 .. r × 32 + 31`, sample `j` the ramp's `(lo, hi, 0)` at normalized age `j / 31`, the writer having evaluated the keyframes linearly (held after the last, the angle ramps unwrapped along the shortest arc) — the floor fetches it with one interpolated `Select Vector From Array` read at `r × 32 + age × 31` and rolls `lerp(lo, hi, u)` with the particle's own `u`. A ramp the tree does not carry holds its unity default. `Burst` (`r = 19`) is the exception: its block carries the raw keyframes `(t, lo, hi)` in entries `0..4` (`t = −1` unused; the five burst modules read them directly) and the `Rate` ramp's maximum in entry `31.x`, the ceiling a child slot's rejection sampling uses |
+1. **Mechanical, in the bake.** Explicit compile, `IsReadyToRun()`, and — for every generated
+   system — activate, tick, and assert a non-zero particle count per emitter. This is an
+   `Elysium.Content.*` automation test (`Activate` blocks on compilation under
+   `GIsAutomationTesting`), shaped after `NiagaraSystemAuditCommandlet`, with
+   `UNiagaraValidationRule_*` (EmitterCount, BannedModules, UserDataInterfaces) attached to
+   `ET_ElysiumEffects`.
+2. **A contact sheet.** Every generated system placed in the witness level and captured, both
+   in Simulate-in-Editor and in-game. Looking at the sheet is the only way a fidelity
+   regression across 155 roots becomes visible.
+3. **An owner verdict per archetype**, recorded in `docs/project/effects_authoring.md` before
+   that archetype is generated across the corpus.
 
-Ramp slot table `r` (particle-age ramps evaluated at the particle's own age; spawn-age ramps
-at the spawning particle's age, or the root's clock, when the child spawns):
-
-| `r` | Ramp | Unit | `r` | Ramp | Unit |
-|---|---|---|---|---|---|
-| 0 | `Size` | cm | 18 | `Rate` | /s (× `User.RateScale`) |
-| 1 | `Width` | × | 19 | `Burst` | count (× `User.RateScale`) |
-| 2 | `Height` | × | 20 | `SpawnRadius` | cm |
-| 3 | `Rotation` | deg (arc) | 21 | `Theta` | deg (arc) |
-| 4 | `Red` | 0..1 | 22 | `Phi` | deg (arc) |
-| 5 | `Green` | 0..1 | 23 | `X` | cm, emitter basis |
-| 6 | `Blue` | 0..1 | 24 | `Y` | cm, emitter basis |
-| 7 | `Color` | 0..1 | 25 | `Z` | cm, emitter basis |
-| 8 | `Mask` | 0..1 | 26 | `Elevation` | cm, world up |
-| 9 | `Refract` | × | 27 | `SpawnRotation` | deg, added to the initial roll |
-| 10 | `RadiusSpeed` | cm/s | 28 | `SpawnWidth` | × |
-| 11 | `ThetaSpeed` | deg/s | 29 | `SpawnHeight` | × |
-| 12 | `PhiSpeed` | deg/s | 30 | `SpawnSize` | × |
-| 13 | `XSpeed` | cm/s, emitter basis | 31 | `SpawnRed` | 0..1 |
-| 14 | `YSpeed` | cm/s, emitter basis | 32 | `SpawnGreen` | 0..1 |
-| 15 | `ZSpeed` | cm/s, emitter basis | 33 | `SpawnBlue` | 0..1 |
-| 16 | `ElevationSpeed` | cm/s, world up | 34 | `SpawnColor` | 0..1 |
-| 17 | `ParentSpeed` | fraction | 35 | `SpawnMask` | 0..1 |
-| | | | 36 | `SpawnRefract` | × |
-
-The colour a slot draws is `Red × Color × SpawnRed × SpawnColor × Tint.r` per channel (each
-unity at 1) and the mask `Mask × SpawnMask × Tint.a`; a `surface_color_optout` node has its
-tint pinned to white by the writer (the node carries the flag, the system has no pin). The
-emitter basis is the component's rotation: particle X → +X forward, Y → +Z up, Z → +Y right;
-`Elevation*` is world +Z.
-
-Why a sampled table and not keyframes or a curve data interface (the note's check 2, closed by
-the contract): a curve holds one value per `t` and cannot carry the per-particle `lo~hi` roll,
-and one curve object per ramp would be 37 objects × 20 slots; raw keyframes cannot be evaluated
-inside the floor either, because a stack expression can read a parameter but never call a data
-interface, and the toolset cannot author the custom-HLSL module that could. One array per slot is
-one setter call per leaf and one interpolated engine read per ramp, and it carries any keyframe
-count (the tutorial's embers author nine).
-
-How a child slot spawns at its parent (check 7, settled): the slot's `Parent` reader feeds the
-engine's `Spawn Particles From Other Emitter` at the parent's `Rate` maximum and `Sample
-Particles From Other Emitter` places each child at a random parent particle with the parent's
-normalized age (every leaf keeps `Particles.Age` normalized by scaling `ParticleState`'s
-delta time by its rolled lifetime); the child then keeps the spawn with probability
-`rate(parentAge) / rateMax`, which reproduces the per-parent-age rate in expectation. The sample
-module kills a particle whose sample is invalid — every root leaf's is — so the keep rule
-reasserts `DataInstance.Alive` after it. `flat` draws through a second sprite renderer with a
-custom facing vector selected by `Particles.VisibilityTag`, since a renderer's facing mode is
-not a per-particle input. Why the renderer's material binding
-and not a `Texture2DArray` (check 3, closed): Troika sprites are single images of unequal
-aspect, one shared child per material kind serves every slot, and the sprite lands as a
-texture parameter through `MaterialParameters` (one MID per emitter slot, twenty at most).
+**The material rule stands** (§5.4): AlphaComposite, sprites premultiplied on black, and a fade
+scales emissive and opacity **together** — scaling opacity alone whitens the card instead of
+vanishing it.
 
 ### 5.4 Materials
 
 VtMB draws every particle on **one material**, mode 8 (`docs/vtmb/effects.md` §2.4). The
 material lane authors the children beside its masters (`make_v2_materials.py`,
-`seam_map_material.md`), map-independent, and the writer binds them by path:
+`seam_map_material.md`), map-independent, and **the generator binds one of them onto each
+generated emitter's sprite renderer by path** — a compile-time binding per emitter, not a
+per-slot user parameter resolved at runtime:
 
 | Child | Parent master | Overrides | Serves |
 |---|---|---|---|
-| `/ElysiumBaked/Materials/particles/MI_Particle` | `M_V2_SpriteZ` — the **depth-tested** twin of `M_V2_Sprite` (same graph, `bDisableDepthTest` off, `used_with_niagara_sprites`) | `BlendMode = AlphaComposite`, `UseVertexColor = UseVertexAlpha = true` | the floor: mode 8 is depth test on, depth write off |
+| `/ElysiumBaked/Materials/particles/MI_Particle` | `M_V2_SpriteZ` — the **depth-tested** twin of `M_V2_Sprite` (same graph, `bDisableDepthTest` off, `used_with_niagara_sprites`) | `BlendMode = AlphaComposite`, `UseVertexColor = UseVertexAlpha = true` | the default leaf: mode 8 is depth test on, depth write off |
 | `/ElysiumBaked/Materials/particles/MI_ParticleLit` | `M_V2_SpriteZLit` — the twin with `TLM_VolumetricPerVertexNonDirectional` | as above | the 6 `lighting` leaves |
 | `/ElysiumBaked/Materials/particles/MI_ParticleNoZ` | `M_V2_Sprite` (depth-test-off by the material lane's ruling) | `BlendMode = AlphaComposite`, vertex colour | the 4 `no_z_test` leaves |
-| `/ElysiumBaked/Materials/particles/MI_ParticleRefract` | `M_V2_Refract` | `DuDvMap` and `RefractAmount` bound per slot (`Normal`, `Refract` ramp) | the 8 `normal` + `refract` leaves (`fire_heat`, four discipline / boss cards, `warrens_tube_water_fx1`) |
+| `/ElysiumBaked/Materials/particles/MI_ParticleRefract` | `M_V2_Refract` | `DuDvMap` and `RefractAmount` bound per emitter (`normal`, the `refract` ramp) | the 8 `normal` + `refract` leaves (`fire_heat`, four discipline / boss cards, `warrens_tube_water_fx1`) |
 
-The floor's graph: `Emissive = BaseTexture.rgb × VertexColor.rgb`, `Opacity = BaseTexture.a ×
+The leaf graph: `Emissive = BaseTexture.rgb × VertexColor.rgb`, `Opacity = BaseTexture.a ×
 VertexColor.a` — with AlphaComposite that is `dst = tex × colour + dst × (1 − tex.a × mask)`,
 VtMB's equation, so `mask 0` is additive and `mask 255` an occluding card on one material. The
 `ElysiumFog` parameters (`FogColor`, `FogStart`, `FogInvRange`) go on the sprite masters with
 the fog colour **scaled by the opacity** so an additive card fogs to black, as Source's sprite
 shader does — the R6.1/R6.7 follow-up (a miniature sprite drawn unfogged) rides on the same
 `GRAPH_VERSION` bump. `M_V2_Sprite` is depth-test-off on the master itself and the flag is not
-instance-overridable, which is why the floor needs the depth-tested twin: R7.7's option (b)
-names the same `M_V2_SpriteZ`; whichever way R7.7 rules for the plain `env_sprite` cards, R7.3
-adds the twin for the particle floor. VtMB composites in gamma space, Unreal in linear HDR;
-the floor inherits the sprite lane's gamma answer for `env_sprite` (check 5).
+instance-overridable, which is why the depth-tested twin exists: R7.7's option (b) names the
+same `M_V2_SpriteZ`; whichever way R7.7 rules for the plain `env_sprite` cards, R7.3 adds the
+twin for the generated leaves. VtMB composites in gamma space, Unreal in linear HDR; the
+generated systems inherit the sprite lane's gamma answer for `env_sprite`. Troika's sprites
+must stay **premultiplied on black**, and a fade scales emissive and opacity together.
 
 ### 5.5 `DA_EffectFamilies` and the effect type
 
@@ -526,7 +561,7 @@ UCLASS() class UElysiumEffectFamilies : public UDataAsset { UPROPERTY() TArray<F
 ```
 
 Match order: a root name, else any leaf sprite name in the tree. A matched actor plays
-`System` **instead of** the floor, writing the tree fields `Pins` names (`Rate`, `Lifetime`,
+`System` **instead of** the generated `NS_<root>`, writing the tree fields `Pins` names (`Rate`, `Lifetime`,
 `Size`, the colour, `SpawnRadius`, …) and the shared names (`User.RateScale`, `User.Tint`,
 the fog three) — one presentation per root, never two at once. The bake resolves the match
 into `FamilySystem` so the level shows it; the runtime re-resolves at adopt so a data-asset
@@ -578,7 +613,7 @@ ramps by raw elapsed seconds**, `StartSize + (EndSize − StartSize) × t`, not 
 | `User.JetLength` | float cm | `jet_length_cm` |
 | `User.Lifetime` | float s | `lifetime_s` |
 | `User.Color` | LinearColor | `color`, `alpha` |
-| `User.Material` | MaterialInterface | the floor child; the heatwave `type` (0 rows) selects `MI_ParticleRefract` — the switch is carried, the material is check 6's |
+| `User.Material` | MaterialInterface | the §5.4 child; the heatwave `type` (0 rows) selects `MI_ParticleRefract` — the switch is carried, the material is check 6's |
 | `User.Active` | bool | `TurnOn` / `TurnOff` / `Toggle`; `initial_state` at spawn |
 
 **`NS_ElysiumBeam`** — `env_beam`, `DynamicBeam`-derived: endpoints from the two targetnames
@@ -603,7 +638,9 @@ Niagara.
 ### 5.7 Attach modes (R-D)
 
 The 19-value enum (`vampire.dll 0x105a7000`; the animation-event spawn `mode` is the same
-enum), implemented on the actor's component attachment and the floor's `SpawnShape`:
+enum), implemented on the actor's component attachment and on the generated system's
+`SpawnShape` / `SpawnBoxMin/Max` / `SkeletalMesh` user parameters (§5.3) — the spawn-shape
+switch is the one place the actor still reshapes what a system does:
 
 | Mode | VtMB | Here |
 |---|---|---|
@@ -641,12 +678,13 @@ enum), implemented on the actor's component attachment and the floor's `SpawnSha
 
 The deferred producers (impact table, muzzle pair, the 511x animation events, discipline /
 dialog auras — `plans/gameplay.md`, the combat and animation plans) need exactly one call,
-which the floor exposes on the embodiment seam beside `PlayAttachedEffect` (which it
+which the effects system exposes on the embodiment seam beside `PlayAttachedEffect` (which it
 supersedes — feeding's 5116 becomes a mode-2 spawn):
 
 ```cpp
-// Spawn one particle root as a transient AElysiumEffectActor on the floor (or its family
-// override). Root is the folded vtmb:particle key; Parent may be null for a world spawn;
+// Spawn one particle root as a transient AElysiumEffectActor on the root's generated
+// NS_<root> (or its family override). Root is the folded vtmb:particle key; Parent may be
+// null for a world spawn;
 // AttachMode is the 19-value enum; AttachName the bone / attachment string, AttachPoint the
 // numbered attachment. Returns an invalid handle when the root's tree is unknown.
 virtual FElysiumEffectHandle SpawnParticleRoot(const FString& Root,
@@ -656,12 +694,15 @@ virtual void StopParticleRoot(const FElysiumEffectHandle& Handle) {}   // TurnOf
 virtual void KillParticleRoot(const FElysiumEffectHandle& Handle) {}   // remove now
 ```
 
-The tree comes from `DA_ElysiumParticleTrees` (`/ElysiumBaked/Particles/`,
-`UElysiumParticleTrees`, keyed by root id) — the same `importers.effects` tree builder the map
-stage runs, over every root a producer's data names (item records, the impact table, the
-discipline records, the animation-event option strings); R7.3 lands the builder and the map
-lane's trees on the actors, and the plan that first needs a non-placed root fills the shared
-asset with it. Nothing in VtMB's animation-event bus stops an emitter (5103 is "remove all
+`DA_ElysiumParticleTrees` (`/ElysiumBaked/Particles/`, `UElysiumParticleTrees`, keyed by root
+id) is the **root → `NS_<root>` lookup**: per root it carries the staged tree (for the family
+pins and for `bake_verify`) and the soft pointer to the generated system in
+`/Game/ElysiumGenerated/VFX/`, so a producer resolves a name to an asset without knowing the
+map it came from. It is built by the same `importers.effects` tree builder the map stage runs,
+over every root a producer's data names (item records, the impact table, the discipline
+records, the animation-event option strings); R7.3 lands the builder and the map lane's roots
+in it, and the plan that first needs a non-placed root adds that root — which also generates
+its system. Nothing in VtMB's animation-event bus stops an emitter (5103 is "remove all
 model decals"); a producer that started one stops it.
 
 ### 5.10 The explosion bundle (P1) — after the ambient set
@@ -714,7 +755,7 @@ runtime-stain seam (stubbed against R7.2's name if it has not landed, never drop
 |---|---|
 | `rate`, `burst` (keyframed), the one rate-scale float, `SetRateScale` / `SetRampTime` linear approach | wired |
 | `frames / fps / min / max`, normalized age, `loop`, `timescale` | wired |
-| ramps: linear in normalized age, `(n)` frame index, negative wrap, shortest-arc angles, `a~b` per particle | wired (keyframe triples, §5.3) |
+| ramps: linear in normalized age, `(n)` frame index, negative wrap, shortest-arc angles, `a~b` per particle | wired through the authored **ramp module**: two curves (the `lo` track and the `hi` track) plus a per-particle random lerp between them, the generator writing every keyframe as a curve key. No five-keyframe ceiling: the curve carries every key the stage staged (15 over the whole corpus by the strategy note's `TreeBuilder` pass, up to 83 on a placed body ramp by the stage's own histogram — `seam_map_map.md`) |
 | spherical motion round the emitter, emitter-basis `x/y/z`, world `elevation`, `parent_speed` | wired |
 | `movealign`, `flat`, `rotation`, `width / height / size` × sprite aspect | wired |
 | `red / green / blue / color` × spawn scales, `mask` as the AlphaComposite interpolant, the three `surface_color` opt-outs (pin white) | wired |
@@ -723,7 +764,7 @@ runtime-stain seam (stubbed against R7.2's name if it has not landed, never drop
 | `lighting` (6 leaves) | wired as the lit child; whether VtMB's sample is light stays INFERRED (`0x200d3840`) |
 | `collide`: world + brush-entity trace, `self` bounce / friction / gravity / drag, spawn child at impact | wired (CPU collision + event) |
 | `collide → decal`, `vdecal_*` ranges | collision event wired; the decal spawn → **R7.2**'s runtime-stain seam |
-| `both` nodes and depth-4 trees | wired (slot events) |
+| `both` nodes and depth-4 trees | wired (events between emitters of the generated system) |
 | `distance` spawn key | 0 placed uses; wired as a rate × speed switch in the spawn module |
 | `precipitation` gate by the leaf sky bit | **weather's** follow-up (needs the visibility unit's leaf sky bit); the flag is staged |
 | attach `0 1 2 3 6 9 17 −1`, `10 / 11` (weather), `15` | wired; `3`'s segment tint recorded |
@@ -741,7 +782,7 @@ runtime-stain seam (stubbed against R7.2's name if it has not landed, never drop
 | `env_shooter` scatter, spin, life, delay, repeat, flaming; point bbox; blood decals | wired; hull instead of point (**modernization**); decals → **R7.2** — the explosion slice |
 | `params_particle` / `params_explosion` | inert classes |
 | impact table, muzzle pair + light, 511x animation-event spawns; discipline / dialog auras, first- vs third-person | §5.9's call; **combat / animation / gameplay plans** (the camera-swap rule is `camera-view-modes.md`'s open item) |
-| Fluids / authored family art | **tuning sessions** through `DA_EffectFamilies`; the floor keeps drawing until then |
+| Fluids / authored family art | **tuning sessions** through `DA_EffectFamilies`; the generated system keeps drawing until then |
 | HUD / menu / screen-space | out of scope by owner decision |
 
 ---
@@ -749,27 +790,44 @@ runtime-stain seam (stubbed against R7.2's name if it has not landed, never drop
 ## 6. Exploration checks before code (no bake, no game code)
 
 Engine content, a scratch `/Game/ElysiumAuthored/FX/_Explore/` folder, a disposable map; one
-editor session; each check has a yes/no result that goes into §3 as a fact. Checks 2 and 3 are
-closed by the contract in §5.3 (keyframe triples; the renderer material binding).
+editor session; each check has a yes/no result that goes into §3 as a fact. Checks **2, 3 and
+7** as first written (the ramp lookup table, the `Texture2DArray` question, slot events) are
+**retired with the floor**; they asked how to fit twenty leaves into one authored asset, which
+is no longer the shape. In their place stand the three steps of the spike
+(`niagara_authoring_strategy.md` §5), renumbered into those three slots below; they are the
+go/no-go on §5.3 and run before any generator code.
 
 - **Check 1 — the generic leaf is expressible in one Niagara emitter.** Emitter-basis
   spherical offset with three speeds, normalized age, linear ramps, `movealign`,
   AlphaComposite material. Author `Flames2` + `FlameGlow2` (the `fire2_emitter` leaves) by
   hand from the numbers. Does it appear? (Did-it-appear only.)
+- **Check 2 — headless composition compiles and activates.** Build `NS_Spike` from a base
+  emitter plus two stock modules under `-run=pythonscript`, finalize, wait for the compile,
+  save. Accept only if the Niagara editor was never opened, the compile state is fresh, and a
+  spawned `NiagaraActor` reports `is_active() == True`. This is the go/no-go on the whole
+  generated-asset family; if it fails on the external-edit API, repeat it on the
+  conversion-context path before any fallback.
+- **Check 3 — one readable module beats 37 expression strings.** Hand-author the ramp sampler
+  (§5.3), drop it on a CPU emitter fed `waterdrops_timer`'s size ramp, and confirm the sampled
+  value against a hand computation. Watch for CPU-VM intrinsics that silently diverge
+  (`smoothstep`).
 - **Check 4 — project fog reaches a Niagara sprite.** With `ElysiumMapVisuals` fog active,
   does the sprite fog through the MID parameters? Settles §5.4's binding.
 - **Check 5 — AlphaComposite on the sprite twin.** Does `mask 0` read additive and
   `mask 255` occlude, and does the lane's gamma answer for `env_sprite` hold?
 - **Check 6 — refract card.** `fire_heat`'s `normal` sprite as DUDV on `M_V2_Refract` over a
   fire. Does the shimmer appear?
-- **Check 7 — slot events.** A parent slot's location event spawning a child slot at the
-  particle (`drip` → `drip_splash`). Does the child land where the parent died?
+- **Check 7 — generation fixes parent/child and the dropped leaves.** Generate `drip`
+  (collide → spawn child, emitter-level reader bound `Other → <parent emitter name>`) and
+  `blood_guardian_summon_emitter` (20 leaves); place both in `sm_hub_1`. Accept if the child
+  lands at the collision, all 20 leaves draw, no "Source emitter not found" appears, and hub
+  frame cost stays inside rain's 1.0 ms discipline.
 - **Check 8 — shake pattern without the plugin.** A `UCameraShakePattern` subclass
   transcribing `CalcShake`, played through `PlayWorldCameraShake(origin, 0, radius, 1)`. Does
   it shake, and does it stop at `radius`?
 - **Check 9 — beam taper and noise.** `DynamicBeam` with width 6 → 0.6, noise 15 × length /
   100, additive `beama`. Does it read as the theatre beam?
-- **Check 10 — cost on a hub.** `sm_hub_1`'s placed rows as slotted floor instances, cull
+- **Check 10 — cost on a hub.** `sm_hub_1`'s placed rows as generated-system instances, cull
   off. Frame cost against rain's 1.0 ms discipline; if it fails, the C3 fallback is the
   answer, not a cull.
 
@@ -785,8 +843,17 @@ The render path is already Lumen + MegaLights + VSM at 1440p
 weather already claimed.
 
 - Sprite Niagara is cheap if overdraw is bounded (soft material, no full-screen
-  sheets, GPU sim). The floor is a CPU-sim system (collision by scene query, events between
-  slots); its cost is instance count × filled slots, which check 10 measures.
+  sheets, GPU sim). The generated systems are CPU-sim (collision by scene query, events
+  between emitters); the cost model is **emitters per root × placed instances of that root**,
+  which check 10 measures. 71% of roots carry one emitter, 86% two or fewer.
+- **The asset count is not a frame cost.** One `NS_<root>` per root — 155 now, 1,698 at full
+  corpus — is a DDC and editor cost, not a runtime one; per Michael Galetzka (Epic), an
+  inherited child emitter costs "exactly the same" at runtime as a standalone one. What is
+  paid per frame is emitters that tick, and a zero-spawn emitter in an uber system still ticks
+  its Emitter State — which is the cost the retired floor was paying twenty times over.
+- Epic's default validation budget is **8 emitters per system**
+  (`NiagaraValidationRules.h`); the handful of corpus roots above it are warnings on the
+  asset, weighed per root against check 10.
 - Scalability lives on `ET_ElysiumEffects` (§5.5): distance significance, an instance cap and
   a cull distance are one asset edit each, shipped off; `UNiagaraComponentPool` serves the
   §5.9 transient spawns.
@@ -808,3 +875,8 @@ weather already claimed.
 - `docs/vtmb/phy_vphysics.md` — collision, not FX.
 - `docs/project/reconstruction-direction.md` — presentation may modernize; logic reproduces.
 - `docs/architecture/rendering-perf.md` — the budget these systems share.
+- `docs/project/niagara_authoring_strategy.md` — the research behind the 2026-09-03 B3
+  revision: what the slotted floor broke on, and the engine facts that bound §5.3.
+- `docs/examples/` — real Niagara work per VtMB family, the reference the base emitters copy.
+- `docs/project/effects_authoring.md` — the archetype list, the base emitters as they are
+  authored, and the owner verdict per archetype.

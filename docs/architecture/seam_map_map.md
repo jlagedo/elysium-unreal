@@ -1573,11 +1573,14 @@ two, Specular 0 / Roughness 1, already flipped with the V2 masters). R5.5 flips 
 
 R7.3 of `docs/project/seam_migration.md` → "Roadmap — one pipeline" places a converted map's
 **effects entities** as actors in the baked level: every `env_particle` / `func_particle` on the
-slotted generic floor `NS_ElysiumParticle` (or its family override), every `func_dustmotes`,
+generated per-root system `NS_<root>` (or its family override), every `func_dustmotes`,
 `env_steam` and `env_beam` on its own authored family system. The owner's rulings (2026-09-02,
 `effects-architecture.md` §5): **A1** — stage off the V2 particle unit and retire the strict
-compiler for converted maps; **B3** — a generic floor with family overrides; **C1** — one actor per
-row, R6.1's sprite pattern; **P1** and the explosion bundle follow the ambient set. The corpus:
+compiler for converted maps; **B3** — a generic presentation with family overrides, **revised
+2026-09-03** from one slotted floor asset to one bake-generated `NS_<root>` per placed root,
+composed headlessly from hand-authored base emitters (`effects-architecture.md` §5.3); **C1** —
+one actor per row, R6.1's sprite pattern; **P1** and the explosion bundle follow the ambient
+set. The corpus:
 `env_particle` 1,304 rows over 155 placed roots, `func_particle` 98, `func_dustmotes` 82,
 `env_steam` 11, `env_beam` 47 (108 maps). Nothing here is a look judgement; the projection rules
 are `seam_map_particle.md` → "Semantics".
@@ -1761,9 +1764,14 @@ The projection's `meaning` decides which table a key lands in; a key with `meani
 stage warning naming the definition, offset and key, never a silent drop. The differ gets an
 `effects` row (rows, roots, unresolved counts) beside `sprites`.
 
-`<map>.particles.json`, `formats/particles.py::compile_definition`, `make_particle_systems.py` and
-`UElysiumParticleAssetBuilder` are **not read by this lane**. They keep serving the legacy bake
-for every unlisted map (below) and retire with it in R9; nothing in R7.3 edits them.
+`<map>.particles.json` and `formats/particles.py::compile_definition` are **not read by this
+lane**. They keep serving the legacy bake for every unlisted map (below) and retire with it in
+R9; nothing in R7.3 edits them. `make_particle_systems.py` and `UElysiumParticleAssetBuilder`
+are a different matter: under the revised B3 they **are this lane's generator**, re-pointed
+from the `<map>.particles.json` flatten to `particleTrees{}` and from the stock Fountain
+template to the project's base emitters, writing one `NS_<root>` per placed root into
+`/Game/ElysiumGenerated/VFX/`. The stage product is unchanged by that; the generator is a
+consumer of `particleTrees{}` exactly as the actor writer is.
 
 ### Consumption and cutover
 
@@ -1827,9 +1835,13 @@ go far past it: `Airplaine` `mask` 42 keyframes (`airplane_emitter`, 22 maps), `
 `FlameGlow2` `size` and `color` 15 (`fire1_emitter`, `fire2_emitter`), `Moth_Path` `theta_speed`
 16 (`moth_emitter`), `FlameEmbers1` `x_speed` / `y_speed` 9 (`barrelfireemitter`,
 `fire1_emitter`), `d_animalism_pestilence_fx4` `width` 83. The stage carries every keyframe
-(`effectStats.keyframeHistogram` is the count); a floor that holds five per ramp
-(`effects-architecture.md` §5.3, `User.Leaf<ii>.Ramps` at 37 × 5) must resample or widen — an
-open item for the floor's author, recorded here, not a stage decision.
+(`effectStats.keyframeHistogram` is the count). **This open item is closed by the revised B3**
+(2026-09-03): the generated systems carry each ramp as two curves on the authored ramp module
+(`effects-architecture.md` §5.3), the generator writing every keyframe as a curve key, so there
+is no five-per-ramp ceiling to resample against, whatever the count. (The strategy note quotes
+a maximum of 15, which is its `TreeBuilder` pass over the 1,698 units; the histogram above is
+this stage's own count over the placed trees and goes to 83. Both are "more than five"; the
+curve carries either.)
 
 None of the three maps authors a `func_dustmotes`, `env_steam` or `env_beam`; the three tables
 were exercised on `ch_lotus_1` (39 dustmotes), `hw_hub_1` (2 steam) and `ch_fulab_1` (12 beams,

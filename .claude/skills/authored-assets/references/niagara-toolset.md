@@ -3,6 +3,28 @@
 Everything below was measured on this project (UE 5.8, R7.3 floor build). Nothing here is in the
 engine docs.
 
+## Scope — what this toolset is for
+
+The NiagaraToolsets MCP is an **inspection and one-off tweak tool for authored assets**
+(`Content/ElysiumAuthored/VFX/**`: the hero systems, the base emitters, the module scripts). It
+is Experimental, it has no compile call and no batch, every call rebuilds a full system view
+model, and it cannot touch lightweight emitters or Niagara Data Channels. It is **not** the way
+shipping content is produced: the per-root `NS_<root>` systems are generated headlessly by the
+bake (below), and nothing under `Content/ElysiumGenerated/VFX/` is ever touched through this
+toolset. Owner call 2026-09-03, `docs/architecture/effects-architecture.md` §5.3.
+
+## Headless lane — the generator
+
+`pipeline/unreal/make_particle_systems.py` → `UElysiumParticleAssetBuilder` composes `NS_<root>`
+without opening the Niagara editor. Two rules it must keep, both from the failures below:
+
+- **Compile explicitly**: `UNiagaraSystem::RequestCompile(false)`, then
+  `FAssetCompilingManager::Get().FinishAllCompilation()`. The toolset's "open the editor once"
+  finalize is a workaround for exactly this and is not available headless.
+- **Gate on `IsReadyToRun()`** before saving, and on a non-zero particle count after activation.
+  Without the gate a system that never compiled looks identical to one that works: `Activate`
+  defers silently with no log at any verbosity.
+
 ## Session rules
 
 - One toolset call per MCP request. Never loop calls inside an in-editor Python command: the editor
@@ -17,6 +39,9 @@ engine docs.
   (`[/Script/UnrealEd.EditorPerformanceSettings] bThrottleCPUWhenNotForeground=False`) and the
   editor world does not simulate particles unless the viewport is realtime. Witness in
   Simulate-in-Editor (`EditorAppToolset.StartPIE`, `bSimulate`). Saving is refused while it runs.
+  The witness level's **World Settings must override the GameMode to `GameModeBase`**: the
+  project's `ElysiumGameMode` travels to Boot on begin play, so Simulate-in-Editor leaves the
+  witness level and you capture the wrong world.
 - After a forced kill, delete `Saved/Autosaves/PackageRestoreData.json` or the next launch hangs
   on the recovery prompt at frame 0.
 - Measure before looking: `fx.Niagara.DumpComponents` (particle counts per emitter),
@@ -61,8 +86,9 @@ engine docs.
   system, so the log says `Source emitter 'X' not found` whatever the name. Make it an
   emitter-level value on a Set Parameters entry:
   `StackInputData_DataInterface`, `propertyValues = '{"EmitterBinding":{"BindingMode":"Other","EmitterName":"Leaf00"}}'`
-  (the emitter **handle** name; `Self` is invalid outside a particle script). A fixed parent per
-  slot follows from this; per-instance parents do not exist.
+  (the emitter **handle** name; `Self` is invalid outside a particle script). Per-instance
+  parents do not exist — which is why the parent/child relation is written **into the generated
+  asset** as an emitter name at compose time, not chosen per component at runtime.
 - `Emitter.LoopCount`, `Emitter.NormalizedLoopAge` need `Loop Behavior = Multiple` with a
   `Loop Count`; `Infinite` hides `Loop Duration Mode`.
 - **A system built through the toolset never activates until it is opened once in the Niagara
