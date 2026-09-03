@@ -63,7 +63,7 @@ struct FElysiumParticleCollide
 	UPROPERTY(EditAnywhere, Category = "Elysium") float Friction = 1.f;
 	UPROPERTY(EditAnywhere, Category = "Elysium") float Gravity = 0.f;
 	UPROPERTY(EditAnywhere, Category = "Elysium") float Drag = 1.f;
-	UPROPERTY(EditAnywhere, Category = "Elysium") bool bSelf = false;
+	UPROPERTY(EditAnywhere, Category = "Elysium") bool bSelfCollide = false;
 	UPROPERTY(EditAnywhere, Category = "Elysium") bool bNested = false;
 	UPROPERTY(EditAnywhere, Category = "Elysium") TArray<int32> Spawn;
 	UPROPERTY(EditAnywhere, Category = "Elysium") TArray<FElysiumParticleDecal> Decals;
@@ -222,6 +222,10 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Elysium") float RampTime = 0.f;
 	UPROPERTY(EditAnywhere, Category = "Elysium") FBox BoundsCm = FBox(ForceInit);   // func_particle: the brush AABB (world)
 	UPROPERTY(EditAnywhere, Category = "Elysium") float VolumeScale = 1.f;           // func_particle: clamp(vol x 2^-21, 0.01, 100)
+	// Provenance only (the row carries them; the class reads none of the three).
+	UPROPERTY(EditAnywhere, Category = "Elysium") FVector AnglesDeg = FVector::ZeroVector;   // key `angles` as authored
+	UPROPERTY(EditAnywhere, Category = "Elysium") FString TargetName;
+	UPROPERTY(EditAnywhere, Category = "Elysium") int32 SpawnFlags = 0;
 	UPROPERTY(EditAnywhere, Category = "Elysium") FElysiumParticleTree Tree;
 	UPROPERTY(EditAnywhere, Category = "Elysium") TSoftObjectPtr<UNiagaraSystem> FamilySystem;
 	// The five scale fields (no keyfield; code producers only).

@@ -86,7 +86,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Elysium") float StrikeTimeS = 0.f;
 	UPROPERTY(EditAnywhere, Category = "Elysium") float Damage = 0.f;
 	UPROPERTY(EditAnywhere, Category = "Elysium") FLinearColor Color = FLinearColor::White;
-	UPROPERTY(EditAnywhere, Category = "Elysium") int32 SpawnFlags = 0;
+	// `SpawnFlags` is the base row's (Source's beam bits: 1 start on, 4 random strike, 128/256 shade).
 	// Provenance, inert in VtMB and here.
 	UPROPERTY(EditAnywhere, Category = "Elysium") FString ImpactParticle;
 	UPROPERTY(EditAnywhere, Category = "Elysium") bool bFacesPlayer = false;

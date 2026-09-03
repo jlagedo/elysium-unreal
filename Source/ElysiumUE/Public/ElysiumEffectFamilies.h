@@ -80,6 +80,15 @@ namespace ElysiumEffectAssets
 	// one interpolated array fetch -- except Burst, whose block carries its raw keyframes (t, lo, hi)
 	// in the first RampKeyframes entries and the rate ramp's maximum in the block's last entry.
 	inline constexpr int32 MaxLeafSlots = 20;
+	// The slot layout is fixed: slots 0..RootSlots-1 take the root-spawned leaves (the parent with
+	// the most children first), and each child slot samples one fixed parent slot. A particle
+	// reader only resolves as an emitter-level binding (the runtime copies every user DI onto the
+	// component, where the reader cannot see the system), so the parent is a property of the slot,
+	// not of the instance: three child slots under slot 0, three under slot 1, one under each of
+	// slots 2..7. The staged corpus (R7.3) has at most eight roots, depth one, three children.
+	inline constexpr int32 RootSlots = 8;
+	inline constexpr int32 ChildSlotParent[MaxLeafSlots] =
+		{ -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 1 };
 	inline constexpr int32 RampCount = 37;
 	inline constexpr int32 RampSamples = 32;
 	inline constexpr int32 RampKeyframes = 5;

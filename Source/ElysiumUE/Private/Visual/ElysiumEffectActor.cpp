@@ -10,7 +10,6 @@
 #include "Materials/MaterialInterface.h"
 #include "NiagaraComponent.h"
 #include "NiagaraDataInterfaceArrayFunctionLibrary.h"
-#include "NiagaraDataInterfaceParticleRead.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
 
@@ -211,20 +210,53 @@ namespace
 		return FName(*FString::Printf(TEXT("User.Leaf%02d.%s"), Slot, Field));
 	}
 
-	// The nearest drawing ancestor's slot, or -1 (the root's own clock) when the parent chain
-	// reaches node 0 or a non-drawing wrapper without passing a drawing node.
-	int32 ParentSlotOf(const FElysiumParticleTree& Tree, const TMap<int32, int32>& SlotByNode,
-		const FElysiumParticleNode& Node)
+	// The node's immediate ancestor: the non-drawing wrapper (or node 0) whose clock it runs on.
+	int32 WrapperOf(const FElysiumParticleTree& Tree, const FElysiumParticleNode& Node)
+	{
+		return Tree.Nodes.IsValidIndex(Node.Parent) ? Node.Parent : INDEX_NONE;
+	}
+
+	// `via: collide` anywhere on the chain from the leaf up to its drawing parent (or the root):
+	// VtMB's collide-spawned wrappers pass the trigger down to the leaf that draws.
+	bool SpawnsOnCollision(const FElysiumParticleTree& Tree, const FElysiumParticleNode& Node)
+	{
+		static const FName Collide(TEXT("collide"));
+		if (Node.Via == Collide)
+		{
+			return true;
+		}
+		int32 Cursor = Node.Parent;
+		int32 Guard = 0;
+		while (Tree.Nodes.IsValidIndex(Cursor) && Cursor > 0 && Guard++ < 64)
+		{
+			const FElysiumParticleNode& Ancestor = Tree.Nodes[Cursor];
+			if (Ancestor.bDraws && Ancestor.bResolved)
+			{
+				return false;
+			}
+			if (Ancestor.Via == Collide)
+			{
+				return true;
+			}
+			Cursor = Ancestor.Parent;
+		}
+		return false;
+	}
+
+	// The nearest drawing ancestor's node index, or INDEX_NONE (the root's own clock) when the
+	// parent chain reaches node 0 or a non-drawing wrapper without passing a drawing node.
+	int32 DrawingParentOf(const FElysiumParticleTree& Tree, const FElysiumParticleNode& Node)
 	{
 		int32 Cursor = Node.Parent;
 		int32 Guard = 0;
 		while (Tree.Nodes.IsValidIndex(Cursor) && Cursor > 0 && Guard++ < 64)
 		{
-			if (const int32* Slot = SlotByNode.Find(Cursor))
+			const FElysiumParticleNode& Ancestor = Tree.Nodes[Cursor];
+			if (Ancestor.bDraws && Ancestor.bResolved)
 			{
-				return *Slot;
+				return Cursor;
 			}
-			Cursor = Tree.Nodes[Cursor].Parent;
+			Cursor = Ancestor.Parent;
 		}
 		return INDEX_NONE;
 	}
@@ -386,11 +418,6 @@ void AElysiumEffectActor::WriteTree()
 	Niagara->SetVariableLinearColor(TEXT("User.Tint"), Tint);
 	Niagara->SetVariableFloat(TEXT("User.SizeScale"), SizeScale);
 
-	// The root's own clock: node 0's lifetime and loop flag drive every root-spawned slot.
-	const bool bHaveRoot = Tree.Nodes.Num() > 0;
-	Niagara->SetVariableFloat(TEXT("User.RootLifetime"),
-		bHaveRoot && Tree.Nodes[0].LifetimeS > 0.f ? Tree.Nodes[0].LifetimeS : 1.f);
-	Niagara->SetVariableBool(TEXT("User.RootLoop"), bHaveRoot ? Tree.Nodes[0].bLoop : true);
 
 	// Mode 15's box is the brush AABB the bake wrote; every other shape is set at attach.
 	if (AttachType == 15 && BoundsCm.IsValid)
@@ -403,29 +430,118 @@ void AElysiumEffectActor::WriteTree()
 		Niagara->SetVariableInt(TEXT("User.SpawnShape"), 0);
 	}
 
-	// Drawing nodes fill the slots in tree order; parents precede children, so a child's
-	// ParentLeaf is always a lower slot.
+	// The fixed layout (ElysiumEffectFamilies.h): roots take slots 0..RootSlots-1, the parent
+	// with the most drawing children first; each child takes a free child slot whose fixed parent
+	// is its parent's slot. A child of a child, a ninth root or a fourth child has no slot and is
+	// not drawn.
 	TMap<int32, int32> SlotByNode;
-	int32 Slot = 0;
+	TArray<const FElysiumParticleNode*> Roots;
+	TArray<TPair<const FElysiumParticleNode*, int32>> ChildNodes;   // node, parent node index
+	TMap<int32, int32> ChildCount;
 	for (const FElysiumParticleNode& Node : Tree.Nodes)
 	{
 		if (!Node.bDraws || !Node.bResolved)
 		{
 			continue;
 		}
-		if (Slot >= MaxLeafSlots)
+		const int32 ParentNode = DrawingParentOf(Tree, Node);
+		if (ParentNode == INDEX_NONE)
 		{
-			WarnOnce(TEXT("slots"), FString::Printf(
-				TEXT("effect %d ('%s') has more than %d drawing leaves; the rest are not drawn"),
-				EntityIndex, *RootName, MaxLeafSlots));
+			Roots.Add(&Node);
+		}
+		else
+		{
+			ChildNodes.Emplace(&Node, ParentNode);
+			++ChildCount.FindOrAdd(ParentNode);
+		}
+	}
+	Roots.StableSort([&ChildCount](const FElysiumParticleNode& A, const FElysiumParticleNode& B)
+	{
+		return ChildCount.FindRef(A.Index) > ChildCount.FindRef(B.Index);
+	});
+	TArray<TTuple<int32, const FElysiumParticleNode*, int32>> Placed;   // slot, node, parent slot
+	for (int32 i = 0; i < Roots.Num(); ++i)
+	{
+		if (i >= RootSlots)
+		{
+			WarnOnce(TEXT("roots"), FString::Printf(
+				TEXT("effect %d ('%s') has more than %d root-spawned leaves; the rest are not drawn"),
+				EntityIndex, *RootName, RootSlots));
 			break;
 		}
-		SlotByNode.Add(Node.Index, Slot);
+		SlotByNode.Add(Roots[i]->Index, i);
+		Placed.Emplace(i, Roots[i], INDEX_NONE);
+	}
+	TSet<int32> UsedChildSlots;
+	for (const TPair<const FElysiumParticleNode*, int32>& Child : ChildNodes)
+	{
+		const int32* ParentSlot = SlotByNode.Find(Child.Value);
+		int32 Slot = INDEX_NONE;
+		if (ParentSlot && *ParentSlot < RootSlots)
+		{
+			for (int32 c = RootSlots; c < MaxLeafSlots; ++c)
+			{
+				if (ChildSlotParent[c] == *ParentSlot && !UsedChildSlots.Contains(c))
+				{
+					Slot = c;
+					break;
+				}
+			}
+		}
+		if (Slot == INDEX_NONE)
+		{
+			WarnOnce(TEXT("child|") + Child.Key->Name, FString::Printf(
+				TEXT("effect %d ('%s') leaf '%s' has no child slot under its parent; not drawn"),
+				EntityIndex, *RootName, *Child.Key->Name));
+			continue;
+		}
+		UsedChildSlots.Add(Slot);
+		SlotByNode.Add(Child.Key->Index, Slot);
+		Placed.Emplace(Slot, Child.Key, *ParentSlot);
+	}
+	// The root clock: every root-spawned slot's Rate / Burst run over the nearest non-drawing
+	// wrapper's lifetime and loop flag (node 0 when the leaf hangs off it directly). VtMB's
+	// looping wrappers restart themselves forever, which is the clock a leaf under them sees --
+	// `waterdrops_timer`'s 1.7 s one-shot root holds a 0.67 s looping wrapper that drips forever.
+	// One clock per instance: the first root's wrapper wins; a tree whose roots disagree is named.
+	{
+		float ClockLifetime = 1.f;
+		bool bClockLoop = true;
+		int32 ClockNode = INDEX_NONE;
+		for (int32 i = 0; i < FMath::Min(Roots.Num(), RootSlots); ++i)
+		{
+			const int32 Wrapper = WrapperOf(Tree, *Roots[i]);
+			if (i == 0)
+			{
+				ClockNode = Wrapper;
+				if (Tree.Nodes.IsValidIndex(Wrapper))
+				{
+					ClockLifetime = Tree.Nodes[Wrapper].LifetimeS > 0.f ? Tree.Nodes[Wrapper].LifetimeS : 1.f;
+					bClockLoop = Tree.Nodes[Wrapper].bLoop;
+				}
+			}
+			else if (Wrapper != ClockNode && Tree.Nodes.IsValidIndex(Wrapper) && Tree.Nodes.IsValidIndex(ClockNode)
+				&& (Tree.Nodes[Wrapper].LifetimeS != Tree.Nodes[ClockNode].LifetimeS || Tree.Nodes[Wrapper].bLoop != Tree.Nodes[ClockNode].bLoop))
+			{
+				WarnOnce(TEXT("clock|") + Roots[i]->Name, FString::Printf(
+					TEXT("effect %d ('%s') leaf '%s' hangs off a wrapper with its own clock; it runs on '%s's"),
+					EntityIndex, *RootName, *Roots[i]->Name, *Tree.Nodes[ClockNode].Name));
+			}
+		}
+		Niagara->SetVariableFloat(TEXT("User.RootLifetime"), ClockLifetime);
+		Niagara->SetVariableBool(TEXT("User.RootLoop"), bClockLoop);
+	}
+	TSet<int32> Filled;
+	for (const TTuple<int32, const FElysiumParticleNode*, int32>& Entry : Placed)
+	{
+		const int32 Slot = Entry.Get<0>();
+		const FElysiumParticleNode& Node = *Entry.Get<1>();
+		const int32 ParentSlot = Entry.Get<2>();
+		Filled.Add(Slot);
 
 		Niagara->SetVariableBool(SlotName(Slot, TEXT("Active")), true);
-		Niagara->SetVariableInt(SlotName(Slot, TEXT("ParentLeaf")), ParentSlotOf(Tree, SlotByNode, Node));
-		Niagara->SetVariableInt(SlotName(Slot, TEXT("SpawnOn")),
-			Node.Via == FName(TEXT("collide")) ? 1 : 0);
+		Niagara->SetVariableInt(SlotName(Slot, TEXT("ParentLeaf")), ParentSlot);
+		Niagara->SetVariableInt(SlotName(Slot, TEXT("SpawnOn")), SpawnsOnCollision(Tree, Node) ? 1 : 0);
 		Niagara->SetVariableFloat(SlotName(Slot, TEXT("Lifetime")), Node.LifetimeS);
 		Niagara->SetVariableFloat(SlotName(Slot, TEXT("LifetimeMin")), Node.LifetimeMinS);
 		Niagara->SetVariableFloat(SlotName(Slot, TEXT("LifetimeMax")), Node.LifetimeMaxS);
@@ -470,7 +586,7 @@ void AElysiumEffectActor::WriteTree()
 		}
 
 		Niagara->SetVariableBool(SlotName(Slot, TEXT("Collide")), Node.bHasCollide);
-		Niagara->SetVariableBool(SlotName(Slot, TEXT("CollideSelf")), Node.bHasCollide && Node.Collide.bSelf);
+		Niagara->SetVariableBool(SlotName(Slot, TEXT("CollideSelf")), Node.bHasCollide && Node.Collide.bSelfCollide);
 		Niagara->SetVariableFloat(SlotName(Slot, TEXT("Bounce")), Node.bHasCollide ? Node.Collide.Bounce : 1.f);
 		Niagara->SetVariableFloat(SlotName(Slot, TEXT("Friction")), Node.bHasCollide ? Node.Collide.Friction : 1.f);
 		Niagara->SetVariableFloat(SlotName(Slot, TEXT("Gravity")), Node.bHasCollide ? Node.Collide.Gravity : 0.f);
@@ -481,22 +597,15 @@ void AElysiumEffectActor::WriteTree()
 		UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayVector(Niagara,
 			SlotName(Slot, TEXT("Ramps")), Ramps);
 
-		// The slot's particle reader names the emitter it samples: the parent slot's for a child,
-		// its own (a valid, unused binding) for a root-spawned leaf.
-		const int32 ParentSlot = ParentSlotOf(Tree, SlotByNode, Node);
-		if (UNiagaraDataInterfaceParticleRead* Reader = UNiagaraFunctionLibrary::GetDataInterface<UNiagaraDataInterfaceParticleRead>(
-			Niagara, SlotName(Slot, TEXT("Parent"))))
-		{
-			Reader->EmitterBinding.BindingMode = ENiagaraDataInterfaceEmitterBindingMode::Other;
-			Reader->EmitterBinding.EmitterName = FName(*FString::Printf(TEXT("Leaf%02d"), ParentSlot >= 0 ? ParentSlot : Slot));
-		}
-		++Slot;
 	}
-	for (int32 Unused = Slot; Unused < MaxLeafSlots; ++Unused)
+	for (int32 Unused = 0; Unused < MaxLeafSlots; ++Unused)
 	{
-		Niagara->SetVariableBool(SlotName(Unused, TEXT("Active")), false);
+		if (!Filled.Contains(Unused))
+		{
+			Niagara->SetVariableBool(SlotName(Unused, TEXT("Active")), false);
+		}
 	}
-	Niagara->SetVariableInt(TEXT("User.LeafCount"), Slot);
+	Niagara->SetVariableInt(TEXT("User.LeafCount"), Filled.Num());
 
 	// A surface_color_optout leaf pins its tint white; the flag is per node, the pin per system,
 	// so the actor's tint is white when any drawing leaf opts out.

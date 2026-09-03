@@ -402,15 +402,15 @@ System-level:
 | `User.SpawnBoxMin`, `User.SpawnBoxMax` | Vector, component-local cm | mode 15's brush AABB; mode 9's parent render bounds, refreshed per tick |
 | `User.SkeletalMesh` | Skeletal Mesh DI | modes 1 / 3: the parent's mesh, spawn uniform along the skeleton segments |
 | `User.FogColor`, `User.FogStart`, `User.FogInvRange` | LinearColor, float, float | the project fog set (`ElysiumFog`), world or sky by the actor's `elysium.sky` marker; bound through the renderer's `MaterialParameters` to the material's `FogColor` / `FogStart` / `FogInvRange` |
-| `User.RootLifetime`, `User.RootLoop` | float s, bool | the root's own clock: node 0's `lifetime_s` and `loop`; every root-spawned slot's `Rate` / `Burst` run over `frac(age / RootLifetime)`, and an unlooped root feeds only its first period |
+| `User.RootLifetime`, `User.RootLoop` | float s, bool | the root clock: the `lifetime_s` and `loop` of the **nearest non-drawing wrapper** above the root-spawned leaves (node 0 when they hang off it directly — VtMB's looping wrappers restart themselves forever, so `waterdrops_timer`'s 1.7 s one-shot root drips through its 0.67 s looping wrapper); every root-spawned slot's `Rate` / `Burst` run over `frac(age / RootLifetime)`, and an unlooped clock feeds only its first period. One clock per instance: the first root's wrapper, a disagreeing root is warned once |
 
 Per slot, scalars:
 
 | Parameter | Type | Source (tree node field) |
 |---|---|---|
 | `User.Leaf<ii>.Active` | bool | slot filled |
-| `User.Leaf<ii>.ParentLeaf` | int32 | the parent slot; `−1` = spawned by the root's own clock (`parent` is node 0 or a non-drawing wrapper chain) |
-| `User.Leaf<ii>.SpawnOn` | int32 | `0` the parent's age (`Rate` / `Burst` over the parent's normalized age — `via: spawn`) · `1` the parent's collision (`via: collide`) |
+| `User.Leaf<ii>.ParentLeaf` | int32 | the parent slot; `−1` = spawned by the root's own clock (`parent` is node 0 or a non-drawing wrapper chain). **The layout is fixed** (`ElysiumEffectFamilies.h`): slots `0..7` are root slots, the parent with the most drawing children first; child slots `8..19` each sample one fixed parent slot — three under slot 0 (`8, 9, 10`), three under slot 1 (`11, 12, 19`), one under each of `2..7` (`13..18`). The writer places a child in a free child slot of its parent's group; a child of a child, a ninth root or a fourth child under one parent is not drawn (the staged corpus has none). Each child slot's reader is an **emitter-level** Particle Attribute Reader bound `Other → Leaf<parent>`: a reader held by a user parameter never resolves at runtime, because the component copies every user DI onto itself and the reader looks the emitter up through its outer system (`FNiagaraDataInterfaceEmitterBinding::ResolveHandle`) |
+| `User.Leaf<ii>.SpawnOn` | int32 | `0` the parent's age (`Rate` / `Burst` over the parent's normalized age — `via: spawn`) · `1` the parent's collision (`via: collide` on the leaf or on any non-drawing wrapper between it and its drawing parent) |
 | `User.Leaf<ii>.Lifetime`, `.LifetimeMin`, `.LifetimeMax` | float s | `lifetime_s`, `lifetime_min_s`, `lifetime_max_s` (`timescale` already divided in) |
 | `User.Leaf<ii>.Loop` | bool | `loop` |
 | `User.Leaf<ii>.Distance` | bool | `spawn.distance` — `Rate` becomes particles per cm travelled |
@@ -423,7 +423,6 @@ Per slot, scalars:
 | `User.Leaf<ii>.Collide` | bool | `collide` present — CPU collision against the world and every collision-enabled body |
 | `User.Leaf<ii>.CollideSelf` | bool | `collide.self` — survive the hit with the bounce rule; false = the particle ends at the hit |
 | `User.Leaf<ii>.Bounce`, `.Friction`, `.Gravity`, `.Drag` | float ×4 | `collide.bounce` 1, `.friction` 1, `.gravity` 0, `.drag` 1 |
-| `User.Leaf<ii>.Parent` | Particle Attribute Reader DI | the emitter the slot samples for its spawn position and age: `Leaf<ParentLeaf>` for a child, the slot's own emitter for a root leaf (a reader with no valid emitter stops the whole emitter, so the writer always names one) |
 
 Per slot, the ramps — **one array, a lookup table per ramp**:
 

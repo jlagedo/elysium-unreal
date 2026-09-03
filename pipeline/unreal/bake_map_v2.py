@@ -183,32 +183,33 @@ EFFECT_NODE_FIELDS = (
     ("index", "index"), ("id", "id"), ("name", "name"), ("kind", "kind"), ("draws", "draws"),
     ("spawns", "spawns"), ("parent", "parent"), ("via", "via"), ("blockIndex", "block_index"),
     ("depth", "depth"), ("resolved", "resolved"), ("fps", "fps"),
-    ("lifetime_s", "lifetime"), ("lifetime_min_s", "lifetime_min"),
-    ("lifetime_max_s", "lifetime_max"), ("loop", "loop"),
-    ("size_cm", "size"), ("width", "width"), ("height", "height"), ("rotation_deg", "rotation"),
-    ("red", "red"), ("green", "green"), ("blue", "blue"), ("color", "color"), ("mask", "mask"),
-    ("refract", "refract"), ("radius_speed_cm_s", "radius_speed"),
-    ("theta_speed_deg_s", "theta_speed"), ("phi_speed_deg_s", "phi_speed"),
-    ("x_speed_cm_s", "x_speed"), ("y_speed_cm_s", "y_speed"), ("z_speed_cm_s", "z_speed"),
-    ("elevation_speed_cm_s", "elevation_speed"), ("parent_speed", "parent_speed"),
+    ("lifetime_s", "lifetime_s"), ("lifetime_min_s", "lifetime_min_s"),
+    ("lifetime_max_s", "lifetime_max_s"), ("loop", "loop"),
+    ("size_cm", "size_cm"), ("width", "width"), ("height", "height"),
+    ("rotation_deg", "rotation_deg"), ("red", "red"), ("green", "green"), ("blue", "blue"),
+    ("color", "color"), ("mask", "mask"), ("refract", "refract"),
+    ("radius_speed_cm_s", "radius_speed_cm_s"), ("theta_speed_deg_s", "theta_speed_deg_s"),
+    ("phi_speed_deg_s", "phi_speed_deg_s"), ("x_speed_cm_s", "x_speed_cm_s"),
+    ("y_speed_cm_s", "y_speed_cm_s"), ("z_speed_cm_s", "z_speed_cm_s"),
+    ("elevation_speed_cm_s", "elevation_speed_cm_s"), ("parent_speed", "parent_speed"),
     ("movealign", "move_align"), ("flat", "flat"), ("sortfront", "sort_front"),
     ("no_z_test", "no_z_test"), ("lighting", "lighting"), ("precipitation", "precipitation"),
     ("depth_offset_cm", "depth_offset_cm"), ("surface_color_optout", "surface_color_optout"),
 )
+#: `spawn { }` field -> `FElysiumParticleSpawn` property (the node's `spawn` member, `has_spawn`).
 EFFECT_SPAWN_FIELDS = (
-    ("rate", "spawn_rate"), ("burst", "spawn_burst"), ("distance", "spawn_distance"),
-    ("radius_cm", "spawn_radius"), ("theta_deg", "spawn_theta"), ("phi_deg", "spawn_phi"),
-    ("x_cm", "spawn_x"), ("y_cm", "spawn_y"), ("z_cm", "spawn_z"),
-    ("elevation_cm", "spawn_elevation"), ("rotation_deg", "spawn_rotation"),
-    ("width", "spawn_width"), ("height", "spawn_height"), ("size", "spawn_size"),
-    ("red", "spawn_red"), ("green", "spawn_green"), ("blue", "spawn_blue"),
-    ("color", "spawn_color"), ("mask", "spawn_mask"), ("refract", "spawn_refract"),
-    ("timescale", "spawn_timescale"),
+    ("rate", "rate"), ("burst", "burst"), ("distance", "distance"),
+    ("radius_cm", "radius_cm"), ("theta_deg", "theta_deg"), ("phi_deg", "phi_deg"),
+    ("x_cm", "x_cm"), ("y_cm", "y_cm"), ("z_cm", "z_cm"), ("elevation_cm", "elevation_cm"),
+    ("rotation_deg", "rotation_deg"), ("width", "width"), ("height", "height"), ("size", "size"),
+    ("red", "red"), ("green", "green"), ("blue", "blue"), ("color", "color"), ("mask", "mask"),
+    ("refract", "refract"), ("timescale", "timescale"),
 )
+#: `collide { }` field -> `FElysiumParticleCollide` property (the node's `collide` member,
+#: `has_collide`); `decals[]` become `FElysiumParticleDecal`, `vdecal` the three `vdecal_*`.
 EFFECT_COLLIDE_FIELDS = (
-    ("bounce", "collide_bounce"), ("friction", "collide_friction"),
-    ("gravity", "collide_gravity"), ("drag", "collide_drag"), ("self", "collide_self"),
-    ("nested", "collide_nested"), ("spawn", "collide_spawn"),
+    ("bounce", "bounce"), ("friction", "friction"), ("gravity", "gravity"), ("drag", "drag"),
+    ("self", "self_collide"), ("nested", "nested"), ("spawn", "spawn"),
 )
 
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
@@ -1009,7 +1010,8 @@ def _build_class():
                     box = unreal.Box()
                     if value:
                         box = unreal.Box(min=unreal.Vector(*value["min"]),
-                                         max=unreal.Vector(*value["max"]), is_valid=1)
+                                         max=unreal.Vector(*value["max"]))
+                        box.set_editor_property("is_valid", 1)
                     value = box
                 elif field == "angles_deg":
                     value = unreal.Vector(*value)
@@ -1031,7 +1033,8 @@ def _build_class():
                     box = unreal.Box()
                     if value:
                         box = unreal.Box(min=unreal.Vector(*value["min"]),
-                                         max=unreal.Vector(*value["max"]), is_valid=1)
+                                         max=unreal.Vector(*value["max"]))
+                        box.set_editor_property("is_valid", 1)
                     value = box
                 elif value is None:
                     value = ""
@@ -1041,43 +1044,95 @@ def _build_class():
         def _write_tree(self, actor, tree):
             if not tree:
                 return
+
+            def ramp(value):
+                keys = []
+                for k in value:
+                    key = unreal.ElysiumRampKey()
+                    self._set(key, "t", float(k[0]), "ramp.t")
+                    self._set(key, "lo", float(k[1]), "ramp.lo")
+                    self._set(key, "hi", float(k[2]), "ramp.hi")
+                    keys.append(key)
+                return keys
+
+            def sprite(image):
+                image = image or {}
+                out = unreal.ElysiumParticleSprite()
+                self._set(out, "id", str(image.get("id") or ""), "node.sprite.id")
+                texture = unreal.load_asset(str(image["texture"])) if image.get("texture") else None
+                if texture:
+                    self._set(out, "texture", texture, "node.sprite.texture")
+                elif image.get("texture"):
+                    log("effects: sprite %s does not load; the leaf draws without it" % image["texture"])
+                size = image.get("size_px") or [0, 0]
+                self._set(out, "size_px", unreal.IntPoint(int(size[0]), int(size[1])), "node.sprite.size_px")
+                aspect = image.get("aspect") or [0.5, 0.5]
+                self._set(out, "aspect", unreal.Vector2D(aspect[0], aspect[1]), "node.sprite.aspect")
+                return out
+
             nodes = []
             for node in tree["nodes"]:
                 struct = unreal.ElysiumParticleNode()
                 for field, prop in EFFECT_NODE_FIELDS:
                     value = node.get(field)
                     if isinstance(value, list) and value and isinstance(value[0], list):
-                        value = [unreal.ElysiumRampKey(t=k[0], lo=k[1], hi=k[2]) for k in value]
+                        value = ramp(value)
                     elif value is None:
-                        value = -1 if field == "parent" else ""
+                        # Absent on the row: the struct's default stands (`Parent` / `BlockIndex`
+                        # INDEX_NONE, strings empty); an int never takes "".
+                        continue
                     self._set(struct, prop, value, "node[%d].%s" % (node["index"], field))
                 spawn = node.get("spawn") or {}
                 self._set(struct, "has_spawn", bool(node.get("spawn")), "node.spawn")
-                for field, prop in EFFECT_SPAWN_FIELDS:
-                    if field not in spawn:
-                        continue
-                    value = spawn[field]
-                    if isinstance(value, list) and value and isinstance(value[0], list):
-                        value = [unreal.ElysiumRampKey(t=k[0], lo=k[1], hi=k[2]) for k in value]
-                    self._set(struct, prop, value, "node[%d].spawn.%s" % (node["index"], field))
-                for key in ("sprite", "normal"):
-                    image = node.get(key) or {}
-                    self._set(struct, key, str(image.get("texture") or ""), "node." + key)
-                    aspect = image.get("aspect") or [0.5, 0.5]
-                    self._set(struct, key + "_aspect", unreal.Vector2D(aspect[0], aspect[1]),
-                              "node." + key + ".aspect")
+                if spawn:
+                    spawn_struct = unreal.ElysiumParticleSpawn()
+                    for field, prop in EFFECT_SPAWN_FIELDS:
+                        if spawn.get(field) is None:
+                            continue
+                        value = spawn[field]
+                        if isinstance(value, list) and value and isinstance(value[0], list):
+                            value = ramp(value)
+                        self._set(spawn_struct, prop, value, "node[%d].spawn.%s" % (node["index"], field))
+                    self._set(struct, "spawn", spawn_struct, "node.spawn")
+                if node.get("sprite"):
+                    self._set(struct, "sprite", sprite(node["sprite"]), "node.sprite")
+                if node.get("normal"):
+                    self._set(struct, "normal", sprite(node["normal"]), "node.normal")
                 collide = node.get("collide")
-                self._set(struct, "collide", bool(collide), "node.collide")
+                self._set(struct, "has_collide", bool(collide), "node.collide")
                 if collide:
+                    collide_struct = unreal.ElysiumParticleCollide()
                     for field, prop in EFFECT_COLLIDE_FIELDS:
-                        self._set(struct, prop, collide[field], "node.collide." + field)
+                        if collide.get(field) is None:
+                            continue
+                        self._set(collide_struct, prop, collide[field], "node.collide." + field)
+                    decals = []
+                    for decal in collide.get("decals") or []:
+                        out = unreal.ElysiumParticleDecal()
+                        self._set(out, "id", str(decal.get("id") or ""), "node.collide.decal.id")
+                        self._set(out, "texture", str(decal.get("texture") or ""), "node.collide.decal.texture")
+                        self._set(out, "angle_spread", float(decal.get("angle_spread") or 0.0),
+                                  "node.collide.decal.angle_spread")
+                        decals.append(out)
+                    self._set(collide_struct, "decals", decals, "node.collide.decals")
+                    vdecal = collide.get("vdecal")
+                    self._set(collide_struct, "has_vdecal", bool(vdecal), "node.collide.vdecal")
+                    if vdecal:
+                        for key in ("first", "last"):
+                            raw = str(vdecal.get(key) or "")
+                            if raw.lstrip("-").isdigit():
+                                self._set(collide_struct, "vdecal_" + key, int(raw), "node.collide.vdecal." + key)
+                        self._set(collide_struct, "vdecal_angle_spread",
+                                  float(vdecal.get("angle_spread") or 0.0), "node.collide.vdecal.angle_spread")
+                    self._set(struct, "collide", collide_struct, "node.collide")
                 nodes.append(struct)
             tree_struct = unreal.ElysiumParticleTree()
             self._set(tree_struct, "root", tree["root"], "tree.root")
             self._set(tree_struct, "name", tree["name"], "tree.name")
             self._set(tree_struct, "nodes", nodes, "tree.nodes")
             self._set(tree_struct, "leaf_count", int(tree["stats"]["leafCount"]), "tree.leafCount")
-            self._set(tree_struct, "max_depth", int(tree["stats"]["depth"]), "tree.depth")
+            self._set(tree_struct, "depth", int(tree["stats"]["depth"]), "tree.depth")
+            self._set(tree_struct, "max_keyframes", int(tree["stats"].get("maxKeyframes") or 0), "tree.maxKeyframes")
             self._set(actor, "tree", tree_struct, "actor.tree")
 
         # ------------------------------------------------------------------ lights (R5.6)

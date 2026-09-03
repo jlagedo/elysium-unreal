@@ -70,9 +70,9 @@ Which toolset applies:
 
 - **Data assets** (`DA_HairDynamics`, `DA_ClothTuning`, `DA_EyeTuning`) — `ObjectTools`, as above.
 - **Material instances** — `MaterialInstanceTools`, or `ObjectTools` for raw properties.
-- **Niagara systems** (`NS_*`) — **there is no Niagara toolset.** Graph and emitter edits are the
-  owner's, in the editor UI. Read state and report a concrete recommendation; do not claim a
-  change you could not make.
+- **Niagara systems** (`NS_*`) — `NiagaraToolsets.NiagaraToolset_System` through `call_tool`
+  (the engine's experimental plugin, enabled in the uproject). Read
+  `references/niagara-toolset.md` first: it holds the measured gotchas that cost a session.
 
 ## Verifying
 
