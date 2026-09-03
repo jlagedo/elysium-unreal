@@ -18,6 +18,7 @@
 #include "NiagaraSystemInstanceController.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/App.h"
+#include "Misc/StringBuilder.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Serialization/JsonReader.h"
@@ -643,6 +644,41 @@ FName EmitterNameFor(const FString& Raw, int32 Ordinal)
 // anything new into the result's `Skipped` list. That is what lets one generator run against both
 // the stock Fountain template (where the Elysium modules do not exist) and the authored base
 // emitter, and report the difference instead of dying on it.
+void WriteInputPath(
+	FNiagaraExternalEditContext& Context,
+	FElysiumRootSystemResult& Result,
+	UNiagaraSystem* System,
+	const FName Emitter,
+	const TCHAR* Script,
+	const TCHAR* Module,
+	const TArray<FName>& InputPath,
+	const FNiagaraExt_StackInputValue& Value)
+{
+	const int32 Before = Context.Errors.Num();
+	FNiagaraExt_StackItemReference Reference(System, Emitter, FName(Script), FName(Module));
+	Reference.InputNameStack = InputPath;
+	UNiagaraExternalEditUtilities::SetStackInputData(Reference, Value, Context);
+	if (Context.Errors.Num() == Before)
+	{
+		return;
+	}
+	TStringBuilder<128> Path;
+	for (const FName Part : InputPath)
+	{
+		if (Path.Len() > 0)
+		{
+			Path << TEXT("/");
+		}
+		Path << Part;
+	}
+	for (int32 Index = Context.Errors.Num() - 1; Index >= Before; --Index)
+	{
+		Result.Skipped.Add(FString::Printf(TEXT("%s/%s/%s/%s: %s"),
+			*Emitter.ToString(), Script, Module, Path.ToString(), *Context.Errors[Index].ToString()));
+		Context.Errors.RemoveAt(Index);
+	}
+}
+
 void WriteInput(
 	FNiagaraExternalEditContext& Context,
 	FElysiumRootSystemResult& Result,
@@ -653,16 +689,8 @@ void WriteInput(
 	const TCHAR* Input,
 	const FNiagaraExt_StackInputValue& Value)
 {
-	const int32 Before = Context.Errors.Num();
-	FNiagaraExt_StackItemReference Reference(System, Emitter, FName(Script), FName(Module));
-	Reference.InputNameStack.Add(FName(Input));
-	UNiagaraExternalEditUtilities::SetStackInputData(Reference, Value, Context);
-	for (int32 Index = Context.Errors.Num() - 1; Index >= Before; --Index)
-	{
-		Result.Skipped.Add(FString::Printf(TEXT("%s/%s/%s/%s: %s"),
-			*Emitter.ToString(), Script, Module, Input, *Context.Errors[Index].ToString()));
-		Context.Errors.RemoveAt(Index);
-	}
+	WriteInputPath(Context, Result, System, Emitter, Script, Module,
+		TArray<FName>({FName(Input)}), Value);
 }
 
 template<typename TValue>
@@ -725,11 +753,106 @@ FNiagaraExt_StackInputValue DataInterfaceValue(const FString& PropertyValues)
 	return Out;
 }
 
+// An enum-valued static switch. Written by name, so the enum's raw `NewEnumeratorN` spelling is the
+// contract, not its display name.
+FNiagaraExt_StackInputValue EnumValue(const TCHAR* EnumAsset, const TCHAR* ValueName)
+{
+	FNiagaraExt_StackInputValue Out;
+	FNiagaraExt_StackInputData_Enum& Data = Out.InitializeAs<FNiagaraExt_StackInputData_Enum>();
+	Data.Enum = LoadObject<UEnum>(nullptr, EnumAsset);
+	Data.EnumName = FName(ValueName);
+	return Out;
+}
+
+// ------------------------------------------------------------------ the VtMB ramps, as curves
+//
+// A VtMB ramp is `[t, lo, hi]` keyframes linear in normalized age, with `lo~hi` rolled once per
+// particle at spawn. The base emitter expresses that with stock parts only: two `*FromCurve`
+// dynamic inputs (the lo side and the hi side, both sampled on `Particles.NormalizedAge`) under a
+// `Lerp_*` whose Alpha is `Particles.MaterialRandom` -- the per-particle roll `InitializeParticle`
+// already writes. So the generator's whole ramp job is to fill six `FRichCurve`s per leaf.
+
+// One side of a ramp sampled at t. Clamped at both ends, which is `RCCE_Constant` extrapolation.
+float SampleSide(const TArray<FKey>* Keys, float T, bool bHi, float Default)
+{
+	if (Keys == nullptr || Keys->Num() == 0)
+	{
+		return Default;
+	}
+	auto Value = [bHi](const FKey& Key) { return bHi ? Key.Hi : Key.Lo; };
+	if (T <= (*Keys)[0].T)
+	{
+		return Value((*Keys)[0]);
+	}
+	for (int32 Index = 1; Index < Keys->Num(); ++Index)
+	{
+		const FKey& Prev = (*Keys)[Index - 1];
+		const FKey& Next = (*Keys)[Index];
+		if (T <= Next.T)
+		{
+			const float Span = Next.T - Prev.T;
+			return Span <= 0.f ? Value(Next)
+			                   : FMath::Lerp(Value(Prev), Value(Next), (T - Prev.T) / Span);
+		}
+	}
+	return Value((*Keys)[Keys->Num() - 1]);
+}
+
+// The union of two ramps' keyframe times: the product of two piecewise-linear ramps is only
+// piecewise-linear on the union of their breakpoints.
+TArray<float> UnionTimes(const TArray<FKey>* A, const TArray<FKey>* B)
+{
+	TArray<float> Times;
+	for (const TArray<FKey>* Ramp : {A, B})
+	{
+		if (Ramp != nullptr)
+		{
+			for (const FKey& Key : *Ramp)
+			{
+				Times.AddUnique(Key.T);
+			}
+		}
+	}
+	if (Times.Num() == 0)
+	{
+		Times.Add(0.f);
+	}
+	Times.Sort();
+	return Times;
+}
+
+// One `FRichCurve` as JSON: the product of two ramps on one side. `FJsonObjectConverter` reads the
+// struct straight back, so the field names below are `FRichCurve`'s and `FRichCurveKey`'s own.
+FString RichCurveJson(const TArray<FKey>* A, const TArray<FKey>* B, bool bHi,
+	float DefaultA = 1.f, float DefaultB = 1.f)
+{
+	const TArray<float> Times = UnionTimes(A, B);
+	TStringBuilder<1024> Out;
+	Out << TEXT("{\"Keys\":[");
+	for (int32 Index = 0; Index < Times.Num(); ++Index)
+	{
+		const float Value = SampleSide(A, Times[Index], bHi, DefaultA)
+			* SampleSide(B, Times[Index], bHi, DefaultB);
+		Out << (Index > 0 ? TEXT(",") : TEXT(""));
+		Out << TEXT("{\"InterpMode\":\"RCIM_Linear\",\"TangentMode\":\"RCTM_Auto\",")
+			<< TEXT("\"TangentWeightMode\":\"RCTWM_WeightedNone\",\"Time\":")
+			<< FString::SanitizeFloat(Times[Index]) << TEXT(",\"Value\":")
+			<< FString::SanitizeFloat(Value) << TEXT("}");
+	}
+	Out << TEXT("],\"PreInfinityExtrap\":\"RCCE_Constant\",\"PostInfinityExtrap\":\"RCCE_Constant\"}");
+	return FString(Out.ToString());
+}
+
+const TArray<FKey>* FindRamp(const TMap<FString, TArray<FKey>>& Ramps, const TCHAR* Field)
+{
+	return Ramps.Find(Field);
+}
+
 // ------------------------------------------------------------------ one drawing node's emitter
 
-// The base emitter's named module inputs (`generator_design.md` -> "The base-emitter input
-// contract"), plus the stock fallbacks so a Fountain-based spike is not inert. Anything the base
-// does not expose lands in `Result.Skipped`.
+// The base emitter's stock module and input names (`generator_design.md` -> "The base-emitter
+// input contract"). `E_VtMBLeaf` is stock Niagara throughout, so every name below is Epic's;
+// anything the base does not expose lands in `Result.Skipped` rather than failing the system.
 void ConfigureLeaf(
 	UNiagaraSystem* System,
 	const FName Emitter,
@@ -742,23 +865,26 @@ void ConfigureLeaf(
 	const int32 Burst = FMath::RoundToInt(RampScalar(Node.Spawn, TEXT("burst"), 0.f));
 	const FNode* Wrapper = WrapperOf(Nodes, Node);
 
-	// --- Emitter Update: the clock and the spawn block.
+	// --- Emitter Update: the root clock is the stock EmitterState's own loop, and the spawn block
+	// is the stock SpawnRate / SpawnBurst_Instantaneous pair.
+	const bool bRootLoop = Wrapper ? Wrapper->bLoop : true;
 	WriteInput(Context, Result, System, Emitter, TEXT("EmitterUpdateScript"),
-		TEXT("NM_VtMBRootClock"), TEXT("Root Lifetime"),
-		FloatValue(Wrapper && Wrapper->LifetimeS > 0.f ? Wrapper->LifetimeS : 1.f));
-	WriteInput(Context, Result, System, Emitter, TEXT("EmitterUpdateScript"),
-		TEXT("NM_VtMBRootClock"), TEXT("Root Loop"),
-		BoolValue(Wrapper ? Wrapper->bLoop : true));
-	WriteInput(Context, Result, System, Emitter, TEXT("EmitterUpdateScript"),
-		TEXT("NM_VtMBSpawn"), TEXT("Rate"), FloatValue(Rate));
-	WriteInput(Context, Result, System, Emitter, TEXT("EmitterUpdateScript"),
-		TEXT("NM_VtMBSpawn"), TEXT("Burst"), IntValue(Burst));
-	WriteInput(Context, Result, System, Emitter, TEXT("EmitterUpdateScript"),
-		TEXT("NM_VtMBSpawn"), TEXT("Timescale"), FloatValue(Node.SpawnTimescale));
-
-	// The stock fallback: a Fountain-shaped emitter drives its rate from this module.
+		TEXT("EmitterState"), TEXT("Loop Behavior"),
+		EnumValue(TEXT("/Niagara/Enums/ENiagara_EmitterStateOptions.ENiagara_EmitterStateOptions"),
+			bRootLoop ? TEXT("ENiagara_EmitterStateOptions::NewEnumerator0")
+			          : TEXT("ENiagara_EmitterStateOptions::NewEnumerator1")));
+	if (!bRootLoop)
+	{
+		// An unlooped clock feeds only its first period; `Loop Duration` is hidden behind the
+		// Infinite behaviour, so it is only meaningful on the Once branch.
+		WriteInput(Context, Result, System, Emitter, TEXT("EmitterUpdateScript"),
+			TEXT("EmitterState"), TEXT("Loop Duration"),
+			FloatValue(Wrapper && Wrapper->LifetimeS > 0.f ? Wrapper->LifetimeS : 1.f));
+	}
 	WriteInput(Context, Result, System, Emitter, TEXT("EmitterUpdateScript"),
 		TEXT("SpawnRate"), TEXT("SpawnRate"), FloatValue(Rate));
+	// `timescale` is already divided into the staged lifetimes, so there is nothing left to write.
+
 	if (Burst > 0)
 	{
 		if (UNiagaraScript* BurstModule = LoadObject<UNiagaraScript>(nullptr,
@@ -778,95 +904,117 @@ void ConfigureLeaf(
 			WriteInput(Context, Result, System, Emitter, TEXT("EmitterUpdateScript"),
 				TEXT("SpawnBurst_Instantaneous"), TEXT("Spawn Count"), IntValue(Burst));
 		}
+		else
+		{
+			Result.Skipped.Add(FString::Printf(
+				TEXT("%s: burst module missing; the leaf emits by rate only"), *Emitter.ToString()));
+		}
 	}
 
-	// --- Particle Spawn: the leaf's own shape.
+	// --- Particle Spawn: InitializeParticle in its Random lifetime / Direct-set colour /
+	// Non-Uniform sprite size / Random rotation configuration, which the base emitter already
+	// stands in; only the numbers are written here.
 	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBLeaf"), TEXT("Lifetime Min"), FloatValue(Node.LifetimeMinS));
+		TEXT("InitializeParticle"), TEXT("Lifetime Min"), FloatValue(Node.LifetimeMinS));
 	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBLeaf"), TEXT("Lifetime Max"), FloatValue(Node.LifetimeMaxS));
+		TEXT("InitializeParticle"), TEXT("Lifetime Max"), FloatValue(Node.LifetimeMaxS));
+	// The atlas stores normalized half-extents (long axis 0.5), so the unit card is 2 x aspect and
+	// the `size`/`width`/`height` ramps below scale it in centimetres.
 	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBLeaf"), TEXT("Size Cm"),
-		FloatValue(RampScalar(Node.Ramps, TEXT("size_cm"), 1.f)));
+		TEXT("InitializeParticle"), TEXT("Sprite Size"),
+		Vec2Value(FVector2f(2.f * static_cast<float>(Node.SpriteAspect.X),
+			2.f * static_cast<float>(Node.SpriteAspect.Y))));
+	// The tint is the ramp's business now; the initial colour is the white the ramps scale.
 	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBLeaf"), TEXT("Sprite Aspect"),
-		Vec2Value(FVector2f(static_cast<float>(Node.SpriteAspect.X),
-			static_cast<float>(Node.SpriteAspect.Y))));
-	// `red`/`green`/`blue` are already 0..1 on the staged row; `mask` is the alpha ramp.
-	const FLinearColor Tint(
-		RampScalar(Node.Ramps, TEXT("red"), 1.f),
-		RampScalar(Node.Ramps, TEXT("green"), 1.f),
-		RampScalar(Node.Ramps, TEXT("blue"), 1.f),
-		RampScalar(Node.Ramps, TEXT("mask"), 1.f));
+		TEXT("InitializeParticle"), TEXT("Color"), ColorValue(FLinearColor::White));
+	const FVector2f Rotation = RampRange(Node.Ramps, TEXT("rotation_deg"), 0.f);
 	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBLeaf"), TEXT("Color"), ColorValue(Tint));
+		TEXT("InitializeParticle"), TEXT("Sprite Rotation Angle Min"), FloatValue(Rotation.X));
 	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBLeaf"), TEXT("Rotation Deg"),
-		Vec2Value(RampRange(Node.Ramps, TEXT("rotation_deg"), 0.f)));
+		TEXT("InitializeParticle"), TEXT("Sprite Rotation Angle Max"), FloatValue(Rotation.Y));
 
-	// The spherical spawn frame VtMB places a particle in.
+	// The spherical spawn frame VtMB places a particle in. TODO(spherical-offset): `theta` and
+	// `phi` are dropped -- ShapeLocation's sphere is uniform over the ball, which is the right
+	// answer only while both angle ramps are full-range. A leaf with a narrow `phi` (the A5 steam
+	// cone) needs the project's own spherical-offset module.
 	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBSpawnPlace"), TEXT("Radius Cm"),
-		Vec2Value(RampRange(Node.Spawn, TEXT("radius_cm"), 0.f)));
-	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBSpawnPlace"), TEXT("Theta Deg"),
-		Vec2Value(RampRange(Node.Spawn, TEXT("theta_deg"), 0.f)));
-	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBSpawnPlace"), TEXT("Phi Deg"),
-		Vec2Value(RampRange(Node.Spawn, TEXT("phi_deg"), 0.f)));
+		TEXT("ShapeLocation"), TEXT("Sphere Radius"),
+		FloatValue(RampRange(Node.Spawn, TEXT("radius_cm"), 0.f).Y));
 	const FVector3f Offset(
 		RampScalar(Node.Spawn, TEXT("x_cm"), 0.f),
 		RampScalar(Node.Spawn, TEXT("y_cm"), 0.f),
 		RampScalar(Node.Spawn, TEXT("z_cm"), 0.f) + RampScalar(Node.Spawn, TEXT("elevation_cm"), 0.f));
 	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBSpawnPlace"), TEXT("Offset Cm"), Vec3Value(Offset));
+		TEXT("ShapeLocation"), TEXT("Offset"), Vec3Value(Offset));
 
-	// Motion. VtMB's `elevation` is the axial member of the spherical frame and maps onto +Z.
-	const FVector3f Linear(
-		RampScalar(Node.Ramps, TEXT("x_speed_cm_s"), 0.f),
-		RampScalar(Node.Ramps, TEXT("y_speed_cm_s"), 0.f),
-		RampScalar(Node.Ramps, TEXT("z_speed_cm_s"), 0.f));
-	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBMotion"), TEXT("Linear Speed Cm S"), Vec3Value(Linear));
-	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBMotion"), TEXT("Elevation Speed Cm S"),
-		Vec2Value(RampRange(Node.Ramps, TEXT("elevation_speed_cm_s"), 0.f)));
-	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("NM_VtMBMotion"), TEXT("Radial Speed Cm S"),
-		Vec2Value(RampRange(Node.Ramps, TEXT("radius_speed_cm_s"), 0.f)));
+	// Motion. `x/y/z_speed` are velocities in the emitter's basis and `elevation_speed` is world Z;
+	// in a local-space emitter both fold onto the same axis. The base emitter drives AddVelocity's
+	// Velocity through a RandomRangeVector, so one lo/hi pair carries every per-particle roll.
+	const FVector2f SpeedX = RampRange(Node.Ramps, TEXT("x_speed_cm_s"), 0.f);
+	const FVector2f SpeedY = RampRange(Node.Ramps, TEXT("y_speed_cm_s"), 0.f);
+	const FVector2f SpeedZ = RampRange(Node.Ramps, TEXT("z_speed_cm_s"), 0.f);
+	const FVector2f SpeedE = RampRange(Node.Ramps, TEXT("elevation_speed_cm_s"), 0.f);
+	WriteInputPath(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
+		TEXT("AddVelocity"), TArray<FName>({FName(TEXT("Velocity")), FName(TEXT("Minimum"))}),
+		Vec3Value(FVector3f(SpeedX.X, SpeedY.X, SpeedZ.X + SpeedE.X)));
+	WriteInputPath(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
+		TEXT("AddVelocity"), TArray<FName>({FName(TEXT("Velocity")), FName(TEXT("Maximum"))}),
+		Vec3Value(FVector3f(SpeedX.Y, SpeedY.Y, SpeedZ.Y + SpeedE.Y)));
+	// TODO(spherical-offset): `radius_speed` / `theta_speed` / `phi_speed` -- the per-frame
+	// spherical offset around the emitter origin has no stock module and is dropped here.
 
-	// The stock fallback, so a Fountain-shaped emitter still takes the leaf's lifetime and size.
-	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("InitializeParticle"), TEXT("Lifetime"),
-		FloatValue(FMath::Max(Node.LifetimeS, KINDA_SMALL_NUMBER)));
-	const float Size = RampScalar(Node.Ramps, TEXT("size_cm"), 1.f);
-	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("InitializeParticle"), TEXT("Sprite Size"),
-		Vec2Value(FVector2f(Size * 2.f * static_cast<float>(Node.SpriteAspect.X),
-			Size * 2.f * static_cast<float>(Node.SpriteAspect.Y))));
-	WriteInput(Context, Result, System, Emitter, TEXT("ParticleSpawnScript"),
-		TEXT("InitializeParticle"), TEXT("Color"), ColorValue(Tint));
+	// --- Particle Update: the ramps. Each is written twice, once per side of the `lo~hi` roll,
+	// into the curve data interface behind the base emitter's Lerp chain.
+	const TArray<FKey>* Size = FindRamp(Node.Ramps, TEXT("size_cm"));
+	const TArray<FKey>* Width = FindRamp(Node.Ramps, TEXT("width"));
+	const TArray<FKey>* Height = FindRamp(Node.Ramps, TEXT("height"));
+	const TArray<FKey>* Red = FindRamp(Node.Ramps, TEXT("red"));
+	const TArray<FKey>* Green = FindRamp(Node.Ramps, TEXT("green"));
+	const TArray<FKey>* Blue = FindRamp(Node.Ramps, TEXT("blue"));
+	const TArray<FKey>* Colour = FindRamp(Node.Ramps, TEXT("color"));
+	const TArray<FKey>* Mask = FindRamp(Node.Ramps, TEXT("mask"));
+	for (int32 Side = 0; Side < 2; ++Side)
+	{
+		const bool bHi = Side == 1;
+		const TCHAR* SideName = bHi ? TEXT("B") : TEXT("A");
+		WriteInputPath(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
+			TEXT("ScaleSpriteSize"),
+			TArray<FName>({FName(TEXT("Scale Factor")), FName(SideName), FName(TEXT("Vector2Curve"))}),
+			DataInterfaceValue(FString::Printf(TEXT("{\"XCurve\":%s,\"YCurve\":%s}"),
+				*RichCurveJson(Size, Width, bHi), *RichCurveJson(Size, Height, bHi))));
+		// `red/green/blue` are the per-channel tint and `color` the intensity; their product is
+		// VtMB's source colour, which AlphaComposite adds. `mask` is the separate erase term.
+		WriteInputPath(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
+			TEXT("ScaleColor"),
+			TArray<FName>({FName(TEXT("Scale RGB")), FName(SideName), FName(TEXT("VectorCurve"))}),
+			DataInterfaceValue(FString::Printf(
+				TEXT("{\"XCurve\":%s,\"YCurve\":%s,\"ZCurve\":%s}"),
+				*RichCurveJson(Red, Colour, bHi), *RichCurveJson(Green, Colour, bHi),
+				*RichCurveJson(Blue, Colour, bHi))));
+		WriteInputPath(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
+			TEXT("ScaleColor"),
+			TArray<FName>({FName(TEXT("Scale Alpha")), FName(SideName), FName(TEXT("FloatCurve"))}),
+			DataInterfaceValue(FString::Printf(TEXT("{\"Curve\":%s}"),
+				*RichCurveJson(Mask, nullptr, bHi))));
+	}
+	// TODO(refract): the `refract` ramp belongs on MI_ParticleRefract's own RefractAmount, bound
+	// through the renderer's MaterialParameters rather than through a particle attribute.
 
-	// --- Particle Update: collision.
+	// --- Particle Update: collision. TODO(A2): the base emitter carries no Collision module yet,
+	// so these land in Skipped until the A2 (WaterDrops_Timer) pass adds
+	// /Niagara/Modules/Collision/Collision + GravityForce + Drag to it.
 	if (Node.bHasCollide)
 	{
 		WriteInput(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
-			TEXT("NM_VtMBCollide"), TEXT("Bounce"), FloatValue(Node.Bounce));
+			TEXT("Collision"), TEXT("Restitution"), FloatValue(Node.Bounce));
 		WriteInput(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
-			TEXT("NM_VtMBCollide"), TEXT("Friction"), FloatValue(Node.Friction));
+			TEXT("Collision"), TEXT("Friction"), FloatValue(Node.Friction));
 		WriteInput(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
-			TEXT("NM_VtMBCollide"), TEXT("Gravity"), FloatValue(Node.Gravity));
+			TEXT("GravityForce"), TEXT("Gravity"),
+			Vec3Value(FVector3f(0.f, 0.f, -Node.Gravity)));
 		WriteInput(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
-			TEXT("NM_VtMBCollide"), TEXT("Drag"), FloatValue(Node.Drag));
-		WriteInput(Context, Result, System, Emitter, TEXT("ParticleUpdateScript"),
-			TEXT("NM_VtMBCollide"), TEXT("Self"), BoolValue(Node.bSelfCollide));
+			TEXT("Drag"), TEXT("Drag"), FloatValue(Node.Drag));
 	}
-
-	// TODO(ramps): `Elysium.RampSize` / `Elysium.RampColor` / `Elysium.RampMask` /
-	// `Elysium.RampRefract` on `NM_VtMBRamps`, ParticleUpdateScript. Each is a Vector-array data
-	// interface fed the node's keyframes, written as a DataInterfaceValue() whose PropertyValues
-	// carries UNiagaraDataInterfaceArrayFloat3's own array field. Held until `E_VtMBLeaf` declares
-	// the module, because the array field name is the module author's choice, not the engine's.
 }
 
 // One emitter's sprite renderer: the material child the leaf's flags pick, the sprite as a renderer

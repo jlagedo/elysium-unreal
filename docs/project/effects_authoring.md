@@ -61,7 +61,7 @@ tutorial casts and `molotov_emitter` → A10.
 - [x] Generator lane: `pipeline/unreal/make_root_systems.py` + `UElysiumParticleAssetBuilder::BuildRootSystem` compose `NS_<root>` headless from `particleTrees{}`, compile, gate on `IsReadyToRun()`, save to `/Game/ElysiumGenerated/VFX/`. Spike passed 2026-09-03: 21 roots built in 43 s off the stock Fountain template, never opened in the editor; `NS_BarrelFireEmitter` activates on fresh load with particles in all four emitters (`sheets/barrelfire_fountain/`). Still open: ramps and collide→spawn writes, particle-count gate, bake wiring, `E_VtMBLeaf` base emitter.
 - [x] Contact-sheet capture, SIE half: `E:/elysium-work/scratch/effects/sheet.py <NS path> --label X` (pedestal, label, fixed camera, two frames, counts.txt). In-game half still needs a fixed view pose via `elysium_player_teleport` + `elysium_screenshot`.
 - [ ] Black card isolated in the hub (survives TurnOff; screen-space in the tutorial; suspect the depth-test-off material child).
-- [ ] A1 `BarrelFireEmitter` — base emitter, generated system, sheet, verdict.
+- [ ] A1 `BarrelFireEmitter` — base emitter `E_VtMBLeaf` authored (all stock modules, ramps as two curves lerped by `Particles.MaterialRandom`), `NS_BarrelFireEmitter` generated from it (4 emitters, inherited, 0 skipped writes), sheets `sheets/a1_barrelfire_hand/` and `sheets/a1_barrelfire_generated/`. **Awaiting the owner's verdict.**
 - [ ] A5 `SteamRelease_Constant_Emitter`
 - [ ] A8 `SteamRelease_Timer`
 - [ ] A2 `WaterDrops_Timer`
@@ -76,4 +76,8 @@ tutorial casts and `molotov_emitter` → A10.
 
 One entry per archetype: date, root, sheet folder, the owner's words, what changed.
 
-(none yet)
+### A1 `BarrelFireEmitter` — 2026-09-03, pending
+
+- Sheets: `E:/elysium-work/scratch/effects/sheets/a1_barrelfire_generated/sie_20260903T014352_t3s.png`, `_t4s.png`; hand-set reference `sheets/a1_barrelfire_hand/sie_20260903T013509_t3s.png`.
+- Known before the verdict: `Fire_Heat` (refraction card) draws nothing yet, its `refract` ramp is a material parameter not bound; the smoke reads as a dark blob against the witness wall (ten `mask 0.235` cards compounding), which is the faithful blend and would read as a soft dark plume in a night alley; no spherical-offset motion yet (not needed for A1).
+- Owner's words: (pending)

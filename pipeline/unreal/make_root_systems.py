@@ -50,10 +50,18 @@ DEFAULT_STAGED = "E:/elysium-work/scratch/effects/staged.json"
 
 
 def _argument(name, default=None):
+    """`-Name=value` off the editor's own command line.
+
+    Under `-run=pythonscript` `sys.argv` carries only the script path; the arguments given to
+    UnrealEditor-Cmd are on `FCommandLine`, so both are scanned (a bare `-Name` counts as "1").
+    """
     prefix = "-%s=" % name
-    for token in sys.argv:
+    tokens = list(sys.argv) + unreal.SystemLibrary.get_command_line().split()
+    for token in tokens:
         if token.startswith(prefix):
-            return token[len(prefix):]
+            return token[len(prefix):].strip('"')
+        if token == "-%s" % name:
+            return "1"
     return default
 
 
@@ -136,17 +144,22 @@ def _report(label, result, saved):
         unreal.log_error("[root-systems] %s   %s" % (label, error))
 
 
+def _remove_stale(asset_name):
+    """Delete a previous run's `NS_<root>.uasset` from disk, before the editor loads it."""
+    relative = PACKAGE.split("/Game/", 1)[-1]
+    path = os.path.join(unreal.Paths.project_content_dir(), relative, asset_name + ".uasset")
+    if os.path.isfile(path):
+        os.remove(path)
+
+
 def _build(asset_name, tree, ticks):
     """Author, compile, gate and save one root. Returns True when the asset landed."""
     asset = "%s/%s" % (PACKAGE, asset_name)
-    # `load_asset` rather than `does_asset_exist`: the latter asks the asset registry, which a
-    # commandlet has not scanned, so a package written by a previous run reads as missing and the
-    # create below lands on top of it.
-    if unreal.load_asset(asset) is not None:
-        _drain()
-        unreal.EditorAssetLibrary.delete_asset(asset)
-    # Loaded after the delete: that delete collects garbage, and the base emitter must be a live
-    # object when the builder reads it.
+    # A previous run's package is removed from disk before anything loads it. Loading it and
+    # force-deleting through `EditorAssetLibrary` crashed the commandlet (the asset compiler still
+    # owned the package's scripts), which is the same crash that kept the legacy lane behind
+    # `--particles`; a package nobody has loaded is just a file.
+    _remove_stale(asset_name)
     base, fallback = _base_emitter()
     if fallback:
         unreal.log_warning(
