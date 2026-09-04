@@ -165,7 +165,9 @@ public:
 	// `AElysiumMapActor::UpdatePlayerWater`: `CheckWater`'s level 0-3 and the surface plane of the
 	// volume it settled on, in cm. A push rather than a query because the camera reaches only its
 	// owner and the water volumes belong to the map actor; `(0, 0)` is "dry", which is what a map
-	// with no water, a dry body and a frame with no map actor all write.
+	// with no water and a dry body both write. A frame with no player body (or a map outside
+	// `Active`) pushes nothing at all and the component keeps its last state -- harmless, because
+	// the camera it would write to is the one that went away with the body.
 	void SetWaterState(int32 Level, float SurfaceZCm)
 	{
 		WaterLevel = Level;

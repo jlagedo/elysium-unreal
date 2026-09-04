@@ -20,7 +20,9 @@ Status of any runtime or bake work lives only in `docs/project/roadmap.md`.
 108 maps, 11,627 VMTs):
 
 - the water VMT inventory and key census;
-- the 25 maps that carry `LEAFWATERDATA` and `CONTENTS_WATER` brushes;
+- the 25 maps that carry `LEAFWATERDATA` (24 with a drawable water brush, 22
+  with the `Water` shader on that brush — the counts diverge by feature, not
+  by disagreement) and `CONTENTS_WATER` brushes;
 - the two readable `ps.1.1` programs `materials/dxshaders/waterreflect.psh` and
   `waterrefract.psh`;
 - the compiled combo set under `shaders/fxc/` and `shaders/psh/`
@@ -159,10 +161,20 @@ both RT slots, and sets both cheap distances to 0 (always cheap). Most
 expensive-shaped: they name both RTs and do not set `$forcecheap`.
 `dev/ocean` is reflection-RT only (refract commented out, `$fogenable 0`).
 
-Whether a given retail config actually fills the RTs or falls through to
-cheap is a live-frame fact (no capture in this survey). The *authored
-intent* on the sewer / warren / pool set is expensive water with a cheap
-distance LOD that cannot be forced off.
+**Corrected:** the earlier text here called this a live-frame uncertainty —
+whether a retail config actually fills the RTs, or a runtime distance LOD
+quietly swaps it for the cheap cubemap. Neither read holds. Nothing in the
+shipped binaries gates the RT fill on distance, frame budget or a video
+setting: `$forcecheap` is a **material author's** choice (VMT-authored,
+one bit, baked at content time), not a runtime level-of-detail system a
+config or a distance query can flip. An expensive-shaped material — both
+RTs named, `$forcecheap` unset — fills them **unconditionally**, every frame
+it draws, regardless of distance from the camera; the `$cheapwaterstart/
+enddistance` pair Water_Old also reads is a *blend weight* for the cubemap
+overlay on top of that expensive result (item 4 above), not a switch that
+turns the RT fill off. The sewer / warren / pool set is therefore not
+"expensive with a cheap LOD fallback" — it is expensive, unconditionally,
+with the cubemap always blended in by distance on top.
 
 ### LightmappedGeneric that only looks like water
 
@@ -201,7 +213,12 @@ surface names `dev/dev_waterbeneath2`, which is itself a full `Water` shader
 (RTs, normal, DUDV, cheap-distance 500/1000) whose `$bottommaterial` is
 *itself*. Face counts on the water maps are nearly 1:1 between the top
 material and `maps/<map>/dev/dev_waterbeneath2`. The view from under the
-plane is a second water surface, not the backface of the top.
+plane is a second water surface, not the backface of the top — but it is
+never a *reflective* one: face loading strips the reflection render target
+from every downward-facing water face before the renderer ever gets to it
+(`Mod_LoadFaces`, `$reflecttexture` set undefined on load), so the underside
+draws refraction and fog only, with no planar reflection pass to strip at
+draw time.
 
 `dev/dev_waterbeneath` (shader name `WaterSurfaceBottom`) is Unofficial
 Patch only. No stdshader DLL registers that class; the vanilla underside
@@ -210,6 +227,15 @@ is `dev_waterbeneath2`.
 `$abovewater` is not authored on any of these VMTs. `$waterdepth` is not
 on the authored VMTs either; VBSP writes it into the map-local PAK
 instances (`$waterdepth N` inside a `patch { include … }`).
+
+VBSP does not restrict the `$bottommaterial` pairing to the water plane's top
+face: every side of a `%compilewater` brush — top, sides and floor alike —
+compiles its own `$bottommaterial` face, not just the one the player looks
+up at from below. The near-1:1 top-vs-underside face count quoted above is
+therefore a lower bound on the pairing, not a description of "one underside
+face per top face"; a multi-sided brush (a stepped canal bed, a sloped
+warrens basin) carries as many `dev_waterbeneath2` faces as it has non-top
+sides.
 
 ---
 
@@ -255,6 +281,13 @@ unconditionally and it is **all zeros** on most maps. Real distances appear
 on `sm_pier_1` (534 nonzero), `hw_warrens_2b` and `hw_warrens_4`.
 `sm_beachhouse_1` is all `0xFFFF` (no volume). `WATEROVERLAYS` (lump 50)
 is empty on every map.
+
+The lump is written and never read: no function in `vampire.dll`,
+`client.dll` or `engine.dll` loads lump 46 at all. It is HL2 compiler
+provenance carried through unused, not a distance hint any live system
+consults — nothing in the water path (fog selection, LOD, the reflection
+blend) is derived from it. The plane and depth a leaf sees come from
+`surfaceTexInfoID` on `LEAFWATERDATA` itself, never from this lump.
 
 ### Map-local PAK instances
 
@@ -362,7 +395,10 @@ comments.
 Compiled combos Water_Old actually names: expensive `WaterReflect_old` /
 `WaterRefract_old` / `WaterWarp_old` (and `*_ps20_old` on DX9-inside-Water_Old);
 cheap `WaterCheap_ps11` / `WaterCheap_vs11` (and `*_ps20_old`). The later
-`water_ps20.vcs` / `watercheap_ps20.vcs` on disk have no registering class.
+`water_ps20.vcs` / `watercheap_ps20.vcs` on disk have no registering class —
+the `_old`-suffixed `ps20` combos are the ones that actually run on DX9
+hardware, still inside Water_Old; the SDK-shaped one-pass `water_ps20.vcs`
+sitting beside them on disk is unused payload, not a second live path.
 
 `WaterCheap_ps11` (no shipped `.psh`; the Bloodlines-SDK file of the same
 name matches the program Water_Old binds) is:
@@ -378,14 +414,40 @@ lrp r0.rgb, t1.a, r0, c0    ; lerp(fogcolor, cube·tint, fresnel)
 `ViewDrawScene` (`client.dll` `FUN_1019b370`) picks
 `ViewDrawScene_EyeAboveWater`, `ViewDrawScene_EyeUnderWater`,
 `ViewDrawScene_WaterDX7`, or `ViewDrawScene_NoWater` (`mat_drawwater` off).
+The fog mode applied under the plane (`FogMode(LINEAR)` before the
+below-water draw, `FogMode(0)` after) is chosen by the **caller** —
+`ViewDrawScene_EyeUnderWater` itself — not authored per volume; every
+`LEAFWATERDATA` row gets the same linear-fog treatment regardless of what
+the material's own `$fogenable` says the *surface* pass should do, because
+the surface pass and the underwater fog pass are different code paths
+reading the same fog keys.
+
 `GetWaterOffset` (`FUN_10190900`) walks the view origin in 1-unit Z steps
-against `MASK_WATER` when `m_nWaterLevel > 1`, using `cl_waterdist`:
-downward at level 2 (keep the camera out of the volume while treading),
-upward at level 3 (keep it just under). `mat_waterswirl`,
-`mat_wateroverlaysize`, `dsp_water` and `WaterWarp_old` are the warp /
-overlay / muffled-audio knobs. Their exact composite is not decompiled;
-the *intent* of an underwater view that is not just "the same scene,
-tinted" is engine-real.
+against `MASK_WATER` when `m_nWaterLevel > 1`, using `cl_waterdist` (4 in):
+**upward at level 2**, out of the volume — treading water, the eye rises
+clear of the plane and stays dry — and **downward at level 3**, back into
+it — submerged, the eye is pushed under the plane and stays wet. (Corrected:
+an earlier pass at this section had the two directions backwards.)
+`mat_waterswirl` is a CPU-side per-vertex swirl of the plane normal
+(amplitude 0.02, applied to the water mesh's vertices before the pixel
+shaders run — not a shader term at all); `mat_wateroverlaysize` and
+`WaterWarp_old` are the overlay-card and warp-strength knobs on the same
+pass. `dsp_water` selects a fixed DSP preset (14) whenever the water level
+reaches 3 (submerged), muffling audio for the underwater view the same way
+the fog mutes the picture. The exact per-frame composite of warp, overlay
+and DSP is not decompiled (`Water_Old`'s C++ draw call sits behind an
+unresolved vtable slot); the *intent* of an underwater view that is not
+just "the same scene, tinted" is engine-real and each individual knob's
+identity now is too.
+
+`GetVisibleFogVolume` (`engine.dll` `CVRenderView::GetVisibleFogVolume`,
+`FUN_20081390`) is not a PVS walk. It descends the map's plane tree from the
+view point — one dot-product-and-branch per node — straight to the leaf
+that contains it, then reads that leaf's `leafWaterDataID` directly. "Which
+volume is active" is a point-location query against the BSP, not a
+front-to-back visibility search over candidate volumes; a view point is in
+at most one leaf, so it is in at most one fog volume, full stop — there is
+no tie-break to infer.
 
 ---
 
@@ -406,7 +468,7 @@ These are not the water surface. They land *on* it or dress a basin.
 | `warrens_tube_water_emitter` | scripted tube (targetname `scene_water`) | warrens |
 | `sprinkler_emitter` | fire-sprite jets (targetname `sprinkler_water`) | a later map, not the current export set |
 | `pipe_water` / `pipedripspour_emitter` / `pipedripstrickle_emitter` | pipe leak | authored, not map-counted here |
-| `WaterBigSplash` / `WaterSplash` / `Splash` | impact bursts | ready for a body entering water; not auto-placed |
+| `WaterBigSplash` / `WaterSplash` / `Splash` | impact bursts | defined and ready, but nothing calls them: `CheckWater`'s level transitions and `WaterMove` never fire a splash effect on entry. VtMB itself is silent when a body crosses the plane |
 | `Andrei_Splash_*` | boss dive | theatre, not a map water system |
 | `rainsplash` / `rainsplash_new` | rain on ground / water | weather |
 
@@ -452,6 +514,25 @@ stand; the accel tail and the jump pair are no longer unread.
 the toss/fly path. Animation selects `ACT_SWIM` / `ACT_TREADWATER` from
 level (`docs/vtmb/animation_and_movers.md`).
 
+**NPCs get a water level too, off a different caller.** Every non-player
+entity that steps physics through `PhysicsStepRunTimestep`
+(`CBaseEntity::PhysicsStepRunTimestep`, `FUN_1003b190`) calls
+`PhysicsCheckWater` directly at the top of the timestep — not through
+`CGameMovement` at all — and reads `m_nWaterLevel` a few lines later to
+decide whether to apply gravity that tick. This is the entity substrate's
+own path into the same three-point classification the player uses; any
+`MOVETYPE_STEP` NPC standing in a canal gets a real, ticked water level,
+independent of whether the player ever notices the volume.
+
+**No drowning.** `CBasePlayer` carries a full drown kit —
+`m_AirFinished`, `m_idrowndmg`, `m_idrownrestored`, `m_nDrownDmgRate` — set
+once at spawn (`this->m_AirFinished = fVar1; this->m_nDrownDmgRate = 2;`)
+and otherwise touched only by the save/debug dumper. Nothing in the
+decompiled corpus reads `m_AirFinished` back against the clock to apply
+drowning damage; the HL2 mechanic's data fields survive, the tick that
+would consume them does not exist. A vampire does not need to breathe, and
+the code agrees: staying at level 3 has no time limit.
+
 What the map census adds:
 
 - The *volumes exist* on 25 maps, including three already-exported ones.
@@ -496,14 +577,28 @@ LightmappedGeneric-vs-`Water` distinction (a compilewater LMG and a real
 
 ## Open questions
 
-- Does a retail frame of `sewer_water` actually fill `_rt_WaterReflection`,
-  or does the config fall through to the cheap cubemap? `mat_showwatertextures`
-  on `sm_hub_1` / `hw_warrens_2` answers it.
-- Water_Old C++ `SHADER_DRAW` pass order (inferred, not decompiled).
-- Exact `WaterWarp` / `mat_waterswirl` / `dsp_water` composite when
-  `waterlevel == 3`.
-- How `GetVisibleFogVolume` / `CWaterEnum` pick the active plane when a
-  map has several `$waterdepth` instances (`hw_warrens_2` has twelve).
-- Reachability of the three exported water planes (walk in, clip, or kill).
+**Resolved since the last pass** (kept here only as a pointer, not a
+question): whether the RT fill is config-gated — it is not, expensive
+water fills unconditionally and `$forcecheap` is an author's binary choice,
+not a distance LOD (see "Expensive vs cheap" above); which plane
+`GetVisibleFogVolume` picks when a map authors several `$waterdepth`
+instances — it is a point-location descent to the containing leaf, and
+each leaf's own `surfaceTexInfoID` already names its exact patched
+material, so there is no runtime "several instances, one wins" contest to
+resolve.
+
+- Water_Old C++'s own `SHADER_DRAW` dispatch and pass order is still
+  inferred from program names and same-era DX80 conventions, not
+  decompiled — the call sits behind an unresolved vtable slot.
+- The exact per-frame composite of `WaterWarp_old`, the `mat_waterswirl`
+  vertex swirl and the `dsp_water` preset switch at `waterlevel == 3`:
+  each knob's identity and rough shape is now known (see "Underwater
+  view" above), but not how they combine into one frame.
+- Reachability of the three exported water planes (walk in, clip, or
+  kill) — `sm_pier_1`'s suspected ocean-kill `trigger_hurt` still wants
+  its brush hull read.
 - Whether LMG `cheap_water` / `blackwater` bind the bumpmapped-envmap
   program (that one *has* Fresnel; the unbumped envmap path does not).
+- Whether `mat_showwatertextures` on a captured frame confirms the RT
+  fill visually (the code path is no longer in question; a frame capture
+  would only add a picture to a fact already read from the binary).

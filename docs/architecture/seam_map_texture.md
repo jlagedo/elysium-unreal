@@ -607,7 +607,9 @@ vtmb:texture:<dir>/<stem>  ->  /ElysiumBaked/Textures/<dir>/T_<safe stem>       
 
 `<dir>` is the unit's directory below `materials/`, kept as package folders; `<safe stem>` is
 `asset_names.safe_name` over the file stem. The exact original path lives in the provenance, so
-folding is never a loss. The legacy `/ElysiumBaked/Shared/Textures` package is not touched by
+folding is never a loss. This is the mount-mirrors-`exports_v2` rule every kind follows
+(`seam_map_unit_contract.md` → "Baked assets"); the sky cubes composed from `skybox/` faces
+land at `Textures/skybox/TC_<sky>` under the same rule (R8.0). The legacy `/ElysiumBaked/Shared/Textures` package is not touched by
 this lane; the material slice deletes it once no material references it.
 
 ### Two phases, one command

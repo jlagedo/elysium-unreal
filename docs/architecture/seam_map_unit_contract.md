@@ -315,3 +315,67 @@ member's capsule is present, the declared length and the declared digest.
 Cross-unit consistency — an inheritance chain, a model's include tree, a map's material closure —
 is a corpus property checked by the corpus index (`seam_map_corpus_index.md`), not something one
 unit can be validated against.
+
+## Baked assets
+
+Every unit kind that lands as Unreal content lands under one mount, `/ElysiumBaked`, and **the
+mount mirrors `exports_v2`**: the kind root, the unit's directory, the unit's name. One rule,
+stated once here and cited by every seam's `## Import`; a seam states only its prefixes and roles.
+
+```text
+exports_v2/<kind>/<dir>/<base>.glb  ->  /ElysiumBaked/<Kind>/<dir'>/<Prefix>_<base'>[_<Role>]      the unit's products
+                                        /ElysiumBaked/<Kind>/<dir'>/<base'>/<Prefix>_<label'>       per-label products
+                                        /ElysiumBaked/<Kind>/_Corpus/<Prefix>_<name>                corpus-wide, no single unit
+```
+
+- **`<Kind>`** is the export root in PascalCase — `Textures`, `Materials`, `Models`,
+  `SurfaceProperties`, `Maps`, `ExpressionTables`, `Sounds`, `Particles`, `Scenes`, … Nothing
+  else sits at the mount root.
+- **Folding.** `<dir'>`, `<base'>` and `<label'>` are the source segments through
+  `asset_names.safe_name` (C++ twin `FElysiumContentPaths::SafeName`), one segment at a time.
+  The exact source path lives in the provenance, so folding is never a loss. A source segment
+  that begins with `_` is refused (`_Corpus` is reserved; no VtMB directory begins with one). A
+  resulting file path longer than 240 characters is refused at stage.
+- **`<Prefix>`** names the Unreal class: `T_`/`TC_`/`TA_` textures, `MI_` material instances,
+  `SM_`/`SK_`/`SKEL_`/`A_`/`BS_`/`CLOTH_`/`PHYS_`/`DYN_` model products, `PM_` physical
+  materials, `DA_` data assets. A level carries no prefix: `Maps/<map>/<map>.umap`.
+- **`<Role>`** distinguishes two products of one unit that share a class: `_linear`, `_Decal`,
+  `_Skinned`, `_Sprite_<Blend>`, `_DetailSway`, `_<n>` for the n-th garment, `_PHYS` for a
+  cloth collider. Where the prefix already differs there is no role.
+- **Per-label products** — a model's clips and blend spaces, a map's chunk meshes, brushes and
+  captures — nest one level, in a folder named for the unit's base. A label folds like a
+  segment; a derived host form is `<layer>_<host>`.
+- **Corpus-wide** assets that are a function of a set of units and of none in particular —
+  family skeletons, the registries, a lane's placeholders — live in `<Kind>/_Corpus/`, named for
+  what they are: `SKEL_Family_<crc32 of the sorted member ids>`, `DA_PropSkins`,
+  `DA_WieldModels`, `DA_PlacedModels`, `DA_CinematicSets`, `DA_Cast`, `DA_ExpressionTables`,
+  `SM_Missing`, `MI_Missing`, `T_MissingChecker`.
+- **Composed from several units of one kind** with a common directory — a sky cube from six
+  faces — the composite lands in that directory, named for the composite:
+  `Textures/skybox/TC_<sky>`.
+- **One resolver.** `elysium_pipeline.asset_paths.baked_path(kind, key, prefix, role=None,
+  label=None)` and `FElysiumContentPaths::BakedUnit(...)` are twins over one golden fixture that
+  covers every kind, every prefix and role, the folded segments and the per-label nest; each
+  `Baked<Kind>(id)` accessor is a one-line call into it. A consumer resolves from the **unit id**,
+  built from the raw source path it already holds (`vtmb:model:` + the path below `models/`
+  without `.mdl`); no consumer recomputes a stem. `static_stem`, `PropModelStem`, `mesh_asset`,
+  `texture_asset_name`, `baked_asset_name` and every stem-keyed accessor retire.
+- **Keyed tables key by id.** `DA_PropSkins`, `DA_WieldModels`, `DA_PlacedModels`, the
+  registries and the authored tuning assets that name a body (`DA_ClothTuning`,
+  `DA_HairDynamics`) key their rows by unit id. A human-facing stem — a capture, an oracle file, a
+  debug picker, a CLI argument — resolves through `Models/_Corpus/DA_Cast` (stem ↔ id, written by
+  the model lane's stage), never through a fold.
+- **Provenance** on every asset carries `AssetId`; the asset-registry tag makes the id searchable
+  without loading the asset.
+- **Generated, not baked**, stays under `/Game/ElysiumGenerated`: the masters, `NS_<root>`, the
+  boot map, the lookdev map, the sky dome mesh and material.
+- **Landing.** A lane writes its own kind root and nothing else. The legacy roots — `Shared/`,
+  `Characters/`, `Props/`, `Items/`, `Meshes/`, `Sprites/`, `Sky/`, `Lookdev/`, the per-map folders
+  at the mount root — receive nothing new and are deleted by the task that retires their producer.
+  "Beside, not over" was the rule while two producers had to coexist for a bisect; under one
+  resolver the roots differ by kind, not by lane, and coexistence is per unit through the
+  producer-assignment list of `docs/project/characters_r8.md` → D5.
+
+Adopted 2026-09-04 (`docs/project/characters_r8.md` → D1); the lanes that drift from it —
+models (flat `Meshes/SM_<stem>`), maps (at the mount root), sprites, detail instances, sky,
+lookdev, the placeholders — move in R8.0, and every later lane lands on it.

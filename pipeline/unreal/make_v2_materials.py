@@ -2174,7 +2174,26 @@ def _build_underwater(mat):
     scene = g.node(unreal.MaterialExpressionSceneTexture, -900, -200)
     scene.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
     scene_rgb = g.mask(scene, "rgb", -700, -200, src_out="Color")
-    depth = g.node(unreal.MaterialExpressionSceneDepth, -900, 200)
+
+    # Depth through `SceneTexture:SceneDepth`, not the bare `SceneDepth` node: the engine's own
+    # `M_UnderWater_PostProcess_Volume` (Water plugin, the shipped precedent ruling D cites)
+    # carries no `MaterialExpressionSceneDepth` at all and reads its depth this way.
+    #
+    # Witnessed 2026-09-04 (`water-architecture.md` section 11): the fog is applied, and on the two
+    # converted maps it is nearly invisible *by the authored numbers*, not by a defect. The
+    # underside surface writes its own depth, so every pixel that sees the above-water world
+    # through the plane fogs at the plane's distance -- 20 cm overhead, one to three metres along
+    # the rows just above the horizon -- against a 2,600 cm range, which is also what VtMB's pass
+    # 2 does to the surface it draws. The below-water world fogs by its true depth, and in a
+    # 50 cm canal that is a hand's breadth of floor. The proof was a red 1 m override through the
+    # map's unbound volume at a priority above the water volume's: the whole below-plane band went
+    # red at once. Below the water volume's priority the same override changed nothing, because
+    # the engine merges every blendable of one material into one node and the higher-priority
+    # values win -- the trap the first witness fell into. Deep basins (`hw_warrens_*`,
+    # `la_hub_1`) are where the volume fog becomes a look.
+    depth_texture = g.node(unreal.MaterialExpressionSceneTexture, -900, 200)
+    depth_texture.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_SCENE_DEPTH)
+    depth = g.mask(depth_texture, "r", -700, 200, src_out="Color")
 
     fog_color = g.vec4(P.Vectors.FogColor, (0.0, 0.0, 0.0, 1.0), -900, 0)
     fog_color_rgb = g.mask(fog_color, "rgb", -700, 0, src_out="RGBA")

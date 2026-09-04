@@ -1172,7 +1172,7 @@ def resolve_material_table(
     return table
 
 
-def _unit_parameters(read_sidecar, unit_key: str) -> dict[str, str]:
+def _unit_parameters(read_sidecar, unit_key: str) -> dict[str, str] | None:
     """One material unit's authored VMT keys, its base's first and every patch delta over them.
 
     A PAKFILE-patched unit's provenance carries only its own delta -- `maps/ch_fulab_1/water/
@@ -1180,10 +1180,16 @@ def _unit_parameters(read_sidecar, unit_key: str) -> dict[str, str]:
     four fog keys are reachable only through `patchBase`. The walk and its `hops > 8` guard are
     `resolve_material_table`'s; a chain that leaves the staging tree stops where it stops and a key
     nobody authored is simply absent, which is `SetFogVolumeState`'s own answer for it.
+
+    `None` is "the material lane staged no document for this unit", which is the only case an
+    operator can fix by re-running the lane; `{}` is a staged unit that authors none of these keys,
+    which is `_water_fog`'s `fogEnable: false` and not an error.
     """
 
     chain: list[dict[str, Any]] = []
     document = read_sidecar(unit_key)
+    if document is None:
+        return None
     hops = 0
     while document is not None:
         chain.append(document)
@@ -1199,6 +1205,24 @@ def _unit_parameters(read_sidecar, unit_key: str) -> dict[str, str]:
         for row in document.get("parameters") or []:
             values[str(row.get("key") or "").lower()] = str(row.get("value") or "")
     return values
+
+
+def _memoized_unit_parameters(read_sidecar):
+    """`_unit_parameters` with one walk per unit key per map.
+
+    Every non-bevel side of every `CONTENTS_WATER` brush asks the same question, and the content bit
+    is deliberately wide (the `tools/tools_shadow` casters carry it), so the uncached reader re-walks
+    -- and re-reads from disk -- one or two sidecars per side across the whole shadow-caster set.
+    """
+
+    cache: dict[str, dict[str, str] | None] = {}
+
+    def lookup(unit_key: str) -> dict[str, str] | None:
+        if unit_key not in cache:
+            cache[unit_key] = _unit_parameters(read_sidecar, unit_key)
+        return cache[unit_key]
+
+    return lookup
 
 
 def _water_fog(values: dict[str, str]) -> dict[str, Any]:
@@ -1217,7 +1241,7 @@ def _water_fog(values: dict[str, str]) -> dict[str, Any]:
     }
 
 
-def _water_brushes(units: sidecars.MapUnits, read_sidecar) -> list[tuple[float, WaterBrush]]:
+def _water_brushes(units: sidecars.MapUnits, unit_parameters) -> list[tuple[float, WaterBrush]]:
     """Every `CONTENTS_WATER` brush a `%compilewater` side proves is water, paired with the Unreal
     height of its horizontal top plane -- the key a `LEAFWATERDATA` row joins on.
 
@@ -1243,10 +1267,11 @@ def _water_brushes(units: sidecars.MapUnits, read_sidecar) -> list[tuple[float, 
         for side in sides:
             if int(side["bevel"]):
                 continue
-            material = sidecars._face_material(units, side)
-            if material is not None and COMPILE_WATER_KEY in _unit_parameters(
-                    read_sidecar, material):
-                compiles_water = True
+            if not compiles_water:
+                # One side proves the brush; the rest are here only for their planes.
+                material = sidecars._face_material(units, side)
+                values = unit_parameters(material) if material is not None else None
+                compiles_water = values is not None and COMPILE_WATER_KEY in values
             row = plane_rows[int(side["plane"])]
             normal = row["normal"]
             # The unit publishes planes in the glTF frame; `gltf_position_to_unreal`'s permutation
@@ -1307,8 +1332,9 @@ def resolve_water_volumes(
             tex_info,
         ))
 
+    unit_parameters = _memoized_unit_parameters(read_sidecar)
     by_row: dict[int, list[WaterBrush]] = {index: [] for index, _z, _min, _tex in kept}
-    for top, brush in _water_brushes(units, read_sidecar):
+    for top, brush in _water_brushes(units, unit_parameters):
         for index, surface_z, _min_z, _tex_info in kept:
             # Lump order decides a tie: a brush stands in exactly one volume, and two records that
             # close on one height are one body of water read twice.
@@ -1322,10 +1348,12 @@ def resolve_water_volumes(
             dropped.append({"index": index, "reason": "no water brush"})
             continue
         material = sidecars._face_material(units, {"texInfo": tex_info})
-        values = _unit_parameters(read_sidecar, material) if material is not None else {}
-        if not values:
+        values = unit_parameters(material) if material is not None else None
+        if values is None:
             # The volume's whole underwater look is these four keys; an unstaged unit would ship a
-            # clear-water volume that nothing in the log explains.
+            # clear-water volume that nothing in the log explains. A unit that *is* staged and
+            # authors none of them is not that case -- `$fogenable` absent is `fogEnable: false`,
+            # which is `SetFogVolumeState`'s own answer and `_water_fog`'s.
             unstaged.append(material or f"texinfo {tex_info}")
             continue
         volumes.append(WaterVolume(

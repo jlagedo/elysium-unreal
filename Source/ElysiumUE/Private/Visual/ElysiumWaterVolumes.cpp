@@ -1,7 +1,6 @@
 #include "ElysiumWaterVolumes.h"
 
 #include "ElysiumFog.h"
-#include "ElysiumSurfaceParams.h"
 
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
@@ -208,24 +207,19 @@ int32 AElysiumWaterVolumes::UpdateViewPostProcess(const FVector& ViewLocationCm)
 {
 	const int32 Volume = FindVolumeAt(ViewLocationCm);
 	Properties.bIsEnabled = Volume != INDEX_NONE;
-	if (Volume == INDEX_NONE || UnderwaterMID == nullptr)
+	if (Volume == INDEX_NONE)
 	{
 		return Volume;
 	}
 
-	// The same triple the scene fog and the decals take (`ElysiumFog::Pack`): the authored colour
-	// decoded, the start in cm, and the inverse range that reads as 0 — unfogged — for a volume
-	// whose `$fogenable` is off or whose range is degenerate.
+	// One packer, one application: the underwater master declares the same three
+	// `ElysiumSurfaceParamsDecal` names the decal master does, so this is `ApplyToDecalMID`'s
+	// write verbatim -- the authored colour decoded, the start in cm, and the inverse range that
+	// reads as 0 (unfogged) for a volume whose `$fogenable` is off or whose range is degenerate.
+	// It null-checks the MID, which is the other half of the early return above.
 	const FElysiumWaterVolume& Row = Volumes[Volume];
-	TArray<float> Fog;
-	ElysiumFog::Pack(Row.bFogEnabled, Row.FogColor, Row.FogStartCm, Row.FogEndCm, Fog);
-	UnderwaterMID->SetVectorParameterValue(ElysiumSurfaceParamsDecal::Vectors::FogColor,
-		FLinearColor(Fog[ElysiumFog::SlotColor + 0], Fog[ElysiumFog::SlotColor + 1],
-			Fog[ElysiumFog::SlotColor + 2], Fog[ElysiumFog::SlotColor + 3]));
-	UnderwaterMID->SetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogStart,
-		Fog[ElysiumFog::SlotStart]);
-	UnderwaterMID->SetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogInvRange,
-		Fog[ElysiumFog::SlotInvRange]);
+	ElysiumFog::ApplyToDecalMID(
+		UnderwaterMID, Row.bFogEnabled, Row.FogColor, Row.FogStartCm, Row.FogEndCm);
 	return Volume;
 }
 

@@ -17,7 +17,7 @@ calls the same task **R7.1** — one task, two ids).
 ## 1. The R7.1 ruling (2026-09-04)
 
 **Presentation is modernized. Authored placement, parameters and the volume are reproduced.**
-Nine rulings, each a transcription unless it says *named modernization*.
+Ten rulings, each a transcription unless it says *named modernization*.
 
 | # | Ruling | In one line |
 |---|---|---|
@@ -29,7 +29,8 @@ Nine rulings, each a transcription unless it says *named modernization*.
 | **F** | **`$forcecheap` is a look, not a LOD**: `CheapWater` multiplies the extinction by 16 (the body reads as its `$fogcolor` at any depth, which is what `lerp(fogcolor, cube, fresnel)` draws) and leaves the reflection to Lumen | *named modernization*: the cheap cubemap is replaced by the same Lumen mirror the expensive path uses |
 | **G** | **`leafMinDist[]` is provenance.** The engine never loads lump 46; nothing is derived from it | fact, not a choice |
 | **H** | **No scene-fog term on the water surface.** The R6 follow-up ("`ElysiumFog` term on `M_V2_Water`") closes as *not on this master*: the refracted world and the Lumen mirror already carry their own per-primitive fog; the surface's own scatter and specular are unfogged (§9) | *named modernization* — VtMB draws the surface under the world fog |
-| **I** | **Out of R7.1**: drips, mist, splashes (R7.3 families — and VtMB itself spawns no splash on entry), `dsp_water` (preset 14 at level 3) and wade footsteps (`plans/audio.md`), NPC water levels (`PhysicsCheckWater` on `MOVETYPE_STEP`, the entity substrate's), the `trigger_hurt` pools (already entities). The camera's `GetWaterOffset` step is the one open owner call (§7) | scope |
+| **I** | **Out of R7.1**: drips, mist, splashes (R7.3 families — and VtMB itself spawns no splash on entry), `dsp_water` (preset 14 at level 3) and wade footsteps (`plans/audio.md`), NPC water levels (`PhysicsCheckWater` on `MOVETYPE_STEP`, the entity substrate's), the `trigger_hurt` pools (already entities) | scope |
+| **J** | **`sm_pier_1`'s surf cards slide on a new `SineUVTranslate` vector.** `M_V2_Lit`/`M_V2_LitTranslucent` gain `(ampU, ampV, offU, offV)`, default `(0,0,0,0)`; the stage resolves a `sine` → `texturetransform` chain into it (two-pass: record the `sine`'s `$temp*` result, then consume it at the `texturetransform` that reads it back), and the graph feeds it to the base-texture panner only, ahead of the bump panner | transcription of the `objects/surf` wave proxy (17 cards, two 15 s sine chains) |
 
 The one knob: `WaterFogScale` on the **Surfaces** settings page, pushed into
 `MPC_ElysiumSurfaces` like every other, default **2·ln 2 ≈ 1.386** — the value at which SLW's
@@ -101,6 +102,14 @@ the shading model does not require it (§8).
 Numbers stay authored on the instance (the pin table is unchanged but for `Underside`); the
 translation happens in the graph.
 
+`Underside` is read straight off the unit's own **VMT provenance rows** (`$bottommaterial`), not
+`params.material_refs`: the GLB decoder emits a `dependencies[]` row only for a texture-shaped
+value, so `$bottommaterial` reaches no dependency on any of the 26 units that author it (measured
+on the corpus) and a `material_refs` lookup was dead. The switch is true when the authored value,
+normalised (`\`→`/`, `.vmt` stripped, case-folded), equals the unit's **own** material key —
+`dev/dev_waterbeneath2` names itself, so it is its own underside — false otherwise, and unset on a
+patched depth instance whose provenance carries only its `insert` delta.
+
 | Source | SLW / material input | Graph |
 |---|---|---|
 | `$fogcolor` (authored /255), `$fogstart`, `$fogend` (Source inches) | **Absorption / Scattering Coefficients** (1/cm) | `range = max((FogEnd − FogStart) × 2.54, 1)`; `σ = WaterFogScale / range`; `c = pow(FogColor.rgb, 2.2)` (the same decode `ElysiumFog::DecodeColor` applies to the scene fog); **Scattering = c × σ**, **Absorption = (1 − c) × σ**. `UseFogEnable` off → both 0 (`$fogenable 0`: `FogMode(0)`, clear water). `Underside` → both 0 (ruling E). `CheapWater` → σ × 16 (ruling F) |
@@ -157,6 +166,46 @@ rate — `$bumpframe` is the shared frame index of both textures in `Water_Old`)
 array on the normal lane sets `UseNormalMap` for every family, not only through the static-frame
 fallback. `DuDvMap` stays unbound and declared.
 
+### 4.5 Ruling J — `sm_pier_1` and the `SineUVTranslate` lane
+
+`sm_pier_1`'s "wave system" is not on the water master at all: it is 17 `objects/surf` cards
+(`M_V2_Lit`/`M_V2_LitTranslucent`, an `lightmappedgeneric` shape, not `water`) plus a `blackwater`
+LMG ocean card with a 24 fps normal flipbook and the `invisible_water` volume the pier walks off
+into (§2's family table). The cards' authored breathing — alpha pulse (already wired) and a UV
+slide — was `$temp` → `texturetransform` provenance-only before R7.1: a `sine` proxy wrote its
+result into a scratch `$temp*` var and a `texturetransform` consumed it as `translatevar`, and
+nothing on the Lit masters read that chain.
+
+A new vector, **`SineUVTranslate`** `(ampU, ampV, offU, offV)`, default `(0,0,0,0)` (neutral by
+construction — every non-surf Lit instance is untouched):
+
+- `_SINE_UV_LANE` merges `{"SineUVTranslate": "V"}` into the shared `M_V2_Lit` construction dict
+  (`LitTranslucent` is the same dict object, so it gains the vector too);
+  `LitParams.Vectors.SineUVTranslate` (`make_v2_materials.py`); `ElysiumSurfaceParamsLit::
+  Vectors::SineUVTranslate` (`ElysiumSurfaceParams.h`).
+- **Stage, two passes** in `_apply_proxies`: the loop pass records a `sine` whose `resultvar` is
+  `$temp`/`$temp[i]` as `temp_sines[base][i] = (min, max)` and emits nothing for it; a
+  `texturetransform` row is collected but not yet resolved. After the loop, a resolution pass
+  matches each `texturetransform` whose `resultvar` is `$basetexturetransform` and whose
+  `translatevar` names a recorded `$temp*`, and emits `SineUVTranslate = [maxU−minU, maxV−minV,
+  minU, minV]` (each sine's component picks U or V; an unwritten component stays 0) with the
+  provenance row's `destination: "graph"`. Every unconsumed `$temp*` sine, a `rotatevar`, `$tempvec`,
+  or any other target keeps the pre-existing `proxyTargetProvenanceOnly` omission — reading VMTs
+  order-independently: the transform may author before or after the sine it consumes. Two sines
+  feeding different `sineperiod`s stage the first and name `sineChainPeriodMismatch`.
+- `_drop_unexposed_sine_uv` runs immediately after `_apply_water_underside` and removes the vector,
+  named, on any master that does not expose it (Unlit and the rest) — the chain resolves the same
+  way regardless of the consuming unit's family, and only the master decides whether the number
+  ships.
+- **Graph** (`_build_lit`): the sine lane (`_sine_lane`, returns the normalized `wave` term) runs
+  *before* the UV lanes; `base_coord = transformed_uv + (SineUVTranslate.rg × wave +
+  SineUVTranslate.ba)` feeds the **base**-texture panner only — the bump panner keeps the plain
+  `transformed_uv` it always had. Unlit / TwoTexture / Sprite / Water graphs are unchanged (the
+  argument defaults to `None`).
+- `sm_pier_1`'s surf chain stages `SineUVTranslate = [0.5, 0, 0, 0]`, `SineTargetMask = [1, 0, 0,
+  0]`, `SinePeriod = 15` — the same 15 s breathing the alpha pulse already used, now also sliding
+  the card up the sand.
+
 ---
 
 ## 5. The volume: `water.volumes[]`
@@ -193,9 +242,14 @@ One row per real `LEAFWATERDATA` record, in lump order:
 - **Planes.** Outward normals and distances in Unreal cm (`n · p = d` on the plane, `n · p < d`
   inside), through the same reflection the geometry takes; bevel sides skipped (redundant
   half-spaces of the same hull). The AABB comes from the plane-intersection vertices.
-- **Fog keys** from the resolved material's staged row (`FogColor`, `FogStart`, `FogEnd`,
-  `UseFogEnable`), start/end converted to cm here because the actor stores final values. A
-  material with no fog keys stages `fogEnable: false` — `SetFogVolumeState`'s own answer.
+- **Fog keys** are read off the volume's material unit's own **VMT provenance rows**
+  (`$fogenable`/`$fogcolor`/`$fogstart`/`$fogend`), not the staged instance — `invisible_water`
+  and `cheap_water` drop the keys from their staged row but still author them. A **patched**
+  unit's own provenance carries only its `insert` delta, so the read walks the same `patchBase`
+  chain `resolve_material_table` already walks (base then delta, the same `hops > 8` guard) —
+  `ch_fulab_1`'s `cheap_water_1318_1990_273` reaches its fog keys and its `%compilewater` bit only
+  this way. Start/end are converted to cm here because the actor stores final values. A material
+  with no fog keys stages `fogEnable: false` — `SetFogVolumeState`'s own answer.
 
 ### 5.2 The actor
 
@@ -249,16 +303,31 @@ everything, `FogMode(0)` after. No warp, no tint, no reflection pass (`docs/vtmb
   `lerp(SceneTexture:PostProcessInput0, FogColor, saturate((SceneDepth − FogStart) × FogInvRange))`.
   Generated beside the V2 masters; the runtime holds one MID.
 - **Registration.** `AElysiumWaterVolumes` implements `IInterface_PostProcessVolume`
-  (`bIsUnbound = false`, `BlendWeight = 1`, `Priority` above the map's neutral unbound volume);
-  `EncompassesPoint` is `FindVolumeAt(ViewLocation) != INDEX_NONE` at distance 0. Registered with
-  `UWorld::AddPostProcessVolume` on `BeginPlay`, removed on `EndPlay`. The engine's own
-  `UPostProcessComponent` and the Water plugin's `UUnderwaterPostProcessVolume` are the two
-  precedents; neither needs the plugin.
-- **`FSceneView::UnderwaterDepth`.** From `UWorld::OnBeginPostProcessSettings` (the broadcast the
-  engine makes before it walks the volumes) the actor sets `UnderwaterDepth = SurfaceZ − View.Z`
-  when the view is in a volume, and writes the active volume's fog triple to the MID. The
-  renderer reads the flag for pass ordering only (underwater translucency before the water
-  pass, fog) — the same writes `UWaterSubsystem::ComputeUnderwaterPostProcess` makes.
+  (`bIsUnbound = false`, `BlendWeight = 1`, `Priority = 1` above the map's neutral unbound
+  `elysium.ppv` at priority 0, a fixed `VolumeGuid` set in the constructor). Registered with
+  `UWorld::AddPostProcessVolume` on `BeginPlay`, removed with `RemovePostProcessVolume` on
+  `EndPlay`. The engine's own `UPostProcessComponent` and the Water plugin's
+  `UUnderwaterPostProcessVolume` are the two precedents; neither needs the plugin.
+- **The gate is `bIsEnabled`, not `EncompassesPoint`'s return.** `UWorld::DoPostProcessVolume`
+  discards a bounded volume's `EncompassesPoint` return and blends on the distance it writes
+  alone (`World.cpp:10710-10741`), so `EncompassesPoint` always writes distance 0 (full weight, no
+  soft edge — a partial blend of a fog lerp would read as haze, not water) and returns
+  `Properties.bIsEnabled`, which `UpdateViewPostProcess` sets per view from
+  `FindVolumeAt(ViewLocation) != INDEX_NONE` inside the `OnBeginPostProcessSettings` handler —
+  broadcast before the engine's volume walk, so the bool is already correct when `EncompassesPoint`
+  runs. The same handler writes the found volume's fog triple (`FogColor` decoded, `FogStart`,
+  `FogInvRange`, packed by `ElysiumFog::Pack`) to the one `UnderwaterMID`, created lazily in
+  `BeginPlay` from `/Game/ElysiumGenerated/Materials/V2/M_ElysiumUnderwater` and added to the
+  settings once via `AddBlendable`; a checkout that has not exported the masters logs a warning and
+  still classifies the body and writes `UnderwaterDepth`, just with nothing to fog with.
+- **`SceneView->WaterIntersection`** is set alongside `UnderwaterDepth` (`-1.f` when the view is
+  outside every volume, the engine's own "out of water"):
+  `EViewWaterIntersection::InsideWater` when the view is in a volume, else `OutsideWater` — the
+  same two writes `UWaterSubsystem::ComputeUnderwaterPostProcess` makes, both for pass-ordering
+  only (5.8's `CameraIsUnderWater` is compile-time false; the look itself is the post-process
+  above).
+- **`FSceneView::UnderwaterDepth`**, the other write the same handler makes, is
+  `SurfaceZCm − ViewLocation.Z` when the view is in a volume, else `-1.f`.
 - **Why a post-process, when the project's fog is per-primitive.** `rebuild-strategy.md`'s rule
   ("the distance fog cannot be an engine fog") exists because the world and the 3D-skybox
   miniature share screen depth. Under the plane that distinction is moot: everything above the
@@ -273,7 +342,7 @@ everything, `FogMode(0)` after. No warp, no tint, no reflection pass (`docs/vtmb
 
 ---
 
-## 7. The camera (open owner call)
+## 7. The camera (built)
 
 `CViewRender::GetWaterOffset` (`cl_waterdist` 4 in) walks the view origin in one-unit Z steps
 against `MASK_WATER` when the player's water level is above 1: at level 2 it **raises** the view
@@ -281,10 +350,21 @@ until it is out of the volume (treading: the camera stays dry), at level 3 it **
 it is back inside (submerged: the camera stays wet) — the opposite of what the earlier VtMB note
 said. The Elysium camera is a third-person boom most of the time, so the case is rarer than in
 2004, but a boom that crosses the plane while the body treads would flicker the post-process.
-The step rule is a pure function beside `ElysiumRig::SolveBoomDistance` and is applied in
-`UElysiumCameraComponent::ApplyBaseToView` after the boom; the query is the water actor's.
-**Owner call:** transcribe it in R7.1 or leave it to the first swim-able slice. Default if
-unanswered: not wired; recorded as the one runtime piece of `docs/vtmb/water.md` this task leaves.
+
+Owner call (2026-09-04 review): **build now**. `ElysiumCam::SolveWaterOffset(WaterLevel, ViewZ,
+SurfaceZ, WaterDistCm)` (`Public/ElysiumCameraSolve.h`, `Private/Player/ElysiumCameraSolve.cpp`) is
+the step rule in closed form — level 2 clamps `SurfaceZ + WaterDist − ViewZ` to `[0, WaterDist]`,
+level 3 clamps `SurfaceZ − WaterDist − ViewZ` to `[−WaterDist, 0]`, everything else is 0 — beside
+`ElysiumRig::SolveBoomDistance`, under a new `cl_waterdist` cvar (`FElysiumCameraCvars::WaterDist`,
+default `4 * ElysiumCam::U`). `UElysiumCameraComponent::ApplyBaseToView` applies it as a Z-only nudge
+to `View.Location` **after** the boom-blend block closes (`ElysiumCameraComponent.cpp:278`, the block closing at `:273`) rather
+than inside it, because the case it exists for — a treading or swimming body — is first person,
+where that block's blend weight is 0 and it never runs. The level and surface plane are a push, not
+a query: `AElysiumMapActor::UpdatePlayerWater` classifies the body each pre-move tick and calls
+`UElysiumCameraComponent::SetWaterState(Level, SurfaceZCm)` on the body's own camera component,
+because the camera reaches only its owner and the water volumes belong to the map actor.
+Divergence: the 1-unit quantization is dropped — the loop's only purpose is the clearance distance,
+and the closed form is that distance exactly rather than rounded up to the next inch (§9.12).
 
 ---
 
@@ -368,7 +448,9 @@ Where the earlier text of this document was wrong, the line says **[was wrong]**
     tuning-session witness, and the fix — if one is wanted — is an additive fog-in on Emissive,
     not a CPD term.
 11. **Opacity as coverage** for the four base-textured `Water` units (none placed).
-12. **Camera water offset** not transcribed (§7, owner call).
+12. **Camera water offset's 1-unit quantization dropped.** `SolveWaterOffset` (§7) is the closed
+    form of `GetWaterOffset`'s step loop; the clearance distance is exact rather than rounded up
+    to the next Source inch. Owner call: build now (§7).
 13. **Water faces are lit.** VtMB's are `SURF_NOLIGHT` (no lightmap; the RTs carry the light);
     SLW is lit forward by the light grid and Lumen. This is the modernization, not a slip.
 
@@ -387,18 +469,96 @@ a hub with a canal is fine; a hub with a canal, a FLIP pool and a Water Body Oce
 
 ## 11. What to witness (did-it-appear only, per "wire first, tune later")
 
+The two maps R7.1 converted are `sm_hub_1` (a drawn `water/sewer_water` surface, staged plane
+Z **−14937.74 cm**) and `sm_pier_1` (the `water/invisible_water` ocean, staged plane
+Z **−1582.42 cm**). `la_hub_1` and `hw_warrens_5` are not on `MapsOnV2Models` and are a later
+witness.
+
+**Witnessed 2026-09-04** (`uv run elysium run play`, both maps). Passed: the sewer surface draws
+and is not black — the canal floor refracts through it and the wall lamps put specular streaks on
+it; the body state reads `Feet` on the sewer floor (`locomotion.water: 1`, pawn settled at
+Z −14896.28) and in the pier's ocean; the pier's ocean card and its 17 surf cards draw and the
+surf band animates (34% relative pixel change at the waterline between consecutive frames against
+1.6% on the static pier deck). Two things did not:
+
+- **The underwater post-process looked unfogged** (§4.3 / ruling D) — and on re-witness
+  (2026-09-04, second session) it is applied and correct; the first measurement was two artefacts.
+  (1) The underside surface writes its own depth, so every pixel that sees the above-water world
+  through the plane fogs at the *plane's* distance — 20 cm overhead, one to three metres along the
+  rows just above the horizon — which a 2,600 cm range barely touches; this is also what VtMB's
+  pass 2 does to the surface it draws. The below-water world fogs by its true depth, and in a
+  50 cm canal that is a hand's breadth of floor, so the "far patch" the first witness measured was
+  the surface at two metres. (2) The engine merges every blendable of one material into a single
+  node whose parameters follow the highest-priority volume, so a test override pushed through the
+  map's priority-0 volume was silently replaced by the water volume's own values under the plane.
+  Proof: the same red 1 m override at priority 2 turned the whole below-plane band red at once
+  (`E:/elysium-work/witness/r71_diag_under_red_prio2.png`), and the volume's own MID applied above
+  the plane fogs the tunnel mouth at the sewer's numbers. The volume fog becomes a *look* only on
+  a deep basin (`hw_warrens_*`, `la_hub_1`); on the two converted maps it is faithful and invisible.
+- **`water/invisible_water` drew.** The pier's ocean and its underside rendered as an opaque
+  magenta `tools/toolsinvisible` sheet with the word INVISIBLE tiled across it, above and below
+  the plane. The VMT authors `%compilenodraw 1` and §2 says "no drawn surface"; the staged
+  instance is `M_V2_Unlit` with `UseBaseTexture` true and
+  `BaseTexture=/ElysiumBaked/Textures/tools/T_toolsinvisible`. The GLB decoder records `noDraw`
+  per face (`map_glb/decode.py:965`, `SURF_NODRAW`) and nothing consumed it; the exporter's tool
+  skip was a name test on `tools/` only, which this unit's `water/` path escapes.
+
+  **Fixed 2026-09-04** (R7.1 review): `UE_map_sidecars.meshed_faces` now skips a face whose lump
+  row carries `noDraw`, *beside* the name test rather than instead of it — the trigger textures
+  leave the flag clear and the flag catches what the name cannot. Measured over all 108 published
+  root units, the flag alone adds exactly 50 faces, all on `sm_pier_1` (41 `water/invisible_water`,
+  9 of its `..._depth_33` patch), all world-scene and none displacement, so no other map's mesh,
+  `.dispcol` or `.sky` moves. **Landed in content the same day**: `import models` over the four
+  working maps (582 reused) and a non-forced `export map sm_pier_1` rebuilt the five chunk meshes
+  that carried the sheet; re-witnessed, the beach shows the surf cards, the `blackwater` card and
+  the rig with no sheet above or below the plane, and the player standing at the staged plane
+  reads `Feet` (`E:/elysium-work/witness/pier_beach_1.png`, `pier_in_water.png`). The plan's
+  original instruction, for the record (`import models --maps sm_pier_1`, then `export map sm_pier_1 --verify`); the
+  volume is unaffected, it comes off the collision brushes and the `LEAFWATERDATA` texinfo. The
+  legacy `UE_bsp_to_scene.py` lane keeps the name test alone: it publishes no V2 map and reads no
+  texinfo flags today.
+
+Also measured, not a defect: **`Waist`/`Eyes` are unreachable on either converted map.** Both
+staged volumes are shallower than the pawn (`sm_hub_1` 50.8 cm — `$waterdepth 20` exactly — and
+`sm_pier_1` 83.8 cm) against a 92.45 cm body half-height, so every pose whose waist is inside the
+band puts the feet below `minZ` and `ClassifyBody` answers `None` (measured: pawn at Z −15012.1
+→ `water: 0`). `WaterMove`, the swim intent and `SolveWaterOffset` therefore have no in-game
+witness until a deeper volume is converted; their coverage is the automation tier.
+
 1. `sm_hub_1` sewer from the promenade: the neon reflects, the surface is not black, the far end
    is murk-green not white. The SLW pass shows in `stat gpu`.
-2. `la_hub_1` canal from the bridge: ripple moves (the 30-fps normal flipbook plus the scroll).
+2. The ripple moves (the 30-fps normal flipbook plus the scroll) — `sm_hub_1`'s sewer, and
+   `sm_pier_1`'s `water/blackwater` ocean card at 24 fps.
 3. Drop the camera through the plane (noclip): the underside draws the above world, the
-   post-process fogs at the sewer's numbers; `elysium_player_get` reports the `water` channel.
-4. Walk into the canal at `sm_hub_1`'s sewer floor (`$waterdepth 20`): level `Feet`; a drop-in
-   from the promenade: `Waist`/`Eyes`, `WaterMove` runs, the swim intent plays.
-5. `spawnwater` on `hw_warrens_5` reads as a bad pool, not a ruby one (a future converted map).
+   post-process fogs at the volume's numbers (`sm_hub_1` `{5 5 0}` / 1024 in, `sm_pier_1`
+   `{22 20 10}`); `elysium_player_get` reports the `water` channel.
+4. Walk into the canal at `sm_hub_1`'s sewer floor (`$waterdepth 20`): level `Feet`. Off the
+   pier's boards at `sm_pier_1`: `Feet` again, with no surface drawn. `Waist`/`Eyes`, `WaterMove`
+   and the swim intent need a volume deeper than the body (see above).
+5. `sm_pier_1`'s 17 `objects/surf` cards slide up the sand on the 15 s sine (`SineUVTranslate`).
+6. `spawnwater` on `hw_warrens_5` reads as a bad pool, not a ruby one (a future converted map).
 
 ---
 
-## 12. Related docs
+## 12. Tests
+
+At the seam, in the count each change authorizes — no floor-wide sweep.
+
+| Layer | File | What it pins |
+|---|---|---|
+| C++ automation | `Private/Tests/ElysiumWaterTests.cpp` → `Elysium.Substrate.Water` | `ElysiumWater::FindVolumeAt` / `ClassifyBody` against a fixed brush set: feet/waist/eyes → `Feet`/`Waist`/`Eyes` with the right `OutVolume`; beside a brush, below `minZ`, or outside a sloped brush's planes → `None`/`INDEX_NONE`; two volumes pick the right index; `ElysiumBakedTags::Water`, `WaterFogScale`'s `2 ln 2` default, the `EElysiumWaterLevel` values |
+| C++ automation | `ElysiumWaterTests.cpp` → `Elysium.Substrate.WaterActor` | `AElysiumWaterVolumes` by reflection (`Volumes` resolves); after `BeginPlay`, `bIsUnbound false` / `Priority 1` / `BlendWeight 1` / `bIsEnabled false`; a simulated `OnBeginPostProcessSettings` call with a point inside flips `bIsEnabled` and writes the MID's `FogColor`/`FogStart`/`FogInvRange`; a point outside flips it back |
+| C++ automation | `Private/Tests/ElysiumCameraTests.cpp` → `Elysium.Substrate.Camera` | `SolveWaterOffset` exact values: level 2 at 1 in below surface → `+3 in`, at 5 in below → 0, at exactly 4 in below → 0; level 3 at 1 in above → `−3 in`, at 5 in above → 0; levels 0/1 → 0 always; `FElysiumCameraCvars().WaterDist == 4 * U` |
+| C++ automation | `Private/Tests/ElysiumV2MaterialTests.cpp` → `Elysium.Policy.V2MasterParams` | `M_V2_Water`'s compiled graph carries `Underside`; `M_ElysiumUnderwater`'s `FogStart`/`FogInvRange`/`FogColor` bindings |
+| pytest | `pipeline/tests/test_materials_stage.py` | the water-family normal fix (`test_water_normal_frames_come_from_normalmap_not_the_dudv`, `test_lit_water_look_unit_animates_its_normal_and_turns_the_gate_on`); `Underside` (`test_self_bottomed_water_unit_is_the_underside`, `test_water_unit_bottomed_by_another_material_is_not_the_underside`, `test_patched_water_instance_stages_no_underside_switch`); the header pin (`test_water_master_exposed_params_pinned_against_cpp_header`); the `SineUVTranslate` chain (`test_surf_sine_chain_stages_the_uv_translate_vector`, `test_surf_sine_chain_resolves_with_the_transform_authored_first`, `test_surf_sine_chain_on_an_unlit_unit_drops_the_vector_and_names_it`, `test_temp_sine_with_no_transform_reading_it_takes_the_omission`, `test_component_less_temp_sine_read_by_a_translatevar_takes_the_omission`, `test_two_sines_at_different_periods_stage_the_first_and_name_the_mismatch`) |
+| pytest | `pipeline/tests/test_make_v2_materials_editor.py` | `test_water_master_is_single_layer_water_with_the_volume_pins_fed` (Opaque + SLW, the four output pins); `test_sine_uv_translate_reaches_the_base_lane_only` (the base-texture sample is downstream of `SineUVTranslate`, the normal sample is not) |
+| pytest | `pipeline/tests/test_map_geometry.py` | `resolve_water_volumes`: the sentinel drop, the `%compilewater` content-bit predicate (`tools_shadow` excluded, `func_detail` water included), planes/bounds in the Unreal frame with the bevel side skipped, fog keys off VMT provenance including the `patchBase` chain, an unmatched row dropped and named, and the corpus rows themselves (`sm_hub_1`, `sm_pier_1`) |
+| pytest | `pipeline/tests/test_bake_map_water.py` | `water_actor_values` (label/tags/folder/position), a zero-row manifest placing nothing, the recipe carrying the staged rows and the actor shape, the module's `MANIFEST_VERSION` bound to the stage's |
+| pytest | `pipeline/unreal/bake_verify.py` → `verify_water` (no dedicated test file; exercised through `export map --verify`) | one tagged `elysium.water` actor iff the manifest has rows; row count, per-row `surface_z_cm` and brush counts match the staged manifest |
+
+---
+
+## 13. Related docs
 
 - `docs/vtmb/water.md` — the inventory and the engine facts this mapping covers.
 - `docs/vtmb/source_movement.md` — `WaterMove` / water level.

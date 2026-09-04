@@ -28,6 +28,7 @@ from elysium_pipeline.exporters.UE_map_sidecars import (
     collect_entity_fields,
     entity_lump_text,
     is_output_key,
+    meshed_faces,
     parse_entity_blocks,
     rope_material_id,
     source_planes,
@@ -297,3 +298,40 @@ def test_every_exported_rope_line_names_an_importable_material(map_name):
         assert tokens[0].startswith("vtmb:material:")
         assert asset_path_for(tokens[0][len("vtmb:material:"):]).startswith(
             "/ElysiumBaked/Materials/")
+
+
+def _meshed_units(rows):
+    """A units stand-in for `meshed_faces`: one texinfo and one texdata per named material."""
+
+    faces = []
+    texinfos = []
+    textures = []
+    for index, (material, no_draw) in enumerate(rows):
+        faces.append({"numEdges": 4, "texInfo": index, "noDraw": no_draw})
+        texinfos.append({"texData": index})
+        textures.append({"asset": f"vtmb:material:{material}"})
+    root = {
+        "faces": faces,
+        "texinfos": texinfos,
+        "textures": textures,
+        "models": [{"index": 0, "firstFace": 0, "numFaces": len(faces)}],
+    }
+    return SimpleNamespace(root=root)
+
+
+def test_meshed_faces_drops_a_nodraw_face_the_tools_name_test_cannot_see():
+    """R7.1 follow-up: `%compilenodraw` outside `tools/` is a skip, and the name test still is one.
+
+    `water/invisible_water` (`sm_pier_1`'s ocean) is `water/`-pathed, so only `SURF_NODRAW` says it
+    draws nothing; `tools/toolstrigger` leaves the flag clear, so only the name says it. Dropping
+    either test puts an opaque sheet in the world.
+    """
+
+    units = _meshed_units([
+        ("brick/bricks01", False),
+        ("water/invisible_water", True),
+        ("tools/toolstrigger", False),
+        ("tools/toolsblack", False),
+    ])
+    scenes = meshed_faces(units, SimpleNamespace(faces=set()), set())
+    assert scenes == {"world": [0, 3], "sky": [], "brush": {}}

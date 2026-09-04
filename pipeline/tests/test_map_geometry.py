@@ -694,6 +694,36 @@ def test_water_fog_keys_come_from_the_material_units_own_vmt_provenance():
     assert (clear.fog_color, clear.fog_start_cm, clear.fog_end_cm) == ((0.0, 0.0, 0.0), 0.0, 0.0)
 
 
+def test_a_staged_unit_with_no_keys_is_clear_water_and_only_an_unstaged_one_is_an_error():
+    """The two cases `import materials` can and cannot fix, told apart.
+
+    A unit the material lane never staged is a real gap and the message names the lane to re-run; a
+    unit that staged and authors none of the four keys is `$fogenable` absent, which is
+    `SetFogVolumeState`'s clear water. Funnelling both into the error aborted the whole map export
+    on a diagnosis that re-running the lane could not change.
+    """
+
+    def units_for(row_material):
+        units = _fake_water_units(
+            [(0x10000020, "water/sewer_water")],
+            [row_material, "water/sewer_water"],
+            [_water_row(0, 0)])
+        return units
+
+    documents = {
+        "water/sewer_water": _provenance(("%compilewater", "1")),
+        "water/no_keys": _provenance(),
+    }
+
+    volumes, dropped = MG.resolve_water_volumes(units_for("water/no_keys"), documents.get, "fake")
+    assert dropped == [] and len(volumes) == 1
+    assert volumes[0].material == "vtmb:material:water/no_keys"
+    assert volumes[0].fog_enable is False
+
+    with pytest.raises(MG.MapGeometryError, match="not staged by the material lane"):
+        MG.resolve_water_volumes(units_for("water/unstaged"), documents.get, "fake")
+
+
 def test_a_row_no_water_brush_stands_at_is_dropped_and_named():
     # `la_bradbury_3`'s row: the only brush at its height is a `tools/tools_shadow` caster, so the
     # record describes a volume the map does not have.

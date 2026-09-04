@@ -383,7 +383,7 @@ no separate "Additive" master, and why `M_V2_Lit` covers opaque and masked alike
 | `M_V2_LitTranslucent` | Default Lit, `TLM_SurfacePerPixelLighting` | Translucent | off | the same four families plus `shatteredglass` — translucent and additive | 1,113 |
 | `M_V2_Unlit` | Unlit | Opaque | off | `unlitgeneric`, `cloud` | 1,865 |
 | `M_V2_Eyes` | Default Lit | Opaque | off | `eyes` | 406 |
-| `M_V2_Water` | Default Lit | Translucent | off | `water` | 24 |
+| `M_V2_Water` | Single Layer Water (R7.1) | Opaque | off | `water` | 24 |
 | `M_V2_Sprite` | Unlit, `bDisableDepthTest` | Translucent | on | `sprite`, plus the 5 `unlitgeneric` `$ignorez` world units | 67 |
 | `M_V2_SpriteZ` (R7.3) | Unlit, depth test **on** | Translucent | on | no VMT unit — `M_V2_Sprite`'s graph plus the `ElysiumFog` parameters (`FogColor` / `FogStart` / `FogInvRange`, by parameter, inscatter × opacity); the particle floor's `MI_Particle` | 0 |
 | `M_V2_SpriteZLit` (R7.3) | Default Lit, `TLM_VolumetricPerVertexNonDirectional` | Translucent | on | no VMT unit — the twin for the `lighting` leaves; `MI_ParticleLit` | 0 |
@@ -687,6 +687,46 @@ of the 19 that do not, the ones whose extra targets are `$temp*` chain links col
 during chain resolution, and any material still left with two exposed targets registers for the
 runtime factory **whole**, exactly as the chain rule in "Proxy policy" already requires.
 
+**The `sine` → `texturetransform` chain, and `SineUVTranslate`** (R7.1 ruling J,
+`water-architecture.md` → "Ruling J — sm_pier_1 and the SineUVTranslate lane",
+`pipeline/unreal/make_v2_materials.py::_uv_lanes`/`_sine_lane`). A `sine` whose `resultvar` is one
+of the target rows above drives a shading term
+through the table; a `sine` whose `resultvar` is a `$temp*` scratch register drives nothing by
+itself — it is half of a *UV* chain, read back by a `texturetransform` proxy whose `translatevar`
+names the same register and whose `resultvar` is `$basetexturetransform`. `objects/surf` (the
+pier's 17 wave cards) writes exactly that pair: `sine $temp[0]` sliding `0 → 0.5` over 15 s, read
+by `translatevar $temp`. `importers/materials.py::_apply_proxies` resolves the pair in two passes
+— the proxy loop records every `sine` that targets a `$temp*` register (`temp_sines`, keyed by
+register and vector component) and every `texturetransform`'s arguments, without emitting either;
+after the loop, `_resolve_sine_uv_translate` joins each `texturetransform` targeting
+`$basetexturetransform` to the `$temp*` register its `translatevar` names and emits one vector,
+**`SineUVTranslate`** = `(SineMax.u − SineMin.u, SineMax.v − SineMin.v, SineMin.u, SineMin.v)` — an
+amplitude/offset pair per UV axis, from whichever component (`u`/`v`) each half of the chain wrote.
+The joined `sine` row's `destination` becomes `"graph"` (it does reach the graph, through this
+vector, not a scalar of its own); a chain whose two sines disagree on `SinePeriod`/`SineTimeOffset`
+stages the first and records `sineChainPeriodMismatch` rather than silently overwriting one with
+the other. A `$temp*` sine no `texturetransform` consumes, any `rotatevar`/`scalevar` rider (this
+lane is one UV translate, not a matrix), and a component-less `$temp` a `translatevar` reads (which
+of U or V the author meant is undecidable — a whole-vector sine writes both components with one
+number) all keep the ordinary `proxyTargetProvenanceOnly` omission, named on the register.
+
+`SineUVTranslate` is exposed on `M_V2_Lit`/`M_V2_LitTranslucent` **only** (`_SINE_UV_LANE =
+{"SineUVTranslate": "V"}`, merged into the Lit construction dict LitTranslucent shares); a VMT
+whose chain resolves on any other master has the vector dropped by `_drop_unexposed_sine_uv`
+(called immediately after `_apply_water_underside`) with the omission
+`"<master> exposes no SineUVTranslate lane"`, the same "declared on the wrong master" shape
+`_validate_exposed` already enforces for switches. In the graph, `_sine_lane` runs *before*
+`_uv_lanes` on Lit/LitTranslucent alone (the only two masters that build it in that order — every
+other master keeps the old order, sine lane after UV lanes, because it has no UV chain to feed),
+so its bare `0..1` wave (`sine["wave"]`, before `SineMin`/`SineMax` scale it into a shading factor
+— the UV chain carries its own amplitude and offset in `SineUVTranslate` itself) is available as an
+input: `base_coord = transformed_uv + (SineUVTranslate.rg × wave + SineUVTranslate.ba)`, fed to the
+**base** texture panner only — the bump/normal panner keeps the untranslated `transformed_uv`,
+because Source's `$baseTextureTransform` moves the base texture and leaves `$bumpTransform` alone,
+and the pier's surf cards carry no normal map to move anyway. The default `(0, 0, 0, 0)` makes the
+whole add an exact no-op on every instance that never authored the chain. Surf as staged:
+`SineUVTranslate = [0.5, 0, 0, 0]`, `SineTargetMask = [1, 0, 0, 0]`, `SinePeriod = 15`.
+
 ##### `M_V2_Lit` / `M_V2_LitTranslucent`
 
 | Textures | Kind | Default | Class |
@@ -703,6 +743,7 @@ runtime factory **whole**, exactly as the chain rule in "Proxy policy" already r
 | `BumpScale` | `1.0` | | `TexScaleOffset` | `(1, 1, 0, 0)` — `(scaleU, scaleV, offsetU, offsetV)` |
 | the animation, scroll and sine lanes above | | | `SineTargetMask`, `SineChannelMask` | as above |
 | the scene-fog lane (R5.4, below) — `FogStart`, `FogInvRange` primitive-driven, `FogInscatter` `1.0` | | | `FogColor` | primitive-driven (CPD 0..3) |
+| | | | `SineUVTranslate` (R7.1 ruling J, Lit/LitTranslucent only — below) | `(0, 0, 0, 0)` |
 
 | Static switch | Default | Set by |
 |---|---|---|
@@ -786,26 +827,58 @@ iris coverage it lost: `BaseColor = (1 - Iris.a) x BaseTexture`, `Emissive += Ir
 
 ##### `M_V2_Water`
 
+**Single Layer Water** (R7.1 ruling A, `docs/architecture/water-architecture.md` §4):
+`MSM_SingleLayerWater`, `BLEND_Opaque`, one-sided (ruling E — the underside is its own set of
+faces on the same master, not a two-sided flip), `used_with_nanite` off (Nanite rejects the
+shading model outright; the water faces already live in the non-Nanite `T_` chunk bucket),
+`used_with_instanced_static_meshes` on. `GRAPH_VERSION` 8 → 9. `make_v2_materials.make_water` sets
+the shading model *after* `_build_water` returns, not before: a fresh `UMaterial` is
+`MSM_DEFAULT_LIT`, and authoring under `MSM_SINGLE_LAYER_WATER` while the ~95 expression writes
+`_build_water` makes are still in flight recompiles the graph as it stands after every write —
+`SingleLayerWater materials requires the use of SingleLayerWaterMaterial output node`
+(`MaterialShared.cpp:6447`) until the output node exists, then `No inputs to Single Layer Water
+Material` (`MaterialExpressions.cpp:21330`) until its four pins are wired. The output node is
+therefore created last, wired to all four pins in one step, and the caller sets the shading model
+only once the function returns; the blend mode is `Opaque` before and after, so no intermediate
+compile the two passes take is ever an invalid domain/blend/shading-model triple.
+
 There is **no `BottomMaterial` texture slot.** `$bottommaterial` (24 units, 22 of them water)
 names a *material*, never a texture; all 24 bindings are unresolved in the corpus. It is a
-provenance material reference, exactly like `$crackmaterial` and `$modelmaterial`.
+provenance material reference, exactly like `$crackmaterial` and `$modelmaterial` — except for one
+comparison the stage still makes: a unit whose `$bottommaterial` names *itself*
+(`dev/dev_waterbeneath2`, `dev/oceanbeneath` — VBSP's own faces on the inward side of every water
+brush) reads the authored value off its own provenance rows, not off `params.material_refs` (the
+GLB decoder emits a dependency row only for a texture-shaped value, so `$bottommaterial` reaches no
+dependency on any of the 26 units that author it), and normalises it (`\`→`/`, `.vmt` stripped,
+case-folded) against the unit's own material key. A match stages the static switch **`Underside`**
+(`_apply_water_underside`, `importers/materials.py:1369`, called at :1983): the engine strips
+`$reflecttexture` from every down-facing water face (`Mod_LoadFaces`), and 5.8's SLW has no
+camera-under-water branch to lean on instead (§8), so the instance says so once — zero specular,
+zero volume extinction (below). Measured 2026-09-04 on the staged manifest: of the 24 water units, 22 carry the
+switch and exactly one is true -- `dev/dev_waterbeneath2` (`MI_dev_waterbeneath2`), the 21 others
+false. `dev/oceanbeneath` names itself the same way and would be the second, but it and `dev/ocean`
+never reach the manifest at all: their `$basetexture` `dev/water_dudv` is a 29-frame VTF that
+stages as a `Texture2DArray` where `BaseTexture` wants a `Texture2D` and there is no
+`BaseTextureFrames` lane on `M_V2_Water` to fall back onto, so `_check_required_slots` fails them
+(they are 2 of the 4 corpus-wide staging failures; `seam_migration.md` -> R7.1 open issues). The
+switch is therefore unmeasured on `dev/oceanbeneath` -- its instance on disk predates R7.1.
 
 | Textures | Kind | Default | Class |
 |---|---|---|---|
 | `BaseTexture` | T2D | `/Engine/EngineResources/DefaultTexture` | colour; 6 of 24 bind one |
-| `DuDvMap` | T2D | `/Engine/EngineMaterials/DefaultNormal` | data → `_linear` twin (`$bumpmap` here, per the slot rule) |
-| `NormalMap` | T2D | `/Engine/EngineMaterials/DefaultNormal` | data → `_linear` twin (`$normalmap`) |
+| `DuDvMap` | T2D | `/Engine/EngineMaterials/DefaultNormal` | data → `_linear` twin (`$bumpmap` here, per the slot rule); **declared, not wired** (below) — the sample node stands in the graph but feeds no pin |
+| `NormalMap` | T2D | `/Engine/EngineMaterials/DefaultNormal` | data → `_linear` twin (`$normalmap`) — the flipbook lane R7.1 fixes (§4.4 below) |
 | `EnvMap` | TCube | `/Engine/EngineResources/DefaultTextureCube` | colour; 7 of 24 |
 
 | Scalar | Default | From | | Scalar | Default | From |
 |---|---|---|---|---|---|---|
-| `RefractAmount` | `20.0` | `$refractamount` | | `WaterTimeFreq1` | `0.0` | `$watertimefreq1` |
-| `ReflectAmount` | `50.0` | `$reflectamount` | | `WaterTimeFreq2` | `0.0` | `$watertimefreq2` |
-| `BaseReflectFract` | `0.0` | feeds the `Fresnel` node input of the same name — the *shipped binary's* default, not the design-era source's: `waterreflect_old`/`waterreflect_ps20_old` read no `c3` register at all, so R0 = 0 in the shipped game; `c3.a` is a real read in the unshipped `waterreflect.psh` source only | | `WaterWaveHeight` | `0.0` | `$waterwaveheight` |
-| `WaterDepth` | `64.0` | `$waterdepth` | | `WaterWaveLength` | `0.0` | `$waterwavelength` |
+| `RefractAmount` | `20.0` | `$refractamount` — declared, not wired (below) | | `WaterTimeFreq1` | `0.0` | `$watertimefreq1` |
+| `ReflectAmount` | `50.0` | `$reflectamount` — declared, not wired | | `WaterTimeFreq2` | `0.0` | `$watertimefreq2` |
+| `BaseReflectFract` | `0.0` | declared, not wired — SLW's own Fresnel replaces the `Fresnel` node this pin used to feed; the *shipped binary's* default, not the design-era source's: `waterreflect_old`/`waterreflect_ps20_old` read no `c3` register at all, so R0 = 0 in the shipped game | | `WaterWaveHeight` | `0.0` | `$waterwaveheight` |
+| `WaterDepth` | `64.0` | `$waterdepth` — VBSP's per-instance depth; the volume the map lane stages carries the real one | | `WaterWaveLength` | `0.0` | `$waterwavelength` |
 | `WaterMurkiness` | `0.0` | `$watermurkiness` | | `CheapWaterStartDistance` | `0.0` | `$cheapwaterstartdistance` |
 | `WaterBaseFactor` | `0.0` | `$waterbasefactor` | | `CheapWaterEndDistance` | `0.0` | `$cheapwaterenddistance` |
-| `WaterBaseMovementDist` | `0.0` | `$waterbasemovementdist` | | `FogStart` | `1.0` | `$fogstart` |
+| `WaterBaseMovementDist` | `0.0` | `$waterbasemovementdist` | | `FogStart` | `1.0` | `$fogstart` — now the SLW extinction range, not a pixel-depth fog tail (below) |
 | `WaterBaseMovementFreq` | `0.0` | `$waterbasemovementfreq` | | `FogEnd` | `400.0` | `$fogend` |
 | `WaterSpecularMin` | `0.0` | `$waterspecularmin` | | `NormalFrameRate`, `NormalFrameCount` | `0.0`, `1.0` | the `animatedtexture` proxy (20 instances) |
 | `WaterSpecularMax` | `1.0` | `$waterspecularmax` | | `BumpScrollRateU`, `BumpScrollRateV` | `0.0` | the `texturescroll` proxy (18 instances) |
@@ -813,35 +886,108 @@ provenance material reference, exactly like `$crackmaterial` and `$modelmaterial
 | Vector | Default | From |
 |---|---|---|
 | `WaterColor` | `(0, 0, 0, 0)` | `$watercolor` |
-| `RefractTint` | `(1, 1, 1, 1)` | `$refracttint` — VtMB's `c1` in `waterrefract.psh` |
-| `ReflectTint` | `(1, 1, 1, 1)` | `$reflecttint` |
-| `FogColor` | `(0, 0, 0, 0)` | `$fogcolor` — the one key in the corpus authored in `{0–255}` form |
+| `RefractTint` | `(1, 1, 1, 1)` | `$refracttint` — VtMB's `c1` in `waterrefract.psh`; now **Color Scale Behind Water** (below) |
+| `ReflectTint` | `(1, 1, 1, 1)` | `$reflecttint` — its luma now scales the class specular (below) |
+| `FogColor` | `(0, 0, 0, 0)` | `$fogcolor` — the one key in the corpus authored in `{0–255}` form; gamma-decoded into the SLW extinction split (below) |
 | `EnvMapTint` | `(1, 1, 1, 1)` | `$envmaptint` |
 | `TexScaleOffset` | `(1, 1, 0, 0)` | `$scale` (20 units) → `.xy`; `$bumpoffset` (13) → `.zw`, and it is also the `texturescroll` target |
 
-Static switches: `CheapWater` (`$forcecheap`, 2 units), `UseFogEnable` (`$fogenable`, 23),
-`UseEnvMap`, `UseFixedCube`, `UseBaseTexture`, `UseAnimatedNormalFrames`, `UseNormalMap` — every
-one of them defaulting `false` on the master (18 of 24 water units bind no `$basetexture` at all,
-so a `true` default would grey-checker the majority; the stage resolves `UseBaseTexture` per unit
-the same way Lit/Unlit/Refract do). Two water keys are **housed outside the material**:
-`$bumpframe` (20) is the
-`animatedtexture` proxy's frame-number variable and becomes the flipbook slice index rather than a
-parameter of its own, and `$subdivsize` (13, values 64 and 16) is Source's water-surface
-tessellation size — geometry, owned by the map lane, provenance only here.
+**Static switches**, every one defaulting `false` on the master: `CheapWater` (`$forcecheap`, 2
+units), `UseFogEnable` (`$fogenable`, 23), `UseBaseTexture` (18 of 24 water units bind no
+`$basetexture` at all, so a `true` default would grey-checker the majority; the stage resolves it
+per unit the same way Lit/Unlit/Refract do), `UseAnimatedNormalFrames`, `UseNormalMap`, and the new
+**`Underside`**. `UseFixedCube` still gates the fixed-cube emissive add. `UseEnvMap` is now
+**declared, not wired**: the switch node stands in the graph (a review artefact of the old
+Fresnel/`ReflectAmount` branch it used to gate) but drives nothing — the cube emissive is gated
+`UseFixedCube` alone, matching every other master's reflection contract. Two water keys are
+**housed outside the material**: `$bumpframe` (20) is the `animatedtexture` proxy's frame-number
+variable and becomes the flipbook slice index rather than a parameter of its own, and
+`$subdivsize` (13, values 64 and 16) is Source's water-surface tessellation size — geometry, owned
+by the map lane, provenance only here.
 
-`MP_REFRACTION = 1 + RefractAmount/100` (the same "1.0 is neutral" convention `M_V2_Refract` uses),
-zeroed back to `1.0` under `CheapWater` alongside the `DuDvMap` perturbation it already zeroes.
-`FixedCubeStrength` (an `MPC_ElysiumSurfaces` knob, not a per-instance parameter) scales the
-authored fixed-cube add here the same way it scales `M_V2_Lit`'s and `M_V2_Refract`'s — Water has
-no separate reflection-mask texture to fold in, so the term is `cube x EnvMapTint x
-FixedCubeStrength x ReflectTint`. `UseFogEnable` is now wired: the shipped cheap program's own
-tail (`watercheap_ps11`/`watercheap_ps20_old`: `mad r0.xyz, F, reflect, c0(g_FogColor)` / `mov
-r0.w, c0.w`) becomes `Emissive += FogColor.rgb x saturate((PixelDepth - FogStart) / (FogEnd -
-FogStart))`, with `Opacity` blended toward `FogColor.a` by the same distance term. The
-wave-animation scalars (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`, `WaterTimeFreq1/2`,
-`WaterWaveHeight/Length`, `WaterSpecularMin/Max`, `CheapWaterStartDistance/EndDistance`,
-`WaterDepth`) remain declared, not wired — vertex/World-Position-Offset concerns, out of this
-master's scope.
+**The SLW translation** (`_build_water`'s own account of ruling A, `make_v2_materials.py:1927`).
+VtMB's `Water_Old` is two render-target passes — `_rt_WaterRefraction` perturbed by the DUDV and
+tinted `$refracttint`, `_rt_WaterReflection` perturbed the same way, Fresnel'd and tinted
+`$reflecttint`, additive — plus a linear fog of everything below the plane
+(`SetFogVolumeState`/`MATERIAL_FOG_LINEAR_BELOW_FOG_Z`). Ruling A replaces the three with the one
+SLW output node (`MaterialExpressionSingleLayerWaterMaterialOutput`, wired by pin name through
+`connect_material_expressions` like the thin-translucent output `make_world_materials.py::
+M_World_Glass` already uses), fed four ways:
+
+- **`ScatteringCoefficients` / `AbsorptionCoefficients`** (1/cm): `range = max((FogEnd − FogStart)
+  × 2.54, 1)`; `σ = WaterFogScale / range` (the `MPC_ElysiumSurfaces` knob
+  `UElysiumSurfaceSettings::WaterFogScale`, default `1.386294` = 2·ln 2 — the value at which SLW's
+  exponential transmittance and VtMB's linear fog agree at the half-fog distance, §4.2 of the
+  architecture doc); `c = pow(FogColor.rgb, 2.2)` (the same decode `ElysiumFog::DecodeColor` gives
+  the scene fog). `Scattering = c × σ`, `Absorption = (1 − c) × σ`. `UseFogEnable` off zeroes both
+  (`$fogenable 0` is `FogMode(0)`: clear water). **`Underside` zeroes both too** — the
+  `$bottommaterial` faces are seen only from inside the volume, whose fog is the post-process
+  (§6), and 5.8's SLW camera-under-water branch is hardcoded off (`const bool CameraIsUnderWater =
+  false;`, `BasePassPixelShader.usf:1698`), so the underside must not integrate "water" over the
+  above-water world it refracts. `CheapWater` multiplies `σ` by `16` (ruling F: the cheap program
+  never reads the refraction RT and lerps `lerp(fogcolor, cube, fresnel)`, so the body reads as its
+  `$fogcolor` at any depth).
+- **`ColorScaleBehindWater`** = `RefractTint` (`mul r0, t2, c1`, the refract pass's own tint).
+- **`PhaseG`** = `0` — VtMB has no phase term.
+- (the fourth wire is `MP_NORMAL`, below — SLW reads the surface normal directly, not a fifth
+  output pin.)
+
+**Normal**: the flipbook lane, unchanged in graph shape — `_flipbook_sample` over `NormalMap`/
+`NormalMapFrames` at `NormalFrameRate`/`NormalFrameCount` (the `animatedtexture` proxy), over the
+`BumpScrollRateU/V` panner, gated `UseNormalMap`, feeding `MP_NORMAL` at unit strength. Before
+R7.1 every water instance shipped a **flat normal** regardless: `$normalmap` and `$bumpmap`
+(`dev/water_normal`, `dev/water_dudv`) are both 29-frame VTFs that stage as `Texture2DArray`s
+(`TA_water_normal` + its `_linear` twin, `TA_water_dudv`), so neither ever bound the master's plain
+2D `NormalMap`/`DuDvMap` slots, and the `animatedtexture` proxy (which reads `$bumpmap` off
+`animatedtexturevar`) bound the **DUDV** array into `NormalMapFrames` — the slot `$bumpmap` lands
+on for the water family — while never setting `UseNormalMap` at all. The stage fix
+(`importers/materials.py`'s `animatedtexture` branch, `family == "water" and normal_lane`): on the
+water family the frames array bound into `NormalMapFrames` is `$normalmap`'s own texture, not
+`$bumpmap`'s (the proxy still supplies the shared rate — `$bumpframe` indexes both textures'
+frames in `Water_Old`); and `_apply_texture_switch_pairs` now treats a bound `NormalMapFrames` as
+"the slot is bound" for the `UseNormalMap` gate, not only a bound static `NormalMap` — before this,
+every water instance animated a normal that `UseNormalMap` then discarded. `DuDvMap` stays unbound
+and declared, per the table above.
+
+**Specular** = `class_specular × luma(ReflectTint)`, forced to `0` under `Underside`
+(`Mod_LoadFaces`'s own strip). SLW applies its own Schlick from `Specular`; the graph's `Fresnel`
+node and `BaseReflectFract` pin from the pre-R7.1 lane are gone, `BaseReflectFract` staying
+declared above. **Roughness** / **Metallic** are the class LUT read, unchanged — Lumen honours SLW
+roughness in 5.8 (§8). **Emissive** is the authored fixed-cube add, unchanged (`cube × EnvMapTint ×
+FixedCubeStrength × ReflectTint`, gated `UseFixedCube`; `FixedCubeStrength` is the same
+`MPC_ElysiumSurfaces` knob `M_V2_Lit`'s and `M_V2_Refract`'s reflection contract reads). **Base
+Color** is unchanged (`BaseTexture × Color × RefractTint`, lerped toward `WaterColor` by
+`WaterMurkiness`) and invisible while Opacity is `0`.
+
+**Opacity is coverage, not murk** (`WaterVisibility = 1 − Opacity`, `BasePassPixelShader.usf:1140`
+— §8): `UseBaseTexture ? Alpha × BaseTexture.a : 0`. The old fog tail this pin used to blend toward
+`FogColor.a` — the shipped cheap program's own tail, `watercheap_ps11`/`watercheap_ps20_old`:
+`mad r0.xyz, F, reflect, c0(g_FogColor)` / `mov r0.w, c0.w` — is gone: Absorption is the fog now,
+and SLW has no refraction pin left to feed either (`MP_REFRACTION` is not written on this master
+any more). The four base-textured `Water` units (`dev_water`, `nether01_water`,
+`oilfieldwater a/b`) are placed on no water map; they keep their alpha as coverage, provenance-level
+only.
+
+**Declared, not wired** (provenance the instance still carries, none of it feeding a pin):
+`DuDvMap` (the DX8 render-target-offset field; SLW refracts along `MP_NORMAL`, which has no second
+channel to offset against — the sample node stands in the graph, unconnected), `RefractAmount` /
+`ReflectAmount` (the DUDV's warp strengths, not intensities — meaningless once the DUDV offset is
+gone), `BaseReflectFract`, `UseEnvMap` (the cheap cube is Lumen's mirror now, gated `UseFixedCube`
+instead), and the wave-animation scalars (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`,
+`WaterTimeFreq1/2`, `WaterWaveHeight/Length`, `WaterSpecularMin/Max`,
+`CheapWaterStartDistance/EndDistance`, `WaterDepth`) — vertex/World-Position-Offset concerns, out
+of this generator's scope, unchanged from before R7.1.
+
+**`M_ElysiumUnderwater`** is a second, separate asset this same generator authors
+(`_build_underwater`, `/ElysiumGenerated/Materials/V2/M_ElysiumUnderwater`) — `MD_PostProcess`,
+not one of the nine `M_V2_*` surface masters, so it carries none of the tables above. Its own three
+parameters (`FogColor`, `FogStart`, `FogInvRange` — the same names `ElysiumFog::ApplyToDecalMID`
+writes, `UNDERWATER_PARAM_TABLE` in the generator) drive `lerp(SceneTexture:PostProcessInput0,
+FogColor, saturate((SceneDepth − FogStart) × FogInvRange))`, blended in by the water actor's
+`IInterface_PostProcessVolume` implementation while the view sits inside a volume
+(`water-architecture.md` §6). `Elysium.Substrate.WaterActor` pins the MID triple by reflection; a
+tenth `FElysiumV2MasterCase` in `ElysiumV2MaterialTests.cpp` pins its two scalars and one vector
+against the compiled graph the same way every `M_V2_*` case does.
 
 ##### `M_V2_Sprite`
 
@@ -1123,10 +1269,17 @@ on each of the five masters is CPD-driven at exactly that index — a name-only 
 and fog nothing.
 
 **Not on the lane, and why.** `M_V2_Water` already exposes `FogColor`/`FogStart`/`FogEnd` as the
-VMT's own *water-fog* keys (`$fogcolor`/`$fogstart`/`$fogend`, the `watercheap` program's tail), a
-different term under the same names; the scene term on water is R7.2's, which owns the water
-surfaces this rebind puts onto `M_V2_Water` (2 on `sm_hub_1`). `M_V2_Sprite` is R7.4's,
-`M_V2_Eyes` R6.1's, and `M_V2_Decal` keeps R5.3's instance-parameter variant.
+VMT's own *water-fog* keys (`$fogcolor`/`$fogstart`/`$fogend`), a different term under the same
+names; this rebind puts 2 surfaces on `sm_hub_1` onto `M_V2_Water`. **R7.1 (2026-09-04) closed the
+question rather than deferring it** (ruling H, `water-architecture.md` §1): `M_V2_Water` takes no
+scene-fog term, on this master or ever — the refracted world already carries the scene's own fog
+(it is the lit scene sampled through SLW's refraction), and the Lumen mirror carries whatever the
+reflected primitives carry, so a second, additive fog term on the water's own scatter/specular
+would double it. *Named modernization*: VtMB draws the water surface under `EnableWorldFog()`
+like everything else; here it does not, and a far canal end that pops against its walls unfogged is
+recorded as divergence 10 in `water-architecture.md` §9, a tuning-session witness rather than a
+defect. `M_V2_Sprite` is R7.4's, `M_V2_Eyes` R6.1's, and `M_V2_Decal` keeps R5.3's
+instance-parameter variant.
 
 **The decal placement lane did not rebind in R5.4 — a domain fact, not a scope call, and R7.2
 answered it.** R5.3 had planned the placement lane's `ADecalActor` onto an MID parented to the
@@ -1902,10 +2055,10 @@ resolves the remainder against the parameter table.
 
 | Proxy | Mats | Inst | Destination | Keys it reads | Notes |
 |---|---|---|---|---|---|
-| `sine` | 87 | 114 | shader-time: the sine lane | `sinemin`, `sinemax`, `sineperiod`, `timeoffset`, `resultvar` | **15** distinct case-folded `resultvar` targets over 116 rows: `$alpha` 35, `$color[*]` 31, `$selfillumtint[*]` 25, `$envmaptint[*]` 10, `$temp*` 7, `$detailscale` 2, `$tempvec[1]` 1. A `[i]` component target writes one channel, through `SineChannelMask`; `$temp*`/`$tempvec` are chain links, not outputs; `$detailscale` is provenance-only, so those two rows emit nothing and record `proxyTargetProvenanceOnly` |
+| `sine` | 87 | 114 | shader-time: the sine lane | `sinemin`, `sinemax`, `sineperiod`, `timeoffset`, `resultvar` | **15** distinct case-folded `resultvar` targets over 116 rows: `$alpha` 35, `$color[*]` 31, `$selfillumtint[*]` 25, `$envmaptint[*]` 10, `$temp*` 7, `$detailscale` 2, `$tempvec[1]` 1. A `[i]` component target writes one channel, through `SineChannelMask`; `$temp*`/`$tempvec` are chain links, not outputs; `$detailscale` is provenance-only, so those rows emit nothing and record `proxyTargetProvenanceOnly` — **except a `$temp*` a `texturetransform` reads back** (R7.1 ruling J, the section above at → "The `sine` → `texturetransform` chain"): that pair resolves to `SineUVTranslate` and the sine row keeps `destination: "graph"`. Measured 2026-09-04 over the staged corpus: 12 `proxyTargetProvenanceOnly` rows on 7 units, one fewer than before ruling J (`objects/surf`'s `$temp[0]`) |
 | `animatedtexture` | 72 | 72 | shader-time: frame index | `animatedtexturevar`, `animatedtextureframenumvar`, `animatedtextureframerate`, `animationnowrap` | `animatedtexturevar` is `$basetexture` / `$bumpmap` / `$normalmap` and `animatedtextureframenumvar` is `$frame` or `$bumpframe` — `$frame` is never declared as a VMT key, so the stage creates the scalar. The slot binds the slice-2 `TA_` array asset and `FrameRate` drives the slice index; `animationnowrap` (1) clamps instead of wrapping |
 | `texturescroll` | 48 | 55 | shader-time: `Panner`, on one of **two** independent lanes | `texturescrollvar`, `texturescrollrate`, `texturescrollangle` | the stage precomputes `rate·cos θ` and `rate·sin θ`, so the master needs no trig. The lane comes from `texturescrollvar`: `$basetexturetransform` 17 and `$basetextureoffset` 3 → **`BaseScrollRateU/V`**; `$bumpoffset` 23 and `$bumptransform` 12 → **`BumpScrollRateU/V`**. 12 materials scroll both lanes at different rates, which is why they are two parameters and not one. Two proxies on the same lane (6 materials) **sum** their rates — exact, since two translations of one UV are one panner |
-| `texturetransform` | 12 | 16 | shader-time **when its inputs are** | `resultvar`, `translatevar`, `rotatevar` | writes `$basetexturetransform` (12) → `TexScaleOffset` or `$texture2transform` (4) → `Texture2ScaleOffset`, from another proxy's output; `translatevar` names `$texoffset` 4, `$tex2offset` 4, `$temp` 4, `$translate` 1, `$tempvec` 1 and `rotatevar` names `$temp` 2. Expressible only when `translatevar`/`rotatevar` resolve to a shader-time source; otherwise runtime |
+| `texturetransform` | 12 | 16 | shader-time **when its inputs are** | `resultvar`, `translatevar`, `rotatevar` | writes `$basetexturetransform` (12) → `TexScaleOffset` or `$texture2transform` (4) → `Texture2ScaleOffset`, from another proxy's output; `translatevar` names `$texoffset` 4, `$tex2offset` 4, `$temp` 4, `$translate` 1, `$tempvec` 1 and `rotatevar` names `$temp` 2. Expressible only when `translatevar`/`rotatevar` resolve to a shader-time source; otherwise runtime. The `$temp` 4 `translatevar` rows are the ruling-J chain: joined to the `sine` that wrote the register they become `SineUVTranslate` (the section above at → "The `sine` → `texturetransform` chain"), not `TexScaleOffset` |
 | `linearramp` | 5 | 5 | shader-time: `Time × rate` | `rate`, `resultvar` | targets `$tex2offset[1]` (4) and `$texture2offset[1]` (1) — both `Texture2ScaleOffset.w`, a scrolling second layer |
 | `add` | 7 | 7 | shader-time arithmetic | `srcvar1`, `srcvar2`, `resultvar` | |
 | `subtract` | 14 | 18 | shader-time arithmetic | `srcvar1`, `srcvar2`, `resultvar` | |

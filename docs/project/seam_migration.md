@@ -457,7 +457,9 @@ no frames array to fall back onto (the `$envmapsphere`/break-glass pair the desi
 Anomaly rollup over the 19,121 staged units: `textureClassMismatch` 97 (up from 53 — every
 fallback-rescued unit still records the real mismatch, only its consequence changed),
 `selfIllumOnUnlitSurface` 9, `misspelledKey` 4, `translucentValue` 2. Omission rollup:
-`unitDivergenceProvenanceOnly` 15, `proxyTargetProvenanceOnly` 13,
+`unitDivergenceProvenanceOnly` 15, `proxyTargetProvenanceOnly` **12** (13 until R7.1: ruling J
+consumes the `objects/surf` `$temp[0]` sine into `SineUVTranslate`, so that one row stops being an
+omission -- re-measured 2026-09-04 over the staged tree, 12 rows on 7 units),
 `animatedFramesArrayUnavailable` 12 — the same 12 units the "known-stale" list names
 (`sprites/mflash_{colt,mac10,shotgun}`, `models/scenery/structural/controlpanel/screenf`,
 `models/scenery/structural/sewerparts/water_fall_{big,small}`,
@@ -2520,6 +2522,181 @@ art variants and armour portraits stay unresolved by the HUD (R6.6); `verify_lig
 the legacy `.sky` and the legacy lane keeps `_read_sky`/`write_sky` for the 105 unconverted maps
 until R9 (R6.7).
 
+**R7.1 — water on the V2 lane (2026-09-04).** VtMB's water is four stacked facts the 2004 engine
+happens to share a name for — a surface look, a `CONTENTS_WATER` volume, an underside face set and
+the eye-under-the-plane fog — and the ruling keeps them apart onto four different Unreal
+mechanisms rather than reproducing the two 2004 render-target passes. Full ruling and engine
+citations in `docs/architecture/water-architecture.md`; contract in `seam_map_material.md` →
+`M_V2_Water` and `seam_map_map.md` → "Import — water volumes (R7.1)". `GRAPH_VERSION` 8 → 9,
+`MANIFEST_VERSION` 8 → 9 (`pipeline/src/elysium_pipeline/importers/map_geometry.py:59`,
+`pipeline/unreal/bake_map_v2.py:59`).
+
+**Ten rulings** (A–J; each a transcription unless named a modernization):
+- **A — `M_V2_Water` is a Single Layer Water master.** `MSM_SingleLayerWater`, `BLEND_Opaque`,
+  one-sided, never Nanite; the VMT's own `$fogenable`/`$fogcolor`/`$fogstart`/`$fogend` become
+  Absorption/Scattering (`σ = WaterFogScale / range`, `range = max((FogEnd−FogStart)×2.54, 1)`,
+  the colour gamma-decoded through the new `Graph.pow`), `$refracttint` is Color Scale Behind
+  Water, `$reflecttint`'s luma scales the class specular, `CheapWater` multiplies extinction ×16.
+  *Named modernization*: the two 2004 render-target passes and the in-volume fog become SLW's
+  refraction, Lumen's reflection and SLW's absorption/scattering — the three things the roadmap
+  line asked to answer in one place (`pipeline/unreal/make_v2_materials.py::_build_water`, `:2266`).
+- **B — `water.volumes[]` is a new stage product**, one row per real `LEAFWATERDATA` record
+  (sentinels and a `la_bradbury_3` shadow row dropped and named in `dropped[]`), each carrying
+  `surfaceZCm`/`minZCm`, the fog keys resolved through `surfaceTexInfoID` → texinfo → material, and
+  the volume's `CONTENTS_WATER` brushes as convex plane sets in Unreal cm — a brush counts only
+  when a non-bevel side authors `%compilewater`, which is how a `tools_shadow`-sided caster is told
+  apart from real `func_detail` water (`importers/map_geometry.py:71-227`).
+- **C — one `AElysiumWaterVolumes` actor per converted map**, bake-placed and tagged
+  `elysium.water`, adopted by `UElysiumMapVisuals`; `AElysiumMapActor::UpdatePlayerWater` (called
+  from `PreMoveTick`) classifies the player's feet/waist/eyes against it — `CheckWater`'s three
+  point queries, level 0–3 — before the move reads the level
+  (`Source/ElysiumUE/Private/Map/ElysiumMapActor.cpp`, `ElysiumWaterVolumes.h`'s
+  `ElysiumWater::ClassifyBody`).
+- **D — underwater is a post-process linear fog.** `M_ElysiumUnderwater` (`MD_PostProcess`,
+  `lerp(scene, FogColor, saturate((SceneDepth−FogStart)×FogInvRange))`) is registered by the water
+  actor as an `IInterface_PostProcessVolume`; the engine reads `bIsEnabled` before it ever calls
+  `EncompassesPoint` (`World.cpp` `DoPostProcessVolume`), so the gate is `bIsEnabled`, set per view
+  from `UWorld::OnBeginPostProcessSettings` the way the Water plugin's own
+  `UUnderwaterPostProcessVolume` does it — the only shipped precedent for a volume whose shape the
+  engine cannot evaluate itself.
+- **E — the underside faces stay.** The corpus already carries `dev/dev_waterbeneath2` as real
+  down-facing faces on every top plane; a self-bottomed unit's own name sets a new `Underside`
+  switch (zero specular, zero extinction) because the engine strips reflection from every
+  down-facing water face and SLW's camera-under-water branch is dead code in 5.8 (§8, below).
+- **F — `$forcecheap` is a look, not a LOD.** `CheapWater` multiplies extinction ×16 (the body
+  reads as its `$fogcolor` at any depth) and leaves the reflection to Lumen. *Named modernization*:
+  the cheap cubemap is replaced by the same Lumen mirror the expensive path uses.
+- **G — `leafMinDist[]` is provenance.** The engine never loads lump 46; nothing is derived from
+  it — a fact, not a choice, and the retraction of the roadmap line's old "underwater from
+  `leafMinDist`" premise.
+- **H — no scene-fog term on the water surface.** The R6 follow-up ("`ElysiumFog` term on
+  `M_V2_Water`") closes as *not on this master*: the refracted world and the Lumen mirror already
+  carry their own per-primitive fog. *Named modernization* — VtMB draws the surface under the
+  world fog; here the surface's own scatter and specular are unfogged.
+- **I — the camera clearance offset is transcribed.** `CViewRender::GetWaterOffset`
+  (`cl_waterdist` 4 in) is `ElysiumCam::SolveWaterOffset` in closed form — treading (level 2)
+  raises the view until clear of the plane, submerged (level 3) lowers it until back under —
+  applied in `UElysiumCameraComponent::ApplyBaseToView` outside the boom-blend block, since the
+  case it exists for (a treading or swimming body) is first person, where that blend is 0. *Named
+  divergence*: the original's one-unit Z-step quantization is dropped for the exact closed-form
+  distance.
+- **J — `SineUVTranslate` on `M_V2_Lit`.** The `sine` → `texturetransform` UV slide the
+  `sm_pier_1` `objects/surf` wave cards author (amplitude, offset, `SinePeriod`/`SineTimeOffset`
+  shared across the one sine a master supports); default `(0,0,0,0)` is neutral
+  (`importers/materials.py:186-371`).
+
+**Out of scope, named (ruling list item 10 in the architecture doc):** drips, mist, splashes
+(R7.3's families — VtMB itself spawns no splash on entry), `dsp_water` and wade footsteps
+(`plans/audio.md`), NPC water levels (the entity substrate's), `trigger_hurt` pools (already
+entities).
+
+**What the ruling retracts** from the pre-ruling text: five engine claims (SLW's camera-under-water
+branch does not exist as `bCameraIsUnderWater`; Opacity is coverage, not murk; coefficients are
+1/cm not 1/m; Lumen honours SLW roughness — it is not a forced mirror; MegaLights still lights
+water forward through the light grid), the "underwater from `leafMinDist`" wording, the "22 maps"
+count (25 maps carry `LEAFWATERDATA`, 24 have a drawable water brush, 22 units sit on the `Water`
+shader — the counts diverge by feature, not by disagreement), and the assumption that the V2
+lane's normal lane was already right on water — it was not: the `animatedtexture` proxy bound the
+29-frame **DUDV** array into `NormalMapFrames` and never set `UseNormalMap`, so every water
+instance shipped with a flat normal on both the legacy and V2 lanes until this fix
+(`importers/materials.py:141-149`).
+
+**Named divergences beside the faithful behaviour** (owner-visible, full list in
+`water-architecture.md` §9): two render targets collapse to one SLW pass (no planar camera, no
+DUDV RT offset); linear volume fog becomes exponential extinction, half-distance matched by
+`WaterFogScale`; `$refractamount`/`$reflectamount` and `mat_waterswirl` are declared, not wired
+(the normal is used at unit strength); `$reflecttint` reaches the reflection only as luma, not red
+tint; Fresnel is SLW's own Schlick, not `(1−N·V)^5` with R0=0; the underwater post-process *adds*
+to the per-primitive scene fog rather than replacing it (the volume fog's range is far inside the
+world fog's on the corpus, so the double term is invisible in practice); fog-volume selection is
+point-in-brush of the view location, not a PVS walk; the water surface itself takes no scene fog
+(ruling H); water faces are lit forward by Lumen and the light grid — VtMB's are `SURF_NOLIGHT`.
+
+**Lane changes.** `pipeline/unreal/make_v2_materials.py`: `_build_water` → the SLW graph, shading
+model set *after* the graph is built (authoring under `MSM_SINGLE_LAYER_WATER` mid-build logs a
+spurious "Failed to compile Material" per write); `REQUIRED_MPC_SCALARS` gains `WaterFogScale`;
+`M_ElysiumUnderwater` generated beside the V2 masters. `pipeline/unreal/matgraph.py`: `Graph.pow`
+routed through `_binop` wired `A`/`B` pins that `UMaterialExpressionPower` does not have (it names
+`Base`/`Exponent`, reachable as `Exp` through `UMaterialGraphNode::GetShortenPinName`) — dead code
+with no call site until `_build_water`'s fog-colour gamma decode, fixed and pinned by
+`pipeline/tests/test_matgraph.py`. `pipeline/unreal/make_surface_knobs.py` /
+`UElysiumSurfaceSettings`: the `WaterFogScale` row. `importers/materials.py`: the `Underside`
+switch, the `SineUVTranslate` lane, the normal-frames fix. `importers/map_geometry.py`:
+`water.volumes[]`, `MANIFEST_VERSION` 9. `pipeline/unreal/bake_map_v2.py` / `bake_map.py`:
+`_place_water` (one actor, `FElysiumWaterVolume`/`FElysiumWaterBrush` structs), `TAG_WATER`,
+`WATER_ACTOR_SHAPE`; the `_set` failure message's hardcoded `effects:` prefix generalized to
+`bake:` now that `_place_water` shares the helper. `pipeline/unreal/bake_verify.py`:
+`verify_water`, `MapsOnV2Models`-gated. `Source/ElysiumUE`: `AElysiumWaterVolumes` +
+`FElysiumWaterVolume`/`FElysiumWaterBrush`, the `elysium.water` tag
+(`ElysiumBakedTags::Water`), `UElysiumMapVisuals::GetWaterVolumes`,
+`AElysiumMapActor::UpdatePlayerWater`, `UElysiumCameraComponent::SetWaterState`,
+`ElysiumCam::SolveWaterOffset`. `Config/DefaultElysium.ini`: `WaterFogScale=1.386294`; `sm_pier_1`
+added to both `MapsOnNewTransport` and `MapsOnV2Models`.
+
+**Owner calls.** The one open question the ruling carried into the task, §7's camera clearance
+offset, resolved **transcribed** (ruling I above) rather than left for a later swim-able slice.
+Two calls surfaced during landing, both accepted: `+MapsOnNewTransport=sm_pier_1` alongside
+`+MapsOnV2Models=sm_pier_1` (`Elysium.Content.MapEnvironment.FieldParity` reads the DA assets, not
+the sidecar, and those assets are dead weight without the R4.6 cutover flag); and Water's
+`BaseTexture` slot stays required (`dev/ocean`/`dev/oceanbeneath` — 29-frame DUDV VTFs with no
+`BaseTextureFrames` lane on the master — stay unstaged, since `UseBaseTexture` defaults off,
+Opacity is 0 without it, and `pipeline/tests/test_materials_stage.py::test_basetexture_multiframe_array_stays_a_failure_on_water`
+pins the current behaviour deliberately; neither map needs them — `sm_pier_1`'s ocean card is
+`water/blackwater`).
+
+**Measured (2026-09-04, foreground, this machine).** `uv run pytest` **3,104 passed, 0 failed**
+(3,103 before, +1 for the `Graph.pow` pin); the plan's named subset **173 passed, 0 failed**.
+`uv run elysium build`: Succeeded, 0 errors. `uv run elysium test substrate`: **457 of 457
+executed, 0 failed** — `Elysium.Substrate.Water`, `Elysium.Substrate.WaterActor` and
+`Elysium.Substrate.Camera` all Success. `uv run elysium test policy`: **10 of 10, 0 failed**,
+`Elysium.Policy.V2MasterParams` Success. `uv run elysium export bundle policy`: 0 "SingleLayerWater
+materials requires the use of SingleLayerWaterMaterial output node", 0 "No inputs to Single Layer
+Water", 0 "Failed to compile Material" (unwrapped grep — the earlier run's "0 Failed" reading had
+been defeated by the console log's ~75-column hard wrap splitting the phrase); `M_V2_Water`
+probes **933** pixel-shader instructions on the all-switches-true permutation and saves;
+`M_ElysiumUnderwater` saves. `uv run elysium import materials`: **33 imported, 19,676 reused, 0
+pruned**, exit 6 on 4 pre-existing failures unrelated to water (`dev/ocean`, `dev/oceanbeneath`,
+`envmap/gioint`, `skybox/hav_env`); `Underside=True` on exactly **1** instance
+(`MI_dev_waterbeneath2`, parent `M_V2_Water`), `SineUVTranslate` on exactly **1**
+(`MI_surf`, parent `M_V2_LitTranslucent`, `[0.5, 0.0, 0.0, 0.0]`). Staged manifests, both
+`MANIFEST_VERSION` 9, one volume, zero dropped: `sm_hub_1` — index 0, `surfaceZCm` −14937.74,
+`minZCm` −14988.54, `vtmb:material:water/sewer_water`, `fogEnable` true, `fogColor` (0.019608,
+0.019608, 0.0), 2.54/2600.96 cm, 1 brush of 6 planes; `sm_pier_1` — index 0, `surfaceZCm`
+−1582.42, `minZCm` −1666.24, `vtmb:material:water/invisible_water`, `fogEnable` true, `fogColor`
+(0.086275, 0.078431, 0.039216), 2.54/1016.0 cm, 1 brush of 6 planes. Both bakes: `[bake] water: 1
+actor placed with 1 volume(s)`; `verify_water`: `1 staged rows, 1 matched` on both maps. No
+`Failed to compile Material Instance` anywhere in `Saved/Logs/ElysiumUE.log` or its eight backups
+across both map bakes; no leftover UnrealEditor processes.
+
+**Order of work.** (i) the ruling into `water-architecture.md`, `seam_map_material.md` →
+`M_V2_Water`, `seam_map_map.md` → "Import — water volumes (R7.1)"; (ii) `matgraph.py`'s `Graph.pow`
+fix (a prerequisite the SLW fog-colour decode exposed); (iii) `make_v2_materials.py`'s `_build_water`
++ `M_ElysiumUnderwater`, `make_surface_knobs.py`'s `WaterFogScale`; (iv) `importers/materials.py`
+(`Underside`, `SineUVTranslate`, the normal-frames fix) and `importers/map_geometry.py`
+(`water.volumes[]`); (v) `bake_map_v2.py`'s `_place_water` and `bake_verify.py`'s `verify_water`;
+(vi) `Source/ElysiumUE` — `AElysiumWaterVolumes`, `UpdatePlayerWater`, `SolveWaterOffset`,
+`SetWaterState`, the post-process registration; (vii) `sm_pier_1` onto both map-transport flags,
+masters regenerated, both maps re-staged and re-baked, the automation tiers, the in-game witness.
+Tests at the seam only: the pytest pins named above, `Elysium.Substrate.Water`/`WaterActor`/`Camera`,
+the camera clearance-band tests in `Source/ElysiumUE/Private/Tests/ElysiumCameraTests.cpp`, and
+`verify_water` in `bake_verify.py`. → lands: water that behaves like water on `sm_hub_1` and
+`sm_pier_1`; roadmap 7.3 named R7.1 and marked landed.
+
+**Open, named, not this task's boundary.** `export map --verify` still exits non-zero on both maps
+on legacy per-map glass/prop-alpha checks a V2 bake can never satisfy (`bake_map_v2.py` authors no
+per-map `MI_glass_*`) — pre-existing, unrelated to water. `test content` exits with 5 pre-existing
+failures, none water-related (reflection captures, `ChangeLevelInputs`' pin count, `FanDuration`,
+`RigCompose`, `SantaMonicaRain`'s missing V2 wet-cubemap MICs). The in-game witness
+(`docs/architecture/water-architecture.md` §11) ran twice on 2026-09-04: the sewer surface draws,
+reflects and refracts; `Feet` reads on the sewer floor and in the pier's ocean band; the pier's
+invisible ocean drew as a `tools/toolsinvisible` sheet until `meshed_faces` honoured `noDraw` and
+the map re-baked (five chunk meshes rebuilt); and the "underwater post-process does not fog"
+finding of the first pass was two measurement artefacts (the underside surface's own depth, and the
+engine merging same-material blendables by volume priority) — the fog applies, and on a 50 cm canal
+it is invisible by the authored numbers. `Waist`/`Eyes` have no in-game witness until a deep
+volume converts. `import models --maps <one map>` still replaces rather than merges the shared
+staged-models manifest — a trap for the next scoped run, named but not fixed here.
+
 **R7.2 — decals on the V2 lane (2026-09-03).** A decal is a *projection*, and Unreal makes that a
 material domain, which is the one material property an instance cannot override. So the lane is
 built around a second instance rather than a second blend mode: `M_V2_Decal` is re-cut as the
@@ -2721,12 +2898,16 @@ wiring. Independent of R8; **order is R6 → R7 → R8** (owner call, 2026-09-02
 upgrades land first and the design questions are settled while the map work is fresh, at the
 cost of the biggest rewrite and the retire stage waiting behind them.
 
-- **R7.1 Water** [R7.2 / MP-5.2]. 22 maps carry water; the root unit publishes `leafData[]` and
-  `leafMinDist[]`; `M_V2_Water` exists with the VMT water-fog keys and two `sm_hub_1` faces
-  already sit on it under an `Opaque` override. Rulings: Single Layer Water versus the
-  translucent master (SLW answers `$reflecttexture` 19 and `$refracttexture` 17 and the scene fog
-  term in one place), `$bottommaterial` (provenance only today), underwater from `leafMinDist`,
-  and `docs/vtmb/water.md`'s open questions. → lands: water that behaves like water.
+- **R7.1 Water** [R7.2 / MP-5.2]. **Ruled and landed, 2026-09-04** — Settled below as
+  "R7.1 — water on the V2 lane". `M_V2_Water` is re-cut as a Single Layer Water master (SLW
+  answers `$reflecttexture`, `$refracttexture` and the in-volume fog in one place, ruling A);
+  `water.volumes[]` is a new stage product joining every real `LEAFWATERDATA` row to its
+  `CONTENTS_WATER` brushes (ruling B); one `AElysiumWaterVolumes` actor per map is bake-placed
+  and classifies feet/waist/eyes pre-move (ruling C); underwater is a post-process linear fog the
+  actor registers as an `IInterface_PostProcessVolume` (ruling D); `$bottommaterial` becomes the
+  `Underside` switch (ruling E); `leafMinDist[]` stays provenance-only, never loaded by the engine
+  (ruling G). The "22 maps" count and the `leafMinDist`-drives-underwater premise are both
+  retracted — see the Settled entry's "What the ruling retracts".
 - **R7.2 Decals** [R7.6 / MP-5.6] — **reviewed on the real census, 2026-09-03; two owner calls
   open, everything else forced.** Why it was deferred: R5.3 planned the decal rebind onto an MID
   over the shared `MI_<unit>`, and R5.4 found (a) a `UDecalComponent` draws only an
@@ -3012,35 +3193,71 @@ asset lane.
 
 ### R8 — characters: the skeletal lane rebuilt on the GLB corpus [was R6.1 / SF-6.3, R6.3 wield / SF-6.5, R6.4 irises]
 
-Cutover is gated **per body** (the cast partition), not per map. The V2 side is further along
-than the old R6.1 implied: characters and weapons are already `vtmb:model:` units (489 under
-`models/character`, 206 under `models/weapons`), each carrying `materialBindings.slots[]` and
-`skinFamilies[]` by `vtmb:material` id, and `importers/models.py` already resolves families to
-`MI_` for props. What is legacy is everything from the unit to the mount: `npc_export` (1,404
-lines), `UE_mdl_skeletal` (1,711), `UE_mdl_cloth`, the `.eskm` container, the six sidecar
-families, `bake_characters.py` (922), `bake_wield.py` (974), three master families and nine
-runtime readers under `npc/`.
+**Designed on measurements, 2026-09-04 — the plan is `characters_r8.md`** (rulings D1–D12,
+the lane, the tasks, the ranked risks, the owner calls with their defaults, and the 15 defects
+the exploration found; the thirteen measurement reports behind it are under
+`$ELYSIUM_WORK_ROOT/_r8_explore/`). What the exploration settled, in one paragraph: the V2 model
+unit carries **every** datum the legacy skeletal exporter reads (masks strictly binary corpus-wide,
+the `<layer>@<host>` fan-out reproduced from the GLB 1,505/1,505 on the largest bank, the skin
+table and the VPhysics rig the `.eskm` never had); what is missing is every *derivation* (~37
+rules, ~2,000 lines) and every bake *decision* — so R8 is a port of rules onto a stage and a
+re-plumb of the C++ builders, which stay because nothing else can author a `USkeletalMesh`.
+**Every asset lands on one baked-asset standard** (owner ruling, 2026-09-04, written into
+`seam_map_unit_contract.md` → "Baked assets"): the mount mirrors `exports_v2` —
+`/ElysiumBaked/<Kind>/<dir>/<Prefix>_<base>`, per-label products under `<base>/`, corpus-wide
+assets under `<Kind>/_Corpus/` — ids are the only address and stems resolve through a cast
+table, so the retail captures keep their keys; the landed lanes that drift (the flat `Meshes/`,
+the per-map root folders, sprites, sky, lookdev) move in R8.0 rather than in a later project.
+The retail-capture parity numbers are pinned as equalities; the character mount (3.9 GB, 39 % of
+the plugin) is the biggest lever on mount size. Corrections the plan applies to this text: `models/character` is **485** units, not
+489; the "Nosferatu/Malkavian obfuscate noise chains" are four CRT-static TV screens on
+`M_V2_TwoTexture`, not character materials; `mouthshader` is a per-slot boolean on two teeth
+materials with no consumer; `identity.shape: bank` classifies nothing and retires.
 
-- **R8.1 Producer parity.** `.eskm`, `clips/`, `facial/`, `procedural/`, `blends/`, `eyes/`,
-  `garment/`, `npc_index.json` and `wield_models.json` re-emitted from the V2 model and
-  animation-bank units, byte-equal or named-divergence-only against the legacy exporters (the R3
-  shape, with the differ). → lands: one producer for the cast.
-- **R8.2 Skeletal bake off the unit.** Skeleton, mesh, slots and skin families → `MI_` by the
-  props lane's own resolution. Two master rulings, written into `seam_map_material.md` first:
-  `ModelAlpha` — the player's dither fade — on `M_V2_Lit`'s masked path or a per-body MID; and
-  `M_V2_Eyes` gaining the eye-basis planes (`IrisOrigin`/`IrisU`/`IrisV`) and the runtime
-  `Vampire` scalar `FElysiumEyePass` drives, with `Iris` bound on the instance so the `npc/` iris
-  read dies. `M_PlayerBody` and `M_Eyes` retire. → lands: bodies on V2.
-- **R8.3 Wield off the unit.** The 206 weapon units through the same skeletal build; the item
-  join stays the `vtmb:vdata:` unit's; the `M_Wield_*` family and `UE_extract_wield`'s private
-  texture closure retire. → lands: items on V2.
-- **R8.4 Animated props.** Skeletal props bind their `MI_` directly; `BindMapMaterials`'s
-  static-twin copy and `ApplyAnimatedPropSkin` retire in favour of the V2 skins table. → lands:
-  one material authority for a placed model.
-- **R8.5 Clips, banks, blends, facial, procedural, cloth cooked.** From the model and
-  animation-bank units; the nine `npc/` runtime readers, `FElysiumTextureCache` and its DDS
-  reader retire; `mouthshader` binds through `Create(MI_)`; the Nosferatu/Malkavian obfuscate
-  noise chains go to the runtime whole. → lands: no loose read under `npc/`.
+Cutover is gated **per body** on the R4.6 shape: a tracked `ModelsOnV2` list of unit ids the
+resolver and the pipeline both read, the new lane landing beside the legacy roots under its own
+kind root, nothing overwritten, the legacy roots deleted when the list is complete. Order: the
+56 player bodies, the three test maps' casts, the rest; banks and props flip wholesale with R8.1
+on a byte-equal payload against a frozen copy of the legacy `npc/` + `items/` export.
+
+- **R8.0 Preflight.** The baked-asset standard implemented — one resolver twin
+  (`asset_paths.baked_path` / `BakedUnit`) with a golden fixture, the models re-imported to
+  `Models/<dir>/SM_<base>`, the map root to `Maps/`, sprites and sky and lookdev moved, the
+  stem folds and stem accessors deleted, every map re-baked; the rulings into their seam docs
+  (`seam_map_material.md` ×3, `seam_map_model.md` → "## Import — skeletal",
+  `animation-architecture.md`, `physics-architecture.md` L0 deleted); the six live defects fixed
+  (`placed_models.py`'s split-rotation tuple, the rigid-wield `FindWieldModel` predicate, the
+  index's `wield`/`ground-item` swap, the missing `ClanDataTables` projector, the `SetModel`
+  basename fold, the missing `safe_name` on the prop path); the legacy export frozen; T-A5
+  marked DONE; T-C8 measured.
+  → lands: one naming standard on the whole mount; the design on record; the baseline cannot
+  move under the rebuild.
+- **R8.1 Producer parity.** `validation/skeletal_diff.py` first, then `importers/characters.py`
+  + `skeletal_stage/` porting the rules and writing the legacy product set at the legacy paths
+  (game and bake untouched) plus the staged `import/characters/` tree; whole-cast run;
+  `npc_export`, `UE_mdl_skeletal`, `UE_mdl_cloth`, `mdl_gltf`, `UE_extract_wield`,
+  `UE_extract_items` deleted. → lands: one producer for the cast.
+- **R8.2 Skeletal bake off the unit.** The skinned master pair (`M_V2_LitSkinned` +
+  `…Translucent`: clothing usage, masked + dither, `ModelAlpha`, `UseAlphaTest`), `M_V2_Eyes`
+  completed (the five basis vectors, `Flatten`, `Vampire` as a scalar, `Iris` on the instance),
+  `M_PlayerBody` / `M_Eyes` retired; the `import characters` lane on the props template with the
+  existing builders, slots on the 2,027 V2 `MI_`, `UElysiumCharacterProvenance`, prune, the
+  map bake's memory drain, T-B3's guard, cloth re-pointed (render maps re-keyed), `DYN_<stem>`;
+  the asset differ `verify characters --legacy-mount` and the crossfade-residual instrument.
+  → lands: bodies on V2.
+- **R8.3 Wield off the unit.** Skeletal always; the ref-pose re-skin moves into the build;
+  `wield_corpus` unchanged over GLB bones; `DA_WieldModels` kept with `AssetId`; `M_Wield_*`,
+  `bake_wield.py`, the private texture closure and `ground_models.json` retire; viewmodels stay
+  LIFE6's. → lands: items on V2.
+- **R8.4 Animated props.** Slots bound at bake, `BindMapMaterials` deleted, `ConfigureRest`
+  narrowed, static equivalence recomputed from the unit, `DA_ElysiumPlacedModels` keyed by id.
+  → lands: one material authority for a placed model.
+- **R8.5 Cooked.** Facial / eyes / procedural on the mesh as user data; the sequence table and
+  autolayer view in `DA_ElysiumBody_<stem>`; clip columns, events and movement as
+  `UAnimMetaData` (never notifies, never root motion); T-B2 in the blend-space writer; the
+  expression-table lane; the nine readers, `FElysiumTextureCache` and the `npc/` / `items/`
+  trees retire. PHYS1 follows as its own row on the staged `physics` payload.
+  → lands: no loose read under `npc/`.
 
 ### R9 — retire [was R8; MP-6, SF-7.1]
 

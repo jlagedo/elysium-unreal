@@ -243,7 +243,15 @@ call, script verb and scheme event that names a sound is conformed to it.
   `M_V2_Decal` is the `MD_DeferredDecal` projector master, every projected unit stages a shared
   `MI_<unit>_Decal` twin the bake and `UElysiumDecalSubsystem::Lay` both bind by name, `$decal`
   world faces draw as mesh decals, and the legacy `M_Decal` and its per-map packages are retired.
-- [ ] **[7.3 Water](plans/world.md)**
+- [x] **7.3 Water** [R7.1] — the V2 lane: `M_V2_Water` is a Single Layer Water master (SLW's own
+  refraction, Lumen's reflection and absorption/scattering answer the two 2004 render-target
+  passes and the in-volume fog in one place), `water.volumes[]` is a new map-stage product joining
+  every real `LEAFWATERDATA` row to its `CONTENTS_WATER` brushes, one bake-placed
+  `AElysiumWaterVolumes` actor per map classifies the player's feet/waist/eyes pre-move and is the
+  map's underwater post-process volume, and the camera's `cl_waterdist` clearance offset is
+  transcribed. `sm_hub_1` and `sm_pier_1` are converted; ruling and detail:
+  `docs/architecture/water-architecture.md`, `docs/project/seam_migration.md` → "R7.1 — water on
+  the V2 lane".
 - [x] **7.4 Master-material set** — the generated surface masters.
 - [ ] **[7.5 Real reflections](plans/world.md)** → `docs/vtmb/reflections.md` ·
   **[7.6 Bloom/glow tuning](plans/world.md)** · **[7.7 Shadow quality](plans/world.md)** ·

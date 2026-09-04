@@ -938,7 +938,9 @@ never be a version apart — it costs about 1.5 s per map. This is the offline-s
 shape the model, material and texture lanes already have.
 
 **One classifier, not two.** The world / 3D-sky / brush-model face split, the sub-three-edge and
-missing-texinfo drops, the `tools/` namespace drop (`tools/black` and `tools/toolsblack` excepted),
+missing-texinfo drops, the `tools/` namespace drop (`tools/black` and `tools/toolsblack` excepted)
+and the `SURF_NODRAW` drop beside it (R7.1 review: a `%compilenodraw` unit outside `tools/` --
+`water/invisible_water` -- escaped the name test and drew),
 the `func_areaportalwindow` backing-model drop, and the sky-area membership test are the R3.2
 producer's own (`exporters.UE_map_sidecars.prepare_join`), imported rather than re-derived. Two
 implementations of "which faces are the miniature" is exactly the divergence R3.3 exists to catch,
@@ -1923,3 +1925,178 @@ block and `flametrail*` a `rate` on the particle body (no row in the runtime's t
 `impactfx_sparks_blue` a `maxframes` typo — all carried nowhere, as VtMB carries them nowhere.
 The `sparks_warrens_computers_fx*` colour ramps spell `255!,0!,…`; the stage reads the numeric
 prefix as the engine's `atof` does.
+
+## Import — water volumes (R7.1)
+
+R7.1 of `docs/project/seam_migration.md` (ruling in `docs/architecture/water-architecture.md`
+§1, rulings B and C) places a converted map's **water volumes** as one bake-generated actor: every
+real `LEAFWATERDATA` record joined to the `CONTENTS_WATER` brushes that carry it and the fog keys
+its surface material authors. The look — `M_V2_Water` as Single Layer Water — is
+`seam_map_material.md` → `M_V2_Water`; this section is the volume: what a body stands in and what
+the camera reads as "underwater". Two maps carry a real water body today: `sm_hub_1` (the sewer)
+and `sm_pier_1` (the ocean off the boards, `water/invisible_water` — no drawn surface, but the
+volume is real and a body that walks off the pier is in it).
+
+### Identity and naming
+
+```text
+vtmb:map-entities:<map>  units.root["water"]["leafData"][i]     (LEAFWATERDATA, lump order)
+  + units.root["collision"]["brushes"][j]                       (CONTENTS_WATER, 0x20)
+  + vtmb:material:<key>  ($fogenable/$fogcolor/$fogstart/$fogend, through patchBase)
+  -> $ELYSIUM_WORK_ROOT/import/map_geometry/<map>/manifest.json   water.volumes[], water.dropped[]
+  -> /ElysiumBaked/<map>/<map>.umap                                one AElysiumWaterVolumes actor
+```
+
+`resolve_water_volumes(units, read_sidecar, map_name)` (`importers/map_geometry.py:1276`) needs no
+sidecar reader of its own beyond the material lane's (`read_sidecar`, the same one every other
+table in this file resolves materials through) and no new field on `MapGeometry` — `units` is
+`geometry.join.units`, `MapUnits.root`'s whole extension (`collision`, `planes`, `texinfos`,
+`textures`, `water`), called from `stage_map` beside `resolve_sprite_table`
+(`map_geometry.py:1619`). `MANIFEST_VERSION` 8 → 9 (`#: 9 (R7.1)`, `bake_map_v2.py:107`'s own
+history line, the `stage-geometry` lane's edit stopping at the constant).
+
+### What the stage publishes
+
+The manifest's `"water"` key, verbatim (`WaterVolume.as_row`/`WaterBrush.as_row`,
+`map_geometry.py:382-421`):
+
+```json
+"water": {
+  "volumes": [
+    {
+      "index": 0,
+      "surfaceZCm": -14937.74, "minZCm": -14988.54,
+      "material": "vtmb:material:water/sewer_water",
+      "fogEnable": true, "fogColor": [0.019608, 0.019608, 0.0],
+      "fogStartCm": 2.54, "fogEndCm": 2600.96,
+      "brushes": [ { "planes": [[nx, ny, nz, d], ...], "boundsCm": {"min": [x, y, z], "max": [x, y, z]} } ]
+    }
+  ],
+  "dropped": [ {"index": 3, "reason": "sentinel"}, {"index": 0, "reason": "no water brush"} ]
+}
+```
+
+| Field | Unit | Source |
+|---|---|---|
+| `index` | int | the `LEAFWATERDATA` row's lump ordinal |
+| `surfaceZCm`, `minZCm` | Unreal cm | the record's own `surfaceZ`/`minZ` (glTF metres) × 100 |
+| `material` | `vtmb:material:<key>` | `sidecars._face_material(units, {"texInfo": row["surfaceTexInfoID"]})` — the same resolver a brush side's material takes, reused verbatim (brush sides carry the same `texInfo` key, `map_glb/lumps.py:400`) |
+| `fogEnable`, `fogColor`, `fogStartCm`, `fogEndCm` | bool, `[r, g, b]` 0..1 undecoded, cm, cm | the material's own VMT provenance (`$fogenable`/`$fogcolor`/`$fogstart`/`$fogend`), **never the staged instance** — `invisible_water`/`cheap_water` land on masters with no fog lane and stage none of these keys, so the volume has to read the source VMT directly. `$fogcolor` parses through `materials._VECTOR_SHAPE["FogColor"]` (already `/255`, the `.env` convention — the gamma decode is the shader's, at bake and render time, never here); start/end × 2.54; a material with no fog keys stages `fogEnable: false` |
+| `brushes[].planes` | `[[nx, ny, nz, d], ...]` Unreal cm, outward normals | `n' = (n0, n2, n1)`, `d' = d × 100` — the same `gltf_position_to_unreal` permutation every coordinate-bearing product in this pipeline takes (verified orthogonal, so the normal only permutes and the distance only scales); inside is `n'·p − d' ≤ 0` |
+| `brushes[].boundsCm` | `{min, max}` Unreal cm | **reused, not re-solved** — `UE_map_sidecars.source_planes` + `brush_hull` (bevel sides skipped, `\|det\| ≥ 1e-6`, the shipped `n·x − d ≤ 0.05` acceptance) + `hull_vertices`, the shipped collision's own solver, so a volume's AABB and the `.hulls` sidecar's vertices come from one implementation |
+
+**Rows.** One row per real `LEAFWATERDATA` record, in lump order. `surfaceTexInfoID == -1` (vbsp's
+sentinel, two rows in `hw_warrens_2`) is dropped and named `"sentinel"`. A record no water brush
+stands at is dropped and named `"no water brush"` — `la_bradbury_3`'s row is exactly this: its
+`tools/tools_shadow` caster carries the water content bit (`0x18000120`) but authors no
+`%compilewater` side, so it is a shadow-brush artefact, never a real body.
+
+**Brushes.** `collision.brushes[]` with `contents & 0x20` (`CONTENTS_WATER`) **and** at least one
+non-bevel side whose material's provenance parameters contain `%compilewater`
+(`COMPILE_WATER_KEY`) qualifies; a `0x18000120` brush with only `tools/tools_shadow` sides never
+qualifies (the shadow caster above), and a `0x18000020` `func_detail` water brush (`ch_lotus_1`)
+does. A qualifying brush joins the row whose `surfaceZCm` its horizontal top plane (`n.z ≥ 0.99`)
+matches within `WATER_SURFACE_TOLERANCE_CM` (2.54 cm, one inch) — the join needs no leaf lookup, so
+`ch_fulab_1`'s `func_illusionary` water (no leaf ever points at its row) still lands, and a tie
+between two records that close on one height resolves to lump order (one body of water read
+twice would be a defect in the source data, not a case to special-case).
+
+**The `patchBase` walk (correction 4).** A patched material unit's own provenance carries only its
+`insert`/`replace` **delta** — `maps/ch_fulab_1/water/cheap_water_1318_1990_273` is `include` plus
+one `insert` block naming `$envmap`, nothing else — so the four fog keys and `%compilewater` itself
+are reachable only through the unit's base chain. `_unit_parameters(read_sidecar, unit_key)`
+(`map_geometry.py:1175`) walks it: read the unit's own sidecar, and while `document["patched"]` is
+true and `patchBase` names another `vtmb:material:` unit (capped at `hops > 8`, the same guard
+`resolve_material_table`'s own walk uses), read that document too; the walk assembles `values` by
+replaying the chain **base-first** (`for document in reversed(chain)`), so a later hop's keys
+override an earlier one's, exactly VBSP's own `include` semantics. Without this walk the 8 patched-
+water maps in the corpus would stage zero brushes — every `%compilewater` read and every
+`_water_fog` read would see an empty delta and find nothing.
+
+**Fog keys**, read once the brush and its row are joined: `_water_fog(values)`
+(`map_geometry.py:1204`) pulls `$fogenable`/`$fogcolor`/`$fogstart`/`$fogend` off the resolved
+`values` dict the walk above assembled — the row's *material*, not the row's staged `MI_`
+instance, because `invisible_water` and `cheap_water` resolve to masters (`M_V2_Unlit`,
+`M_V2_LitTranslucent`) with no fog lane at all and stage none of these four keys on the instance.
+A row whose material never staged at all (no sidecar the material lane produced) is a loud
+`MapGeometryError` naming the unstaged unit (`run: uv run elysium import materials`), never a
+silently clear-water volume.
+
+### Producer and stage
+
+`resolve_water_volumes` is the sole producer, called from `stage_map` after `effects_lane.
+stage_effects_for_join` and before the manifest is assembled (`stage_map`,
+`map_geometry.py:1619-1622`); `counts["waterVolumes"] = len(water_volumes)` joins the existing
+`counts` dict the differ already reports through. No new sidecar unit, no new reader: every fact
+the resolver needs — `leafData`, `collision.brushes`/`brushSides`, `planes`, the material lane's
+staged sidecars — is already published by producers this file's other sections already name.
+
+### The actor contract
+
+One `AElysiumWaterVolumes` per map (`Public/ElysiumWaterVolumes.h`), bake-placed by
+`bake_map_v2._place_water` (`pipeline/unreal/bake_map_v2.py:1211`), chained after `_place_effects`
+in `_place_props` (`:735-736`). No staged rows, no actor — a map with no `LEAFWATERDATA` gives the runtime
+nothing to adopt, the same "empty table places nothing" rule every other placement lane in this
+file follows.
+
+- **Tag.** `elysium.water` (`ElysiumBakedTags::Water`, `TAG_WATER` in both `bake_map_v2.py` and
+  `bake_map.py` — the legacy (non-V2) bake tag exists but places nothing, like `TAG_CAPTURE`).
+- **Struct.** `FElysiumWaterVolume { int32 Index; float SurfaceZCm; float MinZCm; FString
+  Material; bool bFogEnabled; FLinearColor FogColor; float FogStartCm; float FogEndCm;
+  TArray<FElysiumWaterBrush> Brushes; }`, `FElysiumWaterBrush { TArray<FPlane> Planes; FBox
+  BoundsCm; }`; the actor carries `TArray<FElysiumWaterVolume> Volumes` as one
+  `UPROPERTY(EditAnywhere, Category = "Elysium")`. `_place_water` writes every field through
+  `self._set` (the shared property-write helper every placement lane in `bake_map_v2.py` uses,
+  now failing with a `bake:`-prefixed message rather than an `effects:`-prefixed one — a drift
+  the integrator generalized rather than hardcoded a second time), `unreal.Plane(x, y, z, w)` per
+  plane row and `unreal.Box(min=..., max=...)` + `is_valid` per brush's bounds, one
+  `set_editor_property("volumes", [...])` call. The actor stands at the first volume's own bounds
+  centre (`water_actor_values`, `bake_map_v2.py:1588` — any point would do; only the Outliner
+  needs a sane position, since every query the runtime makes reads the struct array, never the
+  actor's transform), labelled `WaterVolumes`, folder `Water`.
+- **Adoption.** `UElysiumMapVisuals::AdoptBakedLevel` buckets an `elysium.water`-tagged actor
+  into `WaterVolumes` (`ElysiumMapVisuals.cpp:302`) and counts it into `WaterVolumeCount`
+  (`:351`), exposed read-only as `GetWaterVolumes()`.
+- **Per-tick consumers.** `AElysiumMapActor::UpdatePlayerWater()` (`ElysiumMapActor.cpp:1889`),
+  called from the map actor's tick inside the `RuntimePhase == Active` guard, after the game-
+  instance clock block closes and before the player's move — `CheckWater`'s own ordering.
+  It classifies the pawn's feet (`origin.z + mins.z + 1 unit`), waist (hull centre) and eyes (the
+  camera component's world location) against `Water->ClassifyBody(...)`, writes the level onto
+  `UElysiumMovementComponent::SetWaterLevel` and, with the matched volume's `SurfaceZCm`, onto
+  `UElysiumCameraComponent::SetWaterState` — the camera's own clearance-band solve
+  (`ElysiumCam::SolveWaterOffset`, `water-architecture.md` §7). The same actor is also the map's
+  underwater post-process volume (`IInterface_PostProcessVolume`, gated per view on `bIsEnabled`,
+  `water-architecture.md` §6) — a second, per-frame consumer of the same `Volumes` array, not a
+  second actor.
+
+### The per-map cutover
+
+Water placement rides the existing V2 cutover, not a flag of its own: a map on
+`UElysiumMapTransportSettings::MapsOnV2Models` (`Config/DefaultElysium.ini`, "The per-map cutover
+flag" above) is baked by `bake_map_v2.py`, which always calls `_place_water` when the staged
+manifest carries `water.volumes[]` rows; a map baked by the legacy `bake_map.py` places no water
+actor at all (`TAG_WATER` exists there only so a shared helper can name the tag without a
+`bake_map_v2` import). `bake_verify.verify_water` (`pipeline/unreal/bake_verify.py:773`) itself is
+gated `map_transport.is_map_on_v2_models(map_name)` first, matching every other V2-only verifier in
+this file: exactly one `elysium.water` actor iff the stage carries rows, the actor's row count, and
+each row's `surface_z_cm` and brush count against the staged manifest. R7.1 adds `sm_pier_1` to
+`MapsOnV2Models` (`+MapsOnV2Models=sm_pier_1`, `Config/DefaultElysium.ini`); `MapsOnV2Models` now
+reads `sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`, `sm_pier_1` — `sp_theatre` is on
+`MapsOnNewTransport` but not `MapsOnV2Models`, so it takes no V2 bake and places no water actor
+either way.
+
+### Measured
+
+`importers.map_geometry.stage_map` (manifest **version 9**) on both water-bearing maps, then
+`bake_map_v2.py`'s bake and `bake_verify.verify_water`:
+
+| Map | Volumes | Dropped | `surfaceZCm` | `minZCm` | Material | `fogEnable` | `fogColor` | `fogStartCm` / `fogEndCm` | Brushes |
+|---|---|---|---|---|---|---|---|---|---|
+| `sm_hub_1` | 1 | 0 | -14937.74 | -14988.54 | `vtmb:material:water/sewer_water` | true | `(0.019608, 0.019608, 0.0)` | 2.54 / 2600.96 | 1 brush, 6 planes |
+| `sm_pier_1` | 1 | 0 | -1582.42 | -1666.24 | `vtmb:material:water/invisible_water` | true | `(0.086275, 0.078431, 0.039216)` | 2.54 / 1016.0 | 1 brush, 6 planes |
+
+Both bakes placed one `AElysiumWaterVolumes` actor carrying 1 volume (`[bake] water: 1 actor
+placed with 1 volume(s)`); `verify_water` matched both (`[verify] water: 1 staged rows, 1
+matched`). `sm_hub_1`'s level carries 2,539 actors including the one `ElysiumWaterVolumes`;
+`sm_pier_1`'s carries 969 including the one. No leftover `dropped[]` row on either map at
+`MANIFEST_VERSION` 9.

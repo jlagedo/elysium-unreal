@@ -376,7 +376,6 @@ def _fake_unreal(editor):
         # R7.1: the Single Layer Water output node (`_build_water`) and the underwater
         # post-process's scene reads (`_build_underwater`).
         "MaterialExpressionSingleLayerWaterMaterialOutput", "MaterialExpressionSceneTexture",
-        "MaterialExpressionSceneDepth",
     ]
 
     ns = SimpleNamespace(
@@ -420,7 +419,7 @@ def _fake_unreal(editor):
         TextureLossyCompressionAmount=_enum("TLCA", "TLCA_NONE"),
         MaterialDomain=_enum("MD", "MD_SURFACE", "MD_DEFERRED_DECAL", "MD_POST_PROCESS"),
         BlendableLocation=_enum("BL", "BL_SCENE_COLOR_BEFORE_DOF"),
-        SceneTextureId=_enum("PPI", "PPI_POST_PROCESS_INPUT0"),
+        SceneTextureId=_enum("PPI", "PPI_POST_PROCESS_INPUT0", "PPI_SCENE_DEPTH"),
         BlendMode=_enum("BLEND", "BLEND_OPAQUE", "BLEND_TRANSLUCENT", "BLEND_MODULATE",
                         "BLEND_ALPHA_COMPOSITE"),
         TranslucencyLightingMode=_enum("TLM", "TLM_SURFACE_PER_PIXEL_LIGHTING",
@@ -582,6 +581,14 @@ def test_water_master_is_single_layer_water_with_the_volume_pins_fed(tmp_path, m
     names = {n.props.get("parameter_name") for n in underwater.expressions
              if n.props.get("parameter_name")}
     assert {"FogColor", "FogStart", "FogInvRange"} <= names
+    # The depth read is a `SceneTexture` fetch, never the bare `SceneDepth` node: in the
+    # post-process pass that node resolves its own screen UV and the view under the plane renders
+    # unfogged (witnessed on `sm_hub_1`; see `_build_underwater`).
+    reads = {n.props.get("scene_texture_id") for n in underwater.expressions
+             if n.cls.__name__ == "MaterialExpressionSceneTexture"}
+    assert reads == {"PPI.PPI_POST_PROCESS_INPUT0", "PPI.PPI_SCENE_DEPTH"}
+    assert not [n for n in underwater.expressions
+                if n.cls.__name__ == "MaterialExpressionSceneDepth"]
 
 
 def test_mask_width_bug_is_caught_offline():

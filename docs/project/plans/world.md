@@ -71,9 +71,10 @@ counterfactual, batch-level voting.
 
 ### 7.3 Water
 
-`.water` → `M_Water` Single Layer Water + Lumen reflections (no mirror cameras). Known engine
-facts: Lumen reflections on SLW are forced mirror (acceptable for VtMB's water), and MegaLights
-does not light water surfaces — verify the water direct-lighting path during this task.
+`water.volumes[]` (staged `LEAFWATERDATA` rows joined to `CONTENTS_WATER` brushes) →
+`M_V2_Water` Single Layer Water + Lumen reflections (no mirror cameras), one bake-placed
+`AElysiumWaterVolumes` actor per map. Ruling and detail: `docs/architecture/water-architecture.md`,
+`docs/project/seam_migration.md` → "R7.1 — water on the V2 lane".
 
 ### 7.5 Real reflections
 

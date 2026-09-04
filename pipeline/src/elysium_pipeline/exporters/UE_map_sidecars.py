@@ -722,6 +722,17 @@ def meshed_faces(units: MapUnits, sky: SkyScope, backings: set[int]) -> dict[str
     `DRAWN_TOOL_MATERIALS`. What is left goes to the world scene, the 3D-sky scene, or that brush
     model's own scene -- which is what decides `brush_mesh` in `.ents` and whether `.sky` is
     written at all.
+
+    **`SURF_NODRAW` is honoured too** (R7.1 follow-up), which the name test alone could not do: a
+    `%compilenodraw` unit outside the `tools/` namespace escaped it and drew as an opaque
+    `tools/toolsinvisible` sheet -- `water/invisible_water`, `sm_pier_1`'s ocean, which
+    `water-architecture.md` -> "Family resolution" rules as a volume with *no drawn surface*. The
+    name test stays because the trigger textures leave the flag clear (`UE_bsp_to_scene.py:32-39`);
+    the flag test is added because a `water/`-pathed nodraw unit leaves the name clear. Measured
+    2026-09-04 over all 108 published root units: the two tests overlap on every `tools/` face and
+    the flag alone catches exactly 50 more, all on `sm_pier_1` (41 `water/invisible_water`, 9 of its
+    `maps/sm_pier_1/water/invisible_water_depth_33` patch), all world-scene, none displacement --
+    so no other map's mesh, `.dispcol` or `.sky` moves.
     """
 
     faces = units.root["faces"]
@@ -740,6 +751,8 @@ def meshed_faces(units: MapUnits, sky: SkyScope, backings: set[int]) -> dict[str
             continue
         base = shared_corpus.base_material(material)
         if base.startswith("tools/") and base not in DRAWN_TOOL_MATERIALS:
+            continue
+        if face.get("noDraw"):
             continue
         if model > 0:
             brush.setdefault(model, []).append(index)
