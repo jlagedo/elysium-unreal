@@ -2585,6 +2585,25 @@ def _character_bake_fingerprint(config, stems: Sequence[str], props: Sequence[st
     )
 
 
+def _character_bake_receipt(stems: Sequence[str], props: Sequence[str]) -> str:
+    """The manifest receipt name for one character launch, keyed by the slice it bakes.
+
+    A receipt answers "has THIS slice been baked", so the slice belongs in the key and not only
+    in the fingerprint. One shared name made the receipt worthless the moment a second slice
+    existed: `export map sm_hub_1` asks for that map's placed models and `export map
+    sm_pawnshop_1` asks for a different set, so each run overwrote the other's receipt under
+    `unreal:bake:characters` and the fingerprint then always mismatched. Exporting a map that was
+    already baked therefore booted a second editor that reused every unit and authored nothing --
+    70 s of a 110 s `export map sm_hub_1` on the Sep 3 run.
+
+    Keyed by digest rather than by the stems themselves because a slice is up to 293 models; the
+    manifest gains one entry per distinct slice actually asked for, and the fingerprint under it
+    still names the slice in full.
+    """
+    scope = "stems:%s|props:%s" % (",".join(stems), ",".join(props))
+    return "unreal:bake:characters:" + hashlib.sha256(scope.encode("utf-8")).hexdigest()[:12]
+
+
 def _character_bake_outputs(config, stems: Sequence[str],
                             props: Sequence[str]) -> tuple[Path, ...]:
     """The per-unit meshes the launch must leave on the mount, so a nuked or partially
@@ -2609,6 +2628,10 @@ def _run_character_bake(config, runner, stems: Sequence[str], *, props: Sequence
     that dies keeps exactly what it saved, records no success, and the next run resumes off
     the stamps alone. `verify` adds the deep read-back on top, which
     `uv run elysium verify characters` also runs on its own.
+
+    The receipt is named per slice (`_character_bake_receipt`), because two callers ask two
+    different questions of it: the cast lane bakes bodies, and a map export bakes that map's
+    placed models.
     """
     stems = list(dict.fromkeys(stems))
     props = list(dict.fromkeys(props))
@@ -2631,7 +2654,7 @@ def _run_character_bake(config, runner, stems: Sequence[str], *, props: Sequence
         unreal.bake_characters(config, runner, stems, props=props, force=force)
 
     task = Task(
-        "unreal:bake:characters",
+        _character_bake_receipt(stems, props),
         launch,
         fingerprint=fingerprint,
         outputs=_character_bake_outputs(config, stems, props),

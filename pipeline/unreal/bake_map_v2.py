@@ -252,6 +252,50 @@ def bind(namespace):
     HOST = _Host(namespace)
 
 
+#: The decoded `DA_ElysiumPropSkins` table, read once per editor process.
+#: `None` until the first read; `{}` once read with the asset absent.
+_SKIN_TABLE = [None]
+
+
+def read_skin_table():
+    """`{stem: (family count, [{slot name: material asset path}])}` for the whole R1 corpus.
+
+    The table is map-independent -- it is authored by the model import lane in another process and
+    cannot change while a bake runs -- but walking it costs about a second, and a `MAP_BAKE_BATCH`
+    process was paying that per map for an identical answer. Cached for the process.
+
+    Deliberately plain Python: every value is a string or an int, never an `unreal` wrapper. A live
+    wrapper is a root for the editor's collector, and this cache outlives the `Bake` instance that
+    filled it -- holding the table's material objects here would pin a slice of the corpus for the
+    whole batch, which is exactly what `_release_map_packages` exists to prevent. The bake resolves
+    a path back to its material when it binds one (`_apply_v2_skin`).
+    """
+
+    if _SKIN_TABLE[0] is not None:
+        return _SKIN_TABLE[0]
+    table = {}
+    asset = unreal.EditorAssetLibrary.load_asset(V2_SKIN_ASSET)
+    if asset is None:
+        HOST.log("v2 skins: %s absent, placements keep their authored set" % V2_SKIN_ASSET)
+        _SKIN_TABLE[0] = table
+        return table
+    for model in asset.get_editor_property("models"):
+        stem = str(model.get_editor_property("stem"))
+        families = []
+        for family in model.get_editor_property("families"):
+            overrides = {}
+            for override in family.get_editor_property("overrides"):
+                material = override.get_editor_property("material")
+                if material is not None:
+                    overrides[str(override.get_editor_property("slot_name"))] = (
+                        material.get_path_name())
+            families.append(overrides)
+        table[stem] = (int(model.get_editor_property("family_count")), families)
+    HOST.log("v2 skins: %d model(s) with alternate families" % len(table))
+    _SKIN_TABLE[0] = table
+    return table
+
+
 def bake_class():
     """The `Bake` subclass this lane runs, built on the host's own class."""
 
@@ -279,6 +323,7 @@ def _build_class():
             self.sky_blend = []
             self.v2_materials = {}     # face group key -> _V2Material (R5.4)
             self.v2_skins = {}         # stem -> (family count, [ {slot: material path} ])
+            self.skin_materials = {}   # material path -> the loaded interface, this map only
             self.placed_index = {}     # catalogue stem -> npc_index row
             self.placed_index_version = 0
             self.rest_labels = {}      # placement index -> the rest clip it was dealt
@@ -385,30 +430,14 @@ def _build_class():
             self.placed_index = document.get("placed_models", {})
 
         def _load_v2_skins(self):
-            """The R1 corpus skin table, read once per map.
+            """The R1 corpus skin table, read once per process (`read_skin_table`).
 
             The V2 lane binds a placement's alternate skin from the same asset the running game
             binds it from (`/ElysiumBaked/Meshes/DA_ElysiumPropSkins`), so a baked placement and a
             runtime `skin` write can never disagree about what family 2 repaints.
             """
 
-            asset = unreal.EditorAssetLibrary.load_asset(V2_SKIN_ASSET)
-            if asset is None:
-                log("v2 skins: %s absent, placements keep their authored set" % V2_SKIN_ASSET)
-                return
-            for model in asset.get_editor_property("models"):
-                stem = str(model.get_editor_property("stem"))
-                families = []
-                for family in model.get_editor_property("families"):
-                    overrides = {}
-                    for override in family.get_editor_property("overrides"):
-                        material = override.get_editor_property("material")
-                        if material is not None:
-                            overrides[str(override.get_editor_property("slot_name"))] = material
-                    families.append(overrides)
-                self.v2_skins[stem] = (
-                    int(model.get_editor_property("family_count")), families)
-            log("v2 skins: %d model(s) with alternate families" % len(self.v2_skins))
+            self.v2_skins = read_skin_table()
 
         # ----------------------------------------------------------------------- materials
 
@@ -504,13 +533,15 @@ def _build_class():
                 asset_path = "%s/SM_Sky_%s%d_%d_%d" % (
                     self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
                 materials = [self.material_for(name) for name in names]
-                kept, lost, _ = self._emit(
+                kept, lost, _, static_mesh = self._emit(
                     "sky", asset_path, sections, names, materials, nanite=opaque)
                 tris += kept
                 dropped += lost
                 built += 1 if kept else 0
                 if kept:
                     wanted.add(asset_path.rsplit("/", 1)[-1])
+                if static_mesh:
+                    self.world_meshes[asset_path] = static_mesh
             pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", wanted, self.prune_scope)
             self.tracker.pruned("sky", pruned)
             log("sky: %d meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
@@ -821,7 +852,7 @@ def _build_class():
                     fail("details: could not author %s" % child_path)
                     raise SystemExit(1)
                 bl.set_static_switch_param(child, DETAIL_SWAY_SWITCH, True)
-                unreal.MaterialEditingLibrary.update_material_instance(child)
+                bl.finish_material_instance(child)
                 self.tracker.stamp(child, child_path)
                 if not bl.save(child_path):
                     fail("details: save failed: %s" % child_path)
@@ -851,17 +882,20 @@ def _build_class():
                     fail("sprites: spawn failed for env_sprite %d" % row.index)
                     raise SystemExit(1)
                 component = actor.sprite
-                component.set_editor_property("material", material)
-                component.set_editor_property(
-                    "size_inches", unreal.Vector2D(*values["size_inches"]))
-                component.set_editor_property("render_mode", row.mode)
-                component.set_editor_property("render_fx", row.fx)
+                # One `set_editor_properties` for the six, not six calls: the plural call runs a
+                # single `PreEditChange`/`PostEditChange` pair over the batch where each singular
+                # one re-registers the component's render state on its own.
                 # `unreal.Color` is FColor's own BGRA layout: positional arguments would swap
                 # red and blue, so the channels are named.
-                component.set_editor_property(
-                    "color", unreal.Color(b=row.color[2], g=row.color[1], r=row.color[0],
-                                          a=row.alpha))
-                component.set_editor_property("upright", row.upright)
+                component.set_editor_properties({
+                    "material": material,
+                    "size_inches": unreal.Vector2D(*values["size_inches"]),
+                    "render_mode": row.mode,
+                    "render_fx": row.fx,
+                    "color": unreal.Color(b=row.color[2], g=row.color[1], r=row.color[0],
+                                          a=row.alpha),
+                    "upright": row.upright,
+                })
                 actor.set_editor_property("entity_index", row.index)
                 if values["scale"] != 1.0:
                     actor.set_actor_scale3d(unreal.Vector(*([values["scale"]] * 3)))
@@ -941,7 +975,7 @@ def _build_class():
                 overrides.set_editor_property("override_blend_mode", True)
                 overrides.set_editor_property("blend_mode", getattr(unreal.BlendMode, member))
                 child.set_editor_property("base_property_overrides", overrides)
-                unreal.MaterialEditingLibrary.update_material_instance(child)
+                bl.finish_material_instance(child)
                 self.tracker.stamp(child, child_path)
                 if not bl.save(child_path):
                     fail("sprites: save failed: %s" % child_path)
@@ -1209,32 +1243,34 @@ def _build_class():
                 component.set_light_color(unreal.LinearColor(*final["color"], 1.0))
                 component.set_intensity(final["intensity"])
                 component.set_cast_shadows(final["cast_shadows"])
-                component.set_editor_property("specular_scale", final["specular_scale"])
-                component.set_editor_property(
-                    "indirect_lighting_intensity", final["indirect_lighting_intensity"])
-                component.set_editor_property(
-                    "volumetric_scattering_intensity", final["volumetric_scattering_intensity"])
+                # Every reflected property this light needs, in one `set_editor_properties`: the
+                # plural call brackets the whole dict in a single `PreEditChange`/`PostEditChange`
+                # pair, where each singular `set_editor_property` runs a full
+                # `ULightComponent::PostEditChangeProperty` of its own -- eight of them per light,
+                # over hundreds of lights per map.
+                properties = {
+                    "specular_scale": final["specular_scale"],
+                    "indirect_lighting_intensity": final["indirect_lighting_intensity"],
+                    "volumetric_scattering_intensity": final["volumetric_scattering_intensity"],
+                }
                 if row.type in (0, 1, 2):
                     component.set_attenuation_radius(final["reach_cm"])
                     # VtMB light is ~flat within its authored radius, so gentle-exponent
                     # falloff, not inverse-square (docs/architecture/rendering-perf.md).
-                    component.set_editor_property("use_inverse_squared_falloff", False)
-                    component.set_editor_property(
-                        "light_falloff_exponent", final["falloff_exponent"])
+                    properties["use_inverse_squared_falloff"] = False
+                    properties["light_falloff_exponent"] = final["falloff_exponent"]
                     # Elysium's hundreds of movable local lights depend on fixed-cost RT
                     # MegaLights: a renderer contract the rig used to restate every load.
-                    component.set_editor_property("allow_mega_lights", True)
-                    component.set_editor_property(
-                        "mega_lights_shadow_method",
+                    properties["allow_mega_lights"] = True
+                    properties["mega_lights_shadow_method"] = (
                         unreal.MegaLightsShadowMethod.RAY_TRACING)
                 if row.type == 2:
                     component.set_outer_cone_angle(final["outer_cone_deg"])
                     component.set_inner_cone_angle(final["inner_cone_deg"])
                 if row.type == 3:
-                    component.set_editor_property(
-                        "light_source_angle", final["sun_source_angle_deg"])
-                    component.set_editor_property(
-                        "light_source_soft_angle", final["sun_soft_source_angle_deg"])
+                    properties["light_source_angle"] = final["sun_source_angle_deg"]
+                    properties["light_source_soft_angle"] = final["sun_soft_source_angle_deg"]
+                component.set_editor_properties(properties)
                 actor.set_actor_label("Light_%d_%s%s" % (
                     row.index, LIGHT_KIND_LABELS[row.type], "_sky" if row.sky else ""))
                 # The lump-15 ordinal is the R4.3 calibration asset's key and the type/style
@@ -1351,8 +1387,17 @@ def _build_class():
             slots = [str(entry.get_editor_property("material_slot_name"))
                      for entry in mesh.get_editor_property("static_materials")]
             applied = 0
-            for slot, material in sorted(families[family].items()):
+            for slot, material_path in sorted(families[family].items()):
                 if slot not in slots:
+                    continue
+                # The table is paths, not objects (`read_skin_table`). Resolved here, and
+                # remembered on this bake -- so the wrappers die with the map, not with the
+                # process-wide table.
+                if material_path not in self.skin_materials:
+                    self.skin_materials[material_path] = unreal.EditorAssetLibrary.load_asset(
+                        material_path)
+                material = self.skin_materials[material_path]
+                if material is None:
                     continue
                 component.set_material(slots.index(slot), material)
                 applied += 1

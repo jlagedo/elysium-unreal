@@ -4,8 +4,11 @@
 # Where the shipping runtime builds every engine object in code at map-load time, this pass
 # runs once in a headless editor and writes the same world out as Texture2D / MaterialInstance
 # / StaticMesh assets plus a .umap, so the map gets the parts of the engine that only exist
-# behind an offline build: Nanite, DDC-fitted Lumen surface cards, distance fields, real LODs
-# and BC7/BC5 compression.
+# behind an offline build: Nanite, DDC-fitted Lumen surface cards, real LODs and BC7/BC5
+# compression. It deliberately builds no mesh distance fields: the project renders with
+# hardware-ray-traced Lumen (Config/DefaultEngine.ini, "Rendering") and nothing ever reads one,
+# so the flag GeometryScript's asset options set on every mesh is cleared again in
+# bake_lib.create_static_mesh.
 #
 # The output is derived from the user's own VtMB install, so it is gitignored and regenerable
 # exactly like $ELYSIUM_EXPORT_ROOT -- only the .uplugin mount descriptor is committed.
@@ -15,6 +18,7 @@
 #       -BakeMap=sp_tutorial_1 -unattended -nosplash -nopause
 #
 # Optional -BakeForce=1 re-authors every asset whether or not its stamped recipe matches.
+import gc
 import hashlib
 import math
 import json
@@ -155,6 +159,14 @@ FOG_CPD_FLOATS = 6
 # process, so the stage saves, reports and releases each batch instead of holding the whole set
 # until the end -- a run that dies keeps every batch that landed.
 PROP_BATCH = 250
+
+# Commandlet frame cadence. A `-run=pythonscript` process never reaches `FEngineLoop::Tick`, so
+# every D3D12 free stays queued behind the frame fence until a frame is simulated
+# (`UElysiumMapBakeLibrary::TickCommandletFrames`), and the fast allocator retires at most one
+# page per frame. The mesh factory ticks one frame per this many meshes built -- the engine's own
+# commandlets pump on the same 256-item cadence -- and each release point ticks a short run.
+MESH_TICK_INTERVAL = 256
+RELEASE_TICK_FRAMES = 4
 
 # The shared, map-independent scope: every texture, material and static model in the install.
 # It is a scope name rather than a map name -- `$ELYSIUM_EXPORT_ROOT/shared` in,
@@ -600,7 +612,13 @@ class Bake(object):
         self.env = {}                    # <map>.env, key -> [tokens]
         self.weather = None              # <map>.weather.json
         self.rain_height = None
-        self.saved = []                  # asset paths pending save
+        self.saved = []                  # (asset path, asset) pending save
+        # The world and sky chunk meshes this run BUILT, by asset path. `stage_level` places every
+        # chunk in `mesh_pkg`, and re-loading one it was just handed is a package lookup per chunk
+        # for nothing. A reused chunk is absent here (`_emit` never loads one) and `stage_level`
+        # loads it by path. Held on the instance, which dies with `bake_one`, so the wrappers go
+        # before `_release_map_packages` runs -- see its own comment.
+        self.world_meshes = {}
 
     def _file_sha256(self, path):
         return self.digest_cache.digest(Path(path))
@@ -810,7 +828,7 @@ class Bake(object):
                 raise SystemExit("[bake] texture import failed: %s" % object_path)
             bl.configure_texture(texture, role)
             result[name] = texture
-            self.saved.append(object_path)
+            self.saved.append((object_path, texture))
             self.tracker.built("textures")
         pruned = (bl.prune_package_prefix(package, prune_prefix, wanted, self.prune_scope)
                   if prune_prefix else bl.prune_package(package, wanted, self.prune_scope))
@@ -1163,7 +1181,10 @@ class Bake(object):
                     if not mic:
                         raise SystemExit("[bake] material instance failed: %s" % object_path)
                     self._bind(mic, mat, tex_pkg)
-                    self.saved.append(object_path)
+                    # One refresh per instance, after every parameter `_bind` wrote: the
+                    # setters defer it (`bake_lib`'s "written in a batch, refreshed once").
+                    bl.finish_material_instance(mic)
+                    self.saved.append((object_path, mic))
                     self.tracker.built("materials")
                 else:
                     mic = unreal.EditorAssetLibrary.load_asset(object_path)
@@ -1217,7 +1238,8 @@ class Bake(object):
                     bl.set_scalar_param(mic, "RainHeightMinZ", height["min_z_cm"])
                     bl.set_scalar_param(mic, "RainHeightZScale", height["z_scale_cm"])
                     bl.set_scalar_param(mic, "RainLayer", layer)
-                    self.saved.append(path)
+                    bl.finish_material_instance(mic)
+                    self.saved.append((path, mic))
                     self.tracker.built("materials")
                     return mic
                 mic = unreal.EditorAssetLibrary.load_asset(path)
@@ -1313,7 +1335,10 @@ class Bake(object):
     def _emit(self, stage, asset_path, sections, names, materials, nanite, phys=None,
               collision=True):
         """Build one StaticMesh from prepared sections.
-        Returns (triangles kept, dropped, simple collision shapes)."""
+
+        Returns (triangles kept, dropped, simple collision shapes, the built asset). The asset is
+        None whenever this call did not build one -- a reused mesh is not loaded here, because not
+        loading it is the whole point of the reuse."""
         want = sum(len(s[4]) for s in sections) // 3
         recipe = {
             "sections": sections,
@@ -1325,7 +1350,7 @@ class Bake(object):
         }
         if not self.tracker.register(
                 stage, asset_path, recipe, expected_class="StaticMesh"):
-            return want, 0, len(phys["hulls"]) if phys else 0
+            return want, 0, (len(phys["hulls"]) if phys else 0), None
         mesh = bl.build_dynamic_mesh(sections)
         got = bl.mesh_triangle_count(mesh)
         static_mesh = bl.create_static_mesh(
@@ -1333,15 +1358,20 @@ class Bake(object):
             collision=collision or phys is not None)
         if not static_mesh:
             fail("mesh build failed: %s" % asset_path)
-            return 0, want, 0
+            return 0, want, 0, None
         # A physics prop simulates, so it needs real simple collision -- VtMB's own convex
         # hulls. Everything else makes its render triangles the collision.
         shapes = bl.set_phy_collision(static_mesh, phys) if phys else 0
         if not phys and collision:
             bl.set_complex_collision(static_mesh)
-        self.saved.append(asset_path)
+        self.saved.append((asset_path, static_mesh))
         self.tracker.built(stage)
-        return got, want - got, shapes
+        # Every mesh built commits GPU and heap pages that only a simulated frame gives back, and
+        # this is the one place any lane creates a StaticMesh -- world chunks, brushes, sky and
+        # props on both lanes come through here, so the cadence lives here rather than in each of
+        # their loops.
+        _tick_built_mesh()
+        return got, want - got, shapes, static_mesh
 
     # ------------------------------------------------------------------- world
 
@@ -1412,13 +1442,15 @@ class Bake(object):
             asset_path = "%s/SM_World_%s%d_%d_%d" % (
                 self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
             materials = [self.material_for(name) for name in names]
-            kept, lost, _ = self._emit(
+            kept, lost, _, static_mesh = self._emit(
                 "world", asset_path, sections, names, materials, nanite=opaque)
             tris += kept
             dropped += lost
             built += 1 if kept else 0
             if kept:
                 wanted.add(asset_path.rsplit("/", 1)[-1])
+            if static_mesh:
+                self.world_meshes[asset_path] = static_mesh
         pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_World_", wanted, self.prune_scope)
         self.tracker.pruned("world", pruned)
         log("world: %d chunk meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
@@ -1440,7 +1472,7 @@ class Bake(object):
             materials = [self.material_for(name) for name in names]
             nanite = all(self.world_mats.get(name).opaque
                          if self.world_mats.get(name) else True for name in names)
-            kept, lost, _ = self._emit(
+            kept, lost, _, _ = self._emit(
                 "world", asset_path, sections, names, materials, nanite=nanite,
                 collision=False)
             if kept:
@@ -1479,13 +1511,15 @@ class Bake(object):
             asset_path = "%s/SM_Sky_%s%d_%d_%d" % (
                 self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
             materials = [self.material_for(name) for name in names]
-            kept, lost, _ = self._emit(
+            kept, lost, _, static_mesh = self._emit(
                 "sky", asset_path, sections, names, materials, nanite=opaque)
             tris += kept
             dropped += lost
             built += 1 if kept else 0
             if kept:
                 wanted.add(asset_path.rsplit("/", 1)[-1])
+            if static_mesh:
+                self.world_meshes[asset_path] = static_mesh
         pruned = bl.prune_package_prefix(self.mesh_pkg, "SM_Sky_", wanted, self.prune_scope)
         self.tracker.pruned("sky", pruned)
         log("sky: %d meshes / %d tris / %d dropped / %d stale pruned (%.1fs)" % (
@@ -1560,8 +1594,8 @@ class Bake(object):
                                         for rep in remap.values()}
                 nanite = all((mats[n].opaque if n in mats else True) for n in skinned)
                 phys = self.prop_phys.get(stem)
-                kept, lost, shapes = self._emit("props", asset_path, sections, names, materials,
-                                                nanite=nanite, phys=phys)
+                kept, lost, shapes, _ = self._emit(
+                    "props", asset_path, sections, names, materials, nanite=nanite, phys=phys)
                 tris += kept
                 dropped += lost
                 built += 1 if kept else 0
@@ -1642,7 +1676,7 @@ class Bake(object):
         if asset is None:
             fail("prop skin set failed: %s" % self.shared_mesh_pkg)
             return
-        self.saved.append(object_path)
+        self.saved.append((object_path, asset))
         self.tracker.built("props")
         log("prop skins: %d models / %d overrides%s" % (
             len(models), overrides, ", %d unresolved" % unresolved if unresolved else ""))
@@ -1746,15 +1780,20 @@ class Bake(object):
                     continue
                 if not actor or not component:
                     continue
+                # One `set_editor_properties` for the whole component, not one call per field:
+                # the plural call brackets the batch in a single `PreEditChange`/`PostEditChange`
+                # pair, and each singular one runs a full `ULightComponent::PostEditChangeProperty`
+                # of its own. `specular_scale` is the one global knob, not the legacy zero (the
+                # matte-world premise is repudiated, `seam_migration.md` 2026-08-31); the rig
+                # re-derives from the same page at adopt.
+                properties = {"specular_scale": specular_scale}
                 if kind in (0, 1, 2):
                     # VtMB light is ~flat within its authored radius, so gentle-exponent
                     # falloff, not inverse-square (docs/architecture/rendering-perf.md calibration).
-                    component.set_editor_property("use_inverse_squared_falloff", False)
-                    component.set_editor_property("light_falloff_exponent", FALLOFF_EXPONENT)
+                    properties["use_inverse_squared_falloff"] = False
+                    properties["light_falloff_exponent"] = FALLOFF_EXPONENT
                 component.set_light_color(color)
-                # The one global knob, not the legacy zero (the matte-world premise is repudiated,
-                # `seam_migration.md` 2026-08-31); the rig re-derives from the same page at adopt.
-                component.set_editor_property("specular_scale", specular_scale)
+                component.set_editor_properties(properties)
                 actor.set_actor_label("Light_%d_%s%s" % (
                     index, {0: "tex", 1: "point", 2: "spot", 3: "sun"}[kind],
                     "_sky" if is_sky else ""))
@@ -1818,6 +1857,7 @@ class Bake(object):
         # The faithful default: VtMB's own sky transfer is the identity (D7), matching
         # ElysiumMapVisuals::ApplySkyBrightness's un-driven CVarSkyBrightness default.
         bl.set_scalar_param(mi, "Brightness", 1.0)
+        bl.finish_material_instance(mi)
         unreal.EditorAssetLibrary.save_asset("%s/%s" % (SKY_MAT_PKG, mi_name))
 
         bl.ensure_dir(SKY_MESH_PKG)
@@ -1996,9 +2036,13 @@ class Bake(object):
                 "level", map_path, self._level_recipe(), expected_class="World"):
             log("level: reused %s" % map_path)
             return True
-        world = unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
+        # The empty world `bake_one` opened before any of this map's stages ran. This stage is
+        # the only thing in the process that spawns an actor, so the world it was handed is
+        # still blank and authoring into it is the same act as opening a second one -- and
+        # `NewBlankMap` is a full `CollectGarbage` sweep, which is not worth paying twice a map.
+        world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
         if not world:
-            fail("new_blank_map returned null")
+            fail("no editor world to author the level into")
             return False
         actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
 
@@ -2015,12 +2059,17 @@ class Bake(object):
         sky_fog = fog_data(self.env, "sky")
 
         placed = 0
-        for asset_path in sorted(unreal.EditorAssetLibrary.list_assets(
+        # The listing is the enumeration, not the load: `stage_world`/`stage_sky` left every chunk
+        # they built in `world_meshes`, so only the chunks this run REUSED are loaded by path.
+        for object_path in sorted(unreal.EditorAssetLibrary.list_assets(
                 self.mesh_pkg, recursive=False, include_folder=False)):
-            static_mesh = unreal.EditorAssetLibrary.load_asset(asset_path)
+            asset_path = object_path.split(".", 1)[0]
+            static_mesh = self.world_meshes.get(asset_path)
+            if not static_mesh:
+                static_mesh = unreal.EditorAssetLibrary.load_asset(object_path)
             if not static_mesh:
                 continue
-            name = asset_path.rsplit("/", 1)[-1].split(".")[0]
+            name = asset_path.rsplit("/", 1)[-1]
             parts = name.split("_")
             is_sky = name.startswith("SM_Sky")
             cell = CELL_CM * (4 if is_sky else 1)
@@ -2316,14 +2365,27 @@ class Bake(object):
     # ------------------------------------------------------------------- drive
 
     def flush(self):
+        """Save every queued package, stamped with its recipe, and let its source geometry go.
+
+        The queue carries the asset beside its path because the stage that queued it had it in
+        hand: a `load_asset` here re-resolved an object this process already holds, once per
+        authored package. It is only loaded when the queue could not carry one.
+        """
         start = time.time()
         failed = 0
-        for asset_path in self.saved:
-            asset = unreal.EditorAssetLibrary.load_asset(asset_path)
+        for asset_path, queued in self.saved:
+            asset = queued if queued else unreal.EditorAssetLibrary.load_asset(asset_path)
             if asset:
                 self.tracker.stamp(asset, asset_path)
             if not bl.save(asset_path):
                 failed += 1
+                continue
+            if isinstance(asset, unreal.StaticMesh):
+                # Saved, so the source description is in the package's bulk data and nothing in
+                # the rest of the run reads it back. `UStaticMesh::Build` -- the path this bake
+                # authors through -- is the one that does not drop it the way `PostLoad` does, so
+                # without this every mesh a run creates keeps its full source geometry resident.
+                unreal.ElysiumMapBakeLibrary.release_mesh_source_data(asset)
         log("saved %d assets, %d failed (%.1fs)" % (
             len(self.saved) - failed, failed, time.time() - start))
         # The queue is what is still unwritten. Emptying it keeps a later flush from re-saving
@@ -2342,7 +2404,7 @@ class Bake(object):
         if failed:
             fail("checkpoint %s: %d asset(s) could not be saved" % (label, failed))
             return failed
-        _collect_garbage()
+        _settle_and_collect()
         log("corpus checkpoint: %s -- %s" % (label, "; ".join(
             "%s %s" % (stage, self.tracker.summary(stage)) for stage in self.tracker.stages)))
         return 0
@@ -2476,7 +2538,25 @@ def bake_one(map_name, digest_cache, force=False):
     its published root unit (R5.1, `bake_map_v2`), and every other map keeps the legacy `.obj`/
     `.props` path byte for byte (`docs/architecture/seam_map_map.md` -> "## Import -- geometry and
     placements (R5.1)").
+
+    The previous map's world goes first, before anything of this map's is read, and
+    unconditionally. It used to go inside `stage_level`, which is both too late and conditional:
+    too late, because every material-instance write in between runs an `FMaterialUpdateContext`,
+    which walks the scene and rebuilds a static draw list for every primitive still registered in
+    it -- sm_hub_2's material stage measured 0.057 s per instance against an empty scene and
+    1.31 s per instance with the previous map's level still standing; conditional, because a map
+    whose level recipe already matches returns before ever opening a new one, so the old scene
+    survived the whole of the next map's bake. `NewBlankMap` -> `GEditor->NewMap` tears the world
+    down through `EditorDestroyWorld`, and `stage_level` authors into the empty world left here.
+
+    The collect that follows is what frees the previous map's assets: the sweep inside
+    `EditorDestroyWorld` keeps `GARBAGE_COLLECTION_KEEPFLAGS`, which takes the actors but leaves
+    every RF_Standalone texture, material instance and mesh the map loaded.
     """
+    if not unreal.EditorLoadingAndSavingUtils.new_blank_map(False):
+        fail("%s: new_blank_map returned null" % map_name)
+        return False
+    _collect_garbage()
     tracker = AssetTracker(map_name, digest_cache, force=force)
     on_v2 = map_transport.is_map_on_v2_models(map_name)
     log("%s: %s lane" % (map_name, "V2 (map root unit)" if on_v2 else "legacy (.obj/.props)"))
@@ -2520,22 +2600,154 @@ BAKE_PARTICLES = [False]
 
 
 def _collect_garbage():
-    collect = getattr(unreal.SystemLibrary, "collect_garbage", None)
-    if collect:
-        collect()
+    """Free what the finished map no longer holds, synchronously and now.
+
+    This used to call `unreal.SystemLibrary.collect_garbage`, which is
+    `UKismetSystemLibrary::CollectGarbage` and does nothing but raise
+    `GEngine->ForceGarbageCollection(true)`. That flag is consumed in `UWorld::Tick`, and a
+    `-run=pythonscript` commandlet never ticks a world -- so the release between maps was a
+    no-op for the whole life of this script, and the resident set grew map over map until D3D12
+    refused an upload heap.
+
+    The module-level `unreal.collect_garbage` (PythonScriptPlugin, `PyCore.cpp`) instead calls
+    `::CollectGarbage` on the spot, and in a commandlet it passes `RF_NoFlags` where the editor
+    would pass `GARBAGE_COLLECTION_KEEPFLAGS` -- so the previous map's textures, material
+    instances and meshes, which are all RF_Standalone, are collectable rather than kept.
+
+    Python's own cycle pass runs first: every `unreal` wrapper is a root for the collector while
+    it lives, and a wrapper caught in a reference cycle is only dropped by `gc.collect()`.
+    """
+    gc.collect()
+    unreal.collect_garbage()
+
+
+def _settle_and_collect():
+    """A release point: finish the async work, free what it was holding, then hand the pages back.
+
+    The three halves are one act and none of them works alone. Async texture and static-mesh
+    compilation is on by default in a commandlet and nothing there pumps it, so a collect that
+    runs first finds every in-flight build's source data still owned
+    (`FAssetCompilingManager::FinishAllCompilation`, plus the shader manager behind it). The
+    collect then frees the objects. What it frees is only *queued* for release inside D3D12, which
+    drains its deferred-deletion queue in `RHIEndFrame` -- reached only from a simulated frame, so
+    the ticks come last (`UElysiumMapBakeLibrary`).
+    """
+    unreal.ElysiumMapBakeLibrary.finish_asset_compilation()
+    _collect_garbage()
+    unreal.ElysiumMapBakeLibrary.tick_commandlet_frames(RELEASE_TICK_FRAMES)
+
+
+def _release_map_packages(map_name):
+    """Drop everything the finished map loaded, so the next one starts from a clean heap.
+
+    A collect alone never took any of it. Every package on the bake mount holds `RF_Standalone`
+    assets, which is exactly what `GARBAGE_COLLECTION_KEEPFLAGS` keeps while `GIsEditor`, so
+    across a `MAP_BAKE_BATCH` run the resident set was the union of every map the process had
+    touched -- the map's own textures, materials and meshes plus the whole slice of the shared
+    corpus it bound. The unload clears the flag and takes the linkers with it
+    (`UElysiumMapBakeLibrary::UnloadBakedPackages` -> `UPackageTools::UnloadPackages`).
+
+    The whole `/ElysiumBaked` mount is the scope, not the map's own package: a map binds far more
+    of the shared corpus than it authors, and everything on the mount is saved output that the
+    next map re-loads by path from disk when it needs it. What is deliberately NOT in scope is
+    `/Game/ElysiumGenerated/Materials` -- the six master materials every map's instances parent
+    to. `load_masters` would reload them, but they are six packages whose shader maps every map in
+    the batch shares, so unloading them would trade the batch's one master load for one per map
+    and buy nothing.
+
+    It runs from `main`'s `finally` rather than at the end of `bake_one`, because the `Bake`
+    instance is a local of `bake_one` and its `textures` / `materials` / `masters` maps hold
+    `unreal` wrappers -- and a live wrapper is a root for the editor's collector. Only after
+    `bake_one` has returned is that set unreachable, and only Python's own cycle pass drops a
+    wrapper caught in a reference cycle, so `gc.collect()` leads.
+
+    The world is torn down first, and here rather than left to `UnloadPackages`. It only opens a
+    fresh empty map itself (`GEditor->CreateNewMapForEditing`) when the world it is unloading is
+    the editor's own, and that holds on the success path -- `stage_level`'s `save_map` renames the
+    editor world's package to `<map>/<map>`, which is on the mount -- but not on the failure one:
+    a map that dies inside `stage_level` after its actors are spawned is still standing in the
+    blank `/Temp/Untitled_N` world `bake_one` opened, which no `/ElysiumBaked` scope can name. Its
+    actors then hold every mesh, material and texture reachable, `UnloadPackages` restores
+    `RF_Standalone` on all of them and frees nothing -- while still running them through
+    `ResetLoaders`, which by its own comment forces attached bulk-data payloads to load into
+    memory, so the release would end the map slightly heavier than it found it. `NewBlankMap`
+    ahead of the unload hands the collector an empty scene on both paths. The last map in a batch
+    is released the same way as every other, so no process ends still holding a level.
+    """
+    gc.collect()
+    if not unreal.EditorLoadingAndSavingUtils.new_blank_map(False):
+        fail("%s: new_blank_map returned null before the package release" % map_name)
+    released = unreal.ElysiumMapBakeLibrary.unload_baked_packages(MOUNT)
+    log("%s: released %d package(s) under %s" % (map_name, released, MOUNT))
+    _settle_and_collect()
+
+
+#: Meshes built since the last frame tick. A list because `_emit` is a method and this is module
+#: state shared by every bake instance in the process.
+_MESHES_SINCE_TICK = [0]
+
+
+def _tick_built_mesh():
+    """Count one built mesh and simulate a frame every `MESH_TICK_INTERVAL` of them."""
+    _MESHES_SINCE_TICK[0] += 1
+    if _MESHES_SINCE_TICK[0] >= MESH_TICK_INTERVAL:
+        _MESHES_SINCE_TICK[0] = 0
+        unreal.ElysiumMapBakeLibrary.tick_commandlet_frames(1)
+
+
+def _scan_packages(paths):
+    """Index exactly the mount packages this scope reads, before anything reads them.
+
+    A fresh commandlet has not indexed the mount, so `does_asset_exist` reports False for assets
+    already on disk and every create_asset call then trips the unattended overwrite guard. The
+    scan also loads the recipe tags every reuse decision reads.
+
+    Forced, because the registry's own start-up scan runs in the background and a plain scan of a
+    path that gatherer already owns returns at once -- the tags then read as absent until it
+    finishes, and every asset on the mount rebuilds. That reason is about the path being scanned,
+    not about how much of the mount is scanned, so `force_rescan` stays while the scope narrows.
+
+    The scope is the packages the run actually reads rather than the whole `/ElysiumBaked` mount
+    (~89k files across every baked map). The saving is real but small -- 4.0 s against 4.5 s,
+    measured twice each on `export map sm_hub_1` -- and it is worth knowing why it is not larger:
+    the mount's own start-up scan is already running over everything, and
+    `FAssetRegistryImpl::ScanPathsSynchronous` ends in `TickGatherer`, which ingests every result
+    the background gather has produced whatever paths were asked for. Narrowing the request
+    narrows what this call *waits* for, not what the process gathers.
+    """
+    start = time.time()
+    scope = sorted(set(paths))
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
+        scope, force_rescan=True)
+    log("registry: %d package path(s) scanned (%.1fs)" % (len(scope), time.time() - start))
+
+
+#: The mount packages any map bake resolves against, whichever lane it runs: the shared corpus
+#: (textures, materials, prop meshes and the error material), the R1 model corpus with its skin
+#: table and the detail-sway children beside it, the shared unit material instances a surface or
+#: a decal binds, the per-blend sprite children, the placed-model units, and the shared sky
+#: package. Everything else a map touches lives under its own `/ElysiumBaked/<map>`.
+MAP_SCAN_PACKAGES = (
+    SC.BAKED_ROOT,
+    v2.V2_MESH_PACKAGE,
+    DECAL_MATERIALS_ROOT,
+    v2.V2_SPRITE_MATERIAL_PACKAGE,
+    "%s/Props" % MOUNT,
+    SKY_PKG,
+)
 
 
 def _run_corpus():
     """-BakeCorpus=1: the shared corpus scope."""
     force = bool(cmdline_arg("BakeForce", ""))
-    # Forced for the reason `main` states: the background start-up scan owns the mount.
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT], force_rescan=True)
+    # The corpus authors and prunes `/ElysiumBaked/Shared` and reads nothing else on the mount.
+    _scan_packages([SC.BAKED_ROOT])
     digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
     try:
         ok = bake_corpus(digest_cache, force=force)
     finally:
         digest_cache.write()
-        _collect_garbage()
+        _settle_and_collect()
     if not ok:
         fail("shared corpus bake failed")
         raise SystemExit(1)
@@ -2559,13 +2771,8 @@ def main():
         " (forced)" if force else "",
         " (+particles)" if BAKE_PARTICLES[0] else " (particle systems off)"))
 
-    # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for
-    # assets already on disk and every create_asset call then trips the unattended
-    # overwrite guard. Scanning up front also loads the recipe tags reuse decisions read.
-    # Forced, because the registry's own start-up scan runs in the background and a plain
-    # scan of a path that gatherer already owns returns at once -- the tags then read as
-    # absent until it finishes, and every asset on the mount rebuilds.
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT], force_rescan=True)
+    _scan_packages(list(MAP_SCAN_PACKAGES)
+                   + ["%s/%s" % (MOUNT, name) for name in map_names])
 
     failed = []
     digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
@@ -2578,7 +2785,11 @@ def main():
             fail("%s raised: %s" % (map_name, exc))
             failed.append(map_name)
         finally:
-            _collect_garbage()
+            # Both paths: a map that failed halfway has loaded just as much as one that finished,
+            # and the next map in the batch must not inherit it. A failed map is released by the
+            # blank map the call opens first -- its own level package is unsaved and therefore
+            # skipped, but tearing the scene down is what makes the rest of the mount collectable.
+            _release_map_packages(map_name)
     digest_cache.write()
 
     if failed:

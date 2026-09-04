@@ -55,10 +55,39 @@ class FakeLinearColor:
         return "FakeLinearColor%r" % (self.value,)
 
 
+class FakeStruct:
+    """A generated USTRUCT wrapper: named properties, and nothing else."""
+
+    def __init__(self, **props):
+        self.props = dict(props)
+
+    def get_editor_property(self, name):
+        return self.props[name]
+
+    def set_editor_property(self, name, value):
+        self.props[name] = value
+
+
+def _parameter_value(name, value):
+    """One `FScalarParameterValue`/`FVectorParameterValue`/`FTextureParameterValue` row, with the
+    `FMaterialParameterInfo` a global parameter carries (`Index` = `INDEX_NONE`)."""
+    return FakeStruct(parameter_info=FakeStruct(name=name, index=-1), parameter_value=value)
+
+
+#: The three `UMaterialInstance` parameter-value arrays `bake_lib` merges its writes into.
+PARAMETER_ARRAYS = (
+    "texture_parameter_values", "scalar_parameter_values", "vector_parameter_values")
+
+
 class FakeAsset:
     """One loaded asset. A `MaterialInstanceConstant` additionally carries the parameter state
     `MaterialEditingLibrary` mutates; any other class (a master, a texture, a physical material)
-    is just an identity `unreal.load_asset` can hand back."""
+    is just an identity `unreal.load_asset` can hand back.
+
+    The scalar/vector/texture parameters live where the real ones do -- in the instance's
+    `*_parameter_values` arrays, reached through `get_editor_property`/`set_editor_property` --
+    because that is the seam `bake_lib.set_tex_param` and its siblings write through now: one
+    value write each, then one `update_material_instance` for the instance."""
 
     def __init__(self, path, class_name):
         self.path = path
@@ -68,12 +97,36 @@ class FakeAsset:
         self.parent = None
         self.phys_material = None
         self.base_property_overrides = FakeBasePropertyOverrides()
-        self.textures = {}
-        self.scalars = {}
-        self.vectors = {}
+        self.parameter_values = {name: [] for name in PARAMETER_ARRAYS}
         self.switches = {}
         self.pending_switches = {}
         self.update_calls = 0
+
+    # -- the parameter arrays, resolved by name the way a reader wants to assert on them --
+    def resolved(self, array_property):
+        return {str(row.get_editor_property("parameter_info").get_editor_property("name")):
+                row.get_editor_property("parameter_value")
+                for row in self.parameter_values[array_property]}
+
+    @property
+    def textures(self):
+        return self.resolved("texture_parameter_values")
+
+    @property
+    def scalars(self):
+        return self.resolved("scalar_parameter_values")
+
+    @property
+    def vectors(self):
+        return self.resolved("vector_parameter_values")
+
+    def set_parameter(self, array_property, name, value):
+        """`UMaterialInstance::Set*ParameterValueInternal`: the row for this name, or a new one."""
+        for row in self.parameter_values[array_property]:
+            if str(row.get_editor_property("parameter_info").get_editor_property("name")) == name:
+                row.set_editor_property("parameter_value", value)
+                return
+        self.parameter_values[array_property].append(_parameter_value(name, value))
 
     def get_class(self):
         return SimpleNamespace(get_name=lambda: self.class_name)
@@ -82,6 +135,8 @@ class FakeAsset:
         return "%s.%s" % (self.path, self.path.rsplit("/", 1)[-1])
 
     def get_editor_property(self, name):
+        if name in self.parameter_values:
+            return list(self.parameter_values[name])
         if name == "parent":
             return self.parent
         if name == "phys_material":
@@ -90,8 +145,10 @@ class FakeAsset:
             return self.base_property_overrides
         raise KeyError(name)
 
-    def set_editor_property(self, name, value):
-        if name == "parent":
+    def set_editor_property(self, name, value, notify_mode=None):
+        if name in self.parameter_values:
+            self.parameter_values[name] = list(value)
+        elif name == "parent":
             self.parent = value
         elif name == "phys_material":
             self.phys_material = value
@@ -204,26 +261,25 @@ class FakeEditor:
         # run set survives this call untouched -- `mic.switches` is deliberately NOT cleared here,
         # so a test that reuses `mic` across two `module.run` calls can prove the entry's own
         # full-state `switches` dict is what actually clears a stale value, not this call.
-        mic.textures.clear()
-        mic.scalars.clear()
-        mic.vectors.clear()
+        for rows in mic.parameter_values.values():
+            rows.clear()
 
     def set_material_instance_parent(self, mic, parent):
         self.parent_calls.append((mic.path, getattr(parent, "path", parent)))
         mic.parent = parent
 
     def set_material_instance_texture_parameter_value(self, mic, name, value):
-        mic.textures[name] = value
+        mic.set_parameter("texture_parameter_values", name, value)
 
     def get_material_instance_texture_parameter_value(self, mic, name):
         self.readback_calls.append((mic.path, name))
         return mic.textures.get(name)
 
     def set_material_instance_scalar_parameter_value(self, mic, name, value):
-        mic.scalars[name] = value
+        mic.set_parameter("scalar_parameter_values", name, value)
 
     def set_material_instance_vector_parameter_value(self, mic, name, value):
-        mic.vectors[name] = value
+        mic.set_parameter("vector_parameter_values", name, value)
 
     def get_material_instance_static_switch_parameter_value(self, mic, name):
         # The effective value: a pending (not-yet-applied) write wins, else whatever the last
@@ -337,12 +393,23 @@ def _fake_unreal(editor):
             get_command_line=lambda: editor.command_line, collect_garbage=lambda: None),
         MaterialInstanceConstant=SimpleNamespace(name="MaterialInstanceConstant"),
         MaterialInstanceConstantFactoryNew=lambda: SimpleNamespace(),
+        # The parameter-value structs `bake_lib` appends to an instance's arrays, and the notify
+        # mode it writes those arrays under. `MaterialParameterInfo` carries the engine struct's
+        # own defaults for a global parameter, which is what `bake_lib` relies on.
+        MaterialParameterInfo=lambda: FakeStruct(name="", index=-1),
+        ScalarParameterValue=FakeStruct,
+        VectorParameterValue=FakeStruct,
+        TextureParameterValue=FakeStruct,
+        PropertyAccessChangeNotifyMode=_enum(
+            "PropertyAccessChangeNotifyMode", "DEFAULT", "NEVER", "ALWAYS"),
         BlendMode=_enum("BLEND", "BLEND_OPAQUE", "BLEND_MASKED", "BLEND_TRANSLUCENT",
                         "BLEND_ADDITIVE", "BLEND_MODULATE"),
         LinearColor=FakeLinearColor,
         ElysiumMaterialProvenance=SimpleNamespace(
             apply_json=apply_json, stamp_registry_tags=stamp_registry_tags),
         load_asset=editor.load_asset,
+        # `PyCore.cpp`'s module-level sweep, the one `import_materials._collect_garbage` calls.
+        collect_garbage=lambda: None,
         log=editor.logs.append,
         log_warning=editor.warnings.append,
         log_error=editor.errors.append,
@@ -608,25 +675,25 @@ def test_a_missing_texture_fails_only_its_entry(tmp_path):
 
 
 def test_an_unknown_parameter_name_fails_the_entry_on_read_back(tmp_path):
-    """A texture parameter the master does not expose: the fake's
-    `set_material_instance_texture_parameter_value` still records it (a real master would refuse
-    silently), but the read-back only trusts what the entry itself bound under that name, so a
-    mismatch there is what the script must catch. Simulated by having the fake's read-back report
-    something other than what was set for one parameter."""
+    """A texture parameter the master does not expose: the write still lands in the instance's
+    `TextureParameterValues` array (`Set*ParameterValueInternal` appends unconditionally), but
+    `GetTextureParameterValue` resolves against the *master's* parameter set and reports nothing
+    for a name it does not carry. The read-back is what must catch that, so the refusal is
+    simulated where the engine puts it -- on the read."""
     editor = _base_editor()
     _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
     module = _load(editor)
 
     # A master that silently ignores an unknown parameter reports None on read-back.
-    real_setter = editor.set_material_instance_texture_parameter_value
+    real_getter = editor.get_material_instance_texture_parameter_value
 
-    def refusing_setter(mic, name, value):
+    def refusing_getter(mic, name):
         if name == "EnvMapMask":
-            return
-        real_setter(mic, name, value)
+            return None
+        return real_getter(mic, name)
 
-    editor.set_material_instance_texture_parameter_value = refusing_setter
-    module.unreal.MaterialEditingLibrary.set_material_instance_texture_parameter_value = refusing_setter
+    editor.get_material_instance_texture_parameter_value = refusing_getter
+    module.unreal.MaterialEditingLibrary.get_material_instance_texture_parameter_value = refusing_getter
 
     entry = _entry("brick", textures={
         "BaseTexture": "/ElysiumBaked/Textures/art/T_brick",

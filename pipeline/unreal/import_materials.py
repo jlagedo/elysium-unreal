@@ -49,6 +49,7 @@ Command line:
 from __future__ import annotations
 
 from collections import OrderedDict
+import gc
 import json
 import os
 import re
@@ -73,9 +74,12 @@ DEFAULT_MASTER_ROOT = "/Game/ElysiumGenerated/Materials/V2"
 #: The one class this lane authors.
 ASSET_CLASS = "MaterialInstanceConstant"
 
-#: Entries between `unreal.SystemLibrary.collect_garbage()` calls -- a chunk boundary here is
-#: purely a GC cadence, not a batched editor call the way the texture lane's AssetImportTask
-#: chunk is: each material instance is authored one at a time regardless.
+#: Entries between `unreal.collect_garbage()` calls -- a chunk boundary here is purely a GC
+#: cadence, not a batched editor call the way the texture lane's AssetImportTask chunk is: each
+#: material instance is authored one at a time regardless. Which also means the number is free to
+#: move: 128 dates from when the collect was the Kismet no-op and a boundary was free, and it is
+#: unverified against the real sweep the lane now pays here. `_collect_garbage` states how to
+#: re-derive it.
 CHUNK = 128
 
 #: Assets per `delete_loaded_assets` call while pruning.
@@ -135,9 +139,31 @@ def flag(value):
 
 
 def _collect_garbage():
-    collect = getattr(unreal.SystemLibrary, "collect_garbage", None)
-    if collect:
-        collect()
+    """Free what the finished chunk no longer holds, synchronously and now.
+
+    This used to call `unreal.SystemLibrary.collect_garbage`, which is
+    `UKismetSystemLibrary::CollectGarbage` and does nothing but raise
+    `GEngine->ForceGarbageCollection(true)` -- a flag consumed in `UWorld::Tick`, which a
+    `-run=pythonscript` commandlet never reaches. So the chunk cadence above released nothing.
+    The module-level `unreal.collect_garbage` (PythonScriptPlugin, `PyCore.cpp`) calls
+    `::CollectGarbage` on the spot, and in a commandlet it passes `RF_NoFlags` where the editor
+    would pass `GARBAGE_COLLECTION_KEEPFLAGS`, so the RF_Standalone assets this lane just wrote
+    and saved are collectable rather than kept for the rest of the run. Python's own cycle pass
+    runs first: an `unreal` wrapper is a root for the collector while it lives, and one caught in
+    a reference cycle is only dropped by `gc.collect()`.
+
+    The `CHUNK` cadence above was never chosen against this call. The Kismet no-op is what these
+    lanes were written on, so a chunk boundary used to cost nothing and the number only had to
+    bound the resident set; a boundary is now a synchronous full sweep whose cost scales with
+    everything the run has loaded, not with the chunk, and no timing has been taken. That is why
+    the elapsed seconds are logged: read the per-boundary cost off the next full-corpus pass of
+    this lane and set `CHUNK` from it. A partial run cannot settle it -- it sweeps a smaller
+    object graph and understates the boundary.
+    """
+    started = time.perf_counter()
+    gc.collect()
+    unreal.collect_garbage()
+    log("collect_garbage %.2fs" % (time.perf_counter() - started))
 
 
 # --- manifest ------------------------------------------------------------------------------------
@@ -563,7 +589,9 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
     t4 = time.perf_counter()
     report.add_phase("basePropertyOverrides", t4 - t3)
 
-    # One refresh, after every static-switch and base-property-override write: `TwoSided` (like
+    # One refresh, after every texture/scalar/vector, static-switch and base-property-override
+    # write -- `bl.set_tex_param` and its siblings now write only the value and leave the refresh
+    # to exactly this call (`bake_lib`'s "written in a batch, refreshed once"). `TwoSided` (like
     # any base-property override) is not part of the static parameter set the switches' own
     # update would have rebuilt against, so an instance whose *only* reason to need the editor's
     # hit-proxy shader permutation is its `TwoSided` override -- opaque, writes every pixel,
@@ -575,7 +603,7 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
     # Kept unconditional, even when both phases above changed nothing: it is the one call this
     # lane makes no allocation-storm claim about, and skipping it on a reused-but-stamped-stale
     # asset risks resurrecting the exact assert the comment above describes.
-    _mel.update_material_instance(mic)
+    bl.finish_material_instance(mic)
     t5 = time.perf_counter()
     report.add_phase("updateMaterialInstance", t5 - t4)
 

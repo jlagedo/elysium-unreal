@@ -187,9 +187,16 @@ def _import_sprites(sprites, package, source_root, tracker):
         if not texture:
             raise SystemExit("[particles] sprite import failed: %s" % texture_asset)
         if texture_dirty:
-            texture.set_editor_property("srgb", True)
-            texture.set_editor_property(
-                "mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+            # One `set_editor_properties`, as `bake_lib.configure_texture` does it: a texture's
+            # `PostEditChangeProperty` re-encodes the whole source payload, so two singular
+            # writes are two full re-encodes of every sprite. Same invariant as there -- the
+            # plural call reaches `PostEditChange` with a null property, which skips
+            # `NotifyMaterials()` -- and it holds because `MI_P_<stem>` is authored below,
+            # after this write.
+            texture.set_editor_properties({
+                "srgb": True,
+                "mip_gen_settings": unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS,
+            })
             if not unreal.EditorAssetLibrary.save_asset(texture_asset, only_if_is_dirty=True):
                 raise SystemExit("[particles] could not save %s" % texture_asset)
             tracker.built("particles")

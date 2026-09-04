@@ -2,8 +2,10 @@
 
 This document owns the bake/runtime split, the seven offline stages, and the UE 5.8 engine facts
 that require the map's look to be native content. A fast runtime `UStaticMesh` lacks the editor
-build's fitted Lumen cards, Nanite data, distance fields, LODs, and BC texture compression; the
-offline bake supplies those representations.
+build's fitted Lumen cards, Nanite data, LODs, and BC texture compression; the offline bake
+supplies those representations. Mesh distance fields are not among them: the project renders
+with hardware-ray-traced Lumen and reads none, so the bake clears the flag GeometryScript sets
+(see the engine fact below).
 
 Each exported map produces a real `.umap` and native assets under the gitignored
 `/ElysiumBaked` mount. Gameplay opens that level directly and adopts it; there is no second
@@ -251,6 +253,44 @@ loaded sp_tutorial_1 in 2.50s
 - **`unreal.StaticMaterial` takes no `imported_material_slot_name` keyword.**
 - **`cmd` splits arguments on commas** regardless of quoting, so a stage list arrives as separate
   `%n` tokens and must be rejoined.
+- **`UMaterialEditingLibrary::SetMaterialInstance*ParameterValue` refreshes the whole instance on
+  every single write.** Each call ends in `UpdateMaterialInstance` — `PreEditChange`/`PostEditChange`,
+  an `FMaterialUpdateContext` (two `FlushRenderingCommands`), a whole-process
+  `TObjectIterator<UMaterialInstance>` and a static-draw-list rebuild for every primitive drawing
+  that master — so a 14-parameter instance pays it 14 times, and the cost scales with everything
+  *else* still registered in the scene (0.057 s → 1.31 s per instance once a previous map's level
+  was still loaded). Only the static-switch setter takes `bUpdateMaterialInstance=false`; the value
+  setters have no such flag, so `bake_lib` writes the `ScalarParameterValues`/`VectorParameterValues`/
+  `TextureParameterValues` arrays itself — the same find-or-append `Set*ParameterValueInternal` does
+  — and calls `update_material_instance` once per instance.
+- **`set_editor_properties({…})` is one change notification; `set_editor_property` is one each.**
+  The plural call brackets the whole dict in a single `PreEditChange(nullptr)`/`PostEditChange()`
+  (`PyWrapperObject.cpp`), so a cluster of writes to one object costs one `PostEditChangeProperty`
+  instead of N — which for a `UTexture` is N full source re-encodes, and for a `ULightComponent` N
+  render-state rebuilds. `set_editor_property` additionally takes
+  `notify_mode=PropertyAccessChangeNotifyMode.NEVER` for a write whose refresh is deliberately
+  deferred to a later, explicit one.
+- **The plural call is not the singular call N times: it drops `NotifyMaterials()`.** It reaches
+  `PostEditChange` with a *null* property, and `UTexture::PostEditChange` forces
+  `RequiresNotifyMaterials = false` on that branch (Texture.cpp ~833) where a named
+  `CompressionSettings`/`SRGB`/`Filter`/`LODGroup` would have set it true (~861), substituting the
+  narrower `IsTextureForceRecompileCacheRessource` walk over already-referencing materials. The
+  saved asset is identical — `ValidateSettingsAfterImportOrEdit` and `UpdateResource()` run either
+  way — so batching a texture's settings is safe **only while every lane configures a texture
+  before authoring the material instance that binds it**, which is the order `bake_map`
+  (`stage_textures` → `stage_materials`), `bake_wield`, `bake_characters`, `import_textures` and
+  `make_particle_systems` all hold. Binding first would leave in-editor materials on the old
+  compression.
+- **GeometryScript turns mesh distance fields ON for every asset it creates.**
+  `create_new_static_mesh_asset_from_mesh` fills an `FStaticMeshAssetOptions` whose
+  `bAllowDistanceField` defaults to true and lands verbatim on
+  `UStaticMesh::bGenerateMeshDistanceField` (`CreateStaticMeshUtil.cpp:229`), and `CacheDerivedData`
+  builds a field whenever the cvar *or* that per-asset flag is set (`StaticMesh.cpp:4564`) — so the
+  project's `r.GenerateMeshDistanceFields=0` never got a say. `bake_lib.create_static_mesh` clears
+  the flag on both its create and its in-place-rewrite paths. `LogMeshUtilities` only prints a
+  distance-field build that took over a second, which is why this was visible as `SM_SkyDome` (a
+  10 km box, 1.2–1.4 s on every map bake) and invisible on the thousands of smaller meshes paying
+  the same tax.
 - **Epic on hardware-ray-traced Lumen:** *"Large meshes that overlap the entire scene are a
   performance issue, such as a skybox. These meshes should have Visible in Ray Tracing disabled."*
   The 3D skybox is scaled 16× and encloses the playable space, so it and the backdrop dome are both

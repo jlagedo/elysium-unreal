@@ -31,6 +31,7 @@ Command line:
 """
 from __future__ import annotations
 
+import gc
 import json
 import os
 import re
@@ -52,7 +53,11 @@ STAGE = "textures"
 MANIFEST_SCHEMA = "1.0.0"
 
 #: Entries per `import_asset_tasks` call; garbage is collected between chunks so the platform
-#: data of a finished chunk does not accumulate across an 11k-asset run.
+#: data of a finished chunk does not accumulate across an 11k-asset run. This one is a batched
+#: editor call as well as a GC cadence, so it cannot move freely -- but 64 dates from when the
+#: collect was the Kismet no-op and the boundary cost only the import call, and it is unverified
+#: against the real sweep the lane now pays here too. `_collect_garbage` states how to re-derive
+#: it.
 CHUNK = 64
 
 #: Assets per `delete_loaded_assets` call while pruning.
@@ -96,9 +101,31 @@ def flag(value):
 
 
 def _collect_garbage():
-    collect = getattr(unreal.SystemLibrary, "collect_garbage", None)
-    if collect:
-        collect()
+    """Free what the finished chunk no longer holds, synchronously and now.
+
+    This used to call `unreal.SystemLibrary.collect_garbage`, which is
+    `UKismetSystemLibrary::CollectGarbage` and does nothing but raise
+    `GEngine->ForceGarbageCollection(true)` -- a flag consumed in `UWorld::Tick`, which a
+    `-run=pythonscript` commandlet never reaches. So the chunk cadence above released nothing.
+    The module-level `unreal.collect_garbage` (PythonScriptPlugin, `PyCore.cpp`) calls
+    `::CollectGarbage` on the spot, and in a commandlet it passes `RF_NoFlags` where the editor
+    would pass `GARBAGE_COLLECTION_KEEPFLAGS`, so the RF_Standalone assets this lane just wrote
+    and saved are collectable rather than kept for the rest of the run. Python's own cycle pass
+    runs first: an `unreal` wrapper is a root for the collector while it lives, and one caught in
+    a reference cycle is only dropped by `gc.collect()`.
+
+    The `CHUNK` cadence above was never chosen against this call. The Kismet no-op is what these
+    lanes were written on, so a chunk boundary used to cost nothing and the number only had to
+    bound the resident set; a boundary is now a synchronous full sweep whose cost scales with
+    everything the run has loaded, not with the chunk, and no timing has been taken. That is why
+    the elapsed seconds are logged: read the per-boundary cost off the next full-corpus pass of
+    this lane and set `CHUNK` from it. A partial run cannot settle it -- it sweeps a smaller
+    object graph and understates the boundary.
+    """
+    started = time.perf_counter()
+    gc.collect()
+    unreal.collect_garbage()
+    log("collect_garbage %.2fs" % (time.perf_counter() - started))
 
 
 # --- manifest ------------------------------------------------------------------------------------
@@ -212,8 +239,24 @@ def settings_for(entry):
 
 
 def apply_settings(texture, entry):
-    for prop, value in settings_for(entry).items():
-        texture.set_editor_property(prop, value)
+    """Write the entry's whole settings dict in one change notification.
+
+    One `set_editor_properties`, never a `set_editor_property` per field: the plural call
+    brackets the dict in a single `PreEditChange(nullptr)`/`PostEditChange()` pair
+    (`PyWrapperObject.cpp`), while each singular call runs its own -- and every
+    `UTexture::PostEditChangeProperty` is a `SetLightingGuid` + `ValidateSettingsAfterImportOrEdit`
+    + `UpdateResource()`, i.e. a fresh DDC re-encode of the whole source payload. Six to eight
+    singular writes were six to eight re-encodes of every texture in the corpus, and
+    `verify_built` then blocks on the last one
+    (`docs/architecture/uasset-bake-spike.md` -> "Engine facts this pinned down").
+
+    The plural call reaches `PostEditChange` with a null property, and that branch forces
+    `RequiresNotifyMaterials = false` (Texture.cpp ~833) where `compression_settings`/`srgb`/
+    `filter` would each have set it true, substituting the narrower
+    `IsTextureForceRecompileCacheRessource` walk. Inert here: this is the import stage, which
+    runs before any material instance that binds these textures exists.
+    """
+    texture.set_editor_properties(settings_for(entry))
 
 
 # --- verification --------------------------------------------------------------------------------

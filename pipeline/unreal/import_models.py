@@ -45,6 +45,7 @@ Command line:
 """
 from __future__ import annotations
 
+import gc
 import json
 import math
 import os
@@ -67,9 +68,12 @@ MANIFEST_SCHEMA = "1.0.0"
 #: The one class this lane authors.
 ASSET_CLASS = "StaticMesh"
 
-#: Entries between `unreal.SystemLibrary.collect_garbage()` calls. Smaller than the material
-#: lane's 128: each entry here holds a decoded GLB, one UDynamicMesh per LOD and a freshly built
-#: StaticMesh, so the resident set grows far faster per entry than a material instance does.
+#: Entries between `unreal.collect_garbage()` calls. Smaller than the material lane's 128: each
+#: entry here holds a decoded GLB, one UDynamicMesh per LOD and a freshly built StaticMesh, so
+#: the resident set grows far faster per entry than a material instance does. That reasoning is
+#: about what a chunk holds, not about what a boundary costs -- 32 dates from when the collect
+#: was the Kismet no-op and a boundary was free, and it is unverified against the real sweep the
+#: lane now pays here. `_collect_garbage` states how to re-derive it.
 CHUNK = 32
 
 #: Assets per `delete_loaded_assets` call while pruning.
@@ -126,9 +130,31 @@ def flag(value):
 
 
 def _collect_garbage():
-    collect = getattr(unreal.SystemLibrary, "collect_garbage", None)
-    if collect:
-        collect()
+    """Free what the finished chunk no longer holds, synchronously and now.
+
+    This used to call `unreal.SystemLibrary.collect_garbage`, which is
+    `UKismetSystemLibrary::CollectGarbage` and does nothing but raise
+    `GEngine->ForceGarbageCollection(true)` -- a flag consumed in `UWorld::Tick`, which a
+    `-run=pythonscript` commandlet never reaches. So the chunk cadence above released nothing.
+    The module-level `unreal.collect_garbage` (PythonScriptPlugin, `PyCore.cpp`) calls
+    `::CollectGarbage` on the spot, and in a commandlet it passes `RF_NoFlags` where the editor
+    would pass `GARBAGE_COLLECTION_KEEPFLAGS`, so the RF_Standalone assets this lane just wrote
+    and saved are collectable rather than kept for the rest of the run. Python's own cycle pass
+    runs first: an `unreal` wrapper is a root for the collector while it lives, and one caught in
+    a reference cycle is only dropped by `gc.collect()`.
+
+    The `CHUNK` cadence above was never chosen against this call. The Kismet no-op is what these
+    lanes were written on, so a chunk boundary used to cost nothing and the number only had to
+    bound the resident set; a boundary is now a synchronous full sweep whose cost scales with
+    everything the run has loaded, not with the chunk, and no timing has been taken. That is why
+    the elapsed seconds are logged: read the per-boundary cost off the next full-corpus pass of
+    this lane and set `CHUNK` from it. A partial run cannot settle it -- it sweeps a smaller
+    object graph and understates the boundary.
+    """
+    started = time.perf_counter()
+    gc.collect()
+    unreal.collect_garbage()
+    log("collect_garbage %.2fs" % (time.perf_counter() - started))
 
 
 # --- manifest ------------------------------------------------------------------------------------

@@ -46,6 +46,13 @@ class FakeAsset:
         self.props[name] = value
         self.events.append(("set", name))
 
+    def set_editor_properties(self, values):
+        # One notification for the batch in the editor; the fake records the same per-property
+        # events so ordering assertions read the same either way.
+        for name, value in values.items():
+            self.props[name] = value
+            self.events.append(("set", name))
+
 
 class FakeEditor:
     """One registry of assets plus the calls the script makes against it."""
@@ -211,6 +218,8 @@ def _fake_unreal(editor):
         SystemLibrary=SimpleNamespace(
             get_command_line=lambda: editor.command_line, collect_garbage=lambda: None),
         AssetImportTask=AssetImportTask,
+        # `PyCore.cpp`'s module-level sweep, the one `import_textures._collect_garbage` calls.
+        collect_garbage=lambda: None,
         TextureCompressionSettings=_enum("TC", "TC_DEFAULT", "TC_EDITOR_ICON", "TC_VECTOR_DISPLACEMENTMAP"),
         TextureMipGenSettings=_enum("TMGS", "TMGS_LEAVE_EXISTING_MIPS", "TMGS_NO_MIPMAPS"),
         TextureFilter=_enum("TF", "TF_DEFAULT", "TF_NEAREST", "TF_TRILINEAR"),

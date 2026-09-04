@@ -415,6 +415,10 @@ def bind_row_textures(stem, describe, mic, master_name, row, texture_table, text
     whether any parameter was set (so the caller knows whether to save), `ok` is false when a named
     key failed to resolve to an imported texture (the caller appends `stem` to its own `failed`
     list exactly once per row, so no bookkeeping happens in here beyond that one `fail()` call).
+
+    The instance is finished here, once, after every key it names has landed: `bl.set_tex_param`
+    only writes the value, and `bl.finish_material_instance` is both the single refresh and what
+    marks the package dirty for the caller's `only_if_is_dirty` save.
     """
     texture_params, _scalar_params = master_params(master_name)
     changed = False
@@ -431,6 +435,8 @@ def bind_row_textures(stem, describe, mic, master_name, row, texture_table, text
             continue
         bl.set_tex_param(mic, param, asset)
         changed = True
+    if changed:
+        bl.finish_material_instance(mic)
     return changed, ok
 
 

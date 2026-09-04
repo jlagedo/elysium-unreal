@@ -64,7 +64,8 @@ CLANG_DATABASE_TIMEOUT_SECONDS = 300.0
 POLICY_TIMEOUT_SECONDS = 1800.0
 CORPUS_TIMEOUT_SECONDS = 7200.0
 #: One batch is `MAP_BAKE_BATCH` maps of Nanite build, Lumen surface-cache fitting and texture
-#: compression, each a cold DDC miss on a first run.
+#: compression, each a cold DDC miss on a first run. Kept where it was when a batch was twelve
+#: maps: it is the bound on a wedged launch, not a budget the batch is expected to approach.
 MAP_BAKE_TIMEOUT_SECONDS = 10800.0
 CHARACTER_BAKE_TIMEOUT_SECONDS = 7200.0
 WIELD_BAKE_TIMEOUT_SECONDS = 3600.0
@@ -674,11 +675,19 @@ def read_lookdev_report(report_path: Path) -> dict | None:
         return None
 
 
-#: Maps per editor process. The commandlet garbage-collects between maps, but loaded texture
-#: platform data and its RHI resources still accumulate across the loop -- one process reached
-#: 23 GB and the machine's commit limit at the fiftieth map -- so a profile bake runs in
-#: processes of this many maps, each starting from a fresh heap for about ten seconds of boot.
-MAP_BAKE_BATCH = 12
+#: Maps per editor process. What is measured, all of it taken *before* the release between maps
+#: was made real: a cold map adds about 2 GB of resident set; a twelve-map batch reached ~25 GB
+#: physical on its third map and died on the fourth in a D3D12 `E_OUTOFMEMORY` on an upload heap,
+#: which is host RAM; a forced three-map V2 run completed with a 12,983 MB peak. Every one of
+#: those runs had `bake_map._collect_garbage` calling the Kismet collect, which only raises a
+#: flag `UWorld::Tick` consumes and a `-run=pythonscript` commandlet never reaches -- so nothing
+#: was released between maps, and none of those numbers describe what the lane costs now.
+#:
+#: Three is the conservative carry-over from that evidence, not a measured ceiling: it is the
+#: largest batch on record that completed. No run has yet been made with the release working, so
+#: re-derive this number from one -- watch the process's peak working set across the batch --
+#: rather than raising it on the assumption that the collect now recovers everything.
+MAP_BAKE_BATCH = 3
 
 
 def bake_maps(
@@ -696,10 +705,13 @@ def bake_maps(
     force-deleting a Niagara package the asset compiler still owns crashes the editor, and a
     launch without it leaves whatever particle packages the mount already carries untouched.
 
-    Editor start-up (module load, plugin init, registry scan) is the fixed cost per process;
-    the commandlet garbage-collects between maps and isolates per-map failures, and a crash
-    mid-run costs only a relaunch: every saved asset carries its recipe stamp and is reused.
-    Profile bakes pass `MAP_BAKE_BATCH` so one process's growth stays bounded.
+    Editor start-up (module load, plugin init, registry scan) is the fixed cost per process, and
+    it buys the only release that is certain: process exit. Between maps the commandlet now
+    drops the previous map's world and collects for real (`bake_map._collect_garbage`), which
+    used to be a no-op, and it isolates per-map failures either way -- a crash mid-run costs only
+    a relaunch, because every saved asset carries its recipe stamp and is reused. Profile bakes
+    pass `MAP_BAKE_BATCH` so what the in-process release does not recover is bounded by how soon
+    the process ends.
 
     Per-asset reuse is the commandlet's own decision, read off each asset's recipe stamp; a
     failed batch is reported by the editor log naming the failing map.

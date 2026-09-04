@@ -506,25 +506,48 @@ def configure_texture(texture, role):
     """Set the compression/colour-space a texture's role needs. `role` is one of
     'albedo' (sRGB colour + alpha), 'normal' (tangent-space bump), 'mask' (linear
     single-channel reflectivity), 'cube' (sRGB source reflection), or 'height'
-    (linear 16-bit rain-cover height)."""
+    (linear 16-bit rain-cover height).
+
+    One `set_editor_properties` per role, never a `set_editor_property` per field: the plural
+    call brackets the whole dict in a single `PreEditChange(nullptr)`/`PostEditChange()` pair
+    (`PyWrapperObject.cpp`, `FMethods::SetEditorProperties`), while each singular call runs its
+    own -- and a texture's `PostEditChangeProperty` re-encodes the whole source payload, so the
+    two/three writes below cost two/three full re-encodes of every texture the bake configures
+    (`docs/architecture/uasset-bake-spike.md` -> "Engine facts this pinned down").
+
+    The two shapes are not identical, and the difference is an invariant this bake owes:
+    `UTexture::PostEditChange` reached with a *named* property sets `RequiresNotifyMaterials`
+    for `compression_settings`, `srgb`, `filter` and `lod_group` (Texture.cpp ~861) and calls
+    `NotifyMaterials()`; reached with a null property -- which is what the plural call passes --
+    it forces that flag back to false (~833) and runs only the narrower
+    `IsTextureForceRecompileCacheRessource` walk over materials that already reference the
+    texture. The saved `.uasset` is the same either way (`ValidateSettingsAfterImportOrEdit`
+    and `UpdateResource()` run on both branches). Dropping `NotifyMaterials()` is safe only
+    because every lane configures a texture *before* authoring the material instance that binds
+    it -- `bake_map` runs `stage_textures` before `stage_materials`, `bake_wield` and
+    `bake_characters` configure at import and bind later -- so there is no loaded material to
+    notify. A reorder that binds first would silently draw the old compression in-editor."""
     if role == "height":
-        texture.set_editor_property("srgb", False)
-        texture.set_editor_property("compression_settings",
-                                    unreal.TextureCompressionSettings.TC_DISPLACEMENTMAP)
-        texture.set_editor_property("mip_gen_settings",
-                                    unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+        texture.set_editor_properties({
+            "srgb": False,
+            "compression_settings": unreal.TextureCompressionSettings.TC_DISPLACEMENTMAP,
+            "mip_gen_settings": unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS,
+        })
     elif role == "normal":
-        texture.set_editor_property("srgb", False)
-        texture.set_editor_property("compression_settings",
-                                    unreal.TextureCompressionSettings.TC_NORMALMAP)
+        texture.set_editor_properties({
+            "srgb": False,
+            "compression_settings": unreal.TextureCompressionSettings.TC_NORMALMAP,
+        })
     elif role == "mask":
-        texture.set_editor_property("srgb", False)
-        texture.set_editor_property("compression_settings",
-                                    unreal.TextureCompressionSettings.TC_MASKS)
+        texture.set_editor_properties({
+            "srgb": False,
+            "compression_settings": unreal.TextureCompressionSettings.TC_MASKS,
+        })
     else:
-        texture.set_editor_property("srgb", True)
-        texture.set_editor_property("compression_settings",
-                                    unreal.TextureCompressionSettings.TC_DEFAULT)
+        texture.set_editor_properties({
+            "srgb": True,
+            "compression_settings": unreal.TextureCompressionSettings.TC_DEFAULT,
+        })
 
 
 # The engine's own miss substitute, reproduced. VtMB's material system binds a synthetic
@@ -745,20 +768,83 @@ def delete_owned_assets(asset_paths):
             % (len(asset_paths), asset_paths[0]))
 
 
+# Material instance parameters: written in a batch, refreshed once.
+#
+# `UMaterialEditingLibrary::SetMaterialInstance{Scalar,Vector,Texture}ParameterValue` ends *every
+# single write* with `UpdateMaterialInstance` (MaterialEditingLibrary.cpp ~1485-1620), which is
+# `PreEditChange`/`PostEditChange` on the instance -- an `FMaterialUpdateContext` (two
+# `FlushRenderingCommands`), a whole-process `TObjectIterator<UMaterialInstance>` and a static-
+# draw-list rebuild for every primitive drawing that master. Paid once per *parameter*, that is
+# what made a map's material stage climb from 0.057 s to 1.31 s per instance in a multi-map run,
+# where a previous map's level was still registered in the scene and every primitive in it was in
+# that rebuild (`docs/architecture/uasset-bake-spike.md` -> "Engine facts this pinned down").
+#
+# So the four setters below write only the parameter *value*, exactly the way
+# `UMaterialInstance::Set*ParameterValueInternal` does -- find the row whose `ParameterInfo`
+# matches, or append one with an invalid `ExpressionGUID` -- and the caller ends the instance with
+# one `finish_material_instance`. That call is `UpdateMaterialInstance` itself, so the end state
+# (parameter arrays, static permutation, `MarkPackageDirty`, `PostEditChange`) is the one the
+# per-write path would have left behind, reached once instead of once per parameter.
+#
+# `notify_mode=NEVER` on the array write is what makes the batching real: `set_editor_property`
+# would otherwise run `UMaterialInstance::PostEditChangeProperty` -- the same refresh again --
+# once per array.
+
+#: `FMaterialParameterInfo::Index` for a global (non-layer, non-blend) parameter: `INDEX_NONE`.
+#: Every parameter this bake writes is global, and the index is what separates a global row from
+#: a material-layer row of the same name.
+GLOBAL_PARAMETER_INDEX = -1
+
+
+def _set_param(mic, array_property, row_class, param, value):
+    """Merge one global parameter override into one of `mic`'s parameter-value arrays."""
+    rows = list(mic.get_editor_property(array_property))
+    for row in rows:
+        info = row.get_editor_property("parameter_info")
+        if (str(info.get_editor_property("name")).lower() == param.lower()
+                and int(info.get_editor_property("index")) == GLOBAL_PARAMETER_INDEX):
+            row.set_editor_property("parameter_value", value)
+            break
+    else:
+        # Left at the struct's own C++ defaults apart from the name: `GlobalParameter` and
+        # `INDEX_NONE`, which is what `FMaterialParameterInfo(ParameterName)` gives the engine's
+        # own path. Populated through `set_editor_property` -- a generated Python struct type
+        # takes no constructor kwargs (`uasset-bake-spike.md`).
+        info = unreal.MaterialParameterInfo()
+        info.set_editor_property("name", param)
+        row = row_class()
+        row.set_editor_property("parameter_info", info)
+        row.set_editor_property("parameter_value", value)
+        rows.append(row)
+    mic.set_editor_property(array_property, rows,
+                            notify_mode=unreal.PropertyAccessChangeNotifyMode.NEVER)
+
+
 def set_tex_param(mic, param, texture):
-    _mel.set_material_instance_texture_parameter_value(mic, param, texture)
+    _set_param(mic, "texture_parameter_values", unreal.TextureParameterValue, param, texture)
 
 
 def set_scalar_param(mic, param, value):
-    _mel.set_material_instance_scalar_parameter_value(mic, param, value)
+    _set_param(mic, "scalar_parameter_values", unreal.ScalarParameterValue, param, float(value))
 
 
 def set_vector_param(mic, param, value):
-    _mel.set_material_instance_vector_parameter_value(mic, param, value)
+    _set_param(mic, "vector_parameter_values", unreal.VectorParameterValue, param, value)
 
 
 def set_static_switch_param(mic, param, value):
-    _mel.set_material_instance_static_switch_parameter_value(mic, param, value)
+    # The one setter that already takes the flag; it still allocates a transient
+    # `UMaterialEditorInstanceConstant` per call either way (import_materials._apply_switches).
+    _mel.set_material_instance_static_switch_parameter_value(
+        mic, param, value, update_material_instance=False)
+
+
+def finish_material_instance(mic):
+    """End one instance's parameter writes: the single refresh the four setters above defer.
+
+    Every caller that wrote a parameter owes exactly one of these before it saves -- it is also
+    what marks the package dirty, and `save` is `only_if_is_dirty`."""
+    _mel.update_material_instance(mic)
 
 
 def build_dynamic_mesh(sections):
@@ -873,6 +959,30 @@ def set_phy_collision(static_mesh, phys):
     return _collision.get_simple_collision_shape_count(combined)
 
 
+def _drop_mesh_distance_field(static_mesh):
+    """Turn off this mesh's own distance field, before the build that would generate one.
+
+    The project renders with hardware-ray-traced Lumen and no mesh distance fields at all
+    (`Config/DefaultEngine.ini`, "Rendering"): `r.GenerateMeshDistanceFields` is left at its
+    engine default of 0, so nothing in the game ever reads one. The asset still asked for one,
+    because GeometryScript's asset creation goes through `FStaticMeshAssetOptions` whose
+    `bAllowDistanceField` defaults to true and lands verbatim on
+    `UStaticMesh::bGenerateMeshDistanceField` (`CreateStaticMeshUtil.cpp:229`), and
+    `CacheDerivedData` builds a field whenever either the cvar or that flag is set
+    (`StaticMesh.cpp:4564`). Every baked mesh has therefore been building and storing a field
+    no renderer looks at -- `SM_SkyDome`, a 10 km box, paid 1.2-1.4 s of it on every single map
+    bake (Sep 3 logs, `LogMeshUtilities: Finished distance field build ... SM_SkyDome`, which
+    only prints at all when a build takes over a second).
+
+    `notify_mode=NEVER` for the reason the parameter setters give: a `PostEditChange` on a
+    StaticMesh triggers a full rebuild, and the write here exists to make the build that follows
+    cheaper, not to provoke one.
+    """
+    static_mesh.set_editor_property(
+        "generate_mesh_distance_field", False,
+        notify_mode=unreal.PropertyAccessChangeNotifyMode.NEVER)
+
+
 def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collision=True):
     """Write a UDynamicMesh out as a real StaticMesh asset and bind its material slots.
     Returns the asset, or None when the build failed.
@@ -882,7 +992,10 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collisio
     sweep plus garbage collection costs seconds per asset with the corpus resident and
     dominated every re-baked prop stage. The copy also carries the materials, slot
     names and Nanite settings in the same build and emits no transaction, so a rewrite
-    is one mesh build instead of three plus an undo record."""
+    is one mesh build instead of three plus an undo record.
+
+    This is the one place any bake lane creates a StaticMesh, so it is where the project's
+    no-mesh-distance-fields ruling is applied (`_drop_mesh_distance_field`)."""
     nanite_settings = unreal.MeshNaniteSettings()
     nanite_settings.set_editor_property("enabled", nanite)
     existing = None
@@ -895,6 +1008,8 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collisio
             # the correct tool for that rare, wrong state.
             delete_owned_asset(asset_path)
     if existing is not None:
+        # Before the copy, which is what rebuilds the mesh and would queue the field.
+        _drop_mesh_distance_field(existing)
         options = unreal.GeometryScriptCopyMeshToAssetOptions()
         options.enable_recompute_normals = False
         options.enable_recompute_tangents = True
@@ -929,6 +1044,11 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collisio
     static_mesh = result[0] if isinstance(result, tuple) else result
     if not static_mesh:
         return None
+    # The create path builds once with the option's own `bAllowDistanceField`, so the first
+    # authoring of a brand-new asset still pays for one field; clearing the flag here is what
+    # saves it on the asset, so every later rewrite of that mesh goes through the branch above
+    # and builds none.
+    _drop_mesh_distance_field(static_mesh)
     # Nanite lands at create time (CreateStaticMeshUtil applies Options.NaniteSettings
     # before the first build); only the material bind remains a post-create write.
     static_mesh.set_editor_property("static_materials", [
