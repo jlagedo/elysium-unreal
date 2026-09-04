@@ -84,7 +84,10 @@ def test_sky_sample_takes_the_miniature_transform_for_position_and_radius(module
 
 
 def test_editor_lane_reads_the_manifest_version_the_stage_writes(module) -> None:
-    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 7
+    # The invariant is that the two halves agree, not the number they agree on: the
+    # constant is restated across the numpy boundary and bumps whenever a table is added
+    # (R7.2 took it to 8), and a literal here only teaches the next bump to edit it here too.
+    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION
     sample = module._CubemapSample(
         {"index": 3, "origin": [1, -2, 3], "position": [2.54, 5.08, 7.62], "sky": False})
     assert (sample.index, sample.origin, sample.position, sample.sky) == (

@@ -253,6 +253,28 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("MI_") + MaterialSafeName(Parts.Last());
 		return Package / Asset + TEXT(".") + Asset;
 	}
+	// The PROJECTOR twin of the instance above (R7.2 ruling 2): every `$decal` unit and every
+	// `decalmodulate` unit stages a second shared instance beside its surface one, in the same
+	// package directory, named `MI_<safe stem>_Decal` and parented to `M_V2_Decal`. A
+	// `UDecalComponent` draws only an `MD_DeferredDecal` material, so this is the asset a placed
+	// or laid decal binds -- never `BakedMaterial`'s, which is surface-domain.
+	//
+	// Empty for anything that is not a `vtmb:material:` id, for the same reason `BakedMaterial` is:
+	// a stale token must not fold to a path that happens to exist.
+	static FString BakedDecalMaterial(const FString& MaterialId)
+	{
+		const FString Surface = BakedMaterial(MaterialId);
+		if (Surface.IsEmpty())
+		{
+			return FString();
+		}
+		// `<dir>/MI_<stem>.MI_<stem>` -> `<dir>/MI_<stem>_Decal.MI_<stem>_Decal`, off the one
+		// name both halves of the object path already carry.
+		FString Package, Asset;
+		Surface.Split(TEXT("."), &Package, &Asset, ESearchCase::CaseSensitive, ESearchDir::FromEnd);
+		const FString DecalAsset = Asset + TEXT("_Decal");
+		return Package + TEXT("_Decal.") + DecalAsset;
+	}
 	// `asset_names.safe_name`: every run of characters outside [A-Za-z0-9_] becomes one
 	// underscore, leading and trailing underscores are stripped, and a name that folds away
 	// entirely is `unnamed`. NOT BakedAssetName (which keeps the leading/trailing run) and NOT

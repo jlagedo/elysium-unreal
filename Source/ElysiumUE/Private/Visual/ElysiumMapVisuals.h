@@ -91,7 +91,10 @@ public:
 	// chunks, its props and (R6.7) the detail components whose actor carries the `elysium.sky`
 	// marker. Custom primitive data, because the two share screen depth and a deferred fog pass
 	// cannot scope by anything else (ElysiumFog.h). Re-run by elysium.Fog, which stamps zeros
-	// instead. A sprite carries no stamp: `M_V2_Sprite` has no fog term (R6.1 follow-up).
+	// instead. A sprite carries no stamp: `M_V2_Sprite` has no fog term (R6.1 follow-up). A decal
+	// takes worldspawn's set through UElysiumDecalSubsystem::ApplyFog (R7.2 ruling 4) -- named
+	// instance parameters on a load-time MID, because a UDecalComponent carries no custom
+	// primitive data of its own.
 	void ApplySceneFog();
 	void RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool bSky);
 

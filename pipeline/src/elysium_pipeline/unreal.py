@@ -725,7 +725,10 @@ def bake_maps(
               f"({report.get('patched', 0)} PAKFILE-patched, "
               f"{report.get('animatedNow', 0)} animated now, "
               f"{report.get('classChanged', 0)} appearance class changed, "
-              f"{report.get('wetnessDriven', 0)} wetness-driven; by master "
+              f"{report.get('wetnessDriven', 0)} wetness-driven, "
+              f"{report.get('decalProjectorsBound', 0)} of "
+              f"{report.get('decalSurfaces', 0)} $decal surface(s) on the projector instance; "
+              f"by master "
               f"{report.get('byV2Master', {})}) -- "
               f"{map_geometry.staging_dir(name) / map_geometry.MATERIAL_REPORT_NAME}")
         # R7.3: every effects entity joined to its particle tree; the counts are the stage's own

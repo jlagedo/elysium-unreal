@@ -13,8 +13,9 @@
  * Every default is VtMB's own, read off the shipped `client.dll` (`GlowBlend`, `100c24a0`): the
  * glow falloff `19000 / dist^2` (`102324b0`), its `0.05` floor (`101e55b0`), the screen-constant
  * scale `dist / 200` (`102261e0`), the pixel-visibility smoothing `r_glowfadein` 0.2 s /
- * `r_glowfadeout` 0.1 s (`102b1fd8` / `102b639c`), and the query quad `dist x 3/128`
- * (`102324d0`, `10225158`). `SpriteQueryGrid` alone has no VtMB twin: Source counted the quad's
+ * `r_glowfadeout` 0.1 s (`102b1fd8` / `102b639c`), and the query quad -- `dist x 3/128` for
+ * `rendermode` 3 alone (`102324d0`, the screen-constant quad) and a fixed 3 Source units for every
+ * other mode (`10225158`). `SpriteQueryGrid` alone has no VtMB twin: Source counted the quad's
  * pixels, Unreal answers a sub-primitive occlusion query per box, so the fraction is sampled
  * over a grid. Wiring defaults, not a tuning judgement ("wire first, tune later").
  */
@@ -46,9 +47,13 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category = "Glow", meta = (ClampMin = "0.0"))
 	float GlowFadeOutSeconds = 0.1f;
 
-	/** The occlusion sample's half-size at the sprite origin, as a fraction of the view distance (VtMB's `3/128`). */
+	/** A rendermode-3 corona's occlusion sample half-size at the origin, as a fraction of the view distance (VtMB's `3/128`, `102324d0`). */
 	UPROPERTY(EditAnywhere, Config, Category = "Occlusion", meta = (ClampMin = "0.0"))
 	float SpriteQueryFootprintPerDistance = 3.0f / 128.0f;
+
+	/** Every other mode's occlusion sample half-size, in Source units (VtMB's fixed `3.0`, `10225158`). */
+	UPROPERTY(EditAnywhere, Config, Category = "Occlusion", meta = (ClampMin = "0.0"))
+	float SpriteQueryFixedHalfInches = 3.0f;
 
 	/** The sample is a `Grid x Grid` tiling of boxes; the visible fraction is visible boxes over the grid. */
 	UPROPERTY(EditAnywhere, Config, Category = "Occlusion", meta = (ClampMin = "1", ClampMax = "8"))

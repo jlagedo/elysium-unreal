@@ -307,10 +307,12 @@ namespace
 	static const FName DecalTextures[] = {
 		ElysiumSurfaceParamsShared::Textures::SurfaceClassLUT,
 		ElysiumSurfaceParamsDecal::Textures::BaseTexture,
+		ElysiumSurfaceParamsDecal::Textures::Emissive,
 	};
 	static const FName DecalScalars[] = {
 		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
 		ElysiumSurfaceParamsShared::Scalars::Alpha,
+		ElysiumSurfaceParamsDecal::Scalars::EmissiveScale,
 		ElysiumSurfaceParamsDecal::Scalars::FogStart,
 		ElysiumSurfaceParamsDecal::Scalars::FogInvRange,
 	};
@@ -319,7 +321,7 @@ namespace
 		ElysiumSurfaceParamsDecal::Vectors::FogColor,
 	};
 	static const FName DecalSwitches[] = {
-		ElysiumSurfaceParamsDecal::Switches::UseVertexColor,
+		ElysiumSurfaceParamsDecal::Switches::Unlit,
 	};
 
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set

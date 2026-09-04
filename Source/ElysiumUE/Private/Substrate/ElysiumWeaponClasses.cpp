@@ -11,6 +11,7 @@
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumComboChain.h"             // the authored combo block and its busy/window rules
+#include "ElysiumDecalSubsystem.h"         // ElysiumImpactDecals::PoolSize — the shot's variation roll
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -2082,6 +2083,14 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 			ElysiumStealth::HearingReductionCmFor(Attacker));
 	}
 
+	// SEAM (R7.2, closed) — retail traces forward first and accepts a valid obstruction hit.
+	// The paid-for shot leaves a mark on whatever the ray actually met, resolved a hit or a miss:
+	// `C_TEGunshotDecal` is emitted by the shot itself, not by the damage. The substrate owns the
+	// instant and the variation roll (a decal variation is an effects-side pick, so it draws on
+	// that stream); the trace, the hit's surface character and the decal are engine questions and
+	// live behind `IElysiumEmbodiment::LayShotImpactDecal` (`docs/vtmb/effects.md` §3.5).
+	TraceShotImpact(*Attacker, *Mode);
+
 	FElysiumEntity* VictimEnt = OpponentHandle.IsSet() && World ? World->Resolve(OpponentHandle) : nullptr;
 	FElysiumCombatCharacter* Victim = VictimEnt ? VictimEnt->AsCombatCharacter() : nullptr;
 	if (!Victim || !IsAliveForCombat(*Victim))
@@ -2094,6 +2103,42 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 	}
 
 	RangedImpact(*Attacker, *Victim, ModeIndex);
+}
+
+void FElysiumWeapon::TraceShotImpact(const FElysiumCombatCharacter& Attacker,
+	const FElysiumWeaponMode& Mode)
+{
+	// The variation is rolled for every committed shot, before anything can decline to draw it: the
+	// Effects stream's position is a function of what the run DID, not of whether an engine was
+	// attached to watch it (`ElysiumRng.h` — the stream state is in the save).
+	const int32 Variation =
+		ElysiumRng::Stream(EElysiumRngStream::Effects).RandRange(1, ElysiumImpactDecals::PoolSize);
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		return;
+	}
+	// The shot's own origin and direction, off the attacker's committed surface. The reach is the
+	// mode's `Range`, or the stated stand-in the aim query already reports on for a record that
+	// authors none — this call adds no second report.
+	//
+	// `Origin` (and so `EyePosition`) is an Unreal world position in cm, but `Angles` is Source
+	// QAngles: the handedness reflection reverses pitch and yaw, which is why the player's own
+	// `SyncFromBody` writes `Angles = ElysiumPlayerView::ToSource(View)` and every motor call
+	// passes `-Angles.Y`. A ray built from the raw components would be mirrored about the world X
+	// axis and pitched the wrong way, so a shot fired at Unreal yaw 90 would stain the wall at
+	// −90. `ToUnreal` is that conversion's one home, and it is the same frame
+	// `AElysiumMapActor::QueryAimTarget` traces the victim along (`GetViewRotation()`), so the
+	// mark and the target come off one aim rather than two.
+	const FVector EyeOrigin = Attacker.EyePosition();
+	const FVector Forward = ElysiumPlayerView::ToUnreal(Attacker.Angles).Vector().GetSafeNormal();
+	const float RangeCm = (Mode.Range > 0.0f ? Mode.Range : ElysiumWeapons::RangedRangeSourceUnits)
+		* ElysiumMove::U;
+	// One hull half-width forward of the eye, so the shooter's own body is never the obstruction
+	// the trace accepts. Retail excluded the firer from its own trace mask; this is that exclusion
+	// expressed as a start point, which needs no handle on an engine body.
+	const FVector From = EyeOrigin + Forward * ElysiumMove::HullHalfWidth;
+	Embodiment->LayShotImpactDecal(From, Forward, RangeCm, Variation);
 }
 
 // The melee contact — a per-frame swept walk over the clip's own authored windows.

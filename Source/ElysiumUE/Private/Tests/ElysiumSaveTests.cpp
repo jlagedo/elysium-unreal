@@ -370,6 +370,22 @@ bool FElysiumSaveRoundTripTest::RunTest(const FString&)
 	C.ApplySnapshot(WithAbsent);
 	TestNull(TEXT("an absent entity is not re-materialised"), C.FindByName(TEXT("counter1")));
 
+	// --- A snapshot frozen against another def array is refused whole --------------------------
+	// Records are matched by index, so a `.ents` that changed under the save lands each one on a
+	// different entity — the classname guard only catches those whose class moved too. Save files
+	// are disposable (CLAUDE.md), so the load keeps the fresh spawn state rather than misapplying.
+	FElysiumEntityDefs ShortDefs = MakeSaveTestDefs();
+	ShortDefs.Defs.Pop();
+	FElysiumEntityWorld D(/*Owner*/ nullptr, /*GameState*/ nullptr);
+	D.Load(MoveTemp(ShortDefs));
+	AddExpectedError(TEXT("was frozen against 3 defs, this build parsed 2"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	TestEqual(TEXT("a snapshot frozen against another def array applies nothing"),
+		D.ApplySnapshot(First), 0);
+	D.Activate(0.0);
+	TestEqual(TEXT("and the counter keeps the value its fresh build gave it"),
+		SaveTestCounterValue(D.FindByName(TEXT("counter1"))), 0.0f);
+
 	return true;
 }
 

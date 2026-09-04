@@ -76,9 +76,12 @@ namespace ElysiumFog
 	// carries no Custom Primitive Data of its own and `Pack` above does not apply to it. A decal
 	// is only ever a world surface (`mat_fog.fog_from_params`'s own docstring), so it needs one
 	// per-map value, never a per-primitive one -- set here as the three named instance parameters
-	// `M_V2_Decal` declares (`ElysiumSurfaceParamsDecal`) on an MID created at decal-spawn time,
-	// parented to the shared imported `MI_<unit>`. Never a per-map material package: the same
-	// values `Pack` already computes for the mesh/prop CPD path, applied to one more instance.
+	// `M_V2_Decal` declares (`ElysiumSurfaceParamsDecal`) on an MID `UElysiumDecalSubsystem` owns
+	// (R7.2 ruling 4): created at MAP LOAD for every baked `elysium.decal` component it adopts,
+	// and inside `Lay` for a runtime stain, parented to the unit's projector twin
+	// `MI_<unit>_Decal` -- a bake cannot save an MID into a level, so there is nowhere earlier for
+	// it to live. Never a per-map material package: the same values `Pack` already computes for
+	// the mesh/prop CPD path, applied to one more instance.
 	inline void ApplyToDecalMID(UMaterialInstanceDynamic* Mid, bool bEnabled,
 		const FLinearColor& Color, float StartCm, float EndCm)
 	{

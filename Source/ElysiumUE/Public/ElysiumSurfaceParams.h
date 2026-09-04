@@ -416,28 +416,41 @@ namespace ElysiumSurfaceParamsRefract
 	}
 }
 
-// `M_V2_Decal` -- `decalmodulate` (38 units, no shipped program at all -- retail fell back to
-// wireframe). Unlit, `BLEND_Modulate` on the master. `DecalDepthOffset` is not on this master (a
-// knob only, in `MPC_ElysiumSurfaces`, applied by the placement lane's decal component -- design
-// doc "Four parameters that left the masters"). Two known UE limitations worth stating rather
-// than working around: modulate-blend surfaces are excluded from the Lumen surface cache (no GI
-// contribution, invisible in a Lumen reflection), and `BLEND_Modulate` is not Nanite-compatible,
-// so this master does not set `used_with_nanite`.
+// `M_V2_Decal` -- R7.2 (docs/project/seam_migration.md -> "R7.2 Decals", ruling 1;
+// docs/architecture/seam_map_material.md -> "M_V2_Decal"): the projector master for every
+// `$decal`/`decalmodulate` unit, re-cut to `MD_DeferredDecal` / `BLEND_Translucent` / DefaultLit
+// -- the one deferred-decal domain a `UDecalComponent` actually draws (`FDeferredDecalProxy`
+// substitutes the engine default for anything else, and DBuffer rewrites a would-be Modulate to
+// Translucent regardless, `DecalRenderingCommon.cpp` 47-49). `BaseTexture` RGB x `Color` (shared)
+// -> BaseColor, `BaseTexture` A x `Alpha` (shared) -> Opacity, `Emissive` x `EmissiveScale`
+// (default 0, the 3 `$selfillum` units) -> EmissiveColor. `Unlit` (the 28 `unlitgeneric`
+// projector units) routes the fogged base colour into Emissive and leaves BaseColor black --
+// DefaultLit has no unlit shading model to fall back to. Roughness, Specular, Metallic and
+// Normal are deliberately NOT connected: the wall keeps its own surface under the decal, which is
+// what a lightmapped `$decal` face did. `DecalDepthOffset` is not on this master and is not a
+// knob anywhere else either: ruling 3 retires it outright (`UElysiumSurfaceSettings`,
+// `MPC_ElysiumSurfaces`, the knob test) -- the `isDecalSurface` mesh-decal pass has nothing left
+// to bias once the projector geometry itself is coplanar with the wall. `UseVertexColor` is
+// dropped: a projected decal has no vertex colour.
 namespace ElysiumSurfaceParamsDecal
 {
 	namespace Textures
 	{
 		inline const FName BaseTexture(TEXT("BaseTexture"));
+		inline const FName Emissive(TEXT("Emissive"));
 	}
 
-	// R5.3 (docs/architecture/seam_map_material.md -> "Decal fog and wetness homes"): the world's
-	// own distance fog as three named instance parameters -- a UDecalComponent carries no Custom
-	// Primitive Data of its own, unlike every mesh primitive. No corpus unit authors a fog key on
-	// a decalmodulate VMT, so the stage never writes these; the placement lane sets them per
-	// decal instance (an MID at load, ElysiumFog::ApplyToDecalMID) from the map's own
-	// `UElysiumMapEnvironment` (R4.4) fog, never from a per-map material package.
+	// R5.3 (docs/architecture/seam_map_material.md -> "Decal fog and wetness homes"), unchanged
+	// by the R7.2 re-cut: the world's own distance fog as three named instance parameters -- a
+	// UDecalComponent carries no Custom Primitive Data of its own, unlike every mesh primitive.
+	// No corpus unit authors a fog key on a decalmodulate VMT, so the stage never writes these;
+	// the placement lane sets them per decal instance (an MID at load,
+	// ElysiumFog::ApplyToDecalMID) from the map's own `UElysiumMapEnvironment` (R4.4) fog, never
+	// from a per-map material package. Fade reaches BaseColor only; fade + inscatter reaches
+	// Emissive -- the fog specular kill is dropped along with Roughness/Specular/Metallic/Normal.
 	namespace Scalars
 	{
+		inline const FName EmissiveScale(TEXT("EmissiveScale"));
 		inline const FName FogStart(TEXT("FogStart"));
 		inline const FName FogInvRange(TEXT("FogInvRange"));
 	}
@@ -449,6 +462,6 @@ namespace ElysiumSurfaceParamsDecal
 
 	namespace Switches
 	{
-		inline const FName UseVertexColor(TEXT("UseVertexColor"));
+		inline const FName Unlit(TEXT("Unlit"));
 	}
 }

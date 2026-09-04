@@ -66,7 +66,6 @@ const TArray<TPair<FName, float UElysiumSurfaceSettings::*>>& UElysiumSurfaceSet
 		{FName(TEXT("FixedCubeStrength")), &UElysiumSurfaceSettings::FixedCubeStrength},
 		{FName(TEXT("ChromaticTintStrength")), &UElysiumSurfaceSettings::ChromaticTintStrength},
 		{FName(TEXT("ChromaThreshold")), &UElysiumSurfaceSettings::ChromaThreshold},
-		{FName(TEXT("DecalDepthOffset")), &UElysiumSurfaceSettings::DecalDepthOffset},
 		{FName(TEXT("CaptureRadius")), &UElysiumSurfaceSettings::CaptureRadius},
 		{FName(TEXT("DetailSwayAmplitude")), &UElysiumSurfaceSettings::DetailSwayAmplitude},
 	};

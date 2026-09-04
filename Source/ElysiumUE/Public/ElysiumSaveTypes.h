@@ -155,7 +155,7 @@ struct FElysiumSavedFade
 struct FElysiumMapSnapshot
 {
 	FString MapName;
-	int32   DefCount = 0;             // the def array's size when frozen; a mismatch is logged
+	int32   DefCount = 0;             // the def array's size when frozen; a mismatch refuses the snapshot
 	double  FrozenAt = 0.0;           // game seconds at freeze, for the readable dump
 
 	// **The schema every `FElysiumEntityState::LeafState` blob in this snapshot was written at.**

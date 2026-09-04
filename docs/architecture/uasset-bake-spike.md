@@ -45,7 +45,7 @@ uv run elysium export map <map> [--force]
 | Stage | Reads | Writes |
 |---|---|---|
 | `textures` | `.mtl` + `tex/`, `props/tex/` | `Texture2D`, alpha-capable source retained where the material needs it, sRGB/`TC_NORMALMAP`/`TC_MASKS` by role, existing packages replaced in place |
-| `materials` | `.mtl` | `MaterialInstanceConstant` off the generated local masters — a `decal 1` surface is a projector, not geometry, so it splits off onto `M_Decal` in its own package |
+| `materials` | `.mtl` | `MaterialInstanceConstant` off the generated local masters. *(R7.2: a `decal 1` surface no longer splits off into a per-map package — every projected unit carries a corpus-wide `MI_<unit>_Decal` twin on `M_V2_Decal`, and no per-map material package is authored at all.)* |
 | `world` | `.obj`, `.blend`, `brushes/brush_*.obj` | one `SM_World_*` per 2048 cm cell plus unplaced `/Brushes/SM_brush_*` assets |
 | `sky` | `_sky.obj` | `SM_Sky_*` |
 | `props` | `props/*.obj`, `props/*.skins`, `props/*.phys` | one `SM_*` per model + `DA_<map>_PropSkins` |
@@ -279,10 +279,15 @@ VtMB's `infodecal` layer — blood, bullet holes, graffiti, band posters, rust s
 projectors on `sp_tutorial_1`, exported as a `.decals` sidecar of 15-token lines. The bake places
 one `ADecalActor` each.
 
-A decal surface is flagged `decal 1` in the shared `<map>.mtl`, and the material stage splits those
-off onto `M_Decal` in `Materials/Decals/`: an `infodecal` is a projector, not geometry, so instancing
-it off a world master would author 27 translucent material instances nothing can use. The textures
-are already in the map's texture package, since they ride the same `.mtl` the world surfaces do.
+A decal surface is flagged `decal 1` in the shared `<map>.mtl` — an `infodecal` is a projector, not
+geometry, so it cannot ride a world master at all. The spike answered that with a per-map
+`M_Decal` MIC set under `Materials/Decals/`. **R7.2 retired both** (`seam_migration.md` → "R7.2
+Decals"): `M_Decal` and `make_decal_material.py` are gone, the one decal material in the project is
+`M_V2_Decal` (`MD_DeferredDecal` / Translucent / Default Lit), and every `$decal` or
+`decalmodulate` unit stages one shared projector instance `MI_<unit>_Decal` beside its surface one,
+corpus-wide. `_place_decals` resolves that twin from the `.decals` line's own material id, the
+per-map `Materials/Decals` package is pruned rather than authored, and the fog those MICs used to
+bake in is a load-time MID `UElysiumDecalSubsystem` owns.
 
 Orientation is the runtime path's, verbatim. A deferred decal maps texture **U → local Z** and
 **V → local Y**, not the intuitive Y=U/Z=V, so the surface horizontal (`SDir`, the U/s texture axis)

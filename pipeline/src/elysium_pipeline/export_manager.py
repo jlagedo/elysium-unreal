@@ -613,7 +613,6 @@ POLICY_GENERATOR_OUTPUTS = {
         "Materials/M_Wield_Translucent.uasset", "Materials/M_Wield_Additive.uasset"),
     "make_sky_material.py": ("Materials/M_Sky.uasset",),
     "make_gizmo_material.py": ("Materials/M_Gizmo.uasset", "Materials/M_Gizmo_XRay.uasset"),
-    "make_decal_material.py": ("Materials/M_Decal.uasset",),
     "make_audio_routing.py": ("Audio/SC_Master.uasset",),
     "make_input_glyphs.py": ("Input/Glyphs/Kenney/Keyboard/T_Kenney_keyboard_e.uasset",),
     "make_input_assets.py": (

@@ -199,8 +199,11 @@ extra id space. Runtime-spawned entities (`npc_maker.Spawn`, `CreateEntityNoSpaw
 array and serialize their synthesized def alongside their state, so they restore as themselves: the
 apply is two passes, one that re-creates them in index order before anything is written, one that
 writes every record. Index alignment holds because the def array always fills `0..DefCount-1`, the
-player always takes `DefCount`, and runtime entities replay in append order; a `DefCount` mismatch or
-a per-record classname mismatch is logged and the record skipped rather than mis-applied.
+player always takes `DefCount`, and runtime entities replay in append order. A `DefCount` mismatch
+means that alignment is gone -- every record would land on a different entity -- so the whole
+snapshot is refused with a warning and the map keeps its fresh spawn state; save files are
+disposable (`CLAUDE.md`), so there is nothing to migrate. A per-record classname mismatch is logged
+and that record alone skipped rather than mis-applied.
 
 The absent set is applied **after** the records, so a stale record for the same index cannot
 resurrect an entity the set says is gone.
@@ -357,8 +360,16 @@ the project:
   produces one, but capturing at save time costs a frame. Defer until the load screen exists (9.5's
   UI half), and store nothing rather than store the wrong frame.
 - **Decals as save state.** VtMB persists bullet holes and blood — 212 in a well-played Santa Monica
-  hub — and nothing models them yet. The `Maps` block reserves the slot; the system that fills it is
-  the combat-impact task (10.7).
+  hub. R7.2 landed the producer: `UElysiumDecalSubsystem` (`ElysiumDecalSubsystem.h`) owns every
+  decal in a world and answers `Records()` with the `DECALLIST` shape — one `FElysiumDecalRecord`
+  per **persistent, named** laid stain — `MaterialId` (a `vtmb:material:` id), `Position`,
+  `Normal`, `EntityIndex` — and `Restore(records)` re-lays each one through
+  the same `Lay` a shot uses. A stain with a lifetime and a collide sprite (which has a texture but
+  no material id) are deliberately not records: one is gone before the save is read, the other has
+  no name `DECALLIST` could write. `Normal` is ours and not the format's — Source re-traced the
+  world at restore, which would put a stain on whatever geometry had moved since; recording it
+  costs 12 bytes and is the named modernization. Still open: **wiring those records into the `Maps`
+  block**, which reserves the slot but is not yet written or read by the save.
 - **`G.morgue`.** Nothing writes or reads it yet (§7).
 - **Snapshot size — measured, and not a problem.** A freeze of a just-loaded map records 58 of 1,869
   entities on `sp_tutorial_1` (1.7 KB compressed), 13 of 469 on `sm_pawnshop_1` (0.6 KB) and 67 of

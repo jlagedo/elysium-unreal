@@ -337,6 +337,7 @@ def _fake_unreal(editor):
         "MaterialExpressionScalarParameter", "MaterialExpressionVectorParameter",
         "MaterialExpressionComponentMask", "MaterialExpressionStaticSwitchParameter",
         "MaterialExpressionCollectionParameter", "MaterialExpressionConstant",
+        "MaterialExpressionConstant2Vector",
         "MaterialExpressionConstant3Vector", "MaterialExpressionConstant4Vector",
         "MaterialExpressionMultiply", "MaterialExpressionAdd",
         "MaterialExpressionSubtract", "MaterialExpressionDivide", "MaterialExpressionDotProduct",
@@ -345,6 +346,7 @@ def _fake_unreal(editor):
         "MaterialExpressionFloor", "MaterialExpressionFrac",
         "MaterialExpressionAppendVector", "MaterialExpressionTime", "MaterialExpressionSine",
         "MaterialExpressionPanner", "MaterialExpressionVertexColor", "MaterialExpressionFresnel",
+        "MaterialExpressionParticleColor", "MaterialExpressionDynamicParameter",
         "MaterialExpressionReflectionVectorWS", "MaterialExpressionTextureCoordinate",
         "MaterialExpressionRayTracingQualitySwitch", "MaterialExpressionIf",
         "MaterialExpressionPixelDepth",
@@ -383,13 +385,13 @@ def _fake_unreal(editor):
         TextureFilter=_enum("TF", "TF_NEAREST"),
         TextureAddress=_enum("TA", "TA_CLAMP"),
         TextureLossyCompressionAmount=_enum("TLCA", "TLCA_NONE"),
-        MaterialDomain=_enum("MD", "MD_SURFACE"),
+        MaterialDomain=_enum("MD", "MD_SURFACE", "MD_DEFERRED_DECAL"),
         BlendMode=_enum("BLEND", "BLEND_OPAQUE", "BLEND_TRANSLUCENT", "BLEND_MODULATE",
                         "BLEND_ALPHA_COMPOSITE"),
         TranslucencyLightingMode=_enum("TLM", "TLM_SURFACE_PER_PIXEL_LIGHTING",
                                        "TLM_VOLUMETRIC_PER_VERTEX_NON_DIRECTIONAL"),
-        MaterialShadingModel=_enum("MSM", "MSM_UNLIT"),
-        RefractionMode=_enum("RM", "RM_PIXEL_NORMAL_OFFSET"),
+        MaterialShadingModel=_enum("MSM", "MSM_UNLIT", "MSM_DEFAULT_LIT"),
+        RefractionMode=_enum("RM", "RM_PIXEL_NORMAL_OFFSET", "RM_2D_OFFSET"),
         MaterialPositionTransformSource=_enum(
             "TRANSFORMPOSSOURCE", "TRANSFORMPOSSOURCE_WORLD", "TRANSFORMPOSSOURCE_INSTANCE"),
         # `unreal.MaterialProperty` in this 5.8 build exposes no `MP_PIXEL_DEPTH_OFFSET`
@@ -482,16 +484,18 @@ def _load(editor, tmp_path, monkeypatch, *, seed=True):
 # landed together (the same graph, and M_V2_LitTranslucent needs no Params class of its own),
 # then M_V2_Unlit, then M_V2_TwoTexture. Part 3 grows this by one more master per commit,
 # starting with M_V2_Eyes.
+#: `domain` defaults `MD.MD_SURFACE` for every master except `M_V2_Decal` (R7.2: re-cut to
+#: `MD_DEFERRED_DECAL` -- the one deferred-decal domain a `UDecalComponent` actually draws).
 MASTERS = [
-    ("M_V2_Lit", "Params", "BLEND.BLEND_OPAQUE"),
-    ("M_V2_LitTranslucent", "LitParams", "BLEND.BLEND_TRANSLUCENT"),
-    ("M_V2_Unlit", "UnlitParams", "BLEND.BLEND_OPAQUE"),
-    ("M_V2_TwoTexture", "TwoTextureParams", "BLEND.BLEND_OPAQUE"),
-    ("M_V2_Eyes", "EyesParams", "BLEND.BLEND_OPAQUE"),
-    ("M_V2_Water", "WaterParams", "BLEND.BLEND_TRANSLUCENT"),
-    ("M_V2_Sprite", "SpriteParams", "BLEND.BLEND_TRANSLUCENT"),
-    ("M_V2_Refract", "RefractParams", "BLEND.BLEND_TRANSLUCENT"),
-    ("M_V2_Decal", "DecalParams", "BLEND.BLEND_MODULATE"),
+    ("M_V2_Lit", "Params", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
+    ("M_V2_LitTranslucent", "LitParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
+    ("M_V2_Unlit", "UnlitParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
+    ("M_V2_TwoTexture", "TwoTextureParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
+    ("M_V2_Eyes", "EyesParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
+    ("M_V2_Water", "WaterParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
+    ("M_V2_Sprite", "SpriteParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
+    ("M_V2_Refract", "RefractParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
+    ("M_V2_Decal", "DecalParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_DEFERRED_DECAL"),
 ]
 
 
@@ -499,10 +503,10 @@ def test_a_fresh_run_authors_all_compiling_masters(tmp_path, monkeypatch):
     editor = FakeEditor()
     module = _load(editor, tmp_path, monkeypatch)
 
-    for name, _params_attr, blend in MASTERS:
+    for name, _params_attr, blend, domain in MASTERS:
         asset = editor.assets.get("%s/%s" % (PKG, name))
         assert asset is not None, "%s was not authored" % name
-        assert asset.props.get("material_domain") == "MD.MD_SURFACE"
+        assert asset.props.get("material_domain") == domain
         assert asset.props.get("blend_mode") == blend
         assert "ElysiumRecipe" in asset.metadata
         assert "%s/%s" % (PKG, name) in editor.saved
@@ -594,7 +598,7 @@ def test_declared_parameters_all_land_on_the_graph(tmp_path, monkeypatch):
     editor = FakeEditor()
     module = _load(editor, tmp_path, monkeypatch)
 
-    for name, params_attr, _blend in MASTERS:
+    for name, params_attr, _blend, _domain in MASTERS:
         asset = editor.assets["%s/%s" % (PKG, name)]
         names = {n.props.get("parameter_name") for n in asset.expressions if "parameter_name" in n.props}
         params = getattr(module, params_attr)
@@ -619,7 +623,7 @@ def test_a_second_run_with_no_change_skips_the_rebuild_and_deletes_nothing(tmp_p
     # A no-op rerun deletes nothing and authors no *new* expression on any master -- the recipe
     # stamp already matches, so every master takes the early-return "up to date, skipping" path.
     assert editor2.deleted == []
-    for name, _params_attr, _blend in MASTERS:
+    for name, _params_attr, _blend, _domain in MASTERS:
         path = "%s/%s" % (PKG, name)
         assert path not in editor2.saved
     assert len(editor2.assets[lit_path].expressions) == first_expression_count
@@ -638,7 +642,7 @@ def test_policy_force_rebuilds_even_when_current(tmp_path, monkeypatch):
 
     asset = editor2.assets[lit_path]
     assert asset.metadata["ElysiumRecipe"] == stamped
-    for name, _params_attr, _blend in MASTERS:
+    for name, _params_attr, _blend, _domain in MASTERS:
         assert "%s/%s" % (PKG, name) in editor2.saved
 
 
@@ -833,3 +837,53 @@ def test_scene_fog_masters_read_the_custom_primitive_data_slots_apply_scene_fog_
         cpd = [n.props.get("parameter_name") for n in asset.expressions
                if n.props.get("use_custom_primitive_data")]
         assert cpd == [], (name, cpd)
+
+
+#: The three masters an `env_sprite` billboard or a Niagara sprite renderer ever draws through.
+_SPRITE_MASTERS = ("M_V2_Sprite", "M_V2_SpriteZ", "M_V2_SpriteZLit")
+
+
+def _sources_of(mel, node, expressions):
+    """Every expression reachable *backwards* from `node` through the recorded connections,
+    restricted to `expressions` (one material's own nodes)."""
+    own = {id(n) for n in expressions}
+    seen, stack, out = {id(node)}, [node], []
+    while stack:
+        current = stack.pop()
+        for src, _src_out, dst, _dst_in in mel.connections:
+            if dst is not current or src is None or id(src) not in own or id(src) in seen:
+                continue
+            seen.add(id(src))
+            out.append(src)
+            stack.append(src)
+    return out
+
+
+def test_sprite_tint_lanes_read_both_the_vertex_and_the_particle_colour(tmp_path, monkeypatch):
+    """One master, two vertex factories, each of which compiles the *other* colour term in as
+    white: `NiagaraSpriteVertexFactory.ush` sets `VertexColor = 1` and fills `Particle.Color`,
+    while the `env_sprite` billboard (`ElysiumSpriteComponent`'s `FDynamicMeshBuilder` on the local
+    vertex factory) has no particle data and gets `Particle.Color = (1,1,1,1)`. VtMB writes
+    `rendercolor`/`renderamt` as per-corner vertex colour (`CMeshBuilder::Color4ubv`, `1008232b`)
+    with no material colour modulation, so the `UseVertexColor`/`UseVertexAlpha` lanes must reach
+    *both* nodes -- reading only one silently drops a whole family's tint (`ParticleColor` alone
+    drew every `env_sprite` untinted and fully opaque; `VertexColor` alone drew the particle
+    sprites as black cards)."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    for name in _SPRITE_MASTERS:
+        asset = editor.assets["%s/%s" % (PKG, name)]
+        switches = {n.props.get("parameter_name"): n for n in asset.expressions
+                    if getattr(n.cls, "__name__", "")
+                    == "MaterialExpressionStaticSwitchParameter"}
+        for switch_name in ("UseVertexColor", "UseVertexAlpha"):
+            switch = switches.get(switch_name)
+            assert switch is not None, "%s: no %s switch" % (name, switch_name)
+            true_lane = [src for src, _out, dst, dst_in in editor.mel.connections
+                         if dst is switch and dst_in == "True"]
+            assert len(true_lane) == 1, (name, switch_name)
+            reached = {getattr(n.cls, "__name__", "")
+                       for n in _sources_of(editor.mel, true_lane[0], asset.expressions)}
+            where = (name, switch_name, sorted(reached))
+            assert "MaterialExpressionVertexColor" in reached, where
+            assert "MaterialExpressionParticleColor" in reached, where

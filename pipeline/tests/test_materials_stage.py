@@ -858,6 +858,90 @@ def test_decalmodulate_family_takes_decal_master_and_modulate_blend(tmp_path):
     }
 
 
+def test_projector_instance_is_staged_beside_the_surface_one_for_decal_units_only(tmp_path):
+    """R7.2 ruling 2 (`seam_migration.md` -> "R7.2 Decals"): a `$decal 1` unit and a
+    `decalmodulate` unit each stage `MI_<unit>_Decal` beside their surface instance, parented to
+    `M_V2_Decal` and blending Translucent (owner call A); an ordinary unit stages nothing extra."""
+    export = tmp_path / "v2"
+    # A `$decal 1` surface unit that also self-illuminates and tints -- the 3 `$selfillum`
+    # projectors and the shared `Color`/`Alpha` rule in one unit.
+    _publish(export, "decals/blood", _unit(
+        "decals/blood", shader="lightmappedgeneric",
+        parameters=[
+            _param(0, "$basetexture", "decals/blood"),
+            _param(1, "$decal", "1"),
+            _param(2, "$selfillum", "0.5"),
+            _param(3, "$color", "[1 0 0]"),
+            _param(4, "$alpha", "0.75"),
+        ],
+        dependencies=[_texture_dep("$basetexture", "decals/blood")],
+    ))
+    # An `unlitgeneric` projector -- the 28 units the master's `Unlit` switch exists for.
+    _publish(export, "decals/neon", _unit(
+        "decals/neon", shader="unlitgeneric",
+        parameters=[_param(0, "$basetexture", "decals/neon"), _param(1, "$decal", "1")],
+        dependencies=[_texture_dep("$basetexture", "decals/neon")],
+    ))
+    # The runtime impact set: no `$decal`, the family alone decides.
+    _publish(export, "decals/hits/concrete/impact3", _unit(
+        "decals/hits/concrete/impact3", shader="decalmodulate",
+        parameters=[_param(0, "$basetexture", "decals/hits/concrete/impact3")],
+        dependencies=[_texture_dep("$basetexture", "decals/hits/concrete/impact3")],
+    ))
+    # A plain wall.
+    _publish(export, "brick/wall", _unit(
+        "brick/wall",
+        parameters=[_param(0, "$basetexture", "brick/wall")],
+        dependencies=[_texture_dep("$basetexture", "brick/wall")],
+    ))
+
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    assert result.staged == 4 and result.projectors == 3 and result.assets == 7
+    entries = _entries(tmp_path / "stage")
+
+    surface = entries["/ElysiumBaked/Materials/decals/MI_blood"]
+    assert surface["decalAsset"] == "/ElysiumBaked/Materials/decals/MI_blood_Decal"
+    assert _provenance(tmp_path / "stage", surface)["decalAsset"] == surface["decalAsset"]
+
+    projector = entries[surface["decalAsset"]]
+    assert projector["parent"] == f"{importer.MASTER_ROOT}/M_V2_Decal"
+    assert projector["basePropertyOverrides"] == {
+        "blendMode": "Translucent", "twoSided": False, "opacityMaskClipValue": None,
+    }
+    # `$selfillum` reaches the master's own emissive slot (the Lit master's derivation, whose
+    # source in Source IS the base texture); `Color`/`Alpha` are the shared rule; the surface's
+    # phys material, class and provenance sidecar are the unit's, because ruling 3 binds this same
+    # instance as an `isDecalSurface` face group's mesh slot.
+    assert projector["textures"] == {
+        "BaseTexture": "/ElysiumBaked/Textures/decals/T_blood",
+        "Emissive": "/ElysiumBaked/Textures/decals/T_blood",
+    }
+    assert projector["scalars"] == {"Alpha": 0.75, "EmissiveScale": 0.5, "SurfaceClassIndex": 0}
+    assert projector["vectors"] == {"Color": [1.0, 0.0, 0.0, 1.0]}
+    assert projector["switches"] == {"Unlit": False}
+    assert projector["provenance"] == surface["provenance"]
+    assert projector["physMaterial"] == surface["physMaterial"]
+    assert projector["decalAsset"] is None
+
+    # The unlit projector is the one that flips the switch; nothing else does.
+    unlit = entries["/ElysiumBaked/Materials/decals/MI_neon_Decal"]
+    assert unlit["switches"] == {"Unlit": True}
+
+    # `decalmodulate` keeps its own surface instance (already on the projector master, `Modulate`
+    # -- the retail record) AND stages the twin every caller binds.
+    modulate = entries["/ElysiumBaked/Materials/decals/hits/concrete/MI_impact3"]
+    assert modulate["parent"] == f"{importer.MASTER_ROOT}/M_V2_Decal"
+    assert modulate["basePropertyOverrides"]["blendMode"] == "Modulate"
+    assert modulate["decalAsset"] == "/ElysiumBaked/Materials/decals/hits/concrete/MI_impact3_Decal"
+    assert entries[modulate["decalAsset"]]["basePropertyOverrides"]["blendMode"] == "Translucent"
+
+    # A wall is a wall.
+    wall = entries["/ElysiumBaked/Materials/brick/MI_wall"]
+    assert wall["decalAsset"] is None
+    assert "/ElysiumBaked/Materials/brick/MI_wall_Decal" not in entries
+
+
 # --- exposed-parameter refusal ----------------------------------------------------------------------
 
 
@@ -1213,9 +1297,14 @@ _PROVENANCE_CPP = (
 #: the record already carries or does not need; `runtime` restates the scalar/vector side effects
 #: `proxies[]` already carries the resolved arguments for; `ignoreZNamedDivergence` is a named
 #: deliberate-divergence flag for the placement lane's own bookkeeping, not part of the record a
-#: packaged game or the Content Browser needs. Named here so this test states the omission rather
+#: packaged game or the Content Browser needs. `decalAsset` (R7.2 ruling 2) is an offline lane's
+#: field: the map stage copies it onto the staged materials table and the bake binds it, while the
+#: runtime resolves the same `MI_<unit>_Decal` path from a `vtmb:material:` id through
+#: `FElysiumContentPaths` -- never by loading a surface instance's provenance record first.
+#: Named here so this test states the omission rather
 #: than silently passing it (mirrors the C++-side Substrate test's own list).
-_KNOWINGLY_UNCOVERED = frozenset({"patched", "patchOf", "runtime", "ignoreZNamedDivergence"})
+_KNOWINGLY_UNCOVERED = frozenset({"patched", "patchOf", "runtime", "ignoreZNamedDivergence",
+                                  "decalAsset"})
 
 
 def _cpp_top_level_keys() -> set[str]:

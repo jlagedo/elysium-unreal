@@ -125,9 +125,11 @@ bool FElysiumSpriteGlowTest::RunTest(const FString&)
 	TestEqual(TEXT("GlowFadeInSeconds is r_glowfadein 0.2"), Page->GlowFadeInSeconds, 0.2f);
 	TestEqual(TEXT("GlowFadeOutSeconds is r_glowfadeout 0.1"), Page->GlowFadeOutSeconds, 0.1f);
 	TestEqual(TEXT("the query footprint is 3/128 of the distance"), Page->SpriteQueryFootprintPerDistance, 3.f / 128.f);
+	TestEqual(TEXT("the fixed query half-size is VtMB's 3 units"), Page->SpriteQueryFixedHalfInches, 3.f);
 	TestEqual(TEXT("the query grid is 4"), Page->SpriteQueryGrid, 4);
 	const ElysiumSpriteGlow::FParams P = ElysiumSpriteGlow::FParams::FromSettings();
 	TestEqual(TEXT("FromSettings reads the page"), P.Falloff, Page->GlowFalloff);
+	TestEqual(TEXT("FromSettings reads the fixed half-size"), P.QueryFixedHalfInches, Page->SpriteQueryFixedHalfInches);
 	TestEqual(TEXT("FromSettings reads the grid"), P.QueryGrid, Page->SpriteQueryGrid);
 
 	// Size: a rendermode-3 corona is screen-constant -- `size x dist / 200` -- whatever the actor
@@ -168,8 +170,21 @@ bool FElysiumSpriteGlowTest::RunTest(const FString&)
 		FMath::IsNearlyEqual(ElysiumSpriteGlow::Smooth(1.f, 0.f, 0.05f, P), 0.5f, 1e-4f));
 	TestTrue(TEXT("falling stops at the target"),
 		FMath::IsNearlyEqual(ElysiumSpriteGlow::Smooth(1.f, 0.75f, 0.05f, P), 0.75f, 1e-4f));
-	TestTrue(TEXT("the query square is 3/128 of the distance"),
-		FMath::IsNearlyEqual(ElysiumSpriteGlow::QueryHalfSizeCm(1280.f, P), 30.f, 1e-3f));
+	// The occlusion sample's footprint: VtMB scales the query quad with the distance for
+	// rendermode 3 alone (100c25ed-100c25fa) and queries a fixed 3 Source units for every other
+	// mode (10225158) -- the renderfx-14 test is separate and later (100c30e9), so a mode-3
+	// NoDissipation corona still takes the screen-constant query, and it is the clamp to the drawn
+	// card that keeps that sample off the wall behind a card that never grew with it.
+	TestTrue(TEXT("mode 3's query square is 3/128 of the distance"),
+		FMath::IsNearlyEqual(ElysiumSpriteGlow::QueryHalfSizeCm(1280.f, 3, 1000.f, P), 30.f, 1e-3f));
+	TestTrue(TEXT("mode 9 queries VtMB's fixed 3 units"),
+		FMath::IsNearlyEqual(ElysiumSpriteGlow::QueryHalfSizeCm(1280.f, 9, 1000.f, P), 3.f * 2.54f, 1e-3f));
+	TestTrue(TEXT("a plain additive sprite queries the same fixed 3 units at any range"),
+		FMath::IsNearlyEqual(ElysiumSpriteGlow::QueryHalfSizeCm(12800.f, 5, 1000.f, P), 3.f * 2.54f, 1e-3f));
+	// A 64-unit NoDissipation card is 81.28 cm half-wide whatever the range; at 40 m the
+	// screen-constant sample would be 93.75 cm and is clamped back into the card it gates.
+	TestTrue(TEXT("the sample never outgrows the card it gates"),
+		FMath::IsNearlyEqual(ElysiumSpriteGlow::QueryHalfSizeCm(4000.f, 3, 64.f * 2.54f * 0.5f, P), 81.28f, 1e-3f));
 
 	// The tag contract the bake writes and `AdoptBakedLevel` buckets by.
 	TArray<FName> Tags;

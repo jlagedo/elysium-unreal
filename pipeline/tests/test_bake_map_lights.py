@@ -181,7 +181,10 @@ def test_light_rows_apply_the_engines_load_time_fixups() -> None:
 
 
 def test_manifest_version_is_the_offline_stages(module) -> None:
-    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 7
+    # The invariant is that the two halves agree, not the number they agree on: the
+    # constant is restated across the numpy boundary and bumps whenever a table is added
+    # (R7.2 took it to 8), and a literal here only teaches the next bump to edit it here too.
+    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)

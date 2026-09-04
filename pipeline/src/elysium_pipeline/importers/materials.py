@@ -15,6 +15,13 @@ the editor prune (`keep`), exactly as the texture lane protects a failed unit's 
 rule covers a parameter name that resolves but is not on the selected master's exposed list
 (`EXPOSED_PARAMS` below): the unit fails rather than writing a name the master does not have.
 
+**One unit, one instance -- except a decal (R7.2 ruling 2).** A unit that draws as a PROJECTOR --
+`$decal 1` (`isDecalSurface`) or the whole `decalmodulate` family -- stages a SECOND instance,
+`MI_<unit>_Decal`, in the same package, parented to `M_V2_Decal` (`projector_entry`). It is an
+ordinary manifest entry sharing the unit's one provenance sidecar, so the editor phase authors it
+with no code of its own; the unit's entry and sidecar both name it under `decalAsset`, and the map
+lane, the bake and the runtime resolve it from a `vtmb:material:` id and nothing else.
+
 **Scope.** This module classifies keys and shapes values; it does not walk a proxy chain that
 needs a `Time`/`Panner`/`If` node into material-graph nodes (SF-4.3/4.5's job) -- `texturetransform`,
 `linearramp` and the shader-time arithmetic proxies are recorded in provenance with their resolved
@@ -54,6 +61,14 @@ FAMILY = "materials"
 PACKAGE_ROOT = "/ElysiumBaked/Materials"
 #: The tracked package the nine hand-built masters (SF-4.3) live under.
 MASTER_ROOT = "/Game/ElysiumGenerated/Materials/V2"
+#: R7.2 ruling 2 (`seam_migration.md` -> "R7.2 Decals"): a `$decal` / `decalmodulate` unit stages a
+#: SECOND shared instance beside its surface one -- same package, the surface instance's name plus
+#: this suffix -- parented to `M_V2_Decal`, the one `MD_DeferredDecal` master a `UDecalComponent`
+#: (and a mesh-decal section) actually draws. Everything that lays or bakes a decal binds this
+#: twin by the unit's own `vtmb:material:` id; nothing else in the project names it.
+DECAL_INSTANCE_SUFFIX = "_Decal"
+#: The master that twin parents to.
+DECAL_MASTER = "M_V2_Decal"
 #: R7.3 (`docs/architecture/effects-architecture.md` section 5.4): the four particle material
 #: children `make_v2_materials.make_particle_children` authors below this lane's package root,
 #: beside the corpus instances and map-independent like them. They are not units of this lane, so
@@ -248,6 +263,11 @@ def resolve_master(family: str, blend_mode: str) -> str | None:
     if family in _REFRACT_FAMILIES:
         return "M_V2_Refract"
     if family == "decalmodulate":
+        # R7.2 ruling 2: the family's surface instance stays on the projector master it already
+        # resolved to -- it is never a world face (0 `usemtl` hits across 108 maps), and the twin
+        # every caller actually binds is `MI_<unit>_Decal` (`projector_entry`). Its `Modulate`
+        # blend is the retail record; owner call A draws the family translucent, which is what the
+        # twin carries (a DBuffer platform rewrites Modulate to Translucent regardless).
         return "M_V2_Decal"
     if family in _TWOTEXTURE_FAMILIES:
         return "M_V2_TwoTexture"
@@ -368,13 +388,20 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
         "RefractAmount": "S", "RefractTint": "V", "EnvMapTint": "V",
         "UseBaseTexture": "#", "UseNormalMap": "#", "UseEnvMap": "#", "UseFixedCube": "#",
     }),
+    # R7.2 (seam_migration.md -> "R7.2 Decals", ruling 1): re-cut MD_DeferredDecal/Translucent/
+    # DefaultLit projector master. `UseVertexColor` is dropped (a projected decal has no vertex
+    # colour); `Emissive`/`EmissiveScale` and the `Unlit` switch are new. Two callers bind this
+    # master: `resolve_master` (the 38 `decalmodulate` units' own surface instance) and
+    # `projector_entry` (the `MI_<unit>_Decal` twin of every `$decal`/`decalmodulate` unit, ruling
+    # 2) -- only the second ever writes `Unlit`, and only for an unlit-family unit.
     "M_V2_Decal": _merged(_SHARED_PARAMS, {
-        "BaseTexture": "T", "UseVertexColor": "#",
-        # R5.3 (seam_map_material.md -> "Decal fog and wetness homes"): the world's own distance
-        # fog, as three named instance parameters -- a UDecalComponent carries no Custom
-        # Primitive Data of its own. No corpus unit authors these (decalmodulate ships no fog
-        # keys), so the stage never writes them; the placement lane sets them per decal instance
-        # from the map's own environment, never from a per-map material package.
+        "BaseTexture": "T", "Emissive": "T", "EmissiveScale": "S", "Unlit": "#",
+        # R5.3 (seam_map_material.md -> "Decal fog and wetness homes"), unchanged by the R7.2
+        # re-cut: the world's own distance fog, as three named instance parameters -- a
+        # UDecalComponent carries no Custom Primitive Data of its own. No corpus unit authors
+        # these (decalmodulate ships no fog keys), so the stage never writes them; the placement
+        # lane sets them per decal instance from the map's own environment, never from a per-map
+        # material package.
         "FogColor": "V", "FogStart": "S", "FogInvRange": "S",
     }),
     "M_V2_TwoTexture": _merged(
@@ -679,6 +706,15 @@ def asset_path_for(key: str) -> str:
     return f"{PACKAGE_ROOT}/{folded}/{name}" if folded else f"{PACKAGE_ROOT}/{name}"
 
 
+def decal_asset_path_for(key: str) -> str:
+    """`vtmb:material:<key>` -> the PROJECTOR instance beside the surface one (R7.2 ruling 2):
+    the same package directory, the surface instance's own name plus `_Decal`. Pure, like
+    `asset_path_for` -- the bake restates this fold rather than importing this module (the
+    editor's embedded Python carries no numpy, which `importers.textures` imports)."""
+
+    return asset_path_for(key) + DECAL_INSTANCE_SUFFIX
+
+
 def _base_key_from_asset_id(asset_id: str) -> str:
     if not isinstance(asset_id, str) or not asset_id.startswith("vtmb:material:"):
         raise MaterialImportError(f"not a vtmb:material: asset id: {asset_id!r}")
@@ -732,6 +768,9 @@ class StageResult:
     assets: int = 0
     provenance_only: int = 0
     patched: int = 0
+    #: R7.2 ruling 2: the `MI_<unit>_Decal` projector instances staged beside a surface one. They
+    #: are entries of the same manifest, so they are counted in `assets` as well.
+    projectors: int = 0
     failures: list[tuple[str, str]] = field(default_factory=list)
     protected: int = 0
     #: Review finding 5: every anomaly/omission kind this run recorded, by name -> count, over
@@ -746,7 +785,8 @@ class StageResult:
         rollup = ", ".join(f"{kind}={count}" for kind, count in sorted(self.anomaly_counts.items()))
         return (
             f"material staging: {self.assets} instances ({self.patched} patched, "
-            f"{self.provenance_only} provenance-only) from {self.staged} units, "
+            f"{self.provenance_only} provenance-only, {self.projectors} decal projectors) "
+            f"from {self.staged} units, "
             f"{self.pruned} pruned, {len(self.failures)} failed "
             f"({self.protected} asset paths protected)"
             + (f" -- anomalies: {rollup}" if rollup else "")
@@ -1771,6 +1811,26 @@ def stage_unit(
                           (f"/ElysiumBaked/SurfaceProperties/PM_{safe_name(surface_class)}"
                            if not patched else None))
 
+    # R7.2 ruling 2: the unit that draws as a PROJECTOR as well as (or instead of) a surface. Two
+    # populations, one rule: a `$decal 1` unit (`isDecalSurface`, 550 of them -- 448 projector-only,
+    # 15 projector and world face, 9 world face only, 78 unused) and the whole `decalmodulate`
+    # family (38, the runtime impact set, never a world face -- 0 `usemtl` hits in 108 maps). Both
+    # get `MI_<unit>_Decal` beside their surface instance, so everything that lays or bakes a decal
+    # resolves ONE name from a `vtmb:material:` id.
+    #
+    # A PATCHED unit stages none of its own: it has no master and no family (it parents to another
+    # instance), and its projector is its root's. The corpus does carry patched `$decal` units --
+    # 10, measured 2026-09-03: `glass/libwndwf` on `hw_warrens_5`/`la_library_1` and
+    # `objects/blastdoortrim` on `la_library_1` -- and inheriting the root's twin loses nothing,
+    # because a patch delta can carry nothing the projector master exposes: the only non-empty
+    # patched delta anywhere in the 19,709-entry manifest is `WaterDepth` (49 water units), and
+    # VBSP's own patch is `$envmap`, which `M_V2_Decal` has no pin for. `map_geometry`'s
+    # `MaterialBinding` reads `isDecalSurface`/`decalAsset` off the ROOT sidecar for exactly that
+    # reason, so the patched face group binds the root's twin by name rather than nothing.
+    decal_asset = (decal_asset_path_for(key)
+                   if not patched and (params.is_decal_surface or family == "decalmodulate")
+                   else None)
+
     entry = {
         "assetPath": asset_path_for(key),
         "unit": asset_id,
@@ -1780,6 +1840,9 @@ def stage_unit(
         "parent": parent,
         "patched": patched,
         "provenanceOnly": provenance_only,
+        #: The projector instance staged beside this one (R7.2 ruling 2), or `None` when this unit
+        #: never draws as a decal. `stage_materials` builds that entry from this one.
+        "decalAsset": decal_asset,
         "textures": dict(sorted(params.textures.items())),
         "scalars": dict(sorted(params.scalars.items())),
         "vectors": {k: v for k, v in sorted(params.vectors.items())},
@@ -1844,6 +1907,10 @@ def stage_unit(
         "patchKind": (patch.get("operations") if patched else None),
         "environment": environment,
         "isDecalSurface": params.is_decal_surface,
+        #: R7.2 ruling 2: the projector instance this unit stages beside its surface one, or
+        #: `None`. The map lane copies it onto the staged materials table (`decalAsset`), and the
+        #: runtime resolves the same path from a `vtmb:material:` id.
+        "decalAsset": decal_asset,
         "ignoreZ": params.ignorez_truthy,
         "ignoreZNamedDivergence": ignorez_named_divergence,
         "spriteOrigin": params.misc_provenance.get("spriteOrigin"),
@@ -1882,6 +1949,100 @@ def stage_unit(
     # `entry["recipe"]` above).
     entry["recipe"]["provenanceSha256"] = hashlib.sha256(_json_bytes(provenance)).hexdigest()
     return entry, provenance
+
+
+# --- the projector twin (R7.2 ruling 2) ---------------------------------------------------------
+
+
+#: The three fog parameters `M_V2_Decal` exposes that the STAGE never writes (R5.3,
+#: `seam_map_material.md` -> "Decal fog and wetness homes"): a `UDecalComponent` carries no Custom
+#: Primitive Data, so the world's own distance fog rides three named instance parameters that the
+#: placement lane -- and, at runtime, the decal subsystem's MID -- sets per decal from the map's own
+#: environment. A `$decal` surface unit whose VMT happens to author `$fogcolor`/`$fogstart` (the
+#: water-fog keys, meaningless on a projector) must not leak that value into this lane's home.
+_DECAL_FOG_PARAMS = frozenset({"FogColor", "FogStart", "FogInvRange"})
+
+
+def projector_entry(entry: dict, provenance: dict) -> dict:
+    """The `MI_<unit>_Decal` manifest entry for a unit whose `decalAsset` is set.
+
+    Same shape as any other entry -- the editor phase (`import_materials.py`) authors it with the
+    code it already has -- parented to `M_V2_Decal` and carrying only what that master exposes:
+
+    * `BaseTexture`, `Alpha`, `Color`, `SurfaceClassIndex` copied from the surface instance (the
+      shared four-parameter contract plus the one texture every master requires);
+    * `Emissive` + `EmissiveScale` from `$selfillum` (3 units), derived the way the Lit master
+      derives its own self-illum term -- Source's self-illum source IS the base texture, so the
+      twin binds the same texture into the master's own emissive slot and `EmissiveScale` carries
+      `SelfIllumAmount`;
+    * the `Unlit` static switch for an unlit-family unit (28 `unlitgeneric` projectors): DefaultLit
+      has no unlit shading model, so the master routes the base colour into Emissive instead;
+    * blend `Translucent` always. Owner call A (`seam_migration.md` -> "R7.2 Decals"): the 38
+      `decalmodulate` units draw as translucent stains, because a deferred decal may only blend
+      Translucent/AlphaComposite/Modulate and DBuffer rewrites Modulate to Translucent anyway. A
+      `$alphatest` projector (1 unit) takes the same route -- Masked is not a decal blend mode, and
+      the alpha it would have clipped is already on Opacity.
+
+    The physical material, surface class and provenance sidecar are the unit's own: ruling 3 binds
+    this same instance as the MESH slot of an `isDecalSurface` face group, so a surface query on
+    that wall must answer exactly what the surface instance would have answered.
+    """
+
+    exposed = EXPOSED_PARAMS[DECAL_MASTER]
+
+    def carried(bucket: dict) -> dict:
+        return {name: value for name, value in bucket.items()
+                if name in exposed and name not in _DECAL_FOG_PARAMS}
+
+    textures = carried(entry["textures"])
+    scalars = carried(entry["scalars"])
+    vectors = carried(entry["vectors"])
+
+    self_illum = float(entry["scalars"].get("SelfIllumAmount") or 0.0)
+    if self_illum and "BaseTexture" in textures:
+        textures["Emissive"] = textures["BaseTexture"]
+        scalars["EmissiveScale"] = self_illum
+
+    switches = {name: False for name in _switch_names(DECAL_MASTER)}
+    switches["Unlit"] = str(provenance.get("shaderFamily") or "").lower() in _UNLIT_FAMILIES
+
+    overrides = {"blendMode": "Translucent", "twoSided": False, "opacityMaskClipValue": None}
+    params = {
+        "textures": dict(sorted(textures.items())),
+        "scalars": dict(sorted(scalars.items())),
+        "vectors": {k: v for k, v in sorted(vectors.items())},
+        "switches": dict(sorted(switches.items())),
+        "allSwitches": _switch_names(DECAL_MASTER),
+        "basePropertyOverrides": overrides,
+    }
+    return {
+        "assetPath": entry["decalAsset"],
+        "unit": entry["unit"],
+        "unitGlb": entry["unitGlb"],
+        "unitSha256": entry["unitSha256"],
+        "sourceMembersSha256": entry["sourceMembersSha256"],
+        "parent": f"{MASTER_ROOT}/{DECAL_MASTER}",
+        "patched": False,
+        "provenanceOnly": entry["provenanceOnly"],
+        # This IS the projector; it has no second one of its own.
+        "decalAsset": None,
+        "physMaterial": entry["physMaterial"],
+        "physMaterialFallback": entry["physMaterialFallback"],
+        "surfaceClass": entry["surfaceClass"],
+        "surfaceClassIndex": entry["surfaceClassIndex"],
+        "surfaceClassSource": entry["surfaceClassSource"],
+        "provenance": entry["provenance"],
+        "recipe": {
+            "unitSha256": entry["unitSha256"],
+            "parent": f"{MASTER_ROOT}/{DECAL_MASTER}",
+            "settingsVersion": SETTINGS_VERSION,
+            "chromaThreshold": entry["recipe"]["chromaThreshold"],
+            "physMaterial": entry["physMaterial"],
+            "provenanceSha256": entry["recipe"]["provenanceSha256"],
+            "params": params,
+        },
+        **params,
+    }
 
 
 # --- staging the corpus ------------------------------------------------------------------------------
@@ -2007,6 +2168,13 @@ def stage_materials(
             failed(key, str(error))
             entries.pop()
             continue
+        if entry["decalAsset"]:
+            # R7.2 ruling 2: the projector twin is an ordinary manifest entry, so the editor phase
+            # authors, prunes, fingerprints and provenance-stamps it with the code it already has.
+            # It shares this unit's one provenance sidecar (`import_materials` stamps each entry's
+            # own `assetPath` over it), so it is appended only once that sidecar is on disk.
+            entries.append(projector_entry(entry, provenance))
+            result.projectors += 1
         produced.add(sidecar_path)
         provenance_by_path[entry["assetPath"]] = provenance
         sidecar_path_by_path[entry["assetPath"]] = sidecar_path
@@ -2078,6 +2246,9 @@ def stage_materials(
     for key in failed_keys:
         try:
             keep.add(asset_path_for(key))
+            # R7.2: a failed unit protects its projector twin as well -- both instances are that
+            # unit's, and a run that could not re-stage it must not prune the one already imported.
+            keep.add(decal_asset_path_for(key))
             produced.update(path for path in _unit_files(root, key) if path.exists())
         except MaterialImportError:
             continue

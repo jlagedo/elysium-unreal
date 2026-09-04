@@ -101,13 +101,18 @@ def _material_slot(package, mat):
 
     A surface that stamps this map's cubemap, fog or weather is the map's own instance; every
     other surface is the corpus's one instance, under its material key rather than its slot.
+
+    R7.2 retired the `Materials/Decals` split this used to answer for a `$decal` surface: neither
+    lane authors a per-map decal material any more (`bake_map._material_sets` returns an empty
+    decal set and `bake_map_v2` the same), so the one per-map package left is `Materials`. The
+    projector a decal actually draws through is the corpus-wide `MI_<unit>_Decal`, which is not a
+    surface slot and never appears here.
     """
     # The surface's own key, not the material's: the cubemap tag the predicate reads is what the
     # map added to the slot, and the material key is the untagged definition underneath it.
     if SC.is_map_scoped_material(mat.name, decal=mat.decal,
                                  wetness_driven=mat.wetness_driven, local=mat.local):
-        return ("%s/Materials/Decals" % package if mat.decal else "%s/Materials" % package,
-                "MI_" + bl.safe_name(mat.name))
+        return ("%s/Materials" % package, "MI_" + bl.safe_name(mat.name))
     return (SC.BAKED_MATERIALS, SC.material_asset(mat.material_key))
 
 
@@ -553,6 +558,16 @@ def verify_details(actors, map_name):
 
 SPRITE_TAG = "elysium.sprite"
 SPRITE_ENTITY_TAG_PREFIX = "elysium.ent="
+#: `bake_map_v2.SPRITE_BLEND_MEMBERS`, restated (this module restates the writer's tables rather
+#: than importing the writer). Spelled out rather than derived as `"BLEND_" + blend.upper()`:
+#: `AlphaComposite` -- the member `$spriterendermode` 8 selects -- is `BLEND_ALPHA_COMPOSITE` in
+#: Unreal's Python spelling, so the upper-casing shortcut resolved it to `None` and let a
+#: mis-baked blend verify clean.
+SPRITE_BLEND_MEMBERS = {
+    "Opaque": "BLEND_OPAQUE", "Masked": "BLEND_MASKED", "Translucent": "BLEND_TRANSLUCENT",
+    "Additive": "BLEND_ADDITIVE", "Modulate": "BLEND_MODULATE",
+    "AlphaComposite": "BLEND_ALPHA_COMPOSITE",
+}
 
 
 def _staged_sprites(map_name):
@@ -635,8 +650,11 @@ def verify_sprites(actors, map_name):
                 problems.append("material parent %s, staged %s" % (parent_path, row["asset"]))
             overrides = material.get_editor_property("base_property_overrides")
             blend = overrides.get_editor_property("blend_mode")
-            want_blend = getattr(unreal.BlendMode, "BLEND_" + row["blend"].upper(), None)
-            if not overrides.get_editor_property("override_blend_mode") or blend != want_blend:
+            member = SPRITE_BLEND_MEMBERS.get(row["blend"])
+            want_blend = getattr(unreal.BlendMode, member, None) if member else None
+            if want_blend is None:
+                problems.append("staged blend %r names no BlendMode" % (row["blend"],))
+            elif not overrides.get_editor_property("override_blend_mode") or blend != want_blend:
                 problems.append("blend %s (override %s), staged %s" % (
                     blend, bool(overrides.get_editor_property("override_blend_mode")), row["blend"]))
         if problems:

@@ -144,8 +144,10 @@ it, so the readout claims a body the stage does not have.
 - [ ] **[3.6 Pinned exposure](plans/world.md)** · **[3.7 Grade/tonemapper fidelity](plans/world.md)** ·
   **[3.8 Texture prewarm](plans/world.md)** · **[3.9 Lightstyle clock pin](plans/world.md)** ·
   **[3.10 Volumetric fog calibration](plans/world.md)** ·
-  **[3.12 `sm_hub_1` fill adjudication](plans/world.md)** ·
-  **[3.13 Decal fog: accept or extend](plans/world.md)**
+  **[3.12 `sm_hub_1` fill adjudication](plans/world.md)**
+- [x] **3.13 Decal fog: accept or extend** — closed as **extend**: `UElysiumDecalSubsystem` owns
+  one MID per decal from map load, so `ApplySceneFog` reaches every decal live, baked or laid
+  (`docs/architecture/seam_map_material.md` → "Decal fog and wetness homes (R5.3)").
 - [x] **3.11 Verify `elysium.LumenDiffuseBoost`** — retired, not wired: R4.5
   (`docs/project/seam_migration.md`) deleted the cvar A/B with the rest of the light-leak
   scaffolding; a bake-time value is R5.6's.
@@ -237,7 +239,10 @@ call, script verb and scheme event that names a sound is conformed to it.
 ## P7 — Dressing & parity — **open tasks FROZEN** *(detail: [plans/world.md](plans/world.md))*
 
 - [ ] **[7.1 Coronas](plans/world.md)**
-- [x] **7.2 Decals** — deferred `UDecalComponent`s through the bake.
+- [x] **7.2 Decals** — deferred `UDecalComponent`s through the bake, on the V2 lane since R7.2:
+  `M_V2_Decal` is the `MD_DeferredDecal` projector master, every projected unit stages a shared
+  `MI_<unit>_Decal` twin the bake and `UElysiumDecalSubsystem::Lay` both bind by name, `$decal`
+  world faces draw as mesh decals, and the legacy `M_Decal` and its per-map packages are retired.
 - [ ] **[7.3 Water](plans/world.md)**
 - [x] **7.4 Master-material set** — the generated surface masters.
 - [ ] **[7.5 Real reflections](plans/world.md)** → `docs/vtmb/reflections.md` ·

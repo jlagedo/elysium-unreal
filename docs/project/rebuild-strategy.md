@@ -148,7 +148,7 @@ movement, Unreal-native throughout:
 | `UElysiumLightRig` (component on map actor) | Point/spot/directional from `.lights`; lightstyle patterns ticked as intensity curves; texlight clustering. |
 | billboard `UMaterialBillboardComponent`s or one Niagara system fed `.sprites` | additive glow sprites. |
 | **Single Layer Water** material + Lumen/SSR reflections | no manual mirror camera. |
-| **`UDecalComponent`** deferred projection from the `.decals` sidecar (`M_Decal`, `DBM_TRANSLUCENT`) | went straight to deferred: a GBuffer decal is lit like its host wall, Lumen indirect included. |
+| **`UDecalComponent`** deferred projection from the `.decals` sidecar (the corpus material's own `MI_<unit>_Decal` on `M_V2_Decal`, Translucent), owned at runtime by `UElysiumDecalSubsystem` | went straight to deferred: a GBuffer decal is lit like its host wall, Lumen indirect included. |
 | `.cube` LUT | post-process Color Grading LUT (transient `UTexture` into per-map `FPostProcessSettings`) — native. |
 | `.env` | sky material from six sky PNGs + a **per-primitive distance-fog term** in the surface masters (`ElysiumFog.h`); `UExponentialHeightFogComponent` keeps the volumetric layer — native. The distance fog cannot be an engine fog: the world and the 3D-skybox miniature carry two authored sets and share screen depth. |
 | custom `UCharacterMovementComponent` override | port the Source `CGameMovement` math line-by-line — `docs/vtmb/source_movement.md` is the reference. Friction/accel/airaccel/StepMove constants verified against the decompile. |
@@ -179,7 +179,6 @@ generators produce a small, game-agnostic set with parameter slots:
   contributes no colour or attenuation of its own
 - `M_Water` (Single Layer Water)
 - `M_Additive` (coronas / glow props)
-- `M_Decal` (deferred decal domain)
 - `M_Sky` (six-face skybox, unlit, two-sided, samples the `SkyCube` param by view
   direction; authored by `pipeline/unreal/make_sky_material.py`)
 - UI brushes / materials for the modern UI stack (vector-type rendering is Slate's own; these

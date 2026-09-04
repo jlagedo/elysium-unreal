@@ -722,6 +722,15 @@ private:
 	void RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
 		int32 ModeIndex);
 
+	// R7.2 — the paid-for shot's forward world trace and the stain it leaves, from the commit that
+	// spent the round. Rolls this shot's decal variation on the Effects stream and hands the eye
+	// ray to `IElysiumEmbodiment::LayShotImpactDecal`; everything past that (the engine trace, the
+	// hit's `UElysiumPhysicalMaterial`, the decal itself) is on the other side of the seam.
+	//
+	// Called whether or not the swing resolved a victim: `C_TEGunshotDecal` is emitted by the shot,
+	// not by the damage, so a miss marks the wall behind the target.
+	void TraceShotImpact(const FElysiumCombatCharacter& Attacker, const FElysiumWeaponMode& Mode);
+
 	// The grounded knockback branch of an UNBLOCKED melee contact the margin classified into the
 	// hit/knockback band: test the victim's eligibility, classify the away direction, snap the
 	// victim's facing so the authored cell reads true, and play that cell as a base-channel

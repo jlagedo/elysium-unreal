@@ -1740,7 +1740,8 @@ header/table pins cover the new names, `Elysium.Policy.V2MasterParams` grew the 
 master. `uv run elysium build`: Succeeded. `Elysium.Policy`: **9 of 9**. `Elysium.Substrate`:
 **439 of 439**. `uv run pytest` over the eight touched modules: **290 passed**.
 
-Follow-ups: R7.6 decides the decal master (deferred-decal domain); R7.2 owns the scene-fog term
+Follow-ups: the decal master (deferred-decal domain) was R7.6's and is answered — R7.2 re-cut
+`M_V2_Decal` and retired `M_Decal`; R7.2 owns the scene-fog term
 on `M_V2_Water` (its `FogColor`/`FogStart`/`FogEnd` are the VMT water-fog keys) and the two
 water surfaces now on it with an `Opaque` override; R5.5 gives the 441 map-scoped patched
 instances their probe; the material lane's `manifest.json` is per-run and a `--select` import
@@ -2519,6 +2520,138 @@ art variants and armour portraits stay unresolved by the HUD (R6.6); `verify_lig
 the legacy `.sky` and the legacy lane keeps `_read_sky`/`write_sky` for the 105 unconverted maps
 until R9 (R6.7).
 
+**R7.2 — decals on the V2 lane (2026-09-03).** A decal is a *projection*, and Unreal makes that a
+material domain, which is the one material property an instance cannot override. So the lane is
+built around a second instance rather than a second blend mode: `M_V2_Decal` is re-cut as the
+`MD_DeferredDecal` / `BLEND_Translucent` / DefaultLit projector master, every unit that is ever
+projected stages `MI_<unit>_Decal` beside its surface `MI_<unit>`, and the three consumers — the
+bake's `.decals` placement, an `isDecalSurface` face group's mesh slot, and the runtime's
+`UElysiumDecalSubsystem::Lay` — all resolve that one twin by name. Contract in
+`seam_map_material.md` → "Two instances", "`M_V2_Decal`", "The eight real unresolved families"
+(owner call A) and the knob table; the map half in `seam_map_map.md` → "Import — materials
+(R5.4)". Roadmap 3.13 closed as **extend**; roadmap 7.2's line rewritten.
+
+**The master.** `BaseTexture.rgb × Color` → BaseColor, `.a × Alpha` → Opacity, a new
+`Emissive`/`EmissiveScale` pair for the 3 `$selfillum` units, a new `Unlit` static switch for the
+28 `unlitgeneric` ones (DefaultLit has no unlit model to fall back to, so the switch moves the
+fogged base colour onto Emissive and zeroes BaseColor), the `(U, 1−V)` flip ported from the
+retiring `make_decal_material.py`, R5.3's fog parameters unchanged. Roughness, Specular, Metallic
+and Normal are deliberately unconnected — the wall keeps its own surface under the stain, which is
+what a lightmapped `$decal` did. `UseVertexColor` is gone (a projected decal has no vertex colour)
+and `DecalDepthOffset` is retired outright rather than relocated. `GRAPH_VERSION` 6 → 7.
+A generator ordering fix landed with it: the blend mode is now set **before** the domain, because
+a fresh `UMaterial` is `BLEND_Opaque` and every `set_editor_property` recompiles, so
+domain-then-blend spent one intermediate compile in the invalid state and logged the engine's
+*"Material using the DeferredDecal domain can only use the Blend Modes …"* warning for a master
+that was about to be valid — the same line the retired `M_Decal` used to fail on, which is exactly
+why it must not appear for a healthy one.
+
+**Owner call A** — the 38 `decalmodulate` units draw as translucent decals; the divergence is "an
+impact hole is a translucent stain", and under DBuffer the engine rewrites Modulate to Translucent
+regardless. **Owner call B** — `UElysiumDecalSubsystem` shipped with its first caller: it adopts
+every baked `elysium.decal` component at load and owns its fog MID (so `ApplySceneFog` reaches
+every decal live — 3.13's *extend*), pools and caps runtime stains
+(`UElysiumSurfaceSettings::MaxLaidDecals`, 2048 as a stated stand-in), answers the `DECALLIST`
+shape, and the ranged shot's forward trace in `FElysiumWeapon::CommitQueuedAttack` lays the
+`C_TEGunshotDecal` table's hole. The trace runs on `ECC_GameTraceChannel2` (`ElysiumPick`), not
+`ECC_Visibility`: only the baked *render* geometry blocks that channel and only it carries the
+face's `PM_<class>`, while the `.hulls` collider is material-less, so a visibility trace would stop
+on a PLAYERCLIP volume and stain every surface concrete.
+
+**Measured (2026-09-03, foreground, this machine).** `uv run elysium export bundle policy`:
+`M_V2_Decal` compiles across 42 shadermap permutations with **zero** `LogMaterial: Warning` lines,
+zero *"DeferredDecal domain"* warnings and zero `M_Decal` references anywhere in the log.
+`uv run elysium import materials`: **19,709 imported, 0 reused, 0 pruned, 0 failed** (the master
+rebuild reparents every instance in the corpus, so nothing is cached) over 19,121 units — **588
+projector twins**, exactly 550 `$decal` + 38 `decalmodulate`, of which 34 carry `Unlit`, 3 carry
+`Emissive`, and **23 bind no `BaseTexture`** (the debug/wireframe families that author `$decal` and
+take no master; referenced by no `.decals` line and no face group in the 108-map export, staged
+because the rule is the unit's own authored key). The 4 stage failures (`dev/ocean`,
+`dev/oceanbeneath`, `envmap/gioint`, `skybox/hav_env`) are pre-existing and unrelated.
+`uv run elysium export map` on the three working maps: decal actors **123 / 38 / 219**, unchanged;
+`materials: 0 built / 0 reused / 27 pruned`, `0 / 0 / 14`, `0 / 2 / 61` — nothing authored on
+either lane, the legacy per-map `M_Decal` MICs pruned, and both `/ElysiumBaked/<map>/Materials` and
+`.../Materials/Decals` left empty on all three (the hub's 2 reused are its weather rain instances).
+All 380 `.decals` lines over 97 distinct materials resolved a twin — a miss is the named failure
+`decal material has no projector instance:`, and none fired. `isDecalSurface` face groups on the
+projector instance: **0 / 3 / 4** (`decals/signs/number{0,5,8}` are the pawnshop door numbers),
+each with `opaque` false in the staged row, so the Nanite split leaves them in a plain section for
+the mesh-decal pass. Booted all three (`uv run elysium debug probe`): `adopted 123 | 38 | 219 baked
+decal(s)` and the same count of decal MIDs on the fog line, zero `Default Material will be used`
+and zero `LogMaterial: Warning` lines in any of the three logs.
+
+**Tests.** `uv run elysium test Policy` 10 of 10 executed, 10 succeeded, 0 failed (including
+`Elysium.Policy.V2MasterParams`, grown by the master's new pins). `uv run elysium test Substrate`
+455 of 455 executed, 399 succeeded + 56 with warnings, 0 failed, 0 notRun — the seven decal leaves
+are `DecalLay`, `DecalLifetime`, `DecalCap`, `DecalRecords`, `DecalImpactTrace`, `FogDecalMID` and
+the pre-existing `Decals`. `uv run elysium test Elysium.Content.TutorialDecals` 1 of 1, succeeded.
+`uv run pytest` **3,255 passed, 0 failed**. `uv run elysium doctor`: repository policy passed
+(29 pre-existing export warnings). One red test predating this work was fixed rather than carried:
+`test_make_surface_knobs.py::test_default_ini_matches_header_field_initializers` could not parse
+R6.3's `DetailSwayAmplitude = 5.0f * 2.54f`, because its header regex only accepted a bare literal;
+it now evaluates a product of float literals (and rounds both sides to six decimals, since the two
+are the same `float` at run time and differ in Python's last double bit), which is the form a knob
+stated in source units should keep.
+
+**Retired with it:** `make_decal_material.py`, `M_Decal.uasset`, its `POLICY_GENERATOR_OUTPUTS`
+row and `build_content.GENERATORS` step, the legacy `("decal", "M_Decal")` master rule and every
+decal branch under it, the V2 lane's last `.mtl` read (`decal_mats`), the per-map `Materials/Decals`
+package on both lanes, and `DecalDepthOffset` from the settings header, the binding table,
+`Config/DefaultElysium.ini`, the MPC scalar list and the knob test. No live `M_Decal` reference
+remains in `pipeline/` or `Source/`.
+
+**Adversarial review, same day — four fixes and one measurement.** (1) **The shot's ray was
+mirrored.** `FElysiumWeapon::TraceShotImpact` built its forward vector as
+`FRotator(Angles.X, Angles.Y, Angles.Z).Vector()`, but `Angles` is Source QAngles while `Origin`
+is an Unreal world position: the handedness reflection reverses pitch and yaw, which is exactly
+why the player writes `Angles = ElysiumPlayerView::ToSource(View)` and every motor call passes
+`-Angles.Y`. A shot fired at Unreal yaw 90° traced towards −90° and stained the wrong wall; only a
+trace that meets real geometry can show it, and the probe harness fires nothing. Now
+`ElysiumPlayerView::ToUnreal(Attacker.Angles).Vector()` — the same frame
+`AElysiumMapActor::QueryAimTarget` picks the victim along, so the mark and the target come off one
+aim. *(The pre-existing `AcquireMeleeOpponent` and `ElysiumDisciplines::AcquirePrimary` cones carry
+the same raw expression; they are the substrate lane's and untouched here, and no test pins their
+sign because every one of them stages yaw 0.)* (2) **`bake_verify._material_slot` still named the
+retired per-map `Materials/Decals` package** for a `$decal` surface, which now contradicts both
+lanes' `_material_sets`; it returns the map's one `Materials` package. (3) The stage's claim that
+*"the corpus carries no patched `$decal` unit"* is **false** — there are 10 (`glass/libwndwf` on
+`hw_warrens_5`/`la_library_1`, `objects/blastdoortrim` on `la_library_1`). Reading
+`isDecalSurface`/`decalAsset` off the root sidecar makes them bind the root's twin, which loses
+nothing: measured over the whole 19,709-entry manifest, the only non-empty patched delta anywhere
+is `WaterDepth` (49 water units), and VBSP's patch is `$envmap`, for which `M_V2_Decal` has no pin.
+Both comments now state the measurement. (4) **The impact table's `flesh` rows are unreachable from
+the world trace**, and the subsystem header said the opposite. Only `ElysiumPickOnly` (baked render
+geometry) and `ElysiumPropSolid` block `ECC_GameTraceChannel2`; an NPC capsule is `Pawn`-profiled,
+its mesh `NoCollision`, and a brush entity sets `ECR_Ignore` — so a shot at a body marks the wall
+behind it, which is what `CommitQueuedAttack` already says the mark is for, and `flesh/blood` /
+`flesh/soak` are reached only by a caller that knows the surface without tracing (the gib blood and
+the soak column, R7.3). Also corrected: `ElysiumFog.h`'s "parented to the shared imported
+`MI_<unit>`" (it is the projector twin, on a subsystem-owned MID) and `uasset-bake-spike.md`'s two
+`M_Decal` / `Materials/Decals` rows.
+
+**Follow-ups.** The 36 unmatched `infodecal` entities (9 maps, 15 of them `hw_609_1`) still want a
+wider plane-distance search and a re-measure — never a guessed face. The 105 unconverted maps still
+hold their stale per-map `Materials/Decals` MICs on the mount; each is pruned by that map's own next
+bake, and their parent `M_Decal` no longer exists. `MaxLaidDecals` stays 2048 as a stated stand-in
+until `r_decals`' default is read off `engine.dll` `staticinit_2007af40`. `Records()`/`Restore()`
+round-trip but nothing writes them into the save's reserved `Maps` block yet
+(`save-architecture.md` → "Decals as save state"). **Looked at, same day:** the `debug shots`
+vantages before/after (`E:/elysium-work/scratch/decals/pawnshop_*_before_after.png`,
+`hub_*_before_after.png`) — the pawnshop corridor's door numbers `507`/`503` read upright and
+unmirrored on the projector lane; the hub's own vantages face the haven bum and show no decal —
+and two in-game frames through the editor MCP after `elysium.dlg.choose` closed his dialogue:
+`scratch/decals/hub_sntgaragee.png` (the `1E` pillar sign, the `Main Street` / `2nd Street`
+signs and the band posters, every one a `.decals` projector, lit as its wall, text the right way
+round) and `hub_parkingb_floor.png` (the floor marking sits under a parked car; inconclusive).
+The pawnshop captures also show the ceiling-lamp coronas blown out to white discs against the
+2026-09-02 frames — **not this change**: `UElysiumSpriteComponent` still writes its colour as
+vertex colour (`ElysiumSpriteComponent.cpp` 193–206) while `4313d0ec` moved the sprite masters
+to `ParticleColor`; R7.3's follow-up. Still open: a hand-placed `hits/concrete/impact3` on
+`sp_soc_4` once it converts, and **no shot has been fired in a real map yet** — the ray fix above
+is reasoned from the frame contract and covered by `Elysium.Substrate.DecalImpactTrace`'s own
+world, not by a bullet hole anyone has looked at.
+
+
 ## Roadmap — one pipeline
 
 The single track. The surfaces and maps plans merged here (2026-08-31, owner: "consolidate — not
@@ -2594,11 +2727,154 @@ cost of the biggest rewrite and the retire stage waiting behind them.
   translucent master (SLW answers `$reflecttexture` 19 and `$refracttexture` 17 and the scene fog
   term in one place), `$bottommaterial` (provenance only today), underwater from `leafMinDist`,
   and `docs/vtmb/water.md`'s open questions. → lands: water that behaves like water.
-- **R7.2 Decals** [R7.6 / MP-5.6]. Domain ruling first: `UDecalComponent` renders only
-  `MD_DeferredDecal` and every V2 master is `MD_Surface`, so either a deferred-decal V2 master or
-  mesh decals as translucent surfaces. 5,143 `infodecal` + `.decals`, 38 `decalmodulate` units;
-  `ElysiumFog::ApplyToDecalMID` and `M_V2_Decal`'s fog parameters are waiting; the legacy per-map
-  `M_Decal` (fails to compile for SM6) retires. → lands: legacy `M_Decal` retired.
+- **R7.2 Decals** [R7.6 / MP-5.6] — **reviewed on the real census, 2026-09-03; two owner calls
+  open, everything else forced.** Why it was deferred: R5.3 planned the decal rebind onto an MID
+  over the shared `MI_<unit>`, and R5.4 found (a) a `UDecalComponent` draws only an
+  `MD_DeferredDecal` material (`FDeferredDecalProxy` substitutes the engine default for anything
+  else — `DecalComponent.cpp` 12–19, 58–60) while every V2 master is `MD_Surface`, and (b)
+  `M_V2_Decal` (Unlit, `BLEND_Modulate`) was built for the 38 `decalmodulate` units, but the
+  materials the `.decals` sidecars name are `$decal` surfaces on `M_V2_LitTranslucent`. The
+  projector lane and the modulate family had been conflated, so the bake kept the legacy per-map
+  `M_Decal` MICs — the one per-map material package a converted map still authors — and the
+  design moved here.
+  **Census (108-map export, `E:/elysium-work/exports`, provenance under `import/materials`).**
+  5,143 `infodecal` entities → 5,095 projector lines on 92 maps (36 unmatched — no face within
+  64 units or outside every candidate polygon, on 9 maps, 15 of them `hw_609_1`; 12 skipped for
+  a missing `origin`/`texture`), 473 distinct materials, all resolving: lightmappedgeneric 426
+  (3,599 lines), unlitgeneric 28 (1,255), vertexlitgeneric 9 (157, the `*_model` blood variants),
+  decalmodulate 10 (84). Of the 550 `$decal 1` units, 448 are projector-only, 15 are both a
+  projector and a real `usemtl` world face, 9 are world-face only, 78 are unused; 53 of the 473
+  projector materials are ordinary world paths (`carpet/malkrugb`, `signs/exit`, …) reused as
+  projectors, all `$decal`. **The 38 `decalmodulate` units are exactly the runtime impact set**
+  — `decals/hits/{concrete,metal,wood,glass,flesh}/*` (the `C_TEGunshotDecal` table's
+  surface × 5, `soak1-5` for the soak column; the `scorch` column has no material in the corpus)
+  plus `decals/break1-3` — none carries `$decal`, all carry `$decalscale`; 10 of them are also
+  hand-placed as `infodecal`, 25 appear in no map at all. No `vdecal_*` material exists in the
+  corpus or the packs and the collide key has 0 placed uses; `collide { decal { particle } }`
+  (16 roots / 174 placements) lays a *particle's sprite* as a decal. VtMB's other runtime decal
+  producers are the client temp entities `C_TEGunshotDecal`, `C_TEPlayerDecal`,
+  `C_TEFootprintDecal`, `C_TEDecal`, `C_TEWorldDecal`, `C_TEBSPDecal`, all gated by `r_decals`
+  (`engine.dll` `201a13d4`; the cap's default is in `staticinit_2007af40`, not yet read), and the
+  save game persists them as `DECALLIST` (`savegame_format.md`). Decal VMTs use 18 keys in total;
+  the canonical unit is `$basetexture $translucent 1 $decal 1 $decalscale 0.25`; `$selfillum` on
+  3, `$additive` on 1, `$alphatest` on 1.
+  **Engine facts (5.8 source, verified).** A deferred-decal material may blend Translucent,
+  AlphaComposite or Modulate (`MaterialShared.cpp` 6492); on a DBuffer platform — `r.DBuffer` is
+  1 and the project does not override it — Modulate is rewritten to Translucent
+  (`DecalRenderingCommon.cpp` 47–49), and an Emissive pin goes through its own pass after the
+  base pass (93–95). DBuffer decals write BaseColor / Normal / Roughness before the base pass,
+  the receiver gated by `MaterialDecalResponse` (default ColorNormalRoughness on every generated
+  master), Nanite receives through the `RECEIVE_DECAL` stencil bit, and the decal is then lit
+  by Lumen and MegaLights exactly like the wall — the modern twin of Source's lightmapped
+  `$decal` face. Decals are not captured into the Lumen surface cache (no loss: a VtMB decal
+  never bounced either). A non-Nanite static-mesh section whose material is decal-domain draws
+  in the **mesh-decal** pass (`PostProcessMeshDecals.cpp` 255), the native answer to Source's
+  `$decal` polygon offset. `UGameplayStatics::SpawnDecalAtLocation/Attached(LifeSpan)`,
+  `UDecalComponent::SetFadeOut` and the `DecalLifetimeOpacity` node are the runtime tools. The
+  legacy `M_Decal` failure is *"Material using the DeferredDecal domain can only use the Blend
+  Modes Translucent, AlphaComposite(Premultiplied Alpha), or Modulate"* — a warning, so every
+  legacy decal has been drawing `WorldGridMaterial` since the 2026-08-31 package move; the
+  legacy generator never checks `recompile_material`'s errors, `make_v2_materials.py` does.
+  **Rulings (forced by the facts above, recorded as such).** (1) **One decal master,
+  `M_V2_Decal`, re-cut as `MD_DeferredDecal` / `BLEND_Translucent` / DefaultLit**: `BaseTexture`
+  RGB → BaseColor, A → Opacity, `Color`, `Alpha`, `Emissive` + `EmissiveScale` (the 3
+  `$selfillum` units), an `Unlit` static switch (the 28 UnlitGeneric units: Emissive = texture,
+  BaseColor unwritten), the `(U, 1−V)` flip the legacy graph carries, and the R5.3 fog home
+  (`FogColor`/`FogStart`/`FogInvRange`, `mat_fog.fog_from_params`) unchanged. Roughness,
+  Specular, Metallic and Normal are **not** connected: the wall keeps its own surface under the
+  decal, which is what a lightmapped `$decal` did. Nine masters stay nine. (2) **Every
+  `$decal` unit and every `decalmodulate` unit stages a second shared instance,
+  `MI_<unit>_Decal`, parented to the decal master** (`/ElysiumBaked/Materials/Decals`, ~590
+  instances), alongside the surface `MI_<unit>` the 24 world-face units still need; the
+  materials table carries `decalAsset` beside `asset`. `_place_decals` binds `MI_<unit>_Decal`
+  by `vtmb:material` id (a missing one is a named failure, never the error material); the
+  per-map `Materials/Decals` package, the V2 lane's last `.mtl` read (`decal_mats`),
+  `make_decal_material.py`, its `export_manager` row and `M_Decal` retire. (3) **The
+  `isDecalSurface` face groups bind `MI_<unit>_Decal` as their mesh slot and draw as mesh
+  decals** — non-Nanite (the master sets no `used_with_nanite`, and the Nanite split already
+  follows the bound master, R5.4's review fix), coplanar with the wall, no z-fight, lit as the
+  wall. This is the first consumer of the `isDecalSurface` provenance flag; the
+  `DecalDepthOffset` knob (`UElysiumSurfaceSettings`, `MPC_ElysiumSurfaces`, the knob test)
+  retires with nothing to bias. (4) **Fog is a load-time MID, owned by the decal subsystem (B)**: a bake
+  cannot save a `UMaterialInstanceDynamic` into the level, so at map load the subsystem adopts
+  every `elysium.decal` actor, parents an MID to the bound instance and calls
+  `ElysiumFog::ApplyToDecalMID`; `ApplySceneFog` re-stamps through the same owner — the R5.3
+  ruling landing where it always had to, and roadmap 3.13 ("decal fog: accept or extend")
+  closes as *extend*: a fog change now reaches every decal live, baked or laid.
+  (5) **Projector geometry stays the exporter's**: one nearest face within 64 units, the room
+  side from leaf solidity, sort order = line order, `FadeScreenSize 0`; the component's 16 cm
+  reach reproduces `R_DecalShoot`'s spread across neighbouring faces natively (already the
+  accepted modernization). The `LowPriority` spawnflag is dropped (it only governs replacement
+  under the cap). The 36 unmatched decals are a follow-up: widen the plane-distance search and
+  re-measure, never guess a face.
+  **Owner call A — the 38 `decalmodulate` units draw as translucent decals.** Retail drew them
+  as wireframe (the shader is absent from `stdshader_dx8.dll`), R5 chose Modulate as the
+  stand-in, and under DBuffer the engine would rewrite Modulate to Translucent regardless. The
+  divergence is "an impact hole is a translucent stain", named beside the family in
+  `seam_map_material.md`; the alternative (turn `r.DBuffer` off to keep a true modulate) trades
+  Nanite decal receiving and the emissive pass for 38 materials that never drew, and is
+  rejected unless the owner wants it. **Owner call B (recommended: yes) — `UElysiumDecalSubsystem` ships in R7.2
+  as the one owner of every decal in a world, with its first real caller.** A `UWorldSubsystem`:
+  (a) adopts the baked `elysium.decal` actors at load and owns their fog MIDs (ruling 4);
+  (b) `Lay(FElysiumDecalRequest{material id or texture, location, normal, half-size, lifetime,
+  attach component})` → a `UDecalComponent` from a pool on one hidden actor, bound to
+  `MI_<unit>_Decal` (or an MID off the master with `BaseTexture` bound, for a collide sprite),
+  fog applied, oriented from the hit normal with the surface tangent the way `_place_decals`
+  does, `SortOrder` from a running serial so later stains layer over earlier ones as
+  `R_DecalCreate`'s list does; (c) a cap (`UElysiumSurfaceSettings.MaxLaidDecals`, VtMB's
+  `r_decals` default once read off `staticinit_2007af40`) with oldest-first recycling;
+  (d) `Records()` — the `DECALLIST` shape (material, position, normal, `saveentityindex`) for
+  the save's reserved `Maps` slot, re-laid on load through the same `Lay`. The Niagara decal
+  renderer is **not** used: a laid decal outlives its particle. **Callers landed with it**, not
+  after it: the ranged shot's forward world trace — the SEAM `ElysiumWeaponClasses.h` names
+  ("retail traces forward first and accepts a valid obstruction hit") — becomes an engine line
+  trace whose `FHitResult` physical material is the imported `UElysiumPhysicalMaterial`, whose
+  surface character indexes the `C_TEGunshotDecal` table (`effects.md` §3.5: surface × weapon
+  column → `decals/hits/<surface>/*`, `scorch` empty) and lays the hole; the R7.3 A2 collide
+  archetype calls `Lay` with the particle's sprite (174 placements). The gib blood waits only
+  because `env_shooter` itself is R7.3's explosion slice; it calls the same `Lay`. The
+  alternative — leave the seam to its first caller — is the pattern this note keeps paying
+  for (R5.3 → R5.4 → R7.6 → R7.2) and is rejected.
+  **Order of work.** (i) rulings into `seam_map_material.md` ("`M_V2_Decal`", "The eight real
+  unresolved families", "Decal fog and wetness homes", the knob table) and `seam_map_map.md`
+  ("Import — materials (R5.4)", the decal placement note); (ii) `make_v2_materials.py`
+  `_build_decal` re-cut + `DECAL_PARAM_TABLE`, `ElysiumSurfaceParamsDecal`, the three-way pin
+  and `Elysium.Policy.V2MasterParams`; (iii) `importers/materials.py` — the second instance
+  for `$decal` / `decalmodulate`, `map_geometry.py`'s `decalAsset` column,
+  `materials_report.json`'s `decal` class meaning "projector instance bound"; (iv)
+  `bake_map_v2.py` — `_place_decals` by id, the empty decal set, `isDecalSurface` groups on the
+  projector instance, the per-map `Decals` package pruned; (v) runtime — the subsystem (B: adopt + fog,
+  `Lay`, pool + cap, records), the ranged world trace and its impact-table caller, the A2 hook,
+  `DecalDepthOffset` deleted; (vi) retire `M_Decal` and its
+  generator, `uv run elysium export bundle policy`; (vii) re-stage and re-bake the three
+  working maps, then a contact sheet the way `effects_authoring.md` does it (pawnshop door
+  numbers, hub blood on the floor, a hand-placed `hits/concrete/impact3` on `sp_soc_4` once it
+  converts). Tests at the seam only: the pytest pins for the master's parameters and the
+  two-instance rule, `Elysium.Policy.V2MasterParams` grown by the master, one Substrate test on
+  `Lay` (orientation, lifetime, cap recycling, the record round-trip) and one on the ranged
+  trace laying the table's hole, `Elysium.Content.TutorialDecals` unchanged. **Measured** = decal
+  actor counts per map unchanged (123 / 38 / 219 on the three), zero per-map material packages,
+  zero `M_Decal` references, the 36 unmatched re-counted. → lands: decals on the V2 lane, the
+  legacy `M_Decal` retired, roadmap 3.13 closed, bullet holes in the world, the stain seam live.
+  **Landed (2026-09-03), Settled above as "R7.2 — decals on the V2 lane".** **Measured:**
+  `M_V2_Decal` compiles with zero errors and zero warnings across 42 permutations and the log
+  carries no `M_Decal` reference; the material stage names **588** projector twins (550 `$decal` +
+  38 `decalmodulate`; 34 `Unlit`, 3 `Emissive`, 23 with no `BaseTexture` — the debug families that
+  author `$decal` and take no master), and `uv run elysium import materials` reports
+  *19,709 imported, 0 reused, 0 pruned, 0 failed* (the master rebuild reparents the whole corpus)
+  beside the 4 pre-existing stage failures; the three working maps re-bake to **123 / 38 / 219**
+  decal actors, unchanged, with `materials: 0 built / 0 reused / 27 | 14 | 61 pruned` — zero
+  per-map material packages authored on either lane — every one of the 380 `.decals` lines (97
+  distinct materials) bound to a `_Decal` twin, and **0 / 3 / 4** `isDecalSurface` face groups on
+  the projector instance with `opaque` false, outside the Nanite buckets. All three boot: *adopted
+  123 | 38 | 219 baked decal(s)*, the same count of decal MIDs on the fog line, no material
+  fallback logged. The 36 unmatched `infodecal` entities are unchanged and stay a follow-up.
+  **Tests:** `Elysium.Policy` 10/10 (`V2MasterParams` grown by the master), `Elysium.Substrate`
+  455/455 with the six new decal leaves, `Elysium.Content.TutorialDecals` 1/1,
+  `uv run pytest` 3,255 passed, `uv run elysium doctor` passed. Frames: the before/after
+  `debug shots` composites and the two hub MCP captures under `E:/elysium-work/scratch/decals/`
+  (garage signs and posters draw as projected decals; the corona blow-out in the same frames is
+  R7.3's `ParticleColor` change, not this lane's).
 - **R7.3 Effects families** [R7.5 / MP-5.5] — **on the real census, ruled 2026-09-02**
   (`effects-architecture.md` §5). R2.2's vocabulary was a guess: `env_fire`, `env_embers`,
   `env_lightglow`, `point_spotlight`, `env_sun` have **0** placements in 108 maps. What the

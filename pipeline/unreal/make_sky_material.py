@@ -54,7 +54,7 @@ bright.set_editor_property("default_value", 1.0)
 scale = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -120, 60)
 
 mel.connect_material_expressions(cam, "", neg, "A")
-# The TextureSample UV pin is named "UVs" (matches make_decal_material.py); "Coordinates" matches no
+# The TextureSample UV pin is named "UVs" (matches make_v2_materials.py); "Coordinates" matches no
 # input, so the connection silently no-ops and the cube compiles to "needs UV input" → default material.
 mel.connect_material_expressions(neg, "", cube, "UVs")
 mel.connect_material_expressions(cube, "RGB", scale, "A")

@@ -75,7 +75,11 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: `effectStats` -- every effects entity joined to its particle closure, brush bounds and sprite
 #: textures (`importers.effects`; `docs/architecture/seam_map_map.md` -> "Import -- effects
 #: (R7.3)").
-MANIFEST_VERSION = 7
+#: 8 (R7.2): every `materials` row carries `decalAsset` (the `MI_<unit>_Decal` projector instance
+#: the material lane staged beside the surface one, or `null`) and `isDecalSurface` -- the pair the
+#: bake binds a `$decal` face group's mesh slot from, and keeps out of the Nanite buckets
+#: (`docs/project/seam_migration.md` -> "R7.2 Decals", rulings 2 and 3).
+MANIFEST_VERSION = 8
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -99,8 +103,12 @@ NANITE_CAPABLE_MASTERS = frozenset({
 #: The legacy `bake_map.Bake._master_for` selection, restated over a `shared/materials.json` record
 #: so the R5.4 report can say what master a surface WAS on before the rebind (data, not a look
 #: judgement). Same order as the bake's own if/elif chain.
+#: R7.2 (ruling 2): the `decal` row is gone with the master it named -- `M_Decal` is retired and
+#: the legacy bake's own decal branch with it, so a `$decal` world face falls through to the master
+#: its blend selects on either lane. The V2 lane then rebinds it onto the projector instance
+#: (`v2Class == "decal"`), which is the class change this report exists to state.
 LEGACY_MASTER_RULES = (
-    ("decal", "M_Decal"), ("additive", "M_Additive"), ("refract", "M_Refract"),
+    ("additive", "M_Additive"), ("refract", "M_Refract"),
     ("glass", "M_World_Glass"), ("water", "M_World_Translucent"), ("blend", "M_World_Translucent"),
     ("scissor", "M_World_Masked"),
 )
@@ -119,7 +127,6 @@ FRAMES_UNAVAILABLE_OMISSION = "animatedFramesArrayUnavailable"
 LEGACY_MASTER_CLASS = {
     "M_World_Opaque": "opaque", "M_World_Masked": "masked", "M_World_Translucent": "translucent",
     "M_World_Glass": "translucent", "M_Refract": "refract", "M_Additive": "additive",
-    "M_Decal": "decal",
 }
 
 #: glTF metres -> Unreal centimetres. One Source inch is 0.0254 glTF metres and 2.54 centimetres.
@@ -133,9 +140,19 @@ STATIC_PROP_FLAG_FADES = 0x1
 #: selects, the `$spriterendermode` row table of `seam_map_material.md` -> `M_V2_Sprite` (VtMB's
 #: client writes the entity's mode into that material var at draw). Mode 6 (`kRenderEnvironmental`)
 #: has no program and is a named failure; every other value is a mode the table does not name.
+#:
+#: Read off the Sprite shader's own per-mode blend state (`stdshader_dx8.dll` `1000eca0`), which
+#: is the authority here rather than the mode's Source *name*: **3** (`kRenderGlow`) and **9**
+#: (`kRenderWorldGlow`) set `SRC_ALPHA, ONE` and disable the depth test -- a glow is additive, not
+#: translucent, and the pre-fix rows drew every corona as a grey card over the light instead of
+#: adding to it; **5** and **7** (`kRenderTransAdd`) are the same `SRC_ALPHA, ONE`; **8**
+#: (`kRenderTransAlphaAdd`) is `ONE, INV_SRC_ALPHA`, premultiplied -- Unreal's `AlphaComposite`,
+#: not `Additive`; **1, 2, 4** are the ordinary `SRC_ALPHA, INV_SRC_ALPHA`.
+#: No premultiply term is wired for the additive rows: Unreal's additive base pass already
+#: multiplies the colour by Opacity (`BasePassPixelShader.usf:2326`), which is `SRC_ALPHA, ONE`.
 SPRITE_BLEND_BY_MODE = {
-    0: "Opaque", 1: "Translucent", 2: "Translucent", 3: "Translucent", 4: "Translucent",
-    5: "Additive", 7: "Additive", 8: "Additive", 9: "Translucent",
+    0: "Opaque", 1: "Translucent", 2: "Translucent", 3: "Additive", 4: "Translucent",
+    5: "Additive", 7: "Additive", 8: "AlphaComposite", 9: "Additive",
 }
 #: `kRenderGlow` / `kRenderWorldGlow`: the two modes `C_Sprite::DrawModel` routes through Source's
 #: glow rule (screen-constant size, `19000 / dist^2`, the pixel-visibility fade).
@@ -354,14 +371,44 @@ class MaterialBinding:
     blend_mode: str
     patched: bool
     provenance: str
+    #: R7.2 ruling 2: the `MI_<unit>_Decal` projector instance the material lane staged beside
+    #: `asset`, or `None` when this unit never draws as a decal. Read off the ROOT unit's sidecar,
+    #: like `master`/`blend_mode`: the material stage stages a twin for the root unit only, so a
+    #: patched `$decal` unit (10 in the corpus -- `glass/libwndwf`, `objects/blastdoortrim`, on
+    #: `hw_warrens_5` and `la_library_1`) binds its root's twin. That loses nothing the patch
+    #: carried: a patch delta cannot reach the projector master (VBSP patches `$envmap`, which
+    #: `M_V2_Decal` has no pin for, and the only non-empty patched delta in the whole manifest is
+    #: `WaterDepth`). It also keeps `isDecalSurface` on one source, so the report's
+    #: `decalSurfaces` and `decalProjectorsBound` counts are the same read.
+    decal_asset: str | None = None
+    #: R7.2 ruling 3: this face group is a `$decal 1` surface (`isDecalSurface`), so it binds
+    #: `decal_asset` as its MESH slot and draws in the mesh-decal pass -- coplanar with the wall,
+    #: no z-fight, lit as the wall, which is what a lightmapped `$decal` face did.
+    is_decal_surface: bool = False
 
     @property
     def opaque(self) -> bool:
+        # R7.2 ruling 3: a decal-surface group is never Nanite. Its bound instance is the
+        # deferred-decal-domain projector, which draws in the mesh-decal pass only from a
+        # non-Nanite section (`PostProcessMeshDecals.cpp` 255) and whose master sets no
+        # `used_with_nanite`; a Nanite chunk would fall back to the default material at render.
+        if self.is_decal_surface:
+            return False
         return self.blend_mode in NANITE_BLEND_MODES and self.master in NANITE_CAPABLE_MASTERS
+
+    @property
+    def slot_asset(self) -> str | None:
+        """The instance the bake binds into this face group's material slot: the projector twin
+        for a `$decal` surface (ruling 3), the surface instance for everything else. `None` when
+        the unit says it is a decal surface and the material lane staged no projector for it --
+        a named bake failure, never a silent rebind onto the surface instance."""
+
+        return self.decal_asset if self.is_decal_surface else self.asset
 
     def as_row(self) -> dict[str, Any]:
         return {
-            "unit": self.unit, "asset": self.asset, "master": self.master,
+            "unit": self.unit, "asset": self.asset, "decalAsset": self.decal_asset,
+            "isDecalSurface": self.is_decal_surface, "master": self.master,
             "blendMode": self.blend_mode, "opaque": self.opaque, "patched": self.patched,
             "provenance": self.provenance,
         }
@@ -1002,6 +1049,7 @@ def resolve_material_table(
     table: dict[str, MaterialBinding] = {}
     missing: list[str] = []
     broken: list[str] = []
+    unprojected: list[str] = []
     for key in sorted(units_by_group):
         unit_key = units_by_group[key]
         document = read_sidecar(unit_key)
@@ -1028,8 +1076,15 @@ def resolve_material_table(
             asset=material_lane.asset_path_for(unit_key), master=master,
             blend_mode=str(root.get("blendMode") or "Opaque"),
             patched=bool(document.get("patched")), provenance=root_key,
+            decal_asset=(str(root.get("decalAsset")) if root.get("decalAsset") else None),
+            is_decal_surface=bool(root.get("isDecalSurface")),
         )
-    if missing or broken:
+        # R7.2 ruling 3: a `$decal 1` face group binds the projector twin as its mesh slot, so a
+        # sidecar that says `isDecalSurface` and names no `decalAsset` has no slot to bind at all.
+        # Named here, per map, rather than discovered as a grey wall in the editor.
+        if table[key].slot_asset is None:
+            unprojected.append(unit_key)
+    if missing or broken or unprojected:
         parts = []
         if missing:
             parts.append(f"{len(missing)} material unit(s) not staged by the material lane "
@@ -1038,6 +1093,10 @@ def resolve_material_table(
         if broken:
             parts.append(f"{len(broken)} patched unit(s) whose base chain leaves the staging "
                          f"tree or names no master: " + ", ".join(broken[:8]))
+        if unprojected:
+            parts.append(f"{len(unprojected)} $decal surface unit(s) whose sidecar names no "
+                         f"decalAsset (re-run: uv run elysium import materials): "
+                         + ", ".join(unprojected[:8]))
         raise MapGeometryError(f"{map_name or 'map'}: " + "; ".join(parts))
     return table
 
@@ -1053,10 +1112,18 @@ def legacy_master_for(record: dict[str, Any] | None) -> str | None:
     return LEGACY_MASTER_DEFAULT
 
 
-def appearance_class(master: str, blend_mode: str) -> str:
+def appearance_class(master: str, blend_mode: str, *, decal_bound: bool = False) -> str:
     """The class a V2 (master, blend) pair renders as -- the blend mode, except where the master
-    itself is the distinction (`M_V2_Refract`, `M_V2_Water`, `M_V2_Decal`)."""
+    itself is the distinction (`M_V2_Refract`, `M_V2_Water`, `M_V2_Decal`).
 
+    R7.2: `decal` means "the projector instance is bound" -- a face group that binds
+    `MI_<unit>_Decal` as its mesh slot (ruling 3), or a unit whose surface instance is itself on
+    the projector master (the `decalmodulate` family). It is a statement about what draws, not
+    about a flag in the `.mtl`.
+    """
+
+    if decal_bound:
+        return "decal"
     if master == "M_V2_Refract":
         return "refract"
     if master == "M_V2_Water":
@@ -1090,7 +1157,8 @@ def classify_material(
     animated_now = bool(live)
     legacy_master = legacy_master_for(legacy_record)
     legacy_class = LEGACY_MASTER_CLASS.get(legacy_master or "", None)
-    v2_class = appearance_class(binding.master, binding.blend_mode)
+    v2_class = appearance_class(binding.master, binding.blend_mode,
+                                decal_bound=binding.is_decal_surface and bool(binding.decal_asset))
     return {
         "key": binding.key,
         "unit": binding.unit,
@@ -1112,6 +1180,10 @@ def classify_material(
         "wetnessDriven": provenance.get("wetnessScale") is not None
         and binding.master in ("M_V2_Lit", "M_V2_LitTranslucent"),
         "isDecalSurface": bool(provenance.get("isDecalSurface")),
+        # R7.2 ruling 2/3: the projector instance staged for this unit, and the slot the bake
+        # actually binds (the projector for a `$decal` surface, the surface instance otherwise).
+        "decalAsset": binding.decal_asset,
+        "slotAsset": binding.slot_asset,
     }
 
 
@@ -1146,6 +1218,7 @@ def material_report(
             "classChanged": len(changed),
             "wetnessDriven": sum(1 for row in rows if row["wetnessDriven"]),
             "decalSurfaces": sum(1 for row in rows if row["isDecalSurface"]),
+            "decalProjectorsBound": sum(1 for row in rows if row["v2Class"] == "decal"),
             "byV2Master": _count_by(rows, "v2Master"),
             "byV2Class": _count_by(rows, "v2Class"),
             "byLegacyClass": _count_by(rows, "legacyClass"),

@@ -983,6 +983,21 @@ public:
 	virtual bool IsNpcMakerInPlayerViewCone(const FVector&) const { return false; }
 	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector&, float) const { return false; }
 
+	// R7.2 -- the ranged shot's forward world trace and the stain it leaves
+	// (`docs/project/seam_migration.md` -> "R7.2 Decals", owner call B).
+	//
+	// The substrate owns WHEN (a shot that has been paid for) and the variation roll; the trace,
+	// the hit's `UElysiumPhysicalMaterial` and the decal itself are engine questions and live on
+	// the other side of this call. Trace the render-surface channel from `FromCm` along `Direction`
+	// for `RangeCm`, read the hit's surface character, and lay that character's hole through
+	// `UElysiumDecalSubsystem::Lay` (`ElysiumImpactDecals`, `docs/vtmb/effects.md` §3.5).
+	//
+	// `Direction` need not be normalized. `Variation` is 1..5, the pool's own five variations.
+	// False is the ordinary answer for a shot that hit nothing, a headless run and a world with no
+	// decal subsystem — a stain nobody sees is never a failure.
+	virtual bool LayShotImpactDecal(const FVector& FromCm, const FVector& Direction, float RangeCm,
+		int32 Variation) { return false; }
+
 	// The legacy scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, and the feed
 	// camera push onto the player camera's one weight stack through here, and
 	// `RemoveCamera` pops. `ShotFile` keys `vdata/camerashots/`; `Subject` is the entity the shot is

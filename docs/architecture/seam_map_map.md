@@ -1158,7 +1158,7 @@ modulation and `renderamt/255` as the blend, depth-tested by the material's own 
 |---|---|
 | identity | `sprites[]` row `index` = the entity's lump ordinal = `FElysiumEntityHandle::Index`; tags `elysium.sprite` + `elysium.ent=<index>` (`ElysiumBakedTags::Sprite` / `EntityIndex`); label `Sprite_<index>_<material stem>`, folder `Sprites` / `Sky/Sprites` |
 | material | the imported `MI_` of `model` (`shared_corpus.material_key`, resolved through the material lane's staged provenance sidecar exactly as a face is), re-parented once per `(MI_, blend)` through `/ElysiumBaked/Sprites/MI_Sprite_<material>_<blend>` — a child whose own values are the blend override and `UseVertexColor = UseVertexAlpha = true`, so the tint and the per-frame glow blend ride the quad's vertex colour and no material is touched at runtime. Shared and map-independent like the R6.3 sway children |
-| blend | the entity's `rendermode` through the `$spriterendermode` row table (`seam_map_material.md` → `M_V2_Sprite`): 0 → Opaque; 1, 2, 3, 4, 9 → Translucent; 5, 7, 8 → Additive; 6 → a named bake failure |
+| blend | the entity's `rendermode` through the `$spriterendermode` row table (`seam_map_material.md` → `M_V2_Sprite`), which is the Sprite shader's own per-mode blend state (`stdshader_dx8.dll` `1000eca0`), not the mode's Source name: 0 → Opaque; 1, 2, 4 → Translucent; **3, 5, 7, 9 → Additive** (`SRC_ALPHA, ONE`; 3 and 9, the glow modes, also disable the depth test — a corona *adds* to the light behind it); **8 → AlphaComposite** (`ONE, INV_SRC_ALPHA`, premultiplied); 6 → a named bake failure |
 | size | `SizeInches = (clamp(scale, 0, 8) or 1) × (texture width, height)` in Source units, the texture's dimensions off the texture lane's sidecar. Mode 3 without `renderfx` 14: `SizeInches × dist_cm × GlowSizePerDistance` — screen-constant, per view. Every other row (mode 9, NoDissipation, the plain modes): the world quad is `SizeInches × 2.54` cm (× the actor scale, so a miniature sprite scales with the miniature) |
 | colour | `rendercolor` (default 255 255 255) and `renderamt` (default 255) as the component's `Color`; `renderfx` carried for the NoDissipation rule |
 | orientation | `parallel_upright` in the VMT's `$spriteorientation` row → `bUpright` (a yaw-only billboard about world Z); `vp_parallel`, `oriented` (3 units, treated as full billboards — a named divergence) and absent → full camera-facing |
@@ -1166,31 +1166,80 @@ modulation and `renderamt/255` as the blend, depth-tested by the material's own 
 | 3D skybox | a row inside the sky area takes the miniature transform a prop takes: position `scale × (p − origin)`, actor scale `scale`, its own `_sky` label and folder, and the `elysium.sky` scope marker beside its two tags (R6.7) |
 | collision, shadow, fog | none, none, none: a sprite is a client-side card in VtMB; `M_V2_Sprite` carries no scene-fog term |
 
+The tint rides **`VertexColor` × `ParticleColor`**, both terms, in each of the master's two gated
+lanes. `M_V2_Sprite` draws through two vertex factories and each compiles the other term in as
+white: the `env_sprite` billboard is an `FDynamicMeshBuilder` on the local vertex factory with no
+particle data (`Particle.Color` = `(1,1,1,1)`), and a Niagara sprite hardcodes `VertexColor = 1`.
+VtMB writes `rendercolor`/`renderamt` as per-corner vertex colour (`CMeshBuilder::Color4ubv`,
+`1008232b`) with no material colour modulation at all, so the billboard's whole tint and its
+per-frame glow blend are the vertex term — reading only `ParticleColor` drew every `env_sprite`
+untinted and fully opaque.
+
 **The runtime half — `UElysiumSpriteComponent` and its proxy, the task's one piece of rendering
 code.** `FElysiumSpriteSceneProxy` builds one camera-facing quad per view in
 `GetDynamicMeshElements` (a yaw-only quad for `bUpright`), sized by the rule above, with vertex
 colour `(rendercolor, renderamt/255 × brightness × visibility)`. For every sprite it declares
 **sub-primitive occlusion queries** (`HasSubprimitiveOcclusionQueries`/`GetOcclusionQueries`): a
-`SpriteQueryGrid × SpriteQueryGrid` grid of small boxes tiling a square of half-size `dist ×
-SpriteQueryFootprintPerDistance` at the origin, facing the view — Source's query quad, sampled as
-a grid because Unreal's sub-query answers are per-box booleans, not pixel counts. The renderer
-tests them against the scene depth on the GPU (hardware queries, HZB or occlusion feedback,
-whichever the platform runs) and hands the booleans back one frame later
-(`AcceptOcclusionResults`); the **visible fraction is the visible boxes over the grid**, and the
-proxy smooths it at `1/GlowFadeInSeconds` up and `1/GlowFadeOutSeconds` down on the render
-thread's clock, exactly VtMB's two cvars. `CanBeOccluded()` is forced true: the master is
-depth-test-off, and the engine's default would have skipped the queries. The fraction gates every
-sprite, not only the coronas: `M_V2_Sprite` disables the depth test on the master (the material
-lane's ruling, `$ignorez`), so a plain additive card behind a wall would otherwise draw through
-it; a card half behind a table fades as a whole instead of clipping — named below as the R7 call.
-No occlusion result yet (the first frame, or a renderer with queries off) reads as fully visible.
+`SpriteQueryGrid × SpriteQueryGrid` grid of samples tiling a square at the origin, facing the
+view — Source's query quad, sampled as a grid because Unreal's sub-query answers are per-box
+booleans, not pixel counts. Three things the R7 pass corrected against `GlowBlend` (`100c24a0`)
+and the 5.8 renderer, each a divergence that showed as a corona lit through a wall:
+
+- **The footprint is the render mode's.** VtMB takes the screen-constant half-size `dist × 3/128`
+  for `rendermode` 3 alone (`100c25ed`-`100c25fa`) and a fixed **3 Source units** for every other
+  mode (`10225158`); the `renderfx` 14 test sits further down the function (`100c30e9`), so a
+  mode-3 NoDissipation corona still queries screen-constant while its card stays at world size.
+  The sample is then **clamped to the drawn card's half-size for that view** — an occlusion query
+  may never test a region larger than the quad whose blend it decides, which was letting a
+  35 m-plus sample read the wall metres away from the card's own pixels.
+- **A sample is a card, not a cube.** The renderer rasterises each sub-query box's front faces
+  with `CF_DepthNearOrEqual` (`SceneOcclusion.cpp` 508-539, 1254) and calls the box visible if any
+  pixel passes (`SceneVisibility.cpp` 2833), so a cube of side `Cell` answered off its own back
+  half and straddled the wall behind the sprite. Each box is the **exact axis-aligned bounds of
+  the flat `Cell × Cell` card facing the view** — per world axis
+  `Cell/2 × (|Right| + |Up|) + 2 cm × |ViewDir|` — as VtMB's flat camera-facing query polygon
+  was. A per-axis `1 − |ViewDir|` collapse only thins an axis-aligned view: off axis it shrinks
+  all three extents, leaving a cube that still straddles the wall while covering a fraction of the
+  cell it samples.
+- **No answer is dark, not bright.** VtMB reads an absent or stale query as fraction 0 and fades
+  the corona back in at `1 / r_glowfadein` (`100c257e`-`100c2586`). Unreal hands back
+  *unoccluded* generously: on first sight, after a history trim, on a camera cut, a teleport or a
+  >45° single-frame turn (`bIgnoreExistingQueries`, `SceneVisibility.cpp` 5571-5586) and whenever
+  a result is unavailable. So the card draws whole — and the stored fraction is *held* at 1 —
+  only while no result has ever been accepted, which keeps the contract that a renderer with
+  sub-queries off draws every sprite and makes the first real answer smooth down from what is on
+  screen instead of popping dark for a frame; every query is stamped with the
+  `GFrameNumberRenderThread` it was **issued** on and every answer with the one it landed on, and
+  a query issued more than **3 frames** before the last answer counts as 0. Staleness is "asked
+  and never answered", never "drawn without an answer": the renderer stops occlusion-testing a
+  primitive it still draws (a selected actor in the editor, `r.AllowOcclusionQueries 0`, a view
+  with no `FSceneViewState`), and that must freeze the fraction, not fade the card out. The
+  smoothing step is clamped to **half the fade it is taken along** instead of snapping, so one
+  spurious all-visible frame raises the blend by a step rather than to full — a fraction, not a
+  fixed 0.25 s, because a cap above the fade constants (0.2 s in, 0.1 s out) never binds.
+
+The **visible fraction is the visible boxes over the grid**, smoothed at `1/GlowFadeInSeconds` up
+and `1/GlowFadeOutSeconds` down on the render thread's clock, exactly VtMB's two cvars. All of it
+is **per view, under a mutex**, keyed by `FSceneView::GetViewKey()` and guarded by the proxy's
+creation frame — the shape `FHierarchicalStaticMeshSceneProxy::AcceptOcclusionResults`
+(`HierarchicalInstancedStaticMesh.cpp` 1983-2015) uses, because `GetOcclusionQueries` is called
+both from the visibility task and from the occlusion cull, and one proxy answers the player view,
+a reflection capture's six faces and an editor viewport in the same frame. `CanBeOccluded()` is
+forced true: the master is depth-test-off, and the engine's default would have skipped the
+queries. The fraction gates every sprite, not only the coronas: `M_V2_Sprite` disables the depth
+test on the master (the material lane's ruling, `$ignorez`), so a plain additive card behind a
+wall would otherwise draw through it; a card half behind a table fades as a whole instead of
+clipping — named below as the R7 call.
 
 Everything tunable is a field on **Project Settings → Elysium → Sprites** (`UElysiumSpriteSettings`),
 shipped with VtMB's own values and read by the proxy at creation: `GlowFalloff` **19000**,
 `GlowMinBrightness` **0.05**, `GlowSizePerDistance` **0.005**, `GlowFadeInSeconds` **0.2**,
-`GlowFadeOutSeconds` **0.1**, `SpriteQueryFootprintPerDistance` **3/128**, `SpriteQueryGrid`
-**4** (16 boxes; the one number with no VtMB twin — Source counted pixels). Cost accepted with
-eyes open: `grid²` sub-queries per sprite per view (sm_hub_1: 309 × 16), one frame of latency.
+`GlowFadeOutSeconds` **0.1**, `SpriteQueryFootprintPerDistance` **3/128** (mode 3),
+`SpriteQueryFixedHalfInches` **3.0** (every other mode), `SpriteQueryGrid` **4** (16 boxes; the
+one number with no VtMB twin — Source counted pixels). The sample half-thickness (2 cm), the
+staleness window (3 frames) and the smoothing step cap (half a fade) are renderer-shaped constants
+with no VtMB twin and live in `ElysiumSpriteGlow.h`. Cost accepted with eyes open: `grid²` sub-queries per
+sprite per view (sm_hub_1: 309 × 16), one frame of latency.
 
 **Visibility is the entity's.** `FElysiumEnvSprite` (`ElysiumEnvSprite.cpp`) restates `CSprite`:
 `Spawn` sets `bOn` by the unnamed-or-Start-On rule; `HideSprite`/`TurnOff` clear it,
@@ -1341,9 +1390,18 @@ run and shrinks to one directory under `--select`, while every staged unit's sid
 until its own scope prunes it — to the asset path (`asset_path_for`, the same pure function that
 named the asset at import), the root master (the sidecar's `master`, already walked to the base for
 a patched unit) and the root blend mode (the base's `blendMode`, reached through `patchBase`). That
-tuple is the `materials` table in the staged manifest (`MANIFEST_VERSION` 2), one row per face
-group; the editor half (`bake_map_v2.MapBakeV2`) loads exactly those assets and `material_for`
-answers from that table alone.
+tuple is the `materials` table in the staged manifest, one row per face group; the editor half
+(`bake_map_v2.MapBakeV2`) loads exactly those assets and `material_for` answers from that table
+alone.
+
+R7.2 gave the row two more columns and the manifest `MANIFEST_VERSION` **8**: `isDecalSurface`
+(the unit's own `$decal` flag, read off the sidecar like `master` and `blendMode`) and
+`decalAsset` (its projector twin, `MI_<unit>_Decal`, or null). A row that says `isDecalSurface`
+and names no `decalAsset` **fails the map by name** — the material stage is what names the twin,
+and a face group with no projector to bind is a staging error, never a silent fallback. What a
+face group actually binds is `slot_asset`: the twin when the unit is a decal surface, `asset`
+otherwise. So a `$decal` world face draws as a **mesh decal** over the wall it sits on, coplanar
+and lit as the wall, which is what Source's `$decal` polygon offset bought.
 
 **The Nanite question moves with the binding.** The legacy chunker split a cell into a Nanite mesh
 (opaque + masked) and a non-Nanite sibling (`T_` prefix) by `MatDef.opaque`, read off the corpus
@@ -1353,7 +1411,9 @@ flags. The V2 lane answers the same question from the root instance's blend mode
 fix): `make_v2_materials.py` deliberately does not set `used_with_nanite` on `M_V2_Water`,
 `M_V2_Refract`, `M_V2_Sprite`, `M_V2_Decal` or `M_V2_Eyes`, so an instance's `blendMode` override
 alone (`water/sewer_water` and `maps/sm_hub_1/dev/dev_waterbeneath2` are lane-forced `Opaque` on
-`M_V2_Water`) cannot make that master's chunk drawable — Unreal falls back silently to the default
+`M_V2_Water`) cannot make that master's chunk drawable. A decal-surface group needs no separate
+rule: `MaterialBinding.opaque` is False whenever `isDecalSurface`, so the twin's group lands in a
+plain static-mesh section by the same predicate, which is where the mesh-decal pass wants it — Unreal falls back silently to the default
 material at render time (`LogMaterial: Warning: ... missing usage flag Nanite!`) rather than
 failing the bake, which is why the material-slot audit (a load-time check) never saw it. Bar that
 one gate, the chunk naming, the section order and the slot names are byte-for-byte the R5.1 lane's
@@ -1376,13 +1436,19 @@ master's placeholder quietly.
   cubemap-patched materials — the ~7,487 corpus-wide that R2's sweep found falling back to generic
   reflection — bind their own map-scoped `MI_` (a parented instance of the base, overriding nothing
   today; the probe join is R5.5's).
-- **The decal package does not stop here.** `_place_decals` still binds the legacy per-map
-  `M_Decal` MIC from `/ElysiumBaked/<map>/Materials/Decals`, and the V2 lane still reads the
-  `.mtl` for exactly those rows. The reason is a domain fact, recorded in `seam_map_material.md` →
-  "Scene fog on the world masters (R5.4)": a `UDecalComponent` renders only an
-  `MD_DeferredDecal`-domain material, every V2 master is `MD_Surface`, and the `.decals` materials
-  are `$decal` surfaces on `M_V2_LitTranslucent`/`M_V2_Unlit`, not `decalmodulate` units. R7.6
-  owns the decal rebind and the legacy `M_Decal` retirement.
+- **The decal package stops too, since R7.2.** `_place_decals` binds the shared projector twin
+  `MI_<unit>_Decal` (`decal_instance_path`, the restated fold of the material stage's
+  `decal_asset_path_for` — the editor's Python has no numpy to import it from), resolved from the
+  `.decals` line's own material id. A twin that does not load is a named failure —
+  `decal material has no projector instance: <key> -> <path>`, pointing at
+  `uv run elysium import materials` — never the error material and never a skipped line, because a
+  `UDecalComponent` accepts only a decal-domain material and the shared error material is a surface
+  one. Both lanes' `_material_sets` now return two empty sets, so `/ElysiumBaked/<map>/Materials`
+  **and** `.../Materials/Decals` are pruned and neither is authored; the V2 lane's last `.mtl` read
+  went with them, and the level recipe grew `decal_materials` (the sorted twin paths a map's
+  `.decals` lines bind) so a level baked against the retired per-map MICs re-authors instead of
+  being reused. `make_decal_material.py`, `M_Decal` and its `export_manager`/`build_content` rows
+  are gone. A converted map now authors **no material package of its own**.
 - **Props were already there.** An R1 prop mesh under `/ElysiumBaked/Meshes` binds its V2 `MI_`
   from its own import; this task changes nothing about props except that their fog now works
   (below).
@@ -1403,13 +1469,17 @@ component) and the runtime's re-stamp are unchanged; the ruling and the paramete
 
 Beside the staged pair, `materials_report.json` classifies every material the map binds — as data,
 never as a look judgement: its V2 master, blend mode and appearance class (`opaque`, `masked`,
-`translucent`, `additive`, `refract`, `water`, `decal`); the legacy master the `.mtl` lane would
+`translucent`, `additive`, `refract`, `water`, `decal` — which since R7.2 means "the projector
+instance is what this face group binds", not merely "the unit carries `$decal`"); the legacy
+master the `.mtl` lane would
 have selected for the same base material (`Bake._master_for`'s own rule order, restated over the
 corpus record) and *its* class; whether the class changed on the rebind; the unit's proxies and
 which of them run live on the V2 instance (`sine`, `texturescroll`, and `animatedtexture` unless
 the provenance's `animatedFramesArrayUnavailable` omission says its frames array never staged);
 whether it is wetness-driven (`wetnessScale` authored on a Lit-family unit); and whether it is a
-`$decal` surface. `uv run elysium export map <map>` prints the counts as it stages.
+`$decal` surface, with the `decalAsset` and `slotAsset` it resolved. `counts` carries
+`decalProjectorsBound` beside `decalSurfaces`, and the two must agree.
+`uv run elysium export map <map>` prints the counts as it stages.
 
 ### Measured (2026-09-02, the three working maps)
 
@@ -1430,8 +1500,9 @@ three maps bind 902 face groups of the 19,121 units; the count scales with the f
 **Appearance class changed** — every one a `$decal` world face (`decals/signs/number{0,5,8}` on
 `sm_pawnshop_1`; `decals/stains/bloodbg{a,b}`, `decals/stains/blooddrip{c,d}` on `sm_hub_1`) that
 the legacy lane bound to the deferred-decal-domain `M_Decal` **as a static-mesh slot** (which a
-surface mesh cannot draw) and that is now an ordinary `M_V2_LitTranslucent` translucent surface,
-plus the two `sm_hub_1` water surfaces, legacy `M_World_Translucent` → `M_V2_Water` with the
+surface mesh cannot draw) and that R5.4 made an ordinary `M_V2_LitTranslucent` translucent surface
+— R7.2 moved them again, onto the projector twin as a mesh decal, which is what the legacy lane had
+been reaching for with the wrong asset — plus the two `sm_hub_1` water surfaces, legacy `M_World_Translucent` → `M_V2_Water` with the
 material lane's own `Opaque` blend override (`water` VMTs author no `$translucent`; R7.2's).
 Because the Nanite split now follows the root instance's blend, the seven decal/glass-flagged
 surfaces left the Nanite buckets; `sp_tutorial_1` 110 and `sm_pawnshop_1` 38 are unchanged.
@@ -1459,7 +1530,8 @@ instances rewritten, exactly the 14 wet units plus the 2 `Additive` ones (`FogIn
 **Bake** (`uv run elysium export map sp_tutorial_1 sm_pawnshop_1 sm_hub_1`, no `--force`; the
 recipes changed): 185 / 70 / 234 assets saved, 0 failed, all three levels; `/ElysiumBaked/<map>/
 Materials` holds only `Decals/` (27 / 14 / 61 legacy `M_Decal` MICs) and `Textures/Cubes` is empty on
-all three. A byte scan of every baked world chunk and brush mesh finds **1,399 / 361 / 1,439**
+all three. *(R7.2, 2026-09-03: those 27 / 14 / 61 are gone — the bake now reports `materials: 0
+built / 0 reused / 27 | 14 | 61 pruned` and both per-map material packages are empty.)* A byte scan of every baked world chunk and brush mesh finds **1,399 / 361 / 1,439**
 references into `/ElysiumBaked/Materials/…` (base and `maps/<map>/…` alike) and **0** into
 `/ElysiumBaked/<map>/Materials/` or `/ElysiumBaked/Shared/Materials/`.
 

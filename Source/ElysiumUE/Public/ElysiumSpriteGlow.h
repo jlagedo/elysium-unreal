@@ -18,6 +18,26 @@ namespace ElysiumSpriteGlow
 	// brightness and no screen-constant scaling (`100c30e9`: the whole block is skipped).
 	constexpr int32 FxNoDissipation = 14;
 
+	// The occlusion sample's half-thickness along the sight line, in cm. VtMB queried a flat
+	// camera-facing polygon; Unreal's sub-primitive query is an axis-aligned box whose front faces
+	// the renderer rasterises (`SceneOcclusion.cpp` 508-539, 1254), so a cube would straddle the
+	// wall behind the sprite and answer "visible" off its own back half. No VtMB twin: this is the
+	// thinnest box the depth test still rasterises reliably.
+	constexpr float QuerySampleThicknessCm = 2.0f;
+	// A query asked this many render-thread frames ago and still unanswered is stale, and a stale
+	// query reads fraction 0 -- VtMB's own rule (`100c257e`-`100c2586`). The window is counted
+	// against the frame the query was *issued* on, never against the drawing frame: the renderer
+	// stops asking for a primitive it still draws (a selected actor in the editor, a view with no
+	// scene state, `r.AllowOcclusionQueries 0`), and an answer nobody asked for is not missing.
+	constexpr uint32 QueryStaleFrames = 3;
+	// The largest smoothing step one draw may take, as a fraction of the fade it is taken along.
+	// A sprite that was culled, cut to, or handed a spurious "unoccluded" (a camera cut, a >45 deg
+	// turn or a trimmed history all make the renderer answer unoccluded) rises by half a fade at
+	// most, never snapping to full brightness; expressed as a fraction so the cap keeps meaning
+	// something when the Sprites page retunes `GlowFadeInSeconds` / `GlowFadeOutSeconds`, and so a
+	// low frame rate only stretches the fade once one draw would cover more than half of it.
+	constexpr float MaxSmoothStepFraction = 0.5f;
+
 	struct FParams
 	{
 		float Falloff = 19000.0f;
@@ -26,6 +46,7 @@ namespace ElysiumSpriteGlow
 		float FadeInSeconds = 0.2f;
 		float FadeOutSeconds = 0.1f;
 		float QueryFootprintPerDistance = 3.0f / 128.0f;
+		float QueryFixedHalfInches = 3.0f;
 		int32 QueryGrid = 4;
 
 		// The Sprites settings page's values (`UElysiumSpriteSettings`), the CDO.
@@ -81,10 +102,23 @@ namespace ElysiumSpriteGlow
 		return FMath::Min(Current + Step, Target);
 	}
 
-	// The half-size, in cm, of the occlusion sample square at the sprite origin for one view:
-	// VtMB's query quad scaled with the distance, floored at 1 cm so a near sprite still has a box.
-	inline float QueryHalfSizeCm(float DistCm, const FParams& P)
+	// The half-size, in cm, of the occlusion sample square at the sprite origin for one view.
+	// VtMB scales the query quad with the distance for `rendermode` 3 alone (`100c25ed`-`100c25fa`,
+	// the screen-constant quad that matches mode 3's screen-constant card) and queries a fixed 3
+	// Source units for every other mode (`10225158`); the `renderfx` 14 test lives further down
+	// (`100c30e9`), so a mode-3 NoDissipation corona still takes the screen-constant query. The
+	// sample is then clamped to the card it gates -- an occlusion query must never test a region
+	// larger than the quad whose blend it decides, or a distant NoDissipation corona samples the
+	// wall metres away from its own pixels -- and floored at 1 cm so a near sprite still has a box.
+	inline float QueryHalfSizeCm(float DistCm, int32 RenderMode, float CardHalfSizeCm, const FParams& P)
 	{
-		return FMath::Max(DistCm * P.QueryFootprintPerDistance, 1.0f);
+		float Half = RenderMode == ModeGlow
+			? DistCm * P.QueryFootprintPerDistance
+			: P.QueryFixedHalfInches * CmPerInch;
+		if (CardHalfSizeCm > 0.0f)
+		{
+			Half = FMath::Min(Half, CardHalfSizeCm);
+		}
+		return FMath::Max(Half, 1.0f);
 	}
 }

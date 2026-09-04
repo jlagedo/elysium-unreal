@@ -59,7 +59,7 @@ DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 #: it up through the recipe stamp even when nothing on disk changed. `_source_hash()` below is the
 #: exhaustive safety net (it catches an edit this constant was not bumped for); this constant
 #: stays as the human-readable marker of the shape revision.
-GRAPH_VERSION = 6
+GRAPH_VERSION = 8
 
 #: `MPC_ElysiumSurfaces` (SF-4.1, C++, landed) owns every one of these rows and their defaults --
 #: `make_surface_knobs.py` (`build_content.py` runs it before this file). This generator is a
@@ -119,8 +119,9 @@ def _fresh(name, *, ism=False, nanite=False, skeletal=False, morph=False, niagar
     per family (design doc "Master inventory" + mechanics doc section 3b): without the matching
     flag UE compiles no permutation outside the editor and the affected primitives fall back to
     the default grey material in a packaged build. `M_V2_Decal` (not authored here) must NOT set
-    Nanite -- BLEND_Modulate is not Nanite-compatible -- which is why this is opt-in per call site
-    rather than a blanket default.
+    Nanite -- R7.2 ruling 3: the projector instance is non-Nanite by construction, the wall
+    underneath carries whatever Nanite split its own master already set -- which is why this is
+    opt-in per call site rather than a blanket default.
 
     M8 review fix: `delete_asset`'s return is now checked -- a failed delete used to fall through
     silently into `create_asset` at the same path, and whatever `MI_` instances the stage already
@@ -790,10 +791,13 @@ def _class_lut_influenced(g, lut_param_name, lut_texture, index_name, x, y):
     (default `1.0`) -- at the default the lerp is an exact identity, collapsing to the raw class
     row exactly as before this ruling landed. Used by every master whose shading model actually
     reads Roughness/Specular/Metallic (the five Default Lit masters: `M_V2_Lit`/
-    `M_V2_LitTranslucent`, `M_V2_TwoTexture`, `M_V2_Eyes`, `M_V2_Water`, `M_V2_Refract`); the four
-    Unlit masters (`M_V2_Unlit`, `M_V2_Sprite`, `M_V2_Decal`) still call the plain `_class_lut`
-    (or, for `M_V2_Unlit`, declare it unwired) because an Unlit shading model ignores those pins
-    entirely, per each function's own docstring."""
+    `M_V2_LitTranslucent`, `M_V2_TwoTexture`, `M_V2_Eyes`, `M_V2_Water`, `M_V2_Refract`); the two
+    Unlit masters (`M_V2_Unlit`, `M_V2_Sprite`) still call the plain `_class_lut` (or, for
+    `M_V2_Unlit`, declare it unwired) because an Unlit shading model ignores those pins entirely,
+    per each function's own docstring. `M_V2_Decal` is DefaultLit but calls the plain `_class_lut`
+    too (R7.2 ruling 1): Roughness/Specular/Metallic/Normal are deliberately left unconnected so
+    the wall keeps its own surface under the decal, which is what a lightmapped `$decal` face
+    did -- there is nothing for `ClassInfluence` to lerp into."""
     class_roughness, class_specular, class_metallic = _class_lut(
         g, lut_param_name, lut_texture, index_name, x, y)
     class_influence = g.mpc("ClassInfluence", x, y + 900)
@@ -2154,10 +2158,10 @@ def make_water():
     # flat-normal-packed default, not the all-white `T_V2_DefaultFrames`).
     default_normal_frames = _make_default_normal_frames_array(force=force)
 
-    # BLEND_Modulate/Translucent surfaces are not Nanite-compatible -- this master
-    # deliberately does not set used_with_nanite (review fix, matches M_V2_Decal's own
-    # note below). used_with_instanced_static_meshes stays on (the placement lane may use
-    # ISM for water planes).
+    # BLEND_Translucent surfaces are not Nanite-compatible -- this master deliberately does not
+    # set used_with_nanite (review fix; M_V2_Decal below is non-Nanite for a different reason --
+    # R7.2 ruling 3 -- but the same used_with_nanite-omission shape). used_with_instanced_static_
+    # meshes stays on (the placement lane may use ISM for water planes).
     mat, asset = _fresh(name, ism=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
@@ -2259,16 +2263,26 @@ def _build_sprite(mat, collection, lut_texture, default_frames):
 
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     tinted = g.mul(base_rgb, "", color, "", -700, -400)
-    # The "vertex colour" the design doc means on a sprite is the *particle's* colour, and on a
-    # Niagara sprite those are two different things: `NiagaraSpriteVertexFactory.ush`'s
-    # `GetMaterialPixelParameters` hardcodes `Result.VertexColor = 1` and fills only
-    # `Result.Particle.Color`. Emissive and Opacity are pixel-shader outputs, so a `VertexColor`
-    # node here reads white no matter what the emitter writes -- which is exactly how the barrel
-    # fire came out an opaque saturated ball under an opaque black smoke card while its
-    # `ScaleColor` ramps held the right 0.235-peak numbers. `UseVertexColor`/`UseVertexAlpha` keep
-    # their names (they are the design's exposed-parameter table) and now gate the particle lane.
+    # `ParticleColor` x `VertexColor`, both of them, because this one master draws through two
+    # different vertex factories and each hardcodes the *other* term to white:
+    #   - a Niagara sprite (`NiagaraSpriteVertexFactory.ush`'s `GetMaterialPixelParameters`) sets
+    #     `Result.VertexColor = 1` and fills only `Result.Particle.Color`. Reading `VertexColor`
+    #     alone is what drew the barrel fire as an opaque saturated ball under an opaque black
+    #     smoke card while its `ScaleColor` ramps held the right 0.235-peak numbers;
+    #   - the `env_sprite` billboard (`ElysiumSpriteComponent.cpp`, an `FDynamicMeshBuilder` on the
+    #     local vertex factory) carries no particle data at all, so `Particle.Color` compiles in as
+    #     `(1,1,1,1)` (`MaterialTemplate.ush`) and the entity's `rendercolor`/`renderamt` rides
+    #     `VertexColor` alone -- which is exactly how VtMB itself draws it: `CMeshBuilder::
+    #     Color4ubv` (`1008232b`) writes the mode's blend colour per corner, with no material
+    #     colour modulation anywhere in the Sprite program.
+    # The product is exact on both lanes: each factory contributes its own term and reads 1 for the
+    # other. `UseVertexColor`/`UseVertexAlpha` keep their names (they are the design's
+    # exposed-parameter table) and gate both terms together.
     particle_color = g.particle_color(-1100, -680)
-    with_vc = g.mul(tinted, "", particle_color, "", -500, -440)
+    vertex_color = g.vertex_color(-1100, -780)
+    vc_rgb = g.mask(vertex_color, "rgb", -900, -780)
+    lane_rgb = g.mul(particle_color, "", vc_rgb, "", -700, -720)
+    with_vc = g.mul(tinted, "", lane_rgb, "", -500, -440)
     vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, -300, -400, default=False)
     g.to(vc_selected, "", unreal.MaterialProperty.MP_BASE_COLOR)
     g.to(vc_selected, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
@@ -2277,11 +2291,14 @@ def _build_sprite(mat, collection, lut_texture, default_frames):
     # Unlit shading model ignores MP_ROUGHNESS/SPECULAR/METALLIC, not wired to anything ---------
     _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
-    # -- Opacity: Alpha x BaseTexture.a, x ParticleColor.a under UseVertexAlpha ------------------
+    # -- Opacity: Alpha x BaseTexture.a, x ParticleColor.a x VertexColor.a under UseVertexAlpha --
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
     alpha_with_basetex = g.mul(alpha_param, "", base_a, "", 1900, 0)
-    # `ParticleColor`'s "A" output is already 1-wide, so no ComponentMask.
-    alpha_with_vc = g.mul(alpha_with_basetex, "", particle_color, "A", 2100, 40)
+    # Both alphas, for the same two-factory reason as the RGB lane above -- an `env_sprite`'s
+    # `renderamt` is a vertex alpha, a particle's own fade is `Particles.Color.a`. `ParticleColor`'s
+    # and `VertexColor`'s named "A" outputs are both already 1-wide, so neither needs a mask.
+    lane_a = g.mul(particle_color, "A", vertex_color, "A", 2100, 120)
+    alpha_with_vc = g.mul(alpha_with_basetex, "", lane_a, "", 2100, 40)
     opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_with_basetex,
                              2300, 20, default=False)
     g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
@@ -2385,18 +2402,23 @@ def _build_sprite_z(mat, collection, lut_texture, default_frames):
 
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     tinted = g.mul(base_rgb, "", color, "", -700, -400)
-    # `ParticleColor`, not `VertexColor` -- see `_build_sprite`'s own note. On a Niagara sprite
-    # `VertexColor` is a compile-time 1 in the pixel shader, which silently threw away every
-    # VtMB `red/green/blue/color` and `mask` ramp the particle lane writes into `Particles.Color`.
+    # `ParticleColor` x `VertexColor`, both terms -- see `_build_sprite`'s own note. A Niagara
+    # sprite compiles `VertexColor` in as 1 and an `env_sprite` billboard compiles
+    # `Particle.Color` in as 1, so only the product carries both the particle lane's
+    # `red/green/blue/color` ramps and the entity's `rendercolor`/`renderamt`.
     particle_color = g.particle_color(-1100, -680)
-    with_vc = g.mul(tinted, "", particle_color, "", -500, -440)
+    vertex_color = g.vertex_color(-1100, -780)
+    vc_rgb = g.mask(vertex_color, "rgb", -900, -780)
+    lane_rgb = g.mul(particle_color, "", vc_rgb, "", -700, -720)
+    with_vc = g.mul(tinted, "", lane_rgb, "", -500, -440)
     vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, -300, -400, default=False)
 
     _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
     alpha_with_basetex = g.mul(alpha_param, "", base_a, "", 1900, 0)
-    alpha_with_vc = g.mul(alpha_with_basetex, "", particle_color, "A", 2100, 40)
+    lane_a = g.mul(particle_color, "A", vertex_color, "A", 2100, 120)
+    alpha_with_vc = g.mul(alpha_with_basetex, "", lane_a, "", 2100, 40)
     opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_with_basetex,
                              2300, 20, default=False)
     g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
@@ -2806,10 +2828,12 @@ def make_refract():
 class DecalParams:
     class Textures:
         BaseTexture = "BaseTexture"
+        Emissive = "Emissive"
         SurfaceClassLUT = "SurfaceClassLUT"
 
     class Scalars:
         Alpha = "Alpha"
+        EmissiveScale = "EmissiveScale"
         SurfaceClassIndex = "SurfaceClassIndex"
         FogStart = mat_fog.P_START
         FogInvRange = mat_fog.P_INV_RANGE
@@ -2819,7 +2843,7 @@ class DecalParams:
         FogColor = mat_fog.P_COLOR
 
     class Switches:
-        UseVertexColor = "UseVertexColor"
+        Unlit = "Unlit"
 
 
 DECAL_PARAM_TABLE = {
@@ -2831,56 +2855,96 @@ DECAL_PARAM_TABLE = {
 
 
 def _build_decal(mat, collection, lut_texture):
-    """`decalmodulate` ships no program at all -- the string is absent from `stdshader_dx8.dll`
-    and the 38 materials fell back to `wireframe` in retail (design doc "M_V2_Decal", "The eight
-    real unresolved families"). Imported as `BLEND_Modulate` of `BaseTexture` over the receiver --
-    a **named deliberate divergence** from retail, which drew them as wireframe.
+    """R7.2 (`seam_map_material.md` -> "M_V2_Decal"; `seam_migration.md` -> "R7.2 Decals", ruling
+    1): the projector master, re-cut to `MD_DeferredDecal` / `BLEND_Translucent` / DefaultLit --
+    the one deferred-decal domain a `UDecalComponent` actually draws (`FDeferredDecalProxy`
+    substitutes the engine default for anything else, and DBuffer rewrites a would-be Modulate to
+    Translucent regardless -- `DecalRenderingCommon.cpp` 47-49). This retires the two-instance
+    conflation R5.4 found: the `decalmodulate` family and every `$decal` surface now share one
+    projector shape instead of the modulate master picking up only the 38 `decalmodulate` units.
 
-    `DecalDepthOffset` is not on this master -- it is a knob only, in `MPC_ElysiumSurfaces`
-    (design doc "Four parameters that left the masters": `MP_PIXEL_DEPTH_OFFSET` is not reachable
-    from `unreal.MaterialProperty` in this build), applied by the decal component the placement
-    lane spawns, not by this graph.
+    `BaseTexture` RGB x `Color` (the shared four-parameter table) -> BaseColor, `BaseTexture` A x
+    `Alpha` (shared) -> Opacity. `Emissive` x `EmissiveScale` (default 0, the 3 `$selfillum`
+    units) -> the self-illum term, always added to whatever lands on Emissive. `Unlit` (the 28
+    `unlitgeneric` projector units, `seam_map_material.md` -> "The eight real unresolved
+    families") routes the (fogged) base colour into Emissive instead and leaves BaseColor black --
+    DefaultLit has no separate unlit shading model to fall back to, so this is the same
+    "fake it through Emissive" trick this file already plays for every Unlit-look-under-DefaultLit
+    surface (`_build_lit`'s own self-illum term). `UseVertexColor` is dropped: a projected decal
+    has no vertex colour. `DecalDepthOffset` is not a knob anywhere in this revision either --
+    ruling 3 retires it outright (it biased the old flat-projector's z-fight; the projector
+    geometry is coplanar with the wall now, so there is nothing left to bias).
 
-    A `BLEND_Modulate` Unlit surface has no `MP_BASE_COLOR`/`MP_OPACITY` distinction the renderer
-    reads separately -- the final `MP_EMISSIVE_COLOR` output *is* what gets multiplied onto the
-    receiver, exactly like every other Unlit master in this file wires both property sinks to the
-    same value. There is no Opacity pin to wire at all for this blend mode.
+    UV is rebuilt as `(U, 1-V)` -- a deferred decal's projected V axis maps to the component's
+    local +Y (up), but the texture is authored top-down like every other slot in this file, so an
+    unflipped sample arrives upside-down. Ported verbatim from the retiring
+    `pipeline/unreal/make_decal_material.py` (`Constant2Vector(1, -1)` scale + `Constant2Vector(0,
+    1)` offset on the base `TextureCoordinate`).
 
-    Carries the world's own distance fog as three named instance parameters
-    (`mat_fog.fog_from_params`) rather than Custom Primitive Data -- a `UDecalComponent` is a
-    `USceneComponent`, not a `UPrimitiveComponent`, so it carries none. This is R5.3's chosen home
-    for the fog axis (`seam_map_material.md` -> "Decal fog and wetness homes (R5.3)"): the three
-    params default neutral (unfogged), and the placement lane sets them per decal instance from
-    the map's own `UElysiumMapEnvironment` (R4.4) fog, never from a per-map material package.
+    Fog is `mat_fog.fog_from_params`, R5.3's chosen home (`seam_map_material.md` -> "Decal fog and
+    wetness homes"), unchanged by this ruling: a `UDecalComponent` is a `USceneComponent`, not a
+    `UPrimitiveComponent`, so it carries no Custom Primitive Data; the three named instance
+    parameters default neutral (unfogged) and the placement lane (later, the runtime `Lay()`
+    caller too) sets them per decal instance from the map's own fog, never from a per-map material
+    package. Fade only reaches whatever is on BaseColor (a decal blends its albedo into the
+    GBuffer the wall already fogged); fade + inscatter (the fog colour added back once the
+    surface has faded out) reaches whatever is on Emissive -- exactly the retired `M_Decal`
+    graph's own split. The fog specular kill is dropped along with the rest of
+    Roughness/Specular/Metallic/Normal (ruling 1): the wall keeps its own surface under the decal,
+    which is what a lightmapped `$decal` face did -- an unconnected property pin means this
+    material never writes that DBuffer channel at all, leaving the receiver's own value alone.
     """
     g = Graph(mat, collection=collection)
     P = DecalParams
 
-    uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1100, -600)
-    base_tex = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
-    connect(uv0, "", base_tex, "UVs")
-    base_rgb = g.mask(base_tex, "rgb", -900, -400)
+    # -- UV = (U, 1-V) -------------------------------------------------------------------------
+    uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1500, -700)
+    flip_scale = g.node(unreal.MaterialExpressionConstant2Vector, -1500, -540)
+    flip_scale.set_editor_property("r", 1.0)
+    flip_scale.set_editor_property("g", -1.0)
+    flip_offset = g.node(unreal.MaterialExpressionConstant2Vector, -1500, -460)
+    flip_offset.set_editor_property("r", 0.0)
+    flip_offset.set_editor_property("g", 1.0)
+    uv_scaled = g.mul(uv0, "", flip_scale, "", -1280, -580)
+    uv = g.add(uv_scaled, "", flip_offset, "", -1080, -520)
 
-    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
-    tinted = g.mul(base_rgb, "", color, "", -700, -440)
-    vertex_color = g.vertex_color(-1100, -680)
-    vc_rgb = g.mask(vertex_color, "rgb", -900, -680)
-    with_vc = g.mul(tinted, "", vc_rgb, "", -500, -480)
-    vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, -300, -440, default=False)
+    # -- BaseTexture x Color -> BaseColor branch, BaseTexture.A x Alpha -> Opacity --------------
+    base_tex = g.tex(P.Textures.BaseTexture, -880, -400, kind="color")
+    connect(uv, "", base_tex, "UVs")
+    base_rgb = g.mask(base_tex, "rgb", -680, -420)
+    base_a = g.mask(base_tex, "a", -680, -320, src_out="RGBA")
 
-    # `Alpha` is declared (the shared four-parameter table) but a modulate-blend Unlit surface has
-    # no opacity pin to feed -- declared, not wired, like every other master's genuinely inert knob.
-    g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -880, -560)
+    raw_base = g.mul(base_rgb, "", color, "", -460, -460)
 
-    fog_f, fog_inv, fog_color = mat_fog.fog_from_params(g.mat, x=-1400, y=1300)
-    faded = mat_fog.fade(g.mat, vc_selected, "", fog_inv, -100, 1120)
-    fogged = mat_fog.inscatter(g.mat, faded, fog_f, fog_color, 80, 1120)
+    alpha = g.scalar(P.Scalars.Alpha, 1.0, -880, -200)
+    opacity = g.mul(base_a, "", alpha, "", -460, -260)
 
-    g.to(fogged, "", unreal.MaterialProperty.MP_BASE_COLOR)
-    g.to(fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
-    g.to(mat_fog.specular(g.mat, fog_inv, -450, 1600), "", unreal.MaterialProperty.MP_SPECULAR)
+    # -- Emissive x EmissiveScale -- the alpha-masked $selfillum term (3 units) -----------------
+    emissive_tex = g.tex(P.Textures.Emissive, -880, 160, kind="color")
+    connect(uv, "", emissive_tex, "UVs")
+    emissive_rgb = g.mask(emissive_tex, "rgb", -680, 180)
+    emissive_scale = g.scalar(P.Scalars.EmissiveScale, 0.0, -880, 320)
+    raw_emissive = g.mul(emissive_rgb, "", emissive_scale, "", -460, 240)
 
-    # -- class LUT declared for contract completeness; Unlit ignores Roughness/Specular/Metallic -
+    # -- Unlit: route the base-colour term into Emissive and zero BaseColor instead -------------
+    black3 = g.const3(0.0, 0.0, 0.0, -200, -620)
+    base_pin_raw = g.switch(P.Switches.Unlit, black3, raw_base, -20, -460, default=False)
+    routed_base = g.switch(P.Switches.Unlit, raw_base, black3, -20, -100, default=False)
+    emissive_pin_raw = g.add(raw_emissive, "", routed_base, "", 220, 60)
+
+    # -- fog: fade on whatever reaches BaseColor, fade + inscatter on whatever reaches Emissive -
+    fog_f, fog_inv, fog_color = mat_fog.fog_from_params(g.mat, x=-1500, y=1200)
+    base_faded = mat_fog.fade(g.mat, base_pin_raw, "", fog_inv, 460, -460)
+    emissive_faded = mat_fog.fade(g.mat, emissive_pin_raw, "", fog_inv, 460, 100)
+    emissive_fogged = mat_fog.inscatter(g.mat, emissive_faded, fog_f, fog_color, 660, 100)
+
+    g.to(base_faded, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    g.to(emissive_fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY)
+
+    # -- class LUT declared for contract completeness; Roughness/Specular/Metallic/Normal are not
+    # connected -- ruling 1: the wall keeps its own surface under the decal -------------------
     _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
 
@@ -2903,15 +2967,20 @@ def make_decal():
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
-    # Modulated surfaces are excluded from the Lumen surface cache (they contribute nothing to
-    # global illumination and cannot themselves be seen in a Lumen reflection) and BLEND_Modulate
-    # is not Nanite-compatible -- this master deliberately does NOT set used_with_nanite, unlike
-    # every other world/ISM master in this file. A decal surface the map lane wants Nanite on is a
-    # placement error, not a material one (design doc "M_V2_Decal").
+    # R7.2 ruling 3: the projector instance is non-Nanite by construction (the master sets no
+    # used_with_nanite) -- the isDecalSurface face group's Nanite split already follows the mesh's
+    # bound *surface* master, not this one, so a decal surface the map lane wants Nanite on is a
+    # placement error, not a material one.
     mat, asset = _fresh(name, ism=True)
-    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
-    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
-    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MODULATE)
+    # Blend mode FIRST, domain second: every `set_editor_property` fires a PostEditChange and
+    # recompiles, and a fresh `UMaterial` is BLEND_Opaque, so setting the domain first spends one
+    # intermediate compile in the invalid DeferredDecal+Opaque state and logs the engine's
+    # "DeferredDecal domain can only use the Blend Modes ..." warning for a material that is about
+    # to be valid. The final state is identical either way; the order is what keeps the policy log
+    # clean, which is how a real decal-master failure stays visible.
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_DEFERRED_DECAL)
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_DEFAULT_LIT)
     mat.set_editor_property("two_sided", False)
 
     _build_decal(mat, collection, lut_texture)

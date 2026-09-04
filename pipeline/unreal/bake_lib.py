@@ -119,9 +119,10 @@ class MatDef(object):
         """True when this surface actually runs the wetness path.
 
         `wetness_driven` is the material's authored fact -- its VMT carries GlobalWetness
-        proxies. A projected decal bakes onto M_Decal, which carries albedo, self-illum and the
-        world fog and nothing else; the wall underneath owns the wetness. So a decal's proxies
-        are inert here, and the surface is not counted, fingerprinted or bound as wet."""
+        proxies. A projected decal draws through `M_V2_Decal`, which carries albedo, self-illum
+        and the world fog and nothing else (R7.2 ruling 1: Roughness/Specular/Metallic/Normal are
+        not connected at all); the wall underneath owns the wetness. So a decal's proxies are
+        inert here, and the surface is not counted, fingerprinted or bound as wet."""
         return self.wetness_driven and not self.decal
 
     @property

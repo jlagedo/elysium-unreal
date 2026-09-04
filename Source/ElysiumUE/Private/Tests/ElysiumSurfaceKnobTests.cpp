@@ -35,11 +35,12 @@ bool FElysiumSurfaceSettingsDefaultsTest::RunTest(const FString&)
 	const TArray<TPair<FName, float UElysiumSurfaceSettings::*>>& Bindings =
 		UElysiumSurfaceSettings::ScalarBindings();
 
-	// The ten named in the mechanics plan, plus the design doc's Overbright, DecalDepthOffset,
-	// MaskMetallicMax, ChromaticTintStrength and ChromaThreshold (fifteen), plus ClassInfluence
-	// (the Default*-vs-class-table lerp weight) -- sixteen settings scalars in all
-	// (seam_map_material.md knob contract; owner review addendum 2026-08-31).
-	TestTrue(TEXT("at least sixteen scalar bindings"), Bindings.Num() >= 16);
+	// The ten named in the mechanics plan, plus the design doc's Overbright, MaskMetallicMax,
+	// ChromaticTintStrength and ChromaThreshold (fourteen), plus ClassInfluence (the
+	// Default*-vs-class-table lerp weight) -- fifteen settings scalars in all
+	// (seam_map_material.md knob contract; owner review addendum 2026-08-31). R7.2 retired
+	// DecalDepthOffset: a mesh decal is coplanar with its wall and has no bias to apply.
+	TestTrue(TEXT("at least fifteen scalar bindings"), Bindings.Num() >= 15);
 
 	TSet<FName> Names;
 	for (const TPair<FName, float UElysiumSurfaceSettings::*>& Binding : Bindings)
@@ -58,7 +59,7 @@ bool FElysiumSurfaceSettingsDefaultsTest::RunTest(const FString&)
 		TEXT("LightSpecularScale"), TEXT("Overbright"), TEXT("MaskRoughnessMin"),
 		TEXT("MaskRoughnessMax"), TEXT("MaskSpecularScale"), TEXT("MaskMetallicMax"),
 		TEXT("EnvTintScale"), TEXT("FixedCubeStrength"), TEXT("ChromaticTintStrength"),
-		TEXT("ChromaThreshold"), TEXT("DecalDepthOffset"), TEXT("CaptureRadius"),
+		TEXT("ChromaThreshold"), TEXT("CaptureRadius"),
 		TEXT("DetailSwayAmplitude"),
 	};
 	for (const TCHAR* Name : Expected)

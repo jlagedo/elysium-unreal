@@ -155,7 +155,7 @@ def test_resolve_sprite_table_joins_the_material_and_texture_sidecars():
     assert row["asset"] == "/ElysiumBaked/Materials/sprites/MI_glowa"
     assert row["texture"] == "/ElysiumBaked/Textures/sprites/T_glowa"
     assert (row["width"], row["height"]) == (128, 64)
-    assert row["blend"] == "Translucent" and row["glow"] is True
+    assert row["blend"] == "Additive" and row["glow"] is True
     assert row["upright"] is False
     assert row["color"] == [255, 200, 100] and row["alpha"] == 180
     assert row["position"] == pytest.approx(list(source_to_unreal(128.0, -64.0, 32.0)), abs=1e-6)
@@ -164,9 +164,12 @@ def test_resolve_sprite_table_joins_the_material_and_texture_sidecars():
     upright = MG.sprite_row(records[0], _material_sidecar("parallel_upright"),
                             _texture_sidecar(32, 32), "/ElysiumBaked/Materials/sprites/MI_glowa")
     assert upright["upright"] is True
+    # The blend per mode is the Sprite shader's own per-`$spriterendermode` blend state
+    # (`stdshader_dx8.dll` `1000eca0`), not the mode's Source name: the two glow modes are
+    # `SRC_ALPHA, ONE` (additive) and 8 is the premultiplied `ONE, INV_SRC_ALPHA`.
     for mode, blend, glow in ((0, "Opaque", False), (1, "Translucent", False),
-                              (5, "Additive", False), (8, "Additive", False),
-                              (9, "Translucent", True)):
+                              (3, "Additive", True), (5, "Additive", False),
+                              (8, "AlphaComposite", False), (9, "Additive", True)):
         record = MG.SpriteRecord(index=7, name="", material="sprites/x", position=(0.0, 0.0, 0.0),
                                  scale=1.0, mode=mode, color=(255, 255, 255), alpha=255, fx=0,
                                  hidden=False, sky=False)
@@ -190,7 +193,7 @@ def _staged_row(module, **overrides):
         "index": 309, "name": "lamp", "material": "sprites/glowa",
         "asset": "/ElysiumBaked/Materials/sprites/MI_glowa",
         "texture": "/ElysiumBaked/Textures/sprites/T_glowa", "width": 128, "height": 64,
-        "position": [1010.0, 2020.0, 3030.0], "scale": 0.5, "mode": 3, "blend": "Translucent",
+        "position": [1010.0, 2020.0, 3030.0], "scale": 0.5, "mode": 3, "blend": "Additive",
         "glow": True, "color": [255, 200, 100], "alpha": 180, "fx": 0, "upright": False,
         "hidden": True, "sky": False,
     }
@@ -213,14 +216,17 @@ def test_sprite_actor_values_size_tags_and_the_sky_transform(module):
     assert sky["scale"] == 16.0
     assert sky["label"] == "Sprite_309_glowa_sky" and sky["folder"] == "Sky/Sprites"
     # The child is named per (imported MI_, blend), under the shared sprites package.
-    assert module.sprite_child_name(row.asset, row.blend) == "MI_Sprite_sprites_glowa_Translucent"
+    assert module.sprite_child_name(row.asset, row.blend) == "MI_Sprite_sprites_glowa_Additive"
     assert module.V2_SPRITE_MATERIAL_PACKAGE == "/ElysiumBaked/Sprites"
     # The row round-trips into the level recipe.
     assert row.as_dict()["index"] == 309 and row.as_dict()["hidden"] is True
 
 
 def test_the_two_halves_share_the_manifest_version(module):
-    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION == 7
+    # The invariant is that the two halves agree, not the number they agree on: the
+    # constant is restated across the numpy boundary and bumps whenever a table is added
+    # (R7.2 took it to 8), and a literal here only teaches the next bump to edit it here too.
+    assert module.MANIFEST_VERSION == MG.MANIFEST_VERSION
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)

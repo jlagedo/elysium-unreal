@@ -105,9 +105,16 @@ public:
 	float ChromaThreshold = 0.02f;
 
 	// --- decal --------------------------------------------------------------------------------
-	/** `$decal` surfaces and `M_V2_Decal`: the deferred-decal depth-bias/offset knob. */
-	UPROPERTY(EditAnywhere, Config, Category = "Decal")
-	float DecalDepthOffset = 0.0f;
+	// R7.2 retired `DecalDepthOffset`: an `isDecalSurface` face group now draws as a mesh decal,
+	// coplanar with its wall by construction, so there is no bias left to apply.
+	/**
+	 * How many runtime stains `UElysiumDecalSubsystem` keeps in one world before it recycles the
+	 * oldest — VtMB's `r_decals`, whose own default lives in `engine.dll` `staticinit_2007af40`
+	 * and has not been read yet (R7.2's census says so); 2048 until it is. Not an
+	 * `MPC_ElysiumSurfaces` row: no material samples it.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category = "Decal", meta = (ClampMin = "1"))
+	int32 MaxLaidDecals = 2048;
 
 	// --- reflection capture placement (SF-6.2) -----------------------------------------------
 	UPROPERTY(EditAnywhere, Config, Category = "Capture", meta = (ClampMin = "100.0"))

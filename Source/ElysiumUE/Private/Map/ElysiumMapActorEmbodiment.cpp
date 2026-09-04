@@ -8,6 +8,7 @@
 #include "ElysiumAudioSubsystem.h"       // the GI-scoped voice mixer every audio forward reaches
 #include "ElysiumCameraComponent.h"      // the pawn camera the shot channel drives
 #include "ElysiumContentPaths.h"         // FElysiumContentPaths::BakedParticleSystem — attached effects
+#include "ElysiumDecalSubsystem.h"       // R7.2: the shot's forward trace and its impact decal
 #include "ElysiumEntityDefs.h"           // FElysiumEntityDef — BodyScaleFor's sky-scope read
 #include "ElysiumMapSubsystem.h"         // the travel owner behind IElysiumTravel
 #include "ElysiumPlayerBody.h"           // IElysiumPlayerBody — the pawn's camera accessor
@@ -532,9 +533,24 @@ void AElysiumMapActor::DestroyDynamicLight(ULightComponent* Light)
 
 void AElysiumMapActor::SetBakedSpriteVisible(int32 EntityIndex, bool bVisible)
 {
-	if (Visuals)
+	if (!Visuals)
 	{
-		Visuals->SetSpriteVisible(EntityIndex, bVisible);
+		return;
+	}
+	if (Visuals->SetSpriteVisible(EntityIndex, bVisible))
+	{
+		return;
+	}
+	// The write landed nowhere. On a map that bakes no sprites at all this is the ruled
+	// legacy-lane case (`ElysiumEnvSprite.cpp`, R6.1) and stays silent; on a map that has the
+	// lane, an index with no billboard means the bake and the `.ents` disagree and the corona
+	// simply never appears -- say so once per sprite, not once per input.
+	if (Visuals->SpriteCount > 0 && !SpriteMissWarned.Contains(EntityIndex))
+	{
+		SpriteMissWarned.Add(EntityIndex);
+		UE_LOG(LogElysium, Warning,
+			TEXT("'%s': env_sprite #%d has no baked billboard (%d adopted) -- %s lands nowhere"),
+			*MapName, EntityIndex, Visuals->SpriteCount, bVisible ? TEXT("show") : TEXT("hide"));
 	}
 }
 
@@ -748,6 +764,28 @@ float AElysiumMapActor::OutputLeadSeconds() const
 {
 	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
 	return Audio ? Audio->OutputLeadSeconds() : ElysiumAudioLatency::FallbackLeadSeconds;
+}
+
+// R7.2 (`docs/project/seam_migration.md` -> "R7.2 Decals", owner call B). The substrate asked for
+// a shot's mark; the trace, the surface character and the decal are all on this side of the seam.
+// A world with no decal subsystem (a headless substrate run) answers false and marks nothing.
+bool AElysiumMapActor::LayShotImpactDecal(const FVector& FromCm, const FVector& Direction,
+	float RangeCm, int32 Variation)
+{
+	UWorld* World = GetWorld();
+	UElysiumDecalSubsystem* Decals = World ? World->GetSubsystem<UElysiumDecalSubsystem>() : nullptr;
+	if (!Decals)
+	{
+		return false;
+	}
+	FElysiumDecalRequest Request;
+	FHitResult Hit;
+	if (!ElysiumImpactDecals::BuildImpactRequest(World, FromCm, Direction, RangeCm, Variation,
+		Request, Hit))
+	{
+		return false;
+	}
+	return Decals->Lay(Request) != nullptr;
 }
 
 void AElysiumMapActor::RequestLandmarkTravel(const FString& Map, const FString& Landmark,

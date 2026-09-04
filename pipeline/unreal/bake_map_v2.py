@@ -23,11 +23,17 @@
 # **Materials (R5.4, `seam_map_map.md` -> "## Import -- materials").** A V2 surface binds the
 # imported `MI_` the material lane already made for its `vtmb:material:*` unit -- a PAKFILE-patched
 # face by its `maps/<map>/...` id -- resolved offline into the staged manifest's `materials` table
-# and loaded here by asset path. No per-map WORLD material package is authored for a V2 map: the
-# `/ElysiumBaked/<map>/Materials` set is pruned. The one per-map material set that survives is the
-# decal lane's `Materials/Decals` (legacy `M_Decal` MICs): a `UDecalComponent` renders only an
-# `MD_DeferredDecal`-domain material and every V2 master is `MD_Surface`, so the decal rebind is
-# R7.6's, not this task's.
+# and loaded here by asset path. NO per-map material package is authored for a V2 map at all: both
+# `/ElysiumBaked/<map>/Materials` and `/ElysiumBaked/<map>/Materials/Decals` are pruned.
+#
+# **Decals (R7.2, `seam_migration.md` -> "R7.2 Decals", rulings 2 and 3).** `M_V2_Decal` is the one
+# `MD_DeferredDecal` master a `UDecalComponent` draws, and the material lane stages one shared
+# `MI_<unit>_Decal` projector instance per `$decal` / `decalmodulate` unit. Every `.decals` line
+# binds that instance by its own `vtmb:material:` id (`_place_decals`, shared with the legacy
+# lane), and every `isDecalSurface` face group binds it as its MESH slot -- a non-Nanite section on
+# a deferred-decal-domain material, which draws in the mesh-decal pass coplanar with the wall and
+# lit as the wall, the native answer to Source's `$decal` polygon offset. The legacy per-map
+# `M_Decal` MICs, the `.mtl` read that fed them and `make_decal_material.py` are retired.
 #
 # **This half reads a staged pair, not the GLB.** Decoding the unit needs `numpy` -- the sky-area BSP
 # walk and the accessor decode -- and Unreal's embedded CPython does not carry it, so the read runs
@@ -96,7 +102,9 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 6 (R6.1): and the `sprites` table this lane places billboards from.
 #: 7 (R7.3): and the `effects` / `particleTrees` / `dustmotes` / `steam` / `beams` tables this
 #: lane places effect actors from.
-MANIFEST_VERSION = 7
+#: 8 (R7.2): and every `materials` row carries `decalAsset` / `isDecalSurface`, the projector
+#: instance this lane binds a `$decal` face group's mesh slot to and lays every `.decals` line on.
+MANIFEST_VERSION = 8
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -143,9 +151,13 @@ TAG_ENTITY_PREFIX = "elysium.ent="
 #: level re-authors.
 SPRITE_ACTOR_SHAPE = 3
 #: `BlendMode` member per staged blend name (`import_materials.BLEND_MODE_MEMBERS`, restated).
+#: `AlphaComposite` is the one row this table carries beyond the material lane's own: only
+#: `$spriterendermode` 8 (`kRenderTransAlphaAdd`, `ONE, INV_SRC_ALPHA` at `stdshader_dx8.dll`
+#: `1000eca0`) selects it, and no VMT blend string maps to it.
 SPRITE_BLEND_MEMBERS = {
     "Opaque": "BLEND_OPAQUE", "Masked": "BLEND_MASKED", "Translucent": "BLEND_TRANSLUCENT",
     "Additive": "BLEND_ADDITIVE", "Modulate": "BLEND_MODULATE",
+    "AlphaComposite": "BLEND_ALPHA_COMPOSITE",
 }
 
 #: R7.3: the tag the runtime buckets an effect actor by (`ElysiumBakedTags::Effect`).
@@ -266,7 +278,6 @@ def _build_class():
             self.sky_model = None      # bl.ObjModel for the miniature
             self.sky_blend = []
             self.v2_materials = {}     # face group key -> _V2Material (R5.4)
-            self.decal_mats = {}       # the legacy `.mtl` rows the decal lane still authors from
             self.v2_skins = {}         # stem -> (family count, [ {slot: material path} ])
             self.placed_index = {}     # catalogue stem -> npc_index row
             self.placed_index_version = 0
@@ -278,12 +289,12 @@ def _build_class():
 
         def load_sources(self):
             """The map root unit's geometry, placements and materials, plus the map-scoped inputs
-            the shared stages still own (`.env`, `.decals`, `.weather`, and the `.mtl` rows the
-            decal lane alone still reads).
+            the shared stages still own (`.env`, `.decals`, `.weather`).
 
             Lights are the staged `lights` table's (R5.6). Every surface's material is the staged
-            `materials` table's (R5.4); the `.mtl` is consulted for nothing but the decal lane's
-            legacy `M_Decal` instances.
+            `materials` table's (R5.4), and R7.2 retired the one thing the legacy `.mtl` was still
+            read for on this lane: a decal binds the corpus-wide `MI_<unit>_Decal` the material
+            lane staged, resolved from the `.decals` line's own material id.
             """
 
             staged = _staging_dir(self.map)
@@ -313,10 +324,6 @@ def _build_class():
             self.v2_materials = {
                 key: _V2Material(key, row) for key, row in self.geometry.materials.items()}
             self.world_mats = self.v2_materials
-            legacy_rows = bl.read_mtl(
-                os.path.join(self.dir, "%s.mtl" % self.map),
-                corpus=self.corpus_materials, local=self.local_materials)
-            self.decal_mats = {key: mat for key, mat in legacy_rows.items() if mat.decal}
             self.decals = bl.read_decals(os.path.join(self.dir, "%s.decals" % self.map))
             weather_path = os.path.join(self.dir, "%s.weather.json" % self.map)
             if os.path.isfile(weather_path):
@@ -413,31 +420,37 @@ def _build_class():
             self.tracker.pruned("textures", pruned)
 
         def _material_sets(self):
-            """The world set is EMPTY on this lane, so `stage_materials` prunes the per-map
-            `Materials` package instead of authoring it; the decal set is the legacy lane's,
-            unchanged, until R7.6 gives decals a deferred-decal-domain V2 master."""
+            """Both sets are EMPTY on this lane, so `stage_materials` PRUNES the per-map
+            `Materials` and `Materials/Decals` packages instead of authoring them. R7.2 ruling 2
+            retired the last per-map material a converted map wrote: a decal binds the same shared
+            `MI_<unit>_Decal` every other consumer of that unit binds."""
             return (({}, self.mat_pkg, self.shared_tex_pkg),
-                    (self.decal_mats, self.decal_mat_pkg, self.shared_tex_pkg))
+                    ({}, self.decal_mat_pkg, self.shared_tex_pkg))
 
         def _shared_material_keys(self):
             """Nothing is resolved out of the legacy shared corpus package on this lane."""
             return {}
 
         def resolve_materials(self):
-            """The decal MICs (legacy, `Bake.resolve_materials`) plus every staged `MI_`, loaded by
-            asset path. A missing instance is a named failure, not a grey surface: the material
-            lane imports map-scoped, and the map it did not import is exactly the map this would
-            silently unbind."""
+            """Every staged `MI_` this map's face groups bind, loaded by asset path -- the
+            projector twin (`MI_<unit>_Decal`) for a `$decal` surface group (R7.2 ruling 3), the
+            surface instance for every other. A missing instance is a named failure, not a grey
+            surface: the material lane imports map-scoped, and the map it did not import is
+            exactly the map this would silently unbind."""
             Bake.resolve_materials(self)
             loaded = {}
             missing = []
             for key, mat in sorted(self.v2_materials.items()):
-                asset = loaded.get(mat.asset)
-                if asset is None and mat.asset not in loaded:
-                    asset = unreal.EditorAssetLibrary.load_asset(mat.asset)
-                    loaded[mat.asset] = asset
+                path = mat.slot_asset
+                if not path:
+                    missing.append("%s (a $decal surface with no projector instance)" % key)
+                    continue
+                asset = loaded.get(path)
+                if asset is None and path not in loaded:
+                    asset = unreal.EditorAssetLibrary.load_asset(path)
+                    loaded[path] = asset
                 if asset is None:
-                    missing.append(mat.asset)
+                    missing.append(path)
                     continue
                 self.materials[(V2_MATERIAL_SCOPE, key)] = asset
             if missing:
@@ -445,7 +458,10 @@ def _build_class():
                      "(run: uv run elysium import materials): %s"
                      % (len(missing), ", ".join(sorted(set(missing))[:8])))
                 raise SystemExit(1)
-            log("v2 materials: %d instance(s) loaded" % len(loaded))
+            log("v2 materials: %d instance(s) loaded (%d decal surface group(s) on the "
+                "projector instance)"
+                % (len(loaded), sum(1 for mat in self.v2_materials.values()
+                                    if mat.is_decal_surface)))
 
         def material_for(self, key):
             """The imported `MI_` one surface binds, by its face group key."""
@@ -513,7 +529,10 @@ def _build_class():
             recipe = Bake._level_recipe(self)
             recipe["lane"] = self.lane
             recipe["unit_sha256"] = self.geometry.unit_sha256
-            recipe["v2_materials"] = sorted({mat.asset for mat in self.v2_materials.values()})
+            # R7.2 ruling 3: the SLOT each face group binds, so a unit that gained (or lost) its
+            # projector twin re-authors the level instead of reusing a level bound to the other one.
+            recipe["v2_materials"] = sorted(
+                {mat.slot_asset or mat.asset for mat in self.v2_materials.values()})
             recipe["props"] = sorted(
                 "%s/SM_%s" % (V2_MESH_PACKAGE, placement.stem)
                 for placement in self.geometry.placements
@@ -1592,9 +1611,16 @@ class _V2Material(object):
     """One staged `materials` row (`map_geometry.MaterialBinding.as_row`): the imported `MI_` a
     face group binds, and the root master/blend it renders through. `opaque` is the one predicate
     the shared chunking stage reads (a Nanite chunk is opaque/masked only), exactly the question
-    the legacy `MatDef.opaque` answered from the corpus flags."""
+    the legacy `MatDef.opaque` answered from the corpus flags.
 
-    __slots__ = ("key", "unit", "asset", "master", "blend_mode", "opaque", "patched")
+    R7.2 ruling 3: a `$decal 1` face group (`is_decal_surface`) binds `decal_asset` -- the
+    `MI_<unit>_Decal` projector instance -- as its mesh slot instead of `asset`, and draws in the
+    mesh-decal pass. The staged row already answers `opaque` False for it, so the Nanite split
+    keeps it in a plain static-mesh section without this file deciding anything.
+    """
+
+    __slots__ = ("key", "unit", "asset", "master", "blend_mode", "opaque", "patched",
+                 "decal_asset", "is_decal_surface")
 
     #: The legacy per-map wetness path (`Bake.resolve_textures`'s sm_hub_1 `SourceCube` join)
     #: reads this off every world row; no V2 surface takes it -- wetness is the shared
@@ -1609,6 +1635,13 @@ class _V2Material(object):
         self.blend_mode = row["blendMode"]
         self.opaque = bool(row["opaque"])
         self.patched = bool(row.get("patched"))
+        self.decal_asset = row.get("decalAsset") or None
+        self.is_decal_surface = bool(row.get("isDecalSurface"))
+
+    @property
+    def slot_asset(self):
+        """The instance this face group's material slot binds (`MaterialBinding.slot_asset`)."""
+        return self.decal_asset if self.is_decal_surface else self.asset
 
 
 def _count_by_master(materials):

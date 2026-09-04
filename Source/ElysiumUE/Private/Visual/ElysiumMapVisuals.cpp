@@ -2,6 +2,7 @@
 
 #include "ElysiumBakedTags.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumDecalSubsystem.h"
 #include "ElysiumDetailPropActor.h"
 #include "ElysiumEffectActor.h"
 #include "ElysiumEffectFamilies.h"
@@ -17,6 +18,7 @@
 #include "Visual/ElysiumRopes.h"
 
 #include "CableComponent.h"
+#include "Components/DecalComponent.h"
 #include "Components/ExponentialHeightFogComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/MeshComponent.h"
@@ -62,9 +64,10 @@ static TAutoConsoleVariable<float> CVarSkyBrightness(
 // Source's distance fog, on (1) or off (0), for A/B. It is a per-primitive material term rather
 // than the height fog actor because the world and the 3D-skybox miniature carry two different
 // fogs and share screen depth — the reasoning and its measurement are in ElysiumFog.h. Live:
-// ApplySceneFog re-stamps every primitive as it changes, so an A/B needs no reload. It does not
-// reach the map's decals, whose fog is bound into their baked material instances (a
-// UDecalComponent is a USceneComponent and carries no custom primitive data).
+// ApplySceneFog re-stamps every primitive as it changes, so an A/B needs no reload. A decal takes
+// the same set through UElysiumDecalSubsystem (R7.2 ruling 4) rather than a custom-data slot: a
+// UDecalComponent is a USceneComponent and carries no custom primitive data, so its fog lives on a
+// load-time MID the subsystem owns.
 static TAutoConsoleVariable<int32> CVarFog(
 	TEXT("elysium.Fog"), 1,
 	TEXT("Apply the map's authored distance fog (1) or none (0). World and 3D-skybox miniature "
@@ -166,6 +169,8 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	PostProcess = nullptr;
 	BakedSkyDomeActor = nullptr;
 	DecalCount = 0;
+	// Filled by the walk below and handed to UElysiumDecalSubsystem once, at its end.
+	TArray<UDecalComponent*> BakedDecals;
 
 	// One pass over the level. A light's `.lights` line index rides a second tag, so the rig can
 	// bind each actor back to the source row it re-derives intensity and reach from.
@@ -280,6 +285,11 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Decal))
 		{
+			// R7.2 ruling 4: this walk is the only walk. The decal subsystem is the single owner
+			// of every decal in the world, so the components go to it here and nothing else ever
+			// iterates the level looking for them again.
+			TInlineComponentArray<UDecalComponent*> Decals(Actor);
+			BakedDecals.Append(Decals);
 			++DecalCount;
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::SkyDome))
@@ -340,6 +350,15 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		{
 			Effect->ResolveFamily(EffectFamilies);
 		}
+	}
+
+	// R7.2 ruling 4: hand the baked decals to their one owner. A bake cannot save a
+	// UMaterialInstanceDynamic into a level, so the fog term `M_V2_Decal` declares only exists
+	// once the subsystem parents an MID to each bound instance -- and `ApplySceneFog` (run right
+	// after, from ApplyEnvironment) is what puts this map's numbers on them.
+	if (UElysiumDecalSubsystem* Decals = World->GetSubsystem<UElysiumDecalSubsystem>())
+	{
+		Decals->AdoptBaked(BakedDecals);
 	}
 
 	if (LightRig)
@@ -826,6 +845,20 @@ void UElysiumMapVisuals::ApplySceneFog()
 		(bSky ? EffectSkyStamped : EffectWorldStamped) += 1;
 	}
 
+	// R7.2 ruling 4: the map's decals, adopted and laid alike, through their one owner. A decal is
+	// only ever a world surface (`mat_fog.fog_from_params`), so it takes worldspawn's set -- never
+	// the miniature's -- and it takes it as three named instance parameters on an MID, because a
+	// UDecalComponent carries no custom primitive data.
+	int32 DecalsStamped = 0;
+	if (UWorld* World = GetWorld())
+	{
+		if (UElysiumDecalSubsystem* Decals = World->GetSubsystem<UElysiumDecalSubsystem>())
+		{
+			DecalsStamped = Decals->ApplyFog(bOn && EnvDef.bFog, EnvDef.FogColor, EnvDef.FogStartCm,
+				EnvDef.FogEndCm);
+		}
+	}
+
 	auto Describe = [](const TArray<float>& Data)
 	{
 		return Data[ElysiumFog::SlotInvRange] > 0.f
@@ -833,9 +866,11 @@ void UElysiumMapVisuals::ApplySceneFog()
 				Data[ElysiumFog::SlotStart] + 1.f / Data[ElysiumFog::SlotInvRange])
 			: FString(TEXT("off"));
 	};
-	UE_LOG(LogElysiumVisuals, Log, TEXT("fog: world %s on %d primitives, 3D skybox %s on %d"),
+	UE_LOG(LogElysiumVisuals, Log,
+		TEXT("fog: world %s on %d primitives, 3D skybox %s on %d, %d decal MID(s)"),
 		*Describe(WorldData), WorldStamped + RuntimeWorldStamped + DetailWorldStamped + EffectWorldStamped,
-		*Describe(SkyData), SkyStamped + RuntimeSkyStamped + DetailSkyStamped + EffectSkyStamped);
+		*Describe(SkyData), SkyStamped + RuntimeSkyStamped + DetailSkyStamped + EffectSkyStamped,
+		DecalsStamped);
 }
 
 void UElysiumMapVisuals::RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool bSky)

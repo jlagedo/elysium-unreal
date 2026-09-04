@@ -28,7 +28,6 @@ GENERATORS = [
     "make_eye_material.py",         # M_Eyes.uasset: the `Eyes` shader — gaze-driven iris planes
     "make_sky_material.py",         # M_Sky.uasset: the 2D-skybox cube master material
     "make_gizmo_material.py",       # M_Gizmo{,_XRay}.uasset: the P2.4 entity-gizmo ISM materials
-    "make_decal_material.py",       # M_Decal.uasset: the 7.2 deferred-decal master material
     "make_audio_routing.py",        # semantic classes/submixes/concurrency/attenuation templates
     "make_input_glyphs.py",         # Kenney CC0 CommonInput textures for KBM/Xbox/DualSense
     "make_input_assets.py",         # player actions + KBM/gamepad contexts + action table

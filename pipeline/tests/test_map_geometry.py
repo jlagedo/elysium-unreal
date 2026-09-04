@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from collections import Counter
 import json
+from pathlib import Path
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -22,6 +24,15 @@ import pytest
 from elysium_pipeline import map_transport, paths, shared_corpus
 from elysium_pipeline.formats.bsp import source_quat_to_unreal, source_to_unreal
 from elysium_pipeline.importers import map_geometry as MG
+
+
+def _bake_map_v2_manifest_version() -> int:
+    """`bake_map_v2.MANIFEST_VERSION`, read as text: that module imports `unreal`."""
+    source = (Path(__file__).resolve().parents[1] / "unreal" / "bake_map_v2.py").read_text(
+        encoding="utf-8")
+    found = re.search(r"^MANIFEST_VERSION = (\d+)$", source, re.MULTILINE)
+    assert found, "bake_map_v2.py states no MANIFEST_VERSION"
+    return int(found.group(1))
 
 #: The three-map working corpus (`seam_migration.md` -> R1); a whole-corpus run is a separate,
 #: owner-approved step and this module never asks for one.
@@ -390,14 +401,26 @@ def test_material_report_classifies_animation_and_appearance_class_from_provenan
     assert row["legacyMaster"] == "M_Additive"
     assert row["classChanged"] is False
 
-    # A `$decal` world face the legacy lane bound to the deferred-decal master is a class change
-    # on the rebind (it renders as an ordinary translucent surface now).
+    # R7.2 rulings 2 and 3: a `$decal 1` world face binds the PROJECTOR instance the material lane
+    # staged beside its surface one, as its mesh slot -- so its class is "decal" (the class means
+    # "projector instance bound", not "a flag in the legacy .mtl"), it is never Nanite, and the
+    # rebind off the legacy lane's ordinary opaque card is the class change the report states.
     decal = MG.MaterialBinding(
         key="decals/n0", unit="vtmb:material:decals/n0", asset="/ElysiumBaked/Materials/decals/MI_n0",
-        master="M_V2_LitTranslucent", blend_mode="Translucent", patched=False, provenance="decals/n0")
+        master="M_V2_LitTranslucent", blend_mode="Translucent", patched=False, provenance="decals/n0",
+        decal_asset="/ElysiumBaked/Materials/decals/MI_n0_Decal", is_decal_surface=True)
+    assert decal.slot_asset == "/ElysiumBaked/Materials/decals/MI_n0_Decal"
+    assert decal.opaque is False
+    assert decal.as_row()["decalAsset"] == "/ElysiumBaked/Materials/decals/MI_n0_Decal"
+    assert decal.as_row()["isDecalSurface"] is True
     row = MG.classify_material(decal, {**_BASE, "isDecalSurface": True}, {"decal": True})
-    assert (row["legacyClass"], row["v2Class"], row["classChanged"]) == ("decal", "translucent", True)
+    assert (row["legacyClass"], row["v2Class"], row["classChanged"]) == ("opaque", "decal", True)
     assert row["isDecalSurface"] is True
+    assert row["decalAsset"] == row["slotAsset"] == "/ElysiumBaked/Materials/decals/MI_n0_Decal"
+
+    # An ordinary surface names no projector and binds its own instance.
+    assert binding.as_row()["decalAsset"] is None
+    assert binding.slot_asset == binding.asset
 
     # No legacy record at all (a PAKFILE-only material the legacy corpus never saw) is stated,
     # never guessed.
@@ -410,6 +433,7 @@ def test_material_report_classifies_animation_and_appearance_class_from_provenan
         legacy_materials={"signs/ticker": {"additive": True}, "decals/n0": {"decal": True}})
     assert report["counts"]["materials"] == 2
     assert report["counts"]["animatedNow"] == 1 and report["counts"]["classChanged"] == 1
+    assert report["counts"]["decalSurfaces"] == report["counts"]["decalProjectorsBound"] == 1
     assert [row["key"] for row in report["animatedNow"]] == ["signs/ticker"]
     assert [row["key"] for row in report["classChanged"]] == ["decals/n0"]
 
@@ -482,9 +506,10 @@ def test_cubemap_sample_takes_the_placement_frame_and_the_sky_area_rule():
     assert samples[0].as_row() == {
         "index": 0, "origin": [-160, 328, 51],
         "position": list(samples[0].position), "sky": False}
-    # The manifest the editor half reads bumped for the new table; the two constants are restated
-    # on either side of the numpy boundary and have to agree.
-    assert MG.MANIFEST_VERSION == 7
+    # The manifest version is restated on either side of the numpy boundary (the editor's embedded
+    # Python cannot import this module), so the two constants have to agree -- read, not repeated
+    # as a literal that every bump teaches the next reader to edit twice.
+    assert MG.MANIFEST_VERSION == _bake_map_v2_manifest_version()
 
 
 @pytest.mark.parametrize("map_name", WORKING_MAPS)

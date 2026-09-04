@@ -155,7 +155,7 @@ built from them and the generator writes their inputs, the family systems use th
 | `red/green/blue` / `color` / `mask` | `Update/Color/Color` + `ScaleColor`; `mask` is the AlphaComposite interpolant |
 | `depth_offset` / `sortfront` / `no_z_test` | the per-particle camera offset module; the renderer's `SortOrderHint` / translucency sort priority; a material with the depth test off — each has a native home |
 | `collide` spawn | CPU collision (scene queries against the world and any collision-enabled body, bounce/friction) → `Events/GenerateCollisionEvent` → `ReceiveCollisionEvent` |
-| `collide` decal | the collision event → `UNiagaraDecalRendererProperties` (any `UMaterialInterface`; the deferred-decal domain rule is R7.2's), or a short-lived `UDecalComponent` — the spawn calls R7.2's runtime-stain seam |
+| `collide` decal | the collision event → `UElysiumDecalSubsystem::Lay` with the particle's own sprite texture (`FElysiumDecalRequest::Texture`, an MID off `M_V2_Decal` with `BaseTexture` bound) and a lifetime. **Not** `UNiagaraDecalRendererProperties`: a laid stain outlives the particle that laid it (R7.2 owner call B) |
 | `both` nodes / child at the parent particle | `GenerateLocationEvent` → `ReceiveEvent` spawn between emitters of **one system** (events do not cross system instances — why a root's leaves are emitters of one generated system) |
 | bone / point attach | `Spawn/Location/SocketLocation` / `SkeletalMeshLocation` |
 | parent follow | `Update/Position/InheritSourceMovement` (`parent_speed`) |
@@ -230,7 +230,7 @@ editor-only, no commandlet — there is no `FlipbookBaker`.
 |---|---|---|
 | Coronas / volume-light shafts / candle / cop flash / lightning | `UElysiumSpriteComponent` on `AElysiumSpriteActor` | **All 6,449 `env_sprite` are drawn, coronas included (owner, 2026-09-02):** one billboard actor per entity on `M_V2_Sprite`, I/O driving visibility; rendermode 3/9 keep Source's glow rule with a per-corona GPU occlusion query. `seam_map_map.md` → "Sprites (R6.1)". |
 | Authored decals | `UDecalComponent` | already baked |
-| Runtime blood / rain stains | Niagara Decal renderer, or a short-lived `UDecalComponent` — **R7.2's runtime-stain seam** | particle `collide.decal`, `vdecal_*`, the gib blood; the collision event is R7.3's, the decal spawn is R7.2's |
+| Runtime blood / rain stains | `UElysiumDecalSubsystem::Lay` (`ElysiumDecalSubsystem.h`) — a pooled `UDecalComponent` under the subsystem's own hidden actor, capped by `UElysiumSurfaceSettings::MaxLaidDecals` and recycled oldest-first | particle `collide.decal`, the gib blood; the collision event is R7.3's, the decal spawn landed in R7.2 with the ranged shot's `ElysiumImpactDecals::BuildImpactRequest` as its first caller |
 | Screen fade | `env_fade` (done) | |
 | Camera shake | `UCameraShakeBase` / `UCameraShakePattern` are **base Engine**; the Perlin, wave and `ULegacyCameraShake` patterns live in the **EngineCameras plugin** | `env_shake` and `params_explosion.shk_*` take a `UCameraShakePattern` subclass transcribing `CalcShake` (§5.10), played through `UGameplayStatics::PlayWorldCameraShake(Epicenter, InnerRadius 0, OuterRadius = radius, Falloff 1)` — **exactly** `UTIL_ScreenShake`'s linear falloff |
 | Physics kick | the impulse seam in `physics-architecture.md` §7 (`UPrimitiveComponent::AddImpulse` / `AddImpulseAtLocation` / `AddRadialImpulse` underneath) | `env_physimpact` / `env_physexplosion`; `URadialForceComponent` and `ApplyRadialDamageWithFalloff` are **not** used — their curves are not VtMB's |
@@ -745,8 +745,10 @@ debris — props-lane units): `velocity = scatter(angles, variance) × m_flVeloc
 angular `(100–200, 100–300, 0)`, life `±5 % × m_flGibLife` (default 25 s) then removal, `delay`
 between shots (default 0.001), the repeat flag, flag 2 (flaming) → an attached fire root through
 §5.9. VtMB bounces a **point** (`MOVETYPE_BOUNCE`, zero-extent bbox); the gib here bounces on
-its own hull — a modernization, not a loss. The up-to-five blood decals on landing → R7.2's
-runtime-stain seam (stubbed against R7.2's name if it has not landed, never dropped).
+its own hull — a modernization, not a loss. The up-to-five blood decals on landing call
+`UElysiumDecalSubsystem::Lay` with `ElysiumImpactDecals::PoolFor("F", false)`'s
+`decals/hits/flesh/blood` pool — the seam is landed (R7.2) and takes callers, so this one arrives
+with `env_shooter` itself rather than as a stub against a name.
 `nogibshadows` / `gibgravityscale` do not exist in VtMB.
 
 ### 5.11 Fidelity ledger (R-J) — every runtime feature, wired or deferred
@@ -763,7 +765,7 @@ runtime-stain seam (stubbed against R7.2's name if it has not landed, never drop
 | `normal` + `refract` (8 leaves) | wired on `M_V2_Refract` |
 | `lighting` (6 leaves) | wired as the lit child; whether VtMB's sample is light stays INFERRED (`0x200d3840`) |
 | `collide`: world + brush-entity trace, `self` bounce / friction / gravity / drag, spawn child at impact | wired (CPU collision + event) |
-| `collide → decal`, `vdecal_*` ranges | collision event wired; the decal spawn → **R7.2**'s runtime-stain seam |
+| `collide → decal`, `vdecal_*` ranges | collision event wired; the decal spawn is `UElysiumDecalSubsystem::Lay` (**R7.2**, landed). No `vdecal_*` material exists in the corpus, so that half has nothing to lay |
 | `both` nodes and depth-4 trees | wired (events between emitters of the generated system) |
 | `distance` spawn key | 0 placed uses; wired as a rate × speed switch in the spawn module |
 | `precipitation` gate by the leaf sky bit | **weather's** follow-up (needs the visibility unit's leaf sky bit); the flag is staged |

@@ -191,17 +191,23 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	{
 		return 0;
 	}
-	bSnapshotApplied = true;
-	SnapshotEntityIndices.Reset();
 	if (Snapshot.DefCount != Defs.Defs.Num())
 	{
-		// The map's `.ents` changed under the save. Every record is matched by index and guarded by
-		// classname below, so this is a loud warning rather than a refusal — a re-export that only
-		// appended still restores the entities it did not move.
+		// The map's `.ents` changed under the save, so record #N is no longer entity #N: every
+		// record would land by index on a different entity, and the classname guard below only
+		// catches the ones whose class also changed. An `env_sprite` record with `bOn` set lighting
+		// the corona next door is the shape of it. Save files are disposable here (CLAUDE.md — we
+		// have not released), so the snapshot is refused whole and the map keeps the state its
+		// fresh spawn just built, which is the `.ents` this build actually parsed. `bSnapshotApplied`
+		// stays false, so Activate takes the ordinary post-Activate omission baseline.
 		UE_LOG(LogElysiumWorld, Warning,
-			TEXT("snapshot '%s' was frozen against %d defs, this build parsed %d — applying by index"),
+			TEXT("snapshot '%s' was frozen against %d defs, this build parsed %d — refused, "
+				"the map keeps its fresh spawn state"),
 			*Snapshot.MapName, Snapshot.DefCount, Defs.Defs.Num());
+		return 0;
 	}
+	bSnapshotApplied = true;
+	SnapshotEntityIndices.Reset();
 
 	// Pass 1 — re-create the runtime-spawned entities (npc_maker.Spawn, CreateEntityNoSpawn) from the
 	// defs that ride along, in index order, so every one lands back on its saved index. They do land

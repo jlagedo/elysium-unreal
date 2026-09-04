@@ -44,8 +44,11 @@ MASTERS = {
     "glass": "%s/M_World_Glass.M_World_Glass" % mounts.MATERIALS,
     "refract": "%s/M_Refract.M_Refract" % mounts.MATERIALS,
     "additive": "%s/M_Additive.M_Additive" % mounts.MATERIALS,
-    "decal": "%s/M_Decal.M_Decal" % mounts.MATERIALS,
 }
+# R7.2 ruling 2 (`docs/project/seam_migration.md` -> "R7.2 Decals"): there is no `decal` master
+# here any more. `M_Decal` is deleted along with its generator; the one decal material in the
+# project is `M_V2_Decal`, and the one instance a decal binds is the shared `MI_<unit>_Decal` the
+# material lane stages per `$decal` / `decalmodulate` unit -- never a per-map copy.
 
 # World chunk edge, centimetres. Triangles are binned by centroid cell; each cell yields one
 # Nanite mesh (opaque + masked surfaces) and, where present, one non-Nanite sibling for the
@@ -116,6 +119,24 @@ KINDA_SMALL_NUMBER = 1e-4
 # A deferred decal's projection box reaches this far (cm) either way along its projection
 # axis. Kept shallow so a decal catches its host wall and not the geometry behind it.
 DECAL_HALF_DEPTH = 16.0
+
+# R7.2 ruling 2: `importers.materials.decal_asset_path_for` restated. That module imports numpy
+# transitively (through `importers.textures`) and the editor's embedded Python has none, so the
+# fold is restated here exactly as `bake_verify.verify_ropes` restates `asset_path_for`:
+# `asset_names.safe_name` per path part, `MI_` on the stem, `_Decal` on the whole name.
+DECAL_MATERIALS_ROOT = "/ElysiumBaked/Materials"
+DECAL_INSTANCE_SUFFIX = "_Decal"
+
+
+def decal_instance_path(material_key):
+    """`<material key>` -> `/ElysiumBaked/Materials/<dir>/MI_<safe stem>_Decal`, the shared
+    projector instance every decal -- baked line, mesh-decal face group or runtime `Lay()` --
+    binds for that unit."""
+    parts = str(material_key).split("/")
+    folded = "/".join(bl.safe_name(part) for part in parts[:-1])
+    name = "MI_" + bl.safe_name(parts[-1]) + DECAL_INSTANCE_SUFFIX
+    return ("%s/%s/%s" % (DECAL_MATERIALS_ROOT, folded, name) if folded
+            else "%s/%s" % (DECAL_MATERIALS_ROOT, name))
 
 # Source's distance fog is a PER-PRIMITIVE material term, not the height fog actor: the world and
 # the 3D-skybox miniature carry two different fogs and share screen depth, so no engine-side fog
@@ -905,18 +926,23 @@ class Bake(object):
         """(materials, material package, texture package) for every set this scope AUTHORS.
 
         A map authors only the materials that stamp something of its own into the instance: the
-        ones VBSP patched to a baked cubemap, the deferred decals that carry its fog, and the
-        wetness-driven surfaces that carry its weather. Everything else is the corpus's, and a map
-        that authored a second copy would be the duplication this whole scope split removes.
+        ones VBSP patched to a baked cubemap and the wetness-driven surfaces that carry its
+        weather. Everything else is the corpus's, and a map that authored a second copy would be
+        the duplication this whole scope split removes.
+
+        R7.2 ruling 2: a decal is no longer one of them. Its fog is not stamped into a per-map
+        instance any more -- the decal subsystem owns a load-time MID over the shared
+        `MI_<unit>_Decal` (ruling 4) -- so the per-map `Materials/Decals` package is authored by
+        nobody and pruned by the empty set below.
         """
-        world, decals = {}, {}
+        world = {}
         for key, mat in self.world_mats.items():
             if not SC.is_map_scoped_material(
                     key, decal=mat.decal, wetness_driven=mat.wetness_driven, local=mat.local):
                 continue
-            (decals if mat.decal else world)[key] = mat
+            world[key] = mat
         return ((world, self.mat_pkg, self.shared_tex_pkg),
-                (decals, self.decal_mat_pkg, self.shared_tex_pkg))
+                ({}, self.decal_mat_pkg, self.shared_tex_pkg))
 
     def error_material(self):
         """The material a slot binds when its own name resolved no `.vmt`. Authored on first use,
@@ -963,8 +989,10 @@ class Bake(object):
             return self.error_bind(key, self.map)
         if SC.is_map_scoped_material(key, decal=mat.decal, wetness_driven=mat.wetness_driven,
                                      local=mat.local):
-            package = self.decal_mat_pkg if mat.decal else self.mat_pkg
-            return self.materials.get((package, key))
+            # R7.2: one per-map package, never a `Materials/Decals` split -- a `$decal` world face
+            # on this lane is an ordinary world surface (its projector layer is the `.decals`
+            # sidecar's, on the shared `MI_<unit>_Decal`).
+            return self.materials.get((self.mat_pkg, key))
         return self.materials.get((self.shared_mat_pkg, mat.material_key))
 
     def _shared_material_keys(self):
@@ -977,8 +1005,8 @@ class Bake(object):
         return keys
 
     def _master_for(self, mat):
-        if mat.decal:
-            return self.masters["decal"]
+        # R7.2 ruling 2: no decal branch. `M_Decal` is retired; a `$decal` world face here takes
+        # the master its blend selects, and the V2 lane rebinds it onto the projector instance.
         if mat.additive:
             return self.masters["additive"]
         if mat.refract:
@@ -1034,8 +1062,6 @@ class Bake(object):
             else:
                 fail("material %s names a missing env mask: %s" % (mat.name, source))
                 values["env_mask_sha256"] = "missing"
-        if mat.decal:
-            values["fog"] = fog_data(self.env)
         if mat.wet:
             values["weather"] = self.weather
         return values
@@ -1064,19 +1090,6 @@ class Bake(object):
         if emissive:
             bl.set_tex_param(mic, "Emissive", emissive)
             bl.set_scalar_param(mic, "EmissiveScale", EMISSIVE_SCALE)
-        # M_Decal carries only the albedo (RGB -> BaseColor, A -> Opacity), that same
-        # alpha-masked self-illum path, and the world's fog; the surface it projects onto owns
-        # the rest. The fog is bound here rather than as custom primitive data because a
-        # UDecalComponent is a USceneComponent and carries none -- and needs none, since a decal
-        # is only ever a world surface. Without it the decal would blend an unfogged patch into
-        # the GBuffer its wall already fogged.
-        if mat.decal:
-            fog = fog_data(self.env)
-            bl.set_vector_param(mic, "FogColor",
-                                unreal.LinearColor(fog[0], fog[1], fog[2], fog[3]))
-            bl.set_scalar_param(mic, "FogStart", fog[4])
-            bl.set_scalar_param(mic, "FogInvRange", fog[5])
-            return
         bump = tex(mat.bump)
         if bump:
             bl.set_tex_param(mic, "BumpMap", bump)
@@ -1966,6 +1979,11 @@ class Bake(object):
             "brushes": sorted(brushes),
             "materials": sorted(
                 _asset_path(material) for material in self.materials.values() if material),
+            # R7.2 ruling 2: the shared projector instances this level's `.decals` lines bind.
+            # Named here rather than left to the sidecar's digest alone, because the binding is a
+            # resolved asset path like every other entry in this recipe -- and a level baked
+            # against the retired per-map `M_Decal` MICs must re-author, not be reused.
+            "decal_materials": sorted({decal_instance_path(decal.mat) for decal in self.decals}),
             "prop_skins": self.prop_skins,
             "cell_cm": CELL_CM,
             "profiles": [PROFILE_PICK_ONLY, PROFILE_PROP_SOLID],
@@ -2224,6 +2242,11 @@ class Bake(object):
         """One ADecalActor per `.decals` line -- VtMB's `infodecal` layer (blood, bullet holes,
         graffiti, posters, stains).
 
+        R7.2 ruling 2: the component binds `MI_<unit>_Decal`, the shared projector instance the
+        material lane stages beside the surface one for every `$decal` / `decalmodulate` unit,
+        resolved from the line's own material id -- the same name the runtime `Lay()` resolves.
+        No per-map decal material is authored or read, on either lane.
+
         A deferred decal maps its texture U to the component's local Z and V to local Y, not the
         intuitive Y=U/Z=V, so the surface's horizontal axis (SDir, the U/s texture axis) goes on
         local Z and the vertical (TDir) falls out as the derived Y. MakeRotFromXZ builds a valid
@@ -2238,10 +2261,14 @@ class Bake(object):
             return 0
         placed = 0
         missing = set()
+        loaded = {}
         for index, decal in enumerate(self.decals):
-            mic = self.materials.get((self.decal_mat_pkg, decal.mat))
+            path = decal_instance_path(decal.mat)
+            if path not in loaded:
+                loaded[path] = unreal.EditorAssetLibrary.load_asset(path)
+            mic = loaded[path]
             if not mic:
-                missing.add(decal.mat)
+                missing.add("%s -> %s" % (decal.mat, path))
                 continue
             rotation = unreal.MathLibrary.make_rot_from_xz(decal.normal, decal.s_dir)
             actor = actors.spawn_actor_from_class(unreal.DecalActor, decal.loc, rotation)
@@ -2261,9 +2288,10 @@ class Bake(object):
         for name in sorted(missing):
             # The one bind that does not fall back to the error material: a UDecalComponent only
             # accepts a Deferred Decal domain material, and the shared error material is a surface
-            # one, so binding it here would draw nothing and complain. A decal is a whole actor
-            # rather than a slot, so the wall it projected onto still renders correctly without it.
-            fail("decal material has no baked instance: %s" % name)
+            # one, so binding it here would draw nothing and complain. Named, never skipped: an
+            # absent projector instance means the material lane did not stage this unit as a decal
+            # (run: uv run elysium import materials).
+            fail("decal material has no projector instance: %s" % name)
         return placed
 
     def _place_player_start(self, actors):

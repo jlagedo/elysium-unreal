@@ -474,6 +474,10 @@ public:
 	virtual bool IsNpcMakerInPlayerViewCone(const FVector& MakerOriginCm) const override;
 	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& GroundOriginCm,
 		float HalfExtentCm) const override;
+	// R7.2: the ranged shot's forward world trace and the decal it leaves, through the world's
+	// UElysiumDecalSubsystem.
+	virtual bool LayShotImpactDecal(const FVector& FromCm, const FVector& Direction, float RangeCm,
+		int32 Variation) override;
 	// The scripted-shot channel. The director resolves a `vdata/camerashots/` file against this
 	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
 	// learns what an entity is.
@@ -586,6 +590,11 @@ private:
 		bool bEnabled = true;
 	};
 	TArray<FTouchAnchorRecord> TouchAnchors;
+
+	// R6.1 diagnostic: entity indices whose `SetBakedSpriteVisible` found no baked billboard, so
+	// the miss is reported once per sprite instead of once per input. A map that bakes no sprites
+	// at all is the ruled legacy-lane case and says nothing here.
+	TSet<int32> SpriteMissWarned;
 
 	UFUNCTION()
 	void HandleTouchAnchorBegin(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

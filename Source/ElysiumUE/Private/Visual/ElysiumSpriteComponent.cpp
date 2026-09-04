@@ -7,6 +7,9 @@
 #include "ElysiumSpriteGlow.h"
 #include "ElysiumSpriteSettings.h"
 
+#include "Async/Mutex.h"
+#include "Async/UniqueLock.h"
+#include "CoreGlobals.h"
 #include "DynamicMeshBuilder.h"
 #include "Engine/CollisionProfile.h"
 #include "Materials/Material.h"
@@ -28,6 +31,7 @@ ElysiumSpriteGlow::FParams ElysiumSpriteGlow::FParams::FromSettings()
 		P.FadeInSeconds = Page->GlowFadeInSeconds;
 		P.FadeOutSeconds = Page->GlowFadeOutSeconds;
 		P.QueryFootprintPerDistance = Page->SpriteQueryFootprintPerDistance;
+		P.QueryFixedHalfInches = Page->SpriteQueryFixedHalfInches;
 		P.QueryGrid = FMath::Clamp(Page->SpriteQueryGrid, 1, 8);
 	}
 	return P;
@@ -39,9 +43,9 @@ namespace
 	// with the distance, so the bounds are its size at this range. Beyond it the frustum test
 	// may drop a corona that would still be drawn in 2004 -- 200 m, past any VtMB sightline.
 	constexpr float GlowBoundsDistanceCm = 20000.0f;
-	// One occlusion-bounds array per view in flight (a reflection capture renders six faces in
-	// one frame): the renderer keeps the pointer until the queries are built.
-	constexpr int32 QuerySlots = 8;
+	// A view key is never reused, so a per-view state this sprite has not been drawn for in this
+	// many render-thread frames is dead weight and is dropped when the next new view arrives.
+	constexpr uint32 StaleViewFrames = 300;
 }
 
 class FElysiumSpriteSceneProxy final : public FPrimitiveSceneProxy
@@ -62,6 +66,15 @@ public:
 			MaterialRelevance = Material->GetRelevance_Concurrent(GetScene().GetShaderPlatform());
 		}
 		bVFRequiresPrimitiveUniformBuffer = true;
+	}
+
+	// The frame the proxy went live on, the guard `FHierarchicalStaticMeshSceneProxy` uses
+	// (`HierarchicalInstancedStaticMesh.cpp` 872-877): occlusion results issued against the
+	// previous proxy's query set must not be accepted by this one.
+	virtual void CreateRenderThreadResources(FRHICommandListBase& RHICmdList) override
+	{
+		FPrimitiveSceneProxy::CreateRenderThreadResources(RHICmdList);
+		SceneProxyCreatedFrameNumberRenderThread = GFrameNumberRenderThread;
 	}
 
 	SIZE_T GetTypeHash() const override
@@ -86,38 +99,74 @@ public:
 	virtual bool CanBeOccluded() const override { return true; }
 	virtual bool HasSubprimitiveOcclusionQueries() const override { return true; }
 
-	// VtMB's pixel-visibility quad as a grid of boxes at the origin, facing the view.
+	// VtMB's pixel-visibility quad as a grid of flat samples at the sprite origin, facing the view.
+	// The half-size is the render mode's own (`ElysiumSpriteGlow::QueryHalfSizeCm`: screen-constant
+	// for mode 3, VtMB's fixed 3 units otherwise) clamped to the card it gates, and each sample is
+	// flattened along the sight line: the renderer rasterises an axis-aligned box's front faces
+	// with `CF_DepthNearOrEqual` and calls the sub-query visible if any pixel passes
+	// (`SceneOcclusion.cpp` 508-539, 1254; `SceneVisibility.cpp` 2833), so a cube of side `Cell`
+	// would straddle the wall behind the sprite and answer off its own back half.
 	virtual const TArray<FBoxSphereBounds>* GetOcclusionQueries(const FSceneView* View) const override
 	{
-		TArray<FBoxSphereBounds>& Out = QueryBounds[QuerySlot];
-		QuerySlot = (QuerySlot + 1) % QuerySlots;
-		Out.Reset();
-		const FVector Origin = GetLocalToWorld().GetOrigin();
+		const FMatrix ToWorld = GetLocalToWorld();
+		const FVector Origin = ToWorld.GetOrigin();
 		const float DistCm = static_cast<float>((View->ViewMatrices.GetViewOrigin() - Origin).Size());
-		const float Half = ElysiumSpriteGlow::QueryHalfSizeCm(DistCm, Glow);
+		const float Half = ElysiumSpriteGlow::QueryHalfSizeCm(
+			DistCm, RenderMode, CardHalfSizeCm(DistCm, ToWorld), Glow);
 		const int32 N = FMath::Max(Glow.QueryGrid, 1);
-		const float Cell = 2.0f * Half / N;
+		const double Cell = 2.0 * Half / N;
 		const FVector Right = View->GetViewRight();
 		const FVector Up = View->GetViewUp();
-		const FVector Extent(Cell * 0.5f);
+		const FVector Dir = View->GetViewDirection();
+		// The exact axis-aligned bounds of the flat `Cell x Cell` card facing the view: each world
+		// axis takes the card's own two axes plus the sample half-thickness along the sight line.
+		// A per-axis `1 - |Dir|` heuristic would only thin an axis-aligned view -- off axis it
+		// shrinks all three, leaving a cube that still straddles the wall behind while covering a
+		// fraction of the cell it is meant to sample.
+		const double Thickness = ElysiumSpriteGlow::QuerySampleThicknessCm;
+		const double HalfCell = Cell * 0.5;
+		const auto AxisExtent = [&](double R, double U, double D)
+		{
+			return HalfCell * (FMath::Abs(R) + FMath::Abs(U)) + Thickness * FMath::Abs(D);
+		};
+		const FVector Extent(
+			AxisExtent(Right.X, Up.X, Dir.X),
+			AxisExtent(Right.Y, Up.Y, Dir.Y),
+			AxisExtent(Right.Z, Up.Z, Dir.Z));
+		const double Radius = Extent.Size();
+
+		UE::TUniqueLock Lock(ViewStatesMutex);
+		FViewOcclusionState& State = FindOrAddViewState(View->GetViewKey());
+		// The frame this view asked on: staleness is "asked and never answered", so a renderer that
+		// stops asking freezes the fraction instead of fading the card out.
+		State.QueriedFrameNumber = GFrameNumberRenderThread;
+		TArray<FBoxSphereBounds>& Out = State.Bounds;
+		Out.Reset(N * N);
 		for (int32 J = 0; J < N; ++J)
 		{
 			for (int32 I = 0; I < N; ++I)
 			{
 				const FVector Center = Origin
-					+ Right * ((I + 0.5f) * Cell - Half)
-					+ Up * ((J + 0.5f) * Cell - Half);
-				Out.Emplace(Center, Extent, Extent.Size());
+					+ Right * ((I + 0.5) * Cell - Half)
+					+ Up * ((J + 0.5) * Cell - Half);
+				Out.Emplace(Center, Extent, Radius);
 			}
 		}
 		return &Out;
 	}
 
 	// The renderer's answer, one frame later: `true` is occluded. The visible fraction is the
-	// target the smoothing chases in the next draw.
+	// target the smoothing chases in the next draw, kept per view (the same proxy answers a
+	// player view, a reflection capture's six faces and an editor viewport in one frame) and
+	// stamped with the frame it arrived on, because an answer that stops arriving is not an
+	// answer. `FHierarchicalStaticMeshSceneProxy::AcceptOcclusionResults`
+	// (`HierarchicalInstancedStaticMesh.cpp` 1983-2015) is the shape this mirrors: the creation
+	// frame guards against results issued for a previous proxy's query set, and the mutex against
+	// two views landing at once.
 	virtual void AcceptOcclusionResults(const FSceneView* View, TArray<bool>* Results, int32 ResultsStart, int32 NumResults) override
 	{
-		if (!Results || NumResults <= 0)
+		if (Results == nullptr || NumResults <= 0
+			|| SceneProxyCreatedFrameNumberRenderThread >= GFrameNumberRenderThread)
 		{
 			return;
 		}
@@ -129,7 +178,57 @@ public:
 				++Visible;
 			}
 		}
-		VisibleTarget = static_cast<float>(Visible) / static_cast<float>(NumResults);
+
+		UE::TUniqueLock Lock(ViewStatesMutex);
+		FViewOcclusionState& State = FindOrAddViewState(View->GetViewKey());
+		if (State.Bounds.Num() != NumResults)
+		{
+			// Not this view's grid: the sample count changed under the results.
+			return;
+		}
+		State.Target = static_cast<float>(Visible) / static_cast<float>(NumResults);
+		State.AcceptedFrameNumber = GFrameNumberRenderThread;
+		State.bEverAccepted = true;
+	}
+
+	// The fraction this view draws with, advanced on the render thread's clock. VtMB's rule
+	// (`GlowBlend` `100c257e`-`100c2586`): a stale or absent query reads 0 and the corona fades
+	// back in at `1 / r_glowfadein`. Unreal answers "unoccluded" generously -- on first sight,
+	// after a history trim, on a camera cut, a teleport or a >45 deg turn
+	// (`bIgnoreExistingQueries`, `SceneVisibility.cpp` 5571-5586) and whenever a result is
+	// unavailable -- so a query asked more than `QueryStaleFrames` frames ago and still unanswered
+	// reads 0, and one all-visible frame can raise the blend by at most a
+	// `MaxSmoothStepFraction` step instead of snapping it to full. Until a query has ever answered
+	// the card draws whole, which keeps the contract that a renderer with sub-queries off draws
+	// every sprite; the stored fraction is held at full over those frames, so the first real answer
+	// smooths down from what is on screen rather than popping dark and fading back in.
+	float AdvanceVisibility(uint32 ViewKey, double NowSeconds) const
+	{
+		UE::TUniqueLock Lock(ViewStatesMutex);
+		FViewOcclusionState& State = FindOrAddViewState(ViewKey);
+		const float Elapsed = State.LastSmoothTime < 0.0
+			? 0.0f
+			: static_cast<float>(NowSeconds - State.LastSmoothTime);
+		State.LastSmoothTime = NowSeconds;
+		if (!State.bEverAccepted)
+		{
+			State.Current = 1.0f;
+			return State.Current;
+		}
+		// Stale is a query that was issued and never answered. The drawing frame is no measure: a
+		// primitive the renderer still draws but has stopped occlusion-testing (a selected actor in
+		// the editor, `r.AllowOcclusionQueries 0`, a view with no scene state) would otherwise fade
+		// to nothing with nothing in front of it.
+		const bool bStale = State.QueriedFrameNumber > State.AcceptedFrameNumber
+			&& State.QueriedFrameNumber - State.AcceptedFrameNumber > ElysiumSpriteGlow::QueryStaleFrames;
+		const float Desired = bStale ? 0.0f : State.Target;
+		// The step cap is a fraction of the fade actually taken, so it stays below the fade whatever
+		// the Sprites page holds.
+		const float FadeSeconds = Desired < State.Current ? Glow.FadeOutSeconds : Glow.FadeInSeconds;
+		const float Delta = FMath::Clamp(
+			Elapsed, 0.0f, ElysiumSpriteGlow::MaxSmoothStepFraction * FadeSeconds);
+		State.Current = ElysiumSpriteGlow::Smooth(State.Current, Desired, Delta, Glow);
+		return State.Current;
 	}
 
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override
@@ -138,18 +237,9 @@ public:
 		{
 			return;
 		}
-		// The smoothing runs on the render thread's clock, once per frame whatever the view
-		// count; a gap of more than a second (the sprite was culled) snaps to the target, so a
-		// corona coming back into view does not fade in from a stale value.
+		// The visible fraction is per view and advances on the render thread's clock, one step
+		// per draw (`AdvanceVisibility`).
 		const double Now = ViewFamily.Time.GetRealTimeSeconds();
-		float Delta = LastSmoothTime < 0.0 ? 0.0f : static_cast<float>(Now - LastSmoothTime);
-		if (Delta < 0.0f || Delta > 1.0f)
-		{
-			Delta = 0.0f;
-			VisibleCurrent = VisibleTarget;
-		}
-		VisibleCurrent = ElysiumSpriteGlow::Smooth(VisibleCurrent, VisibleTarget, Delta, Glow);
-		LastSmoothTime = Now;
 
 		const FMatrix ToWorld = GetLocalToWorld();
 		const FVector Origin = ToWorld.GetOrigin();
@@ -170,7 +260,7 @@ public:
 			const float HeightCm = ElysiumSpriteGlow::WorldSizeCm(
 				static_cast<float>(SizeInches.Y), RenderMode, RenderFx, DistCm, ActorScale, Glow);
 			const float Brightness = ElysiumSpriteGlow::Brightness(DistCm, RenderMode, RenderFx, Glow);
-			const float Alpha = (Color.A / 255.0f) * Brightness * VisibleCurrent;
+			const float Alpha = (Color.A / 255.0f) * Brightness * AdvanceVisibility(View->GetViewKey(), Now);
 			if (Alpha <= 0.0f || WidthCm <= 0.0f || HeightCm <= 0.0f)
 			{
 				continue;
@@ -224,6 +314,56 @@ public:
 	virtual uint32 GetMemoryFootprint() const override { return sizeof(*this) + GetAllocatedSize(); }
 
 private:
+	// Half the drawn card for this view, in cm: the square the occlusion sample is clamped into,
+	// inscribed in the quad so no sample tests a region the card does not cover.
+	float CardHalfSizeCm(float DistCm, const FMatrix& ToWorld) const
+	{
+		const float ActorScale = static_cast<float>(ToWorld.GetScaleVector().GetAbsMax());
+		const float WidthCm = ElysiumSpriteGlow::WorldSizeCm(
+			static_cast<float>(SizeInches.X), RenderMode, RenderFx, DistCm, ActorScale, Glow);
+		const float HeightCm = ElysiumSpriteGlow::WorldSizeCm(
+			static_cast<float>(SizeInches.Y), RenderMode, RenderFx, DistCm, ActorScale, Glow);
+		return FMath::Min(WidthCm, HeightCm) * 0.5f;
+	}
+
+	// One sprite draws into every view of a frame, and the queries are issued, answered and
+	// smoothed per view; state shared across views would let a reflection capture's occluded face
+	// dim the player's corona. Held behind a unique pointer because `GetOcclusionQueries` hands
+	// the renderer a pointer into `Bounds` that must stay valid while another view's insert
+	// rehashes the map.
+	struct FViewOcclusionState
+	{
+		TArray<FBoxSphereBounds> Bounds;
+		float Target = 0.0f;
+		float Current = 0.0f;
+		double LastSmoothTime = -1.0;
+		uint32 QueriedFrameNumber = 0;
+		uint32 AcceptedFrameNumber = 0;
+		uint32 TouchedFrameNumber = 0;
+		bool bEverAccepted = false;
+	};
+
+	// Render thread, `ViewStatesMutex` held by the caller.
+	FViewOcclusionState& FindOrAddViewState(uint32 ViewKey) const
+	{
+		TUniquePtr<FViewOcclusionState>* Found = ViewStates.Find(ViewKey);
+		if (Found == nullptr)
+		{
+			// A view key is never reused: a state untouched for `StaleViewFrames` belongs to a
+			// view that is gone, and dropping it here keeps a long session's map bounded.
+			for (auto It = ViewStates.CreateIterator(); It; ++It)
+			{
+				if (GFrameNumberRenderThread > It.Value()->TouchedFrameNumber + StaleViewFrames)
+				{
+					It.RemoveCurrent();
+				}
+			}
+			Found = &ViewStates.Add(ViewKey, MakeUnique<FViewOcclusionState>());
+		}
+		(*Found)->TouchedFrameNumber = GFrameNumberRenderThread;
+		return **Found;
+	}
+
 	UMaterialInterface* Material;
 	FMaterialRelevance MaterialRelevance;
 	FVector2D SizeInches;
@@ -232,14 +372,14 @@ private:
 	int32 RenderFx;
 	bool bUpright;
 	ElysiumSpriteGlow::FParams Glow;
+	uint32 SceneProxyCreatedFrameNumberRenderThread = MAX_uint32;
 
-	mutable TArray<FBoxSphereBounds> QueryBounds[QuerySlots];
-	mutable int32 QuerySlot = 0;
-	// Render-thread state: the query's last answer and the smoothed fraction the quad draws with.
-	// Fully visible until a query answers, so a renderer with queries off draws every sprite.
-	mutable float VisibleTarget = 1.0f;
-	mutable float VisibleCurrent = 1.0f;
-	mutable double LastSmoothTime = -1.0;
+	// Render-thread state. `GetOcclusionQueries` is called both from the visibility task and from
+	// the occlusion cull, and `AcceptOcclusionResults` from whichever view's readback lands first,
+	// so every touch takes the mutex -- the shape
+	// `FHierarchicalStaticMeshSceneProxy::AcceptOcclusionResults` uses.
+	mutable TMap<uint32, TUniquePtr<FViewOcclusionState>> ViewStates;
+	mutable UE::FMutex ViewStatesMutex;
 };
 
 UElysiumSpriteComponent::UElysiumSpriteComponent()

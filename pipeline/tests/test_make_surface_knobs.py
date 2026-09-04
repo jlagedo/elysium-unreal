@@ -58,13 +58,35 @@ def _cpp_max_rows() -> int:
 #: `re.DOTALL` lets the specifier list -- or the gap between `UPROPERTY(...)` and `float` -- wrap
 #: across lines, and `EditAnywhere`/`Config` are checked as separate substrings below rather than
 #: pinned to one order, so reordering the specifier list (`Config, EditAnywhere, ...`) or wrapping
-#: the macro onto two lines still parses. Matches the same 15 scalars `ScalarBindings()` pins, so
+#: the macro onto two lines still parses. Matches the same scalars `ScalarBindings()` pins, so
 #: this and `_cpp_scalar_bindings()` agree on which fields count as a "knob" even though they read
 #: different files.
+#:
+#: The initializer is a product of float literals, not a single literal: a knob whose default is
+#: stated in source units carries its conversion in the header (`DetailSwayAmplitude = 5.0f *
+#: 2.54f` -- `cl_detail_max_sway` 5 world units, in centimetres), and that is the form worth
+#: keeping, because the number a reader needs is the 5. Anything richer than a product of literals
+#: is deliberately not parsed: a default nobody can read off the declaration is not a default this
+#: file can pin against the ini.
 _HEADER_FIELD_RE = re.compile(
-    r"UPROPERTY\(((?:[^()]|\([^()]*\))*)\)\s*float\s+(\w+)\s*=\s*([-\d.]+)f?;", re.DOTALL,
+    r"UPROPERTY\(((?:[^()]|\([^()]*\))*)\)\s*float\s+(\w+)\s*="
+    r"\s*(-?[\d.]+f?(?:\s*\*\s*-?[\d.]+f?)*)\s*;",
+    re.DOTALL,
 )
 _CONFIG_SPECIFIER_RE = re.compile(r"(?<![\w])Config(?![\w])")
+
+#: Both sides are read as C++ `float`s at run time, where `5.0f * 2.54f` and the ini's `12.7` are
+#: the same value; in Python's doubles they differ in the last bit. Six decimals is finer than any
+#: knob here is authored to and coarser than that difference.
+_KNOB_DECIMALS = 6
+
+
+def _eval_literal_product(expression: str) -> float:
+    """`"5.0f * 2.54f"` -> 12.7. The only arithmetic a knob default is allowed to carry."""
+    product = 1.0
+    for factor in expression.split("*"):
+        product *= float(factor.strip().rstrip("f"))
+    return round(product, _KNOB_DECIMALS)
 
 
 def _cpp_header_scalar_defaults() -> dict[str, float]:
@@ -72,7 +94,7 @@ def _cpp_header_scalar_defaults() -> dict[str, float]:
     fields = {}
     for specifiers, name, value in _HEADER_FIELD_RE.findall(text):
         if "EditAnywhere" in specifiers and _CONFIG_SPECIFIER_RE.search(specifiers):
-            fields[name] = float(value)
+            fields[name] = _eval_literal_product(value)
     assert fields, "no `UPROPERTY(..., Config, ...) float Name = Value;` fields parsed from ElysiumSurfaceSettings.h"
     return fields
 
@@ -84,7 +106,7 @@ def _default_ini_values() -> dict[str, float]:
     )
     assert section, "[/Script/ElysiumUE.ElysiumSurfaceSettings] section not found in DefaultElysium.ini"
     values = dict(
-        (name, float(value))
+        (name, round(float(value), _KNOB_DECIMALS))
         for name, value in re.findall(r"^(\w+)=([-\d.]+)\s*$", section.group(1), re.MULTILINE)
     )
     assert values, "no Name=Value rows parsed from DefaultElysium.ini's ElysiumSurfaceSettings section"
@@ -92,12 +114,18 @@ def _default_ini_values() -> dict[str, float]:
 
 
 def test_default_ini_matches_header_field_initializers():
-    """`Config/DefaultElysium.ini` restates `UElysiumSurfaceSettings`'s 15 field initializers so a
+    """`Config/DefaultElysium.ini` restates `UElysiumSurfaceSettings`'s config FLOAT field
+    initializers -- the knobs `ScalarBindings()`/`MPC_ElysiumSurfaces` carry -- so a
     fresh checkout (no ini edit yet) reads the same values the header's C++ defaults would give it
     anyway -- this pins the two against each other as text, so an owner tuning a class default in
     the header without restating it in the tracked ini (or vice versa) is a failing test, not a
     silent divergence between "what a fresh checkout ships" and "what the class says its default
-    is"."""
+    is".
+
+    Both sides are float-only on purpose, and the ini section carries no row for the one non-float
+    config field on the class (`MaxLaidDecals`, R7.2's decal-pool cap): it is not a shader knob, it
+    reaches no `MPC_ElysiumSurfaces` row, and a row here would be an ini-only name this comparison
+    would reject. Its default lives in the header alone."""
     header_defaults = _cpp_header_scalar_defaults()
     ini_values = _default_ini_values()
     assert header_defaults == ini_values, (
@@ -169,9 +197,6 @@ _MAKE_V2_MATERIALS_UNREAD_SCALAR_BINDINGS = {
     "ChromaThreshold": (
         "read offline, in Python, by `importers/materials.py::_read_chroma_threshold` (the "
         "envmaptint grey/chromatic split happens at stage time, not in the material graph)"
-    ),
-    "DecalDepthOffset": (
-        "consumed by the decal placement lane (SF placement code), not a `M_V2_Decal` graph node"
     ),
     "CaptureRadius": (
         "consumed by the reflection-capture actor placement lane (SF-6.2), not a material graph "

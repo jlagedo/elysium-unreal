@@ -47,7 +47,7 @@ SCALAR_NAMES = (
     "DefaultSpecular", "DefaultRoughness", "DefaultMetallic", "ClassInfluence",
     "LightSpecularScale", "Overbright",
     "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale", "MaskMetallicMax", "EnvTintScale",
-    "FixedCubeStrength", "ChromaticTintStrength", "ChromaThreshold", "DecalDepthOffset",
+    "FixedCubeStrength", "ChromaticTintStrength", "ChromaThreshold",
     "CaptureRadius",
     "DetailSwayAmplitude",
 )

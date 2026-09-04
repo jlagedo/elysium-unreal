@@ -65,13 +65,6 @@ demonstrably replaces it, recorded per map in `docs/vtmb/light-attribution.md`. 
 threads: survey `hw_609_1`, re-score with type/style clauses, per-batch in-engine
 counterfactual, batch-level voting.
 
-### 3.13 Decal fog: accept or extend
-
-A `UDecalComponent` carries no custom primitive data, so its fog set is baked into the material
-instance: correct per map, but `elysium.Fog` does not reach it and a fog change needs a re-bake.
-Either record that as the accepted contract or re-derive decal MID parameters in
-`ApplySceneFog`. Small.
-
 ### 7.1 Coronas
 
 `.sprites` consumer: additive depth-tested billboards, StartOff spawnflag filtering.
