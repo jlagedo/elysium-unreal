@@ -122,7 +122,7 @@ patched depth instance whose provenance carries only its `insert` delta.
 | surface class `water` | **Roughness**, class specular / metallic | the class LUT read, unchanged. Lumen honours SLW roughness in 5.8 (§8), so the class row is what sharpens or blurs the mirror |
 | `$envmap` (named cube) | **Emissive** | the fixed-cube add, unchanged (`UseFixedCube`, `EnvMapTint`, `FixedCubeStrength`) |
 | `$basetexture`, `$color`, `$watercolor`, `$watermurkiness` | **Base Color** | unchanged. Invisible while Opacity is 0 |
-| — | **Opacity** | **coverage, not murk** (`WaterVisibility = 1 − Opacity`, §8): `UseBaseTexture ? Alpha × BaseTexture.a : 0`. The four base-textured `Water` units (`dev_water`, `nether01_water`, `oilfieldwater a/b`) are placed on no water map; they keep their alpha as coverage, provenance-level only |
+| — | **Opacity** | **coverage, not identity** (`WaterVisibility = 1 − Opacity`, §8): `UseBaseTexture ? Alpha × BaseTexture.a : 0`. `BaseTexture` is **not a required slot on this master** (`REQUIRED_TEXTURE_SLOTS["M_V2_Water"] = frozenset()`, R7.1 follow-up, 2026-09-04): the surface's identity is the volume, the reflection and the refraction, none of which read the base texture, so a unit whose `$basetexture` cannot bind stages with `UseBaseTexture` off and draws as water like every other water unit by default, instead of failing the unit outright. This is what unblocked `dev/ocean`/`dev/oceanbeneath` — the DX6 fallback sheet, a 29-frame VTF the master has no frames lane for — which previously refused to stage at all. The four base-textured `Water` units that do bind (`dev_water`, `nether01_water`, `oilfieldwater a/b`) are placed on no water map; they keep their alpha as coverage, provenance-level only |
 | the old fog tail on Emissive / Opacity, `MP_REFRACTION` | — | **gone.** Absorption is the fog now; SLW has no refraction pin |
 | the wave scalars, `CheapWaterStart/EndDistance`, `WaterDepth` | — | declared, not wired, as before (`WaterDepth` is VBSP's per-instance depth; the volume carries the real one) |
 
@@ -434,7 +434,15 @@ Where the earlier text of this document was wrong, the line says **[was wrong]**
 4. **`$reflecttint` → luma.** SLW's Specular is scalar; the red tint on blood and spawn water
    reaches the reflection only as brightness. The volume colour carries the red.
 5. **Fresnel** is SLW's own Schlick from Specular, not `(1 − N·V)^5` with R0 = 0.
-6. **Cheap water's cubemap → Lumen.** The extinction × 16 keeps its opaque-fog body.
+6. **Cheap water's cubemap → Lumen.** The extinction × 16 keeps its opaque-fog body — but the
+   body is *lit*, not constant. VtMB's `$forcecheap` pixel is `lerp($fogcolor, cube, fresnel)`,
+   so the pool never reads darker than its authored `$fogcolor`; SLW's scattering coefficient
+   scatters whatever light reaches the water, so on an unlit stretch the body reads **0**, not
+   the fog colour, and only the Lumen mirror is left. Measured on `sp_soc_3`, §11: the same
+   surface reads (50, 74, 78) where it mirrors a lit wall and (0.2, 0.6, 0.8) 20 m away under an
+   unlit ceiling, against the (22, 20, 10) floor VtMB would draw everywhere. **Owner call open**
+   (§11): leave it physical, or add an unconditional `$fogcolor` floor on Emissive under
+   `CheapWater`.
 7. **Underside = no extinction.** Forced by the dead engine branch; from below the refracted
    above-water world is what draws, tinted by the underside instance's own `$refracttint`.
 8. **Underwater: the world fog is not suppressed.** VtMB replaces it below the plane; here the
@@ -447,7 +455,12 @@ Where the earlier text of this document was wrong, the line says **[was wrong]**
     specular do not fade with distance. A far canal end that pops against its walls is a
     tuning-session witness, and the fix — if one is wanted — is an additive fog-in on Emissive,
     not a CPD term.
-11. **Opacity as coverage** for the four base-textured `Water` units (none placed).
+11. **Opacity as coverage, and an unbindable base texture no longer fails the unit.** `BaseTexture`
+    is not a required slot on `M_V2_Water` (R7.1 follow-up, 2026-09-04): the four base-textured
+    `Water` units that do bind (`dev_water`, `nether01_water`, `oilfieldwater a/b`, none placed)
+    keep their alpha as coverage, provenance-level only, and `dev/ocean`/`dev/oceanbeneath` — whose
+    `$basetexture` is a 29-frame VTF the master has no frames lane for — now stage with
+    `UseBaseTexture` off instead of refusing to stage.
 12. **Camera water offset's 1-unit quantization dropped.** `SolveWaterOffset` (§7) is the closed
     form of `GetWaterOffset`'s step loop; the clearance distance is exact rather than rounded up
     to the next Source inch. Owner call: build now (§7).
@@ -469,10 +482,14 @@ a hub with a canal is fine; a hub with a canal, a FLIP pool and a Water Body Oce
 
 ## 11. What to witness (did-it-appear only, per "wire first, tune later")
 
-The two maps R7.1 converted are `sm_hub_1` (a drawn `water/sewer_water` surface, staged plane
-Z **−14937.74 cm**) and `sm_pier_1` (the `water/invisible_water` ocean, staged plane
-Z **−1582.42 cm**). `la_hub_1` and `hw_warrens_5` are not on `MapsOnV2Models` and are a later
-witness.
+The maps R7.1 converted are `sm_hub_1` (a drawn `water/sewer_water` surface, staged plane
+Z **−14937.74 cm**), `sm_pier_1` (the `water/invisible_water` ocean, staged plane
+Z **−1582.42 cm**) and — added by the 2026-09-04 content run — `sp_soc_3`, the society basin:
+one volume, `maps/sp_soc_3/dev/dev_water2_cheap`, plane Z **−609.6 cm**, floor `minZ`
+**−1788.16 cm**, so **1178.56 cm deep** (464 in) against the pawn's 92.45 cm half-height — the
+first staged volume deeper than the body, and the first on which the volume fog is a look rather
+than a hand's breadth (`$fogcolor {22 20 10}`, `$fogend 400` in = 1016 cm, `$forcecheap`).
+`la_hub_1` and `hw_warrens_5` are not on `MapsOnV2Models` and are a later witness.
 
 **Witnessed 2026-09-04** (`uv run elysium run play`, both maps). Passed: the sewer surface draws
 and is not black — the canal floor refracts through it and the wall lamps put specular streaks on
@@ -518,12 +535,39 @@ surf band animates (34% relative pixel change at the waterline between consecuti
   legacy `UE_bsp_to_scene.py` lane keeps the name test alone: it publishes no V2 map and reads no
   texinfo flags today.
 
-Also measured, not a defect: **`Waist`/`Eyes` are unreachable on either converted map.** Both
-staged volumes are shallower than the pawn (`sm_hub_1` 50.8 cm — `$waterdepth 20` exactly — and
-`sm_pier_1` 83.8 cm) against a 92.45 cm body half-height, so every pose whose waist is inside the
-band puts the feet below `minZ` and `ClassifyBody` answers `None` (measured: pawn at Z −15012.1
-→ `water: 0`). `WaterMove`, the swim intent and `SolveWaterOffset` therefore have no in-game
-witness until a deeper volume is converted; their coverage is the automation tier.
+**`sp_soc_3`, measured 2026-09-04** (the content run that converted it; no `run play` session this
+round — see the owner call below). The bake places the one staged row as `[bake] water: 1 actor
+placed with 1 volume(s)`, and `verify_water` answers `1 staged rows, 1 matched` against the
+manifest's plane Z **−609.6 cm** / floor **−1788.16 cm**. Three things read straight off the
+authored numbers and the family table (§2, §4.3), the same "did-it-appear" standard as the other
+two maps applies once a `run play` session reaches this map:
+- **The cheap-water look.** `maps/sp_soc_3/dev/dev_water2_cheap` is the per-map patched
+  `dev_water2*` unit with `$forcecheap` set, so ruling F's ×16 extinction applies — the basin
+  should read as its `{22 20 10}` fog colour at any depth, not fade in gradually, with the
+  reflection left to Lumen rather than the retired cubemap.
+- **The deep-basin fog under the plane.** At 1178.56 cm (464 in) deep — past `sm_hub_1`'s
+  50.8 cm and `sm_pier_1`'s 83.8 cm, and past the pawn's 92.45 cm half-height — this is the first
+  converted volume where the underwater post-process's fog has room to become a *look* rather
+  than the "a hand's breadth of floor" case §6 and the note below record for the other two; it
+  joins `hw_warrens_*`/`la_hub_1` as a basin where the fog is visible, not invisible-by-numbers.
+- **The underside.** The volume's brushes (2, 6 planes each) carry the same top/bottom face
+  pairing the family always does; the underside instance draws the refracted above-water world
+  with zero extinction (ruling E) wherever the basin is entered from below.
+
+**Owner call (2026-09-04): the swim path and the camera clearance band are out of this session's
+scope.** `sp_soc_3` is the first converted volume deep enough to reach `Waist`/`Eyes` and exercise
+`WaterMove`, the swim intent and `SolveWaterOffset` in play, but no `run play` witness of that was
+run this session — the deep basin's coverage stays on the substrate tests
+(`Elysium.Substrate.Water`, `Elysium.Substrate.WaterActor`, `Elysium.Substrate.Camera`, §12) until
+a later witness spends the play session on it.
+
+Also measured, not a defect: **`Waist`/`Eyes` are unreachable on the two shallow converted maps.**
+Both `sm_hub_1` and `sm_pier_1`'s staged volumes are shallower than the pawn (`sm_hub_1` 50.8 cm —
+`$waterdepth 20` exactly — and `sm_pier_1` 83.8 cm) against a 92.45 cm body half-height, so every
+pose whose waist is inside the band puts the feet below `minZ` and `ClassifyBody` answers `None`
+(measured: pawn at Z −15012.1 → `water: 0`). `sp_soc_3`'s basin is the first converted volume past
+that bound (above); until its swim path is witnessed in play, `WaterMove`, the swim intent and
+`SolveWaterOffset` stay on the automation tier for all three maps.
 
 1. `sm_hub_1` sewer from the promenade: the neon reflects, the surface is not black, the far end
    is murk-green not white. The SLW pass shows in `stat gpu`.
@@ -536,11 +580,69 @@ witness until a deeper volume is converted; their coverage is the automation tie
    pier's boards at `sm_pier_1`: `Feet` again, with no surface drawn. `Waist`/`Eyes`, `WaterMove`
    and the swim intent need a volume deeper than the body (see above).
 5. `sm_pier_1`'s 17 `objects/surf` cards slide up the sand on the 15 s sine (`SineUVTranslate`).
-6. `spawnwater` on `hw_warrens_5` reads as a bad pool, not a ruby one (a future converted map).
+6. `sp_soc_3`'s society basin reads its ×16 cheap-water extinction and its fog is a *look* under
+   the plane — **witnessed below**, with one amendment: the extinction is opaque at any depth as
+   ruled, but the body it leaves is lit, so it reads black rather than `{22 20 10}` wherever no
+   light reaches the water (divergence 6, owner call open). Step off into the 464-in basin for
+   `Waist`/`Eyes` and `WaterMove` — the swim path this session's owner call left for a later
+   `run play` witness (see above).
+7. `spawnwater` on `hw_warrens_5` reads as a bad pool, not a ruby one (a future converted map).
 
----
+### Witnessed 2026-09-04, third session — `sp_soc_3`, the first deep basin
 
-## 12. Tests
+`uv run elysium run play`, noclip, captures under `E:/elysium-work/witness/soc_*.png`. Both
+regressions re-passed on the way out: `sm_hub_1`'s sewer surface draws and is not black (the canal
+floor refracts through it, the pillars and wall lamps mirror in it) and the pawn dropped onto the
+canal floor settles at Z **−14896.257** with `locomotion.water 1`, the same two numbers as the
+second session; `sm_pier_1` shows no `tools/toolsinvisible` sheet above or below the plane — the
+beach, the surf band, the pier and the offshore rig all draw, and `water/invisible_water` is
+absent from the map's face groups on disk. Zero `Failed to compile Material Instance` and zero
+`LogElysiumWater` lines in `Saved/Logs/ElysiumUE.log`.
+
+- **Surface, from above (ruling F).** The basin draws, ripples and mirrors. Two frames at the same
+  camera differ by **9.31 %** over the water against **0.73 %** on a static lit rock wall in the
+  same frames — the 29-frame normal flipbook at 30 fps over the 0.035 scroll is moving. The
+  reflection is Lumen's and is the only term with any magnitude: (50.3, 74.8, 77.8) where the
+  surface mirrors the lit north wall, (0.2, 0.6, 0.8) 20 m out under an unlit ceiling, (0.0, 0.0,
+  0.0) in the far corner. **That last number is the finding**: ruling F promises "the body reads
+  as its `$fogcolor` at any depth", and it does not — see divergence 6 and the owner call below.
+- **Under the plane, inside the volume (ruling D) — the first deep-basin witness.** The volume fog
+  *is* applied and *is* correct by depth. Proof, camera at (−2300, 2100, −900), 290 cm under the
+  plane over a floor 950 cm down, `r.PostProcessing.DisableMaterials` A/B in the same pose:
+  the below-water rock reads **(0, 0, 0)** with the blendable off and **(1.07, 0.83, 0)** near /
+  **(5.02, 3.95, 0)** far with it on — a monotone depth ramp toward the fog colour, on geometry
+  that is otherwise pure black. On the same frame the above-water rock seen *through* the plane
+  goes (92.2, 95.4, 63.4) → (26.0, 25.8, 11.1), which solves to a fog factor of 0.761 and a depth
+  of **774 cm** — the slant distance from the eye to the water plane along that ray (290 cm of
+  clearance at ~22° elevation ≈ 743 cm), not the distance to the rock. The underside-writes-depth
+  artefact is therefore confirmed numerically, not just argued.
+- **The magnitude, recorded.** Fully fogged, the screen value is **(5, 4, 0)/255**; VtMB draws its
+  `$fogcolor` **(22, 20, 10)/255**. Not a water defect: `ElysiumFog::DecodeColor` hands the
+  post-process the linear value (0.00456, 0.00369, 0.00080) and the blendable sits at
+  `BL_SCENE_COLOR_BEFORE_DOF`, so the filmic toe crushes it — the same "one named calibration for
+  the whole render, not a per-term fudge" the header already declares, and the same treatment the
+  per-primitive scene fog gets. It is 4.4× darker than 2004 and blue clips to zero. Nothing in the
+  water lane should compensate for it alone.
+- **The underside, from below (ruling E).** At 540 cm under the plane looking up, the whole ceiling
+  arrives as the above-water world **refracted**: heavy vertical smear along the animated normal,
+  the dock stair distorted with it, moving 1.95 % frame to frame — and no mirror, no specular
+  highlight anywhere on it. Ruling E reads correctly.
+- **The 40 drip emitters.** Nothing draws. There is no `NS_drip_emitter` under
+  `Content/ElysiumGenerated/VFX` (only `NS_BarrelFireEmitter`), so the 40 `env_particle` actors
+  fall back to `NS_ElysiumParticle`, which logs `ParticleRead: Failed to 'Get Position By Index'`
+  for Leaf14–19 and emits nothing. R7.3's known state, not R7.1's.
+- **Not a defect, for the next witness's sake.** `elysium.lights` is a *toggle* with no output; run
+  it once and the map's 78 world lights go out and stay out, and every later capture reads ~40×
+  dark with only bloom left. Three screenshots this session were wasted on it before the second
+  `elysium.lights` brought the frame back bit-for-bit (lit rock 124.35 → 2.80 → 124.33).
+
+**The one owner call this witness leaves.** Ruling F's cheap body is unlit. Recommendation:
+**leave it physical.** The whole of `sp_soc_3`'s basin is unlit below and mostly unlit above, so
+the constant `$fogcolor` floor would land at (5, 4, 0) on screen anyway — visible only against
+pure black, and only because the toe crushes both. If the owner wants the 2004 reading instead,
+the change is one node: an Emissive add of `pow(FogColor, 2.2)` gated on `CheapWater` and off
+under `Underside`, in `_build_water`, which is a ruling-F amendment and a `GRAPH_VERSION` bump —
+not a bug fix, and not made here.
 
 At the seam, in the count each change authorizes — no floor-wide sweep.
 

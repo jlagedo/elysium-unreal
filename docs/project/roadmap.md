@@ -249,7 +249,7 @@ call, script verb and scheme event that names a sound is conformed to it.
   every real `LEAFWATERDATA` row to its `CONTENTS_WATER` brushes, one bake-placed
   `AElysiumWaterVolumes` actor per map classifies the player's feet/waist/eyes pre-move and is the
   map's underwater post-process volume, and the camera's `cl_waterdist` clearance offset is
-  transcribed. `sm_hub_1` and `sm_pier_1` are converted; ruling and detail:
+  transcribed. `sm_hub_1`, `sm_pier_1` and `sp_soc_3` are converted; ruling and detail:
   `docs/architecture/water-architecture.md`, `docs/project/seam_migration.md` → "R7.1 — water on
   the V2 lane".
 - [x] **7.4 Master-material set** — the generated surface masters.
@@ -468,9 +468,11 @@ The ladder:
   per-slot envelope and lifecycle, player/cast producers, five graph closures, post-multiply
   additive and per-closure shared-bank remap stand. The running graph matches the reference
   compositor at `0.009 cm` median on both a differing-bind Tremere and the all-copy Malkavian
-  control; `BakedCharacterParity`, `OracleIdentity`, `RigRetarget`, `RigPose` and `RigLayers` are
-  green. Fan duration, previous-sequence cross-fades, event look-ahead and played two-body
-  acceptance remain open; `RigCompose` is red at 3.168 cm control / 1.358 cm layered, legs first.
+  control; `BakedCharacterParity`, `OracleIdentity`, `RigRetarget`, `RigPose`, `RigLayers` and
+  `FanDuration` are green (225 gait fans across 84 owners, 207 scored to within 0.0010 s).
+  Previous-sequence cross-fades, event look-ahead and played two-body acceptance remain open;
+  `RigCompose` is red at 3.168 cm control / 1.358 cm layered, legs first — the cause is named
+  (T-C7, the cross-fade chain, `plans/animation-critical-path.md`) and is not a bake gap.
 
 ## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md))*
 

@@ -590,7 +590,19 @@ namespace
 			}
 			const bool bPostAdditive =
 				Asset->FindMetaDataByClass<UElysiumAnimPostAdditive>() != nullptr;
-			if (!bDerived && !bPostAdditive)
+			// **The second family for which the raw form IS the shipping form: an overlay whose
+			// mask does not own the split bone.** The exporter derives an overlay against its host
+			// only when the clip's own mask owns a `SPLIT_ROTATION` bone
+			// (`UE_mdl_skeletal._derived_bindings` -> `_owns_split_bone`), because that is the one
+			// mask whose clips cannot normalize against their own frames -- it excludes the whole
+			// chain above `Bip01 Spine1`. An overlay gated by the 24-bone arm mask is already an
+			// ordinary parent-relative pose, so it ships once and there is nothing derived to be
+			// missing. Reading the mask on the PLAYING skeleton rather than trusting the metadata's
+			// bone count is the same rule `OwnedBoneIndices` states for the composition itself.
+			const int32 SplitBone = Ref.FindBoneIndex(GArmSpineBone);
+			const bool bOwnsSplitBone =
+				SplitBone != INDEX_NONE && OwnedBoneIndices(Asset, Mesh).Contains(SplitBone);
+			if (!bDerived && !bPostAdditive && bOwnsSplitBone)
 			{
 				// The derived form is a different pose from the raw one -- the host's own motion
 				// with this layer composed onto it -- so standing the raw clip in its place is a

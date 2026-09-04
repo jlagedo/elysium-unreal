@@ -251,7 +251,7 @@ index 2 the 49-bone upper body from `Bip01 Spine1`.
 | `Elysium.Content.RigCompose` | Content | **RED** — control 3.168 cm, layered **1.358**, arm scalar green on every state of both bodies, four layers green (`deserteagle_attack` 0.70, `deserteagle_reload` 0.40, `steyr_reload` 0.31, `supershotgun_reload` 0.24) | composed pose vs the capture, whole body, mesh-space on the split bone, aim cell pinned per state, three cohorts |
 | `Elysium.Content.OracleIdentity` (T-A5) | Content | **green** — median 0.001–0.003 cm, max 0.027, 928 states across both bodies | the baked mount composed offline equals the reference compositor at every stated state; no capture, no search |
 | `Elysium.Content.BakedCharacterParity` | Content | **green** — 9 models compared; the Ash delta and baseball-bat instrument rows are closed | the bake's own contract, read on the body mesh |
-| `Elysium.Content.FanDuration` (T-A3) | Content | red — 176 of 207 fans on the harmonic branch | T-B2's gate |
+| `Elysium.Content.FanDuration` (T-A3) | Content | **green** (2026-09-04) — 225 fans across 84 owners, 207 scored over 1,863 sampled headings, 176 of them at a heading that blends cells of differing length; every one blends durations to within 0.0010 s. Was red at 176 on the harmonic branch until `bUseLegacySamplePointAnimationLengthCalculations` landed and `export characters --force` re-authored the fans | T-B2's gate |
 | `Elysium.Content.PlayerGraphInstance` | Content | green — 17 of 17 axis-interp rules resolve | the generated graph stands a body in the editor commandlet |
 | `Elysium.Content.RigPose` | Content | green | one clip on an unlayered frame |
 | `Elysium.Content.RigLayers` | Content | green | channel reachability, four slots suffice |
@@ -729,6 +729,21 @@ Everything the task text got wrong, each carrying the measurement that decided i
 bone in mesh space; its control/layered medians remain **3.168 / 1.358 cm**, feet-and-calves first,
 and belong to T-C7. The host-clock sync closes the running graph at 0.009 cm against the compositor.
 
+**The substitution warning named a bake gap that is not one (2026-09-04).** `ComposeClosure`
+exempted only a `_delta` from `SubstitutedClosure`, so it reported
+`character_shared_male_move_and_ranged/katana_bobble_layer declared by katana_aggressive_run` as a
+clip retail drew and the mount does not carry. There is a **second** family for which the raw form
+is the shipping form, and the exporter states it: `_derived_bindings` derives an overlay against its
+host only when `_owns_split_bone` — the clip's own mask owns a `SPLIT_ROTATION` bone. Read off the
+bank's `ANIM` headers, `katana_bobble_layer` and its `knife` / `stake` / `tireiron` / `baseballbat`
+twins carry **mask 1** (24 bones, the arms, entirely below the split), while `bushhook_bobble_layer`
+and `sledgehammer_bobble_layer` carry **mask 2** (49 bones) and do ship
+`<label>@<host>` derived forms. A mask-1 overlay is already an ordinary parent-relative pose, so
+there is nothing derived to be missing. The test now asks the same question the exporter does —
+does this layer's mask own `Bip01 Spine1`, read off the playing skeleton through `OwnedBoneIndices`
+— and the warning is gone with the three medians bit-identical (1.358 / 3.168 / 3.326), which is
+what says the change was to the report and not to the composition.
+
 Shared-bank translation is no longer delegated to `OrientAndScale`. Retail composes a bank closure
 first and then applies one four-outcome translation map: copy, exactly-one-origin pure translation,
 both-origin copy, or shortest-arc/length-ratio similarity. The graph carries one
@@ -759,6 +774,27 @@ DURATIONS".
 - **Gate:** T-A3 green; a movement baseline under `_move/baseline` shifts and is re-committed
   with the number stated.
 - **Docs:** `docs/architecture/movement-architecture.md` gait-speed section cites the rule.
+- **The flag lands only on a re-author, and `--force` is not optional.** `_Tracker.wants_unit`
+  fingerprints a unit by `bl.recipe_fingerprint(stage, object_path, unit.recipe)`, which is purely
+  content-derived, so a C++ authoring change moves no recipe and every stamped `BS_` reads current;
+  the outer `_character_bake_fingerprint` (which hashes `bake_characters.py` alone) would skip the
+  editor boot entirely. `uv run elysium export characters --force` is the command, and it covers
+  every fan `Elysium.Content.FanDuration` walks — that test enumerates `Index.Npcs` and
+  `Index.Banks` and addresses each through `BakedBankBlendSpace`/`BakedCharacterBlendSpace`, so its
+  scope and the cast's are the same set.
+- **The two PLACED-MODEL fans are outside both.** Six `BS_` assets live on the props path, authored
+  through the same `build_blend_spaces_from_grids` call by `_run_character_bake(..., props=stems)`:
+  `Props/character_monster_wolf_form_wolf_form/BS_wolf_Form_run{,2,3,4}` and
+  `Props/character_monster_tzimisce_creation3_tzim3/BS_hit_head`. No test pins them, and the cast
+  above does not reach them, so they had to be re-authored by name. **Run and landed 2026-09-04**
+  (4 + 1 blend spaces rewritten):
+  `uv run elysium export placed-model sp_tutorial_1 models/character/monster/wolf_form/Wolf_Form.mdl --force`
+  and `uv run elysium export placed-model hw_netcafe_1 models/character/monster/tzimisce/creation3/tzim3.mdl --force`.
+  The second map is **not** `hw_609_1`, which this note first named: `placed_models.discover` skips
+  every entity whose classname starts with `npc_`, and `hw_609_1` places `tzim3.mdl` only as
+  `npc_VTzimisceRunner` / `npc_maker_fleshpile` (the command refuses it with "placed model(s) are
+  not used by hw_609_1"). `hw_netcafe_1` is the one map of the eight that carries it as a
+  `prop_dynamic`, which is what makes the `Props/` assets exist at all.
 
 #### T-B3 The mask is binary
 

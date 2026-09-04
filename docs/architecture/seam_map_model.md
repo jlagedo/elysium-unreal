@@ -429,7 +429,7 @@ its 3,661.
 
 > **Superseded (2026-09-04).** `seam_map_unit_contract.md` → "Baked assets" owns naming for
 > every kind; this lane moves to `/ElysiumBaked/Models/<dir>/SM_<base>` with `DA_PropSkins` and
-> `SM_Missing` under `Models/_Corpus/` in R8.0 (`docs/project/characters_r8.md` → D1), and the
+> `SM_Missing` under `Models/_Corpus/` in R8.0a (`docs/project/characters_r8.md` → D1), and the
 > flat layout, `static_stem` and `PropModelStem` retire with it. The text below describes the
 > landed R1 state until that task rewrites it.
 

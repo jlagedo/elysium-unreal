@@ -928,6 +928,10 @@ class _Params:
     #: slot did not actually leave unbound -- `_apply_static_frame_fallback` resolved them onto the
     #: static frame-0 array binding instead, so `_check_required_slots` must not count them missing.
     static_frame_resolved: set[str] = field(default_factory=set)
+    #: Required-slot parameter names whose `textureClassMismatch` was ruled a named divergence
+    #: rather than a stage failure -- `_apply_cube_base_texture_divergence`'s cubemap `$basetexture`
+    #: pair. Subtracted by `_check_required_slots` exactly like `static_frame_resolved`.
+    cube_base_resolved: set[str] = field(default_factory=set)
 
 
 def _dependency_lookup(document: dict) -> dict[str, tuple[str, bool]]:
@@ -1427,8 +1431,15 @@ def _drop_unexposed_sine_uv(params: _Params, master: str) -> None:
 #: unbound is a per-unit stage failure (`_check_required_slots`), not merely a recorded anomaly --
 #: "never an instance written with the unknown part quietly missing" applies in full to the slot
 #: that carries the surface's own colour.
+#: R7.1 exempts `M_V2_Water`: on the Single Layer Water master the base texture is *coverage*
+#: (`Opacity = UseBaseTexture ? Alpha x BaseTexture.a : 0`), not the surface's colour -- the look
+#: is the volume, the reflection and the refraction, none of which read it. A water unit whose
+#: `$basetexture` cannot bind (`dev/ocean`, `dev/oceanbeneath`: the DX6 fallback sheet, a 29-frame
+#: VTF the master has no frames lane for) stages with `UseBaseTexture` off and draws as water,
+#: which is what every other water unit does by default; the anomaly stays recorded.
 REQUIRED_TEXTURE_SLOTS: dict[str, frozenset[str]] = {
-    master: frozenset({"BaseTexture"}) for master in EXPOSED_PARAMS
+    master: (frozenset() if master == "M_V2_Water" else frozenset({"BaseTexture"}))
+    for master in EXPOSED_PARAMS
 }
 
 
@@ -1510,6 +1521,61 @@ def _apply_static_frame_fallback(params: _Params, master: str, texture_staging_r
                 })
 
 
+#: R7.1 follow-up: the 2 units whose `$basetexture` names a **cubemap** VTF (`faces == 6`), so the
+#: binding `_bind_texture` declines leaves `M_V2_Unlit`'s required `BaseTexture` slot unbound and
+#: `_check_required_slots` used to refuse the unit outright. Measured on the corpus 2026-09-04:
+#:
+#: * `envmap/gioint` -- 32x32 DXT1 cube; `UnlitGeneric { $baseTexture envmap/gioint }`. The
+#:   Giovanni-mansion interior probe, consumed as `$envmap` by 17 `stone/gio*` units.
+#: * `skybox/hav_env` -- 256x256 DXT1 cube; `UnlitGeneric { $basetexture skybox/hav_env, $nofog 1 }`.
+#:   Referenced by no other unit at all.
+#:
+#: Neither is *drawn*: neither key appears as a face material in any exported map's `usemtl` list,
+#: on any model, or in any `.env`/`.props`/`.ents` sidecar. They are the `.vmt` companions of a
+#: cubemap `.vtf`, and Source could not draw them either -- `$basetexture` is a 2D sampler on
+#: `UnlitGeneric`, so a cube VTF bound there samples nothing meaningful in the 2004 engine; the
+#: cubemap reaches the screen only through another unit's `$envmap`, which reads the texture and
+#: never this material. Named here per unit rather than keyed on the class mismatch itself,
+#: exactly like `IGNOREZ_NAMED_DIVERGENCE_UNITS`: a cube `$basetexture` on a unit that *is* drawn
+#: keeps the loud failure (review finding 5 stands for every unit not on this list).
+CUBE_BASE_TEXTURE_DIVERGENCE_UNITS = frozenset({"envmap/gioint", "skybox/hav_env"})
+
+
+def _apply_cube_base_texture_divergence(params: _Params, master: str, key: str) -> None:
+    """Rule the `CUBE_BASE_TEXTURE_DIVERGENCE_UNITS` pair's unbound `BaseTexture` a named
+    divergence rather than a stage failure.
+
+    Unlike `_apply_static_frame_fallback` there is no lane to fall back onto: no master carries a
+    cube base-colour sampler, and adding one would author a look the VMT does not describe. So the
+    instance ships with `UseBaseTexture` off -- already resolved that way by
+    `_resolve_use_base_texture`, since the slot never entered `params.textures` -- and the reason
+    is written down once, in provenance, beside the anomaly that caused it."""
+
+    if key not in CUBE_BASE_TEXTURE_DIVERGENCE_UNITS:
+        return
+    required = REQUIRED_TEXTURE_SLOTS.get(master, frozenset())
+    for anomaly in params.anomalies:
+        if anomaly.get("kind") != "textureClassMismatch":
+            continue
+        parameter = anomaly.get("parameter")
+        if parameter not in required or anomaly.get("staged") != "TextureCube":
+            continue
+        if parameter in params.textures or parameter in params.static_frame_resolved:
+            continue
+        params.cube_base_resolved.add(parameter)
+        params.omissions.append({
+            "kind": "cubeBaseTextureProvenanceOnly",
+            "parameter": parameter,
+            "key": anomaly.get("key"),
+            "reason": (
+                f"{master}'s {parameter} is a Texture2D slot and this unit's authored texture "
+                "staged as a TextureCube (faces == 6); Source's 2D base sampler cannot draw it "
+                "either and nothing in the corpus draws this unit -- the cubemap is consumed "
+                "through another unit's $envmap. Recorded, never bound."
+            ),
+        })
+
+
 def _check_required_slots(params: _Params, master: str) -> None:
     """Raise when a required slot's only candidate texture was a `textureClassMismatch` -- the
     unit authored the key, it resolved, but the referenced texture staged as the wrong class, so
@@ -1521,7 +1587,8 @@ def _check_required_slots(params: _Params, master: str) -> None:
         anomaly["parameter"] for anomaly in params.anomalies
         if anomaly.get("kind") == "textureClassMismatch"
     }
-    missing = (required & mismatched) - set(params.textures) - params.static_frame_resolved
+    missing = ((required & mismatched) - set(params.textures)
+               - params.static_frame_resolved - params.cube_base_resolved)
     if missing:
         raise MaterialImportError(
             f"{master} requires {sorted(missing)}, but its referenced texture(s) staged as the "
@@ -1983,6 +2050,7 @@ def stage_unit(
             _apply_water_underside(params, master, key)
             _drop_unexposed_sine_uv(params, master)
             _apply_static_frame_fallback(params, master, texture_staging_root)
+            _apply_cube_base_texture_divergence(params, master, key)
             _check_required_slots(params, master)
             _apply_scene_fog_inscatter(params, master, blend_mode)
         # Review finding 2: state every switch the resolved master exposes, not only the ones a

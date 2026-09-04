@@ -31,7 +31,7 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from elysium_pipeline import paths
 from elysium_pipeline.asset_names import safe_name
@@ -882,6 +882,80 @@ def _prune_stale(root: Path, produced: set[Path]) -> int:
     return pruned
 
 
+def _fold_owner_collisions(entries: list[dict], failed: Callable[[str, str], None]) -> list[dict]:
+    """Two units folding to one `SM_` path is a defect in the fold, not a race one wins.
+
+    Takes the whole entry list a manifest is about to name -- this run's own staged rows the
+    first time it runs, and again over the merged list a scoped run's `_merge_prior_manifest`
+    hands back, so a unit this run kept from a prior run can still collide with one it staged
+    itself.
+    """
+
+    owners: dict[str, list[str]] = {}
+    for entry in entries:
+        owners.setdefault(entry["assetPath"].lower(), []).append(entry["unit"])
+    collided_paths = {path for path, units in owners.items() if len(units) > 1}
+    if not collided_paths:
+        return entries
+    kept: list[dict] = []
+    for entry in entries:
+        lowered = entry["assetPath"].lower()
+        if lowered in collided_paths:
+            others = sorted(set(owners[lowered]) - {entry["unit"]})
+            failed(entry["unit"][len("vtmb:model:"):], f"asset path collides with {', '.join(others)}")
+        else:
+            kept.append(entry)
+    return kept
+
+
+def _load_prior_manifest_for_merge(manifest_path: Path) -> dict | None:
+    """The prior manifest, only if a scoped run may trust it enough to merge into.
+
+    A missing file (first run ever) or a `schemaVersion`/`settingsVersion` mismatch (this run's
+    mapping no longer agrees with whatever staged those rows) both return `None` -- the caller's
+    only correct move at that point is the old outright replacement, because a row this run did
+    not itself produce is only safe to keep if the rules that produced it are still today's rules.
+    """
+
+    if not manifest_path.is_file():
+        return None
+    try:
+        document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(document, dict):
+        return None
+    if document.get("schemaVersion") != MANIFEST_SCHEMA or document.get("settingsVersion") != SETTINGS_VERSION:
+        return None
+    return document
+
+
+def _merge_prior_manifest(
+    prior_manifest: dict, entries: list[dict], keys: Sequence[str],
+) -> tuple[list[dict], set[str]]:
+    """Carry forward the rows and `keep` protection a scoped run's narrower selection leaves out.
+
+    `manifest.json` for a `--maps` run only ever lists this run's own `keys` -- the disk still
+    holds every sidecar an earlier, wider run staged (a scoped run never prunes), so a manifest
+    that dropped their rows would name a set the disk no longer matches. A prior row survives if
+    its unit is not in `keys` -- this run neither staged nor failed it, so the prior row is still
+    the only description of it there is. `keep` is unioned the same way, minus the units this run
+    named itself: this run's own `failed()` calls below are authoritative for those.
+    """
+
+    keys_set = set(keys)
+    carried = [
+        entry for entry in prior_manifest.get("assets") or ()
+        if isinstance(entry, dict) and isinstance(entry.get("unit"), str)
+        and entry["unit"].startswith("vtmb:model:")
+        and entry["unit"][len("vtmb:model:"):] not in keys_set
+    ]
+    prior_keep = {
+        path for path in prior_manifest.get("keep") or () if isinstance(path, str)
+    } - {asset_path_for(key) for key in keys}
+    return entries + carried, prior_keep
+
+
 def stage_models(
     export_v2_root: Path, staging_root_path: Path, *,
     maps: Sequence[str] | None = None, all_models: bool = False,
@@ -890,6 +964,14 @@ def stage_models(
     """Phase 1: stage every model the selection names and write the manifest.
 
     Exactly one of `maps` or `all_models` must be given -- the stage refuses to run unscoped.
+
+    A `--maps` run's manifest is a merge onto the prior one, not a replacement: `_prune_stale`
+    never runs for a scoped selection, so the disk still holds every sidecar an earlier, wider
+    run staged, and the manifest has to keep naming them or it describes a set the disk no longer
+    matches. `_merge_prior_manifest` carries forward the rows and `keep` entries this run's own
+    `keys` do not name; a schema or settings mismatch against the prior file (or no prior file at
+    all) falls back to the old outright replacement, because an old manifest is only trustworthy
+    merge material under the settings that produced it.
     """
 
     if bool(maps) == bool(all_models):
@@ -964,23 +1046,17 @@ def stage_models(
             continue
         produced.add(sidecar_path)
 
-    # Two units folding to one `SM_` path is a defect in the fold, not a race one wins.
-    owners: dict[str, list[str]] = {}
-    for entry in entries:
-        owners.setdefault(entry["assetPath"].lower(), []).append(entry["unit"])
-    collided_paths = {path for path, units in owners.items() if len(units) > 1}
-    if collided_paths:
-        kept: list[dict] = []
-        for entry in entries:
-            lowered = entry["assetPath"].lower()
-            if lowered in collided_paths:
-                others = sorted(set(owners[lowered]) - {entry["unit"]})
-                failed(entry["unit"][len("vtmb:model:"):], f"asset path collides with {', '.join(others)}")
-            else:
-                kept.append(entry)
-        entries = kept
+    entries = _fold_owner_collisions(entries, failed)
 
-    keep: set[str] = {MISSING_MODEL_ASSET_PATH}
+    manifest_path = root / MANIFEST_NAME
+    prior_keep: set[str] = set()
+    if not all_models:
+        prior_manifest = _load_prior_manifest_for_merge(manifest_path)
+        if prior_manifest is not None:
+            entries, prior_keep = _merge_prior_manifest(prior_manifest, entries, keys)
+            entries = _fold_owner_collisions(entries, failed)
+
+    keep: set[str] = {MISSING_MODEL_ASSET_PATH} | prior_keep
     for key in failed_keys:
         keep.add(asset_path_for(key))
         stale_sidecar = _sidecar_path(root, key)
@@ -1008,7 +1084,6 @@ def stage_models(
         "assets": entries,
     }
     root.mkdir(parents=True, exist_ok=True)
-    manifest_path = root / MANIFEST_NAME
     _write_if_changed(manifest_path, _json_bytes(manifest))
     produced.add(manifest_path)
     result.manifest_path = manifest_path

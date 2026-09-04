@@ -575,8 +575,11 @@ bool FElysiumGenesisEntsTest::RunTest(const FString&)
 
 
 // Every exported ChangeNow output must resolve through the real trigger_changelevel registry.
-// The 23-map test bench additionally guards all 88 shipped wires, including the five authored
-// wires whose target names are not present in their own map and cannot be classified by target.
+// The 88-wire count was measured on the 23-map bench of docs/vtmb/exported-map-event-surface.md,
+// so it is counted over exactly those maps by name: the export root now reaches all 108 maps of
+// the patch-first install and a corpus-wide literal would go stale on every widening. The bench
+// guard is what catches a regression in the five authored wires whose target names are absent
+// from their own map and so cannot be classified by target.
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChangeLevelInputCoverageTest,
@@ -600,7 +603,20 @@ bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 		return false;
 	}
 
+	// The bench of docs/vtmb/exported-map-event-surface.md "Evidence snapshot and reproduction".
+	static const TSet<FString> BenchMaps = {
+		TEXT("la_hub_1"),
+		TEXT("sm_apartment_1"), TEXT("sm_asylum_1"), TEXT("sm_bailbonds_1"), TEXT("sm_basement_1"),
+		TEXT("sm_coffee_1"), TEXT("sm_diner_1"), TEXT("sm_gallery_1"), TEXT("sm_hub_1"),
+		TEXT("sm_junkyard_1"), TEXT("sm_medical_1"), TEXT("sm_oceanhouse_1"),
+		TEXT("sm_pawnshop_1"), TEXT("sm_pawnshop_2"), TEXT("sm_pier_1"), TEXT("sm_shreknet_1"),
+		TEXT("sm_smoke_1"), TEXT("sm_tattoo"), TEXT("sm_vamparena"), TEXT("sm_warehouse_1"),
+		TEXT("sp_genesisdevice_1"), TEXT("sp_theatre"), TEXT("sp_tutorial_1")
+	};
+	TSet<FString> BenchMapsSeen;
+
 	int32 ChangeNowWires = 0;
+	int32 BenchChangeNowWires = 0;
 	int32 UnknownInputs = 0;
 	for (const FString& EntsPath : EntsFiles)
 	{
@@ -611,6 +627,12 @@ bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 			continue;
 		}
 
+		const bool bOnBench = BenchMaps.Contains(Defs.MapName);
+		if (bOnBench)
+		{
+			BenchMapsSeen.Add(Defs.MapName);
+		}
+
 		for (const FElysiumEntityDef& Source : Defs.Defs)
 		{
 			for (const FElysiumOutputDef& Wire : Source.Outputs)
@@ -618,6 +640,7 @@ bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 				const bool bIsChangeNow =
 					Wire.Input.Equals(TEXT("ChangeNow"), ESearchCase::IgnoreCase);
 				ChangeNowWires += bIsChangeNow ? 1 : 0;
+				BenchChangeNowWires += (bIsChangeNow && bOnBench) ? 1 : 0;
 
 				bool bTargetsChangeLevel = false;
 				for (const FElysiumEntityDef& Target : Defs.Defs)
@@ -644,17 +667,20 @@ bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 		}
 	}
 
-	AddInfo(FString::Printf(TEXT("trigger_changelevel corpus: %d ChangeNow wires, %d unknown inputs"),
-		ChangeNowWires, UnknownInputs));
-	if (EntsFiles.Num() >= 23)
+	AddInfo(FString::Printf(
+		TEXT("trigger_changelevel corpus: %d map(s), %d ChangeNow wires, %d unknown inputs; ")
+		TEXT("bench: %d/%d map(s), %d ChangeNow wires"),
+		EntsFiles.Num(), ChangeNowWires, UnknownInputs,
+		BenchMapsSeen.Num(), BenchMaps.Num(), BenchChangeNowWires));
+	if (BenchMapsSeen.Num() == BenchMaps.Num())
 	{
 		TestEqual(TEXT("the complete test bench carries all 88 ChangeNow wires"),
-			ChangeNowWires, 88);
+			BenchChangeNowWires, 88);
 	}
 	else
 	{
-		AddInfo(FString::Printf(TEXT("partial corpus: validated %d exported map(s)"),
-			EntsFiles.Num()));
+		AddInfo(FString::Printf(TEXT("partial bench: %d of %d bench map(s) exported"),
+			BenchMapsSeen.Num(), BenchMaps.Num()));
 	}
 	TestEqual(TEXT("every trigger_changelevel input resolves"), UnknownInputs, 0);
 	return true;
@@ -2862,9 +2888,26 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 			Height->CompressionSettings, TC_Displacementmap);
 	}
 
-	UTextureCube* SourceCube = LoadObject<UTextureCube>(nullptr,
-		TEXT("/ElysiumBaked/sm_hub_1/Textures/Cubes/TC_cubemapdefault.TC_cubemapdefault"));
-	if (TestNotNull(TEXT("patch source cubemap loads"), SourceCube))
+	// Which lane sm_hub_1's world surfaces are on decides where its wet materials and its baked
+	// env probe live, and how the wetness reaches the surface at all:
+	//
+	//  - legacy: the bake copies each wet material into `<map>/Materials` and stamps the map's own
+	//    cube into it (`bake_map.py::_stage_wet_cubemaps`), so `SourceCube` +
+	//    `WetnessUsesSourceCube` select the patch-authored reflection endpoint on `M_World_*`.
+	//  - V2 (R5.3/R5.4): the map authors NO material package. The face binds the corpus's own
+	//    map-scoped instance under `/ElysiumBaked/Materials/maps/<map>/...`, a child of the
+	//    unpatched unit's `MI_`, and inherits `WetnessScale`/`WetnessDriven` from it -- wetness is
+	//    `saturate(GlobalWetness x WetnessScale x WetnessOutputScale)` off `MPC_ElysiumEnvironment`
+	//    on `M_V2_Lit`, with no `SourceCube` parameter at all. The baked probe stays a corpus
+	//    texture cited in provenance (`_resolve_envmap`'s `patchedProbe`); the image a V2 surface
+	//    actually reflects comes from the reflection captures R5.5 stands at those same probes.
+	const bool bOnV2 = ElysiumMapTransport::IsMapOnV2Models(TEXT("sm_hub_1"));
+	const FString SourceCubePath = bOnV2
+		? FElysiumContentPaths::BakedCubeTexture(TEXT("maps/sm_hub_1/cubemapdefault"))
+		: FString(TEXT("/ElysiumBaked/sm_hub_1/Textures/Cubes/TC_cubemapdefault.TC_cubemapdefault"));
+	UTextureCube* SourceCube = LoadObject<UTextureCube>(nullptr, *SourceCubePath);
+	if (TestNotNull(*FString::Printf(TEXT("patch source cubemap loads: %s"), *SourceCubePath),
+		SourceCube))
 	{
 #if WITH_EDITORONLY_DATA
 		TestEqual(TEXT("source cubemap width"), SourceCube->Source.GetSizeX(), int64(32));
@@ -2877,47 +2920,71 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 		const TCHAR* Name;
 		float Scale;
 	};
+	// The 14 `GlobalWetness` surfaces of sm_hub_1 (`bake_map.py::_stage_wet_cubemaps` refuses any
+	// other count), keyed by their authored material -- the identity both lanes fold their own
+	// asset name out of. The scales are the units' own `globalwetness` proxy values, and the V2
+	// lane stages exactly these onto the unpatched `MI_` each map-scoped child inherits from
+	// (`import materials`' manifest, `_apply_proxies`' `globalwetness` arm), so one table serves
+	// both lanes.
 	static const FWetMaterialExpectation WetMaterials[] = {
-		{TEXT("asphalt_asphaltasan_cubemapdefault"), 0.56f},
-		{TEXT("concrete_curbredsan_cubemapdefault"), 1.00f},
-		{TEXT("concrete_holsidewalkasan_cubemapdefault"), 1.00f},
-		{TEXT("concrete_ohcurbasan_cubemapdefault"), 1.00f},
-		{TEXT("concrete_ohsidewalkasan_cubemapdefault"), 1.00f},
-		{TEXT("grass_grassasan_cubemapdefault"), 1.00f},
-		{TEXT("ground_stnstreetasan_cubemapdefault"), 1.00f},
-		{TEXT("ground_streetasan_cubemapdefault"), 0.60f},
-		{TEXT("ground_streetbsan_cubemapdefault"), 0.60f},
-		{TEXT("ground_streetbsantrans_cubemapdefault"), 0.60f},
-		{TEXT("ground_streetcsan_cubemapdefault"), 0.60f},
-		{TEXT("ground_streetdsan_cubemapdefault"), 0.60f},
-		{TEXT("ground_streetesan_cubemapdefault"), 0.60f},
-		{TEXT("tile_tilefsan_cubemapdefault"), 1.00f},
+		{TEXT("asphalt/asphaltasan"), 0.56f},
+		{TEXT("concrete/curbredsan"), 1.00f},
+		{TEXT("concrete/holsidewalkasan"), 1.00f},
+		{TEXT("concrete/ohcurbasan"), 1.00f},
+		{TEXT("concrete/ohsidewalkasan"), 1.00f},
+		{TEXT("grass/grassasan"), 1.00f},
+		{TEXT("ground/stnstreetasan"), 1.00f},
+		{TEXT("ground/streetasan"), 0.60f},
+		{TEXT("ground/streetbsan"), 0.60f},
+		{TEXT("ground/streetbsantrans"), 0.60f},
+		{TEXT("ground/streetcsan"), 0.60f},
+		{TEXT("ground/streetdsan"), 0.60f},
+		{TEXT("ground/streetesan"), 0.60f},
+		{TEXT("tile/tilefsan"), 1.00f},
 	};
 	for (const FWetMaterialExpectation& Expected : WetMaterials)
 	{
-		const FString Path = FString::Printf(
-			TEXT("/ElysiumBaked/sm_hub_1/Materials/MI_%s.MI_%s"),
-			Expected.Name, Expected.Name);
+		// The legacy per-map copy folds the whole key into one asset name and keeps VBSP's own
+		// `_cubemapdefault` decoration; the corpus child keeps the key's directories and drops it,
+		// because the cube it names is the unit's map prefix rather than part of its stem.
+		const FString Path = bOnV2
+			? FElysiumContentPaths::BakedMapMaterial(TEXT("sm_hub_1"), Expected.Name)
+			: FString::Printf(TEXT("/ElysiumBaked/sm_hub_1/Materials/MI_%s_cubemapdefault.")
+				TEXT("MI_%s_cubemapdefault"),
+				*FElysiumContentPaths::MaterialSafeName(Expected.Name),
+				*FElysiumContentPaths::MaterialSafeName(Expected.Name));
 		UMaterialInstance* Instance = LoadObject<UMaterialInstance>(nullptr, *Path);
 		if (!TestNotNull(*FString::Printf(TEXT("wet MIC loads: %s"), *Path), Instance))
 		{
 			continue;
 		}
+		// Resolved through the parent chain on both lanes, which is the point on V2: the map-scoped
+		// child overrides nothing, so a scale that stops arriving means the corpus parent it hangs
+		// off is gone or no longer carries the unit's own proxy value.
 		float Scale = -1.0f;
 		TestTrue(TEXT("wet MIC carries authored scale"),
 			Instance->GetScalarParameterValue(TEXT("WetnessScale"), Scale));
 		TestEqual(TEXT("wet MIC preserves patch scale"), Scale, Expected.Scale, 1e-4f);
-		UTexture* BoundCube = nullptr;
-		TestTrue(TEXT("wet MIC binds SourceCube"),
-			Instance->GetTextureParameterValue(TEXT("SourceCube"), BoundCube));
-		TestTrue(TEXT("all wet MICs bind the same cube"), BoundCube == SourceCube);
-		bool bUsesSourceCube = false;
-		FGuid SwitchGuid;
-		TestTrue(TEXT("wet MIC overrides WetnessUsesSourceCube"),
-			Instance->GetStaticSwitchParameterValue(
-				FHashedMaterialParameterInfo(TEXT("WetnessUsesSourceCube")),
-				bUsesSourceCube, SwitchGuid, true));
-		TestTrue(TEXT("wet MIC selects the source-cube permutation"), bUsesSourceCube);
+		// The gate on the wetness term itself (`lerp(1, wet, WetnessDriven)`), stamped by both
+		// lanes: without it the scale above is authored onto a surface that never goes wet.
+		float Driven = -1.0f;
+		TestTrue(TEXT("wet MIC carries WetnessDriven"),
+			Instance->GetScalarParameterValue(TEXT("WetnessDriven"), Driven));
+		TestEqual(TEXT("wet MIC is on the wetness lane"), Driven, 1.0f, 1e-4f);
+		if (!bOnV2)
+		{
+			UTexture* BoundCube = nullptr;
+			TestTrue(TEXT("wet MIC binds SourceCube"),
+				Instance->GetTextureParameterValue(TEXT("SourceCube"), BoundCube));
+			TestTrue(TEXT("all wet MICs bind the same cube"), BoundCube == SourceCube);
+			bool bUsesSourceCube = false;
+			FGuid SwitchGuid;
+			TestTrue(TEXT("wet MIC overrides WetnessUsesSourceCube"),
+				Instance->GetStaticSwitchParameterValue(
+					FHashedMaterialParameterInfo(TEXT("WetnessUsesSourceCube")),
+					bUsesSourceCube, SwitchGuid, true));
+			TestTrue(TEXT("wet MIC selects the source-cube permutation"), bUsesSourceCube);
+		}
 		TArray<FMaterialResource*> Sm6Resources;
 		FMaterialResource* Sm6 = FindOrCreateMaterialResource(
 			Sm6Resources, Instance->GetMaterial(), Instance,

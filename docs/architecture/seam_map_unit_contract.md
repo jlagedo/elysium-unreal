@@ -351,8 +351,9 @@ exports_v2/<kind>/<dir>/<base>.glb  ->  /ElysiumBaked/<Kind>/<dir'>/<Prefix>_<ba
   `DA_WieldModels`, `DA_PlacedModels`, `DA_CinematicSets`, `DA_Cast`, `DA_ExpressionTables`,
   `SM_Missing`, `MI_Missing`, `T_MissingChecker`.
 - **Composed from several units of one kind** with a common directory — a sky cube from six
-  faces — the composite lands in that directory, named for the composite:
-  `Textures/skybox/TC_<sky>`.
+  faces — the composite lands in that directory, **written by the lane that owns that kind root**
+  and carrying a `<Role>` so it can never collide with a unit's own asset:
+  `Textures/skybox/TC_<sky>_Sky`. The stage refuses a composite path equal to a unit path.
 - **One resolver.** `elysium_pipeline.asset_paths.baked_path(kind, key, prefix, role=None,
   label=None)` and `FElysiumContentPaths::BakedUnit(...)` are twins over one golden fixture that
   covers every kind, every prefix and role, the folded segments and the per-label nest; each
@@ -360,22 +361,37 @@ exports_v2/<kind>/<dir>/<base>.glb  ->  /ElysiumBaked/<Kind>/<dir'>/<Prefix>_<ba
   built from the raw source path it already holds (`vtmb:model:` + the path below `models/`
   without `.mdl`); no consumer recomputes a stem. `static_stem`, `PropModelStem`, `mesh_asset`,
   `texture_asset_name`, `baked_asset_name` and every stem-keyed accessor retire.
-- **Keyed tables key by id.** `DA_PropSkins`, `DA_WieldModels`, `DA_PlacedModels`, the
-  registries and the authored tuning assets that name a body (`DA_ClothTuning`,
-  `DA_HairDynamics`) key their rows by unit id. A human-facing stem — a capture, an oracle file, a
+- **Keyed tables key by id, with no exception.** `DA_PropSkins`, `DA_WieldModels`,
+  `DA_PlacedModels`, the registries and the authored tuning assets that name a body
+  (`DA_ClothTuning`, `DA_HairDynamics`) key their rows by unit id — `DA_WieldModels` by the
+  item's `vtmb:vdata:items/<classname>`, whose tail is the classname its caller already passes. A human-facing stem — a capture, an oracle file, a
   debug picker, a CLI argument — resolves through `Models/_Corpus/DA_Cast` (stem ↔ id, written by
   the model lane's stage), never through a fold.
 - **Provenance** on every asset carries `AssetId`; the asset-registry tag makes the id searchable
   without loading the asset.
-- **Generated, not baked**, stays under `/Game/ElysiumGenerated`: the masters, `NS_<root>`, the
-  boot map, the lookdev map, the sky dome mesh and material.
-- **Landing.** A lane writes its own kind root and nothing else. The legacy roots — `Shared/`,
-  `Characters/`, `Props/`, `Items/`, `Meshes/`, `Sprites/`, `Sky/`, `Lookdev/`, the per-map folders
-  at the mount root — receive nothing new and are deleted by the task that retires their producer.
-  "Beside, not over" was the rule while two producers had to coexist for a bisect; under one
-  resolver the roots differ by kind, not by lane, and coexistence is per unit through the
-  producer-assignment list of `docs/project/characters_r8.md` → D5.
+- **Generated, not baked, is a criterion and not a list.** An asset derived from a VtMB unit
+  lands under its kind root with an `AssetId`, a producer stamp and a manifest-driven prune;
+  `/Game/ElysiumGenerated` holds only assets with **no VtMB unit behind them** — the masters, the
+  boot map, the lookdev map, the sky dome mesh, the authored `NS_` base emitters. The namespace
+  gets the same discipline: `build_content.py`'s `GENERATORS` is the claim list, and
+  `uv run elysium build content` reports and deletes any package no listed generator claims. A
+  generator retires in the same task as the assets it authors.
+- **Landing and prune are by producer, not by path.** A kind root can hold assets from more
+  than one producer (four lanes write into `Models/`; the map bake writes a sprite instance into
+  `Materials/` and a sky cube into `Textures/`), so every baked asset carries an
+  `ElysiumProducer` registry tag beside `ElysiumRecipe`, stamped by the same `stamp_recipe` call
+  every lane already makes and readable off the registry without loading. **A run deletes an
+  asset under its prune scope only when that asset's producer is this run's lane and this run's
+  manifest neither names nor keeps it.** A foreign or unstamped asset is reported in
+  `import_report.json` and never deleted; a partial-cutover manifest sets `pruneScope: null`.
+- **Legacy roots are named, each with the task that empties it.** A tracked list beside the
+  resolver's kind roots — `Shared/` (the legacy map bake's corpus, R9.2), `Characters/` (R8.2),
+  `Props/` (R8.4), `Items/` (R8.3) — receives nothing new, and a registry test asserts that every
+  asset on the mount is under a kind root, under `/Game/ElysiumGenerated`, or under a listed
+  legacy root. "Beside, not over" was the rule while two producers had to coexist for a bisect;
+  under one resolver the roots differ by kind, not by lane, and coexistence is per unit through
+  the producer-assignment list of `docs/project/characters_r8.md` → D5.
 
 Adopted 2026-09-04 (`docs/project/characters_r8.md` → D1); the lanes that drift from it —
 models (flat `Meshes/SM_<stem>`), maps (at the mount root), sprites, detail instances, sky,
-lookdev, the placeholders — move in R8.0, and every later lane lands on it.
+lookdev, the placeholders — move in R8.0a, and every later lane lands on it.

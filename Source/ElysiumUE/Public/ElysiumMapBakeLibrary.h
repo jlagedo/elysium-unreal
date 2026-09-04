@@ -12,7 +12,8 @@ class UWorld;
  * The editor-only questions `pipeline/unreal/bake_map.py` asks about a level's reflection captures
  * (R5.5, `docs/architecture/seam_map_map.md` -> "## Import -- reflection captures (R5.5)"), which
  * have no Python scripting surface of their own: rendering the placed captures' contents into the
- * level's `UMapBuildDataRegistry`, and counting how many captures actually carry that data.
+ * level's `UMapBuildDataRegistry`, counting how many captures actually carry that data, saving the
+ * separate `_BuiltData` package that registry lives in, and re-counting off the saved file.
  *
  * The build is `UEditorEngine::BuildReflectionCaptures` -- the same call the editor's Build ->
  * Reflection Captures menu makes (waits for pending shader/asset compiles, refreshes the sky
@@ -52,6 +53,49 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Map Bake")
 	static int32 CountBuiltReflectionCaptures(UWorld* World, int32& OutComponents);
+
+	/**
+	 * Save `World`'s persistent level `UMapBuildDataRegistry` into its own `<map>_BuiltData`
+	 * package, and answer whether that package is on disk once the save returns.
+	 *
+	 * `BuildReflectionCaptures` writes the rendered cubes into the registry, and the registry is a
+	 * SECOND package beside the level (`ULevel::CreateMapBuildDataPackage`). Saving the level does
+	 * not carry it: the editor's own save collects the built-data packages separately
+	 * (`InternalGetMapDataPackages` in FileHelpers.cpp), and a bake that saves only the `.umap`
+	 * leaves every capture it just built in memory, so the shipped level loads with the registry
+	 * absent and every capture unbuilt.
+	 *
+	 * A registry that lives in the level's own package (`IsLegacyBuildData`) is refused rather
+	 * than saved -- nothing this project authors produces one, and the caller asked about a
+	 * `_BuiltData` package that in that case does not exist.
+	 *
+	 * **Call this AFTER the capture build, and never call `save_map` between the two.** A level
+	 * save drains `UMapBuildDataRegistry::ReflectionCaptureBuildData` on its way through: measured
+	 * on `sm_pawnshop_1`, 14 of 14 components answered before the save and 0 of 14 after it, same
+	 * registry object, same package, every `MapBuildDataId` unchanged. The bake therefore builds
+	 * once before its `save_map` (so the level saves with a registry to link) and once after (so
+	 * the registry the saved level points at has the cubes), and this is the only write that
+	 * follows the second build. See `bake_map.Bake.stage_level`.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Map Bake")
+	static bool SaveMapBuildData(UWorld* World);
+
+	/**
+	 * `CountBuiltReflectionCaptures` re-asked of what is ON DISK: unload the level package and its
+	 * `_BuiltData` sibling, load the level again from its file, and count the capture components
+	 * whose registry entry carries a rendered cube. Returns -1 when the package does not exist or
+	 * holds no world -- distinct from 0, "loaded and nothing is built".
+	 *
+	 * The unload is what makes the answer worth having. `LoadPackage` hands back the copy already
+	 * in memory, so a count taken without it re-reads the registry the bake built rather than the
+	 * one it wrote, and the two disagree exactly in the case worth catching: a `_BuiltData`
+	 * package that never reached disk. Unloading the editor's current world closes it
+	 * (`UnloadBakedPackages`), so this is asked after a map is finished, never mid-bake.
+	 *
+	 * `LevelPackagePath` is the level's package name (`/ElysiumBaked/<map>/<map>`).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Map Bake")
+	static int32 CountBuiltReflectionCapturesInPackage(const FString& LevelPackagePath);
 
 	/**
 	 * Simulate `Frames` engine frames through `CommandletHelpers::TickEngine` (Engine's own

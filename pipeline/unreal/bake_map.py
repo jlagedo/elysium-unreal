@@ -1819,6 +1819,65 @@ class Bake(object):
         build on the legacy lane; the V2 lane overrides and asserts the count."""
         return 0
 
+    def _assert_saved_captures(self, map_path, placed):
+        """Re-count the built captures off the SAVED level, and fail the map when they are absent.
+
+        `_build_captures` asserted `built == placed` in memory. Nothing asserted the same of the
+        file, and the cubes are not in the `.umap`: `ULevel::CreateMapBuildDataPackage` gives the
+        registry a package of its own, `<map>_BuiltData`, which is saved as a second act and can
+        therefore be lost on its own -- which is what `Elysium.Content.MapBake.
+        ReflectionCapturesBuilt` was reporting, 0 rendered cubes on maps whose bake had said every
+        capture was built.
+
+        `UElysiumMapBakeLibrary::CountBuiltReflectionCapturesInPackage` drops both packages and
+        loads the level again, so the answer is the disk's rather than the copy already in memory;
+        -1 is "no package, or no world in it".
+
+        A level that fails here is deleted rather than only reported (`_discard_stamped_level`):
+        it is on disk carrying this run's recipe stamp, so leaving it would have the next run
+        REUSE a level whose captures are black with nothing saying so.
+        """
+        built = int(unreal.ElysiumMapBakeLibrary.count_built_reflection_captures_in_package(
+            map_path))
+        if built == placed:
+            log("level: %d capture(s) re-counted on the saved level" % built)
+            return True
+        if built < 0:
+            fail("level: %s did not re-open after the save" % map_path)
+        else:
+            fail("level: %s reloaded with %d of %d capture(s) carrying MapBuildData"
+                 % (map_path, built, placed))
+        self._discard_stamped_level(map_path)
+        return False
+
+    def _discard_stamped_level(self, map_path):
+        """Delete a level that reached disk carrying this run's recipe stamp.
+
+        EVERY exit from `save_map` onwards comes through here. `tracker.stamp` runs before the
+        save, so a run that writes the `.umap` and then fails on the second capture build, on
+        `<map>_BuiltData` or on the re-count leaves a level the next non-forced bake reads as
+        current: `AssetTracker.register` finds it present with a matching recipe, logs "level:
+        reused", skips the builds and the re-count entirely, and the map exits 0 with black probes
+        and nothing said. Deleting is the only way to make a failed bake un-reusable, because the
+        stamp is already written and the file is already there.
+
+        The editor is still standing on this world on the paths that fail before the re-count, and
+        `delete_asset` cannot take the level out from under it -- so it is moved off first, the
+        same `NewBlankMap` release `release_baked_packages` does for the same reason. The re-count
+        path arrives here already released (`UPackageTools::UnloadPackages` opens a fresh map when
+        it unloads the editor's own), where the second open is a no-op sweep.
+        """
+        if not unreal.EditorLoadingAndSavingUtils.new_blank_map(False):
+            fail("level: no blank map to release %s onto before deleting it" % map_path)
+        # A save that answered False may have written nothing at all, and there is then nothing
+        # to make un-reusable -- only a delete that was ASKED for and refused is an error.
+        if not unreal.EditorAssetLibrary.does_asset_exist(map_path):
+            log("level: nothing to discard -- %s never reached the mount" % map_path)
+            return
+        bl.delete_owned_asset(map_path)
+        log("level: deleted the stamped %s -- a saved level with unbuilt captures would be "
+            "REUSED by the next bake" % map_path)
+
     def _bake_sky_cube(self, sky_name):
         """`/ElysiumBaked/Sky/Textures/TC_Sky_<SkyName>` (R5.2): the same
         `ElysiumEnvironment::BuildSkyCubeFrom` join the runtime still runs at load for every map
@@ -2114,21 +2173,72 @@ class Bake(object):
         log("level: %d light actors (%d in the 3D skybox)" % (lights, sky_lights))
         self._place_sky(actors, sky_ambient)
         self._place_player_start(actors)
-        # R5.5: captures last, so every surface, prop, light and the sky are in the render; the
-        # build writes `<map>_BuiltData`, which `save_map` below saves beside the level.
+        # R5.5: captures last, so every surface, prop, light and the sky are in the render.
         captures = self._place_captures(actors, sky_scale, sky_origin)
+        # **Built once before the save and once after it, because the two halves of a reflection
+        # capture are lost in opposite orders.** Measured on `sm_pawnshop_1` (2026-09-04), each
+        # half on its own:
+        #
+        # * Built only BEFORE `save_map`: the level saves with its `MapBuildData` link, and the
+        #   registry reaches disk EMPTY -- 14 of 14 in memory before the save, 0 of 14 on a
+        #   reload, same registry object (`#67486`), every `MapBuildDataId` unchanged. The save
+        #   drains `UMapBuildDataRegistry::ReflectionCaptureBuildData`; it does not re-key it.
+        # * Built only AFTER `save_map`: the entries survive to disk, and the level reloads with
+        #   **no registry at all** (`registry ABSENT on the level`, read by
+        #   `Elysium.Content.MapBake.ReflectionCapturesBuilt` on a fresh editor) -- the registry
+        #   is created by the first build, so a level saved before it has nothing to link.
+        #
+        # So the first build exists to give the level something to point at when it saves, and
+        # the second to put the cubes back into the registry it now points at. Only the registry
+        # package is written after the second build: another `save_map` would drain it again, and
+        # the level needs no second write, because a capture's id is made when its component is
+        # constructed rather than by the render -- the `.umap` already carries every id this build
+        # keys by. That is the whole of why `ReflectionCapturesBuilt` read 0 rendered cubes on
+        # every converted map while the bake's own in-memory count said all of them were built.
         if captures:
             built = self._build_captures(world, captures)
             log("level: %d reflection capture actors, %d built" % (captures, built))
 
         self.tracker.stamp(world, map_path)
-        if unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):
-            self.tracker.built("level")
-            log("level: saved %s (%.1fs)" % (map_path, time.time() - start))
-            return True
-        else:
+        if not unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):
             fail("level save failed: %s" % map_path)
+            # A refused save can still have left a partial `.umap` behind, and it would carry
+            # this run's stamp: discarded like every other post-stamp exit.
+            world = None
+            self._discard_stamped_level(map_path)
             return False
+        if captures:
+            # The level is on the mount from here on, stamped with this run's recipe, so every
+            # way out of this block deletes it -- including the `SystemExit` `_build_captures`
+            # raises, which would otherwise end the process leaving the next run a level it
+            # reuses without ever rendering a cube into it.
+            try:
+                rebuilt = self._build_captures(world, captures)
+                log("level: %d capture(s) re-rendered into the saved level's registry" % rebuilt)
+                # `<map>_BuiltData` is a sibling package no level save carries, so it is written
+                # on its own -- and the library fully loads it first, because the mount's previous
+                # copy arrives here partially loaded and `UPackage::Save` calls `appError` on that.
+                saved_build_data = unreal.ElysiumMapBakeLibrary.save_map_build_data(world)
+            except BaseException:
+                world = None
+                self._discard_stamped_level(map_path)
+                raise
+            if not saved_build_data:
+                fail("level: %s saved with its %d built capture(s) left in memory -- no _BuiltData "
+                     "package on disk" % (map_path, captures))
+                world = None
+                self._discard_stamped_level(map_path)
+                return False
+        # Dropped before the re-count, and load-bearing: the count unloads the level and its
+        # `_BuiltData` sibling to force the read off disk, and a live `unreal` wrapper is a root
+        # for the editor's collector -- the unload would find this world still reachable, the
+        # load would hand back the copy already in memory, and the check would prove nothing.
+        world = None
+        if captures and not self._assert_saved_captures(map_path, captures):
+            return False
+        self.tracker.built("level")
+        log("level: saved %s (%.1fs)" % (map_path, time.time() - start))
+        return True
 
     def _read_env(self):
         """<map>.env as key -> [tokens]. Absent on a map with no environment sidecar at all."""
@@ -2674,8 +2784,11 @@ def _release_map_packages(map_name):
     `RF_Standalone` on all of them and frees nothing -- while still running them through
     `ResetLoaders`, which by its own comment forces attached bulk-data payloads to load into
     memory, so the release would end the map slightly heavier than it found it. `NewBlankMap`
-    ahead of the unload hands the collector an empty scene on both paths. The last map in a batch
-    is released the same way as every other, so no process ends still holding a level.
+    ahead of the unload hands the collector an empty scene on both paths -- and on the third, a
+    converted map whose captures were re-counted off disk, where the editor is already standing in
+    the blank map that count's own unload opened and the level is a package like any other on the
+    mount. The last map in a batch is released the same way as every other, so no process ends
+    still holding a level.
     """
     gc.collect()
     if not unreal.EditorLoadingAndSavingUtils.new_blank_map(False):

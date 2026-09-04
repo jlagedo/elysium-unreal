@@ -8,8 +8,11 @@
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "HAL/FileManager.h"
+#include "Misc/PackageName.h"
 #include "RenderingThread.h"
 #include "UObject/Package.h"
+#include "UObject/SavePackage.h"
 #include "UObject/UObjectIterator.h"
 
 #if WITH_EDITOR
@@ -59,7 +62,22 @@ int32 UElysiumMapBakeLibrary::CountBuiltReflectionCaptures(UWorld* World, int32&
 	// `UReflectionCaptureComponent::GetMapBuildData`, which needs `ULevel::OwningWorld` and a
 	// lighting-scenario walk that a package-loaded world outside any world context never gets.
 	const UMapBuildDataRegistry* Registry = Level->MapBuildData;
+	// **Why a miss missed, tallied.** "0 of 24" is four different defects wearing one number --
+	// the level reloaded without a registry at all, the registry loaded but holds no entry under
+	// this component's `MapBuildDataId`, the entry exists with no cube size, or it has a size and
+	// no bytes. Each points somewhere else (the level's import, the id, the render, the save's
+	// strip), and reading the number without them is guessing.
+	int32 NoEntry = 0;
+	int32 NoCubemap = 0;
+	int32 NoBytes = 0;
 	int32 Built = 0;
+	// The first id the registry could not answer for, and the first id there is. Printed together
+	// because "no entry" has two very different causes and only the guids tell them apart: an id
+	// the level carries that the registry never held (the render keyed something else), or an id
+	// the level REWROTE after the registry was keyed (a save-time regeneration, which no amount of
+	// re-saving the registry can fix).
+	FGuid FirstMissingId;
+	FGuid FirstId;
 	for (const AActor* Actor : Level->Actors)
 	{
 		if (Actor == nullptr)
@@ -73,6 +91,10 @@ int32 UElysiumMapBakeLibrary::CountBuiltReflectionCaptures(UWorld* World, int32&
 			{
 				continue;
 			}
+			if (OutComponents == 0)
+			{
+				FirstId = Capture->MapBuildDataId;
+			}
 			++OutComponents;
 			if (Registry == nullptr)
 			{
@@ -83,13 +105,170 @@ int32 UElysiumMapBakeLibrary::CountBuiltReflectionCaptures(UWorld* World, int32&
 			// A rendered cube: a size and the full-HDR bytes an uncooked package serializes. Every
 			// caller is an editor process (the bake, `bake_verify.py`, the Content test); a `-game`
 			// process empties both after the GPU upload and never asks.
-			if (Data != nullptr && Data->CubemapSize > 0 && Data->FullHDRCapturedData.Num() > 0)
+			if (Data == nullptr)
+			{
+				if (NoEntry == 0)
+				{
+					FirstMissingId = Capture->MapBuildDataId;
+				}
+				++NoEntry;
+			}
+			else if (Data->CubemapSize <= 0)
+			{
+				++NoCubemap;
+			}
+			else if (Data->FullHDRCapturedData.Num() == 0)
+			{
+				++NoBytes;
+			}
+			else
 			{
 				++Built;
 			}
 		}
 	}
+	if (Built < OutComponents)
+	{
+		UE_LOG(LogElysiumMapBake, Warning,
+			TEXT("CountBuiltReflectionCaptures: %s -- %d of %d built; registry %s, %d id(s) with ")
+			TEXT("no entry, %d entry(ies) with no cube size, %d with a size and no full-HDR bytes"),
+			*World->GetOutermost()->GetName(), Built, OutComponents,
+			Registry == nullptr ? TEXT("ABSENT on the level")
+				: *FString::Printf(TEXT("%s #%u"), *Registry->GetPathName(),
+					Registry->GetUniqueID()),
+			NoEntry, NoCubemap, NoBytes);
+		UE_LOG(LogElysiumMapBake, Warning,
+			TEXT("CountBuiltReflectionCaptures: first component id %s, first unanswered id %s"),
+			*FirstId.ToString(EGuidFormats::DigitsWithHyphens),
+			*FirstMissingId.ToString(EGuidFormats::DigitsWithHyphens));
+	}
+	else
+	{
+		UE_LOG(LogElysiumMapBake, Log,
+			TEXT("CountBuiltReflectionCaptures: %d of %d built, registry %s #%u, first component ")
+			TEXT("id %s"),
+			Built, OutComponents,
+			Registry == nullptr ? TEXT("none") : *Registry->GetPathName(),
+			Registry == nullptr ? 0u : Registry->GetUniqueID(),
+			*FirstId.ToString(EGuidFormats::DigitsWithHyphens));
+	}
 	return Built;
+}
+
+bool UElysiumMapBakeLibrary::SaveMapBuildData(UWorld* World)
+{
+#if WITH_EDITOR
+	if (World == nullptr || World->PersistentLevel == nullptr)
+	{
+		UE_LOG(LogElysiumMapBake, Warning, TEXT("SaveMapBuildData: null world -- nothing saved"));
+		return false;
+	}
+	UMapBuildDataRegistry* Registry = World->PersistentLevel->MapBuildData;
+	if (Registry == nullptr)
+	{
+		UE_LOG(LogElysiumMapBake, Warning,
+			TEXT("SaveMapBuildData: %s carries no MapBuildData -- nothing saved"),
+			*World->GetOutermost()->GetName());
+		return false;
+	}
+	UPackage* Package = Registry->GetOutermost();
+	if (Package == nullptr || Registry->IsLegacyBuildData())
+	{
+		UE_LOG(LogElysiumMapBake, Warning,
+			TEXT("SaveMapBuildData: %s holds its build data in the level package itself -- there ")
+			TEXT("is no _BuiltData package to save"),
+			*World->GetOutermost()->GetName());
+		return false;
+	}
+	// What the registry still answers for at the moment of the save. Between the build and here
+	// the world was renamed out of its scratch package by `save_map`, and a registry that lost its
+	// entries in that move would be saved faithfully and still be empty -- which reads downstream
+	// exactly like a save that failed.
+	{
+		int32 Components = 0;
+		const int32 Live = CountBuiltReflectionCaptures(World, Components);
+		UE_LOG(LogElysiumMapBake, Log,
+			TEXT("SaveMapBuildData: %s answers for %d of %d capture component(s) before the save"),
+			*Package->GetName(), Live, Components);
+	}
+	// **Fully loaded first, or `UPackage::Save` calls `appError` and takes the commandlet with
+	// it.** The mount already carries a `<map>_BuiltData` from the previous bake, and the level
+	// load that reached it pulled in only the exports it was asked for, so the package arrives
+	// here partially loaded. `FEditorFileUtils::SaveWorld` meets the same thing on the level's own
+	// package and answers it with `MarkAsFullyLoaded` for the same stated reason ("usually set
+	// implicitly by calling IsFullyLoaded before saving, but that path can get skipped for
+	// levels"); the registry needs the real load, because its unloaded exports are the build data.
+	Package->FullyLoad();
+	const FString FileName = FPackageName::LongPackageNameToFilename(
+		Package->GetName(), FPackageName::GetAssetPackageExtension());
+	FSavePackageArgs Args;
+	// The flags `ULevel::GetOrCreateMapBuildData` gives the registry it creates. Without them the
+	// save keeps only what `Registry` itself references and drops the registry object, writing a
+	// package whose captures are all unbuilt -- the very failure this call exists to prevent.
+	Args.TopLevelFlags = RF_Standalone | RF_Public;
+	// A commandlet has no slow-task UI to feed, and the progress scope asserts outside one.
+	Args.bSlowTask = false;
+	const FSavePackageResultStruct Result = UPackage::Save(Package, Registry, *FileName, Args);
+	// Both answers, because neither one alone is the truth here. A save that reports success and
+	// leaves nothing on disk is indistinguishable downstream from one that never ran -- and the
+	// file existing proves nothing on its own, because the mount already carried a
+	// `<map>_BuiltData` from the PREVIOUS bake before this call (that is why `FullyLoad` is
+	// above), so a failed save would find the old file there and report it as this run's.
+	const bool bSaved = Result.IsSuccessful();
+	const bool bOnDisk = IFileManager::Get().FileExists(*FileName);
+	if (bSaved && bOnDisk)
+	{
+		UE_LOG(LogElysiumMapBake, Log, TEXT("SaveMapBuildData: %s saved (result %d)"),
+			*Package->GetName(), static_cast<int32>(Result.Result));
+	}
+	else
+	{
+		UE_LOG(LogElysiumMapBake, Warning,
+			TEXT("SaveMapBuildData: %s did not save -- UPackage::Save %s (result %d), file %s"),
+			*Package->GetName(), bSaved ? TEXT("succeeded") : TEXT("failed"),
+			static_cast<int32>(Result.Result),
+			bOnDisk ? TEXT("present (it may be the previous bake's)") : TEXT("absent"));
+	}
+	return bSaved && bOnDisk;
+#else
+	return false;
+#endif // WITH_EDITOR
+}
+
+int32 UElysiumMapBakeLibrary::CountBuiltReflectionCapturesInPackage(const FString& LevelPackagePath)
+{
+#if WITH_EDITOR
+	if (!FPackageName::DoesPackageExist(LevelPackagePath))
+	{
+		UE_LOG(LogElysiumMapBake, Warning,
+			TEXT("CountBuiltReflectionCapturesInPackage: %s does not exist"), *LevelPackagePath);
+		return -1;
+	}
+	// Both halves, because the registry is its own package: dropping only the level would leave
+	// the in-memory registry to satisfy the reloaded level's import and the count would answer
+	// about memory again. `UnloadBakedPackages` matches on the exact name here -- the sibling is
+	// beside the level, not under it.
+	UnloadBakedPackages(LevelPackagePath);
+	UnloadBakedPackages(LevelPackagePath + TEXT("_BuiltData"));
+
+	UPackage* Package = LoadPackage(nullptr, *LevelPackagePath, LOAD_None);
+	UWorld* World = Package != nullptr ? UWorld::FindWorldInPackage(Package) : nullptr;
+	if (World == nullptr)
+	{
+		UE_LOG(LogElysiumMapBake, Warning,
+			TEXT("CountBuiltReflectionCapturesInPackage: %s holds no world"), *LevelPackagePath);
+		return -1;
+	}
+	int32 Components = 0;
+	const int32 Built = CountBuiltReflectionCaptures(World, Components);
+	UE_LOG(LogElysiumMapBake, Log,
+		TEXT("CountBuiltReflectionCapturesInPackage: %s -- %d of %d capture component(s) carry ")
+		TEXT("MapBuildData on disk"),
+		*LevelPackagePath, Built, Components);
+	return Built;
+#else
+	return -1;
+#endif // WITH_EDITOR
 }
 
 void UElysiumMapBakeLibrary::TickCommandletFrames(const int32 Frames)

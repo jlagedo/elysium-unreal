@@ -210,6 +210,21 @@ struct FElysiumContentPaths
 	// UI names its art by exactly this key (`UI/ElysiumUiArt.h`). Empty for an empty key.
 	static FString BakedTexture(const FString& Key)
 	{
+		return BakedTextureOfClass(Key, TEXT("T_"));
+	}
+	// The `TC_` twin of `BakedTexture` for a key whose unit decoded to six faces --
+	// `importers.textures.CLASS_PREFIX["TextureCube"]`. The prefix is the ONLY difference: one
+	// unit key names at most one asset, and the class it took is a property of the decoded image,
+	// so a cube is addressed by the same key with the class's own prefix. VtMB's baked env probes
+	// (`maps/<map>/cubemapdefault`, `maps/<map>/c<x>_<y>_<z>`) are the corpus's cubes.
+	static FString BakedCubeTexture(const FString& Key)
+	{
+		return BakedTextureOfClass(Key, TEXT("TC_"));
+	}
+	// The one fold both spellings share: the key's directories through `MaterialSafeName`, the stem
+	// under the asset class's prefix.
+	static FString BakedTextureOfClass(const FString& Key, const TCHAR* ClassPrefix)
+	{
 		TArray<FString> Parts;
 		Key.ParseIntoArray(Parts, TEXT("/"), true);
 		if (Parts.Num() == 0)
@@ -221,7 +236,7 @@ struct FElysiumContentPaths
 		{
 			Package /= MaterialSafeName(Parts[I]);
 		}
-		const FString Asset = TEXT("T_") + MaterialSafeName(Parts.Last());
+		const FString Asset = ClassPrefix + MaterialSafeName(Parts.Last());
 		return Package / Asset + TEXT(".") + Asset;
 	}
 	// The material lane's package root (`uv run elysium import materials`): one `MI_` per
@@ -252,6 +267,23 @@ struct FElysiumContentPaths
 		}
 		const FString Asset = TEXT("MI_") + MaterialSafeName(Parts.Last());
 		return Package / Asset + TEXT(".") + Asset;
+	}
+	// The corpus instance of a world material VBSP patched into ONE map
+	// (`shared_corpus.base_material` / `cubemap_of`): the face's texdata names
+	// `maps/<map>/<material>`, so the unit key carries that prefix and the instance lands under
+	// `/ElysiumBaked/Materials/maps/<map>/<dir>/MI_<safe stem>`.
+	// It is an ordinary corpus instance -- a child of the unpatched unit's own `MI_`, staged by the
+	// same `import materials` run -- not a per-map package: the V2 lane authors NO `<map>/Materials`
+	// package at all. `Material` is the bare authored key (`ground/streetasan`), without the
+	// `maps/<map>/` prefix this composes and without the `@cubemapdefault` tag the export's own
+	// `world_material_key` carries.
+	static FString BakedMapMaterial(const FString& Map, const FString& Material)
+	{
+		if (Map.IsEmpty() || Material.IsEmpty())
+		{
+			return FString();
+		}
+		return BakedMaterial(TEXT("vtmb:material:maps/") + Map + TEXT("/") + Material);
 	}
 	// The PROJECTOR twin of the instance above (R7.2 ruling 2): every `$decal` unit and every
 	// `decalmodulate` unit stages a second shared instance beside its surface one, in the same

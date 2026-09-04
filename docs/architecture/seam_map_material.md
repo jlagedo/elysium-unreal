@@ -228,10 +228,12 @@ failure** with the unit named and the reason printed — never an instance writt
 part quietly missing. That is the rule the three tables exist to make checkable.
 
 **Landed (2026-08-31), revised the same day (review pass — findings 1-9).** `uv run elysium import
-materials` lands the corpus with the required-slot rule (below) now enforced: 19,121 of the
-19,125 units stage (4 fail loudly — `dev/ocean`, `dev/oceanbeneath`, `envmap/gioint`,
-`skybox/hav_env`, every one a `textureClassMismatch` the static frame-0 fallback cannot resolve
-either, since none is a multi-frame array), and `uv run elysium import materials --lookdev` places
+materials` lands the corpus with the required-slot rule (below) now enforced. All **19,125** units
+stage since R7.1 (2026-09-04); the four that used to fail loudly were each a `textureClassMismatch`
+the static frame-0 fallback cannot resolve (none is a multi-frame array), and each is now ruled:
+`dev/ocean`/`dev/oceanbeneath` by ruling A's `M_V2_Water` required-slot exemption (the SLW base
+texture is coverage, not colour), `envmap/gioint`/`skybox/hav_env` by the cube-`$basetexture` named
+divergence (`CUBE_BASE_TEXTURE_DIVERGENCE_UNITS`, below). `uv run elysium import materials --lookdev` places
 every tracked review-set entry still named in `lookdev_set.json`. Real numbers:
 `docs/project/seam_migration.md` → "Material import landed (2026-08-31)".
 
@@ -856,12 +858,24 @@ case-folded) against the unit's own material key. A match stages the static swit
 camera-under-water branch to lean on instead (§8), so the instance says so once — zero specular,
 zero volume extinction (below). Measured 2026-09-04 on the staged manifest: of the 24 water units, 22 carry the
 switch and exactly one is true -- `dev/dev_waterbeneath2` (`MI_dev_waterbeneath2`), the 21 others
-false. `dev/oceanbeneath` names itself the same way and would be the second, but it and `dev/ocean`
-never reach the manifest at all: their `$basetexture` `dev/water_dudv` is a 29-frame VTF that
-stages as a `Texture2DArray` where `BaseTexture` wants a `Texture2D` and there is no
-`BaseTextureFrames` lane on `M_V2_Water` to fall back onto, so `_check_required_slots` fails them
-(they are 2 of the 4 corpus-wide staging failures; `seam_migration.md` -> R7.1 open issues). The
-switch is therefore unmeasured on `dev/oceanbeneath` -- its instance on disk predates R7.1.
+false, including `dev/oceanbeneath`, which names itself the second `Underside` unit and is now
+measured.
+
+**`BaseTexture` is not a required slot on `M_V2_Water` (R7.1 follow-up, 2026-09-04).**
+`REQUIRED_TEXTURE_SLOTS` used to demand `BaseTexture` on every master alike; Water is now the one
+exemption (`importers/materials.py`, the master-keyed dict). The base texture is SLW *coverage*
+(`Opacity = UseBaseTexture ? Alpha × BaseTexture.a : 0`), not the surface's colour — the look is
+the volume, the reflection and the refraction, none of which read it — so a water unit that cannot
+bind one still draws as water, which is what every other water unit already does by default
+(`UseBaseTexture` resolves per unit exactly as Lit/Unlit/Refract do, above). `dev/ocean` and
+`dev/oceanbeneath` are the two units this rescues: their `$basetexture` `dev/water_dudv` is a
+29-frame VTF that stages as a `Texture2DArray` where `BaseTexture` wants a `Texture2D`, and there
+is no `BaseTextureFrames` lane on `M_V2_Water` to fall back onto (the DX6 fallback sheet the R7.1
+water-architecture ruling names, not the shader's real animated DuDv input). They used to be 2 of
+the corpus-wide staging failures (`seam_migration.md` -> R7.1 open issues); now they stage with
+`UseBaseTexture` off, the `textureClassMismatch` anomaly still recorded, and every other slot
+(`DuDvMap`, `NormalMap`, `EnvMap`, the scalars and vectors above) resolved the same as any other
+water unit.
 
 | Textures | Kind | Default | Class |
 |---|---|---|---|
@@ -2282,14 +2296,35 @@ check below, closing a gap where a proxy-bound `BaseTexture` on a *required* slo
 unit). A master with no lane for the mismatched slot (Eyes, Decal, Refract, Water's own
 `BaseTexture`, TwoTexture) is untouched — the `textureClassMismatch` anomaly, and any
 required-slot failure it causes, stands exactly as before, and so does a `TextureCube` mismatch
-(no frames array exists to fall back onto — `envmap/gioint`/`skybox/hav_env`, the literal-cubemap-
-as-plain-texture break-glass pair). The `textureClassMismatch` anomaly itself is still recorded on
+(no frames array exists to fall back onto — see the cube-`$basetexture` divergence below for the
+two units that carry one). The `textureClassMismatch` anomaly itself is still recorded on
 every bound-via-fallback unit — the mismatch is real, only its consequence changed — so the anomaly
 rollup count rises by exactly the number of units this rule rescues. An authored `$frame`/
 `$bumpframe` other than the default `0` is a genuine divergence from the frame this fallback always
 samples: recorded as a `staticFrameOffsetUnsupported` omission (`parameter`, `key`, `value`) rather
 than honoured (no per-instance frame-offset parameter exists) or silently dropped; no unit in the
 current corpus authors either key non-zero.
+
+**A cube `$basetexture` on the two units that author one is a named divergence, not a failure
+(R7.1 follow-up, 2026-09-04).** `CUBE_BASE_TEXTURE_DIVERGENCE_UNITS`
+(`importers/materials.py`) names the corpus's only two units whose `$basetexture` resolves to a
+VTF that staged as a `TextureCube` (`faces == 6`):
+
+| Unit | Texture | Ruling |
+|---|---|---|
+| `envmap/gioint` | `TC_gioint`, 32×32 DXT1 cube | `UnlitGeneric { $baseTexture envmap/gioint }` — the Giovanni-mansion interior probe, consumed as `$envmap` by 17 `stone/gio*` units |
+| `skybox/hav_env` | `TC_hav_env`, 256×256 DXT1 cube | `UnlitGeneric { $basetexture skybox/hav_env, $nofog 1 }` — referenced by no other unit at all |
+
+Neither is ever **drawn**: neither key appears as a face material in any exported map's `usemtl`
+list, on any model, or in any `.env`/`.props`/`.ents` sidecar. Source could not draw them either —
+`$basetexture` is a 2D sampler on `UnlitGeneric`, so a cube VTF bound there samples nothing
+meaningful in the 2004 engine, and the cubemap reaches the screen only through *another* unit's
+`$envmap`, which reads the texture directly and never this material. There is no lane to fall back
+onto (no master carries a cube base-colour sampler, and adding one would author a look the VMT does
+not describe), so the instance ships with `UseBaseTexture` off and the reason is written once into
+provenance as a `cubeBaseTextureProvenanceOnly` omission beside the `textureClassMismatch` anomaly
+that caused it. The list is per unit, like `IGNOREZ_NAMED_DIVERGENCE_UNITS` and not keyed on the
+class mismatch itself: a cube `$basetexture` on a unit that *is* drawn keeps the loud failure.
 
 **A patched instance's `ElysiumMaster` registry tag is the root master, not empty (review finding
 7).** A patched unit's own provenance carries no master of its own (its parent is another `MI_`,

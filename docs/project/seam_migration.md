@@ -2697,6 +2697,65 @@ it is invisible by the authored numbers. `Waist`/`Eyes` have no in-game witness 
 volume converts. `import models --maps <one map>` still replaces rather than merges the shared
 staged-models manifest — a trap for the next scoped run, named but not fixed here.
 
+**Closed since (2026-09-04, later sessions).** Every item named above is closed, in the order it
+was raised:
+- **`export map --verify`'s legacy per-map check.** `bake_verify.py`'s legacy material walks are
+  now V2-aware — gated `if not map_transport.is_map_on_v2_models(map_name)` (`bake_verify.py:1478`)
+  — with `verify_v2_materials` early-returning on a non-V2 map (`:1293`) and the V2-only verifiers
+  gated the other way (`:397/495/596/699/785/871`); a V2 map no longer trips a legacy check it can
+  never satisfy.
+- **The scoped-import trap.** `importers/models.py` gains `_fold_owner_collisions` /
+  `_load_prior_manifest_for_merge` / `_merge_prior_manifest`; a scoped `import models --maps <one
+  map>` now merges its rows into the prior manifest instead of replacing it (`_prune_stale` stays
+  `--all`-only, so `produced` stays correctly scoped). Measured: a five-map run staged 598 rows (1
+  skipped loudly, `weapons/w_null`, 0 failed); a scoped `import models --maps sp_soc_3` re-run
+  afterward staged 154 rows in its own scope, imported 0, reused 598 — the manifest held at 598
+  rows, unchanged.
+- **Reflection captures never reached disk.** `bake_map.py`'s `stage_level` now builds, calls
+  `save_map`, and builds a *second* time into the registry the saved level actually links to —
+  `save_map` drains `UMapBuildDataRegistry::ReflectionCaptureBuildData` without re-keying it, and a
+  level saved before the first build has no registry on it to link. `Elysium.Content.MapBake.
+  ReflectionCapturesBuilt` was red on all four V2 maps (0 of 24/14/19/41 built captures reaching
+  disk) and is green after the fix and re-bake, re-counted off disk: `sp_tutorial_1` 24/24,
+  `sm_pawnshop_1` 14/14, `sm_hub_1` 19/19, `sm_pier_1` 41/41 (`sp_soc_3` 1/1 once converted).
+  `ElysiumMapBakeLibrary::SaveMapBuildData` also gained a `Package->FullyLoad()` call ahead of the
+  save — the mount's previous `<map>_BuiltData` package arriving partially loaded made
+  `UPackage::Save` `appError` and take the commandlet down, reproduced and fixed alongside.
+- **Four of the five `test content` failures.** Reflection captures (above), `ChangeLevelInputs`'
+  pin count (the 88-wire bench pin, `ElysiumContentTests.cpp:677`), `FanDuration` (176 of 207 gait
+  fans on the harmonic branch → 225 fans across 84 owners, 207 scored over 1,863 sampled headings,
+  every scored fan within 0.0010 s, after `export characters --force` plus the two placed-model
+  fans outside that cast — `Wolf_Form`'s four `BS_wolf_Form_run*` and `tzim3`'s `BS_hit_head`,
+  re-authored off `sp_tutorial_1` and `hw_netcafe_1` respectively — `hw_609_1` places `tzim3.mdl`
+  only as `npc_*`, which `placed_models.discover` skips), and `SantaMonicaRain`'s missing V2
+  wet-cubemap MICs are all fixed; `test content` reads 73 succeeded / 7 succeededWithWarnings / 1
+  failed. `RigCompose` stays the one red case — T-C7, retail's surviving-previous-sequence
+  cross-fade ramp, never reproduced, not this task's boundary (control 3.1681 cm, six layered
+  families over the 1.0 cm bound, medians bit-identical to the prior run); its one companion false
+  alarm (a `SubstitutedClosure` warning on a mask-1 `_bobble_layer` that is not a bake gap) is fixed
+  without moving those medians.
+- **`dev/ocean`/`dev/oceanbeneath` now stage.** `M_V2_Water`'s `BaseTexture` slot is no longer
+  required (`water-architecture.md` §4.2's Opacity row, `importers/materials.py`): the DX6 fallback
+  sheet's 29-frame VTF has no frames lane on the master, so the two units stage with
+  `UseBaseTexture` off and draw as water like every other water unit by default, instead of
+  refusing the unit. `envmap/gioint` and `skybox/hav_env` (cubemap `$basetexture` on `M_V2_Unlit`,
+  neither drawn on any exported map) are ruled a named divergence the same session
+  (`CUBE_BASE_TEXTURE_DIVERGENCE_UNITS`), closing materials staging at 19,713 instances from 19,125
+  units, 0 failed.
+- **A third map converted.** `sp_soc_3` — the Society of Leopold basin — joins `MapsOnV2Models`
+  and `MapsOnNewTransport` (`Config/DefaultElysium.ini`). Staged: one water row, plane Z
+  −609.6 cm, floor −1788.16 cm (1178.56 cm / 464 in deep), material
+  `vtmb:material:maps/sp_soc_3/dev/dev_water2_cheap`, `fogEnable` true, `fogColor` (0.086275,
+  0.078431, 0.039216), 2.54/1016.0 cm, 2 brushes of 6 planes each. Bake: `[bake] water: 1 actor
+  placed with 1 volume(s)`; `verify_water`: `1 staged rows, 1 matched`. Full ruling and the
+  cheap-water / deep-basin / underside detail in `docs/architecture/water-architecture.md` §11.
+- **The swim witness.** `Waist`/`Eyes` are no longer unreachable everywhere: `sp_soc_3`'s
+  1178.56 cm basin is the first converted volume past the pawn's 92.45 cm half-height, the
+  condition the earlier text named as blocking. It has not been spent — owner call (2026-09-04):
+  the swim path and the camera clearance band are out of this session's scope, and stay covered by
+  the substrate tier (`Elysium.Substrate.Water`, `Elysium.Substrate.WaterActor`,
+  `Elysium.Substrate.Camera`) rather than a `run play` session, for a later witness to spend.
+
 **R7.2 — decals on the V2 lane (2026-09-03).** A decal is a *projection*, and Unreal makes that a
 material domain, which is the one material property an instance cannot override. So the lane is
 built around a second instance rather than a second blend mode: `M_V2_Decal` is re-cut as the
@@ -3207,7 +3266,7 @@ re-plumb of the C++ builders, which stay because nothing else can author a `USke
 `/ElysiumBaked/<Kind>/<dir>/<Prefix>_<base>`, per-label products under `<base>/`, corpus-wide
 assets under `<Kind>/_Corpus/` — ids are the only address and stems resolve through a cast
 table, so the retail captures keep their keys; the landed lanes that drift (the flat `Meshes/`,
-the per-map root folders, sprites, sky, lookdev) move in R8.0 rather than in a later project.
+the per-map root folders, sprites, sky, lookdev) move in R8.0a rather than in a later project.
 The retail-capture parity numbers are pinned as equalities; the character mount (3.9 GB, 39 % of
 the plugin) is the biggest lever on mount size. Corrections the plan applies to this text: `models/character` is **485** units, not
 489; the "Nosferatu/Malkavian obfuscate noise chains" are four CRT-static TV screens on
@@ -3220,18 +3279,21 @@ kind root, nothing overwritten, the legacy roots deleted when the list is comple
 56 player bodies, the three test maps' casts, the rest; banks and props flip wholesale with R8.1
 on a byte-equal payload against a frozen copy of the legacy `npc/` + `items/` export.
 
-- **R8.0 Preflight.** The baked-asset standard implemented — one resolver twin
-  (`asset_paths.baked_path` / `BakedUnit`) with a golden fixture, the models re-imported to
-  `Models/<dir>/SM_<base>`, the map root to `Maps/`, sprites and sky and lookdev moved, the
-  stem folds and stem accessors deleted, every map re-baked; the rulings into their seam docs
-  (`seam_map_material.md` ×3, `seam_map_model.md` → "## Import — skeletal",
-  `animation-architecture.md`, `physics-architecture.md` L0 deleted); the six live defects fixed
-  (`placed_models.py`'s split-rotation tuple, the rigid-wield `FindWieldModel` predicate, the
-  index's `wield`/`ground-item` swap, the missing `ClanDataTables` projector, the `SetModel`
-  basename fold, the missing `safe_name` on the prop path); the legacy export frozen; T-A5
-  marked DONE; T-C8 measured.
-  → lands: one naming standard on the whole mount; the design on record; the baseline cannot
-  move under the rebuild.
+- **R8.0a The standard.** One resolver twin (`asset_paths.baked_path` / `BakedUnit`) with a
+  golden fixture; the models re-imported to `Models/<dir>/SM_<base>` (also the model lane's first
+  `--all`), the map root to `Maps/`, sprites, sky and lookdev moved, the stem folds and stem
+  accessors deleted, every map re-baked; **prune and landing by producer** (an `ElysiumProducer`
+  registry tag beside `ElysiumRecipe`, a prune that deletes only its own lane's assets, `foreign`
+  and `unstamped` reported) because four producers now share `Models/`; the tracked legacy-root
+  list with the task that empties each. → lands: one naming standard on the whole mount, and a
+  prune that cannot eat another lane.
+- **R8.0b Preflight.** The rulings into their seam docs (`seam_map_material.md` ×3,
+  `seam_map_model.md` → "## Import — skeletal", `animation-architecture.md`,
+  `physics-architecture.md` L0 deleted); the live defects fixed (`placed_models.py`'s
+  split-rotation tuple, the rigid-wield `FindWieldModel` predicate, the index's
+  `wield`/`ground-item` swap, the missing `ClanDataTables` projector, the `SetModel` basename
+  fold); the legacy export frozen; T-A5 marked DONE; T-C8 measured. → lands: the design on
+  record; the baseline cannot move under the rebuild.
 - **R8.1 Producer parity.** `validation/skeletal_diff.py` first, then `importers/characters.py`
   + `skeletal_stage/` porting the rules and writing the legacy product set at the legacy paths
   (game and bake untouched) plus the staged `import/characters/` tree; whole-cast run;

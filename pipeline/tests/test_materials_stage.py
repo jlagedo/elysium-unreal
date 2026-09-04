@@ -1615,6 +1615,36 @@ def test_basetexture_class_mismatch_on_an_optional_slot_stays_an_anomaly(tmp_pat
               for row in provenance["anomalies"])
 
 
+def test_cube_basetexture_on_the_named_pair_stages_as_a_divergence(tmp_path):
+    """R7.1 follow-up: the two corpus units whose `$basetexture` names a cubemap VTF
+    (`envmap/gioint`, `skybox/hav_env`) stage instead of refusing. Source's 2D base sampler cannot
+    draw a cube either and nothing in the corpus draws these units, so the instance ships with
+    `UseBaseTexture` off and the reason lands in provenance as `cubeBaseTextureProvenanceOnly`."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "skybox" / ("hav_env" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"faces": 6}), encoding="utf-8")  # staged as a TextureCube
+    _publish(export, "skybox/hav_env", _unit(
+        "skybox/hav_env", shader="unlitgeneric",
+        parameters=[_param(0, "$basetexture", "skybox/hav_env"),
+                    _param(1, "$nofog", "1", value_type="integer")],
+        dependencies=[_texture_dep("$basetexture", "skybox/hav_env")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/skybox/MI_hav_env"]
+    assert entry["parent"].endswith("M_V2_Unlit")
+    assert "BaseTexture" not in entry["textures"]
+    assert entry["switches"]["UseBaseTexture"] is False
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row["kind"] == "textureClassMismatch" and row["parameter"] == "BaseTexture"
+               for row in provenance["anomalies"])
+    assert any(row["kind"] == "cubeBaseTextureProvenanceOnly" and row["parameter"] == "BaseTexture"
+               and row["key"] == "$basetexture"
+               for row in provenance["omissions"])
+
+
 # --- static frame-0 fallback for a multi-frame BaseTexture/NormalMap --------------------------------
 
 
@@ -1675,10 +1705,12 @@ def test_basetexture_multiframe_array_records_divergence_when_frame_is_authored_
     )
 
 
-def test_basetexture_multiframe_array_stays_a_failure_on_water(tmp_path):
-    """Water exposes no `BaseTextureFrames` lane, so the same `frames > 1` mismatch on its
-    `BaseTexture` (a required slot) keeps failing the unit exactly as before -- the static frame-0
-    fallback never applies where the master has no lane to bind onto."""
+def test_basetexture_multiframe_array_leaves_water_uncovered_not_failed(tmp_path):
+    """Water exposes no `BaseTextureFrames` lane, and since R7.1 its base texture is coverage
+    rather than colour, so the same `frames > 1` mismatch on `BaseTexture` stages the unit with
+    `UseBaseTexture` off and the anomaly recorded -- `dev/ocean` draws as water, not as nothing
+    (`REQUIRED_TEXTURE_SLOTS` exempts the master; the static frame-0 fallback still never applies
+    where the master has no lane to bind onto)."""
     export = tmp_path / "v2"
     texture_staging = tmp_path / "texture-stage"
     sidecar = texture_staging / "dev" / ("ocean" + importer.TEXTURE_PROVENANCE_SUFFIX)
@@ -1690,10 +1722,15 @@ def test_basetexture_multiframe_array_stays_a_failure_on_water(tmp_path):
         dependencies=[_texture_dep("$basetexture", "dev/ocean")],
     ))
     result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
-    assert len(result.failures) == 1
-    key, reason = result.failures[0]
-    assert key == "dev/ocean"
-    assert "BaseTexture" in reason
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/dev/MI_ocean"]
+    assert entry["parent"] == f"{importer.MASTER_ROOT}/M_V2_Water"
+    assert entry["switches"]["UseBaseTexture"] is False
+    assert "BaseTexture" not in entry["textures"]
+    assert any(
+        row.get("kind") == "textureClassMismatch" and row.get("parameter") == "BaseTexture"
+        for row in _provenance(tmp_path / "stage", entry)["anomalies"]
+    )
 
 
 def test_normalmap_multiframe_array_binds_as_static_frame_zero_on_lit(tmp_path):

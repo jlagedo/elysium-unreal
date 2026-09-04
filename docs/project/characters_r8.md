@@ -70,7 +70,7 @@ Twelve defects were found on the way, six of them live. They are in §3 and each
 
 ## 2. Corrections to the R8 text and the owning docs
 
-These are facts the exploration overturned; each is applied in R8.0 (§6).
+These are facts the exploration overturned; each is applied in R8.0b (§6).
 
 1. **`models/character` is 485 units, not 489.** File count and `identity.family` agree.
 2. **The "Nosferatu/Malkavian obfuscate noise chains" are not character materials.** The
@@ -104,14 +104,19 @@ These are facts the exploration overturned; each is applied in R8.0 (§6).
    PHYS1 reads the unit; no chunk is built (§4 D9).
 9. **The 8.4a `solid`/`disableshadows` row looks stale against code**: both keys are read on the
    catalogue and plain-static branches with a passing test; only the no-catalogue fallback branch
-   skips them, and that branch is dead on a v8 index. R8.0 re-verifies and corrects the roadmap.
+   skips them, and that branch is dead on a v8 index. R8.0b re-verifies and corrects the roadmap.
 10. **`mdl-coverage-and-gaps.md:108-147`'s "280 of 484 pass the byte ledger"** predates the model
     seam (2026-08-11); today every install member is a published unit with a complete ledger and
     the corpus index reports `unclaimed: 0`. Marked closed by the model seam.
 11. **`seam_map_character.md` and `seam_map_animation_bank.md`** describe retired identities and
     frame themselves as offline research products. They are deleted in R8.2; anything not already
     in `seam_map_model.md` (the eye-node convention, the byte-ledger states) folds into it.
-12. Stale literals: "7,871 clips" (`bake_characters.py`, `character_partition.py`), "166 models /
+12. **A bank clip's authored columns are identical for every body that plays it.** Measured:
+    5,609 of 5,609 `(label, owner)` pairs carry the same activity, weight and flags across all
+    293 bodies; only `rawIndex` differs. `J_animation_contract.md` §2.1 gives per-body variation
+    as the reason those columns cannot ride the clip, and that reason does not hold — which is
+    the licence for D7's denormalisation of the three selection columns onto the body row.
+13. Stale literals: "7,871 clips" (`bake_characters.py`, `character_partition.py`), "166 models /
     136 banks / 527 blend spaces" (`roadmap.md`), the index "~47 KB" and slice "~92 KB" comments
     (`ElysiumContentPaths.h`, `ElysiumNpcClips.h`; real: 2.51 MB and ~550 KB),
     `ElysiumTextureCache.h`'s `AElysiumMapActor` ownership claim, `ElysiumFacialRig.h`'s "five
@@ -122,18 +127,18 @@ These are facts the exploration overturned; each is applied in R8.0 (§6).
 
 | # | Defect | Where | Live? | Fix in |
 |---|---|---|---|---|
-| F1 | `rest_pose_static_equivalent` tests `bone.index in split` where `split` has been a `(dict, set)` tuple since `cfee8dc7`; the split-rotation correction is never applied to static equivalence, so a `static_equivalent: true` can license a storage pose | `placed_models.py:298-302` | **yes** | R8.0 (fix + re-census: every placed model with a split bone and `static_equivalent: true`) |
-| F2 | `FindWieldModel` / `SweepWieldModels` test `LeaderPoseComponent == Body`, so the 57 rigid-bound melee weapons are invisible to the trail, the pawn and `LabWieldCheck`; `ElysiumNpcVisual.h` still claims "no per-binding branch" | `ElysiumNpcVisual.cpp:332-365` | **yes** | R8.0 |
-| F3 | The corpus index backfill labels `playermodel` as `wield` and `infomodel` as `ground-item`; `roles: wield` (189) is really `playermodel ∪ wieldmodel_*` | `corpus_index_glb/backfill.py:89-90` | **yes** (index) | R8.0 |
-| F4 | `ClanDataTables` has no typed vdata projector, so 27 of 59 player bodies carry no role | `vdata_glb/projection.py:607-641`, `backfill.py:224-235` | **yes** (index) | R8.0 |
-| F5 | The runtime `SetModel` branch hands the character basename fold to `Request.StaticStem`, which expects the whole-path `static_stem` (`palm` vs `SM_models_scenery_props_palm`) | `ElysiumProp.cpp:550`, `ElysiumGreenRoomRun.cpp:479` | **yes** (on a nested path) | R8.0 |
+| F1 | `rest_pose_static_equivalent` tests `bone.index in split` where `split` has been a `(dict, set)` tuple since `cfee8dc7`; the split-rotation correction is never applied to static equivalence, so a `static_equivalent: true` can license a storage pose | `placed_models.py:298-302` | **yes** | R8.0b (fix + re-census: every placed model with a split bone and `static_equivalent: true`) |
+| F2 | `FindWieldModel` / `SweepWieldModels` test `LeaderPoseComponent == Body`, so the 57 rigid-bound melee weapons are invisible to the trail, the pawn and `LabWieldCheck`; `ElysiumNpcVisual.h` still claims "no per-binding branch" | `ElysiumNpcVisual.cpp:332-365` | **yes** | R8.0b |
+| F3 | The corpus index backfill labels `playermodel` as `wield` and `infomodel` as `ground-item`; `roles: wield` (189) is really `playermodel ∪ wieldmodel_*` | `corpus_index_glb/backfill.py:89-90` | **yes** (index) | R8.0b |
+| F4 | `ClanDataTables` has no typed vdata projector, so 27 of 59 player bodies carry no role | `vdata_glb/projection.py:607-641`, `backfill.py:224-235` | **yes** (index) | R8.0b |
+| F5 | The runtime `SetModel` branch hands the character basename fold to `Request.StaticStem`, which expects the whole-path `static_stem` (`palm` vs `SM_models_scenery_props_palm`) | `ElysiumProp.cpp:550`, `ElysiumGreenRoomRun.cpp:479` | **yes** (on a nested path) | R8.0a (the resolver closes it) |
 | F6 | The player's eyeballs never fade: `InstallEyes` MIDs the eye slot before `RefreshBodyVisibility`, and the eye master has no `ModelAlpha` and is opaque | `ElysiumEyePass.cpp:153`, `ElysiumPawn.cpp:230` | **yes** (inferred from code; verify in game) | R8.2 (`M_V2_Eyes` ruling) |
 | F7 | `andrei` carries the same 14 clips under `Anims/andrei/` and `Anims/_banks/…_and_and/` — a body that is also a cinematic root is walked twice; both sets are stamped, nothing reports it | `bake_characters.py:528-557` | yes (waste + two assets per label) | R8.1 rule + verifier |
 | F8 | `phonemes_male` is named in comments and never tried; both lipsync call sites fall back to `phonemes` only | `ElysiumChoreoScene.cpp:1642`, `ElysiumEntityWorldDialogue.cpp:638` | yes (male fallback silently wrong) | R8.5 |
 | F9 | `demal_expressions` is VFE-only and the mirror copies `.txt` only, so one shipped table is unloadable | `UE_extract_scenes.py` | latent (unreferenced) | R8.5 (tables import from `table`) |
-| F10 | `BakedPropMesh` never applies `MaterialSafeName`; a dashed or dotted model path resolves an asset the bake never wrote | `ElysiumContentPaths.h:328` | latent (0 dashed stems today) | R8.0 (`BakedModel(id)`) |
+| F10 | `BakedPropMesh` never applies `MaterialSafeName`; a dashed or dotted model path resolves an asset the bake never wrote | `ElysiumContentPaths.h:328` | latent (0 dashed stems today) | R8.0a (`BakedUnit(id)`) |
 | F11 | `npc_export`'s basename-collision fallback (`bank_stem`) has no C++ counterpart in `ModelStem()` | `npc_export.py:879-902` | latent (unmeasured) | R8.1 measures; delete one side |
-| F12 | `A_katana_bobble_layer@katana_aggressive_run` is not baked while its `bushhook` siblings are — the one substitution T-A1 found | bake | yes | R8.1 (closed by the port; count recorded) |
+| F12 | ~~`A_katana_bobble_layer@katana_aggressive_run` is not baked while its `bushhook` siblings are~~ — **closed 2026-09-04, not a defect**: `_derived_bindings` derives an overlay against a host only when the clip's own mask owns a `SPLIT_ROTATION` bone, and the `katana`/`knife`/`stake`/`tireiron`/`baseballbat` bobble layers carry mask 1 (24 arm bones, entirely below the split) where `bushhook`/`sledgehammer` carry mask 2 (49). A mask-1 overlay is already an ordinary parent-relative pose, so nothing derived is missing; the reporter now asks the exporter's own question | `animation-critical-path.md` | no | closed |
 | F13 | Two additive signals exist (`clips/` `Flags & 0x14` and `UElysiumAnimPostAdditive`) and nothing asserts they agree | `ElysiumNpcClips.h`, `ElysiumSkeletalBuild.cpp` | latent | R8.5 (one signal) + T-B3 |
 | F14 | Five `except Exception: continue` around the `.ents` seed walk can drop a whole map's cast silently | `npc_export.py:86-189` | latent | dies with `npc_export` (R8.1) |
 | F15 | `mdl_gltf._choose_skeleton_root` duplicates `UE_mdl_skeletal._single_root` in a second number system with no tests | `mdl_gltf.py:457-468` | drift risk | dies with `mdl_gltf` (R8.1) |
@@ -192,17 +197,24 @@ capture is re-keyed and the debug pickers stop scanning `npc/*.eskm` (L §4's fo
 here). The body stem in `DA_Cast` is `basename(model).lower()`; R8.1 measures whether any shipped
 body collides on it (F11) and, if one does, the table carries the collision-resolved form.
 
-**Drift the standard exposes in landed lanes, all moved in R8.0** (nothing is pushed later):
+**Drift the standard exposes in landed lanes, all moved in R8.0a** (nothing is pushed later):
 
 | Today | Standard | Cost |
 |---|---|---|
-| `Meshes/SM_<static_stem>` (3,661), `Meshes/Detail/MI_DetailSway_<stem>`, `Meshes/DA_ElysiumPropSkins`, `Meshes/SM_elysium_missing_model` | `Models/<dir>/SM_<base>`, `Models/<dir>/MI_<base>_DetailSway`, `Models/_Corpus/DA_PropSkins` (keyed by id), `Models/_Corpus/SM_Missing` | re-stage + re-import the model corpus (R1 measured 414 units in 130 s → ~20 min), re-bake the V2 maps, `BakedModel(id)` replaces `BakedPropMesh(stem)`/`BakedItemMesh`/`BakedPropSkins` and the four `PropModelStem` call sites, `Def.ModelMesh` becomes the id |
+| `Meshes/SM_<static_stem>` (593 on the mount, 3,661 selected), `Meshes/Detail/MI_DetailSway_<stem>`, `Meshes/DA_ElysiumPropSkins`, `Meshes/SM_elysium_missing_model` | `Models/<dir>/SM_<base>`, `Models/<dir>/MI_<base>_DetailSway`, `Models/_Corpus/DA_PropSkins` (keyed by id), `Models/_Corpus/SM_Missing` | re-stage + re-import the model corpus — this is also the model lane's first owner-approved `--all` run, so it authors ~3,068 assets it has never authored, not only a rename; re-bake the V2 maps; `BakedUnit(id)` replaces `BakedPropMesh(stem)`/`BakedItemMesh`/`BakedPropSkins` and the four `PropModelStem` call sites; `Def.ModelMesh` becomes the id |
 | `/ElysiumBaked/<map>/…` at the mount root (117 folders, both bakes) | `Maps/<map>/…` | `BakedMapDir` + the three importers' root + both bake scripts + `mounts.py`; every map re-bakes (regenerable; the full-corpus re-bake is R9.2's acceptance anyway) |
 | `Sprites/MI_Sprite_<key>_<Blend>` | `Materials/<dir>/MI_<base>_Sprite_<Blend>` | re-bake sprites (per-map, cheap) |
-| `Sky/Textures/TC_Sky_<sky>` | `Textures/skybox/TC_<sky>` | one bake step |
-| `Sky/Meshes/SM_SkyDome`, `Sky/Materials/MI_Sky_<sky>`, `Lookdev/Materials.umap` | `/Game/ElysiumGenerated/Sky/`, `/Game/ElysiumGenerated/Lookdev/` (generated, not decoded) | path constants |
+| `Sky/Textures/TC_Sky_<sky>` | `Textures/skybox/TC_<sky>_Sky`, **written by the texture lane** (which already imports and face-reorders the six units), the upper-hemisphere mean in provenance; the map bake binds it through the resolver instead of composing PNGs out of `shared/tex` | the composite moves lanes; `ElysiumEnvironment::BuildSkyCubeFrom`'s private PNG reader retires with it |
+| `Sky/Materials/MI_Sky_<sky>` | `Materials/skybox/MI_<sky>_Sky` — derived from VtMB units, so baked, not generated | path constants |
+| `Sky/Meshes/SM_SkyDome`, `Lookdev/Materials.umap` | `/Game/ElysiumGenerated/Sky/`, `/Game/ElysiumGenerated/Lookdev/` (no VtMB unit behind them) | path constants |
+| `Shared/{Materials,Textures,Meshes}` (17,107 assets, the mount's largest root) | **stays as it is** — the legacy map bake's own corpus, retired by R9.2 with its producer; it joins the tracked legacy-root list rather than the standard | none |
 | `Materials/particles/MI_Particle*` placeholders | `Materials/_Corpus/` | path constants |
 | `Textures/`, `Materials/`, `SurfaceProperties/` | already on the standard | none |
+
+Every composite carries a `<Role>` (`_Sky`) so it can never occupy a unit's own address, and
+the stage asserts that no composite path equals a unit path — golden fixture
+`vtmb:texture:skybox/hav`, a real six-face cube unit whose own asset is `Textures/skybox/TC_hav`
+and whose composite is `TC_hav_Sky`, with five maps naming `skyname hav`.
 
 Path length: the longest baked path today is 206 characters (a legacy prop with a folded stem);
 under the standard the deepest character folder plus the longest derived label is ~225 from the
@@ -295,10 +307,17 @@ the `--legacy-root` R3.3 grew for the same reason.
 `skeletal`, `morph`, **`clothing`** (no `ism`, no `nanite`); default `BLEND_MASKED` with
 `dither_opacity_mask` and clip 0.333; `ModelAlpha` (scalar, 1.0) and `UseAlphaTest` (switch,
 from `$alphatest`, 43 units); `OpacityMask = lerp(1, BaseTexture.a, UseAlphaTest) × Alpha ×
-ModelAlpha`. Routing by provenance: a material unit referenced by any `shape == "skeletal"`
-model takes the skinned master (2,022 units corpus-wide; 1,154 in the character/weapon set); the
-287 units also bound by a static model get an `MI_<unit>_Skinned` twin (the `MI_<unit>_Decal`
-precedent). `M_V2_Lit` drops `skeletal`/`morph` once R8.4 routes props to the sibling.
+ModelAlpha`. Routing is by **consumer**, and a consumer is a `shape != "skeletal"` model binding **or** a
+drawn (non-tool, non-nodraw) map face whose `texinfo.texData` resolves to the unit: a unit with a
+skeletal consumer takes the skinned master, a unit with both gets an `MI_<unit>_Skinned` twin
+beside its world instance (the `MI_<unit>_Decal` precedent). The twin count is **289**, not 287 —
+`metal/metald` and `metal/walkwayb` are bound only by a skeletal vent prop yet are drawn as world
+geometry on 21 maps including `sp_tutorial_1` (~3,996 drawn faces), and the skinned master carries
+no `nanite`/`ism` usage, so a model-only predicate drops them to the engine default in a cooked
+build. The other half of the rule is load-bearing too: **every skeletal consumer must resolve
+`MI_<unit>_Skinned`**, or D10's "the same resolution the static twin already has" binds the base
+instance and the 289 twins are dead assets. `M_V2_Lit` drops `skeletal`/`morph` once R8.4 routes
+props to the sibling.
 
 Why not the two options R8.2 named: 1,399 of 1,540 character slots are Opaque and an opaque
 material compiles no opacity mask; `DitherOpacityMask` is a `UMaterial`-only property with no
@@ -340,18 +359,35 @@ stage, as `UE_mdl_skeletal.unreal_axis_rules` does today), `split_bones`, the cl
 the cinematic-root fact. Not on the `USkeleton`: bank skeletons are shared, and the face's curve
 names stay per body (293 bodies, 293 skeletons — a rule, stated).
 
-Data that is a join between a body and its banks goes in a per-body `UPrimaryDataAsset`
-`DA_<base>` beside the mesh in the unit's `Models/<dir>/` folder: the sequence table `(label,
-owner, activity, weight, rawIndex)` in include-tree order with soft pointers to the resolved
-sequence or blend space (the `DA_WieldModels` shape), and the per-body autolayer view already
-resolved to the derived `@host` asset — which deletes the whole `<label>@<host>`-then-plain
-ladder and `ResolveLayerHost`.
+Data that is a join between a body and its banks goes in a per-body **`UDataAsset`** `DA_<base>`
+beside the mesh in the unit's `Models/<dir>/` folder, reached through `BakedUnit(id)`: the
+sequence table `(label, owner, activity, weight, rawIndex)` in include-tree order with soft
+pointers to the resolved sequence or blend space (the `DA_WieldModels` shape), and the per-body
+autolayer view already resolved to the derived `@host` asset — which deletes the whole
+`<label>@<host>`-then-plain ladder and `ResolveLayerHost`. **Not a `UPrimaryDataAsset`:** the
+project has none, no `PrimaryAssetTypesToScan` and no `FPrimaryAssetId`, and that name namespace
+is flat, where 5 character basenames and 40 bank bases collide. An asset manager is its own
+roadmap row if it is ever wanted, not a clause here; `PreloadMapAnimations` keeps its wire
+closure and changes only its unit of work, to one `FStreamableManager::RequestAsyncLoad` over the
+union of the map's body assets, held for the map epoch.
+
+**The split criterion is what a selector needs before anything is loaded.** A column a selector
+scores over *unloaded* candidates rides the **body row**; everything the player of a loaded clip
+needs rides the **clip**. So `reachCm`, `lowReachCm` and `comboMask` move onto the sequence row
+(optionally folded to `maxReachCm` per activity), because `MaxReachCmForActivity` and
+`PickByStateMask` scan up to 23 candidates on a katana and 76 on `ACT_DISPOSITION` before
+choosing — on per-clip metadata that is that many synchronous package loads on the swing frame,
+which R8.5's own "no synchronous read inside a tick" forbids. The invariant is an acceptance
+item: **no selector resolves a soft pointer to score a candidate.** Per-cell motion stays on the
+cell sequence, because `FBlendSample::Animation` is a hard reference and the grid is already
+resident.
 
 Data that is a property of the clip goes on the clip as `UAnimMetaData` beside the existing two
 classes: `Flags/Fps/Frames/Fade`, the melee block (reach, low reach, blocked reaction, envelopes,
 swings, combo), the **event timeline** (metadata, never `UAnimNotify` — T-C1 owns retail's window)
 and the **movement path** (metadata, never root motion — `ElysiumClipMovement.h` owns the rule),
-and on a grid cell its motion. Per-grid metadata names each axis's pose parameter and `loop`;
+and on a grid cell its motion (less the three selection columns above). Per-grid metadata names
+each axis's pose parameter and `loop`;
 ranges are already on `FBlendParameter`. Masks stay `UBlendProfile` with the mirror. The
 sidecar's additive bit and `UElysiumAnimPostAdditive` collapse to the metadata (F13).
 
@@ -424,13 +460,25 @@ R8.2's build rewrite — losing it mounts every melee weapon 123° off.
 ### D10 — Animated props: one material authority, and the static-equivalence rule moves to the stage
 
 Skeletal props bind their `MI_` at bake from `materialBindings` (the same resolution the static
-twin already has); `BindMapMaterials` retires; `ApplyAnimatedPropSkin` keeps only the family
+twin already has, through the skinned master per D6); `BindMapMaterials` retires; `ApplyAnimatedPropSkin` keeps only the family
 override and drops its reset-to-base; `ConfigureRest` narrows to a collision source; the V2 skins
 table needs no change. `rest_pose_static_equivalent` is ported to the unit (bind + frame 0 of
 every rest candidate, 0.01 cm / 0.1°) after F1 is fixed, and the census is re-run before any
 `static_equivalent: true` is trusted. The FNV-1a rest choice and its placement token are
 unchanged. Ming Xiao, the one multi-submodel character, bakes every submodel as a section with a
 named anomaly — the props lane's "submodel 0" rule would lose half a boss.
+
+**Character and wield skin families gain a consumer** (scope add; owner row in §8). The table's
+schema and fold need no change; its **input set** does: the 13 multi-family character units and
+R8.3's wield units get rows in `Models/_Corpus/DA_PropSkins`, whose `Overrides` are hard
+`TObjectPtr<UMaterialInterface>` and so stay reachable cooked. The applier goes on
+`FElysiumAnimating` at install **and** on the `skin` key/input write, reusing the reduced
+`ApplyAnimatedPropSkin`, and the rule is `seam_map_model.md`'s own —
+`skinFamilies[min(skin, familyCount-1)][skinReference]` per skin reference, VtMB's clamp
+reproduced — not "family 0". Without it 83 Chinatown temple guards plus Gary, Ash and the Sabbat
+henchman draw the wrong body, and no test map places a skinned body, so the shot baseline cannot
+see it. Acceptance: a content test that all 90 authored placements resolve to their authored
+family row, plus one `ch_temple_2` capture, the only map naming all four `temple_guard` families.
 
 → `seam_map_model.md` → "## Import — skeletal", props; `animation-architecture.md` §1.2.
 
@@ -450,9 +498,18 @@ clips). One new instrument: the crossfade residual (0.5° / 5° / 10°) has no t
 licence for "poses are baked native"; R8.2 adds it.
 
 T-A5 is marked DONE before R8.2 (it is the instrument); T-B3 lands first inside R8.2 (the binary
-mask guard, extended to the mirror); T-B2 lands inside R8.5's blend-space writer (the legacy
-sample-length flag plus per-cell motion vectors on the asset); T-C8 is measured offline before the
-R8.2 re-bake so the cast is re-baked once.
+mask guard, extended to the mirror); T-C8 is measured offline before the R8.2 re-bake so the cast
+is re-baked once.
+
+**T-B2's bake half landed on 2026-09-04, before this plan runs.**
+`bUseLegacySamplePointAnimationLengthCalculations = true` is set on every `UBlendSpace` the
+skeletal builder authors, and `Elysium.Content.FanDuration` is green — 225 fans over 84 owners,
+207 scored across 1,863 sampled headings, every one blending durations to within 0.0010 s. Two
+consequences here: R8.5's blend-space writer **inherits** the flag rather than landing it, and the
+acceptance becomes "stays green"; and the **six placed-model fans are still on the harmonic
+branch** (`Props/character_monster_wolf_form_wolf_form/BS_wolf_Form_run{,2,3,4}` and
+`Props/character_monster_tzimisce_creation3_tzim3/BS_hit_head`), because the cast run cannot reach
+the props path — R8.4 authors them through the same builder and closes it.
 
 → `animation-critical-path.md` (task sequencing notes); `seam_map_model.md` → "## Import —
 skeletal", verification.
@@ -483,10 +540,28 @@ exports_v2/models/<key>.glb  ──stage──▶  $ELYSIUM_WORK_ROOT/import/cha
 exports_v2/expression-tables/<key>.glb ──▶ /ElysiumBaked/ExpressionTables/DA_<base>, /ElysiumBaked/ExpressionTables/_Corpus/DA_ExpressionTables
 ```
 
-**Selection.** Every `models/character/**` unit with an inbound edge of any kind after the F3/F4
-fixes (map entities, `clandoc000.txt`, scenes, scripts), plus the include closure of banks, plus
-every skeletal `placed-prop`, plus the 67 wield units the vdata fields name. Unreferenced units
-are provenance-only, as in the props lane.
+**Landing on work in flight.** A parallel session is adding two things to the model lane this
+plan builds on, and R8.0a composes with them rather than around them: `_fold_owner_collisions`
+(two units folding to one asset path is a stage failure, not a race one wins) and
+`_merge_prior_manifest` (a scoped run carries forward the rows and `keep` entries its narrower
+selection leaves out). Both share the producer stamp's instinct — the collision guard is the
+fold's own proof and R8.0a extends it to the per-label nest and the composites; the merge is what
+makes a *scoped* run of one lane safe without `pruneScope: null`, while the stamp is still what
+makes *two lanes in one root* safe.
+
+**Selection**, from three inputs, not one. (a) Every `models/character/**` unit with an inbound
+data edge after the F3/F4 fixes (map entities, `clandoc000.txt`, scenes, scripts), plus the
+include closure of banks, plus every skeletal `placed-prop`, plus the 67 wield units the vdata
+fields name. (b) A tracked **`codeReferenced:`** list, because a unit can have a consumer in C++
+and no data edge at all: seeded with the 20 `character/gibs/**` units (every one carries
+`physics.solids`, 8 skeletal — PHYS1 exists for exactly these), the 7 `weapons/ejection/**` and
+`weapons/projectile/bullet01`, each with a named consumer in `physics-interaction.md:27,37` and
+`effects-architecture.md:237,743`. (c) The producer-assignment list of D5. **A refusal is
+reported, never silent:** the stage manifest carries `unreferenced[]` (unit id, shape, whether it
+carries `physics`, reason) and `import_report.json` prints the count — 69 character and 25 weapon
+units today, an acceptance number. A data-edge-only rule refuses the severed-limb rigs and the
+shell casings, and R8.2's differ ("0 unmapped either way") is structurally unable to see a unit
+neither producer ever built.
 
 **Stage rules ported from `UE_mdl_skeletal` / `npc_export` / `UE_mdl_cloth` / `placed_models` /
 `wield_corpus`** (the 37 numbered transforms in `A_legacy_exporter.md` §2), grouped: basis
@@ -524,9 +599,21 @@ and its own timeout constant; `verify characters --legacy-mount <path>` is the a
 `doctor` gains a corpus-index-derived character line and reads the per-domain incomplete
 markers. `export characters`, `export wield`, `-BakeCharacters=`, `-BakeWield=` retire at the end.
 
+**And the composed build stays composed.** `uv run elysium export all` is the only whole-corpus
+build path, and it names the legacy bundles today: R8.1 removes the `npc` and `items` bundles
+from both `profiles.toml` profiles and their branches in `export_all.py` in the *same commit*
+that deletes `npc_export.py` and `UE_extract_items.py`, or the command raises `ImportError` on a
+deleted module; `test_profile_package_contract.py` grows an assertion that every bundle a profile
+names resolves to a live module. R8.2–R8.4 put the new lanes into the slots `export_characters`
+and `_ensure_wield_bake` occupy inside `export_profile`. The ordering constraint that lives only
+in that function's step-3 comment is lifted into `seam_map_model.md` as a stated rule — **masters
+→ textures and materials → models → characters, wield, props → maps** — because a map's level
+stage loads every placed skeletal prop and its rest clip. "`export all` completes on a clean
+export root" is an R8.5 acceptance line.
+
 ## 6. Tasks
 
-### R8.0 — Preflight: the standard applied, rulings, corrections, live defects (one re-import, one re-bake)
+### R8.0a — The standard: one resolver, every lane on it (one re-import, one re-bake)
 
 - **The baked-asset standard implemented** (D1): `elysium_pipeline.asset_paths.baked_path` and
   `FElysiumContentPaths::BakedUnit` twins with the golden fixture; `Baked<Kind>(id)` accessors
@@ -538,7 +625,29 @@ markers. `export characters`, `export wield`, `-BakeCharacters=`, `-BakeWield=` 
   the particle placeholders to `Materials/_Corpus/`; `static_stem`, `PropModelStem`, `mesh_asset`,
   `texture_asset_name` and the stem-keyed accessors deleted; `Meshes/`, `Sprites/`, `Sky/`,
   `Lookdev/` and the per-map root folders deleted; every map re-baked; `ModelParity`,
-  `ModelNames` and the bake tests re-pointed at the resolver.
+  `ModelNames` and the bake tests re-pointed at the resolver. `shared_corpus.static_stem`,
+  `mesh_asset` and `texture_asset` survive this task and retire in R9.2 with the legacy map bake,
+  which calls all three.
+- **Prune and landing by producer** (the contract's own rule): the `ElysiumProducer` registry tag
+  stamped beside `ElysiumRecipe` by every lane's existing `stamp_recipe`; every prune loop
+  rewritten to delete only its own lane's assets; `pruneScope: null` on a partial-cutover
+  manifest; `foreign` and `unstamped` counts in `import_report.json`. Without it the first
+  unflagged `import models` after this task deletes the character lane's assets out of
+  `Models/`, and the map bake's sprite instances out of `Materials/`.
+- The tracked **legacy-root list** beside the resolver's kind roots (`Shared/` → R9.2,
+  `Characters/` → R8.2, `Props/` → R8.4, `Items/` → R8.3), each row naming the task that empties
+  it, plus the registry test that asserts every asset on the mount is under a kind root,
+  `/Game/ElysiumGenerated`, or a listed legacy root.
+- `build_content.py`'s `GENERATORS` becomes the claim list for `/Game/ElysiumGenerated`, and
+  `build content` reports and deletes any package no listed generator claims.
+- Acceptance: the resolver fixture green in both languages; the registry test green; `foreign` and
+  `unstamped` both zero on a full `import models`; `ModelParity` green over the full corpus; the
+  three test maps' shots unchanged against the R2.1 baseline; pytest green; doctor clean.
+
+→ lands: one naming standard on the whole mount, and a prune that cannot eat another lane.
+
+### R8.0b — R8 preflight: rulings, corrections, live defects, the frozen baseline
+
 - Rulings D2–D12 written into their seam docs (the three material blocks from
   `E_materials_eyes.md` §8; the `## Import — skeletal` section of `seam_map_model.md`; the
   `animation-architecture.md`, `physics-architecture.md`, `wielded-weapon-integration.md` edits;
@@ -549,11 +658,10 @@ markers. `export characters`, `export wield`, `-BakeCharacters=`, `-BakeWield=` 
 - The legacy export root's `npc/` + `items/` trees frozen as the R8.1 `--legacy-root`.
 - T-A5 marked DONE; T-C8 measured offline (p90 recorded; the 60 Hz decision taken before R8.2).
 - Acceptance: doctor clean, pytest green, every `Elysium.Content.*` and `Elysium.Substrate.*`
-  reading unchanged, the three test maps' shots unchanged against the R2.1 baseline, the
-  resolver fixture green in both languages, no asset outside a kind root or `/Game/ElysiumGenerated`.
+  reading unchanged, the shots unchanged, the corpus index re-run clean, the frozen export on
+  disk.
 
-→ lands: one naming standard on the whole mount; the design on record; the baseline cannot move
-under the rebuild.
+→ lands: the design on record; the baseline cannot move under the rebuild.
 
 ### R8.1 — Producer parity: the stage re-emits the legacy product set, byte-equal or named
 
@@ -633,7 +741,9 @@ under the rebuild.
   2,899-row linear scan; `bake_map_v2.py` reads the table.
 - 8.4a re-verified in game (§2.9) and the roadmap corrected.
 - Acceptance: the 43 rest-pose placements on the three test maps identical (position, material,
-  skin) to R5.1's record; `OpeningAnimatedProps`, `PropSolidCatalogue` green; shots unchanged.
+  skin) to R5.1's record; `OpeningAnimatedProps`, `PropSolidCatalogue` green; shots unchanged;
+  `FanDuration` extended to the props path and green over the six placed-model fans the cast run
+  cannot reach.
 
 → lands: one material authority for a placed model.
 
@@ -643,19 +753,32 @@ under the rebuild.
   file), the two debug probes (asset-registry queries), `ground_models.json` (already R8.3).
 - Facial / eyes / procedural readers → the mesh user data (one bake pass, one reader deletion
   each); the runtime morph-curve registration deleted once O2 proves the bake writes it.
-- The blend-space writer lands T-B2 (legacy sample-length flag; per-cell motion vectors on the
-  cell sequences; the mover blends displacement vectors); `ResolveGridClip` asks the loaded
-  `UBlendSpace` after a one-off equivalence check against the 84 shipped tables.
+- The blend-space writer **inherits** T-B2's landed legacy sample-length flag and adds its
+  runtime half (per-cell motion vectors on the cell sequences; the mover blends displacement
+  vectors rather than lerping per-cell speeds); `ResolveGridClip` asks the loaded `UBlendSpace`
+  after a one-off equivalence check against the 84 shipped tables.
 - Clips + index → `DA_<base>` + per-clip metadata + `DA_CinematicSets` + `DA_Cast`; the
   resolver collapse of D7; `PreloadMapAnimations` becomes a bundle load; F13 collapsed.
 - Expression tables lane; F8 fixed; `mouthshader` bound through `Create(MI_)` and recorded.
+- **The retail comparators are severed from the export tree.** `retail_compositor.Corpus`,
+  `graph_identity` and `compose_diff` derive owner attribution, sequence numbering and clip
+  track-bone sets from the **install** (`formats.install.build_index`,
+  `mdl_skel.first_reference_bases` / `local_sequence_labels`, `find_anim`/`read_anim` track
+  headers) instead of from `npc/`; `--export-root` drops from `debug oracle`. They are **not**
+  re-pointed at `<key>.body.json`: an oracle must share no input with the producer it scores.
+  Otherwise D11's "the numbers did not move" discipline expires one phase after it is adopted,
+  because R8.5 deletes the tree all three read.
 - Retire: the nine readers, `FElysiumNpcIndex`, `FElysiumNpcClipSet::Load`,
   `FElysiumBlendTable::Load`, the `npc/` accessors in `ElysiumContentPaths.h`, the `npc/` and
   `items/` export trees and their `.elysium-incomplete` domains, `export characters`,
   `character_sweep.py` (prune is manifest-driven).
-- Acceptance: zero `Root()` reads under `npc/` or `items/` (grep + a policy test); every
-  `Elysium.Content.*` reading unchanged; `FanDuration` flips red → green (T-B2); no synchronous
-  file read inside a tick; a hub-chain playthrough with dialogue.
+- Acceptance: zero reads under `npc/` or `items/` from **either** side — the C++ `Root()`
+  accessors and Python's `paths.export_root()` (grep + a policy test); `debug oracle --emit`,
+  `debug oracle --run` and `debug compose` re-emit and re-score inside the pinned bands
+  (0.009 cm; 2.336 / 1.663 cm) and `OracleIdentity` re-runs against the re-emitted `_oracle/`;
+  every `Elysium.Content.*` reading unchanged, `FanDuration` included; no
+  synchronous file read inside a tick; `uv run elysium export all` completes on a clean export
+  root; a hub-chain playthrough with dialogue.
 
 → lands: the cast reads cooked content and the corpus only.
 
@@ -707,9 +830,17 @@ the 289 canonical rigs; `StartBodyRagdoll` stops returning false; `prop_ragdoll`
 14. **Path length.** The deepest character folder plus the longest derived label is ~225
     characters from the repo root. Mitigation: the stage refuses > 240; `LongPathsEnabled` is
     the escape hatch; the fixture carries the longest real path.
-15. **The R8.0 re-bake moves every map at once.** Mitigation: it is a root move under one
+15. **The R8.0a re-bake moves every map at once.** Mitigation: it is a root move under one
     accessor with the per-map cutover flags untouched; acceptance is the R2.1 shot baseline and
     the R4.6 parity tests, not a look.
+16. **A lane's prune eats another lane's assets** — four producers now share `Models/`, and every
+    existing prune deletes its kind root minus its own manifest. Mitigation: the producer stamp
+    and the `foreign`/`unstamped` counts land in R8.0a, before any second producer writes.
+17. **A generator resurrects a retired master.** `build content` rebuilds whatever its
+    `GENERATORS` list names, so a master "retired" in R8.2 returns on the next run — and
+    `make_player_body_material.py` is the only file in the repo that sets `used_with_clothing`,
+    the flag D6's whole ruling turns on. Mitigation: a generator retires in the same task as its
+    assets, and the claim list is the criterion.
 
 ## 8. Owner calls and closed questions
 
@@ -728,11 +859,14 @@ the 289 canonical rigs; `StartBodyRagdoll` stops returning false; `prop_ragdoll`
 | OC9 | `mouthshader`: implement the per-slot flag vs bind and record | **bind and record** |
 | OC10 | 8.4a row: delete vs narrow to the dead branch | **verify in game, then delete** |
 | OC11 | LOD import for skinned meshes | **not in R8**; follow-up with the morph caveat |
+| OC13 | `NS_<root>` (1,698 per-unit particle systems): `Particles/<dir>/NS_<base>` under the standard, or `Particles` drops out of the contract's kind list | **the standard** — it is a per-unit product of a VtMB unit, so the criterion in D1 already decides it; the alternative is a stated exception |
+| OC14 | Transformation bodies (`animalism_bat`, `animalism_raven`, `batswarm`, `mingxiao_transformation`, `creation1_*`, `hengeyokai`): build in R8 or sit on the `codeReferenced:` list marked with the task that needs them | **build them** — they are player bodies the camera fades, and R8.2's `M_V2_Unlit` `ModelAlpha` edit exists for exactly these 12 units |
+| OC15 | Character and wield skin families (D10's scope add): in R8, or a follow-up | **in R8** — the fix after R8 costs a re-stage of the whole cast, and 83 temple guards draw the wrong body until it lands |
 | OC12 | Ragdoll interaction anchor (death origin vs pelvis) — PHYS1's | default retail (origin); not R8's |
 
 **Closed by ruling:** the naming pattern — one standard for every kind, the mount mirrors
 `exports_v2`, ids are the only address, stems resolve through `DA_Cast`; the landed lanes that
-drift move in R8.0 (D1).
+drift move in R8.0a (D1).
 
 **Closed by measurement (no call needed):** does the unit carry the clips columns — yes, all of
 them, richer; is the include order preserved — yes, twice (`includeIndex` and `dependencies`);
@@ -744,14 +878,18 @@ does a per-body cutover need a runtime flag — no; skeletal or static for wield
 `DA_WieldModels` — yes; viewmodels in R8.3 — no; `ground_models.json` successor — package-exists;
 the character byte ledger — closed by the model seam; does anything need the `RAGD` chunk — no;
 where does `phonemeFilter` live — the header; TXT or VFE — VFE; `.lip` — corpus text, R9.1;
-one re-bake or two — one (T-C8 first, T-B2 and T-B3 in the same bake); the source capsule for
+one re-bake or two — one (T-C8 measured first, T-B3 in the same bake; T-B2's bake half is already
+in); the source capsule for
 models — no (1.5 GiB for a lane that never re-reads the source).
 
 ## 9. Retirements ledger
 
 | Retires | In |
 |---|---|
-| `shared_corpus.static_stem` / `mesh_asset` / `texture_asset`, `asset_names.texture_asset_name` and `baked_asset_name` (after the collision check), `FElysiumContentPaths::PropModelStem`, `BakedPropMesh`, `BakedItemMesh`, `BakedPropSkins`, `BakedMeshes*`, every `BakedCharacter*`/`BakedBank*`/`BakedProp*`/`BakedWield*` stem accessor, `model_names.json` (replaced by the resolver fixture); the mount folders `Meshes/`, `Sprites/`, `Sky/`, `Lookdev/` and the 117 per-map root folders | R8.0 |
+| `asset_names.texture_asset_name` and `baked_asset_name` (after the collision check), `FElysiumContentPaths::PropModelStem`, `BakedPropMesh`, `BakedItemMesh`, `BakedPropSkins`, `BakedMeshes*`, every `BakedCharacter*`/`BakedBank*`/`BakedProp*`/`BakedWield*` stem accessor, `model_names.json` (replaced by the resolver fixture); the mount folders `Meshes/`, `Sprites/`, `Sky/`, `Lookdev/` and the 117 per-map root folders | R8.0a |
+| `shared_corpus.static_stem` / `mesh_asset` / `texture_asset` — the legacy map bake calls all three, so they die with it | R9.2 |
+| `make_player_body_material.py`, `make_eye_material.py` (deleted from `build_content.py`'s `GENERATORS` in the same task as the masters they author, or the next `build content` rebuilds them) | R8.2 |
+| `make_wield_materials.py` likewise | R8.3 |
 | `exporters/npc_export.py` (1,404), `UE_mdl_skeletal.py` (1,711), `UE_mdl_cloth.py`, `formats/mdl_gltf.py` (893), `UE_extract_wield.py` (451), `UE_extract_items.py` (151); `test_eskm_sections`, `test_character_sources`, `test_wield_export` | R8.1 |
 | `npc/` and `items/` as export products (3.6 GB + `npc_manifest.json` 60.7 MB + `clips/` 143.8 MB) | R8.5 (paths), R8.1 (producer) |
 | `bake_characters.py` (922), `character_recipes.py` (structure kept in the recipe), `bake_verify_characters.py`'s container reads (checks kept), `M_PlayerBody`, `M_Eyes`, `Characters/Materials` 2,526, `Characters/Textures` 834, `seam_map_character.md`, `seam_map_animation_bank.md` | R8.2 |

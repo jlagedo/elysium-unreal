@@ -1159,3 +1159,45 @@ def test_project_authored_unreal_packages_have_one_namespace(path: str) -> None:
 
 def test_a_copied_game_file_under_the_authored_namespace_is_still_prohibited() -> None:
     assert POLICY.prohibited("Content/ElysiumAuthored/Camera/copied_game_data.vpk") is not None
+
+
+def test_dds_alpha_reads_the_staged_subset_and_refuses_the_rest(tmp_path) -> None:
+    """`validation.dds_alpha` is the numpy-free reader bake verification uses to tell a corpus
+    texture that was authored opaque from one whose mask the import dropped. It admits exactly
+    what `importers/texture_dds.stage_dds` writes -- a DX10-header DDS of four-byte 8-bit pixels --
+    and refuses anything else rather than guessing an answer."""
+    import struct
+
+    from elysium_pipeline.validation.dds_alpha import DdsAlphaError, alpha_minimum
+
+    def _staged(width, height, pixels, *, dxgi=87, fourcc=b"DX10"):
+        header = bytearray(124)
+        struct.pack_into("<IIII", header, 0, 124, 0x1007, height, width)
+        struct.pack_into("<II4s", header, 72, 32, 0x4, fourcc)  # file offset 76
+        body = b"DDS " + bytes(header)
+        if fourcc == b"DX10":
+            body += struct.pack("<IIIII", dxgi, 3, 0, 1, 0)
+        return body + pixels
+
+    # BGRA8: alpha is the fourth byte. One masked texel among opaque ones is what makes the
+    # difference between "the corpus authored it opaque" and "the bake lost the mask".
+    opaque = _staged(2, 1, bytes([10, 20, 30, 255, 40, 50, 60, 255]))
+    masked = _staged(2, 1, bytes([10, 20, 30, 255, 40, 50, 60, 7]))
+    for name, payload, want in (("opaque", opaque, 255), ("masked", masked, 7)):
+        path = tmp_path / (name + ".dds")
+        path.write_bytes(payload)
+        assert alpha_minimum(path) == want
+
+    bad = tmp_path / "bad.dds"
+    bad.write_bytes(b"NOTA" + bytes(200))
+    with pytest.raises(DdsAlphaError):
+        alpha_minimum(bad)
+    # A block-compressed DDS is not what the lane stages; refused rather than mis-read as pixels.
+    legacy = tmp_path / "legacy.dds"
+    legacy.write_bytes(_staged(4, 4, bytes(8), fourcc=b"DXT1"))
+    with pytest.raises(DdsAlphaError):
+        alpha_minimum(legacy)
+    truncated = tmp_path / "short.dds"
+    truncated.write_bytes(_staged(64, 64, bytes(16)))
+    with pytest.raises(DdsAlphaError):
+        alpha_minimum(truncated)

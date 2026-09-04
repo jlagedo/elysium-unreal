@@ -1942,6 +1942,14 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 			? NewObject<UBlendSpace>(Package, *AssetName, RF_Public | RF_Standalone)
 			: NewObject<UBlendSpace1D>(Package, *AssetName, RF_Public | RF_Standalone);
 
+		// Retail blends the cells' DURATIONS (`Studio_Duration`); UE 5.8 blends their play rates by
+		// default, which is a different mean and makes a fan sampled between two cells of unequal
+		// length answer a length the source never had. This flag is the per-asset opt back into the
+		// duration blend, so every gait fan a walk cycle is driven off keeps VtMB's timing --
+		// Elysium.Content.FanDuration is the pin. Set before the samples so it is part of the asset
+		// the sample validation and PostEditChange below see.
+		Space->bUseLegacySamplePointAnimationLengthCalculations = true;
+
 		// BEFORE the first sample. `AddSample` validates the sequence against the blend space's
 		// skeleton and drops it silently if they disagree, so a skeleton set afterwards yields an
 		// asset with no samples that saves perfectly well.

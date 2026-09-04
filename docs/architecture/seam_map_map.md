@@ -1483,6 +1483,96 @@ whether it is wetness-driven (`wetnessScale` authored on a Lit-family unit); and
 `decalProjectorsBound` beside `decalSurfaces`, and the two must agree.
 `uv run elysium export map <map>` prints the counts as it stages.
 
+### Verification: `verify_v2_materials` (R7.2)
+
+The legacy material walks in `bake_verify.py` cannot answer on this lane, so they are now gated
+`map_transport.is_map_on_v2_models(map_name)` off and `verify_v2_materials` is the converted lane's
+material check. Two things broke them: they keyed a world surface through `_material_slot`, whose
+per-map `<map>/Materials/MI_...` answer is the package a converted map **prunes** (so every patched
+glass surface reported "material instance missing" and the check proved nothing), and their other
+answer, `SC.BAKED_MATERIALS`, is the legacy corpus bake — `/ElysiumBaked/Shared/Materials`,
+`MI_<family>_<stem>` — while a converted map binds the material lane's
+`/ElysiumBaked/Materials/<family>/MI_<stem>`. Checking assets no converted map draws is not a check.
+
+The V2 answer reads the lane's own documents: the staged map manifest names the instance bound to
+each surface slot, the corpus `.mtl` of every model the map places names the prop units, and
+`$ELYSIUM_WORK_ROOT/import/materials/manifest.json` (~19,700 rows) carries each staged `MI_`'s
+master, blend-mode override and texture bindings. A per-map patched unit under
+`/ElysiumBaked/Materials/maps/<map>/...` is a parameter override authored *on* the corpus instance —
+it states no blend mode and binds no texture of its own — so the join climbs its `parent` chain to
+the corpus row that does. Results are keyed by unit, not by slot: one broken corpus instance is one
+finding however many surfaces draw it (`glass/glass01` alone answers for ten slots on
+`sm_pawnshop_1`).
+
+Three assertions, each the V2 half of a legacy check:
+
+- **Alpha.** A unit whose blend mode reads a per-texel alpha — `$translucent` → `Translucent`,
+  `$alphatest` → `Masked` (`importers/materials._resolve_blend`) — binds a baked `Texture2D`
+  carrying `HasAlphaChannel`. `Additive` and `Modulate` are excluded: they read RGB, so demanding
+  alpha there would be a new false alarm. Coverage grew — the legacy loop covered props only, this
+  one enumerates the map's world-surface units **and** the corpus units of every placed model.
+  The answer does **not** come from the baked texture's `HasAlphaChannel` registry tag, because
+  that tag cannot be read correctly inside a `-run=pythonscript` commandlet — in either registry
+  mode, and silently:
+  - *In memory* (the registry default): the tag is `UTexture2D::HasAlphaChannel()`, derived from
+    BUILT platform data and `false` outright when there is none (`Texture2D.cpp:1049-1065`).
+    Nothing in a commandlet builds it, so every texture the verify session has faulted in — exactly
+    the ones a converted map's world surfaces bind — answers "no alpha channel". `sp_soc_3`'s three
+    masked units read `False` this way while their `T_*.uasset` files record `Format = DXT5`,
+    `HasAlphaChannel = True`.
+  - *`bIncludeOnlyOnDiskAssets`*: right for one map, then not. The registry updates its own cached
+    disk row from the loaded object as it ticks, so in a four-map batch the findings grow with
+    position — measured 2026-09-04: `sp_tutorial_1` (first) 0, `sm_pawnshop_1` 2, `sm_hub_1` 21,
+    `sm_pier_1` 10, all on DXT5 assets.
+
+  So the assertion reads the lane's own documents, which say the same thing on every run and are
+  the thing actually being asked about. The unit's material provenance names the texture unit its
+  `BaseTexture` resolved to (`textureBindings` → `vtmb:texture:<key>`); that unit's staged DDS is
+  the exact payload Unreal imported (`importers/texture_dds` decodes every BC level itself); and
+  `validation/dds_alpha.alpha_minimum` reads its top mip. Every corpus texture imports `TC_Default`
+  with `CompressionNoAlpha` unset, so the format is `AutoDXT`, which Unreal resolves to DXT1
+  exactly when no source texel is non-opaque — "the baked texture has no alpha channel" and "the
+  authored texture is opaque" are the same statement, and only the second is checkable offline.
+  A `$translucent`/`$alphatest` unit over an opaque texture is therefore **recorded**
+  (`opaque-authored`, one line each), not failed: VtMB's own shader sampled the same opaque texels
+  and read alpha 1 everywhere. What still fails is a `BaseTexture` that is not on the mount, or one
+  the lane's documents lead to no staged payload for. Measured over the five converted maps
+  (2026-09-04): 65 world alpha units, 8 opaque-authored across four maps
+  (`building/building_side3`, `building/building_side4`, `metal/junkoilflr` on `sm_hub_1`;
+  `models/scenery/structural/apartment/spike`; the wolf's `wolfformbody`/`wolfformeye` and
+  `models/scenery/structural/italian/awning`), zero missing payloads.
+
+- **Glass and Source Refract.** Every `$glass`/`$refract` unit the map's surfaces or its placed
+  models bind is staged, and the instance on the mount parents to the master the lane recorded
+  (`M_V2_LitTranslucent`, `M_V2_Refract`). The legacy refract walk carried a legacy expectation too
+  (`M_Refract`, `RefractMap`, `SourceRefractAmount`) and is folded in here beside glass; nothing was
+  lost, because no converted map has a `$refract` world surface today and the prop-side refract
+  units are covered by the unit walk. The `sp_theatre` pins (glass 2, refract 1, 6 rain cards) stay
+  in the legacy branch, where `sp_theatre` lives.
+- **Normals.** A `NormalMap` the manifest names is linear normal-compressed and is what the instance
+  binds. The legacy `BumpMap` sub-check re-keyed: the V2 masters take `NormalMap`, and a unit staged
+  without one (`glass/glass01`) has nothing to check rather than a missing bump map —
+  `M_World_Glass` demanded one because its refraction graph had a slot for it, `M_V2_LitTranslucent`
+  has none.
+
+Missing inputs are named rather than skipped: an empty material manifest points at
+`uv run elysium import materials`, an absent staged map manifest at `uv run elysium export map
+<map>`. And `bake_verify.main()` now refuses a launch carrying neither `-BakeMaps` nor `-BakeMap`
+instead of defaulting to `sp_tutorial_1` — the default silently green-lit a map nobody asked about.
+
+**Measured offline (the four `MapsOnV2Models` maps, against the real manifests):** 19,709 staged
+rows; `sp_tutorial_1` 581 bound units / 49 blended-or-masked / 0 missing / 8 glass-refract units,
+`sm_pawnshop_1` 315 / 24 / 0 / 5, `sm_hub_1` 529 / 49 / 0 / 10, `sm_pier_1` 295 / 33 / 0 / 3; every
+semantic unit parents to `M_V2_LitTranslucent` or `M_V2_Refract`, and no bound unit lacks a
+`BaseTexture`.
+
+**Run in the editor (2026-09-04, `uv run elysium verify maps` over the five converted maps, the
+first real run of this walk):** all five pass. `sp_tutorial_1` 581 bound / 49 blended-or-masked /
+46 alpha-capable / 3 opaque-authored, `sm_pawnshop_1` 315 / 24 / 23 / 1, `sm_hub_1` 529 / 49 / 45 /
+4, `sm_pier_1` 295 / 33 / 33 / 0, `sp_soc_3` 63 / 4 / 4 / 0 — 19,713 staged rows behind them, and
+0 missing payloads. `sp_soc_3` joined `MapsOnV2Models` in the same pass (the owner's deep-water
+witness: a 464-inch `dev_water2_cheap` basin, 40 drip emitters, 1 water volume over 2 brushes).
+
 ### Measured (2026-09-02, the three working maps)
 
 Staged from the material lane's sidecars in 2.2 / 0.7 / 2.0 s per map, and every unit resolved:
@@ -1600,17 +1690,78 @@ is refreshed first by that same engine call so the sky is in the capture.
 Where the data lands: `ULevel::MapBuildData`, the `UMapBuildDataRegistry` in the sibling package
 `/ElysiumBaked/<map>/<map>_BuiltData`, one `FReflectionCaptureMapBuildData` per component
 `MapBuildDataId` (`CubemapSize`, `AverageBrightness`, the full-HDR cube bytes). `UWorld::Rename`
-carries the registry through `save_map`'s untitled-to-final rename and `FEditorFileUtils::SaveWorld`
-saves the `_BuiltData` package beside the level, so one save writes both. A packaged or `-game` boot
-loads the registry with the level (a hard `UPROPERTY` reference) and uploads the cubes at
-registration; nothing at runtime re-captures.
+carries the registry through `save_map`'s untitled-to-final rename, and `FEditorFileUtils::SaveWorld`
+does list the `_BuiltData` package beside the level (`InternalGetMapDataPackages`) — but the save
+**drains the registry's reflection entries** on its way through, which is what
+`Elysium.Content.MapBake.ReflectionCapturesBuilt` was reporting: 0 rendered cubes on maps whose bake
+had said every capture was built. The bake no longer trusts that one save writes both, and no longer
+renders before it (see "The build runs twice" below). A packaged or `-game` boot loads the registry with the level (a hard
+`UPROPERTY` reference) and uploads the cubes at registration; nothing at runtime re-captures.
 
 **The bake asserts the build.** `BuildReflectionCaptures` returns the number of capture components
 whose `MapBuildDataId` resolves to a registry entry with `CubemapSize > 0` and captured bytes;
 `MapBakeV2._build_captures` fails the map when that number is short of the placed count, because a
 capture that placed but never rendered is a black probe the running game would read as "no
-reflection here" with nobody saying why. `bake_verify.py` re-counts on the loaded level through the
-same library call (`CountBuiltReflectionCaptures`), and the Content tier's
+reflection here" with nobody saying why.
+
+**The build runs twice, once on each side of the save, and that is the fix.** The first count is a
+memory answer, and memory is not what ships: `Elysium.Content.MapBake.ReflectionCapturesBuilt` read
+**0 rendered cubes on all four converted maps** while every bake log said every capture was built.
+Measured on `sm_pawnshop_1` (2026-09-04), each order on its own loses a different half:
+
+- **Build only before `save_map`** — the level saves carrying its `MapBuildData` link, and the
+  registry reaches disk **empty**: 14 of 14 in memory immediately before the save, 0 of 14 on a
+  reload, *the same registry object* (`#67486`), *the same package name*, and every
+  `MapBuildDataId` unchanged (`A9B2AD44-4DAD-2791-4D5E-AFA8298C7CD9` on both sides). The save
+  drains `UMapBuildDataRegistry::ReflectionCaptureBuildData`; it does not re-key it, and no amount
+  of saving the registry harder can recover what is already gone.
+- **Build only after `save_map`** — the entries survive to disk and the level reloads with **no
+  registry at all** (`registry ABSENT on the level`, read on a fresh editor). The registry is
+  created by the first build, so a level saved before it has nothing to link.
+
+So `stage_level` builds, saves the level, **builds again** into the registry the saved level now
+points at, and then writes only that registry. The level needs no second write — a capture's id is
+made when its component is constructed rather than by the render, so the `.umap` already carries
+every id the second build keys by — and a second `save_map` would drain the registry again.
+
+`UElysiumMapBakeLibrary::SaveMapBuildData(World)` writes `ULevel::MapBuildData`'s own package. It
+**fully loads that package first**: the mount's previous `<map>_BuiltData` arrives partially loaded
+and `UPackage::Save` answers that with `appError`, which takes the commandlet down —
+`FEditorFileUtils::SaveWorld` meets the same thing on the level's own package and answers it with
+`MarkAsFullyLoaded`. It saves with the `RF_Standalone | RF_Public` flags
+`GetOrCreateMapBuildData` gives the registry (without them the save drops the registry object and
+writes a package whose captures are all unbuilt) and returns `IFileManager::FileExists` on the
+written filename rather than the save result code, because a save that reports success and leaves
+nothing on disk is the case worth catching.
+
+Then `stage_level` drops its `unreal` world wrapper (a live wrapper is a root for the editor's
+collector, and the unload below would find the world still reachable) and asks
+`CountBuiltReflectionCapturesInPackage(<level package>)`, which unloads *both* the level and its
+`_BuiltData` sibling — reusing `UnloadBakedPackages`, the same between-map release `c7cd5100` gave
+the bake so a `-run=pythonscript` commandlet actually frees a map's packages instead of dying at
+25 GB with nothing ticking `RHIEndFrame`; the re-count is a second caller of that same primitive,
+now inside a single map's bake rather than only between maps. `UnloadBakedPackages` matches on the
+exact name or the path separator, and
+dropping only the level would leave the in-memory registry to satisfy the reloaded level's import
+and the count would answer about memory again — then loads the level back and re-runs
+`CountBuiltReflectionCaptures`. `-1` is "no such package, or no world in it". A level whose disk
+count is short is **deleted**, not merely reported: it is on disk carrying this run's recipe stamp,
+so leaving it would have the next run reuse a level whose probes are black with nothing saying so.
+The unload has already moved the editor onto a blank map, which is why `_release_map_packages` can
+still run afterwards.
+
+A short count is never one number: `CountBuiltReflectionCaptures` logs which of the four defects it
+is — no registry on the level, an id the registry holds no entry for, an entry with no cube size,
+an entry with a size and no full-HDR bytes — with the registry's own path and object id and the
+first unanswered guid beside the first component's. Those four point at four different places, and
+the number alone points at none of them.
+
+**Measured (2026-09-04, after the re-bake):** `sp_tutorial_1` 24/24, `sm_pawnshop_1` 14/14,
+`sm_hub_1` 19/19, `sm_pier_1` 41/41 re-counted off the saved level, and
+`Elysium.Content.MapBake.ReflectionCapturesBuilt` green on all four.
+
+`bake_verify.py` re-counts on the loaded level through the same library call
+(`CountBuiltReflectionCaptures`), and the Content tier's
 `Elysium.Content.MapBake.ReflectionCapturesBuilt` loads each `MapsOnV2Models` level package and
 checks every placed capture has its registry entry.
 
@@ -2080,10 +2231,18 @@ actor at all (`TAG_WATER` exists there only so a shared helper can name the tag 
 gated `map_transport.is_map_on_v2_models(map_name)` first, matching every other V2-only verifier in
 this file: exactly one `elysium.water` actor iff the stage carries rows, the actor's row count, and
 each row's `surface_z_cm` and brush count against the staged manifest. R7.1 adds `sm_pier_1` to
-`MapsOnV2Models` (`+MapsOnV2Models=sm_pier_1`, `Config/DefaultElysium.ini`); `MapsOnV2Models` now
-reads `sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`, `sm_pier_1` — `sp_theatre` is on
-`MapsOnNewTransport` but not `MapsOnV2Models`, so it takes no V2 bake and places no water actor
-either way.
+**both** flags (`+MapsOnNewTransport=sm_pier_1`, `+MapsOnV2Models=sm_pier_1`,
+`Config/DefaultElysium.ini`): the V2 flag selects the bake lane and the water actor; the transport
+flag is what R4.6 says it is — the map's entity, collision and environment assets
+(`DA_sm_pier_1_{Entities,Collision,Environment}`, imported for the pier in the same pass) are read
+only for a listed map, and `Elysium.Content.MapEnvironment.FieldParity` fails on a map that has the
+assets but not the flag. Listing one without the other is the half-cutover this file warns
+against. `MapsOnV2Models` now reads `sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`, `sm_pier_1`,
+`sp_soc_3`; `sp_theatre` is on `MapsOnNewTransport` but not `MapsOnV2Models`, so it takes no V2
+bake and places no water actor either way. `sp_soc_3` joined both flags in the same pass as the
+owner's deep-water witness: a 464-inch `dev_water2_cheap` basin over 2 brushes, the map's own
+patched unit (`maps/sp_soc_3/dev/dev_water2_cheap`, not a shared-corpus water material), and 40
+drip emitters placed alongside it.
 
 ### Measured
 
@@ -2094,9 +2253,11 @@ either way.
 |---|---|---|---|---|---|---|---|---|---|
 | `sm_hub_1` | 1 | 0 | -14937.74 | -14988.54 | `vtmb:material:water/sewer_water` | true | `(0.019608, 0.019608, 0.0)` | 2.54 / 2600.96 | 1 brush, 6 planes |
 | `sm_pier_1` | 1 | 0 | -1582.42 | -1666.24 | `vtmb:material:water/invisible_water` | true | `(0.086275, 0.078431, 0.039216)` | 2.54 / 1016.0 | 1 brush, 6 planes |
+| `sp_soc_3` | 1 | 0 | -609.6 | -1788.16 | `vtmb:material:maps/sp_soc_3/dev/dev_water2_cheap` | true | `(0.086275, 0.078431, 0.039216)` | 2.54 / 1016.0 | 2 brushes, 6 planes each |
 
-Both bakes placed one `AElysiumWaterVolumes` actor carrying 1 volume (`[bake] water: 1 actor
-placed with 1 volume(s)`); `verify_water` matched both (`[verify] water: 1 staged rows, 1
+All three bakes placed one `AElysiumWaterVolumes` actor carrying 1 volume (`[bake] water: 1 actor
+placed with 1 volume(s)`); `verify_water` matched all three (`[verify] water: 1 staged rows, 1
 matched`). `sm_hub_1`'s level carries 2,539 actors including the one `ElysiumWaterVolumes`;
-`sm_pier_1`'s carries 969 including the one. No leftover `dropped[]` row on either map at
-`MANIFEST_VERSION` 9.
+`sm_pier_1`'s carries 969 including the one. `sp_soc_3`'s depth is the owner's basin: 1178.56 cm
+(464.0 inches) between `surfaceZCm` and `minZCm`, on the map's own per-map patched material rather
+than a shared-corpus one. No leftover `dropped[]` row on any of the three at `MANIFEST_VERSION` 9.

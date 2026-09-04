@@ -37,10 +37,12 @@ def _bake_map_v2_manifest_version() -> int:
 #: The three-map working corpus (`seam_migration.md` -> R1); a whole-corpus run is a separate,
 #: owner-approved step and this module never asks for one.
 WORKING_MAPS = ("sp_tutorial_1", "sm_pawnshop_1", "sm_hub_1")
-#: The maps on the V2 model root. R7.1 adds `sm_pier_1` (the water scope, `MapsOnV2Models` in
-#: `Config/DefaultElysium.ini`); it is not in `WORKING_MAPS` because the parametrized corpus
-#: cases above walk the three-map corpus and R7.1 authorized no wider run.
-V2_MODEL_MAPS = WORKING_MAPS + ("sm_pier_1",)
+#: The maps on the V2 model root. R7.1 adds `sm_pier_1` (the water scope) and, on the owner's call
+#: of 2026-09-04, `sp_soc_3` -- the deep-water witness (Society of Leopold: a 464-inch
+#: `dev_water2_cheap` basin, 40 drip emitters). Both are in `MapsOnV2Models` in
+#: `Config/DefaultElysium.ini` and neither is in `WORKING_MAPS`, because the parametrized corpus
+#: cases above walk the three-map corpus and neither ruling authorized a wider run of those.
+V2_MODEL_MAPS = WORKING_MAPS + ("sm_pier_1", "sp_soc_3")
 
 
 def test_gltf_frame_matches_source_to_unreal_through_the_units_own_transform():
