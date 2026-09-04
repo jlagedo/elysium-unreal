@@ -131,6 +131,18 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category = "Detail Props", meta = (ClampMin = "0.0"))
 	float DetailSwayAmplitude = 5.0f * 2.54f;
 
+	// --- water (R7.1) ---------------------------------------------------------------------------
+	/**
+	 * The one translation knob on `M_V2_Water` (`water-architecture.md` section 4.2): the water
+	 * volume's extinction is `WaterFogScale / (($fogend - $fogstart) x 2.54)` per centimetre, split
+	 * into scattering and absorption by the decoded `$fogcolor`. VtMB's fog is linear (fully fogged
+	 * at `$fogend`); SLW's is exponential; no one value makes the two curves coincide, so the
+	 * faithful default is the one at which they agree at the half-fog distance: 2 ln 2. Wire first,
+	 * tune later -- the tuning session moves it, not the graph.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category = "Water", meta = (ClampMin = "0.0", ClampMax = "16.0"))
+	float WaterFogScale = 1.3862944f;
+
 	/** `/Game/ElysiumGenerated/Materials/V2/MPC_ElysiumSurfaces`, the collection every V2 master reads. */
 	static const TCHAR* CollectionPath();
 

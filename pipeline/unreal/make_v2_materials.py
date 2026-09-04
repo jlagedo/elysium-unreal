@@ -59,7 +59,7 @@ DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 #: it up through the recipe stamp even when nothing on disk changed. `_source_hash()` below is the
 #: exhaustive safety net (it catches an edit this constant was not bumped for); this constant
 #: stays as the human-readable marker of the shape revision.
-GRAPH_VERSION = 8
+GRAPH_VERSION = 9
 
 #: `MPC_ElysiumSurfaces` (SF-4.1, C++, landed) owns every one of these rows and their defaults --
 #: `make_surface_knobs.py` (`build_content.py` runs it before this file). This generator is a
@@ -77,6 +77,8 @@ REQUIRED_MPC_SCALARS = sorted([
     "DefaultRoughness", "DefaultSpecular", "DefaultMetallic", "ClassInfluence",
     # R6.3: the detail-sway amplitude (`_detail_sway`), on Lit/LitTranslucent/Unlit.
     "DetailSwayAmplitude",
+    # R7.1: the water extinction scale (`_build_water`), on Water only.
+    "WaterFogScale",
 ])
 
 # The shader-source units each master's post-lighting math transcribes (design doc "Post-lighting
@@ -621,14 +623,22 @@ def _detail_sway(g, switch_name, x, y):
     g.to(final, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
 
 
-def _uv_lanes(g, tex_scale_offset_name, *, base_scroll_names, bump_scroll_names=None):
+def _uv_lanes(g, tex_scale_offset_name, *, base_scroll_names, bump_scroll_names=None,
+              sine_wave=None, sine_translate_name=None):
     """`TexScaleOffset` transform (shared by every UV-consuming slot on the material), then one
     independent `Panner` per lane it is asked for. `(0, 0)` scroll rates are an exact `Panner`
     no-op, so no static switch gates them (design doc "The animation and scroll lanes"). Returns
     `(base_uv, bump_uv_or_None, tex_scale_offset_param, uv0)` -- `uv0` (M5 review fix) is the raw,
     untransformed `TextureCoordinate` node, for a caller (`M_V2_TwoTexture`'s `BaseTexture2` layer)
     whose own scale/offset vector must be independent of `TexScaleOffset`'s, not composed on top of
-    the already-scaled/panned `base_uv`."""
+    the already-scaled/panned `base_uv`.
+
+    `sine_wave` (R7.1 ruling J, Lit/LitTranslucent only) is the sine lane's own 0..1 wave node; with
+    it the base coordinate becomes `transformed_uv + (SineUVTranslate.rg x wave + SineUVTranslate.ba)`
+    -- a `sine` -> `texturetransform` chain's UV slide, on the BASE lane alone. The bump lane keeps
+    the untranslated coordinate: Source's `$baseTextureTransform` moves the base texture and leaves
+    `$bumpTransform` alone, and the pier's surf cards carry no normal map anyway. The default
+    `(0,0,0,0)` makes the whole term an exact zero add on every other instance."""
     uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1900, 0)
     tex_scale_offset = g.node(unreal.MaterialExpressionVectorParameter, -1900, 200)
     tex_scale_offset.set_editor_property("parameter_name", tex_scale_offset_name)
@@ -643,16 +653,27 @@ def _uv_lanes(g, tex_scale_offset_name, *, base_scroll_names, bump_scroll_names=
 
     time_node = g.time(-1900, 420)
 
-    def _panner(names, y):
+    base_coord = transformed_uv
+    if sine_wave is not None:
+        translate = g.vec4(sine_translate_name, (0.0, 0.0, 0.0, 0.0), -1900, 300)
+        # A `VectorParameter`'s default output is RGB only (see `mask`'s docstring), so the
+        # offset half needs the explicit "RGBA" source output to reach the 4th channel.
+        amplitude = g.mask(translate, "rg", -1700, 320)
+        sine_offset = g.mask(translate, "ba", -1700, 380, src_out="RGBA")
+        slide = g.add(g.mul(amplitude, "", sine_wave, "", -1500, 330), "", sine_offset, "",
+                      -1300, 350)
+        base_coord = g.add(transformed_uv, "", slide, "", -1100, 200)
+
+    def _panner(names, coordinate, y):
         u = g.scalar(names[0], 0.0, -1900, y)
         v = g.scalar(names[1], 0.0, -1900, y + 60)
         speed = g.append(u, "", v, "", -1700, y + 30)
         p = g.panner(time_node, speed, -1500, y + 30)
-        connect(transformed_uv, "", p, "Coordinate")
+        connect(coordinate, "", p, "Coordinate")
         return p
 
-    base_uv = _panner(base_scroll_names, 500)
-    bump_uv = _panner(bump_scroll_names, 620) if bump_scroll_names else None
+    base_uv = _panner(base_scroll_names, base_coord, 500)
+    bump_uv = _panner(bump_scroll_names, transformed_uv, 620) if bump_scroll_names else None
     return base_uv, bump_uv, tex_scale_offset, uv0
 
 
@@ -720,7 +741,10 @@ def _sine_lane(g, *, min_name, max_name, period_name, offset_name, target_mask_n
         factor = g.mask(factor3, out_channels, ax + 660, ay)
         return g.mul(node, node_out, factor, "", ax + 880, ay)
 
-    return {"value": sine_value, "apply": apply}
+    # `wave` is the bare 0..1 wave, before `SineMin`/`SineMax` scale it into a shading factor:
+    # R7.1 ruling J's UV slide carries its own amplitude and offset (`SineUVTranslate`), so it
+    # rides the wave itself rather than a value another target's min/max already stretched.
+    return {"value": sine_value, "wave": wave_norm, "apply": apply}
 
 
 def _flipbook_slice(g, rate_name, count_name, x, y):
@@ -890,6 +914,7 @@ class LitParams:
         TexScaleOffset = "TexScaleOffset"
         SineTargetMask = "SineTargetMask"
         SineChannelMask = "SineChannelMask"
+        SineUVTranslate = "SineUVTranslate"
         FogColor = mat_fog.P_COLOR
 
     class Switches:
@@ -931,14 +956,17 @@ def _build_lit(mat, collection, environment_collection, lut_texture, default_fra
     g = Graph(mat, collection=collection)
     P = LitParams
 
-    base_uv, bump_uv, _, _ = _uv_lanes(
-        g, P.Vectors.TexScaleOffset,
-        base_scroll_names=(P.Scalars.BaseScrollRateU, P.Scalars.BaseScrollRateV),
-        bump_scroll_names=(P.Scalars.BumpScrollRateU, P.Scalars.BumpScrollRateV))
+    # The sine lane comes first here (and only here): its wave is an input to the base UV lane
+    # (R7.1 ruling J's `SineUVTranslate`), so it has to exist before `_uv_lanes` builds the panner.
     sine = _sine_lane(
         g, min_name=P.Scalars.SineMin, max_name=P.Scalars.SineMax,
         period_name=P.Scalars.SinePeriod, offset_name=P.Scalars.SineTimeOffset,
         target_mask_name=P.Vectors.SineTargetMask, channel_mask_name=P.Vectors.SineChannelMask)
+    base_uv, bump_uv, _, _ = _uv_lanes(
+        g, P.Vectors.TexScaleOffset,
+        base_scroll_names=(P.Scalars.BaseScrollRateU, P.Scalars.BaseScrollRateV),
+        bump_scroll_names=(P.Scalars.BumpScrollRateU, P.Scalars.BumpScrollRateV),
+        sine_wave=sine["wave"], sine_translate_name=P.Vectors.SineUVTranslate)
 
     # -- BaseTexture (+ flipbook) --------------------------------------------------------------
     base_tex_2d = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
@@ -1884,6 +1912,8 @@ class WaterParams:
         UseBaseTexture = "UseBaseTexture"
         UseNormalMap = "UseNormalMap"
         UseAnimatedNormalFrames = "UseAnimatedNormalFrames"
+        # R7.1 ruling E: the `$bottommaterial` instance (zero specular, zero extinction).
+        Underside = "Underside"
 
 
 WATER_PARAM_TABLE = {
@@ -1895,61 +1925,49 @@ WATER_PARAM_TABLE = {
 
 
 def _build_water(mat, collection, lut_texture, default_normal_frames):
-    """`waterrefract.psh`/`waterreflect.psh` (design doc "M_V2_Water" post-lighting math) are both
-    render-target passes over `_rt_WaterRefraction`/`_rt_WaterReflection`, and the design states
-    both are **replaced**, not transcribed: Unreal `Refraction` (`RM_PIXEL_NORMAL_OFFSET`, the same
-    technique `make_world_materials.py::make_refract` uses for its legacy `M_Refract`) and Lumen
-    reflection on one translucent surface, with the authored constants carried as scalars driving
-    the same shapes. What *is* transcribed literally is the one place VtMB has a real Fresnel term:
-    `waterreflect.psh`'s quintic `mad r0.a, r0.a, 1-c3.a, c3.a` is Schlick with R0 = `c3.a`, exactly
-    Unreal's `Fresnel` node with `BaseReflectFraction` = `BaseReflectFract` and `ExponentIn` = 5.
+    """R7.1 (`docs/architecture/water-architecture.md` section 4): Single Layer Water.
 
-    Reconstruction decisions, named as such (this master has no shipped pixel source for either
-    final program -- `WaterRefract_old`/`WaterReflect_old` and their `_ps20_old` twins are all
-    compiled-only; only the design-era `waterrefract.psh`/`waterreflect.psh` pair is readable):
+    VtMB's `Water_Old` draws two render-target passes -- `_rt_WaterRefraction` perturbed by the
+    DUDV and tinted `$refracttint`, `_rt_WaterReflection` perturbed the same way, Fresnel'd
+    `(1 - N.V)^5` (PS `c3 = (1,0,0,0)`, R0 = 0) and tinted `$reflecttint`, additive -- and fogs
+    what lies below the plane with the surface material's `$fogcolor`/`$fogstart`/`$fogend`
+    (`SetFogVolumeState`, `MATERIAL_FOG_LINEAR_BELOW_FOG_Z` during the refraction pass). Ruling A
+    replaces the three with the one Unreal primitive that does all three in one pass: the SLW
+    shading model refracts the lit scene along the normal, takes Lumen's reflection through its own
+    Schlick from `Specular`, and integrates a volume BSDF whose extinction is the authored fog.
 
-    - Two independent bump slots feed one `MP_NORMAL` (Pixel Normal Offset refraction has no
-      second normal channel to offset against): `NormalMap` is the lit bump (reflections/specular,
-      gated `UseNormalMap`, matching every other master's normal lane); `DuDvMap` contributes only
-      its own *deviation from flat* (`DuDvMap.rgb - (0,0,1)`), scaled by `RefractAmount/100` and
-      added on top. An unbound `DuDvMap` samples its default (`DefaultNormal`, already flat), so
-      that deviation -- and therefore the whole perturbation -- is an exact `(0,0,0)` no-op
-      regardless of `RefractAmount`, the same "default makes the knob inert" shape every other
-      lane in this file uses.
-    - `MP_REFRACTION = 1 + RefractAmount/100`, the same "1.0 is neutral, `RefractAmount` is added
-      to one" convention `M_V2_Refract`'s own refraction pin uses (review fix: this master's
-      `MP_REFRACTION` was a flat `1.0` -- `RefractAmount` drove only the `DuDvMap` perturbation
-      below, never the refraction pin itself, so the knob never actually bent light).
-      `RefractAmount` still drives the `DuDvMap` perturbation too, so refraction strength and the
-      DuDv ripple share one coherent knob. `CheapWater` "drops the refraction pass" for both: it
-      zeroes the perturbation outright (a `Switch` ahead of the `Add`) *and* forces `MP_REFRACTION`
-      back to the flat neutral `1.0`, so a cheap-water instance is genuinely undistorted, not just
-      unrippled.
-    - `BaseReflectFract` feeds the Fresnel node; its output scales `ReflectAmount/100` into
-      `MP_SPECULAR` (gated `UseEnvMap`, mirroring every other master's envmap-gated specular
-      branch) rather than a literal reflection-image blend, since Lumen already supplies the
-      reflection image once Specular/Roughness are physically plausible. `ReflectTint`'s luma
-      scales that same specular term, the same "grey tint scales Specular" shape `M_V2_Lit`'s own
-      reflection contract uses for a non-chromatic `$envmaptint`. `BaseReflectFract`'s own default
-      is `0.0` and the Fresnel node's static `exponent` is `5.0` -- the shipped binary's own
-      values, not the design-era readable source's: `waterreflect_old`/`waterreflect_ps20_old`
-      read no `c3` register at all (register legend review: "`c3.a` is in the unshipped
-      `waterreflect.psh` source only"), which is R0 = 0 at Schlick's ps.1.1 exponent 5 (ps.2.0/
-      cheap use exponent 4, not reproduced here -- one exponent, matching the ps.1.1 default pass).
-    - `WaterColor`/`WaterMurkiness`/`RefractTint`/`Color` combine into BaseColor: `BaseTexture ×
-      Color × RefractTint` (the un-murky look, `RefractTint` transcribing `waterrefract.psh`'s
-      `mul r0, t2, c1`) `Lerp`'d toward the flat `WaterColor` by `WaterMurkiness` -- an exact no-op
-      at the shipped default (`WaterMurkiness` 0.0), same shape as every other neutral-by-default
-      lane in this file.
-    - `UseFogEnable` -> `Emissive += FogColor.rgb * saturate((PixelDepth - FogStart) / (FogEnd -
-      FogStart))`, `Opacity` blended toward `FogColor.a` by the same distance term when enabled --
-      the transcription of the shipped cheap program's tail (`watercheap_ps11`/
-      `watercheap_ps20_old`: `mad r0.xyz, F, reflect, c0(g_FogColor)` / `mov r0.w, c0.w`, review
-      fix). The wave-animation scalars (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`,
-      `WaterTimeFreq1/2`, `WaterWaveHeight/Length`, `WaterSpecularMin/Max`,
-      `CheapWaterStartDistance/EndDistance`, `WaterDepth`) remain **declared, not wired**: they are
-      vertex/World-Position-Offset concerns, out of this generator's scope, the same way the sprite
-      lane owns `$spriteorigin`.
+    The translation, pin by pin (the numbers stay authored on the instance; the graph converts):
+
+    - **Absorption / Scattering** (1/cm): `range = max((FogEnd - FogStart) x 2.54, 1)`;
+      `sigma = WaterFogScale / range` (the Surfaces-page knob, default 2 ln 2 -- the value at which
+      SLW's exponential transmittance and VtMB's linear fog agree at the half-fog distance);
+      `c = pow(FogColor.rgb, 2.2)` (the same decode `ElysiumFog::DecodeColor` gives the scene fog);
+      Scattering = `c x sigma`, Absorption = `(1 - c) x sigma`. `UseFogEnable` off -> both 0
+      (`$fogenable 0` is `FogMode(0)`: clear water). `Underside` -> both 0 (ruling E: the
+      `$bottommaterial` faces are seen only from inside the volume, whose fog is the post-process;
+      5.8's SLW camera-under-water branch is hardcoded off, so the underside must not integrate
+      "water" over the above-water world it refracts). `CheapWater` -> `sigma x 16` (ruling F: the
+      cheap program never reads the refraction RT and lerps `lerp(fogcolor, cube, fresnel)`, so the
+      body reads as its `$fogcolor` at any depth).
+    - **Color Scale Behind Water** = `RefractTint` (`mul r0, t2, c1`, the refract pass's own tint).
+    - **PhaseG** = 0: VtMB has no phase term.
+    - **Normal**: the flipbook lane unchanged -- `dev/water_normal`'s 29 frames at the
+      `animatedtexture` rate over the `texturescroll` panner, gated `UseNormalMap`. Unit strength.
+    - **Specular** = `class_specular x luma(ReflectTint)`, zero under `Underside` (`Mod_LoadFaces`
+      calls `$reflecttexture->SetUndefined()` on the material of every down-facing water face).
+      SLW's own Fresnel replaces the `Fresnel` node; `BaseReflectFract` stays declared.
+    - **Roughness / Metallic**: the class LUT, unchanged. Lumen honours SLW roughness in 5.8.
+    - **Emissive**: the authored fixed-cube add, unchanged.
+    - **Base Color**: unchanged, invisible while Opacity is 0.
+    - **Opacity is coverage, not murk** (`WaterVisibility = 1 - Opacity` in
+      `BasePassPixelShader.usf`): 0 for the water family; a base-textured `Water` unit (four in
+      the corpus, none placed on a water map) keeps `Alpha x BaseTexture.a` as its coverage.
+
+    Declared, not wired (provenance the instance still carries): `DuDvMap` (the DX8 RT-offset
+    field; SLW offsets along the normal), `RefractAmount`/`ReflectAmount` (its warp strengths, not
+    intensities), `BaseReflectFract`, `UseEnvMap` (the cheap cube is Lumen's now), the wave
+    scalars, `CheapWaterStart/EndDistance` and `WaterDepth` (VBSP's per-instance depth; the volume
+    the map lane stages carries the real one).
     """
     g = Graph(mat, collection=collection)
     P = WaterParams
@@ -1996,12 +2014,11 @@ def _build_water(mat, collection, lut_texture, default_normal_frames):
     base_color_final = g.lerp(tinted, "", water_color, "", murkiness, "", -100, -600)
     g.to(base_color_final, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
-    # -- Normal / refraction: NormalMap (lit bump) plus DuDvMap's own deviation from flat
-    # (unconditional ripple perturbation, its DefaultNormal default already flat) -- see the
-    # function docstring --------------------------------------------------------------------
+    # -- Normal: the flipbook lane (R7.1: `dev/water_normal`'s own 29 frames -- the stage binds
+    # `$normalmap`'s array, not the DUDV's), gated UseNormalMap. DuDvMap is declared beside it and
+    # feeds nothing: SLW refracts along MP_NORMAL, the RT-offset field has no pin to land on ------
     dudv_tex = g.tex(P.Textures.DuDvMap, -1100, 60, kind="normal")
     connect(bump_uv, "", dudv_tex, "UVs")
-    dudv_rgb = g.mask(dudv_tex, "rgb", -900, 60)
 
     normal_tex_2d = g.tex(P.Textures.NormalMap, -1100, 260, kind="normal")
     connect(bump_uv, "", normal_tex_2d, "UVs")
@@ -2012,57 +2029,19 @@ def _build_water(mat, collection, lut_texture, default_normal_frames):
     flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
     normal_lit = g.switch(P.Switches.UseNormalMap, g.mask(normal_tex, "rgb", -700, 260),
                           flat_normal, -500, 220, default=False)
+    g.to(normal_lit, "", unreal.MaterialProperty.MP_NORMAL)
 
-    # `RefractAmount` scales how far DuDvMap's own deviation from flat perturbs the shared normal
-    # -- an unbound DuDvMap (flat DefaultNormal) makes this delta exactly (0,0,0) regardless of
-    # RefractAmount, and CheapWater zeroes it outright ("drops the refraction pass"). Pixel Normal
-    # Offset reads its offset direction from this same MP_NORMAL, so the perturbation is what
-    # actually drives the refraction distortion; MP_REFRACTION itself stays the flat M_Refract-style
-    # neutral 1.0 (see the function docstring) ---------------------------------------------------
-    refract_amount = g.scalar(P.Scalars.RefractAmount, 20.0, -1100, 620)
-    refract_scale = g.div(refract_amount, "", g.const(100.0, -900, 700), "", -700, 660)
-    dudv_delta = g.sub(dudv_rgb, "", flat_normal, "", -700, 580)
-    dudv_perturbation = g.mul(dudv_delta, "", refract_scale, "", -500, 620)
-    dudv_perturbation_gated = g.switch(P.Switches.CheapWater, g.const3(0.0, 0.0, 0.0, -300, 700),
-                                       dudv_perturbation, -300, 640, default=False)
-    combined_normal = g.add(normal_lit, "", dudv_perturbation_gated, "", -100, 400)
-    g.to(combined_normal, "", unreal.MaterialProperty.MP_NORMAL)
-
-    # `MP_REFRACTION = 1 + RefractAmount/100` (review fix -- see the function docstring), zeroed
-    # back to the flat neutral 1.0 under CheapWater, the same "drops the refraction pass" gate the
-    # DuDv perturbation above already uses.
-    refraction_from_amount = g.add(g.const(1.0, -300, 780), "", refract_scale, "", -100, 780)
-    refraction_final = g.switch(P.Switches.CheapWater, g.const(1.0, -300, 860),
-                                refraction_from_amount, 100, 820, default=False)
-    g.to(refraction_final, "", unreal.MaterialProperty.MP_REFRACTION)
-
-    # -- surface class lookup + reflection: BaseReflectFract -> Fresnel -> ReflectAmount/
-    # ReflectTint into Specular, gated UseEnvMap (mirrors every other master's envmap branch) ---
+    # -- surface class lookup; Specular = class specular x luma(ReflectTint), stripped on the
+    # underside (Mod_LoadFaces' `$reflecttexture->SetUndefined()` on every down-facing face) ----
     class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
-    # Default 0.0 (review fix): the shipped `waterreflect_old`/`_ps20_old` binaries read no `c3`
-    # register at all -- R0 = 0 in the shipped game, not the 0.2 the design-era readable source
-    # implied. See the function docstring's Fresnel bullet.
-    base_reflect_fract = g.scalar(P.Scalars.BaseReflectFract, 0.0, -1900, 1900)
-    fresnel_node = g.node(unreal.MaterialExpressionFresnel, -1700, 1900)
-    # `MaterialExpressionFresnel`'s static exponent property is `exponent` (real-editor fact --
-    # `Exponent`, C++ `UMaterialExpressionFresnel.h`); `ExponentIn`/`BaseReflectFractionIn` are the
-    # two *connectable* `FExpressionInput` pins, named for their C++ field verbatim (Unreal's
-    # default `GetInputName` reflects the field name -- neither is overridden on this node).
-    fresnel_node.set_editor_property("exponent", 5.0)
-    connect(base_reflect_fract, "", fresnel_node, "BaseReflectFractionIn")
-
-    reflect_amount = g.scalar(P.Scalars.ReflectAmount, 50.0, -1900, 2000)
     reflect_tint = g.vec3(P.Vectors.ReflectTint, (1.0, 1.0, 1.0, 1.0), -1900, 2080)
     luma_weights = g.const3(0.299, 0.587, 0.114, -1900, 2160)
     reflect_tint_luma = g.dot(reflect_tint, "", luma_weights, "", -1700, 2080)
-    specular_water = g.mul(
-        g.mul(fresnel_node, "", g.div(reflect_amount, "", g.const(100.0, -1500, 2000), "",
-                                      -1500, 2040), "", -1300, 2000),
-        "", reflect_tint_luma, "", -1100, 2000)
-    specular_final = g.switch(P.Switches.UseEnvMap, specular_water, class_specular, -900, 1960,
-                              default=False)
+    specular_water = g.mul(class_specular, "", reflect_tint_luma, "", -1300, 2000)
+    specular_final = g.switch(P.Switches.Underside, g.const(0.0, -1100, 2060), specular_water,
+                              -900, 1960, default=False)
     g.to(specular_final, "", unreal.MaterialProperty.MP_SPECULAR)
     g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
     g.to(class_metallic, "", unreal.MaterialProperty.MP_METALLIC)
@@ -2075,51 +2054,71 @@ def _build_water(mat, collection, lut_texture, default_normal_frames):
     reflect_dir = g.reflection_ws(-1900, 2400)
     envcube = g.cube(P.Textures.EnvMap, -1700, 2400, default=DEFAULT_CUBE)
     connect(reflect_dir, "", envcube, "UVs")
-    # `cube x EnvMapTint x FixedCubeStrength` (review fix: FixedCubeStrength was not read at all on
-    # this master) -- Water has no separate reflection-mask texture to fold in (unlike M_V2_Lit's
-    # mask_sat), so this is the reflection contract's cube/tint/strength triple without a mask
-    # term; ReflectTint keeps scaling the authored cube on top, unchanged from before this fix.
     fixed_raw = g.mul(
         g.mul(g.mul(envcube, "RGB", env_tint, "", -1500, 2400), "", fixed_cube_strength, "",
-             -1400, 2420),
+              -1400, 2420),
         "", reflect_tint, "", -1300, 2440)
     lumen_safe_fixed = g.node(unreal.MaterialExpressionRayTracingQualitySwitch, -1100, 2400)
     connect(fixed_raw, "", lumen_safe_fixed, "Normal")
     connect(g.const3(0.0, 0.0, 0.0, -1100, 2480), "", lumen_safe_fixed, "RayTraced")
     fixed_emissive = g.switch(P.Switches.UseFixedCube, lumen_safe_fixed,
                               g.const3(0.0, 0.0, 0.0, -900, 2400), -900, 2360, default=False)
+    g.to(fixed_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 
-    # -- Fog: the shipped cheap program's own tail (`watercheap_ps11`/`watercheap_ps20_old`:
-    # `mad r0.xyz, F, reflect, c0(g_FogColor)` / `mov r0.w, c0.w`, review fix) -- `F` is the
-    # distance term `saturate((PixelDepth - FogStart) / (FogEnd - FogStart))`, additive on
-    # Emissive and blending Opacity toward FogColor.a, both gated UseFogEnable ------------------
+    # -- The volume: the VMT fog keys as SLW extinction (see the docstring) ---------------------
     fog_color = g.vec4(P.Vectors.FogColor, (0.0, 0.0, 0.0, 0.0), -1900, 4120)
     fog_start = g.scalar(P.Scalars.FogStart, 1.0, -1900, 3960)
     fog_end = g.scalar(P.Scalars.FogEnd, 400.0, -1900, 4040)
-    pixel_depth = g.node(unreal.MaterialExpressionPixelDepth, -1900, 4200)
-    fog_span = g.sub(fog_end, "", fog_start, "", -1700, 4000)
-    fog_numerator = g.sub(pixel_depth, "", fog_start, "", -1700, 4200)
-    fog_ratio = g.div(fog_numerator, "", fog_span, "", -1500, 4100)
-    fog_factor = g.sat(fog_ratio, "", -1300, 4100)
-    fog_color_rgb = g.mask(fog_color, "rgb", -1700, 4280, src_out="RGBA")
-    fog_color_a = g.mask(fog_color, "a", -1700, 4360, src_out="RGBA")
-    fog_emissive_raw = g.mul(fog_color_rgb, "", fog_factor, "", -1100, 4200)
-    fog_emissive = g.switch(P.Switches.UseFogEnable, fog_emissive_raw,
-                            g.const3(0.0, 0.0, 0.0, -900, 4280), -900, 4240, default=False)
-    total_emissive = g.add(fixed_emissive, "", fog_emissive, "", -700, 2400)
-    g.to(total_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    fog_color_rgb = g.mask(fog_color, "rgb", -1700, 4120, src_out="RGBA")
+    fog_decoded = g.pow(fog_color_rgb, "", g.const(2.2, -1700, 4200), "", -1500, 4140)
+    fog_span_in = g.sub(fog_end, "", fog_start, "", -1700, 4000)
+    fog_span_cm = g.mul(fog_span_in, "", g.const(2.54, -1700, 3920), "", -1500, 4000)
+    fog_range = g.clamp(fog_span_cm, "", g.const(1.0, -1500, 3860), "",
+                        g.const(1.0e9, -1500, 3900), "", -1300, 4000)
+    fog_scale = g.mpc("WaterFogScale", -1500, 3800)
+    sigma = g.div(fog_scale, "", fog_range, "", -1100, 3960)
+    sigma_cheap = g.mul(sigma, "", g.const(16.0, -1100, 4040), "", -900, 4000)
+    sigma_selected = g.switch(P.Switches.CheapWater, sigma_cheap, sigma, -700, 3980,
+                              default=False)
+    scattering = g.mul(fog_decoded, "", sigma_selected, "", -500, 4100)
+    absorption = g.mul(g.one_minus(fog_decoded, "", -700, 4200), "", sigma_selected, "",
+                       -500, 4220)
+    zero3 = g.const3(0.0, 0.0, 0.0, -500, 4320)
+    scattering_fogged = g.switch(P.Switches.UseFogEnable, scattering, zero3, -300, 4100,
+                                 default=False)
+    absorption_fogged = g.switch(P.Switches.UseFogEnable, absorption, zero3, -300, 4220,
+                                 default=False)
+    scattering_final = g.switch(P.Switches.Underside, zero3, scattering_fogged, -100, 4100,
+                                default=False)
+    absorption_final = g.switch(P.Switches.Underside, zero3, absorption_fogged, -100, 4220,
+                                default=False)
+    # The output node is created here, immediately before its four inputs: every graph mutation
+    # made while it exists with nothing connected raises `No inputs to Single Layer Water Material`
+    # (`MaterialExpressions.cpp:21330` -- `CompileCustomOutputs` compiles every gathered custom
+    # output whatever the shading model is), and every mutation made while the master is already
+    # MSM_SINGLE_LAYER_WATER with no output node raises `SingleLayerWater materials requires the
+    # use of SingleLayerWaterMaterial output node` (`MaterialShared.cpp:6447`). Creating it last
+    # and wiring it at once closes the first window; the caller setting the shading model only
+    # after this function returns closes the second.
+    slw = g.node(unreal.MaterialExpressionSingleLayerWaterMaterialOutput, 300, 4160)
+    connect(scattering_final, "", slw, "ScatteringCoefficients")
+    connect(absorption_final, "", slw, "AbsorptionCoefficients")
+    connect(g.const(0.0, 100, 4300), "", slw, "PhaseG")
+    connect(refract_tint, "", slw, "ColorScaleBehindWater")
 
-    # -- Opacity: Alpha x BaseTexture.a (translucent, no vertex-color/alpha lane on this master),
-    # blended toward FogColor.a by the same distance term when UseFogEnable is set -------------
+    # -- Opacity: coverage. 0 for water; a base-textured unit keeps Alpha x BaseTexture.a --------
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
-    opacity_base = g.mul(alpha_param, "", base_a_selected, "", 1900, 0)
-    opacity_fogged = g.lerp(opacity_base, "", fog_color_a, "", fog_factor, "", 2100, 40)
-    opacity_final = g.switch(P.Switches.UseFogEnable, opacity_fogged, opacity_base, 2300, 20,
-                             default=False)
+    opacity_textured = g.mul(alpha_param, "", base_a_selected, "", 1900, 0)
+    opacity_final = g.switch(P.Switches.UseBaseTexture, opacity_textured, g.const(0.0, 1900, 80),
+                             2300, 20, default=False)
     g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
 
-    # -- Declared, not wired -- vertex/World-Position-Offset concerns, out of this generator's
-    # scope; see the function docstring's fog bullet ------------------------------------------
+    # -- Declared, not wired -- see the docstring's last paragraph ------------------------------
+    g.scalar(P.Scalars.RefractAmount, 20.0, -1900, 2600)
+    g.scalar(P.Scalars.ReflectAmount, 50.0, -1900, 2680)
+    g.scalar(P.Scalars.BaseReflectFract, 0.0, -1900, 2760)
+    g.switch(P.Switches.UseEnvMap, g.const(1.0, -1900, 2840), g.const(1.0, -1900, 2900),
+             -1700, 2860, default=False)
     g.scalar(P.Scalars.WaterDepth, 64.0, -1900, 3000)
     g.scalar(P.Scalars.WaterBaseFactor, 0.0, -1900, 3080)
     g.scalar(P.Scalars.WaterBaseMovementDist, 0.0, -1900, 3160)
@@ -2132,6 +2131,94 @@ def _build_water(mat, collection, lut_texture, default_normal_frames):
     g.scalar(P.Scalars.WaterWaveLength, 0.0, -1900, 3720)
     g.scalar(P.Scalars.CheapWaterStartDistance, 0.0, -1900, 3800)
     g.scalar(P.Scalars.CheapWaterEndDistance, 0.0, -1900, 3880)
+
+
+# ============================================================================================
+# M_ElysiumUnderwater -- the post-process the water actor blends in below the plane (R7.1 D)
+# ============================================================================================
+
+
+class UnderwaterParams:
+    """`ElysiumSurfaceParamsDecal`'s fog triple, restated: `FogColor` (linear, already decoded by
+    `ElysiumFog::Pack`), `FogStart` (cm) and `FogInvRange` (1 / (end - start), 0 = off) -- the
+    same three names `ElysiumFog::ApplyToDecalMID` writes, so one packer serves the scene fog, the
+    decals and the underwater view."""
+
+    class Scalars:
+        FogStart = "FogStart"
+        FogInvRange = "FogInvRange"
+
+    class Vectors:
+        FogColor = "FogColor"
+
+
+UNDERWATER_PARAM_TABLE = {
+    "scalars": sorted(vars(UnderwaterParams.Scalars)[k] for k in vars(UnderwaterParams.Scalars)
+                      if not k.startswith("_")),
+    "vectors": sorted(vars(UnderwaterParams.Vectors)[k] for k in vars(UnderwaterParams.Vectors)
+                      if not k.startswith("_")),
+}
+
+
+def _build_underwater(mat):
+    """`ViewDrawScene_EyeUnderWater` draws the below-water world and the water surfaces under
+    `SetFogVolumeState(id, false)` -- `MATERIAL_FOG_LINEAR` over the whole scene with the volume's
+    `$fogcolor`/`$fogstart`/`$fogend` -- and nothing else: no warp, no tint, no reflection pass.
+    Transcribed as one scene-depth lerp, applied before DOF so it works in linear HDR like the
+    per-primitive scene fog does: `lerp(scene, FogColor, saturate((SceneDepth - FogStart) x
+    FogInvRange))`. The above-water world is seen through the surface, whose depth SLW writes, so
+    the whole refracted view fogs at the plane's distance -- what pass 2 does to the surface."""
+    g = Graph(mat)
+    P = UnderwaterParams
+
+    scene = g.node(unreal.MaterialExpressionSceneTexture, -900, -200)
+    scene.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
+    scene_rgb = g.mask(scene, "rgb", -700, -200, src_out="Color")
+    depth = g.node(unreal.MaterialExpressionSceneDepth, -900, 200)
+
+    fog_color = g.vec4(P.Vectors.FogColor, (0.0, 0.0, 0.0, 1.0), -900, 0)
+    fog_color_rgb = g.mask(fog_color, "rgb", -700, 0, src_out="RGBA")
+    fog_start = g.scalar(P.Scalars.FogStart, 0.0, -900, 320)
+    fog_inv_range = g.scalar(P.Scalars.FogInvRange, 0.0, -900, 400)
+    fog_factor = g.sat(
+        g.mul(g.sub(depth, "", fog_start, "", -700, 260), "", fog_inv_range, "", -500, 300),
+        "", -300, 300)
+    fogged = g.lerp(scene_rgb, "", fog_color_rgb, "", fog_factor, "", -100, 0)
+    g.to(fogged, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+
+def make_underwater():
+    name = "M_ElysiumUnderwater"
+    asset = "%s/%s" % (PKG, name)
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "params": UNDERWATER_PARAM_TABLE,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    mat, asset = _fresh(name)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
+    mat.set_editor_property("blendable_location",
+                            unreal.BlendableLocation.BL_SCENE_COLOR_BEFORE_DOF)
+
+    _build_underwater(mat)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
 
 
 def make_water():
@@ -2158,20 +2245,26 @@ def make_water():
     # flat-normal-packed default, not the all-white `T_V2_DefaultFrames`).
     default_normal_frames = _make_default_normal_frames_array(force=force)
 
-    # BLEND_Translucent surfaces are not Nanite-compatible -- this master deliberately does not
-    # set used_with_nanite (review fix; M_V2_Decal below is non-Nanite for a different reason --
-    # R7.2 ruling 3 -- but the same used_with_nanite-omission shape). used_with_instanced_static_
-    # meshes stays on (the placement lane may use ISM for water planes).
+    # R7.1 ruling A: Single Layer Water -- Opaque (the shading model's own rule, and what the
+    # material lane's per-instance `Opaque` override already said), one-sided (ruling E: the
+    # underside is its own set of faces), never Nanite (`NaniteResources.cpp` rejects the shading
+    # model; the water faces already live in the non-Nanite `T_` chunk bucket). The blend is set
+    # before the shading model: a fresh `UMaterial` is Opaque already, and SLW compiles only on an
+    # opaque or masked material, so no intermediate compile ever sees an invalid pair.
+    # used_with_instanced_static_meshes stays on (the placement lane may use ISM for water planes).
+    # The shading model is set *after* the graph: a fresh `UMaterial` is MSM_DEFAULT_LIT, and each
+    # of the ~95 expression writes `_build_water` makes triggers a compile of the graph as it
+    # stands, so authoring under MSM_SINGLE_LAYER_WATER logged 96 `Failed to compile Material`
+    # warnings per run for a master that compiles clean at the end (see `_build_water`'s note on
+    # the output node). Nothing in the graph reads the shading model, and the blend mode is opaque
+    # before and after, so the pair is never invalid.
     mat, asset = _fresh(name, ism=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
-    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
-    mat.set_editor_property(
-        "translucency_lighting_mode",
-        unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
-    mat.set_editor_property("refraction_method", unreal.RefractionMode.RM_PIXEL_NORMAL_OFFSET)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
     mat.set_editor_property("two_sided", False)
 
     _build_water(mat, collection, lut_texture, default_normal_frames)
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_SINGLE_LAYER_WATER)
 
     errors = mel.recompile_material(mat)
     if errors:
@@ -3084,7 +3177,8 @@ def make_missing():
     bpo.set_editor_property("override_two_sided", True)
     bpo.set_editor_property("two_sided", False)
     mic.set_editor_property("base_property_overrides", bpo)
-    mel.update_material_instance(mic)
+    # The single refresh this instance's `bl.set_tex_param` above deferred to it.
+    bl.finish_material_instance(mic)
 
     bl.stamp_recipe(mic, fingerprint)
     if not bl.save(asset):
@@ -3112,6 +3206,7 @@ make_unlit()
 make_two_texture()
 make_eyes()
 make_water()
+make_underwater()
 make_sprite()
 make_sprite_z()
 make_sprite_z_lit()

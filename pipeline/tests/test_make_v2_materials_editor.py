@@ -69,6 +69,15 @@ class FakeStruct:
         return self.props.get(name)
 
 
+def _material_parameter_info():
+    """`unreal.MaterialParameterInfo()`: the struct's own C++ defaults, which is all
+    `bake_lib._set_param` relies on beyond the name it writes."""
+    info = FakeStruct()
+    info.set_editor_property("name", "")
+    info.set_editor_property("index", -1)
+    return info
+
+
 class FakeAsset:
     def __init__(self, name, package, cls):
         self.name = name
@@ -79,7 +88,7 @@ class FakeAsset:
         self.metadata = {}
         self.expressions = []
 
-    def set_editor_property(self, name, value):
+    def set_editor_property(self, name, value, notify_mode=None):
         self.props[name] = value
 
     def get_editor_property(self, name):
@@ -88,7 +97,18 @@ class FakeAsset:
             # edits in place before writing it back with `set_editor_property` -- lazily
             # materialize one rather than returning `None`, matching that shape.
             return self.props.setdefault(name, FakeStruct())
+        if name.endswith("_parameter_values"):
+            # `UMaterialInstance`'s own scalar/vector/texture override arrays: an instance that
+            # has never been written carries an empty one, not `None` -- `bake_lib.set_*_param`
+            # reads this array, merges its row and writes the whole array back.
+            return list(self.props.get(name, []))
         return self.props.get(name, [] if name in ("scalar_parameters", "vector_parameters") else None)
+
+    def resolved_parameters(self, array_property):
+        """{parameter name: value} over one of the `*_parameter_values` arrays."""
+        return {str(row.get_editor_property("parameter_info").get_editor_property("name")):
+                row.get_editor_property("parameter_value")
+                for row in self.props.get(array_property, [])}
 
     def get_class(self):
         name = self.cls if isinstance(self.cls, str) else getattr(self.cls, "__name__", str(self.cls))
@@ -353,6 +373,10 @@ def _fake_unreal(editor):
         # R6.3: the detail-sway World Position Offset lane (`_detail_sway`).
         "MaterialExpressionPerInstanceCustomData", "MaterialExpressionWorldPosition",
         "MaterialExpressionTransformPosition", "MaterialExpressionObjectLocalBounds",
+        # R7.1: the Single Layer Water output node (`_build_water`) and the underwater
+        # post-process's scene reads (`_build_underwater`).
+        "MaterialExpressionSingleLayerWaterMaterialOutput", "MaterialExpressionSceneTexture",
+        "MaterialExpressionSceneDepth",
     ]
 
     ns = SimpleNamespace(
@@ -375,6 +399,15 @@ def _fake_unreal(editor):
         MaterialParameterCollectionFactoryNew=type("MaterialParameterCollectionFactoryNew", (), {}),
         MaterialInstanceConstant=type("MaterialInstanceConstant", (), {}),
         MaterialInstanceConstantFactoryNew=type("MaterialInstanceConstantFactoryNew", (), {}),
+        # The parameter-value structs `bake_lib` appends to an instance's arrays, and the notify
+        # mode it writes those arrays under. A fresh `FMaterialParameterInfo` is a *global*
+        # parameter -- `Index` = `INDEX_NONE` -- which is what `bake_lib` leaves it at.
+        MaterialParameterInfo=_material_parameter_info,
+        ScalarParameterValue=FakeStruct,
+        VectorParameterValue=FakeStruct,
+        TextureParameterValue=FakeStruct,
+        PropertyAccessChangeNotifyMode=_enum(
+            "PropertyAccessChangeNotifyMode", "DEFAULT", "NEVER", "ALWAYS"),
         MaterialSamplerType=_enum(
             "SAMPLERTYPE", "SAMPLERTYPE_COLOR", "SAMPLERTYPE_MASKS", "SAMPLERTYPE_NORMAL",
             "SAMPLERTYPE_LINEAR_COLOR"),
@@ -385,12 +418,14 @@ def _fake_unreal(editor):
         TextureFilter=_enum("TF", "TF_NEAREST"),
         TextureAddress=_enum("TA", "TA_CLAMP"),
         TextureLossyCompressionAmount=_enum("TLCA", "TLCA_NONE"),
-        MaterialDomain=_enum("MD", "MD_SURFACE", "MD_DEFERRED_DECAL"),
+        MaterialDomain=_enum("MD", "MD_SURFACE", "MD_DEFERRED_DECAL", "MD_POST_PROCESS"),
+        BlendableLocation=_enum("BL", "BL_SCENE_COLOR_BEFORE_DOF"),
+        SceneTextureId=_enum("PPI", "PPI_POST_PROCESS_INPUT0"),
         BlendMode=_enum("BLEND", "BLEND_OPAQUE", "BLEND_TRANSLUCENT", "BLEND_MODULATE",
                         "BLEND_ALPHA_COMPOSITE"),
         TranslucencyLightingMode=_enum("TLM", "TLM_SURFACE_PER_PIXEL_LIGHTING",
                                        "TLM_VOLUMETRIC_PER_VERTEX_NON_DIRECTIONAL"),
-        MaterialShadingModel=_enum("MSM", "MSM_UNLIT", "MSM_DEFAULT_LIT"),
+        MaterialShadingModel=_enum("MSM", "MSM_UNLIT", "MSM_DEFAULT_LIT", "MSM_SINGLE_LAYER_WATER"),
         RefractionMode=_enum("RM", "RM_PIXEL_NORMAL_OFFSET", "RM_2D_OFFSET"),
         MaterialPositionTransformSource=_enum(
             "TRANSFORMPOSSOURCE", "TRANSFORMPOSSOURCE_WORLD", "TRANSFORMPOSSOURCE_INSTANCE"),
@@ -423,7 +458,7 @@ REQUIRED_MPC_SCALARS = [
     "Overbright", "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale",
     "MaskMetallicMax", "ChromaticTintStrength", "EnvTintScale", "FixedCubeStrength",
     "DefaultRoughness", "DefaultSpecular", "DefaultMetallic", "ClassInfluence",
-    "DetailSwayAmplitude",
+    "DetailSwayAmplitude", "WaterFogScale",
 ]
 
 
@@ -492,7 +527,8 @@ MASTERS = [
     ("M_V2_Unlit", "UnlitParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
     ("M_V2_TwoTexture", "TwoTextureParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
     ("M_V2_Eyes", "EyesParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
-    ("M_V2_Water", "WaterParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
+    # R7.1: Single Layer Water is opaque by the shading model's own rule.
+    ("M_V2_Water", "WaterParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
     ("M_V2_Sprite", "SpriteParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
     ("M_V2_Refract", "RefractParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
     ("M_V2_Decal", "DecalParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_DEFERRED_DECAL"),
@@ -511,6 +547,41 @@ def test_a_fresh_run_authors_all_compiling_masters(tmp_path, monkeypatch):
         assert "ElysiumRecipe" in asset.metadata
         assert "%s/%s" % (PKG, name) in editor.saved
     assert editor.mel.recompile_errors == []
+
+
+def test_water_master_is_single_layer_water_with_the_volume_pins_fed(tmp_path, monkeypatch):
+    """R7.1 ruling A (`water-architecture.md` section 4): `M_V2_Water` is `MSM_SingleLayerWater`,
+    opaque, one-sided, never Nanite, and its `SingleLayerWaterMaterialOutput` node is fed on all
+    four pins -- the VMT fog keys as extinction, `RefractTint` as Color Scale Behind Water. The
+    underwater post-process master lands beside it in the post-process domain."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+
+    water = editor.assets["%s/M_V2_Water" % PKG]
+    assert water.props.get("shading_model") == "MSM.MSM_SINGLE_LAYER_WATER"
+    assert water.props.get("blend_mode") == "BLEND.BLEND_OPAQUE"
+    assert water.props.get("two_sided") is False
+    assert not water.props.get("used_with_nanite")
+    assert "refraction_method" not in water.props
+    outputs = [n for n in water.expressions
+               if n.cls.__name__ == "MaterialExpressionSingleLayerWaterMaterialOutput"]
+    assert len(outputs) == 1
+    fed = {dst_in for _src, _out, dst, dst_in in editor.mel.connections if dst is outputs[0]}
+    assert fed == {"ScatteringCoefficients", "AbsorptionCoefficients", "PhaseG",
+                   "ColorScaleBehindWater"}
+    switches = {n.props.get("parameter_name") for n in water.expressions
+                if n.cls.__name__ == "MaterialExpressionStaticSwitchParameter"}
+    assert {"Underside", "CheapWater", "UseFogEnable"} <= switches
+    mpc = {n.props.get("parameter_name") for n in water.expressions
+           if n.cls.__name__ == "MaterialExpressionCollectionParameter"}
+    assert "WaterFogScale" in mpc
+
+    underwater = editor.assets["%s/M_ElysiumUnderwater" % PKG]
+    assert underwater.props.get("material_domain") == "MD.MD_POST_PROCESS"
+    assert underwater.props.get("blendable_location") == "BL.BL_SCENE_COLOR_BEFORE_DOF"
+    names = {n.props.get("parameter_name") for n in underwater.expressions
+             if n.props.get("parameter_name")}
+    assert {"FogColor", "FogStart", "FogInvRange"} <= names
 
 
 def test_mask_width_bug_is_caught_offline():
@@ -742,7 +813,8 @@ def test_make_missing_binds_the_checker_on_m_v2_unlit(tmp_path, monkeypatch):
 
     checker = editor.assets.get(checker_path)
     assert checker is not None, "T_V2_MissingChecker was not authored"
-    assert mic.props.get("textures", {}).get(module.UnlitParams.Textures.BaseTexture) is checker
+    assert mic.resolved_parameters("texture_parameter_values").get(
+        module.UnlitParams.Textures.BaseTexture) is checker
 
     # Every switch M_V2_Unlit exposes is stated explicitly, and only UseBaseTexture is on.
     switches = mic.props.get("switches", {})
@@ -887,3 +959,31 @@ def test_sprite_tint_lanes_read_both_the_vertex_and_the_particle_colour(tmp_path
             where = (name, switch_name, sorted(reached))
             assert "MaterialExpressionVertexColor" in reached, where
             assert "MaterialExpressionParticleColor" in reached, where
+
+
+#: The two masters that carry R7.1 ruling J's UV slide -- the same graph, built twice.
+_SINE_UV_MASTERS = ("M_V2_Lit", "M_V2_LitTranslucent")
+
+
+def test_sine_uv_translate_reaches_the_base_lane_only(tmp_path, monkeypatch):
+    """R7.1 ruling J (`water-architecture.md` -> "Surf sine UV translate"): `SineUVTranslate` moves
+    the BASE texture's coordinate by `amp x wave + off`, and nothing else -- Source's
+    `$baseTextureTransform` translates the base map and leaves `$bumpTransform` alone, so the
+    normal lane must still read the untranslated, un-slid coordinate. Walked backwards from each
+    sample, the way the two colour lanes are checked below: a name-only assertion would pass on a
+    parameter authored on the graph and wired to nothing."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    for name in _SINE_UV_MASTERS:
+        asset = editor.assets["%s/%s" % (PKG, name)]
+        by_name = {n.props.get("parameter_name"): n for n in asset.expressions
+                   if "parameter_name" in n.props}
+        assert "SineUVTranslate" in by_name, name
+        for slot, expected in (("BaseTexture", True), ("NormalMap", False)):
+            sample = by_name[slot]
+            reached = {n.props.get("parameter_name")
+                       for n in _sources_of(editor.mel, sample, asset.expressions)}
+            assert ("SineUVTranslate" in reached) is expected, (name, slot, sorted(reached))
+            # Both lanes still ride the shared scale/offset transform, so the check above is a
+            # real difference between the two coordinates and not a disconnected normal lane.
+            assert "TexScaleOffset" in reached, (name, slot)

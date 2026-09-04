@@ -49,6 +49,25 @@ float ElysiumCam::SolveViewRoll(const FVector& VelocityCm, const FRotator& ViewR
 		: RollAngleDeg * Sign;
 }
 
+// The water clearance (`CViewRender::GetWaterOffset`, `cl_waterdist`)
+
+float ElysiumCam::SolveWaterOffset(int32 WaterLevel, float ViewZ, float SurfaceZ, float WaterDistCm)
+{
+	// Treading: the surface sits at or just below the eye, so lift the eye to `WaterDist` above it.
+	// The clamp is the band itself — a surface exactly `WaterDist` down needs no lift, and one
+	// above the eye is level 3's case, not this one.
+	if (WaterLevel == 2 && SurfaceZ >= ViewZ - WaterDistCm && SurfaceZ <= ViewZ)
+	{
+		return FMath::Clamp(SurfaceZ + WaterDistCm - ViewZ, 0.0f, WaterDistCm);
+	}
+	// Submerged: the surface sits at or just above the eye, so push the eye back under it.
+	if (WaterLevel == 3 && SurfaceZ >= ViewZ && SurfaceZ <= ViewZ + WaterDistCm)
+	{
+		return FMath::Clamp(SurfaceZ - WaterDistCm - ViewZ, -WaterDistCm, 0.0f);
+	}
+	return 0.0f;
+}
+
 // Player-model visibility (`CAM_Think` tail, `CInput+0x104`)
 
 float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
@@ -372,6 +391,7 @@ TArrayView<const ElysiumCam::FCvarDef> ElysiumCam::CvarDefs()
 		{ TEXT("cam_fadeend"),            TEXT("18"),  TEXT("player model fully hidden at/below this distance") },
 		{ TEXT("cl_rollangle"),           TEXT("2"),   TEXT("strafe view bank, degrees at full speed") },
 		{ TEXT("cl_rollspeed"),           TEXT("200"), TEXT("sideways speed at which the bank reaches cl_rollangle") },
+		{ TEXT("cl_waterdist"),           TEXT("4"),   TEXT("clearance the view keeps from the water plane, Source units") },
 		{ TEXT("c_mindistance"),          TEXT("30"),  TEXT("boom length clamp, minimum") },
 		{ TEXT("c_maxdistance"),          TEXT("200"), TEXT("boom length clamp, maximum") },
 		{ TEXT("c_minpitch"),             TEXT("0"),   TEXT("orbit pitch clamp, minimum") },
@@ -422,6 +442,7 @@ void FElysiumCameraCvars::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 
 	RollAngle = Num(TEXT("cl_rollangle"), 2.0f);
 	RollSpeed = Num(TEXT("cl_rollspeed"), 200.0f) * ElysiumCam::U;
+	WaterDist = Num(TEXT("cl_waterdist"), 4.0f) * ElysiumCam::U;
 
 	bDampOn            = Flag(TEXT("cdamp_on"), true);
 	HookesConstant     = Num(TEXT("cdamp_hookesconstant"), 4.0f);

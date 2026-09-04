@@ -50,6 +50,7 @@ SCALAR_NAMES = (
     "FixedCubeStrength", "ChromaticTintStrength", "ChromaThreshold",
     "CaptureRadius",
     "DetailSwayAmplitude",
+    "WaterFogScale",
 )
 
 

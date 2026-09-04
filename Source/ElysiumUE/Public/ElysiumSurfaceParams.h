@@ -105,6 +105,12 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName TexScaleOffset(TEXT("TexScaleOffset"));
 		inline const FName SineTargetMask(TEXT("SineTargetMask"));
 		inline const FName SineChannelMask(TEXT("SineChannelMask"));
+		// R7.1 ruling J (docs/architecture/water-architecture.md -> "Surf sine UV translate"):
+		// (ampU, ampV, offU, offV), the base texture's UV slide a `sine` -> `texturetransform`
+		// proxy chain authors (`objects/surf`, the sm_pier_1 wave cards). Added to the base
+		// coordinate as `amp x wave + off`, `wave` being the sine lane's own 0..1 wave, so the
+		// default (0,0,0,0) is neutral by construction.
+		inline const FName SineUVTranslate(TEXT("SineUVTranslate"));
 		// R5.4: the fog colour, Custom Primitive Data slots ElysiumFog::SlotColor .. +3.
 		inline const FName FogColor(TEXT("FogColor"));
 	}
@@ -278,15 +284,16 @@ namespace ElysiumSurfaceParamsEyes
 	}
 }
 
-// `M_V2_Water` -- `water` family only (24 units). No `BottomMaterial` slot (`$bottommaterial`
-// names a material, not a texture -- provenance only, design doc "M_V2_Water"). `UseFogEnable`/
-// `FogColor`/`FogStart`/`FogEnd` are wired (the shipped cheap program's own tail,
-// `watercheap_ps11`/`watercheap_ps20_old`): Emissive += FogColor.rgb x a PixelDepth-based
-// distance term, Opacity blended toward FogColor.a, both gated `UseFogEnable`. The wave-animation
-// scalars (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`, `WaterTimeFreq1/2`, `WaterWaveHeight/
-// Length`, `WaterSpecularMin/Max`, `CheapWaterStartDistance/EndDistance`, `WaterDepth`) remain
-// declared, not wired -- vertex/World-Position-Offset concerns, out of this master's scope (see
-// `make_v2_materials.py::_build_water`'s docstring).
+// `M_V2_Water` -- `water` family only (22 units). Since R7.1 a Single Layer Water master
+// (`docs/architecture/water-architecture.md` section 4): `UseFogEnable`/`FogColor`/`FogStart`/
+// `FogEnd` are the VMT's own water-fog keys and become the SLW volume's scattering/absorption
+// (`WaterFogScale / ((FogEnd - FogStart) x 2.54)` per cm, split by the decoded colour);
+// `RefractTint` is Color Scale Behind Water; `ReflectTint`'s luma scales the class specular;
+// `Underside` (the `$bottommaterial` instance) zeroes specular and extinction; `CheapWater`
+// multiplies the extinction by 16. No `BottomMaterial` slot (`$bottommaterial` names a material,
+// not a texture -- provenance, and the source of `Underside`). Declared, not wired: `DuDvMap`,
+// `RefractAmount`/`ReflectAmount`, `BaseReflectFract`, `UseEnvMap`, the wave-animation scalars,
+// `CheapWaterStartDistance/EndDistance` and `WaterDepth` (see `_build_water`'s docstring).
 namespace ElysiumSurfaceParamsWater
 {
 	namespace Textures
@@ -343,6 +350,11 @@ namespace ElysiumSurfaceParamsWater
 		inline const FName UseBaseTexture(TEXT("UseBaseTexture"));
 		inline const FName UseNormalMap(TEXT("UseNormalMap"));
 		inline const FName UseAnimatedNormalFrames(TEXT("UseAnimatedNormalFrames"));
+		// R7.1 (`water-architecture.md` ruling E): the `$bottommaterial` instance -- a water unit
+		// whose `$bottommaterial` names itself (`dev/dev_waterbeneath2`). The engine strips the
+		// reflection from every down-facing water face and 5.8's SLW has no camera-under-water
+		// branch, so the underside draws with zero specular and zero volume extinction.
+		inline const FName Underside(TEXT("Underside"));
 	}
 }
 

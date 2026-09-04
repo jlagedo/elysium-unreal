@@ -13,6 +13,7 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumMapTransportSettings.h"
 #include "ElysiumReflections.h"
+#include "ElysiumWaterVolumes.h"
 #include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMaterialFactory.h"
 #include "Visual/ElysiumRopes.h"
@@ -156,6 +157,8 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	SpritesByEntity.Reset();
 	EffectActors.Reset();
 	EffectsByEntity.Reset();
+	WaterVolumes = nullptr;
+	WaterVolumeCount = 0;
 	EffectCount = 0;
 	EffectSkyCount = 0;
 	SpriteCount = 0;
@@ -296,6 +299,13 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		{
 			BakedSkyDomeActor = Cast<AStaticMeshActor>(Actor);
 		}
+		else if (Actor->ActorHasTag(ElysiumBakedTags::Water))
+		{
+			// R7.1: one actor carrying every `water.volumes[]` row, so this is the whole adoption —
+			// the actor registers its own post-process volume at BeginPlay and answers the map
+			// actor's three point queries per frame.
+			WaterVolumes = Cast<AElysiumWaterVolumes>(Actor);
+		}
 		else
 		{
 			continue;
@@ -338,6 +348,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	DetailModelCount = DetailModels.Num();
 	SpriteCount = SpriteActors.Num();
 	EffectCount = EffectActors.Num();
+	WaterVolumeCount = WaterVolumes ? WaterVolumes->Volumes.Num() : 0;
 
 	// R7.3 (§5.5): the family match is re-resolved at adopt so a data-asset edit needs no re-bake.
 	if (EffectActors.Num() > 0)

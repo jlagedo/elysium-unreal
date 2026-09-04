@@ -62,6 +62,24 @@ namespace ElysiumCam
 	// `VelocityCm` and `RollSpeedCm` are both in cm/s; the return is degrees.
 	float SolveViewRoll(const FVector& VelocityCm, const FRotator& ViewRot,
 		float RollAngleDeg, float RollSpeedCm);
+
+	// The water clearance — `CViewRender::GetWaterOffset`, driven by `cl_waterdist` 4
+	// (`docs/architecture/water-architecture.md` §7). VtMB walks the view origin in one-unit Z
+	// steps against `MASK_WATER` whenever the body's water level is above 1, and the two directions
+	// are opposite: **treading** (level 2) raises the view until it is clear of the plane, so the
+	// camera stays dry, while **submerged** (level 3) lowers it until it is back under, so the
+	// camera stays wet. Either way the view never rests inside the `cl_waterdist` band around the
+	// surface, which is what stops the underwater post-process from flickering on a bobbing eye.
+	//
+	// A Z-only rule, so it takes the two heights rather than the view: `ViewZ` is where the camera
+	// ended up (boom included), `SurfaceZ` is the plane of the volume the body is in, both cm; the
+	// return is the Z delta to add. Levels 0 and 1, and a surface further than `WaterDistCm` from
+	// the view, return 0 — outside the band the original's step loop terminates immediately.
+	//
+	// Divergence: the 1-unit quantization is dropped. The loop's only purpose is to find the
+	// clearance distance, and the closed form is that distance exactly rather than rounded up to
+	// the next inch.
+	float SolveWaterOffset(int32 WaterLevel, float ViewZ, float SurfaceZ, float WaterDistCm);
 }
 
 // The full-strength ordinary feed camera, relative to the player's eye.
@@ -308,6 +326,9 @@ struct FElysiumCameraCvars
 	// The strafe bank. Degrees, and a speed in cm/s above which the bank is at full angle.
 	float RollAngle = 2.0f;                       // cl_rollangle 2
 	float RollSpeed = 200.0f * ElysiumCam::U;     // cl_rollspeed 200
+
+	// The water clearance band `SolveWaterOffset` keeps the view out of (R7.1).
+	float WaterDist = 4.0f * ElysiumCam::U;       // cl_waterdist 4
 
 	// The spring damper. **Two constants** — stiffer against a wall than in open space — which is the
 	// single most characteristic part of the VtMB camera and the reason the stock spring arm is not

@@ -99,6 +99,9 @@ TAG_SKYLIGHT = "elysium.skylight"
 TAG_FOG = "elysium.fog"
 TAG_DECAL = "elysium.decal"
 TAG_PPV = "elysium.ppv"
+# The one `AElysiumWaterVolumes` actor a converted map's `water.volumes[]` rows fold into (R7.1,
+# V2 lane only; the legacy lane places nothing, like TAG_CAPTURE).
+TAG_WATER = "elysium.water"
 # One reflection capture at a `cubemaps[]` sample (R5.5, V2 lane only). Carries a second
 # `elysium.src=<index>` tag naming its lump-42 row, like a light names its `.lights` line.
 TAG_CAPTURE = "elysium.capture"

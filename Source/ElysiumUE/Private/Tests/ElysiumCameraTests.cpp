@@ -488,6 +488,42 @@ bool FElysiumCameraTest::RunTest(const FString&)
 			ElysiumCam::SolveViewRoll(FVector(0.0f, 100.0f, 0.0f), Level, Angle, 0.0f), 0.0f);
 	}
 
+	// --- the water clearance (`GetWaterOffset`, `cl_waterdist`) ---
+	{
+		// Everything is measured from a surface at Z 0, in Source units, because the rule is
+		// authored in them and `cl_waterdist` 4 is the only number in it.
+		const float In = ElysiumCam::U;
+		const float Dist = 4.0f * In;
+		const float Surface = 0.0f;
+
+		TestEqual(TEXT("cl_waterdist defaults to 4 Source units, held in cm"),
+			FElysiumCameraCvars().WaterDist, 4.0f * ElysiumCam::U);
+
+		// Treading (level 2): the view is RAISED until it clears the plane by cl_waterdist, so an
+		// eye one inch above the surface rises the remaining three and the camera stays dry.
+		TestEqual(TEXT("treading one inch above the plane lifts three"),
+			ElysiumCam::SolveWaterOffset(2, Surface + In, Surface, Dist), 3.0f * In);
+		// Already clear of the band: the original's step loop terminates before its first step.
+		TestEqual(TEXT("treading five inches above the plane lifts nothing"),
+			ElysiumCam::SolveWaterOffset(2, Surface + 5.0f * In, Surface, Dist), 0.0f);
+		// The band is closed at cl_waterdist: exactly clear is clear.
+		TestEqual(TEXT("and exactly four inches above is already the clearance"),
+			ElysiumCam::SolveWaterOffset(2, Surface + Dist, Surface, Dist), 0.0f);
+
+		// Submerged (level 3): the opposite direction — the view is LOWERED back under the plane,
+		// so a swimming camera does not surface and flicker the underwater post-process.
+		TestEqual(TEXT("submerged one inch below the plane drops three"),
+			ElysiumCam::SolveWaterOffset(3, Surface - In, Surface, Dist), -3.0f * In);
+		TestEqual(TEXT("submerged five inches below the plane drops nothing"),
+			ElysiumCam::SolveWaterOffset(3, Surface - 5.0f * In, Surface, Dist), 0.0f);
+
+		// Below the waist the rule does not run at all — VtMB gates the whole walk on level > 1.
+		TestEqual(TEXT("a dry body is never offset"),
+			ElysiumCam::SolveWaterOffset(0, Surface + In, Surface, Dist), 0.0f);
+		TestEqual(TEXT("and neither is one in up to its feet"),
+			ElysiumCam::SolveWaterOffset(1, Surface + In, Surface, Dist), 0.0f);
+	}
+
 	// --- the scripted composition: the last term applied, over whatever the base rig produced ---
 	{
 		const FVector Base(0.0f, 0.0f, 0.0f);

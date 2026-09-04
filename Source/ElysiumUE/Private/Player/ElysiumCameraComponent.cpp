@@ -272,6 +272,12 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 		View.Rotation = FMath::Lerp(View.Rotation, SolvedAngles, E);
 	}
 
+	// The water clearance (`GetWaterOffset`, R7.1), applied to whatever the boom left behind and
+	// OUTSIDE the block above: the case it exists for — a treading or swimming body — is first
+	// person, where `E` is 0 and that block never runs. A Z-only nudge, so the solved angles stand.
+	View.Location.Z += ElysiumCam::SolveWaterOffset(WaterLevel,
+		static_cast<float>(View.Location.Z), WaterSurfaceZCm, Cvars.WaterDist);
+
 	// `DrawFeedingView` runs after the ordinary base camera. Its full-strength pose ignores the boom
 	// and applies no collision trace; the linear feed weight is eased only here, at point of use.
 	const float FeedE = Weights.FeedBlend();

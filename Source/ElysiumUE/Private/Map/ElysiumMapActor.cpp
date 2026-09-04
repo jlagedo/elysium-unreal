@@ -11,6 +11,7 @@
 #include "ElysiumPlayerBody.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumUseIcons.h"
+#include "ElysiumWaterVolumes.h"        // the map's water volumes — CheckWater's three probes
 #include "Audio/ElysiumSoundScheme.h"
 #include "Map/ElysiumFeedTargeting.h"
 #include "Map/ElysiumMapCollision.h"
@@ -1880,6 +1881,50 @@ void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 		}
 	}
 
+	// Step 3b — the body's water level, settled before the move reads it. `CheckWater` runs at the
+	// head of `PlayerMove` for the same reason: `FullWalkMove` branches on the level it finds.
+	UpdatePlayerWater();
+}
+
+void AElysiumMapActor::UpdatePlayerWater()
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn);
+	if (Body == nullptr)
+	{
+		return;
+	}
+	UElysiumCameraComponent* Camera = Body->GetCameraComponent();
+
+	EElysiumWaterLevel Level = EElysiumWaterLevel::None;
+	float SurfaceZCm = 0.f;
+	if (AElysiumWaterVolumes* Water = Visuals ? Visuals->GetWaterVolumes() : nullptr)
+	{
+		// `CheckWater`'s three points, off the hull rather than off a trace: the feet are
+		// `origin.z + mins.z + 1` (one Source unit up, so a body standing on the bottom of a
+		// puddle still reports Feet), the waist is the hull centre, and the eye is where the
+		// camera component sits — `origin + m_vecViewOffset` by construction.
+		const FVector Centre = Pawn->GetActorLocation();
+		const FVector Feet(Centre.X, Centre.Y,
+			Centre.Z - Body->GetBodyHalfHeight() + ElysiumMove::U);
+		const FVector Eyes = Camera ? Camera->GetComponentLocation() : Centre;
+
+		int32 Volume = INDEX_NONE;
+		Level = Water->ClassifyBody(Feet, Centre, Eyes, &Volume);
+		if (Volume != INDEX_NONE)
+		{
+			SurfaceZCm = Water->Volumes[Volume].SurfaceZCm;
+		}
+	}
+
+	if (UElysiumMovementComponent* Move = Pawn->FindComponentByClass<UElysiumMovementComponent>())
+	{
+		Move->SetWaterLevel(Level);
+	}
+	if (Camera != nullptr)
+	{
+		Camera->SetWaterState(static_cast<int32>(Level), SurfaceZCm);
+	}
 }
 
 void AElysiumMapActor::Tick(float DeltaSeconds)

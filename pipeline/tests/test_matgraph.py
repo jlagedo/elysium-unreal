@@ -249,6 +249,25 @@ def test_to_succeeds_and_records_the_property_connection():
     assert (n, "RGB", "MP_BASE_COLOR") in mel.property_connections
 
 
+def test_pow_wires_the_power_nodes_own_base_and_exp_pins_not_a_and_b():
+    # `UMaterialExpressionPower` names its inputs `Base`/`Exponent`, so the `A`/`B` every
+    # other binop uses is refused -- and the exponent is reachable only as `Exp`, because
+    # `ConnectMaterialExpressions` matches through `GetShortenPinName` (`Exponent` -> `Exp`,
+    # `MaterialGraphNode.cpp:614-617`). The helper shipped unused and wrong on both counts
+    # until R7.1 gamma-decoded `M_V2_Water`s fog colour through it, and each refusal only
+    # surfaced in the editor -- this pins the accepted spellings here.
+    mel = FakeMaterialEditingLibrary()
+    mel.refuse_pins.update({"A", "B"})
+    module = _load(mel)
+    g = module.Graph(object())
+    base, exponent = FakeNode(None, 0, 0), FakeNode(None, 0, 0)
+
+    node = g.pow(base, "", exponent, "", 0, 0)
+
+    assert [(c[0], c[3]) for c in mel.connections] == [(base, "Base"), (exponent, "Exp")]
+    assert node.cls is module.unreal.MaterialExpressionPower
+
+
 # --- class LUT sampling (SF-4.1 knobs, mechanics doc 1b) --------------------------------------
 
 

@@ -1,392 +1,412 @@
 # Water — Unreal reproduction
 
-VtMB's water inventory, shaders and volumes are `docs/vtmb/water.md`. This
-document is the Unreal side: the owner call, the seam between reproduced
-placement and modern look, and the 5.8 assets worth opening first.
+VtMB's water inventory, shaders and volumes are `docs/vtmb/water.md`. This document is the
+Unreal side: the R7.1 ruling, the seam between reproduced placement and modern look, and the
+engine facts (this 5.8 install, verified in source) the design rests on.
 
-The goal is not a port of `_rt_WaterReflection` cameras or the 2004 DUDV
-perturb. The goal is that a player who remembers the Santa Monica ocean, the
-downtown canal, a warrens basin or the Vesuvius pool still *reads* those
-places — murky, reflective, a little wrong — built with Unreal's own water
-shading.
+The goal is not a port of `_rt_WaterReflection` cameras or the 2004 DUDV perturb. The goal is
+that a player who remembers the Santa Monica sewer, the downtown canal, a warrens basin or the
+Vesuvius pool still *reads* those places — murky, reflective, a little wrong — built with
+Unreal's own water shading, and that a body that walks into one of them is in water.
 
----
-
-## 1. Owner call
-
-**Presentation is modernized. Authored placement and parameters are
-reproduced.**
-
-- **Reproduced:** which faces are water; the plane height; the fog colour and
-  in-volume distances; the reflect tint; which basins exist as
-  `CONTENTS_WATER` (so `CheckWater` / swim / tread can fire); `$bottommaterial`
-  as "there is an underside and an underwater look"; particle placements and
-  rates; `surfaceproperties` `water` impacts and wades; a `trigger_hurt` that
-  is authored on a pool stays a hurt volume.
-- **Modernized:** how the pixel is built. Single Layer Water + Lumen/SSR
-  replaces the planar-reflection camera and the DX8 DUDV. Scrolling normals
-  replace `AnimatedTexture` + `TextureScroll`. Underwater is a post-process
-  volume, not `waterwarp.vcs`. Splashes are Niagara, not `point_16` cards.
-- **One presentation, not two.** There is no "classic water" mode that
-  composites the 2004 RTs. Cheap vs expensive in Source is a cost LOD; the
-  Elysium has one look, scaled by the authored numbers (murkier fog, stronger
-  tint, less opacity), not by swapping shaders.
-
-This matches the weather and effects rules
-(`docs/vtmb/weather.md`, `docs/architecture/effects-architecture.md`).
-
-**Default representation: Single Layer Water on the authored water mesh, at
-the sidecar plane, with Lumen/SSR. Not the Water plugin's Ocean/Lake/River
-bodies.** Those bodies want a Landscape, a Water Zone, and a spline mesh
-that replaces the BSP. VtMB water is already a mesh at a known Z. Keep the
-mesh.
+Status lives only in `docs/project/roadmap.md` (task **7.3 Water**; the seam-migration track
+calls the same task **R7.1** — one task, two ids).
 
 ---
 
-## 2. What already exists in this project
+## 1. The R7.1 ruling (2026-09-04)
 
-Do not rebuild these to explore the look.
+**Presentation is modernized. Authored placement, parameters and the volume are reproduced.**
+Nine rulings, each a transcription unless it says *named modernization*.
 
-| Piece | Where | What it does |
+| # | Ruling | In one line |
 |---|---|---|
-| VMT parse | `pipeline/src/elysium_pipeline/formats/vmt.py` | `Water` shader and `%compilewater` → `water` |
-| Corpus record | `shared_corpus.material_record` | `water_normal`, fog colour / start / end, reflect tint |
-| Map sidecar | `<map>.water` | per-material plane Z (cm), normalmap, fog, reflect tint |
-| MTL flag | `<map>.mtl` `water 1` | this face group is water *here* |
-| Collision | `.hulls` + `BLOCK_MASK` | water is passable |
-| Movement | `UElysiumMovementComponent::WaterMove` | formula-faithful, nothing sets `WaterLevel` yet |
-| Bake | `bake_map.py` `_master_for` | water currently instances `M_World_Translucent` |
-| Strategy target | `docs/project/rebuild-strategy.md` | names `M_Water` (Single Layer Water); that master is not generated |
+| **A** | **`M_V2_Water` is a Single Layer Water master.** Same name, same pinned parameter set plus one switch (`Underside`); `MSM_SingleLayerWater`, `BLEND_Opaque`, one-sided, never Nanite. `GRAPH_VERSION` 8 → 9. | *named modernization*: the two 2004 render-target passes become SLW's scene-colour refraction and Lumen's reflection, and the in-volume fog becomes SLW's absorption/scattering — the three things the roadmap asked to answer in one place |
+| **B** | **`water.volumes[]` is a stage product of the map lane**: one row per real `LEAFWATERDATA` volume (sentinels and the `la_bradbury_3` shadow row dropped), each carrying `surfaceZ`/`minZ` in cm, the fog keys resolved through `surfaceTexInfoID` → texinfo → material, and the volume's `CONTENTS_WATER` brushes as convex plane sets in Unreal cm | transcription of what `SetFogVolumeState` reads and what `CheckWater`'s `MASK_WATER` traces hit |
+| **C** | **One `AElysiumWaterVolumes` actor per converted map**, bake-placed, tagged `elysium.water`, adopted by `UElysiumMapVisuals`; `AElysiumMapActor::PreMoveTick` classifies the player's feet / waist / eyes against it and calls `SetWaterLevel` before the move | transcription of `CGameMovement::CheckWater` (three point queries, level 0–3), on the declared edge "player movement follows pre-move" |
+| **D** | **Underwater is a post-process linear fog**: `M_ElysiumUnderwater` (`MD_PostProcess`, `lerp(scene, FogColor, saturate((SceneDepth − FogStart) × FogInvRange))`) registered by the water actor as an `IInterface_PostProcessVolume` whose `EncompassesPoint` is point-in-brush of the view location; the same actor writes `FSceneView::UnderwaterDepth` from `UWorld::OnBeginPostProcessSettings` | transcription of the `FogMode(LINEAR)` `ViewDrawScene_EyeUnderWater` selects; *named modernization*: the world fog is not suppressed under the plane (§9) |
+| **E** | **The underside faces stay.** The corpus already carries `dev/dev_waterbeneath2` as real down-facing faces on every top plane; they draw on the same one-sided SLW master with `Underside` set — no specular, no extinction — because the engine strips reflection from every down-facing water face and the under-plane view is fog, not volume | transcription of `Mod_LoadFaces`'s `$reflecttexture->SetUndefined()`; the zero extinction is forced by the engine fact in §8 (the SLW camera-under-water branch is dead code in 5.8) |
+| **F** | **`$forcecheap` is a look, not a LOD**: `CheapWater` multiplies the extinction by 16 (the body reads as its `$fogcolor` at any depth, which is what `lerp(fogcolor, cube, fresnel)` draws) and leaves the reflection to Lumen | *named modernization*: the cheap cubemap is replaced by the same Lumen mirror the expensive path uses |
+| **G** | **`leafMinDist[]` is provenance.** The engine never loads lump 46; nothing is derived from it | fact, not a choice |
+| **H** | **No scene-fog term on the water surface.** The R6 follow-up ("`ElysiumFog` term on `M_V2_Water`") closes as *not on this master*: the refracted world and the Lumen mirror already carry their own per-primitive fog; the surface's own scatter and specular are unfogged (§9) | *named modernization* — VtMB draws the surface under the world fog |
+| **I** | **Out of R7.1**: drips, mist, splashes (R7.3 families — and VtMB itself spawns no splash on entry), `dsp_water` (preset 14 at level 3) and wade footsteps (`plans/audio.md`), NPC water levels (`PhysicsCheckWater` on `MOVETYPE_STEP`, the entity substrate's), the `trigger_hurt` pools (already entities). The camera's `GetWaterOffset` step is the one open owner call (§7) | scope |
 
-The Water, Water Extras, Water Advanced and Niagara Fluids plugins are
-**present in this 5.8 install and not enabled** in `ElysiumUE.uproject`.
-Explore them with **Show Engine Content / Show Plugin Content**, or by
-opening the sample maps below in the engine editor. Do not add those plugins
-to the game project until a representation is chosen. Niagara (sprites) is
-already on.
+The one knob: `WaterFogScale` on the **Surfaces** settings page, pushed into
+`MPC_ElysiumSurfaces` like every other, default **2·ln 2 ≈ 1.386** — the value at which SLW's
+exponential extinction and VtMB's linear fog agree at the half-fog distance (§4.2). It ships at
+that value and is not tuned here ("wire first, tune later").
+
+**What the ruling retracts** from the 2026-09-02 options note and the earlier text of this
+document: five engine claims (§8), the "`leafMinDist` underwater" wording of the roadmap entry,
+the "22 maps" count (it is 25 maps with `LEAFWATERDATA`, 24 with a drawable water brush, 22
+*units* on the master), and the assumption that the V2 lane's normal lane was already right on
+water (it was not — §4.4).
 
 ---
 
-## 3. Decision tree
+## 2. The four facts, and what reads each
 
-Pick the row from the authored fact, not from the map name.
+VtMB water is four stacked facts that the 2004 engine happens to share a name for
+(`docs/vtmb/water.md` → "It is not one thing"). The design keeps them apart:
 
-| Authored fact | First Unreal primitive | Do not reach for |
+| Fact | VtMB | Unreal home (R7.1) |
 |---|---|---|
-| `Water` shader faces (`sewer_water`, `warrwater`, `pool_water`, …) | **Single Layer Water** on those triangles (or a horizontal plane at sidecar Z if the mesh is junk) | Water Body Ocean, a planar `SceneCapture2D` mirror |
-| `LightmappedGeneric` water-look (`blackwater`, `bloody_water`, `warrenwater2b`) | existing `M_World_Translucent` + scrolling normal + the cube path already in `docs/vtmb/reflections.md` | SLW. These never had a volume integral |
-| `invisible_water` | no surface. A volume (post-process + contents) at the plane | any visible material |
-| `$bottommaterial` / underwater camera | SLW has no backface. A second underside plane *or* `M_UnderWater_PostProcess_Volume` when the camera crosses the plane | expecting SLW to draw from below |
-| In-volume fog (`$fogcolor`, start/end) | SLW **Absorption Coefficients** + **Opacity**, plus the underwater post if the camera is in the volume | a second `UExponentialHeightFog` (the world already has two fog sets) |
-| Drips / trickle / mist / spa steam | existing rain/drip Niagara family; Fountain / `HangingParticulates` | Fluids |
-| Body / bullet splash | `SimpleSpriteBurst` first; `Grid2D_FLIP_Splash` only as a hero (Andrei, a jump-in the player is looking at) | 3D FLIP |
-| Caustics on a pool floor | optional `M_Caustics_LightFunction_Sun` on one local light | Water plugin caustics generator, volumetric caustics |
-| Intersection foam | skip on v1. A soft depth-fade in the SLW opacity is enough | shoreline Niagara, Gerstner foam |
-| Player actually swimming | `SetWaterLevel` from a contents / plane test; the move and the anim are already written | Water plugin buoyancy, shallow-water sim |
-| Hurt-on-contact pool (`spawnwater`) | the existing `trigger_hurt` entity, not a water look | making it a pretty swimmable basin |
+| **Surface look** | `Water` shader faces; `waterrefract`/`waterreflect` over two RTs | `M_V2_Water` (SLW) on the chunk faces the bake already places |
+| **Volume** | `%compilewater` brushes → `CONTENTS_WATER` leaves + `LEAFWATERDATA` | `water.volumes[]` → `AElysiumWaterVolumes` |
+| **Underside** | `$bottommaterial` faces, reflection stripped | the same faces, `Underside` switch |
+| **Eye under the plane** | the eye leaf's `leafWaterDataID`, the volume's linear fog over the whole scene | `IInterface_PostProcessVolume` + `M_ElysiumUnderwater`, `FSceneView::UnderwaterDepth` |
+| **Body in the volume** | `CheckWater` → `m_nWaterLevel` → `WaterMove` | `PreMoveTick` → `SetWaterLevel` → the already-written `WaterMove` |
+| Dressing | drips, mist, splash, `surfaceprop water` | R7.3 families; `PM_water` physical material (already staged) |
 
-**Ocean vs puddle is not a technology fork.** `sm_pier_1` and
-`hw_vesuvius_1` are the same primitive at different size and tint. A Water
-Body Ocean is only worth a second look if the pier horizon cannot be faked
-with the authored mesh plus a far-plane colour match — try SLW on the mesh
-first.
+### Family resolution (unchanged, now written down)
+
+| Authored fact | Unit family | Master | Volume? |
+|---|---|---|---|
+| `Water` shader (22 units: `sewer_water`, `warrwater`, `warrenwater*`, `pool_water`, `dev_water2*`, `spawnwater`, `bradbury_blood`, `mazewater`, `dev_waterbeneath2`, …) | `water` | `M_V2_Water` (SLW) | yes where placed |
+| `LightmappedGeneric` water-look (`blackwater`, `bloody_water`, `warrenwater2b`) | `lightmappedgeneric` | `M_V2_LitTranslucent` + envmap | no (`la_bradbury_3`'s row is a shadow-brush artefact, dropped by B) |
+| `water/cheap_water` (`ch_fulab_1`) | named divergence → `M_V2_LitTranslucent` | — | **yes**: the brush is `%compilewater`, so B emits its volume with the unit's own fog keys |
+| `water/invisible_water` (`sm_pier_1` ocean) | named divergence → `M_V2_Unlit` nodraw | — | **yes**: no drawn surface, but a volume with fog — walk off the pier and you are in it |
 
 ---
 
-## 4. Parameter mapping
+## 3. Where it lands, lane by lane
 
-Source keys → the SLW graph. Numbers stay authored; the node they land on
-is the translation.
+| Lane | Change |
+|---|---|
+| `pipeline/unreal/make_v2_materials.py` | `_build_water` → SLW graph (§4); `make_water` sets `shading_model` + `BLEND_Opaque`, drops the refraction / translucency-lighting properties; `GRAPH_VERSION` 9; `REQUIRED_MPC_SCALARS` + `WaterFogScale`; `M_ElysiumUnderwater` |
+| `pipeline/unreal/make_surface_knobs.py`, `UElysiumSurfaceSettings` | the `WaterFogScale` row |
+| `importers/materials.py` | `Underside` switch from a self-referencing `$bottommaterial`; the normal lane fix (§4.4); pin table + `ElysiumSurfaceParams.h` + `WATER_PARAM_TABLE` gain `Underside` |
+| `importers/map_geometry.py` | `water.volumes[]` (§5), `MANIFEST_VERSION` 9 |
+| `pipeline/unreal/bake_map_v2.py`, `bake_map.py` | `_place_water`: one actor, the rows written as `FElysiumWaterVolume` structs; `TAG_WATER`; `WATER_ACTOR_SHAPE`; the rows in `_level_recipe` |
+| `Source/ElysiumUE` | `AElysiumWaterVolumes` (+ `FElysiumWaterVolume`, `FElysiumWaterBrush`), the `elysium.water` tag, `UElysiumMapVisuals` adoption, `AElysiumMapActor::PreMoveTick` classification, the post-process interface, `UnderwaterDepth` |
+| Tests, at the seam, in the count the change authorizes | `test_make_v2_materials_editor.py`: the water row is Opaque + SLW with the four output pins fed; `test_materials_stage.py`: a water VMT stages `NormalMapFrames` from `$normalmap`'s array with `UseNormalMap` on, and a self-bottomed unit sets `Underside`; `test_map_geometry.py`: the volume rows (sentinel dropped, fog keys per row, planes in cm); `Elysium.Substrate.Water`: the three-point classification against a fixed brush set |
+| Docs | this file; `docs/vtmb/water.md` (the engine facts); `seam_map_material.md` → `M_V2_Water`; `seam_map_map.md` → "Import — water volumes (R7.1)"; `seam_migration.md` R7.1 |
 
-| Source | SLW / material input | How to read it |
+---
+
+## 4. The surface: `M_V2_Water` as Single Layer Water
+
+### 4.1 Flags
+
+`MD_Surface`, `BLEND_Opaque`, `MSM_SingleLayerWater`, `two_sided` off, `used_with_instanced_
+static_meshes` on, `used_with_nanite` **off** (Nanite rejects the shading model; the water faces
+already live in the non-Nanite `T_` chunk bucket and `MaterialBinding.opaque` already answers
+`False` for this master). The material lane's per-instance `Opaque` blend override — the
+fall-through of `_resolve_blend` for a VMT that authors no `$translucent` — becomes the master's
+own truth instead of an override the translucent master could not honour. No `bUsedWithWater`:
+the shading model does not require it (§8).
+
+### 4.2 The graph, pin by pin
+
+Numbers stay authored on the instance (the pin table is unchanged but for `Underside`); the
+translation happens in the graph.
+
+| Source | SLW / material input | Graph |
 |---|---|---|
-| `$normalmap` (`dev/water_normal`) + `AnimatedTexture` 20–30 fps + `TextureScroll` ~0.05 @ 45° | World-aligned panner on a normal texture, two layers at that rate / angle | Do not invent Gerstner. Dual-panned normals *are* the 2004 motion |
-| `$bumpmap` (`dev/water_dudv`) | skip as a texture. The DUDV was a DX8 way to offset the RT UVs. SLW refraction already reads scene colour / depth along the normal | If the authored `$refractamount` is high, raise normal strength, not a second DUDV |
-| `$reflecttint` | Specular colour × a scalar; also a mild Base Color tint | Grey-green 0.3–0.7 on canals; red on blood / spawn; near-white on pools |
-| `$refracttint` | **Color Scale Behind Water** | Same numbers. This is how sewage stays brown-green when you look *through* it from above. Epic: this input does not apply once the camera is under the plane |
-| `$reflectamount` / `$refractamount` (15–100) | normal intensity / a refraction scalar. Not 1:1 units | Author 60/22 as "strong reflect, modest warp". Start around normal 0.4–0.7 and tune against a capture |
-| `$fogcolor`, `$fogstart`, `$fogend` | **Absorption Coefficients** (1 / distance-to-extinct per channel) and **Opacity** | Small `$fogend` (10–64, blood / spawn) → high absorption, high opacity. Large `$fogend` (1024–1500) → you can see into it. Reciprocal metres, not Source inches — convert |
-| `$fogenable 0` | absorption near zero, opacity from Fresnel only | `dev/ocean`, `confession_water`, `malk_water` |
-| Fresnel (hard-wired Schlick^5 in `waterreflect.psh`) | SLW already Fresnels. Leave it | Do not add a second Fresnel on Specular |
-| `$envmap` on cheap / LMG water | the existing source-cube term, not SLW | `docs/vtmb/reflections.md` |
-| `$forcecheap` / cheap distances | ignore as a shader swap. Use one SLW and let Lumen be the cheap reflection | A planar `SceneCapture` is the thing we are refusing |
-| `$bottommaterial` | underwater post + optional underside plane using the same absorption | Do not try to make SLW two-sided. The sidecar currently emits the underside as a second row at the same Z — pick one drawn SLW and treat the other as the underside / skip |
-| `%compilewater` / `LEAFWATERDATA` | a volume the movement query and the underwater post can test (plane Z + `minZ`) | The visual mesh and the volume can be the same actor |
-| `surfaceprop water` | Unreal physical material + the wade / impact sounds | Independent of the look |
+| `$fogcolor` (authored /255), `$fogstart`, `$fogend` (Source inches) | **Absorption / Scattering Coefficients** (1/cm) | `range = max((FogEnd − FogStart) × 2.54, 1)`; `σ = WaterFogScale / range`; `c = pow(FogColor.rgb, 2.2)` (the same decode `ElysiumFog::DecodeColor` applies to the scene fog); **Scattering = c × σ**, **Absorption = (1 − c) × σ**. `UseFogEnable` off → both 0 (`$fogenable 0`: `FogMode(0)`, clear water). `Underside` → both 0 (ruling E). `CheapWater` → σ × 16 (ruling F) |
+| `$refracttint` | **Color Scale Behind Water** | `RefractTint` (default white). SLW fades it in over the first 50 cm of depth; on a 20-inch canal that is the whole depth |
+| — | **PhaseG** | 0. VtMB has no phase term |
+| `$normalmap` (`dev/water_normal`, 29 frames) + the `animatedtexture` proxy (30 fps, on `$bumpframe`) + `texturescroll` (~0.05 @ 45°) | **Normal** | the existing lane: `_flipbook_sample(NormalMapFrames, NormalFrameRate/Count)` under `UseAnimatedNormalFrames`, gated `UseNormalMap`, over the `BumpScrollRateU/V` panner. Unit strength |
+| `$bumpmap` (`dev/water_dudv`) + `$refractamount` / `$reflectamount` | — | **declared, not wired.** SLW refracts and reflects along the normal; the DUDV was the DX8 way of offsetting the RT UVs (`WaterWarp_old`'s VS c44 is the amount), and the two `*amount`s are its warp strengths, not intensities. `DuDvMap`, `RefractAmount`, `ReflectAmount` stay on the pin table as provenance |
+| `$reflecttint` | **Specular** scale | `Specular = class_specular × luma(ReflectTint)`; `Underside` → 0 (the engine's strip). Luma only: SLW's Specular is scalar (§9) |
+| Fresnel (`(1 − N·V)^5`, R0 = 0: PS `c3 = (1,0,0,0)`) | — | SLW applies its own Schlick from Specular. The `Fresnel` node is retired from the graph; `BaseReflectFract` stays declared |
+| surface class `water` | **Roughness**, class specular / metallic | the class LUT read, unchanged. Lumen honours SLW roughness in 5.8 (§8), so the class row is what sharpens or blurs the mirror |
+| `$envmap` (named cube) | **Emissive** | the fixed-cube add, unchanged (`UseFixedCube`, `EnvMapTint`, `FixedCubeStrength`) |
+| `$basetexture`, `$color`, `$watercolor`, `$watermurkiness` | **Base Color** | unchanged. Invisible while Opacity is 0 |
+| — | **Opacity** | **coverage, not murk** (`WaterVisibility = 1 − Opacity`, §8): `UseBaseTexture ? Alpha × BaseTexture.a : 0`. The four base-textured `Water` units (`dev_water`, `nether01_water`, `oilfieldwater a/b`) are placed on no water map; they keep their alpha as coverage, provenance-level only |
+| the old fog tail on Emissive / Opacity, `MP_REFRACTION` | — | **gone.** Absorption is the fog now; SLW has no refraction pin |
+| the wave scalars, `CheapWaterStart/EndDistance`, `WaterDepth` | — | declared, not wired, as before (`WaterDepth` is VBSP's per-instance depth; the volume carries the real one) |
 
-Absorption is the important translation. `$fogcolor {5 5 0}` with
-`$fogend 1024` on `sewer_water` means "light dies over ~26 m, and it dies
-greener than red" — that is an absorption vector, not a fog actor.
+The SLW output node is `MaterialExpressionSingleLayerWaterMaterialOutput`, created through the
+same `mel.create_material_expression` the thin-translucent output already uses
+(`make_world_materials.py::M_World_Glass`), fed by pin name (`ScatteringCoefficients`,
+`AbsorptionCoefficients`, `PhaseG`, `ColorScaleBehindWater`). The all-switches-true probe
+(`_probe_all_switches_true`) must still compile: `Underside` and `CheapWater` both on is a legal
+permutation (zero extinction wins; the instance never authors both).
 
----
+**Why 2·ln 2.** VtMB's fog is linear: fully `$fogcolor` at `$fogend`, half at the midpoint.
+SLW's is exponential: transmittance `e^(−σ·d)`. No `σ` makes the two curves coincide; matching
+the half-fog distance (`e^(−σ·end/2) = ½ → σ = 2 ln 2 / end`) keeps the *reading* of a canal —
+how far in you can see — while the far end stays a little more transparent than 2004's hard
+clamp. That residual is the knob's business, not the graph's.
 
-## 5. The Unreal toolkit (this 5.8 install)
+### 4.3 What the six authored fog tuples become (1/cm, at `WaterFogScale` 1.386)
 
-Everything below is already on disk at `D:\Epic\UE_5.8`. Content Browser
-paths assume **Show Engine Content** and **Show Plugin Content**.
+| Material | `$fogcolor` | `$fogend` (in) | range (cm) | σ | decoded `c` |
+|---|---|---|---:|---:|---|
+| `sewer_water` (Santa Monica sewer, end sequences) | `{5 5 0}` | 1024 | 2598 | 5.3e-4 | (1.7e-4, 1.7e-4, 0): black-green murk, nearly pure absorption |
+| `warrwater` (downtown canal, warrens, ash sewer, plaguebearer) | `{.2 .4 .2}` | 1024 | 2598 | 5.3e-4 | ≈ 0: pure absorption |
+| `warrenwater` (Hollywood, Chinatown canals, warrens 5) | `{.4 .4 .2}` | 128 | 322 | 4.3e-3 | ≈ 0: short, black |
+| `pool_water` (Vesuvius, Giovanni, temple, plaguebearer pool) | `{21 39 20}` | 800 | 2029 | 6.8e-4 | (4.5e-3, 1.7e-2, 4.0e-3): a basin you can see into, green |
+| `dev_water2*`, `dev_waterbeneath2`, `cheap_water`, `invisible_water` | `{22 20 10}` | 400 | 1013 | 1.4e-3 | (5.4e-3, 4.4e-3, 1.0e-3): warm grey |
+| `spawnwater` (warrens 5) | `{5 0 0}` | 64 | 160 | 8.7e-3 | (1.7e-4, 0, 0): red-black, gone in a metre and a half |
 
-### 5.1 Single Layer Water — the default
+Did-it-appear is the only acceptance here. The magnitudes are the authored ones through one
+formula; whether a sewer reads too black against a capture is the tuning session's question.
 
-Docs:
-[Single Layer Water Shading Model](https://dev.epicgames.com/documentation/unreal-engine/single-layer-water-shading-model-in-unreal-engine).
+### 4.4 The normal lane was wrong, and how it is fixed
 
-SLW is an **Opaque or Masked** shading model with its own pass after the
-base pass and deferred lighting. It reads the lit scene and depth to do
-refraction, runs a volume BSDF (scattering + absorption + PhaseG), and
-composites reflection. Blend Mode stays Opaque. Opacity on the main node is
-the surface / volume mix, not alpha blend.
-
-Open, in this order:
-
-| Content Browser path | Disk | Why |
-|---|---|---|
-| `/Engine/EngineMaterials/WaterMaterial` | `Engine/Content/EngineMaterials/WaterMaterial.uasset` | smallest SLW. Proves the shading model on a plane in five minutes |
-| `/Water/Meshes/S_WaterPlane_256` | `Engine/Plugins/Experimental/Water/Content/Meshes/S_WaterPlane_256.uasset` | the plane to drop. Non-Nanite. Assign an SLW material and stop |
-| `/Water/Materials/WaterSurface/Water_Material_Lake` | `Engine/Plugins/Experimental/Water/Content/Materials/WaterSurface/Water_Material_Lake.uasset` | **first game-like instance.** No ocean Gerstner. This is a canal / sewer / pool |
-| `/WaterAdvanced/Materials/Water_Material_Simple` | `Engine/Plugins/Experimental/WaterAdvanced/Content/Materials/Water_Material_Simple.uasset` | still simpler than the full Water master |
-| `/Water/Materials/WaterSurface/Water_Material` | `Engine/Plugins/Experimental/Water/Content/Materials/WaterSurface/Water_Material.uasset` | the plugin's one master. Other instances: `_Ocean`, `_River`, `_CustomMesh` |
-| `/Water/Materials/WaterSurface/Water_PanningTextures` | same folder | the dual-panner recipe. Then swap in `dev/water_normal` |
-| `/Water/Materials/WaterSurface/Water_Material_CustomMesh` | same folder | the instance meant to be dropped on *your* mesh, not a Water Body |
-| `/Water/Materials/Functions/Water_Underside` | `…/Functions/Water_Underside.uasset` | how Epic does the view from below |
-| `/Water/Materials/Debug/Debug_Absorption` | `…/Debug/Debug_Absorption.uasset` | tune `$fogcolor` → absorption without fighting waves |
-| `/Water/Materials/Debug/DebugRefraction` | `…/Debug/DebugRefraction.uasset` | see the scene-colour read |
-
-Graph to copy, not to ship: **Single Layer Water Material** node with
-
-- Scattering Coefficients — keep low on canals (clear-ish volume, dark
-  absorption), raise on spa steam-adjacent pools;
-- Absorption Coefficients — from `$fogcolor` / `$fogend`;
-- PhaseG — 0 (isotropic) until a sun-path shot asks for otherwise. VtMB is
-  night-street; a strong PhaseG is a daylight trick;
-- Color Scale Behind Water — `$refracttint`;
-- Normal — dual panner on `dev/water_normal` (exported already as
-  `../shared/tex/dev_water_normal_n.png`);
-- Opacity — low on pools, high on blood / spawn / invisible-adjacent murk.
-
-### 5.2 Underwater
-
-| Path | Why |
-|---|---|
-| `/Water/Materials/PostProcessing/M_UnderWater_PostProcess_Volume` | first underwater look. Bind absorption / colour to the same fog numbers |
-| `/Water/Materials/PostProcessing/MPP_Water_ChromaticAbberation` | optional; stands in for `waterwarp` |
-| `/Water/Materials/PostProcessing/M_UnderWater_PostProcess_Mesh` | if a volume is easier to author as a box around the basin |
-| `/WaterAdvanced/Materials/M_UnderWater_PostProcess_Volume_SW` | shallow-water variant; ignore until a swim exists |
-
-Enable the volume only when the camera is below the sidecar plane. Epic's
-own Water Bodies do this automatically; on an SLW mesh it is a plane test.
-
-### 5.3 Water plugin bodies — reference, not the plan
-
-Docs:
-[Water System](https://dev.epicgames.com/documentation/unreal-engine/water-system-in-unreal-engine),
-[Water Meshing and Surface Rendering](https://dev.epicgames.com/documentation/unreal-engine/water-meshing-system-and-surface-rendering-in-unreal-engine),
-[Water Debugging and Scalability](https://dev.epicgames.com/documentation/unreal-engine/water-debugging-and-scalability-options-in-unreal-engine).
-
-A Water Body needs a **Water Zone** in the level and wants a Landscape to
-carve. That is the wrong data model for a BSP canal.
-
-Open the sample maps to *see* SLW + underwater + waves, then close them:
-
-| Map | Disk |
-|---|---|
-| `/WaterExtras/Maps/WaterTestMap` | `Engine/Plugins/Experimental/WaterExtras/Content/Maps/WaterTestMap.umap` |
-| `/WaterExtras/Maps/WaterVelocityTest` | same folder |
-| `/WaterExtras/Caustics/Maps/CausticsMap` | `…/Caustics/Maps/CausticsMap.umap` |
-| `/Water/FluidSimulation/WaterFluidSimtestShallow` | `Engine/Plugins/Experimental/Water/Content/FluidSimulation/WaterFluidSimtestShallow.umap` |
-
-Useful pieces inside the plugin that do **not** require a Water Body:
-
-- `/Water/Materials/WaterSurface/Water_FarMesh` — a flat colour-matched
-  card if the pier horizon needs a fill;
-- `/Water/Materials/Functions/WaterOpacityMaskFromDepth` — soft edge against
-  walls, stands in for intersection foam;
-- `/Water/Content/MPC/MPC_Water` — if several basins must share time.
-
-`r.Water.*` console variables only apply to Water Mesh tiles. They do
-nothing for a standalone SLW static mesh.
-
-### 5.4 Caustics — optional, one pool
-
-| Path | Why |
-|---|---|
-| `/Water/Caustics/Materials/LightFunctions/M_Caustics_LightFunction_Sun` | a light function on one local light over Vesuvius / Giovanni. Cheap |
-| `/Water/Caustics/Materials/LightFunctions/M_Caustics_LightFunction_SubUV` | animated sheet, still a light function |
-| `/Water/Caustics/Materials/Functions/WaterCaustics_Static` | if a light function is too much, multiply into Color Scale Behind Water |
-
-Do not run `GenerateCausticsTextures` or the volumetric / fluidsim caustics
-for a 20k-triangle night map. Color Scale Behind Water is already the hook
-SLW gives you for "bright pattern on the floor".
-
-### 5.5 Niagara — dressing, not the surface
-
-Same family rules as `docs/architecture/effects-architecture.md`. Water
-adds:
-
-| Asset | Use for |
-|---|---|
-| existing `NS_ElysiumRain` / drip path | `WaterDrops_Timer` |
-| `/Niagara/DefaultAssets/Templates/Emitters/SimpleSpriteBurst` | `Splash`, `WaterSplash`, bullet-in-water |
-| `/Niagara/DefaultAssets/Templates/Emitters/Fountain` | trickle, pipe leak, `WaterfallTrickle` |
-| `/Niagara/DefaultAssets/Templates/Emitters/HangingParticulates` | `watermist`, `waterfallmist`, `SpaMist` |
-| `/NiagaraFluids/Templates/Liquid/2D/Systems/Grid2D_FLIP_Splash` | one hero splash (Andrei, a watched jump-in) |
-| `/NiagaraFluids/Templates/Liquid/2D/Systems/ShallowWater/Grid2D_SW_Pool` | **do not** put under every basin. Look at it once if a warrens pool wants interactive ripples |
-| `/WaterAdvanced/Niagara/Systems/Grid2D_SW_WaterBody` | same: a later polish, depends on the Water plugin |
-
-Rain-on-water is weather (`rainsplash_new` is already a flat expanding
-ring). It does not need Fluids.
-
-### 5.6 What not to use
-
-- **Water Body Ocean / Lake / River as the world representation.** Wrong
-  input (Landscape + Zone + spline), wrong cost, and it discards the
-  authored mesh.
-- **Planar `SceneCapture2D` / `PlanarReflection` actors.** That *is* the
-  2004 `_rt_WaterReflection` camera. Lumen on SLW is forced-mirror and is
-  the accepted substitute.
-- **Translucent-surface water** for real `Water` shader faces. The bake
-  currently does this (`M_World_Translucent`). It cannot do absorption or a
-  correct scene-colour refract, and it fights the translucency budget rain
-  already spends.
-- **Niagara 3D FLIP / heterogeneous volumes** for canals.
-- **Gerstner waves** on the Santa Monica ocean. The authored motion is a
-  24–30 fps normal and a 0.05 scroll. Waves would be a new artist decision.
-- **Enabling Water + WaterAdvanced + Landmass on the project** just to
-  explore. Open the engine content; decide; then enable what the chosen
-  path actually needs (likely: nothing, if SLW lives in
-  `make_world_materials.py`).
+Both `dev/water_normal` and `dev/water_dudv` are 29-frame VTFs and stage as `Texture2DArray`s
+(`TA_water_normal` + its `_linear` twin, `TA_water_dudv`), so neither binds to the master's 2D
+`NormalMap` / `DuDvMap` slots (`textureClassMismatch`, correctly). The `animatedtexture` proxy
+then bound the **DUDV** array into `NormalMapFrames` (it looked its dependency up under `DuDvMap`,
+the slot `$bumpmap` lands on for the water family) and never set `UseNormalMap` — so every water
+instance shipped with a **flat normal**: no ripple at all, on either lane. R7.1's stage fix: on the
+water family the frames array comes from `$normalmap`'s own texture (the proxy still supplies the
+rate — `$bumpframe` is the shared frame index of both textures in `Water_Old`), and a bound frames
+array on the normal lane sets `UseNormalMap` for every family, not only through the static-frame
+fallback. `DuDvMap` stays unbound and declared.
 
 ---
 
-## 6. What to open this week (no bake, no game code)
+## 5. The volume: `water.volumes[]`
 
-Work in the Unreal editor against engine / plugin content. Duplicate into a
-scratch `/Game/ElysiumAuthored/FX/_Explore/` folder (project-owned) or a
-disposable map. Do not run `export` or `build`.
+### 5.1 The product (`seam_map_map.md` → "Import — water volumes (R7.1)")
 
-Suggested order. Each step is one proven example.
-
-1. **`/Water/Meshes/S_WaterPlane_256` + `/Water/Materials/WaterSurface/Water_Material_Lake`.**
-   Confirm the window title is `PCD3D_SM6`, Lumen on, MegaLights on. This
-   is the "does SLW even draw in our render path" test. (Plugin content
-   must be visible; do not add the plugin to the `.uproject`.)
-2. **Retune that plane to `sewer_water`.** Absorption from `{5 5 0}` /
-   fogend 1024 in, Color Scale Behind Water `[0.7 0.7 0.7]`, dual-panned
-   `dev/water_normal` (steal the panner from
-   `/Water/Materials/WaterSurface/Water_PanningTextures`), opacity
-   ~0.25–0.4. Sit it next to a `sm_hub_1` or `la_hub_1` capture of the
-   canal. This *is* the downtown / Santa Monica look. Judge the *reflection
-   of neon*, not a MegaLights specular lobe on the water (MegaLights does
-   not light water — see §7).
-3. **Retune a copy to `pool_water` / Vesuvius.** Greener fog, longer
-   `$fogend`, brighter Color Scale. Decide whether one material with
-   instance parameters covers both families.
-4. **Retune a copy to `spawnwater` / `bradbury_blood`.** Fog end 10–64,
-   red absorption, red Color Scale, high opacity. Confirm it reads as a
-   bad pool, not a ruby swimming pool.
-5. **`M_UnderWater_PostProcess_Volume`**, camera dropped through the plane.
-   Match the same fog numbers. Decide if an underside mesh is needed at
-   all (for the current exported maps the player may never go under).
-6. **`SimpleSpriteBurst` splash** on the plane, using the compiled
-   `Splash` / `WaterBigSplash` rates as a starting point. This unlocks
-   enter-water and bullet-water.
-7. **Optional:** `M_Caustics_LightFunction_Sun` on one point light over the
-   pool from step 3. Keep or drop as a family, not per basin.
-8. **Look, do not adopt:** `WaterTestMap` and `Grid2D_FLIP_Splash`, so the
-   Water Body / Fluids option is a memory, not a mystery.
-
-After those eight, the representation is chosen. Remaining work is an
-`M_Water` master, binding the `.water` sidecar, and a contents query into
-`SetWaterLevel` — implementation, not research.
-
-A first binding, when that work is called:
+One row per real `LEAFWATERDATA` record, in lump order:
 
 ```
-Absorption  ~=  1 / max($fogend * 0.0254, ε)   tinted by $fogcolor
-ColorScale  =  $refracttint
-Specular    *= $reflecttint
-Normal      =  panner(dev_water_normal, 0.05, 45°) + panner(..., −0.03, −20°)
-Opacity     =  saturate(c0 + c1 * (1 / $fogend))
+"water": {
+  "volumes": [
+    {
+      "index": 0,                        // the leafData row
+      "surfaceZCm": -14937.74, "minZCm": -14988.54,
+      "material": "vtmb:material:water/sewer_water",   // through surfaceTexInfoID -> texinfo -> texdata
+      "fogEnable": true, "fogColor": [0.0196, 0.0196, 0.0],  // authored /255, undecoded (the `.env` convention)
+      "fogStartCm": 2.54, "fogEndCm": 2600.96,
+      "brushes": [ { "planes": [[nx, ny, nz, d], ...], "boundsCm": {"min": [...], "max": [...]} } ]
+    }
+  ],
+  "dropped": [ {"index": 3, "reason": "sentinel"}, {"index": 0, "reason": "no water brush"} ]
+}
 ```
 
-Tune `c0`/`c1` against the four families in `docs/vtmb/water.md`, not
-against a generic ocean screenshot.
+- **Rows.** `surfaceTexInfoID == −1` (the `16384` sentinel, two rows in `hw_warrens_2`) is
+  dropped. A row no water brush matches (`la_bradbury_3`: `tools/tools_shadow`) is dropped and
+  named.
+- **Brushes.** `collision.brushes[]` with `contents & 0x20` **and** at least one non-bevel side
+  whose texinfo material authors `%compilewater` (the material lane's provenance carries the key).
+  `0x18000120` with only `tools/tools_shadow` sides is a shadow caster and never qualifies;
+  `0x18000020` (`func_detail` water, `ch_lotus_1`) does. A brush belongs to the row whose
+  `surfaceZ` its horizontal top plane matches within one inch — the association needs no leaf
+  join, so `ch_fulab_1`'s `func_illusionary` water (no leaf points at its row) still lands.
+- **Planes.** Outward normals and distances in Unreal cm (`n · p = d` on the plane, `n · p < d`
+  inside), through the same reflection the geometry takes; bevel sides skipped (redundant
+  half-spaces of the same hull). The AABB comes from the plane-intersection vertices.
+- **Fog keys** from the resolved material's staged row (`FogColor`, `FogStart`, `FogEnd`,
+  `UseFogEnable`), start/end converted to cm here because the actor stores final values. A
+  material with no fog keys stages `fogEnable: false` — `SetFogVolumeState`'s own answer.
+
+### 5.2 The actor
+
+```
+USTRUCT() FElysiumWaterBrush   { TArray<FPlane> Planes; FBox BoundsCm; }
+USTRUCT() FElysiumWaterVolume  { int32 Index; float SurfaceZCm; float MinZCm; FString Material;
+                                 bool bFogEnabled; FLinearColor FogColor; float FogStartCm; float FogEndCm;
+                                 TArray<FElysiumWaterBrush> Brushes; }
+UCLASS()  AElysiumWaterVolumes : AActor, IInterface_PostProcessVolume
+          { UPROPERTY(EditAnywhere) TArray<FElysiumWaterVolume> Volumes; ... }
+```
+
+- `int32 FindVolumeAt(const FVector& PointCm) const` — first volume with a brush containing the
+  point (bounds test, then planes). This is `MASK_WATER` at a point.
+- `EElysiumWaterLevel ClassifyBody(FeetCm, WaistCm, EyesCm) const` — the three queries of
+  `CheckWater`, in its order: feet → 1, waist → 2, eyes → 3, `None` when the feet are dry.
+- Editor-only debug: the brush AABBs drawn as boxes at the plane colour under `elysium.Water.Draw`
+  ("the editor is the tuning surface": a volume is inspectable where it stands).
+- Adopted by `UElysiumMapVisuals::AdoptBakedLevel` off `elysium.water`
+  (`ElysiumBakedTags::Water`), exposed as `GetWaterVolumes()`.
+
+### 5.3 The body (ruling C)
+
+`AElysiumMapActor::PreMoveTick`, after the player think and before the move:
+
+```
+feet  = hull centre − (0, 0, GetBodyHalfHeight()) + 1 in   // `origin.z + mins.z + 1.0`
+waist = hull centre                                        // `(mins.z + maxs.z) × 0.5`, not the eye
+eyes  = the camera component's location                    // `origin + m_vecViewOffset`
+Movement->SetWaterLevel(Water->ClassifyBody(feet, waist, eyes))
+```
+
+`FullWalkMove` already branches on `WaterLevel >= Waist` (skips gravity, `WaterMove`), the anim
+intent already answers `Swim` / `Treadwater`, and `CheckJumpButton` refuses at level ≥ 2. None of
+that changes; this is its first caller. No save state: the level is re-derived on the first tick
+(`FElysiumWorldBlock` carries no movement state, by rule). `CONTENTS_CURRENT_*` (a base-velocity
+push at `level × 50`) is not authored on any water brush in the corpus and is not reproduced.
 
 ---
 
-## 7. Cost and engine facts
+## 6. The eye: underwater (ruling D)
 
-The render path is already Lumen + MegaLights + VSM at 1440p
-(`docs/architecture/rendering-perf.md`). Water spends the same
-translucency / lighting budget.
+VtMB under the plane is **two passes and one fog**: the above-water world plus the 2D sky (with
+the world fog) into the refraction RT clipped at the plane, then the below-water world plus the
+water surfaces into the framebuffer under `SetFogVolumeState(id, false)` — plain linear fog over
+everything, `FogMode(0)` after. No warp, no tint, no reflection pass (`docs/vtmb/water.md`).
 
-**Settled Unreal facts (Epic's docs and this 5.8's shaders):**
-
-- Lumen reflections on Single Layer Water are **forced mirror** (roughness
-  does not blur them). `LumenReflectionCommon.ush` returns roughness 0
-  when the reflection pass is SLW. Acceptable for VtMB: the 2004
-  reflection is a perturbed RT, also sharp. Specular input still scales
-  brightness. Ripple comes from **normals**, not roughness.
-- **MegaLights does not light water.** Epic's MegaLights limitations list
-  Water (with clouds and volumetrics) as unsupported. Local neon in this
-  project is MegaLights-owned, so it will not put a specular lobe on the
-  SLW surface. What water *can* see is the **Lumen mirror of the already-lit
-  world** — which is the 2004 shape (a reflection of the scene, not a
-  many-light BRDF). Do not turn MegaLights off on a street of lights "so
-  the water can see them." If a sewer is a black hole, the Lumen surface
-  cache is missing the neon (`docs/architecture/rendering-perf.md`), not
-  MegaLights.
-- SLW has **one depth layer**. No backface, no stacked water. Two basins
-  that overlap in screen space will fight; VtMB's authored planes do not.
-- SLW refraction reads scene colour and depth *after* the deferred light
-  pass. What is behind the water is the lit world, which is what we want.
-  **Color Scale Behind Water is an above-water multiply** (Epic); it does
-  not change how the floor looks once the camera is under the plane.
-  Underwater is the post-process from §5.2.
-- Nanite rejects SLW. Water stays on the non-Nanite bake bucket.
-- On low-end / mobile Epic falls back to a simple translucent with no
-  volume integral. This project does not ship that path (DX12/SM6 is
-  mandatory).
-- The Water plugin's tile mesh, LOD rings and `r.Water.WaterMesh.*` vars
-  do not apply to a static-mesh SLW. The cvars that *do* are
-  `r.Water.SingleLayer.Reflection` (default 1 = same as the scene, i.e.
-  Lumen), `r.Water.SingleLayer.RefractionDownsampleFactor` (2 = cheaper,
-  blurrier under-surface), and `r.Water.SingleLayer.DepthPrepass`
-  (default 1, leave on for VSM).
-
-**Risks to verify on this install, in the editor, before calling the look
-done:**
-
-- **Does the Lumen mirror of neon actually show up** on the plane from
-  step 1, next to a captured `sm_hub_1` sewer? If yes, MegaLights-not-
-  lighting-water is a non-issue. If the surface is black, chase Lumen
-  cards on the neon, not a lighting-path change.
-- **Forced-mirror Lumen** reflecting the 2D sky backdrop and missing the
-  3D-skybox miniature. Same constraint as every other reflection
-  (`docs/vtmb/reflections.md`). Canals mostly see architecture and neons,
-  which Lumen has.
-- **Underwater post cost.** One volume, one material. Do not run it when
-  the camera is dry.
-- **VSM hard shadows on SLW.** Filtering is off by default
-  (`r.Water.SingleLayer.ShadersSupportVSMFiltering 0`). Indoor maps are
-  local-light dominated; ignore until a sunlit pool exists.
-
-Budget instinct: one SLW mesh per water material per map (usually one or
-two), sprite drips already counted under weather, Fluids only if a single
-hero splash is on screen. A hub with a canal is fine. A hub with a canal
-and a 3D FLIP pool and a Water Body Ocean is not.
+- **`M_ElysiumUnderwater`** — `MD_PostProcess`, before tonemapping, three parameters
+  (`FogColor`, `FogStart`, `FogInvRange` — the same triple `ElysiumFog::ApplyToDecalMID` writes,
+  so one packer serves the scene fog, the decals and the underwater view):
+  `lerp(SceneTexture:PostProcessInput0, FogColor, saturate((SceneDepth − FogStart) × FogInvRange))`.
+  Generated beside the V2 masters; the runtime holds one MID.
+- **Registration.** `AElysiumWaterVolumes` implements `IInterface_PostProcessVolume`
+  (`bIsUnbound = false`, `BlendWeight = 1`, `Priority` above the map's neutral unbound volume);
+  `EncompassesPoint` is `FindVolumeAt(ViewLocation) != INDEX_NONE` at distance 0. Registered with
+  `UWorld::AddPostProcessVolume` on `BeginPlay`, removed on `EndPlay`. The engine's own
+  `UPostProcessComponent` and the Water plugin's `UUnderwaterPostProcessVolume` are the two
+  precedents; neither needs the plugin.
+- **`FSceneView::UnderwaterDepth`.** From `UWorld::OnBeginPostProcessSettings` (the broadcast the
+  engine makes before it walks the volumes) the actor sets `UnderwaterDepth = SurfaceZ − View.Z`
+  when the view is in a volume, and writes the active volume's fog triple to the MID. The
+  renderer reads the flag for pass ordering only (underwater translucency before the water
+  pass, fog) — the same writes `UWaterSubsystem::ComputeUnderwaterPostProcess` makes.
+- **Why a post-process, when the project's fog is per-primitive.** `rebuild-strategy.md`'s rule
+  ("the distance fog cannot be an engine fog") exists because the world and the 3D-skybox
+  miniature share screen depth. Under the plane that distinction is moot: everything above the
+  water — sky, miniature, buildings — is seen *through the surface*, and SLW writes the surface's
+  depth, so a scene-depth fog fogs the whole above-water view at the plane's distance, which is
+  exactly what pass 2 does to the surface in 2004. The below-water geometry is fogged at its own
+  depth, also faithful. What the post-process cannot do is *replace* the world fog on the
+  below-water geometry (it adds to it); §9 records that.
+- **Selection.** VtMB picks one fog volume per frame by a front-to-back PVS walk from the eye
+  leaf, and "eye under water" is the eye leaf's own `leafWaterDataID`. Nothing in the corpus
+  shows two volumes at once; the transcription is "the volume the view point is in" (§9).
 
 ---
 
-## 8. Related docs
+## 7. The camera (open owner call)
 
-- `docs/vtmb/water.md` — the inventory this mapping covers.
+`CViewRender::GetWaterOffset` (`cl_waterdist` 4 in) walks the view origin in one-unit Z steps
+against `MASK_WATER` when the player's water level is above 1: at level 2 it **raises** the view
+until it is out of the volume (treading: the camera stays dry), at level 3 it **lowers** it until
+it is back inside (submerged: the camera stays wet) — the opposite of what the earlier VtMB note
+said. The Elysium camera is a third-person boom most of the time, so the case is rarer than in
+2004, but a boom that crosses the plane while the body treads would flicker the post-process.
+The step rule is a pure function beside `ElysiumRig::SolveBoomDistance` and is applied in
+`UElysiumCameraComponent::ApplyBaseToView` after the boom; the query is the water actor's.
+**Owner call:** transcribe it in R7.1 or leave it to the first swim-able slice. Default if
+unanswered: not wired; recorded as the one runtime piece of `docs/vtmb/water.md` this task leaves.
+
+---
+
+## 8. Engine facts (UE 5.8, verified in this install's source)
+
+Where the earlier text of this document was wrong, the line says **[was wrong]**.
+
+- **SLW is engine, not plugin.** `MSM_SingleLayerWater` + `MaterialExpressionSingleLayerWaterMaterialOutput`
+  live in `Engine/`; the Water plugin only uses them. Plugin content is mounted only when the
+  plugin is enabled (`FPluginManager::MountContentPlugins`), so no `/Water/...` asset is
+  referenceable while it stays off — the project authors its own post-process master.
+- **Rules a SLW material must meet** (`MaterialShared.cpp` 6432–6449): opaque **or masked**, the
+  only shading model, and the output node present. Nothing else: no two-sided, static-lighting or
+  `bUsedWithWater` requirement. **Nanite rejects it** (`NaniteResources.cpp` 3407). **Pixel Depth
+  Offset** and scene-depth reads are unsupported on SLW; `SceneDepthWithoutWater` is the node for
+  a wall fade, later.
+- **The camera-under-water branch is dead code.** `BasePassPixelShader.usf:1698`,
+  `SingleLayerWaterComposite.usf:68`: `const bool CameraIsUnderWater = false;`. No cvar, flag or
+  plugin path enables it. **[was wrong]**: "SLW handles the view from below through
+  `bCameraIsUnderWater`". What exists is `FSceneView::UnderwaterDepth` (`SceneView.h:1793`), a
+  CPU flag the renderer reads for pass ordering and fog, whose only stock writer is the Water
+  plugin and which any `UWorld::OnBeginPostProcessSettings` subscriber may set.
+- **Opacity is coverage.** `WaterVisibility = 1 − Opacity` (`BasePassPixelShader.usf:1140`);
+  Opacity 1 removes the water volume. **[was wrong]**: "opacity high on blood / spawn".
+- **Coefficients are 1/cm** (`SingleLayerWaterShading.ush:200`, depth in Unreal units).
+  **[was wrong]**: "reciprocal metres". Color Scale Behind Water fades in over 50 cm (`:176`).
+- **Lumen honours roughness on water.** Every SLW pixel traces regardless of roughness
+  (`LumenReflectionCommon.ush:335`), but the ray uses the GBuffer roughness
+  (`LumenReflections.usf:317/366/377`). **[was wrong]**: "forced mirror" — that is Epic's doc text
+  for an earlier release, not 5.8's shader. `r.Water.SingleLayer.Reflection` 1 means "the scene's
+  method" (Lumen, else SSR), 2 captures, 3 SSR. Planar reflections never feed SLW.
+- **MegaLights does not shade water, but water is not dark.** `EMegaLightsInput` has no water
+  member; SLW is lit **forward through the light grid** with MegaLights' lights still in it
+  (`BasePassPixelShader.usf:1400/1478`, `bExcludeMegaLights = false`), so the neon *does* put an
+  analytic specular lobe on the canal, unshadowed. **[was wrong]**: "what water can see is only
+  the Lumen mirror".
+- **Two-sided is allowed at raster level** (`SingleLayerWaterRendering.cpp:2140`) but the shading
+  always assumes the camera is above — which is why ruling E zeroes the underside's extinction
+  instead of trusting a branch that does not run.
+- **Depth prepass** (`r.Water.SingleLayer.DepthPrepass`, read-only, default 1) requires VSM
+  support; VSM *filtering* on water is off by default behind two more cvars
+  (`ShadersSupportVSMFiltering` read-only 0, `VSMFiltering` 0). Night maps, local lights: left
+  alone. **Velocity** moved to the prepass in 5.8 (`VelocityOutputPass` 1); `ForceVelocity` is
+  deprecated. **No decals** land on SLW (the pass reuses the decal uniform slot). Refraction
+  culling (`r.Water.SingleLayer.Refraction.*`) is off by default; not touched. No `r.Water.*`
+  entry exists in `BaseScalability.ini`.
+- **`IInterface_PostProcessVolume`** is base engine (`Interface_PostProcessVolume.h`), three pure
+  virtuals (`EncompassesPoint`, `GetProperties`, `GetDebugName`); `UWorld::AddPostProcessVolume`
+  is the 5.8 registration (`InsertPostProcessVolume` is deprecated). A bounded volume is skipped
+  when `EncompassesPoint` says no and blends at `BlendWeight` when it says yes at distance 0.
+- **Python authoring** sets `shading_model`, `blend_mode`, `two_sided` through
+  `set_editor_property`; the output node's four inputs are bare `UPROPERTY()`s, so they are wired
+  by pin name through `connect_material_expressions`, never as properties.
+
+---
+
+## 9. Named divergences (owner-visible, recorded here and in `docs/vtmb/water.md`)
+
+1. **Two render targets → one SLW pass.** No planar camera, no DUDV offset of an RT; refraction
+   reads the lit scene behind the surface along the normal, reflection is Lumen's. The 2004
+   reflection RT drew entities and the 2D sky lump, never a 3D skybox; Lumen sees what the scene
+   has, including the placed miniature.
+2. **Linear volume fog → exponential extinction**, half-distance matched by `WaterFogScale`.
+3. **`$refractamount` / `$reflectamount` → nothing.** Warp strengths of a texture offset that no
+   longer exists; the normal is used at unit strength. `mat_waterswirl` (a 0.02 per-vertex swirl
+   of the plane normal, CPU-side) is likewise not reproduced under a per-pixel normal.
+4. **`$reflecttint` → luma.** SLW's Specular is scalar; the red tint on blood and spawn water
+   reaches the reflection only as brightness. The volume colour carries the red.
+5. **Fresnel** is SLW's own Schlick from Specular, not `(1 − N·V)^5` with R0 = 0.
+6. **Cheap water's cubemap → Lumen.** The extinction × 16 keeps its opaque-fog body.
+7. **Underside = no extinction.** Forced by the dead engine branch; from below the refracted
+   above-water world is what draws, tinted by the underside instance's own `$refracttint`.
+8. **Underwater: the world fog is not suppressed.** VtMB replaces it below the plane; here the
+   post-process adds the volume's fog on top of the per-primitive scene fog. On the corpus the
+   volume fog's range (1.6–26 m) is far inside the world fog's, so the double term is invisible
+   in practice; recorded, not compensated.
+9. **Fog-volume selection**: point-in-brush of the view location, not a PVS walk.
+10. **The surface takes no scene fog.** VtMB draws the surfaces under `EnableWorldFog()`; here
+    the refraction and reflection carry the scene's own fog and the surface's scatter and
+    specular do not fade with distance. A far canal end that pops against its walls is a
+    tuning-session witness, and the fix — if one is wanted — is an additive fog-in on Emissive,
+    not a CPD term.
+11. **Opacity as coverage** for the four base-textured `Water` units (none placed).
+12. **Camera water offset** not transcribed (§7, owner call).
+13. **Water faces are lit.** VtMB's are `SURF_NOLIGHT` (no lightmap; the RTs carry the light);
+    SLW is lit forward by the light grid and Lumen. This is the modernization, not a slip.
+
+---
+
+## 10. Cost
+
+One SLW mesh set per water material per map (usually one top and one underside), in the
+non-Nanite bucket the bake already uses, drawn in the SLW pass after deferred lighting. The
+post-process runs only while `EncompassesPoint` is true. No extra actors per brush, no plugin,
+no Water Zone, no fluid sim. The Lumen trace on water is the same trace every reflective
+surface already pays; VSM water filtering is left off. Budget instinct unchanged from before:
+a hub with a canal is fine; a hub with a canal, a FLIP pool and a Water Body Ocean is not.
+
+---
+
+## 11. What to witness (did-it-appear only, per "wire first, tune later")
+
+1. `sm_hub_1` sewer from the promenade: the neon reflects, the surface is not black, the far end
+   is murk-green not white. The SLW pass shows in `stat gpu`.
+2. `la_hub_1` canal from the bridge: ripple moves (the 30-fps normal flipbook plus the scroll).
+3. Drop the camera through the plane (noclip): the underside draws the above world, the
+   post-process fogs at the sewer's numbers; `elysium_player_get` reports the `water` channel.
+4. Walk into the canal at `sm_hub_1`'s sewer floor (`$waterdepth 20`): level `Feet`; a drop-in
+   from the promenade: `Waist`/`Eyes`, `WaterMove` runs, the swim intent plays.
+5. `spawnwater` on `hw_warrens_5` reads as a bad pool, not a ruby one (a future converted map).
+
+---
+
+## 12. Related docs
+
+- `docs/vtmb/water.md` — the inventory and the engine facts this mapping covers.
 - `docs/vtmb/source_movement.md` — `WaterMove` / water level.
-- `docs/vtmb/weather.md` — rain and `WaterDrops_Timer`.
-- `docs/vtmb/effects.md` — splash / drip / spray particles.
+- `docs/vtmb/weather.md`, `docs/vtmb/effects.md` — drips, splashes (R7.3's).
 - `docs/vtmb/reflections.md` — `$envmap` on the LMG water-look materials.
-- `docs/vtmb/surface_properties.md` — `water` physical / audio row.
-- `docs/architecture/effects-architecture.md` — the same seam for fire,
-  steam, blood.
+- `docs/vtmb/surface_properties.md` — the `water` physical / audio row.
+- `docs/architecture/seam_map_material.md` → `M_V2_Water`; `seam_map_map.md` → "Import — water
+  volumes (R7.1)".
+- `docs/architecture/effects-architecture.md` — the same seam for fire, steam, blood.
 - `docs/architecture/rendering-perf.md` — the budget.
-- `docs/project/reconstruction-direction.md` — presentation may modernize; logic
-  reproduces.
+- `docs/project/reconstruction-direction.md` — presentation may modernize; logic reproduces.

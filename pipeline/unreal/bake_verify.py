@@ -767,6 +767,72 @@ def verify_effects(actors, map_name):
     return errors
 
 
+WATER_TAG = "elysium.water"
+
+
+def verify_water(actors, map_name):
+    """R7.1 (`water-architecture.md` section 5.2), `MapsOnV2Models` maps only: exactly one
+    `elysium.water` actor iff the map stages a `water.volumes[]` row, the actor's row count, and
+    each row's `surface_z_cm` and brush count against the staged manifest -- no volume the actor
+    disagrees with the stage on, and no actor at all when the stage places none."""
+    errors = []
+    if not map_transport.is_map_on_v2_models(map_name):
+        return errors
+    manifest = _staged_manifest(map_name)
+    if manifest is None:
+        errors.append("%s: on MapsOnV2Models but no staged map_geometry manifest to count "
+                      "water against (run: uv run elysium export map %s)" % (map_name, map_name))
+        return errors
+    rows = list((manifest.get("water") or {}).get("volumes") or [])
+    found = [actor for actor in actors if WATER_TAG in [str(tag) for tag in actor.tags]]
+    if len(found) > 1:
+        errors.append("%s: %d water actors carry %s, want at most one"
+                      % (map_name, len(found), WATER_TAG))
+    if not rows:
+        if found:
+            errors.append(
+                "%s: %d water actor(s) placed but the stage carries no water.volumes[] row"
+                % (map_name, len(found)))
+        unreal.log("[verify] water: 0 staged rows, %d actor(s)" % len(found))
+        return errors
+    if not found:
+        errors.append("%s: %d staged water.volumes[] row(s) but no %s actor"
+                      % (map_name, len(rows), WATER_TAG))
+        unreal.log("[verify] water: %d staged rows, 0 actors" % len(rows))
+        return errors
+    actor = found[0]
+    volumes = list(actor.get_editor_property("volumes"))
+    if len(volumes) != len(rows):
+        errors.append("%s: water actor carries %d volume(s), staged %d"
+                      % (map_name, len(volumes), len(rows)))
+    matched = 0
+    for index, (volume, row) in enumerate(zip(volumes, rows)):
+        problems = []
+        got_index = int(volume.get_editor_property("index"))
+        want_index = int(row["index"])
+        if got_index != want_index:
+            problems.append("index %d, staged %d" % (got_index, want_index))
+        got_z = float(volume.get_editor_property("surface_z_cm"))
+        want_z = float(row["surfaceZCm"])
+        if abs(got_z - want_z) > 1e-2:
+            problems.append("surface_z_cm %.2f, staged %.2f" % (got_z, want_z))
+        got_brushes = len(list(volume.get_editor_property("brushes")))
+        want_brushes = len(row.get("brushes") or [])
+        if got_brushes != want_brushes:
+            problems.append("%d brush(es), staged %d" % (got_brushes, want_brushes))
+        if problems:
+            errors.append("%s: water volume %d: %s" % (map_name, index, "; ".join(problems)))
+        else:
+            matched += 1
+    unreal.log("[verify] water: %d staged rows, %d matched" % (len(rows), matched))
+    for message in errors[:8]:
+        unreal.log_error("[verify] " + message)
+    if len(errors) > 8:
+        unreal.log_error("[verify] ... and %d more water finding(s) on %s"
+                         % (len(errors) - 8, map_name))
+    return errors
+
+
 SKY_TAG = "elysium.sky"
 
 
@@ -1513,6 +1579,7 @@ def verify_map(map_name):
         errors.extend(verify_details(actors, map_name))
         errors.extend(verify_sprites(actors, map_name))
         errors.extend(verify_effects(actors, map_name))
+        errors.extend(verify_water(actors, map_name))
         errors.extend(verify_sky_scope(actors, map_name))
         errors.extend(verify_ropes(world_dir, map_name))
         errors.extend(verify_captures(

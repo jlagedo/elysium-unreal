@@ -104,7 +104,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: lane places effect actors from.
 #: 8 (R7.2): and every `materials` row carries `decalAsset` / `isDecalSurface`, the projector
 #: instance this lane binds a `$decal` face group's mesh slot to and lays every `.decals` line on.
-MANIFEST_VERSION = 8
+#: 9 (R7.1): and the `water` table -- one `volumes[]` row per `LEAFWATERDATA` record with its fog
+#: keys and its `CONTENTS_WATER` brushes as plane sets, which this lane folds into the one
+#: `AElysiumWaterVolumes` actor (`docs/architecture/water-architecture.md`).
+MANIFEST_VERSION = 9
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -223,6 +226,13 @@ EFFECT_COLLIDE_FIELDS = (
     ("bounce", "bounce"), ("friction", "friction"), ("gravity", "gravity"), ("drag", "drag"),
     ("self", "self_collide"), ("nested", "nested"), ("spawn", "spawn"),
 )
+
+#: R7.1: the tag the runtime buckets the one water actor by (`ElysiumBakedTags::Water`,
+#: `bake_map.TAG_WATER` restated so the pure placement functions can carry it).
+TAG_WATER = "elysium.water"
+#: The shape `_place_water` writes the actor as -- bumped when the writer changes what it puts on
+#: the actor for the same staged rows, so the level re-authors.
+WATER_ACTOR_SHAPE = 1
 
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
 #: so this module reads `HOST.Bake` rather than a dict subscript, and read lazily so binding does not
@@ -602,6 +612,10 @@ def _build_class():
             recipe["steam"] = self.geometry.steam
             recipe["beams"] = self.geometry.beams
             recipe["effect_actor_shape"] = EFFECT_ACTOR_SHAPE
+            # R7.1: the one water actor's rows are its whole input -- no runtime writer touches
+            # it the way an effect actor's material children do -- so a changed row re-authors.
+            recipe["water"] = self.geometry.water
+            recipe["water_actor_shape"] = WATER_ACTOR_SHAPE
             # R5.5: a moved sample or an edited `CaptureRadius` re-authors the level, because the
             # capture's contents live in the level's own MapBuildData and nowhere else.
             recipe["capture_radius"] = HOST.capture_radius()
@@ -719,6 +733,7 @@ def _build_class():
             self._place_details(actors, sky_scale, sky_origin, world_fog, sky_fog)
             self._place_sprites(actors, sky_scale, sky_origin)
             self._place_effects(actors, sky_scale, sky_origin, world_fog, sky_fog)
+            self._place_water(actors)
             return placed, sky_placed
 
         # ------------------------------------------------------------- detail props (R6.3)
@@ -1046,12 +1061,15 @@ def _build_class():
             return placed
 
         def _set(self, target, name, value, what):
-            """One property write that fails naming the property the class does not expose."""
+            """One property write that fails naming the property the class does not expose.
+
+            `what` carries the lane and the row (`tree.root`, `water[0].surfaceZCm`), so the
+            message names no lane of its own -- R7.1 gave this helper a second caller."""
 
             try:
                 target.set_editor_property(name, value)
             except Exception as error:  # noqa: BLE001 -- the mapping table is the contract
-                fail("effects: %s exposes no property %r for %s (%s)" % (
+                fail("bake: %s exposes no property %r for %s (%s)" % (
                     target.get_class().get_name() if hasattr(target, "get_class") else target,
                     name, what, error))
                 raise SystemExit(1)
@@ -1187,6 +1205,71 @@ def _build_class():
             self._set(tree_struct, "depth", int(tree["stats"]["depth"]), "tree.depth")
             self._set(tree_struct, "max_keyframes", int(tree["stats"].get("maxKeyframes") or 0), "tree.maxKeyframes")
             self._set(actor, "tree", tree_struct, "actor.tree")
+
+        # ------------------------------------------------------------------ water (R7.1)
+
+        def _place_water(self, actors):
+            """Every staged `water.volumes[]` row folded into the one `AElysiumWaterVolumes`
+            actor (`water-architecture.md` section 5.2) -- one actor per map, not one per volume,
+            because `FindVolumeAt` / `ClassifyBody` need the whole set to answer "which volume".
+            No rows, no actor: a map with no `LEAFWATERDATA` gives the runtime nothing to adopt
+            and `PreMoveTick` classifies every body `None` (`UElysiumMapVisuals::GetWaterVolumes`
+            answers empty the same way it does for a map baked before this lane ran)."""
+
+            volumes = self.geometry.water
+            if not volumes:
+                log("water: the map stages no water volume")
+                return 0
+            actor_class = getattr(unreal, "ElysiumWaterVolumes", None)
+            if actor_class is None:
+                fail("water: unreal.ElysiumWaterVolumes is not registered "
+                     "(build Source/ElysiumUE first)")
+                raise SystemExit(1)
+            values = water_actor_values(volumes)
+            actor = actors.spawn_actor_from_class(actor_class, unreal.Vector(*values["position"]))
+            if not actor:
+                fail("water: spawn failed at %s" % (values["position"],))
+                raise SystemExit(1)
+            structs = []
+            for row in volumes:
+                what = "water[%d]" % row["index"]
+                volume = unreal.ElysiumWaterVolume()
+                self._set(volume, "index", int(row["index"]), what + ".index")
+                self._set(volume, "surface_z_cm", float(row["surfaceZCm"]), what + ".surfaceZCm")
+                self._set(volume, "min_z_cm", float(row["minZCm"]), what + ".minZCm")
+                self._set(volume, "material", str(row.get("material") or ""), what + ".material")
+                self._set(volume, "fog_enabled", bool(row.get("fogEnable")), what + ".fogEnable")
+                fog_color = row.get("fogColor") or (0.0, 0.0, 0.0)
+                self._set(volume, "fog_color",
+                         unreal.LinearColor(float(fog_color[0]), float(fog_color[1]),
+                                            float(fog_color[2]), 1.0), what + ".fogColor")
+                self._set(volume, "fog_start_cm", float(row.get("fogStartCm") or 0.0),
+                         what + ".fogStartCm")
+                self._set(volume, "fog_end_cm", float(row.get("fogEndCm") or 0.0),
+                         what + ".fogEndCm")
+                brushes = []
+                for brush_index, brush_row in enumerate(row.get("brushes") or []):
+                    brush_what = "%s.brushes[%d]" % (what, brush_index)
+                    brush = unreal.ElysiumWaterBrush()
+                    planes = [unreal.Plane(float(p[0]), float(p[1]), float(p[2]), float(p[3]))
+                             for p in brush_row.get("planes") or []]
+                    self._set(brush, "planes", planes, brush_what + ".planes")
+                    bounds = brush_row.get("boundsCm") or {}
+                    box = unreal.Box()
+                    if bounds.get("min") and bounds.get("max"):
+                        box = unreal.Box(min=unreal.Vector(*bounds["min"]),
+                                         max=unreal.Vector(*bounds["max"]))
+                        box.set_editor_property("is_valid", 1)
+                    self._set(brush, "bounds_cm", box, brush_what + ".boundsCm")
+                    brushes.append(brush)
+                self._set(volume, "brushes", brushes, what + ".brushes")
+                structs.append(volume)
+            self._set(actor, "volumes", structs, "actor.volumes")
+            actor.set_actor_label(values["label"])
+            actor.tags = list(values["tags"])
+            actor.set_folder_path(values["folder"])
+            log("water: 1 actor placed with %d volume(s)" % len(volumes))
+            return 1
 
         # ------------------------------------------------------------------ lights (R5.6)
 
@@ -1499,6 +1582,34 @@ def effect_actor_values(row, table, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
         "folder": "Sky/Effects" if sky else "Effects",
         "tags": (TAG_EFFECT, "%s%d" % (TAG_ENTITY_PREFIX, row["index"]))
                 + ((TAG_SKY,) if sky else ()),
+    }
+
+
+def water_actor_values(volumes):
+    """The placement facts `_place_water` writes for the one water actor (R7.1), pure so a pytest
+    pins them: the actor stands at the first volume's own bounds centre (any point would do -- the
+    actor carries every volume as struct data, not a transform any query reads relative to it;
+    only the Outliner needs a sane position), the label, the folder and the tag
+    (`ElysiumBakedTags::Water`) the runtime adopts by."""
+
+    first = volumes[0]
+    mins = maxs = None
+    for brush in first.get("brushes") or []:
+        bounds = (brush.get("boundsCm") or {})
+        b_min, b_max = bounds.get("min"), bounds.get("max")
+        if not b_min or not b_max:
+            continue
+        mins = list(b_min) if mins is None else [min(a, b) for a, b in zip(mins, b_min)]
+        maxs = list(b_max) if maxs is None else [max(a, b) for a, b in zip(maxs, b_max)]
+    if mins is None:
+        position = (0.0, 0.0, float(first.get("surfaceZCm") or 0.0))
+    else:
+        position = tuple((mins[i] + maxs[i]) / 2.0 for i in range(3))
+    return {
+        "position": position,
+        "label": "WaterVolumes",
+        "folder": "Water",
+        "tags": (TAG_WATER,),
     }
 
 
@@ -1872,6 +1983,11 @@ class _StagedGeometry(object):
         self.steam = list(self.manifest.get("steam") or [])
         self.beams = list(self.manifest.get("beams") or [])
         self.effect_stats = dict(self.manifest.get("effectStats") or {})
+        # R7.1: `water.volumes[]` (`water-architecture.md` section 5.1). `.get("water")` rather
+        # than a required key -- a manifest staged before the stage-geometry lane's own bump
+        # carries no "water" key at all, and `_place_water` reads an empty list the same as a
+        # map with no `LEAFWATERDATA`.
+        self.water = list((self.manifest.get("water") or {}).get("volumes") or [])
 
     def brush_stems(self):
         return {int(index): stem

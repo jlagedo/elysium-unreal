@@ -286,6 +286,11 @@ _SINE_LANE = {
     "SineMin": "S", "SineMax": "S", "SinePeriod": "S", "SineTimeOffset": "S",
     "SineTargetMask": "V", "SineChannelMask": "V",
 }
+#: R7.1 ruling J (`water-architecture.md` -> "Surf sine UV translate"): the one vector a
+#: `sine` -> `texturetransform` -> `$basetexturetransform` chain resolves to, `(ampU, ampV, offU,
+#: offV)`, added to the base UV coordinate as `amp x wave + off`. Only the Lit pair carries it --
+#: `objects/surf`, the pier's wave cards, is the whole population.
+_SINE_UV_LANE = {"SineUVTranslate": "V"}
 _BASE_SCROLL_LANE = {"BaseScrollRateU": "S", "BaseScrollRateV": "S"}
 _BUMP_SCROLL_LANE = {"BumpScrollRateU": "S", "BumpScrollRateV": "S"}
 _BASE_ANIM_LANE = {
@@ -327,7 +332,7 @@ def _merged(*dicts: dict[str, str]) -> dict[str, str]:
 EXPOSED_PARAMS: dict[str, dict[str, str]] = {
     "M_V2_Lit": _merged(
         _SHARED_PARAMS, _BASE_SCROLL_LANE, _BUMP_SCROLL_LANE, _BASE_ANIM_LANE, _NORMAL_ANIM_LANE,
-        _SINE_LANE, _SCENE_FOG_LANE,
+        _SINE_LANE, _SINE_UV_LANE, _SCENE_FOG_LANE,
         {
             "BaseTexture": "T", "NormalMap": "T", "EnvMapMask": "T", "EnvMap": "T",
             "SelfIllumAmount": "S", "EnvMapMaskScale": "S", "BumpScale": "S",
@@ -378,6 +383,9 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
             "EnvMapTint": "V", "TexScaleOffset": "V",
             "CheapWater": "#", "UseFogEnable": "#", "UseEnvMap": "#", "UseFixedCube": "#",
             "UseBaseTexture": "#", "UseNormalMap": "#",
+            # R7.1: the `$bottommaterial` faces (`dev/dev_waterbeneath2`) draw on the same SLW
+            # master with the reflection stripped and no volume extinction (`Underside`).
+            "Underside": "#",
         },
     ),
     "M_V2_Sprite": _merged(_SHARED_PARAMS, _BASE_ANIM_LANE, {
@@ -651,6 +659,15 @@ PROXY_PROVENANCE_ONLY = frozenset({"camo", "waterlod", "lampbeam", "lamphalo", "
 SINE_TARGET_COMPONENT = {"$alpha": 0, "$color": 1, "$selfillumtint": 2, "$envmaptint": 3}
 #: `sine` `resultvar` targets that are a *named* destination but emit nothing in the material.
 SINE_PROVENANCE_TARGETS = frozenset({"$detailscale"})
+#: R7.1 ruling J (`water-architecture.md`, "Surf sine UV translate"): the proxy scratch registers a
+#: `sine` -> `texturetransform` chain writes its wave into before a `translatevar` reads it back as
+#: a UV slide (`objects/surf`, the pier's 17 wave cards). Exactly these three spellings -- `$tempvec`
+#: is a *vector* register no corpus chain translates with, and keeps the omission it has today.
+SINE_TEMP_TARGETS = frozenset({"$temp", "$temp1", "$temp2"})
+#: The `texturetransform` `resultvar` this lane resolves: the base texture's own matrix, the only
+#: transform target `M_V2_Lit`'s UV lane has a home for (`$bumptransform` slides the normal, which
+#: no corpus chain sines).
+SINE_UV_TRANSFORM_TARGET = "$basetexturetransform"
 
 
 # --- roots, keys, selection --------------------------------------------------------------------------
@@ -956,19 +973,32 @@ def _texture_role_conflict(texture_staging_root: Path | None, texture_key: str) 
     return bool(content.get("roleConflict")), True
 
 
-def _texture_array_asset_path(texture_key: str) -> str:
+def _texture_array_asset_path(texture_key: str, *, twin: bool = False) -> str:
     """`/ElysiumBaked/Textures/<dir>/TA_<stem>` -- the `Texture2DArray` sibling `textures.py` stages
     for a unit whose `frames` (or KTX layer count) exceeds one (`_texture_class`'s own rule).
     Reused by the `animatedtexture`-proxy frames-array binding (`_apply_proxies` below, review
     finding 2): `BaseTextureFrames`/`NormalMapFrames` have no stated asset-path formula of their
     own in the design, so this is `_texture_asset_path`'s `TC_`/`T_` shape with the `TA_` prefix
-    `textures.py::CLASS_PREFIX` actually uses for that class."""
+    `textures.py::CLASS_PREFIX` actually uses for that class. `twin` names the `_linear` sibling
+    the texture lane stages beside a role-conflicted colour array (R7.1: `dev/water_normal` is a
+    29-frame BGR888 the lane classes as colour, sampled as a normal on every water unit)."""
 
     parts = PurePosixPath(texture_key).parts
     directories, stem = list(parts[:-1]), parts[-1]
     folded = "/".join(safe_name(part) for part in directories)
-    name = "TA_" + safe_name(stem)
+    name = "TA_" + safe_name(stem) + ("_linear" if twin else "")
     return f"/ElysiumBaked/Textures/{folded}/{name}" if folded else f"/ElysiumBaked/Textures/{name}"
+
+
+def _frames_array_path(texture_staging_root: Path | None, param_name: str, texture_key: str) -> str:
+    """The frames array a slot binds: the `_linear` twin when the slot is a data-class parameter
+    (`NormalMap`) and the texture unit staged as a role-conflicted colour -- the same twin rule
+    `_bind_texture` applies to the plain 2D slot, restated for the array sibling."""
+
+    twin = False
+    if param_name in DATA_CLASS_TEXTURE_PARAMS:
+        twin, _verified = _texture_role_conflict(texture_staging_root, texture_key)
+    return _texture_array_asset_path(texture_key, twin=twin)
 
 
 def _texture_frame_count(texture_staging_root: Path | None, texture_key: str | None) -> int | None:
@@ -1328,8 +1358,66 @@ _TEXTURE_SWITCH_PAIRS = {
 def _apply_texture_switch_pairs(params: _Params, master: str) -> None:
     exposed = EXPOSED_PARAMS[master]
     for texture_name, switch_name in _TEXTURE_SWITCH_PAIRS.items():
-        if texture_name in params.textures and switch_name in exposed:
+        # R7.1: the slot's frames array (`NormalMapFrames`, bound by the `animatedtexture` proxy
+        # or the static-frame fallback) is the slot bound, for the gate's purposes -- before this
+        # every water unit animated a normal that `UseNormalMap` then discarded.
+        bound = texture_name in params.textures or (texture_name + "Frames") in params.textures
+        if bound and switch_name in exposed:
             params.switches[switch_name] = True
+
+
+def _apply_water_underside(params: _Params, master: str, key: str) -> None:
+    """R7.1 ruling E (`water-architecture.md` section 4.2): a water unit whose `$bottommaterial`
+    names *itself* is the underside material -- `dev/dev_waterbeneath2` on every water map, the
+    faces VBSP emits on the inward side of every water brush face. The engine strips
+    `$reflecttexture` from the material of every down-facing water face (`Mod_LoadFaces`), and
+    the SLW master has no camera-under-water branch to lean on (5.8 hardcodes it off), so the
+    instance says so once: `Underside` zeroes the specular and the volume extinction.
+
+    The authored value is read straight off the unit's own provenance rows, not off
+    `params.material_refs`: the GLB decoder emits a `dependencies[]` row only for a
+    texture-shaped value, so `$bottommaterial` reaches no dependency on any of the 26 units that
+    author it (measured on the corpus, 2026-09-04) and a `material_refs` lookup was dead. The
+    value is a bare material path in its own right, compared normalised (`\\` -> `/`, an explicit
+    `.vmt` stripped, case-folded) against this unit's own material key -- the same spelling the
+    key already carries."""
+
+    if master != "M_V2_Water":
+        return
+    bottom = next(
+        (row.get("value") for row in params.provenance_rows
+         if str(row.get("key") or "").lower() == "$bottommaterial" and not row.get("block")),
+        None,
+    )
+    params.switches["Underside"] = (
+        bottom is not None and _normalized_material_path(str(bottom)) == key.strip().lower()
+    )
+
+
+def _normalized_material_path(value: str) -> str:
+    """A `materials/`-relative material path as the unit keys spell it: forward slashes, no
+    `.vmt` suffix, case-folded."""
+
+    folded = value.strip().replace("\\", "/").lower()
+    return folded[:-len(".vmt")] if folded.endswith(".vmt") else folded
+
+
+def _drop_unexposed_sine_uv(params: _Params, master: str) -> None:
+    """R7.1 ruling J: `SineUVTranslate` is resolved by `_apply_proxies`, which runs before the
+    master is known, and only the Lit pair carries the lane -- the same `sine` -> `texturetransform`
+    chain on an `unlitgeneric` or `water` unit would otherwise reach `_validate_exposed` as a
+    parameter the master does not have (a stage failure, since only switches are filtered by the
+    full-state pass). Dropped here with the omission the chain would have taken had nothing
+    consumed it."""
+
+    if "SineUVTranslate" not in params.vectors or "SineUVTranslate" in EXPOSED_PARAMS[master]:
+        return
+    del params.vectors["SineUVTranslate"]
+    params.omissions.append({
+        "kind": "proxyTargetProvenanceOnly", "proxy": "texturetransform",
+        "target": SINE_UV_TRANSFORM_TARGET,
+        "reason": f"{master} exposes no SineUVTranslate lane",
+    })
 
 
 #: Review finding 5: per-master required texture slots. Every real master requires
@@ -1395,7 +1483,8 @@ def _apply_static_frame_fallback(params: _Params, master: str, texture_staging_r
         frame_count = _texture_frame_count(texture_staging_root, texture_key)
         if not frame_count:
             continue  # not actually a multi-frame array -- leave the mismatch/failure as is
-        params.textures[frames_param] = _texture_array_asset_path(texture_key)
+        params.textures[frames_param] = _frames_array_path(
+            texture_staging_root, param_name, texture_key)
         params.scalars[count_name] = float(frame_count)
         params.scalars[rate_name] = 0.0  # static: Source samples one fixed frame, never animates
         params.switches[switch_name] = True
@@ -1523,9 +1612,21 @@ def _apply_proxies(
     params: _Params, document: dict, parameters: list[dict], *,
     family: str = "", texture_staging_root: Path | None = None,
 ) -> list[dict]:
-    """Every proxy's provenance row, plus the direct scalar/vector side effects this lane places."""
+    """Every proxy's provenance row, plus the direct scalar/vector side effects this lane places.
+
+    Two passes (R7.1 ruling J). The loop below resolves every proxy that stands on its own; a
+    `sine` writing a `$temp*` scratch register and a `texturetransform` reading one back are both
+    *half* of a chain, so the loop only records them and the resolution pass afterwards emits what
+    the pair means -- one `SineUVTranslate` vector. A VMT is free to author the two in either
+    order (`objects/surf` puts the sine first), which is the other reason this cannot be decided
+    inside the walk.
+    """
 
     rows: list[dict] = []
+    #: `$temp*` register -> `{component or None: {...}}` -- every `sine` that wrote one, in order.
+    temp_sines: dict[str, dict[int | None, dict]] = {}
+    #: Every `texturetransform`'s arguments, resolved after the loop.
+    transforms: list[dict[str, str]] = []
     for proxy in document.get("proxies") or ():
         if not isinstance(proxy, dict):
             continue
@@ -1555,17 +1656,22 @@ def _apply_proxies(
             params.anomalies.append({"kind": "unknownProxy", "proxy": kind})
 
         if kind == "sine":
-            for source, target in (("sinemin", "SineMin"), ("sinemax", "SineMax"),
-                                   ("sineperiod", "SinePeriod"), ("timeoffset", "SineTimeOffset")):
-                if source in args:
-                    try:
-                        params.scalars[target] = _parse_scalar(args[source])
-                    except ValueError:
-                        pass
             raw_result = args.get("resultvar", "")
             folded = raw_result.strip().lower()
             match = _VECTOR_COMPONENT.match(folded)
             base, component = (match.group(1), int(match.group(2))) if match else (folded, None)
+            wave = {}
+            for source, target in (("sinemin", "SineMin"), ("sinemax", "SineMax"),
+                                   ("sineperiod", "SinePeriod"), ("timeoffset", "SineTimeOffset")):
+                if source in args:
+                    try:
+                        wave[target] = _parse_scalar(args[source])
+                    except ValueError:
+                        pass
+            if base not in SINE_TEMP_TARGETS:
+                # Half a chain stages nothing of its own -- not even `SinePeriod`, which on a
+                # two-sine unit belongs to whichever sine actually drives a master parameter.
+                params.scalars.update(wave)
             if base in SINE_TARGET_COMPONENT:
                 mask_index = SINE_TARGET_COMPONENT[base]
                 target_mask = list(params.vectors.get("SineTargetMask", [0.0, 0.0, 0.0, 0.0]))
@@ -1576,6 +1682,12 @@ def _apply_proxies(
                     if 0 <= component < 4:
                         channel_mask[component] = 1.0
                     params.vectors["SineChannelMask"] = channel_mask
+            elif base in SINE_TEMP_TARGETS:
+                # A scratch register is not a shading term: record the wave and let the resolution
+                # pass below decide what (if anything) the chain it belongs to emits.
+                wave["row"] = len(rows)
+                wave["target"] = raw_result
+                temp_sines.setdefault(base, {})[component] = wave
             elif base in SINE_PROVENANCE_TARGETS or base.startswith("$temp"):
                 params.omissions.append({
                     "kind": "proxyTargetProvenanceOnly", "proxy": "sine", "target": raw_result,
@@ -1597,6 +1709,15 @@ def _apply_proxies(
                 ("DuDvMap" if family in ("water", "refract", "heatglow") else "NormalMap")
                 if normal_lane else "BaseTexture"
             )
+            # R7.1 (`water-architecture.md` section 4.4): on the water master the only frames lane
+            # is the *normal* one, and `Water_Old` reads `$bumpframe` as the shared frame index of
+            # both `$bumpmap` (the DUDV, `DuDvMap`, declared-not-wired on the SLW master) and
+            # `$normalmap`. The proxy names `$bumpmap`, but the array that has to land in
+            # `NormalMapFrames` is `$normalmap`'s own -- binding the DUDV array there (what this
+            # branch did before R7.1) drew a signed offset map as the ripple normal, and left
+            # `dev/water_normal` unbound on every water unit.
+            if family == "water" and normal_lane and "NormalMap" in params.texture_deps:
+                bound_param = "NormalMap"
             if "animatedtextureframerate" in args:
                 try:
                     params.scalars[rate_name] = _parse_scalar(args["animatedtextureframerate"])
@@ -1617,7 +1738,8 @@ def _apply_proxies(
             )
             frame_count = _texture_frame_count(texture_staging_root, texture_key)
             if frame_count:
-                params.textures[frames_param] = _texture_array_asset_path(texture_key)
+                params.textures[frames_param] = _frames_array_path(
+                    texture_staging_root, bound_param, texture_key)
                 params.scalars[count_name] = float(frame_count)
                 params.switches[switch_name] = True
                 # A required slot (`BaseTexture`) whose only candidate staged as a `Texture2DArray`
@@ -1667,10 +1789,77 @@ def _apply_proxies(
                 if family in _LIT_FAMILIES:
                     params.scalars["WetnessScale"] = scale_value
                     params.scalars["WetnessDriven"] = 1.0
+        elif kind == "texturetransform":
+            transforms.append(args)
 
         rows.append({"index": len(rows), "kind": kind, "sourceName": proxy.get("sourceName"),
                      "arguments": args, "destination": destination})
+    _resolve_sine_uv_translate(params, rows, temp_sines, transforms)
     return rows
+
+
+def _resolve_sine_uv_translate(
+    params: _Params, rows: list[dict], temp_sines: dict[str, dict[int | None, dict]],
+    transforms: list[dict[str, str]],
+) -> None:
+    """The second pass of `_apply_proxies` (R7.1 ruling J): join every `sine` that wrote a `$temp*`
+    register to the `texturetransform` that translates the base texture by it, and emit the pair as
+    one `SineUVTranslate = (ampU, ampV, offU, offV)` -- the graph adds `amp x wave + off` to the
+    base UV. `objects/surf` (the pier's 17 wave cards) is `sine $temp[0]` 0 -> .5 over 15 s read by
+    `translatevar $temp`, so it stages `[0.5, 0, 0, 0]`.
+
+    What does NOT resolve keeps today's `proxyTargetProvenanceOnly` omission, named on the register
+    the chain actually used: a `$temp*` sine nothing consumes; a `rotatevar`/`scalevar` rider (this
+    lane has one UV translate and no matrix); a component-less `$temp` a `translatevar` reads,
+    because a whole-vector sine writes both components with one number and Source's own `$temp`
+    starts as `[0 0]` -- which of U and V the author meant is undecidable, so nothing is guessed.
+    """
+
+    consumed: set[int] = set()
+    for args in transforms:
+        if args.get("resultvar", "").strip().lower() != SINE_UV_TRANSFORM_TARGET:
+            continue
+        translate = args.get("translatevar", "").strip().lower()
+        if translate not in temp_sines:
+            continue
+        amplitude, offset, used = [0.0, 0.0], [0.0, 0.0], False
+        for component, wave in temp_sines[translate].items():
+            if component is None or component > 1:
+                continue  # undecidable, or a component the UV has no room for
+            low = wave.get("SineMin", 0.0)
+            amplitude[component] = wave.get("SineMax", 0.0) - low
+            offset[component] = low
+            consumed.add(wave["row"])
+            used = True
+            # The `texturetransform` row is already `graph`; say the same of the sine feeding it,
+            # which reaches the graph through this vector rather than a scalar of its own.
+            rows[wave["row"]]["destination"] = "graph"
+            # The chain's own period is the wave the UV rides. It only reaches the instance when
+            # no other sine has claimed the single `SinePeriod`/`SineTimeOffset` pair the master
+            # exposes; a second sine at a *different* period is a real divergence, named rather
+            # than silently overwritten (`objects/surf`'s two sines share 15 s, so it records none).
+            for name in ("SinePeriod", "SineTimeOffset"):
+                if name not in wave:
+                    continue
+                staged = params.scalars.get(name)
+                if staged is None:
+                    params.scalars[name] = wave[name]
+                elif staged != wave[name]:
+                    params.omissions.append({
+                        "kind": "sineChainPeriodMismatch", "parameter": name,
+                        "target": wave["target"], "staged": staged, "chain": wave[name],
+                    })
+        if used:
+            params.vectors["SineUVTranslate"] = [amplitude[0], amplitude[1], offset[0], offset[1]]
+
+    for waves in temp_sines.values():
+        for wave in waves.values():
+            if wave["row"] in consumed:
+                continue
+            rows[wave["row"]]["destination"] = "provenance"
+            params.omissions.append({
+                "kind": "proxyTargetProvenanceOnly", "proxy": "sine", "target": wave["target"],
+            })
 
 
 # --- provenance + manifest entry for one unit -------------------------------------------------------
@@ -1791,6 +1980,8 @@ def stage_unit(
             if master in _USE_BASE_TEXTURE_MASTERS:
                 params.switches["UseBaseTexture"] = _resolve_use_base_texture(params, document)
             _apply_texture_switch_pairs(params, master)
+            _apply_water_underside(params, master, key)
+            _drop_unexposed_sine_uv(params, master)
             _apply_static_frame_fallback(params, master, texture_staging_root)
             _check_required_slots(params, master)
             _apply_scene_fog_inscatter(params, master, blend_mode)

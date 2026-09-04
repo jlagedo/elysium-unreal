@@ -79,7 +79,10 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: the material lane staged beside the surface one, or `null`) and `isDecalSurface` -- the pair the
 #: bake binds a `$decal` face group's mesh slot from, and keeps out of the Nanite buckets
 #: (`docs/project/seam_migration.md` -> "R7.2 Decals", rulings 2 and 3).
-MANIFEST_VERSION = 8
+#: 9 (R7.1): the manifest carries `water` -- one `volumes[]` row per real `LEAFWATERDATA` record
+#: with its fog keys and its `CONTENTS_WATER` brushes as plane sets, plus the `dropped[]` rows that
+#: name what produced none (`docs/architecture/water-architecture.md` -> section 5.1).
+MANIFEST_VERSION = 9
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -170,6 +173,21 @@ DISP_ALPHA_FULL = 255.0
 #: `SolidType_t` (`docs/vtmb/phy_vphysics.md` -> "Which entities get a collision model"). The bake
 #: only distinguishes `SOLID_NONE` from the rest -- see the ruling in `seam_map_map.md`.
 SOLID_NONE = 0
+
+#: `CONTENTS_WATER` (`bspflags.h`). A brush is a water volume's when it carries the bit AND at
+#: least one non-bevel side whose material authors `%compilewater`: `0x18000120` shadow casters
+#: sided entirely with `tools/tools_shadow` carry the bit too and are not water, while
+#: `0x18000020` `func_detail` water is (`water-architecture.md` section 5.1).
+CONTENTS_WATER = 0x20
+#: The `%compilewater` key vbsp reads to give a brush that content bit; carried on the material
+#: unit's own VMT provenance, so a patched instance only shows it through its `patchBase`.
+COMPILE_WATER_KEY = "%compilewater"
+#: How far a brush's horizontal top plane may sit from a `LEAFWATERDATA` row's `surfaceZ` and still
+#: be that row's brush: one Source inch, the grid vbsp snapped both to.
+WATER_SURFACE_TOLERANCE_CM = 2.54
+#: How flat a plane's Unreal normal must be to be read as a brush's water surface. The corpus's
+#: water tops are axis-aligned; the bound keeps a steep bank side from ever being mistaken for one.
+WATER_TOP_NORMAL_Z = 0.99
 
 
 class MapGeometryError(ValueError):
@@ -348,6 +366,59 @@ class CubemapSample:
             "origin": list(self.origin),
             "position": list(self.position),
             "sky": self.sky,
+        }
+
+
+@dataclass(frozen=True)
+class WaterBrush:
+    """One `CONTENTS_WATER` brush of a volume, as the convex plane set the runtime tests a point
+    against (R7.1). `planes` are Unreal centimetres, outward normals, `n . p - d <= 0` inside;
+    `bounds_min`/`bounds_max` are the hull's AABB, the cheap test the runtime takes first."""
+
+    planes: tuple[tuple[float, float, float, float], ...]
+    bounds_min: tuple[float, float, float]
+    bounds_max: tuple[float, float, float]
+
+    def as_row(self) -> dict[str, Any]:
+        return {
+            "planes": [list(plane) for plane in self.planes],
+            "boundsCm": {"min": list(self.bounds_min), "max": list(self.bounds_max)},
+        }
+
+
+@dataclass(frozen=True)
+class WaterVolume:
+    """One real `LEAFWATERDATA` record joined to its material and its brushes (R7.1,
+    `docs/architecture/water-architecture.md` section 5.1).
+
+    `index` is the lump ordinal, `surface_z_cm`/`min_z_cm` the record's own two floats in Unreal
+    centimetres. `fog_color` is carried **as authored** -- `{r g b}` already divided by 255, `[r g
+    b]` verbatim -- undecoded, the same convention the `.env` sidecar and every staged `FogColor`
+    vector use; the gamma decode is the shader's. `fog_start_cm`/`fog_end_cm` are the authored
+    Source inches in centimetres, because the actor stores final values.
+    """
+
+    index: int
+    surface_z_cm: float
+    min_z_cm: float
+    material: str
+    fog_enable: bool
+    fog_color: tuple[float, float, float]
+    fog_start_cm: float
+    fog_end_cm: float
+    brushes: tuple[WaterBrush, ...]
+
+    def as_row(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "surfaceZCm": self.surface_z_cm,
+            "minZCm": self.min_z_cm,
+            "material": self.material,
+            "fogEnable": self.fog_enable,
+            "fogColor": list(self.fog_color),
+            "fogStartCm": self.fog_start_cm,
+            "fogEndCm": self.fog_end_cm,
+            "brushes": [brush.as_row() for brush in self.brushes],
         }
 
 
@@ -1101,6 +1172,176 @@ def resolve_material_table(
     return table
 
 
+def _unit_parameters(read_sidecar, unit_key: str) -> dict[str, str]:
+    """One material unit's authored VMT keys, its base's first and every patch delta over them.
+
+    A PAKFILE-patched unit's provenance carries only its own delta -- `maps/ch_fulab_1/water/
+    cheap_water_1318_1990_273` is `include` plus one `insert` block -- so `%compilewater` and the
+    four fog keys are reachable only through `patchBase`. The walk and its `hops > 8` guard are
+    `resolve_material_table`'s; a chain that leaves the staging tree stops where it stops and a key
+    nobody authored is simply absent, which is `SetFogVolumeState`'s own answer for it.
+    """
+
+    chain: list[dict[str, Any]] = []
+    document = read_sidecar(unit_key)
+    hops = 0
+    while document is not None:
+        chain.append(document)
+        if not document.get("patched"):
+            break
+        base = str(document.get("patchBase") or "")
+        if not base.startswith("vtmb:material:") or hops > 8:
+            break
+        document = read_sidecar(base[len("vtmb:material:"):])
+        hops += 1
+    values: dict[str, str] = {}
+    for document in reversed(chain):
+        for row in document.get("parameters") or []:
+            values[str(row.get("key") or "").lower()] = str(row.get("value") or "")
+    return values
+
+
+def _water_fog(values: dict[str, str]) -> dict[str, Any]:
+    """The four authored fog keys as a volume carries them: the colour undecoded (`{r g b}` is
+    already divided by 255 by the material lane's own shape, `[r g b]` is verbatim -- the `.env`
+    convention, the gamma decode is the shader's), start and end in centimetres."""
+
+    from elysium_pipeline.importers import materials as material_lane
+
+    colour = material_lane._VECTOR_SHAPE["FogColor"](values.get("$fogcolor", "[0 0 0]"))
+    return {
+        "fog_enable": material_lane._truthy(values.get("$fogenable", "")),
+        "fog_color": tuple(colour[:3]),
+        "fog_start_cm": round(material_lane._parse_scalar(values.get("$fogstart", "0")) * 2.54, 4),
+        "fog_end_cm": round(material_lane._parse_scalar(values.get("$fogend", "0")) * 2.54, 4),
+    }
+
+
+def _water_brushes(units: sidecars.MapUnits, read_sidecar) -> list[tuple[float, WaterBrush]]:
+    """Every `CONTENTS_WATER` brush a `%compilewater` side proves is water, paired with the Unreal
+    height of its horizontal top plane -- the key a `LEAFWATERDATA` row joins on.
+
+    The hull is not re-solved here: `UE_map_sidecars.source_planes` + `brush_hull` + `hull_vertices`
+    are the shipped collision's own solver, tolerances included, so a volume's AABB and the
+    `.hulls` sidecar's vertices come from one implementation.
+    """
+
+    collision = units.root.get("collision") or {}
+    brush_rows = collision.get("brushes") or []
+    side_rows = collision.get("brushSides") or []
+    plane_rows = units.root.get("planes") or []
+    source = sidecars.source_planes(plane_rows)
+    found: list[tuple[float, WaterBrush]] = []
+    for brush in brush_rows:
+        if not int(brush["contents"]) & CONTENTS_WATER:
+            continue
+        first = int(brush["firstSide"])
+        sides = side_rows[first:first + int(brush["numSides"])]
+        planes: list[tuple[float, float, float, float]] = []
+        top: float | None = None
+        compiles_water = False
+        for side in sides:
+            if int(side["bevel"]):
+                continue
+            material = sidecars._face_material(units, side)
+            if material is not None and COMPILE_WATER_KEY in _unit_parameters(
+                    read_sidecar, material):
+                compiles_water = True
+            row = plane_rows[int(side["plane"])]
+            normal = row["normal"]
+            # The unit publishes planes in the glTF frame; `gltf_position_to_unreal`'s permutation
+            # is orthogonal, so the normal only permutes and the distance only scales.
+            plane = (
+                float(normal[0]), float(normal[2]), float(normal[1]),
+                round(float(row["dist"]) * GLTF_TO_UNREAL, 4),
+            )
+            planes.append(plane)
+            if plane[2] >= WATER_TOP_NORMAL_Z:
+                top = plane[3]
+        if not compiles_water or top is None:
+            continue
+        _, points = sidecars.brush_hull(source, sides, int(brush["contents"]))
+        if points is None:
+            continue
+        flat = sidecars.hull_vertices(points)
+        axes = [flat[axis::3] for axis in range(3)]
+        found.append((top, WaterBrush(
+            planes=tuple(planes),
+            bounds_min=tuple(min(axis) for axis in axes),
+            bounds_max=tuple(max(axis) for axis in axes),
+        )))
+    return found
+
+
+def resolve_water_volumes(
+    units: sidecars.MapUnits, read_sidecar, map_name: str = "",
+) -> tuple[list[WaterVolume], list[dict[str, Any]]]:
+    """The map's water volumes, and the `LEAFWATERDATA` rows that produced none (R7.1,
+    `docs/architecture/water-architecture.md` -> section 5.1).
+
+    One volume per real record, in lump order: a `surfaceTexInfoID` of -1 is vbsp's sentinel and is
+    dropped, a record no water brush stands at is dropped and named (a `tools/tools_shadow` caster
+    carries the water content bit but is not water, so `la_bradbury_3`'s row has nothing to carry).
+    The fog keys come from the record's own material unit -- its VMT provenance, never the staged
+    instance, because `invisible_water` and `cheap_water` land on masters with no fog lane at all
+    and stage none of them.
+    """
+
+    rows = (units.root.get("water") or {}).get("leafData") or []
+    volumes: list[WaterVolume] = []
+    dropped: list[dict[str, Any]] = []
+    if not rows:
+        return volumes, dropped
+
+    kept: list[tuple[int, float, float, int]] = []
+    for row in rows:
+        index = int(row["index"])
+        tex_info = int(row["surfaceTexInfoID"])
+        if tex_info < 0:
+            dropped.append({"index": index, "reason": "sentinel"})
+            continue
+        kept.append((
+            index,
+            round(float(row["surfaceZ"]) * GLTF_TO_UNREAL, 4),
+            round(float(row["minZ"]) * GLTF_TO_UNREAL, 4),
+            tex_info,
+        ))
+
+    by_row: dict[int, list[WaterBrush]] = {index: [] for index, _z, _min, _tex in kept}
+    for top, brush in _water_brushes(units, read_sidecar):
+        for index, surface_z, _min_z, _tex_info in kept:
+            # Lump order decides a tie: a brush stands in exactly one volume, and two records that
+            # close on one height are one body of water read twice.
+            if abs(top - surface_z) <= WATER_SURFACE_TOLERANCE_CM:
+                by_row[index].append(brush)
+                break
+
+    unstaged: list[str] = []
+    for index, surface_z, min_z, tex_info in kept:
+        if not by_row[index]:
+            dropped.append({"index": index, "reason": "no water brush"})
+            continue
+        material = sidecars._face_material(units, {"texInfo": tex_info})
+        values = _unit_parameters(read_sidecar, material) if material is not None else {}
+        if not values:
+            # The volume's whole underwater look is these four keys; an unstaged unit would ship a
+            # clear-water volume that nothing in the log explains.
+            unstaged.append(material or f"texinfo {tex_info}")
+            continue
+        volumes.append(WaterVolume(
+            index=index,
+            surface_z_cm=surface_z,
+            min_z_cm=min_z,
+            material=f"vtmb:material:{material}",
+            **_water_fog(values),
+            brushes=tuple(by_row[index]),
+        ))
+    if unstaged:
+        raise MapGeometryError(
+            f"{map_name or 'map'}: {len(unstaged)} water volume material(s) not staged by the "
+            f"material lane (run: uv run elysium import materials): " + ", ".join(unstaged[:8]))
+    return volumes, dropped
+
 def legacy_master_for(record: dict[str, Any] | None) -> str | None:
     """The legacy world master a `shared/materials.json` record selected (`Bake._master_for`)."""
 
@@ -1352,6 +1593,8 @@ def stage_map(map_name: str, root: Path | None = None,
     R7.3: and `effects` / `particleTrees` / `dustmotes` / `steam` / `beams` / `effectStats` --
     every effects entity joined to its particle closure (kept as a tree), its brush bounds and the
     texture lane's sprite assets (`importers.effects.stage_effects_for_join`).
+    R7.1: and `water` -- every `LEAFWATERDATA` record as one volume with its fog keys and its
+    `CONTENTS_WATER` brushes (`resolve_water_volumes`), the bake's `elysium.water` actor.
     """
 
     from elysium_pipeline.importers import effects as effects_lane
@@ -1373,6 +1616,10 @@ def stage_map(map_name: str, root: Path | None = None,
     effects = effects_lane.stage_effects_for_join(
         geometry.join, read_texture=texture_sidecar_reader(texture_staging),
         read_material=read_sidecar, export_v2_root=root, map_name=map_name)
+    water_volumes, water_dropped = resolve_water_volumes(
+        geometry.join.units, read_sidecar, map_name)
+    counts = dict(geometry.counts)
+    counts["waterVolumes"] = len(water_volumes)
     buffer = bytearray()
     scenes = {
         "world": _scene_block(geometry.world, buffer),
@@ -1429,7 +1676,11 @@ def stage_map(map_name: str, root: Path | None = None,
         "steam": effects["steam"],
         "beams": effects["beams"],
         "effectStats": effects["effectStats"],
-        "counts": dict(geometry.counts),
+        "water": {
+            "volumes": [volume.as_row() for volume in water_volumes],
+            "dropped": water_dropped,
+        },
+        "counts": counts,
     }
 
     out_dir = staging_dir(map_name, work_root)

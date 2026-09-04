@@ -13,7 +13,7 @@
 // and runs this tier; the parameter lists below are unverified against a real compile until then.
 //
 // Masters land family-by-family (mechanics doc "Ordering, concurrency, tests, risks"); this test
-// loads whichever of the nine V2 masters already exists and abstains on the rest, so it grows
+// loads whichever of the ten V2 masters already exists and abstains on the rest, so it grows
 // coverage as `make_v2_materials.py` grows without needing a matching edit here.
 #include "Misc/AutomationTest.h"
 
@@ -254,6 +254,19 @@ namespace
 		ElysiumSurfaceParamsWater::Switches::UseBaseTexture,
 		ElysiumSurfaceParamsWater::Switches::UseNormalMap,
 		ElysiumSurfaceParamsWater::Switches::UseAnimatedNormalFrames,
+		ElysiumSurfaceParamsWater::Switches::Underside,
+	};
+
+	// R7.1: `M_ElysiumUnderwater` is a post-process master, not a surface one, so it carries no
+	// class LUT, no textures and no switches -- only the fog triple `ElysiumFog::Pack` fills
+	// (`water-architecture.md` ruling D). The same three names the decal master declares, because
+	// one packer serves the scene fog, the decals and the view under the plane.
+	static const FName UnderwaterScalars[] = {
+		ElysiumSurfaceParamsDecal::Scalars::FogStart,
+		ElysiumSurfaceParamsDecal::Scalars::FogInvRange,
+	};
+	static const FName UnderwaterVectors[] = {
+		ElysiumSurfaceParamsDecal::Vectors::FogColor,
 	};
 
 	static const FName SpriteTextures[] = {
@@ -346,6 +359,8 @@ namespace
 			RefractTextures, RefractScalars, RefractVectors, RefractSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Decal.M_V2_Decal"),
 			DecalTextures, DecalScalars, DecalVectors, DecalSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_ElysiumUnderwater.M_ElysiumUnderwater"),
+			{}, UnderwaterScalars, UnderwaterVectors, {}},
 	};
 }
 

@@ -1884,3 +1884,327 @@ def test_anomaly_rollup_counts_by_kind_in_manifest_and_summary(tmp_path):
     assert "textureClassMismatch=1" in result.summary()
     manifest = _manifest(tmp_path / "stage")
     assert manifest["anomalyCounts"]["textureClassMismatch"] == 1
+
+
+# --- R7.1 water: the normal lane, `Underside`, and the surf UV sine chain ---------------------------
+
+
+def _water_normal_unit(key: str = "water/sewer_water") -> dict:
+    """A `Water` unit shaped like every real one (`water-architecture.md` section 4.4): both
+    `$normalmap` (`dev/water_normal`) and `$bumpmap` (`dev/water_dudv`) are 29-frame VTFs, and the
+    `animatedtexture` proxy names `$bumpmap` because `Water_Old` reads `$bumpframe` as the frame
+    index of both."""
+    parameters = [
+        _param(0, "$basetexture", "water/beneath"),
+        _param(1, "$normalmap", "dev/water_normal"),
+        _param(2, "$bumpmap", "dev/water_dudv"),
+        _param(3, "animatedtexturevar", "$bumpmap", block="proxies#1/animatedtexture#0"),
+        _param(4, "animatedtextureframenumvar", "$bumpframe", block="proxies#1/animatedtexture#0"),
+        _param(5, "animatedtextureframerate", "30", block="proxies#1/animatedtexture#0"),
+    ]
+    return _unit(
+        key, shader="water", parameters=parameters,
+        proxies=[{"index": 0, "name": "animatedtexture", "sourceName": "AnimatedTexture",
+                  "parameters": [3, 4, 5]}],
+        dependencies=[_texture_dep("$basetexture", "water/beneath"),
+                      _texture_dep("$normalmap", "dev/water_normal"),
+                      _texture_dep("$bumpmap", "dev/water_dudv")],
+    )
+
+
+def _water_texture_stage(tmp_path: Path) -> Path:
+    """The two 29-frame water textures as `textures.py` stages them: `dev/water_normal` is a
+    role-conflicted colour unit (so the data-class slot takes its `_linear` twin), `dev/water_dudv`
+    is not."""
+    root = tmp_path / "texture-stage"
+    (root / "dev").mkdir(parents=True, exist_ok=True)
+    (root / "dev" / ("water_normal" + importer.TEXTURE_PROVENANCE_SUFFIX)).write_text(
+        json.dumps({"frames": 29, "roleConflict": True}), encoding="utf-8")
+    (root / "dev" / ("water_dudv" + importer.TEXTURE_PROVENANCE_SUFFIX)).write_text(
+        json.dumps({"frames": 29}), encoding="utf-8")
+    return root
+
+
+def test_water_normal_frames_come_from_normalmap_not_the_dudv(tmp_path):
+    """R7.1 (`water-architecture.md` section 4.4): the proxy names `$bumpmap`, which on the water
+    family binds `DuDvMap` -- so the frames array it used to write into `NormalMapFrames` was the
+    signed offset map, and `dev/water_normal` reached nothing. The array is `$normalmap`'s own
+    (its `_linear` twin, since that texture unit is a role-conflicted colour), the rate is still
+    the proxy's, and a bound frames array now gates `UseNormalMap` on -- without which every water
+    instance shipped a flat normal. `DuDvMap` stays declared and unbound, and the class mismatch
+    that made both slots unbindable is still recorded."""
+    export = tmp_path / "v2"
+    _publish(export, "water/sewer_water", _water_normal_unit())
+    result = importer.stage_materials(
+        export, tmp_path / "stage", texture_staging_root=_water_texture_stage(tmp_path))
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_sewer_water"]
+    assert entry["textures"]["NormalMapFrames"] == "/ElysiumBaked/Textures/dev/TA_water_normal_linear"
+    assert entry["scalars"]["NormalFrameCount"] == 29.0
+    assert entry["scalars"]["NormalFrameRate"] == 30.0
+    assert entry["switches"]["UseAnimatedNormalFrames"] is True
+    assert entry["switches"]["UseNormalMap"] is True
+    assert "DuDvMap" not in entry["textures"]
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row["kind"] == "textureClassMismatch" and row["parameter"] == "DuDvMap"
+               for row in provenance["anomalies"])
+
+
+def test_lit_water_look_unit_animates_its_normal_and_turns_the_gate_on(tmp_path):
+    """The same gate fix on the other family: `blackwater` (the pier's ocean card) is
+    `LightmappedGeneric` with a 24 fps `animatedtexture` on `$bumpmap`, which on a Lit unit binds
+    `NormalMap` -- the frames array binds *and* `UseNormalMap` turns on, where before the static
+    frame-0 fallback was the only path that ever set it."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    (texture_staging / "water").mkdir(parents=True, exist_ok=True)
+    (texture_staging / "water" / ("blackwater_bump" + importer.TEXTURE_PROVENANCE_SUFFIX)).write_text(
+        json.dumps({"frames": 24}), encoding="utf-8")
+    parameters = [
+        _param(0, "$basetexture", "water/blackwater"),
+        _param(1, "$bumpmap", "water/blackwater_bump"),
+        _param(2, "animatedtexturevar", "$bumpmap", block="proxies#1/animatedtexture#0"),
+        _param(3, "animatedtextureframerate", "24", block="proxies#1/animatedtexture#0"),
+    ]
+    _publish(export, "water/blackwater", _unit(
+        "water/blackwater", parameters=parameters,
+        proxies=[{"index": 0, "name": "animatedtexture", "sourceName": "AnimatedTexture",
+                  "parameters": [2, 3]}],
+        dependencies=[_texture_dep("$basetexture", "water/blackwater"),
+                      _texture_dep("$bumpmap", "water/blackwater_bump")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_blackwater"]
+    assert entry["textures"]["NormalMapFrames"] == "/ElysiumBaked/Textures/water/TA_blackwater_bump"
+    assert entry["scalars"]["NormalFrameRate"] == 24.0
+    assert entry["switches"]["UseAnimatedNormalFrames"] is True
+    assert entry["switches"]["UseNormalMap"] is True
+
+
+def _underside_unit(key: str, bottom: str) -> dict:
+    return _unit(
+        key, shader="water",
+        parameters=[_param(0, "$basetexture", "water/beneath"),
+                    _param(1, "$bottommaterial", bottom)],
+        dependencies=[_texture_dep("$basetexture", "water/beneath")],
+    )
+
+
+def test_self_bottomed_water_unit_is_the_underside(tmp_path):
+    """R7.1 ruling E: `dev/dev_waterbeneath2` names itself as its own `$bottommaterial` -- that is
+    what marks the down-facing faces VBSP emits inside every water brush. The value is read off the
+    unit's own provenance rows, since the GLB decoder emits a dependency only for a texture-shaped
+    value and `$bottommaterial` reaches none on any of the 26 units that author it. Source spells
+    its paths with backslashes and an optional `.vmt`, so the comparison is normalised."""
+    export = tmp_path / "v2"
+    _publish(export, "dev/dev_waterbeneath2",
+             _underside_unit("dev/dev_waterbeneath2", "dev\\dev_waterbeneath2.vmt"))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/dev/MI_dev_waterbeneath2"]
+    assert entry["switches"]["Underside"] is True
+
+
+def test_water_unit_bottomed_by_another_material_is_not_the_underside(tmp_path):
+    """`water/sewer_water` points at `dev/dev_waterbeneath2`: it is the top surface, not the
+    underside, so the switch stages explicitly false rather than absent."""
+    export = tmp_path / "v2"
+    _publish(export, "water/sewer_water",
+             _underside_unit("water/sewer_water", "dev/dev_waterbeneath2"))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_sewer_water"]
+    assert entry["switches"]["Underside"] is False
+
+
+def test_patched_water_instance_stages_no_underside_switch(tmp_path):
+    """A patched instance has no master of its own (it parents to the base's instance), so it
+    stages only its own override -- never a switch the base already answered."""
+    export = tmp_path / "v2"
+    _publish(export, "water/warrwater", _underside_unit("water/warrwater", "dev/dev_waterbeneath2"))
+    _publish(export, "maps/hw_warrens_4/water/warrwater", _unit(
+        "maps/hw_warrens_4/water/warrwater", shader="patch", family="patch", resolved=False,
+        parameters=[_param(0, "include", "water/warrwater"),
+                    _param(1, "$waterdepth", "20", block="insert#1")],
+        patch={"include": "water/warrwater", "asset": "vtmb:material:water/warrwater",
+               "operations": ["insert"]},
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    patched = _entries(tmp_path / "stage")[
+        "/ElysiumBaked/Materials/maps/hw_warrens_4/water/MI_warrwater"]
+    assert patched["scalars"] == {"WaterDepth": 20.0}
+    assert "Underside" not in patched["switches"]
+
+
+def _surf_chain(*, sine_first: bool = True) -> dict:
+    """`objects/surf`'s own proxy block (the pier's 17 wave cards, read off the corpus): a sine into
+    `$temp[0]` at 15 s, a `texturetransform` translating `$basetexturetransform` by `$temp`, and a
+    second sine pulsing `$alpha` on the same period. `sine_first` False authors the transform
+    before the sine it reads, which a VMT is free to do."""
+    parameters = [
+        _param(0, "$basetexture", "objects/surf"),
+        _param(1, "$temp", "[ 0 0 ]", value_type="vector"),
+        _param(2, "resultvar", "$temp[0]", block="proxies#3/sine#0"),
+        _param(3, "sineperiod", "15.00", block="proxies#3/sine#0"),
+        _param(4, "sinemin", "0", block="proxies#3/sine#0"),
+        _param(5, "sinemax", ".5", block="proxies#3/sine#0"),
+        _param(6, "resultvar", "$baseTextureTransform", block="proxies#3/texturetransform#1"),
+        _param(7, "translatevar", "$temp", block="proxies#3/texturetransform#1"),
+        _param(8, "resultvar", "$alpha", block="proxies#3/sine#2"),
+        _param(9, "sineperiod", "15.00", block="proxies#3/sine#2"),
+        _param(10, "sinemin", "0", block="proxies#3/sine#2"),
+        _param(11, "sinemax", "1", block="proxies#3/sine#2"),
+    ]
+    sine = {"index": 0, "name": "sine", "sourceName": "Sine", "parameters": [2, 3, 4, 5]}
+    transform = {"index": 1, "name": "texturetransform", "sourceName": "TextureTransform",
+                 "parameters": [6, 7]}
+    alpha = {"index": 2, "name": "sine", "sourceName": "Sine", "parameters": [8, 9, 10, 11]}
+    ordered = [sine, transform] if sine_first else [transform, sine]
+    return dict(parameters=parameters, proxies=ordered + [alpha],
+                dependencies=[_texture_dep("$basetexture", "objects/surf")])
+
+
+def test_surf_sine_chain_stages_the_uv_translate_vector(tmp_path):
+    """R7.1 ruling J: a `sine` -> `$temp[0]` -> `texturetransform translatevar` chain is the pier's
+    surf slide, and it resolves to one `SineUVTranslate = (ampU, ampV, offU, offV)` -- `[0.5, 0, 0,
+    0]` for `objects/surf`. Both halves are `graph` in provenance (neither is a scalar of its own),
+    the `$alpha` sine beside it still stages the sine lane on the same 15 s period, and nothing
+    takes the provenance-only omission the chain used to."""
+    export = tmp_path / "v2"
+    _publish(export, "objects/surf", _unit("objects/surf", **_surf_chain()))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/objects/MI_surf"]
+    assert entry["vectors"]["SineUVTranslate"] == [0.5, 0.0, 0.0, 0.0]
+    assert entry["vectors"]["SineTargetMask"] == [1.0, 0.0, 0.0, 0.0]
+    assert entry["scalars"]["SinePeriod"] == 15.0
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert [(row["kind"], row["destination"]) for row in provenance["proxies"]] == [
+        ("sine", "graph"), ("texturetransform", "graph"), ("sine", "scalar")]
+    assert not any(row["kind"] == "proxyTargetProvenanceOnly" for row in provenance["omissions"])
+    assert not any(row["kind"] == "sineChainPeriodMismatch" for row in provenance["omissions"])
+
+
+def test_surf_sine_chain_resolves_with_the_transform_authored_first(tmp_path):
+    """The chain is a pair, not an order: a VMT authoring the `texturetransform` above the `sine`
+    it reads resolves to the same vector, which is why the join is a second pass rather than a
+    decision taken inside the proxy walk."""
+    export = tmp_path / "v2"
+    _publish(export, "objects/surf", _unit("objects/surf", **_surf_chain(sine_first=False)))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/objects/MI_surf"]
+    assert entry["vectors"]["SineUVTranslate"] == [0.5, 0.0, 0.0, 0.0]
+
+
+def test_surf_sine_chain_on_an_unlit_unit_drops_the_vector_and_names_it(tmp_path):
+    """Only the Lit pair carries the lane, and `_apply_proxies` runs before the master is known --
+    so the same chain on an `unlitgeneric` unit drops the vector with the omission it would have
+    taken had nothing consumed it, rather than reaching `_validate_exposed` as a stage failure."""
+    export = tmp_path / "v2"
+    _publish(export, "objects/surf",
+             _unit("objects/surf", shader="unlitgeneric", **_surf_chain()))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/objects/MI_surf"]
+    assert "SineUVTranslate" not in entry["vectors"]
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row["kind"] == "proxyTargetProvenanceOnly"
+               and row["target"] == importer.SINE_UV_TRANSFORM_TARGET
+               for row in provenance["omissions"])
+
+
+def test_temp_sine_with_no_transform_reading_it_takes_the_omission(tmp_path):
+    """A `$temp*` sine nothing consumes writes a scratch register no program reads -- the same
+    provenance-only omission it had before ruling J, and no `SineUVTranslate`, no `SinePeriod`."""
+    export = tmp_path / "v2"
+    parameters = [
+        _param(0, "$basetexture", "objects/surf"),
+        _param(1, "resultvar", "$temp[0]", block="proxies#1/sine#0"),
+        _param(2, "sineperiod", "15.00", block="proxies#1/sine#0"),
+        _param(3, "sinemin", "0", block="proxies#1/sine#0"),
+        _param(4, "sinemax", ".5", block="proxies#1/sine#0"),
+    ]
+    _publish(export, "objects/surf", _unit(
+        "objects/surf", parameters=parameters,
+        proxies=[{"index": 0, "name": "sine", "sourceName": "Sine", "parameters": [1, 2, 3, 4]}],
+        dependencies=[_texture_dep("$basetexture", "objects/surf")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/objects/MI_surf"]
+    assert "SineUVTranslate" not in entry["vectors"]
+    assert "SinePeriod" not in entry["scalars"]
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert provenance["proxies"][0]["destination"] == "provenance"
+    assert any(row["kind"] == "proxyTargetProvenanceOnly" and row["target"] == "$temp[0]"
+               for row in provenance["omissions"])
+
+
+def test_component_less_temp_sine_read_by_a_translatevar_takes_the_omission(tmp_path):
+    """A sine writing the whole `$temp` vector drives U and V with one number, and Source's own
+    `$temp` starts at `[0 0]` -- which axis the author meant is undecidable, so the chain stages
+    nothing and says so rather than guessing U."""
+    export = tmp_path / "v2"
+    parameters = [
+        _param(0, "$basetexture", "objects/surf"),
+        _param(1, "resultvar", "$temp", block="proxies#2/sine#0"),
+        _param(2, "sineperiod", "15.00", block="proxies#2/sine#0"),
+        _param(3, "sinemin", "0", block="proxies#2/sine#0"),
+        _param(4, "sinemax", ".5", block="proxies#2/sine#0"),
+        _param(5, "resultvar", "$baseTextureTransform", block="proxies#2/texturetransform#1"),
+        _param(6, "translatevar", "$temp", block="proxies#2/texturetransform#1"),
+    ]
+    _publish(export, "objects/surf", _unit(
+        "objects/surf", parameters=parameters,
+        proxies=[{"index": 0, "name": "sine", "sourceName": "Sine", "parameters": [1, 2, 3, 4]},
+                 {"index": 1, "name": "texturetransform", "sourceName": "TextureTransform",
+                  "parameters": [5, 6]}],
+        dependencies=[_texture_dep("$basetexture", "objects/surf")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/objects/MI_surf"]
+    assert "SineUVTranslate" not in entry["vectors"]
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row["kind"] == "proxyTargetProvenanceOnly" and row["target"] == "$temp"
+               for row in provenance["omissions"])
+
+
+def test_two_sines_at_different_periods_stage_the_first_and_name_the_mismatch(tmp_path):
+    """One `SinePeriod` scalar, two waves: the `$alpha` sine stages it (it drives a master
+    parameter), and the chain's own 4 s period cannot also be honoured -- recorded as
+    `sineChainPeriodMismatch` rather than silently overwriting the staged value."""
+    export = tmp_path / "v2"
+    parameters = [
+        _param(0, "$basetexture", "objects/surf"),
+        _param(1, "resultvar", "$alpha", block="proxies#3/sine#0"),
+        _param(2, "sineperiod", "15.00", block="proxies#3/sine#0"),
+        _param(3, "sinemin", "0", block="proxies#3/sine#0"),
+        _param(4, "sinemax", "1", block="proxies#3/sine#0"),
+        _param(5, "resultvar", "$temp[1]", block="proxies#3/sine#1"),
+        _param(6, "sineperiod", "4.0", block="proxies#3/sine#1"),
+        _param(7, "sinemin", "0", block="proxies#3/sine#1"),
+        _param(8, "sinemax", "0.25", block="proxies#3/sine#1"),
+        _param(9, "resultvar", "$baseTextureTransform", block="proxies#3/texturetransform#2"),
+        _param(10, "translatevar", "$temp", block="proxies#3/texturetransform#2"),
+    ]
+    _publish(export, "objects/surf", _unit(
+        "objects/surf", parameters=parameters,
+        proxies=[{"index": 0, "name": "sine", "sourceName": "Sine", "parameters": [1, 2, 3, 4]},
+                 {"index": 1, "name": "sine", "sourceName": "Sine", "parameters": [5, 6, 7, 8]},
+                 {"index": 2, "name": "texturetransform", "sourceName": "TextureTransform",
+                  "parameters": [9, 10]}],
+        dependencies=[_texture_dep("$basetexture", "objects/surf")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/objects/MI_surf"]
+    assert entry["scalars"]["SinePeriod"] == 15.0
+    assert entry["vectors"]["SineUVTranslate"] == [0.0, 0.25, 0.0, 0.0]
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row["kind"] == "sineChainPeriodMismatch" and row["parameter"] == "SinePeriod"
+               and row["staged"] == 15.0 and row["chain"] == 4.0
+               for row in provenance["omissions"])

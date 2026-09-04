@@ -8,6 +8,7 @@
 class AElysiumDetailPropActor;
 class AElysiumEffectActor;
 class AElysiumSpriteActor;
+class AElysiumWaterVolumes;
 class AStaticMeshActor;
 class APostProcessVolume;
 class UCableComponent;
@@ -131,6 +132,10 @@ public:
 	// The family overrides (`DA_EffectFamilies`), loaded once at adopt; null when the asset is
 	// absent (every effect plays the floor).
 	UElysiumEffectFamilies* GetEffectFamilies() const { return EffectFamilies; }
+	// R7.1: the map's one `elysium.water` actor — every staged `LEAFWATERDATA` volume and its
+	// `CONTENTS_WATER` brushes. Null on a map the stage found no water on (most of them), which is
+	// what `AElysiumMapActor::UpdatePlayerWater` reads as "the body is dry".
+	AElysiumWaterVolumes* GetWaterVolumes() const { return WaterVolumes; }
 
 	// The real-time light rig for this map (the Cog Lights window's read-only viewer reaches it
 	// through here), or null before the map is built.
@@ -164,6 +169,8 @@ public:
 	// Effects (R7.3): the adopted `elysium.effect` actors, and how many stand inside the miniature.
 	int32 EffectCount = 0;
 	int32 EffectSkyCount = 0;
+	// Water (R7.1): the staged volumes on the adopted water actor, 0 on a map with no water.
+	int32 WaterVolumeCount = 0;
 	// Decals: number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
 	// Ropes: number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
@@ -213,6 +220,9 @@ private:
 	UPROPERTY() TArray<TObjectPtr<AElysiumEffectActor>> EffectActors;
 	TMap<int32, TWeakObjectPtr<AElysiumEffectActor>> EffectsByEntity;
 	UPROPERTY() TObjectPtr<UElysiumEffectFamilies> EffectFamilies;
+	// R7.1: one per map at most (the bake places a single actor carrying every row), so this is a
+	// handle rather than a bucket.
+	UPROPERTY() TObjectPtr<AElysiumWaterVolumes> WaterVolumes;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeWorldBrushes;
 	UPROPERTY() TArray<TObjectPtr<UStaticMeshComponent>> RuntimeSkyBrushes;
 	bool bPropsVisible = true;

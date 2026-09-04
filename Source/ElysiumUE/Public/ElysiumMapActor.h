@@ -752,6 +752,12 @@ private:
 	// emitting a fresh begin edge. Refresh the pawn's overlap cache, then reconcile every runtime
 	// brush currently containing it into the deduplicating entity touch bus.
 	void ReconcilePlayerBrushTouches(APawn* Pawn);
+	// R7.1 (`water-architecture.md` ruling C): classify the player's feet / waist / eyes against the
+	// map's water volumes and publish the answer — the level to the mover, whose `FullWalkMove`
+	// already branches on it, and the level plus the volume's surface plane to the camera, whose
+	// clearance step keeps the view out of the plane's band. Runs pre-move, on the declared edge
+	// "player movement follows pre-move"; a map with no water actor publishes `None`.
+	void UpdatePlayerWater();
 	bool bSuppressPlayerTouchIngress = false;
 	bool bPlayerTouchReconcilePending = false;
 

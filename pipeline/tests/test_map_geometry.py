@@ -37,6 +37,10 @@ def _bake_map_v2_manifest_version() -> int:
 #: The three-map working corpus (`seam_migration.md` -> R1); a whole-corpus run is a separate,
 #: owner-approved step and this module never asks for one.
 WORKING_MAPS = ("sp_tutorial_1", "sm_pawnshop_1", "sm_hub_1")
+#: The maps on the V2 model root. R7.1 adds `sm_pier_1` (the water scope, `MapsOnV2Models` in
+#: `Config/DefaultElysium.ini`); it is not in `WORKING_MAPS` because the parametrized corpus
+#: cases above walk the three-map corpus and R7.1 authorized no wider run.
+V2_MODEL_MAPS = WORKING_MAPS + ("sm_pier_1",)
 
 
 def test_gltf_frame_matches_source_to_unreal_through_the_units_own_transform():
@@ -260,7 +264,7 @@ def test_the_v2_model_flag_is_its_own_list_and_excludes_sp_theatre():
     # imported, so it must not be carried onto the V2 model root by reusing that list.
     v2 = map_transport.read_array(map_transport.V2_MODELS_KEY)
     transport = map_transport.read_array(map_transport.NEW_TRANSPORT_KEY)
-    assert set(v2) == set(WORKING_MAPS)
+    assert set(v2) == set(V2_MODEL_MAPS)
     assert "sp_theatre" in transport
     assert map_transport.is_map_on_v2_models("sp_theatre") is False
     # Matched case-insensitively, exactly as `ElysiumMapTransport::IsMapOnV2Models` matches.
@@ -530,3 +534,238 @@ def test_reader_stands_one_capture_per_lump_42_sample_on_the_working_corpus(map_
     # No working map authors an env_cubemap inside its 3D-skybox miniature; the rule is kept for
     # the map that does, and this pins the corpus fact the doc states (0 of 57).
     assert not any(sample.sky for sample in geometry.cubemaps)
+
+
+# ------------------------------------------------------------------------- water volumes (R7.1)
+
+#: The six outward halfspaces of a 1 m glTF cube at the origin (`n . p <= d`), the mould every
+#: fake brush below is cut from: `(0, 1, 0)` is glTF up, so it is the water surface.
+_UNIT_CUBE_PLANES = (
+    ((1.0, 0.0, 0.0), 1.0), ((-1.0, 0.0, 0.0), 0.0),
+    ((0.0, 1.0, 0.0), 1.0), ((0.0, -1.0, 0.0), 0.0),
+    ((0.0, 0.0, 1.0), 1.0), ((0.0, 0.0, -1.0), 0.0),
+)
+#: A redundant half-height cap: vbsp carries these on real brushes as bevel sides, and the solver
+#: skips them. Up-facing on purpose -- unskipped it would both halve the hull and be read as the
+#: brush's water surface.
+_BEVEL_PLANE = ((0.0, 1.0, 0.0), 0.5)
+
+
+def _fake_water_units(brush_specs, textures, rows):
+    """The `MapUnits` shape `resolve_water_volumes` reads -- the root extension's `water`,
+    `collision`, `planes`, `texinfos` and `textures` tables and nothing else.
+
+    Every brush is the same 1 m cube; a spec is `(contents, material)`, or `(contents, material,
+    "bevel")` to append the redundant half-height side. Texinfo `i` names `textures[i]`.
+    """
+
+    plane_rows = [{"index": index, "normal": normal, "dist": dist}
+                  for index, (normal, dist) in enumerate(_UNIT_CUBE_PLANES + (_BEVEL_PLANE,))]
+    keys = list(textures)
+    sides: list[dict] = []
+    brushes: list[dict] = []
+    for index, spec in enumerate(brush_specs):
+        contents, material = spec[0], spec[1]
+        first = len(sides)
+        for plane in list(range(6)) + ([6] if len(spec) > 2 else []):
+            sides.append({"index": len(sides), "plane": plane, "texInfo": keys.index(material),
+                          "dispInfo": -1, "bevel": 1 if plane == 6 else 0})
+        brushes.append({"index": index, "firstSide": first, "numSides": len(sides) - first,
+                        "contents": contents})
+    root = {
+        "planes": plane_rows,
+        "collision": {"brushes": brushes, "brushSides": sides},
+        "texinfos": [{"texData": index} for index in range(len(keys))],
+        "textures": [{"asset": f"vtmb:material:{key}"} for key in keys],
+        "water": {"leafData": list(rows)},
+    }
+    return SimpleNamespace(name="fake", document={"nodes": []}, root=root)
+
+
+def _water_row(index, tex_info, surface_z=1.0, min_z=0.0):
+    """One `LEAFWATERDATA` record as the unit publishes it: heights in glTF metres."""
+
+    return {"index": index, "surfaceZ": surface_z, "minZ": min_z,
+            "surfaceTexInfoID": tex_info, "padding": 0}
+
+
+def _provenance(*pairs, patched=False, base=None):
+    """One material unit's staged provenance, as much of it as the water stage reads."""
+
+    return {"patched": patched, "patchBase": base,
+            "parameters": [{"block": "", "key": key, "value": value} for key, value in pairs]}
+
+
+def test_water_volumes_drop_the_sentinel_row_and_keep_the_real_one():
+    # `surfaceTexInfoID` -1 is vbsp's own sentinel (two rows on `hw_warrens_2`): it names no
+    # material, so it is dropped and named rather than resolved against texinfo -1.
+    units = _fake_water_units(
+        [(0x10000020, "water/sewer_water")],
+        ["water/sewer_water"],
+        [_water_row(0, 0), _water_row(1, -1)])
+    documents = {"water/sewer_water": _provenance(("%compilewater", "1"))}
+
+    volumes, dropped = MG.resolve_water_volumes(units, documents.get, "fake")
+    assert [volume.index for volume in volumes] == [0]
+    assert volumes[0].material == "vtmb:material:water/sewer_water"
+    assert volumes[0].surface_z_cm == 100.0 and volumes[0].min_z_cm == 0.0
+    assert dropped == [{"index": 1, "reason": "sentinel"}]
+
+
+def test_only_a_compilewater_brush_carrying_the_content_bit_belongs_to_a_volume():
+    # The content bit alone is not water: a `0x18000120` shadow caster carries it with nothing but
+    # `tools/tools_shadow` sides. `%compilewater` on a side's own material is what vbsp read, and
+    # `0x18000020` `func_detail` water passes on exactly the same evidence.
+    units = _fake_water_units(
+        [(0x10000020, "water/sewer_water"),
+         (0x18000120, "tools/tools_shadow"),
+         (0x18000020, "water/sewer_water")],
+        ["water/sewer_water", "tools/tools_shadow"],
+        [_water_row(0, 0)])
+    documents = {
+        "water/sewer_water": _provenance(("%compilewater", "1")),
+        "tools/tools_shadow": _provenance(("$basetexture", "tools/tools_shadow")),
+    }
+
+    volumes, dropped = MG.resolve_water_volumes(units, documents.get, "fake")
+    assert dropped == []
+    assert len(volumes) == 1 and len(volumes[0].brushes) == 2
+
+
+def test_water_brush_planes_and_bounds_take_the_unreal_frame_and_skip_the_bevel():
+    # The unit publishes planes in the glTF frame; the bake's own permutation `(n0, n2, n1)` with
+    # the distance in centimetres is orthogonal, so a 1 m cube is a 100 cm cube and `n . p - d <= 0`
+    # still names its inside. The bevel side is neither a plane of the hull nor its surface.
+    units = _fake_water_units(
+        [(0x10000020, "water/sewer_water", "bevel")],
+        ["water/sewer_water"],
+        [_water_row(0, 0)])
+    documents = {"water/sewer_water": _provenance(("%compilewater", "1"))}
+
+    volumes, _dropped = MG.resolve_water_volumes(units, documents.get, "fake")
+    brush = volumes[0].brushes[0]
+    assert brush.planes == (
+        (1.0, 0.0, 0.0, 100.0), (-1.0, 0.0, 0.0, 0.0),
+        (0.0, 0.0, 1.0, 100.0), (0.0, 0.0, -1.0, 0.0),
+        (0.0, 1.0, 0.0, 100.0), (0.0, -1.0, 0.0, 0.0),
+    )
+    assert brush.bounds_min == pytest.approx((0.0, 0.0, 0.0), abs=1e-3)
+    assert brush.bounds_max == pytest.approx((100.0, 100.0, 100.0), abs=1e-3)
+
+    def outside(point):
+        return any(sum(n * p for n, p in zip(plane[:3], point)) - plane[3] > 0.0
+                   for plane in brush.planes)
+
+    assert not outside((50.0, 50.0, 50.0))
+    assert outside((150.0, 50.0, 50.0)) and outside((50.0, 50.0, -1.0))
+
+
+def test_water_fog_keys_come_from_the_material_units_own_vmt_provenance():
+    # `invisible_water` stages onto `M_V2_Unlit`, which has no fog lane at all, so every fog key is
+    # a provenance omission on the instance. The volume reads the VMT the unit was authored from:
+    # `{22 20 10}` divided down as authored, the two distances in centimetres.
+    units = _fake_water_units(
+        [(0x10000020, "water/invisible_water"), (0x10000020, "water/warrenwater2b")],
+        ["water/invisible_water", "water/warrenwater2b"],
+        [_water_row(0, 0), _water_row(1, 1, surface_z=3.0, min_z=2.0)])
+    documents = {
+        "water/invisible_water": _provenance(
+            ("%compilewater", "1"), ("$fogenable", "1"), ("$fogcolor", "{22 20 10}"),
+            ("$fogstart", "1.00"), ("$fogend", "400.00")),
+        "water/warrenwater2b": _provenance(("%compilewater", "1"), ("$basetexture", "water/x")),
+    }
+    units.root["planes"].append({"index": 7, "normal": (0.0, 1.0, 0.0), "dist": 3.0})
+    units.root["collision"]["brushSides"][8]["plane"] = 7   # the second cube's top, 3 m up
+
+    volumes, _dropped = MG.resolve_water_volumes(units, documents.get, "fake")
+    fogged, clear = volumes
+    assert fogged.fog_enable is True
+    assert fogged.fog_color == pytest.approx((22 / 255, 20 / 255, 10 / 255), abs=1e-6)
+    assert (fogged.fog_start_cm, fogged.fog_end_cm) == (2.54, 1016.0)
+    assert fogged.as_row() == {
+        "index": 0, "surfaceZCm": 100.0, "minZCm": 0.0,
+        "material": "vtmb:material:water/invisible_water",
+        "fogEnable": True, "fogColor": list(fogged.fog_color),
+        "fogStartCm": 2.54, "fogEndCm": 1016.0,
+        "brushes": [fogged.brushes[0].as_row()],
+    }
+    # A unit that authors no fog key is clear water -- `SetFogVolumeState`'s own answer for it.
+    assert clear.fog_enable is False
+    assert (clear.fog_color, clear.fog_start_cm, clear.fog_end_cm) == ((0.0, 0.0, 0.0), 0.0, 0.0)
+
+
+def test_a_row_no_water_brush_stands_at_is_dropped_and_named():
+    # `la_bradbury_3`'s row: the only brush at its height is a `tools/tools_shadow` caster, so the
+    # record describes a volume the map does not have.
+    units = _fake_water_units(
+        [(0x18000120, "tools/tools_shadow")],
+        ["water/bradbury_blood", "tools/tools_shadow"],
+        [_water_row(0, 0)])
+    documents = {
+        "water/bradbury_blood": _provenance(("%compilewater", "1")),
+        "tools/tools_shadow": _provenance(("$basetexture", "tools/tools_shadow")),
+    }
+
+    volumes, dropped = MG.resolve_water_volumes(units, documents.get, "fake")
+    assert volumes == []
+    assert dropped == [{"index": 0, "reason": "no water brush"}]
+
+
+def test_a_patched_water_unit_reads_compilewater_and_its_fog_keys_through_its_base():
+    # `maps/ch_fulab_1/water/cheap_water_1318_1990_273`'s own provenance is the `patch` delta and
+    # nothing else -- `include` plus one `insert` block. Read without the `patchBase` walk the
+    # brush would not qualify at all and the volume would ship clear.
+    key = "maps/ch_fulab_1/water/cheap_water_1318_1990_273"
+    units = _fake_water_units([(0x10000020, key)], [key], [_water_row(0, 0)])
+    documents = {
+        key: _provenance(("include", "WATER/CHEAP_WATER"),
+                         patched=True, base="vtmb:material:water/cheap_water"),
+        "water/cheap_water": _provenance(
+            ("%compilewater", "1"), ("$forcecheap", "1"), ("$fogenable", "1"),
+            ("$fogcolor", "{22 20 10}"), ("$fogstart", "1.00"), ("$fogend", "400.00")),
+    }
+    documents[key]["parameters"].append(
+        {"block": "insert#1", "key": "$envmap", "value": "maps/ch_fulab_1/c1318_1990_273"})
+
+    volumes, dropped = MG.resolve_water_volumes(units, documents.get, "fake")
+    assert dropped == [] and len(volumes) == 1
+    assert volumes[0].material == f"vtmb:material:{key}"
+    assert volumes[0].fog_enable is True and volumes[0].fog_end_cm == 1016.0
+    assert len(volumes[0].brushes) == 1
+
+
+#: `(map, surfaceZCm, material key, brush count)` -- the three exported maps R7.1 stages water on:
+#: the sewer the ruling was written against, the pier's invisible ocean volume, and the one
+#: PAKFILE-patched `cheap_water` unit in the corpus.
+WATER_CORPUS = (
+    ("sm_hub_1", -14937.74, "water/sewer_water", 1),
+    ("sm_pier_1", -1582.42, "water/invisible_water", 1),
+    ("ch_fulab_1", 22.86, "maps/ch_fulab_1/water/cheap_water_1318_1990_273", 1),
+)
+
+
+@pytest.mark.parametrize("map_name,surface_z_cm,material,brush_count", WATER_CORPUS)
+def test_water_volumes_on_the_exported_corpus(map_name, surface_z_cm, material, brush_count):
+    unit = MG.sidecars.unit_paths(map_name)["root"]
+    if not unit.is_file():
+        pytest.skip(f"no exported map root unit at {unit}")
+    staging = MG.material_staging_root()
+    if not staging.is_dir():
+        pytest.skip(f"no material staging tree at {staging}")
+
+    units = MG.sidecars.read_units(map_name)
+    volumes, dropped = MG.resolve_water_volumes(
+        units, MG.sidecar_reader(staging), map_name)
+    assert dropped == []
+    assert len(volumes) == 1
+    volume = volumes[0]
+    assert volume.surface_z_cm == pytest.approx(surface_z_cm, abs=0.01)
+    assert volume.material == f"vtmb:material:{material}"
+    assert volume.fog_enable is True
+    assert len(volume.brushes) == brush_count
+    for brush in volume.brushes:
+        assert len(brush.planes) >= 6
+        # A closed hull: its bounds hold the surface the record names. The hull is solved in the
+        # collision lane's binary32 Source frame, so its top sits within a rounding step of the
+        # plane distance rather than on it (`sm_hub_1`: 2e-4 cm).
+        assert brush.bounds_min[2] - 0.01 <= volume.surface_z_cm <= brush.bounds_max[2] + 0.01

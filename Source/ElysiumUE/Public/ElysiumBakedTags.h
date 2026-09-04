@@ -50,6 +50,11 @@ namespace ElysiumBakedTags
 	// second tag, Source(i), naming its lump-42 row. Its image lives in the level's MapBuildData,
 	// uploaded at registration; the runtime adopts nothing from it.
 	inline const FName Capture(TEXT("elysium.capture"));
+	// The map's water volumes (R7.1, `MapsOnV2Models` maps only): one AElysiumWaterVolumes carrying
+	// every `water.volumes[]` row the stage emitted -- the CONTENTS_WATER brush hulls, their surface
+	// plane and the volume's authored fog. One actor per map, not one per volume, because the runtime
+	// asks "which volume is this point in" against all of them at once.
+	inline const FName Water(TEXT("elysium.water"));
 	// The map's unbound PostProcessVolume — where a per-map Lumen art-direction value lives
 	// (D3). It ships neutral: nothing overridden, so it changes no pixel until an owner call
 	// puts a number on it.

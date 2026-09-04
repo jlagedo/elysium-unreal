@@ -161,6 +161,17 @@ public:
 	// seduction and death currently use only the shared weight/third-person channel.
 	void SetFeedCamera(bool bActive) { Weights.bFeed = bActive; }
 
+	// The body's water state (R7.1), pushed each pre-move tick by
+	// `AElysiumMapActor::UpdatePlayerWater`: `CheckWater`'s level 0-3 and the surface plane of the
+	// volume it settled on, in cm. A push rather than a query because the camera reaches only its
+	// owner and the water volumes belong to the map actor; `(0, 0)` is "dry", which is what a map
+	// with no water, a dry body and a frame with no map actor all write.
+	void SetWaterState(int32 Level, float SurfaceZCm)
+	{
+		WaterLevel = Level;
+		WaterSurfaceZCm = SurfaceZCm;
+	}
+
 	// Drop the smoothing so the next solve snaps rather than eases — VtMB's re-seed flag (`+0x4`),
 	// which is what makes re-entering third person not swing in from wherever the camera last was.
 	// Latched here and consumed by whoever solves the boom.
@@ -264,6 +275,10 @@ private:
 	bool bClipped = false;
 	bool bReseedRequested = true;
 	bool bOrbitRestoreRequested = false;
+
+	// The frame's water state, read by `ApplyBaseToView`'s clearance step. Never solved here.
+	int32 WaterLevel = 0;
+	float WaterSurfaceZCm = 0.0f;
 
 	// Where the scripted channel's view has reached, so `MoveSpeed` / `MaxTurnRate` rate-limit the
 	// shot's own chase of its target rather than teleporting to it each frame.

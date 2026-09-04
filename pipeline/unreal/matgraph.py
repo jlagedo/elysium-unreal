@@ -208,7 +208,17 @@ class Graph:
         return self._binop(unreal.MaterialExpressionDotProduct, a, a_out, b, b_out, x, y)
 
     def pow(self, a, a_out, b, b_out, x, y):
-        return self._binop(unreal.MaterialExpressionPower, a, a_out, b, b_out, x, y)
+        # Not `_binop`: `UMaterialExpressionPower` names its inputs `Base`/`Exponent`, not
+        # `A`/`B`, and `connect` raises on a pin a node does not have. The exponent pin is
+        # reached as `Exp`, not `Exponent`: `ConnectMaterialExpressions` matches against
+        # `UMaterialGraphNode::GetShortenPinName`, which rewrites `Exponent` -> `Exp`
+        # (`MaterialGraphNode.cpp:614-617`), the same shortening that makes `Coordinates`
+        # reachable only as `UVs`. (R7.1: this helper had no call site until `_build_water`
+        # gamma-decoded its fog colour through it, so both spellings shipped untested.)
+        n = self.node(unreal.MaterialExpressionPower, x, y)
+        connect(a, a_out, n, "Base")
+        connect(b, b_out, n, "Exp")
+        return n
 
     def lerp(self, a, a_out, b, b_out, alpha, alpha_out, x, y):
         n = self.node(unreal.MaterialExpressionLinearInterpolate, x, y)
