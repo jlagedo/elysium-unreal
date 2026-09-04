@@ -2563,9 +2563,13 @@ citations in `docs/architecture/water-architecture.md`; contract in `seam_map_ma
   down-facing faces on every top plane; a self-bottomed unit's own name sets a new `Underside`
   switch (zero specular, zero extinction) because the engine strips reflection from every
   down-facing water face and SLW's camera-under-water branch is dead code in 5.8 (§8, below).
-- **F — `$forcecheap` is a look, not a LOD.** `CheapWater` multiplies extinction ×16 (the body
-  reads as its `$fogcolor` at any depth) and leaves the reflection to Lumen. *Named modernization*:
-  the cheap cubemap is replaced by the same Lumen mirror the expensive path uses.
+- **F — `$forcecheap` is not a murkier volume, it is no volume** (revised 2026-09-04, after the
+  `sp_soc_3` witness). The first cut multiplied extinction ×16 to make the body read as its
+  `$fogcolor`; a scattering coefficient needs light, so an unlit basin read black. `WaterCheap_ps11`
+  is `lrp(fresnel, cube × $reflecttint, c0 = $fogcolor)`, never binds the refraction RT, and runs
+  on a `SURF_NOLIGHT` face — an emitted constant. `CheapWater` now zeroes both coefficients, forces
+  Opacity to 1 and emits the decoded `$fogcolor`. *Named modernization*: only that Lumen's mirror
+  replaces the cubemap.
 - **G — `leafMinDist[]` is provenance.** The engine never loads lump 46; nothing is derived from
   it — a fact, not a choice, and the retraction of the roadmap line's old "underwater from
   `leafMinDist`" premise.

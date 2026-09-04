@@ -26,7 +26,7 @@ Ten rulings, each a transcription unless it says *named modernization*.
 | **C** | **One `AElysiumWaterVolumes` actor per converted map**, bake-placed, tagged `elysium.water`, adopted by `UElysiumMapVisuals`; `AElysiumMapActor::PreMoveTick` classifies the player's feet / waist / eyes against it and calls `SetWaterLevel` before the move | transcription of `CGameMovement::CheckWater` (three point queries, level 0–3), on the declared edge "player movement follows pre-move" |
 | **D** | **Underwater is a post-process linear fog**: `M_ElysiumUnderwater` (`MD_PostProcess`, `lerp(scene, FogColor, saturate((SceneDepth − FogStart) × FogInvRange))`) registered by the water actor as an `IInterface_PostProcessVolume` whose `EncompassesPoint` is point-in-brush of the view location; the same actor writes `FSceneView::UnderwaterDepth` from `UWorld::OnBeginPostProcessSettings` | transcription of the `FogMode(LINEAR)` `ViewDrawScene_EyeUnderWater` selects; *named modernization*: the world fog is not suppressed under the plane (§9) |
 | **E** | **The underside faces stay.** The corpus already carries `dev/dev_waterbeneath2` as real down-facing faces on every top plane; they draw on the same one-sided SLW master with `Underside` set — no specular, no extinction — because the engine strips reflection from every down-facing water face and the under-plane view is fog, not volume | transcription of `Mod_LoadFaces`'s `$reflecttexture->SetUndefined()`; the zero extinction is forced by the engine fact in §8 (the SLW camera-under-water branch is dead code in 5.8) |
-| **F** | **`$forcecheap` is a look, not a LOD**: `CheapWater` multiplies the extinction by 16 (the body reads as its `$fogcolor` at any depth, which is what `lerp(fogcolor, cube, fresnel)` draws) and leaves the reflection to Lumen | *named modernization*: the cheap cubemap is replaced by the same Lumen mirror the expensive path uses |
+| **F** (revised 2026-09-04) | **`$forcecheap` is not a murkier volume, it is no volume**: `CheapWater` zeroes both coefficients, forces Opacity to 1 and emits the decoded `$fogcolor`, leaving the mirror to Lumen | transcription of `WaterCheap_ps11` — `lrp(fresnel, cube × $reflecttint, c0)` with `c0 = $fogcolor`, no refraction pass, on a `NOLIGHT` face; *named modernization* only in that Lumen supplies the cube |
 | **G** | **`leafMinDist[]` is provenance.** The engine never loads lump 46; nothing is derived from it | fact, not a choice |
 | **H** | **No scene-fog term on the water surface.** The R6 follow-up ("`ElysiumFog` term on `M_V2_Water`") closes as *not on this master*: the refracted world and the Lumen mirror already carry their own per-primitive fog; the surface's own scatter and specular are unfogged (§9) | *named modernization* — VtMB draws the surface under the world fog |
 | **I** | **Out of R7.1**: drips, mist, splashes (R7.3 families — and VtMB itself spawns no splash on entry), `dsp_water` (preset 14 at level 3) and wade footsteps (`plans/audio.md`), NPC water levels (`PhysicsCheckWater` on `MOVETYPE_STEP`, the entity substrate's), the `trigger_hurt` pools (already entities) | scope |
@@ -112,7 +112,7 @@ patched depth instance whose provenance carries only its `insert` delta.
 
 | Source | SLW / material input | Graph |
 |---|---|---|
-| `$fogcolor` (authored /255), `$fogstart`, `$fogend` (Source inches) | **Absorption / Scattering Coefficients** (1/cm) | `range = max((FogEnd − FogStart) × 2.54, 1)`; `σ = WaterFogScale / range`; `c = pow(FogColor.rgb, 2.2)` (the same decode `ElysiumFog::DecodeColor` applies to the scene fog); **Scattering = c × σ**, **Absorption = (1 − c) × σ**. `UseFogEnable` off → both 0 (`$fogenable 0`: `FogMode(0)`, clear water). `Underside` → both 0 (ruling E). `CheapWater` → σ × 16 (ruling F) |
+| `$fogcolor` (authored /255), `$fogstart`, `$fogend` (Source inches) | **Absorption / Scattering Coefficients** (1/cm) | `range = max((FogEnd − FogStart) × 2.54, 1)`; `σ = WaterFogScale / range`; `c = pow(FogColor.rgb, 2.2)` (the same decode `ElysiumFog::DecodeColor` applies to the scene fog); **Scattering = c × σ**, **Absorption = (1 − c) × σ**. `UseFogEnable` off → both 0 (`$fogenable 0`: `FogMode(0)`, clear water). `Underside` → both 0 (ruling E). `CheapWater` → both 0, the colour moving to Emissive and Opacity to 1 (ruling F) |
 | `$refracttint` | **Color Scale Behind Water** | `RefractTint` (default white). SLW fades it in over the first 50 cm of depth; on a 20-inch canal that is the whole depth |
 | — | **PhaseG** | 0. VtMB has no phase term |
 | `$normalmap` (`dev/water_normal`, 29 frames) + the `animatedtexture` proxy (30 fps, on `$bumpframe`) + `texturescroll` (~0.05 @ 45°) | **Normal** | the existing lane: `_flipbook_sample(NormalMapFrames, NormalFrameRate/Count)` under `UseAnimatedNormalFrames`, gated `UseNormalMap`, over the `BumpScrollRateU/V` panner. Unit strength |
@@ -434,15 +434,18 @@ Where the earlier text of this document was wrong, the line says **[was wrong]**
 4. **`$reflecttint` → luma.** SLW's Specular is scalar; the red tint on blood and spawn water
    reaches the reflection only as brightness. The volume colour carries the red.
 5. **Fresnel** is SLW's own Schlick from Specular, not `(1 − N·V)^5` with R0 = 0.
-6. **Cheap water's cubemap → Lumen.** The extinction × 16 keeps its opaque-fog body — but the
-   body is *lit*, not constant. VtMB's `$forcecheap` pixel is `lerp($fogcolor, cube, fresnel)`,
-   so the pool never reads darker than its authored `$fogcolor`; SLW's scattering coefficient
-   scatters whatever light reaches the water, so on an unlit stretch the body reads **0**, not
-   the fog colour, and only the Lumen mirror is left. Measured on `sp_soc_3`, §11: the same
-   surface reads (50, 74, 78) where it mirrors a lit wall and (0.2, 0.6, 0.8) 20 m away under an
-   unlit ceiling, against the (22, 20, 10) floor VtMB would draw everywhere. **Owner call open**
-   (§11): leave it physical, or add an unconditional `$fogcolor` floor on Emissive under
-   `CheapWater`.
+6. **Cheap water's cubemap → Lumen**, and nothing else about it is a divergence any more.
+   The first cut multiplied the extinction by 16 to make the body read as its `$fogcolor`, which
+   was an invention and a wrong one: a scattering coefficient scatters whatever light reaches the
+   water, so on an unlit stretch the body read **0**. Measured on `sp_soc_3` (§11), the same
+   surface gave (50, 74, 78) where it mirrors a lit wall and (0.2, 0.6, 0.8) twenty metres away
+   under an unlit ceiling, against the (22, 20, 10) VtMB draws everywhere. The corpus settles it
+   rather than an owner call: `WaterCheap_ps11` is `lrp r0.rgb, fresnel, cube × $reflecttint,
+   c0` with `c0 = $fogcolor` (`docs/vtmb/water.md` → "What the GPU draws"), it never binds
+   `_rt_WaterRefraction`, and a water face is `SURF 0x408` = `WARP|NOLIGHT`, so the constant is
+   emitted and nothing about it is lit. The master now transcribes that: coefficients 0, Opacity
+   1 (no refraction shows through), `$fogcolor` on Emissive, Lumen's mirror arriving through
+   Specular as the other half of the same lerp.
 7. **Underside = no extinction.** Forced by the dead engine branch; from below the refracted
    above-water world is what draws, tinted by the underside instance's own `$refracttint`.
 8. **Underwater: the world fog is not suppressed.** VtMB replaces it below the plane; here the
@@ -542,9 +545,9 @@ manifest's plane Z **−609.6 cm** / floor **−1788.16 cm**. Three things read 
 authored numbers and the family table (§2, §4.3), the same "did-it-appear" standard as the other
 two maps applies once a `run play` session reaches this map:
 - **The cheap-water look.** `maps/sp_soc_3/dev/dev_water2_cheap` is the per-map patched
-  `dev_water2*` unit with `$forcecheap` set, so ruling F's ×16 extinction applies — the basin
-  should read as its `{22 20 10}` fog colour at any depth, not fade in gradually, with the
-  reflection left to Lumen rather than the retired cubemap.
+  `dev_water2*` unit with `$forcecheap` set, so ruling F applies — the basin emits its
+  `{22 20 10}` fog colour on an unlit face, shows nothing through itself (no refraction pass, so
+  Opacity is 1), and takes its mirror from Lumen rather than the retired cubemap.
 - **The deep-basin fog under the plane.** At 1178.56 cm (464 in) deep — past `sm_hub_1`'s
   50.8 cm and `sm_pier_1`'s 83.8 cm, and past the pawn's 92.45 cm half-height — this is the first
   converted volume where the underwater post-process's fog has room to become a *look* rather
@@ -580,12 +583,12 @@ that bound (above); until its swim path is witnessed in play, `WaterMove`, the s
    pier's boards at `sm_pier_1`: `Feet` again, with no surface drawn. `Waist`/`Eyes`, `WaterMove`
    and the swim intent need a volume deeper than the body (see above).
 5. `sm_pier_1`'s 17 `objects/surf` cards slide up the sand on the 15 s sine (`SineUVTranslate`).
-6. `sp_soc_3`'s society basin reads its ×16 cheap-water extinction and its fog is a *look* under
-   the plane — **witnessed below**, with one amendment: the extinction is opaque at any depth as
-   ruled, but the body it leaves is lit, so it reads black rather than `{22 20 10}` wherever no
-   light reaches the water (divergence 6, owner call open). Step off into the 464-in basin for
-   `Waist`/`Eyes` and `WaterMove` — the swim path this session's owner call left for a later
-   `run play` witness (see above).
+6. `sp_soc_3`'s society basin emits its `$fogcolor` and its volume fog is a *look* under the
+   plane — **witnessed below**. The witness caught the first cut reading black wherever no light
+   reached the water; ruling F was rebuilt from `WaterCheap_ps11` as a result (divergence 6), and
+   the basin now carries its authored colour on an unlit face the way the 2004 lerp does. Step
+   off into the 464-in basin for `Waist`/`Eyes` and `WaterMove` — the swim path this session's
+   owner call left for a later `run play` witness (see above).
 7. `spawnwater` on `hw_warrens_5` reads as a bad pool, not a ruby one (a future converted map).
 
 ### Witnessed 2026-09-04, third session — `sp_soc_3`, the first deep basin
@@ -604,8 +607,10 @@ absent from the map's face groups on disk. Zero `Failed to compile Material Inst
   same frames — the 29-frame normal flipbook at 30 fps over the 0.035 scroll is moving. The
   reflection is Lumen's and is the only term with any magnitude: (50.3, 74.8, 77.8) where the
   surface mirrors the lit north wall, (0.2, 0.6, 0.8) 20 m out under an unlit ceiling, (0.0, 0.0,
-  0.0) in the far corner. **That last number is the finding**: ruling F promises "the body reads
-  as its `$fogcolor` at any depth", and it does not — see divergence 6 and the owner call below.
+  0.0) in the far corner. **That last number is the finding**, and it is what sent ruling F back to
+  the corpus: the first cut's ×16 extinction needed light to show a colour, while
+  `WaterCheap_ps11` emits `$fogcolor` on a `NOLIGHT` face. The master now emits it (divergence 6);
+  these three readings are the pre-fix measurement and a re-witness is owed on the next `run play`.
 - **Under the plane, inside the volume (ruling D) — the first deep-basin witness.** The volume fog
   *is* applied and *is* correct by depth. Proof, camera at (−2300, 2100, −900), 290 cm under the
   plane over a floor 950 cm down, `r.PostProcessing.DisableMaterials` A/B in the same pose:

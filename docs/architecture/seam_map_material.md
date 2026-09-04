@@ -938,9 +938,11 @@ M_World_Glass` already uses), fed four ways:
   `$bottommaterial` faces are seen only from inside the volume, whose fog is the post-process
   (§6), and 5.8's SLW camera-under-water branch is hardcoded off (`const bool CameraIsUnderWater =
   false;`, `BasePassPixelShader.usf:1698`), so the underside must not integrate "water" over the
-  above-water world it refracts. `CheapWater` multiplies `σ` by `16` (ruling F: the cheap program
-  never reads the refraction RT and lerps `lerp(fogcolor, cube, fresnel)`, so the body reads as its
-  `$fogcolor` at any depth).
+  above-water world it refracts. `CheapWater` zeroes both coefficients instead, moving the colour to
+  Emissive and forcing Opacity to `1` (ruling F, revised 2026-09-04: `WaterCheap_ps11` is
+  `lrp(fresnel, cube × $reflecttint, c0 = $fogcolor)` with no refraction pass, on a `SURF_NOLIGHT`
+  face — the fog colour is emitted, and a scattering coefficient would need light the face never
+  receives).
 - **`ColorScaleBehindWater`** = `RefractTint` (`mul r0, t2, c1`, the refract pass's own tint).
 - **`PhaseG`** = `0` — VtMB has no phase term.
 - (the fourth wire is `MP_NORMAL`, below — SLW reads the surface normal directly, not a fifth

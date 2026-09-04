@@ -1946,9 +1946,10 @@ def _build_water(mat, collection, lut_texture, default_normal_frames):
       (`$fogenable 0` is `FogMode(0)`: clear water). `Underside` -> both 0 (ruling E: the
       `$bottommaterial` faces are seen only from inside the volume, whose fog is the post-process;
       5.8's SLW camera-under-water branch is hardcoded off, so the underside must not integrate
-      "water" over the above-water world it refracts). `CheapWater` -> `sigma x 16` (ruling F: the
-      cheap program never reads the refraction RT and lerps `lerp(fogcolor, cube, fresnel)`, so the
-      body reads as its `$fogcolor` at any depth).
+      "water" over the above-water world it refracts). `CheapWater` -> both 0 as well, with the
+      colour moved to Emissive and Opacity forced to 1 (ruling F, revised: the cheap program is
+      `lrp(fresnel, cube x $reflecttint, $fogcolor)` with no refraction pass, on a `NOLIGHT` face
+      -- an emitted constant, not a scattering volume).
     - **Color Scale Behind Water** = `RefractTint` (`mul r0, t2, c1`, the refract pass's own tint).
     - **PhaseG** = 0: VtMB has no phase term.
     - **Normal**: the flipbook lane unchanged -- `dev/water_normal`'s 29 frames at the
@@ -2063,7 +2064,8 @@ def _build_water(mat, collection, lut_texture, default_normal_frames):
     connect(g.const3(0.0, 0.0, 0.0, -1100, 2480), "", lumen_safe_fixed, "RayTraced")
     fixed_emissive = g.switch(P.Switches.UseFixedCube, lumen_safe_fixed,
                               g.const3(0.0, 0.0, 0.0, -900, 2400), -900, 2360, default=False)
-    g.to(fixed_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    # The emissive pin is written at the end of the fog block below, which needs the decoded
+    # `$fogcolor` for the cheap-water floor and would otherwise decode it twice.
 
     # -- The volume: the VMT fog keys as SLW extinction (see the docstring) ---------------------
     fog_color = g.vec4(P.Vectors.FogColor, (0.0, 0.0, 0.0, 0.0), -1900, 4120)
@@ -2077,21 +2079,36 @@ def _build_water(mat, collection, lut_texture, default_normal_frames):
                         g.const(1.0e9, -1500, 3900), "", -1300, 4000)
     fog_scale = g.mpc("WaterFogScale", -1500, 3800)
     sigma = g.div(fog_scale, "", fog_range, "", -1100, 3960)
-    sigma_cheap = g.mul(sigma, "", g.const(16.0, -1100, 4040), "", -900, 4000)
-    sigma_selected = g.switch(P.Switches.CheapWater, sigma_cheap, sigma, -700, 3980,
-                              default=False)
-    scattering = g.mul(fog_decoded, "", sigma_selected, "", -500, 4100)
-    absorption = g.mul(g.one_minus(fog_decoded, "", -700, 4200), "", sigma_selected, "",
-                       -500, 4220)
+    scattering = g.mul(fog_decoded, "", sigma, "", -500, 4100)
+    absorption = g.mul(g.one_minus(fog_decoded, "", -700, 4200), "", sigma, "", -500, 4220)
     zero3 = g.const3(0.0, 0.0, 0.0, -500, 4320)
     scattering_fogged = g.switch(P.Switches.UseFogEnable, scattering, zero3, -300, 4100,
                                  default=False)
     absorption_fogged = g.switch(P.Switches.UseFogEnable, absorption, zero3, -300, 4220,
                                  default=False)
-    scattering_final = g.switch(P.Switches.Underside, zero3, scattering_fogged, -100, 4100,
+    # `CheapWater` is not a murkier volume, it is no volume at all: `WaterCheap_ps11` never reads
+    # `_rt_WaterRefraction` and its whole output is `lrp r0.rgb, fresnel, cube x $reflecttint,
+    # c0($fogcolor)` on a `SURF_NOLIGHT` face (`docs/vtmb/water.md` -> "Expensive vs cheap"). So
+    # the coefficients go to zero and the colour is EMITTED, not scattered. Scattering would have
+    # been wrong twice over: it needs incident light, and an unlit basin (`sp_soc_3`, witnessed
+    # 2026-09-04) rendered black where VtMB draws its `$fogcolor`.
+    scattering_cheap = g.switch(P.Switches.CheapWater, zero3, scattering_fogged, -300, 4160,
                                 default=False)
-    absorption_final = g.switch(P.Switches.Underside, zero3, absorption_fogged, -100, 4220,
+    absorption_cheap = g.switch(P.Switches.CheapWater, zero3, absorption_fogged, -300, 4280,
                                 default=False)
+    scattering_final = g.switch(P.Switches.Underside, zero3, scattering_cheap, -100, 4100,
+                                default=False)
+    absorption_final = g.switch(P.Switches.Underside, zero3, absorption_cheap, -100, 4220,
+                                default=False)
+
+    # The cheap program's own `c0`: the fog colour as a flat term the Fresnel lerps the reflection
+    # against. Emissive is the only pin that survives an unlit face, which is what a water face is
+    # (`SURF 0x408` = `WARP|NOLIGHT`; no lightmap sample is ever built for one). Lumen's mirror
+    # arrives through Specular on top, which is the `cube x $reflecttint` half of the same lerp.
+    cheap_emissive = g.switch(P.Switches.CheapWater, fog_decoded,
+                              g.const3(0.0, 0.0, 0.0, -100, 4400), 100, 4360, default=False)
+    g.to(g.add(fixed_emissive, "", cheap_emissive, "", 300, 2400), "",
+         unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     # The output node is created here, immediately before its four inputs: every graph mutation
     # made while it exists with nothing connected raises `No inputs to Single Layer Water Material`
     # (`MaterialExpressions.cpp:21330` -- `CompileCustomOutputs` compiles every gathered custom
@@ -2109,8 +2126,13 @@ def _build_water(mat, collection, lut_texture, default_normal_frames):
     # -- Opacity: coverage. 0 for water; a base-textured unit keeps Alpha x BaseTexture.a --------
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
     opacity_textured = g.mul(alpha_param, "", base_a_selected, "", 1900, 0)
-    opacity_final = g.switch(P.Switches.UseBaseTexture, opacity_textured, g.const(0.0, 1900, 80),
-                             2300, 20, default=False)
+    opacity_textured_or_none = g.switch(P.Switches.UseBaseTexture, opacity_textured,
+                                        g.const(0.0, 1900, 80), 2300, 20, default=False)
+    # Coverage 1 under `CheapWater` (`WaterVisibility = 1 - Opacity`): the cheap program draws no
+    # refraction, so nothing behind the surface shows through it. The surface BRDF and the
+    # emitted fog colour are the whole picture, which is what the 2004 lerp outputs.
+    opacity_final = g.switch(P.Switches.CheapWater, g.const(1.0, 2300, 100),
+                             opacity_textured_or_none, 2500, 40, default=False)
     g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
 
     # -- Declared, not wired -- see the docstring's last paragraph ------------------------------
