@@ -258,7 +258,7 @@ bool SelectKnockbackActivity(const FElysiumSwingRecord& Record, EKnockbackDirect
 	// refusal: `if (counts[bucket] < 1) bucket = 0`. A direction the attack authors no candidate for
 	// therefore answers whatever bucket 0 holds, and only a record whose bucket 0 is ALSO empty
 	// reaches the caller's fallback. Refusing here instead would skip the shipped answer entirely.
-	if (!Record.KnockbackNames.IsValidIndex(Bucket) || Record.KnockbackNames[Bucket].IsEmpty())
+	if (!Record.KnockbackNames.IsValidIndex(Bucket) || Record.KnockbackNames[Bucket].Names.IsEmpty())
 	{
 		Bucket = 0;
 	}
@@ -266,7 +266,7 @@ bool SelectKnockbackActivity(const FElysiumSwingRecord& Record, EKnockbackDirect
 	{
 		return false;
 	}
-	const TArray<FString>& Candidates = Record.KnockbackNames[Bucket];
+	const TArray<FString>& Candidates = Record.KnockbackNames[Bucket].Names;
 	if (Candidates.IsEmpty())
 	{
 		// Retail reaches a per-class default activity by direction here (a virtual on the victim).

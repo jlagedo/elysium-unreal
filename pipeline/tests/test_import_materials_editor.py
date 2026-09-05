@@ -1002,8 +1002,10 @@ def test_pruning_removes_what_the_manifest_neither_names_nor_protects(tmp_path):
     _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
     editor.assets[ROOT + "/art/MI_retired"] = FakeAsset(
         ROOT + "/art/MI_retired", "MaterialInstanceConstant")
+    editor.assets[ROOT + "/art/MI_retired"].metadata["ElysiumProducer"] = 'materials'
     editor.assets[ROOT + "/art/MI_unreadable"] = FakeAsset(
         ROOT + "/art/MI_unreadable", "MaterialInstanceConstant")
+    editor.assets[ROOT + "/art/MI_unreadable"].metadata["ElysiumProducer"] = 'materials'
     module = _load(editor)
     manifest = _stage(tmp_path, [_entry("brick")], keep=[ROOT + "/art/MI_unreadable"])
 

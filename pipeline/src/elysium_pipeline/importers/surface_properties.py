@@ -151,7 +151,8 @@ def asset_path_for(key: str) -> str:
     case first is what makes `Metal` and `metal` name the same asset.
     """
 
-    return f"{PACKAGE_ROOT}/{ASSET_PREFIX}{safe_name(check_key(key))}"
+    from elysium_pipeline.asset_paths import baked_path
+    return baked_path("surface-property", check_key(key), ASSET_PREFIX.rstrip("_"))
 
 
 def prune_scope() -> str:

@@ -149,6 +149,25 @@ def test_the_coordinate_rule_on_a_hand_computed_triangle(editor_module):
     assert twice == [(0, 1, 2)]
 
 
+def test_editor_mesh_projection_preserves_precise_source_positions(editor_module):
+    from pipeline.tests.test_model_glb import _unit
+    from elysium_pipeline.exporters import model_glb
+    _, unit = _unit()
+    primitive = unit.lods[0]["primitives"][0]
+    x = 480123.987654321
+    primitive["positions"][0] = (x, 2., 3.)
+    primitive["sourceNormals"][0] = (0., 0., 2.)
+    primitive["normals"][0] = (0., 0., 1.)
+    document, binary = model_glb.build_document(unit)
+    raw = document["meshes"][0]["primitives"]
+    sections = editor_module.decode_lod_sections(document, binary, raw, {0: 0}, "precise")
+    assert sections[0]["positions"][0] == (x * 2.54, -2. * 2.54, 3. * 2.54)
+    assert sections[0]["normals"][0] == (0., 0., 1.)
+    rounded = editor_module.unreal_positions(editor_module.accessor(
+        document, binary, raw[0]["attributes"]["POSITION"]))[0]
+    assert abs(rounded[0] - sections[0]["positions"][0][0]) > 1e-4
+
+
 def test_non_manifold_sections_are_detected_before_they_are_appended(editor_module):
     """`FDynamicMesh3` refuses a triangle that would make the mesh non-manifold, and a refusal is
     a dropped face plus a log line. Every one of its three refusal conditions is predicted here,

@@ -148,6 +148,8 @@ public:
 	// and every reader handles FindPlayer() being null — the same null-service discipline the
 	// outbound seam established.
 	FElysiumEntityHandle SpawnPlayer();
+	// The same clan/gender/armor selection used by SpawnPlayer, available before body construction.
+	FString InitialPlayerModel() const;
 	// This world's player entity, or null when the map was built without one.
 	class FElysiumPlayer* FindPlayer() const;
 	FElysiumEntityHandle PlayerHandle() const { return Player; }

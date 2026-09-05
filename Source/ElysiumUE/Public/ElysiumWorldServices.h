@@ -514,7 +514,7 @@ public:
 	// subsystem, so this aliases storage that outlives the frame it was asked in. Same frame rule as
 	// the other cached-sidecar getters — a caller does not retain it across a map epoch.
 	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
-		const FString& Label)
+		const FString& Label, const FString& OwnerRoot = FString())
 	{
 		return nullptr;
 	}

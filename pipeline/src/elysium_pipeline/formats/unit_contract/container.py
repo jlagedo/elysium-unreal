@@ -100,6 +100,20 @@ def read_glb(path: Path) -> tuple[dict[str, Any], bytes]:
     return decode_glb(Path(path).read_bytes(), str(path))
 
 
+def read_document(path: Path) -> dict[str, Any]:
+    """Read only a unit's JSON chunk for metadata/consumer walks, without loading its BIN."""
+    path = Path(path)
+    with path.open("rb") as stream:
+        header = stream.read(20)
+        if len(header) != 20:
+            raise GlbContainerError(f"{path}: truncated GLB header")
+        magic, version, total, length, kind = struct.unpack("<5I", header)
+        if (magic != GLB_MAGIC or version != 2 or kind != JSON_CHUNK
+                or total != path.stat().st_size or length % 4 or length + 20 > total):
+            raise GlbContainerError(f"{path}: invalid GLB JSON header")
+        return json.loads(stream.read(length))
+
+
 def decode_glb(data: bytes, path: Any = "the unit") -> tuple[dict[str, Any], bytes]:
     """The same parse over bytes a caller already holds; `path` only names them in errors.
 

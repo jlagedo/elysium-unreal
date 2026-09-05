@@ -20,6 +20,7 @@ from __future__ import annotations
 from typing import Any, Iterable, Mapping, Sequence
 
 from elysium_pipeline.formats.corpus_index_glb.model import Member, Unit
+from elysium_pipeline.formats.unit_contract.source_policy import selected_source
 
 
 def source_rows(root: Mapping[str, Any]) -> dict[str, list[dict[str, Any]]]:
@@ -132,7 +133,8 @@ def source_disagreements(
             table = tables.get(asset)
             if table is None:
                 table = tables[asset] = source_rows(root)
-            row = _disagreement(member.path, asset, member.source.to_json(), table.get(member.path, ()))
+            row = _disagreement(member.path, asset, selected_source(member.to_json(), asset),
+                                table.get(member.path, ()))
             if row is not None:
                 rows.append(row)
     return rows

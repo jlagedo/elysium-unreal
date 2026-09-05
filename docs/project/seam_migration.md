@@ -2527,7 +2527,7 @@ happens to share a name for — a surface look, a `CONTENTS_WATER` volume, an un
 the eye-under-the-plane fog — and the ruling keeps them apart onto four different Unreal
 mechanisms rather than reproducing the two 2004 render-target passes. Full ruling and engine
 citations in `docs/architecture/water-architecture.md`; contract in `seam_map_material.md` →
-`M_V2_Water` and `seam_map_map.md` → "Import — water volumes (R7.1)". `GRAPH_VERSION` 8 → 9,
+`M_V2_Water` and `seam_map_map.md` → "Import — water volumes and water faces". `GRAPH_VERSION` 8 → 9,
 `MANIFEST_VERSION` 8 → 9 (`pipeline/src/elysium_pipeline/importers/map_geometry.py:59`,
 `pipeline/unreal/bake_map_v2.py:59`).
 
@@ -2608,7 +2608,7 @@ instance shipped with a flat normal on both the legacy and V2 lanes until this f
 (`importers/materials.py:141-149`).
 
 **Named divergences beside the faithful behaviour** (owner-visible, full list in
-`water-architecture.md` §9): two render targets collapse to one SLW pass (no planar camera, no
+`water-architecture.md` §12): two render targets collapse to one SLW pass (no planar camera, no
 DUDV RT offset); linear volume fog becomes exponential extinction, half-distance matched by
 `WaterFogScale`; `$refractamount`/`$reflectamount` and `mat_waterswirl` are declared, not wired
 (the normal is used at unit strength); `$reflecttint` reaches the reflection only as luma, not red
@@ -2675,7 +2675,7 @@ actor placed with 1 volume(s)`; `verify_water`: `1 staged rows, 1 matched` on bo
 across both map bakes; no leftover UnrealEditor processes.
 
 **Order of work.** (i) the ruling into `water-architecture.md`, `seam_map_material.md` →
-`M_V2_Water`, `seam_map_map.md` → "Import — water volumes (R7.1)"; (ii) `matgraph.py`'s `Graph.pow`
+`M_V2_Water`, `seam_map_map.md` → "Import — water volumes and water faces"; (ii) `matgraph.py`'s `Graph.pow`
 fix (a prerequisite the SLW fog-colour decode exposed); (iii) `make_v2_materials.py`'s `_build_water`
 + `M_ElysiumUnderwater`, `make_surface_knobs.py`'s `WaterFogScale`; (iv) `importers/materials.py`
 (`Underside`, `SineUVTranslate`, the normal-frames fix) and `importers/map_geometry.py`
@@ -2693,7 +2693,7 @@ on legacy per-map glass/prop-alpha checks a V2 bake can never satisfy (`bake_map
 per-map `MI_glass_*`) — pre-existing, unrelated to water. `test content` exits with 5 pre-existing
 failures, none water-related (reflection captures, `ChangeLevelInputs`' pin count, `FanDuration`,
 `RigCompose`, `SantaMonicaRain`'s missing V2 wet-cubemap MICs). The in-game witness
-(`docs/architecture/water-architecture.md` §11) ran twice on 2026-09-04: the sewer surface draws,
+(`docs/architecture/water-architecture.md` §14) ran twice on 2026-09-04: the sewer surface draws,
 reflects and refracts; `Feet` reads on the sewer floor and in the pier's ocean band; the pier's
 invisible ocean drew as a `tools/toolsinvisible` sheet until `meshed_faces` honoured `noDraw` and
 the map re-baked (five chunk meshes rebuilt); and the "underwater post-process does not fog"
@@ -2741,7 +2741,7 @@ was raised:
   alarm (a `SubstitutedClosure` warning on a mask-1 `_bobble_layer` that is not a bake gap) is fixed
   without moving those medians.
 - **`dev/ocean`/`dev/oceanbeneath` now stage.** `M_V2_Water`'s `BaseTexture` slot is no longer
-  required (`water-architecture.md` §4.2's Opacity row, `importers/materials.py`): the DX6 fallback
+  required (`water-architecture.md` §3.2's Opacity row, `importers/materials.py`): the DX6 fallback
   sheet's 29-frame VTF has no frames lane on the master, so the two units stage with
   `UseBaseTexture` off and draw as water like every other water unit by default, instead of
   refusing the unit. `envmap/gioint` and `skybox/hav_env` (cubemap `$basetexture` on `M_V2_Unlit`,
@@ -2754,7 +2754,7 @@ was raised:
   `vtmb:material:maps/sp_soc_3/dev/dev_water2_cheap`, `fogEnable` true, `fogColor` (0.086275,
   0.078431, 0.039216), 2.54/1016.0 cm, 2 brushes of 6 planes each. Bake: `[bake] water: 1 actor
   placed with 1 volume(s)`; `verify_water`: `1 staged rows, 1 matched`. Full ruling and the
-  cheap-water / deep-basin / underside detail in `docs/architecture/water-architecture.md` §11.
+  cheap-water / deep-basin / underside detail in `docs/architecture/water-architecture.md` §14.
 - **The swim witness.** `Waist`/`Eyes` are no longer unreachable everywhere: `sp_soc_3`'s
   1178.56 cm basin is the first converted volume past the pawn's 92.45 cm half-height, the
   condition the earlier text named as blocking. It has not been spent — owner call (2026-09-04):
@@ -2766,8 +2766,9 @@ was raised:
 complete decoded-datum census of `sm_pier_1` and `sm_hub_1` then measured what it had left on the
 floor — 26 gaps, G1–G26 — and eight read-only Phase 0 lanes settled the unknowns that blocked
 dispositioning six of them. This pass fixed 18, ruled 6 out on evidence, and left 2 to a game
-witness. Evidence and the full gap list: `docs/vtmb/water_data_census.md`. Rulings:
-`docs/architecture/water-architecture.md` §1.1. **`GRAPH_VERSION` 9 → 11**, **`MANIFEST_VERSION`
+witness. Evidence: `docs/vtmb/water.md` and the census report at
+`ELYSIUM_WORK_ROOT/scratch/water_audit/CENSUS.md`; the gap list is the table below. Design:
+`docs/architecture/water-architecture.md`. **`GRAPH_VERSION` 9 → 11**, **`MANIFEST_VERSION`
 9 → 11** (both halves, pinned equal), map seam **1.0.0 → 1.1.0**, material seam **1.1.0 → 1.2.0**,
 `WATER_ACTOR_SHAPE` **1 → 2**.
 
@@ -2922,7 +2923,7 @@ FOOTSTEPS are not in that position: VtMB takes them off a millisecond timer in t
 `AElysiumMapActor::UpdatePlayerWaterFootsteps` runs that timer at the tail of `UpdatePlayerWater`
 and calls `PlayPlayerWaterFootstep` itself. A real locomotion step producer should call that
 consumer directly when it lands, retiring this clock rather than running a second one beside it. (iii)
-**U7 and U8** need the game and the editor respectively (`water_data_census.md` §9). (iv)
+**U7 and U8** need the game and the editor respectively (`water-architecture.md` §14). (iv)
 `player/pl_wade2.wav` is **settled, not open**: an index of every VPK plus every loose override
 (67,469 packed entries, 78,538 files) carries no `pl_wade*` — the literal names a Half-Life 2 asset
 Troika never packed, so leaving the water is silent here because it was silent in 2004.

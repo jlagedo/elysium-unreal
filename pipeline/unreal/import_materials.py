@@ -319,13 +319,14 @@ class Tracker(object):
     def needs_import(self, entry):
         path = entry["assetPath"]
         fingerprint = self.fingerprint(entry)
+        stored = bl.stored_recipe(path, producer='materials')
         exists = unreal.EditorAssetLibrary.does_asset_exist(path)
         if exists and bl.asset_class_name(path) != ASSET_CLASS:
             bl.delete_owned_asset(path)
             exists = False
         if self.force or not exists:
             return True
-        return bl.stored_recipe(path) != fingerprint
+        return stored != fingerprint
 
 
 class Report(object):
@@ -336,6 +337,7 @@ class Report(object):
         self.built = 0
         self.reused = 0
         self.pruned = 0
+        self.ownership = {"foreign": 0, "unstamped": 0}
         self.provenance_only = 0
         self.failures = []
         self.compiled_permutations = []
@@ -373,7 +375,7 @@ class Report(object):
             "select": self.select,
             "imported": self.built,
             "reused": self.reused,
-            "pruned": self.pruned,
+            "pruned": self.pruned, **self.ownership,
             "provenanceOnly": self.provenance_only,
             "failed": self.failures,
             "compiledPermutations": self.compiled_permutations,
@@ -667,6 +669,9 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
     for key in ("assetPath", "unitGlb", "sourceMembersSha256", "physMaterial"):
         if key in entry:
             sidecar[key] = entry[key]
+    if entry.get("resolvedMaster"):
+        sidecar["master"] = entry["resolvedMaster"]
+        sidecar["blendMode"] = entry["basePropertyOverrides"].get("blendMode")
 
     record, error = unreal.ElysiumMaterialProvenance.apply_json(mic, json.dumps(sidecar))
     if record is None:
@@ -674,7 +679,7 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
     stamped, error = unreal.ElysiumMaterialProvenance.stamp_registry_tags(mic)
     if not stamped:
         raise RuntimeError("registry tags: %s" % error)
-    bl.stamp_recipe(mic, tracker.fingerprint(entry))
+    bl.stamp_recipe(mic, tracker.fingerprint(entry), producer='materials')
     t9 = time.perf_counter()
     report.add_phase("provenance", t9 - t8)
 
@@ -721,33 +726,8 @@ def import_entries(manifest, staging_root, tracker, report):
     _collect_garbage()
 
 
-def prune(package_root, keep, scope):
-    """Delete every asset inside `scope` the manifest neither names nor protects, then empty folders.
-
-    `keep` holds package paths below `package_root`: the manifest's `assets` plus its `keep`
-    list. `scope` is the manifest's `pruneScope`, always with a trailing slash, compared
-    case-insensitively. This lane never prunes the master root -- `pruneScope` is validated to
-    sit below `packageRoot`, so the hand-authored masters under `masterRoot` are never in scope.
-    """
-    library = unreal.EditorAssetLibrary
-    if not library.does_directory_exist(package_root):
-        return 0
-    scope = scope.lower()
-    if not scope.endswith("/"):
-        scope += "/"
-    stale = []
-    for object_path in library.list_assets(package_root, recursive=True, include_folder=False):
-        package_path = object_path.split(".", 1)[0]
-        if package_path.lower().startswith(scope) and package_path not in keep:
-            stale.append(package_path)
-    for start in range(0, len(stale), PRUNE_CHUNK):
-        bl.delete_owned_assets(stale[start:start + PRUNE_CHUNK])
-    folders = [path for path in library.list_assets(package_root, recursive=True, include_folder=True)
-               if path.endswith("/") and path.lower().startswith(scope)]
-    for folder in sorted(folders, key=lambda p: p.count("/"), reverse=True):
-        if not library.list_assets(folder, recursive=True, include_folder=False):
-            library.delete_directory(folder)
-    return len(stale)
+def prune(package_root, keep, scope, counts=None):
+    return bl.prune_owned(package_root, keep, scope, 'materials', counts)
 
 
 def run(manifest_path, force=False):
@@ -772,7 +752,7 @@ def run(manifest_path, force=False):
     import_entries(manifest, staging_root, Tracker(force), report)
     try:
         protected = {entry["assetPath"] for entry in manifest["assets"]} | set(manifest["keep"])
-        report.pruned = prune(package_root, protected, manifest["pruneScope"])
+        report.pruned = prune(package_root, protected, manifest["pruneScope"], report.ownership)
     except Exception as exc:  # noqa: BLE001
         report.failures.append({"assetPath": package_root, "unit": "", "reason": "prune raised: %s" % exc})
         fail("prune raised: %s" % exc)

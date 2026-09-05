@@ -126,7 +126,7 @@ def author_map(entry, force=False):
     )
     if (not force and unreal.EditorAssetLibrary.does_asset_exist(object_path)
             and bl.asset_class_name(object_path) == ASSET_CLASS
-            and bl.stored_recipe(object_path) == fingerprint):
+            and bl.stored_recipe(object_path, producer='map-environment') == fingerprint):
         return "reused"
 
     bl.ensure_dir(package_root)
@@ -161,7 +161,7 @@ def author_map(entry, force=False):
     asset.set_editor_property("spawn_origin_cm", make_vector(spawn["origin"]))
     asset.set_editor_property("spawn_yaw_deg", float(spawn["yaw"]))
 
-    bl.stamp_recipe(asset, fingerprint)
+    bl.stamp_recipe(asset, fingerprint, producer='map-environment')
     if not bl.save(object_path):
         raise RuntimeError("save failed: %s" % object_path)
     return "imported"

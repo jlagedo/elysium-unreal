@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumClipMovement.generated.h"
 
 // VtMB's **animation-driven movement**: the rule that a playing sequence, not the player's command,
 // decides where the body goes (`docs/vtmb/source_movement.md`, `docs/vtmb/combat-and-damage.md`).
@@ -28,28 +29,38 @@
 // `-y -> sidemove` reads with a negation and this does not: that negation IS the reflection, spent
 // at the point of use instead. Take X as forward, Y as right and Z as up. Negating Y a second time
 // mirrors every sideways attack.
-struct FElysiumMovementRecord
+USTRUCT()
+struct ELYSIUMUE_API FElysiumMovementRecord
 {
+	GENERATED_BODY()
+
 	// The last frame of the block this record covers. The array is ascending, and the final entry's
 	// value is the clip's own `numframes - 1`.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 EndFrame = 0;
 	// `motionflags` — which channels the block authors. Provenance: the sampler reads the vector.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Flags = 0;
 	// **Lengths, not rates.** They are the ease coefficients of `v0 * f + 0.5 * (v1 - v0) * f * f`
 	// over the block's own fraction, so the whole block's travel is `0.5 * (v0 + v1)` — exact on
 	// every shipped record.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float V0Cm = 0.0f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float V1Cm = 0.0f;
 	// The block's authored yaw about Z, degrees, in Unreal's sense. Every shipped record states
 	// exactly 0.0 (`docs/vtmb/animation_and_movers.md` carries the shipped census), so the rotation the
 	// sampler applies with it is the identity in practice; it is implemented rather than dropped
 	// because that zero is a fact about the corpus, not about the format.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float YawDegrees = 0.0f;
 	// The block's unit travel direction.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FVector Direction = FVector::ZeroVector;
 	// The **cumulative** position at `EndFrame`, from the clip's origin. Never "the displacement":
 	// `baseballbat_attack_med` lunges 46.7 cm mid-clip and ends at exactly zero, so a reader taking
 	// the last record's position makes that clip stand still.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FVector PositionCm = FVector::ZeroVector;
 };
 
@@ -61,8 +72,12 @@ struct FElysiumMovementRecord
 // by ordinary friction. A sidecar carrying no `movement_fields` at all is the different absence —
 // that file was written by a pipeline that never looked, and its reader reports rather than
 // behaving as though the clip authored zero records.
-struct FElysiumClipMovementPath
+USTRUCT()
+struct ELYSIUMUE_API FElysiumClipMovementPath
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	TArray<FElysiumMovementRecord> Records;
 
 	bool IsEmpty() const { return Records.IsEmpty(); }

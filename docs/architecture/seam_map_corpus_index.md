@@ -238,3 +238,16 @@ hash per row, re-hashes every unit file against its `units[]` row, and checks th
 `references[]` edge appears in exactly one unit's `dependencies` and that `inverse` is its
 transpose. Standalone validation checks the scene-less rule, the absence of a BIN chunk, the
 identity, and the internal consistency of `members[]`, `units[]`, `references[]` and `summary`.
+
+
+### Named source-policy exceptions
+
+The member table always records the actual patch-first install winner and hashes its shadowed
+sources. A unit may select a shadowed source only through the exact `(asset id, source path)`
+registry in `formats/unit_contract/source_policy.py`; the member then carries `unitSourcePolicy`.
+The existing water ruling N.3 selects the retail VPK `particles/waterbigsplash_emitter.txt` and
+leaves the patch stub as the recorded install winner. Reconciliation and the independent index
+validator compare the unit's origin, byte length and digest to that measured VPK source. An
+unregistered unit, a different member path, or a wrong digest still fails. The particle unit's
+`sourceResolution.overridePolicy` records the same decision. This is source selection, never
+an exemption from source-byte validation.

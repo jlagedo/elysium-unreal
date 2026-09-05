@@ -6,7 +6,7 @@ and placed skeletal props — through one decoder, one schema and one identity n
 supersedes the character-body unit of `seam_map_character.md` and the bank unit of
 `seam_map_animation_bank.md`; `vtmb:character-body:` and `vtmb:animation-bank:` are retired in
 favour of `vtmb:model:`, and `ELYSIUM_vtmb_character` becomes `ELYSIUM_vtmb_model` at schema
-`2.0.0`. Shared rules are owned by `seam_map_unit_contract.md`.
+`2.2.0`. Shared rules are owned by `seam_map_unit_contract.md`.
 
 Format facts remain owned by `docs/vtmb/mdl_v2531.md`, `docs/vtmb/animation_and_movers.md`,
 `docs/vtmb/animation_rig_resolution.md`, `docs/vtmb/facial_animation.md`,
@@ -101,7 +101,7 @@ model.glb
   "extensionsRequired": ["ELYSIUM_material_reference", "ELYSIUM_vtmb_model"],
   "extensions": {
     "ELYSIUM_vtmb_model": {
-      "schemaVersion": "2.0.0",
+      "schemaVersion": "2.2.0",
       "identity": {},
       "sourceResolution": {},
       "coordinateTransform": {},
@@ -202,16 +202,34 @@ consumer's join through `dependencies`.
 
 Facial deformation is written as morph targets on the LOD 0 primitives with `POSITION` and
 `NORMAL` deltas; `facial.morphTargets[]` maps each back to its flex description and pieces.
+Each LOD0 primitive also carries `ELYSIUM_vtmb_model.morphRecords[]`, in authored flex/vertex
+record order: `flex`, `target`, `sourceVertex`, `vertex`, `position`, `normal`. Positions and
+normals in this extension are decoded **Source** values. `vertex` is the primitive-local render
+index, or null for an undrawn vertex. Zero-valued entries and repeated contributions are retained;
+the dense core accumulates contributions to the same target/vertex. Dense zero arrays alone cannot
+preserve whether the source explicitly authored a zero or no record at all. The skeletal stage
+uses these ordered records to reproduce the sparse native morph payload, including explicit zeros.
+An entire source mesh with no LOD0 primitive retains its ordered records under
+`mdl.bodyParts[].models[].meshes[].unrenderedMorphRecords`, with `flex`, `sourceVertex`,
+`position` and `normal`. Those records have no render target/index to name. Validation counts
+every source mesh's authored `numverts`, including this branch; a mesh without render geometry
+cannot silently lose its facial records.
 `physics` mirrors the PHY records with each convex hull's positions and indices in the BIN and
 the solid, ledge, constraint, break and key-value records in the extension, stated in
 `IVP metres, axis-only`. `coordinateTransform` follows the unit contract; cloth keeps source
 inches inside the extension.
 
+The core glTF nodes/accessors carry the converted geometry, poses and eye origins. Extension
+records retain Source values unless their section explicitly declares another domain: eye
+directions, procedural positions/quaternions, sequence bounds, movements and secondary-motion
+parameters must not be interpreted as glTF-space values. `storedPosition`/`storedRotation` preserve
+bind values that do not round-trip through a normalized core transform.
+
 ## Extension reference
 
 | Key | Kind | Contents |
 |---|---|---|
-| `schemaVersion` | string | `2.0.0` |
+| `schemaVersion` | string | `2.2.0` |
 | `identity` | object | `asset`, `modelPath`, `family`, `shape`, `roles`, `sourcePolicy` |
 | `sourceResolution` | object | the member table |
 | `coordinateTransform` | object | the rule and per-domain table |
@@ -219,7 +237,7 @@ inches inside the extension.
 | `vtx` | object | `variants[]`, `comparison`, `lods[]` |
 | `physics` | object or null | `header`, `coordinateSystem`, `solids[]`, `editParams[]`, `constraints[]`, `breaks[]`, `keyValues[]` |
 | `materialBindings` | object | `slots[]`, `skinFamilies[]` |
-| `facial` | object | `flexDescriptions[]`, `controllers[]`, `rules[]`, `mouths[]`, `phonemeFilter`, `selectedTables[]`, `morphTargets[]` |
+| `facial` | object | `flexDescriptions[]`, `controllers[]`, `rules[]`, `mouths[]`, `selectedTables[]`, `morphTargets[]`; `phonemeFilter` belongs to `mdl.header` |
 | `procedural` | object | `axisInterpolation[]` |
 | `secondaryMotion` | array | one record per dynamics recipe |
 | `cloth` | object | `garments[]`, `sourceModels[]` |
@@ -836,3 +854,302 @@ collision and skins. It makes no judgement that needs a screenshot.
   what R5.1 places.
 - **No legacy retirement.** `/ElysiumBaked/Shared/Meshes` and `DA_ElysiumPropSkins` under it are
   untouched. The root flip and the legacy corpus's deletion are their own named tasks.
+
+
+## Precise decoded source values
+
+The core glTF attributes and animation channels are a float32 rendering projection. Model
+schema 2.2 also stores decoded source positions/normals on each primitive as `sourcePositions`
+and `sourceNormals`, and complete sampled local poses on each local animation as `sourceSamples`.
+These records live in the model extension, in **Source space**, with `bufferView`, `shape`,
+`encoding: zlib-float64-le` and a SHA-256 of the decoded bytes. Geometry shapes are `[vertices,3]`;
+animation shape is `[frames,bones,7]`, each row translation XYZ followed by quaternion XYZW.
+Zero-weight bones carry the source decoder's zero sentinel. An animation with no contributing
+bone has no sample record, just as it has no core channels.
+
+This preserves dequantized source values through the metre/centimetre round trip and preserves
+unnormalized and degenerate authored normals. The core still carries the normalized/repaired
+rendering normal. The validator checks the precise values against that projection and, at export,
+checks precise positions against an independent MDL read. The shared standard-library reader
+bounds decompression by the declared shape, checks stream termination and digest, and refuses
+non-finite values. Staging and static-mesh import consume the precise values; a second VtMB
+install or a binary MDL decoder is not required at import.
+
+## Import — skeletal staging
+
+`uv run elysium import characters --stage-only [--bodies <id-or-stem>]` reads published model
+units and writes `import/characters/<key>.skel`, `<key>.body.json`, `<key>.provenance.json` and
+`manifest.json` under the work root. A scoped selection includes its transitive model includes;
+the manifest inventories every published model with its selection reason. A basename selector
+must resolve to exactly one unit. Staged product addresses follow the baked-unit resolver, and
+folded collisions and physical paths over 240 characters are errors before editor publication.
+
+`skeletal_stage/payload.py` owns the basis change, single-rooting, split-rotation correction,
+owned-channel bind fill, additive/host composition, grid-cell expansion and section writing.
+The temporary legacy exporter and the GLB stage share those rules through decoded-record
+adapters; the GLB adapter never reads the install or invokes a binary MDL decoder. Binary
+ownership masks are checked before any thresholding. `DYNM`/`BDYN` have no staged section;
+the complete secondary-motion records remain in the source semantics instead.
+
+The `.body.json` carries the sequence/grid/event/movement tables, ordered discarded-descriptor
+reasons, skin families, the cloth render-vertex join and the full extension semantic domains.
+Its `sourceSemantics` retains each domain's source units and accessor references; it is an
+editor input, not a runtime sidecar. Native skeletal payloads themselves are Unreal-native.
+Higher LODs remain in the unit and are explicitly listed in provenance; LOD0 is the staged
+skeletal mesh projection.
+
+`uv run elysium verify characters --legacy-root <frozen-export> --stage-root <stage>` performs
+an independent ordered comparison. A character-stage manifest selects the **payload-only**
+gate; two legacy-shaped product trees additionally compare every JSON product and inventory
+missing and extra files. Names, topology, ownership, flags and order are exact. Position error
+up to `1e-4` cm and rotation/normal component error up to `1e-6` are named float32 round trips.
+Removal of unused dynamics sections and private albedo addresses are separately named changes.
+The differ imports no producer code. Payload parity alone does not authorize retirement of the
+loose readers or legacy bake: sidecar parity, bank-family binding, cooked assets and played
+acceptance are separate R8 gates.
+
+### Native skeletal import
+
+`uv run elysium import characters [--bodies <id-or-stem>] [--force]` runs the same stage and
+then `pipeline/unreal/import_characters.py` in a fresh editor. The importer validates payload,
+body and family-rig hashes, builds family/singleton skeletons, meshes, sequences and blend spaces,
+and stamps `UElysiumCharacterProvenance` plus producer/recipe metadata before saving. Material
+bindings read the material stage's `skinnedAsset`; the mesh recipe includes those materials'
+imported fingerprints. Missing imported material dependencies refuse a mesh build.
+
+Sequences and blend spaces have separate expected-product checks: a missing blend space must
+rebuild even when every sequence is current. Cinematic roles participate in every product name.
+Unresolved grid cells and grids with fewer than two native samples are named in `blendOmissions`.
+Native donor-bind identity includes the full owner package and role; two units with the same
+basename cannot overwrite each other's pose on a shared skeleton.
+
+Binary mask validation applies to source payloads, existing native profiles and compatibility
+mirrors. A reused profile must own exactly the source-declared bones, restricted to the target
+tree when mirrored. Body compatibility follows its transitive include closure and runs after
+the selected banks have authored their profiles.
+
+`import_report.json` records each failure and the semantic domains still requiring cooked
+projections. Building the core native products alone does not change runtime resolution or close
+the preservation, physics, cloth/hair, cooked-data and played-acceptance gates.
+
+`uv run elysium verify characters --native [--stage-root <stage>]` opens the stage selection in a
+fresh editor. It checks saved provenance, skeleton binding/counts, mesh bone order/reference
+transforms, routed material slots, morph inventory/curve registration, clip presence and
+post-additive metadata, and blend-space sample references. Its `native_verify_report.json`
+states the narrower scope: vertex/animation-sample parity and rendered acceptance remain separate.
+
+### Cooked mesh semantics
+
+Mesh-aligned facial, eye and procedural data rides `UElysiumCharacterProvenance` as reflected
+value structs. Their public `Visual/` headers define the same evaluator inputs the runtime
+already uses; serializing the values does not replace the evaluators. `bHasMeshData` distinguishes
+an authored empty rig from an asset whose data projection has not run. Parsing must preserve
+declared controller, rule, operation, morph, mouth, eye and procedural-row counts before a
+record can be attached.
+
+Eye origins come from the GLB's ordered `eyeballIndex` nodes, joined against the model records
+and checked for the declared bone parent. Their positions become bone-local centimetres;
+the MDL metadata's up/forward directions use the shared basis conversion. Radius, lid targets
+and iris scale keep their authored domains. The cooked eye record names its source body part,
+body model and material slot, plus a soft iris texture reference and the dynamic vampire flag.
+
+The material declaration table and every skin family remain ordered, including undrawn entries.
+They are distinct number spaces: 49 staged models declare more materials than skin-reference
+columns. Each family retains its original material indices and corresponding native references;
+its width is never padded to the material-table size. Facial RPN order and operands remain exact. All mouth
+records survive; the existing evaluator keeps its first-record view. The cooked mouth forward
+direction is Unreal-native (the legacy facial JSON left that diagnostic vector in Source space);
+no current evaluator reads the vector or mouth bone index.
+
+NPC, preview-body and animated-prop installers pass the loaded mesh to the animation subsystem.
+A V2 mesh supplies its cooked rig values, cached by asset path rather than basename. Missing
+data on a V2 mesh warns and never falls through to loose JSON. Legacy assets retain their old
+route until the cast/address cutover. Eye installation selects the V2 master for a V2 mesh;
+its material already binds the iris, so the cooked eye record triggers no loose texture load.
+
+The whole-mesh projection census covers 1,019 meshes, 194 with morph rigs, 570 eye records,
+2,910 procedural rules and 199 mouth records. Comparisons cover 177 legacy facial tables,
+256 eye tables and 223 procedural tables, with the stated mouth-direction conversion and
+numerical round-trip tolerance. Four eye records on `walkie_talki1` and `sabbat_hand` have no
+material mesh; the records and named source anomalies remain present.
+
+### Cooked clip metadata
+
+The stage writes `<key>.clips.json` per main owner and `<key>/<role>.clips.json` for cinematic
+actors, with separate maps for sequences and blend spaces. Each file is hashed in the manifest.
+`UElysiumClipData` carries the descriptor, contact/envelope/combo records, ordered event timeline
+and complete option strings, authored movement path and statedness, cell motion, and grid-axis
+names/flags/wrap values. Source selector columns remain available for projection onto body rows;
+candidate scoring must not resolve a clip pointer.
+
+The existing gameplay value types are reflected for storage. Knockback buckets use a reflected
+row containing an ordered string array; empty buckets retain their positions. Parser count gates
+include every event, movement, swing, envelope, bucket and knockback candidate. An explicit empty
+timeline remains valid data. The descriptor's additive classification must agree with the native
+post-additive tag, and Unreal's additive extraction stays disabled.
+
+Fresh-editor verification compares every saved reflected clip field against the stage. It is
+separate from geometric/animation-sample and rendered acceptance. Native skeleton packages are
+fully loaded before mutation; attempting to save a partial package returns a diagnosed failure
+instead of terminating the editor.
+
+### Body vocabularies
+
+Each main owner and cinematic role stages a `<key>[ /<role> ].vocabulary.json` and authors a
+`UElysiumBodyData` at the standard `DA_<base>[_<role>]` address. Its ordered sequence rows retain
+label, owner id/root, global raw index, activity/weight, flags/timing, reach bounds and combo-mask
+statedness, plus native sequence/grid/base-cell references and ordered layer references.
+
+The include walk counts every occurrence's full raw descriptor block, including duplicate and
+invalid descriptors, but records only each owner's first base. A cycle stops at the active stack;
+it does not suppress a later branch. Distinct owners of the same label remain distinct rows.
+Layer lookup uses the body's first definition and resolves host-derived forms before plain forms
+during staging. Source orphan declarations remain named and ordered rather than disappearing.
+
+`SelectionVocabulary` constructs only value records and never resolves a soft pointer. Its caller
+supplies the existing cast key for deterministic weighted draws, so moving an asset does not
+change the random seed. `GatherAnimationPaths` exposes the union required for preload. The legacy
+runtime clip/address resolver remains until the cast-table cutover wires these assets throughout.
+
+### Global model lookup
+
+`Models/_Corpus/DA_Cast` records all staged model identities, source paths, mesh/skeleton/body-data
+references, roles, aliases and cinematic root mappings. Source ids and complete model paths resolve
+directly. A short ambiguous alias names its candidates and never chooses an arbitrary model.
+
+Three established human-facing aliases retain their existing targets as the larger corpus brings
+in additional basename matches: `vv` targets `character/npc/unique/downtown/vv/vv`, `andrei` targets
+`character/npc/unique/hollywood/andrei/andrei`, and `stalker_female` targets
+`character/npc/unique/malkavian_mansion/stalker/stalker_female`. Other variants keep full-path and
+path-folded aliases. This is an explicit compatibility rule for cast/capture keys, not a package
+addressing rule. The audit covers all 293 legacy cast aliases with no retargeted keys.
+
+A cinematic mapping retains each exact bone-root token and its owner/body-data address. An empty
+root resolves only an unambiguous single-root set; a wrong nonempty root never selects another
+actor. Model and cinematic lookup operates on soft references without loading their targets.
+
+### Native runtime preparation and lookup
+
+`UElysiumNativeAnimationData` separates preparation from lookup. Preparation loads the requested
+body tables and include-owner tables, gathers their native asset references in a set, and requests
+the animation/mesh union asynchronously. Cinematic sets contribute every actor table named by the
+cast registry. Owner caches use each table's asset address, so two roots from the same model cannot
+share a vocabulary or timeline cache entry. The descriptor index's self row denotes the current
+actor; it does not request a main table for a split cinematic. Failed owner discovery publishes no
+partial owner graph. Handles are retained until the map's visual resources are released; pending
+requests are cancelled at release. Lookup uses prepared tables and resident soft references; it
+never starts an asset load.
+
+Native body data includes each owner's complete sequence/grid product maps, covering generated
+grid cells and derived forms as well as logical descriptor rows. Grid metadata carries the source
+grid and ordered pose-parameter records. The animation subsystem's explicit model-id path builds
+its value catalog from these assets, uses baked references for base/layer resolution, and reads
+contact and event metadata from resident clips. The compatibility view for existing mover/grid
+math is built from cooked metadata, preserving explicit empty movement and source timeline order.
+Legacy stem-based routes remain until the remaining model/world cutover is ready.
+
+Map construction batches known skeletal model references from the immutable entity definitions
+into one native preload request. The request observes the model keys and leaves entity/Source-I/O
+definitions untouched. Activation distinguishes pending native residency from a construction
+failure; a pending native request has a bounded 120-second loading deadline. Completion verifies
+every requested asset and, in the editor, finishes animation compilation before opening the gate.
+The retained resources are scoped to the map epoch; retiring another epoch cannot release them.
+Map preparation also gathers `BaseAnim`, `MaleAnim` and `FemaleAnim`, including every actor root of
+each authored set. An unresolved cinematic reference is a preparation error; ordinary brush and
+static model keys are filtered by the cast inventory. The initial player model joins this request
+through `FElysiumEntityWorld::InitialPlayerModel`, the same clan/gender/armor selection used by
+`SpawnPlayer`. Dynamically-created or changed model admission still requires its corresponding
+preparation path at full cutover. Native body construction reads the prepared mesh reference from
+this request and reports an unavailable mesh without starting a synchronous load.
+
+Direct cinematic resolution carries the unit id and actor root separately through the map/body
+seam. The clip identity, published phase, event cursor and timeline lookup retain that root; equal
+labels on different actors remain separate performances. Native resolution uses only prepared
+tables and resident animation references. A missing actor or unfinished owner fails with a warning
+and is not cached as a permanent missing clip. The legacy stem route remains until body identity
+and the remaining presentation products have completed their cutover.
+
+
+### Cinematic owners and bank families
+
+`BaseAnim`, `MaleAnim` and `FemaleAnim` in the published `logic_choreographed_scene` entity rows
+select cinematic sets. A multi-actor set stages one actor payload per `BipNN` root, with the
+legacy prefix-to-`Bip01` rename and original-index bone map. Per-label native products carry the
+actor root as their role suffix. A single-root set reuses the main owner; a body that is also
+such a set does not acquire a second copy of its clips.
+
+The bank partition reads all model units' joint metadata and masks, independent of the requested
+body slice. Include targets and cinematic actor owners are grouped by the existing case-insensitive
+first-fit tree-compatibility rule. Its historical source-path ordering is preserved as an **order
+key only**, with id/root tie-breaks; paths always resolve by unit identity. Family assets are
+`Models/_Corpus/SKEL_Family_<crc32>`, content-named from the sorted `(id,root)` membership.
+Skeleton-only `.rig.skel` inputs preserve each member's exact bind, so a scoped import can build
+the complete family without staging every member's animations. Body meshes keep singleton
+skeletons; their animation owner may reference a shared family.
+
+The complete GLB include graph contains two bank owners absent from the legacy selection:
+`character/npc/common/stripper/stripper3` and
+`character/pc/male/toreador/armor0/toreador_male_armor_0`. They are retained. The 372 legacy owners
+keep their original grouping; the two additions bring the whole set to 374 owners and 11 families.
+
+Staged reuse checks the source-unit digest, the staging code digest and family context, plus every
+payload/body/actor file's digest. A damaged or stale derived product is rebuilt. Scoped manifests
+retain other units' previous entries and keep native pruning disabled during cutover.
+
+
+### Wield stage and native mesh build
+
+The item join reads the typed `WeaponData` projection from V2 vdata units and the NPC equipment
+fields from V2 entity units. It retains all 244 item definitions and distinguishes empty, authored
+null, real and absent model references. The 67 real models use the shared `wield_corpus` binding,
+frame-constancy, body-compatibility and first-usable-clip reference-pose rules over GLB samples.
+`body.wield` carries the result, the native reference transforms, the original decision inputs,
+and the generated trail socket; the catalogue keys items and models by unit id.
+
+A wield model's staged mesh stays in source bind. Its separate skeleton-only `wieldSkeletonSource`
+contains the required reference pose, and the native build re-skins the vertices when installing
+that pose. `BuildSkeletalMeshFromStage` takes existing material asset paths per slot and optional
+reference transforms. It authors no private material copies or texture closure. It refuses missing
+slots and incomplete/invalid reference transforms. Morph position deltas use the vertex's weighted
+linear skin transform without translation. Morph normal deltas use that transform divided by the
+transformed base normal's length, preserving the final normalized normal at every morph weight.
+Invalid morph vertices and cancelled reference normals refuse the build. The mesh's bind, geometry,
+morphs and sockets must survive saving and reloading together. Both handleclaw wield units carry
+53 morph targets; their presence is preserved through the reference-pose change.
+
+A declared rest clip with an entirely unowned mask still needs the legacy held-bind tracks when
+standing a mesh. Such clips are listed as `forcedRestClips`; ordinary owned clips are untouched.
+
+### Comparing deliberate legacy omissions
+
+Native verification compares each retained staged animation track with the saved editor data
+model, including held singleton padding, sample rate, translations, quaternion components up to
+sign, and unit scale. Tolerances are `1e-4` cm for translation and `1e-6` for quaternion components.
+Dormant donor bones explicitly named by the bake receipt are counted separately: ordinary clips
+must omit their tracks, while additive clips must store identity. This check does not certify the
+omission policy, added mask-bind tracks, compressed/evaluated poses, mesh geometry, or rendered
+behavior. Its report exposes those boundaries separately from the number of source keys compared.
+
+Generated animation sequences under `Models/` use Unreal's stock `UAnimDataModel`, which stores
+quaternion keys directly. UE 5.8's Sequencer model first converts them to float Euler channels and
+collapses nearly-constant channels; that conversion can alter source keys before compression.
+The editor registers a scoped `IAnimationDataModels` provider for the generated model mount.
+Its registration preserves other providers' relative precedence and puts the scoped answer last
+in the factory's enumeration; other assets keep their existing model selection. The builder
+refuses an unexpected model class, and native save/reload and changed-key tests guard the contract.
+No custom animation asset class or runtime storage format is introduced. Existing converted keys
+cannot be repaired by switching model classes on load: affected assets must be rebuilt from stage.
+
+The payload comparer validates the frozen baseline hashes and the staged payload/body hashes.
+A legacy `rest` or `required` selection is compared against the same ordered clip subsequence in
+the complete stage, with mask references re-keyed by value. Additional source clips are reported;
+a missing/reordered legacy clip, changed track, timing, flag, or mask still fails. An addition to a
+legacy `full` selection requires a separate direct-source sample proof and remains a difference
+when that proof does not cover its composition rules.
+
+Packed normals restored by V2 are accepted only when the new normals and geometry equal the
+GLB source values, the changed vertices use a compact source format, and the old normals reproduce
+the legacy geometric fallback. Added morphs must equal the GLB's ordered sparse records, including
+zero deltas. After those field-specific proofs, every other field is compared normally. These
+checks name recovered data rather than dropping it to match an incomplete legacy export; they
+remain payload checks and do not replace native-asset or played acceptance.

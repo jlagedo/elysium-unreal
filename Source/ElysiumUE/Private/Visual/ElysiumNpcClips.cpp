@@ -108,7 +108,7 @@ namespace
 				Record.KnockbackNames.Reserve(Buckets->Num());
 				for (const TSharedPtr<FJsonValue>& BucketValue : *Buckets)
 				{
-					TArray<FString>& Names = Record.KnockbackNames.AddDefaulted_GetRef();
+					TArray<FString>& Names = Record.KnockbackNames.AddDefaulted_GetRef().Names;
 					const TArray<TSharedPtr<FJsonValue>>* Candidates = nullptr;
 					if (BucketValue.IsValid() && BucketValue->TryGetArray(Candidates)
 						&& Candidates != nullptr)

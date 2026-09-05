@@ -681,9 +681,10 @@ struct FElysiumRecordingServices final
 		return FString::Printf(TEXT("%s|%s"), *OwnerStem.ToLower(), *Label.ToLower());
 	}
 	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
-		const FString& Label) override
+		const FString& Label, const FString& OwnerRoot = FString()) override
 	{
-		return NpcEventTimelines.Find(EventTimelineKey(OwnerStem, Label));
+		return NpcEventTimelines.Find(EventTimelineKey(OwnerStem, Label)
+			+ (OwnerRoot.IsEmpty()?FString():TEXT("|")+OwnerRoot.ToLower()));
 	}
 
 	// The label-route sibling's fixture, mirroring bNpcActivitiesResolve above: opt-in so most

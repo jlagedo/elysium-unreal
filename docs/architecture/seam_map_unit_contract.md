@@ -226,8 +226,8 @@ them that way on purpose: `$bottommaterial`'s resolved reference is published he
 (`M_V2_Water`'s `Underside` switch) is decided per FACE, off the compiled face's own plane normal
 (`docs/architecture/seam_map_map.md` → "Section keys: `#underside` and `#style<n>`", verdict B2),
 never off which unit a `$bottommaterial` value happens to name — the R7.1/R7.4 rule that read it
-off self-reference is retired (`docs/architecture/seam_map_material.md` → `M_V2_Water` → "Underside
-is a face fact"). The decoder change here is what makes the reference resolvable at all; the face
+off self-reference is retired (`docs/architecture/seam_map_material.md` → `M_V2_Water` → "The
+`_Underside` twin"). The decoder change here is what makes the reference resolvable at all; the face
 rule is what makes it correct on a map like `sm_pier_1`, where the patched `invisible_water_depth_33`
 instance and its parent `invisible_water` face opposite ways.
 

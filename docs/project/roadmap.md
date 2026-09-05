@@ -251,17 +251,16 @@ call, script verb and scheme event that names a sound is conformed to it.
   map's underwater post-process volume, and the camera's `cl_waterdist` clearance offset is
   transcribed. `sm_hub_1`, `sm_pier_1` and `sp_soc_3` are converted. **Settled by the
   water-complete pass**: a 26-gap decoded-datum census of `sm_pier_1` and `sm_hub_1` was
-  dispositioned in full — the pier's swimmable volume draws (`%compilewater` beats `SURF_NODRAW`),
-  the underside became a per-face `_Underside` twin, the sewer's 29-frame DUDV animates, face
-  lightstyles animate as a per-primitive brightness on CPD slot 6 (world/sky chunks off their actor
-  tag, brush entities — the pier's foam cards — off their mesh's own slot names), and water raises
-  its events
-  (entry splash off the water-level transition, level-keyed footstep and impact sounds, buoyancy
-  from the authored `fluid` block). Ruling and detail:
-  `docs/architecture/water-architecture.md`; evidence: `docs/vtmb/water_data_census.md`; migration:
-  `docs/project/seam_migration.md` → "R7.1 — water on the V2 lane" and "R7.1 — settled". Player
-  water *movement* (`WaterMove`, swim/tread, the camera water band) is out of that pass by owner
-  call and stays on the substrate tier.
+  dispositioned in full — the underside became a per-face `_Underside` twin, the sewer's 29-frame
+  DUDV animates on the Refraction pin, the master transcribes `Water_Old`'s three passes (black
+  base, the cheap cube overlay as emissive), face lightstyles animate as a per-primitive brightness
+  on CPD slot 6, and water raises its events (entry splash off the water-level transition,
+  level-keyed footstep sounds, buoyancy from the authored `fluid` block). `%compilewater` selects
+  the master and a `%compilenodraw` water face draws nothing, as in VtMB (the pier's ocean is the
+  `blackwater` card). Design: `docs/architecture/water-architecture.md`; VtMB facts and evidence:
+  `docs/vtmb/water.md`; migration log: `docs/project/seam_migration.md` → "R7.1". Player water
+  *movement* (`WaterMove`, swim/tread, the camera water band) is out of that pass by owner call and
+  stays on the substrate tier.
 - [x] **7.4 Master-material set** — the generated surface masters.
 - [ ] **[7.5 Real reflections](plans/world.md)** → `docs/vtmb/reflections.md` ·
   **[7.6 Bloom/glow tuning](plans/world.md)** · **[7.7 Shadow quality](plans/world.md)** ·
@@ -611,6 +610,8 @@ tutorial's office chair carries and its sardine can throws, from real input.
   `docs/vtmb/feeding.md`.
 
 ## Pipeline backlog (PL)
+
+- [~] **[R8 Characters on the GLB corpus](plans/pipeline.md#r8-characters-on-the-glb-corpus)** — GLB staging, shared materials, native skeletal products and cooked mesh/clip/body/cast data verified across the corpus; quaternion storage fixed and 78,032,221 retained source keys verified. Native map/player/cinematic preparation and playback probes pass. Remaining projections, geometry/compressed-pose parity, production runtime cutover and legacy retirement remain open.
 
 - [x] **PL1–PL5d** — entity models, scripts/dialogue, use-icon atlas, NPC banks,
   schemes/vdata/cfg mirrors.

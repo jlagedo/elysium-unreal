@@ -540,6 +540,27 @@ def test_keypad_strings_publishes_every_keypad_block():
 # --- open projection -------------------------------------------------------------------------
 
 
+def test_clan_projection_preserves_rows_and_types_only_general_body_fields():
+    model = _decode("system/clandoc000", b'''ClanDataTables {
+        ClanData { General {
+            M_Body0 "models/character/pc/old.mdl"
+            M_Body0 "models/character/pc/male.mdl"
+            F_Body3 "models/character/pc/female.mdl"
+            DeathGib "models/gibs/hgibs.mdl"
+        } Unknown { Keep "everything" } }
+        ClanData { General { M_Body "models/character/npc/hunter.mdl" F_Body "" } }
+    }''', resolve_model=lambda path: path.endswith("male.mdl"))
+    rows = model.projection["clans"]
+    assert len(rows) == 2
+    assert list(rows[0]["bodies"]) == ["m_body0", "f_body3"]
+    assert rows[0]["bodies"]["m_body0"]["asset"] == "vtmb:model:character/pc/male"
+    assert rows[0]["bodies"]["m_body0"]["resolved"]
+    assert not rows[1]["bodies"]["f_body"]["present"]
+    assert "unknown" in model.projection["sections"]["clandata"][0]
+    assert any(row["asset"] == "vtmb:model:gibs/hgibs" for row in model.dependencies)
+    verify_ledger_row(model.ledger_row, model.member.data)
+
+
 def test_an_open_root_key_reshapes_the_tree_without_a_completeness_claim():
     body = b'CameraShotTable\n{\n\tShot\n\t{\n\t\t"Position" "Named"\n\t}\n}\n'
     model = _decode("camerashots/synthetic", body)

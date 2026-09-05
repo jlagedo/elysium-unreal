@@ -166,13 +166,14 @@ class Tracker(object):
     def needs_import(self, entry):
         path = entry["assetPath"]
         fingerprint = self.fingerprint(entry)
+        stored = bl.stored_recipe(path, producer='surface-properties')
         exists = unreal.EditorAssetLibrary.does_asset_exist(path)
         if exists and bl.asset_class_name(path) != entry["class"]:
             bl.delete_owned_asset(path)
             exists = False
         if self.force or not exists:
             return True
-        return bl.stored_recipe(path) != fingerprint
+        return stored != fingerprint
 
 
 class Report(object):
@@ -182,6 +183,7 @@ class Report(object):
         self.built = 0
         self.reused = 0
         self.pruned = 0
+        self.ownership = {"foreign": 0, "unstamped": 0}
         self.failures = []
         self.surface_types = {}
         self.started = time.time()
@@ -200,7 +202,7 @@ class Report(object):
             "packageRoot": self.package_root,
             "imported": self.built,
             "reused": self.reused,
-            "pruned": self.pruned,
+            "pruned": self.pruned, **self.ownership,
             "failed": self.failures,
             "surfaceTypes": self.surface_types,
             "seconds": round(time.time() - self.started, 1),
@@ -257,7 +259,7 @@ def _finish_entry(entry, staging_root, tracker, report):
     if not stamped:
         raise RuntimeError("registry tags: %s" % error)
 
-    bl.stamp_recipe(material, tracker.fingerprint(entry))
+    bl.stamp_recipe(material, tracker.fingerprint(entry), producer='surface-properties')
     if not bl.save(entry["assetPath"]):
         raise RuntimeError("save failed")
 
@@ -288,27 +290,8 @@ def import_entries(manifest, staging_root, tracker, report):
                 warn(traceback.format_exc())
 
 
-def prune(package_root, keep, scope):
-    """Delete every asset inside `scope` the manifest neither names nor protects.
-
-    Returns the number of assets deleted. `keep` holds package paths (`/Root/PM_name`): the
-    manifest's `assets` plus its `keep` list. `scope` is the manifest's `pruneScope`, always with
-    a trailing slash, compared case-insensitively.
-    """
-    library = unreal.EditorAssetLibrary
-    if not library.does_directory_exist(package_root):
-        return 0
-    scope = scope.lower()
-    if not scope.endswith("/"):
-        scope += "/"
-    stale = []
-    for object_path in library.list_assets(package_root, recursive=True, include_folder=False):
-        package_path = object_path.split(".", 1)[0]
-        if package_path.lower().startswith(scope) and package_path not in keep:
-            stale.append(package_path)
-    for start in range(0, len(stale), PRUNE_CHUNK):
-        bl.delete_owned_assets(stale[start:start + PRUNE_CHUNK])
-    return len(stale)
+def prune(package_root, keep, scope, counts=None):
+    return bl.prune_owned(package_root, keep, scope, 'surface-properties', counts)
 
 
 def run(manifest_path, force=False):
@@ -327,7 +310,7 @@ def run(manifest_path, force=False):
     import_entries(manifest, staging_root, Tracker(force), report)
     try:
         protected = {entry["assetPath"] for entry in manifest["assets"]} | set(manifest["keep"])
-        report.pruned = prune(package_root, protected, manifest["pruneScope"])
+        report.pruned = prune(package_root, protected, manifest["pruneScope"], report.ownership)
     except Exception as exc:  # noqa: BLE001
         report.failures.append({"assetPath": package_root, "unit": "",
                                 "reason": "prune raised: %s" % exc})

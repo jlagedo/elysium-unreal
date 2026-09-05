@@ -141,7 +141,7 @@ def author_map(entry, force=False):
     )
     if (not force and unreal.EditorAssetLibrary.does_asset_exist(object_path)
             and bl.asset_class_name(object_path) == ASSET_CLASS
-            and bl.stored_recipe(object_path) == fingerprint):
+            and bl.stored_recipe(object_path, producer='map-collision') == fingerprint):
         return "reused"
 
     bl.ensure_dir(package_root)
@@ -174,7 +174,7 @@ def author_map(entry, force=False):
     if failure:
         raise RuntimeError("collision cook failed for %s (%s)" % (object_path, failure))
 
-    bl.stamp_recipe(asset, fingerprint)
+    bl.stamp_recipe(asset, fingerprint, producer='map-collision')
     if not bl.save(object_path):
         raise RuntimeError("save failed: %s" % object_path)
     return "imported"

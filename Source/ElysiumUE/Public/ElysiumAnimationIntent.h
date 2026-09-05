@@ -1367,12 +1367,15 @@ struct FElysiumClipIdentity
 {
 	// The bank the clip is baked into — the body's own stem, or the bank the include DAG named.
 	FString OwnerStem;
+	// A cinematic actor slice within the model. Empty for its main animation owner.
+	FString OwnerRoot;
 	// The vocabulary key, never the resolved cell or animation name.
 	FString Label;
 
 	FElysiumClipIdentity() = default;
-	FElysiumClipIdentity(FString InOwnerStem, FString InLabel)
+	FElysiumClipIdentity(FString InOwnerStem, FString InLabel, FString InOwnerRoot = FString())
 		: OwnerStem(MoveTemp(InOwnerStem))
+		, OwnerRoot(MoveTemp(InOwnerRoot))
 		, Label(MoveTemp(InLabel))
 	{
 	}
@@ -1397,6 +1400,7 @@ struct FElysiumClipPhase
 	// The bank the playing clip is baked into, and the vocabulary key it was reached by — the pair
 	// `FElysiumBlendTable::FindEvents` is addressed with.
 	FString OwnerStem;
+	FString OwnerRoot;
 	FString Label;
 	// Normalized. A looping clip lives in `[0,1)` and reports the phase it wrapped to rather than 1;
 	// a finished one-shot reports exactly 1, which is the one position it has and nowhere to wrap

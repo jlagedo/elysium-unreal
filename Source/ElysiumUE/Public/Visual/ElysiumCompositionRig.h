@@ -1,11 +1,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumCompositionRig.generated.h"
 
 // The two composition stages VtMB runs between blended locals and the drawn skeleton, as data.
-// Plain C++ with no UObject reflection, like `FElysiumFacialRig`: this
-// holds a table and the arithmetic over it, and the cache that hands one out is
-// `UElysiumAnimSubsystem`.
+// Reflected value data can ride a cooked mesh. The arithmetic and the
+// `UElysiumAnimSubsystem` cache retain the same evaluator.
 //
 // Neither stage is in the clips. Unreal owns decode, blending, skinning and LOD; these are the only
 // two things it has no equivalent for, and both run after the graph has blended locals and before
@@ -38,38 +38,55 @@
 // therefore carries the axis as a converted direction and the three term weights as the images of
 // the Source axes (`FElysiumCompositionRig::DriverAxes`), which states the rule in the artifact's
 // own space and lets this evaluate it knowing nothing about Source's basis.
-struct FElysiumAxisInterpRule
+USTRUCT()
+struct ELYSIUMUE_API FElysiumAxisInterpRule
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FName Bone;                        // the driven bone
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FName Control;                     // the bone whose orientation drives it
 	// The `.mdl`'s own bone indices. Diagnostics only — the runtime resolves by name, because a
 	// bank-retargeted skeleton and a compact pose both renumber.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 BoneIndex = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 ControlIndex = INDEX_NONE;
 
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FVector Axis = FVector::ZeroVector;
 	// Entry order is the record's own: term k's positive entry is 2k and its negative entry 2k+1.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FVector Pos[6] = { FVector::ZeroVector, FVector::ZeroVector, FVector::ZeroVector,
 		FVector::ZeroVector, FVector::ZeroVector, FVector::ZeroVector };
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FQuat Quat[6] = { FQuat::Identity, FQuat::Identity, FQuat::Identity,
 		FQuat::Identity, FQuat::Identity, FQuat::Identity };
 };
 
-struct FElysiumCompositionRig
+USTRUCT()
+struct ELYSIUMUE_API FElysiumCompositionRig
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FString Stem;
 
 	// StudioBone names carrying `Flags & 0x2`, off `npc_index.json`'s `split_bones`. One per
 	// ordinary biped; empty on animals, most props, and any model whose sidecar omits `split_bones`.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FName> SplitBones;
 
 	// Every `ProcType == 1` rule, off `npc/procedural/<stem>.json`. 130 of 185 exported models
 	// carry a table; the rest evaluate the split stage alone, or nothing.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FElysiumAxisInterpRule> AxisRules;
 
 	// The images of Source's three axes, which is what a rule's three terms are indexed by. The
 	// sidecar carries them beside the rules; these defaults are the identity basis a hand-built
 	// fixture wants.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FVector DriverAxes[3] = { FVector(1.f, 0.f, 0.f), FVector(0.f, 1.f, 0.f), FVector(0.f, 0.f, 1.f) };
 
 	// Whether either stage has anything to do. A body whose rig answers false runs the ordinary

@@ -103,7 +103,7 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
 #: while `textures` and `surface-properties` author `.uasset` content under `/ElysiumBaked`. The
 #: last two are not corpus families at all but per-map lanes (R4.1, R4.2), which is why they refuse
 #: to run unscoped where a corpus lane takes `--all`.
-IMPORT_COMMANDS = ("vdata", "textures", "surface-properties", "materials", "models",
+IMPORT_COMMANDS = ("vdata", "textures", "surface-properties", "materials", "models", "characters",
                    "map-entities", "map-collision", "map-environment")
 
 

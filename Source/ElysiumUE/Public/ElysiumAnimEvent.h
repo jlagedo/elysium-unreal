@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumAnimEvent.generated.h"
 
 // One record on a sequence's own timeline, read from the same descriptor as the grids and the
 // bindings (`docs/vtmb/animation_and_movers.md` → "Sequence events and native dispatch").
@@ -17,11 +18,18 @@
 // It lives in `Public/` rather than beside the parser because it crosses the outbound service seam:
 // `IElysiumEmbodiment::GetNpcEventTimeline` hands one model's timeline down to the substrate, the
 // same way `Public/ElysiumStanceTypes.h` carries the stance set.
-struct FElysiumAnimEvent
+USTRUCT()
+struct ELYSIUMUE_API FElysiumAnimEvent
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float Cycle = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Event = 0;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Type = 0;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Options;
 };
 
@@ -39,6 +47,7 @@ struct FElysiumAnimEvent
 struct FElysiumAnimEventCursor
 {
 	FString OwnerStem;
+	FString OwnerRoot;
 	FString Label;
 	uint32 PlayId = 0;
 	float LastCycle = 0.f;
@@ -47,6 +56,7 @@ struct FElysiumAnimEventCursor
 	void Reset()
 	{
 		OwnerStem.Reset();
+		OwnerRoot.Reset();
 		Label.Reset();
 		PlayId = 0;
 		LastCycle = 0.f;

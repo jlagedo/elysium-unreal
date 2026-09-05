@@ -203,6 +203,66 @@ struct FElysiumContentPaths
 	// The texture lane's package root (`uv run elysium import textures`): one `T_` per
 	// `vtmb:texture:` unit, `docs/architecture/seam_map_texture.md` -> "Identity and naming".
 	static FString BakedTexturesDir() { return BakedMount() / TEXT("Textures"); }
+	// The baked-unit contract's object-path resolver. Python's asset_paths.baked_unit returns
+	// the corresponding package path; both walk pipeline/tests/fixtures/baked_paths.json.
+	static FString BakedUnit(const FString& Id, const FString& Prefix,
+		const FString& Role = FString(), const FString& Label = FString())
+	{
+		FString Kind, Key;
+		if (!Id.StartsWith(TEXT("vtmb:"), ESearchCase::CaseSensitive)
+			|| !Id.Mid(5).Split(TEXT(":"), &Kind, &Key)) return FString();
+		static const TMap<FString, FString> Roots = {
+			{TEXT("texture"), TEXT("Textures")}, {TEXT("material"), TEXT("Materials")},
+			{TEXT("model"), TEXT("Models")}, {TEXT("surface-property"), TEXT("SurfaceProperties")},
+			{TEXT("map"), TEXT("Maps")}, {TEXT("expression-table"), TEXT("ExpressionTables")},
+			{TEXT("sound"), TEXT("Sounds")}, {TEXT("particle"), TEXT("Particles")},
+			{TEXT("scene"), TEXT("Scenes")}};
+		const FString* Root = Roots.Find(Kind);
+		if (!Root) return FString();
+		const auto ValidSegment = [](const FString& Part)
+		{
+			return !Part.IsEmpty() && Part != TEXT(".") && Part != TEXT("..")
+				&& !Part.StartsWith(TEXT("_")) && !Part.Contains(TEXT("/"))
+				&& !Part.Contains(TEXT("\\")) && !Part.Contains(TEXT(":"));
+		};
+		TArray<FString> Parts;
+		Key.ParseIntoArray(Parts, TEXT("/"), false);
+		if (Parts.IsEmpty()) return FString();
+		for (FString& Part : Parts)
+		{
+			if (!ValidSegment(Part)) return FString();
+			Part = SafeName(Part);
+		}
+		FString Package = BakedMount() / *Root;
+		for (int32 I = 0; I < Parts.Num() - 1; ++I) Package /= Parts[I];
+		const FString Base = Parts.Last();
+		FString Asset;
+		if (Prefix.IsEmpty())
+		{
+			if (Kind != TEXT("map") || !Role.IsEmpty() || !Label.IsEmpty()) return FString();
+			Package /= Base;
+			Asset = Base;
+		}
+		else
+		{
+			static const TSet<FString> Prefixes = {TEXT("T"), TEXT("TC"), TEXT("TA"), TEXT("MI"),
+				TEXT("SM"), TEXT("SK"), TEXT("SKEL"), TEXT("A"), TEXT("BS"), TEXT("CLOTH"),
+				TEXT("PHYS"), TEXT("DYN"), TEXT("PM"), TEXT("DA"), TEXT("NS"), TEXT("SW")};
+			if (!Prefixes.Contains(Prefix)) return FString();
+			if (!Label.IsEmpty())
+			{
+				if (!ValidSegment(Label)) return FString();
+				Package /= Base;
+			}
+			Asset = Prefix + TEXT("_") + (Label.IsEmpty() ? Base : SafeName(Label));
+			if (!Role.IsEmpty())
+			{
+				if (!ValidSegment(Role)) return FString();
+				Asset += TEXT("_") + SafeName(Role);
+			}
+		}
+		return Package / Asset + TEXT(".") + Asset;
+	}
 	// `<dir>/<stem>` (a `materials/`-relative path, the bare unit key) ->
 	// `/ElysiumBaked/Textures/<dir>/T_<safe stem>.T_<safe stem>`, the object path of the imported 2D
 	// texture. The C++ twin of `importers.textures.asset_path_for(key, "Texture2D")`: every path
@@ -225,19 +285,9 @@ struct FElysiumContentPaths
 	// under the asset class's prefix.
 	static FString BakedTextureOfClass(const FString& Key, const TCHAR* ClassPrefix)
 	{
-		TArray<FString> Parts;
-		Key.ParseIntoArray(Parts, TEXT("/"), true);
-		if (Parts.Num() == 0)
-		{
-			return FString();
-		}
-		FString Package = BakedTexturesDir();
-		for (int32 I = 0; I < Parts.Num() - 1; ++I)
-		{
-			Package /= MaterialSafeName(Parts[I]);
-		}
-		const FString Asset = ClassPrefix + MaterialSafeName(Parts.Last());
-		return Package / Asset + TEXT(".") + Asset;
+		FString Prefix(ClassPrefix);
+		Prefix.RemoveFromEnd(TEXT("_"));
+		return BakedUnit(TEXT("vtmb:texture:") + Key, Prefix);
 	}
 	// The material lane's package root (`uv run elysium import materials`): one `MI_` per
 	// `vtmb:material:` unit, `docs/architecture/seam_map_material.md` -> "Identity and naming".
@@ -249,24 +299,8 @@ struct FElysiumContentPaths
 	// `vtmb:material:` id, so a stale sidecar token never folds to a path that happens to exist.
 	static FString BakedMaterial(const FString& MaterialId)
 	{
-		static const FString Prefix(TEXT("vtmb:material:"));
-		if (!MaterialId.StartsWith(Prefix))
-		{
-			return FString();
-		}
-		TArray<FString> Parts;
-		MaterialId.Mid(Prefix.Len()).ParseIntoArray(Parts, TEXT("/"), true);
-		if (Parts.Num() == 0)
-		{
-			return FString();
-		}
-		FString Package = BakedMaterialsDir();
-		for (int32 I = 0; I < Parts.Num() - 1; ++I)
-		{
-			Package /= MaterialSafeName(Parts[I]);
-		}
-		const FString Asset = TEXT("MI_") + MaterialSafeName(Parts.Last());
-		return Package / Asset + TEXT(".") + Asset;
+		return MaterialId.StartsWith(TEXT("vtmb:material:"), ESearchCase::CaseSensitive)
+			? BakedUnit(MaterialId, TEXT("MI")) : FString();
 	}
 	// The corpus instance of a world material VBSP patched into ONE map
 	// (`shared_corpus.base_material` / `cubemap_of`): the face's texdata names
@@ -311,7 +345,8 @@ struct FElysiumContentPaths
 	// underscore, leading and trailing underscores are stripped, and a name that folds away
 	// entirely is `unnamed`. NOT BakedAssetName (which keeps the leading/trailing run) and NOT
 	// PropModelStem (which keeps `.` and `-` and lower-cases) — three folds, three contracts.
-	static FString MaterialSafeName(const FString& Text)
+	static FString MaterialSafeName(const FString& Text) { return SafeName(Text); }
+	static FString SafeName(const FString& Text)
 	{
 		FString Out;
 		Out.Reserve(Text.Len());
@@ -359,7 +394,7 @@ struct FElysiumContentPaths
 	// silently land on the legacy root for a map that has been cut over.
 	static FString BakedPropMesh(const FString& Stem, const FString& Map)
 	{
-		const FString Asset = TEXT("SM_") + Stem;
+		const FString Asset = TEXT("SM_") + SafeName(Stem);
 		return BakedMeshesFor(Map) / Asset + TEXT(".") + Asset;
 	}
 	// An item's ground model is a static model like any other and sits in the same corpus. The

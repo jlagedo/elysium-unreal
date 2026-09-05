@@ -16,6 +16,8 @@
 #include "Map/ElysiumMapLog.h"
 #include "Player/ElysiumCameraShots.h"   // FElysiumCameraDirector — the scripted-shot stack
 #include "Visual/ElysiumAnimSubsystem.h" // the cinematic bank index
+#include "Visual/ElysiumNativeAnimationData.h"
+#include "ElysiumBodyData.h"
 #include "Visual/ElysiumEntityBodies.h"  // the body factory every mesh forward lands on
 #include "Visual/ElysiumLightRig.h"      // R6.2: lightstyle patterns and the runtime light source
 #include "Components/PointLightComponent.h"
@@ -30,6 +32,27 @@
 #include "GameFramework/Pawn.h"
 #include "NiagaraFunctionLibrary.h"      // SpawnSystemAttached — the one-shot attached effect
 #include "NiagaraSystem.h"
+
+namespace
+{
+	FElysiumClipIdentity CinematicIdentity(UGameInstance* Game, const FString& BodyModel,
+		const FString& AnimSetModel, const FString& Root, const FString& Label)
+	{
+		if (!Game) return {};
+		if (BodyModel.StartsWith(TEXT("vtmb:model:")))
+		{
+			const auto* Native=Game->GetSubsystem<UElysiumNativeAnimationData>();
+			const auto* Owner=Native?Native->CinematicBody(AnimSetModel,Root):nullptr;
+			if (Owner) return {Owner->AssetId,Label,Owner->OwnerRoot};
+			UE_LOG(LogElysium,Warning,TEXT("cinematic owner is absent or not prepared: %s [%s] for %s"),
+				*AnimSetModel,*Root,*BodyModel);
+			return {};
+		}
+		auto* Anims=Game->GetSubsystem<UElysiumAnimSubsystem>();
+		return Anims?FElysiumClipIdentity(Anims->GetIndex().CinematicBank(AnimSetModel,Root),Label)
+			:FElysiumClipIdentity();
+	}
+}
 
 float AElysiumMapActor::BodyScaleFor(const FElysiumEntityDef& Def) const
 {
@@ -242,9 +265,9 @@ bool AElysiumMapActor::GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAn
 }
 
 const TArray<FElysiumAnimEvent>* AElysiumMapActor::GetNpcEventTimeline(const FString& OwnerStem,
-	const FString& Label)
+	const FString& Label, const FString& OwnerRoot)
 {
-	return Bodies->GetNpcEventTimeline(OwnerStem, Label);
+	return Bodies->GetNpcEventTimeline(OwnerStem, Label, OwnerRoot);
 }
 
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
@@ -277,39 +300,25 @@ bool AElysiumMapActor::PlayCinematicClip(USkeletalMeshComponent* Body, const FSt
 	const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 	bool bLoop, float* OutSeconds)
 {
-	// The anim-set model + the actor's bonerename root name a bank the offline split produced.
-	UGameInstance* GI = GetGameInstance();
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-	if (Anims == nullptr)
-	{
-		return false;
-	}
-	const FString Bank = Anims->GetIndex().CinematicBank(AnimSetModel, BoneRoot);
-	if (Bank.IsEmpty())
-	{
-		return false;
-	}
-	return Bodies->PlayCinematicClip(Body, Stem, Bank, ClipName, bLoop, OutSeconds);
+	const auto Identity=CinematicIdentity(GetGameInstance(),Stem,AnimSetModel,BoneRoot,ClipName);
+	return Bodies && Identity.IsValid() && Bodies->PlayCinematicClip(Body,Stem,Identity.OwnerStem,
+		ClipName,bLoop,OutSeconds,Identity.OwnerRoot);
 }
 
 bool AElysiumMapActor::PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName)
 {
-	UGameInstance* GI = GetGameInstance();
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-	const FString Bank = Anims ? Anims->GetIndex().CinematicBank(AnimSetModel, BoneRoot) : FString();
-	return Bodies && !Bank.IsEmpty()
-		&& Bodies->PreloadCinematicClip(Body, Stem, Bank, ClipName);
+	const auto Identity=CinematicIdentity(GetGameInstance(),Stem,AnimSetModel,BoneRoot,ClipName);
+	return Bodies && Identity.IsValid() && Bodies->PreloadCinematicClip(Body,Stem,Identity.OwnerStem,
+		ClipName,Identity.OwnerRoot);
 }
 
 bool AElysiumMapActor::PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
 	const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName)
 {
-	UGameInstance* GI = GetGameInstance();
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
-	const FString Bank = Anims ? Anims->GetIndex().CinematicBank(AnimSetModel, BoneRoot) : FString();
-	return Bodies && !Bank.IsEmpty()
-		&& Bodies->PreloadCinematicClipForModel(Stem, bPlayerMaterial, Bank, ClipName);
+	const auto Identity=CinematicIdentity(GetGameInstance(),Stem,AnimSetModel,BoneRoot,ClipName);
+	return Bodies && Identity.IsValid() && Bodies->PreloadCinematicClipForModel(Stem,bPlayerMaterial,
+		Identity.OwnerStem,ClipName,Identity.OwnerRoot);
 }
 
 bool AElysiumMapActor::SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds)

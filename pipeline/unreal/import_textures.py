@@ -324,13 +324,14 @@ class Tracker(object):
     def needs_import(self, entry):
         path = entry["assetPath"]
         fingerprint = self.fingerprint(entry)
+        stored = bl.stored_recipe(path, producer='textures')
         exists = unreal.EditorAssetLibrary.does_asset_exist(path)
         if exists and bl.asset_class_name(path) != entry["class"]:
             bl.delete_owned_asset(path)
             exists = False
         if self.force or not exists:
             return True
-        return bl.stored_recipe(path) != fingerprint
+        return stored != fingerprint
 
 
 class Report(object):
@@ -341,6 +342,7 @@ class Report(object):
         self.built = 0
         self.reused = 0
         self.pruned = 0
+        self.ownership = {"foreign": 0, "unstamped": 0}
         self.measured = 0
         self.failures = []
         self.short_chains = []
@@ -362,7 +364,7 @@ class Report(object):
             "select": self.select,
             "imported": self.built,
             "reused": self.reused,
-            "pruned": self.pruned,
+            "pruned": self.pruned, **self.ownership,
             "measured": self.measured,
             "failed": self.failures,
             "shortChains": self.short_chains,
@@ -427,7 +429,7 @@ def _finish_entry(texture, entry, staging_root, tracker, report, measure):
     if not stamped:
         raise RuntimeError("registry tags: %s" % error)
 
-    bl.stamp_recipe(texture, tracker.fingerprint(entry))
+    bl.stamp_recipe(texture, tracker.fingerprint(entry), producer='textures')
     if not bl.save(entry["assetPath"]):
         raise RuntimeError("save failed")
 
@@ -482,36 +484,8 @@ def import_entries(manifest, staging_root, tracker, report, measure):
         log("[%d/%d] %s" % (min(start + CHUNK, len(pending)), len(pending), report.summary()))
 
 
-def prune(package_root, keep, scope):
-    """Delete every asset inside `scope` the manifest neither names nor protects, then empty folders.
-
-    Returns the number of assets deleted. `keep` holds package paths (`/Root/dir/T_name`): the
-    manifest's `assets` plus its `keep` list. `scope` is the manifest's `pruneScope` -- the whole
-    root, or the folded package folder of the selected directory, always with a trailing slash --
-    compared case-insensitively, so `hud/` never reaches `hudson/` and a manifest that names only
-    part of the corpus never empties the namespace an earlier full run filled.
-    """
-    library = unreal.EditorAssetLibrary
-    if not library.does_directory_exist(package_root):
-        return 0
-    scope = scope.lower()
-    if not scope.endswith("/"):
-        scope += "/"
-    stale = []
-    for object_path in library.list_assets(package_root, recursive=True, include_folder=False):
-        package_path = object_path.split(".", 1)[0]
-        if package_path.lower().startswith(scope) and package_path not in keep:
-            stale.append(package_path)
-    for start in range(0, len(stale), PRUNE_CHUNK):
-        bl.delete_owned_assets(stale[start:start + PRUNE_CHUNK])
-    # Folders inside the scope left empty by the deletions, deepest first so a parent empties
-    # after its children.
-    folders = [path for path in library.list_assets(package_root, recursive=True, include_folder=True)
-               if path.endswith("/") and path.lower().startswith(scope)]
-    for folder in sorted(folders, key=lambda p: p.count("/"), reverse=True):
-        if not library.list_assets(folder, recursive=True, include_folder=False):
-            library.delete_directory(folder)
-    return len(stale)
+def prune(package_root, keep, scope, counts=None):
+    return bl.prune_owned(package_root, keep, scope, 'textures', counts)
 
 
 def run(manifest_path, force=False, measure=True):
@@ -532,7 +506,7 @@ def run(manifest_path, force=False, measure=True):
     import_entries(manifest, staging_root, Tracker(force), report, measure)
     try:
         protected = {entry["assetPath"] for entry in manifest["assets"]} | set(manifest["keep"])
-        report.pruned = prune(package_root, protected, manifest["pruneScope"])
+        report.pruned = prune(package_root, protected, manifest["pruneScope"], report.ownership)
     except Exception as exc:  # noqa: BLE001
         report.failures.append({"assetPath": package_root, "unit": "", "reason": "prune raised: %s" % exc})
         fail("prune raised: %s" % exc)

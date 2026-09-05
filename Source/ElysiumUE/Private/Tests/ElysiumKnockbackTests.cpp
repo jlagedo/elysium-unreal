@@ -118,7 +118,7 @@ namespace
 		Record.Ba = 0;
 		for (const TCHAR* Name : { Left, Forward, Right, Back })
 		{
-			TArray<FString>& Bucket = Record.KnockbackNames.AddDefaulted_GetRef();
+			TArray<FString>& Bucket = Record.KnockbackNames.AddDefaulted_GetRef().Names;
 			if (Name != nullptr)
 			{
 				Bucket.Add(Name);

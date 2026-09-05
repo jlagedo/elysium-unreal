@@ -46,7 +46,7 @@ namespace
 	bool ShouldReportBadPhase(const FElysiumClipPhase& Phase)
 	{
 		static TSet<FString> Reported;
-		const FString Key = FString::Printf(TEXT("%s|%s"), *Phase.OwnerStem, *Phase.Label);
+		const FString Key = FString::Printf(TEXT("%s|%s|%s"), *Phase.OwnerStem, *Phase.OwnerRoot, *Phase.Label);
 		bool bAlready = false;
 		Reported.Add(Key, &bAlready);
 		return !bAlready;
@@ -307,7 +307,7 @@ void FElysiumAnimating::AdvanceAnimEvents()
 		}
 
 		const TArray<FElysiumAnimEvent>* Timeline =
-			Embodiment->GetNpcEventTimeline(Phase.OwnerStem, Phase.Label);
+			Embodiment->GetNpcEventTimeline(Phase.OwnerStem, Phase.Label, Phase.OwnerRoot);
 		ElysiumAnimEvents::Advance(Timeline, Phase, Cursor, Fired);
 
 		for (const FElysiumAnimEvent* Record : Fired)

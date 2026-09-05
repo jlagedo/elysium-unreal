@@ -604,6 +604,28 @@ def _project_keypad_strings(root: dict) -> tuple[dict[str, Any], list[dict[str, 
     return projection, [], typed_unidentified
 
 
+def _project_clan_data(root, top_nodes, *, resolve_model, resolve_asset):
+    """Ordered clan rows with typed body references and the full open table beside them.
+
+    General's body keys select player/NPC bodies; DeathGib and unrelated model-valued fields
+    remain dependencies without acquiring that role. Repeated clan blocks are not collapsed.
+    """
+    projection = _open_projection("ClanDataTables", top_nodes, evidence="clan-body-fields")
+    clans = []
+    for clan in blocks_by_key(root["children"]).get("clandata", []):
+        bodies = {}
+        for general in blocks_by_key(clan["children"]).get("general", []):
+            for key, node in last_scalars_by_key(general["children"]).items():
+                if re.fullmatch(r"[mf]_body\d*", key):
+                    bodies[key] = _model_field(node, resolve=resolve_model)
+        clans.append({"index": len(clans), "bodies": bodies})
+    projection["clans"] = clans
+    dependencies = _scan_open_dependencies(
+        root["children"], resolve_model=resolve_model, resolve_asset=resolve_asset,
+        parent_key="clandatatables")
+    return projection, _dedupe_dependencies(dependencies), []
+
+
 def build_projection(
     root_key: str | None,
     top_nodes: list[dict],
@@ -632,6 +654,9 @@ def build_projection(
             resolve_sound_group=resolve_sound_group,
             resolve_asset=resolve_asset,
         )
+    if folded == "clandatatables":
+        return _project_clan_data(
+            root, top_nodes, resolve_model=resolve_model, resolve_asset=resolve_asset)
     if folded == "precachedata":
         return _project_precache_data(root, resolve_asset=resolve_asset)
     if folded == "terminaldefinition":

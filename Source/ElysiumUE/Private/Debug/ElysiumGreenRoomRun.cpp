@@ -476,7 +476,7 @@ bool FElysiumGreenRoomRun::BuildBodies()
 				FQuat(BodyRotation(/*bAnimatedProp=*/true)), 1.0f);
 			if (Body)
 			{
-				Map->ApplyAnimatedPropSkin(Body, FPaths::GetBaseFilename(Case.BoneRoot).ToLower(), 0);
+				Map->ApplyAnimatedPropSkin(Body, ResolvedStem, 0);
 			}
 		}
 		else if (Case.bPlayerSurface && !bTheatreCamera)

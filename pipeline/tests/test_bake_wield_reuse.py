@@ -121,7 +121,7 @@ def _stamped_mount(module, stamps, textures=True):
         lambda package, recursive=True, include_folder=False: sorted(
             "%s.%s" % (path, path.rsplit("/", 1)[-1]) for path in stamps))
     module.unreal.EditorAssetLibrary.does_asset_exist = lambda target: textures
-    module.bl.stored_recipe = lambda path: stamps.get(path, "")
+    module.bl.stored_recipe = lambda path, **kwargs: stamps.get(path, "")
 
 WIELD_REUSE_TABLE = {"key_a": "tex/blade.png"}
 
@@ -208,7 +208,7 @@ def test_stamping_covers_only_the_assets_the_builders_left_unstamped() -> None:
             lambda asset, tag: metadata.get(
                 next(path for path, obj in loaded.items() if obj is asset), ""))
         module.bl.stamp_recipe = (
-            lambda asset, fingerprint: stamped.append(
+            lambda asset, fingerprint, **kwargs: stamped.append(
                 next(path for path, obj in loaded.items() if obj is asset)))
         module.bl.save = lambda path: saved.append(path) or True
 
@@ -230,7 +230,7 @@ def test_a_failed_stamp_save_is_loud_and_fails_the_stem() -> None:
                 "%s.%s" % (instance, instance.rsplit("/", 1)[-1])])
         editor.load_asset = lambda path: object()
         editor.get_metadata_tag = lambda asset, tag: ""
-        module.bl.stamp_recipe = lambda asset, fingerprint: None
+        module.bl.stamp_recipe = lambda asset, fingerprint, **kwargs: None
         module.bl.save = lambda path: False
 
         failed: list[str] = []

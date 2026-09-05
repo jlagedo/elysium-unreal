@@ -1697,8 +1697,9 @@ def model_role_corpus(export_root: Path) -> Path:
                           model_dependency("weapons/g_gun")],
             projection={"fields": {"models": {
                 "viewmodel": {"asset": "vtmb:model:weapons/v_gun"},
-                "playermodel": {"asset": "vtmb:model:weapons/w_gun"},
-                "infomodel": {"asset": "vtmb:model:weapons/g_gun"},
+                "wieldmodel_m": {"asset": "vtmb:model:weapons/w_gun"},
+                "playermodel": {"asset": "vtmb:model:weapons/g_gun"},
+                "infomodel": {"asset": "vtmb:model:scenery/scripted"},
             }}})
     publish(export_root, "engine-configs/detail.glb", "vtmb:engine-config:detail",
             dependencies=[model_dependency("scenery/grass"),
@@ -1732,6 +1733,63 @@ def test_identity_roles_are_the_model_seams_closed_vocabulary(tmp_path):
     # `detailTypes[]` does not scatter -- the seam emits a `model` edge for any localized path.
     assert "vtmb:model:scenery/scripted" not in assigned
     assert "vtmb:model:cinematic/courtroom_bip1" not in assigned
+
+
+def test_clan_body_role_does_not_turn_death_gibs_into_player_bodies(tmp_path):
+    root = tmp_path / "exports_v2"
+    root.mkdir()
+    publish(root, "vdata/clandoc.glb", "vtmb:vdata:system/clandoc000",
+            dependencies=[dependency("model", f"vtmb:model:{key}", f"models/{key}.mdl", True)
+                          for key in ("character/pc/male", "gibs/hgibs")],
+            projection={"rootKey": "ClanDataTables", "clans": [
+                {"bodies": {"m_body0": {"asset": "vtmb:model:character/pc/male"}}}]})
+    _, roots = graph.read_corpus(root)
+    assert backfill.model_roles(graph.references(roots), roots) == {
+        "vtmb:model:character/pc/male": ["character-body"]}
+
+
+def test_item_info_model_does_not_receive_a_ground_or_wield_role(tmp_path):
+    root = model_role_corpus(tmp_path / "exports_v2")
+    _, roots = graph.read_corpus(root)
+    item = roots["vtmb:vdata:gun"]
+    item["dependencies"].append(dependency(
+        "model", "vtmb:model:scenery/scripted", "models/scenery/scripted.mdl", True))
+    assert "vtmb:model:scenery/scripted" not in backfill.model_roles(graph.references(roots), roots)
+
+
+def test_named_retail_policy_checks_the_measured_shadowed_bytes():
+    from dataclasses import replace
+    from elysium_pipeline.formats.corpus_index_glb.model import Member, MemberSource
+    from elysium_pipeline.formats.corpus_index_glb import reconcile
+    from elysium_pipeline.validation import corpus_index_glb as validator
+    asset = "vtmb:particle:waterbigsplash_emitter"
+    path = "particles/waterbigsplash_emitter.txt"
+    patch = MemberSource({"kind": "loose", "root": "Unofficial_Patch"}, 161, "a" * 64)
+    retail = MemberSource({"kind": "vpk", "container": "pack001.vpk", "offset": 70, "size": 143}, 143, "b" * 64)
+    member = Member(path, patch, (retail,), "unit", asset)
+    source = {"path": path, **retail.to_json()}
+    units = {asset: {"sourceResolution": {"members": [source]}}}
+    assert not reconcile.source_disagreements([member], units)
+    assert member.to_json()["origin"] == patch.origin  # the install winner is not rewritten
+    assert member.to_json()["unitSourcePolicy"]
+    validator._sources({"members": [member.to_json()]}, {asset: {"sources": [source]}})
+    corrupt = {"path": path, **replace(retail, sha256="c" * 64).to_json()}
+    assert reconcile.source_disagreements([member], {asset: {"sourceResolution": {"members": [corrupt]}}})
+    with pytest.raises(validator.CorpusIndexValidationError):
+        validator._sources({"members": [member.to_json()]}, {asset: {"sources": [corrupt]}})
+
+
+def test_source_exception_cannot_select_shadowed_bytes_for_another_unit():
+    from elysium_pipeline.formats.corpus_index_glb.model import Member, MemberSource
+    from elysium_pipeline.formats.corpus_index_glb import reconcile
+    asset = "vtmb:particle:another_emitter"
+    path = "particles/another_emitter.txt"
+    patch = MemberSource({"kind": "loose", "root": "Unofficial_Patch"}, 12, "a" * 64)
+    retail = MemberSource({"kind": "vpk", "container": "pack001.vpk"}, 13, "b" * 64)
+    member = Member(path, patch, (retail,), "unit", asset)
+    source = {"path": path, **retail.to_json()}
+    assert reconcile.source_disagreements([member], {asset: {"sourceResolution": {"members": [source]}}})
+    assert "unitSourcePolicy" not in member.to_json()
 
 
 def test_an_entity_classifies_a_body_from_the_key_not_the_published_target(tmp_path):

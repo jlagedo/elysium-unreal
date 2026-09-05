@@ -1,11 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumEyeRig.generated.h"
 
 class UElysiumEyeTuningConfig;
+class UTexture2D;
 
-// VtMB's eye system, as data plus the arithmetic over it. Plain C++ with no UObject
-// reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands one out is
+// VtMB's eye system, as reflected value data plus pure arithmetic. The cache that hands one out is
 // `UElysiumAnimSubsystem`, and the per-body application is `UElysiumEntityBodies`.
 //
 // An eye is not a UV-mapped feature of the mesh. The original renderer rebuilds a basis for each
@@ -31,50 +32,75 @@ class UElysiumEyeTuningConfig;
 // that way: the lid math is `asin(target / radius)`, a ratio, so converting one without the other
 // silently changes the lid shape. `IrisScale` is neither — it becomes an inverse length, and
 // `ElysiumEyes::BuildState` is the only place that may convert it.
-struct FElysiumEyeball
+USTRUCT()
+struct ELYSIUMUE_API FElysiumEyeball
 {
+	GENERATED_BODY()
+
 	// The record's own index, and what `StudioMesh.materialparam` selects: 0 or 1.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 Index = 0;
 
 	// The eye's bone, by NAME. A model with more than one parent-less bone gets a synthetic root
 	// appended at export assembly, so the runtime skeleton's bone order is not the `.mdl`'s and an
 	// index would aim off the wrong bone.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FName Bone;
 	// The `.mdl`'s own index. Diagnostics only, for the same reason the composition rig keeps one.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 BoneIndex = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") int32 BodyPart = 0;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") int32 BodyModel = 0;
 
 	// Bone-local, in centimetres.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FVector Org = FVector::ZeroVector;
 	// Bone-local unit vectors: the authored resting basis.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FVector Up = FVector::ZeroVector;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FVector Forward = FVector::ZeroVector;
 
 	// Eyeball units, left as authored.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float ZOffset = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float Radius = 0.5f;
 	// Enters the plane scale as `1 / (1 / IrisScale + EyeSize)`, so it is an inverse length by the
 	// time it reaches the material and converts *by division*.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float IrisScale = 1.f;
 
 	// The three lid-state flexdescs the eyelid rules compute, and the morph-carrying flexdesc the
 	// eye pass writes from them. `INDEX_NONE`/zeroed on a model with no flex rig — which is every
 	// player body, and is a normal load.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 UpperFlexDesc[3] = { INDEX_NONE, INDEX_NONE, INDEX_NONE };
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 LowerFlexDesc[3] = { INDEX_NONE, INDEX_NONE, INDEX_NONE };
 	// **Linear offsets in eyeball units, not angles.** The renderer takes `asin(t / Radius)`;
 	// reading them as radians still produces a lid that moves, which is what makes it easy to keep.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float UpperTarget[3] = { 0.f, 0.f, 0.f };
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float LowerTarget[3] = { 0.f, 0.f, 0.f };
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 UpperLidFlexDesc = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 LowerLidFlexDesc = INDEX_NONE;
 
 	// The glTF material name this eye draws under — the key the material override and the slot
 	// lookup both join on.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FString Material;
 	// The per-character iris, relative to the glb ("tex/<file>.png"). Empty leaves the master's
 	// default, which paints the whole eye and is meant to be visible.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FString IrisTexture;
+	/** Cook dependency for the iris already bound on the imported material. */
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TSoftObjectPtr<UTexture2D> IrisAsset;
 	// The `.vmt`'s `$vampire`: the iris is composited without scene lighting. 12 shipped materials.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	bool bVampire = false;
 
 	// Whether this record can drive a lid. False on every player body.
@@ -82,9 +108,14 @@ struct FElysiumEyeball
 };
 
 // One model's pair, off `npc/eyes/<stem>.json`.
-struct FElysiumEyeSet
+USTRUCT()
+struct ELYSIUMUE_API FElysiumEyeSet
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FString Stem;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FElysiumEyeball> Eyeballs;
 
 	// Every shipped character carries two. A model with none simply has no eyes to draw.

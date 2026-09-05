@@ -119,7 +119,7 @@ def _fail(msg):
     raise SystemExit(1)
 
 
-def _fresh(name, *, ism=False, nanite=False, skeletal=False, morph=False, niagara_sprites=False):
+def _fresh(name, *, ism=False, nanite=False, skeletal=False, morph=False, clothing=False, niagara_sprites=False):
     """Delete + recreate the asset so a re-run authors a clean graph (idempotent). Usage flags are
     per family (design doc "Master inventory" + mechanics doc section 3b): without the matching
     flag UE compiles no permutation outside the editor and the affected primitives fall back to
@@ -159,6 +159,8 @@ def _fresh(name, *, ism=False, nanite=False, skeletal=False, morph=False, niagar
         mat.set_editor_property("used_with_skeletal_mesh", True)
     if morph:
         mat.set_editor_property("used_with_morph_targets", True)
+    if clothing:
+        mat.set_editor_property("used_with_clothing", True)
     if niagara_sprites:
         mat.set_editor_property("used_with_niagara_sprites", True)
     return mat, asset
@@ -1046,8 +1048,21 @@ Params = LitParams
 PARAM_TABLE = LIT_PARAM_TABLE
 
 
+class LitSkinnedParams(LitParams):
+    class Scalars(LitParams.Scalars):
+        ModelAlpha = "ModelAlpha"
+
+    class Switches(LitParams.Switches):
+        UseAlphaTest = "UseAlphaTest"
+
+
+LIT_SKINNED_PARAM_TABLE = {key: list(values) for key, values in LIT_PARAM_TABLE.items()}
+LIT_SKINNED_PARAM_TABLE["scalars"] = sorted([*LIT_SKINNED_PARAM_TABLE["scalars"], "ModelAlpha"])
+LIT_SKINNED_PARAM_TABLE["switches"] = sorted([*LIT_SKINNED_PARAM_TABLE["switches"], "UseAlphaTest"])
+
+
 def _build_lit(mat, collection, environment_collection, lut_texture, default_frames,
-               default_normal_frames, *, translucent):
+               default_normal_frames, *, translucent, skinned=False):
     """The shared M_V2_Lit / M_V2_LitTranslucent shading graph. `translucent` only changes how
     Opacity is wired (design doc: blend mode itself is a per-instance override, not a
     material-only property, so the two masters share every other pin)."""
@@ -1266,6 +1281,9 @@ def _build_lit(mat, collection, environment_collection, lut_texture, default_fra
     # naming question.
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
     alpha_with_sine = sine["apply"](alpha_param, "", "r", "r", 1900, 0)
+    if skinned:
+        model_alpha = g.scalar(LitSkinnedParams.Scalars.ModelAlpha, 1.0, 1700, -100)
+        alpha_with_sine = g.mul(alpha_with_sine, "", model_alpha, "", 2000, -100)
 
     if translucent:
         # LitTranslucent: Opacity = Alpha x BaseTexture.a (x VertexColor.a under UseVertexAlpha)
@@ -1281,8 +1299,13 @@ def _build_lit(mat, collection, environment_collection, lut_texture, default_fra
     g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
 
     one_const = g.const(1.0, 1700, 200)
-    opacity_mask = g.switch(P.Switches.UseSelfIllum, one_const, base_tex_a, 1900, 200,
-                            default=False)
+    if skinned:
+        authored_mask = g.switch(LitSkinnedParams.Switches.UseAlphaTest, base_tex_a, one_const,
+                                 1900, 200, default=False)
+        opacity_mask = g.mul(authored_mask, "", alpha_with_sine, "", 2100, 200)
+    else:
+        opacity_mask = g.switch(P.Switches.UseSelfIllum, one_const, base_tex_a, 1900, 200,
+                                default=False)
     g.to(opacity_mask, "", unreal.MaterialProperty.MP_OPACITY_MASK)
 
     # -- Detail sway (R6.3): the one World Position Offset term, behind UseDetailSway ----------
@@ -1299,7 +1322,7 @@ def _lit_recipe(cited_units):
     }
 
 
-def _make_lit_master(name, *, translucent):
+def _make_lit_master(name, *, translucent, skinned=False):
     asset = "%s/%s" % (PKG, name)
     # Loaded -- and its required rows validated -- before the skip check, so a rerun that would
     # otherwise report "up to date, skipping" still fails loudly if a prerequisite asset (or one
@@ -1308,10 +1331,12 @@ def _make_lit_master(name, *, translucent):
     environment_collection = _load_environment_collection()
     lut_texture = _load_class_lut()
     recipe = _lit_recipe(LIT_CITED_SHADER_UNITS)
+    params = LIT_SKINNED_PARAM_TABLE if skinned else LIT_PARAM_TABLE
+    recipe.update(skinned=skinned, translucent=translucent, params=params)
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -1319,7 +1344,7 @@ def _make_lit_master(name, *, translucent):
     default_frames = _make_default_frames_array(force=force)
     default_normal_frames = _make_default_normal_frames_array(force=force)
 
-    mat, asset = _fresh(name, ism=True, nanite=True, skeletal=True, morph=True)
+    mat, asset = _fresh(name, ism=not skinned, nanite=not skinned, skeletal=True, morph=True, clothing=skinned)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     if translucent:
         mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
@@ -1327,19 +1352,22 @@ def _make_lit_master(name, *, translucent):
             "translucency_lighting_mode",
             unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
     else:
-        mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
+        mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED if skinned else unreal.BlendMode.BLEND_OPAQUE)
+    if skinned:
+        mat.set_editor_property("dither_opacity_mask", True)
+        mat.set_editor_property("opacity_mask_clip_value", 0.333)
     mat.set_editor_property("two_sided", False)
 
     _build_lit(mat, collection, environment_collection, lut_texture, default_frames,
-              default_normal_frames, translucent=translucent)
+              default_normal_frames, translucent=translucent, skinned=skinned)
 
     errors = mel.recompile_material(mat)
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
 
-    _probe_all_switches_true(mat, asset, LIT_PARAM_TABLE["switches"])
+    _probe_all_switches_true(mat, asset, params["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -1352,6 +1380,14 @@ def make_lit():
 
 def make_lit_translucent():
     return _make_lit_master("M_V2_LitTranslucent", translucent=True)
+
+
+def make_lit_skinned():
+    return _make_lit_master("M_V2_LitSkinned", translucent=False, skinned=True)
+
+
+def make_lit_skinned_translucent():
+    return _make_lit_master("M_V2_LitSkinnedTranslucent", translucent=True, skinned=True)
 
 
 # ============================================================================================
@@ -1370,6 +1406,7 @@ class UnlitParams:
 
     class Scalars:
         Alpha = "Alpha"
+        ModelAlpha = "ModelAlpha"
         SurfaceClassIndex = "SurfaceClassIndex"
         EnvMapMaskScale = "EnvMapMaskScale"
         BaseScrollRateU = "BaseScrollRateU"
@@ -1507,6 +1544,8 @@ def _build_unlit(mat, collection, lut_texture, default_frames):
     # lane like every other master -------------------------------------------------------------
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
     alpha_with_sine = sine["apply"](alpha_param, "", "r", "r", 1900, 0)
+    model_alpha = g.scalar(P.Scalars.ModelAlpha, 1., 1700, -100)
+    alpha_with_sine = g.mul(alpha_with_sine, "", model_alpha, "", 2000, -100)
     opacity_base = g.mul(alpha_with_sine, "", base_tex_a, "", 2100, 40)
     # `VertexColor`'s outputs are all unnamed FNames -- connect straight to its own "A" output
     # (already 1-wide) rather than through a ComponentMask; see M_V2_Lit's Opacity section for
@@ -1569,7 +1608,7 @@ def make_unlit():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -1602,7 +1641,7 @@ def make_unlit():
 
     _probe_all_switches_true(mat, asset, UNLIT_PARAM_TABLE["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -1784,7 +1823,7 @@ def make_two_texture():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -1801,7 +1840,7 @@ def make_two_texture():
 
     _probe_all_switches_true(mat, asset, TWOTEXTURE_PARAM_TABLE["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -1824,12 +1863,19 @@ class EyesParams:
         Alpha = "Alpha"
         SurfaceClassIndex = "SurfaceClassIndex"
         IrisFrame = "IrisFrame"
+        Vampire = "Vampire"
+        Flatten = "Flatten"
+        ModelAlpha = "ModelAlpha"
 
     class Vectors:
         Color = "Color"
+        IrisOrigin = "IrisOrigin"
+        IrisU = "IrisU"
+        IrisV = "IrisV"
+        NormalOrigin = "NormalOrigin"
+        EyeUpN = "EyeUpN"
 
     class Switches:
-        VampireEyes = "VampireEyes"
         UseGlint = "UseGlint"
 
 
@@ -1858,7 +1904,7 @@ def _build_eyes(mat, collection, lut_texture):
     wired, exactly like `M_V2_Unlit`'s `UseFixedCube`/`MetallicTint` or `M_V2_TwoTexture`'s
     `UseBumpOnBaseTexture2`.
 
-    `VampireEyes` (review fix -- `psh/eyes_vampire`, compiled-only, disassembled by the review):
+    `Vampire` scalar at 1 (`psh/eyes_vampire`, compiled-only, disassembled by the review):
 
         mul r0, t0, v0            ; BaseColor(lit) = BaseTexture(sclera, t0) x vertex lighting v0
         lrp r0, t1.w, t1, r0      ; ps.1.x lrp d,t,a,b -> LinearInterpolate(A=b, B=a, Alpha=t):
@@ -1888,8 +1934,41 @@ def _build_eyes(mat, collection, lut_texture):
 
     base_tex = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
     iris_tex = g.tex(P.Textures.Iris, -1100, -160, kind="color")
+    iris_tex.set_editor_property("sampler_source", unreal.SamplerSourceMode.SSM_CLAMP_WORLD_GROUP_SETTINGS)
     glint_tex = g.tex(P.Textures.Glint, -1100, 100, kind="color",
                       default="/Engine/EngineResources/Black.Black")
+
+    world = g.node(unreal.MaterialExpressionWorldPosition, -2500, -200)
+    local = g.node(unreal.MaterialExpressionTransformPosition, -2300, -200)
+    local.set_editor_property("transform_source_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_WORLD)
+    local.set_editor_property("transform_type", unreal.MaterialPositionTransformSource.TRANSFORMPOSSOURCE_LOCAL)
+    connect(world, "", local, "")
+    origin = g.vec3(P.Vectors.IrisOrigin, (0., 0., 0., 0.), -2500, 0)
+    iris_u = g.vec3(P.Vectors.IrisU, (1., 0., 0., 0.), -2500, 200)
+    iris_v = g.vec3(P.Vectors.IrisV, (0., 1., 0., 0.), -2500, 400)
+    delta = g.sub(local, "", origin, "", -2100, 0)
+    half = g.const(.5, -2100, 400)
+    u = g.add(g.dot(delta, "", iris_u, "", -1900, 100), "", half, "", -1700, 100)
+    v = g.add(g.dot(delta, "", iris_v, "", -1900, 300), "", half, "", -1700, 300)
+    uv = g.node(unreal.MaterialExpressionAppendVector, -1500, 200)
+    connect(u, "", uv, "A"); connect(v, "", uv, "B")
+    connect(uv, "", iris_tex, "UVs")
+
+    normal_origin = g.vec3(P.Vectors.NormalOrigin, (0., 0., 0., 0.), -2500, 650)
+    up = g.vec3(P.Vectors.EyeUpN, (0., 0., 1., 0.), -2500, 850)
+    flatten = g.scalar(P.Scalars.Flatten, .5, -2500, 1050)
+    direction = g.sub(local, "", normal_origin, "", -2100, 650)
+    amount = g.mul(g.dot(direction, "", up, "", -1900, 800), "", flatten, "", -1700, 800)
+    projected_up = g.mul(amount, "", up, "", -1500, 800)
+    flat = g.sub(direction, "", projected_up, "", -1300, 650)
+    normal_local = g.node(unreal.MaterialExpressionNormalize, -1100, 650)
+    connect(flat, "", normal_local, "")
+    normal_world = g.node(unreal.MaterialExpressionTransform, -900, 650)
+    normal_world.set_editor_property("transform_source_type", unreal.MaterialVectorCoordTransformSource.TRANSFORMSOURCE_LOCAL)
+    normal_world.set_editor_property("transform_type", unreal.MaterialVectorCoordTransform.TRANSFORM_WORLD)
+    connect(normal_local, "", normal_world, "")
+    g.to(normal_world, "", unreal.MaterialProperty.MP_NORMAL)
+    vampire = g.scalar(P.Scalars.Vampire, 0., -900, 850)
 
     base_rgb = g.mask(base_tex, "rgb", -900, -400)
     base_a = g.mask(base_tex, "a", -900, -320, src_out="RGBA")
@@ -1901,14 +1980,13 @@ def _build_eyes(mat, collection, lut_texture):
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     tinted = g.mul(blended, "", color, "", -500, -320)
 
-    # `VampireEyes`: the sclera alone (darkened by the iris coverage it lost, `1 - Iris.a`) in
+    # `Vampire` at 1: the sclera alone (darkened by the iris coverage it lost, `1 - Iris.a`) in
     # BaseColor -- lit, like every other master's BaseColor -- with the iris term moved to
     # Emissive below (self-illuminated, matching the disassembly). See the function docstring.
     sclera_coverage = g.one_minus(iris_a, "", -700, -160)
     sclera_only = g.mul(base_rgb, "", sclera_coverage, "", -500, -200)
     base_color_vampire = g.mul(sclera_only, "", color, "", -300, -240)
-    base_color_final = g.switch(P.Switches.VampireEyes, base_color_vampire, tinted, -100, -280,
-                                default=False)
+    base_color_final = g.lerp(tinted, "", base_color_vampire, "", vampire, "", -100, -280)
     g.to(base_color_final, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
     # -- surface class lookup: Eyes has no $envmap lane at all (not in the design's exposed-
@@ -1925,11 +2003,10 @@ def _build_eyes(mat, collection, lut_texture):
     black3 = g.const3(0.0, 0.0, 0.0, -900, 180)
     glint_emissive = g.switch(P.Switches.UseGlint, glint_rgb, black3, -700, 140, default=False)
 
-    # `VampireEyes`: the iris term the switch above moved out of BaseColor, self-illuminated
+    # `Vampire`: the iris term the scalar blend above moved out of BaseColor, self-illuminated
     # (`Iris.rgb x Iris.a`, additive alongside Glint) -- see the function docstring.
     iris_emissive_raw = g.mul(iris_rgb, "", iris_a, "", -700, 260)
-    iris_emissive = g.switch(P.Switches.VampireEyes, iris_emissive_raw, black3, -500, 300,
-                             default=False)
+    iris_emissive = g.mul(iris_emissive_raw, "", vampire, "", -500, 300)
     total_emissive = g.add(glint_emissive, "", iris_emissive, "", -300, 200)
     g.to(total_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 
@@ -1940,7 +2017,8 @@ def _build_eyes(mat, collection, lut_texture):
     # -- Opacity / OpacityMask: eyes.psh's `mov r0.a, t0.a` -- BaseTexture.a, times the shared
     # Alpha knob (the four-parameter shared table: "Alpha ... feeds MP_OPACITY") ----------------
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
-    opacity = g.mul(alpha_param, "", base_a, "", 1900, 0)
+    model_alpha = g.scalar(P.Scalars.ModelAlpha, 1.0, 1700, 160)
+    opacity = g.mul(g.mul(alpha_param, "", model_alpha, "", 1800, 100), "", base_a, "", 1900, 0)
     g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY)
     g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY_MASK)
 
@@ -1960,7 +2038,7 @@ def make_eyes():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -1969,8 +2047,11 @@ def make_eyes():
     # Niagara flags, unlike the world-and-character masters above.
     mat, asset = _fresh(name, skeletal=True, morph=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
-    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
-    mat.set_editor_property("two_sided", False)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MASKED)
+    mat.set_editor_property("two_sided", True)
+    mat.set_editor_property("tangent_space_normal", False)
+    mat.set_editor_property("dither_opacity_mask", True)
+    mat.set_editor_property("opacity_mask_clip_value", .333)
 
     _build_eyes(mat, collection, lut_texture)
 
@@ -1980,7 +2061,7 @@ def make_eyes():
 
     _probe_all_switches_true(mat, asset, EYES_PARAM_TABLE["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -2547,7 +2628,7 @@ def make_underwater():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -2563,7 +2644,7 @@ def make_underwater():
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -2585,7 +2666,7 @@ def make_water():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -2629,7 +2710,7 @@ def make_water():
 
     _probe_all_switches_true(mat, asset, WATER_PARAM_TABLE["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -2770,7 +2851,7 @@ def make_sprite():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -2793,7 +2874,7 @@ def make_sprite():
 
     _probe_all_switches_true(mat, asset, SPRITE_PARAM_TABLE["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -2898,7 +2979,7 @@ def _make_sprite_z(name, *, lit):
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -2924,7 +3005,7 @@ def _make_sprite_z(name, *, lit):
 
     _probe_all_switches_true(mat, asset, SPRITE_Z_PARAM_TABLE["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -2978,7 +3059,7 @@ def make_particle_children():
         recipe = {
             "sourceHash": _source_hash(),
             "master": master_asset,
-            "masterRecipe": bl.stored_recipe(master_asset),
+            "masterRecipe": bl.stored_recipe(master_asset, producer='v2-masters'),
             "switches": switches,
             "blendMode": blend,
             "twoSided": True,
@@ -2986,7 +3067,7 @@ def make_particle_children():
         fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
         force = _flag(_cmdline_arg("PolicyForce", ""))
         if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-                and bl.stored_recipe(asset) == fingerprint:
+                and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
             unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
             made.append(unreal.load_asset(asset))
             continue
@@ -3011,7 +3092,7 @@ def make_particle_children():
         bpo.set_editor_property("two_sided", True)
         mic.set_editor_property("base_property_overrides", bpo)
         mel.update_material_instance(mic)
-        bl.stamp_recipe(mic, fingerprint)
+        bl.stamp_recipe(mic, fingerprint, producer='v2-masters')
         if not bl.save(asset):
             _fail("save failed: %s" % asset)
         unreal.log("[make_v2_materials] saved %s" % asset)
@@ -3231,7 +3312,7 @@ def make_refract():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -3241,7 +3322,7 @@ def make_refract():
     # `normal` + `refract` leaf (`Fire_Heat` and the seven others) draws through it: without the
     # flag the sprite permutation is compiled on demand in the editor and not at all in a
     # packaged build, where the heat cards would fall back to the default grey material.
-    mat, asset = _fresh(name, ism=True, niagara_sprites=True)
+    mat, asset = _fresh(name, ism=True, skeletal=True, morph=True, niagara_sprites=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
     mat.set_editor_property(
@@ -3263,7 +3344,7 @@ def make_refract():
 
     _probe_all_switches_true(mat, asset, REFRACT_PARAM_TABLE["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -3413,7 +3494,7 @@ def make_decal():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -3441,7 +3522,7 @@ def make_decal():
 
     _probe_all_switches_true(mat, asset, DECAL_PARAM_TABLE["switches"])
 
-    bl.stamp_recipe(mat, fingerprint)
+    bl.stamp_recipe(mat, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -3509,7 +3590,7 @@ def make_missing():
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
-            and bl.stored_recipe(asset) == fingerprint:
+            and bl.stored_recipe(asset, producer='v2-masters') == fingerprint:
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
@@ -3537,7 +3618,7 @@ def make_missing():
     # The single refresh this instance's `bl.set_tex_param` above deferred to it.
     bl.finish_material_instance(mic)
 
-    bl.stamp_recipe(mic, fingerprint)
+    bl.stamp_recipe(mic, fingerprint, producer='v2-masters')
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
     unreal.log("[make_v2_materials] saved %s" % asset)
@@ -3559,6 +3640,8 @@ def _flag(value):
 
 make_lit()
 make_lit_translucent()
+make_lit_skinned()
+make_lit_skinned_translucent()
 make_unlit()
 make_two_texture()
 make_eyes()

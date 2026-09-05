@@ -592,13 +592,14 @@ class AssetTracker(object):
         counters = self._counters(stage)
         fingerprint = bl.recipe_fingerprint(stage, object_path, recipe)
         self.recipes[object_path] = fingerprint
+        stored = bl.stored_recipe(object_path, producer="maps-legacy")
         exists = unreal.EditorAssetLibrary.does_asset_exist(object_path)
         if exists and expected_class:
             if bl.asset_class_name(object_path) != expected_class:
                 bl.delete_owned_asset(object_path)
                 exists = False
         if (self.force or not fresh or not exists
-                or bl.stored_recipe(object_path) != fingerprint):
+                or stored != fingerprint):
             return True
         counters["reused"] += 1
         return False
@@ -610,7 +611,7 @@ class AssetTracker(object):
             fail("no recipe was registered for %s; left unstamped, it re-authors next run"
                  % object_path)
             return
-        bl.stamp_recipe(asset, fingerprint)
+        bl.stamp_recipe(asset, fingerprint, producer='maps-legacy')
 
     def built(self, stage, count=1):
         self._counters(stage)["built"] += count

@@ -572,8 +572,10 @@ def test_prune_deletes_unlisted_assets_below_the_root_and_nothing_else(tmp_path)
     module = _load(editor)
     manifest = _stage(tmp_path, editor, [_entry("T_kept")])
     editor.assets[ROOT + "/old/dir/T_retired"] = FakeAsset(ROOT + "/old/dir/T_retired", "Texture2D", (4, 4, 1, 1))
+    editor.assets[ROOT + "/old/dir/T_retired"].metadata["ElysiumProducer"] = 'textures'
     editor.assets["/ElysiumBaked/Shared/Textures/T_legacy"] = FakeAsset(
         "/ElysiumBaked/Shared/Textures/T_legacy", "Texture2D", (4, 4, 1, 1))
+    editor.assets["/ElysiumBaked/Shared/Textures/T_legacy"].metadata["ElysiumProducer"] = 'textures'
 
     report = module.run(manifest)
 
@@ -584,6 +586,37 @@ def test_prune_deletes_unlisted_assets_below_the_root_and_nothing_else(tmp_path)
     assert editor.deleted_dirs == [ROOT + "/old/dir/", ROOT + "/old/"]
 
 
+def test_prune_preserves_foreign_and_unstamped_assets_in_the_same_root(tmp_path):
+    editor = FakeEditor()
+    module = _load(editor)
+    manifest = _stage(tmp_path, editor, [_entry("T_kept")])
+    for name, producer in (("T_owned", "textures"), ("TC_sky", "maps"), ("T_unknown", None)):
+        path = ROOT + "/" + name
+        editor.assets[path] = FakeAsset(path, "Texture2D", (4, 4, 1, 1))
+        if producer:
+            editor.assets[path].metadata["ElysiumProducer"] = producer
+    report = module.run(manifest)
+    assert report.pruned == 1
+    assert ROOT + "/T_owned" not in editor.assets
+    assert ROOT + "/TC_sky" in editor.assets and ROOT + "/T_unknown" in editor.assets
+    assert report.as_dict()["foreign"] == report.as_dict()["unstamped"] == 1
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_foreign_asset_cannot_be_overwritten_even_when_forced_or_wrong_class(tmp_path, force):
+    editor = FakeEditor()
+    module = _load(editor)
+    manifest = _stage(tmp_path, editor, [_entry("T_kept")])
+    path = ROOT + "/hud/signs/T_kept"
+    asset = FakeAsset(path, "Material", (4, 4, 1, 1))
+    asset.metadata["ElysiumProducer"] = "characters"
+    editor.assets[path] = asset
+    report = module.run(manifest, force=force)
+    assert report.built == 0 and len(report.failures) == 1
+    assert "characters" in report.failures[0]["reason"]
+    assert editor.assets[path] is asset and not editor.deleted
+
+
 def test_a_selected_run_prunes_only_inside_the_manifests_scope(tmp_path):
     editor = FakeEditor()
     module = _load(editor)
@@ -591,6 +624,7 @@ def test_a_selected_run_prunes_only_inside_the_manifests_scope(tmp_path):
     for path in (ROOT + "/hud/signs/T_stale_here", ROOT + "/hud/signs/Deep/T_stale_deep",
                  ROOT + "/hud/signs2/T_neighbour", ROOT + "/hud/T_other_hud", ROOT + "/wood/T_galply"):
         editor.assets[path] = FakeAsset(path, "Texture2D", (4, 4, 1, 1))
+        editor.assets[path].metadata["ElysiumProducer"] = 'textures'
 
     report = module.run(manifest)
 
@@ -609,6 +643,7 @@ def test_a_selected_run_prunes_only_inside_the_manifests_scope(tmp_path):
                       prune_scope=ROOT + "/HUD/")
     for path in (ROOT + "/hud/T_stale", ROOT + "/hudson/T_river"):
         editor.assets[path] = FakeAsset(path, "Texture2D", (4, 4, 1, 1))
+        editor.assets[path].metadata["ElysiumProducer"] = 'textures'
     report = module.run(manifest)
     assert report.pruned == 1
     assert ROOT + "/hudson/T_river" in editor.assets and ROOT + "/hud/T_stale" not in editor.assets
@@ -740,6 +775,7 @@ def test_prune_spares_the_assets_a_failed_stage_protects(tmp_path):
                       keep=[lost, lost + "_linear", ROOT + "/hud/signs/TC_lost"])
     for path in (lost, lost + "_linear", ROOT + "/hud/signs/T_retired"):
         editor.assets[path] = FakeAsset(path, "Texture2D", (4, 4, 1, 1))
+        editor.assets[path].metadata["ElysiumProducer"] = 'textures'
 
     report = module.run(manifest)
 

@@ -180,6 +180,10 @@ class Member:
             row["embedded"] = [dict(entry) for entry in self.embedded]
         if self.evidence is not None:
             row["evidence"] = dict(self.evidence)
+        from elysium_pipeline.formats.unit_contract.source_policy import unit_source_policy
+        policy = unit_source_policy(self.asset, self.path)
+        if policy:
+            row["unitSourcePolicy"] = policy
         return row
 
 

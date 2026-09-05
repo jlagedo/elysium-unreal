@@ -5,6 +5,7 @@
 #include "ElysiumComboChain.h"
 #include "ElysiumMeleeEnvelope.h"
 #include "ElysiumSwingRecord.h"
+#include "ElysiumNpcClips.generated.h"
 
 // The NPC animation vocabulary, read off the offline sidecars.
 //
@@ -30,20 +31,29 @@ namespace ElysiumActivity
 }
 
 // One clip in an NPC's resolved vocabulary.
-struct FElysiumNpcClip
+USTRUCT()
+struct ELYSIUMUE_API FElysiumNpcClip
 {
+	GENERATED_BODY()
+
 	// The stem whose glb carries the baked animation — the NPC itself, or a bank.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Owner;
 	// The `ACT_*` literal the engine selects on; empty on a layer/plumbing sequence (a
 	// `*_layer`/`*_delta` additive the engine composes rather than picks).
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Activity;
 	// Weighted-random share among the clips sharing this activity. `idle01` carries 30 against
 	// three fidgets at 1, which is how VtMB rests on the idle ~91% of the time.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Weight = 0;
 	// Studio sequence bits (`docs/vtmb/mdl_v2531.md`). Bit 0 is STUDIO_LOOPING, bit 1 refuses a
 	// transition, and bits 2 and 4 mark an additive layer together.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Flags = 0;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Frames = 0;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float Fps = 30.f;
 	// This clip's GLOBAL sequence number in the body's own flat space — the index retail's
 	// `LookupSequence` answers with, and the identity a label alone is not: a body's include tree
@@ -54,22 +64,26 @@ struct FElysiumNpcClip
 	// ascending order of it and both pickers resolve a tie by keeping the first candidate. A slice
 	// written before the export stated it reads `INDEX_NONE`, and those rows keep their
 	// (label, owner) order behind every row that carries one.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 RawIndex = INDEX_NONE;
 	// The authored transition duration in seconds (`mstudioseqdesc_t`+0x264). 0.2 on almost every
 	// shipped sequence; 0.3 on a handful of dialogue clips and 0.45/0.5 on the lying-down and
 	// damaged stance idles. A pair of clips transitions over the LARGER of the two, which is why
 	// this is carried per clip rather than tuned globally (`docs/vtmb/animation_and_movers.md`).
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float Fade = 0.2f;
 	// The sequence's own melee reach in centimetres (`mstudioseqdesc_t`+0x2D0).
 	// `CWeaponMelee::RequestActivity` reads it off every sequence the translated activity returns and
 	// queries at the MAXIMUM (`docs/vtmb/combat-and-damage.md` § "Target acquisition, sequence commit
 	// and recovery"). Zero means the sequence states none, which is every non-melee clip.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float ReachCm = 0.0f;
 	// The `ACT_*` the ATTACKER plays when this sequence's swing is blocked (`mstudioseqdesc_t`+0x2E0).
 	// Authored per sequence rather than derived from a direction: the blocked-reaction callback plays
 	// what the attacker's current sequence descriptor stores, falling back to
 	// `ACT_BLOCKED_REACTION_RIGHT` (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
 	// Empty means the sequence names none.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString BlockedReaction;
 	// The NEAR edge of the same band `ReachCm` closes (`mstudioseqdesc_t`+0x2CC). The cast-arm melee
 	// selector scores a candidate's reach bit on `LowReachCm <= mag <= ReachCm`, inclusive at both
@@ -80,22 +94,26 @@ struct FElysiumNpcClip
 	// edge with the reach unset. Negative is the unstated answer here rather than zero, because two
 	// shipped sequences author a genuine `0.0` — a band that starts at the body, which is a real
 	// claim where a zero FAR edge would be a swing that can never reach.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float LowReachCm = -1.0f;
 	// The authored attack envelopes the cast arm tests the enemy against
 	// (`mstudioseqdesc_t`+0x2BC/+0x2C0). A DIFFERENT array from `Swings` below, with a different job
 	// and no parallelism — see `Public/ElysiumMeleeEnvelope.h` for what its axes mean, which is the
 	// one thing a consumer has to know before touching the numbers.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	TArray<FElysiumMeleeEnvelope> Envelopes;
 	// The authored swing-contact records of this sequence's swing (`mstudioseqdesc_t`+0x2C4/+0x2C8).
 	// This is where a melee attack stops being an animation and becomes one: `ReachCm` is the
 	// distance the swing ACQUIRES at, and these are where and when it TOUCHES. Empty on every
 	// sequence that declares none, which is all but 574 of the install's 14,012 descriptors — an
 	// authored absence, and the reason a clip carrying none has no contact at all.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	TArray<FElysiumSwingRecord> Swings;
 	// The chain half of the same authored block (`mstudioseqdesc_t`+0x2D4..+0x2F8): which direction
 	// key selects this attack, which attack it hands off to, and the cycles bounding the hand-off.
 	// Unstated on all but 208 of the install's descriptors, which is an authored absence — an attack
 	// carrying none is a terminal one that no press can continue.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FElysiumComboChain Combo;
 
 	// Whether this sequence states a reach at all. Zero is "no claim", not a zero-length swing, so a

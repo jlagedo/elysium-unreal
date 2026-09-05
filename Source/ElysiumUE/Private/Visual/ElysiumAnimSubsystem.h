@@ -178,32 +178,40 @@ class UElysiumAnimSubsystem : public UGameInstanceSubsystem
 
 public:
 	virtual void Deinitialize() override;
+	/** Native model preparation is a loading-phase operation; resolution below performs no asset I/O. */
+	TSharedPtr<struct FStreamableHandle> PrepareNativeModel(const FString& ModelId, FString& OutError);
+	void ReleaseNativeModels();
+	const class UElysiumClipData* NativeClipData(const FString& Owner, const FString& Label,
+		const FString& OwnerRoot = FString()) const;
+	const FElysiumNpcClip* ClipDescription(const FString& Model, const FString& Label);
 
 	// out/npc/npc_index.json, loaded once. Empty when the NPC export has not been run.
 	const FElysiumNpcIndex& GetIndex();
 	// out/npc/clips/<Stem>.json, cached per stem. Null when the stem has no slice.
 	const FElysiumNpcClipSet* GetClipSet(const FString& Stem);
-	// out/npc/facial/<Stem>.json, cached per stem. Null for a model with no flex rig, which
+	// A supplied V2 mesh provides cooked data, cached by asset path; incomplete V2 data warns
+	// and never falls through to loose files. The legacy stem route remains until cast cutover.
+	// Null for a model with no flex rig, which
 	// is the normal case for animals, crowd bodies and every player body — the caller animates the
 	// body and leaves the face still. Shared rather than raw: an anim instance holds one for as long
 	// as its body lives, across map epochs this GI-scoped cache outlasts.
-	TSharedPtr<const FElysiumFacialRig> GetFacialRig(const FString& Stem);
+	TSharedPtr<const FElysiumFacialRig> GetFacialRig(const FString& Stem, const USkeletalMesh* Mesh = nullptr);
 	// The eyeball pair for a stem: `npc/eyes/<stem>.json`. Same shape and lifetime as
 	// GetFacialRig — shared, immutable once built, GI-scoped. Answered independently of the flex
 	// rig, because a player body carries a pair of eyeballs and no flex rig at all.
 	//
 	// Both sidecars are Unreal-native, in the frame the baked body is in, so a rig is read verbatim
 	// and nothing here converts.
-	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem);
+	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem, const USkeletalMesh* Mesh = nullptr);
 	// The two composition stages' rig for a stem: `npc_index.json`'s `split_bones` plus
 	// `npc/procedural/<stem>.json`. Null when the model declares neither, which is a normal load —
 	// the body then poses under Unreal's ordinary hierarchy composition.
 	// Same shape and lifetime as GetFacialRig: shared, immutable once built, and GI-scoped so it
 	// outlives the map epoch the skeleton belongs to. Same frame rule as above.
-	TSharedPtr<const FElysiumCompositionRig> GetCompositionRig(const FString& Stem);
+	TSharedPtr<const FElysiumCompositionRig> GetCompositionRig(const FString& Stem, const USkeletalMesh* Mesh = nullptr);
 	// The same for a v4 animated prop, which indexes separately and whose sidecar sits under
 	// animated_props/.
-	TSharedPtr<const FElysiumCompositionRig> GetAnimatedPropCompositionRig(const FString& ModelPath);
+	TSharedPtr<const FElysiumCompositionRig> GetAnimatedPropCompositionRig(const FString& ModelPath, const USkeletalMesh* Mesh = nullptr);
 	// Retail's per-body bank bone-remap table (`vampire.dll FUN_100c67b0`) for one CLOSURE's own
 	// (mesh, source skeleton, retarget source) tuple — never for a body "stem": a cinematic body's
 	// per-actor bank is not in any manifest, so a stem-keyed cache would miss it by construction.
@@ -244,7 +252,7 @@ public:
 	// no vocabulary entry to look it up by; the scene knows the bank because it knows its own
 	// `BaseAnim` and the actor's `bonerename` root.
 	UAnimSequence* ResolveClipFromBank(const FString& BankStem, const FString& ClipName,
-		USkeletalMesh* Mesh, FString& OutError);
+		USkeletalMesh* Mesh, FString& OutError, const FString& OwnerRoot = FString());
 
 	// The animation a label actually plays on OwnerStem, which is the label itself for every
 	// label that does not name a blend grid. **This is the only place a grid is collapsed to a cell**;
@@ -256,7 +264,7 @@ public:
 	// name is NOT in the character's clip vocabulary and must not be looked up there; it addresses an
 	// animation in the owner's glb directly.
 	FString ResolveGridClip(const FString& OwnerStem, const FString& Label,
-		const FElysiumPoseParams& Pose = FElysiumPoseParams::Neutral());
+		const FElysiumPoseParams& Pose = FElysiumPoseParams::Neutral(), const FString& OwnerRoot = FString());
 
 	// The same answer for a label reached through a character's vocabulary, which is what finds the
 	// owner. Exposed because a caller that caches the resolved sequence has to key its cache on the

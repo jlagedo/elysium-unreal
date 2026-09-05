@@ -380,11 +380,30 @@ def decode_lod_sections(document, binary, primitives, slot_of_reference, label):
             raise RuntimeError("%s names skinReference %r, absent from the slot list"
                                % (label, reference))
 
-        positions = unreal_positions(accessor(document, binary, attributes["POSITION"]))
-        normals = unreal_directions(accessor(document, binary, attributes["NORMAL"]))
+        source = primitive_ext(primitive)
+        indices = accessor(document, binary, primitive["indices"])
+        if "sourcePositions" in source or "sourceNormals" in source:
+            from elysium_pipeline.formats.unit_contract.precision import decode
+            from elysium_pipeline.formats.bsp import source_to_unreal
+            from elysium_pipeline.formats.mesh_geometry import unreal_surface_normals
+            count = document["accessors"][attributes["POSITION"]]["count"]
+            raw_positions = decode(document, binary, source["sourcePositions"], (count, 3))
+            raw_normals = decode(document, binary, source["sourceNormals"], (count, 3))
+            source_positions = [tuple(raw_positions[i:i + 3]) for i in range(0, len(raw_positions), 3)]
+            source_normals = [tuple(raw_normals[i:i + 3]) for i in range(0, len(raw_normals), 3)]
+            positions = [source_to_unreal(*p) for p in source_positions]
+            normals = unreal_surface_normals({"pos": source_positions, "nrm": source_normals,
+                                              "tris": [indices[i:i + 3] for i in range(0, len(indices), 3)]})
+            normals = [tuple(c / length for c in n) if (length := math.sqrt(sum(c * c for c in n))) > 1e-8
+                       else n for n in normals]
+        else:
+            # Generic glTF geometry helpers remain usable for probes; published 2.2 model units
+            # are required to carry source values by the independent unit validator.
+            positions = unreal_positions(accessor(document, binary, attributes["POSITION"]))
+            normals = unreal_directions(accessor(document, binary, attributes["NORMAL"]))
         uvs = accessor(document, binary, attributes["TEXCOORD_0"]) if "TEXCOORD_0" in attributes \
             else [(0.0, 0.0)] * len(positions)
-        triangles = reversed_winding(accessor(document, binary, primitive["indices"]))
+        triangles = reversed_winding(indices)
         tangents = None
         if "TANGENT" in attributes:
             tangents = unreal_tangents(accessor(document, binary, attributes["TANGENT"]), normals)
@@ -765,13 +784,14 @@ class Tracker(object):
     def needs_import(self, entry):
         path = entry["assetPath"]
         fingerprint = self.fingerprint(entry)
+        stored = bl.stored_recipe(path, producer='models')
         exists = unreal.EditorAssetLibrary.does_asset_exist(path)
         if exists and bl.asset_class_name(path) != ASSET_CLASS:
             bl.delete_owned_asset(path)
             exists = False
         if self.force or not exists:
             return True
-        return bl.stored_recipe(path) != fingerprint
+        return stored != fingerprint
 
 
 def selection_summary(selection):
@@ -796,6 +816,7 @@ class Report(object):
         self.built = 0
         self.reused = 0
         self.pruned = 0
+        self.ownership = {"foreign": 0, "unstamped": 0}
         self.failures = []
         # Carried straight through from the stage rather than re-derived here from 414 provenance
         # sidecars a second time, exactly as the material lane's report does.
@@ -825,7 +846,7 @@ class Report(object):
             "selection": self.selection,
             "imported": self.built,
             "reused": self.reused,
-            "pruned": self.pruned,
+            "pruned": self.pruned, **self.ownership,
             "failed": self.failures,
             "stageFailures": self.stage_failures,
             "skipped": self.skipped,
@@ -902,7 +923,7 @@ def _finish_entry(entry, unit_root, staging_root, tracker, report, materials_cac
     stamped, error = unreal.ElysiumModelProvenance.stamp_registry_tags(static_mesh)
     if not stamped:
         raise RuntimeError("registry tags: %s" % error)
-    bl.stamp_recipe(static_mesh, tracker.fingerprint(entry))
+    bl.stamp_recipe(static_mesh, tracker.fingerprint(entry), producer='models')
     t6 = time.perf_counter()
     report.add_phase("provenance", t6 - t5)
 
@@ -946,9 +967,10 @@ def author_missing_model(asset_path, material_path, tracker_force=False):
         raise RuntimeError("the sentinel material is not on the mount: %s" % material_path)
     recipe = {"placeholder": "missing-model", "material": material_path, "sizeCm": 100.0}
     fingerprint = bl.recipe_fingerprint(STAGE, asset_path, recipe)
+    stored = bl.stored_recipe(asset_path, producer="models")
     if (not tracker_force and unreal.EditorAssetLibrary.does_asset_exist(asset_path)
             and bl.asset_class_name(asset_path) == ASSET_CLASS
-            and bl.stored_recipe(asset_path) == fingerprint):
+            and stored == fingerprint):
         return False
 
     mesh = unreal.DynamicMesh()
@@ -964,7 +986,7 @@ def author_missing_model(asset_path, material_path, tracker_force=False):
     if body is not None:
         body.set_editor_property(
             "collision_trace_flag", unreal.CollisionTraceFlag.CTF_USE_SIMPLE_AND_COMPLEX)
-    bl.stamp_recipe(static_mesh, fingerprint)
+    bl.stamp_recipe(static_mesh, fingerprint, producer='models')
     if not bl.save(asset_path):
         raise RuntimeError("save failed: %s" % asset_path)
     return True
@@ -1007,9 +1029,10 @@ def author_skin_set(manifest, materials_cache, force=False):
         for row in rows
     ]}
     fingerprint = bl.recipe_fingerprint(STAGE + ".skins", object_path, recipe)
+    stored = bl.stored_recipe(object_path, producer="models")
     if (not force and unreal.EditorAssetLibrary.does_asset_exist(object_path)
             and bl.asset_class_name(object_path) == SKIN_SET_CLASS
-            and bl.stored_recipe(object_path) == fingerprint):
+            and stored == fingerprint):
         return {"stems": len(rows), "rows": sum(len(row["families"]) for row in rows),
                 "maxFamilyCount": max((row["familyCount"] for row in rows), default=0),
                 "rebuilt": False}
@@ -1054,7 +1077,7 @@ def author_skin_set(manifest, materials_cache, force=False):
     if asset is None:
         raise RuntimeError("could not create %s" % object_path)
     asset.set_editor_property("models", models)
-    bl.stamp_recipe(asset, fingerprint)
+    bl.stamp_recipe(asset, fingerprint, producer='models')
     if not bl.save(object_path):
         raise RuntimeError("save failed: %s" % object_path)
     return {"stems": len(rows), "rows": total_rows,
@@ -1065,34 +1088,8 @@ def author_skin_set(manifest, materials_cache, force=False):
 # --- prune ---------------------------------------------------------------------------------------
 
 
-def prune(package_root, keep, scope):
-    """Delete every asset inside `scope` the manifest neither names nor protects.
-
-    `scope` is `null` on a map-scoped run and nothing is pruned then, "because only `--all` knows
-    the whole keep set" -- a scoped run can never delete a model another map still stands.
-    """
-    if not scope:
-        return 0
-    library = unreal.EditorAssetLibrary
-    if not library.does_directory_exist(package_root):
-        return 0
-    scope = scope.lower()
-    if not scope.endswith("/"):
-        scope += "/"
-    stale = []
-    for object_path in library.list_assets(package_root, recursive=True, include_folder=False):
-        package_path = object_path.split(".", 1)[0]
-        if package_path.lower().startswith(scope) and package_path not in keep:
-            stale.append(package_path)
-    for start in range(0, len(stale), PRUNE_CHUNK):
-        bl.delete_owned_assets(stale[start:start + PRUNE_CHUNK])
-    folders = [path for path in library.list_assets(package_root, recursive=True,
-                                                    include_folder=True)
-               if path.endswith("/") and path.lower().startswith(scope)]
-    for folder in sorted(folders, key=lambda p: p.count("/"), reverse=True):
-        if not library.list_assets(folder, recursive=True, include_folder=False):
-            library.delete_directory(folder)
-    return len(stale)
+def prune(package_root, keep, scope, counts=None):
+    return bl.prune_owned(package_root, keep, scope, 'models', counts)
 
 
 def run(manifest_path, unit_root, force=False):
@@ -1145,7 +1142,7 @@ def run(manifest_path, unit_root, force=False):
     try:
         protected = ({entry["assetPath"] for entry in manifest["assets"]}
                     | set(manifest["keep"]) | {skin_set_path})
-        report.pruned = prune(package_root, protected, manifest.get("pruneScope"))
+        report.pruned = prune(package_root, protected, manifest.get("pruneScope"), report.ownership)
     except Exception as exc:  # noqa: BLE001
         report.failures.append({"assetPath": package_root, "unit": "",
                                 "reason": "prune raised: %s" % exc})

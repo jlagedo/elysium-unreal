@@ -241,6 +241,7 @@ def decode_lods(
                     stripgroup_base = vtx_mesh + _i32(vtx_data, vtx_mesh + 4)
                     positions: list[tuple[float, float, float]] = []
                     normals: list[tuple[float, float, float]] = []
+                    source_normals: list[tuple[float, float, float]] = []
                     tangents: list[tuple[float, float, float, float]] = []
                     uvs: list[tuple[float, float]] = []
                     joints: list[list[int]] = []
@@ -364,16 +365,9 @@ def decode_lods(
                                             quant_scale,
                                         )
                                         positions.append((x, y, z))
-                                        normals.append(
-                                            _unit_or_zero(
-                                                _normal(
-                                                    mdl_data,
-                                                    source_vertex,
-                                                    vertex_list,
-                                                    anorms,
-                                                )
-                                            )
-                                        )
+                                        source_normal = _normal(mdl_data, source_vertex, vertex_list, anorms)
+                                        source_normals.append(source_normal)
+                                        normals.append(_unit_or_zero(source_normal))
                                         if tangent_base is not None:
                                             tangents.append(
                                                 struct.unpack_from(
@@ -432,6 +426,7 @@ def decode_lods(
                                 "sourceVertices": source_vertices,
                                 "positions": positions,
                                 "normals": normals,
+                                "sourceNormals": source_normals,
                                 "tangents": tangents,
                                 "uvs": uvs,
                                 "joints": joints,

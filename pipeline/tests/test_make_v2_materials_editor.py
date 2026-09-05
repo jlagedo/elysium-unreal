@@ -372,7 +372,7 @@ def _fake_unreal(editor):
         "MaterialExpressionPixelDepth",
         # R6.3: the detail-sway World Position Offset lane (`_detail_sway`).
         "MaterialExpressionPerInstanceCustomData", "MaterialExpressionWorldPosition",
-        "MaterialExpressionTransformPosition", "MaterialExpressionObjectLocalBounds",
+        "MaterialExpressionTransformPosition", "MaterialExpressionTransform", "MaterialExpressionObjectLocalBounds",
         # R7.1: the Single Layer Water output node (`_build_water`) and the underwater
         # post-process's scene reads (`_build_underwater`).
         "MaterialExpressionSingleLayerWaterMaterialOutput", "MaterialExpressionSceneTexture",
@@ -425,14 +425,17 @@ def _fake_unreal(editor):
         MaterialDomain=_enum("MD", "MD_SURFACE", "MD_DEFERRED_DECAL", "MD_POST_PROCESS"),
         BlendableLocation=_enum("BL", "BL_SCENE_COLOR_BEFORE_DOF"),
         SceneTextureId=_enum("PPI", "PPI_POST_PROCESS_INPUT0", "PPI_SCENE_DEPTH"),
-        BlendMode=_enum("BLEND", "BLEND_OPAQUE", "BLEND_TRANSLUCENT", "BLEND_MODULATE",
+        BlendMode=_enum("BLEND", "BLEND_OPAQUE", "BLEND_MASKED", "BLEND_TRANSLUCENT", "BLEND_MODULATE",
                         "BLEND_ALPHA_COMPOSITE"),
         TranslucencyLightingMode=_enum("TLM", "TLM_SURFACE_PER_PIXEL_LIGHTING",
                                        "TLM_VOLUMETRIC_PER_VERTEX_NON_DIRECTIONAL"),
         MaterialShadingModel=_enum("MSM", "MSM_UNLIT", "MSM_DEFAULT_LIT", "MSM_SINGLE_LAYER_WATER"),
         RefractionMode=_enum("RM", "RM_PIXEL_NORMAL_OFFSET", "RM_2D_OFFSET"),
         MaterialPositionTransformSource=_enum(
-            "TRANSFORMPOSSOURCE", "TRANSFORMPOSSOURCE_WORLD", "TRANSFORMPOSSOURCE_INSTANCE"),
+            "TRANSFORMPOSSOURCE", "TRANSFORMPOSSOURCE_WORLD", "TRANSFORMPOSSOURCE_INSTANCE", "TRANSFORMPOSSOURCE_LOCAL"),
+        MaterialVectorCoordTransformSource=_enum("TRANSFORMSOURCE", "TRANSFORMSOURCE_LOCAL"),
+        MaterialVectorCoordTransform=_enum("TRANSFORM", "TRANSFORM_WORLD"),
+        SamplerSourceMode=_enum("SSM", "SSM_CLAMP_WORLD_GROUP_SETTINGS"),
         # `unreal.MaterialProperty` in this 5.8 build exposes no `MP_PIXEL_DEPTH_OFFSET`
         # (phase4_mechanics.md section 0, confirmed against the real editor's own
         # `dir(unreal.MaterialProperty)`) -- the fake used to carry it, which let a
@@ -511,6 +514,9 @@ def _load(editor, tmp_path, monkeypatch, *, seed=True):
         for mod in ("pipeline.unreal.mat_fog", "pipeline.unreal.matgraph",
                     "pipeline.unreal.bake_lib", "pipeline.unreal.make_v2_materials"):
             sys.modules.pop(mod, None)
+            package, _, child = mod.rpartition(".")
+            if package in sys.modules:
+                monkeypatch.delattr(sys.modules[package], child, raising=False)
         spec = importlib.util.spec_from_file_location(
             "elysium_test_make_v2_materials", REPO / "pipeline/unreal/make_v2_materials.py")
         module = importlib.util.module_from_spec(spec)
@@ -528,9 +534,11 @@ def _load(editor, tmp_path, monkeypatch, *, seed=True):
 MASTERS = [
     ("M_V2_Lit", "Params", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
     ("M_V2_LitTranslucent", "LitParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
+    ("M_V2_LitSkinned", "LitSkinnedParams", "BLEND.BLEND_MASKED", "MD.MD_SURFACE"),
+    ("M_V2_LitSkinnedTranslucent", "LitSkinnedParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
     ("M_V2_Unlit", "UnlitParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
     ("M_V2_TwoTexture", "TwoTextureParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
-    ("M_V2_Eyes", "EyesParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
+    ("M_V2_Eyes", "EyesParams", "BLEND.BLEND_MASKED", "MD.MD_SURFACE"),
     # R7.1: Single Layer Water is opaque by the shading model's own rule.
     ("M_V2_Water", "WaterParams", "BLEND.BLEND_OPAQUE", "MD.MD_SURFACE"),
     ("M_V2_Sprite", "SpriteParams", "BLEND.BLEND_TRANSLUCENT", "MD.MD_SURFACE"),
@@ -564,6 +572,8 @@ def test_water_master_is_single_layer_water_with_the_volume_pins_fed(tmp_path, m
     water = editor.assets["%s/M_V2_Water" % PKG]
     assert water.props.get("shading_model") == "MSM.MSM_SINGLE_LAYER_WATER"
     assert water.props.get("blend_mode") == "BLEND.BLEND_OPAQUE"
+
+
     assert water.props.get("two_sided") is False
     assert not water.props.get("used_with_nanite")
     # R7.5 look pass: the Refraction pin is `Water_Old`'s screen-space DUDV warp of the refracted
@@ -661,6 +671,8 @@ def test_param_tables_are_pinned_against_the_stages_exposed_params(tmp_path, mon
     table_by_master = {
         "M_V2_Lit": module.LIT_PARAM_TABLE,
         "M_V2_LitTranslucent": module.LIT_PARAM_TABLE,
+        "M_V2_LitSkinned": module.LIT_SKINNED_PARAM_TABLE,
+        "M_V2_LitSkinnedTranslucent": module.LIT_SKINNED_PARAM_TABLE,
         "M_V2_Unlit": module.UNLIT_PARAM_TABLE,
         "M_V2_TwoTexture": module.TWOTEXTURE_PARAM_TABLE,
         "M_V2_Eyes": module.EYES_PARAM_TABLE,
@@ -1193,3 +1205,46 @@ def test_sine_uv_translate_reaches_the_base_lane_only(tmp_path, monkeypatch):
             # Both lanes still ride the shared scale/offset transform, so the check above is a
             # real difference between the two coordinates and not a disconnected normal lane.
             assert "TexScaleOffset" in reached, (name, slot)
+
+
+def test_eye_material_has_dynamic_gaze_normal_and_fade_inputs(tmp_path, monkeypatch):
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    material = editor.assets[f"{PKG}/M_V2_Eyes"]
+    assert material.props["tangent_space_normal"] is False
+    assert material.props["two_sided"] and material.props["dither_opacity_mask"]
+    iris = next(n for n in material.expressions if n.props.get("parameter_name") == "Iris")
+    assert iris.props["sampler_source"] == "SSM.SSM_CLAMP_WORLD_GROUP_SETTINGS"
+    reached = _sources_of(editor.mel, iris, material.expressions)
+    assert {"IrisOrigin", "IrisU", "IrisV"} <= {n.props.get("parameter_name") for n in reached}
+    normal = _property_source(editor.mel, material, "MP.MP_NORMAL")
+    assert {"NormalOrigin", "EyeUpN", "Flatten"} <= {
+        n.props.get("parameter_name") for n in _feeding(editor.mel, normal, material.expressions)}
+    vampire = next(n for n in material.expressions if n.props.get("parameter_name") == "Vampire")
+    assert vampire.cls.__name__ == "MaterialExpressionScalarParameter"
+    for prop in ("MP.MP_BASE_COLOR", "MP.MP_EMISSIVE_COLOR"):
+        assert vampire in _feeding(editor.mel, _property_source(editor.mel, material, prop), material.expressions)
+    assert any(n.props.get("parameter_name") == "ModelAlpha" for n in
+               _feeding(editor.mel, _property_source(editor.mel, material, "MP.MP_OPACITY_MASK"), material.expressions))
+
+
+def test_skinned_masters_compile_clothing_and_feed_camera_fade_into_both_alpha_pins(tmp_path, monkeypatch):
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    for name in ("M_V2_LitSkinned", "M_V2_LitSkinnedTranslucent"):
+        material = editor.assets[f"{PKG}/{name}"]
+        assert material.props["used_with_skeletal_mesh"]
+        assert material.props["used_with_morph_targets"]
+        assert material.props["used_with_clothing"]
+        assert not material.props.get("used_with_nanite")
+        assert not material.props.get("used_with_instanced_static_meshes")
+        assert material.props["dither_opacity_mask"]
+        assert material.props["opacity_mask_clip_value"] == .333
+        for prop in ("MP.MP_OPACITY", "MP.MP_OPACITY_MASK"):
+            node = _property_source(editor.mel, material, prop)
+            assert node is not None
+            upstream = _feeding(editor.mel, node, material.expressions)
+            assert any(n.props.get("parameter_name") == "ModelAlpha" for n in upstream)
+        mask = _property_source(editor.mel, material, "MP.MP_OPACITY_MASK")
+        assert any(n.props.get("parameter_name") == "UseAlphaTest"
+                   for n in _feeding(editor.mel, mask, material.expressions))

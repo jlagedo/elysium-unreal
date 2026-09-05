@@ -2,6 +2,7 @@
 
 #if WITH_EDITOR
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumSkeletalSource.h"
 
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimData/IAnimationDataModel.h"
@@ -148,4 +149,80 @@ TArray<FName> UElysiumCharacterBakeLibrary::SequenceTrackBones(const UAnimSequen
 	}
 #endif
 	return Tracked;
+}
+
+FString UElysiumCharacterBakeLibrary::VerifyAnimationSamples(const FString& StagePath,
+	const TMap<FString,UAnimSequence*>& Sequences, const TArray<FName>& OmittedDonorBones,
+	int32& OutSourceTracks, int64& OutSourceKeys, int32& OutOmittedSourceTracks)
+{
+	OutSourceTracks=0; OutSourceKeys=0; OutOmittedSourceTracks=0;
+#if WITH_EDITOR
+	FElysiumSkeletalSource Source; FString Error;
+	if (!FElysiumSkeletalSource::Load(StagePath,Source,Error)) return Error;
+	TSet<FName> Omitted(OmittedDonorBones);
+	if (!Omitted.IsEmpty() && !Source.Vertices.IsEmpty()) return TEXT("body clips cannot declare dormant donor omissions");
+	for (FName Name : Omitted)
+		if (!Source.Bones.ContainsByPredicate([Name](const auto& Bone){return Bone.Name==Name;}))
+			return TEXT("omitted donor bone is absent from source: ")+Name.ToString();
+	int32 ClipCount=0;
+	for (const auto& Clip : Source.Clips)
+	{
+		if ((Clip.Flags&4) && !Clip.BaseName.IsEmpty()) continue;
+		++ClipCount;
+		const auto* Found=Sequences.Find(Clip.Name);
+		const UAnimSequence* Sequence=Found?*Found:nullptr;
+		const IAnimationDataModel* Model=Sequence?Sequence->GetDataModel():nullptr;
+		if (!Model) return TEXT("no native data model for source clip: ")+Clip.Name;
+		const int32 Keys=FMath::Max(Clip.FrameCount,2);
+		if (Model->GetNumberOfKeys()!=Keys) return TEXT("native key count differs: ")+Clip.Name;
+		const double Rate=FMath::RoundToInt(FMath::Max(double(Clip.FrameRate),double(UE_KINDA_SMALL_NUMBER))*1000.)/1000.;
+		if (!FMath::IsNearlyEqual(Model->GetFrameRate().AsDecimal(),Rate,1.e-9))
+			return TEXT("native sample rate differs: ")+Clip.Name;
+		TArray<FName> Names; Model->GetBoneTrackNames(Names);
+		TSet<FName> NativeTracks(Names);
+		for (const auto& Track : Clip.Tracks)
+		{
+			if (!Source.Bones.IsValidIndex(Track.Bone)) return TEXT("source track has invalid bone: ")+Clip.Name;
+			const auto& Bone=Source.Bones[Track.Bone];
+			const bool bOmitted=Omitted.Contains(Bone.Name);
+			const bool bAdditive=(Clip.Flags&4)!=0;
+			if (bOmitted)
+			{
+				++OutOmittedSourceTracks;
+				if (!bAdditive)
+				{
+					if (NativeTracks.Contains(Bone.Name)) return TEXT("omitted donor bone still has a native track: ")+Clip.Name+TEXT(" / ")+Bone.Name.ToString();
+					continue;
+				}
+			}
+			if (!NativeTracks.Contains(Bone.Name)) return TEXT("native source track is missing: ")+Clip.Name+TEXT(" / ")+Bone.Name.ToString();
+			TArray<FTransform> Actual; Model->GetBoneTrackTransforms(Bone.Name,Actual);
+			if (Actual.Num()!=Keys) return TEXT("native source track has incomplete keys: ")+Clip.Name+TEXT(" / ")+Bone.Name.ToString();
+			for (int32 Key=0; Key<Keys; ++Key)
+			{
+				const int32 Frame=FMath::Min(Key,Clip.FrameCount-1);
+				const FVector Position=bOmitted?FVector::ZeroVector:Track.Translations.IsValidIndex(Frame)
+					?FVector(Track.Translations[Frame]):Bone.Local.GetTranslation();
+				const FQuat Rotation=bOmitted?FQuat::Identity:Track.Rotations.IsValidIndex(Frame)
+					?FQuat(Track.Rotations[Frame]):Bone.Local.GetRotation();
+				// Quaternion sign is not a rotation difference. Absolute components also catch
+				// non-unit/corrupt keys, which normalizing both sides would hide.
+				const FQuat Q=Actual[Key].GetRotation();
+				const double Sign=(Q|Rotation)<0.?-1.:1.;
+				const double RotationError=FMath::Max(FMath::Max(FMath::Abs(Q.X-Sign*Rotation.X),FMath::Abs(Q.Y-Sign*Rotation.Y)),
+					FMath::Max(FMath::Abs(Q.Z-Sign*Rotation.Z),FMath::Abs(Q.W-Sign*Rotation.W)));
+				const double PositionError=(Actual[Key].GetTranslation()-Position).GetAbsMax();
+				if (Actual[Key].ContainsNaN() || PositionError>1.e-4 || RotationError>1.e-6
+					|| !Actual[Key].GetScale3D().Equals(FVector::OneVector,1.e-6))
+					return FString::Printf(TEXT("native source sample differs: %s / %s key %d (position %.9g cm, rotation %.9g)"),
+						*Clip.Name,*Bone.Name.ToString(),Key,PositionError,RotationError);
+			}
+			if (!bOmitted) { ++OutSourceTracks; OutSourceKeys+=Keys; }
+		}
+	}
+	if (ClipCount!=Sequences.Num()) return TEXT("native clip inventory differs from source sample inventory");
+	return FString();
+#else
+	return TEXT("editor only");
+#endif
 }

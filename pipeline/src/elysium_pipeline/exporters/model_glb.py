@@ -265,6 +265,11 @@ class GlbBuilder:
         self.accessors.append(accessor)
         return len(self.accessors) - 1
 
+    def precise(self, values):
+        from elysium_pipeline.formats.unit_contract.precision import encode
+        values = np.ascontiguousarray(values, dtype="<f8")
+        return encode(self.view, values.tobytes(), values.shape)
+
 
 def _skeleton(
     builder: GlbBuilder, unit: ModelUnit
@@ -453,6 +458,9 @@ def _meshes(
                         "skinReference": source["skinReference"],
                         "sourceVertices": source["sourceVertices"],
                         "stripGroups": source.get("stripGroups", []),
+                        "morphRecords": source.get("morphRecords", []),
+                        "sourcePositions": builder.precise(np.asarray(source["positions"]).reshape(-1, 3)),
+                        "sourceNormals": builder.precise(np.asarray(source["sourceNormals"]).reshape(-1, 3)),
                     },
                 },
             }
@@ -524,6 +532,8 @@ def _animations(
         frames = mdl_skel.read_anim(
             unit.mdl_data, bone_records, row["sourceOffset"], frame_count
         )
+        published["sourceSamples"] = builder.precise([
+            [(*position, *rotation) for position, rotation in frame] for frame in frames])
         times = np.arange(frame_count, dtype=np.float32) / float(row["fps"] or 30.0)
         time_accessor = builder.accessor(times, FLOAT, "SCALAR", bounds=True)
         channels: list[dict[str, Any]] = []

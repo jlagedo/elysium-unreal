@@ -2,6 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumEyeTuningConfig.h"
+#include "Engine/Texture2D.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
@@ -92,6 +93,8 @@ bool FElysiumEyeSet::LoadJsonText(const FString& JsonText, FString& OutError)
 		(*Obj)->TryGetStringField(TEXT("bone"), BoneName);
 		E.Bone = FName(*BoneName);
 		(*Obj)->TryGetNumberField(TEXT("bone_index"), E.BoneIndex);
+		(*Obj)->TryGetNumberField(TEXT("body_part"), E.BodyPart);
+		(*Obj)->TryGetNumberField(TEXT("body_model"), E.BodyModel);
 		E.Org = ReadVector(*Obj, TEXT("org"));
 		E.Up = ReadVector(*Obj, TEXT("up"));
 		E.Forward = ReadVector(*Obj, TEXT("forward"));
@@ -108,6 +111,11 @@ bool FElysiumEyeSet::LoadJsonText(const FString& JsonText, FString& OutError)
 		if ((*Obj)->TryGetNumberField(TEXT("lowerlidflexdesc"), Lid)) { E.LowerLidFlexDesc = Lid; }
 		(*Obj)->TryGetStringField(TEXT("material"), E.Material);
 		(*Obj)->TryGetStringField(TEXT("iris"), E.IrisTexture);
+		FString IrisAsset;
+		if ((*Obj)->TryGetStringField(TEXT("iris_asset"), IrisAsset) && !IrisAsset.IsEmpty())
+		{
+			E.IrisAsset = TSoftObjectPtr<UTexture2D>(FSoftObjectPath(IrisAsset));
+		}
 		(*Obj)->TryGetBoolField(TEXT("vampire"), E.bVampire);
 		Eyeballs.Add(MoveTemp(E));
 	}

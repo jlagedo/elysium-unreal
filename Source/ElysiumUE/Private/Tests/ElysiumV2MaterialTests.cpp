@@ -119,6 +119,7 @@ namespace
 		ElysiumSurfaceParamsUnlit::Textures::BaseTextureFrames,
 	};
 	static const FName UnlitScalars[] = {
+		ElysiumSurfaceParamsUnlit::Scalars::ModelAlpha,
 		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
 		ElysiumSurfaceParamsShared::Scalars::Alpha,
 		ElysiumSurfaceParamsUnlit::Scalars::EnvMapMaskScale,
@@ -206,12 +207,20 @@ namespace
 		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
 		ElysiumSurfaceParamsShared::Scalars::Alpha,
 		ElysiumSurfaceParamsEyes::Scalars::IrisFrame,
+		ElysiumSurfaceParamsEyes::Scalars::Vampire,
+		ElysiumSurfaceParamsEyes::Scalars::Flatten,
+		ElysiumSurfaceParamsEyes::Scalars::ModelAlpha,
 	};
 	static const FName EyesVectors[] = {
+		ElysiumSurfaceParamsEyes::Vectors::IrisOrigin,
+		ElysiumSurfaceParamsEyes::Vectors::IrisU,
+		ElysiumSurfaceParamsEyes::Vectors::IrisV,
+		ElysiumSurfaceParamsEyes::Vectors::NormalOrigin,
+		ElysiumSurfaceParamsEyes::Vectors::EyeUpN,
+
 		ElysiumSurfaceParamsShared::Vectors::Color,
 	};
 	static const FName EyesSwitches[] = {
-		ElysiumSurfaceParamsEyes::Switches::VampireEyes,
 		ElysiumSurfaceParamsEyes::Switches::UseGlint,
 	};
 
@@ -360,7 +369,23 @@ namespace
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
 	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
 	// clip value are per-instance overrides, so they never multiply masters).
+	static const TArray<FName> SkinnedScalars = [] {
+		TArray<FName> Names;
+		Names.Append(LitScalars, UE_ARRAY_COUNT(LitScalars));
+		Names.Add(TEXT("ModelAlpha"));
+		return Names;
+	}();
+	static const TArray<FName> SkinnedSwitches = [] {
+		TArray<FName> Names;
+		Names.Append(LitSwitches, UE_ARRAY_COUNT(LitSwitches));
+		Names.Add(TEXT("UseAlphaTest"));
+		return Names;
+	}();
 	static const FElysiumV2MasterCase Cases[] = {
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_LitSkinned.M_V2_LitSkinned"),
+			LitTextures, SkinnedScalars, LitVectors, SkinnedSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_LitSkinnedTranslucent.M_V2_LitSkinnedTranslucent"),
+			LitTextures, SkinnedScalars, LitVectors, SkinnedSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Lit.M_V2_Lit"),
 			LitTextures, LitScalars, LitVectors, LitSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_LitTranslucent.M_V2_LitTranslucent"),

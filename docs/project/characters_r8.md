@@ -13,7 +13,11 @@
 
 ## 0. Verdict
 
-**R8 is a port of rules and a re-plumb of a bake, not an export task.** The V2 model unit
+**R8 ports the rules and rebuilds the bake on a complete GLB corpus.** Producer corrections
+are part of the migration whenever comparison exposes a dropped datum; byte-ledger coverage
+alone does not prove that every decoded record has a published destination. Model schema 2.1
+therefore retains ordered sparse morph records, including explicit zeros and entire unrendered
+meshes (`seam_map_model.md` → "Core content" / "Import — skeletal staging"). The V2 model unit
 carries every datum the legacy skeletal exporter reads out of an MDL, verified on real files: the
 per-bone ownership masks (`boneWeights`, strictly {0,1} over 600,778 pairs corpus-wide), the raw
 sequences with grids, autolayers, events with their full option strings, movement records, the
@@ -310,13 +314,16 @@ from `$alphatest`, 43 units); `OpacityMask = lerp(1, BaseTexture.a, UseAlphaTest
 ModelAlpha`. Routing is by **consumer**, and a consumer is a `shape != "skeletal"` model binding **or** a
 drawn (non-tool, non-nodraw) map face whose `texinfo.texData` resolves to the unit: a unit with a
 skeletal consumer takes the skinned master, a unit with both gets an `MI_<unit>_Skinned` twin
-beside its world instance (the `MI_<unit>_Decal` precedent). The twin count is **289**, not 287 —
+beside its world instance (the `MI_<unit>_Decal` precedent). The shared-consumer count is **311**;
+307 are lit instances needing the twin, and four retain a non-lit master. The initial 289-unit
+census classified source shape alone; 37 rigid character units still receive skeletal products,
+adding 22 material routes. The predicate is shared with character staging. The count includes
 `metal/metald` and `metal/walkwayb` are bound only by a skeletal vent prop yet are drawn as world
 geometry on 21 maps including `sp_tutorial_1` (~3,996 drawn faces), and the skinned master carries
 no `nanite`/`ism` usage, so a model-only predicate drops them to the engine default in a cooked
-build. The other half of the rule is load-bearing too: **every skeletal consumer must resolve
-`MI_<unit>_Skinned`**, or D10's "the same resolution the static twin already has" binds the base
-instance and the 289 twins are dead assets. `M_V2_Lit` drops `skeletal`/`morph` once R8.4 routes
+build. **Every skeletal consumer resolves the material provenance's `skinnedAsset`**, which names
+the twin for a shared lit material and the ordinary instance for a skeletal-only or non-lit unit.
+This keeps D10's static-twin material lookup from binding the world sibling. `M_V2_Lit` drops `skeletal`/`morph` once R8.4 routes
 props to the sibling.
 
 Why not the two options R8.2 named: 1,399 of 1,540 character slots are Opaque and an opaque

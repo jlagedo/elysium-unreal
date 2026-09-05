@@ -27,7 +27,7 @@ from elysium_pipeline.formats.unit_contract import (
 #: The unit kind, its extension and the schema the extension declares.
 KIND = "model"
 MODEL_EXTENSION = extension_name(KIND)
-SCHEMA_VERSION = "2.0.0"
+SCHEMA_VERSION = "2.2.0"
 
 #: The install root a unit key is relative to. A published unit is written at the key itself
 #: below the seam's own output root, so the seam states this prefix once.

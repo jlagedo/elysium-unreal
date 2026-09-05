@@ -746,8 +746,44 @@ def verify_characters(
         help="Models to check: a stem, family:<name> (an alias for that stem), or "
              "bank:<name> (every model that plays the bank). Omit for the whole cast.",
     ),
+    legacy_root: Path | None = typer.Option(None, "--legacy-root", help="Frozen skeletal product tree."),
+    stage_root: Path | None = typer.Option(None, "--stage-root", help="Replacement product tree to compare in order."),
+    native: bool = typer.Option(False, "--native", help="Read the stage selection's saved native core products in a fresh editor."),
 ) -> None:
+    if native and (legacy_root is not None or models):
+        raise typer.BadParameter("--native uses the character stage's selected units; do not combine it with legacy selectors")
+    if not native and (legacy_root is None) != (stage_root is None):
+        raise typer.BadParameter("--legacy-root and --stage-root must be supplied together")
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        if native:
+            from elysium_pipeline import unreal
+            from elysium_pipeline.importers.characters import staging_root
+
+            root = stage_root or staging_root(config.work_root)
+            unreal.verify_character_stage(config, runner, root / "manifest.json")
+            report = _read_json(root / "native_verify_report.json")
+            if not report or report.get("failed"):
+                raise RuntimeError("native character verification failed or returned no report")
+            console.print(f"native core products: {report['meshes']} meshes, {report['skeletons']} skeletons, "
+                          f"{report['clips']} clips, {report['blendSpaces']} blend spaces; "
+                          "geometry/sample parity and rendered acceptance are separate gates")
+            return
+        if legacy_root is not None:
+            from elysium_pipeline.validation.skeletal_diff import compare_trees, compare_staged_payloads
+
+            staged_manifest = stage_root / "manifest.json"
+            staged = _read_json(staged_manifest) if staged_manifest.is_file() else None
+            result = (compare_staged_payloads(legacy_root, stage_root, export_root=config.export_v2_root)
+                      if staged and staged.get("producer") == "characters"
+                      else compare_trees(legacy_root, stage_root))
+            report_path = config.work_root / "import" / "characters" / "product_diff.json"
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
+            console.print(f"skeletal products: {result['compared']} compared, {result['failed']} failed; {report_path}")
+            if not result["passed"]:
+                raise RuntimeError("skeletal product comparison failed")
+            return
         from elysium_pipeline import export_manager
 
         stems = export_manager.verify_characters(config, runner, models)
@@ -758,8 +794,9 @@ def verify_characters(
         "verify characters",
         ExitCode.OFFLINE_EXPORT,
         action,
-        require_game=True,
-        require_ue=True,
+        require_game=legacy_root is None and not native,
+        require_ue=legacy_root is None,
+        require_work=True,
         activity=True,
     )
 
@@ -1981,6 +2018,62 @@ def import_materials(
         require_ue=lookdev or not stage_only,
         activity=lookdev or not stage_only,
     )
+
+
+@import_app.command("characters")
+def import_characters(
+    ctx: typer.Context,
+    bodies: list[str] = typer.Option(None, "--bodies", help="Unit id, model key or unambiguous body stem; repeatable."),
+    stage_only: bool = typer.Option(False, "--stage-only", help="Stage GLB skeletal payloads and preservation inventory."),
+    force: bool = typer.Option(False, "--force", help="Re-author native assets even when their recipe is current."),
+) -> None:
+    """Stage GLB skeletal units and import their native products under /ElysiumBaked/Models."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import characters
+        from elysium_pipeline.importers import character_data, clip_data, body_data, cast_data, materials
+        from elysium_pipeline import unreal
+
+        root = characters.staging_root(config.work_root)
+        manifest = characters.stage_characters(
+            config.export_v2_root, root, bodies=bodies,
+            content_root=config.repo_root / "Plugins/ElysiumBaked/Content", log=console.print)
+        material_manifest = materials.staging_root(config.work_root) / "manifest.json"
+        if material_manifest.is_file():
+            manifest = character_data.stage_mesh_data(config.export_v2_root, root, manifest, material_manifest, log=console.print)
+        elif not stage_only:
+            raise RuntimeError("stage the material corpus before native character import")
+        manifest = clip_data.stage_clip_data(config.export_v2_root, root, manifest, log=console.print)
+        manifest = body_data.stage_body_data(config.export_v2_root, root, manifest, log=console.print)
+        manifest = cast_data.stage_cast_data(root, manifest)
+        failures = manifest["stageFailures"]
+        console.print(f"characters: {len(manifest['assets'])} staged, {len(failures)} failed; {root / 'manifest.json'}")
+        for row in failures[:10]:
+            console.print(f"{row['assetId']}: {row['reason']}")
+        if failures:
+            raise RuntimeError("character stage failed; previous baked assets remain in use")
+        if stage_only:
+            return
+        editor_failure = None
+        try:
+            unreal.import_characters(config, runner, root / "manifest.json", force=force)
+        except unreal.UnrealFailure as error:
+            editor_failure = error
+        report = _read_json(root / "import_report.json")
+        failed = report.get("failed", []) if report else []
+        if report:
+            console.print(f"character import: {report.get('imported', 0)} imported, "
+                          f"{report.get('reused', 0)} reused, {len(failed)} failed")
+            for row in failed[:10]:
+                console.print(f"{row['assetId']}: {row['reason']}")
+            pending = report.get("pendingProjections", {})
+            if pending:
+                console.print(f"{len(pending)} units still need data projections; see import_report.json")
+        if editor_failure or failed or not report:
+            raise RuntimeError(str(editor_failure or "character native import failed or returned no report"))
+
+    _execute(_state(ctx), "import characters", ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE, action,
+             require_work=True, require_ue=not stage_only, activity=not stage_only)
 
 
 @import_app.command("models")

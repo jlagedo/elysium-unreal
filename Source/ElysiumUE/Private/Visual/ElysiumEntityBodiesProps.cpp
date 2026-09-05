@@ -346,7 +346,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisualWithStaticS
 	// a rule table — so it takes the same install.
 	if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance()))
 	{
-		Inst->SetCompositionRig(Anims->GetAnimatedPropCompositionRig(Entry->Model));
+		Inst->SetCompositionRig(Anims->GetAnimatedPropCompositionRig(Entry->Model, Mesh));
 	}
 
 	const FString MaterialStem = StaticStem.IsEmpty() ? Stem : StaticStem;

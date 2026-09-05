@@ -25,3 +25,14 @@ generation/acceptance has not run. Format: `docs/vtmb/weather.md`. Needed by 7.9
 
 The audio catalog and its typed sidecars are the audio programme's AUD0 (`plans/audio.md`), even
 though the work is the exporter's.
+
+
+### R8 Characters on the GLB corpus
+
+Complete the skeletal export/bake/runtime migration and remove its legacy producers and readers
+after parity. The full lane and retirement gates are in [characters_r8.md](../characters_r8.md),
+under [seam_migration.md](../seam_migration.md)'s R8 sequence. Preserve every source datum,
+including ordered sparse morph records that dense glTF arrays cannot express, and inventory every
+unit even when no current consumer selects it. The native naming standard and producer-owned
+pruning precede the shared Models root cutover. Payload checks alone do not close the sidecar,
+family-skeleton, cloth, material, wield, cooked-reader or played-acceptance gates.

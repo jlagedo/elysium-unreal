@@ -268,10 +268,10 @@ bool FElysiumClipsSwingColumnTest::RunTest(const FString&)
 		First.KnockbackNames.Num(), 4);
 	if (First.KnockbackNames.Num() == 4)
 	{
-		TestEqual(TEXT("...bucket 0 naming its one candidate"), First.KnockbackNames[0].Num(), 1);
+		TestEqual(TEXT("...bucket 0 naming its one candidate"), First.KnockbackNames[0].Names.Num(), 1);
 		TestTrue(TEXT("...and the three empty buckets holding their places"),
-			First.KnockbackNames[1].IsEmpty() && First.KnockbackNames[2].IsEmpty()
-			&& First.KnockbackNames[3].IsEmpty());
+			First.KnockbackNames[1].Names.IsEmpty() && First.KnockbackNames[2].Names.IsEmpty()
+			&& First.KnockbackNames[3].Names.IsEmpty());
 	}
 	TestEqual(TEXT("the direction byte bucket 0 answers"), First.B8, 3);
 	TestEqual(TEXT("...and the unconditional-knockback marker byte"), First.Ba, 255);

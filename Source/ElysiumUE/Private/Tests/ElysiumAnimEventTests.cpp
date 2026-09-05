@@ -377,6 +377,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimEventWindowTest,
 bool FElysiumAnimEventWindowTest::RunTest(const FString&)
 {
 	TArray<const FElysiumAnimEvent*> Fired;
+	{
+		TArray<FElysiumAnimEvent> Timeline{Ev(0.1f,2050)};
+		FElysiumAnimEventCursor Cursor;
+		auto Phase=PhaseAt(0.5f);
+		Phase.OwnerRoot=TEXT("Bip01");
+		ElysiumAnimEvents::Advance(&Timeline,Phase,Cursor,Fired);
+		Phase.OwnerRoot=TEXT("bip01");
+		ElysiumAnimEvents::Advance(&Timeline,Phase,Cursor,Fired);
+		TestTrue(TEXT("case change is the same cinematic actor"),Fired.IsEmpty());
+		Phase.OwnerRoot=TEXT("Bip02");
+		ElysiumAnimEvents::Advance(&Timeline,Phase,Cursor,Fired);
+		TestEqual(TEXT("another actor with identical owner/label/play id has its own timeline"),IdsOf(Fired),FString(TEXT("2050")));
+	}
 
 	// --- The half-open window, at both boundaries -------------------------------------------------
 	{

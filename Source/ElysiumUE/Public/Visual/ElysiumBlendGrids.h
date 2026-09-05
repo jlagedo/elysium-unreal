@@ -8,6 +8,7 @@
 // therefore lives in `Public/` for the same reason.
 #include "ElysiumClipMovement.h"
 #include "ElysiumGaitSpeeds.h"   // FElysiumGaitSpeedTable — what a locomotion fan's motion becomes
+#include "ElysiumBlendGrids.generated.h"
 
 // What a model's own sequence descriptors declare beside their clips, off `npc/blends/<stem>.json`:
 // its blend spaces, its autolayer bindings and its event timelines. All three come from
@@ -34,12 +35,20 @@
 
 // One pose parameter as a model declares it. `Loop` is a wrap modulus and is **zero on the aim
 // parameters**, which therefore do not wrap — the branch is not decoration.
-struct FElysiumPoseParamDesc
+USTRUCT()
+struct ELYSIUMUE_API FElysiumPoseParamDesc
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Name;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Flags = 0;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float Start = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float End = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float Loop = 0.f;
 };
 
@@ -63,10 +72,16 @@ struct FElysiumPoseParams
 
 // Scalar movement authored beside an in-place animation. The offline decoder converts Source
 // inches to centimetres; the skeleton remains in place and the route motor consumes GroundSpeed.
-struct FElysiumClipMotion
+USTRUCT()
+struct ELYSIUMUE_API FElysiumClipMotion
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float CycleSeconds = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float GroundDistanceCm = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float GroundSpeedCmPerSecond = 0.f;
 
 	bool IsUsable() const
@@ -79,24 +94,40 @@ struct FElysiumClipMotion
 // records as a null — no shipped grid carries one today, but the field is nullable by construction
 // so every reader tolerates it rather than assuming. Motion is optional for backwards-compatible
 // exports and for non-locomotion cells.
-struct FElysiumBlendCell
+USTRUCT()
+struct ELYSIUMUE_API FElysiumBlendCell
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Axis[2] = { 0, 0 };
 	// The owner-local MDL animation index. Provenance only — the runtime addresses the clip by name.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Anim = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Clip;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FElysiumClipMotion Motion;
 };
 
 // One sequence's blend space. Axis 0 takes the row stride; `ParamIndex[a]` is -1 when that axis is
 // unused, in which case its range is a degenerate 0/0 that must never be divided by.
-struct FElysiumBlendGrid
+USTRUCT()
+struct ELYSIUMUE_API FElysiumBlendGrid
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Label;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 GroupSize[2] = { 1, 1 };
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 ParamIndex[2] = { INDEX_NONE, INDEX_NONE };
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float ParamStart[2] = { 0.f, 0.f };
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float ParamEnd[2] = { 0.f, 0.f };
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	TArray<FElysiumBlendCell> Cells;
 
 	// A single-cell grid is not written by the exporter, so this is a corruption test rather than the

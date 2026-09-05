@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumMeleeEnvelope.generated.h"
 
 // One authored attack envelope on a melee attack sequence — the box the cast-arm melee selector
 // tests an enemy against (`docs/vtmb/combat-and-damage.md` → "The cast arm").
@@ -31,11 +32,16 @@
 //
 // It lives in `Public/` for the same reason `ElysiumSwingRecord.h` does: it crosses the outbound
 // service seam.
-struct FElysiumMeleeEnvelope
+USTRUCT()
+struct ELYSIUMUE_API FElysiumMeleeEnvelope
 {
+	GENERATED_BODY()
+
 	// The two corners, in Unreal centimetres — a scale off the file's inches, no reflection. Named
 	// `Min`/`Max` because that is what the file states them as; they are not a world-space box.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FVector Min = FVector::ZeroVector;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FVector Max = FVector::ZeroVector;
 
 	// Whether a derived query box overlaps this envelope, per-axis and inclusive at both ends —

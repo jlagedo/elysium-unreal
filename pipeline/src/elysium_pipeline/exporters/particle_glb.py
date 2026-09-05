@@ -38,7 +38,9 @@ class ParticleGlbError(RuntimeError):
 #: `origin.kind` is `"vpk"`, `origin.container` is `pack001.vpk`, same shape as any other member --
 #: nothing marks the product specially; this set is the record of *why* the UP-first answer was
 #: not trusted). Every other key resolves UP-first as usual.
-RETAIL_PROVENANCE_DIVERGENCE_UNITS = frozenset({"waterbigsplash_emitter"})
+from elysium_pipeline.formats.unit_contract.source_policy import RETAIL_PARTICLE_KEYS, unit_source_policy
+
+RETAIL_PROVENANCE_DIVERGENCE_UNITS = RETAIL_PARTICLE_KEYS
 
 
 def _retail_index_override(index: dict, path: str, *, retail_index: dict | None = None) -> dict:
@@ -109,7 +111,9 @@ def build_document(model) -> tuple[dict, bytes]:
             model.asset_id, [source["path"] for source in model.sources], key=model.key,
             particlePath=model.sources[0]["path"],
         ),
-        source_resolution={"policy": SOURCE_POLICY, "members": model.sources},
+        source_resolution={"policy": SOURCE_POLICY, "members": model.sources,
+                           **({"overridePolicy": unit_source_policy(model.asset_id, model.sources[0]["path"])}
+                              if unit_source_policy(model.asset_id, model.sources[0]["path"]) else {})},
         dependencies=model.dependencies,
         coverage=particle_coverage(
             mapped=_MAPPED_FIELDS,

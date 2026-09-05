@@ -433,6 +433,14 @@ namespace
 				*Path, Index, Out.Masks[Index].Bones.Num(), Out.Bones.Num());
 			return false;
 		}
+		for (uint8 Weight : Out.Masks[Index].Bones)
+		{
+			if (Weight > 1)
+			{
+				OutError = FString::Printf(TEXT("%s: mask %d contains non-binary ownership %u"), *Path, Index, Weight);
+				return false;
+			}
+		}
 	}
 	for (const FElysiumSourceClip& Clip : Out.Clips)
 	{

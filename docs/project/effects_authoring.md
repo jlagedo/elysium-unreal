@@ -55,7 +55,8 @@ Other roots on the working maps map onto these: `Fire2_emitter`, `d_animalism_pe
 `D_Potence_1BP_Emitter_Hand` → A1; `Rain_box_NoPrecip_emitter` → A5 (StartHidden); the remaining
 tutorial casts and `molotov_emitter` → A10.
 
-**Water (`water-complete.md` Phase 0, U1d/U3/F1-F3, off the three-map census).** `sp_soc_3` (not
+**Water (the water-complete pass, `ELYSIUM_WORK_ROOT/scratch/water_audit/PLAN.md` Phase 0,
+U1d/U3/F1-F3, off the three-map census).** `sp_soc_3` (not
 one of the three working maps) places `drip_emitter` 40 times — the single root on that map — which
 is `WaterDrops_Timer`'s own chain minus the outer timer/rate wrapper (`drip_emitter` spawns `Drip`
 directly; `WaterDrops_Timer` spawns `WaterDrops_Emitter` which spawns `Drip`), so it folds into A2
@@ -73,9 +74,9 @@ data. All four water trees resolve cleanly (zero unresolved children, zero missi
 The splash pair's spawn rule is the water lane's, not this one's: big splash on `waterLevel 0 → ≥1`
 with `velocity.z < −200 in/s`, wade splash while `0 < level < 3` above 50 in/s on a
 `5.0 − horiz·7.8e-5` s cooldown, at `origin − vel.xy·0.035` snapped to the surface plane
-(`+RandomInt(0,8)` in z for the wade one) — `ElysiumWater::DecideSplash`, ruling L in
-`docs/architecture/water-architecture.md` §1.1. Reading `waterbigsplash_emitter` out of the retail
-pack member is **named divergence N.3** in the same section (the Unofficial Patch's own copy has
+(`+RandomInt(0,8)` in z for the wade one) — `ElysiumWater::DecideSplash`,
+`docs/architecture/water-architecture.md` §8. Reading `waterbigsplash_emitter` out of the retail
+pack member is **named divergence 21** in that document's §12 (the Unofficial Patch's own copy has
 its spawn token commented out, `// removed by wesp`), and it is the only key in
 `exporters.particle_glb.RETAIL_PROVENANCE_DIVERGENCE_UNITS`. Until the generator runs,
 `AElysiumMapActor::RaiseWaterSplash` stands the floor system rather than failing — by design, so a

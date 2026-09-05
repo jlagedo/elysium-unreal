@@ -263,10 +263,10 @@ def _check_key(key: str) -> tuple[list[str], str]:
 
 
 def asset_path_for(key: str, asset_class: str, *, twin: bool = False) -> str:
-    directories, stem = _check_key(key)
-    folded = "/".join(safe_name(part) for part in directories)
-    name = CLASS_PREFIX[asset_class] + safe_name(stem) + (LINEAR_TWIN_SUFFIX if twin else "")
-    return f"{PACKAGE_ROOT}/{folded}/{name}" if folded else f"{PACKAGE_ROOT}/{name}"
+    from elysium_pipeline.asset_paths import baked_path
+    _check_key(key)
+    return baked_path("texture", key, CLASS_PREFIX[asset_class].rstrip("_"),
+                      role="linear" if twin else None)
 
 
 def _texture_class(extension: dict, ktx) -> str:

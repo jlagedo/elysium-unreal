@@ -759,9 +759,10 @@ spawn is R7.2's decal seam.
 
 ### 4.15 Water surface
 
-Map water is a material / Single Layer Water problem (`docs/project/plans/world.md`
-7.3), not a particle. Splashes, bubbles and rain-on-water are particles that land on
-it.
+Map water is a material / Single Layer Water problem
+(`docs/architecture/water-architecture.md`), not a particle. Splashes, bubbles and
+rain-on-water are particles that land on it; the entry and wade splashes are fired by the
+water lane on the water-level transition (`docs/vtmb/water.md` → "The events water raises").
 
 ### 4.16 Fog and atmosphere
 

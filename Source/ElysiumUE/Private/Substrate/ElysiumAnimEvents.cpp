@@ -49,6 +49,7 @@ namespace ElysiumAnimEvents
 		const bool bSamePlay = InOut.bArmed
 			&& InOut.PlayId == Phase.PlayId
 			&& InOut.OwnerStem.Equals(Phase.OwnerStem, ESearchCase::IgnoreCase)
+			&& InOut.OwnerRoot.Equals(Phase.OwnerRoot, ESearchCase::IgnoreCase)
 			&& InOut.Label.Equals(Phase.Label, ESearchCase::IgnoreCase);
 
 		// A phase is normalized. Clamping here keeps the interval arithmetic total; a producer that
@@ -73,6 +74,7 @@ namespace ElysiumAnimEvents
 		const float Last = bSamePlay ? InOut.LastCycle : Anchor;
 
 		InOut.OwnerStem = Phase.OwnerStem;
+		InOut.OwnerRoot = Phase.OwnerRoot;
 		InOut.Label = Phase.Label;
 		InOut.PlayId = Phase.PlayId;
 		InOut.LastCycle = Cycle;

@@ -1,6 +1,10 @@
 #include "Visual/ElysiumAnimSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumCharacterProvenance.h"
+#include "Visual/ElysiumNativeAnimationData.h"
+#include "ElysiumBodyData.h"
+#include "ElysiumClipData.h"
 #include "ElysiumMoveSolve.h"          // the sv_*scale constants the gait tables are built with
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -12,9 +16,69 @@
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/GameInstance.h"
+#include "Animation/BlendSpace.h"
 #include "HAL/FileManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnim, Log, All);
+
+TSharedPtr<FStreamableHandle> UElysiumAnimSubsystem::PrepareNativeModel(const FString& ModelId, FString& OutError)
+{
+	return GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>()->Prepare(ModelId,OutError);
+}
+
+const UElysiumClipData* UElysiumAnimSubsystem::NativeClipData(const FString& Owner,const FString& Label,
+	const FString& OwnerRoot) const
+{
+	auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
+	return Native->ClipData(OwnerRoot.IsEmpty()?Native->Body(Owner):Native->CinematicBody(Owner,OwnerRoot),Label);
+}
+
+void UElysiumAnimSubsystem::ReleaseNativeModels()
+{
+	GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>()->ReleasePrepared();
+}
+
+const FElysiumNpcClip* UElysiumAnimSubsystem::ClipDescription(const FString& Model,const FString& Label)
+{
+	if (Model.StartsWith(TEXT("vtmb:model:")))
+	{
+		const auto* Data=NativeClipData(Model,Label);
+		return Data?&Data->Descriptor:nullptr;
+	}
+	const auto* Set=GetClipSet(Model);
+	return Set?Set->Find(Label):nullptr;
+}
+
+namespace ElysiumCookedRig
+{
+	bool IsCookedMesh(const USkeletalMesh* Mesh)
+	{
+		return Mesh && (UElysiumCharacterProvenance::Find(Mesh)
+			|| Mesh->GetPathName().StartsWith(TEXT("/ElysiumBaked/Models/")));
+	}
+
+	template<typename TRig>
+	TSharedPtr<const TRig> Read(const USkeletalMesh* Mesh, const TCHAR* Domain,
+		TRig UElysiumCharacterProvenance::*Member, bool (TRig::*Usable)() const,
+		TMap<FString, TSharedPtr<const TRig>>& Cache)
+	{
+		const FString Key = Mesh->GetPathName();
+		if (const auto* Existing = Cache.Find(Key)) return *Existing;
+		TSharedPtr<const TRig> Result;
+		const UElysiumCharacterProvenance* Data = UElysiumCharacterProvenance::Find(Mesh);
+		if (!Data || !Data->bHasMeshData)
+		{
+			UE_LOG(LogElysiumAnim, Warning, TEXT("%s: cooked %s data is missing"), *Key, Domain);
+		}
+		else if (((Data->*Member).*Usable)())
+		{
+			Result = MakeShared<TRig>(Data->*Member);
+		}
+		Cache.Add(Key, Result);
+		return Result;
+	}
+}
 
 namespace
 {
@@ -245,23 +309,12 @@ namespace
 		{
 			return Assets.Sequence->FindMetaDataByClass<UElysiumAnimLayerMask>();
 		}
-		if (Assets.Space == nullptr || Mesh == nullptr || !Catalog.BlendTableFor)
-		{
-			return nullptr;
-		}
-		const FElysiumBlendTable* Table = Catalog.BlendTableFor(Selection.OwnerStem);
-		const FElysiumBlendGrid* Grid = Table != nullptr
-			? Table->Find(Selection.SequenceLabel) : nullptr;
-		const FElysiumBlendCell* BaseCell = Grid != nullptr ? Grid->CellAt(0, 0) : nullptr;
-		if (BaseCell == nullptr)
-		{
-			return nullptr;
-		}
-		UAnimSequence* BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, Selection.OwnerStem,
-			BaseCell->Clip);
-		return BaseCellSequence != nullptr
-			? BaseCellSequence->FindMetaDataByClass<UElysiumAnimLayerMask>()
-			: nullptr;
+		// Every grid sample has the same mask (enforced by the bake). Its hard reference is
+		// already resident, so this query needs neither a source table nor another asset load.
+		if (Assets.Space != nullptr)
+			for (const FBlendSample& Sample : Assets.Space->GetBlendSamples())
+				if (Sample.Animation) return Sample.Animation->FindMetaDataByClass<UElysiumAnimLayerMask>();
+		return nullptr;
 	}
 }
 
@@ -392,6 +445,8 @@ const FElysiumDispositionTable& UElysiumAnimSubsystem::Dispositions()
 
 const FElysiumNpcClipSet* UElysiumAnimSubsystem::GetClipSet(const FString& Stem)
 {
+	if (Stem.StartsWith(TEXT("vtmb:model:")))
+		return GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>()->Vocabulary(Stem);
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
@@ -412,8 +467,10 @@ const FElysiumNpcClipSet* UElysiumAnimSubsystem::GetClipSet(const FString& Stem)
 	return Set.Get();
 }
 
-TSharedPtr<const FElysiumFacialRig> UElysiumAnimSubsystem::GetFacialRig(const FString& Stem)
+TSharedPtr<const FElysiumFacialRig> UElysiumAnimSubsystem::GetFacialRig(const FString& Stem, const USkeletalMesh* Mesh)
 {
+	if (ElysiumCookedRig::IsCookedMesh(Mesh))
+		return ElysiumCookedRig::Read(Mesh, TEXT("facial"), &UElysiumCharacterProvenance::Facial, &FElysiumFacialRig::IsValid, FacialRigs);
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
@@ -455,8 +512,10 @@ TSharedPtr<const FElysiumFacialRig> UElysiumAnimSubsystem::GetFacialRig(const FS
 	return Result;
 }
 
-TSharedPtr<const FElysiumEyeSet> UElysiumAnimSubsystem::GetEyeSet(const FString& Stem)
+TSharedPtr<const FElysiumEyeSet> UElysiumAnimSubsystem::GetEyeSet(const FString& Stem, const USkeletalMesh* Mesh)
 {
+	if (ElysiumCookedRig::IsCookedMesh(Mesh))
+		return ElysiumCookedRig::Read(Mesh, TEXT("eye"), &UElysiumCharacterProvenance::Eyes, &FElysiumEyeSet::IsValid, EyeSets);
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
@@ -493,6 +552,8 @@ TSharedPtr<const FElysiumEyeSet> UElysiumAnimSubsystem::GetEyeSet(const FString&
 
 TSharedPtr<const FElysiumBlendTable> UElysiumAnimSubsystem::GetBlendTable(const FString& Stem)
 {
+	if (Stem.StartsWith(TEXT("vtmb:model:")))
+		return GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>()->BlendTable(Stem);
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
@@ -571,7 +632,7 @@ TSharedPtr<const FElysiumBlendTable> UElysiumAnimSubsystem::GetBlendTable(const 
 }
 
 FString UElysiumAnimSubsystem::ResolveGridClip(const FString& OwnerStem, const FString& Label,
-	const FElysiumPoseParams& Pose)
+	const FElysiumPoseParams& Pose, const FString& OwnerRoot)
 {
 	if (OwnerStem.IsEmpty() || Label.IsEmpty())
 	{
@@ -579,7 +640,13 @@ FString UElysiumAnimSubsystem::ResolveGridClip(const FString& OwnerStem, const F
 	}
 	// Nearly every label names one animation, and a model with no multi-cell sequence has no sidecar
 	// at all — so the common path is a cached null and one map lookup that misses.
-	const TSharedPtr<const FElysiumBlendTable> Table = GetBlendTable(OwnerStem);
+	TSharedPtr<const FElysiumBlendTable> Table;
+	if (OwnerRoot.IsEmpty()) Table=GetBlendTable(OwnerStem);
+	else
+	{
+		auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
+		Table=Native->BlendTable(Native->CinematicBody(OwnerStem,OwnerRoot));
+	}
 	if (!Table.IsValid())
 	{
 		return Label;
@@ -635,8 +702,11 @@ namespace
 }
 
 TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetCompositionRig(
-	const FString& Stem)
+	const FString& Stem, const USkeletalMesh* Mesh)
 {
+	if (ElysiumCookedRig::IsCookedMesh(Mesh))
+		return ElysiumCookedRig::Read(Mesh, TEXT("procedural"), &UElysiumCharacterProvenance::Composition,
+			&FElysiumCompositionRig::HasWork, CompositionRigs);
 	if (Stem.IsEmpty())
 	{
 		return nullptr;
@@ -668,8 +738,9 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetCompositionRi
 }
 
 TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetAnimatedPropCompositionRig(
-	const FString& ModelPath)
+	const FString& ModelPath, const USkeletalMesh* Mesh)
 {
+	if (ElysiumCookedRig::IsCookedMesh(Mesh)) return GetCompositionRig(FString(), Mesh);
 	if (ModelPath.IsEmpty())
 	{
 		return nullptr;
@@ -769,7 +840,10 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FSt
 	// A baked bank sequence is the same asset for every compatible body and is addressed by owner
 	// and resolved animation name rather than rebuilt per mesh.
 	const FString AnimName = ResolveClipAnimName(Stem, ClipName);
-	if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, AnimName))
+	UAnimSequence* Resolved = Stem.StartsWith(TEXT("vtmb:model:"))
+		? GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>()->Sequence(Owner,AnimName)
+		: ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, AnimName);
+	if (UAnimSequence* Baked = Resolved)
 	{
 		// **A masked partial-body layer is refused for a Base-channel caller, at the door that
 		// actually poses one.** `ResolveAnimation` guards the locomotion resolve; every clip a
@@ -882,7 +956,20 @@ bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& Clip
 	// as `<label>@<host>`; asking for the bare name misses 299 of 527 spaces.
 	UBlendSpace* Space = nullptr;
 	ElysiumAnimResolve::ELayerAssetForm Form = ElysiumAnimResolve::ELayerAssetForm::None;
-	if (!Host.IsEmpty())
+	if (Stem.StartsWith(TEXT("vtmb:model:")))
+	{
+		const auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
+		const auto* Body=Native->Body(Stem);
+		const auto* HostRow=Body && !Host.IsEmpty()?Body->Find(Host):nullptr;
+		const FElysiumBodyAnimationRef* Reference=nullptr;
+		if (HostRow)
+			Reference=HostRow->Layers.FindByPredicate([&](const auto& Ref){return Ref.Label.Equals(ClipName,ESearchCase::IgnoreCase);});
+		if (!Reference && Body)
+			if (const auto* Row=Body->Find(ClipName,Owner)) Reference=&Row->Assets;
+		Space=Reference?Reference->BlendSpace.Get():nullptr;
+		Form=Host.IsEmpty()?ElysiumAnimResolve::ELayerAssetForm::PlainGrid:ElysiumAnimResolve::ELayerAssetForm::DerivedGrid;
+	}
+	else if (!Host.IsEmpty())
 	{
 		Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, ClipName, Host);
 		if (Space != nullptr)
@@ -890,7 +977,7 @@ bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& Clip
 			Form = ElysiumAnimResolve::ELayerAssetForm::DerivedGrid;
 		}
 	}
-	if (Space == nullptr)
+	if (Space == nullptr && !Stem.StartsWith(TEXT("vtmb:model:")))
 	{
 		Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, ClipName);
 		if (Space != nullptr)
@@ -924,8 +1011,8 @@ FElysiumAnimationCatalog UElysiumAnimSubsystem::BuildCatalog(const FString& Stem
 {
 	FElysiumAnimationCatalog Catalog;
 	Catalog.Clips = GetClipSet(Stem);
-	Catalog.PropClips = Stem.IsEmpty() ? nullptr : GetIndex().PlacedModels.Find(Stem);
-	if (Catalog.PropClips == nullptr && !Stem.IsEmpty())
+	Catalog.PropClips = Stem.IsEmpty() || Stem.StartsWith(TEXT("vtmb:model:")) ? nullptr : GetIndex().PlacedModels.Find(Stem);
+	if (Catalog.PropClips == nullptr && !Stem.IsEmpty() && !Stem.StartsWith(TEXT("vtmb:model:")))
 	{
 		Catalog.PropClips = GetIndex().AnimatedProps.Find(Stem);
 	}
@@ -946,6 +1033,28 @@ void UElysiumAnimSubsystem::ResolveSlotDeclaredAssets(const FString& OwnerStem,
 	OutAimSpace = nullptr;
 	OutAimMaskName = NAME_None;
 	OutAdditive = nullptr;
+	if (OwnerStem.StartsWith(TEXT("vtmb:model:")))
+	{
+		const auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
+		const auto* Body=Native->Body(OwnerStem);
+		const auto* Row=Body?Body->Find(Label,OwnerStem):nullptr;
+		if (!Row) return;
+		for (const auto& Ref : Row->Layers)
+		{
+			if (UBlendSpace* Space=Ref.BlendSpace.Get())
+			{
+				OutAimSpace=Space;
+				UAnimSequence* Base=Ref.BaseCell.Get();
+				const auto* Mask=Base?Base->FindMetaDataByClass<UElysiumAnimLayerMask>():nullptr;
+				if (Mask) OutAimMaskName=Mask->Profile;
+			}
+			else if (UAnimSequence* Clip=Ref.Sequence.Get())
+			{
+				if (Clip->FindMetaDataByClass<UElysiumAnimPostAdditive>()) OutAdditive=Clip;
+			}
+		}
+		return;
+	}
 	if (Mesh == nullptr)
 	{
 		return;
@@ -1268,6 +1377,37 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 		return;
 	}
 
+	if (Intent.Stem.StartsWith(TEXT("vtmb:model:")))
+	{
+		const auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
+		const auto* Body=Native->Body(Intent.Stem);
+		const auto* Row=Body?Body->Find(OutSelection.SequenceLabel,OutSelection.OwnerStem):nullptr;
+		if (!Row)
+		{
+			OutSelection.Outcome=EElysiumAnimOutcome::NoAsset;
+			OutSelection.Detail=TEXT("prepared body data has no resolved sequence row"); ReportMiss(Intent,OutSelection); return;
+		}
+		if (OutSelection.AssetKind==EElysiumAnimAssetKind::BlendSpace) OutAssets.Space=Row->Assets.BlendSpace.Get();
+		else OutAssets.Sequence=Row->Assets.Sequence.Get();
+		if (!OutAssets.IsValid())
+		{
+			OutSelection.Outcome=EElysiumAnimOutcome::NoAsset;
+			OutSelection.Detail=TEXT("native animation was not prepared before resolution"); ReportMiss(Intent,OutSelection); return;
+		}
+		if (RefuseMaskedBase(Intent,Catalog,Mesh,OutSelection,OutAssets)) return;
+		for (const auto& Ref : Row->Layers)
+		{
+			UAnimSequence* Clip=Ref.Sequence.Get(); UBlendSpace* Space=Ref.BlendSpace.Get();
+			UAnimSequence* MaskSource=Space?Ref.BaseCell.Get():Clip;
+			if (Space) OutAssets.OverlaySpace=Space;
+			else if (Clip && Clip->FindMetaDataByClass<UElysiumAnimPostAdditive>()) { OutAssets.AdditiveSequence=Clip; continue; }
+			else if (Clip) OutAssets.OverlaySequence=Clip;
+			const auto* Mask=MaskSource?MaskSource->FindMetaDataByClass<UElysiumAnimLayerMask>():nullptr;
+			if (Mask) OutAssets.OverlayMaskName=Mask->Profile;
+		}
+		return;
+	}
+
 	// One reporter for every layer diagnostic this resolve produces, throttled to a line per
 	// (reason, owner|label) for the session against the same set the slot's own misses use.
 	auto ReportLayerOnce = [this](const TCHAR* Reason, const FString& Key, const FString& Line)
@@ -1558,7 +1698,7 @@ bool UElysiumAnimSubsystem::ResolveSequenceClip(const FString& Stem, const FStri
 }
 
 UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankStem,
-	const FString& ClipName, USkeletalMesh* Mesh, FString& OutError)
+	const FString& ClipName, USkeletalMesh* Mesh, FString& OutError, const FString& OwnerRoot)
 {
 	OutError.Reset();
 	if (BankStem.IsEmpty() || Mesh == nullptr)
@@ -1567,6 +1707,20 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankSte
 		return nullptr;
 	}
 	// This path never consults the clip vocabulary, so the bank is both the asset and the grid owner.
+	if (BankStem.StartsWith(TEXT("vtmb:model:")))
+	{
+		auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
+		const auto* Owner=OwnerRoot.IsEmpty()?Native->Body(BankStem):Native->CinematicBody(BankStem,OwnerRoot);
+		if (!Owner || !Native->BlendTable(Owner).IsValid())
+		{
+			OutError=FString::Printf(TEXT("native animation owner is not prepared: %s [%s]"),*BankStem,*OwnerRoot);
+			return nullptr;
+		}
+		const FString AnimName=ResolveGridClip(BankStem,ClipName,FElysiumPoseParams::Neutral(),OwnerRoot);
+		if (auto* Clip=Native->Sequence(Owner,AnimName)) return Clip;
+		OutError=FString::Printf(TEXT("native clip is absent or not resident: %s [%s] %s"),*BankStem,*OwnerRoot,*AnimName);
+		return nullptr;
+	}
 	const FString AnimName = ResolveGridClip(BankStem, ClipName);
 	if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, BankStem, AnimName))
 	{

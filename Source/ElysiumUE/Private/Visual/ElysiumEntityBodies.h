@@ -108,13 +108,13 @@ public:
 	// cached per (target stem, bank, clip). The target stem is load-bearing: glTFRuntime binds the
 	// returned UAnimSequence to that model's USkeleton.
 	bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& BankStem,
-		const FString& ClipName, bool bLoop, float* OutSeconds);
+		const FString& ClipName, bool bLoop, float* OutSeconds, const FString& OwnerRoot = FString());
 	bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName);
 	bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial, const FString& ClipName);
 	bool PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& BankStem, const FString& ClipName);
+		const FString& BankStem, const FString& ClipName, const FString& OwnerRoot = FString());
 	bool PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
-		const FString& BankStem, const FString& ClipName);
+		const FString& BankStem, const FString& ClipName, const FString& OwnerRoot = FString());
 	bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 	void StopCinematicClip(USkeletalMeshComponent* Body);
 	// Give the scene's base-channel claim back without stopping the clip — the crossfade stop path
@@ -190,7 +190,7 @@ public:
 	bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 		FElysiumClipPhase& Out);
 	const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
-		const FString& Label);
+		const FString& Label, const FString& OwnerRoot = FString());
 	// Compose an autolayer over whatever this body is already playing — a `_delta` additive, a masked
 	// partial-body `_layer`, or a masked aim grid, decided from the asset. Same resolution chain as
 	// PlayNpcClip, so a layer owned by a shared bank is reached by label; the layer itself is
@@ -349,7 +349,7 @@ private:
 	void LoadItemGroundModelCatalogue();
 	USkeletalMesh* ResolveNpcMesh(const FString& Stem, bool bPlayerMaterial);
 	UAnimSequence* ResolveCinematicClip(USkeletalMesh* Mesh, const FString& Stem,
-		const FString& BankStem, const FString& ClipName);
+		const FString& BankStem, const FString& ClipName, const FString& OwnerRoot);
 	UAnimSequence* ResolveAnimatedPropClip(USkeletalMesh* Mesh, const FString& Stem,
 		const FString& ClipName);
 	USkeletalMeshComponent* BuildAnimatedPropVisualWithStaticStem(const FString& Stem,

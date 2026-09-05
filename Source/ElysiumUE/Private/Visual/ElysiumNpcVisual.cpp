@@ -3,6 +3,7 @@
 #include "ElysiumWieldAttach.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumCharacterProvenance.h"
 #include "ElysiumWieldTable.h"
 #include "Visual/ElysiumBodyAnimInstance.h"
 #include "Visual/ElysiumHairDynamicsConfig.h"
@@ -180,8 +181,11 @@ namespace ElysiumNpcVisual
 		}
 	}
 
-	UMaterialInterface* EyeMaster()
+	UMaterialInterface* EyeMaster(const USkeletalMesh* Mesh)
 	{
+		if (UElysiumCharacterProvenance::Find(Mesh))
+			return LoadObject<UMaterialInterface>(nullptr,
+				*(FElysiumContentPaths::MaterialsDir() / TEXT("V2/M_V2_Eyes.M_V2_Eyes")));
 		return LoadObject<UMaterialInterface>(nullptr, *FElysiumContentPaths::Material(TEXT("M_Eyes")));
 	}
 
@@ -330,7 +334,7 @@ namespace ElysiumNpcVisual
 		for (USkeletalMeshComponent* Component : Components)
 		{
 			if (Component->ComponentHasTag(WieldComponentTag())
-				&& Component->LeaderPoseComponent.Get() == Body)
+				&& Component->GetAttachParent() == Body)
 			{
 				return Component;
 			}
@@ -343,8 +347,8 @@ namespace ElysiumNpcVisual
 	 *
 	 * The same ownership trap `SweepStaleGarments` documents: a wield model belongs to the OWNING
 	 * ACTOR, and the map actor owns every character standing on the map — so rebuilding one body
-	 * leaves its weapon behind, parented to an actor that is still alive. The leader pose is a weak
-	 * reference, so the leftover keeps drawing at the identity transform rather than erroring.
+	 * leaves its weapon behind, parented to an actor that is still alive. Both rigid socket-bound
+	 * and skeletal leader-bound weapons attach to their body; only the latter has a leader pose.
 	 *
 	 * The tag is what keeps this from reaching the bodies themselves, which are skeletal components
 	 * on the same owner.
@@ -361,8 +365,8 @@ namespace ElysiumNpcVisual
 			}
 			// Two ways to be stale, and both happen on a restand: the body this weapon followed was
 			// destroyed, or the body is about to be handed a different weapon.
-			if (!Component->LeaderPoseComponent.IsValid()
-				|| Component->LeaderPoseComponent.Get() == Body)
+			if (!IsValid(Component->GetAttachParent())
+				|| Component->GetAttachParent() == Body)
 			{
 				Component->DestroyComponent();
 			}

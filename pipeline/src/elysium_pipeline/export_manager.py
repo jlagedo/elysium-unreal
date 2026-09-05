@@ -624,7 +624,8 @@ POLICY_GENERATOR_OUTPUTS = {
     # `vtmb:missing-material:` sentinel slot in the model corpus binds `MI_V2_Missing`, so an
     # umbrella rerun that silently failed to author it must not report complete.
     "make_v2_materials.py": (
-        "Materials/V2/MI_V2_Missing.uasset", "Materials/V2/T_V2_MissingChecker.uasset"),
+        "Materials/V2/MI_V2_Missing.uasset", "Materials/V2/T_V2_MissingChecker.uasset",
+        "Materials/V2/M_V2_LitSkinned.uasset", "Materials/V2/M_V2_LitSkinnedTranslucent.uasset"),
 }
 
 WORLD_MATERIAL_GENERATOR = "make_world_materials.py"

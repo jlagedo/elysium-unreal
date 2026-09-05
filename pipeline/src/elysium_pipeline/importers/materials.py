@@ -395,7 +395,7 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
     "M_V2_Unlit": _merged(
         _SHARED_PARAMS, _BASE_SCROLL_LANE, _BASE_ANIM_LANE, _SINE_LANE, _SCENE_FOG_LANE,
         {
-            "BaseTexture": "T", "EnvMapMask": "T", "EnvMap": "T", "CloudAlphaTexture": "T",
+            "BaseTexture": "T", "ModelAlpha": "S", "EnvMapMask": "T", "EnvMap": "T", "CloudAlphaTexture": "T",
             "EnvMapMaskScale": "S",
             "EnvMapTint": "V", "TexScaleOffset": "V", "CloudScale": "V",
             "UseBaseTexture": "#", "UseVertexColor": "#", "UseVertexAlpha": "#", "UseEnvMap": "#",
@@ -406,7 +406,8 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
     ),
     "M_V2_Eyes": _merged(_SHARED_PARAMS, {
         "BaseTexture": "T", "Iris": "T", "Glint": "T", "IrisFrame": "S",
-        "VampireEyes": "#", "UseGlint": "#",
+        "Vampire": "S", "Flatten": "S", "ModelAlpha": "S", "UseGlint": "#",
+        "IrisOrigin": "V", "IrisU": "V", "IrisV": "V", "NormalOrigin": "V", "EyeUpN": "V",
     }),
     "M_V2_Water": _merged(
         _SHARED_PARAMS, _BUMP_SCROLL_LANE, _NORMAL_ANIM_LANE, _DUDV_ANIM_LANE, _LIGHTSTYLE_LANE,
@@ -471,6 +472,8 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
     ),
 }
 EXPOSED_PARAMS["M_V2_LitTranslucent"] = EXPOSED_PARAMS["M_V2_Lit"]
+EXPOSED_PARAMS["M_V2_LitSkinned"] = {**EXPOSED_PARAMS["M_V2_Lit"], "ModelAlpha": "S", "UseAlphaTest": "#"}
+EXPOSED_PARAMS["M_V2_LitSkinnedTranslucent"] = EXPOSED_PARAMS["M_V2_LitSkinned"]
 
 
 def _switch_names(master: str) -> list[str]:
@@ -528,6 +531,7 @@ TEXTURE_PROVENANCE_KEYS = frozenset({
 MATERIAL_REFERENCE_KEYS = frozenset({"$bottommaterial", "$crackmaterial", "$modelmaterial", "$leaknoise"})
 
 SCALAR_PARAM_MAP = {
+    "$vampire": "Vampire",
     "$alpha": "Alpha",
     "$envmapmaskscale": "EnvMapMaskScale",
     "$bumpscale": "BumpScale",
@@ -622,7 +626,6 @@ SWITCH_PARAM_MAP = {
     "$vertexalpha": "UseVertexAlpha",
     "$normalmapalphaenvmapmask": "UseNormalMapAlphaEnvMapMask",
     "$basealphaenvmapmask": "UseBaseAlphaEnvMapMask",
-    "$vampire": "VampireEyes",
     "$forcecheap": "CheapWater",
     "$fogenable": "UseFogEnable",
     "$bumpbasetexture2withbumpmap": "UseBumpOnBaseTexture2",
@@ -783,10 +786,9 @@ def asset_path_for(key: str) -> str:
     """`vtmb:material:<key>` -> `/ElysiumBaked/Materials/<dir>/MI_<safe stem>` (install and
     patched units alike -- a patched unit's `<key>` already carries its `maps/<map>/` prefix)."""
 
-    directories, stem = _check_key(key)
-    folded = "/".join(safe_name(part) for part in directories)
-    name = "MI_" + safe_name(stem)
-    return f"{PACKAGE_ROOT}/{folded}/{name}" if folded else f"{PACKAGE_ROOT}/{name}"
+    from elysium_pipeline.asset_paths import baked_path
+    _check_key(key)
+    return baked_path("material", key, "MI")
 
 
 def underside_asset_path_for(key: str) -> str:
@@ -2362,6 +2364,9 @@ def stage_unit(
             raise MaterialImportError(f"shader family {family!r} has no master")
         if master == WATER_MASTER:
             blend_mode = _apply_water_blend(params, base_property_overrides)
+        if master == "M_V2_Eyes":
+            blend_mode = "Masked"
+            base_property_overrides.update(blendMode="Masked", twoSided=True, opacityMaskClipValue=.333)
         parent = f"{MASTER_ROOT}/{master}"
         provenance_only = family_for_binding in NO_MASTER_FAMILIES
         if provenance_only:
@@ -2458,6 +2463,8 @@ def stage_unit(
         # the audit trail for that claim, not a second source the importer must also consult.
         "allSwitches": [] if patched else _switch_names(master),
         "basePropertyOverrides": base_property_overrides,
+        "sourceAlphaTest": (any(_truthy(params.instance_flags.get(key, "0")) for key in ("$alphatest", "$alphatested"))
+                            if any(key in params.instance_flags for key in ("$alphatest", "$alphatested")) else None),
         "physMaterial": phys_material_path,
         "physMaterialFallback": physmat_fallback if not patched else None,
         "surfaceClass": surface_class,
@@ -2988,6 +2995,16 @@ def stage_materials(
         _write_if_changed(sidecar_path_by_path[entry["assetPath"]], _json_bytes(provenance))
         result.probes_bound += 1
 
+    from elysium_pipeline.importers import material_consumers
+    consumers = material_consumers.collect(export_v2_root)
+    entries, consumer_report = material_consumers.route(entries, provenance_by_path, consumers, MASTER_ROOT, EXPOSED_PARAMS)
+    for path, provenance in provenance_by_path.items():
+        _write_if_changed(sidecar_path_by_path[path], _json_bytes(provenance))
+    for entry in entries:
+        provenance = provenance_by_path.get(asset_path_for(entry["unit"][len("vtmb:material:"):]))
+        if provenance is not None:
+            entry["recipe"]["provenanceSha256"] = hashlib.sha256(_json_bytes(provenance)).hexdigest()
+
     keep: set[str] = set()
     for key in failed_keys:
         try:
@@ -2997,6 +3014,7 @@ def stage_materials(
             # prune the ones already imported.
             keep.add(decal_asset_path_for(key))
             keep.add(underside_asset_path_for(key))
+            keep.add(asset_path_for(key) + "_Skinned")
             produced.update(path for path in _unit_files(root, key) if path.exists())
         except MaterialImportError:
             continue
@@ -3023,6 +3041,7 @@ def stage_materials(
         "anomalyCounts": dict(sorted(result.anomaly_counts.items())),
         "omissionCounts": dict(sorted(result.omission_counts.items())),
         "assets": entries,
+        "consumerReport": consumer_report,
     }
     root.mkdir(parents=True, exist_ok=True)
     manifest_path = root / MANIFEST_NAME

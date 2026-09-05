@@ -20,6 +20,7 @@ legacy VTX twin publishes is derived from the two variant files rather than read
 from __future__ import annotations
 
 import struct
+import math
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -531,7 +532,141 @@ def _check_core(document: Mapping[str, Any], root: Mapping[str, Any]) -> None:
                 _fail(f"animation {index} targets node {node!r}, which is not a joint")
 
 
-def _source_vertex_positions(mdl_data: bytes, model_record: int, source_vertices: Sequence[int]):
+def _check_morph_records(document, root):
+    """Authored sparse records must survive independently of the dense render projection."""
+    targets = (root.get("facial") or {}).get("morphTargets") or []
+    lod = next((row for row in root["vtx"]["lods"] if row["index"] == 0), None)
+    if targets and lod is None:
+        _fail("facial targets have no LOD0")
+    primitives = document["meshes"][lod["mesh"]]["primitives"] if lod else []
+    rendered = {tuple(p["extensions"][MODEL_EXTENSION][k] for k in ("bodyPart", "model", "mesh"))
+                for p in primitives}
+    for part in root["mdl"]["bodyParts"]:
+        for model in part["models"]:
+            for mesh in model["meshes"]:
+                if (part["index"], model["index"], mesh["index"]) in rendered:
+                    if mesh.get("unrenderedMorphRecords"):
+                        _fail("rendered mesh duplicates its morph source records")
+                    continue
+                expected = [i for i, flex in enumerate(mesh["flexes"]) for _ in range(flex["numverts"])]
+                rows = mesh.get("unrenderedMorphRecords", [])
+                if [row.get("flex") for row in rows] != expected:
+                    _fail("unrenderedMorphRecords drops or reorders source records")
+                for row in rows:
+                    if not isinstance(row.get("sourceVertex"), int) or not 0 <= row["sourceVertex"] < model["vertexCount"]:
+                        _fail("unrenderedMorphRecords names an invalid source vertex")
+                    for channel in ("position", "normal"):
+                        value = row.get(channel)
+                        if not isinstance(value, (tuple, list)) or len(value) != 3 or not all(
+                                isinstance(v, (float, int)) and math.isfinite(v) for v in value):
+                            _fail(f"unrenderedMorphRecords has invalid {channel} delta")
+    for primitive in primitives:
+        source = primitive["extensions"][MODEL_EXTENSION]
+        if targets and "morphRecords" not in source:
+            _fail("LOD0 primitive lacks ordered morphRecords")
+        model = root["mdl"]["bodyParts"][source["bodyPart"]]["models"][source["model"]]
+        mesh = model["meshes"][source["mesh"]]
+        expected = [i for i, flex in enumerate(mesh["flexes"]) for _ in range(flex["numverts"])]
+        rows = source.get("morphRecords", [])
+        if [row.get("flex") for row in rows] != expected:
+            _fail("morphRecords drops or reorders authored flex records")
+        vertices = {value: i for i, value in enumerate(source["sourceVertices"])}
+        for row in rows:
+            target_index = row.get("target")
+            if not isinstance(target_index, int) or not 0 <= target_index < len(targets):
+                _fail("morphRecords names an undeclared target")
+            target, flex = targets[target_index], mesh["flexes"][row["flex"]]
+            if target["flexDescription"] != flex["flexdesc"] or target["targets"] != flex["targets"]:
+                _fail("morphRecords merges different flex descriptions or ramps")
+            if row.get("vertex") != vertices.get(row.get("sourceVertex")):
+                _fail("morphRecords source vertex does not match its render vertex")
+            for channel in ("position", "normal"):
+                value = row.get(channel)
+                if not isinstance(value, (tuple, list)) or len(value) != 3 or not all(
+                        isinstance(v, (float, int)) and math.isfinite(v) for v in value):
+                    _fail(f"morphRecords has invalid {channel} delta")
+
+
+def _precise_values(document, binary, descriptor, shape):
+    import numpy as np
+    from elysium_pipeline.formats.unit_contract.precision import decode, PrecisionError
+    try:
+        return np.asarray(decode(document, binary, descriptor, shape)).reshape(shape)
+    except (PrecisionError, KeyError) as exc:
+        _fail(f"invalid precise source values: {exc}")
+
+
+def _core_floats(document, binary, index, width):
+    import numpy as np
+    row = document["accessors"][index]
+    if row["componentType"] != 5126 or row["type"] != {1: "SCALAR", 3: "VEC3", 4: "VEC4"}[width]:
+        _fail("precise source projection uses an unexpected core accessor type")
+    view = document["bufferViews"][row["bufferView"]]
+    return np.ndarray((row["count"], width), dtype="<f4", buffer=binary,
+                      offset=view.get("byteOffset", 0) + row.get("byteOffset", 0),
+                      strides=(view.get("byteStride", width * 4), 4))
+
+
+def _check_precise_source(document, binary, root):
+    import numpy as np
+    for mesh in document.get("meshes", ()):
+        for primitive in mesh["primitives"]:
+            attrs = primitive["attributes"]
+            data = primitive["extensions"][MODEL_EXTENSION]
+            count = document["accessors"][attrs["POSITION"]]["count"]
+            for field in ("sourcePositions", "sourceNormals"):
+                if field not in data:
+                    _fail(f"primitive lacks {field}")
+            positions = _precise_values(document, binary, data["sourcePositions"], (count, 3))
+            projected = positions[:, (0, 2, 1)] * (0.0254, 0.0254, -0.0254)
+            if not np.array_equal(_core_floats(document, binary, attrs["POSITION"], 3), projected.astype(np.float32)):
+                _fail("core positions disagree with precise source positions")
+            normals = _precise_values(document, binary, data["sourceNormals"], (count, 3))
+            lengths = np.linalg.norm(normals, axis=1)
+            nonzero = lengths > 1e-12
+            projected = normals[nonzero][:, (0, 2, 1)] * (1., 1., -1.)
+            projected /= lengths[nonzero, None]
+            if not np.allclose(_core_floats(document, binary, attrs["NORMAL"], 3)[nonzero],
+                               projected.astype(np.float32), rtol=0., atol=2e-7):
+                _fail("core normals disagree with precise source normals")
+    bones = len(root["mdl"]["bones"])
+    for row in root["mdl"]["localAnimations"]:
+        index = row.get("animation")
+        if index is None:
+            continue
+        if "sourceSamples" not in row:
+            _fail("local animation lacks precise source samples")
+        samples = _precise_values(document, binary, row["sourceSamples"], (row["frameCount"], bones, 7))
+        weights = row["boneWeights"]
+        for bone, weight in enumerate(weights):
+            if not weight and np.any(samples[:, bone]):
+                _fail("precise animation carries values on an unowned bone")
+        animation = document["animations"][index]
+        seen = set()
+        for channel in animation["channels"]:
+            bone, path = channel["target"]["node"], channel["target"]["path"]
+            if (bone, path) in seen or not weights[bone] or path not in ("translation", "rotation"):
+                _fail("core animation channel does not match source ownership")
+            seen.add((bone, path))
+            sampler = animation["samplers"][channel["sampler"]]
+            if path == "translation":
+                projected = samples[:, bone, :3][:, (0, 2, 1)] * (0.0254, 0.0254, -0.0254)
+                agrees = np.array_equal(_core_floats(document, binary, sampler["output"], 3), projected.astype(np.float32))
+            else:
+                projected = samples[:, bone, 3:][:, (0, 2, 1, 3)] * (1., 1., -1., 1.)
+                lengths = np.linalg.norm(projected, axis=1)
+                valid = lengths > 1e-12
+                projected[valid] /= lengths[valid, None]
+                projected[~valid] = (0., 0., 0., 1.)
+                agrees = np.allclose(_core_floats(document, binary, sampler["output"], 4),
+                                     projected.astype(np.float32), rtol=0., atol=2e-7)
+            if not agrees:
+                _fail("core animation disagrees with precise source samples")
+        if seen != {(i, path) for i, weight in enumerate(weights) if weight for path in ("translation", "rotation")}:
+            _fail("core animation omits owned source channels")
+
+
+def _source_vertex_positions(mdl_data: bytes, model_record: int, source_vertices: Sequence[int], *, source_space=False):
     """Read the MDL vertex pool directly, without the decoder the writer used."""
 
     vertex_offset = _i32(mdl_data, model_record + 148)
@@ -558,6 +693,9 @@ def _source_vertex_positions(mdl_data: bytes, model_record: int, source_vertices
                 quantised_offset[axis] + (packed[axis] / 255.0) * quantised_scale[axis]
                 for axis in range(3)
             )
+        if source_space:
+            positions.append((x, y, z))
+            continue
         positions.append(
             (
                 x * _SOURCE_TO_GLTF_SCALE,
@@ -887,6 +1025,9 @@ def _recheck_sources(
             if record is None:
                 _fail(f"section {key} names a body-part model the extension does not declare")
             expected_positions = _source_vertex_positions(mdl.data, record, source_vertices)
+            exact = _precise_values(document, binary, identity["sourcePositions"], (len(source_vertices), 3))
+            if exact.tolist() != [list(v) for v in _source_vertex_positions(mdl.data, record, source_vertices, source_space=True)]:
+                _fail(f"section {key} precise positions disagree with the original MDL")
             view = views[position["bufferView"]]
             start = int(view["byteOffset"]) + int(position.get("byteOffset", 0))
             written = struct.unpack_from(
@@ -929,6 +1070,8 @@ def validate_document(
         _check_omitted_proven(root)
         _check_source_offsets(root)
         _check_core(document, root)
+        _check_morph_records(document, root)
+        _check_precise_source(document, binary, root)
         if source_members is not None:
             _recheck_sources(document, root, binary, source_members)
     except UnitValidationError as error:

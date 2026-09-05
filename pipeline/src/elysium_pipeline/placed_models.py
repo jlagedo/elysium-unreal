@@ -295,7 +295,7 @@ def rest_pose_static_equivalent(d: bytes, v: bytes, candidates) -> bool:
             frames = S.read_anim(d, bones, sequence.base, sequence.frames)
             if not frames:
                 return False
-            split = UEK._split_rotation_tracks(bones, frames, sequence.frames)
+            split, _anchors = UEK._split_rotation_tracks(bones, frames, sequence.frames)
             world = []
             for bone in bones:
                 position, quat = frames[0][bone.index]

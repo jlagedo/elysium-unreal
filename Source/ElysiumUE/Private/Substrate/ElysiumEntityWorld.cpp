@@ -540,6 +540,18 @@ FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef D
 
 // --- The player entity ---
 
+FString FElysiumEntityWorld::InitialPlayerModel() const
+{
+	if (GameState)
+	{
+		const FElysiumPlayerRecord& Record=GameState->PlayerRecord();
+		if (UElysiumRulebookSubsystem* Rules=GameState->Rulebook())
+			return Rules->Clans().PlayerBodyModel(Record.Sheet.Clan(),
+				/*bFemale*/ !Record.Sheet.IsMale(),FMath::Clamp(Record.ArmorSlot,0,5));
+	}
+	return FString();
+}
+
 FElysiumEntityHandle FElysiumEntityWorld::SpawnPlayer()
 {
 	if (Player.IsSet())
@@ -550,19 +562,8 @@ FElysiumEntityHandle FElysiumEntityWorld::SpawnPlayer()
 	FElysiumEntityDef Def;
 	Def.Classname  = ElysiumPlayerClassName().ToString();
 	Def.TargetName = ElysiumPlayerTargetName();
-	if (GameState)
-	{
-		const FElysiumPlayerRecord& Record = GameState->PlayerRecord();
-		if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
-		{
-			const FString PlayerModel = Rules->Clans().PlayerBodyModel(Record.Sheet.Clan(),
-				/*bFemale*/ !Record.Sheet.IsMale(), FMath::Clamp(Record.ArmorSlot, 0, 5));
-			if (!PlayerModel.IsEmpty())
-			{
-				Def.Keys.Add(TEXT("model"), PlayerModel);
-			}
-		}
-	}
+	const FString PlayerModel=InitialPlayerModel();
+	if (!PlayerModel.IsEmpty()) Def.Keys.Add(TEXT("model"),PlayerModel);
 	// The origin is the pawn's; SpawnPlayer runs before the first tick and FElysiumPlayer::Spawn
 	// samples the body, so the def's zero is never read as a position.
 	Player = CreateRuntimeEntityNoSpawn(MoveTemp(Def));

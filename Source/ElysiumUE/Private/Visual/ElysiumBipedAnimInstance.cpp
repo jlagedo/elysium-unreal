@@ -1953,6 +1953,7 @@ void UElysiumBipedAnimInstance::PublishBasePhase(FElysiumBipedAnimProxy& InProxy
 
 	BasePhase = FElysiumClipPhase();
 	BasePhase.OwnerStem = Arm.Identity.OwnerStem;
+	BasePhase.OwnerRoot = Arm.Identity.OwnerRoot;
 	BasePhase.Label = Arm.Identity.Label;
 	BasePhase.Length = Arm.LengthSeconds;
 	BasePhase.PlayRate = Arm.PlayRate;
@@ -1994,6 +1995,7 @@ void UElysiumBipedAnimInstance::RefreshLocomotionArm(const FAnimNode_BlendStack*
 
 	const bool bSameClip = Arm.IsArmed()
 		&& Arm.Identity.OwnerStem.Equals(Identity.OwnerStem, ESearchCase::IgnoreCase)
+		&& Arm.Identity.OwnerRoot.Equals(Identity.OwnerRoot, ESearchCase::IgnoreCase)
 		&& Arm.Identity.Label.Equals(Identity.Label, ESearchCase::IgnoreCase);
 	if (!bSameClip)
 	{
@@ -2105,6 +2107,7 @@ void UElysiumBipedAnimInstance::PublishSlotPhase(int32 SlotIndex, float Cycle)
 
 	SlotPhase = FElysiumClipPhase();
 	SlotPhase.OwnerStem = SlotArm.Identity.OwnerStem;
+	SlotPhase.OwnerRoot = SlotArm.Identity.OwnerRoot;
 	SlotPhase.Label = SlotArm.Identity.Label;
 	SlotPhase.Length = SlotArm.LengthSeconds;
 	SlotPhase.PlayRate = SlotArm.PlayRate;

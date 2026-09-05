@@ -29,8 +29,9 @@ inbound `model` edge is classified from the referrer's own published field:
 | map entities | an entity's model whose family is `character` | `character-body` |
 | map entities | an entity's model of any other family | `placed-prop` |
 | a vdata item | the `viewmodel` field | `view-model` |
-| a vdata item | the `playermodel` or `wieldmodel_*` fields | `wield` |
-| a vdata item | any other field of its `projection.fields.models`: what the item shows when nothing wields it | `ground-item` |
+| a vdata item | the `wieldmodel_*` fields | `wield` |
+| a vdata item | the `playermodel` field | `ground-item` |
+| a clan table | a `ClanData.General.M_Body*` or `F_Body*` field | `character-body` |
 
 A referrer no rule covers assigns no role; the edge is still in `references[]` and `inverse`,
 which is where an unclassified referrer is read. That covers a script naming a model path, an
@@ -86,8 +87,9 @@ MODEL_ROLE = "model"
 
 #: The vdata weapon fields whose role the model seam's vocabulary names outright; every other
 #: model field of a vdata item is the model the item shows in the world.
-VDATA_WIELD_FIELDS = ("playermodel", "wieldmodel_f", "wieldmodel_m")
+VDATA_WIELD_FIELDS = ("wieldmodel_f", "wieldmodel_m")
 VDATA_VIEW_FIELD = "viewmodel"
+VDATA_GROUND_FIELD = "playermodel"
 
 #: Where the shader-program inverse is written, and the two program columns a material declares.
 SHADER_PROGRAM_PREFIX = "vtmb:shader-program:"
@@ -222,6 +224,12 @@ def _model_role(
             return {ROLE_CHARACTER_BODY}
         return {ROLE_PLACED_PROP}
     if kind == "vdata":
+        projection = (source_root or {}).get("projection") or {}
+        if projection.get("rootKey", "").lower() == "clandatatables":
+            if any(field.get("asset") == edge.target
+                   for clan in projection.get("clans", ())
+                   for field in clan.get("bodies", {}).values()):
+                return {ROLE_CHARACTER_BODY}
         # A vdata file also emits a `model` edge for any scalar that reads as a model path,
         # anywhere in the file; only the item's own model fields say what the model is for, so an
         # edge none of them named assigns no role.
@@ -232,9 +240,7 @@ def _model_role(
                 roles.add(ROLE_VIEW_MODEL)
             elif field in VDATA_WIELD_FIELDS:
                 roles.add(ROLE_WIELD)
-            else:
-                # A model field outside the wielded set -- `infomodel` -- names the thing the
-                # world shows when nothing wields it, which is what `ground-item` is.
+            elif field == VDATA_GROUND_FIELD:
                 roles.add(ROLE_GROUND_ITEM)
         return roles
     return set()

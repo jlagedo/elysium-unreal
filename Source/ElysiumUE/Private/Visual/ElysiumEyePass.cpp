@@ -92,8 +92,8 @@ void FElysiumEyePass::InstallEyes(USkeletalMeshComponent* Comp,
 	{
 		return;
 	}
-	UMaterialInterface* Master = ElysiumNpcVisual::EyeMaster();
 	USkeletalMesh* Mesh = Comp->GetSkeletalMeshAsset();
+	UMaterialInterface* Master = ElysiumNpcVisual::EyeMaster(Mesh);
 	if (Master == nullptr || Mesh == nullptr)
 	{
 		return;
@@ -145,7 +145,7 @@ void FElysiumEyePass::InstallEyes(USkeletalMeshComponent* Comp,
 		if (Eye == nullptr)
 		{
 			UE_LOG(LogElysiumBodies, Warning,
-				TEXT("eyes '%s': slot %d ('%s') draws M_Eyes but matches no record"),
+				TEXT("eyes '%s': slot %d ('%s') draws the eye master but matches no record"),
 				*Set->Stem, Slot, *SlotName);
 			continue;
 		}

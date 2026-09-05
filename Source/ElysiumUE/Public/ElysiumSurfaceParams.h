@@ -174,6 +174,7 @@ namespace ElysiumSurfaceParamsUnlit
 
 	namespace Scalars
 	{
+		inline const FName ModelAlpha(TEXT("ModelAlpha"));
 		inline const FName EnvMapMaskScale(TEXT("EnvMapMaskScale"));
 		inline const FName BaseScrollRateU(TEXT("BaseScrollRateU"));
 		inline const FName BaseScrollRateV(TEXT("BaseScrollRateV"));
@@ -285,7 +286,7 @@ namespace ElysiumSurfaceParamsTwoTexture
 // `M_V2_Eyes` -- `eyes` family only (406 units). No NormalMap, no reflection lane at all (not in
 // the design's exposed-parameter table for this master): Roughness/Specular/Metallic are always
 // the class-LUT row. `IrisFrame` is declared per the design's table but has nothing in the corpus
-// to wire (SF-6's runtime lane writes it on the MID) -- declared, not wired. `VampireEyes` is
+// to wire (SF-6's runtime lane writes it on the MID) -- declared, not wired. `Vampire` is a dynamic scalar and is
 // wired against the `psh/eyes_vampire` disassembly (docs/vtmb/facial_animation.md:503): the iris
 // term moves to Emissive (self-illuminated) and BaseColor keeps only the sclera, darkened by the
 // iris coverage it lost -- see `make_v2_materials.py::_build_eyes`'s docstring.
@@ -301,11 +302,22 @@ namespace ElysiumSurfaceParamsEyes
 	namespace Scalars
 	{
 		inline const FName IrisFrame(TEXT("IrisFrame"));
+		inline const FName Vampire(TEXT("Vampire"));
+		inline const FName Flatten(TEXT("Flatten"));
+		inline const FName ModelAlpha(TEXT("ModelAlpha"));
+	}
+
+	namespace Vectors
+	{
+		inline const FName IrisOrigin(TEXT("IrisOrigin"));
+		inline const FName IrisU(TEXT("IrisU"));
+		inline const FName IrisV(TEXT("IrisV"));
+		inline const FName NormalOrigin(TEXT("NormalOrigin"));
+		inline const FName EyeUpN(TEXT("EyeUpN"));
 	}
 
 	namespace Switches
 	{
-		inline const FName VampireEyes(TEXT("VampireEyes"));
 		inline const FName UseGlint(TEXT("UseGlint"));
 	}
 }

@@ -16,6 +16,7 @@ import pytest
 
 from elysium_pipeline.exporters import npc_export
 from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+from elysium_pipeline.skeletal_stage import payload as PAYLOAD
 from elysium_pipeline.formats import mdl_skel
 from elysium_pipeline import placed_models
 from elysium_pipeline.exporters import source_warnings
@@ -247,13 +248,20 @@ def test_static_equivalence_accepts_identity_and_rejects_quarter_turn() -> None:
     quarter = [[((0.0, 0.0, 0.0), (0.0, 0.0, 2**-0.5, 2**-0.5))]]
     with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
           mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
-          mock.patch.object(UEK, "_split_rotation_tracks", return_value={}),
+          mock.patch.object(UEK, "_split_rotation_tracks", return_value=({}, set())),
           mock.patch.object(mdl_skel, "read_anim", return_value=identity)):
         assert placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
     with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
           mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
-          mock.patch.object(UEK, "_split_rotation_tracks", return_value={}),
+          mock.patch.object(UEK, "_split_rotation_tracks", return_value=({}, set())),
           mock.patch.object(mdl_skel, "read_anim", return_value=quarter)):
+        assert not placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
+    with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
+          mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
+          mock.patch.object(UEK, "_split_rotation_tracks", return_value=({0: [quarter[0][0][1]]}, set())),
+          mock.patch.object(mdl_skel, "read_anim", return_value=identity)):
+        # The correction dictionary is the first member of the helper's (tracks, anchors)
+        # result. Treating the tuple as that dictionary incorrectly accepts the storage pose.
         assert not placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
 
 
@@ -311,10 +319,10 @@ def test_ensured_rest_forces_complete_bind_local_tracks() -> None:
         forced.append(kwargs.get("forced_channels"))
         return b"clip"
 
-    with (mock.patch.object(UEK, "_derived_bindings", return_value=[]),
-          mock.patch.object(UEK, "_cell_names", return_value={}),
-          mock.patch.object(UEK, "_clip_payload", side_effect=payload)):
-        _blob, count = UEK._anim_section(
+    with (mock.patch.object(PAYLOAD, "_derived_bindings", return_value=[]),
+          mock.patch.object(PAYLOAD, "_cell_names", return_value={}),
+          mock.patch.object(PAYLOAD, "_clip_payload", side_effect=payload)):
+        _blob, count = PAYLOAD._anim_section(
             b"", [SimpleNamespace()], [clip], [0], 1, {}, ensure_labels=("idle",))
     assert count == 1
     assert forced == [[(True, True)]]
@@ -342,11 +350,11 @@ OWNED_POSE = [[((1.0, 2.0, 3.0), (0.0, 0.0, 0.0, 1.0))]]
 
 
 def test_an_owned_bind_only_frame_writes_both_local_tracks() -> None:
-    with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
-          mock.patch.object(UEK, "_owned_bones", return_value={0}),
-          mock.patch.object(UEK, "_bone_mask", return_value=None),
+    with (mock.patch.object(PAYLOAD, "_authored_channels", return_value=[(False, False)]),
+          mock.patch.object(PAYLOAD, "_owned_bones", return_value={0}),
+          mock.patch.object(PAYLOAD, "_bone_mask", return_value=None),
           mock.patch.object(mdl_skel, "read_anim", return_value=OWNED_POSE)):
-        payload = UEK._clip_payload(
+        payload = PAYLOAD._clip_payload(
             b"", OWNED_BONES, OWNED_CLIP, [0], 1, {})
     assert payload is not None
     offset = 0
@@ -360,23 +368,23 @@ def test_an_owned_bind_only_frame_writes_both_local_tracks() -> None:
 
 
 def test_a_zero_weight_bone_does_not_become_a_track() -> None:
-    with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
-          mock.patch.object(UEK, "_owned_bones", return_value=set()),
+    with (mock.patch.object(PAYLOAD, "_authored_channels", return_value=[(False, False)]),
+          mock.patch.object(PAYLOAD, "_owned_bones", return_value=set()),
           mock.patch.object(mdl_skel, "read_anim", return_value=OWNED_POSE)):
-        assert UEK._clip_payload(
+        assert PAYLOAD._clip_payload(
             b"", OWNED_BONES, OWNED_CLIP, [0], 1, {}) is None
 
 
 def test_an_additive_forces_its_owned_bind_only_bones_onto_the_host() -> None:
     host = OWNED_CLIP._replace(label="host")
-    layer = OWNED_CLIP._replace(label="delta", flags=UEK.DELTA_SEQUENCE)
-    with (mock.patch.object(UEK, "_derived_bindings",
+    layer = OWNED_CLIP._replace(label="delta", flags=PAYLOAD.DELTA_SEQUENCE)
+    with (mock.patch.object(PAYLOAD, "_derived_bindings",
                            return_value=[(layer, host, None)]),
-          mock.patch.object(UEK, "_owned_channels",
+          mock.patch.object(PAYLOAD, "_owned_channels",
                            side_effect=[[(True, True)], [(False, False)]]),
-          mock.patch.object(UEK, "_composed_frames", return_value=OWNED_POSE),
-          mock.patch.object(UEK, "_clip_payload", return_value=b"clip") as payload):
-        UEK._anim_section(b"", OWNED_BONES, [host, layer], [0], 1, {})
+          mock.patch.object(PAYLOAD, "_composed_frames", return_value=OWNED_POSE),
+          mock.patch.object(PAYLOAD, "_clip_payload", return_value=b"clip") as payload):
+        PAYLOAD._anim_section(b"", OWNED_BONES, [host, layer], [0], 1, {})
 
     host_call = next(call for call in payload.call_args_list
                      if call.args[2].label == "host")
@@ -385,11 +393,11 @@ def test_an_additive_forces_its_owned_bind_only_bones_onto_the_host() -> None:
 
 def test_a_forced_host_track_uses_donor_bind_not_zero_weight_sentinels() -> None:
     masked_frame = [[((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))]]
-    with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
-          mock.patch.object(UEK, "_owned_bones", return_value=set()),
-          mock.patch.object(UEK, "_bone_mask", return_value=None),
+    with (mock.patch.object(PAYLOAD, "_authored_channels", return_value=[(False, False)]),
+          mock.patch.object(PAYLOAD, "_owned_bones", return_value=set()),
+          mock.patch.object(PAYLOAD, "_bone_mask", return_value=None),
           mock.patch.object(mdl_skel, "read_anim", return_value=masked_frame)):
-        payload = UEK._clip_payload(
+        payload = PAYLOAD._clip_payload(
             b"", OWNED_BONES, OWNED_CLIP, [0], 1, {},
             forced_channels=[(True, True)])
 
@@ -405,9 +413,9 @@ def test_a_forced_host_track_uses_donor_bind_not_zero_weight_sentinels() -> None
     offset += struct.calcsize("<3f")
     rotation = struct.unpack_from("<4f", payload, offset)
     assert (bone, has_translation, has_rotation) == (0, 1, 1)
-    for actual, expected in zip(position, UEK._conv_pos(OWNED_BONES[0].pos)):
+    for actual, expected in zip(position, PAYLOAD._conv_pos(OWNED_BONES[0].pos)):
         assert actual == pytest.approx(expected, abs=1e-5)
-    for actual, expected in zip(rotation, UEK._conv_quat(OWNED_BONES[0].quat)):
+    for actual, expected in zip(rotation, PAYLOAD._conv_quat(OWNED_BONES[0].quat)):
         assert actual == pytest.approx(expected, abs=1e-6)
 
 

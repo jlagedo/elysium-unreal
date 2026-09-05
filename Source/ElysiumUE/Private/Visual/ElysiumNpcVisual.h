@@ -42,7 +42,7 @@ namespace ElysiumNpcVisual
 
 	// The master an eye section is drawn with, or null when the policy content has not been
 	// generated. Callers compare a built slot's base material against this to find the eye slots.
-	UMaterialInterface* EyeMaster();
+	UMaterialInterface* EyeMaster(const USkeletalMesh* Mesh = nullptr);
 
 	// Whether the mount carries a body for this stem. There is no second build of a character, so
 	// false means the export has not covered it and nothing will stand — asked ahead of a load by
@@ -103,8 +103,8 @@ namespace ElysiumNpcVisual
 	// is that rule: it matches follower bones to the wearer by name with no shared-`USkeleton`
 	// requirement, and gives a bone the wearer lacks a rigid offset from its nearest matched
 	// ancestor — which, against the frame-0 reference pose the wield bake stores, is retail's own
-	// composition. So a melee weapon rides the wearer's prop bone and a firearm rides the hand
-	// through one mechanism, with no socket, no offset and no per-binding branch.
+	// composition. Skeletal bindings use that leader; rigid bindings attach to the declared prop
+	// bone with the baked offset. Both attach to Body, which owns lookup and cleanup.
 	//
 	// Returns the component when one was attached, null when the mesh could not be loaded — which it
 	// reports. `Context` names the caller's subject (an item classname, or a stem in the lab) and

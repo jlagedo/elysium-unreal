@@ -281,6 +281,15 @@ void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 
 	// --- build decisions ---
 	Master = Str(O, TEXT("master"));
+	SkinnedAsset = Str(O, TEXT("skinnedAsset"));
+	SkinnedMaster = Str(O, TEXT("skinnedMaster"));
+	SkeletalConsumers.Reset(); StaticConsumers.Reset(); MapConsumers.Reset();
+	if (const TSharedPtr<FJsonObject> Consumers = Obj(O, TEXT("consumers")))
+	{
+		SkeletalConsumers = Strings(Consumers.ToSharedRef(), TEXT("skeletal"));
+		StaticConsumers = Strings(Consumers.ToSharedRef(), TEXT("static"));
+		MapConsumers = Strings(Consumers.ToSharedRef(), TEXT("map"));
+	}
 	BlendMode = Str(O, TEXT("blendMode"));
 	TwoSided = Bool(O, TEXT("twoSided"));
 	SurfaceClass = FName(*Str(O, TEXT("surfaceClass")));

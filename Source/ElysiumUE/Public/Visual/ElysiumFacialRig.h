@@ -2,10 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
+#include "ElysiumFacialRig.generated.h"
 
 // A rigged NPC's facial flex rig, read off `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`.
-// Plain C++ with no UObject reflection, like `FElysiumNpcClipSet`: this holds names
-// and arithmetic, and the UObject-side cache that hands one out is `UElysiumAnimSubsystem`.
+// Reflected value data can ride a cooked mesh; evaluation remains plain arithmetic.
+// The UObject-side cache that hands a rig out is `UElysiumAnimSubsystem`.
 //
 // The morph targets themselves are baked into the NPC's `.glb`. Three layers sit between a flex
 // controller and one of those morph targets, and all three are replayed here rather than flattened
@@ -17,6 +18,7 @@
 // Format, opcodes and the ramp: `docs/vtmb/facial_animation.md`.
 
 // `StudioFlexOp_t`. Only these seven appear across the 201 rigged models in the install.
+UENUM()
 enum class EElysiumFlexOp : uint8
 {
 	None   = 0,
@@ -29,29 +31,47 @@ enum class EElysiumFlexOp : uint8
 	Div    = 7,
 };
 
-struct FElysiumFlexOpCode
+USTRUCT()
+struct ELYSIUMUE_API FElysiumFlexOpCode
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	EElysiumFlexOp Op = EElysiumFlexOp::None;
 	// Meaningful for Const (Value) and Fetch1/Fetch2 (Index); unused by the arithmetic ops.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 Index = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float Value = 0.f;
 };
 
 // One rule: an RPN program whose final stack value is the weight of a single flexdesc.
-struct FElysiumFlexRule
+USTRUCT()
+struct ELYSIUMUE_API FElysiumFlexRule
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 FlexDesc = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FElysiumFlexOpCode> Ops;
 };
 
 // One of the 44 named inputs. `Type` groups them into the five shipped families — `eyelid`, `brow`,
 // `nose`, `mouth`, `phoneme` — and the phoneme family is exactly the set `expressions/phonemes.txt`
 // writes, i.e. the surface lipsync drives.
-struct FElysiumFlexController
+USTRUCT()
+struct ELYSIUMUE_API FElysiumFlexController
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FString Name;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FString Type;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float Min = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float Max = 1.f;
 
 	// A controller write is stored normalized across the authored range, then clamped — Source's
@@ -67,13 +87,20 @@ struct FElysiumFlexController
 // different ramps — the eyelid hinge — and the ramp decides which half a given weight drives, so
 // they are two morphs. The second and later ramp of one flexdesc carries a `#k` suffix, which is
 // what keeps the names unique; glTFRuntime keys a `UMorphTarget` by name.
-struct FElysiumFlexMorph
+USTRUCT()
+struct ELYSIUMUE_API FElysiumFlexMorph
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FString Name;
 	// `Name` as an FName: the anim curve the morph target of the same name is driven by.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FName Curve;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 FlexDesc = INDEX_NONE;
 	// The trapezoid the flexdesc's weight is remapped through, as `R_StudioFlexVerts` evaluates it.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float Targets[4] = { 0.f, 1.f, 10.f, 11.f };
 };
 
@@ -81,10 +108,16 @@ struct FElysiumFlexMorph
 // bone. `mstudiomouth_t`, read off the sidecar's `mouths` rather than assumed: across the 86
 // exported rigs the flexdesc is 16 on 85 (`female_raver_1`, whose whole rig is one flexdesc, is the
 // exception), `forward` is (0,-1,0) on every one, and the bone is 6 on 75 but also 7, 12 and 14.
-struct FElysiumFlexMouth
+USTRUCT()
+struct ELYSIUMUE_API FElysiumFlexMouth
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 Bone = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FVector Forward = FVector::ZeroVector;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 FlexDesc = INDEX_NONE;
 
 	bool IsValid() const { return FlexDesc != INDEX_NONE; }
@@ -118,14 +151,24 @@ struct FElysiumJawInput
 //
 // Without one of the two the four eyelid rules compute weights nothing consumes, `blink` moves
 // nothing, and the resting face sits at 0 — off the hinge, with a lid morph half-applied.
-struct FElysiumFlexLid
+USTRUCT()
+struct ELYSIUMUE_API FElysiumFlexLid
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 FlexDesc = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 Lowerer = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 Neutral = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 Raiser = INDEX_NONE;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float LoweredAngle = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float NeutralAngle = 0.f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float RaisedAngle = 0.f;
 };
 
@@ -185,20 +228,32 @@ struct FElysiumEyeInput
 	bool HasAim() const { return Eyes[0].bValid || Eyes[1].bValid; }
 };
 
-struct FElysiumFacialRig
+USTRUCT()
+struct ELYSIUMUE_API FElysiumFacialRig
 {
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FString Stem;
 	// The FACS names, index = flexdesc id.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FString> FlexDescs;
 	// Index = the `FETCH1` operand.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FElysiumFlexController> Controllers;
 	// Evaluated in file order: `FETCH2` reads a flexdesc an earlier rule wrote.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FElysiumFlexRule> Rules;
 	// In the glb's own morph-target order.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FElysiumFlexMorph> Morphs;
 	// Derived at load from the ramps and the flexdesc names, one per hinged lid.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	TArray<FElysiumFlexLid> Lids;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	FElysiumFlexMouth Mouth;
+	/** Complete source declaration; Mouth is the evaluator's first-record view. */
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TArray<FElysiumFlexMouth> Mouths;
 
 	// `studiohdr` +232/+236 — the phoneme filter. A `.lip` phoneme's own span is clamped to this pair
 	// to give the viseme envelope its blend width `S`, so the pair decides how wide a phoneme ramps
@@ -213,7 +268,9 @@ struct FElysiumFacialRig
 	// Defaults are the modal rigged pair, which is what stands in when a sidecar omits the field or
 	// reads (0, 0) — the value 113 of the 339 loose models carry, all of them unrigged. Zero would
 	// make `1/S` infinite, and nothing in retail's own clamp guards it either.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float PhonemeFilterMin = 0.065f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	float PhonemeFilterMax = 0.100f;
 
 	// The controller the jaw bridge writes, derived at load. INDEX_NONE on a rig that has none.
@@ -236,6 +293,7 @@ struct FElysiumFacialRig
 	// Evidence that would settle whether retail's jaw moves at all: capture the flexdesc weight
 	// `mstudiomouth_t` names across a spoken line on the retail build and see whether anything
 	// downstream of it ever leaves zero.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 MouthBridge = INDEX_NONE;
 
 	// Whether this rig can move a face. A sidecar can parse and still drive nothing: two exported
@@ -322,5 +380,6 @@ struct FElysiumFacialRig
 	// instead still produces a lid that moves, so a test that only asserts motion passes on the bug.
 	void ApplyEyesToFlexWeights(const FElysiumEyeInput& Eyes, TArray<float>& InOutFlexWeights) const;
 	// The `blink` controller's index, derived at load. INDEX_NONE on a rig that has none.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source")
 	int32 BlinkController = INDEX_NONE;
 };

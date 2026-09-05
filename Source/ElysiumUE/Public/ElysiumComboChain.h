@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumComboChain.generated.h"
 
 // One melee attack sequence's authored combo-chain block — which direction key selects it, which
 // attack it hands off to, and when the hand-off may be asked for
@@ -180,14 +181,19 @@ namespace ElysiumCombo
 	}
 }
 
-struct FElysiumComboChain
+USTRUCT()
+struct ELYSIUMUE_API FElysiumComboChain
 {
+	GENERATED_BODY()
+
 	// `+0x2D4` — the button-state mask direction-keyed attack selection matches, exported RAW in the
 	// file's own `IN_*` bits. `MaskUnset` on every sequence that is not a selection candidate.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	int32 Mask = ElysiumCombo::MaskUnset;
 
 	// `+0x2DC` — the DODGE activity this sequence answers with (`ACT_DODGE_DUCK` on all 12 that state
 	// one). Empty where the descriptor names none.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Dodge;
 
 	// `+0x2E8` / `+0x2EC` — the successor SEQUENCE LABELS this attack hands off to, matched
@@ -195,18 +201,24 @@ struct FElysiumComboChain
 	// branch, on 28 `meleeshared_onehand` descriptors. Both are carried verbatim, including the
 	// shipped links that name a sequence their own model never defines: that string is the whole
 	// evidence of the authoring bug, and repairing it is not this runtime's business.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString Chain;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	FString ChainAlt;
 
 	// `+0x2F0` / `+0x2F4` / `+0x2F8` — the hand-off window in clip cycles, and the cycle the busy hold
 	// is released at. Carried verbatim and in no assumed order: `w_hold` sits BELOW `w_close` on four
 	// shipped descriptors, so a consumer deriving one from the other disagrees with the file.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float WindowOpen = 0.0f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float WindowClose = 1.0f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	float HoldCycle = 1.0f;
 
 	// Whether the sidecar stated this block at all. The exporter writes the record whole or not at
 	// all, so this is the same "no column" absence a clip with no swing records has.
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Animation")
 	bool bStated = false;
 
 	// Whether this sequence is a candidate for direction-keyed selection. `0` is a stated mask.

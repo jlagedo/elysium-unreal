@@ -3,6 +3,7 @@
 #if WITH_EDITOR
 #include "Animation/AnimData/IAnimationDataController.h"
 #include "Animation/AnimData/IAnimationDataModel.h"
+#include "Animation/AnimData/AnimDataModel.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendProfile.h"
 #include "Animation/BlendSpace.h"
@@ -41,6 +42,44 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumSkeletalBuild, Log, All);
 // name. The named namespace is the project's convention for that.
 namespace ElysiumSkeletalBuildImpl
 {
+	FString ReadBinaryMask(const UBlendProfile* Profile, TSet<FName>& Owned)
+	{
+		if (Profile->Mode != EBlendProfileMode::BlendMask)
+		{
+			return FString::Printf(TEXT("%s: expected BlendMask mode"), *Profile->GetPathName());
+		}
+		for (int32 Index = 0; Index < Profile->GetNumBlendEntries(); ++Index)
+		{
+			const FBlendProfileBoneEntry& Entry = Profile->GetEntry(Index);
+			if (Entry.BlendScale != 0.f && Entry.BlendScale != 1.f)
+			{
+				return FString::Printf(TEXT("%s: bone %s has non-binary mask weight %g"),
+					*Profile->GetPathName(), *Entry.BoneReference.BoneName.ToString(), Entry.BlendScale);
+			}
+			if (Entry.BlendScale == 1.f) Owned.Add(Entry.BoneReference.BoneName);
+		}
+		return FString();
+	}
+
+	FString CheckBinaryMask(const UBlendProfile* Profile, const TSet<FName>& Expected)
+	{
+		TSet<FName> Actual;
+		const FString Error = ReadBinaryMask(Profile, Actual);
+		if (!Error.IsEmpty()) return Error;
+		if (Actual.Num() != Expected.Num() || !Actual.Includes(Expected))
+		{
+			return FString::Printf(TEXT("%s: existing mask differs from source-owned bones; rebuild its skeleton"),
+				*Profile->GetPathName());
+		}
+		return FString();
+	}
+
+	FString ProductName(const TCHAR* Prefix, const FString& Label, bool bStage, const FString& Role)
+	{
+		return Prefix + (bStage ? FElysiumContentPaths::SafeName(Label) : FElysiumContentPaths::BakedAssetName(Label))
+			+ (bStage && !Role.IsEmpty() ? TEXT("_") + FElysiumContentPaths::SafeName(Role) : FString());
+	}
+
 	const FName ProbeMorphName(TEXT("ElysiumProbeMorph"));
 	const FName ProbeMaterialSlot(TEXT("ElysiumProbeSlot"));
 
@@ -152,17 +191,28 @@ namespace ElysiumSkeletalBuildImpl
 
 	bool SavePackageTo(UPackage* Package, const FString& PackageName)
 	{
+		if (!Package || !Package->IsFullyLoaded())
+		{
+			UE_LOG(LogElysiumSkeletalBuild, Warning, TEXT("cannot save incompletely loaded package %s"), *PackageName);
+			return false;
+		}
 		Package->MarkPackageDirty();
 		const FString FileName = FPackageName::LongPackageNameToFilename(
 			PackageName, FPackageName::GetAssetPackageExtension());
 		FSavePackageArgs SaveArgs;
 		SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
+		SaveArgs.SaveFlags = SAVE_NoError;
 		return UPackage::SavePackage(Package, nullptr, *FileName, SaveArgs);
 	}
 
 	/** Load a skeleton asset whose short name matches its package, the way every bake stage names one. */
 	USkeleton* LoadSkeleton(const FString& PackageName)
 	{
+		// A dependency can survive package draining as a partial load. Complete its package
+		// before any retarget pose or mask is changed, rather than discovering it at save time.
+		UPackage* Package = LoadPackage(nullptr, *PackageName, LOAD_None);
+		if (!Package) return nullptr;
+		Package->FullyLoad();
 		return LoadObject<USkeleton>(nullptr,
 			*(PackageName + TEXT(".") + FPackageName::GetShortName(PackageName)));
 	}
@@ -212,10 +262,10 @@ namespace ElysiumSkeletalBuildImpl
 	}
 
 	/** Register the donor bind pose that stock `OrientAndScale` evaluates this sequence against. */
-	FName RegisterRetargetSource(USkeleton* Skeleton, const FString& SourcePath,
+	FName RegisterRetargetSource(USkeleton* Skeleton, const FString& OwnerName,
 		const FElysiumSkeletalSource& Source)
 	{
-		const FName Name(*FPaths::GetBaseFilename(SourcePath));
+		const FName Name(*OwnerName);
 		const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
 		FReferencePose Pose;
 		Pose.PoseName = Name;
@@ -458,12 +508,13 @@ FString UElysiumSkeletalBuildLibrary::BuildProbeSkeletalMesh(const FString& Pack
 #endif
 }
 
-FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString& SourcePath,
+static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 	const FString& PackageName, const FString& SkeletonPackageName,
 	const FString& MaterialParentPath, const FString& MaterialPackagePath,
 	const TMap<FString, FString>& MaterialTextures,
 	const TMap<FString, FString>& MaterialParents,
-	const FString& RecipeFingerprint)
+	const FString& RecipeFingerprint, const TMap<FString, FString>* UnitMaterials,
+	const TArray<FTransform>& ReferencePose)
 {
 #if WITH_EDITOR
 	FElysiumSkeletalSource Source;
@@ -475,6 +526,95 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	if (Source.Vertices.IsEmpty() || Source.Indices.IsEmpty())
 	{
 		return FString::Printf(TEXT("%s carries no geometry"), *SourcePath);
+	}
+
+	TMap<FString, UMaterialInterface*> ResolvedMaterials;
+	if (UnitMaterials != nullptr)
+	{
+		if (UnitMaterials->Num() != Source.Sections.Num())
+		{
+			return FString::Printf(TEXT("%s: staged material count does not match mesh sections"), *SourcePath);
+		}
+		for (const FElysiumSourceSection& Section : Source.Sections)
+		{
+			const FString* Path = UnitMaterials->Find(Section.Material);
+			UMaterialInterface* Material = Path ? LoadObject<UMaterialInterface>(nullptr, **Path) : nullptr;
+			if (Material == nullptr)
+			{
+				return FString::Printf(TEXT("%s: material for slot '%s' is missing (%s)"),
+					*SourcePath, *Section.Material, Path ? **Path : TEXT("unbound"));
+			}
+			ResolvedMaterials.Add(Section.Material, Material);
+		}
+	}
+	if (!ReferencePose.IsEmpty())
+	{
+		if (ReferencePose.Num() != Source.Bones.Num())
+		{
+			return FString::Printf(TEXT("%s: reference-pose override needs every bone"), *SourcePath);
+		}
+		TArray<FTransform> OldWorld, NewWorld;
+		OldWorld.SetNum(Source.Bones.Num());
+		NewWorld.SetNum(Source.Bones.Num());
+		for (int32 Bone = 0; Bone < Source.Bones.Num(); ++Bone)
+		{
+			if (ReferencePose[Bone].ContainsNaN() || !ReferencePose[Bone].GetScale3D().Equals(FVector::OneVector, 1.e-8)
+				|| !ReferencePose[Bone].GetRotation().IsNormalized())
+			{
+				return FString::Printf(TEXT("%s: invalid staged reference transform for %s"), *SourcePath, *Source.Bones[Bone].Name.ToString());
+			}
+			const int32 Parent = Source.Bones[Bone].Parent;
+			OldWorld[Bone] = Parent == INDEX_NONE ? Source.Bones[Bone].Local : Source.Bones[Bone].Local * OldWorld[Parent];
+			NewWorld[Bone] = Parent == INDEX_NONE ? ReferencePose[Bone] : ReferencePose[Bone] * NewWorld[Parent];
+		}
+		TArray<double> NormalLengths;
+		NormalLengths.Reserve(Source.Vertices.Num());
+		for (FElysiumSourceVertex& Vertex : Source.Vertices)
+		{
+			FVector Position = FVector::ZeroVector, Normal = FVector::ZeroVector;
+			for (int32 Influence = 0; Influence < 4; ++Influence)
+			{
+				const double Weight = Vertex.Weights[Influence];
+				if (Weight == 0.) continue;
+				const int32 Bone = Vertex.Bones[Influence];
+				if (!OldWorld.IsValidIndex(Bone))
+				{
+					return FString::Printf(TEXT("%s: reference-pose skin names bone %d"), *SourcePath, Bone);
+				}
+				Position += Weight * NewWorld[Bone].TransformPosition(OldWorld[Bone].InverseTransformPosition(FVector(Vertex.Position)));
+				Normal += Weight * NewWorld[Bone].TransformVectorNoScale(OldWorld[Bone].InverseTransformVectorNoScale(FVector(Vertex.Normal)));
+			}
+			Vertex.Position = FVector3f(Position);
+			NormalLengths.Add(Normal.Size());
+			Vertex.Normal = FVector3f(Normal.GetSafeNormal());
+		}
+		// Morphs are displacements in the mesh bind frame, so they need the same weighted
+		// linear transform as their owning vertex, without the position translation. Preserve
+		// the normal sum for EVERY morph weight: normalize(A*n + w*A*d) equals
+		// normalize(normalize(A*n) + w*A*d/|A*n|). Normalizing each delta would lose its size.
+		for (FElysiumSourceMorph& Morph : Source.Morphs)
+		{
+			for (FElysiumSourceMorphDelta& Delta : Morph.Deltas)
+			{
+				if (!Source.Vertices.IsValidIndex(static_cast<int32>(Delta.Vertex)))
+					return FString::Printf(TEXT("%s: morph %s names invalid vertex %u"), *SourcePath, *Morph.Name, Delta.Vertex);
+				const FElysiumSourceVertex& Vertex = Source.Vertices[Delta.Vertex];
+				FVector Position = FVector::ZeroVector, Normal = FVector::ZeroVector;
+				for (int32 Influence = 0; Influence < 4; ++Influence)
+				{
+					const double Weight = Vertex.Weights[Influence];
+					if (Weight == 0.) continue;
+					const int32 Bone = Vertex.Bones[Influence];
+					Position += Weight * NewWorld[Bone].TransformVectorNoScale(OldWorld[Bone].InverseTransformVectorNoScale(FVector(Delta.Position)));
+					Normal += Weight * NewWorld[Bone].TransformVectorNoScale(OldWorld[Bone].InverseTransformVectorNoScale(FVector(Delta.Normal)));
+				}
+				if (NormalLengths[Delta.Vertex] <= UE_SMALL_NUMBER)
+					return FString::Printf(TEXT("%s: morph %s has a cancelled reference normal at vertex %u"), *SourcePath, *Morph.Name, Delta.Vertex);
+				Delta.Position = FVector3f(Position);
+				Delta.Normal = FVector3f(Normal / NormalLengths[Delta.Vertex]);
+			}
+		}
+		for (int32 Bone = 0; Bone < Source.Bones.Num(); ++Bone) Source.Bones[Bone].Local = ReferencePose[Bone];
 	}
 
 	// The skeleton this mesh binds to.
@@ -675,9 +815,10 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		FSkeletalMaterial Material;
 		UMaterialInterface* const Parent = SlotParents.FindRef(Section.Material) != nullptr
 			? SlotParents.FindRef(Section.Material) : MaterialParent;
-		Material.MaterialInterface = ElysiumSkeletalBuildImpl::MakeSectionMaterial(Parent,
-			MaterialPackagePath, AssetName, Section.Material,
-			MaterialTextures.FindRef(Section.Material));
+		Material.MaterialInterface = UnitMaterials != nullptr ? ResolvedMaterials.FindRef(Section.Material)
+			: ElysiumSkeletalBuildImpl::MakeSectionMaterial(Parent,
+				MaterialPackagePath, AssetName, Section.Material,
+				MaterialTextures.FindRef(Section.Material));
 		Material.MaterialSlotName = SlotName;
 		Material.ImportedMaterialSlotName = SlotName;
 		Mesh->GetMaterials().Add(Material);
@@ -814,6 +955,25 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 #else
 	return TEXT("editor only");
 #endif
+}
+
+FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString& SourcePath,
+	const FString& PackageName, const FString& SkeletonPackageName,
+	const FString& MaterialParentPath, const FString& MaterialPackagePath,
+	const TMap<FString, FString>& MaterialTextures, const TMap<FString, FString>& MaterialParents,
+	const FString& RecipeFingerprint)
+{
+	return BuildElysiumSkeletalMeshInternal(SourcePath, PackageName, SkeletonPackageName,
+		MaterialParentPath, MaterialPackagePath, MaterialTextures, MaterialParents, RecipeFingerprint, nullptr, {});
+}
+
+FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromStage(const FString& SourcePath,
+	const FString& PackageName, const FString& SkeletonPackageName,
+	const TMap<FString, FString>& MaterialAssets, const TArray<FTransform>& ReferencePose,
+	const FString& RecipeFingerprint)
+{
+	return BuildElysiumSkeletalMeshInternal(SourcePath, PackageName, SkeletonPackageName,
+		FString(), FString(), {}, {}, RecipeFingerprint, &MaterialAssets, ReferencePose);
 }
 
 int32 UElysiumSkeletalBuildLibrary::ReleaseBakedPackages(const FString& PackagePath)
@@ -1151,18 +1311,26 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 		// playing skeleton, restricted to bones that target actually owns.
 		for (const TObjectPtr<UBlendProfile>& Carried : Source->BlendProfiles)
 		{
-			if (Carried == nullptr || Target->GetBlendProfile(Carried->GetFName()) != nullptr)
+			if (Carried == nullptr)
 			{
 				continue;
 			}
-			TArray<TPair<FName, float>> Owned;
-			for (int32 Index = 0; Index < Carried->GetNumBlendEntries(); ++Index)
+			TSet<FName> SourceOwned;
+			const FString MaskError = ElysiumSkeletalBuildImpl::ReadBinaryMask(Carried, SourceOwned);
+			if (!MaskError.IsEmpty()) return MaskError;
+			TSet<FName> Owned;
+			for (const FName Bone : SourceOwned)
 			{
-				const FBlendProfileBoneEntry& Entry = Carried->GetEntry(Index);
-				if (TargetRef.FindBoneIndex(Entry.BoneReference.BoneName) != INDEX_NONE)
+				if (TargetRef.FindBoneIndex(Bone) != INDEX_NONE)
 				{
-					Owned.Emplace(Entry.BoneReference.BoneName, Entry.BlendScale);
+					Owned.Add(Bone);
 				}
+			}
+			if (const UBlendProfile* Existing = Target->GetBlendProfile(Carried->GetFName()))
+			{
+				const FString ExistingError = ElysiumSkeletalBuildImpl::CheckBinaryMask(Existing, Owned);
+				if (!ExistingError.IsEmpty()) return ExistingError;
+				continue;
 			}
 			if (Owned.IsEmpty())
 			{
@@ -1170,9 +1338,9 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 			}
 			UBlendProfile* Mirrored = Target->CreateNewBlendProfile(Carried->GetFName());
 			Mirrored->Mode = Carried->Mode;
-			for (const TPair<FName, float>& Bone : Owned)
+			for (const FName Bone : Owned)
 			{
-				Mirrored->SetBoneBlendScale(Bone.Key, Bone.Value,
+				Mirrored->SetBoneBlendScale(Bone, 1.f,
 					/*bRecurse=*/false, /*bCreate=*/true);
 			}
 		}
@@ -1189,12 +1357,15 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 #endif
 }
 
-FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString& SourcePath,
+static FString BuildElysiumSequencesInternal(const FString& SourcePath,
 	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutClipCount,
-	int32& OutDroppedTracks, const FString& RecipeFingerprint)
+	int32& OutDroppedTracks, const FString& RecipeFingerprint, bool bStage, const FString& Role,
+	int32* OutSuppressedAppendixTracks = nullptr, TArray<FName>* OutSuppressedAppendixBones = nullptr)
 {
 	OutClipCount = 0;
 	OutDroppedTracks = 0;
+	if (OutSuppressedAppendixTracks) *OutSuppressedAppendixTracks = 0;
+	if (OutSuppressedAppendixBones) OutSuppressedAppendixBones->Reset();
 #if WITH_EDITOR
 	FElysiumSkeletalSource Source;
 	FString Error;
@@ -1258,7 +1429,8 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// the track states its own bind and dropping it would trade a correct authored pose for a
 	// reliance on the mesh supplying the same value.
 	const FName RetargetSource =
-		ElysiumSkeletalBuildImpl::RegisterRetargetSource(Skeleton, SourcePath, Source);
+		ElysiumSkeletalBuildImpl::RegisterRetargetSource(Skeleton,
+			bStage ? PackagePath + TEXT(":") + Role : FPaths::GetBaseFilename(SourcePath), Source);
 	const TSet<int32> Silent = Source.Vertices.IsEmpty()
 		? ElysiumSkeletalBuildImpl::SilentAppendixBones(Source) : TSet<int32>();
 
@@ -1282,6 +1454,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	TArray<FMaskProfile> MaskProfiles;
 	MaskProfiles.SetNum(Source.Masks.Num());
 	int32 ProfilesCreated = 0;
+	FString MaskError;
 
 	auto MaskProfileFor = [&](const int32 MaskIndex) -> const FMaskProfile&
 	{
@@ -1330,6 +1503,12 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			}
 			++ProfilesCreated;
 		}
+		else
+		{
+			TSet<FName> Expected;
+			for (const FName Bone : Owned) Expected.Add(Bone);
+			MaskError = ElysiumSkeletalBuildImpl::CheckBinaryMask(Skeleton->GetBlendProfile(Entry.Profile), Expected);
+		}
 		return Entry;
 	};
 
@@ -1346,6 +1525,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		if ((Clip.Flags & 0x4) == 0 && Source.Masks.IsValidIndex(Clip.Mask))
 		{
 			MaskProfileFor(Clip.Mask);
+			if (!MaskError.IsEmpty()) return MaskError;
 		}
 	}
 	// The retarget source and any profiles live on the skeleton. Persist them before a sequence
@@ -1420,7 +1600,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		{
 			continue;
 		}
-		const FString AssetName = TEXT("A_") + FElysiumContentPaths::BakedAssetName(Clip.Name);
+		const FString AssetName = ElysiumSkeletalBuildImpl::ProductName(TEXT("A_"), Clip.Name, bStage, Role);
 		const FString PackageName = PackagePath / AssetName;
 		UPackage* Package = ElysiumSkeletalBuildImpl::OpenPackage(PackageName);
 		if (Package == nullptr)
@@ -1431,6 +1611,11 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 
 		UAnimSequence* Sequence = NewObject<UAnimSequence>(Package, *AssetName,
 			RF_Public | RF_Standalone);
+		if (bStage && PackageName.StartsWith(TEXT("/ElysiumBaked/Models/"))
+			&& !Sequence->GetDataModelInterface().GetObject()->IsA<UAnimDataModel>())
+		{
+			return TEXT("native animation requires the quaternion-preserving data model: ")+PackageName;
+		}
 		Sequence->SetSkeleton(Skeleton);
 		Sequence->RetargetSource = RetargetSource;
 
@@ -1514,7 +1699,12 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			// untracked the bone resolves to the playing mesh's own bind instead.
 			if (Silent.Contains(Track.Bone))
 			{
-				++OutDroppedTracks;
+				if (OutSuppressedAppendixTracks)
+				{
+					++*OutSuppressedAppendixTracks;
+					OutSuppressedAppendixBones->AddUnique(BoneName);
+				}
+				else ++OutDroppedTracks;
 				continue;
 			}
 
@@ -1734,7 +1924,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	//
 	// Scoped to the `A_` prefix: blend spaces are `BS_` and are written by a later pass over the
 	// same folder, so sweeping everything here would delete assets that have not been built yet.
-	ElysiumSkeletalBuildImpl::SweepPrefix(PackagePath, TEXT("A_"), TEXT("sequence"),
+	if (!bStage) ElysiumSkeletalBuildImpl::SweepPrefix(PackagePath, TEXT("A_"), TEXT("sequence"),
 		FPaths::GetBaseFilename(SourcePath), WrittenAssets);
 
 	if (!Unresolved.IsEmpty())
@@ -1757,10 +1947,27 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 #endif
 }
 
-FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& BlendsRelPath,
-	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutSpaceCount,
-	int32& OutSkippedGrids, int32& OutSkippedCells, const FString& RecipeFingerprint)
+FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString& SourcePath,
+ const FString& PackagePath, const FString& SkeletonPackageName, int32& OutClipCount,
+ int32& OutDroppedTracks, const FString& RecipeFingerprint)
 {
+ return BuildElysiumSequencesInternal(SourcePath, PackagePath, SkeletonPackageName,
+  OutClipCount, OutDroppedTracks, RecipeFingerprint, false, FString());
+}
+FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromStage(const FString& SourcePath,
+ const FString& PackagePath, const FString& SkeletonPackageName, const FString& Role,
+ int32& OutClipCount, int32& OutDroppedTracks, int32& OutSuppressedAppendixTracks,
+ TArray<FName>& OutSuppressedAppendixBones, const FString& RecipeFingerprint)
+{
+ return BuildElysiumSequencesInternal(SourcePath, PackagePath, SkeletonPackageName,
+  OutClipCount, OutDroppedTracks, RecipeFingerprint, true, Role, &OutSuppressedAppendixTracks, &OutSuppressedAppendixBones);
+}
+
+static FString BuildElysiumBlendSpacesInternal(const FString& BlendsRelPath,
+	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutSpaceCount,
+	int32& OutSkippedGrids, int32& OutSkippedCells, const FString& RecipeFingerprint, bool bStage, const FString& Role)
+{
+	const FString SourceLabel = bStage ? SkeletonPackageName : BlendsRelPath;
 	OutSpaceCount = 0;
 	OutSkippedGrids = 0;
 	OutSkippedCells = 0;
@@ -1773,9 +1980,9 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 	// with the runtime about what a grid says while both looked correct.
 	FElysiumBlendTable Table;
 	FString Error;
-	if (!Table.Load(BlendsRelPath, Error))
+	if (!(bStage ? Table.LoadJsonText(BlendsRelPath, Error) : Table.Load(BlendsRelPath, Error)))
 	{
-		return FString::Printf(TEXT("%s: %s"), *BlendsRelPath, *Error);
+		return FString::Printf(TEXT("%s: %s"), *SourceLabel, *Error);
 	}
 
 	USkeleton* Skeleton = ElysiumSkeletalBuildImpl::LoadSkeleton(SkeletonPackageName);
@@ -1852,8 +2059,7 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 				++SkippedHere;
 				continue;
 			}
-			const FString ClipAsset = TEXT("A_")
-				+ FElysiumContentPaths::BakedAssetName(Cell.Clip + Suffix);
+			const FString ClipAsset = ElysiumSkeletalBuildImpl::ProductName(TEXT("A_"), Cell.Clip + Suffix, bStage, Role);
 			UAnimSequence* Sequence = LoadObject<UAnimSequence>(nullptr,
 				*(PackagePath / ClipAsset + TEXT(".") + ClipAsset));
 			if (Sequence == nullptr)
@@ -1895,7 +2101,7 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 			++OutSkippedGrids;
 			UE_LOG(LogElysiumSkeletalBuild, Warning,
 				TEXT("%s: grid '%s' resolved %d of %d cell(s) and is not a blend space"),
-				*BlendsRelPath, *Label, Samples.Num(), Grid.Cells.Num());
+				*SourceLabel, *Label, Samples.Num(), Grid.Cells.Num());
 			continue;
 		}
 
@@ -1918,15 +2124,14 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 				return FString::Printf(
 					TEXT("%s: grid '%s' mixes bone masks -- '%s' names %s and '%s' names %s. A grid ")
 					TEXT("composes as one layer under one mask, so this one cannot be layered at all"),
-					*BlendsRelPath, *Label, *Samples[0].Sequence->GetName(),
+					*SourceLabel, *Label, *Samples[0].Sequence->GetName(),
 					LayerProfile.IsNone() ? TEXT("no mask") : *LayerProfile.ToString(),
 					*Samples[Index].Sequence->GetName(),
 					Profile.IsNone() ? TEXT("no mask") : *Profile.ToString());
 			}
 		}
 
-		const FString AssetName = TEXT("BS_")
-			+ FElysiumContentPaths::BakedAssetName(Label + Suffix);
+		const FString AssetName = ElysiumSkeletalBuildImpl::ProductName(TEXT("BS_"), Label + Suffix, bStage, Role);
 		const FString PackageName = PackagePath / AssetName;
 		UPackage* Package = ElysiumSkeletalBuildImpl::OpenPackage(PackageName);
 		if (Package == nullptr)
@@ -1988,7 +2193,7 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 				return FString::Printf(
 					TEXT("%s: grid '%s' cell [%d,%d] at %s rejected sequence %s -- check the ")
 					TEXT("skeleton binding and that the value lies inside %.3f..%.3f"),
-					*BlendsRelPath, *Label, Sample.Axis[0], Sample.Axis[1], *Sample.Value.ToString(),
+					*SourceLabel, *Label, Sample.Axis[0], Sample.Axis[1], *Sample.Value.ToString(),
 					*Sample.Sequence->GetName(), Grid.ParamStart[0], Grid.ParamEnd[0]);
 			}
 		}
@@ -2005,7 +2210,7 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 				return FString::Printf(
 					TEXT("%s: grid '%s' axis %d widened to %.3f..%.3f from the declared %.3f..%.3f, ")
 					TEXT("so a sample was placed outside the range the grid states"),
-					*BlendsRelPath, *Label, Axis, Parameter.Min, Parameter.Max,
+					*SourceLabel, *Label, Axis, Parameter.Min, Parameter.Max,
 					Grid.ParamStart[Axis], Grid.ParamEnd[Axis]);
 			}
 		}
@@ -2016,7 +2221,7 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 		if (Space->GetBlendSpaceData().IsEmpty())
 		{
 			return FString::Printf(TEXT("%s: grid '%s' produced no blend data from %d sample(s)"),
-				*BlendsRelPath, *Label, Samples.Num());
+				*SourceLabel, *Label, Samples.Num());
 		}
 
 		Space->PostEditChange();
@@ -2034,13 +2239,28 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 	// resolving enough cells is not rewritten, so its previous asset survives -- still pointing at
 	// sequences the sequence pass may since have swept. That is a package which loads with
 	// "a sample with no/invalid animation" and fails the run, from a bake that logged nothing.
-	ElysiumSkeletalBuildImpl::SweepPrefix(PackagePath, TEXT("BS_"), TEXT("blend space"),
+	if (!bStage) ElysiumSkeletalBuildImpl::SweepPrefix(PackagePath, TEXT("BS_"), TEXT("blend space"),
 		BlendsRelPath, WrittenSpaces);
 
 	return FString();
 #else
 	return TEXT("editor only");
 #endif
+}
+
+FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& Path,
+ const FString& PackagePath, const FString& SkeletonPackageName, int32& OutSpaceCount,
+ int32& OutSkippedGrids, int32& OutSkippedCells, const FString& RecipeFingerprint)
+{
+ return BuildElysiumBlendSpacesInternal(Path, PackagePath, SkeletonPackageName,
+  OutSpaceCount, OutSkippedGrids, OutSkippedCells, RecipeFingerprint, false, FString());
+}
+FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromStage(const FString& Json,
+ const FString& PackagePath, const FString& SkeletonPackageName, const FString& Role,
+ int32& OutSpaceCount, int32& OutSkippedGrids, int32& OutSkippedCells, const FString& RecipeFingerprint)
+{
+ return BuildElysiumBlendSpacesInternal(Json, PackagePath, SkeletonPackageName,
+  OutSpaceCount, OutSkippedGrids, OutSkippedCells, RecipeFingerprint, true, Role);
 }
 
 FString UElysiumSkeletalBuildLibrary::DescribeAnimSequence(const FString& AssetPath)

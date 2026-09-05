@@ -581,7 +581,7 @@ def stem_is_current(stem, model, texture_table, fingerprint, force):
     pair = ("%s/SKEL_%s" % (package, stem), "%s/%s" % (package, wc.skeletal_asset(stem)))
     if any(path not in assets for path in pair):
         return False
-    if not all(bl.stored_recipe(path) == fingerprint for path in assets):
+    if not all(bl.stored_recipe(path, producer='wield-legacy') == fingerprint for path in assets):
         return False
     for uri in _stem_texture_uris(model, texture_table).values():
         if not uri or not unreal.EditorAssetLibrary.does_asset_exist(
@@ -610,7 +610,7 @@ def stamp_stem_assets(stem, fingerprint, failed):
             return
         if str(unreal.EditorAssetLibrary.get_metadata_tag(asset, bl.RECIPE_TAG)) == fingerprint:
             continue
-        bl.stamp_recipe(asset, fingerprint)
+        bl.stamp_recipe(asset, fingerprint, producer='wield-legacy')
         if not bl.save(object_path):
             fail("%s: stamped asset could not be saved: %s" % (stem, object_path))
             failed.append(stem)

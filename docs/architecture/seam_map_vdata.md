@@ -257,3 +257,16 @@ A complete vdata unit has zero `unresolved` and zero `unsupported` rows; for a c
 root every authored key is in `projection` or `typedUnidentified`. Validation re-lexes the file
 independently of the writer, checks that the owners concatenate to the source bytes, rebuilds the
 tree and compares every node, and re-derives the projection from the tree.
+
+
+### Clan body projection
+
+`ClanDataTables` retains the complete open `sections` reshape and adds an ordered `clans[]`
+projection. Each clan carries `index` and `bodies`, the authored `General.M_Body`, `F_Body` and
+numbered variants, with raw path, model asset id, authored/present and resolution fields.
+Repeated clan blocks stay separate; repeated body scalars resolve last-wins while the source
+tree retains every occurrence. Only those fields assign `character-body` in the corpus index;
+`DeathGib` and other model-valued scalars remain dependencies with their own consumer meaning.
+For item models, `playermodel` assigns `ground-item`, `wieldmodel_m/f` assign `wield`, and
+`viewmodel` assigns `view-model`. `infomodel` is an information-display model and assigns none
+of those roles.

@@ -341,6 +341,17 @@ bool FElysiumMapReadinessTest::RunTest(const FString&)
 		MissingAnimations.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Failed);
 	TestTrue(TEXT("animation residency failure is structured"),
 		Failure.Contains(TEXT("animation residency")));
+	MissingAnimations.bAnimationPreloadPending = true;
+	TestEqual(TEXT("an active native request waits behind the activation barrier"),
+		MissingAnimations.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Waiting);
+	TestEqual(TEXT("native asset loading can exceed the old short prerequisite window"),
+		MissingAnimations.Evaluate(20.0, Failure), EElysiumMapReadinessResult::Waiting);
+	TestEqual(TEXT("native loading still has a bounded failure deadline"),
+		MissingAnimations.Evaluate(120.0, Failure), EElysiumMapReadinessResult::Failed);
+	MissingAnimations.bAnimationPreloadPending = false;
+	MissingAnimations.bAnimationPreloadReady = true;
+	TestEqual(TEXT("completed native loading admits the same ready state"),
+		MissingAnimations.Evaluate(20.0, Failure), EElysiumMapReadinessResult::Ready);
 
 	FElysiumMapRuntimePrerequisites MissingSubstrate = Backdrop;
 	MissingSubstrate.bEntityWorldReady = false;

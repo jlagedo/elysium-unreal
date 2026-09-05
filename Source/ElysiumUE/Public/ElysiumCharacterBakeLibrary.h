@@ -79,4 +79,11 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static TArray<FName> SequenceTrackBones(const UAnimSequence* Sequence);
+
+	/** Compare every retained source-track key with the saved editor data model. The declared
+	 * dormant-donor omissions are counted separately; this does not validate compressed poses. */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString VerifyAnimationSamples(const FString& StagePath,
+		const TMap<FString,UAnimSequence*>& Sequences, const TArray<FName>& OmittedDonorBones,
+		int32& OutSourceTracks, int64& OutSourceKeys, int32& OutOmittedSourceTracks);
 };

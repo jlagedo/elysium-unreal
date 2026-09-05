@@ -41,6 +41,41 @@ CHECKSUM = 0x13572468
 EXTENSION = "ELYSIUM_vtmb_model"
 
 
+def test_morph_projection_preserves_zero_undrawn_and_repeated_contributions(monkeypatch):
+    from elysium_pipeline.formats.model_glb import decode
+    monkeypatch.setattr(decode.mdl_skel, "flex_descs", lambda data: ["smile"])
+    flexes = [{"flexdesc": 0, "targets": [0., 1., 1., 2.], "index": i,
+               "numverts": 3 if i == 0 else 1} for i in range(2)]
+    monkeypatch.setattr(decode.mdl_skel, "mesh_flexes", lambda *args: flexes)
+    def deltas(data, flex, normals):
+        if flex["index"] == 0:
+            return [(0, (0., 0., 0.), (0., 0., 0.)),
+                    (1, (1., 0., 0.), (0., 0., 0.)),
+                    (2, (9., 0., 0.), (0., 0., 0.))]
+        return [(1, (2., 0., 0.), (0., 1., 0.))]
+    monkeypatch.setattr(decode.mdl_skel, "vert_anims", deltas)
+    primitive = {"sourceVertices": [10, 11], "positions": [(0., 0., 0.)] * 2,
+                 "modelBase": 0, "mesh": 0, "vertexOffset": 10}
+    targets = decode._morph_targets(b"", [{"primitives": [primitive]}], object())
+    assert len(targets) == 1
+    source = primitive["morphRecords"]
+    assert [row["sourceVertex"] for row in source] == [10, 11, 12, 11]
+    assert [row["vertex"] for row in source] == [0, 1, None, 1]
+    assert [row["flex"] for row in source] == [0, 0, 0, 1]
+    assert source[0]["position"] == (0., 0., 0.)
+    assert source[2]["position"] == (9., 0., 0.)
+    assert primitive["morphTargets"][0]["position"][1] == (3., 0., 0.)
+    mesh = {"index": 0, "vertexOffset": 10, "flexes": flexes}
+    parts = [{"index": 0, "models": [{"index": 0, "vertexCount": 20, "meshes": [mesh]}]}]
+    decode._unrendered_morph_records(b"", parts, [], object())
+    assert [r["sourceVertex"] for r in mesh["unrenderedMorphRecords"]] == [10, 11, 12, 11]
+    root = {"vtx": {"lods": []}, "facial": {"morphTargets": []}, "mdl": {"bodyParts": parts}}
+    validation._check_morph_records({}, root)
+    mesh["unrenderedMorphRecords"].pop()
+    with pytest.raises(validation.ModelGlbValidationError, match="unrenderedMorphRecords"):
+        validation._check_morph_records({}, root)
+
+
 def _minimal_mdl_vtx(
     *, static_prop: bool = True, checksum: int = CHECKSUM, textures: int = 1
 ) -> tuple[bytes, bytes]:
@@ -624,7 +659,7 @@ def test_the_document_states_the_contract_key_order_and_the_seam_generator() -> 
     assert list(root)[:5] == [
         "schemaVersion", "identity", "sourceResolution", "dependencies", "coverage"
     ]
-    assert root["schemaVersion"] == SCHEMA_VERSION == "2.0.0"
+    assert root["schemaVersion"] == SCHEMA_VERSION == "2.2.0"
     assert EXTENSION in document["extensionsUsed"]
     assert EXTENSION in document["extensionsRequired"]
 

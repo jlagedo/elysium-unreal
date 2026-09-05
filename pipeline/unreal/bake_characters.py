@@ -278,7 +278,7 @@ class CharacterTracker(object):
         self.fingerprints[key] = fingerprint
         assets = self._snapshot_unit_assets(stage, object_path)
         stale = (self.force or not assets
-                 or any(bl.stored_recipe(path) != fingerprint for path in assets))
+                 or any(bl.stored_recipe(path, producer='characters-legacy') != fingerprint for path in assets))
         if not stale:
             self._counters(stage)["reused"] += 1
         self.decisions[key] = stale
@@ -313,7 +313,7 @@ class CharacterTracker(object):
                 if not asset:
                     raise SystemExit(
                         "[chars] authored asset could not be loaded to stamp: %s" % path)
-                bl.stamp_recipe(asset, fingerprint)
+                bl.stamp_recipe(asset, fingerprint, producer='characters-legacy')
                 if not bl.save(path):
                     raise SystemExit("[chars] stamped asset could not be saved: %s" % path)
         self._counters(stage)["built"] += 1

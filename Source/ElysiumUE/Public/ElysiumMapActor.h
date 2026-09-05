@@ -62,6 +62,7 @@ struct FElysiumMapRuntimePrerequisites
 	bool bConstructionComplete = false;
 	bool bEntityWorldReady = false;
 	bool bAnimationPreloadReady = false;
+	bool bAnimationPreloadPending = false;
 	bool bAudioCatalogReady = true;
 	bool bMenuBackdrop = false;
 	bool bCollisionReady = false;   // Ready or intentionally Disabled
@@ -364,7 +365,7 @@ public:
 	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 		FElysiumClipPhase& Out) override;
 	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
-		const FString& Label) override;
+		const FString& Label, const FString& OwnerRoot = FString()) override;
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
@@ -831,6 +832,8 @@ private:
 	EElysiumMapRuntimePhase RuntimePhase = EElysiumMapRuntimePhase::Building;
 	bool bRuntimeConstructionComplete = false;
 	bool bAnimationPreloadReady = false;
+	bool bNativeAnimationPreloadPending = false;
+	bool bNativeAnimationPreloadFailed = false;
 	bool bMenuBackdrop = false;
 	bool bNavigationBuildRequested = false;
 	bool bNavigationBuildFailed = false;

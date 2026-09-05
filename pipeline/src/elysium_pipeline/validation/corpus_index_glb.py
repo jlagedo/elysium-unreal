@@ -103,6 +103,9 @@ def _members(root: Mapping[str, Any]) -> dict[str, Any]:
             raise CorpusIndexValidationError(f"{path}: no winning byte length and digest")
         if disposition in ("unit", "companion") and not row.get("asset"):
             raise CorpusIndexValidationError(f"{path}: a {disposition} member names no unit")
+        from elysium_pipeline.formats.unit_contract.source_policy import unit_source_policy
+        if row.get("unitSourcePolicy") != unit_source_policy(row.get("asset"), path):
+            raise CorpusIndexValidationError(f"{path}: unknown or missing named source policy")
         if disposition == "residue":
             evidence = row.get("evidence") or {}
             if evidence.get("category") not in RESIDUE_CATEGORIES:
@@ -363,14 +366,16 @@ def _sources(root: Mapping[str, Any], read: Mapping[str, Mapping[str, Any]]) -> 
                 raise CorpusIndexValidationError(
                     f"{path}: {asset} names no source member cut from it"
                 )
+            from elysium_pipeline.formats.unit_contract.source_policy import selected_source
+            selected = selected_source(row, asset)
             for source in sources:
-                if not _origin_agrees(row, source):
+                if not _origin_agrees(selected, source):
                     continue
                 if not _whole_file(source):
                     break
-                if int(source.get("byteLength", -1)) == int(row.get("byteLength", -2)) and str(
+                if int(source.get("byteLength", -1)) == int(selected.get("byteLength", -2)) and str(
                     source.get("sha256")
-                ) == str(row.get("sha256")):
+                ) == str(selected.get("sha256")):
                     break
             else:
                 raise CorpusIndexValidationError(

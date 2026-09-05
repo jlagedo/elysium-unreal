@@ -2,9 +2,11 @@
 
 #include "ElysiumAnimationIntent.h" // ElysiumAnimIntent::NumChannels/ChannelName
 #include "ElysiumContentPaths.h"
+#include "ElysiumClipData.h"
 #include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
+#include "Visual/ElysiumNativeAnimationData.h"
 #include "Visual/ElysiumEntityBodiesLog.h"
 #include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -227,7 +229,15 @@ USkeletalMesh* UElysiumEntityBodies::ResolveNpcMesh(const FString& Stem, bool bP
 	// The eye sections carry M_Eyes from the bake, which is where the eye sidecar's material names
 	// are read; nothing about the material is decided here any more.
 	FString Error;
-	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadMesh(Stem, Error, bPlayerMaterial);
+	USkeletalMesh* Mesh=nullptr;
+	if (Stem.StartsWith(TEXT("vtmb:model:")))
+	{
+		UGameInstance* Game=GetOwner()?GetOwner()->GetGameInstance():nullptr;
+		const auto* Native=Game?Game->GetSubsystem<UElysiumNativeAnimationData>():nullptr;
+		if (Native) Mesh=Native->Mesh(Stem,Error);
+		else Error=TEXT("native animation service is unavailable");
+	}
+	else Mesh=ElysiumNpcVisual::LoadMesh(Stem, Error, bPlayerMaterial);
 	if (Mesh == nullptr)
 	{
 		UE_LOG(LogElysiumBodies, Warning, TEXT("ResolveNpcMesh '%s': %s"), *Stem, *Error);
@@ -1057,7 +1067,7 @@ bool UElysiumEntityBodies::GetBodyClipPhase(USkeletalMeshComponent* Body,
 }
 
 const TArray<FElysiumAnimEvent>* UElysiumEntityBodies::GetNpcEventTimeline(const FString& OwnerStem,
-	const FString& Label)
+	const FString& Label, const FString& OwnerRoot)
 {
 	UElysiumAnimSubsystem* Anims = GetAnims();
 	if (Anims == nullptr || OwnerStem.IsEmpty() || Label.IsEmpty())
@@ -1067,12 +1077,21 @@ const TArray<FElysiumAnimEvent>* UElysiumEntityBodies::GetNpcEventTimeline(const
 	// The table is cached whole and immutable by the subsystem, so the array this points into
 	// outlives the frame the caller asked in. A model that declares no sidecar at all answers null
 	// here, which is the same absence as a sequence that declares no timeline.
+	if (OwnerStem.StartsWith(TEXT("vtmb:model:")))
+	{
+		const auto* Data=Anims->NativeClipData(OwnerStem,Label,OwnerRoot);
+		if (Data) return Data->Events.IsEmpty()?nullptr:&Data->Events;
+		if (!OwnerRoot.IsEmpty()) return nullptr;
+		const auto NativeTable=Anims->GetBlendTable(OwnerStem);
+		return NativeTable.IsValid()?NativeTable->FindEvents(Label):nullptr;
+	}
 	const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(OwnerStem);
 	return Table.IsValid() ? Table->FindEvents(Label) : nullptr;
 }
 
 void UElysiumEntityBodies::ForgetNpcVisuals()
 {
+	if (UElysiumAnimSubsystem* Anims=GetAnims()) Anims->ReleaseNativeModels();
 	// All three together. The clip cache is keyed off the visual key and every sequence in it is
 	// bound to the mesh that key names, so keeping it across a path change would hand the new body
 	// sequences bound to the old body's skeleton -- which is a worse failure than the one this
@@ -1110,7 +1129,7 @@ bool UElysiumEntityBodies::PreloadNpcClipForModel(const FString& Stem, bool bPla
 }
 
 UAnimSequence* UElysiumEntityBodies::ResolveCinematicClip(USkeletalMesh* Mesh, const FString& Stem,
-	const FString& BankStem, const FString& ClipName)
+	const FString& BankStem, const FString& ClipName, const FString& OwnerRoot)
 {
 	if (Mesh == nullptr || BankStem.IsEmpty() || ClipName.IsEmpty())
 	{
@@ -1124,28 +1143,28 @@ UAnimSequence* UElysiumEntityBodies::ResolveCinematicClip(USkeletalMesh* Mesh, c
 
 	const FString VisualKey = NpcVisualKeyForMesh(Stem, Mesh);
 	const FString Key = ElysiumEntityAnimation::CinematicClipCacheKey(
-		VisualKey, BankStem, Anims->ResolveGridClip(BankStem, ClipName));
+		VisualKey, BankStem + TEXT("|") + OwnerRoot, ClipName);
 	if (const TObjectPtr<UAnimSequence>* Found = NpcAnimCache.Find(Key))
 	{
 		return Found->Get();
 	}
 
 	FString Error;
-	UAnimSequence* Anim = Anims->ResolveClipFromBank(BankStem, ClipName, Mesh, Error);
+	UAnimSequence* Anim = Anims->ResolveClipFromBank(BankStem, ClipName, Mesh, Error, OwnerRoot);
 	if (Anim == nullptr)
 	{
 		UE_LOG(LogElysiumBodies, Warning, TEXT("cinematic bank '%s' clip '%s': %s"),
 			*BankStem, *ClipName, *Error);
 	}
-	NpcAnimCache.Add(Key, Anim);
+	if (Anim) NpcAnimCache.Add(Key, Anim);
 	return Anim;
 }
 
 bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& BankStem, const FString& ClipName, bool bLoop, float* OutSeconds)
+	const FString& BankStem, const FString& ClipName, bool bLoop, float* OutSeconds, const FString& OwnerRoot)
 {
 	UAnimSequence* Anim = Body
-		? ResolveCinematicClip(Body->GetSkeletalMeshAsset(), Stem, BankStem, ClipName)
+		? ResolveCinematicClip(Body->GetSkeletalMeshAsset(), Stem, BankStem, ClipName, OwnerRoot)
 		: nullptr;
 	if (Anim == nullptr)
 	{
@@ -1178,7 +1197,7 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	{
 		// The cinematic bank owns the clip and the scene addressed it by name, so the two
 		// together are the key its event timeline is filed under.
-		Inst->PlayClip(FElysiumClipIdentity(BankStem, ClipName), Anim, bLoop);
+		Inst->PlayClip(FElysiumClipIdentity(BankStem, ClipName, OwnerRoot), Anim, bLoop);
 	}
 	else
 	{
@@ -1201,17 +1220,17 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 }
 
 bool UElysiumEntityBodies::PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& BankStem, const FString& ClipName)
+	const FString& BankStem, const FString& ClipName, const FString& OwnerRoot)
 {
 	return Body && ResolveCinematicClip(
-		Body->GetSkeletalMeshAsset(), Stem, BankStem, ClipName) != nullptr;
+		Body->GetSkeletalMeshAsset(), Stem, BankStem, ClipName, OwnerRoot) != nullptr;
 }
 
 bool UElysiumEntityBodies::PreloadCinematicClipForModel(const FString& Stem, bool bPlayerMaterial,
-	const FString& BankStem, const FString& ClipName)
+	const FString& BankStem, const FString& ClipName, const FString& OwnerRoot)
 {
 	USkeletalMesh* Mesh = ResolveNpcMesh(Stem, bPlayerMaterial);
-	return ResolveCinematicClip(Mesh, Stem, BankStem, ClipName) != nullptr;
+	return ResolveCinematicClip(Mesh, Stem, BankStem, ClipName, OwnerRoot) != nullptr;
 }
 
 bool UElysiumEntityBodies::SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds)
@@ -1604,7 +1623,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// After the mesh, not before: the eye geometry is carried into the frame the body actually
 	// landed in, and only the loaded mesh can say which that is.
 	TSharedPtr<const FElysiumEyeSet> EyeSet = Anims
-		? Anims->GetEyeSet(Stem) : nullptr;
+		? Anims->GetEyeSet(Stem, Mesh) : nullptr;
 
 	// Standard runtime-component recipe (mirrors BuildBrushBody): NewObject → attach → place →
 	// RegisterComponent. The hulls-body path uses relative placement against the root at world origin;
@@ -1645,10 +1664,10 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	{
 		if (Anims != nullptr)
 		{
-			Inst->SetFacialRig(Anims->GetFacialRig(Stem));
+			Inst->SetFacialRig(Anims->GetFacialRig(Stem, Mesh));
 			// The composition stage. Null for a model declaring no procedural rule,
 			// which poses under Unreal's own hierarchy alone.
-			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
+			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem, Mesh));
 		}
 	}
 	ElysiumNpcVisual::InstallHairDynamics(Comp, Stem);
@@ -1706,8 +1725,7 @@ bool UElysiumEntityBodies::HasNpcClip(const FString& Stem, const FString& ClipNa
 FString UElysiumEntityBodies::NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel)
 {
 	UElysiumAnimSubsystem* Anims = GetAnims();
-	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
-	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipLabel) : nullptr;
+	const FElysiumNpcClip* Clip = Anims ? Anims->ClipDescription(Stem,ClipLabel) : nullptr;
 	// Empty all the way down: no vocabulary, no such label, or a sequence whose descriptor names no
 	// blocked reaction all mean the same thing to the caller, and none of them is a fault.
 	return Clip != nullptr ? Clip->BlockedReaction : FString();
@@ -1717,8 +1735,7 @@ const TArray<FElysiumSwingRecord>* UElysiumEntityBodies::NpcClipSwings(const FSt
 	const FString& ClipLabel)
 {
 	UElysiumAnimSubsystem* Anims = GetAnims();
-	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
-	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipLabel) : nullptr;
+	const FElysiumNpcClip* Clip = Anims ? Anims->ClipDescription(Stem,ClipLabel) : nullptr;
 	// Null all the way down, like the blocked reaction above: no vocabulary, no such label, a
 	// sequence declaring no records, and a slice written before the column existed are one answer to
 	// the caller — this swing opens no contact window — and none of them is a fault.
@@ -1729,8 +1746,7 @@ const FElysiumComboChain* UElysiumEntityBodies::NpcClipCombo(const FString& Stem
 	const FString& ClipLabel)
 {
 	UElysiumAnimSubsystem* Anims = GetAnims();
-	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
-	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipLabel) : nullptr;
+	const FElysiumNpcClip* Clip = Anims ? Anims->ClipDescription(Stem,ClipLabel) : nullptr;
 	// Null all the way down, like the two columns above: no vocabulary, no such label, a sequence
 	// declaring no block, and a slice written before the column existed are one answer to the caller
 	// — this attack hands off to nothing — and none of them is a fault.

@@ -1,0 +1,193 @@
+[
+  {
+    "id": "vtmb:texture:hud/signs/notepad-yellow",
+    "prefix": "T",
+    "path": "/ElysiumBaked/Textures/hud/signs/T_notepad_yellow"
+  },
+  {
+    "id": "vtmb:texture:skybox/hav",
+    "prefix": "TC",
+    "path": "/ElysiumBaked/Textures/skybox/TC_hav"
+  },
+  {
+    "id": "vtmb:texture:skybox/hav",
+    "prefix": "TC",
+    "path": "/ElysiumBaked/Textures/skybox/TC_hav_Sky",
+    "role": "Sky"
+  },
+  {
+    "id": "vtmb:texture:effects/fire",
+    "prefix": "TA",
+    "path": "/ElysiumBaked/Textures/effects/TA_fire"
+  },
+  {
+    "id": "vtmb:texture:brick/a",
+    "prefix": "T",
+    "path": "/ElysiumBaked/Textures/brick/T_a_linear",
+    "role": "linear"
+  },
+  {
+    "id": "vtmb:material:brick/a",
+    "prefix": "MI",
+    "path": "/ElysiumBaked/Materials/brick/MI_a"
+  },
+  {
+    "id": "vtmb:material:brick/a",
+    "prefix": "MI",
+    "path": "/ElysiumBaked/Materials/brick/MI_a_Skinned",
+    "role": "Skinned"
+  },
+  {
+    "id": "vtmb:material:brick/a",
+    "prefix": "MI",
+    "path": "/ElysiumBaked/Materials/brick/MI_a_Decal",
+    "role": "Decal"
+  },
+  {
+    "id": "vtmb:material:sprites/glow",
+    "prefix": "MI",
+    "path": "/ElysiumBaked/Materials/sprites/MI_glow_Sprite_Additive",
+    "role": "Sprite_Additive"
+  },
+  {
+    "id": "vtmb:model:character/npc/lacroix/lacroix",
+    "prefix": "SK",
+    "path": "/ElysiumBaked/Models/character/npc/lacroix/SK_lacroix"
+  },
+  {
+    "id": "vtmb:model:character/npc/lacroix/lacroix",
+    "prefix": "SKEL",
+    "path": "/ElysiumBaked/Models/character/npc/lacroix/SKEL_lacroix"
+  },
+  {
+    "id": "vtmb:model:scenery/cliff-danger",
+    "prefix": "SM",
+    "path": "/ElysiumBaked/Models/scenery/SM_cliff_danger"
+  },
+  {
+    "id": "vtmb:model:scenery/grass",
+    "prefix": "MI",
+    "path": "/ElysiumBaked/Models/scenery/MI_grass_DetailSway",
+    "role": "DetailSway"
+  },
+  {
+    "id": "vtmb:model:character/shared/move",
+    "prefix": "A",
+    "path": "/ElysiumBaked/Models/character/shared/move/A_aim_walk",
+    "label": "aim@walk"
+  },
+  {
+    "id": "vtmb:model:character/wolf",
+    "prefix": "A",
+    "path": "/ElysiumBaked/Models/character/wolf/A_wolf_Form_attack_Bite",
+    "label": "wolf_Form_attack[Bite]"
+  },
+  {
+    "id": "vtmb:model:character/shared/move",
+    "prefix": "BS",
+    "path": "/ElysiumBaked/Models/character/shared/move/BS_walk",
+    "label": "walk"
+  },
+  {
+    "id": "vtmb:model:character/body",
+    "prefix": "CLOTH",
+    "path": "/ElysiumBaked/Models/character/CLOTH_body"
+  },
+  {
+    "id": "vtmb:model:character/body",
+    "prefix": "PHYS",
+    "path": "/ElysiumBaked/Models/character/PHYS_body"
+  },
+  {
+    "id": "vtmb:model:character/body",
+    "prefix": "DYN",
+    "path": "/ElysiumBaked/Models/character/DYN_body"
+  },
+  {
+    "id": "vtmb:model:character/body",
+    "prefix": "DA",
+    "path": "/ElysiumBaked/Models/character/DA_body"
+  },
+  {
+    "id": "vtmb:model:character/body",
+    "prefix": "CLOTH",
+    "path": "/ElysiumBaked/Models/character/CLOTH_body_1",
+    "role": "1"
+  },
+  {
+    "id": "vtmb:model:character/body",
+    "prefix": "CLOTH",
+    "path": "/ElysiumBaked/Models/character/CLOTH_body_PHYS",
+    "role": "PHYS"
+  },
+  {
+    "id": "vtmb:surface-property:metal",
+    "prefix": "PM",
+    "path": "/ElysiumBaked/SurfaceProperties/PM_metal"
+  },
+  {
+    "id": "vtmb:map:sm_hub_1",
+    "prefix": "",
+    "path": "/ElysiumBaked/Maps/sm_hub_1/sm_hub_1"
+  },
+  {
+    "id": "vtmb:expression-table:phonemes",
+    "prefix": "DA",
+    "path": "/ElysiumBaked/ExpressionTables/DA_phonemes"
+  },
+  {
+    "id": "vtmb:sound:voices/a.wav",
+    "prefix": "SW",
+    "path": "/ElysiumBaked/Sounds/voices/SW_a_wav"
+  },
+  {
+    "id": "vtmb:particle:fire/small",
+    "prefix": "NS",
+    "path": "/ElysiumBaked/Particles/fire/NS_small"
+  },
+  {
+    "id": "vtmb:scene:intro/arrival",
+    "prefix": "DA",
+    "path": "/ElysiumBaked/Scenes/intro/DA_arrival"
+  },
+  {
+    "id": "vtmb:model:a b/c.d",
+    "prefix": "SK",
+    "path": "/ElysiumBaked/Models/a_b/SK_c_d"
+  },
+  {
+    "id": "vtmb:model:_Corpus/body",
+    "prefix": "SK",
+    "path": null
+  },
+  {
+    "id": "vtmb:model:a//b",
+    "prefix": "SK",
+    "path": null
+  },
+  {
+    "id": "vtmb:model:../body",
+    "prefix": "SK",
+    "path": null
+  },
+  {
+    "id": "vtmb:unknown:a",
+    "prefix": "SK",
+    "path": null
+  },
+  {
+    "id": "models/foo.mdl",
+    "prefix": "SK",
+    "path": null
+  },
+  {
+    "id": "vtmb:model:a\\b",
+    "prefix": "SK",
+    "path": null
+  },
+  {
+    "id": "vtmb:model:a/",
+    "prefix": "SK",
+    "path": null
+  }
+]

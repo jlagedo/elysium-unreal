@@ -234,6 +234,11 @@ public:
 	// --- build decisions ------------------------------------------------------------------------
 	/** The V2 master this instance is parented to; empty for a patched unit (its `Parent` is the base instance). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString Master;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString SkinnedAsset;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString SkinnedMaster;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Consumers") TArray<FString> SkeletalConsumers;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Consumers") TArray<FString> StaticConsumers;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Consumers") TArray<FString> MapConsumers;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString BlendMode;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") bool TwoSided = false;
 	/** The resolved class key (`$surfaceprop`, else top directory, else family default). */

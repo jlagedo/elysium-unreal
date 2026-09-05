@@ -19,6 +19,8 @@
 #include "Map/ElysiumMapCollision.h"      // the walkable-surface build and its readiness states
 #include "Map/ElysiumMapLog.h"
 #include "Visual/ElysiumEntityBodies.h"   // SetMap and the map animation preload
+#include "Visual/ElysiumNativeAnimationData.h"
+#include "Engine/StreamableManager.h"
 #include "Visual/ElysiumMapVisuals.h"     // the baked-level adoption and the material audit
 #include "Visual/ElysiumNpcBody.h"        // SetRuntimeReady at the activation barrier
 
@@ -104,7 +106,7 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
 		OutFailure = TEXT("runtime construction produced no entity substrate");
 		return EElysiumMapReadinessResult::Failed;
 	}
-	if (bConstructionComplete && !bAnimationPreloadReady)
+	if (bConstructionComplete && !bAnimationPreloadReady && !bAnimationPreloadPending)
 	{
 		OutFailure = TEXT("runtime construction did not complete map animation residency");
 		return EElysiumMapReadinessResult::Failed;
@@ -127,7 +129,8 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
 	{
 		return EElysiumMapReadinessResult::Ready;
 	}
-	if (WaitSeconds >= WatchdogSeconds)
+	const double Deadline=bAnimationPreloadPending?120.0:WatchdogSeconds;
+	if (WaitSeconds >= Deadline)
 	{
 		OutFailure = FString::Printf(TEXT("activation watchdog expired; missing: %s"), *Missing());
 		return EElysiumMapReadinessResult::Failed;
@@ -233,6 +236,8 @@ void AElysiumMapActor::LoadMap()
 
 	const double Start = FPlatformTime::Seconds();
 	bAnimationPreloadReady = false;
+	bNativeAnimationPreloadPending = false;
+	bNativeAnimationPreloadFailed = false;
 	if (NavigationBounds)
 	{
 		NavigationBounds->Destroy();
@@ -376,6 +381,49 @@ void AElysiumMapActor::LoadMap()
 				// above (R4.2 — `seam_map_map.md` -> "Import"). Null on an unconverted map, and
 				// then every brush body cooks from its def's hulls as it always has.
 				EntityWorld->SetCollisionPayload(Collision ? Collision->GetPayload() : nullptr);
+				// Observe model keys without changing definitions or Source I/O. The normal
+				// activation barrier waits for this native resource union to finish.
+				if (auto* Native=GI->GetSubsystem<UElysiumNativeAnimationData>())
+				{
+					TArray<FString> Models, CinematicModels;
+					for (const FElysiumEntityDef& Def : EntDefs.Defs)
+						for (const auto& Key : Def.Keys)
+						{
+							if (Key.Key.Equals(TEXT("model"),ESearchCase::IgnoreCase)) Models.AddUnique(Key.Value);
+							else if (Key.Key.Equals(TEXT("BaseAnim"),ESearchCase::IgnoreCase)
+								|| Key.Key.Equals(TEXT("MaleAnim"),ESearchCase::IgnoreCase)
+								|| Key.Key.Equals(TEXT("FemaleAnim"),ESearchCase::IgnoreCase)) CinematicModels.AddUnique(Key.Value);
+						}
+					if (!bMenuBackdrop) Models.AddUnique(EntityWorld->InitialPlayerModel());
+					FString Error;
+					auto Handle=Native->PrepareMapModels(Models,Error,MapEpoch,CinematicModels);
+					if (!Error.IsEmpty())
+					{
+						bNativeAnimationPreloadFailed=true;
+						UE_LOG(LogElysium,Warning,TEXT("native model preparation %s: %s"),*MapName,*Error);
+					}
+					else if (Handle.IsValid())
+					{
+						const TWeakObjectPtr<AElysiumMapActor> WeakThis(this);
+						const TWeakPtr<FStreamableHandle> WeakLoad(Handle);
+						const uint64 ExpectedEpoch=MapEpoch;
+						auto Complete=[WeakThis,WeakLoad,ExpectedEpoch]() {
+							if (auto* Map=WeakThis.Get(); Map && Map->MapEpoch==ExpectedEpoch)
+							{
+								FString Why;
+								Map->bNativeAnimationPreloadFailed=!UElysiumNativeAnimationData::FinishPreparation(WeakLoad.Pin(),Why);
+								Map->bNativeAnimationPreloadPending=false;
+								if (!Why.IsEmpty()) UE_LOG(LogElysium,Warning,TEXT("native model preparation %s: %s"),*Map->MapName,*Why);
+							}
+						};
+						if (Handle->HasLoadCompleted()) Complete();
+						else
+						{
+							bNativeAnimationPreloadPending=true;
+							Handle->BindCompleteDelegate(FStreamableDelegate::CreateLambda(MoveTemp(Complete)));
+						}
+					}
+				}
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();
 
@@ -537,6 +585,8 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// EndPlay still guarantees those objects have valid UObject indices; waiting for this actor's C++
 	// destructor is too late because world cleanup may already have reclaimed its components.
 	EntityWorld.Reset();
+	if (UGameInstance* GI=GetGameInstance())
+		if (auto* Native=GI->GetSubsystem<UElysiumNativeAnimationData>()) Native->ReleaseEpoch(MapEpoch);
 
 	// The scheme manager is this actor's own, so its voices are stopped here rather than at the
 	// epoch boundary below — it will not exist to be asked once this actor is gone.
@@ -585,7 +635,8 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 	FElysiumMapRuntimePrerequisites P;
 	P.bConstructionComplete = bRuntimeConstructionComplete;
 	P.bEntityWorldReady = EntityWorld.Get() != nullptr;
-	P.bAnimationPreloadReady = bAnimationPreloadReady;
+	P.bAnimationPreloadReady = bAnimationPreloadReady && !bNativeAnimationPreloadPending && !bNativeAnimationPreloadFailed;
+	P.bAnimationPreloadPending = bNativeAnimationPreloadPending;
 	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
 	P.bAudioCatalogReady = !Audio || Audio->IsReadyForMapActivation();
 	P.bMenuBackdrop = bMenuBackdrop;

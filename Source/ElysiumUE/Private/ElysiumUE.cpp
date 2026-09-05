@@ -1,5 +1,6 @@
 #include "ElysiumUE.h"
 #include "ElysiumInputAssets.h"
+#include "Editor/ElysiumAnimationDataModel.h"
 
 #include "InputCoreTypes.h"
 #include "Modules/ModuleManager.h"
@@ -24,12 +25,18 @@ public:
 	virtual void StartupModule() override
 	{
 		FDefaultGameModuleImpl::StartupModule();
+		ElysiumAnimationDataModel::Register();
 		RegisterGamepadKey(ElysiumInputAssets::DualSenseCreateKey,
 			LOCTEXT("DualSenseCreate", "DualSense Create"));
 		RegisterGamepadKey(ElysiumInputAssets::DualSensePSKey,
 			LOCTEXT("DualSensePS", "DualSense PS"));
 		RegisterGamepadKey(ElysiumInputAssets::DualSenseMuteKey,
 			LOCTEXT("DualSenseMute", "DualSense Mute"));
+	}
+	virtual void ShutdownModule() override
+	{
+		ElysiumAnimationDataModel::Unregister();
+		FDefaultGameModuleImpl::ShutdownModule();
 	}
 };
 

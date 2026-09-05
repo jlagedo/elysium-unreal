@@ -398,8 +398,10 @@ def test_pruning_removes_what_the_manifest_neither_names_nor_protects(tmp_path):
     editor = FakeEditor()
     module = _load(editor)
     editor.assets[ROOT + "/PM_retired"] = FakeAsset(ROOT + "/PM_retired", "ElysiumPhysicalMaterial")
+    editor.assets[ROOT + "/PM_retired"].metadata["ElysiumProducer"] = 'surface-properties'
     editor.assets[ROOT + "/PM_unreadable"] = FakeAsset(ROOT + "/PM_unreadable",
                                                        "ElysiumPhysicalMaterial")
+    editor.assets[ROOT + "/PM_unreadable"].metadata["ElysiumProducer"] = 'surface-properties'
     manifest = _stage(tmp_path, [_entry("metal")], keep=[ROOT + "/PM_unreadable"])
 
     report = module.run(manifest)

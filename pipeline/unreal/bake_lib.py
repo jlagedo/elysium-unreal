@@ -1066,6 +1066,7 @@ def save(asset_path):
 #: settings class is `config=Game`), so a saved asset
 #: surfaces it as an asset registry tag and a fresh process reads it without loading anything.
 RECIPE_TAG = "ElysiumRecipe"
+PRODUCER_TAG = "ElysiumProducer"
 
 
 def recipe_fingerprint(stage, object_path, recipe):
@@ -1075,7 +1076,7 @@ def recipe_fingerprint(stage, object_path, recipe):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def stored_recipe(object_path):
+def stored_recipe(object_path, *, producer=None):
     """The recipe stamped on an asset, read off the registry without loading it; "" if absent.
 
     An absent tag -- a pre-tag asset, or a registry that was not configured to surface it --
@@ -1086,6 +1087,12 @@ def stored_recipe(object_path):
     data = registry.get_asset_by_object_path(object_path_of(object_path))
     if not data or not data.is_valid():
         return ""
+    if producer is not None:
+        owner = data.get_tag_value(PRODUCER_TAG)
+        if owner and str(owner) != producer:
+            raise RuntimeError("%s belongs to producer %s, not %s" % (object_path, owner, producer))
+        if not owner:
+            return ""
     value = data.get_tag_value(RECIPE_TAG)
     return str(value) if value else ""
 
@@ -1102,6 +1109,56 @@ def object_path_of(path):
     return "%s.%s" % (path, name)
 
 
-def stamp_recipe(asset, fingerprint):
+def stamp_recipe(asset, fingerprint, *, producer):
     """Write the recipe fingerprint into the asset's package metadata, pre-save."""
+    if not producer:
+        raise ValueError("a recipe must name its producer")
     unreal.EditorAssetLibrary.set_metadata_tag(asset, RECIPE_TAG, fingerprint)
+    unreal.EditorAssetLibrary.set_metadata_tag(asset, PRODUCER_TAG, producer)
+
+
+def stored_producer(object_path):
+    registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    data = registry.get_asset_by_object_path(object_path_of(object_path))
+    if not data or not data.is_valid():
+        return ""
+    value = data.get_tag_value(PRODUCER_TAG)
+    return str(value) if value else ""
+
+
+def prune_owned(package_root, keep, scope, producer, counts=None):
+    """Prune only this producer's unlisted packages; foreign and unstamped assets survive."""
+    if not producer:
+        raise ValueError("prune requires a producer")
+    counts = counts if counts is not None else {}
+    counts.update(foreign=0, unstamped=0)
+    if not scope:
+        return 0
+    root = package_root.rstrip("/").casefold() + "/"
+    scope = scope.rstrip("/").casefold() + "/"
+    if not scope.startswith(root):
+        raise ValueError("prune scope is outside its package root: %s" % scope)
+    library = unreal.EditorAssetLibrary
+    if not library.does_directory_exist(package_root):
+        return 0
+    protected = {object_path_of(path).split(".", 1)[0].casefold() for path in keep}
+    stale = []
+    for object_path in library.list_assets(package_root, recursive=True, include_folder=False):
+        package = str(object_path).split(".", 1)[0]
+        if not package.casefold().startswith(scope):
+            continue
+        owner = stored_producer(str(object_path))
+        if not owner:
+            counts["unstamped"] += 1
+        elif owner != producer:
+            counts["foreign"] += 1
+        elif package.casefold() not in protected:
+            stale.append(package)
+    for start in range(0, len(stale), 256):
+        delete_owned_assets(stale[start:start + 256])
+    folders = [path for path in library.list_assets(package_root, recursive=True, include_folder=True)
+               if path.endswith("/") and path.casefold().startswith(scope)]
+    for folder in sorted(folders, key=lambda p: p.count("/"), reverse=True):
+        if not library.list_assets(folder, recursive=True, include_folder=False):
+            library.delete_directory(folder)
+    return len(stale)

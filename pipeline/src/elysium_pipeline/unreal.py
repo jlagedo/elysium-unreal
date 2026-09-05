@@ -455,6 +455,34 @@ def import_materials(config, runner, manifest_path, *, force: bool = False) -> N
 MODEL_IMPORT_TIMEOUT_SECONDS = 4 * 3600.0
 
 
+def import_characters(config, runner, manifest_path, *, force: bool = False) -> None:
+    """Author the GLB stage's skeletal products and bind the imported material corpus."""
+    from elysium_pipeline.importers.materials import staging_root
+
+    _run(config, runner, editor_executable(config, commandlet=True), [
+        str(config.project), "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal/import_characters.py'}",
+        f"-ImportCharacters={manifest_path}",
+        f"-ImportMaterialsRoot={staging_root(config.work_root)}",
+        *(["-ImportForce=1"] if force else []),
+        "-AllowCommandletRendering", "-unattended", "-nosplash", "-nopause",
+        "-stdout", "-FullStdOutLogOutput",
+    ], timeout=4 * 3600.0)
+
+
+def verify_character_stage(config, runner, manifest_path) -> None:
+    """Read the stage selection's saved native core products in a fresh, headless editor."""
+    from elysium_pipeline.importers.materials import staging_root
+
+    _run(config, runner, editor_executable(config, commandlet=True), [
+        str(config.project), "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal/verify_character_stage.py'}",
+        f"-ImportCharacters={manifest_path}",
+        f"-ImportMaterialsRoot={staging_root(config.work_root)}",
+        "-nullrhi", "-unattended", "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
+    ], timeout=4 * 3600.0)
+
+
 def import_models(config, runner, manifest_path, *, force: bool = False) -> None:
     """Run the editor phase of `import models` over one staged manifest.
 

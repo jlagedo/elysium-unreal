@@ -299,12 +299,19 @@ def bake_pose(d, bones):
     """
     from elysium_pipeline.formats import mdl_skel
 
+    return bake_pose_from_samples(bones, mdl_skel.local_sequences(d),
+                                  lambda seq: mdl_skel.read_anim(d, bones, seq.base, seq.frames))
+
+
+def bake_pose_from_samples(bones, clips, read_frames):
+    """The same reference-pose decision over decoded GLB or retail samples."""
+
     bind = tuple((tuple(bone.pos), tuple(bone.quat)) for bone in bones)
-    for seq in mdl_skel.local_sequences(d):
+    for seq in clips:
         frames = seq.frames
         if not isinstance(frames, int) or frames <= 0:
             continue
-        pose = mdl_skel.read_anim(d, bones, seq.base, frames)
+        pose = read_frames(seq)
         first = tuple((tuple(pose[0][i][0]), tuple(pose[0][i][1])) for i in range(len(bones)))
         dp = max((max(abs(a - b) for a, b in zip(first[i][0], bind[i][0]))
                   for i in range(len(bones))), default=0.0)
@@ -555,16 +562,23 @@ def check_motion(d, bones, cls):
     """
     from elysium_pipeline.formats import mdl_skel
 
+    return check_motion_from_samples(bones, cls, mdl_skel.local_sequences(d),
+                                     lambda seq: mdl_skel.read_anim(d, bones, seq.base, seq.frames))
+
+
+def check_motion_from_samples(bones, cls, clips, read_frames):
+    """Frame-constancy check over decoded samples; no source-format access."""
+
     if not cls.collapse_bone:
         return Check("motion", True, ())
     root = next(b.index for b in bones if b.name == cls.collapse_bone)
     live = sorted(subtree(bones, root) - {root}) or [root]
     worst = []
-    for seq in mdl_skel.local_sequences(d):
+    for seq in clips:
         frames = seq.frames
         if not isinstance(frames, int) or frames <= 0:
             continue
-        pose = mdl_skel.read_anim(d, bones, seq.base, frames)
+        pose = read_frames(seq)
         worst.extend((seq.label, name, dp, dr)
                      for name, dp, dr in frame_variance(bones, pose, live))
     return Check("motion", not worst, tuple(worst))
@@ -862,5 +876,4 @@ def npc_carried(idx):
                 if value:
                     out.add(value.lower())
     return out
-
 

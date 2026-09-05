@@ -57,6 +57,13 @@ public:
 		const FString& MaterialPackagePath, const TMap<FString, FString>& MaterialTextures,
 		const TMap<FString, FString>& MaterialParents,
 		const FString& RecipeFingerprint = TEXT(""));
+	/** Build a staged GLB projection, binding existing material assets directly. A non-empty
+	 * reference pose re-skins geometry in the same build, for wield models. No private material
+	 * instances or texture imports are created by this entry point. */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString BuildSkeletalMeshFromStage(const FString& SourcePath, const FString& PackageName,
+		const FString& SkeletonPackageName, const TMap<FString, FString>& MaterialAssets,
+		const TArray<FTransform>& ReferencePose, const FString& RecipeFingerprint = TEXT(""));
 
 	/**
 	 * Build and save a `USkeleton` from an `.eskm`'s bone tree alone, with no mesh.
@@ -148,6 +155,12 @@ public:
 	static FString BuildAnimSequencesFromSource(const FString& SourcePath, const FString& PackagePath,
 		const FString& SkeletonPackageName, int32& OutClipCount, int32& OutDroppedTracks,
 		const FString& RecipeFingerprint = TEXT(""));
+	/** Stage variant: standard folded names, optional cinematic role, manifest-owned pruning. */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString BuildAnimSequencesFromStage(const FString& SourcePath, const FString& PackagePath,
+		const FString& SkeletonPackageName, const FString& Role, int32& OutClipCount,
+		int32& OutDroppedTracks, int32& OutSuppressedAppendixTracks, TArray<FName>& OutSuppressedAppendixBones,
+		const FString& RecipeFingerprint = TEXT(""));
 
 	/**
 	 * Build and save one `UBlendSpace` per blend grid in `npc/blends/<owner>.json`, as
@@ -176,6 +189,11 @@ public:
 	static FString BuildBlendSpacesFromGrids(const FString& BlendsRelPath, const FString& PackagePath,
 		const FString& SkeletonPackageName, int32& OutSpaceCount, int32& OutSkippedGrids,
 		int32& OutSkippedCells, const FString& RecipeFingerprint = TEXT(""));
+	/** Read staged grid JSON directly; no lookup under the legacy export root. */
+	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
+	static FString BuildBlendSpacesFromStage(const FString& Json, const FString& PackagePath,
+		const FString& SkeletonPackageName, const FString& Role, int32& OutSpaceCount,
+		int32& OutSkippedGrids, int32& OutSkippedCells, const FString& RecipeFingerprint = TEXT(""));
 
 	/** Report what a saved sequence contains, for a fresh process to check against. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")

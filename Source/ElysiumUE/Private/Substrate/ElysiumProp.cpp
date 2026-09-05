@@ -1,5 +1,6 @@
 #include "Substrate/ElysiumProp.h"
 
+#include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
@@ -547,7 +548,7 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 	{
 		// `Def->ModelQuat` belongs to the model this one replaced, so it cannot be reused; both
 		// representations fall back to the yaw-only runtime derivation.
-		VisualStem = FPaths::GetBaseFilename(Model).ToLower();
+		VisualStem = FElysiumContentPaths::PropModelStem(Model);
 		Loc = Origin;
 		StaticRot = FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles));
 		SkeletalRot = StaticRot;

@@ -875,6 +875,26 @@ def _facial(data: bytes) -> dict[str, Any]:
     }
 
 
+def _unrendered_morph_records(data, body_parts, lods, anorms):
+    """The flex records on a source mesh with no LOD0 primitive still belong to the unit."""
+    rendered = {(p["bodyPart"], p["model"], p["mesh"])
+                for lod in lods if lod["index"] == 0 for p in lod["primitives"]}
+    for part in body_parts:
+        for model in part["models"]:
+            for mesh in model["meshes"]:
+                if (part["index"], model["index"], mesh["index"]) in rendered:
+                    continue
+                rows = []
+                for i, flex in enumerate(mesh["flexes"]):
+                    if flex["numverts"] and anorms is None:
+                        raise ModelDecodeError("unrendered facial records require the StudioRender unit-vector table")
+                    for local, position, normal in mdl_skel.vert_anims(data, flex, anorms):
+                        rows.append({"flex": i, "sourceVertex": mesh["vertexOffset"] + local,
+                                     "position": tuple(position), "normal": tuple(normal)})
+                if rows:
+                    mesh["unrenderedMorphRecords"] = rows
+
+
 def _morph_targets(data: bytes, lods: list[dict[str, Any]], anorms) -> list[dict[str, Any]]:
     """Attach every MDL flex record to its LOD 0 primitive by source vertex identity."""
 
@@ -890,24 +910,33 @@ def _morph_targets(data: bytes, lods: list[dict[str, Any]], anorms) -> list[dict
     slot_of: dict[tuple[int, tuple[float, ...]], int] = {}
     per_primitive: list[dict[int, dict[int, tuple[tuple[float, ...], tuple[float, ...]]]]] = []
     for primitive in lods[0]["primitives"]:
+        morph_records = []
         source_to_local = {
             source: index for index, source in enumerate(primitive["sourceVertices"])
         }
         targets: dict[int, dict[int, tuple[tuple[float, ...], tuple[float, ...]]]] = {}
-        for flex in mdl_skel.mesh_flexes(data, primitive["modelBase"], primitive["mesh"]):
+        for flex_index, flex in enumerate(mdl_skel.mesh_flexes(data, primitive["modelBase"], primitive["mesh"])):
             key = (flex["flexdesc"], tuple(float(value) for value in flex["targets"]))
             if key not in slot_of:
                 slot_of[key] = len(slots)
                 slots.append(key)
             bucket = targets.setdefault(slot_of[key], {})
             for local, position, normal in mdl_skel.vert_anims(data, flex, anorms):
+                position = tuple(float(value) for value in position or (0.0, 0.0, 0.0))
+                normal = tuple(float(value) for value in normal or (0.0, 0.0, 0.0))
                 vertex = source_to_local.get(primitive["vertexOffset"] + local)
+                # Dense glTF cannot distinguish an authored zero from an absent record, or
+                # represent a flex on an undrawn vertex. Preserve the ordered source records
+                # beside the render projection, including repeated contributions to one target.
+                morph_records.append({
+                    "flex": flex_index, "target": slot_of[key], "sourceVertex": primitive["vertexOffset"] + local,
+                    "vertex": vertex, "position": position, "normal": normal})
                 if vertex is None:
                     continue
-                bucket[vertex] = (
-                    tuple(float(value) for value in position or (0.0, 0.0, 0.0)),
-                    tuple(float(value) for value in normal or (0.0, 0.0, 0.0)),
-                )
+                prior_position, prior_normal = bucket.get(vertex, ((0., 0., 0.), (0., 0., 0.)))
+                bucket[vertex] = (tuple(a + b for a, b in zip(prior_position, position)),
+                                  tuple(a + b for a, b in zip(prior_normal, normal)))
+        primitive["morphRecords"] = morph_records
         per_primitive.append(targets)
 
     seen: Counter[str] = Counter()
@@ -1594,6 +1623,7 @@ def decode_model(
                 (primitive["bodyPart"], primitive["model"]), set()
             ).update(primitive["sourceVertices"])
     body_parts = _body_parts(data, anorms, referenced)
+    _unrendered_morph_records(data, body_parts, lods, anorms)
     morph_targets = _morph_targets(data, lods, anorms)
 
     materials, skin_families, material_dependencies, material_surfaces = _material_rows(

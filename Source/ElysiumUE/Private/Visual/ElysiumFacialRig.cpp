@@ -76,6 +76,7 @@ bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 	Morphs.Reset();
 	Lids.Reset();
 	Mouth = FElysiumFlexMouth();
+	Mouths.Reset();
 	MouthBridge = INDEX_NONE;
 	BlinkController = INDEX_NONE;
 
@@ -198,21 +199,25 @@ bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 		}
 	}
 
-	if (Root->TryGetArrayField(TEXT("mouths"), Values) && Values != nullptr && !Values->IsEmpty())
+	if (Root->TryGetArrayField(TEXT("mouths"), Values) && Values != nullptr)
 	{
-		const TSharedPtr<FJsonObject>* Obj = nullptr;
-		if ((*Values)[0].IsValid() && (*Values)[0]->TryGetObject(Obj) && Obj != nullptr)
+		for (const TSharedPtr<FJsonValue>& Value : *Values)
 		{
-			(*Obj)->TryGetNumberField(TEXT("bone"), Mouth.Bone);
-			(*Obj)->TryGetNumberField(TEXT("flexdesc"), Mouth.FlexDesc);
+			const TSharedPtr<FJsonObject>* Obj = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(Obj) || Obj == nullptr) continue;
+			FElysiumFlexMouth Row;
+			(*Obj)->TryGetNumberField(TEXT("bone"), Row.Bone);
+			(*Obj)->TryGetNumberField(TEXT("flexdesc"), Row.FlexDesc);
 			const TArray<TSharedPtr<FJsonValue>>* Forward = nullptr;
 			if ((*Obj)->TryGetArrayField(TEXT("forward"), Forward) && Forward != nullptr
 				&& Forward->Num() == 3)
 			{
-				Mouth.Forward = FVector((*Forward)[0]->AsNumber(), (*Forward)[1]->AsNumber(),
+				Row.Forward = FVector((*Forward)[0]->AsNumber(), (*Forward)[1]->AsNumber(),
 					(*Forward)[2]->AsNumber());
 			}
+			Mouths.Add(MoveTemp(Row));
 		}
+		if (!Mouths.IsEmpty()) Mouth = Mouths[0];
 	}
 
 	// Both bounds have to be usable together: the pair is a clamp, and half of one is not a narrower

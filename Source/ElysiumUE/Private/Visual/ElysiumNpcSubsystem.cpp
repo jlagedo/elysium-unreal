@@ -538,8 +538,8 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 	Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Component->GetAnimInstance()))
 	{
-		Inst->SetFacialRig(Anims ? Anims->GetFacialRig(Stem) : nullptr);
-		Inst->SetCompositionRig(Anims ? Anims->GetCompositionRig(Stem) : nullptr);
+		Inst->SetFacialRig(Anims ? Anims->GetFacialRig(Stem, Mesh) : nullptr);
+		Inst->SetCompositionRig(Anims ? Anims->GetCompositionRig(Stem, Mesh) : nullptr);
 		if (Anim != nullptr)
 		{
 			// No identity: a preview body stands one named clip and publishes no phase, so the event
