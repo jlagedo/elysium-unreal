@@ -87,8 +87,13 @@ def _closure(body: bytes, path: str = "synthetic/material"):
     return MaterialSourceClosure(path, f"vtmb:material:{path}", member)
 
 
-def _decode(body: bytes, *, present=("models/teeth",), path="synthetic/material"):
-    return decode_material(_closure(body, path), texture_exists=lambda value: value in present)
+def _decode(body: bytes, *, present=("models/teeth",), path="synthetic/material",
+            materials=()):
+    return decode_material(
+        _closure(body, path),
+        texture_exists=lambda value: value in present,
+        material_exists=lambda value: value in materials,
+    )
 
 
 def _publish(body: bytes, **kwargs):
@@ -196,6 +201,67 @@ def test_a_render_target_value_is_not_a_texture_dependency():
     assert model.texture_bindings[0]["kind"] == "render-target"
     assert model.texture_bindings[0]["asset"] is None
     assert model.dependencies == []
+
+
+def test_a_material_shaped_value_is_a_material_reference_and_not_a_texture_binding():
+    """G16: `$bottommaterial` names what VBSP paints on the inward side of a water brush -- a
+    *material*. Read as a texture it resolved against `materials/**.tth` and never answered, so
+    all 24 authors carried the only unresolved bindings in the water cast; in the material
+    namespace it resolves (`PHASE0_VERDICT.md` A6)."""
+
+    body = b'"Water"\n{\n"$bottommaterial" "dev\\dev_waterbeneath2"\n}\n'
+    model = _decode(body, present=(), materials=("dev/dev_waterbeneath2",))
+    assert model.texture_bindings == []
+    assert model.material_references == [{
+        "parameter": "$bottommaterial",
+        "value": "dev/dev_waterbeneath2",
+        "asset": "vtmb:material:dev/dev_waterbeneath2",
+        "resolved": True,
+        "selfReference": False,
+    }]
+    assert [(row["role"], row.get("parameter")) for row in model.dependencies] == [
+        ("material", "$bottommaterial")]
+    assert model.dependencies[0]["sourcePath"] == "materials/dev/dev_waterbeneath2.vmt"
+
+
+def test_a_unit_naming_itself_as_its_own_underside_says_so():
+    """`dev/dev_waterbeneath2` and `dev/oceanbeneath` are the faces VBSP paints on the inward
+    side, so they name themselves; the stage reads that join to tell an underside sheet from the
+    surface above it."""
+
+    body = b'"Water"\n{\n"$bottommaterial" "dev/dev_waterbeneath2.vmt"\n}\n'
+    model = _decode(body, present=(), materials=("dev/dev_waterbeneath2",),
+                    path="dev/dev_waterbeneath2")
+    assert model.material_references[0]["selfReference"] is True
+    assert model.material_references[0]["asset"] == "vtmb:material:dev/dev_waterbeneath2"
+
+
+def test_an_absent_material_reference_publishes_unresolved_without_a_dependency():
+    body = b'"Water"\n{\n"$bottommaterial" "dev/gone"\n}\n'
+    model = _decode(body, present=(), materials=())
+    assert model.material_references[0]["resolved"] is False
+    assert model.dependencies == []
+
+
+@pytest.mark.parametrize("key", ["$bottommaterial", "$crackmaterial", "$modelmaterial",
+                                 "$leaknoise"])
+def test_every_material_shaped_key_publishes_in_the_material_namespace(key):
+    body = b'"LightmappedGeneric"\n{\n"' + key.encode() + b'" "glass/glassb"\n}\n'
+    model = _decode(body, present=("glass/glassb",), materials=("glass/glassb",))
+    # `glass/glassb` is a name the install answers as BOTH a `.tth` and a `.vmt`; the value here
+    # names the material, so a texture binding would have been the wrong reading even though it
+    # would have resolved.
+    assert model.texture_bindings == []
+    assert model.material_references[0]["asset"] == "vtmb:material:glass/glassb"
+
+
+def test_a_published_unit_carries_its_material_references_and_they_validate():
+    body = b'"Water"\n{\n"$bottommaterial" "dev/dev_waterbeneath2"\n}\n'
+    model, document, binary = _publish(body, present=(), materials=("dev/dev_waterbeneath2",))
+    validation.validate_document(document, binary)
+    root = document["extensions"][material_glb.MATERIAL_EXTENSION]
+    assert root["materialReferences"][0]["parameter"] == "$bottommaterial"
+    assert "materialReferences" in root["coverage"]["mapped"]
 
 
 def test_a_proxy_operand_is_not_mistaken_for_a_material_input():

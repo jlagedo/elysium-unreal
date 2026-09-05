@@ -19,9 +19,10 @@ from pathlib import Path
 import re
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
-from elysium_pipeline import map_transport, paths, shared_corpus
+from elysium_pipeline import asset_names, map_transport, paths, shared_corpus
 from elysium_pipeline.formats.bsp import source_quat_to_unreal, source_to_unreal
 from elysium_pipeline.importers import map_geometry as MG
 
@@ -109,7 +110,14 @@ def test_reader_reproduces_the_legacy_scene_split_on_the_working_corpus(map_name
             continue
         vertices, groups = _read_obj_groups(obj_path)
         assert len(scene.positions) == vertices
-        assert {key: len(indices) // 3 for key, indices in scene.groups.items()} == groups
+        # R7.4 splits a face group further on two per-face facts the legacy OBJ had nowhere to put
+        # -- `#underside` and `#style<n>` (`MG.section_key`). Folded back, the split is exactly the
+        # legacy one: same faces, same triangles, same material per triangle, only more sections.
+        merged: dict[str, int] = {}
+        for key, indices in scene.groups.items():
+            base, _underside, _style = MG.split_section_key(key)
+            merged[base] = merged.get(base, 0) + len(indices) // 3
+        assert merged == groups
 
     # The `WorldVertexTransition` blend channel is the one per-vertex value the OBJ itself does not
     # carry: the unit publishes a `DISP_VERT` alpha as the lump's own 0..255 byte and the bake's
@@ -690,6 +698,10 @@ def test_water_fog_keys_come_from_the_material_units_own_vmt_provenance():
         "fogEnable": True, "fogColor": list(fogged.fog_color),
         "fogStartCm": 2.54, "fogEndCm": 1016.0,
         "brushes": [fogged.brushes[0].as_row()],
+        # R7.4: a unit with no physics block, no leaves and no visibility sub-unit authors none of
+        # these, and every one of them says so rather than shipping an empty set as an answer.
+        "fluid": None, "pieces": [], "leafBoxesCm": [], "nearBoxesCm": [],
+        "materialTableWaterIndex": None,
     }
     # A unit that authors no fog key is clear water -- `SetFogVolumeState`'s own answer for it.
     assert clear.fog_enable is False
@@ -741,6 +753,31 @@ def test_a_row_no_water_brush_stands_at_is_dropped_and_named():
     volumes, dropped = MG.resolve_water_volumes(units, documents.get, "fake")
     assert volumes == []
     assert dropped == [{"index": 0, "reason": "no water brush"}]
+
+
+def test_a_fluid_naming_index_zero_creates_nothing():
+    # Verdict B5: VtMB's creation guard is `fluid.index > 0` and nothing else (`vampire.dll
+    # FUN_10158600`, `101586ff JLE skip`), so a block naming index 0 gets no controller there. It
+    # must get none here either: joined on the surface plane alone it would carve the volume out of
+    # `physics.models[0].solids[0]` -- the WORLD's own collision solid -- and those pieces outrank
+    # the real water brushes in `ElysiumWater::FindVolumeAt`, so the whole map would read as
+    # submerged. No corpus map trips it (both owner maps author `index "5"`).
+    units = _fake_water_units(
+        [(0x10000020, "water/sewer_water")], ["water/sewer_water"], [_water_row(0, 0)])
+    documents = {"water/sewer_water": _provenance(("%compilewater", "1"))}
+    units.root["physics"] = {
+        "positionAccessor": 0, "indexAccessor": 1,
+        "models": [{"index": 0, "solids": [{"ledges": []}],
+                    "keyValues": [_key_value(
+                        "fluid", index="0", density="1000.000000",
+                        surfaceplane="0.000000 0.000000 1.000000 39.370079 ")]}],
+    }
+    units.accessor = lambda index: np.zeros((0, 3))
+
+    volumes, dropped = MG.resolve_water_volumes(units, documents.get, "fake")
+    assert dropped == [] and len(volumes) == 1
+    assert volumes[0].fluid is None and volumes[0].pieces == ()
+    assert volumes[0].as_row()["fluid"] is None and volumes[0].as_row()["pieces"] == []
 
 
 def test_a_patched_water_unit_reads_compilewater_and_its_fog_keys_through_its_base():
@@ -801,3 +838,604 @@ def test_water_volumes_on_the_exported_corpus(map_name, surface_z_cm, material, 
         # collision lane's binary32 Source frame, so its top sits within a rounding step of the
         # plane distance rather than on it (`sm_hub_1`: 2e-4 cm).
         assert brush.bounds_min[2] - 0.01 <= volume.surface_z_cm <= brush.bounds_max[2] + 0.01
+
+
+# ------------------------------------------------------- water, complete (R7.4)
+#
+# `docs/architecture/water-architecture.md` rulings K/L/M/N and the water audit's gap list. Four
+# facts vbsp published and this stage never read -- the face's own plane (underside), the face's
+# lightstyles, the compiler's `fluid { }` / convex pieces / leaf boxes, and the PVS the near-water
+# set derives from -- plus the two drops the audit reversed: a `%compilewater` face is never dropped
+# for `SURF_NODRAW`, and a 3D-skybox brush entity is never composed into the collision.
+#
+# The synthetic cases pin the rules; the corpus cases pin them against the three exported water maps
+# and skip, loudly, when those are not on this machine.
+
+
+def _styled(*styles):
+    return {"styles": list(styles) + [255] * (4 - len(styles))}
+
+
+def test_a_faces_lightstyle_is_the_lowest_one_it_names_not_the_first_slot():
+    # Measured on `sm_pier_1`'s 34 `objects/surf` foam cards: every one names style 1, but 18 name
+    # the switchable style 32 in the earlier slot. First-slot order would flicker one waterline on
+    # two patterns; the lowest is the animated one (Quake's inherited 1-11) and the switchable one
+    # (32-63, a named `light`'s) defaults to full brightness anyway.
+    assert MG.face_light_style(_styled(0, 32, 1)) == 1
+    assert MG.face_light_style(_styled(0, 1, 32)) == 1
+    assert MG.face_light_style(_styled(0, 1)) == 1
+    assert MG.face_light_styles(_styled(0, 32, 1)) == [32, 1]
+    # 0 is the always-on base and 255 the empty slot: neither is a style, and a face naming only
+    # those animates on none.
+    assert MG.face_light_style(_styled(0)) is None
+    assert MG.face_light_style({"styles": [0, 255, 255, 255, 3, 4, 5, 6]}) is None
+    assert MG.face_light_styles(_styled(0)) == []
+
+
+def test_underside_is_the_faces_own_plane_normal_and_never_the_side_bit():
+    # Ruling N / verdict B2: `Mod_LoadFaces` tests `plane.normal.z < 0.0` (`_DAT_201734e8`) and
+    # undefines `$reflecttexture` on it. The unit publishes plane normals in the glTF frame, whose
+    # `y` is Unreal's `z`. A vertical face is not an underside -- the pier has 23 of them.
+    units = SimpleNamespace(name="fake", root={"planes": [
+        {"index": 0, "normal": (0.0, 1.0, 0.0), "dist": 0.0},     # up
+        {"index": 1, "normal": (0.0, -1.0, 0.0), "dist": 0.0},    # down
+        {"index": 2, "normal": (1.0, 0.0, 0.0), "dist": 0.0},     # vertical
+    ]})
+    # `side` is the shard's front/back bit and is deliberately not consulted: every one of the
+    # corpus's down-facing water faces carries `side 1`, so flipping on it would call all 47 hub
+    # water faces up-facing.
+    assert MG.face_underside(units, {"plane": 0, "side": 1}) is False
+    assert MG.face_underside(units, {"plane": 1, "side": 1}) is True
+    assert MG.face_underside(units, {"plane": 2, "side": 0}) is False
+    assert MG.face_underside(units, {"plane": 99, "side": 0}) is False
+
+
+def test_section_keys_round_trip_through_both_suffixes():
+    key = MG.section_key("dev/dev_waterbeneath2@cubemapdefault", underside=True, light_style=32)
+    assert key == "dev/dev_waterbeneath2@cubemapdefault#underside#style32"
+    assert MG.split_section_key(key) == ("dev/dev_waterbeneath2@cubemapdefault", True, 32)
+    assert MG.split_section_key("objects/surf#style1") == ("objects/surf", False, 1)
+    assert MG.split_section_key("water/invisible_water#underside") == (
+        "water/invisible_water", True, None)
+    # A material whose own name contains the suffix text is not a section: the style tail has to be
+    # a number and the underside tail has to be the whole suffix.
+    assert MG.split_section_key("water/x#stylish") == ("water/x#stylish", False, None)
+    assert MG.section_key("water/x") == "water/x"
+
+
+def test_an_underside_group_binds_the_twin_and_states_its_style():
+    def binding(key, **overrides):
+        _base, underside, style = MG.split_section_key(key)
+        fields = dict(
+            key=key, unit="vtmb:material:water/sewer_water",
+            asset="/ElysiumBaked/Materials/water/MI_sewer_water", master="M_V2_Water",
+            blend_mode="Opaque", patched=False, provenance="water/sewer_water",
+            underside=underside, light_style=style)
+        fields.update(overrides)
+        return MG.MaterialBinding(**fields)
+
+    surface = binding("water/sewer_water")
+    assert surface.underside_asset is None
+    assert surface.slot_asset == "/ElysiumBaked/Materials/water/MI_sewer_water"
+    assert surface.as_row()["underside"] is False
+    assert surface.as_row()["lightStyle"] is None
+
+    # The twin's name is the surface instance's plus the suffix, in the same folder -- the R7.2
+    # decal-twin shape, so the bake needs no second naming rule.
+    under = binding("water/sewer_water#underside#style1")
+    assert under.underside_asset == "/ElysiumBaked/Materials/water/MI_sewer_water_Underside"
+    assert under.slot_asset == under.underside_asset
+    assert under.as_row()["undersideAsset"] == under.underside_asset
+    assert under.as_row()["lightStyle"] == 1
+
+    # A decal surface still binds its projector: the decal rule is about the whole surface and the
+    # underside rule is about which side of a water sheet it is, and only one of them can be true.
+    decal = binding("water/sewer_water#underside", is_decal_surface=True,
+                    decal_asset="/ElysiumBaked/Materials/water/MI_sewer_water_Decal")
+    assert decal.slot_asset == "/ElysiumBaked/Materials/water/MI_sewer_water_Decal"
+
+
+def test_a_section_key_resolves_the_same_unit_as_its_base_key():
+    documents = {"water/sewer_water": {"master": "/x/M_V2_Water", "blendMode": "Opaque"}}
+    table = MG.resolve_material_table(
+        {"water/sewer_water": "water/sewer_water",
+         "water/sewer_water#underside": "water/sewer_water",
+         "objects/surf#style1": "water/sewer_water"},
+        documents.get, map_name="fake")
+
+    assert set(table) == {"water/sewer_water", "water/sewer_water#underside", "objects/surf#style1"}
+    from elysium_pipeline.importers import materials as material_lane
+    assert {row.asset for row in table.values()} == {
+        material_lane.asset_path_for("water/sewer_water")}
+    assert table["water/sewer_water#underside"].underside is True
+    assert table["water/sewer_water#underside"].light_style is None
+    assert table["objects/surf#style1"].light_style == 1
+    assert table["objects/surf#style1"].underside is False
+
+
+# --- the compiled primitive grid (G13/U2) ---------------------------------------------------------
+
+
+def _primitive_units(kind, indices, points):
+    """A unit whose single face names one primitive: `numPrims`/`firstPrimID` at `dface+100/102`,
+    lump 38 positions in Source inches and lump 39's index run."""
+
+    return SimpleNamespace(
+        name="fake", document={"nodes": []},
+        root={
+            "faces": [{
+                "index": 0, "plane": 0, "side": 0, "texInfo": 0, "dispInfo": -1,
+                "styles": [0, 255, 255, 255], "area": 4096.0, "surfaceFogVolumeID": 0,
+                "numPrims": 1, "firstPrimID": 0, "primitive": None,
+            }],
+            "planes": [{"index": 0, "normal": (0.0, 1.0, 0.0), "dist": 0.0}],
+            "texinfos": [{"texData": 0, "textureVecs": [[1.0, 0.0, 0.0, 0.0],
+                                                        [0.0, 1.0, 0.0, 0.0]]}],
+            "textures": [{"asset": "vtmb:material:water/sewer_water", "width": 64, "height": 64}],
+            "primitives": {
+                "primitives": [{"index": 0, "type": kind, "firstIndex": 0,
+                                "indexCount": len(indices), "firstVert": 0,
+                                "vertCount": len(points)}],
+                "verts": [{"index": i, "point": point} for i, point in enumerate(points)],
+                "indices": {"values": list(indices)},
+            },
+        })
+
+
+def _quad_points():
+    """A 64-inch quad on the z = 0 plane, in Source inches."""
+
+    return [(0.0, 0.0, 0.0), (64.0, 0.0, 0.0), (0.0, 64.0, 0.0), (64.0, 64.0, 0.0)]
+
+
+def test_a_face_with_primitives_meshes_the_compiled_grid_with_uvs_from_texinfo():
+    # `Shader_DrawSurfaceDynamic` reads `numPrims` first and, when it is non-zero, draws the
+    # compiled strip to the exclusion of the surfedge fan -- so the grid IS VtMB's water mesh on the
+    # nine maps that carry one. `Mod_LoadPrimVerts` zero-fills the runtime record and copies only
+    # the position, so lump 38 has no UVs and they are re-derived from the texinfo vectors here.
+    units = _primitive_units(MG.PRIM_TRILIST, [0, 1, 2, 1, 3, 2], _quad_points())
+    scene = MG._build_scene(units, None, 0, [0], "fake", lambda key: True, "world")
+
+    assert list(scene.groups) == ["water/sewer_water"]
+    assert len(scene.groups["water/sewer_water"]) == 6
+    assert len(scene.positions) == 4
+    # Source (64, 64, 0) is Unreal (162.56, -162.56, 0), and the UV is the planar projection over
+    # the TEXDATA size, exactly what `_planar_uv` gives an ordinary face.
+    assert scene.positions[3] == pytest.approx(source_to_unreal(64.0, 64.0, 0.0), abs=1e-4)
+    assert scene.uvs[3] == pytest.approx((1.0, 1.0), abs=1e-6)
+    assert scene.uvs[0] == pytest.approx((0.0, 0.0), abs=1e-6)
+    # Winding is reversed on the way out, like every other face: the frame is a reflection.
+    assert scene.groups["water/sewer_water"][:3] == [0, 2, 1]
+
+
+def test_a_triangle_strip_primitive_unwinds_to_the_same_surface_as_a_list():
+    strip = MG._build_scene(
+        _primitive_units(MG.PRIM_TRISTRIP, [0, 1, 2, 3], _quad_points()),
+        None, 0, [0], "fake", lambda key: True, "world")
+    assert len(strip.groups["water/sewer_water"]) == 6
+
+    # A degenerate stitch -- the strip's own way of joining two runs -- states no triangle, so only
+    # the one real triangle in this run survives.
+    stitched = MG._build_scene(
+        _primitive_units(MG.PRIM_TRISTRIP, [0, 1, 2, 2, 2, 3], _quad_points()),
+        None, 0, [0], "fake", lambda key: True, "world")
+    assert len(stitched.groups["water/sewer_water"]) == 3
+
+    # A type the engine refuses to draw (`else return`) meshes nothing rather than guessing a mode.
+    unknown = MG._build_scene(
+        _primitive_units(7, [0, 1, 2], _quad_points()), None, 0, [0], "fake", lambda k: True, "w")
+    assert unknown.groups == {}
+
+
+def test_primitive_indices_are_read_local_or_absolute_whichever_the_run_states():
+    # `BuildMSurfacePrimIndices` indexes the primitive's own vertex run. A compiler that wrote them
+    # absolute into lump 38 would otherwise mesh inside out or drop the face entirely.
+    units = _primitive_units(MG.PRIM_TRILIST, [0, 1, 2], _quad_points())
+    units.root["primitives"]["primitives"][0]["firstVert"] = 1
+    units.root["primitives"]["primitives"][0]["vertCount"] = 3
+    units.root["primitives"]["primitives"][0]["indexCount"] = 3
+    units.root["primitives"]["indices"]["values"] = [1, 2, 3]
+    absolute = MG._build_scene(units, None, 0, [0], "fake", lambda key: True, "world")
+    assert len(absolute.groups["water/sewer_water"]) == 3
+    assert len(absolute.positions) == 3
+
+
+def test_a_water_face_row_states_every_field_the_audit_named():
+    units = _primitive_units(MG.PRIM_TRILIST, [0, 1, 2, 1, 3, 2], _quad_points())
+    units.root["faces"][0]["styles"] = [0, 32, 1, 255]
+    units.root["faces"][0]["surfaceFogVolumeID"] = 0
+    scene = MG._build_scene(units, None, 0, [0], "fake", lambda key: True, "world")
+
+    assert len(scene.water_faces) == 1
+    row = scene.water_faces[0]
+    assert row["index"] == 0 and row["scene"] == "world"
+    assert row["group"] == "water/sewer_water#style1"
+    assert row["unit"] == "vtmb:material:water/sewer_water"
+    assert row["underside"] is False and row["normal"] == [0.0, 0.0, 1.0]
+    assert (row["lightStyle"], row["lightStyles"]) == (1, [32, 1])
+    assert row["surfaceFogVolumeID"] == 0            # G11: the compiler's own volume statement
+    assert row["texdata"] == 0 and row["texInfo"] == 0
+    assert row["primitive"] == {"first": 0, "count": 1}
+    # G26: `faces[].area` is the pin a rebuilt mesh is checked against; `originalFaces[].area` is
+    # 0.0 on all 2,182 corpus rows and is never the pin.
+    assert row["area"] == 4096.0
+    assert row["areaCm2"] == pytest.approx(4096.0 * 2.54 * 2.54, abs=1e-3)
+    # ... and `meshedAreaCm2` is the other half of it: what this stage actually produced for the
+    # face. The two agreeing is the whole pin -- a mesh path that dropped a shard or double-counted
+    # a strip stitch shows up here and nowhere else offline.
+    assert row["meshedAreaCm2"] == pytest.approx(row["areaCm2"], rel=1e-6)
+    assert row["triangles"] == 2
+
+    # No predicate is "nobody here can answer what a water face is": no rows, and no underside split.
+    assert MG._build_scene(units, None, 0, [0], "fake", None, "world").water_faces == []
+
+
+# --- the fluid block, the convex pieces, the leaf and near boxes ------------------------------------
+
+
+def _physics_units(key_values, solids=(), positions=(), indices=(), leafs=()):
+    return SimpleNamespace(
+        name="fake", document={"nodes": []},
+        accessor=lambda index: (np.array(positions) if index == 0
+                                else np.array(indices).reshape(-1, 1)),
+        root={
+            "physics": {"positionAccessor": 0, "indexAccessor": 1,
+                        "models": [{"index": 0, "keyValues": list(key_values),
+                                    "solids": list(solids)}]},
+            "bsp": {"leafs": list(leafs)},
+        })
+
+
+def _key_value(kind, **pairs):
+    return {"type": kind, "pairs": [{"key": key, "value": value} for key, value in pairs.items()]}
+
+
+def test_the_fluid_block_lands_in_the_bakes_frame_and_says_what_was_not_authored():
+    # `sm_pier_1`'s own block. The plane normal is a direction (Y negated, no scale) and its
+    # distance a length (inches to centimetres): `-623 in` is the volume's own `-1582.42 cm`.
+    fluid = MG._water_fluid(_physics_units([_key_value(
+        "fluid", index="5", density="1000.000000", damping="0.010000",
+        surfaceplane="0.000000 0.000000 1.000000 -623.000000 ",
+        currentvelocity="0.000000 0.000000 0.000000 ")]))
+
+    assert fluid.index == 5 and fluid.density == 1000.0 and fluid.damping == 0.01
+    assert fluid.surface_plane == (0.0, -0.0, 1.0, -1582.42)
+    assert fluid.current_velocity_cm == (0.0, -0.0, 0.0)
+    # The pier authors neither, and a substituted default would state an authoring that did not
+    # happen -- vphysics' own density default is the 1000 the pier does author.
+    assert fluid.contents is None and fluid.surface_prop is None
+    assert fluid.as_row()["surfacePlane"] == [0.0, -0.0, 1.0, -1582.42]
+
+    # `sm_hub_1`'s: no density, a surfaceprop and the parsed-and-unread contents word.
+    hub = MG._water_fluid(_physics_units([_key_value(
+        "fluid", index="5", surfaceprop="water", damping="0.010000", contents="268435488",
+        surfaceplane="0.000000 0.000000 1.000000 -5881.000000 ",
+        currentvelocity="0.000000 0.000000 0.000000 ")]))
+    assert hub.density is None and hub.surface_prop == "water"
+    assert hub.contents == 268435488
+    assert hub.surface_plane[3] == pytest.approx(-14937.74, abs=1e-2)
+
+    # A current nobody authored on any corpus map still has its lane, in the map's own frame.
+    flowing = MG._water_fluid(_physics_units([_key_value(
+        "fluid", index="5", surfaceplane="0 0 1 0", currentvelocity="10.0 20.0 -30.0 ")]))
+    assert flowing.current_velocity_cm == pytest.approx(source_to_unreal(10.0, 20.0, -30.0))
+
+    assert MG._water_fluid(_physics_units([])) is None
+
+
+def test_the_physics_material_table_states_the_water_index_or_says_it_has_none():
+    # G17. `sm_pier_1`'s 18 rows carry `WATER = 17`; `sm_hub_1`'s 16 rows have no water row at all,
+    # which is a fact about the map and not a missing read.
+    pier = MG._physics_units if False else _physics_units
+    assert MG._material_table_water_index(pier([
+        _key_value("materialtable", default="1", metal="5", water="17")])) == 17
+    assert MG._material_table_water_index(pier([
+        _key_value("materialtable", default="1", metal="5")])) is None
+    assert MG._material_table_water_index(pier([])) is None
+
+
+def test_a_solids_ledges_become_convex_plane_sets_with_the_inside_on_the_same_side():
+    # G18. A ledge is vbsp's own convex piece -- 12 triangles over 8 vertices for a box -- and the
+    # lump states topology, not planes, so the planes are derived and oriented against the piece's
+    # own centroid: `n . p - d <= 0` inside, the convention `WaterBrush.planes` already carries.
+    corners = [(x, y, z) for x in (0.0, 1.0) for y in (0.0, 1.0) for z in (0.0, 1.0)]
+    faces = [
+        (0, 1, 3), (0, 3, 2), (4, 7, 5), (4, 6, 7),     # x = 0, x = 1
+        (0, 4, 5), (0, 5, 1), (2, 3, 7), (2, 7, 6),     # y = 0, y = 1
+        (0, 2, 6), (0, 6, 4), (1, 5, 7), (1, 7, 3),     # z = 0, z = 1
+    ]
+    units = _physics_units(
+        [], solids=[{"index": 0, "ledges": [{
+            "index": 0, "firstVertex": 0, "vertexCount": 8, "firstIndex": 0, "indexCount": 36}]}],
+        positions=corners, indices=[corner for face in faces for corner in face])
+
+    pieces = MG._solid_pieces(units, 0)
+
+    assert len(pieces) == 1
+    piece = pieces[0]
+    # The 12 triangles of a box are 6 planes; duplicates of one face collapse.
+    assert len(piece.planes) == 6
+
+    def outside(point):
+        return any(sum(n * p for n, p in zip(plane[:3], point)) - plane[3] > 1e-6
+                   for plane in piece.planes)
+
+    # The glTF-to-Unreal permutation is `(x, z, y) * 100`, so the unit cube is a 100 cm cube.
+    assert not outside((50.0, 50.0, 50.0))
+    assert outside((150.0, 50.0, 50.0)) and outside((50.0, 50.0, -1.0))
+    assert piece.bounds_min == pytest.approx((0.0, 0.0, 0.0), abs=1e-3)
+    assert piece.bounds_max == pytest.approx((100.0, 100.0, 100.0), abs=1e-3)
+    assert MG._solid_pieces(units, 9) == []
+
+
+def _leaf(index, cluster, water, mins, maxs):
+    return {"index": index, "cluster": cluster, "leafWaterDataID": water,
+            "mins": list(mins), "maxs": list(maxs), "contents": 0}
+
+
+def test_the_leaf_boxes_are_the_records_own_leaves_in_the_bakes_frame():
+    # G10: `leafWaterDataID` is the engine's own "the eye is under water" answer in one lookup, and
+    # the union of those boxes is a tighter hull than the single brush AABB -- 66-77 inches tighter
+    # on `sm_hub_1`. `source_to_unreal` negates Y, so the box is rebuilt from both corners.
+    units = _physics_units([], leafs=[
+        _leaf(0, 1, 0, (-10, -20, -30), (10, 20, 30)),
+        _leaf(1, 2, -1, (0, 0, 0), (1, 1, 1)),
+        _leaf(2, 3, 1, (0, 0, 0), (1, 1, 1)),
+    ])
+    boxes = MG._leaf_water_boxes(units, 0)
+
+    assert len(boxes) == 1
+    low, high = boxes[0]
+    assert low == pytest.approx(source_to_unreal(-10.0, 20.0, -30.0), abs=1e-4)
+    assert high == pytest.approx(source_to_unreal(10.0, -20.0, 30.0), abs=1e-4)
+    assert MG._leaf_water_boxes(units, 7) == ()
+
+
+def test_the_near_water_set_is_derived_from_the_pvs_and_never_from_the_leaf_bit():
+    # G9/G23. VtMB's near-water annotation is `union(PVS(water cluster))` -- measured set-equal to
+    # the `0x200` leaves on `sm_hub_1` and `sp_soc_3`. It is derived because `sm_pier_1`'s
+    # Unofficial-Patch recompile carries the bit on no leaf at all (retail: 702).
+    solid = _leaf(3, 4, -1, (0, 0, 0), (0, 0, 0))
+    solid["contents"] = 0x1
+    units = _physics_units([], leafs=[
+        _leaf(0, 1, 0, (0, 0, 0), (1, 1, 1)),        # the water leaf, cluster 1
+        _leaf(1, 4, -1, (2, 2, 2), (3, 3, 3)),       # visible from it
+        _leaf(2, 9, -1, (4, 4, 4), (5, 5, 5)),       # not visible from it
+        solid,                                       # vbsp's dummy solid leaf, in a visible cluster
+    ])
+    asked: list[list[int]] = []
+
+    def pvs_union(clusters):
+        asked.append(list(clusters))
+        return {1, 4}
+
+    boxes = MG._near_water_boxes(units, SimpleNamespace(pvs_union=pvs_union), 0)
+
+    assert asked == [[1]]
+    # The water leaf itself and the one it can see -- never the solid leaf, which no eye can be in
+    # and which VtMB's own annotation never marks (0 of the 97 hub / 126 soc leaves that carry it).
+    assert len(boxes) == 2
+    # No visibility sub-unit is "this lane could not derive it", never "nothing is near the water".
+    assert MG._near_water_boxes(units, None, 0) == ()
+    assert MG._near_water_boxes(units, SimpleNamespace(pvs_union=pvs_union), 7) == ()
+
+
+# --- the three exported water maps ------------------------------------------------------------------
+
+#: What each of the three water maps stages, measured 2026-09-04 off the exported units. Every
+#: number here is a fact about the corpus, not a tolerance: the face split is the compiler's, the
+#: fluid index selects its own solid, and the near-water set is the PVS union.
+WATER_MAP_PINS = {
+    "sm_hub_1": {
+        "surfaceZCm": -14937.74, "brushes": 1,
+        "groups": {"water/sewer_water": 23,
+                   "dev/dev_waterbeneath2@cubemapdefault#underside": 24},
+        "fluidIndex": 5, "density": None, "pieces": 5, "leafBoxes": 21, "nearBoxes": 97,
+        "materialTableWaterIndex": None,
+    },
+    # 41 `water/invisible_water` faces (18 down-facing, 23 vertical) plus the 9 up-facing faces of
+    # the `_depth_33` patch: all 50 are `SURF_NODRAW` and all 50 are kept, which is owner decision 2
+    # ("surface on nodraw water") and the whole of this map's swimmable surface.
+    # R7.5 look pass: `water/invisible_water` is `%compilenodraw` -- a volume with no drawn surface
+    # in VtMB and in the port (owner decision 2 withdrawn against the owner's own frames: the
+    # pier's ocean is the `water/blackwater` card below the plane, which a drawn sheet hid). The
+    # volume, its fog and its events stay; no face group is meshed.
+    "sm_pier_1": {
+        "surfaceZCm": -1582.42, "brushes": 1,
+        "groups": {},
+        "fluidIndex": 5, "density": 1000.0, "pieces": 1, "leafBoxes": 6, "nearBoxes": 569,
+        "materialTableWaterIndex": 17,
+    },
+    # The deep-water witness: 31 `dev_water2_cheap` top and 31 `dev_waterbeneath2` under, 1:1, of
+    # which 4 each are the basin's vertical sides and so neither top nor underside.
+    "sp_soc_3": {
+        "surfaceZCm": -609.6, "brushes": 2,
+        "groups": {"dev/dev_water2_cheap@cubemapdefault": 31,
+                   "dev/dev_waterbeneath2@cubemapdefault": 4,
+                   "dev/dev_waterbeneath2@cubemapdefault#underside": 27},
+        "fluidIndex": 15, "density": None, "pieces": 14, "leafBoxes": 40, "nearBoxes": 126,
+        "materialTableWaterIndex": None,
+    },
+}
+
+
+def _water_corpus(map_name):
+    """`(geometry, volumes)` for one exported water map, or a skip when it is not on this machine."""
+
+    unit = MG.sidecars.unit_paths(map_name)["root"]
+    if not unit.is_file():
+        pytest.skip(f"no exported map root unit at {unit}")
+    staging = MG.material_staging_root()
+    if not staging.is_dir():
+        pytest.skip(f"no material staging tree at {staging}")
+    from elysium_pipeline.importers import map_visibility as visibility_lane
+
+    read_sidecar = MG.sidecar_reader(staging)
+    geometry = MG.read_geometry(map_name, None, MG.compile_water_predicate(read_sidecar))
+    volumes, dropped = MG.resolve_water_volumes(
+        geometry.join.units, read_sidecar, map_name, visibility_lane.read_visibility(map_name))
+    assert dropped == []
+    return geometry, volumes
+
+
+@pytest.mark.parametrize("map_name", sorted(WATER_MAP_PINS))
+def test_the_water_face_split_on_the_exported_corpus(map_name):
+    pins = WATER_MAP_PINS[map_name]
+    geometry, _volumes = _water_corpus(map_name)
+    rows = geometry.water_face_rows()
+
+    assert Counter(row["group"] for row in rows) == Counter(pins["groups"])
+    assert len(rows) == sum(pins["groups"].values())
+    # `underside` is a fact about the face's own plane and the group key is a function of it, so the
+    # two statements have to agree face by face -- a `#underside` group of up-facing faces would
+    # bind the reflection-less twin to the surface of the water.
+    for row in rows:
+        assert row["underside"] is row["group"].endswith(MG.UNDERSIDE_SUFFIX)
+        assert row["underside"] == (row["normal"][2] < 0.0)
+        assert row["area"] > 0.0 and row["areaCm2"] > 0.0
+        # G26/verdict B3, per face: what vbsp computed for the face against what this stage
+        # meshed for it. Measured 2026-09-04 across all 159 water faces on the three maps, the
+        # worst face is 3e-5 out and every group sums to within 1e-7 -- the 1% here is the
+        # contract's tolerance, not the measurement.
+        assert row["meshedAreaCm2"] == pytest.approx(row["areaCm2"], rel=0.01)
+        assert row["texdata"] >= 0
+        # None of the three maps in scope carries a compiled primitive grid; the 512 faces that do
+        # are on nine other maps (verdict B4), and the path is pinned on synthetic units above.
+        assert row["primitive"] == {"first": 0, "count": 0}
+        assert row["triangles"] > 0
+
+    # G26: the area pin, per SECTION -- the unit the bake turns into one mesh section, and the
+    # unit `bake_verify` would have had to ask a baked asset for. Every group's staged mesh covers
+    # the compiler's own square inches for the faces in it, and the hub's top and underside sheets
+    # are the same surface twice.
+    by_group: dict[str, float] = {}
+    meshed_by_group: dict[str, float] = {}
+    for row in rows:
+        by_group[row["group"]] = by_group.get(row["group"], 0.0) + row["areaCm2"]
+        meshed_by_group[row["group"]] = (
+            meshed_by_group.get(row["group"], 0.0) + row["meshedAreaCm2"])
+    assert set(by_group) == set(pins["groups"])
+    for group, area in by_group.items():
+        assert meshed_by_group[group] == pytest.approx(area, rel=0.01), group
+    if map_name == "sm_hub_1":
+        assert by_group["water/sewer_water"] == pytest.approx(
+            by_group["dev/dev_waterbeneath2@cubemapdefault#underside"], rel=1e-9)
+
+
+@pytest.mark.parametrize("map_name", sorted(WATER_MAP_PINS))
+def test_the_water_volume_rows_on_the_exported_corpus(map_name):
+    pins = WATER_MAP_PINS[map_name]
+    _geometry, volumes = _water_corpus(map_name)
+
+    assert len(volumes) == 1
+    volume = volumes[0]
+    assert volume.surface_z_cm == pytest.approx(pins["surfaceZCm"], abs=0.01)
+    assert len(volume.brushes) == pins["brushes"]
+
+    # G7/verdict B5: the controller's guard is `fluid.index > 0`, so a map that authors one gets
+    # entry events -- including the pier, which AUDIT section 12 had guessed did not.
+    assert volume.fluid is not None
+    assert volume.fluid.index == pins["fluidIndex"] > 0
+    assert volume.fluid.density == pins["density"]
+    assert volume.fluid.damping == pytest.approx(0.01)
+    # The authored plane and the compiler's `surfaceZ` are the same surface: that is the join.
+    assert volume.fluid.surface_plane[:3] == (0.0, -0.0, 1.0)
+    assert volume.fluid.surface_plane[3] == pytest.approx(volume.surface_z_cm, abs=0.01)
+    assert volume.fluid.current_velocity_cm == (0.0, -0.0, 0.0)   # G21: none authored anywhere
+
+    # G18: one piece per ledge of the solid the fluid names, each a closed convex set holding the
+    # water it carves.
+    assert len(volume.pieces) == pins["pieces"]
+    for piece in volume.pieces:
+        assert len(piece.planes) >= 4
+        assert piece.bounds_min[2] <= piece.bounds_max[2]
+    assert any(piece.bounds_max[2] >= volume.surface_z_cm - 1.0 for piece in volume.pieces)
+
+    # G10/G9: the leaf carve and the near-water set.
+    assert len(volume.leaf_boxes_cm) == pins["leafBoxes"]
+    for low, high in volume.leaf_boxes_cm:
+        assert all(a <= b for a, b in zip(low, high))
+    assert len(volume.near_boxes_cm) == pins["nearBoxes"] >= len(volume.leaf_boxes_cm)
+
+    # G17: the physics material table's water row, where the map has one.
+    assert volume.material_table_water_index == pins["materialTableWaterIndex"]
+
+    row = volume.as_row()
+    assert row["fluid"]["index"] == pins["fluidIndex"]
+    assert len(row["pieces"]) == pins["pieces"]
+    # A piece is a convex the runtime tests bounds-first, exactly like a brush, so the two rows are
+    # the same shape and the bake writes them through one struct.
+    assert set(row["pieces"][0]) == set(row["brushes"][0]) == {"planes", "boundsCm"}
+    assert len(row["leafBoxesCm"]) == pins["leafBoxes"]
+    assert len(row["nearBoxesCm"]) == pins["nearBoxes"]
+
+
+#: `CONTENTS_TESTFOGVOLUME` -- VtMB's own near-water leaf annotation, and the set G9 measured the
+#: PVS union against.
+_LEAF_NEAR_WATER_BIT = 0x200
+
+
+@pytest.mark.parametrize("map_name", sorted(WATER_MAP_PINS))
+def test_the_pvs_union_reproduces_vtmbs_own_near_water_annotation(map_name):
+    """G9/G23. The derivation is the contract because the leaf bit is not always there: it is
+    set-equal to the annotation on the two maps that carry it, and it is the only answer on
+    `sm_pier_1`, whose Unofficial-Patch recompile carries the bit on no leaf at all."""
+
+    from elysium_pipeline.importers import map_visibility as visibility_lane
+
+    unit = MG.sidecars.unit_paths(map_name)["root"]
+    if not unit.is_file() or not visibility_lane.unit_path(map_name).is_file():
+        pytest.skip(f"no exported units for {map_name}")
+
+    units = MG.sidecars.read_units(map_name)
+    leafs = units.root["bsp"]["leafs"]
+    visibility = visibility_lane.read_visibility(map_name)
+    assert visibility is not None and visibility.num_clusters > 0
+
+    water_clusters = sorted({int(leaf["cluster"]) for leaf in leafs
+                             if int(leaf["leafWaterDataID"]) >= 0 and int(leaf["cluster"]) >= 0})
+    near = visibility.pvs_union(water_clusters)
+    derived = {int(leaf["index"]) for leaf in leafs
+               if int(leaf["cluster"]) in near and not int(leaf["contents"]) & MG.CONTENTS_SOLID}
+    annotated = {int(leaf["index"]) for leaf in leafs
+                 if int(leaf["contents"]) & _LEAF_NEAR_WATER_BIT}
+
+    assert water_clusters and derived
+    if annotated:
+        assert derived == annotated                  # sm_hub_1: 97, sp_soc_3: 126
+    else:
+        # sm_pier_1: retail marks 702 leaves, the UP recompile marks none, and the derivation still
+        # answers -- which is why owner decision 1 (stay on the UP build) costs nothing here.
+        assert map_name == "sm_pier_1"
+        assert len(derived) > len(water_clusters)
+
+
+# ---------------------------------------------------------- the brush-entity lightstyle carrier
+
+# R7.4 contract 3 reaches a world/sky chunk through the `elysium.style=<n>` tag the bake writes on
+# the chunk ACTOR. A brush entity's mesh is never placed, so its style rides the mesh's material
+# slot names instead -- and that only works because `safe_name` folds `#style<n>` to `_style<n>`.
+# `sm_pier_1`'s 17 `objects/surf` foam bodies, all of G6's motivating geometry, arrive this way.
+
+
+def test_the_bakes_restated_lightstyle_suffix_is_the_key_grammars_own() -> None:
+    # The bake runs in the editor's embedded Python, which has no numpy and therefore cannot import
+    # `map_geometry` at all. `asset_names` restates the one suffix it needs; the two are one fact.
+    assert asset_names.LIGHTSTYLE_KEY_SUFFIX == MG.LIGHTSTYLE_SUFFIX
+    assert asset_names.safe_name(asset_names.LIGHTSTYLE_KEY_SUFFIX + "1") ==         (asset_names.FOLDED_LIGHTSTYLE_MARKER + "1").lstrip("_")
+
+
+def test_a_styled_group_key_folds_to_the_marker_the_brush_slot_rule_reads() -> None:
+    slot = asset_names.safe_name(MG.section_key("objects/surf", light_style=1))
+    assert slot == "objects_surf" + asset_names.FOLDED_LIGHTSTYLE_MARKER + "1"
+    assert asset_names.brush_slot_style([slot]) == 1
+
+
+def test_an_unstyled_group_key_folds_to_no_brush_style() -> None:
+    key = MG.section_key("objects/surf")
+    assert asset_names.brush_slot_style([asset_names.safe_name(key)]) == 0
+
+
+def test_the_underside_suffix_does_not_read_as_a_style() -> None:
+    key = MG.section_key("water/invisible_water", underside=True)
+    assert asset_names.brush_slot_style([asset_names.safe_name(key)]) == 0

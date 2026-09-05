@@ -309,6 +309,71 @@ def test_a_blob_larger_than_the_declared_colour_sample_is_not_the_colour_sample(
     assert _omission(model, "low-res-cpu-sample")["externalByteLength"] == 0
 
 
+def _probe_pair(fmt=3, *, width=32, height=32, mips=6, low=b"", declared_inline=3):
+    """A compiler-written reflection probe: the outer TTH mip table declares ONE level while the
+    VTF header inside it declares the whole chain and the blob carries every level inline.
+    `maps/sm_pier_1/cubemapdefault`'s exact shape (`U1b_textures.md` section 1: `tthMipTableCount`
+    1 against `vtfMipCount` 6). `low` adds a declared low-resolution image ahead of the images."""
+
+    info = FORMATS[fmt]
+    levels = []
+    for source_mip in range(mips):
+        shift = mips - source_mip - 1
+        w, h = max(1, width >> shift), max(1, height >> shift)
+        size = image_size(w, h, info)
+        levels.append(b"".join(
+            bytes([(source_mip * 31 + face + 1) & 0xFF]) * size for face in range(7)
+        ))
+    vtf = bytearray(64)
+    struct.pack_into("<4sIII", vtf, 0, b"VTF\0", 7, 1, 64)
+    struct.pack_into("<HHIHH", vtf, 16, width, height, ENVMAP, 1, 0)
+    struct.pack_into("<3f", vtf, 32, 0.1, 0.2, 0.3)
+    struct.pack_into("<f", vtf, 48, 1.0)
+    struct.pack_into("<IB", vtf, 52, fmt, mips)
+    if low:
+        struct.pack_into("<IBB", vtf, 57, 13, 16, 16)
+    else:
+        struct.pack_into("<IBB", vtf, 57, 0, 0, 0)
+    blob = bytes(vtf) + low + b"".join(levels)
+    table = struct.pack("<II", 64, 0) + struct.pack("<II", 64 + len(blob), 0)
+    return struct.pack("<4sHBBI", b"TTH\0", 1, 1, declared_inline, len(blob)) + table + blob
+
+
+def _probe_closure(**kwargs):
+    base = "materials/maps/synthetic/cubemapdefault"
+    return TextureSourceClosure(
+        "maps/synthetic/cubemapdefault",
+        "vtmb:texture:maps/synthetic/cubemapdefault",
+        _source("tth", base + ".tth", _probe_pair(**kwargs)),
+        None,
+    )
+
+
+def test_a_probe_whose_mip_table_under_declares_keeps_the_chain_the_vtf_header_names():
+    """G5b: the outer TTH table says one level, the VTF header says six and the blob is exactly
+    those six. Read against the table alone the five lower levels fall ahead of the image start
+    and are claimed as the header's CPU colour sample, so the probe imports flat -- both
+    `sm_pier_1` probes did (`PHASE0_VERDICT.md` A5)."""
+
+    model = decode_texture(_probe_closure())
+    assert model.mip_count == 6
+    assert [(level.width, level.height) for level in model.levels] == [
+        (32, 32), (16, 16), (8, 8), (4, 4), (2, 2), (1, 1)]
+    assert model.header["tthMipTableCount"] == 1 and model.header["vtfMipCount"] == 6
+    assert model.header["sourceMipCount"] == 6 and model.header["resolvedInlineMips"] == 6
+    assert _omission(model, "low-res-cpu-sample") is None
+    assert model.byte_coverage[0]["coveragePercent"] == 100.0
+
+
+def test_the_under_declared_chain_is_admitted_only_when_the_blob_is_exactly_that_chain():
+    """The gate is arithmetic, not a guess: a probe that really does carry a colour sample ahead
+    of its images no longer matches the pyramid's byte total, so it keeps the old reading."""
+
+    model = decode_texture(_probe_closure(low=bytes([0x5A]) * 128))
+    assert model.mip_count == 1 and model.header["sourceMipCount"] == 1
+    assert _omission(model, "low-res-cpu-sample")["declaredByteLength"] == 128
+
+
 def test_a_small_leading_blob_stays_the_colour_sample():
     model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
     assert model.mip_count == 3

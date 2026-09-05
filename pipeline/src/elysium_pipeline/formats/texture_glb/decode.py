@@ -319,13 +319,35 @@ def decode_texture(closure) -> TextureModel:
             declared_low_size = image_size(low_width, low_height, FORMATS[low_format])
     cubemap = bool(flags & ENVMAP)
     source_faces = 7 if cubemap else 1
-    image_mip_count = min(mip_count, max(width, height).bit_length())
-    source_level_sizes = []
-    for source_mip in range(image_mip_count):
-        shift = image_mip_count - source_mip - 1
-        mip_width, mip_height = max(1, width >> shift), max(1, height >> shift)
-        per_image = image_size(mip_width, mip_height, info)
-        source_level_sizes.append((mip_width, mip_height, per_image, per_image * frames * source_faces))
+    natural_mip_count = max(width, height).bit_length()
+
+    def _mip_chain(levels: int) -> list[tuple[int, int, int, int]]:
+        """`(width, height, bytes per image, bytes per level)` smallest level first, as VTF stores them."""
+
+        chain = []
+        for source_mip in range(levels):
+            shift = levels - source_mip - 1
+            mip_width, mip_height = max(1, width >> shift), max(1, height >> shift)
+            per_image = image_size(mip_width, mip_height, info)
+            chain.append((mip_width, mip_height, per_image, per_image * frames * source_faces))
+        return chain
+
+    image_mip_count = min(mip_count, natural_mip_count)
+    source_level_sizes = _mip_chain(image_mip_count)
+    # G5b: the outer TTH mip table under-declares its own chain on every compiler-written
+    # reflection probe -- `mip_count` is 1 while the VTF header inside it says 6, 7 or 8 and the
+    # blob carries every one of those levels inline. Read against the outer table alone the
+    # levels below the top one fall ahead of `image_start` and are claimed as the header's CPU
+    # colour sample, so a probe imports with a single mip and no roughness chain (measured on
+    # both `sm_pier_1` probes; `maps/sm_pier_1/c-1241_22_4950` loses exactly the 114,681 bytes
+    # of its seven lower levels). The VTF header's count wins where the blob is exactly the
+    # pyramid that count describes -- an arithmetic proof, not a guess; a leading blob that is
+    # not a whole chain still reads as the CPU sample below.
+    vtf_chain_count = min(vtf_mips, natural_mip_count)
+    if vtf_chain_count > image_mip_count:
+        candidate = _mip_chain(vtf_chain_count)
+        if vtf_blob_length - header_size == sum(row[3] for row in candidate):
+            image_mip_count, source_level_sizes = vtf_chain_count, candidate
     expected_total = sum(row[3] for row in source_level_sizes)
     # The header's own claim survives into `sourceFormat.declaredInlineMips` even where it is
     # stale, so the unit restates what the source wrote; the clamped count is what the following

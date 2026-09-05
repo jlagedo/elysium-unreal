@@ -85,6 +85,58 @@ LINEAR_TWIN_SUFFIX = "_linear"
 
 CLASS_PREFIX = {"Texture2D": "T_", "TextureCube": "TC_", "Texture2DArray": "TA_"}
 
+#: The VTF header's 32-bit flag word, bit by bit. The unit already publishes the word itself
+#: (`sourceFormat.flags`) and the eight sampler bits it needs as `sampling`; this table names
+#: every bit so the sidecar states what the source said rather than an opaque integer. Names are
+#: Source's own (`CompiledVtfFlags`); the nine textures of the water cast decode against it
+#: exactly (`U1b_textures.md` section 1 -- `0x2C0` = noCompress|normal|noLod on `dev/water_normal`,
+#: `0x416E` = trilinear|clampS|clampT|hintDxt5|noCompress|noMip|envMap on the pier's fallback cube).
+VTF_FLAG_BITS = {
+    0x00000001: "pointSample",
+    0x00000002: "trilinear",
+    0x00000004: "clampS",
+    0x00000008: "clampT",
+    0x00000010: "anisotropic",
+    0x00000020: "hintDxt5",
+    0x00000040: "noCompress",
+    0x00000080: "normal",
+    0x00000100: "noMip",
+    0x00000200: "noLod",
+    0x00000400: "allMips",
+    0x00000800: "procedural",
+    0x00001000: "oneBitAlpha",
+    0x00002000: "eightBitAlpha",
+    0x00004000: "envMap",
+    0x00008000: "renderTarget",
+    0x00010000: "depthRenderTarget",
+    0x00020000: "noDebugOverride",
+    0x00040000: "singleCopy",
+    0x00080000: "preSrgb",
+    0x00100000: "premultiplyByOneOverMipLevel",
+    0x00200000: "normalToDuDv",
+    0x00400000: "alphaTestMipGeneration",
+    0x00800000: "noDepthBuffer",
+    0x01000000: "niceFiltered",
+    0x02000000: "clampU",
+    0x04000000: "vertexTexture",
+    0x08000000: "ssBump",
+    0x20000000: "border",
+}
+#: The one bit this lane reads. It is a **role-conflict tie-breaker only**: the bit is set on a
+#: texture the author compiled as a normal map, and it is accurate on 4/4 of the conflict set, but
+#: 27 units bind a normal with it clear, so it may never create a role or decide sRGB. No VTF bit
+#: encodes colour space at all -- `preSrgb` (`0x80000`) is clear on every member of the water cast
+#: (`PHASE0_VERDICT.md` A3), and sRGB stays the material binding's answer (`texture_roles`).
+VTF_NORMAL = 0x00000080
+#: Every bit the table above names, for reporting the ones it does not.
+VTF_NAMED_FLAGS = sum(VTF_FLAG_BITS)
+
+
+def vtf_flag_names(flags: int) -> list[str]:
+    """The named bits the VTF flag word carries, in bit order."""
+
+    return [name for bit, name in sorted(VTF_FLAG_BITS.items()) if flags & bit]
+
 
 class TextureImportError(RuntimeError):
     """The texture corpus could not be staged."""
@@ -279,7 +331,23 @@ def plan_unit(
     mip_count = len(ktx.levels)
 
     parameters = set(bindings.get(asset_id, ()))
+    flags = int(source_format.get("flags") or 0)
     role, srgb, conflict = role_for(parameters)
+    if conflict and flags & VTF_NORMAL:
+        # G15: a colour binding beside a data binding normally stages both readings -- the sRGB
+        # asset and a `_linear` twin -- because nothing else says which the author meant. The VTF
+        # header does say it: the compiler set `normal` on this texture. So the conflict resolves
+        # to the data reading alone and no colour asset is staged (`dev/water_normal`: the colour
+        # `TA_water_normal` exists only because `%tooltexture` -- Hammer's thumbnail key, which no
+        # shader samples -- is a colour parameter, and 0 of 19,713 material rows bind it).
+        #
+        # The bit is a TIE-BREAKER between the colour and the data reading (verdict A3) and states
+        # nothing about WHICH data role wins, so the data role stays `role_for`'s own -- dropping
+        # the colour reading and the `_linear` twin, and nothing else. Forcing `ROLE_NORMAL` here
+        # would restyle a conflicted `$dudvmap` binding as a normal map and lose the signed UVWQ
+        # payload the water lane reads; no corpus member trips it (`dev/water_dudv` has the bit
+        # clear), and it must stay untrippable.
+        role, srgb, conflict = data_role(parameters), False, False
     if ktx.vk_format == 41:
         # UVWQ8888 is signed displacement data: a colour reading is meaningless whatever binds it,
         # so it is always a linear data asset and never twins.
@@ -348,7 +416,9 @@ def plan_unit(
             "vkFormatName": payload.get("vkFormat"),
             "vtfVersion": str(source_format.get("vtfVersion", "")),
             "tthVersion": int(source_format.get("tthVersion") or 0),
-            "flags": int(source_format.get("flags") or 0),
+            "flags": flags,
+            "flagNames": vtf_flag_names(flags),
+            "unnamedFlagBits": flags & ~VTF_NAMED_FLAGS,
             "reflectivity": list(source_format.get("reflectivity") or [0.0, 0.0, 0.0]),
             "bumpScale": float(source_format.get("bumpScale") or 0.0),
             "startFrame": int(source_format.get("startFrame") or 0),

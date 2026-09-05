@@ -15,7 +15,7 @@ from elysium_pipeline.formats.particle_glb import (
 )
 from elysium_pipeline.formats.particle_glb.model import asset_id
 from elysium_pipeline.formats.particle_glb.source import ParticleSourceError
-from elysium_pipeline.formats.unit_contract import ByteLedger, ByteLedgerError, ranges_sha256
+from elysium_pipeline.formats.unit_contract import ByteLedger, ByteLedgerError, ranges_sha256, read_glb
 from elysium_pipeline.validation import particle_glb as validation
 
 WELL_FORMED = (
@@ -547,6 +547,61 @@ def test_export_writes_a_unit_that_round_trips_through_standalone_validation(tmp
         "particles/impact_particle.txt",
         "particles/impact_decal.txt",
     ])
+
+
+# --- F2: `waterbigsplash_emitter` is read from the retail VPK member, not the UP stub -----------
+
+
+def test_waterbigsplash_emitter_is_read_from_the_retail_vpk_member_not_the_up_stub(tmp_path):
+    # Shapes of the real UP-first stub (authored-empty, spawn block commented out) and the real
+    # retail `pack001.vpk` member (`water-complete.md` Phase 0 verdict F2), trimmed to what the
+    # decoder needs to tell them apart: the stub has no live spawn block, the retail member does.
+    up_stub = (
+        b'Particle\r\n{\r\n\tloop "0"\t\r\n\tframes "10"\r\n\r\n// removed by wesp\tspawn\r\n'
+        b'\t{\r\n\t\tparticle "WaterBigSplash"\r\n\t}\r\n}\r\n'
+    )
+    retail_data = (
+        b'Particle\n{\n\tloop "0"\t\n\tframes "10"\n\n\tspawn\n\t{\n\t\tparticle "WaterBigSplash"'
+        b'\n\t\tburst "4"\n\t}\n}\n'
+    )
+    path = "particles/waterbigsplash_emitter.txt"
+    index = {path: ("loose", f"C:/game/Unofficial_Patch/{path}")}
+    retail_index = {path: ("pack001.vpk", 70407456, len(retail_data))}
+
+    def read_bytes(idx, requested):
+        if requested != path:
+            return None
+        kind, _ = idx[requested]
+        return retail_data if kind == "vpk" else up_stub
+
+    destination = exporter.export(
+        index, "waterbigsplash_emitter", tmp_path,
+        read_bytes=read_bytes, retail_index=retail_index,
+    )
+    summary = validation.validate(destination)
+    # The retail spawn block resolved, not the UP stub's dead one: the unit draws something.
+    assert summary["role"] in ("emitter", "both")
+    assert "unbalanced-braces" not in summary["anomalies"]
+
+    document, _binary = read_glb(destination)
+    root = document["extensions"][PARTICLE_EXTENSION]
+    member = root["sourceResolution"]["members"][0]
+    assert member["origin"]["kind"] == "vpk"
+    assert member["origin"]["container"] == "pack001.vpk"
+
+
+def test_a_key_outside_the_divergence_list_still_resolves_up_first(tmp_path):
+    # The override touches only its one named key; a plain loose-shadowed unit stages the loose
+    # answer exactly as it always did.
+    path = "particles/watersplash_emitter.txt"
+    index = {path: ("loose", f"C:/game/Unofficial_Patch/{path}")}
+    destination = exporter.export(
+        index, "watersplash_emitter", tmp_path,
+        read_bytes=lambda idx, requested: WELL_FORMED if requested == path else None,
+    )
+    document, _binary = read_glb(destination)
+    member = document["extensions"][PARTICLE_EXTENSION]["sourceResolution"]["members"][0]
+    assert member["origin"]["kind"] == "loose"
 
 
 def test_export_of_a_malformed_file_still_publishes_and_warns(tmp_path):

@@ -9,10 +9,12 @@
 #include "ElysiumMoveSolve.h"           // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumPlayer.h"              // FElysiumCombatCharacter — the feed probe's candidate set
 #include "ElysiumPlayerBody.h"
+#include "ElysiumRng.h"                // the splash jitter and the sound-pool draw
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumUseIcons.h"
 #include "ElysiumWaterVolumes.h"        // the map's water volumes — CheckWater's three probes
 #include "Audio/ElysiumSoundScheme.h"
+#include "Audio/ElysiumWaterAudio.h"   // verdict D3 -- the water cues and their pools
 #include "Map/ElysiumFeedTargeting.h"
 #include "Map/ElysiumMapCollision.h"
 #include "Map/ElysiumMapLog.h"
@@ -1883,15 +1885,130 @@ void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 
 	// Step 3b — the body's water level, settled before the move reads it. `CheckWater` runs at the
 	// head of `PlayerMove` for the same reason: `FullWalkMove` branches on the level it finds.
-	UpdatePlayerWater();
+	UpdatePlayerWater(DeltaSeconds);
 }
 
-void AElysiumMapActor::UpdatePlayerWater()
+namespace
 {
+	// One water cue, at a point, with its variation drawn from the ambient stream (VtMB draws the
+	// pool member at random; the substrate never calls `FMath::Rand*`). A cue whose pool is empty
+	// -- an unexported sound, an unbaked surfaceprop -- plays nothing and says nothing: the export
+	// gate is where a missing wav is reported, not a footstep.
+	void PlayWaterCue(AElysiumMapActor& Map, ElysiumWaterAudio::ECue Cue, const FVector& AtCm,
+		bool bRightFoot = false)
+	{
+		const int32 Variation = ElysiumRng::Stream(EElysiumRngStream::Ambient).RandHelper(1024);
+		const FString Rel = ElysiumWaterAudio::Resolve(Cue, Variation, bRightFoot);
+		if (Rel.IsEmpty())
+		{
+			return;
+		}
+		FElysiumPlayParams Params;
+		Params.b3D = true;
+		Params.Location = AtCm;
+		Map.PlayVoice(Rel, Params);
+	}
+
+	// How long a one-shot splash root stands before it is killed. VtMB's particle manager frees an
+	// emitter when its last particle dies; `SpawnParticleRoot` has no such reaper, so the burst is
+	// given a generous fixed life instead -- both authored splashes are sub-second bursts.
+	constexpr float WaterSplashLifetimeSeconds = 3.f;
+}
+
+void AElysiumMapActor::ReapWaterSplashes(float DeltaSeconds)
+{
+	for (int32 Index = PendingWaterSplashes.Num() - 1; Index >= 0; --Index)
+	{
+		PendingWaterSplashes[Index].Value -= DeltaSeconds;
+		if (PendingWaterSplashes[Index].Value <= 0.f)
+		{
+			KillParticleRoot(PendingWaterSplashes[Index].Key);
+			PendingWaterSplashes.RemoveAt(Index);
+		}
+	}
+}
+
+void AElysiumMapActor::RaiseWaterSplash(ElysiumWater::ESplash Kind, const FVector& LocationCm)
+{
+	const TCHAR* Root = Kind == ElysiumWater::ESplash::Big ? ElysiumWater::BigSplashRoot
+		: Kind == ElysiumWater::ESplash::Wade ? ElysiumWater::WadeSplashRoot : nullptr;
+	if (Root == nullptr)
+	{
+		return;
+	}
+	// The generated system is found by root name through the effect actor's own convention
+	// (`NS_<root>` under /Game/ElysiumGenerated/VFX); a root the effects lane has not generated
+	// yet stands the floor system rather than failing, and a root with no staged tree at all is
+	// warned once by `SpawnParticleRoot` itself.
+	const FElysiumEffectHandle Handle = SpawnParticleRoot(
+		Root, nullptr, 0, NAME_None, 0, LocationCm, FRotator::ZeroRotator);
+	if (Handle.IsValid())
+	{
+		PendingWaterSplashes.Emplace(Handle, WaterSplashLifetimeSeconds);
+	}
+	// D3: the entry splash is an impact, so it carries `water.Impact`. The wade splash does not --
+	// VtMB's wading sound is the footstep, which is a different producer.
+	if (Kind == ElysiumWater::ESplash::Big)
+	{
+		PlayWaterCue(*this, ElysiumWaterAudio::ECue::Impact, LocationCm);
+	}
+}
+
+void AElysiumMapActor::PlayPlayerWaterFootstep(int32 StepIndex, bool bRightFoot)
+{
+	if (!ElysiumWaterAudio::IsSoundingStep(StepIndex, PlayerWaterLevel))
+	{
+		return;
+	}
+	const APawn* Pawn = ResolvePlayerPawn();
+	PlayWaterCue(*this, ElysiumWaterAudio::StepCue(PlayerWaterLevel),
+		Pawn != nullptr ? Pawn->GetActorLocation() : FVector::ZeroVector, bRightFoot);
+}
+
+void AElysiumMapActor::UpdatePlayerWaterFootsteps(float DeltaSeconds,
+	const FVector& VelocityCmPerSec)
+{
+	// `CBasePlayer::UpdateStepSound` (`vampire.dll 1011e940`), the water half of it. The timer is
+	// the gate at the head of that function (`m_flStepSoundTime > 0` returns): a step is taken
+	// when the clock comes due and the body is moving, and the pool the step draws from is the
+	// classified level's. A dry body drops the clock so the first step back in the water is
+	// immediate, which is what a zeroed `m_flStepSoundTime` does there.
+	if (PlayerWaterLevel <= 0)
+	{
+		PlayerStepSoundSeconds = 0.f;
+		return;
+	}
+	PlayerStepSoundSeconds = FMath::Max(0.f, PlayerStepSoundSeconds - DeltaSeconds);
+	const float Speed2dIn =
+		FVector(VelocityCmPerSec.X, VelocityCmPerSec.Y, 0.f).Size() / ElysiumMove::U;
+	const float Speed3dIn = VelocityCmPerSec.Size() / ElysiumMove::U;
+	// `1011eaa2`: horizontal motion at all, and either the water pair's minimum speed or a timer
+	// that has already run out.
+	if (Speed2dIn <= 0.f || PlayerStepSoundSeconds > 0.f
+		|| Speed3dIn < ElysiumWaterAudio::StepMinSpeedIn)
+	{
+		return;
+	}
+	PlayerStepSoundSeconds =
+		ElysiumWaterAudio::StepIntervalSeconds(PlayerWaterLevel, Speed3dIn);
+	PlayPlayerWaterFootstep(PlayerWaterStepIndex, bPlayerWaterStepRight);
+	++PlayerWaterStepIndex;
+	bPlayerWaterStepRight = !bPlayerWaterStepRight;
+}
+
+void AElysiumMapActor::UpdatePlayerWater(float DeltaSeconds)
+{
+	// The pass's own clock, and the reaper for whatever it stood last time. Both run even on a
+	// frame with no pawn: a splash left standing through a load screen would outlive its map.
+	PlayerWaterClockSeconds += DeltaSeconds;
+	ReapWaterSplashes(DeltaSeconds);
+
 	APawn* Pawn = ResolvePlayerPawn();
 	IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn);
 	if (Body == nullptr)
 	{
+		PlayerWaterLevel = 0;
+		bPlayerNearWater = false;
 		return;
 	}
 	UElysiumCameraComponent* Camera = Body->GetCameraComponent();
@@ -1900,6 +2017,14 @@ void AElysiumMapActor::UpdatePlayerWater()
 	float SurfaceZCm = 0.f;
 	if (AElysiumWaterVolumes* Water = Visuals ? Visuals->GetWaterVolumes() : nullptr)
 	{
+		// The water actor raises its own splashes for every simulating body it tracks; they come
+		// back here because the effect and audio lanes live on this actor. Bound on the first
+		// frame the actor is reachable — it is spawned by the bake, so there is no earlier point
+		// both halves exist at.
+		if (!Water->OnSplash.IsBound())
+		{
+			Water->OnSplash.BindUObject(this, &AElysiumMapActor::RaiseWaterSplash);
+		}
 		// `CheckWater`'s three points, off the hull rather than off a trace: the feet are
 		// `origin.z + mins.z + 1` (one Source unit up, so a body standing on the bottom of a
 		// puddle still reports Feet), the waist is the hull centre, and the eye is where the
@@ -1915,6 +2040,12 @@ void AElysiumMapActor::UpdatePlayerWater()
 		{
 			SurfaceZCm = Water->Volumes[Volume].SurfaceZCm;
 		}
+		// G9: settled here, beside the level, so nothing else has to ask.
+		bPlayerNearWater = Water->IsNearWater(Centre);
+	}
+	else
+	{
+		bPlayerNearWater = false;
 	}
 
 	if (UElysiumMovementComponent* Move = Pawn->FindComponentByClass<UElysiumMovementComponent>())
@@ -1925,6 +2056,46 @@ void AElysiumMapActor::UpdatePlayerWater()
 	{
 		Camera->SetWaterState(static_cast<int32>(Level), SurfaceZCm);
 	}
+
+	// R7.4 (G7, verdict D1): the splash and the exit sound ride the LEVEL TRANSITION. VtMB's own
+	// hook sits inside `DrawModel` (`client.dll FUN_10099630`), which is a draw call rather than an
+	// event; binding to the transition reproduces the same two rules and also fires them for a
+	// first-person player VtMB may never have drawn.
+	const int32 Now = static_cast<int32>(Level);
+	{
+		ElysiumWater::FSplashInput In;
+		In.PreviousLevel = PlayerWaterLevel;
+		In.Level = Now;
+		In.OriginCm = Pawn->GetActorLocation();
+		In.VelocityCmPerSec = Pawn->GetVelocity();
+		In.SurfaceZCm = SurfaceZCm;
+		In.NowSeconds = PlayerWaterClockSeconds;
+		In.LastSplashSeconds = PlayerLastSplashSeconds;
+		In.NextWadeSeconds = PlayerNextWadeSeconds;
+		ElysiumWater::FSplashDecision Decision = ElysiumWater::DecideSplash(In);
+		PlayerLastSplashSeconds = Decision.LastSplashSeconds;
+		PlayerNextWadeSeconds = Decision.NextWadeSeconds;
+		if (Decision.Kind == ElysiumWater::ESplash::Wade)
+		{
+			// `+ RandomInt(0, 8)` Source units on the wade splash. Drawn here rather than fed into
+			// the decision so the named stream advances once per splash instead of once per frame
+			// the body spends standing in water.
+			Decision.LocationCm.Z +=
+				ElysiumRng::Stream(EElysiumRngStream::Effects).RandRange(0, 8) * ElysiumMove::U;
+		}
+		if (Decision.Kind != ElysiumWater::ESplash::None)
+		{
+			RaiseWaterSplash(Decision.Kind, Decision.LocationCm);
+		}
+	}
+	// D3: `player/pl_wade2.wav` when the body leaves the water (`vampire.dll 1003f4d0`).
+	if (PlayerWaterLevel > 0 && Now == 0)
+	{
+		PlayWaterCue(*this, ElysiumWaterAudio::ECue::Exit, Pawn->GetActorLocation());
+	}
+	PlayerWaterLevel = Now;
+	// The step clock reads the level this pass just settled, so it runs after the write.
+	UpdatePlayerWaterFootsteps(DeltaSeconds, Pawn->GetVelocity());
 }
 
 void AElysiumMapActor::Tick(float DeltaSeconds)

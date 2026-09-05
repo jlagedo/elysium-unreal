@@ -18,6 +18,7 @@ from elysium_pipeline.formats.material_glb.model import (
     Parameter,
     ProxyRecord,
     asset_id,
+    material_reference_asset_id,
     surface_property_asset_id,
     texture_asset_id,
 )
@@ -35,7 +36,17 @@ TEXTURE_PARAMETERS = frozenset({
     "$detail2", "$envmap", "$envmapmask", "$glassenvmap", "$iris", "$glint", "$dudvmap",
     "$dudvtexture", "$spotlightmask", "$crackmaterial", "$masktexture", "$cloudalphatexture",
     "$burntexture", "$antitexture", "$fuzztexture", "%tooltexture", "$refracttexture",
-    "$reflecttexture", "$selfillummask", "$lightwarptexture", "$bottommaterial",
+    "$reflecttexture", "$selfillummask", "$lightwarptexture",
+})
+
+#: Parameters whose value names another *material*, not a texture. `$bottommaterial` (24 units,
+#: 22 of them water) is what VBSP paints on the inward side of a water brush and what the engine
+#: swaps in below the plane; `$crackmaterial` (4), `$modelmaterial` (11) and `$leaknoise` (1) are
+#: the same shape. Read as texture bindings they resolve against `materials/**.tth` and never
+#: answer -- all 24 `$bottommaterial` values were the only unresolved bindings in the water cast
+#: -- so the value is published in the material namespace instead, where it does resolve.
+MATERIAL_REFERENCE_PARAMETERS = frozenset({
+    "$bottommaterial", "$crackmaterial", "$modelmaterial", "$leaknoise",
 })
 
 #: The placeholder an authored `$envmap` carries where VBSP is expected to patch each face to the
@@ -113,11 +124,13 @@ def decode_material(
     closure,
     *,
     texture_exists: Callable[[str], bool] | None = None,
+    material_exists: Callable[[str], bool] | None = None,
 ) -> MaterialModel:
     """The complete material unit for one source closure.
 
-    `texture_exists` answers whether a texture identity is present in the install. Without it a
-    binding publishes unresolved rather than asserting a target this decode never looked for.
+    `texture_exists` answers whether a texture identity is present in the install, and
+    `material_exists` the same for a material one. Without either, a reference of that shape
+    publishes unresolved rather than asserting a target this decode never looked for.
     """
 
     member = closure.vmt
@@ -216,6 +229,7 @@ def decode_material(
 
     dependencies: list[dict[str, Any]] = []
     texture_bindings: list[dict[str, Any]] = []
+    material_references: list[dict[str, Any]] = []
     environment: dict[str, Any] | None = None
     surface_property: str | None = None
     unresolved: list[dict[str, Any]] = []
@@ -225,6 +239,28 @@ def decode_material(
             continue                       # a proxy's operands are variables, not material inputs
         if parameter.key == "$surfaceprop" and parameter.value.strip():
             surface_property = parameter.value.strip().strip('"').lower()
+            continue
+        if parameter.key in MATERIAL_REFERENCE_PARAMETERS:
+            raw = normalize_value_path(parameter.value)
+            if not raw:
+                continue
+            reference = material_reference_asset_id(raw)
+            present = bool(material_exists(raw)) if material_exists is not None else False
+            material_references.append({
+                "parameter": parameter.key,
+                "value": raw,
+                "asset": reference,
+                "resolved": present,
+                "selfReference": reference == closure.asset_id,
+            })
+            if present:
+                dependencies.append({
+                    "role": "material",
+                    "parameter": parameter.key,
+                    "asset": reference,
+                    "sourcePath": f"materials/{raw}.vmt",
+                    "resolved": True,
+                })
             continue
         if parameter.key not in TEXTURE_PARAMETERS:
             continue
@@ -371,6 +407,7 @@ def decode_material(
         blocks=blocks,
         proxies=proxies,
         texture_bindings=texture_bindings,
+        material_references=material_references,
         patch=patch,
         patch_of=patch_of,
         surface_property=surface_property,

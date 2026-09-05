@@ -20,7 +20,7 @@ from elysium_pipeline.formats.unit_contract import missing_sentinel as _missing_
 KIND = "map"
 KIND_TITLE = "Map"
 MAP_EXTENSION = _coverage.extension_name(KIND)
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"   # 1.1.0: the dface+96 split, primitives reachable from a face
 
 #: The install directory every map member is resolved below, and the family directory the unit
 #: is written into.

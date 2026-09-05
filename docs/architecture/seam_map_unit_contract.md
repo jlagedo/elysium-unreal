@@ -208,6 +208,29 @@ install-relative path the referrer authored (spelling preserved); `resolved` sta
 UP-first index holds a member for it. Optional `byteLength` and `sha256` pin the referenced bytes
 where the referrer's decode depends on them (an included animation bank, a paired VTX).
 
+`role` is the *kind* the value names, not the parameter's own family. A source key whose value
+happens to be shaped like a path is classified by what the engine opens for it, not by the table
+it sits in: a VMT's `$bottommaterial`, `$crackmaterial`, `$modelmaterial` and `$leaknoise` all
+name a **material**, so they resolve in the `vtmb:material:` namespace and carry `role:
+"material"` and their `parameter`, exactly as a texture value carries `role: "texture"`. Read in
+the wrong namespace such a value resolves against a family that does not answer it and publishes
+a permanent unresolved reference — all 24 `$bottommaterial` authors did — and a value whose
+spelling coincides with a member of the other family (`glass/glassb` ships as both a `.tth` and a
+`.vmt`) resolves to the wrong unit outright. A unit that names itself keeps the row: the join is
+the datum (VBSP paints a water brush's inward side with the material the surface names, and the
+two are the same unit on `dev/dev_waterbeneath2`).
+
+This decoder-level `role: "material"` fact and its consumer are two different lanes, and R7.5 kept
+them that way on purpose: `$bottommaterial`'s resolved reference is published here and stays
+**provenance only** — nothing in the material stage reads it to decide a switch any more. Underside
+(`M_V2_Water`'s `Underside` switch) is decided per FACE, off the compiled face's own plane normal
+(`docs/architecture/seam_map_map.md` → "Section keys: `#underside` and `#style<n>`", verdict B2),
+never off which unit a `$bottommaterial` value happens to name — the R7.1/R7.4 rule that read it
+off self-reference is retired (`docs/architecture/seam_map_material.md` → `M_V2_Water` → "Underside
+is a face fact"). The decoder change here is what makes the reference resolvable at all; the face
+rule is what makes it correct on a map like `sm_pier_1`, where the patched `invisible_water_depth_33`
+instance and its parent `invisible_water` face opposite ways.
+
 Object-local references use the reference extensions on the glTF object that binds them:
 
 ```json

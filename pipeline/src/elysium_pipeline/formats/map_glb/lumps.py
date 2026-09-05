@@ -152,7 +152,11 @@ def _face(data: bytes, index: int, offset: int, table: str) -> dict[str, Any]:
     light_offset, area = struct.unpack_from("<if", data, offset + 72)
     lightmap_mins = list(struct.unpack_from("<2i", data, offset + 80))
     lightmap_size = list(struct.unpack_from("<2i", data, offset + 88))
-    original, smoothing = struct.unpack_from("<iI", data, offset + 96)
+    # `Mod_LoadFaces` (engine.dll FUN_200b73d0) reads three fields here, not two: the i32
+    # `origFace` @96, then `numPrims` as a word at @100 (200b7648, into msurface+0x50) and
+    # `firstPrimID` as a word at @102 (200b7650, into msurface+0x52). The single `smoothingGroups`
+    # dword the format notes carried was a phantom -- no reader in the corpus takes it.
+    original, num_prims, first_prim = struct.unpack_from("<i2H", data, offset + 96)
     return {
         "index": index,
         "table": table,
@@ -174,7 +178,8 @@ def _face(data: bytes, index: int, offset: int, table: str) -> dict[str, Any]:
         "lightmapMins": lightmap_mins,
         "lightmapSize": lightmap_size,
         "origFace": int(original),
-        "smoothingGroups": int(smoothing),
+        "numPrims": int(num_prims),
+        "firstPrimID": int(first_prim),
     }
 
 
@@ -525,7 +530,22 @@ def leaf_water(data, span, omissions):
     return _read(data, span, "water.leafData", build, omissions)
 
 
+#: `dprimitive_t.type`, named. `Shader_DrawSurfaceDynamic` (`engine.dll FUN_2007d4e0`) reads the
+#: owning face's `numPrims` first and, when it is non-zero, draws the run through this type
+#: exclusively -- 0 as `MATERIAL_TRIANGLES`, 1 as `MATERIAL_TRIANGLE_STRIP` -- pre-empting both the
+#: water-subdivision branch and the surfedge fan.
+PRIMITIVE_TYPES = {0: "triangles", 1: "strip"}
+
+
 def primitives(data, span, omissions):
+    """The compiler's own tessellation of a face, one record per run.
+
+    A face names its run with `firstPrimID` and `numPrims` (`dface+102` / `dface+100`); the record
+    names a slice of lump 39 (`firstIndex`/`indexCount`) into a slice of lump 38
+    (`firstVert`/`vertCount`). A type this table does not name publishes `typeName: None` rather
+    than a guess.
+    """
+
     def build(index: int, offset: int) -> dict[str, Any]:
         kind, first_index, index_count, first_vert, vert_count = struct.unpack_from(
             "<5H", data, offset
@@ -534,6 +554,7 @@ def primitives(data, span, omissions):
             "index": index,
             "sourceOffset": offset,
             "type": int(kind),
+            "typeName": PRIMITIVE_TYPES.get(int(kind)),
             "firstIndex": int(first_index),
             "indexCount": int(index_count),
             "firstVert": int(first_vert),

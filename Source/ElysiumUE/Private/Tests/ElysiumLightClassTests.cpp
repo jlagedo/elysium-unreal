@@ -10,6 +10,8 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumTestServices.h"
 #include "ElysiumVariant.h"
+#include "Components/StaticMeshComponent.h"
+#include "ElysiumFog.h"                // ElysiumLightStyle::SlotBrightness
 #include "Visual/ElysiumLightRig.h"
 
 #include "Components/PointLightComponent.h"
@@ -142,6 +144,23 @@ bool FElysiumLightSwitchTest::RunTest(const FString&)
 	TestTrue(TEXT("'m' is a multiplier of 1"), FMath::IsNearlyEqual(Rig->StyleMultiplier(32), 1.f));
 	TestFalse(TEXT("an empty pattern is refused"), Rig->SetStylePattern(32, TEXT("")));
 	TestFalse(TEXT("a style past the table is refused"), Rig->SetStylePattern(64, TEXT("m")));
+
+	// R7.4 (G6): a styled BRUSH ENTITY joins after the level walk that adopts the chunks, because
+	// the runtime builds its visual when the entity world embodies it. `AddStyledPrimitive` is that
+	// late join -- it stamps CPD slot 6 immediately, so a body added on a paused frame renders at
+	// the style's own phase rather than at the bake's flat 1.0.
+	UStaticMeshComponent* Foam = NewObject<UStaticMeshComponent>();
+	const int32 Before = Rig->StyledPrimitiveCount();
+	TestTrue(TEXT("a styled brush body joins the clock"), Rig->AddStyledPrimitive(Foam, 1));
+	TestEqual(TEXT("one more styled primitive"), Rig->StyledPrimitiveCount(), Before + 1);
+	TestEqual(TEXT("and its slot is stamped at once"),
+		Foam->GetCustomPrimitiveData().Data[ElysiumLightStyle::SlotBrightness],
+		Rig->StyledPrimitiveBrightness(1));
+	TestTrue(TEXT("registering it again replaces the row"), Rig->AddStyledPrimitive(Foam, 1));
+	TestEqual(TEXT("rather than animating it twice"), Rig->StyledPrimitiveCount(), Before + 1);
+	TestFalse(TEXT("a null component is refused"), Rig->AddStyledPrimitive(nullptr, 1));
+	TestFalse(TEXT("so is style 0, the always-on base"), Rig->AddStyledPrimitive(Foam, 0));
+	TestFalse(TEXT("and a style past the table"), Rig->AddStyledPrimitive(Foam, 64));
 	return true;
 }
 

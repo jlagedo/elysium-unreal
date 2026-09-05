@@ -36,6 +36,14 @@ Status of any runtime or bake work lives only in `docs/project/roadmap.md`.
 accel tail, `CheckWaterJump` / `WaterJump`, and `CViewRender`'s
 EyeAbove / EyeUnder / WaterDX7 split. No shipped `func_water` instance
 exists; those functions sit on `%compilewater` world volumes instead.
+The fluid controller (`FUN_10158600`/`10151150`), the client's own
+water-entry splash (`FUN_10099630`), the compiled-primitive draw path
+(`FUN_2007d4e0` and callers), `Mod_LoadPrimVerts`, `MASK_WATER`'s leaf-only
+readers, and leaf contents bit `0x800` were all settled the same way in the
+water-complete audit's Phase 0 pass — reports at
+`E:/elysium-work/scratch/water_audit/phase0/` (`PHASE0_VERDICT.md` is the
+synthesis; `U1a`–`U9` are the per-lane reports; `G_sweeps.md` the follow-up
+cheap sweeps), against `E:/elysium-work/scratch/water_audit/AUDIT.md`.
 
 **Uncertain:** whether a given water volume is player-reachable, a kill slab, or
 visual-only. Hull extents of the `sm_pier_1` `trigger_hurt` at Z = −562 in sit
@@ -134,14 +142,17 @@ binaries, so the cheap LOD cannot be forced off the way HL2 can.
    and multiplies by `c1` (`$refracttint`). The Fresnel copy of that program
    is present in the file and commented out.
 3. `waterreflect.psh` perturbs `_rt_WaterReflection`, computes Schlick
-   Fresnel against the per-pixel normal, and outputs `reflection · Fresnel`.
-4. The cheap cubemap pass is still available as a **distance blend** using
-   `$cheapwaterstartdistance` / `$cheapwaterenddistance` (Water_Old
-   registers both). There is no convar that disables that overlay.
+   Fresnel against the per-pixel normal, and blends it over the refraction by
+   that Fresnel (SRC_ALPHA).
+4. The cheap cubemap pass **always** follows as a distance blend using
+   `$cheapwaterstartdistance` / `$cheapwaterenddistance`: `$envmap` defaults
+   to `engine/defaultcubemap` when the VMT names none, and only
+   `$forceexpensive` (authored by no unit) suppresses it.
 
-Pass order is inferred from Water_Old's program names plus the same-era
-DX80 `SHADER_DRAW` (Water_Old C++ itself is not decompiled): refract RT,
-then reflect RT, then cheap cubemap by distance.
+Pass order is `water_dx80.cpp`'s `SHADER_DRAW`, confirmed in the shipped
+draw functions (`FUN_100138a0` → `FUN_10013b30` → `FUN_10013d30`): refract
+RT, then reflect RT, then cheap cubemap by distance. See "The live program,
+transcribed" below.
 
 **Cheap** (`$forcecheap 1`, or the `WaterCheap_ps11` / `ps20` combos, or a
 `LightmappedGeneric` that only pretends to be water):
@@ -264,8 +275,30 @@ Collision export already leaves water passable (`BLOCK_MASK` excludes
 `0x20`). A body that enters the volume is not pushed out; `CheckWater`
 is what is supposed to notice.
 
-`CONTENTS_SLIME` (`0x10`) is unused. `dface_t.surfaceFogVolumeID` is **0
-on every face of every map** — it is not the water-volume index.
+`CONTENTS_SLIME` (`0x10`) is unused. `dface_t.surfaceFogVolumeID` is **not
+uniformly 0** — that was an artefact of scanning maps with no primitive-
+bearing water. `sm_pier_1` carries `0` on exactly 27 faces (the 9 `_depth_33`
+top faces on plane 644, normal +Z, plus the 18 `invisible_water` underside
+faces on plane 645, normal −Z, all at `z = -623 in`) and `0xFFFF` on its
+other 5,423 (Phase 0 verdict, water-complete audit G11). It is still not a
+runtime water-volume index worth trusting as a *source*: the engine forces
+`0xFFFF` on every non-`WARP` face and every `WARP` face on both the retail
+and Unofficial-Patch builds ends at volume 0 regardless, and the non-`0xFFFF`
+values exist only in the UP recompile — the port reads it as a cross-check
+against the geometrically-derived top/underside split, never as the split
+itself.
+
+`MASK_WATER` (`0x4030` = `CONTENTS_WATER | CONTENTS_SLIME | CONTENTS_MOVEABLE`)
+is confirmed as a literal in `CBaseEntity::PhysicsCheckWater`
+(`vampire.dll 1003e880`, three `& 0x4030` tests) — but every reader tests it
+against a **leaf's** contents, not a brush's: `EngineTraceServer003` slot 0
+(`GetPointContents`, `engine.dll 20068b10`) resolves to `CM_PointContents`
+(`200303b0`), which returns `leaf->contents` verbatim. A `tools/tools_shadow`
+brush carrying `0x18000120` (contents `& 0x4030 = 0x20`, i.e. it *looks*
+water-flagged) never raises a water level on that account alone: VBSP
+propagates no `0x20` into any leaf containing one of those brushes (Phase 0
+water-complete audit U5, confirming AUDIT §11.1's `RULED_OUT` row as a
+measurement rather than an inference).
 
 ### `LEAFWATERDATA` (lump 36)
 
@@ -288,6 +321,35 @@ provenance carried through unused, not a distance hint any live system
 consults — nothing in the water path (fog selection, LOD, the reflection
 blend) is derived from it. The plane and depth a leaf sees come from
 `surfaceTexInfoID` on `LEAFWATERDATA` itself, never from this lump.
+
+### Leaf contents bit `0x800` — not a water fact, but adjacent to one
+
+`0x800` on a leaf's `contents` word is **not** part of `MASK_WATER` and does
+not gate `CheckWater`. Its one reader in the corpus is
+`engine.dll FUN_200d3f10`, called from `CParticleManager::vfunc15`
+(`200cecb0`), and only for a particle system whose definition carries the
+`precipitation` key (flag `0x4000`, parsed at `FUN_200c8a90`): a particle in
+a leaf *without* `0x800` gets particle flag `0x20`, whose only reader
+(`FUN_200ceef0`) is the render-list gatherer's "do not draw" test. So `0x800`
+is the precipitation render mask, and measurably it is VtMB's sky-visible /
+outdoor annotation — 96 of 209 map files carry it, never co-occurring with
+`CONTENTS_SOLID`, 94 of those 96 also carry `TOOLSSKYBOX` in texdata, pure
+interiors carry zero, and a single +Z ray per empty leaf reproduces it on
+2,303 of 2,493 hub leaves (92.4%, four false positives). **It is destroyed
+by the Unofficial-Patch recompile on `sm_pier_1`** (retail carries it on 702
+leaves, the UP build on 0); `sm_hub_1` is identical in both builds (975
+leaves). This closes AUDIT §11.1's "meaning stays unresolved" row and §12
+unknown 6 (Phase 0 verdict, water-complete audit U6). It matters to water
+only because a rain gate keyed on it would silently do nothing on the pier's
+UP build while the map still places 10 `rain_box_emitter` roots — the same
+UP-vs-retail caveat as leaf contents bit `0x200` (VtMB's own near-water
+annotation, gating `ViewDrawScene_EyeAboveWater`/`_EyeUnderWater`/`_WaterDX7`
+against `_NoWater`; destroyed on the UP `sm_pier_1` the same way, retail 702
+leaves vs UP 0). The port derives the near-water set from `⋃PVS(water
+clusters)` instead of reading either bit off the leaf, which is set-equal to
+`0x200` on both `sm_hub_1` (97 leaves) and `sp_soc_3` (126) and is the only
+answer the UP `sm_pier_1` build has — see `docs/architecture/seam_map_map.md`
+→ "Import — water volumes".
 
 ### Map-local PAK instances
 
@@ -317,6 +379,107 @@ The sidecar already carries `normalmap`, `fogcolor`, `fogdist` (start/end in
 cm), `reflecttint`. It does **not** carry `$refracttint`, `$reflectamount`,
 `$refractamount`, `$forcecheap`, `$bottommaterial`, the DUDV, or the scroll /
 animated-frame proxies.
+
+### Compiled tessellation: `$subdivsize`, primitives, and `origFace`
+
+VBSP tessellates a water face into a regular grid and stores it in lumps
+37 (`PRIMITIVES`) / 38 (`PRIMVERTS`) / 39 (`PRIMINDICES`) whenever the
+material authors `$subdivsize`. Corpus census (Phase 0 water-complete audit
+U4, 108 UP maps): 9 maps carry primitive-bearing water faces — `ch_hub_1`,
+`hw_ash_sewer_1`, `hw_hub_1`, `hw_warrens_1/2/3/5`, `la_hub_1`,
+`la_plaguebearer_sewer_1` — 512 faces total, and **100% of them bind a
+material authoring `$subdivsize 64`**. The reverse fails: `hw_warrens_2b`
+and `hw_warrens_4` bind `$subdivsize` water on every water face and have
+non-empty `PRIMITIVES` lumps with **zero** faces referencing them (a
+UP-recompile regression — retail `hw_warrens_4` has 4/4 referenced). None of
+the three currently-exported maps (`sm_hub_1`, `sm_pier_1`, `sp_soc_3`)
+carries a single primitive-bearing water face.
+
+**Lump 38 (`PRIMVERTS`) carries positions only.** `Mod_LoadPrimVerts`
+(`FUN_200b71e0`) zero-fills a 28-byte runtime record and copies only the
+12-byte position out of it — the shipped engine's compiled water strips
+draw with `TEXCOORD0/1 = (0, 0)`; there is no UV in the lump for a consumer
+to read, faithfully or otherwise (`_DAT_201734e8 = 0.0`, closing AUDIT
+§12.6). A reproduction has to re-derive UV0 from the face's own texinfo
+vectors, exactly as an ordinary (non-primitive) face does.
+
+**`origFace` (the field long misdecoded as `smoothingGroups`, at `dface+96`)
+groups VBSP's CSG shards back to one authored brush face, but it is not a
+drawable polygon.** It is trustworthy as a grouper — 79.5% of `side=1`
+(back) faces share their `origFace` index with a `side=0` front face — and
+untrustworthy as a shape: `originalFaces[].area` is `0.0` on all 2,182 rows
+in the corpus, and only 26.5% (36 of 136) of multi-shard groups reconstruct
+within 10% of their shards' own area sum. `sm_hub_1`'s sewer water body
+(`origFace` 6768) reconstructs to 12,965,370 in² against 2,496,000 in² of
+its surviving top shards — `origFace` names the pre-CSG brush face, most of
+which the compiler discarded. A consumer that wants a real area pin reads
+`faces[].area` (the compiler's own post-CSG number), never
+`originalFaces[].area`.
+
+**Are the compiled strips drawn, and are their vertices perturbed at
+draw?** Drawn — exclusively, and by the shortest possible route.
+`Shader_DrawSurfaceDynamic` (`engine.dll FUN_2007d4e0`) reads `numPrims` at
+`msurface+0x50` as its first act and, when non-zero, takes the primitive
+path (`MATERIAL_TRIANGLES` / `MATERIAL_TRIANGLE_STRIP`) to the exclusion of
+both the adaptive-subdivision branch and the ordinary surfedge fan. Reached
+every frame from `CViewRender::DrawWorld` (`client.dll 10199b40`, ORing
+`DRAWWORLDLISTS_DRAW_WATERSURFACE` under `r_drawwatersurface`) through
+`engine.dll FUN_2007f840` → `FUN_2007d990`/`FUN_2007fb30` →
+`FUN_2007d4e0`. **Never perturbed.** `BuildMSurfacePrimVerts`
+(`FUN_20074f40`) copies each primvert position verbatim (three dword moves)
+and writes the face's PLANE normal; every shipped water vertex shader binds
+`oPos = dp4(v0, cModelViewProj)` on the untouched input position (DX9's
+`Water_vs20_old`, `stdshader_dx8.dll 100138a0`, does not displace); no water
+vertex shader contains a `sincos` or a time constant. The one genuine
+per-vertex animation anywhere near water is a normal-space swirl —
+`mat_waterswirl` (default 0.02) rotates the vertex NORMAL, not the position,
+`normal.xy = (sin, cos)(2·t + 0.117·x + 0.339·y) · mat_waterswirl` — and it,
+like the adaptive-subdivision branch (`maxLen = min(dA, dB)·0.22 + 2.0`
+inches, midpoints and centroids of coplanar points only), is a pre-DX9
+fallback gated on `!hwconfig->vtable[0x30]()`/`[0x28]()` and does not run on
+the shipped DX9 path (Phase 0 water-complete audit U2).
+
+### Which `sm_pier_1`: Unofficial Patch vs retail
+
+The currently exported `sm_pier_1` is the user's patched install — the
+Unofficial Patch's own recompile, not retail. Measured differences that
+touch water (Phase 0 water-complete audit, folding AUDIT §8/G24):
+
+- Retail carries 12 additional `WATER/INVISIBLE_WATER` faces forming a hull
+  floor at `z = -657 in` (1,205,760 in², about 46% of the map's total
+  water-face area) and two extra `CONTENTS_WATER` brushes (`251`, `254`,
+  both `0x18000120`, all-`TOOLS_SHADOW` sides, 372–506 in above the water
+  plane inside the pier structure, never overlapping the real water brush).
+  The UP recompile does not have them.
+- Leaf contents bit `0x800` (precipitation / sky-visible mask, above) is 702
+  leaves on retail and 0 on the UP build.
+- Leaf contents bit `0x200` (near-water annotation) is destroyed the same
+  way on the UP build.
+- Both builds author `fluid { index "5" }` on the same physics model, so
+  **the fluid controller exists in either build** — the guard is
+  `fluid.index > 0`, not a leaf or contents test, and both indices agree.
+
+The UP build is what the shipped install actually runs, and it is the only
+build carrying the drawn ocean-card overlay this document's "Invisible
+compilewater" section describes, so a reconstruction reading the corpus as
+exported reads the UP build. Anything gated on the destroyed `0x200`/`0x800`
+leaf bits for this one map needs a bit that does not survive — the near-water
+derivation from `⋃PVS(water clusters)` (above) is unaffected either way,
+because it never reads the leaf bit.
+
+### The foam cards' lightstyle census
+
+`sm_pier_1`'s 34 `objects/surf` faces (the only lightstyle-bearing water
+geometry on either exported water map) all carry style 1
+(`"mmnmmommommnonmmonqnmmo"`, registered by `CWorld::vfunc104`,
+`vampire.dll 0x1023c020`) and 21 of the 34 also carry the switchable style
+32 in an earlier slot than style 1. `sm_hub_1`'s 47 water faces carry no
+lightstyle at all and have `lightOffset -1` — there is no lightmap page to
+key a style against. No `worldLight` of any type and no texlight is bound
+to a water face on either map (closest texlight: 586.6 in from the pier
+water, 6653.7 in from the hub's). `env_cubemap`, `func_water_analog`,
+`water_lod_control` and `env_fog_controller` do not exist as compiled
+entities on either map (Phase 0 water-complete audit U1c).
 
 ---
 
@@ -368,6 +531,53 @@ and is not referenced by any of the 25 water maps' face names.
 ---
 
 ## What the GPU draws
+
+### The live program, transcribed (2026-09-05)
+
+Read this pass from the shipped binary and the Bloodlines SDK sources
+(`ELYSIUM_WORK_ROOT/research/reference-source/Bloodlines SDK/.../stdshaders/`), not from a
+summary. `stdshader_dx8.dll` registers `Water_Old_dx80_dx81_dx90` (`FUN_10013710`); its
+`SHADER_DRAW` is `water_dx80.cpp`'s, and the three draw functions bind, on DX9 hardware, the SM2
+`_old` programs (`FUN_100138a0`: `Water_vs20_old` + `WaterRefract_ps20_old`; `FUN_10013b30`:
+`WaterReflect_ps20_old`; `FUN_10013d30`: `WaterCheap_vs20_old` + `WaterCheap_ps20_old`, with the
+ps11 twins on DX8). `Water_ps20` — the SDK's one-pass class — is a string nowhere in the corpus.
+The readable twins are `WaterRefract_ps11.psh`, `WaterReflect_ps11.psh`, `WaterCheap_ps11.psh`,
+`Water_vs11.vsh`, `WaterCheap_ps20.fxc` and `Water_ps20.fxc`; `water.cpp` / `water_dx80.cpp`
+set the constants.
+
+1. **Refract pass** (`DrawRefraction`): `texbem` off the DUDV (`$bumpmap`, `$bumpframe`), bump
+   matrix = `$refractamount` (SM2: VS c44), into `_rt_WaterRefraction` at the projected screen
+   UV (c45 = (0,0,0,−1) flips Y); PS c1 = `$refracttint` with its luma in `.a`, c0 = ⅓, c2 = ½.
+   The RT is the scene below the plane, clipped at it, rendered with the **water fog**
+   (`macros.vsh::WaterFog`): linear over the distance the eye ray travels *through water*
+   (`(waterZ − vertZ) / (eyeZ − vertZ) × viewDist`) toward `$fogcolor`, `$fogstart..$fogend`.
+2. **Reflect pass** (`DrawReflection`, SRC_ALPHA / ONE_MINUS_SRC_ALPHA when a refract pass drew):
+   the same `texbem` with `$reflectamount` into `_rt_WaterReflection` (the planar mirror);
+   `rgb = reflection`, `a = (1 − saturate(N·V))^5` on the `$normalmap` normal through the
+   normalizing cube, R0 = 0 (c3 = (1,0,0,0)); c1 = `$reflecttint`. Composite so far:
+   `lerp(refract, reflect, fresnel)`.
+3. **Cheap pass** (`DrawCheapWater`, SRC_ALPHA): `WaterCheap_ps20` is
+   `$fogcolor + cube(reflect(eye, N_world)) × fresnel`, `alpha = saturate((|eye − vert| −
+   $cheapwaterstartdistance) / (end − start))` (defaults 500 / 1000 in, `SHADER_INIT_PARAMS`);
+   the ps11 twin is `lrp(fresnel, cube × $reflecttint, $fogcolor)`. It draws whenever `$envmap`
+   is defined and `$forceexpensive` is not — and `SHADER_INIT_PARAMS` *defines* `$envmap` as
+   `engine/defaultcubemap` (256², warm brown, exported) when the VMT names none — so **every
+   expensive unit is fully cheap past `$cheapwaterenddistance`**. `$forcecheap` draws only this
+   pass, alpha 1.
+4. **No diffuse term.** Nothing in the program is lit; the RTs carry the light. The surface is
+   range-fogged by the map fog like any surface (`CalcFog RANGE` in the vertex program).
+5. **Motion**: `$bumpframe` (the `AnimatedTexture` proxy, 20–30 fps) steps both flipbooks;
+   `$bumptransform` (`TextureScroll`, ~0.05 u/s at 45°) scrolls the bump UV (c91/c92). The DUDV
+   is a 29-slice signed field with rms 0.027 and peaks 0.17; the normal's xy rms is 0.03. The
+   authored amounts (15–100) against those magnitudes give a warp of 1–2 % of the frame in the
+   owner's frames — the port's `WaterWarpScale` (0.01 per unit) is that measurement.
+6. **`$fogcolor` is display bytes**: VtMB writes them to the framebuffer as-is. Measured in the
+   owner's frames: the `sp_soc_3` basin ({22 20 10}) reads (27, 25, 15); the pier ocean (18, 18,
+   17); the `sm_hub_1` canal (34, 45, 21) near and (50, 65, 35) far, darker than its walls.
+
+What Unreal makes of each line is `docs/architecture/water-architecture.md` → ruling O.
+
+### The older ps.1.1 reading
 
 The `.psh` files are readable ps.1.1, same route as
 `docs/vtmb/reflections.md`.
@@ -468,13 +678,72 @@ These are not the water surface. They land *on* it or dress a basin.
 | `warrens_tube_water_emitter` | scripted tube (targetname `scene_water`) | warrens |
 | `sprinkler_emitter` | fire-sprite jets (targetname `sprinkler_water`) | a later map, not the current export set |
 | `pipe_water` / `pipedripspour_emitter` / `pipedripstrickle_emitter` | pipe leak | authored, not map-counted here |
-| `WaterBigSplash` / `WaterSplash` / `Splash` | impact bursts | defined and ready, but nothing calls them: `CheckWater`'s level transitions and `WaterMove` never fire a splash effect on entry. VtMB itself is silent when a body crosses the plane |
+| `WaterBigSplash` / `WaterSplash` / `Splash` | impact bursts | fired by the client on the water-level transition — see below, this row corrects an earlier pass of this document |
 | `Andrei_Splash_*` | boss dive | theatre, not a map water system |
 | `rainsplash` / `rainsplash_new` | rain on ground / water | weather |
 
 The 50-file "Water / splash / drip / spray" bucket in
 `docs/vtmb/effects.md` includes blood sprays. The rows above are the water
 ones.
+
+### The fluid controller emits nothing; the splash is the client's, keyed on the water-level transition
+
+**Corrected from an earlier pass of this document, which had it backwards.**
+Both `sm_hub_1` and `sm_pier_1` DO get a fluid controller: the guard in
+`vampire.dll FUN_10158600` is `if (fluid.index > 0)` on the first dword of
+`ParseFluid`'s output (`101586f6 CALL [EDX+0x10]`, `101586f9 MOV EAX,
+[ESP+0x44]`, `101586ff JLE skip`) — not `contents`, not solid flags — and
+both maps author `fluid { index "5" }`. The controller wraps
+`physics.models[0].solids[5]` and binds the hard-coded literal surfaceprop
+`"water"` (`10158743`).
+
+**The controller itself emits nothing.** `FUN_10151150` is Source's
+`PhysicsSplash` with both `DispatchEffect` calls stripped: zero string
+literals over a 1,952-byte listing, no string address pushed anywhere. It
+still computes the basis, corners, speed, `flScale` and a
+`RandomInt(1, 4)` secondary count into its own stack frame — and then
+returns without dispatching them. `"watersplash"` does not exist as a
+literal anywhere in the corpus, and there is no effect-dispatch registry
+(`EffectDispatch` has zero hits). Those numbers are dead code in the shipped
+build; nothing derived from them (speed scaling, the `RandomInt(1,4)` count)
+should be treated as a live rule.
+
+**The splash that does fire is client-side, on the water-level transition,
+not on any fluid event.** `client.dll FUN_10099630` — called from
+`FUN_10098800`, slot 9 (`DrawModel`) of the `IClientRenderable` sub-table of
+both `C_BaseVCombatCharacter` and `C_BaseHLPlayer` — spawns
+`waterbigsplash_emitter` on a `waterLevel` transition `0 → non-zero` with
+`velocity.z < -200 in/s`, and `watersplash_emitter` while
+`0 < waterLevel < 3` with horizontal speed ≥ 50 in/s on a `5.0 -
+horizontal_speed·7.8e-5` second cooldown, spawned at `GetRenderOrigin() -
+velocity.xy·0.035` snapped to the water surface (plus `RandomInt(0, 8)` in Z
+for the wade one). Leaves: `waterbigsplash` (`watersplashes.tga`),
+`watersplash` (`cloud.tga`), `splash` (`point_16.tga`).
+
+**`waterbigsplash_emitter` is authored-empty in the Unofficial Patch.**
+`Unofficial_Patch/particles/waterbigsplash_emitter.txt` (161 B) comments the
+spawn token out (`// removed by wesp`), leaving an orphan block with no
+spawn rule; the live definition is in retail `pack001.vpk` (143 B at
+offset `70407456`). `watersplash_emitter.txt` (267 B, loose in the UP tree)
+is unaffected and carries two live spawn blocks (`WaterSplash` burst 2,
+`Splash` burst 5).
+
+**The sound hook is separate from the splash builder.** `water.Impact` /
+`water.Scrape` off surfaceprop `water`; `player/pl_wade2.wav` on exit
+(`vampire.dll 1003f4d0`); `Surfaces/Water/Step*` at water level 1 and
+`Surfaces/Wade/Step*` at level ≥ 2 on a four-phase counter whose phase 0 is
+silent — **three wading steps in four sound** (`1011e940`: the level ≥ 2 branch
+opens `if (DAT_1070b898 == 0) { DAT_1070b898 = 1; return; }` and then plays,
+cycling 1→2→3→0, so only phase 0 returns before playing). Verdict D3's
+shorthand "every 4th step" states the inverse and is superseded by this
+reading;
+`Water.BulletImpact` / `Underwater.BulletImpact` for gunfire.
+
+(Phase 0 water-complete audit U3, closing AUDIT §12 unknown 7. Full
+decompiled evidence, including the entry/exit thresholds' derivation, is at
+`E:/elysium-work/scratch/water_audit/phase0/U3_fluid_controller.md`; the
+read-only corpus sweeps that back the census claims throughout this file are
+at `E:/elysium-work/scratch/water_audit/phase0/G_sweeps.md`.)
 
 **Audio.** `scripts/surfaceproperties.txt` `water`: density 1000, elasticity
 0.2, friction 0.8, `gamematerial S`, left/right wade footsteps, three

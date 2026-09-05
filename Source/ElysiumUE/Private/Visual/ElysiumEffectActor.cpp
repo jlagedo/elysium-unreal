@@ -337,11 +337,12 @@ UNiagaraSystem* AElysiumEffectActor::LoadSystem(const TCHAR* Path)
 	return System;
 }
 
-UNiagaraSystem* AElysiumEffectActor::LoadGeneratedSystem()
+FString AElysiumEffectActor::GeneratedSystemStem(const FString& RootOrName)
 {
-	// `NS_<root>` in the definition's authored spelling (`make_root_systems.py::_asset_name`): the
-	// tree's name when it has one, else the entity's, with any include path and `.txt` stripped.
-	FString Stem = Tree.Name.IsEmpty() ? RootName : Tree.Name;
+	// `NS_<root>` in the definition's authored spelling (`make_root_systems.py::_asset_name`):
+	// the folded `vtmb:particle:` prefix dropped, any include path and `.txt` stripped.
+	FString Stem = RootOrName;
+	Stem.RemoveFromStart(TEXT("vtmb:particle:"), ESearchCase::IgnoreCase);
 	Stem.ReplaceInline(TEXT("\\"), TEXT("/"));
 	int32 Slash = INDEX_NONE;
 	if (Stem.FindLastChar(TEXT('/'), Slash))
@@ -352,6 +353,21 @@ UNiagaraSystem* AElysiumEffectActor::LoadGeneratedSystem()
 	{
 		Stem.LeftChopInline(4);
 	}
+	return Stem;
+}
+
+bool AElysiumEffectActor::HasGeneratedSystem(const FString& RootOrName)
+{
+	const FString Stem = GeneratedSystemStem(RootOrName);
+	return !Stem.IsEmpty()
+		&& FPackageName::DoesPackageExist(
+			FString::Printf(TEXT("/Game/ElysiumGenerated/VFX/NS_%s"), *Stem));
+}
+
+UNiagaraSystem* AElysiumEffectActor::LoadGeneratedSystem()
+{
+	// The tree's name when it has one, else the entity's -- a by-root spawn carries no tree.
+	const FString Stem = GeneratedSystemStem(Tree.Name.IsEmpty() ? RootName : Tree.Name);
 	if (Stem.IsEmpty())
 	{
 		return nullptr;

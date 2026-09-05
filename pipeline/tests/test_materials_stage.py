@@ -37,6 +37,7 @@ def _unit(
     dependencies=(),
     patch: dict | None = None,
     programs=(),
+    comments=(),
 ) -> dict:
     family = family if family is not None else shader
     return {
@@ -55,7 +56,7 @@ def _unit(
         "surfaceProperty": None,
         "environment": None,
         "dependencies": list(dependencies),
-        "comments": [],
+        "comments": list(comments),
         "anomalies": [],
         "omissions": [],
         "coverage": {"mapped": [], "byteLedger": [], "unresolved": [], "unsupported": []},
@@ -1301,10 +1302,14 @@ _PROVENANCE_CPP = (
 #: field: the map stage copies it onto the staged materials table and the bake binds it, while the
 #: runtime resolves the same `MI_<unit>_Decal` path from a `vtmb:material:` id through
 #: `FElysiumContentPaths` -- never by loading a surface instance's provenance record first.
+#: `undersideAsset` (R7.5 contract 1) is the same shape as `decalAsset` and omitted for the same
+#: reason: the map stage copies it onto the staged materials table and the bake binds it to the
+#: `'<material key>#underside'` sections, while a runtime that needs the twin folds
+#: `_Underside` onto the surface instance's own path -- never by loading a provenance record.
 #: Named here so this test states the omission rather
 #: than silently passing it (mirrors the C++-side Substrate test's own list).
 _KNOWINGLY_UNCOVERED = frozenset({"patched", "patchOf", "runtime", "ignoreZNamedDivergence",
-                                  "decalAsset"})
+                                  "decalAsset", "undersideAsset"})
 
 
 def _cpp_top_level_keys() -> set[str]:
@@ -2028,24 +2033,29 @@ def _underside_unit(key: str, bottom: str) -> dict:
     )
 
 
-def test_self_bottomed_water_unit_is_the_underside(tmp_path):
-    """R7.1 ruling E: `dev/dev_waterbeneath2` names itself as its own `$bottommaterial` -- that is
-    what marks the down-facing faces VBSP emits inside every water brush. The value is read off the
-    unit's own provenance rows, since the GLB decoder emits a dependency only for a texture-shaped
-    value and `$bottommaterial` reaches none on any of the 26 units that author it. Source spells
-    its paths with backslashes and an optional `.vmt`, so the comparison is normalised."""
+def test_self_bottomed_water_unit_no_longer_carries_the_underside_switch(tmp_path):
+    """R7.5 contract 1 (verdict B2), retiring R7.1 ruling E. `dev/dev_waterbeneath2` names itself
+    as its own `$bottommaterial`, which R7.1 read as "this unit IS the underside" and turned the
+    switch on for. Underside is a FACE fact -- VtMB gates it on `plane.normal.z < 0`
+    (`Mod_LoadFaces`) and answers by undefining `$reflecttexture` on that face's material -- so the
+    surface instance's switch is now always false and the twin carries it. The key is still read
+    and still recorded, with whether it was self-referential, rather than dropped."""
     export = tmp_path / "v2"
     _publish(export, "dev/dev_waterbeneath2",
              _underside_unit("dev/dev_waterbeneath2", "dev\\dev_waterbeneath2.vmt"))
     result = importer.stage_materials(export, tmp_path / "stage")
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/dev/MI_dev_waterbeneath2"]
-    assert entry["switches"]["Underside"] is True
+    assert entry["switches"]["Underside"] is False
+    row = next(row for row in _provenance(tmp_path / "stage", entry)["omissions"]
+               if row["kind"] == "bottomMaterialNotAnUndersideSwitch")
+    assert row["value"] == "dev/dev_waterbeneath2"
+    assert row["selfReferential"] is True
 
 
-def test_water_unit_bottomed_by_another_material_is_not_the_underside(tmp_path):
-    """`water/sewer_water` points at `dev/dev_waterbeneath2`: it is the top surface, not the
-    underside, so the switch stages explicitly false rather than absent."""
+def test_water_unit_bottomed_by_another_material_records_the_reference_not_a_switch(tmp_path):
+    """`water/sewer_water` points at `dev/dev_waterbeneath2`: same rule, `selfReferential` false.
+    Both halves of the pair land `Underside` explicitly false on the surface instance."""
     export = tmp_path / "v2"
     _publish(export, "water/sewer_water",
              _underside_unit("water/sewer_water", "dev/dev_waterbeneath2"))
@@ -2053,11 +2063,58 @@ def test_water_unit_bottomed_by_another_material_is_not_the_underside(tmp_path):
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_sewer_water"]
     assert entry["switches"]["Underside"] is False
+    row = next(row for row in _provenance(tmp_path / "stage", entry)["omissions"]
+               if row["kind"] == "bottomMaterialNotAnUndersideSwitch")
+    assert row["selfReferential"] is False
 
 
-def test_patched_water_instance_stages_no_underside_switch(tmp_path):
-    """A patched instance has no master of its own (it parents to the base's instance), so it
-    stages only its own override -- never a switch the base already answered."""
+def test_every_water_instance_stages_an_underside_twin(tmp_path):
+    """R7.5 contract 1: one `MI_<unit>_Underside` per water instance, in the same folder, parented
+    to the SURFACE instance (an instance-of-instance, exactly like a VMT patch) and stating one
+    thing -- `Underside` true. Everything else is inherited, so a later change to the surface
+    reaches the underside with no second copy to keep in step."""
+    export = tmp_path / "v2"
+    _publish(export, "water/sewer_water",
+             _underside_unit("water/sewer_water", "dev/dev_waterbeneath2"))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    assert result.undersides == 1
+    entries = _entries(tmp_path / "stage")
+    surface = entries["/ElysiumBaked/Materials/water/MI_sewer_water"]
+    assert surface["undersideAsset"] == "/ElysiumBaked/Materials/water/MI_sewer_water_Underside"
+    twin = entries[surface["undersideAsset"]]
+    assert twin["parent"] == surface["assetPath"]
+    assert twin["switches"] == {"Underside": True}
+    assert twin["textures"] == {} and twin["scalars"] == {} and twin["vectors"] == {}
+    assert twin["undersideAsset"] is None and twin["decalAsset"] is None
+    # The twin shares the unit's one provenance sidecar and its surface identity, so a surface
+    # query on a down-facing face answers exactly what the top face answers.
+    assert twin["provenance"] == surface["provenance"]
+    assert twin["physMaterial"] == surface["physMaterial"]
+    assert twin["surfaceClassIndex"] == surface["surfaceClassIndex"]
+
+
+def test_a_non_water_unit_stages_no_underside_twin(tmp_path):
+    """Only water. A `lightmappedgeneric` wall has no down-facing half to bind."""
+    export = tmp_path / "v2"
+    _publish(export, "brick/plain", _unit(
+        "brick/plain", parameters=[_param(0, "$basetexture", "brick/plain")],
+        dependencies=[_texture_dep("$basetexture", "brick/plain")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    assert result.undersides == 0
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_plain"]
+    assert entry["undersideAsset"] is None
+
+
+def test_patched_water_instance_gets_its_own_underside_twin(tmp_path):
+    """A patched instance stages only its own override -- never a switch the base already answered
+    -- but it DOES get a twin of its own: a map's faces bind the patched key
+    (`dev/dev_waterbeneath2@cubemapdefault` is what `sm_hub_1`'s underside faces name), so the
+    twin the bake looks up has to sit beside the patched instance, not beside its base. `stage_unit`
+    cannot know a patched unit is water, so `stage_materials` walks the parent chain to its base's
+    master and back-fills the field (and the sidecar digest with it)."""
     export = tmp_path / "v2"
     _publish(export, "water/warrwater", _underside_unit("water/warrwater", "dev/dev_waterbeneath2"))
     _publish(export, "maps/hw_warrens_4/water/warrwater", _unit(
@@ -2069,10 +2126,328 @@ def test_patched_water_instance_stages_no_underside_switch(tmp_path):
     ))
     result = importer.stage_materials(export, tmp_path / "stage")
     assert result.failures == []
-    patched = _entries(tmp_path / "stage")[
-        "/ElysiumBaked/Materials/maps/hw_warrens_4/water/MI_warrwater"]
+    assert result.undersides == 2  # the base and the patch, one twin each
+    entries = _entries(tmp_path / "stage")
+    patched = entries["/ElysiumBaked/Materials/maps/hw_warrens_4/water/MI_warrwater"]
     assert patched["scalars"] == {"WaterDepth": 20.0}
     assert "Underside" not in patched["switches"]
+    assert patched["undersideAsset"] == (
+        "/ElysiumBaked/Materials/maps/hw_warrens_4/water/MI_warrwater_Underside")
+    twin = entries[patched["undersideAsset"]]
+    assert twin["parent"] == patched["assetPath"]
+    assert twin["switches"] == {"Underside": True}
+    # The back-fill rewrote the sidecar, so its recorded digest still matches the bytes on disk.
+    sidecar = _provenance(tmp_path / "stage", patched)
+    assert sidecar["undersideAsset"] == patched["undersideAsset"]
+    assert patched["recipe"]["provenanceSha256"] == hashlib.sha256(
+        importer._json_bytes(sidecar)).hexdigest()
+
+
+# --- R7.5 contract 2: %compilewater reroutes a unit onto the water master --------------------------
+
+
+def _invisible_water_unit() -> dict:
+    """`water/invisible_water`, verbatim off the corpus (255 B, `pack002.vpk@177844571`): an
+    `UnLitGeneric` VMT with the water compiler hints layered on top, which is why it resolved to
+    `M_V2_Unlit` before this ruling. It is the pier's swimmable volume."""
+    return _unit(
+        "water/invisible_water", shader="unlitgeneric", family="unlitgeneric",
+        parameters=[
+            _param(0, "$basetexture", "Tools/toolsinvisible"),
+            _param(1, "%compilenodraw", "1", value_type="integer"),
+            _param(2, "$bottommaterial", "water/invisible_water"),
+            _param(3, "$translucent", "1", value_type="integer"),
+            _param(4, "$fogenable", "1", value_type="integer"),
+            _param(5, "$fogcolor", "{22 20 10}", value_type="vector"),
+            _param(6, "$fogstart", "1.00", value_type="number"),
+            _param(7, "$fogend", "400.00", value_type="number"),
+            _param(8, "%compilewater", "1", value_type="integer"),
+        ],
+        dependencies=[_texture_dep("$basetexture", "tools/toolsinvisible")],
+    )
+
+
+def test_compilewater_unit_resolves_to_the_water_master_whatever_family_it_declares(tmp_path):
+    """R7.5 contract 2 / owner decision 2 (verdict B1). `%compilewater` is what makes a brush a
+    water brush in VBSP -- the shader name is not -- so a unit that authors it stages on
+    `M_V2_Water` even though its own VMT says `UnLitGeneric`. Without this the pier's swimmable
+    surface has no SLW instance to bind once the geometry lane stops dropping its `noDraw` faces.
+    The authored fog quadruple reaches the master's own fog lane, which is where the pier's
+    `{22 20 10}` finally lands as material data instead of provenance."""
+    export = tmp_path / "v2"
+    _publish(export, "water/invisible_water", _invisible_water_unit())
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_invisible_water"]
+    assert entry["parent"] == "/Game/ElysiumGenerated/Materials/V2/M_V2_Water"
+    assert entry["switches"]["UseFogEnable"] is True
+    assert entry["scalars"]["FogStart"] == 1.0
+    assert entry["scalars"]["FogEnd"] == 400.0
+    assert entry["vectors"]["FogColor"][:3] == pytest.approx(
+        [22 / 255.0, 20 / 255.0, 10 / 255.0], abs=1e-5)
+    row = next(row for row in _provenance(tmp_path / "stage", entry)["omissions"]
+               if row["kind"] == "compileWaterMasterReroute")
+    assert (row["declaredFamily"], row["resolvedFamily"]) == ("unlitgeneric", "water")
+
+
+def test_compilewater_unit_stays_opaque_and_records_translucent_as_water_consumed(tmp_path):
+    """Contract 2's second half: Single Layer Water compiles only on an opaque material, and a
+    water surface's translucency is its `Opacity` coverage plus its `$fogenable` extinction, both
+    of which the master already reads. So `$translucent 1` is consumed by the water lane and named
+    -- never a blend switch, and never a silent drop."""
+    export = tmp_path / "v2"
+    _publish(export, "water/invisible_water", _invisible_water_unit())
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_invisible_water"]
+    assert entry["basePropertyOverrides"]["blendMode"] == "Opaque"
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert provenance["blendMode"] == "Opaque"
+    row = next(row for row in provenance["omissions"]
+               if row["kind"] == "waterBlendConsumedByTheWaterLane")
+    assert row["authoredBlendMode"] == "Translucent"
+
+
+def test_compilewater_unit_drops_its_tool_basetexture_and_turns_the_gate_off(tmp_path):
+    """`water/invisible_water`'s `$basetexture` is `Tools/toolsinvisible` -- the Hammer idiom that
+    makes a `%compilenodraw` brush invisible, not a surface colour. Owner decision 2's named
+    modernization draws WATER on those faces, so the tool texture is recorded and dropped and
+    `UseBaseTexture` lands false, which is contract 2's "UseBaseTexture off when they bind no base
+    texture" for the one unit that nominally binds one."""
+    export = tmp_path / "v2"
+    _publish(export, "water/invisible_water", _invisible_water_unit())
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_invisible_water"]
+    assert "BaseTexture" not in entry["textures"]
+    assert entry["switches"]["UseBaseTexture"] is False
+    row = next(row for row in _provenance(tmp_path / "stage", entry)["omissions"]
+               if row["kind"] == "toolTextureOnWaterSurface")
+    assert row["asset"] == "/ElysiumBaked/Textures/tools/T_toolsinvisible"
+
+
+def test_compilewater_reroute_records_a_key_the_water_master_cannot_place(tmp_path):
+    """`water/cheap_water` is `lightmappedgeneric` and authors `$envmapmask effects/ref_75`; the
+    SLW master has no reflection-mask lane at all (its reflection is Lumen's, scaled by
+    `luma(ReflectTint)`). The reroute is what took the slot away, so the reroute records it --
+    rather than a hand-maintained `UNIT_DIVERGENCES` row, which would have to be re-verified
+    against a staged corpus run. `$forcecheap`, which that table used to hold, now has a real
+    destination."""
+    export = tmp_path / "v2"
+    _publish(export, "water/cheap_water", _unit(
+        "water/cheap_water", shader="lightmappedgeneric", family="lightmappedgeneric",
+        parameters=[
+            _param(0, "$forcecheap", "1", value_type="integer"),
+            _param(1, "$basetexture", "water/cheap_water"),
+            _param(2, "$envmapmask", "effects/ref_75"),
+            _param(3, "$envmaptint", "[.2 0 0]", value_type="vector"),
+            _param(4, "%compilewater", "1", value_type="integer"),
+        ],
+        dependencies=[_texture_dep("$basetexture", "water/cheap_water"),
+                      _texture_dep("$envmapmask", "effects/ref_75")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_cheap_water"]
+    assert entry["parent"] == "/Game/ElysiumGenerated/Materials/V2/M_V2_Water"
+    assert entry["switches"]["CheapWater"] is True
+    assert "EnvMapMask" not in entry["textures"]
+    assert "MetallicTint" not in entry["switches"]  # the chromatic branch is not on this master
+    dropped = {row["parameter"] for row in _provenance(tmp_path / "stage", entry)["omissions"]
+               if row["kind"] == "compileWaterRerouteProvenanceOnly"}
+    assert "EnvMapMask" in dropped
+
+
+def test_compilewater_unit_still_stages_an_underside_twin(tmp_path):
+    """The reroute and contract 1 compose: a rerouted unit is a water instance, so it gets the
+    same `_Underside` twin every other water instance gets -- which is what the pier's down-facing
+    `invisible_water` faces bind."""
+    export = tmp_path / "v2"
+    _publish(export, "water/invisible_water", _invisible_water_unit())
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.undersides == 1
+    entries = _entries(tmp_path / "stage")
+    surface = entries["/ElysiumBaked/Materials/water/MI_invisible_water"]
+    assert entries[surface["undersideAsset"]]["switches"] == {"Underside": True}
+
+
+def test_a_water_family_unit_is_not_recorded_as_rerouted(tmp_path):
+    """`water/sewer_water` reaches `M_V2_Water` through its own declared family, so it carries no
+    reroute row -- the omission names a real change of course, not every water unit."""
+    export = tmp_path / "v2"
+    _publish(export, "water/sewer_water", _unit(
+        "water/sewer_water", shader="water",
+        parameters=[_param(0, "%compilewater", "1", value_type="integer")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_sewer_water"]
+    assert entry["parent"] == "/Game/ElysiumGenerated/Materials/V2/M_V2_Water"
+    kinds = {row["kind"] for row in _provenance(tmp_path / "stage", entry)["omissions"]}
+    assert "compileWaterMasterReroute" not in kinds
+
+
+def test_compilewater_reroute_does_not_change_what_the_units_own_keys_mean(tmp_path):
+    """The reroute picks the MASTER, not the vocabulary. `$bumpmap` is the DUDV offset field on the
+    `water` family and the ordinary normal map on `lightmappedgeneric`/`unlitgeneric`, and
+    `water/cheap_water` -- a `%compilewater` unit whose VMT is `LightmappedGeneric` -- authors
+    `$bumpmap dev/water_normal` in the second sense. Reading its keys through the rerouted family
+    bound the ripple normal into the DUDV lane (measured on the real corpus, 2026-09-04): the
+    ripple animated the refraction offset and the normal lane read the same texture twice."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    (texture_staging / "dev").mkdir(parents=True, exist_ok=True)
+    (texture_staging / "dev" / ("water_normal" + importer.TEXTURE_PROVENANCE_SUFFIX)).write_text(
+        json.dumps({"frames": 29, "roleConflict": True}), encoding="utf-8")
+    _publish(export, "water/cheap_water", _unit(
+        "water/cheap_water", shader="lightmappedgeneric", family="lightmappedgeneric",
+        parameters=[
+            _param(0, "$forcecheap", "1", value_type="integer"),
+            _param(1, "$basetexture", "water/cheap_water"),
+            _param(2, "$bumpmap", "dev/water_normal"),
+            _param(3, "%compilewater", "1", value_type="integer"),
+            _param(4, "animatedtexturevar", "$bumpmap", block="proxies#5/animatedtexture#0"),
+            _param(5, "animatedtextureframerate", "20", block="proxies#5/animatedtexture#0"),
+        ],
+        proxies=[{"index": 0, "name": "animatedtexture", "sourceName": "AnimatedTexture",
+                  "parameters": [4, 5]}],
+        dependencies=[_texture_dep("$basetexture", "water/cheap_water"),
+                      _texture_dep("$bumpmap", "dev/water_normal")],
+    ))
+    result = importer.stage_materials(
+        export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_cheap_water"]
+    assert entry["parent"] == "/Game/ElysiumGenerated/Materials/V2/M_V2_Water"
+    assert entry["textures"]["NormalMapFrames"] == "/ElysiumBaked/Textures/dev/TA_water_normal_linear"
+    assert "DuDvMapFrames" not in entry["textures"]
+    assert entry["switches"]["UseAnimatedNormalFrames"] is True
+    assert entry["switches"]["UseAnimatedDuDvFrames"] is False
+
+
+# --- R7.5 G3: the DUDV flipbook lane ---------------------------------------------------------------
+
+
+def test_water_unit_binds_the_dudv_array_beside_the_normal_one(tmp_path):
+    """G3 (verdict C2). `water/sewer_water` authors `$bumpmap dev/water_dudv` (29-frame signed
+    UVWQ) and `$normalmap dev/water_normal` (29-frame colour), with one
+    `AnimatedTexture($bumpmap, $bumpframe, 30.00)` proxy over both -- `Water_Old` read `$bumpframe`
+    as the shared frame index of the pair. R7.1 redirected the proxy onto `$normalmap`'s array,
+    which fixed the ripple normal and left the DUDV reachable by nothing: the plain `DuDvMap` slot
+    is a `Texture2D` and the array is not one. Both lanes now fill from the one proxy at the one
+    rate."""
+    export = tmp_path / "v2"
+    _publish(export, "water/sewer_water", _water_normal_unit())
+    result = importer.stage_materials(
+        export, tmp_path / "stage", texture_staging_root=_water_texture_stage(tmp_path))
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_sewer_water"]
+    assert entry["textures"]["DuDvMapFrames"] == "/ElysiumBaked/Textures/dev/TA_water_dudv"
+    assert entry["textures"]["NormalMapFrames"] == "/ElysiumBaked/Textures/dev/TA_water_normal_linear"
+    assert entry["scalars"]["DuDvFrameCount"] == 29.0
+    assert entry["scalars"]["DuDvFrameRate"] == entry["scalars"]["NormalFrameRate"] == 30.0
+    assert entry["switches"]["UseAnimatedDuDvFrames"] is True
+    # The plain 2D slot still declines the array, and still says so.
+    assert "DuDvMap" not in entry["textures"]
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row["kind"] == "textureClassMismatch" and row["parameter"] == "DuDvMap"
+               for row in provenance["anomalies"])
+
+
+def test_water_unit_without_an_animation_proxy_binds_the_dudv_array_statically(tmp_path):
+    """Source draws frame `$bumpframe` (default 0) of a multi-frame texture when no proxy animates
+    it, so the DUDV lane takes the same static frame-0 fallback the base and normal lanes take --
+    the array bound, the rate 0."""
+    export = tmp_path / "v2"
+    _publish(export, "water/plain", _unit(
+        "water/plain", shader="water",
+        parameters=[_param(0, "$bumpmap", "dev/water_dudv")],
+        dependencies=[_texture_dep("$bumpmap", "dev/water_dudv")],
+    ))
+    result = importer.stage_materials(
+        export, tmp_path / "stage", texture_staging_root=_water_texture_stage(tmp_path))
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_plain"]
+    assert entry["textures"]["DuDvMapFrames"] == "/ElysiumBaked/Textures/dev/TA_water_dudv"
+    assert entry["scalars"]["DuDvFrameCount"] == 29.0
+    assert entry["scalars"]["DuDvFrameRate"] == 0.0
+    assert entry["switches"]["UseAnimatedDuDvFrames"] is True
+
+
+# --- R7.5 G5: $envmapcontrast ----------------------------------------------------------------------
+
+
+def test_envmapcontrast_reaches_the_lit_master_as_a_scalar(tmp_path):
+    """G5, a NAMED MODERNIZATION: `docs/vtmb/reflections.md` measured that no shipped VtMB `.psh`
+    carries a term for `$envmapcontrast`, so the 2004 renderer dropped the key; 19 units author it
+    (`water/blackwater`, the pier's ocean card, at `0.85`). It leaves `PROVENANCE_ONLY_KEYS` for
+    `EnvMapContrast` on the Lit pair, which is where every author of it resolves."""
+    export = tmp_path / "v2"
+    _publish(export, "water/blackwater", _unit(
+        "water/blackwater", parameters=[
+            _param(0, "$basetexture", "effects/ref_12"),
+            _param(1, "$envmap", "envmap/ocean"),
+            _param(2, "$envmapcontrast", "0.85", value_type="number"),
+        ],
+        dependencies=[_texture_dep("$basetexture", "effects/ref_12"),
+                      _texture_dep("$envmap", "envmap/ocean")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_blackwater"]
+    assert entry["parent"] == "/Game/ElysiumGenerated/Materials/V2/M_V2_Lit"
+    assert entry["scalars"]["EnvMapContrast"] == 0.85
+    assert entry["switches"]["UseFixedCube"] is True
+
+
+def test_commented_out_keys_are_recorded_authored_then_removed_and_never_applied(tmp_path):
+    """R7.5 G5's second half. `water/blackwater` carries `//"$envmaptint" "[.4 .4 .4]"` at byte 179
+    and `//"$translucent" "1"` at byte 262 -- two knobs its author wrote and then commented out.
+    The ruling is recorded, never applied: a commented key is the author's own decision to turn a
+    knob off, and reviving it would be the port second-guessing the shipped material. Stated
+    corpus-wide (1,162 such lines across 787 units) rather than per unit, since the answer is the
+    same everywhere -- and, crucially, the values must NOT reach a parameter."""
+    export = tmp_path / "v2"
+    _publish(export, "water/blackwater", _unit(
+        "water/blackwater",
+        parameters=[_param(0, "$basetexture", "effects/ref_12")],
+        dependencies=[_texture_dep("$basetexture", "effects/ref_12")],
+        comments=[{"offset": 0, "text": "// added by psycho-a\r"},
+                  {"offset": 179, "text": "//\t\"$envmaptint\" \"[.4 .4 .4]\"\r"},
+                  {"offset": 262, "text": "//\t\"$translucent\" \"1\"\r"}],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_blackwater"]
+    # Neither knob reached anything: the blend is still Opaque and no EnvMapTint was written.
+    assert entry["basePropertyOverrides"]["blendMode"] == "Opaque"
+    assert "EnvMapTint" not in entry["vectors"]
+    rows = {row["key"]: row for row in _provenance(tmp_path / "stage", entry)["omissions"]
+            if row["kind"] == "authoredThenRemovedKey"}
+    assert set(rows) == {"$envmaptint", "$translucent"}
+    assert rows["$envmaptint"]["value"] == "[.4 .4 .4]"
+    assert rows["$envmaptint"]["offset"] == 179
+    # The free-text banner is not a key/value pair and is not claimed as one.
+    assert "// added by psycho-a" not in rows
+
+
+def test_envmapcontrast_authored_as_a_vector_takes_its_first_component(tmp_path):
+    """One corpus unit (`models/scenery/furniture/grandfather_clock/grandfatherclock`) authors the
+    scalar key as `[.8 .8 .9]`. The existing vector-shaped-value rule takes the first component
+    rather than failing the unit, exactly as it already does for `$cloudscale`."""
+    export = tmp_path / "v2"
+    _publish(export, "models/clock/face", _unit(
+        "models/clock/face", shader="vertexlitgeneric", family="vertexlitgeneric",
+        parameters=[
+            _param(0, "$basetexture", "models/clock/face"),
+            _param(1, "$envmapcontrast", "[.8 .8 .9]", value_type="vector"),
+        ],
+        dependencies=[_texture_dep("$basetexture", "models/clock/face")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/models/clock/MI_face"]
+    assert entry["scalars"]["EnvMapContrast"] == pytest.approx(0.8)
 
 
 def _surf_chain(*, sine_first: bool = True) -> dict:
@@ -2245,3 +2620,108 @@ def test_two_sines_at_different_periods_stage_the_first_and_name_the_mismatch(tm
     assert any(row["kind"] == "sineChainPeriodMismatch" and row["parameter"] == "SinePeriod"
                and row["staged"] == 15.0 and row["chain"] == 4.0
                for row in provenance["omissions"])
+
+
+# --- R7.5 look pass: a water instance always binds a cube ------------------------------------------
+
+
+def test_a_water_unit_with_no_envmap_binds_the_engine_default_cube(tmp_path):
+    """`water.cpp::SHADER_INIT_PARAMS`: a `Water` unit naming no `$envmap` gets
+    `engine/defaultcubemap` unless it authors `$forceexpensive`, and the cheap pass samples it,
+    blended by distance over the expensive result. The `env_cubemap -> Lumen` rule is for lit
+    surfaces; water always binds a texture (`water_audit/LOOK_SPEC.md`)."""
+    export = tmp_path / "v2"
+    _publish(export, "water/canal", _unit(
+        "water/canal", shader="water",
+        parameters=[_param(0, "%compilewater", "1"), _param(1, "$refractamount", "35")],
+    ))
+    _publish(export, "water/moat", _unit(
+        "water/moat", shader="water",
+        parameters=[_param(0, "%compilewater", "1"), _param(1, "$forceexpensive", "1")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entries = _entries(tmp_path / "stage")
+    canal = entries["/ElysiumBaked/Materials/water/MI_canal"]
+    assert canal["textures"]["EnvMap"] == "/ElysiumBaked/Textures/engine/TC_defaultcubemap"
+    assert canal["switches"]["UseFixedCube"] is True and canal["switches"]["UseEnvMap"] is True
+    assert canal["recipe"]["params"]["textures"]["EnvMap"] == canal["textures"]["EnvMap"]
+    assert _provenance(tmp_path / "stage", canal)["environment"]["defaultWaterCube"] is True
+    moat = entries["/ElysiumBaked/Materials/water/MI_moat"]
+    assert "EnvMap" not in moat["textures"]
+    assert moat["switches"].get("UseFixedCube", False) is False
+    assert _provenance(tmp_path / "stage", moat)["environment"]["forceExpensive"] is True
+
+
+def test_a_patched_water_instance_binds_the_maps_probe_as_its_fixed_cube(tmp_path):
+    """VBSP's patched probe IS the authored reflection of a water surface: the cheap pass samples
+    `$envmap` through the bumped normal (`FUN_10013d30`), so on a water-class instance the
+    `maps/<map>/c...` probe is bound as `EnvMap` with `UseFixedCube`, overriding the base's
+    fallback cube. Water-class is decided by the root master (`M_V2_Water`) or the base's `water`
+    surface class (`water/blackwater`, an LMG fake); an ordinary patched Lit unit is left alone."""
+    export = tmp_path / "v2"
+    _publish(export, "dev/dev_water2_cheap", _unit(
+        "dev/dev_water2_cheap", shader="water",
+        parameters=[_param(0, "%compilewater", "1"), _param(1, "$forcecheap", "1"),
+                    _param(2, "$envmap", "env_cubemap"), _param(3, "$fogcolor", "{22 20 10}")],
+    ))
+    _publish(export, "maps/sp_soc_3/dev/dev_water2_cheap", _unit(
+        "maps/sp_soc_3/dev/dev_water2_cheap", shader="patch", family="patch", resolved=False,
+        parameters=[_param(0, "include", "dev/dev_water2_cheap"),
+                    _param(1, "$envmap", "maps/sp_soc_3/cubemapdefault", block="replace#1")],
+        dependencies=[_texture_dep("$envmap", "maps/sp_soc_3/cubemapdefault")],
+        patch={"include": "dev/dev_water2_cheap", "asset": "vtmb:material:dev/dev_water2_cheap",
+               "operations": ["replace"]},
+    ))
+    _publish(export, "water/blackwater", _unit(
+        "water/blackwater", shader="lightmappedgeneric",
+        parameters=[_param(0, "$basetexture", "effects/ref_12"), _param(1, "$envmap", "env_cubemap"),
+                    _param(2, "$surfaceprop", "water")],
+        dependencies=[_texture_dep("$basetexture", "effects/ref_12")],
+    ))
+    _publish(export, "maps/sm_pier_1/water/blackwater_-1241_22_4950", _unit(
+        "maps/sm_pier_1/water/blackwater_-1241_22_4950", shader="patch", family="patch",
+        resolved=False,
+        parameters=[_param(0, "include", "water/blackwater"),
+                    _param(1, "$envmap", "maps/sm_pier_1/c-1241_22_4950", block="replace#1")],
+        dependencies=[_texture_dep("$envmap", "maps/sm_pier_1/c-1241_22_4950")],
+        patch={"include": "water/blackwater", "asset": "vtmb:material:water/blackwater",
+               "operations": ["replace"]},
+    ))
+    _publish(export, "glass/pane", _unit(
+        "glass/pane", shader="vertexlitgeneric",
+        parameters=[_param(0, "$basetexture", "glass/pane"), _param(1, "$envmap", "env_cubemap")],
+        dependencies=[_texture_dep("$basetexture", "glass/pane")],
+    ))
+    _publish(export, "maps/sm_pier_1/glass/pane", _unit(
+        "maps/sm_pier_1/glass/pane", shader="patch", family="patch", resolved=False,
+        parameters=[_param(0, "include", "glass/pane"),
+                    _param(1, "$envmap", "maps/sm_pier_1/cubemapdefault", block="replace#1")],
+        dependencies=[_texture_dep("$envmap", "maps/sm_pier_1/cubemapdefault")],
+        patch={"include": "glass/pane", "asset": "vtmb:material:glass/pane", "operations": ["replace"]},
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    assert result.probes_bound == 2
+    entries = _entries(tmp_path / "stage")
+    basin = entries["/ElysiumBaked/Materials/maps/sp_soc_3/dev/MI_dev_water2_cheap"]
+    assert basin["textures"]["EnvMap"] == "/ElysiumBaked/Textures/maps/sp_soc_3/TC_cubemapdefault"
+    assert basin["switches"] == {"UseEnvMap": True, "UseFixedCube": True}
+    assert basin["recipe"]["params"]["textures"]["EnvMap"] == basin["textures"]["EnvMap"]
+    environment = _provenance(tmp_path / "stage", basin)["environment"]
+    assert environment["patchedProbe"] is True and environment["patchedProbeBound"] is True
+    assert environment["envMapAsset"] == basin["textures"]["EnvMap"]
+    # The unpatched base keeps the engine fallback: it is never placed, its patches are.
+    base = entries["/ElysiumBaked/Materials/dev/MI_dev_water2_cheap"]
+    assert base["textures"]["EnvMap"] == "/ElysiumBaked/Textures/engine/TC_defaultcubemap"
+    # The pier's ocean card: an LMG fake with `$surfaceprop water` binds its probe the same way.
+    card = entries["/ElysiumBaked/Materials/maps/sm_pier_1/water/MI_blackwater__1241_22_4950"]
+    assert card["textures"]["EnvMap"] == "/ElysiumBaked/Textures/maps/sm_pier_1/TC_c_1241_22_4950"
+    assert card["switches"]["UseFixedCube"] is True
+    # The underside twin of the patched water instance is not itself rebound (it inherits).
+    twin = entries["/ElysiumBaked/Materials/maps/sp_soc_3/dev/MI_dev_water2_cheap_Underside"]
+    assert "EnvMap" not in twin["textures"]
+    # An ordinary patched Lit unit stays provenance-only: Lumen supplies its reflection.
+    pane = entries["/ElysiumBaked/Materials/maps/sm_pier_1/glass/MI_pane"]
+    assert pane["textures"] == {} and pane["switches"] == {}
+    assert "patchedProbeBound" not in _provenance(tmp_path / "stage", pane)["environment"]

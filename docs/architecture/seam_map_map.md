@@ -2077,39 +2077,53 @@ block and `flametrail*` a `rate` on the particle body (no row in the runtime's t
 The `sparks_warrens_computers_fx*` colour ramps spell `255!,0!,…`; the stage reads the numeric
 prefix as the engine's `atof` does.
 
-## Import — water volumes (R7.1)
+## Import — water volumes and water faces (R7.1 → R7.5, water-complete)
 
 R7.1 of `docs/project/seam_migration.md` (ruling in `docs/architecture/water-architecture.md`
 §1, rulings B and C) places a converted map's **water volumes** as one bake-generated actor: every
 real `LEAFWATERDATA` record joined to the `CONTENTS_WATER` brushes that carry it and the fog keys
-its surface material authors. The look — `M_V2_Water` as Single Layer Water — is
-`seam_map_material.md` → `M_V2_Water`; this section is the volume: what a body stands in and what
-the camera reads as "underwater". Two maps carry a real water body today: `sm_hub_1` (the sewer)
-and `sm_pier_1` (the ocean off the boards, `water/invisible_water` — no drawn surface, but the
-volume is real and a body that walks off the pier is in it).
+its surface material authors. R7.4/R7.5 (the water-complete pass, `C:/Users/João Amaro/.claude/
+plans/water-complete.md`, `E:/elysium-work/scratch/water_audit/phase0/PHASE0_VERDICT.md`) complete
+the volume with the compiler's `fluid{}` block and convex pieces, the near-water leaf set, and a
+**face-level** product (`water.faces[]`) carrying the per-face facts (`underside`, `lightStyle`,
+`surfaceFogVolumeID`, `texdata`, `primitive`, `area`) that the old per-material grouping had no row
+for. The look — `M_V2_Water` as Single Layer Water — is `seam_map_material.md` → `M_V2_Water`; this
+section is the volume and the faces: what a body stands in, what the camera reads as "underwater",
+and which mesh section binds which instance. Three maps carry a real water body today: `sm_hub_1`
+(the sewer), `sm_pier_1` (the ocean off the boards — R7.5 draws it, below) and `sp_soc_3` (the
+Society of Leopold basin).
 
 ### Identity and naming
 
 ```text
 vtmb:map-entities:<map>  units.root["water"]["leafData"][i]     (LEAFWATERDATA, lump order)
   + units.root["collision"]["brushes"][j]                       (CONTENTS_WATER, 0x20)
+  + units.root["physics"]["models"][0]["keyValues"]["fluid"]     (the compiler's fluid{} block, G7)
+  + units.root["physics"]["models"][0]["solids"][fluid.index]    (the fluid's convex decomposition, G18)
+  + units.root["bsp"]["leafs"][*]                                (leafWaterDataID, G10; PVS union, G9/G23)
+  + units.root["faces"][*]                                       (per-face underside/lightStyle/etc, G6/G11/G22/G26)
   + vtmb:material:<key>  ($fogenable/$fogcolor/$fogstart/$fogend, through patchBase)
-  -> $ELYSIUM_WORK_ROOT/import/map_geometry/<map>/manifest.json   water.volumes[], water.dropped[]
-  -> /ElysiumBaked/<map>/<map>.umap                                one AElysiumWaterVolumes actor
+  -> $ELYSIUM_WORK_ROOT/import/map_geometry/<map>/manifest.json   water.volumes[], water.faces[], water.dropped[]
+  -> /ElysiumBaked/<map>/<map>.umap                                one AElysiumWaterVolumes actor + tagged mesh sections
 ```
 
-`resolve_water_volumes(units, read_sidecar, map_name)` (`importers/map_geometry.py:1276`) needs no
-sidecar reader of its own beyond the material lane's (`read_sidecar`, the same one every other
-table in this file resolves materials through) and no new field on `MapGeometry` — `units` is
-`geometry.join.units`, `MapUnits.root`'s whole extension (`collision`, `planes`, `texinfos`,
-`textures`, `water`), called from `stage_map` beside `resolve_sprite_table`
-(`map_geometry.py:1619`). `MANIFEST_VERSION` 8 → 9 (`#: 9 (R7.1)`, `bake_map_v2.py:107`'s own
-history line, the `stage-geometry` lane's edit stopping at the constant).
+`resolve_water_volumes(units, read_sidecar, map_name, visibility=None)`
+(`importers/map_geometry.py:1973`) takes one new argument since R7.4: `visibility` is the map's
+visibility sub-unit (`importers.map_visibility.read_visibility`, `None` where the export carries
+none), the sole source for `water.volumes[].nearBoxesCm`. It still needs no sidecar reader of its
+own beyond the material lane's (`read_sidecar`) and no new field on `MapGeometry` — `units` is
+`geometry.join.units`, `MapUnits.root`'s whole extension, called from `stage_map` beside
+`resolve_sprite_table`. `MANIFEST_VERSION` 8 → 9 (R7.1) → 10 (R7.4: `fluid`/`pieces`/
+`leafBoxesCm`/`nearBoxesCm` on the volume row, `water.faces[]`, the `#underside`/`#style<n>`
+section-key suffixes, `underside`/`undersideAsset`/`lightStyle` on the materials row) → 11 (R7.5
+integration pass: `meshedAreaCm2` on the face row, the G26 area pin now checked per face AND per
+section) — `map_geometry.py:85-97`'s own history line, pinned equal to `bake_map_v2.py`'s constant
+by `test_the_two_halves_share_the_manifest_version`.
 
 ### What the stage publishes
 
-The manifest's `"water"` key, verbatim (`WaterVolume.as_row`/`WaterBrush.as_row`,
-`map_geometry.py:382-421`):
+The manifest's `"water"` key, verbatim (`WaterVolume.as_row`/`WaterBrush.as_row`/`WaterFluid.as_row`,
+`map_geometry.py:410-547`):
 
 ```json
 "water": {
@@ -2120,7 +2134,24 @@ The manifest's `"water"` key, verbatim (`WaterVolume.as_row`/`WaterBrush.as_row`
       "material": "vtmb:material:water/sewer_water",
       "fogEnable": true, "fogColor": [0.019608, 0.019608, 0.0],
       "fogStartCm": 2.54, "fogEndCm": 2600.96,
-      "brushes": [ { "planes": [[nx, ny, nz, d], ...], "boundsCm": {"min": [x, y, z], "max": [x, y, z]} } ]
+      "brushes": [ { "planes": [[nx, ny, nz, d], ...], "boundsCm": {"min": [x, y, z], "max": [x, y, z]} } ],
+      "fluid": { "index": 5, "density": null, "damping": null,
+                 "surfacePlane": [nx, ny, nz, d], "currentVelocityCm": [0, 0, 0],
+                 "contents": null, "surfaceProp": "water" },
+      "pieces": [ { "planes": [[nx, ny, nz, d], ...], "boundsCm": {"min": [x, y, z], "max": [x, y, z]} } ],
+      "leafBoxesCm": [ {"min": [x, y, z], "max": [x, y, z]} ],
+      "nearBoxesCm": [ {"min": [x, y, z], "max": [x, y, z]} ],
+      "materialTableWaterIndex": 17
+    }
+  ],
+  "faces": [
+    {
+      "index": 5423, "scene": "world", "group": "vtmb:material:water/sewer_water#underside",
+      "unit": "vtmb:material:water/sewer_water", "underside": true, "lightStyle": null,
+      "lightStyles": [], "surfaceFogVolumeID": 65535, "texInfo": 2425, "texdata": 37,
+      "plane": 3761, "side": 1, "normal": [0.0, 0.0, -1.0],
+      "primitive": {"first": 0, "count": 0},
+      "area": 4848128.0, "areaCm2": 31278568.9, "meshedAreaCm2": 31278568.9, "triangles": 24
     }
   ],
   "dropped": [ {"index": 3, "reason": "sentinel"}, {"index": 0, "reason": "no water brush"} ]
@@ -2135,6 +2166,29 @@ The manifest's `"water"` key, verbatim (`WaterVolume.as_row`/`WaterBrush.as_row`
 | `fogEnable`, `fogColor`, `fogStartCm`, `fogEndCm` | bool, `[r, g, b]` 0..1 undecoded, cm, cm | the material's own VMT provenance (`$fogenable`/`$fogcolor`/`$fogstart`/`$fogend`), **never the staged instance** — `invisible_water`/`cheap_water` land on masters with no fog lane and stage none of these keys, so the volume has to read the source VMT directly. `$fogcolor` parses through `materials._VECTOR_SHAPE["FogColor"]` (already `/255`, the `.env` convention — the gamma decode is the shader's, at bake and render time, never here); start/end × 2.54; a material with no fog keys stages `fogEnable: false` |
 | `brushes[].planes` | `[[nx, ny, nz, d], ...]` Unreal cm, outward normals | `n' = (n0, n2, n1)`, `d' = d × 100` — the same `gltf_position_to_unreal` permutation every coordinate-bearing product in this pipeline takes (verified orthogonal, so the normal only permutes and the distance only scales); inside is `n'·p − d' ≤ 0` |
 | `brushes[].boundsCm` | `{min, max}` Unreal cm | **reused, not re-solved** — `UE_map_sidecars.source_planes` + `brush_hull` (bevel sides skipped, `\|det\| ≥ 1e-6`, the shipped `n·x − d ≤ 0.05` acceptance) + `hull_vertices`, the shipped collision's own solver, so a volume's AABB and the `.hulls` sidecar's vertices come from one implementation |
+| `fluid` | object or `null` (G7) | the compiler's `fluid{}` block off `physics.models[].keyValues`, decoded since R2 and read by nothing until R7.4. `index` names `physics.models[0].solids[index]` and is ALSO the creation guard `vampire.dll FUN_10158600` tests (`fluid.index > 0`, not `contents`) — both owner maps author `index "5"`, so both get a controller (verdict B5, closing AUDIT §12 unknown 7). `density`/`damping`/`contents` are `null` when the author left them out, never a substituted default (vphysics' own default density is 1000 kg/m³, but stating it here would claim an authoring that did not happen). `surfacePlane` is `n·p − d = 0` Unreal cm and lands on the volume's own `surfaceZCm` on all three maps — that equality is the join: a volume's fluid is the one whose plane stands at its surface, within `WATER_SURFACE_TOLERANCE_CM`. `currentVelocityCm` is cm/s; no map in the corpus authors a non-zero one (G21). `surfaceProp` is the hard-coded literal the controller binds (`vampire.dll 10158743`), provenance for the impact/step sound pools |
+| `pieces[]` | same row shape as `brushes[]` (G18) | the compiler's own convex decomposition of the fluid solid (`physics.models[0].solids[fluid.index]`), one plane set per ledge — the hub's water is 5 pieces where its single brush AABB spills 66-77 inches into the sewer walls, so a runtime that tests the carve instead of the box gets an exact answer. Empty (`[]`) when the volume has no fluid |
+| `leafBoxesCm[]` | `{min, max}` Unreal cm (G10) | the AABBs of every BSP leaf whose `leafWaterDataID` names this record — the engine's own "is the eye under water" answer, and a tighter hull than the brush |
+| `nearBoxesCm[]` | `{min, max}` Unreal cm (G9/G23) | the AABBs of every leaf in `⋃PVS(water clusters)`, derived from the visibility sub-unit (`importers.map_visibility.read_visibility`/`pvs_union`) rather than read off VtMB's own `0x200` leaf-contents annotation — measured set-equal to it on `sm_hub_1` (97 leaves) and `sp_soc_3` (126), and the only answer computable on `sm_pier_1`, whose Unofficial-Patch recompile carries the bit on no leaf at all. Solid leaves are excluded (vbsp's dummy leaf 0). Empty (`[]`) when the map ships no visibility sub-unit — a derivation this lane could not make, never "nothing is near water" |
+| `materialTableWaterIndex` | int or `null` (G17) | the physics `materialtable` row named `water` — the surfaceprop index a body moving in this volume reports. `sm_pier_1`'s 18-row table has one (`WATER = 17`); `sm_hub_1`'s 16-row table does not |
+
+`water.faces[]` (R7.4/R7.5, `_water_face_row`, `map_geometry.py:1042-1106`) is one row per
+`%compilewater` face, in face order — what vbsp published about a water face and the port never
+read before this. `underside`/`lightStyle` restate the two facts the face's `group` key was split
+on (`section_key`/`split_section_key`, below) so a reader never has to parse a key back apart;
+`lightStyles` carries every style the face names (not only the lowest, which `lightStyle` picks).
+`surfaceFogVolumeID` is the compiler's own top/underside split — `0` on exactly the pier's 27 water
+faces (9 `_depth_33` top on plane 644, normal +Z; 18 `invisible_water` underside on plane 645,
+normal −Z) and `0xFFFF` on its other 5,423 — downgraded to a cross-check, not a source: the engine
+forces `0xFFFF` on every non-`WARP` face and the field exists only in the Unofficial-Patch
+recompile (G11). `texdata` is the per-surface identity vbsp split the sheet on (G22). `primitive`
+is `{first, count}` from `dface+100/102` — the compiled grid this face draws as when `count` is
+non-zero, to the exclusion of the surfedge fan (G13, U2). `area`/`areaCm2` are the compiler's own
+square inches/cm²; `meshedAreaCm2` is what this stage actually meshed for the face (R7.5,
+`meshed_area_cm2`, `map_geometry.py:1023`) — together they ARE the area pin (G26/verdict B3),
+answered offline per face AND per section, because `originalFaces[].area` is `0.0` on all 2,182
+rows in the corpus and can never be the check (`origFace` is a pre-CSG shard grouper, not a
+drawable polygon — `docs/vtmb/water.md` → "Compiled tessellation").
 
 **Rows.** One row per real `LEAFWATERDATA` record, in lump order. `surfaceTexInfoID == -1` (vbsp's
 sentinel, two rows in `hw_warrens_2`) is dropped and named `"sentinel"`. A record no water brush
@@ -2173,6 +2227,76 @@ A row whose material never staged at all (no sidecar the material lane produced)
 `MapGeometryError` naming the unstaged unit (`run: uv run elysium import materials`), never a
 silently clear-water volume.
 
+### Section keys: `#underside` and `#style<n>` (R7.4, contracts 1 and 3)
+
+A face group's key used to be its material's alone. Since R7.4 it is `<material>[@<cubemap>]
+[#underside][#style<n>]` — two more per-face facts folded on, in a fixed order so a key is parsed
+by splitting rather than guessed at: `map_geometry.section_key(key, underside=, light_style=)`
+builds it, `split_section_key(key) -> (base, underside, style)` is its exact inverse. Both suffixes
+name a BINDING the bake makes on the section, not merely a label: `#underside` says the section
+binds the material lane's `_Underside` twin instead of the surface instance (contract 1), and
+`#style<n>` says the section's chunk gets tagged `ElysiumBakedTags::LightStyle(n)` and the light
+rig writes its brightness into CPD slot 6 (contract 3).
+
+**Underside is decided per FACE, on the face's own plane normal, `z < 0.0` in Unreal space**
+(`UNDERSIDE_NORMAL_Z`, `face_underside`, verdict B2) — never on the unit's `$bottommaterial`
+self-reference the R7.1/R7.4 rule used to read (retired; see `seam_map_material.md` → `M_V2_Water`
+→ "Underside is a face fact"). The `side` bit is deliberately NOT consulted: every down-facing
+water face in the corpus carries `side 1`, so gating on it too would flip all 47 hub water faces
+up-facing. The split is gated to `%compilewater` faces only — every ceiling in a map has a
+down-facing plane normal too, and `Mod_LoadFaces` only reads the normal to decide whether to
+undefine `$reflecttexture`, a key only a water shader registers, so splitting any other family
+would ask the material lane for a twin it never stages.
+
+**Lightstyle picks the LOWEST style a face names, not the first slot** (`face_light_style`, G6):
+Quake's inherited animated patterns are styles 1–11 and a named `light` entity's switchable style
+is 32–63, so the lowest non-base style is the one that actually moves, and the switchable one
+defaults to full brightness anyway. Measured on `sm_pier_1`'s 34 `objects/surf` foam cards: all 34
+name style 1, but 18 of them name the switchable 32 in an EARLIER slot — slot order would have
+split one waterline into two chunks flickering on two different patterns. Every style the face
+names still rides the row (`water.faces[].lightStyles`), so a consumer that wants the switchable
+one too never has to re-read the lump.
+
+### The materials row: `underside`, `undersideAsset`, `lightStyle`
+
+Every `manifest["materials"][<section key>]` row (`MaterialBinding.as_row`, `map_geometry.py:
+624-632`) gains three fields since R7.4: `underside` (bool, mirrors the `#underside` suffix),
+`undersideAsset` (`f"{asset}_Underside"`, same folder as the surface instance, or `null` for a
+non-underside group — `MaterialBinding.underside_asset`, a pure fold identical to the material
+lane's own `materials.underside_asset_path_for`) and `lightStyle` (int or `null`, mirrors
+`#style<n>`). `MaterialBinding.slot_asset` — the instance the bake actually binds into a face
+group's material slot — now resolves the underside twin for an `#underside` group ahead of the
+plain surface instance (a `$decal` projector twin still wins over both, since a decal surface and
+an underside water face never coincide): `decal_asset if is_decal_surface else (underside_asset or
+asset)`. Lane E (`bake_map_v2.py`) parses a section's underside/style facts with
+`split_section_key`, never by string surgery on the key.
+
+### The drawn-water predicate (G1; owner decision 2 withdrawn 2026-09-05)
+
+`meshed_faces(units, sky, backings, compile_water=None)` / `prepare_join(map_name, root=None,
+compile_water=None)` (`map_geometry.py`) and `UE_map_sidecars.meshed_faces` take a fourth,
+optional predicate: `compile_water(read_sidecar)` (`map_geometry.compile_water_predicate`), built
+by trying the unit's own texdata key first, then its base fold. It answers "**drawn** water":
+`%compilewater` **and not** `%compilenodraw`. A face it says yes to is never dropped for
+`SURF_NODRAW`; a `%compilenodraw` water face is dropped like any nodraw face. The predicate tests
+the face's OWN texdata key, not the base-folded family, so a patched `%compilewater` unit is caught
+the same way its base is. `None` (no predicate) reproduces the legacy nodraw behaviour byte for
+byte — a caller that has not adopted the water lane sees no change.
+
+**Owner decision 2 ("surface on nodraw water") is withdrawn** (`water-architecture.md` → ruling O).
+`sm_pier_1`'s `water/invisible_water` and `.../invisible_water_depth_33` are `SURF_NODRAW` in VtMB
+and draw nothing there: the ocean *is* the `water/blackwater` card 21 in below the plane (a bumped
+LMG surface reflecting the map's compiled cubemap), which the R7.5 pass had covered with a lit
+sheet. Measured effect on `sm_pier_1`: 0 water faces mesh, as before R7.5; the brush is still
+staged as a volume by `resolve_water_volumes` (its own `%compilewater` read), so its fog, body
+state and events are unchanged.
+
+### New counts
+
+`manifest["counts"]` gains `waterFaces` (`len(water.faces)`), `waterUndersideFaces` (the subset
+with `underside: true`) and `lightStyleGroups` (the number of distinct non-`null` `lightStyle`
+groups among the water faces) — joining the existing `waterVolumes` count this file already names.
+
 ### Producer and stage
 
 `resolve_water_volumes` is the sole producer, called from `stage_map` after `effects_lane.
@@ -2194,13 +2318,21 @@ file follows.
   `bake_map.py` — the legacy (non-V2) bake tag exists but places nothing, like `TAG_CAPTURE`).
 - **Struct.** `FElysiumWaterVolume { int32 Index; float SurfaceZCm; float MinZCm; FString
   Material; bool bFogEnabled; FLinearColor FogColor; float FogStartCm; float FogEndCm;
-  TArray<FElysiumWaterBrush> Brushes; }`, `FElysiumWaterBrush { TArray<FPlane> Planes; FBox
-  BoundsCm; }`; the actor carries `TArray<FElysiumWaterVolume> Volumes` as one
-  `UPROPERTY(EditAnywhere, Category = "Elysium")`. `_place_water` writes every field through
-  `self._set` (the shared property-write helper every placement lane in `bake_map_v2.py` uses,
-  now failing with a `bake:`-prefixed message rather than an `effects:`-prefixed one — a drift
-  the integrator generalized rather than hardcoded a second time), `unreal.Plane(x, y, z, w)` per
-  plane row and `unreal.Box(min=..., max=...)` + `is_valid` per brush's bounds, one
+  TArray<FElysiumWaterBrush> Brushes; FElysiumWaterFluid Fluid; TArray<FElysiumWaterBrush> Pieces;
+  TArray<FBox> LeafBoxesCm; TArray<FBox> NearBoxesCm; }`, `FElysiumWaterBrush { TArray<FPlane>
+  Planes; FBox BoundsCm; }`, `FElysiumWaterFluid { bool bHasFluid; int32 Index; float Density;
+  float Damping; FPlane SurfacePlane; FVector CurrentVelocityCm; int32 Contents; }` (R7.4, `Public/
+  ElysiumWaterVolumes.h:38-111`); the actor carries `TArray<FElysiumWaterVolume> Volumes` as one
+  `UPROPERTY(EditAnywhere, Category = "Elysium")`. Python spelling on the actor, set via
+  `set_editor_property`, is the snake-case fold of each field: `fluid` (`has_fluid`, `index`,
+  `density`, `damping`, `surface_plane`, `current_velocity_cm`, `contents`), `pieces`,
+  `leaf_boxes_cm`, `near_boxes_cm` — every one `EditAnywhere` without `CPF_EditConst`, asserted by
+  `Elysium.Substrate.WaterActor`, so a write that cannot land fails a test instead of going quiet.
+  `_place_water` writes every field through `self._set` (the shared property-write helper every
+  placement lane in `bake_map_v2.py` uses), writing `fluid`/`pieces`/`leaf_boxes_cm`/
+  `near_boxes_cm` onto the struct **only when the staged row carries the corresponding optional
+  field** — `WATER_ACTOR_SHAPE` bumped 1→2 to track the shape change, `unreal.Plane(x, y, z, w)`
+  per plane row and `unreal.Box(min=..., max=...)` + `is_valid` per brush's bounds, one
   `set_editor_property("volumes", [...])` call. The actor stands at the first volume's own bounds
   centre (`water_actor_values`, `bake_map_v2.py:1588` — any point would do; only the Outliner
   needs a sane position, since every query the runtime makes reads the struct array, never the
@@ -2208,6 +2340,38 @@ file follows.
 - **Adoption.** `UElysiumMapVisuals::AdoptBakedLevel` buckets an `elysium.water`-tagged actor
   into `WaterVolumes` (`ElysiumMapVisuals.cpp:302`) and counts it into `WaterVolumeCount`
   (`:351`), exposed read-only as `GetWaterVolumes()`.
+- **Queries over `Pieces`/`NearBoxesCm` (R7.4).** `ElysiumWater::FindVolumeAt` tests a volume's
+  `Pieces` (planes only, no bounds required) when it publishes any, falling back to `Brushes`
+  otherwise — the compiler's own carve outranks the authored brush wherever both exist, because a
+  canal cut out of the brush answers differently at the cut (the hub's water is 5 convex pieces
+  where its single brush AABB spills 66-77 inches into the sewer walls). `FindNearVolumeAt`/
+  `IsNearWater` answer over `NearBoxesCm`, degrading to the volume's brush bounds on a level baked
+  before R7.4 added the near set.
+- **The underside twin and the lightstyle chunk are mesh-section facts, not volume-actor facts** —
+  bound where the section itself lives (`bake_map_v2._V2Material.slot_asset`, which resolves the
+  staged `undersideAsset` field ahead of the plain surface instance, and `bake_map.
+  chunk_style_suffix`/`parse_chunk_style`, the filename convention a styled world/sky chunk carries
+  beyond its cell coordinates). `bake_map.LIGHT_STYLE_CPD_SLOT = 6` /
+  `LIGHT_STYLE_CPD_DEFAULT = 1.0`: `set_fog` always writes CPD slot 6 = 1.0 alongside the six fog
+  floats, because a CPD-driven parameter never falls back to its own default and an unwritten slot
+  reads `0` — which for a multiplier is black. Every producer of a primitive that binds these
+  masters owes that write: the bake through `set_fog`, the runtime through
+  `ElysiumLightStyle::StampUnstyled` in `UElysiumEntityBodies`' brush / prop / phys-prop /
+  skeletal-prop builders, and `stage_level` tags a styled chunk's actor with
+  `elysium.style=<n>` (`bake_verify.LIGHT_STYLE_TAG_PREFIX`, restating
+  `ElysiumBakedTags::LightStyle`'s format byte for byte). `UElysiumMapVisuals::AdoptBakedLevel`
+  collects every world/sky/prop primitive carrying that tag (component tags first, falling back to
+  actor tags) into `UElysiumLightRig::AdoptStyledPrimitives`, which stamps slot 6 at adopt and
+  rewrites it each tick from the same `StyleTime`/`StylePatterns` pair a switched light already
+  animates against — the look side is `seam_map_material.md` → `M_V2_Water`/`M_V2_Lit` →
+  `LightStyleBrightness`. A **brush entity** takes a second carrier, because the bake never places
+  its mesh and the runtime builds the component long after that walk: the style rides the mesh's
+  own material slot names (`safe_name(<group key>)`, so a styled group's `#style<n>` folds to
+  `_style<n>`), read back by `ElysiumLightStyle::StyleFromSlotNames` in
+  `UElysiumMapVisuals::RegisterRuntimeBrush` and handed to `UElysiumLightRig::AddStyledPrimitive`.
+  `asset_names.brush_slot_style` is the offline twin, and `bake_map.py` fails the bake if an
+  unstyled group key ever folds to that shape. This is the carrier the pier's 17 `objects/surf`
+  foam bodies — all of G6's motivating geometry — arrive on.
 - **Per-tick consumers.** `AElysiumMapActor::UpdatePlayerWater()` (`ElysiumMapActor.cpp:1889`),
   called from the map actor's tick inside the `RuntimePhase == Active` guard, after the game-
   instance clock block closes and before the player's move — `CheckWater`'s own ordering.
@@ -2261,3 +2425,15 @@ matched`). `sm_hub_1`'s level carries 2,539 actors including the one `ElysiumWat
 `sm_pier_1`'s carries 969 including the one. `sp_soc_3`'s depth is the owner's basin: 1178.56 cm
 (464.0 inches) between `surfaceZCm` and `minZCm`, on the map's own per-map patched material rather
 than a shared-corpus one. No leftover `dropped[]` row on any of the three at `MANIFEST_VERSION` 9.
+
+**R7.4/R7.5 re-measurement** (staged at `MANIFEST_VERSION` 11, from the content integration pass —
+figures as reported, not re-run by this docs pass): `sm_hub_1` — 47 water faces / 24 underside / 1
+volume / 2 bound water sections / 1 lightstyle group. `sm_pier_1` — 50 water faces / 18 underside /
+1 volume / 3 bound water sections / 2 lightstyles over 211 styled groups (the 34 `objects/surf`
+foam cards' style 1, plus every other lit chunk's own style). `sp_soc_3` — 62 water faces / 27
+underside / 1 volume / 3 bound water sections / 2 lightstyles. `sp_tutorial_1` — 0 water, 110
+styled groups. `sm_pawnshop_1` — 0 water, 0 styled groups. 108 `_Underside` twin instances imported
+corpus-wide; 27 instances parent directly to `M_V2_Water` (was 24 before the `%compilewater`
+reroute moved three more units onto it). These numbers are the ones Phase 4's witness pass should
+reproduce from a fresh stage+bake; a materially different count on re-run is a regression, not a
+new baseline, unless the corpus or the staged material tree changed underneath it.

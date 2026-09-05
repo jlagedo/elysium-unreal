@@ -107,7 +107,15 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 9 (R7.1): and the `water` table -- one `volumes[]` row per `LEAFWATERDATA` record with its fog
 #: keys and its `CONTENTS_WATER` brushes as plane sets, which this lane folds into the one
 #: `AElysiumWaterVolumes` actor (`docs/architecture/water-architecture.md`).
-MANIFEST_VERSION = 9
+#: 10 (R7.4, water-complete): `map_geometry.section_key` splits a material group on two per-face
+#: facts, each its own `materials` row (`underside`/`undersideAsset`, `lightStyle`) --
+#: `_V2Material.slot_asset` resolves the `_Underside` twin for the first, `_chunk_world` keeps the
+#: second out of every unstyled chunk in its cell; each `water.volumes[]` row may carry `fluid`,
+#: `pieces`, `leafBoxesCm` and `nearBoxesCm` beside its existing fields, all optional so an
+#: older-staged manifest still loads (`_place_water` writes them only when present).
+#: 11 (R7.4, integrator): `water.faces[]` gains `meshedAreaCm2` beside `areaCm2`, which this lane
+#: does not read -- the G26 area pin is answered on the staged side, where both numbers are.
+MANIFEST_VERSION = 11
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -116,6 +124,21 @@ LIGHT_KIND_LABELS = {0: "tex", 1: "point", 2: "spot", 3: "sun"}
 #: The key space the staged `MI_` instances live under in `Bake.materials` -- beside the legacy
 #: `(package, key)` pairs, never colliding with one.
 V2_MATERIAL_SCOPE = "v2"
+
+#: R7.4 (water-complete contract 1, `map_geometry.UNDERSIDE_SUFFIX` restated): the twin instance
+#: name Lane C (`materials.py`/`make_v2_materials.py`) stages beside every `M_V2_Water` surface
+#: instance, in the same folder -- `_apply_water_underside`'s twin, reflection dropped (specular 0,
+#: roughness 1), same coefficients as the surface otherwise.
+UNDERSIDE_ASSET_SUFFIX = "_Underside"
+
+
+def underside_asset_path(surface_asset_path):
+    """`<dir>/MI_<unit>` -> `<dir>/MI_<unit>_Underside`, resolved the same way the surface
+    instance itself is resolved (an asset path Lane C already staged) plus the suffix. A fallback
+    only: `_V2Material.underside_asset` prefers the staged `undersideAsset` field
+    (`MaterialBinding.underside_asset`, computed once at the offline stage) and calls this merely
+    to stay total against a manifest that carries `underside: true` with no precomputed path."""
+    return surface_asset_path + UNDERSIDE_ASSET_SUFFIX
 
 
 #: The R1 model corpus (`docs/architecture/seam_map_model.md` -> "Import" -> "Identity and
@@ -232,7 +255,9 @@ EFFECT_COLLIDE_FIELDS = (
 TAG_WATER = "elysium.water"
 #: The shape `_place_water` writes the actor as -- bumped when the writer changes what it puts on
 #: the actor for the same staged rows, so the level re-authors.
-WATER_ACTOR_SHAPE = 1
+#: 2 (R7.4, water-complete contract 4): `fluid` / `pieces` / `leaf_boxes_cm` / `near_boxes_cm`
+#: ride each volume when the staged row carries them.
+WATER_ACTOR_SHAPE = 2
 
 #: The host script's namespace (`bake_map`'s `globals()`), bound once by it at import time. Wrapped
 #: so this module reads `HOST.Bake` rather than a dict subscript, and read lazily so binding does not
@@ -403,7 +428,9 @@ def _build_class():
             # Every material group the unit's faces resolved has to be in the staged table, or a
             # surface would bind the shared error material without anyone saying why. The offline
             # stage already failed the map if a unit was not staged; this is the cheap re-check
-            # that the pair on disk is the pair that stage wrote.
+            # that the pair on disk is the pair that stage wrote. R7.4: a `#underside`/`#style<n>`
+            # group (`map_geometry.section_key`) is its own row in the staged table, keyed exactly
+            # as the mesh group names it -- no suffix-stripping needed here.
             unknown = sorted(
                 set(self.world_obj.groups) | set(self.sky_model.groups)
                 | {key for model in self.brush_models.values() for key in model.groups}
@@ -473,7 +500,8 @@ def _build_class():
         def resolve_materials(self):
             """Every staged `MI_` this map's face groups bind, loaded by asset path -- the
             projector twin (`MI_<unit>_Decal`) for a `$decal` surface group (R7.2 ruling 3), the
-            surface instance for every other. A missing instance is a named failure, not a grey
+            `_Underside` twin for a `#underside` water group (contract 1, `_V2Material.slot_asset`),
+            the surface instance for every other. A missing instance is a named failure, not a grey
             surface: the material lane imports map-scoped, and the map it did not import is
             exactly the map this would silently unbind."""
             Bake.resolve_materials(self)
@@ -498,12 +526,16 @@ def _build_class():
                      % (len(missing), ", ".join(sorted(set(missing))[:8])))
                 raise SystemExit(1)
             log("v2 materials: %d instance(s) loaded (%d decal surface group(s) on the "
-                "projector instance)"
+                "projector instance, %d underside twin(s))"
                 % (len(loaded), sum(1 for mat in self.v2_materials.values()
-                                    if mat.is_decal_surface)))
+                                    if mat.is_decal_surface),
+                   sum(1 for mat in self.v2_materials.values() if mat.underside)))
 
         def material_for(self, key):
-            """The imported `MI_` one surface binds, by its face group key."""
+            """The imported `MI_` one surface binds, by its face group key. `self.v2_materials`
+            already carries one row per `map_geometry.section_key` -- a `#underside`/`#style<n>`
+            suffixed key is its own staged row, resolved through `_V2Material.slot_asset` exactly
+            like any other; no suffix is parsed here."""
             if key not in self.v2_materials:
                 return self.error_bind(key, self.map)
             return self.materials.get((V2_MATERIAL_SCOPE, key))
@@ -536,12 +568,13 @@ def _build_class():
             built = tris = dropped = 0
             wanted = set()
             for key in sorted(buckets.keys()):
-                cx, cy, cz, opaque = key
+                cx, cy, cz, opaque, style = key
                 pivot = ((cx + 0.5) * cell, (cy + 0.5) * cell, (cz + 0.5) * cell)
                 sections, names = self._sections(
                     model, normals, self.sky_blend, buckets[key], pivot)
-                asset_path = "%s/SM_Sky_%s%d_%d_%d" % (
-                    self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
+                asset_path = "%s/SM_Sky_%s%d_%d_%d%s" % (
+                    self.mesh_pkg, "" if opaque else "T_", cx, cy, cz,
+                    HOST.chunk_style_suffix(style))
                 materials = [self.material_for(name) for name in names]
                 kept, lost, _, static_mesh = self._emit(
                     "sky", asset_path, sections, names, materials, nanite=opaque)
@@ -571,7 +604,8 @@ def _build_class():
             recipe["lane"] = self.lane
             recipe["unit_sha256"] = self.geometry.unit_sha256
             # R7.2 ruling 3: the SLOT each face group binds, so a unit that gained (or lost) its
-            # projector twin re-authors the level instead of reusing a level bound to the other one.
+            # projector twin -- or, R7.4, its `_Underside` twin -- re-authors the level instead of
+            # reusing a level bound to the other one. `slot_asset` already resolves both.
             recipe["v2_materials"] = sorted(
                 {mat.slot_asset or mat.asset for mat in self.v2_materials.values()})
             recipe["props"] = sorted(
@@ -1208,6 +1242,32 @@ def _build_class():
 
         # ------------------------------------------------------------------ water (R7.1)
 
+        def _water_box(self, bounds):
+            """One `{min, max}` row -> `unreal.Box`, `is_valid` stamped only when both corners are
+            present -- shared by a volume's own brush bounds and the R7.4 `leafBoxesCm`/
+            `nearBoxesCm` lists, which carry the same shape with no plane set beside it."""
+            bounds = bounds or {}
+            box = unreal.Box()
+            if bounds.get("min") and bounds.get("max"):
+                box = unreal.Box(min=unreal.Vector(*bounds["min"]),
+                                 max=unreal.Vector(*bounds["max"]))
+                box.set_editor_property("is_valid", 1)
+            return box
+
+        def _water_brush(self, row, what):
+            """One `{planes, boundsCm}` row -> `unreal.ElysiumWaterBrush` -- shared by a volume's
+            own `brushes[]` (its `CONTENTS_WATER` hull) and R7.4's `pieces[]` (the compiler's
+            convex solids). Both carry `boundsCm`: a brush's is the hull the stage solved, a
+            piece's is the AABB of the ledge's own vertices, which bounds its convex hull exactly
+            (`map_geometry._solid_pieces` -- vbsp itself publishes no bounds for a ledge)."""
+            brush = unreal.ElysiumWaterBrush()
+            planes = [unreal.Plane(float(p[0]), float(p[1]), float(p[2]), float(p[3]))
+                     for p in row.get("planes") or []]
+            self._set(brush, "planes", planes, what + ".planes")
+            self._set(brush, "bounds_cm", self._water_box(row.get("boundsCm")),
+                     what + ".boundsCm")
+            return brush
+
         def _place_water(self, actors):
             """Every staged `water.volumes[]` row folded into the one `AElysiumWaterVolumes`
             actor (`water-architecture.md` section 5.2) -- one actor per map, not one per volume,
@@ -1247,22 +1307,48 @@ def _build_class():
                          what + ".fogStartCm")
                 self._set(volume, "fog_end_cm", float(row.get("fogEndCm") or 0.0),
                          what + ".fogEndCm")
-                brushes = []
-                for brush_index, brush_row in enumerate(row.get("brushes") or []):
-                    brush_what = "%s.brushes[%d]" % (what, brush_index)
-                    brush = unreal.ElysiumWaterBrush()
-                    planes = [unreal.Plane(float(p[0]), float(p[1]), float(p[2]), float(p[3]))
-                             for p in brush_row.get("planes") or []]
-                    self._set(brush, "planes", planes, brush_what + ".planes")
-                    bounds = brush_row.get("boundsCm") or {}
-                    box = unreal.Box()
-                    if bounds.get("min") and bounds.get("max"):
-                        box = unreal.Box(min=unreal.Vector(*bounds["min"]),
-                                         max=unreal.Vector(*bounds["max"]))
-                        box.set_editor_property("is_valid", 1)
-                    self._set(brush, "bounds_cm", box, brush_what + ".boundsCm")
-                    brushes.append(brush)
+                brushes = [self._water_brush(brush_row, "%s.brushes[%d]" % (what, i))
+                          for i, brush_row in enumerate(row.get("brushes") or [])]
                 self._set(volume, "brushes", brushes, what + ".brushes")
+
+                # R7.4 contract 4 -- all four optional, present only once Lane B stages them and
+                # Lane D exposes the properties; a manifest staged before this lane still bakes.
+                fluid_row = row.get("fluid")
+                if fluid_row is not None:
+                    fluid_what = what + ".fluid"
+                    fluid = unreal.ElysiumWaterFluid()
+                    self._set(fluid, "index", int(fluid_row.get("index") or 0),
+                             fluid_what + ".index")
+                    self._set(fluid, "density", float(fluid_row.get("density") or 0.0),
+                             fluid_what + ".density")
+                    self._set(fluid, "damping", float(fluid_row.get("damping") or 0.0),
+                             fluid_what + ".damping")
+                    plane = fluid_row.get("surfacePlane") or [0.0, 0.0, 1.0, 0.0]
+                    self._set(fluid, "surface_plane",
+                             unreal.Plane(float(plane[0]), float(plane[1]),
+                                         float(plane[2]), float(plane[3])),
+                             fluid_what + ".surfacePlane")
+                    velocity = fluid_row.get("currentVelocityCm") or [0.0, 0.0, 0.0]
+                    self._set(fluid, "current_velocity_cm",
+                             unreal.Vector(*[float(v) for v in velocity]),
+                             fluid_what + ".currentVelocityCm")
+                    self._set(fluid, "contents", int(fluid_row.get("contents") or 0),
+                             fluid_what + ".contents")
+                    self._set(fluid, "has_fluid", True, fluid_what + ".hasFluid")
+                    self._set(volume, "fluid", fluid, what + ".fluid")
+
+                if row.get("pieces") is not None:
+                    pieces = [self._water_brush(piece_row, "%s.pieces[%d]" % (what, i))
+                             for i, piece_row in enumerate(row.get("pieces") or [])]
+                    self._set(volume, "pieces", pieces, what + ".pieces")
+                if row.get("leafBoxesCm") is not None:
+                    self._set(volume, "leaf_boxes_cm",
+                             [self._water_box(b) for b in row["leafBoxesCm"]],
+                             what + ".leafBoxesCm")
+                if row.get("nearBoxesCm") is not None:
+                    self._set(volume, "near_boxes_cm",
+                             [self._water_box(b) for b in row["nearBoxesCm"]],
+                             what + ".nearBoxesCm")
                 structs.append(volume)
             self._set(actor, "volumes", structs, "actor.volumes")
             actor.set_actor_label(values["label"])
@@ -1773,10 +1859,20 @@ class _V2Material(object):
     `MI_<unit>_Decal` projector instance -- as its mesh slot instead of `asset`, and draws in the
     mesh-decal pass. The staged row already answers `opaque` False for it, so the Nanite split
     keeps it in a plain static-mesh section without this file deciding anything.
+
+    R7.4 (water-complete contract 3): `light_style` is the face rows' own `lightStyle` (0 when
+    none carry one, or absent from a manifest staged before this lane), read by `_chunk_world` to
+    keep a styled group out of every unstyled chunk in its cell.
+
+    R7.4 (contract 1): `underside` is ruling B2's per-face fact (`map_geometry.face_underside`,
+    `normal.z < 0` in Unreal space) restated on the group; `underside_asset` is the `_Underside`
+    twin `MaterialBinding.underside_asset` already computed offline (`asset` plus the suffix, same
+    folder) -- `slot_asset` binds it instead of the surface instance, VtMB's own per-face response
+    to a down-facing water face being to undefine `$reflecttexture` on it.
     """
 
     __slots__ = ("key", "unit", "asset", "master", "blend_mode", "opaque", "patched",
-                 "decal_asset", "is_decal_surface")
+                 "decal_asset", "is_decal_surface", "light_style", "underside", "underside_asset")
 
     #: The legacy per-map wetness path (`Bake.resolve_textures`'s sm_hub_1 `SourceCube` join)
     #: reads this off every world row; no V2 surface takes it -- wetness is the shared
@@ -1793,11 +1889,21 @@ class _V2Material(object):
         self.patched = bool(row.get("patched"))
         self.decal_asset = row.get("decalAsset") or None
         self.is_decal_surface = bool(row.get("isDecalSurface"))
+        self.light_style = int(row.get("lightStyle") or 0)
+        self.underside = bool(row.get("underside"))
+        staged_underside_asset = row.get("undersideAsset")
+        self.underside_asset = (staged_underside_asset or
+                                (underside_asset_path(self.asset)
+                                 if self.underside and self.asset else None))
 
     @property
     def slot_asset(self):
-        """The instance this face group's material slot binds (`MaterialBinding.slot_asset`)."""
-        return self.decal_asset if self.is_decal_surface else self.asset
+        """The instance this face group's material slot binds (`MaterialBinding.slot_asset`):
+        the decal projector, else the `_Underside` twin for an underside group, else the surface
+        instance."""
+        if self.is_decal_surface:
+            return self.decal_asset
+        return self.underside_asset or self.asset
 
 
 def _count_by_master(materials):

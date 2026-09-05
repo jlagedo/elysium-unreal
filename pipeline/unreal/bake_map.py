@@ -35,6 +35,8 @@ from pipeline.unreal import bake_map_v2 as v2  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import placed_models as PM, shared_corpus as SC  # noqa: E402
+from elysium_pipeline.asset_names import (  # noqa: E402
+    LIGHTSTYLE_KEY_SUFFIX, brush_slot_style)
 from elysium_pipeline.paths import export_root  # noqa: E402
 from elysium_pipeline.tasking import ContentDigestCache, DIGEST_CACHE_FILE  # noqa: E402
 
@@ -108,6 +110,50 @@ TAG_CAPTURE = "elysium.capture"
 # The baked 2D-sky backdrop dome (R5.2, `MapsOnV2Models` maps only). Distinct from TAG_SKY -- the
 # 3D-skybox miniature's own tag -- so the miniature's sky-fog stamping pass never walks the dome.
 TAG_SKYDOME = "elysium.skydome"
+# R7.4 (water-complete contract 3): the lightstyle a world/sky chunk carries, restating
+# `ElysiumBakedTags::LightStyle`'s own format (`"elysium.style=%d"`) so `stage_level` can write it
+# without a C++ import. Beside TAG_WORLD/TAG_SKY, never instead of them.
+LIGHT_STYLE_TAG_PREFIX = "elysium.style="
+
+
+def chunk_style_suffix(style):
+    """The filename fragment a styled world/sky chunk's asset name carries beyond
+    `SM_World_<T_>?<cx>_<cy>_<cz>` / `SM_Sky_<T_>?<cx>_<cy>_<cz>` (contract 3: `_chunk_world`
+    keeps a styled material group out of every unstyled bucket, so its chunk needs a name of its
+    own too, or two different buckets in the same cell would collide on one asset path). Empty
+    for style 0 -- the overwhelming majority, every map before this lane existed -- so an unstyled
+    bake names its chunks exactly as it always has."""
+    return "_S%d" % style if style else ""
+
+
+def chunk_actor_tags(name):
+    """The baked tags a world/sky chunk actor carries, from its asset name alone.
+
+    Its lane tag (`TAG_SKY` for a 3D-skybox miniature chunk, `TAG_WORLD` otherwise), plus
+    `elysium.style=<n>` when `chunk_style_suffix` named a lightstyle on it (R7.4 contract 3).
+    The runtime's style clock (`UElysiumMapVisuals::AdoptBakedLevel` -> `UElysiumLightRig::
+    AdoptStyledPrimitives`) finds a chunk by exactly this tag and overwrites CustomPrimitiveData
+    slot `LIGHT_STYLE_CPD_SLOT` on it every tick; every other primitive keeps the
+    `LIGHT_STYLE_CPD_DEFAULT` that `set_fog` stamped. Pulled out of `stage_level`'s placement loop
+    so the one decision the lane added is assertable without an editor world to spawn into.
+    """
+    _base, style = parse_chunk_style(name)
+    tags = [TAG_SKY if name.startswith("SM_Sky") else TAG_WORLD]
+    if style:
+        tags.append("%s%d" % (LIGHT_STYLE_TAG_PREFIX, style))
+    return tags
+
+
+def parse_chunk_style(name):
+    """`(base name, style)` -- the inverse of `chunk_style_suffix`, read where a chunk is
+    rediscovered by listing built assets rather than carried through in memory (`stage_level`).
+    Unambiguous: a chunk's whole name after its `SM_World_`/`SM_Sky_` prefix is digits, `-` and
+    `_` only, so `_S<digits>` cannot occur except as this suffix."""
+    base, sep, tail = name.rpartition("_S")
+    if sep and tail.isdigit():
+        return base, int(tail)
+    return name, 0
+
 
 # `/ElysiumBaked/Sky/...` (R5.2): one cube/mesh/material set per SKY NAME, shared by every
 # converted map that uses it -- the game's six skies are shared between 108 maps, so the bake
@@ -154,6 +200,16 @@ FOG_CPD_COLOR = 0        # float4: linear RGB, then an unused A
 FOG_CPD_START = 4
 FOG_CPD_INV_RANGE = 5
 FOG_CPD_FLOATS = 6
+
+# R7.4 (water-complete contract 3, `ElysiumLightStyle::SlotBrightness` beside `ElysiumFog.h`'s
+# slots 0-5): the term the Lit/LitTranslucent/Water masters multiply base colour and emissive by.
+# Unwritten reads as 1.0 -- "no dimming" -- the opposite convention from fog's "unwritten = off":
+# almost every primitive in the world carries no lightstyle at all and must stay lit at its
+# authored brightness rather than default to black. `UElysiumLightRig`'s style clock overwrites
+# the slot every tick, but only on the components a bake tagged `ElysiumBakedTags::LightStyle`
+# (`elysium.style=<n>`) -- everything else keeps this baked default forever.
+LIGHT_STYLE_CPD_SLOT = 6
+LIGHT_STYLE_CPD_DEFAULT = 1.0
 
 # A map bakes only what carries its own inputs. Prop meshes and every surface texture and
 # material belong to the corpus scope, which runs `shared_corpus.STAGES` instead.
@@ -293,9 +349,13 @@ def fog_data(env, prefix=""):
 
 
 def set_fog(component, data):
-    """Stamp a fog set onto one primitive. The default (serialized) slot, not the transient one:
-    the level has to look right when it is opened in the editor, before any game runs."""
-    component.set_default_custom_primitive_data_float_array(FOG_CPD_COLOR, data)
+    """Stamp a fog set onto one primitive, plus the R7.4 lightstyle-brightness default riding the
+    same array right behind it (index `LIGHT_STYLE_CPD_SLOT`, one call). The default (serialized)
+    slot, not the transient one: the level has to look right when it is opened in the editor,
+    before any game runs, and a component the bake never tagged `elysium.style=` must still read
+    full brightness rather than fog's "unwritten = off" convention."""
+    component.set_default_custom_primitive_data_float_array(
+        FOG_CPD_COLOR, list(data) + [LIGHT_STYLE_CPD_DEFAULT])
 
 
 def sky_join_intensity(mag, upper_mean, sky_name=""):
@@ -1379,13 +1439,22 @@ class Bake(object):
     # ------------------------------------------------------------------- world
 
     def _chunk_world(self, model, mats, blend, cell_cm):
-        """Bin triangles into (cell, nanite-able) buckets. Returns
-        {(cx, cy, cz, opaque): {material name: [tri indices]}}."""
+        """Bin triangles into (cell, nanite-able, lightstyle) buckets. Returns
+        {(cx, cy, cz, opaque, style): {material name: [tri indices]}}.
+
+        R7.4 (water-complete contract 3): a material group whose staged row names a lightstyle
+        (`_V2Material.light_style`, the pier's `objects/surf`) is kept out of every unstyled
+        bucket its cell would otherwise put it in, so it becomes its own chunk regardless of what
+        else shares the cell -- `stage_level` tags exactly that chunk `elysium.style=<n>` and
+        nothing else needs it. A `mats` entry with no `light_style` attribute (every legacy
+        `bake_lib.MatDef`, and every V2 unit before this lane) reads 0, so this bucket key is a
+        strict refinement: identical output whenever nothing carries a style."""
         buckets = {}
         positions = model.positions
         for name, indices in model.groups.items():
             mat = mats.get(name)
             opaque = mat.opaque if mat else True
+            style = int(getattr(mat, "light_style", 0) or 0) if mat else 0
             for base in range(0, len(indices), 3):
                 i0, i1, i2 = indices[base], indices[base + 1], indices[base + 2]
                 ax, ay, az = positions[i0]
@@ -1394,7 +1463,7 @@ class Bake(object):
                 key = (int((ax + bx + cx) / 3.0 // cell_cm),
                        int((ay + by + cy) / 3.0 // cell_cm),
                        int((az + bz + cz) / 3.0 // cell_cm),
-                       opaque)
+                       opaque, style)
                 buckets.setdefault(key, {}).setdefault(name, []).extend((i0, i1, i2))
         return buckets
 
@@ -1439,11 +1508,11 @@ class Bake(object):
         wanted = set()
         start = time.time()
         for key in sorted(buckets.keys()):
-            cx, cy, cz, opaque = key
+            cx, cy, cz, opaque, style = key
             pivot = ((cx + 0.5) * CELL_CM, (cy + 0.5) * CELL_CM, (cz + 0.5) * CELL_CM)
             sections, names = self._sections(model, normals, self.blend, buckets[key], pivot)
-            asset_path = "%s/SM_World_%s%d_%d_%d" % (
-                self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
+            asset_path = "%s/SM_World_%s%d_%d_%d%s" % (
+                self.mesh_pkg, "" if opaque else "T_", cx, cy, cz, chunk_style_suffix(style))
             materials = [self.material_for(name) for name in names]
             kept, lost, _, static_mesh = self._emit(
                 "world", asset_path, sections, names, materials, nanite=opaque)
@@ -1461,11 +1530,14 @@ class Bake(object):
 
         # Brush entities are one local-pivot mesh each. They are never placed in the baked
         # level: the runtime attaches them to the convex entity body that owns movement,
-        # collision, hiding and teardown.
+        # collision, hiding and teardown. R7.4 contract 3 therefore reaches them through the mesh's
+        # own slot names rather than through a chunk actor's tag -- `brush_slot_style` states the
+        # rule, `RegisterRuntimeBrush` reads it back.
         bl.ensure_dir(self.brush_pkg)
         wanted = set()
         brush_tris = 0
         brush_dropped = 0
+        styled_brushes = 0
         for stem, brush in sorted(self.brush_models.items()):
             normals = bl.vertex_normals(brush.positions, brush.groups.values())
             blend = self.brush_blend.get(stem, [])
@@ -1475,6 +1547,18 @@ class Bake(object):
             materials = [self.material_for(name) for name in names]
             nanite = all(self.world_mats.get(name).opaque
                          if self.world_mats.get(name) else True for name in names)
+            # The style the runtime will read back off this mesh, and the one way the slot-name
+            # carrier can lie: an UNSTYLED group key whose fold happens to end in `_style<n>`
+            # would animate a body nothing styled. Say so and stop rather than ship it.
+            slot_names = [bl.safe_name(name) for name in names]
+            for name, slot in zip(names, slot_names):
+                if LIGHTSTYLE_KEY_SUFFIX not in name and brush_slot_style([slot]):
+                    raise SystemExit(
+                        "[map] brush '%s': material group %r carries no lightstyle but its slot "
+                        "name %r folds to one -- `brush_slot_style` would animate the body "
+                        "(rename the unit or extend the carrier)" % (stem, name, slot))
+            style = brush_slot_style(slot_names)
+            styled_brushes += 1 if style else 0
             kept, lost, _, _ = self._emit(
                 "world", asset_path, sections, names, materials, nanite=nanite,
                 collision=False)
@@ -1484,8 +1568,8 @@ class Bake(object):
             brush_dropped += lost
         pruned = bl.prune_package(self.brush_pkg, wanted, self.prune_scope)
         self.tracker.pruned("world", pruned)
-        log("brushes: %d meshes / %d tris / %d dropped / %d stale pruned" % (
-            len(wanted), brush_tris, brush_dropped, pruned))
+        log("brushes: %d meshes / %d tris / %d dropped / %d styled / %d stale pruned" % (
+            len(wanted), brush_tris, brush_dropped, styled_brushes, pruned))
         log("world assets: %s" % self.tracker.summary("world"))
 
     # --------------------------------------------------------------------- sky
@@ -1508,11 +1592,11 @@ class Bake(object):
         wanted = set()
         cell = CELL_CM * 4
         for key in sorted(buckets.keys()):
-            cx, cy, cz, opaque = key
+            cx, cy, cz, opaque, style = key
             pivot = ((cx + 0.5) * cell, (cy + 0.5) * cell, (cz + 0.5) * cell)
             sections, names = self._sections(model, normals, [], buckets[key], pivot)
-            asset_path = "%s/SM_Sky_%s%d_%d_%d" % (
-                self.mesh_pkg, "" if opaque else "T_", cx, cy, cz)
+            asset_path = "%s/SM_Sky_%s%d_%d_%d%s" % (
+                self.mesh_pkg, "" if opaque else "T_", cx, cy, cz, chunk_style_suffix(style))
             materials = [self.material_for(name) for name in names]
             kept, lost, _, static_mesh = self._emit(
                 "sky", asset_path, sections, names, materials, nanite=opaque)
@@ -2132,7 +2216,10 @@ class Bake(object):
             if not static_mesh:
                 continue
             name = asset_path.rsplit("/", 1)[-1]
-            parts = name.split("_")
+            # R7.4 contract 3: a styled chunk's name carries `chunk_style_suffix` beyond its
+            # cell coordinates -- peel it off before parsing the coordinates back out.
+            base_name, _style = parse_chunk_style(name)
+            parts = base_name.split("_")
             is_sky = name.startswith("SM_Sky")
             cell = CELL_CM * (4 if is_sky else 1)
             cx, cy, cz = (int(v) for v in parts[-3:])
@@ -2150,7 +2237,9 @@ class Bake(object):
             component.set_static_mesh(static_mesh)
             component.set_collision_profile_name(PROFILE_PICK_ONLY)
             set_fog(component, sky_fog if is_sky else world_fog)
-            actor.tags = [TAG_SKY if is_sky else TAG_WORLD]
+            # `ElysiumBakedTags::LightStyle` rides beside the lane tag when the chunk is styled;
+            # `set_fog` above already left CPD slot 6 at its 1.0 default for everyone else.
+            actor.tags = chunk_actor_tags(name)
             if is_sky:
                 actor.set_actor_scale3d(unreal.Vector(sky_scale, sky_scale, sky_scale))
                 # Blown up 16x the 3D skybox encloses the playable space, and a mesh that

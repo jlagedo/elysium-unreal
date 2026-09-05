@@ -218,7 +218,40 @@ def _check_bindings(extension: dict[str, Any]) -> list[str]:
     expected = {"vtmb:surface-property:" + surface} if surface else set()
     if declared != expected:
         raise MaterialGlbValidationError("the surface-property dependency disagrees with the key")
+    _check_material_references(extension, dependencies)
     return missing
+
+
+def _check_material_references(extension: dict[str, Any], dependencies: list[Any]) -> None:
+    """A material-shaped value is stated once as a reference and, when it resolves, once as a
+    dependency -- the same rule the texture bindings above keep, in the material namespace."""
+
+    parameter_assets = {
+        str(row.get("asset"))
+        for row in dependencies
+        if isinstance(row, dict) and row.get("role") == "material" and row.get("parameter")
+    }
+    resolved = set()
+    for row in extension.get("materialReferences") or []:
+        if not isinstance(row, dict) or not row.get("parameter"):
+            raise MaterialGlbValidationError("a material reference names no parameter")
+        asset = str(row.get("asset") or "")
+        if not asset.startswith("vtmb:material:"):
+            raise MaterialGlbValidationError("a material reference carries no stable material id")
+        if row.get("resolved"):
+            if asset not in parameter_assets:
+                raise MaterialGlbValidationError(
+                    f"resolved material reference {asset} has no dependency row"
+                )
+            resolved.add(asset)
+        elif asset in parameter_assets:
+            raise MaterialGlbValidationError(
+                f"unresolved material reference {asset} must not claim a dependency"
+            )
+    if parameter_assets - resolved:
+        raise MaterialGlbValidationError(
+            "a parameter material dependency has no reference that produced it"
+        )
 
 
 def _check_shader_resolution(extension: dict[str, Any]) -> bool:

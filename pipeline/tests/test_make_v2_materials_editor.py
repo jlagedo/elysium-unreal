@@ -376,6 +376,11 @@ def _fake_unreal(editor):
         # R7.1: the Single Layer Water output node (`_build_water`) and the underwater
         # post-process's scene reads (`_build_underwater`).
         "MaterialExpressionSingleLayerWaterMaterialOutput", "MaterialExpressionSceneTexture",
+        # R7.5 look pass: the water master's cheap-overlay distance blend (`_build_water`).
+        "MaterialExpressionCameraPositionWS", "MaterialExpressionDistance",
+        # R7.5 G3: the water master renormalises its tangent normal after folding the DUDV
+        # offset field into it (`matgraph.Graph.normalize`).
+        "MaterialExpressionNormalize",
     ]
 
     ns = SimpleNamespace(
@@ -457,7 +462,7 @@ REQUIRED_MPC_SCALARS = [
     "Overbright", "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale",
     "MaskMetallicMax", "ChromaticTintStrength", "EnvTintScale", "FixedCubeStrength",
     "DefaultRoughness", "DefaultSpecular", "DefaultMetallic", "ClassInfluence",
-    "DetailSwayAmplitude", "WaterFogScale",
+    "DetailSwayAmplitude", "WaterFogScale", "WaterWarpScale", "WaterReflectWarpScale",
 ]
 
 
@@ -561,7 +566,9 @@ def test_water_master_is_single_layer_water_with_the_volume_pins_fed(tmp_path, m
     assert water.props.get("blend_mode") == "BLEND.BLEND_OPAQUE"
     assert water.props.get("two_sided") is False
     assert not water.props.get("used_with_nanite")
-    assert "refraction_method" not in water.props
+    # R7.5 look pass: the Refraction pin is `Water_Old`'s screen-space DUDV warp of the refracted
+    # scene, an explicit 2D offset (`RM_2D_OFFSET`), which SLW's base pass applies.
+    assert water.props.get("refraction_method") == "RM.RM_2D_OFFSET"
     outputs = [n for n in water.expressions
                if n.cls.__name__ == "MaterialExpressionSingleLayerWaterMaterialOutput"]
     assert len(outputs) == 1
@@ -909,17 +916,209 @@ def test_scene_fog_masters_read_the_custom_primitive_data_slots_apply_scene_fog_
         assert gate is not None and gate.props.get("default_value") == 1.0, name
         assert not gate.props.get("use_custom_primitive_data"), name
 
-    # The masters that do NOT carry the lane carry none of the primitive-driven names either --
-    # M_V2_Water's `FogColor`/`FogStart` are the VMT's own water-fog keys, instance-driven.
+    # The masters that do NOT carry the lane carry none of the SCENE-FOG primitive-driven names --
+    # M_V2_Water's `FogColor`/`FogStart` are the VMT's own water-fog keys, instance-driven. The
+    # one primitive-driven scalar a non-scene-fog master may carry is R7.5 G6's lightstyle
+    # brightness, which is a different lane in a slot of its own (6) and is asserted separately by
+    # `test_light_style_brightness_reads_custom_primitive_data_slot_six`.
+    fog_names = set(expected) | {mat_fog.P_INSCATTER}
     for name in ("M_V2_Water", "M_V2_Sprite", "M_V2_Eyes", "M_V2_Decal"):
         asset = editor.assets["%s/%s" % (PKG, name)]
-        cpd = [n.props.get("parameter_name") for n in asset.expressions
-               if n.props.get("use_custom_primitive_data")]
-        assert cpd == [], (name, cpd)
+        cpd = sorted(n.props.get("parameter_name") for n in asset.expressions
+                     if n.props.get("use_custom_primitive_data"))
+        assert not (set(cpd) & fog_names), (name, cpd)
+        assert set(cpd) <= {"LightStyleBrightness"}, (name, cpd)
 
 
 #: The three masters an `env_sprite` billboard or a Niagara sprite renderer ever draws through.
 _SPRITE_MASTERS = ("M_V2_Sprite", "M_V2_SpriteZ", "M_V2_SpriteZLit")
+
+
+#: R7.5 G6 (owner decision 4): the masters a lightstyle-bearing face can bind -- the Lit pair for
+#: the pier's 34 `objects/surf` foam cards (styles 0+1, 21 also 32), Water for a lightstyle-bearing
+#: water face, and TwoTexture for the eight styled blend sections (`sm_pier_1`'s
+#: `blends/blend_pier*`, `sp_soc_3`'s `blends/seablend` / `searock_tunnel` / `twrconwllab`). The
+#: first three carry the brightness on BOTH the base colour and the emissive; TwoTexture has no
+#: emissive term of its own, so its lane is base colour alone.
+_LIGHT_STYLE_MASTERS = ("M_V2_Lit", "M_V2_LitTranslucent", "M_V2_Water")
+_LIGHT_STYLE_BASE_COLOR_ONLY_MASTERS = ("M_V2_TwoTexture",)
+
+
+def _property_source(mel, asset, prop):
+    """The one expression wired to a `MaterialProperty` pin on `asset`, or `None`."""
+    sources = [src for src, _out, wired in mel.property_connections
+               if wired == prop and src in asset.expressions]
+    return sources[-1] if sources else None
+
+
+def _feeding(mel, node, expressions):
+    """`node` and everything reachable backwards from it -- `_sources_of` excludes the node
+    itself, and the pin a term ends on is very often the switch that selects it (the water
+    master's `Underside` specular/roughness gates, its `UseAnimatedDuDvFrames` normal gate)."""
+    return [node] + _sources_of(mel, node, expressions)
+
+
+def test_light_style_brightness_reads_custom_primitive_data_slot_six(tmp_path, monkeypatch):
+    """R7.5 G6 / contract 3. VtMB animates a face's lighting by swapping which lightmap page it
+    samples (`Mod_LoadFaces` flags the face `0x2000`, `CWorld::vfunc104` registers the pattern);
+    owner decision 4 is that Lumen replaces lightmaps project-wide, so the port keeps the authored
+    *motion* -- the style clock the runtime already runs -- and spends it as a brightness on the
+    lit result. One CPD slot (6, `ElysiumLightStyle::SlotBrightness`), default 1 so an untagged
+    primitive is untouched, reaching BOTH the base colour and the emissive on all three masters
+    that can carry a lightstyle-bearing face."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    lanes = [(name, ("MP.MP_BASE_COLOR", "MP.MP_EMISSIVE_COLOR"))
+             for name in _LIGHT_STYLE_MASTERS]
+    lanes += [(name, ("MP.MP_BASE_COLOR",))
+              for name in _LIGHT_STYLE_BASE_COLOR_ONLY_MASTERS]
+    for name, properties in lanes:
+        asset = editor.assets["%s/%s" % (PKG, name)]
+        by_name = {n.props.get("parameter_name"): n for n in asset.expressions
+                   if "parameter_name" in n.props}
+        node = by_name.get("LightStyleBrightness")
+        assert node is not None, name
+        assert node.props.get("use_custom_primitive_data") is True, name
+        assert node.props.get("primitive_data_index") == 6, name
+        assert node.props.get("default_value") == 1.0, name
+        for prop in properties:
+            sink = _property_source(editor.mel, asset, prop)
+            assert sink is not None, (name, prop)
+            reached = {n.props.get("parameter_name")
+                       for n in _sources_of(editor.mel, sink, asset.expressions)}
+            assert "LightStyleBrightness" in reached, (name, prop)
+
+
+def test_water_normal_folds_the_dudv_flipbook_into_one_normal(tmp_path, monkeypatch):
+    """R7.5 look pass (`water_audit/LOOK_SPEC.md`). `Water_Old` perturbed the UVs of BOTH render
+    targets by `dev/water_dudv`'s signed offset field, scaled per pass by `$refractamount` /
+    `$reflectamount` (`texbem`, `water_dx80.cpp`). The two warps land on two pins: the REFRACTION
+    warp is the Refraction pin's explicit 2D screen offset (`RefractAmount x WaterWarpScale`), the
+    REFLECTION warp tilts `MP_NORMAL` (`ReflectAmount x WaterReflectWarpScale`), renormalised.
+    Walked backwards from each pin, because a `DuDvMapFrames` parameter authored on the graph and
+    wired to nothing is exactly the state R7.1 left `DuDvMap` in."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    water = editor.assets["%s/M_V2_Water" % PKG]
+    normal = _property_source(editor.mel, water, "MP.MP_NORMAL")
+    assert normal is not None
+    reached = _feeding(editor.mel, normal, water.expressions)
+    names = {n.props.get("parameter_name") for n in reached}
+    assert {"DuDvMapFrames", "DuDvFrameRate", "DuDvFrameCount", "UseAnimatedDuDvFrames",
+            "ReflectAmount", "WaterReflectWarpScale", "NormalMapFrames"} <= names
+    assert "RefractAmount" not in names
+    refraction = _property_source(editor.mel, water, "MP.MP_REFRACTION")
+    assert refraction is not None
+    refraction_names = {n.props.get("parameter_name")
+                        for n in _feeding(editor.mel, refraction, water.expressions)}
+    assert {"DuDvMapFrames", "UseAnimatedDuDvFrames", "RefractAmount",
+            "WaterWarpScale"} <= refraction_names
+    assert "ReflectAmount" not in refraction_names
+    # The fold renormalises: an un-normalised tangent normal with an offset added into XY is not a
+    # unit vector, and 5.8's base pass does not renormalise MP_NORMAL for you.
+    assert any(getattr(n.cls, "__name__", "") == "MaterialExpressionNormalize" for n in reached)
+    # The DUDV array is sampled as LINEAR data, not as a normal map: `TA_water_dudv` stages
+    # `TC_VECTOR_DISPLACEMENTMAP`, and the `x * 2 - 1` bias is Source's own DUDV convention
+    # applied explicitly (a `SAMPLERTYPE_NORMAL` object against that texture is a compile error).
+    dudv_object = next(n for n in reached if n.props.get("parameter_name") == "DuDvMapFrames")
+    assert dudv_object.props.get("sampler_type") == "SAMPLERTYPE.SAMPLERTYPE_LINEAR_COLOR"
+
+
+def test_water_underside_drops_the_reflection_and_keeps_the_volume(tmp_path, monkeypatch):
+    """R7.5 contract 1 (verdict B2). VtMB's response to a down-facing water face is
+    `$reflecttexture->SetUndefined()` on that face's material -- it removes the REFLECTION and
+    touches nothing else. On a deferred renderer that takes two pins: specular 0 kills the direct
+    highlight, roughness 1 kills the mirror Lumen would still resolve off a smooth surface. The
+    volume coefficients are the surface's, so `Underside` must NOT reach the SLW output node any
+    more (R7.1 zeroed them there)."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    water = editor.assets["%s/M_V2_Water" % PKG]
+    for prop in ("MP.MP_SPECULAR", "MP.MP_ROUGHNESS"):
+        sink = _property_source(editor.mel, water, prop)
+        assert sink is not None, prop
+        reached = {n.props.get("parameter_name")
+                   for n in _feeding(editor.mel, sink, water.expressions)}
+        assert "Underside" in reached, prop
+    output = next(n for n in water.expressions
+                  if n.cls.__name__ == "MaterialExpressionSingleLayerWaterMaterialOutput")
+    reached = {n.props.get("parameter_name")
+               for n in _sources_of(editor.mel, output, water.expressions)}
+    assert "Underside" not in reached
+    assert {"CheapWater", "UseFogEnable", "FogColor", "FogStart", "FogEnd"} <= reached
+
+
+def test_cheap_water_emits_the_fresnel_lerp_between_the_cube_and_the_fog_colour(
+        tmp_path, monkeypatch):
+    """R7.5 look pass. The cheap pass `Water_Old` draws on EVERY water unit
+    (`water.cpp::SHADER_DRAW`, `WaterCheap_ps20.fxc`): `$fogcolor + cube(reflect(eye, N)) x
+    fresnel`, alpha-blended by distance (`$cheapwaterstart/enddistance`) over the expensive result,
+    alone with alpha 1 under `$forcecheap`. Emissive is the only pin that survives an unlit face
+    (`SURF 0x408` = `WARP|NOLIGHT`), so the colour is emitted and the blend is Opacity (coverage).
+    `BaseReflectFract` is the Fresnel's own base fraction, which is that parameter's VtMB meaning."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    water = editor.assets["%s/M_V2_Water" % PKG]
+    emissive = _property_source(editor.mel, water, "MP.MP_EMISSIVE_COLOR")
+    reached = _feeding(editor.mel, emissive, water.expressions)
+    names = {n.props.get("parameter_name") for n in reached}
+    assert {"CheapWater", "FogColor", "EnvMapTint", "EnvMap", "UseFixedCube",
+            "BaseReflectFract", "CheapWaterStartDistance", "CheapWaterEndDistance"} <= names
+    # The distance blend is coverage too: past `$cheapwaterenddistance` nothing refracts through.
+    opacity = _property_source(editor.mel, water, "MP.MP_OPACITY")
+    opacity_names = {n.props.get("parameter_name")
+                     for n in _feeding(editor.mel, opacity, water.expressions)}
+    assert {"CheapWater", "CheapWaterStartDistance", "CheapWaterEndDistance"} <= opacity_names
+    assert any(getattr(n.cls, "__name__", "") == "MaterialExpressionCameraPositionWS"
+               for n in reached)
+    fresnel = [n for n in reached if getattr(n.cls, "__name__", "") == "MaterialExpressionFresnel"]
+    assert len(fresnel) == 1
+    # VtMB's own water Fresnel is `(1 - N.V)^5` (PS `c3 = (1,0,0,0)`, R0 = 0).
+    assert fresnel[0].props.get("exponent") == 5.0
+    fed = {dst_in for _src, _out, dst, dst_in in editor.mel.connections if dst is fresnel[0]}
+    assert "BaseReflectFractionIn" in fed
+
+
+def test_envmapcontrast_reaches_the_lit_fixed_cube_and_nothing_else(tmp_path, monkeypatch):
+    """R7.5 G5 -- a NAMED MODERNIZATION, not a reproduction: `docs/vtmb/reflections.md` measured
+    that no shipped VtMB `.psh` carries a term for `$envmapcontrast` at all, over every
+    `lightmappedgeneric*envmap*` and `vertexlitgeneric*envmap*` program. 19 units author it, the
+    pier's ocean card at `0.85`. It applies where a cube is actually sampled -- the authored fixed
+    cube -- and defaults to 0, so every instance that does not author it is unchanged."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    for name in ("M_V2_Lit", "M_V2_LitTranslucent"):
+        asset = editor.assets["%s/%s" % (PKG, name)]
+        by_name = {n.props.get("parameter_name"): n for n in asset.expressions
+                   if "parameter_name" in n.props}
+        contrast = by_name.get("EnvMapContrast")
+        assert contrast is not None, name
+        assert contrast.props.get("default_value") == 0.0, name
+        emissive = _property_source(editor.mel, asset, "MP.MP_EMISSIVE_COLOR")
+        reached = {n.props.get("parameter_name")
+                   for n in _sources_of(editor.mel, emissive, asset.expressions)}
+        assert {"EnvMapContrast", "UseFixedCube", "EnvMap"} <= reached, name
+        # The Lumen path (Specular/Roughness) has no cube sample to contrast, so the knob must not
+        # leak into it -- otherwise every `env_cubemap` unit would silently change.
+        specular = _property_source(editor.mel, asset, "MP.MP_SPECULAR")
+        spec_reached = {n.props.get("parameter_name")
+                        for n in _sources_of(editor.mel, specular, asset.expressions)}
+        assert "EnvMapContrast" not in spec_reached, name
+
+
+def test_the_dudv_default_frames_array_is_its_own_linear_asset(tmp_path, monkeypatch):
+    """The DUDV lane and the normal lane cannot share a default array: `T_V2_DefaultNormalFrames`
+    is `TC_NORMALMAP` and this lane samples `SAMPLERTYPE_LINEAR_COLOR` (because `TA_water_dudv`
+    stages `TC_VECTOR_DISPLACEMENTMAP`), which Unreal refuses as a sampler-type mismatch in both
+    directions. Two slices, for the same `arraySize = 1` collapse-to-`Texture2D` reason the other
+    two default arrays carry."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    asset = editor.assets["%s/T_V2_DefaultDuDvFrames" % PKG]
+    assert asset.get_class().get_name() == "Texture2DArray"
+    assert asset.props.get("srgb") is False
+    assert asset.props.get("compression_settings") == "TC.TC_VECTOR_DISPLACEMENTMAP"
+    assert asset.props.get("mip_gen_settings") == "TMGS.TMGS_NO_MIPMAPS"
 
 
 def _sources_of(mel, node, expressions):

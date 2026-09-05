@@ -69,6 +69,17 @@ MASTER_ROOT = "/Game/ElysiumGenerated/Materials/V2"
 DECAL_INSTANCE_SUFFIX = "_Decal"
 #: The master that twin parents to.
 DECAL_MASTER = "M_V2_Decal"
+#: R7.5 contract 1 (`water_audit/phase0/PHASE0_VERDICT.md` verdict B2): a water unit stages a
+#: SECOND instance beside its surface one -- same package, the surface instance's name plus this
+#: suffix -- for the DOWN-FACING half of every water brush. VtMB decides that per face (the plane
+#: normal's z, `Mod_LoadFaces`) and answers it by undefining `$reflecttexture` on the face's
+#: material; the port answers it by binding this twin, which carries `Underside` (specular 0,
+#: roughness 1, the volume coefficients exactly as the surface's). The map bake resolves it from
+#: the `'<material key>#underside'` section key the geometry stage emits.
+UNDERSIDE_INSTANCE_SUFFIX = "_Underside"
+#: The Single Layer Water master, named once: the underside twin, the `%compilewater` reroute and
+#: the blend rule all key off it.
+WATER_MASTER = "M_V2_Water"
 #: R7.3 (`docs/architecture/effects-architecture.md` section 5.4): the four particle material
 #: children `make_v2_materials.make_particle_children` authors below this lane's package root,
 #: beside the corpus instances and map-independent like them. They are not units of this lane, so
@@ -216,36 +227,44 @@ UNIT_DIVERGENCES: dict[str, dict[str, str]] = {
             "$bumpmap, M_V2_TwoTexture has no EnvMap/UseEnvMap slot at all -- provenance-only"
         ),
     },
-    "water/cheap_water": {
-        "$forcecheap": (
-            "non-water unit (family lightmappedgeneric, takes M_V2_LitTranslucent) authors "
-            "$forcecheap (a water-only key -> CheapWater) despite not being a water surface; "
-            "M_V2_LitTranslucent has no CheapWater switch -- provenance-only"
-        ),
-        "$fogenable": (
-            "non-water unit (family lightmappedgeneric, takes M_V2_LitTranslucent) authors water "
-            "fog parameters despite not being a water surface; M_V2_LitTranslucent has no fog "
-            "lane at all -- provenance-only"
-        ),
-        "$fogcolor": "same as $fogenable on this unit -- M_V2_LitTranslucent has no FogColor slot",
-        "$fogstart": "same as $fogenable on this unit -- M_V2_LitTranslucent has no FogStart slot",
-        "$fogend": "same as $fogenable on this unit -- M_V2_LitTranslucent has no FogEnd slot",
-    },
-    "water/invisible_water": {
-        "$fogenable": (
-            "non-water unit (family unlitgeneric, takes M_V2_Unlit) authors water fog parameters "
-            "despite not being a water surface; M_V2_Unlit has no fog lane at all -- "
-            "provenance-only"
-        ),
-        "$fogcolor": "same as $fogenable on this unit -- M_V2_Unlit has no FogColor slot",
-        "$fogstart": "same as $fogenable on this unit -- M_V2_Unlit has no FogStart slot",
-        "$fogend": "same as $fogenable on this unit -- M_V2_Unlit has no FogEnd slot",
-    },
+    # R7.5 contract 2: `water/cheap_water`'s five rows and `water/invisible_water`'s four are
+    # GONE from this table. Both units author `%compilewater`, so both now resolve to
+    # `M_V2_Water`, which exposes `CheapWater` and the whole `$fogenable`/`$fogcolor`/`$fogstart`/
+    # `$fogend` quadruple -- the keys have real destinations and are no longer divergences. What a
+    # rerouted unit still cannot place (`water/cheap_water`'s `$envmapmask`: the SLW master has no
+    # reflection-mask lane at all) is recorded per unit by `_apply_compile_water_reroute`, not by
+    # a hand-maintained row here, because the reroute itself is what took the slot away.
 }
 
 
+#: R7.5 contract 2 (`water_audit/AUDIT.md` section 9 G1, owner decision 2, verdict B1): the VMT key
+#: that makes a brush a water brush at compile time. VBSP reads it, not the shader name, so a
+#: `%compilewater` unit is a water surface whatever family its own VMT declares -- and four of the
+#: corpus's 27 declare something else (`water/invisible_water` and `dev/dev_waterbeneath` an unlit
+#: family, `water/cheap_water` `lightmappedgeneric`, plus `maps/sm_pier_1/water/
+#: invisible_water_depth_33` inheriting the first through its patch chain). Before this ruling
+#: those four resolved to `M_V2_Unlit`/`M_V2_LitTranslucent`, so the pier's swimmable surface had
+#: no SLW instance to bind even once the geometry lane stopped dropping its `noDraw` faces.
+COMPILE_WATER_KEY = "%compilewater"
+#: The family a `%compilewater` unit is treated as when CHOOSING A MASTER -- and only then, plus
+#: the decisions that follow from which master a unit lands on (the blend rule, the chromatic-tint
+#: branch, the provenance-only families). It is deliberately NOT used to read the unit's own keys:
+#: see `stage_unit`'s comment on `family_for_binding` for the `$bumpmap` case that made the
+#: distinction necessary. Recorded per unit as a `compileWaterMasterReroute` omission whenever it
+#: differs from the unit's own declared family.
+COMPILE_WATER_FAMILY = "water"
+
+
+def effective_family(family: str, *, compile_water: bool) -> str:
+    """The family master selection is made against: the unit's own resolved shader family, except
+    that `%compilewater` names it water (see `COMPILE_WATER_KEY`/`COMPILE_WATER_FAMILY`)."""
+
+    return COMPILE_WATER_FAMILY if compile_water else (family or "").lower()
+
+
 def resolve_master(family: str, blend_mode: str) -> str | None:
-    """The master an install unit's resolved shader family takes, or `None` when unrecognised."""
+    """The master an install unit's resolved shader family takes, or `None` when unrecognised.
+    Callers pass `effective_family(...)`, not the raw decoded family."""
 
     family = (family or "").lower()
     if family == "shatteredglass":
@@ -300,6 +319,22 @@ _NORMAL_ANIM_LANE = {
     "NormalFrameRate": "S", "NormalFrameCount": "S", "NormalMapFrames": "T",
     "UseAnimatedNormalFrames": "#",
 }
+#: R7.5 G3 (`water_audit/AUDIT.md` section 9 G3, verdict C2): the DUDV flipbook lane, water only.
+#: `$bumpmap` on a water unit is the signed UVWQ offset field (`dev/water_dudv`, 29 frames), which
+#: stages as a `Texture2DArray` and therefore never bound to the plain `DuDvMap` `Texture2D` slot
+#: (`textureClassMismatch`). `Water_Old` reads `$bumpframe` as the shared frame index of both
+#: `$bumpmap` and `$normalmap`, so the unit's one `animatedtexture` proxy fills this lane and the
+#: normal lane from the same rate.
+_DUDV_ANIM_LANE = {
+    "DuDvFrameRate": "S", "DuDvFrameCount": "S", "DuDvMapFrames": "T",
+    "UseAnimatedDuDvFrames": "#",
+}
+#: R7.5 G6 (owner decision 4): the per-face lightstyle, as the brightness the runtime's style clock
+#: writes into Custom Primitive Data slot `ElysiumLightStyle::SlotBrightness` (6). Declared on the
+#: three masters a lightstyle-bearing face can bind (the Lit pair for world/foam geometry, Water
+#: for a lightstyle-bearing water face); the STAGE never writes it -- it is a primitive value, like
+#: the scene-fog triple, and the master's own default (1) is what an untagged component reads.
+_LIGHTSTYLE_LANE = {"LightStyleBrightness": "S"}
 #: R5.4 (seam_map_material.md -> "Scene fog on the world masters (R5.4)"): Source's per-map
 #: distance fog as the Custom-Primitive-Data-driven term every world / 3D-skybox / prop primitive
 #: carries (`ElysiumFog.h`, `mat_fog.fog_from_primitive`). `FogColor`/`FogStart`/`FogInvRange` are
@@ -332,10 +367,14 @@ def _merged(*dicts: dict[str, str]) -> dict[str, str]:
 EXPOSED_PARAMS: dict[str, dict[str, str]] = {
     "M_V2_Lit": _merged(
         _SHARED_PARAMS, _BASE_SCROLL_LANE, _BUMP_SCROLL_LANE, _BASE_ANIM_LANE, _NORMAL_ANIM_LANE,
-        _SINE_LANE, _SINE_UV_LANE, _SCENE_FOG_LANE,
+        _SINE_LANE, _SINE_UV_LANE, _SCENE_FOG_LANE, _LIGHTSTYLE_LANE,
         {
             "BaseTexture": "T", "NormalMap": "T", "EnvMapMask": "T", "EnvMap": "T",
             "SelfIllumAmount": "S", "EnvMapMaskScale": "S", "BumpScale": "S",
+            # R7.5 G5: `$envmapcontrast`, honoured on the fixed-cube path as a named
+            # modernization (VtMB's own renderer never implemented it -- `docs/vtmb/
+            # reflections.md`); 0 is unchanged, 1 is `cube x cube`.
+            "EnvMapContrast": "S",
             "SelfIllumTint": "V", "EnvMapTint": "V", "TexScaleOffset": "V",
             "UseBaseTexture": "#", "UseNormalMap": "#", "UseSelfIllum": "#", "UseVertexColor": "#",
             "UseVertexAlpha": "#", "UseEnvMap": "#", "UseEnvMapMask": "#",
@@ -370,7 +409,7 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
         "VampireEyes": "#", "UseGlint": "#",
     }),
     "M_V2_Water": _merged(
-        _SHARED_PARAMS, _BUMP_SCROLL_LANE, _NORMAL_ANIM_LANE,
+        _SHARED_PARAMS, _BUMP_SCROLL_LANE, _NORMAL_ANIM_LANE, _DUDV_ANIM_LANE, _LIGHTSTYLE_LANE,
         {
             "BaseTexture": "T", "DuDvMap": "T", "NormalMap": "T", "EnvMap": "T",
             "RefractAmount": "S", "ReflectAmount": "S", "BaseReflectFract": "S", "WaterDepth": "S",
@@ -383,8 +422,10 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
             "EnvMapTint": "V", "TexScaleOffset": "V",
             "CheapWater": "#", "UseFogEnable": "#", "UseEnvMap": "#", "UseFixedCube": "#",
             "UseBaseTexture": "#", "UseNormalMap": "#",
-            # R7.1: the `$bottommaterial` faces (`dev/dev_waterbeneath2`) draw on the same SLW
-            # master with the reflection stripped and no volume extinction (`Underside`).
+            # R7.5 contract 1 (verdict B2): a down-facing water face draws on the same SLW master
+            # with the reflection stripped (specular 0, roughness 1). Set only on the
+            # `MI_<unit>_Underside` twin this lane stages beside every water instance -- never on
+            # the surface instance, whose `Underside` is now always False.
             "Underside": "#",
         },
     ),
@@ -417,6 +458,12 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
         {
             "BaseTexture": "T", "BaseTexture2": "T", "NormalMap": "T",
             "AlphaBias": "S",
+            # R7.5 G6 (owner decision 4), integrator addition beyond contract 3's Lit/
+            # LitTranslucent/Water list: the bake splits a styled face into its own
+            # (material, style) chunk whatever family it binds, and eight blend sections on
+            # `sm_pier_1`/`sp_soc_3` are styled faces on this master. The stage never writes the
+            # parameter -- it is a Custom Primitive Data read like the fog pair above it.
+            "LightStyleBrightness": "S",
             "TexScaleOffset": "V", "Texture2ScaleOffset": "V",
             "UseBaseTexture2": "#", "UseNormalMap": "#", "UseBumpOnBaseTexture2": "#",
             "UseVertexColor": "#", "UseVertexAlpha": "#",
@@ -502,6 +549,19 @@ SCALAR_PARAM_MAP = {
     "$cheapwaterstartdistance": "CheapWaterStartDistance",
     "$cheapwaterenddistance": "CheapWaterEndDistance",
     "$alpha_bias": "AlphaBias",
+    # R7.5 G5 (`water_audit/AUDIT.md` section 9 G5): authored on 19 units and, until this ruling,
+    # in `PROVENANCE_ONLY_KEYS`. NAMED MODERNIZATION, not a VtMB fact: `docs/vtmb/reflections.md`
+    # ("`$envmapcontrast` and `$envmapsaturation` do not exist") measured that no term for it
+    # appears in any shipped `.psh`, so the 2004 renderer dropped the author's intent on the
+    # floor. The port honours it with Source's own stated meaning -- 0 leaves the cube sample
+    # alone, 1 squares it -- on the fixed-cube path, which is the only path a bound cube reaches
+    # (`env_cubemap` units hand their reflection to Lumen and have no sample to contrast). Every
+    # author of the key is on `M_V2_Lit`/`M_V2_LitTranslucent` (measured on the staged corpus,
+    # 2026-09-04), which is why no other master declares it. One unit
+    # (`models/scenery/furniture/grandfather_clock/grandfatherclock`) authors it as a VECTOR
+    # `[.8 .8 .9]`; `_parse_scalar`'s existing vector-shaped-value rule (the same one `$cloudscale`
+    # relies on) takes its first component rather than failing the unit.
+    "$envmapcontrast": "EnvMapContrast",
 }
 #: Scalar-shaped keys with no destination among the nine masters' exposed scalar names. `$minlight`
 #: and `$maxlight` left the masters (no Lumen formula, a named divergence) and are promoted to
@@ -603,7 +663,13 @@ PROVENANCE_ONLY_KEYS = frozenset({
     "%compilenpcopaque", "%compileorigin", "%compileplayercontrolclip", "%compileshadowonly",
     "%compileskip", "%compilesky", "%compilewanderclip", "%compilewet", "$compilepassbullets",
     "%keywords", "%detailtype", "%notooltexture",
-    "$envmapcontrast", "$envmapmode", "$desaturate", "$modintensity", "$blur", "$soft",
+    # R7.5 look pass: `$forceexpensive` (`water.cpp`, no corpus unit authors it) is read off the
+    # provenance rows by `_water_default_cube` -- it is the one thing that stops `Water_Old`
+    # substituting `engine/defaultcubemap` for a missing `$envmap`.
+    "$forceexpensive",
+    # R7.5 G5: `$envmapcontrast` left this set -- it is now `EnvMapContrast` on the Lit pair (see
+    # `SCALAR_PARAM_MAP`), a named modernization of a key VtMB's own renderer never implemented.
+    "$envmapmode", "$desaturate", "$modintensity", "$blur", "$soft",
     # $nooverbright (3 units): provenance only -- this lane has no per-instance opt-out of the
     # `_x2 c0` overbright doubling, so `UElysiumSurfaceSettings::Overbright` (the single global
     # knob every lit master reads) still applies to these three instances. A named deliberate
@@ -723,6 +789,15 @@ def asset_path_for(key: str) -> str:
     return f"{PACKAGE_ROOT}/{folded}/{name}" if folded else f"{PACKAGE_ROOT}/{name}"
 
 
+def underside_asset_path_for(key: str) -> str:
+    """`vtmb:material:<key>` -> the UNDERSIDE instance beside the surface one (R7.5 contract 1):
+    the same package directory, the surface instance's own name plus `_Underside`. Pure, like
+    `asset_path_for`/`decal_asset_path_for`, for the same reason -- the bake restates this fold
+    rather than importing this module."""
+
+    return asset_path_for(key) + UNDERSIDE_INSTANCE_SUFFIX
+
+
 def decal_asset_path_for(key: str) -> str:
     """`vtmb:material:<key>` -> the PROJECTOR instance beside the surface one (R7.2 ruling 2):
     the same package directory, the surface instance's own name plus `_Decal`. Pure, like
@@ -788,6 +863,11 @@ class StageResult:
     #: R7.2 ruling 2: the `MI_<unit>_Decal` projector instances staged beside a surface one. They
     #: are entries of the same manifest, so they are counted in `assets` as well.
     projectors: int = 0
+    #: R7.5 contract 1: the `MI_<unit>_Underside` twins staged beside every water instance,
+    #: patched ones included. Entries of the same manifest, so counted in `assets` as well.
+    undersides: int = 0
+    #: R7.5 look pass: patched water-class instances whose VBSP probe was bound as their fixed cube.
+    probes_bound: int = 0
     failures: list[tuple[str, str]] = field(default_factory=list)
     protected: int = 0
     #: Review finding 5: every anomaly/omission kind this run recorded, by name -> count, over
@@ -802,7 +882,8 @@ class StageResult:
         rollup = ", ".join(f"{kind}={count}" for kind, count in sorted(self.anomaly_counts.items()))
         return (
             f"material staging: {self.assets} instances ({self.patched} patched, "
-            f"{self.provenance_only} provenance-only, {self.projectors} decal projectors) "
+            f"{self.provenance_only} provenance-only, {self.projectors} decal projectors, "
+            f"{self.undersides} water undersides, {self.probes_bound} water probes bound) "
             f"from {self.staged} units, "
             f"{self.pruned} pruned, {len(self.failures)} failed "
             f"({self.protected} asset paths protected)"
@@ -923,6 +1004,12 @@ class _Params:
     material_refs: dict[str, str] = field(default_factory=dict)  # parameter -> asset id (material)
     is_decal_surface: bool = False
     ignorez_truthy: bool = False
+    #: R7.5 contract 2: this unit authors `%compilewater` at top level, so `effective_family`
+    #: reads `water` for it whatever its own VMT declares. Pre-scanned before the parameter walk
+    #: (`stage_unit`), not set from inside it: `water/cheap_water` authors `$bumpmap` seven rows
+    #: BEFORE `%compilewater`, and the `$bumpmap` -> `DuDvMap`/`NormalMap` choice is one of the
+    #: decisions the flag has to be able to make.
+    compile_water: bool = False
     misc_provenance: dict = field(default_factory=dict)
     #: Required-slot parameter names (`BaseTexture`, `NormalMap`) a `textureClassMismatch` on the
     #: slot did not actually leave unbound -- `_apply_static_frame_fallback` resolved them onto the
@@ -1244,17 +1331,49 @@ def _classify_and_apply(
     return key
 
 
+#: `water.cpp::SHADER_INIT_PARAMS`: a `Water` unit that names no `$envmap` and does not force
+#: expensive gets `engine/defaultcubemap`, and the cheap pass then samples it. The unit is exported
+#: like any other texture (`exports_v2/textures/engine/defaultcubemap.glb`; 256^2, warm brown).
+DEFAULT_WATER_CUBEMAP_KEY = "engine/defaultcubemap"
+
+
+def _water_default_cube(params: _Params, value: str | None) -> dict:
+    """R7.5 look pass: a water instance ALWAYS binds a cube -- the cheap pass (`FUN_10013d30`,
+    `WaterCheap_ps20`) samples a texture, blended by distance over every expensive unit and drawn
+    alone on a `$forcecheap` one, so the `env_cubemap -> Lumen` rule that serves lit surfaces
+    leaves water with nothing to glint. VBSP's patched probe is bound by `stage_materials`' probe
+    back-fill (a patched unit cannot know it is water here); this is the un-patched unit's own
+    fallback, `engine/defaultcubemap`, which `Water_Old` itself substitutes when the VMT names no
+    cube and does not author `$forceexpensive`."""
+
+    if any(str(row.get("key") or "").lower() == "$forceexpensive"
+           and str(row.get("value") or "").strip() not in ("", "0")
+           for row in params.provenance_rows):
+        params.switches.setdefault("UseEnvMap", False)
+        return {"envMapSymbol": value, "forceExpensive": True}
+    params.textures["EnvMap"] = _texture_asset_path(DEFAULT_WATER_CUBEMAP_KEY, cube=True, twin=False)
+    params.switches["UseEnvMap"] = True
+    params.switches["UseFixedCube"] = True
+    return {
+        "envMapSymbol": value, "envMapAsset": params.textures["EnvMap"],
+        "defaultWaterCube": True,
+    }
+
+
 def _resolve_envmap(
     params: _Params, document: dict, deps: dict[str, tuple[str, bool]], *, patched: bool,
-    texture_staging_root: Path | None,
+    texture_staging_root: Path | None, water: bool = False,
 ) -> dict:
     """The reflection contract. Returns the provenance `environment` block."""
 
     value = params.envmap_value
     if value is None:
+        if water and not patched:
+            return _water_default_cube(params, None)
         return {}
     if patched:
-        # A patched unit's concrete `maps/<map>/c...` probe is provenance only, never sampled.
+        # A patched unit's concrete `maps/<map>/c...` probe is provenance only here; on a
+        # water-class instance `stage_materials`' probe back-fill binds it (R7.5 look pass).
         resolution = deps.get("$envmap")
         asset_id = resolution[0] if resolution else None
         probe_path = _texture_asset_path(
@@ -1265,6 +1384,10 @@ def _resolve_envmap(
             "patchedProbe": True,
         }
     if value == "env_cubemap":
+        if water:
+            # The base of every placed water instance; its VBSP patches override this with the
+            # map's own probe, so the fallback is only ever what an unplaced base samples.
+            return _water_default_cube(params, value)
         # No texture asset, and no runtime bind either -- SF-6.2's capture actors supply the
         # image through Lumen, with nothing bound to a parameter.
         params.switches.setdefault("UseEnvMap", True)
@@ -1371,31 +1494,161 @@ def _apply_texture_switch_pairs(params: _Params, master: str) -> None:
 
 
 def _apply_water_underside(params: _Params, master: str, key: str) -> None:
-    """R7.1 ruling E (`water-architecture.md` section 4.2): a water unit whose `$bottommaterial`
-    names *itself* is the underside material -- `dev/dev_waterbeneath2` on every water map, the
-    faces VBSP emits on the inward side of every water brush face. The engine strips
-    `$reflecttexture` from the material of every down-facing water face (`Mod_LoadFaces`), and
-    the SLW master has no camera-under-water branch to lean on (5.8 hardcodes it off), so the
-    instance says so once: `Underside` zeroes the specular and the volume extinction.
+    """R7.5 contract 1 (verdict B2), retiring R7.1 ruling E's material-level rule.
 
-    The authored value is read straight off the unit's own provenance rows, not off
-    `params.material_refs`: the GLB decoder emits a `dependencies[]` row only for a
-    texture-shaped value, so `$bottommaterial` reaches no dependency on any of the 26 units that
-    author it (measured on the corpus, 2026-09-04) and a `material_refs` lookup was dead. The
-    value is a bare material path in its own right, compared normalised (`\\` -> `/`, an explicit
-    `.vmt` stripped, case-folded) against this unit's own material key -- the same spelling the
-    key already carries."""
+    **Underside is a face fact, not a material fact.** VtMB gates it per face on the plane normal
+    (`Mod_LoadFaces`, `normal.z < 0`, `_DAT_201734e8 = 0.0`) and its response is to call
+    `$reflecttexture->SetUndefined()` on the material of that face -- it MUTATES the shared
+    material as the loader walks, which is load-order dependent and cannot be reproduced by a
+    per-unit switch. R7.1's rule ("the unit whose `$bottommaterial` names itself IS the
+    underside") reads the same intent off the authoring, and it is wrong wherever a brush's two
+    sides bind different units: on `sm_pier_1` the patched `..._depth_33` instance faces UP while
+    its parent `invisible_water` faces DOWN, so one unit-level switch cannot answer for both.
 
-    if master != "M_V2_Water":
+    So the surface instance's `Underside` is now ALWAYS false, and every water instance gets an
+    `MI_<unit>_Underside` twin (`underside_entry`) that the map bake binds to the down-facing
+    faces of whatever unit they belong to. `$bottommaterial` keeps its provenance row and its
+    resolved material reference (verdict A6) -- it just no longer decides a switch, which this
+    records once per unit that authors it rather than dropping silently."""
+
+    if master != WATER_MASTER:
         return
+    params.switches["Underside"] = False
     bottom = next(
         (row.get("value") for row in params.provenance_rows
          if str(row.get("key") or "").lower() == "$bottommaterial" and not row.get("block")),
         None,
     )
-    params.switches["Underside"] = (
-        bottom is not None and _normalized_material_path(str(bottom)) == key.strip().lower()
-    )
+    if bottom is None:
+        return
+    normalised = _normalized_material_path(str(bottom))
+    params.omissions.append({
+        "kind": "bottomMaterialNotAnUndersideSwitch", "key": "$bottommaterial",
+        "value": normalised,
+        "selfReferential": normalised == key.strip().lower(),
+        "reason": (
+            "R7.5 contract 1: underside is decided per FACE (plane normal z < 0, Mod_LoadFaces), "
+            "not per material -- this unit's surface instance is never the underside, and its "
+            "MI_<unit>_Underside twin carries the switch instead"
+        ),
+    })
+
+
+#: A VMT line an author commented OUT but left in the file: `//\t"$envmaptint" "[.4 .4 .4]"`.
+#: Matched against the decoder's own `comments[]` rows (each `{offset, text}`), tolerating the
+#: quote-less spelling a few units use.
+_AUTHORED_THEN_REMOVED_RE = re.compile(
+    r'^\s*//\s*"?(\$[A-Za-z0-9_]+)"?\s+"?([^"\r\n]*?)"?\s*$'
+)
+
+
+def _record_authored_then_removed(params: _Params, document: dict) -> None:
+    """R7.5 G5's "decide explicitly about the two commented knobs", generalised.
+
+    `water/blackwater` (the pier's ocean card) carries `//"$envmaptint" "[.4 .4 .4]"` at byte 179
+    and `//"$translucent" "1"` at byte 262 -- two knobs its author wrote and then took back out.
+    The decoder already keeps them in `comments[]`, and until now nothing said what the port does
+    with them, which left "did we miss this?" open every time somebody read the sidecar. The
+    ruling is: **recorded, never applied.** A commented-out key is the author's own decision to
+    turn a knob off, and honouring it would be the port second-guessing the shipped material.
+
+    Corpus-wide rather than a two-unit special case (measured 2026-09-04: 1,162 such lines across
+    787 units, led by `$envmap` 575, `$envmapmask` 129, `$translucent` 80), because the question
+    is the same on every one of them and a per-unit allowlist would answer it 787 times."""
+
+    for row in document.get("comments") or ():
+        if not isinstance(row, dict):
+            continue
+        match = _AUTHORED_THEN_REMOVED_RE.match(str(row.get("text") or "").replace("\r", ""))
+        if not match:
+            continue
+        params.omissions.append({
+            "kind": "authoredThenRemovedKey", "key": match.group(1).lower(),
+            "value": match.group(2), "offset": row.get("offset"),
+            "reason": (
+                "the key is commented out in the shipped VMT -- the author turned this knob off, "
+                "and the port records the decision rather than reviving it (R7.5 G5)"
+            ),
+        })
+
+
+def _apply_water_blend(params: _Params, overrides: dict) -> str:
+    """R7.5 contract 2: the SLW master stays Opaque, whatever the unit's blend keys say.
+
+    Two of the four `%compilewater` units rerouted onto `M_V2_Water` author `$translucent 1`
+    (`water/invisible_water`, `water/cheap_water`), which every other family resolves into a
+    `Translucent` blend. Single Layer Water compiles only on an opaque (or masked) material --
+    `make_v2_materials.make_water` sets `BLEND_OPAQUE` on the master for exactly that reason --
+    and translucency on a water surface is not a blend anyway: it is coverage, which the master
+    already drives from `Opacity` (`WaterVisibility = 1 - Opacity`), and volume extinction, which
+    the `$fogenable` quadruple already drives. So the key is CONSUMED BY THE WATER LANE, recorded
+    here as such, and the override lands `Opaque`. Returns the blend mode actually written."""
+
+    authored = overrides.get("blendMode", "Opaque")
+    if authored != "Opaque":
+        params.omissions.append({
+            "kind": "waterBlendConsumedByTheWaterLane", "key": "$translucent",
+            "authoredBlendMode": authored,
+            "reason": (
+                "M_V2_Water is Single Layer Water, which compiles only opaque; a water unit's "
+                "translucency is its Opacity coverage and its $fogenable extinction, both of "
+                "which the master already reads (R7.5 contract 2)"
+            ),
+        })
+        overrides["blendMode"] = "Opaque"
+    return "Opaque"
+
+
+#: The `/ElysiumBaked/Textures/` prefix a Hammer tool texture stages under -- see
+#: `_apply_compile_water_reroute`.
+_TOOL_TEXTURE_PREFIX = "/elysiumbaked/textures/tools/"
+
+
+def _apply_compile_water_reroute(params: _Params, master: str) -> None:
+    """R7.5 contract 2, the second half: what a rerouted unit can no longer place.
+
+    A `%compilewater` unit whose own VMT declares a lit/unlit family may carry keys that family's
+    master exposes and the SLW master does not -- measured on the corpus (2026-09-04) exactly one
+    such key survives to here, `water/cheap_water`'s `$envmapmask effects/ref_75`, because
+    `M_V2_Water` has no reflection-mask lane at all (its reflection is Lumen's, scaled by
+    `luma(ReflectTint)`). Dropped with a named omission rather than a stage failure: the reroute
+    is what took the slot away, so the record belongs on the reroute, not in a hand-maintained
+    per-unit allowlist (`UNIT_DIVERGENCES`) that has to be re-verified against a staged run.
+
+    The same pass drops a `tools/` `$basetexture` (`water/invisible_water`'s
+    `Tools/toolsinvisible`). A tool texture is a compiler annotation -- the idiom that makes a
+    `%compilenodraw` brush invisible in Hammer -- never a surface colour, and owner decision 2's
+    named modernization ("surface on nodraw water") is to draw WATER on those faces, not the tool
+    texture. `UseBaseTexture` lands False as a consequence, which is the same statement contract 2
+    makes for a `%compilewater` unit that binds no base texture at all."""
+
+    if master != WATER_MASTER or not params.compile_water:
+        return
+    exposed = EXPOSED_PARAMS[master]
+    base_texture = params.textures.get("BaseTexture") or ""
+    if base_texture.lower().startswith(_TOOL_TEXTURE_PREFIX):
+        params.omissions.append({
+            "kind": "toolTextureOnWaterSurface", "key": "$basetexture", "asset": base_texture,
+            "reason": (
+                "a tools/ texture is a compiler annotation (the invisible-brush idiom on a "
+                "%compilenodraw water brush), never a surface colour -- the rerouted water "
+                "instance draws water, not the tool texture (R7.5 contract 2)"
+            ),
+        })
+        del params.textures["BaseTexture"]
+        params.switches["UseBaseTexture"] = False
+    for bucket_name, bucket in (("texture", params.textures), ("scalar", params.scalars),
+                                ("vector", params.vectors), ("switch", params.switches)):
+        for name in [name for name in bucket if name not in exposed]:
+            params.omissions.append({
+                "kind": "compileWaterRerouteProvenanceOnly", "parameter": name,
+                "parameterKind": bucket_name,
+                "reason": (
+                    f"{master} exposes no {name} -- the unit reached this master through its "
+                    f"%compilewater reroute, not through its own declared family"
+                ),
+            })
+            del bucket[name]
 
 
 def _normalized_material_path(value: str) -> str:
@@ -1458,11 +1711,21 @@ _STATIC_FRAME_LANES: dict[str, tuple[str, str, str, str, str]] = {
         "NormalMapFrames", "NormalFrameCount", "NormalFrameRate", "UseAnimatedNormalFrames",
         "UseNormalMap",
     ),
+    # R7.5 G3: the DUDV lane takes the same fallback -- a water unit that authors `$bumpmap`
+    # without an `animatedtexture` proxy still wants its offset field at the fixed `$bumpframe`.
+    # Its "gate switch" is the frames switch itself: unlike the normal lane there is no separate
+    # `UseDuDvMap` (the plain `DuDvMap` 2D slot binds on no unit in the corpus -- every DUDV is a
+    # 29-frame array -- so there is nothing for a second gate to choose between).
+    "DuDvMap": (
+        "DuDvMapFrames", "DuDvFrameCount", "DuDvFrameRate", "UseAnimatedDuDvFrames",
+        "UseAnimatedDuDvFrames",
+    ),
 }
 #: The VMT key that authors each slot's fixed frame index -- `seam_migration.md`'s ruling: a
 #: non-zero authored value is a real divergence from the frame this fallback samples (always 0),
 #: recorded as `staticFrameOffsetUnsupported` rather than silently honoured or silently dropped.
-_STATIC_FRAME_OFFSET_KEYS = {"BaseTexture": "$frame", "NormalMap": "$bumpframe"}
+_STATIC_FRAME_OFFSET_KEYS = {"BaseTexture": "$frame", "NormalMap": "$bumpframe",
+                             "DuDvMap": "$bumpframe"}
 
 
 def _apply_static_frame_fallback(params: _Params, master: str, texture_staging_root: Path | None) -> None:
@@ -1825,7 +2088,44 @@ def _apply_proxies(
                         f"flipbook array"
                     ),
                 })
+            # R7.5 G3 (verdict C2): on a water unit the SAME proxy drives a SECOND array. VtMB's
+            # `Water_Old` reads `$bumpframe` as the shared frame index of both `$bumpmap` (the
+            # signed UVWQ offset field, bound here as `DuDvMap`) and `$normalmap`; R7.1 redirected
+            # this proxy's frames array onto `$normalmap`'s own slices, which fixed the ripple
+            # normal but left `dev/water_dudv` reachable by nothing at all -- not statically (the
+            # plain `DuDvMap` slot is a `Texture2D` and the DUDV stages as a 29-slice
+            # `Texture2DArray`, a `textureClassMismatch`) and not by animation. Both lanes are
+            # filled from the one proxy at the one rate, which is exactly what the 2004 shader did.
+            if family == COMPILE_WATER_FAMILY and normal_lane:
+                dudv_asset = params.texture_deps.get("DuDvMap")
+                dudv_key = (
+                    dudv_asset[len("vtmb:texture:"):]
+                    if isinstance(dudv_asset, str) and dudv_asset.startswith("vtmb:texture:")
+                    else None
+                )
+                dudv_frames = _texture_frame_count(texture_staging_root, dudv_key)
+                if dudv_frames:
+                    params.textures["DuDvMapFrames"] = _frames_array_path(
+                        texture_staging_root, "DuDvMap", dudv_key)
+                    params.scalars["DuDvFrameCount"] = float(dudv_frames)
+                    if "animatedtextureframerate" in args:
+                        try:
+                            params.scalars["DuDvFrameRate"] = _parse_scalar(
+                                args["animatedtextureframerate"])
+                        except ValueError:
+                            pass
+                    params.switches["UseAnimatedDuDvFrames"] = True
+                    params.static_frame_resolved.add("DuDvMap")
         elif kind == "texturescroll":
+            # NAMED DIVERGENCE (R7.5, owner decision 3). `docs/vtmb/water.md`'s decompile pass
+            # measured that the shipped 2004 water shader IGNORED `$bumpoffset` on 13 water units,
+            # the sewer among them: the proxy wrote the register and `Water_Old` never read it, so
+            # the authored scroll did not move on screen. The port scrolls them anyway. Two
+            # readings of the same evidence -- authored intent versus 2004 result -- and the
+            # owner's call is intent: the alternative drops motion the author explicitly wrote
+            # (`TextureScroll($bumpoffset, .05, 45.00)` on `water/sewer_water`,
+            # `TextureScroll($bumptransform, .05, 45.00)` on `dev/dev_waterbeneath2`, both landing
+            # `BumpScrollRateU/V = 0.035355`). Recorded in both docs as a divergence, not a fix.
             var = args.get("texturescrollvar", "").strip().lower()
             bump_lane = var in ("$bumpoffset", "$bumptransform")
             u_name = "BumpScrollRateU" if bump_lane else "BaseScrollRateU"
@@ -1963,6 +2263,35 @@ def stage_unit(
     divergent_keys = UNIT_DIVERGENCES.get(key, {})
 
     params = _Params()
+    # R7.5 contract 2: `%compilewater` is pre-scanned, before the parameter walk, because the
+    # family it names decides how rows EARLIER in the same list are bound (`water/cheap_water`
+    # authors `$bumpmap` at row 2 and `%compilewater` at row 9). A patched unit is left alone --
+    # it has no master and no family of its own, and inherits both through its base's instance.
+    params.compile_water = not patched and any(
+        str(row.get("key") or "").lower() == COMPILE_WATER_KEY and not str(row.get("block") or "")
+        for row in parameters
+    )
+    # `family_for_binding` decides the MASTER (and everything that follows from which master a
+    # unit lands on: the blend, the chromatic branch, the provenance-only families). It is
+    # deliberately NOT used to read the unit's own keys: a VMT key means whatever the family that
+    # WROTE it means. `$bumpmap` is the case that matters -- on the `water` family it is the DUDV
+    # offset field (`dev/water_dudv`), on `lightmappedgeneric`/`unlitgeneric` it is the ordinary
+    # normal map, and `water/cheap_water` (a `%compilewater` unit whose VMT is `LightmappedGeneric`)
+    # authors `$bumpmap dev/water_normal` in the second sense. Routing it through the rerouted
+    # family bound the ripple normal into the DUDV lane on that unit -- measured 2026-09-04 on the
+    # real corpus, before this comment existed to stop it happening again.
+    family_for_binding = effective_family(family, compile_water=params.compile_water)
+    if params.compile_water and family_for_binding != family:
+        params.omissions.append({
+            "kind": "compileWaterMasterReroute", "key": COMPILE_WATER_KEY,
+            "declaredFamily": family, "resolvedFamily": family_for_binding,
+            "reason": (
+                f"the VMT declares shader family {family!r}, but it authors %compilewater, which "
+                f"is what makes the brush a water brush in VBSP -- the unit is staged as a water "
+                f"surface on M_V2_Water (R7.5 contract 2, owner decision 2)"
+            ),
+        })
+
     for row in parameters:
         block = str(row.get("block") or "")
         if block and not block.startswith(("replace#", "insert#")):
@@ -2002,11 +2331,13 @@ def stage_unit(
 
     proxy_rows = _apply_proxies(params, document, parameters,
                                 family=family, texture_staging_root=texture_staging_root)
-    environment = _resolve_envmap(params, document, deps, patched=patched,
-                                  texture_staging_root=texture_staging_root)
-    _apply_chromatic_tint(params, environment, patched=patched, family=family,
+    environment = _resolve_envmap(
+        params, document, deps, patched=patched, texture_staging_root=texture_staging_root,
+        water=family_for_binding == COMPILE_WATER_FAMILY)
+    _apply_chromatic_tint(params, environment, patched=patched, family=family_for_binding,
                           chroma_threshold=chroma_threshold)
     _apply_envmapmask_precedence(params)
+    _record_authored_then_removed(params, document)
 
     provenance_only = False
     ignorez_named_divergence = False
@@ -2019,18 +2350,20 @@ def stage_unit(
         base_property_overrides = {}
         master = None
     else:
-        base_property_overrides = _resolve_blend(params, family)
+        base_property_overrides = _resolve_blend(params, family_for_binding)
         blend_mode = base_property_overrides.get("blendMode", "Opaque")
         if key in IGNOREZ_SPRITE_REROUTE_UNITS and params.ignorez_truthy:
             master = "M_V2_Sprite"
         else:
-            master = resolve_master(family, blend_mode)
+            master = resolve_master(family_for_binding, blend_mode)
             if key in IGNOREZ_NAMED_DIVERGENCE_UNITS and params.ignorez_truthy:
                 ignorez_named_divergence = True
         if master is None:
             raise MaterialImportError(f"shader family {family!r} has no master")
+        if master == WATER_MASTER:
+            blend_mode = _apply_water_blend(params, base_property_overrides)
         parent = f"{MASTER_ROOT}/{master}"
-        provenance_only = family in NO_MASTER_FAMILIES
+        provenance_only = family_for_binding in NO_MASTER_FAMILIES
         if provenance_only:
             # "every parameter recorded in provenance; nothing else about them is reproduced"
             keep_textures = {k: v for k, v in params.textures.items() if k == "BaseTexture"}
@@ -2048,6 +2381,7 @@ def stage_unit(
                 params.switches["UseBaseTexture"] = _resolve_use_base_texture(params, document)
             _apply_texture_switch_pairs(params, master)
             _apply_water_underside(params, master, key)
+            _apply_compile_water_reroute(params, master)
             _drop_unexposed_sine_uv(params, master)
             _apply_static_frame_fallback(params, master, texture_staging_root)
             _apply_cube_base_texture_divergence(params, master, key)
@@ -2090,6 +2424,14 @@ def stage_unit(
                    if not patched and (params.is_decal_surface or family == "decalmodulate")
                    else None)
 
+    # R7.5 contract 1: the underside twin of a water instance. Decided here for a unit that
+    # resolves `M_V2_Water` itself; a PATCHED water instance has no master of its own (it parents
+    # to its base's instance) and gets the same field filled in by `stage_materials`, which is the
+    # only place that can walk the parent chain to the base's master. Its faces bind the patched
+    # key -- `dev/dev_waterbeneath2@cubemapdefault` is what the hub's underside faces name -- so
+    # the patched instance needs a twin of its own, not its base's.
+    underside_asset = underside_asset_path_for(key) if master == WATER_MASTER else None
+
     entry = {
         "assetPath": asset_path_for(key),
         "unit": asset_id,
@@ -2102,6 +2444,10 @@ def stage_unit(
         #: The projector instance staged beside this one (R7.2 ruling 2), or `None` when this unit
         #: never draws as a decal. `stage_materials` builds that entry from this one.
         "decalAsset": decal_asset,
+        #: The underside instance staged beside this one (R7.5 contract 1), or `None` when this
+        #: unit is not water. `stage_materials` builds that entry from this one, and fills this
+        #: field in for a patched water instance (which cannot know its own master here).
+        "undersideAsset": underside_asset,
         "textures": dict(sorted(params.textures.items())),
         "scalars": dict(sorted(params.scalars.items())),
         "vectors": {k: v for k, v in sorted(params.vectors.items())},
@@ -2170,6 +2516,11 @@ def stage_unit(
         #: `None`. The map lane copies it onto the staged materials table (`decalAsset`), and the
         #: runtime resolves the same path from a `vtmb:material:` id.
         "decalAsset": decal_asset,
+        #: R7.5 contract 1: the `MI_<unit>_Underside` twin this unit stages beside its surface
+        #: one, or `None`. The map stage copies it onto the staged materials table exactly as it
+        #: copies `decalAsset`, and the bake binds it to the `'<material key>#underside'` mesh
+        #: sections the geometry stage emits for down-facing water faces.
+        "undersideAsset": underside_asset,
         "ignoreZ": params.ignorez_truthy,
         "ignoreZNamedDivergence": ignorez_named_divergence,
         "spriteOrigin": params.misc_provenance.get("spriteOrigin"),
@@ -2285,6 +2636,8 @@ def projector_entry(entry: dict, provenance: dict) -> dict:
         "provenanceOnly": entry["provenanceOnly"],
         # This IS the projector; it has no second one of its own.
         "decalAsset": None,
+        # A projector is never a water surface, so it never has an underside twin either.
+        "undersideAsset": None,
         "physMaterial": entry["physMaterial"],
         "physMaterialFallback": entry["physMaterialFallback"],
         "surfaceClass": entry["surfaceClass"],
@@ -2294,6 +2647,74 @@ def projector_entry(entry: dict, provenance: dict) -> dict:
         "recipe": {
             "unitSha256": entry["unitSha256"],
             "parent": f"{MASTER_ROOT}/{DECAL_MASTER}",
+            "settingsVersion": SETTINGS_VERSION,
+            "chromaThreshold": entry["recipe"]["chromaThreshold"],
+            "physMaterial": entry["physMaterial"],
+            "provenanceSha256": entry["recipe"]["provenanceSha256"],
+            "params": params,
+        },
+        **params,
+    }
+
+
+# --- the underside twin (R7.5 contract 1) -------------------------------------------------------
+
+
+#: The one switch the twin states. Everything else -- every texture, scalar, vector and the other
+#: switches -- is INHERITED: the twin parents to the surface instance itself, not to the master, so
+#: it is an instance-of-instance exactly like a VMT patch (`MI_sewer_water_depth_20`'s single
+#: `WaterDepth` delta is the shape this follows), and any later change to the surface instance
+#: reaches the underside without a second copy to keep in step.
+UNDERSIDE_SWITCH = "Underside"
+
+
+def underside_entry(entry: dict) -> dict:
+    """The `MI_<unit>_Underside` manifest entry for a water instance (R7.5 contract 1, verdict B2).
+
+    Same shape as any other entry, so the editor phase (`import_materials.py`) authors, prunes,
+    fingerprints and provenance-stamps it with the code it already has -- its `topo_order` already
+    walks `parent` edges that point inside the manifest, which is what a VMT patch needs too. It
+    shares the surface unit's one provenance sidecar for the same reason the projector twin does:
+    a surface query on a down-facing water face must answer exactly what the top face answers.
+
+    `Underside` on `M_V2_Water` is NO REFLECTION -- specular 0 and roughness 1 -- with the volume
+    coefficients left exactly as the surface's. VtMB's own response to a down-facing water face is
+    `$reflecttexture->SetUndefined()` on that face's material (`Mod_LoadFaces`); it does not touch
+    the fog, and neither does this.
+    """
+
+    switches = {UNDERSIDE_SWITCH: True}
+    params = {
+        "textures": {},
+        "scalars": {},
+        "vectors": {},
+        "switches": switches,
+        # Empty for the same reason a patched instance's is: this entry states a delta against
+        # another instance, not a full master state, so there is no master switch list to restate.
+        "allSwitches": [],
+        "basePropertyOverrides": {},
+    }
+    return {
+        "assetPath": entry["undersideAsset"],
+        "unit": entry["unit"],
+        "unitGlb": entry["unitGlb"],
+        "unitSha256": entry["unitSha256"],
+        "sourceMembersSha256": entry["sourceMembersSha256"],
+        "parent": entry["assetPath"],
+        "patched": False,
+        "provenanceOnly": entry["provenanceOnly"],
+        "decalAsset": None,
+        # This IS the underside; it has no second one of its own.
+        "undersideAsset": None,
+        "physMaterial": entry["physMaterial"],
+        "physMaterialFallback": entry["physMaterialFallback"],
+        "surfaceClass": entry["surfaceClass"],
+        "surfaceClassIndex": entry["surfaceClassIndex"],
+        "surfaceClassSource": entry["surfaceClassSource"],
+        "provenance": entry["provenance"],
+        "recipe": {
+            "unitSha256": entry["unitSha256"],
+            "parent": entry["assetPath"],
             "settingsVersion": SETTINGS_VERSION,
             "chromaThreshold": entry["recipe"]["chromaThreshold"],
             "physMaterial": entry["physMaterial"],
@@ -2501,13 +2922,81 @@ def stage_materials(
         entry["recipe"]["provenanceSha256"] = hashlib.sha256(_json_bytes(provenance)).hexdigest()
         _write_if_changed(sidecar_path_by_path[entry["assetPath"]], _json_bytes(provenance))
 
+    # R7.5 contract 1: the underside twin, one per water instance -- INCLUDING every patched one.
+    # A patched instance is what a map's faces actually bind (`dev/dev_waterbeneath2@cubemapdefault`
+    # on `sm_hub_1`), and `stage_unit` cannot know it is water: it has no master of its own and its
+    # base's family lives in another unit. `_root_master` (just above) already walks the parent
+    # chain for exactly this reason, so the back-fill rides the same walk, rewriting the sidecar and
+    # its digest the way the `master` back-fill immediately above does.
+    water_master_path = f"{MASTER_ROOT}/{WATER_MASTER}"
+    for entry in list(entries):
+        if entry["undersideAsset"] is None:
+            if not entry["patched"] or _root_master(entry) != water_master_path:
+                continue
+            entry["undersideAsset"] = entry["assetPath"] + UNDERSIDE_INSTANCE_SUFFIX
+            provenance = provenance_by_path[entry["assetPath"]]
+            provenance["undersideAsset"] = entry["undersideAsset"]
+            entry["recipe"]["provenanceSha256"] = hashlib.sha256(
+                _json_bytes(provenance)).hexdigest()
+            _write_if_changed(sidecar_path_by_path[entry["assetPath"]], _json_bytes(provenance))
+        entries.append(underside_entry(entry))
+        result.undersides += 1
+
+    # R7.5 look pass: VBSP's patched probe IS the authored reflection of a water surface. The
+    # cheap pass (`FUN_10013d30`) samples `$envmap` through the bumped normal on every water unit,
+    # and an LMG water fake (`water/blackwater`, the pier's ocean card) samples it through
+    # `M_V2_Lit`'s fixed-cube path -- so on a water-class instance the `maps/<map>/c...` probe is
+    # bound as `EnvMap` with `UseFixedCube`, overriding the base's fallback cube. Water-class: the
+    # root master is `M_V2_Water`, or the base unit's surface class is `water` (`$surfaceprop`).
+    # Same back-fill shape as the two above: a patched unit cannot know its class in `stage_unit`.
+    def _root_entry(entry: dict) -> dict | None:
+        seen: set[str] = set()
+        current = entry
+        while current.get("patched"):
+            parent_path = current["parent"]
+            if parent_path in seen or parent_path not in entries_by_path:
+                return None
+            seen.add(parent_path)
+            current = entries_by_path[parent_path]
+        return current
+
+    for entry in entries:
+        if not entry["patched"] or entry.get("switches", {}).get("Underside"):
+            continue
+        provenance = provenance_by_path.get(entry["assetPath"])
+        if provenance is None:
+            continue
+        environment = provenance.get("environment") or {}
+        probe_path = environment.get("envMapProbePath")
+        if not environment.get("patchedProbe") or not probe_path:
+            continue
+        root_entry = _root_entry(entry)
+        if root_entry is None:
+            continue
+        water_class = (_root_master(entry) == water_master_path
+                       or root_entry.get("surfaceClass") == "water")
+        if not water_class:
+            continue
+        for target in (entry, entry["recipe"]["params"]):
+            target["textures"]["EnvMap"] = probe_path
+            target["switches"]["UseFixedCube"] = True
+            target["switches"]["UseEnvMap"] = True
+        environment["envMapAsset"] = probe_path
+        environment["patchedProbeBound"] = True
+        provenance["environment"] = environment
+        entry["recipe"]["provenanceSha256"] = hashlib.sha256(_json_bytes(provenance)).hexdigest()
+        _write_if_changed(sidecar_path_by_path[entry["assetPath"]], _json_bytes(provenance))
+        result.probes_bound += 1
+
     keep: set[str] = set()
     for key in failed_keys:
         try:
             keep.add(asset_path_for(key))
-            # R7.2: a failed unit protects its projector twin as well -- both instances are that
-            # unit's, and a run that could not re-stage it must not prune the one already imported.
+            # R7.2 / R7.5: a failed unit protects its projector and underside twins as well --
+            # all three instances are that unit's, and a run that could not re-stage it must not
+            # prune the ones already imported.
             keep.add(decal_asset_path_for(key))
+            keep.add(underside_asset_path_for(key))
             produced.update(path for path in _unit_files(root, key) if path.exists())
         except MaterialImportError:
             continue

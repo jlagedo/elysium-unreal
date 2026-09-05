@@ -266,6 +266,13 @@ public:
 	bool IsOn() const { return bOn; }
 	bool IsKilled() const { return bKilled; }
 
+	/** `NS_<root>`'s asset stem for a root key or an authored name: the folded `vtmb:particle:`
+	 *  prefix dropped, any include path and `.txt` stripped (`make_root_systems.py::_asset_name`). */
+	static FString GeneratedSystemStem(const FString& RootOrName);
+	/** Does the effects lane hold a generated `NS_<root>` for this root? A by-root spawn needs no
+	 *  staged tree when it does -- the generated system carries its leaves as emitters. */
+	static bool HasGeneratedSystem(const FString& RootOrName);
+
 protected:
 	// The asset this actor plays when no family matched.
 	virtual const TCHAR* DefaultSystemPath() const;

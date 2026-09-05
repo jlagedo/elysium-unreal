@@ -38,6 +38,7 @@ FMT_RGBA8888, FMT_BGR888, FMT_BGRA8888, FMT_DXT1, FMT_DXT5 = 0, 3, 12, 13, 15
 FMT_DXT3, FMT_UVWQ8888 = 14, 23
 FLAG_POINT, FLAG_TRILINEAR, FLAG_CLAMPS, FLAG_CLAMPT = 0x1, 0x2, 0x4, 0x8
 FLAG_NOMIP, FLAG_NOLOD, FLAG_ALLMIPS = 0x100, 0x200, 0x400
+FLAG_HINT_DXT5, FLAG_NOCOMPRESS, FLAG_NORMAL, FLAG_PRE_SRGB = 0x20, 0x40, 0x80, 0x80000
 
 
 # --- fixtures ------------------------------------------------------------------------------------
@@ -363,6 +364,121 @@ def test_a_conflict_texture_gets_a_linear_twin(tmp_path):
     assert twin_sidecar["assetId"] == "vtmb:texture:syn/galply"
 
 
+def test_the_vtf_normal_bit_resolves_a_role_conflict_to_the_data_reading(tmp_path):
+    """G15: `dev/water_normal` binds `%tooltexture` (Hammer's thumbnail key, which no shader
+    samples) beside `$bumpmap`, so the role rule alone stages an sRGB asset 0 of 19,713 material
+    rows bind, plus the `_linear` twin every water unit actually samples. The VTF header settles
+    it -- the compiler set `normal` (`0x80`) on this texture -- so one data asset stages and the
+    colour reading is never created (`PHASE0_VERDICT.md` A3)."""
+
+    _publish(tmp_path / "v2", "syn/water_normal", flags=FLAG_NOCOMPRESS | FLAG_NORMAL | FLAG_NOLOD)
+    _material(tmp_path / "v2", "m/hammer", {"%tooltexture": "syn/water_normal"})
+    _material(tmp_path / "v2", "m/water", {"$bumpmap": "syn/water_normal"})
+    result = importer.stage_textures(tmp_path / "v2", tmp_path / "stage")
+
+    assert result.twins == 0 and result.assets == 1
+    entries = _entries(tmp_path / "stage")
+    assert "/ElysiumBaked/Textures/syn/T_water_normal_linear" not in entries
+    asset = entries["/ElysiumBaked/Textures/syn/T_water_normal"]
+    assert (asset["role"], asset["srgb"], asset["roleConflict"]) == ("data-normal", False, False)
+    assert asset["roleEvidence"] == ["$bumpmap", "%tooltexture"]
+    assert not (tmp_path / "stage" / "syn" / "water_normal_linear.provenance.json").exists()
+
+
+def test_the_normal_bit_is_a_tie_breaker_and_never_a_role_or_an_srgb_oracle(tmp_path):
+    """27 units bind a normal with the bit clear, so it may only resolve a conflict the role rule
+    already found; and no VTF bit encodes colour space at all (`preSrgb` is clear on every member
+    of the water cast), so a colour-only binding with the bit set still stages sRGB."""
+
+    _publish(tmp_path / "v2", "syn/albedo", flags=FLAG_NORMAL)
+    _material(tmp_path / "v2", "m/wall", {"$basetexture": "syn/albedo"})
+    _publish(tmp_path / "v2", "syn/bump", flags=FLAG_PRE_SRGB)
+    _material(tmp_path / "v2", "m/bump", {"$bumpmap": "syn/bump"})
+    importer.stage_textures(tmp_path / "v2", tmp_path / "stage")
+
+    entries = _entries(tmp_path / "stage")
+    albedo = entries["/ElysiumBaked/Textures/syn/T_albedo"]
+    assert (albedo["role"], albedo["srgb"], albedo["roleConflict"]) == ("colour", True, False)
+    bump = entries["/ElysiumBaked/Textures/syn/T_bump"]
+    assert (bump["role"], bump["srgb"]) == ("data-normal", False)
+
+
+def test_the_normal_bit_drops_the_colour_reading_and_does_not_pick_the_data_role(tmp_path):
+    """The bit is a tie-breaker between the COLOUR and the DATA reading (`PHASE0_VERDICT.md` A3)
+    and says nothing about which data role wins. Forcing `data-normal` here would restyle a
+    conflicted `$dudvmap` or mixed data binding as a normal map -- for a DUDV that loses the signed
+    UVWQ payload the water lane reads. So the data role stays the one the bindings already derive
+    (`data_role`); only the colour reading and its `_linear` twin go."""
+
+    _publish(tmp_path / "v2", "syn/mixed", flags=FLAG_NORMAL)
+    _material(tmp_path / "v2", "m/hammer", {"%tooltexture": "syn/mixed"})
+    _material(tmp_path / "v2", "m/bumped", {"$bumpmap": "syn/mixed"})
+    _material(tmp_path / "v2", "m/masked", {"$envmapmask": "syn/mixed"})
+    result = importer.stage_textures(tmp_path / "v2", tmp_path / "stage")
+
+    assert result.twins == 0 and result.assets == 1
+    asset = _entries(tmp_path / "stage")["/ElysiumBaked/Textures/syn/T_mixed"]
+    # A mixed data set is a mask, bit or no bit -- the same answer `data_role` gives without it.
+    assert (asset["role"], asset["srgb"], asset["roleConflict"]) == ("data-mask", False, False)
+
+
+def test_a_conflict_the_normal_bit_does_not_resolve_keeps_its_twin(tmp_path):
+    """`effects/ref_12`'s shape: `$basetexture` beside `$envmapmask`, flag word `0x0`. The twin is
+    not waste there -- 15 prop materials bind `T_ref_12_linear` -- so the tie-breaker leaves it
+    (`U1b_textures.md` section 3)."""
+
+    _publish(tmp_path / "v2", "syn/ref_12", flags=0)
+    _material(tmp_path / "v2", "m/water", {"$basetexture": "syn/ref_12"})
+    _material(tmp_path / "v2", "m/desk", {"$envmapmask": "syn/ref_12"})
+    result = importer.stage_textures(tmp_path / "v2", tmp_path / "stage")
+
+    assert result.twins == 1
+    assert "/ElysiumBaked/Textures/syn/T_ref_12_linear" in _entries(tmp_path / "stage")
+
+
+def test_a_twin_the_plan_stops_producing_is_deleted_on_reimport(tmp_path):
+    """The role-conflict twin is staging output, not a permanent asset: once the plan stops
+    naming it, its sidecar leaves the staging tree and its asset path leaves both `assets` and
+    `keep`, so the editor phase's prune deletes the built asset on the same run. The rule is the
+    plan's, not one key's -- it retires `TA_water_normal_linear` under the tie-breaker above and
+    would retire `T_ref_12_linear` the day `effects/ref_12` loses its colour binding."""
+
+    _publish(tmp_path / "v2", "syn/ref_12", flags=0)
+    _material(tmp_path / "v2", "m/water", {"$basetexture": "syn/ref_12"})
+    _material(tmp_path / "v2", "m/desk", {"$envmapmask": "syn/ref_12"})
+    importer.stage_textures(tmp_path / "v2", tmp_path / "stage")
+    twin_sidecar = tmp_path / "stage" / "syn" / "ref_12_linear.provenance.json"
+    assert twin_sidecar.exists()
+
+    (tmp_path / "v2" / "materials" / "m" / "water.glb").unlink()
+    result = importer.stage_textures(tmp_path / "v2", tmp_path / "stage")
+
+    assert result.twins == 0 and result.pruned == 1
+    assert not twin_sidecar.exists()
+    manifest = _manifest(tmp_path / "stage")
+    assert "/ElysiumBaked/Textures/syn/T_ref_12_linear" not in _entries(tmp_path / "stage")
+    assert "/ElysiumBaked/Textures/syn/T_ref_12_linear" not in manifest["keep"]
+
+
+def test_the_flag_word_is_published_bit_by_bit(tmp_path):
+    """The sidecar carried the word as an opaque int; it now says what the word says. The
+    unnamed remainder is published rather than dropped, so a bit no table names still counts."""
+
+    _publish(tmp_path / "v2", "syn/probe",
+             flags=FLAG_TRILINEAR | FLAG_CLAMPS | FLAG_CLAMPT | FLAG_HINT_DXT5
+             | FLAG_NOCOMPRESS | FLAG_NOMIP | 0x10000000)
+    importer.stage_textures(tmp_path / "v2", tmp_path / "stage")
+
+    sidecar = json.loads((tmp_path / "stage" / "syn" / "probe.provenance.json").read_text())
+    assert sidecar["flagNames"] == [
+        "trilinear", "clampS", "clampT", "hintDxt5", "noCompress", "noMip"]
+    assert sidecar["unnamedFlagBits"] == 0x10000000
+    # `maps/sm_pier_1/cubemapdefault`'s own word, decoded (`U1b_textures.md` section 1).
+    assert importer.vtf_flag_names(0x416E) == [
+        "trilinear", "clampS", "clampT", "hintDxt5", "noCompress", "noMip", "envMap"]
+    assert importer.vtf_flag_names(0x2C0) == ["noCompress", "normal", "noLod"]
+
+
 def test_a_conflict_with_a_bump_binding_twins_as_a_normal(tmp_path):
     _publish(tmp_path / "v2", "syn/dudv")
     _material(tmp_path / "v2", "m/a", {"$basetexture": "syn/dudv"})
@@ -402,6 +518,7 @@ def test_sidecar_carries_every_contracted_key(tmp_path):
         "frames", "faces", "mipCount", "sourceMipCount", "sampling", "members", "role",
         "roleEvidence", "roleConflict", "twinOf", "faceMapping", "expandedFromRgb8",
         "partialMipChain", "assetPath", "unitGlb", "stagedFormat", "ddsSha256",
+        "flagNames", "unnamedFlagBits",
     }
     assert sidecar["stagedFormat"] == "bgra8"
     assert sidecar["assetId"] == "vtmb:texture:syn/keys"

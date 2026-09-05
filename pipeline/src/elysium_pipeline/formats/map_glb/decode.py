@@ -1081,6 +1081,13 @@ def decode_map(
             row["role"] == "directory-version-nonzero" for row in anomalies
         ),
         "faceDayNightStylesZero": day_night_zero,
+        # How many faces name a compiled tessellation run at all. The field that addresses it
+        # (`dface+100`/`+102`) used to be unpacked as one `smoothingGroups` dword, which made
+        # `primitives[]` unreachable on every map; the count is published so a map that has one
+        # says so.
+        "primitiveBearingFaces": sum(
+            1 for face in face_rows + original_face_rows if face["numPrims"]
+        ),
     }
 
     document_scenes = {
@@ -1132,6 +1139,14 @@ def decode_map(
         collision={"brushes": brush_rows, "brushSides": brush_side_rows},
         displacements=displacement_rows,
         primitives={
+            # Lump 38 carries POSITIONS ONLY. `Mod_LoadPrimVerts` (`engine.dll FUN_200b71e0`)
+            # zero-fills the 28-byte runtime primvert and copies 12 bytes into it, so the shipped
+            # engine draws a compiled run with `TEXCOORD0/1 = (0, 0)`, and `BuildMSurfacePrimVerts`
+            # (`FUN_20074f40`) writes the owning face's PLANE normal rather than a stored one. A
+            # consumer that wants UVs re-derives them from the face's texinfo vectors and takes the
+            # normal off the face plane; there are no primvert UVs to publish or to read.
+            "vertexAttributes": ["POSITION"],
+            "reachedBy": "faces[].firstPrimID, faces[].numPrims",
             "primitives": primitive_rows,
             "verts": prim_vert_rows,
             "indices": prim_index_table,

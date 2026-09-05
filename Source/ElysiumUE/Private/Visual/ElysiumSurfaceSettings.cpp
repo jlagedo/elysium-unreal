@@ -69,6 +69,8 @@ const TArray<TPair<FName, float UElysiumSurfaceSettings::*>>& UElysiumSurfaceSet
 		{FName(TEXT("CaptureRadius")), &UElysiumSurfaceSettings::CaptureRadius},
 		{FName(TEXT("DetailSwayAmplitude")), &UElysiumSurfaceSettings::DetailSwayAmplitude},
 		{FName(TEXT("WaterFogScale")), &UElysiumSurfaceSettings::WaterFogScale},
+		{FName(TEXT("WaterWarpScale")), &UElysiumSurfaceSettings::WaterWarpScale},
+		{FName(TEXT("WaterReflectWarpScale")), &UElysiumSurfaceSettings::WaterReflectWarpScale},
 	};
 	return Bindings;
 }

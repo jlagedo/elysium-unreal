@@ -150,10 +150,19 @@ def brush_entity_rows(ents_path: Path, sky_scale: float) -> list[dict[str, Any]]
     `FElysiumEntityWorld::BuildBrushBody` looks the body up by -- so rows are never sorted or
     renumbered, only skipped when an entity has no hulls.
 
-    The one transform: a `sky` row's hulls are multiplied by the map's sky scale, because
-    `UElysiumMapEntities::Deserialize` (and `FElysiumEntityDefs::Parse` before it) scales a
-    miniature's hulls and a cooked convex cannot be rescaled afterwards. Hulls take the scale and
-    not the translation, exactly as the deserializer states it.
+    **A 3D-skybox brush entity is not composed into the collision at all** (R7.4, G25). Its hulls
+    are authored in miniature units and the one transform this stage used to apply was the map's
+    sky scale, because `UElysiumMapEntities::Deserialize` (and `FElysiumEntityDefs::Parse` before
+    it) scales a miniature's hulls and a cooked convex cannot be rescaled afterwards. Measured on
+    `sm_pier_1`: that scale (x16) carries `brush_8/9/10`, sky-flagged `func_brush` Solids, from raw
+    z ~= 4939 -- above the map's own `world_maxs.z 512`, where nothing in VtMB can reach them -- to
+    world z -644..-628, three invisible slabs 21 inches under the harbour surface. The miniature is
+    drawn from its own camera and no body ever enters it, so its collider is a port artefact with no
+    VtMB counterpart, and the sky scale has nothing left to apply to. The producer already drops the
+    same hulls at the source (`UE_map_sidecars.build_entities`); this reads the row's own `sky` flag
+    so a `.ents` written before that rule still stages the same collision. `sky_scale` stays on the
+    signature and on the manifest entry -- it is the map's own number and the editor phase records
+    it -- but no staged hull is multiplied by anything any more.
     """
 
     with Path(ents_path).open("r", encoding="ascii") as handle:
@@ -165,11 +174,10 @@ def brush_entity_rows(ents_path: Path, sky_scale: float) -> list[dict[str, Any]]
     rows: list[dict[str, Any]] = []
     for index, entity in enumerate(entities):
         hulls = entity.get("hulls") or []
-        if not hulls:
+        if not hulls or entity.get("sky"):
             continue
-        scale = sky_scale if entity.get("sky") and sky_scale != 1.0 else 1.0
         staged = [
-            [c * scale for c in hull] for hull in hulls
+            list(hull) for hull in hulls
             if len(hull) >= MIN_HULL_VERTICES * 3 and len(hull) % 3 == 0
         ]
         if not staged:
@@ -181,6 +189,14 @@ def brush_entity_rows(ents_path: Path, sky_scale: float) -> list[dict[str, Any]]
             "hulls": staged,
         })
     return rows
+
+
+def _sky_brush_bodies(ents_path: Path) -> int:
+    """How many brush entities G25 kept out of the collision -- the excluded miniatures."""
+
+    with Path(ents_path).open("r", encoding="ascii") as handle:
+        entities = json.load(handle).get("entities") or []
+    return sum(1 for entity in entities if entity.get("sky") and (entity.get("hulls") or []))
 
 
 def displacement_soup(rows: Sequence[Sequence[float]]) -> tuple[list[float], list[int]]:
@@ -286,9 +302,9 @@ def stage_map(
             for row in range(len(round_tripped["displacementIndices"]) // 3)
         ]
         disp = compare_geometry(staged_tris, disp_rows, label="displacement")
-        # Brush hulls: the file's own hulls, times the sky scale for a `sky` row -- stated here a
-        # second time and independently of `brush_entity_rows`, so the transform is asserted rather
-        # than assumed.
+        # Brush hulls: the file's own hulls, verbatim, for every row that is not a 3D-skybox
+        # miniature (G25) -- stated here a second time and independently of `brush_entity_rows`, so
+        # the rule is asserted rather than assumed.
         expected: list[list[float]] = []
         staged_hulls: list[list[float]] = []
         for row in round_tripped["brushBodies"]:
@@ -297,9 +313,9 @@ def stage_map(
             source_entities = json.load(handle)["entities"]
         for row in brush_rows:
             source = source_entities[row["entityIndex"]]
-            scale = sky_scale if source.get("sky") and sky_scale != 1.0 else 1.0
+            assert not source.get("sky")            # `brush_entity_rows` staged no miniature
             expected.extend(
-                [c * scale for c in hull] for hull in (source.get("hulls") or [])
+                list(hull) for hull in (source.get("hulls") or [])
                 if len(hull) >= MIN_HULL_VERTICES * 3 and len(hull) % 3 == 0
             )
         brush = compare_geometry(staged_hulls, expected, label="brushHulls")
@@ -328,7 +344,10 @@ def stage_map(
         "displacementTriangles": len(disp_rows),
         "brushBodies": len(brush_rows),
         "brushHulls": sum(len(row["hulls"]) for row in brush_rows),
+        # G25: staged rows are never miniatures now, so this counts what the rule excluded rather
+        # than what it scaled -- the number to watch if a map ever loses collision it should keep.
         "skyBrushBodies": sum(1 for row in brush_rows if row["sky"]),
+        "skyBrushBodiesExcluded": _sky_brush_bodies(ents_path),
     }
     return entry
 

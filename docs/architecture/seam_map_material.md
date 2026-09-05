@@ -743,9 +743,20 @@ whole add an exact no-op on every instance that never authored the chain. Surf a
 | `SelfIllumAmount` | `0.0` | | `SelfIllumTint` | `(1, 1, 1, 1)` |
 | `EnvMapMaskScale` | `1.0` | | `EnvMapTint` | `(1, 1, 1, 1)` |
 | `BumpScale` | `1.0` | | `TexScaleOffset` | `(1, 1, 0, 0)` — `(scaleU, scaleV, offsetU, offsetV)` |
+| `EnvMapContrast` | `0.0` | | | |
+| `LightStyleBrightness` | `1.0` | | | |
 | the animation, scroll and sine lanes above | | | `SineTargetMask`, `SineChannelMask` | as above |
 | the scene-fog lane (R5.4, below) — `FogStart`, `FogInvRange` primitive-driven, `FogInscatter` `1.0` | | | `FogColor` | primitive-driven (CPD 0..3) |
 | | | | `SineUVTranslate` (R7.1 ruling J, Lit/LitTranslucent only — below) | `(0, 0, 0, 0)` |
+
+**`EnvMapContrast` (G5) and `LightStyleBrightness` (R7.5 G6, owner decision 4).**
+`$envmapcontrast` is honoured on the fixed-cube envmap path with Source's own stated meaning,
+`lerp(cube, cube × cube, contrast)` — no shipped VtMB `.psh` (`lightmappedgeneric*envmap*` or
+`vertexlitgeneric*envmap*`) carries a term for it, so this is authored intent the 2004 engine
+dropped, restored here. Default `0`, so an instance that does not author the key is bit-identical
+to before. `LightStyleBrightness` is the same Custom Primitive Data slot 6, same parameter name,
+same default `1.0` as `M_V2_Water`'s (above) — multiplying the lit base colour and the emissive,
+applied BEFORE the scene-fog lane below (so the haze is never scaled by the style).
 
 | Static switch | Default | Set by |
 |---|---|---|
@@ -845,21 +856,39 @@ only once the function returns; the blend mode is `Opaque` before and after, so 
 compile the two passes take is ever an invalid domain/blend/shading-model triple.
 
 There is **no `BottomMaterial` texture slot.** `$bottommaterial` (24 units, 22 of them water)
-names a *material*, never a texture; all 24 bindings are unresolved in the corpus. It is a
-provenance material reference, exactly like `$crackmaterial` and `$modelmaterial` — except for one
-comparison the stage still makes: a unit whose `$bottommaterial` names *itself*
-(`dev/dev_waterbeneath2`, `dev/oceanbeneath` — VBSP's own faces on the inward side of every water
-brush) reads the authored value off its own provenance rows, not off `params.material_refs` (the
-GLB decoder emits a dependency row only for a texture-shaped value, so `$bottommaterial` reaches no
-dependency on any of the 26 units that author it), and normalises it (`\`→`/`, `.vmt` stripped,
-case-folded) against the unit's own material key. A match stages the static switch **`Underside`**
-(`_apply_water_underside`, `importers/materials.py:1369`, called at :1983): the engine strips
-`$reflecttexture` from every down-facing water face (`Mod_LoadFaces`), and 5.8's SLW has no
-camera-under-water branch to lean on instead (§8), so the instance says so once — zero specular,
-zero volume extinction (below). Measured 2026-09-04 on the staged manifest: of the 24 water units, 22 carry the
-switch and exactly one is true -- `dev/dev_waterbeneath2` (`MI_dev_waterbeneath2`), the 21 others
-false, including `dev/oceanbeneath`, which names itself the second `Underside` unit and is now
-measured.
+names a *material*, never a texture. Since R7.5 (`docs/architecture/seam_map_unit_contract.md`'s
+`role: "material"` addition, verdict A6) the GLB decoder DOES publish it as a resolved
+`vtmb:material:` reference — it is no longer a permanently unresolved binding — but that reference
+stays **provenance only**, exactly like `$crackmaterial` and `$modelmaterial`: nothing in the
+material stage reads it to decide a switch any more (below).
+
+**Underside is a face fact, not a material fact (R7.5 contract 1, verdict B2, retiring the R7.1/
+R7.4 rule that read it off `$bottommaterial` self-reference).** VtMB gates it per FACE, on the
+plane normal (`Mod_LoadFaces`, `normal.z < 0`, `_DAT_201734e8 = 0.0`), and its response is to call
+`$reflecttexture->SetUndefined()` on the material of *that face* — it mutates the shared material
+as the loader walks, load-order dependent, and cannot be reproduced by a per-unit switch: on
+`sm_pier_1` the patched `invisible_water_depth_33` instance faces UP while its parent
+`invisible_water` faces DOWN, so one unit-level switch cannot answer for both. So the **surface**
+instance's `Underside` is now ALWAYS `false`, and every `M_V2_Water` instance in the corpus —
+including every patched one — gets a twin at `<instance path>_Underside`
+(`materials.underside_asset_path_for`/`underside_entry`, `importers/materials.py:788,2628`),
+parented to the surface instance (instance-of-instance, the same shape the `$decal` twin uses),
+stating exactly `switches = {"Underside": True}` with nothing else overridden. The manifest and
+provenance sidecar both carry `undersideAsset` (string or `null`) mirroring the existing
+`decalAsset` field. The map stage (`seam_map_map.md` → "Import — water volumes") binds the twin
+onto a face group's `#underside` section instead of the surface instance — a per-FACE decision, as
+VtMB's own mechanism is.
+
+**`Underside` on the master itself means NO REFLECTION** (`WaterParams.Switches`,
+`make_v2_materials.py:2081-2084`): specular forced to `0`, roughness forced to `1` (the underside
+has no mirror a smooth Lumen surface would otherwise put back), with the volume's scattering/
+absorption coefficients left **exactly as the surface's** — a change from R7.1/R7.4, which zeroed
+them under `Underside` reasoning the underside was a separate, unlit body. R7.5's correction: the
+underside is the SAME body of water seen from its other side, and its extinction is the surface's.
+SLW's camera-under-water branch is still hardcoded off in 5.8 (`const bool CameraIsUnderWater =
+false;`, `BasePassPixelShader.usf:1698`), so an underside face still integrates the volume as if
+the eye were above it — a witness note for Phase 4, and the reason `M_ElysiumUnderwater` exists as
+a post-process rather than a shading-model branch (below).
 
 **`BaseTexture` is not a required slot on `M_V2_Water` (R7.1 follow-up, 2026-09-04).**
 `REQUIRED_TEXTURE_SLOTS` used to demand `BaseTexture` on every master alike; Water is now the one
@@ -880,22 +909,41 @@ water unit.
 | Textures | Kind | Default | Class |
 |---|---|---|---|
 | `BaseTexture` | T2D | `/Engine/EngineResources/DefaultTexture` | colour; 6 of 24 bind one |
-| `DuDvMap` | T2D | `/Engine/EngineMaterials/DefaultNormal` | data → `_linear` twin (`$bumpmap` here, per the slot rule); **declared, not wired** (below) — the sample node stands in the graph but feeds no pin |
+| `DuDvMap` | T2D | `/Engine/EngineMaterials/DefaultNormal` | data → `_linear` twin (`$bumpmap` here, per the slot rule); **declared, not wired** — the plain 2D slot binds on no unit in the corpus (every DUDV is a 29-frame `Texture2DArray`), so the sample node stands in the graph but feeds no pin |
+| `DuDvMapFrames` | T2DArray | `T_V2_DefaultDuDvFrames` (below) | data, no twin — `$bumpmap`'s 29-slice array (`dev/water_dudv`, `TA_water_dudv`), **wired** into the folded normal (R7.5 G3, below) |
 | `NormalMap` | T2D | `/Engine/EngineMaterials/DefaultNormal` | data → `_linear` twin (`$normalmap`) — the flipbook lane R7.1 fixes (§4.4 below) |
 | `EnvMap` | TCube | `/Engine/EngineResources/DefaultTextureCube` | colour; 7 of 24 |
 
+`T_V2_DefaultDuDvFrames` (`/ElysiumGenerated/Materials/V2/T_V2_DefaultDuDvFrames`,
+`make_v2_materials._make_default_dudv_frames_array`) is a 2-slice DX10 DDS, `(128, 128, 255, 255)`,
+sRGB off, `TC_VECTOR_DISPLACEMENTMAP`, no mips — it cannot be the existing default normal-frames
+array (`TC_NORMALMAP`, `SAMPLERTYPE_NORMAL`): `dev/water_dudv` stages
+`TC_VECTOR_DISPLACEMENTMAP`/`SAMPLERTYPE_LINEAR_COLOR`, and pairing either default with the wrong
+sampler type is a real compile error, not a cosmetic mismatch.
+
 | Scalar | Default | From | | Scalar | Default | From |
 |---|---|---|---|---|---|---|
-| `RefractAmount` | `20.0` | `$refractamount` — declared, not wired (below) | | `WaterTimeFreq1` | `0.0` | `$watertimefreq1` |
-| `ReflectAmount` | `50.0` | `$reflectamount` — declared, not wired | | `WaterTimeFreq2` | `0.0` | `$watertimefreq2` |
-| `BaseReflectFract` | `0.0` | declared, not wired — SLW's own Fresnel replaces the `Fresnel` node this pin used to feed; the *shipped binary's* default, not the design-era source's: `waterreflect_old`/`waterreflect_ps20_old` read no `c3` register at all, so R0 = 0 in the shipped game | | `WaterWaveHeight` | `0.0` | `$waterwaveheight` |
-| `WaterDepth` | `64.0` | `$waterdepth` — VBSP's per-instance depth; the volume the map lane stages carries the real one | | `WaterWaveLength` | `0.0` | `$waterwavelength` |
-| `WaterMurkiness` | `0.0` | `$watermurkiness` | | `CheapWaterStartDistance` | `0.0` | `$cheapwaterstartdistance` |
-| `WaterBaseFactor` | `0.0` | `$waterbasefactor` | | `CheapWaterEndDistance` | `0.0` | `$cheapwaterenddistance` |
-| `WaterBaseMovementDist` | `0.0` | `$waterbasemovementdist` | | `FogStart` | `1.0` | `$fogstart` — now the SLW extinction range, not a pixel-depth fog tail (below) |
-| `WaterBaseMovementFreq` | `0.0` | `$waterbasemovementfreq` | | `FogEnd` | `400.0` | `$fogend` |
-| `WaterSpecularMin` | `0.0` | `$waterspecularmin` | | `NormalFrameRate`, `NormalFrameCount` | `0.0`, `1.0` | the `animatedtexture` proxy (20 instances) |
-| `WaterSpecularMax` | `1.0` | `$waterspecularmax` | | `BumpScrollRateU`, `BumpScrollRateV` | `0.0` | the `texturescroll` proxy (18 instances) |
+| `RefractAmount` | `20.0` | `$refractamount` — **wired** (R7.5 G3, below): the DUDV's warp strength, `/100`, folded into the mean of the two per-pass strengths | | `WaterTimeFreq1` | `0.0` | `$watertimefreq1` — declared, not wired (below) |
+| `ReflectAmount` | `50.0` | `$reflectamount` — **wired**, same fold | | `WaterTimeFreq2` | `0.0` | `$watertimefreq2` — declared, not wired |
+| `BaseReflectFract` | `0.0` | `$reflectamount`'s Fresnel base fraction — **wired** into the cheap program's own Fresnel (`BaseReflectFractionIn`, `make_v2_materials.py:2355`), on the expensive path SLW's own Schlick replaces the graph's old `Fresnel` node entirely; the *shipped binary's* default, not the design-era source's: `waterreflect_old`/`waterreflect_ps20_old` read no `c3` register at all, so R0 = 0 in the shipped game | | `WaterWaveHeight` | `0.0` | `$waterwaveheight` — declared, not wired |
+| `WaterDepth` | `64.0` | `$waterdepth` — declared, not wired: VBSP's per-instance depth hint; the volume the map lane stages carries the real one | | `WaterWaveLength` | `0.0` | `$waterwavelength` — declared, not wired |
+| `WaterMurkiness` | `0.0` | `$watermurkiness` — wired (named modernization, below) | | `CheapWaterStartDistance` | `0.0` | `$cheapwaterstartdistance` — declared, not wired |
+| `WaterBaseFactor` | `0.0` | `$waterbasefactor` — declared, not wired | | `CheapWaterEndDistance` | `0.0` | `$cheapwaterenddistance` — declared, not wired |
+| `WaterBaseMovementDist` | `0.0` | `$waterbasemovementdist` — declared, not wired | | `FogStart` | `1.0` | `$fogstart` — now the SLW extinction range, not a pixel-depth fog tail (below) |
+| `WaterBaseMovementFreq` | `0.0` | `$waterbasemovementfreq` — declared, not wired | | `FogEnd` | `400.0` | `$fogend` |
+| `WaterSpecularMin` | `0.0` | `$waterspecularmin` — declared, not wired | | `NormalFrameRate`, `NormalFrameCount` | `0.0`, `1.0` | the `animatedtexture` proxy (20 instances) |
+| `WaterSpecularMax` | `1.0` | `$waterspecularmax` — declared, not wired | | `BumpScrollRateU`, `BumpScrollRateV` | `0.0` | the `texturescroll` proxy (18 instances) |
+| `DuDvFrameRate` | `0.0` | the `animatedtexture` proxy's rate, shared with `NormalFrameRate` (`$bumpframe` indexes both textures in `Water_Old`) | | `DuDvFrameCount` | `1.0` | the DUDV array's own slice count (29) |
+| `LightStyleBrightness` | `1.0` | CPD slot 6 (R7.5 G6, owner decision 4, below) | | | | |
+
+The declared-not-wired scalars above all trace to one measurement
+(`E:/elysium-work/scratch/water_audit/phase0/U2_primitives.md`): VtMB's shipped water vertex
+program never moves a vertex, so the whole wave block (`WaterBaseFactor`/`WaterBaseMovementDist/
+Freq`/`WaterTimeFreq1/2`/`WaterWaveHeight/Length`/`WaterSpecularMin/Max`) was read by a
+`Water_Old` vertex path that did not ship — reproducing it would invent motion VtMB never drew.
+`WaterDepth` and `CheapWaterStartDistance/EndDistance` are declared for the reasons already
+recorded below (the map lane owns the real depth; Lumen already LODs its own reflection by
+distance, so the two-program distance split has no port).
 
 | Vector | Default | From |
 |---|---|---|
@@ -909,8 +957,10 @@ water unit.
 **Static switches**, every one defaulting `false` on the master: `CheapWater` (`$forcecheap`, 2
 units), `UseFogEnable` (`$fogenable`, 23), `UseBaseTexture` (18 of 24 water units bind no
 `$basetexture` at all, so a `true` default would grey-checker the majority; the stage resolves it
-per unit the same way Lit/Unlit/Refract do), `UseAnimatedNormalFrames`, `UseNormalMap`, and the new
-**`Underside`**. `UseFixedCube` still gates the fixed-cube emissive add. `UseEnvMap` is now
+per unit the same way Lit/Unlit/Refract do), `UseAnimatedNormalFrames`, `UseNormalMap`,
+`UseAnimatedDuDvFrames` (R7.5 G3, gates the DUDV lane the same way `UseAnimatedNormalFrames` gates
+the ripple), and **`Underside`** (per-face now, above — set only on the `_Underside` twin, never on
+a surface instance). `UseFixedCube` still gates the fixed-cube emissive add. `UseEnvMap` is
 **declared, not wired**: the switch node stands in the graph (a review artefact of the old
 Fresnel/`ReflectAmount` branch it used to gate) but drives nothing — the cube emissive is gated
 `UseFixedCube` alone, matching every other master's reflection contract. Two water keys are
@@ -918,6 +968,28 @@ Fresnel/`ReflectAmount` branch it used to gate) but drives nothing — the cube 
 variable and becomes the flipbook slice index rather than a parameter of its own, and
 `$subdivsize` (13, values 64 and 16) is Source's water-surface tessellation size — geometry, owned
 by the map lane, provenance only here.
+
+**`%compilewater` reroute (R7.5 contract 2).** A unit whose VMT declares `%compilewater` resolves
+to `M_V2_Water` regardless of its own declared shader family — `importers.materials.
+COMPILE_WATER_KEY`/`COMPILE_WATER_FAMILY`/`effective_family` — because VBSP, not the shader name,
+is what makes a brush a water brush. Corpus effect (measured 2026-09-04, 0 failures on a full
+private stage of all 19,125 units): three base units reroute (`water/invisible_water`, previously
+`M_V2_Unlit`; `water/cheap_water`, previously `M_V2_LitTranslucent`; `dev/dev_waterbeneath` —
+provenance-only before this, the `WaterSurfaceBottom` shader name never resolved a master at all),
+and `maps/sm_pier_1/water/invisible_water_depth_33` follows through its `MaterialInstanceConstant`
+parent chain automatically — a patched unit has no family of its own and inherits the reroute from
+its base's instance, so the pier's 9 up-facing top faces stop landing on `M_V2_Unlit`. The reroute
+takes two more actions, each a named omission on the entry: `_apply_water_blend` forces the blend
+mode to `Opaque` whatever the unit's own `$translucent` says (SLW compiles only opaque or masked;
+a water unit's translucency is its `Opacity` coverage and its `$fogenable` extinction, both of
+which the master already reads — recorded as `waterBlendConsumedByTheWaterLane`), and
+`_apply_compile_water_reroute` drops a `tools/` `$basetexture` (`water/invisible_water`'s
+`Tools/toolsinvisible` — a compiler annotation, the invisible-brush idiom for a
+`%compilenodraw` water brush, never a surface colour; `UseBaseTexture` lands `false`, recorded as
+`toolTextureOnWaterSurface`) and any parameter the rerouted unit authored that `M_V2_Water` does
+not expose (`compileWaterRerouteProvenanceOnly` — measured: exactly one survives to here,
+`water/cheap_water`'s `$envmapmask`, because Water's reflection is Lumen's, scaled by
+`luma(ReflectTint)`, and has no reflection-mask lane at all).
 
 **The SLW translation** (`_build_water`'s own account of ruling A, `make_v2_materials.py:1927`).
 VtMB's `Water_Old` is two render-target passes — `_rt_WaterRefraction` perturbed by the DUDV and
@@ -934,11 +1006,11 @@ M_World_Glass` already uses), fed four ways:
   exponential transmittance and VtMB's linear fog agree at the half-fog distance, §4.2 of the
   architecture doc); `c = pow(FogColor.rgb, 2.2)` (the same decode `ElysiumFog::DecodeColor` gives
   the scene fog). `Scattering = c × σ`, `Absorption = (1 − c) × σ`. `UseFogEnable` off zeroes both
-  (`$fogenable 0` is `FogMode(0)`: clear water). **`Underside` zeroes both too** — the
-  `$bottommaterial` faces are seen only from inside the volume, whose fog is the post-process
-  (§6), and 5.8's SLW camera-under-water branch is hardcoded off (`const bool CameraIsUnderWater =
-  false;`, `BasePassPixelShader.usf:1698`), so the underside must not integrate "water" over the
-  above-water world it refracts. `CheapWater` zeroes both coefficients instead, moving the colour to
+  (`$fogenable 0` is `FogMode(0)`: clear water). **`Underside` does NOT zero them any more (R7.5
+  contract 1, correcting R7.1/R7.4's rule)** — the underside is the same body of water seen from
+  its other side, and its extinction is the surface's; see "Underside is a face fact" above for why
+  5.8's hardcoded-off camera-under-water branch still makes this a witness-note imperfection, not a
+  fidelity claim. `CheapWater` zeroes both coefficients instead, moving the colour to
   Emissive and forcing Opacity to `1` (ruling F, revised 2026-09-04: `WaterCheap_ps11` is
   `lrp(fresnel, cube × $reflecttint, c0 = $fogcolor)` with no refraction pass, on a `SURF_NOLIGHT`
   face — the fog colour is emitted, and a scattering coefficient would need light the face never
@@ -948,32 +1020,74 @@ M_World_Glass` already uses), fed four ways:
 - (the fourth wire is `MP_NORMAL`, below — SLW reads the surface normal directly, not a fifth
   output pin.)
 
-**Normal**: the flipbook lane, unchanged in graph shape — `_flipbook_sample` over `NormalMap`/
-`NormalMapFrames` at `NormalFrameRate`/`NormalFrameCount` (the `animatedtexture` proxy), over the
-`BumpScrollRateU/V` panner, gated `UseNormalMap`, feeding `MP_NORMAL` at unit strength. Before
-R7.1 every water instance shipped a **flat normal** regardless: `$normalmap` and `$bumpmap`
-(`dev/water_normal`, `dev/water_dudv`) are both 29-frame VTFs that stage as `Texture2DArray`s
-(`TA_water_normal` + its `_linear` twin, `TA_water_dudv`), so neither ever bound the master's plain
-2D `NormalMap`/`DuDvMap` slots, and the `animatedtexture` proxy (which reads `$bumpmap` off
-`animatedtexturevar`) bound the **DUDV** array into `NormalMapFrames` — the slot `$bumpmap` lands
-on for the water family — while never setting `UseNormalMap` at all. The stage fix
-(`importers/materials.py`'s `animatedtexture` branch, `family == "water" and normal_lane`): on the
-water family the frames array bound into `NormalMapFrames` is `$normalmap`'s own texture, not
-`$bumpmap`'s (the proxy still supplies the shared rate — `$bumpframe` indexes both textures'
-frames in `Water_Old`); and `_apply_texture_switch_pairs` now treats a bound `NormalMapFrames` as
-"the slot is bound" for the `UseNormalMap` gate, not only a bound static `NormalMap` — before this,
-every water instance animated a normal that `UseNormalMap` then discarded. `DuDvMap` stays unbound
-and declared, per the table above.
+**Normal is ONE normal now, carrying both of VtMB's warps (R7.5 G3, verdict C2/C5, replacing R7.1's
+flipbook-only lane).** Before R7.1 every water instance shipped a **flat normal** regardless:
+`$normalmap` and `$bumpmap` (`dev/water_normal`, `dev/water_dudv`) are both 29-frame VTFs that
+stage as `Texture2DArray`s (`TA_water_normal` + its `_linear` twin, `TA_water_dudv`), so neither
+ever bound the master's plain 2D `NormalMap`/`DuDvMap` slots. R7.1 fixed the ripple half only
+(below); R7.5 adds the refraction half `Water_Old` perturbed both render targets by, which G3
+pinned as an exact bind failure (`_bind_texture` rejected the 29-frame array against the plain
+`DuDvMap` `Texture2D` slot) rather than a design gap. The two halves:
 
-**Specular** = `class_specular × luma(ReflectTint)`, forced to `0` under `Underside`
-(`Mod_LoadFaces`'s own strip). SLW applies its own Schlick from `Specular`; the graph's `Fresnel`
-node and `BaseReflectFract` pin from the pre-R7.1 lane are gone, `BaseReflectFract` staying
-declared above. **Roughness** / **Metallic** are the class LUT read, unchanged — Lumen honours SLW
-roughness in 5.8 (§8). **Emissive** is the authored fixed-cube add, unchanged (`cube × EnvMapTint ×
-FixedCubeStrength × ReflectTint`, gated `UseFixedCube`; `FixedCubeStrength` is the same
-`MPC_ElysiumSurfaces` knob `M_V2_Lit`'s and `M_V2_Refract`'s reflection contract reads). **Base
-Color** is unchanged (`BaseTexture × Color × RefractTint`, lerped toward `WaterColor` by
-`WaterMurkiness`) and invisible while Opacity is `0`.
+- **Ripple**: `_flipbook_sample` over `NormalMap`/`NormalMapFrames` at `NormalFrameRate`/
+  `NormalFrameCount` (the `animatedtexture` proxy), over the `BumpScrollRateU/V` panner, gated
+  `UseNormalMap`. The stage fix (`importers/materials.py`'s `animatedtexture` branch, `family ==
+  "water" and normal_lane`): on the water family the frames array bound into `NormalMapFrames` is
+  `$normalmap`'s own texture, not `$bumpmap`'s (the proxy still supplies the shared rate —
+  `$bumpframe` indexes both textures' frames in `Water_Old`); and `_apply_texture_switch_pairs`
+  treats a bound `NormalMapFrames` as "the slot is bound" for the `UseNormalMap` gate, not only a
+  bound static `NormalMap` — before this, every water instance animated a normal that
+  `UseNormalMap` then discarded.
+- **Refraction (R7.5)**: `dev/water_dudv`'s own 29 signed-UVWQ slices (`DuDvMapFrames`, gated
+  `UseAnimatedDuDvFrames`), biased and added into the ripple normal's tangent XY, then
+  renormalised. `Water_Old` perturbed the UVs of BOTH render targets by this DUDV field, scaled per
+  pass by `$refractamount`/`$reflectamount` (VS `c44`, both `/100`); SLW has a single normal to
+  offset the scene along, so the two per-pass strengths fold into their mean, `(RefractAmount +
+  ReflectAmount) / 200`.
+
+The result feeds `MP_NORMAL`. `DuDvMap` (the plain 2D slot) stays unbound and declared, per the
+table above — its key still names a parameter in the binding contract, but no unit in the corpus
+ever reaches it.
+
+**Specular** = `class_specular × luma(ReflectTint)`, forced to `0` under `Underside`; **Roughness**
+forced to `1` under `Underside` too (R7.5 — `Mod_LoadFaces` strips `$reflecttexture` from every
+down-facing water face, and the underside has no reflection at all, so a mirror Lumen would still
+resolve off a smooth surface goes with it). SLW applies its own Schlick from `Specular` on the
+expensive path; `BaseReflectFract` feeds only the cheap program's own Fresnel base fraction
+(above). **Metallic** is the class LUT read, unchanged — Lumen honours SLW roughness in 5.8 (§8).
+**Emissive** is the authored fixed-cube add (`cube × EnvMapTint × FixedCubeStrength ×
+ReflectTint`, gated `UseFixedCube`; `FixedCubeStrength` is the same `MPC_ElysiumSurfaces` knob
+`M_V2_Lit`'s and `M_V2_Refract`'s reflection contract reads), plus the cheap program's own output
+(above), **plus `LightStyleBrightness`** (R7.5 G6, below). **Base Color** is `BaseTexture × Color ×
+RefractTint`, lerped toward `WaterColor` by `WaterMurkiness` (named modernization, below), then
+**scaled by `LightStyleBrightness`** too, and invisible while Opacity is `0`.
+
+**`LightStyleBrightness`** (R7.5 G6, owner decision 4): Custom Primitive Data slot 6
+(`ElysiumLightStyle::SlotBrightness`, `Public/ElysiumFog.h`), written each tick by the existing
+style clock (`UElysiumLightRig`) on every component the bake tagged with a face lightstyle. VtMB
+modulates a styled face's LIGHTMAP PAGE by the style's pattern; Lumen replaces lightmaps
+project-wide, so the port scales the lit base colour and the emissive by a brightness scalar
+instead — the same clock a switched `light`/`light_spot` already animates against (R6.2). A
+CPD-driven parameter **always** reads the slot — `UMaterialExpressionScalarParameter::Compile`
+emits `CustomPrimitiveData(index)` and never the default value, and an unwritten slot reads `0` —
+so the neutral `1.0` is *written*, not defaulted: onto baked primitives by `bake_map.set_fog`, and
+onto runtime-created ones by `ElysiumLightStyle::StampUnstyled` at each component's construction.
+The parameter's own default is editor preview only. That is the opposite of the fog block
+underneath, whose unwritten `0` already means "not fogged"; a brightness of `0` is black. Same slot, same parameter name and default, on `M_V2_Lit`,
+`M_V2_LitTranslucent` and `M_V2_TwoTexture` — pinned across all four masters by
+`Elysium.Substrate.Water` and the usual header/`EXPOSED_PARAMS`/`*Params` three-way name pins each
+master's own section states. See `seam_map_map.md` → "Import — water volumes" for the tag/section-key
+side (which chunk gets tagged, and with which style) and `docs/vtmb/water.md` for the VtMB fact
+(the foam-card lightstyle census, `Mod_LoadFaces`'s `0x2000` flag).
+
+**`WaterMurkiness` stays wired (named modernization, verdict C4).** No shipped VtMB shader ever
+registered `$watermurkiness` — the 2004 renderer read the key off the VMT and did nothing with it.
+Four corpus units author a non-default value (`dev/dev_water` `0.85`, `dev/nether01_water` `0.8`,
+`water/oilfieldwatera`/`b` `1.0`; none placed on `sm_hub_1`/`sm_pier_1`/`sp_soc_3`). The owner's
+call is to keep the wire rather than delete it: it is authored intent with an unambiguous meaning,
+un-wiring it would put nothing in its place, and the project's rule is to replace a 2004 engine
+limit with the native expression, not to reproduce the limit. Base colour lerps toward `WaterColor`
+by it, unchanged since before R7.5.
 
 **Opacity is coverage, not murk** (`WaterVisibility = 1 − Opacity`, `BasePassPixelShader.usf:1140`
 — §8): `UseBaseTexture ? Alpha × BaseTexture.a : 0`. The old fog tail this pin used to blend toward
@@ -984,15 +1098,27 @@ any more). The four base-textured `Water` units (`dev_water`, `nether01_water`,
 `oilfieldwater a/b`) are placed on no water map; they keep their alpha as coverage, provenance-level
 only.
 
-**Declared, not wired** (provenance the instance still carries, none of it feeding a pin):
-`DuDvMap` (the DX8 render-target-offset field; SLW refracts along `MP_NORMAL`, which has no second
-channel to offset against — the sample node stands in the graph, unconnected), `RefractAmount` /
-`ReflectAmount` (the DUDV's warp strengths, not intensities — meaningless once the DUDV offset is
-gone), `BaseReflectFract`, `UseEnvMap` (the cheap cube is Lumen's mirror now, gated `UseFixedCube`
-instead), and the wave-animation scalars (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`,
-`WaterTimeFreq1/2`, `WaterWaveHeight/Length`, `WaterSpecularMin/Max`,
-`CheapWaterStartDistance/EndDistance`, `WaterDepth`) — vertex/World-Position-Offset concerns, out
-of this generator's scope, unchanged from before R7.1.
+**Declared, not wired** (provenance the instance still carries, none of it feeding a pin), as of
+R7.5 — `RefractAmount`/`ReflectAmount`/`BaseReflectFract` moved OFF this list into "wired" above:
+`DuDvMap` (the plain 2D slot binds on no unit in the corpus, above), `UseEnvMap` (the cheap cube is
+Lumen's mirror now, gated `UseFixedCube` instead), and the wave-animation scalars
+(`WaterBaseFactor`, `WaterBaseMovementDist/Freq`, `WaterTimeFreq1/2`, `WaterWaveHeight/Length`,
+`WaterSpecularMin/Max`, `CheapWaterStartDistance/EndDistance`, `WaterDepth`) — vertex/
+World-Position-Offset and distance-LOD concerns respectively, out of this generator's scope.
+
+**G4's "the compiler's own resolved water parameters were destroyed upstream" is stale (Phase 0
+water-complete verdict, contradiction 1).** Retail `maps/sm_hub_1/dev/dev_waterbeneath2.vmt` is a
+fully expanded `Water` block (refract/reflect amounts and tints, cheap distances, the fog triple,
+the `AnimatedTexture`/`TextureScroll` proxies) and the Unofficial Patch replaced it with a 117 B
+patch stub — but nothing is lost: `import/materials/dev/dev_waterbeneath2.provenance.json` still
+carries the full expanded set, because the corpus-wide BASE unit (not the per-map patch) is what
+authors it, and the patched per-map instance reaches it through Unreal's own
+`MaterialInstanceConstant` parent chain (`materials.py:2018-2020`) — a patched water unit's own
+staged parameter set is deliberately sparse (only the delta the `.vmt` patch block actually names,
+usually just `$waterdepth`), and every key the delta does not override reads through to the base
+MIC. The gap G4 measured was graph wiring (G3's `DuDvMapFrames` bind failure, above), never value
+resolution — the sewer's underside now carries its authored amounts, tints and scroll rate the
+same way the surface does, through the same parent instance.
 
 **`M_ElysiumUnderwater`** is a second, separate asset this same generator authors
 (`_build_underwater`, `/ElysiumGenerated/Materials/V2/M_ElysiumUnderwater`) — `MD_PostProcess`,
@@ -1103,6 +1229,7 @@ outright (see "Four parameters that left the masters"): a mesh decal has nothing
 | Scalar | Default | From | | Vector | Default | From |
 |---|---|---|---|---|---|---|
 | `AlphaBias` | `0.0` | `$alpha_bias` (4, float `0.2`) | | `TexScaleOffset` | `(1, 1, 0, 0)` | `$texscale` (4, **scalar** `.25`) → `.xy`; `$texoffset` (4, **vector** `[0 0]`) → `.zw`; also `$basetexturetransform` |
+| `LightStyleBrightness` | `1.0` | CPD slot 6 (R7.5 G6) — same slot, name and default as `M_V2_Water`'s and the Lit pair's, above | | | | |
 | the scene-fog lane (R5.4) — `FogStart`, `FogInvRange` primitive-driven, `FogInscatter` `1.0` | | | | `FogColor` | primitive-driven (CPD 0..3) | `ElysiumFog::Pack`, never the VMT |
 | the base-scroll and sine lanes | | | | `Texture2ScaleOffset` | `(1, 1, 0, 0)` | `$tex2scale` (4, **scalar**) and `$texture2scale` (1, **scalar** `10.0`) → `.xy`; `$tex2offset` (4, **vector**) → `.zw`. The proxy component targets land here too: `$tex2offset[1]` → `.w`, `$texture2offset[0]` → `.z`, `$texture2transform` → the whole vector |
 

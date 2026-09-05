@@ -851,7 +851,7 @@ the **55** call sites of the lump accessor `FUN_200b6670` was located by scannin
 
 | Address | What | `dface_t` fields it touches |
 |---|---|---|
-| `0x200b73d0` | `Mod_LoadFaces` | `avgLightColor[8]` @0, `planenum` @32, `side` @34, `onnode` @35, `firstedge` @36, `numedges` @40, `texinfo` @42, `dispinfo` @44, **`styles[8]` @48**, `lightofs` @72, `LightmapMins` @80, `LightmapSize` @88, `smoothingGroups` @100 |
+| `0x200b73d0` | `Mod_LoadFaces` | `avgLightColor[8]` @0, `planenum` @32, `side` @34, `onnode` @35, `firstedge` @36, `numedges` @40, `texinfo` @42, `dispinfo` @44, **`styles[8]` @48**, `lightofs` @72, `LightmapMins` @80, `LightmapSize` @88, `numPrims` @100, `firstPrimID` @102 |
 | `0x200b9c30` | face centroid + radius builder (writes 5 floats/face to `worldbrush + 0x124`) | none — walks the built `msurface` array (stride `0x98`), never the raw lump |
 | `0x20033b30` | `CMod_LoadDispInfo` | `firstedge` @36, `numedges` @40, `dispinfo` @44 |
 

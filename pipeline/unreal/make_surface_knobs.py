@@ -51,6 +51,7 @@ SCALAR_NAMES = (
     "CaptureRadius",
     "DetailSwayAmplitude",
     "WaterFogScale",
+    "WaterWarpScale", "WaterReflectWarpScale",
 )
 
 

@@ -143,6 +143,24 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category = "Water", meta = (ClampMin = "0.0", ClampMax = "16.0"))
 	float WaterFogScale = 1.3862944f;
 
+	/**
+	 * `Water_Old` warps the refracted image in screen space by the DUDV flipbook times the authored
+	 * `$refractamount` (`texbem`, `water_dx80.cpp::DrawRefraction`; VS c44 on the SM2 twin). The
+	 * amounts are authored 15-100 and the DUDV's signed rms is 0.027, so this is the screen-UV
+	 * offset per authored unit on `M_V2_Water`'s Refraction pin: 0.01 puts a typical sewer (35)
+	 * at ~1 % of the frame, which is what the 2004 frames show. Tune by eye against them.
+	 */
+	UPROPERTY(EditAnywhere, Config, Category = "Water", meta = (ClampMin = "0.0", ClampMax = "0.2"))
+	float WaterWarpScale = 0.01f;
+
+	/**
+	 * The same field warped `_rt_WaterReflection` by `$reflectamount`. There is no reflection
+	 * image to displace on a deferred renderer, so the port tilts the normal Lumen mirrors off by
+	 * DUDV times the amount times this, per authored unit (named modernization).
+	 */
+	UPROPERTY(EditAnywhere, Config, Category = "Water", meta = (ClampMin = "0.0", ClampMax = "0.2"))
+	float WaterReflectWarpScale = 0.01f;
+
 	/** `/Game/ElysiumGenerated/Materials/V2/MPC_ElysiumSurfaces`, the collection every V2 master reads. */
 	static const TCHAR* CollectionPath();
 

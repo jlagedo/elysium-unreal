@@ -1,4 +1,4 @@
-"""The map root unit's geometry and placements, read for the V2 map bake (R5.1).
+"""The map root unit's geometry and placements, read for the V2 map bake (R5.1, R7.4 water).
 
 `docs/project/seam_migration.md` -> "Roadmap -- one pipeline" R5.1 asks for a map authored from the
 published map root unit -- its `world`, `brushModels`, `displacements` and `placements` scenes --
@@ -44,6 +44,7 @@ from array import array
 from dataclasses import dataclass, field
 import hashlib
 import json
+import math
 from pathlib import Path
 import sys
 from typing import Any, Sequence
@@ -82,7 +83,18 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 9 (R7.1): the manifest carries `water` -- one `volumes[]` row per real `LEAFWATERDATA` record
 #: with its fog keys and its `CONTENTS_WATER` brushes as plane sets, plus the `dropped[]` rows that
 #: name what produced none (`docs/architecture/water-architecture.md` -> section 5.1).
-MANIFEST_VERSION = 9
+#: 10 (R7.4): the water lane is complete. Face groups split on two per-face facts vbsp published and
+#: the bake never read -- `#underside` (the plane normal faces down, so the group binds the material
+#: lane's `_Underside` twin) and `#style<n>` (the face carries a lightstyle, so the chunk gets the
+#: runtime's style brightness) -- every `materials` row states which it is; each `water.volumes[]`
+#: row carries the compiler's `fluid{}`, its convex `pieces[]`, its `leafBoxesCm[]` and the
+#: `nearBoxesCm[]` the PVS derives; and `water.faces[]` is one row per water face with the fields
+#: G11/G13/G22/G26 name (`docs/architecture/water-architecture.md`, AUDIT section 9).
+#: 11 (R7.4, integrator): each `water.faces[]` row also carries `meshedAreaCm2`, the area this
+#: stage actually meshed for the face. `faces[].area` beside it is what vbsp computed, so the
+#: G26/verdict B3 area pin is answerable offline, per face and per section, without an editor
+#: geometry query on a baked asset.
+MANIFEST_VERSION = 11
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -174,6 +186,11 @@ DISP_ALPHA_FULL = 255.0
 #: only distinguishes `SOLID_NONE` from the rest -- see the ruling in `seam_map_map.md`.
 SOLID_NONE = 0
 
+#: `CONTENTS_SOLID` (`bspflags.h`). vbsp writes one dummy solid leaf per map at index 0 -- cluster
+#: 0, a zero-extent box -- and it rides into any cluster-keyed set that names cluster 0. A leaf no
+#: eye can be in is not near water, and VtMB's own annotation agrees: 0 of the 97 `sm_hub_1` and 126
+#: `sp_soc_3` leaves that carry the near-water bit are solid.
+CONTENTS_SOLID = 0x1
 #: `CONTENTS_WATER` (`bspflags.h`). A brush is a water volume's when it carries the bit AND at
 #: least one non-bevel side whose material authors `%compilewater`: `0x18000120` shadow casters
 #: sided entirely with `tools/tools_shadow` carry the bit too and are not water, while
@@ -182,12 +199,46 @@ CONTENTS_WATER = 0x20
 #: The `%compilewater` key vbsp reads to give a brush that content bit; carried on the material
 #: unit's own VMT provenance, so a patched instance only shows it through its `patchBase`.
 COMPILE_WATER_KEY = "%compilewater"
+#: R7.5 look pass: a `%compilenodraw` water brush is a volume with no drawn surface (VtMB's own
+#: behaviour; `water/invisible_water`, the pier's swimmable ocean under the `blackwater` card).
+COMPILE_NODRAW_KEY = "%compilenodraw"
 #: How far a brush's horizontal top plane may sit from a `LEAFWATERDATA` row's `surfaceZ` and still
 #: be that row's brush: one Source inch, the grid vbsp snapped both to.
 WATER_SURFACE_TOLERANCE_CM = 2.54
 #: How flat a plane's Unreal normal must be to be read as a brush's water surface. The corpus's
 #: water tops are axis-aligned; the bound keeps a steep bank side from ever being mistaken for one.
 WATER_TOP_NORMAL_Z = 0.99
+
+#: R7.4 ruling E (revised 2026-09-04, per-face underside; `water-architecture.md` section 1 -- N is
+#: the four standing divergences). `Mod_LoadFaces` (engine.dll `FUN_200b73d0`) tests the face's
+#: own plane normal against the .rdata constant `_DAT_201734e8 = 0.0` and, when it is negative,
+#: undefines `$reflecttexture` on the material -- so an underside water face is not "the same
+#: material flipped", it is the same material with the reflection pass gone. The test is on the
+#: PLANE row the face names, not on the side-flipped normal: measured over the three water maps,
+#: the raw normal reproduces the compiler's own split exactly (`sm_hub_1` 23 up / 24 down,
+#: `sm_pier_1` 18 down + 23 vertical + 9 up on the `_depth_33` patch, `sp_soc_3` 27 up + 4 vertical
+#: / 27 down + 4 vertical), while the side-flipped one calls every one of them up.
+UNDERSIDE_NORMAL_Z = 0.0
+#: The suffix a down-facing face group's key carries. The bake binds `<instance>_Underside`, the
+#: twin the material lane stages beside the surface instance (the R7.2 decal-twin shape).
+UNDERSIDE_SUFFIX = "#underside"
+#: The suffix a lightstyle-bearing face group's key carries, `<key>#style<n>`.
+LIGHTSTYLE_SUFFIX = "#style"
+
+#: `dface_t.styles[0..3]`: `0` is "the base style, always on", `255` is the empty slot. Everything
+#: else names a `CWorld::vfunc104` pattern (`vampire.dll 0x1023c020`) the light rig already clocks.
+#: Read in slot order, which is VtMB's own: the pier's 34 `objects/surf` foam cards carry style 1
+#: first and 21 of them carry the switchable style 32 second.
+LIGHTSTYLE_BASE = 0
+LIGHTSTYLE_EMPTY = 255
+LIGHTSTYLE_SLOTS = 4
+
+#: `dprimitive_t.type` (lump 37): `PRIM_TRILIST` / `PRIM_TRISTRIP`, the two modes
+#: `Shader_DrawSurfaceDynamic` (`engine.dll FUN_2007d4e0`) begins its dynamic mesh with
+#: (`MATERIAL_TRIANGLES` / `MATERIAL_TRIANGLE_STRIP`). Any other value is a record the engine
+#: refuses to draw (`else return`), and so is this lane.
+PRIM_TRILIST = 0
+PRIM_TRISTRIP = 1
 
 
 class MapGeometryError(ValueError):
@@ -249,8 +300,13 @@ class Scene:
     groups: dict[str, list[int]] = field(default_factory=dict)
     #: R5.4: group key -> the material unit key its faces resolved (`vtmb:material:<key>` without
     #: the prefix; a patched face keeps its `maps/<map>/...` id). One unit per group by
-    #: construction -- `group_key` is a function of the raw key alone.
+    #: construction -- `group_key` is a function of the raw key alone, and R7.4's two suffixes are
+    #: functions of the face's own plane and styles.
     units: dict[str, str] = field(default_factory=dict)
+    #: R7.4: one row per `%compilewater` face this scene meshed (`_water_face_row`). Collected only
+    #: when the caller supplied the `%compilewater` predicate -- the key lives on the material
+    #: lane's staged provenance and nothing else in this module can answer it.
+    water_faces: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def tri_count(self) -> int:
@@ -371,9 +427,14 @@ class CubemapSample:
 
 @dataclass(frozen=True)
 class WaterBrush:
-    """One `CONTENTS_WATER` brush of a volume, as the convex plane set the runtime tests a point
-    against (R7.1). `planes` are Unreal centimetres, outward normals, `n . p - d <= 0` inside;
-    `bounds_min`/`bounds_max` are the hull's AABB, the cheap test the runtime takes first."""
+    """One convex of a volume, as the plane set the runtime tests a point against (R7.1).
+
+    Both carriers use this row: the volume's own `CONTENTS_WATER` brushes, and R7.4's `pieces` --
+    the compiler's convex decomposition of the same solid (G18). `planes` are Unreal centimetres,
+    outward normals, `n . p - d <= 0` inside; `bounds_min`/`bounds_max` are the AABB, the cheap
+    test the runtime takes first, and every row has one. For a brush it is the AABB of the hull the
+    stage solved; for a piece it is the AABB of the ledge's own vertices, which bounds that convex
+    exactly -- vbsp publishes no bounds for a ledge, so the stage measures them."""
 
     planes: tuple[tuple[float, float, float, float], ...]
     bounds_min: tuple[float, float, float]
@@ -383,6 +444,50 @@ class WaterBrush:
         return {
             "planes": [list(plane) for plane in self.planes],
             "boundsCm": {"min": list(self.bounds_min), "max": list(self.bounds_max)},
+        }
+
+
+@dataclass(frozen=True)
+class WaterFluid:
+    """The compiler's `fluid { }` block, the half of a water volume the physics reads (R7.4, G7).
+
+    Decoded into the unit since R2 (`formats.map_glb.physics`) and read by nothing until now.
+    `index` names `physics.models[0].solids[index]` -- the convex decomposition of the fluid, which
+    is what `pieces` is built from -- and it is also the creation guard: `vampire.dll FUN_10158600`
+    tests `fluid.index > 0` on the first dword of `ParseFluid`'s output and nothing else, so both
+    owner maps get a controller (verdict B5, closing AUDIT section 12 unknown 7, which had guessed
+    the guard was on `contents`).
+
+    `surface_plane` is the authored plane in the bake's frame -- `n . p - d = 0`, centimetres --
+    and lands on the volume's own `surface_z_cm` on all three maps. `current_velocity_cm` is
+    centimetres per second; no map in the corpus authors a non-zero one and no brush or leaf carries
+    a `CONTENTS_CURRENT_*` bit (G21), so the lane exists for the map that would.
+
+    A key the author left out is `None`, never a substituted default: vphysics' own default density
+    is 1000 kg/m3 and `sm_pier_1` authors exactly that, but the hub and `sp_soc_3` author none and
+    saying `1000` here would state an authoring that did not happen. `contents` is parsed by the
+    game DLL and read by nothing in it (verdict B5).
+    """
+
+    index: int
+    density: float | None
+    damping: float | None
+    surface_plane: tuple[float, float, float, float]
+    current_velocity_cm: tuple[float, float, float]
+    contents: int | None
+    #: The hard-coded literal the controller binds (`vampire.dll 10158743`), when the block names
+    #: one -- provenance for the surfaceprop the impact and step sounds come off.
+    surface_prop: str | None
+
+    def as_row(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "density": self.density,
+            "damping": self.damping,
+            "surfacePlane": list(self.surface_plane),
+            "currentVelocityCm": list(self.current_velocity_cm),
+            "contents": self.contents,
+            "surfaceProp": self.surface_prop,
         }
 
 
@@ -407,6 +512,25 @@ class WaterVolume:
     fog_start_cm: float
     fog_end_cm: float
     brushes: tuple[WaterBrush, ...]
+    #: R7.4 (G7): the `fluid { }` block whose surface plane stands at this volume's own surface, or
+    #: `None` where the compiler authored no fluid for it.
+    fluid: WaterFluid | None = None
+    #: R7.4 (G18): the compiler's own convex decomposition of the fluid solid, one plane set per
+    #: ledge, in the same `n . p - d <= 0` convention as `WaterBrush.planes`. The runtime tests the
+    #: carve rather than the box: the hub's water is 5 pieces and its single brush AABB spills
+    #: 66-77 inches into the sewer walls.
+    pieces: tuple[WaterBrush, ...] = ()
+    #: R7.4 (G10): the AABBs of the leaves whose `leafWaterDataID` names this record -- the engine's
+    #: own "the eye is under water" answer, and a tighter hull than the brush.
+    leaf_boxes_cm: tuple[tuple[tuple[float, float, float], tuple[float, float, float]], ...] = ()
+    #: R7.4 (G9/G23): the AABBs of every leaf in `union(PVS(water cluster))` -- VtMB's `0x200`
+    #: annotation, derived from the visibility sub-unit instead of read off the leaf because the
+    #: Unofficial-Patch recompile of `sm_pier_1` dropped the bit (retail 702 leaves, UP 0).
+    near_boxes_cm: tuple[tuple[tuple[float, float, float], tuple[float, float, float]], ...] = ()
+    #: R7.4 (G17): the physics `materialtable` row named `water`, the surfaceprop index a body
+    #: moving in this volume reports. `None` on a map whose table has no water row -- `sm_hub_1`'s
+    #: 16 rows do not, `sm_pier_1`'s 18 do (`WATER = 17`).
+    material_table_water_index: int | None = None
 
     def as_row(self) -> dict[str, Any]:
         return {
@@ -419,6 +543,16 @@ class WaterVolume:
             "fogStartCm": self.fog_start_cm,
             "fogEndCm": self.fog_end_cm,
             "brushes": [brush.as_row() for brush in self.brushes],
+            "fluid": self.fluid.as_row() if self.fluid is not None else None,
+            # Same row shape as `brushes[]`, deliberately: a piece is a convex the runtime tests a
+            # point against exactly as it tests a brush, bounds-first, so both sides carry one
+            # writer and one struct instead of two that drift.
+            "pieces": [piece.as_row() for piece in self.pieces],
+            "leafBoxesCm": [{"min": list(low), "max": list(high)}
+                            for low, high in self.leaf_boxes_cm],
+            "nearBoxesCm": [{"min": list(low), "max": list(high)}
+                            for low, high in self.near_boxes_cm],
+            "materialTableWaterIndex": self.material_table_water_index,
         }
 
 
@@ -456,6 +590,14 @@ class MaterialBinding:
     #: `decal_asset` as its MESH slot and draws in the mesh-decal pass -- coplanar with the wall,
     #: no z-fight, lit as the wall, which is what a lightmapped `$decal` face did.
     is_decal_surface: bool = False
+    #: R7.4 ruling E (revised): every face in this group faces down (`#underside`), so it binds
+    #: `underside_asset` -- the material lane's `_Underside` twin, which is this instance with the
+    #: reflection pass gone, exactly what `Mod_LoadFaces` does by undefining `$reflecttexture`.
+    underside: bool = False
+    #: R7.4 (G6, owner decision 4): every face in this group animates on this lightstyle, so the
+    #: bake tags the chunk `ElysiumBakedTags::LightStyle(style)` and the light rig writes its
+    #: brightness into CPD slot 6. `None` is a group nothing modulates.
+    light_style: int | None = None
 
     @property
     def opaque(self) -> bool:
@@ -468,13 +610,25 @@ class MaterialBinding:
         return self.blend_mode in NANITE_BLEND_MODES and self.master in NANITE_CAPABLE_MASTERS
 
     @property
+    def underside_asset(self) -> str | None:
+        """The `_Underside` twin this group binds, or `None` when it is not an underside group.
+
+        The name is the surface instance's plus the suffix, in the same folder -- the decal twin's
+        own shape (`MI_<unit>_Decal`), restated so the bake needs no second naming rule.
+        """
+
+        return f"{self.asset}_Underside" if self.underside else None
+
+    @property
     def slot_asset(self) -> str | None:
         """The instance the bake binds into this face group's material slot: the projector twin
         for a `$decal` surface (ruling 3), the surface instance for everything else. `None` when
         the unit says it is a decal surface and the material lane staged no projector for it --
         a named bake failure, never a silent rebind onto the surface instance."""
 
-        return self.decal_asset if self.is_decal_surface else self.asset
+        if self.is_decal_surface:
+            return self.decal_asset
+        return self.underside_asset or self.asset
 
     def as_row(self) -> dict[str, Any]:
         return {
@@ -482,6 +636,8 @@ class MaterialBinding:
             "isDecalSurface": self.is_decal_surface, "master": self.master,
             "blendMode": self.blend_mode, "opaque": self.opaque, "patched": self.patched,
             "provenance": self.provenance,
+            "underside": self.underside, "undersideAsset": self.underside_asset,
+            "lightStyle": self.light_style,
         }
 
 
@@ -530,6 +686,13 @@ class MapGeometry:
                 "count": 0})
             row["count"] += 1
         return [by_model[model] for model in sorted(by_model)]
+
+    def water_face_rows(self) -> list[dict[str, Any]]:
+        """Every scene's `%compilewater` face rows, in face order (R7.4, `_water_face_row`)."""
+
+        rows = [row for scene in (self.world, self.sky, *self.brushes.values())
+                for row in scene.water_faces]
+        return sorted(rows, key=lambda row: row["index"])
 
     def material_units(self) -> dict[str, str]:
         """Every face group over every scene -> its material unit key (R5.4). Two scenes naming
@@ -613,6 +776,82 @@ def group_key(units: sidecars.MapUnits, face: dict[str, Any], map_name: str) -> 
     return f"{base}@{cube}" if cube else base
 
 
+def face_underside(units: sidecars.MapUnits, face: dict[str, Any]) -> bool:
+    """Does this face's own plane point down in the Unreal frame (`UNDERSIDE_NORMAL_Z`)?
+
+    Ruling E (revised): underside is a fact about a FACE, never about a material.
+    `sm_pier_1` is the map that settles it -- the patched `_depth_33` instance faces up and its
+    `invisible_water` parent faces down, one unit each way -- and VtMB agrees, because
+    `Mod_LoadFaces` reads the plane row and not the VMT. The unit publishes plane normals in the
+    glTF frame, whose `y` is Unreal's `z`.
+    """
+
+    planes = units.root.get("planes") or []
+    index = int(face.get("plane", -1))
+    if not 0 <= index < len(planes):
+        return False
+    return float(planes[index]["normal"][1]) < UNDERSIDE_NORMAL_Z
+
+
+def face_light_styles(face: dict[str, Any]) -> list[int]:
+    """Every style the face names, in slot order -- `0` (the always-on base) and `255` (the empty
+    slot) are not styles and never appear."""
+
+    return [
+        int(value) for value in list(face.get("styles") or ())[:LIGHTSTYLE_SLOTS]
+        if int(value) not in (LIGHTSTYLE_BASE, LIGHTSTYLE_EMPTY)
+    ]
+
+
+def face_light_style(face: dict[str, Any]) -> int | None:
+    """The lightstyle this face animates on, or `None` for a face that animates on none.
+
+    VtMB sums one lightmap page per `styles[]` slot, each scaled by that style's pattern; the port
+    has no lightmap (owner decision 4 -- Lumen replaced it) and one brightness scalar per chunk, so
+    one style has to be named. **The lowest** one is: Quake's inherited animated patterns are styles
+    1-11 and a named `light` entity's switchable style is 32-63, so the lowest non-base style is the
+    one that actually moves, and the switchable one defaults to full brightness anyway. Slot order
+    would decide it arbitrarily -- measured on `sm_pier_1`'s 34 `objects/surf` foam cards, all 34
+    name style 1 but 18 of them name 32 in the earlier slot, which would have split one waterline
+    into two chunks flickering on different patterns.
+
+    Every style the face names stays on the row (`face_light_styles`), so a chunk that wants the
+    switchable one too has it without re-reading the lump.
+    """
+
+    styles = face_light_styles(face)
+    return min(styles) if styles else None
+
+
+def section_key(key: str, *, underside: bool = False, light_style: int | None = None) -> str:
+    """The group key one face lands in: its material's, plus what the face itself is.
+
+    Two suffixes, always in this order, so a key is parsed by splitting and never by guessing:
+    `<material>[@<cubemap>][#underside][#style<n>]`. Both name a BINDING the bake makes on the
+    section -- the `_Underside` twin instance, and the lightstyle tag plus CPD slot -- and both are
+    per-face facts that the old one-group-per-material split had nowhere to put.
+    """
+
+    if underside:
+        key += UNDERSIDE_SUFFIX
+    if light_style is not None:
+        key += f"{LIGHTSTYLE_SUFFIX}{int(light_style)}"
+    return key
+
+
+def split_section_key(key: str) -> tuple[str, bool, int | None]:
+    """`section_key`'s inverse: `(material group key, underside, lightStyle)`."""
+
+    style: int | None = None
+    head, sep, tail = key.rpartition(LIGHTSTYLE_SUFFIX)
+    if sep and tail.isdigit():
+        key, style = head, int(tail)
+    underside = key.endswith(UNDERSIDE_SUFFIX)
+    if underside:
+        key = key[:-len(UNDERSIDE_SUFFIX)]
+    return key, underside, style
+
+
 # --------------------------------------------------------------------------------- scenes
 
 
@@ -640,6 +879,99 @@ def _gltf_to_source(point: Sequence[float]) -> tuple[float, float, float]:
 
     scale = 1.0 / sidecars.GLTF_SCALE
     return (float(point[0]) * scale, -float(point[2]) * scale, float(point[1]) * scale)
+
+
+def _source_to_gltf(point: Sequence[float]) -> tuple[float, float, float]:
+    """Source inches to glTF metres -- `_gltf_to_source` the other way, for a lump this lane reads
+    raw (lump 38's primitive vertices are published as the BSP's own `Vector`s, untransformed)."""
+
+    scale = sidecars.GLTF_SCALE
+    return (float(point[0]) * scale, float(point[2]) * scale, -float(point[1]) * scale)
+
+
+def _primitive_triangles(kind: int, indices: Sequence[int]) -> list[tuple[int, int, int]]:
+    """One primitive's index run as triangles, in the mode `dprimitive_t.type` names.
+
+    `PRIM_TRISTRIP` is unwound here rather than carried: the staged pair is a triangle list, and a
+    strip's own alternating winding is exactly what `MATERIAL_TRIANGLE_STRIP` gives the rasterizer.
+    Degenerate triangles (a strip's stitch) are dropped -- Unreal's builder would drop them anyway,
+    and the area pin counts what is drawn.
+    """
+
+    out: list[tuple[int, int, int]] = []
+    if kind == PRIM_TRILIST:
+        for base in range(0, len(indices) - 2, 3):
+            out.append((indices[base], indices[base + 1], indices[base + 2]))
+        return out
+    if kind == PRIM_TRISTRIP:
+        for base in range(len(indices) - 2):
+            a, b, c = indices[base], indices[base + 1], indices[base + 2]
+            if a == b or b == c or a == c:
+                continue
+            out.append((a, b, c) if base % 2 == 0 else (a, c, b))
+        return out
+    return out
+
+
+def _append_primitives(
+    scene: Scene,
+    tris: list[int],
+    units: sidecars.MapUnits,
+    face: dict[str, Any],
+) -> bool:
+    """One face's compiled primitive grid, when vbsp built it one (G13). True when it meshed.
+
+    `$subdivsize` makes vbsp tessellate a water face into a regular grid and store it in lumps
+    37/38/39; `Shader_DrawSurfaceDynamic` reads `numPrims` as its first act and, when it is
+    non-zero, draws the grid **to the exclusion of** both the adaptive-subdivision branch and the
+    surfedge fan -- so on the ~9 maps that carry one, the compiled grid *is* VtMB's water mesh
+    (U2, verdict A2). Every one of the 512 primitive-bearing faces in the corpus binds a material
+    authoring `$subdivsize 64`, and none of them is on a map in the R7.4 scope, so this path is
+    pinned on synthetic units and gates nothing (verdict B4).
+
+    Two rules come straight off `Mod_LoadPrimVerts` (`FUN_200b71e0`), which zero-fills a 28-byte
+    runtime record and copies only the 12-byte position: lump 38 holds **positions only**, so the
+    UVs are re-derived from the texinfo vectors here exactly as `BuildMSurfaceVerts` does for an
+    ordinary face; and the strip carries the face's PLANE normal, constant across the grid, which
+    this lane gets for free by emitting one coplanar grid per face (the bake recomputes normals and
+    a coplanar section has one).
+    """
+
+    count = int(face.get("numPrims") or 0)
+    if count <= 0:
+        return False
+    block = units.root.get("primitives") or {}
+    rows = block.get("primitives") or []
+    verts = block.get("verts") or []
+    index_table = (block.get("indices") or {}).get("values") or []
+    first = int(face.get("firstPrimID") or 0)
+    if first + count > len(rows):
+        return False
+    vectors, width, height = _texture_vectors(units, face)
+    meshed = False
+    for row in rows[first:first + count]:
+        first_vertex, vertex_count = int(row["firstVert"]), int(row["vertCount"])
+        first_index, index_count = int(row["firstIndex"]), int(row["indexCount"])
+        if first_vertex + vertex_count > len(verts):
+            continue
+        run = [int(value) for value in index_table[first_index:first_index + index_count]]
+        if not run:
+            continue
+        # `BuildMSurfacePrimIndices` indexes the primitive's own vertex run; a compiler that wrote
+        # them absolute into lump 38 is read the same way rather than meshed inside out.
+        base = first_vertex if max(run) >= vertex_count else 0
+        local: dict[int, int] = {}
+        for offset in range(vertex_count):
+            point = verts[first_vertex + offset]["point"]
+            local[offset] = scene.emit(
+                _source_to_gltf(point), _planar_uv(point, vectors, width, height))
+        for a, b, c in _primitive_triangles(int(row["type"]), [value - base for value in run]):
+            if not all(0 <= corner < vertex_count for corner in (a, b, c)):
+                continue
+            # Reversed for the same reason `_append_face` reverses: the frame is a reflection.
+            tris.extend((local[a], local[c], local[b]))
+            meshed = True
+    return meshed
 
 
 def _append_face(
@@ -693,30 +1025,139 @@ def _append_displacement(
         tris.extend((local[a], local[c], local[b]))
 
 
+#: One Source square inch in square centimetres -- `faces[].area` is the compiler's own area and
+#: the staged meshes are centimetres.
+SOURCE_AREA_TO_CM2 = 2.54 * 2.54
+
+
+def meshed_area_cm2(positions: Sequence[Sequence[float]], indices: Sequence[int]) -> float:
+    """The surface area, in square centimetres, of a flat index run over `positions`.
+
+    Half the cross-product magnitude per triangle, summed -- winding-independent, so the Unreal
+    reversal `_append_face` applies changes nothing. This is the measured half of the G26/verdict
+    B3 area pin: `faces[].area` is what vbsp computed for the face, and this is what the stage
+    actually meshed for it, so the two disagreeing means the mesh path dropped or duplicated
+    geometry (the primitive grid vs the shard fan, U2's `Shader_DrawSurfaceDynamic` order).
+    """
+    total = 0.0
+    for base in range(0, len(indices) - 2, 3):
+        a, b, c = (positions[indices[base + offset]] for offset in range(3))
+        ux, uy, uz = b[0] - a[0], b[1] - a[1], b[2] - a[2]
+        vx, vy, vz = c[0] - a[0], c[1] - a[1], c[2] - a[2]
+        cx, cy, cz = uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx
+        total += 0.5 * math.sqrt(cx * cx + cy * cy + cz * cz)
+    return total
+
+
+def _water_face_row(
+    units: sidecars.MapUnits,
+    face: dict[str, Any],
+    face_index: int,
+    key: str,
+    unit: str,
+    scene_name: str,
+    *,
+    underside: bool,
+    style: int | None,
+    triangles: int,
+    meshed_area_cm2: float,
+) -> dict[str, Any]:
+    """One `water.faces[]` row: what vbsp published about a water face and the port never read.
+
+    - `underside` / `lightStyle` are the two facts the group key was split on, restated per face so
+      a reader never has to parse a key (rulings E revised and M, G6).
+    - `surfaceFogVolumeID` is the compiler's own statement of which fog volume this face bounds --
+      `0` on exactly the pier's 27 water faces and `0xFFFF` on its other 5,423 (G11). Downgraded to
+      a cross-check by the audit, not a source: the engine forces `0xFFFF` on every non-WARP face
+      and the values exist only in the Unofficial-Patch recompile.
+    - `texdata` is the per-surface identity vbsp split the sheet on -- 36 rows all named
+      `WATER/INVISIBLE_WATER` on the pier, 35 of them naming exactly one texinfo and one face (G22).
+    - `primitive` is `{first, count}` from `dface+100/102`, the compiled grid this face draws as
+      when the count is non-zero (G13).
+    - `area` is the compiler's own square inches, `areaCm2` the same number in the bake's units,
+      and `meshedAreaCm2` is what this stage actually produced for the face. Together they ARE the
+      area pin (G26/verdict B3), answered offline: `originalFaces[].area` is 0.0 on all 2,182 rows
+      in the corpus, so a rebuilt or re-tessellated water mesh is checked against `faces[].area`
+      and never against the pre-CSG original's.
+    """
+
+    texinfos = units.root["texinfos"]
+    tex_info = int(face["texInfo"])
+    tex_data = int(texinfos[tex_info]["texData"]) if 0 <= tex_info < len(texinfos) else -1
+    planes = units.root.get("planes") or []
+    plane_index = int(face.get("plane", -1))
+    normal = (
+        gltf_position_to_unreal(planes[plane_index]["normal"])
+        if 0 <= plane_index < len(planes) else (0.0, 0.0, 0.0)
+    )
+    area = float(face.get("area") or 0.0)
+    return {
+        "index": face_index,
+        "scene": scene_name,
+        "group": key,
+        "unit": f"vtmb:material:{unit}",
+        "underside": underside,
+        "lightStyle": style,
+        "lightStyles": face_light_styles(face),
+        "surfaceFogVolumeID": int(face.get("surfaceFogVolumeID", 0xFFFF)),
+        "texInfo": tex_info,
+        "texdata": tex_data,
+        "plane": plane_index,
+        "side": int(face.get("side", 0)),
+        # The plane row is a direction, so it takes the frame's permutation and no scale; the
+        # length is 1 either way and this is what `underside` was decided on.
+        "normal": [round(value / GLTF_TO_UNREAL, 6) for value in normal],
+        "primitive": {"first": int(face.get("firstPrimID") or 0),
+                      "count": int(face.get("numPrims") or 0)},
+        "area": round(area, 4),
+        "areaCm2": round(area * SOURCE_AREA_TO_CM2, 4),
+        "meshedAreaCm2": round(float(meshed_area_cm2), 4),
+        "triangles": triangles,
+    }
+
+
 def _build_scene(
     units: sidecars.MapUnits,
     prims: _Primitives,
     mesh: int,
     face_indices: Sequence[int],
     map_name: str,
+    compile_water=None,
+    scene_name: str = "",
 ) -> Scene:
     scene = Scene()
     faces = units.root["faces"]
     for face_index in face_indices:
         face = faces[face_index]
-        key = group_key(units, face, map_name)
-        if key is None:
+        base_key = group_key(units, face, map_name)
+        if base_key is None:
             continue
         raw = sidecars._face_material(units, face)
+        # Underside is a WATER split. Every ceiling in the map has a downward plane normal too, and
+        # `Mod_LoadFaces` only reads the normal to decide whether to undefine `$reflecttexture` --
+        # a key only a water shader registers. Splitting any other family would ask the material
+        # lane for an `_Underside` twin it stages for water units alone.
+        water = compile_water is not None and compile_water(raw)
+        underside = water and face_underside(units, face)
+        style = face_light_style(face)
+        key = section_key(base_key, underside=underside, light_style=style)
         if scene.units.setdefault(key, raw) != raw:
             raise MapGeometryError(
                 f"{units.name}: face group {key!r} resolves two material units "
                 f"({scene.units[key]!r}, {raw!r})")
         tris = scene.groups.setdefault(key, [])
+        before = len(tris)
         if int(face["dispInfo"]) >= 0:
             _append_displacement(scene, tris, units, prims, face)
-        elif face.get("primitive") is not None:
+        # `Shader_DrawSurfaceDynamic`'s own order: `numPrims` first and to the exclusion of the
+        # fan, then the fan for everything the compiler left untessellated (G13/U2).
+        elif not _append_primitives(scene, tris, units, face) and face.get("primitive") is not None:
             _append_face(scene, tris, units, prims, mesh, face)
+        if water:
+            scene.water_faces.append(_water_face_row(
+                units, face, face_index, key, raw, scene_name,
+                underside=underside, style=style, triangles=(len(tris) - before) // 3,
+                meshed_area_cm2=meshed_area_cm2(scene.positions, tris[before:])))
     # A group that meshed nothing would otherwise become an empty material slot on the asset.
     scene.groups = {key: tris for key, tris in scene.groups.items() if tris}
     scene.units = {key: unit for key, unit in scene.units.items() if key in scene.groups}
@@ -890,22 +1331,32 @@ def _cubemaps(units: sidecars.MapUnits, sky: sidecars.SkyScope) -> list[CubemapS
 # --------------------------------------------------------------------------------- entry point
 
 
-def read_geometry(map_name: str, root: Path | None = None) -> MapGeometry:
-    """Read one map's root unit into the structures the V2 bake authors from."""
+def read_geometry(map_name: str, root: Path | None = None, compile_water=None) -> MapGeometry:
+    """Read one map's root unit into the structures the V2 bake authors from.
 
-    join = sidecars.prepare_join(map_name, root)
+    `compile_water(base material key) -> bool` is the material lane's answer to "did vbsp read
+    `%compilewater` off this unit", and it decides two things: which `SURF_NODRAW` faces the
+    producer keeps (`sidecars.meshed_faces`, owner decision 2) and which faces get a `water.faces[]`
+    row. `None` is the reader with no material staging tree behind it -- the legacy scene split, and
+    no water face rows.
+    """
+
+    join = sidecars.prepare_join(map_name, root, compile_water)
     units = join.units
     prims = _Primitives(units)
     nodes = units.document["nodes"]
     models = {int(row["index"]): row for row in units.root["models"]}
     world_mesh = int(nodes[int(models[0]["node"])]["mesh"])
 
-    world = _build_scene(units, prims, world_mesh, join.scenes["world"], map_name)
-    sky_scene = _build_scene(units, prims, world_mesh, join.scenes["sky"], map_name)
+    world = _build_scene(units, prims, world_mesh, join.scenes["world"], map_name,
+                         compile_water, "world")
+    sky_scene = _build_scene(units, prims, world_mesh, join.scenes["sky"], map_name,
+                             compile_water, "sky")
     brushes: dict[int, Scene] = {}
     for model_index, face_indices in sorted(join.scenes["brush"].items()):
         mesh = int(nodes[int(models[model_index]["node"])]["mesh"])
-        scene = _build_scene(units, prims, mesh, face_indices, map_name)
+        scene = _build_scene(units, prims, mesh, face_indices, map_name,
+                             compile_water, f"brush_{model_index}")
         if scene.groups:
             brushes[model_index] = scene
 
@@ -1106,6 +1557,10 @@ def resolve_material_table(
     """Every face group's `MI_`, master and blend mode, through the material lane's staged
     provenance sidecars (R5.4).
 
+    R7.4: a key carrying `#underside` or `#style<n>` (`section_key`) resolves the same unit as its
+    base key and states the face fact on the row -- one lookup, one binding rule, and the suffix
+    parsed in exactly one place.
+
     `read_sidecar(unit key)` returns the unit's provenance document or None. The asset path is
     `importers.materials.asset_path_for`, the pure function that named the asset at import; the
     master is the sidecar's own `master` (the import lane already walks a patched unit's `patch`
@@ -1123,6 +1578,7 @@ def resolve_material_table(
     unprojected: list[str] = []
     for key in sorted(units_by_group):
         unit_key = units_by_group[key]
+        _base_key, underside, light_style = split_section_key(key)
         document = read_sidecar(unit_key)
         if document is None:
             missing.append(unit_key)
@@ -1149,6 +1605,7 @@ def resolve_material_table(
             patched=bool(document.get("patched")), provenance=root_key,
             decal_asset=(str(root.get("decalAsset")) if root.get("decalAsset") else None),
             is_decal_surface=bool(root.get("isDecalSurface")),
+            underside=underside, light_style=light_style,
         )
         # R7.2 ruling 3: a `$decal 1` face group binds the projector twin as its mesh slot, so a
         # sidecar that says `isDecalSurface` and names no `decalAsset` has no slot to bind at all.
@@ -1205,6 +1662,45 @@ def _unit_parameters(read_sidecar, unit_key: str) -> dict[str, str] | None:
         for row in document.get("parameters") or []:
             values[str(row.get("key") or "").lower()] = str(row.get("value") or "")
     return values
+
+
+def compile_water_predicate(read_sidecar):
+    """`material key -> bool`: did vbsp read `%compilewater` off this unit's own VMT?
+
+    The key lives on the unit's authored parameters and reaches a PAKFILE-patched instance only
+    through its `patchBase` (`_unit_parameters`), which is why the sidecar producer cannot answer it
+    and this stage can.
+
+    Two spellings, in this order, because the material lane stages patched units two ways and both
+    appear on the water cast: the unit's own key first
+    (`maps/sm_pier_1/water/invisible_water_depth_33` is staged in its own right and reaches
+    `%compilewater` through its `patchBase`), then the base fold
+    (`maps/sm_hub_1/dev/dev_waterbeneath2_-1612_-111_-5876` is an `$envmap` probe copy the lane
+    folds into `dev/dev_waterbeneath2`, exactly as `group_key` folds it). Asking only for the base
+    fold loses the pier's nine `_depth_33` faces -- the map's whole up-facing water surface.
+
+    The predicate answers "is this a DRAWN water face": `%compilewater` and not `%compilenodraw`.
+    Owner decision 2 ("surface on nodraw water") was withdrawn in the R7.5 look pass against the
+    owner's own VtMB frames: `sm_pier_1`'s ocean is the `water/blackwater` card 21 in below the
+    plane, and a surface drawn over the `%compilenodraw` volume hid it. VtMB draws nothing on a
+    nodraw water brush and neither does the port; the brush is still a volume
+    (`resolve_water_volumes` reads `%compilewater` on its own), so its fog, its body state and its
+    events stay. A `%compilewater` face that is NOT nodraw is a water face and is never dropped
+    for `SURF_NODRAW` (`sidecars.meshed_faces`).
+    """
+
+    lookup = _memoized_unit_parameters(read_sidecar)
+
+    def compiles_water(material: str | None) -> bool:
+        if not material:
+            return False
+        for key in (material, shared_corpus.base_material(material)):
+            values = lookup(key)
+            if values is not None:
+                return COMPILE_WATER_KEY in values and COMPILE_NODRAW_KEY not in values
+        return False
+
+    return compiles_water
 
 
 def _memoized_unit_parameters(read_sidecar):
@@ -1298,8 +1794,210 @@ def _water_brushes(units: sidecars.MapUnits, unit_parameters) -> list[tuple[floa
     return found
 
 
+def _physics_blocks(units: sidecars.MapUnits, kind: str) -> list[dict[str, str]]:
+    """Every `physics.models[0].keyValues` block of one type, as a flat `{key: value}` dict.
+
+    Model 0 is worldspawn's, which is the only model any of these blocks appear on: vbsp writes the
+    `fluid` and `materialtable` blocks once, for the world.
+    """
+
+    models = (units.root.get("physics") or {}).get("models") or []
+    if not models:
+        return []
+    out: list[dict[str, str]] = []
+    for block in models[0].get("keyValues") or []:
+        if str(block.get("type") or "").lower() != kind:
+            continue
+        out.append({str(pair.get("key") or "").lower(): str(pair.get("value") or "")
+                    for pair in block.get("pairs") or []})
+    return out
+
+
+def _fluid_number(values: dict[str, str], key: str) -> float | None:
+    """One authored fluid scalar, or `None` where the block does not carry the key at all."""
+
+    if key not in values:
+        return None
+    try:
+        return float(values[key])
+    except ValueError:
+        return None
+
+
+def _water_fluid(units: sidecars.MapUnits) -> WaterFluid | None:
+    """The map's `fluid { }` block in the bake's frame (G7), or `None` where it authored none.
+
+    The plane and the velocity are Source inches: the plane normal is a direction, so it takes the
+    frame's Y negation and no scale, and its distance takes the inch-to-centimetre scale like any
+    length. `sm_hub_1`'s `0 0 1 -5881` lands on `surfaceZCm -14937.74`, which is the volume's own
+    surface to four decimals -- the pin `resolve_water_volumes` joins the two rows on.
+    """
+
+    blocks = _physics_blocks(units, "fluid")
+    if not blocks:
+        return None
+    values = blocks[0]
+    # Verdict B5: the creation guard is `fluid.index > 0` and nothing else -- `vampire.dll
+    # FUN_10158600` tests the first dword of `ParseFluid`'s output (`101586ff JLE skip`), so a
+    # block naming index 0 makes no controller at all. Refusing the row here is what keeps
+    # `resolve_water_volumes` from carving the volume out of `solids[0]`, the world's own collision
+    # solid, whose ledges would then outrank the real water brushes in `ElysiumWater::FindVolumeAt`
+    # and read the whole map as submerged. Both owner maps author `index "5"`.
+    raw_index = _fluid_number(values, "index")
+    index = int(raw_index) if raw_index is not None else 0
+    if index <= 0:
+        return None
+    plane = [float(token) for token in values.get("surfaceplane", "").split()[:4]]
+    if len(plane) != 4:
+        plane = [0.0, 0.0, 1.0, 0.0]
+    velocity = [float(token) for token in values.get("currentvelocity", "").split()[:3]]
+    if len(velocity) != 3:
+        velocity = [0.0, 0.0, 0.0]
+    contents = values.get("contents")
+    return WaterFluid(
+        index=index,
+        density=_fluid_number(values, "density"),
+        damping=_fluid_number(values, "damping"),
+        surface_plane=(
+            round(plane[0], 6), round(-plane[1], 6), round(plane[2], 6),
+            round(plane[3] * 2.54, 4),
+        ),
+        current_velocity_cm=tuple(round(value, 4) for value in source_to_unreal(*velocity)),
+        contents=int(float(contents)) if contents else None,
+        surface_prop=values.get("surfaceprop") or None,
+    )
+
+
+def _material_table_water_index(units: sidecars.MapUnits) -> int | None:
+    """The physics `materialtable`'s `water` row (G17), or `None` where the table has none."""
+
+    for values in _physics_blocks(units, "materialtable"):
+        if "water" in values:
+            try:
+                return int(float(values["water"]))
+            except ValueError:
+                return None
+    return None
+
+
+def _solid_pieces(units: sidecars.MapUnits, solid_index: int) -> list[WaterBrush]:
+    """One physics solid's ledges as convex plane sets in the bake's frame (G18).
+
+    A ledge is a leaf of the IVPS compact surface's own tree -- vbsp's convex decomposition of the
+    volume, 12 triangles over 8 vertices for a box -- and the unit already publishes its vertices
+    and triangle indices in two accessors (`physics.positionAccessor` / `indexAccessor`). The plane
+    set is derived from the triangles rather than carried, because the lump states topology and not
+    planes; each plane is oriented against the piece's own centroid, so `n . p - d <= 0` names the
+    inside exactly as `WaterBrush.planes` does for a BSP brush, and the duplicate faces of one
+    convex (the 12 triangles of a box are 6 planes) collapse.
+
+    The IVP frame is the unit's `(x, y, z)_gltf = (x, -y, -z)_ivp`, unscaled metres, so composing it
+    with `gltf_position_to_unreal` is `formats.phy`'s own empirically settled `(x, -z, -y) * 100`.
+    Witnessed on `sm_pier_1`, whose single ledge lands on the staged brush AABB within a centimetre.
+    """
+
+    physics = units.root.get("physics") or {}
+    models = physics.get("models") or []
+    position_accessor = physics.get("positionAccessor")
+    index_accessor = physics.get("indexAccessor")
+    if not models or position_accessor is None or index_accessor is None:
+        return []
+    solids = models[0].get("solids") or []
+    if not 0 <= solid_index < len(solids):
+        return []
+    positions = units.accessor(int(position_accessor))
+    indices = units.accessor(int(index_accessor)).reshape(-1)
+    pieces: list[WaterBrush] = []
+    for ledge in solids[solid_index].get("ledges") or []:
+        first_vertex, vertex_count = int(ledge["firstVertex"]), int(ledge["vertexCount"])
+        first_index, index_count = int(ledge["firstIndex"]), int(ledge["indexCount"])
+        if vertex_count < 4 or index_count < 3:
+            continue
+        if first_vertex + vertex_count > len(positions) or first_index + index_count > len(indices):
+            continue
+        points = np.array([
+            gltf_position_to_unreal(positions[first_vertex + offset])
+            for offset in range(vertex_count)
+        ])
+        centre = points.mean(axis=0)
+        run = indices[first_index:first_index + index_count].astype(np.int64) - first_vertex
+        planes: dict[tuple[float, float, float, float], None] = {}
+        for base in range(0, len(run) - 2, 3):
+            corners = run[base:base + 3]
+            if corners.min() < 0 or corners.max() >= vertex_count:
+                continue
+            a, b, c = (points[int(corner)] for corner in corners)
+            normal = np.cross(b - a, c - a)
+            length = float(np.linalg.norm(normal))
+            if length <= 1e-9:
+                continue                      # a degenerate triangle states no plane
+            normal = normal / length
+            distance = float(np.dot(normal, a))
+            if float(np.dot(normal, centre)) - distance > 0.0:
+                normal, distance = -normal, -distance
+            planes[(round(float(normal[0]), 5), round(float(normal[1]), 5),
+                    round(float(normal[2]), 5), round(distance, 3))] = None
+        if not planes:
+            continue
+        pieces.append(WaterBrush(
+            planes=tuple(planes),
+            bounds_min=tuple(round(float(value), 4) for value in points.min(axis=0)),
+            bounds_max=tuple(round(float(value), 4) for value in points.max(axis=0)),
+        ))
+    return pieces
+
+
+def _leaf_box(leaf: dict[str, Any]):
+    """One BSP leaf's integer Source-inch AABB as an Unreal-centimetre one.
+
+    `source_to_unreal` negates Y, so the corner that was the minimum on that axis is the maximum
+    here; the box is rebuilt from both transformed corners rather than transformed corner-wise.
+    """
+
+    low = source_to_unreal(*[float(value) for value in leaf["mins"]])
+    high = source_to_unreal(*[float(value) for value in leaf["maxs"]])
+    return (
+        tuple(round(min(a, b), 4) for a, b in zip(low, high)),
+        tuple(round(max(a, b), 4) for a, b in zip(low, high)),
+    )
+
+
+def _leaf_water_boxes(units: sidecars.MapUnits, record_index: int):
+    """The AABBs of the leaves whose `leafWaterDataID` names one `LEAFWATERDATA` record (G10)."""
+
+    leafs = (units.root.get("bsp") or {}).get("leafs") or []
+    return tuple(_leaf_box(leaf) for leaf in leafs
+                 if int(leaf.get("leafWaterDataID", -1)) == record_index)
+
+
+def _near_water_boxes(units: sidecars.MapUnits, visibility, record_index: int):
+    """The AABBs of every leaf in `union(PVS(cluster))` over the record's own water leaves (G9).
+
+    This is VtMB's near-water annotation, derived rather than read: measured set-equal to the
+    `0x200` leaves on `sm_hub_1` (97) and `sp_soc_3` (126), and computable on `sm_pier_1`, whose
+    Unofficial-Patch recompile carries the bit on no leaf at all. Empty when the map ships no
+    visibility sub-unit -- a derivation this lane could not make, never a "nothing is near water".
+
+    Solid leaves are excluded: vbsp's dummy leaf 0 is a zero-extent box in cluster 0, which the
+    pier's water can see, and no leaf VtMB annotated on either map is solid.
+    """
+
+    if visibility is None:
+        return ()
+    leafs = (units.root.get("bsp") or {}).get("leafs") or []
+    clusters = {int(leaf["cluster"]) for leaf in leafs
+                if int(leaf.get("leafWaterDataID", -1)) == record_index
+                and int(leaf.get("cluster", -1)) >= 0}
+    if not clusters:
+        return ()
+    near = visibility.pvs_union(sorted(clusters))
+    return tuple(_leaf_box(leaf) for leaf in leafs
+                 if int(leaf.get("cluster", -1)) in near
+                 and not int(leaf.get("contents", 0)) & CONTENTS_SOLID)
+
+
 def resolve_water_volumes(
-    units: sidecars.MapUnits, read_sidecar, map_name: str = "",
+    units: sidecars.MapUnits, read_sidecar, map_name: str = "", visibility=None,
 ) -> tuple[list[WaterVolume], list[dict[str, Any]]]:
     """The map's water volumes, and the `LEAFWATERDATA` rows that produced none (R7.1,
     `docs/architecture/water-architecture.md` -> section 5.1).
@@ -1310,6 +2008,16 @@ def resolve_water_volumes(
     The fog keys come from the record's own material unit -- its VMT provenance, never the staged
     instance, because `invisible_water` and `cheap_water` land on masters with no fog lane at all
     and stage none of them.
+
+    R7.4 completes the row. `visibility` is the map's visibility sub-unit
+    (`importers.map_visibility.read_visibility`, `None` where the export carries none) and is the
+    only source for `near_boxes_cm`. The compiler's `fluid { }` block, its convex `pieces` and the
+    `materialtable` water index come off the physics model; the fluid joins a volume by its own
+    surface plane standing at that volume's surface, within the same `WATER_SURFACE_TOLERANCE_CM`
+    the brushes join on, because vbsp authors one fluid per map and the join has to be stated rather
+    than assumed. A volume no fluid stands at carries `fluid: None` and no pieces -- the runtime
+    then has the leaf carve and the brush, which is what a `%compilewater` volume with no controller
+    is (verdict B5: the guard is `fluid.index > 0`, so both owner maps do get one).
     """
 
     rows = (units.root.get("water") or {}).get("leafData") or []
@@ -1342,6 +2050,8 @@ def resolve_water_volumes(
                 by_row[index].append(brush)
                 break
 
+    fluid = _water_fluid(units)
+    water_index = _material_table_water_index(units)
     unstaged: list[str] = []
     for index, surface_z, min_z, tex_info in kept:
         if not by_row[index]:
@@ -1356,6 +2066,12 @@ def resolve_water_volumes(
             # which is `SetFogVolumeState`'s own answer and `_water_fog`'s.
             unstaged.append(material or f"texinfo {tex_info}")
             continue
+        # One fluid per map in the whole corpus, joined on the surface it names rather than on
+        # position in either list: `surfaceplane` is the authored plane and `surfaceZ` is the
+        # compiler's, and on all three water maps they are the same number.
+        mine = (fluid if fluid is not None
+                and abs(fluid.surface_plane[3] - surface_z) <= WATER_SURFACE_TOLERANCE_CM
+                else None)
         volumes.append(WaterVolume(
             index=index,
             surface_z_cm=surface_z,
@@ -1363,6 +2079,11 @@ def resolve_water_volumes(
             material=f"vtmb:material:{material}",
             **_water_fog(values),
             brushes=tuple(by_row[index]),
+            fluid=mine,
+            pieces=tuple(_solid_pieces(units, mine.index)) if mine is not None else (),
+            leaf_boxes_cm=_leaf_water_boxes(units, index),
+            near_boxes_cm=_near_water_boxes(units, visibility, index),
+            material_table_water_index=water_index,
         ))
     if unstaged:
         raise MapGeometryError(
@@ -1623,17 +2344,25 @@ def stage_map(map_name: str, root: Path | None = None,
     texture lane's sprite assets (`importers.effects.stage_effects_for_join`).
     R7.1: and `water` -- every `LEAFWATERDATA` record as one volume with its fog keys and its
     `CONTENTS_WATER` brushes (`resolve_water_volumes`), the bake's `elysium.water` actor.
+    R7.4: the volume rows gain the compiler's `fluid`, `pieces`, `leafBoxesCm` and `nearBoxesCm`,
+    `water.faces[]` states every water face -- carrying `meshedAreaCm2` beside vbsp's own
+    `faces[].area`, so the G26/verdict B3 area pin is answerable offline -- and the `materials`
+    rows state the `#underside` and `#style<n>` sections the face groups now split on
+    (`MANIFEST_VERSION` 11, the constant's own two-line changelog).
     """
 
     from elysium_pipeline.importers import effects as effects_lane
+    from elysium_pipeline.importers import map_visibility as visibility_lane
     from elysium_pipeline.importers import textures as texture_lane
 
-    geometry = read_geometry(map_name, root)
     staging = material_staging_root(work_root)
     if not staging.is_dir():
         raise MapGeometryError(
             f"no material staging tree at {staging} (run: uv run elysium import materials)")
     read_sidecar = sidecar_reader(staging)
+    # The material lane is read BEFORE the geometry now: which `SURF_NODRAW` faces the producer
+    # keeps is a question only the staged provenance can answer (R7.4, owner decision 2).
+    geometry = read_geometry(map_name, root, compile_water_predicate(read_sidecar))
     materials = resolve_material_table(geometry.material_units(), read_sidecar, map_name=map_name)
     texture_staging = texture_lane.staging_root(
         Path(work_root) if work_root is not None else paths.work_root())
@@ -1645,9 +2374,15 @@ def stage_map(map_name: str, root: Path | None = None,
         geometry.join, read_texture=texture_sidecar_reader(texture_staging),
         read_material=read_sidecar, export_v2_root=root, map_name=map_name)
     water_volumes, water_dropped = resolve_water_volumes(
-        geometry.join.units, read_sidecar, map_name)
+        geometry.join.units, read_sidecar, map_name,
+        visibility_lane.read_visibility(map_name, root))
+    water_faces = geometry.water_face_rows()
     counts = dict(geometry.counts)
     counts["waterVolumes"] = len(water_volumes)
+    counts["waterFaces"] = len(water_faces)
+    counts["waterUndersideFaces"] = sum(1 for row in water_faces if row["underside"])
+    counts["lightStyleGroups"] = sum(
+        1 for key in geometry.material_units() if split_section_key(key)[2] is not None)
     buffer = bytearray()
     scenes = {
         "world": _scene_block(geometry.world, buffer),
@@ -1707,6 +2442,9 @@ def stage_map(map_name: str, root: Path | None = None,
         "water": {
             "volumes": [volume.as_row() for volume in water_volumes],
             "dropped": water_dropped,
+            # R7.4: one row per `%compilewater` face, in face order. The bake's area pin, the
+            # underside split's own evidence, and the compiler's per-face identity (G11/G13/G22/G26).
+            "faces": water_faces,
         },
         "counts": counts,
     }

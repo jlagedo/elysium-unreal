@@ -5,6 +5,7 @@
 #include "ElysiumLightRig.generated.h"
 
 class ULightComponent;
+class UPrimitiveComponent;
 class UElysiumLightCalibration;
 class UElysiumLightingSettings;
 class UElysiumSurfaceSettings;
@@ -89,6 +90,38 @@ public:
 	float StyleMultiplier(int32 Style) const;
 	// How many adopted sources carry a style >= 32 (entity-switched), for the readout.
 	int32 SwitchedSourceCount() const;
+
+	// R7.4 (G6, `water-architecture.md` ruling M, owner decision 4): a lightstyle on a FACE, not on
+	// a light. VtMB modulates the face's lightmap page by the style's pattern -- the pier's 34
+	// `objects/surf` foam cards carry style 1, 21 of them 32 as well -- and Lumen replaced the page
+	// project-wide, so the style survives as a brightness the lit base colour and the emissive are
+	// multiplied by. The bake splits such faces into their own chunk keyed by (material, style) and
+	// tags it `elysium.style=n`; the visuals walk hands the chunks here, and this clock writes
+	// `ElysiumLightStyle::SlotBrightness` on each of them every tick, off the same
+	// `StylePatterns`/`StyleTime` pair a styled light already animates against.
+	//
+	// Primitives, not lights: the two share only the clock. A styled chunk has no `.lights` row, no
+	// intensity to scale and no calibration to honour.
+	struct FStyledPrimitive
+	{
+		UPrimitiveComponent* Component = nullptr;
+		int32 Style = 0;
+	};
+	// Bind the styled chunks and stamp their first value. Replaces any previous set (one map, one
+	// walk). Returns how many were taken -- a row with a style outside 1..63 or a null component is
+	// dropped rather than animated against a pattern nothing wrote.
+	int32 AdoptStyledPrimitives(const TArray<FStyledPrimitive>& Adopted);
+	// One more styled primitive, after the level walk has already run. A brush ENTITY's visual is
+	// built by the runtime when the entity world embodies it, which is later than
+	// `AdoptBakedLevel` -- and `sm_pier_1`'s 17 `objects/surf` foam bodies, the census's motivating
+	// case for G6, are exactly that. Same rules as `AdoptStyledPrimitives`: a null component or a
+	// style outside 1..63 is dropped, and the first value is stamped now rather than next tick.
+	// Registering the same component twice replaces the earlier row.
+	bool AddStyledPrimitive(UPrimitiveComponent* Component, int32 Style);
+	int32 StyledPrimitiveCount() const { return StyledPrimitives.Num(); }
+	// The brightness the clock is writing for a style right now -- the readout, and what the tests
+	// compare the stamped slot against. Same value `StyleMultiplier` answers.
+	float StyledPrimitiveBrightness(int32 Style) const { return StyleMultiplier(Style); }
 
 	// R6.2: a `light_dynamic` -- the one light with no lump-15 row -- stands through the legacy
 	// derivation: `Light` becomes a non-baked source with the raw magnitude, reach (cm), spot
@@ -258,6 +291,18 @@ private:
 	// frame by the lightstyle curve so fluorescents/candles flicker; all sources can be re-tuned
 	// live from this data (ApplyLiveTuning).
 	TArray<FLightSource> LightSources;
+
+	// R7.4 (G6): one styled chunk. `LastBrightness` is kept so the tick writes custom primitive
+	// data only when the pattern actually moved -- a style whose keyframe has not changed costs a
+	// float compare, not a render-state touch.
+	struct FStyledPrimitiveEntry
+	{
+		TWeakObjectPtr<UPrimitiveComponent> Component;
+		int32 Style = 0;
+		float LastBrightness = -1.f;
+	};
+	TArray<FStyledPrimitiveEntry> StyledPrimitives;
+
 	float StyleTime = 0.f;
 	// The 64 lightstyle patterns (R6.2), seeded by the constructor.
 	FString StylePatterns[MaxLightStyles];

@@ -7,12 +7,14 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Audio/ElysiumWaterAudio.h"
 #include "ElysiumBakedTags.h"
 #include "ElysiumFog.h"
 #include "ElysiumSurfaceParams.h"
 #include "ElysiumSurfaceSettings.h"
 #include "ElysiumWaterVolumes.h"
 
+#include "Components/StaticMeshComponent.h"   // the runtime CPD stamp under test
 #include "Engine/World.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Tests/AutomationCommon.h"
@@ -170,6 +172,301 @@ bool FElysiumWaterTest::RunTest(const FString&)
 		TestTrue(TEXT("WaterFogScale is a collection binding"), bBound);
 	}
 
+	// --- R7.4: the compiler's carve outranks the authored brush (G18) ---
+	{
+		// The same basin with a channel cut out of its middle: vbsp decomposes the water solid into
+		// two convex pieces that leave the centre empty, and the authored brush knows nothing about
+		// it. A point in the gap is dry, though every brush plane says otherwise.
+		FElysiumWaterVolume Carved = Basin();
+		FElysiumWaterBrush West;
+		West.Planes = {
+			FPlane(FVector(1.0, 0.0, 0.0), -40.0), FPlane(FVector(-1.0, 0.0, 0.0), 100.0),
+			FPlane(FVector(0.0, 1.0, 0.0), 100.0), FPlane(FVector(0.0, -1.0, 0.0), 100.0),
+			FPlane(FVector(0.0, 0.0, 1.0), 0.0), FPlane(FVector(0.0, 0.0, -1.0), 50.0),
+		};
+		FElysiumWaterBrush East = West;
+		East.Planes[0] = FPlane(FVector(1.0, 0.0, 0.0), 100.0);
+		East.Planes[1] = FPlane(FVector(-1.0, 0.0, 0.0), -40.0);
+		Carved.Pieces = { West, East };
+		const TArray<FElysiumWaterVolume> Pieces = { Carved };
+
+		TestEqual(TEXT("a point in a compiler piece is in the volume"),
+			ElysiumWater::FindVolumeAt(Pieces, FVector(-80.0, 0.0, -25.0)), 0);
+		TestEqual(TEXT("and one in the other piece too"),
+			ElysiumWater::FindVolumeAt(Pieces, FVector(80.0, 0.0, -25.0)), 0);
+		TestEqual(TEXT("a point in the carve is dry, though the authored brush contains it"),
+			ElysiumWater::FindVolumeAt(Pieces, FVector(0.0, 0.0, -25.0)), INDEX_NONE);
+		// The pieces carry planes alone -- vbsp publishes no bounds for them -- so the plane test
+		// has to run without a box, which is the one thing the brush path refuses to do.
+		TestFalse(TEXT("the pieces carry no bounds of their own"),
+			Pieces[0].Pieces[0].BoundsCm.IsValid != 0);
+		// And with no pieces the brush is still the whole answer.
+		TestEqual(TEXT("the same point is wet with no pieces staged"),
+			ElysiumWater::FindVolumeAt(Volumes, FVector(0.0, 0.0, -25.0)), 0);
+	}
+
+	// --- R7.4: near water is the PVS box set, not the carve (G9/G23) ---
+	{
+		FElysiumWaterVolume Near = Basin();
+		// The room the basin stands in: everything that can see the water.
+		Near.NearBoxesCm.Add(FBox(FVector(-600.0, -600.0, -50.0), FVector(600.0, 600.0, 400.0)));
+		const TArray<FElysiumWaterVolume> WithPvs = { Near };
+
+		TestTrue(TEXT("a point in the water is near it"),
+			ElysiumWater::IsNearWater(WithPvs, FVector(0.0, 0.0, -25.0)));
+		TestTrue(TEXT("so is one on the bank, well outside the brush"),
+			ElysiumWater::IsNearWater(WithPvs, FVector(500.0, 0.0, 200.0)));
+		TestFalse(TEXT("a point outside the water's PVS is not"),
+			ElysiumWater::IsNearWater(WithPvs, FVector(5000.0, 0.0, 200.0)));
+		// A level baked before the near set existed degrades to the brush, never to "never".
+		TestTrue(TEXT("with no near set the volume's own bounds answer"),
+			ElysiumWater::IsNearWater(Volumes, FVector(0.0, 0.0, -25.0)));
+		TestFalse(TEXT("and a point outside them is not near"),
+			ElysiumWater::IsNearWater(Volumes, FVector(500.0, 0.0, 200.0)));
+	}
+
+	// --- R7.4: the fluid row's unset state (G7 / verdict B5) ---
+	{
+		const FElysiumWaterFluid Unset;
+		TestFalse(TEXT("a volume with no authored fluid says so"), Unset.bHasFluid);
+		TestEqual(TEXT("its index is 0 -- below VtMB's own > 0 creation guard"), Unset.Index, 0);
+		TestEqual(TEXT("no density"), Unset.Density, 0.f);
+		TestEqual(TEXT("no damping"), Unset.Damping, 0.f);
+		TestTrue(TEXT("and no current to push a body with"), Unset.CurrentVelocityCm.IsNearlyZero());
+	}
+
+	// --- R7.4: the splash, with VtMB's own numbers (verdict D1/D2) ---
+	{
+		// The thresholds, converted from the Source units VtMB authors them in.
+		TestEqual(TEXT("the entry needs -200 in/s of fall"),
+			ElysiumWater::BigEntryVelocityZCmPerSec, -508.f, 1e-3f);
+		TestEqual(TEXT("the wade needs 50 in/s across"),
+			ElysiumWater::WadeSpeedCmPerSec, 127.f, 1e-3f);
+		TestEqual(TEXT("and the spawn leads the body by 35 ms"),
+			ElysiumWater::SplashLeadSeconds, 0.035f);
+		TestEqual(TEXT("watersplash_emitter is the wade root"),
+			FString(ElysiumWater::WadeSplashRoot), FString(TEXT("watersplash_emitter")));
+		TestEqual(TEXT("waterbigsplash_emitter is the entry root"),
+			FString(ElysiumWater::BigSplashRoot), FString(TEXT("waterbigsplash_emitter")));
+
+		ElysiumWater::FSplashInput In;
+		In.SurfaceZCm = 0.f;
+		In.OriginCm = FVector(0.0, 0.0, -10.0);
+		In.NowSeconds = 100.0;
+
+		// Falling in fast enough: the entry splash, at the plane, led by the horizontal velocity.
+		In.PreviousLevel = 0;
+		In.Level = 1;
+		In.VelocityCmPerSec = FVector(200.0, 0.0, -600.0);
+		ElysiumWater::FSplashDecision Out = ElysiumWater::DecideSplash(In);
+		TestEqual(TEXT("a fast entry is the big splash"),
+			static_cast<int32>(Out.Kind), static_cast<int32>(ElysiumWater::ESplash::Big));
+		TestEqual(TEXT("led by vel.xy * 0.035"), Out.LocationCm.X, -7.0, 1e-6);
+		TestEqual(TEXT("and snapped to the surface plane"), Out.LocationCm.Z, 0.0, 1e-6);
+		TestEqual(TEXT("which stamps the entity's splash clock"), Out.LastSplashSeconds, 100.0);
+
+		// The same transition, walked into rather than fallen into: no entry splash, but the body
+		// is now wading, which is the other rule.
+		In.VelocityCmPerSec = FVector(200.0, 0.0, -100.0);
+		Out = ElysiumWater::DecideSplash(In);
+		TestEqual(TEXT("walking in at -39 in/s is the wade splash, not the big one"),
+			static_cast<int32>(Out.Kind), static_cast<int32>(ElysiumWater::ESplash::Wade));
+
+		// Wading: in the water but not under it, moving, cooldown expired.
+		In.PreviousLevel = 1;
+		In.Level = 2;
+		In.VelocityCmPerSec = FVector(200.0, 0.0, 0.0);
+		In.WadeJitterUnits = 4;
+		Out = ElysiumWater::DecideSplash(In);
+		TestEqual(TEXT("wading raises the wade splash"),
+			static_cast<int32>(Out.Kind), static_cast<int32>(ElysiumWater::ESplash::Wade));
+		TestEqual(TEXT("jittered up by RandomInt(0,8) Source units"),
+			Out.LocationCm.Z, 4.0 * ElysiumMove::U, 1e-6);
+		TestEqual(TEXT("and it arms the cooldown: 5.0 - horiz(in/s) * 7.8e-5"),
+			Out.NextWadeSeconds, 100.0 + (5.0 - (200.0 / ElysiumMove::U) * 7.8e-5), 1e-4);
+
+		// Submerged is not wading.
+		In.Level = 3;
+		In.NextWadeSeconds = ElysiumWater::NeverSeconds;
+		In.LastSplashSeconds = ElysiumWater::NeverSeconds;
+		TestEqual(TEXT("a submerged body does not wade"),
+			static_cast<int32>(ElysiumWater::DecideSplash(In).Kind),
+			static_cast<int32>(ElysiumWater::ESplash::None));
+
+		// Too slow to wade.
+		In.Level = 2;
+		In.VelocityCmPerSec = FVector(100.0, 0.0, 0.0);   // 39 in/s, under the 50 in/s gate
+		TestEqual(TEXT("below 50 in/s across, nothing splashes"),
+			static_cast<int32>(ElysiumWater::DecideSplash(In).Kind),
+			static_cast<int32>(ElysiumWater::ESplash::None));
+
+		// D2's half-second per-entity limit, over both rules.
+		In.PreviousLevel = 0;
+		In.Level = 1;
+		In.VelocityCmPerSec = FVector(0.0, 0.0, -600.0);
+		In.LastSplashSeconds = 99.8;
+		TestEqual(TEXT("a second splash 0.2 s after the last is refused"),
+			static_cast<int32>(ElysiumWater::DecideSplash(In).Kind),
+			static_cast<int32>(ElysiumWater::ESplash::None));
+		In.LastSplashSeconds = 99.4;
+		TestEqual(TEXT("0.6 s after it, allowed"),
+			static_cast<int32>(ElysiumWater::DecideSplash(In).Kind),
+			static_cast<int32>(ElysiumWater::ESplash::Big));
+
+		// The wade cooldown itself, as a function of speed.
+		TestEqual(TEXT("the cooldown at 50 in/s"),
+			ElysiumWater::WadeCooldownSeconds(ElysiumWater::WadeSpeedCmPerSec),
+			5.f - 50.f * 7.8e-5f, 1e-6f);
+		TestTrue(TEXT("and it shortens as the body runs"),
+			ElysiumWater::WadeCooldownSeconds(400.f) < ElysiumWater::WadeCooldownSeconds(200.f));
+	}
+
+	// --- R7.4: buoyancy, the named modernization "vphysics buoyancy" ---
+	{
+		// A 1 m cube whose top sits at the plane.
+		const FBox Cube(FVector(-50.0, -50.0, -100.0), FVector(50.0, 50.0, 0.0));
+		TestEqual(TEXT("a body under the plane is wholly submerged"),
+			ElysiumWater::SubmergedFraction(Cube, 0.f), 1.f, 1e-6f);
+		TestEqual(TEXT("half under is half"),
+			ElysiumWater::SubmergedFraction(Cube, -50.f), 0.5f, 1e-6f);
+		TestEqual(TEXT("above the plane is nothing"),
+			ElysiumWater::SubmergedFraction(Cube, -100.f), 0.f, 1e-6f);
+		TestEqual(TEXT("a 1 m cube displaces 1 m3 when it is all under"),
+			ElysiumWater::DisplacedVolumeM3(Cube, 1.f), 1.f, 1e-6f);
+		TestEqual(TEXT("and half a m3 when half of it is"),
+			ElysiumWater::DisplacedVolumeM3(Cube, 0.5f), 0.5f, 1e-6f);
+		// rho * V * |g|, in Unreal's own kg*cm/s2 -- a cubic metre of water at 980 cm/s2.
+		TestEqual(TEXT("Archimedes on a cubic metre of water"),
+			ElysiumWater::BuoyantForceZ(ElysiumWater::DefaultFluidDensityKgPerM3, 1.f, -980.f),
+			980000.f, 1e-1f);
+		TestEqual(TEXT("water's own density is VtMB's 1000 kg/m3"),
+			ElysiumWater::DefaultFluidDensityKgPerM3, 1000.f);
+	}
+
+	// --- R7.4: the lightstyle CPD slot, and the water sound rules (G6, verdict D3/D4) ---
+	{
+		// One shared block: the fog owns floats 0-5 and the style owns 6, and the bake, the material
+		// graph and the rig all read it by number.
+		TestEqual(TEXT("the fog block is six floats"), ElysiumFog::NumFloats, 6);
+		TestEqual(TEXT("the lightstyle brightness is slot 6"), ElysiumLightStyle::SlotBrightness, 6);
+		TestEqual(TEXT("an unstyled primitive reads 1.0, not 0"), ElysiumLightStyle::Unstyled, 1.f);
+		TestEqual(TEXT("and the masters declare it by name"),
+			ElysiumLightStyle::ParameterName, FName(TEXT("LightStyleBrightness")));
+		// Two mirrors of one string: the runtime owns the slot and its name, the material stage
+		// owns the parameter table it writes instances through. They are pinned equal here so a
+		// rename on either side is a failed test rather than a term that silently stops moving.
+		TestEqual(TEXT("the Lit table agrees"),
+			ElysiumSurfaceParamsLit::Scalars::LightStyleBrightness, ElysiumLightStyle::ParameterName);
+		TestEqual(TEXT("and so does the Water table"),
+			ElysiumSurfaceParamsWater::Scalars::LightStyleBrightness,
+			ElysiumLightStyle::ParameterName);
+		TestEqual(TEXT("the style tag is the one the bake stamps on a styled chunk"),
+			ElysiumBakedTags::LightStyle(1), FName(TEXT("elysium.style=1")));
+
+		// A CPD-driven parameter always reads its slot -- the material's default value is editor
+		// preview and never a runtime fallback -- so the neutral 1.0 has to be WRITTEN. A component
+		// built at runtime starts with no custom primitive data at all, which reads 0 on slot 6 and
+		// would multiply the lit base colour and the emissive to black.
+		{
+			UStaticMeshComponent* Fresh = NewObject<UStaticMeshComponent>();
+			TestEqual(TEXT("a fresh component carries no custom primitive data"),
+				Fresh->GetCustomPrimitiveData().Data.Num(), 0);
+			ElysiumLightStyle::StampUnstyled(Fresh);
+			const TArray<float>& Data = Fresh->GetCustomPrimitiveData().Data;
+			TestEqual(TEXT("the stamp reaches slot 6"), Data.Num(),
+				ElysiumLightStyle::NumFloats);
+			TestEqual(TEXT("and leaves it at full brightness"),
+				Data[ElysiumLightStyle::SlotBrightness], ElysiumLightStyle::Unstyled);
+			// It never resizes the block from the front: the fog's own six stay where they are.
+			for (int32 Slot = 0; Slot < ElysiumFog::NumFloats; ++Slot)
+			{
+				TestEqual(TEXT("the fog slots underneath are untouched"), Data[Slot], 0.f);
+			}
+			ElysiumLightStyle::StampUnstyled(nullptr);   // and a null component is a no-op
+		}
+
+		// G6's second carrier. A brush entity's mesh is never placed, so it has no chunk actor to
+		// tag: the style rides the mesh's material slot names, which the bake writes as
+		// `safe_name(<group key>)` -- and a styled group's key ends in `#style<n>`, which folds to
+		// `_style<n>`. `sm_pier_1`'s 17 `objects/surf` foam bodies arrive exactly this way.
+		{
+			auto One = [](const TCHAR* Name)
+			{
+				const TArray<FName> Slots { FName(Name) };
+				return ElysiumLightStyle::StyleFromSlotNames(Slots);
+			};
+			auto Two = [](const TCHAR* First, const TCHAR* Second)
+			{
+				const TArray<FName> Slots { FName(First), FName(Second) };
+				return ElysiumLightStyle::StyleFromSlotNames(Slots);
+			};
+			TestEqual(TEXT("a folded styled group key names its style"),
+				One(TEXT("objects_surf_style1")), 1);
+			TestEqual(TEXT("two-digit styles too"), One(TEXT("objects_surf_style32")), 32);
+			TestEqual(TEXT("every section must agree"),
+				Two(TEXT("a_style1"), TEXT("b_style1")), 1);
+			TestEqual(TEXT("a mesh whose sections disagree animates on none"),
+				Two(TEXT("a_style1"), TEXT("b_style32")), 0);
+			TestEqual(TEXT("and so does one that mixes styled with unstyled"),
+				Two(TEXT("a_style1"), TEXT("objects_surf")), 0);
+			TestEqual(TEXT("an unstyled mesh names no style"), One(TEXT("objects_surf")), 0);
+			TestEqual(TEXT("a bare marker is not a style"), One(TEXT("style1")), 0);
+			TestEqual(TEXT("nor is a marker with no index"), One(TEXT("a_style")), 0);
+			TestEqual(TEXT("nor one whose index is not a number"), One(TEXT("a_style1x")), 0);
+			TestEqual(TEXT("style 0 is the always-on base, never animated"),
+				One(TEXT("a_style0")), 0);
+			TestEqual(TEXT("a mesh with no slots at all names none"),
+				ElysiumLightStyle::StyleFromSlotNames(TArray<FName>()), 0);
+		}
+
+		// D3/D4: the pool is chosen by the classified LEVEL rather than by the material under the
+		// foot -- the pier's foam cards bind PM_default. `UpdateStepSound`'s level-1 branch plays
+		// every step the clock comes due on; only the wade branch runs the four-phase counter
+		// (`DAT_1070b898`), and only its phase 0 returns before playing, so three wading steps in
+		// four sound.
+		TestEqual(TEXT("the wade counter has four phases"), ElysiumWaterAudio::StepsPerSound, 4);
+		TestTrue(TEXT("every level-1 step sounds"), ElysiumWaterAudio::IsSoundingStep(0, 1));
+		TestTrue(TEXT("including the second"), ElysiumWaterAudio::IsSoundingStep(1, 1));
+		TestFalse(TEXT("a dry body takes no water step"), ElysiumWaterAudio::IsSoundingStep(0, 0));
+		TestFalse(TEXT("the wade counter is silent on phase 0"),
+			ElysiumWaterAudio::IsSoundingStep(0, 2));
+		TestTrue(TEXT("and sounds on the other three"), ElysiumWaterAudio::IsSoundingStep(1, 2));
+		TestTrue(TEXT("phase 2"), ElysiumWaterAudio::IsSoundingStep(2, 2));
+		TestTrue(TEXT("phase 3"), ElysiumWaterAudio::IsSoundingStep(3, 2));
+		TestFalse(TEXT("and is silent again on the next phase 0"),
+			ElysiumWaterAudio::IsSoundingStep(4, 2));
+		// `1011ec5e`: 400 ms walking / 300 ms running at level 1, 600 ms wading, each with the
+		// water pair's own minimum (60 ms) added back onto the timer.
+		TestEqual(TEXT("a walking level-1 step waits 460 ms"),
+			ElysiumWaterAudio::StepIntervalSeconds(1, ElysiumWaterAudio::StepRunSpeedIn - 1.f),
+			0.46f, 1.e-4f);
+		TestEqual(TEXT("a running one waits 360 ms"),
+			ElysiumWaterAudio::StepIntervalSeconds(1, ElysiumWaterAudio::StepRunSpeedIn), 0.36f,
+			1.e-4f);
+		TestEqual(TEXT("and a wading one 660 ms at any speed"),
+			ElysiumWaterAudio::StepIntervalSeconds(2, 500.f), 0.66f, 1.e-4f);
+		TestEqual(TEXT("level 1 steps in Surfaces/Water"),
+			static_cast<int32>(ElysiumWaterAudio::StepCue(1)),
+			static_cast<int32>(ElysiumWaterAudio::ECue::StepWater));
+		TestEqual(TEXT("level 2 in Surfaces/Wade"),
+			static_cast<int32>(ElysiumWaterAudio::StepCue(2)),
+			static_cast<int32>(ElysiumWaterAudio::ECue::StepWade));
+		TestEqual(TEXT("and so does level 3"),
+			static_cast<int32>(ElysiumWaterAudio::StepCue(3)),
+			static_cast<int32>(ElysiumWaterAudio::ECue::StepWade));
+		// The exit cue names the literal `CBaseEntity::PhysicsCheckWaterTransition` pushes, and
+		// resolves to that name or to nothing -- never to a substitute. No measured VtMB install
+		// ships `player/pl_wade2.wav` (stock Source naming a Half-Life 2 asset Troika never
+		// packed: 0 hits across 67,469 packed entries and every loose override), so leaving the
+		// water is silent here exactly as it was in 2004. Asserted install-independently, because
+		// the substrate tier must answer the same on a checkout whose sound export has not run.
+		TestEqual(TEXT("the exit sound names the literal vampire.dll 1003f4d0 pushes"),
+			FString(ElysiumWaterAudio::ExitSound), FString(TEXT("player/pl_wade2.wav")));
+		const FString Exit = ElysiumWaterAudio::Resolve(ElysiumWaterAudio::ECue::Exit, 0);
+		TestTrue(TEXT("and resolves to that name or to nothing, never to a substitute"),
+			Exit.IsEmpty() || Exit == FString(ElysiumWaterAudio::ExitSound));
+	}
+
 	return true;
 }
 
@@ -190,7 +487,9 @@ bool FElysiumWaterActorTest::RunTest(const FString&)
 
 		const TCHAR* const VolumeFields[] = { TEXT("Index"), TEXT("SurfaceZCm"), TEXT("MinZCm"),
 			TEXT("Material"), TEXT("bFogEnabled"), TEXT("FogColor"), TEXT("FogStartCm"),
-			TEXT("FogEndCm"), TEXT("Brushes") };
+			TEXT("FogEndCm"), TEXT("Brushes"),
+			// R7.4: the fluid row, the compiler's carve, the leaf boxes and the PVS neighbourhood.
+			TEXT("Fluid"), TEXT("Pieces"), TEXT("LeafBoxesCm"), TEXT("NearBoxesCm") };
 		for (const TCHAR* Field : VolumeFields)
 		{
 			TestNotNull(*FString::Printf(TEXT("FElysiumWaterVolume::%s"), Field),
@@ -201,6 +500,25 @@ bool FElysiumWaterActorTest::RunTest(const FString&)
 		{
 			TestNotNull(*FString::Printf(TEXT("FElysiumWaterBrush::%s"), Field),
 				FindFProperty<FProperty>(FElysiumWaterBrush::StaticStruct(), Field));
+		}
+		// R7.4 contract 4: the bake writes these by their Python spelling (`has_fluid`,
+		// `surface_plane`, `current_velocity_cm`), which is UHT's fold of the names below.
+		const TCHAR* const FluidFields[] = { TEXT("bHasFluid"), TEXT("Index"), TEXT("Density"),
+			TEXT("Damping"), TEXT("SurfacePlane"), TEXT("CurrentVelocityCm"), TEXT("Contents") };
+		for (const TCHAR* Field : FluidFields)
+		{
+			TestNotNull(*FString::Printf(TEXT("FElysiumWaterFluid::%s"), Field),
+				FindFProperty<FProperty>(FElysiumWaterFluid::StaticStruct(), Field));
+		}
+		// EditAnywhere, or `set_editor_property` reaches nothing: the bake writes through
+		// reflection and a VisibleAnywhere field would refuse the write without a word.
+		for (const TCHAR* Field : FluidFields)
+		{
+			const FProperty* Property =
+				FindFProperty<FProperty>(FElysiumWaterFluid::StaticStruct(), Field);
+			TestTrue(*FString::Printf(TEXT("FElysiumWaterFluid::%s is writable by the bake"), Field),
+				Property != nullptr && Property->HasAnyPropertyFlags(CPF_Edit)
+					&& !Property->HasAnyPropertyFlags(CPF_EditConst));
 		}
 	}
 

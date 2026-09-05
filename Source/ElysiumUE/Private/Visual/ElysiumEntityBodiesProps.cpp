@@ -1,6 +1,7 @@
 #include "Visual/ElysiumEntityBodies.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumFog.h"          // ElysiumLightStyle::StampUnstyled -- CPD slot 6 neutral
 #include "ElysiumPropSkins.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
@@ -322,6 +323,10 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisualWithStaticS
 	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetSkeletalMeshAsset(Mesh);
+	// R7.4 (G6): a skeletal prop is authored on the neutral body master but a placement copies the
+	// map's own already-baked V2 instances into its slots (`bake_characters.py`), so it carries the
+	// same slot-6 multiply every other placed prop does.
+	ElysiumLightStyle::StampUnstyled(Comp);
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Comp->SetVisibility(false, true);
 	Comp->SetupAttachment(Root);
@@ -596,6 +601,10 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildBrushVisual(const FString& Stem
 	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
+	// R7.4 (G6): a brush body binds the map's own V2 instances, whose masters multiply the lit base
+	// colour and the emissive by custom primitive data slot 6. The bake stamps that slot on the
+	// components IT places; this one is made here, so it is stamped here or it renders black.
+	ElysiumLightStyle::StampUnstyled(Comp);
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Comp->SetupAttachment(ParentBody);
 	Comp->SetRelativeLocationAndRotation(FVector::ZeroVector, FQuat::Identity);
@@ -655,6 +664,7 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPropVisual(const FString& Stem,
 	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
+	ElysiumLightStyle::StampUnstyled(Comp);   // R7.4 (G6), as in BuildBrushVisual
 	// prop_dynamic is visual-only; prop_physics owns collision. The baked mesh carries
 	// collision geometry for the props that do need it, so it is switched off here per component.
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -739,6 +749,7 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPhysPropVisual(const FString& S
 	UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(Owner);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
+	ElysiumLightStyle::StampUnstyled(Comp);   // R7.4 (G6), as in BuildBrushVisual
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocationAndRotation(Location, Rotation);
 	// Collide as a physics body (blocks the world's BlockAll hull colliders). Simulation, mass and

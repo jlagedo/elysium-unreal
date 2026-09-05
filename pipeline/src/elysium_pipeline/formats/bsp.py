@@ -45,12 +45,15 @@ L_TEXDATA_STR_TABLE = 44
 #   firstedge i @36 | numedges h @40 | texinfo h @42 | dispinfo h @44 |
 #   surfaceFogVolumeID H @46 | styles[8] b @48 | day[8] b @56 | night[8] b @64 |
 #   lightofs i @72 | area f @76 | LightmapMins[2] i @80 | LightmapSize[2] i @88 |
-#   origFace i @96 | smoothingGroups i @100
+#   origFace i @96 | numPrims H @100 | firstPrimID H @102
 # The three 8-byte lightstyle arrays (MAXLIGHTMAPS=8) sit where modern Source has one
 # `styles[4]`@68. Only `styles`@48 is live: `day`@56 and `night`@64 are 0x00 on every
 # face of all 108 maps and no engine code reads those offsets, so lump 8 holds exactly
 # one bake (`../docs/vtmb/sky-ambience.md` -> "K4"; probe: `probe_daynight.py`). The names
-# are bspsrc's. We only read the offsets below, all confirmed correct.
+# are bspsrc's. We only read the offsets below, all confirmed correct. bspsrc's own
+# `smoothingGroups i @100` is wrong for VtMB: `Mod_LoadFaces` (`engine.dll FUN_200b73d0`,
+# `200b7648`/`200b7650`) reads two words there -- `numPrims` and `firstPrimID` -- into
+# `msurface+0x50`/`+0x52`, and no reader in the corpus takes a smoothing dword.
 FACE_SIZE       = 104
 FE_OFS          = 36   # firstedge  int32
 NE_OFS          = 40   # numedges   int16

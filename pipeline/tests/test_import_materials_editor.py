@@ -814,6 +814,41 @@ def test_a_stale_two_sided_and_clip_override_is_explicitly_cleared_on_reimport(t
     assert props["override_opacity_mask_clip_value"] is False
 
 
+def test_a_stale_blend_override_is_cleared_before_the_parent_moves(tmp_path):
+    """R7.5: re-parenting compiles the instance, so the overrides must land FIRST on a re-import
+    that moves a unit to another master. The `%compilewater` reroute is the case that makes it
+    visible -- `water/invisible_water` and `water/cheap_water` author `$translucent 1`, sat on
+    `M_V2_Unlit`/`M_V2_LitTranslucent`, and move to the Single Layer Water master, which refuses
+    to compile anything but opaque or masked. Asserted at the moment the parent is written, which
+    is the only moment the illegal pair could exist."""
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+    module = _load(editor)
+    translucent = _entry("brick", basePropertyOverrides={
+        "blendMode": "Translucent", "twoSided": False})
+    module.run(_stage(tmp_path, [translucent]))
+    mic = editor.assets[ROOT + "/art/MI_brick"]
+    assert mic.base_property_overrides.props["blend_mode"] == "BLEND.BLEND_TRANSLUCENT"
+
+    seen = []
+    original = editor.set_material_instance_parent
+
+    def watched(instance, parent):
+        seen.append((getattr(parent, "path", parent),
+                     instance.base_property_overrides.props["blend_mode"]))
+        return original(instance, parent)
+
+    editor.set_material_instance_parent = watched
+    module = _load(editor)
+    rerouted = _entry("brick", parent=M_UNLIT, basePropertyOverrides={
+        "blendMode": "Opaque", "twoSided": False})
+    module.run(_stage(tmp_path, [rerouted]), force=True)
+
+    assert seen == [(M_UNLIT, "BLEND.BLEND_OPAQUE")]
+    assert mic.parent is editor.assets[M_UNLIT]
+    assert mic.base_property_overrides.props["blend_mode"] == "BLEND.BLEND_OPAQUE"
+
+
 def test_a_stale_static_switch_is_explicitly_cleared_on_reimport(tmp_path):
     """The 12 known-stale flipbook/water assets: `clear_all_material_instance_parameters` never
     touches a static switch, so a switch that was `True` in an earlier import and is `False` in

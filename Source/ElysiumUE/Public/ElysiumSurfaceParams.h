@@ -96,6 +96,24 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName FogStart(TEXT("FogStart"));
 		inline const FName FogInvRange(TEXT("FogInvRange"));
 		inline const FName FogInscatter(TEXT("FogInscatter"));
+		// R7.5 G5 (`water_audit/AUDIT.md` section 9 G5): `$envmapcontrast`, authored on 19 units
+		// (17x `1`, `water/blackwater` 0.85, one vector). NAMED MODERNIZATION -- VtMB's own
+		// renderer never implemented the key (`docs/vtmb/reflections.md` -> "$envmapcontrast and
+		// $envmapsaturation do not exist": no term for it appears in any shipped `.psh`), so this
+		// is authored intent the 2004 engine dropped, restored with Source's own stated meaning
+		// (`lerp(cube, cube x cube, contrast)`; 0 = unchanged, which is the default).
+		inline const FName EnvMapContrast(TEXT("EnvMapContrast"));
+		// R7.5 G6 (`water_audit/AUDIT.md` section 9 G6, owner decision 4): the lightstyle
+		// brightness the style clock writes into Custom Primitive Data slot
+		// `ElysiumLightStyle::SlotBrightness` (6) on every component tagged with a face
+		// lightstyle. VtMB modulates the face's lightmap page by the style pattern; Lumen
+		// replaces lightmaps project-wide, so the port modulates the lit base colour and the
+		// emissive instead. Never written per material INSTANCE, and never defaulted either: a
+		// CPD-driven parameter always reads the slot (the graph's default value is editor preview
+		// only), so the neutral 1.0 is stamped onto every primitive that binds these masters --
+		// the bake's through `bake_map.set_fog`, the runtime's through
+		// `ElysiumLightStyle::StampUnstyled`.
+		inline const FName LightStyleBrightness(TEXT("LightStyleBrightness"));
 	}
 
 	namespace Vectors
@@ -234,6 +252,14 @@ namespace ElysiumSurfaceParamsTwoTexture
 		inline const FName FogStart(TEXT("FogStart"));
 		inline const FName FogInvRange(TEXT("FogInvRange"));
 		inline const FName FogInscatter(TEXT("FogInscatter"));
+		// R7.5 G6, as on M_V2_Lit: Custom Primitive Data slot 6, the lightstyle brightness. The
+		// bake splits a styled face into its own (material, style) chunk whatever family the face
+		// binds, and `sm_pier_1`'s `blends/blend_pier*` plus `sp_soc_3`'s `blends/seablend`,
+		// `blends/searock_tunnel` and `blends/twrconwllab` are styled faces on THIS master -- so a
+		// lightstyle lane only on the Lit pair would leave eight blend sections dead still beside
+		// the flickering plain sections they abut. This master has no emissive term of its own, so
+		// the brightness reaches the base colour alone.
+		inline const FName LightStyleBrightness(TEXT("LightStyleBrightness"));
 	}
 
 	namespace Vectors
@@ -284,16 +310,19 @@ namespace ElysiumSurfaceParamsEyes
 	}
 }
 
-// `M_V2_Water` -- `water` family only (22 units). Since R7.1 a Single Layer Water master
+// `M_V2_Water` -- the `water` family plus every `%compilewater` unit whatever family its VMT
+// names (R7.5 contract 2: `water/invisible_water`, `maps/sm_pier_1/water/invisible_water_depth_33`,
+// `water/cheap_water`, `dev/dev_waterbeneath`). Since R7.1 a Single Layer Water master
 // (`docs/architecture/water-architecture.md` section 4): `UseFogEnable`/`FogColor`/`FogStart`/
 // `FogEnd` are the VMT's own water-fog keys and become the SLW volume's scattering/absorption
 // (`WaterFogScale / ((FogEnd - FogStart) x 2.54)` per cm, split by the decoded colour);
 // `RefractTint` is Color Scale Behind Water; `ReflectTint`'s luma scales the class specular;
-// `Underside` (the `$bottommaterial` instance) zeroes specular and extinction; `CheapWater`
-// multiplies the extinction by 16. No `BottomMaterial` slot (`$bottommaterial` names a material,
-// not a texture -- provenance, and the source of `Underside`). Declared, not wired: `DuDvMap`,
-// `RefractAmount`/`ReflectAmount`, `BaseReflectFract`, `UseEnvMap`, the wave-animation scalars,
-// `CheapWaterStartDistance/EndDistance` and `WaterDepth` (see `_build_water`'s docstring).
+// `CheapWater` emits `lerp($fogcolor, cube x $reflecttint, fresnel)` (`WaterCheap_ps11`) instead
+// of integrating a volume. No `BottomMaterial` slot (`$bottommaterial` names a material, not a
+// texture -- provenance only since R7.5; see `Underside` below). Declared, not wired: `DuDvMap`
+// (the plain 2D slot: every DUDV in the corpus stages as a 29-frame `Texture2DArray`, so the
+// bound lane is `DuDvMapFrames`), `WaterDepth`, `CheapWaterStart/EndDistance`, `UseEnvMap` and
+// the nine wave scalars (see `_build_water`'s docstring for the VtMB fact behind each).
 namespace ElysiumSurfaceParamsWater
 {
 	namespace Textures
@@ -303,6 +332,10 @@ namespace ElysiumSurfaceParamsWater
 		inline const FName NormalMap(TEXT("NormalMap"));
 		inline const FName EnvMap(TEXT("EnvMap"));
 		inline const FName NormalMapFrames(TEXT("NormalMapFrames"));
+		// R7.5 G3: the 29-slice `TA_water_dudv` flipbook (signed UVWQ, verified byte-exact).
+		// `Water_Old` read `$bumpframe` as the shared frame index of both `$bumpmap` (the DUDV)
+		// and `$normalmap`, so the unit's one `animatedtexture` proxy drives both arrays.
+		inline const FName DuDvMapFrames(TEXT("DuDvMapFrames"));
 	}
 
 	namespace Scalars
@@ -329,6 +362,12 @@ namespace ElysiumSurfaceParamsWater
 		inline const FName BumpScrollRateV(TEXT("BumpScrollRateV"));
 		inline const FName NormalFrameRate(TEXT("NormalFrameRate"));
 		inline const FName NormalFrameCount(TEXT("NormalFrameCount"));
+		// R7.5 G3: the DUDV flipbook's own rate/count, written from the same `animatedtexture`
+		// proxy that fills the normal pair (`Water_Old`'s shared `$bumpframe`).
+		inline const FName DuDvFrameRate(TEXT("DuDvFrameRate"));
+		inline const FName DuDvFrameCount(TEXT("DuDvFrameCount"));
+		// R7.5 G6, as on M_V2_Lit: Custom Primitive Data slot 6, the lightstyle brightness.
+		inline const FName LightStyleBrightness(TEXT("LightStyleBrightness"));
 	}
 
 	namespace Vectors
@@ -350,10 +389,16 @@ namespace ElysiumSurfaceParamsWater
 		inline const FName UseBaseTexture(TEXT("UseBaseTexture"));
 		inline const FName UseNormalMap(TEXT("UseNormalMap"));
 		inline const FName UseAnimatedNormalFrames(TEXT("UseAnimatedNormalFrames"));
-		// R7.1 (`water-architecture.md` ruling E): the `$bottommaterial` instance -- a water unit
-		// whose `$bottommaterial` names itself (`dev/dev_waterbeneath2`). The engine strips the
-		// reflection from every down-facing water face and 5.8's SLW has no camera-under-water
-		// branch, so the underside draws with zero specular and zero volume extinction.
+		// R7.5 G3: gates the DUDV flipbook into the one SLW normal.
+		inline const FName UseAnimatedDuDvFrames(TEXT("UseAnimatedDuDvFrames"));
+		// R7.5 contract 1 (verdict B2), superseding R7.1 ruling E: underside is a FACE fact, not
+		// a material fact -- VtMB gates it per face on `plane.normal.z < 0` (`Mod_LoadFaces`) and
+		// its response is to undefine `$reflecttexture` on that face's material. So the switch is
+		// never set on a unit's surface instance any more (the `$bottommaterial` self-reference
+		// that used to decide it is provenance only); it is set on the `MI_<unit>_Underside`
+		// twin the material stage now writes beside every water instance, which the map bake
+		// binds to the down-facing water faces. Underside = NO REFLECTION: specular 0 and
+		// roughness 1, with the volume coefficients exactly as the surface's.
 		inline const FName Underside(TEXT("Underside"));
 	}
 }

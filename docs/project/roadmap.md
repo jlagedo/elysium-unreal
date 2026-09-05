@@ -249,9 +249,19 @@ call, script verb and scheme event that names a sound is conformed to it.
   every real `LEAFWATERDATA` row to its `CONTENTS_WATER` brushes, one bake-placed
   `AElysiumWaterVolumes` actor per map classifies the player's feet/waist/eyes pre-move and is the
   map's underwater post-process volume, and the camera's `cl_waterdist` clearance offset is
-  transcribed. `sm_hub_1`, `sm_pier_1` and `sp_soc_3` are converted; ruling and detail:
-  `docs/architecture/water-architecture.md`, `docs/project/seam_migration.md` → "R7.1 — water on
-  the V2 lane".
+  transcribed. `sm_hub_1`, `sm_pier_1` and `sp_soc_3` are converted. **Settled by the
+  water-complete pass**: a 26-gap decoded-datum census of `sm_pier_1` and `sm_hub_1` was
+  dispositioned in full — the pier's swimmable volume draws (`%compilewater` beats `SURF_NODRAW`),
+  the underside became a per-face `_Underside` twin, the sewer's 29-frame DUDV animates, face
+  lightstyles animate as a per-primitive brightness on CPD slot 6 (world/sky chunks off their actor
+  tag, brush entities — the pier's foam cards — off their mesh's own slot names), and water raises
+  its events
+  (entry splash off the water-level transition, level-keyed footstep and impact sounds, buoyancy
+  from the authored `fluid` block). Ruling and detail:
+  `docs/architecture/water-architecture.md`; evidence: `docs/vtmb/water_data_census.md`; migration:
+  `docs/project/seam_migration.md` → "R7.1 — water on the V2 lane" and "R7.1 — settled". Player
+  water *movement* (`WaterMove`, swim/tread, the camera water band) is out of that pass by owner
+  call and stays on the substrate tier.
 - [x] **7.4 Master-material set** — the generated surface masters.
 - [ ] **[7.5 Real reflections](plans/world.md)** → `docs/vtmb/reflections.md` ·
   **[7.6 Bloom/glow tuning](plans/world.md)** · **[7.7 Shadow quality](plans/world.md)** ·

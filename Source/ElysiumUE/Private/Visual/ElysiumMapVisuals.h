@@ -171,6 +171,10 @@ public:
 	int32 EffectSkyCount = 0;
 	// Water (R7.1): the staged volumes on the adopted water actor, 0 on a map with no water.
 	int32 WaterVolumeCount = 0;
+	// Lightstyles on FACES (R7.4/G6): the baked chunks carrying `elysium.style=n` that the light
+	// rig's style clock now writes custom primitive data slot 6 on. 0 on a map with none, which is
+	// every map but `sm_pier_1` in the R7.4 scope.
+	int32 LightStylePrimitiveCount = 0;
 	// Decals: number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
 	// Ropes: number of UCableComponents built from <map>.ropes (0 if the map has no ropes or

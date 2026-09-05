@@ -46,8 +46,16 @@ leaf; `bsp.pvs_faces(data, origin)` returns the model-0 faces visible from a poi
 displacement), `surfaceFogVolumeID` uint16 @46, `styles[8]` @48, `day[8]` @56, `night[8]` @64
 (three 8-entry lightstyle arrays where modern Source has one `styles[4]@68`), `lightofs` int32
 @72 (`-1` = unlit), `area` float @76, `LightmapMins[2]` int32 @80, `LightmapSize[2]` int32 @88
-(luxels; actual dims are size+1), `origFace` @96, `smoothingGroups` @100. Face count =
-`FACES_len / 104`.
+(luxels; actual dims are size+1), `origFace` int32 @96, `numPrims` uint16 @100,
+`firstPrimID` uint16 @102. Face count = `FACES_len / 104`.
+
+bspsrc names one `smoothingGroups` int32 at @100; VtMB's engine does not. `Mod_LoadFaces`
+(`0x200b73d0`) reads the two words separately -- `200b7648` moves `[EDI+0x64]` into the
+`msurface`'s `+0x50`, `200b7650` moves `[EDI+0x66]` into `+0x52` -- and those are the
+`numPrims`/`firstPrimID` pair `Shader_DrawSurfaceDynamic` (`0x2007d4e0`) reads first to decide
+whether a face draws through the PRIMITIVES lump instead of its surfedge fan. No reader in the
+corpus takes a smoothing dword. `hw_warrens_1` measures it: 66 faces name a run and lump 37 holds
+exactly 66 records.
 
 `day`/`night` are **dead**: `0x00` on every face of all 108 maps (where `styles` uses `0xFF` for
 an unused slot), and no `engine.dll` code reads offsets 56–71 — the FACES lump's three consumers

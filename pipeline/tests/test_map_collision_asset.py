@@ -78,7 +78,15 @@ def test_brush_entity_rows_key_by_lump_ordinal_and_skip_point_entities(tmp_path)
     assert [len(row["hulls"]) for row in rows] == [1, 2]
 
 
-def test_a_sky_brush_entity_takes_the_sky_scale_the_deserializer_applies(tmp_path):
+def test_a_sky_brush_entity_is_not_composed_into_the_collision_at_all(tmp_path):
+    """G25. The stage used to multiply a miniature's hulls by the map's sky scale, which on
+    `sm_pier_1` walked three sky-flagged `func_brush` Solids from raw z ~= 4939 -- above the map's
+    own `world_maxs.z 512`, where nothing in VtMB reaches them -- down to world z -644..-628, three
+    invisible collision slabs 21 inches under the harbour surface. The 3D skybox is drawn from its
+    own camera and no body ever travels into it, so a miniature contributes no collider and the
+    scale has nothing to apply to. The row is skipped whole, by ordinal, so a real brush entity's
+    handle still finds its own body."""
+
     directory = _write_map(tmp_path, "sp_probe", sky_scale=16.0, entities=[
         {"classname": "func_brush", "hulls": [_cube()], "sky": True},
         {"classname": "func_brush", "hulls": [_cube()]},
@@ -89,8 +97,32 @@ def test_a_sky_brush_entity_takes_the_sky_scale_the_deserializer_applies(tmp_pat
         map_collision.read_sky_scale(directory / "sp_probe.sky"),
     )
 
-    assert rows[0]["hulls"][0] == pytest.approx([c * 16.0 for c in _cube()])
-    assert rows[1]["hulls"][0] == pytest.approx(_cube())
+    assert [row["entityIndex"] for row in rows] == [1]
+    assert rows[0]["hulls"][0] == pytest.approx(_cube())
+
+
+def test_stage_map_counts_the_miniatures_it_kept_out_of_the_collision(tmp_path):
+    """G25's own number, so a map that silently loses a real collider is separable from one whose
+    miniatures were excluded on purpose."""
+
+    directory = _write_map(tmp_path, "sp_probe", sky_scale=16.0, hull_rows=[_cube()], entities=[
+        {"classname": "func_brush", "hulls": [_cube()], "sky": True},
+        {"classname": "func_brush", "hulls": [_cube(2.0)], "sky": True},
+        {"classname": "func_door", "hulls": [_cube(3.0)]},
+    ])
+
+    entry = map_collision.stage_map(
+        "sp_probe",
+        hulls_path=directory / "sp_probe.hulls",
+        dispcol_path=directory / "sp_probe.dispcol",
+        ents_path=directory / "sp_probe.ents",
+        sky_path=directory / "sp_probe.sky",
+    )
+
+    assert entry["parity"]["equal"] is True
+    assert entry["stats"]["brushBodies"] == 1
+    assert entry["stats"]["skyBrushBodiesExcluded"] == 2
+    assert [row["entityIndex"] for row in entry["brushBodies"]] == [2]
 
 
 def test_stage_map_carries_the_sidecars_and_reports_its_own_numbers(tmp_path):
@@ -112,6 +144,7 @@ def test_stage_map_carries_the_sidecars_and_reports_its_own_numbers(tmp_path):
     assert entry["stats"] == {
         "worldHulls": 3, "worldHullVertices": 24, "displacementTriangles": 2,
         "brushBodies": 1, "brushHulls": 1, "skyBrushBodies": 0,
+        "skyBrushBodiesExcluded": 0,
     }
     # Three vertices per triangle, un-welded and in file order -- the soup LoadDispCol builds.
     assert entry["displacementIndices"] == [0, 1, 2, 3, 4, 5]

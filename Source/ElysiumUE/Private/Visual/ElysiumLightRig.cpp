@@ -2,6 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumEditorLabels.h"
+#include "ElysiumFog.h"                // ElysiumLightStyle::SlotBrightness -- the CPD slot 6 contract
 #include "ElysiumLightCalibration.h"
 #include "ElysiumLightingSettings.h"
 #include "ElysiumSurfaceSettings.h"
@@ -10,6 +11,7 @@
 #include "Components/LightComponent.h"
 #include "Components/LocalLightComponent.h"
 #include "Components/PointLightComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Misc/FileHelper.h"
 #include "UObject/UObjectGlobals.h"
@@ -764,6 +766,45 @@ void UElysiumLightRig::ApplyToSource(FLightSource& S)
 	Light->SetIntensity(S.BaseIntensity);
 }
 
+int32 UElysiumLightRig::AdoptStyledPrimitives(const TArray<FStyledPrimitive>& Adopted)
+{
+	StyledPrimitives.Reset();
+	for (const FStyledPrimitive& Row : Adopted)
+	{
+		if (Row.Component == nullptr || Row.Style < 1 || Row.Style >= MaxLightStyles)
+		{
+			continue;
+		}
+		FStyledPrimitiveEntry Entry;
+		Entry.Component = Row.Component;
+		Entry.Style = Row.Style;
+		Entry.LastBrightness = PatternIntensity(StylePatterns[Row.Style], StyleTime);
+		// Stamped now rather than on the first tick: a map paused at load, or one whose rig never
+		// ticks, still renders the style at its own phase instead of at the bake's flat 1.0.
+		Row.Component->SetCustomPrimitiveDataFloat(
+			ElysiumLightStyle::SlotBrightness, Entry.LastBrightness);
+		StyledPrimitives.Add(Entry);
+	}
+	return StyledPrimitives.Num();
+}
+
+bool UElysiumLightRig::AddStyledPrimitive(UPrimitiveComponent* Component, int32 Style)
+{
+	if (Component == nullptr || Style < 1 || Style >= MaxLightStyles)
+	{
+		return false;
+	}
+	FStyledPrimitiveEntry* Existing = StyledPrimitives.FindByPredicate(
+		[Component](const FStyledPrimitiveEntry& Row) { return Row.Component.Get() == Component; });
+	FStyledPrimitiveEntry& Entry = Existing != nullptr
+		? *Existing : StyledPrimitives.AddDefaulted_GetRef();
+	Entry.Component = Component;
+	Entry.Style = Style;
+	Entry.LastBrightness = PatternIntensity(StylePatterns[Style], StyleTime);
+	Component->SetCustomPrimitiveDataFloat(ElysiumLightStyle::SlotBrightness, Entry.LastBrightness);
+	return true;
+}
+
 void UElysiumLightRig::TickComponent(float DeltaTime, ELevelTick TickType,
 	FActorComponentTickFunction* ThisTickFunction)
 {
@@ -777,5 +818,23 @@ void UElysiumLightRig::TickComponent(float DeltaTime, ELevelTick TickType,
 		{
 			S.Light->SetIntensity(S.BaseIntensity * PatternIntensity(StylePatterns[S.Style], StyleTime));
 		}
+	}
+	// R7.4 (G6): the same clock, the same table, written onto the styled chunks as custom primitive
+	// data rather than onto a light's intensity. Only slot 6 moves -- the fog block underneath it
+	// (slots 0-5, `ElysiumFog`) is `ApplySceneFog`'s and is never resized from here.
+	for (FStyledPrimitiveEntry& Entry : StyledPrimitives)
+	{
+		UPrimitiveComponent* Component = Entry.Component.Get();
+		if (Component == nullptr)
+		{
+			continue;
+		}
+		const float Brightness = PatternIntensity(StylePatterns[Entry.Style], StyleTime);
+		if (FMath::IsNearlyEqual(Brightness, Entry.LastBrightness, UE_KINDA_SMALL_NUMBER))
+		{
+			continue;
+		}
+		Entry.LastBrightness = Brightness;
+		Component->SetCustomPrimitiveDataFloat(ElysiumLightStyle::SlotBrightness, Brightness);
 	}
 }

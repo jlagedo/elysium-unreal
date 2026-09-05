@@ -244,6 +244,42 @@ def test_every_meshed_func_lod_row_carries_its_cull_range_in_the_ents(map_name):
 
 
 
+# --- R7.4 (G25): a 3D-skybox brush entity contributes no collision -------------------------
+
+
+@pytest.mark.parametrize("map_name", ("sm_pier_1",) + WORKING_MAPS)
+def test_a_sky_brush_entity_carries_no_hulls_in_the_ents(map_name):
+    """Corpus-gated. `sm_pier_1`'s `brush_8/9/10` are sky-flagged `func_brush` Solids that lived at
+    raw z ~= 4939 -- above the map's own `world_maxs.z 512` -- and the runtime scales a miniature's
+    hulls by the sky scale (x16 here), which landed them at world z -644..-628: three invisible
+    collision slabs 21 inches under the harbour surface, with no VtMB counterpart. The miniature is
+    drawn from its own camera and nothing travels into it, so it contributes no collider.
+
+    Everything else about the row stays: the visual (`brush_mesh`), the contents word and
+    `blocks_player` are the entity's, and a brush entity in the play volume still collides."""
+
+    from elysium_pipeline.exporters.UE_map_sidecars import build_entities, prepare_join
+
+    unit = paths.export_v2_root() / "maps" / f"{map_name}.glb"
+    if not unit.is_file():
+        pytest.skip(f"no exported map root unit at {unit}")
+
+    join = prepare_join(map_name)
+    rows, stats = build_entities(join.units, join.sky, join.pair_blocks, join.brush_meshes)
+    brush_rows = [row for row in rows if "hulls" in row]
+    sky_rows = [row for row in brush_rows if row.get("sky")]
+
+    assert brush_rows, f"{map_name} has no brush entity at all"
+    assert all(row["hulls"] == [] for row in sky_rows)
+    assert any(row["hulls"] for row in brush_rows)
+    # The count the file states is the count it carries, miniatures excluded.
+    assert stats["hulls"] == sum(len(row["hulls"]) for row in brush_rows)
+    if map_name == "sm_pier_1":
+        # The three the audit measured, still present as entities with their visuals.
+        assert len(sky_rows) >= 3
+        assert all("contents" in row for row in sky_rows)
+
+
 # --- R6.5: the `.ropes` line carries the material's unit id, and nothing about its look -----
 
 @pytest.mark.parametrize("keys, expected", [
@@ -322,16 +358,57 @@ def _meshed_units(rows):
 def test_meshed_faces_drops_a_nodraw_face_the_tools_name_test_cannot_see():
     """R7.1 follow-up: `%compilenodraw` outside `tools/` is a skip, and the name test still is one.
 
-    `water/invisible_water` (`sm_pier_1`'s ocean) is `water/`-pathed, so only `SURF_NODRAW` says it
-    draws nothing; `tools/toolstrigger` leaves the flag clear, so only the name says it. Dropping
-    either test puts an opaque sheet in the world.
+    `tools/toolstrigger` leaves the flag clear, so only the name says it draws nothing; a
+    `%compilenodraw` unit outside the `tools/` namespace leaves the name clear, so only the flag
+    says it. Dropping either test puts an opaque sheet in the world.
     """
 
     units = _meshed_units([
         ("brick/bricks01", False),
-        ("water/invisible_water", True),
+        ("effects/nodrawsheet", True),
         ("tools/toolstrigger", False),
         ("tools/toolsblack", False),
     ])
     scenes = meshed_faces(units, SimpleNamespace(faces=set()), set())
     assert scenes == {"world": [0, 3], "sky": [], "brush": {}}
+
+
+def test_a_compilewater_face_is_never_dropped_for_nodraw():
+    """R7.4, owner decision 2 -- the named modernization "surface on nodraw water".
+
+    All 50 of `sm_pier_1`'s water faces are `SURF_NODRAW` and were dropped, which left the map's
+    whole swimmable volume drawing nothing: VtMB painted the ocean as a skybox card because a 2004
+    engine could not draw a live surface there, and the port draws the authored plane instead. The
+    exemption is on `%compilewater`, the key vbsp itself read to make the brush water -- not on the
+    material's name or family, because `water/invisible_water` resolves to `M_V2_Unlit` today and
+    the pier's own `_depth_33` patch is a different unit facing the other way.
+
+    The predicate takes the unit's OWN key: only that spelling reaches `%compilewater` through a
+    patched unit's `patchBase`.
+    """
+
+    rows = [
+        ("water/invisible_water", True),
+        ("maps/sm_pier_1/water/invisible_water_depth_33", True),
+        ("effects/nodrawsheet", True),
+        ("tools/toolstrigger", True),
+    ]
+    units = _meshed_units(rows)
+    asked: list[str] = []
+
+    def compile_water(material):
+        asked.append(material)
+        return "water" in material
+
+    scenes = meshed_faces(units, SimpleNamespace(faces=set()), set(), compile_water)
+    assert scenes == {"world": [0, 1], "sky": [], "brush": {}}
+    # The `tools/` name test runs first and is not up for negotiation: a trigger brush is not water
+    # however its material is flagged.
+    assert "tools/toolstrigger" not in asked
+    assert asked[:2] == ["water/invisible_water",
+                         "maps/sm_pier_1/water/invisible_water_depth_33"]
+
+    # No predicate is the sidecar producer, which has no material staging tree behind it: the drop
+    # stands, byte for byte as before.
+    assert meshed_faces(units, SimpleNamespace(faces=set()), set()) == {
+        "world": [], "sky": [], "brush": {}}

@@ -1,6 +1,9 @@
 # Reports what a map's bake actually produced, from the assets themselves rather than from
 # the bake's own log: asset counts per class, Nanite coverage, triangles, material-slot
-# binding, and the level's actor census.
+# binding, and the level's actor census. R7.4 (water-complete) adds the water lanes: the
+# underside twins, the light-style chunk tags and the water volumes' fluid rows.
+# Phase 3 (the content run) is what proves those lanes on disk: verify_water hard-fails the
+# bake rather than warning, so a missing twin or an unbound '#underside' section stops the map.
 #
 # Run headless:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/bake_verify.py"
@@ -15,6 +18,7 @@ from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
+from elysium_pipeline.asset_names import brush_slot_style  # noqa: E402
 from elysium_pipeline.paths import export_root, work_root  # noqa: E402
 from elysium_pipeline.validation.dds_alpha import DdsAlphaError, alpha_minimum  # noqa: E402
 from elysium_pipeline.validation.png_alpha import alpha_range  # noqa: E402
@@ -775,13 +779,31 @@ def verify_effects(actors, map_name):
 
 
 WATER_TAG = "elysium.water"
+# R7.4 (water-complete): the world chunk tag a styled section carries beside `SKY_TAG` (below --
+# both restate `bake_map.TAG_WORLD`/`TAG_SKY`, `chunk_style_suffix`'s consumers) and the
+# style-index prefix `bake_map.LIGHT_STYLE_TAG_PREFIX` restates (`ElysiumBakedTags::LightStyle`'s
+# own format).
+WORLD_TAG = "elysium.world"
+LIGHT_STYLE_TAG_PREFIX = "elysium.style="
 
 
 def verify_water(actors, map_name):
     """R7.1 (`water-architecture.md` section 5.2), `MapsOnV2Models` maps only: exactly one
     `elysium.water` actor iff the map stages a `water.volumes[]` row, the actor's row count, and
     each row's `surface_z_cm` and brush count against the staged manifest -- no volume the actor
-    disagrees with the stage on, and no actor at all when the stage places none."""
+    disagrees with the stage on, and no actor at all when the stage places none.
+
+    R7.4 (water-complete, contract 4) extends the per-volume comparison to `fluid` (`has_fluid`
+    plus every scalar the row carries, when the row carries one -- an unstaged fluid is not an
+    error) and the `pieces` / `leaf_boxes_cm` / `near_boxes_cm` counts. Two more checks run once
+    per map, independent of the actor: every `_Underside` twin a staged `materials` row names
+    (contract 1) actually resolves to an asset, and every lightstyle a staged `materials` row
+    carries (contract 3) has at least one world/sky chunk actor tagged for it -- `bake_map.py`'s
+    own `chunk_style_suffix`/`parse_chunk_style` pairing, checked from the placed level rather than
+    re-parsing a chunk name here. A third asks whether the water sections BIND what the stage said
+    they would (`_verify_water_section_bindings`), which is the half of contract 1 an existence
+    check cannot see.
+    """
     errors = []
     if not map_transport.is_map_on_v2_models(map_name):
         return errors
@@ -800,43 +822,247 @@ def verify_water(actors, map_name):
             errors.append(
                 "%s: %d water actor(s) placed but the stage carries no water.volumes[] row"
                 % (map_name, len(found)))
-        unreal.log("[verify] water: 0 staged rows, %d actor(s)" % len(found))
-        return errors
-    if not found:
+    elif not found:
         errors.append("%s: %d staged water.volumes[] row(s) but no %s actor"
                       % (map_name, len(rows), WATER_TAG))
         unreal.log("[verify] water: %d staged rows, 0 actors" % len(rows))
-        return errors
-    actor = found[0]
-    volumes = list(actor.get_editor_property("volumes"))
-    if len(volumes) != len(rows):
-        errors.append("%s: water actor carries %d volume(s), staged %d"
-                      % (map_name, len(volumes), len(rows)))
-    matched = 0
-    for index, (volume, row) in enumerate(zip(volumes, rows)):
-        problems = []
-        got_index = int(volume.get_editor_property("index"))
-        want_index = int(row["index"])
-        if got_index != want_index:
-            problems.append("index %d, staged %d" % (got_index, want_index))
-        got_z = float(volume.get_editor_property("surface_z_cm"))
-        want_z = float(row["surfaceZCm"])
-        if abs(got_z - want_z) > 1e-2:
-            problems.append("surface_z_cm %.2f, staged %.2f" % (got_z, want_z))
-        got_brushes = len(list(volume.get_editor_property("brushes")))
-        want_brushes = len(row.get("brushes") or [])
-        if got_brushes != want_brushes:
-            problems.append("%d brush(es), staged %d" % (got_brushes, want_brushes))
-        if problems:
-            errors.append("%s: water volume %d: %s" % (map_name, index, "; ".join(problems)))
-        else:
-            matched += 1
-    unreal.log("[verify] water: %d staged rows, %d matched" % (len(rows), matched))
+    else:
+        actor = found[0]
+        volumes = list(actor.get_editor_property("volumes"))
+        if len(volumes) != len(rows):
+            errors.append("%s: water actor carries %d volume(s), staged %d"
+                          % (map_name, len(volumes), len(rows)))
+        matched = 0
+        for index, (volume, row) in enumerate(zip(volumes, rows)):
+            problems = _verify_water_volume(volume, row)
+            if problems:
+                errors.append("%s: water volume %d: %s" % (map_name, index, "; ".join(problems)))
+            else:
+                matched += 1
+        unreal.log("[verify] water: %d staged rows, %d matched" % (len(rows), matched))
+
+    meshes = brush_meshes(map_name)
+    errors.extend(_verify_water_undersides(manifest, map_name))
+    errors.extend(_verify_water_section_bindings(actors, meshes, manifest, map_name))
+    errors.extend(_verify_water_lightstyle_tags(actors, meshes, manifest, map_name))
+
     for message in errors[:8]:
         unreal.log_error("[verify] " + message)
     if len(errors) > 8:
         unreal.log_error("[verify] ... and %d more water finding(s) on %s"
                          % (len(errors) - 8, map_name))
+    return errors
+
+
+def _verify_water_volume(volume, row):
+    """One `(actor volume, staged row)` pair's problems -- R7.1's original four fields plus the
+    R7.4 contract 4 ones, each skipped when the staged row carries nothing to check (an older
+    manifest, or a volume the compiler authored no fluid/pieces/boxes for)."""
+    problems = []
+    got_index = int(volume.get_editor_property("index"))
+    want_index = int(row["index"])
+    if got_index != want_index:
+        problems.append("index %d, staged %d" % (got_index, want_index))
+    got_z = float(volume.get_editor_property("surface_z_cm"))
+    want_z = float(row["surfaceZCm"])
+    if abs(got_z - want_z) > 1e-2:
+        problems.append("surface_z_cm %.2f, staged %.2f" % (got_z, want_z))
+    got_brushes = len(list(volume.get_editor_property("brushes")))
+    want_brushes = len(row.get("brushes") or [])
+    if got_brushes != want_brushes:
+        problems.append("%d brush(es), staged %d" % (got_brushes, want_brushes))
+
+    fluid_row = row.get("fluid")
+    if fluid_row is not None:
+        fluid = volume.get_editor_property("fluid")
+        if not bool(fluid.get_editor_property("has_fluid")):
+            problems.append("fluid: staged index %s but the actor's has_fluid is false"
+                            % fluid_row.get("index"))
+        else:
+            got_fluid_index = int(fluid.get_editor_property("index"))
+            want_fluid_index = int(fluid_row.get("index") or 0)
+            if got_fluid_index != want_fluid_index:
+                problems.append("fluid.index %d, staged %d" % (got_fluid_index, want_fluid_index))
+            got_density = float(fluid.get_editor_property("density"))
+            want_density = float(fluid_row.get("density") or 0.0)
+            if abs(got_density - want_density) > 1e-3:
+                problems.append("fluid.density %.3f, staged %.3f" % (got_density, want_density))
+    for field, prop in (("pieces", "pieces"), ("leafBoxesCm", "leaf_boxes_cm"),
+                        ("nearBoxesCm", "near_boxes_cm")):
+        staged = row.get(field)
+        if staged is None:
+            continue
+        got_count = len(list(volume.get_editor_property(prop)))
+        want_count = len(staged)
+        if got_count != want_count:
+            problems.append("%d %s, staged %d" % (got_count, field, want_count))
+    return problems
+
+
+def _verify_water_undersides(manifest, map_name):
+    """Contract 1: every staged `materials` row naming an `undersideAsset` resolves to a real
+    asset -- the `_Underside` twin Lane C stages beside the surface instance, which
+    `bake_map_v2._V2Material.slot_asset` binds a down-facing water face's own mesh section to."""
+    errors = []
+    materials = manifest.get("materials") or {}
+    twins = sorted({str(row["undersideAsset"]) for row in materials.values()
+                    if row.get("underside") and row.get("undersideAsset")})
+    missing = [path for path in twins if not unreal.EditorAssetLibrary.does_asset_exist(path)]
+    if missing:
+        errors.append("%s: %d underside twin instance(s) staged but not imported "
+                      "(run: uv run elysium import materials): %s"
+                      % (map_name, len(missing), ", ".join(missing[:8])))
+    unreal.log("[verify] water undersides: %d twin(s) staged, %d missing"
+              % (len(twins), len(missing)))
+    return errors
+
+
+def brush_meshes(map_name):
+    """`{stem: UStaticMesh}` for every baked brush-entity mesh of this map (`/<map>/Brushes`).
+
+    A brush entity's mesh is never placed in the level, so it is reached through the package rather
+    than through an actor walk -- and it is a first-class carrier of both facts the water checks
+    below ask about: `map_geometry` stages `water.faces[]` rows and `#style<n>` groups in BRUSH
+    scenes as readily as in the world one (`read_geometry` runs the same `_build_scene` over every
+    brush model), so a check that walks chunk actors alone reports a correctly baked brush section
+    as missing.
+    """
+    meshes = {}
+    package = "%s/%s/Brushes" % (MOUNT, map_name)
+    if not unreal.EditorAssetLibrary.does_directory_exist(package):
+        return meshes
+    for path in unreal.EditorAssetLibrary.list_assets(package, recursive=False,
+                                                      include_folder=False):
+        name = str(path).split("/")[-1].split(".")[0]
+        if not name.startswith("SM_"):
+            continue
+        mesh = unreal.EditorAssetLibrary.load_asset(path)
+        if mesh is not None:
+            meshes[name[3:]] = mesh
+    return meshes
+
+
+def _slot_names(mesh):
+    """The mesh's material slot names, as the strings `asset_names.brush_slot_style` reads."""
+    return [str(slot.get_editor_property("material_slot_name"))
+            for slot in mesh.get_editor_property("static_materials")]
+
+
+def _verify_water_lightstyle_tags(actors, meshes, manifest, map_name):
+    """Contract 3: every lightstyle a staged `materials` row carries is reachable by the light
+    rig's clock -- through a world/sky chunk actor tagged `elysium.style=<n>` for a WORLD face, and
+    through the brush mesh's own `_style<n>` slot names for a BRUSH-ENTITY face
+    (`ElysiumLightStyle::StyleFromSlotNames`, read back by
+    `UElysiumMapVisuals::RegisterRuntimeBrush`). `sm_pier_1`'s 17 `objects/surf` foam bodies are
+    the second kind and are the census's motivating case for G6, so a check that asked only about
+    chunk actors would have passed while delivering nothing on them.
+    """
+    errors = []
+    materials = manifest.get("materials") or {}
+    styles = sorted({int(row["lightStyle"]) for row in materials.values()
+                     if row.get("lightStyle")})
+    if not styles:
+        return errors
+    tagged = set()
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if WORLD_TAG not in tags and SKY_TAG not in tags:
+            continue
+        for tag in tags:
+            if tag.startswith(LIGHT_STYLE_TAG_PREFIX):
+                tagged.add(int(tag[len(LIGHT_STYLE_TAG_PREFIX):]))
+    styled_brushes = {stem: brush_slot_style(_slot_names(mesh))
+                      for stem, mesh in meshes.items()}
+    on_brushes = {style for style in styled_brushes.values() if style}
+    missing = [style for style in styles if style not in tagged and style not in on_brushes]
+    if missing:
+        errors.append("%s: lightstyle(s) %s staged on a water/foam face but no world/sky chunk "
+                      "actor carries %s<n> and no brush mesh names it in a slot"
+                      % (map_name, missing, LIGHT_STYLE_TAG_PREFIX))
+    styled_count = sum(1 for style in styled_brushes.values() if style)
+    unreal.log("[verify] water lightstyles: %d staged, %d chunk-tagged, %d on brush meshes "
+               "(%d styled brush mesh(es))"
+               % (len(styles), len(tagged), len(on_brushes), styled_count))
+    return errors
+
+
+def chunk_bound_materials(actors, meshes=None):
+    """Every material asset path a world/sky chunk -- or a brush-entity mesh -- binds on this map.
+
+    `bake_map_v2` binds one section per staged face group, so the set this returns is exactly the
+    set of instances the map's surfaces actually draw through. BOTH carriers are walked, because a
+    `water.faces[]` row names the scene it came from and `read_geometry` stages brush models
+    through the same `_build_scene` the world goes through: `sm_pier_1`'s water is all in the world
+    scene, but a map whose swimmable brush belongs to a `func_` entity puts its group on
+    `/<map>/Brushes/SM_brush_<n>` and nowhere else. Object paths are folded to their package path
+    (`/ElysiumBaked/Materials/water/MI_invisible_water`), which is the spelling the stage's
+    `materials` rows use.
+    """
+    bound = set()
+
+    def take(mesh):
+        if mesh is None:
+            return
+        for slot in mesh.get_editor_property("static_materials"):
+            material = slot.get_editor_property("material_interface")
+            if material is not None:
+                bound.add(str(material.get_path_name()).split(".", 1)[0])
+
+    for actor in actors:
+        tags = [str(tag) for tag in actor.tags]
+        if WORLD_TAG not in tags and SKY_TAG not in tags:
+            continue
+        component = getattr(actor, "static_mesh_component", None)
+        take(component.get_editor_property("static_mesh") if component else None)
+    for mesh in (meshes or {}).values():
+        take(mesh)
+    return bound
+
+
+def _verify_water_section_bindings(actors, meshes, manifest, map_name):
+    """Contract 1, on the BAKED asset: every water face group's own instance is bound into a chunk
+    -- or, for a brush-entity scene, into that entity's own mesh.
+
+    `_verify_water_undersides` above asks whether the `_Underside` twin was imported; this asks
+    the harder half -- whether the down-facing sections actually BIND it, rather than falling back
+    to the surface instance and drawing a reflection under the waterline. The expected path per
+    group is `map_geometry.MaterialBinding.slot_asset`'s own rule (`undersideAsset or asset`; a
+    water unit is never a decal surface), and the groups are the ones `water.faces[]` names, so a
+    group that meshed nothing is not asked about.
+
+    The geometric half of the pin -- the area of each section against the compiler's own
+    `faces[].area` (G26/verdict B3) -- is answered on the STAGED side, where both numbers exist:
+    every `water.faces[]` row carries `areaCm2` (vbsp's) beside `meshedAreaCm2` (the stage's), and
+    `test_the_water_face_split_on_the_exported_corpus` pins them equal per face and per section.
+    Asking a baked `UStaticMesh` for a per-section area would re-measure the same triangles through
+    a GeometryScript query that cannot run outside a live editor, for no fact the offline pin does
+    not already have.
+    """
+    errors = []
+    materials = manifest.get("materials") or {}
+    groups = sorted({str(row["group"]) for row in
+                     ((manifest.get("water") or {}).get("faces") or [])})
+    if not groups:
+        return errors
+    expected = {}
+    for group in groups:
+        row = materials.get(group)
+        if row is None:
+            errors.append("%s: water face group %r has no materials row to bind"
+                          % (map_name, group))
+            continue
+        expected[group] = str(row.get("undersideAsset") or row.get("asset") or "")
+    bound = chunk_bound_materials(actors, meshes)
+    missing = sorted({group for group, path in expected.items()
+                      if path and path not in bound})
+    if missing:
+        errors.append(
+            "%s: %d water face group(s) whose instance no world/sky chunk and no brush mesh "
+            "binds: %s"
+            % (map_name, len(missing),
+               ", ".join("%s -> %s" % (group, expected[group]) for group in missing[:6])))
+    unreal.log("[verify] water sections: %d group(s), %d bound on a chunk or brush mesh"
+              % (len(expected), len(expected) - len(missing)))
     return errors
 
 

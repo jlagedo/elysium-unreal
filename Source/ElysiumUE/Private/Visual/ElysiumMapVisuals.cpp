@@ -159,6 +159,7 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	EffectsByEntity.Reset();
 	WaterVolumes = nullptr;
 	WaterVolumeCount = 0;
+	LightStylePrimitiveCount = 0;
 	EffectCount = 0;
 	EffectSkyCount = 0;
 	SpriteCount = 0;
@@ -178,6 +179,32 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	// One pass over the level. A light's `.lights` line index rides a second tag, so the rig can
 	// bind each actor back to the source row it re-derives intensity and reach from.
 	TArray<UElysiumLightRig::FAdoptedLight> Adopted;
+	// R7.4 (G6, owner decision 4): the chunks whose FACES carry a VtMB lightstyle. The bake splits
+	// them out by (material, style) and tags the chunk `elysium.style=n` -- on the component where
+	// it tagged the section, on the actor otherwise, and both spellings are read here so neither
+	// half of the bake contract can go quietly unread. The rig's style clock then writes their
+	// brightness into custom primitive data slot 6 every tick.
+	TArray<UElysiumLightRig::FStyledPrimitive> Styled;
+	auto CollectStyled = [&Styled](AActor* Actor)
+	{
+		TInlineComponentArray<UPrimitiveComponent*> Primitives(Actor);
+		for (UPrimitiveComponent* Component : Primitives)
+		{
+			if (Component == nullptr)
+			{
+				continue;
+			}
+			int32 Style = ElysiumBakedTags::ParseLightStyle(Component->ComponentTags);
+			if (Style == 0)
+			{
+				Style = ElysiumBakedTags::ParseLightStyle(Actor->Tags);
+			}
+			if (Style > 0)
+			{
+				Styled.Add({ Component, Style });
+			}
+		}
+	};
 	int32 Tagged = 0;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
@@ -234,14 +261,17 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		else if (Actor->ActorHasTag(ElysiumBakedTags::World))
 		{
 			WorldActors.Add(Cast<AStaticMeshActor>(Actor));
+			CollectStyled(Actor);
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Sky))
 		{
 			SkyActors.Add(Cast<AStaticMeshActor>(Actor));
+			CollectStyled(Actor);
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Prop))
 		{
 			PropActors.Add(Cast<AStaticMeshActor>(Actor));
+			CollectStyled(Actor);
 		}
 		else if (Actor->ActorHasTag(ElysiumBakedTags::Light))
 		{
@@ -379,6 +409,9 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 		WorldLightCount = ElysiumMapTransport::IsMapOnV2Models(MapName)
 			? LightRig->AdoptBaked(Adopted, MapName)
 			: LightRig->Adopt(Adopted, FElysiumContentPaths::MapLights(MapName), SkyDef.Scale);
+		// R7.4: the styled chunks ride the same clock the styled lights do, so they are handed over
+		// beside them -- one walk, one adopt.
+		LightStylePrimitiveCount = LightRig->AdoptStyledPrimitives(Styled);
 	}
 
 	if (Tagged == 0)
@@ -389,8 +422,12 @@ int32 UElysiumMapVisuals::AdoptBakedLevel(const FString& MapName, const FElysium
 	}
 	// The PPV is the one adopted actor whose absence is silent — the D3 knobs simply stop
 	// working — so its presence is stated rather than inferred.
-	UE_LOG(LogElysiumVisuals, Log, TEXT("adopted '%s': %d tagged actors, ppv %s"),
-		*MapName, Tagged, PostProcess ? TEXT("yes") : TEXT("MISSING"));
+	// R7.4 (contract 3): the styled-chunk count rides the same line. A map whose bake wrote
+	// `elysium.style=<n>` chunks and whose runtime adopted none is the one failure mode of that
+	// contract that renders as "nothing happened" rather than as an error.
+	UE_LOG(LogElysiumVisuals, Log,
+		TEXT("adopted '%s': %d tagged actors, %d styled chunks, ppv %s"),
+		*MapName, Tagged, LightStylePrimitiveCount, PostProcess ? TEXT("yes") : TEXT("MISSING"));
 	return Tagged;
 }
 
@@ -891,6 +928,34 @@ void UElysiumMapVisuals::RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool b
 		return;
 	}
 	(bSky ? RuntimeSkyBrushes : RuntimeWorldBrushes).Add(Comp);
+	// R7.4 (G6): a brush entity's own faces can carry a lightstyle -- `sm_pier_1`'s 17
+	// `objects/surf` foam bodies are the census's motivating case, and they are the only
+	// lightstyle-bearing water geometry in the corpus. They are never placed by the bake, so they
+	// carry no `elysium.style=` actor tag; the style rides the mesh's slot names instead and is
+	// handed to the same clock the baked chunks ride (`ElysiumLightStyle::StyleFromSlotNames`).
+	if (LightRig != nullptr)
+	{
+		if (const UStaticMesh* Mesh = Comp->GetStaticMesh())
+		{
+			TArray<FName> SlotNames;
+			SlotNames.Reserve(Mesh->GetStaticMaterials().Num());
+			for (const FStaticMaterial& Slot : Mesh->GetStaticMaterials())
+			{
+				SlotNames.Add(Slot.MaterialSlotName);
+			}
+			const int32 Style = ElysiumLightStyle::StyleFromSlotNames(SlotNames);
+			if (Style > 0 && LightRig->AddStyledPrimitive(Comp, Style))
+			{
+				Comp->ComponentTags.AddUnique(ElysiumBakedTags::LightStyle(Style));
+				++LightStylePrimitiveCount;
+				// The adoption line above is written before any entity is embodied, so this is
+				// the only place the brush half of the contract is observable at all.
+				UE_LOG(LogElysiumVisuals, Log,
+					TEXT("styled brush body: '%s' animates on style %d (%d styled primitives)"),
+					*Mesh->GetName(), Style, LightStylePrimitiveCount);
+			}
+		}
+	}
 	ApplySceneFog();
 }
 

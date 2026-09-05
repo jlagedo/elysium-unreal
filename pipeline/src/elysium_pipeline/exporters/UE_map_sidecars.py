@@ -714,7 +714,12 @@ def _face_material(units: MapUnits, face: dict[str, Any]) -> str | None:
     return asset[len(prefix):] if asset.startswith(prefix) else None
 
 
-def meshed_faces(units: MapUnits, sky: SkyScope, backings: set[int]) -> dict[str, Any]:
+def meshed_faces(
+    units: MapUnits,
+    sky: SkyScope,
+    backings: set[int],
+    compile_water=None,
+) -> dict[str, Any]:
     """Which faces survive the exporter's filters, split by the scene each one lands in.
 
     `UE_bsp_to_scene` drops a face with fewer than three edges or no texinfo, drops every face of a
@@ -733,6 +738,26 @@ def meshed_faces(units: MapUnits, sky: SkyScope, backings: set[int]) -> dict[str
     the flag alone catches exactly 50 more, all on `sm_pier_1` (41 `water/invisible_water`, 9 of its
     `maps/sm_pier_1/water/invisible_water_depth_33` patch), all world-scene, none displacement --
     so no other map's mesh, `.dispcol` or `.sky` moves.
+
+    **`%compilewater` is exempt from that drop** (R7.4, owner decision 2 -- the named modernization
+    "surface on nodraw water"). `compile_water(material key) -> bool` answers "vbsp read
+    `%compilewater` off this unit's own VMT, through its `patchBase`" -- it takes the face's own
+    TEXDATA key, not the base fold, because a patched water unit
+    (`maps/sm_pier_1/water/invisible_water_depth_33`) is staged in its own right and only that
+    spelling reaches the key. A face whose unit says yes is
+    a water face, and a water face is never dropped for `SURF_NODRAW` however the author flagged it.
+    VtMB drew nothing there because a 2004 engine could not draw a live ocean under a painted
+    skybox card; Unreal draws the authored plane, which is the whole of `sm_pier_1`'s swimmable
+    surface (50 faces: 41 `water/invisible_water` -- 18 down-facing, 23 vertical -- and 9 of the
+    `maps/sm_pier_1/water/invisible_water_depth_33` patch, all up-facing). `None` (the default) is
+    "nobody can answer that here", which is the legacy behaviour byte for byte: the material lane's
+    staged provenance is the only place the key lives, and the `.hulls`/`.ents`/`.dispcol` producer
+    reads no material sidecar. Nothing that producer writes moves either way, and nothing the R4.1
+    entity asset reads does either: measured over all 108 published root units, no `noDraw` face
+    naming a water material sits on a brush model at all, so `scenes["brush"]` -- and therefore
+    `brush_meshes` and every `.ents` `brush_mesh` -- is identical with the predicate and without it.
+    A map that broke that would give the two callers two brush-mesh sets, which is the one thing to
+    re-measure if the exemption ever widens.
     """
 
     faces = units.root["faces"]
@@ -752,7 +777,10 @@ def meshed_faces(units: MapUnits, sky: SkyScope, backings: set[int]) -> dict[str
         base = shared_corpus.base_material(material)
         if base.startswith("tools/") and base not in DRAWN_TOOL_MATERIALS:
             continue
-        if face.get("noDraw"):
+        # The predicate takes the unit's own key, not the base fold: a patched water unit
+        # (`maps/sm_pier_1/water/invisible_water_depth_33`) is staged in its own right and only its
+        # own key reaches `%compilewater` through `patchBase`.
+        if face.get("noDraw") and not (compile_water is not None and compile_water(material)):
             continue
         if model > 0:
             brush.setdefault(model, []).append(index)
@@ -959,7 +987,12 @@ def build_entities(
     `.ents` must reproduce". `entities[]` is one row per lump block in lump order with no drops and
     no reorders: `ElysiumEntityWorldPersistence.cpp` applies saved entity state by index, so the
     ordinal is a save key. `fields` opts into the R3.4 divergences one at a time; the default
-    reproduces `UE_bsp_to_scene.py` byte for byte.
+    reproduces `UE_bsp_to_scene.py` byte for byte **except** for one unconditional ruling: a
+    3D-skybox brush entity carries no hulls (R7.4 / G25, at the model branch below). That one is not
+    a flag because it is not a disagreement about how to read the lump -- both readings agree on the
+    vertices, and the ruling is that a miniature has no collider in the play volume at all.
+    `map_sidecar_diff` reports it as a real `.ents` delta on every map with a sky brush entity,
+    which is what that report is for.
 
     `write_entities` writes these rows to `<map>.ents`; R4.1's `UElysiumMapEntities` stage
     (`importers/map_entities.py`, `seam_map_map_entities.md` -> "Import") lands the same rows as
@@ -1012,6 +1045,16 @@ def build_entities(
             index = int(model_key[1:])
             # The legacy guard is `mi * 48 + 48 <= len(lump 14)`, i.e. the model row exists.
             if 0 <= index < len(models):
+                # G25: a 3D-skybox brush entity contributes no collision. Its hulls are authored in
+                # miniature units and the runtime scales them by the sky scale to place the visual
+                # (`UElysiumMapEntities::Deserialize`), which on `sm_pier_1` walks `brush_8/9/10`
+                # -- sky-flagged `func_brush` Solids that lived at raw z ~= 4939, above the map's
+                # own `world_maxs.z 512` -- down to world z -644..-628, three collision slabs 21
+                # inches under the harbour surface that VtMB never had anywhere near the play
+                # volume. VtMB draws the miniature from its own camera and no body ever travels
+                # there, so the faithful hull count for a miniature is zero. The visual
+                # (`brush_mesh`), the contents word and `blocks_player` are untouched: this drops
+                # the collider, not the entity.
                 hulls: list[list[float]] = []
                 contents_or = 0
                 head = int(models[index]["headNode"])
@@ -1027,6 +1070,8 @@ def build_entities(
                         continue
                     contents_or |= contents
                     hulls.append(hull_vertices(points))
+                if entity.get("sky"):
+                    hulls = []
                 entity["model"] = index
                 entity["hulls"] = hulls
                 entity["contents"] = contents_or
@@ -1378,8 +1423,14 @@ class MapJoin:
     brush_meshes: dict[int, str]
 
 
-def prepare_join(map_name: str, root: Path | None = None) -> MapJoin:
-    """Read one map's units and derive the shared tables (`seam_map_map.md` -> "Producer join")."""
+def prepare_join(map_name: str, root: Path | None = None, compile_water=None) -> MapJoin:
+    """Read one map's units and derive the shared tables (`seam_map_map.md` -> "Producer join").
+
+    `compile_water` is `meshed_faces`' own argument, passed through: the map-geometry stage has the
+    material lane's staged provenance and can answer "is this unit `%compilewater`", the sidecar
+    producer has not and passes `None`. One classifier either way -- the caller supplies the
+    evidence, the classifier stays here.
+    """
 
     units = read_units(map_name, root)
     lump_text = entity_lump_text(units.entities["entities"])
@@ -1387,7 +1438,7 @@ def prepare_join(map_name: str, root: Path | None = None) -> MapJoin:
     text_blocks = entity_block_texts(lump_text)
     sky = SkyScope(units, text_blocks)
     backings = visibility_backing_models(pair_blocks)
-    scenes = meshed_faces(units, sky, backings)
+    scenes = meshed_faces(units, sky, backings, compile_water)
     brush_meshes = {index: f"brush_{index}" for index in sorted(scenes["brush"])}
     return MapJoin(units, sky, pair_blocks, text_blocks, scenes, brush_meshes)
 

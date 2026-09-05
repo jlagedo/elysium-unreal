@@ -237,6 +237,15 @@ class Graph:
         connect(a, a_out, n, "")
         return n
 
+    def normalize(self, a, a_out, x, y):
+        """`MaterialExpressionNormalize` -- its one input pin is unnamed (`""`), like `Saturate`'s
+        and `OneMinus`'s. Added for R7.5 G3: the water master perturbs its tangent normal by the
+        DUDV offset field and has to renormalise before writing `MP_NORMAL`, which nothing else in
+        this layer needed until now."""
+        n = self.node(unreal.MaterialExpressionNormalize, x, y)
+        connect(a, a_out, n, "")
+        return n
+
     def floor(self, a, a_out, x, y):
         n = self.node(unreal.MaterialExpressionFloor, x, y)
         connect(a, a_out, n, "")

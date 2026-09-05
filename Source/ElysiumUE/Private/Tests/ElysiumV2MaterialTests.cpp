@@ -19,6 +19,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ElysiumFog.h"             // ElysiumLightStyle::ParameterName -- the CPD 6 scalar
 #include "ElysiumSurfaceParams.h"
 #include "Materials/MaterialInterface.h"
 
@@ -74,6 +75,14 @@ namespace
 		ElysiumSurfaceParamsLit::Scalars::FogStart,
 		ElysiumSurfaceParamsLit::Scalars::FogInvRange,
 		ElysiumSurfaceParamsLit::Scalars::FogInscatter,
+		// R7.4 (G6, owner decision 4): the lightstyle brightness, Custom Primitive Data slot
+		// ElysiumLightStyle::SlotBrightness. Named through the runtime's own slot contract rather
+		// than through ElysiumSurfaceParams, because the slot and the name are one fact and the
+		// rig writes the slot -- the header mirror is the material stage's copy of the same string,
+		// pinned equal to this one in `Elysium.Substrate.Water`.
+		ElysiumLightStyle::ParameterName,
+		// R7.5 G5: `$envmapcontrast`, restored as a named modernization on the envmap path.
+		ElysiumSurfaceParamsLit::Scalars::EnvMapContrast,
 	};
 	static const FName LitVectors[] = {
 		ElysiumSurfaceParamsShared::Vectors::Color,
@@ -162,6 +171,9 @@ namespace
 		ElysiumSurfaceParamsTwoTexture::Scalars::BaseScrollRateV,
 		ElysiumSurfaceParamsTwoTexture::Scalars::SineMin,
 		ElysiumSurfaceParamsTwoTexture::Scalars::SineMax,
+		// R7.4 G6: the styled blend sections on `sm_pier_1` / `sp_soc_3` bind this master, so it
+		// reads the same slot-6 brightness the Lit pair and Water do.
+		ElysiumLightStyle::ParameterName,
 		ElysiumSurfaceParamsTwoTexture::Scalars::SinePeriod,
 		ElysiumSurfaceParamsTwoTexture::Scalars::SineTimeOffset,
 		ElysiumSurfaceParamsTwoTexture::Scalars::FogStart,
@@ -210,6 +222,8 @@ namespace
 		ElysiumSurfaceParamsWater::Textures::NormalMap,
 		ElysiumSurfaceParamsWater::Textures::EnvMap,
 		ElysiumSurfaceParamsWater::Textures::NormalMapFrames,
+		// R7.5 G3: the 29-slice DUDV array, the lane the plain `DuDvMap` slot could never bind.
+		ElysiumSurfaceParamsWater::Textures::DuDvMapFrames,
 	};
 	static const FName WaterScalars[] = {
 		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
@@ -236,6 +250,12 @@ namespace
 		ElysiumSurfaceParamsWater::Scalars::BumpScrollRateV,
 		ElysiumSurfaceParamsWater::Scalars::NormalFrameRate,
 		ElysiumSurfaceParamsWater::Scalars::NormalFrameCount,
+		// R7.5 G3: the DUDV flipbook's own rate and count, off the shared `$bumpframe` proxy.
+		ElysiumSurfaceParamsWater::Scalars::DuDvFrameRate,
+		ElysiumSurfaceParamsWater::Scalars::DuDvFrameCount,
+		// R7.4: the same slot-6 brightness the Lit masters carry -- the pier's foam cards are Lit,
+		// but a styled water face is a face like any other.
+		ElysiumLightStyle::ParameterName,
 	};
 	static const FName WaterVectors[] = {
 		ElysiumSurfaceParamsShared::Vectors::Color,

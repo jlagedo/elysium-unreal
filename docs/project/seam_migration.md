@@ -2590,9 +2590,11 @@ citations in `docs/architecture/water-architecture.md`; contract in `seam_map_ma
   (`importers/materials.py:186-371`).
 
 **Out of scope, named (ruling list item 10 in the architecture doc):** drips, mist, splashes
-(R7.3's families — VtMB itself spawns no splash on entry), `dsp_water` and wade footsteps
-(`plans/audio.md`), NPC water levels (the entity substrate's), `trigger_hurt` pools (already
-entities).
+(R7.3's families), `dsp_water` and wade footsteps (`plans/audio.md`), NPC water levels (the entity
+substrate's), `trigger_hurt` pools (already entities). *Corrected in the settled entry below*: the
+parenthesis "VtMB itself spawns no splash on entry" is withdrawn — it reasoned from the fluid
+controller, whose splash builder is dead code in the shipped build; the splash is the client's
+water-level transition, and it plus the wade/step sounds came into scope with ruling L.
 
 **What the ruling retracts** from the pre-ruling text: five engine claims (SLW's camera-under-water
 branch does not exist as `bCameraIsUnderWater`; Opacity is coverage, not murk; coefficients are
@@ -2759,6 +2761,171 @@ was raised:
   the swim path and the camera clearance band are out of this session's scope, and stay covered by
   the substrate tier (`Elysium.Substrate.Water`, `Elysium.Substrate.WaterActor`,
   `Elysium.Substrate.Camera`) rather than a `run play` session, for a later witness to spend.
+
+**R7.1 — settled (2026-09-04, the water-complete pass).** R7.1 shipped water that *is* water. A
+complete decoded-datum census of `sm_pier_1` and `sm_hub_1` then measured what it had left on the
+floor — 26 gaps, G1–G26 — and eight read-only Phase 0 lanes settled the unknowns that blocked
+dispositioning six of them. This pass fixed 18, ruled 6 out on evidence, and left 2 to a game
+witness. Evidence and the full gap list: `docs/vtmb/water_data_census.md`. Rulings:
+`docs/architecture/water-architecture.md` §1.1. **`GRAPH_VERSION` 9 → 11**, **`MANIFEST_VERSION`
+9 → 11** (both halves, pinned equal), map seam **1.0.0 → 1.1.0**, material seam **1.1.0 → 1.2.0**,
+`WATER_ACTOR_SHAPE` **1 → 2**.
+
+**Five rulings** — one revision and four new letters, each a transcription unless it says otherwise:
+
+- **E, revised — the underside is a property of the FACE, not of the material.** `Mod_LoadFaces`
+  decides it on the face's own plane (`normal.z < 0`, against the literal `_DAT_201734e8 = 0.0`)
+  and responds by calling `$reflecttexture->SetUndefined()` on the *shared* material — which is why
+  VtMB's answer is load-order dependent and the port's cannot be. So the face carries it
+  (`map_geometry.face_underside`, a `#underside` section key), every water instance stages an
+  `MI_<unit>_Underside` twin parented to the surface instance with exactly `{"Underside": True}`
+  (108 corpus-wide), and the twin **drops reflection** — specular 0, roughness 1. R7.1's "zero
+  extinction" is **withdrawn**: the underside is the same body of water from its other side. The
+  material-level `$bottommaterial` rule is retired; the key stays published as a resolved material
+  reference.
+- **K — `%compilewater` selects the master; the nodraw surface half is withdrawn (2026-09-05).**
+  The compiler key, not the shader name, selects `M_V2_Water` (`materials.effective_family`);
+  three base units reroute plus one patch instance. A `%compilenodraw` water face draws nothing,
+  as in VtMB — `sm_pier_1`'s ocean is the `water/blackwater` card below the plane, which the
+  drawn sheet of owner decision 2 had hidden (ruling O). A `tools/` `$basetexture` on such a unit
+  is a compiler annotation, not a surface colour, so it is dropped and `UseBaseTexture` lands off.
+- **O — the look program (2026-09-05).** `M_V2_Water` transcribes `Water_Old`'s three passes,
+  read from the shipped draw functions and the SDK programs: black base (no diffuse term), the
+  DUDV warp on the Refraction pin (`RM_2D_OFFSET`) and as a reflection-normal tilt, roughness
+  0.05, and the cheap pass (`$fogcolor + cube × fresnel`, blended by distance) as Emissive and
+  coverage; every water instance binds a cube — the authored one, the map's VBSP probe (bound by
+  `stage_materials`' back-fill, LMG water fakes included), else `engine/defaultcubemap`.
+- **L — water raises events.** *Named modernizations* "splash on the water-level transition" and
+  "vphysics buoyancy". The splash is `client.dll FUN_10099630`'s rule — big on
+  `waterLevel 0 → ≥1` with `velocity.z < −200 in/s`, wade while `0 < level < 3` above 50 in/s on a
+  `5.0 − horiz·7.8e-5` s cooldown — bound to `UpdatePlayerWater`'s transition, because the port has
+  no draw hook and the transition *is* the event; the fluid controller's own `FUN_10151150` is
+  `PhysicsSplash` with both `DispatchEffect` calls stripped and its numbers are deliberately not
+  reproduced. Sounds key off the classified level, never the surface material (the pier's foam
+  cards bind `PM_default`); at level ≥ 2 a four-phase counter whose phase 0 is silent means three
+  wading steps in four sound (`1011e940`'s `DAT_1070b898 == 0 → return` guard; verdict D3's "every
+  fourth step" is superseded), and every level-1 step sounds. Buoyancy spends the authored `density`/`damping` on
+  Archimedes and linear damping, because vphysics is not in the corpus.
+- **M — a face lightstyle becomes a per-primitive brightness on CPD slot 6.** *Named
+  modernization* "lightstyle as brightness" (owner decision 4). VtMB swaps which lightmap PAGE a
+  styled face samples; Lumen replaced lightmaps project-wide, so there is no page to swap. A styled
+  face becomes its own `(material, style)` chunk tagged `elysium.style=<n>`, and the existing style
+  clock writes `LightStyleBrightness` (default 1.0 — a brightness of 0 is black) on every tagged
+  component. The **lowest** style wins, not the first slot: 18 of the pier's 34 foam cards name the
+  switchable 32 before style 1, so slot order would have split one waterline in two.
+- **N — the four standing calls.** `WaterMurkiness` stays wired (*named modernization*: no shipped
+  VtMB shader registered `$watermurkiness`, four units author a non-default value, un-wiring puts
+  nothing in its place); the `$bumpoffset` scroll is honoured though `Water_Old` never read the
+  register (*named divergence*, owner decision 3 — authored intent over 2004 result);
+  `waterbigsplash_emitter` is read from the retail pack member because the UP copy is an
+  authored-empty stub (*named divergence*, one-key `RETAIL_PROVENANCE_DIVERGENCE_UNITS`); and
+  `sm_pier_1` stays on the UP recompile (*named divergence*, owner decision 1) with **both** lost
+  leaf annotations derived rather than read — `0x200`'s set is `⋃PVS(water clusters)`, `0x800` is
+  the precipitation render mask and no rain gate may key on it for that map.
+
+**Scope, named.** Water look, water state and the events water triggers are this pass's. Player
+water **movement** — `WaterMove`, the swim/tread animation intent, the camera water band — is not,
+by owner call; it stays on the substrate tier until a `run play` witness spends `sp_soc_3`'s basin.
+
+**The gap list, G1–G26, each dispositioned.**
+
+| Gap | Disposition |
+|---|---|
+| **G1** the pier drew no water surface | ruled out on 2026-09-05 (ruling O): VtMB draws nothing on the `%compilenodraw` volume either — the pier's ocean is the `water/blackwater` card, which now samples the map's compiled probe through its animated normal. The volume, fog and events stay (`importers/materials.py` `_apply_compile_water_reroute` for the master; `map_geometry.compile_water_predicate` = drawn water) |
+| **G2** no cubemap bound to a water face | fixed in `importers/materials.py` (`_water_default_cube`, the probe back-fill in `stage_materials`) + `pipeline/unreal/make_v2_materials.py` (the cheap pass samples `EnvMap`) — ruling O: water always binds a cube; the `env_cubemap → Lumen` rule is for lit surfaces |
+| **G3** the 29-frame DUDV reached no parameter | fixed in `pipeline/unreal/make_v2_materials.py` (`DuDvMapFrames`, `UseAnimatedDuDvFrames`, `DuDvFrameRate/Count`, `Graph.normalize`, `T_V2_DefaultDuDvFrames`) + `importers/materials.py` (the proxy binds the DUDV lane on the water family) |
+| **G4** "resolved water parameters destroyed upstream" | reframed then fixed: the values were never lost (patched instances inherit through the parent instance chain); the gap was graph wiring, and `RefractAmount`/`ReflectAmount`/`BaseReflectFract`/fog/scroll are all wired in `make_v2_materials.py`. The cheap/expensive LOD distances are dropped and named |
+| **G5** the ocean card's envmap knobs and mip collapse | fixed in `importers/materials.py` + `make_v2_materials.py` (`EnvMapContrast` on the Lit pair), `formats/texture_glb/decode.py` (the mip-chain recovery, both pier probes) and `materials.py::_record_authored_then_removed` (the two commented keys recorded, not consumed) |
+| **G6** the foam cards' lightstyles | fixed in `importers/map_geometry.py` (the `#style<n>` split) + `asset_names.brush_slot_style` + `pipeline/unreal/bake_map.py` + `Source/ElysiumUE/Public/ElysiumFog.h` (`StyleFromSlotNames`, `StampUnstyled`) + `Private/Visual/ElysiumLightRig.cpp` (`AddStyledPrimitive`) + `Private/Visual/ElysiumMapVisuals.cpp` (`RegisterRuntimeBrush`) + `make_v2_materials.py` — ruling M. Two carriers: a world/sky chunk takes its style off the actor tag the bake writes, a BRUSH ENTITY (the pier's 17 `objects/surf` foam bodies, which is all of G6's motivating geometry) off its own mesh's `_style<n>` slot names, because the bake never places a brush mesh |
+| **G7** the `fluid { }` block | fixed in `importers/map_geometry.py` (`water.volumes[].fluid`) + `Public/ElysiumWaterVolumes.h` (`FElysiumWaterFluid`, the buoyancy trio, `TickFluidBodies`) + `bake_map_v2.py::_place_water` — ruling L |
+| **G8** the hub's `Sewer Scheme` triggers | ruled out as an implementation gap because the entity-I/O lane already fires staged outputs; what remains is the U7 game witness (`elysium_io_history`, `elysium_audio_state`) |
+| **G9** the near-water leaf set | fixed in `importers/map_visibility.py` (`pvs_union`) + `map_geometry._near_water_boxes` + `ElysiumWater::FindNearVolumeAt` — derived from the PVS, never read off the bit (ruling N) |
+| **G10** `leafWaterDataID` and the leaf boxes | fixed in `importers/map_geometry.py` (`leafBoxesCm`) → `FElysiumWaterVolume::LeafBoxesCm` |
+| **G11** `surfaceFogVolumeID` | published on `water.faces[]` but not relied on — ruled out as the underside key because the engine forces `0xFFFF` on non-WARP faces and the values exist only in the UP recompile; ruling E keys off the face plane instead |
+| **G12** `origFace` as the authored quad | ruled out as a mesh source: it is the pre-CSG brush face (`originalFaces[].area` 0.0 on all 2,182 rows; 26.5 % of multi-shard groups reconstruct within 10 %). Kept as a shard grouper; the area pin uses `faces[].area` |
+| **G13** `numPrims`/`firstPrimID` misdecoded | fixed in `formats/map_glb/lumps.py` (the `dface+96` split, `smoothingGroups` deleted) + `decode.py` (`primitives[].typeName`) + `map_geometry.py` (`water.faces[].primitive`); lump 38 is positions only, so UV0 is re-derived from texinfo |
+| **G14** baked lighting on the pier's water | ruled out because Lumen replaces lightmaps project-wide — there is no lightmap lane to feed, the same fact ruling M rests on |
+| **G15** the VTF `NORMAL` bit | fixed in `importers/textures.py` (`vtf_flag_names`, `flagNames`/`unnamedFlagBits`); a normal-flagged role conflict stages one asset and no `_linear` twin. Tie-breaker only, never an sRGB oracle |
+| **G16** `$bottommaterial` misdecoded | decoder fixed in `formats/material_glb/` (`materialReferences[]`, seam 1.2.0); the material-level underside rule it implied is **retired** for the per-face rule (ruling E), recorded per unit as `bottomMaterialNotAnUndersideSwitch` |
+| **G17** the `materialtable` water index | fixed in `importers/map_geometry.py` (`materialTableWaterIndex`) — 17 on the pier, null on the hub, which is the honest answer |
+| **G18** the compiler's convex decomposition | fixed in `importers/map_geometry.py` (`pieces`) → `FElysiumWaterVolume::Pieces`, tested by `FindVolumeAt` ahead of `Brushes` |
+| **G19** `water.leafMinDist` | ruled out because the engine never loads lump 46 (in no `CMapLoadHelper::LoadLump` call site; length 0 in retail on both maps) and it is derivable from the staged hull. Ruling G |
+| **G20** no lane for global wetness | ruled out because the lane exists end to end (`logic_auto` → `FadeGlobalWetness` → `FElysiumWeatherState` → `MPC_ElysiumEnvironment.GlobalWetness`, with a regression test). No *water* material reads wetness, deliberately — that is roadmap 7.9's contract |
+| **G21** no lane for `fluid.currentvelocity` | fixed in `importers/map_geometry.py` → `FElysiumWaterFluid::CurrentVelocityCm`; a map that authors a current no longer loses it silently |
+| **G22** the 36-way texdata split | fixed (published) as `water.faces[].texdata` |
+| **G23** the visibility sub-unit unpaid | fixed in `importers/map_visibility.py` — its first reader, and the derivation of G9 |
+| **G24** retail-only pier water data | ruled by the owner (decision 1): the port stays on the UP recompile; the two extra retail brushes are inert (`MASK_WATER` tests the leaf, not the brush) and both lost annotations are derived — ruling N |
+| **G25** sky brush hulls inside the play volume | fixed in `exporters/UE_map_sidecars.build_entities` + `importers/map_collision.py`: sky-entity hulls are not composed into world collision |
+| **G26** `faces[].area` unread | fixed in `importers/map_geometry.py` (`area`, `areaCm2`, `meshed_area_cm2`); the corpus test compares vbsp's area against the meshed area per face and per section (worst face 3e-5, every section 1e-7) |
+
+**Lane changes.** Decoders: `formats/map_glb/lumps.py` + `decode.py` + `model.py` (the `dface+96`
+split, `primitives[]`'s `typeName`/`reachedBy`/`vertexAttributes`, map seam 1.1.0);
+`formats/material_glb/` + `exporters/material_glb.py` + `validation/material_glb.py`
+(`materialReferences[]`, material seam 1.2.0, the `.tth` probe-stem suffix);
+`formats/texture_glb/decode.py` (the mip-chain recovery) and `importers/textures.py` (the VTF flag
+names and the normal tie-breaker). Map stage: `importers/map_geometry.py` (`MANIFEST_VERSION` 11,
+`section_key`/`split_section_key`, `face_underside`, `face_light_style`, `water.faces[]`, the four
+new volume fields, `meshed_area_cm2`), the new `importers/map_visibility.py`,
+`exporters/UE_map_sidecars.py` (the `%compilewater` nodraw exemption, the sky-hull ruling) and
+`importers/map_collision.py`. Materials: `importers/materials.py` (the `_Underside` twin and
+`undersideAsset`, `effective_family` + the `%compilewater` reroute, `EnvMapContrast`,
+`_record_authored_then_removed`) and `pipeline/unreal/make_v2_materials.py` + `matgraph.py`
+(`GRAPH_VERSION` 11, `DuDvMapFrames` + `T_V2_DefaultDuDvFrames` + `Graph.normalize`,
+`LIGHT_STYLE_CPD_SLOT = 6`). Bake: `bake_map.py` (`chunk_style_suffix`/`parse_chunk_style`/
+`chunk_actor_tags`, `set_fog` stamping slot 6), `bake_map_v2.py` (`_place_water`'s four fields,
+`WATER_ACTOR_SHAPE` 2, `_V2Material.slot_asset` resolving the twin) and `bake_verify.py`
+(`_verify_water_section_bindings`, `chunk_bound_materials`). Runtime: `Public/ElysiumWaterVolumes.h`
++ `Private/Visual/ElysiumWaterVolumes.cpp` (`FElysiumWaterFluid`, `Pieces`/`LeafBoxesCm`/
+`NearBoxesCm`, `DecideSplash`, the buoyancy trio, `TickFluidBodies`, `OnSplash`),
+`Public/ElysiumFog.h` (`ElysiumLightStyle`), `Private/Visual/ElysiumLightRig.*` +
+`ElysiumMapVisuals.*` (`AdoptStyledPrimitives`), `Public/ElysiumMapActor.h` +
+`Private/Map/ElysiumMapActor.cpp` (`UpdatePlayerWater(DeltaSeconds)`, `RaiseWaterSplash`,
+`PlayPlayerWaterFootstep`, `PlayerWaterLevelNow`, `IsPlayerNearWater`) and the new
+`Private/Audio/ElysiumWaterAudio.*`. Effects: `exporters/particle_glb.py`
+(`RETAIL_PROVENANCE_DIVERGENCE_UNITS`).
+
+**Measured (2026-09-04).** Corpus material stage over all 19,125 units, 0 failures; 108
+`_Underside` twins imported; 27 instances parent directly to `M_V2_Water` (was 24 — the three the
+`%compilewater` reroute moved). Texture import 607 imported, 0 failed, with the pier's two probes
+recovering their chains (`c-1241_22_4950` 1 → 8 mips, `cubemapdefault` 1 → 6) and `sm_hub_1`'s
+untouched at 6 — exactly the pier-only scope the census measured. Staged manifests at
+`MANIFEST_VERSION` 11: `sm_hub_1` 47 water faces / 24 underside / 1 volume / 2 bound water sections
+/ 1 style; `sm_pier_1` 50 / 18 / 1 / 3 / 2 styles over 211 styled groups; `sp_soc_3` 62 / 27 / 1 /
+3 / 2 styles; `sp_tutorial_1` 0 water, 110 styled groups, 5 styles tagged; `sm_pawnshop_1` 0 and 0.
+`MI_sewer_water` proves G3 end to end on disk (`DuDvMapFrames` + `NormalMapFrames`,
+`UseAnimatedDuDvFrames` true, `DuDvFrameCount 29` / `DuDvFrameRate 30`, `Underside: false`), with
+`MI_sewer_water_Underside` parented to it carrying `Underside: true` and nothing else — contract
+1's shape exactly.
+
+**One defect found and fixed in landing.** The corpus material import logged 8 `Failed to compile
+Material Instance with Base M_V2_Water … SingleLayerWater materials must be opaque or masked` on
+`MI_cheap_water` and `MI_invisible_water`. The staged manifest was correct (both rows Opaque) and
+each saved asset's *last* compile carried no warning: the warnings are a transient the re-parent
+opens — `make_material_instance` moved the parent while the on-disk asset still carried the
+previous run's Translucent override, and that write alone compiles. Fixed by landing the entry's
+overrides before the parent moves. It only ever fires for a unit whose master changed, which is why
+nobody hit it before ruling K existed and why a re-run cannot reproduce it; pinned by a unit test
+verified to fail without the fix.
+
+**Open, named.** (i) **Phase 3 must run the R7.3 generator** for the four water roots —
+`uv run elysium run editor -- -run=pythonscript -script=pipeline/unreal/make_root_systems.py
+-RootSystemStaged=<staged.json> -RootSystems=waterbigsplash_emitter,watersplash_emitter,
+waterdrops_timer,drip_emitter -AllowCommandletRendering` (the recipe is written into
+`docs/project/effects_authoring.md`). All four trees are proven to resolve with zero unresolved
+children and zero missing textures; until it runs, `RaiseWaterSplash` stands the floor system
+rather than failing, by design. Phase 3 must also regenerate the ten V2 masters (`GRAPH_VERSION`
+11) or the recipe stamp silently no-ops every graph change above, and re-stage the maps after
+`import materials` — `verify_water` reads the manifest fresh off disk. (ii) **`water.Scrape` has no
+caller** — it is a physics friction event and waits on the whole-game impact/scrape lane. Water
+FOOTSTEPS are not in that position: VtMB takes them off a millisecond timer in the movement code
+(`1011e940`, `m_flStepSoundTime`), not off an animation notify, so
+`AElysiumMapActor::UpdatePlayerWaterFootsteps` runs that timer at the tail of `UpdatePlayerWater`
+and calls `PlayPlayerWaterFootstep` itself. A real locomotion step producer should call that
+consumer directly when it lands, retiring this clock rather than running a second one beside it. (iii)
+**U7 and U8** need the game and the editor respectively (`water_data_census.md` §9). (iv)
+`player/pl_wade2.wav` is **settled, not open**: an index of every VPK plus every loose override
+(67,469 packed entries, 78,538 files) carries no `pl_wade*` — the literal names a Half-Life 2 asset
+Troika never packed, so leaving the water is silent here because it was silent in 2004.
 
 **R7.2 — decals on the V2 lane (2026-09-03).** A decal is a *projection*, and Unreal makes that a
 material domain, which is the one material property an instance cannot override. So the lane is

@@ -154,6 +154,7 @@ def build_document(model) -> tuple[dict, bytes]:
         "blocks": model.blocks,
         "proxies": proxies,
         "textureBindings": model.texture_bindings,
+        "materialReferences": model.material_references,
         "patch": model.patch,
         "patchOf": model.patch_of,
         "surfaceProperty": model.surface_property,
@@ -165,8 +166,8 @@ def build_document(model) -> tuple[dict, bytes]:
         "coverage": {
             "mapped": [
                 "identity", "sourceResolution", "shader", "parameters", "blocks", "proxies",
-                "shaderResolution", "textureBindings", "dependencies", "comments", "anomalies",
-                "omissions", "patchOf",
+                "shaderResolution", "textureBindings", "materialReferences", "dependencies",
+                "comments", "anomalies", "omissions", "patchOf",
             ],
             "byteLedger": model.byte_coverage,
             "unresolved": model.unresolved,
@@ -209,12 +210,14 @@ def write_glb(document: dict, binary: bytes, destination: Path) -> None:
     os.replace(temporary, destination)
 
 
-def _map_probe_stems(index: dict, map_name: str, read_bytes) -> frozenset[str]:
-    """Every `.tth` stem one map's PAKFILE carries, as `$envmap` values name them.
+def _map_probe_stems(index: dict, map_name: str, read_bytes, suffix: str = ".tth") -> frozenset[str]:
+    """Every `<suffix>` stem one map's PAKFILE carries, as a patched value names them.
 
     A patched material's own `$envmap` override names its baked probe the same way the texture
     seam's `source_keys` does -- `maps/<map>/<stem>`, no `materials/` prefix -- so this is that
-    same PAKFILE enumeration, filtered to one map and to stems alone.
+    same PAKFILE enumeration, filtered to one map and to stems alone. `suffix` selects the family:
+    `.tth` for the probe a texture value names, `.vmt` for the material a `$crackmaterial` or
+    `$bottommaterial` names in its own map's compiled copies.
     """
 
     from elysium_pipeline.formats.map_glb.pakfile_index import pakfile_members
@@ -224,7 +227,7 @@ def _map_probe_stems(index: dict, map_name: str, read_bytes) -> frozenset[str]:
     # patched material's own directory, e.g. `plaster/`, is part of its stem). `rsplit('/', 1)`
     # flattened those subdirectories away and skipped the lower-casing, so it could produce a stem
     # `$envmap` never actually binds to.
-    prefix, suffix = "materials/", ".tth"
+    prefix = "materials/"
     members = pakfile_members(index, read_bytes=read_bytes).get(map_name, ())
     stems = set()
     for member in members:
@@ -243,12 +246,13 @@ def export(
     *,
     read_bytes=None,
     texture_exists=None,
+    material_exists=None,
 ) -> Path:
     closure = load_source_closure(index, material_path, read_bytes=read_bytes)
+    normalized = normalize_material_path(material_path)
+    map_name = normalized[len("maps/"):].split("/", 1)[0] if normalized.startswith("maps/") else None
     if texture_exists is None:
-        normalized = normalize_material_path(material_path)
-        if normalized.startswith("maps/"):
-            map_name = normalized[len("maps/"):].split("/", 1)[0]
+        if map_name is not None:
             probe_stems = _map_probe_stems(index, map_name, read_bytes)
 
             def texture_exists(path: str) -> bool:
@@ -256,8 +260,22 @@ def export(
         else:
             def texture_exists(path: str) -> bool:
                 return f"materials/{path}.tth" in index
+    if material_exists is None:
+        # `$bottommaterial` and its three siblings name a material, so the answer is the member
+        # the engine would open for it: an install VMT, or -- for a compiled copy naming another
+        # compiled copy of the same map (`$crackmaterial` on every patched `break_glass_*`) -- a
+        # member of that map's own PAKFILE, which is where `source_keys` finds it too.
+        material_stems = (
+            _map_probe_stems(index, map_name, read_bytes, ".vmt")
+            if map_name is not None else frozenset()
+        )
 
-    model = decode_material(closure, texture_exists=texture_exists)
+        def material_exists(path: str) -> bool:
+            return f"materials/{path}.vmt" in index or path in material_stems
+
+    model = decode_material(
+        closure, texture_exists=texture_exists, material_exists=material_exists
+    )
     document, binary = build_document(model)
     from elysium_pipeline.validation import material_glb as validation
 

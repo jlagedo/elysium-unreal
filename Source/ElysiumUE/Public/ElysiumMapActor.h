@@ -6,6 +6,7 @@
 #include "ElysiumAnimationIntent.h" // FElysiumAnimationSelection — returned by value reference
 #include "ElysiumClipMovement.h"   // FElysiumBaseClipCycle / FElysiumClipMovementPath — by value
 #include "ElysiumEnvironment.h"    // FElysiumSkyDef — a plain by-value member
+#include "ElysiumWaterVolumes.h"   // ElysiumWater::ESplash — the splash this actor raises
 #include "ElysiumWorldServices.h"  // the four interfaces this actor implements
 #include "ElysiumMapActor.generated.h"
 
@@ -505,6 +506,33 @@ public:
 	virtual FString ActiveSchemeRel() const override;
 	virtual float OutputLeadSeconds() const override;
 
+	/**
+	 * R7.4 (verdict D3/D4): the player's water footstep. `Surfaces/Water/Step*` at classified water
+	 * level 1, `Surfaces/Wade/Step*` at level >= 2 with that pool's one-in-four silent phase
+	 * (`vampire.dll 1011e940`) — keyed off the LEVEL this actor already classifies, never off the
+	 * surface material under the foot, because the pier's foam cards bind `PM_default` and a
+	 * material-keyed rule would give the waterline dry footsteps.
+	 *
+	 * `StepIndex` is the body's own water-step counter and `bRightFoot` picks the `stepright` pool.
+	 * This runtime raises no step EVENT yet (the seam is stated in `ElysiumPlayerEntity.cpp`), so
+	 * `UpdatePlayerWaterFootsteps` runs VtMB's own step CLOCK — which is where `UpdateStepSound`
+	 * takes its steps from anyway, not from an animation notify — and a step producer that lands
+	 * later calls this directly.
+	 */
+	void PlayPlayerWaterFootstep(int32 StepIndex, bool bRightFoot);
+
+	/** The player's classified water level this frame, 0-3 — what the footstep rule keys off. */
+	int32 PlayerWaterLevelNow() const { return PlayerWaterLevel; }
+
+	/**
+	 * R7.4 (G9): is the player standing where the water can be seen from — ⋃PVS(water clusters),
+	 * the leaf set the stage derived from the visibility sub-unit rather than from the leaf's
+	 * `0x200` bit, which the Unofficial-Patch recompile of `sm_pier_1` destroyed. Settled once per
+	 * pre-move pass beside the level, so the audio seam reads a number rather than asking the
+	 * volumes a second question of its own. False on a map with no water.
+	 */
+	bool IsPlayerNearWater() const { return bPlayerNearWater; }
+
 	// IElysiumTravel.
 	// Both forward to the GI-scoped UElysiumMapSubsystem, which owns when the travel happens.
 	virtual void RequestLandmarkTravel(const FString& Map, const FString& Landmark,
@@ -757,7 +785,37 @@ private:
 	// already branches on it, and the level plus the volume's surface plane to the camera, whose
 	// clearance step keeps the view out of the plane's band. Runs pre-move, on the declared edge
 	// "player movement follows pre-move"; a map with no water actor publishes `None`.
-	void UpdatePlayerWater();
+	//
+	// R7.4 (G7, verdict D1/D3): it is also where the LEVEL TRANSITION lives, so the splash and the
+	// exit sound are raised from here — VtMB hooks its own splash inside `DrawModel`, which is a
+	// draw call the port has no equivalent of and does not need: the transition is the event.
+	void UpdatePlayerWater(float DeltaSeconds);
+	// The splash the water lane decided, for the player above and (through `OnSplash`) for every
+	// simulating body the water actor tracks: stand the generated `NS_<root>` at the point, and on
+	// an entry play `water.Impact` there too.
+	void RaiseWaterSplash(ElysiumWater::ESplash Kind, const FVector& LocationCm);
+	// The one-shot splash roots stood by `SpawnParticleRoot`, with the seconds left before each is
+	// killed. `SpawnParticleRoot` has no reaper of its own — a transient root lives until someone
+	// kills it — so the burst's own lifetime is carried here.
+	TArray<TPair<FElysiumEffectHandle, float>> PendingWaterSplashes;
+	void ReapWaterSplashes(float DeltaSeconds);
+
+	// The player's water state across frames: the level the last pass settled (which is what the
+	// transition is measured against), the pass's own clock, and the two splash timers D2 keeps per
+	// entity. The clock is accumulated from the tick rather than read off wall time (`cpp.md`).
+	int32 PlayerWaterLevel = 0;
+	bool bPlayerNearWater = false;
+	double PlayerWaterClockSeconds = 0.0;
+	double PlayerLastSplashSeconds = ElysiumWater::NeverSeconds;
+	double PlayerNextWadeSeconds = ElysiumWater::NeverSeconds;
+	// R7.4 (D3): VtMB's step clock for the water pools, run here because nothing else raises a
+	// step yet. `m_flStepSoundTime` counts down in milliseconds inside `CBasePlayer::PreThink` and
+	// `UpdateStepSound` (`vampire.dll 1011e940`) takes a step when it reaches zero; the counter is
+	// the wade pool's four-phase one and the foot alternates so the left/right pools both play.
+	void UpdatePlayerWaterFootsteps(float DeltaSeconds, const FVector& VelocityCmPerSec);
+	float PlayerStepSoundSeconds = 0.f;
+	int32 PlayerWaterStepIndex = 0;
+	bool bPlayerWaterStepRight = false;
 	bool bSuppressPlayerTouchIngress = false;
 	bool bPlayerTouchReconcilePending = false;
 

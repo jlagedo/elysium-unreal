@@ -69,13 +69,6 @@ counterfactual, batch-level voting.
 
 `.sprites` consumer: additive depth-tested billboards, StartOff spawnflag filtering.
 
-### 7.3 Water
-
-`water.volumes[]` (staged `LEAFWATERDATA` rows joined to `CONTENTS_WATER` brushes) →
-`M_V2_Water` Single Layer Water + Lumen reflections (no mirror cameras), one bake-placed
-`AElysiumWaterVolumes` actor per map. Ruling and detail: `docs/architecture/water-architecture.md`,
-`docs/project/seam_migration.md` → "R7.1 — water on the V2 lane".
-
 ### 7.5 Real reflections
 
 The `$envmap` RE and inventory are complete (`docs/vtmb/reflections.md`); presentation

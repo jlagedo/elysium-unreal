@@ -560,6 +560,20 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
         raise RuntimeError("parent not found: %s" % parent_path)
 
     package, name = split_asset_path(entry["assetPath"])
+    # R7.5: land this entry's base-property overrides on an EXISTING asset before its parent
+    # moves. Re-parenting alone compiles the instance, so a unit whose master changed is briefly
+    # its new master under its previous run's overrides -- and the `%compilewater` reroute makes
+    # that combination illegal: `water/invisible_water` and `water/cheap_water` author
+    # `$translucent 1`, were `M_V2_Unlit`/`M_V2_LitTranslucent`, and become `M_V2_Water`, which is
+    # Single Layer Water ("SingleLayerWater materials must be opaque or masked", six warnings on
+    # the 2026-09-04 corpus import, all naming an asset that was correct by the time it saved).
+    # `_apply_base_property_overrides` states every flag from the manifest, so running it first
+    # means no intermediate state is ever compiled and the call in its usual place below finds
+    # nothing left to change.
+    if unreal.EditorAssetLibrary.does_asset_exist(entry["assetPath"]):
+        existing = unreal.EditorAssetLibrary.load_asset(entry["assetPath"])
+        if existing is not None:
+            _apply_base_property_overrides(existing, entry["basePropertyOverrides"])
     mic = bl.make_material_instance(name, package, parent)
     if mic is None:
         raise RuntimeError("make_material_instance produced no asset")

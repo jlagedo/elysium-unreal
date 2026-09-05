@@ -43,6 +43,7 @@ Corpus-wide: 164 placed roots, 1,401 placements over 79 maps. Archetypes A1 + A5
 | A5 | Looping single-leaf plume | `SteamRelease_Constant_Emitter` | 2 / 212 | A narrow pale grey steam cone, ±10°, growing 13 to 100 cm, spreading then slowing, drifting up and rolling over 2 s. |
 | A8 | Timer chain → single leaf | `SteamRelease_Timer` | 6 / 41 | The same jet, puffing on a random 3.3–6.7 s period. |
 | A2 | Drip with collide → splash | `WaterDrops_Timer` | 41 / 126 | A dark 1:5 droplet falls fast, hits the floor, dies, and throws three tiny white points up in a cone while a ring decal lands. |
+| A11 | Runtime-triggered splash pair (no map placement) | `waterbigsplash_emitter` | 0 / 0 — fired by code, not placed | A wide translucent white-blue splash card fanning out low over the water on a hard vertical entry (`waterbigsplash`, `WaterSplashes.tga`); a lighter double flash of a soft cloud puff and a bright pinpoint burst on a shallower wade-through hit (`watersplash_emitter`'s `WaterSplash`/`Splash` pair, `cloud.tga` + `point_16.tga`). |
 | A3 | Precipitation with collide → splash | `rain_follow_emitter` | 2 / 30 | Sheeting rain around the player, splashing into expanding translucent rings, with one huge faint fog card. |
 | A6 | Frame leaves on a path (moth) | `Moth_Emitter` | 5 / 33 | Two moths flutter on slow wandering loops, wings flicking through four frames eight times a second. |
 | A9 | One-shot burst card | `MuzzleFlash_emitter_a` | 3 / 63 | A 38 cm white flash card, three at once, random roll, gone in 0.13 s. `_b` and `_up` are offset variants. |
@@ -54,6 +55,32 @@ Other roots on the working maps map onto these: `Fire2_emitter`, `d_animalism_pe
 `D_Potence_1BP_Emitter_Hand` → A1; `Rain_box_NoPrecip_emitter` → A5 (StartHidden); the remaining
 tutorial casts and `molotov_emitter` → A10.
 
+**Water (`water-complete.md` Phase 0, U1d/U3/F1-F3, off the three-map census).** `sp_soc_3` (not
+one of the three working maps) places `drip_emitter` 40 times — the single root on that map — which
+is `WaterDrops_Timer`'s own chain minus the outer timer/rate wrapper (`drip_emitter` spawns `Drip`
+directly; `WaterDrops_Timer` spawns `WaterDrops_Emitter` which spawns `Drip`), so it folds into A2
+rather than earning its own row. `sm_hub_1` places `WaterDrops_Timer` 36 of its 55 rows (the map's
+single most-placed root) and `sp_tutorial_1` places it too, both already inside A2's `41 / 126`
+count. `waterbigsplash_emitter` and `watersplash_emitter` (A11) are placed by **no** `env_particle`/
+`func_particle` entity on any of the five staged maps, `sm_pier_1` included — U1d re-ran the census
+against the pier and found zero water-drip/splash placements there, confirming U3/AUDIT G7: the
+water-entry splash is the client's water-level transition (`FUN_10099630`), not a map-authored
+effect, so its `NS_<root>` exists only because the C++ runtime looks it up by name on the event
+(D1, `AElysiumEffectActor`'s `NS_<Stem>` convention), never through `particleTrees{}` placement
+data. All four water trees resolve cleanly (zero unresolved children, zero missing textures) —
+`pipeline/tests/test_effects.py::test_the_four_water_splash_and_drip_roots_stage_with_their_sprite_leaves`.
+
+The splash pair's spawn rule is the water lane's, not this one's: big splash on `waterLevel 0 → ≥1`
+with `velocity.z < −200 in/s`, wade splash while `0 < level < 3` above 50 in/s on a
+`5.0 − horiz·7.8e-5` s cooldown, at `origin − vel.xy·0.035` snapped to the surface plane
+(`+RandomInt(0,8)` in z for the wade one) — `ElysiumWater::DecideSplash`, ruling L in
+`docs/architecture/water-architecture.md` §1.1. Reading `waterbigsplash_emitter` out of the retail
+pack member is **named divergence N.3** in the same section (the Unofficial Patch's own copy has
+its spawn token commented out, `// removed by wesp`), and it is the only key in
+`exporters.particle_glb.RETAIL_PROVENANCE_DIVERGENCE_UNITS`. Until the generator runs,
+`AElysiumMapActor::RaiseWaterSplash` stands the floor system rather than failing — by design, so a
+checkout without the roots still classifies, sounds and moves.
+
 ## Todo
 
 - [x] Checkpoint commit (f939f049); floor asset left at its committed state.
@@ -64,13 +91,78 @@ tutorial casts and `molotov_emitter` → A10.
 - [x] A1 `BarrelFireEmitter` — landed 2026-09-03 (three review rounds): base emitter `E_VtMBLeaf`, generated `NS_BarrelFireEmitter`, sprite masters on `ParticleColor`, refraction master on a DUDV offset with a per-particle strength, the effect actor binding `NS_<root>`. Sheets `sheets/a1_shipped_stripes/`, `sheets/a1_shipped_dark/`. Owner's in-game look on the hub barrels still to come.
 - [ ] A5 `SteamRelease_Constant_Emitter`
 - [ ] A8 `SteamRelease_Timer`
-- [ ] A2 `WaterDrops_Timer`
+- [ ] A2 `WaterDrops_Timer` — covers `drip_emitter` (`sp_soc_3`, 40 placements) too, same chain
+  minus the outer timer. Lane F staged both trees, sprites bound (`dropletfast.tga`,
+  `point_16.tga`), zero unresolved children: `pipeline/tests/test_effects.py::test_the_four_water_splash_and_drip_roots_stage_with_their_sprite_leaves`.
+  `-RootSystems=waterdrops_timer,drip_emitter` on the Phase 3 command below builds both from one
+  staged document.
+- [ ] A11 `waterbigsplash_emitter` / `watersplash_emitter` — the water-entry splash pair (owner
+  decision 5, verdict D1/F1). Not placed on any map; staged as a synthetic root pair (no
+  `env_particle` entity backs it) so the generator can still build `NS_<root>` for the C++ runtime
+  to look up by name. `waterbigsplash_emitter` only resolves because of the F2 retail-provenance
+  divergence (`exporters/particle_glb.RETAIL_PROVENANCE_DIVERGENCE_UNITS`) — the Unofficial
+  Patch's own copy is an authored-empty stub. Sprites bound: `waterbigsplash` → `watersplashes.tga`,
+  `watersplash` → `cloud.tga`, `splash` → `point_16.tga`.
 - [ ] A3 `rain_follow_emitter`
 - [ ] A6 `Moth_Emitter`
 - [ ] A9 `MuzzleFlash_emitter_a`
 - [ ] A10 `d_animalism_wolf_into_emitter2`
 - [ ] A7 `Airplane_Emitter`
 - [ ] Scale: every root on the three maps, bake + verify, play run, Measured lines, Settled entry, retire `NS_ElysiumParticle` and the slot fitting.
+
+### Water roots — the Phase 3 command (A2 + A11, four roots, one run)
+
+Lane F staged `E:/elysium-work/scratch/effects/staged.json` with `sm_hub_1`, `sm_pier_1`,
+`sp_soc_3`, `sp_tutorial_1`, `sm_pawnshop_1` and a synthetic `__water_runtime_splash__` entry
+carrying the two splash trees (built with `importers.effects.TreeBuilder.build` directly, since
+no map places them). Reproduce it with:
+
+```
+uv run python -c "
+import json
+from elysium_pipeline.exporters import UE_map_sidecars as MS
+from elysium_pipeline.importers import effects as fx
+from elysium_pipeline.importers import map_geometry as MG
+from elysium_pipeline.importers import textures as texture_lane
+from elysium_pipeline import paths
+
+MAPS = ['sm_hub_1', 'sm_pier_1', 'sp_soc_3', 'sp_tutorial_1', 'sm_pawnshop_1']
+out = {m: fx.stage_effects_for_join(MS.prepare_join(m), map_name=m) for m in MAPS}
+
+reader = fx.particle_unit_reader(paths.export_v2_root())
+read_texture = MG.texture_sidecar_reader(texture_lane.staging_root(paths.work_root()))
+builder = fx.TreeBuilder(reader, read_texture)
+trees = {}
+for key, name in (('waterbigsplash_emitter', 'waterbigsplash_emitter'), ('watersplash_emitter', 'watersplash_emitter')):
+    tree = builder.build(key, name)
+    trees[tree['root']] = tree
+assert not builder.unresolved_children and not builder.missing_textures
+out['__water_runtime_splash__'] = {'particleTrees': trees}
+json.dump(out, open('E:/elysium-work/scratch/effects/staged.json', 'w'), indent=1)
+"
+```
+
+(`read_texture` is the same real staged-sidecar reader `stage_effects_for_join` defaults to for a
+map -- not a fake path -- so the splash pair's sprites resolve to the same `/ElysiumBaked/Textures/
+particles/T_<stem>` asset paths the sprite masters actually import: `watersplashes`, `cloud`,
+`point_16` are staged already, per `E:/elysium-work/import/textures/particles/*.provenance.json`.)
+
+Then, from the repo root:
+
+```
+uv run elysium run editor -- -run=pythonscript ^
+  -script=pipeline/unreal/make_root_systems.py ^
+  -RootSystemStaged=E:/elysium-work/scratch/effects/staged.json ^
+  -RootSystems=waterbigsplash_emitter,watersplash_emitter,waterdrops_timer,drip_emitter ^
+  -AllowCommandletRendering
+```
+
+builds `NS_waterbigsplash_emitter`, `NS_watersplash_emitter`, `NS_WaterDrops_Timer`,
+`NS_drip_emitter` under `/Game/ElysiumGenerated/VFX/` in one run (`-RootSystems` matches on the
+normalized key, the tree's own `name`, or the asset name, casefolded, so the four tokens above are
+enough regardless of which map's placement staged a given tree). Needs `E_VtMBLeaf` landed (it is,
+off A1) and `-AllowCommandletRendering` for `IsReadyToRun()` to gate for real rather than refusing
+every root on `FApp::CanEverRender() == false`.
 
 ## Verdicts
 

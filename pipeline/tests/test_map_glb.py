@@ -174,6 +174,9 @@ def _face(
     disp_info: int = -1,
     plane: int = 0,
     lightmap_size=(1, 1),
+    orig_face: int = -1,
+    num_prims: int = 0,
+    first_prim: int = 0,
 ) -> bytes:
     record = bytearray(b"\0" * 104)
     struct.pack_into("<HBB", record, 32, plane, 0, 0)
@@ -182,7 +185,7 @@ def _face(
     struct.pack_into("<if", record, 72, -1, 16.0)
     struct.pack_into("<2i", record, 80, 0, 0)
     struct.pack_into("<2i", record, 88, *lightmap_size)
-    struct.pack_into("<iI", record, 96, -1, 0)
+    struct.pack_into("<i2H", record, 96, orig_face, num_prims, first_prim)
     return bytes(record)
 
 
@@ -239,6 +242,7 @@ def build_bsp(
     texdata_view_size: tuple[int, int] = (64, 64),
     prop_type: int = 0,
     prop_origin: tuple[float, float, float] = (16.0, 32.0, 48.0),
+    primitives: bool = False,
 ) -> bytes:
     builder = BspBuilder()
     builder.add(0, b'{\n"classname" "worldspawn"\n}\n\0')
@@ -258,7 +262,8 @@ def build_bsp(
     ]
     edges = [(index, (index + 1) % 4) for index in range(4)]
     surf_edges = [0, 1, 2, 3]
-    faces = [_face(first_edge=0, num_edges=4, tex_info=0)]
+    faces = [_face(first_edge=0, num_edges=4, tex_info=0,
+                   **({"orig_face": 0, "num_prims": 1, "first_prim": 0} if primitives else {}))]
     power, side = 2, 5
     if displacement:
         vertices += [
@@ -319,6 +324,12 @@ def build_bsp(
     builder.add(42, struct.pack("<4i", 1, 2, 3, 0))
     builder.add(46, struct.pack("<H", 0))
     builder.add(47, struct.pack("<h", -1))
+    if primitives:
+        # One `MATERIAL_TRIANGLE_STRIP` run: 4 indices into 4 positions, the shape VBSP compiles
+        # from `$subdivsize` on a water face.
+        builder.add(37, struct.pack("<5H", 1, 0, 4, 0, 4))
+        builder.add(38, b"".join(struct.pack("<3f", *point) for point in vertices[:4]))
+        builder.add(39, struct.pack("<4H", 0, 1, 2, 3))
     if inter_lump_fill:
         builder.pad(len(inter_lump_fill), inter_lump_fill)
     solids = [_ivps_solid()]
@@ -895,6 +906,51 @@ def test_a_faces_triangles_are_stated_once_by_the_index_accessor_and_located_by_
     mesh = document["meshes"][document["nodes"][0]["mesh"]]
     accessor = document["accessors"][mesh["primitives"][face["primitive"]]["indices"]]
     assert face["firstIndex"] + face["indexCount"] <= accessor["count"]
+
+
+def test_the_face_record_splits_the_three_fields_mod_loadfaces_reads_at_offset_96():
+    """G13: `dface+96` is `origFace` (i32) then `numPrims` (u16 @100) and `firstPrimID` (u16
+    @102), not one `smoothingGroups` dword. `Mod_LoadFaces` (`engine.dll FUN_200b73d0`) reads the
+    two words separately at `200b7648` / `200b7650` into `msurface+0x50` / `+0x52`; no reader in
+    the corpus takes a smoothing dword."""
+
+    _closure, model = decoded(build_bsp(primitives=True))
+    face = model.faces[0]
+    assert (face["origFace"], face["numPrims"], face["firstPrimID"]) == (0, 1, 0)
+    assert "smoothingGroups" not in face
+    plain = model.faces[1] if len(model.faces) > 1 else model.original_faces[0]
+    assert (plain["numPrims"], plain["firstPrimID"]) == (0, 0)
+
+
+def test_a_compiled_primitive_run_is_reachable_from_the_face_that_names_it():
+    """G13/A2: the run is what `Shader_DrawSurfaceDynamic` draws when `numPrims` is non-zero, so
+    the face reaches it by `firstPrimID`/`numPrims` and the record names its own index and vertex
+    slices. Lump 38 is positions only -- `Mod_LoadPrimVerts` zero-fills the runtime primvert and
+    copies 12 bytes -- so the unit says which attributes it carries and a consumer re-derives UV0
+    from the face's texinfo."""
+
+    _closure, model = decoded(build_bsp(primitives=True))
+    document, _binary = exporter.build_document(model)
+    root = extension_of(document)
+    face = root["faces"][0]
+    run = root["primitives"]["primitives"][face["firstPrimID"]]
+    assert face["numPrims"] == 1
+    assert (run["type"], run["typeName"]) == (1, "strip")
+    assert (run["firstIndex"], run["indexCount"]) == (0, 4)
+    assert (run["firstVert"], run["vertCount"]) == (0, 4)
+    assert run["firstIndex"] + run["indexCount"] <= len(root["primitives"]["indices"]["values"])
+    assert run["firstVert"] + run["vertCount"] <= len(root["primitives"]["verts"])
+    assert root["primitives"]["vertexAttributes"] == ["POSITION"]
+    assert root["primitives"]["reachedBy"] == "faces[].firstPrimID, faces[].numPrims"
+    assert root["census"]["primitiveBearingFaces"] == 1
+
+
+def test_a_map_with_no_compiled_tessellation_says_so_in_the_census():
+    _closure, model = decoded(build_bsp())
+    document, _binary = exporter.build_document(model)
+    root = extension_of(document)
+    assert root["census"]["primitiveBearingFaces"] == 0
+    assert root["primitives"]["primitives"] == []
 
 
 def test_a_static_props_placement_lives_in_its_node_and_not_a_second_time_in_the_record():

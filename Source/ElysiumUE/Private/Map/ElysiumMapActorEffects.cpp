@@ -196,21 +196,24 @@ FElysiumEffectHandle AElysiumMapActor::SpawnParticleRoot(const FString& Root,
 	{
 		ParticleTrees = LoadObject<UElysiumParticleTrees>(nullptr, ElysiumEffectAssets::Trees);
 	}
-	const FElysiumParticleTree* Tree = nullptr;
-	if (ParticleTrees)
-	{
-		// The folded key, or the bare root name a producer's data spells.
-		const FString Key = Root.StartsWith(TEXT("vtmb:particle:"))
-			? Root : TEXT("vtmb:particle:") + Root.Replace(TEXT("\\"), TEXT("/")).ToLower();
-		Tree = ParticleTrees->Trees.Find(Key);
-	}
-	if (!Tree)
+	// The folded key, or the bare root name a producer's data spells.
+	const FString Key = Root.StartsWith(TEXT("vtmb:particle:"))
+		? Root : TEXT("vtmb:particle:") + Root.Replace(TEXT("\\"), TEXT("/")).ToLower();
+	const FElysiumParticleTree* Tree = ParticleTrees ? ParticleTrees->Trees.Find(Key) : nullptr;
+	// R7.4 (G7): a by-root spawn whose root the effects lane generated needs no staged tree.
+	// `DA_ElysiumParticleTrees` is a code-producer table no bake writes today, and a generated
+	// `NS_<root>` carries its leaves as emitters -- `AElysiumEffectActor::WriteTree` skips the slot
+	// layout entirely for one (`bGeneratedSystem`). So the missing tree is only fatal when there is
+	// no generated system either; then the actor would stand the empty floor and draw nothing.
+	const bool bGenerated = AElysiumEffectActor::HasGeneratedSystem(Root);
+	if (!Tree && !bGenerated)
 	{
 		WarnEmitterOnce(TEXT("root|") + Root.ToLower(),
 			[&]
 			{
 				return FString::Printf(
-					TEXT("SpawnParticleRoot '%s': no tree in %s on map '%s'"),
+					TEXT("SpawnParticleRoot '%s': no tree in %s and no generated NS_<root> "
+						"on map '%s'"),
 					*Root, ElysiumEffectAssets::Trees, *MapName);
 			});
 		return FElysiumEffectHandle();
@@ -227,9 +230,9 @@ FElysiumEffectHandle AElysiumMapActor::SpawnParticleRoot(const FString& Root,
 		return FElysiumEffectHandle();
 	}
 	Actor->Classname = FName(TEXT("env_particle"));
-	Actor->Root = Tree->Root;
-	Actor->RootName = Tree->Name.IsEmpty() ? Root : Tree->Name;
-	Actor->Tree = *Tree;
+	Actor->Root = Tree ? Tree->Root : Key;
+	Actor->RootName = (Tree && !Tree->Name.IsEmpty()) ? Tree->Name : Root;
+	Actor->Tree = Tree ? *Tree : FElysiumParticleTree();
 	Actor->AttachType = AttachMode;
 	Actor->AttachBone = AttachName.IsNone() ? FString() : AttachName.ToString();
 	Actor->AttachPoint = AttachPoint;

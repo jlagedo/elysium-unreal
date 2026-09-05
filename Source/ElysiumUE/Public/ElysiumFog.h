@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/PrimitiveComponent.h"   // ElysiumLightStyle::StampUnstyled writes slot 6
 #include "ElysiumSurfaceParams.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
@@ -97,5 +98,105 @@ namespace ElysiumFog
 		Mid->SetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogStart, Data[SlotStart]);
 		Mid->SetScalarParameterValue(ElysiumSurfaceParamsDecal::Scalars::FogInvRange,
 			Data[SlotInvRange]);
+	}
+}
+
+// R7.4 (`water-architecture.md` ruling M, owner decision 4): VtMB's per-face LIGHTSTYLE, as the one
+// Custom Primitive Data slot past the fog block above.
+//
+// VtMB modulates a face's LIGHTMAP page by its style's pattern -- the pier's 34 `objects/surf` foam
+// cards carry style 1, 21 of them style 32 as well (G6) -- and the port has no lightmaps at all:
+// Lumen replaces them project-wide (owner decision 4). So the style survives as a BRIGHTNESS the
+// lit base colour and the emissive are multiplied by, driven from the same clock that already
+// animates a styled light (`UElysiumLightRig`'s `StyleTime` / `StylePatterns`), written onto the
+// styled chunk's primitive rather than onto a light.
+//
+// It is one shared block: `ElysiumFog` owns floats 0-5 on every world / sky / prop primitive and
+// this owns float 6, so a writer of either must never resize the array from the front.
+//
+// THE NEUTRAL VALUE HAS TO BE WRITTEN, ON EVERY PRIMITIVE, BY WHOEVER MAKES IT. A parameter with
+// `bUseCustomPrimitiveData` compiles to `Compiler->CustomPrimitiveData(index, MCT_Float)` and
+// nothing else (`UE_5.8 MaterialExpressions.cpp:8427`): the material's own default value is the
+// editor preview and is never a runtime fallback, and an unwritten slot reads 0
+// (`FPrimitiveUniformShaderParametersBuilder::CustomPrimitiveData` copies `Data.Num()` floats into
+// a zeroed array). The fog block underneath survives that convention because its unwritten 0 means
+// "not fogged"; a BRIGHTNESS of 0 is black. So slot 6 is stamped 1.0 by the bake
+// (`bake_map.set_fog`, on every component it places) and by the runtime
+// (`ElysiumLightStyle::StampUnstyled`, at each runtime component's construction), and only then
+// does `UElysiumLightRig`'s clock overwrite it on the styled ones.
+namespace ElysiumLightStyle
+{
+	// Immediately after ElysiumFog's six.
+	inline constexpr int32 SlotBrightness = ElysiumFog::NumFloats;
+	inline constexpr int32 NumFloats = SlotBrightness + 1;
+	static_assert(SlotBrightness == 6, "the bake and the material graph read slot 6 by number");
+
+	// What a face with no style, and a component the clock never reaches, must read.
+	inline constexpr float Unstyled = 1.f;
+
+	// The scalar parameter the Lit / LitTranslucent / Water / TwoTexture masters declare over slot
+	// 6 (`make_v2_materials.py`, mirrored in `ElysiumSurfaceParams.h`). Custom primitive data is
+	// authored as a named parameter with `use_custom_primitive_data` set, exactly as the fog
+	// triple is, so the name is part of the contract even though no material INSTANCE overrides it.
+	inline const FName ParameterName(TEXT("LightStyleBrightness"));
+
+	// Write the neutral brightness onto one runtime-created primitive. Call it wherever a component
+	// that can bind a V2 master is built (`UElysiumEntityBodies`'s brush / prop / phys-prop / NPC
+	// bodies, the wield sockets, the character stage) -- the bake's own components come out of
+	// `set_fog` already stamped. Idempotent, and it never touches slots 0-5, so it composes with
+	// `ApplySceneFog` in either order.
+	inline void StampUnstyled(UPrimitiveComponent* Component)
+	{
+		if (Component != nullptr)
+		{
+			Component->SetCustomPrimitiveDataFloat(SlotBrightness, Unstyled);
+		}
+	}
+
+	// The style a BRUSH-ENTITY mesh animates on, read off its material slot names (R7.4 G6).
+	//
+	// A world chunk carries its style in the chunk actor's own `elysium.style=<n>` tag, because the
+	// bake places that actor. A brush entity's mesh is never placed: the runtime builds one
+	// component per body when the entity world embodies it, so the fact has to travel on the ASSET.
+	// It already does -- the bake names each section's slot `safe_name(<group key>)` and a styled
+	// group's key ends in `#style<n>` (`map_geometry.section_key`), which folds to `_style<n>`. The
+	// Python twin of this rule is `asset_names.brush_slot_style`; `bake_map.py` also fails the
+	// bake loudly if an unstyled group key ever folds to the same shape.
+	//
+	// One primitive, one slot, so one style: a mesh whose sections disagree, or that mixes styled
+	// and unstyled sections, animates on none (0) rather than dragging unstyled geometry with it.
+	inline int32 StyleFromSlotNames(TConstArrayView<FName> SlotNames)
+	{
+		if (SlotNames.IsEmpty())
+		{
+			return 0;
+		}
+		int32 Agreed = 0;
+		for (const FName& SlotName : SlotNames)
+		{
+			const FString Text = SlotName.ToString();
+			int32 Marker = INDEX_NONE;
+			if (!Text.FindLastChar(TEXT('_'), Marker))
+			{
+				return 0;
+			}
+			const FString Tail = Text.Mid(Marker + 1);
+			if (!Tail.StartsWith(TEXT("style"), ESearchCase::CaseSensitive))
+			{
+				return 0;
+			}
+			const FString Digits = Tail.Mid(5);
+			if (Digits.IsEmpty() || !Digits.IsNumeric())
+			{
+				return 0;
+			}
+			const int32 Style = FCString::Atoi(*Digits);
+			if (Style < 1 || (Agreed != 0 && Style != Agreed))
+			{
+				return 0;
+			}
+			Agreed = Style;
+		}
+		return Agreed;
 	}
 }

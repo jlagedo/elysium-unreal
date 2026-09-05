@@ -89,3 +89,56 @@ def test_fire2_emitter_stages_to_its_two_live_leaves_and_barrelfireemitter_resol
     assert all(n["resolved"] for n in barrel["nodes"])
     assert barrel["stats"]["leafCount"] >= 1
     assert any(n["draws"] and n["sprite"] for n in barrel["nodes"])
+
+
+# --- water-complete Phase 0 F1/F2/F3: the four splash/drip roots resolve, sprites bound ----------
+
+
+def test_the_four_water_splash_and_drip_roots_stage_with_their_sprite_leaves():
+    """`water-complete.md` owner decision 5 / Phase 0 verdicts F1-F3: the water-entry splash pair
+    (`waterbigsplash_emitter`, `watersplash_emitter`), the hub's A2 archetype
+    (`waterdrops_timer`, 36 of 55 placements on `sm_hub_1`) and `sp_soc_3`'s `drip_emitter`.
+    `waterbigsplash_emitter` only resolves at all because of the F2 retail-provenance divergence
+    (`exporters/particle_glb.RETAIL_PROVENANCE_DIVERGENCE_UNITS`) -- the UP stub this corpus
+    export would otherwise carry stages to `role: "neither"`, zero leaves.
+    """
+    try:
+        root = paths.export_v2_root()
+    except RuntimeError:
+        pytest.skip("no ELYSIUM_WORK_ROOT on this machine")
+    for stem in ("waterbigsplash_emitter", "watersplash_emitter", "waterdrops_timer", "drip_emitter"):
+        if not (root / "particles" / f"{stem}.glb").is_file():
+            pytest.skip(f"no exported particle unit {stem}.glb under {root / 'particles'}")
+
+    reader = E.particle_unit_reader(root)
+
+    big_builder = E.TreeBuilder(reader, _texture)
+    big = big_builder.build("waterbigsplash_emitter", "WaterBigSplash_Emitter")
+    assert big["nodes"][0]["resolved"] is True
+    leaf = next(n for n in big["nodes"] if n["draws"])
+    assert leaf["name"] == "WaterBigSplash"
+    assert leaf["sprite"]["id"] == "vtmb:image:particles/watersplashes.tga"
+    assert big_builder.unresolved_children == [] and big_builder.missing_textures == []
+
+    splash_builder = E.TreeBuilder(reader, _texture)
+    splash = splash_builder.build("watersplash_emitter", "WaterSplash_Emitter")
+    assert splash["nodes"][0]["resolved"] is True
+    leaves = {n["name"]: n for n in splash["nodes"] if n["draws"]}
+    assert set(leaves) == {"WaterSplash", "Splash"}
+    assert leaves["WaterSplash"]["sprite"]["id"] == "vtmb:image:particles/cloud.tga"
+    assert leaves["Splash"]["sprite"]["id"] == "vtmb:image:particles/point_16.tga"
+    assert splash_builder.unresolved_children == [] and splash_builder.missing_textures == []
+
+    drops_builder = E.TreeBuilder(reader, _texture)
+    drops = drops_builder.build("waterdrops_timer", "WaterDrops_Timer")
+    assert drops["nodes"][0]["resolved"] is True
+    assert all(n["resolved"] for n in drops["nodes"])
+    assert any(n["draws"] and n["sprite"] for n in drops["nodes"])
+    assert drops_builder.unresolved_children == [] and drops_builder.missing_textures == []
+
+    drip_builder = E.TreeBuilder(reader, _texture)
+    drip = drip_builder.build("drip_emitter", "Drip_Emitter")
+    assert drip["nodes"][0]["resolved"] is True
+    assert all(n["resolved"] for n in drip["nodes"])
+    assert any(n["draws"] and n["sprite"] for n in drip["nodes"])
+    assert drip_builder.unresolved_children == [] and drip_builder.missing_textures == []
