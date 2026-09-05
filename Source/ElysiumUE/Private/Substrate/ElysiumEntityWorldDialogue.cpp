@@ -10,6 +10,7 @@
 #include "Substrate/ElysiumDialogueSession.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumLipTrack.h"
+#include "Visual/ElysiumExpressionPreparation.h"
 
 #include "Algo/Rotate.h"
 #include "HAL/IConsoleManager.h"
@@ -628,14 +629,13 @@ void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int
 	// The audio path this turn resolves to, with the extension swapped — the one place the two
 	// halves of the join have to agree, so it goes through the line service's own rule.
 	Binding.Track = ElysiumLip::Load(FElysiumLineService::DialogueLineSource(DlgSourcePath, LineId));
-	const FString Stem = FPaths::GetBaseFilename(Speaker->Model).ToLower();
-	if (!Stem.IsEmpty())
+	FString ExpressionDiagnostic;
+	Binding.Table = ElysiumExpressions::LoadPreparedPhonemes(*Speaker, ExpressionDiagnostic);
+	if (!ExpressionDiagnostic.IsEmpty())
 	{
-		Binding.Table = ElysiumExpressions::Load(Stem, TEXT("phonemes"));
-	}
-	if (!Binding.Table.IsValid())
-	{
-		Binding.Table = ElysiumExpressions::Load(TEXT("phonemes"), TEXT("phonemes"));
+		// BeginDialogueLipsync runs once per submitted line, never in the per-frame evaluator.
+		UE_LOG(LogElysiumWorld, Warning, TEXT("dialogue phoneme selection for %s: %s"),
+			*Speaker->DebugString(), *ExpressionDiagnostic);
 	}
 	// This speaker's own blend width, same read the cutscene driver makes. A body with no rig keeps
 	// the binding's modal default.

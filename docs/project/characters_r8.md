@@ -13,6 +13,13 @@
 
 ## 0. Verdict
 
+**Physics scope, owner ruling 2026-09-05:** R8 includes physics export/import and data
+conservation only. Preserve and verify geometry, solid/ledge ownership, constraints, all
+parameters, metadata, source gaps and provenance in the GLB and cooked source-data projection.
+Simulation-ready `UPhysicsAsset` construction, solver calibration, ragdoll activation and gameplay
+physics are deferred to PHYS1 and later physics work. They are not R8 completion or legacy-retirement
+prerequisites. This ruling supersedes earlier PHYS1 dependencies in linked plans.
+
 **R8 ports the rules and rebuilds the bake on a complete GLB corpus.** Producer corrections
 are part of the migration whenever comparison exposes a dropped datum; byte-ledger coverage
 alone does not prove that every decoded record has a published destination. Model schema 2.1
@@ -415,32 +422,40 @@ products.
 
 ### D8 — Cloth is re-pointed, hair is cooked for all and gated by the authored table, ragdoll reads the unit
 
-**Cloth**: `UElysiumClothBuildLibrary` and `DA_ClothTuning` are untouched; only the sidecar
-reader's input changes to the stage's converted garment record (inch→cm, Y reflection, winding
+**Cloth**: `UElysiumClothBuildLibrary` retains its simulation construction rules and gains
+standard unit addressing and saved-product verification. `DA_ClothTuning` is re-keyed to model
+IDs with its authored values preserved. The reader consumes the stage's converted garment record (inch→cm, Y reflection, winding
 reversed once, `rest_length_squared × 2.54²`, radii × 2.54, `rig_bone_name` on every name,
 bind-space colliders, `*_local` dropped). The stage **must re-key `render_maps` through
 `sourceVertices`** onto the V2 primitive order — the cloth record inside the unit is keyed to the
 legacy surface order the V2 mesh does not use. Acceptance is the build's own counters
 (`orphaned`, `root-bound`, `degenerate normals`, all 0 on the 49 today) diffed against the
-frozen 49-line log. The 5 character garments the legacy partition never reached come for free;
-the 6 scenery garments are recorded for the props lane and not built here.
+frozen 49-line log. The character garments the legacy partition never reached are retained.
+All six scenery units with garments use this same cloth build; five have a one-bone static source
+shape and therefore need a skeletal projection for cloth in addition to their static twin. Their
+source shape stays static, and material consumer routing includes both representations. The whole
+GLB census is 59 units and 60 garments; source shape must not exclude those five cloth owners.
 
 **Hair / secondary motion**: the stage resolves the child walk (bone indices → names) and the
 provisional unit mapping and writes a generated `DYN_<stem>` per body (the structs in
-`ElysiumHairDynamicsData.h`) for all 102; `InstallHairDynamics` composes the generated recipe
-with `DA_HairDynamics`, which stays the override **and the install gate** until LIFE9 thaws.
+`ElysiumHairDynamicsData.h`) for every source owner (107 units and 600 records in the expanded
+corpus); `InstallHairDynamics` composes the generated recipe
+with `DA_HairDynamics`, whose keys become model IDs while its values stay unchanged. It stays
+the override **and the install gate** until LIFE9 thaws.
 Breast rows are cooked into the asset's `Bodies` array and not installed (the six bouncy-boobs
 owner calls stay open where they are). `DYNM`/`BDYN` and their dead readers retire.
 
 **Procedural**: on the mesh (D7); the evaluator stays; the 24 prop tables go on the props'
 `SK_` in R8.4.
 
-**Ragdoll**: `physics-architecture.md`'s L0 (`RAGD` chunk) is deleted from the design; L1 reads
-the unit's `physics` (`phy_hulls` in `import_models.py` already converts the hulls). Building the
-`UPhysicsAsset` needs PHYS1's two calibrations (the solid transform frame and the constraint axis
-identity), which are scored, not guessed. **PHYS1 lands inside the R8 lane after R8.2 as its own
-roadmap row**; R8.2 owes it the staged `physics` payload and the builder slot. Until then
-`StartBodyRagdoll` keeps returning false, as today.
+**Physics data**: the unit's `physics` replaces the proposed `RAGD` transport. R8 imports a
+`UElysiumPhysicsData` source-data asset and roots it from the owning mesh metadata. It retains
+ordered solids/ledges, hull vertices and triangles, constraints, parameters, unknown fields,
+source-bone gaps and provenance. Fresh-process verification compares these records with their
+hashed GLB/stage inputs. Source gaps remain explicit; no body or constraint is dropped to make a
+simulation builder pass. Simulation-ready `UPhysicsAsset` construction, calibration, ragdoll
+activation and gameplay physics are deferred and cannot block R8. Existing simulation behavior
+is not expanded by this migration.
 
 → `seam_map_model.md` (garment re-key, domains rows), `physics-architecture.md` (L0 deleted),
 `plans/gameplay.md` PHYS1 (reads the unit), `plans/animation.md` LIFE9 (gate stated).
@@ -523,7 +538,8 @@ skeletal", verification.
 
 ### D12 — Scope fences
 
-Not in R8: viewmodels and hands (LIFE6), the ragdoll calibrations (PHYS1), hair widening and
+Not in R8: simulation-ready PhysicsAsset construction, solver calibration, ragdoll activation
+and gameplay physics (PHYS1 and later); viewmodels and hands (LIFE6), hair widening and
 breast rows (LIFE9 and its owner calls), Obfuscate (disciplines), `lip/`/`scenes/` deploy
 (R9.1), LOD import for skinned meshes (recorded: 517 character/weapon units carry >1 LOD and
 146 a shadow row; morphs exist on LOD 0 only, so LODs need `bGenerateMorphTargets` or a face that
@@ -789,10 +805,12 @@ export root" is an R8.5 acceptance line.
 
 → lands: the cast reads cooked content and the corpus only.
 
-### PHYS1 — after R8.2, its own row
+### PHYS1 — deferred simulation work, not an R8 dependency
 
-Builds `PHYS_<stem>` from the staged `physics` payload once the two calibrations are scored on
-the 289 canonical rigs; `StartBodyRagdoll` stops returning false; `prop_ragdoll` follows.
+Consumes the physics data that R8 exports, imports and verifies. Simulation-ready PhysicsAsset
+construction, solver calibration, ragdoll activation and gameplay physics have separate future
+acceptance. Their absence does not prevent R8 completion or deletion of superseded transports
+once their data-preserving replacements pass the applicable migration checks.
 
 ## 7. Risks, ranked
 
@@ -861,7 +879,7 @@ the 289 canonical rigs; `StartBodyRagdoll` stops returning false; `prop_ragdoll`
 | OC4 | Sequence dedup (legacy) vs positional walk | **legacy for parity**; reachability measured; revisit only if a dropped descriptor is reachable |
 | OC5 | Cinematic per-actor slices kept vs four skeletons from one unit | **kept**; later call |
 | OC6 | Hair cooked for all 102 with the authored gate vs authored-only | **cooked, gated** (LIFE9 owns widening) |
-| OC7 | PHYS1 inside the R8 lane vs after R9 | **inside, after R8.2**, its own row |
+| OC7 | Physics scope in R8 | **export/import and data conservation only** (owner ruling 2026-09-05); simulation-ready assets, calibration, ragdoll activation and gameplay physics deferred, never an R8 blocker |
 | OC8 | Expression tables: 250 assets + registry vs one asset | **250 + registry** |
 | OC9 | `mouthshader`: implement the per-slot flag vs bind and record | **bind and record** |
 | OC10 | 8.4a row: delete vs narrow to the dead branch | **verify in game, then delete** |

@@ -929,9 +929,11 @@ def set_phy_collision(static_mesh, phys):
 
     parts = []
     for verts, tris in phys["hulls"]:
+        from elysium_pipeline.importers.triangle_topology import collision_proxy
+        proxy_vertices, proxy_triangles = collision_proxy(verts, tris)
         buffers = unreal.GeometryScriptSimpleMeshBuffers()
-        buffers.vertices = [unreal.Vector(v[0], v[1], v[2]) for v in verts]
-        buffers.triangles = [unreal.IntVector(t[0], t[1], t[2]) for t in tris]
+        buffers.vertices = [unreal.Vector(v[0], v[1], v[2]) for v in proxy_vertices]
+        buffers.triangles = [unreal.IntVector(t[0], t[1], t[2]) for t in proxy_triangles]
         hull = unreal.DynamicMesh()
         result = unreal.GeometryScript_MeshEdits.append_buffers_to_mesh(
             hull, buffers, material_id=0)

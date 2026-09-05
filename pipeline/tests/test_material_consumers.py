@@ -71,6 +71,18 @@ def test_only_drawn_map_faces_add_static_usage(tmp_path):
     assert "vtmb:material:invisible" not in result
 
 
+def test_rigid_cloth_model_keeps_both_material_consumers(tmp_path):
+    material = "vtmb:material:cloth/table"
+    model = {"identity": {"asset": "vtmb:model:scenery/table", "family": "scenery", "shape": "static"},
+             "mdl": {"bones": [{}]}, "cloth": {"garments": [{}]},
+             "materialBindings": {"slots": [{"material": material}], "skinFamilies": [[material]]}}
+    path = tmp_path / "models/table.glb"
+    path.parent.mkdir()
+    path.write_bytes(encode_glb({"extensions": {"ELYSIUM_vtmb_model": model}}))
+    result = material_consumers.collect(tmp_path)[material]
+    assert result["skeletal"] == result["static"] == ["vtmb:model:scenery/table"]
+
+
 def test_skinned_twin_cannot_alias_an_authored_material_name():
     base, conflicting = entry("body"), entry("body_Skinned")
     with pytest.raises(ValueError, match="collision"):

@@ -590,9 +590,7 @@ by `uv run elysium test Play`.
 `docs/vtmb/physics-interaction.md`.* One owner for every simulated body — the prop (8.4, landed),
 the corpse, the carried chair and the explosion kick.
 
-- [ ] **[PHYS1 The ragdoll rig](plans/gameplay.md)** — the `.eskm` `RAGD` chunk, the
-  `UPhysicsAsset` bake, the death impulse; two frame calibrations gate the export. Retires LIFE5's
-  held-pose stand-in.
+- [ ] **[PHYS1 The ragdoll rig](plans/gameplay.md)** — deferred simulation-ready PhysicsAsset construction, solver calibration, ragdoll activation and gameplay handoff. Consumes R8's preserved GLB/cooked physics source data; none of these simulation features block R8 completion.
 - [ ] **[PHYS2 The physics hands](plans/gameplay.md)** — `weapon_physcannon` is *Hands*: HL2's
   grab wired to `+use`, over the existing `WhileHeld` session and the exported `PhysicsHand` cursor.
 - [ ] **[PHYS3 The rest of the physics world](plans/gameplay.md)** — `func_physbox`, the `phys_*`
@@ -611,7 +609,7 @@ tutorial's office chair carries and its sardine can throws, from real input.
 
 ## Pipeline backlog (PL)
 
-- [~] **[R8 Characters on the GLB corpus](plans/pipeline.md#r8-characters-on-the-glb-corpus)** — GLB staging, shared materials, native skeletal products and cooked mesh/clip/body/cast data verified across the corpus; quaternion storage fixed and 78,032,221 retained source keys verified. Native map/player/cinematic preparation and playback probes pass. Remaining projections, geometry/compressed-pose parity, production runtime cutover and legacy retirement remain open.
+- [~] **[R8 Characters on the GLB corpus](plans/pipeline.md#r8-characters-on-the-glb-corpus)** — native skeletal/animation and expression products, secondary-motion data, cloth and authored tuning migration are implemented; full tangent/buffer fidelity and runtime cutover remain under verification. Physics scope is export/import and data conservation only: source-data assets are implemented and a three-asset pilot passed fresh verification; complete corpus coverage remains required. Simulation-ready PhysicsAssets, solver calibration, ragdoll activation and gameplay physics are deferred and cannot block R8. Canonical static import, shared catalogues, applicable fidelity/cook/runtime checks and accepted legacy retirement remain open.
 
 - [x] **PL1–PL5d** — entity models, scripts/dialogue, use-icon atlas, NPC banks,
   schemes/vdata/cfg mirrors.

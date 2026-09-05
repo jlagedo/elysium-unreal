@@ -754,6 +754,10 @@ public:
 	// Stand this entity's body at its current origin/facing, playing the idle its disposition
 	// selects. Called from the leaf's Spawn(); no-op with no embodiment, no model, or bodies off.
 	void BuildBody();
+	/** Admission/attachment metadata only; the source Model write has already occurred. */
+	bool PrepareCharacterVisual();
+	void InvalidateCharacterVisualRequest();
+	void CompletePreparedCharacterVisual(uint64 Generation, const FString& ModelId);
 
 	// The animation seam, implemented once for every character.
 	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
@@ -794,8 +798,12 @@ public:
 	// there is; null for a bodiless character, which cannot be a parent.
 	virtual UPrimitiveComponent* GetAttachBody() const override { return Visual; }
 
-	// The model stem the clip manifest is keyed by: the model file's lowercased basename.
+	// Historical accessor name; returns the full native model ID derived from Model.
+	// The source Model spelling remains unchanged. Bare stems belong to preparation/debug only.
 	FString ModelStem() const;
+	// Visual metadata refresh after the map publishes prepared expression views. No entity I/O,
+	// gameplay state, clock or animation-event cursor is changed by this preparation hook.
+	void RefreshPreparedExpressions() { RefreshDispositionExpression(); }
 
 	// The sequence-event pass, implemented once for every character.
 	//
@@ -827,6 +835,17 @@ public:
 		FElysiumClipPhase& Out) const;
 
 protected:
+	virtual void InstallPreparedCharacterVisual();
+	virtual void OnPreparedVisualAttached() {}
+	void RestoreModelChildren();
+	uint64 CharacterVisualGeneration = 0;
+	struct FCarriedModelChild
+	{
+		TWeakObjectPtr<class USceneComponent> Component;
+		FTransform RelativeTransform;
+		FName Socket;
+	};
+	TArray<FCarriedModelChild> PendingModelChildren;
 	// Which of the three standing idles a disposition's stance set poses. Virtual because only the
 	// NPC chain carries VtMB's stance machine — the `+0x98` self-pointer that reaches it is set in
 	// `CAI_BaseNPCTroika`'s constructor, so the player has none. The base answer spreads the pick by
@@ -1654,6 +1673,7 @@ public:
 	// put; the same component remains the FElysiumAnimating visual used by choreo clip playback.
 	virtual void OnRuntimeModelChanged() override;
 
+	virtual void InstallPreparedCharacterVisual() override;
 	// The player's surface has exactly one writer — the pawn, from the camera's draw policy. This
 	// entity contributes only its own hide state and never touches the component's flags directly.
 	virtual void GateVisual() override;

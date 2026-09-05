@@ -88,7 +88,8 @@ from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import paths  # noqa: E402
-from elysium_pipeline import placed_models as PM  # noqa: E402
+from elysium_pipeline.asset_paths import baked_unit, corpus_path  # noqa: E402
+from pipeline.unreal import model_catalogue_views as model_views  # noqa: E402
 
 #: The staged pair's names and schema. Restated rather than imported: `importers.map_geometry`
 #: reaches numpy through the R3.2 producer, which this interpreter cannot load.
@@ -144,11 +145,11 @@ def underside_asset_path(surface_asset_path):
 #: The R1 model corpus (`docs/architecture/seam_map_model.md` -> "Import" -> "Identity and
 #: naming"), `importers.models.PACKAGE_ROOT`'s value restated for the same reason. Its C++ twin
 #: after this task's flip is `FElysiumContentPaths::BakedMeshes`.
-V2_MESH_PACKAGE = "/ElysiumBaked/Meshes"
-V2_SKIN_ASSET = "%s/DA_ElysiumPropSkins" % V2_MESH_PACKAGE
+V2_MESH_PACKAGE = "/ElysiumBaked/Models"
+V2_SKIN_ASSET = corpus_path("model", "DA", "PropSkins")
+V2_PLACED_ASSET = corpus_path("model", "DA", "PlacedModels")
 #: R6.3: the sway children of the imported `MI_` a detail model binds -- map-independent like the
 #: mesh they dress, so they live beside the corpus meshes and no map's prune scope reaches them.
-V2_DETAIL_MATERIAL_PACKAGE = "%s/Detail" % V2_MESH_PACKAGE
 #: The one static switch a sway child sets (`ElysiumSurfaceParams{Lit,Unlit}::Switches`).
 DETAIL_SWAY_SWITCH = "UseDetailSway"
 #: The tags the runtime buckets a detail actor by (`ElysiumBakedTags::Detail` / `DetailModel`).
@@ -160,12 +161,12 @@ TAG_DETAIL = "elysium.detail"
 TAG_SKY = "elysium.sky"
 #: The shape `_place_details` writes a group as -- bumped when the writer changes what it puts on
 #: the actor for the same staged rows (2: the R6.7 scope marker), so the level re-authors.
-DETAIL_ACTOR_SHAPE = 2
+DETAIL_ACTOR_SHAPE = 3
 #: `swayAmount` is a byte; the custom data float is its unit fraction.
 DETAIL_SWAY_FULL = 255.0
 #: R6.1: the per-blend children of the imported sprite `MI_` -- map-independent like the detail
 #: sway children, so they live beside the corpus and no map's prune scope reaches them.
-V2_SPRITE_MATERIAL_PACKAGE = "%s/Sprites" % mounts.BAKED
+V2_SPRITE_MATERIAL_PACKAGE = "%s/Materials" % mounts.BAKED
 #: The two static switches a sprite child sets (`SpriteParams.Switches`): the tint and the glow
 #: blend ride the quad's vertex colour, so no material is touched at runtime.
 SPRITE_SWITCHES = ("UseVertexColor", "UseVertexAlpha")
@@ -287,48 +288,21 @@ def bind(namespace):
     HOST = _Host(namespace)
 
 
-#: The decoded `DA_ElysiumPropSkins` table, read once per editor process.
-#: `None` until the first read; `{}` once read with the asset absent.
-_SKIN_TABLE = [None]
+#: Plain catalogue rows only; no process-long UObject roots.
+_SKIN_TABLE = {}
+_SKIN_MODELS = set()
+_PLACED_TABLE = {}
 
 
-def read_skin_table():
-    """`{stem: (family count, [{slot name: material asset path}])}` for the whole R1 corpus.
+def read_skin_table(selected_ids):
+    """Complete static/skeletal skin assignments keyed by model ID and representation."""
 
-    The table is map-independent -- it is authored by the model import lane in another process and
-    cannot change while a bake runs -- but walking it costs about a second, and a `MAP_BAKE_BATCH`
-    process was paying that per map for an identical answer. Cached for the process.
-
-    Deliberately plain Python: every value is a string or an int, never an `unreal` wrapper. A live
-    wrapper is a root for the editor's collector, and this cache outlives the `Bake` instance that
-    filled it -- holding the table's material objects here would pin a slice of the corpus for the
-    whole batch, which is exactly what `_release_map_packages` exists to prevent. The bake resolves
-    a path back to its material when it binds one (`_apply_v2_skin`).
-    """
-
-    if _SKIN_TABLE[0] is not None:
-        return _SKIN_TABLE[0]
-    table = {}
-    asset = unreal.EditorAssetLibrary.load_asset(V2_SKIN_ASSET)
-    if asset is None:
-        HOST.log("v2 skins: %s absent, placements keep their authored set" % V2_SKIN_ASSET)
-        _SKIN_TABLE[0] = table
-        return table
-    for model in asset.get_editor_property("models"):
-        stem = str(model.get_editor_property("stem"))
-        families = []
-        for family in model.get_editor_property("families"):
-            overrides = {}
-            for override in family.get_editor_property("overrides"):
-                material = override.get_editor_property("material")
-                if material is not None:
-                    overrides[str(override.get_editor_property("slot_name"))] = (
-                        material.get_path_name())
-            families.append(overrides)
-        table[stem] = (int(model.get_editor_property("family_count")), families)
-    HOST.log("v2 skins: %d model(s) with alternate families" % len(table))
-    _SKIN_TABLE[0] = table
-    return table
+    missing = set(selected_ids) - _SKIN_MODELS
+    if missing:
+        asset = unreal.EditorAssetLibrary.load_asset(V2_SKIN_ASSET)
+        _SKIN_TABLE.update(model_views.skin_view(asset, missing))
+        _SKIN_MODELS.update(missing)
+    return {key: value for key, value in _SKIN_TABLE.items() if key[0] in selected_ids}
 
 
 def bake_class():
@@ -357,10 +331,9 @@ def _build_class():
             self.sky_model = None      # bl.ObjModel for the miniature
             self.sky_blend = []
             self.v2_materials = {}     # face group key -> _V2Material (R5.4)
-            self.v2_skins = {}         # stem -> (family count, [ {slot: material path} ])
+            self.v2_skins = {}         # (model ID, representation) -> full skin families
             self.skin_materials = {}   # material path -> the loaded interface, this map only
-            self.placed_index = {}     # catalogue stem -> npc_index row
-            self.placed_index_version = 0
+            self.placed_index = {}     # model ID -> cooked placed-model row
             self.rest_labels = {}      # placement index -> the rest clip it was dealt
             self.detail_materials = {}  # imported MI_ path -> its MI_DetailSway_* child path
             self.sprite_materials = {}  # (imported MI_ path, blend) -> its MI_Sprite_* child path
@@ -450,31 +423,20 @@ def _build_class():
             return True
 
         def _load_placed_index(self):
-            """`npc/npc_index.json`, the catalogue that says which placed models have no static
-            equivalent and must stand on an authored rest pose instead of a bind-pose mesh.
-
-            Unchanged from the legacy lane: the catalogue, the rest-clip deal and the
-            `AElysiumPlacedModelActor` it feeds are the placed-model bake's, not this task's. Only
-            the placement records driving it come from the unit now.
-            """
-
-            path = os.path.join(HOST.OUT_ROOT, "npc", "npc_index.json")
-            if not os.path.isfile(path):
-                return
-            with open(path, "r", encoding="utf-8") as handle:
-                document = json.load(handle)
-            self.placed_index_version = int(document.get("manifest_version", 0))
-            self.placed_index = document.get("placed_models", {})
+            """Cooked model identities, representation decisions and ordered rest candidates."""
+            needed = {model_views.model_id(p.model_path) for p in self.geometry.placements}
+            missing = needed - _PLACED_TABLE.keys()
+            if missing:
+                asset = unreal.EditorAssetLibrary.load_asset(V2_PLACED_ASSET)
+                _PLACED_TABLE.update(model_views.placed_view(asset, missing))
+            if needed - _PLACED_TABLE.keys():
+                raise ValueError("placed model catalogue misses map references: " + str(sorted(needed - _PLACED_TABLE.keys())))
+            self.placed_index = {id: _PLACED_TABLE[id] for id in needed}
 
         def _load_v2_skins(self):
-            """The R1 corpus skin table, read once per process (`read_skin_table`).
+            """Read the merged static/skeletal cooked skin catalogue once per process."""
 
-            The V2 lane binds a placement's alternate skin from the same asset the running game
-            binds it from (`/ElysiumBaked/Meshes/DA_ElysiumPropSkins`), so a baked placement and a
-            runtime `skin` write can never disagree about what family 2 repaints.
-            """
-
-            self.v2_skins = read_skin_table()
+            self.v2_skins = read_skin_table({model_views.model_id(p.model_path) for p in self.geometry.placements})
 
         # ----------------------------------------------------------------------- materials
 
@@ -609,11 +571,11 @@ def _build_class():
             recipe["v2_materials"] = sorted(
                 {mat.slot_asset or mat.asset for mat in self.v2_materials.values()})
             recipe["props"] = sorted(
-                "%s/SM_%s" % (V2_MESH_PACKAGE, placement.stem)
+                model_views.static_mesh_path(placement.model_path)
                 for placement in self.geometry.placements
             )
             recipe["prop_skins"] = sorted(
-                "%s:%d" % (placement.stem, placement.skin)
+                "%s:%d" % (model_views.model_id(placement.model_path), placement.skin)
                 for placement in self.geometry.placements if placement.skin
             )
             recipe["placements"] = len(self.geometry.placements)
@@ -622,8 +584,11 @@ def _build_class():
             # graph bump) re-authors the level that binds it.
             recipe["details"] = [row.as_row() for row in self.geometry.details]
             recipe["detail_models"] = sorted(
-                "%s/SM_%s" % (V2_MESH_PACKAGE, model["stem"])
+                model_views.static_mesh_path(model["modelPath"])
                 for model in self.geometry.detail_models)
+            recipe["model_catalogues"] = {
+                path: bl.stored_recipe(path, producer="model-catalogues")
+                for path in (V2_PLACED_ASSET, V2_SKIN_ASSET)}
             recipe["detail_cull_cm"] = list(detail_cull())
             recipe["detail_actor_shape"] = DETAIL_ACTOR_SHAPE
             # R6.7: the miniature transform every sky-flagged row is placed through is the
@@ -692,15 +657,14 @@ def _build_class():
             cache = {}
             missing = {}
             for placement in self.geometry.placements:
-                mesh = cache.get(placement.stem)
-                if mesh is None and placement.stem not in cache:
+                id = model_views.model_id(placement.model_path)
+                mesh = cache.get(id)
+                if mesh is None and id not in cache:
                     mesh = unreal.EditorAssetLibrary.load_asset(
-                        "%s/SM_%s" % (V2_MESH_PACKAGE, placement.stem))
-                    cache[placement.stem] = mesh
+                        model_views.static_mesh_path(id))
+                    cache[id] = mesh
                 if not mesh:
-                    missing.setdefault(placement.stem, 0)
-                    missing[placement.stem] += 1
-                    continue
+                    raise ValueError("native static model is absent: " + model_views.static_mesh_path(id))
                 position = placement.position
                 if placement.sky:
                     position = tuple(
@@ -708,21 +672,19 @@ def _build_class():
                 # A miniature prop is never solid whatever its record says: it is scenery the
                 # player can never reach, and at 16x it would wall the map off.
                 solid = placement.solid_blocks and not placement.sky
-                catalogue = PM.model_stem(placement.model_path)
-                record = self.placed_index.get(catalogue)
-                if self.placed_index_version >= 7 and record is None:
-                    fail("placed model %s (%s) is absent from npc_index v%d"
-                         % (placement.stem, catalogue, self.placed_index_version))
+                record = self.placed_index.get(id)
+                if record is None or record["sourceAbsent"]:
+                    fail("placed model %s has no accepted cooked catalogue row" % id)
                     raise SystemExit(1)
                 # A model with no static equivalent stands on an authored rest pose instead of its
                 # bind-pose twin -- the placed-model lane's rule, unchanged; only the placement
                 # record driving it comes from the unit now.
-                use_skeletal = bool(record and not record.get("static_equivalent", False))
+                use_skeletal = not record["staticRestSuffices"]
                 actor = actors.spawn_actor_from_class(
                     unreal.ElysiumPlacedModelActor if use_skeletal else unreal.StaticMeshActor,
                     unreal.Vector(*position), unreal.Quat(*placement.rotation).rotator())
                 if not actor:
-                    continue
+                    raise ValueError("could not create placed model actor: " + id)
                 if use_skeletal:
                     component = self._configure_rest(actor, placement, record, mesh, solid)
                     if component is None:
@@ -735,7 +697,11 @@ def _build_class():
                         HOST.PROFILE_PROP_SOLID if solid else HOST.PROFILE_PICK_ONLY)
                 solid_count += 1 if solid else 0
                 if placement.skin:
-                    skinned += self._apply_v2_skin(component, mesh, placement)
+                    skinned += self._apply_v2_skin(component, placement, use_skeletal)
+                if use_skeletal:
+                    error = actor.refresh_garment_materials()
+                    if error:
+                        raise ValueError(error)
                 if placement.fades:
                     component.set_editor_property(
                         "ld_max_draw_distance", placement.fade_max_cm)
@@ -792,23 +758,22 @@ def _build_class():
             cache = {}
             missing = {}
             instances = components = swaying = sky_components = 0
-            for (stem, sky), rows in groups.items():
-                mesh = cache.get(stem)
-                if mesh is None and stem not in cache:
+            for (id, sky), rows in groups.items():
+                mesh = cache.get(id)
+                if mesh is None and id not in cache:
                     mesh = unreal.EditorAssetLibrary.load_asset(
-                        "%s/SM_%s" % (V2_MESH_PACKAGE, stem))
-                    cache[stem] = mesh
+                        model_views.static_mesh_path(id))
+                    cache[id] = mesh
                 if not mesh:
-                    missing[stem] = missing.get(stem, 0) + len(rows)
-                    continue
+                    raise ValueError("native detail model is absent: " + model_views.static_mesh_path(id))
                 actor = actors.spawn_actor_from_class(
                     unreal.ElysiumDetailPropActor, unreal.Vector(0.0, 0.0, 0.0))
                 if not actor:
-                    fail("details: spawn failed for %s" % stem)
+                    fail("details: spawn failed for %s" % id)
                     raise SystemExit(1)
                 component = actor.instances
                 component.set_static_mesh(mesh)
-                for slot, child in self._detail_sway_materials(mesh):
+                for slot, child in self._detail_sway_materials(mesh, id):
                     component.set_material(slot, child)
                 component.set_num_custom_data_floats(1)
                 component.set_cull_distances(int(round(start_cm)), int(round(end_cm)))
@@ -830,9 +795,9 @@ def _build_class():
                 if sky:
                     component.set_editor_property("visible_in_ray_tracing", False)
                     sky_components += 1
-                actor.set_editor_property("model_stem", stem)
-                actor.set_actor_label("Detail_%s%s" % (stem, "_sky" if sky else ""))
-                actor.tags = list(detail_actor_tags(stem, sky))
+                actor.set_editor_property("model_id", id)
+                actor.set_actor_label("Detail_%s%s" % (id.rsplit("/", 1)[-1], "_sky" if sky else ""))
+                actor.tags = list(detail_actor_tags(id, sky))
                 actor.set_folder_path("Sky/Details" if sky else "Details")
                 instances += len(rows)
                 components += 1
@@ -848,10 +813,10 @@ def _build_class():
                     len(self.detail_materials)))
             return instances, components
 
-        def _detail_sway_materials(self, mesh):
+        def _detail_sway_materials(self, mesh, model_id):
             """`[(slot index, MI_DetailSway_* child)]` for every slot of a detail model's mesh:
             the imported `MI_` the slot already binds, re-parented once through a child whose only
-            own value is `UseDetailSway = true`, authored under `V2_DETAIL_MATERIAL_PACKAGE` and
+            own value is `UseDetailSway = true`, addressed by model ID and source slot, and
             recipe-stamped on the parent path and the master's graph version. A slot whose master
             has no such switch is a named failure -- the weed would stand still with nobody
             saying why."""
@@ -860,12 +825,14 @@ def _build_class():
             for slot, entry in enumerate(mesh.get_editor_property("static_materials")):
                 parent = entry.get_editor_property("material_interface")
                 if parent is None:
-                    continue
+                    raise ValueError("detail model has an unbound material slot: " + model_id)
                 parent_path = parent.get_path_name().split(".", 1)[0]
-                child_path = self.detail_materials.get(parent_path)
+                slot_name = str(entry.get_editor_property("material_slot_name"))
+                key = (model_id, slot_name, parent_path)
+                child_path = self.detail_materials.get(key)
                 if child_path is None:
-                    child_path = self._author_detail_sway_material(parent, parent_path)
-                    self.detail_materials[parent_path] = child_path
+                    child_path = self._author_detail_sway_material(parent, parent_path, model_id, slot_name)
+                    self.detail_materials[key] = child_path
                 child = unreal.EditorAssetLibrary.load_asset(child_path)
                 if not child:
                     fail("details: sway material %s did not load" % child_path)
@@ -873,7 +840,7 @@ def _build_class():
                 out.append((slot, child))
             return out
 
-        def _author_detail_sway_material(self, parent, parent_path):
+        def _author_detail_sway_material(self, parent, parent_path, model_id, slot_name):
             master = parent.get_base_material()
             master_path = master.get_path_name().split(".", 1)[0] if master else ""
             switches = []
@@ -885,10 +852,10 @@ def _build_class():
                      "lives on M_V2_Lit / M_V2_LitTranslucent / M_V2_Unlit)"
                      % (parent_path, master_path or "no master", DETAIL_SWAY_SWITCH))
                 raise SystemExit(1)
-            name = "MI_DetailSway_" + bl.safe_name(
-                parent_path.replace(mounts.BAKED + "/Materials/", "").replace("/MI_", "/"))
-            child_path = "%s/%s" % (V2_DETAIL_MATERIAL_PACKAGE, name)
+            child_path = baked_unit(model_id, "MI", role="DetailSway", label=slot_name)
+            directory, name = child_path.rsplit("/", 1)
             recipe = {
+                "model": model_id, "slot": slot_name,
                 "parent": parent_path,
                 "master": master_path,
                 "master_recipe": bl.stored_recipe(master_path) if master_path else "",
@@ -896,7 +863,7 @@ def _build_class():
             }
             if self.tracker.register("materials", child_path, recipe,
                                      expected_class="MaterialInstanceConstant"):
-                child = bl.make_material_instance(name, V2_DETAIL_MATERIAL_PACKAGE, parent)
+                child = bl.make_material_instance(name, directory, parent)
                 if not child:
                     fail("details: could not author %s" % child_path)
                     raise SystemExit(1)
@@ -924,7 +891,7 @@ def _build_class():
             placed = glow = hidden = sky_placed = 0
             for row in rows:
                 values = sprite_actor_values(row, sky_scale, sky_origin)
-                material = self._sprite_material(row.asset, row.blend)
+                material = self._sprite_material(row.material, row.asset, row.blend)
                 actor = actors.spawn_actor_from_class(
                     unreal.ElysiumSpriteActor, unreal.Vector(*values["position"]))
                 if not actor:
@@ -962,14 +929,14 @@ def _build_class():
                     placed, glow, hidden, sky_placed, len(self.sprite_materials)))
             return placed, glow, hidden
 
-        def _sprite_material(self, parent_path, blend):
+        def _sprite_material(self, material_key, parent_path, blend):
             """The `MI_Sprite_<material>_<blend>` child of one imported sprite `MI_`: the blend
             override the entity's mode selects and the master's two vertex switches on, authored
             once per `(parent, blend)` under `V2_SPRITE_MATERIAL_PACKAGE`, recipe-stamped on the
             parent path, the parent's own recipe, the blend and the switches. A parent whose
             master exposes neither switch is a named failure -- the tint would silently drop."""
 
-            key = (parent_path, blend)
+            key = (material_key, parent_path, blend)
             child_path = self.sprite_materials.get(key)
             if child_path is None:
                 parent = unreal.EditorAssetLibrary.load_asset(parent_path)
@@ -977,7 +944,7 @@ def _build_class():
                     fail("sprites: %s is not imported (run: uv run elysium import materials)"
                          % parent_path)
                     raise SystemExit(1)
-                child_path = self._author_sprite_material(parent, parent_path, blend)
+                child_path = self._author_sprite_material(parent, material_key, parent_path, blend)
                 self.sprite_materials[key] = child_path
             child = unreal.EditorAssetLibrary.load_asset(child_path)
             if not child:
@@ -985,7 +952,7 @@ def _build_class():
                 raise SystemExit(1)
             return child
 
-        def _author_sprite_material(self, parent, parent_path, blend):
+        def _author_sprite_material(self, parent, material_key, parent_path, blend):
             master = parent.get_base_material()
             master_path = master.get_path_name().split(".", 1)[0] if master else ""
             switches = []
@@ -1002,9 +969,13 @@ def _build_class():
             if member is None:
                 fail("sprites: blend %r names no BlendMode" % (blend,))
                 raise SystemExit(1)
-            name = sprite_child_name(parent_path, blend)
-            child_path = "%s/%s" % (V2_SPRITE_MATERIAL_PACKAGE, name)
+            material_id = "vtmb:material:" + material_key
+            if parent_path.split(".", 1)[0] != baked_unit(material_id, "MI"):
+                raise ValueError("sprite parent does not match its material unit: " + material_id)
+            child_path = sprite_child_path(material_key, blend)
+            directory, name = child_path.rsplit("/", 1)
             recipe = {
+                "materialId": material_id,
                 "parent": parent_path,
                 "master": master_path,
                 "master_recipe": bl.stored_recipe(master_path) if master_path else "",
@@ -1014,7 +985,7 @@ def _build_class():
             }
             if self.tracker.register("materials", child_path, recipe,
                                      expected_class="MaterialInstanceConstant"):
-                child = bl.make_material_instance(name, V2_SPRITE_MATERIAL_PACKAGE, parent)
+                child = bl.make_material_instance(name, directory, parent)
                 if not child:
                     fail("sprites: could not author %s" % child_path)
                     raise SystemExit(1)
@@ -1517,48 +1488,34 @@ def _build_class():
             the level with nobody saying why.
             """
 
-            model_path = record.get("model", placement.model_path)
-            catalogue = PM.model_stem(model_path)
-            rest = PM.select_rest_label(model_path, record, placement.index)
-            skeletal = unreal.EditorAssetLibrary.load_asset(
-                "%s/Props/%s/SK_%s" % (mounts.BAKED, catalogue, catalogue))
-            animation = unreal.EditorAssetLibrary.load_asset(
-                "%s/Props/%s/A_%s" % (mounts.BAKED, catalogue, bl.safe_name(rest)))
+            id = model_views.model_id(placement.model_path)
+            rest_clip = model_views.select_rest(record, placement.index)
+            rest = rest_clip["name"]
+            skeletal = unreal.EditorAssetLibrary.load_asset(record["mesh"])
+            animation = unreal.EditorAssetLibrary.load_asset(rest_clip["sequence"] or rest_clip["baseCell"])
             if not skeletal or not animation or not rest:
-                fail("placed model %s has no baked rest asset '%s' "
-                     "(run: uv run elysium export placed-model %s)" % (catalogue, rest, catalogue))
+                fail("placed model %s has no native rest asset '%s'; import characters and model catalogues" % (id, rest))
                 return None
             if not actor.configure_rest(skeletal, animation, mesh, solid):
-                fail("placed model %s refused rest configuration" % catalogue)
+                fail("placed model %s refused rest configuration" % id)
                 return None
             self.rest_labels[placement.index] = rest
             actor.collision_proxy.set_collision_profile_name(
                 HOST.PROFILE_PROP_SOLID if solid else HOST.PROFILE_PICK_ONLY)
             return actor.skeletal_visual
 
-        def _apply_v2_skin(self, component, mesh, placement):
-            """Repaint the slots this placement's skin family changes.
-
-            Mirrors `UElysiumPropSkinSet::Find`: an out-of-range family clamps to the model's last
-            family (VtMB's `skin` is an unclamped int write and the engine clamps rather than
-            falling back to 0), family 0 and any family that repaints nothing resolve to no row.
-            """
-
-            row = self.v2_skins.get(placement.stem)
-            if row is None:
-                return 0
-            family_count, families = row
-            family = placement.skin
-            if family_count > 0 and family >= family_count:
-                family = family_count - 1
-            if family <= 0 or family >= len(families) or not families[family]:
-                return 0
-            slots = [str(entry.get_editor_property("material_slot_name"))
-                     for entry in mesh.get_editor_property("static_materials")]
+        def _apply_v2_skin(self, component, placement, skeletal):
+            """Apply a complete cooked skin family to the actual static or skeletal representation."""
+            id = model_views.model_id(placement.model_path)
+            families = self.v2_skins.get((id, "skeletal" if skeletal else "static"))
+            if not families:
+                raise ValueError("placed model has no cooked skin representation: " + id)
+            family = min(max(int(placement.skin), 0), len(families) - 1)
+            slots = [str(name) for name in component.get_material_slot_names()]
             applied = 0
-            for slot, material_path in sorted(families[family].items()):
-                if slot not in slots:
-                    continue
+            for index, slot, material_path in families[family]:
+                if index >= len(slots) or slots[index].casefold() != slot.casefold():
+                    raise ValueError("native skin slot differs from placed component: " + id + " / " + slot)
                 # The table is paths, not objects (`read_skin_table`). Resolved here, and
                 # remembered on this bake -- so the wrappers die with the map, not with the
                 # process-wide table.
@@ -1567,8 +1524,8 @@ def _build_class():
                         material_path)
                 material = self.skin_materials[material_path]
                 if material is None:
-                    continue
-                component.set_material(slots.index(slot), material)
+                    raise ValueError("native skin material is absent: " + material_path)
+                component.set_material(index, material)
                 applied += 1
             return 1 if applied else 0
 
@@ -1604,17 +1561,16 @@ def detail_instance_rows(details, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
                 float(sky_scale) * (position[i] - float(sky_origin[i])) for i in range(3))
             scale = float(sky_scale)
         sway = float(detail.sway) / DETAIL_SWAY_FULL if detail.sway else 0.0
-        groups.setdefault((detail.stem, bool(detail.sky)), []).append(
+        groups.setdefault((model_views.model_id(detail.model_path), bool(detail.sky)), []).append(
             (position, tuple(float(v) for v in detail.rotation), scale, sway))
     return groups
 
 
-def sprite_child_name(parent_path, blend):
-    """`MI_Sprite_<material path>_<blend>`: the child's asset name for one imported sprite `MI_`
-    and one blend, the same fold the detail sway children use."""
-
-    stem = parent_path.replace(mounts.BAKED + "/Materials/", "").replace("/MI_", "/")
-    return "MI_Sprite_" + bl.safe_name(stem) + "_" + blend
+def sprite_child_path(material_key, blend):
+    """One material-unit variant; directory identity is preserved by the common resolver."""
+    if blend not in SPRITE_BLEND_MEMBERS:
+        raise ValueError("unsupported sprite blend: " + str(blend))
+    return baked_unit("vtmb:material:" + material_key, "MI", role="Sprite_" + blend)
 
 
 def sprite_actor_values(row, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
@@ -1946,12 +1902,13 @@ class _DetailPlacement(object):
     `[index, model, px, py, pz, qx, qy, qz, qw, sway, sky]`; `stem` is joined from
     `details.models[]` by the row's `model`."""
 
-    __slots__ = ("index", "model", "stem", "position", "rotation", "sway", "sky")
+    __slots__ = ("index", "model", "stem", "model_path", "position", "rotation", "sway", "sky")
 
-    def __init__(self, row, stems):
+    def __init__(self, row, models):
         self.index = int(row[0])
         self.model = int(row[1])
-        self.stem = stems[self.model]
+        self.stem = str(models[self.model]["stem"])
+        self.model_path = str(models[self.model]["modelPath"])
         self.position = tuple(float(v) for v in row[2:5])
         self.rotation = tuple(float(v) for v in row[5:9])
         self.sway = int(row[9])
@@ -2079,8 +2036,8 @@ class _StagedGeometry(object):
         self.lights = [_LightRow(row) for row in self.manifest.get("lights") or []]
         details = self.manifest.get("details") or {}
         self.detail_models = list(details.get("models") or [])
-        stems = {int(model["model"]): str(model["stem"]) for model in self.detail_models}
-        self.details = [_DetailPlacement(row, stems) for row in details.get("records") or []]
+        models = {int(model["model"]): model for model in self.detail_models}
+        self.details = [_DetailPlacement(row, models) for row in details.get("records") or []]
         self.sprites = [_SpriteRow(row) for row in self.manifest.get("sprites") or []]
         # R7.3: the effects tables, read as the stage wrote them (dicts; the writer maps fields).
         self.effects = list(self.manifest.get("effects") or [])

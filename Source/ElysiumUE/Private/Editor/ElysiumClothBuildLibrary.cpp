@@ -4,6 +4,7 @@
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "ElysiumClothTuningConfig.h"
+#include "ElysiumCastData.h"
 #include "ElysiumContentPaths.h"
 #include "ChaosCloth/ChaosClothConfig.h"
 #include "ChaosCloth/ChaosClothingSimulationConfig.h"
@@ -418,6 +419,14 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 
 	FString Stem;
 	Root->TryGetStringField(TEXT("stem"), Stem);
+	FString UnitId;
+	Root->TryGetStringField(TEXT("assetId"), UnitId);
+	FString IdentityError;
+	const FString TuningId=UElysiumCastData::ModelIdForPreparation(UnitId.IsEmpty()?Stem:UnitId,IdentityError);
+	if (TuningId.IsEmpty())
+	{
+		Fatal.Errors.Add(TEXT("cloth tuning identity: ")+IdentityError); Results.Add(Fatal); return Results;
+	}
 
 	const TArray<TSharedPtr<FJsonValue>>* Garments = nullptr;
 	if (!Root->TryGetArrayField(TEXT("garments"), Garments) || Garments->Num() == 0)
@@ -442,7 +451,8 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		// number below that is not a decode of the authored payload comes from here.
 		FName TuningMaterial;
 		const FElysiumClothTuningLayer Tuning =
-			TuningTable->ResolveGarment(Stem, GarmentIndex, TuningMaterial, Result.Errors);
+			TuningTable->ResolveGarment(TuningId, GarmentIndex, TuningMaterial, Result.Errors,
+				UnitId.IsEmpty()?nullptr:&Result.Warnings);
 		Result.Material = TuningMaterial.ToString();
 
 		// The authored simulation mesh.
@@ -489,9 +499,22 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		// Built ahead of the collection because Chaos reads the physics asset through the
 		// COLLECTION, not off the built asset: `Build` consumes what the collection names, so a
 		// physics asset attached afterwards is simply not part of the simulation.
-		const FString BaseName = Garments->Num() > 1
+		FString BaseName = Garments->Num() > 1
 			? FString::Printf(TEXT("CLOTH_%s_%d"), *Stem, GarmentIndex)
 			: FString::Printf(TEXT("CLOTH_%s"), *Stem);
+		if (!UnitId.IsEmpty())
+		{
+			const FString Expected=FPackageName::ObjectPathToPackageName(FElysiumContentPaths::BakedUnit(
+				UnitId,TEXT("CLOTH"),Garments->Num()>1?FString::FromInt(GarmentIndex):FString()));
+			FString Declared;
+			if (Expected.IsEmpty() || !Garment->TryGetStringField(TEXT("assetPath"),Declared) || Declared!=Expected
+				|| FPackageName::GetLongPackagePath(Expected)!=PackageDirectory)
+			{
+				Result.Errors.Add(TEXT("cloth output does not match the baked-unit address"));
+				Results.Add(Result); continue;
+			}
+			BaseName=FPackageName::GetShortName(Expected);
+		}
 		int32 Bodies = 0;
 		UPhysicsAsset* Physics = BuildPhysicsAsset(
 			Garment, PackageDirectory, BaseName + TEXT("_PHYS"), Mesh, Bodies, Result.Errors);
@@ -826,6 +849,13 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			const TArray<TSharedPtr<FJsonValue>>& Skin = Map->GetArrayField(TEXT("skin"));
 			const TArray<TSharedPtr<FJsonValue>>& Vertices = Map->GetArrayField(TEXT("vertices"));
 			const TArray<TSharedPtr<FJsonValue>>& RenderFaces = Map->GetArrayField(TEXT("triangles"));
+			const TArray<TSharedPtr<FJsonValue>>* SourceNormals=nullptr;
+			Map->TryGetArrayField(TEXT("normals"),SourceNormals);
+			if ((!UnitId.IsEmpty() && !SourceNormals) || (SourceNormals && SourceNormals->Num()!=Positions.Num()))
+			{
+				Result.Errors.Add(TEXT("native cloth render surface lacks its staged normal array"));
+				continue;
+			}
 
 			FCollectionClothRenderPatternFacade Render = Cloth.AddGetRenderPattern();
 			Render.SetRenderMaterialSoftObjectPathName(Material);
@@ -957,6 +987,13 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			}
 			for (int32 Index = 0; Index < Positions.Num(); ++Index)
 			{
+				if (SourceNormals)
+				{
+					const FVector3f Authored=VectorFrom((*SourceNormals)[Index]->AsArray());
+					if (Authored.ContainsNaN() || Authored.IsNearlyZero())
+						Result.Errors.Add(FString::Printf(TEXT("native cloth render normal %d is invalid"),Index));
+					else RenderNormal[Index]=Authored;
+				}
 				RenderNormal[Index] = RenderNormal[Index].GetSafeNormal(
 					UE_SMALL_NUMBER, FVector3f::ZAxisVector);
 				RenderTangentU[Index] = RenderTangentU[Index].GetSafeNormal(
@@ -1124,6 +1161,65 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 	}
 
 	return Results;
+}
+
+FString UElysiumClothBuildLibrary::VerifyClothAsset(const FString& AssetPath,const FString& GarmentJson,
+	const FString& SkeletalMeshPath)
+{
+	const auto* Asset=LoadObject<UChaosClothAsset>(nullptr,*AssetPath);
+	TSharedPtr<FJsonObject> Garment;
+	if (!Asset || !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(GarmentJson),Garment) || !Garment.IsValid())
+		return TEXT("cloth asset or staged garment is absent");
+	const auto& Collections=Asset->GetClothCollections();
+	if (Collections.Num()!=1) return TEXT("cloth asset does not contain its LOD0 collection");
+	const FCollectionClothConstFacade Cloth(Collections[0]);
+	if (Cloth.GetSkeletalMeshSoftObjectPathName()!=FSoftObjectPath(SkeletalMeshPath))
+		return TEXT("cloth asset binds the wrong skeletal mesh");
+	const auto Model=Asset->GetClothSimulationModel();
+	if (!Model || !Model->IsValidLodIndex(0) || Model->GetNumVertices(0)<=0)
+		return TEXT("cloth asset has no built simulation model");
+	const auto& Lod=Model->ClothSimulationLodModels[0];
+	if (!Lod.WeightMaps.Contains(MaxDistanceMap)) return TEXT("cloth asset lost its max-distance map");
+	int32 Anchored=0; Garment->TryGetNumberField(TEXT("anchored_count"),Anchored);
+	if (Anchored>0 && Lod.TetherData.Tethers.IsEmpty()) return TEXT("anchored cloth asset has no built tethers");
+	const auto& Maps=Garment->GetArrayField(TEXT("render_maps"));
+	if (Cloth.GetNumRenderPatterns()!=Maps.Num()) return TEXT("cloth render pattern inventory differs");
+	int32 At=0,FaceAt=0;
+	for (int32 MapIndex=0; MapIndex<Maps.Num(); ++MapIndex)
+	{
+		const auto Map=Maps[MapIndex]->AsObject();
+		const auto& Positions=Map->GetArrayField(TEXT("positions"));
+		const auto& Normals=Map->GetArrayField(TEXT("normals"));
+		const auto& UVs=Map->GetArrayField(TEXT("uvs"));
+		const auto& Rows=Map->GetArrayField(TEXT("vertices"));
+		const auto& Triangles=Map->GetArrayField(TEXT("triangles"));
+		const auto Pattern=Cloth.GetRenderPattern(MapIndex);
+		if (Pattern.GetNumRenderVertices()!=Positions.Num() || Pattern.GetNumRenderFaces()!=Triangles.Num())
+			return TEXT("cloth render geometry counts differ");
+		for (int32 Index=0; Index<Positions.Num(); ++Index)
+		{
+			const FVector3f Position=VectorFrom(Positions[Index]->AsArray());
+			const FVector3f Normal=VectorFrom(Normals[Index]->AsArray()).GetSafeNormal();
+			const auto& UV=UVs[Index]->AsArray();
+			if (!Cloth.GetRenderPosition()[At+Index].Equals(Position,1.e-4f)
+				|| !Cloth.GetRenderNormal()[At+Index].Equals(Normal,1.e-5f)
+				|| Cloth.GetRenderUVs()[At+Index].Num()!=1
+				|| !Cloth.GetRenderUVs()[At+Index][0].Equals(FVector2f(UV[0]->AsNumber(),UV[1]->AsNumber()),1.e-6f))
+				return FString::Printf(TEXT("cloth render attributes differ at pattern %d vertex %d"),MapIndex,Index);
+			const auto Row=Rows[Index]->Type==EJson::Object?Rows[Index]->AsObject():nullptr;
+			const bool Driven=Row.IsValid() && !Row->HasField(TEXT("anchor"));
+			if (Cloth.GetRenderDeformerSkinningBlend()[At+Index]!=(Driven?0.f:1.f))
+				return TEXT("cloth substitution/skinning choice differs");
+		}
+		for (int32 Face=0; Face<Triangles.Num(); ++Face)
+		{
+			const auto& Row=Triangles[Face]->AsArray();
+			const FIntVector3 Expected(int32(Row[0]->AsNumber())+At,int32(Row[1]->AsNumber())+At,int32(Row[2]->AsNumber())+At);
+			if (Cloth.GetRenderIndices()[FaceAt+Face]!=Expected) return TEXT("cloth render topology or winding differs");
+		}
+		At+=Positions.Num(); FaceAt+=Triangles.Num();
+	}
+	return FString();
 }
 
 #endif  // WITH_EDITOR

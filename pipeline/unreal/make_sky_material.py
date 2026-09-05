@@ -11,13 +11,21 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from elysium_pipeline import mounts
+from elysium_pipeline.importers.sky_paths import sky_cube_path
 
 PKG = mounts.MATERIALS
 NAME = "M_Sky"
 ASSET = "%s/%s" % (PKG, NAME)
-DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
+DEFAULT_CUBE = sky_cube_path("la")
 
 mel = unreal.MaterialEditingLibrary
+
+# R8: sky composites contain linear HDR samples. Require the imported default before
+# replacing the master, so the graph can compile with the same sampler as every sky MI.
+default_cube = unreal.EditorAssetLibrary.load_asset(DEFAULT_CUBE)
+if (default_cube is None or default_cube.get_class().get_name() != "TextureCube"
+        or default_cube.get_editor_property("srgb")):
+    raise RuntimeError("M_Sky requires the linear texture-lane sky cube %s; import textures first" % DEFAULT_CUBE)
 
 if unreal.EditorAssetLibrary.does_asset_exist(ASSET):
     unreal.EditorAssetLibrary.delete_asset(ASSET)
@@ -31,12 +39,11 @@ if not mat:
 mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
 mat.set_editor_property("two_sided", True)
 
-# SkyCube: the per-map cubemap, bound at runtime via a MID. A default engine cube lets the
-# graph compile with a valid texture.
+# SkyCube: the per-map cubemap. The default is a validated linear sky dependency;
+# every sky MI overrides it with its own texture-lane composite.
 cube = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameterCube, -500, 0)
 cube.set_editor_property("parameter_name", "SkyCube")
-cube.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_COLOR)
-default_cube = unreal.EditorAssetLibrary.load_asset(DEFAULT_CUBE)
+cube.set_editor_property("sampler_type", unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_COLOR)
 if default_cube:
     cube.set_editor_property("texture", default_cube)
 

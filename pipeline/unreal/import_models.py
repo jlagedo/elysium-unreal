@@ -1,5 +1,5 @@
 """Phase 2 of `uv run elysium import models`: land the staged model corpus as Unreal
-`UStaticMesh` assets below `/ElysiumBaked/Meshes`.
+`UStaticMesh` assets below `/ElysiumBaked/Models/<dir>/SM_<base>`.
 
 Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import_models.py
 -ImportModels=<manifest.json> -ImportUnitRoot=<export_v2 root>`). The offline stage
@@ -26,12 +26,11 @@ cannot carry: the geometry (`docs/architecture/seam_map_model.md` -> "Import").
     `generate_lightmap_u_vs = False` explicitly (Lumen-only: no static lighting is ever built);
   * attach the provenance record (`UElysiumModelProvenance.apply_json`) from the staged sidecar
     plus this lane's own `shapeCount`, publish its registry tags, stamp the recipe, save;
-  * author the two shipped placeholders the manifest names: `SM_elysium_missing_model` (a unit
+  * author the shipped placeholder the manifest names: `Models/_Corpus/SM_Missing` (a unit
     cube wearing `MI_V2_Missing`) for a dangling `vtmb:model:` reference;
-  * as a finalize step over the whole manifest (R1.5, not per entry): fold every entry's own
-    `skinFamilies`/`familyCount` down to `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`, the
-    corpus-wide `UElysiumPropSkinSet` (`docs/architecture/seam_map_model.md` -> "Import" ->
-    "Skins table");
+  * retain full `skinFamilies`/`familyCount` in provenance and report the canonical
+    `Models/_Corpus/DA_PropSkins` finalization requirement; its owner merges static and
+    skeletal inputs, and this static-only importer never overwrites that global catalogue;
   * prune inside the manifest's `pruneScope` -- `null` on a map-scoped run, which prunes nothing,
     because only `--all` knows the whole keep set;
   * write `import_report.json` beside the manifest and exit non-zero if any entry failed.
@@ -58,9 +57,16 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
+from elysium_pipeline.asset_paths import baked_unit, corpus_path  # noqa: E402
 
 #: The recipe stage label every fingerprint hashes under -- `importers/models.py`'s own lane name.
 STAGE = "models"
+PACKAGE_ROOT = "/ElysiumBaked/Models"
+SETTINGS_VERSION = "elysium-model-import-v3"
+MISSING_MODEL_ASSET_PATH = corpus_path("model", "SM", "Missing")
+SKIN_CATALOGUE_ASSET_PATH = corpus_path("model", "DA", "PropSkins")
+# Native build policy, independently fingerprinted so old half-UV assets cannot be reused.
+STATIC_PRECISION_SETTINGS = {"use_full_precision_u_vs": True, "use_high_precision_tangent_basis": True}
 
 #: Manifest schema this script understands.
 MANIFEST_SCHEMA = "1.0.0"
@@ -174,38 +180,66 @@ def load_manifest(path):
         raise ManifestError("manifest schema %r is not %s"
                             % (manifest.get("schemaVersion"), MANIFEST_SCHEMA))
     root = manifest.get("packageRoot")
-    if not isinstance(root, str) or not root.startswith("/") or root.endswith("/"):
-        raise ManifestError("manifest packageRoot %r is not a mount path" % (root,))
+    if root != PACKAGE_ROOT or manifest.get("producer") != STAGE:
+        raise ManifestError("model manifest must name producer models and canonical root %s" % PACKAGE_ROOT)
+    if manifest.get("settingsVersion") != SETTINGS_VERSION:
+        raise ManifestError("model stage addressing/settings are stale; restage models with --all")
+    if manifest.get("missingModelAsset") != MISSING_MODEL_ASSET_PATH:
+        raise ManifestError("model placeholder must use %s" % MISSING_MODEL_ASSET_PATH)
+    if manifest.get("skinCatalogueAsset") != SKIN_CATALOGUE_ASSET_PATH:
+        raise ManifestError("model skin catalogue must use %s" % SKIN_CATALOGUE_ASSET_PATH)
     entries = manifest.get("assets")
     if not isinstance(entries, list):
         raise ManifestError("manifest assets is not a list")
+    selection = manifest.get("selection")
+    if (not isinstance(selection, dict) or "perMap" not in selection
+            or not isinstance(selection.get("keys"), list)
+            or not all(isinstance(key, str) for key in selection["keys"])):
+        raise ManifestError("manifest lacks an explicit model selection")
+    if "explicitUnits" in selection:
+        explicit = selection["explicitUnits"]
+        if (not isinstance(explicit, list) or not all(isinstance(id, str) for id in explicit)
+                or set(explicit) != {"vtmb:model:" + key for key in selection["keys"]}
+                or selection["perMap"] != {} or manifest.get("pruneScope") is not None):
+            raise ManifestError("explicit unit selection must match its keys and cannot prune")
 
     # `pruneScope` is deliberately nullable here, unlike the material lane's: a map-scoped run
     # sets it to null and prunes nothing, "because only `--all` knows the whole keep set".
     scope = manifest.get("pruneScope")
     if scope is not None:
-        if (not isinstance(scope, str) or not scope.endswith("/")
-                or not scope.lower().startswith((root + "/").lower())):
-            raise ManifestError("manifest pruneScope %r is neither null nor a folder below %s"
-                                % (scope, root))
+        if scope != PACKAGE_ROOT + "/" or selection["perMap"] is not None:
+            raise ManifestError("only a whole-corpus model selection may prune the canonical Models root")
     keep = manifest.get("keep", [])
     if not isinstance(keep, list) or not all(isinstance(p, str) and p.startswith(root + "/")
+                                             and all(re.fullmatch(r"[A-Za-z0-9_]+", part) for part in p[len(root)+1:].split("/"))
                                              for p in keep):
         raise ManifestError("manifest keep is not a list of asset paths below %s" % root)
     manifest["keep"] = keep
 
-    seen = set()
+    seen, units = set(), set()
     for index, entry in enumerate(entries):
+        if not isinstance(entry, dict) or not isinstance(entry.get("recipe"), dict):
+            raise ManifestError("assets[%d] is not an asset row with a recipe" % index)
         for key in ("assetPath", "unit", "unitGlb", "unitSha256", "stem", "slots", "skinFamilies",
                     "lods", "collision", "physMaterial", "nanite", "recipe"):
             if key not in entry:
                 raise ManifestError("assets[%d] lacks %r" % (index, key))
         asset_path = entry["assetPath"]
-        if not isinstance(asset_path, str) or not asset_path.startswith(root + "/"):
-            raise ManifestError("assets[%d] %s is outside %s" % (index, asset_path, root))
-        if asset_path in seen:
+        id = entry["unit"]
+        try:
+            expected = baked_unit(id, "SM") if isinstance(id, str) and id.startswith("vtmb:model:") else None
+        except ValueError as exc:
+            raise ManifestError("assets[%d] has invalid model identity: %s" % (index, exc)) from exc
+        if expected is None or asset_path != expected:
+            raise ManifestError("assets[%d] address %r does not match model identity %r" % (index, asset_path, id))
+        if entry["unitGlb"] != "models/" + id[len("vtmb:model:"):] + ".glb":
+            raise ManifestError("assets[%d] unit path does not match model identity" % index)
+        if entry["recipe"].get("settingsVersion") != SETTINGS_VERSION:
+            raise ManifestError("assets[%d] recipe uses stale model settings" % index)
+        if asset_path.casefold() in seen or id.casefold() in units:
             raise ManifestError("assets[%d] %s is listed twice" % (index, asset_path))
-        seen.add(asset_path)
+        seen.add(asset_path.casefold())
+        units.add(id.casefold())
     return manifest
 
 
@@ -586,6 +620,7 @@ def author_static_mesh(asset_path, lod_meshes, materials, slot_names, nanite, ha
     plus GC costs seconds per asset with the corpus resident. A LOD-count change is the one case
     that recreates, because a shortened chain would otherwise keep its stale tail.
     """
+    require_owned_destination(asset_path)
     package, name = split_asset_path(asset_path)
     bl.ensure_dir(package)
 
@@ -598,6 +633,7 @@ def author_static_mesh(asset_path, lod_meshes, materials, slot_names, nanite, ha
             bl.delete_owned_asset(asset_path)
 
     if existing is None:
+        static_precision_library()
         options = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
         options.enable_recompute_normals = False
         options.enable_recompute_tangents = not has_tangents
@@ -614,8 +650,12 @@ def author_static_mesh(asset_path, lod_meshes, materials, slot_names, nanite, ha
         static_mesh.set_editor_property("static_materials", [
             unreal.StaticMaterial(material_interface=material, material_slot_name=slot)
             for material, slot in zip(materials, slot_names)])
+        apply_static_precision(static_mesh, len(lod_meshes))
         return static_mesh
 
+    # GeometryScript preserves these BuildSettings when copying a LOD. Set them before
+    # copying new source UVs so the replacement build does not repack them into float16.
+    apply_static_precision(existing, len(lod_meshes))
     for index, mesh in enumerate(lod_meshes):
         options = _copy_options(materials, slot_names, nanite, not has_tangents, index == 0)
         write_lod = unreal.GeometryScriptMeshWriteLOD()
@@ -625,6 +665,8 @@ def author_static_mesh(asset_path, lod_meshes, materials, slot_names, nanite, ha
         outcome = result[1] if isinstance(result, tuple) and len(result) > 1 else None
         if outcome is not None and outcome != unreal.GeometryScriptOutcomePins.SUCCESS:
             raise RuntimeError("copy_mesh_to_static_mesh failed for LOD %d" % index)
+    if not static_precision_matches(existing, len(lod_meshes)):
+        raise RuntimeError("static precision settings changed while copying LODs: %s" % asset_path)
     return existing
 
 
@@ -635,9 +677,9 @@ def static_mesh_editor():
     """`UStaticMeshEditorSubsystem`, in a process that may have no subsystem collection.
 
     `GEditor->GetEditorSubsystem<>()` answers null inside `-run=pythonscript` (the editor
-    subsystems are never collected in a commandlet), so a plain `get_editor_subsystem` would fail
-    every multi-LOD entry. The subsystem's LOD methods hold no state of their own -- they take the
-    mesh and the values -- so a transient instance answers identically.
+    subsystems may not be collected in a commandlet), so a plain `get_editor_subsystem` can fail
+    a multi-LOD entry. A transient instance supports the screen-size method used here.
+    Precision uses the separate commandlet-safe native library below.
     """
     global _static_mesh_editor
     if _static_mesh_editor is None:
@@ -645,6 +687,33 @@ def static_mesh_editor():
         if _static_mesh_editor is None:
             _static_mesh_editor = unreal.new_object(unreal.StaticMeshEditorSubsystem)
     return _static_mesh_editor
+
+
+def static_precision_matches(static_mesh, lod_count):
+    if static_mesh is None or lod_count <= 0:
+        return False
+    return not static_precision_library().verify_precision(static_mesh, lod_count)
+
+
+def static_precision_library():
+    library = getattr(unreal, "ElysiumStaticMeshPrecisionLibrary", None)
+    if library is None or not callable(getattr(library, "apply_precision", None)) or not callable(getattr(library, "verify_precision", None)):
+        raise RuntimeError("ElysiumStaticMeshPrecisionLibrary is unavailable; rebuild the editor module before importing models")
+    return library
+
+
+def apply_static_precision(static_mesh, lod_count):
+    """Set and verify all source/render LODs through the commandlet-safe native helper.
+
+    The helper finishes compilation, changes only the two precision flags, performs a
+    synchronous rebuild from the original source data and verifies the built buffers.
+    It does not need AssetEditorSubsystem, call window APIs or clamp source UVs.
+    """
+    if static_mesh is None or lod_count <= 0:
+        raise RuntimeError("cannot set static precision without a mesh and source LODs")
+    error = static_precision_library().apply_precision(static_mesh, lod_count)
+    if error:
+        raise RuntimeError("static precision rebuild failed: " + error)
 
 
 def apply_screen_sizes(static_mesh, screen_sizes):
@@ -778,20 +847,25 @@ class Tracker(object):
     def fingerprint(self, entry):
         path = entry["assetPath"]
         if path not in self.fingerprints:
-            self.fingerprints[path] = bl.recipe_fingerprint(STAGE, path, entry["recipe"])
+            self.fingerprints[path] = bl.recipe_fingerprint(STAGE, path, {
+                "source": entry["recipe"], "staticBuildSettings": STATIC_PRECISION_SETTINGS})
         return self.fingerprints[path]
 
     def needs_import(self, entry):
         path = entry["assetPath"]
         fingerprint = self.fingerprint(entry)
-        stored = bl.stored_recipe(path, producer='models')
+        require_owned_destination(path)
+        stored = bl.stored_recipe(path, producer=STAGE)
         exists = unreal.EditorAssetLibrary.does_asset_exist(path)
         if exists and bl.asset_class_name(path) != ASSET_CLASS:
-            bl.delete_owned_asset(path)
-            exists = False
+            # Author only after the unit/geometry succeeds; never delete in the reuse probe.
+            return True
         if self.force or not exists:
             return True
-        return stored != fingerprint
+        if stored != fingerprint:
+            return True
+        lod_count = sum(not row.get("dropped") for row in entry["lods"])
+        return not static_precision_matches(unreal.EditorAssetLibrary.load_asset(path), lod_count)
 
 
 def selection_summary(selection):
@@ -817,6 +891,9 @@ class Report(object):
         self.reused = 0
         self.pruned = 0
         self.ownership = {"foreign": 0, "unstamped": 0}
+        self.catalogue_finalization = {"assetPath": SKIN_CATALOGUE_ASSET_PATH,
+                                       "requires": "merged static and skeletal catalogue authoring"}
+        self.prune_deferred = False
         self.failures = []
         # Carried straight through from the stage rather than re-derived here from 414 provenance
         # sidecars a second time, exactly as the material lane's report does.
@@ -847,6 +924,8 @@ class Report(object):
             "imported": self.built,
             "reused": self.reused,
             "pruned": self.pruned, **self.ownership,
+            "pruneDeferred": self.prune_deferred,
+            "catalogueFinalization": self.catalogue_finalization,
             "failed": self.failures,
             "stageFailures": self.stage_failures,
             "skipped": self.skipped,
@@ -935,6 +1014,9 @@ def _finish_entry(entry, unit_root, staging_root, tracker, report, materials_cac
 
 def import_entries(manifest, unit_root, staging_root, tracker, report, materials_cache=None):
     entries = manifest["assets"]
+    if "explicitUnits" in manifest.get("selection", {}):
+        selected = set(manifest["selection"]["explicitUnits"])
+        entries = [entry for entry in entries if entry["unit"] in selected]
     if materials_cache is None:
         materials_cache = MaterialCache()
     for index, entry in enumerate(entries):
@@ -965,12 +1047,17 @@ def author_missing_model(asset_path, material_path, tracker_force=False):
     material = unreal.load_asset(material_path)
     if material is None:
         raise RuntimeError("the sentinel material is not on the mount: %s" % material_path)
-    recipe = {"placeholder": "missing-model", "material": material_path, "sizeCm": 100.0}
+    recipe = {"placeholder": "missing-model", "material": material_path, "sizeCm": 100.0,
+              "staticBuildSettings": STATIC_PRECISION_SETTINGS}
+    if asset_path != MISSING_MODEL_ASSET_PATH:
+        raise RuntimeError("noncanonical model placeholder: %s" % asset_path)
+    require_owned_destination(asset_path)
     fingerprint = bl.recipe_fingerprint(STAGE, asset_path, recipe)
     stored = bl.stored_recipe(asset_path, producer="models")
     if (not tracker_force and unreal.EditorAssetLibrary.does_asset_exist(asset_path)
             and bl.asset_class_name(asset_path) == ASSET_CLASS
-            and stored == fingerprint):
+            and stored == fingerprint
+            and static_precision_matches(unreal.EditorAssetLibrary.load_asset(asset_path), 1)):
         return False
 
     mesh = unreal.DynamicMesh()
@@ -1017,6 +1104,8 @@ def author_skin_set(manifest, materials_cache, force=False):
     the table (map-scoped runs regenerate the same handful of multi-family models over and over
     otherwise); `force` bypasses it exactly like every other entry's stamp.
     """
+    if manifest.get("packageRoot") == PACKAGE_ROOT:
+        raise RuntimeError("DA_PropSkins requires merged static/skeletal catalogue authoring; a models-only fold would drop owners")
     from elysium_pipeline.importers import model_skins
 
     object_path = model_skins.skin_set_asset_path()
@@ -1088,8 +1177,24 @@ def author_skin_set(manifest, materials_cache, force=False):
 # --- prune ---------------------------------------------------------------------------------------
 
 
+def require_owned_destination(asset_path):
+    """A shared Models directory gives this producer no right to replace another asset."""
+    if (not isinstance(asset_path, str) or not asset_path.startswith(PACKAGE_ROOT + "/")
+            or not all(re.fullmatch(r"[A-Za-z0-9_]+", part) for part in asset_path[len(PACKAGE_ROOT)+1:].split("/"))
+            or not asset_path.rsplit("/", 1)[-1].startswith("SM_")
+            or (asset_path.startswith(PACKAGE_ROOT + "/_Corpus/") and asset_path != MISSING_MODEL_ASSET_PATH)):
+        raise RuntimeError("outside this producer's canonical static model products: %s" % asset_path)
+    if unreal.EditorAssetLibrary.does_asset_exist(asset_path):
+        owner = bl.stored_producer(asset_path)
+        if owner != STAGE:
+            raise RuntimeError("cannot replace %s model destination %s (producer %r)"
+                               % ("foreign" if owner else "unstamped", asset_path, owner))
+
+
 def prune(package_root, keep, scope, counts=None):
-    return bl.prune_owned(package_root, keep, scope, 'models', counts)
+    if package_root != PACKAGE_ROOT or scope not in (None, PACKAGE_ROOT + "/"):
+        raise ManifestError("model prune must stay in the canonical Models root")
+    return bl.prune_owned(package_root, keep, scope, STAGE, counts)
 
 
 def run(manifest_path, unit_root, force=False):
@@ -1125,24 +1230,16 @@ def run(manifest_path, unit_root, force=False):
     materials_cache = MaterialCache()
     import_entries(manifest, unit_root, staging_root, Tracker(force), report, materials_cache)
 
-    # The corpus skin table (R1.5): a finalize step over the whole manifest, run once every meshes
-    # this run staged are on the mount, so its skin families resolve the same `MI_` paths the
-    # meshes above were just bound to.
-    from elysium_pipeline.importers import model_skins
-    skin_set_path = model_skins.skin_set_asset_path()
-    try:
-        skin_stats = author_skin_set(manifest, materials_cache, force=force)
-        log("prop skins: %d stem(s) / %d row(s) / max FamilyCount %d%s -> %s"
-            % (skin_stats["stems"], skin_stats["rows"], skin_stats["maxFamilyCount"],
-               "" if skin_stats["rebuilt"] else " (reused)", skin_set_path))
-    except Exception as exc:  # noqa: BLE001
-        report.failures.append({"assetPath": skin_set_path, "unit": "", "reason": "%s" % exc})
-        fail("%s: %s" % (skin_set_path, exc))
+    # The global table has a different producer and needs the character/wield input closure.
+    # Complete static skin families remain in this manifest and on mesh provenance for that join.
+    log("skin families staged for merged catalogue finalization: %s" % SKIN_CATALOGUE_ASSET_PATH)
 
     try:
         protected = ({entry["assetPath"] for entry in manifest["assets"]}
-                    | set(manifest["keep"]) | {skin_set_path})
-        report.pruned = prune(package_root, protected, manifest.get("pruneScope"), report.ownership)
+                    | set(manifest["keep"]) | {SKIN_CATALOGUE_ASSET_PATH})
+        report.prune_deferred = bool(report.failures or report.stage_failures)
+        scope = None if report.prune_deferred else manifest.get("pruneScope")
+        report.pruned = prune(package_root, protected, scope, report.ownership)
     except Exception as exc:  # noqa: BLE001
         report.failures.append({"assetPath": package_root, "unit": "",
                                 "reason": "prune raised: %s" % exc})

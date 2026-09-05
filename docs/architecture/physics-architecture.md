@@ -1,5 +1,12 @@
 # Physics — Unreal reproduction
 
+> Scope ruling, 2026-09-05: R8 covers physics export/import and data conservation only, including
+> geometry, solids, constraints, parameters, metadata and provenance. Simulation-ready
+> PhysicsAssets, solver calibration, ragdoll activation and gameplay physics in this document
+> are deferred and do not block R8. Earlier `RAGD` transport proposals are superseded by model
+> GLBs and cooked `UElysiumPhysicsData`; preserving and verifying those records does not depend
+> on simulation calibration.
+
 VtMB's rigid-body facts are `docs/vtmb/phy_vphysics.md` (the `.phy` container and the ragdoll rig)
 and `docs/vtmb/physics-interaction.md` (what simulates, the physics hands, where ragdolls appear).
 This document is the Unreal side: one owner for everything that touches a simulated body, so the

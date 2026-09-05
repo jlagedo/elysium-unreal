@@ -194,6 +194,9 @@ def prune_scope_for(select: str | None) -> str:
 def protected_asset_paths(key: str) -> list[str]:
     """Every asset path a unit key could own, for a unit whose class the stage could not read."""
 
+    from elysium_pipeline.importers.sky_composites import STORAGE_PREFIX, sky_cube_path
+    if key.startswith(STORAGE_PREFIX):
+        return [sky_cube_path(key[len(STORAGE_PREFIX):])]
     paths = []
     for asset_class in CLASS_PREFIX:
         for twin in (False, True):
@@ -238,7 +241,7 @@ class MeasureResult:
     staging_root: Path
     measured: int = 0
     unmeasured: int = 0
-    max_of_max: int = 0
+    max_of_max: int | float = 0
     mean_of_mean: float = 0.0
     worst: list[dict] = field(default_factory=list)
     failures: list[tuple[str, str]] = field(default_factory=list)
@@ -280,6 +283,8 @@ def _texture_class(extension: dict, ktx) -> str:
 
 def _compression(vk_format: int) -> str:
     kind = VK_FORMATS[vk_format][4]
+    if kind in ("rgba16f", "rgba32f"):
+        return "hdr-f32"
     return "default" if kind.startswith("bc") else "uncompressed"
 
 
@@ -352,6 +357,9 @@ def plan_unit(
         # UVWQ8888 is signed displacement data: a colour reading is meaningless whatever binds it,
         # so it is always a linear data asset and never twins.
         role, srgb, conflict = (data_role(parameters) if parameters else ROLE_NORMAL), False, False
+    if ktx.vk_format in (97, 109):
+        # Native HDR is already linear. Retain float data, never quantize it through an icon preset.
+        srgb, conflict = False, False
     directories, stem = _check_key(key)
     dds_relative = "/".join([*directories, stem + ".dds"])
     colour_path = asset_path_for(key, asset_class)
@@ -614,11 +622,25 @@ def stage_textures(
                 KeyError) as error:
             failed(key, str(error))
 
+    # D1: composites are texture-lane products, included in the SAME collision and prune
+    # accounting as units. Their staging namespace cannot overwrite a face or cube unit.
+    from elysium_pipeline.importers.sky_composites import plan_composites
+    sky_plans, sky_failures = plan_composites(export_v2_root, root, select)
+    plans.extend(sky_plans)
+    for key, reason in sky_failures:
+        failed(key, reason)
+
     # Two units folding to one asset path is a defect in the fold, not a race one may win.
     owners: dict[str, list[str]] = {}
     for plan in plans:
         for entry in plan.entries:
             owners.setdefault(entry["assetPath"].lower(), []).append(plan.key)
+    for key in failed_keys:
+        try:
+            for path in protected_asset_paths(key):
+                owners.setdefault(path.lower(), []).append(key)
+        except (TextureImportError, ValueError):
+            continue  # an invalid key could never own a legal package
     collided = {key for keys in owners.values() if len(keys) > 1 for key in keys}
     for plan in plans:
         if plan.key in collided:
@@ -654,7 +676,7 @@ def stage_textures(
         try:
             keep.update(protected_asset_paths(key))
             produced.update(path for path in _unit_files(root, key) if path.exists())
-        except TextureImportError:
+        except (TextureImportError, ValueError):
             continue   # an invalid key never owned an asset
     named = {entry["assetPath"] for entry in assets}
     keep -= named
@@ -710,9 +732,13 @@ def measure_textures(staging_root_path: Path) -> MeasureResult:
                 raise TextureDdsError(
                     f"built mip 0 is {built.shape[1]}x{built.shape[0]}, staged is "
                     f"{staged.shape[1]}x{staged.shape[0]}")
-            delta = np.abs(staged.astype(np.int16) - built.astype(np.int16))
+            floating = (np.issubdtype(staged.dtype, np.floating)
+                        or np.issubdtype(built.dtype, np.floating))
+            dtype = np.float64 if floating else np.int16
+            delta = np.abs(staged.astype(dtype) - built.astype(dtype))
             rows.append({"unit": entry.get("unit"), "dds": dds_relative,
-                         "maxDelta": int(delta.max()), "meanDelta": float(delta.mean())})
+                         "maxDelta": float(delta.max()) if floating else int(delta.max()),
+                         "meanDelta": float(delta.mean())})
             result.measured += 1
         except (TextureDdsError, OSError, ValueError) as error:
             result.failures.append((str(entry.get("unit")), str(error)))

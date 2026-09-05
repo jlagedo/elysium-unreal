@@ -35,7 +35,7 @@ Command line:
   -LookdevSet=<path>          review-set JSON (default: pipeline/unreal/lookdev_set.json, tracked)
   -LookdevPropsSet=<path>     props row-set JSON (default: pipeline/unreal/lookdev_props_set.json,
                                tracked)
-  -LookdevMap=<path>          destination package path (default: /ElysiumBaked/Lookdev/Materials)
+  -LookdevMap=<path>          destination package path (default: /Game/ElysiumGenerated/Lookdev/Materials)
   -LookdevReport=<path>       OS path for `lookdev_report.json` (default: a temp-dir path; the
                                real launcher, `elysium_pipeline.unreal.make_lookdev_map`, always
                                passes one under `$ELYSIUM_WORK_ROOT/reports/lookdev/`)
@@ -93,7 +93,7 @@ LABEL_WORLD_SIZE = 20.0
 
 DEFAULT_SET_PATH = os.path.join(os.path.dirname(__file__), "lookdev_set.json")
 DEFAULT_PROPS_SET_PATH = os.path.join(os.path.dirname(__file__), "lookdev_props_set.json")
-DEFAULT_MAP_PATH = "/ElysiumBaked/Lookdev/Materials"
+DEFAULT_MAP_PATH = "/Game/ElysiumGenerated/Lookdev/Materials"
 #: One blank row of clearance between the material grid's last row and the props row below it, so
 #: a prop's own label never overlaps the material grid's last bay.
 PROPS_ROW_GAP = 1

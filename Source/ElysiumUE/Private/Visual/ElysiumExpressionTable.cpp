@@ -75,6 +75,9 @@ namespace
 	// an unresolvable `param` costs one stat rather than one per event per frame.
 	FCriticalSection GCacheLock;
 	TMap<FString, TSharedPtr<const FElysiumExpressionTable>> GCache;
+#if WITH_DEV_AUTOMATION_TESTS
+	TMap<FString, TSharedPtr<const FElysiumExpressionTable>> GInlineTables;
+#endif
 	int32 GCacheHits = 0;
 	int32 GCacheMisses = 0;
 
@@ -313,7 +316,23 @@ void ElysiumExpressions::RegisterInline(const FString& Stem, const FString& Text
 	// asks for — the on-disk fallback is what the class exists to drive, and there is no disk here.
 	GCache.Add(Norm + TEXT("|expressions"), bOk ? Table : nullptr);
 	GCache.Add(Norm + TEXT("|phonemes"), bOk ? Table : nullptr);
+#if WITH_DEV_AUTOMATION_TESTS
+	GInlineTables.Add(Norm + TEXT("|expressions"), bOk ? Table : nullptr);
+	GInlineTables.Add(Norm + TEXT("|phonemes"), bOk ? Table : nullptr);
+#endif
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+TSharedPtr<const FElysiumExpressionTable> ElysiumExpressions::FindInlineForTest(const FString& Param, const FString& Class)
+{
+	FString Stem = NormalizeStem(Param);
+	if (Stem.EndsWith(TEXT(".mdl"))) Stem.LeftChopInline(4);
+	FScopeLock Lock(&GCacheLock);
+	for (const FString& Candidate : {Stem, Stem + TEXT("_") + Class.ToLower()})
+		if (const auto* Table = GInlineTables.Find(Candidate + TEXT("|") + Class.ToLower())) return *Table;
+	return nullptr;
+}
+#endif
 
 void ElysiumExpressions::ClearCache()
 {
@@ -321,6 +340,9 @@ void ElysiumExpressions::ClearCache()
 	GCache.Reset();
 	GCacheHits = 0;
 	GCacheMisses = 0;
+#if WITH_DEV_AUTOMATION_TESTS
+	GInlineTables.Reset();
+#endif
 }
 
 void ElysiumExpressions::CacheStats(int32& OutEntries, int32& OutHits, int32& OutMisses)

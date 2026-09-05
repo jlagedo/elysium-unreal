@@ -7,12 +7,54 @@
 #include "Engine/SkeletalMesh.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
+#include "Visual/ElysiumCharacterModel.h"
+#include "Containers/Ticker.h"
+#include "UObject/StrongObjectPtr.h"
 #if WITH_EDITOR
 #include "Animation/IAnimationSequenceCompiler.h"
 #endif
 
+struct FElysiumAsyncModelAdmission
+{
+	uint64 Id = 0, Epoch = 0, Generation = 0;
+	FString ModelId;
+	TFunction<void(bool, const FString&)> Completion;
+	bool bRootDiscovered = false, bDependenciesRequested = false;
+	struct FOwner
+	{
+		FString AssetId, OwnerRoot;
+		TSoftObjectPtr<UElysiumBodyData> Data;
+	};
+	TArray<FOwner> Pending;
+	TMap<FString, TObjectPtr<UElysiumBodyData>> Discovered;
+	TArray<TStrongObjectPtr<UElysiumBodyData>> Pins;
+	TSet<FSoftObjectPath> Dependencies;
+	TArray<TSharedPtr<FStreamableHandle>> Handles;
+	FTSTicker::FDelegateHandle Ticker;
+};
+
 namespace
 {
+	bool AnimationReferencesResident(const UElysiumBodyData& Data, FString& Error)
+	{
+		auto Check = [&Error](const auto& Ref, bool bRequired)
+		{
+			if ((!bRequired && Ref.IsNull()) || Ref.Get()) return true;
+			Error = TEXT("native animation reference is absent or has the wrong class: ") + Ref.ToSoftObjectPath().ToString();
+			return false;
+		};
+		for (const auto& Pair : Data.NativeSequences) if (!Check(Pair.Value, true)) return false;
+		for (const auto& Pair : Data.NativeBlendSpaces) if (!Check(Pair.Value, true)) return false;
+		auto CheckRow = [&Check](const FElysiumBodyAnimationRef& Ref)
+		{ return Check(Ref.Sequence, false) && Check(Ref.BlendSpace, false) && Check(Ref.BaseCell, false); };
+		for (const auto& Row : Data.Sequences)
+		{
+			if (!CheckRow(Row.Assets)) return false;
+			for (const auto& Layer : Row.Layers) if (!CheckRow(Layer)) return false;
+		}
+		return true;
+	}
+
 	template<typename T>
 	const T* FindAnimationLabel(const TMap<FString,T>& Values,const FString& Label)
 	{
@@ -33,12 +75,224 @@ void UElysiumNativeAnimationData::Deinitialize()
 
 void UElysiumNativeAnimationData::ReleasePrepared()
 {
+	++AdmissionGeneration;
+	TArray<uint64> PendingIds; ModelAdmissions.GetKeys(PendingIds);
+	for (uint64 Id : PendingIds) CancelModelAdmission(Id);
 	for (auto& Handle : Loads) if (Handle.IsValid())
 	{
 		if (!Handle->HasLoadCompleted()) Handle->CancelHandle();
 		else Handle->ReleaseHandle();
 	}
 	Loads.Reset(); Bodies.Reset(); Vocabularies.Reset(); Tables.Reset();
+}
+
+uint64 UElysiumNativeAnimationData::AdmitModelAsync(const FString& ModelId, uint64 OwnerEpoch,
+	TFunction<void(bool, const FString&)> Completion, FString& OutError)
+{
+	OutError.Reset();
+	if (!IsInGameThread() || !ElysiumCharacterModel::IsCanonicalId(ModelId) || OwnerEpoch != PreparedEpoch || !Completion)
+	{ OutError = TEXT("async model admission requires a canonical ID, live preparation epoch, callback and game thread"); return 0; }
+	auto Request = MakeShared<FElysiumAsyncModelAdmission>();
+	Request->Id = ++NextAdmissionId; Request->Epoch = OwnerEpoch; Request->Generation = AdmissionGeneration;
+	Request->ModelId = ModelId; Request->Completion = MoveTemp(Completion);
+	ModelAdmissions.Add(Request->Id, Request);
+	// Even resident/missing metadata completes after the caller has stored its request token.
+	Request->Ticker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateWeakLambda(this,
+		[this, Id = Request->Id](float)
+		{
+			if (auto* Found = ModelAdmissions.Find(Id)) (*Found)->Ticker.Reset();
+			AdvanceModelAdmission(Id); return false;
+		}));
+	return Request->Id;
+}
+
+void UElysiumNativeAnimationData::CancelModelAdmission(uint64 RequestId)
+{
+	TSharedPtr<FElysiumAsyncModelAdmission> Request;
+	if (!ModelAdmissions.RemoveAndCopyValue(RequestId, Request)) return;
+	if (Request->Ticker.IsValid()) FTSTicker::GetCoreTicker().RemoveTicker(Request->Ticker);
+	for (const auto& Handle : Request->Handles) if (Handle.IsValid())
+	{
+		if (Handle->HasLoadCompleted()) Handle->ReleaseHandle(); else Handle->CancelHandle();
+	}
+	Request->Completion = nullptr;
+}
+
+void UElysiumNativeAnimationData::LoadAdmissionPaths(uint64 RequestId, const TArray<FSoftObjectPath>& Paths)
+{
+	const auto* Found = ModelAdmissions.Find(RequestId);
+	if (!Found) return;
+	const auto Request = *Found;
+	if (Paths.IsEmpty()) { FinishModelAdmission(RequestId, TEXT("async admission produced an empty load batch")); return; }
+	auto Handle = UAssetManager::GetStreamableManager().RequestAsyncLoad(Paths,
+		FStreamableDelegate::CreateWeakLambda(this, [this, RequestId, Paths]
+		{
+			const auto* Active = ModelAdmissions.Find(RequestId);
+			if (!Active) return;
+			const auto& Handles = (*Active)->Handles;
+			if (Handles.IsEmpty() || !Handles.Last()->HasLoadCompleted() || Handles.Last()->HasError())
+			{ FinishModelAdmission(RequestId, TEXT("async native model load failed")); return; }
+			for (const auto& Path : Paths)
+				if (!Path.ResolveObject())
+				{ FinishModelAdmission(RequestId, TEXT("async native dependency is absent: ") + Path.ToString()); return; }
+			AdvanceModelAdmission(RequestId);
+		}), FStreamableManager::DefaultAsyncLoadPriority, false, true);
+	if (!Handle.IsValid()) { FinishModelAdmission(RequestId, TEXT("could not create async native model load")); return; }
+	Request->Handles.Add(Handle);
+	Handle->StartStalledHandle();
+}
+
+bool UElysiumNativeAnimationData::AdmissionAssetsCompiling(const FElysiumAsyncModelAdmission& Request) const
+{
+#if WITH_EDITOR
+	for (const auto& Path : Request.Dependencies)
+	{
+		UObject* Asset = Path.ResolveObject();
+		if (const auto* Sequence = ::Cast<UAnimSequence>(Asset); Sequence && Sequence->IsCompiling()) return true;
+		if (const auto* Mesh = ::Cast<USkeletalMesh>(Asset); Mesh && Mesh->IsCompiling()) return true;
+	}
+#endif
+	return false;
+}
+
+void UElysiumNativeAnimationData::AdvanceModelAdmission(uint64 RequestId)
+{
+	const auto* Found = ModelAdmissions.Find(RequestId);
+	if (!Found) return;
+	const auto Request = *Found;
+	if (Request->Generation != AdmissionGeneration || Request->Epoch != PreparedEpoch)
+	{ CancelModelAdmission(RequestId); return; }
+	if (!Cast)
+	{
+		const TSoftObjectPtr<UElysiumCastData> Ref(FSoftObjectPath(TEXT("/ElysiumBaked/Models/_Corpus/DA_Cast.DA_Cast")));
+		Cast = Ref.Get();
+		if (!Cast)
+		{
+			if (Ref.ToSoftObjectPath().ResolveObject())
+			{ FinishModelAdmission(RequestId, TEXT("native cast path resolves to the wrong UObject class")); return; }
+			LoadAdmissionPaths(RequestId, {Ref.ToSoftObjectPath()}); return;
+		}
+	}
+	FString Error;
+	if (!Request->bRootDiscovered)
+	{
+		const auto* Entry = Cast->FindModel(Request->ModelId, Error);
+		if (!Entry || Entry->Mesh.IsNull() || Entry->BodyData.IsNull())
+		{ FinishModelAdmission(RequestId, Error.IsEmpty() ? TEXT("character has no native mesh/body reference: ") + Request->ModelId : Error); return; }
+		Request->Dependencies.Add(Entry->Mesh.ToSoftObjectPath());
+		Request->Pending.Add({Entry->AssetId, FString(), Entry->BodyData});
+		if (const auto* Cinematic = Cast->Cinematics.Find(Entry->AssetId))
+			for (const auto& Pair : Cinematic->Roots)
+				Request->Pending.Add({Pair.Value.AssetId, Pair.Value.OwnerRoot, Pair.Value.BodyData});
+		Request->bRootDiscovered = true;
+	}
+	while (!Request->Pending.IsEmpty())
+	{
+		const auto Owner = Request->Pending.Pop(EAllowShrinking::No);
+		const FString Key = Owner.Data.ToSoftObjectPath().ToString();
+		if (Owner.Data.IsNull()) { FinishModelAdmission(RequestId, TEXT("native include has no body reference: ") + Owner.AssetId); return; }
+		if (const auto* Prior = Request->Discovered.Find(Key))
+		{
+			if ((*Prior)->AssetId != Owner.AssetId || (*Prior)->OwnerRoot != Owner.OwnerRoot)
+			{ FinishModelAdmission(RequestId, TEXT("native body address has conflicting owner identities: ") + Key); return; }
+			continue;
+		}
+		UElysiumBodyData* Data = Owner.Data.Get();
+		if (!Data)
+		{
+			if (Owner.Data.ToSoftObjectPath().ResolveObject())
+			{ FinishModelAdmission(RequestId, TEXT("native BodyData path resolves to the wrong UObject class: ") + Key); return; }
+			Request->Pending.Add(Owner);
+			TSet<FSoftObjectPath> Wave;
+			for (const auto& Pending : Request->Pending)
+				if (!Pending.Data.IsNull() && !Pending.Data.Get()) Wave.Add(Pending.Data.ToSoftObjectPath());
+			LoadAdmissionPaths(RequestId, Wave.Array()); return;
+		}
+		if (Data->AssetId != Owner.AssetId || Data->OwnerRoot != Owner.OwnerRoot)
+		{ FinishModelAdmission(RequestId, TEXT("native BodyData identity differs from its reference: ") + Key); return; }
+		Request->Pins.Emplace(Data);
+		Request->Discovered.Add(Key, Data);
+		Data->GatherAnimationPaths(Request->Dependencies);
+		for (const auto& Include : Data->IncludeOwners)
+		{
+			if (Include.AssetId == Data->AssetId) continue;
+			const auto* Included = Cast->FindModel(Include.AssetId, Error);
+			if (!Included || Included->BodyData.IsNull())
+			{ FinishModelAdmission(RequestId, TEXT("native include owner is absent: ") + Include.AssetId); return; }
+			Request->Pending.Add({Included->AssetId, FString(), Included->BodyData});
+		}
+	}
+	if (!Request->bDependenciesRequested)
+	{
+		Request->bDependenciesRequested = true;
+		LoadAdmissionPaths(RequestId, Request->Dependencies.Array()); return;
+	}
+	for (const auto& Pair : Request->Discovered)
+		if (!AnimationReferencesResident(*Pair.Value, Error)) { FinishModelAdmission(RequestId, Error); return; }
+	if (AdmissionAssetsCompiling(*Request))
+	{
+		if (!Request->Ticker.IsValid())
+			Request->Ticker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateWeakLambda(this,
+				[this, RequestId](float)
+				{
+					if (auto* Active = ModelAdmissions.Find(RequestId)) (*Active)->Ticker.Reset();
+					AdvanceModelAdmission(RequestId); return false;
+				}), .05f);
+		return;
+	}
+	const auto* Entry = Cast->FindModel(Request->ModelId, Error);
+	if (!Entry || !ElysiumCharacterModel::Validate(Request->ModelId, Entry->Mesh.Get(), Error))
+	{ FinishModelAdmission(RequestId, Error); return; }
+	// One publication point: selectors cannot observe a partially discovered/loading owner graph.
+	for (const auto& Pair : Request->Discovered) { Vocabularies.Remove(Pair.Key); Tables.Remove(Pair.Key); }
+	Bodies.Append(Request->Discovered);
+	Loads.Append(MoveTemp(Request->Handles));
+	FinishModelAdmission(RequestId, FString());
+}
+
+void UElysiumNativeAnimationData::FinishModelAdmission(uint64 RequestId, const FString& Error)
+{
+	const auto* Found = ModelAdmissions.Find(RequestId);
+	if (!Found) return;
+	const auto Request = *Found;
+	auto Completion = MoveTemp(Request->Completion);
+	const bool bCurrent = Request->Generation == AdmissionGeneration && Request->Epoch == PreparedEpoch;
+	CancelModelAdmission(RequestId);
+	if (bCurrent && Completion) Completion(Error.IsEmpty(), Error);
+}
+
+bool UElysiumNativeAnimationData::IsModelReady(const FString& ModelId) const
+{
+	if (!ElysiumCharacterModel::IsCanonicalId(ModelId) || !Cast) return false;
+	FString Error;
+	USkeletalMesh* RootMesh = Mesh(ModelId, Error);
+	if (!ElysiumCharacterModel::Validate(ModelId, RootMesh, Error)) return false;
+	TArray<const UElysiumBodyData*> Pending{Body(ModelId)};
+	if (const auto* Cinematic = Cast->Cinematics.Find(ModelId))
+		for (const auto& Pair : Cinematic->Roots) Pending.Add(PreparedBody(Pair.Value.BodyData));
+	TSet<const UElysiumBodyData*> Seen;
+	while (!Pending.IsEmpty())
+	{
+		const auto* Data = Pending.Pop(EAllowShrinking::No);
+		if (!Data) return false;
+		if (Seen.Contains(Data)) continue;
+		Seen.Add(Data);
+		if (!AnimationReferencesResident(*Data, Error)) return false;
+		for (const auto& Include : Data->IncludeOwners)
+			if (Include.AssetId != Data->AssetId) Pending.Add(Body(Include.AssetId));
+		TSet<FSoftObjectPath> Paths; Data->GatherAnimationPaths(Paths);
+		for (const auto& Path : Paths)
+		{
+			if (!Path.ResolveObject()) return false;
+#if WITH_EDITOR
+			if (const auto* Sequence = ::Cast<UAnimSequence>(Path.ResolveObject()); Sequence && Sequence->IsCompiling()) return false;
+#endif
+		}
+	}
+#if WITH_EDITOR
+	if (RootMesh->IsCompiling()) return false;
+#endif
+	return true;
 }
 
 void UElysiumNativeAnimationData::ReleaseEpoch(uint64 Epoch)

@@ -36,9 +36,8 @@ signature measures the skeleton rather than the pose.
 The shared banks carry sixty bones; a body carries seventy-nine or eighty-eight,
 and the difference is hair, garment and the axis-interpolated twist chain --
 things retail drives by rig rules and secondary motion that no composition
-reproduces. The set is read from the bank's own `ANIM` track headers for the
-clip the frame committed, so it is the export's own answer rather than a list of
-names this file would have to be edited to keep true.
+reproduces. The set is read from the installed bank's animation weight records
+for the clip the frame committed, independently of the producer being scored.
 
 **The retail frame is chosen by search, not by a clock.** The two runs share no
 time base -- one is a recorded VtMB session and the other is a scripted stream
@@ -84,10 +83,10 @@ from typing import Any
 import numpy as np
 
 from elysium_pipeline import paths
-from elysium_pipeline.formats import eskm
+from elysium_pipeline.validation.oracle_source import OracleSource
 
 #: Retail states its world in Source units; our run states centimetres. The
-#: factor is the one `npc_export` converts every stated distance by.
+#: factor converts Source inches into centimetres.
 SOURCE_UNIT_TO_CM = 2.54
 
 #: A matrix3x4_t is three rows of four: a basis row, then that row's translation.
@@ -153,61 +152,23 @@ def _bone_positions(bones: dict[str, Any], scale: float) -> dict[str, np.ndarray
     return out
 
 
-def _sequence_labels(stem: str) -> dict[int, str]:
-    """{retail's own global sequence number: the label the export packaged it under}.
-
-    The capture records what the body committed as a number and every other side
-    of this comparison speaks labels. `clips/<stem>.json` carries that same
-    number per row under `seq`, which is the one place the two vocabularies meet.
-    The sidecar's `activities` array is an intern table (T5) and is never read
-    here.
-    """
-    path = paths.export_root() / "npc" / "clips" / f"{stem}.json"
-    if not path.is_file():
-        return {}
-    sidecar = json.loads(path.read_text(encoding="utf-8"))
-    out: dict[int, str] = {}
-    for label, rows in sidecar.get("seq", {}).items():
-        for raw in rows:
-            out.setdefault(int(raw), label)
-    return out
+def _sequence_labels(stem: str, source: OracleSource | None = None) -> dict[int, str]:
+    """Retail global sequence numbers and labels from the installed include tree."""
+    return (source if source is not None else OracleSource()).sequence_labels(stem)
 
 
 class _Banks:
-    """The bones each clip of each owner states a track for, read once per owner.
+    """The installed animation's track-bone sets; poses are never decoded here."""
 
-    Track headers only: which bones a clip addresses is a property of its track
-    headers, so the answer costs the walk that stepping over the payload does and
-    never the price of decoding a pose.
-    """
-
-    def __init__(self) -> None:
-        self._cache: dict[str, tuple[list[str], dict[str, set[int]]] | None] = {}
-
-    def _load(self, owner: str) -> tuple[list[str], dict[str, set[int]]] | None:
-        if owner in self._cache:
-            return self._cache[owner]
-        root = paths.export_root() / "npc"
-        loaded = None
-        for candidate in (root / "banks" / f"{owner}.eskm", root / f"{owner}.eskm"):
-            if candidate.is_file():
-                blob = eskm.read(candidate)
-                loaded = ([name for name, _parent in eskm.bones(blob)],
-                          eskm.clip_track_bones(blob))
-                break
-        self._cache[owner] = loaded
-        return loaded
+    def __init__(self, source: OracleSource | None = None) -> None:
+        self.source = source if source is not None else OracleSource()
 
     def tracked(self, owner: str, label: str) -> set[str] | None:
         """The bone NAMES `label` carries a track for, or None when the bank does not state it."""
-        loaded = self._load(owner)
-        if loaded is None:
+        try:
+            return self.source.tracked(owner, label)
+        except KeyError:
             return None
-        names, by_clip = loaded
-        indices = by_clip.get(label)
-        if indices is None:
-            return None
-        return {names[index] for index in indices if 0 <= index < len(names)}
 
 
 def _matrix(positions: dict[str, np.ndarray], order: list[str]) -> np.ndarray:
@@ -317,7 +278,7 @@ def _state_key(stem: str, base: str, moving: bool) -> str:
     return f"{stem} {base} {'moving' if moving else 'at rest'}"
 
 
-def _retail_frames(stem: str) -> tuple[list[dict[str, Any]], int]:
+def _retail_frames(stem: str, source: OracleSource | None = None) -> tuple[list[dict[str, Any]], int]:
     """Every captured frame of `stem`, with what it stood and how fast it was going.
 
     The two oracles are joined on `(round(curtime, 5), stem)` -- the pose hook's
@@ -330,7 +291,7 @@ def _retail_frames(stem: str) -> tuple[list[dict[str, Any]], int]:
     """
     out: list[dict[str, Any]] = []
     unjoined = 0
-    labels = _sequence_labels(stem)
+    labels = _sequence_labels(stem, source)
     for session in _sessions():
         layers = json.loads((session / "layer_oracle.json").read_text(encoding="utf-8"))
         poses = json.loads((session / "pose_oracle.json").read_text(encoding="utf-8"))
@@ -432,7 +393,8 @@ def compare(run_path: Path) -> _Verdict:
         verdict.code, verdict.note = 2, f"asked '{body}', stood '{stem}'"
         return verdict
 
-    retail, unjoined = _retail_frames(stem)
+    source = OracleSource()
+    retail, unjoined = _retail_frames(stem, source)
     if not retail:
         print(f"[compose] ABSTAIN: no life_rig_pose session under "
               f"$ELYSIUM_WORK_ROOT/research/frida carries both oracles for '{stem}'")
@@ -448,7 +410,7 @@ def compare(run_path: Path) -> _Verdict:
         verdict.note = "every captured frame is mid cross-fade"
         return verdict
 
-    banks = _Banks()
+    banks = _Banks(source)
     control = _Cohort("control", "no slot standing")
     layered = _Cohort("layered", "exactly one slot at full weight")
     cohorts = [control, layered]

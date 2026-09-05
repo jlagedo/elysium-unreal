@@ -1097,6 +1097,74 @@ payload/body/actor file's digest. A damaged or stale derived product is rebuilt.
 retain other units' previous entries and keep native pruning disabled during cutover.
 
 
+### Cooked secondary motion
+
+`DYN_<base>` is a `UElysiumDynamicsData` asset under the model unit's standard folder. Its ordered
+`Records` retain every secondary-motion declaration, including the unused authored preset, original
+scalar values, source bone indices, resolved bone-name walk, projection kind and recipe index.
+Repeated records remain separate. Unknown fields, invalid walks and unclassified spine singletons
+refuse projection. Multi-bone records generate stock AnimDynamics chain recipes; classified breast
+singletons generate body recipes. Other singletons and the explicitly excluded torso flap/rib rows
+remain cooked source-only records with a reason. Provisional solver mapping never replaces the
+original source values.
+
+The importer hashes the dynamics projection, publishes it before its mesh, and stores a hard
+reference on `UElysiumCharacterProvenance`. The data loads with the mesh. Native installation matches
+each authored chain to exactly one generated chain and applies the authored tuning; the authored
+table remains the install gate. Missing or ambiguous recipes warn. Unadmitted chains and all breast
+body recipes remain inactive. Authored tuning keys use model IDs; preparation-time debug aliases
+resolve through the cast catalogue. Verification compares every reflected source and recipe field after saving/reloading and
+checks the mesh reference. This cooks source data; it does not establish retail solver equivalence.
+
+### Native cloth projection and binding
+
+The cloth stage reconstructs `render_maps` from each source model's LOD0 selector,
+position/normal and tangent tables, joined through `renderVertexMap` to staged vertex identities.
+It keeps the entire material surface around a garment, with its staged positions, normals, UVs,
+skin and winding. Substituted vertices retain particle/tangent/flip fields; skinned anchor rows
+retain the existing ring-closure marker. Neither vertex order nor nearest-position matching is an
+identity. Conflicting joins, missing particles and unrepresented garments fail staging.
+
+Simulation positions/colliders convert from inches and reflect Y once; squared constraint lengths
+scale by `2.54²`. Anchor and particle skin names use the same bone-name mapping as the mesh.
+The distance/compression fields are counts. Raw source models and higher-LOD declarations remain
+in the GLB; the native garment projection consumes LOD0.
+
+The native builder checks each `CLOTH_<base>[_<index>]` address against the shared unit resolver
+and binds materials from the owning mesh. Staged source normals supply the render shading basis.
+The importer saves the cloth and its `_PHYS` asset, rejects nonzero orphaned bindings, root-bound
+fallback particles and degenerate simulation normals, then attaches every garment to the mesh's
+cooked provenance. Fresh verification reads the saved collection and simulation model, compares
+render geometry and substitution/skinning choices, and checks the owning mesh reference.
+Installation uses these loaded references and attaches every garment; it warns on an incomplete
+declared inventory. Tuning remains in `DA_ClothTuning`. A garment without an authored entry uses
+that table's explicit fallback and remains listed in `clothTuningPending`/`pendingProjections`.
+Those inspectable assets do not close tuning acceptance. Undefined material profiles or unset
+solver parameters still fail publication.
+
+The common tuning migration preflights both authored tables against the complete cast before
+changing either map. Missing, ambiguous and colliding aliases refuse the migration. Original
+packages and key/value receipts are backed up under the character stage. Map values remain
+unchanged; reflected struct text is compared before/after assignment and in a fresh editor against
+the import receipt. The serialized hair map field remains `Stems` to retain its authored data;
+its keys are canonical model IDs. Subsequent authored tuning edits establish a new import receipt.
+
+### Independent native geometry verification
+
+The editor verifier captures each saved mesh's LOD0 mesh description, source/render vertex map,
+CPU render buffers and native morph arrays through `UElysiumGeometryVerificationLibrary`.
+Snapshots are individual files under the character stage, with unit, payload, body, package and
+material identities plus content hashes. Missing CPU data, unfinished compilation, unsaved edits
+and missing snapshots fail verification; a partial capture cannot be reported as complete.
+
+Offline numerical comparison independently joins GLB source vertices and triangles to staged
+vertices, including wield reference-pose transforms, then compares native authoring and render
+attributes and every nonzero morph record at every rendered copy. Source-only, undrawn and
+explicit-zero morph records have a separate GLB inventory; dense native morphs cannot recover
+that sparse source evidence. Engine position/normal filtering is a producer defect to correct,
+not permission to relax the comparator. These checks do not establish compressed GPU morph
+fidelity, evaluated skinning, rendered appearance, cloth solver equivalence or higher-LOD coverage.
+
 ### Wield stage and native mesh build
 
 The item join reads the typed `WeaponData` projection from V2 vdata units and the NPC equipment
@@ -1153,3 +1221,19 @@ the legacy geometric fallback. Added morphs must equal the GLB's ordered sparse 
 zero deltas. After those field-specific proofs, every other field is compared normally. These
 checks name recovered data rather than dropping it to match an incomplete legacy export; they
 remain payload checks and do not replace native-asset or played acceptance.
+### Authored tangent and buffer precision contract
+
+The skeletal stage carries a `TANG` section beside `MESH`: a little-endian uint32 vertex count
+followed by one float32 XYZ/handedness tuple per staged vertex. The core glTF-to-Unreal reflection
+maps `(x,y,z,w)` to `(x,z,y,-w)` while retaining UVs. Zero source tangents remain zero. The native
+stage builder requires this channel, imports its tangent and binormal-sign attributes, and
+disables tangent recomputation and tolerance-based welding. Wield reference-pose projection
+rotates tangent directions through the same weighted bind-to-reference transforms as normals.
+Full-precision UVs preserve finite source values outside half-float range; the new skeletal path
+uses the engine's high-precision tangent-basis and skin-weight buffers.
+
+Earlier position/normal/UV/skin/morph comparisons did not inspect authored tangents. Their vertex
+equivalence results must not be interpreted as complete attribute equivalence: the tangent audit
+found different source tangents in every previously aliased pilot pair. Native tangent storage,
+zero-tangent behavior, tangent-aware vertex identity and evaluated shading require their own
+verification before full geometry fidelity or legacy retirement can be claimed.

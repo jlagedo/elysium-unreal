@@ -49,12 +49,7 @@ void FElysiumPlayer::Spawn()
 	{
 		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 		{
-			Visual = Embodiment->BuildPlayerVisual(ModelStem(), Disposition, IdleVariant());
-			if (Visual)
-			{
-				World->RegisterNpcBody(Visual);
-				GateVisual();
-			}
+			if (PrepareCharacterVisual()) InstallPreparedCharacterVisual();
 		}
 	}
 
@@ -530,6 +525,7 @@ void FElysiumPlayer::OnRuntimeTransformChanged()
 
 void FElysiumPlayer::OnRuntimeModelChanged()
 {
+	InvalidateCharacterVisualRequest();
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (!Embodiment)
 	{
@@ -548,14 +544,19 @@ void FElysiumPlayer::OnRuntimeModelChanged()
 	bBlockIntentStands = false;
 	Embodiment->ClearPlayerVisual();
 	Visual = nullptr;
-	if (!Model.IsEmpty())
+	if (PrepareCharacterVisual()) InstallPreparedCharacterVisual();
+}
+
+void FElysiumPlayer::InstallPreparedCharacterVisual()
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || Model.IsEmpty()) return;
+	Visual = Embodiment->BuildPlayerVisual(ModelStem(), Disposition, IdleVariant());
+	if (Visual)
 	{
-		Visual = Embodiment->BuildPlayerVisual(ModelStem(), Disposition, IdleVariant());
-		if (Visual)
-		{
-			World->RegisterNpcBody(Visual);
-			GateVisual();
-		}
+		World->RegisterNpcBody(Visual);
+		GateVisual();
+		RefreshPreparedExpressions();
 	}
 }
 

@@ -14,7 +14,7 @@ def document():
             "extensions": {"ELYSIUM_vtmb_model": {"eyeballIndex": 0, "bone": 0}}}],
             "extensions": {"ELYSIUM_vtmb_model": {
                 "identity": {"asset": "vtmb:model:character/body"},
-                "mdl": {"bones": [{"name": "head", "flags": 2}], "header": {"phonemeFilter": [.08, .1]},
+                "mdl": {"bones": [{"name": "head", "flags": 2}], "header": {"phonemeFilter": [.08, .1], "flags": {"value": 0}},
                         "textures": [{"name": "Eye_Left"}], "skinTable": [[0], [0]],
                         "bodyParts": [{"index": 0, "models": [{"index": 0, "eyeballs": [eye],
                                         "meshes": [{"materialType": 1, "materialParam": 0, "material": 0}]}]}]},

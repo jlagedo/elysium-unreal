@@ -128,13 +128,13 @@ def stage_unit(source, destination, *, mesh=True, content_root=None, cinematic=F
     animations, clip_count = payload._anim_section(
         unit, unit.bones, unit.sequences + extra, bone_map, len(rows), masks,
         reparented=reparented, ensure_labels=forced_rest)
-    mesh_bytes, morph_bytes, names, bindings, vertex_map = (
-        geometry(unit, bone_map) if mesh else (b"", b"", [], [], []))
+    mesh_bytes, morph_bytes, names, bindings, vertex_map, tangent_bytes = (
+        geometry(unit, bone_map) if mesh else (b"", b"", [], [], [], b""))
     sections = [(b"SKEL", payload._skel_section(rows))]
     if mesh:
         sections.extend([(b"ATCH", payload._attachment_section(unit, bone_map, extra_attachments)),
                          (b"MATL", payload._matl_section(names, {}) if names else b""),
-                         (b"MESH", mesh_bytes), (b"MORF", morph_bytes)])
+                         (b"MESH", mesh_bytes), (b"MORF", morph_bytes), (b"TANG", tangent_bytes)])
     sections.extend([(b"MASK", payload._mask_section(masks, len(rows))), (b"ANIM", animations)])
     compiled = payload._assemble(sections)
     clips = eskm.clip_payloads(compiled)
@@ -244,6 +244,7 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
             "boneCount": len(extension["mdl"]["bones"]),
             "includes": [row["asset"] for row in extension["mdl"]["includeModels"]],
             "physics": bool(extension.get("physics")),
+            "cloth": bool((extension.get("cloth") or {}).get("garments")),
         }
         if identity["family"] == "character" and extension["mdl"]["bones"]:
             bones = extension["mdl"]["bones"]
@@ -275,7 +276,8 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
                 raise SkeletalUnitError(f"body {selector!r} resolves to {len(candidates)} units: {candidates}")
             selected.add(candidates[0])
     else:
-        selected = {id for id, row in units.items() if skeletal_candidate(row["identity"], row["boneCount"])}
+        selected = {id for id, row in units.items()
+                    if skeletal_candidate(row["identity"], row["boneCount"], has_cloth=row["cloth"])}
         selected.update(cinematic_sets)
         selected.update(wield_models)
     pending = list(selected)
@@ -327,7 +329,7 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
         "bankPartition": partition,
         "wieldCatalogue": wield_catalogue,
         "inventory": [{"assetId": id, "shape": row["identity"]["shape"],
-                       "roles": row["identity"].get("roles", []), "physics": row["physics"],
+                       "roles": row["identity"].get("roles", []), "physics": row["physics"], "cloth": row["cloth"],
                        "selected": id in selected,
                        "reason": "selected" if id in selected else "outside-selected-skeletal-lane"}
                       for id, row in units.items()],

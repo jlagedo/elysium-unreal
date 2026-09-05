@@ -52,6 +52,7 @@ def project_cast(manifest):
         if model["stem"] in collisions and preserved.get(model["stem"]) != id:
             model["stem"] = safe_name(id.removeprefix("vtmb:model:"))
     return {"schemaVersion":"1.0.0", "assetPath":corpus_path("model","DA","Cast"),
+            "expressionTablesAsset":corpus_path("expression-table","DA","ExpressionTables"),
             "models":models,"aliases":aliases,"ambiguousAliases":collisions,
             "cinematics":cinematics,"establishedAliases":preserved}
 

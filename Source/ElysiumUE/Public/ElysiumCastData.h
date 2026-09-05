@@ -7,6 +7,7 @@
 class USkeletalMesh;
 class USkeleton;
 class UElysiumBodyData;
+class UElysiumExpressionTables;
 
 USTRUCT()
 struct FElysiumCastModel
@@ -56,11 +57,15 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TMap<FString,FString> Aliases;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TMap<FString,FElysiumCastAliasCandidates> AmbiguousAliases;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TMap<FString,FElysiumCastCinematic> Cinematics;
+	/** Cook reachability and map preparation root for every expression-table unit. */
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Assets") TObjectPtr<UElysiumExpressionTables> ExpressionTables;
 #if WITH_EDITORONLY_DATA
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") FString AuthoringEvidence;
 #endif
 	const FElysiumCastModel* FindModel(const FString& Name, FString& OutError) const;
 	const FElysiumCinematicOwnerRef* FindCinematic(const FString& Model, const FString& Root, FString& OutError) const;
+	/** Preparation-time adapter for remaining authored/debug aliases. Never use from a tick. */
+	static FString ModelIdForPreparation(const FString& Name, FString& OutError);
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static UElysiumCastData* ApplyJson(UElysiumCastData* Asset, const FString& Json, FString& OutError);
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")

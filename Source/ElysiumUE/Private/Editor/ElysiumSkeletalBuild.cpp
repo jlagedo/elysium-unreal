@@ -13,6 +13,8 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "BoneWeights.h"
 #include "Engine/SkeletalMesh.h"
+#include "ElysiumSkeletalMesh.h"
+#include "SkinnedAssetCompiler.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Engine/SkinnedAssetCommon.h"
 #include "MeshDescription.h"
@@ -527,6 +529,8 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 	{
 		return FString::Printf(TEXT("%s carries no geometry"), *SourcePath);
 	}
+	if (UnitMaterials && Source.Tangents.Num() != Source.Vertices.Num())
+		return FString::Printf(TEXT("%s lacks the V2 authored tangent channel; restage the model"), *SourcePath);
 
 	TMap<FString, UMaterialInterface*> ResolvedMaterials;
 	if (UnitMaterials != nullptr)
@@ -569,9 +573,10 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 		}
 		TArray<double> NormalLengths;
 		NormalLengths.Reserve(Source.Vertices.Num());
-		for (FElysiumSourceVertex& Vertex : Source.Vertices)
+		for (int32 VertexIndex = 0; VertexIndex < Source.Vertices.Num(); ++VertexIndex)
 		{
-			FVector Position = FVector::ZeroVector, Normal = FVector::ZeroVector;
+			FElysiumSourceVertex& Vertex = Source.Vertices[VertexIndex];
+			FVector Position = FVector::ZeroVector, Normal = FVector::ZeroVector, Tangent = FVector::ZeroVector;
 			for (int32 Influence = 0; Influence < 4; ++Influence)
 			{
 				const double Weight = Vertex.Weights[Influence];
@@ -583,10 +588,21 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 				}
 				Position += Weight * NewWorld[Bone].TransformPosition(OldWorld[Bone].InverseTransformPosition(FVector(Vertex.Position)));
 				Normal += Weight * NewWorld[Bone].TransformVectorNoScale(OldWorld[Bone].InverseTransformVectorNoScale(FVector(Vertex.Normal)));
+				if (Source.Tangents.IsValidIndex(VertexIndex))
+				{
+					const auto& Value = Source.Tangents[VertexIndex];
+					Tangent += Weight * NewWorld[Bone].TransformVectorNoScale(
+						OldWorld[Bone].InverseTransformVectorNoScale(FVector(Value.X, Value.Y, Value.Z)));
+				}
 			}
 			Vertex.Position = FVector3f(Position);
 			NormalLengths.Add(Normal.Size());
 			Vertex.Normal = FVector3f(Normal.GetSafeNormal());
+			if (Source.Tangents.IsValidIndex(VertexIndex))
+			{
+				const FVector UnitTangent = Tangent.GetSafeNormal();
+				Source.Tangents[VertexIndex] = FVector4f(UnitTangent.X, UnitTangent.Y, UnitTangent.Z, Source.Tangents[VertexIndex].W);
+			}
 		}
 		// Morphs are displacements in the mesh bind frame, so they need the same weighted
 		// linear transform as their owning vertex, without the position translation. Preserve
@@ -648,7 +664,9 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 	}
 	const FString AssetName = FPackageName::GetShortName(PackageName);
 	ElysiumSkeletalBuildImpl::ClearForRewrite(Package, AssetName);
-	USkeletalMesh* Mesh = NewObject<USkeletalMesh>(Package, *AssetName, RF_Public | RF_Standalone);
+	USkeletalMesh* Mesh = UnitMaterials
+		? NewObject<UElysiumSkeletalMesh>(Package, *AssetName, RF_Public | RF_Standalone)
+		: NewObject<USkeletalMesh>(Package, *AssetName, RF_Public | RF_Standalone);
 
 	// The reference skeleton.
 	// Authored on the MESH. It keeps the exact MDL bind; the separate `USkeleton` carries the
@@ -744,6 +762,19 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 	// dozens, so the falloff is the expression. Nothing here is an import approximation of a DCC
 	// mesh, so nothing wants a weld threshold.
 	LodInfo.BuildSettings.MorphThresholdPosition = 0.0f;
+	if (UnitMaterials)
+	{
+		// The source uses float32 UVs, including finite values beyond half-float range.
+		// Keep that domain intact and use the engine's highest native normal/weight precision.
+		LodInfo.BuildSettings.bUseFullPrecisionUVs = true;
+		LodInfo.BuildSettings.bUseHighPrecisionTangentBasis = true;
+		LodInfo.BuildSettings.bUseHighPrecisionSkinWeights = true;
+		LodInfo.BuildSettings.bRecomputeTangents = false;
+		LodInfo.BuildSettings.ThresholdPosition = 0.f;
+		LodInfo.BuildSettings.ThresholdTangentNormal = 0.f;
+		LodInfo.BuildSettings.ThresholdUV = 0.f;
+		LodInfo.BuildSettings.bRemoveDegenerates = false;
+	}
 
 	FMeshDescription* MeshDescription = Mesh->CreateMeshDescription(0);
 	if (MeshDescription == nullptr)
@@ -757,6 +788,8 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 	TVertexAttributesRef<FVector3f> Positions = Static.GetVertexPositions();
 	TVertexInstanceAttributesRef<FVector2f> UVs = Static.GetVertexInstanceUVs();
 	TVertexInstanceAttributesRef<FVector3f> Normals = Static.GetVertexInstanceNormals();
+	TVertexInstanceAttributesRef<FVector3f> Tangents = Static.GetVertexInstanceTangents();
+	TVertexInstanceAttributesRef<float> BinormalSigns = Static.GetVertexInstanceBinormalSigns();
 	TPolygonGroupAttributesRef<FName> SlotNames = Static.GetPolygonGroupMaterialSlotNames();
 
 	MeshDescription->ReserveNewVertices(Source.Vertices.Num());
@@ -841,6 +874,12 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 				// duplicated source vertex, so its copies already differ here and the build keeps
 				// them apart rather than welding the pair to one averaged direction.
 				Normals.Set(Corners[Corner], Source.Vertices[VertexIndex].Normal);
+				if (Source.Tangents.IsValidIndex(VertexIndex))
+				{
+					const FVector4f& Tangent = Source.Tangents[VertexIndex];
+					Tangents.Set(Corners[Corner], FVector3f(Tangent.X, Tangent.Y, Tangent.Z));
+					BinormalSigns.Set(Corners[Corner], Tangent.W);
+				}
 				InstancesOfVertex[VertexIndex].Add(Corners[Corner]);
 			}
 			MeshDescription->CreatePolygon(Group, TArrayView<FVertexInstanceID>(Corners, 3));
@@ -915,6 +954,12 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 	Mesh->SetImportedBounds(FBoxSphereBounds(Bounds));
 	Mesh->Build();
 	Mesh->PostEditChange();
+	FSkinnedAssetCompilingManager::Get().FinishCompilation({Mesh});
+	if (const auto* AuthoredMesh = Cast<UElysiumSkeletalMesh>(Mesh))
+	{
+		const FString MorphError = AuthoredMesh->GetMorphBuildError();
+		if (!MorphError.IsEmpty()) return MorphError;
+	}
 
 	// A morph target only animates through a curve of the same name, and a curve only reaches a
 	// morph target if the SKELETON says that is what it is. Serialised here, this is what the

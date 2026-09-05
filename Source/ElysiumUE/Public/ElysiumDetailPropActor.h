@@ -24,11 +24,11 @@ class ELYSIUMUE_API AElysiumDetailPropActor : public AActor
 public:
 	AElysiumDetailPropActor();
 
-	/** The root: every record of `ModelStem` on this map, instance `k` being the model's `k`-th record. */
+	/** The root: every record of `ModelId` on this map, instance `k` being the model's `k`-th record. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium")
 	TObjectPtr<UInstancedStaticMeshComponent> Instances;
 
-	/** The R1 corpus stem the instances draw (`/ElysiumBaked/Meshes/SM_<ModelStem>`), for the label and the log. */
+	/** Canonical model unit identity; the native mesh is already bound on Instances. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Elysium")
-	FName ModelStem;
+	FName ModelId;
 };

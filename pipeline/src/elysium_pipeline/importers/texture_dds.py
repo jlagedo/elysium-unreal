@@ -38,12 +38,14 @@ class TextureDdsError(ValueError):
 # --- formats ------------------------------------------------------------------------------------
 
 #: vkFormat -> (DXGI format, block width, block height, bytes per block, kind)
-#: `kind` names the decoder: `bc1`, `bc2`, `bc3`, `rgba8`, `bgra8`, `rgb8`.
+#: `kind` names the BC, byte-pixel, or native linear float decoder (D1 sky composites).
 VK_FORMATS = {
     23: (28, 1, 1, 3, "rgb8"),      # VK_FORMAT_R8G8B8_UNORM -> widened to DXGI R8G8B8A8_UNORM
     37: (28, 1, 1, 4, "rgba8"),     # VK_FORMAT_R8G8B8A8_UNORM
     41: (28, 1, 1, 4, "rgba8"),     # VK_FORMAT_R8G8B8A8_UINT  (UVWQ8888) -> labelled R8G8B8A8_UNORM
     44: (87, 1, 1, 4, "bgra8"),     # VK_FORMAT_B8G8R8A8_UNORM
+    97: (10, 1, 1, 8, "rgba16f"),   # VK_FORMAT_R16G16B16A16_SFLOAT (linear HDR)
+    109: (2, 1, 1, 16, "rgba32f"),   # VK_FORMAT_R32G32B32A32_SFLOAT (linear HDR)
     133: (71, 4, 4, 8, "bc1"),      # VK_FORMAT_BC1_RGBA_UNORM_BLOCK
     135: (74, 4, 4, 16, "bc2"),     # VK_FORMAT_BC2_UNORM_BLOCK
     137: (77, 4, 4, 16, "bc3"),     # VK_FORMAT_BC3_UNORM_BLOCK
@@ -51,6 +53,8 @@ VK_FORMATS = {
 
 #: DXGI format -> (block width, block height, bytes per block, kind), for reading a DDS back.
 DXGI_FORMATS = {
+    2: (1, 1, 16, "rgba32f"),
+    10: (1, 1, 8, "rgba16f"),
     28: (1, 1, 4, "rgba8"),
     29: (1, 1, 4, "rgba8"),   # R8G8B8A8_UNORM_SRGB
     30: (1, 1, 4, "rgba8"),
@@ -67,7 +71,8 @@ DXGI_FORMATS = {
 #: Legacy fourCC -> kind, for a DDS written without a DX10 header.
 FOURCC_KINDS = {b"DXT1": "bc1", b"DXT3": "bc2", b"DXT5": "bc3"}
 KIND_BLOCKS = {"bc1": (4, 4, 8), "bc2": (4, 4, 16), "bc3": (4, 4, 16),
-               "rgba8": (1, 1, 4), "bgra8": (1, 1, 4), "rgb8": (1, 1, 3)}
+               "rgba8": (1, 1, 4), "bgra8": (1, 1, 4), "rgb8": (1, 1, 3),
+               "rgba16f": (1, 1, 8), "rgba32f": (1, 1, 16)}
 
 DDS_MAGIC = b"DDS "
 DDSD_CAPS, DDSD_HEIGHT, DDSD_WIDTH, DDSD_PITCH, DDSD_PIXELFORMAT = 0x1, 0x2, 0x4, 0x8, 0x1000
@@ -126,7 +131,8 @@ def parse_ktx2(payload: bytes) -> Ktx2:
      supercompression) = struct.unpack_from("<9I", payload, 12)
     if vk_format not in VK_FORMATS:
         raise TextureDdsError(f"KTX2 vkFormat {vk_format} is not one the lane admits")
-    if type_size != 1 or depth != 0 or supercompression != 0:
+    expected_type_size = {97: 2, 109: 4}.get(vk_format, 1)
+    if type_size != expected_type_size or depth != 0 or supercompression != 0:
         raise TextureDdsError("KTX2 header is not a plain 2D/cube/array texture")
     if faces not in (1, 6) or level_count < 1 or not width or not height:
         raise TextureDdsError("KTX2 header declares an invalid texture shape")
@@ -197,7 +203,7 @@ def build_dds(ktx: Ktx2, *, faces: list[list[bytes]] | None = None) -> bytes:
         return _widen_rgb8(data) if kind == "rgb8" else data
 
     flags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT | DDSD_PITCH
-    pitch_or_size = ktx.width * 4
+    pitch_or_size = ktx.width * KIND_BLOCKS[out_kind][2]
     caps = DDSCAPS_TEXTURE
     if level_count > 1:
         flags |= DDSD_MIPMAPCOUNT
@@ -234,7 +240,7 @@ class Dds:
     images: list[list[bytes]]   # [slice][level]
 
     def decode(self, slice_index: int = 0, level: int = 0) -> np.ndarray:
-        """RGBA8 pixels of one image as an `(h, w, 4)` array."""
+        """RGBA pixels of one image; uint8 LDR or native floating HDR, `(h, w, 4)`."""
         return decode_image(self.kind, self.images[slice_index][level],
                             max(1, self.width >> level), max(1, self.height >> level))
 
@@ -378,8 +384,10 @@ def _decode_bc3(data: bytes, width: int, height: int) -> np.ndarray:
 
 
 def decode_image(kind: str, data: bytes, width: int, height: int) -> np.ndarray:
-    """RGBA8 `(height, width, 4)` for one image of the given kind."""
+    """RGBA `(height, width, 4)`: uint8 for LDR, native float for linear HDR."""
 
+    if kind in ("rgba16f", "rgba32f"):
+        return np.frombuffer(data, dtype="<f2" if kind == "rgba16f" else "<f4").reshape(height, width, 4).copy()
     if kind == "bc1":
         return _decode_bc1(data, width, height)
     if kind == "bc2":

@@ -20,6 +20,7 @@
 #include "Map/ElysiumMapLog.h"
 #include "Visual/ElysiumEntityBodies.h"   // SetMap and the map animation preload
 #include "Visual/ElysiumNativeAnimationData.h"
+#include "Visual/ElysiumExpressionPreparation.h"
 #include "Engine/StreamableManager.h"
 #include "Visual/ElysiumMapVisuals.h"     // the baked-level adoption and the material audit
 #include "Visual/ElysiumNpcBody.h"        // SetRuntimeReady at the activation barrier
@@ -211,8 +212,25 @@ void AElysiumMapActor::BuildStageWorld()
 			Services.Presenter  = UElysiumPresentationSubsystem::Get(GetWorld());
 			Services.Weather    = this;
 			Services.Camera     = LocalCameraService(this);
+			CancelCharacterModelAdmissions();
 			EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 			EntityWorld->Load(FElysiumEntityDefs());
+			if (auto* Native = GI->GetSubsystem<UElysiumNativeAnimationData>())
+			{
+				FString Error;
+				auto Request = Native->PrepareMapModels({EntityWorld->InitialPlayerModel()}, Error, MapEpoch);
+				if (Request.IsValid())
+				{
+					Request->WaitUntilComplete();
+					bNativeAnimationPreloadFailed |= !UElysiumNativeAnimationData::FinishPreparation(Request, Error);
+				}
+				if (!Error.IsEmpty())
+				{
+					bNativeAnimationPreloadFailed = true;
+					UE_LOG(LogElysium, Warning, TEXT("green-room native model preparation: %s"), *Error);
+				}
+			}
+			PrepareExpressionTables();
 			EntityWorld->SpawnPlayer();
 		}
 	}
@@ -224,6 +242,38 @@ void AElysiumMapActor::BuildStageWorld()
 	const double TotalMs = (FPlatformTime::Seconds() - Start) * 1000.0;
 	LoadPhases.Add({ TEXT("Total"), TotalMs });
 	UE_LOG(LogElysium, Log, TEXT("built the green-room stage world in %.0f ms (no map)"), TotalMs);
+}
+
+void AElysiumMapActor::PrepareExpressionTables()
+{
+	ExpressionPreparation.Reset();
+	FString Error;
+	UGameInstance* Game = GetGameInstance();
+	auto* Native = Game ? Game->GetSubsystem<UElysiumNativeAnimationData>() : nullptr;
+	if (!Native || !EntityWorld)
+	{
+		Error = TEXT("native expression preparation requires the map world and asset subsystem");
+	}
+	else
+	{
+		// Ordinary maps loaded the cast while gathering native model resources. The green
+		// room has no model union, but still needs resident expression tables for its scenes.
+		if (!Native->PreparedCast()) Native->PrepareMapModels({}, Error, MapEpoch);
+		if (Error.IsEmpty())
+			ExpressionPreparation = ElysiumExpressions::PrepareResident(
+				EntityWorld->GetEpoch(), Native->PreparedCast(), Error);
+	}
+	if (!ExpressionPreparation.IsValid())
+	{
+		bNativeAnimationPreloadFailed = true;
+		UE_LOG(LogElysium, Warning, TEXT("native expression preparation %s: %s"), *MapName, *Error);
+	}
+	else
+	{
+		for (const auto& Entity : EntityWorld->Entities())
+			if (auto* Character = Entity ? Entity->AsCombatCharacter() : nullptr)
+				Character->RefreshPreparedExpressions();
+	}
 }
 
 void AElysiumMapActor::LoadMap()
@@ -376,6 +426,7 @@ void AElysiumMapActor::LoadMap()
 				// system; other env_particle definitions still load their baked closures.
 				Services.Weather    = this;
 				Services.Camera     = LocalCameraService(this);
+				CancelCharacterModelAdmissions();
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 				// The map's cooked per-entity collision, when Collision->Build adopted a payload
 				// above (R4.2 — `seam_map_map.md` -> "Import"). Null on an unconverted map, and
@@ -404,27 +455,16 @@ void AElysiumMapActor::LoadMap()
 					}
 					else if (Handle.IsValid())
 					{
-						const TWeakObjectPtr<AElysiumMapActor> WeakThis(this);
-						const TWeakPtr<FStreamableHandle> WeakLoad(Handle);
-						const uint64 ExpectedEpoch=MapEpoch;
-						auto Complete=[WeakThis,WeakLoad,ExpectedEpoch]() {
-							if (auto* Map=WeakThis.Get(); Map && Map->MapEpoch==ExpectedEpoch)
-							{
-								FString Why;
-								Map->bNativeAnimationPreloadFailed=!UElysiumNativeAnimationData::FinishPreparation(WeakLoad.Pin(),Why);
-								Map->bNativeAnimationPreloadPending=false;
-								if (!Why.IsEmpty()) UE_LOG(LogElysium,Warning,TEXT("native model preparation %s: %s"),*Map->MapName,*Why);
-							}
-						};
-						if (Handle->HasLoadCompleted()) Complete();
-						else
-						{
-							bNativeAnimationPreloadPending=true;
-							Handle->BindCompleteDelegate(FStreamableDelegate::CreateLambda(MoveTemp(Complete)));
-						}
+						// EntityWorld::Load immediately constructs bodies and reads animation metadata.
+						// Complete this load-phase request before Spawn sees those resources; runtime
+						// selectors and later SetModel admission must never perform these disk reads.
+						Handle->WaitUntilComplete();
+						bNativeAnimationPreloadFailed |= !UElysiumNativeAnimationData::FinishPreparation(Handle, Error);
+						if (!Error.IsEmpty()) UE_LOG(LogElysium, Warning, TEXT("native model preparation %s: %s"), *MapName, *Error);
 					}
 				}
 				EntityWorld->Load(MoveTemp(EntDefs));
+				PrepareExpressionTables();
 				BrushBodyCount = EntityWorld->NumBrushBodies();
 
 				// The player is an entity, created here because the map is where a
@@ -584,7 +624,9 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// embodiment seam (interaction anchors, bodies and scripted cameras). Run that teardown while
 	// EndPlay still guarantees those objects have valid UObject indices; waiting for this actor's C++
 	// destructor is too late because world cleanup may already have reclaimed its components.
+	CancelCharacterModelAdmissions();
 	EntityWorld.Reset();
+	ExpressionPreparation.Reset();
 	if (UGameInstance* GI=GetGameInstance())
 		if (auto* Native=GI->GetSubsystem<UElysiumNativeAnimationData>()) Native->ReleaseEpoch(MapEpoch);
 
@@ -635,8 +677,10 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 	FElysiumMapRuntimePrerequisites P;
 	P.bConstructionComplete = bRuntimeConstructionComplete;
 	P.bEntityWorldReady = EntityWorld.Get() != nullptr;
-	P.bAnimationPreloadReady = bAnimationPreloadReady && !bNativeAnimationPreloadPending && !bNativeAnimationPreloadFailed;
-	P.bAnimationPreloadPending = bNativeAnimationPreloadPending;
+	const bool bCharacterModelsPending = HasPendingCharacterModels();
+	P.bAnimationPreloadReady = bAnimationPreloadReady && !bNativeAnimationPreloadPending
+		&& !bNativeAnimationPreloadFailed && !bCharacterModelsPending;
+	P.bAnimationPreloadPending = bNativeAnimationPreloadPending || bCharacterModelsPending;
 	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
 	P.bAudioCatalogReady = !Audio || Audio->IsReadyForMapActivation();
 	P.bMenuBackdrop = bMenuBackdrop;

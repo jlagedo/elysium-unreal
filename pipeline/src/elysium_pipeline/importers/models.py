@@ -1,8 +1,9 @@
 """Stage the referenced model corpus out of the published GLB units.
 
 `uv run elysium import models` turns every **referenced** model unit into one `UStaticMesh` below
-`/ElysiumBaked/Meshes`, slots bound to the landed V2 material instances, collision cooked from
-VtMB's own convex hulls and skin families rolled into one corpus-wide table
+`/ElysiumBaked/Models/<dir>/SM_<base>`, slots bound to the landed V2 material instances,
+collision cooked from VtMB's own convex hulls and complete skin families staged for the
+merged static/skeletal corpus catalogue
 (`docs/architecture/seam_map_model.md` -> "Import"). This module is the offline stage half of that
 lane (R1.3 of `docs/project/seam_migration.md` -> "R1 -- props"); it mirrors `materials.py`'s shape:
 stage every selected unit, write one provenance sidecar per unit plus one `manifest.json`, recipe
@@ -35,6 +36,7 @@ from typing import Any, Callable, Sequence
 
 from elysium_pipeline import paths
 from elysium_pipeline.asset_names import safe_name
+from elysium_pipeline.asset_paths import baked_unit, corpus_path
 from elysium_pipeline.formats.bsp import source_to_unreal
 from elysium_pipeline.formats.map_entities_glb import model as map_entities_model
 from elysium_pipeline.formats.map_glb import model as map_model
@@ -51,11 +53,11 @@ MAP_ENTITIES_EXTENSION = map_entities_model.MAP_ENTITIES_EXTENSION
 
 #: The family directory this lane reads below the export_v2 root.
 FAMILY = "models"
-#: The package every static mesh lands under -- the V2 sibling of the legacy shared bake
-#: (`/ElysiumBaked/Shared/Meshes`), never over it ("Identity and naming").
-PACKAGE_ROOT = "/ElysiumBaked/Meshes"
+#: Shared with characters, wield and catalogue producers; never a directory ownership claim.
+PACKAGE_ROOT = "/ElysiumBaked/Models"
+PRODUCER = "models"
 #: The dangling-reference placeholder, authored by this lane, one shipped asset for the corpus.
-MISSING_MODEL_ASSET_PATH = f"{PACKAGE_ROOT}/SM_elysium_missing_model"
+MISSING_MODEL_ASSET_PATH = corpus_path("model", "SM", "Missing")
 #: The sentinel material every `vtmb:missing-material:` slot binds.
 MI_V2_MISSING = f"{materials.MASTER_ROOT}/MI_V2_Missing"
 #: Bumped whenever this lane's mapping changes in a way that must re-stage every unit.
@@ -63,7 +65,8 @@ MI_V2_MISSING = f"{materials.MASTER_ROOT}/MI_V2_Missing"
 #: auto-detection so every .phy ledge reproduces as its own convex hull (the Settled
 #: "not approximated" contract in seam_map_model.md "### Collision"), instead of a
 #: box- or primitive-shaped ledge being silently substituted with a fitted shape.
-SETTINGS_VERSION = "elysium-model-import-v2"
+#: v3: unit-addressed SM products and producer-scoped publication under the shared Models root.
+SETTINGS_VERSION = "elysium-model-import-v3"
 MANIFEST_SCHEMA = "1.0.0"
 MANIFEST_NAME = "manifest.json"
 #: Written by the editor phase (R1.4), not this module; kept here so the CLI has one name to read.
@@ -144,17 +147,13 @@ def static_stem(key: str) -> str:
 
 
 def asset_path_for(key: str) -> str:
-    """`vtmb:model:<key>` -> `/ElysiumBaked/Meshes/SM_<safe_name(static_stem(...))>`.
+    """Resolve the unit key through the standard; a provenance stem is not an address."""
+    return baked_unit(model_unit_model.asset_id(key), "SM")
 
-    Reuses `shared_corpus.mesh_asset` (`"SM_" + safe_name(stem)`) rather than
-    `shared_corpus.baked_mesh`, whose package root is the legacy shared bake -- this lane writes
-    beside it, at `PACKAGE_ROOT`, never over it.
-    """
 
-    from elysium_pipeline import shared_corpus
-
-    name = shared_corpus.mesh_asset(static_stem(key))
-    return f"{PACKAGE_ROOT}/{name}"
+def skin_set_asset_path() -> str:
+    """Global catalogue address; its author must merge static AND skeletal inputs."""
+    return corpus_path("model", "DA", "PropSkins")
 
 
 def prune_scope() -> str:
@@ -330,7 +329,11 @@ def load_material_index(materials_staging_root: Path | None) -> dict[str, dict[s
         if not isinstance(entry, dict):
             continue
         unit = entry.get("unit")
-        if not isinstance(unit, str):
+        if not isinstance(unit, str) or not unit.startswith("vtmb:material:"):
+            continue
+        # Skinned/decal/etc. products share a source unit. They must not overwrite the
+        # canonical static route merely because a derived entry was appended last.
+        if entry.get("assetPath") != baked_unit(unit, "MI"):
             continue
         overrides = entry.get("basePropertyOverrides") or {}
         index[unit] = {
@@ -676,6 +679,8 @@ def stage_unit(
     asset_id = identity.get("asset")
     if not isinstance(asset_id, str) or not asset_id.startswith("vtmb:model:"):
         raise ModelImportError(f"{key}: unit declares no model identity")
+    if asset_id != model_unit_model.asset_id(key):
+        raise ModelImportError(f"{key}: published identity {asset_id!r} disagrees with the selected unit")
     shape = identity.get("shape")
     family = identity.get("family")
     roles = list(identity.get("roles") or ())
@@ -909,24 +914,24 @@ def _fold_owner_collisions(entries: list[dict], failed: Callable[[str, str], Non
 
 
 def _load_prior_manifest_for_merge(manifest_path: Path) -> dict | None:
-    """The prior manifest, only if a scoped run may trust it enough to merge into.
-
-    A missing file (first run ever) or a `schemaVersion`/`settingsVersion` mismatch (this run's
-    mapping no longer agrees with whatever staged those rows) both return `None` -- the caller's
-    only correct move at that point is the old outright replacement, because a row this run did
-    not itself produce is only safe to keep if the rules that produced it are still today's rules.
-    """
+    """Refuse a scoped migration before writing: old rows cannot be silently relabelled/lost."""
 
     if not manifest_path.is_file():
         return None
     try:
         document = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(document, dict):
-        return None
-    if document.get("schemaVersion") != MANIFEST_SCHEMA or document.get("settingsVersion") != SETTINGS_VERSION:
-        return None
+    except (OSError, ValueError) as exc:
+        raise ModelImportError(f"cannot merge prior model manifest; restage --all: {manifest_path}: {exc}") from exc
+    if (not isinstance(document, dict) or document.get("schemaVersion") != MANIFEST_SCHEMA
+            or document.get("settingsVersion") != SETTINGS_VERSION
+            or document.get("producer") != PRODUCER or document.get("packageRoot") != PACKAGE_ROOT):
+        raise ModelImportError("prior model stage has different settings/root/ownership; restage --all before a scoped run")
+    for entry in document.get("assets", ()):
+        id = entry.get("unit", "")
+        if not id.startswith("vtmb:model:") or entry.get("assetPath") != baked_unit(id, "SM"):
+            raise ModelImportError(f"noncanonical prior model entry {id!r}; restage --all")
+    if any(not isinstance(path, str) or not path.startswith(PACKAGE_ROOT + "/") for path in document.get("keep", ())):
+        raise ModelImportError("prior model keep set contains a foreign root; restage --all")
     return document
 
 
@@ -958,7 +963,7 @@ def _merge_prior_manifest(
 
 def stage_models(
     export_v2_root: Path, staging_root_path: Path, *,
-    maps: Sequence[str] | None = None, all_models: bool = False,
+    maps: Sequence[str] | None = None, all_models: bool = False, units: Sequence[str] | None = None,
     materials_staging_root: Path | None = None,
 ) -> StageResult:
     """Phase 1: stage every model the selection names and write the manifest.
@@ -969,24 +974,36 @@ def stage_models(
     never runs for a scoped selection, so the disk still holds every sidecar an earlier, wider
     run staged, and the manifest has to keep naming them or it describes a set the disk no longer
     matches. `_merge_prior_manifest` carries forward the rows and `keep` entries this run's own
-    `keys` do not name; a schema or settings mismatch against the prior file (or no prior file at
-    all) falls back to the old outright replacement, because an old manifest is only trustworthy
-    merge material under the settings that produced it.
+    `keys` do not name. A schema/settings/root/producer mismatch refuses the scoped run before
+    writing; the canonical migration requires an explicit whole-corpus restage.
     """
 
-    if bool(maps) == bool(all_models):
+    if sum(map(bool, (maps, all_models, units))) != 1:
         raise ModelImportError(
-            "pass exactly one of --maps <stems> or --all -- the model stage refuses to run unscoped"
+            "pass exactly one of --maps <stems>, --units <model IDs> or --all -- the model stage refuses to run unscoped"
         )
 
     export_v2_root = Path(export_v2_root)
     root = Path(staging_root_path)
     result = StageResult(staging_root=root)
+    prior_manifest = _load_prior_manifest_for_merge(root / MANIFEST_NAME) if not all_models else None
 
     if all_models:
         keys = select_all(export_v2_root)
         selection = {"perMap": None, "keys": keys}
         prune_scope_value: str | None = prune_scope()
+    elif units:
+        keys = []
+        for identity in units:
+            if not identity.startswith("vtmb:model:"):
+                raise ModelImportError("--units requires full vtmb:model: identities: " + identity)
+            key = identity.removeprefix("vtmb:model:")
+            if model_unit_model.asset_id(key) != identity:
+                raise ModelImportError("--units requires a canonical model identity: " + identity)
+            keys.append(key)
+        keys = sorted(set(keys))
+        selection = {"perMap": {}, "keys": keys, "explicitUnits": sorted(set(units))}
+        prune_scope_value = None
     else:
         selection = select_for_maps(export_v2_root, list(maps or ()))
         keys = selection["keys"]
@@ -1051,7 +1068,6 @@ def stage_models(
     manifest_path = root / MANIFEST_NAME
     prior_keep: set[str] = set()
     if not all_models:
-        prior_manifest = _load_prior_manifest_for_merge(manifest_path)
         if prior_manifest is not None:
             entries, prior_keep = _merge_prior_manifest(prior_manifest, entries, keys)
             entries = _fold_owner_collisions(entries, failed)
@@ -1070,10 +1086,12 @@ def stage_models(
     manifest = {
         "schemaVersion": MANIFEST_SCHEMA,
         "settingsVersion": SETTINGS_VERSION,
+        "producer": PRODUCER,
         "packageRoot": PACKAGE_ROOT,
         "materialMasterRoot": materials.MASTER_ROOT,
         "missingModelAsset": MISSING_MODEL_ASSET_PATH,
         "missingMaterialAsset": MI_V2_MISSING,
+        "skinCatalogueAsset": skin_set_asset_path(),
         "selection": selection,
         "pruneScope": prune_scope_value,
         "keep": sorted(keep),
@@ -1093,11 +1111,6 @@ def stage_models(
 
 # --- skins table (R1.5) -------------------------------------------------------------------------
 #
-# The fold itself (`build_skin_table`) and its asset path (`skin_set_asset_path`) live in
-# `importers.model_skins`, a module with no `numpy`-reaching import chain, so
-# `pipeline/unreal/import_models.py` -- which runs inside Unreal's embedded Python and has no
-# `numpy` -- can import that module directly without pulling in this one's MDL/VTX decoders.
-# Re-exported here so a caller that already imports the stage module sees no difference.
-
-skin_set_asset_path = model_skins.skin_set_asset_path
+# The legacy fold remains available until replacement acceptance. Canonical publication uses
+# prop_skin_catalogue over merged static/skeletal inputs, not this stem-keyed partial fold.
 build_skin_table = model_skins.build_skin_table

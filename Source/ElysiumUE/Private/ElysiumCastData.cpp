@@ -1,13 +1,27 @@
 #include "ElysiumCastData.h"
 #include "ElysiumBodyData.h"
+#include "ElysiumExpressionData.h"
 #include "Engine/SkeletalMesh.h"
 #include "Animation/Skeleton.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "UObject/UnrealType.h"
+#include "UObject/StrongObjectPtr.h"
 #if WITH_EDITOR
 #include "JsonObjectConverter.h"
 #endif
+
+FString UElysiumCastData::ModelIdForPreparation(const FString& Name,FString& OutError)
+{
+	const FString Normal=Name.TrimStartAndEnd().Replace(TEXT("\\"),TEXT("/")).ToLower();
+	if (Normal.StartsWith(TEXT("vtmb:model:"))) { OutError.Reset(); return Normal; }
+	static TStrongObjectPtr<UElysiumCastData> Data;
+	if (!Data.IsValid()) Data=TStrongObjectPtr<UElysiumCastData>(
+		LoadObject<UElysiumCastData>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_Cast.DA_Cast")));
+	if (!Data.IsValid()) { OutError=TEXT("native cast table is absent"); return FString(); }
+	const auto* Model=Data->FindModel(Normal,OutError);
+	return Model?Model->AssetId:FString();
+}
 
 const FElysiumCastModel* UElysiumCastData::FindModel(const FString& Name, FString& OutError) const
 {
@@ -90,8 +104,21 @@ UElysiumCastData* UElysiumCastData::ApplyJson(UElysiumCastData* Asset, const FSt
 		{ OutError=TEXT("invalid cinematic row: ")+Pair.Key; return nullptr; }
 		Cinematics.Add(Pair.Key,MoveTemp(Row));
 	}
+	UElysiumExpressionTables* ExpressionTables = nullptr;
+	if (Object->HasField(TEXT("expressionTablesAsset")))
+	{
+		FString Path;
+		if (!Object->TryGetStringField(TEXT("expressionTablesAsset"), Path)
+			|| Path != TEXT("/ElysiumBaked/ExpressionTables/_Corpus/DA_ExpressionTables"))
+		{ OutError = TEXT("invalid cast expressionTablesAsset package path"); return nullptr; }
+		ExpressionTables = LoadObject<UElysiumExpressionTables>(nullptr,
+			TEXT("/ElysiumBaked/ExpressionTables/_Corpus/DA_ExpressionTables.DA_ExpressionTables"));
+		if (!ExpressionTables || ExpressionTables->Tables.IsEmpty())
+		{ OutError = TEXT("cast expression corpus is absent or empty"); return nullptr; }
+	}
 	Asset->Models=MoveTemp(Models); Asset->Aliases=MoveTemp(Aliases);
 	Asset->AmbiguousAliases=MoveTemp(Ambiguous); Asset->Cinematics=MoveTemp(Cinematics);
+	Asset->ExpressionTables = ExpressionTables;
 	Asset->AuthoringEvidence=Json; Asset->MarkPackageDirty(); OutError.Reset();
 	return Asset;
 #else
@@ -103,7 +130,7 @@ FString UElysiumCastData::Verify(UElysiumCastData* Asset, const FString& Json)
 {
 	auto* Expected=NewObject<UElysiumCastData>(); FString Error;
 	if (!Asset || !ApplyJson(Expected,Json,Error)) return Error.IsEmpty()?TEXT("cast asset is absent"):Error;
-	for (const TCHAR* Name : {TEXT("Models"),TEXT("Aliases"),TEXT("AmbiguousAliases"),TEXT("Cinematics")})
+	for (const TCHAR* Name : {TEXT("Models"),TEXT("Aliases"),TEXT("AmbiguousAliases"),TEXT("Cinematics"),TEXT("ExpressionTables")})
 	{
 		const FProperty* Field=FindFProperty<FProperty>(StaticClass(),Name);
 		if (!Field || !Field->Identical_InContainer(Asset,Expected)) return FString(TEXT("saved cast differs in "))+Name;

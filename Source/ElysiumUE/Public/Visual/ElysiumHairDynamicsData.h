@@ -26,10 +26,9 @@ struct FElysiumHairDynamicsBodyConfig
 {
 	GENERATED_BODY()
 
-	UPROPERTY() FName BoundBone;
-	UPROPERTY() float GravityScale = 1.0f;
-	UPROPERTY() float Damping = 0.9f;
-	UPROPERTY() float AngularSpring = 0.0f;
-	UPROPERTY() float ConeAngleDegrees = 0.0f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium") FName BoundBone;
+	UPROPERTY(VisibleAnywhere, Category="Elysium") float GravityScale = 1.0f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium") float Damping = 0.9f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium") float AngularSpring = 0.0f;
+	UPROPERTY(VisibleAnywhere, Category="Elysium") float ConeAngleDegrees = 0.0f;
 };
-

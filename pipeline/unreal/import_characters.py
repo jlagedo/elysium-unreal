@@ -51,7 +51,12 @@ def _material_path(id, material_root):
 def _transform(row):
     transform = unreal.Transform()
     transform.translation = unreal.Vector(*row["position"])
-    transform.rotation = unreal.Quat(*row["rotation"])
+    # MakeQuat's Python constructor takes float32 arguments even though FQuat stores
+    # doubles. Assign reflected components directly to preserve the staged reference pose.
+    rotation = unreal.Quat()
+    for field, value in zip(("x", "y", "z", "w"), row["rotation"]):
+        rotation.set_editor_property(field, float(value))
+    transform.rotation = rotation
     transform.scale3d = unreal.Vector(1., 1., 1.)
     return transform
 
@@ -86,7 +91,7 @@ def blend_plan(asset_id, body, clips, role=""):
     return table, expected, omissions
 
 
-def run(manifest_path, material_root, force=False):
+def run(manifest_path, material_root, force=False, export_root=None):
     started = time.time()
     root = Path(manifest_path).parent
     manifest = _json(manifest_path)
@@ -104,7 +109,11 @@ def run(manifest_path, material_root, force=False):
                                  + Path(__file__).with_name("bake_lib.py").read_bytes() + dll.read_bytes()).hexdigest()
     report = {"schemaVersion": "1.0.0", "scope": "native-core-products", "producer": PRODUCER, "imported": 0, "reused": 0,
               "failed": [], "pruned": 0, "foreign": 0, "unstamped": 0, "pendingProjections": {},
-              "blendOmissions": {}, "suppressedAppendixTracks": {}, "assets": []}
+              "blendOmissions": {}, "suppressedAppendixTracks": {}, "clothBuilds": {}, "clothTuningPending": {}, "assets": []}
+    report["physicsSourceData"] = {"assets": 0, "sourceGaps": 0, "receipts": []}
+    report["physicsScope"] = "export-import-data-conservation"
+    report["deferredPhysicsFeatures"] = ["simulation-ready-physics-assets", "solver-calibration", "ragdoll-activation", "gameplay-physics"]
+    physics_published = set()
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
         [manifest["packageRoot"], "/ElysiumBaked/Materials"], force_rescan=True)
     protected = set()
@@ -117,6 +126,12 @@ def run(manifest_path, material_root, force=False):
         (root / "import_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 
     checkpoint()  # a failed/crashed editor must not leave a previous success report
+    if manifest.get("castData"):
+        from pipeline.unreal.migrate_character_tuning import migrate
+        cast = manifest["castData"]
+        _, encoded = _check_file(root, cast["file"], cast["sha256"])
+        report["authoredTuning"] = migrate(json.loads(encoded), root)
+        checkpoint()
 
     def fingerprint(kind, path, recipe):
         return bl.recipe_fingerprint("characters." + kind, path, {"tool": tool_digest, "inputs": recipe})
@@ -238,6 +253,100 @@ def run(manifest_path, material_root, force=False):
                                       "unitSha256": entry["recipe"]["unitSha256"]}, matches[0])
             report["imported"] += spaces
 
+    def physics_source(entry, body):
+        if not entry["meshAsset"] or body["sourceSemantics"].get("physics") is None:
+            return
+        if not export_root:
+            raise RuntimeError("physics source projection requires -ImportUnitRoot")
+        from pipeline.unreal.import_physics_data import publish_entry
+
+        physics, receipt = publish_entry(entry, manifest["selectedUnits"], export_root, root, force=force)
+        protected.add(receipt["assetPath"])
+        report[receipt["outcome"]] += 1
+        report["assets"].append(receipt["assetPath"])
+        report["physicsSourceData"]["assets"] += 1
+        report["physicsSourceData"]["sourceGaps"] += receipt["sourceGaps"]
+        report["physicsSourceData"]["receipts"].append(receipt)
+        mesh = unreal.load_asset(entry["meshAsset"])
+        provenance = next(r for r in mesh.get_editor_property("asset_user_data")
+                          if r and r.get_class().get_name() == "ElysiumCharacterProvenance")
+        evidence = json.loads(provenance.get_editor_property("authoring_evidence"))
+        evidence["physicsSourceAsset"] = receipt["assetPath"]
+        record, error = unreal.ElysiumCharacterProvenance.apply_json(mesh, json.dumps(evidence))
+        if record is None or not bl.save(entry["meshAsset"]):
+            raise RuntimeError(error or "could not bind native physics source data")
+        physics_published.add(entry["assetId"])
+
+    def cloth_assets(entry):
+        if not entry.get("clothData"):
+            return
+        source, encoded = _check_file(root, entry["clothData"], entry["recipe"]["clothDataSha256"])
+        document = json.loads(encoded)
+        expected = entry["clothAssets"]
+        tuning = Path(unreal.Paths.project_content_dir()) / "ElysiumAuthored/Cloth/DA_ClothTuning.uasset"
+        digest = fingerprint("cloth", entry["assetId"], {"source": entry["recipe"]["clothDataSha256"],
+                             "mesh": bl.stored_recipe(entry["meshAsset"], producer=PRODUCER),
+                             "tuning": hashlib.sha256(tuning.read_bytes()).hexdigest()})
+        products = [path for asset in expected for path in (asset, asset + "_PHYS")]
+        protected.update(products)
+        mesh_path = entry["meshAsset"] + "." + entry["meshAsset"].rsplit("/", 1)[-1]
+        saved_cloth = [unreal.load_asset(path) for path in expected]
+        receipts_present = all(asset is not None and unreal.EditorAssetLibrary.get_metadata_tag(asset, "ElysiumClothBuildCounters")
+                               for asset in saved_cloth)
+        if all(current(path, digest) for path in products) and receipts_present:
+            report["reused"] += len(products)
+        else:
+            results = unreal.ElysiumClothBuildLibrary.build_cloth_assets_from_sidecar(
+                str(source), expected[0].rsplit("/", 1)[0], mesh_path)
+            if len(results) != len(expected):
+                raise RuntimeError("cloth builder changed the garment inventory")
+            receipts = []
+            for result, asset in zip(results, expected):
+                if result.errors or result.asset_path.split(".", 1)[0] != asset:
+                    raise RuntimeError("cloth build failed: " + str(list(result.errors)))
+                fields = ("sim_vertices", "sim_faces", "kinematic_vertices", "collision_bodies", "config_properties",
+                          "built_sim_vertices", "built_kinematic_vertices", "built_tethers", "driven_vertices",
+                          "skinned_vertices", "orphaned_bindings", "root_bound_particles", "degenerate_sim_normals")
+                receipt = {field: int(getattr(result, field)) for field in fields}
+                if any(receipt[field] for field in ("orphaned_bindings", "root_bound_particles", "degenerate_sim_normals")):
+                    raise RuntimeError("cloth build lost bindings or usable normals: " + str(receipt))
+                receipt.update(assetPath=asset, material=str(result.material), tuningWarnings=list(result.warnings))
+                receipts.append(receipt)
+                for path in (asset, asset + "_PHYS"):
+                    product = unreal.load_asset(path)
+                    if product is None:
+                        raise RuntimeError("cloth product is absent: " + path)
+                    bl.stamp_recipe(product, digest, producer=PRODUCER)
+                    unreal.EditorAssetLibrary.set_metadata_tag(product, "ElysiumAssetId", entry["assetId"])
+                    unreal.EditorAssetLibrary.set_metadata_tag(product, "ElysiumClothWarnings", json.dumps(list(result.warnings)))
+                    unreal.EditorAssetLibrary.set_metadata_tag(product, "ElysiumClothBuildCounters", json.dumps(receipt))
+                    if not bl.save(path):
+                        raise RuntimeError("could not save cloth product: " + path)
+                    report["imported"] += 1
+                    report["assets"].append(path)
+            report["clothBuilds"][entry["assetId"]] = receipts
+        for asset, garment in zip(expected, document["garments"]):
+            receipt = json.loads(unreal.EditorAssetLibrary.get_metadata_tag(unreal.load_asset(asset), "ElysiumClothBuildCounters"))
+            rows = report["clothBuilds"].setdefault(entry["assetId"], [])
+            if not any(row["assetPath"] == asset for row in rows):
+                rows.append(receipt)
+            warnings = json.loads(unreal.EditorAssetLibrary.get_metadata_tag(unreal.load_asset(asset), "ElysiumClothWarnings") or "[]")
+            if warnings:
+                report["clothTuningPending"].setdefault(entry["assetId"], []).extend(warnings)
+                for warning in warnings:
+                    unreal.log_warning("[import-characters] cloth tuning pending: " + warning)
+            error = unreal.ElysiumClothBuildLibrary.verify_cloth_asset(asset, json.dumps(garment), mesh_path)
+            if error:
+                raise RuntimeError(asset + ": " + error)
+        mesh = unreal.load_asset(entry["meshAsset"])
+        provenance = next(r for r in mesh.get_editor_property("asset_user_data")
+                          if r and r.get_class().get_name() == "ElysiumCharacterProvenance")
+        evidence = json.loads(provenance.get_editor_property("authoring_evidence"))
+        evidence["clothAssets"] = expected
+        record, error = unreal.ElysiumCharacterProvenance.apply_json(mesh, json.dumps(evidence))
+        if record is None or not bl.save(entry["meshAsset"]):
+            raise RuntimeError(error or "could not bind saved cloth assets to their mesh")
+
     for ordinal, entry in enumerate(entries):
         id = entry["assetId"]
         try:
@@ -261,6 +370,11 @@ def run(manifest_path, material_root, force=False):
                     report["imported"] += 1
                 else:
                     report["reused"] += 1
+            if entry.get("dynamicsData"):
+                _, encoded = _check_file(root, entry["dynamicsData"], entry["recipe"]["dynamicsDataSha256"])
+                path = entry["dynamicsDataAsset"]
+                publish_data_asset(path, fingerprint("dynamics-data", path, entry["recipe"]["dynamicsDataSha256"]),
+                                   unreal.ElysiumDynamicsData, encoded, id)
             if entry["meshAsset"]:
                 asset = entry["meshAsset"]
                 _, mesh_data_bytes = _check_file(root, entry["meshData"], entry["recipe"]["meshDataSha256"])
@@ -278,10 +392,14 @@ def run(manifest_path, material_root, force=False):
                     if error:
                         raise RuntimeError(error)
                     stamp(asset, digest, {"assetId": id, "unitSha256": entry["recipe"]["unitSha256"],
-                                          "payloadSha256": entry["recipe"]["payloadSha256"], "meshData": mesh_data})
+                                          "payloadSha256": entry["recipe"]["payloadSha256"], "meshData": mesh_data,
+                                          "dynamicsAsset": entry.get("dynamicsDataAsset") or "",
+                                          "sourceGarmentCount": len((body["sourceSemantics"].get("cloth") or {}).get("garments", []))})
                     report["imported"] += 1
                 else:
                     report["reused"] += 1
+            physics_source(entry, body)
+            cloth_assets(entry)
             if entry.get("nativeMainOwner", True):
                 animations(entry, body, entry)
             for actor in entry.get("actors", ()):
@@ -304,11 +422,17 @@ def run(manifest_path, material_root, force=False):
                        "procedural": (semantics.get("procedural") or {}).get("axisInterpolation"),
                        "cloth": (semantics.get("cloth") or {}).get("garments"),
                        "secondaryMotion": semantics.get("secondaryMotion"),
-                       "physics": (semantics.get("physics") or {}).get("solids"),
+                       "physicsSourceData": semantics.get("physics") is not None,
                        "eyes": any(model.get("eyeballs") for part in semantics["mdl"].get("bodyParts", ())
                                    for model in part["models"])}
             pending = [name for name, present in present.items() if present
-                       and not (entry["meshAsset"] and name in ("facial", "eyes", "procedural"))]
+                       and not (entry["meshAsset"] and name in ("facial", "eyes", "procedural"))
+                       and not (name == "secondaryMotion" and entry.get("dynamicsData"))
+                       and not (name == "physicsSourceData" and id in physics_published)]
+            if entry.get("clothData"):
+                pending = [name for name in pending if name != "cloth"]
+            if id in report["clothTuningPending"]:
+                pending.append("clothTuning")
             if pending:
                 report["pendingProjections"][id] = pending
         except Exception as exc:
@@ -374,7 +498,7 @@ if __name__ == "__main__":
     if not manifest or not materials:
         raise SystemExit("-ImportCharacters and -ImportMaterialsRoot are required")
     try:
-        result = run(manifest, materials, argument("ImportForce") == "1")
+        result = run(manifest, materials, argument("ImportForce") == "1", argument("ImportUnitRoot") or None)
     except Exception as exc:
         report_path = Path(manifest).parent / "import_report.json"
         result = _json(report_path) if report_path.is_file() else {"producer": PRODUCER, "failed": []}

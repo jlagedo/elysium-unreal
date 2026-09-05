@@ -148,7 +148,12 @@ struct FElysiumContentPaths
 	// filesystem paths, so they take no FPaths::ProjectDir. The mount's Content/ is game-derived
 	// and gitignored exactly like Root(); only the .uplugin descriptor is committed.
 	static FString BakedMount() { return TEXT("/ElysiumBaked"); }
-	static FString BakedMapDir(const FString& Map) { return BakedMount() / Map; }
+	static FString BakedMapDir(const FString& Map)
+	{
+		const FString Level = BakedUnit(TEXT("vtmb:map:") + Map, TEXT(""));
+		int32 Slash = INDEX_NONE;
+		return Level.FindLastChar(TEXT('/'), Slash) ? Level.Left(Slash) : FString();
+	}
 	// The .umap UElysiumMapSubsystem::Travel opens for this map.
 	static FString BakedLevel(const FString& Map) { return BakedMapDir(Map) / Map; }
 	// This map's entity table as cooked content (R4.1): the `UElysiumMapEntities` that replaces

@@ -15,6 +15,8 @@
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Visual/ElysiumExpressionTable.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "Visual/ElysiumCharacterModel.h"
+#include "Visual/ElysiumExpressionPreparation.h"
 
 #include "ChaosClothAsset/ClothComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -57,10 +59,50 @@ namespace
 
 FString FElysiumAnimating::ModelStem() const
 {
-	return FPaths::GetBaseFilename(Model).ToLower();
+	return ElysiumCharacterModel::IdFromSource(Model);
 }
 
 void FElysiumAnimating::BuildBody()
+{
+	if (!PrepareCharacterVisual()) return;
+	InstallPreparedCharacterVisual();
+	RestoreModelChildren();
+}
+
+bool FElysiumAnimating::PrepareCharacterVisual()
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Def || Model.IsEmpty()) return false;
+	FString Error;
+	const auto Result = Embodiment->RequestCharacterModel(Handle, ModelStem(), ++CharacterVisualGeneration, Error);
+	if (Result == EElysiumCharacterModelAdmission::Rejected)
+		UE_LOG(LogElysiumPlayer, Warning, TEXT("%s: character model admission refused: %s"), *DebugString(), *Error);
+	return Result == EElysiumCharacterModelAdmission::Ready;
+}
+
+void FElysiumAnimating::InvalidateCharacterVisualRequest()
+{
+	++CharacterVisualGeneration;
+	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+		Embodiment->CancelCharacterModel(Handle);
+}
+
+void FElysiumAnimating::CompletePreparedCharacterVisual(uint64 Generation, const FString& ModelId)
+{
+	if (!World || IsDead() || World->GetEpoch() != Handle.Epoch || World->Resolve(Handle) != this
+		|| Generation != CharacterVisualGeneration || ModelStem() != ModelId || Visual) return;
+	InstallPreparedCharacterVisual();
+	if (!Visual)
+	{
+		UE_LOG(LogElysiumPlayer, Warning, TEXT("%s: admitted native model %s did not construct a visual"), *DebugString(), *ModelId);
+		return;
+	}
+	RestoreModelChildren();
+	OnPreparedVisualAttached();
+	RefreshPreparedExpressions();
+}
+
+void FElysiumAnimating::InstallPreparedCharacterVisual()
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (!Embodiment || !Def || Model.IsEmpty())
@@ -425,8 +467,14 @@ void FElysiumAnimating::RefreshDispositionExpression()
 	{
 		const FString Expression = bDispositionTalking && !Row.TalkingExpression.IsEmpty()
 			? Row.TalkingExpression : Row.DefaultExpression;
+		FString ExpressionDiagnostic;
 		const TSharedPtr<const FElysiumExpressionTable> Table =
-			ElysiumExpressions::Load(ModelStem(), TEXT("expressions"));
+			ElysiumExpressions::LoadPreparedModelSelection(*this, TEXT("expressions"), ExpressionDiagnostic);
+		if (!ExpressionDiagnostic.IsEmpty())
+		{
+			UE_LOG(LogElysiumPlayer, Warning, TEXT("%s: disposition expression: %s"),
+				*DebugString(), *ExpressionDiagnostic);
+		}
 		const int32 Index = Table.IsValid() ? Table->FindRow(Expression) : INDEX_NONE;
 		if (Table.IsValid() && Table->Rows.IsValidIndex(Index))
 		{
@@ -477,6 +525,7 @@ void FElysiumAnimating::OnRuntimeTransformChanged()
 
 void FElysiumAnimating::OnRuntimeModelChanged()
 {
+	InvalidateCharacterVisualRequest();
 	if (!World)
 	{
 		return;
@@ -493,29 +542,28 @@ void FElysiumAnimating::OnRuntimeModelChanged()
 	// The socket travels with the child: a bone-attached env_particle re-parented to the bare root
 	// would silently stop tracking the bone the first time the level script re-models the character,
 	// which is exactly when the cinematic emitters are live.
-	struct FCarriedChild
-	{
-		TWeakObjectPtr<USceneComponent> Component;
-		FTransform RelativeTransform;
-		FName Socket;
-	};
-	TArray<FCarriedChild> Carried;
 	if (Visual)
 	{
 		for (USceneComponent* Child : Visual->GetAttachChildren())
 		{
 			if (Child)
 			{
-				Carried.Add({ Child, Child->GetRelativeTransform(), Child->GetAttachSocketName() });
+				PendingModelChildren.Add({ Child, Child->GetRelativeTransform(), Child->GetAttachSocketName() });
 			}
 		}
 		Visual->DestroyComponent();
 		Visual = nullptr;
 	}
 	BuildBody();
+	// Admission discovers and loads the complete native closure. Do not restart a
+	// synchronous map-wide preload from a gameplay input or its async completion.
+}
+
+void FElysiumAnimating::RestoreModelChildren()
+{
 	if (Visual)
 	{
-		for (const FCarriedChild& Child : Carried)
+		for (const FCarriedModelChild& Child : PendingModelChildren)
 		{
 			if (USceneComponent* Live = Child.Component.Get())
 			{
@@ -526,14 +574,7 @@ void FElysiumAnimating::OnRuntimeModelChanged()
 				Live->SetRelativeTransform(Child.RelativeTransform);
 			}
 		}
-
-		// Runtime animation objects are bound to the old body's transient USkeleton. Re-walk the
-		// dormant plan against this replacement immediately so compression for a Python recast can
-		// overlap the authored lead to its scene; InputStart owns the completion barrier.
-		if (World->IsActive())
-		{
-			World->RefreshAnimationPreload();
-		}
+		PendingModelChildren.Reset();
 	}
 }
 

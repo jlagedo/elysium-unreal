@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/AssetUserData.h"
+#include "ElysiumExpressionData.h"
 #include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumCompositionRig.h"
@@ -9,6 +10,9 @@
 
 class UMaterialInterface;
 class USkeletalMesh;
+class UElysiumDynamicsData;
+class UElysiumPhysicsData;
+class UChaosClothAsset;
 
 USTRUCT()
 struct ELYSIUMUE_API FElysiumCharacterMaterialSlot
@@ -46,11 +50,23 @@ public:
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") bool bHasMeshData = false;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") FString ModelPath;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") FString Stem;
+	/** Data presence, not a transport switch. Unprepared/older assets cannot resolve expressions. */
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") bool bHasExpressionData = false;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") uint32 ExpressionModelFlags = 0;
+	/** Retail SetModel: (~studiohdr.flags >> 8) & 1; player state remains on its own sheet. */
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") bool bExpressionModelIsMale = false;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TArray<FElysiumExpressionSelection> ExpressionSelections;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") FElysiumFacialRig Facial;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") FElysiumEyeSet Eyes;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") FElysiumCompositionRig Composition;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TArray<FElysiumCharacterMaterialSlot> MaterialSlots;
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TArray<FElysiumCharacterSkinFamily> SkinFamilies;
+	/** Loaded with the mesh; runtime installation never reads a dynamics sidecar. */
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TObjectPtr<UElysiumDynamicsData> Dynamics;
+	/** Preserved physics declarations/hulls; simulation admission remains a separate gate. */
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TObjectPtr<UElysiumPhysicsData> PhysicsSourceData;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") TArray<TObjectPtr<UChaosClothAsset>> ClothAssets;
+	UPROPERTY(VisibleAnywhere, Category="Elysium|Source") int32 SourceGarmentCount = 0;
 #if WITH_EDITORONLY_DATA
 	/** Inspectable authoring evidence; runtime behavior uses typed cooked data, not this JSON. */
 	UPROPERTY(VisibleAnywhere, Category="Elysium|Build") FString AuthoringEvidence;

@@ -2,7 +2,9 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumFog.h"          // ElysiumLightStyle::StampUnstyled -- CPD slot 6 neutral
-#include "ElysiumPropSkins.h"
+#include "Visual/ElysiumPreparedPropModels.h"
+#include "Visual/ElysiumNpcVisual.h"
+#include "ElysiumCharacterProvenance.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumEntityBodiesLog.h"
@@ -16,104 +18,26 @@
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Actor.h"
-#include "HAL/IConsoleManager.h"
-#include "Misc/FileHelper.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
 
 void UElysiumEntityBodies::LoadItemGroundModelCatalogue()
 {
-	if (bItemGroundModelsLoaded)
-	{
-		return;
-	}
-	bItemGroundModelsLoaded = true;
-
-	FString Text;
-	const FString Path = FElysiumContentPaths::ItemGroundModels();
-	if (!FFileHelper::LoadFileToString(Text, *Path))
-	{
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("item ground-model catalogue is missing: %s (run: uv run elysium export bundle items)"),
-			*Path);
-		return;
-	}
-	TSharedPtr<FJsonObject> Root;
-	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
-	FString Schema;
-	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid()
-		|| !Root->TryGetStringField(TEXT("schema"), Schema)
-		|| Schema != TEXT("elysium.item-ground-models"))
-	{
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("item ground-model catalogue is invalid: %s"), *Path);
-		return;
-	}
-
-	const TSharedPtr<FJsonObject>* Models = nullptr;
-	if (!Root->TryGetObjectField(TEXT("models"), Models) || Models == nullptr)
-	{
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("item ground-model catalogue has no models table: %s"), *Path);
-		return;
-	}
-	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Models)->Values)
-	{
-		const TSharedPtr<FJsonObject>* Row = nullptr;
-		double Faces = 0.0;
-		if (!Pair.Value.IsValid() || !Pair.Value->TryGetObject(Row) || Row == nullptr
-			|| !(*Row)->TryGetNumberField(TEXT("faces"), Faces))
-		{
-			UE_LOG(LogElysiumBodies, Warning,
-				TEXT("item ground-model catalogue row '%s' has no face count"), *Pair.Key);
-			ItemGroundModels.Add(Pair.Key, EElysiumItemGroundModelState::Unavailable);
-			continue;
-		}
-		ItemGroundModels.Add(Pair.Key, Faces > 0.0
-			? EElysiumItemGroundModelState::Geometry
-			: EElysiumItemGroundModelState::Geometryless);
-	}
-
-	const TArray<TSharedPtr<FJsonValue>>* Skipped = nullptr;
-	if (Root->TryGetArrayField(TEXT("skipped"), Skipped) && Skipped != nullptr)
-	{
-		for (const TSharedPtr<FJsonValue>& Value : *Skipped)
-		{
-			const TSharedPtr<FJsonObject>* Row = nullptr;
-			if (!Value.IsValid() || !Value->TryGetObject(Row) || Row == nullptr)
-			{
-				continue;
-			}
-			FString Model, Reason;
-			if ((*Row)->TryGetStringField(TEXT("model"), Model))
-			{
-				(*Row)->TryGetStringField(TEXT("reason"), Reason);
-				ItemGroundModels.Add(Model, EElysiumItemGroundModelState::Unavailable);
-				UE_LOG(LogElysiumBodies, Warning,
-					TEXT("item ground model '%s' is unavailable: %s"), *Model, *Reason);
-			}
-		}
-	}
+	// Transitional declaration only: preparation owns the catalogue, and this never loads.
+	if (!ElysiumPreparedProps::ForOwner(GetOwner()))
+		ReportNativeModelFailure(TEXT("ground-catalogue"), TEXT("native model catalogues/assets were not prepared"));
 }
 
 EElysiumItemGroundModelState UElysiumEntityBodies::ItemGroundModelState(const FString& ModelPath)
 {
-	LoadItemGroundModelCatalogue();
-	FString Key = ModelPath.TrimStartAndEnd().ToLower().Replace(TEXT("\\"), TEXT("/"));
-	if (!Key.EndsWith(TEXT(".mdl")))
+	const FString Id = ElysiumPreparedProps::ModelId(ModelPath);
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner());
+	FString Error;
+	if (Ready && !Id.IsEmpty())
 	{
-		Key += TEXT(".mdl");
+		if (Ready->IsExplicitlyGeometryless(Id)) return EElysiumItemGroundModelState::Geometryless;
+		if (Ready->StaticMesh(Id, Error)) return EElysiumItemGroundModelState::Geometry;
 	}
-	if (const EElysiumItemGroundModelState* State = ItemGroundModels.Find(Key))
-	{
-		return *State;
-	}
-	if (!ReportedMissingItemGroundModels.Contains(Key))
-	{
-		ReportedMissingItemGroundModels.Add(Key);
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("item ground model '%s' is absent from the generated catalogue"), *Key);
-	}
+	else Error = TEXT("ground model requires a canonical identity and prepared native references");
+	ReportNativeModelFailure(TEXT("ground:") + ModelPath, Error);
 	return EElysiumItemGroundModelState::Unavailable;
 }
 
@@ -143,422 +67,225 @@ namespace ElysiumPropBounds
 	}
 }
 
-// A/B toggle for the prop skin pass. 1 applies alternate skin families; 0 leaves every
-// prop on its authored materials, so a look change can be attributed. Read per apply, so it takes
-// effect on the next Skin input without a reload.
-static TAutoConsoleVariable<int32> CVarPropSkins(
-	TEXT("elysium.PropSkins"), 1,
-	TEXT("Apply alternate prop skin families (1, default) or keep every prop on skin 0 (0)."),
-	ECVF_Default);
-
 FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath) const
 {
-	UElysiumAnimSubsystem* Anims = GetAnims();
-	const FElysiumAnimatedPropEntry* Entry = Anims
-		? (Anims->GetIndex().ManifestVersion >= 7
-			? Anims->GetIndex().FindPlacedModel(ModelPath)
-			: Anims->GetIndex().FindAnimatedProp(ModelPath)) : nullptr;
-	return Entry ? Entry->Stem : FString();
+	// Signature retained; the returned value is now the full model ID.
+	const FString Id = ElysiumPreparedProps::ModelId(ModelPath);
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner());
+	FString Error;
+	if (Ready && !Id.IsEmpty() && Ready->Model(Id, Error)) return Id;
+	ReportNativeModelFailure(TEXT("placed:") + ModelPath, Error.IsEmpty() ? TEXT("placed model identity/catalogue is not prepared") : Error);
+	return FString();
 }
 
 bool UElysiumEntityBodies::HasPlacedModelCatalogue() const
 {
-	UElysiumAnimSubsystem* Anims = GetAnims();
-	return Anims && Anims->GetIndex().ManifestVersion >= 7;
+	return ElysiumPreparedProps::ForOwner(GetOwner()).IsValid();
 }
 
-FElysiumPlacedModelBody UElysiumEntityBodies::BuildPlacedModelBody(
-	const FElysiumPlacedModelRequest& Request)
+FElysiumPlacedModelBody UElysiumEntityBodies::BuildPlacedModelBody(const FElysiumPlacedModelRequest& Request)
 {
 	FElysiumPlacedModelBody Result;
-	if (IConsoleVariable* Gate = IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.PropBodies"));
-		Gate && Gate->GetInt() == 0)
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner());
+	FString Error; const FString Id = ElysiumPreparedProps::ModelId(Request.ModelPath);
+	const auto* Row = Ready ? Ready->Model(Id, Error) : nullptr;
+	if (!Row)
 	{
+		ReportNativeModelFailure(TEXT("placed-body:") + Request.ModelPath, Error.IsEmpty() ? TEXT("placed model was not prepared") : Error);
 		return Result;
 	}
-	Result.Stem = AnimatedPropStemForModel(Request.ModelPath);
-	if (Result.Stem.IsEmpty())
+	if (Row->CanUseStatic(Row->bFullClipsRequired || !Row->RequiredClips.IsEmpty()))
 	{
-		UE_LOG(LogElysiumBodies, Error,
-			TEXT("placed model '%s' is absent from npc_index v7"), *Request.ModelPath);
+		// The shared result's Visual is USkeletalMeshComponent*. A static body created here
+		// would be orphaned from the entity's skin/state/cleanup pointers.
+		ReportNativeModelFailure(TEXT("placed-result:") + Id,
+			TEXT("static placement requires the main embodiment adapter to consume ElysiumPreparedProps::Build's general result"));
 		return Result;
 	}
-	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Result.Stem);
-	const FString StaticStem = !Request.StaticStem.IsEmpty()
-		? Request.StaticStem : (Entry ? Entry->StaticStem : FString());
-	if (StaticStem.IsEmpty())
+	const auto Built = ElysiumPreparedProps::Build(*this, Request, false, Error);
+	if (!Built.IsValid())
 	{
-		UE_LOG(LogElysiumBodies, Error,
-			TEXT("placed model '%s' has no static material/collision stem"), *Request.ModelPath);
+		ReportNativeModelFailure(TEXT("placed-body:") + Id, Error);
 		return Result;
 	}
-
-	Result.Visual = BuildAnimatedPropVisualWithStaticStem(Result.Stem, StaticStem,
-		Request.Location, Request.Rotation, Request.UniformScale, Request.PlacementToken);
-	if (!Result.Visual)
-	{
-		return Result;
-	}
-	ApplyAnimatedPropSkin(Result.Visual, StaticStem, Request.Skin);
-
-	if (Request.Physics != EElysiumPlacedModelPhysics::None)
-	{
-		Result.PhysicsProxy = BuildPhysPropVisual(StaticStem, Request.Location,
-			Request.Rotation, Request.UniformScale);
-		if (!Result.PhysicsProxy)
-		{
-			Result.Visual->DestroyComponent();
-			Result.Visual = nullptr;
-			return Result;
-		}
-		Result.PhysicsProxy->SetVisibility(false, true);
-		if (Request.Physics == EElysiumPlacedModelPhysics::CollisionProxy)
-		{
-			Result.PhysicsProxy->SetSimulatePhysics(false);
-		}
-		Result.Visual->AttachToComponent(Result.PhysicsProxy,
-			FAttachmentTransformRules::KeepWorldTransform);
-		Result.Attach = Result.PhysicsProxy;
-	}
-	else
-	{
-		Result.Attach = Result.Visual;
-	}
+	Result.Stem = Built.ModelId; Result.Visual = Built.SkeletalVisual;
+	Result.Attach = Built.Attach; Result.PhysicsProxy = Built.PhysicsProxy;
 	return Result;
 }
 
-const FElysiumAnimatedPropEntry* UElysiumEntityBodies::FindAnimatedPropEntry(const FString& Stem) const
+const FElysiumAnimatedPropEntry* UElysiumEntityBodies::FindAnimatedPropEntry(const FString& Name) const
 {
-	UElysiumAnimSubsystem* Anims = GetAnims();
-	if (!Anims)
-	{
-		return nullptr;
-	}
-	if (const FElysiumAnimatedPropEntry* Placed = Anims->GetIndex().PlacedModels.Find(Stem))
-	{
-		return Placed;
-	}
-	return Anims->GetIndex().AnimatedProps.Find(Stem);
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner());
+	return Ready ? Ready->CompatibilityView(ElysiumPreparedProps::ModelId(Name)) : nullptr;
 }
 
-FString UElysiumEntityBodies::AnimatedPropRestClip(const FString& Stem, int32 PlacementToken) const
+FString UElysiumEntityBodies::AnimatedPropRestClip(const FString& Name, int32 PlacementToken) const
 {
-	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
-	return Entry ? Entry->RestSequence(PlacementToken) : FString();
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	const auto* Row = Ready ? Ready->Model(ElysiumPreparedProps::ModelId(Name), Error) : nullptr;
+	if (!Row)
+	{
+		ReportNativeModelFailure(TEXT("prop-rest:") + Name, Error.IsEmpty() ? TEXT("placed model was not prepared") : Error);
+		return FString();
+	}
+	const auto* Clip = Row->SelectRest(PlacementToken);
+	return Clip ? Clip->Label : FString();
 }
 
-bool UElysiumEntityBodies::FindAnimatedPropClip(const FString& Stem, const FString& ClipName,
-	bool& bOutLoops) const
+bool UElysiumEntityBodies::FindAnimatedPropClip(const FString& Name, const FString& ClipName, bool& bOutLoops) const
 {
-	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
-	const FElysiumPropClip* Clip = Entry ? Entry->FindClip(ClipName) : nullptr;
-	bOutLoops = Clip && Clip->IsLooping();
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	const auto* Clip = Ready ? Ready->Clip(ElysiumPreparedProps::ModelId(Name), ClipName, Error) : nullptr;
+	bOutLoops = Clip && (Clip->Flags & 1) != 0;
 	return Clip != nullptr;
 }
 
-USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FString& Stem,
+USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisual(const FString& Name,
 	const FVector& Location, const FQuat& Rotation, float UniformScale, int32 PlacementToken)
 {
-	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
-	return BuildAnimatedPropVisualWithStaticStem(Stem,
-		Entry ? Entry->StaticStem : FString(), Location, Rotation, UniformScale, PlacementToken);
+	const FString Id = ElysiumPreparedProps::ModelId(Name);
+	return BuildAnimatedPropVisualWithStaticStem(Id, Id, Location, Rotation, UniformScale, PlacementToken);
 }
 
 USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisualWithStaticStem(
-	const FString& Stem, const FString& StaticStem, const FVector& Location,
+	const FString& Name, const FString& StaticStem, const FVector& Location,
 	const FQuat& Rotation, float UniformScale, int32 PlacementToken)
 {
-	AActor* Owner = GetOwner();
-	USceneComponent* Root = Owner ? Owner->GetRootComponent() : nullptr;
-	UElysiumAnimSubsystem* Anims = GetAnims();
-	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
-	if (!Root || !Entry)
+	// StaticStem was a derived material/collision address; the source ID now owns both.
+	const FString Id = ElysiumPreparedProps::ModelId(Name);
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner());
+	AActor* Owner = GetOwner(); USceneComponent* Root = Owner ? Owner->GetRootComponent() : nullptr;
+	FString Error;
+	const auto* Row = Ready ? Ready->Model(Id, Error) : nullptr;
+	USkeletalMesh* Mesh = Row ? Ready->SkeletalMesh(Id, Error) : nullptr;
+	if (!Root || !Row || !Mesh)
 	{
+		ReportNativeModelFailure(TEXT("prop-mesh:") + Name, Error.IsEmpty() ? TEXT("owner root or prepared skeletal representation is absent") : Error);
 		return nullptr;
 	}
-
-	USkeletalMesh* Mesh = nullptr;
-	if (const TObjectPtr<USkeletalMesh>* Cached = AnimatedPropMeshCache.Find(Stem))
+	const auto* Provenance = UElysiumCharacterProvenance::Find(Mesh);
+	if (!Provenance || !Provenance->bHasMeshData || Provenance->AssetId != Id)
 	{
-		Mesh = Cached->Get();
+		ReportNativeModelFailure(TEXT("prop-provenance:") + Id, TEXT("prepared mesh has no matching cooked model data"));
+		return nullptr;
 	}
-	if (!Mesh)
+	if (AnimatedPropMeshCache.FindRef(Id).Get() != Mesh)
 	{
-		Mesh = LoadObject<USkeletalMesh>(nullptr,
-			*FElysiumContentPaths::BakedPropSkeletalMesh(Stem));
-		if (!Mesh)
-		{
-			UE_LOG(LogElysiumBodies, Warning,
-				TEXT("animated prop '%s' is not on the baked mount -- run: uv run elysium export characters"),
-				*Stem);
-			return nullptr;
-		}
-		AnimatedPropMeshCache.Add(Stem, Mesh);
-
-		// Widen the bind-pose bounds to the furthest reach of any clip this model owns, once, here —
-		// see ElysiumPropBounds. The union rather than the playing clip's own radius: one mesh is
-		// cached per stem and serves every prop standing that model, and the haven stake's five
-		// entities play five different clips off this one asset. `GetImportedBounds` stays the true
-		// bind pose; only the extended bounds move.
-		double ReachCm = 0.0;
-		for (const FElysiumPropClip& Clip : Entry->Clips)
-		{
-			// The container is centimetres by the `UE_` convention; the index states the reach in
-			// metres, which is a magnitude and survives the change of basis unchanged.
-			ReachCm = FMath::Max(ReachCm, static_cast<double>(Clip.BoundsRadiusMeters) * 100.0);
-		}
+		double ReachCm = 0.;
+		for (const auto& Clip : Row->Clips) ReachCm = FMath::Max(ReachCm, Clip.BoundsRadiusCm);
 		FVector Positive, Negative;
 		if (ElysiumPropBounds::ExtensionFor(Mesh->GetImportedBounds(), ReachCm, Positive, Negative))
 		{
-			Mesh->SetPositiveBoundsExtension(Positive);
-			Mesh->SetNegativeBoundsExtension(Negative);
+			Mesh->SetPositiveBoundsExtension(Positive); Mesh->SetNegativeBoundsExtension(Negative);
 			Mesh->CalculateExtendedBounds();
-			UE_LOG(LogElysiumBodies, Verbose,
-				TEXT("animated prop '%s': bounds %.0f -> %.0f cm for a %.0f cm clip reach"),
-				*Stem, Mesh->GetImportedBounds().SphereRadius, Mesh->GetBounds().SphereRadius, ReachCm);
 		}
+		AnimatedPropMeshCache.Add(Id, Mesh);
 	}
-
 	USkeletalMeshComponent* Comp = NewObject<USkeletalMeshComponent>(Owner);
-	Comp->SetCanEverAffectNavigation(false);
-	Comp->SetMobility(EComponentMobility::Movable);
-	Comp->SetSkeletalMeshAsset(Mesh);
-	// R7.4 (G6): a skeletal prop is authored on the neutral body master but a placement copies the
-	// map's own already-baked V2 instances into its slots (`bake_characters.py`), so it carries the
-	// same slot-6 multiply every other placed prop does.
-	ElysiumLightStyle::StampUnstyled(Comp);
-	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	Comp->SetVisibility(false, true);
-	Comp->SetupAttachment(Root);
-	Comp->SetRelativeLocationAndRotation(Location, Rotation);
-	if (UniformScale != 1.0f)
-	{
-		Comp->SetRelativeScale3D(FVector(UniformScale));
-	}
-	// The NATIVE host, not the graph: a skeletal prop is a named clip and nothing else — no gait, no
-	// activity, no selection is ever published for one — so it poses off the clip player alone and a
-	// compiled locomotion machine would sit inert behind it.
+	Comp->SetCanEverAffectNavigation(false); Comp->SetMobility(EComponentMobility::Movable);
+	Comp->SetSkeletalMeshAsset(Mesh); ElysiumLightStyle::StampUnstyled(Comp);
+	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision); Comp->SetVisibility(false, true);
+	Comp->SetupAttachment(Root); Comp->SetRelativeLocationAndRotation(Location, Rotation);
+	if (UniformScale != 1.f) Comp->SetRelativeScale3D(FVector(UniformScale));
 	Comp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	Comp->SetAnimInstanceClass(UElysiumBipedAnimInstance::StaticClass());
-	Comp->RegisterComponent();
-	Owner->AddInstanceComponent(Comp);
-	// A skeletal prop declares the same two composition stages a character does — 19 of them carry
-	// a rule table — so it takes the same install.
-	if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance()))
+	Comp->RegisterComponent(); Owner->AddInstanceComponent(Comp);
+	if (auto* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance())) Inst->SetCompositionRig(Ready->Composition(Id));
+	else Error = TEXT("native prop animation host did not initialize");
+	const auto* Rest = Row->SelectRest(PlacementToken);
+	if (Error.IsEmpty() && Rest && (!PlayAnimatedPropClip(Comp, Id, Rest->Label, false, nullptr) || !SeekCinematicClip(Comp, 0.f)))
+		Error = TEXT("authored rest pose could not be installed");
+	if (Error.IsEmpty() && !Rest && !Row->Clips.IsEmpty()) Error = TEXT("authored clip vocabulary has no rest candidate");
+	if (Error.IsEmpty() && !Ready->ApplySkin(Comp, Id, 0, Error) && Error.IsEmpty())
+		Error = TEXT("native base skin assignment failed");
+	if (!Error.IsEmpty())
 	{
-		Inst->SetCompositionRig(Anims->GetAnimatedPropCompositionRig(Entry->Model, Mesh));
+		ReportNativeModelFailure(TEXT("prop-install:") + Id, Error);
+		ElysiumPreparedProps::DestroyVisual(Comp); return nullptr;
 	}
-
-	const FString MaterialStem = StaticStem.IsEmpty() ? Stem : StaticStem;
-	if (!BindMapMaterials(Comp, MaterialStem) && !StaticStem.IsEmpty())
+	Comp->TickAnimation(0.f, false); Comp->RefreshBoneTransforms(); Comp->SetComponentTickEnabled(false);
+	if (Row->bHasCloth)
 	{
-		UE_LOG(LogElysiumBodies, Error,
-			TEXT("placed model '%s' has no map static mesh for its material slots"), *Stem);
-		Comp->DestroyComponent();
-		return nullptr;
+		// Preparation proved complete cooked provenance, so the garment host cannot enter
+		// its legacy loading branch. Keep one existing cloth/material installation authority.
+		if (!ElysiumNpcVisual::InstallGarment(Comp, Id) || !ElysiumNpcVisual::SyncGarmentMaterials(Comp, Error))
+		{
+			ReportNativeModelFailure(TEXT("prop-cloth:") + Id, Error.IsEmpty() ? TEXT("native garment installation failed") : Error);
+			ElysiumPreparedProps::DestroyVisual(Comp); return nullptr;
+		}
 	}
-
-	const FString Rest = Entry->RestSequence(PlacementToken);
-	if (Rest.IsEmpty() || !PlayAnimatedPropClip(Comp, Stem, Rest, false, nullptr)
-		|| !SeekCinematicClip(Comp, 0.0f))
-	{
-		UE_LOG(LogElysiumBodies, Error,
-			TEXT("placed model '%s' cannot install authored rest pose before visibility"), *Stem);
-		Comp->DestroyComponent();
-		return nullptr;
-	}
-	Comp->TickAnimation(0.0f, false);
-	Comp->RefreshBoneTransforms();
-	Comp->SetComponentTickEnabled(false);
-	Comp->SetVisibility(true, true);
+	Comp->SetVisibility(true, true); ElysiumNpcVisual::GateLeaderCloth(Comp, true);
 	return Comp;
 }
 
-UAnimSequence* UElysiumEntityBodies::ResolveAnimatedPropClip(USkeletalMesh* Mesh,
-	const FString& Stem, const FString& ClipName)
+UAnimSequence* UElysiumEntityBodies::ResolveAnimatedPropClip(USkeletalMesh* Mesh, const FString& Name, const FString& ClipName)
 {
-	if (!Mesh || Stem.IsEmpty() || ClipName.IsEmpty())
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	const FString Id = ElysiumPreparedProps::ModelId(Name);
+	if (!Ready || !Mesh || Ready->SkeletalMesh(Id, Error) != Mesh)
 	{
-		return nullptr;
+		ReportNativeModelFailure(TEXT("prop-animation:") + Name, TEXT("animation requires this epoch's prepared model mesh")); return nullptr;
 	}
-	UElysiumAnimSubsystem* Anims = GetAnims();
-	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
-	if (!Entry || !Entry->HasClip(ClipName))
-	{
-		return nullptr;
-	}
-
-	// Collapse a grid label to its cell BEFORE the key is built, or the label would cache one
-	// cell forever and no pose parameter could ever move it. `wolf_form` is the one skeletal prop
-	// declaring a grid; every other prop label resolves to itself.
-	const FString AnimName = Anims->ResolveGridClip(Stem, ClipName);
-	const FString Key = Stem + TEXT("|") + AnimName.ToLower();
-	UAnimSequence* Anim = nullptr;
-	if (const TObjectPtr<UAnimSequence>* Cached = AnimatedPropAnimCache.Find(Key))
-	{
-		Anim = Cached->Get();
-	}
-	else
-	{
-		Anim = LoadObject<UAnimSequence>(nullptr,
-			*FElysiumContentPaths::BakedPropAnim(Stem, AnimName));
-		if (!Anim)
-		{
-			UE_LOG(LogElysiumBodies, Warning,
-				TEXT("animated prop '%s' clip '%s' (%s) is not on the baked mount"),
-				*Stem, *ClipName, *AnimName);
-		}
-		AnimatedPropAnimCache.Add(Key, Anim);
-	}
-	return Anim;
+	UAnimSequence* Sequence = Ready->Sequence(Id, ClipName, Error);
+	if (!Sequence) ReportNativeModelFailure(TEXT("prop-animation:") + Id + TEXT("|") + ClipName, Error);
+	return Sequence;
 }
 
-bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
+bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Name,
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
-	UAnimSequence* Anim = Body
-		? ResolveAnimatedPropClip(Body->GetSkeletalMeshAsset(), Stem, ClipName)
-		: nullptr;
-	if (Anim == nullptr)
+	if (OutSeconds) *OutSeconds = 0.f;
+	UAnimSequence* Anim = Body ? ResolveAnimatedPropClip(Body->GetSkeletalMeshAsset(), Name, ClipName) : nullptr;
+	if (!Anim) return false;
+	auto* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance());
+	if (!Inst)
 	{
-		return false;
+		ReportNativeModelFailure(TEXT("prop-host:") + Name, TEXT("prepared prop requires its native animation host")); return false;
 	}
 	Body->SetComponentTickEnabled(true);
-	if (OutSeconds)
-	{
-		*OutSeconds = Anim->GetPlayLength();
-	}
-	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
-	{
-		// A skeletal prop owns every clip it can play, so its own stem IS the owner; there is
-		// no bank indirection to resolve (`FElysiumPropClip`).
-		Inst->PlayClip(FElysiumClipIdentity(Stem, ClipName), Anim, bLoop);
-	}
-	else
-	{
-		Body->PlayAnimation(Anim, bLoop);
-	}
+	if (OutSeconds) *OutSeconds = Anim->GetPlayLength();
+	Inst->PlayClip(FElysiumClipIdentity(ElysiumPreparedProps::ModelId(Name), ClipName), Anim, bLoop);
 	return true;
 }
 
-int32 UElysiumEntityBodies::PreloadAnimatedPropClips(USkeletalMeshComponent* Body,
-	const FString& Stem)
+int32 UElysiumEntityBodies::PreloadAnimatedPropClips(USkeletalMeshComponent* Body, const FString& Name)
 {
-	if (!Body || Stem.IsEmpty())
-	{
-		return 0;
-	}
-	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
-	USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
-	if (!Entry || !Mesh)
-	{
-		return 0;
-	}
+	// Presence validation only. Main's preparation handle owns all actual loading.
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	const FString Id = ElysiumPreparedProps::ModelId(Name);
+	const auto* Row = Ready ? Ready->Model(Id, Error) : nullptr;
+	if (!Row || !Body || Ready->SkeletalMesh(Id, Error) != Body->GetSkeletalMeshAsset()) return 0;
 	int32 Resolved = 0;
-	for (const FElysiumPropClip& Clip : Entry->Clips)
-	{
-		Resolved += ResolveAnimatedPropClip(Mesh, Stem, Clip.Name) != nullptr ? 1 : 0;
-	}
+	for (const auto& Clip : Row->Clips) Resolved += ResolveAnimatedPropClip(Body->GetSkeletalMeshAsset(), Id, Clip.Label) != nullptr;
 	return Resolved;
 }
 
 int32 UElysiumEntityBodies::FinishAnimationPreload()
 {
 	TSet<UAnimSequence*> Unique;
-	for (const TPair<FString, TObjectPtr<UAnimSequence>>& Pair : NpcAnimCache)
-	{
-		if (Pair.Value)
-		{
-			Unique.Add(Pair.Value.Get());
-		}
-	}
-	for (const TPair<FString, TObjectPtr<UAnimSequence>>& Pair : AnimatedPropAnimCache)
-	{
-		if (Pair.Value)
-		{
-			Unique.Add(Pair.Value.Get());
-		}
-	}
+	for (const auto& Pair : NpcAnimCache) if (Pair.Value) Unique.Add(Pair.Value.Get());
+	if (const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner())) Ready->GatherResidentSequences(Unique);
 	TArray<UAnimSequence*> Sequences = Unique.Array();
 #if WITH_EDITOR
-	if (!Sequences.IsEmpty())
-	{
-		UE::Anim::IAnimSequenceCompilingManager::FinishCompilation(Sequences);
-	}
+	if (!Sequences.IsEmpty()) UE::Anim::IAnimSequenceCompilingManager::FinishCompilation(Sequences);
 #endif
 	return Sequences.Num();
 }
 
-bool UElysiumEntityBodies::BindMapMaterials(USkeletalMeshComponent* Comp, const FString& StaticStem)
+bool UElysiumEntityBodies::BindMapMaterials(USkeletalMeshComponent* Comp, const FString& Name)
 {
-	if (!Comp || StaticStem.IsEmpty())
-	{
-		return false;
-	}
-	UStaticMesh* StaticMesh = ResolvePropMesh(StaticStem);
-	if (!StaticMesh)
-	{
-		return false;
-	}
-
-	TArray<FString> Unbound;
-	for (const FStaticMaterial& StaticMaterial : StaticMesh->GetStaticMaterials())
-	{
-		const int32 Slot = Comp->GetMaterialIndex(StaticMaterial.MaterialSlotName);
-		if (Slot == INDEX_NONE || StaticMaterial.MaterialInterface == nullptr)
-		{
-			Unbound.Add(StaticMaterial.MaterialSlotName.ToString());
-			continue;
-		}
-		Comp->SetMaterial(Slot, StaticMaterial.MaterialInterface);
-	}
-	// A slot the skeletal body does not carry, or a static twin slot the bake left empty, draws the
-	// engine default — reported once per stem rather than once per body and per skin change.
-	if (!Unbound.IsEmpty() && !ReportedUnboundMaterialStems.Contains(StaticStem))
-	{
-		ReportedUnboundMaterialStems.Add(StaticStem);
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("placed model '%s': %d of %d static material slot(s) bind nothing on the skeletal body [%s]"),
-			*StaticStem, Unbound.Num(), StaticMesh->GetStaticMaterials().Num(),
-			*FString::Join(Unbound, TEXT(", ")));
-	}
-	return true;
+	// Transitional declaration only: base slots now come from the native skeletal skin row.
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	if (Ready && Ready->ApplySkin(Comp, ElysiumPreparedProps::ModelId(Name), 0, Error)) return true;
+	ReportNativeModelFailure(TEXT("prop-base-materials:") + Name, Error.IsEmpty() ? TEXT("native skin catalogue was not prepared") : Error);
+	return false;
 }
 
-void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
-	const FString& Stem, int32 Family)
+void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp, const FString& Name, int32 Family)
 {
-	if (!Comp || CVarPropSkins.GetValueOnGameThread() == 0)
-	{
-		return;
-	}
-	// One skin table for the whole corpus: a model's alternate families and the materials they
-	// repaint are both properties of the install, so a stage world reads the same one a map does.
-	if (!bPropSkinsLoaded)
-	{
-		bPropSkinsLoaded = true;
-		PropSkins = LoadObject<UElysiumPropSkinSet>(
-			nullptr, *FElysiumContentPaths::BakedPropSkins(MapName));
-	}
-	// A skeletal prop's authored surfaces are overrides copied off its static twin, so clearing them
-	// drops the body onto the skeletal asset's own neutral materials. Re-bind that base first and let
-	// the family's repaints layer over it, which is also what restores skin 0 and any family this
-	// model does not carry.
-	Comp->EmptyOverrideMaterials();
-	BindMapMaterials(Comp, Stem);
-	const FElysiumSkinFamily* Row = PropSkins ? PropSkins->Find(FName(*Stem), Family) : nullptr;
-	if (!Row)
-	{
-		return;
-	}
-	for (const FElysiumSkinOverride& Override : Row->Overrides)
-	{
-		const int32 Slot = Comp->GetMaterialIndex(Override.SlotName);
-		if (Override.Material && Slot != INDEX_NONE)
-		{
-			Comp->SetMaterial(Slot, Override.Material);
-		}
-	}
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	if (Ready && Ready->ApplySkin(Comp, ElysiumPreparedProps::ModelId(Name), Family, Error)) return;
+	ReportNativeModelFailure(TEXT("prop-skin:") + Name, Error.IsEmpty() ? TEXT("native skin catalogue was not prepared") : Error);
 }
 
 // The bake already produced each BSP submodel as a local-pivot asset, so the moving collision body
@@ -566,20 +293,10 @@ void UElysiumEntityBodies::ApplyAnimatedPropSkin(USkeletalMeshComponent* Comp,
 // stem; a failed load is not cached, so it can retry after a bake.
 UStaticMesh* UElysiumEntityBodies::ResolveBrushMesh(const FString& Stem)
 {
-	const TObjectPtr<UStaticMesh>* Cached = BrushMeshCache.Find(Stem);
-	if (UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr)
-	{
-		return Mesh;
-	}
-	UStaticMesh* Mesh = LoadObject<UStaticMesh>(
-		nullptr, *FElysiumContentPaths::BakedBrushMesh(MapName, Stem));
-	if (!Mesh)
-	{
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("brush '%s': no baked mesh (run: uv run elysium export map %s --force)"), *Stem, *MapName);
-		return nullptr;
-	}
-	BrushMeshCache.Add(Stem, Mesh);
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	const FSoftObjectPath Path(FElysiumContentPaths::BakedBrushMesh(MapName, Stem));
+	UStaticMesh* Mesh = Ready ? Cast<UStaticMesh>(Ready->Resident(Path, Error)) : nullptr;
+	if (!Mesh) ReportNativeModelFailure(TEXT("brush:") + Stem, Error.IsEmpty() ? TEXT("native brush reference was not prepared") : Error);
 	return Mesh;
 }
 
@@ -622,23 +339,12 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildBrushVisual(const FString& Stem
 	return Comp;
 }
 
-UStaticMesh* UElysiumEntityBodies::ResolvePropMesh(const FString& Stem)
+UStaticMesh* UElysiumEntityBodies::ResolvePropMesh(const FString& Name)
 {
-	const TObjectPtr<UStaticMesh>* Cached = PropMeshCache.Find(Stem);
-	if (UStaticMesh* Mesh = Cached ? Cached->Get() : nullptr)
-	{
-		return Mesh;
-	}
-	// One mesh per model, wherever it stands: a prop, an item's ground body and a piece of map
-	// dressing are all the same static model, so they are all this one asset.
-	UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, *FElysiumContentPaths::BakedPropMesh(Stem, MapName));
-	if (Mesh == nullptr)
-	{
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("prop '%s': no baked mesh (run: uv run elysium export bundle corpus)"), *Stem);
-		return nullptr;
-	}
-	PropMeshCache.Add(Stem, Mesh);
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	const FString Id = ElysiumPreparedProps::ModelId(Name);
+	UStaticMesh* Mesh = Ready && !Id.IsEmpty() ? Ready->StaticMesh(Id, Error) : nullptr;
+	if (!Mesh) ReportNativeModelFailure(TEXT("prop-static:") + Name, Error.IsEmpty() ? TEXT("canonical model ID and prepared static reference are required") : Error);
 	return Mesh;
 }
 
@@ -685,45 +391,11 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPropVisual(const FString& Stem,
 	return Comp;
 }
 
-void UElysiumEntityBodies::ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family)
+void UElysiumEntityBodies::ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Name, int32 Family)
 {
-	UStaticMesh* Mesh = Comp ? Comp->GetStaticMesh() : nullptr;
-	if (!Mesh || CVarPropSkins.GetValueOnGameThread() == 0)
-	{
-		return;
-	}
-
-	if (!bPropSkinsLoaded)
-	{
-		bPropSkinsLoaded = true;
-		PropSkins = LoadObject<UElysiumPropSkinSet>(
-			nullptr, *FElysiumContentPaths::BakedPropSkins(MapName));
-	}
-
-	// Restore first, so a swap back to skin 0 -- or to a family this model does not carry, which
-	// Source draws as the authored set -- undoes whatever the previous skin painted. Clearing the
-	// overrides puts every slot back on the mesh's own material.
-	Comp->EmptyOverrideMaterials();
-	const FElysiumSkinFamily* Row = PropSkins ? PropSkins->Find(FName(*Stem), Family) : nullptr;
-	if (!Row)
-	{
-		return;
-	}
-
-	for (const FElysiumSkinOverride& Override : Row->Overrides)
-	{
-		if (!Override.Material)
-		{
-			continue;
-		}
-		// Every prop body stands a baked mesh, whose slots the bake named safe_name(material) --
-		// the same key the skin table is written with, so the slot name resolves directly.
-		const int32 Slot = Mesh->GetMaterialIndex(Override.SlotName);
-		if (Slot != INDEX_NONE)
-		{
-			Comp->SetMaterial(Slot, Override.Material);
-		}
-	}
+	const auto Ready = ElysiumPreparedProps::ForOwner(GetOwner()); FString Error;
+	if (Ready && Ready->ApplySkin(Comp, ElysiumPreparedProps::ModelId(Name), Family, Error)) return;
+	ReportNativeModelFailure(TEXT("prop-static-skin:") + Name, Error.IsEmpty() ? TEXT("native skin catalogue was not prepared") : Error);
 }
 
 UStaticMeshComponent* UElysiumEntityBodies::BuildPhysPropVisual(const FString& Stem, const FVector& Location,

@@ -36,3 +36,10 @@ including ordered sparse morph records that dense glTF arrays cannot express, an
 unit even when no current consumer selects it. The native naming standard and producer-owned
 pruning precede the shared Models root cutover. Payload checks alone do not close the sidecar,
 family-skeleton, cloth, material, wield, cooked-reader or played-acceptance gates.
+
+**Physics boundary (owner ruling 2026-09-05):** R8 preserves and verifies exported/imported
+physics geometry, solids, constraints, parameters, metadata and provenance, including explicit
+source gaps and unused records. Simulation-ready PhysicsAsset construction, solver calibration,
+ragdoll activation and gameplay physics are deferred. They must not gate R8 completion or the
+retirement of accepted replacement transports. This boundary overrides broader PHYS1 requirements
+in linked documents; all remaining migration and applicable fidelity checks stay in scope.

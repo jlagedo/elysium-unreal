@@ -1,7 +1,7 @@
 """Stage one map's entity table for the `UElysiumMapEntities` data asset (R4.1).
 
 `uv run elysium import map-entities --maps <map>...` turns each named map's published GLB units
-into one `/ElysiumBaked/<map>/DA_<map>_Entities` asset carrying the same rows the `<map>.ents`
+into one `/ElysiumBaked/Maps/<map>/DA_<map>_Entities` asset carrying the same rows the `<map>.ents`
 document carries, in the same order (`docs/architecture/seam_map_map_entities.md` -> "Import").
 This module is the offline stage half: it runs the R3.2 producer's own entity join
 (`exporters.UE_map_sidecars.build_entities`), asserts def-count and per-index parity against the
@@ -52,9 +52,10 @@ def staging_root(work_root: Path) -> Path:
 
 
 def package_root(map_name: str) -> str:
-    """`/ElysiumBaked/<map>` -- the map's own baked package folder, beside its `.umap`."""
+    """`/ElysiumBaked/Maps/<map>` -- the map's own baked package folder, beside its `.umap`."""
 
-    return f"{BAKED_MOUNT}/{map_name}"
+    from elysium_pipeline.asset_paths import map_package
+    return map_package(map_name)
 
 
 def asset_name(map_name: str) -> str:
@@ -62,7 +63,7 @@ def asset_name(map_name: str) -> str:
 
 
 def asset_path(map_name: str) -> str:
-    """`/ElysiumBaked/<map>/DA_<map>_Entities` -- the twin of `FElysiumContentPaths::BakedMapEntities`."""
+    """`/ElysiumBaked/Maps/<map>/DA_<map>_Entities` -- the twin of `FElysiumContentPaths::BakedMapEntities`."""
 
     return f"{package_root(map_name)}/{asset_name(map_name)}"
 

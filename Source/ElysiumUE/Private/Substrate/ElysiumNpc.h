@@ -514,6 +514,13 @@ public:
 	// SetModel: swap the NPC's appearance (bradbury Heather goth/normal, cemetery prostitute,
 	// downtown Nines). The rebuild is FElysiumAnimating's; the A/B gate is this leaf's.
 	virtual void OnRuntimeModelChanged() override;
+	virtual void OnPreparedVisualAttached() override
+	{
+		// A lookup while admission was pending may have cached "no stance" for this ID.
+		// Invalidate only that metadata result; do not re-arm the mind or replay a schedule.
+		StanceResolvedFor.Reset();
+		FElysiumScriptedCharacter::OnPreparedVisualAttached();
+	}
 
 	virtual void OnDormancyChanged() override;
 

@@ -32,4 +32,6 @@ public:
 	UFUNCTION(BlueprintCallable, CallInEditor, Category="Elysium")
 	bool ConfigureRest(USkeletalMesh* SkeletalMesh, UAnimSequence* RestSequence,
 		UStaticMesh* StaticMesh, bool bSolid);
+	UFUNCTION(BlueprintCallable, CallInEditor, Category="Elysium")
+	FString RefreshGarmentMaterials();
 };

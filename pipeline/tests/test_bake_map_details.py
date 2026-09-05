@@ -82,13 +82,13 @@ def test_detail_instance_rows_group_by_model_in_lump_order_and_normalise_sway(mo
     ]
     groups = module.detail_instance_rows(details)
     # One component per model, in first-record order; instance k is the model's k-th record.
-    assert list(groups) == [("grassa", False), ("rock", False)]
-    grass = groups[("grassa", False)]
+    assert list(groups) == [("vtmb:model:grassa", False), ("vtmb:model:rock", False)]
+    grass = groups[("vtmb:model:grassa", False)]
     assert [row[0] for row in grass] == [(0.0, 0.0, 0.0), (10.0, 20.0, 30.0), (0.0, 0.0, 0.0)]
     # `swayAmount / 255`; an unswayed record is an exact 0, never a rounding residue.
     assert [row[3] for row in grass] == [0.0, pytest.approx(0.2), pytest.approx(1.0 / 255.0)]
     assert grass[0][3] == 0.0
-    assert groups[("rock", False)][0][3] == 1.0
+    assert groups[("vtmb:model:rock", False)][0][3] == 1.0
     # A world instance is unscaled; rotation rides through untouched.
     assert all(row[2] == 1.0 for row in grass)
     assert grass[0][1] == (0.0, 0.0, 0.0, 1.0)
@@ -100,9 +100,9 @@ def test_a_miniature_detail_takes_the_sky_transform_in_its_own_component(module)
         _detail(1, 0, "weed", sky=True, position=(1010.0, 2020.0, 3030.0)),
     ]
     groups = module.detail_instance_rows(details, sky_scale=16.0, sky_origin=(1000.0, 2000.0, 3000.0))
-    assert list(groups) == [("weed", False), ("weed", True)]
-    assert groups[("weed", False)][0][0] == (1010.0, 2020.0, 3030.0)
-    sky_row = groups[("weed", True)][0]
+    assert list(groups) == [("vtmb:model:weed", False), ("vtmb:model:weed", True)]
+    assert groups[("vtmb:model:weed", False)][0][0] == (1010.0, 2020.0, 3030.0)
+    sky_row = groups[("vtmb:model:weed", True)][0]
     assert sky_row[0] == pytest.approx((160.0, 320.0, 480.0))
     assert sky_row[2] == 16.0
 
@@ -119,7 +119,8 @@ def test_the_staged_row_layout_round_trips_between_the_two_halves(module) -> Non
         position=(1.5, -2.5, 3.5), rotation=(0.1, 0.2, 0.3, 0.9), sway=42, sky=True)
     row = MG.detail_record_row(detail)
     assert len(row) == len(MG.DETAIL_RECORD_FIELDS) == 11
-    staged = module._DetailPlacement(row, {2: "weedc"})
+    staged = module._DetailPlacement(row, {2: {"stem": "weedc", "modelPath": detail.model_path}})
+    assert staged.model_path == detail.model_path
     assert (staged.index, staged.model, staged.stem) == (7, 2, "weedc")
     assert staged.position == (1.5, -2.5, 3.5)
     assert staged.rotation == (0.1, 0.2, 0.3, 0.9)

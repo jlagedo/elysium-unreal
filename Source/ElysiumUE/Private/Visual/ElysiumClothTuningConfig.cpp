@@ -95,7 +95,7 @@ const UElysiumClothTuningConfig* UElysiumClothTuningConfig::Load()
 }
 
 FElysiumClothTuningLayer UElysiumClothTuningConfig::ResolveGarment(const FString& Stem,
-	int32 Definition, FName& OutMaterial, TArray<FString>& OutErrors) const
+	int32 Definition, FName& OutMaterial, TArray<FString>& OutErrors, TArray<FString>* OutWarnings) const
 {
 	// Every flag starts false, so "nothing ever set this" stays distinguishable from "a layer set
 	// it to the number the struct happens to initialise to".
@@ -112,7 +112,7 @@ FElysiumClothTuningLayer UElysiumClothTuningConfig::ResolveGarment(const FString
 	if (Material.IsNone())
 	{
 		Material = FallbackMaterial;
-		OutErrors.Add(FString::Printf(
+		(OutWarnings?*OutWarnings:OutErrors).Add(FString::Printf(
 			TEXT("%s names no garment '%s' definition %d; fell back to '%s'"),
 			*FElysiumContentPaths::AuthoredClothTuning(), *Stem, Definition, *Material.ToString()));
 	}

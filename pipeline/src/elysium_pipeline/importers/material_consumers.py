@@ -14,7 +14,7 @@ def collect(root):
         kinds = []
         if identity["shape"] != "skeletal":
             kinds.append("static")
-        if skeletal_candidate(identity, len(unit["mdl"]["bones"])):
+        if skeletal_candidate(identity, len(unit["mdl"]["bones"]), has_cloth=bool((unit.get("cloth") or {}).get("garments"))):
             kinds.append("skeletal")
         bindings = unit["materialBindings"]
         for slot in bindings["slots"]:

@@ -368,7 +368,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Elysium|Cloth")
 	TMap<FName, FElysiumClothTuningLayer> Materials;
 
-	/** One entry per model stem that authors cloth, keyed as the export names it. */
+	/** One entry per model id that authors cloth; material profiles remain keyed by material name. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Elysium|Cloth")
 	TMap<FName, FElysiumClothGarmentDefinitions> Garments;
 
@@ -385,11 +385,10 @@ public:
 	 * own entry, each layer overriding the last value by value.
 	 *
 	 * `Definition` selects among a model's entries for a model that authors more than one garment.
-	 * A stem the table does not name resolves to `FallbackMaterial` and appends an error rather
-	 * than resolving quietly, because a garment that reached the build untuned is exactly what a
-	 * silent average would hide. Every value the resolved layer still does not carry is reported by
-	 * name.
+	 * A missing garment resolves to the authored `FallbackMaterial` and reports the substitution.
+	 * Native importers can collect it as a pending-tuning warning; legacy callers receive it in
+	 * OutErrors. Missing material definitions and unset resolved values remain errors.
 	 */
 	FElysiumClothTuningLayer ResolveGarment(const FString& Stem, int32 Definition,
-		FName& OutMaterial, TArray<FString>& OutErrors) const;
+		FName& OutMaterial, TArray<FString>& OutErrors, TArray<FString>* OutWarnings = nullptr) const;
 };

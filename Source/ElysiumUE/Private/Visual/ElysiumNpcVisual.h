@@ -78,6 +78,8 @@ namespace ElysiumNpcVisual
 	// miss is the ordinary case and leaves the body exactly as it was. Returns the component when
 	// one was attached, null otherwise.
 	UChaosClothComponent* InstallGarment(USkeletalMeshComponent* Body, const FString& Stem);
+	// Apply the body's current skin/material overrides to its native garments. No loads.
+	bool SyncGarmentMaterials(USkeletalMeshComponent* Body, FString& OutError);
 
 	// Install this stem's authored stock-AnimDynamics hair chains.
 	//

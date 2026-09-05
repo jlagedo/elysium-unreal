@@ -3424,6 +3424,12 @@ asset lane.
 
 ### R8 — characters: the skeletal lane rebuilt on the GLB corpus [was R6.1 / SF-6.3, R6.3 wield / SF-6.5, R6.4 irises]
 
+**Owner scope ruling, 2026-09-05:** physics is export/import and data conservation only in R8.
+Preserve and verify physics geometry, solids, constraints, parameters, metadata and provenance.
+Simulation-ready PhysicsAsset construction, solver calibration, ragdoll activation and gameplay
+physics are deferred and cannot block this migration or its accepted legacy retirement. This
+supersedes earlier PHYS1 dependencies in linked plans.
+
 **Designed on measurements, 2026-09-04 — the plan is `characters_r8.md`** (rulings D1–D12,
 the lane, the tasks, the ranked risks, the owner calls with their defaults, and the 15 defects
 the exploration found; the thirteen measurement reports behind it are under
@@ -3490,7 +3496,8 @@ on a byte-equal payload against a frozen copy of the legacy `npc/` + `items/` ex
   autolayer view in `DA_ElysiumBody_<stem>`; clip columns, events and movement as
   `UAnimMetaData` (never notifies, never root motion); T-B2 in the blend-space writer; the
   expression-table lane; the nine readers, `FElysiumTextureCache` and the `npc/` / `items/`
-  trees retire. PHYS1 follows as its own row on the staged `physics` payload.
+  trees retire. Physics source data is cooked and verified; deferred PHYS1 simulation work
+  consumes it later and does not gate R8 completion.
   → lands: no loose read under `npc/`.
 
 ### R9 — retire [was R8; MP-6, SF-7.1]

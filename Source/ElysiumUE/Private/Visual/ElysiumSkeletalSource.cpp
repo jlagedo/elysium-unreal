@@ -183,6 +183,16 @@ namespace
 		}
 	}
 
+	void ReadTangents(FCursor& Cursor, FElysiumSkeletalSource& Out)
+	{
+		const uint32 Count = Cursor.Read<uint32>();
+		static_assert(sizeof(FVector4f) == 16);
+		const uint8* Data = Cursor.Take(int64(Count) * 16);
+		if (!Data) return;
+		Out.Tangents.SetNumUninitialized(Count);
+		if (Count) FMemory::Memcpy(Out.Tangents.GetData(), Data, int64(Count) * 16);
+	}
+
 	void ReadMorphs(FCursor& Cursor, FElysiumSkeletalSource& Out)
 	{
 		const int32 Count = static_cast<int32>(Cursor.Read<uint32>());
@@ -358,6 +368,7 @@ namespace
 	constexpr uint32 TagMatl = 'L' << 24 | 'T' << 16 | 'A' << 8 | 'M';
 	constexpr uint32 TagMesh = 'H' << 24 | 'S' << 16 | 'E' << 8 | 'M';
 	constexpr uint32 TagMorf = 'F' << 24 | 'R' << 16 | 'O' << 8 | 'M';
+	constexpr uint32 TagTang = 'G' << 24 | 'N' << 16 | 'A' << 8 | 'T';
 	constexpr uint32 TagMask = 'K' << 24 | 'S' << 16 | 'A' << 8 | 'M';
 	constexpr uint32 TagAnim = 'M' << 24 | 'I' << 16 | 'N' << 8 | 'A';
 	constexpr uint32 TagDynm = 'M' << 24 | 'N' << 16 | 'Y' << 8 | 'D';
@@ -383,6 +394,7 @@ namespace
 		case TagMatl: ReadMaterials(Section, Out); break;
 		case TagMesh: ReadMesh(Section, Out); break;
 		case TagMorf: ReadMorphs(Section, Out); break;
+		case TagTang: ReadTangents(Section, Out); break;
 		case TagMask: ReadMasks(Section, Out); break;
 		case TagAnim: ReadClips(Section, Out); break;
 		case TagDynm: ReadHairDynamics(Section, Out); break;
@@ -396,6 +408,22 @@ namespace
 		}
 	}
 
+	if (!Out.Tangents.IsEmpty())
+	{
+		if (Out.Tangents.Num() != Out.Vertices.Num())
+		{
+			OutError = FString::Printf(TEXT("%s tangent/vertex counts differ"), *Path);
+			return false;
+		}
+		for (const auto& Tangent : Out.Tangents)
+		{
+			if (Tangent.ContainsNaN() || (Tangent.W != -1.f && Tangent.W != 1.f))
+			{
+				OutError = FString::Printf(TEXT("%s has an invalid authored tangent"), *Path);
+				return false;
+			}
+		}
+	}
 	if (Out.Bones.IsEmpty())
 	{
 		OutError = FString::Printf(TEXT("%s carries no skeleton"), *Path);

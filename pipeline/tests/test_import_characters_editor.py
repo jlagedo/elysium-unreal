@@ -122,3 +122,20 @@ def test_stage_paths_cannot_escape_and_command_line_preserves_spaces(editor):
         editor.module._check_file(editor.root, "../elsewhere", "digest")
     assert editor.module.argument("ImportCharacters") == "C:/space here/manifest.json"
     assert editor.module.argument("ImportForce") == "1"
+
+
+def test_reference_quaternion_bypasses_the_float32_make_struct_constructor(editor, monkeypatch):
+    class Quat:
+        def __init__(self, *args):
+            assert not args, "MakeQuat narrows constructor arguments to float32"
+            self.fields = {}
+
+        def set_editor_property(self, field, value):
+            self.fields[field] = value
+
+    monkeypatch.setattr(editor.module.unreal, "Quat", Quat, raising=False)
+    monkeypatch.setattr(editor.module.unreal, "Transform", NS, raising=False)
+    monkeypatch.setattr(editor.module.unreal, "Vector", lambda *v: v, raising=False)
+    values = [.123456789012345, -.234567890123456, .345678901234567, .901234567890123]
+    transform = editor.module._transform({"position": [1., 2., 3.], "rotation": values})
+    assert list(transform.rotation.fields.values()) == values

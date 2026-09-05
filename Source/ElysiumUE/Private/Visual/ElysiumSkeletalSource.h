@@ -150,6 +150,8 @@ struct FElysiumSkeletalSource
 	TArray<FElysiumSourceMaterial> Materials;
 	TArray<FElysiumSourceSection> Sections;
 	TArray<FElysiumSourceVertex> Vertices;
+	/** V2 TANG rows: authored Unreal-frame tangent XYZ and reflected handedness, one per vertex. */
+	TArray<FVector4f> Tangents;
 	/** Three per triangle, indexing Vertices, already wound for Unreal. */
 	TArray<uint32> Indices;
 	TArray<FElysiumSourceMorph> Morphs;

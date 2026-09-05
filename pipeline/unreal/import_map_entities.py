@@ -1,5 +1,5 @@
 """Phase 2 of `uv run elysium import map-entities`: land one staged entity table per map as a
-`UElysiumMapEntities` data asset under `/ElysiumBaked/<map>/DA_<map>_Entities`.
+`UElysiumMapEntities` data asset under `/ElysiumBaked/Maps/<map>/DA_<map>_Entities`.
 
 Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import_map_entities.py
 -ImportMapEntities=<manifest.json>`). The offline stage (`importers/map_entities.py`, R4.1) already

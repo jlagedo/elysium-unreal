@@ -4,6 +4,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumCharacterProvenance.h"
+#include "ElysiumDynamicsData.h"
 #include "ElysiumWieldTable.h"
 #include "Visual/ElysiumBodyAnimInstance.h"
 #include "Visual/ElysiumHairDynamicsConfig.h"
@@ -50,9 +51,16 @@ namespace ElysiumNpcVisual
 		// presentation, so a body simulates hair exactly when the owner gave it an entry. No entry
 		// is the ordinary answer for almost the whole cast and is not a failure -- the one thing
 		// worth reporting, a table that is missing entirely, `Load` already reports once.
-		const FElysiumHairDynamicsStem* const Authored = UElysiumHairDynamicsConfig::FindStem(Stem);
+		const auto* Cooked=UElysiumCharacterProvenance::Find(Mesh);
+		const FString TuningKey=Cooked?Cooked->AssetId:Stem;
+		const FElysiumHairDynamicsStem* const Authored = UElysiumHairDynamicsConfig::FindModel(TuningKey);
 		if (Authored == nullptr)
 		{
+			return false;
+		}
+		if (Cooked && !Cooked->Dynamics)
+		{
+			UE_LOG(LogElysiumNpcVisual,Warning,TEXT("hair dynamics: %s has authored tuning but no cooked dynamics asset"),*Cooked->AssetId);
 			return false;
 		}
 
@@ -89,7 +97,21 @@ namespace ElysiumNpcVisual
 				continue;
 			}
 
-			FElysiumHairDynamicsChainConfig& Config = Chains.AddDefaulted_GetRef();
+			FElysiumHairDynamicsChainConfig Generated;
+			if (Cooked)
+			{
+				int32 Matches=0;
+				for (const auto& Recipe : Cooked->Dynamics->Chains)
+					if (Recipe.BoundBone==Chain.BoundBone && Recipe.ChainEnd==Chain.ChainEnd)
+					{ Generated=Recipe; ++Matches; }
+				if (Matches!=1)
+				{
+					UE_LOG(LogElysiumNpcVisual,Warning,TEXT("hair dynamics: authored chain %s -> %s on %s resolves %d generated recipes"),
+						*Chain.BoundBone.ToString(),*Chain.ChainEnd.ToString(),*Cooked->AssetId,Matches);
+					continue;
+				}
+			}
+			FElysiumHairDynamicsChainConfig& Config = Chains.Add_GetRef(Generated);
 			Config.BoundBone = Chain.BoundBone;
 			Config.ChainEnd = Chain.ChainEnd;
 			Config.GravityScale = Chain.GravityScale;
@@ -293,27 +315,73 @@ namespace ElysiumNpcVisual
 		{
 			return nullptr;
 		}
-		// Absence is the ordinary answer: 60 of 4,445 installed models author a garment at all, so
-		// this is a soft load rather than a resolve-or-fail. LoadObject logs nothing on a miss.
-		const FString AssetPath = FElysiumContentPaths::BakedCharacterCloth(Stem);
-		UChaosClothAsset* Asset = LoadObject<UChaosClothAsset>(nullptr, *AssetPath, nullptr,
-			LOAD_NoWarn | LOAD_Quiet);
-		if (Asset == nullptr)
+		TArray<UChaosClothAsset*> Assets;
+		if (const auto* Cooked=UElysiumCharacterProvenance::Find(Body->GetSkeletalMeshAsset()))
 		{
-			return nullptr;
+			if (Cooked->ClothAssets.Num()!=Cooked->SourceGarmentCount || Cooked->ClothAssets.Contains(nullptr))
+			{
+				UE_LOG(LogElysiumNpcVisual,Warning,TEXT("cloth: %s has incomplete native garment references (%d/%d)"),
+					*Cooked->AssetId,Cooked->ClothAssets.Num(),Cooked->SourceGarmentCount);
+				return nullptr;
+			}
+			for (const auto& Asset : Cooked->ClothAssets) Assets.Add(Asset.Get());
 		}
+		else if (auto* Asset=LoadObject<UChaosClothAsset>(nullptr,*FElysiumContentPaths::BakedCharacterCloth(Stem),
+			nullptr,LOAD_NoWarn|LOAD_Quiet)) Assets.Add(Asset);
+		UChaosClothComponent* First=nullptr;
+		for (UChaosClothAsset* Asset : Assets)
+		{
+			UChaosClothComponent* Cloth = NewObject<UChaosClothComponent>(Owner);
+			Owner->AddInstanceComponent(Cloth);
+			Cloth->SetAsset(Asset);
+			// All garments follow the same body's already-loaded pose. No native path lookup
+			// or loose sidecar read occurs during installation.
+			Cloth->SetupAttachment(Body);
+			Cloth->RegisterComponent();
+			Cloth->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetIncludingScale);
+			Cloth->SetLeaderPoseComponent(Body);
+			HideGarmentSectionsOnBody(Body, *Asset);
+			if (!First) First=Cloth;
+		}
+		return First;
+	}
 
-		UChaosClothComponent* Cloth = NewObject<UChaosClothComponent>(Owner);
-		Cloth->SetAsset(Asset);
-		// The garment is skinned by the body it hangs on, so it follows rather than animates: the
-		// leader pose supplies every bone the cloth's kinematic anchors are bound to. Attaching
-		// before registering keeps the component from ticking against an unset leader for a frame.
-		Cloth->SetupAttachment(Body);
-		Cloth->RegisterComponent();
-		Cloth->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetIncludingScale);
-		Cloth->SetLeaderPoseComponent(Body);
-		HideGarmentSectionsOnBody(Body, *Asset);
-		return Cloth;
+	bool SyncGarmentMaterials(USkeletalMeshComponent* Body, FString& OutError)
+	{
+		OutError.Reset();
+		if (!Body || !Body->GetOwner() || !Body->GetSkeletalMeshAsset())
+		{
+			OutError = TEXT("garment material binding requires a body and its owner");
+			return false;
+		}
+		struct FAssignment { UChaosClothComponent* Component; int32 Slot; UMaterialInterface* Material; };
+		TArray<FAssignment> Assignments;
+		const auto& BodySlots = Body->GetSkeletalMeshAsset()->GetMaterials();
+		TArray<UChaosClothComponent*> Garments;
+		Body->GetOwner()->GetComponents(Garments);
+		for (auto* Garment : Garments)
+		{
+			if (Garment->LeaderPoseComponent.Get() != Body) continue;
+			const auto* Asset = Cast<UChaosClothAsset>(Garment->GetSkinnedAsset());
+			if (!Asset) { OutError = TEXT("garment has no native asset"); return false; }
+			const auto& Slots = Asset->GetMaterials();
+			for (int32 Slot = 0; Slot < Slots.Num(); ++Slot)
+			{
+				TSet<UMaterialInterface*> Targets;
+				for (int32 BodySlot = 0; BodySlot < BodySlots.Num(); ++BodySlot)
+					if (BodySlots[BodySlot].MaterialInterface == Slots[Slot].MaterialInterface)
+						Targets.Add(Body->GetMaterial(BodySlot));
+				if (Targets.Num() != 1 || Targets.Contains(nullptr))
+				{
+					OutError = FString::Printf(TEXT("%s garment slot %d has no unique body material assignment"), *Asset->GetPathName(), Slot);
+					return false;
+				}
+				Assignments.Add({Garment, Slot, *Targets.CreateConstIterator()});
+			}
+		}
+		for (const auto& Assignment : Assignments)
+			Assignment.Component->SetMaterial(Assignment.Slot, Assignment.Material);
+		return true;
 	}
 
 	FName WieldComponentTag()

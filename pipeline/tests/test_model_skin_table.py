@@ -124,17 +124,16 @@ def test_rows_are_sorted_by_stem():
     assert [row["stem"] for row in rows] == ["scenery/alpha", "scenery/zeta"]
 
 
-def test_skin_set_asset_path_is_the_v2_root_sibling_of_the_legacy_asset():
-    assert importer.skin_set_asset_path() == "/ElysiumBaked/Meshes/DA_ElysiumPropSkins"
+def test_skin_set_asset_path_is_the_canonical_global_catalogue():
+    assert importer.skin_set_asset_path() == "/ElysiumBaked/Models/_Corpus/DA_PropSkins"
 
 
-def test_model_skins_package_root_is_pinned_to_the_stage_modules_own():
-    """`importers.model_skins` restates `PACKAGE_ROOT` rather than importing it from
-    `importers.models` (whose import chain reaches `numpy`, unavailable inside Unreal's embedded
-    Python -- the reason `model_skins` exists as a separate module at all); the two must agree."""
+def test_legacy_skin_fold_survives_without_claiming_the_canonical_global_address():
+    """Legacy data/fold remains until replacement acceptance; it is not the merged catalogue."""
 
     from elysium_pipeline.importers import model_skins
 
-    assert model_skins.PACKAGE_ROOT == importer.PACKAGE_ROOT
+    assert model_skins.PACKAGE_ROOT == "/ElysiumBaked/Meshes"
+    assert importer.PACKAGE_ROOT == "/ElysiumBaked/Models"
     assert importer.build_skin_table is model_skins.build_skin_table
-    assert importer.skin_set_asset_path is model_skins.skin_set_asset_path
+    assert importer.skin_set_asset_path() != model_skins.skin_set_asset_path()

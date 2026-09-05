@@ -7,6 +7,7 @@ from pathlib import Path
 from elysium_pipeline.asset_names import rig_bone_name
 from elysium_pipeline.asset_paths import baked_unit
 from elysium_pipeline.formats.unit_contract.container import read_document
+from elysium_pipeline.importers.expression_tables import expression_model_projection
 from elysium_pipeline.skeletal_stage import payload
 from elysium_pipeline.skeletal_stage.unit import source_position
 
@@ -178,4 +179,5 @@ def mesh_projection(document, material_for):
             "skinFamilies": [[object_path(material_for(material)["assetPath"]) for material in family]
                              for family in extension["materialBindings"]["skinFamilies"]],
             "expressionTables": deepcopy((extension["facial"] or {}).get("selectedTables", [])),
+            "expressionData": expression_model_projection(extension),
             "anomalies": anomalies}

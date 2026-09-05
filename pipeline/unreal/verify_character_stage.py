@@ -1,4 +1,5 @@
 """Read saved R8 native core products in a fresh editor; no legacy export dependency."""
+import hashlib
 import json
 from pathlib import Path
 import struct
@@ -51,7 +52,7 @@ def load(path, evidence):
     return asset
 
 
-def run(manifest_path, material_root):
+def run(manifest_path, material_root, export_root=None):
     started = time.time()
     root = Path(manifest_path).parent
     manifest = json.loads(Path(manifest_path).read_text())
@@ -65,6 +66,14 @@ def run(manifest_path, material_root):
     report["rawAnimationSamples"] = {"scope": "retained staged source tracks in saved editor data models",
                                      "owners": 0, "tracks": 0, "keys": 0, "declaredOmittedTracks": 0,
                                      "compressedPoseCompared": False, "addedBindTracksCompared": False}
+    report["dynamicsData"] = {"assets": 0, "sourceRecords": 0, "chains": 0, "bodies": 0, "sourceOnly": 0}
+    report["clothAssets"] = 0
+    report["clothTuningPending"] = {}
+    report["physicsSourceData"] = {"assets": 0, "sourceGaps": 0}
+    report["physicsScope"] = "export-import-data-conservation"
+    report["physicsSimulationAcceptanceRequired"] = False
+    report["geometrySnapshots"] = []
+    report["manifestSha256"] = hashlib.sha256(Path(manifest_path).read_bytes()).hexdigest()
     def checkpoint():
         report["seconds"] = round(time.time() - started, 2)
         (root / "native_verify_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
@@ -80,7 +89,13 @@ def run(manifest_path, material_root):
             error = unreal.ElysiumCastData.verify(asset, data.decode("utf-8"))
             if error:
                 raise ValueError(error)
+            cast_document = json.loads(data)
+            if cast_document.get("expressionTablesAsset"):
+                if package(asset.get_editor_property("expression_tables")) != cast_document["expressionTablesAsset"]:
+                    raise ValueError("cast lost its cooked expression corpus reference")
             report["castData"] = True
+            from pipeline.unreal.migrate_character_tuning import verify as verify_tuning
+            report["authoredTuning"] = verify_tuning(json.loads(data), root)
         except Exception as exc:
             report["failed"].append({"assetId":"cast-corpus","reason":str(exc)})
     selected = set(manifest["selectedUnits"])
@@ -104,6 +119,20 @@ def run(manifest_path, material_root):
             _, body_blob = _check_file(root, entry["body"], entry["recipe"]["bodySha256"])
             body = json.loads(body_blob)
             evidence = {"asset_id": id, "unit_sha256": entry["recipe"]["unitSha256"]}
+            if entry.get("dynamicsData"):
+                _, encoded = _check_file(root, entry["dynamicsData"], entry["recipe"]["dynamicsDataSha256"])
+                expected_dynamics = json.loads(encoded)
+                dynamics = unreal.load_asset(entry["dynamicsDataAsset"])
+                if dynamics is None or not bl.stored_recipe(entry["dynamicsDataAsset"], producer="characters"):
+                    raise ValueError("dynamics asset or recipe is absent")
+                error = unreal.ElysiumDynamicsData.verify(dynamics, encoded.decode("utf-8"))
+                if error:
+                    raise ValueError(error)
+                report["dynamicsData"]["assets"] += 1
+                report["dynamicsData"]["sourceRecords"] += len(expected_dynamics["records"])
+                report["dynamicsData"]["chains"] += len(expected_dynamics["chains"])
+                report["dynamicsData"]["bodies"] += len(expected_dynamics["bodies"])
+                report["dynamicsData"]["sourceOnly"] += sum(r["projection"] == "source-only" for r in expected_dynamics["records"])
             if entry["skeletonAsset"]:
                 skeleton = load(entry["skeletonAsset"], evidence)
                 if lib.skeleton_bone_count(skeleton) != len(eskm.bones(blob)):
@@ -111,6 +140,8 @@ def run(manifest_path, material_root):
                 report["skeletons"] += 1
             if entry["meshAsset"]:
                 mesh = load(entry["meshAsset"], {**evidence, "payload_sha256": entry["recipe"]["payloadSha256"]})
+                if not isinstance(mesh, unreal.ElysiumSkeletalMesh):
+                    raise ValueError("mesh lacks the authored morph build path; reimport its staged unit")
                 if entry.get("meshData"):
                     _, mesh_data = _check_file(root, entry["meshData"], entry["recipe"]["meshDataSha256"])
                     error = unreal.ElysiumCharacterProvenance.verify_mesh_data(mesh, mesh_data.decode("utf-8"))
@@ -119,6 +150,44 @@ def run(manifest_path, material_root):
                     report["meshData"] += 1
                 if package(mesh.get_editor_property("skeleton")) != entry["skeletonAsset"]:
                     raise ValueError("mesh binds the wrong skeleton")
+                mesh_provenance = next(r for r in mesh.get_editor_property("asset_user_data")
+                                       if r and r.get_class().get_name() == "ElysiumCharacterProvenance")
+                if package(mesh_provenance.get_editor_property("dynamics")) != entry.get("dynamicsDataAsset"):
+                    raise ValueError("mesh binds the wrong dynamics asset")
+                if export_root:
+                    physics = mesh_provenance.get_editor_property("physics_source_data")
+                    if body["sourceSemantics"].get("physics") is None:
+                        if physics is not None:
+                            raise ValueError("mesh invents a physics source reference for a null source PHY")
+                    else:
+                        from elysium_pipeline.importers.physics_data import project_selected_entry, json_text, PRODUCER as PHYSICS_PRODUCER
+                        expected_physics = project_selected_entry(entry, manifest["selectedUnits"], export_root, root)
+                        path = expected_physics["assetPath"]
+                        if package(physics) != path or not bl.stored_recipe(path, producer=PHYSICS_PRODUCER):
+                            raise ValueError("mesh physics source reference or recipe is absent")
+                        error = unreal.ElysiumPhysicsData.verify(physics, json_text(expected_physics))
+                        if error:
+                            raise ValueError(error)
+                        report["physicsSourceData"]["assets"] += 1
+                        report["physicsSourceData"]["sourceGaps"] += len(expected_physics["gaps"])
+                expected_cloth = entry.get("clothAssets", [])
+                if [package(asset) for asset in mesh_provenance.get_editor_property("cloth_assets")] != expected_cloth:
+                    raise ValueError("mesh garment references differ from staged inventory")
+                if mesh_provenance.get_editor_property("source_garment_count") != len(expected_cloth):
+                    raise ValueError("mesh lost an authored garment")
+                if entry.get("clothData"):
+                    _, encoded = _check_file(root, entry["clothData"], entry["recipe"]["clothDataSha256"])
+                    cloth_data = json.loads(encoded)
+                    for asset, garment in zip(expected_cloth, cloth_data["garments"]):
+                        if not bl.stored_recipe(asset, producer="characters") or not bl.stored_recipe(asset + "_PHYS", producer="characters"):
+                            raise ValueError("cloth product or recipe is absent")
+                        error = unreal.ElysiumClothBuildLibrary.verify_cloth_asset(asset, json.dumps(garment), mesh.get_path_name())
+                        if error:
+                            raise ValueError(asset + ": " + error)
+                        warnings = json.loads(unreal.EditorAssetLibrary.get_metadata_tag(unreal.load_asset(asset), "ElysiumClothWarnings") or "[]")
+                        if warnings:
+                            report["clothTuningPending"][asset] = warnings
+                        report["clothAssets"] += 1
                 expected_bones = [name.casefold() for name, _ in eskm.bones(blob)]
                 if [str(name).casefold() for name in lib.mesh_bones(mesh)] != expected_bones:
                     raise ValueError("mesh bone names/order differ from stage")
@@ -147,6 +216,25 @@ def run(manifest_path, material_root):
                 for morph in morphs:
                     if not lib.skeleton_has_morph_curve(mesh.get_editor_property("skeleton"), morph.get_name()):
                         raise ValueError("morph curve metadata missing: " + morph.get_name())
+                error, encoded = unreal.ElysiumGeometryVerificationLibrary.capture_geometry(mesh)
+                if error:
+                    raise ValueError("native geometry capture: " + error)
+                relative = "native_geometry/" + id.removeprefix("vtmb:model:") + ".json"
+                snapshot = (root / relative).resolve()
+                if not snapshot.is_relative_to(root.resolve()):
+                    raise ValueError("native geometry snapshot escapes its stage")
+                snapshot.parent.mkdir(parents=True, exist_ok=True)
+                envelope = {"snapshotVersion": 1, "assetId": id, "meshAsset": entry["meshAsset"],
+                            "payloadSha256": entry["recipe"]["payloadSha256"],
+                            "bodySha256": entry["recipe"]["bodySha256"],
+                            "unitSha256": entry["recipe"]["unitSha256"], "native": json.loads(encoded),
+                            "materialPaths": {m["assetId"]: _material_path(m["assetId"], Path(material_root))
+                                              for m in entry["materials"]}}
+                data = json.dumps(envelope, separators=(",", ":"), allow_nan=False).encode("utf-8")
+                snapshot.write_bytes(data)
+                report["geometrySnapshots"].append({"assetId": id, "file": relative,
+                                                    "sha256": hashlib.sha256(data).hexdigest()})
+                del encoded, envelope, data
                 report["meshes"] += 1
             owners = ([entry] if entry.get("nativeMainOwner", True) else []) + entry.get("actors", [])
             for owner in owners:
@@ -234,7 +322,7 @@ def run(manifest_path, material_root):
 
 
 if __name__ == "__main__":
-    result = run(argument("ImportCharacters"), argument("ImportMaterialsRoot"))
+    result = run(argument("ImportCharacters"), argument("ImportMaterialsRoot"), argument("ImportUnitRoot") or None)
     unreal.log("[verify-characters] " + json.dumps(result))
     if result["failed"]:
         raise SystemExit(1)

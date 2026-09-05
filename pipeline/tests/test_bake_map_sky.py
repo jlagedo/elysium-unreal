@@ -142,6 +142,6 @@ def test_sky_dome_geometry_matches_the_runtime_box(module) -> None:
 def test_sky_baked_packages_are_named_by_sky_not_by_map(module) -> None:
     # The game shares six skies between 108 maps; the bake keys by name so two maps that share a
     # sky share one asset set instead of duplicating it.
-    assert module.SKY_TEX_PKG == "/ElysiumBaked/Sky/Textures"
-    assert module.SKY_MESH_PKG == "/ElysiumBaked/Sky/Meshes"
-    assert module.SKY_MAT_PKG == "/ElysiumBaked/Sky/Materials"
+    assert module.SKY_TEX_PKG == "/ElysiumBaked/Textures/skybox"
+    assert module.SKY_MESH_PKG == "/Game/ElysiumGenerated/Sky"
+    assert module.SKY_MAT_PKG == "/ElysiumBaked/Materials/skybox"

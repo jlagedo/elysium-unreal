@@ -302,7 +302,6 @@ def score(corpus: rc.Corpus, run_path: Path) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--export-root", type=Path, required=True)
     parser.add_argument("--run", type=Path, action="append", required=True, dest="runs")
     parser.add_argument("--phase-lag", type=float, default=0.0, metavar="TICKS",
                         help="diagnostic: shift every base cycle by this many 60 Hz ticks")
@@ -321,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
     PHASE_LAG_TICKS = args.phase_lag
     TRACE = args.trace
     BEST_LAG = tuple(range(-args.best_lag, args.best_lag + 1)) if args.best_lag else ()
-    corpus = rc.Corpus(args.export_root)
+    corpus = rc.Corpus()
     codes = [score(corpus, run) for run in args.runs]
     if any(c == 1 for c in codes):
         return 1

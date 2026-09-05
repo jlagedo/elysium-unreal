@@ -50,6 +50,7 @@
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumScenePlayer.h"
 #include "Visual/ElysiumExpressionTable.h"
+#include "Visual/ElysiumExpressionPreparation.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "HAL/IConsoleManager.h"
@@ -272,6 +273,7 @@ public:
 	mutable bool bLoggedMissingClip = false;
 	mutable bool bLoggedMissingSpeak = false;
 	mutable bool bLoggedMissingExpression = false;
+	mutable bool bLoggedExpressionPreparation = false;
 	mutable bool bLoggedMissingFlexKey = false;
 	mutable bool bLoggedUnresolvedPhoneme = false;
 
@@ -797,6 +799,7 @@ public:
 		bLoggedMissingClip = false;
 		bLoggedMissingSpeak = false;
 		bLoggedMissingExpression = false;
+		bLoggedExpressionPreparation = false;
 		bLoggedMissingFlexKey = false;
 		bLoggedUnresolvedPhoneme = false;
 		ActiveClipEvents.Reset();
@@ -1330,7 +1333,9 @@ public:
 			return;
 		}
 		FLiveExpression Live;
-		Live.Table = ElysiumExpressions::Load(Event.Param, ElysiumExpressions::ExpressionClass);
+		FString ExpressionError;
+		Live.Table = ElysiumExpressions::LoadPreparedEvent(Handle.Epoch, Event.Param,
+			ElysiumExpressions::ExpressionClass, ExpressionError);
 		Live.Row = Live.Table.IsValid() ? Live.Table->FindRow(Event.Param2) : INDEX_NONE;
 		if (Live.Row == INDEX_NONE)
 		{
@@ -1338,10 +1343,11 @@ public:
 			if (!bLoggedMissingExpression)
 			{
 				bLoggedMissingExpression = true;
-				UE_LOG(LogElysiumChoreo, Log,
-					TEXT("%s: expression '%s' / '%s' did not resolve to a %s (further misses counted, not logged)"),
+				UE_LOG(LogElysiumChoreo, Warning,
+					TEXT("%s: expression '%s' / '%s' did not resolve to a %s: %s (further misses counted, not logged)"),
 					*DebugString(), *Event.Param, *Event.Param2,
-					Live.Table.IsValid() ? TEXT("row") : TEXT("table"));
+					Live.Table.IsValid() ? TEXT("row") : TEXT("table"),
+					ExpressionError.IsEmpty() ? TEXT("row is absent from compiled table") : *ExpressionError);
 			}
 			return;
 		}
@@ -1629,17 +1635,13 @@ public:
 		}
 		FElysiumLipSyncBinding Binding;
 		Binding.Track = ElysiumLip::Load(Event.Param);
-		const FString Stem = FPaths::GetBaseFilename(Actor->Model).ToLower();
-		if (!Stem.IsEmpty())
+		FString ExpressionDiagnostic;
+		Binding.Table = ElysiumExpressions::LoadPreparedPhonemes(*Actor, ExpressionDiagnostic);
+		if (!ExpressionDiagnostic.IsEmpty() && !bLoggedExpressionPreparation)
 		{
-			Binding.Table = ElysiumExpressions::Load(Stem, ElysiumLip::PhonemeClass);
-		}
-		// `phonemes` / `phonemes_male` are the fallbacks client.dll names literally. Every rigged
-		// character in the shipped cast carries its own table, so this is reached only by a model
-		// whose stem has none.
-		if (!Binding.Table.IsValid())
-		{
-			Binding.Table = ElysiumExpressions::Load(TEXT("phonemes"), ElysiumLip::PhonemeClass);
+			bLoggedExpressionPreparation = true;
+			UE_LOG(LogElysiumChoreo, Warning, TEXT("%s: phoneme selection for %s: %s (further preparation diagnostics suppressed)"),
+				*DebugString(), *Actor->DebugString(), *ExpressionDiagnostic);
 		}
 		// The blend width is this speaker's own `studiohdr` +232/+236 pair, read off its rig. A body
 		// with no rig keeps the binding's modal default, which is what sp_theatre's three speakers

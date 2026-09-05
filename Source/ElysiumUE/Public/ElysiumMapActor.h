@@ -11,6 +11,7 @@
 #include "ElysiumMapActor.generated.h"
 
 class FElysiumEntityWorld;
+class FElysiumExpressionPreparation;
 class FElysiumSoundSchemeManager;
 class UElysiumEntityBodies;
 class UElysiumMapCollision;
@@ -318,6 +319,12 @@ public:
 	// a body factory exists.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override;
+	virtual EElysiumCharacterModelAdmission RequestCharacterModel(const FElysiumEntityHandle& Entity,
+		const FString& ModelId, uint64 Generation, FString& OutError) override;
+	virtual void CancelCharacterModel(const FElysiumEntityHandle& Entity) override;
+	/** Lifecycle calls this before replacing/tearing down EntityWorld. */
+	void CancelCharacterModelAdmissions();
+	bool HasPendingCharacterModels() const { return CharacterModelRequests.Num() != 0; }
 	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
 		const FElysiumEntityHandle& EntityOwner, const FVector& FeetOrigin, float YawDegrees,
 		const FString& Stem, int32 Variant) override;
@@ -834,6 +841,11 @@ private:
 	bool bAnimationPreloadReady = false;
 	bool bNativeAnimationPreloadPending = false;
 	bool bNativeAnimationPreloadFailed = false;
+	TSharedPtr<FElysiumExpressionPreparation> ExpressionPreparation;
+	FElysiumCharacterModelRequests CharacterModelRequests;
+	TMap<FElysiumEntityHandle, uint64> CharacterNativeAdmissionIds;
+	void CompleteCharacterModel(const FElysiumCharacterModelTicket& Ticket, bool bSuccess, const FString& Error);
+	void PrepareExpressionTables();
 	bool bMenuBackdrop = false;
 	bool bNavigationBuildRequested = false;
 	bool bNavigationBuildFailed = false;

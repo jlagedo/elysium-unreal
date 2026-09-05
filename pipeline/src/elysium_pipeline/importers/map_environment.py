@@ -1,7 +1,7 @@
 """Stage one map's environment for the `UElysiumMapEnvironment` asset (R4.4).
 
 `uv run elysium import map-environment --maps <map>...` turns each named map's `<map>.env`,
-`<map>.sky` and `<map>.spawn` sidecars into one `/ElysiumBaked/<map>/DA_<map>_Environment` asset
+`<map>.sky` and `<map>.spawn` sidecars into one `/ElysiumBaked/Maps/<map>/DA_<map>_Environment` asset
 carrying the same values -- the 2D-sky flag and its two fog sets, the 3D-skybox miniature's
 placement transform, and the initial player spawn (`docs/architecture/seam_map_map.md` -> "Import —
 environment"). This module is the offline stage half: it reads the three sidecars verbatim, asserts
@@ -48,9 +48,10 @@ def staging_root(work_root: Path) -> Path:
 
 
 def package_root(map_name: str) -> str:
-    """`/ElysiumBaked/<map>` -- the map's own baked package folder, beside its `.umap`."""
+    """`/ElysiumBaked/Maps/<map>` -- the map's own baked package folder, beside its `.umap`."""
 
-    return f"{BAKED_MOUNT}/{map_name}"
+    from elysium_pipeline.asset_paths import map_package
+    return map_package(map_name)
 
 
 def asset_name(map_name: str) -> str:
@@ -58,7 +59,7 @@ def asset_name(map_name: str) -> str:
 
 
 def asset_path(map_name: str) -> str:
-    """`/ElysiumBaked/<map>/DA_<map>_Environment` -- the twin of `BakedMapEnvironment`."""
+    """`/ElysiumBaked/Maps/<map>/DA_<map>_Environment` -- the twin of `BakedMapEnvironment`."""
 
     return f"{package_root(map_name)}/{asset_name(map_name)}"
 

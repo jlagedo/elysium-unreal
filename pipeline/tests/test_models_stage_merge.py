@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import pytest
 
 from elysium_pipeline.formats.unit_contract.container import encode_glb
 from elysium_pipeline.importers import models as importer
@@ -21,6 +22,23 @@ from elysium_pipeline.importers import models as importer
 from test_importers_models import _material_index, _model_document
 
 MATERIAL_ID = "vtmb:material:models/x/brick"
+
+
+def test_explicit_unit_selection_keeps_other_producer_rows(tmp_path, monkeypatch):
+    export, stage = tmp_path / 'export', tmp_path / 'stage'
+    _publish(export, 'scenery/a')
+    _publish(export, 'scenery/b')
+    monkeypatch.setattr(importer, 'load_material_index', lambda root: _material_index([MATERIAL_ID]))
+    monkeypatch.setattr(importer, 'select_all', lambda root: ['scenery/a','scenery/b'])
+    importer.stage_models(export, stage, all_models=True)
+    result = importer.stage_models(export, stage, units=['vtmb:model:scenery/a'])
+    manifest = json.loads(result.manifest_path.read_text())
+    assert manifest['selection']['keys'] == ['scenery/a']
+    assert manifest['selection']['perMap'] == {}
+    assert manifest['pruneScope'] is None
+    assert {entry['unit'] for entry in manifest['assets']} == {'vtmb:model:scenery/a','vtmb:model:scenery/b'}
+    with pytest.raises(importer.ModelImportError, match='canonical|full vtmb'):
+        importer.stage_models(export, stage, units=['a'])
 
 
 def _publish(export_v2_root: Path, key: str, **document_kwargs) -> Path:
@@ -112,7 +130,7 @@ def test_a_restaged_unit_replaces_its_prior_row(tmp_path, monkeypatch):
     )
 
 
-def test_schema_mismatch_falls_back_to_wholesale_replacement(tmp_path, monkeypatch):
+def test_schema_mismatch_refuses_scoped_run_without_overwriting_prior_stage(tmp_path, monkeypatch):
     export_v2_root = tmp_path / "export_v2"
     staging_root = tmp_path / "stage"
     _publish(export_v2_root, "scenery/a")
@@ -124,9 +142,7 @@ def test_schema_mismatch_falls_back_to_wholesale_replacement(tmp_path, monkeypat
     document["schemaVersion"] = "0.0.1-stale"
     manifest_path.write_text(json.dumps(document), encoding="utf-8")
 
-    scoped = _stage(export_v2_root, staging_root, monkeypatch, maps=["scenery/a"])
-    manifest = _manifest(scoped)
-    stems = {entry["stem"] for entry in manifest["assets"]}
-    # No merge material trusted from a manifest whose schema no longer matches this run's --
-    # `scenery/b`'s row is gone, the same outright replacement an absent manifest gets.
-    assert stems == {importer.static_stem("scenery/a")}
+    before = {p: p.read_bytes() for p in staging_root.rglob("*") if p.is_file()}
+    with pytest.raises(importer.ModelImportError, match="restage --all"):
+        _stage(export_v2_root, staging_root, monkeypatch, maps=["scenery/a"])
+    assert {p: p.read_bytes() for p in staging_root.rglob("*") if p.is_file()} == before

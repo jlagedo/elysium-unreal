@@ -74,6 +74,11 @@ def corpus_path(kind: str, prefix: str, name: str) -> str:
     return f"{BAKED_MOUNT}/{KIND_ROOTS[kind]}/_Corpus/{_product(prefix, name)}"
 
 
+def map_package(map_name: str) -> str:
+    """Map bundle directory, containing its level and map-owned products."""
+    return baked_unit("vtmb:map:" + map_name, "").rsplit("/", 1)[0]
+
+
 def validate_landing(package: str, content_root: Path, *, extension: str = ".uasset") -> Path:
     """Bound the actual filesystem path, including this machine's content-root length."""
     prefix = BAKED_MOUNT + "/"

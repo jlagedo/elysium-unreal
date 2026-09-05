@@ -40,6 +40,8 @@ from elysium_pipeline.asset_names import (  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 from elysium_pipeline.tasking import ContentDigestCache, DIGEST_CACHE_FILE  # noqa: E402
 
+from pipeline.unreal import sky_composites as sky_assets
+
 MOUNT = mounts.BAKED
 OUT_ROOT = os.fspath(export_root())
 
@@ -155,13 +157,10 @@ def parse_chunk_style(name):
     return name, 0
 
 
-# `/ElysiumBaked/Sky/...` (R5.2): one cube/mesh/material set per SKY NAME, shared by every
-# converted map that uses it -- the game's six skies are shared between 108 maps, so the bake
-# follows the runtime's own naming (`ApplyEnvironment`) rather than duplicating per map.
-SKY_PKG = "%s/Sky" % MOUNT
-SKY_TEX_PKG = "%s/Textures" % SKY_PKG
-SKY_MESH_PKG = "%s/Meshes" % SKY_PKG
-SKY_MAT_PKG = "%s/Materials" % SKY_PKG
+# D1: the texture lane owns cubes; maps bind them and author per-sky material instances.
+SKY_TEX_PKG = "%s/Textures/skybox" % MOUNT
+SKY_MESH_PKG = sky_assets.SKY_DOME_PACKAGE
+SKY_MAT_PKG = "%s/Materials/skybox" % MOUNT
 # `ElysiumMapVisuals.cpp`'s own `SkyDomeHalfExtentCm` -- the baked dome has to be the identical
 # box the runtime built at load, or the two would silently draw different backdrops.
 SKY_DOME_HALF_EXTENT_CM = 500000.0
@@ -641,7 +640,8 @@ class Bake(object):
         self.shared_tex_pkg = SC.BAKED_TEXTURES
         self.shared_mat_pkg = SC.BAKED_MATERIALS
         self.shared_mesh_pkg = SC.BAKED_MESHES
-        self.pkg = "%s/%s" % (MOUNT, map_name)
+        from elysium_pipeline.asset_paths import map_package
+        self.pkg = map_package(map_name)
         # A map's own packages hold only what carries a map-specific input: the baked env cubemaps,
         # the rain height field, the material instances that stamp this map's fog or weather, and
         # its geometry.
@@ -1964,26 +1964,8 @@ class Bake(object):
             "REUSED by the next bake" % map_path)
 
     def _bake_sky_cube(self, sky_name):
-        """`/ElysiumBaked/Sky/Textures/TC_Sky_<SkyName>` (R5.2): the same
-        `ElysiumEnvironment::BuildSkyCubeFrom` join the runtime still runs at load for every map
-        this settings page has not converted, aimed at a persistent package instead of a
-        transient one through `UElysiumSkyBakeLibrary::BakeSkyCubeAsset`. Faithful faces only --
-        see `seam_map_map_lighting.md` -> "## Import" -> "Sky baked (R5.2)" for why never
-        `tex_hi`. Returns `(cube_or_None, upper_hemisphere_mean)`; `None` when the six
-        `shared/tex/skybox_<name><face>.png` faces are missing or malformed, the same failure the
-        runtime's own `HasSkyFaces`/`BuildSkyCubeFrom` report."""
-        bl.ensure_dir(SKY_TEX_PKG)
-        asset_name = "TC_Sky_%s" % bl.safe_name(sky_name)
-        asset_path = "%s/%s" % (SKY_TEX_PKG, asset_name)
-        result = unreal.ElysiumSkyBakeLibrary.bake_sky_cube_asset(sky_name, asset_path)
-        cube, upper_mean = result if isinstance(result, tuple) else (result, 0.0)
-        if cube is None:
-            log("sky '%s': cube bake failed -- faces missing under shared/tex" % sky_name)
-            return None, 0.0
-        unreal.EditorAssetLibrary.save_asset(asset_path)
-        log("sky '%s': cube baked into %s (upper-hemisphere mean %.5f)"
-            % (sky_name, asset_path, upper_mean))
-        return cube, upper_mean
+        """Resolve the texture-lane composite and its conserved mean; missing is a bake failure."""
+        return sky_assets.load_sky_cube(sky_name)
 
     def _place_sky_dome(self, actors, sky_name, cube):
         """The baked 2D-sky backdrop (R5.2): the shared `SM_SkyDome` box
@@ -1995,8 +1977,8 @@ class Bake(object):
         if master is None:
             log("sky dome: M_Sky master not found -- run make_sky_material.py")
             return
-        mi_name = "MI_Sky_%s" % bl.safe_name(sky_name)
-        mi = bl.make_material_instance(mi_name, SKY_MAT_PKG, master)
+        mi_package, mi_name = sky_assets.material_address(sky_name)
+        mi = bl.make_material_instance(mi_name, mi_package, master)
         if mi is None:
             log("sky dome: %s could not be created" % mi_name)
             return
@@ -2005,12 +1987,12 @@ class Bake(object):
         # ElysiumMapVisuals::ApplySkyBrightness's un-driven CVarSkyBrightness default.
         bl.set_scalar_param(mi, "Brightness", 1.0)
         bl.finish_material_instance(mi)
-        unreal.EditorAssetLibrary.save_asset("%s/%s" % (SKY_MAT_PKG, mi_name))
+        unreal.EditorAssetLibrary.save_asset("%s/%s" % (mi_package, mi_name))
 
         bl.ensure_dir(SKY_MESH_PKG)
         mesh_path = "%s/SM_SkyDome" % SKY_MESH_PKG
         dome_mesh = bl.create_static_mesh(
-            _build_sky_dome_dynamic_mesh(), mesh_path, [mi], ["Sky"], nanite=False,
+            _build_sky_dome_dynamic_mesh(), mesh_path, [master], ["Sky"], nanite=False,
             collision=False)
         if dome_mesh is None:
             log("sky dome: mesh build failed")
@@ -2022,6 +2004,7 @@ class Bake(object):
             return
         component = actor.static_mesh_component
         component.set_static_mesh(dome_mesh)
+        component.set_material(0, mi)
         # Non-solid backdrop, same as the runtime's own SkyDomeMesh: no collision, no shadow, and
         # excluded from ray tracing (a box that encloses the whole scene is the canonical
         # hardware-ray-tracing overlap cost).
@@ -2939,7 +2922,9 @@ MAP_SCAN_PACKAGES = (
     DECAL_MATERIALS_ROOT,
     v2.V2_SPRITE_MATERIAL_PACKAGE,
     "%s/Props" % MOUNT,
-    SKY_PKG,
+    SKY_TEX_PKG,
+    SKY_MAT_PKG,
+    SKY_MESH_PKG,
 )
 
 
@@ -2977,8 +2962,8 @@ def main():
         " (forced)" if force else "",
         " (+particles)" if BAKE_PARTICLES[0] else " (particle systems off)"))
 
-    _scan_packages(list(MAP_SCAN_PACKAGES)
-                   + ["%s/%s" % (MOUNT, name) for name in map_names])
+    from elysium_pipeline.asset_paths import map_package
+    _scan_packages(list(MAP_SCAN_PACKAGES) + [map_package(name) for name in map_names])
 
     failed = []
     digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)

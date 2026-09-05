@@ -4,11 +4,9 @@ Three things this lane cannot see in a screenshot and cannot fix after the fact:
 
 * the `switchPoints -> ScreenSize` mapping, including the `-1.0` shadow-LOD drop and the clamp;
 * the coordinate rule -- `(x, z, y) * 100`, `TANGENT.w` negated, winding reversed **once**;
-* the names. `SM_<safe_name(static_stem(path))>` and `safe_name(sourceName)` per slot are what
-  `ApplyPropSkin`, `BindMapMaterials` and the four substrate call sites resolve by, so a renamed
-  slot silently unbinds a skin swap rather than failing. The golden table lives in
-  `fixtures/model_names.json` and is read from both sides -- here, and by the C++ twin
-  (`Elysium.Substrate.ModelNames.PropModelStem`, `ElysiumModelNamesTests.cpp`).
+* slot names and legacy provenance stems remain stable while mesh addresses follow the
+  canonical `baked_paths.json` fixture. The old `model_names.json` stays intact for legacy
+  readers until replacement acceptance; it no longer determines a new static mesh address.
 
 `pipeline/unreal/import_models.py` runs inside an editor, so it is loaded here against a stub
 `unreal` module: the transform is plain arithmetic and belongs under test whatever process it
@@ -19,7 +17,10 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
+from copy import deepcopy
 from pathlib import Path
+import struct
 import sys
 import types
 
@@ -184,22 +185,196 @@ def test_non_manifold_sections_are_detected_before_they_are_appended(editor_modu
 
 
 def test_asset_and_slot_names_match_the_golden_table():
-    """The Python side of the twin. `FElysiumContentPaths::PropModelStem` runs over the same rows
-    in `Elysium.Substrate.ModelNames.PropModelStem`; neither may change without the other failing.
-
-    `safe_name` and `baked_asset_name` are not interchangeable here, and the two folds visibly
-    disagree in this table: `cliff-danger` keeps its dash in the stem (`formats.mdl.sanitize`
-    keeps `.` and `-`) and loses it in the asset name (`safe_name` keeps only `[A-Za-z0-9_]`).
-    """
+    """Keep legacy stem/slot evidence while canonical addresses use their own shared fixture."""
     rows = json.loads(FIXTURE.read_text(encoding="utf-8"))
     assert rows, "the golden table is empty"
     for row in rows:
         key = row["unit"][len("vtmb:model:"):]
         assert importer.static_stem(key) == row["stem"], key
-        assert importer.asset_path_for(key) == row["assetPath"], key
         assert row["assetPath"].rsplit("/", 1)[-1] == row["asset"], key
         for slot in row["slots"]:
             base = safe_name(slot["sourceName"])
             # Occurrence 0 keeps `safe_name(sourceName)` verbatim; a later occurrence of the same
             # folded name takes the `_<slot index>` suffix ("Duplicate folded slot names").
             assert slot["slotName"] == base or slot["slotName"].startswith(base + "_"), slot
+    canonical = json.loads(FIXTURE.with_name("baked_paths.json").read_text(encoding="utf-8"))
+    for row in canonical:
+        if row["id"].startswith("vtmb:model:") and row["prefix"] == "SM":
+            assert importer.asset_path_for(row["id"][len("vtmb:model:"):]) == row["path"]
+
+
+@pytest.fixture
+def precision_editor(editor_module, monkeypatch):
+    """Model source/render storage and the native helper interface without Unreal."""
+    calls = {"created": [], "copied": [], "settings": [], "deleted": []}
+    state = {"existing": None, "ignoreSettings": False}
+
+    class Properties:
+        def __init__(self, **values):
+            self.values = values
+
+        def get_editor_property(self, name):
+            return self.values[name]
+
+        def set_editor_property(self, name, value):
+            self.values[name] = value
+
+    class Mesh:
+        def __init__(self, lods, nanite=False):
+            self.source_uvs = deepcopy(lods)
+            self.nanite = nanite
+            self.properties = {}
+            self.settings = [Properties(use_full_precision_u_vs=False, use_high_precision_tangent_basis=False,
+                recompute_normals=False, recompute_tangents=False, generate_lightmap_u_vs=False,
+                remove_degenerates=False, build_scale3d=(1., 1., 1.), use_backwards_compatible_f16_trunc_u_vs=True)
+                for _ in lods]
+            self.rebuild()
+
+        def rebuild(self):
+            self.render_uvs = [[tuple(value if self.settings[i].values["use_full_precision_u_vs"] or abs(value) <= 65504.
+                                     else math.copysign(math.inf, value) for value in uv) for uv in lod]
+                               for i, lod in enumerate(self.source_uvs)]
+            self.render_precision = [deepcopy(settings.values) for settings in self.settings]
+
+        def get_num_lods(self):
+            return len(self.settings)
+
+        def set_editor_property(self, name, value):
+            self.properties[name] = value
+
+    class NativePrecision:
+        @staticmethod
+        def verify_precision(mesh, count):
+            if mesh is None or count != len(mesh.settings):
+                return "wrong source LOD count"
+            for source, render in zip(mesh.settings, mesh.render_precision):
+                for key in editor_module.STATIC_PRECISION_SETTINGS:
+                    if not source.values[key] or not render[key]:
+                        return "source or render precision differs"
+            return ""
+
+        @staticmethod
+        def apply_precision(mesh, count):
+            if state["ignoreSettings"]:
+                return "native settings did not persist"
+            if not NativePrecision.verify_precision(mesh, count):
+                return ""
+            for index, settings in enumerate(mesh.settings):
+                calls["settings"].append(index)
+                for key, value in editor_module.STATIC_PRECISION_SETTINGS.items():
+                    settings.set_editor_property(key, value)
+            mesh.rebuild()
+            return NativePrecision.verify_precision(mesh, count)
+
+    def create(lods, path, options):
+        calls["created"].append(options)
+        state["existing"] = Mesh(lods, options.nanite_settings.get_editor_property("enabled"))
+        return state["existing"], "success"
+
+    def copy(mesh, target, options, lod):
+        index = lod.get_editor_property("lod_index")
+        assert target.settings[index].values["use_full_precision_u_vs"]
+        assert target.settings[index].values["use_high_precision_tangent_basis"]
+        calls["copied"].append((index, options))
+        target.source_uvs[index] = deepcopy(mesh)
+        if options.apply_nanite_settings:
+            target.nanite = options.new_nanite_settings.get_editor_property("enabled")
+        target.rebuild()
+        return mesh, "success"
+
+    unreal = types.SimpleNamespace(StaticMesh=Mesh, StaticMaterial=lambda **k: types.SimpleNamespace(**k),
+        ElysiumStaticMeshPrecisionLibrary=NativePrecision,
+        get_editor_subsystem=lambda _: pytest.fail("precision must not request an editor subsystem"),
+        MeshNaniteSettings=Properties, GeometryScriptCreateNewStaticMeshAssetOptions=Properties,
+        GeometryScriptCopyMeshToAssetOptions=Properties, GeometryScriptMeshWriteLOD=Properties,
+        GeometryScriptGenerateLightmapUVOptions=types.SimpleNamespace(DO_NOT_GENERATE_LIGHTMAP_U_VS="none"),
+        GeometryScriptOutcomePins=types.SimpleNamespace(SUCCESS="success"),
+        EditorAssetLibrary=types.SimpleNamespace(does_asset_exist=lambda _: state["existing"] is not None,
+                                                load_asset=lambda _: state["existing"]),
+        GeometryScript_NewAssetUtils=types.SimpleNamespace(create_new_static_mesh_asset_from_mesh_lods=create),
+        GeometryScript_AssetUtils=types.SimpleNamespace(copy_mesh_to_static_mesh=copy))
+    bl = types.SimpleNamespace(ensure_dir=lambda _: None, stored_producer=lambda _: "models",
+        delete_owned_asset=lambda path: calls["deleted"].append(path), asset_class_name=lambda _: "StaticMesh",
+        recipe_fingerprint=lambda stage, path, value: json.dumps(value, sort_keys=True))
+    monkeypatch.setattr(editor_module, "unreal", unreal)
+    monkeypatch.setattr(editor_module, "bl", bl)
+    monkeypatch.setattr(editor_module, "static_mesh_editor", lambda: pytest.fail("precision must not use the unsafe subsystem setter"))
+    return types.SimpleNamespace(module=editor_module, state=state, calls=calls, Mesh=Mesh, bl=bl)
+
+
+@pytest.mark.parametrize("reuse,nanite,lod_count", [(reuse, nanite, lods) for reuse in (False, True)
+                                                    for nanite in (False, True) for lods in (1, 3)])
+def test_static_authoring_keeps_float32_uvs_and_high_tangent_precision_at_every_lod(precision_editor, reuse, nanite, lod_count):
+    f = precision_editor
+    f32 = lambda value: struct.unpack("<f", struct.pack("<f", value))[0]
+    # Actual finding magnitudes: well above float16, still finite and representable as float32.
+    lods = [[(f32(-1.097e24), f32(1.e21)), (f32(.25), f32(65504.))] for _ in range(lod_count)]
+    if reuse:
+        f.state["existing"] = f.Mesh(lods, nanite)
+    mesh = f.module.author_static_mesh("/ElysiumBaked/Models/scenery/SM_test", lods, ["material"], ["body"], nanite, True)
+    assert mesh.source_uvs == lods and mesh.render_uvs == lods
+    assert all(math.isfinite(v) for row in mesh.render_uvs for uv in row for v in uv)
+    assert mesh.nanite == nanite and not f.calls["deleted"]
+    assert f.calls["settings"] == list(range(lod_count))
+    for settings in mesh.settings:
+        assert settings.values == {"use_full_precision_u_vs": True, "use_high_precision_tangent_basis": True,
+            "recompute_normals": False, "recompute_tangents": False, "generate_lightmap_u_vs": False,
+            "remove_degenerates": False, "build_scale3d": (1., 1., 1.), "use_backwards_compatible_f16_trunc_u_vs": True}
+    if reuse:
+        assert [i for i, _ in f.calls["copied"]] == list(range(lod_count))
+        assert all(o.use_original_vertex_order and not o.enable_recompute_normals for _, o in f.calls["copied"])
+        assert all(not o.enable_recompute_tangents and o.generate_lightmap_u_vs == "none" for _, o in f.calls["copied"])
+    else:
+        options = f.calls["created"][0]
+        assert options.enable_collision and options.use_original_vertex_order
+        assert not options.enable_recompute_normals and not options.enable_recompute_tangents
+
+
+def test_static_precision_propagates_native_failure(precision_editor):
+    f = precision_editor
+    f.state["ignoreSettings"] = True
+    with pytest.raises(RuntimeError, match="did not persist"):
+        f.module.apply_static_precision(f.Mesh([[(0., 0.)]]), 1)
+
+
+def test_static_precision_works_without_asset_editor_subsystem(precision_editor):
+    f = precision_editor
+    mesh = f.Mesh([[(1.e24, 0.)]])
+    f.module.apply_static_precision(mesh, 1)
+    assert f.module.static_precision_matches(mesh, 1)
+    assert f.calls["settings"] == [0]
+
+
+def test_missing_native_helper_requires_build_before_creating_assets(precision_editor, monkeypatch):
+    f = precision_editor
+    monkeypatch.setattr(f.module.unreal, "ElysiumStaticMeshPrecisionLibrary", None)
+    with pytest.raises(RuntimeError, match="rebuild the editor module"):
+        f.module.author_static_mesh("/ElysiumBaked/Models/scenery/SM_test", [[(1.e24, 0.)]], [], [], False, True)
+    assert not f.calls["created"]
+
+
+@pytest.mark.parametrize("flag", ["use_full_precision_u_vs", "use_high_precision_tangent_basis"])
+def test_recipe_reuse_checks_precision_on_every_lod(precision_editor, flag):
+    f = precision_editor
+    mesh = f.Mesh([[(1.e24, 0.)], [(1., 0.)]])
+    f.module.apply_static_precision(mesh, 2)
+    f.state["existing"] = mesh
+    entry = {"assetPath": "/ElysiumBaked/Models/scenery/SM_test", "recipe": {"source": "unchanged"},
+             "lods": [{"dropped": False}, {"dropped": False}, {"dropped": True}]}
+    tracker = f.module.Tracker()
+    digest = tracker.fingerprint(entry)
+    assert json.loads(digest)["staticBuildSettings"] == f.module.STATIC_PRECISION_SETTINGS
+    f.bl.stored_recipe = lambda *a, **k: digest
+    assert not tracker.needs_import(entry)
+    mesh.settings[1].values[flag] = False
+    assert tracker.needs_import(entry)
+
+
+def test_reuse_checks_built_precision_not_only_source_settings(precision_editor):
+    f = precision_editor
+    mesh = f.Mesh([[(1.e24, 0.)]])
+    f.module.apply_static_precision(mesh, 1)
+    mesh.render_precision[0]["use_high_precision_tangent_basis"] = False
+    assert not f.module.static_precision_matches(mesh, 1)
+    f.module.apply_static_precision(mesh, 1)
+    assert f.module.static_precision_matches(mesh, 1)

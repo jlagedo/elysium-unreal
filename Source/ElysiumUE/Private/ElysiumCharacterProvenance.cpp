@@ -1,4 +1,7 @@
 #include "ElysiumCharacterProvenance.h"
+#include "ElysiumDynamicsData.h"
+#include "ElysiumPhysicsData.h"
+#include "ChaosClothAsset/ClothAsset.h"
 #include "ElysiumJsonField.h"
 #include "Interfaces/Interface_AssetUserData.h"
 #include "Engine/SkeletalMesh.h"
@@ -13,6 +16,78 @@
 
 namespace ElysiumCharacterData
 {
+	bool ReadExpressions(UElysiumCharacterProvenance& Record, const TSharedPtr<FJsonObject>& Mesh, FString& Error)
+	{
+		// Old pilot assets remain readable while the expression bake is introduced. Their
+		// explicit false presence is refused by native expression resolution, never replaced
+		// by a guessed gender or by loose text. New stages always publish this declaration.
+		if (!Mesh->HasField(TEXT("expressionData"))) return true;
+		const TSharedPtr<FJsonObject>* Data = nullptr;
+		if (!Mesh->TryGetObjectField(TEXT("expressionData"), Data) || !Data)
+		{ Error = TEXT("expressionData: expected an object"); return false; }
+		FString Version;
+		double Flags = 0.;
+		bool bMale = false;
+		const auto FlagsValue = (*Data)->TryGetField(TEXT("modelFlags"));
+		if (!(*Data)->TryGetStringField(TEXT("schemaVersion"), Version) || Version != TEXT("1.0.0"))
+		{ Error = TEXT("expressionData.schemaVersion: expected 1.0.0"); return false; }
+		if (!FlagsValue.IsValid() || FlagsValue->Type != EJson::Number || !FlagsValue->TryGetNumber(Flags)
+			|| !FMath::IsFinite(Flags) || Flags < 0 || Flags > MAX_uint32 || double(uint32(Flags)) != Flags)
+		{ Error = TEXT("expressionData.modelFlags: expected exact uint32 source flags"); return false; }
+		if (!(*Data)->TryGetBoolField(TEXT("modelIsMale"), bMale) || bMale != ((uint32(Flags) & 0x100u) == 0))
+		{ Error = TEXT("expressionData.modelIsMale: disagrees with source model flag bit 8"); return false; }
+		const TArray<TSharedPtr<FJsonValue>>* Rows = nullptr;
+		if (!(*Data)->TryGetArrayField(TEXT("selections"), Rows))
+		{ Error = TEXT("expressionData.selections: missing ordered declaration"); return false; }
+		TSet<FString> Classes;
+		for (int32 I = 0; I < Rows->Num(); ++I)
+		{
+			const FString Path = FString::Printf(TEXT("expressionData.selections[%d]"), I);
+			const TSharedPtr<FJsonObject>* Row = nullptr;
+			FElysiumExpressionSelection Selection;
+			if (!(*Rows)[I]->TryGetObject(Row)
+				|| !(*Row)->TryGetStringField(TEXT("tableClass"), Selection.TableClass)
+				|| !(*Row)->TryGetStringField(TEXT("primaryAssetId"), Selection.PrimaryAssetId)
+				|| !(*Row)->TryGetStringArrayField(TEXT("fallbackAssetIds"), Selection.FallbackAssetIds)
+				|| !(*Row)->TryGetStringField(TEXT("sourceSelectionJson"), Selection.SourceSelectionJson))
+			{ Error = Path + TEXT(": missing typed selection field"); return false; }
+			if ((Selection.TableClass != TEXT("phonemes") && Selection.TableClass != TEXT("expressions"))
+				|| Classes.Contains(Selection.TableClass))
+			{ Error = Path + TEXT(".tableClass: invalid or duplicate class"); return false; }
+			TSharedPtr<FJsonObject> Source;
+			if (!FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Selection.SourceSelectionJson), Source) || !Source.IsValid())
+			{ Error = Path + TEXT(".sourceSelectionJson: invalid preserved source row"); return false; }
+			FString SourceClass;
+			if (!Source->TryGetStringField(TEXT("class"), SourceClass) || SourceClass != Selection.TableClass)
+			{ Error = Path + TEXT(".tableClass: differs from source row"); return false; }
+			auto Matches = [](const TSharedPtr<FJsonObject>& Candidate, const FString& Projected)
+			{
+				bool bResolved = false; FString Id, Stem;
+				if (!Candidate->TryGetBoolField(TEXT("resolved"), bResolved)
+					|| !Candidate->TryGetStringField(TEXT("asset"), Id) || !Candidate->TryGetStringField(TEXT("stem"), Stem)) return false;
+				const FString Prefix = bResolved ? TEXT("vtmb:expression-table:") : TEXT("vtmb:missing-expression-table:");
+				return Id == Prefix + Stem && Projected == (bResolved ? Id : FString());
+			};
+			if (!Matches(Source, Selection.PrimaryAssetId))
+			{ Error = Path + TEXT(".primaryAssetId: differs from source resolution"); return false; }
+			const TArray<TSharedPtr<FJsonValue>>* Fallbacks = nullptr;
+			if (!Source->TryGetArrayField(TEXT("fallbacks"), Fallbacks) || Fallbacks->Num() != Selection.FallbackAssetIds.Num())
+			{ Error = Path + TEXT(".fallbackAssetIds: source fallback count differs"); return false; }
+			for (int32 J = 0; J < Fallbacks->Num(); ++J)
+			{
+				const TSharedPtr<FJsonObject>* Fallback = nullptr;
+				if (!(*Fallbacks)[J]->TryGetObject(Fallback) || !Matches(*Fallback, Selection.FallbackAssetIds[J]))
+				{ Error = FString::Printf(TEXT("%s.fallbackAssetIds[%d]: differs from ordered source fallback"), *Path, J); return false; }
+			}
+			Classes.Add(Selection.TableClass);
+			Record.ExpressionSelections.Add(MoveTemp(Selection));
+		}
+		Record.ExpressionModelFlags = uint32(Flags);
+		Record.bExpressionModelIsMale = bMale;
+		Record.bHasExpressionData = true;
+		return true;
+	}
+
 	int32 ArrayCount(const TSharedPtr<FJsonObject>& Object, const TCHAR* Key)
 	{
 		const TArray<TSharedPtr<FJsonValue>>* Rows = nullptr;
@@ -36,6 +111,7 @@ namespace ElysiumCharacterData
 		}
 		Record.ModelPath = ElysiumJson::Str(Data.ToSharedRef(), TEXT("modelPath"));
 		Record.Stem = ElysiumJson::Str(Data.ToSharedRef(), TEXT("stem"));
+		if (!ReadExpressions(Record, Data, Error)) return false;
 		for (const TCHAR* Key : {TEXT("facial"), TEXT("eyes")})
 		{
 			const TSharedPtr<FJsonValue> Value = Data->TryGetField(Key);
@@ -198,6 +274,7 @@ UElysiumCharacterProvenance* UElysiumCharacterProvenance::ApplyJson(UObject* Ass
 	Record->SourceUnits = ElysiumJson::Strings(Object, TEXT("sourceUnits"));
 	Record->BankFamilyTreeSha256 = ElysiumJson::Str(Object, TEXT("bankFamilyTreeSha256"));
 	Record->RecipeFingerprint = ElysiumJson::Str(Object, TEXT("recipeFingerprint"));
+	Object->TryGetNumberField(TEXT("sourceGarmentCount"),Record->SourceGarmentCount);
 	if (Record->AssetId.IsEmpty() && Record->SourceUnits.IsEmpty())
 	{
 		OutError = TEXT("character provenance names no source unit");
@@ -213,9 +290,38 @@ UElysiumCharacterProvenance* UElysiumCharacterProvenance::ApplyJson(UObject* Ass
 		}
 		if (!ElysiumCharacterData::ReadMesh(*Record, *MeshData, OutError)) return nullptr;
 	}
+	const FString DynamicsPath=ElysiumJson::Str(Object,TEXT("dynamicsAsset"));
+	const FString PhysicsPath = ElysiumJson::Str(Object, TEXT("physicsSourceAsset"));
+	if (!PhysicsPath.IsEmpty())
+	{
+		Record->PhysicsSourceData = LoadObject<UElysiumPhysicsData>(nullptr, *PhysicsPath);
+		if (!Record->bHasMeshData || !Record->PhysicsSourceData || Record->PhysicsSourceData->Data.AssetId != Record->AssetId)
+		{
+			OutError = TEXT("mesh physics source reference is absent or names a different model: ") + PhysicsPath;
+			return nullptr;
+		}
+	}
+	if (!DynamicsPath.IsEmpty())
+	{
+		Record->Dynamics=LoadObject<UElysiumDynamicsData>(nullptr,*DynamicsPath);
+		if (!Record->bHasMeshData || !Record->Dynamics || Record->Dynamics->AssetId!=Record->AssetId)
+		{
+			OutError=TEXT("mesh dynamics reference is absent or names a different model: ")+DynamicsPath;
+			return nullptr;
+		}
+	}
 #if WITH_EDITORONLY_DATA
 	Record->AuthoringEvidence = Json;
 #endif
+	for (const FString& Path : ElysiumJson::Strings(Object,TEXT("clothAssets")))
+	{
+		auto* Cloth=LoadObject<UChaosClothAsset>(nullptr,*Path);
+		if (!Record->bHasMeshData || !Cloth)
+		{
+			OutError=TEXT("mesh cloth reference is absent: ")+Path; return nullptr;
+		}
+		Record->ClothAssets.Add(Cloth);
+	}
 	Interface->RemoveUserDataOfClass(StaticClass());
 	Interface->AddAssetUserData(Record);
 #if WITH_EDITORONLY_DATA
@@ -240,7 +346,8 @@ FString UElysiumCharacterProvenance::VerifyMeshData(UObject* Asset, const FStrin
 	FString Error;
 	if (!ElysiumCharacterData::ReadMesh(*Expected, Parsed, Error)) return Error;
 	for (const TCHAR* Field : {TEXT("bHasMeshData"), TEXT("ModelPath"), TEXT("Stem"), TEXT("Facial"),
-		TEXT("Eyes"), TEXT("Composition"), TEXT("MaterialSlots"), TEXT("SkinFamilies")})
+		TEXT("Eyes"), TEXT("Composition"), TEXT("MaterialSlots"), TEXT("SkinFamilies"),
+		TEXT("bHasExpressionData"), TEXT("ExpressionModelFlags"), TEXT("bExpressionModelIsMale"), TEXT("ExpressionSelections")})
 	{
 		const FProperty* Property = FindFProperty<FProperty>(StaticClass(), Field);
 		if (!Property || !Property->Identical_InContainer(Record, Expected))

@@ -36,6 +36,12 @@ bool FElysiumBakedUnitPathsTest::RunTest(const FString&)
 		FElysiumContentPaths::PropModelStem(TEXT("models/scenery/signs/cliff-danger.mdl")), TEXT("synthetic"));
 	TestTrue(TEXT("legacy static address uses the same legal object-name fold as the bake"),
 		Prop.EndsWith(TEXT("/SM_models_scenery_signs_cliff_danger.SM_models_scenery_signs_cliff_danger")));
+	TestEqual(TEXT("map helper uses the canonical bundle"), FElysiumContentPaths::BakedMapDir(TEXT("sm_hub_1")),
+		FString(TEXT("/ElysiumBaked/Maps/sm_hub_1")));
+	TestEqual(TEXT("entity table lives beside its canonical level"), FElysiumContentPaths::BakedMapEntities(TEXT("sm_hub_1")),
+		FString(TEXT("/ElysiumBaked/Maps/sm_hub_1/DA_sm_hub_1_Entities.DA_sm_hub_1_Entities")));
+	TestEqual(TEXT("level helper keeps package spelling"), FElysiumContentPaths::BakedLevel(TEXT("sm_hub_1")),
+		FString(TEXT("/ElysiumBaked/Maps/sm_hub_1/sm_hub_1")));
 	return true;
 }
 #endif

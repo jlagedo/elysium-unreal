@@ -14,6 +14,7 @@
 #include "ElysiumComboChain.h"
 #include "ElysiumEntity.h"           // FElysiumFlexWrite (passed by view)
 #include "ElysiumEntityHandle.h"
+#include "ElysiumCharacterModelAdmission.h"
 #include "ElysiumInteraction.h"
 #include "ElysiumLocomotionSample.h" // FElysiumLocomotionSample (returned by value)
 // The authored swing-contact record the clip seam below hands down, by array.
@@ -333,6 +334,12 @@ public:
 	// Null on a missing/failed glb or an empty stem.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) = 0;
+	// Headless implementations need no asset admission. The real map returns Pending until
+	// native metadata, mesh and clips are resident; it never blocks this gameplay call.
+	virtual EElysiumCharacterModelAdmission RequestCharacterModel(const FElysiumEntityHandle& Entity,
+		const FString& ModelId, uint64 Generation, FString& OutError)
+	{ OutError.Reset(); return EElysiumCharacterModelAdmission::Ready; }
+	virtual void CancelCharacterModel(const FElysiumEntityHandle& Entity) {}
 	// Promote an ordinary NPC's visual to a native movement body. Owner preserves the logical entity
 	// identity through collision ingress. Null is the supported headless, backdrop,
 	// disabled-navigation, or failed-spawn path; the NPC remains a standing entity.

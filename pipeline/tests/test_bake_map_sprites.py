@@ -216,8 +216,11 @@ def test_sprite_actor_values_size_tags_and_the_sky_transform(module):
     assert sky["scale"] == 16.0
     assert sky["label"] == "Sprite_309_glowa_sky" and sky["folder"] == "Sky/Sprites"
     # The child is named per (imported MI_, blend), under the shared sprites package.
-    assert module.sprite_child_name(row.asset, row.blend) == "MI_Sprite_sprites_glowa_Additive"
-    assert module.V2_SPRITE_MATERIAL_PACKAGE == "/ElysiumBaked/Sprites"
+    assert module.sprite_child_path(row.material, row.blend) == "/ElysiumBaked/Materials/sprites/MI_glowa_Sprite_Additive"
+    assert module.V2_SPRITE_MATERIAL_PACKAGE == "/ElysiumBaked/Materials"
+    assert module.sprite_child_path("a/glowa", row.blend) != module.sprite_child_path("b/glowa", row.blend)
+    with pytest.raises(ValueError):
+        module.sprite_child_path("sprites/glowa", "unknown")
     # The row round-trips into the level recipe.
     assert row.as_dict()["index"] == 309 and row.as_dict()["hidden"] is True
 

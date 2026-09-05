@@ -69,12 +69,9 @@ public:
 	// The map whose baked assets these bodies draw. Set once at map load, before the spawn pass.
 	void SetMap(const FString& InMapName) { MapName = InMapName; }
 
-	// Build one NPC skeletal body: load (cached per stem) out/npc/<Stem>.glb through
-	// glTFRuntime and stand a movable USkeletalMeshComponent on the owning actor at the given
-	// transform, playing the standing idle its disposition selects (reference pose when nothing
-	// resolves). The idle usually lives in a **shared animation bank**, not the NPC's own glb, and
-	// is retargeted onto this skeleton by bone name — UElysiumAnimSubsystem owns that resolution
-	// and the session-lifetime bank cache. Null on a missing/failed glb or an empty stem.
+	// Build from a mesh and metadata already admitted by native preparation. A source path or
+	// unambiguous debug stem may be resolved through the resident cast at this construction door;
+	// runtime character/clip queries below take canonical model IDs. No legacy mesh fallback.
 	USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant,
 		bool bPlayerMaterial = false);
@@ -347,6 +344,12 @@ public:
 
 private:
 	void LoadItemGroundModelCatalogue();
+	class UElysiumNativeAnimationData* GetNativeModels() const;
+	FString ModelIdForPreparedConstruction(const FString& Name) const;
+	bool RequireModelId(const FString& Id, const TCHAR* Operation) const;
+	bool RequireBodyModel(const FString& Id, const USkeletalMesh* Mesh, const TCHAR* Operation) const;
+	void ReportNativeModelFailure(const FString& Key, const FString& Error) const;
+	mutable TSet<FString> ReportedNativeModelFailures;
 	USkeletalMesh* ResolveNpcMesh(const FString& Stem, bool bPlayerMaterial);
 	UAnimSequence* ResolveCinematicClip(USkeletalMesh* Mesh, const FString& Stem,
 		const FString& BankStem, const FString& ClipName, const FString& OwnerRoot);
@@ -468,16 +471,13 @@ private:
 	// site keeps its own null branch — this only owns the three-hop lookup.
 	UElysiumAnimSubsystem* GetAnims() const;
 
-	// NPC skeletal bodies: per-stem mesh cache and a per-(stem, clip) animation cache,
-	// GC-rooted here so a model shared by several NPCs loads once and survives until unload. The
+	// Native skeletal bodies: model-ID mesh cache and actual-mesh/recipe animation cache,
+	// GC-rooted here so bodies retain prepared references until unload. The
 	// USkeletalMeshComponents themselves are components of the owning actor (rooted via
 	// AddInstanceComponent), freed with it.
 	//
-	// The animation cache is keyed `<stem>|<clip>` and lives HERE rather than on the GI-scoped
-	// UElysiumAnimSubsystem, because a baked UAnimSequence is bound to one USkeleton and the meshes
-	// that carry it are per-map-epoch. The subsystem caches what is
-	// skeleton-independent: the clip vocabularies. An entry may be null (nothing resolved →
-	// reference pose); it is still cached, so a miss is not retried per NPC.
+	// Animation keys retain the full model ID, mesh path, recipe, resolved clip and channel.
+	// Failed preparation/lookup is never negative-cached; later explicit admission can succeed.
 	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> NpcMeshCache;
 	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> NpcAnimCache;
 

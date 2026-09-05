@@ -53,6 +53,7 @@ import sys
 from typing import Any, Iterable
 
 from elysium_pipeline.formats import mdl_skel as S
+from elysium_pipeline.validation.oracle_source import OracleSource
 
 #: `StudioSeqDesc.flags` bits the accumulator reads (A.3).
 FLAG_DELTA = 0x4
@@ -161,51 +162,25 @@ class Model:
 
 
 class Corpus:
-    """The install plus the export's manifest: which model owns a stem or a bank."""
+    """The winning installed MDLs, independent of every exported product."""
 
-    def __init__(self, export_root: Path):
-        self.export_root = export_root
-        with (export_root / "npc" / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
-            self.manifest = json.load(handle)
-        # Imported here rather than at module scope: `install` resolves `ELYSIUM_VTMB_ROOT` at
-        # import time, and the arithmetic above is game-independent and unit-tested without one.
-        from elysium_pipeline.formats import install
-        self._install = install
-        self.index = install.build_index(verbose=False)
+    def __init__(self, source: OracleSource | None = None):
+        self.source = source if source is not None else OracleSource()
         self._models: dict[str, Model] = {}
-        self._clips: dict[str, dict] = {}
 
     def model_key(self, owner: str) -> str:
-        record = self.manifest["npcs"].get(owner) or self.manifest["banks"].get(owner)
-        if record is None:
-            raise KeyError(f"'{owner}' is neither a body nor a bank in npc_manifest.json")
-        return record["model"].replace("\\", "/").lower()
+        return self.source.model_key(owner)
 
     def model(self, owner: str) -> Model:
         key = self.model_key(owner)
         got = self._models.get(key)
         if got is None:
-            got = self._models[key] = Model(key, self._install.read(self.index, key))
-        return got
-
-    def clips(self, stem: str) -> dict:
-        got = self._clips.get(stem)
-        if got is None:
-            with (self.export_root / "npc" / "clips" / f"{stem}.json").open(
-                    encoding="utf-8") as handle:
-                got = self._clips[stem] = json.load(handle)
+            got = self._models[key] = Model(key, self.source.data(key))
         return got
 
     def resolve_global(self, stem: str, sequence: int):
-        """A body's global sequence number -> (owner stem, label), through its clips sidecar."""
-        clips = self.clips(stem)
-        owners = clips["owners"]
-        for label, indices in clips["seq"].items():
-            if sequence in indices:
-                rows = clips["clips"].get(label) or []
-                owner = owners[rows[0][0]] if rows else stem
-                return owner, label
-        return None, None
+        """A body's first-reference global sequence number -> (owner stem, label)."""
+        return self.source.resolve_global(stem, sequence)
 
 
 # ---------------------------------------------------------------------------- evaluation
@@ -741,13 +716,9 @@ def oracle_states(corpus: Corpus, stem: str, hosts: Iterable[str]):
 
 
 def _find_sequence(corpus: Corpus, stem: str, label: str):
-    """(owner, Seq) for a label the body plays, through the sidecar's owner list."""
-    clips = corpus.clips(stem)
-    rows = clips["clips"].get(label)
-    if not rows:
-        raise KeyError(f"'{stem}' does not play '{label}'")
-    owner = clips["owners"][rows[0][0]]
-    seq = corpus.model(owner).sequences.get(label.lower())
+    """(owner, Seq) for a label the body's installed include tree plays."""
+    owner, local_label = corpus.source.find_sequence(stem, label)
+    seq = corpus.model(owner).sequences.get(local_label.lower())
     if seq is None:
         raise KeyError(f"'{label}' is not a sequence of '{owner}'")
     return owner, seq
@@ -781,7 +752,6 @@ def emit_oracle(corpus: Corpus, stem: str, hosts: Iterable[str], out_dir: Path) 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--export-root", type=Path, required=True)
     parser.add_argument("--validate", type=Path, metavar="SESSION",
                         help="a life_rig_pose session directory carrying both oracles")
     parser.add_argument("--stem", action="append", default=[])
@@ -795,7 +765,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="try every cell of the aim grid per frame and report which one "
                              "retail drew, per state")
     args = parser.parse_args(argv)
-    corpus = Corpus(args.export_root)
+    corpus = Corpus()
     global SKIP_DELTAS
     SKIP_DELTAS = bool(args.no_delta)
     if args.validate:

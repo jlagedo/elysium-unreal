@@ -1,5 +1,5 @@
 """Phase 2 of `uv run elysium import map-collision`: land one staged collision payload per map as a
-`UElysiumMapCollisionPayload` asset under `/ElysiumBaked/<map>/DA_<map>_Collision`.
+`UElysiumMapCollisionPayload` asset under `/ElysiumBaked/Maps/<map>/DA_<map>_Collision`.
 
 Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import_map_collision.py
 -ImportMapCollision=<manifest.json>`). The offline stage (`importers/map_collision.py`, R4.2) already

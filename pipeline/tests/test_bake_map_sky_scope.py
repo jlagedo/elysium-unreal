@@ -109,10 +109,10 @@ def test_a_sky_flagged_detail_record_takes_the_miniature_transform_and_the_marke
     ]
     groups = module.detail_instance_rows(records, scale, origin)
     # The miniature record is its own component, at the transform and the miniature's scale.
-    assert list(groups) == [("weed", False), ("weed", True)]
-    position, _rotation, instance_scale, _sway = groups[("weed", True)][0]
+    assert list(groups) == [("vtmb:model:weed", False), ("vtmb:model:weed", True)]
+    position, _rotation, instance_scale, _sway = groups[("vtmb:model:weed", True)][0]
     assert position == pytest.approx(PLACED) and instance_scale == 16.0
-    assert groups[("weed", False)][0][0] == INSIDE and groups[("weed", False)][0][2] == 1.0
+    assert groups[("vtmb:model:weed", False)][0][0] == INSIDE and groups[("vtmb:model:weed", False)][0][2] == 1.0
     # The component actor's tags: class, model, then the scope marker for the sky group only.
     assert module.detail_actor_tags("weed", True) == (
         "elysium.detail", "elysium.model=weed", "elysium.sky")
@@ -130,4 +130,4 @@ def test_the_lane_places_through_the_manifests_own_sky_block(module):
     # The marker is `bake_map.TAG_SKY` / `ElysiumBakedTags::Sky` restated, and the two shape
     # terms exist so a level baked before the marker re-authors.
     assert module.TAG_SKY == "elysium.sky"
-    assert module.DETAIL_ACTOR_SHAPE == 2 and module.SPRITE_ACTOR_SHAPE == 3
+    assert module.DETAIL_ACTOR_SHAPE == 3 and module.SPRITE_ACTOR_SHAPE == 3

@@ -105,6 +105,10 @@ namespace ElysiumExpressions
 	// Seed the cache with table text under a stem, so a headless test can drive one without touching
 	// `$ELYSIUM_EXPORT_ROOT`. Overwrites any cached entry.
 	void RegisterInline(const FString& Stem, const FString& Text);
+#if WITH_DEV_AUTOMATION_TESTS
+	/** Only explicitly registered test text, never a table cached by the legacy disk loader. */
+	TSharedPtr<const FElysiumExpressionTable> FindInlineForTest(const FString& Param, const FString& Class);
+#endif
 
 	void ClearCache();
 	void CacheStats(int32& OutEntries, int32& OutHits, int32& OutMisses);

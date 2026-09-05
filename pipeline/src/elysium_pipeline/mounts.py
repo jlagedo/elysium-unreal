@@ -23,6 +23,7 @@ ANIMATION = "/Game/ElysiumGenerated/Animation"
 # `Content/ElysiumAuthored/VFX/`, not the 1,698 systems built from them.
 VFX = "/Game/ElysiumGenerated/VFX"
 BAKED = "/ElysiumBaked"
+MAPS = BAKED + "/Maps"
 # Decoded from the user's own VtMB install (`mdl_cloth` sidecars), so it belongs with the rest of
 # the baked corpus rather than the pre-cooked `Content/` packages above.
 CLOTH = BAKED + "/Characters/Cloth"

@@ -200,6 +200,8 @@ def settings_for(entry):
     elif compression == "uncompressed":
         tc = (unreal.TextureCompressionSettings.TC_EDITOR_ICON if srgb
               else unreal.TextureCompressionSettings.TC_VECTOR_DISPLACEMENTMAP)
+    elif compression == "hdr-f32" and entry.get("stagedFormat") in ("rgba16f", "rgba32f"):
+        tc = unreal.TextureCompressionSettings.TC_HDR_F32
     else:
         raise ManifestError("%s: compression %r unknown" % (entry["assetPath"], compression))
 
@@ -287,6 +289,10 @@ def verify_built(texture, entry):
     problem = class_problem(texture, entry)
     if problem:
         return problem, None
+    if entry.get("product") == "sky-composite":
+        built_format = unreal.ElysiumTextureImportLibrary.built_pixel_format(texture)
+        if built_format != "PF_A32B32G32R32F":
+            return "sky HDR build is %s, expected PF_A32B32G32R32F" % built_format, None
     width, height, slices, mips = unreal.ElysiumTextureImportLibrary.built_extent(texture)
     if (width, height) != (expected["width"], expected["height"]):
         return "built %dx%d, expected %dx%d" % (width, height, expected["width"], expected["height"]), None
@@ -422,12 +428,16 @@ def _finish_entry(texture, entry, staging_root, tracker, report, measure):
     with open(os.path.join(staging_root, entry["provenance"].replace("/", os.sep)), "r",
               encoding="utf-8") as handle:
         sidecar = handle.read()
-    record, error = unreal.ElysiumTextureProvenance.apply_json(texture, sidecar)
-    if record is None:
-        raise RuntimeError("provenance rejected: %s" % error)
-    stamped, error = unreal.ElysiumTextureProvenance.stamp_registry_tags(texture)
-    if not stamped:
-        raise RuntimeError("registry tags: %s" % error)
+    if entry.get("product") == "sky-composite":
+        from pipeline.unreal.sky_composites import attach_provenance
+        attach_provenance(texture, sidecar)
+    else:
+        record, error = unreal.ElysiumTextureProvenance.apply_json(texture, sidecar)
+        if record is None:
+            raise RuntimeError("provenance rejected: %s" % error)
+        stamped, error = unreal.ElysiumTextureProvenance.stamp_registry_tags(texture)
+        if not stamped:
+            raise RuntimeError("registry tags: %s" % error)
 
     bl.stamp_recipe(texture, tracker.fingerprint(entry), producer='textures')
     if not bl.save(entry["assetPath"]):

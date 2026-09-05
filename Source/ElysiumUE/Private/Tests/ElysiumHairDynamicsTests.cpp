@@ -9,6 +9,7 @@
 #include "Visual/ElysiumBodyAnimInstance.h"
 #include "Visual/ElysiumHairDynamicsConfig.h"
 #include "Visual/ElysiumHairDynamicsData.h"
+#include "ElysiumCastData.h"
 
 #include "Animation/AnimInstanceProxy.h"
 #include "Animation/Skeleton.h"
@@ -230,10 +231,8 @@ bool FElysiumHairDynamicsResetRoutingTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// The authored table (`/Game/ElysiumAuthored/Hair/DA_HairDynamics`) is the sole runtime source
-// of hair chains; the baked mesh carries none. Assert the tracked asset's shape, and -- when the
-// proof bodies happen to be baked -- that every authored bone actually exists on the body it
-// names, which is the one fact only the baked skeleton can answer.
+// Authored tuning admits generated recipes. Every tuning key is a model id, and every
+// authored chain must bind to that model's native skeletal representation.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHairDynamicsAuthoredTest,
 	"Elysium.Content.Characters.HairDynamicsAuthored",
 	GElysiumHairDynamicsTestFlags)
@@ -250,25 +249,21 @@ bool FElysiumHairDynamicsAuthoredTest::RunTest(const FString& Parameters)
 	}
 	TestTrue(TEXT("the authored table names at least the two proof bodies"),
 		Config->Stems.Num() >= 2);
+	const auto* CastData=LoadObject<UElysiumCastData>(nullptr,TEXT("/ElysiumBaked/Models/_Corpus/DA_Cast.DA_Cast"));
+	if (!TestNotNull(TEXT("tuning models have a native cast table"),CastData)) return false;
 	for (const TPair<FName, FElysiumHairDynamicsStem>& Entry : Config->Stems)
 	{
 		TestTrue(*FString::Printf(TEXT("%s authors at least one chain"),
 			*Entry.Key.ToString()), Entry.Value.Chains.Num() > 0);
 
-		USkeletalMesh* Mesh = LoadObject<USkeletalMesh>(nullptr,
-			*FElysiumContentPaths::BakedCharacterMesh(Entry.Key.ToString()),
-			nullptr, LOAD_NoWarn | LOAD_Quiet);
+		const FString Id=Entry.Key.ToString();
+		TestTrue(TEXT("authored hair key is a model id"),Id.StartsWith(TEXT("vtmb:model:")));
+		FString Error;
+		const auto* Model=CastData->FindModel(Id,Error);
+		USkeletalMesh* Mesh=Model?Model->Mesh.LoadSynchronous():nullptr;
 		if (Mesh == nullptr)
 		{
-			Mesh = LoadObject<USkeletalMesh>(nullptr,
-				*FElysiumContentPaths::BakedCharacterMesh(Entry.Key.ToString(), true),
-				nullptr, LOAD_NoWarn | LOAD_Quiet);
-		}
-		if (Mesh == nullptr)
-		{
-			AddInfo(FString::Printf(
-				TEXT("ELYSIUM_TEST_ABSTAIN: %s is not baked; bone names unchecked"),
-				*Entry.Key.ToString()));
+			AddError(TEXT("authored hair model has no native mesh: ")+Id+TEXT(" ")+Error);
 			continue;
 		}
 		const FReferenceSkeleton& RefSkeleton = Mesh->GetRefSkeleton();

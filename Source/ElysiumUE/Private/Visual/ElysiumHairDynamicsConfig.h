@@ -71,8 +71,8 @@ class UElysiumHairDynamicsConfig final : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	/** One entry per body stem, e.g. `jeanette`. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Elysium|Hair")
+	/** One entry per model id. The serialized field name is retained for authored asset migration. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Elysium|Hair", meta=(DisplayName="Models"))
 	TMap<FName, FElysiumHairDynamicsStem> Stems;
 
 	/**
@@ -82,6 +82,6 @@ public:
 	 */
 	static const UElysiumHairDynamicsConfig* Load();
 
-	/** The authored entry for this body stem, or null when the owner has not tuned it. */
-	static const FElysiumHairDynamicsStem* FindStem(const FString& Stem);
+	/** The authored entry for a model id, or null when the owner has not tuned it. */
+	static const FElysiumHairDynamicsStem* FindModel(const FString& Model);
 };

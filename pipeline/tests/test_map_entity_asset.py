@@ -115,8 +115,8 @@ def test_stage_map_entities_writes_a_manifest_carrying_the_rows_and_a_passing_pa
     assert manifest["schemaVersion"] == map_entities.MANIFEST_SCHEMA
     assert manifest["mount"] == "/ElysiumBaked"
     entry = manifest["maps"][0]
-    assert entry["assetPath"] == "/ElysiumBaked/sp_probe/DA_sp_probe_Entities"
-    assert entry["packageRoot"] == "/ElysiumBaked/sp_probe"
+    assert entry["assetPath"] == "/ElysiumBaked/Maps/sp_probe/DA_sp_probe_Entities"
+    assert entry["packageRoot"] == "/ElysiumBaked/Maps/sp_probe"
     assert entry["entities"] == rows
     assert entry["parity"]["checked"] is True and entry["parity"]["equal"] is True
 
@@ -129,7 +129,7 @@ def test_stage_map_entities_refuses_an_unscoped_run(tmp_path):
 def test_the_asset_path_is_the_twin_of_the_cpp_accessor():
     # `FElysiumContentPaths::BakedMapEntities` composes `/ElysiumBaked/<map>/DA_<map>_Entities`; a
     # rename on either side that is not made on the other silently un-cuts every map over.
-    assert map_entities.asset_path("sm_hub_1") == "/ElysiumBaked/sm_hub_1/DA_sm_hub_1_Entities"
+    assert map_entities.asset_path("sm_hub_1") == "/ElysiumBaked/Maps/sm_hub_1/DA_sm_hub_1_Entities"
     header = (REPO_ROOT / "Source/ElysiumUE/Private/ElysiumContentPaths.h").read_text(
         encoding="utf-8")
     assert 'const FString Asset = TEXT("DA_") + Map + TEXT("_Entities");' in header

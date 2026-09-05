@@ -455,6 +455,30 @@ def import_materials(config, runner, manifest_path, *, force: bool = False) -> N
 MODEL_IMPORT_TIMEOUT_SECONDS = 4 * 3600.0
 
 
+def model_catalogues(config, runner, manifest_path, *, verify: bool = False, force: bool = False) -> None:
+    """Author or freshly verify the merged static/skeletal model catalogues."""
+    script = "verify_model_catalogues.py" if verify else "import_model_catalogues.py"
+    flag = "VerifyModelCatalogues" if verify else "ImportModelCatalogues"
+    _run(config, runner, editor_executable(config, commandlet=True), [
+        str(config.project), "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal' / script}", f"-{flag}={manifest_path}",
+        *(["-ImportForce=1"] if force else []),
+        "-nullrhi", "-unattended", "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
+    ], timeout=4 * 3600.0)
+
+
+def expression_tables(config, runner, manifest_path, *, verify: bool = False, force: bool = False) -> None:
+    """Import or independently reload the complete expression corpus."""
+    script = "verify_expression_tables.py" if verify else "import_expression_tables.py"
+    _run(config, runner, editor_executable(config, commandlet=True), [
+        str(config.project), "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal' / script}",
+        f"-ImportExpressionTables={manifest_path}",
+        *(["-ImportForce=1"] if force else []),
+        "-nullrhi", "-unattended", "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
+    ], timeout=3600.0)
+
+
 def import_characters(config, runner, manifest_path, *, force: bool = False) -> None:
     """Author the GLB stage's skeletal products and bind the imported material corpus."""
     from elysium_pipeline.importers.materials import staging_root
@@ -463,6 +487,7 @@ def import_characters(config, runner, manifest_path, *, force: bool = False) -> 
         str(config.project), "-run=pythonscript",
         f"-script={config.repo_root / 'pipeline/unreal/import_characters.py'}",
         f"-ImportCharacters={manifest_path}",
+        f"-ImportUnitRoot={config.export_v2_root}",
         f"-ImportMaterialsRoot={staging_root(config.work_root)}",
         *(["-ImportForce=1"] if force else []),
         "-AllowCommandletRendering", "-unattended", "-nosplash", "-nopause",
@@ -478,6 +503,7 @@ def verify_character_stage(config, runner, manifest_path) -> None:
         str(config.project), "-run=pythonscript",
         f"-script={config.repo_root / 'pipeline/unreal/verify_character_stage.py'}",
         f"-ImportCharacters={manifest_path}",
+        f"-ImportUnitRoot={config.export_v2_root}",
         f"-ImportMaterialsRoot={staging_root(config.work_root)}",
         "-nullrhi", "-unattended", "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
     ], timeout=4 * 3600.0)
@@ -634,7 +660,7 @@ LOOKDEV_MAP_TIMEOUT_SECONDS = 15 * 60.0
 #: but silently keep the default set, or vice-versa, unnoticed.
 LOOKDEV_SET_PATH = "pipeline/unreal/lookdev_set.json"
 LOOKDEV_PROPS_SET_PATH = "pipeline/unreal/lookdev_props_set.json"
-LOOKDEV_MAP_PATH = "/ElysiumBaked/Lookdev/Materials"
+LOOKDEV_MAP_PATH = "/Game/ElysiumGenerated/Lookdev/Materials"
 LOOKDEV_REPORT_NAME = "lookdev_report.json"
 
 
@@ -649,7 +675,7 @@ def make_lookdev_map(config, runner, *, set_path=None, props_set_path=None, map_
     """Run `pipeline/unreal/make_lookdev_map.py`, SF-4.7's generated review map.
 
     Lays the tracked review set (`pipeline/unreal/lookdev_set.json`, or `set_path` when given)
-    out on a grid under `/ElysiumBaked/Lookdev/Materials` (or `map_path`), plus one props row
+    out on a grid under `/Game/ElysiumGenerated/Lookdev/Materials` (or `map_path`), plus one props row
     (R1.6, `docs/project/seam_migration.md` -> Roadmap) below it from the tracked
     `pipeline/unreal/lookdev_props_set.json` (or `props_set_path`), and saves it. A review-set
     entry whose `MI_`/`SM_` does not exist yet is placed on a loud placeholder rather than a

@@ -25,6 +25,7 @@ from elysium_pipeline.validation.png_alpha import alpha_range  # noqa: E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 
 MOUNT = mounts.BAKED
+from elysium_pipeline.asset_paths import map_package
 MATERIALS = mounts.MATERIALS
 
 
@@ -505,7 +506,8 @@ def verify_details(actors, map_name):
                       "detail props against (run: uv run elysium export map %s)"
                       % (map_name, map_name))
         return errors
-    stems = {int(model["model"]): str(model["stem"]) for model in details.get("models") or []}
+    from pipeline.unreal.model_catalogue_views import model_id
+    stems = {int(model["model"]): model_id(model["modelPath"]) for model in details.get("models") or []}
     expected = {}
     for row in details.get("records") or []:
         key = (stems[int(row[1])], bool(row[10]))
@@ -928,7 +930,7 @@ def brush_meshes(map_name):
     as missing.
     """
     meshes = {}
-    package = "%s/%s/Brushes" % (MOUNT, map_name)
+    package = map_package(map_name) + "/Brushes"
     if not unreal.EditorAssetLibrary.does_directory_exist(package):
         return meshes
     for path in unreal.EditorAssetLibrary.list_assets(package, recursive=False,
@@ -1356,7 +1358,7 @@ def verify_brush_cull(map_name, ents_path):
         elif cull is not None:
             errors.append("%s: entity %d (%s) carries cull_max_cm %r but is not a meshed func_lod"
                           % (map_name, index, classname, cull))
-    asset_path = "%s/%s/DA_%s_Entities" % (MOUNT, map_name, map_name)
+    asset_path = "%s/DA_%s_Entities" % (map_package(map_name), map_name)
     asset = unreal.EditorAssetLibrary.load_asset(asset_path)
     asset_rows = asset.get_editor_property("entities") if asset else None
     matched = 0
@@ -1697,7 +1699,7 @@ def verify_v2_materials(map_name, registry, prop_mtls):
 
 def verify_map(map_name):
     errors = []
-    package = "%s/%s" % (MOUNT, map_name)
+    package = map_package(map_name)
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     registry.scan_paths_synchronous([MOUNT], force_rescan=True)
 

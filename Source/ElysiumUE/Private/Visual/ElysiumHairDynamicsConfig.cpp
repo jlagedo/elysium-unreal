@@ -1,4 +1,5 @@
 #include "Visual/ElysiumHairDynamicsConfig.h"
+#include "ElysiumCastData.h"
 
 #include "UObject/StrongObjectPtr.h"
 #include "UObject/UObjectGlobals.h"
@@ -39,14 +40,19 @@ const UElysiumHairDynamicsConfig* UElysiumHairDynamicsConfig::Load()
 	return Config.Get();
 }
 
-const FElysiumHairDynamicsStem* UElysiumHairDynamicsConfig::FindStem(const FString& Stem)
+const FElysiumHairDynamicsStem* UElysiumHairDynamicsConfig::FindModel(const FString& Model)
 {
 	const UElysiumHairDynamicsConfig* const Config = Load();
-	if (Config == nullptr || Stem.IsEmpty())
+	if (Config == nullptr || Model.IsEmpty())
 	{
 		return nullptr;
 	}
-	// FName equality is case-insensitive, which is the comparison a body stem needs: the asset is
-	// authored by hand and the callers pass the stem as the map or the bake spelled it.
-	return Config->Stems.Find(FName(*Stem));
+	FString Error;
+	const FString Id=UElysiumCastData::ModelIdForPreparation(Model,Error);
+	if (Id.IsEmpty())
+	{
+		UE_LOG(LogElysiumHairDynamicsConfig,Warning,TEXT("hair tuning model '%s': %s"),*Model,*Error);
+		return nullptr;
+	}
+	return Config->Stems.Find(FName(*Id));
 }

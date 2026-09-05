@@ -231,15 +231,19 @@ governing rule is that design's owner call: **VtMB owns the rules, Chaos owns th
 
 ### PHYS1 The ragdoll rig — export, bake, handoff
 
-**The export.** `phy.py` gains a second product from the same parse: a `RAGD` chunk in each
-character's `.eskm`, carrying bone-named solids (parent, transform, mass, damping, rotdamping,
-inertia, massbias, surfaceprop, hull range) and one constraint record per `ragdollconstraint`
-(parent/child solid index, three axes of min/max/friction). It is a chunk and not a loose sidecar
-because the payload is per-model skeletal data addressed by bone name, which is what `SKEL`,
-`DYNM`, `BDYN` and `MASK` already are. 324 models carry a rig; 289 of them are one 15-solid,
-14-constraint humanoid shape covering every ordinary NPC and all 58 PC bodies. Bone names fold
-through the same rule the bank baseline uses, and a name that does not resolve against the baked
-skeleton is a hard export error.
+**Deferred after R8 (owner ruling 2026-09-05).** R8 owns export/import and verified conservation
+of physics geometry, solids, constraints, parameters, metadata and provenance. Simulation-ready
+PhysicsAsset construction, solver calibration, ragdoll activation and gameplay physics described
+below are future work and cannot block R8 completion. The former `RAGD` transport proposal is
+superseded by model GLBs and `UElysiumPhysicsData`; export/import must preserve uncalibrated data
+and explicit source gaps rather than waiting for simulation calibration.
+
+**The input.** R8's model GLB and cooked physics source-data projection carry the complete
+geometry, solid/ledge ownership, constraints, parameters, metadata and provenance. The installed
+corpus contains 324 articulated rigs, including 289 with 15 solids and 14 constraints. These
+counts do not justify hardcoding one topology. Missing source-bone joins are explicit retained
+records, not an export failure or permission to drop geometry. PHYS1 consumes this verified
+data after R8; it introduces no `RAGD` chunk or legacy transport dependency.
 
 **Two calibrations gate it, and both are settled the way `(x, -z, -y)` was** — by scoring candidate
 mappings against evidence the corpus already carries, over all 289 canonical rigs, and taking the
@@ -252,17 +256,19 @@ winner by margin rather than by argument:
   not stated by the data. Score by settled pose under gravity; a wrong assignment reads as a knee
   bending sideways.
 
-Until each is settled the export **fails rather than guesses**.
+Until simulation semantics are established, simulation admission must fail rather than guess.
+R8 export/import and data-preservation verification proceed independently.
 
-**The bake.** `bake_characters.py` gains one stage between the mesh and the clips: a
+**The future bake.** A V2 physics builder consumes the preserved source data and authors a
 `UPhysicsAsset` assigned to the baked `USkeletalMesh`. One `USkeletalBodySetup` per solid, with the
 authored convex hulls as `AggGeom.ConvexElems` under the same exactness rule the prop bake proved,
 the authored mass as a body-instance override, `damping`/`rotdamping` as linear/angular damping,
 and `surfaceprop` through the existing surface-property table. One `UPhysicsConstraintTemplate` per
-constraint, linear locked, angular limited — **asymmetry resolved by half-range limit plus a
-midpoint-biased child frame**, never by taking the larger magnitude; an all-zero constraint is a
-weld, not a zero-width limit. `massbias` is carried and unconsumed until a body needs it. Keyed in
-the bake cache off the `RAGD` bytes.
+constraint, with frames, finite-angle limits and friction behavior established by PHYS1's own
+acceptance. Zero-freedom source records must not be assumed to mean a weld; source friction
+must not be substituted with unmeasured Chaos damping. `massbias` remains preserved provenance
+until its consumer is established. Recipes include the canonical source projection and the
+accepted simulation mapping version.
 
 **The handoff.** `StartBodyRagdoll` needs no change and simply stops returning false; the
 `HoldBodyFinalPose` stand-in becomes what it was always described as, the fallback for a body with

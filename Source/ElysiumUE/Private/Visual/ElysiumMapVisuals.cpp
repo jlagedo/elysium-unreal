@@ -1,3 +1,4 @@
+#include "ElysiumSkyProvenance.h"
 #include "Visual/ElysiumMapVisuals.h"
 
 #include "ElysiumBakedTags.h"
@@ -690,21 +691,19 @@ void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env, const FStri
 			*Env.SkyName, Env.SkyConvention, ElysiumEnvironment::SkyConventionVersion);
 	}
 
-	// The faithful decode, always (R6.5 retired the `tex_hi/` toggle: the R5.2 bake already
-	// samples this set and only this set).
-	//
-	// Faces are addressed by the sky's OWN name, because they belong to the sky rather than
-	// to the map showing it: the game's maps share six distinct skies between them, and a
-	// map-local `sky_<face>` alias would give one name several sets of bytes.
-	const FString Prefix = FElysiumContentPaths::SkyFacePrefix(Env.SkyName);
-
-	float CubeUpperMean = 0.f;
-	UTextureCube* Cube = ElysiumEnvironment::BuildSkyCubeFrom(
-		FElysiumContentPaths::SharedTexDir(), Prefix, &CubeUpperMean);
-	if (Cube == nullptr)
+	// D1: the texture lane conserves the GLB faces/mips and stores the sky mean.
+	const FString CubePath = FElysiumContentPaths::BakedUnit(
+		TEXT("vtmb:texture:skybox/") + Env.SkyName.ToLower(), TEXT("TC"), TEXT("Sky"));
+	UTextureCube* Cube = LoadObject<UTextureCube>(nullptr, *CubePath);
+	const UElysiumSkyProvenance* Provenance = UElysiumSkyProvenance::Find(Cube);
+	if (!Provenance || Provenance->SkyName != Env.SkyName.ToLower()
+		|| !FMath::IsFinite(Provenance->UpperHemisphereMean) || Provenance->UpperHemisphereMean < 0.0)
 	{
+		UE_LOG(LogElysiumVisuals, Warning, TEXT("sky '%s': missing/invalid texture-lane composite %s"),
+			*Env.SkyName, *CubePath);
 		return;
 	}
+	const float CubeUpperMean = static_cast<float>(Provenance->UpperHemisphereMean);
 
 	// The cube does two jobs. As the SkyLight's IBL source it is what gives Lumen real sky
 	// occlusion: an interior stops receiving ambient because it cannot see the sky, instead of

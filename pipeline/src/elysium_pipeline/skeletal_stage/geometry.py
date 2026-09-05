@@ -8,7 +8,7 @@ from elysium_pipeline.skeletal_stage.unit import MODEL_EXTENSION, SkeletalUnitEr
 def geometry(unit, bone_map):
     lod = next((row for row in unit.extension["vtx"]["lods"] if row["index"] == 0), None)
     if lod is None:
-        return b"", b"", [], [], []
+        return b"", b"", [], [], [], b""
     mesh = unit.document["meshes"][lod["mesh"]]
     surfaces, remaps, bindings = {}, [], {}
     for p, primitive in enumerate(mesh["primitives"]):
@@ -19,9 +19,9 @@ def geometry(unit, bone_map):
         if name in bindings and bindings[name] != material:
             raise SkeletalUnitError(f"{unit.id}: slot {name} binds two different material units")
         bindings[name] = material
-        surface = surfaces.setdefault(name, {k: [] for k in ("pos", "nrm", "uv", "joints", "weights", "tris")})
+        surface = surfaces.setdefault(name, {k: [] for k in ("pos", "nrm", "uv", "joints", "weights", "tris", "tangent")})
         attrs = primitive["attributes"]
-        required = ("POSITION", "NORMAL", "TEXCOORD_0", "JOINTS_0", "WEIGHTS_0")
+        required = ("POSITION", "NORMAL", "TANGENT", "TEXCOORD_0", "JOINTS_0", "WEIGHTS_0")
         if any(key not in attrs for key in required):
             raise SkeletalUnitError(f"{unit.id}: skeletal primitive {p} lacks a required channel")
         values = {key: unit.accessor(attrs[key]) for key in required}
@@ -43,6 +43,10 @@ def geometry(unit, bone_map):
                     surface["pos"].append(tuple(positions[i]))
                     surface["nrm"].append(tuple(normals[i]))
                     surface["uv"].append(tuple(values["TEXCOORD_0"][i]))
+                    tx, ty, tz, sign = map(float, values["TANGENT"][i])
+                    # Core glTF -> Unreal swaps Y/Z (a reflection); UVs stay unchanged.
+                    # Keep source zeros and every component rather than deriving a new basis.
+                    surface["tangent"].append((tx, tz, ty, -sign))
                     joints = [int(v) for v in values["JOINTS_0"][i]]
                     if any(j < 0 or j >= len(bone_map) for j in joints):
                         raise SkeletalUnitError(f"{unit.id}: vertex references a missing bone")
@@ -81,4 +85,6 @@ def geometry(unit, bone_map):
                    "vertices": [[source["sourceVertices"][local], offsets[name] + index]
                                 for local, index in remap.items()]}
                   for _, source, name, remap in remaps]
-    return mesh_bytes, bytes(morph_bytes), names, [{"slot": name, "assetId": bindings[name]} for name in names], vertex_map
+    tangents = [value for name in names for value in surfaces[name]["tangent"]]
+    tangent_bytes = struct.pack("<I", len(tangents)) + b"".join(struct.pack("<4f", *value) for value in tangents)
+    return mesh_bytes, bytes(morph_bytes), names, [{"slot": name, "assetId": bindings[name]} for name in names], vertex_map, tangent_bytes

@@ -10,6 +10,9 @@ USTRUCT(BlueprintType)
 struct FElysiumClothBuildResult
 {
 	GENERATED_BODY()
+	/** A configured fallback may produce an inspectable asset while tuning remains pending. */
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Cloth")
+	TArray<FString> Warnings;
 
 	/** Package path of the generated cloth asset, empty when nothing was written. */
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Cloth")
@@ -175,5 +178,9 @@ public:
 	static TArray<FElysiumClothBuildResult> BuildClothAssetsFromSidecar(
 		const FString& SidecarPath,
 		const FString& PackageDirectory,
+		const FString& SkeletalMeshPath);
+	/** Fresh saved-asset check of simulation presence and staged render geometry/binding. */
+	UFUNCTION(BlueprintCallable, Category = "Elysium|Cloth")
+	static FString VerifyClothAsset(const FString& AssetPath, const FString& GarmentJson,
 		const FString& SkeletalMeshPath);
 };

@@ -1,5 +1,5 @@
 """Phase 2 of `uv run elysium import map-environment`: land one staged environment per map as a
-`UElysiumMapEnvironment` data asset under `/ElysiumBaked/<map>/DA_<map>_Environment`.
+`UElysiumMapEnvironment` data asset under `/ElysiumBaked/Maps/<map>/DA_<map>_Environment`.
 
 Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import_map_environment.py
 -ImportMapEnvironment=<manifest.json>`). The offline stage (`importers/map_environment.py`, R4.4)

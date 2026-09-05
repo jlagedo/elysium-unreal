@@ -1,7 +1,7 @@
 """Stage one map's collision for the `UElysiumMapCollisionPayload` asset (R4.2).
 
 `uv run elysium import map-collision --maps <map>...` turns each named map's collision sidecars
-into one `/ElysiumBaked/<map>/DA_<map>_Collision` asset carrying the same convex sets and the same
+into one `/ElysiumBaked/Maps/<map>/DA_<map>_Collision` asset carrying the same convex sets and the same
 triangle soup, cooked once offline instead of on every map load
 (`docs/architecture/seam_map_map.md` -> "Import"). This module is the offline stage half: it reads
 `<map>.hulls`, `<map>.dispcol` and the brush-entity `hulls` of `<map>.ents`, applies the one
@@ -54,9 +54,10 @@ def staging_root(work_root: Path) -> Path:
 
 
 def package_root(map_name: str) -> str:
-    """`/ElysiumBaked/<map>` -- the map's own baked package folder, beside its `.umap`."""
+    """`/ElysiumBaked/Maps/<map>` -- the map's own baked package folder, beside its `.umap`."""
 
-    return f"{BAKED_MOUNT}/{map_name}"
+    from elysium_pipeline.asset_paths import map_package
+    return map_package(map_name)
 
 
 def asset_name(map_name: str) -> str:
@@ -64,7 +65,7 @@ def asset_name(map_name: str) -> str:
 
 
 def asset_path(map_name: str) -> str:
-    """`/ElysiumBaked/<map>/DA_<map>_Collision` -- the twin of `BakedMapCollision`."""
+    """`/ElysiumBaked/Maps/<map>/DA_<map>_Collision` -- the twin of `BakedMapCollision`."""
 
     return f"{package_root(map_name)}/{asset_name(map_name)}"
 

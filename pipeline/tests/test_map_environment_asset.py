@@ -88,7 +88,7 @@ def test_stage_map_carries_the_three_sidecars_and_reports_its_own_path(tmp_path)
         spawn_path=directory / "sp_probe.spawn",
     )
 
-    assert entry["assetPath"] == "/ElysiumBaked/sp_probe/DA_sp_probe_Environment"
+    assert entry["assetPath"] == "/ElysiumBaked/Maps/sp_probe/DA_sp_probe_Environment"
     assert entry["parity"]["equal"] is True
     assert entry["sky"] == {"hasMiniature": True, "origin": [1.0, 2.0, 3.0], "scale": 16.0}
     assert entry["spawn"] == {
