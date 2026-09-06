@@ -110,10 +110,10 @@ def stage(roots):
                                             models_root=roots["models"], materials_root=roots["materials"])
 
 
-def test_composes_all_three_complete_catalogues_and_hashes_every_input(corpus):
+def test_composes_every_complete_catalogue_and_hashes_every_input(corpus):
     result = stage(corpus)
     checked, projections = catalogues.verify_model_catalogue_stage(corpus["stage"] / "manifest.json")
-    assert result == checked and len(projections) == 3
+    assert result == checked and len(projections) == len(catalogues.KINDS)
     by_kind = {p["catalogueKind"]: p for p in projections}
     assert len(by_kind["PropSkins"]["data"]["models"]) == 2
     assert len(by_kind["PlacedModels"]["data"]["models"]) == 1

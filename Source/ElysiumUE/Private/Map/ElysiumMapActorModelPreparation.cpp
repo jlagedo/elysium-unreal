@@ -9,6 +9,7 @@
 #include "Visual/ElysiumCharacterModel.h"
 #include "Visual/ElysiumNativeAnimationData.h"
 #include "Visual/ElysiumPreparedPropModels.h"
+#include "Visual/ElysiumPreparedOrnamentModels.h"
 #include "Visual/ElysiumPreparedWieldModels.h"
 #include "Substrate/ElysiumItemClasses.h"   // ElysiumItems::Find — an item record's ground model
 #include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef::PlayerModel
@@ -129,12 +130,17 @@ bool AElysiumMapActor::PreparePropAndWieldModels(const FElysiumEntityDefs& Defin
 	const FSoftObjectPath PlacedPath(TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels.DA_PlacedModels"));
 	const FSoftObjectPath SkinsPath(TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins.DA_PropSkins"));
 	const FSoftObjectPath WieldPath(TEXT("/ElysiumBaked/Models/_Corpus/DA_WieldModels.DA_WieldModels"));
-	const TSet<FSoftObjectPath> Catalogues{PlacedPath, SkinsPath, WieldPath};
+	// The ornament follow models an animation event can ask for at any cycle boundary
+	// (`0x1032e330` 4100/4102). They join the map's residency for the reason every other native
+	// model context does: the request arrives mid-frame with nowhere to wait for a stream.
+	const FSoftObjectPath OrnamentPath(TEXT("/ElysiumBaked/Models/_Corpus/DA_OrnamentModels.DA_OrnamentModels"));
+	const TSet<FSoftObjectPath> Catalogues{PlacedPath, SkinsPath, WieldPath, OrnamentPath};
 	if (!LoadBatch(Catalogues)) return false;
 	auto* Placed = Cast<UElysiumPlacedModelCatalogue>(PlacedPath.ResolveObject());
 	auto* Skins = Cast<UElysiumPropSkinCatalogue>(SkinsPath.ResolveObject());
 	auto* Wield = Cast<UElysiumWieldCatalogue>(WieldPath.ResolveObject());
-	if (!Placed || !Skins || !Wield)
+	auto* Ornaments = Cast<UElysiumOrnamentCatalogue>(OrnamentPath.ResolveObject());
+	if (!Placed || !Skins || !Wield || !Ornaments)
 	{ OutError = TEXT("native model catalogue reference has the wrong asset class"); return false; }
 
 	// The context is created empty and admits the map's models once they are resident; that is
@@ -153,7 +159,8 @@ bool AElysiumMapActor::PreparePropAndWieldModels(const FElysiumEntityDefs& Defin
 	CollectMapModelIds(Definitions, *Props, Ids, Paths);
 	TArray<FString> ModelIds = Ids.Array(); ModelIds.Sort();
 	if (!GatherPlacedModelPaths(Placed, Skins, ModelIds, Paths, OutError)
-		|| !FElysiumPreparedWieldModels::GatherPaths(Wield, Paths, OutError)) return false;
+		|| !FElysiumPreparedWieldModels::GatherPaths(Wield, Paths, OutError)
+		|| !FElysiumPreparedOrnamentModels::GatherPaths(Ornaments, Paths, OutError)) return false;
 
 	// Static/source-absent inventory is not an animation-body request. Only actual cast
 	// mesh/BodyData projections participate in the shared native animation adapters.
@@ -198,7 +205,15 @@ bool AElysiumMapActor::PreparePropAndWieldModels(const FElysiumEntityDefs& Defin
 		ElysiumPreparedProps::Release(this);
 		return false;
 	}
+	auto Worn = FElysiumPreparedOrnamentModels::Create(this, ContextEpoch, Ornaments, ResidentAssets, OutError);
+	if (!Worn.IsValid())
+	{
+		ElysiumPreparedProps::Release(this);
+		FElysiumPreparedWieldModels::Release(this);
+		return false;
+	}
 	PropModelPreparation = MoveTemp(Props); WieldModelPreparation = MoveTemp(Weapons);
+	OrnamentModelPreparation = MoveTemp(Worn);
 	UE_LOG(LogElysium, Log, TEXT("prepared native model contexts for %s: %d model IDs (%s), %d resident references"),
 		*MapName, ModelIds.Num(), bAdmitWholeCatalogue ? TEXT("whole catalogue") : TEXT("entity-derived"), ResidentAssets.Num());
 	return true;
@@ -365,7 +380,8 @@ void AElysiumMapActor::ReleasePropAndWieldModels()
 	// Wield scopes are world-keyed. Outgoing teardown must not unregister an incoming owner.
 	if (ElysiumPreparedProps::ForOwner(this).Get() == PropModelPreparation.Get()) ElysiumPreparedProps::Release(this);
 	if (FElysiumPreparedWieldModels::ForOwner(this).Get() == WieldModelPreparation.Get()) FElysiumPreparedWieldModels::Release(this);
-	PropModelPreparation.Reset(); WieldModelPreparation.Reset();
+	if (FElysiumPreparedOrnamentModels::ForOwner(this).Get() == OrnamentModelPreparation.Get()) FElysiumPreparedOrnamentModels::Release(this);
+	PropModelPreparation.Reset(); WieldModelPreparation.Reset(); OrnamentModelPreparation.Reset();
 }
 
 EElysiumCharacterModelAdmission AElysiumMapActor::RequestCharacterModel(

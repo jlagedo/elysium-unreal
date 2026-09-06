@@ -188,6 +188,11 @@ public:
 		FElysiumClipPhase& Out);
 	const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
 		const FString& Label, const FString& OwnerRoot = FString());
+	// The ornament an animation event hung on this body — retail's `m_hAnimFollowModel`. A
+	// passthrough to `ElysiumNpcVisual`, which owns the component and its sweep; the catalogue row
+	// is resolved out of the map's prepared ornament context, never loaded here.
+	bool AttachOrnamentModel(USkeletalMeshComponent* Body, const FString& RetailPath);
+	void DetachOrnamentModel(USkeletalMeshComponent* Body);
 	// Compose an autolayer over whatever this body is already playing — a `_delta` additive, a masked
 	// partial-body `_layer`, or a masked aim grid, decided from the asset. Same resolution chain as
 	// PlayNpcClip, so a layer owned by a shared bank is reached by label; the layer itself is

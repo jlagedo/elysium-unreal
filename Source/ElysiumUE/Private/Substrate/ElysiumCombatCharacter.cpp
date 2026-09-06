@@ -23,6 +23,7 @@
 #include "Substrate/ElysiumDamage.h"        // FElysiumDmg + the shared apply path
 #include "Substrate/ElysiumDisciplines.h"    // the interruption + teardown entries
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
+#include "Substrate/ElysiumFeed.h"          // EventFeedBegin/EventFeedTeardown — the two ids 0x1032e330 guards
 #include "Substrate/ElysiumGameSound.h"     // the sound-event bus + its category names
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's parameter, the equipped item's record
 #include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef — the equipped item's definition record
@@ -312,6 +313,22 @@ void FElysiumCombatCharacter::AddBlood(int32 Delta)
 		// not in force and nothing here consults it.
 		AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, Delta);
 	}
+}
+
+int32 FElysiumCombatCharacter::BloodPoolCapacity() const
+{
+	// The same bound `AddTrait`/`IncBase` above gate on, asked for directly. `BoundsFor` is the port
+	// of the engine's own bound walk: the stat definition's `Min`/`Max`, a bound authored as another
+	// stat's NAME resolved against the base array, then the character's trait-effect layer applied
+	// to the bound itself. `BloodPool` authors the literal 15 and no clan effect touches it, so the
+	// shipped rulebook answers 15 for every character.
+	int32 Min = 0;
+	int32 Max = 0;
+	Sheet.BoundsFor(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool,
+		SheetRules(), SheetEffects(), Min, Max);
+	// `Max < Min` is `BoundsFor`'s "unbounded" answer, which only a world with no `stats.txt` in
+	// reach gives. There is no pool to draw then, so the honest capacity is nothing.
+	return Max >= Min ? Max : 0;
 }
 
 int32 FElysiumCombatCharacter::BloodHeal(int32 Blood)
@@ -1275,27 +1292,145 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	return bPlayed;
 }
 
-// --- The sequence-event weapon route ---
+// --- `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`) ---
+//
+// The whole recovered body, in retail's own order: the weapon forward first, then the switch, then
+// the base handler as `default:`. `docs/vtmb/animation_events.md` -> "Port status — combat
+// character band" records which arms are real and which are mocked.
 
 bool FElysiumCombatCharacter::HandleAnimEvent(const FElysiumAnimEvent& Event)
 {
-	if (!ElysiumAnimEvents::IsWeaponBand(Event.Event))
+	if (ElysiumAnimEvents::IsWeaponBand(Event.Event))
 	{
-		return FElysiumAnimating::HandleAnimEvent(Event);
+		// The active weapon, and only it. Retail reads `m_hActiveWeapon` and calls the virtual on
+		// whatever it names, so a holstered weapon whose clip is still running receives nothing.
+		FElysiumItem* Held = Inventory.Active(*this);
+		FElysiumWeapon* Weapon = Held ? Held->AsWeapon() : nullptr;
+		if (!Weapon)
+		{
+			// Empty-handed, or holding something with no weapon controller (`item_w_unarmed` authors
+			// no `Activation` block at all). An ordinary negative: there is nothing to route to, and
+			// the census is what records that the id went unclaimed.
+			return false;
+		}
+		return Weapon->OperatorHandleAnimEvent(*this, Event);
 	}
 
-	// The active weapon, and only it. Retail reads `m_hActiveWeapon` and calls the virtual on
-	// whatever it names, so a holstered weapon whose clip is still running receives nothing.
-	FElysiumItem* Held = Inventory.Active(*this);
-	FElysiumWeapon* Weapon = Held ? Held->AsWeapon() : nullptr;
-	if (!Weapon)
+	switch (Event.Event)
 	{
-		// Empty-handed, or holding something with no weapon controller (`item_w_unarmed` authors no
-		// `Activation` block at all). An ordinary negative: there is nothing to route to, and the
-		// census is what records that the id went unclaimed.
-		return false;
+	case ElysiumFeed::EventFeedTeardown:      // 4006 -> `FeedInterrupt`  (`+0x584`)
+	case ElysiumFeed::EventFeedBegin:         // 4007 -> `FeedBegin`      (`+0x57c`)
+		return HandleFeedBoundaryAnimEvent(Event.Event);
+	case ElysiumAnimEvents::DisciplineCallbackHit:
+		return HandleDisciplineAnimEvent(Event.Options);
+	case ElysiumAnimEvents::AttachFollowModel:
+	case ElysiumAnimEvents::DetachFollowModel:
+	case ElysiumAnimEvents::AttachFollowModelGendered:
+		return HandleFollowModelAnimEvent(Event);
+	default:
+		break;
 	}
-	return Weapon->OperatorHandleAnimEvent(*this, Event);
+	return FElysiumAnimating::HandleAnimEvent(Event);
+}
+
+bool FElysiumCombatCharacter::HandleFeedBoundaryAnimEvent(int32 EventId)
+{
+	// Retail's guard, both arms: the paired partner handle at `+0x1538` must resolve to a live
+	// entity AND the paired role at `+0x153c` must be 0. The port folds retail's paired-action block
+	// into `FeedState` (it has no grapple router), so `Peer` is the partner handle and `bVictim` is
+	// the role bit — role 1 is the victim half, which is exactly what `1032e5a9`'s `!= 1` test and
+	// the `== 0` tests on both arms exclude.
+	const bool bPartnerValid = ResolveFeedPeer() != nullptr;
+	if (!bPartnerValid || FeedState.bVictim)
+	{
+		// SWALLOWED, not forwarded. `1032e5b0` and `1032e630` jump straight to the epilogue, so a
+		// guard-failed 4006/4007 never reaches `CBaseAnimating::HandleAnimEvent` and never draws its
+		// "Unhandled animation event" warning. Claimed, therefore, and kept off the census — the id
+		// HAS a handler here; it declined this occurrence.
+		UE_LOG(LogElysiumPlayer, Verbose,
+			TEXT("%s refused feed anim event %d: %s"), *DebugString(), EventId,
+			bPartnerValid ? TEXT("this half is the victim (role 1)") : TEXT("no paired partner"));
+		return true;
+	}
+	OnFeedAnimEvent(EventId);
+	return true;
+}
+
+bool FElysiumCombatCharacter::HandleDisciplineAnimEvent(const FString& Options)
+{
+	// UNIMPLEMENTED, and NOT a sound.
+	//
+	// `FUN_101e3e70(&DAT_10739a4c, this, options)`: `options` names a DISCIPLINE record, the manager
+	// resolves the name to a bit (`0x101e1590` -> `0x101e1870`), the CHARACTER's own discipline mask
+	// at `+0xF34` is tested, and only then does `0x101e3910` select that record's level block for
+	// this character's rating (`0x1033d380`/`0x1033d410`) and run its hit callback — announcing
+	// itself as `DevMsg(3, "Discipline<%s> CallbackHit", name)`. The one shipped record is
+	// `Thaumaturgy_Purge`, so 4020 is where Blood Purge's cast animation COMMITS its effect rather
+	// than where it makes a noise.
+	//
+	// TODO(anim-events): the port commits a discipline from `FElysiumDisciplineState`'s own path,
+	// not from the cast clip's timeline. Routing this id there is a re-timing of an existing commit
+	// and would double-apply until that path stands down for it, so the seam answers "nothing" and
+	// names the retail call it stands for. The id is still CLAIMED, because retail's arm returns
+	// without reaching the base handler.
+	//
+	// Process-wide and once per NAME, the shape the unclaimed-event census has: a gap in the port is
+	// one fact about one discipline, and 4020 re-fires on every cast.
+	static TSet<FString> Reported;
+	if (!Reported.Contains(Options))
+	{
+		Reported.Add(Options);
+		UE_LOG(LogElysiumPlayer, Warning,
+			TEXT("UNIMPLEMENTED anim event 4020 discipline callback '%s' on '%s': retail 0x101e3e70 "
+			     "would run that discipline's level-block hit callback on this character"),
+			*Options, *DebugString());
+	}
+	return true;
+}
+
+bool FElysiumCombatCharacter::HandleFollowModelAnimEvent(const FElysiumAnimEvent& Event)
+{
+	// Retail's order, and it is load-bearing: the standing follow model is removed FIRST and
+	// unconditionally (`1032e40a` for 4100/4102, `1032e4c6` for 4101), before the path is formatted
+	// and before anything can fail. Every way to leave this function with no model created ends at
+	// the same `LAB_1032e4ce` — the handle set back to `0xffffffff`.
+	//
+	// The removal is NOT issued as a separate `DetachOrnamentModel` ahead of an attach. The seam's
+	// attach contract is "replace" — it removes first, unconditionally, and its same-path no-op
+	// (the named modernization in `ElysiumNpcVisual::InstallOrnamentModel`) can only see a standing
+	// component if this handler has not already swept it. The slot itself is reset up front either
+	// way: retail writes the handle on every exit — the created entity's at `1032e486`, `0xffffffff`
+	// at `1032e4ce` — so the old value never survives the arm.
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	const bool bBodied = Embodiment != nullptr && Visual != nullptr;
+	AnimFollowModel.Reset();
+
+	// `IsMale` (`0x10336920`) reads the character's own stat slot 11 — the Gender attribute — and
+	// answers true on exactly 1. `FElysiumSheet::IsMale` is that same slot. An empty `options`
+	// formats nothing: retail would build `".mdl"`, fail `GetModelPtr` and take the failure tail,
+	// which is the same remove-and-clear a 4101 is.
+	const FString Path = Event.Event == ElysiumAnimEvents::DetachFollowModel
+		? FString()
+		: ElysiumAnimEvents::FormatFollowModelPath(Event.Event, Event.Options, Sheet.IsMale());
+	if (!bBodied)
+	{
+		// A bodiless character, or a headless world. The slot is what the transaction is; there is
+		// simply nothing to hang it on, which is the supported negative and not a failure.
+		return true;
+	}
+	if (Path.IsEmpty())
+	{
+		Embodiment->DetachOrnamentModel(Visual);
+		return true;
+	}
+	if (Embodiment->AttachOrnamentModel(Visual, Path))
+	{
+		AnimFollowModel = Path;
+	}
+	// Else: the seam removed what was worn, reported its own gap once per path, and the slot stays
+	// empty — retail's `DevMsg("Could not create ornament prop model: %s")` tail, which also leaves
+	// the handle unset.
+	return true;
 }
 
 void FElysiumCombatCharacter::EndBloodshield()

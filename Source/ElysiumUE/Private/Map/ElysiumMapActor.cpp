@@ -747,6 +747,10 @@ void AElysiumMapActor::ClearPlayerVisual()
 		// (`ElysiumNpcVisual::SweepWieldModels`' ownership trap), so destroying the visual alone
 		// detaches them into floating orphans nothing would ever sweep on this path.
 		ElysiumNpcVisual::ClearWieldModel(Visual);
+		// The same trap for the ornament an animation event hung on the player (4100/4102): it is
+		// owned by the PAWN and merely attached to this visual, so destroying the visual alone would
+		// orphan a lit cigarette nothing on this path would ever sweep.
+		ElysiumNpcVisual::ClearOrnamentModel(Visual);
 		ElysiumMeleeTrail::ClearTrail(Visual);
 		Body->SetPlayerVisual(nullptr);
 		Visual->DestroyComponent();

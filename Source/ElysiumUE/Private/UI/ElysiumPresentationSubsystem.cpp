@@ -427,43 +427,74 @@ void UElysiumPresentationSubsystem::Publish()
 		const FElysiumPlayer* PlayerEnt = World->FindPlayer();
 		if (PlayerEnt)
 		{
-			FElysiumEntityHandle FeedTarget;
-			bool bPaired = false;
-			if (PlayerEnt->IsFeedPaired() && !PlayerEnt->FeedState.bVictim)
+			// The victim blood meter's SOURCE, in retail's own precedence
+			// (`CBasePlayer::UpdateClientActionState` `vampire.dll` `0x101755d0`): the authoritative
+			// feed target `m_hFeedTarget` (`+0x149c`) whenever its handle still resolves, otherwise
+			// the grapple partner (`+0x1538`) while this player is the role-0 half (`+0x153c == 0`)
+			// and the continuation latch (`+0x14a8`) is set. Nothing else on the feed side owns it —
+			// not "is paired" and not "is focused".
+			//
+			// OPEN — retail has a THIRD arm at `0x10175bbb` for the case with no feed target and no
+			// continuation grapple: it reads the active weapon's blood source (weapon vfunc `0x474`
+			// -> `+0x9c`) and publishes that entity's slot 12 on the same panel, which is how a
+			// carried blood pack reads its remaining doses. This runtime has no blood-source weapon,
+			// so that arm has no producer and is left saying nothing.
+			FElysiumEntityHandle Source = PlayerEnt->FeedState.Target;
+			if (World->Resolve(Source) == nullptr
+				&& !PlayerEnt->FeedState.bVictim && PlayerEnt->FeedState.bContinuation)
 			{
-				// Peer exists from accepted engage through the release tail. Target is intentionally
-				// absent before 4007 and cleared at 4006, so it cannot own the visible lifetime.
-				FeedTarget = PlayerEnt->FeedState.Peer;
-				bPaired = true;
-			}
-			else if (Previous.Feed.bVisible
-				&& World->GetFocusedUsable() == Previous.Feed.Target)
-			{
-				// Retail keeps the partially drained bar while the released victim remains focused.
-				// Focus loss, invalidation or travel clears it without a second gameplay owner.
-				FeedTarget = Previous.Feed.Target;
+				Source = PlayerEnt->FeedState.Peer;
 			}
 
-			const FElysiumEntity* TargetEnt = World->Resolve(FeedTarget);
-			const FElysiumCombatCharacter* Victim = TargetEnt ? TargetEnt->AsCombatCharacter() : nullptr;
-			if (Victim && !Victim->IsInert())
+			ElysiumFeedBar::FUpdate Update;
+			const FElysiumEntity* SourceEnt = World->Resolve(Source);
+			// No `IsInert` test: retail reads slot 12 off whatever the handle resolves to and lets
+			// the value gate decide. A victim killed mid-feed still has whatever it had left, and
+			// one drained to nothing is hidden because it is at zero, not because it is dead.
+			if (const FElysiumCombatCharacter* Victim =
+				SourceEnt ? SourceEnt->AsCombatCharacter() : nullptr)
 			{
-				FElysiumFeedView& Feed = Next.Feed;
-				Feed.bVisible = true;
-				Feed.bPaired = bPaired;
-				Feed.Target = FeedTarget;
-				Feed.BloodPool = FMath::Max(0, Victim->BloodPoolValue());
-				const int32 AuthoredMax = Victim->Sheet.GetCurrent(
-					EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPoolMax);
-				// Presentation needs a positive denominator even in a content-free fixture. Never write
-				// the clamp back: authored sheet state remains the sole gameplay value. Retain the first
-				// observed capacity when an NPC has no authored maximum, or the denominator would shrink
-				// with every pulse and the visible bar would incorrectly remain full.
-				const int32 ObservedMax = Previous.Feed.Target == FeedTarget
-					? Previous.Feed.MaxBloodPool : 0;
-				Feed.MaxBloodPool = FMath::Max(1,
-					FMath::Max(Feed.BloodPool, FMath::Max(AuthoredMax, ObservedMax)));
-				Feed.Phase = static_cast<uint8>(PlayerEnt->FeedState.Phase);
+				Update.bHasSource = true;
+				Update.Source = Source;
+				// The value, as the server sends it: the victim's own slot 12 `BloodPool`, negatives
+				// masked to zero (`((int)v < 1) - 1 & v` at `0x10175c9c`).
+				Update.BloodPool = FMath::Max(0, Victim->BloodPoolValue());
+				// The DENOMINATOR, recovered: `CFeedBar::vfunc114` `0x100503d0` seeds it with the
+				// literal `0xf` and then overrides it with the player's replicated
+				// `m_iClientFeedMaxBloodPool` whenever that is non-zero. That field is written in
+				// exactly one place — `CBaseCombatCharacter::EnterGrappleState` `0x10329760`, from
+				// the VICTIM's char-template `Attributes[BloodPool]` (`template+0xd0` `+0x30`, the
+				// same word `CAI_BaseNPCTroika` `0x1029a0b0` seeds the victim's own slot 12 from).
+				// So the bar reads "how much of the pool this critter stood up with is left", not a
+				// share of the 15-point stat cap and not `BloodPool_Max` — slot 13 has no reader in
+				// the binary at all. A victim that authors no template pool falls back to its own
+				// stat ceiling, which the shipped `stats.txt` makes the same 15 the client hardcodes.
+				Update.AuthoredMax = Victim->TemplateBloodPool() > 0
+					? Victim->TemplateBloodPool() : Victim->BloodPoolCapacity();
+			}
+			// `+0x14d4`/`+0x14d0`, the replicated feeding flag and pulse interval `vfunc98` reads.
+			// The release family has the fangs off the neck and performs no pulse, so it does not
+			// drive the anticipation ramp either.
+			Update.bPaired = PlayerEnt->IsFeedPaired() && !PlayerEnt->FeedState.bVictim;
+			Update.bPulsing = PlayerEnt->FeedState.IsTransacting()
+				&& PlayerEnt->FeedState.Phase != EElysiumFeedPhase::Release;
+			Update.PulseInterval = PlayerEnt->FeedState.Interval;
+			Update.Phase = static_cast<uint8>(PlayerEnt->FeedState.Phase);
+
+			Next.Feed = ElysiumFeedBar::Update(Previous.Feed, Update, World->NowSeconds());
+
+			// The owner's live run has no other way to read these numbers. Gated on the three the
+			// panel is built from — the anticipation ramp moves `Percent` every frame and would
+			// otherwise flood the log.
+			if (Next.Feed.bVisible != Previous.Feed.bVisible
+				|| Next.Feed.BloodPool != Previous.Feed.BloodPool
+				|| Next.Feed.MaxBloodPool != Previous.Feed.MaxBloodPool
+				|| Next.Feed.Target != Previous.Feed.Target)
+			{
+				UE_LOG(LogElysiumFeed, Display,
+					TEXT("Feed bar: visible=%d blood=%d max=%d percent=%.2f paired=%d source=%s"),
+					Next.Feed.bVisible ? 1 : 0, Next.Feed.BloodPool, Next.Feed.MaxBloodPool,
+					Next.Feed.Percent, Next.Feed.bPaired ? 1 : 0, *Next.Feed.Target.ToString());
 			}
 		}
 
@@ -528,7 +559,12 @@ void UElysiumPresentationSubsystem::Publish()
 			Vit.MaxHealth = PlayerEnt->MaxHealth;
 			const FElysiumSheet& Sheet = PlayerEnt->Sheet;
 			Vit.BloodPool  = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool);
-			Vit.MaxBloodPool = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPoolMax);
+			// The droplet COUNT is the pool's ceiling, so it is the `BloodPool` stat definition's own
+			// effective Max — the bound `IncBloodPool` refuses to pass — and the shipped `stats.txt`
+			// makes that 15, i.e. three groups of five. Reading slot 13 `BloodPool_Max` here was the
+			// defect: that stat is a critter's STARTING pool (its `Default` is 10), it never clamps
+			// `BloodPool`, and dividing by it hid the third group.
+			Vit.MaxBloodPool = PlayerEnt->BloodPoolCapacity();
 			Vit.Humanity   = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity);
 			Vit.Masquerade = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade);
 		}

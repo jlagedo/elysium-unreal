@@ -242,6 +242,10 @@ struct FElysiumScareRecord
 
 // The ordinary (paired mode 0) state family: engage, bite, feed loop, release. The attacker
 // advances the pair; a role-1 victim never chooses the next base activity.
+// The feed transaction's own log channel. Shared rather than file-static because the presentation
+// layer publishes the victim blood meter and has to report the same numbers on the same channel.
+ELYSIUMUE_API DECLARE_LOG_CATEGORY_EXTERN(LogElysiumFeed, Log, All);
+
 enum class EElysiumFeedPhase : uint8
 {
 	None = 0,
@@ -1094,8 +1098,15 @@ public:
 	//
 	// A character holding nothing answers false for the whole band, which is an ordinary negative and
 	// not a failure: the record joins the unclaimed census the same way an id no handler owns does.
-	// The body's other routes — weapon state 4006/4007, sound 4020, attached models 4100..4102 — are
-	// not claimed yet and reach the census by the same door.
+	//
+	// Past the forward, retail's own `switch` — and this is all of it. Every arm is claimed here
+	// (`docs/vtmb/animation_events.md` -> "Port status — combat character band"):
+	//   4006/4007  the feed/grapple boundary, guarded on the paired partner and role, into
+	//              `OnFeedAnimEvent` -> `FeedInterrupt` / `FeedBegin` (`+0x584` / `+0x57c`);
+	//   4020       the named DISCIPLINE's callback hit, mocked — see `HandleDisciplineAnimEvent`;
+	//   4100/4101/4102  the `m_hAnimFollowModel` ornament slot.
+	// An id in none of them still falls to `CBaseAnimating::HandleAnimEvent` and the census, which
+	// is retail's `default:` arm.
 	//
 	// SEAM — retail forwards on a second condition beside the band: an event whose SOURCE pointer is
 	// not this animating object also goes to the weapon, whatever its id. `FElysiumAnimEvent` carries
@@ -1103,6 +1114,37 @@ public:
 	// walks is the body's own; a second producer that plays one character's clip through another's
 	// dispatcher is what would make the clause reachable.
 	virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) override;
+
+	// `m_hAnimFollowModel` (`+0x5a8`) — the ORNAMENT slot, as the port spells it.
+	//
+	// Retail holds an EHANDLE to a `prop_dynamic_ornament` entity it created; the port holds the
+	// retail-formatted model path the slot currently names, because the ornament here is a component
+	// the visual seam owns rather than an entity the world does. Empty is retail's `0xffffffff`:
+	// nothing worn, which is also the state its creation-failure tail leaves behind.
+	//
+	// Not saved. Retail's handle is a live entity reference and this is its shadow; the slot is
+	// re-established by the very next 4102 the running clip fires, which `cigarette_Idle` and
+	// `cigarette_Inhale` do on every loop wrap.
+	FString AnimFollowModel;
+
+	// The 4006/4007 arm. Retail guards BOTH on the paired partner at `+0x1538` being valid and the
+	// paired role at `+0x153c` being 0 — the ATTACKER half — and a record that fails the guard is
+	// SWALLOWED rather than passed to the base handler (`1032e5b0`/`1032e630`), so this answers true
+	// either way. Returns what retail's arm did with it, which is why the refusal is a Verbose line
+	// and not a census row.
+	bool HandleFeedBoundaryAnimEvent(int32 EventId);
+
+	// The 4020 arm. MOCKED — see the implementation for exactly what retail does and what is missing.
+	bool HandleDisciplineAnimEvent(const FString& Options);
+
+	// The 4100/4101/4102 arm, in retail's order: remove what is worn, then (4100/4102) format the
+	// path and attach. A failure to create leaves the slot empty rather than raising.
+	bool HandleFollowModelAnimEvent(const struct FElysiumAnimEvent& Event);
+
+	// Whether the record this boundary is scheduled for will arrive from the clip's OWN timeline
+	// instead — the same question `FElysiumWeapon::CommitArrivesFromAnimEvent` asks of a shot
+	// commit. True stands the scheduled raise down so the authored record is the one that fires.
+	bool FeedBoundaryArrivesFromAnimEvent(int32 EventId) const;
 
 	// The melee opposed records (`combat-and-damage.md` § "Opposed record and reaction margin").
 	// The defender's own array, keyed by attacker. A second contact from the same attacker REPLACES
@@ -1329,6 +1371,29 @@ public:
 	void AddBlood(int32 Delta);
 	// The `BloodPool` slot's current value — what a feed pulse moves and what teardown reads.
 	int32 BloodPoolValue() const;
+	// The `BloodPool` slot's CEILING — the stat DEFINITION's effective Max, which is the whole of
+	// what bounds the pool. `CBaseCombatCharacter::IncBloodPool` `0x10338cb0` is
+	// `CVStatList_t::IncBase(0xc)` `0x10200d60`, and that refuses the dot unless the base is below
+	// the max the stat's own info block resolves (`FUN_101ff060` off `CVStatInfo_t+0xc/+0x10`);
+	// `DecBloodPool` `0x10338df0` -> `DecBase` `0x10200ea0` is the same test against Min.
+	// `stats.txt` authors `Min 0` / `Max 15` / `Default 10` on slot 12, and the
+	// `"Max" "Generation_Blood_Pool_Max"` line above it is COMMENTED OUT in the shipped file —
+	// `Generation_Blood_Pool_Max` has no reader anywhere in `vampire.dll`, so the literal 15 is the
+	// cap for every character regardless of `Generation`.
+	//
+	// This is emphatically NOT `BloodPool_Max` (slot 13). That stat's own comment in `stats.txt`
+	// calls it "the Maximum (generally meaning the 'starting' bloodpool for a critter)"; it is a
+	// separate slot that nothing in the binary reads as a clamp, and the meter that divides by it
+	// draws the wrong number of points.
+	int32 BloodPoolCapacity() const;
+	// The char TEMPLATE's authored `BloodPool` — the full pool this critter was spawned with, held
+	// separately from the live slot because the live slot moves as it is drained. Retail reaches
+	// it through `GetCharTemplate()` into the template table and reads `Attributes[BloodPool]`
+	// (`CAI_BaseNPCTroika` `0x1029a0b0` seeds the sheet from `template+0xd0` `+0x30`, and
+	// `CBaseCombatCharacter::EnterGrappleState` `0x10329760` latches the same word into the
+	// feeder's replicated `m_iClientFeedMaxBloodPool` `+0x1a90`). Zero when this character resolves
+	// no template, which is retail's own "nothing authored" answer.
+	virtual int32 TemplateBloodPool() const { return 0; }
 	// Spend `Blood` blood points to heal `BloodToHealthRatio` (10) damage each — `VampHeal_Info`'s
 	// `VampFeedingHeal_Info`. Returns the damage actually healed.
 	int32 BloodHeal(int32 Blood);

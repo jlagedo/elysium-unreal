@@ -61,6 +61,7 @@
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumSoundVolumeTable.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Tests/ElysiumRulebookTestFixture.h"
 #include "Visual/ElysiumRopes.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
@@ -4077,6 +4078,39 @@ bool FElysiumSheetContentTest::RunTest(const FString&)
 		Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health), 0);
 	TestEqual(TEXT("Humanity seeds to 7"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Humanity), 7);
 	TestEqual(TEXT("BloodPool seeds to 10"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::BloodPool), 10);
+	// The blood pool's CAP, and the stat that is not it. `BloodPool` (slot 12) authors `Min 0` /
+	// `Max 15`; the `"Max" "Generation_Blood_Pool_Max"` line beside it is commented out in the
+	// shipped file and `Generation_Blood_Pool_Max` has no reader anywhere in `vampire.dll`, so 15
+	// is the ceiling `IncBloodPool` -> `CVStatList_t::IncBase(0xc)` `0x10200d60` refuses to pass for
+	// every character at every Generation — and therefore the number of droplets the meter draws.
+	// `BloodPool_Max` (slot 13) is a SEPARATE stat: the file's own comment calls it the "starting"
+	// pool for a critter, its Default is 10, and nothing clamps `BloodPool` to it.
+	{
+		int32 PoolMin = 0, PoolMax = 0;
+		Sheet.BoundsFor(EC::Attributes, ElysiumSlot::BloodPool, &Stats, nullptr, PoolMin, PoolMax);
+		TestEqual(TEXT("the BloodPool stat definition floors at 0"), PoolMin, 0);
+		TestEqual(TEXT("the BloodPool stat definition caps at 15 — three groups of five droplets"),
+			PoolMax, 15);
+		TestEqual(TEXT("BloodPool_Max is a different stat and seeds to its own Default 10"),
+			Sheet.GetCurrent(EC::Attributes, ElysiumSlot::BloodPoolMax), 10);
+		TestNotEqual(TEXT("...so the meter must not divide by it"),
+			Sheet.GetCurrent(EC::Attributes, ElysiumSlot::BloodPoolMax), PoolMax);
+		// The cap is a literal, not a generation lookup: the table exists in the file but the line
+		// that would name it is commented out, so `BloodPool`'s Max never resolves to a stat name.
+		if (const FElysiumStat* Pool = Stats.Container(EC::Attributes).At(ElysiumSlot::BloodPool))
+		{
+			TestTrue(TEXT("BloodPool's authored Max is the literal 15, not a stat name"),
+				Pool->MaxExpr.IsNumeric());
+			TestEqual(TEXT("...and it reads 15"), Pool->Max, 15);
+		}
+		// A dot cannot be raised past it, which is the same bound the meter's droplet count is.
+		Sheet.SetBase(EC::Attributes, ElysiumSlot::BloodPool, 15);
+		Sheet.RecomputeCurrent(&Stats);
+		TestFalse(TEXT("a full pool refuses another point"),
+			Sheet.IncBase(EC::Attributes, ElysiumSlot::BloodPool, &Stats));
+		Sheet.SetBase(EC::Attributes, ElysiumSlot::BloodPool, 10);
+		Sheet.RecomputeCurrent(&Stats);
+	}
 	TestEqual(TEXT("Masquerade starts clean"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Masquerade), 0);
 	TestEqual(TEXT("an attribute seeds to 1"), Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Strength), 1);
 	TestEqual(TEXT("an ability seeds to 0"), Sheet.GetCurrent(EC::Abilities, /*Brawl*/ 1), 0);
@@ -5990,6 +6024,39 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::BloodPool, 0);
 	Player->RecomputeSheet();
 	TestEqual(TEXT("the real template supplies the blueblood's blood pool"), Child->BloodPoolValue(), 9);
+	// The two meters, against the REAL `stats.txt`. This world carries no rulebook subsystem, so the
+	// table is bound as the headless fallback for the length of this block only — nothing inside it
+	// mutates a sheet, and the feed transaction below runs unbound exactly as it did before.
+	//
+	// The droplet capacity is the `BloodPool` stat DEFINITION's effective Max — 15, three groups of
+	// five — and NOT slot 13 `BloodPool_Max`, the starting-pool stat whose Default is 10 and which
+	// the HUD used to divide by. The victim's bar denominator is a third number again: the victim's
+	// own char-template `BloodPool`, which retail latches into the feeder's replicated
+	// `m_iClientFeedMaxBloodPool` at `EnterGrappleState` `0x10329760` (`template+0xd0` `+0x30`) and
+	// `CFeedBar::vfunc114` `0x100503d0` divides by. For this blueblood that is the 9 it stood up
+	// with.
+	{
+		FElysiumStatTable RealStats;
+		FString StatsError;
+		if (TestTrue(TEXT("stats.txt loads"), RealStats.Load(StatsError)))
+		{
+			ElysiumRulebookTest::FScopedRulebookBinding StatsBinding;
+			ElysiumSheetRules::FBoundTables Bound;
+			Bound.Stats = &RealStats;
+			ElysiumRulebookTest::FScopedRulebookBinding::Bind(Bound);
+			TestEqual(TEXT("a character's droplet capacity is the BloodPool stat definition's Max"),
+				Child->BloodPoolCapacity(), 15);
+			TestNotEqual(TEXT("...which is not the BloodPool_Max slot the HUD used to read"),
+				Child->Sheet.GetCurrent(EElysiumTraitContainer::Attributes,
+					ElysiumSlot::BloodPoolMax), 15);
+		}
+		else
+		{
+			AddError(StatsError);
+		}
+	}
+	TestEqual(TEXT("the victim's feed-bar denominator is its template-authored spawn pool"),
+		Child->TemplateBloodPool(), 9);
 	TestTrue(TEXT("the neutral FastFood blueblood does not resist"), !Child->ResistsFeeding());
 	Services.FeedTarget = Child->Handle;
 	const int32 RowsBefore = Sink->Rows.Num();

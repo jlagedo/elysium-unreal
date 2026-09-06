@@ -60,7 +60,7 @@ def test_missing_or_unverified_publication_cannot_be_blessed(failure):
 
 def test_root_never_manages_itself_and_duplicate_exports_are_rejected():
     source, rows = declarations(), published([roots.ROOT_PACKAGE])
-    assert len(roots.plan_roots(source, rows)["targets"]) == 5
+    assert len(roots.plan_roots(source, rows)["targets"]) == len(roots.GLOBALS)
     with pytest.raises(roots.CookRootError, match="duplicate"):
         roots.plan_roots(source, rows + [rows[0]])
     with pytest.raises(roots.CookRootError, match="escaped"):

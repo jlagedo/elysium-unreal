@@ -134,8 +134,10 @@ namespace ElysiumFeed
 	FString AudioPath(bool bVictim, bool bMale, const TCHAR* Phase);
 
 	// --- The animation-event bridge, driven from decoded clip metadata ------------------------
-	// The bake carries no MDL animation events (see the header comment in `ElysiumFeed.cpp`), so
-	// the state machine raises 4007/4006 itself at the authored cycles `feeding.md` § "Representative
+	// The authored 4007/4006 records now reach `FElysiumCombatCharacter::HandleAnimEvent` from the
+	// clip's own timeline (see the header comment in `ElysiumFeed.cpp`); these constants are the
+	// SCHEDULE that stands behind them — the estimate the state machine raises the boundary from
+	// when no dispatched clip is going to fire the record. Cycles `feeding.md` § "Representative
 	// clip timing" decoded for the ordinary front variants. Seconds, at the authored 30 fps. A body
 	// that resolves its own clip length overrides these; a headless world uses them as-is, which is
 	// what keeps the transaction independent of a rendered body.

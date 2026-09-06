@@ -48,9 +48,14 @@ struct FElysiumVitals
 	bool operator!=(const FElysiumVitals& Other) const { return !(*this == Other); }
 };
 
-// The currently fed-on target, or the just-released target while ordinary +use focus still owns it.
+// The victim blood meter — `client.dll` `CFeedBar`, projected.
+//
 // Gameplay remains on FElysiumFeedState; this is the immutable screen projection sampled by the
 // publisher. bPaired suppresses only the reticle — the capture keeps the rest of the HUD visible.
+//
+// The panel is NOT owned by "who the player is paired with" or "what the player is looking at".
+// Retail owns it with two things and only two: the last VALUE the server sent, and a hide deadline
+// refreshed by that send. `ElysiumFeedBar::Update` below is the whole rule.
 struct FElysiumFeedView
 {
 	bool bVisible = false;
@@ -59,7 +64,146 @@ struct FElysiumFeedView
 	int32 BloodPool = 0;
 	int32 MaxBloodPool = 0;
 	uint8 Phase = 0;
+
+	// The DRAWN fraction, 0..1 — retail's integer percent at `CFeedBar+0x1a8` divided by 100, less
+	// the pre-pulse anticipation `vfunc98` subtracts. The widget draws this and derives nothing.
+	float Percent = 0.0f;
+
+	// `CFeedBar+0x1b4`: the absolute substrate second after which the panel comes down once the
+	// player is no longer holding the pair. Zero means "not held up".
+	double HideDeadline = 0.0;
+
+	// `CFeedBar+0x1b0`: when the value last changed, i.e. when the last `FeedBar` message would
+	// have been sent. Seeds both the deadline and the anticipation ramp.
+	double LastChangeSeconds = 0.0;
 };
+
+// The `CFeedBar` value and lifetime contract, as one total function over the view.
+//
+// RECOVERED (`docs/vtmb/feeding.md` § "CFeedBar — the victim blood meter"):
+//   * The value arrives as the one-byte `FeedBar` usermsg, sent by `CBasePlayer::UpdateClientActionState`
+//     `vampire.dll` `0x101755d0` ONLY when it differs from the cached `m_iClientFeedBloodPool`
+//     (`+0x1a8c`), from the victim's stat slot 12 `BloodPool`, negatives masked to zero.
+//   * `CFeedBar::vfunc114` `client.dll` `0x100503d0` is `(int iValue, bool bShow)`. It seeds the
+//     denominator with the literal 15, overrides it with the player's replicated
+//     `m_iClientFeedMaxBloodPool` (`+0x14cc`) when non-zero, then:
+//       `iValue <= 0`  -> percent 0 and SetVisible(0)      (`JLE 0x100504b3`)
+//       `iValue >= 15` -> percent 0 and SetVisible(0)      (`CMP EDI,0xf / JGE 0x100504d4`)
+//       otherwise      -> percent = iValue*100/max, and if bShow: SetVisible(1) and
+//                         deadline = curtime + 3.0 (`_DAT_10227ee0`, the same rdata double
+//                         `SimpleSpline` `0x100fdb30` reads as its 3).
+//   * `CFeedBar::vfunc98` `0x10050560` (paint) hides the panel when the player is not feeding
+//     (`+0x14d4` clear) and curtime has passed that deadline.
+// So retail NEVER draws an empty bar, and its post-feed persistence is a three-second timer, not
+// a focus test.
+namespace ElysiumFeedBar
+{
+	// `_DAT_10227ee0`.
+	inline constexpr double HoldSeconds = 3.0;
+	// The drawn window, closed at both ends by `vfunc114`. The upper bound is the same literal 15
+	// the client hardcodes as the default denominator, and it is retail's own quirk: a victim
+	// standing at exactly its 15-point stat ceiling shows no meter at all.
+	inline constexpr int32 MinDrawnValue = 1;
+	inline constexpr int32 HiddenAtOrAbove = 15;
+
+	// One frame's worth of what the server would have had to say. `bHasSource` false is "no message
+	// this frame", which is the ordinary state and is NOT the same as "hide".
+	struct FUpdate
+	{
+		bool bHasSource = false;
+		FElysiumEntityHandle Source;
+		int32 BloodPool = 0;
+		// The victim's authored pool — the value `CBaseCombatCharacter::EnterGrappleState`
+		// `0x10329760` replicates into `m_iClientFeedMaxBloodPool`.
+		int32 AuthoredMax = 0;
+		// `+0x14d4`, the replicated feeding flag `vfunc98` reads as its keep-alive. This runtime has
+		// no separate replicated flag: the pair exists exactly while the feed is held, so the pair
+		// is the flag.
+		bool bPaired = false;
+		// `+0x14d0`, the replicated pulse interval, and whether it is running.
+		bool bPulsing = false;
+		float PulseInterval = 0.0f;
+		uint8 Phase = 0;
+	};
+
+	inline FElysiumFeedView Update(const FElysiumFeedView& Previous, const FUpdate& In, double Now)
+	{
+		// Everything the last message left standing carries forward. A frame with no message is not
+		// an instruction to hide — the deadline below is.
+		FElysiumFeedView Out = Previous;
+		Out.bPaired = In.bPaired;
+		Out.Phase = In.Phase;
+
+		if (In.bHasSource)
+		{
+			const int32 Value = FMath::Max(0, In.BloodPool);
+			// The denominator is sticky for the life of one target, because nothing in retail ever
+			// clears `m_iClientFeedMaxBloodPool` — the meter held through the release tail keeps the
+			// denominator the grapple opened with.
+			const int32 StickyMax = (Previous.Target == In.Source) ? Previous.MaxBloodPool : 0;
+			const int32 Max = FMath::Max(1, FMath::Max(In.AuthoredMax, StickyMax));
+			// The change gate is the usermsg's own. Retail caches only the value, so re-feeding a
+			// second victim standing at the first one's number sends nothing; this keys on the
+			// target as well, which is a named divergence from a retail defect, not from a rule.
+			const bool bChanged = Previous.Target != In.Source || Previous.BloodPool != Value;
+
+			Out.Target = In.Source;
+			Out.BloodPool = Value;
+			Out.MaxBloodPool = Max;
+
+			if (Value < MinDrawnValue || Value >= HiddenAtOrAbove)
+			{
+				// `vfunc114`'s two hide arms. Applied on every observation rather than only on a
+				// change: the first out-of-window message hides it and no later one could re-show
+				// it, so the two are observationally identical and this one cannot leave an empty
+				// bar standing.
+				Out.bVisible = false;
+				Out.HideDeadline = 0.0;
+			}
+			else if (bChanged)
+			{
+				// bShow. The one recovered `bShow == false` call is the constructor's
+				// `vfunc114(15, false)`, which is already hidden by the upper arm, so every call
+				// that can raise the panel raises it.
+				Out.bVisible = true;
+				Out.HideDeadline = Now + HoldSeconds;
+			}
+			if (bChanged)
+			{
+				Out.LastChangeSeconds = Now;
+			}
+		}
+
+		// `vfunc98`'s paint-time hide. It only ever hides: a panel the value gate took down stays
+		// down until a changed value raises it again.
+		if (Out.bVisible && !Out.bPaired && Now >= Out.HideDeadline)
+		{
+			Out.bVisible = false;
+		}
+
+		if (!Out.bVisible)
+		{
+			Out.Percent = 0.0f;
+			return Out;
+		}
+
+		const float Denominator = float(FMath::Max(1, Out.MaxBloodPool));
+		float Percent = float(Out.BloodPool) / Denominator;
+		if (In.bPulsing && In.PulseInterval > UE_KINDA_SMALL_NUMBER)
+		{
+			// The pre-pulse anticipation, recovered from `vfunc98` `0x100507a5`: while the feed is
+			// pulsing it subtracts `(100/max) * clamp((curtime - lastChange) / pulseInterval, 0, 1)`
+			// from the drawn percent, so the bar visibly slides one blood point's worth down across
+			// each interval instead of stepping. Expressed here as a fraction rather than retail's
+			// truncated integer percent.
+			const float T = FMath::Clamp(
+				float(Now - Out.LastChangeSeconds) / In.PulseInterval, 0.0f, 1.0f);
+			Percent -= T / Denominator;
+		}
+		Out.Percent = FMath::Clamp(Percent, 0.0f, 1.0f);
+		return Out;
+	}
+}
 
 // FElysiumDialogueView — one conversation turn, snapshotted.
 //

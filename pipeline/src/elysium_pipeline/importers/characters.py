@@ -18,6 +18,7 @@ from elysium_pipeline.skeletal_stage.geometry import geometry
 from elysium_pipeline.skeletal_stage.unit import ModelUnit, read_document, SkeletalUnitError
 from elysium_pipeline.placed_models import rest_candidates
 from elysium_pipeline.model_usage import skeletal_candidate, discover_placed_animation_models
+from elysium_pipeline import ornament_models
 
 #: The code half of every staged character entry: bump when a stage rule changes what it emits.
 #: The data half is the unit's sha256 and the bank/wield inputs. Code is never hashed
@@ -222,12 +223,15 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
     root, destination = Path(export_root), Path(destination)
     units, failures = {}, []
     body_trees = {}
+    ornament_requests = []
     for path in sorted((root / "models").rglob("*.glb")):
         document = read_document(path)
         extension = document["extensions"][MODEL_EXTENSION]
         identity = extension["identity"]
         if identity["asset"] in units:
             raise SkeletalUnitError(f"duplicate model unit {identity['asset']}")
+        ornament_requests.extend(
+            ornament_models.collect_requests(extension["mdl"]["sequences"], identity["asset"]))
         units[identity["asset"]] = {
             "path": path, "identity": identity,
             "boneCount": len(extension["mdl"]["bones"]),
@@ -246,6 +250,13 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
     if wield_catalogue["failures"]:
         raise SkeletalUnitError(f"wield unit closure is incomplete: {wield_catalogue['failures']}")
     wield_models = set(wield_catalogue["modelIds"])
+    # 4100/4102 ornaments (`ornament_models`): the event's own options string is the only place
+    # these models are demanded from -- no entity, item or include edge reaches them.
+    ornaments = ornament_models.resolve(ornament_requests, published_ids=units)
+    ornament_ids = set(ornaments["modelIds"])
+    if ornaments["sourceGaps"]:
+        log(f"ornament source gaps: {len(ornaments['sourceGaps'])} animation events name a model "
+            f"absent from the published source; retained in the catalogue")
     if wield_catalogue["sourceGaps"]:
         log(f"wield source gaps: {len(wield_catalogue['sourceGaps'])} authored references have no install member; retained in the catalogue")
     missing_sets = set(cinematic_sets) - units.keys()
@@ -270,6 +281,7 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
         selected.update(discover_placed_animation_models(root, units))
         selected.update(cinematic_sets)
         selected.update(wield_models)
+        selected.update(ornament_ids)
     pending = list(selected)
     while pending:
         id = pending.pop()
@@ -285,7 +297,8 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
             row = units[id]
             roles = set(row["identity"].get("roles", ()))
             cinematic = id in cinematic_sets
-            bank = roles == {"include-only"} or (cinematic and not roles.intersection({"character-body", "placed-prop"}))
+            # An ornament is spawned as a visible prop; it always needs its own mesh.
+            bank = (roles == {"include-only"} or (cinematic and not roles.intersection({"character-body", "placed-prop"}))) and id not in ornament_ids
             assets.append(stage_unit(row["path"], destination, mesh=not bank,
                                      content_root=content_root, cinematic=cinematic, bank_owners=bank_owners,
                                      wield_bodies=body_trees if id in wield_models else None))
@@ -318,6 +331,7 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
         "cinematicSets": cinematic_sets,
         "bankPartition": partition,
         "wieldCatalogue": wield_catalogue,
+        "ornamentDemand": ornaments,
         "inventory": [{"assetId": id, "shape": row["identity"]["shape"],
                        "roles": row["identity"].get("roles", []), "physics": row["physics"], "cloth": row["cloth"],
                        "selected": id in selected,

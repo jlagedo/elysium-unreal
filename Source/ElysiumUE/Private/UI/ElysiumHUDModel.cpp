@@ -70,6 +70,7 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	bFeedVictimVisible = View.Feed.bVisible;
 	FeedVictimBlood = View.Feed.BloodPool;
 	FeedVictimBloodCapacity = View.Feed.MaxBloodPool;
+	FeedVictimPercent = View.Feed.Percent;
 	UseIcon = View.Interaction.Icon;
 	UsePromptAlpha = View.Interaction.bVisible ? View.Interaction.PromptAlpha : 0.0f;
 	bUseActionable = View.Interaction.bActionable;

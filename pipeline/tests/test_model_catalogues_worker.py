@@ -85,16 +85,16 @@ def test_worker_cli_arguments(command):
     assert worker.argument(command, "Missing") == ""
 
 
-def test_worker_publishes_all_three_then_fresh_verifies_all_fields_and_refs(native):
+def test_worker_publishes_every_catalogue_then_fresh_verifies_all_fields_and_refs(native):
     report = worker.run(native.path)
-    assert report["complete"] and report["imported"] == 3
-    assert len(native.calls["saved"]) == 3 and len(native.calls["pruned"]) == 1
+    assert report["complete"] and report["imported"] == len(KINDS)
+    assert len(native.calls["saved"]) == len(KINDS) and len(native.calls["pruned"]) == 1
     root, keep, scope, owner = native.calls["pruned"][0]
     assert root == "/ElysiumBaked/Models/_Corpus" and scope == root + "/" and owner == PRODUCER
     assert keep == set(native.manifest["keep"])
     saved = list(native.calls["saved"])
     checked = verifier.run(native.path)
-    assert checked["complete"] and checked["verified"] == 3
+    assert checked["complete"] and checked["verified"] == len(KINDS)
     assert checked["references"] == len(native.manifest["references"])
     assert checked["hardReferences"] > 0 and checked["softReferences"] > 0
     assert native.calls["saved"] == saved  # verifier is read-only
@@ -103,14 +103,14 @@ def test_worker_publishes_all_three_then_fresh_verifies_all_fields_and_refs(nati
 def test_current_recipe_does_not_hide_altered_native_fields(native):
     assert worker.run(native.path)["complete"]
     before = len(native.calls["saved"])
-    assert worker.run(native.path)["reused"] == 3
+    assert worker.run(native.path)["reused"] == len(KINDS)
     assert len(native.calls["saved"]) == before
     asset = native.db[object_path(native.manifest["assets"][0]["assetPath"])]
     asset.payload["data"]["models"].clear()
     assert not verifier.run(native.path)["complete"]
     assert len(native.calls["saved"]) == before
     repaired = worker.run(native.path)
-    assert repaired["complete"] and repaired["imported"] == 1 and repaired["reused"] == 2
+    assert repaired["complete"] and repaired["imported"] == 1 and repaired["reused"] == len(KINDS) - 1
     assert native.calls["warnings"]
 
 

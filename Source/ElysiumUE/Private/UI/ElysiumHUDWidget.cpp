@@ -65,6 +65,16 @@ namespace
 				ElysiumUI::Palette::BoneDim.G, ElysiumUI::Palette::BoneDim.B, 0.45f));
 	}
 
+	// The blood rail's droplet slots, and how many sit in a group. `stats.txt` bounds `BloodPool`
+	// at `Min 0` / `Max 15` and nothing narrows it — the `Generation_Blood_Pool_Max` line beside it
+	// is commented out in the shipped file — so 15 is the highest capacity the model can ever
+	// publish and the rail is built with exactly that many slots. Retail's right rail reads the
+	// pool in groups of five (`docs/vtmb/vtmb-ui.md`), which the spacers below reproduce; the third
+	// group is the one a wrong capacity used to collapse. Slots at or past `BloodCapacity` collapse,
+	// so a narrower ceiling (a trait effect capping the pool) still draws correctly.
+	constexpr int32 GBloodDropletSlots = 15;
+	constexpr int32 GBloodDropletsPerGroup = 5;
+
 	TSharedRef<SWidget> BloodDroplet(UElysiumHUDModel* Model, int32 Index)
 	{
 		return SNew(SBox)
@@ -130,9 +140,9 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		EElysiumFontRole::Data, EElysiumFontWeight::Regular, ElysiumUI::Type::Caption);
 
 	TSharedRef<SHorizontalBox> BloodRow = SNew(SHorizontalBox);
-	for (int32 Index = 0; Index < 15; ++Index)
+	for (int32 Index = 0; Index < GBloodDropletSlots; ++Index)
 	{
-		if (Index == 5 || Index == 10)
+		if (Index > 0 && Index % GBloodDropletsPerGroup == 0)
 		{
 			BloodRow->AddSlot().AutoWidth().Padding(3, 0)[SNew(SSpacer).Size(FVector2D(1, 1))];
 		}
@@ -411,12 +421,12 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 			SNew(SBorder).BorderImage(White).BorderBackgroundColor(HUDOutline).Padding(2)
 			[
 				SNew(SProgressBar)
+				// The published fraction, drawn as it arrives. Deriving it here from the two
+				// counters would drop `CFeedBar`'s pre-pulse anticipation and would re-introduce
+				// the empty bar the view state now refuses to publish at all.
 				.Percent_Lambda([M]() -> TOptional<float>
 				{
-					return M && M->FeedVictimBloodCapacity > 0
-						? FMath::Clamp(float(M->FeedVictimBlood)
-							/ float(M->FeedVictimBloodCapacity), 0.0f, 1.0f)
-						: 0.0f;
+					return M ? FMath::Clamp(M->FeedVictimPercent, 0.0f, 1.0f) : 0.0f;
 				})
 				.FillColorAndOpacity(ElysiumUI::Palette::BloodLit)
 			]

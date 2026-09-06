@@ -59,6 +59,11 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "HUD|Feed")
 	int32 FeedVictimBloodCapacity = 0;
 
+	// The drawn fraction. The bar does NOT divide the two counters above: the published view already
+	// carries `CFeedBar`'s percent, including the pre-pulse anticipation the widget has no clock for.
+	UPROPERTY(BlueprintReadOnly, Category = "HUD|Feed")
+	float FeedVictimPercent = 0.0f;
+
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	EElysiumHUDReticle Reticle = EElysiumHUDReticle::None;
 

@@ -528,6 +528,31 @@ public:
 		return nullptr;
 	}
 
+	// The ORNAMENT a character's own clip hung on it — retail's `m_hAnimFollowModel` (`+0x5a8`),
+	// created by `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`) events 4100 and 4102 and
+	// taken away by 4101 (`docs/vtmb/animation_events.md` -> "Port status — combat character band").
+	//
+	// `RetailPath` is the model path the handler FORMATTED, not a model id: `"%s.mdl"` for 4100 and
+	// `"%s_%s.mdl"` with the gender word for 4102, lowercased. The seam looks it up in
+	// `DA_OrnamentModels` under exactly that key, so nothing on either side has to un-format it.
+	//
+	// Retail spawns a `prop_dynamic_ornament` (`FUN_10190e50`), sets its model, and bone-merges it
+	// onto the character (`FUN_10191170`: `SetAimEnt`, `SetParent` attachment 0, `SetOwnerEntity`,
+	// movetype none). The shipped rigs are 13-bone `Bip01` merge skeletons with one rest sequence,
+	// so the port's expression is a leader-posed skeletal component, as a wield model is.
+	//
+	// **Attaching REPLACES.** Retail removes the standing follow model before it creates the next
+	// one, unconditionally, so a second attach is the whole of what a swap is. False is the ordinary
+	// negative — the failure tail retail takes when `GetModelPtr` comes back null, which leaves the
+	// slot empty rather than raising.
+	virtual bool AttachOrnamentModel(USkeletalMeshComponent* Body, const FString& RetailPath)
+	{
+		return false;
+	}
+	// Event 4101, and the same removal the 4100/4102 arms run first. A body wearing nothing is the
+	// ordinary case and not a fault.
+	virtual void DetachOrnamentModel(USkeletalMeshComponent* Body) {}
+
 	// A quiet vocabulary probe: does Stem's clip vocabulary name ClipName, with no play attempted and
 	// no warning logged either way. The one caller today is an unauthored cross-disposition stance
 	// transition, which is a normal absence rather than a failure -- so it probes here before ever

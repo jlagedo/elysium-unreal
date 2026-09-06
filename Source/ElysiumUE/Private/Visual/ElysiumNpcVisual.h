@@ -118,4 +118,41 @@ namespace ElysiumNpcVisual
 	// path that changes what a character wields calls it rather than testing first.
 	void ClearWieldModel(USkeletalMeshComponent* Body);
 
+	// --- Ornaments: the follow model an animation event hung on the character --------------------
+	//
+	// `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`) events 4100/4102 spawn a
+	// `prop_dynamic_ornament` on a model path the record's own `options` field spells, bone-merge it
+	// onto the character and remember it in `m_hAnimFollowModel`; 4101 takes it away. The shipped
+	// rigs (`cigarette_male.mdl`: 13 `Bip01` bones, one rest sequence, no attachments) are merge
+	// skeletons with no motion of their own, so this is the leader-pose case a wield model already
+	// is. Recovery: `docs/vtmb/animation_events.md` -> "Port status — combat character band".
+
+	// The tag every installed ornament carries, and the second tag naming the retail-formatted path
+	// it was built from. The owner holds every other character's body and weapons too, so the first
+	// tag is what scopes a sweep and the second is what makes a re-issue answerable.
+	FName OrnamentComponentTag();
+	FName OrnamentPathTag(const FString& RetailPath);
+
+	// The ornament this body is wearing, or null. Walked rather than cached, for `FindWieldModel`'s
+	// reason: the body can be rebuilt under a caller still holding a stale pointer.
+	USkeletalMeshComponent* FindOrnamentModel(const USkeletalMeshComponent* Body);
+
+	// Hang `RetailPath`'s ornament on this body, replacing whatever it was already wearing.
+	//
+	// `RetailPath` is the string the handler FORMATTED (`"%s.mdl"` / `"%s_%s.mdl"`), lowercased —
+	// the key `DA_OrnamentModels` is written under. False is retail's own failure tail, which
+	// removes the standing model and leaves the slot empty rather than raising; a path with no
+	// catalogue row reports once per path and answers false.
+	//
+	// MODERNIZATION — a re-issue of the SAME path onto the same live body is a no-op instead of a
+	// destroy/rebuild. Retail removes and re-creates unconditionally, and `cigarette_Idle` and
+	// `cigarette_Inhale` re-fire 4102 on every loop wrap, so faithfulness here would churn a
+	// skeletal component and its render proxy roughly twice a second per smoking body for no
+	// observable difference. The guard is on the LIVE component, so a body that was rebuilt under
+	// the ornament still rebuilds it.
+	bool InstallOrnamentModel(USkeletalMeshComponent* Body, const FString& RetailPath);
+
+	// Event 4101, and the removal the 4100/4102 arms run first. Safe on a body wearing nothing.
+	void ClearOrnamentModel(USkeletalMeshComponent* Body);
+
 }

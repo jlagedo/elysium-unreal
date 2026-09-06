@@ -264,6 +264,19 @@ const TArray<FElysiumAnimEvent>* AElysiumMapActor::GetNpcEventTimeline(const FSt
 	return Bodies->GetNpcEventTimeline(OwnerStem, Label, OwnerRoot);
 }
 
+bool AElysiumMapActor::AttachOrnamentModel(USkeletalMeshComponent* Body, const FString& RetailPath)
+{
+	return Bodies && Bodies->AttachOrnamentModel(Body, RetailPath);
+}
+
+void AElysiumMapActor::DetachOrnamentModel(USkeletalMeshComponent* Body)
+{
+	if (Bodies)
+	{
+		Bodies->DetachOrnamentModel(Body);
+	}
+}
+
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 	const FElysiumClipSegment& Segment, float* OutSeconds)
 {

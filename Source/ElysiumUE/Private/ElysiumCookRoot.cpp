@@ -80,7 +80,8 @@ namespace
 		for (const TCHAR* Required : {TEXT("/ElysiumBaked/Models/_Corpus/DA_Cast"),
 			TEXT("/ElysiumBaked/ExpressionTables/_Corpus/DA_ExpressionTables"),
 			TEXT("/ElysiumBaked/Models/_Corpus/DA_WieldModels"), TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels"),
-			TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins")})
+			TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins"),
+			TEXT("/ElysiumBaked/Models/_Corpus/DA_OrnamentModels")})
 			if (!Packages.Contains(Required)) return Fail(Error, FString(TEXT("required global absent: ")) + Required);
 		return true;
 	}

@@ -1237,3 +1237,45 @@ equivalence results must not be interpreted as complete attribute equivalence: t
 found different source tangents in every previously aliased pilot pair. Native tangent storage,
 zero-tangent behavior, tangent-aware vertex identity and evaluated shading require their own
 verification before full geometry fidelity or legacy retirement can be claimed.
+
+### Ornament models (4100/4102)
+
+Animation events 4100 and 4102 spawn a `prop_dynamic_ornament` parented to the character —
+the cigarette, drink can, cell phone, playing cards, walkie-talkie, spray can, bum bottle and
+wineglass an idle puts in a hand. Their model paths exist nowhere but the event's own options
+string: `CBaseCombatCharacter::HandleAnimEvent` (`vampire.dll 0x1032e330`) formats `"%s.mdl"`
+for 4100 and `"%s_%s.mdl"` with `IsMale`'s "male"/"female" for 4102, and 4101 releases the
+handle. The recovery is in `docs/vtmb/animation_events.md` -> "Ornament models (4100/4102)".
+
+`pipeline/src/elysium_pipeline/ornament_models.py` owns the demand. `collect_requests` reads
+`mdl.sequences[i].events` from the published V2 model units — the character/bank GLBs plus the
+ornament models' own banks — and expands each 4100/4102 record with retail's own `sprintf`.
+The option is never repaired: an option that already carries `.mdl` keeps it, so the shipped
+wineglass request really is `wineglass.mdl_male.mdl` (the Unofficial Patch ships that literal
+file and V2 exported it). `resolve` keys each path lower-cased and forward-slashed, joins it to
+`vtmb:model:<path without .mdl>` and marks a path with no published unit `sourceAbsent`.
+
+Both whole-corpus walkers feed it from their existing pass, so the lane costs no extra read:
+`stage_characters` joins the resolved ids into its default selection beside the wield,
+cinematic and placed-animation sets — no entity, item, include or placement edge reaches these
+models, and half of them are only skeletal by shape — and never banks one (an ornament is a
+visible prop and always needs its own mesh). `build_model_catalogues` joins the same ids into
+`required_characters`. Nothing new is staged or imported: ornaments go through the ordinary
+skeletal path and land as `SK_`/`SKEL_`/`DA_` under `/ElysiumBaked/Models/<their own key>`.
+
+`/ElysiumBaked/Models/_Corpus/DA_OrnamentModels` (`ElysiumOrnamentCatalogue`, projected by
+`importers/ornament_catalogue.py`) is keyed by the **retail-formatted path**, because that is
+the only string the runtime has when the event fires. Each row carries `assetId`, `mesh`,
+`skeleton`, `sourceAbsent`, `bones` (the native reference-skeleton names, in the skeleton's own
+order), the events and gender words that asked for it, the raw options spellings, and the
+per-request source evidence. A source gap is published as a row with `sourceAbsent: true` and
+empty products, which keeps "retail asked for a file that never shipped" distinguishable from
+"the bake did not produce this yet". Ornaments are bone-merge rigs — a proper subset of the
+character skeleton (`Bip01` through a hand, sometimes two finger bones) plus the prop's own
+bone — the same shape as a `leader_pose` wield model, which is why the bone list is the
+contract and no separate binding decision is staged.
+
+Shipped scope: 100 event records name 16 paths; 15 resolve, and
+`models/items/walkie_talkie.mdl` is the one source gap (`items/walkie_talkie/walkie_talkie`'s
+own sequence names a sibling copy of itself that is in no VPK).
+

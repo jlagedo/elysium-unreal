@@ -60,6 +60,11 @@ void FElysiumNpc::ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
 	bHasKindredTemplate = true;
 	bKindredTemplate = Resolved.GeneralInt(TEXT("Kindred")) != 0;
 	bDisallowKnockbacks = Resolved.GeneralInt(TEXT("Disallow_Knockbacks")) != 0;
+	// The authored spawn pool, kept beside the sheet write below. `Sheet.ApplyTemplate` puts the
+	// same number on slot 12's BASE, but feeding moves that; the feed meter needs the pool the
+	// victim was full at, which is what retail divides its bar by.
+	const int32* AuthoredBloodPool = Resolved.Trait(TEXT("BloodPool"));
+	TemplateBloodPoolValue = AuthoredBloodPool ? *AuthoredBloodPool : 0;
 
 	// The authored damage filters, kept as the template states them. Nothing multiplies them
 	// yet — the resolver only accumulates them onto the descriptor (`ElysiumDamage::Apply`
@@ -2620,6 +2625,7 @@ void FElysiumNpc::SeedSheet()
 	bHasKindredTemplate = false;
 	bKindredTemplate = false;
 	bDisallowKnockbacks = false;
+	TemplateBloodPoolValue = 0;
 	for (bool& bHas : bHasDamageFilter) { bHas = false; }
 	if (!Table)
 	{

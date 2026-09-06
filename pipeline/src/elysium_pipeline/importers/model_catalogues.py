@@ -21,7 +21,7 @@ SCHEMA = "1.0.0"
 POLICY = "whole-model-catalogues-v1"
 PACKAGE_ROOT = "/ElysiumBaked/Models/_Corpus"
 KINDS = {"WieldModels": "ElysiumWieldCatalogue", "PlacedModels": "ElysiumPlacedModelCatalogue",
-         "PropSkins": "ElysiumPropSkinCatalogue"}
+         "PropSkins": "ElysiumPropSkinCatalogue", "OrnamentModels": "ElysiumOrnamentCatalogue"}
 SOURCE_PATTERNS = ("models/**/*.glb", "maps/*.glb", "vdata/items/*.glb")
 MISSING_MATERIAL = "/Game/ElysiumGenerated/Materials/V2/MI_V2_Missing"
 _UNSPECIFIED = object()
@@ -64,7 +64,7 @@ def bounded_path(root, relative):
 #: The code half of every catalogue projection: bump when a projection rule changes what it
 #: emits. The data half is the input ledger (every read file's digest) and the inventories.
 #: Code is never hashed (`docs/architecture/seam_map_unit_contract.md` -> "Recipes").
-RULES_VERSION = "model-catalogues-v1"
+RULES_VERSION = "model-catalogues-v2-ornaments"
 
 
 def rules_fingerprint():
@@ -154,8 +154,10 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
     identities. Missing selected products must be explicit geometryless source skips.
     """
     from elysium_pipeline.importers import models as static_rules, materials as material_rules
-    from elysium_pipeline.importers import placed_catalogue, prop_skin_catalogue, wield_catalogue
+    from elysium_pipeline.importers import ornament_catalogue, placed_catalogue, prop_skin_catalogue, wield_catalogue
     from elysium_pipeline.model_usage import skeletal_candidate, placed_animation_models
+    from elysium_pipeline import ornament_models
+    from elysium_pipeline.skeletal_stage import payload
     from elysium_pipeline.skeletal_stage import wield, cinematics
     from elysium_pipeline.skeletal_stage.unit import ModelUnit
 
@@ -166,10 +168,11 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
     characters = unique(chars["assets"], "assetId")
     statics = unique(static["assets"], "unit")
     material_entries = unique(mats["assets"], "assetPath")
-    units, trees = {}, {}
+    units, trees, ornament_requests = {}, {}, []
     for relative in inputs.inventories["models/**/*.glb"]:
         document, unit = _source_document(inputs, relative, "ELYSIUM_vtmb_model")
         identity, mdl = unit["identity"], unit["mdl"]
+        ornament_requests.extend(ornament_models.collect_requests(mdl["sequences"], identity["asset"]))
         id = identity["asset"]
         if id in units or not id.startswith("vtmb:model:") or relative != "models/" + id[11:] + ".glb":
             raise CatalogueStageError(f"duplicate/noncanonical model source identity: {id}")
@@ -214,6 +217,8 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
     required_characters.update(placed_animation_models(placed, lambda id: units[id]["sequenceLabels"]))
     required_characters.update(current_wield["modelIds"])
     required_characters.update(cinematics.discover_sets(inputs.roots["exports"]))
+    ornaments = ornament_models.resolve(ornament_requests, published_ids=units)
+    required_characters.update(ornaments["modelIds"])
     pending = list(required_characters)
     while pending:
         id = pending.pop()
@@ -310,9 +315,15 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
         require_coverage(row["nativeSequences"].values(), names.values())
         # The model's prepared vocabulary retains original labels; package leaf names are folded.
         row["nativeSequences"] = dict(names)
+    ornament_ids = set(ornaments["modelIds"])
+    ornament_bones = {}
     skins, placements = [], []
     for id, info in sorted(units.items()):
         document, unit = _source_document(inputs, info["relative"], "ELYSIUM_vtmb_model")
+        if id in ornament_ids:
+            rows, _map, _reparented = payload.unreal_bones(ModelUnit.metadata(
+                inputs.roots["exports"] / info["relative"], document).bones)
+            ornament_bones[id] = [name for name, _parent, _pos, _quat in rows]
         reps = []
         if id in statics:
             e = statics[id]
@@ -346,9 +357,12 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
             row["placementEvidence"] = evidence(use)
             placements.append(row)
     projections = [wield_projection, placed_catalogue.project_placed_catalogue(placements, expected_ids=placed),
-                   prop_skin_catalogue.project_skin_catalogue(skins, expected_ids=units)]
+                   prop_skin_catalogue.project_skin_catalogue(skins, expected_ids=units),
+                   ornament_catalogue.project_ornament_catalogue(ornaments, characters, ornament_bones.__getitem__)]
     expected = {"modelIds": sorted(units), "placedIds": sorted(placed), "wieldModelIds": sorted(current_wield["modelIds"]),
                 "wieldItemIds": sorted(r["assetId"] for r in current_wield["items"]),
+                "ornamentPaths": sorted(r["path"] for r in ornaments["models"]),
+                "ornamentModelIds": sorted(ornaments["modelIds"]),
                 "staticRequiredIds": sorted(required_static), "characterRequiredIds": sorted(required_characters)}
     inputs.verify()
     return projections, inputs, expected
@@ -376,6 +390,9 @@ def reference_inventory(projections):
                 add(row["mesh"], "SkeletalMesh", "characters")
                 add(row["skeleton"], "Skeleton", "characters")
                 add(row["referenceClip"], "AnimSequence", "characters")
+            elif kind == "OrnamentModels":
+                add(row["mesh"], "SkeletalMesh", "characters")
+                add(row["skeleton"], "Skeleton", "characters")
             elif kind == "PlacedModels":
                 add(row["staticMesh"], "StaticMesh", "models")
                 add(row["skeletalMesh"], "SkeletalMesh", "characters")
@@ -412,6 +429,9 @@ def _validate_products(projections, expected):
     require_coverage(by_kind["PropSkins"]["data"]["models"], expected["modelIds"])
     require_coverage(by_kind["PlacedModels"]["data"]["models"], expected["placedIds"])
     require_coverage(by_kind["WieldModels"]["data"]["models"], expected["wieldModelIds"])
+    require_coverage(by_kind["OrnamentModels"]["data"]["models"], expected["ornamentPaths"])
+    require_coverage((r["assetId"] for r in by_kind["OrnamentModels"]["data"]["models"].values()
+                      if not r["sourceAbsent"]), expected["ornamentModelIds"])
     require_coverage((r["assetId"] for r in by_kind["WieldModels"]["data"]["items"].values()), expected["wieldItemIds"])
     if any(r["acceptanceIssues"] for r in by_kind["PlacedModels"]["data"]["models"].values()):
         raise CatalogueStageError("placed catalogue contains unaccepted native products")
@@ -422,6 +442,7 @@ def coverage_summary(projections):
     skins = list(data["PropSkins"]["models"].values())
     placed = list(data["PlacedModels"]["models"].values())
     items = list(data["WieldModels"]["items"].values())
+    ornaments = list(data["OrnamentModels"]["models"].values())
     return {"modelUnits": len(skins), "placedModels": len(placed), "wieldItems": len(items),
             "wieldModels": len(data["WieldModels"]["models"]),
             "skinFamilies": sum(r["familyCount"] for r in skins),
@@ -435,7 +456,11 @@ def coverage_summary(projections):
             "staticSourceRepresentations": sum(r.get("staticSourceRepresentation", False) for r in placed),
             "sourceOnlyPlacedClips": sum(c["state"] == "source-only" for r in placed for c in r["clips"]),
             "absentIntrinsicClips": sum(len(json.loads(r["sourceEvidence"]).get("absentIntrinsicClips", [])) for r in placed),
-            "clothPlacedModels": sum(r["hasCloth"] for r in placed)}
+            "clothPlacedModels": sum(r["hasCloth"] for r in placed),
+            "ornamentPaths": len(ornaments),
+            "ornamentModels": sum(not r["sourceAbsent"] for r in ornaments),
+            "absentOrnamentModels": sum(r["sourceAbsent"] for r in ornaments),
+            "ornamentEventRequests": data["OrnamentModels"]["requestCount"]}
 
 
 def _atomic_write(path, raw):

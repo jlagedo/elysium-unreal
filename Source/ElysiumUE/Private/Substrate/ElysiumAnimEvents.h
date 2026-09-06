@@ -45,6 +45,48 @@ namespace ElysiumAnimEvents
 		return Event >= WeaponBandFirst && Event <= WeaponBandLast;
 	}
 
+	// The COMBAT CHARACTER's own arms of `0x1032e330`, past the weapon forward. Each is a `case` in
+	// retail's switch and each is claimed by `FElysiumCombatCharacter::HandleAnimEvent`
+	// (`docs/vtmb/animation_events.md` -> "Port status — combat character band"). The two feed ids
+	// are spelled again in `ElysiumFeed.h` beside the transaction that consumes them; these are the
+	// dispatcher's view of the same numbers.
+
+	// `0xfb4`. `FUN_101e3e70(&DAT_10739a4c, this, options)`: `options` names a DISCIPLINE, the
+	// manager resolves it to a bit, the character's own discipline mask at `+0xF34` is tested, and
+	// the record's level block runs its hit callback — `DevMsg(3, "Discipline<%s> CallbackHit")` at
+	// `0x101e3910`. It is NOT a sound: it is where a cast's own animation commits its effect.
+	inline constexpr int32 DisciplineCallbackHit = 4020;
+
+	// `0x1004` / `0x1005` / `0x1006` — the `m_hAnimFollowModel` (`+0x5a8`) ornament slot. 4100
+	// formats `"%s.mdl"` from `options`, 4102 formats `"%s_%s.mdl"` with the gender word, and both
+	// REMOVE the standing model before they create the next one; 4101 only removes.
+	inline constexpr int32 AttachFollowModel         = 4100;
+	inline constexpr int32 DetachFollowModel         = 4101;
+	inline constexpr int32 AttachFollowModelGendered = 4102;
+
+	// Retail's own two formats, verbatim from `1032e435` / `1032e448`, and the gender words
+	// `1032e424`/`1032e42b` select between (`male` at `0x105994a0`, `female` at `0x10599490` — the
+	// same pair the `.gender` token substitution at `0x101b3a10` uses).
+	//
+	// **The option is never extension-stripped.** `models/scenery/misc/wineglass/wineglass.mdl`
+	// under 4102 legitimately produces `wineglass.mdl_male.mdl`, and that is the key the catalogue
+	// is written under. Lowercased and forward-slashed here because the lookup is — the same fold,
+	// and only that fold, as the bake's `ornament_models.model_key` — and because a `.mdl` path is
+	// case- and separator-insensitive on the source filesystem. The shipped options are all
+	// forward-slashed already; the fold is what keeps the two sides one contract.
+	inline FString FormatFollowModelPath(int32 Event, const FString& Options, bool bMale)
+	{
+		const FString Trimmed = Options.TrimStartAndEnd();
+		if (Trimmed.IsEmpty())
+		{
+			return FString();
+		}
+		const FString Formatted = Event == AttachFollowModelGendered
+			? FString::Printf(TEXT("%s_%s.mdl"), *Trimmed, bMale ? TEXT("male") : TEXT("female"))
+			: FString::Printf(TEXT("%s.mdl"), *Trimmed);
+		return Formatted.Replace(TEXT("\\"), TEXT("/")).ToLower();
+	}
+
 	// Advance one cursor by one frame and collect what the interval contained, in file order.
 	//
 	// `Timeline` may be null or empty — most sequences declare no timeline at all, which is an

@@ -15,6 +15,7 @@ class FElysiumEntityWorld;
 class FElysiumExpressionPreparation;
 class FElysiumPreparedPropModels;
 class FElysiumPreparedWieldModels;
+class FElysiumPreparedOrnamentModels;
 struct FElysiumEntityDefs;
 struct FStreamableHandle;
 class FElysiumSoundSchemeManager;
@@ -378,6 +379,8 @@ public:
 		FElysiumClipPhase& Out) override;
 	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
 		const FString& Label, const FString& OwnerRoot = FString()) override;
+	virtual bool AttachOrnamentModel(USkeletalMeshComponent* Body, const FString& RetailPath) override;
+	virtual void DetachOrnamentModel(USkeletalMeshComponent* Body) override;
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;
@@ -849,6 +852,9 @@ private:
 	TSharedPtr<FElysiumExpressionPreparation> ExpressionPreparation;
 	TSharedPtr<FElysiumPreparedPropModels> PropModelPreparation;
 	TSharedPtr<FElysiumPreparedWieldModels> WieldModelPreparation;
+	// The ornament follow models an animation event can attach (`0x1032e330` 4100/4102), resident
+	// for this map epoch beside the wield models.
+	TSharedPtr<FElysiumPreparedOrnamentModels> OrnamentModelPreparation;
 	// Residency is entity-derived, as retail's per-entity Precache was: the defs' models, the
 	// makers' NPC models, the player's chargen body and the item records' ground models. The green
 	// room admits the whole catalogue instead, because a lab stands any model on demand.

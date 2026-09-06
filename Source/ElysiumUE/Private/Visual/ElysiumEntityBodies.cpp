@@ -1134,6 +1134,16 @@ const TArray<FElysiumAnimEvent>* UElysiumEntityBodies::GetNpcEventTimeline(const
 	return Table.IsValid() ? Table->FindEvents(Label) : nullptr;
 }
 
+bool UElysiumEntityBodies::AttachOrnamentModel(USkeletalMeshComponent* Body, const FString& RetailPath)
+{
+	return ElysiumNpcVisual::InstallOrnamentModel(Body, RetailPath);
+}
+
+void UElysiumEntityBodies::DetachOrnamentModel(USkeletalMeshComponent* Body)
+{
+	ElysiumNpcVisual::ClearOrnamentModel(Body);
+}
+
 void UElysiumEntityBodies::ForgetNpcVisuals()
 {
 	// The map/native preparation owner controls admission and release. A body cache flush

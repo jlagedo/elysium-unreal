@@ -34,6 +34,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
+#include "UObject/ObjectKey.h"
 #include "UObject/StrongObjectPtr.h"
 
 struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
@@ -698,6 +699,38 @@ struct FElysiumRecordingServices final
 	{
 		return NpcEventTimelines.Find(EventTimelineKey(OwnerStem, Label)
 			+ (OwnerRoot.IsEmpty()?FString():TEXT("|")+OwnerRoot.ToLower()));
+	}
+
+	// The ornament rows this fixture pretends `DA_OrnamentModels` carries, keyed by the
+	// retail-formatted path exactly as the real catalogue is. A path that is not here is the
+	// "mock, don't fail" case: the seam answers false and the slot stays empty, which is the state
+	// retail's own `GetModelPtr`-null tail leaves behind.
+	TSet<FString> OrnamentModels;
+	// The path each body is currently wearing, so a test can assert the SLOT and not merely the
+	// call trace. Absent means nothing is worn.
+	TMap<FObjectKey, FString> WornOrnaments;
+	FString WornOrnament(USkeletalMeshComponent* Body) const
+	{
+		const FString* Found = WornOrnaments.Find(FObjectKey(Body));
+		return Found ? *Found : FString();
+	}
+	virtual bool AttachOrnamentModel(USkeletalMeshComponent* Body, const FString& RetailPath) override
+	{
+		Record(FString::Printf(TEXT("AttachOrnamentModel %s"), *RetailPath));
+		// Retail removes the standing follow model FIRST and unconditionally, so a refused attach
+		// still leaves the slot empty.
+		WornOrnaments.Remove(FObjectKey(Body));
+		if (!OrnamentModels.Contains(RetailPath))
+		{
+			return false;
+		}
+		WornOrnaments.Add(FObjectKey(Body), RetailPath);
+		return true;
+	}
+	virtual void DetachOrnamentModel(USkeletalMeshComponent* Body) override
+	{
+		Record(TEXT("DetachOrnamentModel"));
+		WornOrnaments.Remove(FObjectKey(Body));
 	}
 
 	// The label-route sibling's fixture, mirroring bNpcActivitiesResolve above: opt-in so most

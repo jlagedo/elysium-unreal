@@ -274,3 +274,56 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Elysium|Catalogues")
 	static FString Verify(UElysiumPropSkinCatalogue* Asset, const FString& Json);
 };
+
+// --- Ornaments: the runtime follow model an animation event attaches ---------------------------
+//
+// `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`) events 4100/4101/4102 build a model path
+// out of the record's own `options` field and spawn a `prop_dynamic_ornament` on it
+// (`FUN_10190e50`), bone-merged onto the character (`FUN_10191170`: `SetAimEnt`, `SetParent`
+// attachment 0, `SetOwnerEntity`, movetype none). The shipped rigs are 13-bone `Bip01`-rooted
+// merge skeletons with a single rest sequence and no attachments, so the port's expression of one
+// is a leader-posed skeletal component, exactly as a wield model is.
+//
+// **The key is the retail-formatted path, not a model id.** Retail never strips an extension: 4100
+// formats `"%s.mdl"` and 4102 formats `"%s_%s.mdl"` with the gender word, so a record whose options
+// already carry `.mdl` legitimately produces `wineglass.mdl_male.mdl`. The catalogue is keyed on
+// exactly what the handler builds, lowercased, so the runtime never has to un-format anything.
+USTRUCT()
+struct FElysiumCatalogueOrnamentModel
+{
+	GENERATED_BODY()
+	UPROPERTY(VisibleAnywhere) FString AssetId;
+	UPROPERTY(VisibleAnywhere) TSoftObjectPtr<USkeletalMesh> Mesh;
+	UPROPERTY(VisibleAnywhere) TSoftObjectPtr<USkeleton> Skeleton;
+	/** The path the retail handler formats exists in no shipped VPK: the row is a recorded absence. */
+	UPROPERTY(VisibleAnywhere) bool bSourceAbsent = false;
+	/** The merge rig's bones, in file order — the evidence that this is a leader-pose rig. */
+	UPROPERTY(VisibleAnywhere) TArray<FName> Bones;
+
+	void GatherPaths(TSet<FSoftObjectPath>& Out) const;
+};
+
+USTRUCT()
+struct FElysiumOrnamentCatalogueData
+{
+	GENERATED_BODY()
+	UPROPERTY(VisibleAnywhere) TMap<FString, FElysiumCatalogueOrnamentModel> Models;
+};
+
+/** Models/_Corpus/DA_OrnamentModels. Keyed by the retail-formatted `.mdl` path, lowercased. */
+UCLASS()
+class ELYSIUMUE_API UElysiumOrnamentCatalogue final : public UDataAsset
+{
+	GENERATED_BODY()
+public:
+	UPROPERTY(VisibleAnywhere) FElysiumOrnamentCatalogueData Data;
+	/** Pure lookup on the already-formatted, already-lowercased retail path. */
+	const FElysiumCatalogueOrnamentModel* FindModel(const FString& RetailPath) const
+	{
+		return Data.Models.Find(RetailPath);
+	}
+	UFUNCTION(BlueprintCallable, Category="Elysium|Catalogues")
+	static UElysiumOrnamentCatalogue* ApplyJson(UElysiumOrnamentCatalogue* Asset, const FString& Json, FString& OutError);
+	UFUNCTION(BlueprintCallable, Category="Elysium|Catalogues")
+	static FString Verify(UElysiumOrnamentCatalogue* Asset, const FString& Json);
+};

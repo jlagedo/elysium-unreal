@@ -9,7 +9,7 @@ from pathlib import Path
 def run(manifest_path):
     from pipeline.unreal import import_model_catalogues as worker
     unreal, bl = worker._backend()
-    from elysium_pipeline.importers.model_catalogues import PRODUCER, verify_model_catalogue_stage
+    from elysium_pipeline.importers.model_catalogues import KINDS, PRODUCER, verify_model_catalogue_stage
     path = Path(manifest_path).resolve()
     report = {"producer": PRODUCER, "complete": False, "verified": 0, "failed": [],
               "scope": "fresh-process-native-catalogue-fields-and-references", "renderedAcceptance": False}
@@ -40,7 +40,7 @@ def run(manifest_path):
         worker.verify_generation(path, manifest)
         report["inputDigest"] = manifest["inputDigest"]
         report["coverage"] = manifest["summary"]
-        report["complete"] = not report["failed"] and report["verified"] == 3
+        report["complete"] = not report["failed"] and report["verified"] == len(KINDS)
     except Exception as exc:
         report["failed"].append({"reason": str(exc)})
     checkpoint()

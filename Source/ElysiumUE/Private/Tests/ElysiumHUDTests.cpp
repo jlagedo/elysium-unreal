@@ -41,6 +41,59 @@ namespace
 		}
 		return Count;
 	}
+
+	// The blood rail is the one horizontal box built with 15 droplet slots and the two group
+	// spacers between them. Finding it by that shape keeps the test off the widget's private
+	// internals while still asserting on the real constructed Slate.
+	constexpr int32 GExpectedBloodRowChildren = 17;   // 15 droplets + 2 group spacers
+
+	TSharedPtr<SWidget> FindBloodRow(const TSharedRef<SWidget>& Widget)
+	{
+		if (Widget->GetType() == FName(TEXT("SHorizontalBox")))
+		{
+			FChildren* Own = Widget->GetChildren();
+			if (Own && Own->Num() == GExpectedBloodRowChildren)
+			{
+				return Widget;
+			}
+		}
+		FChildren* Children = Widget->GetChildren();
+		for (int32 Index = 0; Children && Index < Children->Num(); ++Index)
+		{
+			if (TSharedPtr<SWidget> Found = FindBloodRow(Children->GetChildAt(Index)))
+			{
+				return Found;
+			}
+		}
+		return nullptr;
+	}
+
+	// How many of the rail's droplets are drawn, and how many groups they fall into. A group is a
+	// run of uncollapsed droplets bounded by the spacers, so this reads the rail exactly as the
+	// player does.
+	void MeasureBloodRail(const TSharedRef<SWidget>& Row, int32& OutDroplets, int32& OutGroups)
+	{
+		OutDroplets = 0;
+		OutGroups = 0;
+		int32 RunLength = 0;
+		FChildren* Children = Row->GetChildren();
+		for (int32 Index = 0; Children && Index < Children->Num(); ++Index)
+		{
+			const TSharedRef<SWidget> Child = Children->GetChildAt(Index);
+			if (Child->GetType() == FName(TEXT("SSpacer")))
+			{
+				if (RunLength > 0) { ++OutGroups; }
+				RunLength = 0;
+				continue;
+			}
+			if (Child->GetVisibility() != EVisibility::Collapsed)
+			{
+				++OutDroplets;
+				++RunLength;
+			}
+		}
+		if (RunLength > 0) { ++OutGroups; }
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNotificationPresentationRulesTest,
@@ -277,6 +330,232 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	Model->Apply(FElysiumViewState(), EElysiumHUDPreview::Passive);
 	TestEqual(TEXT("passive preview collapses the zone glyph"),
 		Model->ZoneState, EElysiumZoneState::None);
+
+	return true;
+}
+
+
+// The blood rail's droplet count, read off the constructed Slate.
+//
+// The number of droplets is the `BloodPool` stat DEFINITION's Max — `stats.txt` authors `Max 15`
+// on slot 12 and the `"Max" "Generation_Blood_Pool_Max"` line beside it is commented out in the
+// shipped file, so `CVStatList_t::IncBase(0xc)` `0x10200d60` (reached from `IncBloodPool`
+// `0x10338cb0`) stops every character at 15 whatever its Generation. That is three groups of five,
+// which is how retail's right rail reads the pool (`docs/vtmb/vtmb-ui.md`). The defect this covers
+// was publishing slot 13 `BloodPool_Max` — a critter's STARTING pool, Default 10 — as the
+// capacity, which collapsed the third group. That the capacity itself comes from the stat
+// definition is asserted against the real `stats.txt` in `Elysium.Content.Sheet` and against a
+// live player in `Elysium.Content.NpcMakerBlueblood`; this test owns the rail that draws it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDBloodRailTest,
+	"Elysium.Substrate.UI.HUDBloodRail",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumHUDBloodRailTest::RunTest(const FString& Parameters)
+{
+	// One rail per capacity: a widget is prepassed once, which is what evaluates the droplets'
+	// visibility attributes, so each case gets its own construction rather than re-prepassing.
+	auto MeasureRailAtCapacity = [this](int32 Capacity, int32 Banked,
+		int32& OutDroplets, int32& OutGroups) -> bool
+	{
+		UElysiumHUDModel* Model = NewObject<UElysiumHUDModel>();
+
+		FElysiumViewState View;
+		View.bPlayerSurface = true;
+		View.Vitals.bValid = true;
+		View.Vitals.BloodPool = Banked;
+		View.Vitals.MaxBloodPool = Capacity;
+		Model->Apply(View);
+		if (!TestEqual(TEXT("the published capacity projects onto the rail"),
+			Model->BloodCapacity, Capacity))
+		{
+			return false;
+		}
+
+		// The HUD surface is only constructible through the composition root: CommonUI resolves a
+		// screen's owner from the tree it was constructed in, and the root is what hands the HUD
+		// widget its model. Same path the live game takes.
+		UElysiumUIRoot* Root = NewObject<UElysiumUIRoot>();
+		Root->SetModel(Model);
+		const TSharedRef<SWidget> Slate = Root->TakeWidget();
+		Slate->SlatePrepass(1.0f);
+		TSharedPtr<SWidget> Row = FindBloodRow(Slate);
+		if (!TestTrue(TEXT("the HUD builds one blood rail of 15 droplets and 2 group spacers"),
+			Row.IsValid()))
+		{
+			return false;
+		}
+		MeasureBloodRail(Row.ToSharedRef(), OutDroplets, OutGroups);
+		return true;
+	};
+
+	// What the shipped rulebook answers for `BloodPool`'s effective Max.
+	int32 Droplets = 0;
+	int32 Groups = 0;
+	if (!MeasureRailAtCapacity(15, 12, Droplets, Groups))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the shipped cap of 15 draws all 15 droplets"), Droplets, 15);
+	TestEqual(TEXT("...in three groups of five — the third group is the one BloodPool_Max hid"),
+		Groups, 3);
+
+	// A narrower ceiling still draws correctly — the rail is not hardcoded to three groups. Nothing
+	// in the shipped data lowers `BloodPool`'s Max, but a trait effect's `Max` would, and 10 is the
+	// value the former defect published (slot 13 `BloodPool_Max`'s Default), so it is the case that
+	// used to be indistinguishable from correct.
+	if (!MeasureRailAtCapacity(10, 4, Droplets, Groups))
+	{
+		return false;
+	}
+	TestEqual(TEXT("a capacity of 10 draws ten droplets"), Droplets, 10);
+	TestEqual(TEXT("...in two groups"), Groups, 2);
+
+	// The banked count still follows `BloodPool`, not the capacity: `DecBloodPool` -> `DecBase`
+	// `0x10200ea0` floors at the stat's Min 0 and the lit droplets are that live value.
+	UElysiumHUDModel* Model = NewObject<UElysiumHUDModel>();
+	FElysiumViewState View;
+	View.bPlayerSurface = true;
+	View.Vitals.bValid = true;
+	View.Vitals.BloodPool = 12;
+	View.Vitals.MaxBloodPool = 15;
+	Model->Apply(View);
+	TestEqual(TEXT("the banked count is the live BloodPool, not the capacity"), Model->BloodPool, 12);
+	TestEqual(TEXT("...and the capacity is the stat definition's Max"), Model->BloodCapacity, 15);
+
+	return true;
+}
+
+
+// The victim blood meter's value and lifetime contract — `client.dll` `CFeedBar`.
+//
+// THE DEFECT THIS COVERS. The publisher used to own the panel with gameplay ownership: visible
+// while `IsFeedPaired()`, then held while the released victim stayed the focused usable. Every
+// ordinary feed ends with the victim at zero — `FElysiumCombatCharacter::ShouldReleaseFeed`
+// selects the release family exactly at `BloodPoolValue() < 1` — and the pair is still held
+// through Release and ReleaseTail, so the last thing that rule published, for the whole tail of
+// every feed and then for as long as the drained body stayed in focus, was `bVisible` with
+// `BloodPool` zero: a bar that appears and is empty.
+//
+// Retail cannot produce that. `CFeedBar::vfunc114` `0x100503d0` takes the value the `FeedBar`
+// usermsg carries and hides the panel outright below 1 and at or above 15; only 1..14 draws. Its
+// persistence after the fangs come off is `vfunc98` `0x10050560` comparing curtime against a
+// deadline `vfunc114` refreshed — three seconds (`_DAT_10227ee0`) — and there is no focus test in
+// either function.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDFeedBarTest,
+	"Elysium.Substrate.UI.HUDFeedBar",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumHUDFeedBarTest::RunTest(const FString& Parameters)
+{
+	const FElysiumEntityHandle Victim(7, 1);
+	const FElysiumEntityHandle Other(9, 1);
+
+	// A blueblood's authored pool is 9 and it stands up full, so the engaged bar is full. Nine is
+	// inside `vfunc114`'s 1..14 window, which is the whole reason it draws at all.
+	ElysiumFeedBar::FUpdate Engage;
+	Engage.bHasSource = true;
+	Engage.Source = Victim;
+	Engage.BloodPool = 9;
+	Engage.AuthoredMax = 9;
+	Engage.bPaired = true;
+	FElysiumFeedView View = ElysiumFeedBar::Update(FElysiumFeedView(), Engage, 100.0);
+	TestTrue(TEXT("the engaged victim raises the meter"), View.bVisible);
+	TestEqual(TEXT("...at the authored denominator"), View.MaxBloodPool, 9);
+	TestEqual(TEXT("...drawn full"), View.Percent, 1.0f);
+	TestTrue(TEXT("...with the three-second hold armed"),
+		FMath::IsNearlyEqual(View.HideDeadline, 103.0, UE_DOUBLE_KINDA_SMALL_NUMBER));
+
+	// The projection the widget actually draws.
+	UElysiumHUDModel* Model = NewObject<UElysiumHUDModel>();
+	FElysiumViewState Published;
+	Published.bPlayerSurface = true;
+	Published.Feed = View;
+	Model->Apply(Published);
+	TestTrue(TEXT("a full meter projects onto the HUD model"), Model->bFeedVictimVisible);
+	TestEqual(TEXT("...as a full bar, not as two counters the widget divides"),
+		Model->FeedVictimPercent, 1.0f);
+	TestEqual(TEXT("...beside the numbers the log reports"), Model->FeedVictimBlood, 9);
+	TestEqual(TEXT("...and its denominator"), Model->FeedVictimBloodCapacity, 9);
+
+	// THE ROOT CAUSE, as one assertion. The pair is still held — this is the Release/ReleaseTail
+	// frame of every completed feed — and the victim has nothing left. Retail's value gate hides
+	// the panel here; the old ownership rule published exactly this state with `bVisible` true.
+	ElysiumFeedBar::FUpdate Drained = Engage;
+	Drained.BloodPool = 0;
+	View = ElysiumFeedBar::Update(View, Drained, 106.0);
+	TestFalse(TEXT("a drained victim takes the meter down even though the pair still holds"),
+		View.bVisible);
+	TestEqual(TEXT("...and it never draws an empty bar"), View.Percent, 0.0f);
+	Published.Feed = View;
+	Model->Apply(Published);
+	TestFalse(TEXT("the HUD model stops publishing the meter with it"),
+		Model->bFeedVictimVisible);
+
+	// The upper arm, `CMP EDI,0xf / JGE 0x100504d4`. Retail's own quirk: a critter standing at the
+	// 15-point stat ceiling shows no meter at all, because 15 is also the client's default
+	// denominator and the client refuses to draw a whole bar it cannot have been told about.
+	ElysiumFeedBar::FUpdate Ceiling;
+	Ceiling.bHasSource = true;
+	Ceiling.Source = Other;
+	Ceiling.BloodPool = 15;
+	Ceiling.AuthoredMax = 15;
+	Ceiling.bPaired = true;
+	const FElysiumFeedView AtCeiling =
+		ElysiumFeedBar::Update(FElysiumFeedView(), Ceiling, 200.0);
+	TestFalse(TEXT("a victim at the stat ceiling shows no meter"), AtCeiling.bVisible);
+	Ceiling.BloodPool = 14;
+	TestTrue(TEXT("...and one point below it does"),
+		ElysiumFeedBar::Update(FElysiumFeedView(), Ceiling, 200.0).bVisible);
+
+	// The interrupted feed: the player let go with blood left. The panel's remaining lifetime is
+	// the three-second hold `vfunc114` armed at the last value change, and NOTHING else — no focus
+	// test exists in either recovered function, so a player who walks away and one who keeps
+	// staring at the body both lose the meter at the same instant.
+	ElysiumFeedBar::FUpdate Partial;
+	Partial.bHasSource = true;
+	Partial.Source = Victim;
+	Partial.BloodPool = 3;
+	Partial.AuthoredMax = 6;
+	Partial.bPaired = true;
+	FElysiumFeedView Held = ElysiumFeedBar::Update(FElysiumFeedView(), Partial, 300.0);
+	TestTrue(TEXT("the interrupted feed leaves a partially drained meter up"), Held.bVisible);
+	TestEqual(TEXT("...drawn at its true fraction"), Held.Percent, 0.5f);
+
+	// Teardown: no feed target, no continuation grapple, so the server sends nothing at all.
+	ElysiumFeedBar::FUpdate Silent;
+	Held = ElysiumFeedBar::Update(Held, Silent, 302.9);
+	TestTrue(TEXT("silence does not take the meter down inside the hold"), Held.bVisible);
+	TestEqual(TEXT("...and it keeps the value the last message left"), Held.BloodPool, 3);
+	Held = ElysiumFeedBar::Update(Held, Silent, 303.0);
+	TestFalse(TEXT("the hold expires three seconds after the last change"), Held.bVisible);
+
+	// `vfunc98` only ever hides. A value that has not changed sends no message, so a panel the
+	// hold took down cannot come back just because the victim is observable again.
+	Held = ElysiumFeedBar::Update(Held, Partial, 310.0);
+	TestFalse(TEXT("an unchanged value cannot re-raise the expired meter"), Held.bVisible);
+	Partial.BloodPool = 2;
+	Held = ElysiumFeedBar::Update(Held, Partial, 311.0);
+	TestTrue(TEXT("...a changed one does"), Held.bVisible);
+
+	// The pre-pulse anticipation (`vfunc98` `0x100507a5`): while the feed pulses, one blood point's
+	// worth of bar slides off across each interval, so the meter drains continuously instead of
+	// stepping once per pulse.
+	ElysiumFeedBar::FUpdate Pulsing;
+	Pulsing.bHasSource = true;
+	Pulsing.Source = Other;
+	Pulsing.BloodPool = 5;
+	Pulsing.AuthoredMax = 10;
+	Pulsing.bPaired = true;
+	Pulsing.bPulsing = true;
+	Pulsing.PulseInterval = 1.0f;
+	FElysiumFeedView Sliding = ElysiumFeedBar::Update(FElysiumFeedView(), Pulsing, 400.0);
+	TestEqual(TEXT("the pulse's first instant draws the whole value"), Sliding.Percent, 0.5f);
+	Sliding = ElysiumFeedBar::Update(Sliding, Pulsing, 400.5);
+	TestEqual(TEXT("...and half an interval later it has slid half a point down"),
+		Sliding.Percent, 0.45f);
+	Sliding = ElysiumFeedBar::Update(Sliding, Pulsing, 402.0);
+	TestEqual(TEXT("...clamped at one whole point, never past the next pulse"),
+		Sliding.Percent, 0.4f);
 
 	return true;
 }

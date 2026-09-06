@@ -1,6 +1,7 @@
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "ElysiumWieldAttach.h"
+#include "Visual/ElysiumPreparedOrnamentModels.h"
 #include "Visual/ElysiumPreparedWieldModels.h"
 
 #include "ElysiumContentPaths.h"
@@ -457,6 +458,145 @@ namespace ElysiumNpcVisual
 		{
 			SweepWieldModels(Owner, Body);
 		}
+	}
+
+	// --- Ornaments ------------------------------------------------------------------------------
+
+	FName OrnamentComponentTag()
+	{
+		static const FName Tag(TEXT("ElysiumOrnamentModel"));
+		return Tag;
+	}
+
+	FName OrnamentPathTag(const FString& RetailPath)
+	{
+		return FName(*(FString(TEXT("ElysiumOrnamentPath:")) + RetailPath.ToLower()));
+	}
+
+	USkeletalMeshComponent* FindOrnamentModel(const USkeletalMeshComponent* Body)
+	{
+		const AActor* const Owner = Body != nullptr ? Body->GetOwner() : nullptr;
+		if (Owner == nullptr)
+		{
+			return nullptr;
+		}
+		TArray<USkeletalMeshComponent*> Components;
+		Owner->GetComponents(Components);
+		for (USkeletalMeshComponent* Component : Components)
+		{
+			if (Component->ComponentHasTag(OrnamentComponentTag())
+				&& Component->GetAttachParent() == Body)
+			{
+				return Component;
+			}
+		}
+		return nullptr;
+	}
+
+	// `SweepWieldModels`' ownership trap, for the same reason: an ornament belongs to the OWNING
+	// ACTOR and merely attaches to the body, so rebuilding a body would leave its cigarette
+	// parented to an actor that is still alive.
+	void SweepOrnamentModels(AActor* Owner, const USkeletalMeshComponent* Body)
+	{
+		TArray<USkeletalMeshComponent*> Components;
+		Owner->GetComponents(Components);
+		for (USkeletalMeshComponent* Component : Components)
+		{
+			if (!Component->ComponentHasTag(OrnamentComponentTag()))
+			{
+				continue;
+			}
+			if (!IsValid(Component->GetAttachParent())
+				|| Component->GetAttachParent() == Body)
+			{
+				Component->DestroyComponent();
+			}
+		}
+	}
+
+	void ClearOrnamentModel(USkeletalMeshComponent* Body)
+	{
+		AActor* const Owner = Body != nullptr ? Body->GetOwner() : nullptr;
+		if (Owner != nullptr)
+		{
+			SweepOrnamentModels(Owner, Body);
+		}
+	}
+
+	// The paths already reported. An ornament path with no catalogue row is a bake gap, not a
+	// per-frame fault, and 4102 re-fires on every loop of `cigarette_Idle` — so the report is once
+	// per path for the life of the process, exactly as the unclaimed-event census is once per key.
+	TSet<FString>& ReportedOrnamentGaps()
+	{
+		static TSet<FString> Reported;
+		return Reported;
+	}
+
+	bool InstallOrnamentModel(USkeletalMeshComponent* Body, const FString& RetailPath)
+	{
+		AActor* const Owner = Body != nullptr ? Body->GetOwner() : nullptr;
+		if (Owner == nullptr || RetailPath.IsEmpty())
+		{
+			return false;
+		}
+		const FString Key = RetailPath.ToLower();
+
+		// The modernization the header states. A live component already wearing this exact path AND
+		// still led by this body is the state a destroy/rebuild would arrive back at, so the re-issue
+		// stops here. The leader test is load-bearing: `FElysiumAnimating::OnRuntimeModelChanged`
+		// carries every attach child of a re-modelled body onto the new one, and a carried ornament
+		// arrives parented to the new body but posed by the destroyed old one — same path tag, no
+		// pose. That one must rebuild.
+		if (USkeletalMeshComponent* const Standing = FindOrnamentModel(Body);
+			Standing != nullptr && Standing->ComponentHasTag(OrnamentPathTag(Key))
+			&& Standing->LeaderPoseComponent.Get() == Body)
+		{
+			return true;
+		}
+
+		// Retail's order: the standing follow model is removed FIRST and unconditionally, before the
+		// path is even formatted, so every reason this call has for declining is also a reason the
+		// previous ornament goes away (`0x1032e330`, `thunk_FUN_101cd940` at `1032e40a`).
+		SweepOrnamentModels(Owner, Body);
+
+		const auto Ready = FElysiumPreparedOrnamentModels::ForOwner(Owner);
+		FString Error;
+		USkeletalMesh* const Mesh = Ready ? Ready->Mesh(Key, Error) : nullptr;
+		if (Mesh == nullptr)
+		{
+			// TODO(anim-events): the ornament bake owns this. Until a row exists the slot stays
+			// empty, which is exactly the state retail's own failure tail leaves behind.
+			if (!ReportedOrnamentGaps().Contains(Key))
+			{
+				ReportedOrnamentGaps().Add(Key);
+				UE_LOG(LogElysiumNpcVisual, Warning,
+					TEXT("UNIMPLEMENTED ornament model '%s' for '%s': %s (retail 0x10190e50 would "
+					     "spawn prop_dynamic_ornament)"),
+					*Key, *Owner->GetName(),
+					Error.IsEmpty() ? TEXT("the native ornament catalogue was not prepared") : *Error);
+			}
+			return false;
+		}
+
+		USkeletalMeshComponent* const Ornament = NewObject<USkeletalMeshComponent>(Owner);
+		Ornament->ComponentTags.Add(OrnamentComponentTag());
+		Ornament->ComponentTags.Add(OrnamentPathTag(Key));
+		Ornament->SetSkeletalMeshAsset(Mesh);
+		// R7.4 (G6): slot 6 neutral or it renders black, like every other runtime-built skeletal
+		// component (commit 2b9c7e7a).
+		ElysiumLightStyle::StampUnstyled(Ornament);
+		// The rig carries one rest sequence and nothing ever plays it: every bone this model has is
+		// name-matched to the wearer, which is what `SetLeaderPoseComponent` composes below.
+		Ornament->SetAnimationMode(EAnimationMode::AnimationCustomMode);
+		Ornament->SetCanEverAffectNavigation(false);
+		// Attaching before registering keeps the component from ticking against an unset leader for
+		// a frame, the ordering `InstallGarment` and `InstallWieldModel` both depend on.
+		Ornament->SetupAttachment(Body);
+		Ornament->RegisterComponent();
+		Ornament->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Ornament->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetIncludingScale);
+		Ornament->SetLeaderPoseComponent(Body);
+		return true;
 	}
 
 	USkeletalMeshComponent* InstallWieldModel(USkeletalMeshComponent* Body,

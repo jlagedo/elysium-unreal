@@ -932,9 +932,32 @@ twice.
   this stat. `ChangeMasqueradeLevel(delta)` / `GetMasqueradeLevel()`.
 - **Humanity** — 0–10 (Def 7); frenzy checks roll against it; `HumanityAdd(delta)`.
   Toreador doubles gains / others double losses via clan trait-effects.
-- **Blood** — `BloodPool` 0–15; `VampHeal_Info` heals `1%` Max Health per `2.0s`,
-  `BloodToHealthRatio 10` (1 blood → 10 HP). Generation tables (indexed by `Generation`)
-  cap trait rating, pool max, and blood/turn.
+- **Blood** — `BloodPool` (Attributes slot `0xc`) is `Min 0` / `Max 15` / `Default 10`, and the
+  literal 15 is the whole of the cap. `CBaseCombatCharacter::IncBloodPool` `0x10338cb0` is
+  `CVStatList_t::IncBase(0xc)` `0x10200d60`, which adds the point only while the base is below the
+  max the stat's own info block resolves (`FUN_101ff060` off `CVStatInfo_t+0xc`/`+0x10`);
+  `DecBloodPool` `0x10338df0` → `DecBase` `0x10200ea0` is the mirror against `Min`. **The
+  per-Generation pool ceiling is dead data in the shipped file**: `stats.txt` (lines 349–370)
+  authors `"Max" "15"` and the `"Max" "Generation_Blood_Pool_Max"` line above it is commented out,
+  and the string `Generation_Blood_Pool_Max` has **no reader anywhere in `vampire.dll`** — the
+  `Generation_Blood_Pool_Max` table is present in the file and never consulted. So every character
+  caps at 15 whatever its `Generation`, and the right rail draws 15 discrete points, three groups
+  of five. Generation tables still cap trait rating and blood/turn; they do **not** cap the pool.
+  `BloodPool_Max` (slot `0xd`, lines 374–388) is a **separate** stat — the file's own comment calls
+  it "the Maximum (generally meaning the 'starting' bloodpool for a critter)" — with `Default 10`.
+  Nothing clamps `BloodPool` to it; it is a datamap field (`base_bloodpool_max` / `bloodpool_max`,
+  registered by `datamap_CBaseCombatCharacter_builder` `0x1031a600`) that the binary otherwise
+  never reads. A meter that divides by it draws the wrong number of points.
+  `VampHeal_Info` heals `1%` Max Health per `2.0s`, `BloodToHealthRatio 10` (1 blood → 10 HP).
+- **The feed victim's bar** divides by the VICTIM's char-template `BloodPool`, not by the 15-point
+  stat cap and not by `BloodPool_Max`. `CFeedBar::vfunc114` `0x100503d0` (client) seeds its
+  denominator with the literal `0xf` and overrides it with the player's replicated
+  `m_iClientFeedMaxBloodPool` whenever that is non-zero; a payload of 0 or ≥ 15 hides the bar
+  outright. That field is written in exactly one place —
+  `CBaseCombatCharacter::EnterGrappleState` `0x10329760`, from the victim's char-template
+  `Attributes[BloodPool]` (`template+0xd0` then `+0x30`, i.e. slot `0xc`; the same word
+  `CAI_BaseNPCTroika` `0x1029a0b0` seeds the victim's own slot 12 base from). Nothing clears it, so
+  the drained bar retained through the release tail keeps the denominator it opened with.
 - **Frenzy** — `VampFrenzy_Info`: triggers over `Dmg_Amount 20` (normal) / `15`
   (aggravated), or by hunger below `BloodPool_Min_For_Hunger 3`; `Default_Difficulty 5`
   against Humanity, plus `Frenzy_Check_Mod` (clan bane) and a low-blood penalty;

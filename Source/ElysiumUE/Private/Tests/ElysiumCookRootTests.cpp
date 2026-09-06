@@ -24,7 +24,8 @@ namespace
 		for (const TCHAR* Package : {TEXT("/ElysiumBaked/Models/_Corpus/DA_Cast"),
 			TEXT("/ElysiumBaked/ExpressionTables/_Corpus/DA_ExpressionTables"),
 			TEXT("/ElysiumBaked/Models/_Corpus/DA_WieldModels"), TEXT("/ElysiumBaked/Models/_Corpus/DA_PlacedModels"),
-			TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins"), TEXT("/ElysiumBaked/Models/unused/A_never_selected")})
+			TEXT("/ElysiumBaked/Models/_Corpus/DA_PropSkins"),
+			TEXT("/ElysiumBaked/Models/_Corpus/DA_OrnamentModels"), TEXT("/ElysiumBaked/Models/unused/A_never_selected")})
 		{
 			FString Name(Package); int32 Slash = INDEX_NONE; Name.FindLastChar(TEXT('/'), Slash);
 			auto Row = MakeShared<FJsonObject>();
@@ -47,7 +48,7 @@ bool FElysiumCookRootTest::RunTest(const FString&)
 	TestEqual(TEXT("dedicated packaging primary type"), Label->GetPrimaryAssetId().PrimaryAssetType.ToString(), FString(TEXT("ElysiumR8CookRoot")));
 	if (!TestNotNull(TEXT("label accepts all explicit roots without loading them"), UElysiumCookRoot::ApplyJson(Label, Json, Error)))
 	{ AddError(Error); return false; }
-	TestEqual(TEXT("five globals plus unused published model"), Label->ExplicitAssets.Num(), 6);
+	TestEqual(TEXT("six globals plus unused published model"), Label->ExplicitAssets.Num(), 7);
 	TestTrue(TEXT("administrative label stays editor only"), Label->IsEditorOnly());
 	TestFalse(TEXT("no directory-wide cook policy"), bool(Label->bLabelAssetsInMyDirectory));
 	TestFalse(TEXT("no redirector admission"), bool(Label->bIncludeRedirectors));

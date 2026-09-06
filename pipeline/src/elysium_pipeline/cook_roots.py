@@ -23,6 +23,7 @@ GLOBALS = {
     corpus_path("model", "DA", "WieldModels"): "ElysiumWieldCatalogue",
     corpus_path("model", "DA", "PlacedModels"): "ElysiumPlacedModelCatalogue",
     corpus_path("model", "DA", "PropSkins"): "ElysiumPropSkinCatalogue",
+    corpus_path("model", "DA", "OrnamentModels"): "ElysiumOrnamentCatalogue",
 }
 OWNERS = {"characters": "characters", "models": "models", "expressions": "expression-tables", "catalogues": "model-catalogues"}
 PREFIX = re.compile(r"^(?:SM|SK|SKEL|A|BS|CLOTH|PHYS|DYN|DA|MI)_.+")

@@ -39,6 +39,14 @@ void FElysiumCatalogueWieldModel::GatherPaths(TSet<FSoftObjectPath>& Out) const
 	for (const auto& Pair : NativeSequences) AddPath(Pair.Value, Out);
 }
 
+void FElysiumCatalogueOrnamentModel::GatherPaths(TSet<FSoftObjectPath>& Out) const
+{
+	// A recorded absence carries no references at all: the retail handler's own failure tail
+	// (`DevMsg("Could not create ornament prop model: %s")` then remove) is the behaviour, and there
+	// is nothing to make resident for it.
+	AddPath(Mesh, Out); AddPath(Skeleton, Out);
+}
+
 EElysiumCatalogueWieldResult UElysiumWieldCatalogue::Resolve(const FString& Classname, bool bFemale,
 	const FElysiumCatalogueWieldModel*& OutModel, FString& OutError) const
 {
@@ -266,6 +274,50 @@ namespace
 		return true;
 	}
 
+	bool Validate(const FElysiumOrnamentCatalogueData& Data, FString& Error)
+	{
+		for (const auto& Pair : Data.Models)
+		{
+			const auto& Model = Pair.Value;
+			// The key IS the retail-formatted path (`0x1032e330`: `"%s.mdl"` / `"%s_%s.mdl"`),
+			// lowercased with forward slashes and the `.mdl` kept. The runtime folds the same string
+			// to lower case and looks it up verbatim.
+			//
+			// `ESearchCase::CaseSensitive` explicitly, because `FString::operator==` is `Stricmp` —
+			// the default comparison would make this test vacuous. A mixed-case key would in fact
+			// still RESOLVE at runtime, since `TMap<FString, ...>` hashes case-insensitively too;
+			// the rule is here so the catalogue and the shipped mixed-case options
+			// (`models/items/Cigarette/Cigarette`) can never be confused for one another by a reader
+			// or by a diff.
+			if (Pair.Key.IsEmpty()
+				|| !Pair.Key.Equals(Pair.Key.ToLower(), ESearchCase::CaseSensitive)
+				|| Pair.Key.Contains(TEXT("\\")) || !Pair.Key.EndsWith(TEXT(".mdl")))
+			{ Error = TEXT("invalid ornament key, expected a lowercased retail model path: ") + Pair.Key; return false; }
+			if (Model.bSourceAbsent)
+			{
+				// A path the shipped install does not carry. Recorded rather than dropped, because
+				// the census cannot tell "we never baked it" from "retail could not spawn it either"
+				// unless the absence is in the catalogue.
+				if (!Model.Mesh.IsNull() || !Model.Skeleton.IsNull() || !Model.Bones.IsEmpty())
+				{ Error = TEXT("absent ornament source carries references: ") + Pair.Key; return false; }
+				continue;
+			}
+			if (!IsNative(Model.AssetId, TEXT("SK"), Model.Mesh)
+				|| !IsNative(Model.AssetId, TEXT("SKEL"), Model.Skeleton) || Model.Bones.IsEmpty())
+			{ Error = TEXT("invalid ornament decision: ") + Pair.Key; return false; }
+			// A bone-merge rig, and nothing else. Retail parents the ornament to the character and
+			// never gives it a pose of its own, so a rig with no bones could not be leader-posed.
+			TSet<FName> Seen;
+			for (const FName Bone : Model.Bones)
+			{
+				if (Bone.IsNone() || Seen.Contains(Bone))
+				{ Error = TEXT("invalid ornament merge rig: ") + Pair.Key; return false; }
+				Seen.Add(Bone);
+			}
+		}
+		return true;
+	}
+
 	void NormalizeBooleans(const TSharedPtr<FJsonValue>& Value)
 	{
 		if (Value->Type == EJson::Array)
@@ -338,4 +390,5 @@ template<typename T> T* ApplyCatalogue(T* Asset, const FString& Json, const TCHA
 ELYSIUM_CATALOGUE_API(UElysiumWieldCatalogue, "WieldModels")
 ELYSIUM_CATALOGUE_API(UElysiumPlacedModelCatalogue, "PlacedModels")
 ELYSIUM_CATALOGUE_API(UElysiumPropSkinCatalogue, "PropSkins")
+ELYSIUM_CATALOGUE_API(UElysiumOrnamentCatalogue, "OrnamentModels")
 #undef ELYSIUM_CATALOGUE_API

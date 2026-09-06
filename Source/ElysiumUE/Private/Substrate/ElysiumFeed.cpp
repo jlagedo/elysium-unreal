@@ -7,7 +7,25 @@
 // meter, audio, heartbeat, event-5116 particle and release-tail presentation contract.
 // Seductive/rat/zombie modes and prayer remain explicitly out of scope.
 //
-// THE ANIMATION-EVENT BRIDGE IS A SCHEDULER, NOT A NOTIFY LISTENER.
+// THE ANIMATION-EVENT BRIDGE IS A NOTIFY LISTENER WITH A SCHEDULER BEHIND IT.
+//
+// R8 UPDATE. The paragraph below described the state before the character bake carried sequence
+// events. It now does — `UElysiumClipData::Events` rides every native `UAnimSequence` and
+// `IElysiumEmbodiment::GetNpcEventTimeline` hands it to `FElysiumAnimating::AdvanceAnimEvents` —
+// so `FElysiumCombatCharacter::HandleAnimEvent` claims 4006/4007 for real, on retail's own guards
+// (`0x1032e330`: the paired partner at `+0x1538` valid, the paired role at `+0x153c` zero), and
+// calls `OnFeedAnimEvent` from the authored record. `FeedBoundaryArrivesFromAnimEvent` below is
+// what stands the scheduled raise down when that is going to happen, so exactly one firing reaches
+// the transaction.
+//
+// The scheduler is kept as the FALLBACK, not removed: it is what carries a headless world, a body
+// with no visual, a channel publishing no phase, and a clip whose timeline declares no boundary
+// record. `feeding.md` -> "Recreation contract" still requires engage -> bite -> loop -> release
+// to run with nothing rendered.
+//
+// The original note follows, and its decode facts are still true:
+//
+// (was) THE ANIMATION-EVENT BRIDGE IS A SCHEDULER, NOT A NOTIFY LISTENER.
 // VtMB marks the transaction's boundaries with model-authored animation events (4007 at the bite,
 // 4006 on the release). Those events are decoded offline —
 // `pipeline/src/elysium_pipeline/formats/mdl_skel.py` reads `mstudioevent_t` and every `Seq` carries
@@ -30,6 +48,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumUserCmd.h"
+#include "ElysiumAnimEvent.h"        // FElysiumAnimEvent — the record the boundary check scans for
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumDiceTables.h"
@@ -44,7 +63,7 @@
 
 #include "Components/SkeletalMeshComponent.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumFeed, Log, All);
+DEFINE_LOG_CATEGORY(LogElysiumFeed);
 
 // --- The pure rules ---
 
@@ -1035,6 +1054,49 @@ void FElysiumCombatCharacter::EnterFeedRelease(double Now)
 	ScheduleFeedThink(Now);
 }
 
+bool FElysiumCombatCharacter::FeedBoundaryArrivesFromAnimEvent(int32 EventId) const
+{
+	// `FElysiumWeapon::CommitArrivesFromAnimEvent`'s question, asked of a feed boundary: will the
+	// clip this phase is standing on fire the record itself? Only a positive answer stands the
+	// scheduled raise down — every "cannot tell" (no embodiment, no body, an owner the vocabulary
+	// does not name, a channel standing on a different clip, a timeline with no such record) keeps
+	// the schedule, because a boundary that fires twice is inert and a boundary that never fires
+	// hangs the transaction.
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr)
+	{
+		return false;
+	}
+	const ElysiumFeed::EPartnerHeight Height =
+		static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell());
+	const ElysiumFeed::FClipPair Pair = ElysiumFeed::ResolveClipPair(FeedState.Phase, Height);
+	const FString& Label = FeedState.bVictim ? Pair.Victim : Pair.Attacker;
+	if (Label.IsEmpty())
+	{
+		return false;
+	}
+	// The clip's OWNER, not this body's stem: the feed families live in the shared male/female
+	// banks, and `AdvanceAnimEvents` walks the timeline under the owner the phase publishes.
+	const FString Owner = Embodiment->NpcClipOwner(ModelStem(), Label);
+	if (Owner.IsEmpty() || !HasLiveAnimEventDispatch(Owner, Label))
+	{
+		return false;
+	}
+	const TArray<FElysiumAnimEvent>* Timeline = Embodiment->GetNpcEventTimeline(Owner, Label);
+	if (Timeline == nullptr)
+	{
+		return false;
+	}
+	for (const FElysiumAnimEvent& Record : *Timeline)
+	{
+		if (Record.Event == EventId)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void FElysiumCombatCharacter::AdvanceFeedPhase(double Now)
 {
 	switch (FeedState.Phase)
@@ -1055,15 +1117,40 @@ void FElysiumCombatCharacter::AdvanceFeedPhase(double Now)
 				Peer->FeedState.PhaseDeadline = FeedState.PhaseDeadline;
 			}
 		}
-		OnFeedAnimEvent(ElysiumFeed::EventFeedBegin);
-		if (!FeedState.IsTransacting())
+		// The bite clip is now running and its own 4007 sits at cycle 0, so the dispatcher reaches it
+		// on the next pass. Raising here as well would be inert — `FeedBegin` refuses a second call
+		// while `FeedState.Target` is set, which is retail's own `m_hFeedTarget` guard — but the
+		// authored record is the one that should open the transaction, so the schedule stands down
+		// for it and the cadence is seeded from the cycle the clip actually reached.
+		if (!FeedBoundaryArrivesFromAnimEvent(ElysiumFeed::EventFeedBegin))
 		{
-			// FeedBegin refused: no partial transaction is left standing.
-			EndFeedGrapple();
+			OnFeedAnimEvent(ElysiumFeed::EventFeedBegin);
+			if (!FeedState.IsTransacting())
+			{
+				// FeedBegin refused: no partial transaction is left standing.
+				EndFeedGrapple();
+			}
 		}
 		break;
 
 	case EElysiumFeedPhase::Bite:
+		// The bite clip has run past its 4007. If the Engage arm stood its raise down for the
+		// authored record and the record never reached the transaction — the channel was taken over
+		// before the dispatcher's next pass, or the clip was displaced — the pair would enter Loop
+		// with no transaction and nothing left to open one: `Feed` would pulse nothing and
+		// `ShouldReleaseFeed` would hold on a victim still carrying blood. The schedule's own rule
+		// ("a boundary that never fires hangs the transaction") is applied here, at the last instant
+		// the boundary can still be raised; a transaction the record DID open makes this arm inert,
+		// which is `FeedBegin`'s `m_hFeedTarget` guard again.
+		if (!FeedState.IsTransacting())
+		{
+			OnFeedAnimEvent(ElysiumFeed::EventFeedBegin);
+			if (!FeedState.IsTransacting())
+			{
+				EndFeedGrapple();
+				break;
+			}
+		}
 		FeedState.Phase = EElysiumFeedPhase::Loop;
 		FeedState.PhaseDeadline = static_cast<float>(Now)
 			+ PlayFeedPhaseClips(EElysiumFeedPhase::Loop, Now);
@@ -1091,7 +1178,17 @@ void FElysiumCombatCharacter::AdvanceFeedPhase(double Now)
 	case EElysiumFeedPhase::Release:
 		// Event 4006 lands part-way through the release clip. It ends gameplay and camera ownership;
 		// CompleteFeedTransaction retains the body pair for the remaining authored pose.
-		OnFeedAnimEvent(ElysiumFeed::EventFeedTeardown);
+		//
+		// `PhaseDeadline` is deliberately left where it is when the record is going to arrive: it is
+		// the authored event estimate, and `CompleteFeedTransaction` anchors the presentation-only
+		// release tail to it so a late observation consumes pose time instead of extending the
+		// animation. That leaves this arm re-entered on each feed think until the notify lands —
+		// bounded by the release clip, and self-healing, because a clip that stops being dispatched
+		// makes the predicate false and the schedule fires.
+		if (!FeedBoundaryArrivesFromAnimEvent(ElysiumFeed::EventFeedTeardown))
+		{
+			OnFeedAnimEvent(ElysiumFeed::EventFeedTeardown);
+		}
 		break;
 
 	case EElysiumFeedPhase::ReleaseTail:

@@ -129,6 +129,11 @@ public:
 	// multipliers; absent means the template authors no filter for that family.
 	float DamageFilters[4] = { 0.f, 0.f, 0.f, 0.f };
 	bool  bHasDamageFilter[4] = { false, false, false, false };
+	// The resolved template's authored `BloodPool` — the full pool this critter stands up with,
+	// latched at seed because the live slot is drained by feeding. Retail re-reads the immutable
+	// template record instead (`GetCharTemplate` -> `template+0xd0` `+0x30`); the value is the same
+	// and the lookup is not repeated per frame. 0 when the template authors none.
+	int32 TemplateBloodPoolValue = 0;
 
 	// --- Senses, perception tuning and memory ---
 	// The three authored perception keyfields `InitPerceptionDistances` (`0x1028fb70`) reads, kept
@@ -187,6 +192,8 @@ public:
 	// `Clan None` but a Sabbat vampire template carries `Clan Brujah` AND `Kindred 1`, and only the
 	// key distinguishes a ghoul or a Sabbat thug from the clan it is descended from.
 	virtual bool IsKindred() const override;
+
+	virtual int32 TemplateBloodPool() const override { return TemplateBloodPoolValue; }
 
 	virtual bool GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 		float& OutFilter) const override;

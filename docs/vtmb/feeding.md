@@ -467,6 +467,110 @@ rather than introduce separate montage-owned implementations.
 - Verify `OnFedUponBegin`/`OnFedUponEnd` caller, activator, maker forwarding and save/load behavior
   on `sp_tutorial_1`.
 
+## `CFeedBar` — the victim blood meter
+
+Recovered in full. The meter is a `vgui` panel on the client HUD; nothing about its lifetime is
+owned by focus, by the grapple, or by the camera.
+
+### The value channel
+
+`CBasePlayer::UpdateClientActionState` (`vampire.dll` `0x101755d0`) is the only producer. It runs on
+the ordinary HUD update, not on a feed event, and sends the one-byte `FeedBar` usermsg
+(registered at `0x10350340`, message id `DAT_10726060`, payload width 1) **only when the value
+differs from the cached `m_iClientFeedBloodPool` at `+0x1a8c`**. Two arms select the entity whose
+`BloodPool` (stat slot 12, `CVStatList_t` index `0xc`) is sent, in this order:
+
+1. `m_hFeedTarget` (`+0x149c`) when its handle still resolves; otherwise the grapple partner
+   (`+0x1538`) while this player is the role-0 half (`+0x153c == 0`) and the continuation latch
+   (`+0x14a8`) is set. This is the feed arm.
+2. Otherwise the **active weapon's blood source** — weapon vfunc `0x474` -> `+0x9c` — read at
+   `0x10175bbb`. The same panel doubles as a carried blood source's readout. This runtime has no
+   blood-source weapon, so that arm has no producer and is left saying nothing.
+
+Both arms mask a negative to zero (`((int)v < 1) - 1 & v`) before sending.
+
+The denominator is separate and is not sent with the value: `CFeedBar::vfunc114` seeds it with the
+literal `0xf` and overrides it with the player's replicated `m_iClientFeedMaxBloodPool`
+(`+0x14cc` client / `+0x1a90` server) when that is non-zero. That field is written in exactly one
+place — `CBaseCombatCharacter::EnterGrappleState` `0x10329760`, from the VICTIM's char-template
+`Attributes[BloodPool]` (`template+0xd0` `+0x30`) — and nothing ever clears it, so the meter keeps
+the denominator the grapple opened with for the rest of the panel's life. Slot 13 `BloodPool_Max`
+has no reader anywhere in the image.
+
+### The value gate and the hold — `CFeedBar::vfunc114` `client.dll` `0x100503d0`
+
+Signature `(int iValue, bool bShow)` (`RET 0x8`; `EDI = [ESP+0x10]` is the value, `AL = [ESP+0x14]`
+the show flag). In order:
+
+1. `+0x1b0 = curtime` — when this update happened.
+2. `+0x1ac = 15`, then the replicated maximum when non-zero.
+3. If the client-side HUD-suppression latch (`0x100a5a80`) is set, the value is forced to 0 and the
+   deadline is pushed into the past.
+4. `DevMsg(2, "FeedBar: %d\n", value)`.
+5. **`value >= 15`** (`CMP EDI,0xf / JGE 0x100504d4`) -> percent 0, `SetVisible(0)`, return.
+6. **`value <= 0`** (`JLE 0x100504b3`) -> percent 0, `SetVisible(0)`, return.
+7. Otherwise `percent (+0x1a8) = value * 100 / max`, and if `bShow`: `SetVisible(1)` and
+   `hide deadline (+0x1b4) = curtime + 3.0`.
+
+The hold constant `_DAT_10227ee0` is the same rdata double `SimpleSpline` `0x100fdb30` reads as its
+3, so it is exactly **3.0 seconds**. The only recovered `bShow == false` call is the constructor's
+`vfunc114(15, false)` at `0x10050160`, which the upper arm already hides — every call that can
+raise the panel raises it.
+
+Consequences, both load-bearing:
+
+- **Retail never draws an empty bar.** A victim at zero hides the panel outright. Since an ordinary
+  feed always ends with the victim at zero, the meter disappears at the last pulse rather than
+  sitting emptied through the release.
+- **A victim standing at exactly its 15-point stat ceiling shows no meter at all** — 15 is also the
+  client's default denominator, and the client refuses to draw a bar it cannot have been told the
+  size of. Retail's own quirk, reproduced.
+
+### The paint-time hide and the ramps — `CFeedBar::vfunc98` `client.dll` `0x10050560`
+
+- When the player is not feeding (`+0x14d4` clear) and `curtime >= +0x1b4`, `SetVisible(0)` and
+  paint nothing. **This is the whole of the meter's post-feed persistence: a three-second timer off
+  the last value change.** There is no focus test in either function. The capture note in
+  "Captured ordinary presentation sequence" step 4 above reads the disappearance as focus loss;
+  the recovered code says it is this timer, and the two are indistinguishable in that recording
+  because the player kept looking at the body.
+- Pre-pulse anticipation (`0x100507a5`): while feeding with a running pulse interval (`+0x14d0`),
+  `_DAT_103ede90 = (int)((100 / max) * clamp((curtime - +0x1b0) / +0x14d0, 0, 1))` is subtracted
+  from the drawn percent, so the bar slides one blood point's worth down across each interval
+  instead of stepping. The counter is reset to 0 by `vfunc114` whenever the value goes **up**.
+  When not feeding, `+0x1b0` is re-stamped to curtime each paint so the ramp stays at zero.
+- Alpha (`+0x1a0`) ramps +/-5 per frame between 0 and 255, driven by the latches at `+0x1a5`/`+0x1a6`.
+  What sets those latches is **not recovered**.
+- Sprites `hud/BloodBar_Empty` and `hud/BloodBar_Full` (512x64), the fill clipped from the right at
+  `0x1b3 - percent * 0x168 / 100`.
+
+### Port
+
+`ElysiumFeedBar::Update` in `Source/ElysiumUE/Public/ElysiumViewState.h` is the whole contract as
+one total function over `FElysiumFeedView`; `UElysiumPresentationSubsystem::Publish` supplies the
+source in retail's precedence and `UElysiumHUDWidget` draws the published fraction and derives
+nothing. `Elysium.Substrate.UI.HUDFeedBar` asserts the window, the hold, the change gate and the
+anticipation.
+
+DEFECT CLOSED. The publisher previously owned the panel with gameplay ownership — visible while
+`FElysiumFeedState::IsPaired()`, then retained while the released victim remained the focused
+usable. `FElysiumCombatCharacter::ShouldReleaseFeed` selects the release family exactly at
+`BloodPoolValue() < 1`, so every completed feed reached Release and ReleaseTail with the victim at
+zero while the pair was still held, and the focus branch then held that same zero-valued view for
+as long as the drained body stayed in view. The panel the player saw was therefore an empty one,
+for the whole tail of every feed and indefinitely after it. Neither owner exists in retail.
+
+Named modernizations:
+
+- The alpha ramp is not ported as a 51-step per-frame integer fade; the panel is drawn at full
+  opacity and Slate's own visibility flip replaces it. The latches that drove it are unrecovered,
+  so there is nothing faithful to reproduce.
+- The anticipation is published as a float fraction rather than retail's truncated integer percent,
+  and it rides the substrate clock rather than the frame.
+
+Still unrecovered: the `+0x1a5`/`+0x1a6` alpha latches' producer, and the blood-source weapon arm of
+the value channel (no producer in this runtime).
+
 ## Reproducible evidence
 
 | Surface | Entry points / command |
@@ -477,6 +581,7 @@ rather than introduce separate montage-owned implementations.
 | animation event boundary | `CBaseCombatCharacter::HandleAnimEvent` `0x1032e330`; `uv run elysium research animation_event_survey` |
 | event-5116 particle bridge | `client.dll` `C_BaseAnimating::FireEvent` `0x100935a0`, creator `0x100b47b0`; `force_feeding_{emitter,fx1,fx2}` data |
 | transaction | `FeedBegin` `0x10339d90`, `Feed` `0x1033a400`, `FeedInterrupt` `0x1033a9e0` |
+| victim blood meter | `client.dll` `CFeedBar::vfunc114` `0x100503d0`, `vfunc98` `0x10050560`, ctor `0x10050160`; sender `vampire.dll` `CBasePlayer::UpdateClientActionState` `0x101755d0`, usermsg table `0x10350340` |
 | feed camera | `client.dll` weight updater `0x100fc900`, ordinary solver `0x100fe7f0`, blend helper `0x100fe600` |
 | feeding-view renderer | `client.dll` `CViewRender::ViewDrawScene` `0x1019b370`, `DrawFeedingView` `0x1019b030`, `Init` `0x1018f630`; `effects/spotlight` |
 | feed sound state | `vampire.dll` `StartGrappleAttack` `0x10328df0`, `FeedBegin` `0x10339d90`, `FeedInterrupt` `0x1033a9e0`, `GrappleSound` `0x1033b100`; `vdata/system/sndscheme_char.txt` |
@@ -488,3 +593,48 @@ rather than introduce separate montage-owned implementations.
 All decompilation, decoded model inventory and game-derived reports remain under
 `$ELYSIUM_WORK_ROOT/research/`; only the reproducible specifications and engine-neutral findings
 are tracked.
+
+## Port status - 4006/4007 now arrive from the clip
+
+The note in `ElysiumFeed.cpp` that called the animation-event bridge "a scheduler, not a notify
+listener" described the state before the character bake carried sequence events. It now does
+(`UElysiumClipData::Events` rides every native `UAnimSequence`), so
+`FElysiumCombatCharacter::HandleAnimEvent` claims 4007 and 4006 for real, on retail's own guards -
+the paired partner at `+0x1538` resolving and the paired role at `+0x153c` being 0, the ATTACKER
+half - and calls `OnFeedAnimEvent` from the authored record. The vtable slots are named:
+`+0x57c` is `CBaseCombatCharacter::FeedBegin` `0x10339d90` and `+0x584` is
+`CBaseCombatCharacter::FeedInterrupt` `0x1033a9e0`. Full recovery:
+`docs/vtmb/animation_events.md` -> "Port status - combat character band".
+
+**The phase scheduler is kept as the FALLBACK, not removed.** `feeding.md`'s own recreation
+contract requires engage -> bite -> loop -> release to run with nothing rendered, and that is
+exactly what the schedule carries: a headless world, a bodiless character, a channel publishing no
+phase, or a clip whose timeline declares no boundary record.
+
+`FElysiumCombatCharacter::FeedBoundaryArrivesFromAnimEvent` is what decides between them - the same
+question `FElysiumWeapon::CommitArrivesFromAnimEvent` already asks of a shot commit. It resolves the
+current phase's clip pair, asks the embodiment which owner owns that label (the feed families live
+in the shared banks), checks a polled channel is standing on it, and scans that timeline for the id.
+**Only a positive answer stands the scheduled raise down.** Every "cannot tell" keeps the schedule,
+because a boundary that fires twice is inert and a boundary that never fires hangs the transaction.
+
+Exactly one FIRING reaches the transaction, and it is guarded on both sides:
+
+- 4007 - the schedule stands down when the bite clip carries the record, and `FeedBegin` refuses
+  anyway while `FeedState.Target` is set (retail's own `m_hFeedTarget` guard). The Bite -> Loop arm
+  is the backstop: if the stand-down was taken and no record opened the transaction by the time the
+  bite clip is over (the channel was taken over before the next dispatch pass, or the clip was
+  displaced), it raises 4007 itself there, and ends the grapple if `FeedBegin` still refuses -
+  otherwise the pair would enter Loop with no transaction and `ShouldReleaseFeed` would hold on a
+  victim still carrying blood.
+- 4006 - the schedule stands down when the release clip carries the record, and the notify moves the
+  phase to `ReleaseTail`, after which `AdvanceFeedPhase`'s `Release` arm is unreachable.
+
+For 4006 the stand-down deliberately leaves `PhaseDeadline` at the authored event estimate rather
+than re-arming it, because `CompleteFeedTransaction` anchors the presentation-only release tail to
+that value so a late observation consumes pose time instead of extending the animation. The arm is
+therefore re-entered on each feed think until the notify lands - bounded by the release clip, and
+self-healing, since a clip that stops being dispatched makes the predicate false and the schedule
+fires. `Elysium.Substrate.Feeding` and `Elysium.Substrate.FeedMakerOutputs` are unchanged and still
+green: with no clip phase published, the predicate is false and the scheduler behaves exactly as
+before.

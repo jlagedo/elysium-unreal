@@ -177,7 +177,11 @@ Two consequences worth stating because they are easy to get backwards. **The cya
 the red one is blood**, which the area icon settles: the walkthrough places that icon "on top of
 your life meter" and the capture puts it on the cyan rail. And **health is continuous where blood is
 discrete** — the tick marks on the blood tube are its points, which is why a blood readout counts
-and a health readout fills.
+and a health readout fills. There are **fifteen** of those points, in three groups of five: the
+count is `BloodPool`'s authored `Max` in `stats.txt`, which is the literal 15 for every character
+(the `Generation_Blood_Pool_Max` line beside it is commented out and unreferenced by the binary),
+and NOT the separate `BloodPool_Max` stat, which is a critter's starting pool — see
+`docs/vtmb/game_runtime.md` § "Masquerade / Humanity / Blood / Frenzy".
 
 The selection element sits top left, beside the life rail, as a stack of two: a **circular ornate
 icon** holding the current category's selected item, and beneath it a **portrait panel on a red
