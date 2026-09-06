@@ -18,18 +18,17 @@ def test_all_profile_discovers_and_sorts_patch_first_names() -> None:
 
 def test_complete_profiles_include_every_global_bundle() -> None:
     # R6.6: `use-icons` is gone -- the HUD draws the 72 context icons off the texture lane's
-    # `T_` assets, so no profile composites an atlas any more.
+    # `T_` assets, so no profile composites an atlas any more. R8: `npc` and `items` are gone --
+    # characters and wield are native import lanes (`import characters`), not export bundles.
     expected = {
         "audio",
         "particles",
         "scripts",
         "signs",
         "vdata",
-        "items",
         "cfg",
         "scenes",
         "ui",
-        "npc",
     }
     for profile in ("grid", "all"):
         bundles = export_all.bundles_for_profile(profile)

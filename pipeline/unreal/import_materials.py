@@ -306,14 +306,17 @@ class Tracker(object):
     stamp equal to the recipe fingerprint is reused.
     """
 
-    def __init__(self, force=False):
+    def __init__(self, force=False, ledger=None):
         self.force = bool(force)
         self.fingerprints = {}
+        self.ledger = ledger
 
     def fingerprint(self, entry):
         path = entry["assetPath"]
         if path not in self.fingerprints:
             self.fingerprints[path] = bl.recipe_fingerprint(STAGE, path, entry["recipe"])
+            if self.ledger is not None:
+                self.ledger.record(path, entry["recipe"])
         return self.fingerprints[path]
 
     def needs_import(self, entry):
@@ -326,6 +329,8 @@ class Tracker(object):
             exists = False
         if self.force or not exists:
             return True
+        if stored != fingerprint and self.ledger is not None:
+            self.ledger.explain(path, entry["recipe"], stored)
         return stored != fingerprint
 
 
@@ -749,7 +754,9 @@ def run(manifest_path, force=False):
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
         [package_root, master_root], force_rescan=True)
 
-    import_entries(manifest, staging_root, Tracker(force), report)
+    ledger = bl.RecipeLedger(os.path.join(staging_root, "recipes.json"), "import-materials")
+    import_entries(manifest, staging_root, Tracker(force, ledger), report)
+    ledger.write()
     try:
         protected = {entry["assetPath"] for entry in manifest["assets"]} | set(manifest["keep"])
         report.pruned = prune(package_root, protected, manifest["pruneScope"], report.ownership)

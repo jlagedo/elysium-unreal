@@ -69,10 +69,9 @@ public:
 	//
 	// `MapName` is used for exactly one question (R5.2): is this map on `MapsOnV2Models`? A map on
 	// that flag was baked with its own real SkyLight (`SLS_SpecifiedCubemap`, the true cube, the
-	// true intensity) and its own real backdrop dome — both authored once at bake by the same
-	// `ElysiumEnvironment::BuildSkyCubeFrom` join this function still runs for every other map — so
-	// this function returns right after `ApplySceneFog` and touches neither: rebuilding a transient
-	// cube here would not merely waste the work, it would silently fight the baked asset on the
+	// true intensity) and its own real backdrop dome, both bound to the texture-lane composite
+	// and stored mean. This function returns right after `ApplySceneFog` and touches neither:
+	// resetting their bindings here would silently fight the baked asset on the
 	// SkyLight's next `RecaptureSky`.
 	void ApplyEnvironment(const FElysiumEnvDef& Env, const FString& MapName);
 

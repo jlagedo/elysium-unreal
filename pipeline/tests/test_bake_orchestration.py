@@ -8,7 +8,7 @@ from unittest import mock
 
 import pytest
 
-from elysium_pipeline import export_manager, shared_corpus, wield_corpus
+from elysium_pipeline import export_manager, shared_corpus
 from elysium_pipeline.placed_models import PlacedModelUse
 from elysium_pipeline.tasking import Manifest, TaskFailure, TaskResult
 
@@ -21,6 +21,14 @@ def _config(temporary: str):
     (baked / "test_map.umap").write_bytes(b"level")
     export.mkdir(parents=True)
     return SimpleNamespace(repo_root=repo, export_root=export)
+
+
+def _write_character_materials(material_root):
+    v2 = material_root / "V2"
+    v2.mkdir(parents=True, exist_ok=True)
+    for name in ("M_V2_LitSkinned", "M_V2_LitSkinnedTranslucent", "M_V2_Eyes",
+                 "MI_V2_Missing", "T_V2_MissingChecker"):
+        (v2 / f"{name}.uasset").write_bytes(b"asset")
 
 
 def _record_verification(config) -> None:
@@ -114,6 +122,17 @@ def test_particle_pass_is_part_of_the_profile_recipe() -> None:
         assert off != on
 
 
+def test_map_receipt_keeps_deployed_root_and_tracks_native_catalogues(tmp_path) -> None:
+    config = _config(str(tmp_path))
+    expected = config.repo_root / "Plugins/ElysiumBaked/Content/test_map/test_map.umap"
+    assert export_manager._baked_package(config, "test_map") == expected
+    before = export_manager._maps_bake_fingerprint(config, ["test_map"])
+    catalogue = config.repo_root / "Plugins/ElysiumBaked/Content/Models/_Corpus/DA_PlacedModels.uasset"
+    catalogue.parent.mkdir(parents=True)
+    catalogue.write_bytes(b"native references")
+    assert export_manager._maps_bake_fingerprint(config, ["test_map"]) != before
+
+
 def test_corpus_bake_gate_skips_a_warm_second_run_and_force_defeats_it() -> None:
     # The launch rides a manifest receipt over the decoded shared corpus; per-asset reuse
     # inside a launch remains the commandlet's own decision, read off each recipe stamp.
@@ -166,24 +185,6 @@ def test_failed_corpus_bake_records_no_success() -> None:
         bake.assert_called_once()
 
 
-def test_wield_bake_gate_skips_a_warm_second_run_and_force_defeats_it() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _config(temporary)
-        manifest_path = wield_corpus.manifest_path(config.export_root)
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text("{}", encoding="utf-8")
-        wield_corpus.wield_dir(config.export_root).mkdir(parents=True, exist_ok=True)
-        asset = (config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Items"
-                 / "DA_WieldModels.uasset")
-        asset.parent.mkdir(parents=True)
-        asset.write_bytes(b"table")
-        with mock.patch.object(export_manager.unreal, "bake_wield") as bake:
-            export_manager._ensure_wield_bake(config, object())
-            export_manager._ensure_wield_bake(config, object())
-            export_manager._ensure_wield_bake(config, object(), force=True)
-        assert bake.call_count == 2
-
-
 def test_profile_map_bake_gate_skips_warm_and_verify_still_reads_back() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         config = _config(temporary)
@@ -221,33 +222,6 @@ def test_profile_map_bake_skip_requires_the_baked_package() -> None:
         assert bake.call_count == 2
 
 
-def test_character_bake_gate_skips_warm_and_missing_mesh_defeats_it() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _config(temporary)
-        npc_dir = config.export_root / "npc"
-        npc_dir.mkdir()
-        (npc_dir / "families.json").write_text("{}", encoding="utf-8")
-        mesh = (config.repo_root / "Plugins" / "ElysiumBaked" / "Content"
-                / "Characters" / "Meshes" / "SK_amy.uasset")
-        mesh.parent.mkdir(parents=True)
-
-        def author(*_args, **_kwargs):
-            mesh.write_bytes(b"mesh")
-
-        with (
-            mock.patch.object(export_manager.unreal, "bake_characters",
-                              side_effect=author) as bake,
-            mock.patch.object(export_manager.unreal, "verify_characters") as verify,
-        ):
-            export_manager._run_character_bake(config, object(), ["amy"])
-            export_manager._run_character_bake(config, object(), ["amy"])
-            mesh.unlink()
-            export_manager._run_character_bake(config, object(), ["amy"])
-            export_manager._run_character_bake(config, object(), ["amy"], force=True)
-        assert bake.call_count == 3
-        verify.assert_not_called()
-
-
 def test_policy_generators_merge_into_one_commandlet_launch() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         config = _config(temporary)
@@ -270,9 +244,10 @@ def test_policy_generators_merge_into_one_commandlet_launch() -> None:
             material_root.mkdir(parents=True, exist_ok=True)
             for master in (
                 "M_World_Opaque", "M_World_Masked", "M_World_Translucent",
-                "M_World_Glass", "M_Refract", "M_Additive", "M_PlayerBody", "M_Eyes",
+                "M_World_Glass", "M_Refract", "M_Additive",
             ):
                 (material_root / f"{master}.uasset").write_bytes(b"asset")
+            _write_character_materials(material_root)
 
         def auxiliary(_config, _runner):
             font_root.mkdir(parents=True, exist_ok=True)
@@ -330,9 +305,10 @@ def test_stale_world_materials_alone_launch_only_that_generator() -> None:
             material_root.mkdir(parents=True, exist_ok=True)
             for master in (
                 "M_World_Opaque", "M_World_Masked", "M_World_Translucent",
-                "M_World_Glass", "M_Refract", "M_Additive", "M_PlayerBody", "M_Eyes",
+                "M_World_Glass", "M_Refract", "M_Additive",
             ):
                 (material_root / f"{master}.uasset").write_bytes(b"asset")
+            _write_character_materials(material_root)
 
         def auxiliary(_config, _runner):
             font_root.mkdir(parents=True, exist_ok=True)
@@ -370,6 +346,7 @@ def test_export_profile_sequences_gated_launches_and_covers_particles() -> None:
         config = _config(temporary)
         order = []
         with (
+            mock.patch.object(export_manager.native_model_pipeline, "require_map_prerequisites"),
             mock.patch.object(
                 export_manager, "run_offline_profile",
                 side_effect=lambda *_a, **_k: order.append("offline") or (["m1"], {})),
@@ -381,11 +358,8 @@ def test_export_profile_sequences_gated_launches_and_covers_particles() -> None:
                 export_manager, "ensure_corpus_bake",
                 side_effect=lambda *_a, **_k: order.append("corpus")),
             mock.patch.object(
-                export_manager, "export_characters",
-                side_effect=lambda *_a, **_k: order.append("characters")),
-            mock.patch.object(
-                export_manager, "_ensure_wield_bake",
-                side_effect=lambda *_a, **_k: order.append("wield")),
+                export_manager.native_model_pipeline, "import_map_dependencies",
+                side_effect=lambda *_a, **_k: order.append("native models")),
             mock.patch.object(
                 export_manager, "_bake_profile_maps",
                 side_effect=lambda *_a, **_k: order.append("maps")),
@@ -395,7 +369,7 @@ def test_export_profile_sequences_gated_launches_and_covers_particles() -> None:
         # The `all` profile carries the particles bundle, so the policy phase skips its
         # duplicate mirror; the cast and wield mounts precede the map bake.
         assert order == [
-            "offline", ("policy", True), "corpus", "characters", "wield", "maps"]
+            "offline", ("policy", True), "corpus", "native models", "maps"]
 
 
 def test_particle_mirror_is_gated_and_skipped_when_a_profile_covers_it() -> None:
@@ -505,8 +479,7 @@ def test_focused_character_policy_runs_only_character_material_generators() -> N
             assert generators == export_manager.CHARACTER_MATERIAL_GENERATORS
             assert not include_auxiliary
             material_root.mkdir(parents=True)
-            (material_root / "M_PlayerBody.uasset").write_bytes(b"body")
-            (material_root / "M_Eyes.uasset").write_bytes(b"eyes")
+            _write_character_materials(material_root)
 
         with mock.patch.object(
             export_manager.unreal, "generate_policy_content", side_effect=generate
@@ -515,78 +488,3 @@ def test_focused_character_policy_runs_only_character_material_generators() -> N
 
         assert result.status == "ok"
         policy.assert_called_once()
-
-
-def test_focused_character_sources_name_only_the_body_and_reached_banks() -> None:
-    with tempfile.TemporaryDirectory() as temporary:
-        config = _config(temporary)
-        npc_dir = config.export_root / "npc"
-        npc_dir.mkdir()
-        (npc_dir / "npc_manifest.json").write_text(json.dumps({
-            "npcs": {
-                "amy": {
-                    "model": "models/amy.mdl",
-                    "clips": {"idle": "amy", "walk": "bank_a"},
-                },
-                "bob": {
-                    "model": "models/bob.mdl",
-                    "clips": {"idle": "bob", "walk": "bank_b"},
-                },
-            },
-            "banks": {
-                "bank_a": {"model": "models/bank_a.mdl"},
-                "bank_b": {"model": "models/bank_b.mdl"},
-            },
-            "cinematics": {},
-            "placed_models": {
-                "switch": {"model": "models/switch.mdl", "clips": {}},
-            },
-        }), encoding="utf-8")
-        reached = []
-
-        def capture(graph, **_kwargs):
-            reached.extend(graph.tasks)
-            return {
-                name: TaskResult(name, "skipped", 0.0)
-                for name in graph.tasks
-            }
-
-        from elysium_pipeline.formats import install
-        with (
-            mock.patch.object(install, "build_index", return_value={}),
-            mock.patch.object(export_manager.TaskGraph, "run", new=capture),
-        ):
-            bodies, banks = export_manager.write_character_sources(
-                config,
-                npc_dir,
-                manifest=Manifest(config.export_root / ".elysium-manifest.json"),
-                include_props=False,
-                body_stems=("amy",),
-            )
-
-        assert bodies == ["amy"]
-        assert banks == ["bank_a"]
-        assert reached == ["eskm:amy", "eskm:bank:bank_a"]
-
-
-def test_focused_placed_model_never_downgrades_global_clip_policy() -> None:
-    rest = PlacedModelUse(
-        "models/switch.mdl", "switch", "models_switch", False, ())
-    full_row = {
-        "model": "models/switch.mdl", "static_stem": "models_switch",
-        "eskm": "placed_models/switch.eskm", "clip_mode": "full",
-        "rest_candidates": ["idle"],
-        "clips": {"idle": {}, "activate": {}, "deactivate": {}},
-    }
-    assert export_manager._placed_row_satisfies(full_row, rest)
-    preserved = export_manager._preserve_placed_row_policy(rest, full_row)
-    assert preserved.full_clips
-
-    required = PlacedModelUse(
-        "models/switch.mdl", "switch", "models_switch", False,
-        ("idle", "activate", "deactivate"))
-    assert not export_manager._placed_row_satisfies(full_row | {
-        "clip_mode": "required",
-        "clips": {"idle": {}, "activate": {}},
-    }, required)
-    assert export_manager._placed_row_satisfies(full_row, required)

@@ -1,10 +1,8 @@
 #include "Visual/ElysiumBlendGrids.h"
 
-#include "ElysiumContentPaths.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
-#include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -49,18 +47,6 @@ const FElysiumBlendCell* FElysiumBlendGrid::CellAt(int32 Axis0, int32 Axis1) con
 		}
 	}
 	return nullptr;
-}
-
-bool FElysiumBlendTable::Load(const FString& RelPath, FString& OutError)
-{
-	const FString Path = FElysiumContentPaths::NpcBlends(RelPath);
-	FString JsonText;
-	if (!FFileHelper::LoadFileToString(JsonText, *Path))
-	{
-		OutError = FString::Printf(TEXT("not found: %s"), *Path);
-		return false;
-	}
-	return LoadJsonText(JsonText, OutError);
 }
 
 bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError)

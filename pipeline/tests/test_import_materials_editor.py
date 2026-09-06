@@ -422,7 +422,12 @@ def _load(editor):
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     fake = _fake_unreal(editor)
-    with mock.patch.dict(sys.modules, {"unreal": fake}):
+    package = importlib.import_module("pipeline.unreal")
+    # `from pipeline.unreal import bake_lib` also consults the package attribute.
+    # Isolate both caches and restore the previous helper without rebinding its editor.
+    with mock.patch.dict(sys.modules, {"unreal": fake}), \
+            mock.patch.object(package, "bake_lib", None, create=True):
+        del package.bake_lib
         sys.modules.pop("pipeline.unreal.bake_lib", None)
         try:
             spec.loader.exec_module(module)   # main() exits at once: no -ImportMaterials=
@@ -430,6 +435,29 @@ def _load(editor):
             pass
     module.unreal = fake
     return module
+
+
+@pytest.mark.parametrize("cached_module", [False, True])
+def test_loader_isolates_and_restores_a_previous_editor_helper(monkeypatch, tmp_path, cached_module):
+    package = importlib.import_module("pipeline.unreal")
+    previous = SimpleNamespace(unreal=SimpleNamespace())
+    monkeypatch.setattr(package, "bake_lib", previous, raising=False)
+    monkeypatch.delitem(sys.modules, "pipeline.unreal.bake_lib", raising=False)
+    if cached_module:
+        monkeypatch.setitem(sys.modules, "pipeline.unreal.bake_lib", previous)
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+
+    module = _load(editor)
+
+    assert module.bl is not previous and module.bl.unreal is module.unreal
+    assert package.bake_lib is previous
+    if cached_module:
+        assert sys.modules["pipeline.unreal.bake_lib"] is previous
+    else:
+        assert "pipeline.unreal.bake_lib" not in sys.modules
+    # Exercise the real helper's recipe/registry and publication behavior, not a stubbed check.
+    assert module.run(_stage(tmp_path, [_entry("brick")])).failures == []
 
 
 def _add_master(editor, path):

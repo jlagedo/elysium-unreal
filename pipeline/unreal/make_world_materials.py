@@ -179,10 +179,19 @@ def make_environment_collection():
         "RainWetSpecular": 0.50,
         "RainReflectionDebug": 0.0,
     }
+    # Update existing rows in place rather than replacing the array: every
+    # `FCollectionScalarParameter` carries the GUID a `CollectionParameter` node binds to, and a
+    # fresh struct is a fresh GUID. Replacing the array on every run left every master built
+    # before it (M_V2_Lit's wetness nodes) failing to compile with "CollectionParameter has
+    # invalid parameter None" until the masters were rebuilt by hand.
+    existing = {str(row.get_editor_property("parameter_name")): row
+                for row in (collection.get_editor_property("scalar_parameters") or [])}
     parameters = []
     for name, default in values.items():
-        parameter = unreal.CollectionScalarParameter()
-        parameter.set_editor_property("parameter_name", name)
+        parameter = existing.get(name)
+        if parameter is None:
+            parameter = unreal.CollectionScalarParameter()
+            parameter.set_editor_property("parameter_name", name)
         parameter.set_editor_property("default_value", default)
         parameters.append(parameter)
     collection.set_editor_property("scalar_parameters", parameters)

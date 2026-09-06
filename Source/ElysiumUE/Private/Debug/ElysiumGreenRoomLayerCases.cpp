@@ -3,7 +3,8 @@
 #include "Debug/ElysiumGreenRoomShared.h"
 
 #include "ElysiumAnimationIntent.h"   // the grip table a layer case reports its mask from
-#include "Visual/ElysiumNpcVisual.h"   // IsStemBaked — a preset case only stands what the mount has
+#include "Visual/ElysiumNpcVisual.h"
+#include "Visual/ElysiumCharacterAssets.h"   // IsStemBaked — a preset case only stands what the mount has
 
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
@@ -106,7 +107,7 @@ bool FElysiumGreenRoomRun::PickLayerCaseBody(const TArray<FString>& Candidates, 
 	// stable across runs, and a preset that stood a different model each time would make a pose
 	// difference unattributable.
 	TArray<FString> Rest;
-	Anims->GetIndex().Npcs.GetKeys(Rest);
+	Rest = ElysiumCharacterAssets::BodyNames();
 	Rest.Sort();
 	Stems.Append(Rest);
 

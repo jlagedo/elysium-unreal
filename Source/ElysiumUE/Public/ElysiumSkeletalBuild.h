@@ -6,7 +6,7 @@
 #include "ElysiumSkeletalBuild.generated.h"
 
 /**
- * Editor-only construction of skeletal assets from Elysium's own data, without glTF.
+ * Editor-only construction of native skeletal assets from the GLB lane's staged projections.
  *
  * The character bake reads VtMB's decoded rig directly and builds the engine's assets through the
  * engine's own authoring path -- FMeshDescription plus FSkeletalMeshAttributes for geometry, skin
@@ -33,30 +33,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildProbeSkeletalMesh(const FString& PackageName);
 
-	/**
-	 * Build and save a skeletal mesh from an `.eskm` container -- skeleton, LOD0 geometry, skin
-	 * weights and facial morph targets.
-	 *
-	 * `SkeletonPackageName` names the `USkeleton` to bind to; it is created on first use and the
-	 * mesh's bone tree is merged into it. A model's skeleton is built ahead of this call from the
-	 * same container, so that merge is a cross-check rather than a growth step -- a refusal means
-	 * the skeleton on disk no longer matches the container. Left empty, the mesh gets a private
-	 * skeleton beside it.
-	 *
-	 * Each material section gets a `UMaterialInstanceConstant` under `MaterialPackagePath`,
-	 * parented to `MaterialParentPath` and carrying the albedo named for its slot in
-	 * `MaterialTextures`. Instances are named after the MESH asset rather than the model, because
-	 * two meshes of the same model would otherwise write the same instance names and the second
-	 * would silently take the first's slots.
-	 *
-	 * Returns an empty string on success, otherwise the first thing that went wrong.
-	 */
-	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
-	static FString BuildSkeletalMeshFromSource(const FString& SourcePath, const FString& PackageName,
-		const FString& SkeletonPackageName, const FString& MaterialParentPath,
-		const FString& MaterialPackagePath, const TMap<FString, FString>& MaterialTextures,
-		const TMap<FString, FString>& MaterialParents,
-		const FString& RecipeFingerprint = TEXT(""));
 	/** Build a staged GLB projection, binding existing material assets directly. A non-empty
 	 * reference pose re-skins geometry in the same build, for wield models. No private material
 	 * instances or texture imports are created by this entry point. */
@@ -124,37 +100,6 @@ public:
 		const TArray<FString>& SourceSkeletonPackageNames,
 		const FString& RecipeFingerprint = TEXT(""));
 
-	/**
-	 * Build and save one `UAnimSequence` per clip in an `.eskm`, as `<PackagePath>/A_<clip>`.
-	 *
-	 * Every clip in the file is baked in one pass because a shared animation bank holds hundreds
-	 * of them and re-reading the container per clip is the whole cost of the bake.
-	 *
-	 * Tracks bind to the skeleton by bone NAME, which is what lets a bank recorded on one rig play
-	 * on every compatible body. How hard an unresolved name is depends on which kind of
-	 * container this is, and the container says which: a body carries its own geometry, a bank
-	 * carries none.
-	 *
-	 * - A **body's own** container is checked up front and the whole call fails if any of its bones
-	 *   is missing from the skeleton. That skeleton is built from this very container, so a missing
-	 *   bone means the asset on disk is stale for it, and the clip would bake a track short and play
-	 *   part of the rig at bind pose with nothing reported.
-	 * - A **bank** is recorded against another body's rig and legitimately names bones this
-	 *   skeleton has never had -- the Gangrel hair chain, the Ventrue ponytail. Those tracks are
-	 *   dropped, and `OutDroppedTracks` counts them so a bake that quietly loses more than it
-	 *   should is visible.
-	 *
-	 * A clip that owns only part of the rig -- VtMB's partial-body `*_layer` overlays -- also gets a
-	 * `UBlendProfile` blend mask on the sequence skeleton and a `UElysiumAnimLayerMask` naming it, and
-	 * its owned-but-unanimated bones are written out at the container's bind pose rather than left
-	 * to the skeleton's reference pose.
-	 *
-	 * Returns an empty string on success, otherwise the first thing that went wrong.
-	 */
-	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
-	static FString BuildAnimSequencesFromSource(const FString& SourcePath, const FString& PackagePath,
-		const FString& SkeletonPackageName, int32& OutClipCount, int32& OutDroppedTracks,
-		const FString& RecipeFingerprint = TEXT(""));
 	/** Stage variant: standard folded names, optional cinematic role, manifest-owned pruning. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildAnimSequencesFromStage(const FString& SourcePath, const FString& PackagePath,
@@ -162,33 +107,6 @@ public:
 		int32& OutDroppedTracks, int32& OutSuppressedAppendixTracks, TArray<FName>& OutSuppressedAppendixBones,
 		const FString& RecipeFingerprint = TEXT(""));
 
-	/**
-	 * Build and save one `UBlendSpace` per blend grid in `npc/blends/<owner>.json`, as
-	 * `<PackagePath>/BS_<label>`, sampling the `A_<clip>` sequences already written there.
-	 *
-	 * A VtMB sequence label does not always name one animation. 275 of them name a **grid**: a 9x1
-	 * fan of `walk_0`..`walk_315` selected by the `move_yaw` pose parameter, or a 3x3 weapon-aim
-	 * layer on `aim_yaw`/`aim_pitch`. The exporter bakes every cell as its own clip and writes the
-	 * axes beside them; this turns the axes into the asset that mixes them.
-	 *
-	 * `BlendsRelPath` is `npc_index.json`'s own `blends` value, so one call reads both
-	 * "blends/<stem>.json" and "animated_props/blends/<stem>.json". An owner that declares no grid
-	 * has no sidecar at all, which is most of them -- the caller skips rather than asking.
-	 *
-	 * Must run AFTER `BuildAnimSequencesFromSource` for the same owner: a sample is one of the
-	 * sequences that pass writes, and a blend space whose samples do not resolve is not written.
-	 *
-	 * A cell the exporter recorded as null, or one whose sequence is absent, is skipped and counted
-	 * in `OutSkippedCells` -- the schema permits a hole and the runtime reader tolerates one. A grid
-	 * left with fewer than two live samples is not a blend space and is skipped whole, counted in
-	 * `OutSkippedGrids`.
-	 *
-	 * Returns an empty string on success, otherwise the first thing that went wrong.
-	 */
-	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
-	static FString BuildBlendSpacesFromGrids(const FString& BlendsRelPath, const FString& PackagePath,
-		const FString& SkeletonPackageName, int32& OutSpaceCount, int32& OutSkippedGrids,
-		int32& OutSkippedCells, const FString& RecipeFingerprint = TEXT(""));
 	/** Read staged grid JSON directly; no lookup under the legacy export root. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildBlendSpacesFromStage(const FString& Json, const FString& PackagePath,

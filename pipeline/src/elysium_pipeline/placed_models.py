@@ -284,7 +284,7 @@ def rest_pose_static_equivalent(d: bytes, v: bytes, candidates) -> bool:
     try:
         import numpy as np
         from elysium_pipeline.formats import mdl_skel as S
-        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+        from elysium_pipeline.skeletal_stage import payload as UEK
 
         bones = S.read_bones(d)
         surfaces = S.decode_skinned(d, v)

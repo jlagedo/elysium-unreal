@@ -85,3 +85,26 @@ def test_native_provenance_refusal_is_a_worker_failure():
         apply_json=lambda obj, text: (None, "source mip 2 mismatch")))
     with mock.patch.dict(sys.modules, {"unreal": fake}), pytest.raises(RuntimeError, match="mip 2"):
         editor_sky.attach_provenance(_cube(), "{}")
+
+
+@pytest.mark.parametrize("mips", [1, 3, 4])
+def test_usable_native_sky_does_not_need_strict_platform_precision(mips):
+    worker = _load(FakeEditor())
+    entry = {"class": "TextureCube", "product": "sky-composite",
+             "expected": {"width": 8, "height": 8, "mips": 3, "faces": 6}}
+    worker.unreal.ElysiumTextureImportLibrary.built_extent = lambda obj: (8, 8, 0, mips)
+    worker.unreal.ElysiumTextureImportLibrary.built_pixel_format = mock.Mock(
+        side_effect=AssertionError("a platform precision gate is outside milestone scope"))
+    problem, difference = worker.verify_built(_cube(), entry)
+    assert problem is None
+    assert difference == (None if mips == 3 else {"authoredMips": 3, "builtMips": mips})
+
+
+def test_native_sky_still_needs_a_usable_mip_and_original_extent():
+    worker = _load(FakeEditor())
+    entry = {"class": "TextureCube", "product": "sky-composite",
+             "expected": {"width": 8, "height": 8, "mips": 3, "faces": 6}}
+    worker.unreal.ElysiumTextureImportLibrary.built_extent = lambda obj: (8, 8, 0, 0)
+    assert "no usable" in worker.verify_built(_cube(), entry)[0]
+    worker.unreal.ElysiumTextureImportLibrary.built_extent = lambda obj: (4, 4, 0, 1)
+    assert "expected 8x8" in worker.verify_built(_cube(), entry)[0]

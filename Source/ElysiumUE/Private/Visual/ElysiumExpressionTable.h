@@ -89,24 +89,16 @@ namespace ElysiumExpressions
 	// the table itself — 4 of the 23 authored params do.
 	inline constexpr const TCHAR* ExpressionClass = TEXT("expressions");
 
-	// Resolve an `expression` event's `param` to a table, through a shared cache keyed on the
-	// resolved stem.
-	//
-	// `Param` is a bare file stem, not a path: 23 distinct values across the corpus and not one of
-	// them carries a directory or an extension. Nineteen name the table directly
-	// (`lacroix_expressions`); four are the *model* stem alone (`lacroix`, `jeanette`,
-	// `mercuriodamaged`, `dialog`), which is `client.dll`'s own `"expressions/%s_%s.vfe"` form with
-	// the class left off — so `<param>.txt` is tried first and `<param>_<Class>.txt` second.
-	// A leading directory and a `.vfe`/`.txt` extension are tolerated and stripped.
-	//
-	// Null when neither candidate is on disk; that negative is cached too.
+	// Native diagnostic/test lookup. Gameplay uses the prepared map-epoch expression views.
+	// Resolves the same explicit table/class candidates through UElysiumExpressionTables;
+	// unsupported or absent source data returns null with a diagnostic. Never reads loose files.
 	TSharedPtr<const FElysiumExpressionTable> Load(const FString& Param, const FString& Class);
 
 	// Seed the cache with table text under a stem, so a headless test can drive one without touching
 	// `$ELYSIUM_EXPORT_ROOT`. Overwrites any cached entry.
 	void RegisterInline(const FString& Stem, const FString& Text);
 #if WITH_DEV_AUTOMATION_TESTS
-	/** Only explicitly registered test text, never a table cached by the legacy disk loader. */
+	/** Only explicitly registered test text, never a table cached by native diagnostic lookup. */
 	TSharedPtr<const FElysiumExpressionTable> FindInlineForTest(const FString& Param, const FString& Class);
 #endif
 

@@ -70,7 +70,7 @@ void FElysiumClothTuningLayer::ReportUnsetValues(TArray<FString>& OutErrors) con
 
 const UElysiumClothTuningConfig* UElysiumClothTuningConfig::Load()
 {
-	// Rooted rather than re-resolved, the same shape `UElysiumWieldTable::Load` uses: the table is
+	// Rooted rather than re-resolved: the authored table is
 	// authored content with no map epoch of its own, and nothing else holds a reference to it.
 	static bool bResolved = false;
 	static UElysiumClothTuningConfig* Cached = nullptr;

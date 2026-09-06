@@ -137,12 +137,8 @@ void FElysiumItem::BuildWorldBody()
 	{
 		return;
 	}
-	// The exporter's own decoded stem when the map's prop pass covered this model (an
-	// `item_container` states a `model` key like any prop), otherwise the stem the item data's
-	// `playermodel` path folds to — which is what the shared item corpus bakes its meshes under.
-	const FString Stem = Def->ModelMesh.IsEmpty()
-		? FElysiumContentPaths::PropModelStem(Model)
-		: Def->ModelMesh;
+	// Preserve source model identity; the prepared catalogue owns its native address.
+	const FString Stem = Model;
 	if (Stem.IsEmpty())
 	{
 		return;

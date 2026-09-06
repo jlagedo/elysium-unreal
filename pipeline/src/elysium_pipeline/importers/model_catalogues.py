@@ -61,16 +61,14 @@ def bounded_path(root, relative):
     return path
 
 
+#: The code half of every catalogue projection: bump when a projection rule changes what it
+#: emits. The data half is the input ledger (every read file's digest) and the inventories.
+#: Code is never hashed (`docs/architecture/seam_map_unit_contract.md` -> "Recipes").
+RULES_VERSION = "model-catalogues-v1"
+
+
 def rules_fingerprint():
-    here = Path(__file__).resolve()
-    package = here.parent.parent
-    files = [here, *(here.parent / (name + ".py") for name in (
-        "catalogue_common", "wield_catalogue", "placed_catalogue", "prop_skin_catalogue")),
-        *(package / name for name in ("asset_paths.py", "asset_names.py", "model_usage.py", "placed_models.py", "wield_corpus.py",
-                                     "formats/mdl_skel.py", "formats/unit_contract/container.py",
-                                     "skeletal_stage/unit.py", "skeletal_stage/wield.py",
-                                     "skeletal_stage/cinematics.py", "skeletal_stage/payload.py"))]
-    return hashlib.sha256(json_bytes([(str(p.relative_to(package)), digest_file(p)) for p in files])).hexdigest()
+    return RULES_VERSION
 
 
 class Inputs:
@@ -157,7 +155,7 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
     """
     from elysium_pipeline.importers import models as static_rules, materials as material_rules
     from elysium_pipeline.importers import placed_catalogue, prop_skin_catalogue, wield_catalogue
-    from elysium_pipeline.model_usage import skeletal_candidate
+    from elysium_pipeline.model_usage import skeletal_candidate, placed_animation_models
     from elysium_pipeline.skeletal_stage import wield, cinematics
     from elysium_pipeline.skeletal_stage.unit import ModelUnit
 
@@ -176,6 +174,7 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
         if id in units or not id.startswith("vtmb:model:") or relative != "models/" + id[11:] + ".glb":
             raise CatalogueStageError(f"duplicate/noncanonical model source identity: {id}")
         units[id] = {"relative": relative, "identity": identity, "boneCount": len(mdl["bones"]),
+                     "sequenceLabels": [row["label"] for row in mdl["sequences"]] if mdl["bones"] else [],
                      "cloth": bool((unit.get("cloth") or {}).get("garments")),
                      "includes": [r["asset"] for r in mdl["includeModels"]],
                      "geometry": bool(unit["vtx"]["lods"] and any(m["primitives"] for m in document.get("meshes", [])))}
@@ -212,6 +211,7 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
         placement_units(entity_sources, "ELYSIUM_vtmb_map_entities"),
         placement_units(map_sources, "ELYSIUM_vtmb_map"), published_ids=units)
     required_characters = {id for id, r in units.items() if skeletal_candidate(r["identity"], r["boneCount"], has_cloth=r["cloth"])}
+    required_characters.update(placed_animation_models(placed, lambda id: units[id]["sequenceLabels"]))
     required_characters.update(current_wield["modelIds"])
     required_characters.update(cinematics.discover_sets(inputs.roots["exports"]))
     pending = list(required_characters)
@@ -332,9 +332,12 @@ def build_model_catalogues(export_root, *, characters_root, models_root, materia
         skins.append(prop_skin_catalogue.project_skin_model(unit, reps, material_for))
         if id in placed:
             sampled = ModelUnit(inputs.file("exports", info["relative"]))
+            # Existing static-source coverage is the testable milestone. Do not make
+            # a fresh all-rest fidelity measurement a publication dependency for it.
+            proof = None if info["identity"]["shape"] in ("static", "rigid") else placed_catalogue.measure_static_equivalence(sampled)
             placements.append(placed_catalogue.project_placed_model(sampled, staged=entry, native_body=vocabulary,
                 static_mesh=statics.get(id, {}).get("assetPath", ""), usage=placed[id],
-                proof=placed_catalogue.measure_static_equivalence(sampled)))
+                proof=proof))
     for id, use in placed.items():
         if id not in units:
             if not use["sourceAbsent"]:
@@ -429,6 +432,9 @@ def coverage_summary(projections):
             "absentWieldReferences": sum(r[sex]["state"] == "Absent" for r in items for sex in ("female", "male")),
             "absentPlacedModels": sum(r["sourceAbsent"] for r in placed),
             "staticRestSuffices": sum(r["staticRestSuffices"] for r in placed),
+            "staticSourceRepresentations": sum(r.get("staticSourceRepresentation", False) for r in placed),
+            "sourceOnlyPlacedClips": sum(c["state"] == "source-only" for r in placed for c in r["clips"]),
+            "absentIntrinsicClips": sum(len(json.loads(r["sourceEvidence"]).get("absentIntrinsicClips", [])) for r in placed),
             "clothPlacedModels": sum(r["hasCloth"] for r in placed)}
 
 

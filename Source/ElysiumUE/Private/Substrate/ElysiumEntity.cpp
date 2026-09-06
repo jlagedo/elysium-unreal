@@ -177,7 +177,7 @@ void FElysiumEntity::SetFakeSilence(bool bEnabled)
 UPrimitiveComponent* FElysiumEntity::GetAttachBody() const
 {
 	return Body ? static_cast<UPrimitiveComponent*>(Body)
-		: static_cast<UPrimitiveComponent*>(GenericModelBody);
+		: GenericModelBody ? static_cast<UPrimitiveComponent*>(GenericModelBody) : GenericStaticModelBody;
 }
 
 USceneComponent* FElysiumEntity::GetAttachChild() const
@@ -203,7 +203,14 @@ void FElysiumEntity::EnsurePlacedModelBody()
 	Request.Rotation = Def->ModelQuat;
 	Request.UniformScale = Embodiment->BodyScaleFor(*Def);
 	Request.PlacementToken = Handle.Index;
-	GenericModelBody = Embodiment->BuildPlacedModelBody(Request).Visual;
+	const auto Placed = Embodiment->BuildPlacedModelBody(Request);
+	GenericModelBody = Cast<USkeletalMeshComponent>(Placed.Visual);
+	GenericStaticModelBody = GenericModelBody ? nullptr : Placed.Visual;
+	if (GenericStaticModelBody)
+	{
+		World->RegisterPropBody(GenericStaticModelBody);
+		GenericStaticModelBody->SetVisibility(!IsInert(), true);
+	}
 	if (GenericModelBody)
 	{
 		World->RegisterNpcBody(GenericModelBody);
@@ -277,6 +284,7 @@ bool FElysiumEntity::ResolveParentAttachment(bool bWarnIfPending)
 
 void FElysiumEntity::OnDormancyChanged()
 {
+	if (GenericStaticModelBody) GenericStaticModelBody->SetVisibility(!IsInert(), true);
 	// One reversible switch. Inert (hidden or dead) drops the body's collision so it cannot
 	// be touched or traced; active restores its built solidity. Idempotent (SetDormant re-applies).
 	RefreshBrushBodyState();
@@ -336,6 +344,8 @@ void FElysiumEntity::SetRuntimeModel(const FString& NewModel)
 
 void FElysiumEntity::OnRuntimeTransformChanged()
 {
+	if (GenericStaticModelBody) GenericStaticModelBody->SetWorldLocationAndRotation(
+		Origin, FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)));
 	// A brush body is cooked static at build (BuildBrushBody never sets it Movable), and scripts only
 	// SetOrigin/SetAngles point entities (props/items/NPCs) in practice — so the base does not move the
 	// body. The authoritative Origin/Angles fields are already updated; a leaf with a movable body
@@ -353,6 +363,11 @@ void FElysiumEntity::OnRuntimeTransformChanged()
 
 void FElysiumEntity::OnRuntimeModelChanged()
 {
+	if (GenericStaticModelBody)
+	{
+		GenericStaticModelBody->DestroyComponent();
+		GenericStaticModelBody = nullptr;
+	}
 	if (GenericModelBody)
 	{
 		GenericModelBody->DestroyComponent();

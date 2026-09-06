@@ -23,6 +23,9 @@
 #include "Misc/AutomationTest.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumModelCatalogues.h"
+#include "Visual/ElysiumPreparedWieldModels.h"
+#include "UObject/StrongObjectPtr.h"
 #include "ElysiumWieldAttach.h"
 #include "ElysiumWieldTable.h"
 #include "Visual/ElysiumNpcClips.h"
@@ -291,16 +294,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWieldCorpusTest,
 	"Elysium.Content.WieldBinding", GElysiumWieldFlags)
 bool FElysiumWieldCorpusTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("items")))
+	const TStrongObjectPtr<UElysiumWieldCatalogue> Catalogue(LoadObject<UElysiumWieldCatalogue>(nullptr,
+		TEXT("/ElysiumBaked/Models/_Corpus/DA_WieldModels.DA_WieldModels")));
+	if (!Catalogue.IsValid() || Catalogue->Data.Items.IsEmpty())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the items export domain is marked incomplete"));
-		return true;
-	}
-	const UElysiumWieldTable* Table = UElysiumWieldTable::Load();
-	if (Table == nullptr || Table->Rows.IsEmpty())
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked wield table on the mount ")
-			TEXT("(run: uv run elysium export wield)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: native wield catalogue is absent or empty ")
+			TEXT("(run: uv run elysium import wield)"));
 		return true;
 	}
 
@@ -311,7 +310,7 @@ bool FElysiumWieldCorpusTest::RunTest(const FString&)
 	if (Female == nullptr || Male == nullptr)
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the two player bodies are not baked ")
-			TEXT("(run: uv run elysium export characters)"));
+			TEXT("(run: uv run elysium import characters)"));
 		return true;
 	}
 
@@ -319,23 +318,42 @@ bool FElysiumWieldCorpusTest::RunTest(const FString&)
 	int32 Rigid = 0;
 	int32 Followed = 0;
 	int32 NoGeometry = 0;
+	int32 WorldModels = 0;
+	int32 SourceAbsent = 0;
 	int32 NoAsset = 0;
 	TArray<FString> Refused;
 	TArray<FString> Unreachable;
 	TSet<FString> MissingMeshes;
 
-	for (const TPair<FName, FElysiumWieldRow>& Entry : Table->Rows)
+	for (const auto& Entry : Catalogue->Data.Items)
 	{
 		for (int32 Sex = 0; Sex < 2; ++Sex)
 		{
-			const FElysiumWieldModelRef& Ref = Sex == 0 ? Entry.Value.Female : Entry.Value.Male;
+			const FElysiumCatalogueWieldModel* Model = nullptr;
+			FString Error;
+			const auto Lookup = Catalogue->Resolve(Entry.Key, Sex == 0, Model, Error);
 			USkeletalMesh* const Wearer = Sex == 0 ? Female : Male;
 			const TCHAR* const Which = Sex == 0 ? TEXT("female") : TEXT("male");
-			if (Ref.Binding == EElysiumWieldBinding::None || Ref.Mesh.IsNull())
+			if (Lookup == EElysiumCatalogueWieldResult::NoGeometry)
 			{
 				++NoGeometry;
 				continue;
 			}
+			if (Lookup == EElysiumCatalogueWieldResult::WorldModel) { ++WorldModels; continue; }
+			if (Lookup == EElysiumCatalogueWieldResult::SourceAbsent)
+			{
+				// The item's authored `wieldmodel_*` names a model the install never shipped
+				// (`item_w_throwing_star` -> `g_throwing_star`). The catalogue retains the
+				// reference as an explicit source gap; it is not a bake that lost a product.
+				++SourceAbsent;
+				continue;
+			}
+			if (Lookup != EElysiumCatalogueWieldResult::Found || Model == nullptr)
+			{
+				AddError(FString::Printf(TEXT("%s (%s): %s"), *Entry.Key, Which, *Error));
+				continue;
+			}
+			const FElysiumWieldModelRef Ref = FElysiumPreparedWieldModels::AttachmentRef(*Model);
 			++Rows;
 			USkeletalMesh* const Mesh = Ref.Mesh.LoadSynchronous();
 			if (Mesh == nullptr)
@@ -354,7 +372,7 @@ bool FElysiumWieldCorpusTest::RunTest(const FString&)
 				if (Ref.Binding != EElysiumWieldBinding::Projectile)
 				{
 					Refused.Add(FString::Printf(TEXT("%s (%s): %s"),
-						*Entry.Key.ToString(), Which, *Plan.Reason));
+						*Entry.Key, Which, *Plan.Reason));
 				}
 				continue;
 			}
@@ -385,7 +403,7 @@ bool FElysiumWieldCorpusTest::RunTest(const FString&)
 				{
 					Unreachable.Add(FString::Printf(
 						TEXT("%s (%s): '%s' is placed by '%s', not by a hand or prop bone"),
-						*Entry.Key.ToString(), Which, *Name.ToString(),
+						*Entry.Key, Which, *Name.ToString(),
 						Ancestor.IsNone() ? TEXT("nothing") : *Ancestor.ToString()));
 					break;
 				}
@@ -394,8 +412,8 @@ bool FElysiumWieldCorpusTest::RunTest(const FString&)
 	}
 
 	AddInfo(FString::Printf(
-		TEXT("%d rows carry geometry (%d rigid, %d followed); %d carry none, %d bind no asset"),
-		Rows, Rigid, Followed, NoGeometry, NoAsset));
+		TEXT("%d rows carry geometry (%d rigid, %d followed); %d carry none, %d use world models, %d name a source-absent model, %d bind no asset"),
+		Rows, Rigid, Followed, NoGeometry, WorldModels, SourceAbsent, NoAsset));
 
 	if (!MissingMeshes.IsEmpty())
 	{

@@ -98,7 +98,6 @@ struct ELYSIUMUE_API FElysiumCompositionRig
 	// Read `npc/procedural/<RelPath>` — `npc_index.json`'s own `procedural` value. The sidecar is
 	// Unreal-native, written by the same conversion the body's own bones are, so the table lines
 	// up with the skeleton with nothing applied to it. This is the door the runtime uses.
-	bool LoadAxisRules(const FString& RelPath, FString& OutError);
 	// Parse the same JSON from a string rather than from the export root, so a test can state a
 	// table inline. Same result; `LoadAxisRules` is the door.
 	bool LoadAxisRulesJson(const FString& JsonText, FString& OutError);

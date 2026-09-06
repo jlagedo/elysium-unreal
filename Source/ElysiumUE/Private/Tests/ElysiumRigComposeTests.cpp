@@ -53,6 +53,7 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumPoseOracle.h"
 #include "Visual/ElysiumAnimLayerMask.h"
@@ -408,7 +409,7 @@ namespace
 			{
 				Table = MakeShared<FElysiumBlendTable>();
 				FString Error;
-				if (!Table->Load(Entry->Blends, Error))
+				if (!ElysiumNativeTest::Load(*Table, Entry->Blends, Error))
 				{
 					Table.Reset();
 				}
@@ -721,9 +722,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRigComposeTest,
 	"Elysium.Content.RigCompose", GElysiumRigComposeFlags)
 bool FElysiumRigComposeTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	const TArray<FString> Sessions = ElysiumPoseOracle::FindSessions();
@@ -760,10 +761,10 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 
 	FElysiumNpcIndex NpcIndex;
 	FString IndexError;
-	if (!NpcIndex.Load(IndexError) || !NpcIndex.IsValid())
+	if (!ElysiumNativeTest::Load(NpcIndex, IndexError) || !NpcIndex.IsValid())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index ")
-			TEXT("(run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native cast view ")
+			TEXT("(run: uv run elysium import characters)"));
 		return true;
 	}
 	FComposeBlendTables BlendTableFor{ &NpcIndex };
@@ -828,7 +829,7 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 		{
 			Set = MakeShared<FElysiumNpcClipSet>();
 			FString LoadError;
-			if (!Set->Load(Frame.Stem, LoadError))
+			if (!ElysiumNativeTest::Load(*Set, Frame.Stem, LoadError))
 			{
 				Set.Reset();
 			}

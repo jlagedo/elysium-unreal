@@ -242,7 +242,11 @@ def _load(editor):
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     fake = _fake_unreal(editor)
-    with mock.patch.dict(sys.modules, {"unreal": fake}):
+    package = importlib.import_module("pipeline.unreal")
+    # The package attribute is a second import cache; restore both after this editor.
+    with mock.patch.dict(sys.modules, {"unreal": fake}), \
+            mock.patch.object(package, "bake_lib", None, create=True):
+        del package.bake_lib
         sys.modules.pop("pipeline.unreal.bake_lib", None)
         try:
             spec.loader.exec_module(module)   # main() exits at once: no -ImportTextures=

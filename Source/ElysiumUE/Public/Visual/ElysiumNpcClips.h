@@ -307,7 +307,6 @@ struct FElysiumNpcClipSet
 	void SortByWeight(TArray<FElysiumClipRef>& Refs) const;
 
 	// Parse out/npc/clips/<Stem>.json. Returns false and fills OutError on any failure.
-	bool Load(const FString& InStem, FString& OutError);
 	// Parse an already-loaded slice. The same schema gate as Load(), exposed so the column contract
 	// — a row truncated at its last stated column, a legal null reach — can be asserted without
 	// writing into $ELYSIUM_EXPORT_ROOT.
@@ -318,7 +317,6 @@ struct FElysiumNpcClipSet
 	// any shipped body carry?") needs 166 of these and none of the per-clip columns, and the intern
 	// table is exactly that set: the exporter interns an activity as it writes the clip that
 	// carries it. The empty literal every plumbing sequence shares is skipped.
-	static bool LoadActivities(const FString& InStem, TSet<FString>& Out, FString& OutError);
 };
 
 // out/npc/npc_index.json — every NPC and bank with its glb and counts, no clip maps (~34 KB).
@@ -445,7 +443,6 @@ struct FElysiumNpcIndex
 	TMap<FString, FElysiumAnimatedPropEntry> PlacedModels;
 
 	bool IsValid() const { return !Npcs.IsEmpty(); }
-	bool Load(FString& OutError);
 	// Parse an already-loaded manifest. This is the same compatibility gate as Load(), exposed so
 	// generated-content validation can cover old/new schema migration without rewriting $ELYSIUM_EXPORT_ROOT.
 	bool LoadJsonText(const FString& JsonText, FString& OutError);

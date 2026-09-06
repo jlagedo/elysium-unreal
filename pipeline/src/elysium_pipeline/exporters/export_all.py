@@ -282,11 +282,6 @@ def _run_bundle(
         from elysium_pipeline.exporters import UE_extract_corpus
 
         UE_extract_corpus.main(index=index, force=force)
-    elif name == "items":
-        from elysium_pipeline.exporters import UE_extract_items, UE_extract_wield
-
-        UE_extract_items.main(index=index, force=force)
-        UE_extract_wield.main(index=index, force=force)
     elif name == "cfg":
         from elysium_pipeline.exporters import UE_extract_cfg
 
@@ -299,10 +294,6 @@ def _run_bundle(
         from elysium_pipeline.exporters import UE_extract_ui
 
         UE_extract_ui.main(force=force, index=index)
-    elif name == "npc":
-        from elysium_pipeline.exporters import npc_export
-
-        npc_export.main(index=index, strict=True)
     else:
         raise KeyError(f"unknown export bundle: {name}")
 

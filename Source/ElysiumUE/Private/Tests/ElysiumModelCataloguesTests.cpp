@@ -76,7 +76,7 @@ bool FElysiumCatalogueJsonRoundtrip::RunTest(const FString&)
 	const FString Json = TEXT(R"JSON({"schemaVersion":"1.0.0","catalogueKind":"PlacedModels","data":{"models":{
 	"vtmb:model:error":{"assetId":"vtmb:model:error","modelPath":"models/error.mdl","sourceAbsent":true,
 	"sourceReason":"authored model absent from source","roles":[],"staticMesh":"","skeletalMesh":"","bodyData":"",
-	"hasCloth":false,"staticEquivalentProven":false,"staticEquivalent":false,"staticRestSuffices":false,
+	"hasCloth":false,"staticEquivalentProven":false,"staticEquivalent":false,"staticRestSuffices":false,"staticSourceRepresentation":false,
 	"staticTopologyEquivalent":false,"restCandidates":[],"clips":[],"fullClipsRequired":false,
 	"requiredClips":[],"placementEvidence":"","nativeSequences":{},"nativeBlendSpaces":{},
 	"acceptanceIssues":[],"sourceEvidence":"{}"}}}})JSON");

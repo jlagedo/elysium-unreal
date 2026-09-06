@@ -138,8 +138,7 @@ void FElysiumTerminal::Spawn()
 	{
 		return;
 	}
-	VisualStem = Def->ModelMesh.IsEmpty()
-		? FElysiumContentPaths::PropModelStem(Model) : Def->ModelMesh;
+	VisualStem = Model;
 	if (VisualStem.IsEmpty())
 	{
 		return;

@@ -407,6 +407,23 @@ exports_v2/<kind>/<dir>/<base>.glb  ->  /ElysiumBaked/<Kind>/<dir'>/<Prefix>_<ba
   asset under its prune scope only when that asset's producer is this run's lane and this run's
   manifest neither names nor keeps it.** A foreign or unstamped asset is reported in
   `import_report.json` and never deleted; a partial-cutover manifest sets `pruneScope: null`.
+- **Recipes: data by content, code by version — code is never hashed.** The `ElysiumRecipe`
+  stamp is the sha256 of a recipe whose *data* half is the content of what the product was
+  authored from (the unit's sha256, the staged payload's digest, the stamps of the upstream
+  products it reads, the parameter rows it binds) and whose *code* half is one hand-bumped
+  string per producer (`PRODUCER_VERSION`, `SETTINGS_VERSION`, `RULES_VERSION`,
+  `GRAPH_VERSION`). Changed data re-authors exactly and automatically. Changed code re-authors
+  when its producer's version is bumped in the same commit, or when the lane is run with
+  `--force`; forgetting is benign (the change does not show) and visible, never silently wrong
+  data. No recipe hashes a script, a module or the editor DLL: doing so re-authored 19,000
+  character products for any C++ rebuild and restaged 1,207 units for a comment edit, while
+  the one dependency that mattered (a collection's parameter GUIDs) was still missing. The
+  same pattern is Unreal's own DDC key (content plus a versioned derived-data GUID).
+  `--force` is per lane: a map export's `--force` forces the bake, and the import lanes it
+  runs first decide off their own stamps. Every lane keeps a `recipes.json` ledger beside its
+  receipts and, when a product re-authors, logs which recipe fields moved
+  (`bake_lib.RecipeLedger`), so "0 reused" always comes with its reason.
+  `pipeline/tests/test_recipe_policy.py` enforces the rule.
 - **Legacy roots are named, each with the task that empties it.** A tracked list beside the
   resolver's kind roots — `Shared/` (the legacy map bake's corpus, R9.2), `Characters/` (R8.2),
   `Props/` (R8.4), `Items/` (R8.3) — receives nothing new, and a registry test asserts that every

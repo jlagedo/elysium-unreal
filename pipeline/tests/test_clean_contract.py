@@ -74,8 +74,8 @@ def test_clean_deletes_only_generated_targets_and_marks_corpus_incomplete() -> N
         # Every domain is gated after a clean, and each clears on its own.
         assert clean.incomplete_domains(export) == clean.DOMAINS
 
-        clean.mark_complete(export, ("npc",))
-        assert "npc" not in clean.incomplete_domains(export)
+        clean.mark_complete(export, ("audio",))
+        assert "audio" not in clean.incomplete_domains(export)
         assert "maps" in clean.incomplete_domains(export)
         # The aggregate outlives any single domain.
         assert incomplete.is_file()
@@ -83,6 +83,53 @@ def test_clean_deletes_only_generated_targets_and_marks_corpus_incomplete() -> N
         clean.mark_complete(export)
         assert clean.incomplete_domains(export) == ()
         assert not incomplete.exists()
+
+
+def test_profile_clean_keeps_the_glb_corpus_and_the_canonical_kind_roots() -> None:
+    # R8: a profile export reads the V2 corpus and the static native lanes; it regenerates the
+    # loose export root, the policy packages, the corpus bake and the map bakes, and only those.
+    with tempfile.TemporaryDirectory() as temporary:
+        repo, game, work, export, export_v2 = _layout(Path(temporary))
+        (export / "sp_tutorial_1").mkdir()
+        (export / "sp_tutorial_1" / "map.obj").write_text("derived")
+        (export_v2 / "models" / "character").mkdir(parents=True)
+        (export_v2 / "models" / "character" / "rat.glb").write_text("published")
+        (repo / "Content" / "ElysiumGenerated").mkdir(parents=True)
+        (repo / "Content" / "ElysiumGenerated" / "Boot.umap").write_text("derived")
+        corpus = repo / "Content" / "ElysiumCorpus" / "vdata"
+        corpus.mkdir(parents=True)
+        (corpus / "feats.txt").write_text("deployed by import vdata")
+        baked = repo / "Plugins" / "ElysiumBaked" / "Content"
+        for folder in ("Models/character", "Materials", "Textures", "SurfaceProperties",
+                       "ExpressionTables", "Shared", "Characters", "Props", "Items", "Meshes",
+                       "Sky", "Sprites", "Lookdev", "sp_tutorial_1"):
+            (baked / folder).mkdir(parents=True)
+            (baked / folder / "asset.uasset").write_text("x")
+        (baked / "Elysium.upluginmanifest").write_text("keep")
+
+        targets = clean.validate_clean_targets(
+            repo_root=repo, game_root=game, work_root=work,
+            export_root=export, export_v2_root=export_v2,
+        )
+        emptied = {path.name for path in clean.profile_clean_targets(targets)}
+        assert emptied == {"Shared", "Characters", "Props", "Items", "Meshes", "Sky", "Sprites",
+                           "Lookdev", "sp_tutorial_1"}
+
+        incomplete = clean.clean_profile_outputs(targets)
+
+        assert not (export / "sp_tutorial_1").exists()
+        assert (export / clean.OWNERSHIP_FILE).is_file()
+        assert incomplete.is_file()
+        assert (export_v2 / "models" / "character" / "rat.glb").is_file()
+        assert (corpus / "feats.txt").is_file()
+        assert not (repo / "Content" / "ElysiumGenerated").exists()
+        for folder in ("Models/character", "Materials", "Textures", "SurfaceProperties",
+                       "ExpressionTables"):
+            assert (baked / folder / "asset.uasset").is_file(), folder
+        for folder in ("Shared", "Characters", "Props", "Items", "Meshes", "Sky", "Sprites",
+                       "Lookdev", "sp_tutorial_1"):
+            assert not (baked / folder).exists(), folder
+        assert (baked / "Elysium.upluginmanifest").is_file()
 
 
 def test_a_custom_export_v2_root_requires_its_own_ownership_marker() -> None:

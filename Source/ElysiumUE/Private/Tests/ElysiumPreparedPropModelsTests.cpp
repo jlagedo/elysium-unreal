@@ -11,7 +11,9 @@ namespace
 {
 	struct FPreparedPropFixture
 	{
-		TStrongObjectPtr<UObject> Owner{NewObject<UObject>()};
+		// A concrete class: `UObject` itself is declared abstract, and NewObject on it trips the
+		// engine's abstract-class ensure (the owner is only a GC anchor and an identity).
+		TStrongObjectPtr<UObject> Owner{NewObject<UElysiumPropSkinCatalogue>()};
 		FString Key = TEXT("prop_test_") + FGuid::NewGuid().ToString(EGuidFormats::Digits).ToLower() + TEXT("/prop");
 		FString Id = TEXT("vtmb:model:") + Key;
 		UElysiumPlacedModelCatalogue* Placed = NewObject<UElysiumPlacedModelCatalogue>();

@@ -154,6 +154,8 @@ struct FElysiumCataloguePlacedModel
 	UPROPERTY(VisibleAnywhere) bool bStaticEquivalentProven = false;
 	UPROPERTY(VisibleAnywhere) bool bStaticEquivalent = false;
 	UPROPERTY(VisibleAnywhere) bool bStaticRestSuffices = false;
+	/** Existing static-source lane; independent of enhanced rest-equivalence acceptance. */
+	UPROPERTY(VisibleAnywhere) bool bStaticSourceRepresentation = false;
 	UPROPERTY(VisibleAnywhere) bool bStaticTopologyEquivalent = false;
 	/** Indices into Clips in the original candidate order. */
 	UPROPERTY(VisibleAnywhere) TArray<int32> RestCandidates;

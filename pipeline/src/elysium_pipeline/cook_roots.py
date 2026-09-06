@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 import re
 
-from elysium_pipeline.asset_paths import baked_unit, corpus_path
+from elysium_pipeline.asset_paths import corpus_path, map_package
 
 PRODUCER = "r8-cook-roots"
 PRIMARY_TYPE = "ElysiumR8CookRoot"
@@ -60,7 +60,7 @@ def in_scope(package):
     return any(package.startswith(root + "/") for root in SCOPES)
 
 
-def _declared_paths(value):
+def _declared_paths(value, *, skip_animation_declarations=False):
     """Read published address declarations, including merged entries outside the last slice.
 
     Directory roots/prune patterns and foreign asset families are not target packages.
@@ -68,11 +68,13 @@ def _declared_paths(value):
     """
     if isinstance(value, dict):
         for key, item in value.items():
-            yield from _declared_paths(key)
-            yield from _declared_paths(item)
+            if skip_animation_declarations and key == "animationAssets":
+                continue
+            yield from _declared_paths(key, skip_animation_declarations=skip_animation_declarations)
+            yield from _declared_paths(item, skip_animation_declarations=skip_animation_declarations)
     elif isinstance(value, list):
         for item in value:
-            yield from _declared_paths(item)
+            yield from _declared_paths(item, skip_animation_declarations=skip_animation_declarations)
     elif isinstance(value, str) and in_scope(value) and PREFIX.fullmatch(value.rsplit("/", 1)[-1].split(".", 1)[0]):
         yield package_path(value)
 
@@ -83,6 +85,7 @@ def read_declarations(manifest_paths):
     if not required <= set(manifest_paths) or set(manifest_paths) - set(OWNERS):
         raise CookRootError("supply characters/models/expressions and optionally catalogues manifests")
     expected = set(GLOBALS)
+    references = set(GLOBALS)
     ledger, source_evidence = [], {}
     for kind, name in sorted(manifest_paths.items()):
         path = Path(name).resolve()
@@ -109,8 +112,10 @@ def read_declarations(manifest_paths):
         if document.get("stageFailures") or document.get("complete") is False:
             raise CookRootError("producer has incomplete/failed staging: " + str(path))
         expected.update(_declared_paths(document.get("assets", [])))
+        references.update(_declared_paths(document.get("assets", []), skip_animation_declarations=True))
         for key in ("keep", "castData", "corpus", "references"):
             expected.update(_declared_paths(document.get(key)))
+            references.update(_declared_paths(document.get(key)))
         # Preserve source-only/absence decisions verbatim. 'selected' can describe
         # only the last incremental slice; it NEVER narrows the root target set.
         source_evidence[kind] = {key: deepcopy(document[key]) for key in (
@@ -119,15 +124,46 @@ def read_declarations(manifest_paths):
         ledger.append({"kind": kind, "path": str(path), "sha256": hashlib.sha256(raw).hexdigest()})
     if ROOT_PACKAGE in expected:
         raise CookRootError("a producer references the downstream packaging root")
-    return {"expectedPackages": sorted(expected), "inputs": ledger,
+    return {"expectedPackages": sorted(expected), "referencePackages": sorted(references), "inputs": ledger,
             "sourceDecisions": source_evidence,
             "catalogueManifestSupplied": "catalogues" in manifest_paths}
 
 
 def verify_inputs(declarations):
     for row in declarations["inputs"]:
-        if hashlib.sha256(Path(row["path"]).read_bytes()).hexdigest() != row["sha256"]:
+        with Path(row["path"]).open("rb") as stream:
+            actual = hashlib.file_digest(stream, "sha256").hexdigest()
+        if actual != row["sha256"]:
             raise CookRootError("stale cook-root producer input: " + row["path"])
+
+
+def reconcile_declarations(declarations, published_assets):
+    """Remove only proven synthesis intermediates from stale producer expectations.
+
+    Every published product remains rooted. Real clips and all unresolved candidates
+    remain required; validated evidence is part of the root recipe and packaging ledger.
+    """
+    from elysium_pipeline.animation_publications import audit_missing
+    present = {package_path(row["packagePath"]) for row in published_assets}
+    missing = {p for p in declarations["expectedPackages"] if p not in present
+               and p.rsplit("/", 1)[-1].startswith("A_")}
+    # A separate declared consumer makes the asset required even when the producer
+    # also lists it as an intermediate. Never erase an independently required edge.
+    missing.difference_update(declarations.get("referencePackages", []))
+    if not missing:
+        return declarations
+    manifest = next(row for row in declarations["inputs"] if row["kind"] == "characters")
+    audit = audit_missing(manifest["path"], manifest["sha256"], missing)
+    result = deepcopy(declarations)
+    removed = {row["packagePath"] for row in audit["nonProducts"]}
+    result["expectedPackages"] = sorted((set(result["expectedPackages"]) - removed) | set(audit["requiredPackages"]))
+    known = {row["path"] for row in result["inputs"]}
+    for row in audit["inputs"]:
+        if row["path"] not in known:
+            result["inputs"].append(row)
+            known.add(row["path"])
+    result["sourceDecisions"]["animationPublications"] = {key: value for key, value in audit.items() if key != "inputs"}
+    return result
 
 
 def plan_roots(declarations, published_assets, *, metadata_verified=True):
@@ -195,11 +231,12 @@ def scan_package_files(baked_content_root):
 
 
 def cook_map_packages(map_ids):
-    """Explicit level packages, independent of map bundle directories; never CookAll."""
+    """Explicit deployed levels; map_package owns the R8 delivery namespace exception."""
     ids = list(map_ids)
     if not ids or any(not value.startswith("vtmb:map:") for value in ids):
         raise CookRootError("explicit vtmb:map: identities are required")
-    return sorted({"/Game/ElysiumGenerated/Boot", *(baked_unit(value, "") for value in ids)})
+    names = [value.removeprefix("vtmb:map:") for value in ids]
+    return sorted({"/Game/ElysiumGenerated/Boot", *(map_package(name) + "/" + name for name in names)})
 
 
 def verify_cooked_packages(plan, cooked_packages):

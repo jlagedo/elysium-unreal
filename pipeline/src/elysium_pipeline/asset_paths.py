@@ -75,8 +75,13 @@ def corpus_path(kind: str, prefix: str, name: str) -> str:
 
 
 def map_package(map_name: str) -> str:
-    """Map bundle directory, containing its level and map-owned products."""
-    return baked_unit("vtmb:map:" + map_name, "").rsplit("/", 1)[0]
+    """Existing map bundle directory; the whole-map namespace move belongs to R9.
+
+    Validate through the shared resolver, but keep the deployed maps addressable until their
+    packages and references move together. Models already use the canonical kind namespace.
+    """
+    canonical = baked_unit("vtmb:map:" + map_name, "").rsplit("/", 1)[0]
+    return BAKED_MOUNT + canonical.removeprefix(BAKED_MOUNT + "/Maps")
 
 
 def validate_landing(package: str, content_root: Path, *, extension: str = ".uasset") -> Path:

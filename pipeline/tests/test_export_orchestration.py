@@ -5,7 +5,7 @@ from unittest import mock
 
 import pytest
 
-from elysium_pipeline import export_manager, wield_corpus
+from elysium_pipeline import export_manager
 from elysium_pipeline.exporters import export_all
 
 
@@ -724,15 +724,12 @@ def test_every_named_worker_delegates_to_a_declared_seam() -> None:
 
 
 def test_only_ents_consuming_bundles_wait_on_the_maps() -> None:
-    # `audio` and `npc` read the exported per-map `.ents`; every other bundle reads the
-    # install (or the pre-graph shared corpus) and starts immediately. `npc` keeps its one
-    # inter-bundle edge on the exported vdata mirror.
+    # Audio reads the exported per-map `.ents`; other retained bundles read the install.
     from pathlib import Path
     from types import SimpleNamespace
 
     bundles = [
-        "audio", "particles", "scripts", "signs", "vdata", "items",
-        "cfg", "scenes", "ui", "npc",
+        "audio", "particles", "scripts", "signs", "vdata", "cfg", "scenes", "ui",
     ]
     config = SimpleNamespace(export_root=Path("/fake/export/root"))
     tasks = export_manager._bundle_tasks(
@@ -740,30 +737,19 @@ def test_only_ents_consuming_bundles_wait_on_the_maps() -> None:
     by_name = {task.name: task for task in tasks}
     map_edges = ("map:m1", "map:m2")
     assert by_name["bundle:audio"].dependencies == map_edges
-    assert by_name["bundle:npc"].dependencies == (*map_edges, "bundle:vdata")
     for bundle in bundles:
-        if bundle in ("audio", "npc"):
+        if bundle == "audio":
             continue
         assert by_name[f"bundle:{bundle}"].dependencies == (), f"bundle={bundle}"
 
 
-def test_npc_bundle_drops_the_vdata_edge_when_vdata_is_not_requested() -> None:
-    from pathlib import Path
-    from types import SimpleNamespace
+def test_profiles_retire_character_bundles_and_keep_r9_map_dependencies() -> None:
+    from elysium_pipeline.exporters.export_all import bundles_for_profile
 
-    config = SimpleNamespace(export_root=Path("/fake/export/root"))
-    tasks = export_manager._bundle_tasks(
-        config, ["npc"], ["m1"], {}, {"npc": "fp"})
-    assert tasks[0].dependencies == ("map:m1",)
-
-
-def test_items_bundle_outputs_include_both_manifests() -> None:
-    from pathlib import Path
-
-    export_root = Path("/fake/export/root")
-    outputs = export_manager._bundle_outputs(export_root, "items")
-    assert export_root / "items" / "ground_models.json" in outputs
-    assert wield_corpus.manifest_path(export_root) in outputs
+    for profile in ("grid", "all"):
+        bundles = set(bundles_for_profile(profile))
+        assert not bundles & {"npc", "items"}
+        assert {"audio", "particles", "vdata", "scenes"} <= bundles
 
 
 def test_structured_failure_is_strict() -> None:

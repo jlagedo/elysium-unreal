@@ -3,9 +3,11 @@
 // then exercises the mount's own bodies and their UAnimSequence-to-USkeleton binding on PP2's cast.
 
 #include "Misc/AutomationTest.h"
+#include "Algo/AllOf.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "Substrate/ElysiumSceneData.h"
@@ -142,14 +144,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSkeletalCatalogueTest,
 	"Elysium.Content.SkeletalCatalogue", GElysiumSkeletalContentFlags)
 bool FElysiumSkeletalCatalogueTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!Index.Load(Error))
+	if (!ElysiumNativeTest::Load(Index, Error))
 	{
 		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
@@ -162,9 +164,17 @@ bool FElysiumSkeletalCatalogueTest::RunTest(const FString&)
 		if (!Pair.Value.SplitRotationBones.IsEmpty())
 		{
 			++SplitBodies;
-			if (Pair.Value.SplitRotationBones.Num() != 1
-				|| !Pair.Value.SplitRotationBones[0].Equals(
-					TEXT("Bip01 Spine1"), ESearchCase::CaseSensitive))
+			// One split bone per biped root: `Bip01 Spine1` for a body, `Bip01`/`Bip02`/... `Spine1`
+			// for a multi-biped group prop (lap_dancegroup_4 carries two bipeds). The corpus-wide
+			// measurement (all 373 legacy bodies split at `Bip01 Spine1`) still holds per biped.
+			const bool bEveryBipedSpine = Algo::AllOf(Pair.Value.SplitRotationBones, [](const FString& Bone)
+			{
+				return Bone.Len() == 12 && Bone.StartsWith(TEXT("Bip"), ESearchCase::CaseSensitive)
+					&& FChar::IsDigit(Bone[3]) && FChar::IsDigit(Bone[4])
+					&& Bone.EndsWith(TEXT(" Spine1"), ESearchCase::CaseSensitive);
+			});
+			if (Pair.Value.SplitRotationBones.IsEmpty() || !bEveryBipedSpine
+				|| TSet<FString>(Pair.Value.SplitRotationBones).Num() != Pair.Value.SplitRotationBones.Num())
 			{
 				AddError(FString::Printf(
 					TEXT("%s carries an unexpected Flags & 2 inventory: %s"),
@@ -281,9 +291,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTheatreSkeletonBindingTest,
 bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 {
 	if (FElysiumContentPaths::IsIncomplete(TEXT("maps"))
-		|| FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+		|| !ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the maps and npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the maps export domain is incomplete or there is no native character cast"));
 		return true;
 	}
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
@@ -300,7 +310,7 @@ bool FElysiumTheatreSkeletonBindingTest::RunTest(const FString&)
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!TestTrue(TEXT("NPC/cinematic index loads"), Index.Load(Error)))
+	if (!TestTrue(TEXT("NPC/cinematic index loads"), ElysiumNativeTest::Load(Index, Error)))
 	{
 		AddError(Error);
 		return false;
@@ -578,7 +588,7 @@ bool FElysiumTheatreSequenceEvaluationTest::RunTest(const FString&)
 
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!TestTrue(TEXT("NPC/cinematic index loads"), Index.Load(Error)))
+	if (!TestTrue(TEXT("NPC/cinematic index loads"), ElysiumNativeTest::Load(Index, Error)))
 	{
 		AddError(Error);
 		return false;
@@ -716,14 +726,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageFlinchGridTest,
 	"Elysium.Content.DamageFlinchGrid", GElysiumSkeletalContentFlags)
 bool FElysiumDamageFlinchGridTest::RunTest(const FString&)
 {
-	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!TestTrue(TEXT("npc_index parses"), Index.Load(Error)))
+	if (!TestTrue(TEXT("native cast view builds"), ElysiumNativeTest::Load(Index, Error)))
 	{
 		AddError(Error);
 		return false;
@@ -740,7 +750,7 @@ bool FElysiumDamageFlinchGridTest::RunTest(const FString&)
 	{
 		FElysiumNpcClipSet Clips;
 		FString ClipError;
-		if (!Clips.Load(Stem, ClipError))
+		if (!ElysiumNativeTest::Load(Clips, Stem, ClipError))
 		{
 			continue;
 		}
@@ -759,7 +769,7 @@ bool FElysiumDamageFlinchGridTest::RunTest(const FString&)
 	if (Carriers == 0)
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no indexed body carries `hit_torso`; "
-			"run: uv run elysium export characters"));
+			"run: uv run elysium import characters"));
 		return true;
 	}
 
@@ -771,7 +781,7 @@ bool FElysiumDamageFlinchGridTest::RunTest(const FString&)
 	if (Owners.IsEmpty())
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no carrier of `hit_torso` stands on the baked mount; "
-			"run: uv run elysium export characters"));
+			"run: uv run elysium import characters"));
 		return true;
 	}
 
@@ -781,7 +791,7 @@ bool FElysiumDamageFlinchGridTest::RunTest(const FString&)
 		const FString BodyStem = BodyForOwner[Owner];
 		FElysiumBlendTable Table;
 		FString TableError;
-		if (!Table.Load(FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
+		if (!ElysiumNativeTest::Load(Table, FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
 		{
 			AddError(FString::Printf(TEXT("'%s' owns `hit_torso` and has no blend sidecar (%s)"),
 				*Owner, *TableError));
@@ -904,14 +914,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSequenceEventTest,
 	"Elysium.Content.SequenceEvents", GElysiumSkeletalContentFlags)
 bool FElysiumSequenceEventTest::RunTest(const FString&)
 {
-	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!TestTrue(TEXT("npc_index parses"), Index.Load(Error)))
+	if (!TestTrue(TEXT("native cast view builds"), ElysiumNativeTest::Load(Index, Error)))
 	{
 		AddError(Error);
 		return false;
@@ -945,7 +955,7 @@ bool FElysiumSequenceEventTest::RunTest(const FString&)
 		}
 		FElysiumBlendTable Table;
 		FString TableError;
-		if (!Table.Load(RelPath, TableError))
+		if (!ElysiumNativeTest::Load(Table, RelPath, TableError))
 		{
 			// An unreadable sidecar is the autolayer/grid tests' fault to report as well; say it
 			// once here only when this owner was supposed to carry a timeline.

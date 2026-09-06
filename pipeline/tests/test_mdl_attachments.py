@@ -3,7 +3,7 @@ import struct
 
 import pytest
 
-from elysium_pipeline.exporters import UE_mdl_skeletal
+from elysium_pipeline.skeletal_stage import payload as UE_mdl_skeletal
 from elysium_pipeline.formats import eskm, mdl_skel
 
 

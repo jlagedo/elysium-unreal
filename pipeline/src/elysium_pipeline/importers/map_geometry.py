@@ -358,7 +358,7 @@ class DetailPlacement:
 
     `model` is the record's index into the lump's own dictionary and `stem` that entry's R1 corpus
     stem -- the same `static_stem` fold a static prop uses, so the instanced component and a static
-    placement of the same model draw the same `/ElysiumBaked/Meshes/SM_<stem>`. `sway` is the
+    placement of the same model draw the same `/ElysiumBaked/Models/<dir>/SM_<base>`. `sway` is the
     record's `swayAmount` byte, raw (0..255); the editor half normalises it into the per-instance
     custom data float. The record's `lighting`/`lightStyles` are VRAD's baked answer for the 2004
     renderer and are not carried: the V2 lane lights the instances through the R5.6 light actors.

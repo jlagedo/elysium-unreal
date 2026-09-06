@@ -38,9 +38,9 @@ def _unit_glb_path(unit: str, export_v2_root: Path) -> Path:
 
 
 def _manifest_assets():
-    """`{stem: {assetPath, collision, shape, lods, slots, ...}}` from the staged
-    `import/models/manifest.json`, or None when it is not on this machine (no
-    `ELYSIUM_WORK_ROOT`, or no `import models` run yet)."""
+    """`{unit: {assetPath, collision, shape, lods, slots, ...}}` from the staged
+    `import/models/manifest.json`, keyed by the unit id (the only address), or None when it
+    is not on this machine (no `ELYSIUM_WORK_ROOT`, or no `import models` run yet)."""
     try:
         work_root = paths.work_root()
     except RuntimeError:
@@ -49,7 +49,7 @@ def _manifest_assets():
     if not manifest_path.is_file():
         return None
     document = json.loads(manifest_path.read_text(encoding="utf-8"))
-    return {asset["stem"]: asset for asset in document.get("assets", [])}
+    return {asset["unit"]: asset for asset in document.get("assets", [])}
 
 
 def test_set_file_exists_and_parses():
@@ -88,10 +88,10 @@ def test_set_covers_the_sentinel_unit():
     # docs/project/seam_migration.md R1.6 notes name this exact stem: the unit whose slot binds
     # the vtmb:missing-material: sentinel (MI_V2_Missing), so the props row proves the model and
     # material lanes join correctly, not just that a mesh exists.
-    assert any(
-        entry["mesh"] == "/ElysiumBaked/Meshes/SM_models_scenery_structural_warrens_floorblock"
-        for entry in _load_entries()
-    ), "no entry for the sentinel unit SM_models_scenery_structural_warrens_floorblock"
+    sentinel = _expected_mesh("vtmb:model:scenery/structural/warrens/floorblock")
+    assert any(entry["mesh"] == sentinel for entry in _load_entries()), (
+        f"no entry for the sentinel unit {sentinel}"
+    )
 
 
 @pytest.mark.parametrize("entry", _load_entries(), ids=lambda entry: entry["label"])
@@ -111,8 +111,8 @@ def test_mesh_is_an_asset_path_in_the_manifest(entry):
     assets = _manifest_assets()
     if assets is None:
         pytest.skip("no staged models manifest.json on this machine")
-    stem = entry["mesh"].rsplit("/SM_", 1)[-1]
-    assert stem in assets and assets[stem]["assetPath"] == entry["mesh"], (
+    unit = entry["unit"]
+    assert unit in assets and assets[unit]["assetPath"] == entry["mesh"], (
         f"{entry['mesh']}: not a staged assetPath in models manifest.json -- the props row names "
         f"a unit the last `import models` run never staged"
     )
@@ -124,7 +124,7 @@ def test_set_covers_at_least_one_multi_lod_unit():
         pytest.skip("no staged models manifest.json on this machine")
     multi_lod = [
         entry for entry in _load_entries()
-        if len(assets.get(entry["mesh"].rsplit("/SM_", 1)[-1], {}).get("lods", [])) > 1
+        if len(assets.get(entry["unit"], {}).get("lods", [])) > 1
     ]
     assert multi_lod, "no props-row entry resolves to a multi-LOD baked mesh"
 
@@ -135,7 +135,7 @@ def test_set_covers_at_least_one_bbox_collision_unit():
         pytest.skip("no staged models manifest.json on this machine")
     bbox = [
         entry for entry in _load_entries()
-        if assets.get(entry["mesh"].rsplit("/SM_", 1)[-1], {}).get("collision", {}).get("mode")
+        if assets.get(entry["unit"], {}).get("collision", {}).get("mode")
         == "bbox"
     ]
     assert bbox, "no props-row entry resolves to a bbox-collision baked mesh"

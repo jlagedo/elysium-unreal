@@ -840,15 +840,18 @@ class MaterialCache(object):
 class Tracker(object):
     """Per-asset reuse: the manifest recipe against the stamp the asset carries."""
 
-    def __init__(self, force=False):
+    def __init__(self, force=False, ledger=None):
         self.force = bool(force)
         self.fingerprints = {}
+        self.ledger = ledger
 
     def fingerprint(self, entry):
         path = entry["assetPath"]
         if path not in self.fingerprints:
             self.fingerprints[path] = bl.recipe_fingerprint(STAGE, path, {
                 "source": entry["recipe"], "staticBuildSettings": STATIC_PRECISION_SETTINGS})
+            if self.ledger is not None:
+                self.ledger.record(path, {"source": entry["recipe"], "staticBuildSettings": STATIC_PRECISION_SETTINGS})
         return self.fingerprints[path]
 
     def needs_import(self, entry):
@@ -863,6 +866,8 @@ class Tracker(object):
         if self.force or not exists:
             return True
         if stored != fingerprint:
+            if self.ledger is not None:
+                self.ledger.explain(path, {"source": entry["recipe"], "staticBuildSettings": STATIC_PRECISION_SETTINGS}, stored)
             return True
         lod_count = sum(not row.get("dropped") for row in entry["lods"])
         return not static_precision_matches(unreal.EditorAssetLibrary.load_asset(path), lod_count)
@@ -1228,7 +1233,9 @@ def run(manifest_path, unit_root, force=False):
             fail("%s: %s" % (placeholder, exc))
 
     materials_cache = MaterialCache()
-    import_entries(manifest, unit_root, staging_root, Tracker(force), report, materials_cache)
+    ledger = bl.RecipeLedger(os.path.join(staging_root, "recipes.json"), "import-models")
+    import_entries(manifest, unit_root, staging_root, Tracker(force, ledger), report, materials_cache)
+    ledger.write()
 
     # The global table has a different producer and needs the character/wield input closure.
     # Complete static skin families remain in this manifest and on mesh provenance for that join.

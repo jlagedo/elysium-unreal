@@ -471,7 +471,7 @@ bool FElysiumPropZeroClipFallbackTest::RunTest(const FString&)
 	TestFalse(TEXT("a clipless model does not stand a skeletal body"),
 		Services.Saw(TEXT("BuildAnimatedPropVisual lampfloor")));
 	TestTrue(TEXT("it keeps its baked static mesh instead"),
-		Services.Saw(TEXT("BuildPropVisual lampfloor_static")));
+		Services.Saw(TEXT("BuildPropVisual lampfloor")));
 	TestEqual(TEXT("and plays nothing, authored LoopSequence notwithstanding"),
 		Services.Count(TEXT("PlayAnimatedPropClip")), 0);
 	return true;
@@ -508,8 +508,8 @@ bool FElysiumPropSolidCollisionTest::RunTest(const FString&)
 	World.Load(MoveTemp(Defs));
 	World.Activate(0.0);
 
-	UStaticMeshComponent* SolidBody = Services.PropBodies.FindRef(TEXT("crate_static"));
-	UStaticMeshComponent* UnsolidBody = Services.PropBodies.FindRef(TEXT("crate2_static"));
+	UStaticMeshComponent* SolidBody = Services.PropBodies.FindRef(TEXT("crate"));
+	UStaticMeshComponent* UnsolidBody = Services.PropBodies.FindRef(TEXT("crate2"));
 	TestNotNull(TEXT("the solid prop stands a body"), SolidBody);
 	TestNotNull(TEXT("the plain prop stands a body"), UnsolidBody);
 	if (SolidBody)
@@ -584,8 +584,8 @@ bool FElysiumPropDisableShadowsTest::RunTest(const FString&)
 	World.Load(MoveTemp(Defs));
 	World.Activate(0.0);
 
-	UStaticMeshComponent* DarkBody = Services.PropBodies.FindRef(TEXT("lamp_static"));
-	UStaticMeshComponent* LitBody = Services.PropBodies.FindRef(TEXT("lamp2_static"));
+	UStaticMeshComponent* DarkBody = Services.PropBodies.FindRef(TEXT("lamp"));
+	UStaticMeshComponent* LitBody = Services.PropBodies.FindRef(TEXT("lamp2"));
 	TestNotNull(TEXT("the dark lamp stands a body"), DarkBody);
 	TestNotNull(TEXT("the lit lamp stands a body"), LitBody);
 	if (DarkBody)
@@ -623,7 +623,7 @@ bool FElysiumPropSolidGatingTest::RunTest(const FString&)
 	World.Load(MoveTemp(Defs));
 	World.Activate(0.0);
 
-	UStaticMeshComponent* Body = Services.PropBodies.FindRef(TEXT("crate_static"));
+	UStaticMeshComponent* Body = Services.PropBodies.FindRef(TEXT("crate"));
 	TestNotNull(TEXT("the prop stands a body"), Body);
 	if (!Body)
 	{

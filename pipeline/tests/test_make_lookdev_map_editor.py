@@ -353,7 +353,7 @@ def test_props_row_position_continues_the_grid_pitch_below_start_row():
 def test_place_prop_entry_spawns_the_mesh_alone_with_no_plane_or_sphere():
     editor = FakeEditor()
     module = _load(editor)
-    mesh_path = "/ElysiumBaked/Meshes/SM_models_scenery_furniture_bench_bencha"
+    mesh_path = "/ElysiumBaked/Models/scenery/furniture/bench/SM_bencha"
     editor.assets[mesh_path] = FakeAsset(mesh_path)
     entry = _prop_entry("Bench", "vtmb:model:scenery/furniture/bench/bencha", mesh_path)
 
@@ -408,7 +408,7 @@ def test_build_places_a_props_row_below_the_material_grid(tmp_path):
     editor.assets[material_path] = FakeAsset(material_path)
     set_path = _write_set(tmp_path, [
         _entry("Plaster wall", "vtmb:material:plaster/609stuc", material_path, "sphere")])
-    mesh_path = "/ElysiumBaked/Meshes/SM_models_scenery_furniture_bench_bencha"
+    mesh_path = "/ElysiumBaked/Models/scenery/furniture/bench/SM_bencha"
     editor.assets[mesh_path] = FakeAsset(mesh_path)
     props_set_path = _write_props_set(
         tmp_path, [_prop_entry("Bench", "vtmb:model:scenery/furniture/bench/bencha", mesh_path)])

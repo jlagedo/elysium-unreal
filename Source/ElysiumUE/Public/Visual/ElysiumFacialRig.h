@@ -306,7 +306,6 @@ struct ELYSIUMUE_API FElysiumFacialRig
 	int32 FindFlexDesc(const FString& Name) const;
 
 	// Parse the sidecar `npc_index.json` names for a stem (`facial/<stem>.json`, relative to npc/).
-	bool Load(const FString& RelPath, FString& OutError);
 	bool LoadJsonText(const FString& JsonText, FString& OutError);
 
 	// Evaluation.

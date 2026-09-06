@@ -1,11 +1,9 @@
 #include "Visual/ElysiumFacialRig.h"
 
-#include "ElysiumContentPaths.h"
 #include "Visual/ElysiumEyeRig.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
-#include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -54,18 +52,6 @@ int32 FElysiumFacialRig::FindFlexDesc(const FString& Name) const
 }
 
 // Load.
-
-bool FElysiumFacialRig::Load(const FString& RelPath, FString& OutError)
-{
-	const FString Path = FElysiumContentPaths::NpcFacial(RelPath);
-	FString JsonText;
-	if (!FFileHelper::LoadFileToString(JsonText, *Path))
-	{
-		OutError = FString::Printf(TEXT("not found: %s"), *Path);
-		return false;
-	}
-	return LoadJsonText(JsonText, OutError);
-}
 
 bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 {

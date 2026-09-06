@@ -219,6 +219,9 @@ def project_placed_model(unit, *, staged=None, native_body=None, static_mesh="",
     primitives = unit.document["meshes"][lod["mesh"]]["primitives"] if lod else []
     topology_equal = all(p["extensions"]["ELYSIUM_vtmb_model"]["model"] == 0 for p in primitives)
     sufficient = bool(static and proof["proven"] and proof["equivalent"] and not cloth and topology_equal)
+    # Preserve the existing static lane without asserting a new rest-pose proof.
+    # Its unused sequence vocabulary remains source-only, never invented native clips.
+    static_source = bool(static and identity.get("shape") in ("static", "rigid") and not cloth and topology_equal)
     native_body = native_body or {"sequences": [], "nativeSequences": {}, "nativeBlendSpaces": {}}
     for field, prefix in (("nativeSequences", "A"), ("nativeBlendSpaces", "BS")):
         for label, path in native_body[field].items():
@@ -236,7 +239,8 @@ def project_placed_model(unit, *, staged=None, native_body=None, static_mesh="",
                 or base and base not in native_body["nativeSequences"].values()
                 or blend and not base):
             raise ValueError(f"{id}: clip {clip.label} references an undeclared native product")
-        state = "native" if sequence or blend else "static-rest-only" if sufficient and index in rests else "unavailable"
+        state = ("native" if sequence or blend else "static-rest-only" if sufficient and index in rests
+                 else "source-only" if static_source else "unavailable")
         if state == "unavailable":
             issues.append(f"clip has no native representation: {clip.label}")
         clips.append({"index": index, "label": clip.label, "activity": clip.activity,
@@ -247,9 +251,15 @@ def project_placed_model(unit, *, staged=None, native_body=None, static_mesh="",
         issues.append("cloth owner has no declared skeletal mesh")
     if not static and not mesh:
         issues.append("model has no declared native geometry")
+    required_native, absent_intrinsic = [], []
     for required in usage["requiredClips"]:
         match = next((c for c in clips if c["label"].casefold() == required.casefold()), None)
-        if not match or match["state"] != "native":
+        if match is None:
+            absent_intrinsic.append({"label": required, "state": "source-absent",
+                                     "reason": "intrinsic label is absent from source sequence vocabulary"})
+            continue
+        required_native.append(required)
+        if match["state"] != "native":
             issues.append(f"intrinsic clip has no native representation: {required}")
     if usage["fullClips"] and any(c["state"] != "native" for c in clips):
         issues.append("animated placement requires the complete native clip vocabulary")
@@ -258,14 +268,17 @@ def project_placed_model(unit, *, staged=None, native_body=None, static_mesh="",
             "staticMesh": static, "skeletalMesh": mesh,
             "bodyData": object_path(baked_unit(id, "DA")) if mesh and native_body.get("assetId") else "",
             "hasCloth": cloth, "staticEquivalentProven": proof["proven"],
+            "staticSourceRepresentation": static_source,
             "staticEquivalent": proof["equivalent"], "staticRestSuffices": sufficient,
             "staticTopologyEquivalent": topology_equal, "restCandidates": rests, "clips": clips,
-            "fullClipsRequired": usage["fullClips"], "requiredClips": usage["requiredClips"],
+            "fullClipsRequired": usage["fullClips"], "requiredClips": required_native,
             "placementEvidence": evidence(usage),
             "nativeSequences": native_body["nativeSequences"], "nativeBlendSpaces": native_body["nativeBlendSpaces"],
             "acceptanceIssues": issues, "sourceEvidence": evidence({
                 "identity": identity, "sequences": unit.mdl["sequences"],
-                "discardedSequenceDescriptors": unit.dropped_sequences, "staticEquivalence": proof})}
+                "discardedSequenceDescriptors": unit.dropped_sequences, "staticEquivalence": proof,
+                "absentIntrinsicClips": absent_intrinsic,
+                "deferredNativeClips": [c["label"] for c in clips if c["state"] == "source-only"]})}
 
 
 def absent_model(asset_id, model_path, reason):
@@ -275,6 +288,7 @@ def absent_model(asset_id, model_path, reason):
     return {"assetId": asset_id, "modelPath": normalize_model_path(model_path), "sourceAbsent": True,
             "sourceReason": reason, "roles": [], "staticMesh": "", "skeletalMesh": "", "bodyData": "",
             "hasCloth": False, "staticEquivalentProven": False, "staticEquivalent": False,
+            "staticSourceRepresentation": False,
             "staticRestSuffices": False, "staticTopologyEquivalent": False,
             "restCandidates": [], "clips": [], "nativeSequences": {}, "nativeBlendSpaces": {},
             "fullClipsRequired": False, "requiredClips": [], "placementEvidence": "",

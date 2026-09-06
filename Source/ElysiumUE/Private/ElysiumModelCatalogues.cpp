@@ -89,8 +89,8 @@ const FElysiumCataloguePlacedClip* FElysiumCataloguePlacedModel::SelectRest(int3
 
 bool FElysiumCataloguePlacedModel::CanUseStatic(bool bNeedsAnimation) const
 {
-	return !bNeedsAnimation && !bSourceAbsent && !bHasCloth && bStaticRestSuffices
-		&& bStaticEquivalentProven && bStaticEquivalent && bStaticTopologyEquivalent && !StaticMesh.IsNull();
+	return !bNeedsAnimation && !bSourceAbsent && !bHasCloth && bStaticTopologyEquivalent && !StaticMesh.IsNull()
+		&& (bStaticSourceRepresentation || (bStaticRestSuffices && bStaticEquivalentProven && bStaticEquivalent));
 }
 
 void FElysiumCataloguePlacedModel::GatherPaths(TSet<FSoftObjectPath>& Out) const
@@ -191,7 +191,8 @@ namespace
 				|| (!Row.StaticMesh.IsNull() && !IsNative(Pair.Key, TEXT("SM"), Row.StaticMesh))
 				|| (!Row.SkeletalMesh.IsNull() && !IsNative(Pair.Key, TEXT("SK"), Row.SkeletalMesh))
 				|| (Row.bHasCloth && Row.SkeletalMesh.IsNull())
-				|| (Row.bStaticRestSuffices && !Row.CanUseStatic(false)))
+				|| (Row.bStaticSourceRepresentation && !Row.CanUseStatic(false))
+				|| (Row.bStaticRestSuffices && (!Row.CanUseStatic(false) || !Row.bStaticEquivalentProven || !Row.bStaticEquivalent)))
 			{ Error = TEXT("unaccepted placed model: ") + Pair.Key; return false; }
 			Paths.Add(Row.ModelPath);
 			if (Row.bSourceAbsent && (Row.SourceReason.IsEmpty() || !Row.StaticMesh.IsNull() || !Row.SkeletalMesh.IsNull() || !Row.Clips.IsEmpty()))
@@ -204,7 +205,9 @@ namespace
 					|| (Row.bFullClipsRequired && Clip.State != TEXT("native"))
 					|| (Clip.State == TEXT("native") && Clip.Sequence.IsNull() && Clip.BlendSpace.IsNull())
 					|| (!Clip.BlendSpace.IsNull() && Clip.BaseCell.IsNull())
-					|| (Clip.State != TEXT("native") && (Clip.State != TEXT("static-rest-only") || !Row.CanUseStatic(false))))
+					|| (Clip.State != TEXT("native")
+						&& !(Clip.State == TEXT("static-rest-only") && Row.bStaticRestSuffices && Row.CanUseStatic(false))
+						&& !(Clip.State == TEXT("source-only") && Row.bStaticSourceRepresentation && Row.CanUseStatic(false))))
 				{ Error = TEXT("invalid placed clip: ") + Pair.Key; return false; }
 			}
 			for (int32 Index : Row.RestCandidates)

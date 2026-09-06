@@ -6,6 +6,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumSkeletalBasis.h"
@@ -82,12 +83,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningPoseEnvelopeTest,
 
 bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
-	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	if (!ElysiumNativeTest::HasCast())
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: NPC export is absent"));
 		return true;
@@ -259,10 +260,10 @@ bool FElysiumOpeningPoseEnvelopeTest::RunTest(const FString&)
 
 	if (Evaluated == 0)
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no opening body is baked; run: uv run elysium export characters"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no opening body is baked; run: uv run elysium import characters"));
 		return true;
 	}
-	// A partial bake is the ordinary development state (`uv run elysium export characters` covers
+	// A partial bake is the ordinary development state (`uv run elysium import characters` covers
 	// the cast incrementally), so the count is reported rather than asserted against the full five;
 	// only a wholesale failure -- nothing certified at all -- is a suite-level problem, handled by
 	// the abstain above.
@@ -279,14 +280,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningScenePlacementTest,
 bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 {
 	if (FElysiumContentPaths::IsIncomplete(TEXT("maps"))
-		|| FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+		|| !ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the maps and npc export domain(s) are marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the maps export domain is incomplete or there is no native character cast"));
 		return true;
 	}
 	const FString EntsPath = FElysiumContentPaths::MapEnts(TEXT("sp_theatre"));
 	if (!IFileManager::Get().FileExists(*EntsPath)
-		|| !IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+		|| !ElysiumNativeTest::HasCast())
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: theatre or NPC export is absent"));
 		return true;

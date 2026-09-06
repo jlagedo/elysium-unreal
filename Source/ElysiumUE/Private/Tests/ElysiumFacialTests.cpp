@@ -17,6 +17,7 @@
 
 #include "ElysiumCameraSolve.h"   // FElysiumCameraShot, a by-value member of the recording services
 #include "ElysiumChoreoSettings.h"
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -173,8 +174,8 @@ namespace
 		for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Npcs)
 		{
 			if (Pair.Value.Facial.IsEmpty()
-				|| !IFileManager::Get().FileExists(*FElysiumContentPaths::NpcFacial(Pair.Value.Facial))
-				|| !IFileManager::Get().FileExists(*FElysiumContentPaths::NpcSource(Pair.Key)))
+				|| !ElysiumNpcVisual::IsStemBaked(Pair.Key)
+				|| !IFileManager::Get().FileExists(*ElysiumNativeTest::SourcePath(Pair.Key)))
 			{
 				continue;
 			}
@@ -781,14 +782,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFacialTrackTest,
 	"Elysium.Content.FacialTrack", GElysiumFacialTestFlags)
 bool FElysiumFacialTrackTest::RunTest(const FString&)
 {
-	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!TestTrue(TEXT("npc_index parses"), Index.Load(Error)))
+	if (!TestTrue(TEXT("native cast view builds"), ElysiumNativeTest::Load(Index, Error)))
 	{
 		AddError(Error);
 		return false;
@@ -801,7 +802,7 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 	}
 
 	TSharedPtr<FElysiumFacialRig> Rig = MakeShared<FElysiumFacialRig>();
-	if (!TestTrue(TEXT("the facial sidecar parses"), Rig->Load(Index.Npcs[Stem].Facial, Error))
+	if (!TestTrue(TEXT("the facial sidecar parses"), ElysiumNativeTest::Load(*Rig, Index.Npcs[Stem].Facial, Error))
 		|| !TestTrue(TEXT("the rig deforms something"), Rig->IsValid()))
 	{
 		AddError(Error);
@@ -909,7 +910,7 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Npcs)
 	{
 		if (Pair.Value.Facial.IsEmpty() && Pair.Value.Bones > 0
-			&& IFileManager::Get().FileExists(*FElysiumContentPaths::NpcSource(Pair.Key))
+			&& IFileManager::Get().FileExists(*ElysiumNativeTest::SourcePath(Pair.Key))
 			&& (Bare.IsEmpty() || Pair.Key < Bare))
 		{
 			Bare = Pair.Key;
@@ -1462,7 +1463,7 @@ bool FElysiumTheatreExpressionsTest::RunTest(const FString&)
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!Index.Load(Error))
+	if (!ElysiumNativeTest::Load(Index, Error))
 	{
 		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
@@ -1494,7 +1495,7 @@ bool FElysiumTheatreExpressionsTest::RunTest(const FString&)
 		{
 			TSharedPtr<FElysiumFacialRig> Loaded = MakeShared<FElysiumFacialRig>();
 			FString RigError;
-			if (Loaded->Load(Entry->Facial, RigError))
+			if (ElysiumNativeTest::Load(*Loaded, Entry->Facial, RigError))
 			{
 				Rig = Loaded;
 			}
@@ -1631,7 +1632,7 @@ bool FElysiumTheatreJawTest::RunTest(const FString&)
 	}
 	FElysiumNpcIndex Index;
 	FString IndexError;
-	if (!Index.Load(IndexError))
+	if (!ElysiumNativeTest::Load(Index, IndexError))
 	{
 		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *IndexError));
 		return true;
@@ -1666,7 +1667,7 @@ bool FElysiumTheatreJawTest::RunTest(const FString&)
 		{
 			TSharedPtr<FElysiumFacialRig> Loaded = MakeShared<FElysiumFacialRig>();
 			FString RigError;
-			if (Loaded->Load(Entry->Facial, RigError)) { Rig = Loaded; }
+			if (ElysiumNativeTest::Load(*Loaded, Entry->Facial, RigError)) { Rig = Loaded; }
 		}
 		RigByStem.Add(Stem, Rig);
 		return Rig.Get();
@@ -2319,7 +2320,7 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 	}
 	FElysiumNpcIndex Index;
 	FString IndexError;
-	if (!Index.Load(IndexError))
+	if (!ElysiumNativeTest::Load(Index, IndexError))
 	{
 		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *IndexError));
 		return true;
@@ -2395,7 +2396,11 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 			{
 				for (const FElysiumLipPhoneme& P : Word.Phonemes)
 				{
-					if (Table->FindRowByPhonemeCode(P.Code) == INDEX_NONE)
+					// By class code first, then by name -- the runtime's own order (ElysiumLipTrack).
+					// LaCroix's lines carry code 95 for `ax` where every table's class column says
+					// 0x0259; the name row is what plays, and what this asserts.
+					if (Table->FindRowByPhonemeCode(P.Code) == INDEX_NONE
+						&& Table->FindRow(P.Phoneme) == INDEX_NONE)
 					{
 						NoRow.AddUnique(FString::Printf(TEXT("%s: %d/'%s'"), *Stem, P.Code, *P.Phoneme));
 					}
@@ -2409,7 +2414,7 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 			{
 				FElysiumFacialRig Rig;
 				FString RigError;
-				if (Rig.Load(Entry->Facial, RigError))
+				if (ElysiumNativeTest::Load(Rig, Entry->Facial, RigError))
 				{
 					for (const FString& Key : Table->Keys)
 					{
@@ -2481,17 +2486,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphInstanceTest,
 	"Elysium.Content.PlayerGraphInstance", GElysiumFacialTestFlags)
 bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!Index.Load(Error) || !Index.IsValid())
+	if (!ElysiumNativeTest::Load(Index, Error) || !Index.IsValid())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export grid)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native cast view (run: uv run elysium import characters)"));
 		return true;
 	}
 	TArray<FString> Stems;
@@ -2516,7 +2521,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 		FString RigError;
 		TSharedPtr<FElysiumCompositionRig> Loaded = MakeShared<FElysiumCompositionRig>();
 		Loaded->Stem = Candidate;
-		if (Loaded->LoadAxisRules(Entry->Procedural, RigError) && Loaded->AxisRules.Num() > 0)
+		if (ElysiumNativeTest::Load(*Loaded, Entry->Procedural, RigError) && Loaded->AxisRules.Num() > 0)
 		{
 			Stem = Candidate;
 			Rig = Loaded;
@@ -2622,7 +2627,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 	// The resolver, over this body's real sidecars — the same pure entry point the driver calls, so a
 	// selection that would not reach the graph in the game does not reach it here either.
 	FElysiumNpcClipSet Vocabulary;
-	if (!TestTrue(TEXT("the player body's clip vocabulary loads"), Vocabulary.Load(Stem, Error)))
+	if (!TestTrue(TEXT("the player body's clip vocabulary loads"), ElysiumNativeTest::Load(Vocabulary, Stem, Error)))
 	{
 		AddError(Error);
 		return false;
@@ -2645,7 +2650,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 		{
 			Table = MakeShared<FElysiumBlendTable>();
 			FString TableError;
-			if (!Table->Load(Owned->Blends, TableError))
+			if (!ElysiumNativeTest::Load(*Table, Owned->Blends, TableError))
 			{
 				Table.Reset();
 			}

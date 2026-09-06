@@ -12,6 +12,9 @@
 
 class FElysiumEntityWorld;
 class FElysiumExpressionPreparation;
+class FElysiumPreparedPropModels;
+class FElysiumPreparedWieldModels;
+struct FElysiumEntityDefs;
 class FElysiumSoundSchemeManager;
 class UElysiumEntityBodies;
 class UElysiumMapCollision;
@@ -842,6 +845,10 @@ private:
 	bool bNativeAnimationPreloadPending = false;
 	bool bNativeAnimationPreloadFailed = false;
 	TSharedPtr<FElysiumExpressionPreparation> ExpressionPreparation;
+	TSharedPtr<FElysiumPreparedPropModels> PropModelPreparation;
+	TSharedPtr<FElysiumPreparedWieldModels> WieldModelPreparation;
+	bool PreparePropAndWieldModels(const FElysiumEntityDefs& Definitions, FString& OutError);
+	void ReleasePropAndWieldModels();
 	FElysiumCharacterModelRequests CharacterModelRequests;
 	TMap<FElysiumEntityHandle, uint64> CharacterNativeAdmissionIds;
 	void CompleteCharacterModel(const FElysiumCharacterModelTicket& Ticket, bool bSuccess, const FString& Error);

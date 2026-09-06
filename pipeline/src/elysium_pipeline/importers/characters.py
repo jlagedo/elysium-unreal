@@ -17,26 +17,15 @@ from elysium_pipeline.skeletal_stage import wield
 from elysium_pipeline.skeletal_stage.geometry import geometry
 from elysium_pipeline.skeletal_stage.unit import ModelUnit, read_document, SkeletalUnitError
 from elysium_pipeline.placed_models import rest_candidates
-from elysium_pipeline.model_usage import skeletal_candidate
+from elysium_pipeline.model_usage import skeletal_candidate, discover_placed_animation_models
 
+#: The code half of every staged character entry: bump when a stage rule changes what it emits.
+#: The data half is the unit's sha256 and the bank/wield inputs. Code is never hashed
+#: (`docs/architecture/seam_map_unit_contract.md` -> "Recipes").
 SETTINGS_VERSION = "elysium-character-stage-v2"
 
 
 @lru_cache(maxsize=1)
-def rules_fingerprint():
-    from elysium_pipeline import asset_paths, placed_models, wield_corpus, model_usage
-    from elysium_pipeline.formats import mesh_geometry
-    from elysium_pipeline.formats.unit_contract import precision
-    from elysium_pipeline.skeletal_stage import source_api, unit, geometry as geometry_module
-    modules = (asset_paths, model_usage, mesh_geometry, precision, source_api, unit, geometry_module,
-               payload, sequences, cinematics, families, mdl_skel, eskm, placed_models, wield, wield_corpus)
-    digest = hashlib.sha256(Path(__file__).read_bytes())
-    for module in modules:
-        digest.update(module.__name__.encode())
-        digest.update(Path(module.__file__).read_bytes())
-    return digest.hexdigest()
-
-
 def staging_root(work_root):
     return Path(work_root) / "import" / "characters"
 
@@ -100,7 +89,7 @@ def stage_unit(source, destination, *, mesh=True, content_root=None, cinematic=F
     key = unit.id.removeprefix("vtmb:model:")
     destination = Path(destination)
     owners = [value for (id, _), value in (bank_owners or {}).items() if id == unit.id]
-    input_recipe = {"settings": SETTINGS_VERSION, "rules": rules_fingerprint(),
+    input_recipe = {"settings": SETTINGS_VERSION,
                     "unitSha256": unit.digest, "mesh": mesh, "cinematic": cinematic,
                     "wieldBodyTrees": hashlib.sha256(_json_bytes(wield_bodies)).hexdigest() if wield_bodies is not None else None,
                     "bankOwners": sorted(owners, key=lambda row: row["root"])}
@@ -278,6 +267,7 @@ def stage_characters(export_root, destination, *, bodies=None, content_root=None
     else:
         selected = {id for id, row in units.items()
                     if skeletal_candidate(row["identity"], row["boneCount"], has_cloth=row["cloth"])}
+        selected.update(discover_placed_animation_models(root, units))
         selected.update(cinematic_sets)
         selected.update(wield_models)
     pending = list(selected)

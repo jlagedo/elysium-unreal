@@ -3,10 +3,15 @@
 CLI integration: -ImportExpressionTables=<manifest> [-ImportForce=1]. The caller
 owns the generated-state lease/process checks. Legacy deletion is never performed.
 """
-import hashlib
 import json
 from pathlib import Path
 import re
+
+
+#: The code half of every expression-table recipe; bump when this writer or the
+#: `UElysiumExpressionData`/`UElysiumExpressionTables` classes change what they author.
+#: Never hash code (`seam_map_unit_contract.md` -> "Recipes").
+PRODUCER_VERSION = "expression-tables-v1"
 
 
 def argument(command_line, name):
@@ -66,9 +71,7 @@ def run(manifest_path, force=False):
     checkpoint()
     try:
         manifest, projections, corpus = verify_expression_stage(manifest_path)
-        dll = Path(unreal.Paths.project_dir()) / "Binaries/Win64/UnrealEditor-ElysiumUE.dll"
-        tool_digest = hashlib.sha256(Path(__file__).read_bytes() + Path(bl.__file__).read_bytes()
-                                     + dll.read_bytes()).hexdigest()
+        tool_digest = PRODUCER_VERSION
         products = [(unreal.ElysiumExpressionData, p) for p in projections]
         products.append((unreal.ElysiumExpressionTables, corpus))
         # Resolve every class/ownership conflict before the first package mutation.

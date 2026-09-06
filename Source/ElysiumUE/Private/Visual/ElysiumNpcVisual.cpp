@@ -1,8 +1,10 @@
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "ElysiumWieldAttach.h"
+#include "Visual/ElysiumPreparedWieldModels.h"
 
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumCharacterAssets.h"
 #include "ElysiumCharacterProvenance.h"
 #include "ElysiumDynamicsData.h"
 #include "ElysiumWieldTable.h"
@@ -326,8 +328,11 @@ namespace ElysiumNpcVisual
 			}
 			for (const auto& Asset : Cooked->ClothAssets) Assets.Add(Asset.Get());
 		}
-		else if (auto* Asset=LoadObject<UChaosClothAsset>(nullptr,*FElysiumContentPaths::BakedCharacterCloth(Stem),
-			nullptr,LOAD_NoWarn|LOAD_Quiet)) Assets.Add(Asset);
+		else
+		{
+			UE_LOG(LogElysiumNpcVisual, Warning, TEXT("cloth: %s has no native character provenance"), *Stem);
+			return nullptr;
+		}
 		UChaosClothComponent* First=nullptr;
 		for (UChaosClothAsset* Asset : Assets)
 		{
@@ -462,16 +467,14 @@ namespace ElysiumNpcVisual
 		// function has for declining is also a reason the previous weapon still needs taking away.
 		SweepWieldModels(Owner, Body);
 
-		// A row that reaches here carries geometry — the authored no-geometry answers are resolved
-		// and reported by UElysiumWieldTable::FindRow, so a load miss here is a bake that did not
-		// produce a package its own table references.
-		USkeletalMesh* const Mesh = Ref.Mesh.LoadSynchronous();
+		const auto Ready = FElysiumPreparedWieldModels::ForOwner(Owner);
+		FString Error;
+		USkeletalMesh* const Mesh = Ready ? Ready->Mesh(Ref, Body->GetSkeletalMeshAsset(), Error) : nullptr;
 		if (Mesh == nullptr)
 		{
 			UE_LOG(LogElysiumNpcVisual, Warning,
-				TEXT("wield model '%s' for '%s' is referenced by the wield table but is not on the "
-				     "mount -- nothing is drawn. Run `uv run elysium export wield`."),
-				*Ref.Mesh.ToString(), *Context);
+				TEXT("wield model '%s' for '%s' is unavailable: %s"),
+				*Ref.Mesh.ToString(), *Context, Error.IsEmpty() ? TEXT("native wield catalogue/assets were not prepared") : *Error);
 			return nullptr;
 		}
 
@@ -539,8 +542,8 @@ namespace ElysiumNpcVisual
 
 	USkeletalMesh* LoadBakedMesh(const FString& Stem, bool bPlayerMaterial)
 	{
-		return LoadObject<USkeletalMesh>(nullptr,
-			*FElysiumContentPaths::BakedCharacterMesh(Stem, bPlayerMaterial));
+		const FString Path = ElysiumCharacterAssets::MeshPath(Stem);
+		return Path.IsEmpty() ? nullptr : LoadObject<USkeletalMesh>(nullptr, *Path);
 	}
 
 	bool IsStemBaked(const FString& Stem)
@@ -550,7 +553,7 @@ namespace ElysiumNpcVisual
 		// choice between two sets.
 		return FPackageName::DoesPackageExist(
 			FPackageName::ObjectPathToPackageName(
-				FElysiumContentPaths::BakedCharacterMesh(Stem)));
+				ElysiumCharacterAssets::MeshPath(Stem)));
 	}
 
 	bool IsOnMount(const FString& ObjectPath)
@@ -574,13 +577,8 @@ namespace ElysiumNpcVisual
 		{
 			return nullptr;
 		}
-		const FString BankPath = FElysiumContentPaths::BakedBankAnim(Owner, ClipName);
-		if (IsOnMount(BankPath))
-		{
-			return LoadObject<UAnimSequence>(nullptr, *BankPath);
-		}
-		return LoadObject<UAnimSequence>(nullptr,
-			*FElysiumContentPaths::BakedCharacterAnim(Owner, ClipName));
+		const FString Path = ElysiumCharacterAssets::AnimationPath(Owner, ClipName);
+		return Path.IsEmpty() ? nullptr : LoadObject<UAnimSequence>(nullptr, *Path);
 	}
 
 	UBlendSpace* LoadBakedBlendSpace(const USkeletalMesh* Mesh, const FString& Owner,
@@ -590,13 +588,9 @@ namespace ElysiumNpcVisual
 		{
 			return nullptr;
 		}
-		const FString BankPath = FElysiumContentPaths::BakedBankBlendSpace(Owner, Label, Host);
-		if (IsOnMount(BankPath))
-		{
-			return LoadObject<UBlendSpace>(nullptr, *BankPath);
-		}
-		return LoadObject<UBlendSpace>(nullptr,
-			*FElysiumContentPaths::BakedCharacterBlendSpace(Owner, Label, Host));
+		const FString Path = ElysiumCharacterAssets::AnimationPath(Owner,
+			Host.IsEmpty() ? Label : Label + TEXT("@") + Host, true);
+		return Path.IsEmpty() ? nullptr : LoadObject<UBlendSpace>(nullptr, *Path);
 	}
 
 	USkeletalMesh* LoadMesh(const FString& Stem, FString& OutError, bool bPlayerMaterial)
@@ -610,7 +604,7 @@ namespace ElysiumNpcVisual
 			return Baked;
 		}
 		OutError = FString::Printf(
-			TEXT("'%s' is not on the baked mount -- run `uv run elysium export characters`"), *Stem);
+			TEXT("'%s' is not on the baked mount -- run `uv run elysium import characters`"), *Stem);
 		return nullptr;
 	}
 

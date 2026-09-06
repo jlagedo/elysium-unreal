@@ -25,12 +25,13 @@
 // silently dropped part of the model.
 //
 // Self-skipping: the baked mount is gitignored and regenerable, so a checkout that has not run
-// `uv run elysium export characters` has nothing to compare and says so rather than failing.
+// `uv run elysium import characters` has nothing to compare and says so rather than failing.
 
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumPoseOracle.h"
 #include "Visual/ElysiumAnimLayerMask.h"
@@ -404,7 +405,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	// built to handle — and the bake it verifies is itself run against a subset of the cast.
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!Index.Load(Error))
+	if (!ElysiumNativeTest::Load(Index, Error))
 	{
 		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no NPC index (%s)"), *Error));
 		return true;
@@ -822,7 +823,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	{
 		FElysiumBlendTable Table;
 		FString TableError;
-		if (!Table.Load(FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
+		if (!ElysiumNativeTest::Load(Table, FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
 		{
 			// Most owners declare no grid and ship no sidecar at all, which is an ordinary load.
 			return;
@@ -1364,7 +1365,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		// with no import step to disagree about, which makes it the reference the bake is held to
 		// -- and, since nothing else builds a character, the only one.
 		FElysiumSkeletalSource Source;
-		if (!FElysiumSkeletalSource::Load(FElysiumContentPaths::NpcSource(Stem), Source, Error))
+		if (!FElysiumSkeletalSource::Load(ElysiumNativeTest::SourcePath(Stem), Source, Error))
 		{
 			AddInfo(FString::Printf(TEXT("%s: no .eskm to check against (%s)"), *Stem, *Error));
 			continue;
@@ -1495,7 +1496,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			// `_delta`. Cheap to widen because a blend space is checked against its own sidecar and
 			// the mount, with no container to load.
 			TSet<FString> GridOwners;
-			if (Vocabulary.Load(Stem, VocabularyError))
+			if (ElysiumNativeTest::Load(Vocabulary, Stem, VocabularyError))
 			{
 				Vocabulary.Clips.ForEachClip(
 					[&GridOwners, &AdditiveOwners, &Stem](const FString&, const FElysiumNpcClip& Clip)
@@ -1520,7 +1521,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				FElysiumSkeletalSource BankSource;
 				FString BankError;
 				if (!FElysiumSkeletalSource::Load(
-					FElysiumContentPaths::NpcBankSource(Bank), BankSource, BankError))
+					ElysiumNativeTest::SourcePath(Bank), BankSource, BankError))
 				{
 					AddInfo(FString::Printf(TEXT("%s: bank '%s' has no container (%s)"),
 						*Stem, *Bank, *BankError));
@@ -1545,7 +1546,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				FElysiumSkeletalSource BankSourceForPose;
 				FString BankPoseError;
 				if (!FElysiumSkeletalSource::Load(
-					FElysiumContentPaths::NpcBankSource(Bank), BankSourceForPose, BankPoseError))
+					ElysiumNativeTest::SourcePath(Bank), BankSourceForPose, BankPoseError))
 				{
 					continue;
 				}
@@ -1703,7 +1704,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 
 	if (Compared == 0)
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no slice model is baked; run: uv run elysium export characters"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no slice model is baked; run: uv run elysium import characters"));
 		return true;
 	}
 	AddInfo(FString::Printf(TEXT("%d model(s) compared, %d bone samples, %d `_delta` clip(s) ")
@@ -1753,7 +1754,7 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
 		FElysiumNpcClipSet Clips;
 		FString ClipError;
-		if (Mesh == nullptr || !Clips.Load(Stem, ClipError))
+		if (Mesh == nullptr || !ElysiumNativeTest::Load(Clips, Stem, ClipError))
 		{
 			continue;
 		}
@@ -1786,7 +1787,7 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 		{
 			FElysiumBlendTable Table;
 			FString TableError;
-			if (!Table.Load(FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
+			if (!ElysiumNativeTest::Load(Table, FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
 			{
 				// Most owners declare no grid and ship no sidecar at all, which is an ordinary load.
 				continue;
@@ -1958,7 +1959,7 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 	if (Bodies == 0)
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body on the mount; "
-			"run: uv run elysium export characters"));
+			"run: uv run elysium import characters"));
 		return true;
 	}
 	AddInfo(FString::Printf(

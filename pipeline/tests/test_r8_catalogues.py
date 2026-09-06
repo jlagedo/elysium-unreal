@@ -199,7 +199,12 @@ def test_static_rest_cannot_erase_an_animated_placement_requirement():
     unit = placed_unit()
     usage = {"assetId": ID, "fullClips": True, "requiredClips": ["open"], "uses": [{"sourceRecordIndex": 7}]}
     row = project_placed_model(unit, static_mesh=baked_unit(ID, "SM"), proof=measure_static_equivalence(unit), usage=usage)
-    assert row["fullClipsRequired"] and row["requiredClips"] == ["open"]
+    # An intrinsic label the source vocabulary never had is an explicit source gap, recorded in
+    # the evidence rather than claimed as a requirement the runtime could satisfy.
+    assert row["fullClipsRequired"] and row["requiredClips"] == []
+    assert json.loads(row["sourceEvidence"])["absentIntrinsicClips"] == [
+        {"label": "open", "state": "source-absent",
+         "reason": "intrinsic label is absent from source sequence vocabulary"}]
     assert json.loads(row["placementEvidence"]) == usage
     with pytest.raises(ValueError): project_placed_catalogue([row], expected_ids=[ID])
 

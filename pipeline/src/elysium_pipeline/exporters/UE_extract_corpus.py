@@ -219,9 +219,9 @@ def discover(idx, map_names=None, *, jobs=1):
     # `model` key, and a scripted grant or a drop can put any definition in any map. They are the
     # same kind of thing as a prop -- one model, one mesh -- so they join the same corpus.
     if map_names is None:
-        from elysium_pipeline.exporters import UE_extract_items
+        from elysium_pipeline import item_models
 
-        found.models |= set(UE_extract_items.ground_models(idx))
+        found.models |= set(item_models.ground_models(idx))
     for shard in workers.map_chunks(_census_shard, names, jobs=jobs, label="map census"):
         found.world |= shard.world
         found.decals |= shard.decals

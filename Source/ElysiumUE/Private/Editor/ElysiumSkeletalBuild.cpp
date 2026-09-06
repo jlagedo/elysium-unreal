@@ -1002,16 +1002,6 @@ static FString BuildElysiumSkeletalMeshInternal(const FString& SourcePath,
 #endif
 }
 
-FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString& SourcePath,
-	const FString& PackageName, const FString& SkeletonPackageName,
-	const FString& MaterialParentPath, const FString& MaterialPackagePath,
-	const TMap<FString, FString>& MaterialTextures, const TMap<FString, FString>& MaterialParents,
-	const FString& RecipeFingerprint)
-{
-	return BuildElysiumSkeletalMeshInternal(SourcePath, PackageName, SkeletonPackageName,
-		MaterialParentPath, MaterialPackagePath, MaterialTextures, MaterialParents, RecipeFingerprint, nullptr, {});
-}
-
 FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromStage(const FString& SourcePath,
 	const FString& PackageName, const FString& SkeletonPackageName,
 	const TMap<FString, FString>& MaterialAssets, const TArray<FTransform>& ReferencePose,
@@ -1992,13 +1982,6 @@ static FString BuildElysiumSequencesInternal(const FString& SourcePath,
 #endif
 }
 
-FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString& SourcePath,
- const FString& PackagePath, const FString& SkeletonPackageName, int32& OutClipCount,
- int32& OutDroppedTracks, const FString& RecipeFingerprint)
-{
- return BuildElysiumSequencesInternal(SourcePath, PackagePath, SkeletonPackageName,
-  OutClipCount, OutDroppedTracks, RecipeFingerprint, false, FString());
-}
 FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromStage(const FString& SourcePath,
  const FString& PackagePath, const FString& SkeletonPackageName, const FString& Role,
  int32& OutClipCount, int32& OutDroppedTracks, int32& OutSuppressedAppendixTracks,
@@ -2019,13 +2002,13 @@ static FString BuildElysiumBlendSpacesInternal(const FString& BlendsRelPath,
 #if WITH_EDITOR
 	// Every blend space this run wrote, which the sweep at the end measures the folder against.
 	TSet<FString> WrittenSpaces;
-	// The runtime's own reader, not a second parse of the same document. It already knows the
-	// sidecar's shape -- the pose-parameter array a grid's axes index into, the null cell, the
+	// The shared value parser reads the GLB stage JSON directly. It already knows the
+	// grid shape -- the pose-parameter array a grid's axes index into, the null cell, the
 	// leading '@' a raw label can carry -- and a bake that read the file its own way could disagree
 	// with the runtime about what a grid says while both looked correct.
 	FElysiumBlendTable Table;
 	FString Error;
-	if (!(bStage ? Table.LoadJsonText(BlendsRelPath, Error) : Table.Load(BlendsRelPath, Error)))
+	if (!Table.LoadJsonText(BlendsRelPath, Error))
 	{
 		return FString::Printf(TEXT("%s: %s"), *SourceLabel, *Error);
 	}
@@ -2293,13 +2276,6 @@ static FString BuildElysiumBlendSpacesInternal(const FString& BlendsRelPath,
 #endif
 }
 
-FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& Path,
- const FString& PackagePath, const FString& SkeletonPackageName, int32& OutSpaceCount,
- int32& OutSkippedGrids, int32& OutSkippedCells, const FString& RecipeFingerprint)
-{
- return BuildElysiumBlendSpacesInternal(Path, PackagePath, SkeletonPackageName,
-  OutSpaceCount, OutSkippedGrids, OutSkippedCells, RecipeFingerprint, false, FString());
-}
 FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromStage(const FString& Json,
  const FString& PackagePath, const FString& SkeletonPackageName, const FString& Role,
  int32& OutSpaceCount, int32& OutSkippedGrids, int32& OutSkippedCells, const FString& RecipeFingerprint)

@@ -44,6 +44,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumNpcClips.h"
@@ -223,12 +224,12 @@ namespace
 	// this sweep is over what the bake wrote rather than over what a particular character can play.
 	UBlendSpace* LoadFan(const FString& Owner, const FString& Label)
 	{
-		const FString BankPath = FElysiumContentPaths::BakedBankBlendSpace(Owner, Label);
+		const FString BankPath = ElysiumCharacterAssets::AnimationPath(Owner, Label, true);
 		if (FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(BankPath)))
 		{
 			return LoadObject<UBlendSpace>(nullptr, *BankPath);
 		}
-		const FString OwnPath = FElysiumContentPaths::BakedCharacterBlendSpace(Owner, Label);
+		const FString OwnPath = ElysiumCharacterAssets::AnimationPath(Owner, Label, true);
 		if (FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(OwnPath)))
 		{
 			return LoadObject<UBlendSpace>(nullptr, *OwnPath);
@@ -241,19 +242,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFanDurationTest,
 	"Elysium.Content.FanDuration", GElysiumFanDurationFlags)
 bool FElysiumFanDurationTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 
 	FElysiumNpcIndex Index;
 	FString IndexError;
-	if (!Index.Load(IndexError) || !Index.IsValid())
+	if (!ElysiumNativeTest::Load(Index, IndexError) || !Index.IsValid())
 	{
 		AddInfo(FString::Printf(
-			TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (%s) ")
-			TEXT("(run: uv run elysium export bundle npc)"), *IndexError));
+			TEXT("ELYSIUM_TEST_ABSTAIN: no native cast view (%s) ")
+			TEXT("(run: uv run elysium import characters)"), *IndexError));
 		return true;
 	}
 
@@ -302,7 +303,7 @@ bool FElysiumFanDurationTest::RunTest(const FString&)
 	{
 		FElysiumBlendTable Table;
 		FString TableError;
-		if (!Table.Load(BlendsByOwner[Owner], TableError))
+		if (!ElysiumNativeTest::Load(Table, BlendsByOwner[Owner], TableError))
 		{
 			// A sidecar the index names and the export did not write is a gap in the export, not in
 			// the bake, and the parity test already owns that report.
@@ -522,7 +523,7 @@ bool FElysiumFanDurationTest::RunTest(const FString&)
 	if (GaitFans == 0)
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no gait fan in any exported blends sidecar ")
-			TEXT("(run: uv run elysium export bundle npc, then uv run elysium export characters)"));
+			TEXT("(run: uv run elysium import characters, then uv run elysium import characters)"));
 		return true;
 	}
 

@@ -138,6 +138,11 @@ FString UElysiumCookRoot::VerifyCookRules(const FString& Json)
 		|| Info.Rules.CookRule != EPrimaryAssetCookRule::AlwaysCook || !Info.Rules.bApplyRecursively)
 		return TEXT("R8 cook root: register the dedicated type with bIsEditorOnly=False, AlwaysCook and recursive rules");
 	const FSoftObjectPath ObjectPath(PackagePath() + TEXT(".") + FPackageName::GetShortName(PackagePath()));
+	// The manager's primary-asset map was built from the config at editor start; a label saved
+	// by this same process (the first publication, or a re-authored one) is not in it until the
+	// configured specific asset is rescanned. Synchronous, so the check below reads the saved file.
+	Manager.ScanPathsForPrimaryAssets(Id.PrimaryAssetType, { PackagePath() }, UElysiumCookRoot::StaticClass(),
+		/*bHasBlueprintClasses*/ false, /*bIsEditorOnly*/ false, /*bForceSynchronousScan*/ true);
 	if (Manager.GetPrimaryAssetIdForPath(ObjectPath) != Id) return TEXT("R8 cook root: canonical label is not scanned");
 	// This must also pass in a fresh editor BEFORE loading the label: custom primary
 	// types use saved bundle metadata and type rules; only stock PrimaryAssetLabel

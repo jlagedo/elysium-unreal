@@ -658,9 +658,9 @@ void UElysiumMapVisuals::ApplyEnvironment(const FElysiumEnvDef& Env, const FStri
 	{
 		// R5.2: this map's SkyLight (`SLS_SpecifiedCubemap`, the real baked cube, the real
 		// `emit_skyambient`-joined intensity) and its backdrop dome are already standing —
-		// `pipeline/unreal/bake_map.py::_place_sky` authored both from the exact same
-		// `ElysiumEnvironment::BuildSkyCubeFrom` join this function runs below for every map
-		// still on the legacy path. Nothing here would improve on that; re-running it would
+		// `pipeline/unreal/bake_map.py::_place_sky` binds the texture-lane cube and stored mean,
+		// the same assets this function resolves below for maps still on the legacy path.
+		// Nothing here would improve on that; re-running it would
 		// silently fight the baked asset the next time something calls `RecaptureSky`.
 		UE_LOG(LogElysiumVisuals, Log, TEXT("sky '%s': baked (MapsOnV2Models) — runtime assembly skipped"),
 			*Env.SkyName);

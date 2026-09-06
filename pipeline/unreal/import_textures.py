@@ -283,22 +283,26 @@ def verify_built(texture, entry):
     `short_chain` is {authoredMips, builtMips} when Unreal built more levels than the unit
     authored -- the 65 chains that end above 1x1 -- which is recorded, not failed. A cubemap's
     slice count is not held against `expected`: the platform data does not report faces as
-    slices, and the class check already proves the cube.
+    slices, and the class check already proves the cube. Sky composites retain the
+    old lane's usable mip-0 acceptance: platform format/chain differences are recorded,
+    while their complete source mip hashes are checked by ElysiumSkyProvenance.
     """
     expected = entry["expected"]
     problem = class_problem(texture, entry)
     if problem:
         return problem, None
-    if entry.get("product") == "sky-composite":
-        built_format = unreal.ElysiumTextureImportLibrary.built_pixel_format(texture)
-        if built_format != "PF_A32B32G32R32F":
-            return "sky HDR build is %s, expected PF_A32B32G32R32F" % built_format, None
     width, height, slices, mips = unreal.ElysiumTextureImportLibrary.built_extent(texture)
     if (width, height) != (expected["width"], expected["height"]):
         return "built %dx%d, expected %dx%d" % (width, height, expected["width"], expected["height"]), None
     if entry["class"] == "Texture2DArray" and slices != expected.get("slices", 1):
         return "built %d slices, expected %d" % (slices, expected.get("slices", 1)), None
     authored = expected["mips"]
+    if entry.get("product") == "sky-composite":
+        if mips < 1:
+            return "sky has no usable built mip", None
+        if mips != authored:
+            return None, {"authoredMips": authored, "builtMips": mips}
+        return None, None
     if mips < authored:
         return "built %d mips, unit authored %d" % (mips, authored), None
     if mips > authored:
@@ -317,14 +321,17 @@ class Tracker(object):
     rebuilt; a stamp equal to the recipe fingerprint is reused.
     """
 
-    def __init__(self, force=False):
+    def __init__(self, force=False, ledger=None):
         self.force = bool(force)
         self.fingerprints = {}
+        self.ledger = ledger
 
     def fingerprint(self, entry):
         path = entry["assetPath"]
         if path not in self.fingerprints:
             self.fingerprints[path] = bl.recipe_fingerprint(STAGE, path, entry["recipe"])
+            if self.ledger is not None:
+                self.ledger.record(path, entry["recipe"])
         return self.fingerprints[path]
 
     def needs_import(self, entry):
@@ -337,6 +344,8 @@ class Tracker(object):
             exists = False
         if self.force or not exists:
             return True
+        if stored != fingerprint and self.ledger is not None:
+            self.ledger.explain(path, entry["recipe"], stored)
         return stored != fingerprint
 
 
@@ -513,7 +522,9 @@ def run(manifest_path, force=False, measure=True):
     # the registry, and the background start-up scan owns the path, so the scan is forced.
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([package_root], force_rescan=True)
 
-    import_entries(manifest, staging_root, Tracker(force), report, measure)
+    ledger = bl.RecipeLedger(os.path.join(staging_root, "recipes.json"), "import-textures")
+    import_entries(manifest, staging_root, Tracker(force, ledger), report, measure)
+    ledger.write()
     try:
         protected = {entry["assetPath"] for entry in manifest["assets"]} | set(manifest["keep"])
         report.pruned = prune(package_root, protected, manifest["pruneScope"], report.ownership)

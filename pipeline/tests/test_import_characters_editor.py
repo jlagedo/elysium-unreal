@@ -43,7 +43,9 @@ def editor(monkeypatch, tmp_path):
     bl = NS(recipe_fingerprint=lambda *a: hashlib.sha256(json.dumps(a, sort_keys=True).encode()).hexdigest(),
             stored_recipe=lambda p, **k: assets.get(p, ""),
             stamp_recipe=lambda p, digest, **k: assets.__setitem__(p, digest), save=lambda p: True,
-            prune_owned=lambda *a: 0)
+            prune_owned=lambda *a: 0,
+            RecipeLedger=lambda *a: NS(record=lambda *a: None, recorded=lambda *a: {},
+                                       explain=lambda *a: "", write=lambda: None))
     path = Path(__file__).resolve().parents[1] / "unreal/import_characters.py"
     spec = importlib.util.spec_from_file_location("character_editor_test", path)
     module = importlib.util.module_from_spec(spec)

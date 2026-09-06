@@ -19,8 +19,9 @@
 #include "HAL/FileManager.h"
 #include "Materials/Material.h"
 #include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
+#include "Misc/ScopeExit.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
 
@@ -67,13 +68,19 @@ TArray<uint8> Source(float HandLocalX = 10.f, bool bMixedSkin = false)
 	Append<uint32>(Morphs, 1); String(Morphs, TEXT("stage_morph"));
 	Append<uint32>(Morphs, 1); Append<uint32>(Morphs, 0);
 	for (float Value : {2.f, 0.f, 0.f, bMixedSkin ? 0.f : 1.f, bMixedSkin ? 1.f : 0.f, 0.f}) Append(Morphs, Value);
+	// The V2 authored tangent channel (`TANG`): one xyz + handedness per vertex, the mesh build
+	// refuses a stage without it.
+	TArray<uint8> Tangents;
+	Append<uint32>(Tangents, 3);
+	for (int32 Vertex = 0; Vertex < 3; ++Vertex)
+		for (float Value : {1.f, 0.f, 0.f, 1.f}) Append(Tangents, Value);
 	TArray<uint8> Bytes;
 	Bytes.Append(reinterpret_cast<const uint8*>("ESKM"), 4);
-	Append<uint32>(Bytes, 8); Append<uint32>(Bytes, 6); Append<uint32>(Bytes, 0);
-	const char* Tags[] = {"SKEL", "ATCH", "MATL", "MESH", "ANIM", "MORF"};
-	const TArray<uint8>* Parts[] = {&Bones, &Attachments, &Materials, &Mesh, &Animations, &Morphs};
-	uint64 Offset = 16 + 6 * 20;
-	for (int32 I = 0; I < 6; ++I)
+	Append<uint32>(Bytes, 8); Append<uint32>(Bytes, 7); Append<uint32>(Bytes, 0);
+	const char* Tags[] = {"SKEL", "ATCH", "MATL", "MESH", "ANIM", "MORF", "TANG"};
+	const TArray<uint8>* Parts[] = {&Bones, &Attachments, &Materials, &Mesh, &Animations, &Morphs, &Tangents};
+	uint64 Offset = 16 + 7 * 20;
+	for (int32 I = 0; I < 7; ++I)
 	{
 		Bytes.Append(reinterpret_cast<const uint8*>(Tags[I]), 4);
 		Append(Bytes, Offset); Append<uint64>(Bytes, Parts[I]->Num()); Offset += Parts[I]->Num();
@@ -299,6 +306,17 @@ bool FElysiumSkeletalStageOwnerTest::RunTest(const FString&)
 	const FString Family = TEXT("/Game/ElysiumGenerated/Tests/R8/SKEL_StageOwners");
 	const FString A = TEXT("/ElysiumBaked/Models/_Tests/stage_owners/owner_a");
 	const FString B = TEXT("/ElysiumBaked/Models/_Tests/stage_owners/owner_b");
+	// The owner fixtures land on the canonical mount, where every package is expected to carry
+	// a producer stamp: a leftover blocks `import cook-roots` ("missing publication
+	// class/producer/recipe"). Delete them on every exit path, not only the passing one.
+	ON_SCOPE_EXIT
+	{
+		UElysiumMapBakeLibrary::FinishAssetCompilation();
+		UElysiumMapBakeLibrary::UnloadBakedPackages(TEXT("/ElysiumBaked/Models/_Tests"));
+		IFileManager::Get().DeleteDirectory(
+			*FPackageName::LongPackageNameToFilename(TEXT("/ElysiumBaked/Models/_Tests/")),
+			/*RequireExists*/ false, /*Tree*/ true);
+	};
 	int32 Count = 0, Dropped = 0, Suppressed = 0;
 	TArray<FName> SuppressedBones;
 	if (!TestEqual(TEXT("shared rig builds"), UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(

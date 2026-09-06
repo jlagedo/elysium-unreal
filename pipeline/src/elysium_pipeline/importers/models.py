@@ -197,43 +197,46 @@ def referenced_models_for_map(export_v2_root: Path, map_stem: str) -> set[str]:
     return keys
 
 
-def item_ground_models(export_root_path: Path | None = None) -> set[str]:
+def item_ground_models(export_v2_root: Path | None = None, index=None) -> set[str]:
     """Every model key the item ground table names -- the models no map unit references.
 
-    An `item_*` entity carries no `model` keyvalue: the runtime folds a stem out of the item's own
-    `vdata/items` `playermodel` path and resolves it through `items/ground_models.json`
-    (`FElysiumContentPaths::ItemGroundModels`, and `ElysiumItemContainer`/`ElysiumItemClasses`/
-    `ElysiumLockable`/`ElysiumTerminal` are its four call sites). So the map units' `dependencies[]`
-    do not name these models, and a map-scoped run that staged only what those units name left the
-    running game with no mesh for them -- measured by R5.1 as 18 stems over 41 placements on the
-    three-map working corpus, the moment the runtime's model root was flipped.
+    An `item_*` entity carries no `model` keyvalue: the runtime folds the item's own
+    `vdata/items` `playermodel` into a model id and resolves it through the native model
+    catalogue (`ElysiumItemContainer`/`ElysiumItemClasses`/`ElysiumLockable`/`ElysiumTerminal`
+    are its four call sites). So the map units' `dependencies[]` do not name these models, and
+    a map-scoped run that staged only what those units name left the running game with no mesh
+    for them -- measured by R5.1 as 18 stems over 41 placements on the three-map working corpus.
 
     The whole table is staged rather than a per-map subset, because item placement is not a map
-    fact: the player can drop any carried item on any map, so "which items can this map show" has no
-    map-scoped answer. 124 models, 123 of them outside the three maps' unit-referenced set.
+    fact: the player can drop any carried item on any map, so "which items can this map show" has
+    no map-scoped answer. 124 models, 123 of them outside the three maps' unit-referenced set.
 
-    Read from the same manifest the runtime resolves through, so the selection cannot name something
-    the consumer does not, or miss something it does. An absent manifest is an empty set: a corpus
-    that has not run the item pass yet stages nothing extra rather than failing the model run.
+    R8 retired the legacy `items/ground_models.json` join with its exporter; the enumeration is
+    read straight from the install's `vdata/items` definitions (`item_models.ground_models`),
+    the same source the V2 vdata units and the native wield catalogue are published from. Two
+    definitions declare a `playermodel` the install does not ship (`w_pistol`, the throwing
+    star's ground model); the legacy join listed them under `skipped`, and here they are the
+    keys with no published unit, left out of the selection as an explicit source gap.
     """
 
-    root = Path(export_root_path) if export_root_path is not None else paths.export_root()
-    manifest = root / "items" / "ground_models.json"
-    if not manifest.is_file():
-        return set()
-    try:
-        document = json.loads(manifest.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise ModelImportError(f"{manifest} is unreadable: {error}") from error
-    return {
+    from elysium_pipeline import item_models
+    from elysium_pipeline.formats import install
+
+    if index is None:
+        index = install.build_index(dirs=("vdata",), verbose=False)
+    keys = {
         map_model.model_key(path)
-        for path in (document.get("models") or {})
+        for path in item_models.ground_models(index)
         if isinstance(path, str) and path
     }
+    root = unit_root(export_v2_root) if export_v2_root is not None else None
+    if root is None:
+        return keys
+    return {key for key in keys if (root / f"{key}.glb").is_file()}
 
 
 def select_for_maps(export_v2_root: Path, map_stems: Sequence[str],
-                    export_root_path: Path | None = None) -> dict[str, Any]:
+                    index=None) -> dict[str, Any]:
     """`{"perMap": ..., "itemGround": ..., "keys": sorted union}` -- the map-scoped selection the
     contract's `--maps` flag names.
 
@@ -252,7 +255,7 @@ def select_for_maps(export_v2_root: Path, map_stems: Sequence[str],
         found = referenced_models_for_map(export_v2_root, normalized)
         per_map[normalized] = sorted(found)
         union |= found
-    ground = item_ground_models(export_root_path)
+    ground = item_ground_models(export_v2_root, index)
     union |= ground
     return {"perMap": per_map, "itemGround": sorted(ground), "keys": sorted(union)}
 

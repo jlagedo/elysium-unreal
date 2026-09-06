@@ -4,10 +4,14 @@ No work at import time; no CLI, config, catalogue producer, map or runtime edits
 Only the label is loaded. Corpus targets are scanned as Asset Registry metadata
 and authored as soft references by ElysiumCookRoot; no eager all-corpus load.
 """
-import hashlib
 import json
 from pathlib import Path
 import re
+
+
+#: The code half of the cook-root recipe; bump when this writer or `UElysiumCookRoot` changes
+#: what it authors. Never hash code (`seam_map_unit_contract.md` -> "Recipes").
+PRODUCER_VERSION = "r8-cook-roots-v1"
 
 
 def _tag(data, key):
@@ -76,11 +80,10 @@ def publish(manifest_paths, *, force=False):
     from elysium_pipeline import cook_roots as roots
     declarations = roots.read_declarations(manifest_paths)
     before = snapshot(unreal)
+    declarations = roots.reconcile_declarations(declarations, before)
     plan = roots.plan_roots(declarations, before)
     roots.verify_inputs(declarations)
-    dll = Path(unreal.Paths.project_dir()) / "Binaries/Win64/UnrealEditor-ElysiumUE.dll"
-    tool = hashlib.sha256(Path(__file__).read_bytes() + Path(roots.__file__).read_bytes()
-                          + Path(bl.__file__).read_bytes() + dll.read_bytes()).hexdigest()
+    tool = PRODUCER_VERSION
     recipe = bl.recipe_fingerprint(roots.PRODUCER, roots.ROOT_PACKAGE, {"tool": tool, "plan": plan})
     label, state = _publish(unreal, bl, plan, recipe, force)
     roots.verify_inputs(declarations)

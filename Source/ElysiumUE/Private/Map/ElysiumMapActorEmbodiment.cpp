@@ -39,18 +39,12 @@ namespace
 		const FString& AnimSetModel, const FString& Root, const FString& Label)
 	{
 		if (!Game) return {};
-		if (BodyModel.StartsWith(TEXT("vtmb:model:")))
-		{
-			const auto* Native=Game->GetSubsystem<UElysiumNativeAnimationData>();
-			const auto* Owner=Native?Native->CinematicBody(AnimSetModel,Root):nullptr;
-			if (Owner) return {Owner->AssetId,Label,Owner->OwnerRoot};
-			UE_LOG(LogElysium,Warning,TEXT("cinematic owner is absent or not prepared: %s [%s] for %s"),
-				*AnimSetModel,*Root,*BodyModel);
-			return {};
-		}
-		auto* Anims=Game->GetSubsystem<UElysiumAnimSubsystem>();
-		return Anims?FElysiumClipIdentity(Anims->GetIndex().CinematicBank(AnimSetModel,Root),Label)
-			:FElysiumClipIdentity();
+		const auto* Native=Game->GetSubsystem<UElysiumNativeAnimationData>();
+		const auto* Owner=Native?Native->CinematicBody(AnimSetModel,Root):nullptr;
+		if (Owner) return {Owner->AssetId,Label,Owner->OwnerRoot};
+		UE_LOG(LogElysium,Warning,TEXT("cinematic owner is absent or not prepared: %s [%s] for %s"),
+			*AnimSetModel,*Root,*BodyModel);
+		return {};
 	}
 }
 

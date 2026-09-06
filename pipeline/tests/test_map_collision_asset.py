@@ -139,7 +139,7 @@ def test_stage_map_carries_the_sidecars_and_reports_its_own_numbers(tmp_path):
         sky_path=directory / "sp_probe.sky",
     )
 
-    assert entry["assetPath"] == "/ElysiumBaked/Maps/sp_probe/DA_sp_probe_Collision"
+    assert entry["assetPath"] == "/ElysiumBaked/sp_probe/DA_sp_probe_Collision"
     assert entry["parity"]["equal"] is True
     assert entry["stats"] == {
         "worldHulls": 3, "worldHullVertices": 24, "displacementTriangles": 2,

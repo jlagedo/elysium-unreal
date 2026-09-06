@@ -226,7 +226,6 @@ struct FElysiumBlendTable
 
 	// The door the runtime uses. RelPath is `npc_index.json`'s own `blends` value, so one function
 	// reads both "blends/<stem>.json" and "animated_props/blends/<stem>.json".
-	bool Load(const FString& RelPath, FString& OutError);
 	// The same parse without touching the disk, so a test can hand it a document directly. There is
 	// no import conversion here — a grid is labels, ints and degrees, and carries no geometry.
 	bool LoadJsonText(const FString& JsonText, FString& OutError);

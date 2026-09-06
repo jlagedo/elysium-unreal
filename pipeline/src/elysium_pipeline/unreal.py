@@ -67,8 +67,6 @@ CORPUS_TIMEOUT_SECONDS = 7200.0
 #: compression, each a cold DDC miss on a first run. Kept where it was when a batch was twelve
 #: maps: it is the bound on a wedged launch, not a budget the batch is expected to approach.
 MAP_BAKE_TIMEOUT_SECONDS = 10800.0
-CHARACTER_BAKE_TIMEOUT_SECONDS = 7200.0
-WIELD_BAKE_TIMEOUT_SECONDS = 3600.0
 CLOTH_TIMEOUT_SECONDS = 1800.0
 
 #: How many automation reports are retained under `$ELYSIUM_WORK_ROOT/reports/tests/`. Each run
@@ -479,6 +477,16 @@ def expression_tables(config, runner, manifest_path, *, verify: bool = False, fo
     ], timeout=3600.0)
 
 
+def import_cook_roots(config, runner, job_path) -> None:
+    """Root published model/expression products without loading the entire corpus."""
+    _run(config, runner, editor_executable(config, commandlet=True), [
+        str(config.project), "-run=pythonscript",
+        f"-script={config.repo_root / 'pipeline/unreal/import_cook_roots.py'}",
+        f"-CookRootJob={job_path}",
+        "-nullrhi", "-unattended", "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
+    ], timeout=3600.0)
+
+
 def import_characters(config, runner, manifest_path, *, force: bool = False) -> None:
     """Author the GLB stage's skeletal products and bind the imported material corpus."""
     from elysium_pipeline.importers.materials import staging_root
@@ -495,7 +503,7 @@ def import_characters(config, runner, manifest_path, *, force: bool = False) -> 
     ], timeout=4 * 3600.0)
 
 
-def verify_character_stage(config, runner, manifest_path) -> None:
+def verify_character_stage(config, runner, manifest_path, *, fidelity: bool = False) -> None:
     """Read the stage selection's saved native core products in a fresh, headless editor."""
     from elysium_pipeline.importers.materials import staging_root
 
@@ -503,6 +511,7 @@ def verify_character_stage(config, runner, manifest_path) -> None:
         str(config.project), "-run=pythonscript",
         f"-script={config.repo_root / 'pipeline/unreal/verify_character_stage.py'}",
         f"-ImportCharacters={manifest_path}",
+        *(["-VerifyFidelity=1"] if fidelity else []),
         f"-ImportUnitRoot={config.export_v2_root}",
         f"-ImportMaterialsRoot={staging_root(config.work_root)}",
         "-nullrhi", "-unattended", "-nosplash", "-nopause", "-stdout", "-FullStdOutLogOutput",
@@ -833,117 +842,6 @@ def bake_maps(
             ],
             timeout=MAP_BAKE_TIMEOUT_SECONDS,
         )
-
-
-def bake_characters(config, runner, stems: Sequence[str], *, props: Sequence[str] = (),
-                    force: bool = False) -> None:
-    """Bake the named models onto /ElysiumBaked/Characters.
-
-    The whole cast goes through one editor process, and the commandlet decides per unit whether
-    anything is authored, by comparing each recipe against the hash stamped on the assets -- a
-    current cast launches, reports every unit reused, and exits.
-
-    Memory is bounded by releasing each scope's packages as it completes rather than by the async
-    compilation throttler, which cannot see this work: only a task reporting -1 draws against that
-    budget and animation compression reports 0.
-    """
-    stems = list(dict.fromkeys(stems))
-    props = list(dict.fromkeys(props))
-    if not stems and not props:
-        raise ValueError("character bake needs at least one body or placed model")
-    arguments = [
-        str(config.project),
-        "-run=pythonscript",
-        f"-script={config.repo_root / 'pipeline/unreal/bake_characters.py'}",
-        f"-BakeCharacters={','.join(stems)}",
-        "-unattended",
-        "-nosplash",
-        "-nopause",
-        "-stdout",
-        "-FullStdOutLogOutput",
-    ]
-    if props:
-        arguments.insert(4, f"-BakeProps={','.join(props)}")
-    if force:
-        arguments.insert(4, "-BakeForce=1")
-    _run(config, runner, editor_executable(config, commandlet=True), arguments,
-         timeout=CHARACTER_BAKE_TIMEOUT_SECONDS)
-
-
-def bake_wield(config, runner, stems: Sequence[str] = ()) -> None:
-    """Bake the named wield models onto /ElysiumBaked/Items/Wield.
-
-    One editor process, `-BakeWield=<csv>` naming the stems to build. Empty `stems` bakes the
-    whole corpus -- `bake_wield.py` itself treats an empty selector as every real model the
-    manifest declares, so this function does not have to resolve that list itself.
-    """
-    stems = list(dict.fromkeys(stems))
-    arguments = [
-        str(config.project),
-        "-run=pythonscript",
-        f"-script={config.repo_root / 'pipeline/unreal/bake_wield.py'}",
-        f"-BakeWield={','.join(stems)}",
-        "-unattended",
-        "-nosplash",
-        "-nopause",
-        "-stdout",
-        "-FullStdOutLogOutput",
-    ]
-    _run(config, runner, editor_executable(config, commandlet=True), arguments,
-         timeout=WIELD_BAKE_TIMEOUT_SECONDS)
-
-
-def make_cloth_assets(config, runner, stems: Sequence[str]) -> None:
-    """Generate a Chaos cloth asset per authored garment among `stems`.
-
-    Runs behind the character bake rather than under `build_content`'s umbrella: a cloth asset
-    binds to a skeletal mesh's reference skeleton, and the umbrella runs before any character
-    exists. Most named models author no garment and are simply absent from the sidecar directory.
-    """
-    _run(
-        config,
-        runner,
-        editor_executable(config, commandlet=True),
-        [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/make_cloth_assets.py'}",
-            f"-ClothStems={','.join(dict.fromkeys(stems))}",
-            "-unattended",
-            "-nosplash",
-            "-nopause",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ],
-        timeout=CLOTH_TIMEOUT_SECONDS,
-    )
-
-
-def verify_characters(config, runner, stems: Sequence[str], *, props: Sequence[str] = ()) -> None:
-    stems = list(dict.fromkeys(stems))
-    props = list(dict.fromkeys(props))
-    if not stems and not props:
-        raise ValueError("character verification needs at least one body or placed model")
-    arguments = [
-        str(config.project),
-        "-run=pythonscript",
-        f"-script={config.repo_root / 'pipeline/unreal/bake_verify_characters.py'}",
-        f"-BakeCharacters={','.join(stems)}",
-        "-unattended",
-        "-nosplash",
-        "-nopause",
-        "-stdout",
-        "-FullStdOutLogOutput",
-    ]
-    if props:
-        arguments.insert(4, f"-BakeProps={','.join(props)}")
-    _run(
-        config,
-        runner,
-        editor_executable(config, commandlet=True),
-        arguments,
-        timeout=CHARACTER_BAKE_TIMEOUT_SECONDS,
-    )
 
 
 def verify_bakes(config, runner, maps: Sequence[str], *, batch_size: int = 4) -> None:

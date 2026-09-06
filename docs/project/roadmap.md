@@ -609,7 +609,7 @@ tutorial's office chair carries and its sardine can throws, from real input.
 
 ## Pipeline backlog (PL)
 
-- [~] **[R8 Characters on the GLB corpus](plans/pipeline.md#r8-characters-on-the-glb-corpus)** — native skeletal/animation and expression products, secondary-motion data, cloth and authored tuning migration are implemented; full tangent/buffer fidelity and runtime cutover remain under verification. Physics scope is export/import and data conservation only: source-data assets are implemented and a three-asset pilot passed fresh verification; complete corpus coverage remains required. Simulation-ready PhysicsAssets, solver calibration, ragdoll activation and gameplay physics are deferred and cannot block R8. Canonical static import, shared catalogues, applicable fidelity/cook/runtime checks and accepted legacy retirement remain open.
+- [~] **[R8 Characters on the GLB corpus](plans/pipeline.md#r8-characters-on-the-glb-corpus)** — development closed 2026-09-06 on the testable V2 path: build and Python suite green, the native import chain (materials, characters, catalogues, cook roots) published, `sp_tutorial_1` / `sm_pawnshop_1` / `sm_hub_1` re-baked with no legacy references (seam_migration.md → R8 → "Closure record"). Remaining: the owner-piloted rendered play pass on those three maps. Enhanced fidelity and expanded source coverage stay deferred in seam_migration.md's R8 fidelity ledger; physics simulation, calibration and ragdoll activation remain outside this milestone; the mount's legacy folders and the 106 unconverted maps are R9.
 
 - [x] **PL1–PL5d** — entity models, scripts/dialogue, use-icon atlas, NPC banks,
   schemes/vdata/cfg mirrors.

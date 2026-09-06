@@ -1119,6 +1119,83 @@ def stamp_recipe(asset, fingerprint, *, producer):
     unreal.EditorAssetLibrary.set_metadata_tag(asset, PRODUCER_TAG, producer)
 
 
+class RecipeLedger(object):
+    """Why a product re-authored. A lane keeps, beside its receipts, one digest per recipe
+    field of every product it stamped; on the next run a mismatch names the fields that moved
+    instead of reporting "0 reused" and leaving the reason to be read out of the code.
+
+    The ledger is advisory: reuse is decided by the stamp on the asset, never by this file.
+    A lane records every recipe it computes (`record`) and asks `explain` only when the stamp
+    differs; `write` merges this run's records over the previous ones so a partial run keeps
+    the entries it did not visit. The first `LOG_LIMIT` explanations are logged in full, the
+    rest are counted by the set of fields that moved (`summary`)."""
+
+    LOG_LIMIT = 20
+
+    def __init__(self, path, lane):
+        self.path = str(path)
+        self.lane = lane
+        self.previous = {}
+        self.current = {}
+        self.raw = {}
+        self.reasons = {}
+        self.logged = 0
+        if os.path.isfile(self.path):
+            try:
+                with open(self.path, "r", encoding="utf-8") as handle:
+                    self.previous = json.load(handle)
+            except (OSError, ValueError):
+                self.previous = {}
+
+    @staticmethod
+    def _fields(recipe):
+        if not isinstance(recipe, dict):
+            recipe = {"recipe": recipe}
+        return {str(key): hashlib.sha256(json.dumps(value, sort_keys=True, default=str,
+                                                     separators=(",", ":")).encode("utf-8")).hexdigest()
+                for key, value in recipe.items()}
+
+    def record(self, object_path, recipe):
+        self.current[object_path] = self._fields(recipe)
+        self.raw[object_path] = recipe
+
+    def recorded(self, object_path):
+        return self.raw.get(object_path, {})
+
+    def explain(self, object_path, recipe, stored):
+        """Log and count why `object_path` re-authors; `stored` is the stamp read off the asset."""
+        fields = self._fields(recipe)
+        before = self.previous.get(object_path)
+        if not stored:
+            reason = "no stamp on the asset"
+        elif before is None:
+            reason = "no previous recipe in the ledger"
+        else:
+            moved = sorted(key for key in set(before) | set(fields) if before.get(key) != fields.get(key))
+            reason = "changed " + ", ".join(moved) if moved else "identical fields; stage label or path moved"
+        self.reasons[reason] = self.reasons.get(reason, 0) + 1
+        if self.logged < self.LOG_LIMIT:
+            self.logged += 1
+            unreal.log("[%s] re-author %s: %s" % (self.lane, object_path, reason))
+        return reason
+
+    def summary(self):
+        return dict(sorted(self.reasons.items(), key=lambda item: (-item[1], item[0])))
+
+    def write(self):
+        merged = dict(self.previous)
+        merged.update(self.current)
+        directory = os.path.dirname(self.path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        temporary = self.path + ".tmp"
+        with open(temporary, "w", encoding="utf-8") as handle:
+            json.dump(merged, handle, sort_keys=True, separators=(",", ":"))
+        os.replace(temporary, self.path)
+        if self.reasons:
+            unreal.log("[%s] re-author reasons: %s" % (self.lane, json.dumps(self.summary())))
+
+
 def stored_producer(object_path):
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     data = registry.get_asset_by_object_path(object_path_of(object_path))

@@ -3,7 +3,6 @@
 -ImportModelCatalogues=<manifest.json> [-ImportForce=1]
 The shared CLI owns the generated-state lease and process lifecycle.
 """
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -22,12 +21,13 @@ def _backend():
     return unreal, bake_lib
 
 
+#: The code half of every native catalogue recipe; bump when this writer, its verifier or the
+#: `UElysium*Catalogue` classes change what they author. Never hash code.
+PRODUCER_VERSION = "model-catalogues-native-v1"
+
+
 def tool_fingerprint(unreal, bl):
-    from elysium_pipeline.importers.model_catalogues import digest_file, json_bytes
-    directory = Path(__file__).resolve().parent
-    dll = Path(unreal.Paths.project_dir()) / "Binaries/Win64/UnrealEditor-ElysiumUE.dll"
-    files = [Path(__file__), directory / "verify_model_catalogues.py", Path(bl.__file__), dll]
-    return hashlib.sha256(json_bytes([(path.name, digest_file(path)) for path in files])).hexdigest()
+    return PRODUCER_VERSION
 
 
 def native_recipe(bl, entry, tool):

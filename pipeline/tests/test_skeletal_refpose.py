@@ -26,7 +26,8 @@ import numpy as np
 
 import pytest
 
-from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+from elysium_pipeline.skeletal_stage import payload as UEK
+from elysium_pipeline.skeletal_stage.cinematics import actor_rows
 from elysium_pipeline.formats import mdl_skel
 IDENTITY_Q = (0.0, 0.0, 0.0, 1.0)
 #: A 90-degree rotation about Z, used wherever a test needs a root whose orientation actually
@@ -353,7 +354,7 @@ def test_forked_actor_subset_resolves_without_a_synthetic_root() -> None:
         bone(12, "Bip02 Spine1", 11, (0.0, 1.0, 0.0)),
         bone(13, "Bip02 Prop", -1, (5.0, 5.0, 5.0)),  # a second, forked root
     ]
-    rows, order, reparented = UEK._cinematic_rows(sub, "Bip02")
+    rows, order, reparented = actor_rows(sub, "Bip02")
     # The forked prop resolved onto the actor's own root, keyed by ORIGINAL bone index.
     assert reparented == {13: 10}
 

@@ -148,11 +148,13 @@ struct FElysiumContentPaths
 	// filesystem paths, so they take no FPaths::ProjectDir. The mount's Content/ is game-derived
 	// and gitignored exactly like Root(); only the .uplugin descriptor is committed.
 	static FString BakedMount() { return TEXT("/ElysiumBaked"); }
+	static FString CastData() { return BakedMount() / TEXT("Models/_Corpus/DA_Cast.DA_Cast"); }
 	static FString BakedMapDir(const FString& Map)
 	{
-		const FString Level = BakedUnit(TEXT("vtmb:map:") + Map, TEXT(""));
-		int32 Slash = INDEX_NONE;
-		return Level.FindLastChar(TEXT('/'), Slash) ? Level.Left(Slash) : FString();
+		// R9 owns relocation of the existing level packages. Validate the identity, then
+		// retain their physical mount root until that migration actually moves the maps.
+		return BakedUnit(TEXT("vtmb:map:") + Map, TEXT("")).IsEmpty()
+			? FString() : BakedMount() / Map;
 	}
 	// The .umap UElysiumMapSubsystem::Travel opens for this map.
 	static FString BakedLevel(const FString& Map) { return BakedMapDir(Map) / Map; }
@@ -475,118 +477,6 @@ struct FElysiumContentPaths
 	// Apart from the cast only in folder and lifetime: a prop owns its own skeleton the same way
 	// a body does, and its stem is the whole address. It plays no shared bank, so nothing is
 	// declared compatible with it.
-	static FString BakedPropDir() { return BakedMount() / TEXT("Props"); }
-	static FString BakedPropPackage(const FString& Stem) { return BakedPropDir() / Stem; }
-	static FString BakedPropSkeleton(const FString& Stem)
-	{
-		const FString Asset = TEXT("SKEL_") + Stem;
-		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
-	}
-	static FString BakedPropSkeletalMesh(const FString& Stem)
-	{
-		const FString Asset = TEXT("SK_") + Stem;
-		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
-	}
-	static FString BakedPropAnim(const FString& Stem, const FString& Clip)
-	{
-		const FString Asset = TEXT("A_") + BakedAssetName(Clip);
-		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
-	}
-	static FString BakedPropBlendSpace(const FString& Stem, const FString& Label)
-	{
-		const FString Asset = TEXT("BS_") + BakedAssetName(Label);
-		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
-	}
-
-	// Baked wield corpus (`pipeline/unreal/bake_wield.py`).
-	// The geometry a drawn weapon puts in a character's hand. Shaped like an animated prop — a
-	// weapon owns a private skeleton and its stem is the whole address — but kept apart because
-	// the corpus and its lifetime are the item definitions', not the cast's.
-	static FString BakedItemsDir() { return BakedMount() / TEXT("Items"); }
-	static FString BakedWieldDir() { return BakedItemsDir() / TEXT("Wield"); }
-	static FString BakedWieldPackage(const FString& Stem) { return BakedWieldDir() / Stem; }
-	static FString BakedWieldMesh(const FString& Stem)
-	{
-		const FString Asset = TEXT("SK_") + Stem;
-		return BakedWieldPackage(Stem) / Asset + TEXT(".") + Asset;
-	}
-	// The table `(classname, sex)` resolves through, typed by Public/ElysiumWieldTable.h. Its rows
-	// carry soft references to the packages above, so a resolved row is followed rather than
-	// rebuilt by name — BakedWieldMesh exists for the caller that has a stem and no row.
-	static FString BakedWieldTable()
-	{
-		const FString Asset = TEXT("DA_WieldModels");
-		return BakedItemsDir() / Asset + TEXT(".") + Asset;
-	}
-
-	static FString BakedCharacterDir() { return BakedMount() / TEXT("Characters"); }
-	static FString BakedCharacterSkeletonPrefix() { return TEXT("SKEL_Elysium_"); }
-	static FString BakedCharacterSkeleton(const FString& Stem)
-	{
-		const FString Asset = BakedCharacterSkeletonPrefix() + Stem;
-		return BakedCharacterDir() / TEXT("Skeletons") / Asset + TEXT(".") + Asset;
-	}
-	// One body, whoever is wearing it. The player-material variant is not a separate asset: every
-	// section is instanced from the one body master whose parameters the player path drives, so the
-	// PC and an NPC differ in the ModelAlpha set on the component and in nothing on disk. The
-	// argument stays because the runtime's own visual cache key still distinguishes the two.
-	static FString BakedCharacterMesh(const FString& Stem, bool /*bPlayerMaterial*/ = false)
-	{
-		const FString Asset = TEXT("SK_") + Stem;
-		return BakedCharacterDir() / TEXT("Meshes") / Asset + TEXT(".") + Asset;
-	}
-	// A body's Chaos cloth asset (`make_cloth_assets.py`), decoded from the user's VtMB install like
-	// the skeleton and mesh above rather than authored, so it bakes to the same per-character mount.
-	static FString BakedCharacterClothDir() { return BakedCharacterDir() / TEXT("Cloth"); }
-	static FString BakedCharacterCloth(const FString& Stem)
-	{
-		const FString Asset = TEXT("CLOTH_") + Stem;
-		return BakedCharacterClothDir() / Asset + TEXT(".") + Asset;
-	}
-	// Where a bank's clips live, apart from the bodies'. Banks are packaged once and reused by
-	// compatible body skeletons.
-	static FString BakedBankFolder()
-	{
-		return TEXT("_banks");
-	}
-	// One of a body's own clips. `Owner` is the body's stem — a body's non-bank clips are always
-	// its own (the export asserts it), so the stem is the whole address.
-	static FString BakedCharacterAnim(const FString& Owner, const FString& Clip)
-	{
-		const FString Asset = TEXT("A_") + BakedAssetName(Clip);
-		return BakedCharacterDir() / TEXT("Anims") / Owner / Asset + TEXT(".") + Asset;
-	}
-	// One of a shared bank's clips, under `BakedBankFolder()`.
-	static FString BakedBankAnim(const FString& Bank, const FString& Clip)
-	{
-		const FString Asset = TEXT("A_") + BakedAssetName(Clip);
-		return BakedCharacterDir() / TEXT("Anims") / BakedBankFolder() / Bank / Asset
-			+ TEXT(".") + Asset;
-	}
-	// One blend grid, as a UBlendSpace. It sits with the sequences it samples rather than in a
-	// directory of its own — the `BS_` prefix disambiguates it from their `A_` the way `MI_`, `T_`
-	// and `SK_` do elsewhere on the mount — because a grid's cells are always clips of the same
-	// owner, so the two are written by the same pass and go stale together.
-	//
-	// `Host` names the clip a LAYER grid was composed with, and is empty for a grid that stands on
-	// its own. A layer's cells are masked overlays whose pose only means anything accumulated onto
-	// a particular host, so the bake writes one asset per declaring host and the label alone does
-	// not identify one — asking for the bare label found nothing for 299 of the mount's 527 spaces.
-	static FString BakedCharacterBlendSpace(const FString& Owner,
-		const FString& Label, const FString& Host = FString())
-	{
-		const FString Asset = TEXT("BS_")
-			+ BakedAssetName(Host.IsEmpty() ? Label : Label + TEXT("@") + Host);
-		return BakedCharacterDir() / TEXT("Anims") / Owner / Asset + TEXT(".") + Asset;
-	}
-	static FString BakedBankBlendSpace(const FString& Bank,
-		const FString& Label, const FString& Host = FString())
-	{
-		const FString Asset = TEXT("BS_")
-			+ BakedAssetName(Host.IsEmpty() ? Label : Label + TEXT("@") + Host);
-		return BakedCharacterDir() / TEXT("Anims") / BakedBankFolder() / Bank / Asset
-			+ TEXT(".") + Asset;
-	}
 	// Every run of characters illegal in an Unreal object name folds to a single underscore. Model
 	// stems are already safe, but 14 of the 2,494 shipped clip labels are not —
 	// `claws_aggressive_walk#50`, `wolf_Form_attack[Bite]`, `Lacroix_Line1_col_E&F`. The runtime
@@ -633,27 +523,6 @@ struct FElysiumContentPaths
 	static FString SharedPropsDir() { return SharedDir() / TEXT("props"); }
 	static FString SharedManifest() { return SharedDir() / TEXT("manifest.json"); }
 	static FString SharedMaterials() { return SharedDir() / TEXT("materials.json"); }
-	// A sky's six faces are ordinary corpus textures under `materials/skybox/<skyname><face>`, so
-	// two maps that share a sky share one set. `ElysiumEnvironment::BuildSkyCubeFrom` appends its
-	// own face suffixes to this prefix, exactly as it does for the labelled probe set.
-	// Its Python twin is `shared_corpus.sky_face_prefix`.
-	static FString SkyFacePrefix(const FString& SkyName)
-	{
-		return TEXT("skybox_") + SkyName.ToLower();
-	}
-
-	// `items/ground_models.json` names which `vdata/items` definition stands on which corpus mesh
-	// stem, its triangle count, and every model the install did not carry. The meshes themselves
-	// are the corpus's, addressed by `BakedItemMesh`.
-	static FString ItemsDir() { return Root() / TEXT("items"); }
-	static FString ItemGroundModels() { return ItemsDir() / TEXT("ground_models.json"); }
-	// `items/wield_models.json`'s `models` table, and the Unreal-native `.eskm` beside it each row
-	// names -- the wield-model analogue of `NpcSource`, checked against the baked `SK_<stem>` the
-	// same way (`wield_corpus.wield_dir`/`manifest_path`).
-	static FString WieldDir() { return ItemsDir() / TEXT("wield"); }
-	static FString WieldManifest() { return ItemsDir() / TEXT("wield_models.json"); }
-	static FString WieldSource(const FString& Stem) { return WieldDir() / (Stem + TEXT(".eskm")); }
-
 	static FString MapDir(const FString& Map) { return Root() / Map; }
 	// A map's own texture directory. It holds only `tex/cube/` now -- the env cubemaps VBSP baked
 	// per map and per position. Every surface texture is the corpus's.
@@ -700,8 +569,8 @@ struct FElysiumContentPaths
 	// readable `.txt`, so only the `.txt` is mirrored and only it is read. Leaf is the file name with
 	// its extension — a scene's `expression` event names the stem in `param`, and lipsync names
 	// `<model stem>_phonemes`.
-	static FString ExpressionsDir() { return Root() / TEXT("expressions"); }
-	static FString ExpressionFile(const FString& Leaf) { return ExpressionsDir() / Leaf; }
+	static FString BakedExpressionTables()
+	{ return BakedMount() / TEXT("ExpressionTables/_Corpus/DA_ExpressionTables.DA_ExpressionTables"); }
 
 	// Scripting. VtMB's level scripts + dialogue are game-global loose plain-text, mirrored under
 	// the export root's scripts/ and dlg/ directories by
@@ -763,72 +632,6 @@ struct FElysiumContentPaths
 	// (ParagraphText/Newsprint/Headline/...) onto vector type. Read verbatim off disk at draw time.
 	static FString FontsDir() { return FPaths::ProjectContentDir() / TEXT("Fonts"); }
 	static FString FontFile(const FString& File) { return FontsDir() / File; }
-
-	// NPCs. Skeletal characters export under the export root's npc/ directory; the game plays
-	// only baked assets off the mount, and the .eskm container is what the character bake reads.
-	// Stem is the model name, e.g. "gangmember_male_2".
-	static FString NpcDir() { return Root() / TEXT("npc"); }
-	// The Unreal-native skeletal container the character bake reads (`UE_mdl_skeletal.py`). It
-	// needs no import transform, so it is also the reference a baked asset is checked against:
-	// whatever it says a bone's bind pose is, is what the bake had to write.
-	static FString NpcSource(const FString& Stem) { return NpcDir() / (Stem + TEXT(".eskm")); }
-	static FString NpcBankSource(const FString& Stem)
-	{
-		return NpcDir() / TEXT("banks") / (Stem + TEXT(".eskm"));
-	}
-
-	// The shared animation banks and their resolution sidecars. A VtMB NPC's own .mdl
-	// carries only its own clips — mostly dialogue — and pulls idle/locomotion/combat from banks
-	// through the studiohdr include DAG, so a bank is a skeleton + clips with no mesh, applied
-	// to any NPC through skeleton compatibility. `npc_index.json` names every character and bank
-	// with counts (~47 KB, read once); `clips/<stem>.json` is one character's whole resolved
-	// vocabulary (~95 KB), read only for the stems a map actually places — the full
-	// npc_manifest.json is 15.8 MB and exists for the offline probes. The index also carries the
-	// 56 player bodies, which no map references and are resolved by clan through
-	// `clandoc000.txt`.
-	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
-	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }
-
-	// The facial flex rig beside a rigged NPC's glb: the FACS flexdesc names, the 44
-	// flex controllers, the 60 RPN flex rules, the amplitude jaw and the per-morph target ramps,
-	// index-aligned with the glb's morph targets. RelPath is `npc_index.json`'s own
-	// `npcs[stem].facial` ("facial/<stem>.json"); a model with no flex rig names none.
-	static FString NpcFacial(const FString& RelPath) { return NpcDir() / RelPath; }
-
-	// The procedural bone rule table beside a driven model's glb: per driven bone, its
-	// control bone, the axis as a converted direction, and the six-entry pos/quat table the runtime
-	// blends. RelPath is `npc_index.json`'s own `procedural` value — "procedural/<stem>.json", or
-	// "animated_props/procedural/<stem>.json" for a skeletal prop. A model with no `ProcType == 1`
-	// bone names none; 130 of the 185 exported models carry one.
-	static FString NpcProcedural(const FString& RelPath) { return NpcDir() / RelPath; }
-
-	// The blend spaces a model's multi-cell sequences declare. A VtMB sequence can name a
-	// grid of animations rather than one — a 9x1 `move_yaw` locomotion fan, a 3x3 weapon-aim layer —
-	// and the exporter bakes every cell as its own clip beside a sidecar naming the axes, the pose
-	// parameter driving each, and which clip sits in each cell. Without it a grid label resolves to
-	// the base cell, which on a symmetric yaw fan is the -180 degree extreme: `walk` plays backwards.
-	// RelPath is `npc_index.json`'s own `blends` value — "blends/<stem>.json", or
-	// "animated_props/blends/<stem>.json" for a skeletal prop. A model whose every sequence is a
-	// single cell names none, which is most of them.
-	static FString NpcBlends(const FString& RelPath) { return NpcDir() / RelPath; }
-
-	// VtMB's authored renderer-cloth payload for one character, decoded offline into a simulation
-	// mesh: particles, constraints, collision primitives and the per-render-vertex substitution
-	// maps (`docs/vtmb/secondary_motion.md`). Written only for the 60 installed models whose
-	// `MDLHeader.Flags` carries 0x400, so a miss is the ordinary case rather than a fault.
-	//
-	// The runtime does not read this. It is the generator's input — `make_cloth_assets.py` turns it
-	// into a `UChaosClothAsset` under /ElysiumBaked/Characters/Cloth, and the game loads that. The
-	// path is here so a debug surface can report whether a body's garment was ever exported, which
-	// is what separates "this character has no cloth" from "the export did not run".
-	static FString NpcGarmentDir() { return NpcDir() / TEXT("garment"); }
-	static FString NpcGarment(const FString& Stem) { return NpcGarmentDir() / (Stem + TEXT(".json")); }
-
-	// The eyeball pair beside a character's glb: the eye's bone and resting basis, the iris
-	// scale and texture, and the eyelid flexdescs the renderer's eye pass writes back into the flex
-	// weights. RelPath is `npc_index.json`'s own `npcs[stem].eyes` value ("eyes/<stem>.json").
-	// Named separately from the flex rig because a player body carries eyeballs and no flex rig.
-	static FString NpcEyes(const FString& RelPath) { return NpcDir() / RelPath; }
 
 	// Light-probe output (debug, `ElysiumLightProbe.cpp`). R4.3 retired the Lights Cog window's
 	// hand-survey JSON that used to share this directory (`UElysiumLightCalibration` replaces it as

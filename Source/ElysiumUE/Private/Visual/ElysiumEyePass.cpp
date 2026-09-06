@@ -155,16 +155,7 @@ void FElysiumEyePass::InstallEyes(USkeletalMeshComponent* Comp,
 		{
 			continue;
 		}
-		// The iris texture is the .vmt's `$iris`, not anything in the glb — the exporter decodes it
-		// beside the mesh's own textures and names it here.
-		if (!Eye->IrisTexture.IsEmpty())
-		{
-			const FString Dir = FElysiumContentPaths::NpcDir();
-			if (UTexture2D* Iris = EyeTextures.LoadTex(Dir, Eye->IrisTexture, /*bSRGB=*/true))
-			{
-				Mid->SetTextureParameterValue(TEXT("IrisTexture"), Iris);
-			}
-		}
+		// The native material instance already carries the imported $iris texture.
 		Mid->SetScalarParameterValue(TEXT("Vampire"), Eye->bVampire ? 1.f : 0.f);
 
 		FElysiumEyeSlot Bound;

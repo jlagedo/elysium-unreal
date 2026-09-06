@@ -251,11 +251,11 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 		return false;
 	}
 	TestEqual(TEXT("a geometry-bearing loose item builds its shared ground mesh"),
-		Services.Count(TEXT("BuildPropVisual models_items_test_ground")), 1);
+		Services.Count(TEXT("BuildPropVisual ground")), 1);
 	TestEqual(TEXT("a loose item's body is a camera +use target"),
 		Services.Count(TEXT("RegisterUseAnchor")), 1);
 	TestEqual(TEXT("an authored geometryless item never asks for a missing mesh"),
-		Services.Count(TEXT("BuildPropVisual models_weapons_w_null")), 0);
+		Services.Count(TEXT("BuildPropVisual w_null")), 0);
 
 	// --- Ownership round trip: loose -> owned -> script-removed ---------------------------
 	TestFalse(TEXT("a loose world item has no owner"), Lockpick->IsOwned());
@@ -794,7 +794,7 @@ bool FElysiumInventoryContainerTest::RunTest(const FString&)
 	FElysiumItem* Seed = Live->Inventory.At(*Live, 0);
 	TestTrue(TEXT("seed item is owned by the container"), Seed && Seed->Owner == Live->Handle);
 	TestEqual(TEXT("container body requests its existing prop representation"),
-		Services.Count(TEXT("BuildPropVisual test_crate")), 1);
+		Services.Count(TEXT("BuildPropVisual crate")), 1);
 	TestTrue(TEXT("attached container lock starts locked"), LiveLock->IsUseLocked());
 	TestFalse(TEXT("locked attachment suppresses the container's direct +use anchor"),
 		Services.UseAnchorEnabled.FindRef(Live->Handle));

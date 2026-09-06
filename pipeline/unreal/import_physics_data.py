@@ -4,8 +4,12 @@ The caller owns the generated-state lease and editor lifetime. Call publish_entr
 only after compiling ElysiumPhysicsData. This worker never attaches a reference,
 activates physics, prunes packages, or modifies the character stage/manifest.
 """
-import hashlib
 from pathlib import Path
+
+
+#: The code half of every physics source-data recipe; bump when this writer or
+#: `UElysiumPhysicsData` changes what it authors. Never hash code.
+PRODUCER_VERSION = "physics-data-v1"
 
 
 def _publish(unreal, bl, kind, projection, recipe, force=False):
@@ -57,9 +61,7 @@ def publish_entry(entry, selected_units, export_root, stage_root, *, force=False
     if kind is None:
         raise RuntimeError("ElysiumPhysicsData is not compiled in this editor; the main owner must build/restart first")
     projection = physics_data.project_selected_entry(entry, selected_units, export_root, stage_root)
-    dll = Path(unreal.Paths.project_dir()) / "Binaries/Win64/UnrealEditor-ElysiumUE.dll"
-    tool_hash = hashlib.sha256(Path(__file__).read_bytes() + Path(physics_data.__file__).read_bytes()
-                               + Path(bl.__file__).read_bytes() + dll.read_bytes()).hexdigest()
+    tool_hash = PRODUCER_VERSION
     recipe = bl.recipe_fingerprint(physics_data.PRODUCER, projection["assetPath"],
                                    {"tool": tool_hash, "projection": projection})
     asset, outcome = _publish(unreal, bl, kind, projection, recipe, force)

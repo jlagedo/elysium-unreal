@@ -22,23 +22,12 @@ import re
 import struct
 from typing import NamedTuple
 
-from elysium_pipeline import mounts
 
-MANIFEST_SCHEMA = "elysium.item-wield-models"
-VERSION = 1
+# The legacy `items/wield_models.json` manifest and the `/ElysiumBaked/Items/Wield` mount
+# retired in R8: the wield join is staged from the V2 units (`skeletal_stage.wield`) and
+# published as the native `DA_WieldModels` catalogue under `Models/_Corpus`.
 
-REGENERATE = "re-run: uv run elysium export bundle items"
-
-# --- the corpus on disk, under $ELYSIUM_EXPORT_ROOT --------------------------------------------
-#: The wield manifest lands beside `ground_models.json`: both are joins over `vdata/items`.
-ROOT = "items"
-WIELD = "wield"
-MANIFEST = "wield_models.json"
-
-# --- the corpus on the /ElysiumBaked mount ------------------------------------------------------
-BAKED_ROOT = mounts.BAKED + "/Items/Wield"
-
-#: `vdata/items/*.txt`, one definition per file -- the same enumeration `UE_extract_items` walks.
+#: `vdata/items/*.txt`, one definition per file -- the enumeration `item_models` walks.
 ITEM_DIR = "vdata/items/"
 
 #: The two model keys, in manifest order. A definition authors both or neither.

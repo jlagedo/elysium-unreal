@@ -134,11 +134,11 @@ void FElysiumPhysProp::ApplySkin()
 	{
 		if (PosedVisual)
 		{
-			Embodiment->ApplyAnimatedPropSkin(PosedVisual, Def->ModelMesh, Skin);
+			Embodiment->ApplyAnimatedPropSkin(PosedVisual, Model, Skin);
 		}
 		else if (Visual)
 		{
-			Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);
+			Embodiment->ApplyPropSkin(Visual, Model, Skin);
 		}
 	}
 }
@@ -189,11 +189,11 @@ void FElysiumPhysProp::BuildBody()
 	{
 		const FElysiumPlacedModelBody PlacedBody = Embodiment->BuildPlacedModelBody(Request);
 		Visual = PlacedBody.PhysicsProxy;
-		PosedVisual = PlacedBody.Visual;
+		PosedVisual = Cast<USkeletalMeshComponent>(PlacedBody.Visual);
 	}
 	else
 	{
-		Visual = Embodiment->BuildPhysPropVisual(Def->ModelMesh, Def->Origin, Def->ModelQuat,
+		Visual = Embodiment->BuildPhysPropVisual(Model, Def->Origin, Def->ModelQuat,
 			Embodiment->BodyScaleFor(*Def));
 	}
 	if (!Visual)
@@ -207,7 +207,7 @@ void FElysiumPhysProp::BuildBody()
 	}
 	if (Skin != 0)
 	{
-		Embodiment->ApplyPropSkin(Visual, Def->ModelMesh, Skin);   // authored on an alternate family
+		ApplySkin();
 	}
 
 	// A model with no collision model cannot simulate, and VtMB does not remove the entity over

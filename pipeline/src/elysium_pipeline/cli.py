@@ -664,96 +664,21 @@ def export_map(
     )
 
 
-@export_app.command("characters")
-def export_characters(
-    ctx: typer.Context,
-    models: list[str] = typer.Argument(
-        None,
-        help="Models to bake: a stem, family:<name> (an alias for that stem), or "
-             "bank:<name> (every model that plays the bank). "
-             "Omit for the whole cast, which is what the game needs.",
-    ),
-    force: bool = typer.Option(False, "--force", help="Rewrite every .eskm container."),
-    no_sweep: bool = typer.Option(
-        False, "--no-sweep", help="Leave assets the declared partition no longer produces."
-    ),
-    force_sweep: bool = typer.Option(
-        False, "--force-sweep", help="Sweep past the safety guard on how much may be removed."
-    ),
-    verify: bool = typer.Option(
-        False,
-        "--verify",
-        help=(
-            "Read the baked mount back after the bake (acceptance check). Off by "
-            "default: a bake that exits clean and writes its run report is trusted."
-        ),
-    ),
-) -> None:
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import export_manager
-
-        stems = export_manager.export_characters(
-            config, runner, models, force=force,
-            sweep=not no_sweep, force_sweep=force_sweep, verify=verify,
-        )
-        console.print(f"character bake complete: {len(stems)} model(s)")
-
-    _execute(
-        _state(ctx),
-        "export characters",
-        ExitCode.OFFLINE_EXPORT,
-        action,
-        require_game=True,
-        require_ue=True,
-        activity=True,
-    )
-
-
-@export_app.command("wield")
-def export_wield(
-    ctx: typer.Context,
-    stems: list[str] = typer.Argument(
-        None,
-        help="Wield model stems to bake, e.g. w_m_katana. Omit for the whole corpus.",
-    ),
-) -> None:
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        # No export_manager wrapper exists for this bake yet -- `unreal.bake_wield` is called
-        # directly, same shape as `unreal.bake_characters`, whose offline pre-decode and partition
-        # steps a wield bake has no equivalent of: its manifest is written by `export bundle items`.
-        from elysium_pipeline import unreal
-
-        unreal.bake_wield(config, runner, stems or ())
-        console.print(
-            "wield bake complete: " + (", ".join(stems) if stems else "whole corpus"))
-
-    _execute(
-        _state(ctx),
-        "export wield",
-        ExitCode.OFFLINE_EXPORT,
-        action,
-        require_game=True,
-        require_ue=True,
-        activity=True,
-    )
-
-
 @verify_app.command("characters")
 def verify_characters(
     ctx: typer.Context,
-    models: list[str] = typer.Argument(
-        None,
-        help="Models to check: a stem, family:<name> (an alias for that stem), or "
-             "bank:<name> (every model that plays the bank). Omit for the whole cast.",
-    ),
     legacy_root: Path | None = typer.Option(None, "--legacy-root", help="Frozen skeletal product tree."),
     stage_root: Path | None = typer.Option(None, "--stage-root", help="Replacement product tree to compare in order."),
-    native: bool = typer.Option(False, "--native", help="Read the stage selection's saved native core products in a fresh editor."),
+    native: bool = typer.Option(False, "--native", help="Read saved native products (the default when no comparison mode is selected)."),
+    fidelity: bool = typer.Option(False, "--fidelity", help="Also compare full geometry snapshots and retained animation samples; deferred fidelity gate."),
     geometry_only: bool = typer.Option(False, "--geometry-only", help="Compare existing hashed native geometry snapshots without launching Unreal."),
 ) -> None:
-    if geometry_only and (native or legacy_root is not None or models):
+    native = native or (legacy_root is None and not geometry_only)
+    if fidelity and not native:
+        raise typer.BadParameter("--fidelity requires native verification")
+    if geometry_only and (native or legacy_root is not None):
         raise typer.BadParameter("--geometry-only uses captured stage snapshots; do not combine it with native/legacy selectors")
-    if native and (legacy_root is not None or models):
+    if native and legacy_root is not None:
         raise typer.BadParameter("--native uses the character stage's selected units; do not combine it with legacy selectors")
     if not native and not geometry_only and (legacy_root is None) != (stage_root is None):
         raise typer.BadParameter("--legacy-root and --stage-root must be supplied together")
@@ -778,23 +703,23 @@ def verify_characters(
             receipt.unlink(missing_ok=True)
             editor_failure = None
             try:
-                unreal.verify_character_stage(config, runner, root / "manifest.json")
+                unreal.verify_character_stage(config, runner, root / "manifest.json", fidelity=fidelity)
             except unreal.UnrealFailure as error:
                 editor_failure = error
             report = _read_json(root / "native_verify_report.json")
             if not report:
                 raise RuntimeError("native character verification failed or returned no report")
-            from elysium_pipeline.validation.native_geometry_stage import verify_geometry_stage
-
-            geometry = verify_geometry_stage(root, config.export_v2_root)
-            if not geometry["passed"]:
-                raise RuntimeError("native character geometry verification failed; see native_geometry_report.json")
             if editor_failure or report.get("failed"):
                 raise RuntimeError(str(editor_failure or "native character verification failed"))
+            if fidelity:
+                from elysium_pipeline.validation.native_geometry_stage import verify_geometry_stage
+
+                geometry = verify_geometry_stage(root, config.export_v2_root)
+                if not geometry["passed"]:
+                    raise RuntimeError("native character geometry verification failed; see native_geometry_report.json")
             console.print(f"native core products: {report['meshes']} meshes, {report['skeletons']} skeletons, "
                           f"{report['clips']} clips, {report['blendSpaces']} blend spaces; "
-                          "source/authoring/render geometry and retained animation keys compared; "
-                          "evaluated and rendered acceptance remain separate gates")
+                          f"fidelity comparison {'requested' if fidelity else 'deferred'}")
             return
         if legacy_root is not None:
             from elysium_pipeline.validation.skeletal_diff import compare_trees, compare_staged_payloads
@@ -811,17 +736,13 @@ def verify_characters(
             if not result["passed"]:
                 raise RuntimeError("skeletal product comparison failed")
             return
-        from elysium_pipeline import export_manager
-
-        stems = export_manager.verify_characters(config, runner, models)
-        console.print(f"character verify complete: {len(stems)} model(s)")
 
     _execute(
         _state(ctx),
         "verify characters",
         ExitCode.OFFLINE_EXPORT,
         action,
-        require_game=legacy_root is None and not native and not geometry_only,
+        require_game=False,
         require_ue=legacy_root is None and not geometry_only,
         require_work=True,
         activity=not geometry_only,
@@ -2095,24 +2016,9 @@ def import_model_catalogues(
 ) -> None:
     """Merge the complete static/skeletal producer inventories into cooked model catalogues."""
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import unreal
-        from elysium_pipeline.importers import model_catalogues, characters, models, materials
+        from elysium_pipeline.native_model_pipeline import import_model_catalogues as run_import
 
-        root = model_catalogues.staging_root(config.work_root)
-        model_catalogues.stage_model_catalogues(config.export_v2_root, root,
-            characters_root=characters.staging_root(config.work_root),
-            models_root=models.staging_root(config.work_root),
-            materials_root=materials.staging_root(config.work_root))
-        if stage_only:
-            console.print(f"model catalogues staged: {root / 'manifest.json'}")
-            return
-        receipt = root / "model_catalogues_import_report.json"
-        receipt.unlink(missing_ok=True)
-        unreal.model_catalogues(config, runner, root / "manifest.json", force=force)
-        report = _read_json(receipt)
-        if not report or not report.get("complete") or report.get("failed"):
-            raise RuntimeError("native model catalogue import failed; see model_catalogues_import_report.json")
-        console.print("merged wield, placed-model and skin catalogues imported")
+        run_import(config, runner, stage_only=stage_only, force=force, log=console.print)
 
     _execute(_state(ctx), "import model-catalogues", ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
              action, require_work=True, require_ue=not stage_only, activity=True)
@@ -2126,29 +2032,44 @@ def import_expression_tables(
 ) -> None:
     """Stage and cook the complete expression GLB corpus, including unused tables."""
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import unreal
-        from elysium_pipeline.importers import expression_tables
+        from elysium_pipeline.native_model_pipeline import import_expression_tables as run_import
 
-        root = expression_tables.staging_root(config.work_root)
-        manifest = expression_tables.stage_expression_tables(config.export_v2_root, root, log=console.print)
-        if not manifest.get("complete") or manifest["stageFailures"]:
-            for failure in manifest["stageFailures"]:
-                console.print(f"{failure['assetId']}: {failure['reason']}")
-            raise RuntimeError("expression table stage failed")
-        if stage_only:
-            return
-        receipt = root / "import_report.json"
-        receipt.unlink(missing_ok=True)
-        unreal.expression_tables(config, runner, root / "manifest.json", force=force)
-        report = _read_json(receipt)
-        expected = len(manifest["keep"])
-        if (not report or not report.get("complete") or report.get("failed")
-                or report.get("imported", 0) + report.get("reused", 0) != expected):
-            raise RuntimeError("expression table import failed or did not account for every product")
-        console.print(f"expression tables: {report['imported']} imported, {report['reused']} reused")
+        run_import(config, runner, stage_only=stage_only, force=force, log=console.print)
 
     _execute(_state(ctx), "import expression-tables", ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
              action, require_work=True, require_ue=not stage_only, activity=True)
+
+
+@import_app.command("cook-roots")
+def import_cook_roots(
+    ctx: typer.Context,
+    force: bool = typer.Option(False, "--force"),
+) -> None:
+    """Publish cook references after character, model, expression and catalogue imports."""
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import unreal
+        from elysium_pipeline.importers import characters, models, expression_tables, model_catalogues
+
+        root = config.work_root / "import" / "cook-roots"
+        root.mkdir(parents=True, exist_ok=True)
+        manifests = {name: str(module.staging_root(config.work_root) / "manifest.json")
+                     for name, module in (("characters", characters), ("models", models),
+                                          ("expressions", expression_tables), ("catalogues", model_catalogues))}
+        for path in manifests.values():
+            if not Path(path).is_file():
+                raise RuntimeError("import the producer before publishing cook roots: " + path)
+        job = root / "job.json"
+        job.write_text(json.dumps({"manifestPaths": manifests, "force": force}, indent=2), encoding="utf-8")
+        receipt = root / "cook_root_import_report.json"
+        receipt.unlink(missing_ok=True)
+        unreal.import_cook_roots(config, runner, job)
+        report = _read_json(receipt)
+        if not report or not report.get("complete"):
+            raise RuntimeError("cook-root publication failed; see " + str(receipt))
+        console.print(f"cook root {report['outcome']}: {report['assetPath']}")
+
+    _execute(_state(ctx), "import cook-roots", ExitCode.UNREAL_OR_BAKE, action,
+             require_work=True, require_ue=True, activity=True)
 
 
 @import_app.command("characters")
@@ -2161,49 +2082,9 @@ def import_characters(
     """Stage GLB skeletal units and import their native products under /ElysiumBaked/Models."""
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline.importers import characters
-        from elysium_pipeline.importers import character_data, clip_data, body_data, cast_data, dynamics_data, cloth_data, materials
-        from elysium_pipeline import unreal
+        from elysium_pipeline.character_pipeline import import_characters as run_import
 
-        root = characters.staging_root(config.work_root)
-        manifest = characters.stage_characters(
-            config.export_v2_root, root, bodies=bodies,
-            content_root=config.repo_root / "Plugins/ElysiumBaked/Content", log=console.print)
-        material_manifest = materials.staging_root(config.work_root) / "manifest.json"
-        if material_manifest.is_file():
-            manifest = character_data.stage_mesh_data(config.export_v2_root, root, manifest, material_manifest, log=console.print)
-        elif not stage_only:
-            raise RuntimeError("stage the material corpus before native character import")
-        manifest = clip_data.stage_clip_data(config.export_v2_root, root, manifest, log=console.print)
-        manifest = dynamics_data.stage_dynamics_data(root, manifest, log=console.print)
-        manifest = cloth_data.stage_cloth_data(root, manifest, log=console.print)
-        manifest = body_data.stage_body_data(config.export_v2_root, root, manifest, log=console.print)
-        manifest = cast_data.stage_cast_data(root, manifest)
-        failures = manifest["stageFailures"]
-        console.print(f"characters: {len(manifest['assets'])} staged, {len(failures)} failed; {root / 'manifest.json'}")
-        for row in failures[:10]:
-            console.print(f"{row['assetId']}: {row['reason']}")
-        if failures:
-            raise RuntimeError("character stage failed; previous baked assets remain in use")
-        if stage_only:
-            return
-        editor_failure = None
-        try:
-            unreal.import_characters(config, runner, root / "manifest.json", force=force)
-        except unreal.UnrealFailure as error:
-            editor_failure = error
-        report = _read_json(root / "import_report.json")
-        failed = report.get("failed", []) if report else []
-        if report:
-            console.print(f"character import: {report.get('imported', 0)} imported, "
-                          f"{report.get('reused', 0)} reused, {len(failed)} failed")
-            for row in failed[:10]:
-                console.print(f"{row['assetId']}: {row['reason']}")
-            pending = report.get("pendingProjections", {})
-            if pending:
-                console.print(f"{len(pending)} units still need data projections; see import_report.json")
-        if editor_failure or failed or not report:
-            raise RuntimeError(str(editor_failure or "character native import failed or returned no report"))
+        run_import(config, runner, bodies=bodies, stage_only=stage_only, force=force, log=console.print)
 
     _execute(_state(ctx), "import characters", ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE, action,
              require_work=True, require_ue=not stage_only, activity=not stage_only)
@@ -3048,8 +2929,8 @@ def export_bundle(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     allowed = {
-        "audio", "corpus", "particles", "scripts", "signs", "vdata", "items", "cfg", "scenes",
-        "ui", "npc", "policy",
+        "audio", "corpus", "particles", "scripts", "signs", "vdata", "cfg", "scenes",
+        "ui", "policy",
     }
     if bundle not in allowed:
         raise typer.BadParameter("bundle must be one of: " + ", ".join(sorted(allowed)))

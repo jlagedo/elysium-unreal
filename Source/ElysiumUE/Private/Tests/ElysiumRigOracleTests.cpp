@@ -12,6 +12,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "ElysiumAnimationIntent.h"
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimationResolve.h"
 #include "Visual/ElysiumBlendGrids.h"
@@ -211,7 +212,7 @@ namespace
 			{
 				Table = MakeShared<FElysiumBlendTable>();
 				FString Error;
-				if (!Table->Load(Entry->Blends, Error))
+				if (!ElysiumNativeTest::Load(*Table, Entry->Blends, Error))
 				{
 					Table.Reset();
 				}
@@ -283,9 +284,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRigOracleTest,
 	"Elysium.Content.RigOracle", GElysiumRigOracleFlags)
 bool FElysiumRigOracleTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	const FString OraclePath = FindOracle();
@@ -303,9 +304,9 @@ bool FElysiumRigOracleTest::RunTest(const FString&)
 		return false;
 	}
 	FElysiumNpcIndex Index;
-	if (!Index.Load(Error) || !Index.IsValid())
+	if (!ElysiumNativeTest::Load(Index, Error) || !Index.IsValid())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native cast view (run: uv run elysium import characters)"));
 		return true;
 	}
 	FRealTables Tables;
@@ -323,7 +324,7 @@ bool FElysiumRigOracleTest::RunTest(const FString&)
 	{
 		FElysiumNpcClipSet Set;
 		FString LoadError;
-		if (!Index.Npcs.Contains(Body.Stem) || !Set.Load(Body.Stem, LoadError))
+		if (!Index.Npcs.Contains(Body.Stem) || !ElysiumNativeTest::Load(Set, Body.Stem, LoadError))
 		{
 			BodiesNotExported.Add(Body.Stem);
 			continue;

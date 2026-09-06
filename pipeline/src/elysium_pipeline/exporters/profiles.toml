@@ -29,11 +29,9 @@ bundles = [
   "scripts",
   "signs",
   "vdata",
-  "items",
   "cfg",
   "scenes",
   "ui",
-  "npc",
 ]
 
 [profiles.all]
@@ -44,9 +42,7 @@ bundles = [
   "scripts",
   "signs",
   "vdata",
-  "items",
   "cfg",
   "scenes",
   "ui",
-  "npc",
 ]

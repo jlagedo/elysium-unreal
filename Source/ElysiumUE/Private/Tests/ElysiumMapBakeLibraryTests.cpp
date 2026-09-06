@@ -110,6 +110,16 @@ bool FElysiumMapBakeLibraryCapturesBuiltTest::RunTest(const FString&)
 		TestEqual(*FString::Printf(TEXT("%s: every placed capture carries a rendered cube"),
 			*PackageName), Built, Placed);
 		++Checked;
+		// A loaded level initialises its subsystems (world partition among them); left in memory,
+		// the next garbage collection destroys it while still initialised and trips the engine's
+		// ensure inside whichever test collects. Clean the world up and release the package here.
+		if (World->IsInitialized())
+		{
+			World->CleanupWorld();
+		}
+		World = nullptr;
+		Package = nullptr;
+		UElysiumMapBakeLibrary::UnloadBakedPackages(PackageName);
 	}
 	if (Checked == 0)
 	{

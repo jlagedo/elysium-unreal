@@ -4,7 +4,6 @@
 // By value: the debug seam carries the tuning knobs and a binding holds a shared eye set.
 #include "Visual/ElysiumEyeRig.h"
 // By value: the per-character iris textures are owned here for the epoch.
-#include "Visual/ElysiumTextureCache.h"
 
 class UMaterialInstanceDynamic;
 class USkeletalMeshComponent;
@@ -156,5 +155,4 @@ private:
 	// The per-character iris is the `.vmt`'s `$iris`, decoded beside the glb rather than carried
 	// inside it, so it loads through the same per-map dedup index the world uses. Strong-ref'd for
 	// the epoch, released with the owning component.
-	FElysiumTextureCache EyeTextures;
 };

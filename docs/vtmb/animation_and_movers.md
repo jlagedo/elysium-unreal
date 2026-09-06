@@ -69,7 +69,7 @@ multiply against. Array of `NumBones` (@240) at `BoneIndex` (@244).
 parent=−1 `pos=(0,0,39.67)`, uniform `posscale=(1/256,…)`, `rotscale ~1e-5`; stride
 160 verified end-to-end (bone[70] name `"tire iron"` = a weapon-carry bone).
 
-A patch-first whole-install audit (`pipeline/src/elysium_pipeline/validation/validate_skeletal_pipeline.py`) reads
+A patch-first whole-install audit (the `validate_skeletal_pipeline` module, retired with the `.eskm` export lane in R8; its measurements stand as recorded) read
 **433 character skeletons / 30,530 bones**. Every bind quaternion is normalized
 within `9.24e-8`, every parent precedes its child, and every one of the **373**
 `Flags & 0x2` bones is `Bip01 Spine1`. All 373 split bones' `poseToBone`
@@ -3608,9 +3608,12 @@ all of these seams:
 6. ~~`Bip01` root composition with entity origin/angles and cinematic placement;~~
 7. ~~`poseToBone` use in CPU/GPU skinning and final render submission.~~
 
-The independent source/output audit is implemented by the internal
-`elysium_pipeline.validation.validate_skeletal_pipeline` library module. It is not a
-public project-tooling entrypoint.
+The independent source/output audit was the internal
+`elysium_pipeline.validation.validate_skeletal_pipeline` library module. It read the legacy
+`npc/` export tree and retired with it in R8 (`docs/project/seam_migration.md` -> R8); the
+native replacements are `validation/skeletal_diff.py` against the frozen legacy baseline and
+`verify characters --fidelity` against the GLB units. The findings below are its recorded
+measurements.
 
 It reads the patch-first retail files rather than trusting exporter output, then
 compares generated node binds, inverse binds, skin joints/weights, timelines, and

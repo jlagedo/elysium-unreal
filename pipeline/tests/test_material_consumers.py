@@ -102,3 +102,15 @@ def test_rigid_character_still_requests_skeletal_materials(tmp_path):
     usage = material_consumers.collect(tmp_path)[id]
     assert usage["skeletal"] == [unit["identity"]["asset"]]
     assert usage["static"] == usage["skeletal"]
+
+
+def test_placed_role_alone_keeps_existing_static_lane(tmp_path):
+    material = "vtmb:material:scenery/rigid"
+    unit = {"identity": {"asset": "vtmb:model:scenery/rigid", "shape": "static", "family": "scenery", "roles": ["placed-prop"]},
+            "mdl": {"bones": [{}]},
+            "materialBindings": {"slots": [{"material": material}], "skinFamilies": [[material]]}}
+    path = tmp_path / "models/rigid.glb"
+    path.parent.mkdir()
+    path.write_bytes(encode_glb({"extensions": {"ELYSIUM_vtmb_model": unit}}))
+    usage = material_consumers.collect(tmp_path)[material]
+    assert usage == {"static": [unit["identity"]["asset"]], "skeletal": [], "map": []}

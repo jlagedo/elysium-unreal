@@ -115,6 +115,13 @@ def _load(mel, textures=None):
     with mock.patch.dict(sys.modules, {"unreal": fake}):
         sys.modules.pop("pipeline.unreal.mat_fog", None)
         sys.modules.pop("pipeline.unreal.matgraph", None)
+        # `from pipeline.unreal import mat_fog` returns the package attribute when one exists,
+        # without re-importing; when another test already imported the `pipeline.unreal`
+        # package the attribute is a mat_fog bound to a previous fake `MaterialEditingLibrary`.
+        package = sys.modules.get("pipeline.unreal")
+        for name in ("mat_fog", "matgraph"):
+            if package is not None and hasattr(package, name):
+                delattr(package, name)
         spec = importlib.util.spec_from_file_location(
             "elysium_test_matgraph", REPO / "pipeline/unreal/matgraph.py")
         module = importlib.util.module_from_spec(spec)

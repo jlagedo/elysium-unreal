@@ -186,7 +186,6 @@ public:
 	const FElysiumNpcClip* ClipDescription(const FString& Model, const FString& Label);
 
 	// out/npc/npc_index.json, loaded once. Empty when the NPC export has not been run.
-	const FElysiumNpcIndex& GetIndex();
 	// out/npc/clips/<Stem>.json, cached per stem. Null when the stem has no slice.
 	const FElysiumNpcClipSet* GetClipSet(const FString& Stem);
 	// A supplied V2 mesh provides cooked data, cached by asset path; incomplete V2 data warns
@@ -399,16 +398,15 @@ public:
 	static const TCHAR* TierName(EElysiumIdleTier Tier);
 
 private:
+	class UElysiumNativeAnimationData* NativeData() const;
+	const USkeletalMesh* PreparedRigMesh(const FString& Model, const USkeletalMesh* Mesh) const;
 	// The disposition table belongs to the rulebook, like every other `vdata/system` catalog. This
 	// is the local reach for it — the two idle resolvers below need the `Animation Name` column.
 	const FElysiumDispositionTable& Dispositions();
 
-	FElysiumNpcIndex Index;
-	bool bIndexLoaded = false;
 
 	// Value is null for a stem whose slice is missing, so a failed read is remembered rather than
 	// retried on every NPC that shares the stem.
-	TMap<FString, TSharedPtr<FElysiumNpcClipSet>> ClipSets;
 	// Same shape, same reason: a null entry is the remembered "this model has no flex rig".
 	TMap<FString, TSharedPtr<const FElysiumFacialRig>> FacialRigs;
 	// Eye and composition sidecars are authored in the same Unreal-native frame as the baked body,
@@ -427,7 +425,6 @@ private:
 	TMap<FBankRemapKey, TSharedPtr<const FElysiumBankRemap>> BankRemaps;
 	// Blend spaces keyed by the OWNING stem — a bank serves every character that
 	// resolves a clip out of it, so this is parsed once for the whole cast rather than per NPC.
-	TMap<FString, TSharedPtr<const FElysiumBlendTable>> BlendTables;
 
 	// A request that binds no asset says so, once per (stem, request, outcome). Once, because a
 	// resolve runs on every selection change across the whole cast and the same body asking the same

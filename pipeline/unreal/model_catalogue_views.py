@@ -56,12 +56,25 @@ def placed_view(asset, selected_ids=None):
         candidates = list(_get(model, "rest_candidates"))
         if any(type(i) is not int or not 0 <= i < len(clips) for i in candidates):
             raise ValueError("invalid cooked rest candidate index: " + id)
+        source_absent = bool(_get(model, "source_absent"))
+        has_cloth = bool(_get(model, "has_cloth"))
+        static_mesh = asset_path(_get(model, "static_mesh"))
+        rest_suffices = bool(_get(model, "static_rest_suffices"))
+        # `FElysiumCataloguePlacedModel::CanUseStatic(false)`, mirrored: the static-source lane
+        # (a static/rigid-shape unit on its static mesh, unproven) or a proven rest equivalence.
+        # The bake decides static-vs-skeletal placement on exactly what the runtime decides on.
+        can_use_static = (not source_absent and not has_cloth and bool(static_mesh)
+                          and bool(_get(model, "static_topology_equivalent"))
+                          and (bool(_get(model, "static_source_representation"))
+                               or (rest_suffices and bool(_get(model, "static_equivalent_proven"))
+                                   and bool(_get(model, "static_equivalent")))))
         result[id] = {"model": str(_get(model, "model_path")),
-                      "sourceAbsent": bool(_get(model, "source_absent")),
-                      "staticRestSuffices": bool(_get(model, "static_rest_suffices")),
-                      "hasCloth": bool(_get(model, "has_cloth")),
+                      "sourceAbsent": source_absent,
+                      "staticRestSuffices": rest_suffices,
+                      "canUseStatic": can_use_static,
+                      "hasCloth": has_cloth,
                       "mesh": asset_path(_get(model, "skeletal_mesh")),
-                      "staticMesh": asset_path(_get(model, "static_mesh")),
+                      "staticMesh": static_mesh,
                       "clips": clips, "restCandidates": candidates}
     return result
 

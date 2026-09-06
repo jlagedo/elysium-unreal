@@ -1,6 +1,6 @@
-"""Copy VtMB's choreo scenes, phoneme files and expression tables verbatim into $ELYSIUM_EXPORT_ROOT/.
+"""Copy VtMB's choreo scenes and phoneme files verbatim into $ELYSIUM_EXPORT_ROOT/.
 
-Asset-delivery step for the choreography + lipsync track (roadmap PL9, PL10). All three
+Asset-delivery step for the choreography + lipsync track (roadmap PL9, PL10). Both
 trees are plain text needing no transcode:
 
   * **`sound/**/*.vcd`** -> `$ELYSIUM_EXPORT_ROOT/scenes/` -- Faceposer choreo scenes, the unit of a cinematic
@@ -10,14 +10,9 @@ trees are plain text needing no transcode:
     `docs/vtmb/choreographed_scenes.md` (RE19).
   * **`sound/**/*.lip`** -> `$ELYSIUM_EXPORT_ROOT/lip/` -- the phoneme sidecar beside a line's audio
     (`<line>.wav` -> `<line>.lip`): which phoneme is on screen when.
-  * **`expressions/*.txt`** -> `$ELYSIUM_EXPORT_ROOT/expressions/` -- the phoneme -> flex-controller weight
-    tables, chosen by the actor's model basename (`lacroix.mdl` ->
-    `lacroix_phonemes.txt`). The shipped `.vfe` is Faceposer's compiled form of the same
-    data, so only the readable `.txt` is mirrored.
 
-The last two are two thirds of 12.5's per-line join (the third is the model's own
-`mstudiomouth_t`, which rides in the NPC export); both formats are RE20, and only the bytes
-are delivered here.
+R8 expression tables use the expression-table GLB exporter and native import. This R9
+transport retains only scenes and lip bytes; it neither writes nor deletes expression mirrors.
 
 Copied **verbatim** -- no parse, no transcode -- same bring-your-own-game posture as the
 script/dialogue/sign/vdata/cfg mirrors: output lives under $ELYSIUM_EXPORT_ROOT/ (gitignored, regenerable),
@@ -29,10 +24,10 @@ The two `sound/` extensions get separate mirrors because they are separate consu
 reads the scenes, 12.5 the phonemes -- and their sub-paths otherwise interleave file-for-file.
 
 Whole-game, not map-scoped, so `export_all.py` runs it once at the end of a run
-(`--no-scenes` to skip).
+through its scenes bundle.
 
 Usage:
-  uv run elysium export bundle scenes            # copy scenes + phonemes + expressions
+  uv run elysium export bundle scenes            # copy scenes + phonemes
   uv run elysium export bundle scenes --force    # re-copy even files already present
 """
 import glob
@@ -47,8 +42,7 @@ OUT = os.fspath(export_root())
 
 SCENE_ROOT = "sound"
 #: (install root, extension, mirror name under $ELYSIUM_EXPORT_ROOT/). Roots are walked once each.
-TREES = ((SCENE_ROOT, ".vcd", "scenes"), (SCENE_ROOT, ".lip", "lip"),
-         ("expressions", ".txt", "expressions"))
+TREES = ((SCENE_ROOT, ".vcd", "scenes"), (SCENE_ROOT, ".lip", "lip"))
 
 
 def collect(index=None):

@@ -1,14 +1,7 @@
 #include "ElysiumEnvironment.h"
 
 #include "Engine/TextureCube.h"
-#include "HAL/PlatformFileManager.h"
-#include "IImageWrapper.h"
-#include "IImageWrapperModule.h"
 #include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
-#include "Modules/ModuleManager.h"
-
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumEnv, Log, All);
 
 // .env sidecar.
 
@@ -140,31 +133,6 @@ bool FElysiumSpawnDef::Parse(const FString& SpawnPath, FElysiumSpawnDef& Out)
 
 namespace
 {
-	// Decode a PNG on disk into tightly packed BGRA8. Returns false (and leaves OutSize 0)
-	// on a missing/undecodable file.
-	bool LoadPngBgra(const FString& Path, int32& OutW, int32& OutH, TArray64<uint8>& OutBgra)
-	{
-		OutW = OutH = 0;
-		TArray<uint8> FileData;
-		if (!FFileHelper::LoadFileToArray(FileData, *Path))
-		{
-			return false;
-		}
-		IImageWrapperModule& Module = FModuleManager::LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
-		const TSharedPtr<IImageWrapper> Wrapper = Module.CreateImageWrapper(EImageFormat::PNG);
-		if (!Wrapper.IsValid() || !Wrapper->SetCompressed(FileData.GetData(), FileData.Num()))
-		{
-			return false;
-		}
-		if (!Wrapper->GetRaw(ERGBFormat::BGRA, 8, OutBgra))
-		{
-			return false;
-		}
-		OutW = Wrapper->GetWidth();
-		OutH = Wrapper->GetHeight();
-		return true;
-	}
-
 	// The rotation a decoded Source face carries on its way into an Unreal cube slice. Named for
 	// what happens to the *image content*, so `CCW90` is numpy's rot90.
 	enum class ESkyRot : uint8 { None, CCW90, CW90, Half };
@@ -220,77 +188,7 @@ namespace
 		}
 	}
 
-	// The cube's solid-angle-weighted mean linear radiance over the UPPER hemisphere.
-	//
-	// Three things have to be right for this number to mean anything. The texels are sRGB, so
-	// they are decoded to linear before averaging — averaging gamma-encoded values would
-	// overstate a dark sky badly. A cube texel's solid angle is not uniform: it falls off as
-	// (1 + u^2 + v^2)^-3/2 toward the face corners, so each sample is weighted by that. And
-	// only the upper hemisphere counts, because the SkyLight runs with
-	// bLowerHemisphereIsBlack — VtMB's ground faces are uniform near-black plates and a sky
-	// that lit the world's undersides would defeat the occlusion the cubemap is there for.
-	//
-	// Reads the assembled slices, so it needs no knowledge of which face went where — the
-	// direction comes from GetCubemapVector, the same table the GPU samples with.
-	float UpperHemisphereMean(const uint8* Slices, int32 N)
-	{
-		const float Inv = 1.f / float(N);
-		double Sum = 0.0, Weight = 0.0;
-		for (int32 Slice = 0; Slice < 6; ++Slice)
-		{
-			const uint8* Face = Slices + int64(Slice) * N * N * 4;
-			for (int32 Y = 0; Y < N; ++Y)
-			{
-				const float V = 2.f * ((Y + 0.5f) * Inv) - 1.f;
-				for (int32 X = 0; X < N; ++X)
-				{
-					const float U = 2.f * ((X + 0.5f) * Inv) - 1.f;
-					// GetCubemapVector's third component is world up (its own
-					// "no sky lighting from below the horizon" test reads it).
-					float Up;
-					switch (Slice)
-					{
-					case 0: Up = -U;  break;   // +X: ( 1, -V, -U)
-					case 1: Up =  U;  break;   // -X: (-1, -V,  U)
-					case 2: Up =  V;  break;   // +Y: ( U,  1,  V)
-					case 3: Up = -V;  break;   // -Y: ( U, -1, -V)
-					case 4: Up =  1;  break;   // +Z
-					default: Up = -1; break;   // -Z
-					}
-					if (Up <= 0.f)
-					{
-						continue;
-					}
-					const float W = FMath::Pow(1.f + U * U + V * V, -1.5f);
-					const uint8* Px = Face + (int64(Y) * N + X) * 4;   // BGRA
-					// Rec.709 luminance of the sRGB-decoded texel.
-					const float Lum =
-						0.2126f * FMath::Pow(Px[2] / 255.f, 2.2f) +
-						0.7152f * FMath::Pow(Px[1] / 255.f, 2.2f) +
-						0.0722f * FMath::Pow(Px[0] / 255.f, 2.2f);
-					Sum += double(Lum) * W;
-					Weight += W;
-				}
-			}
-		}
-		return Weight > 0.0 ? float(Sum / Weight) : 0.f;
-	}
 
-	// Copy one N x N BGRA8 face into a slice, rotating the content.
-	void BlitRotated(const uint8* Src, uint8* Dst, int32 N, ESkyRot Rot)
-	{
-		const uint32* SrcPx = reinterpret_cast<const uint32*>(Src);
-		uint32* DstPx = reinterpret_cast<uint32*>(Dst);
-		for (int32 Y = 0; Y < N; ++Y)
-		{
-			for (int32 X = 0; X < N; ++X)
-			{
-				int32 SX, SY;
-				RotSource(Rot, X, Y, N, SX, SY);
-				DstPx[int64(Y) * N + X] = SrcPx[int64(SY) * N + SX];
-			}
-		}
-	}
 }
 
 const TCHAR* ElysiumEnvironment::SkySliceFace(int32 Slice)
@@ -304,11 +202,60 @@ void ElysiumEnvironment::SkySliceSource(int32 Slice, int32 X, int32 Y, int32 N,
 	RotSource(SkySlices[FMath::Clamp(Slice, 0, 5)].Rot, X, Y, N, OutSrcX, OutSrcY);
 }
 
-// Sky faces -> IBL cubemap.
-
-UTextureCube* ElysiumEnvironment::BuildSkyCube(const FString& TexDir)
+// The cube's solid-angle-weighted mean linear radiance over the UPPER hemisphere.
+//
+// Three things have to be right for this number to mean anything. The texels are sRGB, so
+// they are decoded to linear before averaging — averaging gamma-encoded values would
+// overstate a dark sky badly. A cube texel's solid angle is not uniform: it falls off as
+// (1 + u^2 + v^2)^-3/2 toward the face corners, so each sample is weighted by that. And
+// only the upper hemisphere counts, because the SkyLight runs with
+// bLowerHemisphereIsBlack — VtMB's ground faces are uniform near-black plates and a sky
+// that lit the world's undersides would defeat the occlusion the cubemap is there for.
+//
+// Reads the assembled slices, so it needs no knowledge of which face went where — the
+// direction comes from GetCubemapVector, the same table the GPU samples with.
+float ElysiumEnvironment::UpperHemisphereMean(const uint8* Slices, int32 N)
 {
-	return BuildSkyCubeFrom(TexDir, TEXT("sky_"));
+	const float Inv = 1.f / float(N);
+	double Sum = 0.0, Weight = 0.0;
+	for (int32 Slice = 0; Slice < 6; ++Slice)
+	{
+		const uint8* Face = Slices + int64(Slice) * N * N * 4;
+		for (int32 Y = 0; Y < N; ++Y)
+		{
+			const float V = 2.f * ((Y + 0.5f) * Inv) - 1.f;
+			for (int32 X = 0; X < N; ++X)
+			{
+				const float U = 2.f * ((X + 0.5f) * Inv) - 1.f;
+				// GetCubemapVector's third component is world up (its own
+				// "no sky lighting from below the horizon" test reads it).
+				float Up;
+				switch (Slice)
+				{
+				case 0: Up = -U;  break;   // +X: ( 1, -V, -U)
+				case 1: Up =  U;  break;   // -X: (-1, -V,  U)
+				case 2: Up =  V;  break;   // +Y: ( U,  1,  V)
+				case 3: Up = -V;  break;   // -Y: ( U, -1, -V)
+				case 4: Up =  1;  break;   // +Z
+				default: Up = -1; break;   // -Z
+				}
+				if (Up <= 0.f)
+				{
+					continue;
+				}
+				const float W = FMath::Pow(1.f + U * U + V * V, -1.5f);
+				const uint8* Px = Face + (int64(Y) * N + X) * 4;   // BGRA
+				// Rec.709 luminance of the sRGB-decoded texel.
+				const float Lum =
+					0.2126f * FMath::Pow(Px[2] / 255.f, 2.2f) +
+					0.7152f * FMath::Pow(Px[1] / 255.f, 2.2f) +
+					0.0722f * FMath::Pow(Px[0] / 255.f, 2.2f);
+				Sum += double(Lum) * W;
+				Weight += W;
+			}
+		}
+	}
+	return Weight > 0.0 ? float(Sum / Weight) : 0.f;
 }
 
 UTextureCube* ElysiumEnvironment::BuildConstantCube(const FLinearColor& Colour, int32 Size)
@@ -342,109 +289,6 @@ UTextureCube* ElysiumEnvironment::BuildConstantCube(const FLinearColor& Colour, 
 	Mip->BulkData.Unlock();
 
 	Cube->SetPlatformData(PD);
-	Cube->UpdateResource();
-	return Cube;
-}
-
-bool ElysiumEnvironment::HasSkyFaces(const FString& Dir, const FString& Prefix)
-{
-	IPlatformFile& Files = FPlatformFileManager::Get().GetPlatformFile();
-	for (int32 F = 0; F < 6; ++F)
-	{
-		const FString Path = Dir / FString::Printf(TEXT("%s%s.png"), *Prefix, SkySlices[F].Face);
-		if (!Files.FileExists(*Path))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-UTextureCube* ElysiumEnvironment::BuildSkyCubeFrom(const FString& Dir, const FString& Prefix,
-	float* OutUpperMean, UObject* Outer, FName Name)
-{
-	if (OutUpperMean)
-	{
-		*OutUpperMean = 0.f;
-	}
-	// One decoded face per Unreal slice, in slice order, each already assigned its rotation.
-	TArray64<uint8> Faces[6];
-	int32 Size = 0;
-	for (int32 F = 0; F < 6; ++F)
-	{
-		const FString Path = Dir / FString::Printf(TEXT("%s%s.png"), *Prefix, SkySlices[F].Face);
-		int32 W = 0, H = 0;
-		if (!LoadPngBgra(Path, W, H, Faces[F]) || W <= 0 || W != H)
-		{
-			UE_LOG(LogElysiumEnv, Warning, TEXT("sky face missing or non-square: %s"), *Path);
-			return nullptr;
-		}
-		if (Size == 0)
-		{
-			Size = W;
-		}
-		else if (W != Size)
-		{
-			UE_LOG(LogElysiumEnv, Warning, TEXT("sky faces differ in size: %s"), *Path);
-			return nullptr;
-		}
-	}
-
-	// A persistent bake asset (Outer given) is public/standalone so it survives the package save
-	// with no other referencer keeping it alive; the runtime's own transient cube (Outer null)
-	// is exactly as before.
-	UTextureCube* Cube = Outer
-		? NewObject<UTextureCube>(Outer, Name, RF_Public | RF_Standalone)
-		: NewObject<UTextureCube>(GetTransientPackage(), NAME_None, RF_Transient);
-	if (Outer)
-	{
-		// PreEditChange/PostEditChange around a source replacement is the engine's own idiom
-		// (Texture.h: "All changes to Texture properties must be wrapped in PreEditChange/
-		// PostEditChange"). It matters here specifically because a saved, uncooked package
-		// serializes UTexture::Source, not FTexturePlatformData -- the transient runtime cube
-		// below only ever needed the platform data (it is rebuilt every load), but a persistent
-		// bake asset with no Source would round-trip through SavePackage as an empty texture.
-		Cube->PreEditChange(nullptr);
-	}
-	Cube->SRGB = true;
-	Cube->NeverStream = true;
-
-	FTexturePlatformData* PD = new FTexturePlatformData();
-	PD->SizeX = Size;
-	PD->SizeY = Size;
-	PD->PixelFormat = PF_B8G8R8A8;
-	PD->SetIsCubemap(true);
-	PD->SetNumSlices(6);   // the six faces; the single mip holds them contiguously
-
-	// Mip SizeZ is unused for cubemaps; the face count lives in the platform data above.
-	const int64 FaceBytes = int64(Size) * Size * 4;
-	FTexture2DMipMap* Mip = new FTexture2DMipMap(Size, Size, 1);
-	PD->Mips.Add(Mip);
-	Mip->BulkData.Lock(LOCK_READ_WRITE);
-	uint8* Dest = (uint8*)Mip->BulkData.Realloc(FaceBytes * 6);
-	for (int32 F = 0; F < 6; ++F)
-	{
-		BlitRotated(Faces[F].GetData(), Dest + FaceBytes * F, Size, SkySlices[F].Rot);
-	}
-	// Measured while the bulk data is still mapped — after Unlock the pointer is not ours.
-	if (OutUpperMean)
-	{
-		*OutUpperMean = UpperHemisphereMean(Dest, Size);
-	}
-	if (Outer)
-	{
-		// Same rotated BGRA8 bytes as the mip above, copied into the texture's own Source while
-		// Dest is still mapped -- Source.Init copies the buffer rather than aliasing it, so this
-		// is independent of the Mip's bulk data being unlocked right after.
-		Cube->Source.Init(Size, Size, 6, 1, TSF_BGRA8, Dest);
-	}
-	Mip->BulkData.Unlock();
-
-	Cube->SetPlatformData(PD);
-	if (Outer)
-	{
-		Cube->PostEditChange();
-	}
 	Cube->UpdateResource();
 	return Cube;
 }

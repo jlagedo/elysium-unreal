@@ -16,6 +16,7 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCameraSolve.h"
 #include "ElysiumCommands.h"
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumDecals.h"
 #include "ElysiumDlg.h"
@@ -1562,10 +1563,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceClipsTest,
 	"Elysium.Content.ScriptedSequenceClips", GElysiumContentTestFlags)
 bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("maps"), TEXT("npc") })) return true;
-	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	if (SkipIncompleteCorpus(*this, { TEXT("maps") })) return true;
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: native DA_Cast is absent (run: uv run elysium import characters)"));
 		return true;
 	}
 
@@ -1651,7 +1652,7 @@ bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 			{
 				TSharedPtr<FElysiumNpcClipSet> Set = MakeShared<FElysiumNpcClipSet>();
 				FString Error;
-				ClipCache.Add(Stem, Set->Load(Stem, Error) ? Set : nullptr);
+				ClipCache.Add(Stem, ElysiumNativeTest::Load(*Set, Stem, Error) ? Set : nullptr);
 			}
 			const TSharedPtr<FElysiumNpcClipSet>& Set = ClipCache[Stem];
 			for (const FString& Clip : Wanted)
@@ -1705,12 +1706,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerBodiesTest,
 	"Elysium.Content.PlayerBodies", GElysiumContentTestFlags)
 bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("npc") })) return true;
 	const FString ClanDoc = FElysiumContentPaths::VdataFile(TEXT("system/clandoc000.txt"));
 	if (!IFileManager::Get().FileExists(*ClanDoc) ||
-		!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+		!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata + npc data (run: uv run elysium export_v2 vdatas-glb && uv run elysium import vdata, then uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: imported clan data or native DA_Cast is absent (run: uv run elysium import vdata, then uv run elysium import characters)"));
 		return true;
 	}
 
@@ -1760,7 +1760,7 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!TestTrue(FString::Printf(TEXT("npc_index.json loads (%s)"), *Error), Index.Load(Error)))
+	if (!TestTrue(FString::Printf(TEXT("native cast view builds (%s)"), *Error), ElysiumNativeTest::Load(Index, Error)))
 	{
 		return true;
 	}
@@ -1782,14 +1782,14 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 				"produce (pipeline/src/elysium_pipeline/exporters/npc_export.py)"), *Model));
 			continue;
 		}
-		if (IFileManager::Get().FileExists(*FElysiumContentPaths::NpcSource(*Stem)))
+		if (IFileManager::Get().FileExists(*ElysiumNativeTest::SourcePath(*Stem)))
 		{
 			++Exported;
 		}
 		else
 		{
 			AddError(FString::Printf(TEXT("%s exports as stem '%s' but %s is missing"),
-				*Model, **Stem, *FElysiumContentPaths::NpcSource(*Stem)));
+				*Model, **Stem, *ElysiumNativeTest::SourcePath(*Stem)));
 		}
 	}
 
@@ -1817,7 +1817,7 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 				{
 					const FString Stem = Clans.PlayerBodyStem(Clan, bFemale, /*ArmorSlot*/ 0);
 					if (Stem.IsEmpty() ||
-						!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcSource(Stem)))
+						!IFileManager::Get().FileExists(*ElysiumNativeTest::SourcePath(Stem)))
 					{
 						AddError(FString::Printf(TEXT("no exported body for clan %d %s (stem '%s')"),
 							Clan, bFemale ? TEXT("female") : TEXT("male"), *Stem));
@@ -2271,7 +2271,7 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!TestTrue(FString::Printf(TEXT("npc_index loads: %s"), *Error), Index.Load(Error)))
+	if (!TestTrue(FString::Printf(TEXT("native cast view builds: %s"), *Error), ElysiumNativeTest::Load(Index, Error)))
 	{
 		return true;
 	}
@@ -2373,9 +2373,8 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 		// off that one any more.
 		TestTrue(FString::Printf(TEXT("%s declares its .eskm container"), Want.Target),
 			!Entry->Eskm.IsEmpty());
-		TestTrue(FString::Printf(TEXT("%s generated container exists"), Want.Target),
-			IFileManager::Get().FileExists(
-				*(FElysiumContentPaths::NpcDir() / Entry->Eskm)));
+		TestTrue(FString::Printf(TEXT("%s native skeletal package exists"), Want.Target),
+			FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(Entry->Eskm)));
 		TestTrue(FString::Printf(TEXT("%s clip %s resolves"), Want.Target, Want.ClipA),
 			Entry->HasClip(Want.ClipA));
 		if (Want.ClipB)

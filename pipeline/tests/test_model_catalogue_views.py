@@ -25,9 +25,11 @@ def test_rest_selection_preserves_candidate_indices_even_for_repeated_labels():
              row(label='idle', weight=3, sequence='/second', base_cell='')]
     model = row(asset_id='vtmb:model:a/door', model_path='models/a/door.mdl', acceptance_issues=[],
                 clips=clips, rest_candidates=[0, 1], source_absent=False, static_rest_suffices=False,
+                static_source_representation=False, static_equivalent_proven=False,
+                static_equivalent=False, static_topology_equivalent=True,
                 has_cloth=True, skeletal_mesh='/mesh', static_mesh='/static')
     data = views.placed_view(row(data=row(models={'vtmb:model:a/door': model})))['vtmb:model:a/door']
-    assert data['hasCloth'] and not data['staticRestSuffices']
+    assert data['hasCloth'] and not data['staticRestSuffices'] and not data['canUseStatic']
     for token in range(50):
         expected = '/first' if fnv1a_32(data['model'], token) % 4 == 0 else '/second'
         assert views.select_rest(data, token)['sequence'] == expected
@@ -62,3 +64,24 @@ def test_map_view_does_not_resolve_unselected_native_model_references():
     asset = row(data=row(models={'vtmb:model:a/other': SimpleNamespace(get_editor_property=forbidden)}))
     assert views.placed_view(asset, {'vtmb:model:b/selected'}) == {}
     assert views.skin_view(asset, {'vtmb:model:b/selected'}) == {}
+
+
+def test_can_use_static_mirrors_the_runtime_rule():
+    # `FElysiumCataloguePlacedModel::CanUseStatic(false)`: the static-source lane (a static or
+    # rigid shape on its static mesh, rest unproven) or a proven rest equivalence; cloth, an
+    # absent source, a missing static mesh or a lost submodel veto either.
+    def model(**fields):
+        base = dict(asset_id='vtmb:model:a/door', model_path='models/a/door.mdl', acceptance_issues=[],
+                    clips=[row(label='idle', weight=1, sequence='', base_cell='')], rest_candidates=[0],
+                    source_absent=False, static_rest_suffices=False, static_source_representation=False,
+                    static_equivalent_proven=False, static_equivalent=False, static_topology_equivalent=True,
+                    has_cloth=False, skeletal_mesh='', static_mesh='/static')
+        base.update(fields)
+        return views.placed_view(row(data=row(models={'vtmb:model:a/door': row(**base)})))['vtmb:model:a/door']
+    assert model(static_source_representation=True)['canUseStatic']
+    assert model(static_rest_suffices=True, static_equivalent_proven=True, static_equivalent=True)['canUseStatic']
+    assert not model(static_rest_suffices=True)['canUseStatic']  # unproven claim is not a lane
+    assert not model(static_source_representation=True, has_cloth=True)['canUseStatic']
+    assert not model(static_source_representation=True, static_mesh='')['canUseStatic']
+    assert not model(static_source_representation=True, static_topology_equivalent=False)['canUseStatic']
+    assert not model(static_source_representation=True, source_absent=True)['canUseStatic']

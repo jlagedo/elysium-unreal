@@ -548,14 +548,14 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 	{
 		// `Def->ModelQuat` belongs to the model this one replaced, so it cannot be reused; both
 		// representations fall back to the yaw-only runtime derivation.
-		VisualStem = FElysiumContentPaths::PropModelStem(Model);
+		VisualStem = Model;
 		Loc = Origin;
 		StaticRot = FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles));
 		SkeletalRot = StaticRot;
 	}
 	else
 	{
-		VisualStem = Def->ModelMesh;
+		VisualStem = Model;
 		Loc = Def->Origin;
 		StaticRot = Def->ModelQuat;
 		// A model that decoded no static geometry carries no `model_quat`, so falling back to
@@ -595,8 +595,17 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 			? EElysiumPlacedModelPhysics::CollisionProxy
 			: EElysiumPlacedModelPhysics::None;
 		const FElysiumPlacedModelBody PlacedBody = Embodiment->BuildPlacedModelBody(Request);
-		AnimatedVisual = PlacedBody.Visual;
-		CollisionProxy = PlacedBody.PhysicsProxy;
+		AnimatedVisual = Cast<USkeletalMeshComponent>(PlacedBody.Visual);
+		Visual = Cast<UStaticMeshComponent>(PlacedBody.Visual);
+		VisualStem = AnimatedStem = PlacedBody.Stem;
+		// A static visual owns its collision directly; never double-own/destroy it as a proxy.
+		CollisionProxy = Visual ? nullptr : PlacedBody.PhysicsProxy;
+		if (Visual)
+		{
+			World->RegisterPropBody(Visual, IsUsable() && Def && !Def->bSky ? Handle : FElysiumEntityHandle::Invalid());
+			Visual->SetCastShadow(!bDisableShadows);
+			if (Solid == 2) BuildBoxCollisionProxy(Visual);
+		}
 		if (AnimatedVisual)
 		{
 			World->RegisterNpcBody(AnimatedVisual);

@@ -12,6 +12,10 @@ from elysium_pipeline.asset_paths import baked_unit, assert_unique_paths
 from elysium_pipeline.formats import eskm
 
 PRODUCER = "characters"
+#: The code half of every native character recipe. Bump when a builder, a data class or this
+#: script changes what it authors; the data half is content-hashed. Never hash code (see
+#: `docs/architecture/seam_map_unit_contract.md` -> "Recipes").
+PRODUCER_VERSION = "characters-v1"
 
 
 def argument(name, default=""):
@@ -104,9 +108,7 @@ def run(manifest_path, material_root, force=False, export_root=None):
     by_id = {e["assetId"]: e for e in manifest["assets"]}
     lib = unreal.ElysiumSkeletalBuildLibrary
     drain = unreal.ElysiumMapBakeLibrary
-    dll = Path(unreal.Paths.project_dir()) / "Binaries/Win64/UnrealEditor-ElysiumUE.dll"
-    tool_digest = hashlib.sha256(Path(__file__).read_bytes()
-                                 + Path(__file__).with_name("bake_lib.py").read_bytes() + dll.read_bytes()).hexdigest()
+    ledger = bl.RecipeLedger(root / "recipes.json", "import-characters")
     report = {"schemaVersion": "1.0.0", "scope": "native-core-products", "producer": PRODUCER, "imported": 0, "reused": 0,
               "failed": [], "pruned": 0, "foreign": 0, "unstamped": 0, "pendingProjections": {},
               "blendOmissions": {}, "suppressedAppendixTracks": {}, "clothBuilds": {}, "clothTuningPending": {}, "assets": []}
@@ -134,10 +136,14 @@ def run(manifest_path, material_root, force=False, export_root=None):
         checkpoint()
 
     def fingerprint(kind, path, recipe):
-        return bl.recipe_fingerprint("characters." + kind, path, {"tool": tool_digest, "inputs": recipe})
+        full = {"tool": PRODUCER_VERSION, "inputs": recipe}
+        ledger.record(path, full)
+        return bl.recipe_fingerprint("characters." + kind, path, full)
 
     def current(path, digest):
         stored = bl.stored_recipe(path, producer=PRODUCER)
+        if not force and stored != digest:
+            ledger.explain(path, ledger.recorded(path), stored)
         return not force and stored == digest
 
     def publish_data_asset(path, digest, kind, encoded, asset_id=""):
@@ -488,6 +494,7 @@ def run(manifest_path, material_root, force=False, export_root=None):
         counts = {}
         report["pruned"] = bl.prune_owned(manifest["packageRoot"], protected, manifest.get("pruneScope"), PRODUCER, counts)
         report.update(counts)
+    ledger.write()
     checkpoint()
     return report
 

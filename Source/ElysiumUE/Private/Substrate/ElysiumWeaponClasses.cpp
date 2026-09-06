@@ -39,6 +39,9 @@
 #include "Substrate/ElysiumSwingContact.h"    // the contact walk's pure window/sub-step rules
 #include "Visual/ElysiumMeleeTrail.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "Visual/ElysiumPreparedWieldModels.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/Actor.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
 
@@ -536,37 +539,31 @@ namespace
 			return;
 		}
 
-		const FElysiumWieldModelRef* Ref = nullptr;
-		const EElysiumWieldResult Result = UElysiumWieldTable::FindRow(
-			FName(*Weapon.ClassName()), /*bFemale*/ !Wearer.Sheet.IsMale(), Ref);
+		const auto Ready = FElysiumPreparedWieldModels::ForOwner(Body->GetOwner());
+		const FElysiumCatalogueWieldModel* Model = nullptr;
+		FString Error;
+		const auto Result = Ready ? Ready->Resolve(Weapon.ClassName(), !Wearer.Sheet.IsMale(), Model, Error)
+			: EElysiumCatalogueWieldResult::InvalidCatalogue;
 
 		switch (Result)
 		{
-		case EElysiumWieldResult::Found:
-			// A load miss here is a bake that did not produce a package its own table references;
-			// InstallWieldModel names it.
-			ElysiumNpcVisual::InstallWieldModel(Body, *Ref, Weapon.ClassName());
+		case EElysiumCatalogueWieldResult::Found:
+			if (!ElysiumNpcVisual::InstallWieldModel(Body, FElysiumPreparedWieldModels::AttachmentRef(*Model), Weapon.ClassName()))
+				ElysiumMeleeTrail::ClearTrail(Body);
 			break;
-		case EElysiumWieldResult::NoGeometry:
-		case EElysiumWieldResult::WorldModel:
+		case EElysiumCatalogueWieldResult::NoGeometry:
+		case EElysiumCatalogueWieldResult::WorldModel:
 			// The corpus's ordinary answer (`w_null.mdl` / no wield model) or the `shows_view_model`
 			// gate: either way the hand draws nothing, which is an authored answer, not a missing asset.
 			ElysiumNpcVisual::ClearWieldModel(Body);
 			ElysiumMeleeTrail::ClearTrail(Body);
 			break;
-		case EElysiumWieldResult::UnknownItem:
+		default:
 			UE_LOG(LogElysiumWeapon, Warning,
-				TEXT("%s equipped by %s names no row in the wield table for '%s'"),
-				*Weapon.DebugString(), *Wearer.DebugString(), *Weapon.ClassName());
+				TEXT("%s equipped by %s: wield presentation failed: %s"),
+				*Weapon.DebugString(), *Wearer.DebugString(), Error.IsEmpty() ? TEXT("native wield preparation unavailable") : *Error);
 			ElysiumNpcVisual::ClearWieldModel(Body);
 			ElysiumMeleeTrail::ClearTrail(Body);
-			break;
-		case EElysiumWieldResult::NoTable:
-			// UElysiumWieldTable::Load already warned once that the wield bake has not run.
-			break;
-		case EElysiumWieldResult::MeshMissing:
-		case EElysiumWieldResult::NoWearer:
-			// Not FindRow's vocabulary (`ElysiumWieldTable.h`) — it never answers either from this call.
 			break;
 		}
 	}

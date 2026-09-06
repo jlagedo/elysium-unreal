@@ -678,8 +678,9 @@ def _build_class():
                     raise SystemExit(1)
                 # A model with no static equivalent stands on an authored rest pose instead of its
                 # bind-pose twin -- the placed-model lane's rule, unchanged; only the placement
-                # record driving it comes from the unit now.
-                use_skeletal = not record["staticRestSuffices"]
+                # record driving it comes from the unit now. `canUseStatic` is the runtime's own
+                # `CanUseStatic(false)`: the static-source lane or a proven rest equivalence.
+                use_skeletal = not record["canUseStatic"]
                 actor = actors.spawn_actor_from_class(
                     unreal.ElysiumPlacedModelActor if use_skeletal else unreal.StaticMeshActor,
                     unreal.Vector(*position), unreal.Quat(*placement.rotation).rotator())

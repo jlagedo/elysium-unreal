@@ -1,10 +1,8 @@
 #include "Visual/ElysiumNpcClips.h"
 
-#include "ElysiumContentPaths.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
-#include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -227,23 +225,6 @@ namespace
 		return 0;
 	}
 
-	bool ReadJsonFile(const FString& Path, TSharedPtr<FJsonObject>& OutRoot, FString& OutError)
-	{
-		FString Raw;
-		if (!FFileHelper::LoadFileToString(Raw, *Path))
-		{
-			OutError = FString::Printf(TEXT("not found: %s"), *Path);
-			return false;
-		}
-		const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Raw);
-		if (!FJsonSerializer::Deserialize(Reader, OutRoot) || !OutRoot.IsValid())
-		{
-			OutError = FString::Printf(TEXT("malformed JSON: %s"), *Path);
-			return false;
-		}
-		return true;
-	}
-
 	void ReadIndexGroup(const TSharedPtr<FJsonObject>& Root, const TCHAR* Field,
 		TMap<FString, FElysiumNpcIndexEntry>& Out)
 	{
@@ -279,20 +260,6 @@ namespace
 }
 
 // FElysiumNpcClipSet.
-
-bool FElysiumNpcClipSet::Load(const FString& InStem, FString& OutError)
-{
-	const FString Path = FElysiumContentPaths::NpcClips(InStem);
-	FString JsonText;
-	if (!FFileHelper::LoadFileToString(JsonText, *Path))
-	{
-		Stem = InStem;
-		Clips.Reset();
-		OutError = FString::Printf(TEXT("not found: %s"), *Path);
-		return false;
-	}
-	return LoadJsonText(InStem, JsonText, OutError);
-}
 
 bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& JsonText, FString& OutError)
 {
@@ -520,24 +487,6 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 	return !Clips.IsEmpty();
 }
 
-bool FElysiumNpcClipSet::LoadActivities(const FString& InStem, TSet<FString>& Out, FString& OutError)
-{
-	TSharedPtr<FJsonObject> Root;
-	if (!ReadJsonFile(FElysiumContentPaths::NpcClips(InStem), Root, OutError))
-	{
-		return false;
-	}
-	TArray<FString> Activities;
-	ReadStringArray(Root, TEXT("activities"), Activities);
-	if (Activities.IsEmpty())
-	{
-		OutError = FString::Printf(TEXT("slice carries no `activities` intern table: %s"), *InStem);
-		return false;
-	}
-	Out.Append(Activities);
-	return true;
-}
-
 TArray<FElysiumClipRef> FElysiumNpcClipSet::ByActivity(const FString& Activity) const
 {
 	// **In flat sequence order, because that order is load-bearing.** Retail's collector walks
@@ -649,17 +598,6 @@ void FElysiumNpcClipSet::SortByWeight(TArray<FElysiumClipRef>& Refs) const
 }
 
 // FElysiumNpcIndex.
-
-bool FElysiumNpcIndex::Load(FString& OutError)
-{
-	FString JsonText;
-	if (!FFileHelper::LoadFileToString(JsonText, *FElysiumContentPaths::NpcIndex()))
-	{
-		OutError = FString::Printf(TEXT("not found: %s"), *FElysiumContentPaths::NpcIndex());
-		return false;
-	}
-	return LoadJsonText(JsonText, OutError);
-}
 
 bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 {
@@ -885,17 +823,28 @@ FString FElysiumAnimatedPropEntry::RestSequence(int32 PlacementToken) const
 	// so save/load and rebuilds retain the same authored alternative.
 	static const FString ActIdle(TEXT("ACT_IDLE"));
 	TArray<const FElysiumPropClip*> Candidates;
-	for (const FElysiumPropClip& Clip : Clips)
+	// The cooked catalogue owns the rest set (`placed_models.rest_candidates`: ACT_IDLE clips, else
+	// sequence 0), in its own order; the row's `SelectRest` draws over exactly that set, and the
+	// two must agree for one placement token. The activity scan below is the pre-catalogue
+	// fallback for an entry that carries no rest set.
+	for (const FString& Label : RestCandidates)
 	{
-		if (Clip.Activity.Equals(ActIdle, ESearchCase::IgnoreCase))
-		{
-			Candidates.Add(&Clip);
-		}
+		if (const FElysiumPropClip* Clip = FindClip(Label)) Candidates.Add(Clip);
 	}
-	Candidates.Sort([](const FElysiumPropClip& A, const FElysiumPropClip& B)
+	if (Candidates.IsEmpty())
 	{
-		return A.Index < B.Index;
-	});
+		for (const FElysiumPropClip& Clip : Clips)
+		{
+			if (Clip.Activity.Equals(ActIdle, ESearchCase::IgnoreCase))
+			{
+				Candidates.Add(&Clip);
+			}
+		}
+		Candidates.Sort([](const FElysiumPropClip& A, const FElysiumPropClip& B)
+		{
+			return A.Index < B.Index;
+		});
+	}
 	if (!Candidates.IsEmpty())
 	{
 		uint32 Hash = 2166136261u;

@@ -11,7 +11,7 @@ from pathlib import Path
 import tempfile
 from unittest import mock
 
-from elysium_pipeline.exporters import UE_extract_items as items
+from elysium_pipeline import item_models as items
 from elysium_pipeline.exporters.UE_bsp_to_scene import decode_prop_models
 from elysium_pipeline.formats import mdl
 
@@ -117,76 +117,3 @@ def test_the_corpus_stem_is_the_whole_model_path_folded() -> None:
     assert (ok, missing) == (len(keys), 0)
     assert len(set(expected.values())) == len(keys)
     assert expected["models/items/rings/ground/ring03.mdl"] == "models_items_rings_ground_ring03"
-
-
-def _run(install: _Install, out: Path, decoded: dict[str, str], faces: int = 3):
-    """Run main() against a corpus holding `decoded`, returning the manifest it wrote.
-
-    The exporter decodes nothing now -- `UE_extract_corpus` does -- so the fixture stands the
-    corpus meshes up on disk and this asserts the join it writes over them.
-    """
-    props = out / "shared" / "props"
-    props.mkdir(parents=True, exist_ok=True)
-    for stem in decoded.values():
-        (props / f"{stem}.obj").write_text(
-            "v 0 0 0\n" + "f 1 1 1\n" * faces, encoding="ascii")
-
-    with mock.patch.object(items, "OUT", str(out)):
-        items.main(index=install.index)
-    return json.loads((out / "items" / "ground_models.json").read_text(encoding="utf-8"))
-
-
-def test_a_model_the_install_lacks_is_recorded_rather_than_fatal() -> None:
-    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-        install = _Install(Path(root))
-        install.item("item_g_stake", "models/items/stake/ground/stake.mdl")
-        install.item("item_w_pistol", "models/weapons/pistol/world/w_pistol.mdl")
-        install.item("item_w_pistol-null", "models/weapons/pistol/world/w_pistol.mdl")
-        install.add("models/items/stake/ground/stake.mdl", "IDST")
-
-        manifest = _run(
-            install,
-            Path(out),
-            {"models/items/stake/ground/stake.mdl": "models_items_stake_ground_stake"},
-        )
-
-        assert list(manifest["models"]) == ["models/items/stake/ground/stake.mdl"]
-        assert manifest["skipped"] == [
-            {
-                "model": "models/weapons/pistol/world/w_pistol.mdl",
-                "reason": "not in the install",
-                "classes": ["item_w_pistol", "item_w_pistol-null"],
-            }
-        ]
-
-
-def test_a_model_present_but_undecodable_is_named_as_such() -> None:
-    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-        install = _Install(Path(root))
-        install.item("item_g_stake", "models/items/stake/ground/stake.mdl")
-        install.add("models/items/stake/ground/stake.mdl", "not a model")
-
-        manifest = _run(install, Path(out), {})
-
-        assert manifest["models"] == {}
-        assert [row["reason"] for row in manifest["skipped"]] == ["decode failed"]
-
-
-def test_a_geometry_free_model_is_recorded_with_no_faces() -> None:
-    # `models/weapons/w_null.mdl` decodes cleanly and writes no triangles; the bake authors no
-    # asset for it, so a consumer must be able to tell it apart from a decode that failed.
-    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-        install = _Install(Path(root))
-        install.item("item_a_body_armor_slot", "models/weapons/w_null.mdl")
-        install.add("models/weapons/w_null.mdl", "IDST")
-
-        manifest = _run(
-            install,
-            Path(out),
-            {"models/weapons/w_null.mdl": "models_weapons_w_null"},
-            faces=0,
-        )
-
-        row = manifest["models"]["models/weapons/w_null.mdl"]
-        assert row["faces"] == 0
-        assert row["stem"] == "models_weapons_w_null"

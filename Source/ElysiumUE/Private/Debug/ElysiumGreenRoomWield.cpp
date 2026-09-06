@@ -7,11 +7,46 @@
 #include "Visual/ElysiumMeleeTrail.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Visual/ElysiumRenderedBone.h"
+#include "Visual/ElysiumPreparedWieldModels.h"
+#include "ElysiumModelCatalogues.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "GameFramework/Actor.h"
+#include "UObject/StrongObjectPtr.h"
 
 // The wielded weapon.
+
+namespace
+{
+	// Observation/reapply can be called from a tick. They only query the lab owner's
+	// resident catalogue; the map/lab preparation lifetime owns loading and release.
+	EElysiumWieldResult ResolveLabWield(const USkeletalMeshComponent* Body,
+		const FString& Classname, bool bFemale, FElysiumWieldModelRef& Out, FString& Error)
+	{
+		Out = {};
+		const auto Prepared = Body ? FElysiumPreparedWieldModels::ForOwner(Body->GetOwner()) : nullptr;
+		if (!Prepared)
+		{
+			Error = TEXT("native wield catalogue/assets are not prepared for the standing body");
+			return Body ? EElysiumWieldResult::NoTable : EElysiumWieldResult::NoWearer;
+		}
+		const FElysiumCatalogueWieldModel* Model = nullptr;
+		switch (Prepared->Resolve(Classname, bFemale, Model, Error))
+		{
+		case EElysiumCatalogueWieldResult::Found:
+			Out = FElysiumPreparedWieldModels::AttachmentRef(*Model);
+			return EElysiumWieldResult::Found;
+		case EElysiumCatalogueWieldResult::NoGeometry: return EElysiumWieldResult::NoGeometry;
+		case EElysiumCatalogueWieldResult::WorldModel: return EElysiumWieldResult::WorldModel;
+		case EElysiumCatalogueWieldResult::UnknownItem: return EElysiumWieldResult::UnknownItem;
+		case EElysiumCatalogueWieldResult::SourceAbsent: return EElysiumWieldResult::MeshMissing;
+		case EElysiumCatalogueWieldResult::InvalidCatalogue: return EElysiumWieldResult::NoTable;
+		}
+		Error = TEXT("unrecognized native wield catalogue result");
+		return EElysiumWieldResult::NoTable;
+	}
+}
 
 EElysiumWieldResult FElysiumGreenRoomRun::LabSetWield(const FString& Classname, bool bFemale,
 	FString& OutDetail)
@@ -26,9 +61,10 @@ EElysiumWieldResult FElysiumGreenRoomRun::LabSetWield(const FString& Classname, 
 	bReviewWieldFemale = bFemale;
 	const TCHAR* const Sex = bFemale ? TEXT("female") : TEXT("male");
 
-	const FElysiumWieldModelRef* Ref = nullptr;
+	FElysiumWieldModelRef ResolvedRef;
+	const FElysiumWieldModelRef* Ref = &ResolvedRef;
 	const EElysiumWieldResult Lookup =
-		UElysiumWieldTable::FindRow(FName(*Classname), bFemale, Ref);
+		ResolveLabWield(Body, Classname, bFemale, ResolvedRef, OutDetail);
 
 	switch (Lookup)
 	{
@@ -69,16 +105,15 @@ EElysiumWieldResult FElysiumGreenRoomRun::LabSetWield(const FString& Classname, 
 			TEXT("'%s' is not an item definition the wield table carries"), *Classname);
 		break;
 	case EElysiumWieldResult::NoTable:
-		OutDetail = TEXT("the wield table is not on the mount — run `uv run elysium export wield`");
+		// Preserve the native preparation/lookup diagnosis supplied above.
 		break;
 	case EElysiumWieldResult::MeshMissing:
 	case EElysiumWieldResult::NoWearer:
-		// Not FindRow's vocabulary: both are this function's own outcomes and are returned directly
-		// above, so reaching them here would mean the lookup answered something it cannot.
-		OutDetail = FString::Printf(
-			TEXT("the wield table answered an install-side result for '%s'"), *Classname);
+		// A missing authored source is a failure, never an authored empty-hand answer.
 		break;
 	}
+	if (ElysiumWieldFailed(Lookup))
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("lab wield '%s': %s"), *Classname, *OutDetail);
 	return Lookup;
 }
 
@@ -279,11 +314,11 @@ bool FElysiumGreenRoomRun::LabWieldCheck(FString& OutReport) const
 		return false;
 	}
 
-	const FElysiumWieldModelRef* Ref = nullptr;
-	if (UElysiumWieldTable::FindRow(FName(*ReviewWield), bReviewWieldFemale, Ref)
+	FElysiumWieldModelRef ResolvedRef;
+	const FElysiumWieldModelRef* Ref = &ResolvedRef;
+	if (ResolveLabWield(Body, ReviewWield, bReviewWieldFemale, ResolvedRef, OutReport)
 		!= EElysiumWieldResult::Found)
 	{
-		OutReport = FString::Printf(TEXT("'%s' no longer resolves"), *ReviewWield);
 		return false;
 	}
 
@@ -407,11 +442,11 @@ bool FElysiumGreenRoomRun::LabWieldTrackStart(float Seconds, float ToleranceCm, 
 		OutError = TEXT("nothing is held — `elysium.gr_wield <item>` first");
 		return false;
 	}
-	const FElysiumWieldModelRef* Ref = nullptr;
-	if (UElysiumWieldTable::FindRow(FName(*ReviewWield), bReviewWieldFemale, Ref)
+	FElysiumWieldModelRef ResolvedRef;
+	const FElysiumWieldModelRef* Ref = &ResolvedRef;
+	if (ResolveLabWield(Body, ReviewWield, bReviewWieldFemale, ResolvedRef, OutError)
 		!= EElysiumWieldResult::Found)
 	{
-		OutError = FString::Printf(TEXT("'%s' no longer resolves"), *ReviewWield);
 		return false;
 	}
 	// The hand is the frame every sample is expressed in, so a body without it has nothing to
@@ -775,16 +810,17 @@ void FElysiumGreenRoomRun::ReapplyWield()
 		return;
 	}
 	USkeletalMeshComponent* Body = LabBody();
-	const FElysiumWieldModelRef* Ref = nullptr;
+	FElysiumWieldModelRef ResolvedRef;
+	const FElysiumWieldModelRef* Ref = &ResolvedRef;
+	FString Error;
 	if (Body == nullptr
-		|| UElysiumWieldTable::FindRow(FName(*ReviewWield), bReviewWieldFemale, Ref)
+		|| ResolveLabWield(Body, ReviewWield, bReviewWieldFemale, ResolvedRef, Error)
 			!= EElysiumWieldResult::Found)
 	{
 		// The row resolved once to get here, so losing it now means the table changed underneath a
 		// live session. Say so rather than leaving a body silently empty-handed.
 		UE_LOG(LogElysiumGreenRoom, Warning,
-			TEXT("lab wield: '%s' no longer resolves — the standing body holds nothing"),
-			*ReviewWield);
+			TEXT("lab wield: '%s' no longer resolves: %s"), *ReviewWield, *Error);
 		ReviewWield.Reset();
 		return;
 	}
@@ -794,19 +830,25 @@ void FElysiumGreenRoomRun::ReapplyWield()
 TArray<FString> FElysiumGreenRoomRun::LabWieldClassnames(bool bFemale)
 {
 	TArray<FString> Names;
-	const UElysiumWieldTable* const Table = UElysiumWieldTable::Load();
-	if (Table == nullptr)
+	// Explicit picker refresh: allowed to load the small catalogue outside pose/equip ticks.
+	const TStrongObjectPtr<UElysiumWieldCatalogue> Catalogue(LoadObject<UElysiumWieldCatalogue>(nullptr,
+		TEXT("/ElysiumBaked/Models/_Corpus/DA_WieldModels.DA_WieldModels")));
+	if (!Catalogue.IsValid())
 	{
+		UE_LOG(LogElysiumGreenRoom, Warning, TEXT("native wield catalogue is absent; run uv run elysium import wield"));
 		return Names;
 	}
-	for (const TPair<FName, FElysiumWieldRow>& Pair : Table->Rows)
+	for (const auto& Pair : Catalogue->Data.Items)
 	{
-		const FElysiumWieldModelRef& Ref = bFemale ? Pair.Value.Female : Pair.Value.Male;
-		if (Pair.Value.bShowsWieldModel && Ref.Binding != EElysiumWieldBinding::None
-			&& !Ref.Mesh.IsNull())
+		const FElysiumCatalogueWieldModel* Model = nullptr;
+		FString Error;
+		const auto Result = Catalogue->Resolve(Pair.Key, bFemale, Model, Error);
+		if (Result == EElysiumCatalogueWieldResult::Found)
 		{
-			Names.Add(Pair.Key.ToString());
+			Names.Add(Pair.Key);
 		}
+		else if (Result == EElysiumCatalogueWieldResult::InvalidCatalogue || Result == EElysiumCatalogueWieldResult::SourceAbsent)
+			UE_LOG(LogElysiumGreenRoom, Warning, TEXT("wield picker '%s': %s"), *Pair.Key, *Error);
 	}
 	Names.Sort();
 	return Names;

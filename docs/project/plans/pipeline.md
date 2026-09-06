@@ -29,6 +29,11 @@ though the work is the exporter's.
 
 ### R8 Characters on the GLB corpus
 
+Owner delivery ruling (2026-09-05): close development on a testable migration covering the old
+export/import lane. Only build/runtime/import/cook breakage, lost old coverage and unsafe legacy
+retirement block this milestone. Enhanced fidelity and expanded coverage are follow-up work in
+`seam_migration.md`'s R8 fidelity ledger; its revised ruling supersedes stricter original gates.
+
 Complete the skeletal export/bake/runtime migration and remove its legacy producers and readers
 after parity. The full lane and retirement gates are in [characters_r8.md](../characters_r8.md),
 under [seam_migration.md](../seam_migration.md)'s R8 sequence. Preserve every source datum,

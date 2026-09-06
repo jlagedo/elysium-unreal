@@ -55,11 +55,11 @@ tools = unreal.AssetToolsHelpers.get_asset_tools()
 
 DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 
-#: Bump the graph shape (node topology / algebra), not the parameter defaults, and a re-run picks
-#: it up through the recipe stamp even when nothing on disk changed. `_source_hash()` below is the
-#: exhaustive safety net (it catches an edit this constant was not bumped for); this constant
-#: stays as the human-readable marker of the shape revision.
-GRAPH_VERSION = 12
+#: The code half of every master's recipe: bump it when this generator, `matgraph.py` or
+#: `mat_fog.py` changes what a master's graph is, and a re-run re-authors the masters even when
+#: nothing on disk changed. The data half (collection rows, cited shader units, parameter
+#: tables) is content-hashed. Code is never hashed (`seam_map_unit_contract.md` -> "Recipes").
+GRAPH_VERSION = 13
 
 #: `MPC_ElysiumSurfaces` (SF-4.1, C++, landed) owns every one of these rows and their defaults --
 #: `make_surface_knobs.py` (`build_content.py` runs it before this file). This generator is a
@@ -178,19 +178,6 @@ def _policy_scratch_dir():
     d = scratch_root() / "policy" / "materials-v2"
     d.mkdir(parents=True, exist_ok=True)
     return d
-
-
-def _source_hash():
-    """sha256 of this file plus `matgraph.py`'s and `mat_fog.py`'s own text -- the exhaustive half
-    of the recipe stamp: any edit to any of the three files invalidates every master's stamp even
-    when `GRAPH_VERSION` was not bumped for it. `mat_fog.py` is in scope (review fix) because
-    `matgraph.connect` is `mat_fog.connect` re-exported, not reimplemented -- a change to its
-    refused-pin behaviour changes every master's graph exactly as much as a `matgraph.py` edit
-    does."""
-    digest = hashlib.sha256()
-    for name in ("make_v2_materials.py", "matgraph.py", "mat_fog.py"):
-        digest.update(Path(__file__).with_name(name).read_bytes())
-    return digest.hexdigest()
 
 
 def _import_png(name, png_bytes, *, srgb, compression, filter_nearest=False, force=False,
@@ -544,6 +531,33 @@ def _load_environment_collection():
         _fail("%s is missing required scalar row(s): %s -- run make_world_materials.py"
               % (asset, ", ".join(missing)))
     return collection
+
+
+def _collection_identity(collection):
+    """What a `CollectionParameter` node actually binds to: the parameter rows' GUIDs.
+
+    Part of every master recipe that reads the collection, so a regenerated collection whose
+    rows carry new GUIDs invalidates the masters instead of leaving them "up to date" and every
+    instance failing to compile. Falls back to the saved package's digest when the row GUID is
+    not reflected to Python, and to the row names alone when there is no package on disk (the
+    editor-fake tests)."""
+    rows = list(collection.get_editor_property("scalar_parameters") or [])
+    identity = []
+    for row in rows:
+        name = str(row.get_editor_property("parameter_name"))
+        try:
+            guid = str(row.get_editor_property("id"))
+        except Exception:
+            guid = ""
+        identity.append([name, guid])
+    if all(guid for _name, guid in identity):
+        return sorted(identity)
+    try:
+        path = unreal.SystemLibrary.get_system_path(collection)
+        digest = hashlib.sha256(Path(path).read_bytes()).hexdigest() if path else ""
+    except Exception:
+        digest = ""
+    return {"rows": sorted(name for name, _guid in identity), "package": digest}
 
 
 def _env_scalar(g, environment_collection, name, x, y):
@@ -1315,7 +1329,6 @@ def _build_lit(mat, collection, environment_collection, lut_texture, default_fra
 def _lit_recipe(cited_units):
     return {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": _cited_unit_hashes(cited_units),
         "params": LIT_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -1332,7 +1345,8 @@ def _make_lit_master(name, *, translucent, skinned=False):
     lut_texture = _load_class_lut()
     recipe = _lit_recipe(LIT_CITED_SHADER_UNITS)
     params = LIT_SKINNED_PARAM_TABLE if skinned else LIT_PARAM_TABLE
-    recipe.update(skinned=skinned, translucent=translucent, params=params)
+    recipe.update(skinned=skinned, translucent=translucent, params=params,
+                  environmentCollection=_collection_identity(environment_collection))
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
     if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
@@ -1600,7 +1614,6 @@ def make_unlit():
     lut_texture = _load_class_lut()
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": _cited_unit_hashes(UNLIT_CITED_SHADER_UNITS),
         "params": UNLIT_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -1815,7 +1828,6 @@ def make_two_texture():
     lut_texture = _load_class_lut()
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": _cited_unit_hashes(TWOTEXTURE_CITED_SHADER_UNITS),
         "params": TWOTEXTURE_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -2030,7 +2042,6 @@ def make_eyes():
     lut_texture = _load_class_lut()
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": _cited_unit_hashes(EYES_CITED_SHADER_UNITS),
         "params": EYES_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -2622,7 +2633,6 @@ def make_underwater():
     asset = "%s/%s" % (PKG, name)
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "params": UNDERWATER_PARAM_TABLE,
     }
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
@@ -2658,7 +2668,6 @@ def make_water():
     lut_texture = _load_class_lut()
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": _cited_unit_hashes(WATER_CITED_SHADER_UNITS),
         "params": WATER_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -2843,7 +2852,6 @@ def make_sprite():
     lut_texture = _load_class_lut()
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": {},  # SpriteRender* ships compiled-only; no readable shader-source unit
         "params": SPRITE_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -2970,7 +2978,6 @@ def _make_sprite_z(name, *, lit):
     lut_texture = _load_class_lut()
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": {},
         "params": SPRITE_Z_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -3057,8 +3064,7 @@ def make_particle_children():
             _fail("%s exposes no %s switch for %s" % (master_asset, "/".join(missing), name))
         switches = {name_: (name_ in switches_on) for name_ in switch_names}
         recipe = {
-            "sourceHash": _source_hash(),
-            "master": master_asset,
+                "master": master_asset,
             "masterRecipe": bl.stored_recipe(master_asset, producer='v2-masters'),
             "switches": switches,
             "blendMode": blend,
@@ -3304,7 +3310,6 @@ def make_refract():
     lut_texture = _load_class_lut()
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": {},  # no shipped source and no transcribed selector for this family
         "params": REFRACT_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -3486,7 +3491,6 @@ def make_decal():
     lut_texture = _load_class_lut()
     recipe = {
         "graphVersion": GRAPH_VERSION,
-        "sourceHash": _source_hash(),
         "citedUnits": {},  # decalmodulate ships no program at all
         "params": DECAL_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
@@ -3578,7 +3582,6 @@ def make_missing():
     asset = "%s/%s" % (PKG, name)
     master_asset = "%s/M_V2_Unlit" % PKG
     recipe = {
-        "sourceHash": _source_hash(),
         "master": master_asset,
         "texture": "%s/T_V2_MissingChecker" % PKG,
         "checker": {"size": MISSING_CHECKER_SIZE, "square": MISSING_CHECKER_SQUARE,

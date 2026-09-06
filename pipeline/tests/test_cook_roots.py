@@ -75,9 +75,9 @@ def test_label_registration_is_specific_and_non_editor_only():
     assert 'CookAll' not in setting
 
 
-def test_map_selection_uses_level_golden_not_bundle_directory():
+def test_map_selection_uses_deployed_delivery_namespace():
     assert roots.cook_map_packages(["vtmb:map:sp_tutorial_1"]) == [
-        "/ElysiumBaked/Maps/sp_tutorial_1/sp_tutorial_1", "/Game/ElysiumGenerated/Boot"]
+        "/ElysiumBaked/sp_tutorial_1/sp_tutorial_1", "/Game/ElysiumGenerated/Boot"]
     with pytest.raises(roots.CookRootError): roots.cook_map_packages([])
 
 
@@ -108,6 +108,7 @@ def test_merged_manifest_inventory_is_not_restricted_to_last_slice(tmp_path):
         paths[kind] = path
     source = roots.read_declarations(paths)
     assert older in source["expectedPackages"]
+    assert older in source["referencePackages"]
     assert "/ElysiumBaked/Models/SM_w_null" not in source["expectedPackages"]
     assert source["sourceDecisions"]["characters"]["inventory"][0]["reason"] == "no consumer"
     roots.verify_inputs(source)
@@ -190,6 +191,7 @@ def test_current_disk_inventory_is_audit_only():
     if (base / "model-catalogues/manifest.json").is_file(): manifests["catalogues"] = base / "model-catalogues/manifest.json"
     source = roots.read_declarations(manifests)
     rows = roots.scan_package_files(Path(r"E:\dev\elysium-unreal\Plugins\ElysiumBaked\Content"))
+    source = roots.reconcile_declarations(source, rows)
     plan = roots.plan_roots(source, rows, metadata_verified=False)
     roots.verify_inputs(source)
     assert not plan["readyToPublish"]  # File presence is not a registry/cook result.

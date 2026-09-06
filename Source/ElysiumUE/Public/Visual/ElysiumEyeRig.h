@@ -124,7 +124,6 @@ struct ELYSIUMUE_API FElysiumEyeSet
 	// Read `npc/<RelPath>` — `npc_index.json`'s own `eyes` value. The sidecar is Unreal-native, so
 	// the geometry lines up with the loaded skeleton with nothing applied to it. This is the door
 	// the runtime uses.
-	bool Load(const FString& RelPath, FString& OutError);
 	// Parse the same JSON from a string rather than from the export root, so a test can state a
 	// record inline. Same result; `Load` is the door.
 	bool LoadJsonText(const FString& JsonText, FString& OutError);

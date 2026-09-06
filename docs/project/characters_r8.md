@@ -13,12 +13,27 @@
 
 ## 0. Verdict
 
+**Delivery priority, owner ruling 2026-09-05:** close development on a testable migration
+covering the old export/import lane. Build failures, lost old coverage, broken runtime/import/cook
+dependencies and unsafe retirement remain blockers. Enhanced fidelity, newly discovered coverage
+and exhaustive rendered/numerical parity are follow-up work, recorded in
+[`seam_migration.md`](seam_migration.md#fidelity-follow-up-ledger-deferred-from-migration-closure).
+This supersedes the stronger original acceptance gates below; preserve source data and evidence,
+but do not retain a second transport solely to finish those future comparisons.
+
 **Physics scope, owner ruling 2026-09-05:** R8 includes physics export/import and data
 conservation only. Preserve and verify geometry, solid/ledge ownership, constraints, all
 parameters, metadata, source gaps and provenance in the GLB and cooked source-data projection.
 Simulation-ready `UPhysicsAsset` construction, solver calibration, ragdoll activation and gameplay
 physics are deferred to PHYS1 and later physics work. They are not R8 completion or legacy-retirement
 prerequisites. This ruling supersedes earlier PHYS1 dependencies in linked plans.
+
+**Closure, 2026-09-06:** the testable path is recorded in
+[`seam_migration.md`](seam_migration.md#closure-record-2026-09-06) → "Closure record": build,
+Python suite, the native import chain, the three test maps re-baked on the V2 lane with no legacy
+references, the verifies and the native tiers, plus the defects fixed on the way. The rendered
+play pass on `sp_tutorial_1` / `sm_pawnshop_1` / `sm_hub_1` is owner-piloted and is the
+remaining acceptance step; R9 owns the mount's legacy folders and the 106 unconverted maps.
 
 **R8 ports the rules and rebuilds the bake on a complete GLB corpus.** Producer corrections
 are part of the migration whenever comparison exposes a dropped datum; byte-ledger coverage

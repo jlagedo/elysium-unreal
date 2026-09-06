@@ -94,21 +94,14 @@ FElysiumPlacedModelBody UElysiumEntityBodies::BuildPlacedModelBody(const FElysiu
 		ReportNativeModelFailure(TEXT("placed-body:") + Request.ModelPath, Error.IsEmpty() ? TEXT("placed model was not prepared") : Error);
 		return Result;
 	}
-	if (Row->CanUseStatic(Row->bFullClipsRequired || !Row->RequiredClips.IsEmpty()))
-	{
-		// The shared result's Visual is USkeletalMeshComponent*. A static body created here
-		// would be orphaned from the entity's skin/state/cleanup pointers.
-		ReportNativeModelFailure(TEXT("placed-result:") + Id,
-			TEXT("static placement requires the main embodiment adapter to consume ElysiumPreparedProps::Build's general result"));
-		return Result;
-	}
 	const auto Built = ElysiumPreparedProps::Build(*this, Request, false, Error);
 	if (!Built.IsValid())
 	{
 		ReportNativeModelFailure(TEXT("placed-body:") + Id, Error);
 		return Result;
 	}
-	Result.Stem = Built.ModelId; Result.Visual = Built.SkeletalVisual;
+	Result.Stem = Built.ModelId; Result.Visual = Built.Visual;
+	Result.SkeletalVisual = Built.SkeletalVisual; Result.StaticVisual = Built.StaticVisual;
 	Result.Attach = Built.Attach; Result.PhysicsProxy = Built.PhysicsProxy;
 	return Result;
 }

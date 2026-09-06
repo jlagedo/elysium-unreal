@@ -254,6 +254,19 @@ struct FElysiumRecordingServices final
 	, public IElysiumPresenter
 	, public IElysiumWeather
 {
+	// The runtime addresses a model by unit id (`vtmb:model:<dir>/<base>`) or by its source path
+	// (`models/<dir>/<base>.mdl`). The double records and keys by the base name: it is what a
+	// source `.mdl` stem was, and what the literals every test asserts against read like.
+	static FString StemOf(const FString& Model)
+	{
+		FString Base = Model;
+		Base.RemoveFromStart(TEXT("vtmb:model:"));
+		int32 Slash = INDEX_NONE;
+		if (Base.FindLastChar(TEXT('/'), Slash)) Base = Base.Mid(Slash + 1);
+		Base.RemoveFromEnd(TEXT(".mdl"));
+		return Base;
+	}
+
 	// One line per service call, in the order they happened: "PlayVoice ambient/x.wav".
 	// Mutable so the const interface methods can record too.
 	mutable TArray<FString> Calls;
@@ -339,7 +352,7 @@ struct FElysiumRecordingServices final
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override
 	{
 		Record(FString::Printf(TEXT("BuildNpcVisual %s %s scale=%.2f disp=%s var=%d"),
-			*Stem, *Location.ToString(), UniformScale, *Disposition, IdleVariant));
+			*StemOf(Stem), *Location.ToString(), UniformScale, *Disposition, IdleVariant));
 		if (PrebuiltNpcVisual != nullptr)
 		{
 			return PrebuiltNpcVisual;
@@ -367,7 +380,7 @@ struct FElysiumRecordingServices final
 		FElysiumRecordingNpcMotor* Result = Motor.Get();
 		NpcMotors.Add(MoveTemp(Motor));
 		Record(FString::Printf(TEXT("BuildNpcMotor %s yaw=%.1f stem=%s var=%d"),
-			*FeetOrigin.ToString(), YawDegrees, *Stem, Variant));
+			*FeetOrigin.ToString(), YawDegrees, *StemOf(Stem), Variant));
 		return Result;
 	}
 	virtual void DestroyNpcMotor(IElysiumNpcMotor*) override
@@ -378,7 +391,7 @@ struct FElysiumRecordingServices final
 		const FString& Disposition, int32 DispositionLevel, int32 IdleVariant) override
 	{
 		Record(FString::Printf(TEXT("RefreshNpcIdle %s disp=%s level=%d var=%d"),
-			*Stem, *Disposition, DispositionLevel, IdleVariant));
+			*StemOf(Stem), *Disposition, DispositionLevel, IdleVariant));
 		return Body != nullptr;
 	}
 	// The stance set a test hands the machine. Empty by default, which is the "this model carries no
@@ -388,7 +401,7 @@ struct FElysiumRecordingServices final
 	virtual bool ResolveStanceClips(const FString& Stem, const FString& AnimName,
 		FElysiumStanceClips& OutClips) override
 	{
-		Record(FString::Printf(TEXT("ResolveStanceClips %s anim=%s"), *Stem, *AnimName));
+		Record(FString::Printf(TEXT("ResolveStanceClips %s anim=%s"), *StemOf(Stem), *AnimName));
 		OutClips = StanceClips;
 		return OutClips.IsValid();
 	}
@@ -431,7 +444,7 @@ struct FElysiumRecordingServices final
 		// REPLACES, or a `CBaseAnimatingOverlay` slot 0 layer that composes over it. A ranged fire on
 		// the base channel collapses the body, and nothing else in this line would say so.
 		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d band=%s%s rate=%.2f act=%s ch=%s"),
-			*Stem, *Segment.ClipName, Segment.bLoop ? 1 : 0,
+			*StemOf(Stem), *Segment.ClipName, Segment.bLoop ? 1 : 0,
 			ElysiumAnimIntent::PriorityName(Segment.Priority),
 			Segment.bHoldUntilReleased ? TEXT(" held=1") : TEXT(""), Segment.PlaybackRate,
 			Segment.Activity.IsEmpty() ? TEXT("(none)") : *Segment.Activity,
@@ -459,14 +472,14 @@ struct FElysiumRecordingServices final
 	virtual bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName) override
 	{
-		Record(FString::Printf(TEXT("PreloadNpcClip %s %s"), *Stem, *ClipName));
+		Record(FString::Printf(TEXT("PreloadNpcClip %s %s"), *StemOf(Stem), *ClipName));
 		return Body != nullptr;
 	}
 	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
 		const FString& ClipName) override
 	{
 		Record(FString::Printf(TEXT("PreloadNpcClipForModel %s player=%d %s"),
-			*Stem, bPlayerMaterial ? 1 : 0, *ClipName));
+			*StemOf(Stem), bPlayerMaterial ? 1 : 0, *ClipName));
 		return !Stem.IsEmpty() && !ClipName.IsEmpty();
 	}
 	virtual bool ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
@@ -480,7 +493,7 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(
 			TEXT("ResolveNpcActivityClip %s %s var=%d class=%s weapon=%s state=%s hit=%.1f ")
 			TEXT("buttons=%d body=%s"),
-			*Request.Stem, *Request.Activity, Request.Variant,
+			*StemOf(Request.Stem), *Request.Activity, Request.Variant,
 			Request.ActorClassname.IsEmpty() ? TEXT("-") : *Request.ActorClassname,
 			Request.WeaponClassname.IsEmpty() ? TEXT("-") : *Request.WeaponClassname,
 			LexToString(Request.ActorState), Request.HitYaw, Request.StateMask,
@@ -696,7 +709,7 @@ struct FElysiumRecordingServices final
 		EElysiumAnimBodyKind BodyKind, FString& OutAnimName,
 		float& OutGroundSpeedCmPerSecond) override
 	{
-		Record(FString::Printf(TEXT("ResolveNpcSequenceClip %s %s body=%s"), *Stem, *ClipName,
+		Record(FString::Printf(TEXT("ResolveNpcSequenceClip %s %s body=%s"), *StemOf(Stem), *ClipName,
 			ElysiumAnimIntent::BodyKindName(BodyKind)));
 		OutAnimName = bNpcSequenceClipsResolve ? ResolvedNpcSequenceAnimName : FString();
 		OutGroundSpeedCmPerSecond = bNpcSequenceClipsResolve
@@ -709,8 +722,8 @@ struct FElysiumRecordingServices final
 	TMap<FString, TSet<FString>> KnownNpcClips;
 	virtual bool HasNpcClip(const FString& Stem, const FString& ClipName) override
 	{
-		Record(FString::Printf(TEXT("HasNpcClip %s %s"), *Stem, *ClipName));
-		const TSet<FString>* Known = KnownNpcClips.Find(Stem.ToLower());
+		Record(FString::Printf(TEXT("HasNpcClip %s %s"), *StemOf(Stem), *ClipName));
+		const TSet<FString>* Known = KnownNpcClips.Find(StemOf(Stem).ToLower());
 		return Known != nullptr && Known->Contains(ClipName);
 	}
 	// The blocked-reaction column a test authors, keyed by lower-cased clip label. Empty by default:
@@ -722,7 +735,7 @@ struct FElysiumRecordingServices final
 	virtual FString NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel) override
 	{
 		const FString* Found = BlockedReactionByClip.Find(ClipLabel.ToLower());
-		Record(FString::Printf(TEXT("NpcClipBlockedReaction %s %s -> %s"), *Stem, *ClipLabel,
+		Record(FString::Printf(TEXT("NpcClipBlockedReaction %s %s -> %s"), *StemOf(Stem), *ClipLabel,
 			Found != nullptr ? **Found : TEXT("-")));
 		return Found != nullptr ? *Found : FString();
 	}
@@ -736,7 +749,7 @@ struct FElysiumRecordingServices final
 		const FString& ClipLabel) override
 	{
 		const TArray<FElysiumSwingRecord>* Found = SwingsByClip.Find(ClipLabel.ToLower());
-		Record(FString::Printf(TEXT("NpcClipSwings %s %s -> %d"), *Stem, *ClipLabel,
+		Record(FString::Printf(TEXT("NpcClipSwings %s %s -> %d"), *StemOf(Stem), *ClipLabel,
 			Found != nullptr ? Found->Num() : 0));
 		return (Found != nullptr && !Found->IsEmpty()) ? Found : nullptr;
 	}
@@ -749,7 +762,7 @@ struct FElysiumRecordingServices final
 		const FString& ClipLabel) override
 	{
 		const FElysiumComboChain* Found = ComboByClip.Find(ClipLabel.ToLower());
-		Record(FString::Printf(TEXT("NpcClipCombo %s %s -> %s"), *Stem, *ClipLabel,
+		Record(FString::Printf(TEXT("NpcClipCombo %s %s -> %s"), *StemOf(Stem), *ClipLabel,
 			Found != nullptr ? TEXT("stated") : TEXT("-")));
 		return (Found != nullptr && Found->bStated) ? Found : nullptr;
 	}
@@ -760,7 +773,7 @@ struct FElysiumRecordingServices final
 	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel) override
 	{
 		const FString* Found = ClipOwnerByLabel.Find(ClipLabel.ToLower());
-		Record(FString::Printf(TEXT("NpcClipOwner %s %s -> %s"), *Stem, *ClipLabel,
+		Record(FString::Printf(TEXT("NpcClipOwner %s %s -> %s"), *StemOf(Stem), *ClipLabel,
 			Found != nullptr ? **Found : TEXT("-")));
 		return Found != nullptr ? *Found : FString();
 	}
@@ -861,7 +874,7 @@ struct FElysiumRecordingServices final
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override
 	{
-		Record(FString::Printf(TEXT("PlayCinematicClip %s %s %s %s"), *Stem, *AnimSetModel,
+		Record(FString::Printf(TEXT("PlayCinematicClip %s %s %s %s"), *StemOf(Stem), *AnimSetModel,
 			*BoneRoot, *ClipName));
 		if (OutSeconds)
 		{
@@ -872,7 +885,7 @@ struct FElysiumRecordingServices final
 	virtual bool PreloadCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) override
 	{
-		Record(FString::Printf(TEXT("PreloadCinematicClip %s %s %s %s"), *Stem,
+		Record(FString::Printf(TEXT("PreloadCinematicClip %s %s %s %s"), *StemOf(Stem),
 			*AnimSetModel, *BoneRoot, *ClipName));
 		return bCinematicClipsResolve && Body != nullptr;
 	}
@@ -880,7 +893,7 @@ struct FElysiumRecordingServices final
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) override
 	{
 		Record(FString::Printf(TEXT("PreloadCinematicClipForModel %s player=%d %s %s %s"),
-			*Stem, bPlayerMaterial ? 1 : 0, *AnimSetModel, *BoneRoot, *ClipName));
+			*StemOf(Stem), bPlayerMaterial ? 1 : 0, *AnimSetModel, *BoneRoot, *ClipName));
 		return bCinematicClipsResolve && !Stem.IsEmpty();
 	}
 	virtual int32 FinishAnimationPreload() override
@@ -1081,30 +1094,30 @@ struct FElysiumRecordingServices final
 	{
 		// The rotation is recorded last so the existing prefix assertions keep matching.
 		Record(FString::Printf(TEXT("BuildAnimatedPropVisual %s %s scale=%.2f rot=%s"),
-			*Stem, *Location.ToString(), UniformScale, *Rotation.Rotator().ToString()));
+			*StemOf(Stem), *Location.ToString(), UniformScale, *Rotation.Rotator().ToString()));
 		LastAnimatedPropRotation = Rotation;
 		USkeletalMeshComponent* Body = NewComponent<USkeletalMeshComponent>();
-		AnimatedPropBodies.Add(Stem, Body);
+		AnimatedPropBodies.Add(StemOf(Stem), Body);
 		return Body;
 	}
 	virtual bool PlayAnimatedPropClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName, bool bLoop, float* OutSeconds) override
 	{
 		Record(FString::Printf(TEXT("PlayAnimatedPropClip %s %s loop=%d"),
-			*Stem, *ClipName, bLoop ? 1 : 0));
+			*StemOf(Stem), *ClipName, bLoop ? 1 : 0));
 		if (OutSeconds) { *OutSeconds = ClipSeconds; }
 		return Body != nullptr;
 	}
 	virtual int32 PreloadAnimatedPropClips(USkeletalMeshComponent* Body,
 		const FString& Stem) override
 	{
-		Record(FString::Printf(TEXT("PreloadAnimatedPropClips %s"), *Stem));
+		Record(FString::Printf(TEXT("PreloadAnimatedPropClips %s"), *StemOf(Stem)));
 		return Body != nullptr ? 1 : 0;
 	}
 	virtual void ApplyAnimatedPropSkin(USkeletalMeshComponent*, const FString& StaticStem,
 		int32 Family) override
 	{
-		Record(FString::Printf(TEXT("ApplyAnimatedPropSkin %s family=%d"), *StaticStem, Family));
+		Record(FString::Printf(TEXT("ApplyAnimatedPropSkin %s family=%d"), *StemOf(StaticStem), Family));
 	}
 	virtual FString AnimatedPropRestClip(const FString& Stem,
 		int32 PlacementToken = 0) const override
@@ -1126,7 +1139,7 @@ struct FElysiumRecordingServices final
 		USceneComponent* ParentBody, float UniformScale, bool bSky) override
 	{
 		Record(FString::Printf(TEXT("BuildBrushVisual %s scale=%.2f sky=%d"),
-			*Stem, UniformScale, bSky ? 1 : 0));
+			*StemOf(Stem), UniformScale, bSky ? 1 : 0));
 		UStaticMeshComponent* Visual = NewComponent<UStaticMeshComponent>();
 		if (ParentBody)
 		{
@@ -1179,10 +1192,10 @@ struct FElysiumRecordingServices final
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override
 	{
-		Record(FString::Printf(TEXT("BuildPropVisual %s %s scale=%.2f"), *Stem, *Location.ToString(), UniformScale));
+		Record(FString::Printf(TEXT("BuildPropVisual %s %s scale=%.2f"), *StemOf(Stem), *Location.ToString(), UniformScale));
 		LastPropRotation = Rotation;
 		UStaticMeshComponent* Body = NewComponent<UStaticMeshComponent>();
-		PropBodies.Add(Stem, Body);
+		PropBodies.Add(StemOf(Stem), Body);
 		return Body;
 	}
 	TMap<FString, EElysiumItemGroundModelState> ItemGroundModelStates;
@@ -1198,18 +1211,18 @@ struct FElysiumRecordingServices final
 	virtual UStaticMeshComponent* BuildPhysPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) override
 	{
-		Record(FString::Printf(TEXT("BuildPhysPropVisual %s %s scale=%.2f"), *Stem, *Location.ToString(), UniformScale));
+		Record(FString::Printf(TEXT("BuildPhysPropVisual %s %s scale=%.2f"), *StemOf(Stem), *Location.ToString(), UniformScale));
 		return NewComponent<UStaticMeshComponent>();
 	}
 	virtual void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family) override
 	{
-		Record(FString::Printf(TEXT("ApplyPropSkin %s family=%d"), *Stem, Family));
+		Record(FString::Printf(TEXT("ApplyPropSkin %s family=%d"), *StemOf(Stem), Family));
 	}
 	virtual USkeletalMeshComponent* BuildPlayerVisual(const FString& Stem,
 		const FString& Disposition, int32 IdleVariant) override
 	{
 		Record(FString::Printf(TEXT("BuildPlayerVisual %s disp=%s var=%d"),
-			*Stem, *Disposition, IdleVariant));
+			*StemOf(Stem), *Disposition, IdleVariant));
 		return Stem.IsEmpty() ? nullptr : NewComponent<USkeletalMeshComponent>();
 	}
 	virtual void ClearPlayerVisual() override

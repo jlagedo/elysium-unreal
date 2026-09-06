@@ -14,13 +14,14 @@ from unittest import mock
 
 import pytest
 
-from elysium_pipeline.exporters import npc_export
-from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+
+
 from elysium_pipeline.skeletal_stage import payload as PAYLOAD
 from elysium_pipeline.formats import mdl_skel
 from elysium_pipeline import placed_models
 from elysium_pipeline.exporters import source_warnings
-from elysium_pipeline import export_manager
+
+MODEL = "models/scenery/structural/doorknoba/drknobantique.mdl"
 
 
 def _run(valid_keys, total, stored=None):
@@ -69,38 +70,6 @@ def test_zero_valid_does_not_index_an_empty_key_list() -> None:
 
 def test_a_zero_length_run_cannot_loop_forever() -> None:
     assert mdl_skel._rle_channel(_run([1], 0), 0, 2) == [0, 0]
-
-
-class _Seq:
-    def __init__(self, frames):
-        self.frames = frames
-
-
-def test_a_single_frame_sequence_is_an_authored_pose() -> None:
-    # `stage_light`, `lampfloor`, `glassa`, `junkyardcraneb`, `bottleb` and `bottlec` each
-    # declare exactly one 1-frame `idle` while authoring LoopSequence.
-    with mock.patch.object(mdl_skel, "local_sequences", return_value=[_Seq(1)]):
-        assert npc_export.has_animation(b"")
-
-
-def test_any_multi_frame_sequence_qualifies() -> None:
-    # `clamp`'s `idle` is one frame beside its real 45-frame open/close, so the test is "any",
-    # not "every".
-    with mock.patch.object(mdl_skel, "local_sequences", return_value=[_Seq(1), _Seq(45)]):
-        assert npc_export.has_animation(b"")
-
-
-def test_a_model_with_no_sequences_is_not_animation() -> None:
-    with mock.patch.object(mdl_skel, "local_sequences", return_value=[]):
-        assert not npc_export.has_animation(b"")
-
-
-def test_an_undecodable_model_is_not_animation() -> None:
-    with mock.patch.object(mdl_skel, "local_sequences", side_effect=struct.error("truncated")):
-        assert not npc_export.has_animation(b"")
-
-
-MODEL = "models/scenery/structural/doorknoba/drknobantique.mdl"
 
 
 def seq(label, activity="", weight=0, index=0):
@@ -248,66 +217,21 @@ def test_static_equivalence_accepts_identity_and_rejects_quarter_turn() -> None:
     quarter = [[((0.0, 0.0, 0.0), (0.0, 0.0, 2**-0.5, 2**-0.5))]]
     with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
           mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
-          mock.patch.object(UEK, "_split_rotation_tracks", return_value=({}, set())),
+          mock.patch.object(PAYLOAD, "_split_rotation_tracks", return_value=({}, set())),
           mock.patch.object(mdl_skel, "read_anim", return_value=identity)):
         assert placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
     with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
           mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
-          mock.patch.object(UEK, "_split_rotation_tracks", return_value=({}, set())),
+          mock.patch.object(PAYLOAD, "_split_rotation_tracks", return_value=({}, set())),
           mock.patch.object(mdl_skel, "read_anim", return_value=quarter)):
         assert not placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
     with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
           mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
-          mock.patch.object(UEK, "_split_rotation_tracks", return_value=({0: [quarter[0][0][1]]}, set())),
+          mock.patch.object(PAYLOAD, "_split_rotation_tracks", return_value=({0: [quarter[0][0][1]]}, set())),
           mock.patch.object(mdl_skel, "read_anim", return_value=identity)):
         # The correction dictionary is the first member of the helper's (tracks, anchors)
         # result. Treating the tuple as that dictionary incorrectly accepts the storage pose.
         assert not placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
-
-
-def _write(labels, ensure=()):
-    clips = [SimpleNamespace(label="idle"), SimpleNamespace(label="open")]
-    seen = []
-    ensured = []
-
-    def anim(_data, _bones, emitted, _bone_map, _count, _masks, ensure_labels=(),
-             reparented=None):
-        seen.extend(clip.label for clip in emitted)
-        ensured.extend(ensure_labels)
-        return b"", len(emitted)
-
-    with (tempfile.TemporaryDirectory() as temporary,
-            mock.patch.object(UEK.mdl, "load", return_value=(b"mdl", b"vtx")),
-            mock.patch.object(mdl_skel, "read_bones", return_value=[]),
-            mock.patch.object(mdl_skel, "decode_skinned", return_value={}),
-            mock.patch.object(UEK.mdl, "search_paths", return_value=[]),
-            mock.patch.object(UEK, "unreal_bones", return_value=([], {}, {})),
-            mock.patch.object(UEK, "_mesh_section", return_value=(b"", {})),
-            mock.patch.object(mdl_skel, "local_sequences", return_value=clips),
-            mock.patch.object(mdl_skel, "blend_clip_plan", return_value=([], {})),
-            mock.patch.object(UEK, "_attachment_section", return_value=b""),
-            mock.patch.object(UEK, "_anim_section", side_effect=anim)):
-        UEK.write_model({}, "models/test/prop.mdl", temporary, clip_labels=labels,
-                        ensure_labels=ensure)
-    return seen, ensured
-
-
-def test_rest_only_container_emits_only_selected_candidates() -> None:
-    assert _write(("idle",), ("idle",)) == (["idle"], ["idle"])
-
-
-def test_full_container_emits_the_complete_sequence_inventory() -> None:
-    assert _write(None) == (["idle", "open"], [])
-
-
-def test_clip_policy_and_inventory_invalidate_the_container_fingerprint() -> None:
-    rest = {"clip_mode": "rest", "clips": {"idle": {}},
-            "rest_candidates": ["idle"]}
-    full = {"clip_mode": "full", "clips": {"idle": {}, "open": {}}}
-    first = export_manager.placed_model_source_fingerprint(
-        "prop", rest, "code", "source")
-    assert first != export_manager.placed_model_source_fingerprint(
-        "prop", full, "code", "source")
 
 
 def test_ensured_rest_forces_complete_bind_local_tracks() -> None:
@@ -417,91 +341,6 @@ def test_a_forced_host_track_uses_donor_bind_not_zero_weight_sentinels() -> None
         assert actual == pytest.approx(expected, abs=1e-5)
     for actual, expected in zip(rotation, PAYLOAD._conv_quat(OWNED_BONES[0].quat)):
         assert actual == pytest.approx(expected, abs=1e-6)
-
-
-RECORD = {
-    "eskm": "animated_props/drknobantique.eskm",
-    "model": "models/scenery/doorknoba/drknobantique.mdl",
-    "bones": 2,
-    "clips": {
-        "idle": {"activity": "", "weight": 0, "flags": 1, "frames": 16, "fps": 15.0},
-        "handle_locked": {"activity": "", "weight": 0, "flags": 0, "frames": 16, "fps": 15.0},
-        "handle_unlocked": {"activity": "", "weight": 0, "flags": 0, "frames": 16, "fps": 15.0},
-    },
-}
-
-
-def test_declaration_order_is_preserved() -> None:
-    row = npc_export.animated_prop_index_row(RECORD)
-    assert [c["name"] for c in row["clips"]] == ["idle", "handle_locked", "handle_unlocked"]
-
-
-def test_each_clip_carries_its_ordinal_and_selection_keys() -> None:
-    row = npc_export.animated_prop_index_row(RECORD)
-    assert [c["index"] for c in row["clips"]] == [0, 1, 2]
-    first = row["clips"][0]
-    assert first["flags"] == 1          # STUDIO_LOOPING
-    assert first["activity"] == ""
-    assert first["frames"] == 16
-    assert first["fps"] == 15.0
-
-
-def test_optional_sidecars_are_omitted_when_absent() -> None:
-    row = npc_export.animated_prop_index_row(RECORD)
-    assert "procedural" not in row
-    assert "blends" not in row
-    assert row["split_bones"] == []
-
-
-def test_a_clipless_record_projects_an_empty_list() -> None:
-    row = npc_export.animated_prop_index_row({"eskm": "e", "model": "m"})
-    assert row["clips"] == []
-
-
-def test_a_bounds_radius_reaches_the_runtime_row() -> None:
-    record = dict(RECORD, clips={
-        "idle": dict(RECORD["clips"]["idle"], bounds_radius_m=22.388)})
-    row = npc_export.animated_prop_index_row(record)
-    assert row["clips"][0]["bounds_radius_m"] == 22.388
-
-
-def _seq(label, bbmin, bbmax):
-    return mdl_skel.Seq(label=label, base=0, frames=16, fps=30.0, activity="",
-                        actweight=0, flags=0, bbmin=bbmin, bbmax=bbmax)
-
-
-SWORD = _seq("scene", (-881.4, -162.6, -6.7), (0.0, 89.3, 166.2))
-
-
-# ClipBoundsRadiusTests
-# What a clip declares about its own reach, reconciled with what baked.
-#
-# `cin_sheriff_sword`'s `scene` is the shape these guard: a 2 m mesh whose sequence bbox
-# spans 881 Source units because the rig carries the sword across the courtroom.
-
-def test_the_authored_radius_wins_when_it_covers_the_bake() -> None:
-    # The real case: studiomdl's box sits a little outside the extent it was computed from.
-    assert npc_export.clip_bounds_radius_m(SWORD, 21.833) == pytest.approx(881.4 * 0.0254, abs=1e-6)
-
-
-def test_a_zeroed_descriptor_falls_back_to_the_bake() -> None:
-    # Every model's header ViewBBMin/ViewBBMax is (0,0,0) in this corpus, so a sequence box
-    # that was never filled in is a shape the export has to survive rather than trust.
-    blank = _seq("scene", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-    assert npc_export.authored_radius_m(blank) == 0.0
-    assert npc_export.clip_bounds_radius_m(blank, 9.99) == pytest.approx(9.99, abs=1e-6)
-
-
-def test_an_authored_radius_short_of_the_bake_loses() -> None:
-    short = _seq("scene", (-1.0, 0.0, 0.0), (1.0, 0.0, 0.0))
-    assert npc_export.clip_bounds_radius_m(short, 4.0) == pytest.approx(4.0, abs=1e-6)
-
-
-def test_the_key_is_absent_until_it_has_been_reconciled() -> None:
-    # Presence is the promise that the number covers the geometry; a bank or NPC clip, which
-    # nothing measures, must not look like it carries one.
-    assert "bounds_radius_m" not in npc_export._clip_meta(SWORD)
-    assert npc_export._clip_meta(SWORD, 22.38812)["bounds_radius_m"] == 22.3881
 
 
 # ClipExtentTests

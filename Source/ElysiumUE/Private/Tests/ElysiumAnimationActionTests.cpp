@@ -3,6 +3,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumAnimationIntent.h"
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"               // what a map stands each cast body as
 #include "ElysiumGaitSpeeds.h"               // the per-direction speed table
@@ -4026,7 +4027,7 @@ namespace
 			{
 				Table = MakeShared<FElysiumBlendTable>();
 				FString Error;
-				if (!Table->Load(Entry->Blends, Error))
+				if (!ElysiumNativeTest::Load(*Table, Entry->Blends, Error))
 				{
 					Table.Reset();
 				}
@@ -4109,16 +4110,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphTransitionParityTest,
 	"Elysium.Content.PlayerGraphTransitionParity", GElysiumAnimationContentFlags)
 bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!Index.Load(Error) || !Index.IsValid())
+	if (!ElysiumNativeTest::Load(Index, Error) || !Index.IsValid())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export grid)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native cast view (run: uv run elysium import characters)"));
 		return true;
 	}
 
@@ -4139,7 +4140,7 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 			continue;
 		}
 		FString LoadError;
-		if (Body.Load(Stem, LoadError) && Body.ByActivity(TEXT("ACT_WALK")).Num() > 0)
+		if (ElysiumNativeTest::Load(Body, Stem, LoadError) && Body.ByActivity(TEXT("ACT_WALK")).Num() > 0)
 		{
 			Chosen = Stem;
 			break;

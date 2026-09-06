@@ -3424,6 +3424,79 @@ asset lane.
 
 ### R8 — characters: the skeletal lane rebuilt on the GLB corpus [was R6.1 / SF-6.3, R6.3 wield / SF-6.5, R6.4 irises]
 
+**Owner delivery ruling, 2026-09-05: close the migration and produce a testable version.**
+Coverage of the old export/import lane is the acceptance floor for this development milestone.
+The long-term fidelity goal remains, but improved numerical/rendered fidelity and newly discovered
+coverage beyond that floor are follow-up work. This ruling supersedes stricter fidelity gates in
+the original R8 plan below and in `characters_r8.md`; those gates describe future acceptance, not
+a reason to keep both transports alive. Preserve the GLB source records and the existing evidence.
+
+Only critical migration defects block retirement: a failing build; loss of an asset or behavior
+the old lane supplied; missing required native dependencies; broken import, runtime loading or
+cook wiring; and a deletion that leaves a live caller without its replacement. Finish those,
+exercise the normal import and runtime paths, and remove superseded producers/readers. Do not
+expand the milestone to new solver work, new source decoding, full rendered parity, or exhaustive
+precision calibration. Source-absent content stays explicit; it must not be invented to satisfy
+a catalogue. Keep the frozen baseline outside the repository for later comparisons.
+
+**Delivery exception: map package relocation belongs to R9.** All 109 existing baked levels
+were still under `/ElysiumBaked/<map>/` at the delivery checkpoint. Moving the resolver alone
+to `Maps/<map>/` makes those maps unavailable. `map_package()` and `BakedMapDir()` therefore
+retain the existing map bundle address together, including entity/collision/environment/brush
+products. Move and verify the levels and their references together during R9. This does not
+retain a character transport: character, bank, wield and prop products use canonical `Models/`
+addresses now. The generic unit resolver still defines the future canonical map namespace.
+Existing unconverted map packages can also retain hard references to already-baked legacy prop
+meshes/materials. Those generated packages remain until the map references are rebuilt in R9;
+their presence does not authorize retaining or rerunning the retired character/wield exporters.
+Do not delete a referenced native package merely because its producer has been retired.
+
+#### Fidelity follow-up ledger (deferred from migration closure)
+
+These are known gaps or uncompleted measurements, not claims that their fixes are accepted.
+Evidence is under `$ELYSIUM_WORK_ROOT/_r8_explore/`; the counts describe their recorded cohort
+and must be remeasured after changing the selection. A missing old-lane asset remains critical
+even when discovered by one of these future checks.
+
+| Follow-up | Recorded evidence / remaining work |
+| --- | --- |
+| Full native geometry parity | The earlier comparison reported 251 failing units among 1,184 selected: 174 vertex identity/merge cases, 38 topology cases, 35 authoring-position cases and four UV capture failures. `all_authored_morphs_geometry_report.json` is the baseline, not full acceptance. Recheck against source after migration closure. |
+| Authored tangents and handedness | All 1,024 mesh GLBs in the audited cohort carry authored tangents. All 599 previously accepted position/normal/UV/skin/morph alias pairs differed in tangent data. The TANG transport and native basis restoration are implemented; Geometry3's packing fix still needs native pilot, save/reload and DDC verification. Preserve strict reporting; do not loosen tolerances to claim parity. |
+| Wield position and UV precision | Remeasure 35 wield-position failures after the double-precision quaternion fix. Four source meshes have 32 finite UV components outside half-float range; full-float UV import is implemented, but full-corpus parity is pending. Source-byte and precision reports remain under `agents/geometry/`. |
+| Evaluated animation and retail oracles | Retained raw animation keys were compared successfully; this does not prove compressed/evaluated/rendered behavior. Pinned graph/compose rescoring, layered/crossfade checks and OracleIdentity refresh remain. Three frame JSONs needed for pinned rescoring were unavailable at the pause. Keep the independent install-derived oracle. |
+| Cloth, hair and skin appearance | All 49 garments covered by the frozen comparison matched; 11 additional garments retain tuning fallbacks. Calibrate those separately, and verify skin changes propagate to garments, hair culling, eyes and first-person fading in rendered play. Preserve authored tuning and the existing simulation gates. |
+| Expanded prop coverage | Selection expansion identified 1,192 additional skeletal candidates. Import additional skeletal representations only where needed to preserve old behavior during this milestone; broader source-native clip coverage and uncertain static equivalence are later work, with source gaps recorded explicitly. |
+| Sky, materials and rendered maps | Complete operational native imports and bindings now. Full HDR/face/mip/build comparisons, visual baselines, every-map rendered comparisons and the long hub-chain/dialogue acceptance pass remain future fidelity work. |
+| Physics | Source geometry, solids, constraints, parameters and provenance remain conserved in the new transport. Simulation-ready PhysicsAssets, solver calibration, ragdoll activation and gameplay physics remain PHYS1 work. |
+| Oracle readings at closure (2026-09-06) | `BakedCharacterParity`: `nosferatu_female_armor_2` / `Nos_Female_Crouch2` frame 120 bone `thing3` composes 0.0511° off retail against a 0.05° band (one bone, one frame, 0 cm). `RigCompose`: CONTROL cohort median 3.168 cm over 440 frames, `crossbow_attack_layer` 7.040 cm over 8 frames, `crossbow_reload_layer` 3.334 cm over 55 frames, against the pinned 2.336 / 1.663 cm bands (the deferred pinned rescoring; three frame JSONs were still unavailable). `RigOracle`: one activity-selection divergence, `nosferatu_female_armor_0` `ACT_CHARSHEET_FIDGET` weighted: retail draws the body's own `Nos_Female_Crouch2`, the export draws `character_shared_female_pc_no/Nos_Female_Idle2` (bank-vs-body candidate ordering in the weighted draw). None of the three is a missing product; all three are fidelity follow-ups. |
+
+#### Native import and development checks
+
+Given the published V2 GLB corpus and the other already-migrated loose corpus slices, the
+native dependency order is policy generators, textures, materials, static models, expression
+tables, characters (including banks/wield/animated props), model catalogues, then cook roots:
+
+```powershell
+uv run elysium export bundle policy
+uv run elysium import textures
+uv run elysium import materials
+uv run elysium import models --all
+uv run elysium import expression-tables
+uv run elysium import characters
+uv run elysium import model-catalogues
+uv run elysium import cook-roots
+uv run elysium verify characters
+uv run elysium verify expression-tables
+uv run elysium verify model-catalogues
+```
+
+Normal character verification checks required saved products, metadata, references and bindings.
+`verify characters --fidelity` additionally captures geometry and compares retained animation
+samples; `--geometry-only` scores existing hashed snapshots. Neither comparison's tolerances
+are weakened by the delivery ruling. The retired `export characters`, `export wield` and
+`export bundle npc/items` commands do not form an alternate path. Keep the existing map package
+addresses for play; R9 owns their package relocation and remaining map transport retirement.
+
 **Owner scope ruling, 2026-09-05:** physics is export/import and data conservation only in R8.
 Preserve and verify physics geometry, solids, constraints, parameters, metadata and provenance.
 Simulation-ready PhysicsAsset construction, solver calibration, ragdoll activation and gameplay
@@ -3500,6 +3573,79 @@ on a byte-equal payload against a frozen copy of the legacy `npc/` + `items/` ex
   consumes it later and does not gate R8 completion.
   → lands: no loose read under `npc/`.
 
+#### Closure record (2026-09-06)
+
+What the testable path is, on this machine, after the closure pass. Everything below was run
+from the committed state plus the uncommitted R8 tree; the acceptance floor is the old lane's
+coverage, not fidelity.
+
+| Step | Result |
+| --- | --- |
+| `uv run elysium build` | green (twice more after the C++ edits below) |
+| `uv run pytest pipeline/tests` | 3,804 passed, 22 skipped |
+| `export bundle policy` | green; V2 masters rebuilt after the environment collection |
+| `import textures --select skybox` | 93 native sky composites imported |
+| `import materials` | 2 imported, 20,156 reused, 0 failed, 0 instance compile failures |
+| `import characters` | 1,207 units staged (0 failed; the 23 previously missing placed owners included); 19,190 native products, 0 failed; 27 explicit pendings (11 cloth-tuning fallbacks, 16 mesh-less include-only owners whose eyes/procedural tables have no mesh host) |
+| `import model-catalogues` | merged wield, placed-model and skin catalogues imported |
+| `import cook-roots` | 22,906 targets rooted, `readyToCook` true (offline rule check; no real cook run) |
+| `export map sp_tutorial_1 sm_pawnshop_1 sm_hub_1` | all three re-baked on the V2 lane; the levels reference only `Models/`, `Materials/`, `Textures/` and their own bundle (before: `Meshes/`, `Props/`, `Sky/`, `Sprites/`); 31 / 0 / 21 skeletal rest placements |
+| `verify characters` / `expression-tables` / `model-catalogues` | green: 1,047 meshes, 1,061 skeletons, 14,263 clips, 540 blend spaces (core products; fidelity comparison deferred); 251 expression products; catalogues and references verified, each in a fresh editor |
+| `uv run elysium test content` / `substrate` | substrate 483 / 483; content 92 / 95 after the test-side fixes below, the three remaining being the deferred oracle/fidelity readings recorded in the ledger (`BakedCharacterParity`, `RigCompose`, `RigOracle`) |
+| Rendered play on the three maps | **owner-piloted, not run here** (`uv run elysium run play sp_tutorial_1`) |
+
+Defects found and fixed during closure, none of them fidelity work:
+
+- `--clean` rejected outright (and `reconstruct` with it): a profile clean now empties only what
+  the profile regenerates (loose root, `ElysiumGenerated`, the legacy and map folders on the
+  mount) and keeps the GLB corpus and the canonical kind roots it reads.
+- The item ground-model selection read the retired `items/ground_models.json`; it now reads the
+  install's `vdata/items` definitions, filtered to published units (two declared `playermodel`
+  paths the install does not ship stay explicit gaps).
+- The sky bootstrap logged an editor error on a fresh mount (`load_asset` on the absent default
+  cube), failing the policy commandlet.
+- The environment collection was regenerated with fresh parameter GUIDs while the V2 masters'
+  recipe could not see it (every `M_V2_Lit` instance fell back to the default material).
+  Collection rows are now updated in place and the masters' recipe carries the collection
+  identity.
+- The cook-root rule check ran against an Asset Manager map built at editor start; the label is
+  now rescanned synchronously before the check. A native test left two unstamped fixture
+  packages under `Models/_Tests`, which the cook-root audit rightly refused; the test now
+  deletes them on every exit path.
+- The V2 map bake decided static-vs-skeletal placement on `staticRestSuffices` alone, which the
+  catalogue only sets for a *proven* rest equivalence; the static-source lane (a static or rigid
+  shape on its static mesh, never measured, 2,620 of 2,899 placed models) was therefore routed to
+  a skeletal rest it never had. Both bake lanes now decide on the runtime's own
+  `CanUseStatic(false)`, mirrored into the catalogue view as `canUseStatic`.
+- Recipes hashed code (the editor DLL, 17 stage modules, three generator files): any C++ rebuild
+  re-authored the whole cast and a comment edit restaged 1,207 units. Recipes are now data content
+  plus one hand-bumped version string per producer, `--force` is per lane, and every lane logs
+  why a product re-authored (`seam_map_unit_contract.md` → "Recipes").
+
+Test-side corrections made during closure (contracts the migration changed, not runtime fixes):
+the substrate double now records and keys models by base name while the runtime addresses them
+by unit id; prop lookups keyed by the old fake `ModelMesh` stems retargeted; a catalogue JSON
+fixture gained `staticSourceRepresentation`; the stage-build fixture carries the mandatory
+`TANG` channel; the wield-binding test counts an authored reference the install never shipped
+as a recorded source gap; the skeletal-catalogue test accepts one split bone per biped root
+(multi-biped group props); the lipsync test follows the runtime's code-then-name lookup; the
+scene test asserts that `SetModel` no longer restarts a map-wide preload; the reflection-capture
+test cleans up the level worlds it loads. Two runtime defects surfaced by the tiers were fixed:
+the cook-root primary-asset rescan, and the prepared-prop view drawing its weighted rest choice
+over `ACT_IDLE` clips instead of the catalogue's rest set (the row and the view now agree for
+one placement token).
+
+Deferred, recorded here so nothing is silently dropped:
+
+- The legacy folders on the mount (`Meshes/`, `Props/`, `Characters/`, `Items/`, `Shared/`,
+  `Sky/`, `Sprites/`, `Lookdev/`) still exist for the 106 unconverted maps; they empty in R9 with
+  the legacy map bake. The three closure maps no longer reference any of them.
+- Cook reachability is audited offline (`readyToCook`); a real cook has not been run.
+- The fidelity ledger above is unchanged; 11 cloth garments keep tuning fallbacks; the 16
+  mesh-less owners' facial/eyes/procedural tables are conserved in the GLB with no consumer.
+- The loose export lane's task graph still fingerprints its decoder closure by content; it
+  retires with that lane (R9.2) and is the one allowed exception to the recipe rule.
+
 ### R9 — retire [was R8; MP-6, SF-7.1]
 
 Settled entries above and the seam docs written before 2026-09-02 say **R8.1 / R8.2** for these
@@ -3559,3 +3705,12 @@ is Valve console syntax the console bridge seeds itself from; `vdata/` is the wh
 as KeyValues. Some of these plausibly become `UDataAsset`s, but each is its own call — a script the
 VM imports by path is not the same problem as a rules table read once at startup. Undecided, and
 deliberately so: this is the question the migration has to answer, one resource at a time.
+
+**Sky follow-up beyond the testable migration.** The owner-approved milestone uses the old
+export/import lane's coverage as its acceptance boundary. Keep the existing GLB composite,
+orientation, mip and provenance fixes. Additional rendered seam sweeps, GPU radiance/mip
+equivalence measurements and HDR fidelity beyond that old coverage are later work; they do not
+gate this milestone. Normal build/import/save/cook and preservation of old-covered skies still
+do. The generated M_Sky default is independent of VtMB imports, while each baked sky instance
+binds its canonical texture-lane cube. Before deleting legacy sky assets or PNG files, import
+the canonical replacements for the old-covered maps and rebind/rebake their references.

@@ -6,6 +6,7 @@
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "Visual/ElysiumCharacterAssets.h"
 
 #include "Animation/AnimSequence.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -138,15 +139,7 @@ TArray<UElysiumBipedAnimInstance*> UElysiumNpcSubsystem::FacialBodies(const FStr
 
 TArray<FString> UElysiumNpcSubsystem::AvailableBodyStems()
 {
-	TArray<FString> Stems;
-	TArray<FString> Files;
-	IFileManager::Get().FindFiles(Files, *(FElysiumContentPaths::NpcDir() / TEXT("*.eskm")), true, false);
-	for (const FString& File : Files)
-	{
-		Stems.Add(FPaths::GetBaseFilename(File));
-	}
-	Stems.Sort();
-	return Stems;
+	return ElysiumCharacterAssets::BodyNames();
 }
 
 void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)

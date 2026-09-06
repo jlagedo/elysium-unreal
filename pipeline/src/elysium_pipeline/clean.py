@@ -16,9 +16,10 @@ OWNERSHIP_FILE = ".elysium-owned.json"
 INCOMPLETE_FILE = ".elysium-incomplete"
 MANIFEST_FILE = ".elysium-manifest.json"
 
-# The corpus is incomplete per DOMAIN, not as a whole: `export bundle npc` finishes the character
-# intermediates and nothing else, and a content test that reads only those has no reason to abstain
-# because the audio catalogue is still missing.  One marker per domain, named for the bundle that
+# The corpus is incomplete per DOMAIN, not as a whole: `export bundle audio` finishes the audio
+# catalogue and nothing else, and a content test that reads only that has no reason to abstain
+# because the scripts are still missing. (`npc` and `items` retired with their exporters in R8;
+# characters and wield are native import lanes with their own receipts.)  One marker per domain, named for the bundle that
 # clears it (`maps` for the map exports), plus INCOMPLETE_FILE as the aggregate the repository
 # policy check and the human-facing message read.  The aggregate survives while any domain does.
 DOMAINS = (
@@ -28,8 +29,6 @@ DOMAINS = (
     # The shared static corpus: every texture, material and static model in the install, decoded
     # once. Every map export and every bake resolves against it, so it is its own domain.
     "corpus",
-    "items",
-    "npc",
     "particles",
     # `policy` is not an export bundle in the exporters' sense: it is the generated
     # /Game/ElysiumGenerated packages `ensure_policy_content` writes, cleared by every profile
@@ -174,6 +173,12 @@ def _empty_owned_root(root: Path) -> None:
 
 
 def clean_generated(targets: CleanTargets) -> Path:
+    """Empty every generated root, the published GLB corpus and its native lanes included.
+
+    This is the whole-mount clean. Nothing on the public command surface runs it since R8:
+    a profile export regenerates only its own outputs (`clean_profile_outputs`), because the
+    GLB corpus and the static native lanes it consumes are published by separate commands.
+    """
     _empty_owned_root(targets.export_root)
     _empty_owned_root(targets.export_v2_root)
     if targets.generated_content.exists():
@@ -182,6 +187,43 @@ def clean_generated(targets: CleanTargets) -> Path:
         shutil.rmtree(targets.baked_content)
     if targets.corpus_content.exists():
         shutil.rmtree(targets.corpus_content)
+    return mark_incomplete(targets.export_root)
+
+
+def profile_clean_targets(targets: CleanTargets) -> tuple[Path, ...]:
+    """The mount folders a profile export owns and may empty before regenerating.
+
+    Everything under the baked mount that is not a canonical kind root: the legacy roots
+    (`Shared/`, `Characters/`, `Props/`, `Items/`), the pre-standard folders (`Meshes/`,
+    `Sky/`, `Sprites/`, `Lookdev/`) and every deployed `<map>/` bundle. The kind roots
+    (`Models/`, `Materials/`, `Textures/`, `SurfaceProperties/`, `ExpressionTables/`, ...)
+    are producer-owned: their lanes stamp and prune their own assets and are re-run with
+    `--force` by the profile rather than deleted from under their receipts.
+    """
+    from elysium_pipeline.asset_paths import KIND_ROOTS
+
+    keep = {name.casefold() for name in KIND_ROOTS.values()}
+    if not targets.baked_content.is_dir():
+        return ()
+    return tuple(sorted(
+        child for child in targets.baked_content.iterdir()
+        if child.is_dir() and child.name.casefold() not in keep
+    ))
+
+
+def clean_profile_outputs(targets: CleanTargets) -> Path:
+    """Empty what a profile export regenerates; keep the corpus the profile only reads.
+
+    Kept: the `exports_v2` GLB corpus (published by `export_v2 *-glb`), the canonical kind
+    roots on the mount (published by `import textures/materials/models/...`) and the deployed
+    vdata corpus (`import vdata`). Emptied: the loose export root, `Content/ElysiumGenerated`
+    (policy generators) and the legacy/map folders on the mount (corpus bake, map bakes).
+    """
+    _empty_owned_root(targets.export_root)
+    if targets.generated_content.exists():
+        shutil.rmtree(targets.generated_content)
+    for folder in profile_clean_targets(targets):
+        shutil.rmtree(folder)
     return mark_incomplete(targets.export_root)
 
 

@@ -222,7 +222,7 @@ public:
 	// Put an item's wield model in the standing body's hand. The stage carries no
 	// `FElysiumCombatCharacter`, so there is no inventory here to equip through and the lab installs
 	// directly — but *what* it installs and *how* is the shipping path: the row is resolved out of
-	// `/ElysiumBaked/Items/DA_WieldModels` and the attachment is
+	// `/ElysiumBaked/Models/_Corpus/DA_WieldModels` and the attachment is
 	// `ElysiumNpcVisual::InstallWieldModel`. Nothing about the geometry on screen is lab-only, which
 	// is what makes this the place a placement is judged.
 	//

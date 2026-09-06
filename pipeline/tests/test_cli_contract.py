@@ -45,10 +45,10 @@ def test_no_detached_checkout_family_is_exposed() -> None:
         assert "No such command" in result.output
 
 
-def test_export_help_exposes_wield() -> None:
+def test_export_help_retires_wield() -> None:
     result = RUNNER.invoke(app, ["export", "--help"])
     assert result.exit_code == 0, result.output
-    assert "wield" in result.output
+    assert "wield" not in result.output
 
 
 #: Every command `export_v2` registers: one singular and one plural per unit kind, plus the
@@ -104,6 +104,7 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
 #: last two are not corpus families at all but per-map lanes (R4.1, R4.2), which is why they refuse
 #: to run unscoped where a corpus lane takes `--all`.
 IMPORT_COMMANDS = ("vdata", "textures", "surface-properties", "materials", "models", "characters",
+                   "model-catalogues", "expression-tables", "cook-roots",
                    "map-entities", "map-collision", "map-environment")
 
 

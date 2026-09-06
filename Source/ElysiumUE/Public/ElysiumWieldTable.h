@@ -1,7 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Engine/DataAsset.h"
 #include "UObject/SoftObjectPtr.h"
 
 #include "ElysiumWieldTable.generated.h"
@@ -48,7 +47,7 @@ struct FElysiumWieldModelRef
 	GENERATED_BODY()
 
 	/**
-	 * The baked `/ElysiumBaked/Items/Wield/<stem>/SK_<stem>` package. Null is the authored
+	 * The native `/ElysiumBaked/Models/.../SK_<model>` package. Null is the authored
 	 * no-geometry answer -- a `w_null.mdl` or empty wield model -- and is not an error; it pairs
 	 * with `Binding == EElysiumWieldBinding::None`.
 	 */
@@ -72,38 +71,13 @@ struct FElysiumWieldModelRef
 };
 
 /**
- * One item classname's wield answer. No shipped item definition authors one sex without the other,
- * so both members are always written -- including when both carry no geometry.
- */
-USTRUCT(BlueprintType)
-struct FElysiumWieldRow
-{
-	GENERATED_BODY()
-
-	/** The model a female wearer holds. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Elysium|Wield")
-	FElysiumWieldModelRef Female;
-
-	/** The model a male wearer holds. */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Elysium|Wield")
-	FElysiumWieldModelRef Male;
-
-	/**
-	 * The item definition's `shows_view_model` gate, default 1. When false, equip skips the sex
-	 * branch entirely and the world model supplies the geometry instead.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Elysium|Wield")
-	bool bShowsWieldModel = true;
-};
-
-/**
  * What asking for a character's held geometry answered. Three of these are answers the corpus
  * authors deliberately and three are failures, which is the whole reason this is an enum: most of
  * the corpus holds nothing, so a caller that treated every empty hand as a missing asset would warn
  * constantly and say nothing.
  *
- * The first five are `UElysiumWieldTable::FindRow`'s vocabulary. The last two belong to a caller
- * that goes on to install what the row named, and `FindRow` never answers them.
+ * Native catalogue lookup preserves authored absence separately from preparation and attachment
+ * failures. Debug surfaces use this result vocabulary alongside the typed catalogue result.
  */
 UENUM()
 enum class EElysiumWieldResult : uint8
@@ -148,40 +122,3 @@ inline bool ElysiumWieldFailed(EElysiumWieldResult Result)
 		|| Result == EElysiumWieldResult::MeshMissing
 		|| Result == EElysiumWieldResult::NoWearer;
 }
-
-/**
- * `/ElysiumBaked/Items/DA_WieldModels` -- the table the runtime resolves `(classname, sex)` through
- * to a held weapon's baked mesh and its binding.
- *
- * Written by the editor wield bake from the exporter's engine-neutral manifest; the bake sets these
- * properties directly, so every one of them is editable and Blueprint-writable.
- */
-UCLASS(BlueprintType)
-class ELYSIUMUE_API UElysiumWieldTable final : public UDataAsset
-{
-	GENERATED_BODY()
-
-public:
-	/**
-	 * One row per item classname. Keys are case-folded to lower, because VtMB compares classnames
-	 * case-insensitively and the manifest is written from authored text of mixed case.
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Elysium|Wield")
-	TMap<FName, FElysiumWieldRow> Rows;
-
-	/**
-	 * The baked table, loaded on first use and rooted for the process. Null -- with one warning
-	 * naming the command that produces it -- when the wield bake has not run. There is no second
-	 * build of the corpus, so a miss is a missing bake rather than a choice between two sets.
-	 */
-	static const UElysiumWieldTable* Load();
-
-	/**
-	 * The model a wielder of this sex holds for `Classname`. `OutRef` is set only for `Found`.
-	 *
-	 * Classnames are compared case-insensitively, as VtMB's own comparison is; the caller passes the
-	 * classname as authored and this folds it.
-	 */
-	static EElysiumWieldResult FindRow(FName Classname, bool bFemale,
-		const FElysiumWieldModelRef*& OutRef);
-};

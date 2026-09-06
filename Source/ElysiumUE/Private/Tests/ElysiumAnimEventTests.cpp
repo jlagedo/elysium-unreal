@@ -18,6 +18,7 @@
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumClassRegistry.h"
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -243,9 +244,9 @@ namespace
 	{
 		FElysiumNpcIndex Index;
 		FString Error;
-		if (!Index.Load(Error) || !Index.IsValid())
+		if (!ElysiumNativeTest::Load(Index, Error) || !Index.IsValid())
 		{
-			OutWhy = TEXT("no exported npc index (run: uv run elysium export grid)");
+			OutWhy = TEXT("no native cast view (run: uv run elysium import characters)");
 			return false;
 		}
 
@@ -265,7 +266,7 @@ namespace
 			{
 				Table = MakeShared<FElysiumBlendTable>();
 				FString TableError;
-				if (!Table->Load(Entry->Blends, TableError))
+				if (!ElysiumNativeTest::Load(*Table, Entry->Blends, TableError))
 				{
 					Table.Reset();
 				}
@@ -281,7 +282,7 @@ namespace
 		for (const FString& Stem : Stems)
 		{
 			FElysiumNpcClipSet Vocabulary;
-			if (!Vocabulary.Load(Stem, Error))
+			if (!ElysiumNativeTest::Load(Vocabulary, Stem, Error))
 			{
 				continue;
 			}
@@ -364,7 +365,7 @@ namespace
 		OutWhy = FString::Printf(
 			TEXT("no exported body carries a %d-%d frame non-grid clip whose baked timeline has a "
 			     "uniquely-identified server-band record in (0, %.2f] — %d label(s) considered; "
-			     "run: uv run elysium export characters"),
+			     "run: uv run elysium import characters"),
 			GMinEventClipFrames, GMaxEventClipFrames, GMaxEventCycle, Considered);
 		return false;
 	}
@@ -1020,9 +1021,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSequenceEventCarrierTest,
 	"Elysium.Content.SequenceEventCarrier", GElysiumTestFlags)
 bool FElysiumSequenceEventCarrierTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
@@ -1061,7 +1062,7 @@ bool FElysiumSequenceEventCarrierTest::RunTest(const FString&)
 		FElysiumNpcClipSet Vocabulary;
 		FString VocabularyError;
 		if (TestTrue(TEXT("the discovered body's vocabulary loads"),
-			Vocabulary.Load(Pick.Stem, VocabularyError)))
+			ElysiumNativeTest::Load(Vocabulary, Pick.Stem, VocabularyError)))
 		{
 			const FElysiumNpcClip* Row = Vocabulary.Find(Pick.Label);
 			if (TestNotNull(TEXT("...and carries the discovered label"), Row))

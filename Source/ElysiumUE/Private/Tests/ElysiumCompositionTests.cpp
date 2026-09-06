@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimNodes.h"
 #include "Visual/ElysiumCompositionRig.h"
@@ -266,9 +267,9 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 	}
 	FElysiumNpcIndex Index;
 	FString Error;
-	if (!Index.Load(Error))
+	if (!ElysiumNativeTest::Load(Index, Error))
 	{
-		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no npc index (%s)"), *Error));
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no native cast view (%s)"), *Error));
 		return true;
 	}
 
@@ -290,7 +291,7 @@ bool FElysiumCompositionImportTest::RunTest(const FString&)
 
 		FElysiumCompositionRig Rig;
 		FString RigError;
-		if (!Rig.LoadAxisRules(Entry->Procedural, RigError))
+		if (!ElysiumNativeTest::Load(Rig, Entry->Procedural, RigError))
 		{
 			AddError(FString::Printf(TEXT("procedural '%s': %s"), Stem, *RigError));
 			continue;

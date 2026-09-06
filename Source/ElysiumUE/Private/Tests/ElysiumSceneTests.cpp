@@ -1108,8 +1108,11 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		Services.Calls.Reset();
 		LiveActor->SetRuntimeModel(
 			TEXT("models/character/npc/common/female_citizen.mdl"));
-		TestTrue(TEXT("SetModel queues the map closure for the replacement skeleton"),
-			Services.Saw(TEXT("PreloadCinematicClip female_citizen")));
+		// R8: a model change is admitted through the native character lane, which discovers and
+		// loads the replacement's complete closure itself; SetModel no longer restarts a
+		// synchronous map-wide preload. The recast is resolved when the scene starts (below).
+		TestFalse(TEXT("SetModel does not restart a map-wide cinematic preload"),
+			Services.Saw(TEXT("PreloadCinematicClip")));
 		Services.Calls.Reset();
 		World.EnqueueInput(TEXT("resident_scene"), FName(TEXT("Start")),
 			FElysiumVariant::Void(), 0.0, {}, {});

@@ -1,10 +1,9 @@
 #include "Visual/ElysiumExpressionTable.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumExpressionData.h"
 
-#include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
-#include "Misc/FileHelper.h"
 #include "Misc/ScopeLock.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumExpressions, Log, All);
@@ -72,7 +71,7 @@ namespace
 	}
 
 	// The cache, in the shape `ElysiumScene`'s is: one entry per resolved key, negatives included so
-	// an unresolvable `param` costs one stat rather than one per event per frame.
+	// an unresolvable `param` costs one diagnostic lookup rather than repeated package requests.
 	FCriticalSection GCacheLock;
 	TMap<FString, TSharedPtr<const FElysiumExpressionTable>> GCache;
 #if WITH_DEV_AUTOMATION_TESTS
@@ -260,39 +259,22 @@ TSharedPtr<const FElysiumExpressionTable> ElysiumExpressions::Load(const FString
 		}
 	}
 
-	// `<param>.txt` first, then `client.dll`'s `%s_%s` form with the class appended. Nineteen of the
-	// 23 authored params resolve on the first candidate and four — bare model stems — on the second.
+	// Diagnostic/test preparation only. Gameplay consumes the map's prepared native views.
 	TSharedPtr<const FElysiumExpressionTable> Result;
-	const FString Candidates[] = { Stem, Stem + TEXT("_") + Class };
-	for (const FString& Candidate : Candidates)
+	FString Error;
+	if (!IsInGameThread())
 	{
-		if (Candidate.IsEmpty())
-		{
-			continue;
-		}
-		FString Text;
-		if (!FFileHelper::LoadFileToString(Text, *FElysiumContentPaths::ExpressionFile(Candidate + TEXT(".txt"))))
-		{
-			continue;
-		}
-		TSharedPtr<FElysiumExpressionTable> Table = MakeShared<FElysiumExpressionTable>();
-		FString Error;
-		if (Table->ParseText(Text, Candidate, Error))
-		{
-			Result = Table;
-		}
-		else
-		{
-			UE_LOG(LogElysiumExpressions, Warning, TEXT("%s"), *Error);
-		}
-		break;
+		UE_LOG(LogElysiumExpressions, Warning, TEXT("native expression inspection requires the game thread"));
+		return nullptr;
 	}
+	const auto* Corpus = LoadObject<UElysiumExpressionTables>(nullptr, *FElysiumContentPaths::BakedExpressionTables());
+	if (Corpus)
+	{
+		if (const auto* Data = Corpus->ResolveEvent(Stem, Class, Error)) Result = Data->PrepareLegacyView(Error);
+	}
+	else Error = TEXT("native expression corpus is absent; run elysium import expression-tables");
 	if (!Result.IsValid())
-	{
-		UE_LOG(LogElysiumExpressions, Log,
-			TEXT("expression table '%s' (class '%s') did not resolve under %s"),
-			*Stem, *Class, *FElysiumContentPaths::ExpressionsDir());
-	}
+		UE_LOG(LogElysiumExpressions, Warning, TEXT("expression table '%s' (class '%s'): %s"), *Stem, *Class, *Error);
 
 	FScopeLock Lock(&GCacheLock);
 	++GCacheMisses;
@@ -313,7 +295,7 @@ void ElysiumExpressions::RegisterInline(const FString& Stem, const FString& Text
 
 	FScopeLock Lock(&GCacheLock);
 	// Registered against every class, so a test's inline table resolves whichever suffix the caller
-	// asks for — the on-disk fallback is what the class exists to drive, and there is no disk here.
+	// asks for — the native candidate suffix is what the class selects; this fixture has no asset dependency.
 	GCache.Add(Norm + TEXT("|expressions"), bOk ? Table : nullptr);
 	GCache.Add(Norm + TEXT("|phonemes"), bOk ? Table : nullptr);
 #if WITH_DEV_AUTOMATION_TESTS
@@ -371,7 +353,7 @@ static FAutoConsoleCommandWithArgsAndOutputDevice GElysiumExpressionCmd(
 				int32 Entries = 0, Hits = 0, Misses = 0;
 				ElysiumExpressions::CacheStats(Entries, Hits, Misses);
 				Ar.Logf(TEXT("expression tables under %s; cache: %d entries, %d hits, %d misses"),
-					*FElysiumContentPaths::ExpressionsDir(), Entries, Hits, Misses);
+					*FElysiumContentPaths::BakedExpressionTables(), Entries, Hits, Misses);
 				return;
 			}
 			TSharedPtr<const FElysiumExpressionTable> Table =
@@ -379,7 +361,7 @@ static FAutoConsoleCommandWithArgsAndOutputDevice GElysiumExpressionCmd(
 			if (!Table.IsValid())
 			{
 				Ar.Logf(ELogVerbosity::Warning, TEXT("'%s' resolves to no table under %s"),
-					*Args[0], *FElysiumContentPaths::ExpressionsDir());
+					*Args[0], *FElysiumContentPaths::BakedExpressionTables());
 				return;
 			}
 			Ar.Logf(TEXT("%s: %d key(s), %d row(s)%s%s"), *Table->Stem, Table->Keys.Num(),

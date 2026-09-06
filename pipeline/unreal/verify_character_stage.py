@@ -52,7 +52,7 @@ def load(path, evidence):
     return asset
 
 
-def run(manifest_path, material_root, export_root=None):
+def run(manifest_path, material_root, export_root=None, *, fidelity=False):
     started = time.time()
     root = Path(manifest_path).parent
     manifest = json.loads(Path(manifest_path).read_text())
@@ -72,6 +72,7 @@ def run(manifest_path, material_root, export_root=None):
     report["physicsSourceData"] = {"assets": 0, "sourceGaps": 0}
     report["physicsScope"] = "export-import-data-conservation"
     report["physicsSimulationAcceptanceRequired"] = False
+    report["fidelityRequested"] = fidelity
     report["geometrySnapshots"] = []
     report["manifestSha256"] = hashlib.sha256(Path(manifest_path).read_bytes()).hexdigest()
     def checkpoint():
@@ -216,25 +217,26 @@ def run(manifest_path, material_root, export_root=None):
                 for morph in morphs:
                     if not lib.skeleton_has_morph_curve(mesh.get_editor_property("skeleton"), morph.get_name()):
                         raise ValueError("morph curve metadata missing: " + morph.get_name())
-                error, encoded = unreal.ElysiumGeometryVerificationLibrary.capture_geometry(mesh)
-                if error:
-                    raise ValueError("native geometry capture: " + error)
-                relative = "native_geometry/" + id.removeprefix("vtmb:model:") + ".json"
-                snapshot = (root / relative).resolve()
-                if not snapshot.is_relative_to(root.resolve()):
-                    raise ValueError("native geometry snapshot escapes its stage")
-                snapshot.parent.mkdir(parents=True, exist_ok=True)
-                envelope = {"snapshotVersion": 1, "assetId": id, "meshAsset": entry["meshAsset"],
-                            "payloadSha256": entry["recipe"]["payloadSha256"],
-                            "bodySha256": entry["recipe"]["bodySha256"],
-                            "unitSha256": entry["recipe"]["unitSha256"], "native": json.loads(encoded),
-                            "materialPaths": {m["assetId"]: _material_path(m["assetId"], Path(material_root))
-                                              for m in entry["materials"]}}
-                data = json.dumps(envelope, separators=(",", ":"), allow_nan=False).encode("utf-8")
-                snapshot.write_bytes(data)
-                report["geometrySnapshots"].append({"assetId": id, "file": relative,
-                                                    "sha256": hashlib.sha256(data).hexdigest()})
-                del encoded, envelope, data
+                if fidelity:
+                    error, encoded = unreal.ElysiumGeometryVerificationLibrary.capture_geometry(mesh)
+                    if error:
+                        raise ValueError("native geometry capture: " + error)
+                    relative = "native_geometry/" + id.removeprefix("vtmb:model:") + ".json"
+                    snapshot = (root / relative).resolve()
+                    if not snapshot.is_relative_to(root.resolve()):
+                        raise ValueError("native geometry snapshot escapes its stage")
+                    snapshot.parent.mkdir(parents=True, exist_ok=True)
+                    envelope = {"snapshotVersion": 1, "assetId": id, "meshAsset": entry["meshAsset"],
+                                "payloadSha256": entry["recipe"]["payloadSha256"],
+                                "bodySha256": entry["recipe"]["bodySha256"],
+                                "unitSha256": entry["recipe"]["unitSha256"], "native": json.loads(encoded),
+                                "materialPaths": {m["assetId"]: _material_path(m["assetId"], Path(material_root))
+                                                  for m in entry["materials"]}}
+                    data = json.dumps(envelope, separators=(",", ":"), allow_nan=False).encode("utf-8")
+                    snapshot.write_bytes(data)
+                    report["geometrySnapshots"].append({"assetId": id, "file": relative,
+                                                        "sha256": hashlib.sha256(data).hexdigest()})
+                    del encoded, envelope, data
                 report["meshes"] += 1
             owners = ([entry] if entry.get("nativeMainOwner", True) else []) + entry.get("actors", [])
             for owner in owners:
@@ -284,7 +286,7 @@ def run(manifest_path, material_root, export_root=None):
                     if tagged != bool(clip.flags & 4) or sequence.get_editor_property("additive_anim_type") != unreal.AdditiveAnimationType.AAT_NONE:
                         raise ValueError("post-additive contract differs: " + path)
                     report["clips"] += 1
-                if native_sequences:
+                if native_sequences and fidelity:
                     error, tracks, keys, omitted = lib.verify_animation_samples(
                         str(root / relative), native_sequences, [unreal.Name(n) for n in declared_omissions])
                     if error:
@@ -322,7 +324,7 @@ def run(manifest_path, material_root, export_root=None):
 
 
 if __name__ == "__main__":
-    result = run(argument("ImportCharacters"), argument("ImportMaterialsRoot"), argument("ImportUnitRoot") or None)
+    result = run(argument("ImportCharacters"), argument("ImportMaterialsRoot"), argument("ImportUnitRoot") or None, fidelity=argument("VerifyFidelity") == "1")
     unreal.log("[verify-characters] " + json.dumps(result))
     if result["failed"]:
         raise SystemExit(1)

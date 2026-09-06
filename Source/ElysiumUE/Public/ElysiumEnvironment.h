@@ -65,42 +65,14 @@ struct FElysiumSpawnDef
 
 namespace ElysiumEnvironment
 {
-	// The sky-face orientation contract this build assembles cubes under, matched against the
-	// `.env` sidecar's `skyconv`. Version 1: the exported `sky_<face>.png` are verbatim decodes
+	// The sky-face orientation contract the texture projector uses, matched against the
+	// `.env` sidecar's `skyconv`. Version 1: the six texture units carry verbatim source faces
 	// carrying VtMB's own canonical orientation — rt=+X, lf=-X, bk=+Y, ft=-Y, up=+Z, dn=-Z in
 	// Source space, image row 0 the top of the face, no face rotated or mirrored
-	// (docs/vtmb/sky-ambience.md -> "K1 ... (settled)"). Everything BuildSkyCube does to a face is
+	// (docs/vtmb/sky-ambience.md -> "K1 ... (settled)"). The pure face-to-slice transform is
 	// derived from that plus Unreal's own cube layout, so a sidecar written under a different
 	// convention would silently draw wrong.
 	inline constexpr int32 SkyConventionVersion = 1;
-
-	// The six Source sky faces (tex/sky_{rt,lf,ft,bk,up,dn}.png) -> a transient UTextureCube in
-	// Unreal slice order (+X,-X,+Y,-Y,+Z,-Z), each face bound to its slice and rotated into
-	// Unreal's D3D-derived cube layout (the table is in the .cpp). It feeds the SkyLight IBL
-	// *and* the visible M_Sky backdrop, so both the binding and the per-face rotation matter.
-	// Null if any face is missing or the faces are not square and equal-sized.
-	UTextureCube* BuildSkyCube(const FString& TexDir);
-
-	// The same assembly over six faces named `<Prefix><face>.png` in Dir, which is how the
-	// labelled RE-A2 probe set is named (`<skyname>rt.png`, …). BuildSkyCube is this with
-	// Prefix = "sky_".
-	//
-	// `OutUpperMean`, when given, receives the cube's **solid-angle-weighted mean linear
-	// radiance over the upper hemisphere** — the part that actually lights, since the SkyLight
-	// runs with `bLowerHemisphereIsBlack`. It is what turns VtMB's `emit_skyambient` magnitude
-	// into a SkyLight intensity: VtMB states the sky's radiance as one number, so scaling the
-	// cube so its own average matches that number gives the sky VtMB's *level* while keeping
-	// the cube's *direction* (C1). 0 when the cube could not be built.
-	//
-	// `Outer`/`Name` let the exact same pixel path build a PERSISTENT asset instead of the
-	// runtime's transient one (R5.2, `ElysiumSkyBakeLibrary::BakeSkyCubeAsset`): pass a real
-	// package and a name to get a savable `UTextureCube` with `RF_Public | RF_Standalone`,
-	// or leave both at their defaults for the runtime's own transient cube. Nothing about the
-	// face read, the rotation table or the upper-hemisphere measurement changes either way —
-	// only where the result lives — which is what makes the bake's join and the runtime's join
-	// the same computation rather than two that are merely supposed to agree.
-	UTextureCube* BuildSkyCubeFrom(const FString& Dir, const FString& Prefix,
-		float* OutUpperMean = nullptr, UObject* Outer = nullptr, FName Name = NAME_None);
 
 	// A cube of one flat colour, for a SkyLight that has no sky to capture. The green room's stage
 	// world is empty by construction, so a captured-scene SkyLight there would capture black; this
@@ -109,10 +81,9 @@ namespace ElysiumEnvironment
 	// game is lit by this.
 	UTextureCube* BuildConstantCube(const FLinearColor& Colour, int32 Size = 8);
 
-	// True when all six `<Prefix><face>.png` exist in Dir — the test for "is there an enhanced
-	// face set for this map", asked before BuildSkyCubeFrom so a partial set falls back to the
-	// faithful one rather than failing the sky outright.
-	bool HasSkyFaces(const FString& Dir, const FString& Prefix);
+	// Pure R5.2 reference mean over six assembled BGRA8 D3D slices (Z-up upper hemisphere).
+	// No file decoding or asset authoring. The texture projector records the same LDR method.
+	float UpperHemisphereMean(const uint8* Slices, int32 N);
 
 	// The two halves of the K1 x K2 face->slice transform, exposed so the automation suite can
 	// check them against the conventions they were derived from rather than against themselves.

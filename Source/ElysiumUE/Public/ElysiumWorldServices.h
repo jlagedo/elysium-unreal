@@ -65,7 +65,9 @@ struct FElysiumPlacedModelRequest
 
 struct FElysiumPlacedModelBody
 {
-	USkeletalMeshComponent* Visual = nullptr;
+	UPrimitiveComponent* Visual = nullptr;
+	USkeletalMeshComponent* SkeletalVisual = nullptr;
+	UStaticMeshComponent* StaticVisual = nullptr;
 	UPrimitiveComponent* Attach = nullptr;
 	UStaticMeshComponent* PhysicsProxy = nullptr;
 	FString Stem;

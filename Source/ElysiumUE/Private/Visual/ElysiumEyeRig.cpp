@@ -1,10 +1,8 @@
 #include "Visual/ElysiumEyeRig.h"
 
-#include "ElysiumContentPaths.h"
 #include "ElysiumEyeTuningConfig.h"
 #include "Engine/Texture2D.h"
 #include "Visual/ElysiumNpcVisual.h"
-#include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -45,19 +43,6 @@ namespace
 			Out[i] = static_cast<float>((*Arr)[i]->AsNumber());
 		}
 	}
-}
-
-bool FElysiumEyeSet::Load(const FString& RelPath, FString& OutError)
-{
-	OutError.Reset();
-	const FString Path = FElysiumContentPaths::NpcEyes(RelPath);
-	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *Path))
-	{
-		OutError = FString::Printf(TEXT("cannot read %s"), *Path);
-		return false;
-	}
-	return LoadJsonText(Text, OutError);
 }
 
 bool FElysiumEyeSet::LoadJsonText(const FString& JsonText, FString& OutError)

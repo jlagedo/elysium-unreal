@@ -1034,7 +1034,7 @@ def _procedural_rule_export_image(axis: int = 2, rule=None) -> bytes:
 
 
 def _rules(image):
-    from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+    from elysium_pipeline.skeletal_stage import payload as UEK
     from elysium_pipeline.formats import mdl_skel
 
     records, faults = mdl_skel.axis_interp_records(image, mdl_skel.read_bones(image))
@@ -1048,7 +1048,7 @@ def test_the_exporter_carries_the_source_axes_into_the_unreal_basis() -> None:
     through unchanged would name a sign-flipped axis on one rule in three. This
     is the assertion that says so out loud.
     """
-    from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+    from elysium_pipeline.skeletal_stage import payload as UEK
 
     assert UEK.DRIVER_AXES == [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]]
     # `-0.0` is normalized away, so the table reads as the signed unit vectors it is.
@@ -1084,7 +1084,7 @@ def test_the_table_takes_the_same_basis_change_the_mesh_and_clips_take() -> None
 
 @pytest.mark.parametrize("axis", range(3))
 def test_the_exported_table_inverts_to_the_bytes_it_was_read_from(axis: int) -> None:
-    from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+    from elysium_pipeline.skeletal_stage import payload as UEK
 
     # `source_to_unreal` and `source_quat_to_unreal` are their own inverses up to the
     # inch-to-centimetre scale, so undoing them is a division and two sign flips.
@@ -1121,7 +1121,7 @@ def test_the_exported_table_inverts_to_the_bytes_it_was_read_from(axis: int) -> 
 
 @pytest.mark.parametrize("axis", range(3))
 def test_the_exported_table_evaluates_to_the_converted_correction(axis: int) -> None:
-    from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+    from elysium_pipeline.skeletal_stage import payload as UEK
 
     locals_ = _bind_locals(PROCEDURAL_BONES)
     # The control bone's bind is oblique, so the driver has three non-zero

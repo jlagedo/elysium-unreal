@@ -213,7 +213,14 @@ void AElysiumMapActor::BuildStageWorld()
 			Services.Weather    = this;
 			Services.Camera     = LocalCameraService(this);
 			CancelCharacterModelAdmissions();
+			ReleasePropAndWieldModels();
 			EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
+			FString ModelContextError;
+			if (!PreparePropAndWieldModels(FElysiumEntityDefs(), ModelContextError))
+			{
+				bNativeAnimationPreloadFailed = true;
+				UE_LOG(LogElysium, Warning, TEXT("green-room model contexts: %s"), *ModelContextError);
+			}
 			EntityWorld->Load(FElysiumEntityDefs());
 			if (auto* Native = GI->GetSubsystem<UElysiumNativeAnimationData>())
 			{
@@ -427,6 +434,7 @@ void AElysiumMapActor::LoadMap()
 				Services.Weather    = this;
 				Services.Camera     = LocalCameraService(this);
 				CancelCharacterModelAdmissions();
+				ReleasePropAndWieldModels();
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 				// The map's cooked per-entity collision, when Collision->Build adopted a payload
 				// above (R4.2 — `seam_map_map.md` -> "Import"). Null on an unconverted map, and
@@ -462,6 +470,12 @@ void AElysiumMapActor::LoadMap()
 						bNativeAnimationPreloadFailed |= !UElysiumNativeAnimationData::FinishPreparation(Handle, Error);
 						if (!Error.IsEmpty()) UE_LOG(LogElysium, Warning, TEXT("native model preparation %s: %s"), *MapName, *Error);
 					}
+				}
+				FString ModelContextError;
+				if (!PreparePropAndWieldModels(EntDefs, ModelContextError))
+				{
+					bNativeAnimationPreloadFailed = true;
+					UE_LOG(LogElysium, Warning, TEXT("native model contexts %s: %s"), *MapName, *ModelContextError);
 				}
 				EntityWorld->Load(MoveTemp(EntDefs));
 				PrepareExpressionTables();
@@ -626,6 +640,7 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// destructor is too late because world cleanup may already have reclaimed its components.
 	CancelCharacterModelAdmissions();
 	EntityWorld.Reset();
+	ReleasePropAndWieldModels();
 	ExpressionPreparation.Reset();
 	if (UGameInstance* GI=GetGameInstance())
 		if (auto* Native=GI->GetSubsystem<UElysiumNativeAnimationData>()) Native->ReleaseEpoch(MapEpoch);

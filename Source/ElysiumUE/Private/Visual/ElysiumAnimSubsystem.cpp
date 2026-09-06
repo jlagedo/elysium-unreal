@@ -11,16 +11,28 @@
 #include "Visual/ElysiumActionTables.h"   // the recovered task routes the restart rule reads
 #include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumAnimPostAdditive.h"
-#include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/GameInstance.h"
 #include "Animation/BlendSpace.h"
-#include "HAL/FileManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnim, Log, All);
+
+UElysiumNativeAnimationData* UElysiumAnimSubsystem::NativeData() const
+{
+	auto* Game = GetGameInstance();
+	return Game ? Game->GetSubsystem<UElysiumNativeAnimationData>() : nullptr;
+}
+
+const USkeletalMesh* UElysiumAnimSubsystem::PreparedRigMesh(const FString& Model, const USkeletalMesh* Mesh) const
+{
+	if (Mesh) return Mesh;
+	auto* Native = NativeData();
+	FString Error;
+	return Native ? Native->Mesh(Model, Error) : nullptr;
+}
 
 TSharedPtr<FStreamableHandle> UElysiumAnimSubsystem::PrepareNativeModel(const FString& ModelId, FString& OutError)
 {
@@ -30,8 +42,8 @@ TSharedPtr<FStreamableHandle> UElysiumAnimSubsystem::PrepareNativeModel(const FS
 const UElysiumClipData* UElysiumAnimSubsystem::NativeClipData(const FString& Owner,const FString& Label,
 	const FString& OwnerRoot) const
 {
-	auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
-	return Native->ClipData(OwnerRoot.IsEmpty()?Native->Body(Owner):Native->CinematicBody(Owner,OwnerRoot),Label);
+	auto* Native = NativeData();
+	return Native ? Native->ClipData(OwnerRoot.IsEmpty() ? Native->Body(Owner) : Native->CinematicBody(Owner, OwnerRoot), Label) : nullptr;
 }
 
 void UElysiumAnimSubsystem::ReleaseNativeModels()
@@ -41,13 +53,8 @@ void UElysiumAnimSubsystem::ReleaseNativeModels()
 
 const FElysiumNpcClip* UElysiumAnimSubsystem::ClipDescription(const FString& Model,const FString& Label)
 {
-	if (Model.StartsWith(TEXT("vtmb:model:")))
-	{
-		const auto* Data=NativeClipData(Model,Label);
-		return Data?&Data->Descriptor:nullptr;
-	}
-	const auto* Set=GetClipSet(Model);
-	return Set?Set->Find(Label):nullptr;
+	const auto* Data = NativeClipData(Model, Label);
+	return Data ? &Data->Descriptor : nullptr;
 }
 
 namespace ElysiumCookedRig
@@ -92,209 +99,6 @@ namespace
 	// and the set that remembers belongs to the subsystem.
 	using FLayerReporter = TFunctionRef<void(const TCHAR*, const FString&, const FString&)>;
 
-	void ResolveLayerAssets(const FElysiumAnimationCatalog& Catalog,
-		const FElysiumAnimationSelection& Selection, USkeletalMesh* Mesh,
-		FElysiumResolvedAnimation& Assets, FLayerReporter ReportOnce)
-	{
-		if (Mesh == nullptr || Catalog.Clips == nullptr)
-		{
-			return;
-		}
-
-		for (const FString& LayerLabel : Selection.LayerLabels)
-		{
-			const FElysiumNpcClip* LayerClip = Catalog.Clips->Find(LayerLabel);
-			if (LayerClip == nullptr)
-			{
-				// One of the five per-bank orphans the autolayer table can name but the catalog does
-				// not carry (`docs/vtmb/animation_and_movers.md` A.3) — there is nothing to load.
-				continue;
-			}
-
-			const FString LayerOwner = LayerClip->Owner;
-			const FElysiumBlendTable* LayerTable = Catalog.BlendTableFor
-				? Catalog.BlendTableFor(LayerOwner) : nullptr;
-			const FElysiumBlendGrid* LayerGrid = LayerTable != nullptr
-				? LayerTable->Find(LayerLabel) : nullptr;
-
-			// Standing sequence first, table fallback — the same host the lab path uses. A first-
-			// sorted table pick would stand a different derived asset than the body is posing.
-			const FString Host = ElysiumAnimResolve::ResolveLayerHost(Selection.SequenceLabel,
-				LayerTable, LayerLabel);
-
-			// Which of the two shapes below a layer took, and the three lookups that decide it. A
-			// grid that resolves as a plain sequence still POSES — it stands the one cell it loaded
-			// — so the failure is invisible in the frame and only a steerable parameter that never
-			// moves reveals it. Verbose because it is per layer per publish.
-			UE_LOG(LogElysiumAnim, Verbose,
-				TEXT("[elysium] layer '%s' owner='%s' host='%s': table=%s grid=%s multicell=%s"),
-				*LayerLabel, *LayerOwner, *Host,
-				LayerTable != nullptr ? TEXT("yes") : TEXT("NO"),
-				LayerGrid != nullptr ? TEXT("yes") : TEXT("NO"),
-				LayerGrid != nullptr && LayerGrid->IsMultiCell() ? TEXT("yes") : TEXT("NO"));
-
-			if (LayerGrid != nullptr && LayerGrid->IsMultiCell())
-			{
-				// An aim grid, baked once per declaring host (`_derived_bindings` in
-				// `UE_mdl_skeletal.py`) — the loader's own `Host` parameter is the exporter's
-				// dedicated seam for this, not a mangled label.
-				if (!Host.IsEmpty())
-				{
-					Assets.OverlaySpace = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner,
-						LayerLabel, Host);
-				}
-				if (Assets.OverlaySpace == nullptr)
-				{
-					Assets.OverlaySpace = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner,
-						LayerLabel);
-				}
-				if (Assets.OverlaySpace != nullptr)
-				{
-					UE_LOG(LogElysiumAnim, Verbose,
-						TEXT("[elysium] layer '%s' stands the GRID asset %s"), *LayerLabel,
-						*GetNameSafe(Assets.OverlaySpace));
-					// Every cell of a grid shares one bone mask (A.4), so reading it off the base
-					// cell [0][0] is reading it off the whole grid.
-					//
-					// **The cell is asked for by its DERIVED name first, exactly as the grid's own
-					// samples were baked.** A cell of an autolayer grid ships only as
-					// `<cell>@<host>`: the raw form of a clip some host declares is suppressed, so
-					// the bare label the blend table names has no asset behind it. Asking for the
-					// bare name alone therefore finds nothing, and the mask stays unset — which is
-					// not a neutral outcome. An unset mask writes a NULL blend profile, and a null
-					// profile gives every bone a per-bone weight of zero, so the layer resolves,
-					// binds, takes its aim parameters and then contributes nothing to the pose. The
-					// body stands its base pose alone and the grid looks frozen rather than absent.
-					if (const FElysiumBlendCell* BaseCell = LayerGrid->CellAt(0, 0))
-					{
-						UAnimSequence* BaseCellSequence = nullptr;
-						if (!Host.IsEmpty())
-						{
-							BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
-								FString::Printf(TEXT("%s@%s"), *BaseCell->Clip, *Host));
-						}
-						if (BaseCellSequence == nullptr)
-						{
-							BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
-								BaseCell->Clip);
-						}
-						const UElysiumAnimLayerMask* Mask = BaseCellSequence != nullptr
-							? BaseCellSequence->FindMetaDataByClass<UElysiumAnimLayerMask>()
-							: nullptr;
-						if (Mask != nullptr)
-						{
-							Assets.OverlayMaskName = Mask->Profile;
-						}
-						else
-						{
-							// Said out loud rather than composed at zero weight. The layer is
-							// standing and steerable and still cannot reach the pose, which is the
-							// one failure on this path that looks exactly like working content.
-							// Throttled because this runs per layer per publish, which is per frame
-							// for the life of a standing layer.
-							ReportOnce(TEXT("nogridmask"),
-								FString::Printf(TEXT("%s|%s"), *LayerOwner, *LayerLabel),
-								FString::Printf(
-									TEXT("'%s' stands the grid %s but its base cell '%s' (host '%s') "
-										 "carries no bone mask, so it would compose at zero weight on "
-										 "every bone and pose nothing; the layer is refused"),
-									*LayerLabel, *GetNameSafe(Assets.OverlaySpace), *BaseCell->Clip,
-									*Host));
-						}
-					}
-				}
-				else
-				{
-					UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] layer %s"),
-						*ElysiumAnimResolve::DescribeLayerAssetMiss(LayerLabel, LayerOwner, Host,
-							LayerTable));
-				}
-				continue;
-			}
-
-			// A plain sequence — additive or masked overlay. A clip whose mask owns the shared
-			// ancestor split bone ships ONLY in derived `<clip>@<host>` form; one that does not
-			// ships once under its plain label, and every additive ships both. Trying the derived
-			// name first and falling back handles either shape without knowing which one applies.
-			UAnimSequence* LayerSequence = nullptr;
-			if (!Host.IsEmpty())
-			{
-				LayerSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
-					FString::Printf(TEXT("%s@%s"), *LayerLabel, *Host));
-			}
-			if (LayerSequence == nullptr)
-			{
-				LayerSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner, LayerLabel);
-			}
-			if (LayerSequence == nullptr)
-			{
-				UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] layer %s"),
-					*ElysiumAnimResolve::DescribeLayerAssetMiss(LayerLabel, LayerOwner, Host,
-						LayerTable));
-				continue;
-			}
-
-			const FString LayerKey = FString::Printf(TEXT("%s|%s"), *LayerOwner, *LayerLabel);
-
-			if (LayerClip->IsAdditive())
-			{
-				// One additive per record — the graph carries one `_delta` node. A host declaring two
-				// would silently keep only the last, which reads as the first one never having been
-				// authored.
-				if (Assets.AdditiveSequence != nullptr)
-				{
-					ReportOnce(TEXT("twoadditive"), LayerKey, FString::Printf(
-						TEXT("'%s' is the second additive this record declares; the graph carries one "
-							 "`_delta` node, so %s is dropped in favour of it"),
-						*LayerLabel, *GetNameSafe(Assets.AdditiveSequence)));
-				}
-				Assets.AdditiveSequence = LayerSequence;
-				continue;
-			}
-
-			// The two overlay fields are "exactly one of these": a grid already standing means this
-			// record declares both shapes, and the grid would then compose through THIS clip's mask
-			// because the mask write below is the last one. Refused rather than mixed.
-			if (Assets.OverlaySpace != nullptr)
-			{
-				ReportOnce(TEXT("gridandsequence"), LayerKey, FString::Printf(
-					TEXT("'%s' is a plain overlay on a record that already stands the grid %s; the two "
-						 "share one node and one mask, so the sequence is refused rather than composing "
-						 "the grid through its own bone set"),
-					*LayerLabel, *GetNameSafe(Assets.OverlaySpace)));
-				continue;
-			}
-			if (Assets.OverlaySequence != nullptr)
-			{
-				ReportOnce(TEXT("twooverlay"), LayerKey, FString::Printf(
-					TEXT("'%s' is the second plain overlay this record declares; the graph carries one "
-						 "overlay node, so %s is dropped in favour of it"),
-					*LayerLabel, *GetNameSafe(Assets.OverlaySequence)));
-			}
-
-			Assets.OverlaySequence = LayerSequence;
-			UE_LOG(LogElysiumAnim, Verbose,
-				TEXT("[elysium] layer '%s' stands the SEQUENCE asset %s — a single pose, so nothing "
-					 "the aim parameters say can move it"),
-				*LayerLabel, *GetNameSafe(LayerSequence));
-			if (const UElysiumAnimLayerMask* Mask =
-				LayerSequence->FindMetaDataByClass<UElysiumAnimLayerMask>())
-			{
-				Assets.OverlayMaskName = Mask->Profile;
-			}
-			else
-			{
-				// The same failure the grid branch reports, on the shape that had no `else` at all: a
-				// maskless overlay writes a null blend profile, which weights every bone at zero, so
-				// the layer binds, takes its aim parameters and reaches the pose on no bone. The
-				// projector refuses it; this is what says which clip.
-				ReportOnce(TEXT("nomask"), LayerKey, FString::Printf(
-					TEXT("'%s'@'%s' stands the sequence %s but it carries no bone mask, so it would "
-						 "compose at zero weight on every bone and pose nothing; the layer is refused"),
-					*LayerLabel, *LayerOwner, *GetNameSafe(LayerSequence)));
-			}
-		}
-	}
 
 	// The bone mask a RESOLVED BASE asset carries, or none.
 	//
@@ -320,12 +124,10 @@ namespace
 
 void UElysiumAnimSubsystem::Deinitialize()
 {
-	ClipSets.Reset();
 	FacialRigs.Reset();
 	CompositionRigs.Reset();
 	BankRemaps.Reset();
 	EyeSets.Reset();
-	BlendTables.Reset();
 	ReportedMisses.Reset();
 	ReportedSlotMisses.Reset();
 	Super::Deinitialize();
@@ -414,24 +216,6 @@ void UElysiumAnimSubsystem::ReportGaitFanMiss(const FElysiumGaitSpeedRequest& Re
 		Selection.OwnerStem.IsEmpty() ? TEXT("(none)") : *Selection.OwnerStem);
 }
 
-const FElysiumNpcIndex& UElysiumAnimSubsystem::GetIndex()
-{
-	if (!bIndexLoaded)
-	{
-		bIndexLoaded = true;
-		FString Error;
-		if (!Index.Load(Error))
-		{
-			UE_LOG(LogElysiumAnim, Warning, TEXT("npc index: %s"), *Error);
-		}
-		else
-		{
-			UE_LOG(LogElysiumAnim, Log, TEXT("npc index: %d NPCs, %d animation banks"),
-				Index.Npcs.Num(), Index.Banks.Num());
-		}
-	}
-	return Index;
-}
 
 const FElysiumDispositionTable& UElysiumAnimSubsystem::Dispositions()
 {
@@ -445,190 +229,28 @@ const FElysiumDispositionTable& UElysiumAnimSubsystem::Dispositions()
 
 const FElysiumNpcClipSet* UElysiumAnimSubsystem::GetClipSet(const FString& Stem)
 {
-	if (Stem.StartsWith(TEXT("vtmb:model:")))
-		return GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>()->Vocabulary(Stem);
-	if (Stem.IsEmpty())
-	{
-		return nullptr;
-	}
-	if (const TSharedPtr<FElysiumNpcClipSet>* Cached = ClipSets.Find(Stem))
-	{
-		return Cached->Get();
-	}
-
-	TSharedPtr<FElysiumNpcClipSet> Set = MakeShared<FElysiumNpcClipSet>();
-	FString Error;
-	if (!Set->Load(Stem, Error))
-	{
-		UE_LOG(LogElysiumAnim, Warning, TEXT("npc clips '%s': %s"), *Stem, *Error);
-		Set.Reset();   // remembered as a miss, so this is not retried per NPC sharing the stem
-	}
-	ClipSets.Add(Stem, Set);
-	return Set.Get();
+	auto* Native = NativeData();
+	return Native && !Stem.IsEmpty() ? Native->Vocabulary(Stem) : nullptr;
 }
 
 TSharedPtr<const FElysiumFacialRig> UElysiumAnimSubsystem::GetFacialRig(const FString& Stem, const USkeletalMesh* Mesh)
 {
-	if (ElysiumCookedRig::IsCookedMesh(Mesh))
-		return ElysiumCookedRig::Read(Mesh, TEXT("facial"), &UElysiumCharacterProvenance::Facial, &FElysiumFacialRig::IsValid, FacialRigs);
-	if (Stem.IsEmpty())
-	{
-		return nullptr;
-	}
-	if (const TSharedPtr<const FElysiumFacialRig>* Cached = FacialRigs.Find(Stem))
-	{
-		return *Cached;
-	}
-
-	// The index names the sidecar, so a model with no flex rig is answered without touching the
-	// disk — and answered null, which is a normal load, not a failure.
-	const FElysiumNpcIndexEntry* Entry = GetIndex().Npcs.Find(Stem);
-	TSharedPtr<const FElysiumFacialRig> Result;
-	if (Entry != nullptr && !Entry->Facial.IsEmpty())
-	{
-		TSharedPtr<FElysiumFacialRig> Rig = MakeShared<FElysiumFacialRig>();
-		FString Error;
-		if (!Rig->Load(Entry->Facial, Error))
-		{
-			UE_LOG(LogElysiumAnim, Warning, TEXT("facial '%s': %s"), *Stem, *Error);
-		}
-		else if (!Rig->IsValid())
-		{
-			// A rig with nothing to weight is answered the same way as no rig at all, so no body
-			// carries a facial track that cannot move anything.
-			UE_LOG(LogElysiumAnim, Verbose,
-				TEXT("facial '%s': %d controllers, %d rules, no morph targets — no face to drive"),
-				*Stem, Rig->Controllers.Num(), Rig->Rules.Num());
-		}
-		else
-		{
-			UE_LOG(LogElysiumAnim, Verbose,
-				TEXT("facial '%s': %d controllers, %d rules, %d morphs, %d lid(s)"), *Stem,
-				Rig->Controllers.Num(), Rig->Rules.Num(), Rig->Morphs.Num(), Rig->Lids.Num());
-			Result = Rig;
-		}
-	}
-	FacialRigs.Add(Stem, Result);
-	return Result;
+	const USkeletalMesh* Prepared = PreparedRigMesh(Stem, Mesh);
+	return Prepared ? ElysiumCookedRig::Read(Prepared, TEXT("facial"), &UElysiumCharacterProvenance::Facial,
+		&FElysiumFacialRig::IsValid, FacialRigs) : nullptr;
 }
 
 TSharedPtr<const FElysiumEyeSet> UElysiumAnimSubsystem::GetEyeSet(const FString& Stem, const USkeletalMesh* Mesh)
 {
-	if (ElysiumCookedRig::IsCookedMesh(Mesh))
-		return ElysiumCookedRig::Read(Mesh, TEXT("eye"), &UElysiumCharacterProvenance::Eyes, &FElysiumEyeSet::IsValid, EyeSets);
-	if (Stem.IsEmpty())
-	{
-		return nullptr;
-	}
-	const FString& CacheKey = Stem;
-	if (const TSharedPtr<const FElysiumEyeSet>* Cached = EyeSets.Find(CacheKey))
-	{
-		return *Cached;
-	}
-
-	// As with the flex rig, the index names the sidecar — so a model with no eyeballs is answered
-	// without touching the disk, and answered null, which is a normal load.
-	const FElysiumNpcIndexEntry* Entry = GetIndex().Npcs.Find(Stem);
-	TSharedPtr<const FElysiumEyeSet> Result;
-	if (Entry != nullptr && !Entry->Eyes.IsEmpty())
-	{
-		TSharedPtr<FElysiumEyeSet> Set = MakeShared<FElysiumEyeSet>();
-		FString Error;
-		if (!Set->Load(Entry->Eyes, Error))
-		{
-			UE_LOG(LogElysiumAnim, Warning, TEXT("eyes '%s': %s"), *Stem, *Error);
-		}
-		else
-		{
-			UE_LOG(LogElysiumAnim, Verbose, TEXT("eyes '%s': %d record(s), lids %s"), *Stem,
-				Set->Eyeballs.Num(),
-				Set->Eyeballs[0].HasLids() ? TEXT("driven") : TEXT("absent (no flex rig)"));
-			Result = Set;
-		}
-	}
-	EyeSets.Add(CacheKey, Result);
-	return Result;
+	const USkeletalMesh* Prepared = PreparedRigMesh(Stem, Mesh);
+	return Prepared ? ElysiumCookedRig::Read(Prepared, TEXT("eye"), &UElysiumCharacterProvenance::Eyes,
+		&FElysiumEyeSet::IsValid, EyeSets) : nullptr;
 }
 
 TSharedPtr<const FElysiumBlendTable> UElysiumAnimSubsystem::GetBlendTable(const FString& Stem)
 {
-	if (Stem.StartsWith(TEXT("vtmb:model:")))
-		return GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>()->BlendTable(Stem);
-	if (Stem.IsEmpty())
-	{
-		return nullptr;
-	}
-	if (const TSharedPtr<const FElysiumBlendTable>* Cached = BlendTables.Find(Stem))
-	{
-		return *Cached;
-	}
-
-	// A grid can be declared by any of the three things that own animations: a character's own model,
-	// a shared bank, or a skeletal prop. The stem arrives here already resolved to whichever owns the
-	// clip, so all three groups are searched rather than assuming the caller knew which it was.
-	const FElysiumNpcIndex& Loaded = GetIndex();
-	const FElysiumNpcIndexEntry* Entry = Loaded.Npcs.Find(Stem);
-	if (Entry == nullptr)
-	{
-		Entry = Loaded.Banks.Find(Stem);
-	}
-	FString RelPath = Entry != nullptr ? Entry->Blends : FString();
-	if (RelPath.IsEmpty())
-	{
-		const TMap<FString, FElysiumAnimatedPropEntry>& Props =
-			Loaded.PlacedModels.IsEmpty() ? Loaded.AnimatedProps : Loaded.PlacedModels;
-		for (const TPair<FString, FElysiumAnimatedPropEntry>& Prop : Props)
-		{
-			if (Prop.Value.Stem.Equals(Stem, ESearchCase::IgnoreCase))
-			{
-				RelPath = Prop.Value.Blends;
-				break;
-			}
-		}
-	}
-
-	TSharedPtr<const FElysiumBlendTable> Result;
-	if (!RelPath.IsEmpty())
-	{
-		TSharedPtr<FElysiumBlendTable> Table = MakeShared<FElysiumBlendTable>();
-		FString Error;
-		const bool bLoaded = Table->Load(RelPath, Error) && Table->IsValid();
-		// **Reported whether or not the table loaded, because neither of these makes it fail.** A
-		// sidecar with an unreadable movement schema and a valid grid installs and serves poses; the
-		// only symptom is that no clip of the bank can say whether it authors a lunge. Logged here,
-		// at the one place that turns a path into a table, so it is said once per bank per session
-		// rather than once per swing.
-		if (Table->bMovementSchemaUnreadable)
-		{
-			UE_LOG(LogElysiumAnim, Warning,
-				TEXT("blends '%s' (%s): the sidecar states a `movement_fields` schema this build "
-					 "cannot address, so no clip of this bank can say whether it authors a lunge — "
-					 "the READER is behind the file's column set, and re-exporting will not change "
-					 "it"), *Stem, *RelPath);
-		}
-		if (Table->MalformedMovementRows > 0)
-		{
-			UE_LOG(LogElysiumAnim, Warning,
-				TEXT("blends '%s' (%s): %d malformed `movement` row(s) were dropped from a table that "
-					 "still installed, so the clips they belonged to author a short or empty "
-					 "displacement path"),
-				*Stem, *RelPath, Table->MalformedMovementRows);
-		}
-		if (!bLoaded)
-		{
-			UE_LOG(LogElysiumAnim, Warning, TEXT("blends '%s': %s"), *Stem,
-				Error.IsEmpty() ? TEXT("no usable grid, binding or timeline") : *Error);
-		}
-		else
-		{
-			UE_LOG(LogElysiumAnim, Verbose,
-				TEXT("blends '%s': %d grid(s), %d pose parameter(s), %d event timeline(s)"),
-				*Stem, Table->Grids.Num(), Table->PoseParams.Num(), Table->Events.Num());
-			Result = Table;
-		}
-	}
-	BlendTables.Add(Stem, Result);
-	return Result;
+	auto* Native = NativeData();
+	return Native && !Stem.IsEmpty() ? Native->BlendTable(Stem) : nullptr;
 }
 
 FString UElysiumAnimSubsystem::ResolveGridClip(const FString& OwnerStem, const FString& Label,
@@ -674,96 +296,18 @@ FString UElysiumAnimSubsystem::ResolveGridClip(const FString& OwnerStem, const F
 	return Pick.Cell->Clip;
 }
 
-namespace
-{
-	// Build one composition rig out of the two things that declare it: the index's own split-bone
-	// inventory and, when the model declares any driven bone, the rule table beside its glb. Either
-	// half may be empty; a model with neither is answered null, and that is a normal load.
-	TSharedPtr<const FElysiumCompositionRig> BuildCompositionRig(const FString& Stem,
-		const TArray<FString>& SplitBones, const FString& ProceduralRelPath,
-		FString& OutError)
-	{
-		TSharedPtr<FElysiumCompositionRig> Rig = MakeShared<FElysiumCompositionRig>();
-		Rig->Stem = Stem;
-		Rig->SplitBones.Reserve(SplitBones.Num());
-		for (const FString& BoneName : SplitBones)
-		{
-			Rig->SplitBones.Add(FName(*BoneName));
-		}
-		if (!ProceduralRelPath.IsEmpty()
-			&& !Rig->LoadAxisRules(ProceduralRelPath, OutError))
-		{
-			// A named-but-unreadable table is a fault, not a model without one: the split half is
-			// still installed so the body keeps whatever composition it can have.
-			Rig->AxisRules.Reset();
-		}
-		return Rig->HasWork() ? TSharedPtr<const FElysiumCompositionRig>(Rig) : nullptr;
-	}
-}
-
 TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetCompositionRig(
 	const FString& Stem, const USkeletalMesh* Mesh)
 {
-	if (ElysiumCookedRig::IsCookedMesh(Mesh))
-		return ElysiumCookedRig::Read(Mesh, TEXT("procedural"), &UElysiumCharacterProvenance::Composition,
-			&FElysiumCompositionRig::HasWork, CompositionRigs);
-	if (Stem.IsEmpty())
-	{
-		return nullptr;
-	}
-	const FString& CacheKey = Stem;
-	if (const TSharedPtr<const FElysiumCompositionRig>* Cached = CompositionRigs.Find(CacheKey))
-	{
-		return *Cached;
-	}
-
-	const FElysiumNpcIndexEntry* Entry = GetIndex().Npcs.Find(Stem);
-	TSharedPtr<const FElysiumCompositionRig> Result;
-	if (Entry != nullptr)
-	{
-		FString Error;
-		Result = BuildCompositionRig(Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
-		if (!Error.IsEmpty())
-		{
-			UE_LOG(LogElysiumAnim, Warning, TEXT("procedural '%s': %s"), *Stem, *Error);
-		}
-		else if (Result.IsValid())
-		{
-			UE_LOG(LogElysiumAnim, Verbose, TEXT("composition '%s': %d split bone(s), %d rule(s)"),
-				*Stem, Result->SplitBones.Num(), Result->AxisRules.Num());
-		}
-	}
-	CompositionRigs.Add(CacheKey, Result);
-	return Result;
+	const USkeletalMesh* Prepared = PreparedRigMesh(Stem, Mesh);
+	return Prepared ? ElysiumCookedRig::Read(Prepared, TEXT("procedural"), &UElysiumCharacterProvenance::Composition,
+		&FElysiumCompositionRig::HasWork, CompositionRigs) : nullptr;
 }
 
 TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetAnimatedPropCompositionRig(
 	const FString& ModelPath, const USkeletalMesh* Mesh)
 {
-	if (ElysiumCookedRig::IsCookedMesh(Mesh)) return GetCompositionRig(FString(), Mesh);
-	if (ModelPath.IsEmpty())
-	{
-		return nullptr;
-	}
-	const FElysiumAnimatedPropEntry* Entry = GetIndex().FindAnimatedProp(ModelPath);
-	if (Entry == nullptr)
-	{
-		return nullptr;
-	}
-	if (const TSharedPtr<const FElysiumCompositionRig>* Cached = CompositionRigs.Find(Entry->Stem))
-	{
-		return *Cached;
-	}
-
-	FString Error;
-	TSharedPtr<const FElysiumCompositionRig> Result =
-		BuildCompositionRig(Entry->Stem, Entry->SplitRotationBones, Entry->Procedural, Error);
-	if (!Error.IsEmpty())
-	{
-		UE_LOG(LogElysiumAnim, Warning, TEXT("procedural prop '%s': %s"), *Entry->Stem, *Error);
-	}
-	CompositionRigs.Add(Entry->Stem, Result);
-	return Result;
+	return GetCompositionRig(ModelPath, Mesh);
 }
 
 TSharedPtr<const FElysiumBankRemap> UElysiumAnimSubsystem::GetBankRemap(USkeletalMesh* Mesh,
@@ -840,9 +384,8 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FSt
 	// A baked bank sequence is the same asset for every compatible body and is addressed by owner
 	// and resolved animation name rather than rebuilt per mesh.
 	const FString AnimName = ResolveClipAnimName(Stem, ClipName);
-	UAnimSequence* Resolved = Stem.StartsWith(TEXT("vtmb:model:"))
-		? GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>()->Sequence(Owner,AnimName)
-		: ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, AnimName);
+	auto* Native = NativeData();
+	UAnimSequence* Resolved = Native ? Native->Sequence(Owner, AnimName) : nullptr;
 	if (UAnimSequence* Baked = Resolved)
 	{
 		// **A masked partial-body layer is refused for a Base-channel caller, at the door that
@@ -956,7 +499,6 @@ bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& Clip
 	// as `<label>@<host>`; asking for the bare name misses 299 of 527 spaces.
 	UBlendSpace* Space = nullptr;
 	ElysiumAnimResolve::ELayerAssetForm Form = ElysiumAnimResolve::ELayerAssetForm::None;
-	if (Stem.StartsWith(TEXT("vtmb:model:")))
 	{
 		const auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
 		const auto* Body=Native->Body(Stem);
@@ -968,22 +510,6 @@ bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& Clip
 			if (const auto* Row=Body->Find(ClipName,Owner)) Reference=&Row->Assets;
 		Space=Reference?Reference->BlendSpace.Get():nullptr;
 		Form=Host.IsEmpty()?ElysiumAnimResolve::ELayerAssetForm::PlainGrid:ElysiumAnimResolve::ELayerAssetForm::DerivedGrid;
-	}
-	else if (!Host.IsEmpty())
-	{
-		Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, ClipName, Host);
-		if (Space != nullptr)
-		{
-			Form = ElysiumAnimResolve::ELayerAssetForm::DerivedGrid;
-		}
-	}
-	if (Space == nullptr && !Stem.StartsWith(TEXT("vtmb:model:")))
-	{
-		Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, ClipName);
-		if (Space != nullptr)
-		{
-			Form = ElysiumAnimResolve::ELayerAssetForm::PlainGrid;
-		}
 	}
 	if (Space == nullptr)
 	{
@@ -1011,18 +537,9 @@ FElysiumAnimationCatalog UElysiumAnimSubsystem::BuildCatalog(const FString& Stem
 {
 	FElysiumAnimationCatalog Catalog;
 	Catalog.Clips = GetClipSet(Stem);
-	Catalog.PropClips = Stem.IsEmpty() || Stem.StartsWith(TEXT("vtmb:model:")) ? nullptr : GetIndex().PlacedModels.Find(Stem);
-	if (Catalog.PropClips == nullptr && !Stem.IsEmpty() && !Stem.StartsWith(TEXT("vtmb:model:")))
-	{
-		Catalog.PropClips = GetIndex().AnimatedProps.Find(Stem);
-	}
-	// The owning bank is not known until the weighted pick has run, so the table arrives as a lookup
-	// rather than as a preloaded map. The shared pointer lives in this subsystem's session-lifetime
-	// cache, so the raw pointer outlives every resolve that reads it.
+	Catalog.PropClips = nullptr; // Props use the same prepared BodyData vocabulary.
 	Catalog.BlendTableFor = [this](const FString& Owner) -> const FElysiumBlendTable*
-	{
-		return GetBlendTable(Owner).Get();
-	};
+	{ return GetBlendTable(Owner).Get(); };
 	return Catalog;
 }
 
@@ -1033,149 +550,25 @@ void UElysiumAnimSubsystem::ResolveSlotDeclaredAssets(const FString& OwnerStem,
 	OutAimSpace = nullptr;
 	OutAimMaskName = NAME_None;
 	OutAdditive = nullptr;
-	if (OwnerStem.StartsWith(TEXT("vtmb:model:")))
-	{
 		const auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
-		const auto* Body=Native->Body(OwnerStem);
-		const auto* Row=Body?Body->Find(Label,OwnerStem):nullptr;
-		if (!Row) return;
-		for (const auto& Ref : Row->Layers)
-		{
-			if (UBlendSpace* Space=Ref.BlendSpace.Get())
-			{
-				OutAimSpace=Space;
-				UAnimSequence* Base=Ref.BaseCell.Get();
-				const auto* Mask=Base?Base->FindMetaDataByClass<UElysiumAnimLayerMask>():nullptr;
-				if (Mask) OutAimMaskName=Mask->Profile;
-			}
-			else if (UAnimSequence* Clip=Ref.Sequence.Get())
-			{
-				if (Clip->FindMetaDataByClass<UElysiumAnimPostAdditive>()) OutAdditive=Clip;
-			}
-		}
-		return;
-	}
-	if (Mesh == nullptr)
+	const auto* Body=Native->Body(OwnerStem);
+	const auto* Row=Body?Body->Find(Label,OwnerStem):nullptr;
+	if (!Row) return;
+	for (const auto& Ref : Row->Layers)
 	{
-		return;
-	}
-
-	// One warning per (host, layer, reason), through the same latch the slot resolution uses: this
-	// seam is re-entered every publish and per trigger pull, and each fault it can name is a bake
-	// property that does not change between frames.
-	auto ReportOnce = [this, &OwnerStem, &Label](const TCHAR* Reason, const FString& Line)
-	{
-		const uint32 Key = HashCombine(HashCombine(GetTypeHash(OwnerStem), GetTypeHash(Label)),
-			GetTypeHash(FString(Reason)));
-		if (ReportedSlotMisses.Contains(Key))
+		if (UBlendSpace* Space=Ref.BlendSpace.Get())
 		{
-			return;
+			OutAimSpace=Space;
+			UAnimSequence* Base=Ref.BaseCell.Get();
+			const auto* Mask=Base?Base->FindMetaDataByClass<UElysiumAnimLayerMask>():nullptr;
+			if (Mask) OutAimMaskName=Mask->Profile;
 		}
-		ReportedSlotMisses.Add(Key);
-		UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] slot layer %s"), *Line);
-	};
-
-	const TSharedPtr<const FElysiumBlendTable> Table = GetBlendTable(OwnerStem);
-	const FElysiumAutoLayerBinding* Declared = Table.IsValid()
-		? Table->FindAutoLayers(Label) : nullptr;
-	if (Declared == nullptr)
-	{
-		// An ordinary absence: a clip that declares no layers — every reload layer — composes bare.
-		return;
-	}
-
-	for (const FString& DeclaredLayer : Declared->Clips)
-	{
-		const FElysiumBlendGrid* Grid = Table->Find(DeclaredLayer);
-		if (Grid == nullptr || !Grid->IsMultiCell())
+		else if (UAnimSequence* Clip=Ref.Sequence.Get())
 		{
-			// Not a grid, so a sequence — and whether it is the `_delta` additive is asked of the
-			// ASSET rather than a clip catalog: clip sets are per-NPC while this owner is a bank, so
-			// a catalog lookup here answers nothing for every shared layer. The derived
-			// `<layer>@<host>` form is composed against this host's own pose; the raw form is the
-			// fallback for the containers that still carry one.
-			//
-			// **A resolved grid stands the additive DOWN.** The bake folds a masked host's motion
-			// additives into the grid's own cells — a delta's meaning depends on the pose it rides,
-			// so per-cell composition is the only place it can be right for every aim direction —
-			// and composing the delta again here would apply the action twice.
-			if (OutAdditive != nullptr || OutAimSpace != nullptr)
-			{
-				continue;
-			}
-			UAnimSequence* Loaded = ElysiumNpcVisual::LoadBakedClip(Mesh, OwnerStem,
-				FString::Printf(TEXT("%s@%s"), *DeclaredLayer, *Label));
-			if (Loaded == nullptr)
-			{
-				Loaded = ElysiumNpcVisual::LoadBakedClip(Mesh, OwnerStem, DeclaredLayer);
-			}
-			if (Loaded == nullptr)
-			{
-				ReportOnce(TEXT("nolayerasset"), FString::Printf(
-					TEXT("'%s' declares the layer '%s' but no baked asset answers for it on this "
-						 "body, so the shot composes without it"),
-					*Label, *DeclaredLayer));
-			}
-			else if (Loaded->FindMetaDataByClass<UElysiumAnimPostAdditive>() != nullptr)
-			{
-				// The tag, never `IsValidAdditive()`. A `_delta` ships as an ordinary sequence
-				// holding the raw difference, because retail's combine order is not one Unreal's
-				// additive types can express -- so the engine's own predicate answers false for
-				// every one of them and a resolver keyed on it composes the slot without its delta.
-				OutAdditive = Loaded;
-			}
-			else
-			{
-				// A declared non-grid, non-additive overlay — nothing a slot clip ships today. Said
-				// out loud rather than composed wrong or dropped silently.
-				ReportOnce(TEXT("layerkind"), FString::Printf(
-					TEXT("'%s' declares '%s', which is neither a grid nor an additive; the slot "
-						 "composes without it"),
-					*Label, *DeclaredLayer));
-			}
-			continue;
-		}
-		if (OutAimSpace != nullptr)
-		{
-			continue;
-		}
-		OutAimSpace = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, OwnerStem, DeclaredLayer, Label);
-		if (OutAimSpace == nullptr)
-		{
-			ReportOnce(TEXT("nogrid"), FString::Printf(
-				TEXT("'%s' declares the aim grid '%s' but no composed asset for it exists on this "
-					 "body, so the shot poses aim-neutral"),
-				*Label, *DeclaredLayer));
-			continue;
-		}
-		// The grid's own mask, read off its base cell exactly as the base channel's aim grid reads
-		// it — derived name first, because a cell of an autolayer grid ships only as `<cell>@<host>`.
-		if (const FElysiumBlendCell* BaseCell = Grid->CellAt(0, 0))
-		{
-			UAnimSequence* BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, OwnerStem,
-				FString::Printf(TEXT("%s@%s"), *BaseCell->Clip, *Label));
-			if (BaseCellSequence == nullptr)
-			{
-				BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, OwnerStem, BaseCell->Clip);
-			}
-			const UElysiumAnimLayerMask* Mask = BaseCellSequence != nullptr
-				? BaseCellSequence->FindMetaDataByClass<UElysiumAnimLayerMask>() : nullptr;
-			if (Mask != nullptr)
-			{
-				OutAimMaskName = Mask->Profile;
-			}
-			else
-			{
-				// An unmasked grid composes at zero weight on every bone — standing, steerable, and
-				// invisible — so it is refused with its grid rather than composed silently.
-				OutAimSpace = nullptr;
-				ReportOnce(TEXT("nogridmask"), FString::Printf(
-					TEXT("'%s' grid '%s': its base cell '%s' carries no bone mask, so the aim layer "
-						 "would compose at zero weight and is refused"),
-					*Label, *DeclaredLayer, *BaseCell->Clip));
-			}
+			if (Clip->FindMetaDataByClass<UElysiumAnimPostAdditive>()) OutAdditive=Clip;
 		}
 	}
+	return;
 }
 
 void UElysiumAnimSubsystem::ResolveSlotLayer(int32 SlotIndex, const FElysiumAnimationRequest& Claim,
@@ -1377,106 +770,33 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 		return;
 	}
 
-	if (Intent.Stem.StartsWith(TEXT("vtmb:model:")))
-	{
 		const auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
-		const auto* Body=Native->Body(Intent.Stem);
-		const auto* Row=Body?Body->Find(OutSelection.SequenceLabel,OutSelection.OwnerStem):nullptr;
-		if (!Row)
-		{
-			OutSelection.Outcome=EElysiumAnimOutcome::NoAsset;
-			OutSelection.Detail=TEXT("prepared body data has no resolved sequence row"); ReportMiss(Intent,OutSelection); return;
-		}
-		if (OutSelection.AssetKind==EElysiumAnimAssetKind::BlendSpace) OutAssets.Space=Row->Assets.BlendSpace.Get();
-		else OutAssets.Sequence=Row->Assets.Sequence.Get();
-		if (!OutAssets.IsValid())
-		{
-			OutSelection.Outcome=EElysiumAnimOutcome::NoAsset;
-			OutSelection.Detail=TEXT("native animation was not prepared before resolution"); ReportMiss(Intent,OutSelection); return;
-		}
-		if (RefuseMaskedBase(Intent,Catalog,Mesh,OutSelection,OutAssets)) return;
-		for (const auto& Ref : Row->Layers)
-		{
-			UAnimSequence* Clip=Ref.Sequence.Get(); UBlendSpace* Space=Ref.BlendSpace.Get();
-			UAnimSequence* MaskSource=Space?Ref.BaseCell.Get():Clip;
-			if (Space) OutAssets.OverlaySpace=Space;
-			else if (Clip && Clip->FindMetaDataByClass<UElysiumAnimPostAdditive>()) { OutAssets.AdditiveSequence=Clip; continue; }
-			else if (Clip) OutAssets.OverlaySequence=Clip;
-			const auto* Mask=MaskSource?MaskSource->FindMetaDataByClass<UElysiumAnimLayerMask>():nullptr;
-			if (Mask) OutAssets.OverlayMaskName=Mask->Profile;
-		}
-		return;
-	}
-
-	// One reporter for every layer diagnostic this resolve produces, throttled to a line per
-	// (reason, owner|label) for the session against the same set the slot's own misses use.
-	auto ReportLayerOnce = [this](const TCHAR* Reason, const FString& Key, const FString& Line)
+	const auto* Body=Native->Body(Intent.Stem);
+	const auto* Row=Body?Body->Find(OutSelection.SequenceLabel,OutSelection.OwnerStem):nullptr;
+	if (!Row)
 	{
-		const uint32 Hash = HashCombine(GetTypeHash(Key), GetTypeHash(FString(Reason)));
-		if (ReportedSlotMisses.Contains(Hash))
-		{
-			return;
-		}
-		ReportedSlotMisses.Add(Hash);
-		UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] layer %s"), *Line);
-	};
-
-	if (OutSelection.AssetKind == EElysiumAnimAssetKind::BlendSpace)
-	{
-		// A grid is addressed by the LABEL: it is the thing a label names when it does not name one
-		// animation, so there is no cell to select first.
-		OutAssets.Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, OutSelection.OwnerStem,
-			OutSelection.SequenceLabel);
-		if (OutAssets.Space != nullptr)
-		{
-			if (RefuseMaskedBase(Intent, Catalog, Mesh, OutSelection, OutAssets))
-			{
-				// Nothing to compose onto: the base was refused rather than resolved, so the host's
-				// own autolayers have no pose to overwrite bones on.
-				return;
-			}
-			ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets, ReportLayerOnce);
-			return;
-		}
-		// A fan the bake has not covered still names its current cell, so the body can stand that one
-		// clip rather than nothing — and the record already says which cell it is.
-		//
-		// **It is a fallback rung, not a resolution.** The driver only re-resolves on a discrete key
-		// change, so a grid that degraded here plays ONE cell of the fan for the whole request and
-		// steers nothing — a body that looks like it is animating and is not listening. Recorded as
-		// its own outcome so `elysium.anim` and the trace can tell it from a fan that is steering.
-		OutSelection.AssetKind = EElysiumAnimAssetKind::Sequence;
-		OutSelection.Outcome = EElysiumAnimOutcome::GridFallback;
-		OutSelection.Detail = FString::Printf(
-			TEXT("'%s'@'%s' names a blend grid the mount does not carry; standing its cell '%s' alone, "
-				 "which poses but does not steer"),
-			*OutSelection.SequenceLabel, *OutSelection.OwnerStem, *OutSelection.AnimationName);
-		ReportMiss(Intent, OutSelection);
+		OutSelection.Outcome=EElysiumAnimOutcome::NoAsset;
+		OutSelection.Detail=TEXT("prepared body data has no resolved sequence row"); ReportMiss(Intent,OutSelection); return;
 	}
-
-	// Addressed by owner and resolved animation name, matching what the record says rather than
-	// re-resolving the label at the neutral pose.
-	OutAssets.Sequence = ElysiumNpcVisual::LoadBakedClip(Mesh, OutSelection.OwnerStem,
-		OutSelection.AnimationName);
-	if (OutAssets.Sequence == nullptr)
+	if (OutSelection.AssetKind==EElysiumAnimAssetKind::BlendSpace) OutAssets.Space=Row->Assets.BlendSpace.Get();
+	else OutAssets.Sequence=Row->Assets.Sequence.Get();
+	if (!OutAssets.IsValid())
 	{
-		OutSelection.AssetKind = EElysiumAnimAssetKind::None;
-		OutSelection.Outcome = EElysiumAnimOutcome::NoAsset;
-		OutSelection.Detail = FString::Printf(TEXT("'%s'@'%s' is not on the baked mount"),
-			*OutSelection.AnimationName, *OutSelection.OwnerStem);
-		// A named clip the mount does not carry, on a body that has its mesh: a bake gap rather than
-		// a timing one, and the only warning that separates the two.
-		ReportMiss(Intent, OutSelection);
+		OutSelection.Outcome=EElysiumAnimOutcome::NoAsset;
+		OutSelection.Detail=TEXT("native animation was not prepared before resolution"); ReportMiss(Intent,OutSelection); return;
 	}
-	else if (RefuseMaskedBase(Intent, Catalog, Mesh, OutSelection, OutAssets))
+	if (RefuseMaskedBase(Intent,Catalog,Mesh,OutSelection,OutAssets)) return;
+	for (const auto& Ref : Row->Layers)
 	{
-		// Nothing to compose onto: the base was refused rather than resolved.
-		return;
+		UAnimSequence* Clip=Ref.Sequence.Get(); UBlendSpace* Space=Ref.BlendSpace.Get();
+		UAnimSequence* MaskSource=Space?Ref.BaseCell.Get():Clip;
+		if (Space) OutAssets.OverlaySpace=Space;
+		else if (Clip && Clip->FindMetaDataByClass<UElysiumAnimPostAdditive>()) { OutAssets.AdditiveSequence=Clip; continue; }
+		else if (Clip) OutAssets.OverlaySequence=Clip;
+		const auto* Mask=MaskSource?MaskSource->FindMetaDataByClass<UElysiumAnimLayerMask>():nullptr;
+		if (Mask) OutAssets.OverlayMaskName=Mask->Profile;
 	}
-
-	// A layer rides a DIFFERENT pose than the one it composes onto, so it resolves whether or not
-	// the primary asset above loaded.
-	ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets, ReportLayerOnce);
+	return;
 }
 
 bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Request,
@@ -1701,37 +1021,15 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankSte
 	const FString& ClipName, USkeletalMesh* Mesh, FString& OutError, const FString& OwnerRoot)
 {
 	OutError.Reset();
-	if (BankStem.IsEmpty() || Mesh == nullptr)
-	{
-		OutError = TEXT("no bank or no mesh");
-		return nullptr;
-	}
-	// This path never consults the clip vocabulary, so the bank is both the asset and the grid owner.
-	if (BankStem.StartsWith(TEXT("vtmb:model:")))
-	{
-		auto* Native=GetGameInstance()->GetSubsystem<UElysiumNativeAnimationData>();
-		const auto* Owner=OwnerRoot.IsEmpty()?Native->Body(BankStem):Native->CinematicBody(BankStem,OwnerRoot);
-		if (!Owner || !Native->BlendTable(Owner).IsValid())
-		{
-			OutError=FString::Printf(TEXT("native animation owner is not prepared: %s [%s]"),*BankStem,*OwnerRoot);
-			return nullptr;
-		}
-		const FString AnimName=ResolveGridClip(BankStem,ClipName,FElysiumPoseParams::Neutral(),OwnerRoot);
-		if (auto* Clip=Native->Sequence(Owner,AnimName)) return Clip;
-		OutError=FString::Printf(TEXT("native clip is absent or not resident: %s [%s] %s"),*BankStem,*OwnerRoot,*AnimName);
-		return nullptr;
-	}
-	const FString AnimName = ResolveGridClip(BankStem, ClipName);
-	if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, BankStem, AnimName))
-	{
-		return Baked;
-	}
-	// A cinematic bank is named by a scene rather than by any vocabulary, so the bake enumerates it
-	// separately into the shared bank namespace.
-	// `uv run elysium verify characters` holds the mount to every bank a scene can name.
-	OutError = FString::Printf(
-		TEXT("'%s'@'%s' is not on the baked mount -- run: uv run elysium export characters"),
-		*AnimName, *BankStem);
+	auto* Native = NativeData();
+	if (!Native || BankStem.IsEmpty() || !Mesh)
+	{ OutError = TEXT("native animation service, owner or target mesh is absent"); return nullptr; }
+	const auto* Owner = OwnerRoot.IsEmpty() ? Native->Body(BankStem) : Native->CinematicBody(BankStem, OwnerRoot);
+	if (!Owner || !Native->BlendTable(Owner).IsValid())
+	{ OutError = FString::Printf(TEXT("native owner is not prepared: %s [%s]"), *BankStem, *OwnerRoot); return nullptr; }
+	const FString AnimName = ResolveGridClip(BankStem, ClipName, FElysiumPoseParams::Neutral(), OwnerRoot);
+	if (auto* Clip = Native->Sequence(Owner, AnimName)) return Clip;
+	OutError = FString::Printf(TEXT("native clip is absent or not resident: %s [%s] %s"), *BankStem, *OwnerRoot, *AnimName);
 	return nullptr;
 }
 

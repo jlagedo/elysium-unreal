@@ -34,7 +34,7 @@ from pipeline.unreal import bake_lib as bl  # noqa: E402
 from pipeline.unreal import bake_map_v2 as v2  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import map_transport  # noqa: E402
-from elysium_pipeline import placed_models as PM, shared_corpus as SC  # noqa: E402
+from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.asset_names import (  # noqa: E402
     LIGHTSTYLE_KEY_SUFFIX, brush_slot_style)
 from elysium_pipeline.paths import export_root  # noqa: E402
@@ -2123,6 +2123,8 @@ class Bake(object):
     # ------------------------------------------------------------------- level
 
     def _level_recipe(self):
+        from elysium_pipeline.asset_paths import corpus_path
+
         # One recursive listing over the map's own package, bucketed into the two
         # directly-owned mesh sets the recipe names.
         world_sky = []
@@ -2155,6 +2157,10 @@ class Bake(object):
             # against the retired per-map `M_Decal` MICs must re-author, not be reused.
             "decal_materials": sorted({decal_instance_path(decal.mat) for decal in self.decals}),
             "prop_skins": self.prop_skins,
+            "model_catalogues": {
+                corpus_path("model", "DA", name): bl.stored_recipe(
+                    corpus_path("model", "DA", name), producer="model-catalogues")
+                for name in ("PlacedModels", "PropSkins")},
             "cell_cm": CELL_CM,
             "profiles": [PROFILE_PICK_ONLY, PROFILE_PROP_SOLID],
         }
@@ -2344,107 +2350,126 @@ class Bake(object):
     def _place_props(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0),
                      world_fog=None, sky_fog=None):
         """Place GAME_LUMP props in storage-equivalent static or authored-rest form."""
+        from pipeline.unreal import model_catalogue_views as model_views
+        from elysium_pipeline.asset_paths import corpus_path
+
         path = os.path.join(self.dir, "%s.props" % self.map)
         if not os.path.isfile(path):
             return 0, 0
         placed = skinned = sky_placed = skeletal_placed = 0
         cache = {}
-        index_path = os.path.join(OUT_ROOT, "npc", "npc_index.json")
-        placed_index = {}
-        index_version = 0
-        if os.path.isfile(index_path):
-            with open(index_path, "r", encoding="utf-8") as index_handle:
-                index_doc = json.load(index_handle)
-            index_version = int(index_doc.get("manifest_version", 0))
-            placed_index = index_doc.get("placed_models", {})
+        placements = []
         with open(path, "r", encoding="utf-8", errors="replace") as handle:
             for placement_token, line in enumerate(handle):
                 tok = line.split()
                 if len(tok) < 9:
                     continue
-                stem = tok[0]
-                mesh = cache.get(stem)
-                if mesh is None:
-                    mesh = unreal.EditorAssetLibrary.load_asset(
-                        "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem)))
-                    cache[stem] = mesh
-                if not mesh:
-                    if index_version >= 7:
-                        raise RuntimeError("GAME_LUMP model %s has no baked static material/collision mesh" % stem)
-                    continue
-                # Field 11 marks a prop inside the 3D-skybox miniature: it is placed under the
-                # same transform the sky world meshes take, `world(v) = scale * (v - origin)`,
-                # rather than at its raw 1/scale coordinates in the middle of the playable map.
-                is_sky = len(tok) >= 11 and int(tok[10]) != 0
-                pos = [float(tok[1]), float(tok[2]), float(tok[3])]
-                if is_sky:
-                    pos = [sky_scale * (pos[i] - sky_origin[i]) for i in range(3)]
-                location = unreal.Vector(*pos)
-                rotation = unreal.Quat(float(tok[4]), float(tok[5]),
-                                       float(tok[6]), float(tok[7])).rotator()
-                # Field 0 is the map export's legacy OBJ/static-mesh stem.  The v7 catalogue is
-                # intentionally keyed by the normalized full model-path stem, which field 11
-                # carries without loss.  Keep the two identities separate: the legacy stem owns
-                # this map's material/collision mesh; the path stem owns the shared skeletal body.
-                model_path = tok[11] if len(tok) >= 12 else ""
-                catalogue_stem = PM.model_stem(model_path) if model_path else stem
-                record = placed_index.get(catalogue_stem) if index_version >= 7 else None
-                if index_version >= 7 and record is None:
-                    raise RuntimeError("GAME_LUMP model %s (%s) is absent from npc_index v7" %
-                                       (stem, catalogue_stem))
-                use_skeletal = bool(record and not record.get("static_equivalent", False))
-                actor_class = unreal.ElysiumPlacedModelActor if use_skeletal else unreal.StaticMeshActor
-                actor = actors.spawn_actor_from_class(actor_class, location, rotation)
-                if not actor:
-                    continue
-                if use_skeletal:
-                    model_path = record.get("model", model_path)
-                    rest = PM.select_rest_label(model_path, record, placement_token)
-                    skel = unreal.EditorAssetLibrary.load_asset(
-                        (MOUNT + "/Props/%s/SK_%s") %
-                        (catalogue_stem, catalogue_stem))
-                    anim = unreal.EditorAssetLibrary.load_asset(
-                        (MOUNT + "/Props/%s/A_%s") %
-                        (catalogue_stem, bl.safe_name(rest)))
-                    if not skel or not anim or not rest:
-                        raise RuntimeError("GAME_LUMP model %s has no baked rest asset '%s'" %
-                                           (stem, rest))
-                    solid = int(tok[8]) != 0 and not is_sky
-                    if not actor.configure_rest(skel, anim, mesh, solid):
-                        raise RuntimeError("GAME_LUMP model %s refused rest configuration" % stem)
-                    component = actor.skeletal_visual
-                    proxy = actor.collision_proxy
-                    proxy.set_collision_profile_name(PROFILE_PROP_SOLID if solid else PROFILE_PICK_ONLY)
-                    skeletal_placed += 1
-                else:
-                    component = actor.static_mesh_component
-                    component.set_static_mesh(mesh)
-                # Field 9 is Source's own `solid` byte: a solid prop blocks, the rest is dressing.
-                # A miniature prop is never solid whatever it says -- it is scenery the player can
-                # never reach, and at 16x it would wall off the map.
-                if not use_skeletal:
-                    component.set_collision_profile_name(
-                        PROFILE_PROP_SOLID if (int(tok[8]) != 0 and not is_sky) else PROFILE_PICK_ONLY)
-                # Field 10 (DStaticPropV4.skin) names an alternate skin family. A GAME_LUMP prop is
-                # not an entity and never changes skin, so the remap is baked into the placement as
-                # material overrides rather than costing anything at runtime. Older 9-field exports
-                # simply have no skin.
-                if len(tok) >= 10 and int(tok[9]) != 0:
-                    skinned += self._apply_prop_skin(component, mesh, stem, int(tok[9]))
-                fog = sky_fog if is_sky else world_fog
-                if fog:
-                    set_fog(component, fog)
-                if is_sky:
-                    actor.set_actor_scale3d(unreal.Vector(sky_scale, sky_scale, sky_scale))
-                    # Same reasoning as the sky world meshes: blown up 16x the miniature encloses
-                    # the playable space, which is the canonical hardware-ray-tracing overlap cost,
-                    # and it is backdrop, so it casts nothing.
-                    component.set_editor_property("visible_in_ray_tracing", False)
-                    component.set_cast_shadow(False)
-                    sky_placed += 1
-                actor.tags = [TAG_SKY if is_sky else TAG_PROP]
-                actor.set_folder_path("Sky/Props" if is_sky else "Props")
-                placed += 1
+                # R9 retains the static transport. Older rows recover their full identity
+                # from its shared manifest; never infer a model path from a lossy stem.
+                model_path = (tok[11] if len(tok) >= 12 else
+                              self.corpus_manifest.get("models", {}).get(tok[0], {}).get("model", ""))
+                identity = model_views.model_id(model_path)
+                placements.append((placement_token, tok, identity))
+        if not placements:
+            return 0, 0
+        needed = {identity for _, _, identity in placements}
+        placed_index = model_views.placed_view(unreal.EditorAssetLibrary.load_asset(
+            corpus_path("model", "DA", "PlacedModels")), needed)
+        missing = needed - placed_index.keys()
+        if missing:
+            raise RuntimeError("GAME_LUMP models absent from native placed catalogue: " + str(sorted(missing)))
+        skeletal_ids = {identity for identity, record in placed_index.items()
+                        if not record["canUseStatic"]}
+        skins = model_views.skin_view(unreal.EditorAssetLibrary.load_asset(
+            corpus_path("model", "DA", "PropSkins")), skeletal_ids) if skeletal_ids else {}
+        skin_materials = {}
+        for placement_token, tok, identity in placements:
+            stem = tok[0]
+            mesh = cache.get(stem)
+            if mesh is None:
+                mesh = unreal.EditorAssetLibrary.load_asset(
+                    "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem)))
+                cache[stem] = mesh
+            if not mesh:
+                raise RuntimeError("GAME_LUMP model %s has no baked static material/collision mesh" % stem)
+            # Field 11 marks a prop inside the 3D-skybox miniature: it is placed under the
+            # same transform the sky world meshes take, `world(v) = scale * (v - origin)`,
+            # rather than at its raw 1/scale coordinates in the middle of the playable map.
+            is_sky = len(tok) >= 11 and int(tok[10]) != 0
+            pos = [float(tok[1]), float(tok[2]), float(tok[3])]
+            if is_sky:
+                pos = [sky_scale * (pos[i] - sky_origin[i]) for i in range(3)]
+            location = unreal.Vector(*pos)
+            rotation = unreal.Quat(float(tok[4]), float(tok[5]),
+                                   float(tok[6]), float(tok[7])).rotator()
+            # The native catalogue owns the skeletal decision and prepared references.
+            # The retained shared static mesh still supplies the R9 collision proxy.
+            record = placed_index[identity]
+            use_skeletal = not record["canUseStatic"]
+            actor_class = unreal.ElysiumPlacedModelActor if use_skeletal else unreal.StaticMeshActor
+            actor = actors.spawn_actor_from_class(actor_class, location, rotation)
+            if not actor:
+                raise RuntimeError("GAME_LUMP model %s actor creation failed" % identity)
+            if use_skeletal:
+                rest_clip = model_views.select_rest(record, placement_token)
+                rest = rest_clip["name"]
+                skel = unreal.EditorAssetLibrary.load_asset(record["mesh"])
+                anim = unreal.EditorAssetLibrary.load_asset(rest_clip["sequence"] or rest_clip["baseCell"])
+                if not skel or not anim or not rest:
+                    raise RuntimeError("GAME_LUMP model %s has no native rest asset '%s'; import characters and model catalogues" %
+                                       (identity, rest))
+                solid = int(tok[8]) != 0 and not is_sky
+                if not actor.configure_rest(skel, anim, mesh, solid):
+                    raise RuntimeError("GAME_LUMP model %s refused rest configuration" % stem)
+                component = actor.skeletal_visual
+                proxy = actor.collision_proxy
+                proxy.set_collision_profile_name(PROFILE_PROP_SOLID if solid else PROFILE_PICK_ONLY)
+                skeletal_placed += 1
+            else:
+                component = actor.static_mesh_component
+                component.set_static_mesh(mesh)
+            # Field 9 is Source's own `solid` byte: a solid prop blocks, the rest is dressing.
+            # A miniature prop is never solid whatever it says -- it is scenery the player can
+            # never reach, and at 16x it would wall off the map.
+            if not use_skeletal:
+                component.set_collision_profile_name(
+                    PROFILE_PROP_SOLID if (int(tok[8]) != 0 and not is_sky) else PROFILE_PICK_ONLY)
+            # Field 10 (DStaticPropV4.skin) names an alternate skin family. A GAME_LUMP prop is
+            # not an entity and never changes skin, so the remap is baked into the placement as
+            # material overrides rather than costing anything at runtime. Older 9-field exports
+            # simply have no skin.
+            if use_skeletal:
+                families = skins.get((identity, "skeletal"))
+                if not families:
+                    raise RuntimeError("GAME_LUMP model has no native skeletal skin: " + identity)
+                family = min(max(int(tok[9]) if len(tok) >= 10 else 0, 0), len(families) - 1)
+                slots = [str(name) for name in component.get_material_slot_names()]
+                for index, slot, material_path in families[family]:
+                    if index >= len(slots) or slots[index].casefold() != slot.casefold():
+                        raise RuntimeError("GAME_LUMP native skin slot differs: " + identity + " / " + slot)
+                    if material_path not in skin_materials:
+                        skin_materials[material_path] = unreal.EditorAssetLibrary.load_asset(material_path)
+                    material = skin_materials[material_path]
+                    if material is None:
+                        raise RuntimeError("GAME_LUMP native skin material absent: " + material_path)
+                    component.set_material(index, material)
+                skinned += int(family != 0)
+            elif len(tok) >= 10 and int(tok[9]) != 0:
+                skinned += self._apply_prop_skin(component, mesh, stem, int(tok[9]))
+            fog = sky_fog if is_sky else world_fog
+            if fog:
+                set_fog(component, fog)
+            if is_sky:
+                actor.set_actor_scale3d(unreal.Vector(sky_scale, sky_scale, sky_scale))
+                # Same reasoning as the sky world meshes: blown up 16x the miniature encloses
+                # the playable space, which is the canonical hardware-ray-tracing overlap cost,
+                # and it is backdrop, so it casts nothing.
+                component.set_editor_property("visible_in_ray_tracing", False)
+                component.set_cast_shadow(False)
+                sky_placed += 1
+            actor.tags = [TAG_SKY if is_sky else TAG_PROP]
+            actor.set_folder_path("Sky/Props" if is_sky else "Props")
+            placed += 1
         if skinned:
             log("level: %d static props on an alternate skin" % skinned)
         if skeletal_placed:

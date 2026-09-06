@@ -18,6 +18,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumAnimationIntent.h"    // the slot claim and its pure envelope
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimGraph.h"       // ElysiumAnimGraph::ReactionBranchTag
 #include "Visual/ElysiumAnimLayerMask.h"
@@ -91,7 +92,7 @@ namespace
 			USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
 			FElysiumNpcClipSet Vocabulary;
 			FString Error;
-			if (Mesh == nullptr || !Vocabulary.Load(Stem, Error))
+			if (Mesh == nullptr || !ElysiumNativeTest::Load(Vocabulary, Stem, Error))
 			{
 				continue;
 			}
@@ -213,9 +214,9 @@ namespace
 	ESharedSetupResult EnsureCoreSetup(FAutomationTestBase& Test, FTestWorldWrapper& OutWorld,
 		UClass*& OutGraph, FString& OutAbstainMessage)
 	{
-		if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+		if (!ElysiumNativeTest::HasCast())
 		{
-			OutAbstainMessage = TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete");
+			OutAbstainMessage = TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)");
 			return ESharedSetupResult::Abstain;
 		}
 		OutGraph = LoadClass<UAnimInstance>(nullptr, *FElysiumContentPaths::PlayerAnimBlueprintClass());
@@ -244,7 +245,7 @@ namespace
 		{
 			OutAbstainMessage =
 				TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
-					"run: uv run elysium export characters");
+					"run: uv run elysium import characters");
 			return ESharedSetupResult::Abstain;
 		}
 		OutPick.Mesh->AddToRoot();
@@ -858,7 +859,7 @@ namespace
 		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
 		FElysiumNpcClipSet Vocabulary;
 		FString Error;
-		if (Mesh == nullptr || !Vocabulary.Load(Stem, Error))
+		if (Mesh == nullptr || !ElysiumNativeTest::Load(Vocabulary, Stem, Error))
 		{
 			return false;
 		}
@@ -885,7 +886,7 @@ namespace
 				continue;
 			}
 			TSharedPtr<FElysiumBlendTable> Table = MakeShared<FElysiumBlendTable>();
-			if (!Table->Load(Entry->Blends, Error))
+			if (!ElysiumNativeTest::Load(*Table, Entry->Blends, Error))
 			{
 				continue;
 			}
@@ -919,7 +920,7 @@ namespace
 	{
 		FElysiumNpcIndex Index;
 		FString Error;
-		if (!Index.Load(Error) || !Index.IsValid())
+		if (!ElysiumNativeTest::Load(Index, Error) || !Index.IsValid())
 		{
 			return false;
 		}
@@ -944,7 +945,7 @@ namespace
 	{
 		FElysiumNpcClipSet Vocabulary;
 		FString Error;
-		if (!Vocabulary.Load(Fan.Stem, Error))
+		if (!ElysiumNativeTest::Load(Vocabulary, Fan.Stem, Error))
 		{
 			return nullptr;
 		}
@@ -1057,7 +1058,7 @@ static bool RunGraphReactionDriveCase(FAutomationTestBase& Test)
 	if (!FindReactionFan(Fan))
 	{
 		Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a directional hit fan; "
-			"run: uv run elysium export characters"));
+			"run: uv run elysium import characters"));
 		return true;
 	}
 	UAnimSequence* BaseClip = FindBaseClipFor(Fan);
@@ -1297,16 +1298,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionGridLengthTest,
 	"Elysium.Content.ReactionGridLength", GElysiumMontageSlotFlags)
 bool FElysiumReactionGridLengthTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	FReactionFanPick Fan;
 	if (!FindReactionFan(Fan))
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a directional hit fan; "
-			"run: uv run elysium export characters"));
+			"run: uv run elysium import characters"));
 		return true;
 	}
 	Fan.Mesh->AddToRoot();
@@ -1374,16 +1375,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionCellMasksTest,
 	"Elysium.Content.ReactionCellMasks", GElysiumMontageSlotFlags)
 bool FElysiumReactionCellMasksTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	FReactionFanPick Fan;
 	if (!FindReactionFan(Fan))
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a directional hit fan; "
-			"run: uv run elysium export characters"));
+			"run: uv run elysium import characters"));
 		return true;
 	}
 	Fan.Mesh->AddToRoot();
@@ -1559,7 +1560,7 @@ namespace
 			USkeleton* Skeleton = Mesh != nullptr ? Mesh->GetSkeleton() : nullptr;
 			FElysiumNpcClipSet Vocabulary;
 			FString Error;
-			if (Skeleton == nullptr || !Vocabulary.Load(Stem, Error))
+			if (Skeleton == nullptr || !ElysiumNativeTest::Load(Vocabulary, Stem, Error))
 			{
 				continue;
 			}
@@ -1685,7 +1686,7 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	if (!FindSlotLayer(Pick))
 	{
 		Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a masked layer clip "
-			"whose blend profile is on its own skeleton; run: uv run elysium export characters"));
+			"whose blend profile is on its own skeleton; run: uv run elysium import characters"));
 		return true;
 	}
 	Pick.Mesh->AddToRoot();

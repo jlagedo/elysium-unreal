@@ -20,6 +20,7 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Tests/ElysiumNativeCharacterTestData.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -338,9 +339,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRigPoseTest,
 	"Elysium.Content.RigPose", GElysiumRigPoseFlags)
 bool FElysiumRigPoseTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	if (!ElysiumNativeTest::HasCast())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
 		return true;
 	}
 	const TArray<FString> OraclePaths = FindPoseOracles();
@@ -367,9 +368,9 @@ bool FElysiumRigPoseTest::RunTest(const FString&)
 		return true;
 	}
 	FElysiumNpcIndex NpcIndex;
-	if (!NpcIndex.Load(Error) || !NpcIndex.IsValid())
+	if (!ElysiumNativeTest::Load(NpcIndex, Error) || !NpcIndex.IsValid())
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index (run: uv run elysium export bundle npc)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native cast view (run: uv run elysium import characters)"));
 		return true;
 	}
 
@@ -429,7 +430,7 @@ bool FElysiumRigPoseTest::RunTest(const FString&)
 		{
 			Set = MakeShared<FElysiumNpcClipSet>();
 			FString LoadError;
-			if (!Set->Load(Frame.Stem, LoadError))
+			if (!ElysiumNativeTest::Load(*Set, Frame.Stem, LoadError))
 			{
 				Set.Reset();
 			}

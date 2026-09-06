@@ -11,27 +11,27 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from elysium_pipeline import mounts
-from elysium_pipeline.importers.sky_paths import sky_cube_path
+from pipeline.unreal.sky_composites import ensure_default_sky_cube
 
 PKG = mounts.MATERIALS
 NAME = "M_Sky"
 ASSET = "%s/%s" % (PKG, NAME)
-DEFAULT_CUBE = sky_cube_path("la")
 
 mel = unreal.MaterialEditingLibrary
 
-# R8: sky composites contain linear HDR samples. Require the imported default before
-# replacing the master, so the graph can compile with the same sampler as every sky MI.
-default_cube = unreal.EditorAssetLibrary.load_asset(DEFAULT_CUBE)
-if (default_cube is None or default_cube.get_class().get_name() != "TextureCube"
-        or default_cube.get_editor_property("srgb")):
-    raise RuntimeError("M_Sky requires the linear texture-lane sky cube %s; import textures first" % DEFAULT_CUBE)
+# Generators must also run before the first texture import. Prepare the generated
+# default before touching M_Sky; a failed dependency leaves the existing graph intact.
+default_cube = ensure_default_sky_cube()
 
-if unreal.EditorAssetLibrary.does_asset_exist(ASSET):
-    unreal.EditorAssetLibrary.delete_asset(ASSET)
-
-tools = unreal.AssetToolsHelpers.get_asset_tools()
-mat = tools.create_asset(NAME, PKG, unreal.Material, unreal.MaterialFactoryNew())
+mat = unreal.EditorAssetLibrary.load_asset(ASSET)
+if mat is not None:
+    if mat.get_class().get_name() != "Material":
+        raise RuntimeError("%s is not a Material; refusing to replace it" % ASSET)
+    # Keep the object and all existing MI/map references across generator runs.
+    mel.delete_all_material_expressions(mat)
+else:
+    tools = unreal.AssetToolsHelpers.get_asset_tools()
+    mat = tools.create_asset(NAME, PKG, unreal.Material, unreal.MaterialFactoryNew())
 if not mat:
     unreal.log_error("[make_sky_material] create_asset failed")
     raise SystemExit(1)
@@ -39,7 +39,7 @@ if not mat:
 mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
 mat.set_editor_property("two_sided", True)
 
-# SkyCube: the per-map cubemap. The default is a validated linear sky dependency;
+# SkyCube: the per-map cubemap. The generated default has the same linear sampler;
 # every sky MI overrides it with its own texture-lane composite.
 cube = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameterCube, -500, 0)
 cube.set_editor_property("parameter_name", "SkyCube")
@@ -70,4 +70,6 @@ mel.connect_material_property(scale, "", unreal.MaterialProperty.MP_EMISSIVE_COL
 
 mel.recompile_material(mat)
 ok = unreal.EditorAssetLibrary.save_asset(ASSET)
+if not ok:
+    raise RuntimeError("[make_sky_material] could not save %s" % ASSET)
 unreal.log("[make_sky_material] saved %s: %s" % (ASSET, "ok" if ok else "FAILED"))

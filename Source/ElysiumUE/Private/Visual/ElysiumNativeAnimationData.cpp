@@ -12,6 +12,8 @@
 #include "UObject/StrongObjectPtr.h"
 #if WITH_EDITOR
 #include "Animation/IAnimationSequenceCompiler.h"
+#include "AssetCompilingManager.h"
+#include "IAssetCompilingManager.h"
 #endif
 
 struct FElysiumAsyncModelAdmission
@@ -35,6 +37,20 @@ struct FElysiumAsyncModelAdmission
 
 namespace
 {
+#if WITH_EDITOR
+	bool AnimationCompilationPending()
+	{
+		// UE 5.8 keeps UAnimSequence::IsCompiling protected. The public compiler
+		// registry exposes a nonblocking readiness query; conservatively wait for its
+		// animation queue instead of reaching into engine-private headers or blocking.
+		static const FName AnimationType(TEXT("UE-AnimationSequence"));
+		for (const IAssetCompilingManager* Manager : FAssetCompilingManager::Get().GetRegisteredManagers())
+			if (Manager && Manager->GetAssetTypeName() == AnimationType)
+				return Manager->GetNumRemainingAssets() != 0;
+		return false;
+	}
+#endif
+
 	bool AnimationReferencesResident(const UElysiumBodyData& Data, FString& Error)
 	{
 		auto Check = [&Error](const auto& Ref, bool bRequired)
@@ -145,10 +161,10 @@ void UElysiumNativeAnimationData::LoadAdmissionPaths(uint64 RequestId, const TAr
 bool UElysiumNativeAnimationData::AdmissionAssetsCompiling(const FElysiumAsyncModelAdmission& Request) const
 {
 #if WITH_EDITOR
+	if (AnimationCompilationPending()) return true;
 	for (const auto& Path : Request.Dependencies)
 	{
 		UObject* Asset = Path.ResolveObject();
-		if (const auto* Sequence = ::Cast<UAnimSequence>(Asset); Sequence && Sequence->IsCompiling()) return true;
 		if (const auto* Mesh = ::Cast<USkeletalMesh>(Asset); Mesh && Mesh->IsCompiling()) return true;
 	}
 #endif
@@ -267,6 +283,9 @@ bool UElysiumNativeAnimationData::IsModelReady(const FString& ModelId) const
 	FString Error;
 	USkeletalMesh* RootMesh = Mesh(ModelId, Error);
 	if (!ElysiumCharacterModel::Validate(ModelId, RootMesh, Error)) return false;
+#if WITH_EDITOR
+	if (AnimationCompilationPending()) return false;
+#endif
 	TArray<const UElysiumBodyData*> Pending{Body(ModelId)};
 	if (const auto* Cinematic = Cast->Cinematics.Find(ModelId))
 		for (const auto& Pair : Cinematic->Roots) Pending.Add(PreparedBody(Pair.Value.BodyData));
@@ -284,9 +303,6 @@ bool UElysiumNativeAnimationData::IsModelReady(const FString& ModelId) const
 		for (const auto& Path : Paths)
 		{
 			if (!Path.ResolveObject()) return false;
-#if WITH_EDITOR
-			if (const auto* Sequence = ::Cast<UAnimSequence>(Path.ResolveObject()); Sequence && Sequence->IsCompiling()) return false;
-#endif
 		}
 	}
 #if WITH_EDITOR

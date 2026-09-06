@@ -108,6 +108,8 @@ public:
 	// Generic skeletal embodiment for a model-backed point entity whose leaf supplied no body.
 	// It carries no inferred interaction semantics; the world creates it between Spawn/PostSpawn.
 	USkeletalMeshComponent* GenericModelBody = nullptr;
+	// Static counterpart retains the same point-entity ownership and lifecycle.
+	UPrimitiveComponent* GenericStaticModelBody = nullptr;
 
 	// --- Base keyfields — the CBaseEntity contract (python_bridge.md) ---
 	// Registered once on the base class field table; every subclass inherits them through

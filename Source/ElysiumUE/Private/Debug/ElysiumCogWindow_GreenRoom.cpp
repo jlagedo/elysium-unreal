@@ -6,6 +6,9 @@
 #include "Debug/ElysiumCogStyle.h"
 #include "Debug/ElysiumGreenRoomRun.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumCastData.h"
+#include "Visual/ElysiumCharacterAssets.h"
+#include "Misc/PackageName.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
@@ -254,7 +257,7 @@ void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 		if (!Lab.LabStem().IsEmpty() && !ElysiumNpcVisual::IsStemBaked(Lab.LabStem()))
 		{
 			ImGui::TextColored(ImVec4(0.9f, 0.45f, 0.45f, 1.0f),
-				"'%s' is not on the baked mount - run `uv run elysium export characters`",
+				"'%s' is not on the baked mount - run `uv run elysium import characters`",
 				COG_TCHAR_TO_CHAR(*Lab.LabStem()));
 			return;
 		}
@@ -332,7 +335,11 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		StemHasCloth.Reserve(Stems.Num());
 		for (const FString& Stem : Stems)
 		{
-			StemHasCloth.Add(IFileManager::Get().FileExists(*FElysiumContentPaths::NpcGarment(Stem)));
+			FString Error;
+			const FElysiumCastModel* Model = ElysiumCharacterAssets::Model(Stem, Error);
+			const FString Cloth = Model ? FElysiumContentPaths::BakedUnit(Model->AssetId, TEXT("CLOTH")) : FString();
+			StemHasCloth.Add(!Cloth.IsEmpty() && FPackageName::DoesPackageExist(
+				FPackageName::ObjectPathToPackageName(Cloth)));
 		}
 		bStemsDirty = false;
 	}
@@ -388,7 +395,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 	FCogWidgets::InputTextWithHint("##StemFilter", "(filter)", StemFilter);
 	if (Stems.IsEmpty())
 	{
-		ImGui::TextDisabled("No .eskm under npc/. Export: uv run elysium export characters");
+		ImGui::TextDisabled("No native bodies in DA_Cast. Run: uv run elysium import characters");
 	}
 	else
 	{
@@ -502,8 +509,9 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 	FCogWidgets::InputTextWithHint("##ClipFilter", "(filter - try 'walk' or 'Stance')", ClipFilter);
 	if (ClipRows.IsEmpty())
 	{
-		ImGui::TextDisabled("No clip vocabulary - npc/clips/%s.json is missing.",
+		ImGui::TextDisabled("No prepared native clip vocabulary for %s.",
 			COG_TCHAR_TO_CHAR(*PendingStem));
+		ImGui::TextDisabled("Run uv run elysium import characters, then restand the body.");
 		return;
 	}
 	// Filters.
@@ -1242,7 +1250,7 @@ void FElysiumCogWindow_GreenRoom::RenderWield(FElysiumGreenRoomRun& Lab)
 	{
 		// The one outcome that is a failure rather than an authored answer, so it names its fix.
 		ImGui::TextDisabled(
-			"No wield rows. Is the corpus baked? uv run elysium export wield");
+			"No usable rows in native DA_WieldModels. Run uv run elysium import wield.");
 		return;
 	}
 
@@ -1316,8 +1324,8 @@ void FElysiumCogWindow_GreenRoom::RenderEyes(FElysiumGreenRoomRun& Lab)
 	{
 		ImGui::TextColored(ElysiumCogStyle::ColWarn, "%s carries no eye sections.",
 			COG_TCHAR_TO_CHAR(*Lab.LabStem()));
-		ImGui::TextDisabled("Either the model authors no `StudioEyeball` record, or npc/eyes/<stem>.json");
-		ImGui::TextDisabled("was not exported. Animals and most crowd bodies are the normal case.");
+		ImGui::TextDisabled("The model may author no eye records; otherwise check its native character data.");
+		ImGui::TextDisabled("Reimport with uv run elysium import characters, then restand the body.");
 		return;
 	}
 	const bool bHealthy = Eyes.BoundCount > 0 && Eyes.BoundCount == Eyes.EyeSlotCount;

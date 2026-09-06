@@ -1,20 +1,24 @@
 """Material usage from published model bindings and drawn map faces."""
 from elysium_pipeline.formats.unit_contract.container import read_document
-from elysium_pipeline.model_usage import skeletal_candidate
+from elysium_pipeline.model_usage import skeletal_candidate, discover_placed_animation_models
 
 
 def collect(root):
+    model_paths = sorted((root / "models").rglob("*.glb"))
+    published = {"vtmb:model:" + path.relative_to(root / "models").with_suffix("").as_posix() for path in model_paths}
+    animated_placed = discover_placed_animation_models(root, published)
     usage = {}
     def add(material, kind, owner):
         if isinstance(material, str) and material.startswith("vtmb:material:"):
             usage.setdefault(material, {"skeletal": set(), "static": set(), "map": set()})[kind].add(owner)
-    for path in sorted((root / "models").rglob("*.glb")):
+    for path in model_paths:
         unit = read_document(path)["extensions"]["ELYSIUM_vtmb_model"]
         identity = unit["identity"]
         kinds = []
         if identity["shape"] != "skeletal":
             kinds.append("static")
-        if skeletal_candidate(identity, len(unit["mdl"]["bones"]), has_cloth=bool((unit.get("cloth") or {}).get("garments"))):
+        if (identity["asset"] in animated_placed
+                or skeletal_candidate(identity, len(unit["mdl"]["bones"]), has_cloth=bool((unit.get("cloth") or {}).get("garments")))):
             kinds.append("skeletal")
         bindings = unit["materialBindings"]
         for slot in bindings["slots"]:
