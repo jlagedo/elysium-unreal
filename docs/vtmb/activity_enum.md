@@ -378,6 +378,64 @@ inside the function. And **rung 3 tests `B` but returns `A`**, so rungs 3 and 4 
 and differ only in the predicate that lets you reach the tail. That reads as a Troika variable-naming
 slip; it is recorded here as behaviour, not intent.
 
+#### The probe is unconditional, and it is what makes an unarmed body move
+
+The four rungs above are not an optional tail. `CAI_BaseNPC::TranslateActivity` has exactly one
+early return — `if (cur != ACT_SCRIPT_CUSTOM_MOVE)` guards the whole probe, so a request that is
+`0x18` returns straight out and **every other request walks all four rungs**. There is no flag, no
+ConVar and no caller argument that skips it.
+
+That matters because of one row pair in the human pre-translation. `PreTranslate_Human`
+(`0x103854f0`, virtual `+0x5dc` for the `CNPC_VHuman` subtree) rewrites, under its `NotArmedAlert`
+arm:
+
+| from | to |
+|---|---|
+| `ACT_WALK` (9) | `ACT_WALK_RELAXED` (22) |
+| `ACT_RUN` (19) | `ACT_RUN_RELAXED` (23) |
+
+The arm's own predicate is satisfied **unconditionally by an unarmed body** — the recovered decision
+tree early-outs on "no active weapon" before it reads `m_NPCState` at all — so every cast body
+standing with empty hands has its walk and its run rewritten to the relaxed pair.
+
+**No shipped body carries either sequence.** A census over this repo's own clip export
+(`out/npc/clips`, 293 bodies) finds `ACT_WALK_RELAXED` and `ACT_RUN_RELAXED` on **zero** of them;
+the relaxed gaits exist only as weapon-suffixed activities (`ACT_WALK_RELAXED_FISTS`,
+`ACT_WALK_RELAXED_PISTOL`, …). This is the same fact the Fists table's row 0–2 note below depends
+on, seen from the body's side rather than the weapon's.
+
+So for an unarmed cast body the chain is: rung 1 asks for `ACT_WALK_RELAXED` and gets `-1`; rungs 2
+and 3 hold the same value and are skipped by their own equality predicates; **rung 4 asks for the
+untranslated `ACT_WALK` and gets it.** The probe is the only thing standing between an unarmed NPC
+and no gait at all — a relaxed pedestrian, a patrolling gangmember, an idle Sabbat henchman and the
+player's own third-person body all resolve their walk through rung 4 and nothing else.
+
+An armed body never needs it: `CBaseCombatWeapon::ActivityOverride` runs first, and the Fists and
+ZombieFists tables map `ACT_WALK_RELAXED → ACT_WALK` and `ACT_RUN_RELAXED → ACT_RUN` in rows 0–2,
+ahead of their `_FISTS` rows, so the weapon translator undoes the pre-translation before the probe
+is ever consulted.
+
+**Divergence in this port, now closed.** `UElysiumAnimSubsystem::ResolveGaitSpeeds` cleared
+`bAllowFallbackLadder`, which gated the probe as well as the substitutions, on the reasoning that "a
+gait resolved through a fallback rung is not that gait". Two of the rungs it was aiming at do answer
+with a different activity — the terminal `ACT_RUN → ACT_WALK` (`piStack_4 == 0x13` → `9`) and this
+runtime's own `ACT_DISPOSITION`/sequence-zero retries — but the probe's four rungs never do; they
+only choose among the same request's own translations. Clearing one flag therefore refused both, and
+every unarmed cast body's walk and run commanded **zero** while the per-frame publish, which kept
+the probe, posed the plain walk it had. The intent now carries a second, narrower gate,
+`bAllowSubstituteActivity`: the speed seam keeps the probe and refuses only the substitutions.
+Asserted by `Elysium.Substrate.GaitSubstitutionGate` (both arms, on a fixture) and
+`Elysium.Content.UnarmedCastGaitFan` (thirteen stood bodies against the real corpus).
+
+**Resolving an activity is not the same as commanding a speed.** A gait whose selected label carries
+no blend grid is a separate question, and it belongs to the speed pipeline rather than to activity
+selection: see `animation_and_movers.md` → "One speed pipeline answers a fanned gait and a plain
+clip alike", which owns `ResetSequenceInfo` (`0x10090950`), `GetSequenceGroundSpeed` (`0x10091490`)
+and the reason `0x100c1c60`'s `poseparamindex == -1` guard makes a non-blended sequence's speed
+direction-independent. That arm is now ported; `monster/rat/rat` moves and
+`npc/unique/downtown/sheriff/sheriff` is shown there to be a data absence rather than a gap, still
+entangled with the unmodelled `0x80` rule.
+
 ### The player's chain
 
 `0x101644f0` calls the two virtuals inline, in the order `+0x5f4` then `+0x5e0`, with nothing before

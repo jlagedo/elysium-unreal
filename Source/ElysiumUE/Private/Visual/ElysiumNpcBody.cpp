@@ -11,7 +11,9 @@
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimGraph.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGroundSurface.h"    // the surfaceprop under the feet, this body's own trace
 #include "ElysiumMapActor.h"
+#include "ElysiumMoveSolve.h"        // ElysiumMove::U -- the Source unit the trace depth is in
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -81,6 +83,10 @@ AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 void AElysiumNpcBody::InitializeAtFeet(const FVector& FeetOrigin, float YawDegrees)
 {
 	Teleport(FeetOrigin, YawDegrees);
+	// The spawn is where retail clears its cached `surfacedata_t` (`CAI_BaseNPC +0x5b90`):
+	// `NPCInit 0x10273390` and `OnRestore 0x1027bf50`, both of which this body's construction stands
+	// for. Nothing else clears it — `MoveEnact 0x102ef870` overwrites it on the next move step.
+	GroundSurface = FName();
 	ApplyEnabledState();
 }
 
@@ -404,6 +410,14 @@ FVector AElysiumNpcBody::FeetLocation() const
 void AElysiumNpcBody::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	// Retail refreshes the NPC's ground surface once per move step and nowhere else
+	// (`CAI_Navigator::MoveEnact 0x102ef870` -> `0x10270290` -> `+0x5b90`), so a body that is not
+	// travelling pays for no trace and keeps the answer its last leg left — which is also what
+	// makes the cache a cache rather than a per-frame query.
+	if (bMoveRequested)
+	{
+		RefreshGroundSurface();
+	}
 	if (!bFaceRequested)
 	{
 		return;
@@ -486,6 +500,10 @@ void AElysiumNpcBody::Stop()
 	bFaceRequested = false;
 	// The leg is over; there is nothing left to re-derive against a later fan change.
 	RequestedGaitKind.Reset();
+	// `GroundSurface` is deliberately NOT cleared here. Retail's `+0x5b90` survives an arrival, a
+	// freeze and a teleport — it is cleared only by `NPCInit 0x10273390` and `OnRestore 0x1027bf50`
+	// (`InitializeAtFeet`) and rewritten by the next move step — so a footfall record landing on a
+	// body in its blend-out still sounds on the floor it stopped on.
 }
 
 void AElysiumNpcBody::Teleport(const FVector& FeetOrigin, float YawDegrees)
@@ -612,6 +630,47 @@ void AElysiumNpcBody::ApplyEnabledState()
 	}
 }
 
+void AElysiumNpcBody::RefreshGroundSurface()
+{
+	const UWorld* World = GetWorld();
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (World == nullptr || Capsule == nullptr)
+	{
+		GroundSurface = FName();
+		return;
+	}
+
+	// From the capsule's centre, past its bottom, by the same 2u the player's ground trace reaches
+	// below its hull — CharacterMovement floats the capsule a contact offset above the floor, so a
+	// segment that stopped at the capsule bottom would end in the gap. The capsule wears the `Pawn`
+	// profile and this channel's default response is Ignore, so the body cannot trace itself; the
+	// actor passed to the query is belt and braces for the visual and anything parented to it.
+	const float DepthCm = Capsule->GetScaledCapsuleHalfHeight()
+		+ 2.0f * ElysiumMove::U + ElysiumMove::DistEpsilon;
+	const FName Rendered = ElysiumGroundSurface::TraceBelow(World, GetActorLocation(), DepthCm, this);
+	if (!Rendered.IsNone())
+	{
+		GroundSurface = Rendered;
+		return;
+	}
+
+	// Nothing DRAWN under the body. That is not the same as nothing under it: a brush entity's
+	// hull, a lift platform and a test slab are all standable and none of them is on the
+	// render-surface channel. Ask the movement component for the floor itself — fresh, because a
+	// teleported body's `CurrentFloor` and `MovementMode` still describe where it came from — and
+	// answer index 0 for a floor with no drawn half, `NAME_None` only for a body standing on
+	// nothing, which is retail's null `surfacedata_t` and a silent step.
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (Movement == nullptr)
+	{
+		GroundSurface = FName();
+		return;
+	}
+	FFindFloorResult Floor;
+	Movement->FindFloor(GetActorLocation(), Floor, /*bCanUseCachedLocation=*/false);
+	GroundSurface = Floor.IsWalkableFloor() ? ElysiumGroundSurface::DefaultSurface() : FName();
+}
+
 FElysiumLocomotionSample AElysiumNpcBody::SampleLocomotion() const
 {
 	// An NPC faces where its actor is turned — `bOrientRotationToMovement` keeps that pointed along
@@ -630,6 +689,14 @@ FElysiumLocomotionSample AElysiumNpcBody::SampleLocomotion() const
 	// standing still has commanded nothing.
 	const UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Out.CommandedSpeed = (bMoveRequested && Movement != nullptr) ? Movement->MaxWalkSpeed : 0.0f;
+
+	// **The cache, not a trace.** `FromCharacterMovement` cannot fill this — the engine's floor
+	// sweeps run without `bReturnPhysicalMaterial` — and this call is a getter that a think and an
+	// animation pass may both make on the same frame, so the world query lives on the once-per-move
+	// `RefreshGroundSurface` above and this only publishes what it left. `NAME_None` on a body that
+	// has never travelled is retail's own answer: `+0x5b90` is written by `MoveEnact` and by
+	// nothing else.
+	Out.GroundSurface = GroundSurface;
 	return Out;
 }
 

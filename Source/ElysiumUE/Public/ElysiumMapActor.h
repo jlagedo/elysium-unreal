@@ -343,6 +343,10 @@ public:
 		FElysiumStanceClips& OutClips) override;
 	virtual bool ResolveDisposition(const FString& Disposition, int32 DispositionLevel,
 		FElysiumDisposition& OutRow) override;
+	// A2 (footsteps): one surfaceprop's audio row, off the baked
+	// `/ElysiumBaked/SurfaceProperties/PM_<name>` asset. Const because it is a query; the load
+	// cache behind it is session-scoped and lives in `Audio/ElysiumSurfaceSoundTable.h`.
+	virtual bool ResolveSurfaceSounds(FName Surface, FElysiumSurfaceSounds& Out) const override;
 	virtual bool IsNpcBodyVisible(USkeletalMeshComponent* Body) override;
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FElysiumClipSegment& Segment, float* OutSeconds) override;
@@ -481,6 +485,8 @@ public:
 	virtual void SetBakedSpriteVisible(int32 EntityIndex, bool bVisible) override;
 	virtual bool IsPlayerSneaking() const override;
 	virtual bool IsPlayerOnGround() const override;
+	// A1, footsteps: the mover's whole published record, for the substrate's step clock.
+	virtual bool SamplePlayerLocomotion(FElysiumLocomotionSample& Out) const override;
 	virtual FString GetPlayerBaseActivity() const override;
 	// The forced-sequence record the melee stop's rule is evaluated over, and the stop
 	// itself. Both are the player body's, so both live on this actor beside the driver that owns it.
@@ -514,6 +520,11 @@ public:
 	virtual void SetVoicePitch(FElysiumVoiceHandle Handle, float Pitch) override;
 	virtual void CancelAudioOwner(FElysiumAudioOwner AudioOwner, float FadeSeconds = 0.f) override;
 	virtual FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params) override;
+	// A2 (footsteps): one body-attached one-shot on one of the owner's Source channels, with the
+	// sound level turned into a real falloff and the previous voice on that `(owner, channel)`
+	// stopped first — Source's channels hold one voice each.
+	virtual FElysiumAudioVoiceHandle PlayBodySound(const FElysiumEntityHandle& OwnerHandle,
+		const FElysiumBodySound& Sound) override;
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) override;
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) override;
 	virtual bool IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const override;
@@ -523,21 +534,15 @@ public:
 	virtual float OutputLeadSeconds() const override;
 
 	/**
-	 * R7.4 (verdict D3/D4): the player's water footstep. `Surfaces/Water/Step*` at classified water
-	 * level 1, `Surfaces/Wade/Step*` at level >= 2 with that pool's one-in-four silent phase
-	 * (`vampire.dll 1011e940`) — keyed off the LEVEL this actor already classifies, never off the
-	 * surface material under the foot, because the pier's foam cards bind `PM_default` and a
-	 * material-keyed rule would give the waterline dry footsteps.
+	 * The player's classified water level this frame, 0-3 — what the step clock's water and wade
+	 * arms key off (`FElysiumPlayer::TickStepClock`, `vampire.dll 1011e940`). Classification is all
+	 * this actor does for footsteps: the clock, the intervals, the wade silence and the pools live
+	 * in the substrate, and the level reaches them on the mover's locomotion sample.
 	 *
-	 * `StepIndex` is the body's own water-step counter and `bRightFoot` picks the `stepright` pool.
-	 * This runtime raises no step EVENT yet (the seam is stated in `ElysiumPlayerEntity.cpp`), so
-	 * `UpdatePlayerWaterFootsteps` runs VtMB's own step CLOCK — which is where `UpdateStepSound`
-	 * takes its steps from anyway, not from an animation notify — and a step producer that lands
-	 * later calls this directly.
+	 * D3/D4: keyed off the CLASSIFIED LEVEL and never off the surface material under the foot,
+	 * because the pier's foam cards bind `PM_default` and a material-keyed rule would give the
+	 * waterline dry footsteps.
 	 */
-	void PlayPlayerWaterFootstep(int32 StepIndex, bool bRightFoot);
-
-	/** The player's classified water level this frame, 0-3 — what the footstep rule keys off. */
 	int32 PlayerWaterLevelNow() const { return PlayerWaterLevel; }
 
 	/**
@@ -699,6 +704,31 @@ private:
 	FVector DeferredSchemeAnchor = FVector::ZeroVector;
 	float DeferredSchemeFadeSeconds = 0.0f;
 
+	// A2 (footsteps): the body-sound channel ledger — Source's "one voice per (entity, channel)".
+	// `PlayBodySound` stops whatever this holds for the key before it plays, which is why two
+	// footsteps 40 ms apart never overlap in retail. Keyed by the entity HANDLE, so a handle from a
+	// previous map epoch can never collide with a live one; entries are dropped as their voices
+	// finish and the whole map's are dropped with the entity world.
+	struct FBodySoundKey
+	{
+		FElysiumEntityHandle Owner;
+		EElysiumSoundChannel Channel = EElysiumSoundChannel::Body;
+
+		bool operator==(const FBodySoundKey& Other) const
+		{
+			return Owner == Other.Owner && Channel == Other.Channel;
+		}
+		friend uint32 GetTypeHash(const FBodySoundKey& Key)
+		{
+			return HashCombine(GetTypeHash(Key.Owner),
+				::GetTypeHash(static_cast<uint8>(Key.Channel)));
+		}
+	};
+	TMap<FBodySoundKey, FElysiumAudioVoiceHandle> BodySoundVoices;
+	// The falloff each sound level buys, built once per level (`ElysiumSoundLevel::MakeAttenuation`
+	// samples a 66-key curve) and shared by every body sound at that level.
+	TMap<int32, TSharedPtr<const FSoundAttenuationSettings>> BodySoundAttenuations;
+
 	// The live scripted camera shots and their entity bindings. Owned here because resolving a
 	// shot's anchors needs the entity world and the bodies standing in it; refreshed in the post-move
 	// pass so a shot following an NPC sees where that NPC ended the frame.
@@ -828,10 +858,6 @@ private:
 	// step yet. `m_flStepSoundTime` counts down in milliseconds inside `CBasePlayer::PreThink` and
 	// `UpdateStepSound` (`vampire.dll 1011e940`) takes a step when it reaches zero; the counter is
 	// the wade pool's four-phase one and the foot alternates so the left/right pools both play.
-	void UpdatePlayerWaterFootsteps(float DeltaSeconds, const FVector& VelocityCmPerSec);
-	float PlayerStepSoundSeconds = 0.f;
-	int32 PlayerWaterStepIndex = 0;
-	bool bPlayerWaterStepRight = false;
 	bool bSuppressPlayerTouchIngress = false;
 	bool bPlayerTouchReconcilePending = false;
 

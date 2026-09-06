@@ -66,6 +66,42 @@ namespace ElysiumGameSounds
 		return Name;
 	}
 
+	// The six PLAYER LOCOMOTION rows. They are not six producers: `CBasePlayer::UpdatePlayerSound`
+	// (`vampire.dll 0x1016b480`) rewrites ONE permanently reserved stimulus every think and these
+	// are the names it chooses between (`docs/vtmb/footsteps.md` §2.5). Sneak is the only one that
+	// is quieter than normal — walk and run resolve to the same authored level, so the split
+	// changes the category a consumer switches on and nothing else.
+	inline const FName& PlayerFootstepSneak()
+	{
+		static const FName Name(TEXT("PLAYER_FOOTSTEP_SNEAK"));
+		return Name;
+	}
+	inline const FName& PlayerFootstepWalk()
+	{
+		static const FName Name(TEXT("PLAYER_FOOTSTEP_WALK"));
+		return Name;
+	}
+	inline const FName& PlayerFootstepRun()
+	{
+		static const FName Name(TEXT("PLAYER_FOOTSTEP_RUN"));
+		return Name;
+	}
+	inline const FName& PlayerJump()
+	{
+		static const FName Name(TEXT("PLAYER_JUMP"));
+		return Name;
+	}
+	inline const FName& PlayerLandSoft()
+	{
+		static const FName Name(TEXT("PLAYER_LAND_SOFT"));
+		return Name;
+	}
+	inline const FName& PlayerLandHard()
+	{
+		static const FName Name(TEXT("PLAYER_LAND_HARD"));
+		return Name;
+	}
+
 	// `DOOR_NORMAL` — a door moved audibly.
 	//
 	// SEAM: the table also carries `DOOR_STEALTH`, and which of the two a door emits is a decision
@@ -135,6 +171,35 @@ public:
 	// asserts against; `Now` is the substrate clock, never a wall clock.
 	FElysiumGameSoundEvent Emit(const FElysiumGameSoundRequest& Request, double Now);
 
+	// **One PERSISTENT stimulus, rewritten rather than re-inserted.**
+	//
+	// Retail's player locomotion sound is not an event at all: `CBasePlayer` owns one permanently
+	// reserved `CSound` record and `UpdatePlayerSound` (`vampire.dll 0x1016b480`) rewrites its
+	// origin, its type and its volume every think — nothing is ever inserted, and there is never
+	// more than one (`docs/vtmb/footsteps.md` §2.5). This is that slot on a bus whose contract is a
+	// retention window: the previous record for the slot is REMOVED (not evicted — it was never
+	// stale, it was replaced) and the fresh one emitted in its place.
+	//
+	// Re-serialising rather than rewriting in place is the load-bearing half: a consumer polls with
+	// a cursor (`EventsSince`), so a record whose serial it has already passed would never be seen
+	// again. The slot therefore always reads as the newest stimulus, which is exactly what a
+	// listener re-reading the reserved `CSound` sees.
+	//
+	// `Slot` is the caller's own handle, 0 for "nothing standing yet"; it is updated in place.
+	FElysiumGameSoundEvent Refresh(uint64& Slot, const FElysiumGameSoundRequest& Request, double Now);
+
+	// Retire the slot — retail's volume 0, which every listener ignores. Cheap and safe on a slot
+	// that stands for nothing.
+	void Retire(uint64& Slot);
+
+	// The level a category resolves to, with the unknown-category warning latched by name. Never
+	// null: an unknown category takes the `normal` level, which is what retail's own default is.
+	//
+	// Public because a producer that carries its OWN radius — the player's decaying locomotion
+	// stimulus, which is somewhere between the table's answer and zero on most thinks — still has
+	// to read the authored answer to decay towards it.
+	const FElysiumSoundLevel& ResolveLevel(FName Category);
+
 	// Everything emitted after `LastSerial` that is still retained, oldest first. A consumer keeps
 	// the serial it last saw and hands it back, so nothing is processed twice and a consumer that
 	// arrived late sees exactly the retained window rather than the whole map's history.
@@ -155,9 +220,6 @@ public:
 	void Reset();
 
 private:
-	// The level a category resolves to, with the unknown-category warning latched by name. Never
-	// null: an unknown category takes the `normal` level, which is what retail's own default is.
-	const FElysiumSoundLevel& ResolveLevel(FName Category);
 	// Drop everything past the retention window, leaving room for one more event.
 	void Evict(double Now);
 

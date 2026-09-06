@@ -32,6 +32,37 @@ FElysiumGameSoundEvent FElysiumGameSoundBus::Emit(const FElysiumGameSoundRequest
 	return Event;
 }
 
+FElysiumGameSoundEvent FElysiumGameSoundBus::Refresh(uint64& Slot,
+	const FElysiumGameSoundRequest& Request, double Now)
+{
+	// The previous record for this slot is REPLACED, so the window never grows with a stimulus that
+	// is rewritten every think. `Retire` first, `Emit` second: the emission is what re-serialises
+	// the record so a consumer's cursor sees it again.
+	Retire(Slot);
+	const FElysiumGameSoundEvent Event = Emit(Request, Now);
+	Slot = Event.Serial;
+	return Event;
+}
+
+void FElysiumGameSoundBus::Retire(uint64& Slot)
+{
+	if (Slot == 0)
+	{
+		return;
+	}
+	for (int32 Index = 0; Index < Events.Num(); ++Index)
+	{
+		if (Events[Index].Serial == Slot)
+		{
+			// Not counted as an eviction: the record was replaced by its own producer, not dropped
+			// by the window, and `NumEvicted` is what a test reads to prove the window bound bit.
+			Events.RemoveAt(Index, 1, EAllowShrinking::No);
+			break;
+		}
+	}
+	Slot = 0;
+}
+
 const FElysiumSoundLevel& FElysiumGameSoundBus::ResolveLevel(FName Category)
 {
 	if (Volumes == nullptr)

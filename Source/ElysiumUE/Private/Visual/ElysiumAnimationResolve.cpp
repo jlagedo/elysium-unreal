@@ -265,7 +265,12 @@ namespace
 		// the controlled corpus records a ducked ACT_LAND_CROUCH request simply returning -1 — so a
 		// player miss is reported as the named miss it is. It forks on the body's own chain, not on
 		// the producer: a damage reaction on a cast body walks the ladder its class descends from.
-		if (Intent.BodyKind == EElysiumAnimBodyKind::Cast && Intent.bAllowFallbackLadder)
+		// Both of the rungs below answer with an activity the caller did not ask for — the whole
+		// request as ACT_DISPOSITION, then sequence zero — so they need the substitution gate as
+		// well as the ladder gate. A speed reader refuses them for the same reason it refuses the
+		// run-to-walk: a stance idle's motion is not the walk fan.
+		if (Intent.BodyKind == EElysiumAnimBodyKind::Cast && Intent.bAllowFallbackLadder
+			&& Intent.bAllowSubstituteActivity)
 		{
 			// The disposition rung takes the same door, which costs nothing: no stance sequence in the
 			// corpus authors a state mask, so the ladder's own retry is the weighted draw it always was.
@@ -584,10 +589,13 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	// 5. availability, in the recovered order: the final weapon answer, the remembered class answer,
 	// the first weapon answer, then the original logical request.
 	//
-	// A caller that refuses the fallback ladder reads the miss and keeps its own answer,
-	// so the probe is what its `bAllowFallbackLadder` switches off: a gait resolved through rung 3
-	// is not that gait, and reporting it as one is the silent substitution the record exists to
-	// prevent.
+	// **The probe is unconditional in retail and every rung answers the SAME logical request.**
+	// `CAI_BaseNPC::TranslateActivity` (`0x10271ff0`) runs it for every cast body; the only early
+	// return is `ACT_SCRIPT_CUSTOM_MOVE` (`0x18`) above. Its four rungs are the same gait as it came
+	// out of the weapon table, out of the class table, out of the first weapon pass, and
+	// untranslated — never a different activity — so a caller that wants no SUBSTITUTION still wants
+	// this. Only `bAllowFallbackLadder` turns it off, and only retail's gesture path
+	// (`AddGesture` -> `SelectWeightedSequence`, which returns on -1) walks no rung at all.
 	if (!Intent.bAllowFallbackLadder)
 	{
 		Out.Resolved = Current;
@@ -610,7 +618,11 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	}
 
 	// The recovered last resort, keyed on the ORIGINAL request rather than on the translated one.
-	if (Out.Requested.Equals(GRunActivity, ESearchCase::IgnoreCase))
+	// It is the one rung of the probe that answers with a DIFFERENT activity than the request
+	// (`piStack_4 == 0x13` -> `9`, ACT_RUN -> ACT_WALK), so it is the one a speed reader refuses:
+	// a run fan read off the walk grid is not the run fan.
+	if (Intent.bAllowSubstituteActivity
+		&& Out.Requested.Equals(GRunActivity, ESearchCase::IgnoreCase))
 	{
 		Out.Resolved = GWalkActivity;
 		Out.bRunToWalk = true;

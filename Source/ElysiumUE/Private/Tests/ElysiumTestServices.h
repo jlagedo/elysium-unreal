@@ -21,6 +21,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumIOSink.h"
 #include "ElysiumMoveSolve.h"     // HullHalfWidth/StandHeight — the character box the sweep reaches
+#include "ElysiumSurfaceSounds.h" // A2: FElysiumSurfaceSounds (held by value in the table below)
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumWorldServices.h"
@@ -197,11 +198,18 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		return true;
 	}
 
+	// A1 (footsteps): the surfaceprop this body's last move step left cached — the double's stand-in
+	// for `CAI_BaseNPC +0x5b90`. `NAME_None` by default, which is retail's own answer for a body
+	// that has never travelled and the one that makes a step silent; a case that wants a footfall
+	// names the surface it is standing on.
+	FName GroundSurface;
+
 	virtual FElysiumLocomotionSample SampleLocomotion() const override
 	{
 		FElysiumLocomotionSample Out;
 		Out.FacingYaw = Yaw;
 		Out.bOnGround = true;
+		Out.GroundSurface = GroundSurface;
 		return Out;
 	}
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override
@@ -421,6 +429,23 @@ struct FElysiumRecordingServices final
 		const FElysiumDisposition* Named = DispositionRows.Find(Key);
 		OutRow = Named != nullptr ? *Named : DispositionRow;
 		return OutRow.IsValid();
+	}
+
+	// --- A2 (footsteps): the surface sound table ------------------------------------------
+	// The rows a test authors for the surfaces its bodies stand on. An unlisted name answers false
+	// — the headless answer stated on the interface, and retail's null `surfacedata_t`.
+	TMap<FName, FElysiumSurfaceSounds> SurfaceSounds;
+	virtual bool ResolveSurfaceSounds(FName Surface, FElysiumSurfaceSounds& Out) const override
+	{
+		const FElysiumSurfaceSounds* Row = SurfaceSounds.Find(Surface);
+		Record(FString::Printf(TEXT("ResolveSurfaceSounds %s -> %s"), *Surface.ToString(),
+			Row != nullptr ? TEXT("yes") : TEXT("no")));
+		if (Row == nullptr)
+		{
+			return false;
+		}
+		Out = *Row;
+		return true;
 	}
 	// `TASK_WAIT_PVS`'s answer, settable so a test drives both branches. True by default because
 	// that is what a headless run means: the question has no renderer to answer it.
@@ -1451,6 +1476,28 @@ struct FElysiumRecordingServices final
 			bPlayerOnGround ? TEXT("true") : TEXT("false")));
 		return bPlayerOnGround;
 	}
+	// ---- A1, footsteps ---------------------------------------------------------------------------
+	// The player's whole published locomotion record. UNSET by default, which is the interface's
+	// stated headless answer: a Substrate world runs no mover, and "no record" is a different fact
+	// from a zeroed one — a zeroed sample reads as a body standing still on the ground with no
+	// surface, and a step clock fed that would tick forever. A case that wants the clock to run
+	// sets the sample it wants the clock to see.
+	TOptional<FElysiumLocomotionSample> PlayerLocomotion;
+	virtual bool SamplePlayerLocomotion(FElysiumLocomotionSample& Out) const override
+	{
+		if (!PlayerLocomotion.IsSet())
+		{
+			Record(TEXT("SamplePlayerLocomotion -> (none)"));
+			return false;
+		}
+		Record(FString::Printf(TEXT("SamplePlayerLocomotion -> speed2d=%.1f ground=%d surface=%s"),
+			PlayerLocomotion->Speed2D(), PlayerLocomotion->bOnGround ? 1 : 0,
+			*PlayerLocomotion->GroundSurface.ToString()));
+		Out = *PlayerLocomotion;
+		return true;
+	}
+	// ----------------------------------------------------------------------------------------------
+
 	// The player's published ideal activity, which the melee primary's airborne fork switches on.
 	// Default EMPTY — a Substrate world runs no animation driver, so the honest answer is "nothing
 	// published", and an empty activity forks nowhere. A test that wants the fork names the phase.
@@ -1580,6 +1627,29 @@ struct FElysiumRecordingServices final
 		Request.StartOffsetSeconds = Params.StartTimeSeconds;
 		return Submit(MoveTemp(Request));
 	}
+	// A2 (footsteps): the body-sound seam, RECORDED and not mixed. The `(Owner, Channel)`
+	// replacement is `AElysiumMapActor`'s own policy — it needs a live voice pool to stop a voice
+	// in — so this double deliberately keeps both voices alive and lets a test read the two
+	// requests exactly as the producer made them.
+	virtual FElysiumAudioVoiceHandle PlayBodySound(const FElysiumEntityHandle& Owner,
+		const FElysiumBodySound& Sound) override
+	{
+		Record(FString::Printf(TEXT("PlayBodySound %s vol=%.2f lvl=%d pitch=%.2f chan=%d"),
+			*Sound.Rel, Sound.Volume, Sound.SoundLevelDb, Sound.Pitch,
+			static_cast<int32>(Sound.Channel)));
+		BodySounds.Add(Sound);
+		BodySoundOwners.Add(Owner);
+		FElysiumAudioRequest Request;
+		Request.Source = FElysiumAudioSource::Path(Sound.Rel);
+		Request.Gain = Sound.Volume;
+		Request.Pitch = Sound.Pitch;
+		return Submit(MoveTemp(Request));
+	}
+	// Every body sound a test's producers made, in order, with the owner each was made for. The
+	// recorded line carries the same facts as text; these carry them as values, so a test asserts
+	// a volume without parsing one out of a string.
+	TArray<FElysiumBodySound> BodySounds;
+	TArray<FElysiumEntityHandle> BodySoundOwners;
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) override
 	{
 		Record(FString::Printf(TEXT("StopVoice %u:%u fade=%.2f"),

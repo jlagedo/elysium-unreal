@@ -6,6 +6,7 @@
 #include "ElysiumEntityHandle.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumEventQueue.h"
+#include "ElysiumFootstepTuning.h"   // FElysiumFootstepTuning — held by value below
 #include "ElysiumIOSink.h"
 #include "ElysiumSaveTypes.h"
 #include "ElysiumUserCmd.h"   // EElysiumButton — the world retains the combat button field itself
@@ -477,12 +478,37 @@ public:
 	// through `ElysiumStealth::HearingReductionCmFor`, and a world-made noise (a door) passes 0.
 	void EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
 		const FElysiumEntityHandle& Source, float StealthHearingReductionCm = 0.f);
+
+	// **The player's ONE permanently reserved locomotion stimulus** — `CBasePlayer::UpdatePlayerSound`
+	// (`vampire.dll 0x1016b480`), which inserts nothing and rewrites one `CSound` record every think
+	// (`docs/vtmb/footsteps.md` §2.5). `Slot` is the caller's handle into the bus, updated in place;
+	// a `NAME_None` category retires it, which is retail's volume 0.
+	//
+	// `RadiusCm` is explicit here rather than table-resolved, because the producer's own radius is a
+	// DECAYING value — the reserved slot rises instantly and falls at 250 units/s — and is only
+	// equal to the category's authored reach on the think the sound is loudest. Ask
+	// `GameSoundRadiusUnits` for the value it decays towards.
+	void RefreshGameSound(uint64& Slot, const FVector& PositionCm, FName Category, float RadiusCm,
+		const FElysiumEntityHandle& Source, float StealthHearingReductionCm = 0.f);
+	// The authored reach of a named category, SOURCE UNITS, with the volume table bound on first
+	// use exactly as `EmitGameSound` binds it. 0 for `NAME_None`.
+	float GameSoundRadiusUnits(FName Category);
 	// The retained window. Const for consumers and the debug surface; the mutable overload exists
 	// for the two callers that own the bus's configuration — this world, and a Substrate-tier test
 	// binding a fabricated table — the same shape `Queue()` already has. Defined in the .cpp
 	// because the bus type is only forward-declared here.
 	const FElysiumGameSoundBus& GameSounds() const;
 	FElysiumGameSoundBus& GameSounds();
+
+	// --- A2 (footsteps): the cvar surface both step producers read ------------------------
+	// `footstep_normal_vol/_dist`, `footstep_heavy_vol/_dist`, `footstep_npc_use_templates`,
+	// `footstep_pc_vol` and `sv_footsteps`, at their retail defaults until something refreshes
+	// them. The mutable overload is the refresh (the map actor's pre-move pass calls `LoadFrom`
+	// through it, the way `UElysiumMovementComponent` re-reads `FElysiumMoveTuning` every frame);
+	// every consumer takes the const one. Held here rather than on a component because both
+	// producers are substrate rules and neither can see the console.
+	const FElysiumFootstepTuning& FootstepTuning() const { return FootstepTuningState; }
+	FElysiumFootstepTuning& FootstepTuning() { return FootstepTuningState; }
 
 	// --- The world-event law lane's record store ---
 	// The expiring criminal/supernatural records an NPC's global witness lane polls, in exactly the
@@ -644,16 +670,30 @@ private:
 	// end of Load and for each runtime entity as it spawns.
 	void CaptureBaseline(int32 Index);
 	void PublishWetness();
+	// Bind `sound_volume_table.txt` to the bus on first use, latched. Shared by the three entry
+	// points that need an authored answer (`EmitGameSound`, `RefreshGameSound`,
+	// `GameSoundRadiusUnits`) so a world can never resolve a category against an unbound table
+	// through one of them and a bound one through another.
+	void BindSoundVolumes();
 
 	AActor* Owner = nullptr;                          // component outer + VLOG context; not owned
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
 	FElysiumWorldServices WorldServices;              // the outbound seam; members may be null
 	FElysiumWeatherState WeatherState;
+	// A2 (footsteps): VtMB's seven footstep cvars, held by value at their retail defaults. Refreshed
+	// from the console store by the map actor's pre-move pass; a headless world never refreshes it
+	// and therefore runs on exactly the defaults a stock install has.
+	FElysiumFootstepTuning FootstepTuningState;
 	// The game-sound stimulus window. Held by pointer so the substrate's own header stays out of
 	// this public one, the way LineService below already does.
 	TUniquePtr<FElysiumGameSoundBus> GameSoundBus;
 	// The law-record store, held the same way and for the same reason.
 	TUniquePtr<ElysiumNpcWitness::FElysiumLawEventBus> LawEventBus;
+	// When the player's step clock last ran, substrate seconds. Negative until the first tick, which
+	// is what makes that tick's delta zero rather than "everything since the epoch". Held here
+	// rather than on the player entity because it measures THIS world's tick cadence, and a player
+	// hydrated into a new map has not been ticked in it yet.
+	double LastStepClockNow = -1.0;
 	// Set once the rulebook has been asked for the sound-volume table. Latched rather than retried,
 	// so a world with no game state (or with no exported `vdata`) costs one lookup and then runs on
 	// the bus's own normal-level fallback.

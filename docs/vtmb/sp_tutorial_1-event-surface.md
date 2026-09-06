@@ -286,7 +286,7 @@ current step-3 Python handler; any output it fires rejoins the equal-time tail o
 | `trigger_changelevel` | 14 | 0 | Script-only travel to `sm_pawnshop_1`, `sp_theatre`, and optional patch/hunter destinations. | All carry spawnflag `2` (`NOTOUCH` for this class) and are driven through `ChangeNow`; five begin hidden. The class-specific flag meaning must not be inherited from generic trigger flags. |
 | `trigger_autosave` | 1 | 0 | Establish a recovery point without player UI. | Self-deletes on the first accepted player touch, so repeated saves while occupied are structurally impossible rather than guarded; full chain in `docs/vtmb/entity_io.md` → "`trigger_autosave` (`CTriggerSave`)". |
 | `trigger_inventory_check` | 1 | 3 | Emit `OnPlayerHasItem` for an inventory-gated beat. | Recovered `StartTouch` accepts only a base-filtered player entry, then searches ordinary slots and keyring case-insensitively. It does not poll, test quantity, or disable itself; this map authors the one-shot outputs. |
-| `trigger_environmental_audio` | 16 | 0 | Change acoustic room/reverb state while crossing tutorial spaces. | All begin disabled and author room types `123` (8), `12` (1), `5` (3), `104` (2), `108` (1), and `11` (1). Plans must preserve trigger, SoundScheme `RoomDSP`, interior/exterior, and scripted-override precedence until RE30/RE31 close it. |
+| `trigger_environmental_audio` | 16 | 0 | Change acoustic room/reverb state while crossing tutorial spaces. | All begin disabled (`StartDisabled 1`), unnamed, spawnflags `1`, no Enable wire. Retail InitTrigger therefore never sets `FSOLID_TRIGGER` — these sixteen brushes are **inert**. Room types `123` (8), `12` (1), `5` (3), `104` (2), `108` (1), `11` (1). Precedence when a volume *is* enabled: live `room_type > 0` beats scheme `RoomDSP` (`docs/vtmb/audio_pipeline.md` §4, RE30 closed). |
 | `trigger_stealth_mod` | 3 | 0 | Add a balanced Sneaking modifier while a combat character overlaps the region. | All three author `stealth_modifier=2`; enter adds, leave removes, overlapping raw contributions stack, and only the effective read clamps to `[-10,+10]`. Full observer contract: `stealth.md`. |
 
 ### 4.1 Trigger fidelity risks to keep explicit
@@ -903,8 +903,10 @@ retried. A new contact can still emit its edge-only `OnStartTouch` before the wa
 accidental recursion, but the underlying retail queue still has no starvation budget.
 
 `trigger_environmental_audio` retains the same physical `StartDisabled` and client-admission gate
-as the rest of the trigger family even while environmental room presentation is absent. Spawning
-the blueblood inside disabled room brushes must not manufacture begin/end pairs.
+as the rest of the trigger family. These sixteen brushes never Enable, so they never set
+`FSOLID_TRIGGER` and never write `room_type` (`docs/vtmb/audio_pipeline.md` §4). Spawning
+the blueblood inside disabled room brushes must not manufacture begin/end pairs. The map's
+point/scheme census is `docs/vtmb/three-map-audio-surface.md`.
 
 ### 11.8 Lockpick-to-Sheriff encounter transaction
 

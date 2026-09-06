@@ -544,7 +544,10 @@ The two producers are different only before this boundary:
   uses the same seam rather than growing an animation path inside a controller.
 
 `FElysiumLocomotionSample` is the smaller shared result both bodies publish: local planar velocity,
-speed, facing yaw, `move_yaw`, grounded/air/water state, stance, and the jump phase. It is sampled
+speed, facing yaw, `move_yaw`, grounded/air/water state, stance, the jump phase, and the
+surfaceprop name under the foot (`GroundSurface`, retail's cached `surfacedata_t` — `NAME_None` when
+the body is standing on nothing, `default` on a floor that names no surface;
+`docs/architecture/footstep-architecture.md` §4.1). It is sampled
 after movement and merged with the current action requests into the intent. The Anim Blueprint never
 reads input, AI controllers, entity fields or weapons directly.
 

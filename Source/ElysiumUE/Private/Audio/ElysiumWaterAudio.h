@@ -38,6 +38,14 @@
 //    `ElysiumRng::Stream`, because the substrate never calls `FMath::Rand*`.
 namespace ElysiumWaterAudio
 {
+	// **The footstep half of this namespace has moved.** `UpdateStepSound`'s water and wade arms are
+	// two arms of ONE step clock, not a water feature, and running them here left the game with two
+	// step producers that could not see each other's foot or each other's timer. The clock, the
+	// intervals, the one-in-four wade silence and the pool selection are now
+	// `Substrate/ElysiumFootsteps.h` (`AdvanceStepClock`, `WaterSurface`/`WadeSurface`), driven by
+	// `FElysiumPlayer::TickStepClock`; the step POOLS come off the same baked `PM_water`/`PM_wade`
+	// assets through `IElysiumEmbodiment::ResolveSurfaceSounds`. What stays here is the impact, the
+	// scrape and the exit — the three cues that are not steps.
 	enum class ECue : uint8
 	{
 		// A body hitting the water: `water.Impact`.
@@ -46,10 +54,6 @@ namespace ElysiumWaterAudio
 		Scrape,
 		// Leaving the water: the one fixed filename VtMB names.
 		Exit,
-		// Water level 1 -- ankle deep.
-		StepWater,
-		// Water level >= 2 -- wading.
-		StepWade,
 	};
 
 	// `player/pl_wade2.wav`, the literal `vampire.dll 1003f4d0` pushes. Divergence 0 in the file
@@ -57,35 +61,8 @@ namespace ElysiumWaterAudio
 	// the water is silent -- as it was in 2004. Kept by name, not by guessed substitute.
 	inline const TCHAR* ExitSound = TEXT("player/pl_wade2.wav");
 
-	// The wade pool's cycle. `UpdateStepSound`'s level >= 2 branch runs a four-phase counter
-	// (`DAT_1070b898`) whose phase 0 returns BEFORE playing and the other three play, so three
-	// wading steps in four sound. Level 1 has no such counter -- every step on the clock sounds.
-	inline constexpr int32 StepsPerSound = 4;
-
-	// The water half of `UpdateStepSound`'s speed pair, in Source units per second. A body with
-	// any water level takes {60, 80} where a dry one takes {120, 220} (`1011ea3c`): below the
-	// minimum no step is taken at all, and below the run speed the body is walking.
-	inline constexpr float StepMinSpeedIn = 60.f;
-	inline constexpr float StepRunSpeedIn = 80.f;
-	// The interval each water pool sets on the step timer, in milliseconds, before the pair's own
-	// minimum is added back to it (`1011ec5e`, `m_flStepSoundTime`).
-	inline constexpr float StepIntervalWalkMs = 400.f;
-	inline constexpr float StepIntervalRunMs  = 300.f;
-	inline constexpr float StepIntervalWadeMs = 600.f;
-	inline constexpr float StepIntervalBiasMs = 60.f;
-
-	// Seconds to the next water step for a body moving at `Speed3dIn` Source units per second at
-	// this classified level -- the interval `UpdateStepSound` writes back onto the timer.
-	float StepIntervalSeconds(int32 WaterLevel, float Speed3dIn);
-
-	// Which pool a classified water level draws its footstep from, and whether this step is one of
-	// the ones that sounds. `StepIndex` counts the body's water steps, 0-based.
-	bool IsSoundingStep(int32 StepIndex, int32 WaterLevel);
-	ECue StepCue(int32 WaterLevel);
-
 	// The engine-relative filename for a cue, or empty when the pool has no member (a checkout
 	// whose sound export has not run, or a surfaceprop asset that is not baked). `Variation` is the
-	// caller's own draw; `bRightFoot` selects the `stepright` pool over `stepleft` and is ignored
-	// by the non-footstep cues.
-	FString Resolve(ECue Cue, int32 Variation, bool bRightFoot = false);
+	// caller's own draw.
+	FString Resolve(ECue Cue, int32 Variation);
 }

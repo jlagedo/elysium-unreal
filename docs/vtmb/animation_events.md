@@ -200,6 +200,10 @@ carrying `2052`/`2053` are `*_run`, at cycles `1/3`, `5/9` and `7/9`, `8/9`. `20
 **`CBasePlayer::HandleAnimEvent` swallows 2050 … 2053 outright.** Player footsteps do not come from
 animation events.
 
+The whole footfall subsystem — the `0x1026d460` chain and its constants, the species overrides, the
+player's `m_flStepSoundTime` clock, the landing step, the `PLAYER_FOOTSTEP_*` hearing stimulus and
+the engine's soundlevel→distance law — is recovered in [footsteps.md](footsteps.md).
+
 ### 3000 … 3999 — the weapon band
 
 Routed to `Operator_HandleAnimEvent` (slot `+0x5c8`). `CBaseCombatCharacter` routes `3000..3999`;
@@ -290,6 +294,10 @@ hands a `const char*` to the handler; every handler parses its own.
 | raw particle/emitter name | 5111–5120 |
 | ignored | everything else |
 
+`2050`–`2053` sit in that last row on purpose: `0x1026d460` never reads the 64-byte field, and every
+shipped footfall record carries an empty one. The species overrides do not read it either — they
+select from a fixed wav pool ([footsteps.md](footsteps.md) §1.7).
+
 Failure reporting is per-handler: `"Invalid options for animation event on %s!!"` when `options` is
 empty for the emitter family, `"Could not attach particle %s to point %d on %s"` on a failed
 attachment lookup, `DevWarning("Unhandled animation event %d for %s")` at the base handler, and
@@ -366,6 +374,12 @@ model corpus and `/ElysiumBaked/Models/_Corpus/DA_OrnamentModels` carries the jo
 `CBaseCombatCharacter::HandleAnimEvent` `0x1032e330`, in retail's own order: the weapon forward,
 then the switch, then `CBaseAnimating::HandleAnimEvent` as `default:`. The `sprintf` recovery is
 the section above; this one is the runtime half.
+
+**The NPC footfall band is a different handler and a different document.** `2050`–`2053` reach
+`CAI_BaseNPC::HandleAnimEvent` `0x10274e30`, not the combat-character switch, so their port status
+lives in [footsteps.md](footsteps.md) §1.8 (where each retail input lives in the port) and in the status section
+of `docs/architecture/footstep-architecture.md` (what landed, by file). The content proof that the
+records reach this runtime at all is `Elysium.Content.FootstepEventCensus`.
 
 **A guard that fails is not the same as an id nothing owns.** Retail's `0xfa6`/`0xfa7` arms `break`
 to `LAB_1032e630` - the epilogue - not to the base handler (`1032e5b0` jumps straight to
@@ -495,3 +509,49 @@ the slot's whole life inside one clip), `cigarette_*` (4102), `Drink_*` (4102), 
 and the six `party_*`/`wine_drink` wineglass records (4102). `cigarette_Into` carries 4102 at cycle
 `0.0029` with options `models/items/Cigarette/Cigarette`, which the runtime formats to the catalogue
 key `models/items/cigarette/cigarette_male.mdl`.
+
+## Port status - NPC footstep band (2050-2053)
+
+`FElysiumNpc::HandleAnimEvent` (`Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp`) claims the four
+footfall ids and nothing else of `CAI_BaseNPC::HandleAnimEvent` `0x10274e30` yet. The chain behind
+them is `0x1026d460`, recovered in full in [footsteps.md](footsteps.md) §1 and ported per §1.9.
+
+| code | retail | port | status |
+|---:|---|---|---|
+| 2050 | `0x1026d460(this, 0)` - walk footfall, "normal" | `NpcStep(2050, bHeavy=false)` | **real** |
+| 2051 | `0x1026d460(this, 0)` - the same arm; the foot is discarded | `NpcStep(2051, false)` | **real** |
+| 2052 | `0x1026d460(this, 1)` - run footfall, "heavy" | `NpcStep(2052, bHeavy=true)` | **real** |
+| 2053 | `0x1026d460(this, 1)` | `NpcStep(2053, true)` | **real** |
+
+**All four answer claimed on every arm**, the same rule the combat-character band above states:
+`0x1026d460` returns from each early exit - the player gate, the null `surfacedata_t`, the empty
+sound name - and never reaches `CBaseAnimating::HandleAnimEvent`. A footfall the port decided to
+make no sound for is therefore handled, not unclaimed, and must not appear on the census.
+
+The species overrides on the same virtual (`CNPC_VMingXiao` `0x10392a70`, `CNPC_VHengeyokai`
+`0x1037fb60`, `CNPC_VTzimisceHeadClaw` `0x103c1540`, `CNPC_VTzimisceRunner` `0x103c32c0`) landed as
+a classname-keyed policy table read by `FElysiumNpc::OverrideFootstep` before the shared chain runs.
+`npc_VTzimisceRunner` is the only one of those classnames this port registers; its wav pools play
+and the two shake rows report their unbuilt `UTIL_ScreenShake` once each
+([footsteps.md](footsteps.md) §4.1).
+
+**The rest of `0x10274e30`'s switch is not claimed here.** 1003, 2021/2022, 2040, 2070/2071 and
+4150-4155 still fall through to `FElysiumCombatCharacter::HandleAnimEvent` and then to the census,
+which is what keeps them on the work list.
+
+Tests: `Elysium.Substrate.Footsteps.{NpcNormal, NpcHeavy, NpcCvarPath, NpcMuted, NpcNoSurface,
+NpcNoPool, CoinFlip, SpeciesPolicy}` (the chain against the recording double) and
+`Elysium.Content.FootstepRecords` (the baked shared male banks' own 2050-2053 timelines).
+
+`FootstepRecords` reads six shared male banks and finds **72 walk records and 74 run records over 37
+run clips** - the same 37 the table above counts. Every clip carrying `2052`/`2053` is a `*_run`, and
+every one of their cycles is one of the four recovered values: the `move_and_ranged` family authors
+`2052 @ 1/3` with `2053 @ 8/9`, and the `claws`/`frenzy` family authors `2052 @ 7/9` with
+`2053 @ 5/9`. The walk pair sits at `0.2222` / `0.6444` on `*_walk` (`claws_aggressive_walk` at
+`0.2000` / `0.5111`).
+
+**A `*_run` label does not imply the heavy pair.** The four `panic_run*` clips in the shared male
+`misc` bank carry `2050`/`2051` at `0.3889` / `0.8889` - the walk ids on a running clip - so the
+walk/run split is what the ANIMATOR authored per record, and the handler reads the record and never
+the label. The implication that holds, and the one the test asserts, is the other direction: a clip
+carrying `2052`/`2053` is always a `*_run`.

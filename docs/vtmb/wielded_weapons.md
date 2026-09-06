@@ -178,6 +178,57 @@ field-reference sweep of `+0x76c` and `+0x770` across `vampire.dll` finds exactl
 each — the Precache write. The indices exist so both models are resident and replicated; the model
 actually applied is selected from the live strings instead.
 
+### `SetModel` never fails, and only an *empty* string is declined
+
+`SetModel` is **vtable slot 105** (`+0x1a4`), overridden down the hierarchy —
+`CBaseEntity::SetModel` (`0x100ad460`), `CBaseAnimating::SetModel` (`0x10095030`),
+`CBaseCombatCharacter::SetModel` (`0x1000245f`), `CBaseFlex::vfunc105` (`0x10013813`),
+`CAI_BaseHumanoid::vfunc105` (`0x1000e50c`). Every override converges on the shared helper
+`UTIL_SetModel` (`0x101cf4a0`), and it has **no failure path a caller can observe**:
+
+```
+if (name == NULL || *name == '\0') return;            // the ONLY early out
+index = modelinfo->PrecacheModel(name);               // [DAT_1070b250 + 0x30], synchronous
+if (index < 0) Error();                               // fatal — never returned from
+...
+if (studio_model != NULL)  SetMinsMaxs(ent, model_bounds);
+else                       SetMinsMaxs(ent, vec3_origin, vec3_origin);   // zero-extent bbox
+```
+
+Three facts follow, and all three matter to a port:
+
+1. **Precache is synchronous and inside `SetModel`.** There is no asynchronous admission and
+   nothing for a caller to wait on. A model is resident by the time `SetModel` returns.
+2. **A named model that carries no geometry is a success, not a failure.** It takes the
+   `vec3_origin/vec3_origin` arm and the entity keeps the model it was given, with a zero-extent
+   bounding box. `CBaseAnimating::SetModel` is even softer: when `modelinfo->GetModelType(index)`
+   is not `mod_studio` (`3`) it prints `"Setting CBaseAnimating to non-studio model %s (type:%i)"`
+   and **carries on** — a `Msg`, not an error, and execution continues into `UTIL_SetModel`.
+3. **An empty string is a different value from a null model.** It is the one input `SetModel`
+   declines, leaving the current model in place. This is the same distinction
+   `CWeaponMelee::Deploy` (`0x103ea510`, §1) relies on with its `if (*string != '\0')` guard.
+
+`models/weapons/w_null.mdl` is therefore handed to `SetModel` unconditionally and always succeeds.
+`CBasePlayer::FUN_101772b0` — the weapon-switch wrapper — is the single referencer of the string
+literal at `0x105878c4`, and it passes it straight to `+0x1a4` on the else-branch of its
+`shows_view_model` test (`FUN_10256220`). Nothing downstream distinguishes that call from a katana.
+
+**Port note (Elysium).** `AElysiumMapActor::EnsurePlacedModelAdmitted` admits a catalogue row
+recorded `bSourceAbsent` — the cooked shape of a zero-geometry model — synchronously and in place,
+rather than routing it through the late async admission used for a model that really does have
+assets to stream. A geometryless row references nothing, so that route could never acquire a
+handle, and its failure surfaced as `EElysiumItemGroundModelState::Unavailable` ("a failed asset
+load") for what retail treats as an ordinary success. `Geometryless` is the port's name for
+retail's zero-extent outcome and is the only correct answer here. The regression fires once per
+`item_w_fists`/`item_w_claws` spawn, i.e. once per NPC, because those are the definitions whose
+ground model is `w_null.mdl`.
+
+A second, related ordering rule: retail parsed `vdata/items/*.txt` at start-up (`FUN_10259f80`),
+so an item definition's `playermodel` was always readable when a map derived its precache list.
+Elysium's item table is lazy, so `AElysiumMapActor::CollectMapModelIds` now forces
+`UElysiumRulebookSubsystem::Items()` before deriving; without it `ElysiumItems::Find` answered
+`nullptr` for every classname and **no item ground model reached the precache list at all**.
+
 ### Equip selects by sex and applies a string
 
 `FUN_10252ea0` (equip, weapon vtable slot `+0x468`) ends in the selection:

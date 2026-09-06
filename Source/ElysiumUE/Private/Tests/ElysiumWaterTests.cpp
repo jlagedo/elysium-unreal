@@ -419,41 +419,12 @@ bool FElysiumWaterTest::RunTest(const FString&)
 				ElysiumLightStyle::StyleFromSlotNames(TArray<FName>()), 0);
 		}
 
-		// D3/D4: the pool is chosen by the classified LEVEL rather than by the material under the
-		// foot -- the pier's foam cards bind PM_default. `UpdateStepSound`'s level-1 branch plays
-		// every step the clock comes due on; only the wade branch runs the four-phase counter
-		// (`DAT_1070b898`), and only its phase 0 returns before playing, so three wading steps in
-		// four sound.
-		TestEqual(TEXT("the wade counter has four phases"), ElysiumWaterAudio::StepsPerSound, 4);
-		TestTrue(TEXT("every level-1 step sounds"), ElysiumWaterAudio::IsSoundingStep(0, 1));
-		TestTrue(TEXT("including the second"), ElysiumWaterAudio::IsSoundingStep(1, 1));
-		TestFalse(TEXT("a dry body takes no water step"), ElysiumWaterAudio::IsSoundingStep(0, 0));
-		TestFalse(TEXT("the wade counter is silent on phase 0"),
-			ElysiumWaterAudio::IsSoundingStep(0, 2));
-		TestTrue(TEXT("and sounds on the other three"), ElysiumWaterAudio::IsSoundingStep(1, 2));
-		TestTrue(TEXT("phase 2"), ElysiumWaterAudio::IsSoundingStep(2, 2));
-		TestTrue(TEXT("phase 3"), ElysiumWaterAudio::IsSoundingStep(3, 2));
-		TestFalse(TEXT("and is silent again on the next phase 0"),
-			ElysiumWaterAudio::IsSoundingStep(4, 2));
-		// `1011ec5e`: 400 ms walking / 300 ms running at level 1, 600 ms wading, each with the
-		// water pair's own minimum (60 ms) added back onto the timer.
-		TestEqual(TEXT("a walking level-1 step waits 460 ms"),
-			ElysiumWaterAudio::StepIntervalSeconds(1, ElysiumWaterAudio::StepRunSpeedIn - 1.f),
-			0.46f, 1.e-4f);
-		TestEqual(TEXT("a running one waits 360 ms"),
-			ElysiumWaterAudio::StepIntervalSeconds(1, ElysiumWaterAudio::StepRunSpeedIn), 0.36f,
-			1.e-4f);
-		TestEqual(TEXT("and a wading one 660 ms at any speed"),
-			ElysiumWaterAudio::StepIntervalSeconds(2, 500.f), 0.66f, 1.e-4f);
-		TestEqual(TEXT("level 1 steps in Surfaces/Water"),
-			static_cast<int32>(ElysiumWaterAudio::StepCue(1)),
-			static_cast<int32>(ElysiumWaterAudio::ECue::StepWater));
-		TestEqual(TEXT("level 2 in Surfaces/Wade"),
-			static_cast<int32>(ElysiumWaterAudio::StepCue(2)),
-			static_cast<int32>(ElysiumWaterAudio::ECue::StepWade));
-		TestEqual(TEXT("and so does level 3"),
-			static_cast<int32>(ElysiumWaterAudio::StepCue(3)),
-			static_cast<int32>(ElysiumWaterAudio::ECue::StepWade));
+		// **The step clock moved.** `UpdateStepSound`'s water and wade arms are two arms of one
+		// player step clock, not a water feature; the intervals, the one-in-four wade silence, the
+		// pool selection and the foot alternation are asserted in
+		// `Elysium.Substrate.Footsteps.PlayerWater` against `ElysiumFootsteps::AdvanceStepClock`.
+		// What is left in this lane is the impact, the scrape and the exit.
+
 		// The exit cue names the literal `CBaseEntity::PhysicsCheckWaterTransition` pushes, and
 		// resolves to that name or to nothing -- never to a substitute. No measured VtMB install
 		// ships `player/pl_wade2.wav` (stock Source naming a Half-Life 2 asset Troika never

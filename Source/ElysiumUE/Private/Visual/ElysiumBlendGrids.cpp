@@ -616,3 +616,31 @@ bool ElysiumBlendGrids::SpeedFan(const FElysiumBlendGrid& Grid, const FElysiumBl
 	Out.Scale = Scale;
 	return Out.IsValid();
 }
+
+bool ElysiumBlendGrids::FlatFan(const FElysiumClipMotion& Motion, float Scale,
+	FElysiumGaitSpeedTable& Out)
+{
+	Out = FElysiumGaitSpeedTable();
+
+	// The zero `m_flGroundSpeed` retail computes when the sequence authors no movement at all:
+	// `Studio_AnimMovement` reports false, `GetSequenceMoveDist` is the magnitude of a zero vector,
+	// and the quotient is zero. Refused rather than published, so the caller reports the gap.
+	if (!Motion.IsUsable())
+	{
+		return false;
+	}
+
+	// Every cell equal, across the same span the shipped nine-cell `move_yaw` fans use. The cells
+	// are not an interpolation of anything — a sequence binding no pose parameter accumulates one
+	// corner at weight 1 (`0x100c5d10` over `0x100c1c60`), so the speed is the same number at every
+	// yaw and this shape is that fact, not an approximation of it.
+	for (int32 Index = 0; Index < FElysiumGaitSpeedTable::MaxCells; ++Index)
+	{
+		Out.Cells[Index] = Motion.GroundSpeedCmPerSecond;
+	}
+	Out.Count = FElysiumGaitSpeedTable::MaxCells;
+	Out.AxisMin = -180.0f;
+	Out.AxisMax = 180.0f;
+	Out.Scale = Scale;
+	return Out.IsValid();
+}

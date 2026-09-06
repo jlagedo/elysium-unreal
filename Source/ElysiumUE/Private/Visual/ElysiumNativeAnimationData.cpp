@@ -541,6 +541,15 @@ TSharedPtr<const FElysiumBlendTable> UElysiumNativeAnimationData::BlendTable(con
 		if (!Meta || !Meta->bMovementStated) return nullptr;
 		if (!Meta->Events.IsEmpty()) Table->Events.Add(Meta->SourceLabel,Meta->Events);
 		if (!Meta->Movement.Records.IsEmpty()) Table->Movement.Add(Meta->SourceLabel,Meta->Movement);
+		// The scalar speed of a sequence with no grid. Harvested here, in the loop that is already
+		// residency-gated on every one of the body's sequences being loaded, because that is what
+		// makes the answer available at spawn: the table is only built (and only cached) once
+		// `Pair.Value.Get()` has answered for all of them, so a gait reading it cannot race a load.
+		// A label that also declares a grid is answered by its cells; this map is the other arm of
+		// retail's one `GetSequenceGroundSpeed` call, never a second source for the same sequence.
+		if (Meta->GroundSpeedCmPerSecond>0.f && FMath::IsFinite(Meta->GroundSpeedCmPerSecond))
+			Table->Motion.Add(Meta->SourceLabel,
+				{Meta->CycleSeconds,Meta->GroundDistanceCm,Meta->GroundSpeedCmPerSecond});
 	}
 	for (const auto& Row : Data->Sequences)
 		if (Row.Owner==Data->AssetId && !Row.DeclaredLayers.IsEmpty()) Table->AutoLayers.Add(Row.Label,{Row.DeclaredLayers});

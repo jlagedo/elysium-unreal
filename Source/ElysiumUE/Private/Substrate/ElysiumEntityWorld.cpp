@@ -1202,6 +1202,18 @@ void FElysiumEntityWorld::Tick(double Now)
 	if (FElysiumPlayer* PlayerEnt = FindPlayer())
 	{
 		PlayerEnt->SyncFromBody();
+		// The player's step clock, immediately after the body's state is sampled and on the
+		// POST-MOVE pass — which is where `CGameMovement::PlayerMove` (`0x101274a0`) runs
+		// `UpdateStepSound`, at the far end of the move whose speed and ground contact it reads.
+		//
+		// The delta is measured on the substrate clock between successive ticks, and clamped: a
+		// tick after a load screen would otherwise hand the clock a delta big enough to fire a step
+		// on the first frame back. Retail's own term is `gpGlobals->frametime`, which the engine
+		// clamps for the same reason.
+		const float StepDt = LastStepClockNow >= 0.0
+			? static_cast<float>(FMath::Clamp(Now - LastStepClockNow, 0.0, 0.25)) : 0.f;
+		LastStepClockNow = Now;
+		PlayerEnt->TickStepClock(Now, StepDt);
 	}
 	// The sequence-event pass, immediately before the thinks. Retail dispatches a body's
 	// animation events out of the animating object's own frame advance, ahead of the AI, so the
@@ -1257,25 +1269,66 @@ ElysiumNpcWitness::FElysiumLawEventBus& FElysiumEntityWorld::LawEvents()
 	return *LawEventBus;
 }
 
-void FElysiumEntityWorld::EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
-	const FElysiumEntityHandle& Source, float StealthHearingReductionCm)
+void FElysiumEntityWorld::BindSoundVolumes()
 {
 	// Bind the authored table on the first emission rather than at construction: the rulebook loads
 	// lazily, and a world that never makes a noise should never force the file open. An invalid
 	// table stays unbound so the bus takes its silent normal-level fallback — the rulebook has
 	// already logged why the load failed, and re-reporting it per category would bury it.
-	if (!bSoundVolumesBound && GameState != nullptr)
+	//
+	// A world with no game state never reaches the rulebook and never latches, which is what leaves
+	// a Substrate-tier test's own `GameSounds().SetVolumeTable(...)` standing.
+	if (bSoundVolumesBound || GameState == nullptr)
 	{
-		bSoundVolumesBound = true;
-		if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
+		return;
+	}
+	bSoundVolumesBound = true;
+	if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
+	{
+		const FElysiumSoundVolumeTable& Table = Rules->SoundVolumes();
+		if (Table.IsValid())
 		{
-			const FElysiumSoundVolumeTable& Table = Rules->SoundVolumes();
-			if (Table.IsValid())
-			{
-				GameSoundBus->SetVolumeTable(&Table);
-			}
+			GameSoundBus->SetVolumeTable(&Table);
 		}
 	}
+}
+
+float FElysiumEntityWorld::GameSoundRadiusUnits(FName Category)
+{
+	if (Category.IsNone())
+	{
+		return 0.f;
+	}
+	BindSoundVolumes();
+	return GameSoundBus->ResolveLevel(Category).RadiusUnits;
+}
+
+void FElysiumEntityWorld::RefreshGameSound(uint64& Slot, const FVector& PositionCm, FName Category,
+	float RadiusCm, const FElysiumEntityHandle& Source, float StealthHearingReductionCm)
+{
+	if (Category.IsNone() || RadiusCm <= 0.f)
+	{
+		// Retail's volume 0: the reserved record is still the player's, but nothing can hear it.
+		// Retiring it rather than stamping a zero-radius stimulus keeps the window free of records
+		// no consumer would ever act on.
+		GameSoundBus->Retire(Slot);
+		return;
+	}
+	BindSoundVolumes();
+
+	FElysiumGameSoundRequest Request;
+	Request.Position = PositionCm;
+	Request.Category = Category;
+	Request.RadiusCm = RadiusCm;
+	Request.Source = Source;
+	Request.StealthHearingReductionCm = StealthHearingReductionCm;
+	GameSoundBus->Refresh(Slot, Request, NowSeconds());
+}
+
+void FElysiumEntityWorld::EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
+	const FElysiumEntityHandle& Source, float StealthHearingReductionCm)
+{
+	BindSoundVolumes();
 
 	FElysiumGameSoundRequest Request;
 	Request.Position = PositionCm;

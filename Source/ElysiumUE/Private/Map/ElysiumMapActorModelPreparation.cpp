@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumItemClasses.h"   // ElysiumItems::Find — an item record's ground model
 #include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef::PlayerModel
 #include "Substrate/ElysiumNpcLoadout.h"    // the fists fallback and the none sentinel
+#include "Substrate/ElysiumRulebookSubsystem.h" // Items() — installs the catalogue Find() reads
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/AssetManager.h"
@@ -68,6 +69,17 @@ void AElysiumMapActor::CollectMapModelIds(const FElysiumEntityDefs& Definitions,
 	// Retail's precache list, derived the same way: every spawned entity names what it will show.
 	// A derived ID the catalogues do not carry is dropped here rather than failing the map — the
 	// entity that reaches for it reports the absence once, exactly as it did before.
+
+	// Retail parsed `vdata/items/*.txt` once at start-up (`FUN_10259f80`, the item-definition
+	// loader), so every `playermodel` was readable long before a map spawned anything. Here the
+	// table is lazy: `ElysiumItems::Find` answers out of `GItemTable`, which stays null until
+	// `UElysiumRulebookSubsystem::Items()` runs `ElysiumItems::Install`, and the world does not
+	// touch `Items()` until `FElysiumEntityWorld::Load` — one step AFTER this derivation. Without
+	// this the four `AddItemGroundModel` arms below are silently no-ops and no item ground model
+	// ever reaches the precache list, so each one is discovered late, mid-frame, with nowhere to
+	// wait for a stream (`AdmitPlacedModelAsync`).
+	if (UGameInstance* GI = GetGameInstance())
+		if (auto* Rules = GI->GetSubsystem<UElysiumRulebookSubsystem>()) Rules->Items();
 	auto AddKnown = [&](const FString& Source)
 	{
 		const FString Id = ElysiumCharacterModel::IdFromSource(Source);
@@ -227,6 +239,38 @@ bool AElysiumMapActor::EnsurePlacedModelAdmitted(const FString& ModelPath)
 	const FString Id = ElysiumPreparedProps::ModelId(ModelPath);
 	if (!PropModelPreparation.IsValid() || Id.IsEmpty() || PropModelPreparation->IsAdmitted(Id)
 		|| !PropModelPreparation->Knows(Id) || bMotorsRetired || RuntimePhase == EElysiumMapRuntimePhase::Failed) return true;
+	// Nothing to stream is not a failure, so a model with no asset at all is admitted here and now
+	// rather than routed through an async load that could never acquire a handle. This is retail's
+	// own answer: `UTIL_SetModel` (`0x101cf4a0`, reached from `CBaseEntity::SetModel` `0x100ad460`
+	// and `CBaseAnimating::SetModel` `0x10095030`, vtable slot 105 = `+0x1a4`) precaches the named
+	// model synchronously and carries on — a model with no studio data merely takes the
+	// `SetMinsMaxs(vec3_origin, vec3_origin)` arm and gets a zero-extent bbox, and a non-studio
+	// type costs a `Msg` and nothing else. The ONLY input it declines is an EMPTY string.
+	// `models/weapons/w_null.mdl` is a real shipped, precached model with zero bones and zero
+	// vertices (`docs/vtmb/wielded_weapons.md`), named by 296 of the 384 `(classname, sex)` wield
+	// rows and by `item_w_fists`/`item_w_claws` as their ground model; retail hands it to
+	// `SetModel` unconditionally (`0x101772b0` passes the literal to `+0x1a4`).
+	//
+	// The predicate is the load inventory itself, evaluated with the same gatherer the async route
+	// uses, so "empty here" is exactly "nothing to wait on there". It covers both cooked shapes of
+	// a geometryless model: a published skin row carrying no representation (the twelve units with
+	// `sourceOnlyReason == "geometryless source has skin index 0 but no texture slots"`, which is
+	// what both `w_null` spellings are — they have no placed row at all), and a placed row recorded
+	// `bSourceAbsent`. Failing them was a port artifact with no retail counterpart, and it made
+	// `ItemGroundModelState` answer `Unavailable` — a failed asset load — for the authored empty
+	// body that `Geometryless` exists to name.
+	TSet<FSoftObjectPath> Inventory; FString GatherError;
+	if (GatherPlacedModelPaths(PropModelPreparation->PlacedCatalogue(), PropModelPreparation->SkinCatalogue(),
+		{Id}, Inventory, GatherError) && Inventory.IsEmpty())
+	{
+		FString Error;
+		if (!PropModelPreparation->Admit({Id}, {}, Error))
+		{
+			UE_LOG(LogElysium, Warning,
+				TEXT("geometryless model admission on %s: '%s' failed: %s"), *MapName, *Id, *Error);
+		}
+		return true;
+	}
 	AdmitPlacedModelAsync(Id);
 	return false;
 }

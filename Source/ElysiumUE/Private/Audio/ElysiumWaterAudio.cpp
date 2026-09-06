@@ -1,5 +1,6 @@
 #include "Audio/ElysiumWaterAudio.h"
 
+#include "Audio/ElysiumSurfaceSoundTable.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumPhysicalMaterial.h"
 
@@ -8,37 +9,15 @@
 
 namespace
 {
-	// The two baked surfaceprop assets D3 names. `PM_water` carries the impact/scrape scripts and
-	// the ankle-deep footsteps; `PM_wade` carries the wading ones.
+	// `PM_water` carries the impact/scrape scripts D3 names. Its footstep pools -- and `PM_wade`'s
+	// -- are reached by the substrate step clock through `ResolveSurfaceSounds` instead, so this
+	// lane names only the one asset it still reads.
 	const TCHAR* WaterMaterialPath = TEXT("/ElysiumBaked/SurfaceProperties/PM_water.PM_water");
-	const TCHAR* WadeMaterialPath = TEXT("/ElysiumBaked/SurfaceProperties/PM_wade.PM_wade");
 
-	const UElysiumPhysicalMaterial* LoadSurface(const TCHAR* Path)
-	{
-		// Loaded on first use and kept: two assets for the whole session, and the alternative is a
-		// synchronous load inside a footstep.
-		static TMap<FString, TWeakObjectPtr<UElysiumPhysicalMaterial>> Loaded;
-		if (const TWeakObjectPtr<UElysiumPhysicalMaterial>* Found = Loaded.Find(Path))
-		{
-			if (Found->IsValid())
-			{
-				return Found->Get();
-			}
-		}
-		UElysiumPhysicalMaterial* Material = LoadObject<UElysiumPhysicalMaterial>(
-			nullptr, Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
-		Loaded.Add(Path, Material);
-		return Material;
-	}
-
-	// `vtmb:sound:surfaces/water/stepleft1.wav` -> `surfaces/water/stepleft1.wav`, which is exactly
-	// the engine-relative path under `sound/` that `PlayVoice` takes.
-	FString SoundRel(const FString& AssetId)
-	{
-		static const FString Prefix(TEXT("vtmb:sound:"));
-		return AssetId.StartsWith(Prefix, ESearchCase::IgnoreCase)
-			? AssetId.RightChop(Prefix.Len()) : AssetId;
-	}
+	// The cached surfaceprop loader and the `vtmb:sound:` -> engine-relative strip both moved to
+	// `Audio/ElysiumSurfaceSoundTable.h` when the footstep subsystem needed the same two operations
+	// for all 63 entries. Called qualified below: one cache, so the water lane and a footstep
+	// resolve the same asset object.
 
 	// The folder a surfaceprop's own pool lives in, taken off whichever id it publishes first.
 	FString SurfaceFolder(const UElysiumPhysicalMaterial* Material)
@@ -52,7 +31,7 @@ namespace
 		{
 			if (!Pool->IsEmpty())
 			{
-				return FPaths::GetPath(SoundRel((*Pool)[0]));
+				return FPaths::GetPath(ElysiumSurfaceSoundTable::SoundRel((*Pool)[0]));
 			}
 		}
 		return FString();
@@ -106,53 +85,19 @@ namespace
 	}
 }
 
-float ElysiumWaterAudio::StepIntervalSeconds(int32 WaterLevel, float Speed3dIn)
-{
-	// `1011ec5e`: the pool writes 600 ms wading, else 400 ms walking / 300 ms running against the
-	// water pair's run speed, and the pair's minimum is added to whichever was written.
-	const float Ms = (WaterLevel >= 2)
-		? StepIntervalWadeMs
-		: (Speed3dIn < StepRunSpeedIn ? StepIntervalWalkMs : StepIntervalRunMs);
-	return (Ms + StepIntervalBiasMs) / 1000.f;
-}
-
-bool ElysiumWaterAudio::IsSoundingStep(int32 StepIndex, int32 WaterLevel)
-{
-	if (StepIndex < 0 || WaterLevel <= 0)
-	{
-		return false;
-	}
-	// Level 1 is the plain water pool: `UpdateStepSound` plays it every time the clock comes due.
-	// Only the wade branch carries the four-phase counter, and only its phase 0 is silent.
-	return WaterLevel < 2 || (StepIndex % StepsPerSound) != 0;
-}
-
-ElysiumWaterAudio::ECue ElysiumWaterAudio::StepCue(int32 WaterLevel)
-{
-	// Level 1 is ankle deep and level 2-3 is wading; a dry body is not this lane's business, and
-	// the caller is expected not to ask -- `StepWater` is the harmless answer if it does.
-	return WaterLevel >= 2 ? ECue::StepWade : ECue::StepWater;
-}
-
-FString ElysiumWaterAudio::Resolve(ECue Cue, int32 Variation, bool bRightFoot)
+FString ElysiumWaterAudio::Resolve(ECue Cue, int32 Variation)
 {
 	if (Cue == ECue::Exit)
 	{
 		return ExitSoundExists() ? FString(ExitSound) : FString();
 	}
 
-	const UElysiumPhysicalMaterial* Material =
-		LoadSurface(Cue == ECue::StepWade ? WadeMaterialPath : WaterMaterialPath);
+	// Impact and scrape both live on `PM_water`; the wade prop carries footsteps only, and those
+	// moved to the substrate step clock (`Substrate/ElysiumFootsteps.h`).
+	const UElysiumPhysicalMaterial* Material = ElysiumSurfaceSoundTable::Load(WaterMaterialPath);
 	if (Material == nullptr)
 	{
 		return FString();
-	}
-
-	if (Cue == ECue::StepWater || Cue == ECue::StepWade)
-	{
-		const TArray<FString>& Pool = bRightFoot ? Material->FootstepsRight : Material->FootstepsLeft;
-		const FString Id = Pick(Pool, Variation);
-		return Id.IsEmpty() ? FString() : SoundRel(Id);
 	}
 
 	return Pick(ScriptPool(SurfaceFolder(Material), Cue == ECue::Scrape ? TEXT("scrape") : TEXT("impact")),

@@ -148,4 +148,68 @@ bool FElysiumPreparedPropLateAdmission::RunTest(const FString&)
 	TestTrue(TEXT("context registered for its owner"), ElysiumPreparedProps::ForOwner(F.Owner.Get()) == Ready);
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPreparedPropGeometryless,
+	"Elysium.Content.PreparedPropModels.GeometrylessAdmission", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumPreparedPropGeometryless::RunTest(const FString&)
+{
+	// `models/weapons/w_null.mdl`: a real shipped, precached model with zero bones and zero
+	// vertices, named by `item_w_fists`/`item_w_claws` as their ground model. Retail's
+	// `UTIL_SetModel` (`0x101cf4a0`) precaches it synchronously and carries on — only an EMPTY
+	// model string is declined — so admission must SUCCEED with nothing resident. It formerly went
+	// down the async route, which had no path to wait on, and reported `Unavailable` (a failed
+	// asset load) for the authored empty body.
+	//
+	// This is its ACTUAL cooked shape, checked against the staged catalogues: one of the twelve
+	// published geometryless units — a skin row with no representation and that exact
+	// `SourceOnlyReason` — and NO placed row at all. Both `w_null` spellings have it.
+	FPreparedPropFixture F; FString Error;
+	const FString NullId = TEXT("vtmb:model:weapons/w_null");
+	auto& NullSkin = F.Skins->Data.Models.Add(NullId);
+	NullSkin.AssetId = NullId; NullSkin.FamilyCount = 1; NullSkin.SkinReferenceCount = 1;
+	NullSkin.SourceOnlyReason = TEXT("geometryless source has skin index 0 but no texture slots");
+	TestTrue(TEXT("fixture matches the cooked shape: no placed row"), F.Placed->FindModel(NullId) == nullptr);
+
+	// The reason the async route could never work, and the predicate the gate now uses: the model
+	// references nothing to stream, so gathering succeeds and yields an EMPTY inventory.
+	TSet<FSoftObjectPath> Paths;
+	TestTrue(TEXT("geometryless model gathers paths without error"),
+		FElysiumPreparedPropModels::GatherPaths(F.Placed, F.Skins, {NullId}, Paths, Error));
+	TestEqual(TEXT("geometryless model references no asset to load"), Paths.Num(), 0);
+
+	const auto Ready = FElysiumPreparedPropModels::Create(F.Owner.Get(), 1, F.Placed, F.Skins, {}, {}, Error);
+	if (!TestTrue(TEXT("an empty context is a valid context: ") + Error, Ready.IsValid())) return false;
+	TestTrue(TEXT("a geometryless model is catalogue knowledge"), Ready->Knows(NullId));
+	// The retail contract: nothing to precache, so it succeeds — no resident asset supplied.
+	TestTrue(TEXT("geometryless admission needs no resident asset: ") + Error,
+		Ready->Admit({NullId}, {}, Error));
+	TestTrue(TEXT("geometryless model is admitted"), Ready->IsAdmitted(NullId));
+	// Admission is what lets the embodiment answer `Geometryless` instead of `Unavailable`.
+	TestTrue(TEXT("admitted model reports as explicitly geometryless"), Ready->IsExplicitlyGeometryless(NullId));
+	TestTrue(TEXT("re-admission is a no-op"), Ready->Admit({NullId}, {}, Error));
+	// It carries no geometry, which is the authored answer and not a lookup failure.
+	TestTrue(TEXT("geometryless model resolves no static mesh"), Ready->StaticMesh(NullId, Error) == nullptr);
+
+	// A placed row recorded `bSourceAbsent` is the other cooked shape with nothing to stream, and
+	// the gate must treat it the same way.
+	const FString AbsentId = TEXT("vtmb:model:") + F.Key + TEXT("_absent");
+	auto& AbsentRow = F.Placed->Data.Models.Add(AbsentId);
+	AbsentRow.AssetId = AbsentId; AbsentRow.ModelPath = TEXT("models/") + F.Key + TEXT("_absent.mdl");
+	AbsentRow.bSourceAbsent = true; AbsentRow.SourceReason = TEXT("source-only/no geometry");
+	Paths.Reset();
+	TestTrue(TEXT("source-absent row gathers without error"),
+		FElysiumPreparedPropModels::GatherPaths(F.Placed, F.Skins, {AbsentId}, Paths, Error));
+	TestEqual(TEXT("source-absent row references no asset to load"), Paths.Num(), 0);
+	TestTrue(TEXT("source-absent row admits with nothing resident: ") + Error,
+		Ready->Admit({AbsentId}, {}, Error));
+
+	// Contrast: a model that really does carry geometry still requires its asset, so it keeps
+	// taking the async route rather than being admitted empty.
+	Paths.Reset();
+	TestTrue(TEXT("a geometry model gathers without error"),
+		FElysiumPreparedPropModels::GatherPaths(F.Placed, F.Skins, {F.Id}, Paths, Error));
+	TestTrue(TEXT("a geometry model has assets to load"), Paths.Num() > 0);
+	TestFalse(TEXT("a geometry model still needs its resident asset"), Ready->Admit({F.Id}, {}, Error));
+	return true;
+}
 #endif

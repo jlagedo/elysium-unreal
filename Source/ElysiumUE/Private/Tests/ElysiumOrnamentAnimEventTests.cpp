@@ -262,7 +262,14 @@ bool FElysiumOrnamentAnimEventTest::RunTest(const FString&)
 
 	// --- An id in none of the arms still falls through to the base handler -------------------------
 	{
+		// 2010 (`NPC_SWISHSOUND`), which no arm of this chain claims and which the shipped clips
+		// never author. It replaced 2050 here when the footstep lane landed: these bodies are
+		// `npc_VPedestrian`, so `FElysiumNpc::HandleAnimEvent` now claims 2050-2053 ahead of the
+		// combat-character band and the walk footfall is no longer an unclaimed id
+		// (`docs/vtmb/animation_events.md` -> "Port status - NPC footstep band").
 		TestFalse(TEXT("an unrelated id is not claimed by the character"),
+			Smoker->HandleAnimEvent(Ev(2010, TEXT("left"))));
+		TestTrue(TEXT("...while 2050 IS claimed, by the NPC leaf's footstep arm"),
 			Smoker->HandleAnimEvent(Ev(2050, TEXT("left"))));
 	}
 	return true;

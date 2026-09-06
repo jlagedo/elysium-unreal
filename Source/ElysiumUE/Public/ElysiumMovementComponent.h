@@ -313,6 +313,17 @@ private:
 	// doing work — VtMB's jump is a held push, not a single impulse.
 	float JumpHoldRemaining = 0.0f;
 
+	// `m_flFallVelocity` (`player+0x1ee8`), Source's own bookkeeping and not a derived value:
+	// `CGameMovement::PlayerMove` refreshes it to `-velocity.z` at the top of every move the body
+	// spends with no ground entity, and `CheckFalling` (`0x10125db0`) reads it on the move the
+	// ground comes back and then clears it. Kept in cm/s here, like every other speed on this
+	// component; the sample publishes it as `FallSpeedAtLanding` on the one frame it is consumed.
+	//
+	// Doing it retail's way rather than sampling `Velocity.Z` at the transition is load-bearing:
+	// `TryPlayerMove`'s slide clips the vertical component against the floor plane, so by the time
+	// the ground trace notices the landing the speed that caused it is already gone.
+	float FallVelocity = 0.0f;
+
 	// The player's own gravity scale (`m_flGravity`, `player+0x3ec`), which `Start`/`FinishGravity`
 	// multiply by. `JumpGravityMultiplier` for the duration of a jump, 1.0 otherwise.
 	float GravityScale = 1.0f;
@@ -324,6 +335,13 @@ private:
 	// by 1.25 and clamps to 1.0, and 1 of the install's 11,624 VMTs carries a `$surfaceprop`, so
 	// everything resolves to the `default` prop at 0.8 (`docs/vtmb/source_movement.md`).
 	float SurfaceFriction = 1.0f;
+
+	// The surfaceprop the last ground trace stood on, or `NAME_None` when there was no floor —
+	// retail's `m_pSurfaceData`, cached on `CGameMovement` by `CategorizePosition` and read as a
+	// `gamematerial` letter by `UpdateStepSound 0x1011e940`. Written by `CategorizePosition`,
+	// published on the sample below; the rules it obeys are on `FElysiumLocomotionSample::
+	// GroundSurface` and in `ElysiumGroundSurface`.
+	FName GroundSurface;
 
 	// The body state this mover publishes. Written at the tick tail; read by everything that
 	// wants the body rather than the mover.

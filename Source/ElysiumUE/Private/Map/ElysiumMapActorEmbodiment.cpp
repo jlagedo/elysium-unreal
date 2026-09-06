@@ -10,6 +10,10 @@
 #include "ElysiumContentPaths.h"         // FElysiumContentPaths::BakedParticleSystem — attached effects
 #include "ElysiumDecalSubsystem.h"       // R7.2: the shot's forward trace and its impact decal
 #include "ElysiumEntityDefs.h"           // FElysiumEntityDef — BodyScaleFor's sky-scope read
+#include "ElysiumEntityWorld.h"          // Resolve — a body sound is placed on its owner entity
+#include "ElysiumSoundLevel.h"           // A2: the Source sound-level -> falloff model
+#include "ElysiumSurfaceSounds.h"        // A2: FElysiumSurfaceSounds — the surface table's row
+#include "Audio/ElysiumSurfaceSoundTable.h" // A2: the baked PM_<name> loader behind it
 #include "ElysiumMapSubsystem.h"         // the travel owner behind IElysiumTravel
 #include "ElysiumPlayerBody.h"           // IElysiumPlayerBody — the pawn's camera accessor
 #include "Audio/ElysiumSoundScheme.h"    // FElysiumSoundSchemeManager — the scheme fade forwards
@@ -719,9 +723,90 @@ FElysiumAudioVoiceHandle AElysiumMapActor::PlayVoice(const FString& Rel, const F
 	Request.Placement.Location = Params.Location;
 	Request.Placement.AttachTo = Params.AttachTo;
 	Request.AttenuationRadiusCm = Params.AttenuationRadiusCm;
+	Request.AttenuationOverride = Params.AttenuationOverride;
 	Request.FadeInSeconds = Params.FadeInSeconds;
 	Request.StartOffsetSeconds = Params.StartTimeSeconds;
 	return Submit(MoveTemp(Request));
+}
+
+bool AElysiumMapActor::ResolveSurfaceSounds(FName Surface, FElysiumSurfaceSounds& Out) const
+{
+	// The whole implementation is the baked-asset read; the load cache behind it is session-scoped
+	// (the 63 surface entries are map-independent authored data) and shared with the water lane.
+	return ElysiumSurfaceSoundTable::Resolve(Surface, Out);
+}
+
+// `OwnerHandle` rather than `Owner`: `AActor::Owner` is a member of this class, and a parameter
+// spelled the same shadows it (C4458).
+FElysiumAudioVoiceHandle AElysiumMapActor::PlayBodySound(const FElysiumEntityHandle& OwnerHandle,
+	const FElysiumBodySound& Sound)
+{
+	if (Sound.Rel.IsEmpty())
+	{
+		return FElysiumAudioVoiceHandle::Invalid();
+	}
+	// The owner is what places the sound. No entity world, or a handle that no longer resolves,
+	// means there is nothing to hang it on — retail's `EmitSound` takes an entindex and an entity
+	// that has been removed emits nothing.
+	const FElysiumEntity* Entity = EntityWorld ? EntityWorld->Resolve(OwnerHandle) : nullptr;
+	if (Entity == nullptr)
+	{
+		return FElysiumAudioVoiceHandle::Invalid();
+	}
+
+	// **Channel replacement.** Source holds one voice per (entity, channel): a second `CHAN_BODY`
+	// sound stops the first rather than layering on it, which is why two footsteps 40 ms apart
+	// never overlap in retail. Stopped with no fade, because that is what taking a channel does.
+	const FBodySoundKey Key{ OwnerHandle, Sound.Channel };
+	if (const FElysiumAudioVoiceHandle* Previous = BodySoundVoices.Find(Key))
+	{
+		StopVoice(*Previous, 0.f);
+	}
+
+	FElysiumPlayParams Params;
+	Params.b3D = true;
+	Params.Volume = Sound.Volume;
+	Params.Pitch = Sound.Pitch;
+	// Attached to the body when the entity has one, so a walking NPC's step follows it for the
+	// length of the wav; at the entity's origin otherwise (a logical entity with no primitive).
+	Params.AttachTo = Entity->GetAttachBody();
+	Params.Location = Entity->Origin;
+	// The sound level IS the reach: full gain inside `snd_refdist`, -6 dB per doubling, silent
+	// where the level reaches the 40 dB floor (`ElysiumSoundLevel::MakeAttenuation`). Built once
+	// per level and shared: the curve is 66 keys, it is a pure function of the level, and a walking
+	// cast asks two or three times a second per body.
+	TSharedPtr<const FSoundAttenuationSettings>& Attenuation =
+		BodySoundAttenuations.FindOrAdd(Sound.SoundLevelDb);
+	if (!Attenuation.IsValid())
+	{
+		Attenuation = MakeShared<FSoundAttenuationSettings>(
+			ElysiumSoundLevel::MakeAttenuation(Sound.SoundLevelDb));
+	}
+	Params.AttenuationOverride = Attenuation;
+
+	const FElysiumAudioVoiceHandle Handle = PlayVoice(Sound.Rel, Params);
+	if (!Handle.IsValid())
+	{
+		BodySoundVoices.Remove(Key);
+		return Handle;
+	}
+	BodySoundVoices.Add(Key, Handle);
+
+	// The ledger is bounded by (entities that have ever made a body sound) x (channels), and a map
+	// reload on a surviving actor would carry the previous epoch's keys forward. Compact when it
+	// grows past a body's worth of entries rather than scanning on every step: a handle whose voice
+	// has finished can never be replaced again, and a stale-epoch one never plays by definition.
+	if (BodySoundVoices.Num() > 64)
+	{
+		for (auto It = BodySoundVoices.CreateIterator(); It; ++It)
+		{
+			if (!(It.Key() == Key) && !IsVoicePlaying(It.Value()))
+			{
+				It.RemoveCurrent();
+			}
+		}
+	}
+	return Handle;
 }
 
 void AElysiumMapActor::StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds)

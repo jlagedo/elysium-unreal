@@ -701,10 +701,22 @@ struct FElysiumAnimationIntent
 	// four-way availability probe and its run-to-walk last resort, then the whole request as a
 	// disposition, then sequence zero. It is an NPC rule and the player has none (the controlled
 	// corpus records a ducked ACT_LAND_CROUCH request simply returning -1), so the ladder needs both
-	// this and a `Cast` body kind. A caller clears it when its own contract predates the ladder and
-	// its callers read the miss: a gait resolved through a fallback rung is not that gait, and the
-	// weighted pick would hand the body walking speeds while it plays a crouch.
+	// this and a `Cast` body kind. Clearing it is retail's GESTURE contract and nothing else:
+	// `AddGesture` reaches `SelectWeightedSequence` and simply returns on -1, walking no rung.
 	bool bAllowFallbackLadder = true;
+	// Whether a rung may answer with an activity OTHER than the one requested. Two of the ladder's
+	// rungs do — the run-to-walk last resort (`0x10271ff0`: `piStack_4 == 0x13` -> `9`) and the
+	// ACT_DISPOSITION/sequence-zero retries — and the other four never do, because they only choose
+	// among the same request's own translations.
+	//
+	// **This is the gate a SPEED reader wants, and `bAllowFallbackLadder` is not.** The human
+	// pre-translation (`0x103854f0`) rewrites an unarmed `ACT_WALK` to `ACT_WALK_RELAXED` whatever
+	// the body can play, and no shipped body carries a `ACT_WALK_RELAXED` sequence — so the
+	// availability probe is the ONLY thing that hands a body its plain walk back, and a reader that
+	// refused the whole ladder to avoid reading a crouch as a walk was refusing the rung that makes
+	// an unarmed cast body move at all. Clearing this instead keeps the probe and refuses only the
+	// substitutions, which is the distinction the record exists to make.
+	bool bAllowSubstituteActivity = true;
 	EElysiumAnimSource CompletionOwner = EElysiumAnimSource::Player;
 
 	// No blend time and no asset reference live here, by design: the authored fade comes back OUT on

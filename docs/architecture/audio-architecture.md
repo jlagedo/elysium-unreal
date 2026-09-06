@@ -233,9 +233,12 @@ Calibration differences live beside the generated preset mapping.
 ### `ambient_generic`
 
 The entity owns one logical voice set. `PlaySound`, `StopSound`, `ToggleSound`, `Volume`,
-`FadeIn`, `FadeOut`, hide/unhide, dormancy and `Kill` all manipulate that set through handles.
-Source attachment, force-looping, every/no-position mode, ducking exemption, gameplay-noise flags,
-authored envelopes and sound-event ownership remain entity semantics; none belongs in the decoder.
+hide/unhide, dormancy and `Kill` all manipulate that set through handles. Retail has no
+`FadeIn`/`FadeOut` inputs here (`fadein`/`fadeout` are `m_dpv` KeyValues). Mixer wrap is
+`smpl`/`cue ` or `flag_force_looping`, not the entity looping bit. ScriptHide does not stop
+the voice; Kill does. Source attachment, force-looping, every/no-position mode, ducking
+exemption, gameplay-noise flags, authored envelopes and sound-event ownership remain entity
+semantics; none belongs in the decoder.
 
 ### Map SoundSchemes and music
 
@@ -243,12 +246,14 @@ There is one logical active map scheme, with outgoing and incoming transition st
 prefetches the destination, starts its stems on one audio-clock boundary, then crossfades. Explore,
 alert and combat are states of that scheme, driven by world combat/safe state and the six
 `events_world` music outputs. `NoPause`, `Dry`, `RandomSoundCount` and `RoomDSP` are inputs to that
-policy. They are not called faithful until RE30/RE31 settle precedence and scheduling.
+policy. `RoomDSP` is the fallback behind a live `trigger_environmental_audio` `room_type > 0`
+(`docs/vtmb/audio_pipeline.md` §4, RE30). Scheduling is RE31 in the same file.
 
-Random sounds use the game RNG stream and game clock for deterministic replay. The authored polar
-distribution is evaluated around the scheme anchor/listener as specified by the recovered behavior.
-Until the remaining frequency curve is recovered, the faithful mode logs the unsupported behavior;
-an approximation may exist only as a divergence named and recorded beside the faithful behavior.
+Random sounds use the game RNG stream and game clock for deterministic replay. Recovered
+placement (RE31, `docs/vtmb/audio_pipeline.md` §5): **XY around the player**, **Z around the
+scheme origin**; fire when `Frequency > RandomInt(1, soundscheme_randomness)` (default max
+1000); **Frequency 0 never plays**. Angle min/max are a linear range with no wrap. A seconds-
+between-plays mean, or clamping 0→1, is a named divergence.
 
 ### Dialogue, choreography and body sound
 
@@ -286,6 +291,71 @@ Footsteps and impacts join the current physical/surface material to the exported
 Left/right steps alternate per character; impact/scrape events select their `rndwave`, pitch and
 volume range. Weapon and discipline `SoundData`/`SoundFX` emit through the same event layer and may
 also publish an AI-hearing event.
+
+#### Surface sound table / body sound seam (footstep subsystem, wave 1)
+
+Three pieces of the above are now built, ahead of the two step producers
+(`docs/architecture/footstep-architecture.md`).
+
+**The surface table crosses the seam as data.** `IElysiumEmbodiment::ResolveSurfaceSounds(FName
+Surface, FElysiumSurfaceSounds&)` is a query the map actor answers from the baked
+`/ElysiumBaked/SurfaceProperties/PM_<name>` asset — the `stepleft`/`stepright` variation pools with
+their duplicates intact, the `gamematerial` letter and the `impact`/`scrape` script names, as plain
+strings (`Public/ElysiumSurfaceSounds.h`). `false` means "no such surface", which is retail's null
+`surfacedata_t` and a silent step; `true` with empty pools is a surface that authors no footsteps.
+The load cache is session-scoped (`Private/Audio/ElysiumSurfaceSoundTable.h`) and shared with the
+water lane, which previously owned a duplicate of it. 63 entries resolve; 17 declare a step pool and
+46 carry one once the importer's `base`-chain flattening is applied
+(`Elysium.Content.SurfaceSoundTable`).
+
+**Sound level, not radius.** `ElysiumSoundLevel` (`Public/ElysiumSoundLevel.h`) is Source's
+`soundlevel_t` — distinct from `sound_volume_table.txt`'s AI-hearing level, which is a different
+number in the same runtime. It is a **port, not a model**: the engine's distance law was recovered
+in the same wave (`docs/vtmb/footsteps.md` §3) and every constant here is read from a DLL.
+
+Two DLLs, two reference dB, and the difference is the whole point:
+
+- `vampire.dll 0x10228350` turns an authored distance into a level with **40** dB:
+  `int(20*log10(dist/36) + 40)`, truncating. `FromDistanceUnits`.
+- `engine.dll 0x20119fe0` (`DIST_MULT_TO_SNDLVL`) relates a level to the channel's `dist_mult` with
+  `snd_refdb` = **60**, so a level's reference distance is `D_ref(L) = 36 * 10^((L-60)/20)` units.
+- Therefore `d_authored / D_ref == 10` exactly: **`NormalFootfallDist` / `HeavyFootfallDist` is the
+  −20 dB point of the step, not where it dies.** A 300-unit walk step is level 58, reference
+  distance 28.6 u, −20 dB at 286 u, and audible (gain ≥ `snd_gain_min` 0.01) out to 2860 u.
+
+`Gain(LevelDb, DistUnits)` is `engine.dll 0x2011a0b0` (`SND_GetGain`) as a pure function: raw gain
+`1/max(d/D_ref, 0.1)`, soft-compressed above 0.5 towards `snd_gain_max`, floored at `snd_gain_min`.
+`MakeAttenuation(LevelDb)` samples it onto an `EAttenuationDistanceModel::Custom` curve with the
+sphere's inner radius at `D_ref` and the cull at `D_ref * 100`, giving −6 dB per doubling beyond
+`2 * D_ref` exactly. Custom rather than `::Inverse` because Unreal's `Inverse` pins its own
+reference distance at 2% of the falloff distance and cannot hold a reference distance and a cull
+distance independently. Two departures are named in the source, both bounded: `snd_foliage_db_loss`
+(4 dB per 1200 u) is not applied — stock Source gates the same term behind a foliage trace the port
+has no equivalent for — and the field inside `D_ref` is held flat at 0.912 where retail rises to
+0.9997, at most 0.8 dB within 28 u of the source. The `// A3:` blocks in
+`Public/ElysiumSoundLevel.h` and `Private/Audio/ElysiumSoundLevel.cpp` carry the recovered addresses.
+
+`SourceAttenuation` (`0x1026d460`'s `level > 50 ? 20/(level-50) : 4.0`, integer division retained)
+is kept as a transcription and **feeds nothing**: it is consumed only by `CPASAttenuationFilter`, a
+server-side recipient cull whose loop `maxClients == 1` skips, so in VtMB it is inert. The Unreal
+falloff is derived from the sound level, never from it.
+
+This replaces the ad-hoc `FElysiumPlayParams::AttenuationRadiusCm` for body sounds; the request
+layer now carries an optional whole `FSoundAttenuationSettings` that wins over the radius.
+
+**`IElysiumAudio::PlayBodySound(Owner, FElysiumBodySound)`** is the execution every
+`EmitSound(..., CHAN_BODY, ...)` port lands on. `EElysiumSoundChannel` is Source's `CHAN_*`, and a
+channel is a slot on the entity rather than a mixer bus: the map actor keeps one live voice per
+`(Owner, Channel)` and stops the previous one before playing, which is why two footsteps 40 ms apart
+never overlap in retail. The sound is attached to the owner's `GetAttachBody()` when it has one and
+placed at the entity origin when it does not. The recording double records the request and keeps
+every voice — replacement is the map actor's policy and needs a live voice pool, so it is not
+assertable in the substrate tier (stated in `Elysium.Substrate.Footsteps.BodySoundReplacement`).
+
+The seven `footstep_*` / `sv_footsteps` cvars are declared into the VtMB console store beside the
+`sv_*` movement set and held on `FElysiumEntityWorld` (`FootstepTuning()`), refreshed once per frame
+in the map actor's pre-move pass. Distances stay in **Source units** there, because they are the
+argument of `FromDistanceUnits` rather than lengths anything moves along.
 
 ### NPC voice sets, whispers, radio and news
 

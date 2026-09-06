@@ -2220,7 +2220,7 @@ Counts are wires observed across all maps.
 | classname | inputs it receives |
 | --- | --- |
 | `logic_relay` | Trigger(1704) Disable(84) Kill(74) Enable(66) ScriptUnhide(12) ScriptHide(3) |
-| `ambient_generic` | PlaySound(903) Kill(254) StopSound(248) Volume(36) FadeIn(2) FadeOut(2) ScriptUnhide(2) |
+| `ambient_generic` | PlaySound(903) Kill(254) StopSound(248) Volume(36) FadeIn(2) FadeOut(2) ScriptUnhide(2) — **FadeIn/FadeOut have no datamap handler**; those two+two wires are `AcceptInput` refusals. Real fade keys are KeyValue `fadein`/`fadeout` LFO into `m_dpv` (`docs/vtmb/audio_pipeline.md` §7) |
 | `npc_VHumanCombatant` | 29 inputs — ScriptUnhide(175) TweakParam(140) SetRelationship(107) FollowPatrolPath(95) SetupPatrolType(95) SetInvestigateMode*(130) StayEntrenched(65) WillTalk(36) ScriptHide(32) Kill(25) StartPlayerDialog(19) … |
 | `prop_dynamic` | Skin(332) ScriptUnhide(176) Kill(94) SetAnimation(81) ScriptHide(67) Break(65) |
 | `scripted_sequence` | BeginSequence(515) CancelSequence(93) Kill(92) ScriptHide(15) ScriptUnhide(14) |
@@ -2232,7 +2232,7 @@ Counts are wires observed across all maps.
 | `trigger_changelevel` | ChangeNow(273) ScriptUnhide(18) ScriptHide(6) Enable(1) Kill(1) |
 | `func_door` | Open(157) Close(93) Unlock(15) Lock(12) Toggle(4) Kill(4) ScriptHide(2) |
 | `func_brush` | ScriptHide(104) ScriptUnhide(101) Kill(30) Disable(3) Enable(3) |
-| `ambient_soundscheme` | FadeIn(205) FadeOut(179) Kill(1) Disable(1) |
+| `ambient_soundscheme` | FadeIn(205) FadeOut(179) Kill(1) Disable(1) — **Disable has no handler**; Kill does not stop the manager stems (`docs/vtmb/audio_pipeline.md` §5) |
 | `light` | TurnOff(81) TurnOn(46) Kill(25) SetPattern(20) Toggle(7) FadeToPattern(7) ScriptUnhide(2) |
 | `point_teleport` | Teleport(140) Kill(9) |
 | `light_spot` | TurnOff(63) TurnOn(58) FadeToPattern(30) SetPattern(7) ScriptHide(5) ScriptUnhide(5) Toggle(1) |

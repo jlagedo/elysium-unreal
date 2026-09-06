@@ -677,3 +677,27 @@ At the seam, in the count each change authorizes.
 - `docs/architecture/effects-architecture.md` — the same seam for fire, steam, blood;
   `docs/architecture/rendering-perf.md` — the budget;
   `docs/project/reconstruction-direction.md` — presentation may modernize; logic reproduces.
+
+---
+
+## 17. The player's water footstep clock moved to the substrate (2026-09-06)
+
+Appended by the footstep lane. `AElysiumMapActor::UpdatePlayerWaterFootsteps` /
+`PlayPlayerWaterFootstep` and `ElysiumWaterAudio`'s `StepIntervalSeconds` / `IsSoundingStep` /
+`StepCue` are gone. They were never a water feature: retail's water and wade steps are two arms of
+one `CBasePlayer::UpdateStepSound` (`vampire.dll 1011e940`) switch that also has a dry arm and a
+ladder arm, and running the wet half here left the game with two step timers and two independent
+notions of which foot was next. The clock is now `ElysiumFootsteps::AdvanceStepClock`
+(`Private/Substrate/ElysiumFootsteps.h`), sequenced by `FElysiumPlayer::TickStepClock` off the
+locomotion sample, and the step pools come off the same baked `PM_water` / `PM_wade` assets through
+`IElysiumEmbodiment::ResolveSurfaceSounds` — so there is exactly one producer. **What this actor
+still owns is the classification**: `UpdatePlayerWater` settles the level every pre-move pass,
+writes it onto the mover, and publishes it as `PlayerWaterLevelNow()`; D3/D4's rule — the pool is
+keyed off the classified LEVEL and never off the material under the foot, because the pier's foam
+cards bind `PM_default` — is unchanged and is now asserted in
+`Elysium.Substrate.Footsteps.PlayerWater`. The impact, scrape and exit cues, the splashes and the
+level transition all stay here. Two constants changed with the move and both are recoveries rather
+than retunings (`docs/vtmb/footsteps.md` §2.2, §2.8): the term added to the re-armed interval is
+`flduck` 100 ms, not `velwalk` 60 — so a level-1 walking step is 500 ms and a wading one 700 —
+and the water band's 60 u/s minimum speed gates nothing, because the arm that reads it is dead
+behind `ReduceTimers`' clamp at zero.

@@ -641,6 +641,9 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	// destructor is too late because world cleanup may already have reclaimed its components.
 	CancelCharacterModelAdmissions();
 	EntityWorld.Reset();
+	// The body-sound channel ledger keys on that world's entity handles; the voices themselves are
+	// the audio subsystem's and retire at the epoch boundary.
+	BodySoundVoices.Reset();
 	ReleasePropAndWieldModels();
 	ExpressionPreparation.Reset();
 	if (UGameInstance* GI=GetGameInstance())

@@ -453,6 +453,17 @@ struct FElysiumClanTemplate
 	bool    HasGeneral(const TCHAR* Key) const;
 	FString GeneralStr(const TCHAR* Key, const FString& Def = FString()) const;
 	int32   GeneralInt(const TCHAR* Key, int32 Def = 0) const;
+	// The same raw `General` read as a float, for the keys authored as one. `NormalFootfallVol
+	// 0.45` would read as 0 through `GeneralInt`, and a footstep at volume 0 is silent, so a key
+	// with a fractional part needs its own accessor rather than a caller remembering to parse.
+	// An ABSENT key answers `Def` — which for the four footfall keys is `0x101d3f10`'s own default,
+	// not zero. A key that is present but unparsable answers `Atof`'s 0, exactly as `GeneralInt`
+	// answers `Atoi`'s 0: `General` is kept raw and this is a read, not a validator.
+	//
+	// Reads THIS template's map only. Inheritance is `FElysiumClanTable::Resolve`'s job, and it
+	// already folds `General` parent-first with the child overwriting — which is retail's
+	// `ParentTemplateName` semantics for these keys.
+	float   GeneralFloat(const TCHAR* Key, float Def = 0.0f) const;
 
 	// A trait's rating in this template alone, ignoring the parent chain.
 	const int32* Trait(const FString& InternalName) const;
@@ -472,6 +483,12 @@ struct FElysiumClanTable
 	// Clans first, then NPC templates. Both name spaces are flat and do not collide.
 	const FElysiumClanTemplate* Find(const FString& TemplateName) const;
 	const FElysiumClanTemplate* Clan(int32 Index) const;
+
+	// Append one NPC template and index it by name — `Load`'s own tail, exposed for the same reason
+	// `FElysiumTraitEffects::Add` is: a Substrate-tier test builds a fabricated parent/child pair
+	// (the footfall-key inheritance case) with no `vdata` file behind it. `Find` reads the index,
+	// so an appended template is invisible without going through here.
+	void AddNpcTemplate(FElysiumClanTemplate&& Template);
 
 	// The template with its `ParentTemplateName` chain folded in — a child key wins, an absent one
 	// takes the parent's. Cycle-guarded; returns false when the name resolves to nothing.

@@ -31,6 +31,9 @@ enum class EElysiumRngStream : uint8
 	               // weighted-sequence draw
 	Effects,       // R7.3: the dust motes' in-solid sample points, an env_beam's endpoint pick
 	               // among duplicate targetnames, its random end point and its random restrike
+	Footsteps,     // the NPC step's stepleft/stepright coin flip (`vampire.dll 1026d460`'s
+	               // RandomInt(0,1)), the player step's 95..105 pitch jitter (`1011e430`), the
+	               // wade branch's four-phase silent counter and the Sabbat leader's 0..6 draw
 	Count
 };
 

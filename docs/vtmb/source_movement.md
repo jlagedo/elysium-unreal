@@ -531,6 +531,41 @@ This agrees with the content: no `func_ladder`, `func_useableladder` or any othe
 appears in the exported entity lumps. Ladder movement is not part of this game, so a port has
 nothing to reproduce.
 
+### The step clock — `ReduceTimers` / `UpdateStepSound` / `PlayStepSound` / `CheckFalling`
+
+Appended by the footstep lane (2026-09-06). The full recovery, arm by arm and constant by constant,
+is [footsteps.md](footsteps.md) §2; what belongs *here* is where the four functions sit in the move
+and what the port does with each.
+
+| retail | address | where in the move | port |
+|---|---|---|---|
+| `ReduceTimers` | `0x1011f520` (vfunc 24) | first thing `PlayerMove` runs, before `Duck` | folded into `ElysiumFootsteps::AdvanceStepClock`, which decrements `m_flStepSoundTime` by `frametime * 1000` and **clamps at 0** |
+| `UpdateStepSound` | `0x1011e940` | from `PlayerMove`, at the **top** of the move — after the `m_flFallVelocity` refresh, before `CategorizePosition`, `Duck` and the movetype switch — over the previous move's state | `ElysiumFootsteps::AdvanceStepClock` + `FElysiumPlayer::TickStepClock`, driven from `FElysiumEntityWorld::Tick` on the post-move pass (the same record one frame later; the landing frame is handed the pre-landing premise) |
+| `PlayStepSound` | `0x1011e430` (vfunc 16) | called by both of the above | `PlayPlayerStepSound` in `Private/Substrate/ElysiumPlayerEntity.cpp` → `IElysiumAudio::PlayBodySound`, CHAN_BODY, level 75, pitch 0.95–1.05 |
+| `CheckFalling` | `0x10125db0` | the last line of `FullWalkMove` | `ElysiumFootsteps::LandingStepVolume` + `TickStepClock`'s landing block; only the footstep half — `m_vecPunchangle` and fall damage are not ported here |
+
+Three facts about the clock that the table row above (`step intervals 60/80 walking, 120/220
+running`) gets the wrong way round, all read from the asm rather than the decompiled C:
+
+- **60/80 and 120/220 are the SPEED BANDS, not intervals.** `velwalk`/`velrun` are `{60, 80}` while
+  ducked, on a ladder or in any water and `{120, 220}` otherwise (`0x1011ea30`…`0x1011ea58`); the
+  intervals are 400/300 ms dry, 800 ms below 100 u/s of 2-D speed, 350 ladder, 400/300 water,
+  600 wade.
+- **`velwalk` gates nothing.** The one arm that reads it (`0x1011eabb`) is `speed3D < velwalk` ANDed
+  with `m_flStepSoundTime != 0`, and `ReduceTimers` clamps the clock at 0 — so the second term is
+  always false where it is tested. The only surviving speed gate is "2-D speed > 0".
+- **The term added to the re-armed clock is `flduck` (0 or 100 ms), not `velwalk`.** `0x1011ec9c`
+  loads `[ESP+0x1c]`; the decompiled C at that address renders the `velwalk` local instead. Every
+  band that is not "standing on dry land" therefore pays +100 ms.
+
+`m_flFallVelocity` (`player+0x1ee8`) is Source's own bookkeeping and the port keeps it the same way:
+`PlayerMove` refreshes it to `-velocity.z` at the top of every move the body spends with no ground
+entity, and `CheckFalling` reads it on the move the ground returns and clears it
+(`0x10126226`). `UElysiumMovementComponent::FallVelocity` is that field, published on the
+locomotion sample as `FallSpeedAtLanding` on the one frame it is consumed — sampling `Velocity.Z`
+at the ground transition instead would read zero, because `TryPlayerMove`'s slide has already
+clipped the vertical component against the floor plane.
+
 ### Water
 
 Water movement *does* exist — `WaterMove` (`0x101200c0`), reached from `FullWalkMove` whenever

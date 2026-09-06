@@ -9,6 +9,7 @@
 
 #include "Substrate/ElysiumNpc.h"
 
+#include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumDlg.h"
@@ -19,11 +20,14 @@
 #include "ElysiumRng.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
+#include "ElysiumSoundLevel.h"
 #include "ElysiumStub.h"
+#include "ElysiumSurfaceSounds.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumFeed.h"
+#include "Substrate/ElysiumFootsteps.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -80,7 +84,189 @@ void FElysiumNpc::ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
 		bHasDamageFilter[i] = !Authored.IsEmpty();
 		DamageFilters[i] = bHasDamageFilter[i] ? FCString::Atof(*Authored) : 0.f;
 	}
+
+	// The footfall source (`0x1026d460` step 2, `1026d4a0`). Retail re-resolves the stat template on
+	// EVERY step; this latches the already-resolved record here, at the one site that resolves it,
+	// because `FElysiumClanTable::Resolve` merges seven maps down a parent chain and a walking body
+	// asks two or three times a second. The keys themselves are read at the step, so a cvar flipped
+	// mid-run still switches source.
+	FootstepTemplate = MakeShared<FElysiumClanTemplate>(Resolved);
+
 	Sheet.ApplyTemplate(Resolved, Table);
+}
+
+// --- `CAI_BaseNPC::HandleAnimEvent` (`0x10274e30`) — the footstep arm --------------------------
+//
+// The four ids and nothing else yet. `docs/vtmb/footsteps.md` §1 is the recovery; the rules are
+// `Substrate/ElysiumFootsteps.h` and the sequencing is here, because the chain reads this NPC's
+// template, this NPC's motor and the world's gate.
+//
+// **The rest of retail's switch is not claimed here.** `0x10274e30` also handles 1003, 2021/2022,
+// 2040, 2070/2071 and 4150-4155; those still fall to `FElysiumCombatCharacter::HandleAnimEvent` and
+// then to the anim-event census, which is what keeps them on the work list.
+
+bool FElysiumNpc::HandleAnimEvent(const FElysiumAnimEvent& Event)
+{
+	if (ElysiumFootsteps::IsFootstepEvent(Event.Event))
+	{
+		// 2050/2051 -> `0x1026d460(this, 0)` "normal"; 2052/2053 -> mode 1 "heavy". The left/right in
+		// the id is carried past this point only for the species overrides — the shared chain
+		// re-chooses the foot with a coin flip.
+		return NpcStep(Event.Event, ElysiumFootsteps::IsHeavyFootstep(Event.Event));
+	}
+	return FElysiumScriptedCharacter::HandleAnimEvent(Event);
+}
+
+const FElysiumFootstepSpecies* FElysiumNpc::ResolveFootstepSpecies()
+{
+	if (!bFootstepSpeciesResolved)
+	{
+		bFootstepSpeciesResolved = true;
+		FootstepSpecies = Def != nullptr ? ElysiumFootsteps::SpeciesFor(Def->Classname) : nullptr;
+	}
+	return FootstepSpecies;
+}
+
+bool FElysiumNpc::OverrideFootstep(int32 EventId, bool bHeavy)
+{
+	const FElysiumFootstepSpecies* Row = ResolveFootstepSpecies();
+	if (Row == nullptr || !ElysiumFootsteps::SpeciesClaims(*Row, EventId))
+	{
+		// No override for this classname, or an id this species leaves to the base handler — which
+		// is `CNPC_VTzimisceRunner`'s `JMP 0x100146e1` for 2052/2053.
+		return false;
+	}
+
+	// The shake, which retail raises BEFORE the wav vfunc on both `Shake` rows. Reported, not
+	// performed: the `UTIL_ScreenShake` seam belongs to the 2100/2101 group.
+	ElysiumFootsteps::ReportUnimplementedShake(*Row);
+
+	// The species vfuncs draw from the shared RNG exactly as `0x1026d460` does, and a `Silent` row
+	// draws nothing at all — its override is `return`, with no call behind it.
+	FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::Footsteps);
+	const TCHAR* const Wav = ElysiumFootsteps::PickSpeciesWav(*Row, EventId, Stream);
+	const TCHAR* const Extra = ElysiumFootsteps::PickSpeciesExtraWav(*Row, Stream);
+
+	IElysiumAudio* Audio = World != nullptr ? World->Audio() : nullptr;
+	if (Audio != nullptr)
+	{
+		// Both sounds go out on `CHAN_BODY` because retail's vfunc emits both there
+		// (`0x103c4160`), so the breath REPLACES the footfall on this owner's body channel — which
+		// is what a single Source channel does and not a defect of the seam.
+		auto Emit = [&](const TCHAR* Rel)
+		{
+			if (Rel == nullptr)
+			{
+				return;
+			}
+			FElysiumBodySound Sound;
+			Sound.Rel = Rel;
+			Sound.Volume = ElysiumFootsteps::SpeciesVolume;
+			Sound.SoundLevelDb = ElysiumFootsteps::SpeciesSoundLevelDb;
+			Sound.Pitch = ElysiumFootsteps::SpeciesPitch;
+			Sound.Channel = EElysiumSoundChannel::Body;
+			Audio->PlayBodySound(Handle, Sound);
+		};
+		Emit(Wav);
+		Emit(Extra);
+	}
+	// Claimed either way. Every species override returns without reaching `0x1026d460`, so even the
+	// `Silent` row is a handler and never a census row.
+	return true;
+}
+
+bool FElysiumNpc::NpcStep(int32 EventId, bool bHeavy)
+{
+	// (a) The species overrides replace the whole chain, so they run first and short-circuit it.
+	if (OverrideFootstep(EventId, bHeavy))
+	{
+		return true;
+	}
+	if (World == nullptr)
+	{
+		return true;
+	}
+	// (b) Step 1 (`1026d467`): the global player gate — a scripted camera, a camera track or an open
+	// conversation silences every NPC in the level.
+	if (ElysiumFootsteps::NpcStepsMuted(*World))
+	{
+		return true;
+	}
+
+	// (c) Step 3 (`1026d4aa`): the template's footfall pair, or the cvars.
+	const ElysiumFootsteps::FStepSource Source = ElysiumFootsteps::NpcSource(
+		FootstepTemplate.Get(), bHeavy, World->FootstepTuning());
+
+	// (d) Step 5 (`1026d597`): `if (!this->m_pSurfaceData /* +0x5b90 */) return;`. The motor's last
+	// published surface IS that field — written per move (`CAI_Navigator::MoveEnact 0x102ef870`) and
+	// `NAME_None` until the body has travelled. This reads the cache the motor already publishes
+	// rather than tracing again.
+	const FName Surface = Motor != nullptr ? Motor->SampleLocomotion().GroundSurface : FName();
+	if (Surface.IsNone())
+	{
+		// Counted once per body, the anim-event census's rule: a body standing on nothing fires 2050
+		// every half second and a line per occurrence would bury every real defect.
+		if (!bReportedNoStepSurface)
+		{
+			bReportedNoStepSurface = true;
+			UE_LOG(LogElysiumFootsteps, Verbose,
+				TEXT("%s footfall %d is silent: no ground surface under the body (retail's null "
+					"surfacedata_t at +0x5b90 — the motor has published none)"),
+				*DebugString(), EventId);
+		}
+		return true;
+	}
+
+	FElysiumSurfaceSounds Sounds;
+	IElysiumEmbodiment* Embodiment = World->Embodiment();
+	if (Embodiment == nullptr || !Embodiment->ResolveSurfaceSounds(Surface, Sounds)
+		|| !Sounds.HasSteps())
+	{
+		// A surface the table cannot answer, or one whose baked record carries no step pool at all.
+		// Retail's equivalent is a `surfacedata_t` whose `stepleft`/`stepright` resolve to empty
+		// strings (`1026d666`). Once per (body, surface).
+		if (!ReportedStepSurfacesWithoutPool.Contains(Surface))
+		{
+			ReportedStepSurfacesWithoutPool.Add(Surface);
+			UE_LOG(LogElysiumFootsteps, Verbose,
+				TEXT("%s footfall %d is silent: surface '%s' %s"),
+				*DebugString(), EventId, *Surface.ToString(),
+				Embodiment == nullptr ? TEXT("has no surface table to resolve against")
+									  : TEXT("resolves with no step pool"));
+		}
+		return true;
+	}
+
+	// (f) Step 6 (`1026d5ab` -> `0x10228350`): the authored distance becomes the soundlevel. The
+	// attenuation `0x1026d5e1` computes beside it is a PAS recipient cull that single-player never
+	// runs, so it is not part of what the port emits (`docs/vtmb/footsteps.md` §3.5).
+	const int32 LevelDb = ElysiumSoundLevel::FromDistanceUnits(Source.DistanceUnits);
+
+	// (g) Step 9 (`1026d626`): the coin flip.
+	const FString* Wav = ElysiumFootsteps::PickNpcWav(Sounds,
+		ElysiumRng::Stream(EElysiumRngStream::Footsteps));
+	if (Wav == nullptr || Wav->IsEmpty())
+	{
+		// The chosen side names nothing — retail's own silent step on a half-authored surface. Not
+		// reported: it is a per-draw outcome, not a missing record.
+		return true;
+	}
+
+	// (h) Step 11 (`1026d668`): `EmitSound(CHAN_BODY, name, volume, soundlevel, 0, pitch 100, ...)`.
+	// The volume is the template's or the cvar's, unscaled; the pitch is a hard 100, which is this
+	// seam's 1.0. No `CSoundEnt::InsertSound` anywhere on this path — an NPC footfall raises no AI
+	// hearing stimulus, so one NPC never hears another walk (§1.6).
+	if (IElysiumAudio* Audio = World->Audio())
+	{
+		FElysiumBodySound Sound;
+		Sound.Rel = *Wav;
+		Sound.Volume = Source.Volume;
+		Sound.SoundLevelDb = LevelDb;
+		Sound.Pitch = 1.0f;
+		Sound.Channel = EElysiumSoundChannel::Body;
+		Audio->PlayBodySound(Handle, Sound);
+	}
+	return true;
 }
 
 bool FElysiumNpc::IsKindred() const

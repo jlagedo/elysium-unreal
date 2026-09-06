@@ -31,6 +31,9 @@ struct FElysiumEntityDef;
 struct FElysiumSignData;
 struct FElysiumStanceClips;
 struct FElysiumDisposition;
+// A2 (footsteps): the surface sound row `ResolveSurfaceSounds` fills, declared in
+// `ElysiumSurfaceSounds.h`. By out-reference, so the declaration is enough here.
+struct FElysiumSurfaceSounds;
 
 enum class EElysiumPlacedModelPhysics : uint8
 {
@@ -633,6 +636,22 @@ public:
 		return false;
 	}
 
+	// --- Footsteps (A2): the surface sound table -------------------------------------------
+	// One surfaceprop's audio row, by the name the locomotion sample publishes under
+	// `GroundSurface` (`concrete`, `default`). A QUERY, and the same posture `ResolveDisposition`
+	// has: the table is engine-side because it is baked into
+	// `/ElysiumBaked/SurfaceProperties/PM_<name>` assets, and the row crosses the seam as DATA so
+	// the substrate can pick a step wav with no `UObject` in reach.
+	//
+	// **Headless answers false.** A recording double with no table set, and any embodiment that
+	// carries no baked content, report "no such surface" — which is retail's null `surfacedata_t`
+	// at `+0x5b90` and a silent step (`vampire.dll 1026d460`), not an error. `true` with empty
+	// pools is a DIFFERENT answer: the surface exists and authors no footsteps.
+	virtual bool ResolveSurfaceSounds(FName Surface, FElysiumSurfaceSounds& Out) const
+	{
+		return false;
+	}
+
 	// Whether this body was drawn recently enough to count as visible, standing in for the leaf-set
 	// answer Source's PVS gives `TASK_WAIT_PVS`.
 	//
@@ -975,6 +994,28 @@ public:
 	// asked in the first place.
 	virtual bool IsPlayerOnGround() const { return false; }
 
+	// ---- A1, footsteps: the player's whole locomotion record ------------------------------------
+	// The record the player's mover published at its tick tail, copied out whole.
+	//
+	// A QUERY (S11): every field of it is something only a body that moved can know — the realized
+	// velocity, ground contact, water depth, the duck ramp and the surfaceprop under the foot — and
+	// the step clock this feeds is the substrate's own rule over those premises, ported from
+	// `CBasePlayer::UpdateStepSound 0x1011e940`. Nothing here is arbitrated on this side of the
+	// seam: the whole record crosses, and which interval, which foot, which pool and how loud stay
+	// in plain C++.
+	//
+	// **The headless answer is `false`, and `Out` is left untouched.** A run with no pawn has no
+	// published record at all, and that is a different fact from a record full of zeroes: a zeroed
+	// sample reads as a body standing still on the ground with no surface, which a step clock would
+	// happily tick forever. The caller must branch on the bool rather than on the sample, which is
+	// why the record travels in an out-parameter instead of being returned by value.
+	//
+	// Deliberately the WHOLE sample and not the three scalars the clock needs, unlike
+	// `IsPlayerOnGround` and `GetPlayerBaseActivity` above: those two are single terms of predicates
+	// that ask nothing else of the body, while this is the one producer's one record, and splitting
+	// it into per-consumer accessors is how the player's locomotion becomes two systems.
+	virtual bool SamplePlayerLocomotion(FElysiumLocomotionSample& Out) const { return false; }
+
 	// The LOGICAL activity the player's body is currently classified into — retail's ideal activity
 	// (`m_IdealActivity`), un-translated. The melee primary's airborne fork switches on exactly this
 	// (`docs/vtmb/animation_and_movers.md` § "Player action selection is code around the model
@@ -1060,6 +1101,44 @@ public:
 // Implemented by AElysiumMapActor, which owns the per-map FElysiumSoundSchemeManager and forwards
 // the voice calls to the GI-scoped UElysiumAudioSubsystem. The substrate never holds either.
 // --------------------------------------------------------------------------------------------
+
+// A2 (footsteps): Source's `CHAN_*`, which is what an `IEngineSound::EmitSound` call selects with
+// its third argument. A channel is a SLOT ON THE ENTITY, not a mixer bus: an entity holds one voice
+// per channel and a second sound on the same channel REPLACES the first. That is the whole reason
+// this enum exists here rather than as a routing hint — `PlayBodySound` implements the replacement.
+//
+// The numbers are Source's own (`CHAN_AUTO` 0 ... `CHAN_STATIC` 6, with `CHAN_ITEM` 3 and
+// `CHAN_BODY` 4); footsteps use `Body`, both for the NPC event path (`vampire.dll 1026d460` passes
+// a literal 4) and for the player's clock (`CGameMovement::PlayStepSound`, `1011e430`).
+enum class EElysiumSoundChannel : uint8
+{
+	Auto   = 0,
+	Weapon = 1,
+	Voice  = 2,
+	Item   = 3,
+	Body   = 4,
+	Static = 6,
+};
+
+// A2 (footsteps): one body-attached one-shot, in the terms `EmitSound` takes.
+//
+// `SoundLevelDb` is Source's `soundlevel_t` — the dB number
+// `ElysiumSoundLevel::FromDistanceUnits` computes from the authored audible distance, NOT VtMB's
+// AI-hearing level. 75 is the player's own fixed step level (`1011e430` pushes `0x4b`); an NPC's
+// is computed per step. `Pitch` is a multiplier (retail's `PITCH_NORM` 100 is 1.0 here, and the
+// player's `95 + RandomInt(0,10)` jitter is 0.95..1.05).
+struct FElysiumBodySound
+{
+	// The engine-relative path under `sound/`, as `PlayVoice` takes it.
+	FString Rel;
+	float Volume = 1.f;
+	// 75 = `ElysiumSoundLevel::PlayerStepLevelDb`, spelled as a literal so this header does not have
+	// to pull `Sound/SoundAttenuation.h` in behind `ElysiumSoundLevel.h`.
+	int32 SoundLevelDb = 75;
+	float Pitch = 1.f;
+	EElysiumSoundChannel Channel = EElysiumSoundChannel::Body;
+};
+
 class IElysiumAudio
 {
 public:
@@ -1077,6 +1156,23 @@ public:
 	// Compatibility translation for the existing entity leaves. New integrations submit a typed
 	// request above; this method constructs exactly that request rather than owning a second path.
 	virtual FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params) = 0;
+
+	// A2 (footsteps): an EXECUTION — one body-attached one-shot on one of the owner's channels.
+	// The seam every `EmitSound(..., CHAN_BODY, ...)` port lands on (footsteps first; impacts,
+	// 4020 and the weapon foley later), so the sound-level model and the channel rule are
+	// implemented once instead of per producer.
+	//
+	// The map actor plays it attached to the owner's `GetAttachBody()` when the entity has one and
+	// at the entity's origin when it does not, with attenuation from
+	// `ElysiumSoundLevel::MakeAttenuation(SoundLevelDb)`, and REPLACES whatever it was already
+	// playing on the same `(Owner, Channel)` — Source's channels hold one voice each, which is why
+	// two footsteps 40 ms apart never overlap in retail. A recording double records the request.
+	//
+	// The returned handle is `FElysiumAudioVoiceHandle::Invalid()` when nothing was played (an
+	// empty `Rel`, an owner that does not resolve, no audio device).
+	virtual FElysiumAudioVoiceHandle PlayBodySound(const FElysiumEntityHandle& Owner,
+		const FElysiumBodySound& Sound) = 0;
+
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) = 0;
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) = 0;
 	virtual bool IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const = 0;

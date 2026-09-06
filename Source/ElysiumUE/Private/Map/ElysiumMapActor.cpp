@@ -18,7 +18,9 @@
 #include "Map/ElysiumFeedTargeting.h"
 #include "Map/ElysiumMapCollision.h"
 #include "Map/ElysiumMapLog.h"
+#include "Debug/ElysiumConsole.h"       // A2: FElysiumConsole::GetCvar — the footstep cvar read
 #include "Player/ElysiumCameraShots.h"
+#include "Player/ElysiumCommandBus.h"   // A2: the VtMB console store the footstep cvars live in
 #include "ElysiumCameraComponent.h"
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
@@ -1680,6 +1682,24 @@ bool AElysiumMapActor::IsPlayerOnGround() const
 	return Body != nullptr && Body->GetLocomotionSample().bOnGround;
 }
 
+bool AElysiumMapActor::SamplePlayerLocomotion(FElysiumLocomotionSample& Out) const
+{
+	// The same record `IsPlayerSneaking` and `IsPlayerOnGround` above read one field of, handed over
+	// whole — the player's footstep clock needs the speed bands, the duck, ground contact, the water
+	// depth and the surfaceprop under the foot, and re-deriving any of them here would be a second
+	// definition of a fact the mover already published.
+	const APawn* Pawn = ResolvePlayerPawn();
+	const IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	if (Body == nullptr)
+	{
+		// The stated headless answer. `Out` is left exactly as the caller had it: a zeroed sample
+		// reads as a body standing still on the ground, which is not what "there is no body" means.
+		return false;
+	}
+	Out = Body->GetLocomotionSample();
+	return true;
+}
+
 FString AElysiumMapActor::GetPlayerBaseActivity() const
 {
 	// The driver's own published record, read through the same accessor Cog, the trace and the MCP
@@ -1882,6 +1902,15 @@ void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 			// Every other entity thinks in the gameplay pass, after the move.
 			if (EntityWorld)
 			{
+				// A2 (footsteps): re-read the seven footstep cvars off the VtMB console store
+				// before anything that can raise a step runs, exactly as
+				// `UElysiumMovementComponent` re-reads `FElysiumMoveTuning` every frame. A cvar the
+				// store does not carry keeps its retail default, so a run with no `out/cfg`
+				// behaves like a stock install.
+				EntityWorld->FootstepTuning().LoadFrom([](const TCHAR* Name) -> FString
+				{
+					return ElysiumCommandBus::Console().GetCvar(Name);
+				});
 				EntityWorld->RunPlayerThink(GameState->GameClock().GetNow());
 			}
 		}
@@ -1898,11 +1927,10 @@ namespace
 	// pool member at random; the substrate never calls `FMath::Rand*`). A cue whose pool is empty
 	// -- an unexported sound, an unbaked surfaceprop -- plays nothing and says nothing: the export
 	// gate is where a missing wav is reported, not a footstep.
-	void PlayWaterCue(AElysiumMapActor& Map, ElysiumWaterAudio::ECue Cue, const FVector& AtCm,
-		bool bRightFoot = false)
+	void PlayWaterCue(AElysiumMapActor& Map, ElysiumWaterAudio::ECue Cue, const FVector& AtCm)
 	{
 		const int32 Variation = ElysiumRng::Stream(EElysiumRngStream::Ambient).RandHelper(1024);
-		const FString Rel = ElysiumWaterAudio::Resolve(Cue, Variation, bRightFoot);
+		const FString Rel = ElysiumWaterAudio::Resolve(Cue, Variation);
 		if (Rel.IsEmpty())
 		{
 			return;
@@ -1956,48 +1984,6 @@ void AElysiumMapActor::RaiseWaterSplash(ElysiumWater::ESplash Kind, const FVecto
 	{
 		PlayWaterCue(*this, ElysiumWaterAudio::ECue::Impact, LocationCm);
 	}
-}
-
-void AElysiumMapActor::PlayPlayerWaterFootstep(int32 StepIndex, bool bRightFoot)
-{
-	if (!ElysiumWaterAudio::IsSoundingStep(StepIndex, PlayerWaterLevel))
-	{
-		return;
-	}
-	const APawn* Pawn = ResolvePlayerPawn();
-	PlayWaterCue(*this, ElysiumWaterAudio::StepCue(PlayerWaterLevel),
-		Pawn != nullptr ? Pawn->GetActorLocation() : FVector::ZeroVector, bRightFoot);
-}
-
-void AElysiumMapActor::UpdatePlayerWaterFootsteps(float DeltaSeconds,
-	const FVector& VelocityCmPerSec)
-{
-	// `CBasePlayer::UpdateStepSound` (`vampire.dll 1011e940`), the water half of it. The timer is
-	// the gate at the head of that function (`m_flStepSoundTime > 0` returns): a step is taken
-	// when the clock comes due and the body is moving, and the pool the step draws from is the
-	// classified level's. A dry body drops the clock so the first step back in the water is
-	// immediate, which is what a zeroed `m_flStepSoundTime` does there.
-	if (PlayerWaterLevel <= 0)
-	{
-		PlayerStepSoundSeconds = 0.f;
-		return;
-	}
-	PlayerStepSoundSeconds = FMath::Max(0.f, PlayerStepSoundSeconds - DeltaSeconds);
-	const float Speed2dIn =
-		FVector(VelocityCmPerSec.X, VelocityCmPerSec.Y, 0.f).Size() / ElysiumMove::U;
-	const float Speed3dIn = VelocityCmPerSec.Size() / ElysiumMove::U;
-	// `1011eaa2`: horizontal motion at all, and either the water pair's minimum speed or a timer
-	// that has already run out.
-	if (Speed2dIn <= 0.f || PlayerStepSoundSeconds > 0.f
-		|| Speed3dIn < ElysiumWaterAudio::StepMinSpeedIn)
-	{
-		return;
-	}
-	PlayerStepSoundSeconds =
-		ElysiumWaterAudio::StepIntervalSeconds(PlayerWaterLevel, Speed3dIn);
-	PlayPlayerWaterFootstep(PlayerWaterStepIndex, bPlayerWaterStepRight);
-	++PlayerWaterStepIndex;
-	bPlayerWaterStepRight = !bPlayerWaterStepRight;
 }
 
 void AElysiumMapActor::UpdatePlayerWater(float DeltaSeconds)
@@ -2097,9 +2083,12 @@ void AElysiumMapActor::UpdatePlayerWater(float DeltaSeconds)
 	{
 		PlayWaterCue(*this, ElysiumWaterAudio::ECue::Exit, Pawn->GetActorLocation());
 	}
+	// The classified level is this pass's whole product now. **The step clock moved**: the water
+	// and wade footsteps are two arms of `CBasePlayer::UpdateStepSound` (`vampire.dll 1011e940`),
+	// not a water feature, and they run on the substrate's one step clock
+	// (`FElysiumPlayer::TickStepClock`) off the level this write settles and the mover publishes on
+	// its locomotion sample. What is left here is the classification the clock asks for.
 	PlayerWaterLevel = Now;
-	// The step clock reads the level this pass just settled, so it runs after the write.
-	UpdatePlayerWaterFootsteps(DeltaSeconds, Pawn->GetVelocity());
 }
 
 void AElysiumMapActor::Tick(float DeltaSeconds)

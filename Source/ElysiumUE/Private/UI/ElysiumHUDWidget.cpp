@@ -19,7 +19,6 @@
 #include "Widgets/Layout/SScaleBox.h"
 #include "Widgets/Layout/SSeparator.h"
 #include "Widgets/Layout/SSpacer.h"
-#include "Widgets/Notifications/SProgressBar.h"
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/SCanvas.h"
 #include "Widgets/SOverlay.h"
@@ -74,6 +73,43 @@ namespace
 	// so a narrower ceiling (a trait effect capping the pool) still draws correctly.
 	constexpr int32 GBloodDropletSlots = 15;
 	constexpr int32 GBloodDropletsPerGroup = 5;
+
+	// A horizontal meter: an outlined trough and a flat fill that occupies `Percent` of its width,
+	// from the left. Retail draws both its bars this way — `CFeedBar::vfunc98` `0x10050560` clips a
+	// full sprite to the percentage over an empty one — and this is that, in Slate primitives. It
+	// deliberately does not use `SProgressBar`: that widget draws its fill through the engine's
+	// `Common/ProgressBar_Fill` box brush and its style tint, so what reaches the screen is the
+	// brush multiplied by the colour asked for, and in the game build the result has been a colour
+	// the code never names (a blue LIFE bar) and, for the red victim meter, nothing visible at all.
+	// A flat white brush tinted by the colour is exactly what the code says it is.
+	TSharedRef<SWidget> MeterBar(float Width, float Height, float Outline,
+		TAttribute<float> Percent, TAttribute<FSlateColor> Fill)
+	{
+		const FSlateBrush* White = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
+		const TAttribute<float> Remainder = TAttribute<float>::CreateLambda([Percent]()
+		{
+			return 1.0f - FMath::Clamp(Percent.Get(), 0.0f, 1.0f);
+		});
+		const TAttribute<float> Filled = TAttribute<float>::CreateLambda([Percent]()
+		{
+			return FMath::Clamp(Percent.Get(), 0.0f, 1.0f);
+		});
+		return SNew(SBox).WidthOverride(Width).HeightOverride(Height)
+		[
+			SNew(SBorder).BorderImage(White).BorderBackgroundColor(HUDOutline).Padding(Outline)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().FillWidth(Filled)
+				[
+					SNew(SImage).Image(White).ColorAndOpacity(Fill)
+				]
+				+ SHorizontalBox::Slot().FillWidth(Remainder)
+				[
+					SNew(SSpacer)
+				]
+			]
+		];
+	}
 
 	TSharedRef<SWidget> BloodDroplet(UElysiumHUDModel* Model, int32 Index)
 	{
@@ -367,23 +403,17 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		]
 		+ SVerticalBox::Slot().AutoHeight().Padding(0, 5, 0, 0)
 		[
-			SNew(SBox).WidthOverride(240).HeightOverride(10)
-			[
-				SNew(SBorder).BorderImage(White).BorderBackgroundColor(HUDOutline).Padding(1)
-				[
-					SNew(SProgressBar)
-					.Percent_Lambda([M]() -> TOptional<float>
-					{
-						return M && M->MaxHealth > 0
-							? FMath::Clamp(float(M->Health) / float(M->MaxHealth), 0.0f, 1.0f) : 0.0f;
-					})
-					.FillColorAndOpacity_Lambda([M]()
-					{
-						return M && M->MaxHealth > 0 && M->Health * 4 <= M->MaxHealth
-							? ElysiumUI::Palette::BloodLit : ElysiumUI::Palette::Bone;
-					})
-				]
-			]
+			MeterBar(240, 10, 1,
+				TAttribute<float>::CreateLambda([M]()
+				{
+					return M && M->MaxHealth > 0
+						? FMath::Clamp(float(M->Health) / float(M->MaxHealth), 0.0f, 1.0f) : 0.0f;
+				}),
+				TAttribute<FSlateColor>::CreateLambda([M]() -> FSlateColor
+				{
+					return M && M->MaxHealth > 0 && M->Health * 4 <= M->MaxHealth
+						? ElysiumUI::Palette::BloodLit : ElysiumUI::Palette::Bone;
+				}))
 		]
 	];
 
@@ -414,22 +444,19 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 	// composition. Its value is a projection only — the substrate pulse clock remains authoritative.
 	Content->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Top).Padding(0, 38, 0, 0)
 	[
-		SNew(SBox).WidthOverride(500).HeightOverride(14)
+		SNew(SBox)
 		.Visibility_Lambda([M]() { return M && M->bFeedVictimVisible
 			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
 		[
-			SNew(SBorder).BorderImage(White).BorderBackgroundColor(HUDOutline).Padding(2)
-			[
-				SNew(SProgressBar)
-				// The published fraction, drawn as it arrives. Deriving it here from the two
-				// counters would drop `CFeedBar`'s pre-pulse anticipation and would re-introduce
-				// the empty bar the view state now refuses to publish at all.
-				.Percent_Lambda([M]() -> TOptional<float>
+			// The published fraction, drawn as it arrives. Deriving it here from the two counters
+			// would drop `CFeedBar`'s pre-pulse anticipation and would re-introduce the empty bar
+			// the view state now refuses to publish at all.
+			MeterBar(500, 14, 2,
+				TAttribute<float>::CreateLambda([M]()
 				{
 					return M ? FMath::Clamp(M->FeedVictimPercent, 0.0f, 1.0f) : 0.0f;
-				})
-				.FillColorAndOpacity(ElysiumUI::Palette::BloodLit)
-			]
+				}),
+				FSlateColor(ElysiumUI::Palette::BloodLit))
 		]
 	];
 

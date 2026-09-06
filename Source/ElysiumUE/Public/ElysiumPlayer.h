@@ -1727,6 +1727,60 @@ public:
 	// `SetPlayerBlockHeld` arms on every change of the button.
 	void TickBlockIntent(double NowSeconds);
 
+	// --- Footsteps (B2): the step clock, the landing and the hearing stimulus -----------------
+	//
+	// `docs/vtmb/footsteps.md` §2. Three retail functions, two entry points:
+	//
+	//   * `TickStepClock` is `CGameMovement::ReduceTimers` (`0x1011f520`) +`UpdateStepSound`
+	//     (`0x1011e940`) + `PlayStepSound` (`0x1011e430`) + `CheckFalling`'s forced step
+	//     (`0x10125db0`), run once per world tick on the post-move pass. Retail runs the clock at
+	//     the TOP of `PlayerMove` (`0x101274a0`) over the previous move's state and `CheckFalling`
+	//     at the end of `FullWalkMove`; the post-move sample is the same record one frame later,
+	//     and the one frame where that matters — the landing — is handled inside. It is fed
+	//     entirely by `IElysiumEmbodiment::SamplePlayerLocomotion`; a run with no published record
+	//     leaves the clock untouched rather than ticking it against a body that does not exist.
+	//   * `UpdatePlayerSound` is `CBasePlayer::UpdatePlayerSound` (`0x1016b480`) off `PostThink`,
+	//     which is NOT a per-step producer: it rewrites the player's one permanently reserved
+	//     stimulus every think, choosing between six `sound_volume_table.txt` rows and decaying the
+	//     radius at 250 units/s. It runs from `Think` here.
+	//
+	// The whole rule half lives in `Substrate/ElysiumFootsteps.h`; these two are the sequencing and
+	// the state retail keeps on `CBasePlayer`.
+	void TickStepClock(double NowSeconds, float DeltaSeconds);
+	void UpdatePlayerSound(double NowSeconds);
+
+	// `m_flStepSoundTime` (`player+0x2328`), MILLISECONDS. Session state: retail's field is on the
+	// player and survives moves, but a save restoring a half-run step interval buys nothing.
+	float StepSoundMs = 0.f;
+	// `m_nStepside` (`player+0x1ee4`): clear draws `stepright`, set draws `stepleft`, toggled on
+	// every emit whether or not the chosen pool had a sound in it.
+	bool bStepSide = false;
+	// The wade branch's four-phase counter — retail's MODULE GLOBAL at `0x1070b898`, which is a
+	// single static shared by everything that wades. Held per player here because this runtime has
+	// exactly one wading body and a global would be a second lifetime to reset.
+	int32 WadeStepPhase = 0;
+
+	// The reserved locomotion stimulus: the bus slot, the radius currently standing (SOURCE units,
+	// decaying) and the category that radius belongs to. Retail's `CSound` record carries only a
+	// type and a volume, so the category is the port's own — a decaying tail keeps the name of
+	// whatever produced it, because a consumer switching on the category has to be told something.
+	uint64 PlayerSoundSlot = 0;
+	float PlayerSoundRadiusUnits = 0.f;
+	FName PlayerSoundCategory;
+	// When `UpdatePlayerSound` last ran, for the 250 units/s decay. Negative until the first pass.
+	double PlayerSoundLastTime = -1.0;
+	// The port's stand-in for the player animation state (`+0x1db4` values 8 / 10 / 11), which
+	// `UpdatePlayerSound` reads to pick `PLAYER_LAND_SOFT` or `PLAYER_LAND_HARD`. **The enum itself
+	// is unrecovered** (`docs/vtmb/footsteps.md` §4): the port latches the landing the step clock
+	// just classified — soft band or hard band — and the next think consumes it. A latch rather than
+	// a per-frame read because the clock ticks every frame and the think does not.
+	FName PendingLandCategory;
+	// The two kill switches `UpdatePlayerSound` honours: `FL_NOTARGET` (`0x8000`, `1016b4b8`) and
+	// `m_fNoPlayerSound` (`player+0x22a0`, `1016b610`), either of which writes volume 0 into the
+	// reserved record. SEAM: nothing in this runtime sets it yet — retail's `notarget` path and the
+	// setter of `+0x22a0` are unrecovered — so it answers false and the slot always sounds.
+	bool bNoPlayerSound = false;
+
 	// Offer this player an observer, from an NPC's own sight pass. Nearest wins; an offer for the
 	// incumbent refreshes it. Nothing is published here — `Think` commits, which is what keeps the
 	// HUD downstream of gameplay rather than beside it.
@@ -1739,6 +1793,15 @@ public:
 	// where retail runs it, inside CPlayerMove::RunCommand. The feed transaction is driven from
 	// here, so a pulse deadline is measured on the substrate clock and never on a timer.
 	virtual void Think() override;
+
+	// `CBasePlayer::HandleAnimEvent` SWALLOWS 2050-2053. The player's clips carry the same footfall
+	// records the cast's do — they are the same shared banks — and retail claims all four without
+	// playing anything, because the player's steps come off `UpdateStepSound`'s millisecond clock
+	// instead (`docs/vtmb/footsteps.md` §2). Claiming them is therefore a behaviour and not a census
+	// tidy-up: an unclaimed record would eventually find a handler and double every step.
+	//
+	// Everything else falls to `FElysiumCombatCharacter::HandleAnimEvent` unchanged.
+	virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) override;
 
 	// `CHL2_Player`'s own slot-333 maintainer (`0x10350270`), which is not the NPC cascade: the
 	// player's eyes are commanded straight ahead of the head frame, 300 units out, and the

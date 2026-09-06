@@ -5,6 +5,7 @@
 #include "ElysiumCommands.h"
 #include "Debug/ElysiumConsole.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumFootstepTuning.h"
 #include "ElysiumLookCurve.h"
 #include "ElysiumMoveSolve.h"
 #include "Scripting/ElysiumPythonVM.h"
@@ -46,6 +47,12 @@ FElysiumConsole& ElysiumCommandBus::Console()
 			Store.DeclareCvar(Def.Name, Def.Default);
 		}
 		for (const ElysiumInput::FCvarDef& Def : ElysiumInput::CvarDefs())
+		{
+			Store.DeclareCvar(Def.Name, Def.Default);
+		}
+		// A2 (footsteps): the seven `footstep_*` / `sv_footsteps` cvars, declared with the defaults
+		// `vampire.dll` constructs them with (`0x1026d1b0..0x1026d3f0`, `0x1011d7e0`).
+		for (const ElysiumFootstep::FCvarDef& Def : ElysiumFootstep::CvarDefs())
 		{
 			Store.DeclareCvar(Def.Name, Def.Default);
 		}

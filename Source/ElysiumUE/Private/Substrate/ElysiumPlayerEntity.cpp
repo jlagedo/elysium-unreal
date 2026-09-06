@@ -6,13 +6,19 @@
 
 #include "ElysiumPlayer.h"
 
+#include "ElysiumAnimEvent.h"                // the 2050-2053 swallow reads the record's id
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumLocomotionSample.h"         // the step clock's whole input
 #include "ElysiumMoveSolve.h"
 #include "ElysiumGameStateSubsystem.h"
+#include "ElysiumRng.h"                      // EElysiumRngStream::Footsteps
 #include "ElysiumSheetSlots.h"
+#include "ElysiumSurfaceSounds.h"            // the step pools the emit draws from
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDisciplines.h"
+#include "Substrate/ElysiumFootsteps.h"      // the step clock, the landing and the hearing rules
+#include "Substrate/ElysiumGameSound.h"      // the six PLAYER_* category names
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpcConditions.h"  // WeaponCapability — the block predicate's `0x18000` term
 #include "Substrate/ElysiumPlayerLog.h"
@@ -115,13 +121,12 @@ void FElysiumPlayer::Think()
 	// `SetAnimation`'s law helper instead. `ElysiumLaw.cpp` states that divergence beside the code.
 	ElysiumLaw::TickPlayerLaw(*this, Now);
 
-	// SEAM: the footstep hearing stimulus belongs here, and there is nothing to hang it on yet.
-	// `sound_volume_table.txt` names `PLAYER_FOOTSTEP_SNEAK`/`_WALK`/`_RUN` plus `PLAYER_JUMP` and
-	// the two landings, and separates walking from running by its own `PLAYER_RUN_SPEED` (128
-	// units/s) — but this runtime raises no step EVENT at all: no animation notify, no movement
-	// callback, nothing on the locomotion sample that says "a foot just landed". Inventing a cadence
-	// here would be substrate arithmetic standing in for a producer, so the step stays unemitted
-	// until the locomotion/stealth work supplies one. Not warned: nothing failed.
+	// The footstep hearing stimulus (`docs/vtmb/footsteps.md` §2.5). **It is not a step producer**,
+	// which is what the seam that used to stand here was waiting for and never needed: retail's
+	// `CBasePlayer::UpdatePlayerSound` (`0x1016b480`) runs off `PostThink`, once per think, and
+	// rewrites the player's one permanently reserved `CSound` record. No footstep ever inserts a
+	// sound, and the categories are chosen from locomotion state rather than from a footfall.
+	UpdatePlayerSound(Now);
 
 	// The re-arm. `RunPlayerThink` clears `NextThink` before entering here, so a think
 	// that schedules nothing never runs again. Retail's player think runs every frame and gates the
@@ -198,6 +203,283 @@ void FElysiumPlayer::TickBlockIntent(double NowSeconds)
 	Preblock.Release = EElysiumReactionRelease::Predicate;
 	UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s starts blocking at %.3f"), *DebugString(), NowSeconds);
 	PlayReactionActivity(Preblock);
+}
+
+// --- Footsteps (B2): the step clock, the landing and the hearing stimulus ------------------------
+//
+// `docs/vtmb/footsteps.md` §2. The RULES are `Substrate/ElysiumFootsteps.h`; what is here is the
+// sequencing retail spreads across `PlayerMove` / `UpdateStepSound` / `PlayStepSound` /
+// `CheckFalling` / `PostThink`, plus the state those functions keep on `CBasePlayer`.
+
+namespace
+{
+	// `FL_DUCKING` — the hull is the SMALL one. Source carries `m_bDucked` and `m_bDucking`
+	// independently and the flag follows the first, so two of the sample's four stances raise it.
+	bool IsPlayerDucking(const FElysiumLocomotionSample& Sample)
+	{
+		return Sample.Stance == EElysiumStance::Ducked || Sample.Stance == EElysiumStance::Rising;
+	}
+
+	// `CGameMovement::PlayStepSound` (`0x1011e430`, vfunc 16), the whole of it.
+	//
+	// `Ground` is the movement's cached `m_pSurfaceData` (`CGameMovement+0x9c`), already resolved by
+	// the caller because the dry arm is the one that needs the `gamematerial` letter too; the other
+	// three arms name a surfaceprop and are resolved here, exactly as retail resolves
+	// `GetSurfaceIndex("ladder" | "water" | "wade")` inside the arm that chose it.
+	void PlayPlayerStepSound(FElysiumPlayer& Player, const IElysiumEmbodiment& Embodiment,
+		IElysiumAudio& Audio, ElysiumFootsteps::EStepPool Pool,
+		const FElysiumSurfaceSounds* Ground, float Volume)
+	{
+		FElysiumSurfaceSounds Resolved;
+		const FElysiumSurfaceSounds* Row = nullptr;
+		if (Pool == ElysiumFootsteps::EStepPool::Dry)
+		{
+			Row = Ground;
+		}
+		else
+		{
+			const FName Surface = Pool == ElysiumFootsteps::EStepPool::Ladder
+				? ElysiumFootsteps::LadderSurface()
+				: (Pool == ElysiumFootsteps::EStepPool::Water
+					? ElysiumFootsteps::WaterSurface() : ElysiumFootsteps::WadeSurface());
+			if (Embodiment.ResolveSurfaceSounds(Surface, Resolved))
+			{
+				Row = &Resolved;
+			}
+		}
+		if (Row == nullptr)
+		{
+			// `1011e448`: `if (!psurface) return;` — retail's null `surfacedata_t`, which is a silent
+			// step and not a failure. On the dry arm it is a body standing on nothing the table
+			// knows; on the other three it is a checkout whose surfaceprop bake has not run.
+			return;
+		}
+
+		// `1011e4a4`: `m_nStepside` clear draws `stepright` (`+0x2e`), set draws `stepleft`
+		// (`+0x2c`) — and the toggle happens BEFORE the "no sound on this side" test below, so a
+		// surface that authors only one foot still alternates rather than repeating.
+		const TArray<FString>& Steps = Player.bStepSide ? Row->StepLeft : Row->StepRight;
+		Player.bStepSide = !Player.bStepSide;
+		if (Steps.IsEmpty())
+		{
+			return;   // `1011e4c7`: `if (sample == 0) return;`
+		}
+
+		FRandomStream& Stream = ElysiumRng::Stream(EElysiumRngStream::Footsteps);
+		// The variation retail leaves to the sound engine: `surfaceproperties.txt` repeats the key
+		// inside one entry and the engine picks between the repeats, and the bake flattened those
+		// repeats into this pool. Duplicates are alternates and are legal picks.
+		const FString& Rel = Steps[Stream.RandRange(0, Steps.Num() - 1)];
+
+		FElysiumBodySound Sound;
+		Sound.Rel = Rel;
+		Sound.Volume = Volume;
+		Sound.SoundLevelDb = ElysiumFootsteps::kPlayerSoundLevelDb;   // `1011e50b`: a literal 75
+		// `1011e502`: `95 + RandomInt(0, 10)`, inclusive, as a multiplier here — 0.95 .. 1.05.
+		Sound.Pitch = (ElysiumFootsteps::kPitchBase
+			+ Stream.RandRange(0, ElysiumFootsteps::kPitchJitter)) / 100.f;
+		Sound.Channel = EElysiumSoundChannel::Body;                   // `1011e50f`: CHAN_BODY
+		Audio.PlayBodySound(Player.Handle, Sound);
+	}
+}
+
+void FElysiumPlayer::TickStepClock(double NowSeconds, float DeltaSeconds)
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	IElysiumAudio* Audio = World ? World->Audio() : nullptr;
+	FElysiumLocomotionSample Sample;
+	if (Embodiment == nullptr || Audio == nullptr || !Embodiment->SamplePlayerLocomotion(Sample))
+	{
+		// No published record: no mover ran, so no move happened and retail's clock — which is only
+		// ever touched from inside `PlayerMove` — did not advance either. Deliberately NOT the same
+		// as a zeroed sample, which would read as a body standing on the ground with no surface.
+		return;
+	}
+
+	const FElysiumFootstepTuning& Tuning = World->FootstepTuning();
+
+	ElysiumFootsteps::FStepClockIn In;
+	// Source units per second. Everything in `UpdateStepSound` is authored in them.
+	In.Speed2D = Sample.Speed2D() / ElysiumMove::U;
+	In.Speed3D = static_cast<float>(Sample.LocalVelocity.Size()) / ElysiumMove::U;
+	In.bDucked = IsPlayerDucking(Sample);
+	In.bOnLadder = Sample.bOnLadder;
+	In.bOnGround = Sample.bOnGround;
+	In.Water = Sample.Water;
+	In.PcVol = Tuning.PlayerVolume;
+	In.bServerFootsteps = Tuning.bServerFootsteps;
+
+	// The movement's cached `m_pSurfaceData`, resolved once: the dry arm needs both the
+	// `gamematerial` letter it takes its volume from and the step pools it draws the wav from, and
+	// asking the table twice for the same surface is how the two could disagree.
+	FElysiumSurfaceSounds Ground;
+	const bool bHaveGround = !Sample.GroundSurface.IsNone()
+		&& Embodiment->ResolveSurfaceSounds(Sample.GroundSurface, Ground);
+	In.GameMaterial = bHaveGround ? Ground.GameMaterial : FString();
+
+	// --- The ordinary pass: `PlayerMove` -> `UpdateStepSound` -------------------------------
+	//
+	// `PlayerMove` (`0x101274a0`) runs `UpdateStepSound` at the TOP of the move — after the
+	// `m_flFallVelocity` refresh and before `CategorizePosition`, `Duck` and the movetype switch —
+	// so retail's ordinary pass reads the PREVIOUS move's ground contact, water level and velocity.
+	// This port reads the post-move sample, which is that same record one frame later, except on the
+	// one frame the body lands: retail's pass still sees no ground entity there and takes early
+	// return #5, and the only steps that frame are `CheckFalling`'s own (below). The ordinary pass is
+	// therefore handed the pre-landing premise on a landing frame — that is what keeps a landing at
+	// retail's two steps rather than three, and the foot parity retail's.
+	const bool bLanding = Sample.FallSpeedAtLanding > 0.f;
+	ElysiumFootsteps::FStepClockIn Ordinary = In;
+	Ordinary.bOnGround = In.bOnGround && !bLanding;
+	ElysiumFootsteps::FStepClockOut Out;
+	if (ElysiumFootsteps::AdvanceStepClock(StepSoundMs, DeltaSeconds * 1000.f, WadeStepPhase,
+		Ordinary, Out))
+	{
+		PlayPlayerStepSound(*this, *Embodiment, *Audio, Out.Pool,
+			bHaveGround ? &Ground : nullptr, Out.Volume);
+	}
+
+	// --- The landing: `CheckFalling` (`0x10125db0`), the last line of `FullWalkMove` ------------
+	//
+	// The sample raises `FallSpeedAtLanding` on exactly the frame the ground came back, carrying the
+	// speed the body fell at — retail's `m_flFallVelocity` read the moment `CheckFalling` reads it.
+	if (!bLanding)
+	{
+		return;
+	}
+	float FallSpeedUnits = Sample.FallSpeedAtLanding / ElysiumMove::U;
+	// SEAM: `GetGroundEntity()->IsFloating()` (`0x1000b186`) subtracts 173 u/s before the volume is
+	// chosen, and it is the ONLY way retail's 0.5 and 0.65 arms are reachable. This runtime has no
+	// floating-brush concept on the ground entity — the sample publishes a surfaceprop, not the
+	// entity under the foot — so the reduction is never applied and those two arms stay unreachable
+	// exactly as they are on ordinary ground. The rule is written and asserted in
+	// `Elysium.Substrate.Footsteps.PlayerLanding` so the day a floating platform exists there is one
+	// argument to change.
+	const float LandingVolume = ElysiumFootsteps::LandingStepVolume(FallSpeedUnits,
+		Sample.Water != EElysiumWaterLevel::None, /*bGroundIsFloating*/ false);
+
+	// The latch `UpdatePlayerSound` reads for its two `PLAYER_LAND_*` rows. Retail reads the player
+	// animation state (`+0x1db4` == 8, or 10/11) that `CheckFalling` wrote a few instructions
+	// earlier; the enum is unrecovered, so the port latches the band `CheckFalling` classified,
+	// which is the split those two authored rows are named after.
+	PendingLandCategory = FallSpeedUnits < ElysiumFootsteps::kMaxSafeFallSpeed
+		? ElysiumGameSounds::PlayerLandSoft() : ElysiumGameSounds::PlayerLandHard();
+
+	if (LandingVolume <= 0.f)
+	{
+		return;
+	}
+	// `1012617a`, in retail's order and with retail's consequence: the clock is zeroed, the ordinary
+	// clock is run AGAIN — and with the clock at exactly 0 it fires, because its only remaining gate
+	// is "moving at all" — and then the forced step plays on the other foot. **VtMB double-steps on
+	// a fast landing**; that is reproduced rather than suppressed, and named here so a reviewer does
+	// not read it as a bug.
+	StepSoundMs = 0.f;
+	ElysiumFootsteps::FStepClockOut Landing;
+	if (ElysiumFootsteps::AdvanceStepClock(StepSoundMs, 0.f, WadeStepPhase, In, Landing))
+	{
+		PlayPlayerStepSound(*this, *Embodiment, *Audio, Landing.Pool,
+			bHaveGround ? &Ground : nullptr, Landing.Volume);
+	}
+	// The forced step takes the movement's cached surface whatever the clock chose, and its volume
+	// is `CheckFalling`'s ladder UNSCALED: no duck factor, no `footstep_pc_vol`, no clamp — those
+	// belong to `UpdateStepSound`'s tail and this value never goes through it.
+	PlayPlayerStepSound(*this, *Embodiment, *Audio, ElysiumFootsteps::EStepPool::Dry,
+		bHaveGround ? &Ground : nullptr, LandingVolume);
+}
+
+void FElysiumPlayer::UpdatePlayerSound(double NowSeconds)
+{
+	if (World == nullptr)
+	{
+		return;
+	}
+	const float Dt = PlayerSoundLastTime >= 0.0
+		? static_cast<float>(FMath::Clamp(NowSeconds - PlayerSoundLastTime, 0.0, 1.0)) : 0.f;
+	PlayerSoundLastTime = NowSeconds;
+
+	IElysiumEmbodiment* Embodiment = World->Embodiment();
+	FElysiumLocomotionSample Sample;
+	// `1016b4b8`: `FL_NOTARGET` (0x8000) writes volume 0 and returns before anything is read;
+	// `1016b610`: `m_fNoPlayerSound` (`+0x22a0`) zeroes the volume after the decay. Both are the
+	// `bNoPlayerSound` seam, and a world with no body takes the same arm: a retired slot rather than
+	// a zero-radius stimulus nobody could act on.
+	if (bNoPlayerSound || Embodiment == nullptr || !Embodiment->SamplePlayerLocomotion(Sample))
+	{
+		World->RefreshGameSound(PlayerSoundSlot, FVector::ZeroVector, NAME_None, 0.f, Handle);
+		PlayerSoundRadiusUnits = 0.f;
+		PlayerSoundCategory = NAME_None;
+		return;
+	}
+
+	ElysiumFootsteps::FHearingIn In;
+	// `m_nButtons & IN_JUMP`. The port's stand-in is the jump's own push window: VtMB's jump is a
+	// HELD push, so the window is open exactly while the button is doing work. It closes earlier
+	// than retail's button bit, which the 250 u/s decay tail covers.
+	In.bJumpHeld = Sample.JumpHoldRemaining > 0.f;
+	In.bOnGround = Sample.bOnGround;
+	In.bLandSoft = PendingLandCategory == ElysiumGameSounds::PlayerLandSoft();
+	In.bLandHard = PendingLandCategory == ElysiumGameSounds::PlayerLandHard();
+	In.Speed3D = static_cast<float>(Sample.LocalVelocity.Size()) / ElysiumMove::U;
+	// **Ducking is the whole of "sneaking"** on this path — not the Stealth feat, not the light
+	// level, not the player's stealth surface.
+	In.bDucked = IsPlayerDucking(Sample);
+	if (UElysiumGameStateSubsystem* GameState = World->GetGameState())
+	{
+		if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
+		{
+			// `MiscData PLAYER_RUN_SPEED` (table `+0xfc`), authored 128. The compiled-in default is
+			// the same number, so a run with no `vdata` splits walk from run identically.
+			In.RunSpeedUnits = Rules->SoundVolumes().MiscFloat(TEXT("PLAYER_RUN_SPEED"),
+				ElysiumFootsteps::kPlayerRunSpeedUnits);
+		}
+	}
+
+	const FName Category = ElysiumFootsteps::HearingCategory(In);
+	// The latch is consumed by the pass that read it — retail's animation state is overwritten by
+	// the next `SetAnimation`, and the port has no such publisher, so one think is the lifetime.
+	PendingLandCategory = NAME_None;
+
+	// The authored reach the slot decays TOWARDS. A silent think targets zero, which is retail's
+	// `vol = 0` and the reason a sprint keeps ringing for about a second after it stops.
+	const float TargetRadiusUnits = Category.IsNone() ? 0.f : World->GameSoundRadiusUnits(Category);
+	PlayerSoundRadiusUnits =
+		ElysiumFootsteps::DecayHearingRadiusUnits(PlayerSoundRadiusUnits, TargetRadiusUnits, Dt);
+	if (!Category.IsNone())
+	{
+		PlayerSoundCategory = Category;
+	}
+
+	if (PlayerSoundRadiusUnits <= 0.f || PlayerSoundCategory.IsNone())
+	{
+		World->RefreshGameSound(PlayerSoundSlot, FVector::ZeroVector, NAME_None, 0.f, Handle);
+		PlayerSoundCategory = NAME_None;
+		return;
+	}
+	// The stealth subtraction is LISTENER-side in retail and producer-side here, and the number is
+	// the same: `CBaseEntity::AdjustSoundDistForStealth` (`0x1009d850`) is called from the two NPC
+	// hearing predicates (`CAI_BaseNPCTroika 0x102b35b0`, `0x1030f7b0`) on the sound's OWNER
+	// entity, subtracts that owner's stealth hearing distance (vfunc `+0x78`) from the audible
+	// reach and floors it at 0, and only for `m_iType == 4` (`SOUND_PLAYER`) — this slot is the
+	// only type-4 producer in the game. `UpdatePlayerSound` itself writes the raw table volume; its
+	// one call to the function, through `0x101b9a50`, is the rate-limited stealth debug print.
+	// Retail subtracts AFTER the listener's own hearing scale, and this runtime's listeners carry
+	// no such scale, so the two orders are identical here.
+	World->RefreshGameSound(PlayerSoundSlot, Origin, PlayerSoundCategory,
+		PlayerSoundRadiusUnits * ElysiumMove::U, Handle,
+		ElysiumStealth::HearingReductionCmFor(this));
+}
+
+bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
+{
+	// `CBasePlayer::HandleAnimEvent` swallows 2050-2053: claimed, and nothing played. The player's
+	// clips carry the same footfall records the cast's do, and the player's steps come off
+	// `UpdateStepSound`'s millisecond clock instead — so letting one through would double every
+	// step the moment a handler above claimed it.
+	if (ElysiumFootsteps::PlayerSwallows(Event.Event))
+	{
+		return true;
+	}
+	return FElysiumCombatCharacter::HandleAnimEvent(Event);
 }
 
 void FElysiumPlayer::RefreshClanEffects()

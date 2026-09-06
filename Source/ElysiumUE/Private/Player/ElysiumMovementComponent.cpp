@@ -1,6 +1,7 @@
 #include "ElysiumMovementComponent.h"
 
 #include "ElysiumGameClock.h"
+#include "ElysiumGroundSurface.h"   // the surfaceprop under the foot, off the ground trace
 #include "ElysiumPawn.h"
 #include "Debug/ElysiumConsole.h"
 #include "Player/ElysiumCommandBus.h"
@@ -127,7 +128,14 @@ void UElysiumMovementComponent::ResetState()
 	JumpsTaken = 0;
 	PrevCmd = FElysiumUserCmd();
 	bOnGround = false;
+	// The surface goes with the ground contact, exactly as retail's reset clears the NPC's own
+	// cache (`0x10273390` / `0x1027bf50`): a body arriving somewhere new is not standing on what it
+	// left, and the next `CategorizePosition` is what says what it IS standing on.
+	GroundSurface = FName();
 	WaterLevel = EElysiumWaterLevel::None;
+	// A teleport is not a landing: the fall the body was in belonged to where it left, and carrying
+	// the speed across would make the arrival play a hard landing step it never fell for.
+	FallVelocity = 0.0f;
 	EndJumpHold();
 
 	// The published body state goes with the carried motion: a teleported body must not still be
@@ -394,9 +402,30 @@ void UElysiumMovementComponent::PublishLocomotionSample(bool bSolved)
 	// The body's own answer, not `CategorizePosition`'s raw one: a noclipping body is flying, and a
 	// graph asking whether it is grounded wants that to be false.
 	LastSample.bOnGround = IsMovingOnGround();
+	// The surfaceprop `CategorizePosition` just read off the ground trace, unfiltered by the noclip
+	// answer above: `bOnGround` is what says whether the body is standing, and a mover with no floor
+	// already carries `NAME_None` here.
+	LastSample.GroundSurface = GroundSurface;
 	LastSample.Water = WaterLevel;
 	LastSample.Stance = ElysiumLocomotion::StanceFrom(bDucked, bDucking);
 	LastSample.JumpHoldRemaining = JumpHoldRemaining;
+	// Always false, and faithfully so: VtMB's `PlayerMove` movetype switch has no ladder arm and no
+	// map places a ladder entity (`docs/vtmb/source_movement.md` → "Ladders: VtMB has none"), so
+	// retail's own `UpdateStepSound` ladder branch is unreachable as well. Written explicitly rather
+	// than left to the sample's default, so the line that a climbing modernization would change is
+	// where the reader looks for it.
+	LastSample.bOnLadder = false;
+
+	// **The landing signal, on the one frame it exists.** `CheckFalling` (`0x10125db0`) is entered
+	// with a ground entity and reads `m_flFallVelocity`; the field is then cleared, which is what
+	// makes the landing a single event rather than a state. Published off the RAW ground answer
+	// (`bOnGround`) and not `IsMovingOnGround()`, because a noclipping body has no landing to
+	// report and its raw answer is already false.
+	LastSample.FallSpeedAtLanding = bOnGround ? FMath::Max(0.0f, FallVelocity) : 0.0f;
+	if (bOnGround)
+	{
+		FallVelocity = 0.0f;   // `0x10126226`: cleared on any move that has a ground entity
+	}
 }
 
 void UElysiumMovementComponent::CategorizePosition()
@@ -404,6 +433,7 @@ void UElysiumMovementComponent::CategorizePosition()
 	if (!UpdatedComponent)
 	{
 		bOnGround = false;
+		GroundSurface = FName();
 		return;
 	}
 	// Rising: never on the ground. Source's own gate, and what keeps a jump from re-grounding on
@@ -412,6 +442,7 @@ void UElysiumMovementComponent::CategorizePosition()
 	if (Velocity.Z > Tuning.BaseJumpVelocity * 0.5f)
 	{
 		bOnGround = false;
+		GroundSurface = FName();
 		return;
 	}
 
@@ -423,11 +454,24 @@ void UElysiumMovementComponent::CategorizePosition()
 	FHitResult Hit;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(ElysiumCategorizePosition), /*bTraceComplex*/ false, PawnOwner);
 	Params.AddIgnoredActor(PawnOwner);
+	// What the floor is MADE OF, asked of the same query that asks whether there is one — which is
+	// where retail asks it: `CGameMovement::CategorizePosition` caches the ground trace's
+	// `surfacedata_t` on the mover, and `UpdateStepSound 0x1011e940` switches the dry step volume on
+	// its `gamematerial` letter (`switch((char)mover[0x29])`). Free on a query that was running
+	// anyway, and it never changes what the sweep decides.
+	Params.bReturnPhysicalMaterial = true;
 	const bool bHit = UpdatedPrimitive && GetWorld()->SweepSingleByChannel(Hit, Start, End,
 		UpdatedComponent->GetComponentQuat(), UpdatedPrimitive->GetCollisionObjectType(),
 		UpdatedPrimitive->GetCollisionShape(), Params);
 
 	bOnGround = bHit && Hit.ImpactNormal.Z >= ElysiumMove::StandableZ;
+	// The port's stand-in for `m_pSurfaceData`, published on the sample rather than kept here
+	// (`ElysiumGroundSurface`, which owns the "no floor is NAME_None, an unmaterialed floor is
+	// `default`" pair and the render-geometry probe this runtime needs because the bake split the
+	// collision brush from the drawn one). A body that is not standing on anything carries no
+	// surface, which is retail's null `surfacedata_t` and a silent step.
+	GroundSurface = bOnGround
+		? ElysiumGroundSurface::AtFloorHit(GetWorld(), Hit, PawnOwner) : FName();
 	if (bOnGround)
 	{
 		// Landing ends the jump: the reduced gravity and the push window belong to the jump, and
@@ -882,6 +926,16 @@ void UElysiumMovementComponent::PlayerMove(float DeltaTime)
 	{
 		NoclipMove(DeltaTime);
 		return;
+	}
+
+	// `CGameMovement::PlayerMove`'s own first act, before anything can move the body: while the
+	// player has no ground entity, remember how fast it is going DOWN. This is the whole of
+	// `m_flFallVelocity`'s maintenance — the value `CheckFalling` (`0x10125db0`) reads at the far
+	// end of the step to choose the landing step's volume — and `bOnGround` here is still the
+	// previous move's answer, exactly as retail's `GetGroundEntity()` is at this point.
+	if (!bOnGround)
+	{
+		FallVelocity = static_cast<float>(-Velocity.Z);
 	}
 
 	// `SetupMove` runs ahead of the whole step, which is where retail runs it: it rewrites the

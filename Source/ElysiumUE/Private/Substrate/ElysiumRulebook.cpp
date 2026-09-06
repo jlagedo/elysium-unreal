@@ -1010,6 +1010,12 @@ int32 FElysiumClanTemplate::GeneralInt(const TCHAR* Key, int32 Def) const
 	return V ? FCString::Atoi(**V) : Def;
 }
 
+float FElysiumClanTemplate::GeneralFloat(const TCHAR* Key, float Def) const
+{
+	const FString* V = General.Find(ElysiumFold(Key));
+	return V ? FCString::Atof(**V) : Def;
+}
+
 const int32* FElysiumClanTemplate::Trait(const FString& InName) const
 {
 	const FString Key = ElysiumFold(InName);
@@ -1086,6 +1092,12 @@ const FElysiumClanTemplate* FElysiumClanTable::Find(const FString& TemplateName)
 const FElysiumClanTemplate* FElysiumClanTable::Clan(int32 Index) const
 {
 	return Clans.IsValidIndex(Index) ? &Clans[Index] : nullptr;
+}
+
+void FElysiumClanTable::AddNpcTemplate(FElysiumClanTemplate&& Template)
+{
+	ElysiumVdata::Index(NpcByName, Template.TemplateName, NpcTemplates.Num());
+	NpcTemplates.Add(MoveTemp(Template));
 }
 
 void FElysiumClanTable::ParentChain(const FString& TemplateName, TArray<FString>& Out) const

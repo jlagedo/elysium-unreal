@@ -135,13 +135,34 @@ The player networks both `m_sndRoomDSP` and `m_sndPlayerDSP` from `vampire.dll` 
 and drives the engine DSP state. Music blocks flagged `"Dry" "1"` bypass the reverb
 bus (the `#`/drymix path) so the score is not smeared by room reverb.
 
-The exact touch handler and precedence between a trigger's `room_type`, the active
-scheme's `RoomDSP`, and the two player fields are **not yet recovered**. The current
-export snapshot has 16 environmental-audio brushes, all in `sp_tutorial_1`, with
-`room_type` values `5` (3), `11` (1), `12` (1), `104` (2), `108` (1), and `123`
-(8). All author `StartDisabled 1`, spawnflags `1`, no targetname and no outputs, so
-the meaning of those inherited trigger fields must be settled from the handler, not
-guessed from the map text.
+**Precedence is recovered** [VtMB] (`CTriggerEnvAudio`, factory `0x101cbb10`, size
+`0x59c`; `m_nRoomType` at `+0x598`; `m_bDisabled` is `StartDisabled` at `+0x55c`).
+Spawn runs `CTriggerTeleport`'s InitTrigger: `StartDisabled 0` sets `FSOLID_TRIGGER`,
+`StartDisabled 1` **clears** it. Enable/Disable (inherited `CBaseTrigger`
+`0x101c4bf0` / `0x101c4dd0`) flip that bit and `PhysicsTouchTriggers`.
+
+DSP Touch is **slot 175** `0x101cbbc0`, not `StartTouch`. It does **not** call
+`PassesTriggerFilters`. If the toucher has a player object at `+0xa8`,
+`FUN_101753a0` writes `player+0x1e08 = room_type` and stamps `player+0x1e0c` with
+an engine counter. EndTouch (`0x101cbc10`) clears to `0xffffffff` only if this
+brush still owns the value. Spawnflag 1 (clients) gates `OnStartTouch` outputs
+only, not this DSP path.
+
+Resolver `FUN_10175290` (from `CBasePlayer::UpdateClientActionState` `0x101755d0`),
+the value that tracks with `m_sndRoomDSP`:
+
+1. if the trigger stamp is older than ~5 engine counts, `player+0x1e08 = -1`;
+2. if `player+0x1e08 > 0`, **that `room_type` wins**;
+3. else the scheme EHANDLE FadeIn stored at `player+0x1e04` → scheme `RoomDSP`
+   (`+0x45c`);
+4. else **0**.
+
+`m_sndPlayerDSP` is a separate pick (`FUN_10175220`), not scheme RoomDSP. A live
+`room_type > 0` therefore beats the active scheme. `StartDisabled 1` with no
+Enable wire never sets `FSOLID_TRIGGER`, so Touch never runs: the 16 tutorial
+brushes (room types `123`×8, `5`×3, `104`×2, `12`/`108`/`11`×1; all
+`StartDisabled 1`, spawnflags `1`, unnamed, no outputs) are **inert in retail**.
+`sm_pawnshop_1` and `sm_hub_1` author none.
 
 ## 5. The SoundScheme system (VtMB's `env_soundscape` replacement)
 
@@ -180,11 +201,11 @@ SoundScheme
     Ambient { "Filename" "environmental/sewers/sewer ambinc.wav" "Volume" "60" } // one looping bed
     RandomSound { "Filename" "Environmental/Sewers/Running_Pipes7.wav"
                   "PitchMin" "95" "PitchMax" "110" "Volume" "30"
-                  "Frequency" "10"                    // spawn rate/likelihood
+                  "Frequency" "10"                    // fire when Frequency > RandomInt(1, soundscheme_randomness); 0 = never
                   "AudibleRadius" "2000"              // attenuation reach
-                  "DistMin" "200"  "DistMax" "1000"   // radial distance from anchor/player
-                  "HeightMin" "0"  "HeightMax" "100"  // vertical offset from the entity
-                  "AngleMin" "330" "AngleMax" "30" }  // azimuth arc (wraps); many one-shots
+                  "DistMin" "200"  "DistMax" "1000"   // radial distance from the player (XY)
+                  "HeightMin" "0"  "HeightMax" "100"  // vertical offset from the scheme origin (Z)
+                  "AngleMin" "330" "AngleMax" "30" }  // linear RandomFloat; wrap arcs interpolate the long way
 }
 ```
 
@@ -194,14 +215,62 @@ Block presence across schemes [data]: `Music` ~140–161, `Combat` ~126–149,
 0.0–1.0). `Dry` = route to the dry bus (skip reverb); `NoPause` = keep playing while
 the game is paused (menus/loading).
 
-**Semantics** [data comments + inferred]: `Ambient` is a constant loop.
-`RandomSound` picks a random point on a ring `[DistMin,DistMax]` at a random
-height/azimuth around the entity `origin`, plays at random pitch/volume, attenuated
-to `AudibleRadius`, up to `RandomSoundCount` at once — VtMB's positional-ambience
-answer to Source `playrandom`/`recPositions`, authored in polar coordinates around
-the player instead of from BSP-baked recording points. A scheme with no music
-(`cops_outside.txt`) is pure `RandomSound` police barks; a scheme is
-`{optional music triad} + {optional ambient loop} + {N random one-shots} + {DSP}`.
+**Semantics** [VtMB, decompiled — RE31 closed]: `Ambient` is a constant loop on the
+manager's Ambient stem. `RandomSound` is scheduled by `CSoundSchemePlayingThink`
+(`FUN_1022b300`, thunk `0x10003a71`), not by a seconds-between-plays mean.
+
+Each think (rescheduled at `curtime + DAT_104491b4`): if the live-random count
+(`manager+0x194`) is already `>= RandomSoundCount` (`+0x458`, clamp 0..6), skip;
+if this (scheme, cursor) is already live, `cursor++`; else
+`roll = IUniformRandomStream::RandomInt(1, soundscheme_randomness.GetInt())` and
+**fire when `Frequency > roll`**. The cvar (`FUN_1022b290`, object `0x10750f28`)
+defaults to **1000** (same default string as `player_throwforce`). Frequency 10
+therefore fires on roll ∈ `[1,9]` (9/1000 per visit). **Frequency 0 never fires**
+(`0 > RandomInt(1, max)` is false); an omitted key still defaults to 10 at parse.
+Frequency `> 1000` always fires when under the cap. Cursor is round-robin at
+`+0x5a8`.
+
+Polar placement (`FUN_102298e0`) uses `DAT_1070b244` (`RandomFloat` / `RandomInt`).
+**XY is around the player** (`UTIL_PlayerByIndex(1)` origin + `AngleVectors(0, angle, 0) * dist`).
+**Z is around the `ambient_soundscheme` origin** (`[z − HeightMin, z + HeightMax]`).
+`AngleMin`/`AngleMax` are a linear `RandomFloat` with **no wrap helper** — an
+authored wrap arc `330`..`30` interpolates the long way. Emit ORs flags `0x280`.
+
+A scheme with no music (`cops_outside.txt`) is pure `RandomSound` police barks; a
+scheme is `{optional music triad} + {optional ambient loop} + {N random one-shots} + {DSP}`.
+
+### Scheme FadeIn / FadeOut / start_enabled / Kill
+
+One global `CSoundSchemeManager` at `DAT_10750d78` (ctor `FUN_10228450`) holds **one**
+Ambient/Music/Combat/Alert stem set (slots `+0x14`, `+0x6c`, `+0xc4`, `+0x11c`,
+stride `0x58`). Two full schemes do not overlap.
+
+`InputFadeIn` `0x1022b480` / `InputFadeOut` `0x1022b4d0` read
+`inputdata.variant.fieldType == 1` (float) then `flVal`; otherwise **0.0**. Values
+**strictly below 0** clamp to **0.5 s**; **0 is instant**; a positive float is that
+many seconds. There is **no `Disable` / `Enable` input**.
+
+`FUN_1022b590` (FadeIn): if `this+0x455` (playing flag) is already 1, **return**.
+Else walk every registered scheme and `FUN_1022b660` (clear think, `+0x455 = 0`),
+replace the four stems (`FUN_10229270` → `FUN_10229430`, same filename retargets
+volume, different filename fades the old slot into `+0x174` then starts the new),
+install PlayingThink, set `+0x455 = 1`, and store this scheme's EHANDLE at
+`player+0x1e04` (RoomDSP fallback). FadeOut (`FUN_1022b520`): if `+0x455 == 0`,
+**return**; else fade all four live slots (`FUN_102293f0`) and clear think/flag.
+
+Activate (`vfunc113` `0x1022a300`) registers the EHANDLE (`FUN_102289e0`) then, if
+`start_enabled`, FadeIns with a **hardcoded 2.0 s**. `start_enabled 0` waits for
+`InputFadeIn`. OnSave (`vfunc129` `0x1022a350`) copies the playing flag into
+`start_enabled` so restore Activate FadeIns again.
+
+A typical map pair `A.FadeOut` + `B.FadeIn` on one trigger: FadeIn B first already
+cleared A's flag, so A's FadeOut is a no-op; FadeOut A first fades the global stems
+toward 0, then B starts. A delayed FadeOut of A **after** B's FadeIn does nothing.
+
+**Kill does not stop the stems.** `CSoundScheme` does not override `UpdateOnRemove`;
+the destructor only frees the RandomSound vector. RandomSound think dies with the
+entity; beds/music keep going until another FadeIn replaces them or a still-active
+scheme FadeOuts. An authored `ambient_soundscheme,Disable` wire has **no handler**.
 
 ## 6. Dynamic music and radio
 
@@ -227,38 +296,102 @@ additions:
 "health"       "10"     // VOLUME on a 0–10 scale (Source convention), not hit points
 "radius"       "1250"   // falloff distance (units)
 "pitch"        "100"    // + pitchstart
-"spawnflags"   "16"     // 0, 16=Start Silent, 48=Start Silent+Not Looped, 1=Everywhere
+"spawnflags"   "16"     // bits below; default (0) is a looping autoplay bed
 "targetname"   "Floresent"
 // VtMB-specific keys (not in stock ambient_generic):
 "SourceEntityName" "tram_mover"   // parents the sound to a moving entity (154 use it)
 "sound_event"      "0"            // + sound_event_level "2"
 "flag_no_voice_duck" "1"         // exempt from dialogue ducking (§3)
 "flag_force_looping" "1"  "flag_no_sfx" "1"  "flag_skip_collide" "1"
-"StartHidden"      "1"            // spawn-muted; revealed via ScriptUnhide (/docs/vtmb/entity_io.md)
+"StartHidden"      "1"            // ScriptHide at spawn — visual/collision only, NOT an audio mute
 ```
+
+Spawnflags (`CAmbientGeneric::vfunc103` `0x101ac310`):
+
+| Bit | Value | Meaning |
+|---|---:|---|
+| `0x01` | 1 | Everywhere (non-spatial) |
+| `0x10` | 16 | Start Silent — do not set `m_fActive` at Precache |
+| `0x20` | 32 | Not Looped — `m_fLooping = 0` unless `flag_force_looping` |
+
+`m_fLooping` (`+0x4bd`) is 0 only when `flag_force_looping == 0` **and** bit `0x20` is set;
+otherwise 1. Precache (`0x101ac930`) sets `m_fActive = 1` only when **not** Start Silent
+**and** `m_fLooping`. Activate emits only if `m_fActive`.
 
 Fired by presence (looping beds), by I/O, or from Python via the datamap-bound
 `Entity.PlaySound()` / `StopSound()` (phone rings, sirens, buzzers) [script]. The
-stock LFO/spin envelope block (`lfotype`/`lforate`/`spinup`…) is present but zeroed. Fade keys
-are not: five authored `fadeinsecs` and four `fadeoutsecs` values are non-zero in this snapshot.
+stock LFO/spin envelope keys (`preset`/`spinup`/`volstart`/`lfotype`/`lforate`/…)
+are parsed in KeyValue override `vfunc110` `0x101ada80` into `m_dpv` (`+0x458`).
+**`fadein` / `fadeout` are those envelope keys**, not seconds-I/O: `atof` → `ftol` →
+`<< 8` into `m_dpv+0x1c/+0x20`. There are **no** `fadeinsecs` / `fadeoutsecs` strings
+in `vampire.dll`; a 108-map scan of current `.ents` finds **zero** non-zero
+`fadeinsecs` keys. 78 `ambient_generic` rows do author a non-zero `fadein` LFO value
+(including `sm_hub_1`'s `rain_sounds` `fadein=10` / `fadeout=10`).
+
+There are **no** `InputFadeIn` / `InputFadeOut` methods on this class. The only
+`InputFadeIn` string in the image is `CSoundScheme`. Authored
+`ambient_generic,FadeIn` wires are `AcceptInput` refusals. `entity_io.md`'s
+FadeIn(2)/FadeOut(2) counts are those dead rows.
 
 ### `PlaySound` and `StopSound` are edge-only, and the wired parameter is inert
 
-Both inputs resolve to one shared dispatcher (`0x101ad470`), differing only in a mode literal, and
-that dispatcher refuses the redundant edge in both directions: **`PlaySound` on an entity that is
-already playing returns immediately** — no restart, no re-trigger — and `StopSound` on a stopped
-entity does the same. A map that wants a sound retriggered has to stop it first.
+`InputPlaySound` `0x101ad3e0` (mode **1**), `InputStopSound` `0x101ad410` (mode **0**),
+and `InputToggleSound` `0x101ad440` (mode **3**) share dispatcher `FUN_101ad470`.
+Mode 1 on an already-`m_fActive` entity **returns**; mode 0 on an inactive entity
+**returns**. Mode 3 **bypasses** that early-out and is a real toggle. A map that
+wants a sound retriggered has to Stop it first (or Toggle).
 
-The parameter carried on the wire is **never read**. The dispatcher takes the variant values as
-arguments and no path in its body references them; the sound played is always whatever `message`
-(`m_iszSound`, `+0x4c0`) already names, resolved at play time, with a leading `!` treated as a
-sentence lookup. `sp_tutorial_1` authors `PlaySound` with the parameter `"3"` on one wire and empty
-on every other — they behave identically.
+The parameter carried on the wire is **never read**. The dispatcher takes the variant
+values as arguments and no path in its body references them; the sound played is always
+whatever `message` (`m_iszSound`, `+0x4c0`) already names, resolved at play time, with
+a leading `!` treated as a sentence lookup. `sp_tutorial_1` authors `PlaySound` with
+the parameter `"3"` on one wire (`logic_shot_7 → sound_maul_wolves`, delay −1) and
+empty on every other — they behave identically. Mode 3 is ToggleSound's literal, not
+that wire's parameter.
 
-`radius`, `pitch` and `health`/volume are not consulted per call either: the dispatcher branches on
-`m_fLooping` (`+0x4bd`), and only the looping branch marks the entity active and runs the ramp and
-spin bookkeeping out of the packed `m_dpv` block (`+0x458`). Those keyfields are therefore resolved
-once at spawn into `m_dpv`, not re-read on each play.
+`radius`, `pitch` and `health`/volume are not consulted per Play/Stop either: the
+dispatcher branches on `m_fLooping`, and only the looping branch marks the entity
+active and runs the ramp and spin bookkeeping out of `m_dpv`. Those keyfields are
+resolved once at spawn into `m_dpv`, not re-read on each play. `InputVolume`
+`0x101ac7d0` writes `m_dpv+0x4c` and, if a source handle is live, updates the voice
+(`FUN_101cdac0` with flags `m_nSndFlags | 1`). It does not start or stop.
+
+Emit flags are `FUN_101ac670` = `m_nSndFlags | param`. Play passes param 0, so the
+flags are only the VtMB key bits: `flag_force_looping` → `0x100`, `flag_skip_collide`
+→ `0x200`, `flag_no_sfx` → `0x800`, `flag_no_voice_duck` → `0x1000`.
+
+### Entity looping is not mixer wrapping
+
+`m_fLooping` keeps the entity **active** (PlaySound no-op, StopSound required to
+`SND_STOP`). The mixer wraps the WAV only when:
+
+- the file has a `smpl` sampler loop or a `cue ` chunk (`CAudioSourceWave` `+0x28`,
+  parsed in `FUN_2013a030`), or
+- emit flags include **`0x100`** (`flag_force_looping`), which forces
+  `CAudioSourceWave::FUN_2013a120(true)` → loop start **0** if `HasLoop()` was false.
+
+`S_StartStaticSound` `0x2011f620` is the wrap site. There is no `SND_LOOPING` string
+in the image. A start-silent gunshot with spawnflags 16 and **no** `smpl`/`cue ` and
+**no** `flag_force_looping` therefore **plays once** even though the entity stays
+"looping". Tutorial samples: `JackChopWindow.wav`, `gun shot 2.wav`,
+`Jack V Sabbat SFX.wav`, `Riled_1.wav` have neither chunk; `Fire Loop.wav`,
+`floresent light.wav`, `rain_light_loop.wav` have `smpl`; `City Ambience.wav` and
+`Crowd screams.wav` have `cue `. Wrapping every non-0x20 entity in a port is a
+divergence, not retail.
+
+### Hide, unhide, Kill
+
+**Kill stops the voice.** `UpdateOnRemove` `vfunc180` `0x101ac5e0` emits
+`FUN_101cdac0(..., flags 4)` (`SND_STOP`) if the source handle at `+0x4c8` is live.
+
+**ScriptHide does not.** `CBaseEntity::ScriptHide` `0x100a8710` saves think, clears
+solid, sets nodraw — no `SND_STOP`. A looping static channel keeps mixing.
+ScriptUnhide restores think/solid and does **not** call PlaySound: a still-running
+loop continues; a finished one-shot does not restart.
+
+**StartHidden is not Start Silent.** A looping, non-silent, `StartHidden` entity
+still sets `m_fActive` at Precache and still emits. Start Silent (`0x10`) is the
+audio mute.
 
 ### Current exported seam [data]
 
@@ -284,6 +417,10 @@ include patch-added names, `AmbientCrickets` in `sm_warehouse_1`, and `scheme_gu
 in `sp_tutorial_1`. These are content-validation findings: a runtime must diagnose
 them rather than silently accept them, but absence in a partial export does not by
 itself prove the retail target never exists.
+
+The playable-path trio (`sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`) is joined in
+`docs/vtmb/three-map-audio-surface.md`: every `ambient_generic` / scheme / env-audio
+row, every Play/Stop/Fade wire, mover `soundgroup`s, and which WAVs actually wrap.
 
 ## 7b. Mover sounds — the `soundgroup` convention
 
@@ -401,7 +538,8 @@ priority and status live in `docs/project/roadmap.md`.
 | Address | Symbol / role |
 |---|---|
 | `0x20118cf0` | sound init — loads `mss32.dll` + `vaudio_miles.dll` (`VAudio001`); `-nosound`/`-wavonly` |
-| `0x2011f620` | `S_StartStaticSound` — channel alloc (`MAX_CHANNELS=128`, base 24, 160-B records), sound-char prefixes, `!`-sentence dispatch, volume clamp 255 |
+| `0x2011f620` | `S_StartStaticSound` — channel alloc (`MAX_CHANNELS=128`, base 24, 160-B records), sound-char prefixes, `!`-sentence dispatch, volume clamp 255; flags `0x100` force-loop from sample 0 |
+| `0x2013a030` / `0x2013a120` | WAV `smpl`/`cue ` loop-start parse; `SetLooped(true)` writes loop start 0 when `HasLoop()` was false |
 | `0x2013b870` | sentence playback path |
 | `0x20131dd0` | `DSP_LoadPresetFile` (`scripts/dsp_presets.txt`) |
 | `0x20131c40` / `0x20131cc0` | DSP preset counter / processor-name→id table |
@@ -413,13 +551,19 @@ scheme parser and `ambient_soundscheme` entity are now pinned (`$ELYSIUM_WORK_RO
 
 | Address | Symbol / role |
 |---|---|
-| `0x1022a930` | `CSoundScheme` KeyValues parser — walks `SchemeParams`/`Music`/`Combat`/`Alert`/`Ambient`/`RandomSound` blocks (else `"Unrecognized section '%s' in soundscheme"`); reads the RandomSound polar fields |
-| `0x10229ff0` / `0x1022ce80` | `ambient_soundscheme` entity (spawn / datamap) |
+| `0x1022a930` | `CSoundScheme` KeyValues parser — walks `SchemeParams`/`Music`/`Combat`/`Alert`/`Ambient`/`RandomSound` blocks (else `"Unrecognized section '%s' in soundscheme"`); Frequency default 10, stored as-is (0 stays 0) |
+| `0x10229ff0` / `0x1022a0c0` | `ambient_soundscheme` factory (size `0x5b0`) / datamap (`scheme_file`, `start_enabled`, FadeIn, FadeOut, think name) |
+| `0x1022a300` / `0x1022b480` / `0x1022b4d0` | Activate (`start_enabled` → FadeIn 2.0 s); `InputFadeIn`; `InputFadeOut` |
+| `0x1022b590` / `0x1022b520` / `0x1022b660` | FadeIn body; FadeOut body; deactivate (clear think + playing flag) |
+| `DAT_10750d78` / `0x10228450` / `0x10229270` / `0x102293f0` | manager singleton; ctor; replace four stems; fade all four slots |
+| `0x1022b300` / `0x102298e0` | `CSoundSchemePlayingThink`; polar emit (XY around player, Z around scheme) |
 | `0x102282e0` | combat-music timing (`soundscheme_combat_music_time`) |
-| `0x1022b290` / `0x1022cf20` | `soundscheme_randomness` / `soundscheme_toggledebug` cvars |
-| `0x105b4494` / `0x105b4594` | `CSoundSchemeManager` / `CSoundScheme` RTTI; `CSoundSchemePlayingThink` (str `0x105b4400`) |
+| `0x1022b290` / `0x1022cf20` | `soundscheme_randomness` (default 1000) / `soundscheme_toggledebug` cvars |
+| `0x105b4494` / `0x105b4594` | `CSoundSchemeManager` / `CSoundScheme` RTTI; think name str `0x105b4400` |
 | `0x1000e8a9` / `0x1000ef8e` / `0x10010ce9` | `ambient_generic` / `ambient_soundscheme` / `env_soundscape` class registration |
-| `0x101cbb10` | `trigger_environmental_audio` factory; object size `0x59c` (touch behavior remains open) |
+| `0x101ad3e0` / `0x101ad410` / `0x101ad440` / `0x101ad470` | PlaySound / StopSound / ToggleSound / shared dispatcher |
+| `0x101ac310` / `0x101ac930` / `0x101ac5e0` / `0x101ada80` / `0x101ac670` | Spawn (loop bit); Precache (`m_fActive`); UpdateOnRemove `SND_STOP`; KeyValue (`fadein` LFO); emit flags |
+| `0x101cbb10` / `0x101cbbc0` / `0x101cbc10` / `0x10175290` | `CTriggerEnvAudio` factory size `0x59c`; DSP Touch / EndTouch; room-type vs scheme RoomDSP resolver |
 
 Player DSP transport [VtMB, decompiled]: `vampire.dll` send table builder
 `0x1018a730` publishes `m_sndRoomDSP` and `m_sndPlayerDSP`; `client.dll` receive table
@@ -428,7 +572,11 @@ builder `0x100a3e00` receives them at client-player offsets `0x144` and `0x148`.
 **Retail RandomSound defaults** (from `0x1022a930`) [VtMB, decompiled]: `Volume` 20,
 `Frequency` 10, `PitchMin`/`PitchMax` 100/100, `AudibleRadius` 1600, `DistMin`/`DistMax`
 800/1400, `HeightMin`/`HeightMax` 20/20, `AngleMin`/`AngleMax` 0/360; `NoPause` sets a
-keep-playing flag, `Dry` routes to the dry bus. These are the values an omitted key takes.
+keep-playing flag, `Dry` routes to the dry bus. These are the values an **omitted** key
+takes. An authored `Frequency 0` is stored as 0 and never plays (§5).
+
+RE30 (env-audio DSP precedence) and RE31 (RandomSound scheduler) are closed in this
+file. Implementation remains AUD7 / AUD6.
 
 Owners: **`engine.dll`** = Miles mixer, codecs (PCM/MS-ADPCM/MP3), DSP graph,
 sentences. **`vampire.dll`** = SoundScheme parser + `ambient_soundscheme` +

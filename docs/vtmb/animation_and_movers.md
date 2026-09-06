@@ -1704,6 +1704,88 @@ sequence between the current and target sequence, commits `ACT_TRANSITION` while
 intermediate, and commits the saved logical/translated/weapon target on arrival. `SetActivity` is
 the immediate route that resolves and calls `SetActivityAndSequence` directly.
 
+#### One speed pipeline answers a fanned gait and a plain clip alike [VtMB decompiled + data-verified]
+
+`ResetSequenceInfo` (`0x10090950`) has no branch on whether the sequence it is committing is a
+blend. Read off the decompiled body, it writes, in order:
+
+| write | field | source |
+|---|---|---|
+| `param_1[0x158]` | `m_flYawSpeed` `+0x560` | `GetSequenceYawSpeed(m_nSequence)` |
+| `param_1[0x195]` | `m_flGroundSpeed` `+0x654` | `GetSequenceGroundSpeed(m_nSequence)` |
+| `param_1[0x1bd]` | `m_flPlaybackRate` `+0x6f4` | the literal `0x3f800000`, i.e. `1.0` |
+
+`GetSequenceGroundSpeed` (`0x10091490`) is `SequenceDuration`, an early-out returning zero when that
+duration is zero, and otherwise `GetSequenceMoveDist` over it. `GetSequenceMoveDist` (`0x1008fbe0`)
+is the plain magnitude `sqrt(x² + y² + z²)` of `GetSequenceLinearMotion` — **no scalar is applied
+inside either**. `m_flGroundSpeedScalar` (`+0x564`) does not participate in this write at all; it is
+`1.0` from the `CBaseAnimating` constructor and its only writer is `SetPlaybackAndSpeedScalar`
+(`0x1008d230`), so it is a live runtime multiplier and never part of a sequence's authored speed.
+`GetIdealSpeed` (`0x10091740`) is confirmed a plain read of `+0x654` with no other term — no
+scalar, no playback rate.
+
+**Why the same call answers both shapes.** The mover (`0x100c5d10`) resolves four bilinear corners
+through `0x100c5400` and accumulates `weight * motion` over them. The per-axis fraction and index
+come from `0x100c1c60`, which opens with
+
+```c
+iVar3 = *(int *)(param_3 + 0x244 + param_4 * 4);   // seqdesc.poseparamindex[axis]
+if (iVar3 == -1) { *param_5 = 0.0; *param_6 = 0; return; }   // fraction 0, index 0
+```
+
+and only walks an index at all under `if (1 < *(int *)(param_3 + 0x23c + param_4 * 4))` —
+`groupsize[axis] > 1`. A sequence that binds no pose parameter therefore yields `s = t = 0` on both
+axes, the bilinear weights collapse to `{1, 0, 0, 0}`, and the accumulate is one animation's own
+motion at weight 1. **A non-blended sequence's ground speed is a single number that no direction can
+change**, and it is produced by the same call that gives a fan its pose-weighted, per-frame-updated
+speed.
+
+**What this port does.** `UElysiumAnimSubsystem::ResolveGaitSpeeds` read only the fanned arm, so a
+gait whose selected label carried no grid commanded zero. It now asks the owning bank for a grid
+first and for the label's scalar motion second — one fork on the sequence's shape, not two rules.
+`ElysiumBlendGrids::FlatFan` fills every cell of a nine-cell `-180…180` table with that one speed,
+which is the direction-independent answer expressed in the consumer's own vocabulary: `SpeedAt`
+returns it at every yaw, `Peak` and `Forward` agree, and `Symmetrize` is a no-op. It is spread
+across the cells rather than written once because `FElysiumGaitSpeedTable::IsValid` requires two
+cells and a non-degenerate axis, so a single-cell table would read as absent.
+
+The scalar rides `UElysiumClipData` on every baked `UAnimSequence` — `cycleSeconds`,
+`groundDistanceCm` and `groundSpeedCmPerSecond`, computed by `importers/clip_data.py` as
+`(frames-1)/fps`, `|movement[-1].position| * 2.54`, and their quotient, which is
+`SequenceDuration`, `GetSequenceMoveDist` and `GetSequenceGroundSpeed` exactly. **Residency needed
+no new mechanism**: `UElysiumNativeAnimationData::BlendTable` already walks every one of a body's
+`NativeSequences`, already refuses to build or cache a table while any of them is unresident, and
+already harvests `Events` and `Movement` from that same metadata — so the speed is harvested in that
+loop, and a gait that can reach a blend table can reach the speed by construction. No deferred fill
+and no admission-time guarantee is needed.
+
+**A label absent from the map authors no movement**, which is the `false` retail's own
+`Studio_AnimMovement` returns and the zero `m_flGroundSpeed` that follows. That is reported rather
+than substituted — the gait genuinely commands zero, and so does retail's.
+
+##### The tutorial's two cases, and the one this does not close
+
+`monster/rat/rat` is closed. It is a standalone model with no include banks; `rat_walk` and
+`rat_run` are plain 11-frame clips at 30 fps, each authoring `pos_x_cm = 71.9109`, so the recovered
+speed is `71.9109 / (10/30) = 215.7 cm/s` (84.9 u/s). No grid is involved and none is needed.
+
+`npc/unique/downtown/sheriff/sheriff` is **not** closed, and the reason is data rather than
+mechanism. Its own local `Run` carries flags `1` — no `0x80` — so under
+`Studio_GetSequencesForActivity` (`0x10427df0`) it shadows the shared bank's fanned `run` and is the
+only candidate retail collects. That local sequence appears in neither the sheriff's grids nor its
+movement records, on a sidecar that does state its movement column; the file is therefore stating
+that the clip authors no movement, and retail's ground speed for it is **zero**. So the zero this
+runtime now reports for the sheriff's run is the correct answer *for the clip it lands on*.
+
+What remains unrecovered is whether retail lands on that clip. **The `0x80` include-shadowing rule
+is still unmodelled here** (see `animation_rig_resolution.md` → "What the reproduction does not
+carry"), so this runtime collects both the sheriff's local `Run` and the shared bank's fanned one
+and picks between them with a seeded draw. It currently draws the local one and so agrees with
+retail by coincidence rather than by rule; a different seed would draw the shared bank's fan and
+publish a speed retail would not. Modelling `0x80` would make the sheriff right for the right
+reason and would not change the rat. Nothing here works around that rule, and nothing here depends
+on it.
+
 #### The transition graph is unauthored, and the traversal branch is dead code [VtMB decompiled + data-verified]
 
 `AdvanceToIdealActivity` (`0x102726a0`) asks `CBaseAnimating::FindTransitionSequence`

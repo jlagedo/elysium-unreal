@@ -594,7 +594,14 @@ void UElysiumAudioSubsystem::RealizeVoice(
 		{
 			Comp->bIsUISound = false;
 			Comp->bAllowSpatialization = true;
-			if (Request.AttenuationRadiusCm > 0.f)
+			if (Request.AttenuationOverride.IsValid())
+			{
+				// An authored falloff (the body-sound path's Source sound-level curve) wins over
+				// the radius: the caller already knows the whole shape.
+				Comp->bOverrideAttenuation = true;
+				Comp->AttenuationOverrides = *Request.AttenuationOverride;
+			}
+			else if (Request.AttenuationRadiusCm > 0.f)
 			{
 				Comp->bOverrideAttenuation = true;
 				Comp->AttenuationOverrides = MakeSphereAttenuation(
@@ -1037,6 +1044,7 @@ FElysiumAudioVoiceHandle UElysiumAudioSubsystem::PlayVoice(
 	Request.Placement.Location = Params.Location;
 	Request.Placement.AttachTo = Params.AttachTo;
 	Request.AttenuationRadiusCm = Params.AttenuationRadiusCm;
+	Request.AttenuationOverride = Params.AttenuationOverride;
 	Request.FadeInSeconds = Params.FadeInSeconds;
 	Request.StartOffsetSeconds = Params.StartTimeSeconds;
 	return Submit(Request);

@@ -77,16 +77,19 @@ never a bare `soundgroup` lookup — and returns an ordinary request:
 - **Characters.** NPC voice sets — sentences, exertions, pain/death and activity-bound events —
   `SetSoundOverrideEnt`, `SetFakeSilence`, and player `Whisper` as a protected player-voice
   category rather than ambient SFX.
-- **Surfaces.** Footsteps, impacts and scrapes joined to the exported surface table: left/right
-  alternation per character, authored `rndwave`, pitch and volume ranges.
+- **Surfaces.** Impacts and scrapes joined to the exported surface table: authored `rndwave`,
+  pitch and volume ranges, through the `impact` / `scrape` script names
+  `FElysiumSurfaceSounds` carries beside the step pools. Footsteps have their own design,
+  `docs/architecture/footstep-architecture.md` (retail in `docs/vtmb/footsteps.md`).
 - **Radio and news.** Dependency lists evaluated at map/save load, the selected loop streamed from
   a radio source, the selected `.vcd` story through AUD3's service; both keep explicit categories
   and source ownership rather than passing as music or dialogue.
 - **The AI-hearing event.** The semantic noise event with its authored radius from
-  `sound_volume_table.txt`, published separately from the rendered voice, including the **footstep
-  hearing producer** — the one bus category with nothing raising it, the seam marked in
-  `Substrate/ElysiumPlayerEntity.cpp`. `flag_no_sfx` and authored no-noise paths suppress the
-  event without muting the voice.
+  `sound_volume_table.txt`, published separately from the rendered voice. `flag_no_sfx` and
+  authored no-noise paths suppress the event without muting the voice; the player's reserved
+  locomotion slot (`docs/vtmb/footsteps.md` §2.5) still needs its two kill switches wired —
+  `FL_NOTARGET` and `m_fNoPlayerSound`, the `FElysiumPlayer::bNoPlayerSound` seam. NPC footfalls
+  raise no stimulus by design.
 
 *Acceptance:* one door, container lid, computer, NPC voice set, alternating surface footstep,
 weapon shot, whisper, radio loop and news story all resolve through the one request ledger with
@@ -124,15 +127,19 @@ sync, and the scheduled lead matches the measured path with the residual stated.
 ### AUD4 Authored ambience plays
 
 Every authored `ambient_generic` flag, envelope and lifetime path over one logical voice set per
-entity: `PlaySound`, `StopSound`, `ToggleSound`, `Volume`, `FadeIn`, `FadeOut`, hide/unhide,
-dormancy and `Kill` all manipulate that set through handles; source attachment, force-looping,
-every/no-position mode, ducking exemption and gameplay-noise flags stay entity semantics and never
-reach the decoder. The active scheme's ambient bed and its point emitters start, stop and retire
-with the map epoch, and map activation waits on catalog readiness plus required start-enabled
-prefetch. Classify the 15 unresolved wires from `audio_surface_survey.py`; never silently swallow
-one. *Acceptance:* every exported map's point and scheme controls resolve or carry an explicit
-optional-content disposition, and the tutorial's authored ambience starts, stops and dies with its
-entities. *Deps:* AUD1, AUD2.
+entity: `PlaySound`, `StopSound`, `ToggleSound` (dispatcher mode 3), `Volume`, hide/unhide,
+dormancy and `Kill` all manipulate that set through handles. Retail has **no** `FadeIn`/`FadeOut`
+inputs on this class — `fadein`/`fadeout` are `m_dpv` KeyValues. Mixer wrap is `smpl`/`cue ` or
+`flag_force_looping` (`0x100`), not the entity `m_fLooping` bit. ScriptHide does not `SND_STOP`;
+Kill's `UpdateOnRemove` does. Source attachment, force-looping, every/no-position mode, ducking
+exemption and gameplay-noise flags stay entity semantics and never reach the decoder. The active
+scheme's ambient bed and its point emitters start, stop and retire with the map epoch, and map
+activation waits on catalog readiness plus required start-enabled prefetch (`start_enabled`
+FadeIns in **2.0 s**). Classify the 15 unresolved wires from `audio_surface_survey.py`; never
+silently swallow one. *Acceptance:* every exported map's point and scheme controls resolve or
+carry an explicit optional-content disposition, and the tutorial's authored ambience starts, stops
+and dies with its entities, matching the entity-loop vs mixer-wrap split in
+`docs/vtmb/audio_pipeline.md` §7. *Deps:* AUD1, AUD2.
 
 ## Tier 1 — it sounds like VtMB
 
@@ -156,14 +163,16 @@ from virtualization at the correct phase without restarting; a shipping-config l
 One logical active map scheme with outgoing and incoming transition states: a transition prefetches
 the destination, starts its stems on one audio-clock boundary, then crossfades. `Dry`, `NoPause`,
 `RandomSoundCount` and `RoomDSP` are policy inputs to that machine. The random-emitter scheduler
-runs on the game RNG stream and game clock for deterministic replay, evaluating the authored polar
-distribution around the scheme anchor or listener (RE31); until the frequency curve is recovered
-the faithful mode logs the unsupported behaviour and any approximation exists only as a divergence
-named beside it. Explore, alert and combat are states of that scheme, driven from real world
-combat/safe state through the six `events_world` music outputs. *Acceptance:* scheme trigger pairs
-in the tutorial and the hubs crossfade without duplicate stems; combat entry and exit move the
-music state from real world state; a seeded replay reproduces the same random-emitter sequence.
-*Deps:* AUD4, AUD5, RE31.
+runs on the game RNG stream and game clock for deterministic replay. Recovered (RE31 closed,
+`docs/vtmb/audio_pipeline.md` §5): XY around the player, Z around the scheme origin; fire when
+`Frequency > RandomInt(1, soundscheme_randomness)` (default 1000); Frequency 0 is silence;
+`start_enabled` FadeIns in 2.0 s; missing FadeIn param is instant; scheme Kill does not stop
+stems; `Disable` is not an input. Explore, alert and combat are states of that scheme, driven from
+real world combat/safe state through the six `events_world` music outputs. *Acceptance:* scheme
+trigger pairs in the tutorial and the hubs crossfade without duplicate stems; combat entry and
+exit move the music state from real world state; a seeded replay reproduces the same
+random-emitter sequence, including the seven Frequency-0 city whispers staying silent.
+*Deps:* AUD4, AUD5.
 
 ### AUD7 The listener zone
 
@@ -174,10 +183,12 @@ for hysteresis, publishing one interpolated listener environment to the submix g
 preset ids map to generated local reverb/submix presets through a data table, preset `0` neutral;
 the signal processing is a presentation-layer modernization choice and its calibration differences are
 recorded beside the preset mapping, while the authored preset selection and transition behaviour
-are logic to reproduce. Settle RE30 — the precedence between brush `room_type`, scheme `RoomDSP`
-and the player's networked room fields. *Acceptance:* the tutorial's 16 authored
-`trigger_environmental_audio` volumes change and restore DSP as the player crosses them, and the
-precedence stack matches RE30's recovered order. *Deps:* AUD5, AUD6, RE30.
+are logic to reproduce. Precedence is recovered (RE30 closed, `docs/vtmb/audio_pipeline.md` §4):
+live trigger `room_type > 0` beats scheme `RoomDSP`; the stamp expires after ~5 engine counts;
+`StartDisabled 1` never gets `FSOLID_TRIGGER`. The tutorial's 16 brushes are all StartDisabled
+with no Enable wire — **inert in retail** — so they are not the crossing-acceptance map. *Acceptance:*
+an enabled `trigger_environmental_audio` changes and restores DSP as the player crosses it, a
+disabled volume does not, and the precedence stack matches RE30. *Deps:* AUD5, AUD6.
 
 ### AUD8 Heard — played acceptance
 

@@ -161,11 +161,13 @@ per map in the timers' own keys.
 
 ### Audio
 
-The cycling `sm_hub_1` sound is `area/Santa_Monica/rain_light_loop.wav`, attached to `!player`,
-with authored `fadein=10` and `fadeout=10`. The current reading is seconds applied to
-`PlaySound`/`StopSound`; retail comparison decides whether that interpretation stays. Separate
-sewer ambience uses `Environmental/Weather/rainsewers.wav` four times in this map and is outside
-the outdoor-rain slice.
+The cycling `sm_hub_1` sound is `area/Santa_Monica/rain_light_loop.wav` (`smpl` loop chunk),
+everywhere + start-silent (`spawnflags 17`), attached to `!player`. Authored `fadein=10` /
+`fadeout=10` are `CAmbientGeneric` KeyValue **LFO envelope** fields (`vfunc110` `0x101ada80`,
+`atof` → `<< 8` into `m_dpv`), **not** I/O seconds — there is no `InputFadeIn` on the class
+(`docs/vtmb/audio_pipeline.md` §7). The rain timers still `PlaySound` / `StopSound` the
+entity. Separate sewer ambience uses `Environmental/Weather/rainsewers.wav` four times in
+this map (`plus_drop_sound`) and is outside the outdoor-rain slice.
 
 ## The particle-definition format
 

@@ -14,7 +14,8 @@ namespace
 	const TCHAR* const GStreamNames[] =
 	{
 		TEXT("OneOfSet"), TEXT("LogicTimer"), TEXT("LogicCase"), TEXT("Dice"), TEXT("Ambient"),
-		TEXT("Chargen"), TEXT("NpcMaker"), TEXT("NpcSchedule"), TEXT("Reaction"), TEXT("Effects")
+		TEXT("Chargen"), TEXT("NpcMaker"), TEXT("NpcSchedule"), TEXT("Reaction"), TEXT("Effects"),
+		TEXT("Footsteps")
 	};
 	static_assert(UE_ARRAY_COUNT(GStreamNames) == GStreamCount,
 		"every EElysiumRngStream enumerator needs its own name in GStreamNames");

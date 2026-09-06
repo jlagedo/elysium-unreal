@@ -10,6 +10,11 @@ class UAudioComponent;
 class USceneComponent;
 class USoundWaveProcedural;
 class IConsoleObject;
+// A request may carry a whole authored falloff instead of a radius (the body-sound path builds one
+// from a Source sound level). Held by shared pointer to an INCOMPLETE type on purpose: the settings
+// struct drags `Sound/SoundAttenuation.h` and its generated header behind it, and this header is
+// reached from `ElysiumWorldServices.h` by most of the runtime.
+struct FSoundAttenuationSettings;
 
 enum class EElysiumAudioSourceDomain : uint8
 {
@@ -148,6 +153,11 @@ struct FElysiumAudioRequest
 	float Gain = 1.f;
 	float Pitch = 1.f;
 	float AttenuationRadiusCm = 0.f;
+	// The whole falloff, when the producer knows it. Wins over `AttenuationRadiusCm`: a caller that
+	// authored a curve is not asking for the sphere the radius would build. Shared rather than
+	// held by value because one attenuation is reused by every step on a surface and the request
+	// is copied through the ledger.
+	TSharedPtr<const FSoundAttenuationSettings> AttenuationOverride;
 	bool bLooping = false;
 	float StartOffsetSeconds = 0.f;
 	float FadeInSeconds = 0.f;
@@ -202,6 +212,9 @@ struct FElysiumPlayParams
 	bool bLooping = false;
 	bool b3D = true;
 	float AttenuationRadiusCm = 0.f;
+	// The `FElysiumAudioRequest` field of the same name, reachable from the compatibility path the
+	// body-sound seam is built on.
+	TSharedPtr<const FSoundAttenuationSettings> AttenuationOverride;
 	float FadeInSeconds = 0.f;
 	float StartTimeSeconds = 0.f;
 	USceneComponent* AttachTo = nullptr;

@@ -7,14 +7,14 @@
 namespace
 {
 	TMap<FObjectKey, TWeakPtr<FElysiumPreparedOrnamentModels>> PreparedOrnaments;
-	FObjectKey Scope(const UObject* Owner)
+	FObjectKey OrnamentScope(const UObject* Owner)
 	{
 		return FObjectKey(Owner && Owner->GetWorld() ? static_cast<const UObject*>(Owner->GetWorld()) : Owner);
 	}
 }
 
 FElysiumPreparedOrnamentModels::FElysiumPreparedOrnamentModels(UObject* InOwner, uint64 InEpoch)
-	: Key(Scope(InOwner)), Owner(InOwner), Epoch(InEpoch) {}
+	: Key(OrnamentScope(InOwner)), Owner(InOwner), Epoch(InEpoch) {}
 
 FElysiumPreparedOrnamentModels::~FElysiumPreparedOrnamentModels()
 {
@@ -31,7 +31,7 @@ void FElysiumPreparedOrnamentModels::AddReferencedObjects(FReferenceCollector& C
 TSharedPtr<FElysiumPreparedOrnamentModels> FElysiumPreparedOrnamentModels::ForOwner(const UObject* InOwner)
 {
 	if (!InOwner || !IsInGameThread()) return nullptr;
-	const auto* Entry = PreparedOrnaments.Find(Scope(InOwner));
+	const auto* Entry = PreparedOrnaments.Find(OrnamentScope(InOwner));
 	const auto Result = Entry ? Entry->Pin() : nullptr;
 	return Result && Result->IsCurrent() ? Result : nullptr;
 }
@@ -39,7 +39,7 @@ TSharedPtr<FElysiumPreparedOrnamentModels> FElysiumPreparedOrnamentModels::ForOw
 void FElysiumPreparedOrnamentModels::Release(const UObject* InOwner)
 {
 	if (!InOwner || !IsInGameThread()) return;
-	const FObjectKey InKey = Scope(InOwner);
+	const FObjectKey InKey = OrnamentScope(InOwner);
 	if (const auto* Entry = PreparedOrnaments.Find(InKey))
 		if (const auto Current = Entry->Pin(); !Current || Current->Owner.Get() == InOwner) PreparedOrnaments.Remove(InKey);
 }
@@ -78,7 +78,7 @@ TSharedPtr<FElysiumPreparedOrnamentModels> FElysiumPreparedOrnamentModels::Creat
 	Error.Reset();
 	if (!InOwner || !InEpoch || !IsInGameThread())
 	{ Error = TEXT("ornament preparation requires owner, epoch and game thread"); return nullptr; }
-	PreparedOrnaments.Remove(Scope(InOwner));
+	PreparedOrnaments.Remove(OrnamentScope(InOwner));
 	TSet<FSoftObjectPath> Paths;
 	if (!GatherPaths(Catalogue, Paths, Error)) return nullptr;
 	TSharedPtr<FElysiumPreparedOrnamentModels> Result = MakeShareable(new FElysiumPreparedOrnamentModels(InOwner, InEpoch));

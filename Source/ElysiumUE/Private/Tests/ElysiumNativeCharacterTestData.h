@@ -100,6 +100,11 @@ namespace ElysiumNativeTest
 			}
 			if (!Meta->Events.IsEmpty()) Out.Events.Add(Meta->SourceLabel, Meta->Events);
 			if (!Meta->Movement.Records.IsEmpty()) Out.Movement.Add(Meta->SourceLabel, Meta->Movement);
+			// Mirrors `UElysiumNativeAnimationData::BlendTable` — a test reading a different table
+			// than the runtime builds is a test of nothing.
+			if (Meta->GroundSpeedCmPerSecond > 0.f && FMath::IsFinite(Meta->GroundSpeedCmPerSecond))
+				Out.Motion.Add(Meta->SourceLabel,
+					{Meta->CycleSeconds, Meta->GroundDistanceCm, Meta->GroundSpeedCmPerSecond});
 		}
 		for (const auto& Row : Body->Sequences)
 			if (Row.Owner == Body->AssetId && !Row.DeclaredLayers.IsEmpty())

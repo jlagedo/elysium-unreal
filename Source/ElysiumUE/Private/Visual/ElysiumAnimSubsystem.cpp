@@ -205,13 +205,17 @@ void UElysiumAnimSubsystem::ReportGaitFanMiss(const FElysiumGaitSpeedRequest& Re
 	// separates a body that declares no such activity from a fan that failed to resolve.
 	UE_LOG(LogElysiumAnim, Warning,
 		TEXT("[elysium] '%s' resolves no %s fan (%s): that gait commands zero, exactly as retail's ")
-		TEXT("unwritten table slot does (%s chain, class '%s', weapon '%s', state %d, label ")
-		TEXT("'%s'@'%s')"),
+		TEXT("unwritten table slot does (%s chain, class '%s', weapon '%s', state %d, translated ")
+		TEXT("'%s' rung %d, label '%s'@'%s')"),
 		*Request.Stem, ElysiumAnimIntent::ActivityName(Code), Reason,
 		ElysiumAnimIntent::BodyKindName(Request.BodyKind),
 		Request.ActorClassname.IsEmpty() ? TEXT("(none)") : *Request.ActorClassname,
 		Request.WeaponClassname.IsEmpty() ? TEXT("(empty hands)") : *Request.WeaponClassname,
 		static_cast<int32>(Request.ActorState),
+		// The translated activity and the rung that answered are what separate the two ways a gait
+		// misses: a body that truly declares nothing, and a translation whose answer is uncarried.
+		Selection.ResolvedActivity.IsEmpty() ? TEXT("(none)") : *Selection.ResolvedActivity,
+		Selection.AvailabilityRung,
 		Selection.SequenceLabel.IsEmpty() ? TEXT("(none)") : *Selection.SequenceLabel,
 		Selection.OwnerStem.IsEmpty() ? TEXT("(none)") : *Selection.OwnerStem);
 }
@@ -830,11 +834,21 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		Intent.BodyKind = Request.BodyKind;
 		Intent.ActorClassname = Request.ActorClassname;
 		Intent.ActorState = Request.ActorState;
-		// A gait that resolves through the fallback ladder is not that gait. Reaching `walk` for a
-		// missing `sneak` and then calling its speeds the sneak table is exactly the silent
-		// substitution the record exists to prevent, and here it would also make the body move at
-		// walking pace while playing a crouch.
-		Intent.bAllowFallbackLadder = false;
+		// **The probe runs; only the substitutions are refused.** Reaching `walk` for a missing
+		// `sneak` and then calling its speeds the sneak table is the silent substitution the record
+		// exists to prevent — but that is the run-to-walk and disposition rungs, not the four-way
+		// availability probe, whose rungs are all the same request differently translated
+		// (`CAI_BaseNPC::TranslateActivity` `0x10271ff0`, unconditional on the cast chain).
+		//
+		// Refusing the whole ladder here refused the probe as well, and the probe is load-bearing:
+		// `PreTranslate_Human` (`0x103854f0`) rewrites an unarmed `ACT_WALK` to `ACT_WALK_RELAXED`
+		// and `ACT_RUN` to `ACT_RUN_RELAXED` whatever the body can play, and no shipped body carries
+		// either sequence — so every unarmed cast body resolved nothing and every one of its gaits
+		// commanded zero while the per-frame publish, which keeps the probe, posed the plain walk it
+		// had. That is the divergence `ActivityIntentFor` already warns about: two seams answering
+		// one request differently.
+		Intent.bAllowFallbackLadder = true;
+		Intent.bAllowSubstituteActivity = false;
 
 		// Every way out of here is a gait that will command zero while its record names a cell, so
 		// every one of them says so once rather than returning a quiet false into a caller that
@@ -844,7 +858,8 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		if (Selection.SequenceLabel.IsEmpty() || Selection.OwnerStem.IsEmpty())
 		{
 			ReportGaitFanMiss(Request, Code,
-				TEXT("the body declares no such activity — an authored absence, not a defect"),
+				TEXT("nothing the translation named, and no rung of the availability probe, is on ")
+				TEXT("this body"),
 				Selection);
 			return false;
 		}
@@ -857,12 +872,37 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 				Selection);
 			return false;
 		}
+		// **One speed pipeline, as retail has one.** `ResetSequenceInfo` (`0x10090950`) calls
+		// `GetSequenceGroundSpeed` (`0x10091490`) for every sequence it commits, and the four-corner
+		// mover underneath it (`0x100c5d10`) answers a fanned sequence with a pose-weighted speed and
+		// a non-fanned one with a single corner at weight 1 — `0x100c1c60` short-circuits to fraction
+		// 0 the moment the sequence binds no pose parameter. The fork below is which of those two
+		// shapes the selected label has, not two different rules.
 		const FElysiumBlendGrid* Grid = Owner->Find(Selection.SequenceLabel);
 		if (Grid == nullptr)
 		{
-			ReportGaitFanMiss(Request, Code, TEXT("the blend table carries no grid for that label"),
-				Selection);
-			return false;
+			// No grid: the label names one animation, and its speed is direction-independent.
+			const FElysiumClipMotion* Motion = Owner->FindMotion(Selection.SequenceLabel);
+			if (Motion == nullptr)
+			{
+				// The sequence authors no movement — retail's `Studio_AnimMovement` returns false
+				// and `m_flGroundSpeed` is zero, so commanding zero here IS the retail answer. It is
+				// still reported: a gait that cannot move is worth saying out loud either way.
+				ReportGaitFanMiss(Request, Code,
+					Owner->bMovementStated
+						? TEXT("the label declares neither a grid nor any authored movement, so "
+							"retail's own ground speed for it is zero")
+						: TEXT("the owning bank never stated its movement column"),
+					Selection);
+				return false;
+			}
+			if (!ElysiumBlendGrids::FlatFan(*Motion, Scale, Table))
+			{
+				ReportGaitFanMiss(Request, Code, TEXT("the clip's authored motion carries no speed"),
+					Selection);
+				return false;
+			}
+			return true;
 		}
 		if (!ElysiumBlendGrids::SpeedFan(*Grid, *Owner, Scale, Table))
 		{

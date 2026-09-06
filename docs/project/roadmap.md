@@ -483,11 +483,17 @@ The ladder:
   `RigCompose` is red at 3.168 cm control / 1.358 cm layered, legs first — the cause is named
   (T-C7, the cross-fade chain, `plans/animation-critical-path.md`) and is not a bake gap.
 
-## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md))*
+## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md), conversation gaps: [plans/dialogue.md](plans/dialogue.md))*
 
-- [~] **[9.1 `.dlg` parser + dlgexpr](plans/gameplay.md)** — `GetStartingLine` fidelity open.
-- [ ] **[9.2 Conversation UI](plans/gameplay.md)** — UI slice landed; presentation completion and
-  live acceptance open. Line audio and subtitles are AUD3's.
+- [~] **[9.1 `.dlg` parser + dlgexpr](plans/dialogue.md)** — opener landed; the dependency
+  object (negative thresholds, discipline blood gate/charge, seven clan columns), deferred NPC
+  col-5, the 4 cap and the no-reply rule open (D1, D2, D4).
+- [ ] **[DC Dialogue corpus slice](plans/dialogue.md)** — `.dlg`, `.vcd`, `.lip` and all of
+  `sound/**` still read the legacy export; capsule upgrade for `dialogue_glb`/`scene_glb`,
+  `import dialogue` + `import sound` lanes, readers flip to `CorpusRoot()`.
+- [ ] **[9.2 Conversation UI](plans/dialogue.md)** — UI slice landed; use-to-talk entry and the
+  player refusal predicate (D3), requirement labels / disabled skill rows / skip (D5), voice take
+  by text column (D4), save-refusal proof (D7) open. Line audio and subtitles are AUD3's.
 - [x] **9.3a CPython default host + auto-load** · **9.3b `ccmd` + cfg aliases** ·
   **9.3c script filesystem**.
 - [~] **[9.3 Level-script execution](plans/gameplay.md)** — core landed; delegated fills open.
@@ -638,7 +644,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE18–RE22 | script API; scenes; facial formats; frame order; hulls | owning docs | [x] |
 | RE23 | particle format — the runtime is decoded from `engine.dll` (`frames`/`fps`, `v(n)`, the mode-8 blend, the emitter basis, collision, the 19-value attach enum; `docs/vtmb/effects.md` §2.4); open: whether `0x200d3840` is the `lighting` light sample, mode 3's per-segment tint, and the wetness time units | `docs/vtmb/weather.md`; 7.9, PL12 | [ ] |
 | RE24–RE29 | sheet; chargen; traits; quests; genesis exit; name matching | `docs/vtmb/game_runtime.md`, `entity_io.md` | [x] |
-| RE30, RE31 | env-audio DSP precedence; RandomSound scheduler | `docs/vtmb/audio_pipeline.md`; AUD7, AUD6 | [ ] |
+| RE30, RE31 | env-audio DSP precedence; RandomSound scheduler | `docs/vtmb/audio_pipeline.md` §4/§5; AUD7, AUD6 consume | [x] |
 | RE32 | source-attributed `sp_theatre` run joined to bytes/export | `docs/vtmb/vtmb-animation-reverse-engineering.md`; 12.1 | [~] |
 | RE33 | facial/lip runtime equivalence — verifies 12.3–12.5, never gates | `docs/vtmb/facial_animation.md`; 12.3–12.5 | [~] |
 | RE34 | the eye system end to end | `docs/vtmb/facial_animation.md` | [x] |

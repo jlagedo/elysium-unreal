@@ -230,6 +230,35 @@ public:
 	 */
 	virtual void OnKilled() override;
 
+	/**
+	 * `CAI_BaseNPC::HandleAnimEvent` (`0x10274e30`) — the FOOTSTEP arm of it, and nothing else yet.
+	 *
+	 * 2050/2051 are the walk footfall ("normal", `0x1026d460(this, 0)`) and 2052/2053 the run one
+	 * ("heavy", mode 1). Every other id in retail's switch — 1003, 2021/2022, 2040, 2070/2071 and
+	 * 4150-4155 — is NOT claimed here yet and falls to `FElysiumCombatCharacter::HandleAnimEvent`,
+	 * which is the weapon forward, the ornament/feed/4020 band, and then the census.
+	 *
+	 * Every footstep arm answers **claimed**, including the muted and the silent ones: retail's
+	 * handler `return`s after each case rather than falling through to `CBaseAnimating`, so an id it
+	 * decided to make no sound for still has a handler. That distinction is what keeps the anim-event
+	 * census a work list (`docs/vtmb/animation_events.md` -> "Port status - NPC footstep band").
+	 */
+	virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) override;
+
+	/**
+	 * The species seam: retail's five `HandleAnimEvent` overrides that replace `0x1026d460` outright
+	 * (`docs/vtmb/footsteps.md` §1.7). True means this NPC's own class handled the footfall and the
+	 * shared chain must not run.
+	 *
+	 * **The policy table IS the seam, not a virtual.** Retail's five species are distinct C++
+	 * classes each holding its own `HandleAnimEvent` slot; this port stands ONE leaf for every
+	 * `npc_V*` classname, so the overrides arrive as the classname-keyed data table in
+	 * `ElysiumFootsteps.h`. A `virtual` here would be unoverridable — `FElysiumNpc` is `final` — and
+	 * would read as an extension point that does not exist. The day a species genuinely needs a leaf
+	 * of its own, that leaf takes the `final` off and this becomes virtual in the same commit.
+	 */
+	bool OverrideFootstep(int32 EventId, bool bHeavy);
+
 	void InputUseInteresting(const FElysiumInputArgs& Args);
 
 	void InputTeleportToEntity(const FElysiumInputArgs& Args);
@@ -645,6 +674,41 @@ private:
 	// saved `NextThink` is `never`, so this cannot be deferred to a think the way the patrol and
 	// discipline blocks defer theirs.
 	void RestoreDeathBodyState();
+
+	// --- The footfall (`0x1026d460`), sequenced ---------------------------------------------------
+	/**
+	 * One footfall, in retail's own order: the species override, the global player gate, the
+	 * template/cvar source, this body's cached surface, the level, the coin flip, the emit.
+	 *
+	 * Always answers true. `EventId` is carried past the mode because the species overrides read the
+	 * foot the shared chain throws away.
+	 */
+	bool NpcStep(int32 EventId, bool bHeavy);
+
+	// The species row this NPC's classname selects, resolved ONCE. `bFootstepSpeciesResolved`
+	// distinguishes "no row" from "not looked up yet"; the row itself is a pointer into a static
+	// table, so it outlives every entity.
+	const struct FElysiumFootstepSpecies* FootstepSpecies = nullptr;
+	bool bFootstepSpeciesResolved = false;
+	const struct FElysiumFootstepSpecies* ResolveFootstepSpecies();
+
+	// This NPC's `stattemplate` record, RESOLVED through `ParentTemplateName` and latched at the one
+	// site that already resolves it (`ApplyResolvedTemplate`). Retail re-resolves per footfall
+	// (`1026d4a0`); the port resolves once, because `FElysiumClanTable::Resolve` merges seven maps
+	// and a walking body asks two or three times a second. Null for an NPC with no `stattemplate` or
+	// one whose template does not resolve, which `ElysiumFootsteps::NpcSource` answers with the
+	// loader's own defaults.
+	//
+	// Shared rather than unique so the header needs no complete type: `TSharedPtr`'s deleter is
+	// captured where `MakeShared` runs, which is the .cpp that has `ElysiumRulebook.h`.
+	TSharedPtr<const FElysiumClanTemplate> FootstepTemplate;
+
+	// The two silent arms of the footfall, counted rather than logged per occurrence — the anim-event
+	// census's rule, and for its reason: a body with no surface under it fires 2050 every half
+	// second. `bReportedNoStepSurface` is retail's null `surfacedata_t` (`+0x5b90`); the set is one
+	// entry per surface whose baked record carries no step pool at all.
+	bool bReportedNoStepSurface = false;
+	TSet<FName> ReportedStepSurfacesWithoutPool;
 
 	FElysiumNpcMind Mind;
 	FElysiumBodyOwnerToken PatrolOwner;

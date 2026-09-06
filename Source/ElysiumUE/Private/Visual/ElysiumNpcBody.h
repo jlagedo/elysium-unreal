@@ -130,6 +130,21 @@ public:
 		bool bSelfMoved, FVector HitLocation, FVector HitNormal, FVector NormalImpulse,
 		const FHitResult& Hit) override;
 
+	// Re-read the surfaceprop under this body's feet into the cache `SampleLocomotion` publishes.
+	//
+	// **The body owns this trace because `UCharacterMovementComponent` does not ask for it**: its
+	// floor sweeps run without `bReturnPhysicalMaterial`, so `CurrentFloor.HitResult.PhysMaterial`
+	// is null on every one of them (`CharacterMovementComponent.cpp`, `ComputeFloorDist`). The
+	// player's mover asks inside the ground trace it was already running; a cast body has to run
+	// one of its own.
+	//
+	// Called from `Tick` while a move request is in flight, which is where retail writes its own
+	// cache: `CAI_Navigator::MoveEnact 0x102ef870` is the ONLY writer of `CAI_BaseNPC +0x5b90`
+	// (through the setter `0x10270290`), so a standing body never pays for a trace and never
+	// changes its answer. Public so an engine-tier test can drive it without a navmesh, a
+	// controller and a crowd agent standing between it and one trace.
+	void RefreshGroundSurface();
+
 private:
 	// Clear every trace of a recording launch. Called from `Landed` and from `Stop()`, which is the
 	// funnel freeze, teleport and disable all reach.
@@ -185,6 +200,15 @@ private:
 	// commanded number falls back to the stated constant while the record names a different one.
 	// That is the one place the speed authority is still two numbers, and it says so.
 	mutable uint8 WarnedSpeedFallback = 0;
+	// The surfaceprop under this body's feet — `CAI_BaseNPC +0x5b90`, the cached `surfacedata_t*`
+	// the NPC footfall arm at `0x1026d460` returns silently on when it is null. Written only by
+	// `RefreshGroundSurface` (per move step, as `CAI_Navigator::MoveEnact 0x102ef870` writes the
+	// retail one) and cleared only at spawn (`InitializeAtFeet`, which is where `NPCInit 0x10273390`
+	// and `OnRestore 0x1027bf50` clear retail's). It SURVIVES `Stop()` — an arrival, a freeze, a
+	// disable and a teleport — exactly as retail's does: a footfall record landing on a body in its
+	// blend-out still sounds on the floor it stopped on, and a teleported body answers the floor it
+	// left until its first move step rewrites the cache, which is retail's own behaviour too.
+	FName GroundSurface;
 	FElysiumEntityHandle OwningEntity;
 	TWeakObjectPtr<AElysiumMapActor> OwningMap;
 

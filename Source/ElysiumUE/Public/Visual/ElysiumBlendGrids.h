@@ -179,6 +179,21 @@ struct FElysiumBlendTable
 	// record at all — see `bMovementStated`, which is what tells that apart from a file nothing
 	// looked in.
 	TMap<FString, FElysiumClipMovementPath> Movement;
+	// The scalar cycle/distance/speed of a sequence that declares NO grid, keyed the same way again.
+	//
+	// **This is the same quantity a grid cell's `Motion` carries, for the sequences that have no
+	// cells.** Retail has one speed pipeline for both: `ResetSequenceInfo` (`0x10090950`) always
+	// calls `GetSequenceGroundSpeed` (`0x10091490`), which is `GetSequenceMoveDist` (`0x1008fbe0`)
+	// over `SequenceDuration`, and the mover underneath it (`0x100c5d10`) accumulates
+	// `weight * motion` over four bilinear corners whose weights collapse to `{1,0,0,0}` when the
+	// sequence binds no pose parameter — `0x100c1c60` returns fraction 0 and index 0 the moment
+	// `poseparamindex[axis]` reads `-1`. So a non-blended sequence's ground speed is one number that
+	// no direction can change, and it is read through the same call the fanned ones are.
+	//
+	// A label absent here declares no movement, which is the `false` retail's own `Studio_AnimMovement`
+	// returns and the zero `m_flGroundSpeed` that follows from it. Read `bMovementStated` to tell
+	// that apart from a file nothing looked in.
+	TMap<FString, FElysiumClipMotion> Motion;
 	// Whether the sidecar carried `movement_fields`. **The two absences are different and a reader
 	// must not collapse them**: false means this file never read the
 	// `mstudiomovement_t` array, so it says nothing about any clip and a consumer reports the gap;
@@ -199,7 +214,8 @@ struct FElysiumBlendTable
 	// caching. The exporter writes no file at all in that case, so this only fires on a damaged one.
 	bool IsValid() const
 	{
-		return !Grids.IsEmpty() || !AutoLayers.IsEmpty() || !Events.IsEmpty() || !Movement.IsEmpty();
+		return !Grids.IsEmpty() || !AutoLayers.IsEmpty() || !Events.IsEmpty() || !Movement.IsEmpty()
+			|| !Motion.IsEmpty();
 	}
 	const FElysiumBlendGrid* Find(const FString& Label) const { return Grids.Find(Label); }
 	// The layers `Label` declares, or null. Never reordered — see FElysiumAutoLayerBinding.
@@ -218,6 +234,12 @@ struct FElysiumBlendTable
 	const FElysiumClipMovementPath* FindMovement(const FString& Label) const
 	{
 		return Movement.Find(Label);
+	}
+	// `Label`'s scalar motion when it declares no grid, or null. A label WITH a grid is answered by
+	// its cells instead, exactly as retail's four-corner accumulate answers it.
+	const FElysiumClipMotion* FindMotion(const FString& Label) const
+	{
+		return Motion.Find(Label);
 	}
 	const FElysiumPoseParamDesc* Param(int32 Index) const
 	{
@@ -282,4 +304,23 @@ namespace ElysiumBlendGrids
 	// than frozen. A fan with no usable cell at all is refused.
 	bool SpeedFan(const FElysiumBlendGrid& Grid, const FElysiumBlendTable& Table, float Scale,
 		FElysiumGaitSpeedTable& Out);
+
+	// The other half of retail's one speed pipeline: a gait whose sequence declares no grid.
+	//
+	// `GetSequenceGroundSpeed` (`0x10091490`) is called for EVERY sequence, blended or not, and the
+	// mover it reaches (`0x100c5d10`) weighs four bilinear corners whose weights collapse to
+	// `{1,0,0,0}` for a sequence that binds no pose parameter: `0x100c1c60` short-circuits to
+	// fraction 0 / index 0 the moment `poseparamindex[axis]` reads `-1`, and its index walk is
+	// further gated on `groupsize > 1`. So the accumulate is one animation's own motion at weight 1
+	// and **no direction can change it**.
+	//
+	// A flat fan across the shipped `move_yaw` span is exactly that answer in the consumer's own
+	// vocabulary: every cell equal, so `SpeedAt` returns the same number at every yaw, `Peak` and
+	// `Forward` agree, and `Symmetrize` is a no-op. It is filled across `MaxCells` rather than
+	// written as one cell because `FElysiumGaitSpeedTable::IsValid` requires two cells and a
+	// non-degenerate axis — a single-cell table cannot be interpolated and would read as absent.
+	//
+	// Refuses a motion with no usable speed, which is the zero `m_flGroundSpeed` retail computes
+	// when `Studio_AnimMovement` reports the sequence authors no movement at all.
+	bool FlatFan(const FElysiumClipMotion& Motion, float Scale, FElysiumGaitSpeedTable& Out);
 }

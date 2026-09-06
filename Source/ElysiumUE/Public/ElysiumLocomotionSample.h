@@ -94,10 +94,65 @@ struct FElysiumLocomotionSample
 	EElysiumWaterLevel Water = EElysiumWaterLevel::None;
 	EElysiumStance Stance = EElysiumStance::Standing;
 
+	// **The surfaceprop under the foot** — `concrete`, `default`, `wood` — spelled the way
+	// `UElysiumPhysicalMaterial::SourceName` spells the entry it came from. Compared as an `FName`,
+	// which is case-insensitive, so a table entry authored `Kitchen_Pan` answers `kitchen_pan`.
+	//
+	// It is retail's cached `surfacedata_t*`, carried on the sample because BOTH producers cache one
+	// and both footstep consumers read it: `CAI_BaseNPC +0x5b90`, written only by
+	// `CAI_Navigator::MoveEnact 0x102ef870` through the setter `0x10270290` and cleared at
+	// spawn/reset by `0x10273390` / `0x1027bf50`; and the player's, cached on `CGameMovement` by
+	// `CategorizePosition` and read as a `gamematerial` letter by `UpdateStepSound 0x1011e940`
+	// (`switch((char)mover[0x29])`).
+	//
+	// Two rules, and they are not the same answer:
+	//  - **`NAME_None` means there is no standable floor under the body**, or the body has never
+	//    moved. It is retail's null `surfacedata_t` — the arm at `0x1026d460` returns without a
+	//    sound on `+0x5b90 == 0` — so a step on `NAME_None` is silent rather than defaulted.
+	//  - **A floor hit whose `PhysMaterial` is not a `UElysiumPhysicalMaterial` is `default`**, not
+	//    `NAME_None`: an unmaterialed collider and a `$surfaceprop`-less face are Source's
+	//    surfaceprop index 0, which is a real surface with real step sounds.
+	//
+	// Filled by `ElysiumGroundSurface` on both producers; `FromCharacterMovement` leaves it unset,
+	// because the engine's own floor sweep does not request a physical material.
+	FName GroundSurface;
+
 	// How much of the jump's push window is left, seconds. Non-zero means the button is still doing
 	// work — VtMB's jump is a held push, not a single impulse — which is what makes the ascend phase
 	// derivable without a second flag.
 	float JumpHoldRemaining = 0.0f;
+
+	// **Is the body climbing?** Retail's `GetMoveType() == 10` (`MOVETYPE_LADDER`), which
+	// `CGameMovement::UpdateStepSound` (`0x1011e940`) reads three times: it forces the slow speed
+	// band, it selects the `ladder` surfaceprop's step pool at 350 ms and volume 0.35, and it is one
+	// of the three things that stop the "no ground contact" early return.
+	//
+	// **It is permanently false, and that is FAITHFUL rather than a gap.** VtMB has no ladder
+	// movement: `PlayerMove`'s movetype switch (`0x101274a0`) has no ladder arm at all, and no
+	// `func_ladder` / `func_useableladder` appears in any exported entity lump
+	// (`docs/vtmb/source_movement.md` → "Ladders: VtMB has none"). The `"ladder"` string at
+	// `0x10572554` survives in the shipped image only as the FOOTSTEP MATERIAL name
+	// `UpdateStepSound` reads — so retail's own ladder step arm is unreachable too.
+	//
+	// The field is carried so the arm is written and asserted against the recovered constants
+	// instead of being silently dropped, and so a modernization that adds climbing has one line to
+	// write. The NPC producers leave it false: retail's cast does not climb either.
+	bool bOnLadder = false;
+
+	// **The landing signal**, cm/s, positive downward — and non-zero on exactly ONE published frame:
+	// the one where the body regained ground contact. Zero on every other frame, including every
+	// airborne one.
+	//
+	// It is retail's `m_flFallVelocity` (`player+0x1ee8`) sampled at the moment `CheckFalling`
+	// (`0x10125db0`) reads it. The mover keeps the field the way `CGameMovement::PlayerMove` does —
+	// refreshed to `-velocity.z` at the top of every move the body spends off the ground, cleared on
+	// any move that has a ground entity — so what lands here is the speed the body carried INTO the
+	// floor rather than the speed it has after the impact zeroed it.
+	//
+	// The consumer is the forced landing step (`ElysiumFootsteps::LandingStepVolume`) and the two
+	// `PLAYER_LAND_*` hearing rows. NPC motors leave it 0: retail's landing step is `CGameMovement`'s
+	// and the cast does not run that code.
+	float FallSpeedAtLanding = 0.0f;
 
 	// Horizontal speed, cm/s. Derived rather than stored: a yaw rotation preserves length, so a
 	// stored copy would carry no information `LocalVelocity` does not — only the ability to disagree
