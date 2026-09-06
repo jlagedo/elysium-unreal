@@ -1617,6 +1617,9 @@ def make_unlit():
         "citedUnits": _cited_unit_hashes(UNLIT_CITED_SHADER_UNITS),
         "params": UNLIT_PARAM_TABLE,
         "mpcScalars": REQUIRED_MPC_SCALARS,
+        # R8 play-pass fix: the usage flags are part of what this master is, so a flag change
+        # rebuilds it (the graph alone did not move when `used_with_clothing` was added).
+        "usage": {"clothing": True},
     }
     fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
     force = _flag(_cmdline_arg("PolicyForce", ""))
@@ -1640,7 +1643,11 @@ def make_unlit():
     # `used_with_niagara_sprites` is dropped -- `M_V2_Sprite` is the design's own Niagara-sprite
     # master (doc "M_V2_Sprite" -> `used_with_instanced_static_meshes`), and nothing in the doc's
     # usage-flag notes requires it on Unlit as well.
-    mat, asset = _fresh(name, ism=True, nanite=True, skeletal=True, morph=True)
+    # `used_with_clothing` (R8 play pass): a native model's garments are Chaos cloth components
+    # and bind the same `MI_` the body slot does -- the spectral wolf_form's whole hide is
+    # cloth on an `UnlitGeneric` VMT, and without this flag UE swapped in the default grey
+    # material for every one of its garments in game.
+    mat, asset = _fresh(name, ism=True, nanite=True, skeletal=True, morph=True, clothing=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
     mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)

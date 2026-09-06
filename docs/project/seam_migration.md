@@ -3631,6 +3631,18 @@ Defects found and fixed during closure, none of them fidelity work:
   serialized slot too (`StampUnstyledDefault`) because the bake installs them through the same
   calls. Proven in `Elysium.Substrate.LightSwitch` and `Elysium.Content.NativeCloth`; the three
   closure maps place no cloth-bearing scenery, so their bakes stand.
+- Owner play pass, second finding: the tutorial's two spectral wolves (`wolf1`/`wolf2`,
+  `prop_dynamic` with `StartHidden 1`) stood in the alley before their scene, as untextured grey
+  clay. Two defects. (1) `wolf_form`'s whole hide is cloth: the native placed model carries its
+  garments as leader-posed Chaos cloth children, and `FElysiumProp::GateVisual` set only the
+  rigid body's visibility, so the garments drew whatever the entity's hidden state; the prop
+  gate and the generic placed-body gates in `FElysiumEntity` now call
+  `ElysiumNpcVisual::GateLeaderCloth` beside the body switch. (2) The wolf's VMTs are
+  `UnlitGeneric`, so its garments bind `M_V2_Unlit` children, and that master never set
+  `used_with_clothing`; the game logged "missing usage flag Clothing" and drew the default grey
+  material. The Unlit master now carries the flag, and its recipe records the usage flags so a
+  flag change rebuilds it. `Elysium.Content.NativeCloth` now dresses the wolf, requires the
+  Clothing flag on every master a garment reaches, and exercises the cloth gate both ways.
 
 Test-side corrections made during closure (contracts the migration changed, not runtime fixes):
 the substrate double now records and keys models by base name while the runtime addresses them

@@ -6,6 +6,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
 
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -714,6 +715,10 @@ void FElysiumProp::GateVisual()
 	{
 		const bool bWasTicking = AnimatedVisual->IsComponentTickEnabled();
 		AnimatedVisual->SetVisibility(bShown);
+		// A native placed model carries its garments as leader-posed cloth children; the body's
+		// own visibility never reaches them (the wolf_form's whole hide is cloth, so a
+		// start_hidden spectral wolf stood fully drawn with only its rigid core gated).
+		ElysiumNpcVisual::GateLeaderCloth(AnimatedVisual, bShown);
 		AnimatedVisual->SetComponentTickEnabled(bShown && !bRestPoseHeld);
 		// A hidden body does not tick, so its clip stops advancing while the game clock does
 		// not. On the way back the 10 Hz think would correct it within 0.1 s; doing it on the

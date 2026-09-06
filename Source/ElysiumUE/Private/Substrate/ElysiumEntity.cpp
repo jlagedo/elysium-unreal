@@ -7,6 +7,7 @@
 #include "ElysiumLineService.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
 
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -215,6 +216,7 @@ void FElysiumEntity::EnsurePlacedModelBody()
 	{
 		World->RegisterNpcBody(GenericModelBody);
 		GenericModelBody->SetVisibility(!IsInert(), true);
+		ElysiumNpcVisual::GateLeaderCloth(GenericModelBody, !IsInert());
 	}
 }
 
@@ -291,6 +293,9 @@ void FElysiumEntity::OnDormancyChanged()
 	if (GenericModelBody)
 	{
 		GenericModelBody->SetVisibility(!IsInert(), true);
+		// Propagation sets bVisible on the cloth children, but the cloth component may restore
+		// its own bVisible on an asset update; HiddenInGame is the gate that holds.
+		ElysiumNpcVisual::GateLeaderCloth(GenericModelBody, !IsInert());
 	}
 	if (World)
 	{

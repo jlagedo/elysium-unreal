@@ -61,6 +61,13 @@ appearance delta already listed in the fidelity ledger.
   construction site (bodies, wields, garments, preview, character stage, placed rest visual);
   tests `Elysium.Substrate.LightSwitch` and `Elysium.Content.NativeCloth` cover it. No re-bake
   needed: the three maps place no cloth scenery, and the bake already stamped its own actors.
+- Spectral wolves standing in the tutorial alley before their scene, as grey clay: the wolf's
+  whole hide is cloth, and the prop gate never hid a placed model's garments (fixed in
+  `FElysiumProp::GateVisual` and the generic placed-body gates); its `UnlitGeneric` materials
+  bind `M_V2_Unlit`, which lacked the Clothing usage flag, so the game drew the default grey
+  material (fixed in `make_v2_materials.make_unlit`). Needs `export bundle policy` then
+  `import materials` to re-author the master and re-parent its instances; no map re-bake.
+  `Elysium.Content.NativeCloth` now dresses the wolf and checks both.
 
 ## Recipe rule (new this pass)
 
