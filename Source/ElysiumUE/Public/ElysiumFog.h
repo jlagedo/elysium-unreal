@@ -153,6 +153,19 @@ namespace ElysiumLightStyle
 		}
 	}
 
+	// The same neutral brightness into the SERIALIZED slot as well as the live one, for a component
+	// built on a path the bake also walks (`AElysiumPlacedModelActor::ConfigureRest` and the
+	// garments it installs): the live write alone would be lost when the level is saved, and the
+	// bake's own `set_fog` only reaches the visual it is handed, never the cloth beside it.
+	inline void StampUnstyledDefault(UPrimitiveComponent* Component)
+	{
+		if (Component != nullptr)
+		{
+			Component->SetDefaultCustomPrimitiveDataFloat(SlotBrightness, Unstyled);
+			Component->SetCustomPrimitiveDataFloat(SlotBrightness, Unstyled);
+		}
+	}
+
 	// The style a BRUSH-ENTITY mesh animates on, read off its material slot names (R7.4 G6).
 	//
 	// A world chunk carries its style in the chunk actor's own `elysium.style=<n>` tag, because the

@@ -3,6 +3,7 @@
 #include "Animation/AnimSequence.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "ElysiumFog.h"                     // ElysiumLightStyle::StampUnstyledDefault -- CPD slot 6 neutral
 #include "Components/StaticMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
@@ -44,6 +45,9 @@ bool AElysiumPlacedModelActor::ConfigureRest(USkeletalMesh* SkeletalMesh,
 	CollisionProxy->SetStaticMesh(StaticMesh);
 	CollisionProxy->SetCollisionProfileName(bSolid ? TEXT("BlockAll") : TEXT("ElysiumPickOnly"));
 	SkeletalVisual->SetSkeletalMeshAsset(SkeletalMesh);
+	// R7.4 (G6): the bake stamps the visual it is handed through `set_fog`; stamped here as well
+	// so the rest body reads full brightness on every path that configures it.
+	ElysiumLightStyle::StampUnstyledDefault(SkeletalVisual);
 
 	const bool bNativeModel = SkeletalMesh->IsA<UElysiumSkeletalMesh>();
 	SkeletalVisual->EmptyOverrideMaterials();

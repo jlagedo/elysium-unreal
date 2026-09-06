@@ -1,6 +1,7 @@
 #include "ElysiumNpcSubsystem.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumFog.h"                     // ElysiumLightStyle::StampUnstyled -- CPD slot 6 neutral
 #include "ElysiumMapSubsystem.h"
 #include "Visual/ElysiumFacialRig.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
@@ -519,6 +520,7 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 	USkeletalMeshComponent* Component = NewObject<USkeletalMeshComponent>(Actor);
 	Component->SetMobility(EComponentMobility::Movable);
 	Component->SetSkeletalMeshAsset(Mesh);
+	ElysiumLightStyle::StampUnstyled(Component);   // R7.4 (G6): slot 6 neutral or it renders black
 	// The NATIVE host rather than the graph, installed before the component registers so it owns the
 	// pose from frame one: a preview body stands one named clip and nothing publishes a selection for
 	// it, so the clip player is the whole path it needs. The preview body carries no A/B against the

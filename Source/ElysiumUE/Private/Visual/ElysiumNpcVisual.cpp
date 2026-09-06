@@ -4,6 +4,7 @@
 #include "Visual/ElysiumPreparedWieldModels.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumFog.h"                     // ElysiumLightStyle::StampUnstyledDefault -- CPD slot 6 neutral
 #include "Visual/ElysiumCharacterAssets.h"
 #include "ElysiumCharacterProvenance.h"
 #include "ElysiumDynamicsData.h"
@@ -339,6 +340,9 @@ namespace ElysiumNpcVisual
 			UChaosClothComponent* Cloth = NewObject<UChaosClothComponent>(Owner);
 			Owner->AddInstanceComponent(Cloth);
 			Cloth->SetAsset(Asset);
+			// R7.4 (G6): slot 6 neutral, serialized too -- a placed model's garments are installed
+			// by the bake through this same call and saved with the level.
+			ElysiumLightStyle::StampUnstyledDefault(Cloth);
 			// All garments follow the same body's already-loaded pose. No native path lookup
 			// or loose sidecar read occurs during installation.
 			Cloth->SetupAttachment(Body);
@@ -505,6 +509,7 @@ namespace ElysiumNpcVisual
 		USkeletalMeshComponent* const Wield = NewObject<USkeletalMeshComponent>(Owner);
 		Wield->ComponentTags.Add(WieldComponentTag());
 		Wield->SetSkeletalMeshAsset(Mesh);
+		ElysiumLightStyle::StampUnstyled(Wield);   // R7.4 (G6): slot 6 neutral or it renders black
 		// The weapon evaluates no pose of its own under either placement: no graph, no clip player.
 		// Its clips are baked and a later rung may play one (`w_m_lockpick`'s pick wiggle is the
 		// corpus's only visible own-motion), which is a graph added here rather than a different

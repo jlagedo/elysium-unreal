@@ -2,6 +2,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS && WITH_EDITOR
 #include "ElysiumCharacterProvenance.h"
+#include "ElysiumFog.h"                // ElysiumLightStyle::SlotBrightness
 #include "Visual/ElysiumNativeAnimationData.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "ChaosClothAsset/ClothComponent.h"
@@ -53,6 +54,16 @@ bool FElysiumNativeClothTest::RunTest(const FString&)
 		{
 			TestTrue(TEXT("garment follows the correct skeletal body"),Garment->LeaderPoseComponent.Get()==Body);
 			TestTrue(TEXT("garment participates in actor instance serialization"),Owner->GetInstanceComponents().Contains(Garment));
+			// R7.4 (G6): the skinned masters multiply base colour by CPD slot 6; an installed garment
+			// reads full brightness live and serialized, on the bake's path and the runtime's alike.
+			TestEqual(TEXT("garment light-style slot is stamped live"),
+				Garment->GetCustomPrimitiveData().Data.IsValidIndex(ElysiumLightStyle::SlotBrightness)
+					? Garment->GetCustomPrimitiveData().Data[ElysiumLightStyle::SlotBrightness] : 0.f,
+				ElysiumLightStyle::Unstyled);
+			TestEqual(TEXT("and serialized"),
+				Garment->GetDefaultCustomPrimitiveData().Data.IsValidIndex(ElysiumLightStyle::SlotBrightness)
+					? Garment->GetDefaultCustomPrimitiveData().Data[ElysiumLightStyle::SlotBrightness] : 0.f,
+				ElysiumLightStyle::Unstyled);
 		}
 		ElysiumNpcVisual::InstallGarment(Body,Data->AssetId);
 		Garments.Reset(); Owner->GetComponents(Garments);

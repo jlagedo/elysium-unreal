@@ -3,6 +3,7 @@
 #include "UI/ElysiumUiArt.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "ElysiumFog.h"                     // ElysiumLightStyle::StampUnstyled -- CPD slot 6 neutral
 
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
@@ -200,6 +201,7 @@ void FElysiumCharacterStage::SetBody(const FString& InStem)
 	USkeletalMeshComponent* Component = NewObject<USkeletalMeshComponent>(Body);
 	Component->SetMobility(EComponentMobility::Movable);
 	Component->SetSkeletalMeshAsset(Mesh);
+	ElysiumLightStyle::StampUnstyled(Component);   // R7.4 (G6): slot 6 neutral or it renders black
 	Body->SetRootComponent(Component);
 	Component->RegisterComponent();
 	Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);

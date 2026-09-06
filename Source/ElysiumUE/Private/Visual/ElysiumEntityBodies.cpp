@@ -2,6 +2,7 @@
 
 #include "ElysiumAnimationIntent.h" // ElysiumAnimIntent::NumChannels/ChannelName
 #include "ElysiumContentPaths.h"
+#include "ElysiumFog.h"                     // ElysiumLightStyle::StampUnstyled -- CPD slot 6 neutral
 #include "ElysiumClipData.h"
 #include "ElysiumCastData.h"
 #include "ElysiumCharacterProvenance.h"
@@ -1687,6 +1688,9 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Mode
 	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetSkeletalMeshAsset(Mesh);
+	// R7.4 (G6): the skinned V2 masters multiply the lit base colour by CPD slot 6, and an
+	// unwritten slot reads 0 -- a body built here renders black until it is stamped.
+	ElysiumLightStyle::StampUnstyled(Comp);
 	Comp->SetVisibility(false, true);
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocation(Location);

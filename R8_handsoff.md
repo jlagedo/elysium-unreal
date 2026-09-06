@@ -54,6 +54,14 @@ Look at, in this order:
 Anything wrong is a functional defect for R8, not fidelity, unless it is a precision or
 appearance delta already listed in the fidelity ledger.
 
+## Play pass findings so far
+
+- Black characters (bodies lit, no albedo): CPD slot 6, the lightstyle brightness the lit
+  masters multiply by, was never stamped on runtime-built skeletal components. Fixed at every
+  construction site (bodies, wields, garments, preview, character stage, placed rest visual);
+  tests `Elysium.Substrate.LightSwitch` and `Elysium.Content.NativeCloth` cover it. No re-bake
+  needed: the three maps place no cloth scenery, and the bake already stamped its own actors.
+
 ## Recipe rule (new this pass)
 
 `ElysiumRecipe` = data content + one hand-bumped version string per producer; code is never

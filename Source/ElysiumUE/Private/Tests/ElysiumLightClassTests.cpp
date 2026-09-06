@@ -11,6 +11,7 @@
 #include "ElysiumTestServices.h"
 #include "ElysiumVariant.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "ElysiumFog.h"                // ElysiumLightStyle::SlotBrightness
 #include "Visual/ElysiumLightRig.h"
 
@@ -161,6 +162,27 @@ bool FElysiumLightSwitchTest::RunTest(const FString&)
 	TestFalse(TEXT("a null component is refused"), Rig->AddStyledPrimitive(nullptr, 1));
 	TestFalse(TEXT("so is style 0, the always-on base"), Rig->AddStyledPrimitive(Foam, 0));
 	TestFalse(TEXT("and a style past the table"), Rig->AddStyledPrimitive(Foam, 64));
+
+	// The neutral stamp every runtime-built body, wield, garment and preview component carries:
+	// an unwritten slot 6 reads 0 and the skinned masters multiply base colour by it, so a
+	// component built without the stamp renders black. The default variant writes the serialized
+	// slot as well, for the components the bake builds through the same runtime calls.
+	USkeletalMeshComponent* Body = NewObject<USkeletalMeshComponent>();
+	TestFalse(TEXT("a fresh component has no brightness slot"),
+		Body->GetCustomPrimitiveData().Data.IsValidIndex(ElysiumLightStyle::SlotBrightness));
+	ElysiumLightStyle::StampUnstyled(Body);
+	TestEqual(TEXT("StampUnstyled writes the live slot"),
+		Body->GetCustomPrimitiveData().Data[ElysiumLightStyle::SlotBrightness], ElysiumLightStyle::Unstyled);
+	TestFalse(TEXT("but not the serialized one"),
+		Body->GetDefaultCustomPrimitiveData().Data.IsValidIndex(ElysiumLightStyle::SlotBrightness));
+	USkeletalMeshComponent* Placed = NewObject<USkeletalMeshComponent>();
+	ElysiumLightStyle::StampUnstyledDefault(Placed);
+	TestEqual(TEXT("StampUnstyledDefault writes the serialized slot"),
+		Placed->GetDefaultCustomPrimitiveData().Data[ElysiumLightStyle::SlotBrightness], ElysiumLightStyle::Unstyled);
+	TestEqual(TEXT("and the live one"),
+		Placed->GetCustomPrimitiveData().Data[ElysiumLightStyle::SlotBrightness], ElysiumLightStyle::Unstyled);
+	ElysiumLightStyle::StampUnstyled(nullptr);
+	ElysiumLightStyle::StampUnstyledDefault(nullptr);
 	return true;
 }
 

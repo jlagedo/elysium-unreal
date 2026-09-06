@@ -3621,6 +3621,16 @@ Defects found and fixed during closure, none of them fidelity work:
   re-authored the whole cast and a comment edit restaged 1,207 units. Recipes are now data content
   plus one hand-bumped version string per producer, `--force` is per lane, and every lane logs
   why a product re-authored (`seam_map_unit_contract.md` → "Recipes").
+- Owner play pass, first finding: every character rendered black (lit, with highlights, no
+  albedo). The lit masters multiply base colour by Custom Primitive Data slot 6, the lightstyle
+  brightness (R7.4 G6); an unwritten slot reads 0. The bake stamps the components it places and
+  the prop/brush paths stamp theirs, but the NPC and player bodies, wield models, garments, the
+  preview body and the character stage never did; on the legacy `Characters/` bake they bound
+  masters that predate the slot. Every runtime skeletal construction now stamps the neutral
+  value (`ElysiumLightStyle::StampUnstyled`), garments and the placed-model rest visual stamp the
+  serialized slot too (`StampUnstyledDefault`) because the bake installs them through the same
+  calls. Proven in `Elysium.Substrate.LightSwitch` and `Elysium.Content.NativeCloth`; the three
+  closure maps place no cloth-bearing scenery, so their bakes stand.
 
 Test-side corrections made during closure (contracts the migration changed, not runtime fixes):
 the substrate double now records and keys models by base name while the runtime addresses them
