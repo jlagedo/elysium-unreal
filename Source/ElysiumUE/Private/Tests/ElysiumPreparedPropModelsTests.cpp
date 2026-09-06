@@ -125,4 +125,27 @@ bool FElysiumPreparedPropRoots::RunTest(const FString&)
 	TestTrue(TEXT("material retained"), Materials.Num() == 1 && Materials[0].Material != nullptr);
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPreparedPropLateAdmission,
+	"Elysium.Content.PreparedPropModels.LateAdmission", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumPreparedPropLateAdmission::RunTest(const FString&)
+{
+	// The map's residency is entity-derived, so a context starts with only the map's models and
+	// a script's SetModel literal arrives later: the same validation, after the fact, atomically.
+	FPreparedPropFixture F; FString Error;
+	const auto Ready = FElysiumPreparedPropModels::Create(F.Owner.Get(), 1, F.Placed, F.Skins, {}, {}, Error);
+	if (!TestTrue(TEXT("an empty context is a valid context: ") + Error, Ready.IsValid())) return false;
+	TestTrue(TEXT("catalogue knowledge precedes admission"), Ready->Knows(F.Id));
+	TestFalse(TEXT("unknown model is not known"), Ready->Knows(TEXT("vtmb:model:elsewhere")));
+	TestFalse(TEXT("nothing admitted yet"), Ready->IsAdmitted(F.Id));
+	TestTrue(TEXT("unadmitted model refuses lookup"), Ready->StaticMesh(F.Id, Error) == nullptr);
+	TestFalse(TEXT("late admission without the resident asset fails"), Ready->Admit({F.Id}, {}, Error));
+	TestFalse(TEXT("a failed late admission admits nothing"), Ready->IsAdmitted(F.Id));
+	TestTrue(TEXT("late admission with the resident asset: ") + Error, Ready->Admit({F.Id}, {F.Mesh}, Error));
+	TestTrue(TEXT("late-admitted model resolves"), Ready->IsAdmitted(F.Id) && Ready->StaticMesh(F.Id, Error) == F.Mesh);
+	TestNotNull(TEXT("late-admitted model has its compatibility view"), Ready->CompatibilityView(F.Id));
+	TestTrue(TEXT("re-admission is a no-op"), Ready->Admit({F.Id}, {}, Error));
+	TestTrue(TEXT("context registered for its owner"), ElysiumPreparedProps::ForOwner(F.Owner.Get()) == Ready);
+	return true;
+}
 #endif

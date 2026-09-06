@@ -86,12 +86,15 @@ FElysiumBankRemap FElysiumBankRemap::Build(const TArray<FTransform>& BankBindPos
 	{
 		const FName BoneName = MeshBones[MeshIndex].Name;
 		const int32 BankIndex = BankSkeleton.FindBoneIndex(BoneName);
-		if (BankIndex == INDEX_NONE || !BankBindPose.IsValidIndex(BankIndex))
+		if (BankIndex == INDEX_NONE || !BankBindPose.IsValidIndex(BankIndex)
+			|| IsAbsentBankBind(BankBindPose[BankIndex]))
 		{
-			// A bone this body's mesh carries that the bank's own skeleton has never had (an
-			// appendix, a hair chain no other body shares) has nothing to correct against --
-			// retail's own remap builder has no entry for it either, and this is the same silent
-			// absence a table-named bone missing from the evaluating pose is at runtime.
+			// A bone this body's mesh carries that the bank itself has never had (an appendix, a
+			// hair chain no other body shares) has nothing to correct against -- retail's own remap
+			// builder has no entry for it either, and this is the same silent absence a
+			// table-named bone missing from the evaluating pose is at runtime. The shared
+			// skeleton's tree still names it (another body's same-named chain put it there), so
+			// the bank's donor pose says so per bone (`AbsentBankBind`), not the tree.
 			continue;
 		}
 

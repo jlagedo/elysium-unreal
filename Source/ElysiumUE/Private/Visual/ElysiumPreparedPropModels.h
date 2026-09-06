@@ -31,6 +31,14 @@ public:
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
 	virtual FString GetReferencerName() const override { return TEXT("FElysiumPreparedPropModels"); }
 	uint64 GetEpoch() const { return Epoch; }
+	/** Late admission: the same validation Create runs, over models whose assets a caller has
+	 * since made resident. Nothing is admitted on failure; an ID already admitted is a no-op. */
+	bool Admit(const TArray<FString>& ModelIds, const TArray<UObject*>& ResidentAssets, FString& OutError);
+	bool IsAdmitted(const FString& Id) const { return Admitted.Contains(Id); }
+	/** The cooked catalogues carry this model (a skin row, or a placed row recorded source-absent). */
+	bool Knows(const FString& Id) const;
+	const UElysiumPlacedModelCatalogue* PlacedCatalogue() const { return Placed; }
+	const UElysiumPropSkinCatalogue* SkinCatalogue() const { return Skins; }
 	const FElysiumCataloguePlacedModel* Model(const FString& Id, FString& Error) const;
 	const FElysiumCataloguePlacedClip* Clip(const FString& Id, const FString& Label, FString& Error) const;
 	const FElysiumAnimatedPropEntry* CompatibilityView(const FString& Id) const;
@@ -46,6 +54,7 @@ public:
 private:
 	FElysiumPreparedPropModels(UObject* Owner, uint64 InEpoch);
 	bool IsCurrent() const;
+	bool AdmitOne(const FString& Id, FString& Error);
 	UObject* FindResident(const FSoftObjectPath& Path, FString& Error) const;
 	FObjectKey OwnerKey;
 	TWeakObjectPtr<UObject> Owner;

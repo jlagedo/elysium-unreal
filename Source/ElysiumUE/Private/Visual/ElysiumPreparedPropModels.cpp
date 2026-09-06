@@ -102,91 +102,123 @@ TSharedPtr<FElysiumPreparedPropModels> FElysiumPreparedPropModels::Create(UObjec
 {
 	Error.Reset();
 	if (!IsInGameThread() || !InOwner || !InEpoch) { Error = TEXT("prop preparation requires an owner, epoch and game thread"); return nullptr; }
+	if (!InPlaced || !InSkins) { Error = TEXT("placed and skin catalogues must already be resident"); return nullptr; }
 	Prepared.Remove(FObjectKey(InOwner)); // A failed refresh cannot expose the previous epoch's data.
-	TSet<FSoftObjectPath> Required;
-	if (!GatherPaths(InPlaced, InSkins, ModelIds, Required, Error)) return nullptr;
 	TSharedPtr<FElysiumPreparedPropModels> Result = MakeShareable(new FElysiumPreparedPropModels(InOwner, InEpoch));
 	Result->Placed = InPlaced; Result->Skins = InSkins;
+	if (!Result->Admit(ModelIds, ResidentAssets, Error)) return nullptr;
+	Prepared.Add(Result->OwnerKey, Result); return Result;
+}
+
+bool FElysiumPreparedPropModels::Knows(const FString& Id) const
+{
+	if (!Placed || !Skins) return false;
+	if (Skins->Data.Models.Contains(Id)) return true;
+	const auto* Row = Placed->FindModel(Id);
+	return Row && Row->bSourceAbsent;
+}
+
+bool FElysiumPreparedPropModels::Admit(const TArray<FString>& ModelIds, const TArray<UObject*>& ResidentAssets, FString& Error)
+{
+	Error.Reset();
+	if (!IsInGameThread()) { Error = TEXT("model admission requires the game thread"); return false; }
+	TSet<FSoftObjectPath> Required;
+	if (!GatherPaths(Placed, Skins, ModelIds, Required, Error)) return false;
 	for (UObject* Asset : ResidentAssets)
 	{
-		if (!IsValid(Asset)) { Error = TEXT("preparation was given a missing native asset"); return nullptr; }
-		Result->Assets.Add(FSoftObjectPath(Asset), Asset);
+		if (!IsValid(Asset)) { Error = TEXT("preparation was given a missing native asset"); return false; }
+		Assets.Add(FSoftObjectPath(Asset), Asset);
 	}
 	for (const auto& Path : Required)
-		if (!Result->Assets.Contains(Path)) { Error = TEXT("native model asset was not prepared: ") + Path.ToString(); return nullptr; }
+		if (!Assets.Contains(Path)) { Error = TEXT("native model asset was not prepared: ") + Path.ToString(); return false; }
+	// Validate every model before admitting any: a late batch that fails halfway leaves the
+	// context exactly as it was, so a retry or a report sees one consistent answer.
+	TArray<FString> Fresh;
 	for (const FString& Id : ModelIds)
 	{
-		if (Result->Admitted.Contains(Id)) continue;
-		Result->Admitted.Add(Id);
-		const auto* Skin = InSkins->Data.Models.Find(Id);
-		if (Skin) for (const auto& Rep : Skin->Representations)
+		if (Admitted.Contains(Id) || Fresh.Contains(Id)) continue;
+		if (!AdmitOne(Id, Error))
 		{
-			if ((!Rep.StaticMesh.IsNull() && !Cast<UStaticMesh>(Result->FindResident(Rep.StaticMesh.ToSoftObjectPath(), Error)))
-				|| (!Rep.SkeletalMesh.IsNull() && !Cast<USkeletalMesh>(Result->FindResident(Rep.SkeletalMesh.ToSoftObjectPath(), Error))))
-			{ Error = TEXT("prepared mesh has the wrong native type: ") + Id; return nullptr; }
-			for (const auto& Family : Rep.Families) for (const auto& Cell : Family.Cells)
-				if (!IsValid(Cell.Material.Get())) { Error = TEXT("skin family has an unprepared hard material reference: ") + Id; return nullptr; }
+			for (const FString& Undo : Fresh) { Views.Remove(Undo); Grids.Remove(Undo); Rigs.Remove(Undo); }
+			Views.Remove(Id); Grids.Remove(Id); Rigs.Remove(Id);
+			return false;
 		}
-		const auto* Row = InPlaced->FindModel(Id);
-		if (!Row) continue; // A character/wield/ground skin owner need not be placed by a map.
-		if (Row->AssetId != Id || !Row->AcceptanceIssues.IsEmpty()) { Error = TEXT("unaccepted placed model: ") + Id; return nullptr; }
-		if (Row->bSourceAbsent) continue;
-		if (Row->StaticMesh.IsNull() && Row->SkeletalMesh.IsNull()) { Error = TEXT("placed model has no declared native geometry: ") + Id; return nullptr; }
-		if (!Row->StaticMesh.IsNull())
-		{
-			const auto* Rep = Representation(InSkins, Id, TEXT("static"));
-			if (!Rep || Rep->StaticMesh != Row->StaticMesh) { Error = TEXT("static catalogue references disagree: ") + Id; return nullptr; }
-		}
-		if (!Row->SkeletalMesh.IsNull())
-		{
-			const auto* Rep = Representation(InSkins, Id, TEXT("skeletal"));
-			if (!Rep || Rep->SkeletalMesh != Row->SkeletalMesh) { Error = TEXT("skeletal catalogue references disagree: ") + Id; return nullptr; }
-			auto* Mesh = Cast<USkeletalMesh>(Result->FindResident(Row->SkeletalMesh.ToSoftObjectPath(), Error));
-			const auto* Record = ElysiumCharacterModel::Validate(Id, Mesh, Error);
-			if (!Record) return nullptr;
-			if (Row->bHasCloth != (Record->SourceGarmentCount > 0) || Record->SourceGarmentCount < 0
-				|| Record->ClothAssets.Num() != Record->SourceGarmentCount || Record->ClothAssets.Contains(nullptr))
-			{ Error = TEXT("cloth owner has incomplete native garments: ") + Id; return nullptr; }
-			for (const auto& Cloth : Record->ClothAssets)
-				if (!IsValid(Cloth.Get())) { Error = TEXT("native garment was not resident at preparation: ") + Id; return nullptr; }
-			if (Record->Composition.HasWork()) Result->Rigs.Add(Id, MakeShared<FElysiumCompositionRig>(Record->Composition));
-			const auto* Body = Cast<UElysiumBodyData>(Result->FindResident(Row->BodyData.ToSoftObjectPath(), Error));
-			if (!Body || Body->AssetId != Id || Row->BodyData.ToSoftObjectPath().ToString() != FElysiumContentPaths::BakedUnit(Id, TEXT("DA")))
-			{ Error = TEXT("placed BodyData was not prepared for its owner: ") + Id; return nullptr; }
-		}
-		else if (Row->bHasCloth) { Error = TEXT("cloth cannot use a static-only representation: ") + Id; return nullptr; }
-		for (const auto& Pair : Row->NativeSequences)
-			if (Pair.Value.ToSoftObjectPath().ToString() != FElysiumContentPaths::BakedUnit(Id, TEXT("A"), FString(), Pair.Key)
-				|| !Cast<UAnimSequence>(Result->FindResident(Pair.Value.ToSoftObjectPath(), Error)))
-			{ Error = TEXT("sequence not prepared at its canonical address: ") + Id + TEXT(" / ") + Pair.Key; return nullptr; }
-		auto Table = MakeShared<FElysiumBlendTable>(); Table->Stem = Id;
-		for (const auto& Pair : Row->NativeBlendSpaces)
-		{
-			const auto* Space = Cast<UBlendSpace>(Result->FindResident(Pair.Value.ToSoftObjectPath(), Error));
-			const auto* Meta = Space ? Space->FindMetaDataByClass<UElysiumClipData>() : nullptr;
-			if (!Meta || Meta->AssetId != Id || !Meta->bHasGrid
-				|| Pair.Value.ToSoftObjectPath().ToString() != FElysiumContentPaths::BakedUnit(Id, TEXT("BS"), FString(), Pair.Key))
-			{ Error = TEXT("native grid metadata absent/mismatched: ") + Id + TEXT(" / ") + Pair.Key; return nullptr; }
-			Table->Grids.Add(Pair.Key, Meta->Grid); Table->PoseParams = Meta->PoseParams;
-		}
-		Result->Grids.Add(Id, Table);
-		auto& View = Result->Views.Add(Id); View.Stem = View.StaticStem = Id; View.Model = Row->ModelPath;
-		View.bStaticEquivalent = Row->CanUseStatic(false);
-		View.ClipMode = Row->bFullClipsRequired ? TEXT("full") : Row->RequiredClips.IsEmpty() ? TEXT("rest") : TEXT("required");
-		for (const auto& Clip : Row->Clips)
-		{
-			if (Clip.Index != View.Clips.Num()) { Error = TEXT("placed clip index space differs: ") + Id; return nullptr; }
-			auto& Legacy = View.Clips.AddDefaulted_GetRef();
-			Legacy.Name = Clip.Label; Legacy.Activity = Clip.Activity; Legacy.Weight = Clip.Weight; Legacy.Flags = Clip.Flags;
-			Legacy.Index = Clip.Index; Legacy.Frames = Clip.Frames; Legacy.Fps = float(Clip.Fps); Legacy.BoundsRadiusMeters = float(Clip.BoundsRadiusCm / 100.);
-		}
-		for (int32 Index : Row->RestCandidates)
-		{
-			if (!Row->Clips.IsValidIndex(Index)) { Error = TEXT("invalid placed rest candidate: ") + Id; return nullptr; }
-			View.RestCandidates.Add(Row->Clips[Index].Label);
-		}
+		Fresh.Add(Id);
 	}
-	Prepared.Add(Result->OwnerKey, Result); return Result;
+	for (const FString& Id : Fresh) Admitted.Add(Id);
+	return true;
+}
+
+bool FElysiumPreparedPropModels::AdmitOne(const FString& Id, FString& Error)
+{
+	const auto* Skin = Skins->Data.Models.Find(Id);
+	if (Skin) for (const auto& Rep : Skin->Representations)
+	{
+		if ((!Rep.StaticMesh.IsNull() && !Cast<UStaticMesh>(FindResident(Rep.StaticMesh.ToSoftObjectPath(), Error)))
+			|| (!Rep.SkeletalMesh.IsNull() && !Cast<USkeletalMesh>(FindResident(Rep.SkeletalMesh.ToSoftObjectPath(), Error))))
+		{ Error = TEXT("prepared mesh has the wrong native type: ") + Id; return false; }
+		for (const auto& Family : Rep.Families) for (const auto& Cell : Family.Cells)
+			if (!IsValid(Cell.Material.Get())) { Error = TEXT("skin family has an unprepared hard material reference: ") + Id; return false; }
+	}
+	const auto* Row = Placed->FindModel(Id);
+	if (!Row) return true; // A character/wield/ground skin owner need not be placed by a map.
+	if (Row->AssetId != Id || !Row->AcceptanceIssues.IsEmpty()) { Error = TEXT("unaccepted placed model: ") + Id; return false; }
+	if (Row->bSourceAbsent) return true;
+	if (Row->StaticMesh.IsNull() && Row->SkeletalMesh.IsNull()) { Error = TEXT("placed model has no declared native geometry: ") + Id; return false; }
+	if (!Row->StaticMesh.IsNull())
+	{
+		const auto* Rep = Representation(Skins, Id, TEXT("static"));
+		if (!Rep || Rep->StaticMesh != Row->StaticMesh) { Error = TEXT("static catalogue references disagree: ") + Id; return false; }
+	}
+	if (!Row->SkeletalMesh.IsNull())
+	{
+		const auto* Rep = Representation(Skins, Id, TEXT("skeletal"));
+		if (!Rep || Rep->SkeletalMesh != Row->SkeletalMesh) { Error = TEXT("skeletal catalogue references disagree: ") + Id; return false; }
+		auto* Mesh = Cast<USkeletalMesh>(FindResident(Row->SkeletalMesh.ToSoftObjectPath(), Error));
+		const auto* Record = ElysiumCharacterModel::Validate(Id, Mesh, Error);
+		if (!Record) return false;
+		if (Row->bHasCloth != (Record->SourceGarmentCount > 0) || Record->SourceGarmentCount < 0
+			|| Record->ClothAssets.Num() != Record->SourceGarmentCount || Record->ClothAssets.Contains(nullptr))
+		{ Error = TEXT("cloth owner has incomplete native garments: ") + Id; return false; }
+		for (const auto& Cloth : Record->ClothAssets)
+			if (!IsValid(Cloth.Get())) { Error = TEXT("native garment was not resident at preparation: ") + Id; return false; }
+		if (Record->Composition.HasWork()) Rigs.Add(Id, MakeShared<FElysiumCompositionRig>(Record->Composition));
+		const auto* Body = Cast<UElysiumBodyData>(FindResident(Row->BodyData.ToSoftObjectPath(), Error));
+		if (!Body || Body->AssetId != Id || Row->BodyData.ToSoftObjectPath().ToString() != FElysiumContentPaths::BakedUnit(Id, TEXT("DA")))
+		{ Error = TEXT("placed BodyData was not prepared for its owner: ") + Id; return false; }
+	}
+	else if (Row->bHasCloth) { Error = TEXT("cloth cannot use a static-only representation: ") + Id; return false; }
+	for (const auto& Pair : Row->NativeSequences)
+		if (Pair.Value.ToSoftObjectPath().ToString() != FElysiumContentPaths::BakedUnit(Id, TEXT("A"), FString(), Pair.Key)
+			|| !Cast<UAnimSequence>(FindResident(Pair.Value.ToSoftObjectPath(), Error)))
+		{ Error = TEXT("sequence not prepared at its canonical address: ") + Id + TEXT(" / ") + Pair.Key; return false; }
+	auto Table = MakeShared<FElysiumBlendTable>(); Table->Stem = Id;
+	for (const auto& Pair : Row->NativeBlendSpaces)
+	{
+		const auto* Space = Cast<UBlendSpace>(FindResident(Pair.Value.ToSoftObjectPath(), Error));
+		const auto* Meta = Space ? Space->FindMetaDataByClass<UElysiumClipData>() : nullptr;
+		if (!Meta || Meta->AssetId != Id || !Meta->bHasGrid
+			|| Pair.Value.ToSoftObjectPath().ToString() != FElysiumContentPaths::BakedUnit(Id, TEXT("BS"), FString(), Pair.Key))
+		{ Error = TEXT("native grid metadata absent/mismatched: ") + Id + TEXT(" / ") + Pair.Key; return false; }
+		Table->Grids.Add(Pair.Key, Meta->Grid); Table->PoseParams = Meta->PoseParams;
+	}
+	Grids.Add(Id, Table);
+	auto& View = Views.Add(Id); View.Stem = View.StaticStem = Id; View.Model = Row->ModelPath;
+	View.bStaticEquivalent = Row->CanUseStatic(false);
+	View.ClipMode = Row->bFullClipsRequired ? TEXT("full") : Row->RequiredClips.IsEmpty() ? TEXT("rest") : TEXT("required");
+	for (const auto& Clip : Row->Clips)
+	{
+		if (Clip.Index != View.Clips.Num()) { Error = TEXT("placed clip index space differs: ") + Id; return false; }
+		auto& Legacy = View.Clips.AddDefaulted_GetRef();
+		Legacy.Name = Clip.Label; Legacy.Activity = Clip.Activity; Legacy.Weight = Clip.Weight; Legacy.Flags = Clip.Flags;
+		Legacy.Index = Clip.Index; Legacy.Frames = Clip.Frames; Legacy.Fps = float(Clip.Fps); Legacy.BoundsRadiusMeters = float(Clip.BoundsRadiusCm / 100.);
+	}
+	for (int32 Index : Row->RestCandidates)
+	{
+		if (!Row->Clips.IsValidIndex(Index)) { Error = TEXT("invalid placed rest candidate: ") + Id; return false; }
+		View.RestCandidates.Add(Row->Clips[Index].Label);
+	}
+	return true;
 }
 
 bool FElysiumPreparedPropModels::IsCurrent() const

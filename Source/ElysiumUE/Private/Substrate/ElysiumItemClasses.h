@@ -113,6 +113,8 @@ public:
 	// so it has no presence in the world.
 	void BuildWorldBody();
 	void DestroyWorldBody();
+	// A model change or late admission re-stands the loose world body (an owned item has none).
+	virtual void OnRuntimeModelChanged() override;
 
 protected:
 	// The loose item's ground model, built from the item data's `playermodel`. Null while carried.

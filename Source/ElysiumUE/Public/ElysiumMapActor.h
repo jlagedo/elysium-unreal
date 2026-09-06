@@ -8,6 +8,7 @@
 #include "ElysiumEnvironment.h"    // FElysiumSkyDef — a plain by-value member
 #include "ElysiumWaterVolumes.h"   // ElysiumWater::ESplash — the splash this actor raises
 #include "ElysiumWorldServices.h"  // the four interfaces this actor implements
+#include "Containers/Ticker.h"      // FTSTicker::FDelegateHandle — a late model admission's poll
 #include "ElysiumMapActor.generated.h"
 
 class FElysiumEntityWorld;
@@ -15,6 +16,7 @@ class FElysiumExpressionPreparation;
 class FElysiumPreparedPropModels;
 class FElysiumPreparedWieldModels;
 struct FElysiumEntityDefs;
+struct FStreamableHandle;
 class FElysiumSoundSchemeManager;
 class UElysiumEntityBodies;
 class UElysiumMapCollision;
@@ -847,8 +849,31 @@ private:
 	TSharedPtr<FElysiumExpressionPreparation> ExpressionPreparation;
 	TSharedPtr<FElysiumPreparedPropModels> PropModelPreparation;
 	TSharedPtr<FElysiumPreparedWieldModels> WieldModelPreparation;
-	bool PreparePropAndWieldModels(const FElysiumEntityDefs& Definitions, FString& OutError);
+	// Residency is entity-derived, as retail's per-entity Precache was: the defs' models, the
+	// makers' NPC models, the player's chargen body and the item records' ground models. The green
+	// room admits the whole catalogue instead, because a lab stands any model on demand.
+	bool PreparePropAndWieldModels(const FElysiumEntityDefs& Definitions, FString& OutError,
+		bool bAdmitWholeCatalogue = false);
 	void ReleasePropAndWieldModels();
+	// Late admission: the modern form of retail's synchronous precache inside SetModel. A model no
+	// entity declared at load (a script's SetModel literal, a restored runtime entity) is loaded
+	// asynchronously, admitted into this map's prepared context, and every live entity standing on
+	// it is rebuilt. False means the caller's build must stand down until that completion.
+	void CollectMapModelIds(const FElysiumEntityDefs& Definitions, const FElysiumPreparedPropModels& Context,
+		TSet<FString>& OutIds, TSet<FSoftObjectPath>& OutBrushPaths) const;
+	bool EnsurePlacedModelAdmitted(const FString& ModelPath);
+	void AdmitPlacedModelAsync(const FString& ModelId);
+	void ContinuePlacedModelAdmission(const FString& ModelId);
+	void FinishPlacedModelAdmission(const FString& ModelId, const FString& Error);
+	void CancelPlacedModelAdmissions();
+	void RebuildBodiesForModel(const FString& ModelId);
+	struct FElysiumPlacedModelAdmission
+	{
+		TSharedPtr<FStreamableHandle> Handle;
+		uint64 NativeRequestId = 0;
+		FTSTicker::FDelegateHandle Ticker;
+	};
+	TMap<FString, FElysiumPlacedModelAdmission> PlacedModelAdmissions;
 	FElysiumCharacterModelRequests CharacterModelRequests;
 	TMap<FElysiumEntityHandle, uint64> CharacterNativeAdmissionIds;
 	void CompleteCharacterModel(const FElysiumCharacterModelTicket& Ticket, bool bSuccess, const FString& Error);

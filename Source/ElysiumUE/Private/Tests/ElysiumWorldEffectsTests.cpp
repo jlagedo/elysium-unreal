@@ -62,6 +62,7 @@
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "ElysiumLocomotionSample.h"         // the body sample's pure rules
+#include "Substrate/ElysiumNpc.h"           // FElysiumNpc — the gaze cascade's NPC arms
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -953,12 +954,144 @@ bool FElysiumGazeTest::RunTest(const FString&)
 		TestTrue(TEXT("DialogPOV redirects the dialogue arm to the camera"),
 			Watcher->EyeLookTarget.Equals(CameraPoint, 0.1f));
 
-		// It replaces the *player* as the subject and nothing else: the player looking back at the
-		// NPC still resolves the NPC, with the same point supplied.
-		Player->NextFidgetTime = TNumericLimits<float>::Max();
-		Player->TickGaze(0.f, 0.f, Head, Forward, Tuning, &CameraPoint);
-		TestTrue(TEXT("DialogPOV does not redirect the player's own aim"),
-			Player->EyeLookTarget.Equals(Watcher->EyePosition(), 0.1f));
+		// The player is not on this cascade at all. `CHL2_Player` fills slot 333 with its own
+		// maintainer, which commands 300 units straight ahead of the head and snaps the smoothed
+		// point to it — in a conversation, with a camera point offered, or otherwise.
+		const FVector PlayerAhead = Head + Forward * (300.f * ElysiumMove::U);
+		const FVector PlayerSmoothed = Player->TickGaze(0.f, 0.f, Head, Forward, Tuning, &CameraPoint);
+		TestTrue(TEXT("the player's maintainer aims 300 units straight ahead"),
+			Player->EyeLookTarget.Equals(PlayerAhead, 0.1f));
+		TestTrue(TEXT("...and snaps the smoothed point to it with no integration"),
+			PlayerSmoothed.Equals(PlayerAhead, 0.1f));
+	}
+
+	// --- The subject is tracked, not the point --------------------------------------------------
+	// `m_hEyeLookTarget` is an entity, re-read every think: between re-picks the scan's subject is
+	// followed where it goes, and a subject that stops resolving drops the aim to straight ahead.
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumCombatCharacter* Watcher = Raw ? Raw->AsCombatCharacter() : nullptr;
+		if (Watcher == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("the scan stores the subject"), Watcher->EyeLookTargetHandle == Player->Handle);
+
+		// No re-pick is due, yet the aim moves with the player.
+		Player->Origin = FVector(520.f, 30.f, 0.f);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("a moving subject is followed between re-picks"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+
+		// A subject that goes inert is dropped, and the eyes go straight ahead.
+		Player->bHidden = true;
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		const FVector Ahead = Head + Forward * (500.f * ElysiumMove::U);
+		TestTrue(TEXT("an inert subject is dropped for straight ahead"),
+			Watcher->EyeLookTarget.Equals(Ahead, 0.1f));
+		TestFalse(TEXT("...and the handle is cleared"), Watcher->EyeLookTargetHandle.IsSet());
+		Player->bHidden = false;
+	}
+
+	// --- The scan sphere follows the body, the cone follows the head ------------------------------
+	// Retail centres the 300-unit sphere along `BodyDirection2D()` from the eyes. A body facing
+	// away from where the head points scans behind the head's cone, and finds nothing there.
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumCombatCharacter* Watcher = Raw ? Raw->AsCombatCharacter() : nullptr;
+		if (Watcher == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+		Watcher->Angles = FVector(0.f, 180.f, 0.f);   // Source yaw 180: the body faces -X
+		TestTrue(TEXT("BodyDirection2D reads the entity's yaw"),
+			Watcher->BodyDirection2D().Equals(FVector(-1.f, 0.f, 0.f), 0.001f));
+		Player->Origin = FVector(500.f, 0.f, 0.f);    // inside the head's +X cone
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		const FVector Ahead = Head + Forward * (500.f * ElysiumMove::U);
+		TestTrue(TEXT("a candidate outside the body-centred sphere is not picked"),
+			Watcher->EyeLookTarget.Equals(Ahead, 0.1f));
+	}
+
+	// --- The NPC arms: target entity, enemy, navigation goal, heard sound ----------------------
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumNpc* Npc = Raw ? Raw->AsNpc() : nullptr;
+		if (Npc == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		Npc->NextFidgetTime = TNumericLimits<float>::Max();
+		// Park the scan so an arm, not the scan, is what any pick came from.
+		Npc->NextEyeLookTime = TNumericLimits<float>::Max();
+
+		// The enemy arm: the committed enemy inside the cone is the subject.
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		Npc->Senses.Memory.Enemy = Player->Handle;
+		Npc->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("the enemy arm aims at the enemy's EyePosition"),
+			Npc->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+		// Outside the cone it is passed over, and with the scan parked nothing else picks.
+		Npc->EyeLookTargetHandle = FElysiumEntityHandle::Invalid();
+		Player->Origin = FVector(-500.f, 0.f, 0.f);
+		Npc->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		const FVector Ahead = Head + Forward * (500.f * ElysiumMove::U);
+		TestTrue(TEXT("an enemy outside the cone is passed over"),
+			Npc->EyeLookTarget.Equals(Ahead, 0.1f));
+		Npc->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+
+		// The heard-sound arm is DIRECT: the point is returned as the eyes' target this think, and
+		// neither the commanded nor the smoothed target is written.
+		Npc->TickGaze(0.f, 0.f, Head, Forward, Tuning);   // seed the smoothed point on Ahead
+		const FVector SmoothedBefore = Npc->CurEyeTarget;
+		const FVector Shot(400.f * ElysiumMove::U, 20.f, ElysiumMove::StandViewZ);
+		Npc->Senses.Memory.LastHeardPosition = Shot;
+		Npc->Senses.Memory.LastHeardTime = 1.0;
+		Npc->Cognition.Conditions.Set(EElysiumNpcCond::HearCombat);
+		const FVector Direct = Npc->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("the heard-sound arm hands the stimulus point straight to the eyes"),
+			Direct.Equals(Shot, 0.1f));
+		TestTrue(TEXT("...without integrating it"), Npc->CurEyeTarget.Equals(SmoothedBefore, 0.1f));
+		TestTrue(TEXT("...or committing it as the commanded target"),
+			Npc->EyeLookTarget.Equals(Ahead, 0.1f));
+		Npc->Cognition.Conditions.Clear(EElysiumNpcCond::HearCombat);
+
+		// A heard sound behind the head fails the cone and the arm is passed over.
+		Npc->Senses.Memory.LastHeardPosition = FVector(-400.f * ElysiumMove::U, 0.f, ElysiumMove::StandViewZ);
+		Npc->Cognition.Conditions.Set(EElysiumNpcCond::HearCombat);
+		const FVector NotDirect = Npc->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("a heard sound outside the cone is passed over"),
+			NotDirect.Equals(SmoothedBefore, 0.1f));
+		Npc->Cognition.Conditions.Clear(EElysiumNpcCond::HearCombat);
+
+		// The navigation-goal arm, on a character with a move in flight, is the same direct hand-off,
+		// lifted to eye height. Exercised through the hook a leaf answers, since a headless world
+		// has no motor to issue a move through.
+		struct FWalker final : public FElysiumCombatCharacter
+		{
+			FVector Goal = FVector::ZeroVector;
+			virtual bool GazeNavigationGoal(FVector& Out) const override { Out = Goal; return true; }
+		};
+		FWalker Walker;
+		Walker.Goal = FVector(300.f * ElysiumMove::U, 0.f, ElysiumMove::StandViewZ);
+		Walker.NextFidgetTime = TNumericLimits<float>::Max();
+		const FVector WalkerDirect = Walker.TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("the navigation-goal arm hands the goal straight to the eyes"),
+			WalkerDirect.Equals(Walker.Goal, 0.1f));
+		TestFalse(TEXT("...and never seeds the integrator"), Walker.bCurEyeTargetSeeded);
 	}
 
 	// --- The four scripted inputs -------------------------------------------------------------

@@ -31,6 +31,7 @@
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumAnimPostAdditive.h"
+#include "Visual/ElysiumBankRemap.h"        // AbsentBankBind -- donor pose entries for bones a bank never had
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumSkeletalSource.h"
 #include "UObject/Package.h"
@@ -271,7 +272,10 @@ namespace ElysiumSkeletalBuildImpl
 		const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
 		FReferencePose Pose;
 		Pose.PoseName = Name;
-		Pose.ReferencePose = RefSkeleton.GetRefBonePose();
+		// Every tree bone starts ABSENT, and only the bank's own bones state a bind: the shared
+		// tree is the union of every body's appendix, and seeding from its reference pose handed
+		// the remap another body's same-named chain as this bank's bind (`FElysiumBankRemap`).
+		Pose.ReferencePose.Init(FElysiumBankRemap::AbsentBankBind(), RefSkeleton.GetRawBoneNum());
 		for (const FElysiumSourceBone& Bone : Source.Bones)
 		{
 			const int32 Index = RefSkeleton.FindRawBoneIndex(Bone.Name);
@@ -1247,7 +1251,9 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	for (TPair<FName, FReferencePose>& Carried : CarriedRetargetSources)
 	{
 		const TArray<FTransform> Previous = MoveTemp(Carried.Value.ReferencePose);
-		Carried.Value.ReferencePose = Skeleton->GetReferenceSkeleton().GetRefBonePose();
+		// A bone the tree gained since this donor registered is one the donor never had.
+		Carried.Value.ReferencePose.Init(FElysiumBankRemap::AbsentBankBind(),
+			Skeleton->GetReferenceSkeleton().GetRawBoneNum());
 		for (int32 Old = 0; Old < PreviousBoneNames.Num(); ++Old)
 		{
 			const int32 New = Skeleton->GetReferenceSkeleton().FindRawBoneIndex(PreviousBoneNames[Old]);

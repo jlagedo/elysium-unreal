@@ -165,6 +165,15 @@ void FElysiumItem::BuildWorldBody()
 	}
 }
 
+void FElysiumItem::OnRuntimeModelChanged()
+{
+	DestroyWorldBody();
+	if (!IsOwned())
+	{
+		BuildWorldBody();
+	}
+}
+
 void FElysiumItem::DestroyWorldBody()
 {
 	if (World)

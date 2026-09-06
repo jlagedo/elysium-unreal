@@ -3643,6 +3643,44 @@ Defects found and fixed during closure, none of them fidelity work:
   material. The Unlit master now carries the flag, and its recipe records the usage flags so a
   flag change rebuilds it. `Elysium.Content.NativeCloth` now dresses the wolf, requires the
   Clothing flag on every master a garment reaches, and exercises the cloth gate both ways.
+- Owner play pass, third finding: Smiling Jack's beard was missing. The mesh, its 30-triangle
+  beard section, the masked material and its alpha coverage were all correct, and Jack's own line
+  clips pose the six beard-chain bones exactly at his bind. The loss is in the bank remap
+  (`FElysiumBankRemap`): a compatible group of bodies shares one `USkeleton`, so its tree is the
+  union of every body's appendix under generic names, and `RegisterRetargetSource` seeded each
+  bank's donor pose from that tree's reference pose before writing the bank's own bones. A bone the
+  bank never had (Jack's `Bone01`, `Bone07`, ...) therefore read another body's same-named bind as
+  the bank's `a`, and every shared clip corrected the beard by the similarity or translate branch
+  into the head. The donor pose now marks such bones absent (`AbsentBankBind`, a zero-scale entry
+  no genuine bind carries and the remap never reads; carried the same way when the tree grows), and
+  `Build` takes the copy branch for them, which is retail's outcome for a bone the bank's own table
+  does not name. `Elysium.Substrate.BankRemap` states the polluted and the marked cases side by
+  side. The producer version moved to `characters-v2`, so the native character corpus re-authored.
+- Owner play pass, load time: `elysium.newgame` took 71 s to reach the tutorial, 66 s of it in
+  `PreparePropAndWieldModels`, which admitted every key of `DA_PlacedModels` and `DA_PropSkins`
+  (4,445 model IDs, 10,970 resident references, 3,367 static meshes and all 60 cloth garments for a
+  map that declares 84 models). The closure comment called that a milestone policy; the plan's
+  own wording was the union of the map's body assets. Residency is now entity-derived, which is
+  retail's precache list computed the way retail computed it, at spawn from the entities rather
+  than as a baked list: the defs' `model` keys and decoded stems (props, NPCs, containers and the
+  `npc_maker`s, which carry the NPC's model), the weapon an NPC's `additionalequipment` names and
+  the fists fallback (their records' `playermodel` is the ground body a drop stands), a placed
+  item's own record model, a container's `SpawnItemInContainer` parameter, and the player's
+  chargen body (`InitialPlayerModel`). The wield catalogue (67 models) stays whole: any weapon
+  can cross a map in the player's hands. A derived ID the catalogues do not carry is dropped, and
+  the entity that reaches for it reports the absence once as before. The green room still admits
+  the whole catalogue (`bAdmitWholeCatalogue`), because a lab stands any model on demand.
+  **Modernization, late admission:** retail's `SetModel` precached an undeclared model
+  synchronously on the call (`CBaseEntity::PrecacheModel` → `IVEngineServer` slot `+0x34`, and the
+  Python `SetModel` binding calls the same slot before proceeding). R8.5 forbids the synchronous
+  read, so the map actor now answers such a miss with `EnsurePlacedModelAdmitted`: the placed
+  entries stand the build down with no warning, `AdmitPlacedModelAsync` loads the model's
+  inventory (through the native admission first when it is a cast body), polls editor compilation
+  instead of blocking, admits it into the same prepared context (`FElysiumPreparedPropModels::
+  Admit`, the validation `Create` runs, atomic per batch) and replays every live non-character
+  entity standing on that model (`OnRuntimeModelAdmitted`; a prop replays whichever placement
+  data its stood-down build read). The one warning names the model, which is how a real map's
+  residency rule grows. The tutorial's sardine can (`tutorial.py:560`) is the first user.
 
 Test-side corrections made during closure (contracts the migration changed, not runtime fixes):
 the substrate double now records and keys models by base name while the runtime addresses them

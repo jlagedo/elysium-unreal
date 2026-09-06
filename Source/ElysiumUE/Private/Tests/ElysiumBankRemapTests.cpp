@@ -144,6 +144,37 @@ bool FElysiumBankRemapTest::RunTest(const FString&)
 	TestTrue(TEXT("root and spine copy, and the mesh-only `extra` bone is skipped"),
 		Table.Translate.Num() + Table.Similarity.Num() == 2);
 
+	// --- a shared tree names a bone the bank never had -------------------------------------------
+	//
+	// Smiling Jack's beard: the male bank's skeleton is the UNION of every male body's appendix,
+	// so its tree carries `Bone01` from some other body (bind `(-16.9, -4.1, -0.2)`) while Jack's
+	// own `Bone01` binds at `(0.8, -12.5, -0.1)`. A donor pose seeded from the tree reads that
+	// stranger's bind as `a` and takes the similarity branch -- the beard chain rotated into the
+	// head on every shared clip. The bake writes `AbsentBankBind` for such a bone instead, and
+	// `Build` copies it.
+	const FVector StrangerChainBind(-16.9, -4.1, -0.2);
+	const FVector JackChainBind(0.8, -12.5, -0.1);
+	USkeleton* UnionSkeleton = BuildTestSkeleton(
+		{ TEXT("root"), TEXT("pelvis"), TEXT("Bone01") },
+		{ FTransform::Identity, FTransform(BankPelvisBind), FTransform(StrangerChainBind) });
+	USkeleton* JackSkeleton = BuildTestSkeleton(
+		{ TEXT("root"), TEXT("pelvis"), TEXT("Bone01") },
+		{ FTransform::Identity, FTransform(BodyPelvisBind), FTransform(JackChainBind) });
+	TArray<FTransform> SeededFromTree = UnionSkeleton->GetReferenceSkeleton().GetRefBonePose();
+	const FElysiumBankRemap Polluted = FElysiumBankRemap::Build(SeededFromTree,
+		UnionSkeleton->GetReferenceSkeleton(), JackSkeleton->GetReferenceSkeleton());
+	TestEqual(TEXT("a donor pose seeded from the shared tree corrects the stranger's chain (the defect)"),
+		Polluted.Similarity.Num(), 1);
+	TArray<FTransform> Donor = SeededFromTree;
+	Donor[2] = FElysiumBankRemap::AbsentBankBind();
+	TestTrue(TEXT("the sentinel reads as absent"), FElysiumBankRemap::IsAbsentBankBind(Donor[2]));
+	TestFalse(TEXT("a genuine bind does not"), FElysiumBankRemap::IsAbsentBankBind(Donor[1]));
+	const FElysiumBankRemap Marked = FElysiumBankRemap::Build(Donor,
+		UnionSkeleton->GetReferenceSkeleton(), JackSkeleton->GetReferenceSkeleton());
+	TestEqual(TEXT("the bank's own pelvis still corrects"), Marked.Translate.Num(), 1);
+	TestEqual(TEXT("a bone the bank never had copies, whatever the shared tree binds it at"),
+		Marked.Similarity.Num(), 0);
+
 	// The runtime lookup must read the donor pose off the PLAYING SEQUENCE'S skeleton, not the
 	// body's skeleton. Give the body a same-named decoy pose that would produce an empty table; the
 	// bank skeleton alone carries the ash pair above. This is the exact topology that exposed the

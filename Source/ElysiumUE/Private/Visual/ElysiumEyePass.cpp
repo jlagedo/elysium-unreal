@@ -1,6 +1,7 @@
 #include "Visual/ElysiumEyePass.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumEyeTuningConfig.h"
 #include "Visual/ElysiumBodyAnimInstance.h"
 #include "Visual/ElysiumEntityBodiesLog.h"
@@ -8,6 +9,7 @@
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
+#include "AnimationRuntime.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
@@ -63,11 +65,19 @@ bool FElysiumEyePass::GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPos
 		// beside the component it was resolved against.
 		const FTransform BoneToWorld =
 			Body->GetBoneTransform(Binding.HeadBoneIndex, Body->GetComponentTransform());
-		OutPosition = BoneToWorld.GetLocation();
-		// VtMB's head bone points down the model's own axis, not the character's facing, so the
-		// forward the cone is measured along is the component's, rotated by the head bone's yaw.
-		// Taking the bone's raw X would tilt the cone with every idle head bob.
-		OutForward = BoneToWorld.GetRotation().GetForwardVector();
+		// `CalcLookData`'s position: the bind-time eye point carried by the live bone.
+		OutPosition = Binding.bHasHeadLocalEye
+			? BoneToWorld.TransformPosition(Binding.HeadLocalEye)
+			: BoneToWorld.GetLocation();
+		// The head bone's own X runs up the skull (a Bip01 bone points along its length), not out
+		// of the face. Measuring the cone along it aimed every "straight ahead" at the crown, so the
+		// autonomous scan rejected the player and the iris parked under the upper lid — blank eyes.
+		// Retail's `CalcLookData`: the bind-time head-local forward rotated by the live bone. A
+		// binding without one (no reference pose to read at build) falls back to the component's
+		// facing, which is right until the head turns.
+		OutForward = Binding.HeadLocalForward.IsNearlyZero()
+			? Body->GetComponentTransform().GetRotation().GetForwardVector()
+			: BoneToWorld.GetRotation().RotateVector(Binding.HeadLocalForward).GetSafeNormal();
 		return true;
 	}
 	return false;
@@ -122,6 +132,53 @@ void FElysiumEyePass::InstallEyes(USkeletalMeshComponent* Comp,
 			Binding.HeadBoneIndex = Index;
 			break;
 		}
+	}
+	if (Binding.HeadBoneIndex != INDEX_NONE)
+	{
+		// `SetModel`'s `VectorIRotate(model forward, head bind matrix)`: the model's own facing
+		// taken into the head bone's frame through the reference pose. Read once here because the
+		// reference skeleton is the mesh's, and the animated bone the pass reads is this
+		// component's, so both halves are resolved against the same skeleton.
+		//
+		// Retail's model forward is the constant `(0,-1,0)` in Source model space. The imported
+		// mesh's reference pose is NOT guaranteed to face the component's +X — the V2 corpus keeps
+		// the model's authored axes in the bind pose and carries the turn to +X in the animation's
+		// root — so the constant cannot be hardcoded in component space. The eyeball record says
+		// which model axis the face is on: its authored resting aim, rotated by the bind bone,
+		// lands within the QC's few degrees of eye angle of the model's facing axis, and snapping
+		// it to that axis recovers retail's constant for this model. It also recovers
+		// `CNPC_VTzimisce`'s override (`0x103b9060`, a quarter turn of the stored vector) without
+		// a class case, because that model's eyes author the axis its face is actually on.
+		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
+		const FTransform BindComponent = FAnimationRuntime::GetComponentSpaceTransform(
+			Ref, Ref.GetRefBonePose(), Binding.HeadBoneIndex);
+		const FQuat BindRot = BindComponent.GetRotation();
+		FVector ModelForward = FVector::ForwardVector;
+		for (const FElysiumEyeball& Eye : Set->Eyeballs)
+		{
+			if (Eye.Forward.IsNearlyZero())
+			{
+				continue;
+			}
+			// The record stores the aim negated, as `BuildState` reads it.
+			const FVector Aim = BindRot.RotateVector(-Eye.Forward);
+			const int32 Axis = FMath::Abs(Aim.X) >= FMath::Abs(Aim.Y)
+				? (FMath::Abs(Aim.X) >= FMath::Abs(Aim.Z) ? 0 : 2)
+				: (FMath::Abs(Aim.Y) >= FMath::Abs(Aim.Z) ? 1 : 2);
+			ModelForward = FVector::ZeroVector;
+			ModelForward[Axis] = FMath::Sign(Aim[Axis]);
+			break;
+		}
+		Binding.HeadLocalForward = BindRot.UnrotateVector(ModelForward).GetSafeNormal();
+		UE_LOG(LogElysiumBodies, Verbose,
+			TEXT("eyes '%s': head bone %d, model forward %s, head-local forward %s"),
+			*Set->Stem, Binding.HeadBoneIndex, *ModelForward.ToCompactString(),
+			*Binding.HeadLocalForward.ToCompactString());
+		// `VectorITransform(m_vecViewOffset, bind)`: the standing view offset sits on the
+		// component's own vertical through the feet, which is where the entity's origin is.
+		Binding.HeadLocalEye =
+			BindComponent.InverseTransformPosition(FVector(0.f, 0.f, ElysiumMove::StandViewZ));
+		Binding.bHasHeadLocalEye = true;
 	}
 
 	const TArray<FSkeletalMaterial>& Slots = Mesh->GetMaterials();

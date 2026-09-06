@@ -607,6 +607,32 @@ in VtMB dialogue is animation and choreography, not this path. The *input* side 
 gaze cone and the fidget grid are computed in the real animated head-bone frame, with a
 fallback to `EyePosition()`/`EyeAngles()` when a model has no head bone.
 
+**The head frame is bind-time data carried by the live bone**, not the bone's own axes.
+`CBaseCombatCharacter::SetModel` (`0x103409a0`) looks up `Bip01 Head` and stores
+`m_vecHeadLocalForward = VectorIRotate((0,-1,0), headBindMatrix)` — the model's facing taken into
+head-bone space once, at bind. `CalcLookData` (`0x10331da0`) then rotates that by the animated
+bone for the forward, and carries `m_vecViewOffset` the same way (inverse-transformed by the bind
+matrix, transformed by the live bone) for the position — so the cone's apex is the eye-height
+point on the model's axis riding the head, and its axis is the face's, whatever the bone's
+axes are. A Bip01 bone's X runs along its length, up the skull: reading it as the facing aims
+"straight ahead" at the crown, the scan rejects everything in front of the character, and the
+iris parks under the upper lid — which is exactly the blank-eyed NPC that motivated recovering
+this. `CNPC_VTzimisce` (`0x103b9060`) rotates the stored vector a quarter turn for its own rig.
+A model with no head bone falls back to `EyePosition()` and `BodyDirection3D()`.
+
+> **Port note.** The imported reference pose does not necessarily face the component's +X (the
+> V2 bind pose keeps the model's authored axes; the turn to +X rides the animation root), so the
+> runtime does not hardcode retail's `(0,-1,0)` in component space. It rotates the eyeball
+> record's authored aim by the bind bone, snaps that to the nearest model axis, and inverse-rotates
+> the axis back — which recovers the constant per model and absorbs the Tzimisce override without
+> a class case.
+
+**The player is not on the cascade.** Slot 333 is `CBaseCombatCharacter::MaintainEyeDirection`,
+which `CAI_BaseNPCTroika` overrides (`0x102bff20`: blink cadence, the disposition fidget driver,
+then `CAI_BaseNPC`'s cascade) and `CHL2_Player` overrides separately (`0x10350270`): the player's
+commanded and smoothed targets are both set to `headPos + headForward × 300` every think, with
+no partner arm, no scan and no integration.
+
 Blink is likewise server-side only as a cadence: `Blink()` is a single networked toggle, and
 the envelope that animates it is client-side (below).
 

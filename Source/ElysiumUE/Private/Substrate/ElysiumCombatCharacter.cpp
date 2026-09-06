@@ -567,19 +567,29 @@ void FElysiumCombatCharacter::InputLookAtEntityDefault(const FElysiumInputArgs&)
 	EyeLookMode = 0;
 }
 
+FVector FElysiumCombatCharacter::BodyDirection2D() const
+{
+	return FRotator(0.f, ElysiumSkeletalBasis::FromSourceAngles(Angles).Yaw, 0.f).Vector();
+}
+
 FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 	const FVector& HeadPos, const FVector& HeadForward, const FElysiumEyeTargetTuning& Tuning,
 	const FVector* DialogPovPoint)
 {
+	// `CAI_BaseNPC`'s eye maintainer at slot 333 (`0x1026b810`), the body every VtMB NPC class
+	// reaches through `CAI_BaseNPCTroika`'s wrapper (`0x102bff20`: the blink cadence, the
+	// disposition fidget driver, then this). The blink lives in the eye pass and the fidget
+	// driver is the saccade layer below; the selection, the subject tracking, the direct arms
+	// and the integrator are here, in retail's order.
 	const FVector Ahead = HeadPos + HeadForward * GAheadReach;
 
 	// --- Selection ---------------------------------------------------------------------------
-	// The priority cascade. Three of retail's arms have nothing to read and are marked rather
-	// than faked: `enemy` needs the combat layer, `navigation goal` needs a move-goal
-	// accessor on FElysiumNpc, and `heard sound` needs a sound record. Each would sit here, in this
-	// order, between the scripted target and the autonomous scan. Their absence makes a character
-	// fall through to the scan, which is the same thing retail does when those arms find nothing.
-	FVector Commanded = Ahead;
+	// Retail stores the SUBJECT (`m_hEyeLookTarget`) and only the two cases that are not an entity
+	// — the camera redirect and a scripted look-at — as a point. The tail below turns the subject
+	// into this think's EyePosition(), which is what makes a moving subject followed rather than
+	// a stale point held until the next re-pick.
+	FVector Point = FVector::ZeroVector;
+	bool bHavePoint = false;
 	bool bResolved = false;
 
 	// 1. The dialogue partner, at their EyePosition() — eye height on the entity, not a head bone,
@@ -606,9 +616,15 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 				// player still resolves normally, and every other arm of the cascade is untouched.
 				const bool bPartnerIsPlayer = World->PlayerHandle().IsSet()
 					&& Partner->Handle.Index == World->PlayerHandle().Index;
-				Commanded = (bPartnerIsPlayer && DialogPovPoint != nullptr)
-					? *DialogPovPoint
-					: Partner->EyePosition();
+				if (bPartnerIsPlayer && DialogPovPoint != nullptr)
+				{
+					Point = *DialogPovPoint;
+					bHavePoint = true;
+				}
+				else
+				{
+					EyeLookTargetHandle = Partner->Handle;
+				}
 				bResolved = true;
 			}
 		}
@@ -620,8 +636,9 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 	{
 		if (const FElysiumEntity* Scripted = World->FindByName(EyeLookTargetName))
 		{
-			const FVector Point = (EyeLookMode == 3) ? Scripted->Origin : Scripted->EyePosition();
-			Commanded = InsideGazeCone(HeadPos, HeadForward, Point) ? Point : Ahead;
+			const FVector Aim = (EyeLookMode == 3) ? Scripted->Origin : Scripted->EyePosition();
+			Point = InsideGazeCone(HeadPos, HeadForward, Aim) ? Aim : Ahead;
+			bHavePoint = true;
 			bResolved = true;
 		}
 		else
@@ -631,14 +648,55 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 		}
 	}
 
-	// 3. The autonomous scan: nearest qualifying entity inside a 300-unit sphere centred 300 units
-	//    ahead of the eyes, re-picked every 1-5 seconds; nothing found means straight ahead and a
-	//    retry in half a second.
+	// 3. The target entity, then 4. the enemy — each taken when its EyePosition() is inside the
+	//    cone and otherwise passed over for the next arm, exactly as retail falls through.
+	if (!bResolved)
+	{
+		const FElysiumEntity* GazeEntity = GazeTargetEntity();
+		if (GazeEntity != nullptr && GazeEntity != this && !GazeEntity->IsInert()
+			&& InsideGazeCone(HeadPos, HeadForward, GazeEntity->EyePosition()))
+		{
+			EyeLookTargetHandle = GazeEntity->Handle;
+			bResolved = true;
+		}
+	}
+	if (!bResolved)
+	{
+		const FElysiumEntity* Enemy = GazeEnemy();
+		if (Enemy != nullptr && Enemy != this && !Enemy->IsInert()
+			&& InsideGazeCone(HeadPos, HeadForward, Enemy->EyePosition()))
+		{
+			EyeLookTargetHandle = Enemy->Handle;
+			bResolved = true;
+		}
+	}
+
+	// 5. The navigation goal, then 6. a heard combat sound. Both are DIRECT: retail hands the point
+	//    to the head filter and the eyes and returns before the commanded or smoothed targets are
+	//    written, so neither the subject nor the integrator sees these frames. The head filter
+	//    still runs because retail's does, and because its state is inspectable.
+	if (!bResolved)
+	{
+		FVector Direct = FVector::ZeroVector;
+		const bool bDirect =
+			(GazeNavigationGoal(Direct) && InsideGazeCone(HeadPos, HeadForward, Direct))
+			|| (GazeHeardSound(Direct) && InsideGazeCone(HeadPos, HeadForward, Direct));
+		if (bDirect)
+		{
+			FilterHeadTurn(Direct, HeadPos, HeadForward);
+			return Direct;
+		}
+	}
+
+	// 7. The autonomous scan: nearest qualifying entity inside a 300-unit sphere centred 300 units
+	//    along the BODY's facing from the eyes, re-picked every 1-5 seconds; nothing found means
+	//    no subject (straight ahead at the tail) and a retry in half a second. Between re-picks the
+	//    subject stands and is followed.
 	if (!bResolved)
 	{
 		if (Now >= NextEyeLookTime)
 		{
-			const FVector Centre = HeadPos + HeadForward * GScanReach;
+			const FVector Centre = EyePosition() + BodyDirection2D() * GScanReach;
 			const FElysiumEntity* Best = nullptr;
 			float BestDistanceSq = TNumericLimits<float>::Max();
 			if (World != nullptr)
@@ -660,13 +718,15 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 					{
 						continue;
 					}
-					const FVector Point = E->EyePosition();
-					if (FVector::DistSquared(Point, Centre) > GScanRadius * GScanRadius
-						|| !InsideGazeCone(HeadPos, HeadForward, Point))
+					const FVector Aim = E->EyePosition();
+					if (FVector::DistSquared(Aim, Centre) > GScanRadius * GScanRadius
+						|| !InsideGazeCone(HeadPos, HeadForward, Aim))
 					{
 						continue;
 					}
-					const float DistanceSq = FVector::DistSquared(Point, HeadPos);
+					// Retail ranks by distance from a point it reaches through slot 220, which the
+					// corpus does not name; the head is the nearest recovered point to it.
+					const float DistanceSq = FVector::DistSquared(Aim, HeadPos);
 					if (Best == nullptr || DistanceSq < BestDistanceSq
 						|| (FMath::IsNearlyEqual(DistanceSq, BestDistanceSq)
 							&& E->Handle.Index < Best->Handle.Index))
@@ -678,21 +738,38 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 			}
 			if (Best != nullptr)
 			{
-				Commanded = Best->EyePosition();
+				EyeLookTargetHandle = Best->Handle;
 				NextEyeLookTime = Now + static_cast<float>(FMath::RandRange(1, 5));
 				FidgetStep = -1;
 			}
 			else
 			{
-				Commanded = Ahead;
+				EyeLookTargetHandle = FElysiumEntityHandle::Invalid();
 				NextEyeLookTime = Now + 0.5f;
 			}
-			EyeLookTarget = Commanded;
 		}
-		// Between re-picks the commanded point stands, so the scan does not jitter frame to frame.
-		// The re-pick above always runs on the first call (NextEyeLookTime starts at zero), so this
-		// is never reading an unset value.
-		Commanded = EyeLookTarget;
+	}
+
+	// --- The subject becomes this think's point ------------------------------------------------
+	// Retail's tail: a subject that resolves is looked at where it is NOW; one that does not — gone,
+	// or this character itself — is dropped and the aim is straight ahead of the head.
+	FVector Commanded = Ahead;
+	if (bHavePoint)
+	{
+		Commanded = Point;
+	}
+	else if (EyeLookTargetHandle.IsSet())
+	{
+		const FElysiumEntity* Subject =
+			World != nullptr ? World->Resolve(EyeLookTargetHandle) : nullptr;
+		if (Subject != nullptr && Subject != this && !Subject->IsInert())
+		{
+			Commanded = Subject->EyePosition();
+		}
+		else
+		{
+			EyeLookTargetHandle = FElysiumEntityHandle::Invalid();
+		}
 	}
 
 	// --- Fidget ------------------------------------------------------------------------------
@@ -760,21 +837,26 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 		EyeIntegAccumulator = 0.f;
 	}
 
-	// --- Head turn, which drives nothing -------------------------------------------------------
-	// Retail integrates m_flHeadYaw/m_flHeadPitch every think through this 0.8/0.2 filter and
-	// applies them with SetBoneController(0, …) and (1, …) — bone controllers, not pose parameters.
-	// No shipped model declares a single bone controller, so the lookup fails and the value never
-	// reaches the skeleton. Visible head movement in VtMB dialogue is animation and choreography,
-	// not this path. Reproduced, including the unclamped filter and its lone `> 360 → 0` guard, so
-	// the state is inspectable and so nobody later mistakes its absence for a missing feature.
-	const FRotator ToTarget = (EyeLookTarget - HeadPos).Rotation();
+	FilterHeadTurn(EyeLookTarget, HeadPos, HeadForward);
+	return CurEyeTarget;
+}
+
+void FElysiumCombatCharacter::FilterHeadTurn(const FVector& LookTarget, const FVector& HeadPos,
+	const FVector& HeadForward)
+{
+	// `SetHeadDirection` — head turn, which drives nothing. Retail integrates m_flHeadYaw and
+	// m_flHeadPitch every think through this 0.8/0.2 filter and applies them with
+	// SetBoneController(0, …) and (1, …) — bone controllers, not pose parameters. No shipped model
+	// declares a single bone controller, so the lookup fails and the value never reaches the
+	// skeleton. Visible head movement in VtMB dialogue is animation and choreography, not this
+	// path. Reproduced, including the unclamped filter and its lone `> 360 → 0` guard, so the
+	// state is inspectable and so nobody later mistakes its absence for a missing feature.
+	const FRotator ToTarget = (LookTarget - HeadPos).Rotation();
 	const FRotator HeadNow = HeadForward.Rotation();
 	HeadYaw = HeadYaw * 0.8f + (ToTarget.Yaw - HeadNow.Yaw) * 0.2f;
 	HeadPitch = HeadPitch * 0.8f + (ToTarget.Pitch - HeadNow.Pitch) * 0.2f;
 	if (HeadYaw > 360.f) { HeadYaw = 0.f; }
 	if (HeadPitch > 360.f) { HeadPitch = 0.f; }
-
-	return CurEyeTarget;
 }
 
 void FElysiumCombatCharacter::SyncHealthFromSheet()

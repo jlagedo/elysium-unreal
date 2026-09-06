@@ -8,6 +8,7 @@
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
@@ -57,6 +58,21 @@ void FElysiumPlayer::Spawn()
 	// ("due now") on a fresh entity, and `Think` re-arms itself from it after every pass; without
 	// this first arm the deadline-driven think would never start.
 	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+}
+
+FVector FElysiumPlayer::TickGaze(float, float, const FVector& HeadPos,
+	const FVector& HeadForward, const FElysiumEyeTargetTuning&, const FVector*)
+{
+	// `CHL2_Player`'s maintainer (`0x10350270`): `CalcLookData`, then the commanded and smoothed
+	// targets both set to 300 units straight ahead of the head, then `SetViewtarget`. There is no
+	// cascade on the player and no integration — a snap, every think. The tuning and the camera
+	// point are accepted for the signature and ignored, because the player has no disposition
+	// row driving its eyes and DialogPOV redirects NPCs at the player, never the player itself.
+	EyeLookTargetHandle = FElysiumEntityHandle::Invalid();
+	EyeLookTarget = HeadPos + HeadForward * (300.f * ElysiumMove::U);
+	CurEyeTarget = EyeLookTarget;
+	bCurEyeTargetSeeded = true;
+	return CurEyeTarget;
 }
 
 void FElysiumPlayer::Think()

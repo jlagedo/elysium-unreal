@@ -423,14 +423,19 @@ bool AElysiumMapActor::GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPo
 	return Bodies ? Bodies->GetHeadFrame(Body, OutPosition, OutForward) : false;
 }
 
+// Every placed-model entry below stands down while a late admission is in flight
+// (EnsurePlacedModelAdmitted): the entity gets an empty answer now, no warning, and a rebuild
+// when the model lands. A model the catalogues never carried falls through and reports once.
 FString AElysiumMapActor::AnimatedPropStemForModel(const FString& ModelPath) const
 {
+	if (!const_cast<AElysiumMapActor*>(this)->EnsurePlacedModelAdmitted(ModelPath)) return FString();
 	return Bodies ? Bodies->AnimatedPropStemForModel(ModelPath) : FString();
 }
 
 FElysiumPlacedModelBody AElysiumMapActor::BuildPlacedModelBody(
 	const FElysiumPlacedModelRequest& Request)
 {
+	if (!EnsurePlacedModelAdmitted(Request.ModelPath)) return FElysiumPlacedModelBody{};
 	return Bodies ? Bodies->BuildPlacedModelBody(Request) : FElysiumPlacedModelBody{};
 }
 
@@ -572,11 +577,13 @@ UStaticMeshComponent* AElysiumMapActor::BuildBrushVisual(const FString& Stem,
 UStaticMeshComponent* AElysiumMapActor::BuildPropVisual(const FString& Stem, const FVector& Location,
 	const FQuat& Rotation, float UniformScale)
 {
+	if (!EnsurePlacedModelAdmitted(Stem)) return nullptr;
 	return Bodies->BuildPropVisual(Stem, Location, Rotation, UniformScale);
 }
 
 EElysiumItemGroundModelState AElysiumMapActor::ItemGroundModelState(const FString& ModelPath)
 {
+	if (!EnsurePlacedModelAdmitted(ModelPath)) return EElysiumItemGroundModelState::Unavailable;
 	return Bodies ? Bodies->ItemGroundModelState(ModelPath)
 		: EElysiumItemGroundModelState::Unavailable;
 }
@@ -584,6 +591,7 @@ EElysiumItemGroundModelState AElysiumMapActor::ItemGroundModelState(const FStrin
 UStaticMeshComponent* AElysiumMapActor::BuildPhysPropVisual(const FString& Stem, const FVector& Location,
 	const FQuat& Rotation, float UniformScale)
 {
+	if (!EnsurePlacedModelAdmitted(Stem)) return nullptr;
 	return Bodies->BuildPhysPropVisual(Stem, Location, Rotation, UniformScale);
 }
 

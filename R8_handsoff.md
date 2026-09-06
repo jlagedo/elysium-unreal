@@ -68,6 +68,20 @@ appearance delta already listed in the fidelity ledger.
   material (fixed in `make_v2_materials.make_unlit`). Needs `export bundle policy` then
   `import materials` to re-author the master and re-parent its instances; no map re-bake.
   `Elysium.Content.NativeCloth` now dresses the wolf and checks both.
+- Smiling Jack's beard missing: the bank remap's donor pose was seeded from the shared skeleton's
+  tree, so the beard chain bones (which the male bank never had) were corrected against another
+  body's same-named bind and swung into the head on every shared clip. Donor poses now mark bones
+  a bank never had as absent, `Build` copies them. Fixed in `ElysiumSkeletalBuild.cpp` and
+  `ElysiumBankRemap.cpp`; `Elysium.Substrate.BankRemap` covers it; `characters-v2` re-authored
+  the native corpus (`import characters`, then `import cook-roots`).
+- Tutorial load took 71 s: model preparation admitted the whole placed/skin catalogue (4,445
+  IDs) for every map. Residency is now derived from the map's entities the way retail's per-entity
+  `Precache` was (defs, makers, NPC equipment and item ground models, the player's body); a model
+  no entity declared is admitted late and asynchronously on first use, with one warning naming it
+  (`late model admission on <map>: '<id>' ...`). Expect the tutorial's sardine can to log it once.
+  Two costs are separate and still open: the 60 `CLOTH_*` assets rebuild every launch because
+  `LegacyCHAOSCLOTH` derived data hashes non-deterministically, and `RuntimeGeneration=Dynamic`
+  rebuilds the navmesh at load (13.5 s on the tutorial).
 
 ## Recipe rule (new this pass)
 

@@ -21,6 +21,8 @@
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "Visual/ElysiumBankRemap.h"
+#include "Animation/AnimData/IAnimationDataModel.h"
 
 #include "Animation/AnimSequence.h"
 #include "Animation/Skeleton.h"
@@ -446,5 +448,97 @@ bool FElysiumRigRetargetTest::RunTest(const FString&)
 	MissingSource.Report(*this);
 	Classification.Report(*this);
 	Branch.Report(*this);
+	return true;
+}
+
+// Elysium.Content.BankDonorAbsence -- the shared skeleton's tree is the union of every body's
+// appendix under recurring generic names, so a bank's donor pose must SAY which bones the bank
+// never had (`FElysiumBankRemap::AbsentBankBind`) rather than carry the tree's default for them.
+// Smiling Jack is the measured case: his three beard chains (`Bone01/02`, `Bone04/05`,
+// `Bone07/08`) exist on his own donor pose and on no shared bank's, and every bone a bank clip
+// actually tracks carries a real donor bind. Runs against the baked corpus, and abstains only
+// when there is none.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBankDonorAbsenceTest,
+	"Elysium.Content.BankDonorAbsence", GElysiumRigRetargetFlags)
+bool FElysiumBankDonorAbsenceTest::RunTest(const FString&)
+{
+	if (!ElysiumNativeTest::HasCast())
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
+		return true;
+	}
+	const FString Body = TEXT("smiling_jack");
+	const USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Body);
+	if (!TestNotNull(TEXT("Smiling Jack's baked mesh loads"), Mesh)) return false;
+	const USkeleton* Skeleton = Mesh->GetSkeleton();
+	if (!TestNotNull(TEXT("Smiling Jack's mesh carries its family skeleton"), Skeleton)) return false;
+	const FReferenceSkeleton& Tree = Skeleton->GetReferenceSkeleton();
+	const FReferenceSkeleton& Own = Mesh->GetRefSkeleton();
+	const TArray<FName> Beard{ TEXT("Bone01"), TEXT("Bone02"), TEXT("Bone04"), TEXT("Bone05"),
+		TEXT("Bone07"), TEXT("Bone08") };
+	for (const FName& Bone : Beard)
+	{
+		TestTrue(*FString::Printf(TEXT("the mesh binds %s"), *Bone.ToString()), Own.FindBoneIndex(Bone) != INDEX_NONE);
+		TestTrue(*FString::Printf(TEXT("the shared tree names %s"), *Bone.ToString()), Tree.FindBoneIndex(Bone) != INDEX_NONE);
+	}
+
+	// Jack's own donor pose is the one whose Bone01 entry states his own bind; every other source
+	// on the tree is a bank that never had a beard.
+	const int32 OwnBone01 = Own.FindBoneIndex(TEXT("Bone01"));
+	const FVector JackBone01 = OwnBone01 != INDEX_NONE ? Own.GetRefBonePose()[OwnBone01].GetTranslation() : FVector::ZeroVector;
+	int32 OwnSources = 0, SharedSources = 0;
+	for (const TPair<FName, FReferencePose>& Source : Skeleton->AnimRetargetSources)
+	{
+		const TArray<FTransform>& Donor = Source.Value.ReferencePose;
+		if (!TestEqual(*FString::Printf(TEXT("donor pose %s spans the tree"), *Source.Key.ToString()), Donor.Num(), Tree.GetRawBoneNum())) continue;
+		const int32 TreeBone01 = Tree.FindBoneIndex(TEXT("Bone01"));
+		const bool bOwn = TreeBone01 != INDEX_NONE && !FElysiumBankRemap::IsAbsentBankBind(Donor[TreeBone01])
+			&& Donor[TreeBone01].GetTranslation().Equals(JackBone01, 1e-3);
+		(bOwn ? OwnSources : SharedSources) += 1;
+		for (const FName& Bone : Beard)
+		{
+			const int32 Index = Tree.FindBoneIndex(Bone);
+			if (Index == INDEX_NONE) continue;
+			const bool bAbsent = FElysiumBankRemap::IsAbsentBankBind(Donor[Index]);
+			if (bOwn)
+			{
+				TestFalse(*FString::Printf(TEXT("Jack's own donor %s states %s"), *Source.Key.ToString(), *Bone.ToString()), bAbsent);
+			}
+			else
+			{
+				TestTrue(*FString::Printf(TEXT("bank donor %s marks %s absent (it never had a beard)"),
+					*Source.Key.ToString(), *Bone.ToString()), bAbsent);
+			}
+		}
+	}
+	TestTrue(TEXT("Jack's own donor pose is registered"), OwnSources >= 1);
+	TestTrue(TEXT("at least one shared bank donor pose is registered on the family skeleton"), SharedSources >= 1);
+
+	// Every bone a shared bank clip tracks carries a real donor bind: the marker never swallows a
+	// bone the bank genuinely owns.
+	FElysiumNpcClipSet Set;
+	FString Error;
+	if (!TestTrue(TEXT("Jack's clip set loads"), ElysiumNativeTest::Load(Set, Body, Error))) { AddError(Error); return false; }
+	int32 TrackedChecked = 0, SharedClips = 0;
+	for (const TPair<FName, FReferencePose>& Source : Skeleton->AnimRetargetSources)
+	{
+		const FString Clip = FindBankClip(Set, Source.Key.ToString());
+		if (Clip.IsEmpty()) continue;
+		const UAnimSequence* Sequence = ElysiumNpcVisual::LoadBakedClip(Mesh, Source.Key.ToString(), Clip);
+		if (!Sequence || Sequence->GetSkeleton() != Skeleton) continue;
+		++SharedClips;
+		const TArray<FTransform>& Donor = Source.Value.ReferencePose;
+		TArray<FName> Tracks;
+		Sequence->GetDataModel()->GetBoneTrackNames(Tracks);
+		for (const FName& Track : Tracks)
+		{
+			const int32 Index = Tree.FindBoneIndex(Track);
+			if (Index == INDEX_NONE || !Donor.IsValidIndex(Index)) continue;
+			++TrackedChecked;
+			TestFalse(*FString::Printf(TEXT("%s tracks %s, so donor %s states its bind"),
+				*Clip, *Track.ToString(), *Source.Key.ToString()), FElysiumBankRemap::IsAbsentBankBind(Donor[Index]));
+		}
+	}
+	TestTrue(TEXT("a bank clip Jack plays was checked"), SharedClips >= 1 && TrackedChecked > 0);
 	return true;
 }

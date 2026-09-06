@@ -532,6 +532,18 @@ public:
 
 	virtual FElysiumNpc* AsNpc() override { return this; }
 
+	// The gaze cascade's NPC-only subjects (`CAI_BaseNPC`'s eye maintainer, `0x1026b810`).
+	// `GetEnemy()` is the committed enemy; the navigator's goal is the destination of the move in
+	// flight; the heard sound is the last stimulus the hearing gather promoted to a HEAR_* condition.
+	virtual const FElysiumEntity* GazeEnemy() const override;
+	virtual bool GazeNavigationGoal(FVector& OutPoint) const override;
+	virtual bool GazeHeardSound(FVector& OutPoint) const override;
+
+	// `m_pNavigator`'s goal position: the feet destination the move in flight was issued for.
+	// Written beside every `Motor->MoveTo`, read by the gaze arm above and nothing else — the
+	// motor owns the route, this is only what the character asked it for.
+	FVector MoveGoal = FVector::ZeroVector;
+
 	// Read-only, for the debug layer. The mind is private because every WRITE to it has to go
 	// through `RequestState` / `Acquire` / `Release` so the admission and the body arbitration
 	// cannot be sidestepped; reading its state, its ideal state, its owner and its transition trace

@@ -1443,10 +1443,18 @@ public:
 	// discarded — dropping it would make the convergence rate depend on the frame rate.
 	float EyeIntegAccumulator = 0.f;
 
+	// `m_hEyeLookTarget` proper: the SUBJECT the cascade chose, as distinct from the point. Retail
+	// keeps the entity and re-reads its EyePosition() every think, so a partner who steps sideways
+	// or a scan pick who walks past is followed for as long as the pick stands. Every arm but the
+	// camera redirect and the scripted look-at goes through this. Session state: the scan
+	// re-picks within five seconds of a load anyway.
+	FElysiumEntityHandle EyeLookTargetHandle;
+
 	// Head yaw/pitch, integrated through retail's 0.8/0.2 filter and driving nothing — see
 	// TickGaze. Kept so the values can be inspected and so the filter stays reproducible.
 	float HeadYaw = 0.f;
 	float HeadPitch = 0.f;
+	void FilterHeadTurn(const FVector& LookTarget, const FVector& HeadPos, const FVector& HeadForward);
 
 	// One gaze step. `HeadPos`/`HeadForward` come from the live animated head bone when the body
 	// has one, and fall back to EyePosition()/EyeAngles() when it does not — the input side of the
@@ -1460,8 +1468,32 @@ public:
 	// `DialogPovPoint`, when set, is where the camera is for a shot whose `DialogPOV` is on: it
 	// replaces the player as the dialogue arm's subject, and nothing else. Passed as a point rather
 	// than a camera so this stays free of the engine half.
-	FVector TickGaze(float Now, float DeltaSeconds, const FVector& HeadPos, const FVector& HeadForward,
-		const struct FElysiumEyeTargetTuning& Tuning, const FVector* DialogPovPoint = nullptr);
+	virtual FVector TickGaze(float Now, float DeltaSeconds, const FVector& HeadPos,
+		const FVector& HeadForward, const struct FElysiumEyeTargetTuning& Tuning,
+		const FVector* DialogPovPoint = nullptr);
+
+	// The cascade's subjects that only a leaf can answer, in retail's own priority order between
+	// the dialogue partner and the autonomous scan. `CAI_BaseNPC`'s maintainer reads them off
+	// itself (`m_hTargetEnt`, `GetEnemy()`, `m_pNavigator`, `GetBestSound`); this class is the
+	// `CBaseCombatCharacter` half and has none of them, so each answers "nothing" here and the
+	// NPC leaf overrides. Kept as questions rather than fields so the cascade stays assertable
+	// on a bare character, and so a leaf that has no navigator does not have to fake one.
+	//
+	// `m_hTargetEnt` is the scripted-sequence target HL2 sets through `SetTarget`; nothing in
+	// this runtime writes such a field yet, so the arm is present and answers nothing on every
+	// class until something does.
+	virtual const FElysiumEntity* GazeTargetEntity() const { return nullptr; }
+	virtual const FElysiumEntity* GazeEnemy() const { return nullptr; }
+	// The two DIRECT arms: retail hands these to the eyes without integration and returns before
+	// the smoothed point is touched, so a character glances at where it is walking, or at a shot,
+	// and the eyes glide back from wherever they were when the arm lets go.
+	virtual bool GazeNavigationGoal(FVector& OutPoint) const { return false; }
+	virtual bool GazeHeardSound(FVector& OutPoint) const { return false; }
+
+	// `CBaseCombatCharacter::BodyDirection2D`: the entity's facing as a flat unit vector. The
+	// autonomous scan's sphere is centred along THIS, not the head — a character looking over its
+	// shoulder still scans the way its body points.
+	FVector BodyDirection2D() const;
 
 	// The four scripted look-at inputs. Center deliberately behaves as Eye — see the .cpp.
 	void InputLookAtEntityEye(const FElysiumInputArgs& Args);
@@ -1642,6 +1674,14 @@ public:
 	// where retail runs it, inside CPlayerMove::RunCommand. The feed transaction is driven from
 	// here, so a pulse deadline is measured on the substrate clock and never on a timer.
 	virtual void Think() override;
+
+	// `CHL2_Player`'s own slot-333 maintainer (`0x10350270`), which is not the NPC cascade: the
+	// player's eyes are commanded straight ahead of the head frame, 300 units out, and the
+	// smoothed point is snapped to it — no partner arm, no scan, no integration, no blink. The
+	// player's face in a dialogue shot is whatever the head bone does; the eyes do not track.
+	virtual FVector TickGaze(float Now, float DeltaSeconds, const FVector& HeadPos,
+		const FVector& HeadForward, const struct FElysiumEyeTargetTuning& Tuning,
+		const FVector* DialogPovPoint = nullptr) override;
 
 	// `AwardExperience("<key>")` — the whole walk: refuse a key already in the give-once ledger,
 	// look it up (a miss awards and appends nothing, so it retries on every fire), add

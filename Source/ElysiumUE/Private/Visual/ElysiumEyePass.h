@@ -139,6 +139,18 @@ private:
 		// the `.mdl`'s own bone ordering, which is not the USkeleton's.
 		int32 HeadBoneIndex = INDEX_NONE;
 
+		// Retail's `m_vecHeadLocalForward`: the model's facing carried into head-bone space at bind
+		// (`CBaseCombatCharacter::SetModel` inverse-rotates the model forward by the head's bind
+		// matrix), then rotated by the live bone each think in `CalcLookData`. Cached for the same
+		// reason: a Bip01 bone's own X runs up the skull, so the bone axes alone say nothing about
+		// where the face points.
+		FVector HeadLocalForward = FVector::ZeroVector;
+		// The other half of `CalcLookData`: `m_vecViewOffset` inverse-transformed by the head's
+		// bind matrix, so the eye-height point on the model's own axis rides the head bone rather
+		// than the bone's pivot (which is the neck) standing in for the eyes.
+		FVector HeadLocalEye = FVector::ZeroVector;
+		bool bHasHeadLocalEye = false;
+
 		// Every slot on this body whose base material IS the eye master, with the record index it
 		// joined to or `INDEX_NONE`. Kept for the readout rather than for the pass: a slot that draws
 		// as an eye and matched no record is the one eye failure that looks like a working eye, so it

@@ -397,6 +397,7 @@ bool FElysiumNpc::IssuePatrolMove()
 		return false;
 	}
 	PatrolIndex = FMath::Clamp(PatrolIndex, 0, PatrolPoints.Num() - 1);
+	MoveGoal = PatrolPoints[PatrolIndex];
 	bMoveIssued = Motor->MoveTo(PatrolPoints[PatrolIndex], /*AcceptanceRadiusCm=*/20.0f,
 		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk),
 		/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk);
@@ -1557,6 +1558,7 @@ bool FElysiumNpc::StepAwayFromSavePosition(float DistanceCm)
 			ElysiumSchedule::RetreatResultName(Result)));
 		return false;
 	}
+	MoveGoal = Destination;
 	bMoveIssued = true;
 	return true;
 }
@@ -1780,6 +1782,7 @@ bool FElysiumNpc::GetPathToScriptedGoal()
 	const FVector Destination = ScriptedScheduleOrder.Route[ScriptedScheduleOrder.Leg++];
 	const EElysiumNpcGaitKind RouteGait = ScriptedScheduleOrder.bRun
 		? EElysiumNpcGaitKind::Run : EElysiumNpcGaitKind::Walk;
+	MoveGoal = Destination;
 	bMoveIssued = Motor->MoveTo(Destination, ElysiumNpcGait::ScriptAcceptanceCm,
 		ElysiumNpcGait::TravelSpeed(Motor, RouteGait), /*bAllowPartialPath=*/false, RouteGait);
 	if (!bMoveIssued)
@@ -1905,6 +1908,7 @@ bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
 		: ElysiumNpcGait::ScriptAcceptanceCm;
 	// The enemy's FEET: an entity's origin is its feet in this runtime, which is what the patrol
 	// executor already hands the same verb.
+	MoveGoal = Enemy->Origin;
 	bMoveIssued = Motor->MoveTo(Enemy->Origin, ToleranceCm,
 		ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Run),
 		/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Run);
@@ -1924,6 +1928,54 @@ void FElysiumNpc::RunPath()
 	{
 		Mind.RecordExternal(TEXT("TASK_RUN_PATH: no run locomotion resolved for this body"));
 	}
+}
+
+// --- The gaze cascade's NPC arms ---
+
+const FElysiumEntity* FElysiumNpc::GazeEnemy() const
+{
+	// `GetEnemy()`: the committed enemy, dead or alive — the cascade itself refuses an inert one,
+	// which is the `IsInert()` half of retail's handle test, not an extra rule.
+	if (World == nullptr || !Senses.Memory.Enemy.IsSet())
+	{
+		return nullptr;
+	}
+	return ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy);
+}
+
+bool FElysiumNpc::GazeNavigationGoal(FVector& OutPoint) const
+{
+	// `m_pNavigator->IsGoalActive()` then `GetGoalPos()`, lifted to eye height when the goal is a
+	// position rather than an entity (retail's `+0x18 == 0` branch reads its own EyePosition().z):
+	// a character walking somewhere glances at where it is going, not at the floor there.
+	if (!bMoveIssued)
+	{
+		return false;
+	}
+	OutPoint = MoveGoal;
+	OutPoint.Z = EyePosition().Z;
+	return true;
+}
+
+bool FElysiumNpc::GazeHeardSound(FVector& OutPoint) const
+{
+	// Retail pairs condition 0x6d with `GetBestSound()` type 1 and 0x6a with type 8, and in the
+	// SDK of the era those bits are SOUND_COMBAT and SOUND_DANGER. The hearing gather promotes the
+	// last stimulus to exactly these conditions from its category, so the condition standing IS
+	// the best-sound test; the stimulus it stood on is the point. `HEAR_DANGER` is never raised
+	// here (no recovered category maps to it — see `GatherHearing`), which leaves the combat half
+	// live and the danger half waiting on that recovery rather than on this arm.
+	const FElysiumNpcConditions& Conds = Cognition.Conditions;
+	if (!Conds.Has(EElysiumNpcCond::HearCombat) && !Conds.Has(EElysiumNpcCond::HearDanger))
+	{
+		return false;
+	}
+	if (Senses.Memory.LastHeardTime < 0.0)
+	{
+		return false;
+	}
+	OutPoint = Senses.Memory.LastHeardPosition;
+	return true;
 }
 
 EElysiumMoveWatch FElysiumNpc::WaitForMovement()
@@ -2230,6 +2282,7 @@ void FElysiumNpc::ThinkAmbient()
 			return;
 		}
 		AmbientPhase = EAmbientPhase::Moving;
+		MoveGoal = Spot->Origin;
 		bMoveIssued = Motor->MoveTo(Spot->Origin, 24.0f,
 			ElysiumNpcGait::TravelSpeed(Motor, EElysiumNpcGaitKind::Walk),
 			/*bAllowPartialPath=*/false, EElysiumNpcGaitKind::Walk);

@@ -213,6 +213,16 @@ void FElysiumProp::OnRuntimeModelChanged()
 	bLoopSequenceResolved = MeaningfulSequence(LoopSequence) && StartLoopSequence();
 }
 
+void FElysiumProp::OnRuntimeModelAdmitted()
+{
+	// The same rebuild, replaying whichever placement data the stood-down build read: a
+	// def-placed prop keeps its `model_quat`, a SetModel one its yaw-only derivation.
+	DestroyBody();
+	BuildBody(bLastBuildFromSetModel);
+	StandRestPose();
+	bLoopSequenceResolved = MeaningfulSequence(LoopSequence) && StartLoopSequence();
+}
+
 void FElysiumProp::InputBreak(const FElysiumInputArgs& Args)
 {
 	if (bBroken)
@@ -520,6 +530,7 @@ bool FElysiumProp::StartLoopSequence()
 
 void FElysiumProp::BuildBody(bool bFromSetModel)
 {
+	bLastBuildFromSetModel = bFromSetModel;
 	if (!ElysiumPropBodiesEnabled() || !World || !Def || Model.IsEmpty())
 	{
 		return;

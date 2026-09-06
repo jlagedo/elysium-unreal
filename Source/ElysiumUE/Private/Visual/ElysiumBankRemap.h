@@ -94,6 +94,23 @@ struct FElysiumBankRemap
 	static FElysiumBankRemap Build(const TArray<FTransform>& BankBindPose,
 		const FReferenceSkeleton& BankSkeleton, const FReferenceSkeleton& MeshSkeleton);
 
+	// A compatible group of bodies shares one `USkeleton`, so the skeleton's bone tree is the UNION
+	// of every body's appendix -- Smiling Jack's beard chain, a hat's tassel, a coat's hem -- under
+	// generic names (`Bone01`, `Bone07`) that recur from body to body with unrelated binds. A bank's
+	// donor pose is indexed by that whole tree, so the entries for bones the bank itself never had
+	// must say so, or `Build` reads another body's bind as the bank's `a` and corrects a bone the
+	// bank never posed (the beard vanished into Jack's head on every shared clip). The bake writes
+	// this sentinel -- zero scale, which no genuine bind carries and the remap never reads --
+	// wherever the bank had no bone, and `Build` takes the copy branch for it.
+	static FTransform AbsentBankBind()
+	{
+		return FTransform(FQuat::Identity, FVector::ZeroVector, FVector::ZeroVector);
+	}
+	static bool IsAbsentBankBind(const FTransform& BankBind)
+	{
+		return BankBind.GetScale3D().IsNearlyZero();
+	}
+
 	// Parse `{"translate": [{"bone", "offset"}...], "similarity": [{"bone", "rotation", "scale"}...]}`
 	// directly -- no sidecar, no per-body/per-owner wrapper, because a caller already knows which
 	// (mesh, source skeleton, retarget source) tuple this table answers for. Exists purely so a test

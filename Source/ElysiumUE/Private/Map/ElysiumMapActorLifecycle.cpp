@@ -216,7 +216,8 @@ void AElysiumMapActor::BuildStageWorld()
 			ReleasePropAndWieldModels();
 			EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 			FString ModelContextError;
-			if (!PreparePropAndWieldModels(FElysiumEntityDefs(), ModelContextError))
+			// A lab stands any catalogue model on demand, so the whole catalogue is resident here.
+			if (!PreparePropAndWieldModels(FElysiumEntityDefs(), ModelContextError, /*bAdmitWholeCatalogue=*/true))
 			{
 				bNativeAnimationPreloadFailed = true;
 				UE_LOG(LogElysium, Warning, TEXT("green-room model contexts: %s"), *ModelContextError);

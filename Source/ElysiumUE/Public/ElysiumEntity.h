@@ -226,6 +226,10 @@ public:
 	// its skeletal component and OnRuntimeModelChanged to rebuild it with the new model.
 	virtual void OnRuntimeTransformChanged();
 	virtual void OnRuntimeModelChanged();
+	// The map admitted this entity's model late (it was not in the load-time residency and has
+	// just become resident). Base: rebuild exactly as a runtime model change would. A leaf whose
+	// original build read def-only placement data overrides to replay that build instead.
+	virtual void OnRuntimeModelAdmitted() { OnRuntimeModelChanged(); }
 
 	// Overlap terminus: a brush body's begin/end overlap lands here. Base no-op;
 	// trigger classes override to fire OnStartTouch/OnEndTouch (respecting spawnflags).

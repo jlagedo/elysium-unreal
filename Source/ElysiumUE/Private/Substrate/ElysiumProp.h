@@ -59,6 +59,7 @@ private:
 	virtual UPrimitiveComponent* GetAttachBody() const override;
 	virtual void OnRuntimeTransformChanged() override;
 	virtual void OnRuntimeModelChanged() override;
+	virtual void OnRuntimeModelAdmitted() override;
 
 	void ApplySkin();
 
@@ -115,6 +116,8 @@ private:
 	FString CurrentAnimation;
 	bool bAnimationLoop = false;
 	bool bBroken = false;
+	// Which placement data the last BuildBody read, so a late model admission replays the same build.
+	bool bLastBuildFromSetModel = false;
 
 	// Derived. Retail carries a resolved sequence *index* (-1 when LoopSequence names nothing); the
 	// animated-prop index exposes clip *names*, so the equivalent test is "it resolved to a real clip".

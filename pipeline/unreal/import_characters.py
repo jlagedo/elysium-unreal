@@ -15,7 +15,7 @@ PRODUCER = "characters"
 #: The code half of every native character recipe. Bump when a builder, a data class or this
 #: script changes what it authors; the data half is content-hashed. Never hash code (see
 #: `docs/architecture/seam_map_unit_contract.md` -> "Recipes").
-PRODUCER_VERSION = "characters-v1"
+PRODUCER_VERSION = "characters-v2"   # v2: donor poses mark bones a bank never had as absent
 
 
 def argument(name, default=""):
