@@ -32,6 +32,15 @@ public:
 	static constexpr uint16 StyleBit = 0x80;
 	// `+0xe74` starts at the value the screensaver "resets" to (type 5), so the plain screen is
 	// drawn with the bit set and the alternate style (type 6) is the inverse block.
+	//
+	// **Seam, unproven from the corpus.** `0x80` is what type 5 (`FUN_100c7f40`) WRITES, and every
+	// shipped draw that clears the bit (the mail list's `[N]`) sends type 6 then type 5 around it —
+	// so the resting value can only be the one type 5 restores. But the client's `+0xe74` is
+	// initialized in `C_BaseTerminal`'s constructor, which the corpus does not resolve, so nothing
+	// proves the byte is `0x80` before the FIRST type 5 arrives. If it were 0, a screen drawn before
+	// any style message would come up as one reverse-video block. The port assumes `0x80`; the
+	// authority here sends type 5 as part of every draw it opens, so the window is unreachable from
+	// the port's own content and the assumption is only visible to a hand-built buffer.
 	static constexpr uint8 DefaultStyle = 0x80;
 
 	FElysiumTerminalScreenBuffer() { Reset(36, 24); }

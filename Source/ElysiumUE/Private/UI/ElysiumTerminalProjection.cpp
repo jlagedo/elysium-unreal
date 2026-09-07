@@ -1,25 +1,26 @@
 #include "UI/ElysiumTerminalProjection.h"
 
 #include "ElysiumViewState.h"
-#include "UI/ElysiumTerminalCells.h"
+#include "UI/ElysiumTerminalScreenTuning.h"
+#include "UI/SElysiumTerminalCells.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Misc/App.h"
-#include "Styling/CoreStyle.h"
-#include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SScaleBox.h"
-#include "Widgets/SBoxPanel.h"
-#include "Widgets/Text/STextBlock.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumTerminalProjection, Log, All);
 
 namespace
 {
 	const FName ScreenMaterialSlot(TEXT("screen"));
+	// The authored material's own parameters (`docs/project/plans/terminals.md`, slice D).
+	const FName ScreenParameter(TEXT("Screen"));
+	const FName FlipUParameter(TEXT("FlipU"));
+	const FName FlipVParameter(TEXT("FlipV"));
+	const FName Rotate90Parameter(TEXT("Rotate90"));
+	// The engine fallback's parameters, which are a different set entirely.
 	const FName SlateUIParameter(TEXT("SlateUI"));
 	const FName TintParameter(TEXT("TintColorAndOpacity"));
 	const FName OpacityParameter(TEXT("OpacityFromTexture"));
@@ -27,8 +28,14 @@ namespace
 	constexpr float SurfaceHeight = 768.0f;
 	const FVector2D SurfaceDrawSize(SurfaceWidth, SurfaceHeight);
 	const FLinearColor ScreenBlack(0.004f, 0.009f, 0.007f, 1.0f);
-	const FLinearColor ProjectionPhosphor(0.63f, 0.88f, 0.70f, 1.0f);
-	const TCHAR* ProjectionMaterialPath =
+	// The project's own CRT material, authored in the editor: unlit, emissive from one texture
+	// parameter, faint scanlines, a vignette and a slight UV curvature, plus the three orientation
+	// switches the per-model tuning table feeds.
+	const TCHAR* AuthoredMaterialPath =
+		TEXT("/Game/ElysiumAuthored/UI/M_ElysiumTerminalScreen.M_ElysiumTerminalScreen");
+	// The engine's flat blit. It shows the grid and nothing else — no emissive lift, no flip — so a
+	// glass running on it is legible but wrong, which is exactly what the named warning says.
+	const TCHAR* FallbackMaterialPath =
 		TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Opaque.Widget3DPassThrough_Opaque");
 }
 
@@ -83,13 +90,25 @@ bool UElysiumTerminalProjection::Bind(UPrimitiveComponent* InTarget)
 		return true;
 	}
 
-	UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr,
-		ProjectionMaterialPath);
+	// The authored CRT material first. It is tracked repository content, so a miss is a missing
+	// authored asset rather than a missing export — but it must not take the monitor down with it:
+	// the engine pass-through still shows the grid, and the named warning is what says the picture
+	// on the glass is the fallback's flat blit.
+	UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr, AuthoredMaterialPath);
+	bAuthoredMaterial = BaseMaterial != nullptr;
+	if (!BaseMaterial)
+	{
+		UE_LOG(LogElysiumTerminalProjection, Warning,
+			TEXT("terminal projection for %s: authored material '%s' did not load; falling back to "
+				"the engine pass-through — the glass will draw flat and unflipped"),
+			*Owner.ToString(), AuthoredMaterialPath);
+		BaseMaterial = LoadObject<UMaterialInterface>(nullptr, FallbackMaterialPath);
+	}
 	if (!BaseMaterial)
 	{
 		UE_LOG(LogElysiumTerminalProjection, Warning,
 			TEXT("terminal projection failed for %s: material '%s' did not load"),
-			*Owner.ToString(), ProjectionMaterialPath);
+			*Owner.ToString(), FallbackMaterialPath);
 		Release();
 		return false;
 	}
@@ -122,9 +141,24 @@ bool UElysiumTerminalProjection::Bind(UPrimitiveComponent* InTarget)
 	// Remembered before the override so `Release` can put it back. Null is a legitimate answer (the
 	// mesh's own default material), and `SetMaterial(index, nullptr)` restores exactly that.
 	OriginalMaterial = InTarget->GetMaterial(MaterialIndex);
-	ProjectionMaterial->SetTextureParameterValue(SlateUIParameter, RenderTarget);
-	ProjectionMaterial->SetVectorParameterValue(TintParameter, FLinearColor::White);
-	ProjectionMaterial->SetScalarParameterValue(OpacityParameter, 1.0f);
+	if (bAuthoredMaterial)
+	{
+		ProjectionMaterial->SetTextureParameterValue(ScreenParameter, RenderTarget);
+		// The authored UVs of a 2004 monitor's screen face run whichever way its author left them,
+		// and only the model knows. The table answers "none" for every model nobody has calibrated.
+		const FElysiumTerminalScreenTuningEntry Tuning =
+			UElysiumTerminalScreenTuning::FindForBody(InTarget);
+		ProjectionMaterial->SetScalarParameterValue(FlipUParameter, Tuning.bFlipU ? 1.0f : 0.0f);
+		ProjectionMaterial->SetScalarParameterValue(FlipVParameter, Tuning.bFlipV ? 1.0f : 0.0f);
+		ProjectionMaterial->SetScalarParameterValue(Rotate90Parameter,
+			Tuning.bRotate90 ? 1.0f : 0.0f);
+	}
+	else
+	{
+		ProjectionMaterial->SetTextureParameterValue(SlateUIParameter, RenderTarget);
+		ProjectionMaterial->SetVectorParameterValue(TintParameter, FLinearColor::White);
+		ProjectionMaterial->SetScalarParameterValue(OpacityParameter, 1.0f);
+	}
 	InTarget->SetMaterial(MaterialIndex, ProjectionMaterial);
 	return true;
 }
@@ -149,17 +183,51 @@ void UElysiumTerminalProjection::Release()
 	ProjectionTarget.Reset();
 	ProjectionMaterialIndex = INDEX_NONE;
 	ProjectionMaterial = nullptr;
+	bAuthoredMaterial = false;
 	// The renderer holds the target; drop it first.
 	WidgetRenderer.Reset();
 	RenderTarget = nullptr;
 	DrawnRevision = 0;
 	DrawnDraft.Reset();
+	bDrawnBlinkLit = false;
+}
+
+void UElysiumTerminalProjection::SetCalibration(bool bInCalibration)
+{
+	if (bCalibration == bInCalibration)
+	{
+		return;
+	}
+	bCalibration = bInCalibration;
+	// The pattern is not the authority's grid, so neither the revision nor the draft moved: force
+	// the next pass to redraw by dropping what the last one consumed.
+	DrawnRevision = 0;
+	DrawnDraft.Reset();
+}
+
+bool UElysiumTerminalProjection::ShowsCursor(const FElysiumTerminalView& View)
+{
+	// The same three conditions `ElysiumTerminalPaint::BuildDrawPlan` applies, minus the blink
+	// itself: an idle monitor, a closed line editor and acknowledge mode all draw no caret, and a
+	// glass with no caret must not redraw twice a second forever.
+	constexpr uint8 AcknowledgeMode = 2;
+	return View.IsOpen() && View.bLineEditActive && View.InputMode != AcknowledgeMode;
 }
 
 bool UElysiumTerminalProjection::NeedsRedraw(const FElysiumTerminalView& View,
 	const FString& Draft) const
 {
-	return IsBound() && (View.Revision != DrawnRevision || Draft != DrawnDraft);
+	if (!IsBound())
+	{
+		return false;
+	}
+	if (View.Revision != DrawnRevision || Draft != DrawnDraft)
+	{
+		return true;
+	}
+	// The blink is the third half of the gate, and only while there is a caret to blink.
+	return ShowsCursor(View)
+		&& ElysiumTerminalPaint::BlinkLit(BlinkPhase) != bDrawnBlinkLit;
 }
 
 bool UElysiumTerminalProjection::IsBodyResident() const
@@ -178,6 +246,7 @@ void UElysiumTerminalProjection::Draw(const FElysiumTerminalView& View, const FS
 {
 	DrawnRevision = View.Revision;
 	DrawnDraft = Draft;
+	bDrawnBlinkLit = ElysiumTerminalPaint::BlinkLit(BlinkPhase);
 	++DrawCount;
 	if (!WidgetRenderer.IsValid() || !RenderTarget)
 	{
@@ -189,44 +258,22 @@ void UElysiumTerminalProjection::Draw(const FElysiumTerminalView& View, const FS
 TSharedRef<SWidget> UElysiumTerminalProjection::BuildSurface(const FElysiumTerminalView& View,
 	const FString& Draft) const
 {
-	// The COMPOSED grid: the authority's cells with the local draft put-charred over them from the
-	// authority's cursor. That composition is what retail's client does — `FUN_100c6d50` collects
-	// the keystroke into its own line and re-runs it through `FUN_100c8060` before the rasterizer
-	// sees the buffer (`docs/vtmb/computer-terminals.md` §8.1, TERM13) — so the typed characters are
-	// genuinely on the glass and not in a viewport overlay.
+	// The cell painter, at the render target's own metrics. It composes the draft onto the
+	// authority's grid itself (`ElysiumTerminalPaint::BuildDrawPlan` -> `ComposeDraft`), which is
+	// what retail's client does — `FUN_100c6d50` collects the keystroke into its own line and
+	// re-runs it through `FUN_100c8060` before the rasterizer sees the buffer
+	// (`docs/vtmb/computer-terminals.md` §8.1, TERM13) — so the typed characters are genuinely on
+	// the glass and not in a viewport overlay.
 	//
 	// Entity message type 9 (the CRACKING echo, `FUN_10217d60`) is a different thing and is already
 	// in the authority's cells.
 	//
-	// Slice D replaces this text block with the cell painter at fixed metrics, the style bit, the
-	// four palettes and the blinking block cursor. Until then the composed grid is drawn as rows of
-	// monospace text, which is the same characters in the same places.
-	const ElysiumTerminalCells::FElysiumTerminalComposed Composed =
-		ElysiumTerminalCells::ComposeDraft(View, Draft);
-	return SNew(SBorder)
-		.BorderImage(FCoreStyle::Get().GetBrush(TEXT("GenericWhiteBox")))
-		.BorderBackgroundColor(FSlateColor(ScreenBlack))
-		.Padding(FMargin(28.0f, 24.0f))
-		.Clipping(EWidgetClipping::ClipToBoundsAlways)
-		[
-			SNew(SScaleBox)
-			.Stretch(EStretch::ScaleToFit)
-			.StretchDirection(EStretchDirection::Both)
-			[
-				SNew(SBox)
-				.WidthOverride(SurfaceWidth - 56.0f)
-				.HeightOverride(SurfaceHeight - 48.0f)
-				[
-					SNew(SVerticalBox)
-					+ SVerticalBox::Slot().FillHeight(1.0f)
-					[
-						SNew(STextBlock)
-						.Text(FText::FromString(FString::Join(Composed.RowTexts(), TEXT("\n"))))
-						.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18))
-						.ColorAndOpacity(FSlateColor(ProjectionPhosphor))
-						.Clipping(EWidgetClipping::ClipToBoundsAlways)
-					]
-				]
-			]
-		];
+	// A fresh widget per draw rather than a retained one: the rasterization is on demand into a
+	// render target, the tree is one leaf, and a retained widget would have to be kept in step with
+	// a view that can be republished by any pass.
+	const TSharedRef<SElysiumTerminalCells> Cells = SNew(SElysiumTerminalCells);
+	Cells->SetView(View, Draft);
+	Cells->SetBlinkPhase(BlinkPhase);
+	Cells->SetCalibration(bCalibration);
+	return Cells;
 }

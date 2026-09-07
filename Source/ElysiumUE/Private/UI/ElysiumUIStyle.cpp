@@ -32,15 +32,22 @@ namespace
 		static const FString BodyItalic = FElysiumContentPaths::UiFontFace(TEXT("FF_Spectral_Italic"));
 		static const FString DataRegular = FElysiumContentPaths::UiFontFace(TEXT("FF_Inter_Regular"));
 		static const FString DataSemiBold = FElysiumContentPaths::UiFontFace(TEXT("FF_Inter_SemiBold"));
+		// Terminus ships Regular and Bold and no italic. Bold is registered under the `SemiBold`
+		// entry name because that is the library's one heavier-weight slot; the terminal draws
+		// Regular and the name is an internal key, not a weight claim.
+		static const FString MonoRegular = FElysiumContentPaths::UiFontFace(TEXT("FF_TerminusTTF_Regular"));
+		static const FString MonoBold = FElysiumContentPaths::UiFontFace(TEXT("FF_TerminusTTF_Bold"));
 
 		static const FRoleFaces LabelFaces{ *LabelRegular, *LabelSemiBold, nullptr };
 		static const FRoleFaces BodyFaces{ *BodyRegular, *BodySemiBold, *BodyItalic };
 		static const FRoleFaces DataFaces{ *DataRegular, *DataSemiBold, nullptr };
+		static const FRoleFaces MonoFaces{ *MonoRegular, *MonoBold, nullptr };
 
 		switch (Role)
 		{
 		case EElysiumFontRole::Label: return LabelFaces;
 		case EElysiumFontRole::Data:  return DataFaces;
+		case EElysiumFontRole::Mono:  return MonoFaces;
 		default:                      return BodyFaces;
 		}
 	}
@@ -78,6 +85,48 @@ namespace
 		// keeps it alive with the font and Slate rasterises straight out of the cooked asset.
 		Entry.Font = FFontData(Face);
 		return true;
+	}
+}
+
+namespace ElysiumUI
+{
+	const FElysiumTerminalPalette& TerminalPalette(int32 ColorScheme)
+	{
+		// One record per authored `colorscheme`, in the order retail's four records sit in at
+		// `0x10233378`. Built once: the terminal draw asks for a palette per painted frame per
+		// monitor, and these are literals with no dependency on anything.
+		static const FElysiumTerminalPalette Schemes[4] =
+		{
+			// 0 — amber. The default `colorscheme 0`, and the one `tuthack` runs on.
+			FElysiumTerminalPalette{
+				FLinearColor::FromSRGBColor(FColor(10, 6, 2)),
+				FLinearColor::FromSRGBColor(FColor(255, 176, 60)),
+				FLinearColor::FromSRGBColor(FColor(255, 214, 150)),
+				FLinearColor::FromSRGBColor(FColor(255, 176, 60)),
+				FLinearColor::FromSRGBColor(FColor(10, 6, 2)) },
+			// 1 — green (P1 phosphor).
+			FElysiumTerminalPalette{
+				FLinearColor::FromSRGBColor(FColor(2, 10, 4)),
+				FLinearColor::FromSRGBColor(FColor(96, 255, 128)),
+				FLinearColor::FromSRGBColor(FColor(190, 255, 205)),
+				FLinearColor::FromSRGBColor(FColor(96, 255, 128)),
+				FLinearColor::FromSRGBColor(FColor(2, 10, 4)) },
+			// 2 — cold white.
+			FElysiumTerminalPalette{
+				FLinearColor::FromSRGBColor(FColor(6, 7, 9)),
+				FLinearColor::FromSRGBColor(FColor(222, 230, 236)),
+				FLinearColor::FromSRGBColor(FColor(255, 255, 255)),
+				FLinearColor::FromSRGBColor(FColor(222, 230, 236)),
+				FLinearColor::FromSRGBColor(FColor(6, 7, 9)) },
+			// 3 — cyan.
+			FElysiumTerminalPalette{
+				FLinearColor::FromSRGBColor(FColor(2, 9, 12)),
+				FLinearColor::FromSRGBColor(FColor(86, 229, 255)),
+				FLinearColor::FromSRGBColor(FColor(190, 244, 255)),
+				FLinearColor::FromSRGBColor(FColor(86, 229, 255)),
+				FLinearColor::FromSRGBColor(FColor(2, 9, 12)) },
+		};
+		return Schemes[FMath::Clamp(ColorScheme, 0, 3)];
 	}
 }
 

@@ -10,7 +10,9 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "Debug/ElysiumPick.h"
+#include "ElysiumPresentationSubsystem.h"
 #include "ElysiumUseIcons.h"
+#include "UI/ElysiumTerminalProjection.h"
 
 #include "CogImguiContext.h"
 #include "CogImguiHelper.h"
@@ -567,6 +569,37 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 		for (const TPair<FString, FString>& KV : DebugState)
 		{
 			Row(COG_TCHAR_TO_CHAR(*KV.Key), KV.Value);
+		}
+	}
+
+	// A terminal's glass is presentation state and cannot come back through `GetDebugState`, which
+	// the substrate owns. A monitor showing nothing is unbound, rendererless or on the engine
+	// fallback material, and those are three different repairs — so the row names which.
+	if (Ent->AsTerminal() != nullptr)
+	{
+		if (const UElysiumPresentationSubsystem* Presentation =
+			UElysiumPresentationSubsystem::Get(GameWorld))
+		{
+			ImGui::SeparatorText("Terminal glass");
+			const UElysiumTerminalProjection* Glass =
+				Presentation->FindTerminalProjection(Ent->Handle);
+			Row("Projection", Glass
+				? FString::Printf(TEXT("%s, %s, %s"),
+					Glass->IsBound() ? TEXT("bound") : TEXT("UNBOUND"),
+					Glass->HasRenderer() ? TEXT("renderer") : TEXT("no renderer"),
+					Glass->UsesAuthoredMaterial() ? TEXT("authored material")
+						: TEXT("ENGINE FALLBACK material"))
+				: FString(TEXT("(not registered)")));
+			if (Glass)
+			{
+				Row("Glass body", GetNameSafe(Glass->BoundBody()));
+				Row("Glass drawn", FString::Printf(TEXT("revision %u, %d draws, resident %s%s"),
+					Glass->DrawnRevision, Glass->DrawCount,
+					Glass->IsBodyResident() ? TEXT("yes") : TEXT("no"),
+					Glass->IsCalibrating() ? TEXT(", CALIBRATION") : TEXT("")));
+				Row("Glass draft", Glass->DrawnDraft.IsEmpty()
+					? FString(TEXT("(none)")) : Glass->DrawnDraft);
+			}
 		}
 	}
 

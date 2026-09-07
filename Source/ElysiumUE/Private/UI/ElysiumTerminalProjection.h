@@ -44,6 +44,11 @@ public:
 	// would have written, but allocates no render target. Named rather than silent, because a
 	// projection with no renderer is the ordinary headless answer and must not read as a failure.
 	bool HasRenderer() const { return WidgetRenderer.IsValid(); }
+	// True while the glass is drawn through the authored `M_ElysiumTerminalScreen`; false means the
+	// engine's `Widget3DPassThrough_Opaque` fallback is installed and the named warning was logged.
+	// Named rather than silent because the fallback is a flat unlit blit — no emissive, no
+	// scanlines, no UV flip — and a monitor showing a mirrored screen is otherwise a mystery.
+	bool UsesAuthoredMaterial() const { return bAuthoredMaterial; }
 	UPrimitiveComponent* BoundBody() const { return ProjectionTarget.Get(); }
 
 	// The revision gate, plus the local draft. The residency gate (`WasRecentlyRendered`) belongs to
@@ -63,6 +68,22 @@ public:
 	// onto the glass, and consume the view's revision and the draft.
 	void Draw(const FElysiumTerminalView& View, const FString& Draft = FString());
 
+	// The block cursor's blink, in `[0, 1)` of one ~1.6 Hz period, set by the redraw pass before the
+	// gate is asked. It is the THIRD half of the gate: a blink changes the picture without moving
+	// the revision or the draft, and it is only ever asked while the cursor is actually on screen,
+	// so an idle monitor costs nothing extra.
+	//
+	// The blink has no retail counterpart — `C_BaseTerminal` draws no caret at all — so it is a
+	// named modernization (`docs/vtmb/computer-terminals.md` §8.7). It is driven from here rather
+	// than from a widget tick because the projection's Slate tree is rasterized on demand into a
+	// render target and never ticks.
+	void SetBlinkPhase(float Phase) { BlinkPhase = Phase; }
+	float GetBlinkPhase() const { return BlinkPhase; }
+	// Draw the calibration pattern instead of the cell grid, for reading a model's authored UV
+	// orientation back off the render target.
+	void SetCalibration(bool bInCalibration);
+	bool IsCalibrating() const { return bCalibration; }
+
 	// The revision last drawn (or last consumed, where there is no renderer).
 	uint32 DrawnRevision = 0;
 	// The draft last drawn, the second half of the gate.
@@ -76,6 +97,15 @@ public:
 
 private:
 	TSharedRef<SWidget> BuildSurface(const FElysiumTerminalView& View, const FString& Draft) const;
+	// Whether this view puts a block cursor on the glass at all. Only then is the blink part of the
+	// redraw gate.
+	static bool ShowsCursor(const FElysiumTerminalView& View);
+
+	// The blink phase and the lit/unlit state the last draw consumed.
+	float BlinkPhase = 0.0f;
+	bool bDrawnBlinkLit = false;
+	bool bCalibration = false;
+	bool bAuthoredMaterial = false;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextureRenderTarget2D> RenderTarget;

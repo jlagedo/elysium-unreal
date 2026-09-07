@@ -26,7 +26,11 @@
 //         break in raw or acknowledge mode: those arms returned before the set.
 //  * **Character insert** `FUN_100c6d50` — ignores backtick and the control codes `8`/`9`/`10`/
 //    `13`/`27`, honours `m_nMaxInput` (**zero means unlimited**) and the digits-only flag
-//    `m_HackFlags 0x2`, and inserts at the caret.
+//    `m_HackFlags 0x2`, and inserts at the caret. It has **no `0x4` test**: the raw-character arm
+//    exists only in the key-down body, so in raw mode the byte is sent as `hackcmd %c` AND inserted
+//    into the local line, and the local re-render puts it on the glass under the sent command. The
+//    authority's answer is a print, which closes the editor and moves the epoch, and that is what
+//    clears it again.
 //
 // Retail's key repeat is an ordinary key-down: `0x100c7090` is handed a code and has no repeat
 // input at all, so a held Enter submits again, a held Escape quits again and a held Ctrl+C breaks

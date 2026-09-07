@@ -1018,6 +1018,8 @@ The authority port (`Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp`,
 | `colorscheme` clamp | client rasterizer clamps `0..3` | clamped at spawn and published on the view | one clamp site |
 | Right margin and style on the view | client-local state | published by the authority so the local editor composes with them | the authority owns the buffer here |
 | Mail footer strings 45–47 | no compiled-in fallback — `FUN_10219400` leaves the slots NULL and `Q_vsnprintf` takes a NULL format | `ElysiumHackingStrings::GetOrEmpty` draws a blank footer row | a crash hazard is not a behaviour |
+| Raw-mode local echo | `FUN_100c6d50` has no `0x4` test, so a raw-mode printable is sent **and** inserted locally until the next print closes the editor | same, driven by the translated character | faithful |
+| Four palettes and the caret | `0x10233378` colour records; no caret is drawn by `C_BaseTerminal` while the server owns the screen | four project palettes keyed by `colorscheme`; a blinking block cursor while the editor is open | named presentation modernizations (§6.4 of the architecture doc) |
 | Raw mode keys | `hackcmd %c` with the raw key code for every key-down (Enter, Backspace, arrows included) | the translated printable only; non-printable keys in raw mode are a named seam (the open mail message and the unported `CPropKeypad` raise `0x4`) | the port has no VtMB key codes |
 | Screensaver randomness | engine `RandomInt` / `RandomFloat` (the shared global) | `ElysiumRng::Stream(EElysiumRngStream::Terminal)`, shared with the cracking filler, seeded per session | deterministic tests; draw order preserved |
 | Two think functions | `CPropHackingSS_Think` and the cracking stepper on one `m_flNextThink` via `ThinkSet` | one `Think()` dispatcher: cracking buffer first, else the screensaver when no user is bound; entry sets never-think, exit re-arms at `ss_start` | one clock, same order |
@@ -1252,6 +1254,18 @@ screen inside the (1,1) margins the title box leaves: the client's word wrap bre
 the last row and that newline, landing on `rows-1`, scrolls the whole message up one row.
 `haven_pc.txt` authors 53 `Email` blocks (eight headers carry a trailing `// added by wesp`
 comment).
+
+**Loader caps and defaults (`CPropHacking::LoadFromFile` `0x1021cba0`).** `Email`: subject and
+sender `Q_strncpy` 0x20, body 0x200, dependency and runscript 0x40; defaults `this email has no
+subject` (`0x105b078c`), `this email has no sender` (`0x105b0760`), `this email has no body`
+(`0x105b073c`); dependency/runscript have no default. The same loader caps the other halves:
+subdir `name` 0x10 (lowercased), `description` 0x20 defaulting to the literal `description`,
+`password` 0x10, `dependency` 0x40; function `name` 0x10 (lowercased), `description` 0x20 (same
+default), `runtext` 0x200 defaulting to the literal `runtext`, `dependency`/`runscript` 0x40;
+top-level `screen saver` 0x40, `brackets` 0x3 (two characters plus NUL), `email_password` /
+`email_username` 0x20. `[q]uit` from an open message leaves `+0x9f4` stale (`FUN_1021c890` never
+clears it; only the list draw's first statement does) — harmless, the mail area always re-enters
+on the list.
 
 **`autodelete` is inert.** The only deletion path is the player's `DEL` command through
 `FUN_1021bbf0` → `FUN_1021a560` (set bit `0x2`).

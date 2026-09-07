@@ -16,11 +16,22 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGameClock.h"
+#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMoveSolve.h"
+#include "ElysiumPlayer.h"
+#include "ElysiumRng.h"
+#include "ElysiumScriptHost.h"
 #include "ElysiumViewState.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumUseIcons.h"
 #include "ElysiumPresentationSubsystem.h"
+#include "Misc/ScopeExit.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemContainer.h"
+#include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumLockable.h"
+#include "Tests/ElysiumEntityDebugStateTestHelpers.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Engine/StaticMesh.h"
@@ -51,6 +62,57 @@ static const TArray<FString>& GymRoots()
 		TEXT("trig_popup_note"), TEXT("item_k_tutorial_chopshop_stairs_key"),
 		TEXT("tutdoordknob"), TEXT("tutdoordknob-wesp"), TEXT("tutchopdoord") };
 	return Roots;
+}
+
+// The `Gym` prefix on the three helpers below is unity-blob safety: `ElysiumTerminalSliceTests.cpp`
+// declares `Locked` / `BoxRule` / `BoxRow` in its own namespace and both files put a file-scope
+// `using namespace` over them, so identical names go ambiguous the moment the build merges the two
+// into one translation unit.
+static bool GymLocked(const FElysiumEntity* Entity)
+{
+	return ElysiumEntityDebugTest::Row(Entity, TEXT("Locked")) == TEXT("yes");
+}
+
+static bool GymTriggerEnabled(const FElysiumEntity* Entity)
+{
+	const FString Enabled = ElysiumEntityDebugTest::Row(Entity, TEXT("Enabled"));
+	if (!Enabled.IsEmpty())
+	{
+		return Enabled == TEXT("yes");
+	}
+	const FString Disabled = ElysiumEntityDebugTest::Row(Entity, TEXT("Disabled"));
+	if (!Disabled.IsEmpty())
+	{
+		return Disabled == TEXT("no");
+	}
+	return ElysiumEntityDebugTest::Row(Entity, TEXT("Armed")) == TEXT("yes");
+}
+
+// One framed row, as `FUN_1021b330` builds it: `|`, the row's spaces, the text blitted at `Margin`,
+// `|`, all `columns - 2` wide from the left margin.
+static FString GymBoxRow(int32 Columns, const FString& Text, int32 Margin)
+{
+	FString Row = FString::ChrN(Columns - 2, TEXT(' '));
+	Row[0] = TEXT('|');
+	Row[Columns - 3] = TEXT('|');
+	for (int32 Offset = 0; Offset < Text.Len() && Margin + Offset < Columns - 2; ++Offset)
+	{
+		Row[Margin + Offset] = Text[Offset];
+	}
+	return TEXT(" ") + Row;
+}
+
+// Where the authored screensaver label sits on the grid, or `INDEX_NONE` when it is not drawn.
+static int32 FindLabelRow(const FElysiumTerminalScreenBuffer& Screen, const FString& Label)
+{
+	for (int32 Index = 0; Index < Screen.Rows(); ++Index)
+	{
+		if (Screen.RowText(Index).Contains(Label, ESearchCase::CaseSensitive))
+		{
+			return Index;
+		}
+	}
+	return INDEX_NONE;
 }
 }
 
@@ -631,6 +693,385 @@ bool FElysiumTerminalGymScreenSaverTest::RunTest(const FString&)
 			TestTrue(TEXT("which the projection has not drawn yet under -nullrhi"),
 				Projection->NeedsRedraw(*Tuthack));
 		}
+	}
+	return true;
+}
+
+// The whole tutorial terminal beat, end to end, on the real bodies
+// (`docs/project/plans/terminals.md`, slice H).
+//
+// The plan's acceptance for this beat is the Play tier's `do`/`wait`/`assert`/`shot` script, which
+// needs 11.10 and is not landed. This is the plan's stated interim: the same steps in the same
+// order, driven natively on the terminal gym, asserting authority state at every one. What it
+// CANNOT do is the picture — every tier runs `-nullrhi`, so the projection allocates no render
+// target and the `shot` comparisons against `retail-shots/01-home-menu.png` remain Play-tier and
+// owner-piloted. The cell grid stands in for the shot: it is the same characters in the same
+// places, read off the authority instead of off the glass.
+//
+// The pawn walks into the cone and the session is opened through the WORLD'S USE EDGE — the same
+// `QueuePlayerUseEdge` / `UpdatePlayerInteraction` pair the player controller's `+use` binding
+// drives — rather than by calling `BeginPlayerUseSession`, so the focus walk, the cone gate and
+// the rising-edge arm are all part of what is proven.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalGymBeatTest,
+	"Elysium.Content.TerminalGymBeat", GGymFlags)
+bool FElysiumTerminalGymBeatTest::RunTest(const FString&)
+{
+	if (!FElysiumTerminalGym::Available(GGymMap))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the sp_tutorial_1 export or /ElysiumBaked is absent"));
+		return true;
+	}
+
+	// The keycard is an `equip0` seed on the safe and spawns only through the installed catalogue,
+	// exactly as the game installs it before a map's item entities exist.
+	FElysiumItemTable Items;
+	FString ItemsError;
+	const bool bItems = Items.Load(ItemsError);
+	if (bItems)
+	{
+		ElysiumItems::Install(Items);
+	}
+	else
+	{
+		AddInfo(FString::Printf(
+			TEXT("seam: item catalogue unavailable (%s); the keycard beats are skipped"),
+			*ItemsError));
+	}
+	ON_SCOPE_EXIT { if (bItems) { ElysiumItems::Uninstall(Items); } };
+
+	// The screensaver's row, column and style are draws from the Terminal stream; seeded before the
+	// build so the first tick `Activate` arms is reproducible.
+	ElysiumRng::SeedAll(20260907);
+
+	FElysiumTerminalGym Gym;
+	// Standing well off the machine: the beat's first assertion is what an untouched monitor shows.
+	if (!Gym.Build(*this, GGymMap, GymRoots(), FVector(300.0f, -324.0f, 0.0f), 0.0f))
+	{
+		return false;
+	}
+	AddInfo(Gym.Report());
+	FElysiumEntityWorld* World = Gym.World();
+	FElysiumPropHacking* Terminal = Gym.Terminal(TEXT("tuthack"));
+	if (!TestNotNull(TEXT("the entity world stands"), World)
+		|| !TestNotNull(TEXT("tuthack resolves"), Terminal)
+		|| !TestTrue(TEXT("its screen attachments resolved"), Terminal->bScreenAttachmentsResolved))
+	{
+		return false;
+	}
+	// The authored `dependency` expressions on the directory and its functions are evaluated at
+	// draw time, so the host can be installed after the build.
+	if (Gym.State)
+	{
+		Gym.State->SetScriptHost(MakeUnique<FElysiumExprScriptHost>(Gym.State));
+	}
+
+	FElysiumEntity* Padlock = World->FindByName(TEXT("tutsafelock"));
+	FElysiumEntity* SafeEntity = World->FindByName(TEXT("tutsafe"));
+	FElysiumEntity* KnobA = World->FindByName(TEXT("tutdoordknob"));
+	FElysiumEntity* KnobB = World->FindByName(TEXT("tutdoordknob-wesp"));
+	FElysiumPlayer* Player = World->FindPlayer();
+	if (!TestNotNull(TEXT("tutsafelock resolves"), Padlock)
+		|| !TestNotNull(TEXT("tutsafe resolves"), SafeEntity)
+		|| !TestNotNull(TEXT("tutdoordknob resolves"), KnobA)
+		|| !TestNotNull(TEXT("tutdoordknob-wesp resolves"), KnobB)
+		|| !TestNotNull(TEXT("the player entity resolves"), Player))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the padlock starts locked"), GymLocked(Padlock));
+	TestTrue(TEXT("the door knobs start locked"), GymLocked(KnobA) && GymLocked(KnobB));
+
+	const FString Label = Terminal->ScreenSaverLabel();
+	const int32 Columns = Terminal->TextColumns;
+	auto Row = [Terminal](int32 Index) { return Terminal->Screen.RowTextTrimmed(Index); };
+
+	// --- BEFORE THE FIRST APPROACH: the screensaver label is on the grid --------------------------
+	// `CPropHacking::vfunc113` `0x1021a270` armed the first tick inside the first second at map
+	// load. One second of the gym's own clock is enough for it to have run at least once, and the
+	// think it schedules is the entity's, on the game clock, with nobody standing at the machine.
+	TestEqual(TEXT("the authored screensaver label"), Label,
+		FString(TEXT("Brothers Downtown Garage")));
+	Gym.Advance(1.2);
+	const int32 IdleLabelRow = FindLabelRow(Terminal->Screen, Label);
+	TestTrue(TEXT("the screensaver label is on the grid before the first approach"),
+		IdleLabelRow != INDEX_NONE);
+	// `0x1021a788`-`0x1021a7a1`: row `[1, rows-1]`, so it never sits on row 0.
+	TestTrue(TEXT("and never on row 0"), IdleLabelRow >= 1);
+	{
+		TArray<FElysiumTerminalView> Idle;
+		World->BuildIdleTerminalViews(Idle);
+		const FElysiumTerminalView* Published = Idle.FindByPredicate(
+			[Terminal](const FElysiumTerminalView& Candidate)
+			{ return Candidate.Owner == Terminal->Handle; });
+		if (TestNotNull(TEXT("and the idle publication carries that glass"), Published))
+		{
+			TestEqual(TEXT("with no session serial"), Published->SessionSerial, 0u);
+			TestEqual(TEXT("and the authored label"), Published->ScreenSaverLabel, Label);
+		}
+	}
+
+	// --- THE APPROACH: into the cone, then `+use` through the world's own edge ---------------------
+	const FVector Screen = Terminal->ScreenPointCm;
+	const FVector Forward = (Terminal->ScreenAxisPointCm - Screen).GetSafeNormal2D();
+	const FVector Stand = Screen + Forward * (60.0f * ElysiumMove::U);
+	Gym.PlacePawnFeet(FVector(Stand.X, Stand.Y, Terminal->Origin.Z - 60.0f),
+		(-Forward).Rotation().Yaw);
+
+	IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Gym.Host.Pawn);
+	UElysiumCameraComponent* Camera = Body ? Body->GetCameraComponent() : nullptr;
+	if (!TestNotNull(TEXT("the pawn carries a camera"), Camera))
+	{
+		return false;
+	}
+	const int32 ShotsBefore = Camera->GetShots().Num();
+
+	// One frame with a rising `+use` edge queued. `UpdatePlayerInteraction` runs the focus walk
+	// first and the queued edges after it, so this single frame is the whole gesture.
+	World->QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+	Gym.Frame(Gym.Now());
+	if (!TestTrue(TEXT("pressing +use in the cone opens the session through the use edge"),
+		Terminal->CurrentUser.IsSet()))
+	{
+		AddError(TEXT("the use edge did not reach the terminal; the rest of the beat cannot run"));
+		return false;
+	}
+	FElysiumTerminalView View;
+	TestTrue(TEXT("and the session publishes a view"), World->BuildTerminalView(View));
+	TestFalse(TEXT("entry immobilizes the player"), Player->IsMobile());
+	TestEqual(TEXT("entry cancels the screensaver think"), Terminal->NextThink,
+		ELYSIUM_NEVER_THINK);
+
+	// --- THE CAMERA: on `screen_axis`, looking at `screen` -----------------------------------------
+	TestTrue(TEXT("entry pushed the Hacking shot and kept its handle"), Terminal->CameraShot != 0);
+	TestEqual(TEXT("the camera stack grew by exactly one"), Camera->GetShots().Num(),
+		ShotsBefore + 1);
+	const int32 FirstShot = Terminal->CameraShot;
+	if (const FElysiumCameraShot* Live = Camera->GetShots().Top())
+	{
+		TestTrue(TEXT("the live shot settles on the screen_axis attachment"),
+			Live->Origin.Equals(Terminal->ScreenAxisPointCm, 0.1f));
+		TestTrue(TEXT("and looks at the screen attachment"),
+			Live->bUseLookAt && Live->LookAt.Equals(Terminal->ScreenPointCm, 0.1f));
+	}
+
+	// --- THE LOGON BOX ----------------------------------------------------------------------------
+	// `FUN_1021b140` frames the one authored `LogonScreen` line, centred: (36 - 14 - 2) / 2 = 10.
+	TestEqual(TEXT("the logon box reads \"Welcome, Jack.\""), Row(2),
+		GymBoxRow(Columns, TEXT("Welcome, Jack."), 10));
+	TestEqual(TEXT("with the root menu under it"), Row(5), TEXT(" Home menu"));
+	TestEqual(TEXT("the one directory listed lowercased"), Row(8), TEXT("    safe"));
+	TestEqual(TEXT("and the prompt on row 22"), Row(22), TEXT(" Type menu or command:"));
+
+	// --- THE COMMANDS, through the presentation intents where they reach the world -----------------
+	// `UElysiumPresentationSubsystem`'s five intents are the widget's only channel to a terminal,
+	// and each re-resolves the map through `UElysiumMapSubsystem::GetCurrentMap()`. The gym's map
+	// actor is stood directly on a test world and is not that world's registered current map, so the
+	// intents answer false here and the beat falls back to the world call they wrap. Which route ran
+	// is reported rather than assumed.
+	UElysiumPresentationSubsystem* Presentation =
+		UElysiumPresentationSubsystem::Get(Gym.Host.World);
+	bool bIntentsReachedTheWorld = false;
+	auto Send = [&](const FString& Command)
+	{
+		if (Presentation
+			&& Presentation->SubmitCommand(Terminal->Handle, Terminal->SessionSerial, Command))
+		{
+			bIntentsReachedTheWorld = true;
+			return true;
+		}
+		return World->SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, Command);
+	};
+	auto SendAcknowledge = [&]()
+	{
+		if (Presentation && Presentation->Acknowledge(Terminal->Handle, Terminal->SessionSerial))
+		{
+			bIntentsReachedTheWorld = true;
+			return true;
+		}
+		return World->SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, FString());
+	};
+	auto SendBreak = [&]()
+	{
+		if (Presentation && Presentation->Break(Terminal->Handle, Terminal->SessionSerial))
+		{
+			bIntentsReachedTheWorld = true;
+			return true;
+		}
+		return World->SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial,
+			TEXT("break"));
+	};
+	auto SendQuit = [&]()
+	{
+		if (Presentation && Presentation->Quit(Terminal->Handle, Terminal->SessionSerial))
+		{
+			bIntentsReachedTheWorld = true;
+			return true;
+		}
+		return World->SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial,
+			TEXT("quit"));
+	};
+
+	TestTrue(TEXT("`Safe` is accepted"), Send(TEXT("Safe")));
+	TestEqual(TEXT("and asks for its password"), Terminal->InputMode(),
+		EElysiumTerminalInputMode::Password);
+	TestEqual(TEXT("with the login prompt on the last row"), Row(23), TEXT(" Password:"));
+	TestTrue(TEXT("the prompt publishes a view"), World->BuildTerminalView(View));
+	TestEqual(TEXT("carrying InfoCtrl hint 3, the Ctrl-C offer"), View.HudHintType, 3);
+
+	TestTrue(TEXT("`chopshop` is accepted"), Send(TEXT("chopshop")));
+	TestEqual(TEXT("and enters Safe"), Terminal->CurrentDirectory, 0);
+	TestEqual(TEXT("ending on the acknowledge prompt"), Row(23),
+		TEXT(" [Press \"ENTER\" to continue]"));
+	TestEqual(TEXT("in acknowledge mode"), Terminal->InputMode(),
+		EElysiumTerminalInputMode::Acknowledge);
+
+	TestTrue(TEXT("Enter past the acknowledgement is accepted"), SendAcknowledge());
+	TestEqual(TEXT("which draws the Safe menu"), Row(5), TEXT(" Safe Menu"));
+	TestEqual(TEXT("and returns to the line editor"), Terminal->InputMode(),
+		EElysiumTerminalInputMode::Line);
+
+	const double UnlockIssued = Gym.Now();
+	TestTrue(TEXT("`Unlock` is accepted"), Send(TEXT("Unlock")));
+	TestEqual(TEXT("the executor prints the authored runtext"), Row(6),
+		TEXT(" Safe doors unlocked."));
+	TestEqual(TEXT("and waits on the acknowledge prompt"), Terminal->InputMode(),
+		EElysiumTerminalInputMode::Acknowledge);
+	TestTrue(TEXT("Enter past the runtext is accepted"), SendAcknowledge());
+
+	// --- THE AUTHORED ROWS, on the game clock ------------------------------------------------------
+	Gym.Advance(UnlockIssued);
+	TestFalse(TEXT("OnTrigger0 unlocked tutsafelock through the authored row"), GymLocked(Padlock));
+	TestFalse(TEXT("and the padlock is still drawn before the delayed hide"), Padlock->IsHidden());
+	Gym.Advance(UnlockIssued + 0.6);
+	TestTrue(TEXT("the +0.5 s ScriptHide row then hides it"), Padlock->IsHidden());
+
+	// --- THE EXIT ---------------------------------------------------------------------------------
+	TestTrue(TEXT("`quit` closes the session"), SendQuit());
+	AddInfo(bIntentsReachedTheWorld
+		? TEXT("the beat drove the presentation intents")
+		: TEXT("the presentation intents do not resolve the gym's map actor "
+			"(UElysiumMapSubsystem::GetCurrentMap is not this test world's); the beat drove "
+			"FElysiumEntityWorld::SubmitTerminalCommand, which the intents wrap"));
+	TestFalse(TEXT("the terminal stops publishing a session"), World->BuildTerminalView(View));
+	TestTrue(TEXT("the exit mobilizes the player again"), Player->IsMobile());
+	TestEqual(TEXT("the camera handle is dropped"), Terminal->CameraShot, 0);
+	TestEqual(TEXT("and the stack is back where it started"), Camera->GetShots().Num(),
+		ShotsBefore);
+	TestTrue(TEXT("the shot that was popped is the one entry pushed"), FirstShot != 0);
+
+	// --- THE SCREENSAVER IS BACK ON THE GLASS -------------------------------------------------------
+	// The exit re-arms at `ss_start + now` (`0x1021a6f6`), unfloored. Nothing else drives the glass
+	// once the session is gone, so the label returning IS the screensaver think running again.
+	TestTrue(TEXT("the exit re-armed the screensaver at ss_start"),
+		FMath::IsNearlyEqual(Terminal->NextThink,
+			static_cast<float>(Gym.Now()) + Terminal->ScreenSaverStart, 0.01f));
+	TestEqual(TEXT("the directory draw is still what is on the glass right after the exit"),
+		FindLabelRow(Terminal->Screen, Label), INDEX_NONE);
+	Gym.Advance(Gym.Now() + Terminal->ScreenSaverStart + 0.2);
+	TestTrue(TEXT("and one ss_start later the screensaver label is back on the glass"),
+		FindLabelRow(Terminal->Screen, Label) != INDEX_NONE);
+
+	// --- THE SAFE, THE KEYCARD AND THE DOOR ---------------------------------------------------------
+	if (bItems)
+	{
+		FElysiumItemContainer* Safe = SafeEntity->AsItemContainer();
+		if (TestNotNull(TEXT("tutsafe is an item container"), Safe))
+		{
+			const FString KeyCard = TEXT("item_k_tutorial_chopshop_stairs_key");
+			TestTrue(TEXT("the safe holds its equip0 keycard"),
+				Safe->Inventory.Has(*Safe, KeyCard));
+			bool bTaken = false;
+			for (int32 Slot = 0; Slot < Safe->Inventory.Num() && !bTaken; ++Slot)
+			{
+				bTaken = Safe->TakeToPlayer(*Player, Slot);
+			}
+			TestTrue(TEXT("the keycard is taken out of the unlocked safe"), bTaken);
+			TestTrue(TEXT("and the player carries it"), Player->Inventory.Has(*Player, KeyCard));
+			Gym.Advance(Gym.Now());
+
+			// The knobs are `prop_doorknob_electronic` with `key_name` = the keycard and
+			// `delete_key 1`: the first accepts and consumes it, so the far-side knob has nothing
+			// left to accept.
+			World->BeginPlayerUseSession(KnobA->Handle, World->PlayerHandle());
+			TestFalse(TEXT("the door knob opens with the keycard"), GymLocked(KnobA));
+			TestFalse(TEXT("delete_key consumed it"), Player->Inventory.Has(*Player, KeyCard));
+			World->BeginPlayerUseSession(KnobB->Handle, World->PlayerHandle());
+			TestTrue(TEXT("so the far-side knob stays locked"), GymLocked(KnobB));
+		}
+	}
+
+	// --- THE SECOND RUN: Ctrl+C, on the game clock ---------------------------------------------------
+	// `break` is the string the client's Ctrl+C chord sends (`s_hackcmd_break_102b721c`), and only
+	// the pending-password arm acts on it. Relock the directory so there is a prompt to break, then
+	// re-approach and re-press: the whole second run goes through the use edge too.
+	Terminal->DirectoryUnlocked[0] = 0;
+	Gym.PlacePawnFeet(FVector(Stand.X, Stand.Y, Terminal->Origin.Z - 60.0f),
+		(-Forward).Rotation().Yaw);
+	World->QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
+	Gym.Frame(Gym.Now());
+	if (!TestTrue(TEXT("a second +use reopens the session"), Terminal->CurrentUser.IsSet()))
+	{
+		return false;
+	}
+	const int32 SecondShot = Terminal->CameraShot;
+	TestTrue(TEXT("with a fresh camera handle"), SecondShot != 0 && SecondShot != FirstShot);
+	TestTrue(TEXT("`Safe` is accepted on the relocked directory"), Send(TEXT("Safe")));
+	TestEqual(TEXT("which asks for its password again"), Terminal->InputMode(),
+		EElysiumTerminalInputMode::Password);
+
+	TestTrue(TEXT("Ctrl+C sends `break`, which the password prompt accepts"), SendBreak());
+	if (TestTrue(TEXT("break started the timed attempt"), !Terminal->HackBuffer().IsEmpty()))
+	{
+		// Tier 3 fills the buffer with the REAL password and reveals it; below tier 3 the buffer is
+		// scrambled and the typed submit rejects it. The roll is drawn from the seeded Skill stream,
+		// so which arm runs is reproducible — both are asserted, and the one that ran is reported.
+		const bool bTierThree = Terminal->HackBuffer() == TEXT("chopshop");
+		const uint32 CrackingRevision = Terminal->ViewRevision;
+		Gym.Advance(Gym.Now() + 1.0);
+		TestTrue(TEXT("the cracking row redraws on the game clock"),
+			Terminal->ViewRevision > CrackingRevision);
+		TestFalse(TEXT("and the buffer is still live mid-crack"), Terminal->HackBuffer().IsEmpty());
+		TestFalse(TEXT("a live cracking buffer swallows every typed line"),
+			Send(TEXT("Unlock")));
+		Gym.Advance(Gym.Now() + 6.0);
+		TestTrue(TEXT("the buffer flushes when the interval is up"),
+			Terminal->HackBuffer().IsEmpty());
+		if (bTierThree)
+		{
+			AddInfo(TEXT("the seeded roll reached tier 3: break typed the real password"));
+			TestEqual(TEXT("a tier-3 crack enters Safe without the player typing it"),
+				Terminal->CurrentDirectory, 0);
+		}
+		else
+		{
+			AddInfo(TEXT("the seeded roll stayed below tier 3: break typed a scrambled buffer"));
+			// `PasswordFailed`'s SKILL arm (`0x1021c560`) is not the typed arm: it does not reprint
+			// the retry prompt. It counts the attempt, raises InfoCtrl hint 6 with the difficulty,
+			// and `EnterDirectory(-1)` drops the player back at the root — still inside the
+			// terminal, with the pending directory cleared.
+			TestEqual(TEXT("a sub-tier-3 crack is refused and returns to the root directory"),
+				Terminal->CurrentDirectory, INDEX_NONE);
+			TestEqual(TEXT("with no directory left pending"), Terminal->PendingDirectory,
+				INDEX_NONE);
+			TestEqual(TEXT("drawing the root menu again"), Row(5), TEXT(" Home menu"));
+			TestTrue(TEXT("counting against the directory's attempts"),
+				Terminal->DirectoryAttempts[0] > 0);
+			FElysiumTerminalView Failed;
+			if (TestTrue(TEXT("and it publishes a view"), World->BuildTerminalView(Failed)))
+			{
+				TestEqual(TEXT("carrying InfoCtrl hint 6, the skill-too-low line"),
+					Failed.HudHintType, 6);
+				TestEqual(TEXT("with the directory's difficulty"), Failed.HudHintValue,
+					Terminal->Definition.Directories[0].Difficulty > 0
+						? Terminal->Definition.Directories[0].Difficulty : Terminal->Difficulty);
+			}
+		}
+	}
+	if (Terminal->CurrentUser.IsSet())
+	{
+		TestTrue(TEXT("the second run quits"), SendQuit());
+		TestEqual(TEXT("dropping its own camera handle"), Terminal->CameraShot, 0);
+		TestEqual(TEXT("and unwinding the stack"), Camera->GetShots().Num(), ShotsBefore);
 	}
 	return true;
 }

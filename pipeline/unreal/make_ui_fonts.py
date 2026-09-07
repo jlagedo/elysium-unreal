@@ -28,6 +28,20 @@ from elysium_pipeline import mounts
 PKG = mounts.UI_FONTS
 SRC = os.path.join(_bootstrap.REPO, "Content", "Fonts")
 
+# Terminus is a bitmap face converted to TTF: every outline is a staircase of axis-aligned
+# segments. Slate's multi-channel distance field is generated at a fixed ppem, and at the engine
+# default that field rounds the stair corners -- on a 28x32 terminal cell the 36x24 grid then reads
+# as a blur rather than as a console. Raising the three ppem tiers keeps the corners: the field is
+# generated close enough to the drawn size that the median of the three channels lands on the
+# corner rather than between two of them. Editor-only asset properties, applied on import below.
+# (docs/project/plans/terminals.md, slice D.)
+TERMINUS_DISTANCE_FIELD = {
+    "enable_distance_field_rendering": True,
+    "min_multi_distance_field_ppem": 48,
+    "mid_multi_distance_field_ppem": 56,
+    "max_multi_distance_field_ppem": 64,
+}
+
 # (ttf filename, asset name). Asset names are FF_<Family>_<Weight> so the C++ side can build
 # the path from a role + weight without a table lookup per face.
 FACES = [
@@ -46,6 +60,28 @@ FACES = [
 ]
 
 
+def _apply_face_settings(face, asset, obj_path):
+    """Loading policy, hinting, and the terminal face's raised distance-field tiers.
+
+    Returns True when any property actually moved, so an already-current asset is only re-saved
+    when this pass changed it.
+    """
+    settings = {
+        "loading_policy": unreal.FontLoadingPolicy.INLINE,
+        "hinting": unreal.FontHinting.DEFAULT,
+    }
+    if asset.startswith("FF_TerminusTTF_"):
+        settings.update(TERMINUS_DISTANCE_FIELD)
+    changed = False
+    for name, value in settings.items():
+        if face.get_editor_property(name) != value:
+            face.set_editor_property(name, value)
+            changed = True
+    if changed:
+        unreal.EditorAssetLibrary.save_asset(obj_path)
+    return changed
+
+
 def main():
     tools = unreal.AssetToolsHelpers.get_asset_tools()
     src_dir = os.path.normpath(SRC)
@@ -62,9 +98,12 @@ def main():
         obj_path = "%s/%s.%s" % (PKG, asset, asset)
         if unreal.EditorAssetLibrary.does_asset_exist(obj_path):
             # Idempotent: re-point the existing asset at its source and re-save, so a replaced
-            # .ttf is picked up without needing the asset deleted by hand.
+            # .ttf is picked up without needing the asset deleted by hand. A face whose source is
+            # already current still has its settings reasserted -- the distance-field tiers were
+            # added after the first import, and a face imported before that would never get them.
             face = unreal.EditorAssetLibrary.load_asset(obj_path)
             if face and face.get_editor_property("source_filename") == path:
+                _apply_face_settings(face, asset, obj_path)
                 kept += 1
                 continue
 
@@ -83,8 +122,7 @@ def main():
             unreal.log_error("[make_ui_fonts] import produced no asset: %s" % asset)
             failed.append(asset)
             continue
-        face.set_editor_property("loading_policy", unreal.FontLoadingPolicy.INLINE)
-        face.set_editor_property("hinting", unreal.FontHinting.DEFAULT)
+        _apply_face_settings(face, asset, obj_path)
         unreal.EditorAssetLibrary.save_asset(obj_path)
         made += 1
 

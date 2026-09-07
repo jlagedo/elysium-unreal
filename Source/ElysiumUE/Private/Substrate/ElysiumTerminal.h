@@ -12,7 +12,10 @@ class UPrimitiveComponent;
 
 // The view's reading of the session's input state, derived from retail's `m_HackFlags` and the
 // pending-password target (docs/vtmb/computer-terminals.md §8.1, §9). `Raw` is `m_HackFlags 0x4`,
-// a mode the substrate carries even though no computer content raises it (the keypad does).
+// and computer content DOES raise it: the mail area's open-message render (`FUN_1021c260`) ends in
+// `FUN_10219240`, which is the raw-mode sender, so every open email runs in single-key mode and the
+// client posts one `hackcmd %c` per press (§12). `CPropKeypad` raises the same flag; it is not
+// ported.
 enum class EElysiumTerminalInputMode : uint8
 {
 	Line,
@@ -50,6 +53,25 @@ struct FElysiumTerminalEmail
 	FString RunScript;
 	bool bAutoDelete = false;
 };
+
+// The `Email` record's field widths and its three compiled-in defaults, from
+// `CPropHacking::LoadFromFile` `0x1021cba0` (`docs/vtmb/computer-terminals.md` §12). Each cap is
+// the `Q_strncpy` byte count minus the terminator, so `Q_strncpy(dest, src, 0x20)` keeps 31
+// characters; the `dependency` / `runscript` pair share the 64-byte slot every other authored
+// script string on the entity uses. The defaults are the retail `.rdata` strings at `0x105b078c`,
+// `0x105b0760` and `0x105b073c`, and they are what an `Email` block missing that key DRAWS.
+namespace ElysiumTerminalEmailCaps
+{
+	inline constexpr int32 Subject = 31;      // Q_strncpy(..., 0x20)
+	inline constexpr int32 Sender = 31;       // Q_strncpy(..., 0x20)
+	inline constexpr int32 Body = 511;        // Q_strncpy(..., 0x200)
+	inline constexpr int32 Dependency = 63;   // Q_strncpy(..., 0x40)
+	inline constexpr int32 RunScript = 63;    // Q_strncpy(..., 0x40)
+
+	inline const TCHAR* DefaultSubject = TEXT("this email has no subject");
+	inline const TCHAR* DefaultSender = TEXT("this email has no sender");
+	inline const TCHAR* DefaultBody = TEXT("this email has no body");
+}
 
 // `CPropHacking+0x904`: a 64-byte character field, so 63 characters plus the terminator
 // (`docs/vtmb/computer-terminals.md` §4.4). The parser truncates to it because retail's `Q_strncpy`
@@ -134,6 +156,14 @@ namespace ElysiumHackingStrings
 	constexpr int32 MailListCount = 45;
 	constexpr int32 MailListMore = 46;
 	constexpr int32 MailListExit = 47;
+
+	// **Test-only.** Install a `hacking_strings` table for the headless resolver, ahead of both the
+	// rulebook and the exported corpus. Without it a tree with no export resolves every entry to
+	// its compiled key name, and the five mail hotkeys — which are the SECOND byte of a bracketed
+	// word (`"[n]ext"`) — all collapse onto `T`, so the mail cases have to abstain rather than
+	// assert. `Reset` puts the ordinary resolution back; a case that installs must reset.
+	void InstallForTests(TArray<FString> Entries);
+	void ResetForTests();
 
 	FString Get(const class FElysiumEntityWorld* World, int32 Index);
 	// The same lookup with **no** fallback: an absent entry answers empty. This is what the three
@@ -442,6 +472,12 @@ public:
 	bool IsEmailDeleted(int32 Index) const;
 	void SetEmailRead(int32 Index);
 	void SetEmailDeleted(int32 Index);
+	// `FUN_1021bbf0`, the module's only deletion path (`autodelete` is read by nothing). It carries
+	// its OWN bound — the record count — in front of the accessor's 128, so the two are different
+	// guards and a record between the two is refused by the second and not the first. Public
+	// beside the accessors it wraps: the router can only ever hand it a valid open index, so the
+	// record bound is unreachable from the grammar and is proven by calling it.
+	void MailDelete(int32 RealIndex);                      // FUN_1021bbf0
 	// `FUN_1021bd80`: visible = not deleted AND its `dependency` (record `+0x240`, mode `0x102`)
 	// passes, in record order. Rebuilt from scratch on every draw, so numbering is not stable
 	// across a state change — and it never re-clamps the page.
@@ -517,7 +553,6 @@ private:
 	// The mail bodies.
 	void MailRender();                                     // FUN_1021c260
 	void MailOpen(int32 VisibleRow);                       // FUN_1021bc90
-	void MailDelete(int32 RealIndex);                      // FUN_1021bbf0
 	void MailNextPage();                                   // FUN_1021c000
 	void MailPrevPage();                                   // FUN_1021bfd0
 	void MailNextMessage();                                // FUN_1021bc20

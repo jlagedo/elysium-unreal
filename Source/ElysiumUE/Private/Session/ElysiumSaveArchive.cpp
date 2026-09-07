@@ -233,7 +233,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	// `m_GlobalEmailFlags` — the per-terminal-name email flag records (§12). This slot previously
 	// held an unwritten `TArray<FString>` placeholder; nothing ever filled it, so an older payload
 	// reads and discards it and there is nothing to migrate.
-	if (Version >= FElysiumSaveVersion::TerminalEmail)
+	if (Ar.IsSaving() || Version >= FElysiumSaveVersion::TerminalEmail)
 	{
 		Ar << R.GlobalEmail;
 	}

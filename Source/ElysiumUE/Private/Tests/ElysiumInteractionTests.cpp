@@ -1485,6 +1485,60 @@ TerminalDefinition
 			ElysiumTerminalScreenSaverMax);
 	}
 
+	// `CPropHacking::LoadFromFile` `0x1021cba0` reads every `Email` field with `Q_strncpy` into a
+	// fixed record slot, and hands three of them a compiled-in DEFAULT rather than the empty
+	// string (`0x105b078c`, `0x105b0760`, `0x105b073c`). Both halves are content-visible: an
+	// `Email` block with no `subject` draws retail's stand-in on the glass, and an over-long body
+	// is truncated at load, not on the way to the screen.
+	{
+		const FString LongSubject = FString::ChrN(60, TEXT('S'));
+		const FString LongBody = FString::ChrN(700, TEXT('B'));
+		const FString LongScript = FString::ChrN(90, TEXT('R'));
+		FElysiumTerminalDefinition Capped;
+		FString CapError;
+		if (TestTrue(TEXT("an Email block with over-long fields still parses"),
+			FElysiumTerminalDefinition::ParseText(FString::Printf(TEXT(
+				"TerminalDefinition { Email { \"subject\" \"%s\" \"body\" \"%s\" "
+				"\"runscript\" \"%s\" \"dependency\" \"%s\" } Email { } }"),
+				*LongSubject, *LongBody, *LongScript, *LongScript), Capped, CapError))
+			&& TestEqual(TEXT("both Email blocks are records"), Capped.Emails.Num(), 2))
+		{
+			TestEqual(TEXT("subject is capped at Q_strncpy(..., 0x20) minus the terminator"),
+				Capped.Emails[0].Subject.Len(), ElysiumTerminalEmailCaps::Subject);
+			TestEqual(TEXT("body at 0x200 minus the terminator"), Capped.Emails[0].Body.Len(),
+				ElysiumTerminalEmailCaps::Body);
+			TestEqual(TEXT("runscript at 0x40 minus the terminator"),
+				Capped.Emails[0].RunScript.Len(), ElysiumTerminalEmailCaps::RunScript);
+			TestEqual(TEXT("and dependency shares that 64-byte slot"),
+				Capped.Emails[0].Dependency.Len(), ElysiumTerminalEmailCaps::Dependency);
+			// The authored keys that WERE present take no default...
+			TestEqual(TEXT("an authored sender is absent, so the default stands"),
+				Capped.Emails[0].Sender, FString(ElysiumTerminalEmailCaps::DefaultSender));
+			// ...and a block that authors nothing takes all three.
+			TestEqual(TEXT("an empty Email block takes the retail subject default"),
+				Capped.Emails[1].Subject, FString(TEXT("this email has no subject")));
+			TestEqual(TEXT("the retail sender default"), Capped.Emails[1].Sender,
+				FString(TEXT("this email has no sender")));
+			TestEqual(TEXT("and the retail body default"), Capped.Emails[1].Body,
+				FString(TEXT("this email has no body")));
+			// `dependency` and `runscript` have NO default — retail passes the empty string — so an
+			// unauthored one must stay empty or every mail would run a script named "".
+			TestTrue(TEXT("dependency has no default"), Capped.Emails[1].Dependency.IsEmpty());
+			TestTrue(TEXT("nor runscript"), Capped.Emails[1].RunScript.IsEmpty());
+		}
+		// An authored-but-EMPTY value is not an absent key: `KeyValues` returns the empty string and
+		// the default never applies, which is the same distinction the sign's `"XPos" ""` turns on.
+		FElysiumTerminalDefinition Blank;
+		if (TestTrue(TEXT("an Email block with an explicitly empty subject parses"),
+			FElysiumTerminalDefinition::ParseText(
+				TEXT("TerminalDefinition { Email { \"subject\" \"\" } }"), Blank, CapError))
+			&& TestEqual(TEXT("as one record"), Blank.Emails.Num(), 1))
+		{
+			TestTrue(TEXT("an authored empty subject stays empty; the default is for an ABSENT key"),
+				Blank.Emails[0].Subject.IsEmpty());
+		}
+	}
+
 	FElysiumTerminalDefinition Invalid;
 	TestFalse(TEXT("an out-of-range trigger fails closed"),
 		FElysiumTerminalDefinition::ParseText(

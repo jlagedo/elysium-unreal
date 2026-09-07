@@ -256,7 +256,45 @@ bool FElysiumTerminalKeysTest::RunTest(const FString&)
 		Input->OnKeyChar(Geometry, Typed(TCHAR('q')));
 		TestEqual(TEXT("each printable is one hackcmd %c"), Characters, 2);
 		TestEqual(TEXT("carrying the translated character"), TypedCharacters, FString(TEXT("nq")));
-		TestTrue(TEXT("and nothing accumulates locally"), Input->Draft().IsEmpty());
+		// ...and the SAME keystroke is also inserted locally. `FUN_100c6d50` has no `0x4` test at
+		// all — the raw arm lives only in the key-down body `0x100c7090` — so its only mode gate is
+		// `(m_HackFlags & 1) == 0`, which raw mode passes. The byte goes on the wire AND into the
+		// client's own line `+0xed8`, and the local re-render puts it on the glass under the command
+		// it just sent. This is why an open mail message shows the pressed hotkey for the frame or
+		// two before the list redraw comes back.
+		TestEqual(TEXT("and the same byte is echoed into the local line, because FUN_100c6d50 has "
+			"no 0x4 test"), Input->Draft(), FString(TEXT("nq")));
+		// The authority's answer is a print, which closes the client's editor and moves the epoch —
+		// and the epoch is what clears the local line (`FUN_100c82e0` zeroes `+0xed8` on the next
+		// activation). That is the only thing that ends the echo.
+		{
+			FElysiumTerminalView Answered = PromptView(/*InputMode*/ 3);
+			Answered.EditEpoch = 99;
+			Input->SetSession(Answered);
+			TestTrue(TEXT("the authority's next print clears the raw echo through the epoch"),
+				Input->Draft().IsEmpty());
+			Input->SetSession(PromptView(/*InputMode*/ 3));
+			Input->OnKeyChar(Geometry, Typed(TCHAR('n')));
+			Input->OnKeyChar(Geometry, Typed(TCHAR('q')));
+		}
+		// The digits-only and max-input gates still stand in front of the insert — they are inside
+		// the same `(flags & 1) == 0` branch — so raw mode is not a way past them.
+		{
+			FElysiumTerminalView Capped = PromptView(/*InputMode*/ 3);
+			Capped.SessionSerial = 77;
+			Capped.MaxInput = 1;
+			Input->SetSession(Capped);
+			const int32 CharactersBefore = Characters;
+			Input->OnKeyChar(Geometry, Typed(TCHAR('a')));
+			Input->OnKeyChar(Geometry, Typed(TCHAR('b')));
+			TestEqual(TEXT("both raw keys still went on the wire"), Characters,
+				CharactersBefore + 2);
+			TestEqual(TEXT("but m_nMaxInput still bounds the local echo"), Input->Draft(),
+				FString(TEXT("a")));
+			Input->SetSession(PromptView(/*InputMode*/ 3));
+			Input->OnKeyChar(Geometry, Typed(TCHAR('n')));
+			Input->OnKeyChar(Geometry, Typed(TCHAR('q')));
+		}
 		const int32 QuitsBefore = Quits;
 		Input->OnKeyDown(Geometry, Down(EKeys::Escape));
 		TestEqual(TEXT("Escape in raw mode still quits"), Quits, QuitsBefore + 1);

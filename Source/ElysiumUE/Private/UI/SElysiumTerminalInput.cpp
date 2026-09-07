@@ -214,12 +214,22 @@ FReply SElysiumTerminalInput::OnKeyChar(const FGeometry&, const FCharacterEvent&
 
 	if (IsRawMode())
 	{
-		// `hackcmd %c` per key, no accumulation. The whole line is one character.
+		// `hackcmd %c` per key, no accumulation on the WIRE. The whole command is one character.
 		if (OnSubmitCharacter.IsBound())
 		{
 			OnSubmitCharacter.Execute(Character);
 		}
-		return FReply::Handled();
+		// ...and then it falls through to the insert, because `FUN_100c6d50` has **no `0x4` test**.
+		// The raw arm lives entirely in the key-down body (`0x100c7090`, `if ((flags & 4) != 0)`);
+		// the character body only ever tests `(flags & 1) == 0` — acknowledge — so in raw mode the
+		// same keystroke ALSO goes into the client's local line `+0xed8` and is re-rendered on top
+		// of the `hackcmd %c` it just sent. The typed letter is therefore visible on the glass until
+		// the authority's answer arrives: that answer is a print, which closes the client's editor
+		// (`+0xe88`) and moves the epoch, and the epoch clears the draft here.
+		//
+		// This is the retail chain and it is what the mail area looks like: pressing `n` in an open
+		// message shows `n` at the prompt for exactly as long as it takes the list redraw to come
+		// back.
 	}
 
 	if (!CanAppend(Character))

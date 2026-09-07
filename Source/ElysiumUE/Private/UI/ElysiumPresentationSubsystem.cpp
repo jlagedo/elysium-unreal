@@ -15,6 +15,7 @@
 #include "UI/ElysiumDialogueWidget.h"
 #include "UI/ElysiumTerminalProjection.h"
 #include "UI/ElysiumUISubsystem.h"
+#include "UI/SElysiumTerminalCells.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Engine/Engine.h"
@@ -408,13 +409,23 @@ UElysiumTerminalProjection* UElysiumPresentationSubsystem::FindTerminalProjectio
 
 void UElysiumPresentationSubsystem::RedrawTerminalProjections(const FElysiumViewState& State)
 {
-	auto Consider = [this](const FElysiumTerminalView& View)
+	// The block cursor's blink, on REAL time: it is a screen animation on a monitor whose own think
+	// clock is the game's, and a paused game should not freeze a caret mid-blink. `GetRealTimeSeconds`
+	// is the same clock the weapon peek runs on, and a world-less publish simply holds phase 0.
+	const UWorld* BlinkWorld = GetWorld();
+	const float BlinkPhase = BlinkWorld
+		? static_cast<float>(FMath::Fmod(BlinkWorld->GetRealTimeSeconds()
+			* ElysiumTerminalPaint::BlinkHz, 1.0))
+		: 0.0f;
+	auto Consider = [this, BlinkPhase](const FElysiumTerminalView& View)
 	{
 		UElysiumTerminalProjection* Projection = FindTerminalProjection(View.Owner);
 		if (!Projection)
 		{
 			return;
 		}
+		// Set before the gate is asked: the blink is part of it.
+		Projection->SetBlinkPhase(BlinkPhase);
 		// The typed line belongs to the terminal the focused widget is bound to, and to no other
 		// glass on the map.
 		const FString& Draft = View.IsOpen() && TerminalDraftHandle == View.Owner

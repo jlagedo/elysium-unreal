@@ -22,6 +22,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumViewState.h"
+#include "UI/ElysiumTerminalProjection.h"
 #include "Debug/ElysiumScreenshot.h"
 #include "Debug/ElysiumWireDump.h"
 #include "ElysiumWireReport.h"
@@ -641,6 +642,42 @@ namespace ElysiumMcpImpl
 				// The overlay stack.
 				Anim->SetArrayField(TEXT("overlay_slots"), OverlayRows(Sel));
 				Out->SetObjectField(TEXT("animation"), Anim);
+			}
+		}
+
+		// The monitor's glass. The rest of the terminal diagnostic is authority state and comes back
+		// through `live_state`; the projection is the one half that CANNOT — it is a presentation
+		// object with a render target and a material instance, and the substrate never reaches it.
+		// A terminal whose screen shows nothing is either unbound (no `screen` material slot on the
+		// body), rendererless (a commandlet or `-nullrhi`), or drawing through the engine fallback
+		// because the authored material is missing, and those are three different repairs.
+		if (Entity.AsTerminal() != nullptr)
+		{
+			if (const UWorld* GameWorld = LiveWorld())
+			{
+				if (const UElysiumPresentationSubsystem* Presentation =
+					UElysiumPresentationSubsystem::Get(GameWorld))
+				{
+					TSharedRef<FJsonObject> Glass = Obj();
+					const UElysiumTerminalProjection* Projection =
+						Presentation->FindTerminalProjection(Entity.Handle);
+					Glass->SetBoolField(TEXT("registered"), Projection != nullptr);
+					if (Projection)
+					{
+						Glass->SetBoolField(TEXT("bound"), Projection->IsBound());
+						Glass->SetBoolField(TEXT("has_renderer"), Projection->HasRenderer());
+						Glass->SetBoolField(TEXT("authored_material"),
+							Projection->UsesAuthoredMaterial());
+						Glass->SetBoolField(TEXT("body_resident"), Projection->IsBodyResident());
+						Glass->SetBoolField(TEXT("calibration"), Projection->IsCalibrating());
+						Glass->SetStringField(TEXT("body"),
+							GetNameSafe(Projection->BoundBody()));
+						Glass->SetNumberField(TEXT("drawn_revision"), Projection->DrawnRevision);
+						Glass->SetNumberField(TEXT("draw_count"), Projection->DrawCount);
+						Glass->SetStringField(TEXT("drawn_draft"), Projection->DrawnDraft);
+					}
+					Out->SetObjectField(TEXT("terminal_projection"), Glass);
+				}
 			}
 		}
 

@@ -58,6 +58,35 @@ namespace ElysiumUI
 		inline const FLinearColor Scrim     = FLinearColor(0.0f, 0.0f, 0.0f, 0.55f);
 	}
 
+	// One computer terminal's glass, by `colorscheme` (`docs/project/plans/terminals.md`, slice D).
+	//
+	// `m_nColorScheme` (`DT_BaseTerminal+0x818`) is the index the retail rasterizer reads its four
+	// palette records at `0x10233378` with, clamped to `[0, 3]` at spawn. The INDEX is retail; the
+	// colours are **not** — the four records there are 2004 CRT values chosen against a CRT, and
+	// `docs/vtmb/computer-terminals.md` §6.4 records them without copying them. These four are the
+	// project's own, a named modernization, and every authored `colorscheme` still selects one of
+	// exactly four the way retail's does.
+	//
+	// The style bit (`0x80`) is the cell's own inverse-video switch, and retail's rasterizer XORs
+	// the foreground/background pair on it — so `Alternate*` is that pair swapped rather than a
+	// fifth and sixth colour. Bit SET is the resting style (`FElysiumTerminalScreenBuffer::
+	// DefaultStyle`), so a cleared bit is the reverse-video block.
+	struct FElysiumTerminalPalette
+	{
+		FLinearColor Background = FLinearColor::Black;
+		FLinearColor Foreground = FLinearColor::White;
+		// The block cursor. Its own token because a cursor that is exactly the foreground reads as a
+		// glyph on a phosphor screen; each palette lifts it.
+		FLinearColor Cursor = FLinearColor::White;
+		FLinearColor AlternateBackground = FLinearColor::White;
+		FLinearColor AlternateForeground = FLinearColor::Black;
+	};
+
+	// `colorscheme`, clamped to `[0, 3]`: 0 amber, 1 green, 2 cold white, 3 cyan. Out-of-range
+	// indices clamp rather than assert — the authority already clamps at spawn, and a projection
+	// carrying a stale view must still draw something.
+	const FElysiumTerminalPalette& TerminalPalette(int32 ColorScheme);
+
 	// Type ramp in virtual px. Sizes, not faces: the role/weight picks the face. Tuned against the
 	// reference captures rather than against VtMB's per-resolution `.fnt` tiers, which do not
 	// survive vector type.
@@ -88,12 +117,17 @@ namespace ElysiumUI
 	}
 }
 
-// Which of the three Nocturne families a piece of text belongs to (docs/architecture/ui-architecture.md).
+// Which of the Nocturne families a piece of text belongs to (docs/architecture/ui-architecture.md).
 enum class EElysiumFontRole : uint8
 {
 	Label,   // Spectral SC — small caps: menu items, sheet rows, HUD labels, headers
 	Body,    // Spectral    — running copy: signs, subtitles, descriptions
 	Data,    // Inter       — numerals and dense data, tabular figures
+	// Terminus — the character-cell grid on a computer terminal's glass, and nothing else. It is a
+	// bitmap-derived face with square outlines, so it is the only role whose faces are authored with
+	// the distance-field ppem raised (`pipeline/unreal/make_ui_fonts.py`); at the default ppem the
+	// MSDF rounds its corners and the 36x24 grid reads as a blur.
+	Mono,
 };
 
 enum class EElysiumFontWeight : uint8

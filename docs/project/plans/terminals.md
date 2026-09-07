@@ -81,29 +81,33 @@ under menus, `help`/`quit` under commands, prompt on row 22, bare input row 23) 
 prompt reproduces `04-password-failed.png` including the truncation; the HUD hint value is 3 on
 every password-prompt render and cleared on the next accepted line.
 
-**Slice D — the modern terminal render.** `M_ElysiumTerminalScreen` in `Content/ElysiumAuthored/`
-(unlit, emissive from one texture parameter, scalar strength, faint scanlines, vignette, slight
-curvature in UV space, `FlipU`/`FlipV`/`Rotate90`, a calibration-pattern debug draw) replacing the
-engine pass-through. Terminus (TTF) (already in `Content/Fonts`, `FF_TerminusTTF_Regular`/`_Bold`
-via `make_ui_fonts.py`) as a `Mono` role in the UI font library, MSDF with the distance-field ppem
-raised for its pixel-derived outlines; four terminal palettes keyed by `colorscheme` in the UI style tokens. A leaf cell-painter
-widget at fixed cell metrics with the style bit and a blinking block cursor while editing; the local
-draft is mirrored into the grid at the cursor. Clear colour set before the target initializes.
-*Acceptance:* projection tests on cell metrics and palette selection; Play-tier `shot`
-baselines on the terminal gym at 1080p and 4K showing the 36×24 grid crisp and inside the bezel,
-compared against `retail-shots/01-home-menu.png` for layout; UV orientation recorded per model
-from the calibration pattern read back off the render target.
+**Slice D — the modern terminal render (editor half).** Landed in C++ (2026-09-07): the four
+palettes keyed by `colorscheme` in the UI style tokens, the `Mono` font role on the Terminus faces,
+`SElysiumTerminalCells` (fixed cell metrics, style-bit inverse video, the blinking block cursor
+while the editor is open, the calibration pattern) painting the composed grid into the projection,
+`UElysiumTerminalScreenTuning` for per-model `FlipU`/`FlipV`/`Rotate90`, and `Bind` loading
+`/Game/ElysiumAuthored/UI/M_ElysiumTerminalScreen` with a named fallback to the engine
+pass-through (`Elysium.Substrate.Terminal.{CellMetrics,Palette,CellPaint,FontRole}`). Remaining:
+author `M_ElysiumTerminalScreen` in the editor (unlit, emissive from the `Screen` texture
+parameter, `EmissiveStrength`, faint scanlines, vignette, slight UV curvature, `FlipU`/`FlipV`/
+`Rotate90`, `UVDebug`; graph in `$ELYSIUM_WORK_ROOT/_terminal_explore/slice-ed-plan.md` §5), run
+`make_ui_fonts.py` for the Terminus distance-field settings, and the Play-tier `shot` baselines on
+the terminal gym at 1080p and 4K (grid crisp inside the bezel, layout against
+`retail-shots/01-home-menu.png`, UV orientation per model from the calibration pattern) —
+`-nullrhi` allocates no render target, so the picture is owner-piloted until 11.10.
 
-**Slice H — diagnostics and the gym beat script.** One read-only terminal diagnostic (owner, user,
-serial, file, directory, pending, mode, flags, revision, projection, camera handle, attempt, last
-command). Content test: `screen` slot and both attachments on every model a `prop_hacking`
-references across the export. The Play-tier beat script on the terminal gym, from injected real
-input: the screensaver label is on the glass before the first approach (`shot`); the pawn walks
-into the cone and presses E; the camera settles on `screen_axis` looking at `screen`; the logon
-box reads "Welcome, Jack."; `Safe`, `chopshop` (and a second run with Ctrl+C), `Unlock`, Enter,
-`quit`; the padlock unlocked then hidden by the authored rows; the safe opened and the keycard
-taken; the door knob opened with it; the previous view restored and the screensaver back on the
-glass. Each step is an `assert` on authority state or a `shot` against the baseline.
+**Slice H — the gym beat script (remaining half).** Landed: the read-only terminal diagnostic
+(`GetDebugState`, the `elysium_entity_get` `terminal_projection` block, the Cog inspector section),
+the content test on every `prop_hacking` model, and the native gym driver
+`Elysium.Content.TerminalGymBeat` (screensaver on the glass, the use edge into the session, the
+camera on the sockets, `Welcome, Jack.`, `Safe`/`chopshop`/`Unlock`/Enter/`quit` and the Ctrl+C
+run, padlock, keycard, knob, camera dropped, screensaver back). Remaining: the Play-tier beat
+script from injected real input with `shot` steps, when 11.10 lands, with the same assertions.
+
+**Loader caps (small follow-up).** `CPropHacking::LoadFromFile` caps every record field
+(`docs/vtmb/computer-terminals.md` §12 loader caps): the `Email` half is ported; the subdir /
+function / `brackets` (two characters) / `screen saver` / `email_*` caps and the two literal
+defaults (`description`, `runtext`) are recovered and not yet ported.
 
 *Deps:* 4.11, AUD2, 9.6, 11.4–11.8, and **11.10 for the gym beat script**. Until the Play tier
 lands, slices B–H are accepted on the terminal gym through a native automation test that spawns
@@ -111,5 +115,5 @@ the gym world, drives the same steps through the command bus and the intents, as
 state and reads the projection's render target back for the layout checks; the beat script
 replaces that driver when 11.10 lands, with the same assertions. The terminal gym builds on the
 movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0, A, B and C have
-landed (2026-09-07); D and H remain. Every acceptance is
+landed (2026-09-07); the editor half of D, the Play-tier half of H and the loader caps remain. Every acceptance is
 headless (the map slice) or on the terminal gym; nothing in this plan is accepted on a live map.

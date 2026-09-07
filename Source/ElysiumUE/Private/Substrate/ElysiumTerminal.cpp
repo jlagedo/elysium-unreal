@@ -100,12 +100,21 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 		}
 		if (Child.Key == TEXT("email"))
 		{
+			// `CPropHacking::LoadFromFile` `0x1021cba0`: every `Email` field is a `Q_strncpy` into a
+			// fixed record slot, and three of them carry a compiled-in DEFAULT rather than the empty
+			// string — so an `Email` block with no `subject` prints retail's stand-in on the glass
+			// and not a blank line. Both halves are content-visible and both are reproduced.
 			FElysiumTerminalEmail Email;
-			Email.Subject = Child.Value->Str(TEXT("subject"), FString());
-			Email.Sender = Child.Value->Str(TEXT("sender"), FString());
-			Email.Body = Child.Value->Str(TEXT("body"), FString());
-			Email.Dependency = Child.Value->Str(TEXT("dependency"), FString());
-			Email.RunScript = Child.Value->Str(TEXT("runscript"), FString());
+			Email.Subject = Child.Value->Str(TEXT("subject"),
+				ElysiumTerminalEmailCaps::DefaultSubject).Left(ElysiumTerminalEmailCaps::Subject);
+			Email.Sender = Child.Value->Str(TEXT("sender"),
+				ElysiumTerminalEmailCaps::DefaultSender).Left(ElysiumTerminalEmailCaps::Sender);
+			Email.Body = Child.Value->Str(TEXT("body"),
+				ElysiumTerminalEmailCaps::DefaultBody).Left(ElysiumTerminalEmailCaps::Body);
+			Email.Dependency = Child.Value->Str(TEXT("dependency"), FString())
+				.Left(ElysiumTerminalEmailCaps::Dependency);
+			Email.RunScript = Child.Value->Str(TEXT("runscript"), FString())
+				.Left(ElysiumTerminalEmailCaps::RunScript);
 			Email.bAutoDelete = Child.Value->Bool(TEXT("autodelete"), false);
 			Out.Emails.Add(MoveTemp(Email));
 		}
@@ -186,8 +195,27 @@ namespace ElysiumHackingStrings
 		return Strings;
 	}
 
+	// The test-only override, ahead of everything: a case that installs a table is asserting
+	// against THAT table, and a tree that happens to carry an export must not change its answers.
+	static TUniquePtr<FElysiumStrings> GInstalledForTests;
+
+	void InstallForTests(TArray<FString> Entries)
+	{
+		GInstalledForTests = MakeUnique<FElysiumStrings>();
+		GInstalledForTests->Groups.Add(TEXT("hacking_strings"), MoveTemp(Entries));
+	}
+
+	void ResetForTests()
+	{
+		GInstalledForTests.Reset();
+	}
+
 	static const FElysiumStrings& TableFor(const FElysiumEntityWorld* World)
 	{
+		if (GInstalledForTests)
+		{
+			return *GInstalledForTests;
+		}
 		UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
 		UElysiumRulebookSubsystem* Rulebook = GameState ? GameState->Rulebook() : nullptr;
 		return Rulebook ? Rulebook->Strings() : HeadlessStrings();
@@ -1120,14 +1148,34 @@ const TCHAR* FElysiumTerminal::SaveBlockReason() const
 void FElysiumTerminal::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
 	FElysiumSkillEntity::GetDebugState(Out);
+	// The owner is the machine itself. It reads redundant beside an inspector that already named
+	// the entity, and it is not: the terminal diagnostic is copied out of `elysium_entity_get` into
+	// bug reports, and a row set with no owner in it cannot be told from another terminal's.
+	Out.Emplace(TEXT("Terminal owner"), Handle.ToString());
 	Out.Emplace(TEXT("Terminal enabled"), bStartEnabled ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Terminal user"), CurrentUser.IsSet() ? CurrentUser.ToString() : TEXT("(none)"));
 	Out.Emplace(TEXT("Session serial"), FString::Printf(TEXT("%u"), SessionSerial));
 	Out.Emplace(TEXT("View revision"), FString::Printf(TEXT("%u"), ViewRevision));
 	Out.Emplace(TEXT("Grid"), FString::Printf(TEXT("%dx%d"), Screen.Columns(), Screen.Rows()));
-	Out.Emplace(TEXT("Hack flags"), FString::Printf(TEXT("0x%x"), HackFlags));
+	Out.Emplace(TEXT("Colour scheme"), FString::FromInt(ColorScheme));
+	Out.Emplace(TEXT("Hack flags"), FString::Printf(TEXT("0x%x (mode %d, maxinput %d)"),
+		HackFlags, static_cast<int32>(InputMode()), MaxInput));
 	Out.Emplace(TEXT("Cursor"), FString::Printf(TEXT("%d,%d"), Screen.CursorColumn(), Screen.CursorRow()));
-	Out.Emplace(TEXT("HUD hint"), FString::Printf(TEXT("%d (%d)"), HudHintType, HudHintValue));
+	// `+0xe88` and its origin: the client's line editor is the difference between a key that
+	// inserts and a key that is silently eaten, and nothing else on the screen shows it.
+	Out.Emplace(TEXT("Line editor"), IsLineEditActive()
+		? FString::Printf(TEXT("open at %d,%d (epoch %u)"), LineEditOriginColumn, LineEditOriginRow,
+			LineEditEpoch)
+		: FString::Printf(TEXT("closed (armed %s, epoch %u)"),
+			bLineEditArmed ? TEXT("stale") : TEXT("no"), LineEditEpoch));
+	// The timed skill attempt this terminal is running, if any: who, at what difficulty, and when
+	// the last cycle resolved. The base's rows carry the roll and the count; this names the window.
+	Out.Emplace(TEXT("Hack attempt"), AttemptUser.IsSet()
+		? FString::Printf(TEXT("%s at difficulty %d, last cycle %.2fs"), *AttemptUser.ToString(),
+			AttemptDifficulty(), LastAttemptSeconds)
+		: TEXT("(none)"));
+	Out.Emplace(TEXT("HUD hint"), FString::Printf(TEXT("%d (%d) \"%s\""), HudHintType, HudHintValue,
+		*HudHintLine()));
 	Out.Emplace(TEXT("Cues"), FString::FromInt(CueRels.Num()));
 	Out.Emplace(TEXT("Screen attachments"), bScreenAttachmentsResolved
 		? FString::Printf(TEXT("%s / %s"), *ScreenPointCm.ToCompactString(),
@@ -2495,10 +2543,32 @@ void FElysiumPropHacking::Serialize(FElysiumSaveArchive& Ar)
 void FElysiumPropHacking::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
 	FElysiumTerminal::GetDebugState(Out);
-	Out.Emplace(TEXT("Hack file"), HackFile);
-	Out.Emplace(TEXT("Current directory"), FString::FromInt(CurrentDirectory));
-	Out.Emplace(TEXT("Pending directory"), FString::FromInt(PendingDirectory));
+	Out.Emplace(TEXT("Hack file"), HackFile.IsEmpty() ? TEXT("(none)") : *HackFile);
+	// `-1` is the root and `-2` the mail area, which is the whole reason these are printed as their
+	// authored name and not only as an index.
+	auto DirectoryLabel = [this](int32 Index)
+	{
+		if (Index == INDEX_NONE) { return FString(TEXT("-1 root")); }
+		if (Index == MailArea) { return FString(TEXT("-2 mail")); }
+		return FString::Printf(TEXT("%d %s"), Index, Definition.Directories.IsValidIndex(Index)
+			? *Definition.Directories[Index].Name : TEXT("(out of range)"));
+	};
+	Out.Emplace(TEXT("Current directory"), DirectoryLabel(CurrentDirectory));
+	Out.Emplace(TEXT("Pending directory"), DirectoryLabel(PendingDirectory));
 	Out.Emplace(TEXT("Input mode"), FString::FromInt(static_cast<int32>(InputMode())));
+	// Per-directory `m_SubDirAttempts`, which is what the difficulty escalation reads.
+	{
+		TArray<FString> Attempts;
+		for (int32 Index = 0; Index < Definition.Directories.Num(); ++Index)
+		{
+			Attempts.Add(FString::Printf(TEXT("%s=%d/%s"), *Definition.Directories[Index].Name,
+				DirectoryAttempts.IsValidIndex(Index) ? DirectoryAttempts[Index] : -1,
+				(DirectoryUnlocked.IsValidIndex(Index) && DirectoryUnlocked[Index] != 0)
+					? TEXT("unlocked") : TEXT("locked")));
+		}
+		Out.Emplace(TEXT("Directories"), Attempts.Num()
+			? FString::Join(Attempts, TEXT(", ")) : TEXT("(none)"));
+	}
 	Out.Emplace(TEXT("Crack buffer"), CrackBuffer.IsEmpty() ? TEXT("(none)") : *CrackBuffer);
 	Out.Emplace(TEXT("Reprint prompt"), bReprintPrompt ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Email unlocked"), bEmailUnlocked ? TEXT("yes") : TEXT("no"));

@@ -28,6 +28,8 @@
 #include "Serialization/MemoryWriter.h"
 #include "Substrate/ElysiumTerminal.h"
 #include "Tests/ElysiumTestServices.h"
+#include "UI/ElysiumTerminalCells.h"
+#include "UI/SElysiumTerminalInput.h"
 
 namespace ElysiumTerminalEmailTests
 {
@@ -59,7 +61,12 @@ public:
 	virtual const TCHAR* Name() const override { return TEXT("mail-sentinel"); }
 };
 
-static UElysiumGameStateSubsystem* MakeHeadlessGameState()
+// The `Mail` prefix is unity-blob safety, the same reason `MailBoxRule` / `MailBoxRow` carry it
+// below: `ElysiumTerminalRouterTests.cpp` declares an identically named helper in its own namespace
+// and both files put a file-scope `using namespace` over it, so the two go ambiguous the moment the
+// build merges them into one translation unit — which it does, and which the blob composition
+// decides, so adding an unrelated test file is enough to trip it.
+static UElysiumGameStateSubsystem* MailHeadlessGameState()
 {
 	UGameInstance* GameInstance = NewObject<UGameInstance>(GetTransientPackage());
 	return NewObject<UElysiumGameStateSubsystem>(GameInstance);
@@ -151,6 +158,83 @@ static FString MailBoxRow(int32 Columns, const FString& Text, int32 Margin)
 	return TEXT(" ") + Row;
 }
 
+// A `Hacking_Strings` table for the headless resolver.
+//
+// It is a project FIXTURE, not a copy of the shipped localization: what matters is the table's
+// SHAPE, because that is what the mail router reads. Every mail command is
+// `Q_strnicmp(line, Hacking_Strings[i] + 1, 1)` — the SECOND byte of the localized word, which is
+// the letter inside the brackets of `"[n]ext"` — so a table whose entries are not bracketed makes
+// the five hotkeys indistinguishable. With no table at all `FUN_10219400` hands back the compiled
+// key names and all five collapse onto `T` (`"STRING_NEXT_CMD"[1]`), which is a real retail
+// degradation but leaves nothing to assert; installing this one is what makes the mail cases run
+// on every tree instead of only on one with the export mounted.
+static TArray<FString> MailStringTable()
+{
+	TArray<FString> Table;
+	Table.SetNum(48);
+	Table[0] = TEXT("Press CTRL-C to use the Hacking feat");
+	Table[1] = TEXT("Changing to %s");
+	Table[2] = TEXT("Available menus");
+	Table[3] = TEXT("Available commands");
+	Table[4] = TEXT("No commands");
+	Table[5] = TEXT("Invalid command");
+	Table[6] = TEXT("Type \"list\" for a list");
+	Table[7] = TEXT("Type \"help\" for help");
+	Table[8] = TEXT("Type a menu name to enter it");
+	Table[9] = TEXT("Type a command to run it");
+	Table[10] = TEXT("Type \"home\" for the main menu");
+	Table[11] = TEXT("Type \"quit\" to log off");
+	Table[12] = TEXT("LOGON");
+	Table[13] = TEXT("\n%s %c%s%c\n\n");
+	Table[14] = TEXT("Password required");
+	Table[15] = TEXT("PASSWORD FAILED");
+	Table[16] = TEXT("Password accepted");
+	Table[17] = TEXT("home");
+	Table[18] = TEXT("[Press \"ENTER\" to continue]");
+	Table[19] = TEXT("Access granted");
+	Table[20] = TEXT("HELP");
+	Table[21] = TEXT("[Press \"ENTER\" to go back]");
+	Table[22] = TEXT("From");
+	Table[23] = TEXT("Subject");
+	// The five bracketed hotkey words. The bracket is not decoration: the letter inside it is the
+	// byte the router compares.
+	Table[24] = TEXT("[n]ext");
+	Table[25] = TEXT("[p]rev");
+	Table[26] = TEXT("[d]elete");
+	Table[27] = TEXT("[m]enu");
+	Table[28] = TEXT("[q]uit");
+	Table[29] = TEXT("Inbox for");
+	Table[30] = TEXT("email");
+	Table[31] = TEXT("%d messages, %d unread");
+	Table[32] = TEXT("Logging off");
+	Table[33] = TEXT("quit");
+	Table[34] = TEXT("help");
+	Table[35] = TEXT("list");
+	Table[36] = TEXT("email");
+	Table[37] = TEXT("Difficulty ");
+	Table[38] = TEXT("Skill too low at difficulty ");
+	Table[39] = TEXT("Mail password: %s");
+	Table[40] = TEXT("Making hack attempt at skill ");
+	Table[41] = TEXT("Current menu");
+	Table[42] = TEXT("Type menu or command:");
+	Table[43] = TEXT("Home menu");
+	Table[44] = TEXT("Menu");
+	// 45-47 are the three list footers, the only indices `FUN_10219400` leaves NULL.
+	Table[45] = TEXT("%d msgs, %d to %d");
+	Table[46] = TEXT("%s / %s to page");
+	Table[47] = TEXT("%s to exit");
+	return Table;
+}
+
+// Installed for the length of one case and removed on every exit path, including the early
+// `return false`s: the resolver is a process-wide static and a leaked table would silently rewrite
+// every other terminal case's copy.
+struct FMailStringScope
+{
+	FMailStringScope() { ElysiumHackingStrings::InstallForTests(MailStringTable()); }
+	~FMailStringScope() { ElysiumHackingStrings::ResetForTests(); }
+};
+
 // One `prop_hacking` def, so the fixtures below differ only in name and `global_email`.
 static FElysiumEntityDef TerminalDef(const TCHAR* Name, bool bGlobalEmail)
 {
@@ -172,8 +256,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalEmailTest,
 bool FElysiumTerminalEmailTest::RunTest(const FString&)
 {
 	using namespace ElysiumHackingStrings;
+	const FMailStringScope Strings;
 
-	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	UElysiumGameStateSubsystem* State = MailHeadlessGameState();
 	TUniquePtr<FElysiumMailScriptHost> OwnedHost = MakeUnique<FElysiumMailScriptHost>();
 	FElysiumMailScriptHost* Host = OwnedHost.Get();
 	State->SetScriptHost(MoveTemp(OwnedHost));
@@ -222,13 +307,18 @@ bool FElysiumTerminalEmailTest::RunTest(const FString&)
 	const FString KeyMenu = Letter(MenuCmd);
 	const FString KeyQuit = Letter(QuitCmd);
 	{
-		TSet<FString> Distinct = { KeyNext, KeyPrev, KeyDel, KeyMenu, KeyQuit };
-		if (Distinct.Num() != 5 || Distinct.Contains(FString()))
+		// With the fixture table installed this is deterministic on every tree — it is the reason
+		// the table is installed at all, and it is asserted rather than abstained on.
+		const TSet<FString> Distinct = { KeyNext, KeyPrev, KeyDel, KeyMenu, KeyQuit };
+		if (!TestEqual(TEXT("the installed table gives five distinct mail hotkeys"),
+			Distinct.Num(), 5) || !TestFalse(TEXT("and none of them is empty"),
+			Distinct.Contains(FString())))
 		{
-			AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: Hacking_Strings resolves no distinct mail hotkeys ")
-				TEXT("(the compiled key names collapse all five onto 'T')"));
-			return true;
+			return false;
 		}
+		TestEqual(TEXT("the hotkey letter is the SECOND byte of the bracketed word"), KeyNext,
+			FString(TEXT("n")));
+		TestEqual(TEXT("...for delete too"), KeyDel, FString(TEXT("d")));
 	}
 
 	// --- the gate: the `email` builtin only matches when the record count is non-zero ------------
@@ -610,6 +700,195 @@ bool FElysiumTerminalEmailTest::RunTest(const FString&)
 	TestEqual(TEXT("under its own exact name"), PlayerEntity->GlobalEmail[1].Name,
 		TEXT("haven_pc2"));
 	World.EndPlayerUseSession(HavenC->Handle, EElysiumUseEndReason::Released);
+
+	// --- **no create-on-store**: the hole retail leaves and warns about --------------------------
+	// `CBasePlayer::StoreGlobalEmailFlags` `0x1016f0f0` looks the record up and, on a miss, warns
+	// and writes NOTHING. It never creates. Retrieve always runs first at OnUseBegin, so the hole
+	// is unreachable through the entry/exit pair — but the accessor is public state and a caller
+	// that skipped the entry would silently lose the flags, so the arm is proven directly.
+	{
+		const int32 Before = PlayerEntity->GlobalEmail.Num();
+		TArray<int32> Flags;
+		Flags.SetNumZeroed(FElysiumPropHacking::EmailFlagCount);
+		Flags[0] = FElysiumPropHacking::EmailFlagRead;
+		PlayerEntity->StoreGlobalEmailFlags(TEXT("never_retrieved"), Flags);
+		TestEqual(TEXT("storing under an unknown terminal name creates no record"),
+			PlayerEntity->GlobalEmail.Num(), Before);
+		TestFalse(TEXT("and the flags are simply lost, as retail loses them"),
+			PlayerEntity->GlobalEmail.ContainsByPredicate(
+				[](const FElysiumGlobalEmailRecord& Record)
+				{ return Record.Name == TEXT("never_retrieved"); }));
+	}
+
+	// --- the 128-flag cap: mail 129 and up are permanently unread and undeletable -----------------
+	// `m_EmailFlags` is `DEFINE_ARRAY(FIELD_INTEGER, 128)` while the record vector is unbounded, and
+	// all four accessors answer FALSE out of range rather than clamping (`XOR AL,AL` at
+	// `0x1021a4d3`). The visible consequence is not the flag: it is the `runscript`, which
+	// `MailOpen` fires whenever the read bit is CLEAR — so a mail past the cap re-runs its script on
+	// every single open, forever.
+	{
+		FElysiumTerminalDefinition Big;
+		Big.Brackets = TEXT("[]");
+		Big.EmailUsername = TEXT("Noa");
+		// No `email_password`, which is also the straight-in branch asserted just below.
+		for (int32 Index = 0; Index < 130; ++Index)
+		{
+			FElysiumTerminalEmail Mail;
+			Mail.Subject = FString::Printf(TEXT("Big%03d"), Index);
+			Mail.Sender = TEXT("bulk");
+			Mail.Body = TEXT("Body.");
+			Big.Emails.Add(MoveTemp(Mail));
+		}
+		Big.Emails[128].RunScript = TEXT("SCRIPT:past_the_cap");
+		Big.Emails[5].RunScript = TEXT("SCRIPT:inside_the_cap");
+		Terminal->InstallDefinition(MoveTemp(Big));
+		TestEqual(TEXT("installing a 130-record definition still leaves exactly 128 flags"),
+			Terminal->EmailFlags.Num(), FElysiumPropHacking::EmailFlagCount);
+		// `InstallDefinition` RESIZES the flag array and never clears it — retail's loader runs once
+		// at Spawn and the flags are saved state, so nothing in the module zeroes them on a content
+		// swap. The two records this case deleted above would otherwise stay deleted under the new
+		// definition and hide two of the 130.
+		Terminal->EmailFlags.Reset();
+		Terminal->EmailFlags.SetNumZeroed(FElysiumPropHacking::EmailFlagCount);
+
+		World.BeginPlayerUseSession(Terminal->Handle, Player);
+		Serial = Terminal->SessionSerial;
+		// An EMPTY `email_password` is the straight-in branch: `FUN_1021aaa0` enters the mail area
+		// without a prompt, so the very next thing on the glass is the acknowledged entry screen.
+		TestTrue(TEXT("`email` is accepted with an empty email_password"),
+			Submit(Get(&World, Email)));
+		TestNotEqual(TEXT("an empty email_password never prompts"), Terminal->InputMode(),
+			EElysiumTerminalInputMode::Password);
+		TestEqual(TEXT("it goes straight into the mail area"), Terminal->CurrentDirectory,
+			FElysiumPropHacking::MailArea);
+		TestTrue(TEXT("and entry still sets m_bEmailUnlocked"), Terminal->bEmailUnlocked);
+		Submit(FString());   // the acknowledgement, which draws the list
+		TestEqual(TEXT("all 130 records are visible"), Terminal->MailVisible.Num(), 130);
+
+		// The list arm's `atoi` is one-based over the VISIBLE table and `MailOpen` clamps by row,
+		// not by page — so a row on page 13 opens from page 0 without paging to it.
+		TestEqual(TEXT("nothing has run the past-the-cap script yet"),
+			Host->Calls.FindRef(TEXT("SCRIPT:past_the_cap")), 0);
+		TestTrue(TEXT("row 129 is accepted"), Submit(TEXT("129")));
+		TestEqual(TEXT("and opens record 128"), Terminal->MailOpenIndex, 128);
+		TestFalse(TEXT("but record 128 is past the 128-flag array and stays UNREAD"),
+			Terminal->IsEmailRead(128));
+		TestEqual(TEXT("so its runscript fired"),
+			Host->Calls.FindRef(TEXT("SCRIPT:past_the_cap")), 1);
+		Submit(KeyMenu);
+		Submit(TEXT("129"));
+		TestEqual(TEXT("and fires AGAIN on the next open, because the read bit never took"),
+			Host->Calls.FindRef(TEXT("SCRIPT:past_the_cap")), 2);
+		// `[d]elete` on it is equally inert: `MailDelete` passes the record-count bound and the
+		// accessor then drops the write on the floor.
+		TestTrue(TEXT("the delete hotkey is accepted on a record past the cap"), Submit(KeyDel));
+		TestFalse(TEXT("but record 128 cannot be deleted either"), Terminal->IsEmailDeleted(128));
+		TestEqual(TEXT("so it is still listed"), Terminal->MailVisible.Num(), 130);
+
+		// A record INSIDE the cap behaves the other way, which is what makes the cap the cause.
+		Submit(TEXT("6"));
+		TestEqual(TEXT("row 6 opens record 5"), Terminal->MailOpenIndex, 5);
+		TestTrue(TEXT("which is inside the array and reads"), Terminal->IsEmailRead(5));
+		TestEqual(TEXT("firing its script once"),
+			Host->Calls.FindRef(TEXT("SCRIPT:inside_the_cap")), 1);
+		Submit(KeyMenu);
+		Submit(TEXT("6"));
+		TestEqual(TEXT("and never again"),
+			Host->Calls.FindRef(TEXT("SCRIPT:inside_the_cap")), 1);
+
+		// --- `MailDelete`'s own record-count bound -------------------------------------------------
+		// `FUN_1021bbf0` guards on the RECORD count before the accessor's 128 guard, so an index
+		// past the definition writes nothing at all — including the negative "no message open".
+		const TArray<int32> FlagsBefore = Terminal->EmailFlags;
+		Terminal->MailDelete(130);      // one past the record count
+		Terminal->MailDelete(9999);
+		Terminal->MailDelete(INDEX_NONE);   // the "no message open" sentinel
+		TestTrue(TEXT("an out-of-record-range delete leaves every flag byte alone"),
+			Terminal->EmailFlags == FlagsBefore);
+		Terminal->MailDelete(7);
+		TestTrue(TEXT("while an in-range one takes"), Terminal->IsEmailDeleted(7));
+
+		// --- single-key `q` from the OPEN state goes to the root directory -------------------------
+		// The open arm demands `Line.Len() == 1`, and `[q]uit` there is `EnterDirectory(-1)` — the
+		// same call the list arm's `[q]uit` makes. The four-byte `hackcmd quit` the client sends for
+		// ESC misses the length test and lands on the list instead, which is the case above.
+		Submit(KeyMenu);
+		// Record 7 is deleted by now, so visible row 9 is NOT record 8 — the table is renumbered on
+		// every draw and the row is read off it rather than assumed.
+		Submit(TEXT("9"));
+		if (TestTrue(TEXT("the visible table still holds nine rows"), Terminal->MailVisible.Num() > 8))
+		{
+			TestEqual(TEXT("a message is open for the single-key quit case"),
+				Terminal->MailOpenIndex, Terminal->MailVisible[8]);
+		}
+		TestTrue(TEXT("the single-key quit is accepted in the open state"), Submit(KeyQuit));
+		TestEqual(TEXT("and leaves the mail area for the root directory"),
+			Terminal->CurrentDirectory, INDEX_NONE);
+		// `[q]uit` from the open state is `EnterDirectory(-1)`, and `FUN_1021c890` does not touch
+		// `+0x9f4` — only `FUN_1021c040`'s first statement does. So the open-message index is left
+		// STALE on the way out, which is harmless because re-entering the mail area always draws
+		// the list and that draw is what clears it. Ported, not tidied.
+		TestTrue(TEXT("leaving the mail area does NOT clear the open-message index"),
+			Terminal->MailOpenIndex != INDEX_NONE);
+		FElysiumTerminalView StillOpen;
+		TestTrue(TEXT("without ending the session"), World.BuildTerminalView(StillOpen));
+
+		// --- the raw-mode local echo (`FUN_100c6d50` has no `0x4` test) -----------------------------
+		// An open message runs in single-key mode, and the client's CHARACTER body has no raw-mode
+		// arm at all: the byte goes out as `hackcmd %c` AND into the client's own line, and the
+		// local re-render puts it on the glass over the command it just sent. The keyboard leaf is
+		// driven here directly against the live view, so the composition asserted is the one the
+		// projection paints.
+		Submit(Get(&World, Email));
+		Submit(FString());
+		TestEqual(TEXT("and the list draw on the way back in is what clears the stale index"),
+			Terminal->MailOpenIndex, INDEX_NONE);
+		Submit(TEXT("2"));
+		TestEqual(TEXT("the open message is raw single-key mode"), Terminal->InputMode(),
+			EElysiumTerminalInputMode::Raw);
+		FElysiumTerminalView RawView;
+		if (TestTrue(TEXT("and the session publishes a view"), World.BuildTerminalView(RawView)))
+		{
+			int32 Sent = 0;
+			FString SentText;
+			const TSharedRef<SElysiumTerminalInput> Keyboard = SNew(SElysiumTerminalInput)
+				.OnSubmitCharacter(SElysiumTerminalInput::FElysiumTerminalCharDelegate::
+					CreateLambda([&Sent, &SentText](TCHAR Character)
+					{
+						++Sent;
+						SentText.AppendChar(Character);
+						return true;
+					}));
+			Keyboard->SetSession(RawView);
+			Keyboard->OnKeyChar(FGeometry(),
+				FCharacterEvent(KeyNext[0], FModifierKeysState(), 0, false));
+			TestEqual(TEXT("the keypress went out as one hackcmd %c"), Sent, 1);
+			TestEqual(TEXT("carrying the hotkey letter"), SentText, KeyNext);
+			TestEqual(TEXT("and the SAME byte was echoed into the local line"), Keyboard->Draft(),
+				KeyNext);
+			// ...and it is genuinely on the glass, at the edit origin the open-message draw left.
+			const ElysiumTerminalCells::FElysiumTerminalComposed Composed =
+				ElysiumTerminalCells::ComposeDraft(RawView, Keyboard->Draft());
+			TestTrue(TEXT("composed onto the monitor's cells"), Composed.bDraftDrawn);
+			TestEqual(TEXT("at the edit origin"),
+				FString::Chr(Composed.CharAt(RawView.EditOriginColumn, RawView.EditOriginRow)),
+				KeyNext);
+
+			// The authority's answer is the list redraw, and its print closes the client's editor
+			// and moves the epoch — which is the only thing that ends the echo.
+			TestTrue(TEXT("the authority answers the hotkey"), Submit(KeyNext));
+			FElysiumTerminalView Answered;
+			if (TestTrue(TEXT("and republishes"), World.BuildTerminalView(Answered)))
+			{
+				TestNotEqual(TEXT("the redraw moved the edit epoch"), Answered.EditEpoch,
+					RawView.EditEpoch);
+				Keyboard->SetSession(Answered);
+				TestTrue(TEXT("so the echoed key is gone from the local line"),
+					Keyboard->Draft().IsEmpty());
+			}
+		}
+		World.EndPlayerUseSession(Terminal->Handle, EElysiumUseEndReason::Released);
+	}
 	return true;
 }
 
@@ -642,7 +921,7 @@ bool FElysiumTerminalEmailContentTest::RunTest(const FString&)
 		Definition.Emails.ContainsByPredicate(
 			[](const FElysiumTerminalEmail& Record) { return Record.bAutoDelete; }));
 
-	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	UElysiumGameStateSubsystem* State = MailHeadlessGameState();
 	State->SetScriptHost(MakeUnique<FElysiumExprScriptHost>(State));
 
 	FElysiumEntityDefs Defs;
