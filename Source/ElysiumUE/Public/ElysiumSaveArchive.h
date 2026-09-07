@@ -45,6 +45,7 @@ FArchive& operator<<(FArchive& Ar, ElysiumRng::FState& S);
 FArchive& operator<<(FArchive& Ar, FElysiumSheet& S);
 FArchive& operator<<(FArchive& Ar, FElysiumXpEntry& E);
 FArchive& operator<<(FArchive& Ar, FElysiumAssignedQuest& Q);
+FArchive& operator<<(FArchive& Ar, FElysiumGlobalEmailRecord& R);
 FArchive& operator<<(FArchive& Ar, FElysiumLawState& L);
 FArchive& operator<<(FArchive& Ar, FElysiumPoliceState& P);
 FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R);

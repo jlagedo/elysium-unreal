@@ -186,14 +186,29 @@ namespace ElysiumHackingStrings
 		return Strings;
 	}
 
+	static const FElysiumStrings& TableFor(const FElysiumEntityWorld* World)
+	{
+		UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+		UElysiumRulebookSubsystem* Rulebook = GameState ? GameState->Rulebook() : nullptr;
+		return Rulebook ? Rulebook->Strings() : HeadlessStrings();
+	}
+
 	FString Get(const FElysiumEntityWorld* World, int32 Index)
 	{
 		static const FString Group(TEXT("hacking_strings"));
 		const FString Fallback(KeyName(Index));
-		UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
-		UElysiumRulebookSubsystem* Rulebook = GameState ? GameState->Rulebook() : nullptr;
-		const FElysiumStrings& Table = Rulebook ? Rulebook->Strings() : HeadlessStrings();
-		return Table.At(Group, Index, Fallback);
+		return TableFor(World).At(Group, Index, Fallback);
+	}
+
+	FString GetOrEmpty(const FElysiumEntityWorld* World, int32 Index)
+	{
+		// Indices 45/46/47 are the only ones `FUN_10219400` leaves NULL: retail then hands
+		// `Q_vsnprintf` a NULL format and the row is whatever the CRT does with that. The port
+		// cannot reproduce a crash hazard, so a missing entry prints NOTHING — the named seam is
+		// that a `Hacking_Strings` table without those three entries draws three blank footer rows
+		// instead of retail's undefined behaviour.
+		static const FString Group(TEXT("hacking_strings"));
+		return TableFor(World).At(Group, Index, FString());
 	}
 }
 
@@ -1119,6 +1134,42 @@ namespace
 		return FString();
 	}
 
+	// C's `atoi`, which is what the mail router runs on the WHOLE line (`0x1021b9c0`): leading
+	// whitespace, an optional sign, then digits, stopping at the first byte that is not one — so
+	// `12abc` is 12 and `nonsense` is 0. Overflow is undefined in C and wraps on MSVC; the
+	// accumulator here is 64-bit and truncates, which lands in the same place. The range test in
+	// the caller, not this, is what catches an out-of-range number.
+	int32 TerminalAtoi(const FString& Line)
+	{
+		int32 At = 0;
+		while (At < Line.Len() && FChar::IsWhitespace(Line[At]))
+		{
+			++At;
+		}
+		int64 Sign = 1;
+		if (At < Line.Len() && (Line[At] == TEXT('-') || Line[At] == TEXT('+')))
+		{
+			Sign = Line[At] == TEXT('-') ? -1 : 1;
+			++At;
+		}
+		int64 Value = 0;
+		for (; At < Line.Len() && FChar::IsDigit(Line[At]); ++At)
+		{
+			Value = Value * 10 + (Line[At] - TEXT('0'));
+		}
+		return static_cast<int32>(Sign * Value);
+	}
+
+	// `Q_strnicmp(line, FUN_10219400(i) + 1, 1)`: ONE character, case-insensitive, against the
+	// **second** byte of the localized word. The shipped words are bracketed (`"[n]ext"`), so
+	// `word[1]` is the hotkey letter. A word shorter than two characters has no letter to offer and
+	// matches nothing — which is also what the empty-table case degenerates to.
+	bool MatchesHotkey(const FString& Word, const FString& Line)
+	{
+		return Word.Len() > 1 && !Line.IsEmpty()
+			&& FChar::ToLower(Line[0]) == FChar::ToLower(Word[1]);
+	}
+
 	FString FirstUpper(const FString& Name)
 	{
 		if (Name.IsEmpty())
@@ -1188,10 +1239,353 @@ bool FElysiumPropHacking::DependencyPasses(const FString& Source) const
 		|| (World && World->EvalCondition(Source, Handle, CurrentUser).IsPythonCheckTrue());
 }
 
+// --- the mail state (§12) ---
+
+bool FElysiumPropHacking::IsEmailRead(int32 Index) const
+{
+	// `FUN_1021a4b0`: `if (0 <= i && i < 0x80) return (flags[i] & 1) == 1; return false;` — out of
+	// range answers FALSE (`XOR AL,AL` at `0x1021a4d3`), it does not clamp.
+	return EmailFlags.IsValidIndex(Index) && (EmailFlags[Index] & EmailFlagRead) != 0;
+}
+
+bool FElysiumPropHacking::IsEmailDeleted(int32 Index) const
+{
+	// `FUN_1021a4f0`, the same shape on bit `0x2`.
+	return EmailFlags.IsValidIndex(Index) && (EmailFlags[Index] & EmailFlagDeleted) != 0;
+}
+
+void FElysiumPropHacking::SetEmailRead(int32 Index)
+{
+	// `FUN_1021a530`. Set-only: there is no clear accessor in the module.
+	if (EmailFlags.IsValidIndex(Index))
+	{
+		EmailFlags[Index] |= EmailFlagRead;
+	}
+}
+
+void FElysiumPropHacking::SetEmailDeleted(int32 Index)
+{
+	// `FUN_1021a560`.
+	if (EmailFlags.IsValidIndex(Index))
+	{
+		EmailFlags[Index] |= EmailFlagDeleted;
+	}
+}
+
+void FElysiumPropHacking::RebuildMailIndex()
+{
+	// `FUN_1021bd80`: purge the vector, then append every record that is neither deleted nor
+	// dependency-hidden, in record order. It is called from the list draw AND from the directory
+	// draw (for the unread count), so the numbering is rebuilt whenever either is drawn — a
+	// dependency that flips while the terminal is open renumbers the inbox under the player.
+	//
+	// It never re-clamps the page (`+0xa0c`): deleting the last row of the last page leaves the
+	// player on an empty page until they press `[p]rev`. Retail off-by-one, ported as-is.
+	MailVisible.Reset();
+	for (int32 Index = 0; Index < Definition.Emails.Num(); ++Index)
+	{
+		if (IsEmailDeleted(Index))
+		{
+			continue;
+		}
+		// `FUN_1021bec0`: an empty dependency passes; otherwise `CallPyDialogFunc(dep, ..., 0x102)`
+		// with the session's player as the activator — the same gate a directory's takes.
+		if (!DependencyPasses(Definition.Emails[Index].Dependency))
+		{
+			continue;
+		}
+		MailVisible.Add(Index);
+	}
+}
+
 int32 FElysiumPropHacking::UnreadEmailCount() const
 {
-	// Slice G: the per-email read flags (`m_EmailFlags` bit 0x1). Until then every email is unread.
-	return Definition.Emails.Num();
+	// `0x1021ace9`: unread among the freshly rebuilt VISIBLE table, not among the raw records.
+	int32 Unread = 0;
+	for (const int32 Real : MailVisible)
+	{
+		if (!IsEmailRead(Real))
+		{
+			++Unread;
+		}
+	}
+	return Unread;
+}
+
+void FElysiumPropHacking::MailListDraw()
+{
+	// `FUN_1021c040`.
+	using namespace ElysiumHackingStrings;
+	// `0x1021c049`: leaving the open-message state is the FIRST thing the list draw does, which is
+	// why every router miss lands back on the inbox.
+	MailOpenIndex = INDEX_NONE;
+	RebuildMailIndex();
+	const int32 Count = MailVisible.Num();
+
+	// `UTIL_VarArgs("%s %s", string 29, email_username)` -> the framed title box.
+	const FString Title = ElysiumTerminalFormat(TEXT("%s %s"),
+		{ HackingString(EmailTitleBar), Definition.EmailUsername });
+	TitleBox(&Title, Definition.LogonLines);
+
+	const int32 First = MailPage * 10;
+	int32 Drawn = 0;
+	for (int32 At = First; At < Count && Drawn < 10; ++At, ++Drawn)
+	{
+		const int32 Real = MailVisible[At];
+		// `"[%d]"` (`0x105b06ac`) with the ONE-BASED on-screen row number.
+		const FString Number = ElysiumTerminalFormat(TEXT("[%d]"),
+			{ FElysiumTerminalArg::Num(At + 1) });
+		if (!IsEmailRead(Real))
+		{
+			// Entity message type 6 (client style byte `0x00`) before the bracketed number and type
+			// 5 (`0x80`) after. The rasterizer XORs the glyph on bit 7, so **bit 7 clear is reverse
+			// video**: an unread row's `[N]` is inverted and the subject after it is not.
+			ScreenStyleAlternate();
+			ScreenPrint(Number);
+			ScreenStyleDefault();
+		}
+		else
+		{
+			ScreenPrint(Number);
+		}
+		// `"%s\n"` (`0x1053e080`) with `record + 0x00`, the subject.
+		ScreenPrint(ElysiumTerminalFormat(TEXT("%s\n"), { Definition.Emails[Real].Subject }));
+	}
+
+	// The three footer rows, pinned to `rows-3 / rows-2 / rows-1` at column 0. Their formats are
+	// the three `Hacking_Strings` entries with no compiled-in fallback, so they resolve through
+	// `GetOrEmpty` and an absent entry draws a blank row.
+	ScreenSetCursor(0, Screen.Rows() - 3);
+	ScreenPrint(ElysiumTerminalFormat(GetOrEmpty(World, MailListCount),
+		{ FElysiumTerminalArg::Num(Count), FElysiumTerminalArg::Num(First + 1),
+		  FElysiumTerminalArg::Num(Drawn + First) }));
+	ScreenSetCursor(0, Screen.Rows() - 2);
+	ScreenPrint(ElysiumTerminalFormat(GetOrEmpty(World, MailListMore),
+		{ HackingString(NextCmd), HackingString(PrevCmd) }));
+	ScreenSetCursor(0, Screen.Rows() - 1);
+	ScreenPrint(ElysiumTerminalFormat(GetOrEmpty(World, MailListExit),
+		{ HackingString(QuitCmd) }));
+	// `FUN_10219120`: type 3 and `m_HackFlags &= ~(1|4)` — back to the line editor, which is what
+	// makes the list a typed prompt while an open message is one key per press.
+	EnterLineEdit();
+}
+
+void FElysiumPropHacking::MailRender()
+{
+	// `FUN_1021c260`.
+	using namespace ElysiumHackingStrings;
+	if (!Definition.Emails.IsValidIndex(MailOpenIndex))
+	{
+		return;
+	}
+	const FElysiumTerminalEmail& Record = Definition.Emails[MailOpenIndex];
+	// `FUN_10218db0` is the type-4 clear and nothing else: no title box and no type 7, so the (1,1)
+	// margins the last title box set stand for the whole message.
+	ScreenClear();
+	// `"\n\n(%s) %s\n"` (`0x105b06e0`) then `"(%s) %s\n\n\n"` (`0x105b06d0`) — the parentheses are
+	// the format's, not the data's, so retail's `Subject:` header renders as `(Subject:) <text>`.
+	ScreenPrint(ElysiumTerminalFormat(TEXT("\n\n(%s) %s\n"),
+		{ HackingString(SubjectHeader), Record.Subject }));
+	ScreenPrint(ElysiumTerminalFormat(TEXT("(%s) %s\n\n\n"),
+		{ HackingString(FromHeader), Record.Sender }));
+	// `0x1021c2e2` prints the body as ONE type-2 message with the body itself **as the format
+	// string**, so authored newlines pass through and an authored `%` is a retail formatting
+	// hazard — the same contract a Function's `runtext` has. The wrap is the screen buffer's.
+	ScreenPrint(ElysiumTerminalFormat(Record.Body));
+	ScreenSetCursor(0, Screen.Rows() - 2);
+	// `"%s, %s, %s, %s, %s: "` (`0x105b06b4`) — `[n]ext, [p]rev, [d]elete, [m]enu, [q]uit: `.
+	ScreenPrint(ElysiumTerminalFormat(TEXT("%s, %s, %s, %s, %s: "),
+		{ HackingString(NextCmd), HackingString(PrevCmd), HackingString(DelCmd),
+		  HackingString(MenuCmd), HackingString(QuitCmd) }));
+	// The tail is `FUN_10219240`, NOT the acknowledge helper: an open message runs in single-key
+	// mode (`m_HackFlags |= 4`), so the client sends `hackcmd %c` per keypress.
+	EnterRawCharacter();
+}
+
+void FElysiumPropHacking::MailOpen(int32 VisibleRow)
+{
+	// `FUN_1021bc90`.
+	if (MailVisible.Num() == 0)
+	{
+		return;
+	}
+	MailSelectedRow = FMath::Clamp(VisibleRow, 0, MailVisible.Num() - 1);
+	MailOpenIndex = MailVisible[MailSelectedRow];
+	MailRender();
+	// The `runscript` fires BEFORE the read bit is set and only when it was clear — exactly once
+	// per email per saved state — and AFTER the render, so a script that flips a dependency does
+	// not change the body already on the glass. Mode `0x100` is `Py_file_input`: a statement body,
+	// the same seam a Function's `runscript` takes.
+	if (!IsEmailRead(MailOpenIndex))
+	{
+		const FString& RunScript = Definition.Emails[MailOpenIndex].RunScript;
+		if (!RunScript.IsEmpty() && World)
+		{
+			World->EvalCondition(RunScript, Handle, CurrentUser);
+		}
+	}
+	SetEmailRead(MailOpenIndex);
+}
+
+void FElysiumPropHacking::MailDelete(int32 RealIndex)
+{
+	// `FUN_1021bbf0`, the only deletion path in the module — `autodelete` is read by nothing.
+	// Bounded by the RECORD count here and by 128 inside the accessor.
+	if (RealIndex >= 0 && RealIndex < Definition.Emails.Num())
+	{
+		SetEmailDeleted(RealIndex);
+	}
+}
+
+void FElysiumPropHacking::MailNextPage()
+{
+	// `FUN_1021c000`: `page = min(page + 1, count / 10)`. Integer division, and the first of the
+	// two retail off-by-ones — with a visible count that is an exact multiple of ten the last page
+	// starts at index `count` and draws ZERO rows. Ported, not corrected.
+	MailPage = FMath::Min(MailPage + 1, MailVisible.Num() / 10);
+	MailListDraw();
+}
+
+void FElysiumPropHacking::MailPrevPage()
+{
+	// `FUN_1021bfd0`: `page = max(page - 1, 0)`.
+	MailPage = FMath::Max(MailPage - 1, 0);
+	MailListDraw();
+}
+
+void FElysiumPropHacking::MailNextMessage()
+{
+	// `FUN_1021bc20`: the guard is `+0x9f0 < count + 1`, one too lax. `MailOpen` re-clamps and
+	// writes the row back, so it self-corrects to "stay on the last message" — the off-by-one is
+	// real but invisible, and it is reproduced rather than tightened.
+	if (MailSelectedRow < MailVisible.Num() + 1)
+	{
+		++MailSelectedRow;
+	}
+	MailOpen(MailSelectedRow);
+}
+
+void FElysiumPropHacking::MailPrevMessage()
+{
+	// `FUN_1021bc60`.
+	if (MailSelectedRow > 0)
+	{
+		--MailSelectedRow;
+	}
+	MailOpen(MailSelectedRow);
+}
+
+bool FElysiumPropHacking::MailHotkeys(const FString& Line)
+{
+	// `FUN_1021b9c0`. Returns true when the line was consumed; a miss makes `AcceptCmd` redraw the
+	// list, which is also how the empty line after the entry acknowledgement reaches the inbox.
+	using namespace ElysiumHackingStrings;
+	if (Line.IsEmpty())
+	{
+		return false;
+	}
+	auto Hotkey = [this, &Line](int32 Index)
+	{
+		return MatchesHotkey(HackingString(Index), Line);
+	};
+	if (MailOpenIndex == INDEX_NONE)
+	{
+		// The LIST state. There is **no length check** here: `atoi` runs on the whole line and the
+		// letter compares look at one character, so `next`, `n` and `nonsense` all page forward and
+		// `12abc` opens row 12. `[d]elete` and `[m]enu` are not matched in this state at all.
+		const int32 Count = MailVisible.Num();
+		const int32 Chosen = TerminalAtoi(Line);
+		if (Chosen > 0 && Chosen < Count + 1)
+		{
+			// One-based over the VISIBLE table, then clamped.
+			MailOpen(FMath::Clamp(Chosen - 1, 0, Count - 1));
+			return true;
+		}
+		if (Hotkey(NextCmd))
+		{
+			MailNextPage();
+			return true;
+		}
+		if (Hotkey(PrevCmd))
+		{
+			MailPrevPage();
+			return true;
+		}
+		if (Hotkey(QuitCmd))
+		{
+			EnterDirectory(INDEX_NONE);
+			return true;
+		}
+		return false;
+	}
+	// The OPEN state, where the client is in single-key mode and sends one `hackcmd %c` per press.
+	// The length test is exactly 1, so `ESC` — which the client sends as the four-byte
+	// `hackcmd quit` — misses here and lands on the LIST, not at the root directory.
+	if (Line.Len() != 1)
+	{
+		return false;
+	}
+	if (Hotkey(NextCmd))
+	{
+		MailNextMessage();
+		return true;
+	}
+	if (Hotkey(PrevCmd))
+	{
+		MailPrevMessage();
+		return true;
+	}
+	if (Hotkey(DelCmd))
+	{
+		MailDelete(MailOpenIndex);
+		MailListDraw();
+		return true;
+	}
+	if (Hotkey(MenuCmd))
+	{
+		MailListDraw();
+		return true;
+	}
+	if (Hotkey(QuitCmd))
+	{
+		EnterDirectory(INDEX_NONE);
+		return true;
+	}
+	// Numeric selection does not exist in the open state — the `atoi` branch is inside the list arm
+	// only, so any other single key is a miss and the list is redrawn.
+	return false;
+}
+
+void FElysiumPropHacking::LoadGlobalEmailState()
+{
+	// `CPropHacking::LoadGlobalEmailState` `0x1021a2f0`, called from OnUseBegin BEFORE any draw.
+	// Only the 128 flags cross: `m_bEmailUnlocked` and `m_nEmailAttempts` stay per-entity, which is
+	// why the haven PC's password is re-prompted in every haven map even though the read/deleted
+	// state follows the player.
+	if (!bGlobalEmail)
+	{
+		return;
+	}
+	if (FElysiumPlayer* PlayerEntity = World ? World->FindPlayer() : nullptr)
+	{
+		// The key is the entity's `targetname`, `""` when unnamed — the four shipped
+		// `global_email 1` entities are all named `haven_pc`.
+		PlayerEntity->RetrieveGlobalEmailFlags(TargetName, EmailFlags);
+		EmailFlags.SetNumZeroed(EmailFlagCount);
+	}
+}
+
+void FElysiumPropHacking::SaveGlobalEmailState()
+{
+	// `CPropHacking::SaveGlobalEmailState` `0x1021a3d0`, the first statement of OnUseEnd.
+	if (!bGlobalEmail)
+	{
+		return;
+	}
+	if (FElysiumPlayer* PlayerEntity = World ? World->FindPlayer() : nullptr)
+	{
+		PlayerEntity->StoreGlobalEmailFlags(TargetName, EmailFlags);
+	}
 }
 
 void FElysiumPropHacking::BeginContentSession()
@@ -1207,6 +1601,10 @@ void FElysiumPropHacking::BeginContentSession()
 	bSkillSubmit = false;
 	LastCommand.Reset();
 	PlayCue(TEXT("access"));
+	// `0x1021a5cb`: `LoadGlobalEmailState(this, player)` sits between the base's entry and the
+	// think cancel, so a `global_email` terminal has the player's copy of the flags in hand before
+	// the directory draw counts unread mail off them.
+	LoadGlobalEmailState();
 	// Entry step 4, `0x1021a5d6`: `CBaseEntity::ThinkSet(NULL, 0.0f, NULL)`. The screensaver think
 	// carries no in-use guard of its own (correction C16), so cancelling the schedule is the whole
 	// of what keeps the label off a screen someone is typing on.
@@ -1224,6 +1622,12 @@ void FElysiumPropHacking::EndContentSession()
 	// title, reset the two indices. It touches neither `m_HackFlags` nor `m_szHackPWD` — the ONLY
 	// writer of the crack buffer on the entry/exit path is `FUN_1021a1c0` at entry (§3.2 step 1),
 	// and the next entry rewrites the whole flags word as well.
+	//
+	// `SaveGlobalEmailState(this, player)` is `CPropHacking::vfunc42`'s FIRST statement, ahead of
+	// the base's own teardown. The port reaches this body after the base has run, which changes
+	// nothing the store can see: `CurrentUser` is still bound (the base clears it last) and the
+	// flags are entity state neither half touches.
+	SaveGlobalEmailState();
 	// `m_flNextThink = m_flSS_Start + gpGlobals->curtime` — **`ss_start`, never `ss_delay`, and with
 	// no floor**: the 2.0 floor is Activate-only (correction C15).
 	ArmScreenSaver(ScreenSaverStart);
@@ -1231,6 +1635,9 @@ void FElysiumPropHacking::EndContentSession()
 	CurrentDirectory = INDEX_NONE;
 	PendingDirectory = INDEX_NONE;
 	bReprintPrompt = false;
+	// Exit resets neither the selected row, the open index, the page nor `m_bEmailUnlocked`: none
+	// of the four is in retail's teardown, and the first three are re-derived by the next list draw
+	// anyway. The unlock deliberately persists for the entity's lifetime.
 }
 
 EElysiumTerminalInputMode FElysiumPropHacking::ContentInputMode() const
@@ -1249,6 +1656,18 @@ void FElysiumPropHacking::DirectoryDraw()
 	// `FUN_1021aca0`.
 	using namespace ElysiumHackingStrings;
 	const bool bHasMail = Definition.Emails.Num() > 0;
+	// `0x1021acce`: when the entity holds any email records at all, the directory draw REBUILDS the
+	// visible table before it draws anything, and both numbers on the email row come off that
+	// table — the first is the visible count (dependency-filtered, deleted excluded), NOT the raw
+	// record count, and the second is the unread count among those.
+	int32 VisibleMail = 0;
+	int32 UnreadMail = 0;
+	if (bHasMail)
+	{
+		RebuildMailIndex();
+		VisibleMail = MailVisible.Num();
+		UnreadMail = UnreadEmailCount();
+	}
 	const bool bInDirectory = Definition.Directories.IsValidIndex(CurrentDirectory);
 	const FString* Title = bInDirectory ? &Definition.Directories[CurrentDirectory].Description : nullptr;
 	TitleBox(Title, Definition.LogonLines);
@@ -1256,8 +1675,7 @@ void FElysiumPropHacking::DirectoryDraw()
 	{
 		// String 31 "You have %d emails, %d are unread." is itself the format (`FUN_101d3730`).
 		ScreenPrint(ElysiumTerminalFormat(HackingString(EmailCount),
-			{ FElysiumTerminalArg::Num(Definition.Emails.Num()),
-			  FElysiumTerminalArg::Num(UnreadEmailCount()) }));
+			{ FElysiumTerminalArg::Num(VisibleMail), FElysiumTerminalArg::Num(UnreadMail) }));
 		ScreenPrint(TEXT("\n\n"));
 	}
 	if (!bInDirectory)
@@ -1646,13 +2064,13 @@ bool FElysiumPropHacking::SubmitContent(const FString& Command)
 	LastCommand = Line;
 	if (CurrentDirectory == MailArea)
 	{
+		// `0x1021a909`: hide the hint, run the hotkey router, and on a MISS redraw the whole list —
+		// which also clears the open-message index, so any unrecognized key leaves an open message.
 		SetHudHint(2, 0);
-		// Slice G: `FUN_1021b9c0` mail hotkeys, `FUN_1021c040` list redraw on a miss. The mail area
-		// cannot be entered by content without emails; until the mail bodies land, any line
-		// returns to root so the session is never stuck.
-		UE_LOG(LogElysiumSkill, Warning, TEXT("%s mail-area command '%s' not routed (slice G)"),
-			*DebugString(), *Line);
-		EnterDirectory(INDEX_NONE);
+		if (!MailHotkeys(Line))
+		{
+			MailListDraw();
+		}
 	}
 	else if (PendingDirectory == INDEX_NONE)
 	{
@@ -1945,6 +2363,31 @@ void FElysiumPropHacking::BuildContentView(FElysiumTerminalView& Out) const
 	{
 		return;
 	}
+	if (CurrentDirectory == MailArea)
+	{
+		// The mail area answers a completely different grammar (`FUN_1021b9c0`), so the directory's
+		// verbs are not offered here — `list` and `help` do not route in mail mode at all. The
+		// commands are the localized words themselves, whose first character is what the router
+		// actually matches, so what the affordance sends is what a keypress would.
+		using namespace ElysiumHackingStrings;
+		auto Hotkey = [this, &AddAction](const TCHAR* Id, int32 Index)
+		{
+			const FString Word = HackingString(Index);
+			if (Word.Len() > 1)
+			{
+				AddAction(Id, Word, FString::Chr(Word[1]));
+			}
+		};
+		Hotkey(TEXT("mail:next"), NextCmd);
+		Hotkey(TEXT("mail:prev"), PrevCmd);
+		if (MailOpenIndex != INDEX_NONE)
+		{
+			Hotkey(TEXT("mail:delete"), DelCmd);
+			Hotkey(TEXT("mail:menu"), MenuCmd);
+		}
+		Hotkey(TEXT("mail:quit"), QuitCmd);
+		return;
+	}
 	AddAction(TEXT("list"), TEXT("List"), TEXT("list"));
 	AddAction(TEXT("help"), TEXT("Help"), TEXT("help"));
 	if (CurrentDirectory != INDEX_NONE)
@@ -1983,10 +2426,20 @@ void FElysiumPropHacking::Serialize(FElysiumSaveArchive& Ar)
 	Ar << DirectoryAttempts;
 	Ar << bEmailUnlocked;
 	Ar << EmailAttempts;
+	// `DEFINE_ARRAY(m_EmailFlags, FIELD_INTEGER, 128)`. Appended behind its own version at the end
+	// of the leaf's block, so a payload written before the mail state existed restores a terminal
+	// with every message unread and none deleted — which is the state it was actually saved in.
+	// The page, the selected row and the open index are deliberately NOT here: retail's datamap
+	// does not carry them either, and OnUseEnd has already forced the directory back to root.
+	if (Ar.Version() >= FElysiumSaveVersion::TerminalEmail)
+	{
+		Ar << EmailFlags;
+	}
 	if (Ar.IsLoading())
 	{
 		DirectoryUnlocked.SetNum(Definition.Directories.Num());
 		DirectoryAttempts.SetNum(Definition.Directories.Num());
+		EmailFlags.SetNumZeroed(EmailFlagCount);
 	}
 }
 
@@ -2000,5 +2453,19 @@ void FElysiumPropHacking::GetDebugState(TArray<TPair<FString, FString>>& Out) co
 	Out.Emplace(TEXT("Crack buffer"), CrackBuffer.IsEmpty() ? TEXT("(none)") : *CrackBuffer);
 	Out.Emplace(TEXT("Reprint prompt"), bReprintPrompt ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Email unlocked"), bEmailUnlocked ? TEXT("yes") : TEXT("no"));
+	Out.Emplace(TEXT("Email attempts"), FString::FromInt(EmailAttempts));
+	int32 ReadCount = 0;
+	int32 DeletedCount = 0;
+	for (int32 Index = 0; Index < Definition.Emails.Num(); ++Index)
+	{
+		ReadCount += IsEmailRead(Index) ? 1 : 0;
+		DeletedCount += IsEmailDeleted(Index) ? 1 : 0;
+	}
+	Out.Emplace(TEXT("Email"), FString::Printf(
+		TEXT("%d records, %d visible, %d read, %d deleted; page %d, row %d, open %d"),
+		Definition.Emails.Num(), MailVisible.Num(), ReadCount, DeletedCount, MailPage,
+		MailSelectedRow, MailOpenIndex));
+	Out.Emplace(TEXT("Global email"), bGlobalEmail
+		? FString::Printf(TEXT("keyed on '%s'"), *TargetName) : TEXT("no"));
 	Out.Emplace(TEXT("Last command"), LastCommand);
 }

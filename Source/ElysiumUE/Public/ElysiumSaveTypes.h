@@ -70,6 +70,12 @@ struct FElysiumSaveVersion
 		// bit existed carries a drawn one, which is the default the field already has.
 		WeaponHidden = 28,
 
+		// The computer terminal's mail state: `m_EmailFlags[128]` on the terminal entity, and the
+		// player's `m_GlobalEmailFlags` records behind it. The player slot that now carries those
+		// records held an unwritten `TArray<FString>` placeholder before, so a pre-29 payload reads
+		// that placeholder and discards it rather than mis-parsing the fields after it.
+		TerminalEmail = 29,
+
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
 	};

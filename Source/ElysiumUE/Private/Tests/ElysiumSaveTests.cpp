@@ -735,8 +735,14 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `WeaponHidden` appends the active weapon's drawn/hidden bit (retail `EF_NODRAW`, `m_fEffects`
 	// +0x19c & 0x40) behind its own version. Additive: a pre-28 payload restores a drawn weapon,
 	// which is the field's default, and the next state change re-holsters it.
+	// `TerminalEmail` carries the computer terminal's mail state: the terminal leaf's 128-entry
+	// `m_EmailFlags` array, appended behind its own version at the end of that leaf's block, and
+	// the player's `m_GlobalEmailFlags` records. Additive on the terminal side (a pre-29 payload
+	// restores an inbox with nothing read and nothing deleted, which is what it was saved with);
+	// on the player side the slot it occupies previously held an unwritten `TArray<FString>`
+	// placeholder that nothing ever filled, so an older payload reads and discards it.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::WeaponHidden);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::TerminalEmail);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -762,7 +768,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the staged swing's clip owner"),
 			(int32)FElysiumSaveVersion::WeaponSwingClipOwner),
 		TPair<const TCHAR*, int32>(TEXT("the active weapon's hidden bit"),
-			(int32)FElysiumSaveVersion::WeaponHidden) })
+			(int32)FElysiumSaveVersion::WeaponHidden),
+		TPair<const TCHAR*, int32>(TEXT("the terminal's mail flags and the player's global email"),
+			(int32)FElysiumSaveVersion::TerminalEmail) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);
@@ -779,7 +787,11 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 			FElysiumPlayerRecord Legacy = Payload.Player;
 			Ar << Legacy.Name << Legacy.Sheet << Legacy.Money;
 			Ar << Legacy.Health << Legacy.MaxHealth;
-			Ar << Legacy.ExperienceLog << Legacy.Effects << Legacy.EmailFlags;
+			Ar << Legacy.ExperienceLog << Legacy.Effects;
+			// v6's email slot is the unwritten `TArray<FString>` placeholder the global email
+			// records later replaced; an empty array is exactly what v6 wrote.
+			TArray<FString> LegacyEmailPlaceholder;
+			Ar << LegacyEmailPlaceholder;
 			Ar << Legacy.ExperienceRemainder << Legacy.LifetimeExperience;
 			// `FElysiumLawState`'s own operator writes its cycle-10b deadline/count fields whenever
 			// the archive is saving, regardless of the declared version (correct for a real save,

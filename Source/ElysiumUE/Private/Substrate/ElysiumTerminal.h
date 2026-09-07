@@ -105,6 +105,15 @@ namespace ElysiumHackingStrings
 	constexpr int32 PasswordAccepted = 19;
 	constexpr int32 HelpTitle = 20;
 	constexpr int32 PasswordExit = 21;
+	// The mail bodies (§12): the two body headers, the five hotkey words, the list title.
+	constexpr int32 FromHeader = 22;
+	constexpr int32 SubjectHeader = 23;
+	constexpr int32 NextCmd = 24;
+	constexpr int32 PrevCmd = 25;
+	constexpr int32 DelCmd = 26;
+	constexpr int32 MenuCmd = 27;
+	constexpr int32 QuitCmd = 28;
+	constexpr int32 EmailTitleBar = 29;
 	constexpr int32 EmailDir = 30;
 	constexpr int32 EmailCount = 31;
 	constexpr int32 Quit = 33;
@@ -118,8 +127,18 @@ namespace ElysiumHackingStrings
 	constexpr int32 TypePrompt = 42;
 	constexpr int32 HomeMenu = 43;
 	constexpr int32 Menu = 44;
+	// The mail list's three footer rows. `FUN_10219400` leaves these three slots **NULL** — they
+	// are the only indices in the table with no compiled-in fallback (`local_c`/`local_8`/`local_4`
+	// = 0 at `0x10219400`), so a short `Hacking_Strings` hands `Q_vsnprintf` a NULL format. They
+	// resolve through `GetOrEmpty`, never `Get`.
+	constexpr int32 MailListCount = 45;
+	constexpr int32 MailListMore = 46;
+	constexpr int32 MailListExit = 47;
 
 	FString Get(const class FElysiumEntityWorld* World, int32 Index);
+	// The same lookup with **no** fallback: an absent entry answers empty. This is what the three
+	// footer indices take, because retail has no compiled-in label for them at all.
+	FString GetOrEmpty(const class FElysiumEntityWorld* World, int32 Index);
 	const TCHAR* KeyName(int32 Index);
 }
 
@@ -363,8 +382,46 @@ public:
 	// `+0x9e0`: -1 none, -2 mail, else the directory awaiting its password.
 	int32 PendingDirectory = INDEX_NONE;
 	static constexpr int32 MailArea = -2;
+	// `m_bEmailUnlocked` (`+0xc2c`) and `m_nEmailAttempts` (`+0xc28`), both saved. The attempt
+	// counter is **write-only** in retail — `FUN_1021ca90` zeroes it, the password failure arm
+	// increments it, and nothing ever reads it; it is serialized and inert.
 	bool bEmailUnlocked = false;
 	int32 EmailAttempts = 0;
+
+	// --- the mail state (`docs/vtmb/computer-terminals.md` §12) ---
+	// `m_EmailFlags` (`+0xa28`): `DEFINE_ARRAY(FIELD_INTEGER, 128)`, bit `0x1` read, bit `0x2`
+	// deleted. There is no third bit and no clear accessor anywhere in the module — a mail cannot
+	// be un-read or un-deleted. The array is 128 while the record vector is unbounded, and the
+	// accessors answer FALSE out of range rather than clamping, so email #129 and up are
+	// permanently unread and never deleted.
+	static constexpr int32 EmailFlagCount = 128;
+	static constexpr int32 EmailFlagRead = 0x1;
+	static constexpr int32 EmailFlagDeleted = 0x2;
+	TArray<int32> EmailFlags;
+
+	// The transient half, none of which is in retail's datamap: the selected visible row
+	// (`+0x9f0`), the open mail's REAL record index (`+0x9f4`, `-1` = the list state), the
+	// visible-index table (`+0x9f8`, rebuilt on every list and directory draw) and the page
+	// (`+0xa0c`, ten rows to a page). OnUseEnd resets none of them, so they survive a session.
+	int32 MailSelectedRow = 0;
+	int32 MailOpenIndex = INDEX_NONE;
+	TArray<int32> MailVisible;
+	int32 MailPage = 0;
+
+	FElysiumPropHacking() { EmailFlags.SetNumZeroed(EmailFlagCount); }
+
+	// `FUN_1021a4b0` / `FUN_1021a4f0` / `FUN_1021a530` / `FUN_1021a560`, bounds-checked at 128 and
+	// set-only, exactly as retail's four accessors are.
+	bool IsEmailRead(int32 Index) const;
+	bool IsEmailDeleted(int32 Index) const;
+	void SetEmailRead(int32 Index);
+	void SetEmailDeleted(int32 Index);
+	// `FUN_1021bd80`: visible = not deleted AND its `dependency` (record `+0x240`, mode `0x102`)
+	// passes, in record order. Rebuilt from scratch on every draw, so numbering is not stable
+	// across a state change — and it never re-clamps the page.
+	void RebuildMailIndex();
+	// `FUN_1021c040`, the inbox. Public because it is also the miss path of the mail router.
+	void MailListDraw();
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
@@ -417,6 +474,7 @@ private:
 	FString HackingString(int32 Index) const;
 	// Loader-lowercased names (`Q_strnlwr`, §6): what the listings print and compare.
 	static FString LoweredName(const FString& Name) { return Name.ToLower(); }
+	// Unread among the CURRENT visible table — the directory draw rebuilds it first.
 	int32 UnreadEmailCount() const;
 
 	// The draw bodies, each named for its retail address in the .cpp.
@@ -429,6 +487,20 @@ private:
 	bool ExecuteFunction(int32 DirectoryIndex, int32 FunctionIndex);   // FUN_1021c6d0
 	void CrackingStep();                                   // FUN_10217d60
 	void CrackingRow(const FString& Shown);                // CPropHacking::vfunc278
+
+	// The mail bodies.
+	void MailRender();                                     // FUN_1021c260
+	void MailOpen(int32 VisibleRow);                       // FUN_1021bc90
+	void MailDelete(int32 RealIndex);                      // FUN_1021bbf0
+	void MailNextPage();                                   // FUN_1021c000
+	void MailPrevPage();                                   // FUN_1021bfd0
+	void MailNextMessage();                                // FUN_1021bc20
+	void MailPrevMessage();                                // FUN_1021bc60
+	bool MailHotkeys(const FString& Line);                 // FUN_1021b9c0
+	// The two `global_email` wrappers. Both early-out unless `m_bHasGlobalEmail` is set, and both
+	// key on the entity's own `targetname` (`""` when unnamed).
+	void LoadGlobalEmailState();                           // CPropHacking::LoadGlobalEmailState
+	void SaveGlobalEmailState();                           // CPropHacking::SaveGlobalEmailState
 
 	// The router (AcceptCmd 0x1021a830) and its arms.
 	bool Builtins(const FString& Line);                    // FUN_1021aaa0

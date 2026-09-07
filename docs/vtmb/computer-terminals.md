@@ -1009,6 +1009,8 @@ The authority port (`Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp`,
 | Character path range | `FUN_100c6d50` inserts anything but `0x60` and `8/9/10/13/27` (`0x7f` then reads as a backspace, `>0x7e` as a glyph index) | `0x20..0x7e` only | no glyph table to index |
 | `colorscheme` clamp | client rasterizer clamps `0..3` | clamped at spawn and published on the view | one clamp site |
 | Right margin and style on the view | client-local state | published by the authority so the local editor composes with them | the authority owns the buffer here |
+| Mail footer strings 45–47 | no compiled-in fallback — `FUN_10219400` leaves the slots NULL and `Q_vsnprintf` takes a NULL format | `ElysiumHackingStrings::GetOrEmpty` draws a blank footer row | a crash hazard is not a behaviour |
+| Raw mode keys | `hackcmd %c` with the raw key code for every key-down (Enter, Backspace, arrows included) | the translated printable only; other keys are a named seam until `CPropKeypad` (the only content that raises `0x4`) is ported | the port has no VtMB key codes |
 | Screensaver randomness | engine `RandomInt` / `RandomFloat` (the shared global) | `ElysiumRng::Stream(EElysiumRngStream::Terminal)`, shared with the cracking filler, seeded per session | deterministic tests; draw order preserved |
 | Two think functions | `CPropHackingSS_Think` and the cracking stepper on one `m_flNextThink` via `ThinkSet` | one `Think()` dispatcher: cracking buffer first, else the screensaver when no user is bound; entry sets never-think, exit re-arms at `ss_start` | one clock, same order |
 | Idle glass | the client entity owns the cell buffer for the entity's lifetime | the authority publishes an idle view per terminal with a body when its revision changes; the presentation redraws the world-lifetime projection only then and only while the body rendered recently | no per-frame work on idle machines, as retail |
@@ -1213,7 +1215,8 @@ must not be rewritten as an entity wire.
 **`m_EmailFlags` is a bitmask, not a status enum.** Each of the 128 integers at `+0xa28` carries
 bit `0x1` for *read* and bit `0x2` for *deleted*. Accessors: `FUN_1021a4b0` / `FUN_1021a530`
 (test / set read) and `FUN_1021a4f0` / `FUN_1021a560` (test / set deleted), each addressing
-`this + index*4 + 0xa28`, index clamped to `[0, 127]`.
+`this + index*4 + 0xa28`; an out-of-range index is **not clamped**: the testers return false
+(`XOR AL,AL` at `0x1021a4d3`) and the setters are no-ops.
 
 **A dependency hides a message rather than disabling it.** `FUN_1021bd80` rebuilds the visible
 index table at `+0x9f8` whenever the list is drawn. A record is appended only when it is not
@@ -1234,6 +1237,13 @@ rows per page, page at `+0xa0c`. Two retail off-by-ones: `[n]ext` page uses `cou
 player on an empty page. The `accept` cue is played by `FUN_1021c890`'s tail (entering the mail
 area, returning to root), not by the list draw. Full listings:
 `$ELYSIUM_WORK_ROOT/_terminal_explore/slice-g-decompiles.md`.
+
+**The open-message hotkey row scrolls.** `"%s, %s, %s, %s, %s: "` renders as
+`[n]ext, [p]rev, [d]elete, [m]enu, [q]uit: ` (42 characters), which does not fit a 36-column
+screen inside the (1,1) margins the title box leaves: the client's word wrap breaks `[q]uit:` onto
+the last row and that newline, landing on `rows-1`, scrolls the whole message up one row.
+`haven_pc.txt` authors 53 `Email` blocks (eight headers carry a trailing `// added by wesp`
+comment).
 
 **`autodelete` is inert.** The only deletion path is the player's `DEL` command through
 `FUN_1021bbf0` → `FUN_1021a560` (set bit `0x2`).

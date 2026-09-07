@@ -667,7 +667,7 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 	}
 	ExperienceLog = Record.ExperienceLog;
 	Effects    = Record.Effects;
-	EmailFlags = Record.EmailFlags;
+	GlobalEmail = Record.GlobalEmail;
 	ExperienceRemainder = Record.ExperienceRemainder;
 	LifetimeExperience  = Record.LifetimeExperience;
 	bUnkillable = Record.bUnkillable;
@@ -767,7 +767,7 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 	Record.Police     = Police;   // unscoped; see Hydrate for why
 	Record.ExperienceLog = ExperienceLog;
 	Record.Effects    = Effects;
-	Record.EmailFlags = EmailFlags;
+	Record.GlobalEmail = GlobalEmail;
 	Record.ExperienceRemainder = ExperienceRemainder;
 	Record.LifetimeExperience  = LifetimeExperience;
 	Record.bUnkillable = bUnkillable;
@@ -786,6 +786,59 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 	Record.Stealth = Stealth;
 	Record.StealthModRaw = StealthModRaw;
 	Record.StealthMap = World ? World->MapName() : FString();
+}
+
+namespace
+{
+	// `Q_strncmp(a, b, MAX(strlen(a), strlen(b))) == 0` (`0x1016eec0` / `0x1016f19b`). Comparing
+	// over the LONGER of the two lengths means the shorter string's terminator is part of the
+	// comparison, so this is an exact, case-sensitive name compare — not the prefix match the
+	// `strncmp` shape suggests. `haven_pc2` does not match `haven_pc`.
+	bool SameTerminalName(const FString& A, const FString& B)
+	{
+		return A.Equals(B, ESearchCase::CaseSensitive);
+	}
+}
+
+void FElysiumPlayer::RetrieveGlobalEmailFlags(const FString& TerminalName, TArray<int32>& InOutFlags)
+{
+	// `CBasePlayer::RetrieveGlobalEmailFlags` `0x1016eec0`.
+	FElysiumGlobalEmailRecord* Found = GlobalEmail.FindByPredicate(
+		[&TerminalName](const FElysiumGlobalEmailRecord& Record)
+		{ return SameTerminalName(Record.Name, TerminalName); });
+	if (!Found)
+	{
+		// Create-on-retrieve: a zeroed `0x240` local, `Q_strncpy(local, name, 0x40)`, `AddToTail`.
+		// The new record's flags are all clear, so a first visit copies nothing over the local
+		// array — which is exactly what a terminal that has never been read should see.
+		FElysiumGlobalEmailRecord Fresh;
+		Fresh.Name = TerminalName.Left(FElysiumGlobalEmailRecord::NameMax);
+		Fresh.Flags.SetNumZeroed(FElysiumGlobalEmailRecord::FlagCount);
+		Found = &GlobalEmail[GlobalEmail.Add(MoveTemp(Fresh))];
+	}
+	// `memcpy(out, record->flags, 0x80 * 4)` — GLOBAL WINS, no merge.
+	Found->Flags.SetNumZeroed(FElysiumGlobalEmailRecord::FlagCount);
+	InOutFlags = Found->Flags;
+}
+
+void FElysiumPlayer::StoreGlobalEmailFlags(const FString& TerminalName, const TArray<int32>& InFlags)
+{
+	// `CBasePlayer::StoreGlobalEmailFlags` `0x1016f0f0`.
+	FElysiumGlobalEmailRecord* Found = GlobalEmail.FindByPredicate(
+		[&TerminalName](const FElysiumGlobalEmailRecord& Record)
+		{ return SameTerminalName(Record.Name, TerminalName); });
+	if (!Found)
+	{
+		// **No create-on-store.** Retail warns and writes nothing, so a `global_email` terminal
+		// saved before it was ever used silently loses its state. Retrieve always runs first at
+		// OnUseBegin, which is why that hole is unreachable in practice.
+		UE_LOG(LogElysiumPlayer, Verbose,
+			TEXT("could not save email for terminal: %s"), *TerminalName);
+		return;
+	}
+	// `memcpy(record->flags, in, 0x80 * 4)` — LOCAL WINS, no merge.
+	Found->Flags = InFlags;
+	Found->Flags.SetNumZeroed(FElysiumGlobalEmailRecord::FlagCount);
 }
 
 void FElysiumPlayer::SyncFromBody()

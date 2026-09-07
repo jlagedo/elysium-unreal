@@ -1213,7 +1213,11 @@ bool FElysiumLawSaveTest::RunTest(const FString&)
 			Ar << Old.Money;
 			Ar << Old.ArmorSlot;
 			Ar << Old.Health << Old.MaxHealth;
-			Ar << Old.ExperienceLog << Old.Effects << Old.EmailFlags;
+			Ar << Old.ExperienceLog << Old.Effects;
+			// The slot the global email records now occupy held an unwritten `TArray<FString>`
+			// placeholder at this version, so v22's bytes are an empty string array.
+			TArray<FString> LegacyEmailPlaceholder;
+			Ar << LegacyEmailPlaceholder;
 			Ar << Old.ExperienceRemainder << Old.LifetimeExperience;
 			// The pre-Law wire shape: three bare levels, no deadlines or act counts.
 			Ar << Old.Law.Criminal << Old.Law.Supernatural << Old.Law.Investigate;

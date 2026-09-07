@@ -473,6 +473,26 @@ struct FElysiumStealthObserver
 	void Reset() { *this = FElysiumStealthObserver(); }
 };
 
+// One `GLOBAL_EMAIL` record of `CBasePlayer::m_GlobalEmailFlags` (`+0x1e28`), the
+// `CUtlVector<GLOBAL_EMAIL>` the player datamap saves as `fieldType 10`. Retail's record is
+// `0x240` bytes: `char name[0x40]` at `+0x00` and `int flags[128]` at `+0x40`
+// (`docs/vtmb/computer-terminals.md` §12). The name is a terminal entity's `targetname`; the flags
+// are that terminal's `m_EmailFlags` (bit `0x1` read, bit `0x2` deleted).
+//
+// Only terminals whose `global_email` keyfield is set reconcile through here, and only the flag
+// array crosses — `m_bEmailUnlocked` and `m_nEmailAttempts` stay per-entity, which is why the
+// haven PC's password is re-prompted in every haven map.
+struct FElysiumGlobalEmailRecord
+{
+	// `Q_strncpy(record, name, 0x40)`: 63 characters and the terminator.
+	static constexpr int32 NameMax = 63;
+	// `DEFINE_ARRAY(m_EmailFlags, FIELD_INTEGER, 128)`.
+	static constexpr int32 FlagCount = 128;
+
+	FString Name;
+	TArray<int32> Flags;
+};
+
 // The durable half of the player: session lifetime, so it crosses a map boundary. The entity is the
 // *live* view; this is the truth that survives the world it lived in. Hydrated into the player
 // entity at map build, dehydrated back out when the world is torn down (travel, quit, reload) and
@@ -507,7 +527,8 @@ struct FElysiumPlayerRecord
 
 	TArray<FElysiumXpEntry> ExperienceLog;   // EXPERIENCE_ENTRY — itemised, not a total
 	TArray<FString>         Effects;         // m_tEffectList
-	TArray<FString>         EmailFlags;      // the Player block, save-architecture.md section 3
+	// m_GlobalEmailFlags — one record per `global_email` terminal entity name (§12).
+	TArray<FElysiumGlobalEmailRecord> GlobalEmail;
 	FElysiumLawState        Law;
 
 	// The police-response / Masquerade-timer / pursuit block beside the activity
@@ -1748,7 +1769,20 @@ public:
 	// by `ElysiumLaw::TickPlayerLaw`. Session state; the reasoning is on `FElysiumScareRecord`.
 	TArray<FElysiumScareRecord> ScareQueue;
 	TArray<FElysiumXpEntry> ExperienceLog;
-	TArray<FString> EmailFlags;
+	// `m_GlobalEmailFlags`, mirrored from the record for the map's lifetime exactly as
+	// `ExperienceLog` is: a `global_email` terminal reconciles against the LIVE player at its own
+	// use-begin/use-end, and the record is written back when the world is torn down.
+	TArray<FElysiumGlobalEmailRecord> GlobalEmail;
+
+	// `CBasePlayer::RetrieveGlobalEmailFlags` `0x1016eec0`. Copies the named terminal's saved flag
+	// array over `InOutFlags` — **global wins** — creating a zeroed record when the name is new.
+	// Lookup is `Q_strncmp` over `MAX(strlen(a), strlen(b))`, i.e. an exact, case-sensitive name
+	// compare rather than a prefix match (`0x1016f19b`); `haven_pc2` does not match `haven_pc`.
+	void RetrieveGlobalEmailFlags(const FString& TerminalName, TArray<int32>& InOutFlags);
+	// `CBasePlayer::StoreGlobalEmailFlags` `0x1016f0f0`. The mirror — **local wins** — but with
+	// **no create-on-store**: an unknown name is a `DevWarning` and nothing is written. Retrieve
+	// always runs first at OnUseBegin, so in practice the record exists by the time this runs.
+	void StoreGlobalEmailFlags(const FString& TerminalName, const TArray<int32>& Flags);
 
 	// `vdiscipline_int`'s stored compiled index and the remembered tier beside it, plus the
 	// cast counter a committed targeted cast increments. Mirrored from the record for the map's

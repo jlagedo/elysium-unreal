@@ -21,7 +21,11 @@ subsystem (`UElysiumTerminalProjection`, registered with the use anchor), and (s
 authored `old_computer` group, the executor silent, exit stopping every sound on the terminal, and (slice E) the focused keyboard leaf reproducing the client key-down and
 char-insert bodies (TERM20), the five intents, the local draft composed onto the glass with retail's
 fit guard, and the `InfoCtrl` hint on the HUD model (its drawn slot is Play-tier: the HUD widget
-cannot be built without a local player) (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
+cannot be built without a local player), and (slice G) email: the 128-flag
+bitmask, the visible-index table, ten rows per page, both input regimes and the raw single-key
+open state, the first-open `runscript`, both retail off-by-ones, and the `global_email`
+reconciliation on the player record (save schema 29), proven on a 12-mail definition and on
+`haven_pc.txt` (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
 `Elysium.Substrate.TerminalScreenBuffer`). Nothing below the entity is faithful yet: the body,
 the cone, the camera, the projection and the keyboard are the slices below. The 2026-09-06
 exploration (audit, content facts, projection research, the slice-A decompiles and the B/C design
@@ -90,13 +94,6 @@ baselines on the terminal gym at 1080p and 4K showing the 36×24 grid crisp and 
 compared against `retail-shots/01-home-menu.png` for layout; UV orientation recorded per model
 from the calibration pattern read back off the render target.
 
-**Slice G — email.** The 128-flag bitmask, mail unlock and attempt count, `email_password` gate,
-the visible index table rebuilt on every list draw (not deleted, dependency passes), ten rows per
-page, hotkeys `n`/`p`/`d`/`m`/`q` matched against the localized words' first character, open =
-render + first-open `runscript` once + mark read, `global_email` reconciliation keyed by entity
-name, and serialization. *Acceptance:* the §12 invariants as tests; `haven_pc` content loads and
-lists.
-
 **Slice H — diagnostics and the gym beat script.** One read-only terminal diagnostic (owner, user,
 serial, file, directory, pending, mode, flags, revision, projection, camera handle, attempt, last
 command). Content test: `screen` slot and both attachments on every model a `prop_hacking`
@@ -114,5 +111,5 @@ the gym world, drives the same steps through the command bus and the intents, as
 state and reads the projection's render target back for the layout checks; the beat script
 replaces that driver when 11.10 lands, with the same assertions. The terminal gym builds on the
 movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0, A, B and C have
-landed (2026-09-07); G next; then D, H. Every acceptance is
+landed (2026-09-07); D and H remain. Every acceptance is
 headless (the map slice) or on the terminal gym; nothing in this plan is accepted on a live map.

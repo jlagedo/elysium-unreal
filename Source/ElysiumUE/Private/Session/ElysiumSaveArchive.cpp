@@ -148,6 +148,20 @@ FArchive& operator<<(FArchive& Ar, FElysiumAssignedQuest& Q)
 	return Ar;
 }
 
+FArchive& operator<<(FArchive& Ar, FElysiumGlobalEmailRecord& R)
+{
+	// One `GLOBAL_EMAIL`: the terminal's `targetname` and its 128 flag integers. The array is
+	// re-squared on load so a hand-edited or truncated payload cannot hand a terminal a short one.
+	Ar << R.Name;
+	Ar << R.Flags;
+	if (Ar.IsLoading())
+	{
+		R.Name = R.Name.Left(FElysiumGlobalEmailRecord::NameMax);
+		R.Flags.SetNumZeroed(FElysiumGlobalEmailRecord::FlagCount);
+	}
+	return Ar;
+}
+
 FArchive& operator<<(FArchive& Ar, FElysiumLawState& L)
 {
 	Ar << L.Criminal << L.Supernatural << L.Investigate;
@@ -215,7 +229,19 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 		R.ArmorSlot = FMath::Clamp(R.ArmorSlot, 0, 5);
 	}
 	Ar << R.Health << R.MaxHealth;
-	Ar << R.ExperienceLog << R.Effects << R.EmailFlags;
+	Ar << R.ExperienceLog << R.Effects;
+	// `m_GlobalEmailFlags` — the per-terminal-name email flag records (§12). This slot previously
+	// held an unwritten `TArray<FString>` placeholder; nothing ever filled it, so an older payload
+	// reads and discards it and there is nothing to migrate.
+	if (Version >= FElysiumSaveVersion::TerminalEmail)
+	{
+		Ar << R.GlobalEmail;
+	}
+	else
+	{
+		TArray<FString> LegacyEmailPlaceholder;
+		Ar << LegacyEmailPlaceholder;
+	}
 	// The award accumulators travel with the ledger they belong to: the residue is real state (one
 	// bonus XP per 100 awards falls out of it), so dropping it would quietly cost a point.
 	Ar << R.ExperienceRemainder << R.LifetimeExperience;
@@ -701,7 +727,20 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 	OutLines.Add(FString::Printf(TEXT("player.xp.lifetime = %.0f (%.0f pending)"),
 		P.LifetimeExperience, P.ExperienceRemainder));
 	for (const FString& E : P.Effects)    { OutLines.Add(FString::Printf(TEXT("player.effect %s"), *E)); }
-	for (const FString& E : P.EmailFlags) { OutLines.Add(FString::Printf(TEXT("player.email %s"), *E)); }
+	for (const FElysiumGlobalEmailRecord& E : P.GlobalEmail)
+	{
+		// Only the set flags: 128 zeroes per terminal would drown the diff.
+		FString Set;
+		for (int32 Index = 0; Index < E.Flags.Num(); ++Index)
+		{
+			if (E.Flags[Index] != 0)
+			{
+				Set += FString::Printf(TEXT(" %d=%d"), Index, E.Flags[Index]);
+			}
+		}
+		OutLines.Add(FString::Printf(TEXT("player.email %s%s"), *E.Name,
+			Set.IsEmpty() ? TEXT(" (all clear)") : *Set));
+	}
 	// The journal, as stored — assignment order, which is also `Order` order.
 	for (const FElysiumAssignedQuest& Q : P.Journal)
 	{
