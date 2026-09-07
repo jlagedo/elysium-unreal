@@ -1872,6 +1872,101 @@ CameraShotTable { Vantage { End { "Position" "cam_marker_1" "AttachPos" "Origin"
 	TestTrue(TEXT("an unrecognised Position is the entity's own name"),
 		Named.End.Position == EElysiumShotPosition::Named && Named.End.NamedEntity == TEXT("cam_marker_1"));
 
+	// --- multi-shot files: `special-case.txt` and the `Hacking` block -------------------------
+	// Most of `vdata/camerashots/` is one shot per file, but `special-case.txt` carries five
+	// siblings and retail addresses them by name (`FUN_10070470("Hacking", ...)`,
+	// `docs/vtmb/computer-terminals.md` §7.3 step 6). `ParseText` keeps answering block 0 so no
+	// existing `SetCamera` caller changes.
+	{
+		const FString MultiText = TEXT(R"(
+CameraShotTable
+{
+	DeathCam { End { "Position" "Player" "OffsetOrigin" "[0, 0, 100]" } }
+	Hacking
+	{
+		End    { "Position" "Named"  "AttachPos" "Attachment: screen_axis"  "AttachType" "Follow" }
+		Target { Point1 { "Position" "Named"  "AttachPos" "Attachment: screen"  "AttachType" "Follow" } }
+		CameraConstraints
+		{
+			"MoveAccel" "250.0"  "TurnAccel" "180"
+			"MoveSpeed" "300"    "MaxTurnRate" "[200, 200, 200]"
+			"DistanceTolerance" "1"  "AngularTolerance" "[1,1,1]"
+			"FieldOfView" "75"   "DialogPOV" "0"  "DrawViewmodel" "0"
+			"SyncRotateOnMove" "1"   "ShowHud" "1"
+		}
+	}
+}
+)");
+		TArray<FElysiumCameraShotDef> All;
+		TestTrue(TEXT("a multi-shot file parses whole"),
+			ElysiumCameraShots::ParseAllText(MultiText, All));
+		TestEqual(TEXT("in authored order"), All.Num(), 2);
+
+		FElysiumCameraShotDef First;
+		TestTrue(TEXT("ParseText still answers block 0"),
+			ElysiumCameraShots::ParseText(MultiText, First));
+		TestEqual(TEXT("which is the file's first shot"), First.Name, FString(TEXT("DeathCam")));
+
+		ElysiumCameraShots::FlushCache();
+		ON_SCOPE_EXIT { ElysiumCameraShots::FlushCache(); };
+		ElysiumCameraShots::InstallNamed(TEXT("special-case"), All);
+
+		const FElysiumCameraShotDef* Hacking =
+			ElysiumCameraShots::LoadNamed(TEXT("special-case"), TEXT("Hacking"));
+		if (TestNotNull(TEXT("LoadNamed finds the Hacking block"), Hacking))
+		{
+			// The retail terminal shot: on the `screen_axis` attachment, looking at `screen`.
+			TestEqual(TEXT("the camera sits on screen_axis"), Hacking->End.AttachPos,
+				FString(TEXT("Attachment: screen_axis")));
+			TestEqual(TEXT("and looks at screen"), Hacking->Target1.AttachPos,
+				FString(TEXT("Attachment: screen")));
+			TestEqual(TEXT("FOV 75"), Hacking->Constraints.FieldOfView, 75.0f);
+			TestTrue(TEXT("ShowHud 1"), Hacking->Constraints.bShowHud);
+			TestFalse(TEXT("DrawViewmodel 0"), Hacking->Constraints.bDrawViewmodel);
+			// It is not a snap: the shot eases in on its own constraints (C19).
+			TestTrue(TEXT("MoveSpeed 300 u/s"),
+				FMath::IsNearlyEqual(Hacking->Constraints.MoveSpeed, 300.0f * ElysiumCam::U, 0.01f));
+			TestTrue(TEXT("MoveAccel 250 u/s^2"),
+				FMath::IsNearlyEqual(Hacking->Constraints.MoveAccel, 250.0f * ElysiumCam::U, 0.01f));
+			TestTrue(TEXT("TurnAccel 180 deg/s^2"),
+				FMath::IsNearlyEqual(Hacking->Constraints.TurnAccel, 180.0f, 0.01f));
+			TestTrue(TEXT("MaxTurnRate [200,200,200]"),
+				Hacking->Constraints.MaxTurnRate.Equals(FVector(200.0f, 200.0f, 200.0f), 0.01f));
+			TestTrue(TEXT("DistanceTolerance 1 u"),
+				FMath::IsNearlyEqual(Hacking->Constraints.DistanceTolerance, 1.0f * ElysiumCam::U,
+					0.01f));
+			// A bare `Position: Named` with no entity name is the shot asking for its subject.
+			TestTrue(TEXT("its anchors are bare Named"),
+				Hacking->End.Position == EElysiumShotPosition::Named
+					&& Hacking->End.NamedEntity.IsEmpty());
+		}
+		TestEqual(TEXT("Load still answers block 0 of the same file"),
+			ElysiumCameraShots::Load(TEXT("special-case"))->Name, FString(TEXT("DeathCam")));
+		TestNull(TEXT("a missing block is a miss, not block 0"),
+			ElysiumCameraShots::LoadNamed(TEXT("special-case"), TEXT("NoSuchShot")));
+		TestNull(TEXT("and so is a missing file"),
+			ElysiumCameraShots::LoadNamed(TEXT("no-such-file"), TEXT("Hacking")));
+	}
+
+	// --- the exposure clamp, the one named Presentation modernization ------------------------
+	// Retail has no exposure state at all (`slice-bc-decompiles.md` §7, C20), so nothing parses
+	// these: they are the pusher's ask, carried on the shot record.
+	{
+		FElysiumShotPresentation Presentation;
+		float Min = -1.0f;
+		float Max = -1.0f;
+		TestFalse(TEXT("an ordinary shot leaves the scene's own exposure alone"),
+			ElysiumCam::SolveExposureClamp(Presentation, Min, Max));
+		TestTrue(TEXT("and writes neither end"), Min == -1.0f && Max == -1.0f);
+
+		Presentation.bClampExposure = true;
+		Presentation.ExposureBrightness = 0.75f;
+		TestTrue(TEXT("a clamped shot answers"),
+			ElysiumCam::SolveExposureClamp(Presentation, Min, Max));
+		TestEqual(TEXT("with the same brightness at both ends"), Min, 0.75f);
+		TestEqual(TEXT("min and max together"), Max, 0.75f);
+	}
+
 	return true;
 }
 

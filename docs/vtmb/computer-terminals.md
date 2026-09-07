@@ -280,6 +280,13 @@ important authored keys are:
 | content | `hack_file`, `global_email` |
 | skill | `difficulty`, `skilltype` |
 | audio | `soundgroup` |
+
+The export references ten distinct `prop_hacking` models. Nine carry the `screen` material slot
+and both `screen` / `screen_axis` attachments (`Elysium.Content.TerminalAttachments`). The tenth,
+`models/scenery/furniture/Computer_New/monitor.mdl` (one entity, in `hw_warrens_5`), is the
+decorative member of that set — the hackable ones are `monitor_hackable` /
+`largemonitor_hackable` — and authors neither attachment nor the slot, so retail's cone reads
+uninitialized stack on it (§7.2); the port refuses its session by name.
 | outputs | `OnUseBegin`, `OnUseEnd`, `OnSkill*`, `OnTrigger0`…`OnTrigger7` |
 | inputs | `Enable`, `Disable`, plus the inherited `CBaseEntity` / skill-entity inputs (`ResetDifficulty`, `ScriptHide`, …) |
 
@@ -455,16 +462,26 @@ The control layer binds `E` to `+use` (`IN_USE` bit `0x20`). Server dispatcher
 1. If `m_hInteractiveUseTarget` (`player+0x1040`) is live, call slot 32 (use gate). **A failed
    gate immediately runs `FUN_10167fd0` (release / slot 42) and returns.** This is how
    `InputDisable`, a failed screen-facing test, or a lost player component ends a live session.
-2. If no `IN_USE` edge/level and a target is still held, `FUN_10167e00` (maintenance): slot 43
-   (pin) or slot 41 (input think) depending on a distance / required-weapon test against the held
-   entity. Terminals inherit stub slots 36/37/40, so the interesting work is 41 and 43.
+2. If no `IN_USE` edge/level and a target is still held, `FUN_10167e00` (maintenance). It runs
+   from a **second site** as well: inside the `IN_USE` arm, for a held button with no rising edge
+   — so maintenance runs every tick of a session regardless of the key. `FUN_10167e00`
+   (`0x10167e00`) measures `d = |eye.x − p.x| + |eye.y − p.y|` (Manhattan XY) from the player's
+   eye to the point clamped onto the held entity's collision box (`FUN_1013c8c0`) and compares it
+   with slot 37, the entity's use range — `CBaseTerminal` inherits `CAISound::FUN_10026710` =
+   `_DAT_104454c8` = **`80.0f`**. `range <= d` selects **slot 43 (the hull-sweep pin, the far
+   arm)**; otherwise slot 36 (required weapon; terminals inherit none) picks **slot 41 (the near
+   arm: view-angle snap)**, or slot 40 after a weapon switch. Once the player stands at the
+   machine the near arm is what runs every tick.
 3. On `IN_USE`, skip if a Protean-transform handle is live or `FUN_10167370` reports another
    exclusive session. Target acquisition: existing handle, then `FUN_104115b0`, then
-   `FUN_10167470` (cosine cone, range `0x42a00000` = 80.0 units), then `player+0x1cb8` /
+   `FUN_10167470` (cosine cone, range `0x42a00000` = 80.0 units, with a second straight probe
+   at `eye + forward * 160` — a separate reach from the cone), then `player+0x1cb8` /
    `+0x1cbc` fallbacks.
 4. On a rising `IN_USE` edge with no current handle, `FUN_10167d70` re-checks slot 32, writes both
    handles (`player+0x1040` and `entity+0x8c`), and dispatches slot 39 (entry).
 5. On a rising edge with a current handle, slot 44 (`+0xb0`) decides whether to release.
+   `CBaseTerminal` inherits `CAISound::FUN_100267b0` = `return 1`, so a second `+use` press
+   **always** releases a terminal.
 
 ### 7.2 Use gate, availability, screen-facing
 
@@ -481,9 +498,15 @@ screen-facing test. `ObjectCaps` `0x10218660` returns bit `0x2` iff the screen-f
 passes, else 0.
 
 `FUN_10218710` (listing, not the overlapping decompiler stack) reads the model's `screen` and
-`screen_axis` **attachments** through `CBaseAnimating::GetAttachment01` (compile-time bound;
-scope-trace string `0x1054fb5c`). Screen-forward is `screen_axis.origin - screen.origin`, then
-`VectorNormalize`. Player vtable `+0x304` (slot 193, `FUN_100b4b40` on the common entity table)
+`screen_axis` **attachments** through `CBaseAnimating::GetAttachment01` (`0x10092e20`;
+scope-trace string `0x1054fb5c`). `GetAttachment01(name, &origin, &angles)` is
+`GetAttachment02(LookupAttachment(name), …)`: the **name is resolved on every call**, nothing is
+cached at Spawn or Precache, and on a miss `GetAttachment02` returns 0 and **writes neither
+out-parameter**, so a model without either attachment makes the cone read uninitialized stack —
+retail has no missing-attachment handling (the port refuses the session with a named content
+error instead; §8.7). Screen-forward is `screen_axis.origin - screen.origin`, normalized in **3D**
+(`VectorNormalize`), and only its `.xy` is used afterwards, **un-renormalized** — a `screen_axis`
+with a Z offset shortens the XY part and widens the cone. Player vtable `+0x304` (slot 193, `FUN_100b4b40` on the common entity table)
 writes **eye position** (`GetAbsOrigin` via `+0x364` plus `m_vecViewOffset`) into an out-vector.
 `FUN_101d1120` then takes `(screen.origin, eye, normalized screen-forward)` and returns the 2D
 XY cosine
@@ -492,8 +515,9 @@ XY cosine
 normalize(eye.xy - screen.origin.xy) · screen_forward.xy
 ```
 
-That value must exceed `_DAT_10457f54` = **`0.7f`** (`333?` at `vampire.dll` `0x10457f54`; the
+That value must **strictly** exceed `_DAT_10457f54` = **`0.7f`** (`vampire.dll` `0x10457f54`; the
 same cosine used by `CGameMovement` and `CWeaponMelee::RequestActivity`). `arccos(0.7) ≈ 45.6°`.
+A zero-length XY eye vector (the eye exactly over the screen point) returns `0` and fails.
 It is a **plan-view position cone in front of the screen**, not a view-vector facing test. No
 bodygroup, material or brush participates.
 
@@ -525,7 +549,23 @@ plain default use icon — never a text hint and never an absent prompt.
    the terminal as Named slots 1 and 2. `FUN_1017cef0(player, cam)` stores that camera at
    `player+0x1ec4` / `+0x19b4`. The shot sits on attachment `screen_axis`, looks at attachment
    `screen`, FOV 75, `ShowHud 1`, `DrawViewmodel 0` (`docs/vtmb/camera-view-modes.md`);
-7. a second `FUN_101e56e0` lookup of feat id 2 (redundant with step 2 once skilltype is 2).
+7. a scan of the global stat table (`DAT_10739d24`, count `DAT_10739d20`) for the stat whose
+   type word is `2`, then `FUN_101e56e0(stat, player)` = `CVStat::GetEffectiveValue` — the
+   player's effective Hacking value, whose `uint` return is **discarded** (`RET 4` follows).
+   Dead work; not ported.
+
+`FUN_10167d70` writes **both** handles (`player+0x1040`, `entity+0x8c`) before dispatching slot
+39, and `FUN_10167fd0` dispatches slot 42 **before** clearing `entity+0x8c`, so both the entry and
+the exit body can resolve the user (which is what lets exit's `FUN_10218820(this, 2, 0)` find its
+recipient). In `FUN_1017cef0`, `player+0x1ec4` is the camera's **engine entity index** (`0` when
+cleared) and `player+0x19b4` its **`CBaseHandle`** (`-1` when cleared); the function removes the
+previous camera entity when it differs and carries `EFL` bit `0x4`. The `Hacking` shot is not a
+snap: `MoveSpeed 300`, `MoveAccel 250`, `MaxTurnRate [200,200,200]`, `TurnAccel 180`,
+`DistanceTolerance 1`, `AngularTolerance [1,1,1]` — an ease-in on entry and **no ease-out on
+exit** (the camera entity is simply removed; nothing is saved and nothing is restored, the client
+falls back to the player's own eye). Nothing on the entry path touches exposure, tonemapping or
+any `mat_` cvar (`xposure` matches no string in any module): the port's exposure clamp is a named
+modernization with no retail counterpart.
 
 `CPropHacking` exit `0x1021a6c0`:
 
@@ -537,10 +577,13 @@ plain default use icon — never a text hint and never an absent prompt.
      and `0x8` (entry only set `0x1`; bit `0x8` is the view-angle lock raised by signs and other
      held-use classes, cleared here defensively);
    - `m_bInUse = 0`;
-   - engine helper to drop the screen/session handle;
+   - `IEngineSoundServer003` (`DAT_1070b248`) slot 5 (`+0x14`) called with
+     `engine->vfunc(0x8c)(terminal edict, 0)` — a sound call keyed on the terminal's entity
+     index (the stop for the terminal's channel), not a screen or session handle;
    - `CBaseVampireSkillEntity::vfunc42` → **`OnUseEnd`** (`FUN_100a5030`) and skill-component
      detach;
-3. `ThinkSet(CPropHackingSS_Think)`, `m_flNextThink = m_flSS_Start + curtime`;
+3. `ThinkSet(CPropHackingSS_Think)`, `m_flNextThink = m_flSS_Start + curtime` (**unfloored**;
+   the `2.0` floor is Activate-only, §13);
 4. `FUN_1021b140(this, NULL)` (idle title);
 5. current directory and pending password = `-1`;
 6. `FUN_1017cef0(player, NULL)` — drop the `camera_cinematic` (and `FUN_101cd940` if its
@@ -574,18 +617,30 @@ owned by `docs/vtmb/player-entity.md` (PostThink skip); terminals do not write i
 | `0x1` | OR on entry, AND-clear on exit | `SetupMove`: when set, take origin from the special entity/animation path instead of the usercmd (the pin in slot 43 is what actually moves the pawn; this bit keeps SetupMove from fighting it). Compact-code 8 in `docs/vtmb/animation_and_movers.md` also reads bit 1 as a feeding-release activity select — a **second consumer of the same word**, not a terminal animation. |
 | `0x8` | AND-clear on exit only | `SetupMove`, `CPlayerMove::RunCommand` `0x101874a0`, `CBasePlayer::ProcessUsercmds` `0x1016aaf0`: when set, ignore usercmd viewangles and keep the stored eye angles. Raised by `CGameSign` use-begin `FUN_10212810` together with immobilized + bit `0x1`. Terminals do not set it; they still clear it. |
 
-Active-use `0x10218320` (decompiled 2026-09-07) reads the player origin (slot `+0x364`) and the
-terminal origin, the player's collision mins/maxs, and builds a hull ray: start at the player's
-collision centre, extents = half the hull, delta = terminal origin − player origin (XY; Z of the
-delta is zero). It installs the player as the trace filter (`FUN_101d3190(..., player, 3)`),
-traces with mask `0x201400b`, and — unless the trace started solid — writes the player's origin
-to the trace end through vtable `+0x360` and `CBaseEntity::Relink`s **the player**. The effect is
-that the hull is swept toward the computer until contact, every tick: the session holds the pawn
-against the terminal, and distance never ends it. A non-empty `m_szHackPWD` then runs the echo /
-cracking stepper `FUN_10217d60`.
+Active-use slot 43 `0x10218320` (the **far** arm of §7.1 step 2; listing read 2026-09-07,
+`$ELYSIUM_WORK_ROOT/_terminal_explore/slice-bc-decompiles.md` §1) has one early-out, a NULL user.
+It reads the player origin (slot `+0x364`) and the terminal origin, the player's collision
+`OBBMins`/`OBBMaxs`, and inlines `Ray_t::Init(start = playerOrigin, end = (terminal.x,
+terminal.y, **player.z**), mins/maxs = the player's own OBB)` — an XY-only hull sweep at the
+player's own height (`Ray_t` here is the unaligned 12-byte-Vector layout with a fourth
+Bloodlines-only bool at `+0x33`, set when `sqrt(ext.x² + ext.y²) > 1e-6`). It installs
+`CTraceFilterSimple(player, COLLISION_GROUP_PLAYER = 3)` (`FUN_101d3190`) and traces with
+`0x0201400b` = **`MASK_PLAYERSOLID`** (`SOLID | WINDOW | GRATE | MOVEABLE | PLAYERCLIP | MONSTER`),
+so the terminal's own `SOLID_BBOX` is what stops the sweep. Then, **unconditionally** — there is
+no start-solid test and `trace.fraction` is never read; the only conditional in the tail guards a
+debug overlay line on the shared debug ConVar `0x10738964` — it writes the player's origin to
+`trace.endpos` through slot 216 (`+0x360`, `SetAbsOrigin`) and `CBaseEntity::Relink`s **the
+player**. The hull is swept toward the computer until contact: the session holds the pawn against
+the terminal, and distance never ends it. A non-empty `m_szHackPWD` then runs the echo / cracking
+stepper `FUN_10217d60`.
 
-Input think `0x102182b0` copies the terminal attachment from vtable `+0x300` into
-`FUN_10178590` (player view placement) and likewise steps `FUN_10217d60` when the buffer is live.
+The **near** arm, slot 41 `0x102182b0`, calls slot 192 (`+0x300`) on the terminal —
+`CAISound::FUN_10027160` = **`WorldSpaceCenter()`**, the collision-OBB centre, not an attachment
+— and hands it to `FUN_10178590(player, target)`: `dir = target − EyePosition()`,
+`VectorNormalize`, `VectorAngles`, `FUN_10178550(player, angles)` — it **snaps the player's eye
+angles at the terminal's bounds centre every tick** while the player is within 80 units. Terminals
+never set `m_iVFlags` bit `0x8`, so the usercmd view angles still arrive each tick and this
+re-snaps over them. It likewise steps `FUN_10217d60` when the buffer is live.
 
 ### 7.4 Forced-exit paths (TERM2, second half)
 
@@ -607,6 +662,14 @@ Recovered callers:
 | `CWeaponGravityGun::vfunc327` | `0x1014dd50` | physcannon |
 | `CPhysicsPropContested::vfunc39` | `0x10192e60` | contested-prop use |
 | `FUN_10170090` | `0x10170090` | (player helper that also releases) |
+| `CPropSign::vfunc41` | `0x10211e00` | sign use-think |
+| `CPropKeypad::vfunc41` | `0x1021de70` | keypad use-think |
+| `FUN_102252f0` | `0x102252f0` | slot 41 of `CPropDoorknob`, `CPropPadlock`, `CPropDoorknobElectronic`, `CItemContainerLock` |
+| `FUN_10224fa0` | `0x10224fa0` | lock-family helper (no recovered caller) |
+| `FUN_1040e9c0` / `FUN_10410bf0` | `0x1040e9c0` / `0x10410bf0` | NPC melee-approach bodies: release, restore the weapon, return |
+
+All 28 `thunk_FUN_10167fd0` hits route through thunk `0x10014a6a` into the one body, and
+`PlayerUse` carries **two** release sites in its own body.
 
 There is no terminal-local death, kill or `UpdateOnRemove` override. Killing the computer while
 the player is in session relies on `FUN_100db7a0` (edict match) or on the next `PlayerUse` tick
@@ -902,6 +965,10 @@ The authority port (`Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp`,
 | Content as format strings | `runtext`, directory descriptions, framed-row text and the pre-formatted notify are passed to `Q_vsnprintf` **as the format**, so a `%` in authored content is undefined | authored strings are printed literally; only the recovered format literals (§8.6) are formatted, through the port's `%s`/`%d`/`%c`/`%%` subset with C's NUL-on-`%c` truncation | no shipped `.txt` carries a `%` outside strings 19/31/39/45–47; the hazard is not a behaviour |
 | `FUN_1021c890` guard | `target > count` only, so `target == count` reads one record past the table | `target >= count` refuses | unreachable from the router; refusing is the only defined answer |
 | Sixth `subdir` | loaded into a five-byte flag array (overrun) | the parser rejects the file with a named error | no shipped file has six; a corrupted one fails loud |
+| Pin trace mask | `MASK_PLAYERSOLID` (`0x0201400b`), stopped by the terminal's own `SOLID_BBOX` | two sweeps of the pawn's hull — its movement channel for world solidity and `ELYSIUM_USE_CHANNEL` where the registered use anchor stands in for the terminal's box — the nearer contact wins (`AElysiumMapActor::SweepPlayerHullToward`) | placed prop bodies are not solid to the pawn in this port |
+| Missing `screen` / `screen_axis` | the cone reads uninitialized stack (§7.2) | one warning naming entity, model and part at spawn; the session is refused (`FElysiumTerminal::ResolveScreenAttachments`) | undefined in retail |
+| Exposure during the shot | none (§7.3) | `FElysiumShotPresentation::bClampExposure` for the handle's lifetime (`ElysiumCam::SolveExposureClamp`) | Unreal's auto-exposure reacts to the emissive panel; retail had no auto-exposure |
+| `m_iVFlags` bits `0x1` / `0x8` | origin from the special path; view-angle lock | no counterpart; the view lock the port needs is the pushed shot | the pin and the shot already own what the bits guarded |
 
 The client's acknowledge restriction (only an empty `hackcmd` leaves `m_HackFlags & 0x1`) is a
 widget rule in retail and stays one in the port (slice E); the authority's `AcceptCmd` port
@@ -1110,18 +1177,32 @@ deleted **and** its dependency at `record+0x240` passes under mode `0x102`. Hidd
 messages are absent from the table, so no selection, `NEXT` or `PREV` can reach them.
 
 **Reading and `runscript` both happen on open, and `runscript` fires exactly once.**
-`FUN_1021bc90` selects the visible row, stores the real email index at `+0x9f4`, renders the
-body (`FUN_1021c260`), tests bit `0x1`, and only if it is unset executes `record+0x280` through
-`CallPyDialogFunc` mode `0x100`, then `FUN_1021a530` sets bit `0x1`. The list renderer
-`FUN_1021c040` uses the bit only to pick style 6 (unread) versus default (read); it never runs a
-script. Ten rows per page, page at `+0xa0c`.
+`FUN_1021bc90` selects the visible row, stores the **clamped visible row** at `+0x9f0` and the
+real email index at `+0x9f4`, renders the body (`FUN_1021c260`), tests bit `0x1`, and only if it
+is unset executes `record+0x280` through `CallPyDialogFunc` mode `0x100`, then `FUN_1021a530`
+sets bit `0x1`. `[n]ext` / `[p]rev` message (`FUN_1021bc20` / `FUN_1021bc60`) walk `+0x9f0`, not
+`+0x9f4`. The list renderer `FUN_1021c040` uses the bit only to bracket an unread row's `[%d]`
+between entity messages **type 6** (client style byte `0x00`) and **type 5** (`0x80`) — reverse
+video on the bracketed number only (`0x1021c0ce` / `0x1021c0e4`); it never runs a script. Ten
+rows per page, page at `+0xa0c`. Two retail off-by-ones: `[n]ext` page uses `count / 10`
+(integer), so a count that is an exact multiple of 10 has a reachable empty page; and
+`FUN_1021bd80` never re-clamps `+0xa0c`, so deleting the last row of the last page strands the
+player on an empty page. The `accept` cue is played by `FUN_1021c890`'s tail (entering the mail
+area, returning to root), not by the list draw. Full listings:
+`$ELYSIUM_WORK_ROOT/_terminal_explore/slice-g-decompiles.md`.
 
 **`autodelete` is inert.** The only deletion path is the player's `DEL` command through
 `FUN_1021bbf0` → `FUN_1021a560` (set bit `0x2`).
 
-**The mail area gates on a non-empty password only.** See the `EMAIL` builtin in §9. Entering
-always sets `m_bEmailUnlocked`. Neither entry nor exit of the terminal session clears that flag,
-so it persists for the entity's lifetime as saved state.
+**The mail area gate.** The `email` builtin (§9) matches only when the email record count
+`+0xa20` is non-zero; the password prompt fires when `strlen(email_password) != 0 &&
+m_bEmailUnlocked == 0`, else the area opens directly. Every shipped email-bearing file (22 of
+them) authors a non-empty `email_password`, so the "straight in" branch is unreachable in retail
+content (the in-file comment `// not used for log in` contradicts the code). The mail-area
+password crack rolls against the **entity keyfield `difficulty`** (`m_nSkillDifficulty`), never a
+per-mail value, because vfunc268 `0x1021cae0` short-circuits on pending `-2`. Entering always sets
+`m_bEmailUnlocked`. Neither entry nor exit of the terminal session clears that flag, so it
+persists for the entity's lifetime as saved state.
 
 **Email navigation is a hotkey state.** `FUN_1021b9c0` runs only while `+0x9dc == -2`. Commands
 are matched as **one character** against `(Hacking Strings[i] + 1)` — the first character of the
@@ -1129,15 +1210,20 @@ localized word after a leading byte (typically a space or bracket):
 
 | Index | Key | List (`+0x9f4 == -1`) | Open message |
 |---:|---|---|---|
-| (integer `1..count`) | — | open that visible row | (ignored unless length 1) |
+| (integer `1..count`) | — | open that visible row (`atoi` of the whole line) | — (no numeric selection in the open state) |
 | 24 | `STRING_NEXT_CMD` | `FUN_1021c000` page forward | `FUN_1021bc20` next message |
 | 25 | `STRING_PREV_CMD` | `FUN_1021bfd0` page back | `FUN_1021bc60` previous message |
 | 26 | `STRING_DEL_CMD` | — | delete current, then list |
 | 27 | `STRING_MENU_CMD` | — | list (`FUN_1021c040`) |
 | 28 | `STRING_QUIT_CMD` | `FUN_1021c890(this, -1)` root | same |
 
-Open-message commands require the input length to be exactly 1. `QUIT` from either state returns
-to the root directory, not out of the terminal.
+Two input regimes. The **list state has no length check**: `next`, `n` and `nonsense` all page
+forward, and `atoi` runs on the whole line. The **open state** requires the input length to be
+exactly 1, because the client is then in `m_HackFlags & 4` single-key mode (client `0x100c7090`
+sends `hackcmd %c` per keypress). `ESC` in an open message sends the literal `hackcmd quit`
+(4 bytes), which fails the length-1 test and lands on the **list**, not root. The typed or
+localized `[q]uit` from either state returns to the root directory, not out of the terminal. Any
+unmatched key or line in either state returns `0` and `AcceptCmd` draws the list.
 
 **Global reconciliation overwrites in both directions, keyed by entity name.**
 `LoadGlobalEmailState` `0x1021a2f0` and `SaveGlobalEmailState` `0x1021a3d0` both return
@@ -1145,7 +1231,8 @@ immediately unless `m_bHasGlobalEmail` is set. Otherwise they call
 `CBasePlayer::RetrieveGlobalEmailFlags` `0x1016eec0` / `StoreGlobalEmailFlags` `0x1016f0f0`.
 
 Each player record is `0x240` bytes: a 64-byte name at `+0x00` and 128 ints at `+0x40`. Lookup
-is `Q_strncmp` of the **shorter** of the two name lengths (not a fixed 64). Retrieve creates a
+is `Q_strncmp` over the **longer** of the two name lengths (`MAX(strlen(a), strlen(b))`,
+`0x1016f19b`) — an exact-name compare, not a prefix match. Retrieve creates a
 zeroed record (`Q_strncpy` name, cap 64) when none exists and copies 128 ints over the local
 array. Store copies the local array over the record, and `DevWarning("Could not save email for
 terminal %s")` if no record is found — there is no create-on-store. No merge in either
@@ -1153,29 +1240,37 @@ direction: entry is global-wins, exit is local-wins. For `global_email 0` both c
 and `m_EmailFlags` is purely per-entity saved state.
 
 The player save's `m_GlobalEmailFlags` vector holds one such record per terminal entity name.
-The byte layout belongs to `docs/vtmb/savegame_format.md`.
+Only **four** entities in the whole game set `global_email 1`, all named `haven_pc`, all in the
+player havens; and only the 128 flags cross — `m_bEmailUnlocked` and `m_nEmailAttempts` are
+per-entity, so the haven password is re-prompted in each haven map. The byte layout belongs to
+`docs/vtmb/savegame_format.md`.
 
 ## 13. Screensaver
 
 `CPropHackingSS_Think` `0x1021a740` repositions one label; it does not scroll, bounce or animate
 continuously. Each tick:
 
-1. type 7 + type 4 clear (`FUN_10218ec0`, `FUN_10218db0`);
+1. type 7 with margins **`(0, 0)`** (`FUN_10218ec0`; this resets the `(1,1)` the title box set
+   — type 7 clears nothing) then the type 4 clear (`FUN_10218db0`);
 2. measure `"screen saver"` at `+0x904`;
 3. `RandomInt(1, textrows - 1)` and `RandomInt(1, max(0, textcolumns - labelLength))` — the label
    never sits on row 0 or column 0;
-4. type-1 cursor;
+4. type-1 cursor `FUN_10218ff0(this, column, row)` — column first, margin-relative (margin 0
+   here, so absolute);
 5. `RandomInt(0, 1)` selects style 5 (`FUN_10218ca0`) or style 6 (`FUN_10218b90`);
-6. type-2 print of the label;
+6. type-2 print of the label through `FUN_10217ac0`, i.e. **as a format string**;
 7. style 5 again (reset);
 8. `m_flNextThink = m_flSS_Delay + curtime`.
 
 The work is server-side and pushes through the ordinary entity-message path. `brackets` do not
 participate.
 
-Two timers: Activate arms the **first** tick at `RandomFloat(0, 1) + curtime`. Exit re-arms at
-`m_flSS_Start + curtime`. Each tick then reschedules itself `ss_delay` later, floored at `2.0`
-when the authored value was below `_DAT_10449400`. Entry cancels think outright.
+Two timers: Activate (`CPropHacking::vfunc113` `0x1021a270`) arms the **first** tick at
+`RandomFloat(0, 1) + curtime`, and only **after** that first schedule floors `m_flSS_Delay` to
+`2.0f` when the authored value was below `_DAT_10449400` (a double `2.0`). Exit re-arms at
+`m_flSS_Start + curtime`, unfloored. Each tick then reschedules itself `m_flSS_Delay` later. Entry
+cancels the think outright (`ThinkSet(NULL)`); the think body itself carries **no `m_bInUse`
+guard**.
 
 ## 14. Terminal sound cues
 
@@ -1219,7 +1314,7 @@ inherit:
 
 ## 16. Localized `Hacking Strings` indices
 
-`FUN_10219400` reads `vdata` table `"Hacking Strings"`. Compiled-in fallback names, in order
+`FUN_10219400` reads `vdata` table `"Hacking_Strings"` (underscore, `0x105b03b4`). Compiled-in fallback names, in order
 0…47:
 
 | i | Key | Typical consumer |
@@ -1251,7 +1346,7 @@ inherit:
 | 41 | `STRING_CURRENT_SUBDIR` | |
 | 42 | `STRING_TYPE_PROMPT` | `FUN_1021b410` uses the player's bound `+use` key name (`player+0x2078`) |
 | 43–44 | `STRING_HOME_MENU` / `STRING_MENU` | root versus in-directory header |
-| 45–47 | (list footer keys) | mail list `FUN_1021c040` |
+| 45–47 | (list footer keys; **no compiled-in fallback** — `FUN_10219400` leaves the three slots NULL, so a short table hands `Q_vsnprintf` a NULL format for every footer row) | mail list `FUN_1021c040` |
 
 ## 17. `sp_tutorial_1`: the worked terminal contract
 
@@ -1382,6 +1477,7 @@ here are closed from listings and from the pinned module bytes:
 | TERM14 | Screen test is `normalize(eye.xy - screen.origin.xy) · screen_forward.xy > 0.7f`. Eye is slot 193 (`GetAbsOrigin + m_vecViewOffset`). `_DAT_10457f54 = 0.7f`. Not a view-vector test. |
 | TERM15 | The client screen is a cell terminal: `FUN_100c8060` put-char (wrap at `columns`, newline to the margin, scroll at `rows - 1`, backspace), `FUN_100c8210` scroll-up, `FUN_100c77f0` rasterizer; cells are `char \| 0x80 style`, stride 36 (§8.3). |
 | TERM16 | `FUN_10218820` is the `InfoCtrl` HUD hint (type, value): 2 hide, 3 "Press CTRL-C…", 5 "Making hack attempt at skill N", 6 "Skill too low… difficulty N"; client handler `FUN_10055d30` (§8.4). Draw bodies `FUN_1021b140` / `FUN_1021aca0` / `FUN_1021b410` / `FUN_1021b5e0` joined to owner captures (§8.5). |
+| TERM19 | Slice B/C listings (`slice-bc-decompiles.md`): the hull-sweep pin `0x10218320` is the far arm (eye ≥ 80 Manhattan XY units from the terminal's box), unconditional `SetAbsOrigin(endpos)` + `Relink`, mask `MASK_PLAYERSOLID`; the near arm `0x102182b0` snaps the player's eye angles at `WorldSpaceCenter()`; attachments are looked up by name per call; the cone forward is 3D-normalized with `.xy` used raw, strict `> 0.7`; a second `+use` always releases; the camera is removed on exit with no restore and no ease-out; no exposure change exists; the screensaver's type 7 is `(0,0)`, its floor Activate-only, its think unguarded. |
 | TERM18 | Port review 2026-09-07 against the listings: `FUN_1021b750` continues past a dependency-blocked name match; `0x1021c560` hides the HUD hint unconditionally, raises hint 6 with `GetDifficulty` on the skill arm and never clears the screen; `0x10217b30` echoes a second random draw per character (type 9, margin to 0) on the sub-3 roll; `thunk_FUN_10218820` has exactly six callers (`0x10217b30`, `0x10217f50`, `CBaseTerminal::vfunc42`, `AcceptCmd`, `0x1021b5e0`, `0x1021c560`) — no hint on entry; `AcceptCmd` never tests `m_HackFlags & 0x1` (the acknowledge restriction is client-side); the prompt's key name is copied without a case fold; the rule row is `columns - 2` bytes. |
 | TERM17 | Draw bodies line by line (§8.6). Type 7 (`FUN_10218ec0`/client `FUN_100c7e60`) sets the two margins and clears nothing; type 4 clears. Type-2 prints are word-wrapped by client `FUN_100c7fb0` inside `[left, columns - right)`. Type-1 columns are margin-relative (client `FUN_100c7ec0`). Box rows are `columns - 2` wide from the margin (`FUN_1021b2b0`/`FUN_1021b330`); the prompt literal is `"%c%s@%s%c "` with the bound `+use` key name; strings 19/39 echo the accepted password. |
 

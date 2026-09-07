@@ -114,9 +114,14 @@ namespace ElysiumCameraShotsImpl
 
 	// The parsed table, keyed by the lowercased shot-file name. A conversation re-reads the same file
 	// every line, and the whole directory is 66 files of a few hundred bytes.
-	TMap<FString, TSharedPtr<FElysiumCameraShotDef>>& Cache()
+	//
+	// The value is the file's WHOLE authored block list, because `special-case.txt` carries five
+	// siblings that retail addresses by name. `Load` answers element 0, which is the one-shot-per-file
+	// convention every other caller relies on; a null entry is a remembered miss.
+	using FShotList = TArray<FElysiumCameraShotDef>;
+	TMap<FString, TSharedPtr<FShotList>>& Cache()
 	{
-		static TMap<FString, TSharedPtr<FElysiumCameraShotDef>> Map;
+		static TMap<FString, TSharedPtr<FShotList>> Map;
 		return Map;
 	}
 }
@@ -134,8 +139,9 @@ FString ElysiumCameraShots::NormalizeKey(const FString& ShotFile)
 	return FPaths::GetBaseFilename(Normalized).ToLower();
 }
 
-bool ElysiumCameraShots::ParseText(const FString& Text, FElysiumCameraShotDef& Out)
+bool ElysiumCameraShots::ParseAllText(const FString& Text, TArray<FElysiumCameraShotDef>& Out)
 {
+	Out.Reset();
 	const TSharedPtr<ElysiumKeyValues::FKvNode> Root = ElysiumKeyValues::ParseText(Text);
 	if (!Root.IsValid())
 	{
@@ -145,65 +151,102 @@ bool ElysiumCameraShots::ParseText(const FString& Text, FElysiumCameraShotDef& O
 	// carries everything and a hand-edited file may drop the wrapper.
 	const ElysiumKeyValues::FKvNode* Table = Root->Child(TEXT("CameraShotTable"));
 	const ElysiumKeyValues::FKvNode* Outer = Table ? Table : Root.Get();
-	if (Outer->Kids.Num() == 0)
+
+	for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Kid : Outer->Kids)
+	{
+		const ElysiumKeyValues::FKvNode* Shot = Kid.Value.Get();
+		if (!Shot || Kid.Key.IsEmpty())
+		{
+			continue;
+		}
+		FElysiumCameraShotDef Def;
+		Def.Name = Kid.Key;
+		ParseAnchor(Shot->Child(TEXT("Start")), Def.Start);
+		ParseAnchor(Shot->Child(TEXT("End")), Def.End);
+		if (const ElysiumKeyValues::FKvNode* Target = Shot->Child(TEXT("Target")))
+		{
+			ParseAnchor(Target->Child(TEXT("Point1")), Def.Target1);
+			ParseAnchor(Target->Child(TEXT("Point2")), Def.Target2);
+		}
+		ParseConstraints(Shot->Child(TEXT("CameraConstraints")), Def.Constraints);
+		Out.Add(MoveTemp(Def));
+	}
+	return Out.Num() > 0;
+}
+
+bool ElysiumCameraShots::ParseText(const FString& Text, FElysiumCameraShotDef& Out)
+{
+	// One file, one shot, named after the file — block 0 of the list above.
+	TArray<FElysiumCameraShotDef> All;
+	if (!ParseAllText(Text, All))
 	{
 		return false;
 	}
-
-	// One file, one shot, named after the file.
-	Out = FElysiumCameraShotDef();
-	Out.Name = Outer->Kids[0].Key;
-	const ElysiumKeyValues::FKvNode* Shot = Outer->Kids[0].Value.Get();
-	if (!Shot)
-	{
-		return false;
-	}
-
-	ParseAnchor(Shot->Child(TEXT("Start")), Out.Start);
-	ParseAnchor(Shot->Child(TEXT("End")), Out.End);
-	if (const ElysiumKeyValues::FKvNode* Target = Shot->Child(TEXT("Target")))
-	{
-		ParseAnchor(Target->Child(TEXT("Point1")), Out.Target1);
-		ParseAnchor(Target->Child(TEXT("Point2")), Out.Target2);
-	}
-	ParseConstraints(Shot->Child(TEXT("CameraConstraints")), Out.Constraints);
+	Out = All[0];
 	return true;
+}
+
+namespace ElysiumCameraShotsImpl
+{
+	// The file's whole block list, loaded and cached once. Null is a remembered miss.
+	const FShotList* LoadFile(const FString& ShotFile)
+	{
+		if (ShotFile.IsEmpty())
+		{
+			return nullptr;
+		}
+		const FString Key = ElysiumCameraShots::NormalizeKey(ShotFile);
+		if (Key.IsEmpty())
+		{
+			return nullptr;
+		}
+		if (const TSharedPtr<FShotList>* Hit = Cache().Find(Key))
+		{
+			return Hit->Get();
+		}
+
+		const FString Path =
+			FElysiumContentPaths::VdataFile(TEXT("camerashots") / (Key + TEXT(".txt")));
+		FString Text;
+		TSharedPtr<FShotList> List;
+		if (FFileHelper::LoadFileToString(Text, *Path))
+		{
+			List = MakeShared<FShotList>();
+			if (!ElysiumCameraShots::ParseAllText(Text, *List))
+			{
+				UE_LOG(LogElysiumCamShots, Warning, TEXT("camera shot '%s' has no shot block"), *Key);
+				List.Reset();
+			}
+		}
+		else
+		{
+			UE_LOG(LogElysiumCamShots, Warning, TEXT("camera shot '%s' not found (%s)"), *Key, *Path);
+		}
+		Cache().Add(Key, List);
+		return List.Get();
+	}
 }
 
 const FElysiumCameraShotDef* ElysiumCameraShots::Load(const FString& ShotFile)
 {
-	if (ShotFile.IsEmpty())
-	{
-		return nullptr;
-	}
-	const FString Key = NormalizeKey(ShotFile);
-	if (Key.IsEmpty())
-	{
-		return nullptr;
-	}
-	if (const TSharedPtr<FElysiumCameraShotDef>* Hit = Cache().Find(Key))
-	{
-		return Hit->Get();   // a null entry is a remembered miss
-	}
+	const FShotList* List = LoadFile(ShotFile);
+	return (List && List->Num() > 0) ? &(*List)[0] : nullptr;
+}
 
-	const FString Path = FElysiumContentPaths::VdataFile(TEXT("camerashots") / (Key + TEXT(".txt")));
-	FString Text;
-	TSharedPtr<FElysiumCameraShotDef> Def;
-	if (FFileHelper::LoadFileToString(Text, *Path))
+const FElysiumCameraShotDef* ElysiumCameraShots::LoadNamed(const FString& ShotFile,
+	const FString& ShotName)
+{
+	const FShotList* List = LoadFile(ShotFile);
+	if (!List || ShotName.IsEmpty())
 	{
-		Def = MakeShared<FElysiumCameraShotDef>();
-		if (!ParseText(Text, *Def))
-		{
-			UE_LOG(LogElysiumCamShots, Warning, TEXT("camera shot '%s' has no shot block"), *Key);
-			Def.Reset();
-		}
+		return nullptr;
 	}
-	else
+	// The corpus writes the block names in the authored case (`Hacking`, `Intrusion`); retail's own
+	// lookup is case-insensitive, so this is too.
+	return List->FindByPredicate([&ShotName](const FElysiumCameraShotDef& Def)
 	{
-		UE_LOG(LogElysiumCamShots, Warning, TEXT("camera shot '%s' not found (%s)"), *Key, *Path);
-	}
-	Cache().Add(Key, Def);
-	return Def.Get();
+		return Def.Name.Equals(ShotName, ESearchCase::IgnoreCase);
+	});
 }
 
 void ElysiumCameraShots::FlushCache()
@@ -213,12 +256,20 @@ void ElysiumCameraShots::FlushCache()
 
 void ElysiumCameraShots::Install(const FString& ShotFile, const FElysiumCameraShotDef& Def)
 {
+	InstallNamed(ShotFile, MakeArrayView(&Def, 1));
+}
+
+void ElysiumCameraShots::InstallNamed(const FString& ShotFile,
+	TArrayView<const FElysiumCameraShotDef> Defs)
+{
 	const FString Key = NormalizeKey(ShotFile);
 	if (Key.IsEmpty())
 	{
 		return;
 	}
-	Cache().Add(Key, MakeShared<FElysiumCameraShotDef>(Def));
+	TSharedRef<FShotList> List = MakeShared<FShotList>();
+	List->Append(Defs.GetData(), Defs.Num());
+	Cache().Add(Key, List);
 }
 
 const TCHAR* ElysiumCameraShots::LexToString(EElysiumShotPosition Position)
@@ -268,7 +319,14 @@ namespace ElysiumCameraShotsImpl
 			// grapple shot frames the same subject rather than resolving to nothing.
 			return World->Resolve(Subject);
 		case EElysiumShotPosition::Named:
-			return World->FindByName(Anchor.NamedEntity);
+			// A bare `Position: Named` with no entity name is the shot asking for **the entity it was
+			// pushed about**. Retail's own call binds it: `FUN_10070470("Hacking", NULL, terminal,
+			// terminal, NULL)` hands the terminal in as Named slots 1 and 2
+			// (`docs/vtmb/computer-terminals.md` §7.3 step 6), and `special-case.txt`'s `Hacking` and
+			// `Intrusion` blocks both write the keyword with no name for exactly that reason.
+			// `FindByName("")` would answer nothing and lose the shot.
+			return Anchor.NamedEntity.IsEmpty()
+				? World->Resolve(Subject) : World->FindByName(Anchor.NamedEntity);
 		default:
 			return nullptr;
 		}
@@ -303,6 +361,15 @@ namespace ElysiumCameraShotsImpl
 			int32 Colon = INDEX_NONE;
 			AttachPos.FindChar(TEXT(':'), Colon);
 			const FName Socket(*AttachPos.Mid(Colon + 1).TrimStartAndEnd());
+			// A placed prop is normally reduced to its static representation and has no skeletal body
+			// to hold a socket table, while the model's `$attachment`s still exist on its baked
+			// skeletal asset. That route is asked FIRST, so the terminal's screen cone and its camera
+			// read the same two vectors (`screen`, `screen_axis`) by construction.
+			FVector Attachment;
+			if (Entity.GetBodyAttachmentPoint(Socket, Attachment))
+			{
+				return Attachment;
+			}
 			if (Body && Body->DoesSocketExist(Socket))
 			{
 				return Body->GetSocketLocation(Socket);
@@ -441,6 +508,49 @@ int32 FElysiumCameraDirector::Push(FElysiumEntityWorld* World, UElysiumCameraCom
 	return Entry.Id;
 }
 
+int32 FElysiumCameraDirector::PushNamed(FElysiumEntityWorld* World, UElysiumCameraComponent* Camera,
+	const FString& ShotFile, const FString& ShotName, const FElysiumEntityHandle& Subject,
+	EElysiumShotExposure Exposure)
+{
+	if (!Camera)
+	{
+		return 0;
+	}
+	const FElysiumCameraShotDef* Def = ElysiumCameraShots::LoadNamed(ShotFile, ShotName);
+	if (!Def || !Def->IsValid())
+	{
+		UE_LOG(LogElysiumCamShots, Warning, TEXT("camera shot '%s:%s' did not resolve"),
+			*ShotFile, *ShotName);
+		return 0;
+	}
+
+	FElysiumCameraShot Shot;
+	if (!Resolve(World, *Def, Subject, Shot))
+	{
+		UE_LOG(LogElysiumCamShots, Warning,
+			TEXT("camera shot '%s:%s': nothing it anchors to resolved"), *ShotFile, *ShotName);
+		return 0;
+	}
+
+	FLiveShot& Entry = Live.AddDefaulted_GetRef();
+	Entry.Id = NextId++;
+	Entry.bValue = false;
+	Entry.Def = *Def;
+	Entry.Subject = Subject;
+	Entry.Exposure = Exposure;
+	ApplyExposure(Entry, Shot);
+	Entry.CameraShotId = Camera->PushShot(Shot);
+	return Entry.Id;
+}
+
+void FElysiumCameraDirector::ApplyExposure(const FLiveShot& Entry, FElysiumCameraShot& Shot)
+{
+	// The clamp belongs to the HANDLE, not to the file: nothing in `vdata/camerashots/` authors an
+	// exposure key, so the pusher's ask has to be re-stamped every time `Tick` re-resolves the shot
+	// or the resolve would silently drop it mid-session.
+	Shot.Presentation.bClampExposure = Entry.Exposure == EElysiumShotExposure::Clamped;
+}
+
 int32 FElysiumCameraDirector::PushValue(UElysiumCameraComponent* Camera, const FElysiumCameraShot& Shot)
 {
 	if (!Camera)
@@ -510,6 +620,7 @@ void FElysiumCameraDirector::Tick(FElysiumEntityWorld* World, UElysiumCameraComp
 		FElysiumCameraShot Shot;
 		if (Resolve(World, Entry.Def, Entry.Subject, Shot))
 		{
+			ApplyExposure(Entry, Shot);
 			Camera->UpdateShot(Entry.CameraShotId, Shot);
 		}
 	}

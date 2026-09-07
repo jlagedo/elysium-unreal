@@ -38,6 +38,7 @@ class APawn;
 class AElysiumNpcBody;
 class AElysiumMapActor;
 class AElysiumEffectActor;
+enum class EElysiumShotExposure : uint8;
 class UElysiumParticleTrees;
 struct FElysiumEffectAttachment;
 
@@ -308,6 +309,16 @@ public:
 	// The live Track-B entity world, or null if the map has no `.ents`. Owned by this
 	// actor, so it dies on map unload. The `elysium.world*` verbs reach it through here.
 	FElysiumEntityWorld* GetEntityWorld() const { return EntityWorld.Get(); }
+#if WITH_DEV_AUTOMATION_TESTS
+	// Harness seam (`Tests/ElysiumTerminalGym.h`). Production builds the entity world through the map
+	// lifecycle, which needs the whole asset/prerequisite chain; a headless harness that spawns a
+	// cut-down slice and stands its bodies by hand needs the same wiring — the camera director and
+	// the attachment fallback both resolve entities through this pointer — without that chain.
+	void AdoptEntityWorldForTests(TPimplPtr<FElysiumEntityWorld>&& InWorld)
+	{
+		EntityWorld = MoveTemp(InWorld);
+	}
+#endif
 	// Engine overlap ingress from UElysiumBrushComponent. Runtime teleports suppress the callbacks
 	// Unreal emits inside SetActorLocation and replace them with one post-movement containment diff.
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush,
@@ -377,6 +388,10 @@ public:
 	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel) override;
 	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
 		FTransform& OutWorld) const override;
+	virtual bool GetBodyAttachment(const FElysiumEntityHandle& OwnerHandle, FName Attachment,
+		FTransform& OutWorld) const override;
+	virtual bool GetUseBodyWorldBounds(const FElysiumEntityHandle& OwnerHandle,
+		FBox& OutWorld) const override;
 	virtual void QuerySwingContacts(const FElysiumSwingSweep& Sweep,
 		TArray<FElysiumEntityHandle>& OutHits) const override;
 	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
@@ -455,11 +470,20 @@ public:
 	virtual bool GetPlayerFeetTransform(FVector& OutFeetOrigin, FRotator& OutViewRotation) const override;
 	virtual bool GetPlayerCapsuleTransform(FVector& OutCapsuleCenter, FRotator& OutViewRotation) const override;
 	virtual void TeleportPlayer(const FVector& FeetOrigin, const FRotator& ViewRotation) override;
+	virtual bool SweepPlayerHullToward(const FVector& TargetCm, FVector& OutContactCm) override;
+	virtual bool SnapPlayerViewTo(const FVector& TargetCm) override;
 	virtual void DamagePlayer(float Amount) override;
 	virtual void RegisterUseAnchor(UPrimitiveComponent* Source,
 		const FElysiumEntityHandle& Owner) override;
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;
 	virtual void ClearUseAnchors() override;
+	// The socket table a placed prop's `$attachment`s are read from when its own body cannot carry
+	// one. Production leaves this unset: `GetBodyAttachment` composes the model row's baked
+	// `SkeletalMesh` ref pose with the standing body instead. A harness that stands its bodies by
+	// hand (the terminal gym) registers the model's real skeletal component here so the transforms
+	// are the asset's own rather than a composition.
+	void RegisterAttachmentSource(const FElysiumEntityHandle& OwnerHandle,
+		USkeletalMeshComponent* Source);
 	// Presentation-only lookup for the rendered component that supplied an entity's use anchor.
 	// Query proxies remain private; callers receive the physical mesh/brush, never the proxy box.
 	UPrimitiveComponent* FindUseVisual(const FElysiumEntityHandle& Owner) const;
@@ -505,6 +529,8 @@ public:
 	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
 	// learns what an entity is.
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override;
+	virtual int32 PushCameraShotNamed(const FString& ShotFile, const FString& ShotName,
+		const FElysiumEntityHandle& Subject, EElysiumShotExposure Exposure) override;
 	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) override;
 	virtual bool UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot) override;
 	virtual void SetEquippedCameraClass(int32 CameraClass) override;
@@ -627,6 +653,8 @@ private:
 	{
 		TWeakObjectPtr<UPrimitiveComponent> Component;
 		TWeakObjectPtr<UPrimitiveComponent> Visual;
+		// Optional: an explicit socket table for this owner's model attachments.
+		TWeakObjectPtr<USkeletalMeshComponent> AttachmentSource;
 		FElysiumEntityHandle Owner;
 		bool bEnabled = true;
 	};

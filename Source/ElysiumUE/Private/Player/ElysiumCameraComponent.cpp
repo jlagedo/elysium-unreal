@@ -344,6 +344,20 @@ void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) co
 		// scripted camera channel while it has visible weight.
 		View.PostProcessSettings.bOverride_MotionBlurAmount = true;
 		View.PostProcessSettings.MotionBlurAmount = 0.0f;
+
+		// The pusher's exposure ask, for the handle's lifetime (`FElysiumShotPresentation`, the named
+		// Presentation modernization in `docs/architecture/computer-terminal-architecture.md` §6.4).
+		// A terminal shot frames one bright emissive panel at close range and the eye would otherwise
+		// ramp the rest of the room into black around it.
+		float ExposureMin = 0.0f;
+		float ExposureMax = 0.0f;
+		if (ElysiumCam::SolveExposureClamp(Shot.Presentation, ExposureMin, ExposureMax))
+		{
+			View.PostProcessSettings.bOverride_AutoExposureMinBrightness = true;
+			View.PostProcessSettings.AutoExposureMinBrightness = ExposureMin;
+			View.PostProcessSettings.bOverride_AutoExposureMaxBrightness = true;
+			View.PostProcessSettings.AutoExposureMaxBrightness = ExposureMax;
+		}
 	}
 	if (Shot.Weight > 0.0f && Shot.bSeeded)
 	{
@@ -370,6 +384,7 @@ FElysiumScriptedShotView UElysiumCameraComponent::ScriptedShotView() const
 	if (const FElysiumCameraShot* Top = Shots.Top())
 	{
 		Out.FieldOfView = Top->FieldOfView;
+		Out.Presentation = Top->Presentation;
 	}
 	return Out;
 }

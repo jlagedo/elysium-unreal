@@ -257,6 +257,16 @@ public:
 		return FElysiumUseBeginResult::Completed();
 	}
 	virtual void EndPlayerUse(const FElysiumUseContext& Context, EElysiumUseEndReason Reason) {}
+	// Retail's `CBasePlayer::PlayerUse` maintenance arm (`0x10167850` step 2 -> `FUN_10167e00`):
+	// what a held session does on every tick where nothing was pressed. `FUN_10167e00` re-reads the
+	// held entity's bounds and dispatches slot 43 or slot 41 off a reach test; the leaf owns which
+	// of those it is. The base does nothing, which is every class that holds no session.
+	virtual void TickPlayerUse(const FElysiumUseContext& Context) {}
+	// Retail slot 44 (`+0xb0`), consulted on a rising `+use` edge while this entity is already held
+	// (`CBasePlayer::PlayerUse` step 4e): a non-zero answer runs the one release body. Most classes
+	// inherit `return 1`; the base here answers false so only the classes whose retail slot has
+	// been read take it, and the port's existing while-held sessions keep their behaviour.
+	virtual bool ReleasesOnSecondUse() const { return false; }
 	virtual void OnUseCursorEnter() {}                                  // look-cursor entered (OnIn)
 	virtual void OnUseCursorLeave() {}                                  // look-cursor left (OnOut)
 	virtual void Use(const FElysiumEntityHandle& Activator) {}          // +use / Press pressed it
@@ -294,6 +304,15 @@ public:
 	// and the bone lookup a look-at rig uses. Base returns null; `FElysiumAnimating`
 	// returns its standing `Visual`. Declared here for the same no-RTTI reason `GetAttachBody` is.
 	virtual class USkeletalMeshComponent* GetSkeletalBody() const { return nullptr; }
+
+	// A model-authored `$attachment` on this entity's placed body, world cm — retail's
+	// `CBaseAnimating::GetAttachment01`. Separate from `GetSkeletalBody`'s socket table because a
+	// placed prop is normally reduced to its **static** representation and has no skeletal body at
+	// all, while the attachment transforms still live on the model's baked skeletal asset
+	// (`ElysiumPlacedAttachments`). A camera shot's `Attachment:` anchor asks here first.
+	//
+	// False is the ordinary answer: no body, no such attachment, or a headless world.
+	virtual bool GetBodyAttachmentPoint(FName Attachment, FVector& OutWorld) const { return false; }
 
 	// --- The sequence-event chain ---
 	// Walk this entity's playing clips one frame further along their own timelines and dispatch

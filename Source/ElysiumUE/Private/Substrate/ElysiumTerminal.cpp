@@ -1,5 +1,7 @@
 #include "Substrate/ElysiumTerminal.h"
 
+#include "Substrate/ElysiumTerminalCone.h"
+
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumBinds.h"
 #include "ElysiumContentPaths.h"
@@ -307,50 +309,147 @@ void FElysiumTerminal::Spawn()
 	}
 
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (!Embodiment || !Def)
+	// The body build is conditional; resolving the screen attachments at the end is not, because a
+	// bodiless terminal still has to report WHICH part it is missing.
+	if (Embodiment && Def && !Model.IsEmpty())
 	{
+		VisualStem = Model;
+		const FQuat StaticRotation = Def->ModelMesh.IsEmpty()
+			? FQuat(FRotator(0.0f, -Angles.Y, 0.0f)) : Def->ModelQuat;
+		const FQuat SkeletalRotation = Def->ModelMesh.IsEmpty()
+			? FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)) : Def->ModelQuat;
+		if (Embodiment->HasPlacedModelCatalogue())
+		{
+			FElysiumPlacedModelRequest Request;
+			Request.ModelPath = Model;
+			Request.StaticStem = VisualStem;
+			Request.Location = Origin;
+			Request.Rotation = SkeletalRotation;
+			Request.UniformScale = Embodiment->BodyScaleFor(*Def);
+			Request.PlacementToken = Handle.Index;
+			WorldBody = Embodiment->BuildPlacedModelBody(Request).Visual;
+		}
+		else
+		{
+			WorldBody = Embodiment->BuildPropVisual(
+				VisualStem, Origin, StaticRotation, Embodiment->BodyScaleFor(*Def));
+		}
+		if (WorldBody)
+		{
+			World->RegisterPropBody(WorldBody, Handle);
+			World->SetUseAnchorEnabled(Handle, bStartEnabled && !IsInert());
+		}
+	}
+	ResolveScreenAttachments();
+	ReportMissingAttachments();
+}
+
+void FElysiumTerminal::ResolveScreenAttachments()
+{
+	// `FUN_10218710`'s two `CBaseAnimating::GetAttachment01` calls, done once per body rather than
+	// once per gate: the pair only moves when the body does, and the gate runs for every use
+	// candidate every frame.
+	bScreenAttachmentsResolved = false;
+	AttachmentError = nullptr;
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment)
+	{
+		AttachmentError = TEXT("no embodiment");
 		return;
 	}
-	VisualStem = Model;
-	if (VisualStem.IsEmpty())
+	FTransform ScreenFrame;
+	FTransform AxisFrame;
+	if (!Embodiment->GetBodyAttachment(Handle, FName(TEXT("screen")), ScreenFrame))
 	{
+		AttachmentError = TEXT("screen");
 		return;
 	}
-	const FQuat StaticRotation = Def->ModelMesh.IsEmpty()
-		? FQuat(FRotator(0.0f, -Angles.Y, 0.0f)) : Def->ModelQuat;
-	const FQuat SkeletalRotation = Def->ModelMesh.IsEmpty()
-		? FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)) : Def->ModelQuat;
-	if (Embodiment->HasPlacedModelCatalogue())
+	if (!Embodiment->GetBodyAttachment(Handle, FName(TEXT("screen_axis")), AxisFrame))
 	{
-		FElysiumPlacedModelRequest Request;
-		Request.ModelPath = Model;
-		Request.StaticStem = VisualStem;
-		Request.Location = Origin;
-		Request.Rotation = SkeletalRotation;
-		Request.UniformScale = Embodiment->BodyScaleFor(*Def);
-		Request.PlacementToken = Handle.Index;
-		WorldBody = Embodiment->BuildPlacedModelBody(Request).Visual;
+		AttachmentError = TEXT("screen_axis");
+		return;
 	}
-	else
+	ScreenPointCm = ScreenFrame.GetLocation();
+	ScreenAxisPointCm = AxisFrame.GetLocation();
+	bScreenAttachmentsResolved = true;
+}
+
+void FElysiumTerminal::ReportMissingAttachments() const
+{
+	// The one named content error (`docs/architecture/computer-terminal-architecture.md` §3.3):
+	// entity, model, which part is missing. It is raised where the pair is READ, not where a session
+	// is refused, because a model that does not carry `screen` / `screen_axis` is an authored/bake
+	// defect that exists from spawn — and because the world's own gate refuses the session before
+	// the entity's `BeginPlayerUse` ever runs.
+	//
+	// A terminal with no model at all is not a defect: it is a bodiless fixture, and the port's
+	// headless tier is full of them.
+	if (AttachmentError && !Model.IsEmpty())
 	{
-		WorldBody = Embodiment->BuildPropVisual(
-			VisualStem, Origin, StaticRotation, Embodiment->BodyScaleFor(*Def));
+		UE_LOG(LogElysiumSkill, Warning,
+			TEXT("%s cannot be used: model '%s' resolves no '%s' attachment"),
+			*DebugString(), *Model, AttachmentError);
 	}
-	if (WorldBody)
+}
+
+bool FElysiumTerminal::GetBodyAttachmentPoint(FName Attachment, FVector& OutWorld) const
+{
+	// The camera shot's `Attachment:` anchors read the SAME two vectors the cone measured with, so
+	// the shot cannot frame a screen the gate was not testing.
+	if (bScreenAttachmentsResolved)
 	{
-		World->RegisterPropBody(WorldBody, Handle);
-		World->SetUseAnchorEnabled(Handle, bStartEnabled && !IsInert());
+		if (Attachment == FName(TEXT("screen")))
+		{
+			OutWorld = ScreenPointCm;
+			return true;
+		}
+		if (Attachment == FName(TEXT("screen_axis")))
+		{
+			OutWorld = ScreenAxisPointCm;
+			return true;
+		}
 	}
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	FTransform Frame;
+	if (Embodiment && Embodiment->GetBodyAttachment(Handle, Attachment, Frame))
+	{
+		OutWorld = Frame.GetLocation();
+		return true;
+	}
+	return false;
 }
 
 bool FElysiumTerminal::CanPlayerFocus(const FElysiumUseContext& Context) const
 {
-	if (!bStartEnabled || IsInert() || CurrentUser.IsSet() || !World)
+	// Use gate `0x102180c0` (§7.2): `m_bEnabled`, a requester with a player component, **either no
+	// current user or the requester IS the current user** — re-entry of the same player is allowed,
+	// a different actor is refused — and a positive screen-facing test.
+	//
+	// Availability `0x10218690` is the stricter query (no current user at all) and `ObjectCaps`
+	// `0x10218660` answers the cone alone; the port publishes one predicate, because
+	// `PlayerUseIconFilter` (`FUN_10342590`) passes on ANY of slots 32/34/35, so a terminal is
+	// icon-eligible exactly when it is usable.
+	if (!bStartEnabled || IsInert() || !World)
+	{
+		return false;
+	}
+	if (CurrentUser.IsSet() && CurrentUser != Context.Activator)
 	{
 		return false;
 	}
 	const FElysiumEntity* User = World->Resolve(Context.Activator);
-	return User && User->AsCombatCharacter();
+	if (!User || !User->AsCombatCharacter())
+	{
+		return false;
+	}
+	// A model with no `screen` / `screen_axis` fails retail's gate too: `GetAttachment01` leaves the
+	// out-vectors alone, the forward is zero-length and `FUN_101d1120` answers 0, which never
+	// exceeds 0.7. Failing closed here says WHICH part is missing instead.
+	if (!bScreenAttachmentsResolved || !Context.bHasEyeOrigin)
+	{
+		return false;
+	}
+	return ElysiumTerminalCone::Faces(ScreenPointCm, ScreenAxisPointCm, Context.EyeOrigin);
 }
 
 FElysiumUseBeginResult FElysiumTerminal::BeginPlayerUse(const FElysiumUseContext& Context)
@@ -366,8 +465,88 @@ FElysiumUseBeginResult FElysiumTerminal::BeginPlayerUse(const FElysiumUseContext
 		++SessionSerial;
 	}
 	++ViewRevision;
+	// `CPropHacking` entry `0x1021a5b0` in order: the flag reset and `CBaseTerminal::vfunc39`'s cue
+	// (`BeginContentSession`), the player hold, the draws, then the `Hacking` camera.
 	BeginContentSession();
+
+	// `FUN_1015ef40(player)` -> `CBasePlayer::m_bIsImmobilized` = 1 (§7.3 step 2). The port's
+	// `AElysiumPlayerController::TickActor` zeroes wish movement off `IsMobile()`, which is retail's
+	// `SetupMove` button-mask arm; the pawn is held in place by `TickPlayerUse` below, exactly as
+	// retail's slot 43 does.
+	if (FElysiumPlayer* PlayerEntity = World ? World->FindPlayer() : nullptr)
+	{
+		PlayerEntity->SetImmobilized(true);
+	}
+
+	// `FUN_10070470("Hacking", NULL, terminal, terminal, NULL)` (§7.3 step 6): the `Hacking` block of
+	// `vdata/camerashots/special-case.txt`, with the terminal bound as its Named slots. The shot IS
+	// the framing — no distance solve, no bezel margin — so a shot that will not resolve refuses the
+	// session rather than leaving the player pinned to a screen the camera never reached
+	// (`docs/architecture/computer-terminal-architecture.md` §6.3).
+	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+	{
+		// The clamp is the one named Presentation modernization: the glass is the brightest thing in
+		// the frame and the auto-exposure has no retail counterpart to reproduce.
+		CameraShot = Embodiment->PushCameraShotNamed(TEXT("special-case"), TEXT("Hacking"), Handle,
+			EElysiumShotExposure::Clamped);
+		if (CameraShot == 0)
+		{
+			UE_LOG(LogElysiumSkill, Warning,
+				TEXT("%s cannot open: the 'Hacking' shot in special-case.txt did not resolve"),
+				*DebugString());
+			EndContentSession();
+			CurrentUser = FElysiumEntityHandle::Invalid();
+			if (FElysiumPlayer* PlayerEntity = World->FindPlayer())
+			{
+				PlayerEntity->SetImmobilized(false);
+			}
+			++ViewRevision;
+			return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
+		}
+	}
 	return FElysiumUseBeginResult::Started(EElysiumUseSessionKind::Explicit);
+}
+
+void FElysiumTerminal::TickPlayerUse(const FElysiumUseContext& Context)
+{
+	// `CBasePlayer::PlayerUse`'s maintenance arm, `FUN_10167e00` (`slice-bc-decompiles.md` §5.1).
+	// The held entity's collision mins/maxs go to world space, the player's eye is clamped onto that
+	// box, and `d = |eye.x - clamped.x| + |eye.y - clamped.y|` -- MANHATTAN, XY -- is compared with
+	// the entity's slot-37 reach:
+	//
+	//   d >= reach  -> slot 43, the hull sweep that pulls the pawn in (the FAR arm);
+	//   d <  reach  -> slot 41, which snaps the player's eye angles at the terminal's
+	//                  `WorldSpaceCenter()` every tick (the NEAR arm, and the common one once the
+	//                  sweep has done its work).
+	//
+	// Both arms then step the cracking/echo printer, which in this port is already the entity's own
+	// think, so neither arm carries it here.
+	//
+	// With no bounds to measure -- a headless world with no body -- the far arm runs, which is what
+	// the reach test degenerates to.
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment)
+	{
+		return;
+	}
+	FBox BodyBounds(ForceInit);
+	const bool bHasBounds = Context.bHasEyeOrigin
+		&& Embodiment->GetUseBodyWorldBounds(Handle, BodyBounds);
+	if (bHasBounds)
+	{
+		const FVector Clamped = BodyBounds.GetClosestPointTo(Context.EyeOrigin);
+		const double Manhattan = FMath::Abs(Context.EyeOrigin.X - Clamped.X)
+			+ FMath::Abs(Context.EyeOrigin.Y - Clamped.Y);
+		if (Manhattan < HoldReachCm)
+		{
+			// Slot 41. Retail's target is slot 192 = `WorldSpaceCenter()`, the collision OBB's own
+			// centre -- not an attachment (correction C4).
+			Embodiment->SnapPlayerViewTo(BodyBounds.GetCenter());
+			return;
+		}
+	}
+	FVector Contact = FVector::ZeroVector;
+	Embodiment->SweepPlayerHullToward(Origin, Contact);
 }
 
 void FElysiumTerminal::EndPlayerUse(const FElysiumUseContext& Context, EElysiumUseEndReason)
@@ -383,10 +562,41 @@ void FElysiumTerminal::EndPlayerUse(const FElysiumUseContext& Context, EElysiumU
 			*DebugString(), *Context.Activator.ToString(), *CurrentUser.ToString());
 		return;
 	}
-	// `CBaseTerminal::vfunc42` 0x10218220: hide the hint, release the player, drop the session.
+	// The one release body, in `CBaseTerminal::vfunc42` `0x10218220` +
+	// `CPropHacking::vfunc42` `0x1021a6c0` order (`slice-bc-decompiles.md` §4). Retail's
+	// `FUN_10167fd0` dispatches slot 42 **before** it clears `entity+0x8c`, which is what lets the
+	// hint hide still resolve its recipient -- so `CurrentUser` stays bound until the end here.
+	//
+	// 1. hide the `InfoCtrl` hint (type 2, value 0), user still bound;
 	SetHudHint(2, 0);
+	// 2. `FUN_1015ef60(player)` -> `m_bIsImmobilized` = 0. Unconditional and idempotent, and this is
+	//    the ONE place every exit converges on -- directory `quit`, the failed per-tick gate, the
+	//    second `+use` press, `InputDisable`, dormancy, damage, dialogue, teleport, removal and
+	//    world teardown all reach `EndActiveUse`, which calls this.
+	if (FElysiumPlayer* PlayerEntity = World ? World->FindPlayer() : nullptr)
+	{
+		PlayerEntity->SetImmobilized(false);
+	}
+	// 3-5. the two `m_iVFlags` bits and `m_bInUse` have no port counterpart yet: the view-angle lock
+	//    the port needs is the camera shot, and `m_bInUse` is `CurrentUser` below.
+	// 6. an `IEngineSoundServer003` slot-5 call keyed on the terminal's entity index (correction
+	//    C6). Unclaimed: slice F owns the terminal's cue table and decides what it is.
+	// 7. `OnUseEnd` + skill detach.
 	StopAttempt();
+	// Then `CPropHacking`'s own tail: the idle title box and the directory/pending reset
+	// (`EndContentSession`), with the screensaver re-arm at `ss_start + now` left to slice C.
 	EndContentSession();
+	// Last: `FUN_1017cef0(player, NULL)` drops the `camera_cinematic` outright. Nothing was saved
+	// and nothing is restored -- the client simply falls back to the player's own eye -- and there
+	// is **no ease-out** (correction C8, C19), so the pop is immediate.
+	if (CameraShot != 0)
+	{
+		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+		{
+			Embodiment->PopCameraShot(CameraShot, /*BlendOutSeconds*/ 0.0f);
+		}
+		CameraShot = 0;
+	}
 	CurrentUser = FElysiumEntityHandle::Invalid();
 	++ViewRevision;
 }
@@ -636,6 +846,15 @@ void FElysiumTerminal::OnRuntimeTransformChanged()
 		WorldBody->SetWorldLocationAndRotation(Origin,
 			FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)));
 	}
+	// The attachments are world points, so a moved body moves the cone and the camera with it.
+	ResolveScreenAttachments();
+}
+
+void FElysiumTerminal::OnRuntimeModelChanged()
+{
+	FElysiumEntity::OnRuntimeModelChanged();
+	ResolveScreenAttachments();
+	ReportMissingAttachments();
 }
 
 UPrimitiveComponent* FElysiumTerminal::GetAttachBody() const
@@ -664,6 +883,12 @@ void FElysiumTerminal::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Cursor"), FString::Printf(TEXT("%d,%d"), Screen.CursorColumn(), Screen.CursorRow()));
 	Out.Emplace(TEXT("HUD hint"), FString::Printf(TEXT("%d (%d)"), HudHintType, HudHintValue));
 	Out.Emplace(TEXT("Cues"), FString::FromInt(CueRels.Num()));
+	Out.Emplace(TEXT("Screen attachments"), bScreenAttachmentsResolved
+		? FString::Printf(TEXT("%s / %s"), *ScreenPointCm.ToCompactString(),
+			*ScreenAxisPointCm.ToCompactString())
+		: FString::Printf(TEXT("(missing %s)"),
+			AttachmentError ? AttachmentError : TEXT("unknown")));
+	Out.Emplace(TEXT("Camera shot"), FString::FromInt(CameraShot));
 }
 
 // --- CPropHacking -------------------------------------------------------------------------------

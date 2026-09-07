@@ -54,6 +54,16 @@ struct FElysiumUseContext
 	FVector AnchorPoint = FVector::ZeroVector;
 	EElysiumUseSelection Selection = EElysiumUseSelection::None;
 	double TimeSeconds = 0.0;
+
+	// Where the requester is looking FROM, world cm. Retail's use gate reaches it through the
+	// player's own vtable slot 193 (`GetAbsOrigin + m_vecViewOffset`) inside the predicate; here the
+	// interaction pass reads it once per frame and stamps every context it builds, so a gate stays
+	// a pure function of its argument and one service call covers every candidate.
+	//
+	// `bHasEyeOrigin` false is the ordinary headless / no-pawn answer, and a gate that needs an eye
+	// (the terminal's screen cone) **fails closed** on it rather than guessing the origin.
+	FVector EyeOrigin = FVector::ZeroVector;
+	bool bHasEyeOrigin = false;
 };
 
 struct FElysiumUseBeginResult

@@ -149,7 +149,9 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	State->SetScriptHost(MakeUnique<FElysiumExprScriptHost>(State));
 
 	FElysiumRecordingServices Services;
-	Services.bHasPlayer = true;
+	// The slice has no bodies, so the double supplies the `screen` / `screen_axis` pair the cone
+	// reads and stands the eye on its axis.
+	Services.StandTerminalScreen();
 	// The knobs parent to the rotating door's brush, which has no body headless (a slice seam).
 	AddExpectedError(TEXT("resolved parent 'tutchopdoord', but its attachment body is unavailable"),
 		EAutomationExpectedErrorFlags::Contains, 2);
@@ -236,6 +238,31 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 		return false;
 	}
 	const uint32 Serial = Terminal->SessionSerial;
+
+	// --- slice B on the slice: the hold, the cone and the camera handle ----------------------
+	FElysiumPlayer* SessionPlayer = World.FindPlayer();
+	if (!TestNotNull(TEXT("the player entity resolves"), SessionPlayer))
+	{
+		return false;
+	}
+	TestFalse(TEXT("entry immobilizes the player"), SessionPlayer->IsMobile());
+	TestTrue(TEXT("entry pushed the Hacking shot and kept its handle"), Terminal->CameraShot != 0);
+	TestEqual(TEXT("exactly one Hacking shot for the session"),
+		Services.Count(TEXT("PushCameraShotNamed special-case:Hacking exposure=clamped")), 1);
+	{
+		// The gate is the recovered cone over the two attachment points the double supplied.
+		FElysiumUseContext Gate;
+		Gate.Owner = Terminal->Handle;
+		Gate.Activator = PlayerHandle;
+		Gate.bHasEyeOrigin = true;
+		Gate.EyeOrigin = Services.PlayerLocation;
+		TestTrue(TEXT("the eye on the screen's axis is inside the cone"),
+			Terminal->CanPlayerFocus(Gate));
+		Gate.EyeOrigin = FVector(0.0f, 300.0f, 120.0f);   // 90 degrees off the glass
+		TestFalse(TEXT("the same eye 90 degrees off is outside it"),
+			Terminal->CanPlayerFocus(Gate));
+	}
+
 	FElysiumTerminalView View;
 	TestTrue(TEXT("the session publishes a view"), World.BuildTerminalView(View));
 	TestEqual(TEXT("the view carries the authored screensaver"), View.ScreenSaverLabel,
@@ -369,9 +396,14 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	Advance(0.5);
 	TestTrue(TEXT("tutsafelock is hidden by the +0.5 s ScriptHide row"), Padlock->IsHidden());
 
+	const int32 FirstShot = Terminal->CameraShot;
 	TestTrue(TEXT("quit closes the session"),
 		World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("quit")));
 	TestFalse(TEXT("the terminal no longer publishes"), World.BuildTerminalView(View));
+	TestTrue(TEXT("quit mobilizes the player again"), SessionPlayer->IsMobile());
+	TestEqual(TEXT("quit released the camera handle"), Terminal->CameraShot, 0);
+	TestEqual(TEXT("and popped exactly the shot it pushed"),
+		Services.Count(FString::Printf(TEXT("PopCameraShot %d"), FirstShot)), 1);
 
 	// --- The safe gives the keycard; the map wires G.Tut_Key and Jack's teleport ---
 	FElysiumItemContainer* Safe = SafeEntity->AsItemContainer();
@@ -423,7 +455,16 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	TestFalse(TEXT("the padlock is not yet relocked before the delay"), Locked(Padlock));
 	Advance(LockIssued + 0.75);
 	TestTrue(TEXT("tutsafelock relocked by the +0.5 s Lock row"), Locked(Padlock));
+	// The `Lock` run holds the same contract: a live handle and an immobilized player throughout,
+	// both released by the exit.
+	TestFalse(TEXT("the reopened session immobilizes again"), SessionPlayer->IsMobile());
+	const int32 SecondShot = Terminal->CameraShot;
+	TestTrue(TEXT("and pushed a fresh camera handle"), SecondShot != 0 && SecondShot != FirstShot);
 	World.SubmitTerminalCommand(Terminal->Handle, Second, TEXT("quit"));
+	TestTrue(TEXT("the Lock run's quit mobilizes the player"), SessionPlayer->IsMobile());
+	TestEqual(TEXT("and releases its own handle"), Terminal->CameraShot, 0);
+	TestEqual(TEXT("popping exactly once"),
+		Services.Count(FString::Printf(TEXT("PopCameraShot %d"), SecondShot)), 1);
 	return true;
 }
 

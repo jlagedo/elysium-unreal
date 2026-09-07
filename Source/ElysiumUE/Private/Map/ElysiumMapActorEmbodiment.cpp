@@ -28,12 +28,16 @@
 #include "Components/SpotLightComponent.h"
 #include "Visual/ElysiumMapVisuals.h"    // RegisterRuntimeBrush — runtime brush visuals join the look
 #include "Visual/ElysiumNpcBody.h"       // AElysiumNpcBody — the NPC motor actor
+#include "Visual/ElysiumPlacedAttachments.h" // a placed model's `$attachment` off the baked asset
+#include "Visual/ElysiumPreparedPropModels.h" // the model row the attachment asset comes from
+#include "ElysiumUseIcons.h"             // ELYSIUM_USE_CHANNEL — the pin sweep's channel
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "NiagaraFunctionLibrary.h"      // SpawnSystemAttached — the one-shot attached effect
 #include "NiagaraSystem.h"
 
@@ -254,6 +258,186 @@ bool AElysiumMapActor::GetBodyBoneTransform(USkeletalMeshComponent* Body, const 
 	FTransform& OutWorld) const
 {
 	return Bodies ? Bodies->GetBoneFrame(Body, BoneName, OutWorld) : false;
+}
+
+bool AElysiumMapActor::GetBodyAttachment(const FElysiumEntityHandle& OwnerHandle, FName Attachment,
+	FTransform& OutWorld) const
+{
+	// `CBaseAnimating::GetAttachment01` (`docs/vtmb/computer-terminals.md` §7.2). Three routes, in
+	// the order that answers with the least composition:
+	//   1. a socket table a harness registered explicitly for this owner;
+	//   2. the standing body itself, when the placed model was NOT reduced to its static form;
+	//   3. the model row's baked `SkeletalMesh` ref pose, composed with the standing body's
+	//      transform -- the ordinary production case, because `FElysiumCataloguePlacedModel`
+	//      keeps both representations resident and a rigid prop's rig IS its bind pose.
+	if (Attachment.IsNone() || !OwnerHandle.IsSet())
+	{
+		return false;
+	}
+	const FUseAnchorRecord* Record = UseAnchors.FindByPredicate(
+		[OwnerHandle](const FUseAnchorRecord& Candidate)
+		{
+			return Candidate.Owner == OwnerHandle;
+		});
+	if (!Record)
+	{
+		return false;
+	}
+
+	if (const USkeletalMeshComponent* Source = Record->AttachmentSource.Get())
+	{
+		if (Source->DoesSocketExist(Attachment))
+		{
+			OutWorld = Source->GetSocketTransform(Attachment, RTS_World);
+			return true;
+		}
+	}
+
+	UPrimitiveComponent* Visual = Record->Visual.Get();
+	if (!Visual)
+	{
+		return false;
+	}
+	if (const USkeletalMeshComponent* Skeletal = Cast<USkeletalMeshComponent>(Visual))
+	{
+		if (Skeletal->DoesSocketExist(Attachment))
+		{
+			OutWorld = Skeletal->GetSocketTransform(Attachment, RTS_World);
+			return true;
+		}
+	}
+
+	const FElysiumEntity* Entity = EntityWorld ? EntityWorld->Resolve(OwnerHandle) : nullptr;
+	if (!Entity || Entity->Model.IsEmpty())
+	{
+		return false;
+	}
+	const TSharedPtr<FElysiumPreparedPropModels> Prepared = ElysiumPreparedProps::ForOwner(this);
+	if (!Prepared.IsValid())
+	{
+		return false;
+	}
+	FString Error;
+	const USkeletalMesh* Mesh = Prepared->SkeletalMesh(ElysiumPreparedProps::ModelId(Entity->Model),
+		Error);
+	FTransform Local;
+	if (!ElysiumPlacedAttachments::RefPoseTransform(Mesh, Attachment, Local))
+	{
+		return false;
+	}
+	OutWorld = Local * Visual->GetComponentTransform();
+	return true;
+}
+
+void AElysiumMapActor::RegisterAttachmentSource(const FElysiumEntityHandle& OwnerHandle,
+	USkeletalMeshComponent* Source)
+{
+	for (FUseAnchorRecord& Record : UseAnchors)
+	{
+		if (Record.Owner == OwnerHandle)
+		{
+			Record.AttachmentSource = Source;
+		}
+	}
+}
+
+bool AElysiumMapActor::GetUseBodyWorldBounds(const FElysiumEntityHandle& OwnerHandle,
+	FBox& OutWorld) const
+{
+	const FUseAnchorRecord* Record = UseAnchors.FindByPredicate(
+		[OwnerHandle](const FUseAnchorRecord& Candidate)
+		{
+			return Candidate.Owner == OwnerHandle;
+		});
+	const UPrimitiveComponent* Visual = Record ? Record->Visual.Get() : nullptr;
+	if (!Visual)
+	{
+		return false;
+	}
+	OutWorld = Visual->Bounds.GetBox();
+	return true;
+}
+
+bool AElysiumMapActor::SweepPlayerHullToward(const FVector& TargetCm, FVector& OutContactCm)
+{
+	// `CBaseTerminal` slot 43, `vampire.dll` 0x10218320 (`slice-bc-decompiles.md` §1). The ray retail
+	// builds is a verbatim `Ray_t::Init`:
+	//   start   = player origin, offset by (collision mins + maxs) * 0.5 -- the hull centre
+	//   extents = (collision maxs - mins) * 0.5                          -- the half hull
+	//   end     = (terminal.x, terminal.y, PLAYER.z)                     -- the sweep is XY-only
+	// with a `CTraceFilterSimple(player, COLLISION_GROUP_PLAYER)`, and the trace's `endpos` goes
+	// straight back through `SetAbsOrigin` + `Relink` at 10218571-10218583 -- no fraction test and
+	// no start-solid test (correction C1; the branch above that call gates only an
+	// `NDebugOverlay::Line`).
+	//
+	// This runtime's pawn root IS the hull centre, so the start needs no offset and the sweep's
+	// result location is directly the actor location.
+	//
+	// **Named modernization.** Retail's `0x0201400b` is `MASK_PLAYERSOLID`, and what stops the sweep
+	// at the machine is the terminal's own `SOLID_BBOX`. This runtime keeps a placed prop body
+	// non-solid, so the mask's union is reached as two sweeps: the pawn's own movement channel for
+	// world solidity, and `ELYSIUM_USE_CHANNEL` where the registered use anchor stands in for the
+	// terminal's box. The nearer contact wins, which is what one union trace would have answered.
+	APawn* Pawn = const_cast<APawn*>(ResolvePlayerPawn());
+	UPrimitiveComponent* Hull = Pawn ? Cast<UPrimitiveComponent>(Pawn->GetRootComponent()) : nullptr;
+	UWorld* World = GetWorld();
+	if (!Pawn || !Hull || !World)
+	{
+		return false;
+	}
+
+	const FVector Start = Hull->GetComponentLocation();
+	const FVector End(TargetCm.X, TargetCm.Y, Start.Z);
+	OutContactCm = End;
+	if (!Start.Equals(End))
+	{
+		FCollisionQueryParams Params(FName(TEXT("ElysiumTerminalPin")), /*bTraceComplex*/ false);
+		Params.AddIgnoredActor(Pawn);
+		const FCollisionShape Shape = Hull->GetCollisionShape();
+		const FQuat Rotation = Hull->GetComponentQuat();
+		double BestDistanceSq = FVector::DistSquared(Start, End);
+		for (const ECollisionChannel Channel :
+			{ Hull->GetCollisionObjectType(), ELYSIUM_USE_CHANNEL })
+		{
+			FHitResult Hit;
+			if (!World->SweepSingleByChannel(Hit, Start, End, Rotation, Channel, Shape, Params))
+			{
+				continue;
+			}
+			const double DistanceSq = FVector::DistSquared(Start, Hit.Location);
+			if (DistanceSq < BestDistanceSq)
+			{
+				BestDistanceSq = DistanceSq;
+				OutContactCm = Hit.Location;
+			}
+		}
+	}
+	Pawn->SetActorLocation(OutContactCm, /*bSweep*/ false, nullptr, ETeleportType::TeleportPhysics);
+	return true;
+}
+
+bool AElysiumMapActor::SnapPlayerViewTo(const FVector& TargetCm)
+{
+	// `CBaseTerminal` slot 41, `0x102182b0` -> `FUN_10178590(player, WorldSpaceCenter())`:
+	// `VectorAngles(target - playerEye)` written onto the player's eye angles every tick
+	// (`slice-bc-decompiles.md` §5.2, correction C4). The pitch/yaw pair is the whole write; roll is
+	// not part of `VectorAngles`, so the controller's own roll stands.
+	APawn* Pawn = const_cast<APawn*>(ResolvePlayerPawn());
+	APlayerController* Controller = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	FVector Eye;
+	if (!Controller || !GetPlayerUseOrigin(Eye))
+	{
+		return false;
+	}
+	const FVector Direction = TargetCm - Eye;
+	if (Direction.IsNearlyZero())
+	{
+		return false;
+	}
+	FRotator Look = Direction.Rotation();
+	Look.Roll = Controller->GetControlRotation().Roll;
+	Controller->SetControlRotation(Look);
+	return true;
 }
 
 bool AElysiumMapActor::GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
@@ -631,6 +815,17 @@ int32 AElysiumMapActor::PushCameraShot(const FString& ShotFile, const FElysiumEn
 		CameraDirector = MakePimpl<FElysiumCameraDirector>();
 	}
 	return CameraDirector->Push(EntityWorld.Get(), PlayerCamera(), ShotFile, Subject);
+}
+
+int32 AElysiumMapActor::PushCameraShotNamed(const FString& ShotFile, const FString& ShotName,
+	const FElysiumEntityHandle& Subject, EElysiumShotExposure Exposure)
+{
+	if (!CameraDirector)
+	{
+		CameraDirector = MakePimpl<FElysiumCameraDirector>();
+	}
+	return CameraDirector->PushNamed(EntityWorld.Get(), PlayerCamera(), ShotFile, ShotName, Subject,
+		Exposure);
 }
 
 int32 AElysiumMapActor::PushCameraShotValue(const FElysiumCameraShot& Shot)

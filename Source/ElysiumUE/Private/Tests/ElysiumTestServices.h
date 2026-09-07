@@ -317,6 +317,20 @@ struct FElysiumRecordingServices final
 	bool bNpcMakerInViewCone = false;
 	bool bNpcMakerOccupied = false;
 	FElysiumCameraShot LastCameraShot;
+	// The placed model's `$attachment` table, as a case's own values. Empty is the honest headless
+	// answer -- a terminal with no attachments refuses its session with the named error.
+	TMap<FName, FTransform> BodyAttachments;
+	// The world bounds of the registered use body, for retail's held-use reach test. Off by default:
+	// a headless case has no body, and the reach test degenerates to "always pin".
+	FBox UseBodyBounds = FBox(ForceInit);
+	bool bHasUseBodyBounds = false;
+	// Where the next `SweepPlayerHullToward` reports contact, and whether it moves the player there.
+	// Off by default: a sweep that found nothing to hit leaves the pawn where it was, and a case that
+	// is not about the pin must not have its player teleported to the origin. A pin case sets both,
+	// and the double then MOVES its player the way the map actor's `SetActorLocation` does, so
+	// `GetPlayerUseOrigin` reports the pinned point on the next frame.
+	bool bPlayerSweepMoves = false;
+	FVector PlayerSweepContact = FVector::ZeroVector;
 	// What the next modern interaction query returns. Geometry-specific tests control the adapter;
 	// substrate tests remain pure and exercise focus/session policy over these records.
 	FElysiumUseQueryResult UseQuery;
@@ -346,6 +360,20 @@ struct FElysiumRecordingServices final
 	FElysiumRecordingNpcMotor* LastNpcMotor() const
 	{
 		return NpcMotors.IsEmpty() ? nullptr : NpcMotors.Last().Get();
+	}
+
+	// Stand a terminal's glass in front of this double's player, so the recovered screen cone
+	// (`ElysiumTerminalCone`) passes: `screen` at `ScreenCm` with `screen_axis` 100 cm along
+	// `ForwardXY`, and the player's eye `DistanceCm` out in front of it — the plan-view cosine is
+	// then exactly 1. Call it BEFORE `Load`, because `FElysiumTerminal::Spawn` reads the pair.
+	void StandTerminalScreen(const FVector& ScreenCm = FVector(0.0f, 0.0f, 120.0f),
+		const FVector& ForwardXY = FVector(-1.0f, 0.0f, 0.0f), float DistanceCm = 300.0f)
+	{
+		const FVector Forward = ForwardXY.GetSafeNormal();
+		BodyAttachments.Add(FName(TEXT("screen")), FTransform(ScreenCm));
+		BodyAttachments.Add(FName(TEXT("screen_axis")), FTransform(ScreenCm + Forward * 100.0f));
+		bHasPlayer = true;
+		PlayerLocation = ScreenCm + Forward * DistanceCm;
 	}
 
 	// IElysiumEmbodiment.
@@ -838,6 +866,28 @@ struct FElysiumRecordingServices final
 	// The bone frames a test places, keyed by lower-cased bone name. A body whose bone is unseeded
 	// answers false, which is the missing-bone guard's own case.
 	TMap<FString, FTransform> BoneFrames;
+	virtual bool GetBodyAttachment(const FElysiumEntityHandle& Owner, FName Attachment,
+		FTransform& OutWorld) const override
+	{
+		const FTransform* Found = BodyAttachments.Find(Attachment);
+		Record(FString::Printf(TEXT("GetBodyAttachment %s -> %s"), *Attachment.ToString(),
+			Found ? *Found->GetLocation().ToCompactString() : TEXT("<none>")));
+		if (!Found)
+		{
+			return false;
+		}
+		OutWorld = *Found;
+		return true;
+	}
+	virtual bool GetUseBodyWorldBounds(const FElysiumEntityHandle& Owner, FBox& OutWorld) const override
+	{
+		if (!bHasUseBodyBounds)
+		{
+			return false;
+		}
+		OutWorld = UseBodyBounds;
+		return true;
+	}
 	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
 		FTransform& OutWorld) const override
 	{
@@ -1329,6 +1379,34 @@ struct FElysiumRecordingServices final
 	{
 		return GetPlayerFeetTransform(OutLocation, OutRotation); // headless services have no centred hull
 	}
+	virtual bool SweepPlayerHullToward(const FVector& TargetCm, FVector& OutContactCm) override
+	{
+		const FVector Contact = bPlayerSweepMoves ? PlayerSweepContact : PlayerLocation;
+		Record(FString::Printf(TEXT("SweepPlayerHullToward %s -> %s"),
+			*TargetCm.ToCompactString(), *Contact.ToCompactString()));
+		if (!bHasPlayer)
+		{
+			return false;
+		}
+		OutContactCm = Contact;
+		PlayerLocation = Contact;
+		return true;
+	}
+	virtual bool SnapPlayerViewTo(const FVector& TargetCm) override
+	{
+		Record(FString::Printf(TEXT("SnapPlayerViewTo %s"), *TargetCm.ToCompactString()));
+		if (!bHasPlayer)
+		{
+			return false;
+		}
+		const FVector Direction = TargetCm - PlayerLocation;
+		if (Direction.IsNearlyZero())
+		{
+			return false;
+		}
+		PlayerRotation = Direction.Rotation();
+		return true;
+	}
 	virtual void TeleportPlayer(const FVector& FeetOrigin, const FRotator& ViewRotation) override
 	{
 		Record(FString::Printf(TEXT("TeleportPlayer %s rot=%s"),
@@ -1545,6 +1623,13 @@ struct FElysiumRecordingServices final
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override
 	{
 		Record(FString::Printf(TEXT("PushCameraShot %s"), *ShotFile));
+		return ++NextCameraShotId;
+	}
+	virtual int32 PushCameraShotNamed(const FString& ShotFile, const FString& ShotName,
+		const FElysiumEntityHandle& Subject, EElysiumShotExposure Exposure) override
+	{
+		Record(FString::Printf(TEXT("PushCameraShotNamed %s:%s exposure=%s"), *ShotFile, *ShotName,
+			Exposure == EElysiumShotExposure::Clamped ? TEXT("clamped") : TEXT("scene")));
 		return ++NextCameraShotId;
 	}
 	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) override

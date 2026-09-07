@@ -105,7 +105,9 @@ bool FElysiumTerminalRouterTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(TerminalDef));
 
 	FElysiumRecordingServices Services;
-	Services.bHasPlayer = true;
+	// The screen cone is a real gate now: a terminal with no `screen` / `screen_axis`, or a player
+	// standing off its plan-view axis, refuses every session.
+	Services.StandTerminalScreen();
 	FElysiumEntityWorld World(nullptr, State, Services.Bundle());
 	AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
 		EAutomationExpectedErrorFlags::Contains, 1);

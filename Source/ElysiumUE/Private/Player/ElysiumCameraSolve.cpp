@@ -70,6 +70,20 @@ float ElysiumCam::SolveWaterOffset(int32 WaterLevel, float ViewZ, float SurfaceZ
 
 // Player-model visibility (`CAM_Think` tail, `CInput+0x104`)
 
+bool ElysiumCam::SolveExposureClamp(const FElysiumShotPresentation& Presentation, float& OutMin,
+	float& OutMax)
+{
+	if (!Presentation.bClampExposure)
+	{
+		return false;
+	}
+	// One value in both ends is what "clamped" means: the auto-exposure loop has no range left to
+	// travel, so a bright emissive panel filling the frame cannot ramp the rest of the shot down.
+	OutMin = Presentation.ExposureBrightness;
+	OutMax = Presentation.ExposureBrightness;
+	return true;
+}
+
 float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
 	const FElysiumCameraWeights& Weights, const FElysiumCameraCvars& Cvars)
 {

@@ -59,6 +59,8 @@ struct FElysiumScriptedShotView
 	// False until the channel has framed its first shot, which is what stops a push being applied
 	// from wherever the camera happened to be.
 	bool bSeeded = false;
+	// The top shot's own presentation record — the HUD/viewmodel keys and the pusher's exposure ask.
+	FElysiumShotPresentation Presentation;
 };
 
 UCLASS()

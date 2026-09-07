@@ -163,6 +163,22 @@ struct FElysiumShotPresentation
 	bool bNamed = false;
 	bool bShowHud = false;         // parses default 0, but only on a named shot
 	bool bDrawViewmodel = false;   // same
+
+	// **Named Presentation modernization** (`docs/architecture/computer-terminal-architecture.md`
+	// §6.4). Nothing in `vdata/camerashots/` authors an exposure key -- retail's renderer has no
+	// eye adaptation to fight -- so this is never parsed. It is the pusher's ask, carried for the
+	// handle's lifetime: a terminal shot fills the frame with one bright emissive panel and UE's
+	// auto-exposure would otherwise ramp the whole image down around it.
+	bool bClampExposure = false;
+	float ExposureBrightness = 1.0f;   // EV100-ish min == max while the clamp is on
+};
+
+// What a pusher asks of the frame's exposure while its shot has weight. `Scene` is every ordinary
+// shot: the world's own auto-exposure stands.
+enum class EElysiumShotExposure : uint8
+{
+	Scene,
+	Clamped,
 };
 
 // One resolve of the switch-frame table (`docs/vtmb/camera-view-modes.md` §5, the render hand-off).
@@ -454,6 +470,13 @@ struct FElysiumCameraCvars
 
 namespace ElysiumCam
 {
+	// The shot's exposure policy, as the two post-process numbers it becomes. False leaves the
+	// scene's own auto-exposure alone and does not touch `OutMin`/`OutMax`; true writes the same
+	// brightness into both, which is what pins the eye. Pure so the clamp is assertable with no
+	// camera (`Elysium.Substrate.CameraShots`).
+	bool SolveExposureClamp(const FElysiumShotPresentation& Presentation, float& OutMin,
+		float& OutMax);
+
 	// The player-body fade band alone (`CInput+0x104`). True first person is zero, because the band
 	// reads the third-person boom and that boom is scaled to nothing while the weight is zero.
 	float SolveModelAlpha(const FVector& SolvedOffset, const FElysiumCameraWeights& Weights,

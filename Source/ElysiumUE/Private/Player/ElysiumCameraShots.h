@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/ArrayView.h"
 #include "ElysiumCameraSolve.h"
 #include "ElysiumEntityHandle.h"
 
@@ -126,11 +127,25 @@ namespace ElysiumCameraShots
 	FString NormalizeKey(const FString& ShotFile);
 
 	// Parse one shot file's text. False when it carries no `CameraShotTable` with a shot in it.
+	// **The file's FIRST block**, which is the one-shot-per-file convention every `SetCamera` caller
+	// relies on.
 	bool ParseText(const FString& Text, FElysiumCameraShotDef& Out);
 
+	// Every shot block in the file, in authored order. Most of `vdata/camerashots/` is one shot per
+	// file, but `special-case.txt` carries five siblings under one `CameraShotTable` and retail
+	// addresses them by name (`FUN_10070470("Hacking", ...)`), so the reader has to be able to see
+	// past block 0. False on the same input `ParseText` refuses.
+	bool ParseAllText(const FString& Text, TArray<FElysiumCameraShotDef>& Out);
+
 	// `vdata/camerashots/<Name>.txt` under the content root, parsed and cached per process (the table
-	// is ~66 small files and a conversation re-reads the same one every line).
+	// is ~66 small files and a conversation re-reads the same one every line). Answers the file's
+	// first block.
 	const FElysiumCameraShotDef* Load(const FString& ShotFile);
+
+	// The block named `ShotName` (case-insensitive) in the same file. Null when the file does not
+	// load or carries no such block; the file's parse is cached exactly as `Load`'s is, misses
+	// included.
+	const FElysiumCameraShotDef* LoadNamed(const FString& ShotFile, const FString& ShotName);
 
 	// Drop the cache — a re-export, and the test seam.
 	void FlushCache();
@@ -140,6 +155,10 @@ namespace ElysiumCameraShots
 	// automation run has no export mounted, so this is how a headless test drives the source-shot
 	// path at all. Paired with `FlushCache` by every caller.
 	void Install(const FString& ShotFile, const FElysiumCameraShotDef& Def);
+
+	// The same seam for a multi-shot file: install the whole authored list under one key, so a
+	// fixture can drive `LoadNamed` with no export mounted.
+	void InstallNamed(const FString& ShotFile, TArrayView<const FElysiumCameraShotDef> Defs);
 
 	const TCHAR* LexToString(EElysiumShotPosition Position);
 	const TCHAR* LexToString(EElysiumShotAttach Attach);
@@ -159,6 +178,13 @@ public:
 	// handle (0 on a shot file that does not parse or with no camera to push onto).
 	int32 Push(FElysiumEntityWorld* World, UElysiumCameraComponent* Camera, const FString& ShotFile,
 		const FElysiumEntityHandle& Subject);
+
+	// `Push` for one named block of a multi-shot file, plus the exposure policy the handle carries
+	// for its whole lifetime. Retail authors no exposure key, so the clamp is the caller's ask
+	// rather than the file's -- see `FElysiumShotPresentation::bClampExposure`.
+	int32 PushNamed(FElysiumEntityWorld* World, UElysiumCameraComponent* Camera,
+		const FString& ShotFile, const FString& ShotName, const FElysiumEntityHandle& Subject,
+		EElysiumShotExposure Exposure = EElysiumShotExposure::Scene);
 
 	// A raw value uses the same director-handle namespace as named shots, so callers can always
 	// update/pop through one interface without colliding with the component's private ids.
@@ -197,7 +223,11 @@ private:
 		bool bValue = false;       // true for a camera_track value, false for a named shot file
 		FElysiumCameraShotDef Def;
 		FElysiumEntityHandle Subject;
+		// The pusher's exposure ask, re-stamped on every re-resolve because no file authors it.
+		EElysiumShotExposure Exposure = EElysiumShotExposure::Scene;
 	};
+
+	static void ApplyExposure(const FLiveShot& Entry, FElysiumCameraShot& Shot);
 
 	// One anchor -> a world point. False when the entity it names is not there.
 	static bool ResolveAnchor(FElysiumEntityWorld* World, const FElysiumShotAnchor& Anchor,

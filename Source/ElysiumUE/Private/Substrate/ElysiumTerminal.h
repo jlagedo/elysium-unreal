@@ -190,6 +190,30 @@ public:
 	int32 HudHintType = 0;
 	int32 HudHintValue = 0;
 
+	// The model's `screen` / `screen_axis` attachments in world cm, resolved off the placed body
+	// (§7.2, `FUN_10218710`). One pair serves the use gate, the availability query, the use icon and
+	// the `Hacking` camera shot, so "the camera sits where the cone measured from" holds by
+	// construction rather than by agreement.
+	FVector ScreenPointCm = FVector::ZeroVector;
+	FVector ScreenAxisPointCm = FVector::ZeroVector;
+	bool bScreenAttachmentsResolved = false;
+	// Which part is missing, for the one named log line a refused session emits. Null while the
+	// pair resolved.
+	const TCHAR* AttachmentError = nullptr;
+
+	// The `Hacking` shot's director handle while a session is live, 0 otherwise. Retail stores its
+	// `camera_cinematic` on the player (`player+0x1ec4`), not in the script-camera slot, so this is
+	// its own stacked handle and a `SetCamera` cutscene cannot be clobbered by a terminal.
+	int32 CameraShot = 0;
+
+	// `CBaseEntity`'s default held-use reach, slot 37 (`CAISound::FUN_10026710` -> `_DAT_104454c8`
+	// = **80.0** Source units, read from the module's `.rdata`). `CBasePlayer::PlayerUse`'s
+	// maintenance arm (`FUN_10167e00` 10167eb1) dispatches the PIN (slot 43) while the manhattan XY
+	// distance from the player's eye to the nearest point on the held entity's collision bounds is
+	// at or beyond it, and the view snap (slot 41) inside it. A terminal overrides neither 36 nor
+	// 37, so this is the value it runs on.
+	static constexpr float HoldReachCm = 80.0f * 2.54f;
+
 	virtual void Spawn() override;
 	virtual bool IsUsable() const override { return bStartEnabled; }
 	virtual bool CanPlayerFocus(const FElysiumUseContext& Context) const override;
@@ -198,6 +222,12 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 	virtual void OnDormancyChanged() override;
 	virtual void OnRuntimeTransformChanged() override;
+	virtual void OnRuntimeModelChanged() override;
+	virtual void TickPlayerUse(const FElysiumUseContext& Context) override;
+	// Slot 44 (`+0xb0`): `CBaseTerminal` inherits `CAISound::FUN_100267b0` = `return 1`, so a second
+	// `+use` press while the session is held **always** releases it (correction C11).
+	virtual bool ReleasesOnSecondUse() const override { return true; }
+	virtual bool GetBodyAttachmentPoint(FName Attachment, FVector& OutWorld) const override;
 	virtual UPrimitiveComponent* GetAttachBody() const override;
 	virtual const TCHAR* SaveBlockReason() const override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
@@ -209,6 +239,13 @@ public:
 	bool BeginHack(uint32 ExpectedSerial);
 	void BuildView(FElysiumTerminalView& Out) const;
 	EElysiumTerminalInputMode InputMode() const;
+
+	// Re-read `screen` / `screen_axis` off the standing body. Called from `Spawn`, and again from
+	// every hook that can move or replace that body.
+	void ResolveScreenAttachments();
+	// One named warning naming entity, model and the missing part — raised at spawn and after a
+	// model change, never per use press.
+	void ReportMissingAttachments() const;
 
 	// --- the retail entity messages, as writes into `Screen` (§8.2) ---
 	void ScreenSetCursor(int32 Column, int32 Row) { Screen.SetCursor(Column, Row); }

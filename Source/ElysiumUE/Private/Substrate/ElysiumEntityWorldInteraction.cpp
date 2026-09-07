@@ -622,6 +622,13 @@ FElysiumUseBeginResult FElysiumEntityWorld::BeginPlayerUseSession(
 	Context.Activator = Activator;
 	Context.Owner = OwnerHandle;
 	Context.TimeSeconds = NowSeconds();
+	// The eye a position gate measures from. A programmatic caller may have no player body at all
+	// (a script `Use`, a headless fixture), and a gate that needs an eye fails closed on that rather
+	// than measuring from the world origin.
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Context.bHasEyeOrigin = Bodily->GetPlayerUseOrigin(Context.EyeOrigin);
+	}
 	if (!Entity)
 	{
 		UE_LOG(LogElysiumWorld, Warning,
@@ -672,6 +679,16 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 		return;
 	}
 
+	// One eye read per frame, stamped into every context this pass builds: retail's gate reaches the
+	// player's own eye slot inside the predicate, but a predicate that calls a world service is not
+	// assertable headless and would cost one call per candidate per frame.
+	FVector FrameEyeOrigin = FVector::ZeroVector;
+	bool bFrameHasEyeOrigin = false;
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		bFrameHasEyeOrigin = Bodily->GetPlayerUseOrigin(FrameEyeOrigin);
+	}
+
 	if (ActiveUse.IsSet())
 	{
 		FElysiumEntity* ActiveEntity = Resolve(ActiveUse->Context.Owner);
@@ -679,6 +696,24 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 		if (!ActiveEntity || ActiveEntity->IsInert() || !ActiveUser || ActiveUser->IsInert())
 		{
 			EndActiveUse(EElysiumUseEndReason::TargetInvalid);
+		}
+		else
+		{
+			// `CBasePlayer::PlayerUse` `0x10167850` step 1: a live held target re-runs the use gate
+			// every tick and **a failed gate immediately releases** (`FUN_10167fd0`, §7.1). This is
+			// how `InputDisable` and a lost screen-facing test end a live session.
+			ActiveUse->Context.EyeOrigin = FrameEyeOrigin;
+			ActiveUse->Context.bHasEyeOrigin = bFrameHasEyeOrigin;
+			ActiveUse->Context.TimeSeconds = NowSeconds();
+			if (!ActiveEntity->CanPlayerFocus(ActiveUse->Context))
+			{
+				EndActiveUse(EElysiumUseEndReason::TargetInvalid);
+			}
+			else
+			{
+				// Step 2, the maintenance arm: what a held session does when nothing was pressed.
+				ActiveEntity->TickPlayerUse(ActiveUse->Context);
+			}
 		}
 	}
 
@@ -698,6 +733,8 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 		Context.AnchorPoint = Candidate.AnchorPoint;
 		Context.Selection = Candidate.Selection;
 		Context.TimeSeconds = NowSeconds();
+		Context.EyeOrigin = FrameEyeOrigin;
+		Context.bHasEyeOrigin = bFrameHasEyeOrigin;
 		if (Entity && Entity->CanPlayerFocus(Context))
 		{
 			Selected = &Candidate;
@@ -726,12 +763,27 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 			continue;
 		}
 
+		if (ActiveUse.IsSet())
+		{
+			// `CBasePlayer::PlayerUse` step 4e: a rising `+use` edge with a handle already held asks
+			// the held entity's slot 44, and a non-zero answer runs the one release body. A terminal
+			// inherits `CAISound::FUN_100267b0` = `return 1`, so `E` at the machine closes it
+			// (correction C11); classes whose slot 44 has not been read stay Busy.
+			FElysiumEntity* Held = Resolve(ActiveUse->Context.Owner);
+			if (Held && Held->ReleasesOnSecondUse())
+			{
+				EndActiveUse(EElysiumUseEndReason::Released);
+				continue;
+			}
+		}
 		if (ActiveUse.IsSet() || DialogueSession || OpenSignOwner.IsSet())
 		{
 			LastUseOutcome = EElysiumUseOutcome::Busy;
 			continue;
 		}
 		FElysiumEntity* Entity = Resolve(FocusedUsable);
+		FocusContext.EyeOrigin = FrameEyeOrigin;
+		FocusContext.bHasEyeOrigin = bFrameHasEyeOrigin;
 		if (!Entity || !Entity->CanPlayerFocus(FocusContext))
 		{
 			LastUseOutcome = EElysiumUseOutcome::Unavailable;
@@ -756,6 +808,8 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 			}
 		}
 		FocusContext.TimeSeconds = NowSeconds();
+		FocusContext.EyeOrigin = FrameEyeOrigin;
+		FocusContext.bHasEyeOrigin = bFrameHasEyeOrigin;
 		const bool bWasLocked = Entity->IsUseLocked();
 		const FElysiumUseBeginResult Result = Entity->BeginPlayerUse(FocusContext);
 		LastUseOutcome = bWasLocked ? EElysiumUseOutcome::Locked : Result.Outcome;

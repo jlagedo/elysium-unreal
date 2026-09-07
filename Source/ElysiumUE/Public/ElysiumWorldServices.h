@@ -27,6 +27,8 @@ class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class UPrimitiveComponent;
 struct FElysiumCameraShot;
+// The pusher's exposure policy for a scripted shot (`ElysiumCameraSolve.h`).
+enum class EElysiumShotExposure : uint8;
 struct FElysiumEntityDef;
 struct FElysiumSignData;
 struct FElysiumStanceClips;
@@ -764,6 +766,29 @@ public:
 	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
 		FTransform& OutWorld) const { return false; }
 
+	// A model-authored `$attachment` on a placed prop body, by the owner it was registered under,
+	// world cm. Retail reads `screen` / `screen_axis` through `CBaseAnimating::GetAttachment01`
+	// (`docs/vtmb/computer-terminals.md` §7.2, `FUN_10218710`).
+	//
+	// It is keyed by owner rather than by component because the body a `prop_hacking` stands is
+	// normally the model's **static** reduction, which carries no socket table; the two transforms
+	// still live on the same model's baked skeletal asset, and the map actor composes that asset's
+	// ref-pose socket with the standing body's transform (`Visual/ElysiumPlacedAttachments.h`).
+	//
+	// False = this embodiment carries no attachment data for that owner, which is the headless
+	// answer and the answer for a model that does not author the attachment.
+	virtual bool GetBodyAttachment(const FElysiumEntityHandle& Owner, FName Attachment,
+		FTransform& OutWorld) const { return false; }
+
+	// The world-space bounds of the body registered as `Owner`'s use anchor. Retail's held-use
+	// maintenance (`FUN_10167e00` 10167e41) transforms the held entity's collision mins/maxs into
+	// world space and measures the player's reach against the closest point on that box; this is
+	// the same box. False = no body, which every reader treats as "no reach test".
+	virtual bool GetUseBodyWorldBounds(const FElysiumEntityHandle& Owner, FBox& OutWorld) const
+	{
+		return false;
+	}
+
 	// v4 animated props. Model selection is explicit and manifest-backed; ordinary props stay on
 	// the existing static representation. The skeletal surface remains non-solid.
 	virtual FString AnimatedPropStemForModel(const FString& ModelPath) const = 0;
@@ -841,6 +866,39 @@ public:
 	// Place the player at a Source absorigin (feet). The body owns capsule compensation and applies
 	// body yaw plus the complete controller view rotation.
 	virtual void TeleportPlayer(const FVector& FeetOrigin, const FRotator& ViewRotation) = 0;
+
+	// The held-use pin, the FAR arm of retail's maintenance (`CBaseTerminal` slot 43,
+	// `vampire.dll` 0x10218320). `Ray_t::Init(start = player origin, end = (Target.X, Target.Y,
+	// player.Z), mins/maxs = the player's own collision OBB)` with a `CTraceFilterSimple` on the
+	// player, traced against `MASK_PLAYERSOLID` (`0x0201400b`); the trace's `endpos` then goes
+	// straight through `SetAbsOrigin` + `Relink` — **unconditionally**. There is no fraction test
+	// and no start-solid test; the conditional the decompiler shows around it gates only a debug
+	// overlay line (`slice-bc-decompiles.md` §1.4, correction C1).
+	//
+	// **Named modernization.** `MASK_PLAYERSOLID` is the union of world solidity and the terminal's
+	// own `SOLID_BBOX` (raised by its Spawn, §1.3). This port keeps placed prop bodies non-solid, so
+	// the union is reached as two sweeps: the pawn's own movement channel for the world, and
+	// `ELYSIUM_USE_CHANNEL` where the use anchor stands in for the terminal's box. The nearer
+	// contact wins.
+	//
+	// This is not `TeleportPlayer`: that is a one-shot relocate that also writes the view rotation,
+	// and the pin runs every frame of a live session and must leave the view alone.
+	//
+	// False = no player, no movement body, or a headless world; `OutContactCm` is untouched.
+	virtual bool SweepPlayerHullToward(const FVector& TargetCm, FVector& OutContactCm)
+	{
+		return false;
+	}
+
+	// The NEAR arm of the same maintenance (`CBaseTerminal` slot 41, `0x102182b0` ->
+	// `FUN_10178590`): `dir = Target - playerEye`, `VectorAngles(dir)`, and the player's eye angles
+	// are **snapped** to it. Terminals never raise the view-angle lock bit (`m_iVFlags 0x8`), so the
+	// usercmd's own angles still arrive every tick and this re-snaps over them — the player cannot
+	// look away from the machine while a session is live.
+	//
+	// False = no player or a headless world.
+	virtual bool SnapPlayerViewTo(const FVector& TargetCm) { return false; }
+
 	// trigger_hurt / a door closing on the player. No-op when there is no player.
 	virtual void DamagePlayer(float Amount) = 0;
 	// Modern +use embodiment. Registration names engine components with substrate handles; the
@@ -1082,6 +1140,25 @@ public:
 	// IElysiumPresenter: the camera is part of the body (S3), and the presenter carries what is put
 	// on *screen*, not what the player's body does.
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) = 0;
+	// One named block of a **multi-shot** file. `vdata/camerashots/special-case.txt` carries five
+	// siblings under `CameraShotTable`, and retail addresses one of them by name
+	// (`FUN_10070470("Hacking", NULL, terminal, terminal, NULL)`, §7.3 step 6) rather than by file.
+	// `Subject` is bound as the shot's Named slots, which is what its bare `Position: Named` anchors
+	// resolve to. Returns 0 when the file, the block or its anchors do not resolve — a terminal
+	// takes that as a refusal, because the shot IS the framing.
+	// `Exposure` has no retail counterpart at all -- this engine has no tonemapper and no exposure
+	// cvar (`slice-bc-decompiles.md` §7, correction C20). It is the pusher's own ask, carried for the
+	// handle's lifetime, and the one named Presentation modernization in
+	// `docs/architecture/computer-terminal-architecture.md` §6.4: a terminal shot fills the frame
+	// with one bright emissive panel at close range, which UE's auto-exposure would answer by ramping
+	// the rest of the room into black.
+	// `Exposure` is stated at every call site rather than defaulted: this header only forward-declares
+	// the enum, and a shot's exposure policy is a decision, not a fallback.
+	virtual int32 PushCameraShotNamed(const FString& ShotFile, const FString& ShotName,
+		const FElysiumEntityHandle& Subject, EElysiumShotExposure Exposure)
+	{
+		return 0;
+	}
 	// Value shots are the camera_track path: the entity world owns the sampler and publishes the
 	// resulting world-space value without teaching the camera component about entities.
 	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) = 0;

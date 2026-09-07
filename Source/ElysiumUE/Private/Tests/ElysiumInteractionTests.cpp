@@ -1538,7 +1538,8 @@ TerminalDefinition
 	Defs.Defs.Add(MoveTemp(Counter));
 
 	FElysiumRecordingServices Services;
-	Services.bHasPlayer = true;
+	// The screen cone gates every terminal session; stand the glass in front of the eye.
+	Services.StandTerminalScreen();
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
 		EAutomationExpectedErrorFlags::Contains, 1);
@@ -1627,6 +1628,71 @@ TerminalDefinition
 	TestEqual(TEXT("successful bypass enters the same directory transition as a password"),
 		Terminal->CurrentDirectory, 0);
 	World.SubmitTerminalCommand(Terminal->Handle, SecondSerial, TEXT("quit"));
+
+	// --- slice B: the gate's own arms -------------------------------------------------------
+	// Same-player re-entry is allowed (`0x102180c0`: "no current user, **or** that user IS the
+	// requester"); a second activator is not. This is what makes the per-tick gate re-check pass
+	// while the session is live.
+	FElysiumUseContext Gate;
+	Gate.Owner = Terminal->Handle;
+	Gate.Activator = Player;
+	Gate.EyeOrigin = Services.PlayerLocation;
+	Gate.bHasEyeOrigin = true;
+	TestEqual(TEXT("the terminal reopens once more"),
+		World.BeginPlayerUseSession(Terminal->Handle, Player).Outcome,
+		EElysiumUseOutcome::SessionStarted);
+	TestTrue(TEXT("the same player passes the gate while in session"),
+		Terminal->CanPlayerFocus(Gate));
+	FElysiumUseContext Other = Gate;
+	Other.Activator = FElysiumEntityHandle(4242, 1);
+	TestFalse(TEXT("a second activator is refused"), Terminal->CanPlayerFocus(Other));
+	World.SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, TEXT("quit"));
+
+	// No eye at all fails closed.
+	FElysiumUseContext Blind = Gate;
+	Blind.bHasEyeOrigin = false;
+	TestFalse(TEXT("no eye fails the gate closed"), Terminal->CanPlayerFocus(Blind));
+
+	// --- a model with no attachments refuses, and pushes no camera --------------------------
+	{
+		FElysiumRecordingServices Blank;
+		Blank.bHasPlayer = true;
+		Blank.PlayerLocation = FVector(-300.0f, 0.0f, 0.0f);
+		FElysiumEntityDefs BareDefs;
+		BareDefs.MapName = TEXT("__terminal_no_screen__");
+		FElysiumEntityDef BareTerminal;
+		BareTerminal.Classname = TEXT("prop_hacking");
+		BareTerminal.TargetName = TEXT("terminal");
+		BareTerminal.Keys.Add(TEXT("start_enabled"), TEXT("1"));
+		// An authored model that carries neither attachment: the defect the named error exists for.
+		BareTerminal.Keys.Add(TEXT("model"), TEXT("models/synthetic/no_screen.mdl"));
+		BareDefs.Defs.Add(MoveTemp(BareTerminal));
+
+		FElysiumEntityWorld Blind2(nullptr, nullptr, Blank.Bundle());
+		AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
+			EAutomationExpectedErrorFlags::Contains, 1);
+		AddExpectedError(TEXT("resolves no 'screen' attachment"),
+			EAutomationExpectedErrorFlags::Contains, 1);
+		// `BuildPropVisual` on the double answers a component for any stem, so the model is
+		// "present" and the missing pair is reported once, at spawn.
+		Blind2.Load(MoveTemp(BareDefs));
+		const FElysiumEntityHandle BlindPlayer = Blind2.SpawnPlayer();
+		Blind2.Activate(0.0);
+		FElysiumEntity* BareEntity = Blind2.FindByName(TEXT("terminal"));
+		FElysiumTerminal* BareBase = BareEntity ? BareEntity->AsTerminal() : nullptr;
+		if (TestNotNull(TEXT("the attachment-less terminal resolves"), BareBase))
+		{
+			BareBase->InputEnable();
+			TestFalse(TEXT("it resolved no attachments"), BareBase->bScreenAttachmentsResolved);
+			TestEqual(TEXT("and names the missing part"), FString(BareBase->AttachmentError),
+				FString(TEXT("screen")));
+			TestEqual(TEXT("+use is refused"),
+				Blind2.BeginPlayerUseSession(BareBase->Handle, BlindPlayer).Outcome,
+				EElysiumUseOutcome::Unavailable);
+			TestEqual(TEXT("and no camera shot was pushed"),
+				Blank.Count(TEXT("PushCameraShotNamed")), 0);
+		}
+	}
 	return true;
 }
 
@@ -1694,7 +1760,8 @@ bool FElysiumTerminalDependencyTruthinessTest::RunTest(const FString&)
 	Defs.Defs.Add(MoveTemp(TerminalDef));
 
 	FElysiumRecordingServices Services;
-	Services.bHasPlayer = true;
+	// The screen cone gates every terminal session; stand the glass in front of the eye.
+	Services.StandTerminalScreen();
 	FElysiumEntityWorld World(nullptr, State, Services.Bundle());
 	AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
 		EAutomationExpectedErrorFlags::Contains, 1);

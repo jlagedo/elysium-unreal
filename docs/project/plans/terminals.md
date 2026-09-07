@@ -12,7 +12,10 @@ explicit-use session, the non-bindable `hackcmd` path, the timed Hacking bypass,
 `FElysiumTerminalScreenBuffer` cell screen with every draw body in retail's order, the retail
 router by mode, the `Hacking_Strings` copy, the `InfoCtrl` hint value, the four cue sites, and
 the `FElysiumMapSlice` fixture that proves the `tuthack` transaction on the real `sp_tutorial_1`
-rows (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
+rows, and (slice B) the `0.7` screen cone off the baked `screen`/`screen_axis` sockets, the
+immobilize, the far-arm hull-sweep pin and near-arm view snap, the named `Hacking` shot pushed on
+entry and dropped on every exit, and the terminal gym host with its three `Elysium.Content.
+TerminalGym*`/`TerminalAttachments` tests (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
 `Elysium.Substrate.TerminalScreenBuffer`). Nothing below the entity is faithful yet: the body,
 the cone, the camera, the projection and the keyboard are the slices below. The 2026-09-06
 exploration (audit, content facts, projection research, the slice-A decompiles and the B/C design
@@ -67,22 +70,6 @@ session; the root draw reproduces `01-home-menu.png` cell for cell (five-row tit
 under menus, `help`/`quit` under commands, prompt on row 22, bare input row 23) and the retry
 prompt reproduces `04-password-failed.png` including the truncation; the HUD hint value is 3 on
 every password-prompt render and cleared on the next accepted line.
-
-**Slice B — the screen cone, immobilize, the retail camera.** `CanPlayerFocus` reads the placed
-model's `screen` / `screen_axis` sockets and applies `normalize(eye.xy − screen.xy) ·
-normalize(screen_axis − screen).xy > 0.7`; the same predicate answers availability and use-icon
-eligibility. Entry immobilizes the player through `SetImmobilized`, and the active-use tick reproduces
-`CBaseTerminal 0x10218320`: sweep the player's collision hull from the pawn toward the terminal
-origin (retail mask `0x201400b`), set the pawn at the contact point, relink — every tick while the
-session is live, so the player is held against the computer and stands there on exit. Camera: a named-shot loader for multi-shot
-files (`ElysiumCameraShots::LoadNamed("special-case", "Hacking")`) and `FElysiumCameraDirector::Push`
-on entry / `Pop` on exit, so the camera sits on `screen_axis` looking at `screen` at FOV 75 with the
-HUD shown and the viewmodel hidden; a shot that cannot resolve refuses the session with the named
-error. Exposure clamped for the handle's lifetime. *Acceptance:* cone tests at the focus,
-availability and icon boundaries from the real attachment transforms; a session refuses on a model
-without the attachments; a pawn placed 60 units off is at hull contact with the terminal after one
-session tick and stays there; camera tests assert the pushed shot's origin/look-at equal the two socket
-positions and that the previous view returns on every exit reason.
 
 **Slice C — world-lifetime projection and the screensaver.** Move `FWidgetRenderer`, the
 1024×768 render target and the material instance out of `UElysiumTerminalScreen` into a
@@ -148,6 +135,6 @@ lands, slices B–H are accepted on the terminal gym through a native automation
 the gym world, drives the same steps through the command bus and the intents, asserts authority
 state and reads the projection's render target back for the layout checks; the beat script
 replaces that driver when 11.10 lands, with the same assertions. The terminal gym builds on the
-movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0 first; A and B
-are independent; C depends on A; D and E depend on C; F, G on A; H last. Every acceptance is
+movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0, A and B have
+landed (2026-09-07); C next; D and E depend on C; F, G on A; H last. Every acceptance is
 headless (the map slice) or on the terminal gym; nothing in this plan is accepted on a live map.
