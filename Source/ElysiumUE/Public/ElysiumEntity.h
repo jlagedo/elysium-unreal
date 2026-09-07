@@ -14,6 +14,7 @@ class FElysiumEntityWorld;
 class UElysiumBrushComponent;
 class FElysiumDoorBase;
 class FElysiumLockableEntity;
+class IElysiumCameraOverrideSource;
 
 // Next-think sentinel: an entity with this next-think never runs Think(). Matches VtMB's
 // `0x7f7fffff` (FLT_MAX) write in CBaseEntity::ScriptHide (entity_io.md).
@@ -331,6 +332,17 @@ public:
 	// and the bone lookup a look-at rig uses. Base returns null; `FElysiumAnimating`
 	// returns its standing `Visual`. Declared here for the same no-RTTI reason `GetAttachBody` is.
 	virtual class USkeletalMeshComponent* GetSkeletalBody() const { return nullptr; }
+
+	// The `camera_track` override channel's view of this entity — retail's vtable slots 46 to 53
+	// (`+0xB8`..`+0xD4`): become-view / become-target, roll, FOV, viewpoint, target point and the
+	// two minimum crossfades. `CBaseEntity` declares all eight and only `CCameraTrack` and
+	// `CBaseCombatCharacter` fill any of them, so the base answers null and the channel then treats
+	// this entity as "not a camera source" rather than reading defaults off it.
+	//
+	// Declared here for the same no-RTTI reason `GetAttachBody` and `GetSkeletalBody` are: the
+	// channel's resolver holds an `FElysiumEntity*` and must not know which leaf implements the
+	// interface. Non-const because the interface's two notifies mutate the entity.
+	virtual IElysiumCameraOverrideSource* GetCameraOverrideSource() { return nullptr; }
 
 	// A model-authored `$attachment` on this entity's placed body, world cm — retail's
 	// `CBaseAnimating::GetAttachment01`. Separate from `GetSkeletalBody`'s socket table because a

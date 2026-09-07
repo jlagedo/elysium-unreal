@@ -92,7 +92,13 @@ FElysiumCameraRequest ElysiumDialogueCamera::BuildRequest(
 	Request.SelectedProfile = Profile.Name.ToString();
 	Request.Fallback = EElysiumCameraFallback::AuthoredProfile;
 	Request.BlendInSeconds = 0.35f;
-	Request.BlendOutSeconds = 0.25f;
+	// **The release is a cut** (M1, ruled). `EndPlayerDialog` (`vampire.dll` `0x10178400`) is an
+	// unconditional `UTIL_Remove` of the camera and there is no blend field anywhere on
+	// `C_BaseCineCamera`: retail hands control back on the *same tick* the camera dies, together with
+	// `SetImmobilized(false)`, the weapon restore and the HUD restore. The 0.25 s here was the port's
+	// invention and composed a dead camera over a player who already had input; it is deleted rather
+	// than defaulted, and no cvar exists that could bring it back.
+	Request.BlendOutSeconds = 0.0f;
 	Request.Control = EElysiumCameraControlPolicy::Preserve;
 	Request.bShowHud = true;
 	Request.bDrawViewmodel = false;

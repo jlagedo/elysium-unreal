@@ -191,6 +191,11 @@ bool FElysiumCameraTest::RunTest(const FString&)
 	}
 
 	// --- symmetric and interruptible: reversing mid-blend resumes, it does not restart ---
+	// This is the FIRST/THIRD weight's own symmetry — an integrator with no transition object, so
+	// there is nothing to restart. It is NOT retail's camera-override reversal, which the plan and
+	// `server_cine_camera.md` §7 both used to point here: that one is `FUN_1017d0b0`'s back-dated
+	// mark, it lives on `FElysiumCameraOverrideChannel::Arm`, and it is asserted on the stored
+	// `mark`/`duration` pair by `Elysium.Substrate.CameraOverride` (SC3).
 	{
 		FElysiumCameraWeights W;
 		W.bUserThird = true;
@@ -1466,6 +1471,12 @@ bool FElysiumCameraTrackerTest::RunTest(const FString&)
 			FMath::IsNearlyEqual(AdvanceOneFrame(5.0f), FTracker::FrameDeltaCeiling, 0.0001f));
 		TestTrue(TEXT("a 0.1 ms frame is floored to 10 ms"),
 			FMath::IsNearlyEqual(AdvanceOneFrame(0.0001f), FTracker::FrameDeltaFloor, 0.0001f));
+		// The floor's compare constant and its stored literal are the **same** 0.01 (RC9 read
+		// `_DAT_101e34e8` as `0a d7 23 3c`), so a 5 ms frame — well above the earlier 1/255 reading —
+		// is floored too. That is a 200 Hz frame being advanced as if it were 100 Hz, and it is
+		// retail's.
+		TestTrue(TEXT("a 5 ms frame is floored to 10 ms too, because the threshold is 0.01"),
+			FMath::IsNearlyEqual(AdvanceOneFrame(0.005f), FTracker::FrameDeltaFloor, 0.0001f));
 		TestTrue(TEXT("a zero frame is floored to 10 ms, which is retail's zero handling"),
 			FMath::IsNearlyEqual(AdvanceOneFrame(0.0f), FTracker::FrameDeltaFloor, 0.0001f));
 		TestTrue(TEXT("and so is a negative one"),
@@ -1571,22 +1582,52 @@ bool FElysiumCameraTrackerTest::RunTest(const FString&)
 		Tracker.Advance(Shot, 1.0f / 60.0f);
 		TestEqual(TEXT("a second frame copies the new value outright"), Tracker.Fov, 20.0f);
 
-		IConsoleVariable* Override =
-			IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.CameraShotFovOverride"));
-		if (TestNotNull(TEXT("the cine-FOV dev override is declared"), Override))
-		{
-			ON_SCOPE_EXIT { Override->Set(0.0f, ECVF_SetByCode); };
-			Override->Set(90.0f, ECVF_SetByCode);
-			Shot.FieldOfView = 25.0f;
-			TestEqual(TEXT("the guard returns the cvar"), Tracker.TrackFov(Shot), 90.0f);
-			Tracker.Advance(Shot, 1.0f / 60.0f);
-			TestEqual(TEXT("and freezes the cached FOV at its previous value, as retail does"),
-				Tracker.Fov, 20.0f);
+		// The guard is retail's own ConVar `camera_fov` (`client.dll` object `0x102de308`, name string
+		// `0x10270c88`, default `"-1"`, flags 0) and its threshold is `_DAT_101e34f4` = **10.0**, both
+		// read byte-exact by RC9. It therefore lives in the VtMB console store like every other
+		// retail-named cvar, not as an `elysium.*` engine one — M12 closes.
+		TestEqual(TEXT("the guard threshold is retail's 10.0"), FTracker::FovOverrideThreshold, 10.0f);
+		TestNull(TEXT("and the elysium.* placeholder is gone"),
+			IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.CameraShotFovOverride")));
 
-			Override->Set(0.0f, ECVF_SetByCode);
-			Tracker.Advance(Shot, 1.0f / 60.0f);
-			TestEqual(TEXT("clearing the override resumes the copy"), Tracker.Fov, 25.0f);
+		bool bCameraFovDeclared = false;
+		for (const ElysiumCam::FCvarDef& Def : ElysiumCam::CvarDefs())
+		{
+			bCameraFovDeclared |= FString(Def.Name) == TEXT("camera_fov")
+				&& FString(Def.Default) == TEXT("-1");
 		}
+		TestTrue(TEXT("camera_fov is declared in the VtMB store at retail's -1"), bCameraFovDeclared);
+
+		// The shipped default never fires: -1 is not above 10.
+		FElysiumCameraCvars Lens;
+		TestTrue(TEXT("the default is below the threshold, so a stock run never freezes"),
+			Lens.CameraFov <= FTracker::FovOverrideThreshold);
+
+		// A console-store write reaches the loaded value, which is what the component hands the
+		// tracker every frame.
+		TMap<FString, FString> Cfg;
+		Cfg.Add(TEXT("camera_fov"), TEXT("90"));
+		Lens.LoadFrom([&Cfg](const TCHAR* Name) -> FString
+		{
+			const FString* Hit = Cfg.Find(Name);
+			return Hit ? *Hit : FString();
+		});
+		TestEqual(TEXT("a camera_fov write reaches the cvar surface unclamped"), Lens.CameraFov, 90.0f);
+
+		Shot.FieldOfView = 25.0f;
+		TestEqual(TEXT("the guard returns the cvar"), Tracker.TrackFov(Shot, Lens.CameraFov), 90.0f);
+		Tracker.Advance(Shot, 1.0f / 60.0f, Lens.CameraFov);
+		TestEqual(TEXT("and freezes the cached FOV at its previous value, as retail does"),
+			Tracker.Fov, 20.0f);
+
+		// Exactly at the threshold the guard does NOT fire — the compare is strictly greater.
+		Tracker.Advance(Shot, 1.0f / 60.0f, 10.0f);
+		TestEqual(TEXT("camera_fov exactly at 10 is not above it, so the copy resumes"),
+			Tracker.Fov, 25.0f);
+
+		Shot.FieldOfView = 30.0f;
+		Tracker.Advance(Shot, 1.0f / 60.0f, -1.0f);
+		TestEqual(TEXT("and the shipped default copies the record outright"), Tracker.Fov, 30.0f);
 	}
 
 	// --- the frame latch: one Advance per rendered frame (`m_nFrameCache`, FUN_10001a20) ---
@@ -2102,6 +2143,69 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	return true;
 }
 
+// The two channels are mutually exclusive — SC2.
+//
+// `CBasePlayer::SetCameraViewEntity` (`vampire.dll` `FUN_1017d280`, the `camera_track` role setter)
+// **opens with `SetCineCamera(NULL)`**, and nothing anywhere in the cine path touches `+0x19b8`; the
+// map teardown `FUN_10071970` tears both channels down together. Retail therefore cannot reach a
+// state where an adopted cine camera and a live track override both own the view — which is exactly
+// why the release of either is a cut (M1) and not a blend: there is no "one fading out while the
+// other ramps in" for a blend to arbitrate.
+//
+// A separate case rather than an edit to the temporal-cut cluster above, so the exclusion rule reads
+// as its own claim and survives SC4 rebuilding the adoption slot underneath it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraChannelExclusionTest,
+	"Elysium.Substrate.CameraChannelExclusion", GElysiumTestFlags)
+bool FElysiumCameraChannelExclusionTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__camera_channel_exclusion_test__");
+	FElysiumEntityDef Track;
+	Track.Classname = TEXT("camera_track");
+	Track.TargetName = TEXT("pos");
+	Track.Origin = FVector(100.0f, 0.0f, 0.0f);
+	Track.Keys.Add(TEXT("Pause"), TEXT("30"));      // long enough that nothing completes on its own
+	Defs.Defs.Add(MoveTemp(Track));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	const auto PlayTrack = [&World]()
+	{
+		World.AcceptInput(TEXT("pos"), FName(TEXT("PlayAsCameraPosition")), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+	};
+
+	// A track lease, alone.
+	PlayTrack();
+	TestTrue(TEXT("the track lease owns the view"), World.HasTrackCamera());
+	TestFalse(TEXT("and no cine camera is adopted"), World.HasScriptedCamera());
+
+	// Adopting a cine camera drops it — `SetCamera` is "*the* cinematic camera mode".
+	World.SetScriptedCamera(TEXT("jack"), FElysiumEntityHandle());
+	TestTrue(TEXT("the cine camera is adopted"), World.HasScriptedCamera());
+	TestFalse(TEXT("and the adoption cleared the live track lease"), World.HasTrackCamera());
+	TestFalse(TEXT("including the role itself, so a superseded track cannot reclaim it"),
+		World.TrackCameraOwner(/*bTargetRole*/ false).IsSet());
+
+	// The superseded track's own clock keeps running and still cannot take the view back.
+	World.Tick(1.0);
+	TestFalse(TEXT("a running track that lost its lease does not repossess the view"),
+		World.HasTrackCamera());
+	TestTrue(TEXT("and the cine camera is untouched by it"), World.HasScriptedCamera());
+
+	// And the other direction: leasing a track role clears the adopted camera, retail's
+	// `SetCineCamera(NULL)` at the top of `FUN_1017d280`.
+	PlayTrack();
+	TestTrue(TEXT("the track lease is back"), World.HasTrackCamera());
+	TestFalse(TEXT("and leasing it dropped the adopted cine camera"), World.HasScriptedCamera());
+
+	return true;
+}
+
 // vdata/camerashots — the shot files SetCamera names.
 //
 // The grammar is documented by Troika in the shipped `camera shots how-to.txt`, so this asserts the
@@ -2240,14 +2344,18 @@ CameraShotTable { Wide { End { "Position" "Player" } CameraConstraints { "FieldO
 		ElysiumCameraShots::ParseText(TEXT("CameraShotTable\n{\n}\n"), Empty));
 	TestFalse(TEXT("and so does empty text"), ElysiumCameraShots::ParseText(FString(), Empty));
 
-	// A `Named` anchor carries the entity name, and a bare name is taken as one (the how-to writes
-	// `Named` both as the keyword and as "the name of an entity in the map").
+	// Retail's `Position` parser (`FUN_10071e00`) is an `_strstr` chain — `Player`, `DialogTarget`,
+	// `GrappleVictim`, `GrappleAttacker`, `Named` — and anything else falls through to `World`
+	// (`0x4`). A bare entity name is *not* read off the record: `Named` resolves to nothing until a
+	// caller supplies the entity through `SetShotAnchorEntity` (`FUN_1006ef50`). The how-to's
+	// "the name of an entity in the map" wording describes the director keyvalue, not the shot file.
 	FElysiumCameraShotDef Named;
-	TestTrue(TEXT("a named-entity shot parses"), ElysiumCameraShots::ParseText(TEXT(R"(
+	AddExpectedError(TEXT("is not a keyword"), EAutomationExpectedErrorFlags::Contains, 0);
+	TestTrue(TEXT("a shot with an unrecognised Position still parses"), ElysiumCameraShots::ParseText(TEXT(R"(
 CameraShotTable { Vantage { End { "Position" "cam_marker_1" "AttachPos" "Origin" "AttachType" "None" } } }
 )"), Named));
-	TestTrue(TEXT("an unrecognised Position is the entity's own name"),
-		Named.End.Position == EElysiumShotPosition::Named && Named.End.NamedEntity == TEXT("cam_marker_1"));
+	TestTrue(TEXT("an unrecognised Position falls through to World, as retail's _strstr chain does"),
+		Named.End.Position == EElysiumShotPosition::World && Named.End.NamedEntity.IsEmpty());
 
 	// --- multi-shot files: `special-case.txt` and the `Hacking` block -------------------------
 	// Most of `vdata/camerashots/` is one shot per file, but `special-case.txt` carries five

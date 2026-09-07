@@ -6,6 +6,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
+#include "Substrate/ElysiumCameraOverride.h"
 #include "Substrate/ElysiumClassFields.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCameraTrack, Log, All);
@@ -318,12 +319,57 @@ namespace
 		}
 	};
 
-	class FElysiumCameraTrack final : public FElysiumCameraKeyframe
+	class FElysiumCameraTrack final
+		: public FElysiumCameraKeyframe
+		, public IElysiumCameraOverrideSource
 	{
 	public:
 		bool bHoldAtEnd = false;
 		float FromPlayerTime = 0.0f;
 		float ToPlayerTime = 0.0f;
+
+		// The runtime pose block `CCameraTrack` publishes through slots 0xC8/0xCC/0xC4/0xC0 —
+		// retail's `m_vecViewPos` (+0x4e0), `m_vecTargetPos` (+0x4c8), `m_flViewFOV` (+0x4ec) and
+		// `m_flViewRoll` (+0x4f0). The sampler writes them; the override channel reads them. They
+		// are runtime, not keyfields: `Roll` and `FocalLength` above are what the map authors.
+		FVector ViewPos = FVector::ZeroVector;
+		FVector TargetPos = FVector::ZeroVector;
+		float ViewFov = 0.0f;
+		float ViewRoll = 0.0f;
+		// `m_flViewStartTime` (+0x4d4) / `m_flTargetStartTime` (+0x4bc), stamped by the two notifies.
+		double ViewStartTime = 0.0;
+		double TargetStartTime = 0.0;
+
+		// --- The override-channel source, slots 46-53 (`docs/vtmb/camera-view-modes.md`) --------
+		virtual IElysiumCameraOverrideSource* GetCameraOverrideSource() override { return this; }
+
+		virtual FVector GetCameraViewpointPosition() const override { return ViewPos; }
+		// `0x100cc320` writes only the out pointer; the aim-from source is never read.
+		virtual FVector GetCameraTargetPosition(const FVector& /*AimFrom*/) const override
+		{
+			return TargetPos;
+		}
+		virtual float GetCameraRoll() const override { return ViewRoll; }
+		virtual float GetCameraFieldOfView() const override { return ViewFov; }
+		// `0x100cbf30` / `0x100cbf70`: `max(0, FromPlayerTime)` and `max(0, ToPlayerTime)`. The
+		// authored keyvalues clamped at zero — a `camera_track`'s whole contribution to the fade.
+		virtual float GetCameraFadeInTime() const override { return FMath::Max(0.0f, FromPlayerTime); }
+		virtual float GetCameraFadeOutTime() const override { return FMath::Max(0.0f, ToPlayerTime); }
+
+		// `0x100cc250` / `0x100cc1c0`. Retail's bodies also fire `OnReachedKeyframe`, seed the key
+		// cursor and schedule the think — but in retail the notify IS the start, because the player
+		// pulls the pose out of the track. The port inverts that: `InputPlay` starts the chain and
+		// the sampler pushes each frame's pose, so those three are already done by the time the
+		// channel notifies. Only the start stamp is left here; firing the output again would
+		// double-fire an authored map wire.
+		virtual void OnBecameCameraView() override
+		{
+			ViewStartTime = World ? World->NowSeconds() : 0.0;
+		}
+		virtual void OnBecameCameraTarget() override
+		{
+			TargetStartTime = World ? World->NowSeconds() : 0.0;
+		}
 
 		void InputPlay(bool bTarget, const FElysiumInputArgs& Args)
 		{
@@ -484,6 +530,22 @@ namespace
 			}
 		}
 
+		// Land this frame's sample in the runtime pose block the override channel reads through
+		// slots 0xC8/0xCC/0xC4/0xC0. The target stream fills only `m_vecTargetPos`, exactly as the
+		// target half of retail's think does — a track playing as the target contributes no FOV or
+		// roll at all.
+		void StoreSample(bool bTarget, const ElysiumCameraTrack::FSample& Sample)
+		{
+			if (bTarget)
+			{
+				TargetPos = Sample.Position;
+				return;
+			}
+			ViewPos = Sample.Position;
+			ViewFov = Sample.FieldOfView;
+			ViewRoll = Sample.Roll;
+		}
+
 		void TickPlayback(bool bTarget, FPlayback& P, float Elapsed, bool bRoleChanged = false)
 		{
 			ElysiumCameraTrack::FSample Sample;
@@ -502,6 +564,7 @@ namespace
 			}
 			FireCrossedOutputs(P, Elapsed);
 			P.LastElapsed = Elapsed;
+			StoreSample(bTarget, Sample);
 			if (World)
 			{
 				World->PublishTrackCamera(bTarget, Handle, Sample.Position, Sample.Rotation,
@@ -558,6 +621,7 @@ namespace
 					ElysiumCameraTrack::FSample Sample;
 					if (P.Path.Sample(Elapsed, Sample) && World)
 					{
+						StoreSample(bTarget, Sample);
 						const bool bRoleChanged = World->SelectTrackCameraRole(bTarget, Handle);
 						World->PublishTrackCamera(bTarget, Handle, Sample.Position, Sample.Rotation,
 							Sample.Roll, Sample.FieldOfView, FromPlayerTime,

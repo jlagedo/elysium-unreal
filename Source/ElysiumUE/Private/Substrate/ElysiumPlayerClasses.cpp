@@ -311,10 +311,15 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		ELYSIUM_PENDING_INPUT(FC, BarterBegin,            "9.8 — barter");
 		ELYSIUM_PENDING_INPUT(FC, BarterEnd,              "9.8 — barter");
 		ELYSIUM_PENDING_INPUT(FC, PlayFloat,              "8.9 — the floating HUD readout");
-		ELYSIUM_PENDING_INPUT(FC, SetHeadAsCameraTarget,  "11.7 — the scripted-shot channel");
-		ELYSIUM_PENDING_INPUT(FC, SetBodyAsCameraTarget,  "11.7 — the scripted-shot channel");
-		ELYSIUM_PENDING_INPUT(FC, FadeHeadAsCameraTarget, "11.7 — the scripted-shot channel");
-		ELYSIUM_PENDING_INPUT(FC, FadeBodyAsCameraTarget, "11.7 — the scripted-shot channel");
+		// The four `SetAsCameraTarget` wires (SC3). `Set*` pass a zero fade and `Fade*` pass the
+		// wire's own value; all four broadcast the character onto the player's camera-TARGET
+		// channel, which — unlike the view channel — does not cancel a live cine shot. Head picks
+		// `CalcLookData` and body picks `WorldSpaceCenter()` for the published aim point.
+		// `sm_hub_1` fires `!playercontroller.SetBodyAsCameraTarget`, so this is shipped content.
+		D.Input(TEXT("SetHeadAsCameraTarget"),  [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputSetHeadAsCameraTarget(A); });
+		D.Input(TEXT("SetBodyAsCameraTarget"),  [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputSetBodyAsCameraTarget(A); });
+		D.Input(TEXT("FadeHeadAsCameraTarget"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputFadeHeadAsCameraTarget(A); });
+		D.Input(TEXT("FadeBodyAsCameraTarget"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputFadeBodyAsCameraTarget(A); });
 		// The four scripted look-at inputs. Center is registered separately from Eye even though it
 		// behaves identically, because the identical behaviour is retail's own defect rather than a
 		// simplification of ours — see InputLookAtEntityCenter.
@@ -334,6 +339,14 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		// the player entity is excluded from that snapshot, so its copy rides the player record
 		// beside the surface it feeds.
 		ElysiumAddClassField(D, TEXT("m_nRawStealthModifier"), &FC::StealthModRaw);
+
+		// The camera-target pair, at the datamap names retail carries them under (`+0x10d0` and
+		// `+0x10d4`, both in `datamap_CBaseCombatCharacter_builder`). Engine-written by
+		// `SetAsCameraTarget`, never authored — the same Save-only posture the stance pair takes.
+		ElysiumAddClassField(D, TEXT("m_flCameraOverrideFadeTime"), &FC::CameraOverrideFadeTime,
+			EElysiumField::Save);
+		ElysiumAddClassField(D, TEXT("m_bCameraTargetIsHead"), &FC::bCameraTargetIsHead,
+			EElysiumField::Save);
 
 		// The runtime's authoritative once-only death latch. Saving it is required by npc_maker's
 		// owner notification: a dead child restored and later Kill'd must not refund a live slot.

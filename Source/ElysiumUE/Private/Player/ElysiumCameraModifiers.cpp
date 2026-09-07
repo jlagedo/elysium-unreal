@@ -54,9 +54,14 @@ bool UElysiumCameraModifier_LegacyShot::ApplyElysiumLayer(float DeltaTime, FMini
 
 	const FElysiumScriptedShotView Shot = Camera->ScriptedShotView();
 
-	// The stack's weight *is* this layer's alpha. Written, never blended — so `showdebug camera`
+	// The channel's weight *is* this layer's alpha. Written, never blended — so `showdebug camera`
 	// reports the real ramp rather than a copy of it drifting alongside.
-	Alpha = Shot.Weight;
+	//
+	// It is the **linear** weight, deliberately. Retail's ramp (`FUN_100fc900`'s tail) is linear and
+	// the `SimpleSpline` ease lives at the compose site (`FUN_100ffb90` opens with it), so easing
+	// here as well would ease twice over an authored duration. An adopted cine camera reads as full
+	// weight because it has none of its own.
+	Alpha = Shot.ChannelWeight();
 
 	Camera->ApplyScriptedShotToView(InOutPOV);
 
@@ -73,5 +78,5 @@ bool UElysiumCameraModifier_LegacyShot::ApplyElysiumLayer(float DeltaTime, FMini
 
 	// While an authored shot has weight, nothing further composes over it: an edit is exact, and the
 	// stock camera-shake modifier sitting at the default priority is the layer this suppresses.
-	return Shot.Weight > 0.0f;
+	return Shot.ChannelWeight() > 0.0f;
 }

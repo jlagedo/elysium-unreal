@@ -39,6 +39,19 @@ namespace ElysiumCam
 		return t * t * (3.0f - 2.0f * t);
 	}
 
+	// `CInput::OverrideView`'s stand-in aim point (`FUN_100ffb90`, `_DAT_1022b298`): the composition
+	// interpolates what the camera is *looking at* as a **point**, not as an angle, and the base
+	// view's point is its own origin plus this far along its forward. **240 Source units** (609.6 cm),
+	// recovered byte-exact by RC9 — the earlier reading of 100 was wrong by 2.4x, which materially
+	// changes the arc of every scripted arrival.
+	inline constexpr float ViewForwardPointUnits = 240.0f;
+	inline constexpr float ViewForwardPointCm = ViewForwardPointUnits * U;
+
+	// The stand-in target a shot that carries a rotation rather than a look-at point aims at. At full
+	// weight `VectorAngles(target - origin)` is exactly that rotation again, so the two authoring
+	// forms land on the same pose and differ only in the arc between.
+	FVector ScriptedShotTargetPoint(const FVector& ShotLocation, const FRotator& ShotRotation);
+
 	// Source's rate-limited approach (`0x100fc000`): push Current toward Target by at most
 	// `Speed * Dt`. Nothing eases — the clamp is the whole smoothing, which is why the camera reads as
 	// mechanical until the spring damper runs over it. A Speed of 0 snaps.
@@ -250,9 +263,26 @@ struct FElysiumCameraShot
 	float Roll = 0.0f;
 	float FieldOfView = 0.0f;
 
-	// The timed ramp's duration (`+0x118`) — cutscene cameras get an explicit duration, unlike the
-	// toggle's fixed-rate blend. 0 snaps.
+	// The timed ramp's duration (`+0x118`) — a `camera_track` override gets an explicit duration,
+	// unlike the toggle's fixed-rate blend. 0 snaps. **Read on the track channel only**: a cine shot
+	// has no weight at all (see `bCine`).
 	float BlendSeconds = 0.5f;
+
+	// **Which of retail's two channels this shot is.** They are not two views: they are one camera in
+	// series (`client.dll` `0x100d4040`).
+	//
+	//   * **cine** (`bCine` true) — an adopted `C_BaseCineCamera`: `SetCamera`, a `camera_cinematic`,
+	//     a terminal shot, a dialogue shot. `C_BasePlayer::CalcView` (`0x100a7770`) hard-writes its
+	//     origin, angles and FOV (`FUN_10001b50`) and `CInput` slot 31's third-person boom is then
+	//     **skipped entirely** — there is no weight, no blend field anywhere on `C_BaseCineCamera`,
+	//     and every exit is a same-tick cut (M1);
+	//   * **value / track** (`bCine` false) — the `camera_track` override channel: the only ramped
+	//     one, composed over whichever base won by `CInput::OverrideView` (`FUN_100ffb90`) at the
+	//     signed-duration weight `FElysiumCameraShotStack` carries.
+	//
+	// A second axis from `bTracked`, deliberately: `bTracked` says *how the pose is solved* (retail's
+	// `CamMode == 1`), `bCine` says *which channel writes it*.
+	bool bCine = false;
 
 	// The shot file's `CameraConstraints`, in engine units: how the camera is allowed to chase its
 	// own goal once the shot is live. These are the client tracker's inputs — `C_BaseCineCamera`
@@ -371,7 +401,11 @@ struct FElysiumScriptedShotTracker
 	// below `FrameDeltaFloorThreshold` with `FrameDeltaFloor` — which is how it handles a zero or a
 	// negative delta as well. The caller supplies the frame's delta and nothing else; the tracker
 	// never reads a clock.
-	void Advance(const FElysiumCameraShot& Shot, float DeltaSeconds);
+	//
+	// `CameraFovCvar` is retail's `camera_fov` ConVar value, read from the VtMB console store by the
+	// caller (`FElysiumCameraCvars::CameraFov`) and passed in rather than looked up, because the
+	// tracker reaches nothing. Its default `-1` is retail's, and it never fires a shipped run.
+	void Advance(const FElysiumCameraShot& Shot, float DeltaSeconds, float CameraFovCvar = -1.0f);
 
 	// The hard copy — `FUN_10002390`. Goal -> current for origin and angles, position settled, speed
 	// and the three turn rates zeroed, all three angle axes marked **unsettled** (so the aim
@@ -382,10 +416,10 @@ struct FElysiumScriptedShotTracker
 	void Snap(const FElysiumCameraShot& Shot);
 
 	// `FUN_10001c20`. Returns the FOV this frame renders and, in the ordinary path, copies the shot
-	// record's `FieldOfView` into `Fov`. Under the dev-cvar override it returns the cvar **without
+	// record's `FieldOfView` into `Fov`. Under the `camera_fov` guard it returns the cvar **without
 	// writing `Fov`**, so the rendered FOV freezes at whatever it last was — retail's own behaviour,
-	// reproduced (M12).
-	float TrackFov(const FElysiumCameraShot& Shot);
+	// reproduced (M12). `CameraFovCvar` is that cvar's value; its retail default is `-1`.
+	float TrackFov(const FElysiumCameraShot& Shot, float CameraFovCvar = -1.0f);
 
 	// `FUN_100019a0`'s first test: `m_flSpeed <= 1.0` (a *double* compare at `0x101e34e0`) reads as
 	// "the camera has stopped dollying", and it is clean precisely because `MinTrackSpeed` is the
@@ -405,52 +439,96 @@ struct FElysiumScriptedShotTracker
 	static constexpr float MinTrackSpeed = 1.0f * 2.54f;              // cm/s (1.0 u/s)
 
 	// The frame-delta guards from `FUN_10001a20`. `dt > 1.0 => 1.0` (`FCOMP _DAT_101e34ec`, then
-	// `MOV 0x3f800000`); `dt < 1/255 => 0.01` (`FCOMP _DAT_101e34e8`, then `MOV 0x3c23d70a`) — the
-	// second covers zero and negative, which is why there is no separate early-out.
+	// `MOV 0x3f800000`); `dt < 0.01 => 0.01` (`FCOMP _DAT_101e34e8` at `0x10001a75`, then
+	// `MOV 0x3c23d70a`) — the floor's compare constant and its stored literal are **the same
+	// 0.01** (RC9 read `_DAT_101e34e8` as `0a d7 23 3c`; the earlier `1/255` reading was wrong), and
+	// it covers zero and negative, which is why there is no separate early-out.
 	static constexpr float FrameDeltaCeiling = 1.0f;                  // s  (`_DAT_101e34ec`)
-	static constexpr float FrameDeltaFloorThreshold = 1.0f / 255.0f;  // s  (`_DAT_101e34e8`)
-	static constexpr float FrameDeltaFloor = 0.01f;                   // s  (immediate 0x3c23d70a)
+	static constexpr float FrameDeltaFloor = 0.01f;                   // s  (`_DAT_101e34e8`, and the
+	                                                                  //     immediate 0x3c23d70a)
 
-	// `_DAT_101e34f4`, the cine-FOV guard's threshold: the cvar wins only while
-	// `FovOverrideThreshold < cvar.GetFloat()`. **The retail value is unrecovered** — RC9 supplies
-	// it; 0 stands in and reads as "the cvar is unset", which is what an unwritten dev cvar is.
-	static constexpr float FovOverrideThreshold = 0.0f;
+	// `_DAT_101e34f4`, the `camera_fov` guard's threshold: the cvar wins only while
+	// `FovOverrideThreshold < camera_fov`. RC9 read it as `00 00 20 41` = **10.0**, and `camera_fov`'s
+	// own default is `-1`, so the guard never fires in a shipped run.
+	static constexpr float FovOverrideThreshold = 10.0f;
 };
 
 // The channel. Push/pop is **handle-based, not LIFO** — a conversation ends behind a cutscene that
 // is still running, exactly like the input-scope stack — so a pop removes a shot from
 // wherever it sits and the top re-resolves. Ids are never reused, so a stale or doubled pop is a
 // no-op.
+//
+// **Two channels, not one weighted list** (`docs/vtmb/camera-view-modes.md`, SC2). The entries share
+// one array because push/pop ordering is shared, but they answer separately: `TopCine()` is the
+// adopted camera — no weight, a hard write, and its release is a cut — while `TopTrack()` is the
+// `camera_track` override, the only ramped one.
 class FElysiumCameraShotStack
 {
 public:
-	// Returns the shot's id (from 1). The weight ramps in over the shot's own BlendSeconds.
+	// Returns the shot's id (from 1). A **track** shot arms the ramp over its own `BlendSeconds`,
+	// back-dated so an in-flight weight is preserved rather than restarted (retail's re-time,
+	// `vampire.dll` `FUN_1017d0b0`). A **cine** shot arms nothing: it is live at full weight the
+	// instant it is pushed.
 	int32 Push(const FElysiumCameraShot& Shot);
 
 	// Refresh a live shot's values — what a `Follow` attach type is. False for an id that is not up.
 	bool Update(int32 Id, const FElysiumCameraShot& Shot);
 
-	// Remove a shot. When it was the top one, the weight ramps back out over its BlendSeconds (or
-	// toward whatever is left underneath, which stays at full weight).
+	// Remove a shot.
+	//
+	// A **cine** shot is released **instantaneously** — M1, ruled: retail returns control on the same
+	// tick the camera dies (`FUN_10070990`, `EndPlayerDialog` `0x10178400`, `InputRemoveCamera`
+	// `0x10171f10`), no blend field exists anywhere on `C_BaseCineCamera`, and `BlendOutSeconds` is
+	// therefore not consulted at all. A **track** shot that empties the track channel arms retail's
+	// negative-duration blend-out over `BlendOutSeconds` (or its own `BlendSeconds` when the argument
+	// is negative); one popped from under another track shot leaves the ramp where it is.
 	bool Pop(int32 Id, float BlendOutSeconds = -1.0f);
 
 	// Drop everything, weight included — a map teardown, `RestoreCameraToPlayerControl` in the large.
 	void Clear();
 
 	int32 Num() const { return Shots.Num(); }
-	bool IsActive() const { return Shots.Num() > 0 || Weight > 0.0f; }
+	bool IsActive() const { return Shots.Num() > 0 || GetTrackWeight() > 0.0f; }
 
-	// The deciding shot: the most recently pushed one still up, or null / 0.
+	// The deciding shot overall: the most recently pushed one still up, or null / 0. What the
+	// presentation keys and the debug read-out come from.
 	const FElysiumCameraShot* Top() const { return Shots.Num() > 0 ? &Shots.Last().Shot : nullptr; }
 	int32 TopId() const { return Shots.Num() > 0 ? Shots.Last().Id : 0; }
+
+	// The adopted cine camera (`m_iCameraOverrideIdx`'s entity), or null. One slot in retail; the
+	// most recent push here until SC4 rebuilds the slot.
+	const FElysiumCameraShot* TopCine() const;
+	int32 TopCineId() const;
+
+	// The `camera_track` override, or null.
+	const FElysiumCameraShot* TopTrack() const;
+	int32 TopTrackId() const;
+
 	const FElysiumCameraShot* Find(int32 Id) const;
 
-	// Advance the timed ramp. Toward 1 while a shot is up, toward 0 when none is.
+	// Advance the channel's own clock. The weight is a **function** of that clock and the two stored
+	// ramp fields, exactly as retail's is of `engine->GetCurTime()` — nothing integrates.
 	void Advance(float DeltaSeconds);
 
-	float GetWeight() const { return Weight; }
+	// The track channel's ramp — `CInput+0x100`, `FUN_100fc900`'s tail. **Linear**; the
+	// `SimpleSpline` ease belongs at the compose site, not here.
+	float GetTrackWeight() const;
+
+	// What `CAM_IsThirdPerson` and the layer alpha read: an adopted cine camera counts as full
+	// scripted weight (it has none of its own), otherwise the track ramp.
+	float GetWeight() const { return TopCine() ? 1.0f : GetTrackWeight(); }
+
+	// Retail's ramp fields, for the debug read-out and for SC3's fade machine to build on.
+	float RampStartSeconds() const { return RampStartTime; }
+	float RampDurationSeconds() const { return RampDuration; }
 
 	FString Describe() const;
+
+	// The ramp's symmetric dead band, `|duration| <= 0.01 s` (RC9: `_DAT_101e34e8` = `+0.01`,
+	// `_DAT_10235278` = `-0.01`, both read byte-exact out of `client.dll`). Inside it the weight is
+	// **1 and stays 1** — a hard cut in — in either sign, so a "blend out" shorter than 10 ms is not
+	// a fast fade, it is no fade at all. "Off" is not encoded here: it is `startTime <= 0`.
+	static constexpr float RampDeadBandSeconds = 0.01f;
 
 private:
 	struct FEntry
@@ -459,11 +537,32 @@ private:
 		FElysiumCameraShot Shot;
 	};
 
+	// Arm the ramp, preserving the current weight by back-dating the start rather than writing the
+	// weight — retail's `FUN_1017d0b0`. Two entry points rather than one signed argument, because the
+	// direction has to survive a zero: `-0.0f >= 0.0f` is true, so a zero-length release and a
+	// zero-length arrival are not distinguishable by sign.
+	void ArmRampIn(float Seconds);
+	void ArmRampOut(float Seconds);
+
 	TArray<FEntry> Shots;
-	float Weight = 0.0f;
-	// The ramp duration in force: the top shot's while one is up, the last-popped shot's on the way
-	// out (so a shot fades away as fast as it arrived).
-	float RampSeconds = 0.5f;
+
+	// **Retail's own encoding** (M5, ruled): the pair of replicated fields
+	// `m_flCameraOverrideFadeStartTime` (local `+0x114`) and `m_flCameraOverrideFadeDuration`
+	// (`+0x118`), with the **sign of the duration** as the stored direction. `FUN_100fc900`'s tail:
+	//   `startTime <= 0`            => weight 0, the override is off;
+	//   `|duration| <= 0.01`        => weight 1, immediately, and it stays;
+	//   `duration >  0.01`          => `(now - startTime)/duration`;
+	//   `duration < -0.01`          => `1 + (now - startTime)/duration`, the blend out;
+	// then clamp to [0,1]. `Pop(Id, BlendOutSeconds)` survives only as a facade that writes these.
+	float RampStartTime = 0.0f;
+	float RampDuration = 0.0f;
+
+	// The channel's clock, standing for `engine->GetCurTime()`. It is advanced by the frame's
+	// `DeltaSeconds` and never read from a real one (the substrate rule). It starts **above zero**
+	// because `startTime <= 0` is retail's "off" sentinel, so a legitimate stamp has to be strictly
+	// positive — retail gets that for free from an engine time that is never 0 while a map is up.
+	float RampNow = 1.0f;
+
 	int32 NextId = 1;
 };
 
@@ -517,6 +616,23 @@ struct FElysiumCameraCvars
 	// `bViewmodelEligible` gate, which has no draw consumer), so the value is declared, loaded and
 	// readable and nothing projects with it. It stands for retail's `viewmodel_fov` ConVar.
 	float ViewmodelFov = 54.0f;
+
+	// `camera_fov`, the cine-FOV guard (`client.dll` ConVar object `0x102de308`, name string
+	// `0x10270c88`, default `"-1"`, flags 0 — RC9). Above
+	// `FElysiumScriptedShotTracker::FovOverrideThreshold` (10) the scripted-shot FOV **freezes**
+	// rather than following the cvar, which is retail's behaviour and not a defect to smooth over
+	// (M12). Degrees, unconverted; the default never fires.
+	float CameraFov = -1.0f;
+
+	// `c_orthowidth` / `c_orthoheight` (`client.dll` `0x100fb240`, both `FCVAR_ARCHIVE`, default
+	// `"100"` — RC9). Source's orthographic debug view, toggled by the `camortho` command
+	// (`FUN_101001e0`) through `CInput+0x1b8`: `CViewSetup::m_bOrtho` (`+0x16`) is raised and the
+	// rect at `+0x18..0x24` is written `(-w*0.5, -h*0.5, w*0.5, h*0.5)`. Source units in, cm here.
+	//
+	// **This is not an off-centre projection.** The earlier reading of the block as `bOffCenter` was
+	// wrong on both the flag and the offsets (M11, re-scoped by RC9).
+	float OrthoWidth = 100.0f * ElysiumCam::U;
+	float OrthoHeight = 100.0f * ElysiumCam::U;
 
 	// The spring damper. **Two constants** — stiffer against a wall than in open space — which is the
 	// single most characteristic part of the VtMB camera and the reason the stock spring arm is not
@@ -615,15 +731,35 @@ namespace ElysiumCam
 	FElysiumFeedCameraPose SolveOrdinaryFeedCamera(float T, float EntryYaw,
 		const FElysiumCameraCvars& Cvars);
 
-	// `ApplyScriptedBlend`, the tail of `CAM_ApplyToView` (`0x100ffb00`): the scripted channel is
-	// composed **over** whatever the base rig produced, at the shot stack's own timed weight. It is
-	// not a rival viewpoint — VtMB has one camera, and this is the last term applied to it.
+	// `CInput::OverrideView` (`client.dll` `FUN_100ffb90`, slot 33), verbatim — the **track** channel
+	// composed over whatever base won, and the last term applied to the one camera VtMB has.
+	//
+	//     e = SimpleSpline(w)                                   // the ease is HERE, the ramp is linear
+	//     AngleVectors(angles, fwd)
+	//     viewFwdPoint = origin + fwd * 240u                    // `_DAT_1022b298`
+	//     origin       = origin + (shotOrigin - origin) * e
+	//     dir          = lerp(viewFwdPoint, shotTarget, e) - origin
+	//     VectorAngles(normalize(dir), angles)
+	//     angles.roll  = e * shotRoll                           // the base roll is DISCARDED
+	//     fov          = fov + (shotFov - fov) * e
+	//
+	// Two properties this shape has and a rotator lerp does not: the aim is interpolated as a
+	// **point**, so a shot swings faster at the start and settles rather than sweeping uniformly; and
+	// the base view's roll is thrown away outright the instant the weight is non-zero. The authored
+	// `FromPlayerTime` values were tuned against exactly this (M9), so it is contract.
 	//
 	// Taking the three view values rather than an `FMinimalViewInfo` is what keeps this header on
 	// Core types, so the composition is asserted with no engine view struct — and it is the reason
 	// the same function serves the faithful evaluator and the modern rig without either owning it.
 	// A `Weight` at or below zero leaves all three untouched; a `ShotFov` at or below zero keeps the
 	// player's field of view, which is what a shot file with no `FieldOfView` authors.
+	void ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
+		const FVector& ShotLocation, const FVector& ShotTarget, float ShotRoll, float ShotFov,
+		float Weight);
+
+	// The same, for a shot that carries a rotation instead of a look-at point: the target becomes
+	// `ScriptedShotTargetPoint(ShotLocation, ShotRotation)` and the roll the rotation's own, so the
+	// two authoring forms reach the same pose at full weight.
 	void ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
 		const FVector& ShotLocation, const FRotator& ShotRotation, float ShotFov, float Weight);
 

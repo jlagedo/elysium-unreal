@@ -884,11 +884,69 @@ a coordinate/basis fact and does not imply that retail turns Jack before the sho
 The channel is a **handle-based** stack of shots-as-values (`FElysiumCameraShotStack`), not LIFO: a
 conversation ends behind a running cutscene, so a pop removes a shot from wherever it sits and the top
 re-resolves. Ids are never reused, so a stale or doubled pop is a no-op — the same discipline the input
-scopes use (`docs/architecture/input-architecture.md`). Each shot carries its own **timed** ramp duration, matching
-VtMB's scripted weight (`(now − startTime) / duration` off fields on the player entity) rather than
-the toggle's fixed rate. A shot is pushed as origin / look-at / roll / FOV / rate limits; whoever
-pushed it keeps those values current, which is what a `Follow` attach type is. The camera therefore
-never learns what an entity is.
+scopes use (`docs/architecture/input-architecture.md`). A shot is pushed as origin / look-at / roll /
+FOV / rate limits; whoever pushed it keeps those values current, which is what a `Follow` attach type
+is. The camera therefore never learns what an entity is.
+
+#### The two channels, and how they compose (SC2, 2026-09-07)
+
+**Retail runs two channels, not one weighted stack**, and the port now does too
+(`FElysiumCameraShot::bCine`). They are not two viewpoints: they are one camera in series.
+
+* the **cine** channel — an adopted `C_BaseCineCamera` (`SetCamera`, a `camera_cinematic`, a terminal
+  shot, a `vdata/camerashots/` file shot). `C_BasePlayer::CalcView` (`client.dll` `0x100a7770`) calls
+  `FUN_10001b50`, which **hard-writes all three** — `v->origin = m_vecCurOrigin`,
+  `v->angles = m_angCurAngles`, `v->fov = m_flCurFov`. No blend, no lerp, no weight, and **no blend
+  field exists anywhere on the entity**. While one is adopted, `ClientModeShared::OverrideView`
+  (`0x100d4040`) takes `CInput` slot 33 directly rather than slot 31, so the **third-person boom is
+  skipped entirely** and a scripted shot is never displaced by it;
+* the **value / track** channel — the `camera_track` override. The only ramped one, composed over
+  whichever base won by `CInput::OverrideView` (`FUN_100ffb90`). Both of retail's branches end in that
+  same function; only the base differs, so at weight 1 the track wins outright and at weight 0 the
+  cine pose (or the rig's) stands.
+
+`FElysiumCameraShot::bCine` is a **second axis** beside `bTracked`, deliberately: `bTracked` says how
+the pose is solved (retail's `CamMode == 1`), `bCine` says which channel writes it.
+
+**The composition is a point lerp, and the ease is at the point of use.** `FUN_100ffb90`, verbatim:
+
+    e = SimpleSpline(w)                                  // the ramp itself is LINEAR
+    AngleVectors(angles, fwd)
+    viewFwdPoint = origin + fwd * 240u                   // `_DAT_1022b298` = 240.0f (609.6 cm)
+    origin       = origin + (shotOrigin - origin) * e
+    dir          = lerp(viewFwdPoint, shotTarget, e) - origin
+    VectorAngles(normalize(dir), angles)
+    angles.roll  = e * shotRoll                          // the base roll is DISCARDED outright
+    fov          = fov + (shotFov - fov) * e
+
+The aim is interpolated as a **point**, never as an angle, so a shot swings faster at the start and
+settles rather than sweeping uniformly; and the base view's roll is thrown away the instant the weight
+is non-zero. The authored `FromPlayerTime` values were tuned against exactly this, so the shape is
+contract rather than a look (M9). `_DAT_1022b298` is **240** Source units, read byte-exact by RC9 —
+the earlier reading of 100 was wrong by 2.4×.
+
+**The ramp's stored state is retail's signed duration** (M5), the pair
+`m_flCameraOverrideFadeStartTime` / `m_flCameraOverrideFadeDuration` that `FUN_100fc900`'s tail reads:
+
+* `startTime <= 0` ⇒ weight **0**, the override is off;
+* `|duration| <= 0.01` ⇒ weight **1** immediately, and it stays — a symmetric ±10 ms dead band
+  (RC9: `_DAT_101e34e8` = `+0.01`, `_DAT_10235278` = `-0.01`);
+* `duration > 0.01` ⇒ `(now − startTime)/duration`;
+* `duration < -0.01` ⇒ `1 + (now − startTime)/duration`, the blend **out**;
+
+then clamped to `[0,1]`. `Pop(Id, BlendOutSeconds)` survives only as a **façade that writes those
+fields**, and a re-time back-dates the start (`vampire.dll` `FUN_1017d0b0`) rather than writing the
+weight, which is why a mid-blend reversal resumes instead of restarting.
+
+**Every cine release is a cut** (M1, ruled 2026-09-07): retail returns control on the *same tick* the
+camera dies — `SetImmobilized(false)`, the weapon restore and the HUD restore all land on that frame —
+so the port creates no release-blend cvar at all, and `Pop` ignores `BlendOutSeconds` for a cine shot.
+
+**The two channels are mutually exclusive.** `CBasePlayer::SetCameraViewEntity` (`vampire.dll`
+`FUN_1017d280`) opens with `SetCineCamera(NULL)` and the map teardown `FUN_10071970` tears both down
+together, so retail cannot reach "a cine camera fading out while a track ramps in" — which is itself
+why the release is a cut and not a blend. `FElysiumEntityWorld::SelectTrackCameraRole` clears the
+adopted camera and `SetScriptedCamera` clears the track leases.
 
 The substrate reaches the raw value channel through
 **`IElysiumEmbodiment::PushCameraShotValue` / `UpdateCameraShotValue` / `PopCameraShot`**, not
@@ -994,11 +1052,16 @@ CameraShotTable { <ShotName> { Start {…} End {…} Target { Point1 {…} Point
 - **`Target`** is what it looks at. One point is tracked directly; **two are tracked at their
   midpoint**.
 - Each anchor is `Position` × `AttachPos` × `AttachType` × `OffsetOrigin`:
-  `Position` ∈ `Player` | `DialogTarget` | `GrappleTarget` | `World` | a named entity;
-  `AttachPos` ∈ `Origin` | `Center` | `EyePosition` | `Top` | `Bottom` | `Bone: <name>` |
-  `Attachment: <name>`; `AttachType` ∈ `Follow` (position + the offset rotated by the attachment's
-  facing) | `FollowNoAngles` (position only) | `FollowEntAngles` (offset rotated by the entity's
-  facing) | `None` (offset in world axes). `OffsetOrigin "[F, R, U]"` is Source units.
+  `Position` ∈ `Player` | `DialogTarget` | `GrappleVictim` | `GrappleAttacker` | `Named` | `World`,
+  and **anything unrecognised falls through to `World`** — the how-to's `GrappleTarget` and its
+  second reading of `Named` as "the name of an entity in the map" are both documentation with no
+  grammar behind them (see the parser below);
+  `AttachPos` ∈ `Origin` | `Center` | `EyePosition` | `Top` | `Bottom` | `AbsMin` | `AbsMax` |
+  `Bone: <name>` | `Attachment: <name>`; `AttachType` ∈ `Follow` (position + the offset rotated by
+  the attach point's own facing) | `FollowNoAngles` (position only) | `FollowEntAngles` (offset
+  rotated by the entity's facing) | `None` (offset in world axes, **and the anchor sampled once at
+  shot start**). `AttachType` is matched **case-sensitively**. `OffsetOrigin "[F, R, U]"` is Source
+  units, and its parse default is the literal `"[0, 0, 0]"`.
 - **`CameraConstraints`** carries `MoveSpeed`/`MoveAccel` (inches/sec, inches/sec²),
   `MaxTurnRate`/`TurnAccel` (deg/s, deg/s²), `DistanceTolerance`/`AngularTolerance` (the **deadbands**
   the camera parks inside — see the tracker below), `FieldOfView`, `DialogPOV` (NPCs look at the
@@ -1101,6 +1164,25 @@ the attacker and `1` for the victim (`0x10329285` / `0x103292d3`), and corrobora
 animation. The names come from `CBaseCombatCharacter::Dump` `0x103222c0`, which also names
 `+0x1534` `m_GrappleSavedMoveType`, `+0x1540` `m_GrappleType` and `+0x1544` `m_GrapplePosition`. The
 full writer/reader ledger and the nine-valued `m_GrappleType` enum are in `docs/vtmb/stealth.md`.
+
+**Both grapple arms additionally require the `+0x1538` handle to be live**; a dead partner drops the
+anchor to the `World`/NULL tail, so a stealth-kill shot left up past the kill frames the world origin
+rather than a corpse.
+
+**A camera-lifecycle edge the mode tables do not otherwise list: `CBasePlayer::LeaveGrappleState`
+`0x10169660` calls `SetCineCamera(NULL)`.** Since `FUN_1017cef0` destroys the previous camera whenever
+its `+0x204 & 0x4` is set, **ending a grapple ends the shot** — the same unconditional same-tick
+removal `EndPlayerDialog` and `InputEndShot` perform. It belongs with them in the "which camera is
+live" ledger; the port's wire for it is SC4/SC9's, not SC6's.
+
+**Port status (SC6, 2026-09-07).** The pair is real substrate state: `FElysiumGrappleState` on
+`FElysiumCombatCharacter` (`Public/ElysiumPlayer.h`), with `EElysiumGrappleRole` spelled retail's way
+(`None = -1, Attacker = 0, Victim = 1`) and the nine-valued `EElysiumGrappleType`. It is written by
+exactly the two transactions retail has —
+`FElysiumCombatCharacter::EnterGrappleState` / `LeaveGrappleState`, with the two-party
+`EnterGrapplePair` / `LeaveGrapplePair` standing for `StartGrappleAttack`'s enter pair and
+`EndGrapple` — and the feed path routes through them as mode 0. The anchor resolve reads the generic
+pair, not the feed block.
 
 **`OffsetAngles` is parsed and dead — settling this document's open question.** `FUN_1006f080` only
 ever reads `+0x14`, and no cine-camera site anywhere in `vampire.dll` tests `0x40000`. The key is
@@ -2352,11 +2434,11 @@ change arrives.
 
 **All of the above is ported** (`Public/ElysiumCameraSolve.h`,
 `Private/Player/ElysiumCameraSolve.cpp`, asserted by `Elysium.Substrate.CameraTracker`). The two frame
-deltas are guards on `Advance`'s `DeltaSeconds` **parameter** — `FrameDeltaCeiling` 1.0 s,
-`FrameDeltaFloorThreshold` 1/255 s, `FrameDeltaFloor` 0.01 s — because the substrate never reads a
-clock. **Retail's threshold and floor are the same constant, 0.01 s** (`_DAT_101e34e8`, read from the
-image above), so `FrameDeltaFloorThreshold` should be 0.01 s, not 1/255 s: retail floors a 5 ms frame
-to 10 ms and the port currently passes it through. The once-per-rendered-frame latch is the
+deltas are guards on `Advance`'s `DeltaSeconds` **parameter** — `FrameDeltaCeiling` 1.0 s and
+`FrameDeltaFloor` 0.01 s — because the substrate never reads a clock. **Retail's threshold and floor
+are the same constant, 0.01 s** (`_DAT_101e34e8`, read from the image above), so the separate
+`FrameDeltaFloorThreshold` is gone and a 5 ms frame is floored to 10 ms exactly as retail does
+(corrected by RC9 and landed with SC2). The once-per-rendered-frame latch is the
 `GFrameCounter` stamp the camera component, the camera
 service and the camera modifier already take. `UnsettledAngleTolerance` is retail's 1.0°,
 `MinTrackSpeed` retail's 1.0 u/s floor, and `IsDollying()` is `FUN_100019a0`'s `speed <= 1.0` test read
@@ -2365,10 +2447,12 @@ defects kept** and only the triangle arm's radicand clamped at zero. `MoveAccel 
 decel branch, so retail's crawl is reproduced without a hardware divide. `Snap()` is `FUN_10002390` as
 a real one-shot, armed by `bSnapPending` and consumed at the top of the next `Advance`. `TrackFov()` is
 the per-frame copy from the shot record, with the dev-cvar guard **including the freeze** — the guard
-returns the cvar value without writing the cached FOV — under `elysium.CameraShotFovOverride` and a
-`FovOverrideThreshold` constant. Retail's name and threshold are now read: the cvar is **`camera_fov`**
-(default `"-1"`, flags 0) and the threshold is **`_DAT_101e34f4 = 10.0f`**, so the port's cvar takes
-the retail name and `FovOverrideThreshold` becomes 10.0 with a −1 default.
+returns the cvar value without writing the cached FOV. **M12 closes with SC2:** RC9 read the name
+(ConVar object `0x102de308`, string `0x10270c88`) and the threshold, so the guard is retail's
+**`camera_fov`**, declared in the VtMB console store at its own default `"-1"` and loaded into
+`FElysiumCameraCvars::CameraFov`; `FovOverrideThreshold` is `_DAT_101e34f4 = 10.0f` and the compare is
+strictly greater. The `elysium.CameraShotFovOverride` placeholder is deleted. The value is handed to
+`TrackFov` / `Advance` as a **parameter** rather than read there, because the tracker reaches nothing.
 
 Two things on this path are the port's own and are marked as such in the source: a `MoveSpeed <= 0`
 arm, which retail's parser can never reach (its `CameraConstraints` default is 150 u/s and no shipped
@@ -2503,12 +2587,29 @@ two durations `m_flCameraViewCrossfadeDuration` / `m_flCameraTargetCrossfadeDura
   **view** arm: its `vfunc0xC8` viewpoint, `vfunc0xC0` roll and `vfunc0xC4` FOV are crossfaded into the
   published *view* override and it consumes the *view* channel's coverage, while the target point
   itself simply snaps. The fade list's kind-1 branch is unreachable in a shipped run.
-* **`FUN_1017d0b0(player, dur)` — arm or re-time — back-dates the start.** Fresh (`mark <= 0`): mark
-  now, duration `dur`. Reversing a fade-out: keep the current weight `w` by setting `mark = t − w*dur`.
-  A zero duration that has already elapsed restarts as a fade-in. A fade-in that would otherwise finish
-  later than `t + dur` is shortened the same way. This is the **symmetric mid-blend reversal** the
-  port's weight driver already asserts — retail achieves it by back-dating, not by tracking a separate
-  weight.
+* **`FUN_1017d0b0(player, dur)` — arm or re-time — back-dates the start.** Read off the listing
+  `0x1017d0b0`–`0x1017d21d`, which corrects the decompile in three places:
+  - `0x1017d0b0`–`0x1017d0c9` **clamps the argument first**: a `dur` that is not strictly positive is
+    stored as `0`. The decompile drops this entirely.
+  - Fresh (`mark <= 0`, `0x1017d205`): mark now, duration `dur`.
+  - Reversing a fade-out (`duration < 0`, `0x1017d109`): keep the current weight `w` by setting
+    `duration = dur; mark = t − w*dur`.
+  - Already fading in (`duration > 0`, `0x1017d154`–`0x1017d1aa`): re-time only while `w < 1` **and**
+    `(mark + duration) < (t + dur)` — `0x1017d17d`'s `FCOMPP` + `TEST AH,0x5` + `JP` falls through on
+    *less than*. So a fade in flight that would land **earlier** than the new request is
+    **lengthened** to it; a longer one is left alone. The earlier reading — "a fade-in that would
+    finish later than `t + dur` is shortened" — had the comparison backwards.
+  - The instantaneous regime (`duration == 0`, `0x1017d1ad`–`0x1017d202`) upgrades to a real fade in
+    only while `t − ε <= mark` and `dur > 0`, where **`ε = _DAT_10450aa4 = 0.00999999977`** — the same
+    10 ms dead band the client ramp's `_DAT_101e34e8` / `_DAT_10235278` pair uses. A snap that landed
+    longer ago than 10 ms keeps the camera hard on and the crossfade request is dropped.
+
+  This is the **symmetric mid-blend reversal**: retail achieves it by back-dating the mark, not by
+  tracking a separate weight. **Ported verbatim as `FElysiumCameraOverrideChannel::Arm`**
+  (`Private/Substrate/ElysiumCameraOverride.cpp`), asserted on the stored `mark`/`duration` pair by
+  `Elysium.Substrate.CameraOverride`. The port's `Elysium.Substrate.Camera` reversal case at
+  `ElysiumCameraTests.cpp:192-208` is the **first/third weight's** own symmetry and was previously
+  mis-cited here as this one; the citation now points at `Arm`.
 * **`FUN_1017d6d0(player, dur)` — fade out.** No-op at weight ≤ 0; raises `dur` to each live end's own
   minimum (`vfunc0xD4`); `dur <= 0` hard-clears the mark (an instant snap back); otherwise
   `+0x19bc = −dur` and `+0x19b8 = curtime − (1 − w)*dur`.
@@ -2603,6 +2704,67 @@ target crossfade in shipped content. Its five callers are `CSceneEntity::Dispatc
 `GetCameraFadeOutTime` has no static caller by design — it is only ever reached as
 `viewEnt->vfunc0xD4()` / `targetEnt->vfunc0xD4()` inside `FUN_1017d6d0`.
 
+**The fifth caller, read out in full (SC3, 2026-09-07).** `CSceneEntity::DispatchStartEvent`
+`0x10082ee0` is a switch on `CChoreoEvent`'s type, and **two of its arms drive this channel**:
+
+| `CChoreoEvent` type | port enum | what the arm does |
+|---|---|---|
+| `0x10` (16) | `CameraMove` | resolve param1 to the **view** entity and param2 to the **target** entity. If the target entity carries a combat character at `+0x27`, call `SetAsCameraTarget(that, <event bool>, <event float>)` and then **null the local target pointer**, so the broadcast below pushes only the view — `SetAsCameraTarget` has already broadcast the target itself. Then, for every player index, `FUN_1017d280(player, viewEnt, <event float>)` and `FUN_1017d460(player, targetEnt, <event float>)` |
+| `0x11` (17) | `CameraShot` | falls to `default:` — **no handler**, only a `Msg()` |
+| `0x12` (18) | `CameraRestore` | for every player index, `FUN_1017d6d0(player, <event float>)` |
+
+So the arm the port's enum names `CameraShot` genuinely has no body in retail, which the port's own
+`ElysiumSceneData.h` comment already said; the live one is `CameraMove`. **Neither ships:** all ten
+of the non-live event types have zero authored uses in the corpus, and `Elysium.Content.SceneCorpus`
+holds that at zero. It is **not wired in the port** as of SC3, for one concrete reason beyond
+reachability: the arm reads two fields off the event record — a boolean (`thunk_FUN_10075cc0`, the
+head/body flag `SetAsCameraTarget` takes) and a float (`thunk_FUN_10076b30`, the crossfade) — that
+`FElysiumSceneEvent` does not parse, and there is no authored instance to check a guess against.
+The hook it would land on is `IElysiumScenePlayer::StartEvent`.
+
+**As landed (SC3, 2026-09-07).** The whole machinery above is
+`FElysiumCameraOverrideChannel`, `Private/Substrate/ElysiumCameraOverride.{h,cpp}` — one class
+holding the mark, the signed duration, the two slots and the outgoing entry list, with
+`GetWeight` / `SetViewEntity` / `SetTargetEntity` / `Arm` / `FadeOut` / `Publish` standing for
+`FUN_1017d900` / `FUN_1017d280` / `FUN_1017d460` / `FUN_1017d0b0` / `FUN_1017d6d0` /
+`SetupVisibility`'s fold. It reaches entities through `IElysiumCameraOverrideSource` (retail's slots
+46–53, with the `CBaseEntity` defaults — roll 0.0, FOV 75.0, both fades 0.0 — as the interface's own
+defaults) and the world through `IElysiumCameraOverrideResolver`, so it is assertable with no world
+at all: `Elysium.Substrate.CameraOverride`. `camera_track` implements the source with its runtime
+pose block and `max(0, FromPlayerTime)` / `max(0, ToPlayerTime)`;
+`FElysiumCombatCharacter` implements it with the single `m_flCameraOverrideFadeTime` field and gains
+`SetAsCameraTarget` plus the four entity inputs, registered on `CBaseCombatCharacter` in
+`ElysiumPlayerClasses.cpp`. `FElysiumEntityWorld::PublishTrackCamera` is the channel's single
+per-frame driver, keeping the composed track shot **direct** (`bTracked` false).
+
+Four things about the port are worth stating beside the recovery rather than inside it:
+
+- **The reap order is reproduced literally.** `GetWeight` is the reaper, so a query on the frame both
+  ends die returns 0 *and* leaves the channel clean; the next push behaves as fresh rather than as a
+  mid-blend reversal. It clears exactly what retail clears — mark, duration, both handles, the entry
+  count — and deliberately leaves both slots' set times and crossfade durations behind.
+- **`camera_track` leases the position and target roles independently in this port**, which retail
+  has no counterpart for (retail's only per-slot writer is a replacement). A role that gives up its
+  lease therefore also gives up the matching slot, through `ReleaseSlot`; otherwise the fold would
+  keep publishing a released camera with no ramp underneath it. A **zero-blend** teardown reaps the
+  channel outright instead of letting an entity's own `ToPlayerTime` extend it, because the port's
+  teardown and its cine/track mutual exclusion are cuts (ruling M1, slice SC2).
+- **M4 — ruled 2026-09-07.** The SendProp **bit widths** are skipped: they are pixel-only and the
+  port has no wire behind them. The **encoder clamps are kept as contract** and sit exactly where
+  retail's SendProps do — on the composed value, once, at publication: FOV to `[0, 180]`, roll to
+  `[−180, 180]`, the replicated fade duration to `±10 s`, each warning and naming the SendProp when
+  it bites. The unreplicated `+0x19bc` duration keeps whatever was armed. The corpus never reaches
+  any of the three (max `FromPlayerTime` 1.0, `ToPlayerTime` 0), which is what makes the clamp an
+  assertion rather than a behaviour.
+- **M13 — ruled 2026-09-07: not applicable.** `SetupVisibility`'s `AddOriginToPVS(m_vecCameraViewOverride)`
+  tail, and the cine camera's `ResetPVS` + `AddOriginToPVS(m_vecCamOrigin)` that skips the ordinary
+  visibility pass entirely, are retail hand-moving a PVS origin to approximate culling from the
+  lens. Unreal culls from the actual view, so the algorithm is native and the difference is
+  pixel-only; no PVS half is built. **The behavioural consequence is a retail artefact and is
+  deliberately not reproduced:** during a retail cine shot, entities near the player but far from
+  the lens fall out of the PVS and stop receiving updates, so an NPC just off-camera can visibly
+  resume mid-motion when the shot ends. The port keeps updating them.
+
 ### The draw gates and the HUD mask (2026-09-07)
 
 **`m_bDrawPlayer` short-circuits `CAM_IsThirdPerson`.** `C_BasePlayer::ShouldDrawLocalPlayer`
@@ -2661,31 +2823,38 @@ what happens to them.
 | `SnapOnShotChange` is a **one-shot** flag consumed by `FUN_10002390` | `bSnapPending` armed by `Start` (retail's `FUN_10002210` tail and `OnDataChanged`) and consumed at the top of `Advance` by `Snap()` | matches — the shot cuts on the change and tracks its anchor afterwards, which is what `sp_tutorial_1`'s `LookAtTarget_Snap` needs |
 | `RemainingTime` carries both defects above (the NaN band) | `ElysiumCam::RemainingTranslationSeconds` is retail's three arms verbatim, radicand clamped at zero | reproduced — M6, landed with SC1. `jack.txt` closing 100 u from rest answers retail's **0.17 s** again instead of the correct solve's 1.27 s, so the pan lands with the dolly across all 33 `SyncRotateOnMove` shots. The clamp removes only the NaN state, which needs `MoveSpeed > 2·MoveAccel` and no shipped shot has it |
 | `MoveAccel == 0` divides by zero, pinning the speed at the 1.0 floor | an explicit decel branch that leaves the speed unchanged; the clamp then pins it at `MinTrackSpeed` | reproduced — M7, landed with SC1: retail's crawl, written as a branch so no hardware divide, NaN or infinity is ever produced. The parse default is 50, so nothing shipped changes; a mod that writes 0 gets the crawl |
-| every scripted-shot exit is a **hard cut** (`EndShot`, `EndPlayerDialog`, the interaction closers, `CamMode → 0`, adoption cleared, entity removed) | `FElysiumCameraShotStack` ramps the cine channel **out** over `RampSeconds` | **named modernization** — VtMB's cuts are jarring; declared here, and the authored `MoveTime ≤ 0.05` cut fold of §6 is still reproduced exactly |
-| the scripted weight is **eased at the point of use**, `e = SimpleSpline(w)` inside `FUN_100ffb90` | `ElysiumCam::ComposeScriptedShot` receives the raw linear weight (the ease is applied to `Third` and `Feed` only) | unintended |
-| composition lerps the **origin and a look-at point** (`origin + fwd*100` → the override target) and re-derives angles with `VectorAngles` | `FMath::Lerp` over `FRotator`s | unintended — for a large angular delta a point lerp swings faster at the start and settles, an angle lerp is uniform |
-| `angles.roll = e * shotRoll`, discarding the base roll | roll lerps as part of the rotator | unintended |
-| `duration < 0` **is** the blend-out encoding | `Pop(Id, BlendOutSeconds)` — the same behaviour, a different encoding | equivalent |
+| every scripted-shot exit is a **hard cut** (`EndShot`, `EndPlayerDialog`, the interaction closers, `CamMode → 0`, adoption cleared, entity removed) | `FElysiumCameraShotStack::Pop` releases a cine shot **instantaneously** and ignores its `BlendOutSeconds`; no `elysium.CameraShotReleaseSeconds` cvar exists | matches — **M1 reversed and landed with SC2.** The earlier "ease behind a cvar" modernization is withdrawn: the release is a *transition*, and a blend-out composed a dead camera over a player who already had input. The invented `BlendSeconds = 0.5` (`Resolve`) and `BlendOutSeconds = 0.25` (`ElysiumDialogueCamera`) are both deleted |
+| the scripted weight is **eased at the point of use**, `e = SimpleSpline(w)` inside `FUN_100ffb90`, and the ramp itself is linear | `ElysiumCam::ComposeScriptedShot` opens with `SimpleSpline(Weight)`; `FElysiumCameraShotStack::GetTrackWeight` is linear and the modifier's alpha is the un-eased weight | matches — landed with SC2 |
+| composition lerps the **origin and a look-at point** (`origin + fwd*240u` → the override target) and re-derives angles with `VectorAngles` | `ComposeScriptedShot` builds `ViewForwardPointCm = 240 u × 2.54`, lerps origin and target point, and re-derives pitch/yaw from the lerped direction | matches — landed with SC2 (M9). `_DAT_1022b298` = **240**, read byte-exact by RC9; the earlier 100 was wrong by 2.4× and changed the arc of every scripted arrival |
+| `angles.roll = e * shotRoll`, discarding the base roll | `InOutRotation.Roll = E * ShotRoll`, an assignment | matches — landed with SC2 |
+| `duration < 0` **is** the blend-out encoding, with a symmetric ±0.01 s dead band that reads as "cut in and stay" | `RampStartTime` / `RampDuration` on `FElysiumCameraShotStack`, retail's three regimes verbatim; `Pop(Id, BlendOutSeconds)` is a façade that writes them, and a re-push back-dates the start (`FUN_1017d0b0`) | matches — **M5 reversed and landed with SC2.** The sign is the stored direction, not a mapping documented beside a different encoding |
+| the cine camera **hard-writes** origin, angles and FOV and the third-person boom is skipped entirely (`0x100d4040` takes `CInput` slot 33 rather than slot 31) | `FElysiumCameraShot::bCine` splits the channel; `ApplyBaseToView` skips the boom while one is live and `ApplyScriptedShotToView` hard-writes the pose, then composes the track override over it | matches — landed with SC2. `UElysiumCameraService::ApplyToView` takes the same two branches |
+| `C_BasePlayer::CalcView` runs a **vehicle arm before** the cine arm, so an adopted camera also beats a vehicle view | absent | **ruled dead code (M10)** — VtMB ships no drivable vehicle and `m_bInVehicle` / `field_0x19c4` have no writer in the image. The *ordering* fact is a comment at the compose site, which already has the precedence |
+| `ClientModeShared::OverrideView`'s `camortho` block: `CViewSetup::m_bOrtho` (`+0x16`) and the rect `+0x18..0x24` = `(−w·0.5, −h·0.5, w·0.5, h·0.5)` from `c_orthowidth` / `c_orthoheight` (both `FCVAR_ARCHIVE`, default `100`), enabled by `CInput+0x1b8` | `UElysiumCameraComponent::bOrthographic` behind the `camortho` verb, driving `FMinimalViewInfo::ProjectionMode` + `OrthoWidth` from the two VtMB-store cvars | matches — **M11 landed with SC2, and re-scoped by RC9**: the block is Source's *orthographic debug view*, not an off-centre projection, so the earlier plan to port it onto `OffCenterProjectionOffset` would have reproduced the wrong thing. Unreal owns the projection, so only the width crosses; `c_orthoheight` is loaded and the window's aspect gives the vertical extent |
+| `CViewRender::CalcView`'s last arm hard-replaces origin and angles from the entity at `GetViewEntity()` when its index is **strictly above** `GetMaxClients()` (1 in single player) — the death / observer view, and there is **no** separate death, feed or seduction arm | `UElysiumCameraComponent::SetSpectatedView`, applied at the tail of `ApplyBaseToView`, replacing origin and angles and leaving the FOV alone | **the arm is ported; nothing writes it.** The port has no observer, death-cam or spectator producer, so the seam stands for `IVRenderView::GetViewEntity()` (slot 39 on `VEngineRenderView008`, RC10) with the index test made by whoever eventually writes it |
 | the body is drawn iff the replicated `m_bDrawPlayer` says so, short-circuiting `CAM_IsThirdPerson`; its authored source is `spawnflags & 2` on the director, set on **27 of 51** shipped `camera_cinematic` entities | `bBodyEligible = bThirdPerson`; no `bDrawPlayer` on `FElysiumShotPresentation`, and no `spawnflags` parse | unintended — a shot cannot ask for the body, and 27 shipped shots are asking |
 | the runtime camera's `m_bForcePlayerLook` defaults to **1**, the director's `point_player` is never copied onto it, and only `CFuncMonitor::vfunc39`, anim event 4050 and the `"Intrusion"` opener clear it | `point_player` has no counterpart at all | unintended — every shipped scripted shot forces the subject's gaze in retail, including the 26 directors that author `point_player 0` |
 | `CBaseCineCam::ObjectCaps()` is `0` — the base's `FCAP_ACROSS_TRANSITION` is cleared, so a live shot does not survive a level change | not modelled | unintended |
 | `CBaseCineCam::ShouldTransmit` sends the camera **only** to `m_hSubject`'s client, and only while `CamMode != 0` | single-player, no transmit model | equivalent in practice; a shot whose subject is not player 1 would be invisible in retail rather than merely inactive |
 | the viewmodel gate is `DrawViewmodel && speed ≤ 1.0` | `!bThirdPerson && (!bNamed \|\| bDrawViewmodel)` — no speed term | unintended — the hands appear during the dolly |
-| `dt` is latched once per rendered frame, clamped to 1.0 s, floored at 0.01 s below ~1/255 s | the latch is `LastAdvancedFrame == GFrameCounter` (`ElysiumCameraComponent::AdvanceFrame`, `ElysiumCameraService::Advance`, the modifier's zeroed second pass); the two guards are applied to `Advance`'s `DeltaSeconds` parameter | matches — landed with SC1. The tracker never reads a clock: the ceiling and the 10 ms floor sit inside `Advance`, and the floor is also retail's zero-and-negative handling |
-| the cine-FOV dev cvar **`camera_fov`** (default `"-1"`) short-circuits `FUN_10001c20` above `_DAT_101e34f4 = 10.0f` and returns without writing `m_flCurFov`, so the rendered FOV **freezes** | `FElysiumScriptedShotTracker::TrackFov` behind `elysium.CameraShotFovOverride`, freeze included; the threshold is a named `FovOverrideThreshold` constant defaulting to 0 | **the name and the threshold** — M12. Retail's name and threshold are now read: the cvar is `camera_fov`, its default is `-1` and the guard fires above `10.0`, so the port takes the retail name and `FovOverrideThreshold` becomes 10.0 |
-| `AttachType` is matched **case-sensitively** | `IgnoreCase` | unintended |
-| an unrecognised `Position` value falls through to **`World`** | falls through to `Named` | unintended |
-| `Top`/`Bottom` are the abs origin's XY with only Z from the bounds; `AbsMin`/`AbsMax` are whole bounds corners | `BoundsPoint(1.0f)`/`BoundsPoint(0.0f)` — a bounds fraction on all three axes; no `AbsMin`/`AbsMax` | unintended |
-| `GrappleVictim` / `GrappleAttacker`, resolved through the grapple role slot | one `GrappleTarget` keyword | unintended — `stealth_kill.txt` writes `GrappleAttacker` ×6 and `GrappleVictim` ×2 (the `Stealth_Kill_1..4` family anim event 4050 selects); `GrappleTarget` appears only in the how-to and in no shot file |
-| `OffsetAngles` is parsed and never read | not parsed | equivalent — retail's key is dead |
+| `dt` is latched once per rendered frame, clamped to 1.0 s, and **floored at 0.01 s below 0.01 s** — the compare constant and the stored literal are the same `_DAT_101e34e8` | the latch is `LastAdvancedFrame == GFrameCounter` (`ElysiumCameraComponent::AdvanceFrame`, `ElysiumCameraService::Advance`, the modifier's zeroed second pass); the two guards are applied to `Advance`'s `DeltaSeconds` parameter, with `FrameDeltaFloor` 0.01 s as both threshold and value | matches — landed with SC1, corrected by RC9 (`_DAT_101e34e8` is `0.01`, not `1/255`; the separate threshold is gone). The tracker never reads a clock, the floor is also retail's zero-and-negative handling, and a 5 ms frame is floored too |
+| the cine-FOV dev cvar **`camera_fov`** (default `"-1"`) short-circuits `FUN_10001c20` above `_DAT_101e34f4 = 10.0f` and returns without writing `m_flCurFov`, so the rendered FOV **freezes** | `camera_fov` declared in the VtMB console store at `-1`, loaded into `FElysiumCameraCvars::CameraFov` and handed to `FElysiumScriptedShotTracker::TrackFov` / `Advance`; `FovOverrideThreshold` is 10.0 and the freeze is reproduced | matches — **M12 closes with SC2.** RC9 recovered the name (ConVar object `0x102de308`, string `0x10270c88`), the default and the threshold, so the `elysium.CameraShotFovOverride` placeholder is deleted and the retail name governs. The tracker takes the value as a parameter rather than reading a cvar, because it reaches nothing |
+| `AttachType` is matched **case-sensitively** — an exact byte compare including the NUL | an exact `ESearchCase::CaseSensitive` compare, with a **parse warning** on a case-only mismatch naming the retail spelling and stating that retail reads the value as `None` | matches — **M3 reversed and landed with SC6.** The leniency was not available: the value decides whether the anchor latches at shot start or tracks, which is state. The warning is observability, not a rescue. No shipped file writes a mis-cased value (`Elysium.Content.CameraShotGrammar` asserts it) |
+| an unrecognised `Position` value falls through to **`World`** | falls through to `World` too, with a warning naming the token; the invented "take the value as an entity name" arm is deleted, and `Named` carries no name because retail reads none | matches — landed with SC6 |
+| `Top`/`Bottom` are the abs origin's XY with only Z from the bounds; `AbsMin`/`AbsMax` are whole bounds corners | the abs origin's XY with only Z from the bounds, and both `AbsMin`/`AbsMax` arms, off one surrounding-bounds read per resolve | matches — landed with SC6. The old `BoundsPoint(alpha)` slid an anchor sideways on any body whose box is not centred on its origin |
+| the `Follow` offset is turned by the **attach point's** own angles (a bone's or an attachment's), `FollowEntAngles` by the entity's | `Follow` turns by the attach point's frame, `FollowEntAngles` by the entity's abs angles | matches — landed with SC6. The port previously turned both by the entity's, which cost a `Bone:` `Follow` anchor its bone-space offset frame |
+| `SetShotAnchorEntity` `FUN_1006ef50` stores the anchor handle and resolves the inline `Bone:`/`Attachment:` name to an **index once**, leaving it `-1` on a non-animating entity | `FElysiumCameraDirector::SetShotAnchorEntity` and the per-shot binding table (`Entity` / `PointIndex` / the shot-start cache); the resolve never looks a socket name up again, and the invented `Origin + Z(64 u)` fallback is deleted | matches — landed with SC6. The port's cached "index" is which attachment seam answered, because the substrate seam has no integer bone table; `INDEX_NONE` carries retail's `-1` |
+| `GrappleVictim` / `GrappleAttacker`, resolved through the grapple role slot | both keywords, resolved through `FElysiumCombatCharacter::Grapple` — the partner handle and the role — including the "**resolves to the subject itself**" arm and the dead-partner fall-through to `World` | matches — landed with SC6. `stealth_kill.txt` writes `GrappleAttacker` ×6 and `GrappleVictim` ×2; `GrappleTarget` appears only in the how-to, where retail's `_strstr` chain would resolve it to `World`, and the port now does the same |
+| the shot record carries `+0xd4`, the count of `Target` sub-blocks, and raises the presence flag by **order of presence** (`flags \|= 1 << (count + 2)`) while writing the fixed slot | `FElysiumCameraShotDef::TargetPointCount` and the two presence flags, raised the same way; the look-at reads the flags, not the slots | matches — landed with SC6, **bug included**. A shot authoring `Point2` alone raises the `Point1` bit and aims at `(0,0,0)`; no shipped file does this, and the client parser has the identical bug (RC11) |
+| `OffsetAngles` is parsed and never read | not parsed, deliberately | equivalent — **settled on evidence, SC6.** `FUN_1006f080` only ever touches `+0x14`, a corpus-wide search for `& 0x40000` returns no cine-camera hit, and the client half stores it and never reads it either (RC11). The how-to says so in as many words: "NOTE: This currently isn't implemented." Parsing it would create a field nothing may act on |
 | `AutoPositionFromTarget` recomputes the origin per tick | parsed and asserted in tests; no solver reads it | unintended |
-| the anchor cache is gated on `AttachType None` (and, through the retail bug, on the *Start* anchor's flags) | every anchor re-resolves every frame | matches retail for the 56 shot files with no `Start` block. Ten files author one (`andreibasement`, `kilpatrick`, `lookattarget_b`, `npcfollow`, `npcfollowcut`, `npcfollowfromplayer`, `npcfollowmove`, `special-case`, `stealth_kill`, `tong`); nine of those Starts are `Follow`/`FollowEntAngles` and resolve live in retail too, and exactly one — `special-case.txt`'s `Follow` shot, `Start { AttachType None }` — latches all four anchors at shot start in retail and re-resolves them here |
+| the anchor cache is gated on `AttachType None` (and, through the retail bug, on the *Start* anchor's flags) | `ElysiumCameraShots::LatchesAnchors` is that exact test — `Start` present **and** its `AttachType` is `None` — applied per shot in `FElysiumCameraDirector::Tick`, reading back the per-anchor shot-start cache | matches — landed with SC6, **bug included**, because the anchor-0 test is what decides which shots latch and reproducing the latch without it would change 55 of the 66 files. Ten files author a `Start` (`andreibasement`, `kilpatrick`, `lookattarget_b`, `npcfollow`, `npcfollowcut`, `npcfollowfromplayer`, `npcfollowmove`, `special-case`, `stealth_kill`, `tong`); nine of those Starts are `Follow`/`FollowEntAngles` and resolve live, and exactly one — `special-case.txt`'s `Follow`, `Start { AttachType None }` — latches all four anchors at shot start |
 | `StartShot`/`StartPlayerDialog` immobilize the player and `EndShot` clears bits `0x1`/`0x8` of `player+0x1d60`; `SetCamera` does not | `camera_cinematic`'s `StartShot`/`EndShot` are the stub in `ElysiumStubClasses.cpp`; the director entity, its four `targetname` anchors, the `+0x204 & 0x4` destroy rule and the immobilize pair have no counterpart | unintended |
 | `FindBestShot`, its two visibility predicates and anim events 4050/4051 | absent | unintended |
 | the 24 Hz server think, the `+0x594` origin selector, `point_player`/`m_bForcePlayerLook` | absent | unintended |
 | `EndPlayerDialog` removes the camera unconditionally; the payphone RTTI arm and the holster restore | the port keeps a weight ramp; neither arm is present | the ramp is the declared cut modernization above; the payphone and holster arms are unintended gaps |
 | `DialogPOV`'s aim is gated by the head-turn feasibility test `FUN_10325da0` | the port's `DialogPOV` resolver has no feasibility gate | unintended |
-| the server track channel: sign-as-direction fades, `FUN_1017d0b0`'s back-dating re-time, per-entity minimum crossfades (`vfunc0xD0`/`vfunc0xD4`), the multi-entry crossfade stack, and "a cine camera cancels the track" | `PublishTrackCamera` and the port's own weight driver; the symmetric mid-blend reversal is reproduced | the reversal matches; the rest is unwired |
+| the server track channel: sign-as-direction fades, `FUN_1017d0b0`'s back-dating re-time, per-entity minimum crossfades (`vfunc0xD0`/`vfunc0xD4`), the multi-entry crossfade stack, and "a cine camera cancels the track" | the signed-duration state, the back-dating re-time and the exclusion rule landed with SC2 (`FElysiumCameraShotStack`, `SelectTrackCameraRole` / `SetScriptedCamera`); the per-entity minimums and the N-entry crossfade stack are SC3's | the reversal, the encoding, the re-time and the exclusion match; the per-entity minimums and the crossfade stack are still unwired |
 
 ### Verification hooks
 
@@ -2696,7 +2865,16 @@ what happens to them.
 - `Elysium.Substrate.CameraShots` reads a `dialogdefault`-shaped file and asserts it against the
   how-to. `Elysium.Substrate.CameraTrack` covers authored duration/pause/easing, four-key spatial and
   focal sampling, shortest-path roll, zero/30 ms cuts, independent owners, exact track-shot rotation,
-  holds/restores, outputs, blend times, and snapshot restore.
+  holds/restores, outputs, blend times, and snapshot restore;
+  `Elysium.Substrate.CameraTrack.ChannelExclusion` covers `SetCineCamera(NULL)` in both directions.
+- `Elysium.Substrate.CameraCompose` is the two channels and the composition shape: the 240 u stand-in
+  point, the point lerp against `VectorAngles(lerp(fwdPoint, target, e) − lerp(origin, shotOrigin, e))`
+  at three weights, the `SimpleSpline` ease at the compose site over a linear ramp, `roll = e ×
+  shotRoll` discarding a banked base view, the signed-duration ramp regimes and the back-dated
+  re-time, a live cine shot suppressing the boom and hard-writing the pose, a track override lerping
+  from the cine pose rather than the rig's, the release cutting with **no**
+  `elysium.CameraShotReleaseSeconds` registered, `camortho`'s orthographic projection, and the
+  spectator replace.
 - `elysium_player_get` (MCP) reports the view mode, the deciding latch, the weight, the scripted
   weight, the solved boom length, the model alpha and the live shot name, so an agent can drive the
   toggle and assert the transition. `elysium.camera` is the same state as a console dump.

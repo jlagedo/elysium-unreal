@@ -372,6 +372,13 @@ void FElysiumCombatCharacter::StartFeedPair(FElysiumCombatCharacter& Victim, dou
 		Victim.SetRuntimeAngles(VictimFacing);
 	}
 
+	// **The pair is retail's grapple transaction, mode 0.** `CBasePlayer::Replenish` `0x10168320`
+	// reaches `StartGrappleAttack(victim, 0)`, which enters the shared `+0x1534`..`+0x1558` block on
+	// both parties — the feeder as the ATTACKER (role 0), the victim as the VICTIM (role 1). That is
+	// the state `stealth_kill.txt`'s `GrappleAttacker` / `GrappleVictim` anchors resolve out of, so
+	// it has to be written here rather than inferred from the feed block.
+	EnterGrapplePair(Victim, EElysiumGrappleType::Feed);
+
 	FeedState = FElysiumFeedState();
 	FeedState.Peer = Victim.Handle;
 	FeedState.bVictim = false;
@@ -397,6 +404,10 @@ void FElysiumCombatCharacter::StartFeedPair(FElysiumCombatCharacter& Victim, dou
 void FElysiumCombatCharacter::EndFeedGrapple()
 {
 	ReleaseFeedCamera();
+	// `EndGrapple` `0x10329560` -> `LeaveGrappleState` on both halves, before the feed block's own
+	// teardown: once the role pair is clear a `GrappleAttacker` / `GrappleVictim` anchor falls
+	// through to `World`, which is the same order retail unwinds in.
+	LeaveGrapplePair();
 	if (FElysiumCombatCharacter* Peer = ResolveFeedPeer())
 	{
 		Peer->EndFeedVictimRole();

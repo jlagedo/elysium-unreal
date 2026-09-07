@@ -590,6 +590,94 @@ FVector FElysiumCombatCharacter::EyePosition() const
 	return Origin + FVector(0.f, 0.f, ElysiumMove::StandViewZ);
 }
 
+// === SC3 — the camera-override source and the four SetAsCameraTarget inputs ===================
+// `docs/vtmb/camera-view-modes.md` §"The `camera_track` override channel"; recovery RC7.
+
+FVector FElysiumCombatCharacter::GetCameraViewpointPosition() const
+{
+	// Slot 50, `CBaseCombatCharacter::GetCameraViewpointPosition` `0x10332010` -> `CalcLookData(&out,
+	// NULL)`. Unconditional — the head flag does not reach this one. The port's stand-in for the
+	// look point is `EyePosition()`, which is the same fixed view offset the gaze cascade aims at.
+	return EyePosition();
+}
+
+FVector FElysiumCombatCharacter::GetCameraTargetPosition(const FVector& /*AimFrom*/) const
+{
+	// Slot 51, `0x103320b0`. Head (`m_bCameraTargetIsHead`) -> `CalcLookData`; body ->
+	// `WorldSpaceCenter()` (vfunc `0x300`), the collision OBB's own centre.
+	if (bCameraTargetIsHead)
+	{
+		return EyePosition();
+	}
+	FBox BodyBounds(ForceInit);
+	if (IElysiumEmbodiment* Bodily = World ? World->Embodiment() : nullptr)
+	{
+		if (Bodily->GetUseBodyWorldBounds(Handle, BodyBounds) && BodyBounds.IsValid != 0)
+		{
+			return BodyBounds.GetCenter();
+		}
+	}
+	// No rendered body: retail's `WorldSpaceCenter()` is a collision-bounds midpoint a headless
+	// world does not have, so the standing view offset's midpoint stands in for it. Same posture
+	// `ElysiumTerminal.cpp` takes for the same missing primitive.
+	return Origin + FVector(0.f, 0.f, ElysiumMove::StandViewZ * 0.5f);
+}
+
+bool FElysiumCombatCharacter::IsCameraSourceAlive() const
+{
+	// Retail's test is the EHANDLE's own validity, which a killed entity fails.
+	return !IsDead();
+}
+
+void FElysiumCombatCharacter::SetAsCameraTarget(bool bHead, float FadeTime)
+{
+	// `0x1000a2d6` / `0x103322e0`, verbatim: write the two fields, then walk every player index and
+	// push this entity onto that player's TARGET channel with a crossfade argument of **0.0**. The
+	// entity's own `GetCameraFadeInTime()` — i.e. the field just written — is what raises it, which
+	// is why `FadeHeadAsCameraTarget 0.5` and `SetHeadAsCameraTarget` differ at all.
+	//
+	// Setting the target does NOT cancel a live cine shot; only the view setter does.
+	bCameraTargetIsHead = bHead;
+	CameraOverrideFadeTime = FadeTime;
+	if (World != nullptr)
+	{
+		World->SetCameraOverrideTarget(Handle, 0.0f);
+	}
+}
+
+void FElysiumCombatCharacter::InputSetHeadAsCameraTarget(const FElysiumInputArgs&)
+{
+	SetAsCameraTarget(/*bHead*/ true, 0.f);     // `0x10332570` — SetAsCameraTarget(1, 0)
+}
+
+void FElysiumCombatCharacter::InputSetBodyAsCameraTarget(const FElysiumInputArgs&)
+{
+	SetAsCameraTarget(/*bHead*/ false, 0.f);    // `0x10332610` — SetAsCameraTarget(0, 0)
+}
+
+namespace
+{
+	// `inputdata.value.fieldType == 1` (FIELD_FLOAT) else 0 — `0x103323d0` / `0x103324a0`. The
+	// datamap declares both Fade inputs FLOAT (`docs/vtmb/script_api.md`), so `AcceptInput`'s own
+	// convert has already run by the time the guard is read and a numeric wire passes it; a Void
+	// firing is what the guard actually rejects.
+	float CameraTargetFadeArg(const FElysiumInputArgs& Args)
+	{
+		return Args.Param.IsVoid() ? 0.f : Args.Param.ToFloat();
+	}
+}
+
+void FElysiumCombatCharacter::InputFadeHeadAsCameraTarget(const FElysiumInputArgs& Args)
+{
+	SetAsCameraTarget(/*bHead*/ true, CameraTargetFadeArg(Args));
+}
+
+void FElysiumCombatCharacter::InputFadeBodyAsCameraTarget(const FElysiumInputArgs& Args)
+{
+	SetAsCameraTarget(/*bHead*/ false, CameraTargetFadeArg(Args));
+}
+// === end SC3 block ============================================================================
+
 void FElysiumCombatCharacter::InputLookAtEntityEye(const FElysiumInputArgs& Args)
 {
 	EyeLookTargetName = Args.Param.ToString();
@@ -1504,6 +1592,84 @@ bool FElysiumCombatCharacter::HandleFollowModelAnimEvent(const FElysiumAnimEvent
 	// empty — retail's `DevMsg("Could not create ornament prop model: %s")` tail, which also leaves
 	// the handle unset.
 	return true;
+}
+
+// --- The grapple pair — `+0x1534`..`+0x1558` (RC13) ---
+//
+// One transaction in, one transaction out, and nothing in between: retail has **exactly three
+// writers** of this block in the whole image — `EnterGrappleState` `0x10329760`,
+// `LeaveGrappleState` `0x10329a70` and the `CBaseCombatCharacter` constructor `0x10326de0` — so
+// there is no partial state and no per-frame maintenance to reproduce. Every reader (the camera
+// anchor resolve `FUN_1006e130`, `CanStartGrappleAttack`, `CPlayerMove::SetupMove`,
+// `GetSaveBlockedReason`, `ChooseMeleeAttackSequence`, the two player anim-state selectors) only
+// reads.
+
+FElysiumCombatCharacter* FElysiumCombatCharacter::ResolveGrapplePartner() const
+{
+	FElysiumEntity* Ent = World ? World->Resolve(Grapple.Partner) : nullptr;
+	return Ent ? Ent->AsCombatCharacter() : nullptr;
+}
+
+void FElysiumCombatCharacter::EnterGrappleState(const FElysiumEntityHandle& Partner,
+	EElysiumGrappleRole Role, EElysiumGrappleType Type, int32 Position, bool bHolster)
+{
+	Grapple.Partner = Partner;
+	Grapple.Role = Role;
+	Grapple.Type = Type;
+	Grapple.Position = Position;
+	Grapple.EnterOrigin = Origin;                  // `+0x1548..0x1550 = GetAbsOrigin()`
+	Grapple.bHolsteredOnEnter = bHolster;
+	// `+0x1558 = (role != 0) ? partner : -1` — only the victim points at its attacker, because the
+	// attacker is the half that drives the paired animation.
+	Grapple.AnimDriver = (Role != EElysiumGrappleRole::Attacker)
+		? Partner : FElysiumEntityHandle::Invalid();
+}
+
+void FElysiumCombatCharacter::LeaveGrappleState()
+{
+	// Every field back to retail's `-1`, in one transaction. The exit placement retail computes
+	// from `+0x1548` (and, for `role == 0 && (type == 1 || type == 4)`, from the *partner's* saved
+	// origin) is the movement half and belongs with whoever placed the bodies; the port's feed pair
+	// leaves both origins untouched, which is the divergence `ElysiumFeed.cpp` already records.
+	Grapple = FElysiumGrappleState();
+}
+
+bool FElysiumCombatCharacter::EnterGrapplePair(FElysiumCombatCharacter& Victim,
+	EElysiumGrappleType Type, int32 Position)
+{
+	if (&Victim == this || !Handle.IsSet() || !Victim.Handle.IsSet())
+	{
+		return false;
+	}
+	// The attacker first, then the victim — `StartGrappleAttack`'s two `EnterGrappleState`
+	// dispatches in their own order (`0x10329284`, `0x103292d2`), with the attacker rolled back if
+	// the victim refuses. The per-mode holster asymmetry is retail's: mode 3 (the stealth kill)
+	// holsters the victim only, modes 4 and 7 neither party, everything else both.
+	const bool bHolsterAttacker = Type != EElysiumGrappleType::StealthKill
+		&& Type != EElysiumGrappleType::StealthKillTwin
+		&& Type != EElysiumGrappleType::PayphoneVariant;
+	const bool bHolsterVictim = Type != EElysiumGrappleType::StealthKillTwin
+		&& Type != EElysiumGrappleType::PayphoneVariant;
+
+	EnterGrappleState(Victim.Handle, EElysiumGrappleRole::Attacker, Type, Position, bHolsterAttacker);
+	if (!Victim.Handle.IsSet())
+	{
+		LeaveGrappleState();   // the roll-back arm
+		return false;
+	}
+	Victim.EnterGrappleState(Handle, EElysiumGrappleRole::Victim, Type, Position, bHolsterVictim);
+	return true;
+}
+
+void FElysiumCombatCharacter::LeaveGrapplePair()
+{
+	// `EndGrapple` `0x10329560`: the partner leaves first, then this one, so a half that is already
+	// clear costs nothing and a re-entrant call is inert.
+	if (FElysiumCombatCharacter* Partner = ResolveGrapplePartner())
+	{
+		Partner->LeaveGrappleState();
+	}
+	LeaveGrappleState();
 }
 
 void FElysiumCombatCharacter::EndBloodshield()

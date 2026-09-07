@@ -1004,6 +1004,16 @@ void FElysiumEntityWorld::SetScriptedCamera(const FString& ShotFile, const FElys
 	// "*The* cinematic camera mode": a second SetCamera replaces the first rather than stacking, so
 	// the channel underneath never accumulates shots a conversation forgot to remove.
 	ClearScriptedCamera();
+	// **The two channels are mutually exclusive** (SC2). `CBasePlayer::SetCameraViewEntity`
+	// (`vampire.dll` `FUN_1017d280`) begins with `SetCineCamera(NULL)`, and the map teardown
+	// `FUN_10071970` tears both down together: retail cannot reach a state where a cine camera and a
+	// `camera_track` override both own the view, which is exactly why the release of either is a cut
+	// rather than a blend — there is no "one fading out while the other ramps in" to arbitrate. The
+	// other direction is in `SelectTrackCameraRole`.
+	//
+	// The track side is cleared with **no blend**: the shots it owned are gone the same tick, which
+	// is what `UTIL_Remove` does to a `camera_track`.
+	ClearTrackCamera(0.0f);
 	ScriptedCameraShot = E->PushCameraShot(ShotFile, Subject);
 	ScriptedCameraFile = ScriptedCameraShot != 0 ? ShotFile : FString();
 }
@@ -1029,12 +1039,51 @@ bool FElysiumEntityWorld::SelectTrackCameraRole(bool bTargetRole,
 	{
 		return false;
 	}
+	// **`FUN_1017d280` starts with `SetCineCamera(NULL)`** (SC2). Leasing a `camera_track` role drops
+	// whatever cine camera was adopted, unconditionally and on the same tick — the two channels
+	// cannot both own the view. The other direction is in `SetScriptedCamera`.
+	ClearScriptedCamera();
 	FElysiumEntityHandle& OwnerSlot = bTargetRole
 		? TrackCameraTargetOwner
 		: TrackCameraPositionOwner;
 	const bool bRoleChanged = OwnerSlot != TrackOwner;
 	OwnerSlot = TrackOwner;
 	return bRoleChanged;
+}
+
+IElysiumCameraOverrideSource* FElysiumWorldCameraOverrideResolver::ResolveCameraOverrideSource(
+	const FElysiumEntityHandle& Handle) const
+{
+	// `handleLive()` — index, epoch and the dead flag, all of which `Resolve` already tests.
+	FElysiumEntity* Entity = World ? World->Resolve(Handle) : nullptr;
+	return Entity ? Entity->GetCameraOverrideSource() : nullptr;
+}
+
+void FElysiumWorldCameraOverrideResolver::ClearCineCamera()
+{
+	// `CBasePlayer::SetCineCamera(NULL)` `FUN_1017cef0`, which `FUN_1017d280` calls first and
+	// unconditionally: the cine channel and the track override channel are mutually exclusive by
+	// construction, so leasing the VIEW role cancels a live scripted shot. SC2 put the same call on
+	// `SelectTrackCameraRole`, one step earlier in the same lease; both are retail's, and
+	// `ClearScriptedCamera` is idempotent, so the second is a no-op rather than a duplicate.
+	if (World)
+	{
+		World->ClearScriptedCamera();
+	}
+}
+
+IElysiumCameraOverrideResolver& FElysiumEntityWorld::CameraOverrideResolver()
+{
+	return TrackCameraOverrideResolver;
+}
+
+void FElysiumEntityWorld::SetCameraOverrideTarget(const FElysiumEntityHandle& Entity,
+	float Crossfade)
+{
+	// `FUN_1017d460` through `SetAsCameraTarget`'s per-player broadcast. One player here, so one
+	// call; the crossfade argument is 0.0 from that path and the entity's own slot-0xD0 answer is
+	// what raises it.
+	TrackCameraOverride.SetTargetEntity(NowSeconds(), Entity, Crossfade, TrackCameraOverrideResolver);
 }
 
 void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
@@ -1065,6 +1114,49 @@ void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
 		TrackCameraFov = FieldOfView;
 	}
 
+	// --- SC3: the override channel underneath this publication -------------------------------
+	// Retail's shape is inverted from the port's: there, the player PULLS the pose out of whichever
+	// entity holds the channel slot, once per frame in `CHL2_Player::SetupVisibility`; here the
+	// track PUSHES its sample and this is the single place the channel is driven. Taking the slot
+	// is `FUN_1017d280` / `FUN_1017d460`, and it happens exactly when the slot's occupant changes —
+	// which is what pushes the outgoing camera onto the crossfade stack and arms the fade.
+	//
+	// The one collapse against retail: a track that re-takes a slot it already occupies does not
+	// re-arm here, where retail's input would push the track onto its own crossfade stack. That
+	// entry crossfades a camera with itself, so the composed pose is identical either way.
+	const double Now = NowSeconds();
+	const FElysiumEntityHandle& Occupant = bTargetRole
+		? TrackCameraOverride.TargetSlot().Entity
+		: TrackCameraOverride.ViewSlot().Entity;
+	if (Occupant != TrackOwner)
+	{
+		if (bTargetRole)
+		{
+			TrackCameraOverride.SetTargetEntity(Now, TrackOwner, BlendInSeconds,
+				TrackCameraOverrideResolver);
+		}
+		else
+		{
+			// The view setter drops any live cine shot first, exactly as `FUN_1017d280` does.
+			TrackCameraOverride.SetViewEntity(Now, TrackOwner, BlendInSeconds,
+				TrackCameraOverrideResolver);
+		}
+	}
+
+	// The aim-from source `SetupVisibility` hands the target getter when there is no view entity.
+	// Dead in every shipped implementation, so its only job here is to be the value retail passes.
+	FVector PlayerEye = TrackCameraPosition;
+	{
+		FRotator EyeRotation;
+		FVector EyePoint;
+		if (E->GetPlayerViewPoint(EyePoint, EyeRotation))
+		{
+			PlayerEye = EyePoint;
+		}
+	}
+	const FElysiumCameraOverrideChannel::FPublished& Composed =
+		TrackCameraOverride.Publish(Now, TrackCameraOverrideResolver, PlayerEye);
+
 	// A target may publish one queue entry before its paired position. Seed the missing half from
 	// the live player view once; the position track replaces it later in the same drain.
 	if (!TrackCameraPositionOwner.IsSet() && TrackCameraShot == 0)
@@ -1079,9 +1171,13 @@ void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
 	}
 
 	FElysiumCameraShot Shot;
-	Shot.Origin = TrackCameraPosition;
-	Shot.Roll = TrackCameraRoll;
-	Shot.FieldOfView = TrackCameraFov;
+	// The channel's fold is what publishes while it is armed: with one live view entity it answers
+	// that entity's own pose, and with a crossfade stack it answers the fold. It is NOT armed on a
+	// frame whose substrate time is still zero — retail's `curtime` never is, and `GetWeight`'s
+	// `mark > 0` test is read literally — so the direct sample stands in until the clock advances.
+	Shot.Origin = Composed.bHasView ? Composed.ViewOrigin : TrackCameraPosition;
+	Shot.Roll = Composed.bHasView ? Composed.Roll : TrackCameraRoll;
+	Shot.FieldOfView = Composed.bHasView ? Composed.FieldOfView : TrackCameraFov;
 	Shot.BlendSeconds = FMath::Max(0.0f, BlendInSeconds);
 	// camera_track already owns the full per-frame path, including target interpolation and hard
 	// cuts: retail applies this channel through `CInput`'s view override (`client.dll`
@@ -1093,10 +1189,12 @@ void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
 	Shot.bCameraCut = bCameraCut
 		|| (BlendInSeconds <= KINDA_SMALL_NUMBER && TrackCameraShot == 0);
 	Shot.DebugName = TEXT("camera_track");
-	if (TrackCameraTargetOwner.IsSet())
+	// A channel target that is not a `camera_track` — an NPC pushed by `SetBodyAsCameraTarget`,
+	// which `sm_hub_1` fires — holds no track role, so the look-at gate reads the channel too.
+	if (TrackCameraTargetOwner.IsSet() || Composed.bHasTarget)
 	{
 		Shot.bUseLookAt = true;
-		Shot.LookAt = TrackCameraTarget;
+		Shot.LookAt = Composed.bHasTarget ? Composed.TargetPoint : TrackCameraTarget;
 	}
 	else
 	{
@@ -1125,6 +1223,23 @@ void FElysiumEntityWorld::RestoreTrackCamera(bool bTargetRole,
 		return; // a stale Restore cannot tear down a newer track that owns the role
 	}
 	OwnerSlot = FElysiumEntityHandle::Invalid();
+
+	// Releasing a slot is retail's fade-OUT, `FUN_1017d6d0` — and only that. A null entity handed to
+	// either setter routes there too, so this reaches the same body without also re-running the
+	// view setter's `SetCineCamera(NULL)`, for which the restore path has no recovered evidence.
+	// The released entity is NOT pushed onto the crossfade stack: only a REPLACEMENT pushes.
+	const FElysiumCameraOverrideChannel::FSlot& ReleasedSlot = bTargetRole
+		? TrackCameraOverride.TargetSlot()
+		: TrackCameraOverride.ViewSlot();
+	if (ReleasedSlot.Entity == TrackOwner)
+	{
+		TrackCameraOverride.FadeOut(NowSeconds(), BlendOutSeconds, TrackCameraOverrideResolver);
+		// And give up the slot, which retail's whole-channel release has no need to do — see
+		// `FElysiumCameraOverrideChannel::ReleaseSlot`.
+		TrackCameraOverride.ReleaseSlot(bTargetRole
+			? EElysiumCameraOverrideKind::Target
+			: EElysiumCameraOverrideKind::View);
+	}
 
 	if (!TrackCameraPositionOwner.IsSet() && !TrackCameraTargetOwner.IsSet())
 	{
@@ -1158,6 +1273,25 @@ void FElysiumEntityWorld::ClearTrackCamera(float BlendOutSeconds)
 	TrackCameraShot = 0;
 	TrackCameraPositionOwner = FElysiumEntityHandle::Invalid();
 	TrackCameraTargetOwner = FElysiumEntityHandle::Invalid();
+
+	// `FUN_1017d6d0`: the release is a request, not a command. Each live end raises it to its own
+	// `ToPlayerTime` minimum (slot 0xD4), and only a non-positive result hard-clears the mark for an
+	// instant snap back to the player. The handles and the crossfade stack survive either way; the
+	// next `GetWeight` reaps them once both ends are gone.
+	//
+	// **Named divergence** at a zero blend: the channel is reaped outright rather than left for a
+	// later query. Retail's cine path never touches the override channel at all, so it has no
+	// opinion here — but the port's teardown and its cine/track mutual exclusion (SC2, ruling M1)
+	// are both CUTS, and letting an entity's own `ToPlayerTime` extend a teardown past the frame the
+	// shot was popped on would turn one into a blend nothing is drawing.
+	if (BlendOutSeconds > 0.0f)
+	{
+		TrackCameraOverride.FadeOut(NowSeconds(), BlendOutSeconds, TrackCameraOverrideResolver);
+	}
+	else
+	{
+		TrackCameraOverride.Clear();
+	}
 }
 
 // --- Tick (move-first, then think — retail order) ----------------------------------------

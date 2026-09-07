@@ -11,6 +11,10 @@
 #include "ElysiumEntity.h"
 #include "ElysiumInventorySections.h"
 #include "ElysiumSheetSlots.h"
+// By base: `FElysiumCombatCharacter` implements retail's camera-source slots 46-53, so the
+// interface's definition is needed here. Same posture as the `Visual/` rigs several Public headers
+// already inherit from.
+#include "Substrate/ElysiumCameraOverride.h"
 
 class USkeletalMeshComponent;
 
@@ -302,6 +306,73 @@ struct FElysiumFeedState
 	bool IsPaired() const { return Peer.IsSet() || Target.IsSet(); }
 	// The authoritative transaction is open (event 4007 has fired and 4006 has not).
 	bool IsTransacting() const { return Target.IsSet(); }
+};
+
+// The grapple pair — `CBaseCombatCharacter`'s paired-action block at `+0x1534`..`+0x1558`, named
+// from `CBaseCombatCharacter::Dump` `0x103222c0`. It is the state every paired body action shares:
+// the feed, the seductive feed, the stealth kill, the payphone and the zombie feed are nine modes of
+// **one** transaction, not five systems.
+//
+// `+0x153c`'s polarity is proved twice: `StartGrappleAttack` `0x10328df0` pushes the role literal
+// straight into its two `EnterGrappleState` dispatches (`PUSH 0x0` on the attacker at `0x10329285`,
+// `PUSH 0x1` on the victim at `0x103292d3`), and `EnterGrappleState` itself reads
+// `if (role != 0) m_hGrappleAnimDriver = partner` — the attacker drives the paired animation.
+enum class EElysiumGrappleRole : int8
+{
+	None     = -1,
+	Attacker = 0,
+	Victim   = 1,
+};
+
+// `+0x1540` `m_GrappleType` — the mode `StartGrappleAttack(this, victim, type)` was called with.
+// Each mode carries its own admission distance, its own holster policy and its own post-enter
+// activity (RC13); the camera reads only the role pair, but the payphone arm is identified by the
+// type and nothing else.
+enum class EElysiumGrappleType : int8
+{
+	None              = -1,
+	Feed              = 0,   // `CBasePlayer::Replenish` `0x10168320`, the ordinary victim
+	FeedVariant       = 1,   // no shipped caller; shares mode 0's sound and 64-u distance
+	SeductiveFeed     = 2,   // the `SeductiveFeed(a, b)` script native `0x10198150`; no distance check
+	StealthKill       = 3,   // `PlayerTryStealthKill` `0x10167370`
+	StealthKillTwin   = 4,   // no shipped caller; weapon activity 0x18 instead of 0x17
+	Payphone          = 5,   // `CBasePlayer::StartPlayerDialog` `0x10178280`
+	FeedType13        = 6,   // `Replenish` when the victim's vfunc 0x228 answers 0xd
+	PayphoneVariant   = 7,   // no shipped caller; mode 5's 144-u distance and holster policy
+	ZombieFeedsPlayer = 8,   // `CBasePlayer::BeFedOnByZombie` `0x10168700` — the player is the victim
+};
+
+// The block `EnterGrappleState` `0x10329760` (vtable slot 379) writes in one transaction and
+// `LeaveGrappleState` `0x10329a70` (slot 380) clears in one. There are exactly three writers in the
+// whole image — those two and the `CBaseCombatCharacter` constructor `0x10326de0`, which seeds the
+// partner and the role to `-1`. **No NPC melee path writes it**; `ChooseMeleeAttackSequence`
+// `0x10347180` only reads it.
+struct FElysiumGrappleState
+{
+	// +0x1538 `m_GrapplePartner`. On the attacker it is the victim, on the victim the attacker.
+	FElysiumEntityHandle Partner;
+	// +0x153c `m_GrappleRole`.
+	EElysiumGrappleRole Role = EElysiumGrappleRole::None;
+	// +0x1540 `m_GrappleType`.
+	EElysiumGrappleType Type = EElysiumGrappleType::None;
+	// +0x1544 `m_GrapplePosition` — the variant `CheckAndTranslateGrapplePosition` chose. The
+	// port has no position translator yet, so this carries whatever the caller states.
+	int32 Position = INDEX_NONE;
+	// +0x1548..+0x1550 — `GetAbsOrigin()` captured on enter, read back by `LeaveGrappleState` for
+	// the exit placement.
+	FVector EnterOrigin = FVector::ZeroVector;
+	// +0x1554 — 1 when the enter holstered the active weapon, so the leave restores it. The port
+	// records the ask; the weapon half belongs to whoever drives the pair.
+	bool bHolsteredOnEnter = false;
+	// +0x1558 `m_hGrappleAnimDriver`, set only when `role != 0` — the victim points at the attacker.
+	FElysiumEntityHandle AnimDriver;
+
+	// Structurally paired. Retail's readers test `role != -1` **and** that the `+0x1538` EHANDLE is
+	// still live, and only the world can answer the second half here (`FElysiumEntityHandle::IsSet`
+	// is not a liveness check) — so every consumer that can reach a world resolves `Partner` too.
+	// The camera anchor resolve does exactly that, which is what makes a dead partner fall through
+	// to `World`.
+	bool IsPaired() const { return Role != EElysiumGrappleRole::None && Partner.IsSet(); }
 };
 
 // `AttemptFeed`'s verdict, kept as separate answers rather than a boolean: the four acceptance
@@ -969,7 +1040,7 @@ struct FElysiumReactionPlayRequest
 	EElysiumReactionRelease Release = EElysiumReactionRelease::ClipCompletion;
 };
 
-class FElysiumCombatCharacter : public FElysiumAnimating
+class FElysiumCombatCharacter : public FElysiumAnimating, public IElysiumCameraOverrideSource
 {
 public:
 	FElysiumSheet Sheet;
@@ -1475,6 +1546,51 @@ public:
 	// class's. Implemented in `Substrate/ElysiumFeed.cpp`.
 	FElysiumFeedState FeedState;
 
+	// The grapple pair (`docs/vtmb/stealth.md`, `docs/vtmb/feeding.md`).
+	// Retail's `+0x1534`..`+0x1558` block, shared by every paired body action. It lives on
+	// `CBaseCombatCharacter` and so does it here. The scripted camera reads it: `stealth_kill.txt`'s
+	// four shots anchor on `GrappleAttacker` / `GrappleVictim`, which `CBaseCineCam::SetShot`
+	// `FUN_1006e130` resolves out of exactly these two fields.
+	FElysiumGrappleState Grapple;
+
+	// `CBaseCombatCharacter::EnterGrappleState` `0x10329760` (vtable slot 379) — the ONLY setter in
+	// the image, and it writes the whole block in one transaction. `Partner` null clears the handle
+	// to retail's `-1`; the anim driver is set only on the victim half (`role != 0`).
+	//
+	// What retail's overrides add on top of the field write, and who owns it here: the weapon
+	// holster (`bHolster`, recorded on the state and driven by the pair's owner), the transform
+	// blend and re-placement, `MOVETYPE_NONE` for a player, `CBasePlayer::FUN_101695f0`'s
+	// `AddVFlags(1)` pose lock (RC4), and the feeder's `m_iClientFeedMaxBloodPool` latch, which the
+	// feed transaction already writes.
+	void EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role,
+		EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true);
+
+	// `CBaseCombatCharacter::LeaveGrappleState` `0x10329a70` (slot 380) — the ONLY clearer. Every
+	// field back to `-1` in one transaction; idempotent.
+	//
+	// `CBasePlayer`'s override `0x10169660` additionally clears the pose-lock VFlag and calls
+	// **`SetCineCamera(NULL)`**, so ending a grapple ends the scripted shot. That camera edge is
+	// SC4/SC9's to wire; it is recorded in `docs/vtmb/camera-view-modes.md`.
+	void LeaveGrappleState();
+
+	// `StartGrappleAttack` `0x10328df0`'s enter pair: the attacker enters first, then the victim,
+	// and the attacker is rolled back if the victim refuses. The admission
+	// (`CanStartGrappleAttack` `0x103285a0` — the crouch hull trace, the per-mode distance, the
+	// re-entry arm) belongs to the callers, not here. Returns false when either half cannot enter.
+	bool EnterGrapplePair(FElysiumCombatCharacter& Victim, EElysiumGrappleType Type,
+		int32 Position = INDEX_NONE);
+
+	// `CBaseCombatCharacter::EndGrapple` `0x10329560`: the partner leaves, then this one does.
+	// Idempotent, and safe from either role.
+	void LeaveGrapplePair();
+
+	// The pair's other half as a combat character, resolved through the world, or null. This is the
+	// live-handle test retail's readers spell as "`+0x1538` is live".
+	FElysiumCombatCharacter* ResolveGrapplePartner() const;
+
+	// Paired AND the partner still resolves.
+	bool IsGrappling() const { return Grapple.IsPaired() && ResolveGrapplePartner() != nullptr; }
+
 	// `CBasePlayer::Replenish` + `AttemptFeed`: eligibility, then the paired start. Returns the
 	// verdict whether or not it accepted; on acceptance the pair is running and this character is
 	// its attacker. Refuses while either side is already paired.
@@ -1636,6 +1752,46 @@ public:
 	void InputLookAtEntityCenter(const FElysiumInputArgs& Args);
 	void InputLookAtEntityOrigin(const FElysiumInputArgs& Args);
 	void InputLookAtEntityDefault(const FElysiumInputArgs& Args);
+
+	// === SC3 — the camera-override source (retail vtable slots 46-53) =========================
+	// `CBaseCombatCharacter` fills four of the eight `CBaseEntity` camera slots and leaves roll and
+	// FOV at the base defaults (0.0 and 75.0), which is why a superseded NPC target dragged through
+	// the view arm by the kind-byte defect pulls the published FOV toward 75. Recovery:
+	// `docs/vtmb/camera-view-modes.md` §"The `camera_track` override channel", RC7.
+
+	// `m_flCameraOverrideFadeTime` (+0x10d0). ONE runtime field answering BOTH directions —
+	// `GetCameraFadeInTime` `0x103321a0` and `GetCameraFadeOutTime` `0x10332240` return the same
+	// float, unclamped, unlike a `camera_track`'s two authored keyvalues clamped at zero. Written
+	// only by `SetAsCameraTarget`.
+	float CameraOverrideFadeTime = 0.f;
+	// `m_bCameraTargetIsHead` (+0x10d4). Head -> the look point; body -> the world-space centre.
+	bool bCameraTargetIsHead = false;
+
+	// `CBaseCombatCharacter::SetAsCameraTarget` `0x1000a2d6`. Writes the two fields above, then
+	// **broadcasts** to every player index with a crossfade argument of exactly 0.0 — never to an
+	// activator — so the entity's own `GetCameraFadeInTime()` is the only source of a non-zero
+	// target crossfade in shipped content. One player exists in the port, so the broadcast is a
+	// single call; the shape is kept because it is what makes the fade time the only channel.
+	void SetAsCameraTarget(bool bHead, float FadeTime);
+
+	// The four entity inputs that reach it. `Set*` pass 0; `Fade*` pass the wire's value.
+	void InputSetHeadAsCameraTarget(const FElysiumInputArgs& Args);
+	void InputSetBodyAsCameraTarget(const FElysiumInputArgs& Args);
+	void InputFadeHeadAsCameraTarget(const FElysiumInputArgs& Args);
+	void InputFadeBodyAsCameraTarget(const FElysiumInputArgs& Args);
+
+	virtual IElysiumCameraOverrideSource* GetCameraOverrideSource() override { return this; }
+	// Slot 50 `0x10332010` — `CalcLookData(&out, NULL)`, the look/eye point, unconditionally.
+	virtual FVector GetCameraViewpointPosition() const override;
+	// Slot 51 `0x103320b0` — head arm `CalcLookData`, body arm `WorldSpaceCenter()`. `AimFrom` is
+	// dead in both arms (both write `[ESP+0x14]`), so it is accepted and ignored.
+	virtual FVector GetCameraTargetPosition(const FVector& AimFrom) const override;
+	virtual float GetCameraFadeInTime() const override { return CameraOverrideFadeTime; }
+	virtual float GetCameraFadeOutTime() const override { return CameraOverrideFadeTime; }
+	virtual bool IsCameraSourceAlive() const override;
+	// Slots 48/49 and the two notifies are NOT overridden: `CBaseCombatCharacter` keeps the
+	// `CBaseEntity` bodies (roll 0.0, FOV 75.0, both notifies `RET`).
+	// === end SC3 block =======================================================================
 
 	virtual FVector EyePosition() const override;
 

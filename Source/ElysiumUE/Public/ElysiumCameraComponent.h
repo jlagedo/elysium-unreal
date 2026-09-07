@@ -44,23 +44,61 @@ namespace ElysiumCameraView
 //   * **it does not know what an entity is.** A scripted shot is pushed as *values* and whoever
 //     pushed it keeps them current, so a `Follow` attach type is the pusher re-resolving each frame.
 
-// What the scripted channel resolved to this frame: the pose the top shot has chased to, its field
-// of view, and the stack's own timed weight. It is published as values because the layer that
-// composes it runs later in the frame than the solve that produced it — and because the same values
-// have to compose over either rig once `elysium.ModernCamera` has a second one to choose.
-struct FElysiumScriptedShotView
+// One channel's resolved pose. `Target` is what the composition interpolates — retail lerps the aim
+// **point** (`m_vecCameraTargetOverride`), never the rotator — and `Rotation` is what the cine
+// channel hard-writes.
+struct FElysiumScriptedShotPose
 {
 	FVector Location = FVector::ZeroVector;
 	FRotator Rotation = FRotator::ZeroRotator;
+	FVector Target = FVector::ZeroVector;
 	// 0 keeps the player's field of view, which is what a shot file with no `FieldOfView` authors.
 	float FieldOfView = 0.0f;
-	// The shot stack's timed ramp. This is the layer's alpha; it is never re-eased.
+	float Roll = 0.0f;
+	bool bLive = false;
+};
+
+// What the scripted channel resolved to this frame, **as retail's two channels** (SC2). It is
+// published as values because the layer that composes it runs later in the frame than the solve that
+// produced it — and because the same values have to compose over either rig once
+// `elysium.ModernCamera` has a second one to choose.
+struct FElysiumScriptedShotView
+{
+	// The adopted cine camera (`C_BaseCineCamera`, `C_BasePlayer::CalcView` `0x100a7770`). A hard
+	// write of origin, angles and FOV with no weight of any kind; while it is live the third-person
+	// boom is skipped entirely (`ClientModeShared::OverrideView` `0x100d4040`).
+	FElysiumScriptedShotPose Cine;
+
+	// The `camera_track` override (`CInput::OverrideView` `FUN_100ffb90`). Composed over whichever
+	// base won — the cine pose when one is adopted, the rig's otherwise — at `Weight`.
+	FElysiumScriptedShotPose Track;
+
+	// The track channel's ramp. **Linear**: the `SimpleSpline` ease lives at the compose site, which
+	// is retail's own division of labour (`FUN_100fc900`'s tail is linear, `FUN_100ffb90` opens with
+	// the spline). This is the layer's alpha.
 	float Weight = 0.0f;
+
 	// False until the channel has framed its first shot, which is what stops a push being applied
 	// from wherever the camera happened to be.
 	bool bSeeded = false;
+
 	// The top shot's own presentation record — the HUD/viewmodel keys and the pusher's exposure ask.
 	FElysiumShotPresentation Presentation;
+
+	// What `CAM_IsThirdPerson` and the modifier's alpha read: an adopted cine camera is full scripted
+	// weight because it has none of its own.
+	float ChannelWeight() const { return Cine.bLive ? 1.0f : Weight; }
+};
+
+// `CViewRender::CalcView`'s last arm (`client.dll` `0x10191200`, tail `0x1019158e`-`0x101915f2`):
+// when the engine's view entity index is **strictly above** `IVEngineClient::GetMaxClients()` — 1 in
+// single player, so any index of 2 or more — origin and angles are hard-replaced by that entity's
+// abs origin and abs angles. The FOV is **not** touched. That is VtMB's death / observer view; there
+// is no separate death, feed or seduction `CalcView` arm (RC10).
+struct FElysiumSpectatedView
+{
+	FVector Origin = FVector::ZeroVector;
+	FRotator Angles = FRotator::ZeroRotator;
 };
 
 UCLASS()
@@ -102,13 +140,19 @@ public:
 	// their own points in the frame, because the scripted layer runs after the base is chosen.
 	void ApplyToView(FMinimalViewInfo& View) const;
 
-	// The base half: the strafe bank and the boom, at the third-person weight. This is what a base
-	// request produces; nothing scripted is in it.
+	// The base half: the strafe bank and the boom, at the third-person weight, then the water
+	// clearance, the ordinary feed pose, the spectator replace and the `camortho` projection. This is
+	// what a base request produces; nothing scripted is in it.
+	//
+	// **The boom is skipped entirely while a cine shot is live** (`ClientModeShared::OverrideView`
+	// `0x100d4040` takes `CInput` slot 33 directly rather than slot 31), so a scripted shot is never
+	// displaced by it and the track override lerps from the cine pose rather than from the rig's.
 	void ApplyBaseToView(FMinimalViewInfo& View) const;
 
-	// The scripted half (`ApplyScriptedBlend`): composed **over** whatever base won, at the shot
-	// stack's own weight, plus the motion-blur suppression an authored edit needs. Retail composes
-	// rather than arbitrating — VtMB has one camera and this is the last term applied to it.
+	// The scripted half, in retail's two branches: the adopted cine camera hard-writes the pose
+	// (`C_BaseCineCamera::CalcView` `FUN_10001b50`), and the `camera_track` override then composes
+	// over whatever base won (`CInput::OverrideView` `FUN_100ffb90`), plus the motion-blur
+	// suppression an authored edit needs. One camera in series, never two rival viewpoints.
 	void ApplyScriptedShotToView(FMinimalViewInfo& View) const;
 
 	// What the scripted layer reads, as values.
@@ -218,6 +262,21 @@ public:
 	void ClearShots() { Shots.Clear(); }
 	const FElysiumCameraShotStack& GetShots() const { return Shots; }
 
+	// `camortho` (`client.dll` `FUN_101001e0`) and `CInput+0x1b8`, the enable `CAM_IsOrthographic`
+	// (slot 48) answers. A dev view: no shipped content sets it.
+	void SetOrthographic(bool bOrtho) { bOrthographic = bOrtho; }
+	bool IsOrthographic() const { return bOrthographic; }
+
+	// The spectator replace (`CViewRender::CalcView`'s last arm, RC10). **The seam answers nothing
+	// yet**: the port has no observer, death-cam or spectator producer, so nothing calls this, and it
+	// stands for retail's `IVRenderView::GetViewEntity()` (slot 39 on `VEngineRenderView008`) with the
+	// `index > GetMaxClients()` test already made by whoever would write it. When it is set, the base
+	// view's origin and angles are replaced outright and the FOV is left alone, in retail's own place
+	// in the order — after the ordinary view, ahead of the cine hard write.
+	void SetSpectatedView(const FElysiumSpectatedView& View) { SpectatedView = View; }
+	void ClearSpectatedView() { SpectatedView.Reset(); }
+	const TOptional<FElysiumSpectatedView>& GetSpectatedView() const { return SpectatedView; }
+
 	// Debug.
 	// The solved boom length in cm (0 in first person), for `elysium_player_get` and the Cog window.
 	float BoomLength() const { return SolvedOffset.Size() * Weights.ThirdBlend(); }
@@ -299,12 +358,21 @@ private:
 	// the accel/decel on `MoveSpeed`/`MoveAccel` and `MaxTurnRate`/`TurnAccel`, `SyncRotateOnMove` —
 	// is `C_BaseCineCamera`, ported into `FElysiumScriptedShotTracker`, so the legacy `SetCamera`
 	// stack and the dialogue director's request channel cannot drift apart.
+	// **One tracker, because retail has one.** It follows the adopted cine shot when there is one and
+	// the top track shot otherwise. The `camera_track` channel needs none of its own: retail's
+	// `CInput` override re-derives `VectorAngles(target - origin)` from the replicated values every
+	// frame with no deadband and no rate, which is exactly what the tracker's `bTracked == false`
+	// copy-through does.
 	FElysiumScriptedShotTracker ShotTracker;
 	FVector ShotPosition = FVector::ZeroVector;
 	FRotator ShotRotation = FRotator::ZeroRotator;
 	bool bShotSeeded = false;
 	// The shot the channel is currently framed on, so a push or a pop that changes the top re-seeds.
 	int32 LastTopShotId = 0;
+	// `CInput+0x1b8`, the `camortho` latch.
+	bool bOrthographic = false;
+	// Retail's spectated view entity, when something ever sets it. See `SetSpectatedView`.
+	TOptional<FElysiumSpectatedView> SpectatedView;
 	// Set by the shot mutation phase; cleared only when CalcCamera publishes the cut to Unreal.
 	bool bTemporalCameraCutPending = false;
 

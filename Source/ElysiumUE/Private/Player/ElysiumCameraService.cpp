@@ -229,12 +229,35 @@ void UElysiumCameraService::ApplyToView(FMinimalViewInfo& InOutView) const
 	// A `vdata/camerashots/` `FieldOfView` is 4:3-referenced and Source is Hor+, so the authored
 	// number widens to the window's aspect here rather than in the parse — the shot keeps the value
 	// its file wrote and only the rendered frame carries the window's.
-	float Fov = InOutView.FOV;
-	ElysiumCam::ComposeScriptedShot(InOutView.Location, InOutView.Rotation, Fov,
-		Resolved.Location, Resolved.Rotation,
-		ElysiumCam::WidenSourceFov(Resolved.FieldOfView,
-			ElysiumCameraView::RenderAspectRatio(InOutView.AspectRatio)), Resolved.Weight);
-	InOutView.FOV = Fov;
+	const float Aspect = ElysiumCameraView::RenderAspectRatio(InOutView.AspectRatio);
+	const float ShotFov = ElysiumCam::WidenSourceFov(Resolved.FieldOfView, Aspect);
+
+	// **Retail's two branches, on this channel too** (SC2). A dialogue or terminal shot resolved off a
+	// `vdata/camerashots/` file is a **cine** shot — an adopted `C_BaseCineCamera` — and
+	// `C_BaseCineCamera::CalcView` (`FUN_10001b50`) hard-writes origin, angles and FOV with no weight
+	// at all. Because that write discards everything before it, the rig's boom is out of the result
+	// whether or not the manager applied it, which is the same outcome retail gets by skipping
+	// `CInput` slot 31 outright.
+	//
+	// The consequence is deliberate: the request's `BlendInSeconds` no longer shapes a cine arrival,
+	// because retail has no field it could come from. SC9 moves dialogue onto the adoption slot and
+	// retires the ramp for this channel entirely; until then the ramp still governs a value request.
+	if (Resolved.Request.Shot.bCine)
+	{
+		InOutView.Location = Resolved.Location;
+		InOutView.Rotation = Resolved.Rotation;
+		if (ShotFov > 0.0f)
+		{
+			InOutView.FOV = ShotFov;
+		}
+	}
+	else
+	{
+		float Fov = InOutView.FOV;
+		ElysiumCam::ComposeScriptedShot(InOutView.Location, InOutView.Rotation, Fov,
+			Resolved.Location, Resolved.Rotation, ShotFov, Resolved.Weight);
+		InOutView.FOV = Fov;
+	}
 	if (Resolved.Request.bCameraCut && Resolved.Weight >= 1.0f)
 	{
 		InOutView.PreviousViewTransform = FTransform(InOutView.Rotation, InOutView.Location);

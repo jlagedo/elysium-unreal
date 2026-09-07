@@ -174,8 +174,17 @@ void UElysiumCameraComponent::ConsumeCamCommand()
 
 void UElysiumCameraComponent::SolveShot(float Dt)
 {
-	const FElysiumCameraShot* Top = Shots.Top();
-	const int32 TopId = Shots.TopId();
+	// **The tracker follows the cine channel first.** An adopted `C_BaseCineCamera` is the shot whose
+	// pose is solved (`CamMode == 1`, `FUN_10001fa0`); the `camera_track` override underneath it is a
+	// value the `CInput` path re-derives every frame and needs no tracker state at all. With no cine
+	// shot adopted the top track shot takes the tracker, which is what the port has always done.
+	const FElysiumCameraShot* Top = Shots.TopCine();
+	int32 TopId = Shots.TopCineId();
+	if (!Top)
+	{
+		Top = Shots.TopTrack();
+		TopId = Shots.TopTrackId();
+	}
 	if (!Top)
 	{
 		bShotSeeded = false;
@@ -202,7 +211,7 @@ void UElysiumCameraComponent::SolveShot(float Dt)
 	}
 	else
 	{
-		ShotTracker.Advance(*Top, Dt);
+		ShotTracker.Advance(*Top, Dt, Cvars.CameraFov);
 	}
 	ShotPosition = ShotTracker.Location;
 	ShotRotation = ShotTracker.Rotation;
@@ -272,8 +281,13 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 		View.Rotation.Roll += Roll * (1.0f - Weights.ThirdBlend());
 	}
 
+	// **The boom is the `CInput` slot-31 branch, and an adopted cine camera skips it outright.**
+	// `ClientModeShared::OverrideView` (`0x100d4040`) tests the adopted camera and calls slot 33
+	// (`FUN_100ffb90`, the track override) *directly* when one is live, so `m_vecCameraOffset` and
+	// `m_angCamera` never reach the view. That is not cosmetic: it is what the track override lerps
+	// **from**, so leaving the boom in would compose an authored edit out of a third-person pose.
 	const float E = Weights.ThirdBlend();
-	if (E > 0.0f)
+	if (E > 0.0f && !Shots.TopCine())
 	{
 		View.Location += SolvedOffset * E;
 		View.Rotation = FMath::Lerp(View.Rotation, SolvedAngles, E);
@@ -317,6 +331,34 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 		PP.bOverride_VignetteTexture = FeedVisionMask != nullptr;
 		PP.VignetteTexture = FeedVisionMask;
 	}
+
+	// The spectator replace, `CViewRender::CalcView`'s last arm (`0x1019158e`-`0x101915f2`, RC10):
+	// origin and angles hard-replaced by the entity the engine's view is on, FOV untouched. It is
+	// last inside `CalcView`, so it beats the bob, the shake, the water offset and `scr_ofs*` — and
+	// it is still ahead of the cine hard write, which is why a cutscene camera beats a death view.
+	//
+	// **Nothing sets this yet**: the port has no observer, death-cam or spectator producer. See
+	// `SetSpectatedView`.
+	if (SpectatedView.IsSet())
+	{
+		View.Location = SpectatedView->Origin;
+		View.Rotation = SpectatedView->Angles;
+	}
+
+	// `camortho`: Source's orthographic debug view (`ClientModeShared::OverrideView` `100d40b6`, the
+	// block the client report mis-read as an off-centre projection — M11, re-scoped by RC9). Retail
+	// raises `CViewSetup::m_bOrtho` and writes the rect `(-w*0.5, -h*0.5, w*0.5, h*0.5)`; Unreal
+	// already owns that projection, so the port hands it the width and lets the window's aspect give
+	// the height. `c_orthoheight` is loaded and stands for retail's vertical pair.
+	//
+	// Retail runs the block after the `CInput` override rather than here; the position is immaterial
+	// because it writes projection state and never the pose, and here it is on the path every caller
+	// reaches rather than only the ones that run the legacy post layer.
+	if (bOrthographic)
+	{
+		View.ProjectionMode = ECameraProjectionMode::Orthographic;
+		View.OrthoWidth = Cvars.OrthoWidth;
+	}
 }
 
 float ElysiumCameraView::RenderAspectRatio(float Fallback)
@@ -336,7 +378,7 @@ void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) co
 {
 	const FElysiumScriptedShotView Shot = ScriptedShotView();
 
-	if (Shot.Weight > 0.0f)
+	if (Shot.ChannelWeight() > 0.0f)
 	{
 		// VtMB camera tracks author exact edits and deliberate dollies, but no camera-motion blur.
 		// UE's default blur turns even the small post-cut dollies into a radial smear and makes a
@@ -359,17 +401,40 @@ void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) co
 			View.PostProcessSettings.AutoExposureMaxBrightness = ExposureMax;
 		}
 	}
-	if (Shot.Weight > 0.0f && Shot.bSeeded)
+	const float Aspect = ElysiumCameraView::RenderAspectRatio(View.AspectRatio);
+
+	// **Branch one — the adopted cine camera.** `C_BaseCineCamera::CalcView` (`FUN_10001b50`) writes
+	// all three outright: `v->origin = m_vecCurOrigin`, `v->angles = m_angCurAngles`,
+	// `v->fov = m_flCurFov`. No blend, no lerp, no weight, and no arm anywhere on the path takes one.
+	//
+	// **M10 — the ordering fact, kept as a comment because the code is dead.** Retail's
+	// `C_BasePlayer::CalcView` (`0x100a7770`) runs a vehicle arm *before* this one, so an adopted cine
+	// camera beats a vehicle view. VtMB ships no drivable vehicle and `m_bInVehicle` /
+	// `field_0x19c4` have no writer in the image, so there is no transition to reproduce — only the
+	// precedence, which this ordering already has.
+	if (Shot.Cine.bLive && Shot.bSeeded)
 	{
-		// The scripted camera is applied on top: origin, look-at, roll and FOV all lerp by its own
-		// timed weight, which is what lets a cutscene cut on the beat it was authored for.
+		View.Location = Shot.Cine.Location;
+		View.Rotation = Shot.Cine.Rotation;
 		// The shot's `FieldOfView` is a **4:3-referenced** Source angle; the widening to the window's
-		// own aspect happens here, at apply time, so the parsed shot keeps the authored number.
+		// own aspect happens here, at apply time, so the parsed shot keeps the authored number (M15).
+		// A shot with no `FieldOfView` keeps the player's, which `WidenSourceFov` passes through.
+		if (Shot.Cine.FieldOfView > 0.0f)
+		{
+			View.FOV = ElysiumCam::WidenSourceFov(Shot.Cine.FieldOfView, Aspect);
+		}
+	}
+
+	// **Branch two — the `camera_track` override, composed over whichever base won.** Both of retail's
+	// branches end in `FUN_100ffb90`; only the base differs, which is what makes the two channels one
+	// camera in series rather than two rival viewpoints. At weight 1 the track wins outright; at
+	// weight 0 the cine pose (or the rig's) stands.
+	if (Shot.Track.bLive && Shot.Weight > 0.0f && Shot.bSeeded)
+	{
 		float Fov = View.FOV;
 		ElysiumCam::ComposeScriptedShot(View.Location, View.Rotation, Fov,
-			Shot.Location, Shot.Rotation,
-			ElysiumCam::WidenSourceFov(Shot.FieldOfView,
-				ElysiumCameraView::RenderAspectRatio(View.AspectRatio)), Shot.Weight);
+			Shot.Track.Location, Shot.Track.Target, Shot.Track.Roll,
+			ElysiumCam::WidenSourceFov(Shot.Track.FieldOfView, Aspect), Shot.Weight);
 		View.FOV = Fov;
 	}
 }
@@ -377,14 +442,42 @@ void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) co
 FElysiumScriptedShotView UElysiumCameraComponent::ScriptedShotView() const
 {
 	FElysiumScriptedShotView Out;
-	Out.Location = ShotPosition;
-	Out.Rotation = ShotRotation;
-	Out.Weight = Shots.GetWeight();
+	Out.Weight = Shots.GetTrackWeight();
 	Out.bSeeded = bShotSeeded;
 	if (const FElysiumCameraShot* Top = Shots.Top())
 	{
-		Out.FieldOfView = Top->FieldOfView;
 		Out.Presentation = Top->Presentation;
+	}
+
+	// The cine channel takes the tracker's pose, because the tracker is following it (`SolveShot`).
+	const FElysiumCameraShot* Cine = Shots.TopCine();
+	if (Cine)
+	{
+		Out.Cine.bLive = true;
+		Out.Cine.Location = ShotPosition;
+		Out.Cine.Rotation = ShotRotation;
+		Out.Cine.Roll = Cine->Roll;
+		Out.Cine.FieldOfView = Cine->FieldOfView;
+		Out.Cine.Target = Cine->bUseLookAt
+			? Cine->LookAt
+			: ElysiumCam::ScriptedShotTargetPoint(ShotPosition, ShotRotation);
+	}
+
+	if (const FElysiumCameraShot* Track = Shots.TopTrack())
+	{
+		Out.Track.bLive = true;
+		Out.Track.Roll = Track->Roll;
+		Out.Track.FieldOfView = Track->FieldOfView;
+		// With no cine camera adopted the tracker is on this shot, so its solved pose is the answer.
+		// With one adopted the track channel reads the shot's own values straight through — retail's
+		// `CInput` override does exactly that, from the replicated fields, every frame.
+		Out.Track.Location = Cine ? Track->Origin : ShotPosition;
+		Out.Track.Rotation = Cine
+			? (Track->bUseLookAt ? (Track->LookAt - Track->Origin).Rotation() : Track->Rotation)
+			: ShotRotation;
+		Out.Track.Target = Track->bUseLookAt
+			? Track->LookAt
+			: ElysiumCam::ScriptedShotTargetPoint(Out.Track.Location, Out.Track.Rotation);
 	}
 	return Out;
 }
@@ -635,7 +728,9 @@ int32 UElysiumCameraComponent::PushShot(const FElysiumCameraShot& Shot)
 	FElysiumCameraShot StableShot = Shot;
 	StableShot.bCameraCut = false; // an instruction for this frame, never persistent shot state
 	const int32 Id = Shots.Push(StableShot);
-	if (Shot.bCameraCut || Shot.BlendSeconds <= KINDA_SMALL_NUMBER)
+	// A cine adoption is a cut by construction — it is live at full weight the frame it lands, with
+	// no ramp to smear the previous view across (M1).
+	if (Shot.bCine || Shot.bCameraCut || Shot.BlendSeconds <= KINDA_SMALL_NUMBER)
 	{
 		bTemporalCameraCutPending = true;
 	}
@@ -663,6 +758,9 @@ bool UElysiumCameraComponent::PopShot(int32 Id, float BlendOutSeconds)
 {
 	const bool bWasTop = Shots.TopId() == Id;
 	const FElysiumCameraShot* Existing = Shots.Find(Id);
+	// A cine release is a cut by construction (M1), so it always resets the temporal history; a track
+	// release only does so when its own blend-out is instantaneous.
+	const bool bWasCine = Existing && Existing->bCine;
 	const float EffectiveBlend = BlendOutSeconds >= 0.0f
 		? BlendOutSeconds
 		: (Existing ? Existing->BlendSeconds : 0.0f);
@@ -670,7 +768,7 @@ bool UElysiumCameraComponent::PopShot(int32 Id, float BlendOutSeconds)
 	{
 		return false;
 	}
-	if (bWasTop && EffectiveBlend <= KINDA_SMALL_NUMBER)
+	if (bWasTop && (bWasCine || EffectiveBlend <= KINDA_SMALL_NUMBER))
 	{
 		bTemporalCameraCutPending = true;
 	}
@@ -724,14 +822,19 @@ void UElysiumCameraComponent::RegisterCommands()
 	Bindings.Add(Registry.Bind(TEXT("cam_rotateleft"), StepCamYaw(-15.0f)));
 	Bindings.Add(Registry.Bind(TEXT("cam_rotateright"), StepCamYaw(15.0f)));
 
-	// `camortho` is declared in the verb table and does nothing: no orthographic path exists anywhere
-	// in the recovered code (`docs/vtmb/camera-view-modes.md` §1). It is bound so the registry's
-	// unbound-verb diagnostic does not report it as a gap, and it reports rather than failing
-	// silently when something calls it.
-	Bindings.Add(Registry.Bind(TEXT("camortho"), [](const FElysiumCommandCall&)
+	// `camortho` (`client.dll` `FUN_101001e0`) toggles `CInput+0x1b8`, the enable
+	// `CAM_IsOrthographic` (slot 48) answers; `ClientModeShared::OverrideView` then raises
+	// `CViewSetup::m_bOrtho` and writes the rect from `c_orthowidth` / `c_orthoheight`. A dev view —
+	// no shipped content sets it — but it is a real arm, recovered by RC9, and it is ported rather
+	// than left as a logging stub. An argument sets the state outright; no argument toggles, which is
+	// the shape the retail command has.
+	Bindings.Add(Registry.Bind(TEXT("camortho"), [this](const FElysiumCommandCall& Call)
 	{
-		UE_LOG(LogElysiumCamera, Verbose,
-			TEXT("camortho: retail registers the verb and implements no orthographic path"));
+		SetOrthographic(Call.Args.IsEmpty()
+			? !IsOrthographic()
+			: FCString::Atoi(*Call.Args) != 0);
+		UE_LOG(LogElysiumCamera, Verbose, TEXT("camortho %d (width %.1f cm)"),
+			IsOrthographic() ? 1 : 0, Cvars.OrthoWidth);
 	}));
 
 	// `centerview` / `force_centerview` recentre pitch. The view belongs to the controller, so this

@@ -1,7 +1,5 @@
 #include "ElysiumCameraSolve.h"
 
-#include "HAL/IConsoleManager.h"
-
 // The approach (`client.dll` 0x100fc000)
 
 float ElysiumCam::Approach(float Current, float Target, float Speed, float Dt)
@@ -204,24 +202,60 @@ FElysiumCameraDrawPolicy ElysiumCam::SolveDrawPolicy(const FElysiumCameraWeights
 	return Out;
 }
 
-// The scripted composition (`ApplyScriptedBlend`, tail of `CAM_ApplyToView`)
+// The scripted composition (`CInput::OverrideView`, `client.dll` FUN_100ffb90)
+
+FVector ElysiumCam::ScriptedShotTargetPoint(const FVector& ShotLocation, const FRotator& ShotRotation)
+{
+	return ShotLocation + ShotRotation.Vector() * ViewForwardPointCm;
+}
 
 void ElysiumCam::ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
-	const FVector& ShotLocation, const FRotator& ShotRotation, float ShotFov, float Weight)
+	const FVector& ShotLocation, const FVector& ShotTarget, float ShotRoll, float ShotFov,
+	float Weight)
 {
+	// `if (0.0f < m_flScriptedWeight)` — the whole body is inside that test, which is what makes the
+	// layer safe to run unconditionally.
 	if (Weight <= 0.0f)
 	{
 		return;
 	}
-	// `FMath::Lerp` on a rotator interpolates the *normalized* delta, so a shot across the ±180
-	// boundary takes the short way round. That is the behaviour the shipped apply point has, and it
-	// is called rather than reimplemented so the two cannot drift.
-	InOutLocation = FMath::Lerp(InOutLocation, ShotLocation, Weight);
-	InOutRotation = FMath::Lerp(InOutRotation, ShotRotation, Weight);
+
+	// **The ease is here, not in the ramp.** `FUN_100fc900`'s tail is linear; `FUN_100ffb90` opens
+	// with `e = SimpleSpline(w)`. Easing at both ends would ease twice over an authored duration.
+	const float E = SimpleSpline(Weight);
+
+	// `AngleVectors(angles, fwd)` then `viewFwdPoint = origin + fwd * 240u`: a stand-in for "what the
+	// base view is looking at", so the aim can be interpolated as a **point** rather than an angle.
+	const FVector ViewForwardPoint = InOutLocation + InOutRotation.Vector() * ViewForwardPointCm;
+
+	InOutLocation = InOutLocation + (ShotLocation - InOutLocation) * E;
+
+	const FVector Direction = (ViewForwardPoint + (ShotTarget - ViewForwardPoint) * E) - InOutLocation;
+	// `VectorNormalize` then `VectorAngles`. A degenerate direction — the lerped aim point landing on
+	// the lerped origin — has no angle to derive, so the previous one stands; retail's `VectorAngles`
+	// answers yaw 0 there, which would snap the view sideways for one frame.
+	if (!Direction.IsNearlyZero())
+	{
+		const FRotator Aimed = Direction.Rotation();
+		InOutRotation.Pitch = Aimed.Pitch;
+		InOutRotation.Yaw = Aimed.Yaw;
+	}
+	// `angles->roll = e * m_flOverrideRoll` — an assignment, not a lerp: the base view's roll (the
+	// strafe bank, a shake) is discarded outright the instant the weight is non-zero.
+	InOutRotation.Roll = E * ShotRoll;
+
 	if (ShotFov > 0.0f)
 	{
-		InOutFov = FMath::Lerp(InOutFov, ShotFov, Weight);
+		InOutFov = InOutFov + (ShotFov - InOutFov) * E;
 	}
+}
+
+void ElysiumCam::ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
+	const FVector& ShotLocation, const FRotator& ShotRotation, float ShotFov, float Weight)
+{
+	ComposeScriptedShot(InOutLocation, InOutRotation, InOutFov, ShotLocation,
+		ScriptedShotTargetPoint(ShotLocation, ShotRotation),
+		static_cast<float>(ShotRotation.Roll), ShotFov, Weight);
 }
 
 // The weight driver (0x100fc900)
@@ -336,16 +370,6 @@ float ElysiumCam::RemainingTranslationSeconds(float Speed, float MaxSpeed, float
 	return FMath::Abs((PeakSpeed - Speed) / Accel) + FMath::Abs((0.0f - PeakSpeed) / Accel);
 }
 
-// The cine-FOV dev-cvar guard (`FUN_10001c20`, `DAT_102de30c`) — M12. Retail's own name is
-// unrecovered (**RC9**); when RC9 recovers it, the retail name wins and this one retires.
-static TAutoConsoleVariable<float> CVarCameraShotFovOverride(
-	TEXT("elysium.CameraShotFovOverride"),
-	0.0f,
-	TEXT("Dev override for the scripted-shot FOV (retail DAT_102de30c). While it is above the "
-		"guard threshold the shot's own FieldOfView is ignored AND the cached FOV stops being "
-		"written, so the rendered FOV freezes - retail's behaviour, reproduced. 0 = unset."),
-	ECVF_Cheat);
-
 namespace
 {
 	// One axis of `FUN_10001d40` plus its rate solve `FUN_10001c80`. `InOutRate` is the axis' entry in
@@ -451,16 +475,16 @@ void FElysiumScriptedShotTracker::Snap(const FElysiumCameraShot& Shot)
 	bSnapPending = false;
 }
 
-float FElysiumScriptedShotTracker::TrackFov(const FElysiumCameraShot& Shot)
+float FElysiumScriptedShotTracker::TrackFov(const FElysiumCameraShot& Shot, float CameraFovCvar)
 {
-	// The dev-cvar guard, ahead of everything: `if (!cvar.IsCommand() && K < cvar.GetFloat())
-	// return cvar.GetFloat();` with `K = _DAT_101e34f4`. It returns **without writing `m_flCurFov`**,
-	// so the rendered FOV freezes at its previous value instead of following the cvar. That freeze is
-	// retail's behaviour and is reproduced, not smoothed over (M12).
-	const float Override = CVarCameraShotFovOverride.GetValueOnAnyThread();
-	if (FovOverrideThreshold < Override)
+	// The `camera_fov` guard, ahead of everything: `if (!cvar.IsCommand() && 10.0f < cvar.GetFloat())
+	// return cvar.GetFloat();` (`_DAT_101e34f4` = 10.0, RC9). It returns **without writing
+	// `m_flCurFov`**, so the rendered FOV freezes at its previous value instead of following the
+	// cvar. That freeze is retail's behaviour and is reproduced, not smoothed over (M12). The
+	// shipped default is `-1`, so nothing in a stock run takes this arm.
+	if (FovOverrideThreshold < CameraFovCvar)
 	{
-		return Override;
+		return CameraFovCvar;
 	}
 	// A straight copy from the **shot record**, every frame — never a lerp, and never the replicated
 	// `m_flFOV`, which `CamMode == 1` does not consult.
@@ -468,7 +492,8 @@ float FElysiumScriptedShotTracker::TrackFov(const FElysiumCameraShot& Shot)
 	return Fov;
 }
 
-void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float DeltaSeconds)
+void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float DeltaSeconds,
+	float CameraFovCvar)
 {
 	if (!bSeeded)
 	{
@@ -484,7 +509,7 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 	{
 		Dt = FrameDeltaCeiling;
 	}
-	else if (Dt < FrameDeltaFloorThreshold)
+	else if (Dt < FrameDeltaFloor)
 	{
 		Dt = FrameDeltaFloor;
 	}
@@ -583,7 +608,7 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 		Shot.TurnAccel, SyncSeconds, Dt);
 
 	// Third and last of `FUN_10001fa0`'s steps, after position and angles.
-	TrackFov(Shot);
+	TrackFov(Shot, CameraFovCvar);
 }
 
 float ElysiumCam::WidenSourceFov(float SourceFovDegrees, float AspectRatio)
@@ -600,12 +625,102 @@ float ElysiumCam::WidenSourceFov(float SourceFovDegrees, float AspectRatio)
 	return FMath::Clamp(Widened, 1.0f, 170.0f);
 }
 
+const FElysiumCameraShot* FElysiumCameraShotStack::TopCine() const
+{
+	for (int32 i = Shots.Num() - 1; i >= 0; --i)
+	{
+		if (Shots[i].Shot.bCine)
+		{
+			return &Shots[i].Shot;
+		}
+	}
+	return nullptr;
+}
+
+int32 FElysiumCameraShotStack::TopCineId() const
+{
+	for (int32 i = Shots.Num() - 1; i >= 0; --i)
+	{
+		if (Shots[i].Shot.bCine)
+		{
+			return Shots[i].Id;
+		}
+	}
+	return 0;
+}
+
+const FElysiumCameraShot* FElysiumCameraShotStack::TopTrack() const
+{
+	for (int32 i = Shots.Num() - 1; i >= 0; --i)
+	{
+		if (!Shots[i].Shot.bCine)
+		{
+			return &Shots[i].Shot;
+		}
+	}
+	return nullptr;
+}
+
+int32 FElysiumCameraShotStack::TopTrackId() const
+{
+	for (int32 i = Shots.Num() - 1; i >= 0; --i)
+	{
+		if (!Shots[i].Shot.bCine)
+		{
+			return Shots[i].Id;
+		}
+	}
+	return 0;
+}
+
+void FElysiumCameraShotStack::ArmRampIn(float Seconds)
+{
+	const float Duration = FMath::Max(0.0f, Seconds);
+	// Inside the dead band there is no ramp to arm: `|duration| <= 0.01` reads as weight 1 and stays.
+	// A zero-duration arrival is exactly that — a hard cut in.
+	if (Duration <= RampDeadBandSeconds)
+	{
+		RampDuration = 0.0f;
+		RampStartTime = RampNow;
+		return;
+	}
+	// The back-date (`vampire.dll` `FUN_1017d0b0` re-times by moving the start, never by writing the
+	// weight): solve `start` so the regime answers exactly the weight in force right now, which is
+	// what makes a reversal resume instead of restarting.
+	const float Current = GetTrackWeight();
+	RampDuration = Duration;
+	RampStartTime = RampNow - Current * Duration;
+}
+
+void FElysiumCameraShotStack::ArmRampOut(float Seconds)
+{
+	const float Duration = FMath::Max(0.0f, Seconds);
+	// A **release shorter than the dead band is not a fast fade — it is the override going off**, and
+	// retail encodes that as `startTime <= 0` rather than as a duration. Reading it as the dead band's
+	// "weight 1 and stays" would leave a dead camera composed over a player who already has input.
+	if (Duration <= RampDeadBandSeconds)
+	{
+		RampDuration = 0.0f;
+		RampStartTime = 0.0f;
+		return;
+	}
+	const float Current = GetTrackWeight();
+	RampDuration = -Duration;
+	RampStartTime = RampNow - (Current - 1.0f) * RampDuration;
+}
+
 int32 FElysiumCameraShotStack::Push(const FElysiumCameraShot& Shot)
 {
 	FEntry& Entry = Shots.AddDefaulted_GetRef();
 	Entry.Id = NextId++;
 	Entry.Shot = Shot;
-	RampSeconds = Shot.BlendSeconds;
+	// **A cine shot has no ramp.** It is adopted at full weight the instant `m_iCameraOverrideIdx`
+	// changes and the client hard-writes its pose from the next frame; nothing on the channel is
+	// timed, so it must not disturb the track channel's ramp either.
+	if (!Shot.bCine)
+	{
+		ArmRampIn(Shot.BlendSeconds);
+	}
 	return Entry.Id;
 }
 
@@ -616,10 +731,13 @@ bool FElysiumCameraShotStack::Update(int32 Id, const FElysiumCameraShot& Shot)
 		if (Entry.Id == Id)
 		{
 			// The ramp already in flight belongs to the push, not to the refresh: a `Follow` shot
-			// re-resolving its origin every frame must not restart its own blend.
+			// re-resolving its origin every frame must not restart its own blend. Which channel the
+			// shot is on is settled at the push for the same reason.
 			const float Blend = Entry.Shot.BlendSeconds;
+			const bool bCine = Entry.Shot.bCine;
 			Entry.Shot = Shot;
 			Entry.Shot.BlendSeconds = Blend;
+			Entry.Shot.bCine = bCine;
 			return true;
 		}
 	}
@@ -633,15 +751,25 @@ bool FElysiumCameraShotStack::Pop(int32 Id, float BlendOutSeconds)
 	{
 		return false;
 	}
-	const bool bWasTop = Index == Shots.Num() - 1;
+	const bool bWasCine = Shots[Index].Shot.bCine;
 	const float Blend = BlendOutSeconds >= 0.0f
 		? BlendOutSeconds
 		: Shots[Index].Shot.BlendSeconds;
 	Shots.RemoveAt(Index);
-	if (bWasTop)
+
+	// **M1, ruled: the release of a cine shot is a cut.** Retail returns control on the same tick the
+	// camera dies — `SetImmobilized(false)`, the weapon restore and the HUD restore all land on that
+	// frame — and there is no blend field anywhere on `C_BaseCineCamera` to soften it with. So
+	// `BlendOutSeconds` is not consulted, and no cvar exists that could reintroduce one.
+	if (bWasCine)
 	{
-		// Fading out (or handing over to whatever is underneath) takes as long as arriving did.
-		RampSeconds = Blend;
+		return true;
+	}
+	// The track channel: only emptying it starts the blend out. A shot popped from under another
+	// track shot leaves the ramp exactly where it is, because the channel is still owned.
+	if (!TopTrack())
+	{
+		ArmRampOut(Blend);
 	}
 	return true;
 }
@@ -649,8 +777,14 @@ bool FElysiumCameraShotStack::Pop(int32 Id, float BlendOutSeconds)
 void FElysiumCameraShotStack::Clear()
 {
 	Shots.Reset();
-	Weight = 0.0f;
-	RampSeconds = 0.5f;
+	// `startTime <= 0` is retail's "the override is off", which is what a teardown wants: no residual
+	// weight, and no fade left running over a map that is gone.
+	RampStartTime = 0.0f;
+	RampDuration = 0.0f;
+	// The clock restarts with the map. Retail's `curtime` is a float too and resets on a level change;
+	// letting a single-precision accumulator run for hours would coarsen a 0.35 s ramp to its own
+	// resolution, and there is nothing live across a teardown for the reset to disturb.
+	RampNow = 1.0f;
 }
 
 const FElysiumCameraShot* FElysiumCameraShotStack::Find(int32 Id) const
@@ -661,29 +795,51 @@ const FElysiumCameraShot* FElysiumCameraShotStack::Find(int32 Id) const
 
 void FElysiumCameraShotStack::Advance(float DeltaSeconds)
 {
-	const float Dt = FMath::Max(0.0f, DeltaSeconds);
-	const float Target = Shots.Num() > 0 ? 1.0f : 0.0f;
+	// The clock, and nothing else. `FUN_100fc900` recomputes the weight from `engine->GetCurTime()`
+	// and the two stored fields every frame rather than integrating it, which is why re-timing a fade
+	// is a write to `startTime` and never a write to the weight.
+	RampNow += FMath::Max(0.0f, DeltaSeconds);
+}
 
-	// A *timed* ramp, not the toggle's fixed rate: a scripted camera is given a duration, which is
-	// what makes a cutscene's cut land on the beat it was authored for.
-	if (RampSeconds <= 0.0f)
+float FElysiumCameraShotStack::GetTrackWeight() const
+{
+	// `FUN_100fc900`'s tail, in its own order.
+	if (RampStartTime <= 0.0f)
 	{
-		Weight = Target;
-		return;
+		return 0.0f;
 	}
-	const float Rate = 1.0f / RampSeconds;
-	Weight = Target > Weight
-		? FMath::Min(Target, Weight + Rate * Dt)
-		: FMath::Max(Target, Weight - Rate * Dt);
+	float W = 1.0f;
+	if (RampDuration > RampDeadBandSeconds)
+	{
+		W = (RampNow - RampStartTime) / RampDuration;
+	}
+	else if (RampDuration < -RampDeadBandSeconds)
+	{
+		W = 1.0f + (RampNow - RampStartTime) / RampDuration;
+	}
+	// Otherwise `|duration| <= 0.01`: the weight stays at the 1 written above — a hard cut in.
+	const float Clamped = FMath::Clamp(W, 0.0f, 1.0f);
+
+	// The clock is accumulated from frame deltas rather than read, so a ramp that has just finished
+	// can land a float epsilon short of its endpoint. Snapping that last epsilon is what keeps
+	// "the channel is idle" and "the shot is fully arrived" boolean rather than thresholds — a
+	// residual 6e-8 of weight is a dead camera still composed over a live player.
+	if (Clamped <= UE_KINDA_SMALL_NUMBER)
+	{
+		return 0.0f;
+	}
+	return Clamped >= 1.0f - UE_KINDA_SMALL_NUMBER ? 1.0f : Clamped;
 }
 
 FString FElysiumCameraShotStack::Describe() const
 {
+	const float Weight = GetWeight();
 	if (Shots.Num() == 0)
 	{
 		return FString::Printf(TEXT("no shot (weight %.2f)"), Weight);
 	}
-	FString Out = FString::Printf(TEXT("weight %.2f, %d shot(s):"), Weight, Shots.Num());
+	FString Out = FString::Printf(TEXT("weight %.2f (cine %d, track %.2f), %d shot(s):"),
+		Weight, TopCine() != nullptr ? 1 : 0, GetTrackWeight(), Shots.Num());
 	for (int32 i = Shots.Num() - 1; i >= 0; --i)
 	{
 		Out += FString::Printf(TEXT("\n  %s#%d %s  origin %s  fov %.1f"),
@@ -730,6 +886,9 @@ TArrayView<const ElysiumCam::FCvarDef> ElysiumCam::CvarDefs()
 		{ TEXT("cl_waterdist"),           TEXT("4"),   TEXT("clearance the view keeps from the water plane, Source units") },
 		{ TEXT("default_fov"),            TEXT("75"),  TEXT("player horizontal field of view at the 4:3 reference (Hor+)") },
 		{ TEXT("viewmodel_fov"),          TEXT("54"),  TEXT("first-person viewmodel field of view at the 4:3 reference") },
+		{ TEXT("camera_fov"),             TEXT("-1"),  TEXT("dev: above 10, the scripted-shot FOV FREEZES rather than following it (M12)") },
+		{ TEXT("c_orthowidth"),           TEXT("100"), TEXT("archive -- camortho view width, Source units") },
+		{ TEXT("c_orthoheight"),          TEXT("100"), TEXT("archive -- camortho view height, Source units") },
 		{ TEXT("c_mindistance"),          TEXT("30"),  TEXT("boom length clamp, minimum") },
 		{ TEXT("c_maxdistance"),          TEXT("200"), TEXT("boom length clamp, maximum") },
 		{ TEXT("c_minpitch"),             TEXT("0"),   TEXT("orbit pitch clamp, minimum") },
@@ -786,6 +945,14 @@ void FElysiumCameraCvars::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 	// here; `ElysiumCam::WidenSourceFov` widens them to the window at the point of use.
 	DefaultFov   = FMath::Clamp(Num(TEXT("default_fov"), 75.0f), 20.0f, 120.0f);
 	ViewmodelFov = FMath::Clamp(Num(TEXT("viewmodel_fov"), 54.0f), 20.0f, 120.0f);
+
+	// `camera_fov` is **not** clamped like the two above: retail reads it raw and compares it against
+	// 10, and its own default `-1` is outside any sane FOV range on purpose — it is the "unset" value.
+	CameraFov = Num(TEXT("camera_fov"), -1.0f);
+
+	// The `camortho` rect, Source units in, cm out.
+	OrthoWidth  = FMath::Max(0.0f, Num(TEXT("c_orthowidth"), 100.0f) * ElysiumCam::U);
+	OrthoHeight = FMath::Max(0.0f, Num(TEXT("c_orthoheight"), 100.0f) * ElysiumCam::U);
 
 	bDampOn            = Flag(TEXT("cdamp_on"), true);
 	HookesConstant     = Num(TEXT("cdamp_hookesconstant"), 4.0f);

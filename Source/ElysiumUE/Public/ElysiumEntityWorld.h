@@ -13,6 +13,8 @@
 #include "ElysiumVariant.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumWorldServices.h"
+// By value: the world owns the `camera_track` override channel, retail's `CBasePlayer` fade state.
+#include "Substrate/ElysiumCameraOverride.h"
 
 struct FElysiumSignData;
 struct FElysiumLootView;
@@ -33,6 +35,25 @@ class UPhysicsConstraintComponent;
 class UPrimitiveComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class FElysiumEntityWorld;
+
+// The world's side of the override channel's two outbound needs: turning an EHANDLE into the
+// entity's camera-source interface (`handleLive` + the slot-46..53 vtable) and dropping the live
+// cine shot when the VIEW entity is set. Held by value on the world so the channel never stores a
+// world pointer of its own — the whole point of the interface is that the channel is assertable
+// with a hand-built resolver and no world at all.
+class FElysiumWorldCameraOverrideResolver final : public IElysiumCameraOverrideResolver
+{
+public:
+	explicit FElysiumWorldCameraOverrideResolver(FElysiumEntityWorld* InWorld) : World(InWorld) {}
+
+	virtual IElysiumCameraOverrideSource* ResolveCameraOverrideSource(
+		const FElysiumEntityHandle& Handle) const override;
+	virtual void ClearCineCamera() override;
+
+private:
+	FElysiumEntityWorld* World = nullptr;
+};
 
 // The substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
 // dies with it. It parses `.ents` into live entities, indexes them by name and class, and routes
@@ -490,6 +511,20 @@ public:
 		return bTargetRole ? TrackCameraTargetOwner : TrackCameraPositionOwner;
 	}
 
+	// `CBaseCombatCharacter::SetAsCameraTarget`'s broadcast hop (`0x1000a2d6` -> `FUN_1017d460`):
+	// push an entity onto the override channel's TARGET slot with the caller's crossfade, which is
+	// always 0.0 from that path. Unlike the view slot this does NOT cancel a live cine shot.
+	void SetCameraOverrideTarget(const FElysiumEntityHandle& Entity, float Crossfade);
+
+	// The `camera_track` override channel — the mark/signed-duration pair, the two slots and the
+	// outgoing crossfade stack. `PublishTrackCamera` is its only per-frame driver; retail composes
+	// it from `CHL2_Player::SetupVisibility` instead.
+	const FElysiumCameraOverrideChannel& CameraOverrideChannel() const { return TrackCameraOverride; }
+	FElysiumCameraOverrideChannel& CameraOverrideChannelMutable() { return TrackCameraOverride; }
+	// The resolver the channel reaches entities and the cine slot through. Handed out so a caller
+	// that needs to query the weight on its own frame does not have to build one.
+	IElysiumCameraOverrideResolver& CameraOverrideResolver();
+
 	// The game-state subsystem (the `G`/quest store, player sheet, script host). Outlives the world.
 	UElysiumGameStateSubsystem* GetGameState() const { return GameState; }
 
@@ -900,6 +935,9 @@ private:
 	FRotator TrackCameraRotation = FRotator::ZeroRotator;
 	float TrackCameraRoll = 0.0f;
 	float TrackCameraFov = 0.0f;
+	// Retail's `CBasePlayer` fade machinery, one instance per world because the port has one player.
+	FElysiumCameraOverrideChannel TrackCameraOverride;
+	FElysiumWorldCameraOverrideResolver TrackCameraOverrideResolver{ this };
 
 	FElysiumEntityHandle OpenSignOwner;
 	double OpenSignTime = 0.0;
