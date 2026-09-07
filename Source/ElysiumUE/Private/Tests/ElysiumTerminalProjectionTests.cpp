@@ -23,6 +23,7 @@
 #include "GameFramework/Actor.h"
 #include "Misc/App.h"
 #include "Tests/AutomationCommon.h"
+#include "UI/ElysiumTerminalCells.h"
 #include "UI/ElysiumTerminalProjection.h"
 #include "UI/ElysiumTerminalScreen.h"
 
@@ -314,6 +315,45 @@ bool FElysiumTerminalProjectionRedrawTest::RunTest(const FString&)
 	Presentation->RedrawTerminalProjections(State);
 	TestEqual(TEXT("a serial-0 terminal view is not a live session and is not drawn as one"),
 		HeldGlass->DrawCount, 1);
+
+	// --- the typed line is part of the picture ---------------------------------------------------
+	// Retail composes the local line into the CLIENT's own cell buffer before rasterizing
+	// (`FUN_100c6d50` -> `FUN_100c8060`, §8.1/TERM13), so a keystroke changes the glass without
+	// moving any authority revision. The draft is therefore the second half of the redraw gate.
+	State.Terminal.SessionSerial = 5;
+	State.Terminal.Revision = 12;
+	State.Terminal.CursorRow = 23;
+	State.Terminal.CursorColumn = 1;
+	State.Terminal.RightMargin = 1;
+	State.Terminal.Cells.Init(static_cast<uint16>(0x80 | ' '),
+		State.Terminal.Columns * State.Terminal.Rows);
+	Presentation->SetTerminalDraft(Held, FString());
+	Presentation->RedrawTerminalProjections(State);
+	const int32 AfterRevision = HeldGlass->DrawCount;
+	TestEqual(TEXT("the moved revision drew once"), AfterRevision, 2);
+
+	Presentation->SetTerminalDraft(Held, TEXT("cho"));
+	TestTrue(TEXT("a keystroke needs a redraw even though the revision did not move"),
+		HeldGlass->NeedsRedraw(State.Terminal, TEXT("cho")));
+	Presentation->RedrawTerminalProjections(State);
+	TestEqual(TEXT("and it redrew"), HeldGlass->DrawCount, AfterRevision + 1);
+	TestEqual(TEXT("consuming the draft"), HeldGlass->DrawnDraft, FString(TEXT("cho")));
+	Presentation->RedrawTerminalProjections(State);
+	TestEqual(TEXT("the same draft on the same revision draws nothing more"),
+		HeldGlass->DrawCount, AfterRevision + 1);
+
+	// The composition itself: that draft on that grid puts the characters on the cursor row.
+	const ElysiumTerminalCells::FElysiumTerminalComposed Composed =
+		ElysiumTerminalCells::ComposeDraft(State.Terminal, TEXT("cho"));
+	TestTrue(TEXT("the draft is composed onto the glass"), Composed.bDraftDrawn);
+	TestEqual(TEXT("at the authority cursor"), Composed.RowText(23).Mid(1, 3),
+		FString(TEXT("cho")));
+
+	// A draft belonging to another terminal never reaches this one's glass.
+	Presentation->SetTerminalDraft(Idle, TEXT("elsewhere"));
+	Presentation->RedrawTerminalProjections(State);
+	TestEqual(TEXT("the held glass drops a draft addressed to another terminal"),
+		HeldGlass->DrawnDraft, FString());
 
 	Presentation->ReleaseAllTerminalProjections();
 	return true;

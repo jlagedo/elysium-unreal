@@ -718,6 +718,12 @@ void UElysiumPlayerUISubsystem::ShowTerminal(const FElysiumTerminalView& Termina
 			UElysiumTerminalScreen* Screen = CastChecked<UElysiumTerminalScreen>(&Widget);
 			Screen->ApplyTerminal(Terminal);
 			Screen->OnCommand.BindUObject(this, &UElysiumPlayerUISubsystem::OnTerminalCommand);
+			Screen->OnCharacter.BindUObject(this, &UElysiumPlayerUISubsystem::OnTerminalCharacter);
+			Screen->OnAcknowledge.BindUObject(this,
+				&UElysiumPlayerUISubsystem::OnTerminalAcknowledge);
+			Screen->OnQuit.BindUObject(this, &UElysiumPlayerUISubsystem::OnTerminalQuit);
+			Screen->OnBreak.BindUObject(this, &UElysiumPlayerUISubsystem::OnTerminalBreak);
+			Screen->OnDraft.BindUObject(this, &UElysiumPlayerUISubsystem::OnTerminalDraft);
 			Screen->ConfigureScreenPolicy(EElysiumUIScreenKind::Terminal);
 		}));
 	if (!TerminalScreen)
@@ -759,6 +765,12 @@ void UElysiumPlayerUISubsystem::HideTerminal()
 		RemoveWidget(EElysiumUILayer::GameModal, TerminalScreen);
 		TerminalScreen = nullptr;
 	}
+	// The third of the draft's three clears: the keyboard is gone, so the glass must stop showing
+	// a line nobody is typing any more.
+	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+	{
+		Presentation->SetTerminalDraft(FElysiumEntityHandle::Invalid(), FString());
+	}
 	ShownTerminalOwner = FElysiumEntityHandle::Invalid();
 	ShownTerminalSerial = 0;
 	ShownTerminalRevision = 0;
@@ -787,7 +799,74 @@ bool UElysiumPlayerUISubsystem::OnTerminalCommand(
 	{
 		// The substrate closes synchronously. Release UI-only input immediately; publication remains
 		// the repair path for scripted closure and replacement.
-		HideTerminal();
+		//
+		// `quit` is one string with two authority behaviours (§9): at the directory prompt it is
+		// builtin 33 and releases the player, at a password prompt it is `FUN_10217f50`'s cancel and
+		// the session stays live. Asking the world whether the session survived is the only correct
+		// test, and the next publish does exactly that — so a cancel re-opens the screen on the very
+		// next frame rather than tearing it down here.
+		if (!Presentation->IsTerminalSessionOpen())
+		{
+			HideTerminal();
+		}
 	}
 	return true;
+}
+
+bool UElysiumPlayerUISubsystem::OnTerminalCharacter(
+	const FElysiumEntityHandle& Owner, uint32 SessionSerial, TCHAR Character)
+{
+	UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get();
+	if (!Presentation)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("terminal UI character failed: presentation subsystem is unavailable "
+				"(owner %s serial %u)"), *Owner.ToString(), SessionSerial);
+		return false;
+	}
+	return Presentation->SubmitCharacter(Owner, SessionSerial, Character);
+}
+
+bool UElysiumPlayerUISubsystem::OnTerminalAcknowledge(
+	const FElysiumEntityHandle& Owner, uint32 SessionSerial)
+{
+	UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get();
+	if (!Presentation)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("terminal UI acknowledge failed: presentation subsystem is unavailable "
+				"(owner %s serial %u)"), *Owner.ToString(), SessionSerial);
+		return false;
+	}
+	return Presentation->Acknowledge(Owner, SessionSerial);
+}
+
+bool UElysiumPlayerUISubsystem::OnTerminalQuit(
+	const FElysiumEntityHandle& Owner, uint32 SessionSerial)
+{
+	// The literal `hackcmd quit`, and the same close-on-release rule as a typed one.
+	return OnTerminalCommand(Owner, SessionSerial, TEXT("quit"));
+}
+
+bool UElysiumPlayerUISubsystem::OnTerminalBreak(
+	const FElysiumEntityHandle& Owner, uint32 SessionSerial)
+{
+	UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get();
+	if (!Presentation)
+	{
+		UE_LOG(LogElysiumPlayerUI, Warning,
+			TEXT("terminal UI break failed: presentation subsystem is unavailable "
+				"(owner %s serial %u)"), *Owner.ToString(), SessionSerial);
+		return false;
+	}
+	return Presentation->Break(Owner, SessionSerial);
+}
+
+void UElysiumPlayerUISubsystem::OnTerminalDraft(
+	const FElysiumEntityHandle& Owner, const FString& Draft)
+{
+	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+	{
+		Presentation->SetTerminalDraft(Owner, Draft);
+	}
 }

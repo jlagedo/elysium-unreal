@@ -96,8 +96,17 @@ private:
 	void ReconcileTerminal(const struct FElysiumTerminalView& Terminal);
 	void ShowTerminal(const struct FElysiumTerminalView& Terminal);
 	void HideTerminal();
+	// The five `hackcmd` intents, each forwarded to the matching chokepoint on the presentation
+	// subsystem so owner, serial and the live use session are re-resolved every time.
 	bool OnTerminalCommand(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
 		const FString& Command);
+	bool OnTerminalCharacter(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
+		TCHAR Character);
+	bool OnTerminalAcknowledge(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
+	bool OnTerminalQuit(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
+	bool OnTerminalBreak(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
+	// The local line, mirrored onto the monitor's glass rather than submitted.
+	void OnTerminalDraft(const FElysiumEntityHandle& Owner, const FString& Draft);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UElysiumHUDModel> Model;

@@ -290,6 +290,9 @@ public:
 	void EnterAcknowledge() { EnterLineEdit(); HackFlags |= FlagAcknowledge; }
 	// `FUN_10218820` — the `InfoCtrl` usermessage (§8.4).
 	void SetHudHint(int32 Type, int32 Value);
+	// The hint as the client's `InfoCtrl` handler resolves it (§8.4), so the HUD draws a line rather
+	// than re-deriving one from a type byte. Empty = hidden.
+	FString HudHintLine() const;
 	// `FUN_101f5950` on the entity's soundgroup: `access`, `accept`, `error`, `typing` (§14).
 	void PlayCue(const TCHAR* Cue);
 	// The stable audio-owner id every cue is submitted under, and the one the exit's stop-by-owner

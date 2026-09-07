@@ -85,6 +85,13 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FLinearColor Fade = FLinearColor::Transparent;
 
+	// The terminal's `InfoCtrl` line (`docs/vtmb/computer-terminals.md` §8.4), drawn bottom-centre
+	// while a hacking session raises one. Retail's client resolves the type byte into a
+	// `Hacking_Strings` entry and draws it in the HUD font; the authority resolves it here, so this
+	// is already the finished line and empty means the hint is down.
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	FText TerminalHint;
+
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FElysiumHUDEquipmentView Equipment;
 

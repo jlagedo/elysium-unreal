@@ -85,6 +85,10 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	default:                                 Reticle = EElysiumHUDReticle::None; break;
 	}
 	Fade = View.Fade;
+	// Only a LIVE session raises the hint: an idle terminal's view carries serial 0 and no session
+	// half at all, and the published line is already empty on every hidden arm (types 0 and 2).
+	TerminalHint = View.Terminal.IsOpen() && !View.Terminal.HudHintText.IsEmpty()
+		? FText::FromString(View.Terminal.HudHintText) : FText::GetEmpty();
 
 	// Disciplines have no production owner. Invalid is the contract, not a zero-valued fake
 	// item. The preview branch below is compiled in every config so this value type remains

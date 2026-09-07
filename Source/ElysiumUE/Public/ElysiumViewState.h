@@ -308,16 +308,37 @@ struct FElysiumTerminalView
 	TArray<FString> ScreenRows;
 	int32 CursorRow = 0;
 	int32 CursorColumn = 0;
+	// The screen's right margin (`+0xe84`) and current style byte (`+0xe74`). Both are client state
+	// in retail, and both are what the LOCAL line editor composes with: `0x100c7090` refuses to draw
+	// the typed line at all unless `cursorColumn + length < columns - rightMargin`, and its put-char
+	// stamps each character with the current style. The authority owns the buffer here, so it
+	// publishes them rather than letting presentation guess.
+	int32 RightMargin = 0;
+	uint8 CellStyle = 0x80;
+	// `m_nColorScheme` (`DT_BaseTerminal` `+0x818`, `FUN_102173e0`), clamped to `[0, 3]` — the range
+	// the client's rasterizer reads its four palette records at `0x10233378` with (`client+0xf08`,
+	// §8.3). Glass state, so an idle monitor carries it too.
+	int32 ColorScheme = 0;
 	// EElysiumTerminalInputMode: 0 line, 1 password, 2 acknowledge, 3 raw character.
 	uint8 InputMode = 0;
-	int32 MaxInput = 16;
+	// `m_nMaxInput`, zeroed by `CBaseTerminal::Spawn` `0x10217880` and raised by no shipped body.
+	// **Zero or less means UNLIMITED**, exactly as the client's two input paths read it
+	// (`if (m_nMaxInput != 0 && strlen(line) >= m_nMaxInput) return;`, `0x100c7090` and
+	// `FUN_100c6d50`). The router's own 16-byte cap is a separate, authority-side truncation.
+	int32 MaxInput = 0;
 	bool bDigitsOnly = false;
-	bool bAcceptsDirectoryKeys = true;
+	// `m_bAllowDirKeys` (`+0x824`). Zeroed at `CBaseTerminal::Spawn` and written NOWHERE else in
+	// vampire.dll, so arrows / Home / End move no cursor on any retail terminal or keypad.
+	bool bAcceptsDirectoryKeys = false;
 	// The `InfoCtrl` HUD hint (§8.4): 0 hidden, 3 "Press CTRL-C to use the Hacking feat",
 	// 5 "Making hack attempt at skill <value>", 6 "Skill too low ... difficulty <value>". The HUD
 	// draws it bottom-centre in the project's own type.
 	int32 HudHintType = 0;
 	int32 HudHintValue = 0;
+	// The resolved line the HUD draws, assembled by the authority through the same
+	// `Hacking_Strings` table the screen draws with (type 3 -> index 0; 4 -> 37 + value;
+	// 5 -> 40 + value; 6 -> 38 + value; 0/2 -> empty). Empty means the hint is hidden.
+	FString HudHintText;
 	TArray<FElysiumTerminalActionView> Actions;
 
 	// A LIVE session. An idle projection carries the same owner and the same grid with serial 0

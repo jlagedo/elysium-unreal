@@ -803,6 +803,18 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		]
 	];
 
+	// The terminal's `InfoCtrl` line. Retail draws it as one bottom-centre line in the HUD font
+	// (`FUN_10055d30`, §8.4, visible in `03-password-prompt.png`); this is that line in the
+	// project's own type. It shares the sneak cluster's band because a terminal session immobilizes
+	// the pawn (`FElysiumTerminal::BeginPlayerUse`), so the two can never be up together.
+	Content->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(FMargin(0, 0, 0, 96))
+	[
+		SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::Bone)
+		.Visibility_Lambda([M]() { return M && !M->TerminalHint.IsEmpty()
+			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+		.Text_Lambda([M]() { return M ? M->TerminalHint : FText::GetEmpty(); })
+	];
+
 	TSharedRef<SCanvas> RadialCanvas = SNew(SCanvas);
 	for (int32 Index = 0; Index < RadialSlotCount; ++Index)
 	{

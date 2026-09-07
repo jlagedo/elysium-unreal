@@ -212,6 +212,17 @@ bool FElysiumTerminalRouterTest::RunTest(const FString&)
 	TestEqual(TEXT("with the directory's own difficulty"), View.HudHintValue, 1);
 	TestEqual(TEXT("the failed bypass counted an attempt"), Terminal->DirectoryAttempts[0], 2);
 
+	// --- `break` is only the password arm's word. At the directory prompt it is not a builtin, not
+	// a subdirectory and not a function, so it falls through to the invalid-command body — which is
+	// exactly what `AcceptCmd` does, because the `hackcmd break` test lives inside the
+	// password-pending arm and nowhere else.
+	TestTrue(TEXT("break at the directory prompt is accepted by the router"), Submit(TEXT("break")));
+	TestEqual(TEXT("and is an invalid command there, not a bypass"), Terminal->InputMode(),
+		EElysiumTerminalInputMode::Acknowledge);
+	TestTrue(TEXT("the invalid-command prompt is consumed"), Submit(TEXT("")));
+	TestEqual(TEXT("leaving the player typing again"), Terminal->InputMode(),
+		EElysiumTerminalInputMode::Line);
+
 	// --- The middle arm's string order: builtins first, then names, then invalid.
 	TestTrue(TEXT("help is a builtin"), Submit(TEXT("help")));
 	TestEqual(TEXT("help leaves the player typing"), Terminal->InputMode(),
@@ -253,6 +264,139 @@ bool FElysiumTerminalRouterTest::RunTest(const FString&)
 	TestFalse(TEXT("quit at the directory prompt releases the player"),
 		World.BuildTerminalView(View));
 	TestFalse(TEXT("and the spent serial submits nothing"), Submit(TEXT("list")));
+	return true;
+}
+
+// The `InfoCtrl` HUD hint (`docs/vtmb/computer-terminals.md` §8.4), end to end: the six producers
+// `thunk_FUN_10218820` has, the type byte each sends, and the `Hacking_Strings` line the client's
+// handler `FUN_10055d30` resolves it into. The authority resolves that line here, so what the HUD
+// draws is already finished text and the widget layer has no table lookup of its own.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalHudHintTest,
+	"Elysium.Substrate.TerminalHudHint", GRouterFlags)
+bool FElysiumTerminalHudHintTest::RunTest(const FString&)
+{
+	using namespace ElysiumHackingStrings;
+
+	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	State->SetScriptHost(MakeUnique<FElysiumRouterScriptHost>());
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__terminal_hudhint__");
+	FElysiumEntityDef TerminalDef;
+	TerminalDef.Classname = TEXT("prop_hacking");
+	TerminalDef.TargetName = TEXT("terminal");
+	TerminalDef.Keys.Add(TEXT("start_enabled"), TEXT("1"));
+	TerminalDef.Keys.Add(TEXT("difficulty"), TEXT("3"));
+	TerminalDef.Keys.Add(TEXT("skilltype"), TEXT("2"));
+	// `colorscheme` is parsed, clamped `[0, 3]` at Spawn and published on the view; nine is the
+	// out-of-range case the client's rasterizer would have clamped at `+0xf08`.
+	TerminalDef.Keys.Add(TEXT("colorscheme"), TEXT("9"));
+	Defs.Defs.Add(MoveTemp(TerminalDef));
+
+	FElysiumRecordingServices Services;
+	Services.StandTerminalScreen();
+	FElysiumEntityWorld World(nullptr, State, Services.Bundle());
+	AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+
+	FElysiumEntity* Entity = World.FindByName(TEXT("terminal"));
+	FElysiumTerminal* Base = Entity ? Entity->AsTerminal() : nullptr;
+	if (!TestNotNull(TEXT("the terminal resolves"), Base))
+	{
+		return false;
+	}
+	TestEqual(TEXT("an out-of-range colorscheme is clamped at spawn"), Base->ColorScheme, 3);
+
+	FElysiumPropHacking* Terminal = static_cast<FElysiumPropHacking*>(Base);
+	Terminal->InstallDefinition(RouterDefinition());
+	Terminal->InputEnable();
+	if (!TestEqual(TEXT("+use opens the session"),
+		World.BeginPlayerUseSession(Terminal->Handle, Player).Outcome,
+		EElysiumUseOutcome::SessionStarted))
+	{
+		return false;
+	}
+	const uint32 Serial = Terminal->SessionSerial;
+	auto Submit = [&](const TCHAR* Command)
+	{
+		return World.SubmitTerminalCommand(Terminal->Handle, Serial, Command);
+	};
+	FElysiumTerminalView View;
+	auto Advance = [&](double To)
+	{
+		for (int32 Guard = 0; Guard < 4096 && State->GameClock().GetNow() < To; ++Guard)
+		{
+			State->TimeControl().AdvanceFrame(FMath::Min(0.1, To - State->GameClock().GetNow()));
+			World.Tick(State->GameClock().GetNow());
+		}
+	};
+
+	// --- the glass half is published whether or not a session is open ----------------------------
+	TestTrue(TEXT("the live view publishes"), World.BuildTerminalView(View));
+	TestEqual(TEXT("the clamped colour scheme reaches the view"), View.ColorScheme, 3);
+	TestFalse(TEXT("m_bAllowDirKeys is published false, as Spawn leaves it"),
+		View.bAcceptsDirectoryKeys);
+	TestEqual(TEXT("m_nMaxInput is published as Spawn leaves it: unlimited"), View.MaxInput, 0);
+
+	// --- entry raises nothing: `FUN_1021a1c0` is not one of the six hint producers ---------------
+	TestEqual(TEXT("entry raises no hint"), View.HudHintType, 0);
+	TestTrue(TEXT("so the hint line is empty"), View.HudHintText.IsEmpty());
+
+	// --- the password prompt raises type 3 on EVERY render, first and retry -----------------------
+	TestTrue(TEXT("a locked directory is reached by name"), Submit(TEXT("vault")));
+	TestTrue(TEXT("the first prompt publishes"), World.BuildTerminalView(View));
+	TestEqual(TEXT("the FIRST password prompt raises InfoCtrl type 3"), View.HudHintType, 3);
+	TestEqual(TEXT("resolved through Hacking_Strings index 0"), View.HudHintText,
+		Get(&World, PressHackKey));
+	TestFalse(TEXT("and that line is not empty"), View.HudHintText.IsEmpty());
+
+	TestTrue(TEXT("a wrong password is accepted"), Submit(TEXT("wrong")));
+	TestTrue(TEXT("the retry prompt publishes"), World.BuildTerminalView(View));
+	TestEqual(TEXT("the RETRY prompt raises it again"), View.HudHintType, 3);
+	TestEqual(TEXT("with the same line"), View.HudHintText, Get(&World, PressHackKey));
+
+	// --- the cracking buffer raises type 5 with the rating ----------------------------------------
+	TestTrue(TEXT("break starts the skill bypass"), Submit(TEXT("break")));
+	TestTrue(TEXT("the cracking view publishes"), World.BuildTerminalView(View));
+	TestEqual(TEXT("the bypass raises InfoCtrl type 5"), View.HudHintType, 5);
+	TestEqual(TEXT("index 40 plus the rating"), View.HudHintText,
+		Get(&World, MakingHackAttempt) + FString::FromInt(View.HudHintValue));
+
+	// --- the skill-blocked arm raises type 6 with the difficulty ----------------------------------
+	Advance(5.5);
+	TestTrue(TEXT("the failed bypass leaves the session open"), World.BuildTerminalView(View));
+	TestEqual(TEXT("the skill arm raises InfoCtrl type 6"), View.HudHintType, 6);
+	TestEqual(TEXT("carrying the entity's difficulty"), View.HudHintValue, 3);
+	TestEqual(TEXT("index 38 plus that difficulty"), View.HudHintText,
+		Get(&World, SkillInsufficient) + FString::FromInt(3));
+
+	// --- and the NEXT accepted line hides it (`AcceptCmd` sends type 2 before either router) ------
+	TestTrue(TEXT("a line is accepted"), Submit(TEXT("list")));
+	TestTrue(TEXT("the redraw publishes"), World.BuildTerminalView(View));
+	TestEqual(TEXT("the next accepted line hides the hint"), View.HudHintType, 0);
+	TestTrue(TEXT("so its line is empty again"), View.HudHintText.IsEmpty());
+
+	// --- type 4 has no terminal producer, but the resolver still answers for it -------------------
+	Terminal->SetHudHint(4, 7);
+	TestTrue(TEXT("the type-4 view publishes"), World.BuildTerminalView(View));
+	TestEqual(TEXT("index 37 plus the value"), View.HudHintText,
+		Get(&World, DifficultyLabel) + FString::FromInt(7));
+	// Types 0 and 2 both hide, and hiding zeroes the value too.
+	Terminal->SetHudHint(2, 99);
+	TestTrue(TEXT("the hidden view publishes"), World.BuildTerminalView(View));
+	TestEqual(TEXT("type 2 hides"), View.HudHintType, 0);
+	TestEqual(TEXT("and drops the value with it"), View.HudHintValue, 0);
+	TestTrue(TEXT("leaving no line"), View.HudHintText.IsEmpty());
+
+	// --- exit hides it, before the user handle is released -----------------------------------------
+	Terminal->SetHudHint(3, 0);
+	World.EndPlayerUseSession(Terminal->Handle, EElysiumUseEndReason::Released);
+	TestFalse(TEXT("the session is closed"), World.BuildTerminalView(View));
+	TestEqual(TEXT("and the exit hid the hint on the way out"), Terminal->HudHintType, 0);
+	TestTrue(TEXT("so nothing resolves"), Terminal->HudHintLine().IsEmpty());
 	return true;
 }
 

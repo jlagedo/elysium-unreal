@@ -1,6 +1,7 @@
 #include "UI/ElysiumTerminalScreen.h"
 
 #include "UI/ElysiumActionButton.h"
+#include "UI/ElysiumTerminalInputWidget.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "InputCoreTypes.h"
@@ -32,12 +33,12 @@ void UElysiumTerminalScreen::ApplyTerminal(const FElysiumTerminalView& InTermina
 	{
 		return;
 	}
-	const bool bInputModeChanged = Terminal.InputMode != InTerminal.InputMode;
 	const bool bChanged = bNewSession || Terminal.Revision != InTerminal.Revision;
 	Terminal = InTerminal;
-	if (bNewSession || bInputModeChanged)
+	if (TerminalInput)
 	{
-		SetDraftText(FString());
+		// The leaf owns the draft and its own three clears (new session, mode change, explicit).
+		TerminalInput->SetSession(Terminal);
 	}
 	if (bChanged && GetCachedWidget().IsValid())
 	{
@@ -45,50 +46,33 @@ void UElysiumTerminalScreen::ApplyTerminal(const FElysiumTerminalView& InTermina
 	}
 }
 
-void UElysiumTerminalScreen::SetDraftText(const FString& Text)
-{
-	if (!CommandEntry)
-	{
-		return;
-	}
-	const int32 Limit = FMath::Max(0, Terminal.MaxInput);
-	const FString Clamped = Text.Left(Limit);
-	bUpdatingDraft = true;
-	CommandEntry->SetText(FText::FromString(Clamped));
-	bUpdatingDraft = false;
-}
-
 FString UElysiumTerminalScreen::GetDraftText() const
 {
-	return CommandEntry ? CommandEntry->GetText().ToString() : FString();
+	return TerminalInput ? TerminalInput->GetDraft() : FString();
 }
 
 bool UElysiumTerminalScreen::SubmitDraft()
 {
-	const FString Command = Terminal.InputMode == 2 ? FString() : GetDraftText();
-	return SubmitCommand(Command);
-}
-
-void UElysiumTerminalScreen::HandleDraftChanged(const FText& Text)
-{
-	if (bUpdatingDraft)
+	if (!Terminal.IsOpen())
 	{
-		return;
+		return false;
 	}
-	const FString Changed = Text.ToString();
-	const int32 Limit = FMath::Max(0, Terminal.MaxInput);
-	if (Changed.Len() > Limit)
+	if (Terminal.InputMode == 2)
 	{
-		SetDraftText(Changed.Left(Limit));
+		// The bare `"hackcmd "`: acknowledge mode accepts an empty command and nothing else.
+		if (!OnAcknowledge.IsBound())
+		{
+			return false;
+		}
+		return OnAcknowledge.Execute(Terminal.Owner, Terminal.SessionSerial);
 	}
-}
-
-void UElysiumTerminalScreen::HandleDraftCommitted(const FText&, ETextCommit::Type CommitMethod)
-{
-	if (CommitMethod == ETextCommit::OnEnter)
+	const FString Draft = GetDraftText();
+	const bool bAccepted = SubmitCommand(Draft);
+	if (bAccepted && TerminalInput)
 	{
-		SubmitDraft();
+		TerminalInput->ClearDraft();
 	}
+	return bAccepted;
 }
 
 bool UElysiumTerminalScreen::SubmitCommand(const FString& Command)
@@ -104,36 +88,51 @@ bool UElysiumTerminalScreen::SubmitCommand(const FString& Command)
 			*Command, *Terminal.Owner.ToString(), Terminal.SessionSerial);
 		return false;
 	}
-	const bool bAccepted = OnCommand.Execute(Terminal.Owner, Terminal.SessionSerial, Command);
-	if (bAccepted)
-	{
-		SetDraftText(FString());
-	}
-	return bAccepted;
+	return OnCommand.Execute(Terminal.Owner, Terminal.SessionSerial, Command);
 }
 
-void UElysiumTerminalScreen::ConfigureEditor()
+void UElysiumTerminalScreen::PublishDraft()
 {
-	if (!CommandEntry)
+	OnDraft.ExecuteIfBound(Terminal.Owner, GetDraftText());
+}
+
+void UElysiumTerminalScreen::BindInputDelegates()
+{
+	if (!TerminalInput)
 	{
 		return;
 	}
-	FEditableTextStyle Style = FCoreStyle::Get().GetWidgetStyle<FEditableTextStyle>(
-		TEXT("NormalEditableText"));
-	Style.SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18));
-	Style.SetColorAndOpacity(FSlateColor(ScreenPhosphor));
-	CommandEntry->SetWidgetStyle(Style);
-	CommandEntry->SetMinimumDesiredWidth(1.0f);
-	CommandEntry->SetClearKeyboardFocusOnCommit(false);
-	CommandEntry->SetSelectAllTextOnCommit(false);
-	CommandEntry->SetRevertTextOnEscape(false);
-	CommandEntry->SetIsPassword(Terminal.InputMode == 1);
-	CommandEntry->SetIsReadOnly(Terminal.InputMode == 2);
-	CommandEntry->SetHintText(Terminal.InputMode == 1
-		? NSLOCTEXT("Elysium", "TerminalPasswordHint", "Password")
-		: Terminal.InputMode == 2
-			? NSLOCTEXT("Elysium", "TerminalAcknowledgeHint", "Press Enter")
-			: NSLOCTEXT("Elysium", "TerminalCommandHint", "Type menu or command"));
+	TerminalInput->OnSubmitLine.BindWeakLambda(this, [this](const FString& Line)
+	{
+		return SubmitCommand(Line);
+	});
+	TerminalInput->OnSubmitCharacter.BindWeakLambda(this, [this](TCHAR Character)
+	{
+		return Terminal.IsOpen() && OnCharacter.IsBound()
+			&& OnCharacter.Execute(Terminal.Owner, Terminal.SessionSerial, Character);
+	});
+	TerminalInput->OnAcknowledge.BindWeakLambda(this, [this]()
+	{
+		if (Terminal.IsOpen() && OnAcknowledge.IsBound())
+		{
+			OnAcknowledge.Execute(Terminal.Owner, Terminal.SessionSerial);
+		}
+	});
+	TerminalInput->OnQuit.BindWeakLambda(this, [this]()
+	{
+		if (Terminal.IsOpen() && OnQuit.IsBound())
+		{
+			OnQuit.Execute(Terminal.Owner, Terminal.SessionSerial);
+		}
+	});
+	TerminalInput->OnBreak.BindWeakLambda(this, [this]()
+	{
+		if (Terminal.IsOpen() && OnBreak.IsBound())
+		{
+			OnBreak.Execute(Terminal.Owner, Terminal.SessionSerial);
+		}
+	});
+	TerminalInput->OnDraftChanged.BindWeakLambda(this, [this]() { PublishDraft(); });
 }
 
 TSharedRef<SWidget> UElysiumTerminalScreen::BuildActionVisual(
@@ -199,12 +198,11 @@ void UElysiumTerminalScreen::RebuildActions()
 	BeginNavigationBuild();
 	SetNavigationGroup(TerminalActions, true, true, true, true);
 	DefaultActionId = NAME_None;
-	ConfigureEditor();
 	BuildTerminalActions();
 	FinalizeNavigationBuild(DefaultActionId);
-	if (IsActivated() && CommandEntry && GetOwningPlayer())
+	if (IsActivated() && TerminalInput && GetOwningPlayer())
 	{
-		CommandEntry->SetUserFocus(GetOwningPlayer());
+		TerminalInput->SetUserFocus(GetOwningPlayer());
 	}
 }
 
@@ -217,21 +215,19 @@ TSharedRef<SWidget> UElysiumTerminalScreen::RebuildWidget()
 			TEXT("terminal UI rebuild has no WidgetTree for %s serial %u"),
 			*Terminal.Owner.ToString(), Terminal.SessionSerial);
 	}
-	else if (!CommandEntry)
+	else if (!TerminalInput)
 	{
-		CommandEntry = WidgetTree->ConstructWidget<UEditableText>(
-			UEditableText::StaticClass(), TEXT("TerminalCommandEntry"));
-		if (CommandEntry)
+		TerminalInput = WidgetTree->ConstructWidget<UElysiumTerminalInputWidget>(
+			UElysiumTerminalInputWidget::StaticClass(), TEXT("TerminalKeyboard"));
+		if (TerminalInput)
 		{
-			CommandEntry->OnTextChanged.AddDynamic(this,
-				&UElysiumTerminalScreen::HandleDraftChanged);
-			CommandEntry->OnTextCommitted.AddDynamic(this,
-				&UElysiumTerminalScreen::HandleDraftCommitted);
+			BindInputDelegates();
+			TerminalInput->SetSession(Terminal);
 		}
 		else
 		{
 			UE_LOG(LogElysiumTerminalUI, Warning,
-				TEXT("terminal UI failed to create its command editor for %s serial %u"),
+				TEXT("terminal UI failed to create its keyboard for %s serial %u"),
 				*Terminal.Owner.ToString(), Terminal.SessionSerial);
 		}
 	}
@@ -244,13 +240,13 @@ TSharedRef<SWidget> UElysiumTerminalScreen::RebuildWidget()
 		.HeightOverride(1.0f)
 		.RenderOpacity(0.0f)
 		[
-			CommandEntry ? CommandEntry->TakeWidget() : SNullWidget::NullWidget
+			TerminalInput ? TerminalInput->TakeWidget() : SNullWidget::NullWidget
 		];
 }
 
 UWidget* UElysiumTerminalScreen::NativeGetDesiredFocusTarget() const
 {
-	return CommandEntry ? CommandEntry : Super::NativeGetDesiredFocusTarget();
+	return TerminalInput ? TerminalInput : Super::NativeGetDesiredFocusTarget();
 }
 
 bool UElysiumTerminalScreen::HandleNavigation(EElysiumNavigationDirection Direction)
@@ -258,7 +254,7 @@ bool UElysiumTerminalScreen::HandleNavigation(EElysiumNavigationDirection Direct
 	const int32 Delta = Direction == EElysiumNavigationDirection::Up
 		|| Direction == EElysiumNavigationDirection::Left ? -1 : 1;
 	// Action visuals live in the render-target Slate tree, outside the viewport focus path. Keep
-	// keyboard focus on the invisible editor while updating the durable semantic selection.
+	// keyboard focus on the invisible keyboard while updating the durable semantic selection.
 	return SelectAdjacentInGroup(TerminalActions, Delta, true, false);
 }
 
@@ -271,22 +267,10 @@ void UElysiumTerminalScreen::HandleSelectedActionChanged(FName, FName)
 FReply UElysiumTerminalScreen::NativeOnPreviewKeyDown(
 	const FGeometry& Geometry, const FKeyEvent& KeyEvent)
 {
-	if (KeyEvent.GetKey() == EKeys::Escape)
-	{
-		if (!KeyEvent.IsRepeat())
-		{
-			SubmitCommand(TEXT("quit"));
-		}
-		return FReply::Handled();
-	}
-	if (KeyEvent.GetKey() == EKeys::C && KeyEvent.IsControlDown())
-	{
-		if (!KeyEvent.IsRepeat())
-		{
-			SubmitCommand(TEXT("break"));
-		}
-		return FReply::Handled();
-	}
+	// Escape and Ctrl+C are NOT intercepted here any more. They are terminal keys with a mode-
+	// dependent meaning in retail's client — Escape sends `hackcmd quit` in line and raw mode but
+	// the bare `"hackcmd "` in acknowledge mode (`0x100c7090`) — and only the focused leaf knows
+	// which mode is live. Handling them at the screen made Escape mean `quit` in every mode.
 	if (KeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Bottom)
 	{
 		if (!KeyEvent.IsRepeat())
@@ -305,7 +289,7 @@ FReply UElysiumTerminalScreen::NativeOnPreviewKeyDown(
 		|| Key == EKeys::Gamepad_DPad_Right || Key == EKeys::Gamepad_LeftStick_Up
 		|| Key == EKeys::Gamepad_LeftStick_Down || Key == EKeys::Gamepad_LeftStick_Left
 		|| Key == EKeys::Gamepad_LeftStick_Right;
-	if (CommandEntry && CommandEntry->HasKeyboardFocus() && !bGamepadNavigation)
+	if (TerminalInput && TerminalInput->HasKeyboardFocus() && !bGamepadNavigation)
 	{
 		// Do not let the navigable-screen W/A/S/D aliases consume ordinary terminal text entry.
 		return UElysiumActivatableScreen::NativeOnPreviewKeyDown(Geometry, KeyEvent);
@@ -315,12 +299,21 @@ FReply UElysiumTerminalScreen::NativeOnPreviewKeyDown(
 
 bool UElysiumTerminalScreen::NativeOnHandleBackAction()
 {
-	SubmitCommand(TEXT("quit"));
+	// The platform back action is Escape's semantic twin, and it carries the same mode split.
+	if (!Terminal.IsOpen())
+	{
+		return true;
+	}
+	FElysiumTerminalIntentDelegate& Intent = Terminal.InputMode == 2 ? OnAcknowledge : OnQuit;
+	if (Intent.IsBound())
+	{
+		Intent.Execute(Terminal.Owner, Terminal.SessionSerial);
+	}
 	return true;
 }
 
 void UElysiumTerminalScreen::ReleaseSlateResources(bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
-	CommandEntry = nullptr;
+	TerminalInput = nullptr;
 }

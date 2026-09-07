@@ -34,6 +34,9 @@ namespace
 	// gone before the next thing the player looks at.
 	constexpr float WeaponPeekHoldSeconds = 1.5f;
 	constexpr float WeaponPeekFadeSeconds = 0.35f;
+
+	// "Nothing is typed on this glass", as a reference the redraw gate can hand to `Draw`.
+	const FString GEmptyTerminalDraft;
 }
 
 // Tick function.
@@ -291,6 +294,52 @@ bool UElysiumPresentationSubsystem::SubmitTerminalCommand(
 	return World && World->SubmitTerminalCommand(Owner, SessionSerial, Command);
 }
 
+bool UElysiumPresentationSubsystem::SubmitCommand(const FElysiumEntityHandle& Owner,
+	uint32 SessionSerial, const FString& Command)
+{
+	return SubmitTerminalCommand(Owner, SessionSerial, Command);
+}
+
+bool UElysiumPresentationSubsystem::SubmitCharacter(const FElysiumEntityHandle& Owner,
+	uint32 SessionSerial, TCHAR Character)
+{
+	// `hackcmd %c` under `m_HackFlags 0x4`: one character, no accumulation, and the router's mail
+	// open state is the only reader that cares that the line is exactly one byte long (§12).
+	return SubmitTerminalCommand(Owner, SessionSerial, FString::Chr(Character));
+}
+
+bool UElysiumPresentationSubsystem::Acknowledge(const FElysiumEntityHandle& Owner,
+	uint32 SessionSerial)
+{
+	// The bare `"hackcmd "` at client `0x102b7210` — the command argument is empty.
+	return SubmitTerminalCommand(Owner, SessionSerial, FString());
+}
+
+bool UElysiumPresentationSubsystem::Quit(const FElysiumEntityHandle& Owner, uint32 SessionSerial)
+{
+	return SubmitTerminalCommand(Owner, SessionSerial, TEXT("quit"));
+}
+
+bool UElysiumPresentationSubsystem::Break(const FElysiumEntityHandle& Owner, uint32 SessionSerial)
+{
+	return SubmitTerminalCommand(Owner, SessionSerial, TEXT("break"));
+}
+
+bool UElysiumPresentationSubsystem::IsTerminalSessionOpen() const
+{
+	const AElysiumMapActor* Map = ResolveMapActor();
+	const FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
+	FElysiumTerminalView Live;
+	return World && World->BuildTerminalView(Live);
+}
+
+void UElysiumPresentationSubsystem::SetTerminalDraft(const FElysiumEntityHandle& Owner,
+	const FString& Draft)
+{
+	TerminalDraftHandle = Owner;
+	TerminalDraftText = Draft;
+}
+
 void UElysiumPresentationSubsystem::RegisterTerminalProjection(
 	const FElysiumEntityHandle& Owner, UPrimitiveComponent* Body)
 {
@@ -362,7 +411,17 @@ void UElysiumPresentationSubsystem::RedrawTerminalProjections(const FElysiumView
 	auto Consider = [this](const FElysiumTerminalView& View)
 	{
 		UElysiumTerminalProjection* Projection = FindTerminalProjection(View.Owner);
-		if (!Projection || !Projection->NeedsRedraw(View))
+		if (!Projection)
+		{
+			return;
+		}
+		// The typed line belongs to the terminal the focused widget is bound to, and to no other
+		// glass on the map.
+		const FString& Draft = View.IsOpen() && TerminalDraftHandle == View.Owner
+			? TerminalDraftText : GEmptyTerminalDraft;
+		// A keystroke moves no authority revision — the local editor is entirely client-side in
+		// retail — so the draft is the second half of the gate.
+		if (!Projection->NeedsRedraw(View, Draft))
 		{
 			return;
 		}
@@ -372,7 +431,7 @@ void UElysiumPresentationSubsystem::RedrawTerminalProjections(const FElysiumView
 		{
 			return;
 		}
-		Projection->Draw(View);
+		Projection->Draw(View, Draft);
 	};
 	// The held session first: it is the one a player is reading.
 	if (State.Terminal.IsOpen())

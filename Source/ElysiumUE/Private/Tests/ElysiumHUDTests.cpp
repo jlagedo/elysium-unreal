@@ -13,7 +13,9 @@
 #include "UI/ElysiumMainMenu.h"
 #include "UI/ElysiumNotificationScreen.h"
 #include "UI/ElysiumSignScreen.h"
+#include "UI/ElysiumTerminalInputWidget.h"
 #include "UI/ElysiumTerminalScreen.h"
+#include "UI/SElysiumTerminalInput.h"
 #include "UI/ElysiumUIRoot.h"
 #include "UI/ElysiumUIStyle.h"
 
@@ -1159,6 +1161,7 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 	FElysiumEntityHandle ReceivedOwner;
 	uint32 ReceivedSerial = 0;
 	FString ReceivedCommand;
+	FString MirroredDraft;
 	int32 SubmissionCount = 0;
 	Screen->OnCommand.BindLambda(
 		[&](const FElysiumEntityHandle& Owner, uint32 Serial, const FString& Command)
@@ -1169,6 +1172,8 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 			++SubmissionCount;
 			return true;
 		});
+	Screen->OnDraft.BindLambda(
+		[&](const FElysiumEntityHandle&, const FString& Draft) { MirroredDraft = Draft; });
 
 	const TSharedRef<SWidget> Slate = Screen->TakeWidget();
 	// Slice C: the input shell owns no engine presentation resources at all. The render target, the
@@ -1178,15 +1183,37 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 		Screen->GetClass()->FindPropertyByName(FName(TEXT("RenderTarget"))));
 	TestNull(TEXT("nor a projection material"),
 		Screen->GetClass()->FindPropertyByName(FName(TEXT("ProjectionMaterial"))));
-	TestEqual(TEXT("the terminal owns one real editable command line"),
-		CountSlateWidgetsOfType(Slate, FName(TEXT("SEditableText"))), 1);
+	// Slice E: the engine's editable-text widget is gone. Retail's terminal has no text box — the
+	// client eats keys in `0x100c7090`, accumulates them in its own line and composes that line into
+	// its own cell buffer, so the port's viewport widget is a bare focus leaf that paints nothing.
+	TestEqual(TEXT("no engine text box is used for terminal entry"),
+		CountSlateWidgetsOfType(Slate, FName(TEXT("SEditableText"))), 0);
+	TestEqual(TEXT("the terminal owns one keyboard leaf"),
+		CountSlateWidgetsOfType(Slate, FName(TEXT("SElysiumTerminalInput"))), 1);
 	TestEqual(TEXT("no terminal copy is painted into viewport Slate"),
 		CountSlateWidgetsOfType(Slate, FName(TEXT("STextBlock"))), 0);
 	TestNotNull(TEXT("the authoritative directory is also a semantic action"),
 		Screen->FindAction(TEXT("dir:0")));
 	TestNotNull(TEXT("quit is a semantic action"), Screen->FindAction(TEXT("quit")));
 
-	Screen->SetDraftText(TEXT("1234567890abcdefghijklmnop"));
+	// The draft is built one keystroke at a time, through the leaf, exactly as retail builds
+	// `+0xed8`; there is no setter to clamp.
+	UElysiumTerminalInputWidget* Keyboard =
+		Cast<UElysiumTerminalInputWidget>(Screen->GetDesiredFocusTarget());
+	if (!TestNotNull(TEXT("the keyboard leaf is the screen's focus target"), Keyboard))
+	{
+		return false;
+	}
+	const TSharedPtr<SElysiumTerminalInput> Input = Keyboard->GetInput();
+	if (!TestTrue(TEXT("and it built its Slate leaf"), Input.IsValid()))
+	{
+		return false;
+	}
+	for (const TCHAR Character : FString(TEXT("1234567890abcdefghijklmnop")))
+	{
+		Input->OnKeyChar(FGeometry(),
+			FCharacterEvent(Character, FModifierKeysState(), 0, false));
+	}
 	TestEqual(TEXT("the local editor enforces the authoritative maximum"),
 		Screen->GetDraftText(), FString(TEXT("1234567890abcdef")));
 	TestTrue(TEXT("Enter submits the captured owner, serial and local line"), Screen->SubmitDraft());
@@ -1197,6 +1224,7 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 		FString(TEXT("1234567890abcdef")));
 	TestTrue(TEXT("accepted submission clears only the local editor"),
 		Screen->GetDraftText().IsEmpty());
+	TestEqual(TEXT("and the draft mirror was told"), MirroredDraft, FString());
 
 	View.Revision = 4;
 	View.InputMode = 1;
@@ -1213,6 +1241,54 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 		ReceivedCommand, FString(TEXT("break")));
 	TestEqual(TEXT("the action is the second accepted intent"), SubmissionCount, 2);
 	(void)Slate;
+	return !HasAnyErrors();
+}
+
+// The `InfoCtrl` hint's presentation half (`docs/vtmb/computer-terminals.md` §8.4). Retail's client
+// handler `FUN_10055d30` draws one line bottom-centre in the HUD font; the authority resolves the
+// line, so this layer only has to project it and draw it once.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalHudHintUITest,
+	"Elysium.Substrate.Terminal.HudHint",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumTerminalHudHintUITest::RunTest(const FString&)
+{
+	ICommonInputModule::GetSettings().LoadData();
+	const FString Hint(TEXT("Press CTRL-C to use the Hacking feat"));
+
+	FElysiumViewState View;
+	View.bPlayerSurface = true;
+	View.Camera.bShowHud = true;
+	View.Terminal.Owner = FElysiumEntityHandle(7, 1);
+	View.Terminal.SessionSerial = 19;
+	View.Terminal.HudHintType = 3;
+	View.Terminal.HudHintText = Hint;
+
+	UElysiumHUDModel* Model = NewObject<UElysiumHUDModel>();
+	Model->Apply(View);
+	TestEqual(TEXT("the model carries the authority's resolved hint line"),
+		Model->TerminalHint.ToString(), Hint);
+
+	// Type 2 hides, and the authority publishes no line for it.
+	FElysiumViewState Hidden = View;
+	Hidden.Terminal.HudHintType = 0;
+	Hidden.Terminal.HudHintText.Reset();
+	Model->Apply(Hidden);
+	TestTrue(TEXT("a hidden hint yields no text"), Model->TerminalHint.IsEmpty());
+
+	// A terminal nobody is using publishes serial 0 and no session half at all; a stale line on it
+	// must not reach the HUD.
+	FElysiumViewState Idle = View;
+	Idle.Terminal.SessionSerial = 0;
+	Model->Apply(Idle);
+	TestTrue(TEXT("an idle terminal draws no hint"), Model->TerminalHint.IsEmpty());
+
+	// The DRAWN half is Play-tier, not headless. `UElysiumHUDWidget::TakeWidget()` access-violates
+	// inside UMG/CommonUI before it ever reaches `RebuildWidget` — a `UUserWidget` of this family
+	// needs a real `ULocalPlayer`, and no automation tier stands one (that is also why no case in
+	// this file has ever built the HUD widget). What the slot itself does is one declarative
+	// `STextBlock` with a collapsed-when-empty visibility, in the same shape as the zone and vitals
+	// rows beside it; the value it draws is the assertion above.
 	return !HasAnyErrors();
 }
 

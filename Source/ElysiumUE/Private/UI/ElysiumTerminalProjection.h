@@ -46,9 +46,11 @@ public:
 	bool HasRenderer() const { return WidgetRenderer.IsValid(); }
 	UPrimitiveComponent* BoundBody() const { return ProjectionTarget.Get(); }
 
-	// The revision gate alone. The residency gate (`WasRecentlyRendered`) belongs to the caller: a
-	// process that renders nothing would otherwise never redraw at all.
-	bool NeedsRedraw(const FElysiumTerminalView& View) const;
+	// The revision gate, plus the local draft. The residency gate (`WasRecentlyRendered`) belongs to
+	// the caller: a process that renders nothing would otherwise never redraw at all. The draft is
+	// half of the gate because a keystroke changes the picture without moving any authority
+	// revision — retail's line editor is entirely client-side (§8.1, TERM13).
+	bool NeedsRedraw(const FElysiumTerminalView& View, const FString& Draft = FString()) const;
 	// Whether the bound body is on screen this frame, which is the caller's second gate. It is asked
 	// through this object so a `-nullrhi` case can drive the redraw path at all: nothing is ever
 	// rendered under `-nullrhi`, so `WasRecentlyRendered` is permanently false there and the whole
@@ -56,11 +58,15 @@ public:
 	bool IsBodyResident() const;
 	// Test-only override for the line above. Unset in the game, where the engine's own answer wins.
 	TOptional<bool> ForcedResidency;
-	// Rasterize the authority's grid onto the glass and consume the view's revision.
-	void Draw(const FElysiumTerminalView& View);
+	// Rasterize the COMPOSED grid — the authority's cells with the local draft put-charred from the
+	// authority's cursor (`ElysiumTerminalCells::ComposeDraft`) — onto the glass, and consume the
+	// view's revision and the draft.
+	void Draw(const FElysiumTerminalView& View, const FString& Draft = FString());
 
 	// The revision last drawn (or last consumed, where there is no renderer).
 	uint32 DrawnRevision = 0;
+	// The draft last drawn, the second half of the gate.
+	FString DrawnDraft;
 	// How many times `Draw` ran, for the ownership tests and the slice-H diagnostic.
 	int32 DrawCount = 0;
 
@@ -69,7 +75,7 @@ public:
 	static int32 FindScreenMaterialSlot(const TArray<FName>& SlotNames);
 
 private:
-	TSharedRef<SWidget> BuildSurface(const FElysiumTerminalView& View) const;
+	TSharedRef<SWidget> BuildSurface(const FElysiumTerminalView& View, const FString& Draft) const;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UTextureRenderTarget2D> RenderTarget;

@@ -748,6 +748,31 @@ help `"Command to current hacking console"`). The callback label `LAB_1000eab6` 
 recovered function start. The only consumer of the command string is
 `CPropHacking::AcceptCmd` `0x1021a830` (and the keypad's slot-273 equivalent).
 
+#### 8.1.1 The client line editor, line by line (TERM20, 2026-09-07)
+
+- Both input bodies (`0x100c7090` key-down, `FUN_100c6d50` char insert) return early unless the
+  local line editor is **active** (`+0xe88`). Entity-message type 3 (`FUN_100c82e0`) activates it
+  only when it is not already active: it saves the cursor's whole row into `+0xe90`, records the
+  cursor column as the edit origin `+0xe8c`, clears the local line `+0xed8`, sets `+0xe88 = 1`.
+  Type 4 (clear) and scroll (`FUN_100c8210`) clear `+0xe88`.
+- Arm order in `0x100c7090`: Ctrl chord (latched `0x85` then `c` → `hackcmd break`) → raw mode
+  (`m_HackFlags & 0x4`: `hackcmd %c` per key) → acknowledge (`0x1`: Enter **and** Escape send
+  `DAT_102b7210` = `"hackcmd "` with the trailing space; Escape is *not* `quit` there) → the line
+  editor (Enter sends the line, Escape sends `hackcmd quit`, Backspace edits, printables are
+  eaten so they never reach the movement binds; backtick is left unhandled).
+- `m_nMaxInput == 0` is unlimited: `if (m_nMaxInput != 0 && strlen(line) >= m_nMaxInput) return;`
+  in both bodies. `m_bAllowDirKeys` is `CBaseTerminal+0x824`, replicated, and `CBaseTerminal::Spawn`
+  `0x10217880` is its **only writer** in `vampire.dll` — it is never raised, so arrows/Home/End are
+  always ignored.
+- `FUN_100c6d50` refuses only `0x60` and `8/9/10/13/27`; the `0x20..0x7e` range is the key-down
+  eat, not a character-path check. Every keystroke restores the saved row and re-walks the whole
+  line through put-char from the edit origin, **inside**
+  `if (strlen(line) + editOrigin < columns - rightMargin)`: an over-long keystroke is discarded
+  whole — the local editor never wraps and never scrolls. Password characters are inserted
+  literally; there is no masking.
+- `CBaseTerminal::Spawn` also clamps columns `[4,36]` and rows `[2,24]` and zeroes `m_HackFlags` /
+  `m_nMaxInput`; `m_nColorScheme` (`+0x818`, 4 bits) is clamped `0..3` on the client only.
+
 ### 8.2 Server → client screen messages
 
 Screen mutation is an entity message (filter `CEntityMessageFilter`) with a type byte:
@@ -979,6 +1004,11 @@ The authority port (`Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp`,
 | The one box | reach clamp, `WorldSpaceCenter()` snap target and the sweep stop all read `ent+0x274/0x284` | all three read the registered use-anchor box (`GetUseBodyWorldBounds`), not the visual's render bounds | faithful |
 | `screen saver` length | `Q_strncpy` into a 64-byte field (`+0x904`) | truncated to 63 characters at parse | faithful |
 | Exit and the crack buffer | `vfunc42` does not touch `m_szHackPWD` (entry-only `FUN_1021a1c0`) | same | faithful (an earlier port cleared it on exit) |
+| Ctrl+C | a latched `0x85` key then `c` | `IsControlDown()` on the `C` key-down | one chord, same command |
+| Raw-mode character | the raw key code | the translated character from `OnKeyChar` | non-US layouts type what the player sees |
+| Character path range | `FUN_100c6d50` inserts anything but `0x60` and `8/9/10/13/27` (`0x7f` then reads as a backspace, `>0x7e` as a glyph index) | `0x20..0x7e` only | no glyph table to index |
+| `colorscheme` clamp | client rasterizer clamps `0..3` | clamped at spawn and published on the view | one clamp site |
+| Right margin and style on the view | client-local state | published by the authority so the local editor composes with them | the authority owns the buffer here |
 | Screensaver randomness | engine `RandomInt` / `RandomFloat` (the shared global) | `ElysiumRng::Stream(EElysiumRngStream::Terminal)`, shared with the cracking filler, seeded per session | deterministic tests; draw order preserved |
 | Two think functions | `CPropHackingSS_Think` and the cracking stepper on one `m_flNextThink` via `ThinkSet` | one `Think()` dispatcher: cracking buffer first, else the screensaver when no user is bound; entry sets never-think, exit re-arms at `ss_start` | one clock, same order |
 | Idle glass | the client entity owns the cell buffer for the entity's lifetime | the authority publishes an idle view per terminal with a body when its revision changes; the presentation redraws the world-lifetime projection only then and only while the body rendered recently | no per-frame work on idle machines, as retail |
@@ -1492,6 +1522,7 @@ here are closed from listings and from the pinned module bytes:
 | TERM15 | The client screen is a cell terminal: `FUN_100c8060` put-char (wrap at `columns`, newline to the margin, scroll at `rows - 1`, backspace), `FUN_100c8210` scroll-up, `FUN_100c77f0` rasterizer; cells are `char \| 0x80 style`, stride 36 (§8.3). |
 | TERM16 | `FUN_10218820` is the `InfoCtrl` HUD hint (type, value): 2 hide, 3 "Press CTRL-C…", 5 "Making hack attempt at skill N", 6 "Skill too low… difficulty N"; client handler `FUN_10055d30` (§8.4). Draw bodies `FUN_1021b140` / `FUN_1021aca0` / `FUN_1021b410` / `FUN_1021b5e0` joined to owner captures (§8.5). |
 | TERM19 | Slice B/C listings (`slice-bc-decompiles.md`): the hull-sweep pin `0x10218320` is the far arm (eye ≥ 80 Manhattan XY units from the terminal's box), unconditional `SetAbsOrigin(endpos)` + `Relink`, mask `MASK_PLAYERSOLID`; the near arm `0x102182b0` snaps the player's eye angles at `WorldSpaceCenter()`; attachments are looked up by name per call; the cone forward is 3D-normalized with `.xy` used raw, strict `> 0.7`; a second `+use` always releases; the camera is removed on exit with no restore and no ease-out; no exposure change exists; the screensaver's type 7 is `(0,0)`, its floor Activate-only, its think unguarded. |
+| TERM20 | The client line editor (§8.1.1): activation by type 3 with a saved row and edit origin; arm order Ctrl → raw → acknowledge → line; acknowledge Enter/Escape send `"hackcmd "`; `m_nMaxInput 0` unlimited; `m_bAllowDirKeys` never raised; no wrap — an over-long keystroke is discarded; no password masking. |
 | TERM18 | Port review 2026-09-07 against the listings: `FUN_1021b750` continues past a dependency-blocked name match; `0x1021c560` hides the HUD hint unconditionally, raises hint 6 with `GetDifficulty` on the skill arm and never clears the screen; `0x10217b30` echoes a second random draw per character (type 9, margin to 0) on the sub-3 roll; `thunk_FUN_10218820` has exactly six callers (`0x10217b30`, `0x10217f50`, `CBaseTerminal::vfunc42`, `AcceptCmd`, `0x1021b5e0`, `0x1021c560`) — no hint on entry; `AcceptCmd` never tests `m_HackFlags & 0x1` (the acknowledge restriction is client-side); the prompt's key name is copied without a case fold; the rule row is `columns - 2` bytes. |
 | TERM17 | Draw bodies line by line (§8.6). Type 7 (`FUN_10218ec0`/client `FUN_100c7e60`) sets the two margins and clears nothing; type 4 clears. Type-2 prints are word-wrapped by client `FUN_100c7fb0` inside `[left, columns - right)`. Type-1 columns are margin-relative (client `FUN_100c7ec0`). Box rows are `columns - 2` wide from the margin (`FUN_1021b2b0`/`FUN_1021b330`); the prompt literal is `"%c%s@%s%c "` with the bound `+use` key name; strings 19/39 echo the accepted password. |
 

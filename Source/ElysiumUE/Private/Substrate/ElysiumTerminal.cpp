@@ -286,6 +286,12 @@ FString ElysiumTerminalFormat(const FString& Format, TArrayView<const FElysiumTe
 
 void FElysiumTerminal::Spawn()
 {
+	// `CBaseTerminal::Spawn` `0x10217880` clamps the grid and zeroes `m_HackFlags`, `m_nMaxInput`
+	// and `m_bAllowDirKeys` (`+0x824`, the field's ONLY writer in vampire.dll). The colour scheme is
+	// replicated in four bits and clamped by the client's rasterizer to `0..3` (`client+0xf08`,
+	// §8.3); the port clamps it here so the published view never carries a palette index nobody can
+	// draw.
+	ColorScheme = FMath::Clamp(ColorScheme, 0, 3);
 	Screen.Reset(TextColumns, TextRows);
 	FString ContentError;
 	if (!OpenContent(ContentError))
@@ -770,6 +776,22 @@ void FElysiumTerminal::SetHudHint(int32 Type, int32 Value)
 	HudHintValue = Value;
 }
 
+FString FElysiumTerminal::HudHintLine() const
+{
+	// The client's `InfoCtrl` handler `FUN_10055d30` (§8.4): the type selects a `Hacking_Strings`
+	// line and 4/5/6 append the integer the usermessage carried. Type 1 (a raw `CGameText` string)
+	// has no terminal producer, and 0/2 hide.
+	using namespace ElysiumHackingStrings;
+	switch (HudHintType)
+	{
+	case 3: return Get(World, PressHackKey);
+	case 4: return Get(World, DifficultyLabel) + FString::FromInt(HudHintValue);
+	case 5: return Get(World, MakingHackAttempt) + FString::FromInt(HudHintValue);
+	case 6: return Get(World, SkillInsufficient) + FString::FromInt(HudHintValue);
+	default: return FString();
+	}
+}
+
 FString FElysiumTerminal::CueOwnerId() const
 {
 	// One place, because the exit's stop-by-owner (`vfunc42` step 6) has to name exactly what
@@ -912,6 +934,9 @@ void FElysiumTerminal::FillView(FElysiumTerminalView& Out, uint32 Serial) const
 	Out.ScreenSaverLabel = ScreenSaverLabel();
 	Out.Columns = Screen.Columns();
 	Out.Rows = Screen.Rows();
+	// Replicated glass state, not session state: `m_nColorScheme` selects the rasterizer's palette
+	// whether or not anyone is standing at the machine.
+	Out.ColorScheme = ColorScheme;
 	Out.Cells.Reserve(Out.Columns * Out.Rows);
 	Out.ScreenRows.Reserve(Out.Rows);
 	for (int32 Row = 0; Row < Out.Rows; ++Row)
@@ -924,6 +949,8 @@ void FElysiumTerminal::FillView(FElysiumTerminalView& Out, uint32 Serial) const
 	}
 	Out.CursorRow = Screen.CursorRow();
 	Out.CursorColumn = Screen.CursorColumn();
+	Out.RightMargin = Screen.RightMargin();
+	Out.CellStyle = Screen.Style();
 	if (Serial == 0)
 	{
 		// --- and nothing else. An idle machine publishes no session state and, above all, runs no
@@ -936,8 +963,12 @@ void FElysiumTerminal::FillView(FElysiumTerminalView& Out, uint32 Serial) const
 	Out.InputMode = static_cast<uint8>(InputMode());
 	Out.MaxInput = MaxInput;
 	Out.bDigitsOnly = (HackFlags & FlagDigitsOnly) != 0;
+	// `m_bAllowDirKeys` is zeroed at Spawn and no shipped body raises it, so the local line editor
+	// never moves its cursor. Published rather than assumed, because the widget reads it as data.
+	Out.bAcceptsDirectoryKeys = false;
 	Out.HudHintType = HudHintType;
 	Out.HudHintValue = HudHintValue;
+	Out.HudHintText = HudHintLine();
 	BuildContentView(Out);
 }
 
@@ -1896,9 +1927,7 @@ void FElysiumPropHacking::OnAttemptStopped(FElysiumCombatCharacter&, EElysiumUse
 void FElysiumPropHacking::BuildContentView(FElysiumTerminalView& Out) const
 {
 	// The label is glass state and `FillView` has already published it; this body is the SESSION's
-	// affordances only.
-	Out.bAcceptsDirectoryKeys = true;
-
+	// affordances only. `bAcceptsDirectoryKeys` is the base's to publish, and it is always false.
 	auto AddAction = [&Out](const FString& Id, const FString& Label, const FString& Command)
 	{
 		FElysiumTerminalActionView Action;

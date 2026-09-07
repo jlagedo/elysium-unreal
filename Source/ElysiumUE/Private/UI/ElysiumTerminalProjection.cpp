@@ -1,6 +1,7 @@
 #include "UI/ElysiumTerminalProjection.h"
 
 #include "ElysiumViewState.h"
+#include "UI/ElysiumTerminalCells.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Engine/TextureRenderTarget2D.h"
@@ -152,11 +153,13 @@ void UElysiumTerminalProjection::Release()
 	WidgetRenderer.Reset();
 	RenderTarget = nullptr;
 	DrawnRevision = 0;
+	DrawnDraft.Reset();
 }
 
-bool UElysiumTerminalProjection::NeedsRedraw(const FElysiumTerminalView& View) const
+bool UElysiumTerminalProjection::NeedsRedraw(const FElysiumTerminalView& View,
+	const FString& Draft) const
 {
-	return IsBound() && View.Revision != DrawnRevision;
+	return IsBound() && (View.Revision != DrawnRevision || Draft != DrawnDraft);
 }
 
 bool UElysiumTerminalProjection::IsBodyResident() const
@@ -171,28 +174,35 @@ bool UElysiumTerminalProjection::IsBodyResident() const
 	return Body != nullptr && Body->WasRecentlyRendered();
 }
 
-void UElysiumTerminalProjection::Draw(const FElysiumTerminalView& View)
+void UElysiumTerminalProjection::Draw(const FElysiumTerminalView& View, const FString& Draft)
 {
 	DrawnRevision = View.Revision;
+	DrawnDraft = Draft;
 	++DrawCount;
 	if (!WidgetRenderer.IsValid() || !RenderTarget)
 	{
 		return;   // bound with no renderer: the revision is consumed, nothing is rasterized
 	}
-	WidgetRenderer->DrawWidget(RenderTarget, BuildSurface(View), SurfaceDrawSize, 0.0f, false);
+	WidgetRenderer->DrawWidget(RenderTarget, BuildSurface(View, Draft), SurfaceDrawSize, 0.0f, false);
 }
 
-TSharedRef<SWidget> UElysiumTerminalProjection::BuildSurface(const FElysiumTerminalView& View) const
+TSharedRef<SWidget> UElysiumTerminalProjection::BuildSurface(const FElysiumTerminalView& View,
+	const FString& Draft) const
 {
-	// The authority's grid and nothing else.
+	// The COMPOSED grid: the authority's cells with the local draft put-charred over them from the
+	// authority's cursor. That composition is what retail's client does — `FUN_100c6d50` collects
+	// the keystroke into its own line and re-runs it through `FUN_100c8060` before the rasterizer
+	// sees the buffer (`docs/vtmb/computer-terminals.md` §8.1, TERM13) — so the typed characters are
+	// genuinely on the glass and not in a viewport overlay.
 	//
-	// That is NOT the whole of retail's glass. Entity message type 9 is the CRACKING echo
-	// (`FUN_10217d60` printing the scrambled password a character at a time); an ordinary typed
-	// character is composed **client-side** — `FUN_100c6d50` collects the keystroke into the local
-	// line and `FUN_100c8060` paints it over the server's cells before the screen is drawn
-	// (`docs/vtmb/computer-terminals.md` §8.1, TERM13). So the local draft is a real part of the
-	// picture and this surface does not carry it yet: slice E composes it, and slice D replaces this
-	// text block with the cell painter at fixed metrics, the style bit and the block cursor.
+	// Entity message type 9 (the CRACKING echo, `FUN_10217d60`) is a different thing and is already
+	// in the authority's cells.
+	//
+	// Slice D replaces this text block with the cell painter at fixed metrics, the style bit, the
+	// four palettes and the blinking block cursor. Until then the composed grid is drawn as rows of
+	// monospace text, which is the same characters in the same places.
+	const ElysiumTerminalCells::FElysiumTerminalComposed Composed =
+		ElysiumTerminalCells::ComposeDraft(View, Draft);
 	return SNew(SBorder)
 		.BorderImage(FCoreStyle::Get().GetBrush(TEXT("GenericWhiteBox")))
 		.BorderBackgroundColor(FSlateColor(ScreenBlack))
@@ -211,7 +221,7 @@ TSharedRef<SWidget> UElysiumTerminalProjection::BuildSurface(const FElysiumTermi
 					+ SVerticalBox::Slot().FillHeight(1.0f)
 					[
 						SNew(STextBlock)
-						.Text(FText::FromString(FString::Join(View.ScreenRows, TEXT("\n"))))
+						.Text(FText::FromString(FString::Join(Composed.RowTexts(), TEXT("\n"))))
 						.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18))
 						.ColorAndOpacity(FSlateColor(ProjectionPhosphor))
 						.Clipping(EWidgetClipping::ClipToBoundsAlways)

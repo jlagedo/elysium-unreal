@@ -129,6 +129,33 @@ public:
 	bool CloseLoot();
 	bool SubmitTerminalCommand(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
 		const FString& Command);
+	// --- the five terminal intents (`docs/project/plans/terminals.md`, slice E) -------------------
+	// Retail's client has exactly one channel to the terminal — the `hackcmd` ConCommand
+	// (`FUN_100dace0`) — and its key handler picks the string. These name the five strings that
+	// handler can send, so the widget never spells a command out and every one re-resolves the map,
+	// the world, the active use session and the serial through the same `SubmitTerminalCommand`
+	// chokepoint. `Quit` and `Break` are literal words on purpose: `quit` is builtin 33 at the
+	// directory and `FUN_10217f50`'s cancel at a password prompt (one string, two authority
+	// behaviours, as retail), and `break` acts only on the pending-password arm.
+	bool SubmitCommand(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
+		const FString& Command);
+	bool SubmitCharacter(const FElysiumEntityHandle& Owner, uint32 SessionSerial, TCHAR Character);
+	bool Acknowledge(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
+	bool Quit(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
+	bool Break(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
+
+	// The local line the focused widget is holding, mirrored onto the monitor's glass. Retail
+	// composes the typed characters into the CLIENT's own cell buffer before rasterizing
+	// (`FUN_100c6d50` -> `FUN_100c8060`, §8.1/TERM13), so the typed line is genuinely on the screen
+	// and not in a viewport overlay. An unset owner (or an empty string) means nothing is typed.
+	// Whether the world still holds a live terminal session RIGHT NOW, not in the last published
+	// frame. `quit` is one string with two authority behaviours (§9) — a release at the directory
+	// prompt, a cancel at a password prompt — so the only way to know whether the screen may close
+	// is to ask the world after the submit, before the next publish.
+	bool IsTerminalSessionOpen() const;
+	void SetTerminalDraft(const FElysiumEntityHandle& Owner, const FString& Draft);
+	const FString& TerminalDraft() const { return TerminalDraftText; }
+	const FElysiumEntityHandle& TerminalDraftOwner() const { return TerminalDraftHandle; }
 	// --- world-lifetime terminal glass (`docs/project/plans/terminals.md`, slice C) ---------------
 	// A monitor's screen is not session state: retail's screensaver think writes into the entity's
 	// own cell buffer from map load onward, so the render target lives with the BODY. The map actor
@@ -170,6 +197,12 @@ private:
 	// terminals, so the scan is the cheaper half of the trade.
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UElysiumTerminalProjection>> TerminalProjections;
+
+	// The mirrored draft and the terminal it belongs to. Plain values: the handle is a substrate
+	// type and the string is presentation-local, neither is authority state, and both are dropped
+	// when the session's screen goes away.
+	FElysiumEntityHandle TerminalDraftHandle;
+	FString TerminalDraftText;
 
 	// Whether the stale-sample warning has already been issued for the run of frames currently in
 	// progress. The manager can legitimately publish nothing for many consecutive frames, and the
