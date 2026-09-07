@@ -104,16 +104,11 @@ camera on the sockets, `Welcome, Jack.`, `Safe`/`chopshop`/`Unlock`/Enter/`quit`
 run, padlock, keycard, knob, camera dropped, screensaver back). Remaining: the Play-tier beat
 script from injected real input with `shot` steps, when 11.10 lands, with the same assertions.
 
-**Loader caps (small follow-up).** `CPropHacking::LoadFromFile` caps every record field
-(`docs/vtmb/computer-terminals.md` §12 loader caps): the `Email` half is ported; the subdir /
-function / `brackets` (two characters) / `screen saver` / `email_*` caps and the two literal
-defaults (`description`, `runtext`) are recovered and not yet ported.
-
 *Deps:* 4.11, AUD2, 9.6, 11.4–11.8, and **11.10 for the gym beat script**. Until the Play tier
 lands, slices B–H are accepted on the terminal gym through a native automation test that spawns
 the gym world, drives the same steps through the command bus and the intents, asserts authority
 state and reads the projection's render target back for the layout checks; the beat script
 replaces that driver when 11.10 lands, with the same assertions. The terminal gym builds on the
 movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0, A, B and C have
-landed (2026-09-07); the editor half of D, the Play-tier half of H and the loader caps remain. Every acceptance is
+landed (2026-09-07); the editor half of D and the Play-tier half of H remain. Every acceptance is
 headless (the map slice) or on the terminal gym; nothing in this plan is accepted on a live map.

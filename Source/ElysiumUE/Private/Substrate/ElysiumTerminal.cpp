@@ -41,11 +41,17 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 
 	// `+0x904` is a 64-byte field and the loader fills it with `Q_strncpy` (§4.4), so a longer
 	// authored label is TRUNCATED at load, not printed in full — the screensaver think then measures
-	// `strlen` of the truncated copy when it places the row.
-	Out.ScreenSaver = Root->Str(TEXT("screen saver"), FString()).Left(ElysiumTerminalScreenSaverMax);
-	Out.Brackets = Root->Str(TEXT("brackets"), FString());
-	Out.EmailPassword = Root->Str(TEXT("email_password"), FString());
-	Out.EmailUsername = Root->Str(TEXT("email_username"), FString());
+	// `strlen` of the truncated copy when it places the row. The other three top-level keys are the
+	// same three-argument call into a fixed field (`ElysiumTerminalCaps`), and `brackets` is the one
+	// of them that carries an `.rdata` default (`0x105b083c` = "[]", `1021cc8a`): a file that omits
+	// the line is bracketed, and only a file that authors `""` — as the tutorial does — is not.
+	Out.ScreenSaver = Root->Str(TEXT("screen saver"), FString()).Left(ElysiumTerminalCaps::ScreenSaver);
+	Out.Brackets = Root->Str(TEXT("brackets"), ElysiumTerminalCaps::DefaultBrackets)
+		.Left(ElysiumTerminalCaps::Brackets);
+	Out.EmailPassword = Root->Str(TEXT("email_password"), FString())
+		.Left(ElysiumTerminalCaps::EmailPassword);
+	Out.EmailUsername = Root->Str(TEXT("email_username"), FString())
+		.Left(ElysiumTerminalCaps::EmailUsername);
 
 	for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Child : Root->Kids)
 	{
@@ -67,11 +73,19 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 				OutError = TEXT("TerminalDefinition exceeds the native five-directory limit");
 				return false;
 			}
+			// The `SubDir` record's five strings, each a `Q_strncpy` into a fixed slot of the 0xd4-byte
+			// record (`1021ceaf`..`1021cf38`). `name` and `description` take the KEY LITERAL as their
+			// default, so a nameless block answers to `name` and a description-less one draws the word
+			// `description` in its title box — both are what the glass shows in retail.
 			FElysiumTerminalDirectory Directory;
-			Directory.Name = Child.Value->Str(TEXT("name"), FString());
-			Directory.Password = Child.Value->Str(TEXT("password"), FString());
-			Directory.Description = Child.Value->Str(TEXT("description"), FString());
-			Directory.Dependency = Child.Value->Str(TEXT("dependency"), FString());
+			Directory.Name = Child.Value->Str(TEXT("name"), ElysiumTerminalCaps::DefaultName)
+				.Left(ElysiumTerminalCaps::Name);
+			Directory.Password = Child.Value->Str(TEXT("password"), FString())
+				.Left(ElysiumTerminalCaps::Password);
+			Directory.Description = Child.Value->Str(TEXT("description"),
+				ElysiumTerminalCaps::DefaultDescription).Left(ElysiumTerminalCaps::Description);
+			Directory.Dependency = Child.Value->Str(TEXT("dependency"), FString())
+				.Left(ElysiumTerminalCaps::Dependency);
 			Directory.Difficulty = Child.Value->Int(TEXT("difficulty"), 0);
 			for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Grandchild
 				: Child.Value->Kids)
@@ -80,12 +94,26 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 				{
 					continue;
 				}
+				// `1021cf84`: the loop is `while (block && count < 0x14)`, so the twenty-first
+				// `Function` block and everything after it is never read into the record vector.
+				if (Directory.Functions.Num() >= ElysiumTerminalCaps::FunctionsPerDirectory)
+				{
+					break;
+				}
+				// The same three widths again, plus `runtext` at 0x200 — and `runtext` is the third
+				// key whose default is its own literal, so a `Function` that authors none prints
+				// `runtext` when it runs.
 				FElysiumTerminalFunction Function;
-				Function.Name = Grandchild.Value->Str(TEXT("name"), FString());
-				Function.Description = Grandchild.Value->Str(TEXT("description"), FString());
-				Function.RunText = Grandchild.Value->Str(TEXT("runtext"), FString());
-				Function.Dependency = Grandchild.Value->Str(TEXT("dependency"), FString());
-				Function.RunScript = Grandchild.Value->Str(TEXT("runscript"), FString());
+				Function.Name = Grandchild.Value->Str(TEXT("name"), ElysiumTerminalCaps::DefaultName)
+					.Left(ElysiumTerminalCaps::Name);
+				Function.Description = Grandchild.Value->Str(TEXT("description"),
+					ElysiumTerminalCaps::DefaultDescription).Left(ElysiumTerminalCaps::Description);
+				Function.RunText = Grandchild.Value->Str(TEXT("runtext"),
+					ElysiumTerminalCaps::DefaultRunText).Left(ElysiumTerminalCaps::RunText);
+				Function.Dependency = Grandchild.Value->Str(TEXT("dependency"), FString())
+					.Left(ElysiumTerminalCaps::Dependency);
+				Function.RunScript = Grandchild.Value->Str(TEXT("runscript"), FString())
+					.Left(ElysiumTerminalCaps::RunScript);
 				Function.Trigger = Grandchild.Value->Int(TEXT("trigger"), INDEX_NONE);
 				if (Function.Trigger < INDEX_NONE || Function.Trigger > 7)
 				{

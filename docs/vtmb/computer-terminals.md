@@ -1259,11 +1259,20 @@ comment).
 sender `Q_strncpy` 0x20, body 0x200, dependency and runscript 0x40; defaults `this email has no
 subject` (`0x105b078c`), `this email has no sender` (`0x105b0760`), `this email has no body`
 (`0x105b073c`); dependency/runscript have no default. The same loader caps the other halves:
-subdir `name` 0x10 (lowercased), `description` 0x20 defaulting to the literal `description`,
-`password` 0x10, `dependency` 0x40; function `name` 0x10 (lowercased), `description` 0x20 (same
-default), `runtext` 0x200 defaulting to the literal `runtext`, `dependency`/`runscript` 0x40;
-top-level `screen saver` 0x40, `brackets` 0x3 (two characters plus NUL), `email_password` /
-`email_username` 0x20. `[q]uit` from an open message leaves `+0x9f4` stale (`FUN_1021c890` never
+subdir `name` 0x10 (lowercased; default the literal `name` — `0x1053fd80` is passed as both key
+and fallback, `1021ceaf`), `description` 0x20 defaulting to the literal `description`
+(`0x105b07d8`, `1021cefc`), `password` 0x10, `dependency` 0x40; function `name` 0x10 (lowercased,
+same `name` default), `description` 0x20 (same default), `runtext` 0x200 defaulting to the literal
+`runtext` (`0x105b07c0`, `1021d003`), `dependency`/`runscript` 0x40; at most **twenty** functions
+per subdir (loop guard `count < 0x14`, `1021cf84`); top-level `screen saver` 0x40, `brackets` 0x3
+(two characters plus NUL; default `"[]"` `0x105b083c` when the key is absent, `1021cc8a`),
+`email_password` / `email_username` 0x20. `Q_strnlwr` (`vstdlib 0x10003310`) lowercases to the NUL
+regardless of its count argument, so the fold covers the whole truncated name. Seven shipped files
+author a `description` past 31 characters (`soc_ext_hack.txt`, `soc_int_hack.txt`,
+`chateau_computer.txt`, `hack_example.txt`, `sinbin.txt`, six rows of `dane_computer.txt`) and
+retail truncates them on the glass; no shipped `name`, `password`, `runtext` or top-level key
+exceeds its cap. The loader itself has no subdirectory limit (the vector grows at
+`1021d0f5`–`1021d156`); only the five-byte unlock array at `+0x986` does. `[q]uit` from an open message leaves `+0x9f4` stale (`FUN_1021c890` never
 clears it; only the list draw's first statement does) — harmless, the mail area always re-enters
 on the list.
 

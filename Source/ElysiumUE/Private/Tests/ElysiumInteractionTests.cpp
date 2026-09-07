@@ -1539,6 +1539,135 @@ TerminalDefinition
 		}
 	}
 
+	// The other three halves of the same loader (`0x1021cba0`, §12): the top-level keys, the
+	// `SubDir` record and the `Function` record. One file that overruns every one of those caps,
+	// and two records that author nothing at all — `name` (`1021ceaf` / `1021cf9d`), `description`
+	// (`1021cefc` / `1021cfe2`) and `runtext` (`1021d003`) are each read with their own KEY LITERAL
+	// as the default, because retail passes the same `.rdata` pointer as key and as fallback
+	// (`0x1053fd80`, `0x105b07d8`, `0x105b07c0`). An empty block is therefore not an empty screen.
+	{
+		const FString Long = FString::ChrN(700, TEXT('L'));
+		FElysiumTerminalDefinition Capped;
+		FString CapError;
+		const FString CapText = FString::Printf(TEXT(
+			"TerminalDefinition {"
+			"  \"screen saver\" \"%s\" \"brackets\" \"<<<>>>\""
+			"  \"email_password\" \"%s\" \"email_username\" \"%s\""
+			"  SubDir {"
+			"    \"name\" \"%s\" \"password\" \"%s\" \"description\" \"%s\" \"dependency\" \"%s\""
+			"    Function {"
+			"      \"name\" \"%s\" \"description\" \"%s\" \"runtext\" \"%s\""
+			"      \"dependency\" \"%s\" \"runscript\" \"%s\""
+			"    }"
+			"    Function { }"
+			"  }"
+			"  SubDir { }"
+			"}"),
+			*Long, *Long, *Long, *Long, *Long, *Long, *Long, *Long, *Long, *Long, *Long, *Long);
+		if (TestTrue(TEXT("a record that overruns every loader cap still parses"),
+			FElysiumTerminalDefinition::ParseText(CapText, Capped, CapError))
+			&& TestEqual(TEXT("both SubDir blocks are records"), Capped.Directories.Num(), 2)
+			&& TestEqual(TEXT("both Function blocks are records"),
+				Capped.Directories[0].Functions.Num(), 2))
+		{
+			TestEqual(TEXT("screen saver is capped at Q_strncpy(..., 0x40) minus the terminator"),
+				Capped.ScreenSaver.Len(), ElysiumTerminalCaps::ScreenSaver);
+			TestEqual(TEXT("brackets keep two characters plus the NUL of the 3-byte field"),
+				Capped.Brackets, FString(TEXT("<<")));
+			TestEqual(TEXT("email_password at 0x20 minus the terminator"),
+				Capped.EmailPassword.Len(), ElysiumTerminalCaps::EmailPassword);
+			TestEqual(TEXT("email_username shares that width"), Capped.EmailUsername.Len(),
+				ElysiumTerminalCaps::EmailUsername);
+
+			const FElysiumTerminalDirectory& Directory = Capped.Directories[0];
+			TestEqual(TEXT("a SubDir name is capped at 0x10 minus the terminator"),
+				Directory.Name.Len(), ElysiumTerminalCaps::Name);
+			TestEqual(TEXT("its password shares that 16-byte slot"), Directory.Password.Len(),
+				ElysiumTerminalCaps::Password);
+			TestEqual(TEXT("its description at 0x20 minus the terminator"),
+				Directory.Description.Len(), ElysiumTerminalCaps::Description);
+			TestEqual(TEXT("its dependency at 0x40 minus the terminator"),
+				Directory.Dependency.Len(), ElysiumTerminalCaps::Dependency);
+
+			const FElysiumTerminalFunction& Function = Directory.Functions[0];
+			TestEqual(TEXT("a Function name takes the same 16-byte slot as a SubDir name"),
+				Function.Name.Len(), ElysiumTerminalCaps::Name);
+			TestEqual(TEXT("and the same 32-byte description"), Function.Description.Len(),
+				ElysiumTerminalCaps::Description);
+			TestEqual(TEXT("its runtext at 0x200 minus the terminator, like an email body"),
+				Function.RunText.Len(), ElysiumTerminalCaps::RunText);
+			TestEqual(TEXT("its dependency at 0x40 minus the terminator"), Function.Dependency.Len(),
+				ElysiumTerminalCaps::Dependency);
+			TestEqual(TEXT("and its runscript shares that 64-byte slot"), Function.RunScript.Len(),
+				ElysiumTerminalCaps::RunScript);
+
+			// The three literal defaults, on the two blocks that author nothing.
+			const FElysiumTerminalFunction& Bare = Directory.Functions[1];
+			TestEqual(TEXT("a Function with no name answers to the literal 'name'"), Bare.Name,
+				FString(TEXT("name")));
+			TestEqual(TEXT("with no description it draws the literal 'description'"),
+				Bare.Description, FString(TEXT("description")));
+			TestEqual(TEXT("and with no runtext it prints the literal 'runtext'"), Bare.RunText,
+				FString(TEXT("runtext")));
+			TestTrue(TEXT("a Function dependency still has no default"), Bare.Dependency.IsEmpty());
+			TestTrue(TEXT("nor its runscript"), Bare.RunScript.IsEmpty());
+
+			const FElysiumTerminalDirectory& BareDir = Capped.Directories[1];
+			TestEqual(TEXT("a SubDir with no name answers to the literal 'name'"), BareDir.Name,
+				FString(TEXT("name")));
+			TestEqual(TEXT("and with no description its title box reads 'description'"),
+				BareDir.Description, FString(TEXT("description")));
+			TestTrue(TEXT("a SubDir password has no default"), BareDir.Password.IsEmpty());
+			TestTrue(TEXT("nor its dependency"), BareDir.Dependency.IsEmpty());
+		}
+	}
+
+	// `brackets` is the one top-level key with an `.rdata` default (`0x105b083c` = "[]",
+	// `0x1021cc8a`). Every shipped `hackterminals` file but one authors the line, and the tutorial
+	// authors it EMPTY — which is not the same thing as omitting it, because `KeyValues` answers an
+	// authored empty string and the default never applies.
+	{
+		FElysiumTerminalDefinition Bare;
+		FElysiumTerminalDefinition Blank;
+		FString BracketError;
+		if (TestTrue(TEXT("a file with no brackets line parses"),
+			FElysiumTerminalDefinition::ParseText(TEXT("TerminalDefinition { }"), Bare, BracketError)))
+		{
+			TestEqual(TEXT("an absent brackets key takes the compiled-in \"[]\""), Bare.Brackets,
+				FString(TEXT("[]")));
+		}
+		if (TestTrue(TEXT("an explicitly empty brackets line parses"),
+			FElysiumTerminalDefinition::ParseText(TEXT("TerminalDefinition { \"brackets\" \"\" }"),
+				Blank, BracketError)))
+		{
+			TestTrue(TEXT("an authored empty brackets stays empty, as the tutorial authors it"),
+				Blank.Brackets.IsEmpty());
+		}
+	}
+
+	// `1021cf84`: the Function loop is `while (block != NULL && count < 0x14)`, so a twenty-first
+	// block is never read into the record vector and is content nobody can reach.
+	{
+		FString ManyText = TEXT("TerminalDefinition { SubDir { \"name\" \"deck\"");
+		for (int32 Index = 0; Index < 25; ++Index)
+		{
+			ManyText += FString::Printf(TEXT(" Function { \"name\" \"f%d\" }"), Index);
+		}
+		ManyText += TEXT(" } }");
+		FElysiumTerminalDefinition Many;
+		FString ManyError;
+		if (TestTrue(TEXT("a SubDir with twenty-five Function blocks parses"),
+			FElysiumTerminalDefinition::ParseText(ManyText, Many, ManyError))
+			&& TestEqual(TEXT("as one directory"), Many.Directories.Num(), 1))
+		{
+			TestEqual(TEXT("the loader keeps twenty functions per SubDir"),
+				Many.Directories[0].Functions.Num(),
+				ElysiumTerminalCaps::FunctionsPerDirectory);
+			TestEqual(TEXT("and they are the first twenty, in authored order"),
+				Many.Directories[0].Functions[19].Name, FString(TEXT("f19")));
+		}
+	}
+
 	FElysiumTerminalDefinition Invalid;
 	TestFalse(TEXT("an out-of-range trigger fails closed"),
 		FElysiumTerminalDefinition::ParseText(
@@ -1581,6 +1710,11 @@ TerminalDefinition
 		"description" "Door controls"
 		"difficulty" "0"
 		Function { "name" "Open" "runtext" "Opened." "trigger" "0" }
+	}
+	SubDir
+	{
+		"name" "Plain"
+		Function { "name" "Ping" }
 	}
 }
 )KV"), Definition, ParseError))
@@ -1688,6 +1822,32 @@ TerminalDefinition
 	TestTrue(TEXT("OnTrigger0 delivers through the ordinary queue"),
 		FMath::IsNearlyEqual(
 			ElysiumEntityDebugTest::CounterValue(World.FindByName(TEXT("triggered"))), 1.0f));
+
+	// The loader's two literal defaults, on the glass. `CPropHacking::LoadFromFile` hands
+	// `description` (`0x1021cefc`) and `runtext` (`0x1021d003`) their own key string as the
+	// fallback, and both are DRAWN: the directory draw uses the description as its title box
+	// (`FUN_1021aca0`) and `ExecuteFunction` prints the runtext as the printer's format string
+	// (`FUN_1021c6d0`). The second `SubDir` authors neither line.
+	auto ScreenShows = [Terminal](const TCHAR* Needle)
+	{
+		for (int32 Row = 0; Row < Terminal->Screen.Rows(); ++Row)
+		{
+			if (Terminal->Screen.RowTextTrimmed(Row).Contains(Needle))
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	TestTrue(TEXT("a passwordless directory opens on its name alone"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("Plain")));
+	TestEqual(TEXT("and that is the directory the session is in"), Terminal->CurrentDirectory, 1);
+	TestTrue(TEXT("a directory with no description draws the literal 'description' in its title box"),
+		ScreenShows(TEXT("description")));
+	TestTrue(TEXT("its Function runs"),
+		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("Ping")));
+	TestTrue(TEXT("a Function with no runtext prints the literal 'runtext'"),
+		ScreenShows(TEXT("runtext")));
 
 	TestTrue(TEXT("quit closes through the captured session"),
 		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("quit")));

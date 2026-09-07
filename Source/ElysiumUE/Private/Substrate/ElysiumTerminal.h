@@ -73,14 +73,66 @@ namespace ElysiumTerminalEmailCaps
 	inline const TCHAR* DefaultBody = TEXT("this email has no body");
 }
 
+// The other three halves of the same loader (`CPropHacking::LoadFromFile` `0x1021cba0`,
+// `docs/vtmb/computer-terminals.md` §12): the top-level keys, the `SubDir` record and the
+// `Function` record. Each cap is the `Q_strncpy` byte count minus the terminator, because
+// `Q_strncpy(dst, src, n)` keeps n-1 characters — an authored value longer than that is TRUNCATED
+// at load and every later measurement (the screensaver's column placement, the directory header's
+// own 16-byte copy, the `%s` in a framed row) sees only the truncated copy.
+//
+// The defaults are the load-time `KeyValues::GetString` fallbacks, and three of them are the KEY
+// literal itself — retail passes the same `.rdata` pointer as key and default — so a record that
+// omits the line draws that word on the glass:
+//   * `1021ceaf` / `1021cf9d`  `name`        cap 0x10, default `"name"`   (`0x1053fd80`)
+//   * `1021cefc` / `1021cfe2`  `description` cap 0x20, default `"description"` (`0x105b07d8`)
+//   * `1021d003`               `runtext`     cap 0x200, default `"runtext"` (`0x105b07c0`)
+// `brackets` (`1021cc8a`) takes the `.rdata` default `"[]"` at `0x105b083c`; every other key
+// defaults to the empty string at `0x106b8540`.
+//
+// The `SubDir` and `Function` records share these three widths exactly (both names are 0x10, both
+// descriptions 0x20, both dependencies 0x40), so they are named once here.
+namespace ElysiumTerminalCaps
+{
+	// Top level, into `CPropHacking`'s own fields.
+	inline constexpr int32 ScreenSaver = 63;     // 1021cc64  Q_strncpy(this+0x904, ..., 0x40)
+	inline constexpr int32 Brackets = 2;         // 1021cc8a  Q_strncpy(this+0x984, ..., 3)
+	inline constexpr int32 EmailPassword = 31;   // 1021ccaa  Q_strncpy(this+0x944, ..., 0x20)
+	inline constexpr int32 EmailUsername = 31;   // 1021ccc8  Q_strncpy(this+0x964, ..., 0x20)
+
+	// `SubDir` and `Function`.
+	inline constexpr int32 Name = 15;            // 1021ceaf / 1021cf9d  Q_strncpy(..., 0x10)
+	inline constexpr int32 Description = 31;     // 1021cefc / 1021cfe2  Q_strncpy(..., 0x20)
+	inline constexpr int32 Password = 15;        // 1021cf1a  Q_strncpy(..., 0x10)
+	inline constexpr int32 Dependency = 63;      // 1021cf38 / 1021d027  Q_strncpy(..., 0x40)
+	inline constexpr int32 RunText = 511;        // 1021d003  Q_strncpy(..., 0x200)
+	inline constexpr int32 RunScript = 63;       // 1021d048  Q_strncpy(..., 0x40)
+
+	inline const TCHAR* DefaultName = TEXT("name");
+	inline const TCHAR* DefaultDescription = TEXT("description");
+	inline const TCHAR* DefaultRunText = TEXT("runtext");
+	inline const TCHAR* DefaultBrackets = TEXT("[]");
+
+	// `1021cf84`: the `Function` loop stops at twenty records per `SubDir` — the remaining blocks
+	// are read by nobody, so a twenty-first function is not authored content at all.
+	inline constexpr int32 FunctionsPerDirectory = 20;
+}
+
 // `CPropHacking+0x904`: a 64-byte character field, so 63 characters plus the terminator
 // (`docs/vtmb/computer-terminals.md` §4.4). The parser truncates to it because retail's `Q_strncpy`
 // does, and the screensaver's column placement measures the truncated string.
-inline constexpr int32 ElysiumTerminalScreenSaverMax = 63;
+inline constexpr int32 ElysiumTerminalScreenSaverMax = ElysiumTerminalCaps::ScreenSaver;
 
 // One patch-first `TerminalDefinition`. The parser preserves authored order and raw display/script
 // strings; only names used for comparisons fold at the comparison site. It is deliberately plain
 // C++ so malformed content and routing rules can be proven without a world, viewport, or RHI.
+//
+// Retail folds a `SubDir` / `Function` name at LOAD instead — `Q_strnlwr` (`vstdlib 0x10003310`,
+// which ignores its count and lowers the whole string) runs on the truncated copy at `1021cef1` /
+// `1021cfd7`, so the record never holds the authored case. The port keeps `Name` as authored and
+// folds at every site that compares or prints it (`FElysiumPropHacking::LoweredName`), which is
+// the same observable text: the two are equivalent because the cap is applied BEFORE the fold in
+// retail and `ToLower` is length-preserving. The raw field is what the definition tests and the
+// debug rows read back.
 struct FElysiumTerminalDefinition
 {
 	FString ScreenSaver;
