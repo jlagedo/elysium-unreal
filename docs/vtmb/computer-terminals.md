@@ -657,7 +657,7 @@ Recovered callers:
 | Site | Address | When |
 |---|---|---|
 | `CBasePlayer::PlayerUse` | `0x10167850` | use-gate fail while held; slot-44 release on a second `+use` press |
-| `CPropHacking` builtin `QUIT` | `FUN_1021aaa0` | localized `Hacking Strings` index 33 |
+| `CPropHacking` builtin `QUIT` | `FUN_1021aaa0` | localized `Hacking_Strings` index 33 |
 | `CPropKeypad::vfunc273` | `0x1021deb0` | quit token or the second keypad cancel token |
 | `CBasePlayer::vfunc142` | `0x10163020` | **`OnTakeDamage`**: releases the held use **before** applying damage. Any damage interrupts a terminal session, not only death. |
 | `CBasePlayer::FUN_10178280` | `0x10178280` | starting a dialogue: release, then immobilize and holster |
@@ -770,6 +770,14 @@ recovered function start. The only consumer of the command string is
   `if (strlen(line) + editOrigin < columns - rightMargin)`: an over-long keystroke is discarded
   whole — the local editor never wraps and never scrolls. Password characters are inserted
   literally; there is no masking.
+- The messages that close the editor (zero `+0xe88` as their first statement) are exactly types
+  **1, 2, 4 and the internal scroll** (`FUN_100c7ec0`, `FUN_100c7fb0`, `FUN_100c7f50`,
+  `FUN_100c8210`). Types 5/6 and 7 do not touch it; types 8/9 write the left margin `+0xe80`.
+  `FUN_10219240` (raw) and `FUN_10219270` (acknowledge) both call `FUN_10219120` first, so type 3
+  and its activation apply to all three prompt kinds. `FUN_100c6d50` has no `0x4` test — its
+  branch is `if ((m_HackFlags & 1) == 0) insert` — so in raw mode the character path also
+  inserts the byte into the local line and re-renders it, on top of the `hackcmd %c` the key-down
+  already sent: the keypress stays echoed on the glass until the server's next print.
 - `CBaseTerminal::Spawn` also clamps columns `[4,36]` and rows `[2,24]` and zeroes `m_HackFlags` /
   `m_nMaxInput`; `m_nColorScheme` (`+0x818`, 4 bits) is clamped `0..3` on the client only.
 
@@ -1010,7 +1018,7 @@ The authority port (`Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp`,
 | `colorscheme` clamp | client rasterizer clamps `0..3` | clamped at spawn and published on the view | one clamp site |
 | Right margin and style on the view | client-local state | published by the authority so the local editor composes with them | the authority owns the buffer here |
 | Mail footer strings 45–47 | no compiled-in fallback — `FUN_10219400` leaves the slots NULL and `Q_vsnprintf` takes a NULL format | `ElysiumHackingStrings::GetOrEmpty` draws a blank footer row | a crash hazard is not a behaviour |
-| Raw mode keys | `hackcmd %c` with the raw key code for every key-down (Enter, Backspace, arrows included) | the translated printable only; other keys are a named seam until `CPropKeypad` (the only content that raises `0x4`) is ported | the port has no VtMB key codes |
+| Raw mode keys | `hackcmd %c` with the raw key code for every key-down (Enter, Backspace, arrows included) | the translated printable only; non-printable keys in raw mode are a named seam (the open mail message and the unported `CPropKeypad` raise `0x4`) | the port has no VtMB key codes |
 | Screensaver randomness | engine `RandomInt` / `RandomFloat` (the shared global) | `ElysiumRng::Stream(EElysiumRngStream::Terminal)`, shared with the cracking filler, seeded per session | deterministic tests; draw order preserved |
 | Two think functions | `CPropHackingSS_Think` and the cracking stepper on one `m_flNextThink` via `ThinkSet` | one `Think()` dispatcher: cracking buffer first, else the screensaver when no user is bound; entry sets never-think, exit re-arms at `ss_start` | one clock, same order |
 | Idle glass | the client entity owns the cell buffer for the entity's lifetime | the authority publishes an idle view per terminal with a body when its revision changes; the presentation redraws the world-lifetime projection only then and only while the body rendered recently | no per-frame work on idle machines, as retail |
@@ -1038,7 +1046,7 @@ routes any line, as `0x1021a830` does.
 5. If `field_0x9ec` is set, the user handle is live, and pending is `-1`, reprint the prompt
    (`FUN_1021b410`).
 
-`FUN_1021aaa0` builtins, matched with `Q_strnicmp` against `Hacking Strings` (resolver
+`FUN_1021aaa0` builtins, matched with `Q_strnicmp` against `Hacking_Strings` (resolver
 `FUN_10219400`):
 
 | Index | Key | Empty / match |
@@ -1050,7 +1058,7 @@ routes any line, as `0x1021a830` does.
 | 36 (`0x24`) | `STRING_EMAIL` | only if `+0xa20 != 0`. Non-empty `email_password` and `m_bEmailUnlocked == 0` → password pending `-2` (`FUN_1021c390`). Otherwise `FUN_1021c890(this, -2)` |
 | 17 (`0x11`) | `STRING_HOME_DIR` | `FUN_1021c890(this, -1)` |
 
-If the `Hacking Strings` table is shorter than the requested index, `FUN_10219400` falls back to
+If the `Hacking_Strings` table is shorter than the requested index, `FUN_10219400` falls back to
 the `STRING_*` **key names** themselves (48 compiled-in labels, else `"Unrecognized Command"`).
 
 `FUN_1021b750` function/directory match, from **any** current directory (mail is excluded by the
@@ -1259,7 +1267,7 @@ per-mail value, because vfunc268 `0x1021cae0` short-circuits on pending `-2`. En
 persists for the entity's lifetime as saved state.
 
 **Email navigation is a hotkey state.** `FUN_1021b9c0` runs only while `+0x9dc == -2`. Commands
-are matched as **one character** against `(Hacking Strings[i] + 1)` — the first character of the
+are matched as **one character** against `(Hacking_Strings[i] + 1)` — the first character of the
 localized word after a leading byte (typically a space or bracket):
 
 | Index | Key | List (`+0x9f4 == -1`) | Open message |
@@ -1366,7 +1374,7 @@ inherit:
 - entry `0x1021ddf0` is base terminal entry plus redraw plus the same `camera_cinematic`
   `"Hacking"` shot.
 
-## 16. Localized `Hacking Strings` indices
+## 16. Localized `Hacking_Strings` indices
 
 `FUN_10219400` reads `vdata` table `"Hacking_Strings"` (underscore, `0x105b03b4`). Compiled-in fallback names, in order
 0…47:

@@ -18,8 +18,14 @@
 //   4 `FUN_100c7f50` clear           5 `FUN_100c7f40` style 0x80    6 `FUN_100c7f30` style 0
 //   7 `FUN_100c7e60` set margins     8 backspace (`0x7f` through put-char, then left margin 0)
 //   9 echo one character (put-char, then left margin 0)
-// Every handler except 5/6 also clears the client's local line-edit flag, which the widget owns
-// here and the view reports as the cursor being editable.
+//
+// Four of them — 1 `FUN_100c7ec0`, 2 `FUN_100c7fb0`, 4 `FUN_100c7f50` and the internal scroll
+// `FUN_100c8210` — zero the client's local line-edit flag `+0xe88` as their FIRST act, which
+// closes any open edit. Types 5/6 (style) and 7 (margins) do not touch it, and types 8/9 write
+// `+0xe80 = 0` (the left margin) rather than the flag. The authority owns that flag here
+// (`FElysiumTerminal::IsLineEditActive`), and the scroll `PutChar` performs when the cursor runs
+// off the bottom is invisible from outside, so the buffer counts those four events and the
+// terminal compares the count it activated at.
 class FElysiumTerminalScreenBuffer
 {
 public:
@@ -40,6 +46,10 @@ public:
 	int32 LeftMargin() const { return MarginLeft; }
 	int32 RightMargin() const { return MarginRight; }
 	uint8 Style() const { return CurrentStyle; }
+	// How many times a message that zeroes `+0xe88` has run on this grid (types 1, 2, 4 and the
+	// scroll). Monotonic; only ever compared for equality against the value an edit opened at, so
+	// a double count from a print that also scrolled is harmless.
+	uint32 LineEditBreaks() const { return NumLineEditBreaks; }
 
 	uint16 Cell(int32 InColumn, int32 InRow) const;
 	TCHAR CharAt(int32 InColumn, int32 InRow) const;
@@ -86,6 +96,7 @@ private:
 	int32 MarginLeft = 0;
 	int32 MarginRight = 0;
 	uint8 CurrentStyle = DefaultStyle;
+	uint32 NumLineEditBreaks = 0;
 	TArray<uint16> Cells;
 
 	int32 Index(int32 InColumn, int32 InRow) const { return InRow * NumColumns + InColumn; }

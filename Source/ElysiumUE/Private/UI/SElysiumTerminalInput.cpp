@@ -29,8 +29,11 @@ void SElysiumTerminalInput::SetSession(const FElysiumTerminalView& InView)
 {
 	const bool bNewSession = View.Owner != InView.Owner || View.SessionSerial != InView.SessionSerial;
 	const bool bModeChanged = View.InputMode != InView.InputMode;
+	// `FUN_100c82e0` clears `+0xed8` inside the activation guard, so every reopened edit starts on
+	// an empty line — including the one that reopens over an unchanged owner, serial and mode.
+	const bool bReopened = View.EditEpoch != InView.EditEpoch;
 	View = InView;
-	if (bNewSession || bModeChanged)
+	if (bNewSession || bModeChanged || bReopened)
 	{
 		ClearDraft();
 	}
@@ -76,28 +79,31 @@ FReply SElysiumTerminalInput::OnKeyDown(const FGeometry&, const FKeyEvent& KeyEv
 		return FReply::Unhandled();
 	}
 
-	// The Ctrl chord, before every mode arm: retail latches `0x85` and fires on the next `c`.
-	if (Key == EKeys::C && KeyEvent.IsControlDown())
+	// `if (this[0xf04] == 0) return 0;` — the second test, and it returns ZERO: a terminal that is
+	// not in use hands the key straight back, so it reaches whatever binding would have had it.
+	if (!IsInUse())
 	{
-		if (!KeyEvent.IsRepeat())
-		{
-			OnBreak.ExecuteIfBound();
-		}
+		return FReply::Unhandled();
+	}
+
+	// `if (this[0xe88] == 0) return 1;` — the third test. The line editor is closed (nothing has
+	// sent type 3 since the last print, clear or scroll), so the key is eaten and NOTHING else
+	// happens: no break, no quit, no submit, no raw send, no draw. It is deliberately ahead of
+	// every mode arm.
+	if (!IsEditorOpen())
+	{
 		return FReply::Handled();
 	}
 
-	// Raw-character transport (`m_HackFlags 0x4`) is tested BEFORE acknowledge in `0x100c7090`.
-	// Escape still quits; every other key becomes one `hackcmd %c`, which the port sends from
-	// `OnKeyChar` so the character is the translated one.
+	// Raw-character transport (`m_HackFlags 0x4`) is tested BEFORE acknowledge in `0x100c7090`, and
+	// both are tested before the Ctrl latch is ever SET. Escape still quits; every other key
+	// becomes one `hackcmd %c`, which the port sends from `OnKeyChar` so the character is the
+	// translated one.
 	if (IsRawMode())
 	{
 		if (Key == EKeys::Escape)
 		{
-			if (!KeyEvent.IsRepeat())
-			{
-				OnQuit.ExecuteIfBound();
-			}
-			return FReply::Handled();
+			OnQuit.ExecuteIfBound();
 		}
 		return FReply::Handled();
 	}
@@ -109,17 +115,24 @@ FReply SElysiumTerminalInput::OnKeyDown(const FGeometry&, const FKeyEvent& KeyEv
 	{
 		if (Key == EKeys::Enter || Key == EKeys::Escape)
 		{
-			if (!KeyEvent.IsRepeat())
-			{
-				OnAcknowledge.ExecuteIfBound();
-			}
+			OnAcknowledge.ExecuteIfBound();
 		}
+		return FReply::Handled();
+	}
+
+	// The Ctrl chord, and its position is the point: retail sets the latch (`this[0xf0c] = 1` on
+	// `0x85`) only in this arm, AFTER the raw and acknowledge arms have returned. Every other key
+	// clears the latch, so the break can only fire when the immediately preceding key-down went
+	// through the line editor — which is never true in raw or acknowledge mode.
+	if (Key == EKeys::C && KeyEvent.IsControlDown())
+	{
+		OnBreak.ExecuteIfBound();
 		return FReply::Handled();
 	}
 
 	if (Key == EKeys::Enter)
 	{
-		if (!KeyEvent.IsRepeat() && OnSubmitLine.IsBound() && OnSubmitLine.Execute(DraftText))
+		if (OnSubmitLine.IsBound() && OnSubmitLine.Execute(DraftText))
 		{
 			// The authority accepted the line, which in retail means it redrew and its type-3
 			// message reopened the editor over a cleared local line (`FUN_100c82e0`).
@@ -130,10 +143,7 @@ FReply SElysiumTerminalInput::OnKeyDown(const FGeometry&, const FKeyEvent& KeyEv
 
 	if (Key == EKeys::Escape)
 	{
-		if (!KeyEvent.IsRepeat())
-		{
-			OnQuit.ExecuteIfBound();
-		}
+		OnQuit.ExecuteIfBound();
 		return FReply::Handled();
 	}
 
@@ -175,10 +185,21 @@ FReply SElysiumTerminalInput::OnKeyChar(const FGeometry&, const FCharacterEvent&
 {
 	const TCHAR Character = CharacterEvent.GetCharacter();
 
-	// `FUN_100c6d50`'s gate, in order: backtick, then the five control codes it names.
+	// `FUN_100c6d50`'s gate, in its own order: backtick, `this[0xf04]` (in use), `this[0xe88]` (the
+	// line editor is open), then the five control codes it names. The insert path carries the same
+	// two state guards as the key-down path, so a closed session and a closed editor each refuse
+	// the character as well as the key.
 	if (Character == TCHAR('`'))
 	{
 		return FReply::Unhandled();
+	}
+	if (!IsInUse())
+	{
+		return FReply::Unhandled();
+	}
+	if (!IsEditorOpen())
+	{
+		return FReply::Handled();
 	}
 	if (Character == 8 || Character == 9 || Character == 10 || Character == 13 || Character == 27)
 	{

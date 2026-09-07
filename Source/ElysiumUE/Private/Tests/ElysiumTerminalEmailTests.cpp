@@ -126,12 +126,17 @@ static FElysiumTerminalDefinition HavenDefinition()
 
 // The framed box rows, built exactly as `FElysiumTerminal::RuleRow` / `FramedRow` build them, so a
 // cell-for-cell comparison is against the same arithmetic and not against a transcription.
-static FString BoxRule(int32 Columns)
+//
+// Unity-blob safety: `ElysiumTerminalSliceTests.cpp` builds the same two rows for the same reason,
+// and a named namespace plus a file-scope `using` does not separate two translation units the
+// build merges — the calls go ambiguous the moment the two land in one blob. The `Mail` prefix is
+// what keeps them apart.
+static FString MailBoxRule(int32 Columns)
 {
 	return FString(TEXT(" +")) + FString::ChrN(Columns - 4, TEXT('-')) + TEXT("+");
 }
 
-static FString BoxRow(int32 Columns, const FString& Text, int32 Margin)
+static FString MailBoxRow(int32 Columns, const FString& Text, int32 Margin)
 {
 	const int32 Width = FMath::Max(2, Columns - 2);
 	FString Row = FString::ChrN(Width, TEXT(' '));
@@ -271,7 +276,7 @@ bool FElysiumTerminalEmailTest::RunTest(const FString&)
 		EElysiumTerminalInputMode::Acknowledge);
 	TestTrue(TEXT("entry sets m_bEmailUnlocked"), Terminal->bEmailUnlocked);
 	TestEqual(TEXT("the entry screen titles string 16"), Row(2),
-		BoxRow(Columns, Get(&World, ValidPassword),
+		MailBoxRow(Columns, Get(&World, ValidPassword),
 			(Columns - Get(&World, ValidPassword).Len() - 2) / 2));
 	TestEqual(TEXT("and waits on the acknowledge prompt"), Row(Terminal->TextRows - 1),
 		TEXT(" ") + Get(&World, Continue));
@@ -280,6 +285,11 @@ bool FElysiumTerminalEmailTest::RunTest(const FString&)
 	TestTrue(TEXT("the acknowledging empty line is accepted"), Submit(FString()));
 	TestEqual(TEXT("the inbox is a line-editor prompt again"), Terminal->InputMode(),
 		EElysiumTerminalInputMode::Line);
+	// `FUN_10219120` is the type-3 message as well as the flag clear, so the list draw's tail also
+	// opens the client's editor (`FUN_100c82e0`) — and it only does so if the three-row footer left
+	// the cursor short of `columns - rightMargin - 1`.
+	TestTrue(TEXT("and its client line editor is open on that footer row"),
+		Terminal->IsLineEditActive());
 	TestEqual(TEXT("the dependency-hidden record is absent from the visible table"),
 		Terminal->MailVisible.Num(), 12);
 	TestFalse(TEXT("so record 12 (the FAIL dependency) is never listed"),
@@ -310,10 +320,10 @@ bool FElysiumTerminalEmailTest::RunTest(const FString&)
 		const FString Title = ElysiumTerminalFormat(TEXT("%s %s"),
 			{ Get(&World, EmailTitleBar), TEXT("Noa") });
 		const int32 Margin = (Columns - Title.Len() - 2) / 2;
-		TestEqual(TEXT("the inbox title box rules"), Row(0), BoxRule(Columns));
+		TestEqual(TEXT("the inbox title box rules"), Row(0), MailBoxRule(Columns));
 		TestEqual(TEXT("the inbox title is \"<string 29> <email_username>\""), Row(2),
-			BoxRow(Columns, Title, Margin));
-		TestEqual(TEXT("and closes on the second rule"), Row(4), BoxRule(Columns));
+			MailBoxRow(Columns, Title, Margin));
+		TestEqual(TEXT("and closes on the second rule"), Row(4), MailBoxRule(Columns));
 		for (int32 Number = 1; Number <= 10; ++Number)
 		{
 			TestEqual(FString::Printf(TEXT("page 1 row %d"), Number), Row(4 + Number),
@@ -364,6 +374,11 @@ bool FElysiumTerminalEmailTest::RunTest(const FString&)
 	// single-key mode so the client sends one `hackcmd %c` per keypress.
 	TestEqual(TEXT("an open message is raw single-key mode"), Terminal->InputMode(),
 		EElysiumTerminalInputMode::Raw);
+	// `FUN_10219240` calls `FUN_10219120` FIRST, so a raw prompt carries the same type-3 activation
+	// a line prompt does. It has to: `0x100c7090` tests `+0xe88` third, ahead of the raw arm, so a
+	// closed editor would eat every hotkey before it could become a `hackcmd %c`.
+	TestTrue(TEXT("and its client line editor is open, so a hotkey reaches the raw arm"),
+		Terminal->IsLineEditActive());
 	TestTrue(TEXT("opening set the read bit"), Terminal->IsEmailRead(0));
 	TestEqual(TEXT("and fired the runscript exactly once"),
 		Host->Calls.FindRef(TEXT("SCRIPT:opened")), 1);
@@ -690,7 +705,7 @@ bool FElysiumTerminalEmailContentTest::RunTest(const FString&)
 		const FString Title = ElysiumTerminalFormat(TEXT("%s %s"),
 			{ Get(&World, EmailTitleBar), Definition.EmailUsername });
 		TestEqual(TEXT("the header is \"<string 29> <email_username>\""), Row(2),
-			BoxRow(Columns, Title, (Columns - Title.Len() - 2) / 2));
+			MailBoxRow(Columns, Title, (Columns - Title.Len() - 2) / 2));
 	}
 	{
 		const FString Subject = Definition.Emails[Terminal->MailVisible[0]].Subject;

@@ -321,6 +321,25 @@ struct FElysiumTerminalView
 	int32 ColorScheme = 0;
 	// EElysiumTerminalInputMode: 0 line, 1 password, 2 acknowledge, 3 raw character.
 	uint8 InputMode = 0;
+	// The client line editor's activation (`docs/vtmb/computer-terminals.md` §8.1.1, TERM20).
+	// Retail's editor is opened by entity message 3 (`FUN_100c82e0`, sent by `FUN_10219120` and so
+	// by all three mode senders) and closed by every message that zeroes `+0xe88` — set cursor
+	// (`FUN_100c7ec0`), print (`FUN_100c7fb0`), clear (`FUN_100c7f50`) and the scroll
+	// (`FUN_100c8210`). Closed, `0x100c7090` returns 1 at its third test: the key is eaten, nothing
+	// is inserted and nothing is drawn. The input MODE says how a key is answered; this says
+	// whether it is answered at all, and the two are independent.
+	bool bLineEditActive = false;
+	// `+0xe8c` and the row the edit opened on. The draft is composed from HERE, not from the live
+	// cursor: `0x100c7090`'s re-render restores the saved row, sets the cursor to `+0xe8c` and
+	// walks the whole line back through put-char, so the origin is the only anchor and its fit
+	// guard is `strlen(line) + editOrigin < columns - rightMargin`.
+	int32 EditOriginColumn = 0;
+	int32 EditOriginRow = 0;
+	// Bumped on every activation. It has no retail field: retail's type-3 handler clears the local
+	// line `+0xed8` itself, and the authority here cannot reach into the widget that holds it, so
+	// a changed epoch is that clear. Serial and mode changes clear the draft too; this covers the
+	// case they miss — the same session redrawing the same mode's prompt.
+	uint32 EditEpoch = 0;
 	// `m_nMaxInput`, zeroed by `CBaseTerminal::Spawn` `0x10217880` and raised by no shipped body.
 	// **Zero or less means UNLIMITED**, exactly as the client's two input paths read it
 	// (`if (m_nMaxInput != 0 && strlen(line) >= m_nMaxInput) return;`, `0x100c7090` and

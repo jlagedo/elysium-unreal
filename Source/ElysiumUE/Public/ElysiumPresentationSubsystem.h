@@ -144,15 +144,16 @@ public:
 	bool Quit(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
 	bool Break(const FElysiumEntityHandle& Owner, uint32 SessionSerial);
 
-	// The local line the focused widget is holding, mirrored onto the monitor's glass. Retail
-	// composes the typed characters into the CLIENT's own cell buffer before rasterizing
-	// (`FUN_100c6d50` -> `FUN_100c8060`, §8.1/TERM13), so the typed line is genuinely on the screen
-	// and not in a viewport overlay. An unset owner (or an empty string) means nothing is typed.
 	// Whether the world still holds a live terminal session RIGHT NOW, not in the last published
 	// frame. `quit` is one string with two authority behaviours (§9) — a release at the directory
 	// prompt, a cancel at a password prompt — so the only way to know whether the screen may close
 	// is to ask the world after the submit, before the next publish.
 	bool IsTerminalSessionOpen() const;
+
+	// The local line the focused widget is holding, mirrored onto the monitor's glass. Retail
+	// composes the typed characters into the CLIENT's own cell buffer before rasterizing
+	// (`FUN_100c6d50` -> `FUN_100c8060`, §8.1/TERM13), so the typed line is genuinely on the screen
+	// and not in a viewport overlay. An unset owner (or an empty string) means nothing is typed.
 	void SetTerminalDraft(const FElysiumEntityHandle& Owner, const FString& Draft);
 	const FString& TerminalDraft() const { return TerminalDraftText; }
 	const FElysiumEntityHandle& TerminalDraftOwner() const { return TerminalDraftHandle; }

@@ -14,13 +14,19 @@ struct FElysiumTerminalView;
 // insert) restores that saved row, walks the whole line back through put-char from the edit origin
 // and leaves the cursor at `origin + caret`.
 //
-// Three consequences the port reproduces here rather than approximating:
+// Four consequences the port reproduces here rather than approximating:
 //
+//  * **The activation.** Nothing composes while the editor is closed. `0x100c7090` tests `+0xe88`
+//    third, before every mode arm, and returns 1 with no re-render when it is zero — so between a
+//    print or a clear and the next type-3 message the glass is the authority's grid and nothing
+//    else, even though the widget may still be holding the line it typed.
 //  * **The fit guard.** Both client paths wrap the entire re-render in
 //    `if (strlen(line) + editOrigin < columns - rightMargin)`, and the edited line is only written
 //    back to `+0xed8` INSIDE it. A keystroke that would push the line past the right margin is
-//    therefore discarded whole — retail has no wrap and no scroll in the local editor.
-//  * **One row.** The composition only ever touches the authority's cursor row.
+//    therefore discarded whole — retail has no wrap and no scroll in the local editor. The anchor
+//    is the edit ORIGIN `+0xe8c`, not the live cursor, which is why the guard survives the cursor
+//    walking right as the line grows.
+//  * **One row.** The composition only ever touches the row the edit opened on.
 //  * **The caret is the end of the line.** Left/Right/Home/End move it only while `m_bAllowDirKeys`
 //    is set, and that field is zeroed at `CBaseTerminal::Spawn` `0x10217880` and written nowhere
 //    else in vampire.dll.
@@ -53,6 +59,7 @@ namespace ElysiumTerminalCells
 	// The widget applies it to refuse the keystroke, exactly as retail discards the edit.
 	bool DraftFits(const FElysiumTerminalView& View, int32 DraftLength);
 
-	// The authority's grid with the local draft put-charred from the authority's cursor.
+	// The authority's grid with the local draft put-charred from the edit origin. An inactive
+	// editor (`FElysiumTerminalView::bLineEditActive` false) composes to the grid untouched.
 	FElysiumTerminalComposed ComposeDraft(const FElysiumTerminalView& View, const FString& Draft);
 }

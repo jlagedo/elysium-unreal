@@ -353,10 +353,67 @@ bool FElysiumTerminalHudHintTest::RunTest(const FString&)
 		Get(&World, PressHackKey));
 	TestFalse(TEXT("and that line is not empty"), View.HudHintText.IsEmpty());
 
+	// The client line editor's activation travels with that type-3 message (§8.1.1, TERM20):
+	// `FUN_10219120` sends it, `FUN_100c82e0` records the cursor column as the edit origin `+0xe8c`,
+	// clears the local line `+0xed8` and sets `+0xe88`.
+	TestTrue(TEXT("the password prompt leaves the client line editor open"), View.bLineEditActive);
+	TestEqual(TEXT("anchored on the prompt row"), View.EditOriginRow, View.Rows - 1);
+	TestEqual(TEXT("at the column the prompt left the cursor on"), View.EditOriginColumn,
+		View.CursorColumn);
+	const uint32 FirstPromptEpoch = View.EditEpoch;
+	TestTrue(TEXT("and the activation is counted"), FirstPromptEpoch > 0);
+
 	TestTrue(TEXT("a wrong password is accepted"), Submit(TEXT("wrong")));
 	TestTrue(TEXT("the retry prompt publishes"), World.BuildTerminalView(View));
 	TestEqual(TEXT("the RETRY prompt raises it again"), View.HudHintType, 3);
 	TestEqual(TEXT("with the same line"), View.HudHintText, Get(&World, PressHackKey));
+	// The retry is the same session in the same mode, so serial and mode say nothing changed. The
+	// epoch is what tells the widget its line was cleared — `FUN_1021b5e0` redraws the whole screen
+	// and its type-3 tail zeroes `+0xed8`, so the guess the player just made is gone from the glass.
+	TestTrue(TEXT("the retry prompt re-opened the edit, clearing the pending line"),
+		View.EditEpoch > FirstPromptEpoch);
+	TestTrue(TEXT("and it is open again"), View.bLineEditActive);
+
+	// --- and every message that zeroes `+0xe88` closes it -----------------------------------------
+	{
+		const uint32 OpenEpoch = View.EditEpoch;
+		// `FUN_100c7fb0` (type 2) zeroes the flag as its first act, exactly like `FUN_100c7ec0`
+		// (type 1), `FUN_100c7f50` (type 4) and the internal scroll `FUN_100c8210`.
+		Terminal->ScreenPrint(TEXT("x"));
+		TestFalse(TEXT("a print closes the client's line editor"), Terminal->IsLineEditActive());
+		TestTrue(TEXT("the closed view publishes"), World.BuildTerminalView(View));
+		TestFalse(TEXT("and the view says so, so nothing composes onto the glass"),
+			View.bLineEditActive);
+		TestEqual(TEXT("without pretending the edit was reopened"), View.EditEpoch, OpenEpoch);
+
+		Terminal->ScreenClear();
+		Terminal->EnterLineEdit();
+		TestTrue(TEXT("the next type-3 message opens it again"), Terminal->IsLineEditActive());
+		TestTrue(TEXT("the reopened view publishes"), World.BuildTerminalView(View));
+		TestTrue(TEXT("with a bumped epoch"), View.EditEpoch > OpenEpoch);
+
+		// The activation guard itself: `iVar1 < (columns - rightMargin) - 1`. A type-3 message that
+		// arrives with the cursor on the last usable column activates nothing at all.
+		const int32 Columns = Terminal->Screen.Columns();
+		const int32 Right = Terminal->Screen.RightMargin();
+		const int32 Left = Terminal->Screen.LeftMargin();
+		const uint32 GuardEpoch = View.EditEpoch;
+		Terminal->ScreenClear();   // closes the edit, so the next EnterLineEdit is a real attempt
+		Terminal->ScreenSetCursor(Columns - Right - 1 - Left, 5);
+		TestEqual(TEXT("the cursor is on the last column the guard refuses"),
+			Terminal->Screen.CursorColumn(), Columns - Right - 1);
+		Terminal->EnterLineEdit();
+		TestFalse(TEXT("type 3 at that column activates nothing"), Terminal->IsLineEditActive());
+		TestTrue(TEXT("the refused view publishes"), World.BuildTerminalView(View));
+		TestEqual(TEXT("and no epoch was spent on it"), View.EditEpoch, GuardEpoch);
+
+		Terminal->ScreenSetCursor(Columns - Right - 2 - Left, 5);
+		Terminal->EnterLineEdit();
+		TestTrue(TEXT("one column earlier it does activate"), Terminal->IsLineEditActive());
+		TestEqual(TEXT("with the edit origin at that cursor"), Terminal->LineEditOriginColumn,
+			Columns - Right - 2);
+		TestEqual(TEXT("on that row"), Terminal->LineEditOriginRow, 5);
+	}
 
 	// --- the cracking buffer raises type 5 with the rating ----------------------------------------
 	TestTrue(TEXT("break starts the skill bypass"), Submit(TEXT("break")));

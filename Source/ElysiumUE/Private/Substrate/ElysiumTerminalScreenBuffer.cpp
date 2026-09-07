@@ -48,15 +48,18 @@ void FElysiumTerminalScreenBuffer::Fill(int32 FromRow, int32 ToRow)
 
 void FElysiumTerminalScreenBuffer::SetCursor(int32 InColumn, int32 InRow)
 {
-	// `FUN_100c7ec0`: the column is offset by the left margin and clamped to `[0, columns-1]`;
-	// the row is clamped to `[0, rows-1]`.
+	// `FUN_100c7ec0`: `+0xe88 = 0` first, then the column is offset by the left margin and clamped
+	// to `[0, columns-1]`; the row is clamped to `[0, rows-1]`.
+	++NumLineEditBreaks;
 	Column = FMath::Clamp(MarginLeft + InColumn, 0, NumColumns - 1);
 	Row = FMath::Clamp(InRow, 0, NumRows - 1);
 }
 
 void FElysiumTerminalScreenBuffer::Print(const FString& Text)
 {
-	// `FUN_100c7fb0`. `Limit` is `columns - rightMargin`, the column a word may not cross.
+	// `FUN_100c7fb0`, which also opens with `+0xe88 = 0`. `Limit` is `columns - rightMargin`, the
+	// column a word may not cross.
+	++NumLineEditBreaks;
 	const int32 Limit = NumColumns - MarginRight;
 	const int32 Len = Text.Len();
 	int32 At = 0;
@@ -100,6 +103,8 @@ void FElysiumTerminalScreenBuffer::Print(const FString& Text)
 
 void FElysiumTerminalScreenBuffer::Clear()
 {
+	// `FUN_100c7f50`: `+0xe88 = 0`, then the fill.
+	++NumLineEditBreaks;
 	Fill(0, NumRows);
 	Row = 0;
 	Column = MarginLeft;
@@ -204,6 +209,9 @@ void FElysiumTerminalScreenBuffer::PutChar(int32 Code)
 
 void FElysiumTerminalScreenBuffer::ScrollUp(int32 Lines)
 {
+	// `FUN_100c8210` zeroes `+0xe88` BEFORE its `0 < lines` guard, so even a no-op scroll closes an
+	// open edit.
+	++NumLineEditBreaks;
 	if (Lines <= 0)
 	{
 		return;

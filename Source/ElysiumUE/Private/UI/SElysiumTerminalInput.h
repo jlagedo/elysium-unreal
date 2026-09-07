@@ -15,19 +15,37 @@
 //
 //  * **Key-down** `C_BaseTerminal::vfunc25` `0x100c7090` — the specials, and the *eat*: an ordinary
 //    printable in `0x20..0x7e` returns 1 **without inserting**, so it never reaches the player's
-//    movement bindings, and the character path does the insert. Order matters and is preserved:
-//    backtick first (the console keeps it), then the Ctrl chord, then raw mode, then acknowledge
-//    mode, then the ordinary line editor.
+//    movement bindings, and the character path does the insert. Order matters and is preserved,
+//    test for test:
+//      1. backtick -> **return 0** (the console keeps it);
+//      2. `this[0xf04] == 0` (not in use) -> **return 0** — a closed session hands the key back;
+//      3. `this[0xe88] == 0` (the line editor is not open) -> **return 1**, eaten, nothing drawn;
+//      4. the Ctrl latch fires only for `c`, and the latch is CLEARED here for every other key;
+//      5. raw mode (`m_HackFlags 0x4`), 6. acknowledge mode (`0x1`),
+//      7. the line editor — and only here is the latch SET on `0x85`, which is why Ctrl+C is not a
+//         break in raw or acknowledge mode: those arms returned before the set.
 //  * **Character insert** `FUN_100c6d50` — ignores backtick and the control codes `8`/`9`/`10`/
 //    `13`/`27`, honours `m_nMaxInput` (**zero means unlimited**) and the digits-only flag
 //    `m_HackFlags 0x2`, and inserts at the caret.
 //
+// Retail's key repeat is an ordinary key-down: `0x100c7090` is handed a code and has no repeat
+// input at all, so a held Enter submits again, a held Escape quits again and a held Ctrl+C breaks
+// again. Nothing here suppresses repeats.
+//
 // Named modernizations (`docs/vtmb/computer-terminals.md` §8.7):
 //
 //  * Retail latches Ctrl as a chord byte (`0x85`, then `c`). The port reads Slate's modifier state
-//    on the `C` key-down instead, which is the same gesture through a real keyboard model.
-//  * Retail forwards the raw key code in `hackcmd %c`. The port forwards the TRANSLATED character
-//    from `OnKeyChar`, so a non-US layout types what the player sees.
+//    on the `C` key-down instead, which is the same gesture through a real keyboard model. The
+//    latch's POSITION is reproduced rather than its mechanism: the test sits after the raw and
+//    acknowledge arms, so break exists only in the line editor.
+//  * Retail forwards the raw key code in `hackcmd %c` for EVERY key-down in raw mode — Enter
+//    (`0xd`), backspace (`0x7f`), Tab, the arrow codes `0x80..0x83`, the lot. The port forwards
+//    the TRANSLATED character from `OnKeyChar`, so a non-US layout types what the player sees, and
+//    the consequence is a named seam: a non-printable key in raw mode is eaten here and sent
+//    nowhere. Nothing in the ported content needs it — the open mail message (`FUN_1021c260` ->
+//    `FUN_10219240`) is the only shipped raw-mode prompt and its grammar is `n`/`p`/`d`/`m`/`q` —
+//    and the one content that would (`CPropKeypad`, whose keys are the arrows and Enter) is not
+//    ported. Recorded in §8.7.
 //  * Retail's character path range-checks nothing but the five control codes, so a stray `0x7f`
 //    reaches the cell buffer and reads there as a backspace. The port requires `0x20..0x7e`, the
 //    same range key-down eats.
@@ -48,9 +66,11 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
-	// The published session. A change of input mode clears the draft, which is what retail's type-3
-	// message does when it reopens the line editor over a freshly cleared screen (`FUN_100c82e0`
-	// zeroes `+0xed8`).
+	// The published session. The draft is cleared on a new session (owner or serial), on a change of
+	// input mode, and on a change of `EditEpoch` — the last being retail's own clear, since
+	// `FUN_100c82e0` zeroes the local line `+0xed8` on every activation. The epoch is what makes the
+	// third case reachable: a redraw that reopens the same mode's prompt for the same session (the
+	// password retry after a failed crack, `FUN_1021b5e0`) changes neither owner, serial nor mode.
 	void SetSession(const FElysiumTerminalView& InView);
 	const FElysiumTerminalView& Session() const { return View; }
 
@@ -82,6 +102,10 @@ private:
 
 	bool IsAcknowledgeMode() const { return View.InputMode == 2; }
 	bool IsRawMode() const { return View.InputMode == 3; }
+	// `this[0xf04]`, the in-use flag `0x100c7090` tests second. `IsOpen()` is the port's answer.
+	bool IsInUse() const { return View.IsOpen(); }
+	// `this[0xe88]`, the line editor's own flag, tested third — independently of the mode.
+	bool IsEditorOpen() const { return View.bLineEditActive; }
 	// `FUN_100c6d50`'s insert gate, in retail's order: the acknowledge arm, `m_nMaxInput`, the
 	// digits-only flag, then the fit guard that both client paths wrap the whole re-render in.
 	bool CanAppend(TCHAR Character) const;

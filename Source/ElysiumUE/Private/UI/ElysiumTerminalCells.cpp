@@ -50,7 +50,9 @@ namespace ElysiumTerminalCells
 		{
 			return true;   // nothing to draw is always drawable
 		}
-		return View.CursorColumn + DraftLength < View.Columns - View.RightMargin;
+		// `this[0xe8c]`, the edit origin — the column the type-3 message opened the edit at, which
+		// does not move as the line grows.
+		return View.EditOriginColumn + DraftLength < View.Columns - View.RightMargin;
 	}
 
 	FElysiumTerminalComposed ComposeDraft(const FElysiumTerminalView& View, const FString& Draft)
@@ -69,8 +71,14 @@ namespace ElysiumTerminalCells
 		{
 			return Out;
 		}
+		if (!View.bLineEditActive)
+		{
+			// `0x100c7090`'s third test: with `+0xe88` clear the body returns before it reaches any
+			// re-render, so a line typed before a print or a clear is simply not on the glass.
+			return Out;
+		}
 		if (!DraftFits(View, Draft.Len())
-			|| View.CursorRow < 0 || View.CursorRow >= Out.Rows || View.CursorColumn < 0)
+			|| View.EditOriginRow < 0 || View.EditOriginRow >= Out.Rows || View.EditOriginColumn < 0)
 		{
 			// Retail's guard, and its consequence: the keystroke is discarded, the saved row is not
 			// restored and the glass keeps whatever it last showed.
@@ -78,7 +86,7 @@ namespace ElysiumTerminalCells
 		}
 
 		const uint16 Style = static_cast<uint16>(View.CellStyle & 0x80);
-		int32 Column = View.CursorColumn;
+		int32 Column = View.EditOriginColumn;
 		for (const TCHAR Character : Draft)
 		{
 			if (Character < 0x20 || Character > 0x7e || Column >= Out.Columns)
@@ -88,13 +96,15 @@ namespace ElysiumTerminalCells
 				// this pure function honest about retail's one-row editor.
 				break;
 			}
-			Out.Cells[View.CursorRow * Out.Columns + Column] =
+			Out.Cells[View.EditOriginRow * Out.Columns + Column] =
 				static_cast<uint16>(static_cast<uint16>(Character) | Style);
 			++Column;
 		}
 		// `+0xe78 = editOrigin + caret`, and the caret is the end of the line because the direction
-		// keys are permanently disabled.
+		// keys are permanently disabled. The row is the edit's, which is the authority's cursor row
+		// as well: every message that could move that row closes the edit first.
 		Out.CursorColumn = Column;
+		Out.CursorRow = View.EditOriginRow;
 		Out.bDraftDrawn = true;
 		return Out;
 	}

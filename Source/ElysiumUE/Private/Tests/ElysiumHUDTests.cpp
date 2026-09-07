@@ -1141,6 +1141,10 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 	View.Columns = 36;
 	View.Rows = 24;
 	View.MaxInput = 16;
+	// The client line editor is open, as the tail of every draw body leaves it (`FUN_10219120` ->
+	// entity message 3 -> `FUN_100c82e0`); without it `0x100c7090` eats every key untouched.
+	View.bLineEditActive = true;
+	View.EditEpoch = 1;
 	View.ScreenRows.SetNum(View.Rows);
 	View.ScreenRows[0] = FString(TEXT("TEST TERMINAL")).RightPad(View.Columns);
 	View.ScreenRows[2] = FString(TEXT("Available menus:")).RightPad(View.Columns);

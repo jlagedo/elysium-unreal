@@ -59,8 +59,8 @@ public:
 	// Test-only override for the line above. Unset in the game, where the engine's own answer wins.
 	TOptional<bool> ForcedResidency;
 	// Rasterize the COMPOSED grid — the authority's cells with the local draft put-charred from the
-	// authority's cursor (`ElysiumTerminalCells::ComposeDraft`) — onto the glass, and consume the
-	// view's revision and the draft.
+	// edit origin, and only while the line editor is open (`ElysiumTerminalCells::ComposeDraft`) —
+	// onto the glass, and consume the view's revision and the draft.
 	void Draw(const FElysiumTerminalView& View, const FString& Draft = FString());
 
 	// The revision last drawn (or last consumed, where there is no renderer).

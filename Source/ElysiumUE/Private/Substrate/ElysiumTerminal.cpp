@@ -915,6 +915,48 @@ void FElysiumTerminal::TitleBox(const FString* Title, const TArray<FString>& Log
 	RuleRow();
 }
 
+void FElysiumTerminal::EnterLineEdit()
+{
+	// `FUN_10219120`, the server half: `m_HackFlags &= 0xfffffffa` clears acknowledge (0x1) and raw
+	// (0x4), and the same body sends entity message type 3.
+	HackFlags &= ~(FlagAcknowledge | FlagRawCharacter);
+
+	// `FUN_100c82e0`, the client half — the whole body, guards included.
+	//
+	//   `if (-1 < cursorCol && cursorCol < columns - rightMargin - 1 &&
+	//       -1 < cursorRow && cursorRow < rows && *(char*)(this+0xe88) == 0)`
+	//
+	// so a message that arrives with the cursor already at (or past) the last usable column, or
+	// while an edit is still open, does NOTHING: no origin, no cleared line, no flag. Inside the
+	// guard it saves the cursor's cell row into `+0xe90`, records the cursor column as the edit
+	// origin `+0xe8c`, clears the local line `+0xed8` and sets `+0xe88`.
+	//
+	// The saved row has no counterpart here: retail saves it because the client re-renders the
+	// typed line INTO its own grid destructively, while the port composes the draft over an
+	// untouched copy of the authority's grid each publish (`ElysiumTerminalCells::ComposeDraft`),
+	// which is the same picture with nothing to restore.
+	if (IsLineEditActive())
+	{
+		return;
+	}
+	const int32 Column = Screen.CursorColumn();
+	const int32 Row = Screen.CursorRow();
+	if (Column < 0 || Column >= Screen.Columns() - Screen.RightMargin() - 1)
+	{
+		return;
+	}
+	if (Row < 0 || Row >= Screen.Rows())
+	{
+		return;
+	}
+	LineEditOriginColumn = Column;
+	LineEditOriginRow = Row;
+	LineEditBreakMark = Screen.LineEditBreaks();
+	bLineEditArmed = true;
+	// The cleared line `+0xed8`. The widget holds it, so the epoch is what reaches it.
+	++LineEditEpoch;
+}
+
 void FElysiumTerminal::BuildView(FElysiumTerminalView& Out) const
 {
 	Out = FElysiumTerminalView();
@@ -976,6 +1018,13 @@ void FElysiumTerminal::FillView(FElysiumTerminalView& Out, uint32 Serial) const
 		return;
 	}
 	Out.InputMode = static_cast<uint8>(InputMode());
+	// The client line editor's activation (§8.1.1). Session state, not glass state: an idle
+	// monitor has no client holding a line, and retail's `+0xe88` only matters to the body that
+	// eats keys.
+	Out.bLineEditActive = IsLineEditActive();
+	Out.EditEpoch = LineEditEpoch;
+	Out.EditOriginColumn = LineEditOriginColumn;
+	Out.EditOriginRow = LineEditOriginRow;
 	Out.MaxInput = MaxInput;
 	Out.bDigitsOnly = (HackFlags & FlagDigitsOnly) != 0;
 	// `m_bAllowDirKeys` is zeroed at Spawn and no shipped body raises it, so the local line editor

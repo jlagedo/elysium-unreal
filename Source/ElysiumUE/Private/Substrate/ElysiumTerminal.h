@@ -214,6 +214,28 @@ public:
 	int32 HudHintType = 0;
 	int32 HudHintValue = 0;
 
+	// --- the client line editor's activation (§8.1.1, TERM20) -----------------------------------
+	// Retail's line editor is not implied by the input mode: it is OPENED by entity message 3
+	// (`FUN_100c82e0`) and CLOSED by every message that zeroes `+0xe88`. While it is closed,
+	// `C_BaseTerminal::vfunc25` `0x100c7090` returns 1 at its third test and no key inserts, moves
+	// or draws anything. The authority owns the flag here because it owns the cell buffer the
+	// activation reads its origin from.
+	//
+	// `bLineEditArmed` is `+0xe88` as the type-3 message left it; `LineEditBreakMark` is the
+	// buffer's break count at that moment, and a later break makes the arm stale, which is the
+	// port's expression of the four handlers that zero the flag. `LineEditEpoch` has no retail
+	// field: it is how the widget learns that `+0xed8` was cleared, since the authority cannot
+	// reach into the widget's line the way retail's client reaches into its own.
+	bool bLineEditArmed = false;
+	uint32 LineEditBreakMark = 0;
+	uint32 LineEditEpoch = 0;
+	int32 LineEditOriginColumn = 0;
+	int32 LineEditOriginRow = 0;
+	bool IsLineEditActive() const
+	{
+		return bLineEditArmed && LineEditBreakMark == Screen.LineEditBreaks();
+	}
+
 	// The model's `screen` / `screen_axis` attachments in world cm, resolved off the placed body
 	// (§7.2, `FUN_10218710`). One pair serves the use gate, the availability query, the use icon and
 	// the `Hacking` camera shot, so "the camera sits where the cone measured from" holds by
@@ -304,7 +326,11 @@ public:
 	void ScreenSetMargins(int32 Left, int32 Right) { Screen.SetMargins(Left, Right); }
 	void ScreenEcho(TCHAR Character) { Screen.Echo(Character); }
 	// `FUN_10219120` (leave acknowledge/raw), `FUN_10219240` (raw), `FUN_10219270` (acknowledge).
-	void EnterLineEdit() { HackFlags &= ~(FlagAcknowledge | FlagRawCharacter); }
+	// All three send entity message **type 3** first, because the two mode senders open with a call
+	// to `FUN_10219120` — so opening the client's line editor is not a line-mode-only act, and a
+	// raw-character prompt (the open mail message, `FUN_1021c260`) is editable in exactly the same
+	// sense: the client's `+0xe88` has to be set or `0x100c7090` eats the key with no send.
+	void EnterLineEdit();
 	void EnterRawCharacter() { EnterLineEdit(); HackFlags |= FlagRawCharacter; }
 	void EnterAcknowledge() { EnterLineEdit(); HackFlags |= FlagAcknowledge; }
 	// `FUN_10218820` — the `InfoCtrl` usermessage (§8.4).

@@ -32,7 +32,8 @@ static constexpr EAutomationTestFlags GKeyFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 // The tutorial's live prompt row, as `FUN_1021b410` leaves it: 36x24, the cursor parked on the
-// last row at the left margin of a title-box screen.
+// last row at the left margin of a title-box screen, with the client's line editor OPEN — the
+// draw body's tail is `FUN_10219120`, whose type-3 message is `FUN_100c82e0`'s activation.
 static FElysiumTerminalView PromptView(uint8 InputMode = 0)
 {
 	FElysiumTerminalView View;
@@ -48,6 +49,10 @@ static FElysiumTerminalView PromptView(uint8 InputMode = 0)
 	View.RightMargin = 0;
 	View.CellStyle = 0x80;
 	View.InputMode = InputMode;
+	View.bLineEditActive = true;
+	View.EditEpoch = 1;
+	View.EditOriginColumn = View.CursorColumn;
+	View.EditOriginRow = View.CursorRow;
 	View.MaxInput = 0;              // `m_nMaxInput` as `CBaseTerminal::Spawn` leaves it: unlimited
 	View.bAcceptsDirectoryKeys = false;
 	return View;
@@ -160,22 +165,24 @@ bool FElysiumTerminalKeysTest::RunTest(const FString&)
 	TestEqual(TEXT("once"), Lines, 1);
 	TestTrue(TEXT("and the accepted line is cleared, as the server's type-3 message does"),
 		Input->Draft().IsEmpty());
+	// `0x100c7090` is handed a key code and has no repeat input at all, so a held key is an
+	// ordinary key-down and submits again.
 	Input->OnKeyDown(Geometry, Down(EKeys::Enter, false, /*bRepeat*/ true));
-	TestEqual(TEXT("a repeated Enter submits nothing"), Lines, 1);
+	TestEqual(TEXT("a repeated Enter submits again, as retail's key-down does"), Lines, 2);
 
 	// --- Escape quits, Ctrl+C breaks, plain C does not ------------------------------------------
 	TestTrue(TEXT("Escape is consumed"),
 		Input->OnKeyDown(Geometry, Down(EKeys::Escape)).IsEventHandled());
 	TestEqual(TEXT("Escape in line mode sends the quit intent"), Quits, 1);
 	Input->OnKeyDown(Geometry, Down(EKeys::Escape, false, /*bRepeat*/ true));
-	TestEqual(TEXT("a repeated Escape does not"), Quits, 1);
+	TestEqual(TEXT("and a repeated Escape sends it again"), Quits, 2);
 	Input->OnKeyDown(Geometry, Down(EKeys::C));
 	TestEqual(TEXT("a bare C is not a break"), Breaks, 0);
 	Input->OnKeyDown(Geometry, Down(EKeys::C, /*bControl*/ true));
 	TestEqual(TEXT("Ctrl+C is"), Breaks, 1);
 	Input->OnKeyDown(Geometry, Down(EKeys::C, /*bControl*/ true, /*bRepeat*/ true));
-	TestEqual(TEXT("and it does not repeat"), Breaks, 1);
-	TestEqual(TEXT("no quit or break ever submitted a line"), Lines, 1);
+	TestEqual(TEXT("and it repeats too"), Breaks, 2);
+	TestEqual(TEXT("no quit or break ever submitted a line"), Lines, 2);
 
 	// --- digits-only (`m_HackFlags 0x2`) ---------------------------------------------------------
 	{
@@ -233,6 +240,13 @@ bool FElysiumTerminalKeysTest::RunTest(const FString&)
 		TestEqual(TEXT("and so does Escape — it is NOT quit in this mode"), Acknowledges, 2);
 		TestEqual(TEXT("acknowledge mode never quits"), Quits, QuitsBefore);
 		TestEqual(TEXT("nor submits a line"), Lines, LinesBefore);
+		// The acknowledge arm returns before the Ctrl latch is ever set (`0x100c7090`: the
+		// `param_1 == 0x85` store is in the line-editor arm, after this `return 1`), so Ctrl+C is
+		// not a break here — it is eaten with everything else.
+		const int32 BreaksBefore = Breaks;
+		Input->OnKeyDown(Geometry, Down(EKeys::C, /*bControl*/ true));
+		TestEqual(TEXT("Ctrl+C is not a break in acknowledge mode"), Breaks, BreaksBefore);
+		TestEqual(TEXT("and it did not become an acknowledge either"), Acknowledges, 2);
 	}
 
 	// --- raw-character mode (`m_HackFlags 0x4`) ---------------------------------------------------
@@ -246,6 +260,71 @@ bool FElysiumTerminalKeysTest::RunTest(const FString&)
 		const int32 QuitsBefore = Quits;
 		Input->OnKeyDown(Geometry, Down(EKeys::Escape));
 		TestEqual(TEXT("Escape in raw mode still quits"), Quits, QuitsBefore + 1);
+		// Same reason as acknowledge, one arm earlier: the raw arm is the FIRST mode test in
+		// `0x100c7090` and it returns before the latch can be set, so break never fires in raw mode.
+		const int32 BreaksBefore = Breaks;
+		const int32 CharactersBefore = Characters;
+		Input->OnKeyDown(Geometry, Down(EKeys::C, /*bControl*/ true));
+		TestEqual(TEXT("Ctrl+C is not a break in raw mode"), Breaks, BreaksBefore);
+		TestEqual(TEXT("and the key-down itself sends no character"), Characters, CharactersBefore);
+	}
+
+	// --- Ctrl+C in the two line-editor modes: it IS the break there ------------------------------
+	// `m_HackFlags 0x2` (password) leaves both the raw and the acknowledge arms untaken, so the key
+	// reaches the arm that owns the latch. This is the Hacking feat's own gesture (§8.4, hint 3).
+	{
+		const int32 BreaksBefore = Breaks;
+		Input->SetSession(PromptView(/*InputMode*/ 0));
+		Input->OnKeyDown(Geometry, Down(EKeys::C, /*bControl*/ true));
+		TestEqual(TEXT("Ctrl+C in line mode is a break"), Breaks, BreaksBefore + 1);
+		FElysiumTerminalView Password = PromptView(/*InputMode*/ 1);
+		Password.SessionSerial = 31;
+		Input->SetSession(Password);
+		Input->OnKeyDown(Geometry, Down(EKeys::C, /*bControl*/ true));
+		TestEqual(TEXT("and so is Ctrl+C at a password prompt"), Breaks, BreaksBefore + 2);
+	}
+
+	// --- the activation, on the widget's side (§8.1.1, TERM20) -----------------------------------
+	{
+		FElysiumTerminalView Live = PromptView(/*InputMode*/ 0);
+		Live.SessionSerial = 41;
+		Input->SetSession(Live);
+		Input->OnKeyChar(Geometry, Typed(TCHAR('c')));
+		Input->OnKeyChar(Geometry, Typed(TCHAR('h')));
+		TestEqual(TEXT("the open editor accepts the line"), Input->Draft(), FString(TEXT("ch")));
+
+		// A print, a clear or a scroll on the authority side closes the editor: same session, same
+		// mode, same epoch, `bLineEditActive` false. Retail eats the key at `0x100c7090`'s third
+		// test and `FUN_100c6d50` refuses the insert at its own third guard.
+		FElysiumTerminalView Interrupted = Live;
+		Interrupted.bLineEditActive = false;
+		Interrupted.Revision = 9;
+		Input->SetSession(Interrupted);
+		TestEqual(TEXT("closing the editor does not by itself clear the held line"),
+			Input->Draft(), FString(TEXT("ch")));
+		const int32 BreaksBefore = Breaks;
+		const int32 QuitsBefore = Quits;
+		const int32 LinesBefore = Lines;
+		TestTrue(TEXT("a key-down with the editor closed is still eaten"),
+			Input->OnKeyDown(Geometry, Down(EKeys::Enter)).IsEventHandled());
+		Input->OnKeyDown(Geometry, Down(EKeys::Escape));
+		Input->OnKeyDown(Geometry, Down(EKeys::C, /*bControl*/ true));
+		Input->OnKeyChar(Geometry, Typed(TCHAR('x')));
+		TestEqual(TEXT("but it submits nothing"), Lines, LinesBefore);
+		TestEqual(TEXT("quits nothing"), Quits, QuitsBefore);
+		TestEqual(TEXT("breaks nothing"), Breaks, BreaksBefore);
+		TestEqual(TEXT("and inserts nothing"), Input->Draft(), FString(TEXT("ch")));
+
+		// The reopen: a redraw in the SAME session and the SAME mode — the password retry after a
+		// failed crack (`FUN_1021b5e0`), or a `runscript` that redraws the prompt — bumps only the
+		// epoch, and `FUN_100c82e0`'s `+0xed8 = 0` is exactly that clear.
+		FElysiumTerminalView Reopened = Live;
+		Reopened.Revision = 10;
+		Reopened.EditEpoch = Live.EditEpoch + 1;
+		Input->SetSession(Reopened);
+		TestTrue(TEXT("a reopened edit starts on an empty line"), Input->Draft().IsEmpty());
+		Input->OnKeyChar(Geometry, Typed(TCHAR('z')));
+		TestEqual(TEXT("and types again from there"), Input->Draft(), FString(TEXT("z")));
 	}
 
 	return !HasAnyErrors();
@@ -259,9 +338,12 @@ bool FElysiumTerminalDraftMirrorTest::RunTest(const FString&)
 
 	FElysiumTerminalView View = PromptView();
 	// A prompt row exactly as `FUN_1021b410` leaves it inside a title-box screen: margins (1, 1),
-	// the cursor on the last row at column 1.
+	// the cursor on the last row at column 1, and the type-3 tail having recorded that cell as the
+	// edit origin `+0xe8c` / `+0xe7c`.
 	View.CursorColumn = 1;
 	View.RightMargin = 1;
+	View.EditOriginColumn = 1;
+	View.EditOriginRow = 23;
 
 	{
 		const FElysiumTerminalComposed Empty = ComposeDraft(View, FString());
@@ -308,6 +390,34 @@ bool FElysiumTerminalDraftMirrorTest::RunTest(const FString&)
 		TestEqual(TEXT("and the glass keeps the authority grid — there is no wrap"),
 			TooLong.Cells, View.Cells);
 		TestEqual(TEXT("nor does the cursor move"), TooLong.CursorColumn, View.CursorColumn);
+	}
+
+	{
+		// The activation gate. `0x100c7090` tests `+0xe88` before every mode arm and returns 1 with
+		// no re-render when it is clear, so a line held over a print, a clear or a scroll is not on
+		// the glass until the next type-3 message reopens the edit.
+		FElysiumTerminalView Closed = View;
+		Closed.bLineEditActive = false;
+		const FElysiumTerminalComposed NotDrawn = ComposeDraft(Closed, TEXT("Safe"));
+		TestFalse(TEXT("a closed line editor composes nothing"), NotDrawn.bDraftDrawn);
+		TestEqual(TEXT("and the glass is the authority grid, cell for cell"), NotDrawn.Cells,
+			View.Cells);
+		TestEqual(TEXT("with the authority's cursor"), NotDrawn.CursorColumn, View.CursorColumn);
+	}
+
+	{
+		// The origin, not the live cursor, is the anchor: `0x100c7090` sets `+0xe78 = +0xe8c` before
+		// it walks the line back through put-char, and its fit guard is `strlen + origin`. A cursor
+		// that has walked right as the line grew therefore changes neither where the line is drawn
+		// nor how much of it fits.
+		FElysiumTerminalView Walked = View;
+		Walked.CursorColumn = 20;   // where a live client's caret would be, mid-line
+		const FElysiumTerminalComposed Anchored = ComposeDraft(Walked, TEXT("Safe"));
+		TestEqual(TEXT("the draft is drawn from the edit origin, not the moved cursor"),
+			Anchored.CharAt(1, 23), TCHAR('S'));
+		TestEqual(TEXT("and the composed cursor is origin + caret"), Anchored.CursorColumn, 5);
+		TestTrue(TEXT("the fit guard measures from the origin too"), DraftFits(Walked, 33));
+		TestFalse(TEXT("one character past it still does not fit"), DraftFits(Walked, 34));
 	}
 
 	{
@@ -435,13 +545,27 @@ bool FElysiumTerminalIntentsTest::RunTest(const FString&)
 	TestEqual(TEXT("the raw arm forwards a character"), Seen[0].Name, FString(TEXT("character")));
 	TestEqual(TEXT("and it is the one typed"), Seen[0].Payload, FString(TEXT("x")));
 
-	// --- a closed session submits nothing ---------------------------------------------------------
+	// --- a closed session submits nothing, and hands the key BACK ---------------------------------
+	// `0x100c7090`'s second test is `if (this[0xf04] == 0) return 0;` and `FUN_100c6d50` carries the
+	// same guard, so a terminal that is not in use consumes no key and inserts no character — the
+	// key goes on to whatever binding would have had it.
 	Seen.Reset();
+	View.InputMode = 0;
+	View.Revision = 6;
+	Screen->ApplyTerminal(View);
+	Input->OnKeyChar(Geometry, Typed(TCHAR('h')));
+	TestEqual(TEXT("a live session is still typing"), Screen->GetDraftText(), FString(TEXT("h")));
 	FElysiumTerminalView Closed;
 	Closed.Owner = View.Owner;
 	Closed.SessionSerial = 0;   // `IsOpen()` is the serial, not the owner
 	Screen->ApplyTerminal(Closed);
-	Input->OnKeyDown(Geometry, Down(EKeys::Enter));
+	TestTrue(TEXT("the end of the session cleared the local line"),
+		Screen->GetDraftText().IsEmpty());
+	TestFalse(TEXT("a key-down on a closed session is left unhandled"),
+		Input->OnKeyDown(Geometry, Down(EKeys::Enter)).IsEventHandled());
+	TestFalse(TEXT("and so is a character"),
+		Input->OnKeyChar(Geometry, Typed(TCHAR('x'))).IsEventHandled());
+	TestTrue(TEXT("which inserted nothing"), Screen->GetDraftText().IsEmpty());
 	Input->OnKeyDown(Geometry, Down(EKeys::Escape));
 	Input->OnKeyDown(Geometry, Down(EKeys::C, /*bControl*/ true));
 	TestEqual(TEXT("a spent session submits nothing at all"), Seen.Num(), 0);
@@ -472,9 +596,15 @@ bool FElysiumTerminalIntentsTest::RunTest(const FString&)
 			TestEqual(TEXT("the mirrored draft is held for its terminal"),
 				Presentation->TerminalDraft(), FString(TEXT("cho")));
 			TestEqual(TEXT("under that owner"), Presentation->TerminalDraftOwner(), Owner);
+			// The third of the draft's clears, and the exact call
+			// `UElysiumPlayerUISubsystem::HideTerminal` makes on its way out: the keyboard is gone,
+			// so the glass must stop composing a line nobody is holding. (The `HideTerminal` body
+			// itself needs a local-player subsystem and is Play-tier.)
 			Presentation->SetTerminalDraft(FElysiumEntityHandle::Invalid(), FString());
 			TestTrue(TEXT("and dropped when the keyboard goes away"),
 				Presentation->TerminalDraft().IsEmpty());
+			TestFalse(TEXT("with its owner released too, so no glass claims it"),
+				Presentation->TerminalDraftOwner().IsSet());
 		}
 	}
 	else

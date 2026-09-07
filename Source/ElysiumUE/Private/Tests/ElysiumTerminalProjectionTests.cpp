@@ -325,6 +325,12 @@ bool FElysiumTerminalProjectionRedrawTest::RunTest(const FString&)
 	State.Terminal.CursorRow = 23;
 	State.Terminal.CursorColumn = 1;
 	State.Terminal.RightMargin = 1;
+	// The client's line editor is open on that cell: entity message 3 (`FUN_100c82e0`) saved the
+	// row and recorded column 1 as the edit origin. Nothing composes without it.
+	State.Terminal.bLineEditActive = true;
+	State.Terminal.EditEpoch = 1;
+	State.Terminal.EditOriginColumn = 1;
+	State.Terminal.EditOriginRow = 23;
 	State.Terminal.Cells.Init(static_cast<uint16>(0x80 | ' '),
 		State.Terminal.Columns * State.Terminal.Rows);
 	Presentation->SetTerminalDraft(Held, FString());
