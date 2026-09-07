@@ -272,6 +272,31 @@ struct FElysiumDialogueSession
 	int32 DecodedFlags = 0;
 	FString DefaultCamera;
 	FString NormalizedCamera;
+
+	// --- SC9: `CBasePlayer::StartPlayerDialog` (`vampire.dll` `0x10178280`) state ---------------
+	//
+	// **`CDialog::Acquire`'s third outcome** (`0x100e05f0`, RC6). `+0x30e9` is raised by
+	// `fill_packet` (`0x100e7da0`) when a PC response row of the STARTING line comes back `-1` from
+	// `process_pc_line` (`0x100e8520`) — an `(Auto-End)` row (`FUN_100df120`'s three `auto_end`
+	// spellings) whose dependency passed and whose NPC line has a speech file. `Acquire` then sends
+	// the line and returns **false**, so `StartPlayerDialog` takes the `SetDialogPartner(NULL)` path:
+	// **a bark creates no camera, does not immobilize and does not holster.**
+	//
+	// The port keeps the session so the line still plays (retail's `message_send`), and marks it
+	// here so none of the opener's transitions run. Divergence, named: retail additionally requires
+	// `LookupSpeechFile` to answer, which the port cannot know before the line service is asked
+	// inside the turn; a shipped bark always has its take, so the two agree wherever content reaches.
+	bool bOneShot = false;
+	// Whether the opener actually ran the `StartPlayerDialog` tail (immobilize, holster latch,
+	// camera or payphone grapple). `EndPlayerDialog` (`0x10178400`) is only reachable in retail when
+	// it did, so the closing tail is gated on it rather than run for a bark.
+	bool bOpenerApplied = false;
+	// Whether the opener's `FUN_10070470(default_camera)` loaded and was adopted into the world's
+	// single cine slot (`SetCineCamera` `0x1017cef0`). When it did, the dialogue director stands
+	// down entirely: the shot in effect is the cine camera's, per-line `SetCamera` re-shots THAT
+	// camera, and nothing is published on `UElysiumCameraService`.
+	bool bCineAdopted = false;
+
 	FElysiumCameraHandle CameraHandle;
 	FElysiumCameraRequest CameraRequest;
 	EElysiumDialogueDirectorSource DirectorSource = EElysiumDialogueDirectorSource::None;

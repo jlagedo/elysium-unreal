@@ -13,6 +13,7 @@
 
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraSolve.h"
+#include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -48,6 +49,24 @@ FElysiumEntityDefs MakeAnchorWorldDefs()
 	Victim.TargetName = TEXT("victim");
 	Defs.Defs.Add(MoveTemp(Victim));
 	return Defs;
+}
+
+// One NPC line, which is all `OpenDialog` needs to make an entity the player's dialogue partner —
+// retail's `player+0xFE8`, and what a `DialogTarget` anchor resolves to. Copied from
+// `ElysiumDialogueCameraTests.cpp`, where it is file-static.
+TSharedRef<FElysiumDlgConversation> MakeOneLineConversation()
+{
+	TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();
+	FElysiumDlgLine& Line = File->Lines.AddDefaulted_GetRef();
+	Line.Id = 1;
+	Line.TextMale = TEXT("Test line");
+	Line.Link = TEXT("#");
+	Line.Role = EElysiumDlgRole::NpcLine;
+	File->IndexById.Add(1, 0);
+	TSharedRef<FElysiumDlgConversation> Conversation = MakeShared<FElysiumDlgConversation>(
+		File, true, false, [](const FString&) { return true; }, [](const FString&) {});
+	Conversation->Start();
+	return Conversation;
 }
 
 const FElysiumCameraShotDef* FindShot(const TArray<FElysiumCameraShotDef>& Shots, const TCHAR* Name)
@@ -656,7 +675,33 @@ CameraShotTable { Jack
 			}
 			Director.Clear(Camera);
 
-			// The same walk under `jack.txt`, which authors no `Start`.
+			// --- `jack.txt` with NO conversation open -----------------------------------------
+			// Its `End` is `Position DialogTarget`, which is `player+0xFE8` — a dead EHANDLE
+			// outside a conversation. `FUN_1006f080` resolves that handle first and, on a miss,
+			// writes `vec3_origin` and returns at `0x1006f09b`, skipping `LAB_1006f430` — so the
+			// authored `OffsetOrigin` is not added on top either. `SetShot` fails only on a name
+			// the table does not carry, so the shot still goes up and frames the world origin.
+			Walker->Origin = FVector(600.0f, 0.0f, 0.0f);
+			FElysiumCameraDirector Orphan;
+			TestTrue(TEXT("a DialogTarget shot with no conversation open still pushes"),
+				Orphan.Push(&World, Camera, TEXT("jack"), Walker->Handle) != 0);
+			if (const FElysiumCameraShot* Adrift = Camera->GetShots().Top())
+			{
+				TestTrue(TEXT("and frames the world origin, with no offset applied"),
+					Adrift->Origin.IsNearlyZero(0.01f));
+			}
+			Orphan.Clear(Camera);
+
+			// The same walk under `jack.txt`, now with the walker as the player's dialogue partner
+			// — which is what `DialogTarget` names on every shipped path (`SetShot` arm 2 reads
+			// `subject+0xFE8`, and every shipped caller's subject is the player).
+			World.SpawnPlayer();
+			World.Activate(0.0);
+			World.Tick(0.0);   // the NPC mind admits its body on its first think
+			World.OpenDialog(Walker->Handle, MakeOneLineConversation());
+			TestTrue(TEXT("the walker is now the open conversation's owner"),
+				World.GetOpenDialogOwner() == Walker->Handle);
+
 			Walker->Origin = FVector::ZeroVector;
 			FElysiumCameraDirector Tracking;
 			TestTrue(TEXT("jack pushes"),
@@ -672,7 +717,8 @@ CameraShotTable { Jack
 					Tracked->Origin.Equals(Before, 0.01f));
 				TestTrue(TEXT("and lands on the entity's new position"),
 					Tracked->Origin.Equals(Walker->Origin
-						+ FVector(50.0f, 0.0f, 65.0f) * ElysiumCam::U, 0.01f));
+						+ ElysiumSkeletalBasis::FromSourceAngles(Walker->Angles)
+							.RotateVector(FVector(50.0f, 0.0f, 65.0f) * ElysiumCam::U), 0.01f));
 			}
 
 			// --- `SetShotAnchorEntity` -------------------------------------------------------
@@ -691,7 +737,8 @@ CameraShotTable { Jack
 				{
 					TestTrue(TEXT("and the shot moves onto the supplied entity"),
 						Rebound->Origin.Equals(Corpse->Origin
-							+ FVector(50.0f, 0.0f, 65.0f) * ElysiumCam::U, 0.01f));
+							+ ElysiumSkeletalBasis::FromSourceAngles(Corpse->Angles)
+								.RotateVector(FVector(50.0f, 0.0f, 65.0f) * ElysiumCam::U), 0.01f));
 				}
 				Named.Clear(Camera);
 			}

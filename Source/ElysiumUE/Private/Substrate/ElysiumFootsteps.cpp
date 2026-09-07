@@ -44,24 +44,19 @@ FStepSource NpcSource(const FElysiumClanTemplate* Template, bool bHeavy,
 
 bool NpcStepsMuted(const FElysiumEntityWorld& World)
 {
-	// `0x10014371` -> `0x1017d630`: the player's camera VIEW entity (`+0x19c0`). A `SetCamera`
-	// shotfile is this world's one scripted camera and it is exactly that field's lifetime.
-	if (World.HasScriptedCamera())
-	{
-		return true;
-	}
-	// `0x10014ad3`: the camera TARGET (`+0x19cc`). `camera_track` publishes position and target as
-	// two independent roles and the world composes both into one value shot; either role standing is
-	// the same fact retail reads off that handle.
+	// `0x10014371` -> `0x1017d630`: the player's camera VIEW entity (`+0x19c0`), and `0x10014ad3`:
+	// the camera TARGET (`+0x19cc`). Both are the `camera_track` override channel's two roles;
+	// the world composes them into one value shot, and either role standing is the fact retail
+	// reads off those two handles.
 	if (World.HasTrackCamera())
 	{
 		return true;
 	}
-	// `0x1000306c`: the dialogue / control entity (`+0x19b4`) with `+0x1ec4 > 0`. The open
-	// conversation is the part of that field this world can answer; the terminal, keypad and hacking
-	// sessions that set the SAME field through `0x1017cef0` have no state here yet (the named
-	// divergence on the declaration).
-	return World.GetOpenDialog() != nullptr;
+	// `0x1000306c`: the cine camera (`+0x19b4`) with `+0x1ec4 > 0` -- `CBasePlayer::GetCineCamera`
+	// (`FUN_1017cf90`). Every adopter of that one slot lands here: `SetCamera`, the dialogue
+	// opener, `camera_cinematic`'s `StartShot`, the terminal, keypad, hacking and lock sessions, and
+	// anim event 4050 -- which is why the gate is the slot and not the open conversation.
+	return World.CineCameraEntity().IsSet();
 }
 
 const FString* PickNpcWav(const FElysiumSurfaceSounds& Sounds, FRandomStream& Stream)

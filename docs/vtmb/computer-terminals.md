@@ -245,14 +245,22 @@ keystroke-sound bit), current directory `-1`, pending password `-1`, clear `m_sz
 
 | Slot | Offset | `CBaseTerminal` | `CPropHacking` | Role |
 |---:|---:|---|---|---|
-| 32 | `+0x80` | `0x102180c0` | inherited | use gate |
+| 32 | `+0x80` | `0x102180c0` | inherited | use gate — `CanBeInteractiveUsed(player)` |
 | 33 | `+0x84` | base stub | `0x1021a590` | (prop override, 6 bytes) |
 | 34 | `+0x88` | `0x10218690` | inherited | availability predicate (`IsUseable`) |
 | 35 | `+0x8c` | `0x10218660` | inherited | `ObjectCaps` — bit `0x2` when the screen-facing test passes |
-| 39 | `+0x9c` | `0x102181a0` | `0x1021a5b0` | entry |
+| 36 | `+0x90` | base `NULL` | inherited | **required item classname**, or `NULL` (`CPropDoorknob`: `"item_g_lockpick"`) |
+| 37 | `+0x94` | base | inherited | **max `\|dx\|+\|dy\|` before break-off** (`CPropDoorknob`: `80.0`, `_DAT_104454c8`) |
+| 39 | `+0x9c` | `0x102181a0` | `0x1021a5b0` | entry — **begin interactive use** |
+| 40 | `+0xa0` | base no-op | inherited | ran once after the required item is auto-equipped |
 | 41 | `+0xa4` | `0x102182b0` | inherited | input think (view from attachment `vfunc +0x300`, then echo) |
-| 42 | `+0xa8` | `0x10218220` | `0x1021a6c0` | exit |
-| 43 | `+0xac` | `0x10218320` | inherited | active-use maintenance (pin the pawn, echo) |
+| 42 | `+0xa8` | `0x10218220` | `0x1021a6c0` | exit — **end interactive use** |
+| 43 | `+0xac` | `0x10218320` | inherited | active-use maintenance (pin the pawn, echo) — ran when slot 37's distance is exceeded |
+
+§7.1 walks the dispatcher that fixes these meanings. Slots 36 and 40 are inert on the terminal family
+(no required item, so `FUN_10167e00` always takes slot 41) and load-bearing on the lock family, where
+slot 36 returns `"item_g_lockpick"` and slots 40 and 43 share one body that places the player at the
+lock — §15.1.
 
 Password-accept virtuals on the terminal/keypad leaves (called from `FUN_10217f50`):
 
@@ -569,7 +577,7 @@ falls back to the player's own eye). Nothing on the entry path touches exposure,
 any `mat_` cvar (`xposure` matches no string in any module): the port's exposure clamp is a named
 modernization with no retail counterpart.
 
-**The terminal has no camera handle of its own (M8, ruled 2026-09-07; landed with SC4).** It used to
+**The terminal has no camera handle of its own (M8, ruled 2026-09-07).** It used to
 keep the `Hacking` shot's director id on the entity (`ElysiumTerminal.h`, pushed at the entry and
 popped at the exit) *beside* `FElysiumEntityWorld`'s scripted-camera slot, on the reading that retail
 stores its `camera_cinematic` on the player rather than in the script slot. Retail stores it in
@@ -1417,6 +1425,106 @@ inherit:
   (`STRING_VALID_PASSWORD`), or invalid-password + login prompt;
 - entry `0x1021ddf0` is base terminal entry plus redraw plus the same `camera_cinematic`
   `"Hacking"` shot.
+
+### 15.1 The lockpick twin — `Intrusion` on the lock family (2026-09-07)
+
+`prop_lockpick` does not exist as a classname in the binary or in any shipped map, and there is no
+`CIntrusion` minigame class. `vtmb_func 10225070` names the opener directly:
+
+```
+vampire.dll  10225070  FUN_10225070  __thiscall  97 bytes
+    vtable slot of 4 class(es):
+      CPropDoorknob#39, CPropPadlock#39, CPropDoorknobElectronic#39, CItemContainerLock#39
+```
+
+It is the shared **slot 39** of `CBaseLockableEnt`'s four leaves — a sibling of `CBaseTerminal` under
+the same `CBaseVampireSkillEntity` (§4.2), reached through the same `+USE` chain (§4.5, §7.1). It is
+documented here because it shares that whole substrate and diverges from `Hacking` at exactly six
+points.
+
+**Open — `FUN_10225070`:**
+
+```c
+if (HasKeyItem(this, player)) { UnlockWithKey(this, player); return; }   // 10224910 / 10224950
+CBaseVampireSkillEntity::vfunc39(this, player);          // 1020acb0 — OnUseBegin + skill bookkeeping
+cam = FUN_10070470("Intrusion", NULL, this, this, NULL); // the shot, anchors 1 and 2 = the lock
+cam->m_bForcePlayerLook (+0x5e8) = 0;                    // opt OUT of point_player
+FUN_1017cef0(player, cam);                               // adopt
+FUN_1015ef40(player);                                    // m_bIsImmobilized = 1
+FireOutput(this->m_OnSkillAttemptBegin /*+0x7dc*/, player, this, 0);
+```
+
+**Close — `FUN_10225140` (slot 42), and it is a cut:**
+
+```c
+CBaseVampireSkillEntity::vfunc42(this, player);   // 1020adc0 — OnUseEnd, m_nLastSkillLevel = rating
+FUN_1017cef0(player, NULL);                       // <-- the cut; the disposable camera is UTIL_Removed
+FUN_1015ef60(player);                             // m_bIsImmobilized = 0
+// then one CReliableSingleUserRecipientFilter usermessage, opcode 6:
+//   byte flags · byte this->+0x816 (last roll) · byte difficulty · byte player's effective rating
+```
+
+There is **no `InputRemoveCamera` and no ramp**. `FUN_1017cef0(player, NULL)` writes
+`player+0x1ec4 = 0` / `+0x19b4 = -1` and, because the camera carries `m_spawnflags & 4`, removes it
+same-tick — the same exit shape §7.3 already records for the terminal.
+
+**Where it differs from `Hacking`:**
+
+| | `Intrusion` | `Hacking` (`CBaseTerminal::vfunc39` / `vfunc42`) |
+|---|---|---|
+| early-out | `key_name` in inventory → unlock, **no camera, no immobilize** | none |
+| order | adopt the camera **then** immobilize | immobilize (in the base) **then** adopt |
+| `AddVFlags(player, 1)` | **no** — the lockpick takes no move-angle pose lock | yes |
+| weapon | the pick is **equipped**, by slot 40's arm of `FUN_10167e00`; nothing is holstered | nothing equipped |
+| `m_bForcePlayerLook` | **set to 0** — the player's eye is *not* snapped onto the look target | left at the constructor's `1` |
+| sound | none on entry | `FUN_101f5950(access)` |
+| entry outputs | `OnUseBegin`, then `OnSkillAttemptBegin` | `OnUseBegin` |
+| exit | `SetCineCamera(NULL)`, un-immobilize, usermsg 6 | `RemoveVFlags(1)`, `RemoveVFlags(8)`, un-immobilize, then `SetCineCamera(NULL)` |
+
+**What starts it.** The `+USE` admission is slot 32, `FUN_10224ae0`: it refuses when the lock is
+already open (`m_LastRoll (+0x780) >= 3`), when someone else holds `+0x8c`, when a linked door is
+mid-move, and — after the key check — when `requires_key` is set or the player has no
+`item_g_lockpick`. Slot 36 (`FUN_10224ca0`) hardcodes that classname. Slot 37 (`FUN_10224eb0`)
+returns `80.0`. Slots 40 and 43 share one body, `FUN_10224440`, which places the player at the lock:
+it reads the model's **`camera_position`** and **`camera_target`** attachments, traces for headroom
+(`"%d %s no solid ground over lock"`, `"%d %s too close to solid geometry"`), teleports the player and
+faces him at the lock; when either attachment is missing it prints `"%s : %s not set up correctly to
+b…"` and falls back to the lock's and the player's world-space centres.
+
+**The shot.** `vdata/camerashots/special-case.txt`'s `Intrusion` block has **no `Start`** (so the
+camera eases in from wherever the view already is), `End` = `Named` / `Attachment: camera_position` /
+`Follow`, `Target/Point1` = `Named` / `Attachment: camera_target` / `Follow` — **the same two
+attachments `FUN_10224440` needs** — and `MoveAccel 450`, `TurnAccel 250`, `MoveSpeed 300`,
+`MaxTurnRate [320,320,320]`, `DistanceTolerance 5`, `AngularTolerance [3,3,3]`, `FieldOfView 75`,
+`DialogPOV 0`, **`DrawViewmodel 1`**, `SyncRotateOnMove 1`, `ShowHud 1`. It is `Hacking`'s twin in
+shape and faster in every constraint, and `DrawViewmodel` is the one *authored* difference —
+`Hacking` sets it to `0`, because the lockpick viewmodel is meant to be visible and the terminal has
+nothing to show.
+
+**Shipped census** (`E:\elysium-work\exports\*\*.ents`): `prop_doorknob` **719** in 73 maps,
+`prop_doorknob_electronic` 55 in 21, `item_container_lock` 21 in 8, `prop_padlock` 5 in 4 —
+**800 total**, against 64 `prop_hacking`. Every instance that authors `skilltype` uses `1`
+(`vdata/system/feats.txt`: `Feat { "Name" "Lockpicking"; "InternalName" "Intrusion"; "Base0"
+"Dexterity"; "Base1" "Security"; "MaxValue" "10" }`, against `Hacking` = `Wits` + `Computer`,
+`MaxValue 20`). The key-item keys are `key_name` / `delete_key` / `requires_key` /
+`electronic_key`; **`unlock_item` does not exist anywhere in the corpus**, and `use_pref` never
+appears on any of these classes. `OnSkillAttemptBegin` — the output the opener fires alongside the
+camera — is authored exactly four times, all `prop_doorknob` in `sp_giovanni_2a` / `sp_giovanni_2b`,
+wired to `Bruno_Event → Trigger`.
+
+**In the port.** `FElysiumLockableEntity` (`Private/Substrate/ElysiumLockable.{h,cpp}`) reproduces
+the I/O, the key path and the feat check, but **pushes no camera and applies no immobilize** —
+`PushCameraShotNamed` has exactly one caller in the module, `FElysiumTerminal::BeginPlayerUse`. The
+two missing steps land in `BeginPlayerUse` (`ElysiumLockable.cpp:169-206`, in the arm where
+`StartAttempt` succeeded, after the `OnUseBegin` output so the retail order holds: push the shot,
+`SetCineCamera`, *then* `SetImmobilized(true)`) and in `EndPlayerUse` (`:208-226`, after
+`FinishUseOutputs`: `ClearScriptedCamera()` then `SetImmobilized(false)`). `Shot == 0` must not
+refuse — retail runs `FUN_1017cef0(player, NULL)` and the attempt proceeds cameraless — and the
+`Intrusion` push takes **no** exposure clamp, since that clamp is the terminal glass's named
+Presentation modernization. Slots 37/40/43 have no port counterpart at all: the lock family has no
+`TickPlayerUse`, so neither the 80-unit break-off, the auto-equip of `item_g_lockpick`, nor the
+place-the-player-at-the-lock step exists, and the shot's two anchors share the latter's dependency on
+the lock model's `camera_position` / `camera_target` attachments surviving the bake.
 
 ## 16. Localized `Hacking_Strings` indices
 

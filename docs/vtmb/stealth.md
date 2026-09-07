@@ -390,7 +390,7 @@ thing: the attacker drives the paired animation. `CBaseCineCam::SetShot`'s `Grap
 `GrappleAttacker` anchor keywords read the same pair (see `docs/vtmb/camera-view-modes.md`), which is
 why the `Stealth_Kill_1..4` shots in `vdata/camerashots/stealth_kill.txt` frame the right body.
 
-**The scripted camera is a consumer of this pair, and the port's is too (SC6, 2026-09-07).**
+**The scripted camera is a consumer of this pair, and the port's is too (2026-09-07).**
 `stealth_kill.txt` anchors on `GrappleAttacker` ×6 and `GrappleVictim` ×2 — the only file in the whole
 66-file shot corpus that writes either keyword — and each resolves to *the partner* or to *the subject
 itself* purely off `m_GrappleRole`. In the port the pair is `FElysiumGrappleState` on

@@ -520,6 +520,30 @@ bool ElysiumCameraShots::LatchesAnchors(const FElysiumCameraShotDef& Def)
 	return Def.Start.bPresent && Def.Start.Attach == EElysiumShotAttach::None;
 }
 
+FBox ElysiumCameraShots::SurroundingBounds(const FElysiumEntity& Entity)
+{
+	if (const USkeletalMeshComponent* Body = Entity.GetSkeletalBody())
+	{
+		const FBoxSphereBounds Bounds = Body->Bounds;
+		return FBox(Bounds.Origin - Bounds.BoxExtent, Bounds.Origin + Bounds.BoxExtent);
+	}
+	// A placed prop keeps its box on the embodiment rather than on a skeletal body; this is the same
+	// box retail's held-use maintenance measures reach against.
+	const IElysiumEmbodiment* Embodiment = Entity.World ? Entity.World->Embodiment() : nullptr;
+	FBox Box(ForceInit);
+	if (Embodiment && Embodiment->GetUseBodyWorldBounds(Entity.Handle, Box) && Box.IsValid)
+	{
+		return Box;
+	}
+	// Nothing to measure. The stand-in is VtMB's own standing hull on the entity's origin, so a
+	// bodiless conversation partner still frames the way a bodied one does; retail's answer here is
+	// whatever the entity's collision prop holds and is not recoverable from a body-less port state.
+	// **One stand-in, not two**: the mode-3 follow think used to fall back to the raw origin here,
+	// which put its camera a hull-height below every `Center` anchor on the same entity.
+	constexpr float StandingHullHeight = 72.0f * ElysiumCam::U;
+	return FBox(Entity.Origin, Entity.Origin + FVector(0.0f, 0.0f, StandingHullHeight));
+}
+
 // The director
 
 namespace ElysiumCameraShotsImpl
@@ -566,15 +590,19 @@ namespace ElysiumCameraShotsImpl
 			// pass one, `FUN_10070780`, passes the activator, which is always the player. So on every
 			// shipped path this anchor is **the player's dialogue partner**: the NPC being talked to.
 			//
-			// **The port answers the shot's subject instead**, and for a dialogue shot that subject
-			// *is* that NPC, so the two agree wherever the corpus can reach. They diverge for a
-			// `SetCamera` fired on an NPC that is not the player's partner, and for a `DialogTarget`
-			// anchor with no conversation open at all: retail answers the partner (or NULL, and then
-			// frames the world origin), the port answers the receiver. The port has the accessor this
-			// would need — `FElysiumEntityWorld::GetOpenDialogOwner()` is the player's partner — but
-			// the anchor is reached today by producers that push `DialogTarget` shots with no session
-			// open, so the swap belongs with SC9's dialogue slice, which owns those producers.
-			return World->Resolve(Subject);
+			// **Wired to the partner (SC9).** `FElysiumEntityWorld::GetOpenDialogOwner()` IS
+			// `player+0xFE8` — the world holds one session and the player is always its listener —
+			// so the anchor now answers the same entity retail's `piVar9[0x3fa]` does, on every path
+			// and not only on a dialogue shot. With no conversation open it answers **NULL**, exactly
+			// as retail's dead EHANDLE does, and the resolve falls through to the world-origin tail;
+			// that is what a `DialogTarget` shot fired outside a conversation frames in retail too.
+			//
+			// The subject is no longer consulted here, which is also retail: `FUN_1017d020`,
+			// `FUN_10070470`, `FUN_100705d0`, `FUN_10070690` and `FUN_1006e4c0` all pass a NULL
+			// `param_3`, so `subject == UTIL_PlayerByIndex(1)` and `subject+0xFE8` is the player's
+			// own partner however the shot was created.
+			return World->FindPlayer() != nullptr
+				? World->Resolve(World->GetOpenDialogOwner()) : nullptr;
 		case EElysiumShotPosition::GrappleVictim:
 		case EElysiumShotPosition::GrappleAttacker:
 		{
@@ -616,11 +644,9 @@ namespace ElysiumCameraShotsImpl
 		Embodiment       = 2,   // the placed model's baked `$attachment` frame -- position and angles
 	};
 
-	// VtMB's own standing hull height, the stand-in bounds for an entity with no body to measure.
-	constexpr float FallbackCenterHeight = 36.0f * ElysiumCam::U;
-
-	// The world-space surrounding bounds retail reads **once at the top** of `FUN_1006f080`
-	// (`ent->m_Collision (+0x270)->vfunc 0x3c`) and every `AttachPos` arm then indexes into.
+	// The bounds `FUN_1006f080` reads once at the top and every `AttachPos` arm then indexes into.
+	// The measurement itself is `ElysiumCameraShots::SurroundingBounds`, because the mode-3 follow
+	// think publishes the same `WorldSpaceCenter()` off the same box.
 	struct FAnchorBounds
 	{
 		FVector Min = FVector::ZeroVector;
@@ -631,30 +657,10 @@ namespace ElysiumCameraShotsImpl
 
 	FAnchorBounds SurroundingBounds(const FElysiumEntity& Entity)
 	{
+		const FBox Box = ElysiumCameraShots::SurroundingBounds(Entity);
 		FAnchorBounds Out;
-		if (const USkeletalMeshComponent* Body = Entity.GetSkeletalBody())
-		{
-			const FBoxSphereBounds Bounds = Body->Bounds;
-			Out.Min = Bounds.Origin - Bounds.BoxExtent;
-			Out.Max = Bounds.Origin + Bounds.BoxExtent;
-			return Out;
-		}
-		// A placed prop keeps its box on the embodiment rather than on a skeletal body; this is the
-		// same box retail's held-use maintenance measures reach against.
-		const IElysiumEmbodiment* Embodiment = Entity.World ? Entity.World->Embodiment() : nullptr;
-		FBox Box(ForceInit);
-		if (Embodiment && Embodiment->GetUseBodyWorldBounds(Entity.Handle, Box) && Box.IsValid)
-		{
-			Out.Min = Box.Min;
-			Out.Max = Box.Max;
-			return Out;
-		}
-		// Nothing to measure. The stand-in is VtMB's standing hull on the entity's own origin, so a
-		// bodiless conversation partner still frames the way a bodied one does; retail's answer here
-		// is whatever the entity's collision prop holds and is not recoverable from a body-less port
-		// state.
-		Out.Min = Entity.Origin;
-		Out.Max = Entity.Origin + FVector(0.0f, 0.0f, FallbackCenterHeight * 2.0f);
+		Out.Min = Box.Min;
+		Out.Max = Box.Max;
 		return Out;
 	}
 
@@ -924,17 +930,27 @@ bool FElysiumCameraDirector::ResolveAnchor(FElysiumEntityWorld* World, const FEl
 	const FElysiumEntity* Entity = World ? World->Resolve(Binding.Entity) : nullptr;
 	if (!Entity)
 	{
-		// A dead or unbound anchor. **This is a port divergence, stated rather than hidden.** Retail's
-		// `FUN_1006f080` opens by resolving the anchor's EHANDLE and, on a miss, writes `vec3_origin`
-		// and returns (`0x1006f09b`) — the caller cannot tell, so the shot frames the world origin
-		// and never falls back to another anchor. The port answers `false`, and the origin selector's
-		// caller then tries the other anchor, which is a different framing for the same state.
+		// **A dead or unbound anchor is the world origin, and the caller cannot tell.**
+		// `FUN_1006f080` opens by resolving the anchor's EHANDLE at `+0x610 + i*4` and, on a miss,
+		// writes `vec3_origin` into the out vector and returns at `0x1006f09b`. That is one of the
+		// function's two `vec3_origin` early returns — the other being the non-animating `Bone:` /
+		// `Attachment:` arm below — so `LAB_1006f430` never runs and the anchor's `OffsetOrigin` is
+		// **not** added on top of it either.
 		//
-		// It is left here deliberately: the `+0x594` origin selector is what decides which anchor
-		// drives the origin and whether a miss has anywhere to fall to, and that selector is SC7's,
-		// so the two are changed together or not at all. The flagged-but-empty **target** slot does
-		// reach retail's answer, because the look-at solve has no second anchor to try.
-		return false;
+		// The shot-start cache reaches the same value by its own road: `FUN_1006e8e0`'s fill loop
+		// tests each of the four handles itself and writes `vec3_origin` into `+0x598 + i*12`
+		// without calling `FUN_1006f080` at all, so a latched shot holds the origin too.
+		//
+		// So a `DialogTarget` shot fired with no conversation open, or a shot whose anchor entity
+		// died, frames the world origin and keeps running: nothing falls back to another anchor,
+		// nothing expires, and `SetShot` still succeeds.
+		OutPoint = FVector::ZeroVector;
+		if (!Binding.bCached)
+		{
+			Binding.Cached = OutPoint;
+			Binding.bCached = true;
+		}
+		return true;
 	}
 
 	const ElysiumCameraShotsImpl::FAnchorSample Sample =
@@ -1028,27 +1044,37 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	const bool bLatched = Pass == EElysiumShotResolvePass::Think
 		&& ElysiumCameraShots::LatchesAnchors(Def);
 
-	// The origin selector `+0x594`, the mode-1 think's own order: `sel == 1` publishes anchor 0
-	// (`Start`), `sel == 0` publishes anchor 1 (`End`). The selector's third value leaves the entity's
-	// own abs origin alone — the director entity's transform, which is SC4's to supply; until then
-	// this resolve still answers from the anchors and only the `AutoPositionFromTarget` suppression
-	// below is in force for it.
+	// The origin selector `+0x594`, the mode-1 think's own order (`FUN_1006f8f0`): `sel == 1`
+	// publishes anchor 0 (`Start`), `sel == 0` publishes anchor 1 (`End`), and the selected anchor is
+	// published **unconditionally** — `FUN_1006f010` always writes, `vec3_origin` included. There is
+	// no "try the other anchor" arm anywhere in the listing, and there is nothing left to try one
+	// for: a dead or unbound anchor now answers the world origin, as retail's does.
 	//
-	// The fall-through to the other anchor is the port's, and it is what the how-to describes: "If
-	// there is no End position specified, the camera will not move between the points" — so `End` is
-	// where the shot lives and `Start` is only its entry. Retail reaches the same place by a different
-	// road: `FUN_1006e8e0` only sets the selector to 0 when the **End** handle is live.
+	// The selector's third value leaves the entity's own abs origin alone; the abs-origin source is
+	// the director entity's transform, so `FElysiumCameraCinematic` applies that arm after this
+	// returns and only the `AutoPositionFromTarget` suppression below is in force here.
 	const bool bStartFirst = OriginSelector == EElysiumShotOriginSelector::StartAnchor;
-	const FElysiumShotAnchor& FirstAnchor = bStartFirst ? Def.Start : Def.End;
-	const FElysiumShotAnchor& SecondAnchor = bStartFirst ? Def.End : Def.Start;
-	FElysiumShotAnchorBinding& FirstBinding = Bindings->Anchors[bStartFirst ? 0 : 1];
-	FElysiumShotAnchorBinding& SecondBinding = Bindings->Anchors[bStartFirst ? 1 : 0];
+	const FElysiumShotAnchor& OriginAnchor = bStartFirst ? Def.Start : Def.End;
+	FElysiumShotAnchorBinding& OriginBinding = Bindings->Anchors[bStartFirst ? 0 : 1];
 
-	FVector Origin;
-	if (!ResolveAnchor(World, FirstAnchor, FirstBinding, bLatched, Origin) &&
-		!ResolveAnchor(World, SecondAnchor, SecondBinding, bLatched, Origin))
+	FVector Origin = FVector::ZeroVector;
+	if (!ResolveAnchor(World, OriginAnchor, OriginBinding, bLatched, Origin))
 	{
-		return false;
+		// The selected anchor has **no block at all**, which is a state retail's selector never
+		// points at: its one writer (`FUN_1006e8e0`) sets `sel = 0` only when the `End` handle is
+		// live, so an `End`-less shot keeps the constructed `2` and its origin is the entity's abs
+		// origin — the pose shot start just put there, which for a `Start` shot is anchor 0's own
+		// point (arm A). That is the how-to's "If there is no End position specified, the camera
+		// will not move between the points", and it is why `kilpatrick.txt`, `center.txt` and
+		// `stealth_kill.txt` ship without an `End`.
+		//
+		// A caller with a camera entity behind it (`ThinkNamedShot`) applies that arm itself. This
+		// is the stand-in for the callers that have none — the dialogue ladder resolves a shot file
+		// as pure values — and it answers the same world position at shot start by reading the
+		// other anchor directly. It is reached only for an absent block, never for a miss.
+		const FElysiumShotAnchor& EntityStandIn = bStartFirst ? Def.End : Def.Start;
+		FElysiumShotAnchorBinding& StandInBinding = Bindings->Anchors[bStartFirst ? 1 : 0];
+		ResolveAnchor(World, EntityStandIn, StandInBinding, bLatched, Origin);
 	}
 
 	// The look-at, `FUN_1006f670`, verbatim — and it reads the **flags**, not the slots:
@@ -1166,8 +1192,7 @@ int32 FElysiumCameraDirector::Push(FElysiumEntityWorld* World, UElysiumCameraCom
 
 	// The entry lands first because retail's shot start writes the four anchor handles and their
 	// bone/attachment indices ONTO the camera before it places anything (`SetShot`'s
-	// `SetShotAnchorEntity` loop, then `FUN_1006e8e0`), and the placement reads them back. A shot
-	// that then fails to anchor is dropped again.
+	// `SetShotAnchorEntity` loop, then `FUN_1006e8e0`), and the placement reads them back.
 	FLiveShot& Entry = Live.AddDefaulted_GetRef();
 	Entry.Id = NextId++;
 	Entry.bValue = false;
@@ -1175,14 +1200,13 @@ int32 FElysiumCameraDirector::Push(FElysiumEntityWorld* World, UElysiumCameraCom
 	Entry.Subject = Subject;
 	BindAnchors(World, Entry.Def, Subject, Entry.Bindings);
 
+	// **A shot is refused only by the table lookup above.** `SetShot` (`FUN_1006e130`) returns false
+	// on a name that is not in `&DAT_106c8298` and on a NULL subject, and on nothing else: the
+	// anchor loop stores whatever each `Position` resolved to — NULL included — and `FUN_1006e8e0`
+	// then places the camera from handles it never re-tests. A shot whose anchors are all dead runs,
+	// framing the world origin.
 	FElysiumCameraShot Shot;
-	if (!Resolve(World, Entry.Def, Subject, Shot, &Entry.Bindings, EElysiumShotResolvePass::ShotStart))
-	{
-		UE_LOG(LogElysiumCamShots, Warning, TEXT("camera shot '%s': nothing it anchors to resolved"),
-			*Def->Name);
-		Live.RemoveAt(Live.Num() - 1);
-		return 0;
-	}
+	Resolve(World, Entry.Def, Subject, Shot, &Entry.Bindings, EElysiumShotResolvePass::ShotStart);
 	Entry.CameraShotId = Camera->PushShot(Shot);
 	return Entry.Id;
 }
@@ -1211,14 +1235,9 @@ int32 FElysiumCameraDirector::PushNamed(FElysiumEntityWorld* World, UElysiumCame
 	Entry.Exposure = Exposure;
 	BindAnchors(World, Entry.Def, Subject, Entry.Bindings);
 
+	// Same as `Push`: the `LoadNamed` miss above is the only refusal `SetShot` has.
 	FElysiumCameraShot Shot;
-	if (!Resolve(World, Entry.Def, Subject, Shot, &Entry.Bindings, EElysiumShotResolvePass::ShotStart))
-	{
-		UE_LOG(LogElysiumCamShots, Warning,
-			TEXT("camera shot '%s:%s': nothing it anchors to resolved"), *ShotFile, *ShotName);
-		Live.RemoveAt(Live.Num() - 1);
-		return 0;
-	}
+	Resolve(World, Entry.Def, Subject, Shot, &Entry.Bindings, EElysiumShotResolvePass::ShotStart);
 	ApplyExposure(Entry, Shot);
 	Entry.CameraShotId = Camera->PushShot(Shot);
 	return Entry.Id;

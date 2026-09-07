@@ -36,6 +36,9 @@ enum class EElysiumRngStream : uint8
 	               // wade branch's four-phase silent counter and the Sabbat leader's 0..6 draw
 	Terminal,      // the computer terminal's screensaver cell/style draws (`CPropHackingSS_Think`
 	               // 0x1021a740) and the cracking stepper's filler characters (`FUN_10217200`)
+	CameraFindBestShot, // `CBaseCineCam::FindBestShot` `FUN_1006e4c0`'s uniform pick over the
+	               // candidate shots that passed both predicates (`RandomInt(0, count-1)`), the one
+	               // draw in the scripted-camera subsystem
 	Count
 };
 

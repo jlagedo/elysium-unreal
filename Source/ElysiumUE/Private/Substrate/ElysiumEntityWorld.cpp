@@ -997,15 +997,10 @@ FElysiumEntityHandle FElysiumEntityWorld::GetOpenSign(double* OutOpenTime) const
 
 void FElysiumEntityWorld::SetScriptedCamera(const FString& ShotFile, const FElysiumEntityHandle& Subject)
 {
-	IElysiumEmbodiment* E = Embodiment();
-	if (!E)
-	{
-		return;
-	}
-	// "*The* cinematic camera mode": a second SetCamera replaces the first rather than stacking, so
-	// the channel underneath never accumulates shots a conversation forgot to remove. The replace
-	// is `SetCineCamera`'s below, in one step, because retail's destroy test reads the **incoming**
-	// camera (`old != cam`) and a clear-then-set cannot.
+	// "*The* cinematic camera mode": there is ONE adoption slot, so a second `SetCamera` re-shots the
+	// camera already in it rather than stacking a second one — which is also why the entity is never
+	// re-placed by the second call. A headless world runs the whole chain: the camera entity exists
+	// and thinks, and only its goal publish (`PublishGoal`) needs an embodiment to reach.
 	// **The two channels are mutually exclusive** (SC2). `CBasePlayer::SetCameraViewEntity`
 	// (`vampire.dll` `FUN_1017d280`) begins with `SetCineCamera(NULL)`, and the map teardown
 	// `FUN_10071970` tears both down together: retail cannot reach a state where a cine camera and a
@@ -1016,13 +1011,72 @@ void FElysiumEntityWorld::SetScriptedCamera(const FString& ShotFile, const FElys
 	// The track side is cleared with **no blend**: the shots it owned are gone the same tick, which
 	// is what `UTIL_Remove` does to a `camera_track`.
 	ClearTrackCamera(0.0f);
-	// `CBasePlayer::SetCamera` `FUN_1017d020` with no camera adopted runs `FUN_10070470` — which
-	// marks its new `camera_cinematic` **disposable** — and then `FUN_1017cef0`. The port has no
-	// entity behind a script shot, so the disposable bit rides the shot handle: the next adoption
-	// releases it, exactly as retail removes the camera it created.
-	const int32 Pushed = E->PushCameraShot(ShotFile, Subject);
-	SetCineCamera(FElysiumEntityHandle::Invalid(), Pushed, /*bDisposable*/ true,
-		Pushed != 0 ? ShotFile : FString());
+
+	// **`CBasePlayer::SetCamera` `FUN_1017d020`, verbatim** (SC9):
+	//
+	//     if (GetCineCamera() == NULL) {
+	//       cam = FUN_10070470(shotName, NULL,NULL,NULL,NULL);
+	//       if (!cam) cam = FUN_10070470("DialogDefault", NULL,NULL,NULL,NULL);
+	//       FUN_1017cef0(this, cam);
+	//     } else {
+	//       if (!SetShot(shotName, 1, NULL)) SetShot("DialogDefault", 1, NULL);
+	//     }
+	//
+	// Three properties the shape hides, all asserted by `Elysium.Substrate.DialogueCamera.RetailChain`:
+	// it **never immobilizes** (unlike `InputStartShot`); the `"DialogDefault"` literal is verbatim
+	// (`s_DialogDefault_10587f04`) and lands on **both** arms; and the re-shot branch **never calls
+	// `FUN_1006e8e0`**, so it neither re-places the entity nor refills the shot-start anchor cache —
+	// a mid-conversation `SetCamera` therefore leaves the entity where the FIRST shot put it.
+	//
+	// The only caller is the Python native `FUN_10198070` (`ElysiumScriptNatives.cpp`), with 115
+	// shipped call sites; the dialogue opener deliberately does NOT reach the fallback (RC6/§SC9).
+	static const TCHAR* const DialogDefaultShot = TEXT("DialogDefault");
+	static constexpr int32 NamedShotMode = static_cast<int32>(EElysiumCineCamMode::NamedShot);
+	const FElysiumEntityHandle NoAnchors[FElysiumShotBindings::Num] = {};
+
+	FElysiumEntity* Adopted = Resolve(ScriptedCameraEntity);
+	if (FElysiumCameraCinematic* Live = Adopted ? Adopted->AsCameraCinematic() : nullptr)
+	{
+		if (!Live->SetShot(ShotFile, NamedShotMode, Subject))
+		{
+			Live->SetShot(DialogDefaultShot, NamedShotMode, Subject);
+		}
+		if (!Live->IsActive())
+		{
+			// Both names failed. Retail leaves the camera adopted and idle, and `ShouldTransmit`
+			// (slot 86) then refuses it to every client, so the view falls back to the player's own
+			// eye. The port's equivalent of "not transmitted" is "not on the channel" — unreachable
+			// on shipped content, because `dialogdefault.txt` always loads.
+			ClearScriptedCamera();
+			return;
+		}
+		// Same entity, same published shot handle: `SetCineCamera` pops nothing and destroys
+		// nothing, it only re-stamps which shot the slot is reporting.
+		SetCineCamera(Live->Handle, Live->PublishedShotId, Live->bDisposable, Live->ShotDef.Name);
+		return;
+	}
+
+	FElysiumEntityHandle Created = FElysiumCameraCinematic::CreateRuntimeCamera(*this, ShotFile,
+		NamedShotMode, NoAnchors);
+	if (!Resolve(Created))
+	{
+		Created = FElysiumCameraCinematic::CreateRuntimeCamera(*this, DialogDefaultShot,
+			NamedShotMode, NoAnchors);
+	}
+	FElysiumEntity* CreatedEntity = Resolve(Created);
+	FElysiumCameraCinematic* Camera = CreatedEntity ? CreatedEntity->AsCameraCinematic() : nullptr;
+	if (Camera && Subject.IsSet())
+	{
+		// `FUN_10070470` passes NULL for `param_3`, so `SetShot` already seeded the subject with
+		// `UTIL_PlayerByIndex(1)` — which is what every shipped path gets. A caller that names one
+		// takes `FUN_10070780`'s shape instead (`cam->m_hSubject = activator`).
+		Camera->Subject = Subject;
+	}
+	// `FUN_1017cef0(this, cam)` — and with `cam == NULL` (neither name loaded) this IS the clear.
+	SetCineCamera(Camera ? Camera->Handle : FElysiumEntityHandle::Invalid(),
+		Camera ? Camera->PublishedShotId : 0,
+		Camera ? Camera->bDisposable : false,
+		Camera ? Camera->ShotDef.Name : FString());
 }
 
 void FElysiumEntityWorld::SetCineCamera(const FElysiumEntityHandle& CameraEntity, int32 ShotId,

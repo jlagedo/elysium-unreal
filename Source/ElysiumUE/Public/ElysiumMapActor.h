@@ -507,6 +507,11 @@ public:
 	// The two perception queries. Geometry only; every threshold stays substrate.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
+	// SC8: `FindBestShot`'s visibility predicate `FUN_1006db10` — a swept 2-unit hull from a shot
+	// anchor to the look-at that the shot's subject cannot block.
+	virtual bool TraceCameraHull(const FVector& FromCm, const FVector& ToCm,
+		const FVector& HalfExtentCm, const FElysiumEntityHandle& IgnoreEntity,
+		float& OutFraction, bool& OutStartSolid) const override;
 	// R6.2: the lightstyle pattern table and the runtime `light_dynamic` source, both on the rig.
 	virtual void SetLightStylePattern(int32 Style, const FString& Pattern) override;
 	virtual FString LightStylePattern(int32 Style) const override;

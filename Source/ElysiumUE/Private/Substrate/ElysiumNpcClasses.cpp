@@ -274,6 +274,17 @@ struct FElysiumNpcRegistrar
 			TEXT("npc_VTaxiDriver"), TEXT("npc_VHuman"), TEXT("npc_VHunter"),
 			TEXT("npc_VTzimisceRunner"), TEXT("npc_VNewscaster"), TEXT("npc_VAnimal"),
 			TEXT("npc_VSabbatLeader"), TEXT("npc_VAndreiBlood"),
+			// `CPayphone` (`.?AVCPayphone@@` `0x10587930`) is a `CAI_BaseNPCTroika` subclass — the
+			// class `CBasePlayer::StartPlayerDialog` `0x10178280` RTTI-casts its partner to before it
+			// decides whether to create a camera at all (SC9/RC6). It is an NPC leaf here for the same
+			// reason it is one in retail: the four shipped phones author `dialogname`,
+			// `default_camera` and `WillTalk`, the opener takes their dialogue body session, and the
+			// arm it runs instead of the camera is `StartGrappleAttack(this, npc, 5)`, whose state
+			// lives on the combat character. Registering it retires the `npc_payphone` stub row
+			// (`RegisterStub` answers null once an implementation owns the name). Its own
+			// `EnterGrappleState` override (`CPayphone::vfunc379` `0x101aade0`, the receiver
+			// animation) is not built.
+			TEXT("npc_payphone"),
 		};
 		for (const TCHAR* Name : NpcClasses)
 		{

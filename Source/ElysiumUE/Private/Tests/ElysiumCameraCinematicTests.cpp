@@ -648,8 +648,17 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 			{
 				Step(0.001);
 				Step(0.1);
+				// `WorldSpaceCenter()` (vfunc `0x300`), measured off the **same** box the anchor
+				// resolver reads (`ElysiumCameraShots::SurroundingBounds`). This fixture's anchor is
+				// a bodiless point entity with no use-anchor box, so the box is VtMB's standing hull
+				// on its origin and the centre is half a hull above it — where a `Center` anchor on
+				// the same entity lands. The think used to fall back to the raw origin instead.
 				TestTrue(TEXT("mode 3 follows anchor 0"),
-					Services.LastCameraShot.Origin.Equals(FVector(300.0f, 0.0f, 50.0f), 0.1f));
+					Services.LastCameraShot.Origin.Equals(
+						ElysiumCameraShots::SurroundingBounds(*Anchor).GetCenter(), 0.1f));
+				TestTrue(TEXT("...at its world-space centre, not at its feet"),
+					Services.LastCameraShot.Origin.Equals(
+						FVector(300.0f, 0.0f, 50.0f + 36.0f * ElysiumCam::U), 0.1f));
 				TestFalse(TEXT("mode 3 publishes no target"), Services.LastCameraShot.bUseLookAt);
 				TestEqual(TEXT("mode 3 publishes no FOV"),
 					Services.LastCameraShot.FieldOfView, 0.0f);

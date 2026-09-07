@@ -413,12 +413,28 @@ namespace ElysiumScriptNatives
 			return FElysiumVariant::Void();
 		}
 		// SetCamera(char, shotfile) — "Sets the entity to use the named shot file as their cinematic
-		// camera mode" (ml_doc), so the argument keys `vdata/camerashots/` (115 calls). The receiver is
-		// the shot's subject: its `DialogTarget` anchors resolve to whoever the script called it on,
-		// which for a `.dlg` action is the NPC on screen. The scripted-shot channel is what it lands on.
+		// camera mode" (ml_doc), so the argument keys `vdata/camerashots/` (115 calls).
+		//
+		// **The receiver must be the player.** `vampire.dll FUN_10198070` resolves the actor, reads
+		// `ent + 0xa8` — the cached `CBasePlayer*`, non-NULL only for players, the same field
+		// `CDialog::Acquire` and `CanStartGrappleAttack` use to mean "this entity is a player" — and
+		// calls `CBasePlayer::SetCamera` on it; a receiver that is not a player raises
+		// `"SetShot needs to be called on a v..."` and **nothing happens**. Every shipped call site
+		// spells it `pc.SetCamera("Shot")`, and the shot's own subject is therefore always player 1,
+		// which is what makes a `DialogTarget` anchor mean "the player's dialogue partner" (RC6/RC13).
 		if (Method == FName(TEXT("SetCamera")) && World && Args.Num() >= 1)
 		{
-			World->SetScriptedCamera(Args[0].ToString(), Self);
+			const bool bReceiverIsPlayer = !Self.IsSet() || World->PlayerHandle() == Self;
+			if (!bReceiverIsPlayer)
+			{
+				UE_LOG(LogElysiumNative, Warning,
+					TEXT("SetShot needs to be called on a valid player: %s"), *Display);
+				Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ false);
+				return FElysiumVariant::Void();
+			}
+			// `param_3` is NULL on both of `FUN_1017d020`'s arms, so the shot's subject is
+			// `UTIL_PlayerByIndex(1)`; the world supplies it.
+			World->SetScriptedCamera(Args[0].ToString(), FElysiumEntityHandle::Invalid());
 			const bool bUp = World->HasScriptedCamera();
 			Record(State, Method, Display, FElysiumVariant::Void(), /*bStub*/ !bUp);
 			return FElysiumVariant::Void();

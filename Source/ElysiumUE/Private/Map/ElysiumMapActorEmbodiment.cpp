@@ -424,6 +424,82 @@ bool AElysiumMapActor::SweepPlayerHullToward(const FVector& TargetCm, FVector& O
 	return true;
 }
 
+bool AElysiumMapActor::TraceCameraHull(const FVector& FromCm, const FVector& ToCm,
+	const FVector& HalfExtentCm, const FElysiumEntityHandle& IgnoreEntity,
+	float& OutFraction, bool& OutStartSolid) const
+{
+	// `FUN_1006db10`'s per-anchor trace, verbatim in shape:
+	//   `UTIL_TraceHull(anchor, lookAt, (-1,-1,-1), (1,1,1), 0x1400b,
+	//                   CTraceFilterSimple(m_hSubject, 0), &tr)`
+	// and the predicate above it fails on `fraction < 1 || startsolid || allsolid`.
+	//
+	// `0x1400b` is `MASK_PLAYERSOLID_BRUSHONLY` (SOLID | WINDOW | GRATE | MOVEABLE | PLAYERCLIP) —
+	// `MASK_PLAYERSOLID` without `CONTENTS_MONSTER`. So retail's occluder set is brush geometry, and
+	// `ELYSIUM_USE_CHANNEL` — this project's solid-world channel, the one the map's brush bodies and
+	// the material-less `.hulls` surface answer on — is the port's expression of it. The named
+	// modernization is the channel, never the semantics: a character is not an occluder on either
+	// side.
+	OutFraction = 1.0f;
+	OutStartSolid = false;
+
+	const UWorld* World = GetWorld();
+	if (World == nullptr)
+	{
+		// No collision world to ask — a `-nullrhi` Substrate run or an unbuilt actor. The stated
+		// headless answer is "the trace did not run", which admits the candidate.
+		return false;
+	}
+	if (FromCm.Equals(ToCm))
+	{
+		// A degenerate segment is trivially clear, and retail's own hull trace over a zero-length
+		// ray answers `fraction 1` unless the hull already starts inside something — which is the
+		// `startsolid` arm below, and a shot anchor buried in a wall is not a case any shipped file
+		// authors.
+		return true;
+	}
+
+	FCollisionQueryParams Params(FName(TEXT("ElysiumCameraFindBestShot")), /*bTraceComplex*/ false);
+	// `CTraceFilterSimple(m_hSubject, 0)` — the shot's subject is excluded from the trace. Its
+	// registered use anchor and its body actor are the two things in this runtime that stand for
+	// that entity's collision, so both are ignored.
+	if (IgnoreEntity.IsSet())
+	{
+		for (const FUseAnchorRecord& Record : UseAnchors)
+		{
+			if (Record.Owner == IgnoreEntity)
+			{
+				if (const UPrimitiveComponent* Component = Record.Component.Get())
+				{
+					Params.AddIgnoredComponent(Component);
+				}
+			}
+		}
+		if (FElysiumEntityWorld* Entities = GetEntityWorld())
+		{
+			if (const FElysiumEntity* Subject = Entities->Resolve(IgnoreEntity))
+			{
+				if (const USkeletalMeshComponent* Body = Subject->GetSkeletalBody())
+				{
+					Params.AddIgnoredActor(Body->GetOwner());
+				}
+			}
+		}
+	}
+
+	const FCollisionShape Hull = FCollisionShape::MakeBox(HalfExtentCm.GetAbs());
+	FHitResult Hit;
+	const bool bHit = World->SweepSingleByChannel(Hit, FromCm, ToCm, FQuat::Identity,
+		ELYSIUM_USE_CHANNEL, Hull, Params);
+	if (bHit)
+	{
+		OutFraction = static_cast<float>(Hit.Time);
+		// Source distinguishes `startsolid` from `allsolid`; Unreal's `bStartPenetrating` is their
+		// union, and `FUN_1006db10` ORs the two anyway.
+		OutStartSolid = Hit.bStartPenetrating;
+	}
+	return true;
+}
+
 bool AElysiumMapActor::SnapPlayerViewTo(const FVector& TargetCm)
 {
 	// `CBaseTerminal` slot 41, `0x102182b0` -> `FUN_10178590(player, WorldSpaceCenter())`:

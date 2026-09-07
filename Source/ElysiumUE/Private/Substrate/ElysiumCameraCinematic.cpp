@@ -83,6 +83,43 @@ namespace ElysiumCineCamImpl
 	{
 		return ElysiumSkeletalBasis::FromSourceAngles(Entity.Angles);
 	}
+
+	// `Q_snprintf(buf, 0x40, "%s_%d", baseName, i)` — `FindBestShot`'s candidate name, in retail's
+	// own 64-byte buffer: 63 characters plus the NUL. No shipped 4050 `options` string comes near
+	// it, but the truncated name is what the shot table is asked for.
+	FString ShotNameFor(const FString& BaseName, int32 Index)
+	{
+		return FString::Printf(TEXT("%s_%d"), *BaseName, Index).Left(63);
+	}
+
+	// `FUN_1006f670`, the look-at solve, on its own — `FindBestShot`'s visibility predicate
+	// (`FUN_1006db10`) calls it directly, ahead of and independently of the `+0xd4` angle gate that
+	// `FElysiumCameraDirector::Resolve` applies. It reads the record's **presence flags**, not its
+	// slots, so the order-of-presence flag bug travels with it: a `Point2`-only shot raises the
+	// `Point1` bit and this reads the empty slot 2, aiming the test at `(0,0,0)`.
+	FVector SolveLookAt(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
+		FElysiumShotBindings& Bindings, bool bLatched)
+	{
+		// An anchor that does not resolve leaves the zero there, which is what `FUN_1006f080`'s
+		// `vec3_origin` early-out writes.
+		FVector Point1 = FVector::ZeroVector;
+		FVector Point2 = FVector::ZeroVector;
+		FElysiumCameraDirector::ResolveAnchorPoint(World, Def, 2, Bindings, bLatched, Point1);
+		FElysiumCameraDirector::ResolveAnchorPoint(World, Def, 3, Bindings, bLatched, Point2);
+		if (Def.bTargetPoint1Flagged && Def.bTargetPoint2Flagged)
+		{
+			return (Point1 + Point2) * 0.5f;
+		}
+		if (Def.bTargetPoint1Flagged)
+		{
+			return Point1;
+		}
+		if (Def.bTargetPoint2Flagged)
+		{
+			return Point2;
+		}
+		return FVector::ZeroVector;
+	}
 }
 
 // --- Lifecycle ---------------------------------------------------------------------------------
@@ -300,15 +337,11 @@ void FElysiumCameraCinematic::StartShotPlacement()
 
 	// The shot-start anchor cache at `+0x598 + i*12`, refilled last, and the publish. `Resolve`'s
 	// `ShotStart` pass is exactly that fill: it resolves every anchor live and writes the cache.
+	// It cannot fail: an anchor retail cannot resolve answers `vec3_origin` (`0x1006f09b`), so there
+	// is no "the shot did not anchor" state to fall back from.
 	FElysiumCameraShot Shot;
-	const bool bResolved = FElysiumCameraDirector::Resolve(World, ShotDef, Subject, Shot, &Bindings,
+	FElysiumCameraDirector::Resolve(World, ShotDef, Subject, Shot, &Bindings,
 		EElysiumShotResolvePass::ShotStart, OriginSelector);
-	if (!bResolved)
-	{
-		Shot = FElysiumCameraShot();
-		Shot.bUseLookAt = false;
-		Shot.FieldOfView = ShotDef.Constraints.FieldOfView;
-	}
 	Shot.DebugName = ShotDef.Name;
 	// **The shot start publishes the PLACEMENT, not the anchor.** `1006ebcb`/`1006ebe9` write
 	// `m_vecCamOrigin = +0x564` and `m_angCamAngles = +0x57c` — the pose the entity was just moved
@@ -492,17 +525,8 @@ void FElysiumCameraCinematic::ThinkNamedShot()
 	// is the one solver both the dialogue ladder and this entity share. Arm 2 of the selector is
 	// applied here, because it is the arm that says "do not touch the origin at all".
 	FElysiumCameraShot Shot;
-	const bool bResolved = FElysiumCameraDirector::Resolve(World, ShotDef, Subject, Shot,
+	FElysiumCameraDirector::Resolve(World, ShotDef, Subject, Shot,
 		&Bindings, EElysiumShotResolvePass::Think, OriginSelector);
-	if (!bResolved)
-	{
-		Shot = FElysiumCameraShot();
-		Shot.DebugName = ShotDef.Name;
-		Shot.Origin = PlacementOrigin;
-		Shot.bUseLookAt = false;
-		Shot.Rotation = PlacementAngles;
-		Shot.FieldOfView = ShotDef.Constraints.FieldOfView;
-	}
 	if (OriginSelector == EElysiumShotOriginSelector::Entity)
 	{
 		// `sel == 2` — "leave the entity's own abs origin alone". `Resolve` has already suppressed
@@ -554,15 +578,13 @@ void FElysiumCameraCinematic::ThinkFollowEntity()
 
 	FElysiumCameraShot Shot;
 	Shot.DebugName = ShotDef.Name;
-	// `WorldSpaceCenter()` (vfunc 0x300). The port's bounds source for an entity is the use-body
-	// box the embodiment publishes; with none, retail's centre for a bodiless point entity is its
-	// origin, which is what the base answers.
-	FBox Bounds(ForceInit);
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	Shot.Origin = (Embodiment && Embodiment->GetUseBodyWorldBounds(Anchor->Handle, Bounds)
-		&& Bounds.IsValid)
-		? Bounds.GetCenter()
-		: Anchor->Origin;
+	// `WorldSpaceCenter()` (vfunc 0x300) — **the same box the anchor resolver measures**
+	// (`ElysiumCameraShots::SurroundingBounds`): the skeletal body's bounds, else the embodiment's
+	// use-anchor box, else VtMB's standing hull on the entity's origin. This think used to read the
+	// use-body box alone and fall back to the raw origin, so a mode-3 camera on a bodied NPC sat a
+	// hull-height below where a `Center` anchor on the same entity put it, and answered the feet of
+	// a body the anchor arm measured whole.
+	Shot.Origin = ElysiumCameraShots::SurroundingBounds(*Anchor).GetCenter();
 	Shot.bUseLookAt = false;
 	Shot.Rotation = ElysiumCineCamImpl::AbsAnglesOf(*Anchor);
 	// No target and no FOV: `FieldOfView` 0 is the port's "keep the player's", which is the closest
@@ -656,12 +678,17 @@ void FElysiumCameraCinematic::PublishGoal(const FElysiumCameraShot& Shot)
 		ReleaseGoal();
 		return;
 	}
+	// `m_vecCamOrigin` / `m_vecCamTarget` / `m_angCamAngles` / `m_flFOV` are the ENTITY's own fields
+	// in retail — the SendProp channel merely replicates them — and `CBaseCineCam::vfunc193`
+	// (`0x1006d910`) reads `+0x5ec` off the entity whether or not any client is listening. SC9's
+	// `DialogPOV` reader is exactly that call, so the goal is recorded before the channel is
+	// consulted and a headless world still answers with the pose it just solved.
+	LastGoal = Shot;
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (!Embodiment)
 	{
 		return;   // a headless logic world runs the whole lifecycle without a camera to point
 	}
-	LastGoal = Shot;
 	if (PublishedShotId == 0)
 	{
 		PublishedShotId = Embodiment->PushCameraShotValue(Shot);
@@ -747,6 +774,192 @@ FElysiumEntityHandle FElysiumCameraCinematic::CreateRuntimeCamera(FElysiumEntity
 			Camera->SetShotAnchorEntity(Index, Anchors[Index]);
 		}
 	}
+	Camera->StartShotPlacement();
+	return Handle;
+}
+
+// --- `FindBestShot` and its two predicates (SC8) -------------------------------------------------
+
+bool FElysiumCameraCinematic::AnchorsExist() const
+{
+	// `FUN_1006d9d0`:
+	//
+	//     flags = GetFlags();                                    // the shot record's +0x20
+	//     if (flags == 0xffffffff) return false;
+	//     if ((flags & 1) && !handleLive(+0x610)) return false;   // Start declared, no entity
+	//     if ((flags & 2) && !handleLive(+0x614)) return false;   // End
+	//     if ((flags & 4) && !handleLive(+0x618)) return false;   // Point1
+	//     if ((flags & 8) && !handleLive(+0x61c)) return false;   // Point2
+	//     return m_ShotIndex != -1;
+	//
+	// The `0xffffffff` guard and the trailing `m_ShotIndex != -1` are the same question asked twice:
+	// with no shot loaded there is no record to read flags out of. `bShotLoaded` is the port's
+	// `m_ShotIndex != -1`, so it stands for both.
+	if (!bShotLoaded || !ShotDef.IsValid())
+	{
+		return false;
+	}
+	// Bits 0 and 1 are the `Start` / `End` presence bits; bits 2 and 3 are the two `Target`
+	// sub-block bits, which the parser raises **by order of presence** while writing the fixed
+	// slot. The bit is what retail tests and the slot is what it indexes, so the bug travels here
+	// too: a `Point2`-only shot raises the `Point1` bit and this tests anchor 2's handle.
+	const bool bDeclared[FElysiumShotBindings::Num] =
+	{
+		ShotDef.Start.bPresent,
+		ShotDef.End.bPresent,
+		ShotDef.bTargetPoint1Flagged,
+		ShotDef.bTargetPoint2Flagged,
+	};
+	for (int32 Index = 0; Index < FElysiumShotBindings::Num; ++Index)
+	{
+		if (!bDeclared[Index])
+		{
+			continue;
+		}
+		// `handleLive` is an EHANDLE resolve, not a "the field was written" test — a handle whose
+		// entity has since died reads dead here.
+		if (!World || World->Resolve(Bindings.Anchors[Index].Entity) == nullptr)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FElysiumCameraCinematic::CanSeeTarget()
+{
+	// `FUN_1006db10`, in its own order: the look-at first, then the `Start` anchor, then the `End`
+	// anchor. Both traces share one hull and one filter.
+	if (!bShotLoaded)
+	{
+		return false;
+	}
+	const bool bLatched = ElysiumCameraShots::LatchesAnchors(ShotDef);
+	const FVector LookAt = ElysiumCineCamImpl::SolveLookAt(World, ShotDef, Bindings, bLatched);
+
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment)
+	{
+		// A headless logic world has no geometry to refuse a candidate with, and refusing every
+		// shot there would make `FindBestShot` answer false in exactly the runs meant to prove it.
+		return true;
+	}
+	// `mins (-1,-1,-1)` / `maxs (1,1,1)` — a 2-unit hull, in Source units.
+	const FVector HalfExtent(1.0f * ElysiumCam::U, 1.0f * ElysiumCam::U, 1.0f * ElysiumCam::U);
+
+	// Anchor 0 (`Start`) then anchor 1 (`End`); the two `Target` anchors are the look-at and are
+	// never traced from.
+	for (int32 Index = 0; Index < 2; ++Index)
+	{
+		if (!World || World->Resolve(Bindings.Anchors[Index].Entity) == nullptr)
+		{
+			continue;   // `handleLive(+0x610)` / `handleLive(+0x614)` — an absent anchor is skipped
+		}
+		FVector From;
+		if (!FElysiumCameraDirector::ResolveAnchorPoint(World, ShotDef, Index, Bindings, bLatched,
+			From))
+		{
+			continue;
+		}
+		float Fraction = 1.0f;
+		bool bStartSolid = false;
+		// `CTraceFilterSimple(m_hSubject, 0)` — **the shot's subject never blocks its own shot**,
+		// which is what stops the player's body from rejecting every candidate framed on him.
+		if (!Embodiment->TraceCameraHull(From, LookAt, HalfExtent, Subject, Fraction, bStartSolid))
+		{
+			continue;   // no collision world answered; the candidate is admitted
+		}
+		if (Fraction < 1.0f || bStartSolid)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool FElysiumCameraCinematic::FindBestShot(const FString& BaseName, FRandomStream& Rng)
+{
+	// `this->CamMode (+0x638) = 1;` — written **directly**, before any `SetShot`. Every `SetShot`
+	// below clears the mode and rewrites it, so on any path that reaches the loop this write is
+	// overwritten; it is reproduced because it is what the listing does and because it is the state
+	// a `SetShot`-less path would leave behind.
+	CamMode = static_cast<int32>(EElysiumCineCamMode::NamedShot);
+
+	TArray<int32> Candidates;
+	// `for (i = 1; ; ++i)` — unbounded in retail, ended only by the first name the shot table does
+	// not hold. Reproduced as written: the enumeration walks `<base>_1`, `<base>_2`, … and the gap
+	// is the terminator, so a family that skips an index (`_1`, `_2`, `_4`) offers two candidates
+	// and never sees the fourth.
+	for (int32 Index = 1; ; ++Index)
+	{
+		const FString Name = ElysiumCineCamImpl::ShotNameFor(BaseName, Index);
+		if (SetShot(Name, static_cast<int32>(EElysiumCineCamMode::NamedShot),
+			FElysiumEntityHandle::Invalid()))
+		{
+			// `FUN_1006e8e0(this)` — the candidate is actually **placed** before it is judged, so
+			// the anchors it declares are bound, the shot-start cache is filled and the origin
+			// selector has been decided. The predicates read that state, not the record.
+			StartShotPlacement();
+			if (AnchorsExist() && CanSeeTarget())
+			{
+				Candidates.Add(Index);
+			}
+		}
+		// `if (this->m_ShotIndex == -1) break;` — the test is on the shot index and not on
+		// `SetShot`'s return, so it is the *loaded* state that ends the scan.
+		if (!bShotLoaded)
+		{
+			break;
+		}
+	}
+
+	if (Candidates.IsEmpty())
+	{
+		// `return false` with the camera left wherever the last failed `SetShot` put it: idle, mode
+		// 0, no shot. `FUN_10070550` is what removes the entity.
+		return false;
+	}
+
+	// `k = RandomInt(0, vec.Count()-1)` — a **uniform** pick with no scoring of any kind. The draw
+	// is the named stream's, never `FMath::Rand*`, so a seeded session reproduces the same shot.
+	const int32 Pick = Rng.RandRange(0, Candidates.Num() - 1);
+	const FString Chosen = ElysiumCineCamImpl::ShotNameFor(BaseName, Candidates[Pick]);
+	SetShot(Chosen, static_cast<int32>(EElysiumCineCamMode::NamedShot),
+		FElysiumEntityHandle::Invalid());
+	// `Msg("CBaseCineCam::FindBestShot chose %s\n", buf)` — retail's own line, verbatim.
+	UE_LOG(LogElysiumCineCam, Log, TEXT("CBaseCineCam::FindBestShot chose %s"), *Chosen);
+	// **No `FUN_1006e8e0` after the final `SetShot`** — the caller runs the shot start.
+	return true;
+}
+
+FElysiumEntityHandle FElysiumCameraCinematic::CreateFindBestShotCamera(FElysiumEntityWorld& World,
+	const FString& BaseName, FRandomStream& Rng)
+{
+	// `FUN_10070550(baseName)`:
+	//   this = CBaseEntity::Create("camera_cinematic", vec3_origin);
+	//   this[0x81] |= 4;                                   // +0x204 & 0x4 — disposable
+	//   if (!FUN_1006e4c0(this, baseName)) { UTIL_Remove(this); return NULL; }
+	//   FUN_1006e8e0(this);
+	//
+	// The disposable bit is what makes 4051's "drop and destroy" a one-liner: `SetCineCamera(NULL)`
+	// removes the outgoing camera precisely because this bit is on it.
+	FElysiumEntityDef Def;
+	Def.Classname = TEXT("camera_cinematic");
+	Def.Origin = FVector::ZeroVector;
+	const FElysiumEntityHandle Handle = World.SpawnRuntimeEntity(MoveTemp(Def));
+	FElysiumEntity* Created = World.Resolve(Handle);
+	FElysiumCameraCinematic* Camera = Created ? Created->AsCameraCinematic() : nullptr;
+	if (!Camera)
+	{
+		return FElysiumEntityHandle::Invalid();
+	}
+	Camera->bDisposable = true;
+	if (!Camera->FindBestShot(BaseName, Rng))
+	{
+		Created->Kill();
+		return FElysiumEntityHandle::Invalid();
+	}
+	// The shot start `FindBestShot` deliberately did not run after its final `SetShot`.
 	Camera->StartShotPlacement();
 	return Handle;
 }

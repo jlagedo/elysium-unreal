@@ -204,6 +204,125 @@ belongs here the first time a layer has to *survive* a cutscene; building one be
 layer to exempt would be building it blind. Accessibility scales motion layers at the source rather
 than damping the final pose after a cut.
 
+## The scripted-camera subsystem — the retail port as it stands
+
+This section describes the legacy layer's own internal design: retail's `camera_cinematic` /
+`C_BaseCineCamera` / `camera_track` subsystem, ported whole (`docs/project/camera_scripted.md`
+SC1–SC7; SC8's `FindBestShot`/anim-event writer and SC9's dialogue migration are open). Every
+retail fact cited here is recovered in `docs/vtmb/camera-view-modes.md`; this section states only
+the port's own structure and file map.
+
+### Two channels, one slot
+
+Retail runs the legacy layer as **two channels composed in series, not two rival viewpoints**, and
+the port keeps that shape rather than the single weighted stack it started from:
+
+- **Channel A, the cine slot.** `FElysiumEntityWorld::SetCineCamera` /
+  `ClearScriptedCamera` (`Public/ElysiumEntityWorld.h`, impl `Private/Substrate/ElysiumEntityWorld.cpp`)
+  is retail's one adoption slot (`CBasePlayer::SetCineCamera` `FUN_1017cef0`). It **hard-writes** the
+  base pose — origin, angles and FOV, no blend, no lerp, no weight — through
+  `FElysiumCameraShotStack::TopCine()` / `TopCineId()` (`Public/ElysiumCameraSolve.h`). Only one
+  camera is ever adopted; pushing a second replaces the first.
+- **Channel B, the `camera_track` override.** `FElysiumCameraOverrideChannel`
+  (`Private/Substrate/ElysiumCameraOverride.{h,cpp}`) is the signed-duration fade machine
+  (`GetCameraOverrideWeight` `FUN_1017d900`, the lazy reap, the back-dated re-time, the per-entity
+  minimum crossfades and the N-entry outgoing stack), fed by `camera_track`/`camera_keyframe`
+  (`Private/Substrate/ElysiumCameraTrack.{h,cpp}`) through
+  `FElysiumEntityWorld::PublishTrackCamera`. It is the **only** blended channel and is composed
+  **over whichever base won** by `ElysiumCam::ComposeScriptedShot`
+  (`Public/ElysiumCameraSolve.h`, impl `Private/Player/ElysiumCameraSolve.cpp`): point lerp,
+  `SimpleSpline` ease at the compose site, `roll = e × shotRoll` as an assignment, FOV lerp. At
+  weight 0 the cine pose (or the rig's) stands; at weight 1 the track wins outright.
+
+Both channels are read out of the same `FElysiumCameraShotStack`
+(`UElysiumCameraComponent::ApplyScriptedShotToView`, `Private/Player/ElysiumCameraComponent.cpp`,
+and `UElysiumCameraService::ApplyToView`, `Private/Player/ElysiumCameraService.cpp`), so the two
+apply sites cannot compose the channels differently. `FElysiumCameraShotStack::GetWeight()` answers
+1 while a cine shot is adopted (it has no weight of its own) and the track ramp otherwise — which is
+what `CAM_IsThirdPerson`'s scripted disjunct reads.
+
+### The adoption slot and the disposable rule
+
+`SetCineCamera`'s outgoing camera is destroyed **only when it is disposable and differs from the
+incoming one** (`FUN_1017cef0`'s `if (old != cam && old != NULL && (old->+0x204 & 0x4))
+UTIL_Remove(old)`), which is why a map-placed `camera_cinematic` director survives its own
+`StartShot` while the runtime camera it creates does not survive the next adoption. A null adoption
+(`SetCineCamera(Invalid, 0, false, "")`) is retail's `SetCineCamera(player, NULL)` — the whole of
+`RemoveCamera`, a terminal closer, and `EndShot`'s camera step. Leasing a `camera_track` role
+(`SelectTrackCameraRole`) opens with the same `SetCineCamera(NULL)` retail's own
+`FUN_1017d280` does, so adopting a track role first clears a live cine shot — the two channels stay
+mutually exclusive at the slot even though they compose in series at the apply site.
+
+**M8.** The terminal used to hold its own camera handle beside the slot, which retail does not; it
+now adopts and releases through `SetCineCamera` like every other producer
+(`Private/Substrate/ElysiumTerminal.cpp`), and `docs/vtmb/computer-terminals.md` records the move.
+
+### Who adopts
+
+- **The director entity**, `FElysiumCameraCinematic::StartShot`
+  (`Private/Substrate/ElysiumCameraCinematic.{h,cpp}`) — the `camera_cinematic` map entity's
+  director/runtime split, `SetShot`, the four targetname anchors, all five `CamMode` arms, and
+  `camera_animated` as its own class (`ElysiumCameraAnimated.{h,cpp}`).
+- **The `SetCamera` script native**, `FElysiumEntityWorld::SetScriptedCamera` /
+  `ClearScriptedCamera` (`Public/ElysiumEntityWorld.h`) — the 115 shipped call sites' single entry
+  point.
+- **Terminals** (`Private/Substrate/ElysiumTerminal.cpp`), since M8.
+- **Dialogue does not yet adopt the slot.** The conversation's per-line camera selection
+  (`FElysiumEntityWorldDialogue.cpp`) resolves a shot from `vdata/camerashots/` or an authored
+  profile and pushes it as a `Dialogue`-kind request through `UElysiumCameraService::AcquireCamera`
+  — Channel B of the two-service split below — rather than through `SetCineCamera`. Moving the
+  dialogue opener/closer onto the shared slot is SC9's, named in `camera_scripted.md`'s ledger.
+- **Anim event 4050 does not yet write `bDrawPlayerBody` or call `FindBestShot`.** Both are SC8's;
+  today the field exists (`FElysiumShotPresentation::bDrawPlayerBody`) with only the director's
+  `spawnflags & 2` as a writer.
+
+### The per-frame order
+
+The subsystem is one ordered pass, and the order is retail's:
+
+1. **Substrate 24 Hz goal publish** — `FElysiumCameraCinematic::Think`
+   (`Private/Substrate/ElysiumCameraCinematic.cpp`), the `ThinkAccumulator` gated on
+   `ElysiumCineCam::ThinkInterval` so the goal advances at a fixed 24 Hz cadence measured off the
+   caller's own delta, never a clock read.
+2. **Shot-change edges** — `FElysiumShotStartEdges::OnDataChanged` (`Public/ElysiumCameraSolve.h`),
+   `C_BaseCineCamera::OnDataChanged`'s two signals kept apart: a new reset-frame arms shot start and
+   clears no settle flag, a new shot index arms the snap *or* clears the three angle-settled flags,
+   never both.
+3. **The one-shot snap** — consumed inside `FElysiumScriptedShotTracker::Start`/`Advance` ahead of
+   the `bTracked` copy-through.
+4. **The `bTracked` branch in `FElysiumScriptedShotTracker::Advance`** (`Public/ElysiumCameraSolve.h`,
+   impl `Private/Player/ElysiumCameraSolve.cpp`) — `bTracked` is the port's name for `CamMode == 1`;
+   set, the tracker's full numerics (position/angle settle bands, `MoveAccel`/`TurnAccel`,
+   `SyncRotateOnMove`) run against the published goal.
+5. **Compose** — `UElysiumCameraComponent::ApplyBaseToView` skips the third-person boom outright
+   while a cine shot is adopted (`CInput` slot 31 vs slot 33 in retail); `ApplyScriptedShotToView`
+   hard-writes the cine pose, then composes the track override over it.
+6. **The track override** — `ElysiumCam::ComposeScriptedShot`, described above.
+7. **The draw gates** — `UElysiumCameraComponent::SolveDrawPolicy` →
+   `ElysiumCam::SolveDrawPolicy` (`Public/ElysiumCameraSolve.h`): the body/world-weapon draw test
+   reads the **adopted** cine camera's `bDrawPlayerBody` outright, the viewmodel test adds
+   `!IsDollying()`.
+8. **The HUD edge** — `FElysiumShotHudGate` (`Public/ElysiumCameraSolve.h`), a latch rather than a
+   per-frame solve (M14): it re-issues only on a shot-index change, on going inactive after having
+   been active, or on destruction, "active" meaning a cine camera is adopted so a `camera_track`
+   running under a released shot does not hold the HUD down.
+
+### `UElysiumCameraService` — Channel B of the *service* split
+
+Distinct from the two shot channels above, `UElysiumCameraService`
+(`Public/ElysiumCameraService.h`, impl `Private/Player/ElysiumCameraService.cpp`) is the
+request/arbitration surface this document's ["Arbitration and composition"](#arbitration-and-composition)
+section describes: `Focus`, `Dialogue`, `GameplayEvent`, and `Sequence` producers push
+`FElysiumCameraRequest`s here rather than at the legacy slot. It runs the same
+`FElysiumScriptedShotTracker` and `ElysiumCam::ComposeScriptedShot` the legacy component does — one
+implementation, so the two service surfaces cannot drift on tracker numerics — and applies through
+its own `ApplyToView`, taking the same cine/track two-branch shape as
+`UElysiumCameraComponent::ApplyToView`.
+
+Today the service is what dialogue's per-line selection goes through (see "Who adopts" above); once
+SC9 lands, dialogue moves onto the shared adoption slot and the service's dialogue ramp retires in
+favour of the slot's own cut semantics (M1).
+
 ## Project-authored camera assets
 
 Original project packages live under the explicit Git/LFS namespace

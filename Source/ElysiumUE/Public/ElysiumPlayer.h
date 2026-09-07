@@ -2053,6 +2053,23 @@ public:
 	void SetHiddenByController(bool bInHidden);
 	bool IsMobile() const { return !bImmobilized && !bHiddenByController; }
 
+	// === SC8 — `CBasePlayer::IsObserver` (`vfunc +0x658`, `FUN_1015ee60`) =====================
+	// `m_bIsObserver` `+0x19f6`, and the gate `CBasePlayer::HandleAnimEvent` `0x10178a10` opens
+	// with: `if (!IsObserver() && event->owner == this) { ...the whole switch... }`. It is also
+	// read by `CBasePlayer::OnTakeDamage` (returns 0), `CBasePlayer::PostThink` (skips the body),
+	// `CHL2_Player::Spawn` (goes non-solid, MOVETYPE 9, `EF_NODRAW`, `item_w_fists`) and the two
+	// discipline-visual passes.
+	//
+	// **It is provably false in the shipped game.** The complete write set of `+0x19f6` is
+	// `FUN_1015ee80` (`= 1`) and `FUN_1015eea0` (`= 0`), and both are reachable only through thunks
+	// that **no function calls** — so nothing in `vampire.dll` ever raises it, and the gate above is
+	// a constant pass. The field is carried here so the gate is a named predicate rather than a
+	// silently dropped term; the seam has no producer for exactly the reason retail's has none.
+	// (`+0x19f5`, its neighbour, is `pl.deadflag`; `FUN_1015eec0` is `IsAlive`.)
+	bool bObserver = false;
+	bool IsObserver() const { return bObserver; }
+	// =========================================================================================
+
 	// `m_iVFlags` `+0x1d60`, and the three retail accessors that have callers. `HasViewFlags` is
 	// `HasAllVFlags` `0x10181650` — `(m_iVFlags & mask) == mask`, an ALL test, not an any test.
 	EElysiumViewFlags ViewFlags = EElysiumViewFlags::None;

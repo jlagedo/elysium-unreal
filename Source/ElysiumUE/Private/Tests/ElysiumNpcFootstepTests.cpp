@@ -22,6 +22,7 @@
 #include "ElysiumSoundLevel.h"
 #include "ElysiumSurfaceSounds.h"
 #include "ElysiumWorldServices.h"
+#include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumFootsteps.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -31,6 +32,7 @@
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumCharacterAssets.h"
 
+#include "Misc/ScopeExit.h"
 #include "Templates/UniquePtr.h"
 
 namespace ElysiumNpcFootstepTests
@@ -386,6 +388,25 @@ bool FElysiumNpcFootstepMutedTest::RunTest(const FString&)
 	}
 	Motor->GroundSurface = FName(TEXT("concrete"));
 	ElysiumNpcTestHooks::ApplyResolvedTemplate(*Fixture.Walker, ShippedTemplate());
+	// `SetCamera` is a `CBasePlayer` method (`FUN_1017d020`) and the cine slot (`+0x19b4`) lives on
+	// the player, so the world needs one for the scripted-camera arm to be reachable at all.
+	Fixture.Services.bHasPlayer = true;
+	Fixture.World->SpawnPlayer();
+
+	// Both camera arms below adopt a real runtime `camera_cinematic`, so the shot name has to
+	// RESOLVE. Seed it rather than read the export root: `SetCamera` would otherwise land on its
+	// `"DialogDefault"` fallback and only when the corpus happens to be mounted, and the dialogue
+	// opener has no fallback at all (`StartPlayerDialog` `0x10178280` — a `default_camera` that does
+	// not load leaves the conversation cameraless, and mutes nothing).
+	ElysiumCameraShots::FlushCache();
+	ON_SCOPE_EXIT { ElysiumCameraShots::FlushCache(); };
+	{
+		FElysiumCameraShotDef Def;
+		Def.Name = TEXT("test");
+		Def.End.bPresent = true;
+		Def.End.Position = EElysiumShotPosition::Player;
+		ElysiumCameraShots::Install(TEXT("shots/test.txt"), Def);
+	}
 
 	TestFalse(TEXT("an ordinary world mutes nothing"),
 		ElysiumFootsteps::NpcStepsMuted(*Fixture.World));
@@ -422,8 +443,12 @@ bool FElysiumNpcFootstepMutedTest::RunTest(const FString&)
 	TestFalse(TEXT("clearing the track un-mutes the level"),
 		ElysiumFootsteps::NpcStepsMuted(*Fixture.World));
 
-	// `+0x19b4` with `+0x1ec4 > 0` — a dialogue/control entity owns the player. The conversation is
-	// opened on the OTHER NPC, because the gate is the player's and not the stepper's.
+	// `+0x19b4` with `+0x1ec4 > 0` — the cine camera the dialogue opener adopts off the partner's
+	// `default_camera` (`FUN_10178280` -> `FUN_10070470`). The conversation is opened on the OTHER
+	// NPC, because the gate is the player's and not the stepper's; and the partner needs a shot
+	// that loads, because a conversation whose `default_camera` fails runs cameraless in retail
+	// (no `DialogDefault` fallback on this path) and mutes nothing.
+	Fixture.Talker->DefaultCamera = TEXT("shots/test.txt");
 	Fixture.World->OpenDialog(Fixture.Talker->Handle, MakeOneLineConversation());
 	StepsSilently(TEXT("an open conversation"));
 	Fixture.World->CloseDialog(/*bSilent*/ true);

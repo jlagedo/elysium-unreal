@@ -235,7 +235,7 @@ Ranged fire is the whole range `3030..3044`; melee contact is `{3001} ∪ {3030.
 | **4006** | — | vfunc `+0x584` on the interaction partner — **feed/grapple release** | **272** |
 | **4007** | — | vfunc `+0x57c` — **feed/grapple bite (engage)** | **104** |
 | 4020 | — | named effect | 2 |
-| **4050** / **4051** | — | create the `camera_cinematic` action object and switch to it / release it and place it — **the stealth-kill pair** | 40 / 40 |
+| **4050** / **4051** | — | `FUN_10070550(options)` — create a disposable `camera_cinematic`, `FindBestShot` over `<options>_1`, `<options>_2`, …, adopt it with `m_bDrawPlayer = 1` and `m_bForcePlayerLook = 0` / drop **and destroy** it, then snap the player's eye angles level along his own flattened forward. **The stealth-kill pair**, and neither immobilizes | 40 / 40 |
 | 4100 / 4101 / 4102 | — | attach `"%s.mdl"` from options as the follow model / detach it / attach the **gendered** `"%s_%s.mdl"` | 28 / 5 / 36 |
 | 4150 … 4155 | — | `Interesting_places/<gender>/<opt>.wav` on channel 4 or 2, plus their stop verbs and a second slot each | 10, 2, 2, 0, 2, 0 |
 
@@ -290,7 +290,7 @@ hands a `const char*` to the handler; every handler parses its own.
 | raw model path | 4100, 4102 (4101 reads no options) |
 | raw bone name | 2070, 2071 |
 | raw activity/sequence name | 2042, 2044, 5105 |
-| raw entity classname | 4050 |
+| raw camera-shot **base name** | 4050 (the earlier "raw entity classname" reading was wrong: `FUN_10070550` passes `options` to `CBaseCineCam::FindBestShot` `FUN_1006e4c0`, which `Q_snprintf`s `"%s_%d"` onto it — `stealth_kill.txt`'s `Stealth_Kill_1..4` is exactly that family) |
 | raw particle/emitter name | 5111–5120 |
 | ignored | everything else |
 
@@ -555,3 +555,48 @@ every one of their cycles is one of the four recovered values: the `move_and_ran
 walk/run split is what the ANIMATOR authored per record, and the handler reads the record and never
 the label. The implication that holds, and the one the test asserts, is the other direction: a clip
 carrying `2052`/`2053` is always a `*_run`.
+
+## Port status - the scripted-camera band (4050/4051)
+
+`FElysiumPlayer::HandleAnimEvent`
+(`Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp`) carries the two ids
+`CBasePlayer::HandleAnimEvent` `0x10178a10` owns. They are **the player's own handler**, not the
+combat-character switch: `CBasePlayer` overrides the virtual, handles `0xfd2`, `0xfd3` and `0x80c`
+itself, and delegates everything else to `CBaseCombatCharacter::HandleAnimEvent`.
+
+**The handler opens with a gate, and the base call is inside it.**
+`if (!this->IsObserver() && event->owner == this) { ...the whole switch, default included... }` — so
+an event that fails the gate reaches no handler at all and produces no
+`DevWarning("Unhandled animation event")`. `IsObserver` is `vfunc +0x658` / `FUN_1015ee60`, reading
+`m_bIsObserver` `+0x19f6`; the byte's only two writers (`FUN_1015ee80`, `FUN_1015eea0`) are
+reachable solely through thunks nothing calls, so **it is false everywhere in the shipped game** and
+the gate is a constant pass. It is ported as the named predicate `FElysiumPlayer::IsObserver()` over
+a `bObserver` field with no producer — for exactly the reason retail's has none. `event->owner ==
+this` is structural in the port: the dispatcher hands a record to the entity whose clip carries it.
+
+| code | retail | port | status |
+|---:|---|---|---|
+| 4050 | `options` is the shot **base name**; `FUN_10070550(options)` creates a disposable `camera_cinematic` and runs `CBaseCineCam::FindBestShot` `FUN_1006e4c0` over `<base>_1`, `<base>_2`, …; on success `cam->m_bDrawPlayer = 1`, `FUN_1017cef0(this, cam)` (adopt), `cam->m_bForcePlayerLook = 0` | `FElysiumCameraCinematic::CreateFindBestShotCamera` -> `FindBestShot`, then `bDrawPlayerBody = true`, `FElysiumEntityWorld::SetCineCamera`, `bForcePlayerLook = false` | **real** |
+| 4051 | `FUN_1017cef0(this, NULL)` — drop **and destroy**, because 4050's camera carries the disposable bit — then `AngleVectors(GetAngles())`, `fwd.z = 0`, normalize, `FUN_10178590(this, EyePosition() + fwd * 1000.0f)` | `ClearScriptedCamera()`, then `LookAtWorldPoint(EyePosition() + flattenedForward * 1000 u)` through the same pending-eye-angle pair `point_player` uses | **real** |
+
+Both arms answer **claimed** on every path, including the two refusals retail also swallows: an empty
+`options` on 4050 (`name && *name`) and a `FindBestShot` that finds no candidate. Neither id may
+appear on the census any more.
+
+**Neither event immobilizes.** `FUN_1015ef40` is not on either path — only `StartShot`
+(`FUN_10070780`) and `StartPlayerDialog` `0x10178280` freeze the player — and 4051 does not mobilize
+either. 4050 is also one of exactly **three** paths in the game that clear `m_bForcePlayerLook`
+(`CFuncMonitor::vfunc39` and the lockpick `Intrusion` opener are the other two), whose runtime
+default is 1; and one of exactly **two** non-zero writers of `m_bDrawPlayer`, the other being a
+director's `spawnflags & 2`. See
+[camera-view-modes.md](camera-view-modes.md) § "`FindBestShot` and the anim-event channel" for the
+enumeration, the two predicates, the `0x1400b` mask decomposition and the `_DAT_10447ee0 = 1000.0f`
+constant.
+
+The 40 shipped 4050 records and 40 shipped 4051 records are the stealth-kill clips, and
+`vdata/camerashots/stealth_kill.txt`'s `Stealth_Kill_1..4` is the `"%s_%d"` family they name.
+
+Tests: `Elysium.Substrate.CameraFindBestShot` — the enumeration's first-gap terminator, both
+predicates (including "a candidate whose only obstruction is the subject is admitted"), the seeded
+uniform pick, both events, "neither immobilizes", and the whole chain over `stealth_kill.txt`
+verbatim with both grapple roles live.

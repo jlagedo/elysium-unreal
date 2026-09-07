@@ -11,6 +11,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Player/ElysiumCameraShots.h"
+#include "Substrate/ElysiumCameraCinematic.h"
 
 #include "Camera/CameraTypes.h"
 #include "Engine/Engine.h"
@@ -565,30 +566,49 @@ bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
 		return false;
 	}
 
-	// --- the retail path: the source shot resolved, and it sets the flag ------------------------
+	// --- the retail path: the source shot is ADOPTED INTO THE CINE SLOT (SC9) -------------------
+	// `StartPlayerDialog` (`0x10178280`) creates a runtime `camera_cinematic` off the NPC's
+	// `default_camera` — `FUN_10070470(name, NULL x4)` — and adopts it into the player's single
+	// cine slot. Nothing reaches the authored-profile channel, and `DialogPOV` is read off the
+	// **adopted camera's own shot record**, which is what `FUN_1026b810` reads.
 	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
 		EElysiumDialogOpenerKind::Remote, 0, TEXT("pov-fixture"));
-	TestTrue(TEXT("the source shot is what the director selected"),
-		Camera.LastRequest.Fallback == EElysiumCameraFallback::SourceShot);
-	TestTrue(TEXT("the source shot's DialogPOV rides the request"), Camera.LastRequest.bDialogPOV);
+	// This world has no embodiment, so nothing is pushed onto the value channel and
+	// `HasScriptedCamera()` (the published shot handle) stays 0. The ADOPTION is the entity slot —
+	// retail's `GetCineCamera()` — and that is what the opener writes.
+	TestTrue(TEXT("the source shot is adopted into the one cine slot"),
+		World.CineCameraEntity().IsSet());
+	TestEqual(TEXT("...and the authored-profile channel is not used at all"),
+		Camera.AcquireCount, 0);
 	FVector Lens = FVector::ZeroVector;
 	TestTrue(TEXT("a DialogPOV source shot redirects the gaze to the shot's own lens"),
 		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::ShotOrigin);
-	TestTrue(TEXT("...and the lens IS the camera position, not the look-at"),
-		Lens.Equals(Camera.LastRequest.Shot.Origin, 0.01f));
+	{
+		FElysiumEntity* CineEnt = World.Resolve(World.CineCameraEntity());
+		const FElysiumCameraCinematic* Cine = CineEnt ? CineEnt->AsCameraCinematic() : nullptr;
+		if (TestNotNull(TEXT("the adopted camera resolves"), Cine))
+		{
+			TestTrue(TEXT("...and the lens IS the camera's published origin, not its look-at"),
+				Lens.Equals(Cine->LastGoal.Origin, 0.01f));
+		}
+	}
 	TestFalse(TEXT("the lens is not the speaker's eye"), Lens.Equals(Speaker->EyePosition(), 1.0f));
 	World.CloseDialog(/*bSilent*/ true);
 
-	// --- the authored profile, standing in for the same conversation's shot ----------------------
-	// The profile REPLACES the shot, so it has no flags of its own. The authored intent for this
-	// conversation is still the NPC's `default_camera`, so the flag carries across.
-	Camera.bAcceptSourceShots = false;
+	// --- the authored profile, the NAMED MODERNIZATION standing in for nothing -------------------
+	// Retail runs a conversation whose `default_camera` does not load with **no camera at all**
+	// (`StartPlayerDialog` has no `DialogDefault` fallback — only `SetCamera` does). The port offers
+	// the authored grammar in that one gap, never in front of a shot that DID load, and with no
+	// source shot to read the flag off it defaults the redirect SET — 51 of the 66 shipped shot
+	// files set it (`docs/architecture/camera-architecture.md`).
 	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
-		EElysiumDialogOpenerKind::Remote, 0, TEXT("pov-fixture"));
-	TestTrue(TEXT("refusing the source shot falls through to the authored grammar"),
+		EElysiumDialogOpenerKind::Remote, 0, TEXT("no-such-fixture"));
+	TestFalse(TEXT("a default_camera that does not load adopts no camera"),
+		World.CineCameraEntity().IsSet());
+	TestTrue(TEXT("the authored grammar stands in for it"),
 		Camera.LastRequest.Fallback == EElysiumCameraFallback::AuthoredProfile
 			&& Camera.LastRequest.bOverridePose);
-	TestTrue(TEXT("the profile carries the source shot's DialogPOV"), Camera.LastRequest.bDialogPOV);
+	TestTrue(TEXT("with no source shot the redirect defaults SET"), Camera.LastRequest.bDialogPOV);
 	Lens = FVector::ZeroVector;
 	TestTrue(TEXT("a profile shot redirects the gaze to the profile camera's lens"),
 		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::ShotOrigin);
@@ -601,7 +621,6 @@ bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
 	TestTrue(TEXT("...so the redirect survives the frame after selection"),
 		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::ShotOrigin);
 	World.CloseDialog(/*bSilent*/ true);
-	Camera.bAcceptSourceShots = true;
 
 	// --- the player-view fallback ----------------------------------------------------------------
 	// No candidate survives, so the request publishes no pose and the player's own view stays up.
@@ -625,20 +644,18 @@ bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
 
 	// --- a source shot that does NOT set the flag --------------------------------------------------
 	// The 15 shipped shot files that leave DialogPOV out want the NPC on the player's eye, and the
-	// default must not leak past them on any path.
+	// default must not leak past them on any path. The flag is read off the **adopted camera's**
+	// current shot (SC9/RC5), so a per-line `SetCamera` changes the answer on the same tick — which
+	// is exactly what retail's `FUN_1026b810` sees.
 	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
 		EElysiumDialogOpenerKind::Remote, 0, TEXT("plain-fixture"));
-	TestFalse(TEXT("a source shot without the flag does not set it"), Camera.LastRequest.bDialogPOV);
-	TestTrue(TEXT("...and asks for no gaze redirect at all"),
+	TestTrue(TEXT("the unflagged shot is adopted like any other"),
+		World.CineCameraEntity().IsSet());
+	TestTrue(TEXT("a source shot without the flag asks for no gaze redirect at all"),
 		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::None);
-	Camera.bAcceptSourceShots = false;
-	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
-		EElysiumDialogOpenerKind::Remote, 0, TEXT("plain-fixture"));
-	TestTrue(TEXT("the unflagged shot still falls through to the grammar"),
-		Camera.LastRequest.Fallback == EElysiumCameraFallback::AuthoredProfile);
-	TestFalse(TEXT("and the profile inherits its cleared flag too"), Camera.LastRequest.bDialogPOV);
-	TestTrue(TEXT("so no path redirects the gaze"),
-		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::None);
+	World.SetScriptedCamera(TEXT("pov-fixture"), FElysiumEntityHandle::Invalid());
+	TestTrue(TEXT("a mid-conversation SetCamera to a DialogPOV shot turns the redirect on"),
+		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::ShotOrigin);
 	World.CloseDialog(/*bSilent*/ true);
 
 	// A closed conversation supplies no gaze point at all — the producer the eye pass's own
@@ -700,8 +717,22 @@ bool FElysiumJackCameraBasisTest::RunTest(const FString&)
 
 	FElysiumEntityWorld World(nullptr, nullptr);
 	World.Load(MakeDialogueWorldDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
 	FElysiumEntity* Jack = World.FindByName(TEXT("speaker"));
 	if (!TestNotNull(TEXT("Jack fixture"), Jack))
+	{
+		return false;
+	}
+	// **Both of `jack.txt`'s anchors are `Position DialogTarget`**, which is retail's
+	// `subject+0xFE8` — the player's dialogue partner, because every shipped `SetShot` caller passes
+	// a NULL subject and the subject falls back to `UTIL_PlayerByIndex(1)`. So the shot is resolved
+	// the way the game resolves it: with Jack as the open conversation's owner. Outside one the
+	// handle is dead and retail frames the world origin (asserted in `Elysium.Substrate.CameraAnchors`).
+	World.OpenDialog(Jack->Handle, MakeOneLineConversation());
+	if (!TestTrue(TEXT("Jack is the player's dialogue partner"),
+		World.GetOpenDialogOwner() == Jack->Handle))
 	{
 		return false;
 	}

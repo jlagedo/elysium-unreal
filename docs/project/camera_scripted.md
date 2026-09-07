@@ -1671,7 +1671,81 @@ moves from recovered to landed.
 
 **Rulings applied.** None — every behaviour in this slice is contract. **Deps:** SC4, SC6.
 
-**Closure record.**
+**Closure record — landed 2026-09-07 (headless; not yet built or run).**
+
+- **`FindBestShot` and its two predicates** are members of the entity, as retail's are:
+  `FElysiumCameraCinematic::FindBestShot(BaseName, Rng)`, `AnchorsExist()` and `CanSeeTarget()`
+  (`Private/Substrate/ElysiumCameraCinematic.h:277-320`, impl `.cpp:793-975`). The `CamMode = 1`
+  direct write, the `"%s_%d"` enumeration, the **first-gap terminator** (`if (m_ShotIndex == -1)
+  break`, spelled as `if (!bShotLoaded) break`), the per-candidate `StartShotPlacement`, the
+  uniform pick and the verbatim `CBaseCineCam::FindBestShot chose %s` line under
+  `LogElysiumCineCam` are all present, and **the shot start is deliberately not re-run** after the
+  final `SetShot` — `CreateFindBestShotCamera` does it, as `FUN_10070550` does.
+- **The anchor predicate carries the order-of-presence flag bug with it.** It tests
+  `Start.bPresent` / `End.bPresent` / `bTargetPoint1Flagged` / `bTargetPoint2Flagged` against
+  anchors 0/1/2/3, which is retail's "the bit is what is tested, the slot is what is indexed": a
+  `Point2`-only shot raises the `Point1` bit and this reads the empty slot 2. The `flags ==
+  0xffffffff` guard and the trailing `m_ShotIndex != -1` are one term here (`bShotLoaded`), because
+  with no record loaded there is nothing to read flags out of.
+- **The visibility predicate** solves the look-at through a local `FUN_1006f670`
+  (`ElysiumCineCamImpl::SolveLookAt`, off the presence flags rather than the slots, ahead of and
+  independent of the `+0xd4` angle gate), then traces the `±1`-unit hull from each live
+  `Start`/`End` anchor with the subject filtered out, failing on
+  `fraction < 1 || startsolid || allsolid`.
+- **The trace is a new world service.** `IElysiumEmbodiment::TraceCameraHull(From, To, HalfExtent,
+  IgnoreEntity, OutFraction, OutStartSolid)` (`Public/ElysiumWorldServices.h:978-1016`), a real
+  `SweepSingleByChannel` on `AElysiumMapActor` (`Private/Map/ElysiumMapActorEmbodiment.cpp:427-501`)
+  and a scriptable blocker list on `FElysiumRecordingServices`
+  (`Private/Tests/ElysiumTestServices.h:1507-1566`), so the "the subject never blocks its own shot"
+  half is assertable with no collision world. `OutStartSolid` carries both of Source's flags,
+  because Unreal's `bStartPenetrating` is their union and the predicate ORs them anyway.
+- **The mask is decomposed, and it is not what the plan guessed.** `0x1400b` is
+  `SOLID 0x1 | WINDOW 0x2 | GRATE 0x8 | MOVEABLE 0x4000 | PLAYERCLIP 0x10000` —
+  `MASK_PLAYERSOLID_BRUSHONLY`, i.e. `MASK_PLAYERSOLID` (`0x201400b`, the mask
+  `CanStartGrappleAttack` uses) **minus `CONTENTS_MONSTER`**, not "SOLID | WINDOW | MOVEABLE |
+  MONSTER | GRATE". No character is an occluder on either side, so the subject filter is a second
+  guard rather than the only one.
+- **The draw is `EElysiumRngStream::CameraFindBestShot`** (`Public/ElysiumRng.h:39-42`, appended
+  immediately before `Count`, name added to `Private/Session/ElysiumRng.cpp:18`), never
+  `FMath::Rand*`. The stream is a parameter of `FindBestShot`, so the substrate never reaches for it.
+- **The two anim events** land in `FElysiumPlayer::HandleAnimEvent`'s fall-through
+  (`Private/Substrate/ElysiumPlayerEntity.cpp:489-608`), with retail's gate spelled out ahead of
+  them. 4050 takes `options` as the shot **base name**, raises `bDrawPlayerBody`, re-stamps the
+  published goal, adopts through `SetCineCamera` and clears `bForcePlayerLook`; 4051 clears the
+  slot (which destroys the disposable camera) and snaps the eye angles level along the body's own
+  flattened forward. Neither touches `SetImmobilized`.
+- **`_DAT_10447ee0 = 1000.0f`**, read out of `vampire.dll`. Carried as `1000.0f * ElysiumCam::U` cm;
+  the point is consumed as a direction, so the magnitude cannot change the answer.
+- **`vfunc0x658` is `CBasePlayer::IsObserver`, not "is dead".** `FUN_1015ee60` returns
+  `m_bIsObserver` `+0x19f6`, and the byte's only writers (`FUN_1015ee80` / `FUN_1015eea0`) are
+  reachable solely through thunks nothing calls — so it is false everywhere in the shipped image and
+  the gate is a constant pass. It is ported as `FElysiumPlayer::IsObserver()` over a `bObserver`
+  field with no producer (`Public/ElysiumPlayer.h:2056-2071`), and a gated-out event reaches **no**
+  handler at all, base included, because retail's base call is inside the `if`. The neighbouring
+  `+0x19f5` is `pl.deadflag` and `FUN_1015eec0` is `IsAlive`.
+- **Test:** `Elysium.Substrate.CameraFindBestShot`
+  (`Private/Tests/ElysiumCameraFindBestShotTests.cpp`) — the first-gap terminator over a `_1`,
+  `_2`, `_4` family; the anchor predicate rejecting a declared-`Start`-without-entity shot and
+  accepting one that declares nothing; the visibility predicate refusing a blocked candidate and
+  **admitting** one whose only obstruction is the subject; a seeded pick that reproduces and a
+  different seed that does not; 4050's adopt + `bDrawPlayerBody` + `point_player` clear; 4051's
+  destroy and its pitch-0 / body-yaw snap; neither event immobilizing; and the whole chain over
+  `stealth_kill.txt` **verbatim** with both grapple roles live, asserting the chosen shot is one of
+  `Stealth_Kill_1..4` and that its `GrappleAttacker` / `GrappleVictim` anchors resolved to the right
+  half of the pair, then 4051, then RC13's other edge — `LeaveGrappleState` on a still-live shot
+  ending it. This is the plan's **`StealthKillCamera`** witness; no shipped map is involved.
+- **Census:** `ElysiumAnimEvents.cpp` keeps no claimed set — `FElysiumAnimating`'s dispatcher records
+  a census row only when `HandleAnimEvent` answers false — so both ids leave the unclaimed list by
+  being handled, and no table needed editing.
+- **Docs:** `docs/vtmb/camera-view-modes.md` § "`FindBestShot` and the anim-event channel" states the
+  port as fact and its divergence row resolves; `docs/vtmb/animation_events.md` gains
+  § "Port status - the scripted-camera band (4050/4051)", its 4050/4051 code-table row is rewritten,
+  and the `options` table's "raw entity classname" row becomes "raw camera-shot base name" with the
+  correction named.
+- **Not done:** nothing in the slice's scope. The one thing the port cannot yet assert is the trace
+  against real geometry — `TraceCameraHull`'s `AElysiumMapActor` body has no automation witness
+  because no Substrate case has a collision world; the Play-tier `StealthKillCamera` shot is where
+  that lands.
 
 ---
 
@@ -1773,7 +1847,94 @@ opener's boundary.
 **Rulings applied.** **M1** (its dialogue half) — the release is a same-tick cut and no release-blend
 cvar exists. Ruled 2026-09-07 under the owner framework of §7. **Deps:** SC2, SC4, 11.13f, RC5, RC6.
 
-**Closure record.**
+**Closure record — landed 2026-09-07 on HEAD `9cec3d16` (headless; not yet built or run).** Written
+as corrected by **RC5**, **RC6** and **RC13** — three of this slice's bullets read differently after
+them, and the code follows the recovery, not the draft above.
+
+*What landed.*
+
+- **The opener is one function again.** `FElysiumEntityWorld::StartPlayerDialogTail`
+  (`Private/Substrate/ElysiumEntityWorldDialogue.cpp:494`) runs `FUN_10178280`'s tail from
+  `OpenDialog` (`:339`), in retail's order: the bark test, `SetImmobilized(true)`,
+  `HolsterForDialog()` (the `+0x1e01` latch and the `item_w_unarmed` swap), then either the payphone
+  grapple or `AdoptDialogueCineCamera` (`:566`). The holster moved off `FElysiumNpc::BeginDialog`
+  (`ElysiumNpc.cpp:2938`) because only the world can tell `CDialog::Acquire`'s third outcome from its
+  second.
+- **`CDialog::Acquire`'s third outcome** (RC6). `+0x30e9` is `FElysiumDialogueSession::bOneShot`
+  (`ElysiumDialogueSession.h:289`), raised when the starting line's band resolves to a passing
+  `(Auto-End)` row — retail's `process_pc_line` `-1` return, whose classifier `FUN_100df120` is the
+  three `auto_end` spellings the port already reads as `FElysiumDlgLine::IsAutoEnd`. A bark creates no
+  camera, does not immobilize and does not holster. **Named divergence:** retail additionally requires
+  `LookupSpeechFile` to answer, which the port cannot know before the line service is asked inside the
+  turn; every shipped bark has its take, so the two agree wherever content reaches.
+- **The dialogue camera adopts the cine slot.** `AdoptDialogueCineCamera` calls
+  `FElysiumCameraCinematic::CreateRuntimeCamera` with **no anchor entities** and
+  `FElysiumEntityWorld::SetCineCamera`. `SelectDialogueCamera` (`:682`) stands down whenever the slot
+  is occupied — by the opener, by a per-line `SetCamera`, by a terminal — and releases its own
+  Channel-B handle as a cut when it does, so the two channels are exclusive the way `FUN_1017d280`
+  makes them.
+- **`SetCamera`** is `CBasePlayer::SetCamera` `FUN_1017d020` verbatim
+  (`ElysiumEntityWorld.cpp:998`): create-or-re-shot, the verbatim `"DialogDefault"` on **both** arms,
+  no immobilize, and no `StartShotPlacement` on the re-shot arm. Its only caller is the native
+  (`ElysiumScriptNatives.cpp:427`), which now also reproduces `FUN_10198070`'s **player-receiver
+  gate** (`"SetShot needs to be called on a v…"`); the subject is player 1 on both arms, as
+  `param_3 == NULL` makes it.
+- **`EndPlayerDialog`** is `EndPlayerDialogTail` (`:636`), called from `EndDialogSession` (`:1307`):
+  the **unconditional** `Kill()` of the slot's entity (not gated on the disposable bit),
+  `ClearScriptedCamera()`, `SetImmobilized(false)`, `RestoreDialogHolster()` and the payphone
+  grapple's exit, all on one frame. `UElysiumCameraService::ReleaseCamera`
+  (`ElysiumCameraService.cpp:90`) collapses a Dialogue-kind winner's resolved weight on the frame it
+  fires, so the cut is a property of the channel rather than of one request field.
+- **The payphone arm** (RC6/RC13): keyed on the `npc_payphone` classname — `CPayphone`'s one shipped
+  alias — with grapple type 5, the 144-unit x/y admission, both parties holstered by
+  `EnterGrapplePair`'s per-mode policy, the mode-5 16-bit yaw round trip, and **no camera**.
+  `npc_payphone` is registered as an NPC leaf (`ElysiumNpcClasses.cpp:287`) because the arm needs a
+  dialogue body session and a grapple partner; the stub row stands down on its own.
+- **`DialogPOV`'s gate was already retail's** and this slice proves it rather than rebuilding it:
+  `InsideGazeCone` (`ElysiumCombatCharacter.cpp:575`) is `dot(headForward, normalize(p − headPos)) >
+  0.866f` on the head bone's live frame (`FElysiumEyePass::GetHeadFrame`, refreshed once per frame),
+  and a refusal already fell through to the next chain step. What SC9 added is
+  `CAI_BaseNPCTroika::FUN_102bff20`'s `+0x5d6c = curtime + 2.0` scan suppression
+  (`ElysiumCombatCharacter.cpp:831`), which is what makes a refused `DialogPOV` target end at straight
+  ahead instead of at a passer-by, and `GetDialogueCameraGaze` (`:989`) now reads the **adopted cine
+  camera's** shot flag and `m_vecCamOrigin` — retail's actual reader — so a per-line `SetCamera`
+  changes the answer on the same tick.
+- **`DialogTarget`** resolves to `GetOpenDialogOwner()` (`ElysiumCameraShots.cpp:581`), i.e.
+  `subject+0xFE8`, and answers NULL with no conversation open exactly as the dead EHANDLE does.
+
+*The modernization, named.* The **authored-profile ladder**
+(`ElysiumDialogueCamera::DefaultProfiles` over `UElysiumCameraService`) stands in the one place retail
+leaves empty: an NPC whose `default_camera` does not load. Retail runs that conversation **cameraless**
+— `StartPlayerDialog` has no `DialogDefault` fallback — and the port's ladder is a replacement for
+nothing, never a replacement for a shot that did load. It is reached only after
+`AdoptDialogueCineCamera` fails, it publishes on Channel B only while the cine slot is empty, and with
+it disabled (`IElysiumCameraService::DialogueCamerasEnabled()` false, or an empty profile set) the port
+answers exactly as retail does — which is the form the test asserts. The `DialogPOV`-defaults-set rule
+beside it (`ElysiumEntityWorldDialogue.cpp:745`) is the same modernization's second half and is
+unchanged.
+
+*Tests.* `Elysium.Substrate.DialogueCamera.RetailChain` and `Elysium.Content.DialogueCameraChain`
+(`Private/Tests/ElysiumDialogueCameraRetailChainTests.cpp`) — the fallback asymmetry on both arms, the
+immobilize/holster pair open and closed, the empty-handed open, the payphone arm, the bark, the
+end cut's zero residual weight, the unconditional remove of a **non-disposable** adopted camera, the
+mid-conversation re-shot that does not re-place the entity, `DialogTarget`, and the cone's
+fall-through and hysteresis. The content witness drives `santa monica/tourette.dlg` (96 of the corpus's
+110 `SetCamera` calls) against `sm_asylum_1`'s `npc_VVampire Tourette`
+(`default_camera "vdata/CameraShots/Tourette.txt"`) through the real dialogue session and the real
+native. `Elysium.Substrate.CameraChannelExclusion` gained the player and the seeded `jack` shot the
+rebuilt `SetScriptedCamera` needs.
+
+*Still unbuilt, named.* `CPayphone::EnterGrappleState` (slot 379, `0x101aade0`) and the receiver
+animation it drives; `CheckAndTranslateGrapplePosition`, so the payphone grapple writes the facing and
+leaves both bodies standing; and the opener's two non-camera members, `FUN_10147a60`
+`DisciplineGlobalTeardown` (P13 owns disciplines; there is nothing to tear down yet) and the
+`FUN_100826b0(NULL)` world-notify sweep.
+
+**RE46 closes here.** `docs/project/roadmap.md`'s RE46 row asked exactly what the opener's boundary is:
+the answer is the table in `docs/vtmb/camera-view-modes.md` §"How dialogue drives the camera" — the
+admission's three outcomes, the immobilize/holster pair, the payphone arm, the absent `DialogDefault`
+fallback, the unconditional remove, and the `DialogPOV` reader — every one of them recovered (RC5, RC6,
+RC13) and ported by this slice. The docs agent owns the row itself.
 
 ---
 

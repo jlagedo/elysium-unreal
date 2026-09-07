@@ -15,8 +15,10 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumRng.h"                      // EElysiumRngStream::Footsteps
 #include "ElysiumSheetSlots.h"
+#include "ElysiumSkeletalBasis.h"            // 4051 flattens the body's own Source angles
 #include "ElysiumSurfaceSounds.h"            // the step pools the emit draws from
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumCameraCinematic.h" // anim event 4050 -> FUN_10070550 -> FindBestShot
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumFootsteps.h"      // the step clock, the landing and the hearing rules
 #include "Substrate/ElysiumItemClasses.h"   // the dialogue holster switches the active weapon
@@ -493,6 +495,114 @@ bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
 	if (ElysiumFootsteps::PlayerSwallows(Event.Event))
 	{
 		return true;
+	}
+
+	// `CBasePlayer::HandleAnimEvent` `0x10178a10`, and its gate:
+	//
+	//     if (!this->vfunc0x658() && event->owner == this) { ...the whole switch... }
+	//     return;                                     // the base handler is INSIDE the gate
+	//
+	// `vfunc0x658` is `IsObserver()` (`FUN_1015ee60`, `m_bIsObserver` `+0x19f6`) — see the field's
+	// comment on `FElysiumPlayer`; it has no reachable writer in the shipped image, so the gate is a
+	// constant pass, and it is spelled out rather than dropped. `event->owner == this` is
+	// structural here: the port's dispatcher (`FElysiumAnimating::AdvanceAnimEvents`) hands a record
+	// to the entity whose clip carries it, so an event that reaches this function is always this
+	// player's.
+	//
+	// A gated-out event reaches **no** handler at all, not even the combat-character base — so the
+	// gate wraps the fall-through too.
+	if (IsObserver())
+	{
+		return true;
+	}
+	switch (Event.Event)
+	{
+	case 4050:
+	{
+		// `0xfd2`. The `options` string is the shot **BASE NAME** — `FindBestShot` appends `_1`,
+		// `_2`, … to it — not an entity classname, which is what
+		// `docs/vtmb/animation_events.md`'s options table used to record.
+		//
+		//     name = event->options;
+		//     if (name && *name && (cam = FUN_10070550(name))) {
+		//        cam->m_bDrawPlayer (+0x640) = 1;
+		//        FUN_1017cef0(this, cam);                 // adopt
+		//        cam->m_bForcePlayerLook (+0x5e8) = 0;    // the ONLY clearer among the three
+		//        return;
+		//     }
+		//
+		// **It does not immobilize.** `FUN_1015ef40` is not on this path; only `StartShot` and
+		// `StartPlayerDialog` freeze the player.
+		//
+		// A failed create falls out of the `if` and returns without reaching the base handler,
+		// which is retail's own shape — the event is claimed either way.
+		if (Event.Options.IsEmpty() || !World)
+		{
+			return true;
+		}
+		const FElysiumEntityHandle Created = FElysiumCameraCinematic::CreateFindBestShotCamera(
+			*World, Event.Options, ElysiumRng::Stream(EElysiumRngStream::CameraFindBestShot));
+		FElysiumEntity* CreatedEntity = World->Resolve(Created);
+		FElysiumCameraCinematic* Camera =
+			CreatedEntity ? CreatedEntity->AsCameraCinematic() : nullptr;
+		if (!Camera)
+		{
+			return true;
+		}
+		// `m_bDrawPlayer = 1` — with `spawnflags & 2` on a map director (RC2), one of the two
+		// non-zero writers in the game, and SC5's `bDrawPlayerBody` consumer is what reads it. It
+		// lands **before** the adoption, so the goal already carries it; the re-stamp is what gets
+		// it onto the published shot the shot start pushed.
+		Camera->bDrawPlayerBody = true;
+		Camera->RefreshPublishedGoal();
+		World->SetCineCamera(Camera->Handle, Camera->PublishedShotId, Camera->bDisposable,
+			Camera->ShotDef.Name);
+		// **The only clearer of `point_player` on this camera.** The runtime default is 1 (the
+		// constructor's, RG-A) and the director's keyvalue never reaches a runtime camera, so a
+		// stealth-kill shot is one of exactly three paths in the game that opt the subject's gaze
+		// out — the func-monitor camera and the lockpick `Intrusion` opener are the other two.
+		Camera->bForcePlayerLook = false;
+		return true;
+	}
+	case 4051:
+	{
+		// `0xfd3`:
+		//
+		//     FUN_1017cef0(this, NULL);                  // drop AND destroy — the camera 4050
+		//                                                // created carries the disposable bit
+		//     AngleVectors(this->GetAngles(), fwd); fwd.z = 0; VectorNormalize(fwd);
+		//     FUN_10178590(this, this->EyePosition() + fwd * _DAT_10447ee0);
+		//
+		// `_DAT_10447ee0` is **1000.0f** (read out of `vampire.dll` at that address). The point is
+		// only ever used as a direction, so the magnitude cannot change the answer; it is carried in
+		// cm so the call reads as retail's.
+		//
+		// The net effect is a snap of the player's eye angles to pitch 0 and his own body yaw —
+		// level and straight ahead — which is what returns a sane view after a shot that has been
+		// driving it. Like 4050, it does not immobilize or mobilize.
+		if (!World)
+		{
+			return true;
+		}
+		World->ClearScriptedCamera();
+		const FRotator Facing = ElysiumSkeletalBasis::FromSourceAngles(Angles);
+		FVector Forward = Facing.Vector();
+		Forward.Z = 0.0f;
+		if (!Forward.Normalize())
+		{
+			// `VectorNormalize` on a zero vector leaves it zero and the look point degenerates to
+			// the eye itself; `LookAtWorldPoint` then has no direction to turn to, and retail's
+			// `VectorAngles((0,0,0))` answers `(0,0,0)` — a level, zero-yaw snap.
+			SetPendingEyeAngles(FRotator::ZeroRotator, EyePosition());
+			return true;
+		}
+		// 1000 Source units.
+		constexpr float ForwardReachCm = 1000.0f * ElysiumCam::U;
+		LookAtWorldPoint(EyePosition() + Forward * ForwardReachCm);
+		return true;
+	}
+	default:
+		break;
 	}
 	return FElysiumCombatCharacter::HandleAnimEvent(Event);
 }

@@ -95,8 +95,23 @@ bool UElysiumCameraService::ReleaseCamera(FElysiumCameraHandle Handle)
 	{
 		return false;
 	}
+	// **M1 (ruled 2026-09-07) — a dialogue release is a same-tick CUT.** `EndPlayerDialog`
+	// (`vampire.dll` `0x10178400`) is an unconditional `UTIL_Remove` of the camera, and there is no
+	// blend field anywhere on `C_BaseCineCamera`: control comes back on the frame the camera dies,
+	// together with `SetImmobilized(false)`, the weapon restore and the HUD restore. Collapsing the
+	// resolved state here rather than trusting the request's `BlendOutSeconds` means the cut holds
+	// even when the released request carried a shot-authored blend, so "zero residual weight on the
+	// frame it fires" is a property of the channel, not of one field.
+	const bool bWasDialogueWinner = Resolved.Handle == Handle
+		&& Entries[Index].Request.Kind == EElysiumCameraRequestKind::Dialogue;
 	Entries.RemoveAt(Index);
 	FreeSlots.Add(Handle.Slot);
+	if (bWasDialogueWinner)
+	{
+		Resolved = FElysiumResolvedCameraState();
+		bTrackingSeeded = false;
+		ShotEdges.Reset();
+	}
 	return true;
 }
 

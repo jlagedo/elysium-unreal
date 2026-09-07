@@ -820,6 +820,16 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 			? World->FindPlayer() : nullptr;
 		if (Partner != nullptr && Partner != this)
 		{
+			// **The idle scan is suppressed for the whole conversation** (RC5). Every shipped
+			// `CNPC_V*` fills slot 333 with `CAI_BaseNPCTroika::FUN_102bff20`, which — before it
+			// calls `CAI_BaseNPC::MaintainEyeDirection` unchanged — pushes the re-scan stamp
+			// `+0x5d6c` to `curtime + 2.0` (`_DAT_10452dc4 = 2.0f`) on every think while a dialogue
+			// partner is live. It is what makes the fall-through below terminal: a `DialogPOV`
+			// target the head cannot reach drops through arms 2-5 and then to straight ahead,
+			// rather than to a passer-by the scan happened to find — and never back to the
+			// partner's eye, which is the arm that was just refused.
+			NextEyeLookTime = Now + 2.0f;
+
 			// `DialogPOV` on the shot in effect redirects this arm to the camera. It replaces the
 			// *player* as the subject and nothing else, so every other arm of the cascade is
 			// untouched.

@@ -975,6 +975,45 @@ public:
 	// carries no NPC/player bits, so a body standing between two points does not break the line.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const { return true; }
 
+	// `CBaseCineCam::FindBestShot`'s visibility predicate `FUN_1006db10` (SC8): can the camera see
+	// what the shot is aimed at?
+	//
+	//   mins = (-1,-1,-1); maxs = (1,1,1);                   // a 2-unit hull
+	//   filter = CTraceFilterSimple(shot subject, 0);        // the SUBJECT never blocks
+	//   UTIL_TraceHull(anchor, lookAt, mins, maxs, 0x1400b, filter, &tr);
+	//   fail on tr.fraction < 1.0 || tr.startsolid || tr.allsolid
+	//
+	// It is a distinct seam from `QueryLineOfSight` because it is a distinct retail query with its
+	// own shape (a swept hull, not a ray), its own mask and its own filter: the visibility test that
+	// admits a candidate shot must be able to exclude one entity — retail's `CTraceFilterSimple`
+	// ignoring `m_hSubject` is what stops the player's own body from rejecting every shot framed on
+	// him.
+	//
+	// **Mask, verified.** `0x1400b` is `CONTENTS_SOLID 0x1 | CONTENTS_WINDOW 0x2 | CONTENTS_GRATE 0x8
+	// | CONTENTS_MOVEABLE 0x4000 | CONTENTS_PLAYERCLIP 0x10000` — Source's `MASK_PLAYERSOLID_BRUSHONLY`.
+	// It is `MASK_PLAYERSOLID` (`0x201400b`, the mask `CanStartGrappleAttack`'s crouch trace uses)
+	// **minus `CONTENTS_MONSTER 0x2000000`**, so no character is an occluder at all and the subject
+	// filter is belt-and-braces on top of that. The port keeps the semantics rather than the number:
+	// the trace runs on `ELYSIUM_USE_CHANNEL`, this project's solid-world channel, exactly as
+	// `QueryLineOfSight` does and for the same reason (the `.hulls` walkable surface is
+	// material-less and answers only there).
+	//
+	// `OutStartSolid` carries **both** retail flags: Source distinguishes `startsolid` from
+	// `allsolid`, Unreal's `FHitResult::bStartPenetrating` is their union, and the predicate ORs the
+	// two anyway.
+	//
+	// The return value is "a collision world answered", not "blocked". False is the headless answer
+	// — a `-nullrhi` Substrate run has no geometry — and it leaves `OutFraction` at 1 and
+	// `OutStartSolid` false, so a candidate shot is admitted rather than silently refused.
+	virtual bool TraceCameraHull(const FVector& FromCm, const FVector& ToCm,
+		const FVector& HalfExtentCm, const FElysiumEntityHandle& IgnoreEntity,
+		float& OutFraction, bool& OutStartSolid) const
+	{
+		OutFraction = 1.0f;
+		OutStartSolid = false;
+		return false;
+	}
+
 	// One sub-step of a melee swing's swept contact: which live characters' bodies the
 	// authored contact segment passed through as it moved from where it was at the start of the
 	// sub-step to where it is at its end.

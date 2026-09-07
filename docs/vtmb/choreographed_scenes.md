@@ -556,7 +556,7 @@ no receiver (§ `!playercontroller` in `docs/vtmb/entity_io.md`). Therefore the 
 scripted camera or a body double is not evidence that the real pawn is immobilised; that state must
 be recovered from the particular scene, map wiring or script.
 
-**The lock exists in the port** (SC4, 2026-09-07). `camera_cinematic`'s `StartShot` calls
+**The lock exists in the port (2026-09-07).** `camera_cinematic`'s `StartShot` calls
 `FElysiumPlayer::SetImmobilized(true)` and its `EndShot` clears it on the same frame, joining the
 terminal and `events_player.ImmobilizePlayer` on the one latch every consumer reads (`IsMobile()` —
 the controller's move gate and `UpdatePlayerWeaponFrame`). `EndShot` additionally clears the two

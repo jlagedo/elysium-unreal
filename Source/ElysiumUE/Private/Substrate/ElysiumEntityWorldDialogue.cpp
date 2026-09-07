@@ -3,12 +3,16 @@
 #include "ElysiumCameraService.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumDlg.h"
+#include "ElysiumEntityDefs.h"
 #include "ElysiumLineService.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Player/ElysiumCameraShots.h"
+#include "Substrate/ElysiumCameraCinematic.h"
 #include "Substrate/ElysiumDialogueSession.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumLipTrack.h"
 #include "Visual/ElysiumExpressionPreparation.h"
 
@@ -293,9 +297,24 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	DialogueSession->Conversation = Conversation;
 	DialogueSession->Opener = Opener;
 	DialogueSession->RawFlags = RawFlags;
+	// **The shot name is the NPC's own field, not the caller's** — retail reads `npc->+0x64C4`
+	// (`default_camera`) inside `StartPlayerDialog` `0x10178280` and has no parameter for it at all.
+	// The port's argument exists only because `FElysiumNpc::OpenConversation` already has the value
+	// in hand; every other opener — a console `EndDialog`/`StartDialog`, a test, a script that hands
+	// the world a conversation directly — passes nothing and must still get the partner's camera,
+	// or it would run cameraless for a reason retail does not have. The argument wins when it is
+	// given, so a caller can still name a shot the NPC does not author.
 	DialogueSession->DefaultCamera = DefaultCamera;
+	if (DialogueSession->DefaultCamera.IsEmpty())
+	{
+		if (const FElysiumNpc* OwnerNpc = OwnerEntity->AsNpc())
+		{
+			DialogueSession->DefaultCamera = OwnerNpc->DefaultCamera;
+		}
+	}
 	DialogueSession->BodyOwner = BodyOwner;
-	DialogueSession->NormalizedCamera = ElysiumCameraShots::NormalizeKey(DefaultCamera);
+	DialogueSession->NormalizedCamera =
+		ElysiumCameraShots::NormalizeKey(DialogueSession->DefaultCamera);
 	DialogueSession->ScreenSide = (NewOwner.Index & 1) == 0 ? 1.0f : -1.0f;
 	const uint32 OpeningSerial = DialogueSession->Serial;
 
@@ -310,6 +329,32 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	{
 		// The opening col-4 ended this session or opened another one. Whatever is open now owns
 		// itself; this call has nothing left to announce.
+		return;
+	}
+
+	// --- SC9: the rest of `CBasePlayer::StartPlayerDialog` (`0x10178280`) ----------------------
+	//
+	// Everything above is retail's `CDialog::Acquire` (`0x100e05f0`): the session record IS the
+	// installed dialog object, and `Conversation->Start()` is `fill_packet` + `process_npc_line`.
+	// What follows is the opener's own tail, in retail's order:
+	//
+	//     FUN_10167fd0(player);                        // release whatever is being used
+	//     SetDialogPartner(player, npc);               // player+0xFE8  == this session
+	//     FUN_1015ef40(player);                        // SetImmobilized(true)
+	//     player->+0x1e01 = active weapon is drawable; // the latch
+	//     player->vfunc0x724("item_w_unarmed", 0);     // holster
+	//     if (!dynamic_cast<CPayphone*>(npc))
+	//         SetCineCamera(player, FUN_10070470(npc->+0x64C4, NULL,NULL,NULL,NULL));
+	//     else
+	//         StartGrappleAttack(player, npc, 5);
+	//     DisciplineGlobalTeardown(player);            // FUN_10147a60
+	//     FUN_100826b0(NULL);                          // the world-notify sweep
+	//
+	// It writes no origin and no angles for either party, and it has **no `DialogDefault` fallback**:
+	// a `default_camera` that does not load leaves `cam == NULL` and the conversation runs cameraless.
+	StartPlayerDialogTail();
+	if (!DialogueSession || DialogueSession->Serial != OpeningSerial)
+	{
 		return;
 	}
 
@@ -429,10 +474,256 @@ void FElysiumEntityWorld::CloseDialog(bool bSilent)
 	EndDialogSession(bSilent);
 }
 
+namespace
+{
+	// `__RTDynamicCast(npc, 0, &TypeDescriptor(".?AVCAI_BaseNPCTroika@@"),
+	//                  &TypeDescriptor(".?AVCPayphone@@"), 0)` — `StartPlayerDialog`'s one branch
+	// (RC6). `CPayphone` is a `CAI_BaseNPCTroika` subclass and the class's single shipped entity
+	// classname is `npc_payphone` (the recovered `CPayphone` alias row in the NPC class ledger,
+	// `ElysiumNpcActivityTables.cpp`), so the port keys on the class rather than on a keyvalue —
+	// exactly as RC6 says the test should.
+	bool IsPayphonePartner(const FElysiumEntity* Owner)
+	{
+		return Owner && Owner->Def
+			&& Owner->Def->Classname.Equals(TEXT("npc_payphone"), ESearchCase::IgnoreCase);
+	}
+
+	// `StartGrappleAttack`'s mode-5 facing yaw (`0x10328df0`): NOT `VecToYaw(victim − attacker)` but
+	// the **victim's own abs-angles yaw**, round-tripped through the 16-bit angle encoding —
+	//   `((int)((yaw + 180.0f) * 182.04444885f) & 0xFFFF) * 0.0054931640625f`
+	// (`_DAT_1044c3a8 = 180.0f`, `_DAT_1044ffe0 = 182.04444885253906f`,
+	// `_DAT_1044ffdc = 0.0054931640625f = 360/65536`). A payphone grapple therefore aligns the
+	// player to the phone's own yaw rather than to the approach vector, and the round trip is kept
+	// because it is a lossy quantisation the placement is authored against.
+	float PayphoneGrappleYaw(float VictimYawDegrees)
+	{
+		const int32 Quantised =
+			static_cast<int32>((VictimYawDegrees + 180.0f) * 182.04444885253906f) & 0xFFFF;
+		return static_cast<float>(Quantised) * 0.0054931640625f;
+	}
+
+	// `CanStartGrappleAttack` `0x103285a0` step 6, the 2-D (x/y only) distance against
+	// `GetAbsOrigin()`. Types 5 and 7 use **144.0** Source units; the port measures in cm.
+	constexpr float PayphoneGrappleDistance = 144.0f * ElysiumMove::U;
+}
+
+void FElysiumEntityWorld::StartPlayerDialogTail()
+{
+	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
+	{
+		return;
+	}
+	FElysiumDlgConversation& Conversation = *DialogueSession->Conversation;
+
+	// `CDialog::Acquire`'s `+0x30e9` — the bark / one-shot outcome. See `FElysiumDialogueSession`.
+	const FElysiumDlgLine* Automatic = Conversation.PendingAutomatic();
+	DialogueSession->bOneShot = Conversation.IsAwaitingAutomatic()
+		&& Automatic != nullptr && Automatic->IsAutoEnd();
+	if (DialogueSession->bOneShot)
+	{
+		UE_LOG(LogElysiumWorld, Verbose,
+			TEXT("dialogue %s is a one-shot (CDialog +0x30e9): the line is sent, no camera, ")
+			TEXT("no immobilize, no holster"), *DescribeHandle(DialogueSession->Owner));
+		return;
+	}
+
+	FElysiumPlayer* PlayerEnt = FindPlayer();
+	if (!PlayerEnt)
+	{
+		return;   // retail's very first guard is that a player exists
+	}
+	DialogueSession->bOpenerApplied = true;
+
+	// `FUN_1015ef40(player)` — `SetImmobilized(true)`: movement, jump, duck and weapon use frozen
+	// for the whole conversation. It changes no view state.
+	PlayerEnt->SetImmobilized(true);
+	// `player->+0x1e01 = (GetActiveWeapon() && GetActiveWeapon()->+0x870) ? 1 : 0` and
+	// `vfunc0x724("item_w_unarmed", 0)`. The latch and the swap are one call here; the restore is
+	// `EndPlayerDialogTail`'s.
+	PlayerEnt->HolsterForDialog();
+
+	FElysiumEntity* OwnerEntity = Resolve(DialogueSession->Owner);
+	if (IsPayphonePartner(OwnerEntity))
+	{
+		// **The payphone arm creates no camera at all** — and does not clear the dialogue partner
+		// either. `StartGrappleAttack(this, npc, 5)`: both parties holster (the per-mode policy in
+		// `EnterGrapplePair`), the distance gate is 144 u in x/y, and the facing comes from the
+		// phone's own angles.
+		FElysiumCombatCharacter* Phone = OwnerEntity->AsCombatCharacter();
+		const FVector Delta = OwnerEntity->Origin - PlayerEnt->Origin;
+		const bool bInRange =
+			FVector2D(Delta.X, Delta.Y).SizeSquared()
+				<= PayphoneGrappleDistance * PayphoneGrappleDistance;
+		if (Phone && bInRange
+			&& PlayerEnt->EnterGrapplePair(*Phone, EElysiumGrappleType::Payphone))
+		{
+			// The mode-5 yaw. The port has no `CheckAndTranslateGrapplePosition`, so the placement
+			// half is left to whoever moves bodies (the same posture `LeaveGrappleState` takes about
+			// the exit placement); the FACING is state a script can read, so it is written here.
+			PlayerEnt->Angles.Y = PayphoneGrappleYaw(static_cast<float>(OwnerEntity->Angles.Y));
+		}
+		else
+		{
+			// `DevWarning("Couldn't grapple payphone!\n")` — retail's own refusal log. The
+			// conversation still opens: the arm is the camera's replacement, not an admission test.
+			UE_LOG(LogElysiumWorld, Warning, TEXT("Couldn't grapple payphone! (%s)"),
+				*DescribeHandle(DialogueSession->Owner));
+		}
+		return;
+	}
+
+	// `cam = FUN_10070470(npc->+0x64C4 /* default_camera */, NULL,NULL,NULL,NULL)` — a runtime
+	// `camera_cinematic` with **no anchor entities**, so every anchor comes from the shot file's own
+	// `Position` — then `FUN_1017cef0(player, cam)`. One adoption slot with `SetCamera`, the
+	// terminals and `camera_cinematic` (M8).
+	AdoptDialogueCineCamera(DialogueSession->NormalizedCamera);
+}
+
+bool FElysiumEntityWorld::AdoptDialogueCineCamera(const FString& ShotName)
+{
+	if (!DialogueSession || ShotName.IsEmpty())
+	{
+		return false;
+	}
+	const FElysiumEntityHandle NoAnchors[FElysiumShotBindings::Num] = {};
+	const FElysiumEntityHandle Created = FElysiumCameraCinematic::CreateRuntimeCamera(*this,
+		ShotName, static_cast<int32>(EElysiumCineCamMode::NamedShot), NoAnchors);
+	FElysiumEntity* CreatedEntity = Resolve(Created);
+	FElysiumCameraCinematic* Camera = CreatedEntity ? CreatedEntity->AsCameraCinematic() : nullptr;
+	if (!Camera)
+	{
+		// **No `DialogDefault` fallback here** — that literal belongs to `CBasePlayer::SetCamera`
+		// (`FUN_1017d020`) alone. A `default_camera` that does not load leaves `cam == NULL` and the
+		// conversation runs cameraless. The port's authored-profile ladder below is a NAMED
+		// MODERNIZATION standing in that gap; with it off (`DialogueCamerasEnabled()` false, or an
+		// empty profile set) the port reproduces retail exactly.
+		UE_LOG(LogElysiumWorld, Log,
+			TEXT("dialogue %s default_camera '%s' did not load; retail runs cameraless here"),
+			*DescribeHandle(DialogueSession->Owner), *ShotName);
+		return false;
+	}
+	SetCineCamera(Camera->Handle, Camera->PublishedShotId, Camera->bDisposable,
+		Camera->ShotDef.Name);
+	DialogueSession->bCineAdopted = true;
+	return true;
+}
+
+void FElysiumEntityWorld::StampCineDialogueRequest()
+{
+	// The cine slot publishes its own goal (`FElysiumCameraCinematic::PublishGoal`), so nothing is
+	// acquired on `UElysiumCameraService` here. What this does write is the session's diagnostic
+	// record — the source-shot name, the presentation policy and the selected profile — so
+	// `GetDialogueDebugState`, `DialogueCameraHidesHud` and the MCP dump keep naming the shot that is
+	// actually in effect rather than the last one the ladder considered.
+	if (!DialogueSession)
+	{
+		return;
+	}
+	FElysiumEntity* Cine = Resolve(CineCameraEntity());
+	const FElysiumCameraCinematic* Camera = Cine ? Cine->AsCameraCinematic() : nullptr;
+
+	FElysiumCameraRequest& Request = DialogueSession->CameraRequest;
+	Request.Kind = EElysiumCameraRequestKind::Dialogue;
+	Request.Owner = DescribeHandle(DialogueSession->Owner);
+	Request.Priority = 500;
+	Request.bOverridePose = true;
+	Request.Control = EElysiumCameraControlPolicy::Preserve;
+	Request.Fallback = EElysiumCameraFallback::SourceShot;
+	Request.BlendInSeconds = 0.0f;
+	Request.BlendOutSeconds = 0.0f;   // M1 — the release is a cut
+	Request.SelectedProfile = TEXT("cine-slot");
+	Request.SourceShot = Camera ? Camera->ShotDef.Name : ScriptedCameraName();
+	Request.DebugName = FString::Printf(TEXT("Dialogue:%s"), *Request.SourceShot);
+	if (Camera && Camera->bShotLoaded)
+	{
+		Request.Shot = Camera->LastGoal;
+		Request.bShowHud = Camera->ShotDef.Constraints.bShowHud;
+		Request.bDrawViewmodel = Camera->ShotDef.Constraints.bDrawViewmodel;
+		Request.bDialogPOV = Camera->ShotDef.Constraints.bDialogPOV;
+	}
+	DialogueSession->DirectorSource = EElysiumDialogueDirectorSource::SourceShot;
+	DialogueSession->SelectedProfile = EElysiumDialogueShotProfile::Fallback;
+	DialogueSession->MinimumHoldSeconds = 0.0f;
+	DialogueSession->SelectedAt = NowSeconds();
+	DialogueSession->FallbackReason.Reset();
+	DialogueSession->CandidateRejections.Reset();
+}
+
+void FElysiumEntityWorld::EndPlayerDialogTail(FElysiumDialogueSession& Closed)
+{
+	// `CBasePlayer::EndPlayerDialog` `0x10178400`, in order, **all on one frame and with no blend**
+	// (M1, ruled 2026-09-07):
+	//
+	//     UTIL_Remove(GetCineCamera());     // UNCONDITIONAL — not gated on `+0x204 & 0x4`
+	//     SetCineCamera(player, NULL);
+	//     SetImmobilized(false);
+	//     if (player->+0x1e01) re-draw the holstered weapon;
+	//     SetDialogPartner(player, NULL);
+	//     CPlayerEventsManager::vfunc4();
+	//
+	// Reachable in retail only when the opener ran its tail, so a bark (`+0x30e9`) closes with none
+	// of it.
+	if (!Closed.bOpenerApplied)
+	{
+		return;
+	}
+
+	// The unconditional remove. It destroys whatever occupies the slot — including a camera the
+	// dialogue did not create and a **non-disposable** one a map-placed `camera_cinematic` director
+	// put there — which `ClearScriptedCamera` alone would not, because `SetCineCamera`'s own destroy
+	// test reads the disposable bit.
+	if (FElysiumEntity* Cine = Resolve(CineCameraEntity()))
+	{
+		Cine->Kill();
+	}
+	// `SetCineCamera(player, NULL)`: the shot handle is released with a 0 s blend, so the client's
+	// next frame is the player's own eye.
+	ClearScriptedCamera();
+
+	if (FElysiumPlayer* PlayerEnt = FindPlayer())
+	{
+		PlayerEnt->SetImmobilized(false);
+		// The `+0x1e01` re-draw. `RestoreDialogHolster` is one-shot and answers "nothing was
+		// latched" by leaving the hands alone, which is retail's `if (player->+0x1e01)`.
+		PlayerEnt->RestoreDialogHolster();
+		// The payphone conversation's grapple ends with the conversation. `LeaveGrappleState` on the
+		// player runs `SetCineCamera(NULL)` (RC13) — already done above, and idempotent.
+		if (PlayerEnt->Grapple.Type == EElysiumGrappleType::Payphone)
+		{
+			PlayerEnt->LeaveGrapplePair();
+		}
+	}
+}
+
 void FElysiumEntityWorld::SelectDialogueCamera(bool bLineBoundary)
 {
 	if (!DialogueSession)
 	{
+		return;
+	}
+	// SC9 — the two arms where retail's director is not running at all.
+	//
+	// A **one-shot / bark** (`CDialog +0x30e9`, RC6) never reached `StartPlayerDialog`'s camera step:
+	// the line is sent and the function returns. No camera, on either channel.
+	if (DialogueSession->bOneShot)
+	{
+		DialogueSession->FallbackReason = TEXT("one-shot dialog (CDialog +0x30e9): no camera");
+		return;
+	}
+	// A live **cine camera** IS the shot in effect. Retail has one adoption slot: the opener's
+	// `default_camera`, a per-line `pc.SetCamera("Shot")` (which re-shots that same camera), a
+	// terminal or a `camera_cinematic` all occupy it, and there is no second director to arbitrate
+	// with — `FUN_1017d280` makes the two channels mutually exclusive. So the port's authored-profile
+	// ladder stands down while the slot is occupied, and its `UElysiumCameraService` request, if the
+	// ladder had one up before a `SetCamera` fired, is released as a cut (M1).
+	if (CineCameraEntity().IsSet() || HasScriptedCamera())
+	{
+		if (Camera() && Camera()->IsCameraLive(DialogueSession->CameraHandle))
+		{
+			Camera()->ReleaseCamera(DialogueSession->CameraHandle);
+			DialogueSession->CameraHandle = FElysiumCameraHandle();
+		}
+		StampCineDialogueRequest();
 		return;
 	}
 	IElysiumCameraService* Service = Camera();
@@ -638,6 +929,22 @@ void FElysiumEntityWorld::SelectDialogueCamera(bool bLineBoundary)
 
 void FElysiumEntityWorld::UpdateSelectedDialogueCamera()
 {
+	// The cine slot re-solves and re-publishes its own goal on its 24 Hz think (SC4/M2), so there is
+	// nothing to push here — only the session's diagnostic mirror to keep current, which is what
+	// `DialogueCameraHidesHud` and the debug state read.
+	if (DialogueSession && (CineCameraEntity().IsSet() || HasScriptedCamera()))
+	{
+		// A `SetCamera` fired mid-LINE reaches the slot without passing a line boundary, so the
+		// exclusion is enforced here too: the two channels cannot both own the view
+		// (`FUN_1017d280`), and the ladder's release is a cut like every other (M1).
+		if (Camera() && Camera()->IsCameraLive(DialogueSession->CameraHandle))
+		{
+			Camera()->ReleaseCamera(DialogueSession->CameraHandle);
+			DialogueSession->CameraHandle = FElysiumCameraHandle();
+		}
+		StampCineDialogueRequest();
+		return;
+	}
 	if (!DialogueSession || !Camera()
 		|| !Camera()->IsCameraLive(DialogueSession->CameraHandle))
 	{
@@ -709,7 +1016,32 @@ EElysiumDialogueGazeLens FElysiumEntityWorld::GetDialogueCameraGaze(FVector& Out
 	// ACTIVE camera entity for its shot's flags and, on bit 0x10, aims at that entity's position.
 	// There is no second test for "the camera moved" — a shot that leaves the view where it was is
 	// still the shot in effect, and the camera entity is still where the eye is.
-	if (!DialogueSession || !DialogueSession->CameraRequest.bDialogPOV)
+	if (!DialogueSession)
+	{
+		return EElysiumDialogueGazeLens::None;
+	}
+	// **Retail's reader is the adopted CINE CAMERA, not the director** (SC9/RC5). `FUN_1026b810`
+	// step 1 asks `GetCineCamera(player)` (`FUN_1017cf90`) for the CURRENT shot's flags
+	// (`FUN_1006edb0 & 0x10`) and, on a set bit, aims at that entity's `EyePosition()` — vtable slot
+	// 193 `0x1006d910`, which returns `m_vecCamOrigin (+0x5ec)`. So a per-line `pc.SetCamera("Shot")`
+	// that re-shot the slot changes the answer on the same tick, without the dialogue director
+	// knowing anything about it.
+	if (const FElysiumEntity* Cine = Resolve(CineCameraEntity()))
+	{
+		const FElysiumCameraCinematic* Camera = Cine->AsCameraCinematic();
+		if (Camera && Camera->IsActive())
+		{
+			if (!Camera->ShotDef.Constraints.bDialogPOV)
+			{
+				// A live cine shot WITHOUT the flag: the arm keeps the player's eye as its candidate,
+				// which is the cascade's own default, so nothing is redirected here.
+				return EElysiumDialogueGazeLens::None;
+			}
+			OutPoint = Camera->LastGoal.Origin;
+			return EElysiumDialogueGazeLens::ShotOrigin;
+		}
+	}
+	if (!DialogueSession->CameraRequest.bDialogPOV)
 	{
 		return EElysiumDialogueGazeLens::None;
 	}
@@ -989,8 +1321,14 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 
 	if (Camera())
 	{
+		// The port's authored-profile channel. `UElysiumCameraService::ReleaseCamera` collapses a
+		// Dialogue-kind winner's weight on the frame it fires, so this is a cut like retail's, not a
+		// blend-out over a player who already has input (M1).
 		Camera()->ReleaseCamera(Closed->CameraHandle);
 	}
+	// `CBasePlayer::EndPlayerDialog` `0x10178400`: the unconditional camera remove, the mobilize and
+	// the weapon restore, all on this frame.
+	EndPlayerDialogTail(*Closed);
 	if (FElysiumEntity* OwnerEntity = Resolve(Closing))
 	{
 		// The token is generation-stamped, so a replacement session that already re-acquired the

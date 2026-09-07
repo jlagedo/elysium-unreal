@@ -2537,10 +2537,24 @@ bool FElysiumCameraChannelExclusionTest::RunTest(const FString&)
 	Track.Keys.Add(TEXT("Pause"), TEXT("30"));      // long enough that nothing completes on its own
 	Defs.Defs.Add(MoveTemp(Track));
 
+	// SC9 rebuilt `SetScriptedCamera` into `CBasePlayer::SetCamera` `FUN_1017d020`, which creates a
+	// real runtime `camera_cinematic` off the named shot and needs both a subject (player 1, through
+	// `SetShot`'s `param_3 ? param_3 : UTIL_PlayerByIndex(1)`) and a shot the table can find.
+	ElysiumCameraShots::FlushCache();
+	ON_SCOPE_EXIT { ElysiumCameraShots::FlushCache(); };
+	{
+		FElysiumCameraShotDef Jack;
+		Jack.Name = TEXT("jack");
+		Jack.End.bPresent = true;
+		Jack.End.Position = EElysiumShotPosition::Player;
+		ElysiumCameraShots::Install(TEXT("jack"), Jack);
+	}
+
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
 	World.Activate(0.0);
 
 	const auto PlayTrack = [&World]()

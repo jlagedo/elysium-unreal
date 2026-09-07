@@ -484,11 +484,13 @@ public:
 	void GetDialogueDebugState(TArray<TPair<FString, FString>>& Out) const;
 	FString ScriptedSessionSaveBlockReason() const;
 
-	// The one scripted camera the map has up, held here for exactly the reason the sign and the
-	// conversation are: it is world state with a lifetime, and the thing that draws it is replaceable.
-	// `SetCamera(shotfile)` (115 script calls) sets it and `RemoveCamera` clears it; setting a second
-	// one replaces the first, which is what "*the* cinematic camera mode" means. Both no-op with no
-	// embodiment, so a headless conversation runs the same beats without a camera to point.
+	// **`CBasePlayer::SetCamera` `FUN_1017d020`** — the script native's entry (115 shipped calls),
+	// and its only caller. With nothing adopted it creates a runtime `camera_cinematic` from the
+	// name, falls back to the verbatim `"DialogDefault"` when that name does not load, and adopts;
+	// with a camera already adopted it **re-shots that camera in place**, with the same fallback and
+	// **without** running the shot start, so the entity stays where the first shot put it. It never
+	// immobilizes. The `"DialogDefault"` fallback is reached from here ONLY — the dialogue opener
+	// has none (RC6), and that asymmetry is asserted rather than smoothed.
 	void SetScriptedCamera(const FString& ShotFile, const FElysiumEntityHandle& Subject);
 	void ClearScriptedCamera();
 	bool HasScriptedCamera() const { return ScriptedCameraShot != 0; }
@@ -997,6 +999,24 @@ private:
 	void StopDialogueVoice();
 	void SelectDialogueCamera(bool bLineBoundary);
 	void UpdateSelectedDialogueCamera();
+
+	// --- SC9 — the `StartPlayerDialog` / `EndPlayerDialog` pair around the camera ---------------
+	// `CBasePlayer::StartPlayerDialog` `0x10178280`'s tail, run once `CDialog::Acquire` has accepted:
+	// the bark test, `SetImmobilized(true)`, the active-weapon latch and holster, and then either the
+	// payphone grapple (type 5, no camera) or the `default_camera` adoption. See the .cpp for the
+	// verbatim sequence and `docs/vtmb/camera-view-modes.md` §"How dialogue drives the camera".
+	void StartPlayerDialogTail();
+	// `FUN_10070470(name, NULL x4)` + `SetCineCamera` — a runtime `camera_cinematic` with no anchor
+	// entities, so every anchor comes from the shot file's own `Position`. False when the name does
+	// not load, which retail leaves as a cameraless conversation.
+	bool AdoptDialogueCineCamera(const FString& ShotName);
+	// Mirror the adopted cine shot's presentation policy onto the session's diagnostic record. It
+	// publishes nothing: the cine slot is its own channel.
+	void StampCineDialogueRequest();
+	// `CBasePlayer::EndPlayerDialog` `0x10178400`: the UNCONDITIONAL `UTIL_Remove(GetCineCamera())`,
+	// `SetCineCamera(NULL)`, `SetImmobilized(false)` and the weapon restore, all on one frame with no
+	// blend (M1).
+	void EndPlayerDialogTail(FElysiumDialogueSession& Closed);
 
 	// --- The dialogue half of lipsync ---
 	// A conversation turn has no authored timeline — the line simply starts when the turn opens — so

@@ -4,6 +4,7 @@
 #include "ElysiumCameraSolve.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityHandle.h"
+#include "Math/RandomStream.h"   // FindBestShot's uniform pick draws from a named ElysiumRng stream
 #include "Player/ElysiumCameraShots.h"
 
 // `camera_cinematic` — VtMB's `CBaseCineCam` (`vampire.dll`, vtable `1044e67c`), the map entity that
@@ -272,6 +273,50 @@ public:
 	// name. A failed `SetShot` is the **only** failure path and it `UTIL_Remove`s the new entity.
 	static FElysiumEntityHandle CreateRuntimeCamera(FElysiumEntityWorld& World, const FString& Name,
 		int32 InCamMode, const FElysiumEntityHandle (&Anchors)[FElysiumShotBindings::Num]);
+
+	// --- `FindBestShot` and its two predicates (SC8) ---------------------------------------------
+
+	// `CBaseCineCam::FindBestShot` `FUN_1006e4c0(this, baseName)`.
+	//
+	//     CamMode = 1;                                    // DIRECTLY, before any SetShot
+	//     for (i = 1; ; ++i) {
+	//       Q_snprintf(buf, 0x40, "%s_%d", baseName, i);
+	//       if (SetShot(buf, 1, NULL)) {
+	//         FUN_1006e8e0(this);                          // place it, so the predicates can look
+	//         if (FUN_1006d9d0() && FUN_1006db10()) vec.AddToTail(i);
+	//       }
+	//       if (m_ShotIndex == -1) break;                  // the first missing name ends the scan
+	//     }
+	//     if (!vec.Count()) return false;
+	//     k = RandomInt(0, vec.Count()-1);
+	//     SetShot("<base>_<vec[k]>", 1, NULL);
+	//     Msg("CBaseCineCam::FindBestShot chose %s\n", buf);
+	//
+	// **There is no scoring** — the name is a misnomer for "any shot that fits, chosen at random" —
+	// and it does **not** re-run the shot start after the final `SetShot`; the caller does. The draw
+	// comes from `EElysiumRngStream::CameraFindBestShot`, never `FMath::Rand*`
+	// (`.claude/rules/cpp.md`), which is what makes the pick assertable from a seeded stream.
+	bool FindBestShot(const FString& BaseName, FRandomStream& Rng);
+
+	// `FUN_1006d9d0` — "the shot's declared anchors exist". `flags == 0xffffffff` is false outright;
+	// then each of `Start 0x1` / `End 0x2` / `Point1 0x4` / `Point2 0x8` **the shot declares** must
+	// have a live handle at `+0x610 + i*4`; finally `m_ShotIndex != -1`. A shot that declares no
+	// anchor at all passes trivially.
+	bool AnchorsExist() const;
+
+	// `FUN_1006db10` — "the camera can see its target". Solves the look-at (`FUN_1006f670`), then
+	// for each **live** `Start` / `End` anchor traces a 2-unit hull from that anchor's resolved
+	// world position to the look-at, ignoring the shot's subject, and fails on
+	// `fraction < 1 || startsolid || allsolid`. Non-const because the port's anchor reader fills the
+	// shot-start cache on a first resolve, exactly as `FUN_1006e8e0` does — which has already run by
+	// the time `FindBestShot` asks.
+	bool CanSeeTarget();
+
+	// `FUN_10070550(baseName)` — create a `camera_cinematic`, flag it **disposable** (`+0x204 |= 4`),
+	// `FindBestShot`, `UTIL_Remove` on failure and `FUN_1006e8e0` on success. Its only caller in the
+	// whole image is `CBasePlayer::HandleAnimEvent` `0x10178a10`, anim event 4050.
+	static FElysiumEntityHandle CreateFindBestShotCamera(FElysiumEntityWorld& World,
+		const FString& BaseName, FRandomStream& Rng);
 
 	// `FUN_10071970`'s per-entity body: the full `EndShot` when active, then removal. The map
 	// teardown runs it over every `camera_cinematic` before it drops the adoption slot.

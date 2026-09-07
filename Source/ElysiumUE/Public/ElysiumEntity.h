@@ -517,6 +517,10 @@ public:
 	// `FUN_10070780` (StartShot's "is a camera already adopted") both RTTI-cast an entity to
 	// `CBaseCineCam`; UE builds compile without RTTI, so the recognition is this hook.
 	virtual class FElysiumCameraCinematic* AsCameraCinematic() { return nullptr; }
+	const class FElysiumCameraCinematic* AsCameraCinematic() const
+	{
+		return const_cast<FElysiumEntity*>(this)->AsCameraCinematic();
+	}
 
 	virtual class FElysiumTerminal* AsTerminal() { return nullptr; }
 	const class FElysiumTerminal* AsTerminal() const

@@ -1504,6 +1504,63 @@ struct FElysiumRecordingServices final
 			LightAtPoint));
 		return LightAtPoint;
 	}
+	// SC8 — the geometry `FindBestShot`'s visibility predicate asks about, as a scriptable list
+	// rather than a collision world. Each blocker is a world-space point with a radius: it stops the
+	// swept hull when it lies within `RadiusCm` of the segment, and `Owner` is what makes the
+	// subject-filter half assertable — a blocker whose owner is the entity the trace was told to
+	// ignore does not block, exactly as retail's `CTraceFilterSimple(m_hSubject, 0)` does not.
+	//
+	// Empty is the ordinary answer and the headless one: no blocker, `TraceCameraHull` still reports
+	// that it ran (the double IS the collision world for a Substrate case) and every candidate is
+	// admitted.
+	struct FCameraHullBlocker
+	{
+		FVector PointCm = FVector::ZeroVector;
+		float RadiusCm = 32.0f;
+		// Unset = world geometry, which nothing can filter out.
+		FElysiumEntityHandle Owner;
+	};
+	TArray<FCameraHullBlocker> CameraHullBlockers;
+	virtual bool TraceCameraHull(const FVector& FromCm, const FVector& ToCm,
+		const FVector& HalfExtentCm, const FElysiumEntityHandle& IgnoreEntity,
+		float& OutFraction, bool& OutStartSolid) const override
+	{
+		OutFraction = 1.0f;
+		OutStartSolid = false;
+		const FVector Segment = ToCm - FromCm;
+		const double LengthSq = Segment.SizeSquared();
+		for (const FCameraHullBlocker& Blocker : CameraHullBlockers)
+		{
+			if (Blocker.Owner.IsSet() && Blocker.Owner == IgnoreEntity)
+			{
+				continue;   // the subject filter
+			}
+			// The closest point on the segment, clamped to it, plus the hull's own half extent —
+			// a swept box of that extent grazes anything within `Radius + extent` of the line.
+			const double T = LengthSq > UE_DOUBLE_SMALL_NUMBER
+				? FMath::Clamp(FVector::DotProduct(Blocker.PointCm - FromCm, Segment) / LengthSq,
+					0.0, 1.0)
+				: 0.0;
+			const FVector Nearest = FromCm + Segment * T;
+			const double Reach = Blocker.RadiusCm + HalfExtentCm.GetAbsMax();
+			if (FVector::DistSquared(Nearest, Blocker.PointCm) > Reach * Reach)
+			{
+				continue;
+			}
+			if (T <= 0.0)
+			{
+				// The hull is already inside it — retail's `startsolid` / `allsolid` pair.
+				OutStartSolid = true;
+				OutFraction = 0.0f;
+				break;
+			}
+			OutFraction = FMath::Min(OutFraction, static_cast<float>(T));
+		}
+		Record(FString::Printf(TEXT("TraceCameraHull %s -> %s ignore=%s = %.2f%s"),
+			*FromCm.ToString(), *ToCm.ToString(), *IgnoreEntity.ToString(), OutFraction,
+			OutStartSolid ? TEXT(" startsolid") : TEXT("")));
+		return true;
+	}
 	// R6.2: the lightstyle table a `light` writes, kept so a test reads the pattern by style.
 	TMap<int32, FString> LightStylePatterns;
 	virtual void SetLightStylePattern(int32 Style, const FString& Pattern) override

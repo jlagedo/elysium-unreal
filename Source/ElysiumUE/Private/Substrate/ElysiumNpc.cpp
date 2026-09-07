@@ -2935,14 +2935,14 @@ void FElysiumNpc::BeginDialog(EElysiumDialogOpenerKind Opener, int32 RawFlags,
 	// are the paths that leave `bInDialog` latched on the manual `EndDialog` seam with no
 	// conversation to close them. Holstering before the open would strip the player's weapon on
 	// them and nothing but a hand-fired `EndDialog` would ever give it back.
-	if (!OpenConversation(Args.Activator, Opener))
-	{
-		return;
-	}
-	if (FElysiumPlayer* DialoguePlayer = World ? World->FindPlayer() : nullptr)
-	{
-		DialoguePlayer->HolsterForDialog();
-	}
+	// SC9 — the holster is no longer taken here. `FUN_10178280` runs the whole tail
+	// (`SetImmobilized(true)`, the `+0x1e01` latch, the holster, then the camera or the payphone
+	// grapple) *inside* the accepted open, and one of `CDialog::Acquire`'s three outcomes — a
+	// **bark** (`+0x30e9`, RC6) — sends its line and returns false, so it must take **none** of
+	// them. Only the world can tell a bark from a conversation, because only it has the started
+	// conversation's response band, so the whole tail lives in
+	// `FElysiumEntityWorld::StartPlayerDialogTail` and runs from `OpenDialog`.
+	OpenConversation(Args.Activator, Opener);
 }
 
 void FElysiumNpc::InputStartPlayerDialog(const FElysiumInputArgs& Args)

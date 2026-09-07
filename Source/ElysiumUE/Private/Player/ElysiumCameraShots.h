@@ -5,6 +5,7 @@
 #include "ElysiumCameraSolve.h"
 #include "ElysiumEntityHandle.h"
 
+class FElysiumEntity;
 class FElysiumEntityWorld;
 class UElysiumCameraComponent;
 
@@ -273,6 +274,14 @@ namespace ElysiumCameraShots
 	// re-resolves all four anchors every think. Exactly one shipped shot latches
 	// (`special-case.txt`'s `Follow`). See `docs/vtmb/retail-defects.md` §7.
 	bool LatchesAnchors(const FElysiumCameraShotDef& Def);
+
+	// The world-space surrounding bounds retail reads **once at the top** of `FUN_1006f080`
+	// (`ent->m_Collision (+0x270)->vfunc 0x3c`) and every `AttachPos` arm then indexes into: the
+	// standing skeletal body's bounds, else the embodiment's use-anchor box, else VtMB's own
+	// standing hull on the entity's origin as the stand-in for an entity with nothing to measure.
+	// `WorldSpaceCenter()` (vfunc `0x300`) is this box's centre, which is what the `Center` anchor
+	// and the mode-3 follow think both publish — so both read this one accessor.
+	FBox SurroundingBounds(const FElysiumEntity& Entity);
 }
 
 // The director
@@ -353,6 +362,11 @@ public:
 	// director entity owns and re-decides at every shot start (`FUN_1006e8e0`). It picks which anchor
 	// drives the published origin and, on its third value, **suppresses `AutoPositionFromTarget`**
 	// (SC5/SC7). The default is retail's shipped case: a shot with an `End` anchor drives from `End`.
+	//
+	// **It always succeeds.** Retail's resolve cannot fail — `FUN_1006f080` writes `vec3_origin` for
+	// an anchor whose EHANDLE is dead and the caller cannot tell — so an unanchored shot frames the
+	// world origin rather than being refused. The `bool` is kept because it reads as one at every
+	// call site and because a future arm may want it; nothing may key behaviour off `false`.
 	static bool Resolve(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
 		const FElysiumEntityHandle& Subject, FElysiumCameraShot& Out,
 		FElysiumShotBindings* Bindings = nullptr,
