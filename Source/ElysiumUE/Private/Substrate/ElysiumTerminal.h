@@ -341,10 +341,16 @@ public:
 	// pair resolved.
 	const TCHAR* AttachmentError = nullptr;
 
-	// The `Hacking` shot's director handle while a session is live, 0 otherwise. Retail stores its
-	// `camera_cinematic` on the player (`player+0x1ec4`), not in the script-camera slot, so this is
-	// its own stacked handle and a `SetCamera` cutscene cannot be clobbered by a terminal.
-	int32 CameraShot = 0;
+	// **M8, ruled 2026-09-07: the terminal has no camera handle of its own.** It used to keep the
+	// `Hacking` shot's director id here, beside `FElysiumEntityWorld`'s scripted-camera slot, on the
+	// reading that retail stores its `camera_cinematic` on the player rather than in the script slot.
+	// It stores it in exactly one place: `CFuncMonitor::vfunc39`, `CPropHacking::vfunc39`,
+	// `CPropKeypad::vfunc39` and the `Intrusion` opener all reach `FUN_10070470` then
+	// **`FUN_1017cef0`** — the same one-camera slot `SetCamera` and `camera_cinematic` reach, with
+	// the same destroy-the-previous rule. "Which camera is live" is a transition and cannot be
+	// arbitrated by a second stack, so the terminal now adopts through
+	// `FElysiumEntityWorld::SetCineCamera` and a terminal closer drops to the **player view**, never
+	// to a previously stacked shot.
 
 	// `CBaseEntity`'s default held-use reach, slot 37 (`CAISound::FUN_10026710` -> `_DAT_104454c8`
 	// = **80.0** Source units, read from the module's `.rdata`). `CBasePlayer::PlayerUse`'s

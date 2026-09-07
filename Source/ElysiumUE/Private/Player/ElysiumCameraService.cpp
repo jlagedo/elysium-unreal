@@ -6,6 +6,9 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumUserSettings.h"
 
+#include "Debug/ElysiumConsole.h"
+#include "Player/ElysiumCommandBus.h"   // `camera_fov`, read from the VtMB console store
+
 #include "Engine/GameInstance.h"
 
 #include "Camera/CameraTypes.h"
@@ -147,6 +150,9 @@ void UElysiumCameraService::SelectWinner(const FEntry* Entry)
 	Resolved.CandidateRejections.Reset();
 	Resolved.Weight = Entry->Request.BlendInSeconds <= KINDA_SMALL_NUMBER ? 1.0f : 0.0f;
 	bTrackingSeeded = false;
+	// A new winner is a new adoption: the two `OnDataChanged` signals are re-read against a cleared
+	// cache, exactly as retail reads them against a freshly constructed `C_BaseCineCamera`.
+	ShotEdges.Reset();
 }
 
 void UElysiumCameraService::Advance(float DeltaSeconds)
@@ -187,6 +193,7 @@ void UElysiumCameraService::Advance(float DeltaSeconds)
 		{
 			Resolved = FElysiumResolvedCameraState();
 			bTrackingSeeded = false;
+			ShotEdges.Reset();
 			return;
 		}
 	}
@@ -204,20 +211,48 @@ void UElysiumCameraService::Advance(float DeltaSeconds)
 	// the shot's own `DistanceTolerance` / `AngularTolerance`, which for a conversation shot is 10
 	// degrees — wider than any head-bone motion.
 	const FElysiumCameraShot& Shot = Resolved.Request.Shot;
-	if (!bTrackingSeeded)
+
+	// `OnDataChanged`'s two signals, kept apart on this channel too (SC5). A request whose pusher
+	// re-stamps `ResetFrame` is a shot start; a request that swaps the shot record under the same
+	// handle is a shot-index change and re-acquires (or snaps) without re-seeding the pose.
+	ShotEdges.OnDataChanged(Shot, Tracker);
+
+	if (ShotEdges.bShotStartPending || !bTrackingSeeded)
 	{
-		Tracker.Start(Shot);
+		// The live-view arm's seed (`CViewRender::GetViewSetup()`): an `End`-without-`Start` shot
+		// dollies in from the rendered view rather than cutting to its framing. The service is a
+		// local-player subsystem, so the view is the local controller's; a service with no controller
+		// yet seeds from the zero view, which only a shot that takes the goal arm can reach.
+		FElysiumViewSetup LiveView;
+		if (const ULocalPlayer* LP = GetLocalPlayer())
+		{
+			if (APlayerController* PC = LP->GetPlayerController(GetWorld()))
+			{
+				PC->GetPlayerViewPoint(LiveView.Location, LiveView.Rotation);
+			}
+		}
+		Tracker.Start(Shot, LiveView);
+		ShotEdges.bShotStartPending = false;
 		bTrackingSeeded = true;
 	}
 	else
 	{
-		Tracker.Advance(Shot, Dt);
+		// `camera_fov` reaches this channel too. The tracker reaches nothing, so the cvar is read
+		// here from the same VtMB console store the camera component reads it from and passed in;
+		// its shipped default is `-1`, so a stock run never takes the guard.
+		FElysiumCameraCvars Cvars;
+		Cvars.LoadFrom([](const TCHAR* Name) { return ElysiumCommandBus::Console().GetCvar(Name); });
+		Tracker.Advance(Shot, Dt, Cvars.CameraFov);
 	}
 	TrackingLocation = Tracker.Location;
 	TrackingRotation = Tracker.Rotation;
 	Resolved.Location = TrackingLocation;
 	Resolved.Rotation = TrackingRotation;
-	Resolved.FieldOfView = Shot.FieldOfView;
+	// **`m_flCurFov` (`0x480`), not the shot record.** `C_BaseCineCamera::CalcView` publishes
+	// `v->fov = m_flCurFov` (`0x10001bc1`), and that field is the one `FUN_10001c20` leaves untouched
+	// under the `camera_fov > 10` guard — publishing the record instead would render the freeze
+	// (M12) invisible on this channel exactly as it was on the component's.
+	Resolved.FieldOfView = Tracker.Fov;
 }
 
 void UElysiumCameraService::ApplyToView(FMinimalViewInfo& InOutView) const
@@ -254,8 +289,14 @@ void UElysiumCameraService::ApplyToView(FMinimalViewInfo& InOutView) const
 	else
 	{
 		float Fov = InOutView.FOV;
+		// The compose lerp is unconditional (`0x100ffcef`), because retail's published
+		// `m_flCameraFOVOverride` cannot be 0 — `CBaseEntity` slot `0xC4` defaults to 75. A port value
+		// shot that authors no FOV carries the port's `0`, so retail's own default is seeded here.
+		const float TrackFov = ShotFov > 0.0f
+			? ShotFov
+			: ElysiumCam::WidenSourceFov(ElysiumCam::CameraFovOverrideDefault, Aspect);
 		ElysiumCam::ComposeScriptedShot(InOutView.Location, InOutView.Rotation, Fov,
-			Resolved.Location, Resolved.Rotation, ShotFov, Resolved.Weight);
+			Resolved.Location, Resolved.Rotation, TrackFov, Resolved.Weight);
 		InOutView.FOV = Fov;
 	}
 	if (Resolved.Request.bCameraCut && Resolved.Weight >= 1.0f)
@@ -416,6 +457,7 @@ void UElysiumCameraService::BeginMapEpoch(uint64 NewEpoch)
 	NextSlot = 1;
 	Resolved = FElysiumResolvedCameraState();
 	bTrackingSeeded = false;
+	ShotEdges.Reset();
 	Epoch = NewEpoch;
 }
 
@@ -430,6 +472,7 @@ void UElysiumCameraService::RetireMapEpoch(uint64 RetiringEpoch)
 	NextSlot = 1;
 	Resolved = FElysiumResolvedCameraState();
 	bTrackingSeeded = false;
+	ShotEdges.Reset();
 	Epoch = 0;
 }
 

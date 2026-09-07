@@ -83,6 +83,19 @@ FVector FElysiumPlayer::TickGaze(float, float, const FVector& HeadPos,
 	return CurEyeTarget;
 }
 
+void FElysiumPlayer::OnPendingEyeAnglesRaised()
+{
+	// `FUN_10178550` writes `m_angEyeAngles` and the movement code reads it back; the port's view
+	// is the pawn's, and the seam that turns it is `IElysiumEmbodiment::SnapPlayerViewTo` — the
+	// same call the terminal's near arm makes, because retail's terminal reaches the same
+	// `FUN_10178590`. The pending flag stays raised: `ProcessUsercmds` is what clears it, and until
+	// it does, this frame's usercmd angles are refused (`AElysiumPlayerController`'s look gate).
+	if (IElysiumEmbodiment* Bodily = World ? World->Embodiment() : nullptr)
+	{
+		Bodily->SnapPlayerViewTo(PendingEyeLookPoint);
+	}
+}
+
 void FElysiumPlayer::Think()
 {
 	const double Now = World ? World->NowSeconds() : 0.0;

@@ -57,6 +57,12 @@ void UElysiumCameraComponent::BeginPlay()
 
 void UElysiumCameraComponent::EndPlay(const EEndPlayReason::Type Reason)
 {
+	// `C_BaseCineCamera::~C_BaseCineCamera` `FUN_10001920`: a shot that had hidden the HUD puts it
+	// back on the way out. The camera dying with a shot live is exactly retail's case — the client
+	// entity is destroyed on every end path — and without this the last frame's hidden HUD would
+	// outlive the camera that hid it.
+	HudGate.OnDestroyed();
+	DrawPolicy.bShowHud = HudGate.bHudVisible;
 	UnregisterCommands();
 	Super::EndPlay(Reason);
 }
@@ -178,7 +184,20 @@ void UElysiumCameraComponent::SolveShot(float Dt)
 	// pose is solved (`CamMode == 1`, `FUN_10001fa0`); the `camera_track` override underneath it is a
 	// value the `CInput` path re-derives every frame and needs no tracker state at all. With no cine
 	// shot adopted the top track shot takes the tracker, which is what the port has always done.
-	const FElysiumCameraShot* Top = Shots.TopCine();
+	const FElysiumCameraShot* Cine = Shots.TopCine();
+
+	// **The HUD edge belongs to the cine camera alone**, so "active" here is "a `C_BaseCineCamera` is
+	// adopted", not "the channel has something in it": retail's `IsActive()` is the cine camera's own,
+	// and when the shot ends the entity is destroyed whether or not a `camera_track` is still running
+	// underneath it. A track shot authors no `ShowHud` key and carries no shot index, which is the
+	// same statement from the other side.
+	//
+	// `(flags & 0x200) == 0 ? HideHud(0xa06d) : ShowHud(0xa06d)` on the shot-index change; the restore
+	// on going inactive after having been active; and nothing per frame.
+	HudGate.OnDataChanged(Cine != nullptr, Cine ? Cine->ShotIndex : INDEX_NONE,
+		!Cine || !Cine->Presentation.bNamed || Cine->Presentation.bShowHud);
+
+	const FElysiumCameraShot* Top = Cine;
 	int32 TopId = Shots.TopCineId();
 	if (!Top)
 	{
@@ -187,26 +206,30 @@ void UElysiumCameraComponent::SolveShot(float Dt)
 	}
 	if (!Top)
 	{
+		ShotEdges.Reset();
 		bShotSeeded = false;
 		LastTopShotId = 0;
 		return;
 	}
-	if (TopId != LastTopShotId)
-	{
-		// The deciding shot changed — a push, or a pop that revealed the one underneath. Either way it
-		// cuts: the weight ramp is what blends, the shot itself does not chase in from its predecessor.
-		LastTopShotId = TopId;
-		bShotSeeded = false;
-	}
+	LastTopShotId = TopId;
 
-	// A shot arriving is a *blend*, not a chase: the weight ramp is what carries the view from the
-	// player's camera to the shot, so the shot itself starts where it was authored (retail's own
-	// shot-start arm for a shot that carries a `Start` anchor, `FUN_10002210`). `MoveSpeed`,
-	// `MoveAccel`, `MaxTurnRate`, `TurnAccel` and the two tolerances are the file's limits on the
-	// shot **tracking** a moving subject afterwards, and the tracker is the one place they are read.
-	if (!bShotSeeded)
+	// **`OnDataChanged` `0x100024c0`, its two signals kept apart.** A new reset frame arms shot start
+	// and clears no settle flag; a new shot index arms the one-shot snap *or* clears the three
+	// angle-settled flags. Never both.
+	ShotEdges.OnDataChanged(*Top, ShotTracker);
+
+	// Shot start — `FUN_10002210`, both arms. The live-view seed is this frame's rendered view, which
+	// only this side of the seam has: an `End`-without-`Start` shot dollies in from wherever the
+	// player is looking, under the file's own `MoveSpeed` / `MoveAccel`, rather than cutting to its
+	// framing. `bShotSeeded` covers the tracker having no pose at all yet (a first frame, a re-entry
+	// after the channel emptied), which retail gets for free from a freshly constructed entity.
+	if (ShotEdges.bShotStartPending || !bShotSeeded)
 	{
-		ShotTracker.Start(*Top);
+		FElysiumViewSetup LiveView;
+		LiveView.Location = EyeLocation();
+		LiveView.Rotation = ViewRotation();
+		ShotTracker.Start(*Top, LiveView);
+		ShotEdges.bShotStartPending = false;
 		bShotSeeded = true;
 	}
 	else
@@ -228,7 +251,17 @@ FElysiumShotPresentation UElysiumCameraComponent::ShotPresentation() const
 
 void UElysiumCameraComponent::SolveDrawPolicy()
 {
-	DrawPolicy = ElysiumCam::SolveDrawPolicy(Weights, SolvedOffset, Cvars, ShotPresentation());
+	// The two cine gates read the **adopted** camera, not the deciding shot overall: retail's
+	// `GetCineCamera()` is `m_iCameraOverrideIdx`'s entity, and a `camera_track` value underneath one
+	// is not it. `IsActive` is deliberately not consulted — `ShouldDrawLocalPlayer` does not call it.
+	ElysiumCam::FElysiumShotDrawState State;
+	const FElysiumCameraShot* Cine = Shots.TopCine();
+	State.bCineAdopted = Cine != nullptr;
+	State.bDollying = ShotTracker.IsDollying();
+	State.bHudVisible = HudGate.bHudVisible;
+	const FElysiumShotPresentation Presentation =
+		Cine ? Cine->Presentation : ShotPresentation();
+	DrawPolicy = ElysiumCam::SolveDrawPolicy(Weights, SolvedOffset, Cvars, Presentation, State);
 }
 
 void UElysiumCameraComponent::EnsureFeedVisionMask()
@@ -347,9 +380,15 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 
 	// `camortho`: Source's orthographic debug view (`ClientModeShared::OverrideView` `100d40b6`, the
 	// block the client report mis-read as an off-centre projection — M11, re-scoped by RC9). Retail
-	// raises `CViewSetup::m_bOrtho` and writes the rect `(-w*0.5, -h*0.5, w*0.5, h*0.5)`; Unreal
-	// already owns that projection, so the port hands it the width and lets the window's aspect give
-	// the height. `c_orthoheight` is loaded and stands for retail's vertical pair.
+	// raises `CViewSetup::m_bOrtho` and writes the rect `(-w*0.5, -h*0.5, w*0.5, h*0.5)` from
+	// `c_orthowidth` and `c_orthoheight`.
+	//
+	// **Unreal expresses an orthographic view as one width plus the view's aspect ratio**, so both
+	// cvars are applied by handing it the width and the aspect the pair implies, constrained — which
+	// frames exactly the `w x h` of world retail's rect frames. The one divergence is pixel-only and
+	// named: retail stretches its rect non-uniformly over whatever the window is, and Unreal renders
+	// it undistorted and letterboxes instead, because `FMinimalViewInfo` carries no second ortho
+	// extent to distort with. The framing — what is inside the view — is identical.
 	//
 	// Retail runs the block after the `CInput` override rather than here; the position is immaterial
 	// because it writes projection state and never the pose, and here it is on the path every caller
@@ -358,6 +397,11 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 	{
 		View.ProjectionMode = ECameraProjectionMode::Orthographic;
 		View.OrthoWidth = Cvars.OrthoWidth;
+		if (Cvars.OrthoHeight > 0.0f)
+		{
+			View.bConstrainAspectRatio = true;
+			View.AspectRatio = Cvars.OrthoWidth / Cvars.OrthoHeight;
+		}
 	}
 }
 
@@ -432,9 +476,16 @@ void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) co
 	if (Shot.Track.bLive && Shot.Weight > 0.0f && Shot.bSeeded)
 	{
 		float Fov = View.FOV;
+		// The compose lerp is unconditional (`0x100ffcef`), because retail's published
+		// `m_flCameraFOVOverride` cannot be 0 — `CBaseEntity` slot `0xC4` defaults to 75. A port
+		// value shot that authors no FOV carries the port's `0`, so retail's own default is seeded
+		// here, exactly as `UElysiumCameraService::ApplyToView` does at the other publish site.
+		const float TrackFov = Shot.Track.FieldOfView > 0.0f
+			? Shot.Track.FieldOfView
+			: ElysiumCam::CameraFovOverrideDefault;
 		ElysiumCam::ComposeScriptedShot(View.Location, View.Rotation, Fov,
 			Shot.Track.Location, Shot.Track.Target, Shot.Track.Roll,
-			ElysiumCam::WidenSourceFov(Shot.Track.FieldOfView, Aspect), Shot.Weight);
+			ElysiumCam::WidenSourceFov(TrackFov, Aspect), Shot.Weight);
 		View.FOV = Fov;
 	}
 }
@@ -457,7 +508,13 @@ FElysiumScriptedShotView UElysiumCameraComponent::ScriptedShotView() const
 		Out.Cine.Location = ShotPosition;
 		Out.Cine.Rotation = ShotRotation;
 		Out.Cine.Roll = Cine->Roll;
-		Out.Cine.FieldOfView = Cine->FieldOfView;
+		// **`m_flCurFov` (`0x480`), not the shot record.** `C_BaseCineCamera::CalcView` writes
+		// `v->fov = m_flCurFov` (`0x10001bc1`), and `m_flCurFov` is the field `FUN_10001c20` copies
+		// the record into on its ordinary path and **leaves untouched** under the `camera_fov > 10`
+		// guard (`0x10001c4a`-`0x10001c66` returns without writing). Publishing the record instead
+		// rendered the guard inert: the FOV freeze M12 is about is a property of `0x480`, so it has
+		// to be `0x480` that reaches the view.
+		Out.Cine.FieldOfView = ShotTracker.Fov;
 		Out.Cine.Target = Cine->bUseLookAt
 			? Cine->LookAt
 			: ElysiumCam::ScriptedShotTargetPoint(ShotPosition, ShotRotation);
@@ -467,7 +524,12 @@ FElysiumScriptedShotView UElysiumCameraComponent::ScriptedShotView() const
 	{
 		Out.Track.bLive = true;
 		Out.Track.Roll = Track->Roll;
-		Out.Track.FieldOfView = Track->FieldOfView;
+		// `m_flCameraFOVOverride` — the compose lerp is unconditional (`0x100ffcef`) because retail's
+		// value cannot be 0: it comes from `CBaseEntity`'s slot `0xC4`, default 75. A port value shot
+		// that authors no FOV carries the port's `0` ("keep the player's"), so retail's own default is
+		// seeded here, at the publish, rather than by guarding the lerp downstream.
+		Out.Track.FieldOfView = Track->FieldOfView > 0.0f
+			? Track->FieldOfView : ElysiumCam::CameraFovOverrideDefault;
 		// With no cine camera adopted the tracker is on this shot, so its solved pose is the answer.
 		// With one adopted the track channel reads the shot's own values straight through — retail's
 		// `CInput` override does exactly that, from the replicated fields, every frame.
@@ -752,6 +814,15 @@ bool UElysiumCameraComponent::UpdateShot(int32 Id, const FElysiumCameraShot& Sho
 		UE_LOG(LogElysiumCamera, Log, TEXT("camera shot #%d queued temporal cut"), Id);
 	}
 	return true;
+}
+
+bool UElysiumCameraComponent::RestartShot(int32 Id)
+{
+	// SC4's shot start on a camera that is already the view. It bumps the entry's `ResetFrame` and
+	// changes nothing else, so the frame latch re-seeds the tracker exactly as it does on a first
+	// adoption — retail's `m_nClientResetFrame` re-stamp, with the same id still in
+	// `m_iCameraOverrideIdx`.
+	return Shots.Restart(Id);
 }
 
 bool UElysiumCameraComponent::PopShot(int32 Id, float BlendOutSeconds)

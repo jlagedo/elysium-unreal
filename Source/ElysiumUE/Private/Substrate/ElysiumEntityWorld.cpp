@@ -10,6 +10,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
+#include "Substrate/ElysiumCameraCinematic.h"
 #include "Substrate/ElysiumDialogueSession.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumGameSound.h"
@@ -1002,8 +1003,9 @@ void FElysiumEntityWorld::SetScriptedCamera(const FString& ShotFile, const FElys
 		return;
 	}
 	// "*The* cinematic camera mode": a second SetCamera replaces the first rather than stacking, so
-	// the channel underneath never accumulates shots a conversation forgot to remove.
-	ClearScriptedCamera();
+	// the channel underneath never accumulates shots a conversation forgot to remove. The replace
+	// is `SetCineCamera`'s below, in one step, because retail's destroy test reads the **incoming**
+	// camera (`old != cam`) and a clear-then-set cannot.
 	// **The two channels are mutually exclusive** (SC2). `CBasePlayer::SetCameraViewEntity`
 	// (`vampire.dll` `FUN_1017d280`) begins with `SetCineCamera(NULL)`, and the map teardown
 	// `FUN_10071970` tears both down together: retail cannot reach a state where a cine camera and a
@@ -1014,22 +1016,59 @@ void FElysiumEntityWorld::SetScriptedCamera(const FString& ShotFile, const FElys
 	// The track side is cleared with **no blend**: the shots it owned are gone the same tick, which
 	// is what `UTIL_Remove` does to a `camera_track`.
 	ClearTrackCamera(0.0f);
-	ScriptedCameraShot = E->PushCameraShot(ShotFile, Subject);
-	ScriptedCameraFile = ScriptedCameraShot != 0 ? ShotFile : FString();
+	// `CBasePlayer::SetCamera` `FUN_1017d020` with no camera adopted runs `FUN_10070470` — which
+	// marks its new `camera_cinematic` **disposable** — and then `FUN_1017cef0`. The port has no
+	// entity behind a script shot, so the disposable bit rides the shot handle: the next adoption
+	// releases it, exactly as retail removes the camera it created.
+	const int32 Pushed = E->PushCameraShot(ShotFile, Subject);
+	SetCineCamera(FElysiumEntityHandle::Invalid(), Pushed, /*bDisposable*/ true,
+		Pushed != 0 ? ShotFile : FString());
+}
+
+void FElysiumEntityWorld::SetCineCamera(const FElysiumEntityHandle& CameraEntity, int32 ShotId,
+	bool bDisposable, const FString& ShotFile)
+{
+	// `FUN_1017cef0`. The outgoing camera is read FIRST, then the slot is written, then the
+	// destroy test runs against `old != cam && old != NULL && (old->+0x204 & 0x4)`.
+	const FElysiumEntityHandle Outgoing = ScriptedCameraEntity;
+	const int32 OutgoingShot = ScriptedCameraShot;
+	const bool bOutgoingDisposable = bScriptedCameraDisposable;
+
+	ScriptedCameraEntity = CameraEntity;
+	ScriptedCameraShot = ShotId;
+	ScriptedCameraFile = ShotId != 0 ? ShotFile : FString();
+	bScriptedCameraDisposable = ShotId != 0 || CameraEntity.IsSet() ? bDisposable : false;
+
+	// The outgoing SHOT always goes: it is the port's `m_iCameraOverrideIdx`, and retail's outgoing
+	// camera stops being the view on this same tick whatever happens to its entity. There is no
+	// blend on any of it (M1) — the release is a cut and the client's next frame is the player eye.
+	if (OutgoingShot != 0 && OutgoingShot != ShotId)
+	{
+		if (IElysiumEmbodiment* E = Embodiment())
+		{
+			E->PopCameraShot(OutgoingShot, /*BlendOutSeconds*/ 0.0f);
+		}
+	}
+	// The outgoing ENTITY goes only when it carries the disposable bit and is not the incoming one.
+	// **A map-placed director never carries it and survives its own `StartShot`.**
+	if (Outgoing.IsSet() && Outgoing != CameraEntity && bOutgoingDisposable)
+	{
+		if (FElysiumEntity* Old = Resolve(Outgoing))
+		{
+			Old->Kill();
+		}
+	}
 }
 
 void FElysiumEntityWorld::ClearScriptedCamera()
 {
-	if (ScriptedCameraShot == 0)
+	if (ScriptedCameraShot == 0 && !ScriptedCameraEntity.IsSet())
 	{
 		return;
 	}
-	if (IElysiumEmbodiment* E = Embodiment())
-	{
-		E->PopCameraShot(ScriptedCameraShot);
-	}
-	ScriptedCameraShot = 0;
-	ScriptedCameraFile.Reset();
+	// `SetCineCamera(player, NULL)`: `m_iCameraOverrideIdx = 0`, the handle to `-1`, and the
+	// outgoing camera removed when it is disposable.
+	SetCineCamera(FElysiumEntityHandle::Invalid(), 0, /*bDisposable*/ false, FString());
 }
 
 bool FElysiumEntityWorld::SelectTrackCameraRole(bool bTargetRole,
@@ -2244,7 +2283,25 @@ void FElysiumEntityWorld::Teardown()
 	}
 	Player = FElysiumEntityHandle::Invalid();
 
-	// Scripted cameras do not outlive the map that pushed them.
+	// Scripted cameras do not outlive the map that pushed them — `FUN_10071970`, in its own order:
+	// **for each `camera_cinematic`, the full `EndShot` when it is active, then removal**, and only
+	// then every `camera_track`. `CBaseCineCam::ObjectCaps() == 0` (RC2.4) says the same thing from
+	// the other side: a live shot is never carried across a transition, so there is nothing to
+	// preserve here. The `EndShot` half mobilizes the player and drops the two view-flag locks; it
+	// runs after the player handle has gone, so those writes land on nothing — which is correct,
+	// because the entity holding them is going with the map. What it is here for is the outputs and
+	// the slot release.
+	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
+	{
+		if (!Ent || Ent->IsDead())
+		{
+			continue;
+		}
+		if (FElysiumCameraCinematic* Camera = Ent->AsCameraCinematic())
+		{
+			Camera->TeardownShot();
+		}
+	}
 	ClearTrackCamera(/*BlendOutSeconds*/ 0.0f);
 	ClearScriptedCamera();
 

@@ -23,28 +23,82 @@ namespace ElysiumCameraShotsImpl
 {
 	using ElysiumKeyValues::FKvNode;
 
-	// `"[40, -10, 25]"` -> a vector. Brackets and separators are both optional in the corpus, so the
-	// parse is "take the numbers in order"; a value that yields fewer than three is left at the
-	// caller's default.
+	// `"[40, -10, 25]"` -> a vector — `FUN_10071cd0`, reproduced as the listing writes it.
+	//
+	// It is **three ordered scans over a running remainder**, not "take any three numbers":
+	//
+	//     x = y = z = 0                                     (0x10071ce6-0x10071cf6)
+	//     p = strstr(s, "[");  if (p) { s = p+1; x = atof(s); }   (0x10071d04, sep 0x10547308)
+	//     p = strstr(s, ",");  if (p) { s = p+1; y = atof(s); }   (0x10071d36, sep 0x10547304)
+	//     p = strstr(s, ",");  if (p) { s = p+1; z = atof(s); }   (0x10071d68)
+	//
+	// Each `atof` runs on the remainder **after** its separator, a miss leaves that one component at
+	// 0 without stopping the scan (a bracketless `"1,2,3"` therefore reads as `(0, 2, 3)`), and a
+	// truncated `"[-60,"` reads as `(-60, 0, 0)` rather than failing.
+	//
+	// That truncation is shipped content, not a hypothetical: `npcfollowmove.txt` authors
+	// `"OffsetOrigin"  [-60, 0, 72]` **unquoted** on both its `Start` and its `End`, and both
+	// tokenizers end a bare run at the first whitespace, so the value the parse ever sees is the
+	// token `[-60,`. Retail frames those anchors 60 u (152.4 cm) behind the eye; the port's old
+	// "three numbers or nothing" reading dropped the offset entirely.
+	//
+	// (Retail copies through a 0x30-byte scratch buffer at each step, so a value 48 characters or
+	// longer is truncated. Nothing in the corpus is a third that long, and the copy is not
+	// reproduced.)
+	//
+	// The return says only "the key carried a value", which is what lets the caller fall through from
+	// `OffsetOrigin` to the how-to's `Offset`; retail reaches the same place through the literal
+	// `"[0, 0, 0]"` default it hands `GetString` (`0x1007201d`).
 	bool ParseBracketVector(const FString& Raw, FVector& Out)
 	{
-		FString S = Raw;
-		S.ReplaceInline(TEXT("["), TEXT(" "));
-		S.ReplaceInline(TEXT("]"), TEXT(" "));
-		S.ReplaceInline(TEXT(","), TEXT(" "));
-		TArray<FString> Parts;
-		S.ParseIntoArrayWS(Parts);
-		if (Parts.Num() < 3)
+		if (Raw.IsEmpty())
 		{
 			return false;
 		}
-		Out = FVector(FCString::Atof(*Parts[0]), FCString::Atof(*Parts[1]), FCString::Atof(*Parts[2]));
+		static const TCHAR* const Separators[3] = { TEXT("["), TEXT(","), TEXT(",") };
+		float Components[3] = { 0.0f, 0.0f, 0.0f };
+		const TCHAR* Cursor = *Raw;
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			if (const TCHAR* Hit = FCString::Strstr(Cursor, Separators[Index]))
+			{
+				Cursor = Hit + 1;
+				Components[Index] = FCString::Atof(Cursor);
+			}
+		}
+		Out = FVector(Components[0], Components[1], Components[2]);
 		return true;
 	}
 
-	// `Position` — retail's `_strstr` chain in `FUN_10071e00`, in its own order, with retail's
-	// fallthrough. The chain tests substrings, so the order is what decides an ambiguous value; the
-	// port keeps the order and matches whole values, because no shipped file writes a compound one.
+	// A case-only mismatch against one of a key's retail spellings, for the parse warning. Retail's
+	// comparers on this path are all case-**sensitive**, so a mis-cased value is silently something
+	// else; the warning is what makes that visible, and it names the spelling retail wanted and the
+	// value retail actually reads.
+	template <int32 N>
+	const TCHAR* CaseOnlyMiss(const FString& Value, const TCHAR* const (&Spellings)[N])
+	{
+		for (const TCHAR* Spelling : Spellings)
+		{
+			if (Value.Equals(Spelling, ESearchCase::IgnoreCase))
+			{
+				return Spelling;
+			}
+		}
+		return nullptr;
+	}
+
+	// `Position` — retail's `_strstr` chain in `FUN_10071e00` (`0x10071e1d`-`0x10071eaf`), verbatim:
+	// five calls to the CRT `_strstr` (`0x10431510`) in the order `Player` `0x1` -> `DialogTarget`
+	// `0x2` -> `GrappleVictim` `0x80000` -> `GrappleAttacker` `0x100000` -> `Named` `0x8`, else
+	// `World` `0x4`.
+	//
+	// **A case-sensitive SUBSTRING test, not an equality test.** `"PlayerEye"` is `Player` because
+	// the substring hits; `"player"` is **not**, and falls all the way through to `World`. The order
+	// is what decides an ambiguous value, which is why it is written out rather than sorted. This is
+	// the same leniency M3 reversed for `AttachType`, in the opposite direction.
+	//
+	// Corpus: all 156 shipped `Position` values are canonical spellings, so no shipped file changes
+	// either way — the fix is for the grammar, not for a shot.
 	//
 	// **There is no "the value is an entity name" arm.** The how-to's second reading of `Named` —
 	// "the name of an entity in the map" — is documentation, not grammar: retail raises the `Named`
@@ -54,13 +108,27 @@ namespace ElysiumCameraShotsImpl
 	EElysiumShotPosition ParsePosition(const FString& Raw, const TCHAR* ShotName)
 	{
 		const FString V = Raw.TrimStartAndEnd();
-		if (V.Equals(TEXT("Player"), ESearchCase::IgnoreCase))          { return EElysiumShotPosition::Player; }
-		if (V.Equals(TEXT("DialogTarget"), ESearchCase::IgnoreCase))    { return EElysiumShotPosition::DialogTarget; }
-		if (V.Equals(TEXT("GrappleVictim"), ESearchCase::IgnoreCase))   { return EElysiumShotPosition::GrappleVictim; }
-		if (V.Equals(TEXT("GrappleAttacker"), ESearchCase::IgnoreCase)) { return EElysiumShotPosition::GrappleAttacker; }
-		if (V.Equals(TEXT("Named"), ESearchCase::IgnoreCase))           { return EElysiumShotPosition::Named; }
-		if (V.Equals(TEXT("World"), ESearchCase::IgnoreCase) || V.IsEmpty())
+		if (V.Contains(TEXT("Player"), ESearchCase::CaseSensitive))          { return EElysiumShotPosition::Player; }
+		if (V.Contains(TEXT("DialogTarget"), ESearchCase::CaseSensitive))    { return EElysiumShotPosition::DialogTarget; }
+		if (V.Contains(TEXT("GrappleVictim"), ESearchCase::CaseSensitive))   { return EElysiumShotPosition::GrappleVictim; }
+		if (V.Contains(TEXT("GrappleAttacker"), ESearchCase::CaseSensitive)) { return EElysiumShotPosition::GrappleAttacker; }
+		if (V.Contains(TEXT("Named"), ESearchCase::CaseSensitive))           { return EElysiumShotPosition::Named; }
+		if (V.Contains(TEXT("World"), ESearchCase::CaseSensitive) || V.IsEmpty())
 		{
+			// `World` has no arm of its own — it is the fallthrough — but a file that spells it out
+			// means it, and saying so here keeps the warning below for values that really are
+			// unknown.
+			return EElysiumShotPosition::World;
+		}
+		static const TCHAR* const Spellings[] = { TEXT("Player"), TEXT("DialogTarget"),
+			TEXT("GrappleVictim"), TEXT("GrappleAttacker"), TEXT("Named"), TEXT("World") };
+		if (const TCHAR* Miss = CaseOnlyMiss(V, Spellings))
+		{
+			UE_LOG(LogElysiumCamShots, Warning,
+				TEXT("camera shot '%s': Position '%s' differs from retail's '%s' only in case, and ")
+				TEXT("retail's _strstr chain is case-sensitive -- it falls through to World, so this ")
+				TEXT("anchor resolves to the world origin"),
+				ShotName, *V, Miss);
 			return EElysiumShotPosition::World;
 		}
 		UE_LOG(LogElysiumCamShots, Warning,
@@ -84,24 +152,29 @@ namespace ElysiumCameraShotsImpl
 
 		static const TCHAR* const Spellings[] = { TEXT("Follow"), TEXT("FollowNoAngles"),
 			TEXT("FollowEntAngles") };
-		for (const TCHAR* Spelling : Spellings)
+		if (const TCHAR* Miss = CaseOnlyMiss(V, Spellings))
 		{
-			if (V.Equals(Spelling, ESearchCase::IgnoreCase))
-			{
-				UE_LOG(LogElysiumCamShots, Warning,
-					TEXT("camera shot '%s': AttachType '%s' differs from retail's '%s' only in case, ")
-					TEXT("and retail's compare is case-sensitive -- it reads the value as None, so ")
-					TEXT("this anchor latches at shot start instead of following"),
-					ShotName, *V, Spelling);
-				break;
-			}
+			UE_LOG(LogElysiumCamShots, Warning,
+				TEXT("camera shot '%s': AttachType '%s' differs from retail's '%s' only in case, ")
+				TEXT("and retail's compare is case-sensitive -- it reads the value as None, so ")
+				TEXT("this anchor latches at shot start instead of following"),
+				ShotName, *V, Miss);
 		}
 		return EElysiumShotAttach::None;
 	}
 
-	// `AttachPos` — retail's `_strstr` chain, in its order. `Bone:` and `Attachment:` carry an
-	// inline name; every other keyword is the whole value.
-	EElysiumShotAttachPos ParseAttachPos(const FString& Raw, FString& OutName)
+	// `AttachPos` — retail's `_strstr` chain (`0x10071ec6`-`0x10071fb7`), verbatim and in its order:
+	// `Bone:` `0x200` -> `Attachment:` `0x400` -> `Center` `0x20` -> `EyePosition` `0x40` -> `Top`
+	// `0x100` -> `Bottom` `0x80` -> `AbsMin` `0x800` -> `AbsMax` `0x1000`, else `Origin` `0x10`.
+	// **Case-sensitive substrings**, like `Position` and unlike nothing else on this path, so
+	// `"center"` is `Origin` and a compound value takes the first arm that hits.
+	//
+	// `Bone:` and `Attachment:` carry an inline name, and retail takes it from `value + 5` /
+	// `value + 11` (`0x10071edd`, `0x10071f0c`) — the **value**, not the `_strstr` hit — which is
+	// what the `Mid(5)` / `Mid(11)` below is.
+	//
+	// Corpus: all 156 shipped `AttachPos` values are canonical, so nothing shipped changes.
+	EElysiumShotAttachPos ParseAttachPos(const FString& Raw, const TCHAR* ShotName, FString& OutName)
 	{
 		OutName.Reset();
 		const FString V = Raw.TrimStartAndEnd();
@@ -113,22 +186,45 @@ namespace ElysiumCameraShotsImpl
 		{
 			OutName = Value.Mid(PrefixLen).TrimStartAndEnd().Left(InlineNameChars);
 		};
-		if (V.StartsWith(TEXT("Bone:"), ESearchCase::IgnoreCase))
+		if (V.Contains(TEXT("Bone:"), ESearchCase::CaseSensitive))
 		{
 			TakeName(V, 5);
 			return EElysiumShotAttachPos::Bone;
 		}
-		if (V.StartsWith(TEXT("Attachment:"), ESearchCase::IgnoreCase))
+		if (V.Contains(TEXT("Attachment:"), ESearchCase::CaseSensitive))
 		{
 			TakeName(V, 11);
 			return EElysiumShotAttachPos::Attachment;
 		}
-		if (V.Equals(TEXT("Center"), ESearchCase::IgnoreCase))      { return EElysiumShotAttachPos::Center; }
-		if (V.Equals(TEXT("EyePosition"), ESearchCase::IgnoreCase)) { return EElysiumShotAttachPos::EyePosition; }
-		if (V.Equals(TEXT("Top"), ESearchCase::IgnoreCase))         { return EElysiumShotAttachPos::Top; }
-		if (V.Equals(TEXT("Bottom"), ESearchCase::IgnoreCase))      { return EElysiumShotAttachPos::Bottom; }
-		if (V.Equals(TEXT("AbsMin"), ESearchCase::IgnoreCase))      { return EElysiumShotAttachPos::AbsMin; }
-		if (V.Equals(TEXT("AbsMax"), ESearchCase::IgnoreCase))      { return EElysiumShotAttachPos::AbsMax; }
+		if (V.Contains(TEXT("Center"), ESearchCase::CaseSensitive))      { return EElysiumShotAttachPos::Center; }
+		if (V.Contains(TEXT("EyePosition"), ESearchCase::CaseSensitive)) { return EElysiumShotAttachPos::EyePosition; }
+		if (V.Contains(TEXT("Top"), ESearchCase::CaseSensitive))         { return EElysiumShotAttachPos::Top; }
+		if (V.Contains(TEXT("Bottom"), ESearchCase::CaseSensitive))      { return EElysiumShotAttachPos::Bottom; }
+		if (V.Contains(TEXT("AbsMin"), ESearchCase::CaseSensitive))      { return EElysiumShotAttachPos::AbsMin; }
+		if (V.Contains(TEXT("AbsMax"), ESearchCase::CaseSensitive))      { return EElysiumShotAttachPos::AbsMax; }
+		// `Origin` is retail's fallthrough and its parse default, so a file that spells it out and a
+		// file that omits the key land in the same place; only a value that is neither warns.
+		if (!V.Contains(TEXT("Origin"), ESearchCase::CaseSensitive) && !V.IsEmpty())
+		{
+			static const TCHAR* const Spellings[] = { TEXT("Bone:"), TEXT("Attachment:"),
+				TEXT("Center"), TEXT("EyePosition"), TEXT("Top"), TEXT("Bottom"), TEXT("AbsMin"),
+				TEXT("AbsMax"), TEXT("Origin") };
+			if (const TCHAR* Miss = CaseOnlyMiss(V, Spellings))
+			{
+				UE_LOG(LogElysiumCamShots, Warning,
+					TEXT("camera shot '%s': AttachPos '%s' differs from retail's '%s' only in case, ")
+					TEXT("and retail's _strstr chain is case-sensitive -- it falls through to Origin, ")
+					TEXT("so this anchor samples the entity's own origin"),
+					ShotName, *V, Miss);
+			}
+			else
+			{
+				UE_LOG(LogElysiumCamShots, Warning,
+					TEXT("camera shot '%s': AttachPos '%s' is not a keyword; retail's _strstr chain ")
+					TEXT("falls through to Origin"),
+					ShotName, *V);
+			}
+		}
 		return EElysiumShotAttachPos::Origin;   // `Origin`, and retail's default
 	}
 
@@ -141,7 +237,7 @@ namespace ElysiumCameraShotsImpl
 		Out.bPresent = true;
 		Out.Position = ParsePosition(Node->Str(TEXT("Position"), FString()), ShotName);
 		Out.AttachPos = Node->Str(TEXT("AttachPos"), TEXT("Origin")).TrimStartAndEnd();
-		Out.AttachPoint = ParseAttachPos(Out.AttachPos, Out.AttachPointName);
+		Out.AttachPoint = ParseAttachPos(Out.AttachPos, ShotName, Out.AttachPointName);
 		Out.Attach = ParseAttach(Node->Str(TEXT("AttachType"), FString()), ShotName);
 
 		FVector Offset;
@@ -414,11 +510,13 @@ bool ElysiumCameraShots::LatchesAnchors(const FElysiumCameraShotDef& Def)
 	// decides which shots latch, so reproducing the latch without it would change 55 of the 66
 	// shipped shots (`camera_scripted.md` §4 row 4, `docs/vtmb/retail-defects.md` §7).
 	//
-	// A shot with no `Start` block leaves anchor 0 zeroed, so the `0x2000` (`None`) bit is clear and
-	// all four anchors re-resolve every think — which is why `jack.txt`'s head-bone target tracks and
-	// why its 10-degree `AngularTolerance` is what actually holds the shot still. A `Start` block
-	// with no `AttachType` key parses to `None` and does latch, because `None` is retail's parse
-	// default too.
+	// **The retail test is one term, not two.** `FUN_1006f010` tests only `anchor[0].flags & 0x2000`
+	// (`None`); the record's `Start`-present bit is tested by the *caller* `FUN_1006e8e0`, and only
+	// for its own index-0 call. The two-term formula below is equivalent because a shot with no
+	// `Start` block leaves anchor 0 **zeroed**, so the `0x2000` bit is clear and all four anchors
+	// re-resolve every think — which is why `jack.txt`'s head-bone target tracks and why its
+	// 10-degree `AngularTolerance` is what actually holds the shot still. A `Start` block with no
+	// `AttachType` key parses to `None` and does latch, because `None` is retail's parse default too.
 	return Def.Start.bPresent && Def.Start.Attach == EElysiumShotAttach::None;
 }
 
@@ -460,8 +558,22 @@ namespace ElysiumCameraShotsImpl
 		case EElysiumShotPosition::Player:
 			return World->FindPlayer();
 		case EElysiumShotPosition::DialogTarget:
-			// `subject+0xFE8`, the subject's dialogue partner. `SetCamera`'s receiver IS the
-			// conversation's other half, so the subject is the answer.
+			// **Retail is `subject + 0xFE8`** — `piVar9[0x3fa]`, the subject's own dialogue-partner
+			// EHANDLE — and the arm additionally requires `UTIL_PlayerByIndex(1)` to be non-NULL
+			// (`FUN_1006e130` arm 2). The subject itself is `param_3 ? param_3 : UTIL_PlayerByIndex(1)`,
+			// and **every** shipped `SetShot` caller passes a NULL `param_3` (`FUN_10070470`,
+			// `FUN_1017d020`, `FUN_100705d0`, `FUN_10070690`, `FUN_1006e4c0`) while the one that does
+			// pass one, `FUN_10070780`, passes the activator, which is always the player. So on every
+			// shipped path this anchor is **the player's dialogue partner**: the NPC being talked to.
+			//
+			// **The port answers the shot's subject instead**, and for a dialogue shot that subject
+			// *is* that NPC, so the two agree wherever the corpus can reach. They diverge for a
+			// `SetCamera` fired on an NPC that is not the player's partner, and for a `DialogTarget`
+			// anchor with no conversation open at all: retail answers the partner (or NULL, and then
+			// frames the world origin), the port answers the receiver. The port has the accessor this
+			// would need — `FElysiumEntityWorld::GetOpenDialogOwner()` is the player's partner — but
+			// the anchor is reached today by producers that push `DialogTarget` shots with no session
+			// open, so the swap belongs with SC9's dialogue slice, which owns those producers.
 			return World->Resolve(Subject);
 		case EElysiumShotPosition::GrappleVictim:
 		case EElysiumShotPosition::GrappleAttacker:
@@ -551,6 +663,11 @@ namespace ElysiumCameraShotsImpl
 	{
 		FVector Point = FVector::ZeroVector;
 		FRotator Basis = FRotator::ZeroRotator;
+
+		// Retail's early `return` out of `FUN_1006f080` — the two arms that answer `vec3_origin` and
+		// leave the function without ever reaching `LAB_1006f430`, so the anchor's `OffsetOrigin` is
+		// not applied on top of it.
+		bool bSkipOffset = false;
 	};
 
 	// Ask one seam for a bone's / attachment's whole frame. `bOutHasBasis` is false for a seam that
@@ -642,10 +759,18 @@ namespace ElysiumCameraShotsImpl
 		case EElysiumShotAttachPos::Bone:
 		case EElysiumShotAttachPos::Attachment:
 		{
-			// The index was resolved once, at bind time. An unresolved index is retail's `-1`, which
-			// it hands straight to `GetBonePosition02` — what that call then writes is not recovered,
-			// so the port answers the entity's abs origin, which is the same answer its `Origin` arm
-			// gives. The old `Origin + Z(64u)` guess had no retail counterpart and is gone.
+			// The index was resolved once, at bind time. **An unresolved seam answers the WORLD
+			// origin and skips the offset step**, which is retail: the `0x200` arm at `0x1006f32e`
+			// (and its `0x400` twin at `0x1006f3af`) calls `GetBaseAnimating` (vfunc `0x224`) and, on
+			// NULL, writes `vec3_origin` into the out vector and **returns** — never reaching
+			// `LAB_1006f430`, so the anchor's `OffsetOrigin` is not added either. That is the
+			// terminal case: `funcmonitor.txt` / `hackcam.txt` bind `Attachment: screen` /
+			// `screen_axis` to brush-and-prop monitors, which do not animate.
+			//
+			// The port answered the entity's abs origin here, which is a different world position for
+			// every such anchor. What remains unrecovered is only the narrower case of a **live
+			// animating** entity whose `LookupBone` / `LookupAttachment` returned `-1`; the port
+			// cannot tell the two apart and answers retail's non-animating arm for both.
 			FTransform Frame;
 			bool bHasBasis = false;
 			if (PointIndex != INDEX_NONE &&
@@ -659,7 +784,8 @@ namespace ElysiumCameraShotsImpl
 				}
 				return Out;
 			}
-			Out.Point = Entity.Origin;
+			Out.Point = FVector::ZeroVector;
+			Out.bSkipOffset = true;
 			return Out;
 		}
 		case EElysiumShotAttachPos::Center:
@@ -702,16 +828,23 @@ namespace ElysiumCameraShotsImpl
 		const FElysiumEntityHandle& Entity, FElysiumShotAnchorBinding& Binding)
 	{
 		Binding.Entity = Entity;
-		Binding.PointIndex = INDEX_NONE;
 		const FElysiumEntity* Ent = World ? World->Resolve(Entity) : nullptr;
 		if (!Ent)
 		{
-			// `if (ent == NULL) { this->+0x610[i] = 0xffffffff; return; }` — and the index array keeps
-			// whatever the mode clear last put there, which is `-1`.
+			// `if (ent == NULL) { this->+0x610[i] = 0xffffffff; return; }` — the handle is cleared and
+			// `+0x620` is **not written**, so the index keeps whatever it last held.
 			Binding.Entity = FElysiumEntityHandle::Invalid();
 			return;
 		}
-		Binding.PointIndex = LookupAttachPointIndex(*Ent, Anchor);
+		// **`+0x620` is written on the `0x200` / `0x400` arms only** (`FUN_1006ef50`): an anchor that
+		// is neither `Bone:` nor `Attachment:`, and an entity with no animating half, both leave the
+		// index **stale** across shot changes rather than resetting it to `-1`. Nothing reads it on
+		// those anchors — `AttachPoint`'s other arms never touch it — so the behaviour is identical
+		// either way; it is written this way because that is what the listing does.
+		if (Anchor.NeedsAttachPointIndex())
+		{
+			Binding.PointIndex = LookupAttachPointIndex(*Ent, Anchor);
+		}
 	}
 }
 
@@ -740,6 +873,38 @@ void FElysiumCameraDirector::BindAnchors(FElysiumEntityWorld* World, const FElys
 	}
 }
 
+void FElysiumCameraDirector::BindAnchorEntity(FElysiumEntityWorld* World,
+	const FElysiumCameraShotDef& Def, int32 AnchorIndex, const FElysiumEntityHandle& Entity,
+	FElysiumShotBindings& Bindings)
+{
+	if (AnchorIndex < 0 || AnchorIndex >= FElysiumShotBindings::Num)
+	{
+		return;
+	}
+	const FElysiumShotAnchor* const Anchors[FElysiumShotBindings::Num] =
+		{ &Def.Start, &Def.End, &Def.Target1, &Def.Target2 };
+	FElysiumShotAnchorBinding& Binding = Bindings.Anchors[AnchorIndex];
+	ElysiumCameraShotsImpl::BindAnchor(World, *Anchors[AnchorIndex], Entity, Binding);
+	// A newly supplied entity re-opens the shot-start cache: the anchor has not been sampled
+	// against this one yet. Retail reaches the same state because the caller that fills a `Named`
+	// slot does it inside `SetShot`, before `FUN_1006e8e0` writes the cache.
+	Binding.bCached = false;
+}
+
+bool FElysiumCameraDirector::ResolveAnchorPoint(FElysiumEntityWorld* World,
+	const FElysiumCameraShotDef& Def, int32 AnchorIndex, FElysiumShotBindings& Bindings,
+	bool bLatched, FVector& OutPoint)
+{
+	if (AnchorIndex < 0 || AnchorIndex >= FElysiumShotBindings::Num)
+	{
+		return false;
+	}
+	const FElysiumShotAnchor* const Anchors[FElysiumShotBindings::Num] =
+		{ &Def.Start, &Def.End, &Def.Target1, &Def.Target2 };
+	return ResolveAnchor(World, *Anchors[AnchorIndex], Bindings.Anchors[AnchorIndex], bLatched,
+		OutPoint);
+}
+
 bool FElysiumCameraDirector::ResolveAnchor(FElysiumEntityWorld* World, const FElysiumShotAnchor& Anchor,
 	FElysiumShotAnchorBinding& Binding, bool bLatched, FVector& OutPoint)
 {
@@ -759,14 +924,34 @@ bool FElysiumCameraDirector::ResolveAnchor(FElysiumEntityWorld* World, const FEl
 	const FElysiumEntity* Entity = World ? World->Resolve(Binding.Entity) : nullptr;
 	if (!Entity)
 	{
-		// A dead or unbound anchor. Retail's `FUN_1006f080` writes the zero vector through the same
-		// path, which is why a flagged-but-empty target slot aims the shot at `(0,0,0)`; the origin
-		// selector's callers treat "did not resolve" as "this anchor cannot drive the origin".
+		// A dead or unbound anchor. **This is a port divergence, stated rather than hidden.** Retail's
+		// `FUN_1006f080` opens by resolving the anchor's EHANDLE and, on a miss, writes `vec3_origin`
+		// and returns (`0x1006f09b`) — the caller cannot tell, so the shot frames the world origin
+		// and never falls back to another anchor. The port answers `false`, and the origin selector's
+		// caller then tries the other anchor, which is a different framing for the same state.
+		//
+		// It is left here deliberately: the `+0x594` origin selector is what decides which anchor
+		// drives the origin and whether a miss has anywhere to fall to, and that selector is SC7's,
+		// so the two are changed together or not at all. The flagged-but-empty **target** slot does
+		// reach retail's answer, because the look-at solve has no second anchor to try.
 		return false;
 	}
 
 	const ElysiumCameraShotsImpl::FAnchorSample Sample =
 		ElysiumCameraShotsImpl::AttachPoint(*Entity, Anchor, Binding.PointIndex);
+
+	if (Sample.bSkipOffset)
+	{
+		// `FUN_1006f080`'s two `vec3_origin` early returns: the answer is the world origin and
+		// `LAB_1006f430` never runs, so the anchor's `OffsetOrigin` is not applied on top of it.
+		OutPoint = Sample.Point;
+		if (!Binding.bCached)
+		{
+			Binding.Cached = OutPoint;
+			Binding.bCached = true;
+		}
+		return true;
+	}
 
 	// The offset step, `LAB_1006f430`, gated on `OffsetOrigin` being non-zero (`0x20000`):
 	//   `flags & 0xa000` (`None` | `FollowNoAngles`) -> add in world axes;
@@ -798,9 +983,38 @@ bool FElysiumCameraDirector::ResolveAnchor(FElysiumEntityWorld* World, const FEl
 	return true;
 }
 
+namespace ElysiumCameraShotsImpl
+{
+	// `m_ShotIndex`'s source — retail's row in the shot table `&DAT_106c8298`, which `SetShot`
+	// (`FUN_1006e130`) looks the normalized name up in and stores at `+0x630`. Retail's table is
+	// filled by the parse, so a row's index is stable for the run and two different records never
+	// share one; this is that property, and only that property, over the port's per-name parse cache.
+	//
+	// The identity is the **normalized** name, so `LookAtTarget` and `vdata/CameraShots/lookattarget`
+	// are one record here exactly as they are one row there (`SetShot` `Q_FileBase`s a name that
+	// carries `.txt` and the table lookup supplies the case-insensitivity).
+	int32 ShotTableIndex(const FString& ShotName)
+	{
+		static TMap<FString, int32> Table;
+		static int32 Next = 0;
+		if (ShotName.IsEmpty())
+		{
+			// Retail's "unknown shot" answer: `SetShot` returns 0 with `m_ShotIndex` still `-1`.
+			return INDEX_NONE;
+		}
+		const FString Key = ElysiumCameraShots::NormalizeKey(ShotName);
+		if (const int32* Found = Table.Find(Key))
+		{
+			return *Found;
+		}
+		return Table.Add(Key, Next++);
+	}
+}
+
 bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
 	const FElysiumEntityHandle& Subject, FElysiumCameraShot& Out,
-	FElysiumShotBindings* Bindings, EElysiumShotResolvePass Pass)
+	FElysiumShotBindings* Bindings, EElysiumShotResolvePass Pass,
+	EElysiumShotOriginSelector OriginSelector)
 {
 	// A caller with no live shot behind it (the dialogue ladder) gets a one-shot binding table on
 	// the stack: bound from the definition and the subject, resolved once, thrown away.
@@ -814,12 +1028,25 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	const bool bLatched = Pass == EElysiumShotResolvePass::Think
 		&& ElysiumCameraShots::LatchesAnchors(Def);
 
-	// "If there is no End position specified, the camera will not move between the points" — so End is
-	// where the shot lives and Start is only its entry. Until a shot is *animated* between the two
-	// (the theatre's, 12.x), the framing is End, or Start when the file authors only that.
+	// The origin selector `+0x594`, the mode-1 think's own order: `sel == 1` publishes anchor 0
+	// (`Start`), `sel == 0` publishes anchor 1 (`End`). The selector's third value leaves the entity's
+	// own abs origin alone — the director entity's transform, which is SC4's to supply; until then
+	// this resolve still answers from the anchors and only the `AutoPositionFromTarget` suppression
+	// below is in force for it.
+	//
+	// The fall-through to the other anchor is the port's, and it is what the how-to describes: "If
+	// there is no End position specified, the camera will not move between the points" — so `End` is
+	// where the shot lives and `Start` is only its entry. Retail reaches the same place by a different
+	// road: `FUN_1006e8e0` only sets the selector to 0 when the **End** handle is live.
+	const bool bStartFirst = OriginSelector == EElysiumShotOriginSelector::StartAnchor;
+	const FElysiumShotAnchor& FirstAnchor = bStartFirst ? Def.Start : Def.End;
+	const FElysiumShotAnchor& SecondAnchor = bStartFirst ? Def.End : Def.Start;
+	FElysiumShotAnchorBinding& FirstBinding = Bindings->Anchors[bStartFirst ? 0 : 1];
+	FElysiumShotAnchorBinding& SecondBinding = Bindings->Anchors[bStartFirst ? 1 : 0];
+
 	FVector Origin;
-	if (!ResolveAnchor(World, Def.End, Bindings->Anchors[1], bLatched, Origin) &&
-		!ResolveAnchor(World, Def.Start, Bindings->Anchors[0], bLatched, Origin))
+	if (!ResolveAnchor(World, FirstAnchor, FirstBinding, bLatched, Origin) &&
+		!ResolveAnchor(World, SecondAnchor, SecondBinding, bLatched, Origin))
 	{
 		return false;
 	}
@@ -850,6 +1077,21 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	{
 		Look = Point2;
 	}
+	// **`AutoPositionFromTarget`** (`flags & 0x20`), the mode-1 think's block at `0x1006fa50`. It runs
+	// **after** the origin selector has chosen the origin and the look-at is solved, and **before**
+	// anything is published — which is where it sits here — and it is skipped outright on the
+	// selector's third arm, because retail's whole `if (sel != 2)` body contains it.
+	//
+	// It reads the two `Target` **slots**, not the presence flags: retail resolves `anchorPos(2)` and
+	// `anchorPos(3)` directly, so a `Point2`-only shot (the order-of-presence flag bug) frames against
+	// the slot it actually filled even while its look-at reads the empty one.
+	if (Def.Constraints.bAutoPositionFromTarget
+		&& OriginSelector != EElysiumShotOriginSelector::Entity)
+	{
+		Origin = ElysiumCam::AutoPositionFromTarget(Origin, Look, Point1, Point2,
+			Def.Constraints.FieldOfView);
+	}
+
 	// `if (rec->+0xd4 > 0)` — the mode-1 think derives the angle from the look-at only when the shot
 	// authored a `Target` block at all; one without keeps the entity's own abs angles.
 	const bool bHasTarget = Def.TargetPointCount > 0;
@@ -859,6 +1101,20 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	Out.Origin = Origin;
 	Out.bUseLookAt = bHasTarget;
 	Out.LookAt = Look;
+	// The record's presence flags and its `+0xd4` count travel with the shot: shot start's arm test
+	// (`(flags & 2) == 0 || (flags & 1) != 0`) and the `+0xd4` angle gate are both client-side reads
+	// of the record, and the tracker has no other way to see them.
+	Out.bHasStartAnchor = Def.Start.bPresent;
+	Out.bHasEndAnchor = Def.End.bPresent;
+	Out.bTargetPoint1Flagged = Def.bTargetPoint1Flagged;
+	Out.bTargetPoint2Flagged = Def.bTargetPoint2Flagged;
+	Out.TargetPointCount = Def.TargetPointCount;
+	// `m_ShotIndex` — the row this record occupies in retail's shot table (`&DAT_106c8298`), which is
+	// what `OnDataChanged` compares. The port's table is a per-name parse cache, so the index is
+	// assigned per distinct shot name on first sight; the only property either side relies on is that
+	// the same record answers the same index and a different record a different one.
+	Out.ShotIndex = ElysiumCameraShotsImpl::ShotTableIndex(Def.Name);
+	Out.OriginSelector = OriginSelector;
 	// The whole `CameraConstraints` block reaches the tracker; a field the port parsed and then never
 	// read is a field retail's camera was using. A file shot is `SetShot(name, 1, ...)` — `CamMode`
 	// 1, the one mode `C_BaseCineCamera::Update` (`FUN_10001a20`) tracks.
@@ -887,6 +1143,9 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	Out.Presentation.bNamed = true;
 	Out.Presentation.bShowHud = Def.Constraints.bShowHud;
 	Out.Presentation.bDrawViewmodel = Def.Constraints.bDrawViewmodel;
+	// `m_bDrawPlayer` is deliberately **not** written here: it is not a shot key. It belongs to the
+	// director entity (`spawnflags & 2`, copied onto the runtime camera by `FUN_10070780`) and to anim
+	// event 4050, so the pusher stamps it onto the resolved shot after this returns.
 	return true;
 }
 
@@ -1025,6 +1284,12 @@ bool FElysiumCameraDirector::UpdateValue(UElysiumCameraComponent* Camera, int32 
 	const FLiveShot* Entry = Live.FindByPredicate(
 		[Id](const FLiveShot& S) { return S.Id == Id && S.bValue; });
 	return Entry && Camera && Camera->UpdateShot(Entry->CameraShotId, Shot);
+}
+
+bool FElysiumCameraDirector::RestartValue(UElysiumCameraComponent* Camera, int32 Id)
+{
+	const FLiveShot* Entry = Live.FindByPredicate([Id](const FLiveShot& S) { return S.Id == Id; });
+	return Entry && Camera && Camera->RestartShot(Entry->CameraShotId);
 }
 
 bool FElysiumCameraDirector::Pop(UElysiumCameraComponent* Camera, int32 Id, float BlendOutSeconds)

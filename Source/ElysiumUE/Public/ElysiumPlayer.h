@@ -1591,6 +1591,12 @@ public:
 	// Paired AND the partner still resolves.
 	bool IsGrappling() const { return Grapple.IsPaired() && ResolveGrapplePartner() != nullptr; }
 
+	// This character as the player, or null. `EnterGrappleState`/`LeaveGrappleState` are the
+	// combat-character transaction, but the `m_iVFlags` pose lock and the `SetCineCamera(NULL)` edge
+	// are `CBasePlayer`'s overrides (`0x101695f0` / `0x10169660`), so those two arms have to
+	// recognise which half of the pair is the player without RTTI.
+	class FElysiumPlayer* AsGrapplingPlayer();
+
 	// `CBasePlayer::Replenish` + `AttemptFeed`: eligibility, then the paired start. Returns the
 	// verdict whether or not it accepted; on acceptance the pair is running and this character is
 	// its attacker. Refuses while either side is already paired.
@@ -1654,6 +1660,41 @@ public:
 	void PendingInput(const TCHAR* Input, const TCHAR* Owner, const FElysiumInputArgs& Args,
 		const TCHAR* DeclaringClass = nullptr) const;
 
+	// The pending eye-angle snap — retail's `FUN_10178590` / `FUN_10178550` pair (RC4, SC4).
+	//
+	//   FUN_10178590(ent, point):  dir = point - EyePosition(); VectorNormalize; VectorAngles(dir);
+	//   FUN_10178550(ent, ang):    +0x206c..0x2074 = ang;  +0x207c = 1;
+	//
+	// `+0x206c..0x2074` is `m_angEyeAngles` and `+0x207c` is the one-shot "the server owns this
+	// frame's view angles" flag `CBasePlayer::ProcessUsercmds` and `CPlayerMove::RunCommand` test
+	// before copying the usercmd's own angles in. It is the twin of view flag
+	// `EElysiumViewFlags::ViewAngleLock`: **two doors onto the same lock**, one persistent, one
+	// one-shot.
+	//
+	// Two producers reach it: a live `camera_cinematic` shot's `point_player` arm, every tick, on
+	// the shot's SUBJECT (never the camera); and the terminal's near-arm view snap
+	// (`CBaseTerminal` slot 41), which reaches the same body through
+	// `IElysiumEmbodiment::SnapPlayerViewTo`.
+	FRotator PendingEyeAngles = FRotator::ZeroRotator;
+	FVector PendingEyeLookPoint = FVector::ZeroVector;
+	bool bPendingEyeAngleSnap = false;
+
+	// `FUN_10178590` — turn this character's eyes toward a world point.
+	void LookAtWorldPoint(const FVector& WorldPoint);
+	// `FUN_10178550` — raise the pending snap. Virtual tail so the player leaf can also drive the
+	// real view through the embodiment on the same call; an NPC has no view to snap and the field
+	// alone is the whole of its state.
+	void SetPendingEyeAngles(const FRotator& InAngles, const FVector& LookPoint);
+	// `ProcessUsercmds`' read-and-clear of `+0x207c`. False when nothing was pending.
+	bool ConsumePendingEyeAngleSnap(FRotator& OutAngles, FVector& OutLookPoint);
+	bool HasPendingEyeAngleSnap() const { return bPendingEyeAngleSnap; }
+
+protected:
+	// Applied by the leaf that owns a view. The base has none, so this is where the snap stops for
+	// an NPC.
+	virtual void OnPendingEyeAnglesRaised() {}
+
+public:
 	// Gaze.
 	// VtMB puts this on CBaseCombatCharacter and so do we. The class decides *where to look*; the
 	// visual layer decides what that looks like, and the only thing crossing between them is one
@@ -1918,6 +1959,46 @@ namespace ElysiumDialogue
 	inline const TCHAR* const RefusalNotice = TEXT("They won't talk right now.");
 }
 
+// `CBasePlayer::m_iVFlags` (`+0x1d60`) — a saved, unreplicated, unauthorable bitfield with six
+// accessors in the whole image (`AddVFlags` `0x10181580`, `RemoveVFlags` `0x101815b0`, `GetVFlags`,
+// `ClearVFlags` and `ToggleVFlags` — both callerless — and `HasAllVFlags` `0x10181650`). RC4 pinned
+// every bit; the names below are the recovered meanings, not the bit numbers.
+//
+// It is **not** the immobilize flag and not a duplicate of it: immobilize (`+0x19f7`) stops
+// movement, jump, duck and weapons; `0x1` redirects where the move takes its angles from; `0x8`
+// stops the client's view angles from being accepted at all.
+enum class EElysiumViewFlags : uint8
+{
+	None = 0,
+
+	// `0x1` — the scripted-interaction pose lock: "take the move's angles from the entity, not from
+	// the eye". Its one reader is `CPlayerMove::SetupMove` `0x10186120`, in the arm taken when the
+	// player is NOT grappling: `if (GetVFlags() & 1) moveAngles = GetAngles()`, discarding the
+	// `m_angEyeAngles.y` substitution made a few lines earlier. Set by every scripted-interaction
+	// *opener* (`CBaseTerminal`, `CPropSign`, `CTriggerBombSite`, `CTriggerElectricBugaloo`,
+	// `CGameSign`, and `CBasePlayer::FUN_101695f0` — the grapple enter); cleared by the matching
+	// closers, by the grapple exit `FUN_10169660`, and by `EndShot`.
+	MoveAnglesFromEntity = 1 << 0,
+
+	// `0x2` / `0x4` — a pending "grapple release" / "seductive release" animation, read only by
+	// `CBasePlayer::SetAnimation` `0x10164870`'s `state == 8` arm, which plays activity 4003 or 4041
+	// and then `RemoveVFlags(6)`. **Read and cleared, never set**: `RemoveVFlags(6)` is the only
+	// writer of either bit anywhere in `vampire.dll`, `AddVFlags` is only ever called with 1 and 8,
+	// and `ToggleVFlags` has no callers. Modelled as the two release requests they are, with no
+	// shipped path raising them, because the consumer is real (RC4).
+	PendingGrappleRelease = 1 << 1,
+	PendingSeductiveRelease = 1 << 2,
+
+	// `0x8` — the view-angle lock: "the server owns `m_angEyeAngles`". Three readers:
+	// `ProcessUsercmds` `0x1016aaf0` and `CPlayerMove::RunCommand` `0x101874a0` both refuse to copy
+	// the usercmd's angles into `m_angEyeAngles` while it is set, and `CPlayerMove::SetupMove`
+	// feeds the move `m_angEyeAngles` instead of the command's. Its only setter in the image is
+	// `CGameSign`'s read-begin `FUN_10212810`; cleared by the terminal, the monitor and `EndShot`.
+	// The one-shot twin of this lock is `FElysiumCombatCharacter`'s pending eye-angle snap.
+	ViewAngleLock = 1 << 3,
+};
+ENUM_CLASS_FLAGS(EElysiumViewFlags)
+
 class FElysiumPlayer final : public FElysiumCombatCharacter
 {
 public:
@@ -1971,6 +2052,22 @@ public:
 	void SetImmobilized(bool bInImmobilized) { bImmobilized = bInImmobilized; }
 	void SetHiddenByController(bool bInHidden);
 	bool IsMobile() const { return !bImmobilized && !bHiddenByController; }
+
+	// `m_iVFlags` `+0x1d60`, and the three retail accessors that have callers. `HasViewFlags` is
+	// `HasAllVFlags` `0x10181650` — `(m_iVFlags & mask) == mask`, an ALL test, not an any test.
+	EElysiumViewFlags ViewFlags = EElysiumViewFlags::None;
+	void AddViewFlags(EElysiumViewFlags Mask) { ViewFlags |= Mask; }
+	void RemoveViewFlags(EElysiumViewFlags Mask) { ViewFlags &= ~Mask; }
+	bool HasViewFlags(EElysiumViewFlags Mask) const
+	{
+		return Mask != EElysiumViewFlags::None && (ViewFlags & Mask) == Mask;
+	}
+
+	// The pending eye-angle snap's consumer for the half of the pair that owns a view: retail's
+	// `FUN_10178550` writes `m_angEyeAngles` and the movement code reads it, and the port's
+	// equivalent seam is `IElysiumEmbodiment::SnapPlayerViewTo` — the same call the terminal's near
+	// arm already makes, because retail reaches it through the same `FUN_10178590`.
+	virtual void OnPendingEyeAnglesRaised() override;
 
 	// The block intent (`docs/vtmb/controls.md` § "Attack, block and weapon commands",
 	// `docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").

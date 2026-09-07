@@ -852,6 +852,11 @@ bool AElysiumMapActor::UpdateCameraShotValue(int32 ShotId, const FElysiumCameraS
 		: false;
 }
 
+bool AElysiumMapActor::RestartCameraShot(int32 ShotId)
+{
+	return CameraDirector ? CameraDirector->RestartValue(PlayerCamera(), ShotId) : false;
+}
+
 bool AElysiumMapActor::PopCameraShot(int32 ShotId, float BlendOutSeconds)
 {
 	return CameraDirector ? CameraDirector->Pop(PlayerCamera(), ShotId, BlendOutSeconds) : false;

@@ -379,7 +379,8 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 		return false;
 	}
 	TestFalse(TEXT("entry immobilizes the player"), SessionPlayer->IsMobile());
-	TestTrue(TEXT("entry pushed the Hacking shot and kept its handle"), Terminal->CameraShot != 0);
+	// M8: the shot is adopted into the world's one cine slot; the terminal keeps no handle.
+	TestTrue(TEXT("entry pushed the Hacking shot and adopted it"), World.CineCameraShotId() != 0);
 	TestEqual(TEXT("exactly one Hacking shot for the session"),
 		Services.Count(TEXT("PushCameraShotNamed special-case:Hacking exposure=clamped")), 1);
 	{
@@ -556,7 +557,7 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	TestEqual(TEXT("and draws the root menu again"), Row(5), TEXT(" Home menu"));
 	ExpectCues(TEXT("the home/root return"), Cues, 0, /*accept*/ 1, 0, 0);
 
-	const int32 FirstShot = Terminal->CameraShot;
+	const int32 FirstShot = World.CineCameraShotId();
 	Cues = SnapCues();
 	const int32 StopsBeforeQuit = Services.Count(
 		FString::Printf(TEXT("CancelAudioOwner %s"), *Terminal->CueOwnerId()));
@@ -573,7 +574,7 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	ExpectCues(TEXT("the exit"), Cues, 0, 0, 0, 0);
 	TestFalse(TEXT("the terminal no longer publishes"), World.BuildTerminalView(View));
 	TestTrue(TEXT("quit mobilizes the player again"), SessionPlayer->IsMobile());
-	TestEqual(TEXT("quit released the camera handle"), Terminal->CameraShot, 0);
+	TestFalse(TEXT("quit dropped the cine slot to the player view"), World.HasScriptedCamera());
 	// Exit re-arms at `ss_start + now` (`0x1021a6f6`), unfloored and never `ss_delay`.
 	TestTrue(TEXT("quit re-arms the screensaver at ss_start"),
 		FMath::IsNearlyEqual(Terminal->NextThink,
@@ -641,11 +642,11 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	// The `Lock` run holds the same contract: a live handle and an immobilized player throughout,
 	// both released by the exit.
 	TestFalse(TEXT("the reopened session immobilizes again"), SessionPlayer->IsMobile());
-	const int32 SecondShot = Terminal->CameraShot;
+	const int32 SecondShot = World.CineCameraShotId();
 	TestTrue(TEXT("and pushed a fresh camera handle"), SecondShot != 0 && SecondShot != FirstShot);
 	World.SubmitTerminalCommand(Terminal->Handle, Second, TEXT("quit"));
 	TestTrue(TEXT("the Lock run's quit mobilizes the player"), SessionPlayer->IsMobile());
-	TestEqual(TEXT("and releases its own handle"), Terminal->CameraShot, 0);
+	TestFalse(TEXT("and releases the slot"), World.HasScriptedCamera());
 	TestEqual(TEXT("popping exactly once"),
 		Services.Count(FString::Printf(TEXT("PopCameraShot %d"), SecondShot)), 1);
 

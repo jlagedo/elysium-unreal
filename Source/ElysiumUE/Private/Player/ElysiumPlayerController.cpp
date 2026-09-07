@@ -87,7 +87,7 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 	const FElysiumUserCmd Sampled = Router->CurrentCmd();
 	FElysiumUserCmd Current = Sampled;
 	FElysiumEntityWorld* EntityWorld = CurrentEntityWorld();
-	const FElysiumPlayer* FeedPlayer = EntityWorld ? EntityWorld->FindPlayer() : nullptr;
+	FElysiumPlayer* FeedPlayer = EntityWorld ? EntityWorld->FindPlayer() : nullptr;
 	bool bCmdChanged = false;
 
 	if (FeedPlayer && FeedPlayer->IsFeedPaired())
@@ -99,6 +99,43 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 	{
 		Current.ClearMovement();
 		bCmdChanged = true;
+	}
+
+	// --- `m_iVFlags`, the two locks beside immobilize (RC4, SC4) --------------------------------
+	//
+	// This function is the port's `CBasePlayer::ProcessUsercmds` / `CPlayerMove::RunCommand`: it is
+	// where the command's own view angles would be accepted. Retail's test there is
+	//
+	//     if (+0x207c == 0 && !HasAllVFlags(this, 8)) m_angEyeAngles = cmd->viewangles;
+	//
+	// — the persistent lock and the one-shot pending snap, two doors onto the same refusal. Both are
+	// read here, and the one-shot is consumed exactly as the drain consumes it.
+	if (FeedPlayer)
+	{
+		FRotator PendingAngles;
+		FVector PendingPoint;
+		const bool bSnapPending = FeedPlayer->ConsumePendingEyeAngleSnap(PendingAngles, PendingPoint);
+		if (bSnapPending || FeedPlayer->HasViewFlags(EElysiumViewFlags::ViewAngleLock))
+		{
+			// The server owns this frame's view angles; the command's look delta is discarded
+			// rather than integrated over the snap the server just wrote.
+			Current.LookDelta = FVector2D::ZeroVector;
+			bCmdChanged = true;
+		}
+		// `EElysiumViewFlags::MoveAnglesFromEntity` (`0x1`) has one retail reader,
+		// `CPlayerMove::SetupMove` `0x10186120`, which replaces the move's angles with the posing
+		// entity's own. **The port has no move-angle source seam**: the wish direction comes from
+		// the pawn's control rotation, and there is nothing here that could stand in for "the
+		// entity's angles" without inventing a pose channel. The flag is read at the gate the
+		// substitution belongs to so the state is live and asserted, and the substitution itself
+		// lands with whoever builds that seam.
+		if (FeedPlayer->HasViewFlags(EElysiumViewFlags::MoveAnglesFromEntity))
+		{
+			// Retail also stops the player steering itself out of the pose it is being held in,
+			// which immobilize already does for every shipped opener (they all set both).
+			Current.ClearMovement();
+			bCmdChanged = true;
+		}
 	}
 
 	if (bCmdChanged)

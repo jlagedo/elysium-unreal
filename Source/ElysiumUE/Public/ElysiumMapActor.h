@@ -541,6 +541,7 @@ public:
 		const FElysiumEntityHandle& Subject, EElysiumShotExposure Exposure) override;
 	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) override;
 	virtual bool UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot) override;
+	virtual bool RestartCameraShot(int32 ShotId) override;
 	virtual void SetEquippedCameraClass(int32 CameraClass) override;
 	virtual bool PopCameraShot(int32 ShotId, float BlendOutSeconds = -1.0f) override;
 

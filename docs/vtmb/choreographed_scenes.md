@@ -556,6 +556,17 @@ no receiver (§ `!playercontroller` in `docs/vtmb/entity_io.md`). Therefore the 
 scripted camera or a body double is not evidence that the real pawn is immobilised; that state must
 be recovered from the particular scene, map wiring or script.
 
+**The lock exists in the port** (SC4, 2026-09-07). `camera_cinematic`'s `StartShot` calls
+`FElysiumPlayer::SetImmobilized(true)` and its `EndShot` clears it on the same frame, joining the
+terminal and `events_player.ImmobilizePlayer` on the one latch every consumer reads (`IsMobile()` —
+the controller's move gate and `UpdatePlayerWeaponFrame`). `EndShot` additionally clears the two
+`m_iVFlags` locks it never took — `EElysiumViewFlags::MoveAnglesFromEntity` and `ViewAngleLock`,
+retail's `+0x1d60` bits `0x1` and `0x8` — because retail's `FUN_10070990` is copying the terminal /
+sign / monitor *closer*, not the symmetric partner of its own opener
+(`docs/vtmb/camera-view-modes.md` → "`player+0x1d60` is `CBasePlayer::m_iVFlags`"). Script `SetCamera`
+still does not immobilize, and neither does a `camera_track` or a controller double, so the sentence
+above stands: the presence of a scripted camera is not evidence the pawn is locked — the *entity* is.
+
 ### The effect bit a scripted jump raises
 
 `position_start`'s placement and `position_end` 1 and 2 all raise bit `0x10`, and so does

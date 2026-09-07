@@ -301,6 +301,9 @@ public:
 	// update/pop through one interface without colliding with the component's private ids.
 	int32 PushValue(UElysiumCameraComponent* Camera, const FElysiumCameraShot& Shot);
 	bool UpdateValue(UElysiumCameraComponent* Camera, int32 Id, const FElysiumCameraShot& Shot);
+	// A shot start on a handle that is already up — `camera_cinematic`'s re-shot branch (SC4). It
+	// re-stamps `m_nClientResetFrame` and touches nothing else.
+	bool RestartValue(UElysiumCameraComponent* Camera, int32 Id);
 	bool Pop(UElysiumCameraComponent* Camera, int32 Id, float BlendOutSeconds = -1.0f);
 
 	// Every shot the map has up, dropped — a teardown, or `RemoveCamera` in the large.
@@ -345,15 +348,34 @@ public:
 	// shot-start cache (retail's `+0x610` / `+0x620` / `+0x598`). Null means "a one-shot resolve with
 	// no live shot behind it": the anchors are bound from the definition and the subject on the spot,
 	// which is what every direct caller (the dialogue ladder) wants.
+	//
+	// `OriginSelector` is retail's `+0x594`, the mode-1 think's origin-source selector, which the
+	// director entity owns and re-decides at every shot start (`FUN_1006e8e0`). It picks which anchor
+	// drives the published origin and, on its third value, **suppresses `AutoPositionFromTarget`**
+	// (SC5/SC7). The default is retail's shipped case: a shot with an `End` anchor drives from `End`.
 	static bool Resolve(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
 		const FElysiumEntityHandle& Subject, FElysiumCameraShot& Out,
 		FElysiumShotBindings* Bindings = nullptr,
-		EElysiumShotResolvePass Pass = EElysiumShotResolvePass::ShotStart);
+		EElysiumShotResolvePass Pass = EElysiumShotResolvePass::ShotStart,
+		EElysiumShotOriginSelector OriginSelector = EElysiumShotOriginSelector::EndAnchor);
 
 	// Retail's `SetShot` anchor loop: resolve each anchor's `Position` to an entity and bind it.
 	// Exposed because the shot-start pass and `SetShotAnchorEntity` share it.
 	static void BindAnchors(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
 		const FElysiumEntityHandle& Subject, FElysiumShotBindings& Bindings);
+
+	// `FUN_1006ef50` on one anchor of a shot the caller owns outright — the `camera_cinematic`
+	// entity (SC4) keeps its own binding table rather than a director handle, so it needs the bind
+	// without the "find my live shot and re-resolve it onto a camera component" wrapper above.
+	static void BindAnchorEntity(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
+		int32 AnchorIndex, const FElysiumEntityHandle& Entity, FElysiumShotBindings& Bindings);
+
+	// One anchor of an already-bound table to a world point — retail's `FUN_1006f010`, the
+	// cache-aware per-tick reader. `FUN_1006e8e0`'s `Start` arm reads anchor 0 through it directly
+	// (rather than through the whole shot solve) because the placement is that anchor's position.
+	// False when the anchor names nothing that resolves.
+	static bool ResolveAnchorPoint(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
+		int32 AnchorIndex, FElysiumShotBindings& Bindings, bool bLatched, FVector& OutPoint);
 
 private:
 	struct FLiveShot

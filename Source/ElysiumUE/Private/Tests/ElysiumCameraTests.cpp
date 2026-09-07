@@ -10,6 +10,7 @@
 #include "ElysiumBinds.h"
 #include "ElysiumBrushComponent.h"
 #include "Player/ElysiumCameraShots.h"
+#include "Player/ElysiumCommandBus.h"       // the VtMB console store `camera_fov` lives in
 #include "ElysiumCameraComponent.h"
 #include "ElysiumCameraRig.h"
 #include "ElysiumCameraSolve.h"
@@ -559,11 +560,16 @@ bool FElysiumCameraTest::RunTest(const FString&)
 			TestEqual(TEXT("and the fov meets in the middle"), Fov, 65.0f);
 		}
 
-		// A shot file with no `FieldOfView` keeps the player's.
+		// **The FOV lerp is unconditional** (`0x100ffcef`: `FLD [ESI+0x198]; FSUB; FMUL e; FADD;
+		// FSTP` — no test). Retail's published `m_flCameraFOVOverride` cannot be 0, because it comes
+		// from `CBaseEntity` slot `0xC4`, whose default is 75, so a producer handing this a 0 is
+		// asking for a zero lens and gets one. Seeding retail's 75 where a port value shot authors
+		// no FOV is the **pusher's** job, done at both publish sites
+		// (`UElysiumCameraComponent::ApplyScriptedShotToView`, `UElysiumCameraService::ApplyToView`).
 		{
 			FVector L = Base; FRotator R = FRotator::ZeroRotator; float Fov = 90.0f;
 			ElysiumCam::ComposeScriptedShot(L, R, Fov, Shot, FRotator::ZeroRotator, 0.0f, 1.0f);
-			TestEqual(TEXT("a shot with no fov keeps the player's"), Fov, 90.0f);
+			TestEqual(TEXT("a zero fov is lerped to, not ignored"), Fov, 0.0f);
 			TestEqual(TEXT("while still moving the camera"), L, Shot);
 		}
 
@@ -687,32 +693,35 @@ bool FElysiumCameraDrawTest::RunTest(const FString&)
 	}
 
 	// --- HUD policy belongs to the NAMED shot channel and to nothing else ---
+	//
+	// **The HUD is an edge, not a per-frame solve** (M14, landed with SC5), so these three content
+	// facts are asserted through `FElysiumShotHudGate` — the one thing that writes the state — rather
+	// than off `SolveDrawPolicy`, which now only carries whatever the gate latched.
 	{
 		FElysiumCameraWeights W;
 		W.Scripted = 1.0f;
 
-		// A Worldcraft `camera_track` publishes a value shot. It carries no `ShowHud` key, so it
-		// cannot take the HUD down no matter how long it owns the view.
-		FElysiumShotPresentation Track;
-		Track.bNamed = false;
-		Track.bShowHud = false;
-		TestTrue(TEXT("a camera_track cannot hide the HUD"),
-			ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, Track).bShowHud);
+		// A Worldcraft `camera_track` publishes a value shot. It carries no `ShowHud` key and no shot
+		// index, so it cannot take the HUD down no matter how long it owns the view.
+		FElysiumShotHudGate TrackGate;
+		TrackGate.OnDataChanged(/*bActive*/ true, INDEX_NONE, /*bShotShowsHud*/ true);
+		TestTrue(TEXT("a camera_track cannot hide the HUD"), TrackGate.bHudVisible);
 
 		// A named story shot authoring neither key hides both surfaces: both parse default 0.
+		FElysiumShotHudGate StoryGate;
+		StoryGate.OnDataChanged(/*bActive*/ true, /*ShotIndex*/ 7, /*bShotShowsHud*/ false);
+		TestFalse(TEXT("a named shot with no keys hides the HUD"), StoryGate.bHudVisible);
+
 		FElysiumShotPresentation Story;
 		Story.bNamed = true;
 		const FElysiumCameraDrawPolicy StoryPolicy =
 			ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, Story);
-		TestFalse(TEXT("a named shot with no keys hides the HUD"), StoryPolicy.bShowHud);
 		TestFalse(TEXT("and the viewmodel with it"), StoryPolicy.bViewmodelEligible);
 
 		// An interaction shot opts back in — `special-case.txt`'s Hacking and Intrusion entries.
-		FElysiumShotPresentation Interaction;
-		Interaction.bNamed = true;
-		Interaction.bShowHud = true;
-		TestTrue(TEXT("an interaction shot opts the HUD back in"),
-			ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, Interaction).bShowHud);
+		FElysiumShotHudGate InteractionGate;
+		InteractionGate.OnDataChanged(/*bActive*/ true, /*ShotIndex*/ 8, /*bShotShowsHud*/ true);
+		TestTrue(TEXT("an interaction shot opts the HUD back in"), InteractionGate.bHudVisible);
 
 		// `DrawViewmodel` can only ever suppress. With the predicate true it cannot force hands on.
 		FElysiumShotPresentation Draws;
@@ -720,6 +729,167 @@ bool FElysiumCameraDrawTest::RunTest(const FString&)
 		Draws.bDrawViewmodel = true;
 		TestFalse(TEXT("DrawViewmodel never forces the hands on under a scripted camera"),
 			ElysiumCam::SolveDrawPolicy(W, FarBoom, Cvars, Draws).bViewmodelEligible);
+	}
+
+	return true;
+}
+
+// The two cine draw gates and the HUD edge (SC5).
+//
+// These are the three things `ShouldDrawLocalPlayer` (`FUN_100a7a50`), `ShouldHideViewModel` (slot
+// 174, `FUN_100a7ab0` + `FUN_100019a0`) and `OnDataChanged` (`0x100024c0`) do that the mode predicate
+// alone cannot express: `m_bDrawPlayer` short-circuiting the third-person disjunction off a merely
+// *adopted* camera, the viewmodel's speed term, and a HUD that moves only on an edge.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraDrawGatesTest, "Elysium.Substrate.CameraDrawGates",
+	GElysiumTestFlags)
+bool FElysiumCameraDrawGatesTest::RunTest(const FString&)
+{
+	FElysiumCameraCvars Cvars;
+	Cvars.IdealDist = 100.0f;
+	Cvars.FadeStart = 80.0f;
+	Cvars.FadeEnd = 20.0f;
+
+	// A first-person run: no toggle, no weight, the boom still at the eye. Retail's fall-through arm
+	// (`IsLocalPlayerEntity() && !CAM_IsThirdPerson()`) answers "do not draw the body" here, and the
+	// cine gate is what overrules it.
+	FElysiumCameraWeights FirstPerson;
+	const FVector NearEye(5.0f, 0.0f, 0.0f);
+
+	// --- `m_bDrawPlayer` short-circuits the third-person test, in both directions ---------------
+	{
+		FElysiumShotPresentation Draws;
+		Draws.bNamed = true;
+		Draws.bDrawPlayerBody = true;
+
+		ElysiumCam::FElysiumShotDrawState Adopted;
+		Adopted.bCineAdopted = true;
+
+		const FElysiumCameraDrawPolicy P =
+			ElysiumCam::SolveDrawPolicy(FirstPerson, NearEye, Cvars, Draws, Adopted);
+		TestFalse(TEXT("the run is first person"), P.bThirdPerson);
+		TestTrue(TEXT("but an adopted shot with m_bDrawPlayer draws the body anyway"),
+			P.bBodyEligible);
+		TestEqual(TEXT("and draws the whole of it: a cine camera skips the boom the fade band reads"),
+			P.BodyAlpha, 1.0f);
+		// The carried weapon asks the same function (`0x100aef40` -> `ShouldDrawLocalPlayer`).
+		TestTrue(TEXT("the world weapon takes the same answer"), P.bWorldWeaponEligible);
+
+		FElysiumShotPresentation Hides;
+		Hides.bNamed = true;
+		Hides.bDrawPlayerBody = false;
+		TestFalse(TEXT("with the flag clear the body does not draw"),
+			ElysiumCam::SolveDrawPolicy(FirstPerson, NearEye, Cvars, Hides, Adopted).bBodyEligible);
+
+		// The short-circuit is *whatever third person says*, not an OR with it: a full third-person
+		// weight under an adopted shot whose flag is clear still draws no body.
+		FElysiumCameraWeights ThirdPerson;
+		ThirdPerson.bUserThird = true;
+		ThirdPerson.Third = 1.0f;
+		const FElysiumCameraDrawPolicy Over =
+			ElysiumCam::SolveDrawPolicy(ThirdPerson, FVector(200.0f, 0.0f, 0.0f), Cvars, Hides, Adopted);
+		TestTrue(TEXT("the predicate is still third person"), Over.bThirdPerson);
+		TestFalse(TEXT("and the adopted shot still decides the body outright"), Over.bBodyEligible);
+
+		// With no camera adopted the disjunction is back in charge, unchanged.
+		TestFalse(TEXT("no adopted camera: first person hides the body"),
+			ElysiumCam::SolveDrawPolicy(FirstPerson, NearEye, Cvars, Draws).bBodyEligible);
+		TestTrue(TEXT("no adopted camera: third person draws it"),
+			ElysiumCam::SolveDrawPolicy(ThirdPerson, FVector(200.0f, 0.0f, 0.0f), Cvars, Hides)
+				.bBodyEligible);
+	}
+
+	// --- the viewmodel's speed term: the same shot, dollying and parked --------------------------
+	{
+		FElysiumShotPresentation Hands;
+		Hands.bNamed = true;
+		Hands.bDrawViewmodel = true;
+
+		// The tracker is the source of the term, so it is driven rather than asserted by hand:
+		// `IsDollying()` is `m_flSpeed > MinTrackSpeed`, retail's `speed <= 1.0` read off its own
+		// speed floor.
+		FElysiumScriptedShotTracker Dollying;
+		Dollying.Speed = 40.0f * ElysiumCam::U;      // 40 u/s — mid-dolly
+		FElysiumScriptedShotTracker Parked;
+		Parked.Speed = 0.5f * ElysiumCam::U;         // 0.5 u/s — below the floor, so "not translating"
+		TestTrue(TEXT("40 u/s is dollying"), Dollying.IsDollying());
+		TestFalse(TEXT("0.5 u/s is not"), Parked.IsDollying());
+
+		ElysiumCam::FElysiumShotDrawState Moving;
+		Moving.bCineAdopted = true;
+		Moving.bDollying = Dollying.IsDollying();
+		TestFalse(TEXT("a DrawViewmodel shot still hides the hands while it dollies"),
+			ElysiumCam::SolveDrawPolicy(FirstPerson, NearEye, Cvars, Hands, Moving).bViewmodelEligible);
+
+		ElysiumCam::FElysiumShotDrawState Still;
+		Still.bCineAdopted = true;
+		Still.bDollying = Parked.IsDollying();
+		TestTrue(TEXT("and shows them once it parks"),
+			ElysiumCam::SolveDrawPolicy(FirstPerson, NearEye, Cvars, Hands, Still).bViewmodelEligible);
+
+		// A shot that never opted in keeps them off however still it is.
+		FElysiumShotPresentation NoHands;
+		NoHands.bNamed = true;
+		TestFalse(TEXT("a shot without DrawViewmodel keeps the hands off when parked"),
+			ElysiumCam::SolveDrawPolicy(FirstPerson, NearEye, Cvars, NoHands, Still).bViewmodelEligible);
+	}
+
+	// --- the HUD edge: issued on the change, never re-issued, restored on going inactive ---------
+	{
+		FElysiumShotHudGate Gate;
+		TestTrue(TEXT("the HUD starts up"), Gate.bHudVisible);
+		TestEqual(TEXT("with nothing issued"), Gate.Issued, 0);
+
+		// Into a `ShowHud`-clear shot: one hide.
+		TestTrue(TEXT("the change into a HUD-hiding shot issues an edge"),
+			Gate.OnDataChanged(/*bActive*/ true, /*ShotIndex*/ 3, /*bShotShowsHud*/ false));
+		TestFalse(TEXT("the HUD is down"), Gate.bHudVisible);
+		TestEqual(TEXT("one call"), Gate.Issued, 1);
+
+		// The same shot, frame after frame: **no per-frame enforcement**.
+		for (int32 Frame = 0; Frame < 8; ++Frame)
+		{
+			TestFalse(TEXT("a frame with no shot change issues nothing"),
+				Gate.OnDataChanged(true, 3, false));
+		}
+		TestEqual(TEXT("still one call after eight frames"), Gate.Issued, 1);
+
+		// Replaced by ANOTHER HUD-hiding shot: the index changes, so retail's unconditional arm calls
+		// `HideHud` again on an element set that is already hidden — a no-op. The port issues nothing,
+		// which is M14's contract read as a state edge.
+		TestFalse(TEXT("a HUD-hiding shot replaced by another does not re-issue"),
+			Gate.OnDataChanged(true, 4, false));
+		TestEqual(TEXT("still one call across the swap"), Gate.Issued, 1);
+		TestFalse(TEXT("and the HUD stays down"), Gate.bHudVisible);
+
+		// Into a `ShowHud`-set shot — `special-case.txt`'s Hacking / Intrusion: one show.
+		const int32 BeforeShow = Gate.Issued;
+		TestTrue(TEXT("the change into a ShowHud shot issues an edge"),
+			Gate.OnDataChanged(true, 5, true));
+		TestTrue(TEXT("the HUD is back"), Gate.bHudVisible);
+		TestEqual(TEXT("exactly one more call"), Gate.Issued, BeforeShow + 1);
+
+		// Down again, then the camera goes away: `!IsActive() && m_bWasActive => ShowHud`.
+		Gate.OnDataChanged(true, 6, false);
+		TestFalse(TEXT("the story shot hides it again"), Gate.bHudVisible);
+		const int32 BeforeInactive = Gate.Issued;
+		TestTrue(TEXT("going inactive after having been active restores the HUD"),
+			Gate.OnDataChanged(/*bActive*/ false, INDEX_NONE, true));
+		TestTrue(TEXT("the HUD is up"), Gate.bHudVisible);
+		TestEqual(TEXT("one restore"), Gate.Issued, BeforeInactive + 1);
+		TestFalse(TEXT("and staying inactive issues nothing further"),
+			Gate.OnDataChanged(false, INDEX_NONE, true));
+
+		// The same shot re-adopted after that must hide again — retail gets this for free because the
+		// camera entity is destroyed and its index cache goes with it.
+		TestTrue(TEXT("re-adopting the same shot hides the HUD again"),
+			Gate.OnDataChanged(true, 6, false));
+		TestFalse(TEXT("so the HUD is down for the second run of the shot"), Gate.bHudVisible);
+
+		// Destruction restores what a shot had taken down, and only that.
+		TestTrue(TEXT("destruction restores a hidden HUD"), Gate.OnDestroyed());
+		TestTrue(TEXT("the HUD is up"), Gate.bHudVisible);
+		TestFalse(TEXT("and destruction with the HUD already up issues nothing"), Gate.OnDestroyed());
 	}
 
 	return true;
@@ -1566,6 +1736,150 @@ bool FElysiumCameraTrackerTest::RunTest(const FString&)
 			static_cast<float>(Tracker.Location.X) < 300.0f);
 	}
 
+	// --- `TurnAccel == 0`: the angular twin, and it does NOT turn (`FUN_10001c80`) ----------------
+	{
+		// `stopAngle = rate^2/(2*0)` is a NaN or an infinity, and **both** of the branches it can
+		// take end in `FUN_10001070(rate, goal, 0, dt)` (`0x10001d0c`, `0x10001d32`), which returns
+		// the input unchanged for a zero step. The rate starts at 0 out of `Start`, so it stays 0 and
+		// the axis never moves. The port used to run such an axis at `MaxTurnRate` outright.
+		FElysiumCameraShot Still;
+		Still.bTracked = true;
+		Still.Origin = FVector::ZeroVector;
+		Still.bUseLookAt = true;
+		Still.LookAt = FVector(300.0f, 0.0f, 0.0f);
+		Still.MoveSpeed = 500.0f * ElysiumCam::U;
+		Still.MoveAccel = 250.0f * ElysiumCam::U;
+		Still.TurnAccel = 0.0f;                    // the dialogue profiles' shape: no CameraConstraints
+		Still.MaxTurnRate = FVector(90.0f, 90.0f, 90.0f);
+		Still.AngularTolerance = FVector::ZeroVector;
+
+		const FElysiumCameraShot Opening = Still;
+
+		FTracker Frozen;
+		Frozen.Start(Still);
+		const FRotator Opened = Frozen.Rotation;
+
+		// The look-at swings 90 degrees: an axis with a rate would close it, an axis at rate 0 cannot.
+		Still.LookAt = FVector(0.0f, 300.0f, 0.0f);
+		for (int32 Frame = 0; Frame < 60; ++Frame)
+		{
+			Frozen.Advance(Still, 1.0f / 60.0f);
+		}
+		TestTrue(TEXT("TurnAccel 0 leaves the turn rate exactly where it was: zero"),
+			FMath::IsNearlyZero(static_cast<float>(Frozen.TurnRate.Y), 0.0001f));
+		TestTrue(TEXT("so a whole second of a 90-degree error does not move the yaw at all"),
+			FMath::IsNearlyEqual(static_cast<float>(FRotator::NormalizeAxis(Frozen.Rotation.Yaw)),
+				static_cast<float>(FRotator::NormalizeAxis(Opened.Yaw)), 0.0001f));
+		TestFalse(TEXT("and the axis stays unsettled, because the error is real"), Frozen.bYawSettled);
+		TestTrue(TEXT("nothing on that path divides: no NaN in the rate or the pose"),
+			!Frozen.TurnRate.ContainsNaN() && !Frozen.Rotation.ContainsNaN());
+
+		// Its authored twin does close, which is what makes the arm above a real fork rather than a
+		// deadband: the same shot, opened on the same aim, with the parse default's 30 deg/s^2.
+		FElysiumCameraShot Turning = Opening;
+		Turning.TurnAccel = 30.0f;
+		FTracker Moving;
+		Moving.Start(Turning);
+		Turning.LookAt = FVector(0.0f, 300.0f, 0.0f);
+		for (int32 Frame = 0; Frame < 60; ++Frame)
+		{
+			Moving.Advance(Turning, 1.0f / 60.0f);
+		}
+		TestTrue(TEXT("the same shot with a TurnAccel closes on the new aim"),
+			FMath::Abs(FRotator::NormalizeAxis(Moving.Rotation.Yaw - Opened.Yaw)) > 1.0f);
+	}
+
+	// --- the turn rate is stored RAW: unclamped, and it can go negative (`FUN_10001d40`) ---------
+	{
+		// `FUN_10001c80` returns `FUN_10001070`'s result and `FUN_10001d40` stores it at
+		// `0x10001e4a` / `0x10001e91` without a clamp, so one accel step can overshoot `MaxTurnRate`
+		// and one decel step can walk the rate through zero into negative. The port used to clamp to
+		// `[0, MaxTurnRate]`, which is smoothing retail does not do.
+		// A rotation-carrying tracked shot, so the desired angle is the authored number exactly and
+		// the arithmetic below is readable rather than derived from a look-at.
+		FElysiumCameraShot Shot;
+		Shot.bTracked = true;
+		Shot.bUseLookAt = false;
+		Shot.Origin = FVector::ZeroVector;
+		Shot.Rotation = FRotator::ZeroRotator;
+		Shot.MoveSpeed = 150.0f * ElysiumCam::U;
+		Shot.MoveAccel = 50.0f * ElysiumCam::U;
+		Shot.DistanceTolerance = 10.0f * ElysiumCam::U;
+		Shot.AngularTolerance = FVector::ZeroVector;
+		Shot.MaxTurnRate = FVector(10.0f, 10.0f, 10.0f);
+		Shot.TurnAccel = 900.0f;                   // one 1/60 s step is 15 deg/s, over the ceiling
+
+		FTracker Over;
+		Over.Start(Shot);
+		Shot.Rotation = FRotator(0.0f, 90.0f, 0.0f);
+		Over.Advance(Shot, 1.0f / 60.0f);
+		TestTrue(TEXT("the accel arm oversteps MaxTurnRate rather than clamping to it"),
+			FMath::IsNearlyEqual(static_cast<float>(Over.TurnRate.Y), 15.0f, 0.001f));
+
+		// The decel arm, driven straight through zero: a rate below one step of `TurnAccel` lands
+		// negative, and for that frame the axis walks backwards instead of parking.
+		FTracker Under;
+		Under.Start(Shot);                         // opens on yaw 90, the shot's current aim
+		Under.bYawSettled = true;                  // settled -> the deadband is the shot's own 0
+		Under.TurnRate.Y = 0.1;
+		FElysiumCameraShot Braking = Shot;
+		Braking.TurnAccel = 60.0f;                 // stopAngle = 0.01/120 = 8.33e-5 deg
+		Braking.Rotation = FRotator(0.0f, 90.00005f, 0.0f);   // an error inside that stopping angle
+		const double BeforeYaw = Under.Rotation.Yaw;
+		Under.Advance(Braking, 1.0f / 60.0f);      // |delta| <= stopAngle -> decelerate toward 0
+		TestTrue(TEXT("the decel arm walks the rate through zero into negative, unclamped"),
+			static_cast<float>(Under.TurnRate.Y) < 0.0f);
+		TestTrue(TEXT("so that frame's step moves the axis AWAY from its goal"),
+			Under.Rotation.Yaw < BeforeYaw);
+	}
+
+	// --- `m_flDistRemaining` (`0x4c4`) is the PRE-move distance (`FUN_10001fe0` 0x10002054) ------
+	{
+		// One `jack.txt` frame from rest, 100 u out. The stored distance is what the position step
+		// measured **before** it moved, which is what `SyncRotateOnMove` divides by the same frame
+		// (`FUN_10001c80` `0x10001cb7`); recomputing it after the step would report one step less
+		// every frame and inflate the turn rate the shipped shots are tuned against.
+		FElysiumCameraShot Shot = MakeJackShot();
+		Shot.DistanceTolerance = 0.0f;
+		FTracker Tracker;
+		Tracker.Start(Shot);
+		const float Out = 100.0f * ElysiumCam::U;
+		Shot.Origin += FVector(Out, 0.0f, 0.0f);
+		Shot.LookAt += FVector(Out, 0.0f, 0.0f);
+		Tracker.Advance(Shot, 1.0f / 60.0f);
+
+		TestTrue(TEXT("the stored distance is the whole 100 u the frame opened with"),
+			FMath::IsNearlyEqual(Tracker.DistRemaining, Out, 0.01f));
+		const float AfterStep =
+			static_cast<float>(FVector::Distance(Shot.Origin, Tracker.Location));
+		TestTrue(TEXT("which is strictly more than what is left after the step"),
+			Tracker.DistRemaining > AfterStep + 0.01f);
+		TestTrue(TEXT("and it is the value the sync solve is handed"),
+			FMath::IsNearlyEqual(
+				ElysiumCam::RemainingTranslationSeconds(Tracker.Speed, Shot.MoveSpeed,
+					Shot.MoveAccel, Tracker.DistRemaining),
+				ElysiumCam::RemainingTranslationSeconds(Tracker.Speed, Shot.MoveSpeed,
+					Shot.MoveAccel, Out), 0.0001f));
+	}
+
+	// --- `Snap` copies the goal angles unconditionally (`FUN_10002390` 0x100023c0-0x100023f8) ----
+	{
+		// The copy runs before the `CamMode == 1` re-derive, so a copy-through shot that reaches
+		// `Snap()` directly — a public entry point the tests and the one-shot both use — lands on the
+		// replicated angles rather than keeping whatever the tracker had.
+		FElysiumCameraShot Direct;
+		Direct.bTracked = false;                  // a `camera_track` value: the angles ARE the pose
+		Direct.bUseLookAt = false;
+		Direct.Origin = FVector(10.0f, 20.0f, 30.0f);
+		Direct.Rotation = FRotator(-15.0f, 135.0f, 0.0f);
+		FTracker Tracker;
+		Tracker.Rotation = FRotator(70.0f, -40.0f, 12.0f);
+		Tracker.Snap(Direct);
+		TestTrue(TEXT("the snap copies the shot's own angles onto a copy-through pose"),
+			Tracker.Rotation.Equals(Direct.Rotation, 0.001f));
+		TestTrue(TEXT("and its origin"), Tracker.Location.Equals(Direct.Origin, 0.001f));
+	}
+
 	// --- FOV: a copy every frame, and the dev-cvar freeze (`FUN_10001c20`) — M12 ---
 	{
 		FElysiumCameraShot Shot = MakeJackShot();
@@ -1628,6 +1942,62 @@ bool FElysiumCameraTrackerTest::RunTest(const FString&)
 		Shot.FieldOfView = 30.0f;
 		Tracker.Advance(Shot, 1.0f / 60.0f, -1.0f);
 		TestEqual(TEXT("and the shipped default copies the record outright"), Tracker.Fov, 30.0f);
+	}
+
+	// --- the FOV **wire**: `CalcView` publishes `m_flCurFov`, so the freeze reaches the view -------
+	{
+		// `FUN_10001b50` `0x10001bc1`: `MOV ECX,[ESI+0x480] ; MOV [EAX+0x28],ECX` — the rendered view
+		// takes `m_flCurFov`, the field the guard leaves untouched, and **not** the shot record. A
+		// port that published the record instead would pass every assertion above with the whole M12
+		// chain dead, which is what this case exists to stop.
+		UElysiumCameraComponent* Lens = NewObject<UElysiumCameraComponent>();
+		if (TestNotNull(TEXT("the FOV-wire case has a camera component"), Lens))
+		{
+			FElysiumCameraShot Cine;
+			Cine.bCine = true;
+			Cine.bTracked = true;                 // `CamMode` 1 — the only mode that tracks the FOV
+			Cine.BlendSeconds = 0.0f;
+			Cine.Origin = FVector(100.0f, 0.0f, 150.0f);
+			Cine.LookAt = Cine.Origin + FVector(300.0f, 0.0f, 0.0f);
+			Cine.bUseLookAt = true;
+			Cine.FieldOfView = 40.0f;
+			const int32 Id = Lens->PushShot(Cine);
+			++GFrameCounter;
+			Lens->AdvanceFrame(1.0f / 60.0f);
+
+			// A 4:3 window, so `WidenSourceFov` passes the authored angle through untouched and the
+			// published number is the shot's own.
+			auto PublishedFov = [Lens]()
+			{
+				FMinimalViewInfo View;
+				View.Location = FVector::ZeroVector;
+				View.Rotation = FRotator::ZeroRotator;
+				View.AspectRatio = 4.0f / 3.0f;
+				Lens->ApplyToView(View);
+				return static_cast<float>(View.FOV);
+			};
+			TestTrue(TEXT("the published view carries the tracked shot's FOV"),
+				FMath::IsNearlyEqual(PublishedFov(), 40.0f, 0.01f));
+
+			// The guard, through the console store the component actually reads every frame.
+			FElysiumConsole& Store = ElysiumCommandBus::Console();
+			const FString Restore = Store.GetCvar(TEXT("camera_fov"));
+			ON_SCOPE_EXIT { Store.SetCvar(TEXT("camera_fov"), Restore); };
+			Store.SetCvar(TEXT("camera_fov"), TEXT("90"));
+
+			Cine.FieldOfView = 25.0f;
+			Lens->UpdateShot(Id, Cine);
+			++GFrameCounter;
+			Lens->AdvanceFrame(1.0f / 60.0f);
+			TestTrue(TEXT("camera_fov above 10 freezes the RENDERED fov at its previous value"),
+				FMath::IsNearlyEqual(PublishedFov(), 40.0f, 0.01f));
+
+			Store.SetCvar(TEXT("camera_fov"), TEXT("-1"));
+			++GFrameCounter;
+			Lens->AdvanceFrame(1.0f / 60.0f);
+			TestTrue(TEXT("and the copy resumes the frame the cvar drops back under the threshold"),
+				FMath::IsNearlyEqual(PublishedFov(), 25.0f, 0.01f));
+		}
 	}
 
 	// --- the frame latch: one Advance per rendered frame (`m_nFrameCache`, FUN_10001a20) ---

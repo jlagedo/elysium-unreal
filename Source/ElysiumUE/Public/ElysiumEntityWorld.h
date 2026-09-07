@@ -494,6 +494,36 @@ public:
 	bool HasScriptedCamera() const { return ScriptedCameraShot != 0; }
 	const FString& ScriptedCameraName() const { return ScriptedCameraFile; }
 
+	// **Retail's single adoption slot — `CBasePlayer::SetCineCamera` `FUN_1017cef0`** (SC4/M8):
+	//
+	//     old = GetCineCamera();
+	//     player->m_iCameraOverrideIdx = cam ? IndexOfEdict(cam) : 0;
+	//     player->+0x19b4              = cam ? cam->GetRefEHandle() : -1;
+	//     if (old != cam && old != NULL && (old->+0x204 & 0x4)) UTIL_Remove(old);
+	//
+	// The outgoing camera is **destroyed only when it is disposable and differs from the incoming
+	// one**, which is why a map-placed `camera_cinematic` director survives its own `StartShot`
+	// while the runtime camera it created does not survive the next adoption.
+	//
+	// `CameraEntity` is unset for an adopter that owns no entity — the `SetCamera` native and the
+	// terminal both reach `FUN_10070470` -> `FUN_1017cef0` in retail and the port collapses that
+	// pair into the shot handle. The outgoing shot is always released, because the shot handle IS
+	// "which camera is live": retail's un-adopted camera stops being `m_iCameraOverrideIdx` on the
+	// same tick even when its entity lives on.
+	//
+	// A null/zero adoption is retail's `SetCineCamera(player, NULL)` — the whole of `RemoveCamera`,
+	// a terminal closer and `EndShot`'s camera step.
+	void SetCineCamera(const FElysiumEntityHandle& CameraEntity, int32 ShotId, bool bDisposable,
+		const FString& ShotFile);
+	// `GetCineCamera` `FUN_1017cf90` — the adopted entity, or unset. Unset with a live shot means
+	// the slot is held by an entity-less adopter (a terminal, a `SetCamera` shot).
+	FElysiumEntityHandle CineCameraEntity() const { return ScriptedCameraEntity; }
+	bool IsCineCameraDisposable() const { return bScriptedCameraDisposable; }
+	// The value-shot handle the slot's occupant published — retail's `m_iCameraOverrideIdx` in the
+	// only form the port has one. 0 when nothing is adopted. Read by the terminal and camera tests,
+	// which used to read the handle off the terminal before M8 retired it.
+	int32 CineCameraShotId() const { return ScriptedCameraShot; }
+
 	// `camera_track` selects and publishes position and target independently. Selection is exclusive
 	// per role: a newer track supersedes an older one, whose clock and outputs may continue without
 	// reclaiming the view. The world composes both selected roles into one value shot so restoring one
@@ -924,6 +954,10 @@ private:
 	// The scripted camera's handle on IElysiumEmbodiment's channel; 0 = none up.
 	int32 ScriptedCameraShot = 0;
 	FString ScriptedCameraFile;
+	// The adoption slot's entity half and its `+0x204 & 0x4` flag. Unset/false for an adopter that
+	// owns no entity.
+	FElysiumEntityHandle ScriptedCameraEntity;
+	bool bScriptedCameraDisposable = false;
 
 	// The paired camera_track director. Values remain cached when one role restores so the surviving
 	// role does not snap to the player between independently authored chains.

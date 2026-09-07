@@ -1087,7 +1087,93 @@ same-tick cut with no cvar. **M8** — one adoption slot with retail semantics; 
 it and a terminal closer drops to the **player view**, never to a previously stacked shot. All ruled
 2026-09-07 under the owner framework of §7. **Deps:** SC1, SC2, RC2, RC3, RC4, RC12.
 
-**Closure record.**
+**Closure record.** Landed 2026-09-07, **with RG-A in hand**, which corrected six things this slice
+had written down wrong. New: `Private/Substrate/ElysiumCameraCinematic.{h,cpp}` (`FElysiumCameraCinematic`
+— the six datamap rows, the three named `spawnflags` bits, `StartShot`/`EndShot`, `SetShot`,
+`SetShotAnchorEntity`, `StartShotPlacement`, the 24 Hz accumulator and all five `CamMode` arms plus
+the `>4` expiry arm, `ShouldTransmit`, `ObjectCaps`, the `camera_showdebug` overlay hook) and
+`Private/Substrate/ElysiumCameraAnimated.{h,cpp}` (`camera_animated` as its own class). The stub row
+at `ElysiumStubClasses.cpp:46-47` is deleted. `FElysiumEntityWorld::SetCineCamera` /
+`ClearScriptedCamera` are retail's one adoption slot with the disposable destroy rule; the terminal
+moved onto it (**M8**) and lost its own handle; the map teardown runs the full `EndShot` over every
+`camera_cinematic` first (`FUN_10071970`). `FElysiumPlayer` gained `EElysiumViewFlags` with
+`Add`/`Remove`/`HasViewFlags`, and `FElysiumCombatCharacter` the `FUN_10178590`/`FUN_10178550`
+pending eye-angle snap. Tests: `Elysium.Substrate.CameraCinematic` and
+`Elysium.Content.TutorialFeedCamera` (`Private/Tests/ElysiumCameraCinematicTests.cpp`).
+
+**Six plan lines this slice had to correct**, all from RG-A:
+
+1. **There is no `KeyValue` handler.** The class overrides nine vtable slots and the keyvalue path is
+   not among them; the seven keys are plain datamap rows and `spawnflags` is engine-parsed. `Spawn`
+   (slot 103) is the only entity hook, and it is `if (spawnflags & 2) m_bDrawPlayer = 1`.
+2. **`spawnflags`:** `0x1` is `CCameraAnimated`'s freeze bit and is **dead on this class** (parsed and
+   ignored, by name); `0x2` is draw-the-player-body; `0x4` is disposable.
+3. **"`m_bDrawPlayer` defaults to 0 on every shipped director" is false and is inverted** — 27 of 51
+   set `spawnflags & 2`, `sp_tutorial_1`'s `feedcamera` (`spawnflags 3`) among them, so SC4's own
+   verbatim witness is a draw-the-body shot and SC5 has a shipped non-zero input from content.
+4. **`point_player` is dead.** The runtime camera defaults `m_bForcePlayerLook = 1` and the director's
+   keyvalue is never copied, so all 35 authored values (26 of them `0`) are discarded. Ported exactly:
+   the key parses so the census can read it, the runtime ignores it, and the test asserts the subject
+   is turned for `point_player 0`. `retail-defects.md` §7 carries the row.
+5. **RC3's `+0x570`/`+0x588` is a previous-*placement* memory**, not a dolly memory, saved on every
+   shot start after the first and consumed only by the `End`-without-`Start` arm; it survives
+   `SetShot`, and `SetCamera`'s re-shot branch never runs the shot start at all.
+6. **`EndShot` is never fired by shipped content** (0 hits in every `.vpk` and `.ents`), so its whole
+   arm — including "a director carrying `spawnflags & 4` deletes itself" — has no content witness and
+   its acceptance is unit-test only.
+
+**The `DeathCam` ruling.** `special-case.txt`'s `DeathCam` **has no driver anywhere in retail**: the
+literal appears exactly once in the whole install, in the shot file itself, and in no module, `.vpk`
+script or dialogue file. Retail's death view is the spectator-target replace at the tail of
+`CViewRender::CalcView`, with no cine camera involved. §4's row ("its driver is RC12's second
+question") is answered: there is none. **No death-camera driver is invented here**; the shot stays
+orphaned content, and reaching it would be a named modernization nobody has asked for. Recorded in
+`camera-view-modes.md` § "The server shot lifecycle".
+
+**One correction to RG-A itself, found by the port's own test.** RC12 reads mode 4's dead-anchor arm
+as "arms the expiry at exactly `curtime`, so it is removed one think later". The first half is right
+and the second does not survive the listing: `if (!handleLive(+0x610)) FUN_1006e8b0(this, 0.0);` is
+**unguarded and re-runs on every think**, so a still-dead anchor re-stamps `+0x55c` to the new
+`curtime` *before* `FUN_1006f7d0` reads it, and the strict `+0x55c < curtime` gate is false at
+equality again — forever. Mode 4 therefore reaches the same end state mode 3 does — **a dead anchor
+freezes the shot rather than ending it** — by a different mechanism. The code reproduces the listing
+unchanged and `Elysium.Substrate.CameraCinematic` asserts the re-arm.
+
+**Two named divergences, both stated in code:**
+
+* **Mode 3's dead-anchor crash → a guarded no-op.** `FUN_1006fe00` writes an integer `0` into the
+  expiry (which the `> 0.0f` gate rejects forever) and then dereferences the dead handle. The port
+  keeps the no-expiry — a mode-3 camera whose anchor dies freezes on its last published pose, which
+  is what retail renders for the one tick before it faults — and removes only the fault.
+  `retail-defects.md` §7 already carries the row.
+* **`camera_animated`'s missing-sequence arm ends the camera instead of stranding the view.** Retail's
+  `seq < 0` path `Msg`s and returns: no `OnCameraBegin`, no think, and the cine camera it just adopted
+  has nothing left to end it. The port's animation seam resolves a clip through the NPC clip manifest
+  (`FElysiumAnimating::PlayAnimClip`), which a camera rig's own model need not be in, so the arm is
+  reachable for a reason retail's is not; the think ends the camera on its next 0.1 s tick. The missing
+  piece is "play an arbitrary named sequence on a bare animating entity". Zero shipped
+  `camera_animated` instances, so nothing in content sees either behaviour.
+
+**Two things landing SC4 surfaced elsewhere, both fixed here.**
+
+* **The save-block reason now walks the entities before the cine slot**
+  (`ElysiumEntityWorldDialogue.cpp`, `ScriptedSessionSaveBlockReason`). M8 puts every interaction's
+  shot in the one slot, so testing the slot first answered "an authored legacy camera is active" for
+  a terminal session and buried the session that actually owns the block. The slot's row survives
+  below the walk, for the case it is really for: a `SetCamera` shot with no entity session behind it.
+* **The component's track-compose site now seeds retail's 75 for a value shot with no FOV**
+  (`ElysiumCameraComponent.cpp`), which `UElysiumCameraService::ApplyToView` already did. SC2's
+  `ComposeScriptedShot` made the FOV lerp unconditional — correctly, because retail's published
+  `m_flCameraFOVOverride` cannot be 0 — and moved the seeding to "the two publish sites", but only
+  one of the two had it. `Elysium.Substrate.Camera`'s stale "a shot with no fov keeps the player's"
+  assertion is rewritten to the contract that actually holds.
+
+**Left for the slices that own them:** the `+0x594 == 2` arm's *suppression* lives in SC7's `Resolve`
+(this slice supplies the selector and the abs-origin source); `bDrawPlayerBody` is written here and
+consumed by SC5; anim event 4050's write to it is SC8's; `FindBestShot` is SC8's. The debug overlay is
+a **gate plus a diagnostic**, not geometry: the substrate carries no line/box draw seam, so
+`DrawDebugGeometryOverlays` reproduces retail's `camera_showdebug == 1` test and names what retail
+draws, and the drawing lands with whoever builds that seam.
 
 ---
 
@@ -1189,7 +1275,46 @@ term as landed; the divergence table's three draw rows resolve.
 the *edge timing* is contract and is reproduced. Ruled 2026-09-07 under the owner framework of §7.
 **Deps:** SC1, SC4, RC11.
 
-**Closure record.**
+**Closure record — landed 2026-09-07 (headless; not yet built or run).**
+
+`Public/ElysiumCameraSolve.h` / `Private/Player/ElysiumCameraSolve.cpp` carry the whole slice's
+values and edges. `FElysiumCameraShot` grew the record's four **presence flags**, the `+0xd4`
+`TargetPointCount`, `ShotIndex` (`m_ShotIndex`), `ResetFrame` (`m_nClientResetFrame`), the
+`EElysiumShotOriginSelector` and the `StartsOnGoal()` predicate — `(flags & 2) == 0 || (flags & 1)
+!= 0`, read off the flags rather than inferred. `FElysiumShotPresentation` grew `bDrawPlayerBody`
+(`m_bDrawPlayer`), which `Resolve` deliberately does **not** write: its writers are the director's
+`spawnflags & 2` (SC4) and 4050 (SC8).
+
+`FElysiumScriptedShotTracker::Start` takes an `FElysiumViewSetup` (`CViewRender::GetViewSetup()`)
+and implements **both** arms of `FUN_10002210`; the header comment recording the live-view arm as
+absent is deleted. `FElysiumShotStartEdges` is `OnDataChanged`'s first two arms as one struct used by
+**both** channels, so a reset-frame change arms shot start and clears no settle flag while a
+shot-index change snaps *or* clears the three angle flags and never re-seeds. The stack stamps
+`ResetFrame` in `Push`, preserves it in `Update` (the think) and re-stamps it in the new
+`Restart(Id)` — retail's re-shot branch, which SC4's `StartShot` on a live camera calls.
+
+`SolveDrawPolicy` takes an `ElysiumCam::FElysiumShotDrawState` (adopted / dollying / latched HUD) and
+carries both gates: the body is the adopted shot's `bDrawPlayerBody` **outright**, at full alpha
+because a cine camera skips the boom the fade band reads — and so is the **world weapon**, because
+`0x100aef40` reaches the same `ShouldDrawLocalPlayer` and a shot that draws the body draws what it is
+holding; the viewmodel is
+`bDrawViewmodel && !IsDollying()` under an adopted camera and the mode predicate under none. **M14**
+lands as `FElysiumShotHudGate`: three write sites, a call counter so the absence of a re-issue is
+assertable, `bShowHud` on the draw policy demoted to carrying the latch, and "active" defined as *a
+cine camera is adopted* so a `camera_track` running under a released shot does not hold the HUD down.
+`UElysiumCameraComponent::EndPlay` is the destructor arm.
+
+Tests: `Elysium.Substrate.CameraShotStart` (new, `Private/Tests/ElysiumCameraShotStartTests.cpp`) and
+`Elysium.Substrate.CameraDrawGates` (new case in `ElysiumCameraTests.cpp`). Three `bShowHud`
+assertions inside the existing `Elysium.Substrate.CameraDraw` case now go through the gate, because
+the per-frame solve they described is the thing M14 retires; the content facts they assert are
+unchanged.
+
+**What this slice did not do.** The origin selector's third arm is *represented* and suppresses
+`AutoPositionFromTarget`, but its "leave the entity's own abs origin alone" half needs the director
+entity's transform and is SC4's; `Resolve` keeps the anchor-derived origin for it and says so in the
+source. Nothing yet writes `bDrawPlayerBody` or calls `Restart` — SC4 and SC8 are the writers, and
+both were built against these names.
 
 ---
 
@@ -1432,10 +1557,12 @@ though the map never fires it.
 (`ElysiumCameraShots.cpp:428-479`) **after** the origin and look-at are solved
 (`:435-439` / `:442-448`) and **before** `bTracked` is stamped (`:458`), reading
 `bAutoPositionFromTarget` (`ElysiumCameraShots.h:99`, parsed at `.cpp:104`) which no solver reads
-today. It is suppressed on SC5's third origin-selector arm, as retail is. `ClosestPointOnLine` is
-implemented as the **standard clamped projection** and the assumption is named in the code and the
-doc until **RC1** opens `FUN_1013c940`; if RC1 finds the projection unclamped, the one-line change
-lands with it.
+today. It is suppressed on SC5's third origin-selector arm, as retail is. `ClosestPointOnLine` is the
+**unclamped** projection with the `1e-5` degenerate guard returning `t = 0` — **RC1 opened
+`FUN_1013c940` and settled it**: the function's only branch is that guard, there is no `FCOM`
+against `0.0` or `1.0` in the body, and the image holds no segment-clamped variant of it or of its
+2-D twin. So `d` is the true perpendicular distance to the *infinite* camera→look-at axis even when
+the low point projects behind the camera or beyond the look-at.
 
 **Tests — `Elysium.Substrate.CameraAutoPosition`** (new):
 
@@ -1452,7 +1579,26 @@ nothing" to the recovered formula as landed, with the `FUN_1013c940` assumption 
 
 **Rulings applied.** None — every behaviour in this slice is contract. **Deps:** SC5, SC6, RC1.
 
-**Closure record.**
+**Closure record — landed 2026-09-07 (headless; not yet built or run).**
+
+`ElysiumCam::ClosestPointParameterOnLine` / `ClosestPointOnLine` are `FUN_1013c940` / `FUN_1013ca00`
+with the `1e-05f` degenerate guard converted into cm² and **no clamp** — RC1's answer, so this note's
+"implemented as the standard clamped projection … if RC1 finds the projection unclamped, the one-line
+change lands with it" is resolved rather than carried. `ElysiumCam::AutoPositionFromTarget` is the
+`0x1006fa50`–`0x1006fb85` block with `_DAT_104454d0` and `_DAT_1044eb08` named, the Z swap, the lower
+point alone, `h = d/sin(A)`, `r = sqrt(h²+d²)` and the slide along the existing axis. Two guards are
+the port's and are named in the source: a non-positive `sin(A)` (unreachable through the `[20,120]`
+FOV clamp) and a zero-length `lookAt − camOrigin`, both leaving the origin untouched.
+
+It is applied in `FElysiumCameraDirector::Resolve` after the origin selector and the look-at and
+before the stamp — the think's own order — off the two `Target` **slots** rather than the presence
+flags, and skipped when the selector is `Entity`, which `Resolve` now takes as a defaulted parameter.
+
+Tests: `Elysium.Substrate.CameraAutoPosition` (new,
+`Private/Tests/ElysiumCameraAutoPositionTests.cpp`). `Elysium.Substrate.CameraAnchors`' verbatim
+`centerfullview` case now asserts the anchor step with the flag **cleared** and the shipped flagged
+file beside it, because the shipped file's origin is no longer the anchor's — which is the slice
+working.
 
 ---
 

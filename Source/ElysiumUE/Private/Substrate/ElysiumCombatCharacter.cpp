@@ -1594,6 +1594,42 @@ bool FElysiumCombatCharacter::HandleFollowModelAnimEvent(const FElysiumAnimEvent
 	return true;
 }
 
+// --- The pending eye-angle snap — `FUN_10178590` / `FUN_10178550` (RC4, SC4) ---
+
+void FElysiumCombatCharacter::LookAtWorldPoint(const FVector& WorldPoint)
+{
+	// `FUN_10178590`, verbatim: the eye position (vfunc `0x304`), the normalized direction to the
+	// point, `VectorAngles`, and the result handed to `FUN_10178550`. Retail normalizes before
+	// `VectorAngles`, which the angle solve does not need but which is what makes a zero-length
+	// direction produce `(0,0,0)` rather than a NaN — so the degenerate case is guarded here too.
+	const FVector Direction = WorldPoint - EyePosition();
+	const FRotator EyeAngles = Direction.IsNearlyZero()
+		? FRotator::ZeroRotator : Direction.GetSafeNormal().Rotation();
+	SetPendingEyeAngles(EyeAngles, WorldPoint);
+}
+
+void FElysiumCombatCharacter::SetPendingEyeAngles(const FRotator& InAngles, const FVector& LookPoint)
+{
+	// `FUN_10178550`: `+0x206c..0x2074 = ang; +0x207c = 1;` — and nothing else. The flag is what the
+	// usercmd drain reads, so raising it is the whole of the write.
+	PendingEyeAngles = InAngles;
+	PendingEyeLookPoint = LookPoint;
+	bPendingEyeAngleSnap = true;
+	OnPendingEyeAnglesRaised();
+}
+
+bool FElysiumCombatCharacter::ConsumePendingEyeAngleSnap(FRotator& OutAngles, FVector& OutLookPoint)
+{
+	if (!bPendingEyeAngleSnap)
+	{
+		return false;
+	}
+	OutAngles = PendingEyeAngles;
+	OutLookPoint = PendingEyeLookPoint;
+	bPendingEyeAngleSnap = false;
+	return true;
+}
+
 // --- The grapple pair — `+0x1534`..`+0x1558` (RC13) ---
 //
 // One transaction in, one transaction out, and nothing in between: retail has **exactly three
@@ -1623,6 +1659,15 @@ void FElysiumCombatCharacter::EnterGrappleState(const FElysiumEntityHandle& Part
 	// attacker is the half that drives the paired animation.
 	Grapple.AnimDriver = (Role != EElysiumGrappleRole::Attacker)
 		? Partner : FElysiumEntityHandle::Invalid();
+
+	// `CBasePlayer::FUN_101695f0`, the player's grapple *enter*, raises the pose lock: while the
+	// body is posed by the paired animation the move takes its angles from the entity rather than
+	// from the eye (`CPlayerMove::SetupMove` `0x10186120`, RC4). It is a player-only write — an NPC
+	// has no `m_iVFlags` — so this arm runs only when the character being entered is the player.
+	if (FElysiumPlayer* PlayerEnt = AsGrapplingPlayer())
+	{
+		PlayerEnt->AddViewFlags(EElysiumViewFlags::MoveAnglesFromEntity);
+	}
 }
 
 void FElysiumCombatCharacter::LeaveGrappleState()
@@ -1632,6 +1677,28 @@ void FElysiumCombatCharacter::LeaveGrappleState()
 	// origin) is the movement half and belongs with whoever placed the bodies; the port's feed pair
 	// leaves both origins untouched, which is the divergence `ElysiumFeed.cpp` already records.
 	Grapple = FElysiumGrappleState();
+
+	if (FElysiumPlayer* PlayerEnt = AsGrapplingPlayer())
+	{
+		// `CBasePlayer::LeaveGrappleState` `0x10169660`, the override, does two things beyond the
+		// base transaction: it drops the pose lock, and it calls **`SetCineCamera(NULL)`**.
+		PlayerEnt->RemoveViewFlags(EElysiumViewFlags::MoveAnglesFromEntity);
+		// **RC13 — ending a grapple ends the scripted shot.** The camera the feed/stealth-kill shot
+		// was running on is destroyed with it when it is disposable, and the release is a cut (M1):
+		// the player's own eye is the next frame's view.
+		if (World)
+		{
+			World->ClearScriptedCamera();
+		}
+	}
+}
+
+FElysiumPlayer* FElysiumCombatCharacter::AsGrapplingPlayer()
+{
+	// The `m_iVFlags` half of the grapple transaction is `CBasePlayer`'s override, not
+	// `CBaseCombatCharacter`'s body, so it must not run for an NPC half of the same pair.
+	FElysiumPlayer* PlayerEnt = World ? World->FindPlayer() : nullptr;
+	return static_cast<FElysiumCombatCharacter*>(PlayerEnt) == this ? PlayerEnt : nullptr;
 }
 
 bool FElysiumCombatCharacter::EnterGrapplePair(FElysiumCombatCharacter& Victim,

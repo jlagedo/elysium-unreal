@@ -647,9 +647,15 @@ FElysiumUseBeginResult FElysiumTerminal::BeginPlayerUse(const FElysiumUseContext
 	{
 		// The clamp is the one named Presentation modernization: the glass is the brightest thing in
 		// the frame and the auto-exposure has no retail counterpart to reproduce.
-		CameraShot = Embodiment->PushCameraShotNamed(TEXT("special-case"), TEXT("Hacking"), Handle,
-			EElysiumShotExposure::Clamped);
-		if (CameraShot == 0)
+		const int32 Shot = Embodiment->PushCameraShotNamed(TEXT("special-case"), TEXT("Hacking"),
+			Handle, EElysiumShotExposure::Clamped);
+		// Step 8, `FUN_1017cef0(player, cam)` — **the single adoption slot** (M8). The camera the
+		// opener created is disposable, so the next adoption destroys it and the terminal never has
+		// to remember a handle. A NULL camera (`Shot == 0`) reaches the same call and simply clears
+		// the slot, which is why the session below still opens.
+		World->SetCineCamera(FElysiumEntityHandle::Invalid(), Shot, /*bDisposable*/ true,
+			TEXT("special-case"));
+		if (Shot == 0)
 		{
 			// Retail does NOT refuse. `FUN_10070470` returns NULL when the shot will not load
 			// (§3.3 step 3), and step 8 then runs `FUN_1017cef0(player, NULL)` — which CLEARS the
@@ -763,13 +769,13 @@ void FElysiumTerminal::EndPlayerUse(const FElysiumUseContext& Context, EElysiumU
 	// Last: `FUN_1017cef0(player, NULL)` drops the `camera_cinematic` outright. Nothing was saved
 	// and nothing is restored -- the client simply falls back to the player's own eye -- and there
 	// is **no ease-out** (correction C8, C19), so the pop is immediate.
-	if (CameraShot != 0)
+	//
+	// M8: this is the shared slot's clear, so the closer drops to the **player view** and never to a
+	// shot that was live before the session opened. Unconditional, exactly as retail's is: the
+	// terminal does not test whether the camera it is dropping is the one it pushed.
+	if (World)
 	{
-		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
-		{
-			Embodiment->PopCameraShot(CameraShot, /*BlendOutSeconds*/ 0.0f);
-		}
-		CameraShot = 0;
+		World->ClearScriptedCamera();
 	}
 	CurrentUser = FElysiumEntityHandle::Invalid();
 	++ViewRevision;
@@ -1222,7 +1228,10 @@ void FElysiumTerminal::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			*ScreenAxisPointCm.ToCompactString())
 		: FString::Printf(TEXT("(missing %s)"),
 			AttachmentError ? AttachmentError : TEXT("unknown")));
-	Out.Emplace(TEXT("Camera shot"), FString::FromInt(CameraShot));
+	// M8: the shot lives in the world's one adoption slot, so the row reports the slot rather than a
+	// handle the terminal used to keep.
+	Out.Emplace(TEXT("Camera shot"), World && World->HasScriptedCamera()
+		? World->ScriptedCameraName() : TEXT("<none>"));
 }
 
 // --- CPropHacking -------------------------------------------------------------------------------

@@ -163,8 +163,23 @@ FElysiumCameraRequest ElysiumDialogueCamera::BuildRequest(
 	Request.Shot.LookAt = LookAt;
 	Request.Shot.bUseLookAt = true;
 	// A profile stands in for a `vdata/camerashots/` dialogue shot, which retail runs in `CamMode` 1:
-	// it is tracked, at the record's rate ceiling, not copied through like a `camera_track` value.
+	// it is tracked, at the record's own rates, not copied through like a `camera_track` value.
 	Request.Shot.bTracked = true;
+	// **`dialogdefault.txt`'s `CameraConstraints`, verbatim** — the record every conversation retail
+	// opens runs on, and the numbers the tracker needs to move at all. A tracked shot with the
+	// struct defaults carries `MoveSpeed 0` and `TurnAccel 0`, and retail's `TurnAccel == 0` arm
+	// leaves the turn rate exactly where it is (`FUN_10001c80` → `FUN_10001070` with a zero step),
+	// so such a shot would open aimed and then never turn again. These are the file's own values:
+	// MoveSpeed 500 u/s, MoveAccel 250 u/s², TurnAccel 30 deg/s², MaxTurnRate [60,60,60],
+	// DistanceTolerance 5 u, AngularTolerance [10,10,10]°, `SyncRotateOnMove` set — and the 10°
+	// deadband is what holds a conversation camera still while its subject's head animates.
+	Request.Shot.MoveSpeed = 500.0f * ElysiumCam::U;
+	Request.Shot.MoveAccel = 250.0f * ElysiumCam::U;
+	Request.Shot.TurnAccel = 30.0f;
+	Request.Shot.MaxTurnRate = FVector(60.0f, 60.0f, 60.0f);
+	Request.Shot.DistanceTolerance = 5.0f * ElysiumCam::U;
+	Request.Shot.AngularTolerance = FVector(10.0f, 10.0f, 10.0f);
+	Request.Shot.bSyncRotateOnMove = true;
 	Request.Shot.FieldOfView = Profile.FieldOfView;
 	Request.Shot.BlendSeconds = Request.BlendInSeconds;
 	Request.Shot.DebugName = Request.DebugName;

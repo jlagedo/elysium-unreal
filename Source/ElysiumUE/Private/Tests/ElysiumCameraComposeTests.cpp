@@ -137,6 +137,21 @@ bool FElysiumCameraComposeTest::RunTest(const FString&)
 			FMath::IsNearlyEqual(static_cast<float>(L.X), 50.0f, 0.001f));
 		TestTrue(TEXT("and the fov halfway too"), FMath::IsNearlyEqual(Fov, 65.0f, 0.001f));
 
+		// **The FOV lerp is unconditional** (`0x100ffcef`: `FLD ; FSUB ; FMUL e ; FADD ; FSTP`, no
+		// test). Retail cannot publish a zero there — `m_flCameraFOVOverride` is `CBaseEntity`'s
+		// slot `0xC4`, default 75 — so a 0 handed to the compose lerps the view toward 0 rather
+		// than being ignored, and it is the **producer's** job to seed 75 where a value shot
+		// authors no FOV.
+		FVector ZeroL = FVector::ZeroVector;
+		FRotator ZeroR = FRotator::ZeroRotator;
+		float ZeroFov = 90.0f;
+		ElysiumCam::ComposeScriptedShot(ZeroL, ZeroR, ZeroFov, FVector(100.0f, 0.0f, 0.0f),
+			FVector(700.0f, 0.0f, 0.0f), 0.0f, /*ShotFov*/ 0.0f, 0.5f);
+		TestTrue(TEXT("a zero shot FOV composes through rather than being skipped"),
+			FMath::IsNearlyEqual(ZeroFov, 45.0f, 0.001f));
+		TestEqual(TEXT("and CBaseEntity's slot-0xC4 default, the value retail publishes, is 75"),
+			ElysiumCam::CameraFovOverrideDefault, 75.0f);
+
 		// The ramp itself is linear: half the authored duration is half the weight, un-eased.
 		FElysiumCameraShotStack Stack;
 		Stack.Push(MakeTrackShot(FVector::ZeroVector, FVector(100.0f, 0.0f, 0.0f), 2.0f));
@@ -215,6 +230,31 @@ bool FElysiumCameraComposeTest::RunTest(const FString&)
 		TestEqual(TEXT("it finishes the remaining half"), Reverse.GetTrackWeight(), 1.0f);
 		TestTrue(TEXT("popping one of two track shots leaves the channel owned"),
 			Reverse.Pop(FirstId, 0.5f) && Reverse.GetTrackWeight() == 1.0f);
+
+		// **Only `dur <= 0` turns the override off.** `FUN_1017d6d0` hard-clears the mark on the
+		// non-positive arm alone (`0x1017d802` -> `0x1017d87e`); a positive duration inside the dead
+		// band is stored as `-dur` with a live mark, and `FUN_100fc900`'s tail reads `|dur| <= 0.01`
+		// as weight 1 **that stays** — so a 5 ms "blend out" is a cut IN, not a fast fade out.
+		FElysiumCameraShotStack Brief;
+		const int32 BriefId = Brief.Push(
+			MakeTrackShot(FVector::ZeroVector, FVector::ForwardVector, 1.0f));
+		Brief.Advance(1.0f);
+		TestEqual(TEXT("the arrival completes"), Brief.GetTrackWeight(), 1.0f);
+		Brief.Pop(BriefId, 0.005f);
+		TestEqual(TEXT("a 5 ms release leaves the override hard on, as retail does"),
+			Brief.GetTrackWeight(), 1.0f);
+		Brief.Advance(5.0f);
+		TestEqual(TEXT("and it stays on: the dead band is not a fast fade in either sign"),
+			Brief.GetTrackWeight(), 1.0f);
+
+		// The shipped shape — every one of the 168 `camera_track` chains returns with
+		// `ToPlayerTime 0` — is the arm both readings agree on: the mark is cleared and the
+		// override is off on the same frame.
+		FElysiumCameraShotStack Cut0;
+		const int32 Cut0Id = Cut0.Push(
+			MakeTrackShot(FVector::ZeroVector, FVector::ForwardVector, 0.0f));
+		Cut0.Pop(Cut0Id, 0.0f);
+		TestEqual(TEXT("a zero release clears the mark outright"), Cut0.GetTrackWeight(), 0.0f);
 	}
 
 	// --- the two channels answer separately, and a cine shot has no ramp ---
@@ -316,6 +356,31 @@ bool FElysiumCameraComposeTest::RunTest(const FString&)
 			TestFalse(TEXT("which is nowhere near the boomed player view"),
 				View.Location.Equals(FMath::Lerp(Eye + Boom, TrackOrigin, 0.5f), 1.0f));
 		}
+
+		// A value shot that authors no FOV: the publish seeds `CBaseEntity`'s 75 in its place, so the
+		// unconditional lerp lands on the same lens the player view already carries instead of
+		// dragging it to zero. This is the half of the FOV rule the producers own.
+		UElysiumCameraComponent* NoFov = NewObject<UElysiumCameraComponent>();
+		if (TestNotNull(TEXT("the no-FOV case has a camera component"), NoFov))
+		{
+			FElysiumCameraShot Shot = MakeTrackShot(FVector(200.0f, 0.0f, 160.0f),
+				FVector(800.0f, 0.0f, 160.0f), 0.0f);
+			TestEqual(TEXT("the fixture authors no FOV at all"), Shot.FieldOfView, 0.0f);
+			NoFov->PushShot(Shot);
+			++GFrameCounter;
+			NoFov->AdvanceFrame(1.0f / 60.0f);
+			TestEqual(TEXT("a zero-blend track shot is at full weight"),
+				NoFov->GetShots().GetTrackWeight(), 1.0f);
+
+			FMinimalViewInfo View;
+			View.Location = Eye;
+			View.Rotation = FRotator::ZeroRotator;
+			View.AspectRatio = 4.0f / 3.0f;          // the 4:3 reference: no widening
+			NoFov->ApplyToView(View);
+			TestTrue(TEXT("the composed view keeps a 75-degree lens rather than collapsing to zero"),
+				FMath::IsNearlyEqual(static_cast<float>(View.FOV),
+					ElysiumCam::CameraFovOverrideDefault, 0.01f));
+		}
 	}
 
 	// --- no cvar exists that could soften the release (M1, ruled: the cvar is NOT created) ---
@@ -386,6 +451,18 @@ bool FElysiumCameraComposeTest::RunTest(const FString&)
 			TestTrue(TEXT("at the width c_orthowidth asks for, in cm"),
 				FMath::IsNearlyEqual(static_cast<float>(On.OrthoWidth),
 					Ortho->GetCvars().OrthoWidth, 0.01f));
+			// **`c_orthoheight` is applied too.** Retail writes the whole rect
+			// `(-w*0.5, -h*0.5, w*0.5, h*0.5)`; Unreal carries one ortho extent plus an aspect, so
+			// the pair lands as the aspect it implies, constrained — the same `w x h` of world is
+			// framed. Retail stretches that rect over the window and Unreal letterboxes it instead,
+			// which is the named pixel-only divergence.
+			TestTrue(TEXT("the rect's second extent lands as a constrained aspect ratio"),
+				On.bConstrainAspectRatio);
+			TestTrue(TEXT("which is exactly c_orthowidth / c_orthoheight"),
+				FMath::IsNearlyEqual(static_cast<float>(On.AspectRatio),
+					Ortho->GetCvars().OrthoWidth / Ortho->GetCvars().OrthoHeight, 0.001f));
+			TestFalse(TEXT("and the perspective view is left with the window's own aspect"),
+				Off.bConstrainAspectRatio);
 		}
 	}
 

@@ -785,10 +785,12 @@ FString FElysiumEntityWorld::ScriptedSessionSaveBlockReason() const
 	{
 		return TEXT("an authored camera track is active");
 	}
-	if (HasScriptedCamera())
-	{
-		return TEXT("an authored legacy camera is active");
-	}
+	// The entity walk runs **ahead of** the cine slot (M8, SC4). Every interaction that adopts a
+	// scripted camera — a terminal, a monitor, a keypad, the lockpick — now reaches the one slot
+	// `SetCamera` reaches, so testing the slot first would answer "an authored legacy camera is
+	// active" for every one of them and bury the session that actually owns the block. The slot's
+	// own row survives below it for the case it is really for: a `SetCamera` shot with no entity
+	// session behind it.
 	for (const TUniquePtr<FElysiumEntity>& Entity : EntityList)
 	{
 		if (Entity && !Entity->IsInert())
@@ -798,6 +800,10 @@ FString FElysiumEntityWorld::ScriptedSessionSaveBlockReason() const
 				return Reason;
 			}
 		}
+	}
+	if (HasScriptedCamera())
+	{
+		return TEXT("an authored legacy camera is active");
 	}
 	return FString();
 }

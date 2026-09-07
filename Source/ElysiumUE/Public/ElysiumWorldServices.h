@@ -1169,6 +1169,12 @@ public:
 	// resulting world-space value without teaching the camera component about entities.
 	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) = 0;
 	virtual bool UpdateCameraShotValue(int32 ShotId, const FElysiumCameraShot& Shot) = 0;
+	// A **shot start on a handle that is already up** — `camera_cinematic`'s re-shot branch
+	// (`FUN_10070780` step 4: `SetShot` then `FUN_1006e8e0` on the camera the player has already
+	// adopted). It re-stamps retail's `m_nClientResetFrame` so the consumer arms shot start again,
+	// without changing the entity, its id or `m_iCameraOverrideIdx`. The per-tick goal publish
+	// (`UpdateCameraShotValue`) deliberately does NOT re-stamp it.
+	virtual bool RestartCameraShot(int32 ShotId) { return false; }
 
 	// The equipped item's authored `camera_class` bits. Pushed whenever the **player's** active weapon
 	// changes, because drawing a weapon re-runs the arbitration that can force the view mode

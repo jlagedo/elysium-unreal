@@ -1991,7 +1991,12 @@ TerminalDefinition
 			TestEqual(TEXT("an unresolvable shot still opens the session"),
 				ShotWorld.BeginPlayerUseSession(ShotBase->Handle, ShotPlayer).Outcome,
 				EElysiumUseOutcome::SessionStarted);
-			TestEqual(TEXT("the terminal holds no shot handle"), ShotBase->CameraShot, 0);
+			// M8: the terminal keeps no handle of its own — the adoption slot is the only place a
+			// live cine shot exists. A shot that did not load reaches `FUN_1017cef0(player, NULL)`
+			// and the slot ends up empty, which is what "cameraless" means.
+			TestEqual(TEXT("nothing was adopted into the cine slot"),
+				ShotWorld.CineCameraShotId(), 0);
+			TestFalse(TEXT("... and the slot is empty"), ShotWorld.HasScriptedCamera());
 			TestEqual(TEXT("the push was attempted exactly once"),
 				NoShot.Count(TEXT("PushCameraShotNamed special-case:Hacking exposure=clamped")), 1);
 			FElysiumTerminalView CamlessView;

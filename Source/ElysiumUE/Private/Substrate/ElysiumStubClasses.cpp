@@ -43,8 +43,6 @@ namespace
 	{
 		{ TEXT("ambient_soundscheme"),           TEXT("FadeIn FadeOut Disable"),
 		  TEXT("the SoundScheme manager owns the scheme file, but no entity class receives its wires") },
-		{ TEXT("camera_cinematic"),              TEXT("EndShot StartShot"),
-		  TEXT("the scripted-shot channel") },
 		{ TEXT("env_physimpact"),                TEXT("Impact"),
 		  TEXT("scripted physics impulses") },
 		{ TEXT("intersting_place_conversation"), TEXT("PlayOneOffSound"),

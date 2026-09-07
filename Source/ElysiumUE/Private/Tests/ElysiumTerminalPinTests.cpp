@@ -288,14 +288,16 @@ bool FElysiumTerminalPinTest::RunTest(const FString&)
 		// `FUN_10070470("Hacking", ...)` at entry (§3.2 step 7), exactly once.
 		TestEqual(TEXT("entry pushes the Hacking shot once, with the exposure clamp asked for"),
 			Services.Count(TEXT("PushCameraShotNamed special-case:Hacking exposure=clamped")), 1);
-		TestTrue(TEXT("and the terminal holds its handle"), Terminal->CameraShot != 0);
-		const int32 Handle = Terminal->CameraShot;
+		// M8: the shot lives in the world's one adoption slot, not on the terminal.
+		TestTrue(TEXT("and the opener adopted it into the cine slot"),
+			World.CineCameraShotId() != 0);
+		const int32 Handle = World.CineCameraShotId();
 
 		World.EndPlayerUseSession(Terminal->Handle, Reason);
 		TestTrue(TEXT("every exit reason mobilizes the player"), PlayerEntity->IsMobile());
 		TestEqual(TEXT("every exit reason pops the shot exactly once"),
 			Services.Count(FString::Printf(TEXT("PopCameraShot %d"), Handle)), 1);
-		TestEqual(TEXT("and the handle is cleared"), Terminal->CameraShot, 0);
+		TestFalse(TEXT("and the closer drops to the player view"), World.HasScriptedCamera());
 	}
 
 	// --- the two maintenance arms (`FUN_10167e00`) -------------------------------------------
@@ -463,7 +465,7 @@ bool FElysiumTerminalForcedExitTest::RunTest(const FString&)
 		const FElysiumUseBeginResult Result = World.BeginPlayerUseSession(Terminal->Handle, Player);
 		TestEqual(TEXT("+use opens the session"), Result.Outcome,
 			EElysiumUseOutcome::SessionStarted);
-		return Terminal->CameraShot;
+		return World.CineCameraShotId();
 	};
 
 	// --- damage: ANY accepted damage, not death (`10163126` precedes `10163278`) ---------------
@@ -475,7 +477,7 @@ bool FElysiumTerminalForcedExitTest::RunTest(const FString&)
 		PlayerEntity->TakeDamage(3.0f);
 		TestFalse(TEXT("one point of damage closes the terminal"), World.BuildTerminalView(View));
 		TestTrue(TEXT("the player is mobile again"), PlayerEntity->IsMobile());
-		TestEqual(TEXT("the camera handle is cleared"), Terminal->CameraShot, 0);
+		TestFalse(TEXT("the cine slot is empty again"), World.HasScriptedCamera());
 		TestEqual(TEXT("and its shot was popped exactly once"),
 			Services.Count(FString::Printf(TEXT("PopCameraShot %d"), Shot)), 1);
 		TestEqual(TEXT("the release is reported as a cancellation, not a completion"),
@@ -492,7 +494,7 @@ bool FElysiumTerminalForcedExitTest::RunTest(const FString&)
 			Player, Player);
 		TestFalse(TEXT("being teleported closes the terminal"), World.BuildTerminalView(View));
 		TestTrue(TEXT("the player is mobile again"), PlayerEntity->IsMobile());
-		TestEqual(TEXT("the camera handle is cleared"), Terminal->CameraShot, 0);
+		TestFalse(TEXT("the cine slot is empty again"), World.HasScriptedCamera());
 		TestEqual(TEXT("and its shot was popped exactly once"),
 			Services.Count(FString::Printf(TEXT("PopCameraShot %d"), Shot)), 1);
 		TestTrue(TEXT("and the player really moved"),

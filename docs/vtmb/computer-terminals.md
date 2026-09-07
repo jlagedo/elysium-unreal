@@ -569,6 +569,24 @@ falls back to the player's own eye). Nothing on the entry path touches exposure,
 any `mat_` cvar (`xposure` matches no string in any module): the port's exposure clamp is a named
 modernization with no retail counterpart.
 
+**The terminal has no camera handle of its own (M8, ruled 2026-09-07; landed with SC4).** It used to
+keep the `Hacking` shot's director id on the entity (`ElysiumTerminal.h`, pushed at the entry and
+popped at the exit) *beside* `FElysiumEntityWorld`'s scripted-camera slot, on the reading that retail
+stores its `camera_cinematic` on the player rather than in the script slot. Retail stores it in
+exactly **one** place: `CFuncMonitor::vfunc39`, `CPropHacking::vfunc39`, `CPropKeypad::vfunc39` and
+the `Intrusion` opener `FUN_10225070` all reach `FUN_10070470` and then `FUN_1017cef0` — the same
+one-camera slot `SetCamera` and `camera_cinematic`'s `StartShot` reach, with the same
+destroy-the-previous rule. "Which camera is live" is a *transition*, and it cannot be arbitrated by a
+second stack.
+
+So the terminal now adopts through `FElysiumEntityWorld::SetCineCamera` and its closer runs
+`ClearScriptedCamera()` — unconditional, exactly as retail's `FUN_1017cef0(player, NULL)` is; the
+terminal does not test whether the camera it is dropping is the one it pushed. Two consequences are
+contract: **a terminal opened over a live cine shot destroys that shot's disposable camera**, and **a
+terminal closer drops to the player view**, never back to a shot that was live before the session
+opened. Asserted by `Elysium.Substrate.CameraCinematic`
+(`Private/Tests/ElysiumCameraCinematicTests.cpp`, the adoption-slot case).
+
 `CPropHacking` exit `0x1021a6c0`:
 
 1. `SaveGlobalEmailState`;

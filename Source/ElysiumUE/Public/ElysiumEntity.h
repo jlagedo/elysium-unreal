@@ -513,6 +513,11 @@ public:
 	{
 		return const_cast<FElysiumEntity*>(this)->AsLockableEntity();
 	}
+	// The same, for the scripted-camera leaf. Retail's `FUN_10071970` (the map teardown) and
+	// `FUN_10070780` (StartShot's "is a camera already adopted") both RTTI-cast an entity to
+	// `CBaseCineCam`; UE builds compile without RTTI, so the recognition is this hook.
+	virtual class FElysiumCameraCinematic* AsCameraCinematic() { return nullptr; }
+
 	virtual class FElysiumTerminal* AsTerminal() { return nullptr; }
 	const class FElysiumTerminal* AsTerminal() const
 	{

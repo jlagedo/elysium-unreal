@@ -350,7 +350,10 @@ bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestTrue(TEXT("the terminal holds a camera handle"), Terminal->CameraShot != 0);
+	// M8: the terminal keeps no handle of its own — the world's one adoption slot is where a live
+	// cine shot is, and a terminal reaches it through the same `FUN_1017cef0` `SetCamera` does.
+	TestTrue(TEXT("the opener adopted a camera into the cine slot"),
+		World->CineCameraShotId() != 0);
 	TestEqual(TEXT("and the camera stack grew by one"), Camera->GetShots().Num(), ShotsBefore + 1);
 	if (const FElysiumCameraShot* Live = Camera->GetShots().Top())
 	{
@@ -536,7 +539,8 @@ bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 	// --- the exit -----------------------------------------------------------------------------
 	TestTrue(TEXT("quit closes the session"),
 		World->SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, TEXT("quit")));
-	TestEqual(TEXT("the camera handle is released"), Terminal->CameraShot, 0);
+	TestFalse(TEXT("the closer drops the cine slot to the player view"),
+		World->HasScriptedCamera());
 	TestEqual(TEXT("and the camera stack is back where it started"),
 		Camera->GetShots().Num(), ShotsBefore);
 
@@ -549,7 +553,7 @@ bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 		World->BeginPlayerUseSession(Terminal->Handle, World->PlayerHandle()).Outcome,
 		EElysiumUseOutcome::SessionStarted))
 	{
-		const int32 ConeShot = Terminal->CameraShot;
+		const int32 ConeShot = World->CineCameraShotId();
 		TestEqual(TEXT("with a live shot on the stack"), Camera->GetShots().Num(), ShotsBefore + 1);
 		// 90 degrees off the glass, where the cone answers 0.
 		const FVector OffAxis = Screen + Side * 200.0f;
@@ -559,7 +563,7 @@ bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 		FElysiumTerminalView Lost;
 		TestFalse(TEXT("one tick outside the cone releases the session"),
 			World->BuildTerminalView(Lost));
-		TestEqual(TEXT("and drops the camera it pushed"), Terminal->CameraShot, 0);
+		TestFalse(TEXT("and drops the camera it pushed"), World->HasScriptedCamera());
 		TestEqual(TEXT("the stack is unwound"), Camera->GetShots().Num(), ShotsBefore);
 		TestTrue(TEXT("the shot was popped, not abandoned"), ConeShot != 0);
 	}
@@ -577,7 +581,7 @@ bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 		Terminal->InputDisable();
 		FElysiumTerminalView Disabled;
 		TestFalse(TEXT("InputDisable closes a live session"), World->BuildTerminalView(Disabled));
-		TestEqual(TEXT("and releases the camera"), Terminal->CameraShot, 0);
+		TestFalse(TEXT("and releases the camera"), World->HasScriptedCamera());
 		TestEqual(TEXT("the stack is unwound"), Camera->GetShots().Num(), ShotsBefore);
 		FBox StillThere(ForceInit);
 		TestTrue(TEXT("a disabled terminal keeps its collision box"),
@@ -842,10 +846,10 @@ bool FElysiumTerminalGymBeatTest::RunTest(const FString&)
 		ELYSIUM_NEVER_THINK);
 
 	// --- THE CAMERA: on `screen_axis`, looking at `screen` -----------------------------------------
-	TestTrue(TEXT("entry pushed the Hacking shot and kept its handle"), Terminal->CameraShot != 0);
+	TestTrue(TEXT("entry pushed the Hacking shot and adopted it"), World->CineCameraShotId() != 0);
 	TestEqual(TEXT("the camera stack grew by exactly one"), Camera->GetShots().Num(),
 		ShotsBefore + 1);
-	const int32 FirstShot = Terminal->CameraShot;
+	const int32 FirstShot = World->CineCameraShotId();
 	if (const FElysiumCameraShot* Live = Camera->GetShots().Top())
 	{
 		TestTrue(TEXT("the live shot settles on the screen_axis attachment"),
@@ -954,7 +958,7 @@ bool FElysiumTerminalGymBeatTest::RunTest(const FString&)
 			"FElysiumEntityWorld::SubmitTerminalCommand, which the intents wrap"));
 	TestFalse(TEXT("the terminal stops publishing a session"), World->BuildTerminalView(View));
 	TestTrue(TEXT("the exit mobilizes the player again"), Player->IsMobile());
-	TestEqual(TEXT("the camera handle is dropped"), Terminal->CameraShot, 0);
+	TestFalse(TEXT("the cine slot is dropped"), World->HasScriptedCamera());
 	TestEqual(TEXT("and the stack is back where it started"), Camera->GetShots().Num(),
 		ShotsBefore);
 	TestTrue(TEXT("the shot that was popped is the one entry pushed"), FirstShot != 0);
@@ -1013,7 +1017,7 @@ bool FElysiumTerminalGymBeatTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	const int32 SecondShot = Terminal->CameraShot;
+	const int32 SecondShot = World->CineCameraShotId();
 	TestTrue(TEXT("with a fresh camera handle"), SecondShot != 0 && SecondShot != FirstShot);
 	TestTrue(TEXT("`Safe` is accepted on the relocked directory"), Send(TEXT("Safe")));
 	TestEqual(TEXT("which asks for its password again"), Terminal->InputMode(),
@@ -1070,7 +1074,7 @@ bool FElysiumTerminalGymBeatTest::RunTest(const FString&)
 	if (Terminal->CurrentUser.IsSet())
 	{
 		TestTrue(TEXT("the second run quits"), SendQuit());
-		TestEqual(TEXT("dropping its own camera handle"), Terminal->CameraShot, 0);
+		TestFalse(TEXT("dropping the cine slot"), World->HasScriptedCamera());
 		TestEqual(TEXT("and unwinding the stack"), Camera->GetShots().Num(), ShotsBefore);
 	}
 	return true;

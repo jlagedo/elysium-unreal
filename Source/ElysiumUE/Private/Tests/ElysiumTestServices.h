@@ -1659,6 +1659,13 @@ struct FElysiumRecordingServices final
 		LastCameraShot = Shot;
 		return ShotId > 0;
 	}
+	// The re-shot's `m_nClientResetFrame` re-stamp. Recorded rather than modelled: the double owns
+	// no stack, and what a case asserts is that a shot start on a live handle asked for it.
+	virtual bool RestartCameraShot(int32 ShotId) override
+	{
+		Record(FString::Printf(TEXT("RestartCameraShot %d"), ShotId));
+		return ShotId > 0;
+	}
 	virtual bool PopCameraShot(int32 ShotId, float BlendOutSeconds = -1.0f) override
 	{
 		Record(FString::Printf(TEXT("PopCameraShot %d blend=%.2f"), ShotId, BlendOutSeconds));

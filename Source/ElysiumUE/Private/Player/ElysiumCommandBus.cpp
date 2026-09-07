@@ -9,6 +9,7 @@
 #include "ElysiumLookCurve.h"
 #include "ElysiumMoveSolve.h"
 #include "Scripting/ElysiumPythonVM.h"
+#include "Substrate/ElysiumCameraCinematic.h"   // ElysiumCineCam::CvarDefs — `camera_showdebug`
 
 #include "ElysiumInputRouter.h"
 #include "ElysiumPlayerController.h"
@@ -53,6 +54,13 @@ FElysiumConsole& ElysiumCommandBus::Console()
 		// A2 (footsteps): the seven `footstep_*` / `sv_footsteps` cvars, declared with the defaults
 		// `vampire.dll` constructs them with (`0x1026d1b0..0x1026d3f0`, `0x1011d7e0`).
 		for (const ElysiumFootstep::FCvarDef& Def : ElysiumFootstep::CvarDefs())
+		{
+			Store.DeclareCvar(Def.Name, Def.Default);
+		}
+		// SC4: `camera_showdebug`, registered by `vampire.dll` in the `CBaseCineCam` translation
+		// unit itself (`0x1006d5b0`) rather than with the client's camera block, which is why it is
+		// declared from the entity's own file.
+		for (const ElysiumCam::FCvarDef& Def : ElysiumCineCam::CvarDefs())
 		{
 			Store.DeclareCvar(Def.Name, Def.Default);
 		}

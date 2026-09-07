@@ -138,9 +138,17 @@ CameraShotTable
 				Subject->Origin = Origin;
 				Subject->Angles = FVector(0.0f, 90.0f, 0.0f);   // Source yaw
 
+				// **The anchor step is asserted with `AutoPositionFromTarget` cleared.** The shipped
+				// file sets the flag, and SC7 landed the solve that reads it, so a resolve of the
+				// file verbatim answers the *framed* origin rather than the anchor's — which is the
+				// point of `Elysium.Substrate.CameraAutoPosition` and would hide this case's own
+				// subject, the `FollowEntAngles` offset frame. Both are asserted, in order.
+				FElysiumCameraShotDef Unframed = Def;
+				Unframed.Constraints.bAutoPositionFromTarget = false;
+
 				FElysiumCameraShot Shot;
 				if (TestTrue(TEXT("centerfullview resolves"),
-					FElysiumCameraDirector::Resolve(&World, Def, Subject->Handle, Shot)))
+					FElysiumCameraDirector::Resolve(&World, Unframed, Subject->Handle, Shot)))
 				{
 					// Neither target point authors an `OffsetOrigin`, so retail's offset step is
 					// gated off (`0x20000` clear) and the two points are the raw bounds corners.
@@ -155,6 +163,19 @@ CameraShotTable
 						Shot.Origin.Equals(Expected, 0.01f));
 					TestTrue(TEXT("and the shot carries its authored FOV"),
 						FMath::IsNearlyEqual(Shot.FieldOfView, 75.0f));
+
+					// The file as shipped: the flag is set, so the origin is pulled back along the
+					// camera->look-at axis to frame the lower target point (SC7).
+					FElysiumCameraShot Framed;
+					if (TestTrue(TEXT("and the shipped, flagged file resolves too"),
+						FElysiumCameraDirector::Resolve(&World, Def, Subject->Handle, Framed)))
+					{
+						TestTrue(TEXT("AutoPositionFromTarget re-frames the origin"),
+							Framed.Origin.Equals(ElysiumCam::AutoPositionFromTarget(Shot.Origin,
+								Shot.LookAt, Box.Min, Box.Max, 75.0f), 0.01f));
+						TestTrue(TEXT("and leaves the look-at where the anchors put it"),
+							Framed.LookAt.Equals(Shot.LookAt, 0.01f));
+					}
 				}
 
 				// --- `Top` / `Bottom` on an off-origin body ---------------------------------
@@ -251,14 +272,24 @@ CameraShotTable
 					!Attacker->Grapple.AnimDriver.IsSet()
 						&& Victim->Grapple.AnimDriver == AttackerEnt->Handle);
 
-				// Neither the bone nor the body exists headlessly, so `Bone: Bip01 Head` leaves its
-				// index unresolved and the look-at falls to the entity's own abs origin — which is
-				// exactly the discriminator this case wants: WHICH entity each keyword picked.
+				// The discriminator is the **`Start` anchor**, whose `AttachPos` is `Origin`: it
+				// carries whichever entity the keyword picked into a distinct world position.
+				// (`Target Point1` is `Bone: Bip01 Head`, and neither the bone nor a body exists
+				// headlessly, so the look-at is `vec3_origin` for every one of these — retail's
+				// non-animating answer, asserted once below rather than four times.)
 				auto ResolveFor = [&World](const FElysiumCameraShotDef& Def,
 					const FElysiumEntityHandle& Subject, FElysiumCameraShot& Out)
 				{
 					return FElysiumCameraDirector::Resolve(&World, Def, Subject, Out);
 				};
+				// `Follow` turns the offset in the attach point's frame, `FollowEntAngles` in the
+				// entity's; with `AttachPos Origin` both are the entity's own abs angles.
+				const FVector OnAttacker = AttackerEnt->Origin
+					+ ElysiumSkeletalBasis::FromSourceAngles(AttackerEnt->Angles)
+						.RotateVector(FVector(64.0f, 64.0f, 96.0f) * ElysiumCam::U);
+				const FVector OnVictim = VictimEnt->Origin
+					+ ElysiumSkeletalBasis::FromSourceAngles(VictimEnt->Angles)
+						.RotateVector(FVector(-32.0f, 0.0f, 128.0f) * ElysiumCam::U);
 
 				FElysiumCameraShot Shot;
 				// `GrappleAttacker` with the ATTACKER as the subject resolves to **the subject
@@ -267,45 +298,45 @@ CameraShotTable
 					ResolveFor(*Kill1, AttackerEnt->Handle, Shot)))
 				{
 					TestTrue(TEXT("GrappleAttacker on the attacker is the subject itself"),
-						Shot.LookAt.Equals(AttackerEnt->Origin, 0.01f));
-					const FVector Expected = AttackerEnt->Origin
-						+ ElysiumSkeletalBasis::FromSourceAngles(AttackerEnt->Angles)
-							.RotateVector(FVector(64.0f, 64.0f, 96.0f) * ElysiumCam::U);
-					TestTrue(TEXT("and its Follow offset turns in the attach point's frame"),
-						Shot.Origin.Equals(Expected, 0.01f));
+						Shot.Origin.Equals(OnAttacker, 0.01f));
+					TestTrue(TEXT("and a Bone: target on an entity that does not animate is the "
+						"world origin, retail's non-animating answer"),
+						Shot.LookAt.IsNearlyZero(0.01f));
 				}
 				// The same shot from the VICTIM's point of view resolves to the partner.
 				if (TestTrue(TEXT("Stealth_Kill_1 resolves for the victim"),
 					ResolveFor(*Kill1, VictimEnt->Handle, Shot)))
 				{
 					TestTrue(TEXT("GrappleAttacker on the victim is the partner"),
-						Shot.LookAt.Equals(AttackerEnt->Origin, 0.01f));
+						Shot.Origin.Equals(OnAttacker, 0.01f));
 				}
 				// `GrappleVictim` is the mirror on both halves.
 				if (TestTrue(TEXT("Stealth_Kill_4 resolves for the attacker"),
 					ResolveFor(*Kill4, AttackerEnt->Handle, Shot)))
 				{
 					TestTrue(TEXT("GrappleVictim on the attacker is the partner"),
-						Shot.LookAt.Equals(VictimEnt->Origin, 0.01f));
+						Shot.Origin.Equals(OnVictim, 0.01f));
 				}
 				if (TestTrue(TEXT("Stealth_Kill_4 resolves for the victim"),
 					ResolveFor(*Kill4, VictimEnt->Handle, Shot)))
 				{
 					TestTrue(TEXT("GrappleVictim on the victim is the subject itself"),
-						Shot.LookAt.Equals(VictimEnt->Origin, 0.01f));
+						Shot.Origin.Equals(OnVictim, 0.01f));
 				}
 
 				// **The dead-handle fall-through.** Both grapple arms additionally require the
 				// `+0x1538` handle to be live; without it the anchor takes the `World` tail, which
-				// is worldspawn's origin.
+				// is worldspawn — the origin, plus the anchor's own offset.
 				Attacker->LeaveGrapplePair();
 				TestFalse(TEXT("leaving clears both halves"),
 					Attacker->Grapple.IsPaired() || Victim->Grapple.IsPaired());
 				if (TestTrue(TEXT("an unpaired stealth-kill shot still resolves"),
 					ResolveFor(*Kill1, AttackerEnt->Handle, Shot)))
 				{
-					TestTrue(TEXT("a dead grapple partner falls through to the world origin"),
-						Shot.LookAt.IsNearlyZero());
+					TestTrue(TEXT("a dead grapple partner falls through to worldspawn"),
+						Shot.Origin.Equals(FVector(64.0f, 64.0f, 96.0f) * ElysiumCam::U, 0.01f));
+					TestFalse(TEXT("which is neither of the two characters"),
+						Shot.Origin.Equals(OnAttacker, 0.01f));
 				}
 			}
 		}
@@ -377,7 +408,9 @@ CameraShotTable { BoneFrames
 
 			// --- the bone index is resolved ONCE, at bind time -------------------------------
 			// Retail resolves the inline name to an index inside `SetShotAnchorEntity` and re-uses
-			// it; a non-animating entity leaves it at `-1` and nothing looks the name up again.
+			// it; `+0x620` is written on the `0x200` / `0x400` arms alone (`FUN_1006ef50`), so a
+			// non-animating entity and a non-bone anchor both leave the previous index **stale**,
+			// and nothing looks the name up again either way.
 			FElysiumShotBindings Bindings;
 			FElysiumCameraDirector::BindAnchors(&World, Def, Subject->Handle, Bindings);
 			TestTrue(TEXT("the bone index resolves at bind time"),
@@ -401,7 +434,14 @@ CameraShotTable { NoBone { End { "Position" "Named" "AttachPos" "Bone: Bip01 Tai
 				FElysiumCameraDirector::Resolve(&World, Missing, Subject->Handle, Late,
 					&Unresolved, EElysiumShotResolvePass::Think)))
 			{
-				TestTrue(TEXT("an unresolved bone index answers the entity's abs origin"),
+				// `FUN_1006f080`'s `0x200` arm at `0x1006f32e`: `GetBaseAnimating()` (vfunc `0x224`)
+				// answering NULL writes **`vec3_origin`** and returns, skipping `LAB_1006f430` — so
+				// the anchor is the world origin and its `OffsetOrigin` is not applied on top. This
+				// is the terminal case (`Attachment: screen` on a brush monitor), and the port used
+				// to answer the entity's own origin instead, a different world position every time.
+				TestTrue(TEXT("an unresolved bone index answers the WORLD origin, as retail does"),
+					Late.Origin.IsNearlyZero(0.01f));
+				TestFalse(TEXT("which is not the entity's own origin"),
 					Late.Origin.Equals(Subject->Origin, 0.01f));
 			}
 			// Re-binding is what picks it up — retail's `SetShotAnchorEntity`, run again.
@@ -464,6 +504,94 @@ CameraShotTable { Upper { Start { "Position" "Named" "AttachPos" "Origin" "Attac
 		TestTrue(TEXT("'Follow' is Follow"), Cased.Start.Attach == EElysiumShotAttach::Follow);
 		TestFalse(TEXT("and a following shot does not latch"),
 			ElysiumCameraShots::LatchesAnchors(Cased));
+	}
+
+	// --- `Position` is a case-sensitive SUBSTRING (`FUN_10071e00` 0x10071e1d-0x10071eaf) ---------
+	// Five `_strstr` calls in one order, so a compound value takes the first arm that hits and a
+	// mis-cased one hits nothing and falls through to `World`. No shipped file writes either — all
+	// 156 corpus values are canonical — which is exactly why the negative has to be asserted here.
+	{
+		FElysiumCameraShotDef Compound;
+		TestTrue(TEXT("a compound Position parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { Compound { End { "Position" "PlayerEye" "AttachPos" "Origin" } } }
+)KV"), Compound));
+		TestTrue(TEXT("'PlayerEye' contains 'Player', so retail's _strstr chain reads it as Player"),
+			Compound.End.Position == EElysiumShotPosition::Player);
+
+		FElysiumCameraShotDef Lower;
+		TestTrue(TEXT("a lower-cased Position parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { Lower { End { "Position" "player" "AttachPos" "Origin" } } }
+)KV"), Lower));
+		TestTrue(TEXT("'player' matches nothing case-sensitively and falls through to World"),
+			Lower.End.Position == EElysiumShotPosition::World);
+
+		// The order matters as much as the comparison: `DialogTarget` is tested before `Named`, so a
+		// value carrying both keywords is the earlier arm.
+		FElysiumCameraShotDef Both;
+		TestTrue(TEXT("a two-keyword Position parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { Both { End { "Position" "NamedDialogTarget" "AttachPos" "Origin" } } }
+)KV"), Both));
+		TestTrue(TEXT("the chain's order decides: DialogTarget is tested before Named"),
+			Both.End.Position == EElysiumShotPosition::DialogTarget);
+	}
+
+	// --- `AttachPos` likewise (`0x10071ec6`-`0x10071fb7`) ----------------------------------------
+	{
+		FElysiumCameraShotDef Lower;
+		TestTrue(TEXT("a lower-cased AttachPos parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { Lower { End { "Position" "Named" "AttachPos" "center" } } }
+)KV"), Lower));
+		TestTrue(TEXT("'center' matches nothing case-sensitively and falls through to Origin"),
+			Lower.End.AttachPoint == EElysiumShotAttachPos::Origin);
+
+		FElysiumCameraShotDef Compound;
+		TestTrue(TEXT("a compound AttachPos parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { Compound { End { "Position" "Named" "AttachPos" "EyePositionOffset" } } }
+)KV"), Compound));
+		TestTrue(TEXT("'EyePositionOffset' contains 'EyePosition', which is the arm that hits"),
+			Compound.End.AttachPoint == EElysiumShotAttachPos::EyePosition);
+
+		// The inline name is taken from `value + 5` / `value + 11` — the value, not the hit.
+		FElysiumCameraShotDef Bone;
+		TestTrue(TEXT("a Bone: AttachPos parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { Boned { End { "Position" "Named" "AttachPos" "Bone: Bip01 Head" } } }
+)KV"), Bone));
+		TestTrue(TEXT("the inline name is what follows the five-character prefix"),
+			Bone.End.AttachPointName == TEXT("Bip01 Head"));
+	}
+
+	// --- the bracket-vector parser is three ordered scans (`FUN_10071cd0`) -----------------------
+	// `npcfollowmove.txt`'s own text, unquoted, which is why this is a substrate case and not only a
+	// corpus one: both tokenizers end the bare run at the whitespace after the comma, so the parser
+	// is handed `[-60,` and retail answers `(-60, 0, 0)`.
+	{
+		FElysiumCameraShotDef Def;
+		TestTrue(TEXT("an unquoted OffsetOrigin parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { NPCFollowMove { End { "Position" "Named" "AttachPos" "EyePosition"
+	"AttachType" "FollowEntAngles" "OffsetOrigin" [-60, 0, 72] } } }
+)KV"), Def));
+		TestTrue(TEXT("the truncated token still yields retail's x, with y and z at their 0 default"),
+			Def.End.OffsetOrigin.Equals(FVector(-60.0f * ElysiumCam::U, 0.0f, 0.0f), 0.01f));
+
+		// Quoted, the whole value survives the tokenizer and all three scans hit.
+		FElysiumCameraShotDef Quoted;
+		TestTrue(TEXT("a quoted OffsetOrigin parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { Quoted { End { "Position" "Named" "AttachPos" "Origin"
+	"OffsetOrigin" "[-60, 0, 72]" } } }
+)KV"), Quoted));
+		TestTrue(TEXT("and answers all three components"),
+			Quoted.End.OffsetOrigin.Equals(
+				FVector(-60.0f, 0.0f, 72.0f) * ElysiumCam::U, 0.01f));
+
+		// No bracket at all: the first scan misses and leaves x at 0, and the two comma scans then
+		// read the SECOND and THIRD numbers. Retail reads `"1, 2, 3"` as `(0, 2, 3)`.
+		FElysiumCameraShotDef Bare;
+		TestTrue(TEXT("a bracketless OffsetOrigin parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+CameraShotTable { Bare { End { "Position" "Named" "AttachPos" "Origin"
+	"OffsetOrigin" "1, 2, 3" } } }
+)KV"), Bare));
+		TestTrue(TEXT("a missing bracket costs x and only x, exactly as retail's chain does"),
+			Bare.End.OffsetOrigin.Equals(FVector(0.0f, 2.0f, 3.0f) * ElysiumCam::U, 0.01f));
 	}
 
 	// --- the latch, and retail's anchor-0 bug ------------------------------------------------------

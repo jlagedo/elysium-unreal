@@ -228,6 +228,11 @@ bool FElysiumCameraShotGrammarTest::RunTest(const FString&)
 	int32 SpecialCaseShots = 0;
 	bool bDeathCam = false;
 	bool bAnimated = false;
+	// `npcfollowmove.txt`'s two unquoted `OffsetOrigin` values — the one place in the corpus where
+	// the bracket-vector parser's exact shape is observable. Seeded with a sentinel so a file that
+	// stopped shipping fails the assertion rather than passing vacuously.
+	FVector FollowMoveStartOffset(-1.0e9);
+	FVector FollowMoveEndOffset(-1.0e9);
 
 	static const TCHAR* const CensusKeys[] = { TEXT("DialogPOV"), TEXT("SyncRotateOnMove"),
 		TEXT("SnapOnShotChange"), TEXT("AutoPositionFromTarget"), TEXT("ShowHud"),
@@ -262,6 +267,11 @@ bool FElysiumCameraShotGrammarTest::RunTest(const FString&)
 			TestTrue(FString::Printf(TEXT("%s is the how-to, the only file with no shot"), *Leaf),
 				Leaf.Contains(TEXT("how-to")));
 			continue;
+		}
+		if (Leaf.Equals(TEXT("npcfollowmove.txt"), ESearchCase::IgnoreCase) && Shots.Num() > 0)
+		{
+			FollowMoveStartOffset = Shots[0].Start.OffsetOrigin;
+			FollowMoveEndOffset = Shots[0].End.OffsetOrigin;
 		}
 		if (Leaf.Equals(TEXT("special-case.txt"), ESearchCase::IgnoreCase))
 		{
@@ -347,6 +357,22 @@ bool FElysiumCameraShotGrammarTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("every other Position/AttachPos/AttachType token the corpus writes resolves"),
 		Unresolved.Num(), 0);
+
+	// --- the one shipped value the bracket parser's exact shape decides ---------------------------
+	// `npcfollowmove.txt` authors `"OffsetOrigin"  [-60, 0, 72]` **unquoted** on both its `Start` and
+	// its `End`, and every KeyValues tokenizer — retail's and the port's — ends a bare run at the
+	// first whitespace, so the value the parse ever sees is the token `[-60,`. Retail's
+	// `FUN_10071cd0` reads that as `x = atof("-60,") = -60`, `y = 0` (the comma is the last
+	// character, so the remainder is empty), `z = 0` (no third separator), and frames both anchors
+	// **60 u behind the eye**. The port's old "three numbers or nothing" reading dropped the offset
+	// entirely and framed the shot 152 cm away from where retail frames it.
+	{
+		const FVector Expected(-60.0f * ElysiumCam::U, 0.0f, 0.0f);
+		TestTrue(TEXT("npcfollowmove's Start offset parses to (-60, 0, 0) u, as retail reads it"),
+			FollowMoveStartOffset.Equals(Expected, 0.01f));
+		TestTrue(TEXT("and its End offset with it"),
+			FollowMoveEndOffset.Equals(Expected, 0.01f));
+	}
 
 	// --- the grapple keywords ----------------------------------------------------------------------
 	TestEqual(TEXT("GrappleAttacker is written 6 times"),

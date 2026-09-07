@@ -220,6 +220,11 @@ private:
 	FVector TrackingLocation = FVector::ZeroVector;
 	FRotator TrackingRotation = FRotator::ZeroRotator;
 	bool bTrackingSeeded = false;
+	// `OnDataChanged` `0x100024c0`'s first two arms on this channel too (SC5), the same struct the
+	// legacy stack uses. The service does not own the HUD — only the dialogue session's stored request
+	// reaches it, through `FElysiumEntityWorld::DialogueCameraHidesHud` — so the third arm is not
+	// issued here.
+	FElysiumShotStartEdges ShotEdges;
 	FDelegateHandle MapEpochBeginHandle;
 	FDelegateHandle MapEpochRetiredHandle;
 };

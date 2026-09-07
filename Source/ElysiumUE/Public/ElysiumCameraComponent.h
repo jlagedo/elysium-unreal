@@ -258,6 +258,10 @@ public:
 	// Returns the shot's id (never reused, 0 on failure); `PopShot` gives control back.
 	int32 PushShot(const FElysiumCameraShot& Shot);
 	bool UpdateShot(int32 Id, const FElysiumCameraShot& Shot);
+	// A **re-shot of the shot already up** (SC4): `SetShot` + `FUN_1006e8e0` on a live
+	// `camera_cinematic` re-stamps `m_nClientResetFrame` without changing the entity or its
+	// `m_iCameraOverrideIdx`, so the consumer arms shot start again on an id that never moved.
+	bool RestartShot(int32 Id);
 	bool PopShot(int32 Id, float BlendOutSeconds = -1.0f);
 	void ClearShots() { Shots.Clear(); }
 	const FElysiumCameraShotStack& GetShots() const { return Shots; }
@@ -367,8 +371,17 @@ private:
 	FVector ShotPosition = FVector::ZeroVector;
 	FRotator ShotRotation = FRotator::ZeroRotator;
 	bool bShotSeeded = false;
-	// The shot the channel is currently framed on, so a push or a pop that changes the top re-seeds.
+	// The shot the channel is currently framed on, kept for the debug read-out and to notice that the
+	// channel emptied. **It is no longer the re-seed signal**; the two below are.
 	int32 LastTopShotId = 0;
+
+	// `OnDataChanged` `0x100024c0`'s first two arms — the reset-frame and shot-index signals, kept
+	// apart. See `FElysiumShotStartEdges`.
+	FElysiumShotStartEdges ShotEdges;
+
+	// The HUD edge (M14). Written only on a shot-index change, on going inactive after having been
+	// active, and at teardown; read by `SolveDrawPolicy` and by nothing else.
+	FElysiumShotHudGate HudGate;
 	// `CInput+0x1b8`, the `camortho` latch.
 	bool bOrthographic = false;
 	// Retail's spectated view entity, when something ever sets it. See `SetSpectatedView`.

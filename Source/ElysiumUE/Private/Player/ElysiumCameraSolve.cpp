@@ -162,7 +162,7 @@ int32 ElysiumCam::SaveWeaponCameraPref(int32 Class, int32 Prefs, bool bThirdPers
 
 FElysiumCameraDrawPolicy ElysiumCam::SolveDrawPolicy(const FElysiumCameraWeights& Weights,
 	const FVector& SolvedOffset, const FElysiumCameraCvars& Cvars,
-	const FElysiumShotPresentation& Shot)
+	const FElysiumShotPresentation& Shot, const FElysiumShotDrawState& State)
 {
 	FElysiumCameraDrawPolicy Out;
 
@@ -178,28 +178,246 @@ FElysiumCameraDrawPolicy ElysiumCam::SolveDrawPolicy(const FElysiumCameraWeights
 	Out.bBodyEligible = Out.bThirdPerson;
 	Out.BodyAlpha = SolveModelAlpha(SolvedOffset, Weights, Cvars);
 
+	// **The `m_bDrawPlayer` short-circuit** — `C_BasePlayer::ShouldDrawLocalPlayer` `FUN_100a7a50`,
+	// read off the listing by RC11:
+	//
+	//     cine = GetCineCamera();
+	//     if (cine) return cine->m_bDrawPlayer;                 // 0x464, FUN_10001990
+	//     if (IsLocalPlayerEntity() && !CAM_IsThirdPerson()) return false;
+	//     return true;
+	//
+	// `0x464` is read **exactly once in the whole image**, here; the test does **not** call
+	// `IsActive`, so a merely *adopted* camera answers; and it short-circuits the entire third-person
+	// disjunction below it rather than ANDing with it. The `IsLocalPlayer && !thirdPerson` arm above
+	// therefore applies only when no cine camera is adopted.
+	//
+	// The alpha follows the gate rather than the band, and that is not a second opinion: the band is a
+	// function of the **third-person boom** (`CInput+0x104`), and an adopted cine camera skips slot
+	// 31's boom entirely (`0x100d4040`), so there is no boom for it to read. A shot that asks for the
+	// body — 27 of the 51 shipped directors do, `sp_tutorial_1`'s `feedcamera` among them — gets the
+	// whole body, not a body faded out by a boom that never ran.
 	// Boolean, both directions. No attachment-alpha consumer is recovered, so a world weapon pops
 	// rather than fading; inventing a fade here would be inventing cinematography.
 	Out.bWorldWeaponEligible = Out.bThirdPerson;
 
-	// **Resuming at exactly weight 0 falls out of the strict comparison inside the predicate.** The
-	// last frame of a third->first return is the first frame every term is false, which is the frame
-	// retail resumes the hands on. An epsilon here would resume them early and break the table.
+	if (State.bCineAdopted)
+	{
+		Out.bBodyEligible = Shot.bDrawPlayerBody;
+		Out.BodyAlpha = Shot.bDrawPlayerBody ? 1.0f : 0.0f;
+		// **The world weapon takes the same answer, because it asks the same function.** The carried
+		// weapon and the player's owned attachments are gated by `ShouldDrawLocalPlayer` too
+		// (`0x100a7a50` reached from `0x100aef40`), so the short-circuit is not the body's alone: a
+		// shot that draws the body draws what it is holding, and one that does not hides both.
+		Out.bWorldWeaponEligible = Shot.bDrawPlayerBody;
+	}
+
+	// **The viewmodel gate is the cine camera's, not the mode predicate's, whenever one is adopted.**
+	// `C_BasePlayer::ShouldHideViewModel` (slot 174, `FUN_100a7ab0`) is `cine && !ShotWantsViewmodel`,
+	// and `FUN_100019a0` is
 	//
-	// The second term is redundant while a named shot is live — such a shot always carries scripted
-	// weight, so the predicate has already suppressed the viewmodel — and it is kept because the RE
-	// records both gates. `DrawViewmodel` can only ever suppress; it never forces the hands on.
-	Out.bViewmodelEligible = !Out.bThirdPerson && (!Shot.bNamed || Shot.bDrawViewmodel);
+	//     ShotWantsViewmodel() = (m_flSpeed <= 1.0f) && (flags & 0x40 DrawViewmodel)
+	//
+	// — the shot opted in **and** the camera has stopped dollying, `1.0` being exactly the tracker's
+	// own speed floor (`MinTrackSpeed`), which is why `IsDollying()` is a clean read of it. So a
+	// `DrawViewmodel` shot pops the hands back on only after its dolly parks, which is what the
+	// shipped interaction shots (the terminals, the gym beat) are authored against.
+	//
+	// With no cine camera adopted the mode predicate decides, which is the other retail gate
+	// (`ShouldDrawViewModel` `0x10198ea0`, `CInput` slot `+0x74`): the last frame of a third->first
+	// return is the first frame every term is false, and that is the frame retail resumes the hands
+	// on. An epsilon there would resume them early and break the table.
+	Out.bViewmodelEligible = State.bCineAdopted
+		? (Shot.bDrawViewmodel && !State.bDollying)
+		: !Out.bThirdPerson;
 
 	Out.Reticle = Out.bThirdPerson
 		? EElysiumReticlePath::ThirdPerson : EElysiumReticlePath::FirstPerson;
 
-	// Named shots only. Both keys parse with a default of 0, so an authored story shot with no keys
-	// hides the HUD while an interaction shot opts back in. A value shot — a `camera_track`, a VCD
-	// edit — carries no such key and therefore cannot take the HUD down.
-	Out.bShowHud = !Shot.bNamed || Shot.bShowHud;
+	// **Latched, never solved** (M14). Retail issues `HideHud(0xa06d)` / `ShowHud(0xa06d)` on the
+	// shot-index edge and on going inactive, and enforces nothing per frame — so this copies whatever
+	// `FElysiumShotHudGate` last latched. Solving it from the live shot's keys here, as the port used
+	// to, re-issued the decision every frame and could not express "replaced by another HUD-hiding
+	// shot, no second call".
+	Out.bShowHud = State.bHudVisible;
 
 	return Out;
+}
+
+// The shot-change edges (`OnDataChanged` `0x100024c0`'s first two arms)
+
+bool FElysiumShotStartEdges::OnDataChanged(const FElysiumCameraShot& Shot,
+	FElysiumScriptedShotTracker& Tracker)
+{
+	// Arm 1 — a new `m_nClientResetFrame`. It says only "a shot started": the tracker re-seeds its
+	// pose, and the aim's acquire state is left exactly as it was. A re-shot of the same record
+	// therefore re-seeds without re-acquiring, which is the whole reason retail carries two fields.
+	if (Shot.ResetFrame != CachedResetFrame)
+	{
+		CachedResetFrame = Shot.ResetFrame;
+		bShotStartPending = true;
+	}
+
+	// Arm 2 — a new `m_ShotIndex`. **Either** the one-shot snap **or** the three angle-settled flags,
+	// never both, and never the pose: a shot swapped under a live camera cuts its aim (or re-acquires
+	// it at the tight 1-degree band) while the camera keeps dollying from where it is.
+	if (Shot.ShotIndex == CachedShotIndex)
+	{
+		return false;
+	}
+	CachedShotIndex = Shot.ShotIndex;
+	if (Shot.bSnapOnShotChange)
+	{
+		Tracker.bSnapPending = true;
+	}
+	else
+	{
+		Tracker.bPitchSettled = false;
+		Tracker.bYawSettled = false;
+		Tracker.bRollSettled = false;
+	}
+	return true;
+}
+
+// The HUD edge (`OnDataChanged` `0x100024c0`'s HUD arms, the destructor `FUN_10001920`)
+
+bool FElysiumShotHudGate::OnDataChanged(bool bActive, int32 ShotIndex, bool bShotShowsHud)
+{
+	bool bIssued = false;
+
+	// `if (m_ShotIndexCache != m_ShotIndex) { ... ShowHud / HideHud ... }` — the **only** hide site in
+	// the image. A value shot carries `INDEX_NONE` and authors no `ShowHud` key, so a `camera_track`
+	// can neither hide the HUD nor, by replacing a named shot, put it back: it is not a shot record
+	// and does not change `m_ShotIndex`.
+	if (ShotIndex != ShotIndexCache)
+	{
+		ShotIndexCache = ShotIndex;
+		// **Issued only when the state actually changes.** Retail's arm is unconditional, and calling
+		// `HideHud(0xa06d)` on an already-hidden element set does nothing at all — `SetVisible(false)`
+		// on an invisible element. The port's HUD is a published boolean rather than a walk over an
+		// element list, so the state edge *is* the call, and M14's contract ("a HUD-hiding shot
+		// replaced by another HUD-hiding shot does not re-issue the call") is exactly this test.
+		if (ShotIndex != INDEX_NONE && bHudVisible != bShotShowsHud)
+		{
+			bHudVisible = bShotShowsHud;
+			++Issued;
+			bIssued = true;
+		}
+	}
+
+	// `if (!IsActive() && m_bWasActive) gHUD->ShowHud(0xa06d);` — the restore when the shot stops
+	// being live at all, whatever hid it. Same rule: nothing is issued for a HUD that is already up.
+	if (!bActive && bWasActive)
+	{
+		if (!bHudVisible)
+		{
+			bHudVisible = true;
+			++Issued;
+			bIssued = true;
+		}
+		// Retail's caches live on `C_BaseCineCamera`, and the camera **entity is destroyed** when the
+		// shot ends (`SetCineCamera(NULL)`, `UTIL_Remove`), so the next adoption starts with a fresh
+		// `-1` cache and re-issues its own hide. The port's gate outlives the shot, so the entity's
+		// death is reproduced here: without this, re-running the same shot would find its index
+		// already cached and leave the HUD up.
+		ShotIndexCache = INDEX_NONE;
+	}
+	bWasActive = bActive;
+	return bIssued;
+}
+
+bool FElysiumShotHudGate::OnDestroyed()
+{
+	// `if ((rec[0x20] & 0x200) == 0) gHUD->ShowHud(0xa06d);` — the destructor restores only what a
+	// shot had taken down. Nothing is issued when the HUD was already up.
+	ShotIndexCache = INDEX_NONE;
+	bWasActive = false;
+	if (bHudVisible)
+	{
+		return false;
+	}
+	bHudVisible = true;
+	++Issued;
+	return true;
+}
+
+// `AutoPositionFromTarget` (`0x1006fa50`-`0x1006fb85`) and its closest-point kernel (`FUN_1013c940`)
+
+namespace
+{
+	// `_DAT_1046a5e4 = 1e-05f`, the degenerate-length guard on `dir . dir`. Retail's units are Source
+	// units and the port's are cm, so the guard converts with them: it is a squared length.
+	constexpr float ClosestPointLengthEpsilon = 1e-05f * ElysiumCam::U * ElysiumCam::U;
+
+	// `_DAT_104454d0 = 0.5` and `_DAT_1044eb08 = 0.0174532924`, both read out of `vampire.dll`. The
+	// half-FOV is written as retail writes it — a multiply by 0.5 and then by a stored DEG2RAD — so
+	// the arithmetic is the same one the five flagged shipped shots were authored against.
+	constexpr float HalfFovScale = 0.5f;
+	constexpr float DegreesToRadians = 0.0174532924f;
+}
+
+float ElysiumCam::ClosestPointParameterOnLine(const FVector& P, const FVector& A, const FVector& B)
+{
+	const FVector Dir = B - A;
+	const double LengthSquared = Dir.SizeSquared();
+	if (LengthSquared < ClosestPointLengthEpsilon)
+	{
+		// `_DAT_104454c4 = 0.0f`. The closest point is then `A` itself, which for the one caller means
+		// the look-at point.
+		return 0.0f;
+	}
+	// **No clamp** (RC1): the listing's only branch is the guard above, and there is no `FCOM` against
+	// `0.0` or `1.0` in the body. `t` outside `[0,1]` is a legal answer and the caller wants it —
+	// clamping would report a strictly larger perpendicular distance for a target point that projects
+	// behind the camera or beyond the look-at, and back the camera further off than retail does.
+	return static_cast<float>(FVector::DotProduct(P - A, Dir) / LengthSquared);
+}
+
+FVector ElysiumCam::ClosestPointOnLine(const FVector& P, const FVector& A, const FVector& B)
+{
+	return A + (B - A) * ClosestPointParameterOnLine(P, A, B);
+}
+
+FVector ElysiumCam::AutoPositionFromTarget(const FVector& CamOrigin, const FVector& LookAt,
+	const FVector& Point1, const FVector& Point2, float FieldOfViewDeg)
+{
+	// `if (P2.z > P1.z) swap(P1, P2)` at `0x1006f9e6` (`FCOMP` + `AND EAX,0x4100` + a JNZ that skips
+	// the swap when `P2.z <= P1.z`): P1 ends **high**, P2 ends **low**, and only the low one is used
+	// from here on. The high point exists solely to decide which is which, which is why feeding the
+	// two points in either order gives one answer.
+	const FVector Low = Point2.Z > Point1.Z ? Point1 : Point2;
+
+	const float HalfFovRadians = FieldOfViewDeg * HalfFovScale * DegreesToRadians;
+	const float SinHalfFov = FMath::Sin(HalfFovRadians);
+	if (!(SinHalfFov > 0.0f))
+	{
+		// Unreachable through the parser — `FieldOfView` is clamped to `[20,120]`, so the half-angle is
+		// `[10,60]` degrees — but a producer that builds a shot by hand can reach it, and retail's
+		// unguarded divide would answer an infinity that then propagates into the origin.
+		return CamOrigin;
+	}
+
+	// `C = ClosestPointOnLine(P2, lookAt, camOrigin)`, the **infinite** camera->look-at axis (RC1), so
+	// `d` is the true perpendicular distance from the lower target point to it.
+	const FVector Closest = ClosestPointOnLine(Low, LookAt, CamOrigin);
+	const float D = static_cast<float>((Closest - Low).Size());
+
+	// `h = d / sin(A); r = sqrt(h*h + d*d)`. **Not** the tight `d / tan(A)` fit: retail takes the
+	// hypotenuse and then adds a second `d` in quadrature, so the camera always sits further back than
+	// an exact frame. That over-shoot is the recovered arithmetic and is reproduced, not corrected.
+	const float H = D / SinHalfFov;
+	const float R = FMath::Sqrt(H * H + D * D);
+
+	// `camOrigin = lookAt - normalize(lookAt - camOrigin) * r`: the camera slides along its own
+	// existing axis to distance `r` from the look-at, keeping the direction the anchors chose.
+	FVector Axis = LookAt - CamOrigin;
+	if (!Axis.Normalize())
+	{
+		// The camera standing on its own look-at has no axis to slide along; retail's `VectorNormalize`
+		// leaves a zero direction here and the result would be the look-at point itself. The origin
+		// stands instead — the one guard on this path, named as such.
+		return CamOrigin;
+	}
+	return LookAt - Axis * R;
 }
 
 // The scripted composition (`CInput::OverrideView`, `client.dll` FUN_100ffb90)
@@ -244,10 +462,14 @@ void ElysiumCam::ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRota
 	// strafe bank, a shake) is discarded outright the instant the weight is non-zero.
 	InOutRotation.Roll = E * ShotRoll;
 
-	if (ShotFov > 0.0f)
-	{
-		InOutFov = InOutFov + (ShotFov - InOutFov) * E;
-	}
+	// `FLD [ESI+0x198] ; FSUB [EAX] ; FMUL e ; FADD [EAX] ; FSTP [EAX]` (`0x100ffcef`) — **no test**.
+	// The lerp is unconditional because `m_flCameraFOVOverride` cannot be 0 in retail: the published
+	// value comes from `CBaseEntity`'s slot `0xC4`, whose default is 75.0 (`0x10026830` ->
+	// `_DAT_104454cc`). A producer that hands this 0 is asking for the view to be pulled to a zero
+	// lens, and it gets it; seeding retail's 75 where a value shot authors no FOV is the pusher's
+	// job, done at the two publish sites (`UElysiumCameraComponent::ScriptedShotView`,
+	// `UElysiumCameraService::ApplyToView`).
+	InOutFov = InOutFov + (ShotFov - InOutFov) * E;
 }
 
 void ElysiumCam::ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
@@ -372,6 +594,25 @@ float ElysiumCam::RemainingTranslationSeconds(float Speed, float MaxSpeed, float
 
 namespace
 {
+	// `Approach` (`FUN_10001070`), verbatim from the listing `0x10001070`-`0x100010ae`:
+	//
+	//     cur > goal -> cur - rate*dt        (`FSUBR`, 0x10001081, no clamp at the goal)
+	//     cur < goal -> cur + rate*dt        (`FADD`,  0x1000109d, no clamp at the goal)
+	//     otherwise  -> goal
+	//
+	// **Nothing clamps.** A step that overshoots the goal stays overshot, and a decelerating value
+	// walks straight through zero into negative territory — which is exactly what makes a zero `rate`
+	// return the input unchanged on every arm, the behaviour `TurnAccel == 0` depends on.
+	//
+	// (Named for the address rather than `Approach`, because the module builds with unity on and
+	// `UElysiumCameraService`'s own file-local `Approach` is a different function.)
+	double ApproachUnclamped(double Current, double Goal, double Rate, double Dt)
+	{
+		if (Current > Goal) { return Current - Rate * Dt; }
+		if (Current < Goal) { return Current + Rate * Dt; }
+		return Goal;
+	}
+
 	// One axis of `FUN_10001d40` plus its rate solve `FUN_10001c80`. `InOutRate` is the axis' entry in
 	// the tracker's `0x4a8[3]`; `bInOutSettled` its entry in `0x4c1[3]`.
 	// `FRotator`/`FVector` components are `double` in UE5, so the axis and its rate come in by
@@ -405,15 +646,34 @@ namespace
 		}
 		else if (TurnAccel <= 0.0f)
 		{
-			// A tracked shot that authors no `TurnAccel` (the conversation profiles) runs at the rate
-			// ceiling directly. A direct shot never reaches this function.
-			InOutRate = FMath::Max(MaxRate, 0.0f);
+			// **`TurnAccel == 0` leaves the rate exactly where it is** — retail, through a branch.
+			// `FUN_10001c80` opens with `stopAngle = FUN_100010b0(rate, TurnAccel) = rate^2/(2*0)`,
+			// a `0/0` NaN (rate 0) or an infinity (rate > 0); the NaN compare falls to the
+			// `MaxTurnRate` arm and the infinity to the zero arm, and **both** arms end in
+			// `FUN_10001070(rate, goal, 0, dt)` (`0x10001d0c`, `0x10001d32`), which returns the input
+			// unchanged for a zero step whichever way it compares. So an axis whose shot authors no
+			// `TurnAccel` starts at 0 from `Start`/`Snap` and stays 0: it never turns. Written as a
+			// branch and never as a real divide, exactly as M7's `MoveAccel == 0` twin is.
+			//
+			// No shipped file authors `TurnAccel` 0 (the `CameraConstraints` default is 30 deg/s^2),
+			// so nothing in the corpus takes this arm; the port's own producers can, and they get
+			// retail's answer rather than a ceiling the port invented.
 		}
 		else
 		{
+			// `stopAngle = rate^2/(2*accel)`; `|delta| <= stopAngle` decelerates toward 0, otherwise
+			// accelerate toward `MaxTurnRate[i]`. The compare is retail's `FCOMPP` + `TEST AH,0x41` +
+			// `JP` at `0x10001cef`, which takes the decel arm on **less-or-equal** (both `0x01` and
+			// `0x40` are odd parity, so only "greater" jumps to the ceiling arm).
 			const double StoppingAngle = (InOutRate * InOutRate) / (2.0f * TurnAccel);
-			InOutRate += (Error <= StoppingAngle ? -TurnAccel : TurnAccel) * Dt;
-			InOutRate = FMath::Clamp(InOutRate, 0.0f, FMath::Max(MaxRate, 0.0f));
+			// **Unclamped, and it is retail's** (`FUN_10001c80` returns `FUN_10001070`'s result raw
+			// and `FUN_10001d40` stores it raw at `0x10001e4a` / `0x10001e91`): the rate overshoots
+			// `MaxTurnRate` by one step on the way up and goes **negative** when it decelerates past
+			// the goal, which for one frame walks the axis backwards. The port used to clamp to
+			// `[0, MaxTurnRate]`, which is smoothing retail does not do.
+			InOutRate = ApproachUnclamped(InOutRate,
+				Error <= StoppingAngle ? 0.0 : static_cast<double>(MaxRate),
+				static_cast<double>(TurnAccel), static_cast<double>(Dt));
 		}
 
 		const double Step = InOutRate * Dt;
@@ -422,11 +682,32 @@ namespace
 	}
 }
 
-void FElysiumScriptedShotTracker::Start(const FElysiumCameraShot& Shot)
+void FElysiumScriptedShotTracker::Start(const FElysiumCameraShot& Shot,
+	const FElysiumViewSetup& LiveView)
 {
-	Location = Shot.Origin;
-	Rotation = Shot.bUseLookAt ? (Shot.LookAt - Shot.Origin).Rotation() : Shot.Rotation;
-	Rotation.Roll = Shot.Roll;
+	// `FUN_10002210`'s arm test, verbatim: `if ((flags & 2) == 0 || (flags & 1) != 0)`.
+	if (Shot.StartsOnGoal())
+	{
+		// The **replicated-goal** arm — no `End`, or an authored `Start`. `m_vecCurOrigin`,
+		// `m_angCurAngles` and `m_vecShotStart` all come from the goal, so the shot opens on its own
+		// framing and the tracker has nothing to close.
+		Location = Shot.Origin;
+		Rotation = Shot.bUseLookAt ? (Shot.LookAt - Shot.Origin).Rotation() : Shot.Rotation;
+		Rotation.Roll = Shot.Roll;
+	}
+	else
+	{
+		// The **live-view** arm — an `End` anchor and no `Start`, which is the shipped `jack.txt` /
+		// `dialogdefault.txt` / `centerfullview.txt` shape. All three fields come from
+		// `CViewRender::GetViewSetup()`, so the shot dollies in from wherever the player is actually
+		// looking, at the file's own `MoveSpeed` / `MoveAccel` / `TurnAccel`. The roll is the view's;
+		// the shot's own roll is reached as the aim closes, exactly as its position is.
+		Location = LiveView.Location;
+		Rotation = LiveView.Rotation;
+	}
+	// Retail touches neither `m_flFOV` (`0x458`) nor `m_flCurFov` (`0x480`) at shot start; in mode 1
+	// the FOV is re-established every frame from the shot record. The port's tracker holds one FOV, so
+	// seeding it from the record here is that same value one frame early and never a lerp.
 	Fov = Shot.FieldOfView;
 	Speed = 0.0f;
 	TurnRate = FVector::ZeroVector;
@@ -436,9 +717,9 @@ void FElysiumScriptedShotTracker::Start(const FElysiumCameraShot& Shot)
 	bPitchSettled = false;
 	bYawSettled = false;
 	bRollSettled = false;
-	// The tail of `FUN_10002210`: `if (flags & 0x80) m_bSnapPending = 1;`. Shot start is the port's
-	// shot-change edge, so this is also retail's `OnDataChanged` arm (`0x100024c0`) — both sites arm
-	// the same one-shot, and `Advance` consumes it on the very next rendered frame.
+	// The tail of `FUN_10002210`: `if (flags & 0x80) m_bSnapPending = 1;`. `OnDataChanged`'s
+	// shot-index arm is the *other* site that arms the same one-shot (SC5 splits the two signals at
+	// the caller), and `Advance` consumes it on the very next rendered frame.
 	bSnapPending = Shot.bSnapOnShotChange;
 	bSeeded = true;
 }
@@ -449,6 +730,11 @@ void FElysiumScriptedShotTracker::Snap(const FElysiumCameraShot& Shot)
 	// `m_vecShotStart` (0x484) and `m_vecSettledOrigin` (0x4b4), which the port derives rather than
 	// stores, so there is nothing to write for those two.
 	Location = Shot.Origin;
+	// `m_angCurAngles = m_angCamAngles` (`0x100023c0`-`0x100023f8`), copied **unconditionally** and
+	// only then overwritten from the look-at on the `CamMode == 1` arm below. The net pose is the
+	// same for a tracked shot, but `Snap()` is a public entry point and a copy-through shot reaching
+	// it directly must land on the replicated angles rather than keep whatever it had.
+	Rotation = Shot.bUseLookAt ? (Shot.LookAt - Shot.Origin).Rotation() : Shot.Rotation;
 	Rotation.Roll = Shot.Roll;
 	bPositionSettled = true;
 	Speed = 0.0f;
@@ -459,16 +745,12 @@ void FElysiumScriptedShotTracker::Snap(const FElysiumCameraShot& Shot)
 	bYawSettled = false;
 	bRollSettled = false;
 	// `if (m_CamMode == 1) VectorAngles(m_vecLookAt - m_vecCurOrigin, &m_angCurAngles);` — the
-	// re-derive happens **only** for a tracked shot. A copy-through shot keeps the angles it was
-	// handed, because for it the replicated angles are the pose.
+	// re-derive happens **only** for a tracked shot, and it overwrites the unconditional copy above.
+	// A copy-through shot keeps the replicated angles that copy just wrote, because for it those
+	// angles *are* the pose.
 	if (Shot.bTracked && Shot.bUseLookAt)
 	{
 		Rotation = (Shot.LookAt - Location).Rotation();
-		Rotation.Roll = Shot.Roll;
-	}
-	else if (Shot.bTracked)
-	{
-		Rotation = Shot.Rotation;
 		Rotation.Roll = Shot.Roll;
 	}
 	// The one-shot's consume.
@@ -535,6 +817,13 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 		return;
 	}
 
+	// Position, `FUN_10001fe0`. **`m_flDistRemaining` (`0x4c4`) is stored before anything moves**
+	// (`0x10002054`, an unconditional `FST` ahead of both the settled and the unsettled arm), and it
+	// is the value `SyncRotateOnMove` divides by later in this same frame.
+	const FVector ToGoal = Shot.Origin - Location;
+	const float Distance = static_cast<float>(ToGoal.Size());
+	DistRemaining = Distance;
+
 	// **A port seam, not retail.** Retail's parser always hands `FUN_10001fe0` a `MoveSpeed` — the
 	// `CameraConstraints` default is 150 u/s and no shipped file writes 0 — so retail's position
 	// solve has no zero-speed arm at all. The port has producers that push a tracked shot with no
@@ -548,9 +837,6 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 	}
 	else
 	{
-		// Position, `FUN_10001fe0`.
-		const FVector ToGoal = Shot.Origin - Location;
-		const float Distance = static_cast<float>(ToGoal.Size());
 		const float Threshold = bPositionSettled
 			? FMath::Max(Shot.DistanceTolerance, 0.0f) : SettleDistance;
 		if (Distance < Threshold)
@@ -590,11 +876,14 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 	Desired.Roll = Shot.Roll;
 
 	// `SyncRotateOnMove` (`FUN_10001c80`): only while the position is actually travelling, and then
-	// `MaxTurnRate` is bypassed so the pan lands with the dolly. The floor at `Dt` is the port's, and
-	// it stands where retail's unguarded `delta / T` would divide by a zero `T`.
+	// `MaxTurnRate` is bypassed so the pan lands with the dolly. The distance handed to the timing
+	// solve is `m_flDistRemaining` — the **pre-move** distance the position step just stored
+	// (`0x10001cb7` reads `this+0x4c4`), not the distance left after this frame's step. The floor at
+	// `Dt` is the port's, and it stands where retail's unguarded `delta / T` would divide by a zero
+	// `T`.
 	const float SyncSeconds = (Shot.bSyncRotateOnMove && !bPositionSettled)
 		? FMath::Max(ElysiumCam::RemainingTranslationSeconds(Speed, Shot.MoveSpeed, Shot.MoveAccel,
-			static_cast<float>(FVector::Distance(Shot.Origin, Location))), Dt)
+			DistRemaining), Dt)
 		: 0.0f;
 
 	AdvanceAngleAxis(Rotation.Pitch, Desired.Pitch, TurnRate.X, bPitchSettled,
@@ -695,10 +984,17 @@ void FElysiumCameraShotStack::ArmRampIn(float Seconds)
 void FElysiumCameraShotStack::ArmRampOut(float Seconds)
 {
 	const float Duration = FMath::Max(0.0f, Seconds);
-	// A **release shorter than the dead band is not a fast fade — it is the override going off**, and
-	// retail encodes that as `startTime <= 0` rather than as a duration. Reading it as the dead band's
-	// "weight 1 and stays" would leave a dead camera composed over a player who already has input.
-	if (Duration <= RampDeadBandSeconds)
+	// **Only `dur <= 0` clears the mark.** `FUN_1017d6d0`'s `0x1017d802` branch reaches `0x1017d87e`,
+	// which zeroes `m_flCameraOverrideFadeMarkTime` and nothing else, for a non-positive duration
+	// alone. Anything above zero is stored as `duration = -dur` with a live mark, and `FUN_100fc900`'s
+	// tail then reads `|duration| <= 0.01` as **weight 1 that stays** (`0x100fcbf7`'s
+	// `FCOMP [_DAT_10235278]` falls through only on a strict `<`). So a 5 ms release leaves retail's
+	// override hard **on** — a cut in, not a cut out — and the port reproduces that rather than
+	// treating a sub-dead-band release as "off".
+	//
+	// Corpus: all 168 shipped `camera_track` chains return with `ToPlayerTime 0`, which is the
+	// `dur <= 0` arm both readings agree on, so nothing shipped changes either way.
+	if (Duration <= 0.0f)
 	{
 		RampDuration = 0.0f;
 		RampStartTime = 0.0f;
@@ -706,7 +1002,10 @@ void FElysiumCameraShotStack::ArmRampOut(float Seconds)
 	}
 	const float Current = GetTrackWeight();
 	RampDuration = -Duration;
-	RampStartTime = RampNow - (Current - 1.0f) * RampDuration;
+	// Inside the dead band the weight is 1 whatever the mark is, so the back-date has nothing to
+	// preserve; the mark still has to be strictly positive or `startTime <= 0` would read as "off".
+	RampStartTime = Duration <= RampDeadBandSeconds
+		? RampNow : RampNow - (Current - 1.0f) * RampDuration;
 }
 
 int32 FElysiumCameraShotStack::Push(const FElysiumCameraShot& Shot)
@@ -714,6 +1013,10 @@ int32 FElysiumCameraShotStack::Push(const FElysiumCameraShot& Shot)
 	FEntry& Entry = Shots.AddDefaulted_GetRef();
 	Entry.Id = NextId++;
 	Entry.Shot = Shot;
+	// A push **is** a shot start: `SetShot` stamps `m_nClientResetFrame` and the shot start
+	// `FUN_1006e8e0` stamps it again, and the client's only test on it is "does it differ from the
+	// cached one". The stamp is the channel's, not the pusher's, so a caller cannot forget it.
+	Entry.Shot.ResetFrame = NextResetFrame++;
 	// **A cine shot has no ramp.** It is adopted at full weight the instant `m_iCameraOverrideIdx`
 	// changes and the client hard-writes its pose from the next frame; nothing on the channel is
 	// timed, so it must not disturb the track channel's ramp either.
@@ -733,11 +1036,35 @@ bool FElysiumCameraShotStack::Update(int32 Id, const FElysiumCameraShot& Shot)
 			// The ramp already in flight belongs to the push, not to the refresh: a `Follow` shot
 			// re-resolving its origin every frame must not restart its own blend. Which channel the
 			// shot is on is settled at the push for the same reason.
+			//
+			// `ResetFrame` is preserved for the same reason and a stronger one: this is retail's
+			// **think**, which re-publishes `m_vecCamOrigin` / `m_angCamAngles` / `m_flFOV` every tick
+			// and never touches `m_nClientResetFrame`. Re-stamping it here would re-seed the tracker
+			// every frame and no shot would ever dolly.
 			const float Blend = Entry.Shot.BlendSeconds;
 			const bool bCine = Entry.Shot.bCine;
+			const int32 ResetFrame = Entry.Shot.ResetFrame;
 			Entry.Shot = Shot;
 			Entry.Shot.BlendSeconds = Blend;
 			Entry.Shot.bCine = bCine;
+			Entry.Shot.ResetFrame = ResetFrame;
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FElysiumCameraShotStack::Restart(int32 Id)
+{
+	for (FEntry& Entry : Shots)
+	{
+		if (Entry.Id == Id)
+		{
+			// `SetShot` on a camera that already has one: the mode is cleared and re-written, the
+			// anchors are re-bound and `m_nClientResetFrame` is stamped again — but the entity, and so
+			// the port's id, is the same. The consumer arms shot start off the new stamp; whether the
+			// aim also re-acquires is `m_ShotIndex`'s business, not this one's.
+			Entry.Shot.ResetFrame = NextResetFrame++;
 			return true;
 		}
 	}
