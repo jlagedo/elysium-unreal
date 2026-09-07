@@ -760,6 +760,7 @@ def bake_maps(
     *,
     force: bool = False,
     particles: bool = False,
+    light_store: bool = True,
     batch_size: int | None = None,
 ) -> None:
     """Bake the named maps, `batch_size` maps per editor process (the whole list when None).
@@ -767,6 +768,14 @@ def bake_maps(
     `particles` opts the map's Niagara authoring pass in; it is off by default because
     force-deleting a Niagara package the asset compiler still owns crashes the editor, and a
     launch without it leaves whatever particle packages the mount already carries untouched.
+
+    `light_store` is on by default and is the harvest/apply loop of
+    `pipeline/unreal/light_store.py`: a lighting pass saved into a baked level is read off it at
+    the top of every map and re-applied by the same bake. Clearing it is how a map that has been
+    hand-tuned is handed back to `UElysiumLightingSettings` -- delete the map's
+    `Content/ElysiumAuthored/Lighting/<map>.lights.json` and bake once with this off, which
+    re-derives the level; the next ordinary bake then harvests that derived level into a fresh
+    store.
 
     Editor start-up (module load, plugin init, registry scan) is the fixed cost per process, and
     it buys the only release that is certain: process exit. Between maps the commandlet now
@@ -833,6 +842,7 @@ def bake_maps(
                 f"-BakeMaps={','.join(batch)}",
                 *(["-BakeForce=1"] if force else []),
                 *(["-BakeParticles=1"] if particles else []),
+                *([] if light_store else ["-NoLightStore=1"]),
                 "-AllowCommandletRendering",
                 "-unattended",
                 "-nosplash",

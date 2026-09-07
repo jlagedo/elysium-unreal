@@ -1023,10 +1023,14 @@ public:
 	// (`0x102a1910`) both apply before a conversation may open: a character in the middle of a
 	// discipline transaction does not talk.
 	//
-	// SEAM: answers false for every character. TODO(dialogue-plan): recover
-	// `CBaseCombatCharacter::IsBusyWithDiscipline` — which of the thirteen `Active_*` slots, the
-	// per-record `FElysiumDisciplineState::Recovery` deadlines, or a distinct cast latch it reads —
-	// and answer off that state instead of standing open.
+	// RECOVERED. It reads no discipline state at all: `0x1033e2b0`'s entire body is
+	// `return (m_bfAINPCFlags & 1) != 0` — the `D_IS_BUSY` bit, and nothing in the whole binary else
+	// reads that bit. So the predicate does not ask "is a discipline running"; it asks "did a
+	// schedule declare this character occupied", and the answer is written by `TASK_SET_NPC_FLAG`
+	// and released by the next schedule change. `FElysiumNpc` overrides this off its flag word.
+	//
+	// It stays false on the base and on the player leaf, which carry no NPC flag word — retail's
+	// bit lives on `CBaseCombatCharacter` but only NPC schedules ever write it.
 	virtual bool IsBusyWithDiscipline() const { return false; }
 
 	// `m_tEffectList` — the `TraitEffectGroup` names in force on this character: its clan's

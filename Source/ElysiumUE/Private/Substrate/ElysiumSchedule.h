@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "Substrate/ElysiumNpcConditions.h"   // the interrupt mask a schedule declares
+#include "Substrate/ElysiumNpcFlags.h"        // the flag word `TASK_SET_NPC_FLAG` names
 
 class IElysiumNpcMotor;   // the reachability query `TASK_MOVE_AWAY_PATH` asks the world
 
@@ -88,6 +89,20 @@ enum class EElysiumTask : uint8
 	// `FElysiumTaskStep::Activity`; empty means the program named none.
 	PlayDeathSequence,
 
+	// The incapacitation vocabulary.
+	// Both are `StartTask`-only in retail — neither has a `RunTask` arm, so both complete on the
+	// think that begins them.
+
+	// `TASK_MAKE_OBLIVIOUS` (0x131, arm `0x102a72e3`). Reads `FElysiumTaskStep::Param`, which the
+	// schedule compiler writes as 1.0 for `TRUE` and 0.0 for `FALSE`.
+	MakeOblivious,
+	// `TASK_SET_NPC_FLAG` (0x100, arm `0x102a585d`). Reads `FElysiumTaskStep::Flag`.
+	//
+	// `TASK_CLEAR_NPC_FLAG` (0x101) is its exact mirror and is deliberately ABSENT: no registered
+	// program clears a flag, and every bit the registered programs set is released by
+	// `IElysiumScheduleRunner::OnScheduleChange` instead. Add it with the schedule that needs it.
+	SetNpcFlag,
+
 	// The scripted-director vocabulary.
 	// Path to the goal an `aiscripted_schedule` pushed (`TASK_GET_PATH_TO_GOAL`). It reads no
 	// operand: the goal, the route and the gait are the pushed order's, exactly as
@@ -126,6 +141,9 @@ enum class EElysiumScheduleId : uint8
 	// The death family (`Substrate/ElysiumNpcCombatSchedules.cpp` registers it).
 	Die,                      // SCHED_DIE (number not decoded)
 
+	// The post-feed trance (`Substrate/ElysiumFeedSchedules.cpp` registers it beside its producer).
+	Mesmerized,               // 0xfb SCHED_TROIKA_MESMERIZED
+
 	// The scripted-director family (`Substrate/ElysiumAiScriptedSchedule.cpp` registers both).
 	ScriptedMoveToGoal,       // `aiscripted_schedule` modes 1 and 2
 	ScriptedFollowPath,       // `aiscripted_schedule` modes 4 and 5
@@ -158,6 +176,10 @@ struct FElysiumTaskStep
 	// registered number in the same float column; it is kept as the identity here so a program reads
 	// as the schedule it transfers to rather than as a magic constant.
 	EElysiumScheduleId Target = EElysiumScheduleId::None;
+	// The bit `TASK_SET_NPC_FLAG` names; `None` for every other task. Retail spells this operand as
+	// `NPCFlag:<name>` and resolves it to a mask at schedule-load time (`0x1030cbd0`), so it is a
+	// typed identity here rather than a number in the float column.
+	EElysiumNpcFlag Flag = EElysiumNpcFlag::None;
 };
 
 struct FElysiumSchedule
@@ -187,11 +209,27 @@ struct FElysiumSchedule
 	// NPC that just acquired an enemy into a cover or flinch program instead of re-selecting.
 	FElysiumNpcConditions Interrupts;
 
-	// SEAM (named, unimplemented): 42 schedules carry a `DELAY_INTERRUPTS` flag. What "delayed"
-	// means — a deferral window, a task boundary, a one-shot suppression — is not recovered, and
-	// none of the schedules this runtime registers is among the 42. The flag is named here so a
-	// recovered schedule that carries it has somewhere to land; nothing reads it, and nothing
-	// should until the semantics are decoded.
+	// `DELAY_INTERRUPTS`, the ONLY schedule flag retail has. Its token table
+	// (`vampire.dll 0x1030d7e0`) answers exactly two spellings — `NONE` -> 0 and `DELAY_INTERRUPTS`
+	// -> bit 0 — and makes anything else a load-time `Error`, so `bDelayInterrupts` is the whole
+	// flag word rather than one bit of a set.
+	//
+	// It is NOT a property the interrupt check can consult on its own. The sole tester,
+	// `CAI_BaseNPC::IsScheduleValid` (`0x10280ff0`, called only from `MaintainSchedule`
+	// `0x102817c0`), ANDs it with the NPC's own `m_bDidMaintainSchedule` (`+0x5bb8`):
+	//
+	//     if (!(!m_bDidMaintainSchedule && (schedule->flags & 1)))  evaluate the interrupt mask
+	//
+	// so the flag buys a schedule exactly ONE think of immunity, re-armed by every install and
+	// bounded by nothing else — no timer, no task boundary, no deferral store. See
+	// `FElysiumScheduleState::bDidMaintainSchedule` for the other half and for what "one think"
+	// buys, and `ElysiumSchedule::Start` for the condition clear that goes with it.
+	//
+	// 42 of retail's 691 schedules carry it, and they are one family: the Discipline effects and the
+	// externally forced states (`D_MESMERIZE`, `D_DAZE`, `D_BERSERK`, `D_TRANCE`, `FLEE_AND_DIE`,
+	// `TROIKA_MESMERIZED`). All of them are installed from OUTSIDE the AI think, which is the case
+	// the flag exists for: without it a forced state is re-selected away on the same think that
+	// forced it.
 	bool bDelayInterrupts = false;
 
 	bool IsValid() const { return Id != EElysiumScheduleId::None && !Tasks.IsEmpty(); }
@@ -348,6 +386,33 @@ public:
 	// order's own gait. False means no order, no body, an exhausted route or a body that would not
 	// take the request; all four fail the task, and the runner names which.
 	virtual bool GetPathToScriptedGoal() { return false; }
+
+	// `TASK_MAKE_OBLIVIOUS` (0x131, `StartTask` arm `0x102a72e3`). The operand is a float the schedule
+	// compiler writes from `TRUE`/`ON` -> 1.0 and `FALSE`/`OFF` -> 0.0 (`0x1030e65f`); all 35 shipped
+	// operands are `TRUE`, so `bOblivious=false` is a path no registered program takes.
+	virtual void MakeOblivious(bool bOblivious) {}
+
+	// `TASK_SET_NPC_FLAG` (0x100, `StartTask` arm `0x102a585d`). One bit of the NPC flag word.
+	virtual void SetNpcFlag(EElysiumNpcFlag Flag) {}
+
+	// Discard every gathered condition, because a schedule was just installed.
+	//
+	// Retail's `CAI_BaseNPC::SetSchedule` (`0x10280e50`) zeroes all 192 condition bits before it
+	// returns, so a forced program starts from a clean slate. This is the half of `DELAY_INTERRUPTS`
+	// that is easy to miss: without it the flag would look nearly redundant, and with it the pair
+	// produce retail's behaviour — a condition standing at the instant of install is destroyed, and
+	// only a stimulus the NEXT pass re-observes can end the program.
+	virtual void ClearConditions() {}
+
+	// Retail's schedule-change virtual, slot 435 — `CAI_BaseNPCTroika::OnScheduleChange`
+	// (`0x102a0940`), which `ForceScheduleChange` (`0x102ae490`) dispatches at the tail of every
+	// `SetSchedule`. It clears ten bits of the NPC flag word (mask `&= 0xbbf4b97e`), and when
+	// `MADE_OBLIVIOUS` was set it clears that too and decrements the oblivious refcount.
+	//
+	// This is why `SCHED_TROIKA_MESMERIZED` needs no teardown tasks and why the trance unwinds
+	// completely: the NEXT schedule this NPC is given is what ends it. It is also why the mesmerize
+	// tasks always write onto a cleared word — the same virtual ran when the program was installed.
+	virtual void OnScheduleChange() {}
 };
 
 // The per-NPC runner state. Saved as part of the NPC, so a schedule survives a save.
@@ -367,6 +432,20 @@ struct FElysiumScheduleState
 	// Source units, and negative means "the task never ran, so the motor's own acceptance decides".
 	float ToleranceUnits = -1.f;
 
+	// `CAI_BaseNPC::m_bDidMaintainSchedule` (`+0x5bb8`) — the other half of `DELAY_INTERRUPTS`.
+	//
+	// False from the moment a schedule is installed until the end of the next maintenance pass that
+	// runs it, which is the whole window a `DELAY_INTERRUPTS` program is immune in. Retail writes it
+	// in exactly three places and this runtime matches all three: false at spawn (the default here),
+	// false by every install (`ElysiumSchedule::Start`), true at the end of a pass that ran a task
+	// (`ElysiumSchedule::Tick`).
+	//
+	// NOT serialized, and the default is the reason: a restore re-installs its program through
+	// `Start`, so a loaded NPC gets exactly the one think of immunity a fresh install gives. Carrying
+	// the saved value would only differ for a payload saved mid-window, and it is not a value the
+	// player can observe.
+	bool bDidMaintainSchedule = false;
+
 	bool IsRunning() const { return Current != EElysiumScheduleId::None; }
 	void Clear()
 	{
@@ -376,6 +455,7 @@ struct FElysiumScheduleState
 		bTaskStarted = false;
 		FailScheduleOverride = EElysiumScheduleId::None;
 		ToleranceUnits = -1.f;
+		bDidMaintainSchedule = false;
 	}
 };
 

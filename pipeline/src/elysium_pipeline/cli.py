@@ -630,6 +630,16 @@ def export_map(
     force: bool = typer.Option(False, "--force"),
     intermediate_only: bool = typer.Option(False, "--intermediate-only"),
     particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
+    no_light_store: bool = typer.Option(
+        False,
+        "--no-light-store",
+        help=(
+            "Skip the per-map light store: do not harvest the lights off the baked level, and "
+            "derive every light from UElysiumLightingSettings instead of applying the map's "
+            "Content/ElysiumAuthored/Lighting/<map>.lights.json. Delete that file and bake once "
+            "with this flag to hand a hand-tuned map back to the settings page."
+        ),
+    ),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -649,6 +659,7 @@ def export_map(
             force=force,
             intermediate_only=intermediate_only,
             particles=particles,
+            light_store=not no_light_store,
             verify=verify,
         )
         console.print("map export complete: " + ", ".join(names))

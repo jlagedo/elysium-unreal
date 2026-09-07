@@ -961,6 +961,123 @@ more than one conceptual concern and not every relevant name shares a prefix.
 The library also contains start-combat, chase, ranged/melee attack, flank, reload/equip, feeding,
 prone, animal, follower, boss, and class-specific schedules outside those simple prefixes.
 
+### The incapacitation tasks and the NPC flag word
+
+`CAI_BaseNPCTroika::StartTask` (`0x102a1910`) and `RunTask` (`0x102aacf0`) are two-level MSVC jump
+tables Ghidra does not recover. `StartTask`'s dispatch at `0x102a1938` indexes `taskID - 5` through
+byte table `0x102a7ab8` into dword table `0x102a77f8`; `RunTask`'s at `0x102aad03` indexes
+`taskID - 2` through `0x102ac844` / `0x102ac760`. `[VtMB]`
+
+| Task | ID | `StartTask` arm | `RunTask` arm |
+|---|---:|---|---|
+| `TASK_SET_NPC_FLAG` | `0x100` | `0x102a585d` | none |
+| `TASK_CLEAR_NPC_FLAG` | `0x101` | `0x102a58ae` | none |
+| `TASK_SET_MISC_FLAG` | `0x102` | `0x102a5886` | none |
+| `TASK_MAKE_OBLIVIOUS` | `0x131` | `0x102a72e3` | none |
+
+All four are `StartTask`-only: they perform their write and call `TaskComplete` (`0x10273e80`) on
+the think that begins them. `[VtMB]`
+
+#### `TASK_SET_NPC_FLAG` and the 62-name flag vocabulary
+
+The operand `NPCFlag:<name>` is resolved at schedule-load time by the `strcmpi` chain `0x1030cbd0`,
+which returns the bare mask for a word-one name and `0x80000000 | bit` for a word-two name; an
+unknown name is an `Error`. The task arm routes on that sign bit into `m_bfAINPCFlags` (`+0x14b8`,
+`0x102a97a0`) or `m_bfAINPCFlags2` (`+0x14bc`, `0x102a9800`). Word two's bit 31 is therefore the
+routing marker, not a flag. `TASK_CLEAR_NPC_FLAG` is the exact mirror (`0x102a97d0` / `0x102a9830`).
+`[VtMB]`
+
+`m_bfAINPCFlags` (`+0x14b8`), bit 0 → 30:
+
+`D_IS_BUSY`, `DO_STARTLED`, `AT_CROSSWALK`, `PRESERVE_PATH`, `FINDING_BODY`, `CARRYING_BODY`,
+`NAV_IGNORE_NPC`, `IN_FLEE_SCHED`, `INITIAL_FLEE`, `COWER_PATH`, `COWERING`, `DODGING`,
+`MADE_HUNT_PATH`, `AT_COVER_HINT`, `ANIM_MOVEMENT`, `DONE_EXTRAPOLATING`, `FORCE_RELAXED_ANIMS`,
+`SLEEPING`, `BOTCHED_ATTACK`, `NO_DIALOG`, `SKIPPED_SOUND`, `LOOKED_AT_UNKNOWN`, `IGNORE_UNKNOWN`,
+`ATTACK_UNKNOWN`, `MADE_INITIAL_RESPONSE`, `FINISHED_IGNORE_UNKNOWN`, `DONT_INVESTIGATE`,
+`PLAYING_FACE_ANIM`, `FORCED_OCCLUDE`, `INTERESTING_INTO`, `ONE_HIT_KILL`.
+
+`m_bfAINPCFlags2` (`+0x14bc`), bit 0 → 30:
+
+`SLEEP_BOUNDING_BOX`, `FINISH_SPECIAL_NAV`, `SCHEDULE_CHANGED`, `INTERESTING_LOST`,
+`TASKS_FACE_ENEMY`, `TASKS_FACE_TARGET`, `IGNORE_SQUAD_SEE_ENEMY`, `NO_UNKNOWN_ATTACK`,
+`COVER_VS_MELEE_MODE`, `IGNORE_DOOR_FAILURE`, `MOVE_FACE_ENEMY`, `DISALLOW_TGT_DISCIPLINE`,
+`MADE_OBLIVIOUS`, `SQUAD_NEW_ENEMY`, `DONT_FALL_TO_GROUND`, `DISABLE_BURST_FIRE`, `D_CALM`,
+`D_INSANE`, `D_POSSESSED`, `D_MILDLY_CRAZY`, `D_FOLLOW`, `D_NIGHTMARE`, `D_AUTO_FEEDABLE`,
+`D_DISCONNECT_SQUAD`, `D_WPN_HIDDEN`, `CHOOSE_NEW_SCHEDULE`, `NO_UNKNOWN_VISION`, `NOT_FEEDABLE`,
+`NO_DIALOG_PERSISTENT`, `DISAPPEAR`, `ACTIVITY_COPY_PROP_CLEAN`.
+
+Word one's bit order is independently confirmed by the AI debug overlay `0x1028d990`, which walks
+bits 0–29 against the legend string `"RSCPFCNFIPCDHVAEFSBDSLIAMFDPOIO"` at `0x105d88b8`.
+
+Every call site of the five generic flag accessors — all 16 — lies inside `StartTask`, so no hidden
+writer of these bits exists outside the task vocabulary. `[VtMB]`
+
+Consumers of the three bits the mesmerize program writes, each proved exhaustive against the field
+ledger:
+
+| Bit | Readers | Meaning |
+|---|---|---|
+| `D_IS_BUSY` (0) | **one**: `CBaseCombatCharacter::IsBusyWithDiscipline` (`0x1033e2b0`), whose entire body is that bit test | the bit *is* the predicate. Its 17 callers include `CAI_BaseNPCTroika::SelectSchedule` (`0x102af660`), the dialogue gate (`0x102c21c0`) and all three `StartPlayerDialog` inputs — so a flagged NPC will not be re-targeted by a discipline, will not start dialogue, and is refused an ordinary schedule |
+| `NO_DIALOG` (19) | **two**, both the same virtual slot 295: `0x102c21c0` and the `CPayphone` override `0x101aaee0` | one link of the "can the player talk to me" chain, beside `m_iDialog`, `IsUnconscious`, `m_bWillTalk`, `IsBusyWithDiscipline` and `NO_DIALOG_PERSISTENT`. The per-schedule form of dialogue suppression |
+| `DONT_INVESTIGATE` (26) | **one**: `0x102b3270`, whose first line rejects on `DONT_INVESTIGATE \| IN_FLEE_SCHED` | the per-candidate interest predicate, reached only from the two per-entity sweeps `CAI_BaseNPCTroika::GatherConditions` (`0x102b27f0`) runs back to back. Every sensed entity fails the interest test |
+
+#### `TASK_MAKE_OBLIVIOUS` and `m_iIsOblivious`
+
+The operand is a float: the schedule compiler writes `TRUE`/`ON` → 1.0 and `FALSE`/`OFF` → 0.0
+(`0x1030e65f`), and the arm compares against 0.0 exactly. All 35 shipped operands are `TRUE`; the
+clear branch (`0x102a731a`) is dead in shipped data. `[VtMB] [script/data]`
+
+The TRUE arm (`0x102a72f5`) does four things in order: sets `MADE_OBLIVIOUS`; calls `0x1026d130`,
+which is `SetEnemy(NULL)` + squad disconnect (`0x1026d050`) + `++m_iIsOblivious`; fires
+`OnIncapacitatedStart` (`+0x5fd4`); and completes. The FALSE arm is its exact mirror, ending in
+`OnIncapacitatedEnd` (`+0x5fec`). `[VtMB]`
+
+**`CAI_BaseNPC::m_iIsOblivious` (`+0x5bb4`) is an `int` refcount, not a boolean** — retail nests its
+sources, so a body oblivious for two reasons stays oblivious when one ends. Its increment sites are
+the scripted-scene starts (`CCineNPC`/`CCineAI`/`CCineAISchedule` `vfunc583`), grapple entry
+(`0x1026cdc0`), fed-upon begin (`0x1026cec0`) and this task. `MADE_OBLIVIOUS` itself has **zero
+readers anywhere in the binary**; it is pure bookkeeping so the schedule-change clear knows a
+decrement is owed. All behaviour hangs off the counter, which has exactly four consumers:
+
+| Consumer | Effect |
+|---|---|
+| `CAI_BaseNPC::PerformSensing` (`0x1026e4f0`) | `if (m_iIsOblivious < 1)` gates the whole sense pass — an oblivious body takes in **no sight, sound or scent at all** |
+| `CAI_BaseNPCTroika` slot 587 (`0x1028ef20`) | reject rung in a reaction predicate |
+| `CAI_BaseNPCTroika` slot 314 (`0x102bf070`) | clears `m_bAimWeaponAtTarget` and zeroes the aim pose params — the body stops aiming |
+| `CStealthKillRules::FindVictim` (`0x101be1f0`) | an oblivious body is **stealth-killable from any angle**, bypassing the behind/deaf-arc test |
+
+#### Nothing in schedule data clears these bits — the schedule *change* does
+
+Across all 38 `TASK_CLEAR_NPC_FLAG` operands in the image, `D_IS_BUSY` and `NO_DIALOG` are never
+cleared, and `DONT_INVESTIGATE` only once (`SCHED_TROIKA_SHOT_BY_UNKNOWN`). The release is
+structural: `SetSchedule` → `ForceScheduleChange` (`0x102ae490`) → **virtual slot 435**, which for
+all 60 classes of the Troika hierarchy is `CAI_BaseNPCTroika::OnScheduleChange` (`0x102a0940`):
+
+```c
+m_bfAINPCFlags2 |= SCHEDULE_CHANGED;
+if (!(m_bfAINPCFlags & PRESERVE_PATH)) {
+    ... navigator / motor / goal reset ...
+    uVar1 = m_bfAINPCFlags2;
+    m_bfAINPCFlags  &= 0xbbf4b97e;      // ~0xbbf4b97e == 0x440b4681
+    m_bfAINPCFlags2 &= 0x77fff14f;
+    if (uVar1 & MADE_OBLIVIOUS) { m_bfAINPCFlags2 = uVar1 & 0x77ffe14f; UnOblivious(this); }
+}
+m_bfAINPCFlags2 &= 0x3fffffff;
+m_bfAINPCFlags  &= 0xd7ffffff;
+```
+
+`0x440b4681` is `D_IS_BUSY`, `IN_FLEE_SCHED`, `COWER_PATH`, `COWERING`, `ANIM_MOVEMENT`,
+`FORCE_RELAXED_ANIMS`, `SLEEPING`, `NO_DIALOG`, `DONT_INVESTIGATE`, `ONE_HIT_KILL`. So an
+incapacitating schedule needs no teardown tasks: **the next schedule the NPC is given unwinds it
+completely and symmetrically**, and the same virtual ran when the program was installed, which is
+why its tasks always write onto a cleared word. `[VtMB]`
+
+One genuine retail defect found here: virtual slot 448 (`CAI_BaseNPCTroika::FUN_1029adb0`, the
+task-failure/teardown virtual) applies `m_bfAINPCFlags2 &= 0x7fffe24f`, **clearing `MADE_OBLIVIOUS`
+without decrementing `m_iIsOblivious`**. An NPC that takes that path keeps a positive refcount with
+the bookkeeping bit gone, so no later `SetSchedule` will decrement it and the body stays sense-blind
+and stealth-killable. No compensating decrement was found. `[VtMB]`
+
 ### Interrupt conditions
 
 Schedules declare which new conditions are allowed to abort their current task program. The most
@@ -992,6 +1109,70 @@ Forty-two schedules carry a `DELAY_INTERRUPTS` flag. The schedule—not merely t
 condition—decides whether a new stimulus may pre-empt the current behavior immediately. This is
 why a faithful AI cannot be implemented as a single global priority list with no current-task
 context.
+
+#### `DELAY_INTERRUPTS`, decoded
+
+`DELAY_INTERRUPTS` is the **only** schedule flag the engine has. The token table `0x1030d7e0`
+answers exactly two spellings — `NONE` → 0 and `DELAY_INTERRUPTS` → **bit 0** — and makes anything
+else a load-time `Error`. The schedule-table parser `0x1030d850` OR-accumulates the `Flags` section
+into `CAI_Schedule+0x18`, defaulting to 0 when a schedule declares none. `[VtMB]`
+
+Recovered `CAI_Schedule` layout, from that parser and `CAI_BaseNPC::CacheInterruptConditions`
+(`0x1026a0f0`):
+
+| Offset | Meaning |
+|---|---|
+| `+0x00`–`+0x17` | **inverted** interrupt mask, 192 bits — the `!COND_*` form |
+| `+0x18` | flags word; bit 0 = `DELAY_INTERRUPTS` |
+| `+0x1c` | schedule id |
+| `+0x20` / `+0x24` | task array (8 bytes/entry) and count (parser caps at 64) |
+| `+0x28`–`+0x3f` | **normal** interrupt mask, 192 bits |
+| `+0x40` | name |
+
+The flag has exactly one tester: `CAI_BaseNPC::IsScheduleValid` (`0x10280ff0`), called only from
+`MaintainSchedule` (`0x102817c0`). It is **not** consulted on its own — it is ANDed with the NPC's
+`m_bDidMaintainSchedule` (`+0x5bb8`):
+
+```c
+if (!(!m_bDidMaintainSchedule && (m_pSchedule->flags & 1)))
+{
+    testBits = (m_Conditions & m_CustomInterruptConditions)
+             | (m_InvertedInterruptConditions & ~m_Conditions);
+    if (testBits) return false;          // "Break condition: > %s"
+}
+if (HasCondition(COND_SCHEDULE_DONE) || HasCondition(COND_TASK_FAILED)) return false;
+return true;
+```
+
+`m_bDidMaintainSchedule` is written in exactly three places: false at spawn (`0x10273ad0`), **false
+by every `SetSchedule`** (`0x10280e50`), and true on `MaintainSchedule`'s common exit
+(`0x102821ae`). So the flag buys a schedule **one think of immunity, re-armed by every install** —
+no timer, no task boundary, no deferral store. Nothing is latched: a condition suppressed on that
+think is simply not consulted, and a stimulus that persists is re-gathered and fires on the next
+one. `COND_TASK_FAILED` (`0x5c`) and `COND_SCHEDULE_DONE` (`0x5d`) are tested after the gate and
+are never delayed. `[VtMB]`
+
+All 42 flagged schedules are installed from **outside** the AI think, which is the case the flag
+exists for, and they are one family: the Discipline effects and externally forced states —
+`SCHED_TROIKA_D_MESMERIZE`, `D_DAZE`, `D_BERSERK`, `D_TRANCE`, `D_HYSTERIA`, `D_SUICIDE`,
+`D_BRAINWIPE`, the eighteen `DO_*_ACTIVITY` performers, `TROIKA_MESMERIZED`, `LAUGHING`, `CALMED`,
+`LOST`, `DISORIENTED`, `FLEE_AND_DIE`. Without the flag a forced state would be re-selected away on
+the same think that forced it. `[VtMB]`
+
+#### `SetSchedule` clears the condition set
+
+`CAI_BaseNPC::SetSchedule` (`0x10280e50`) zeroes six dwords at `+0x5c5c` — the 192-bit condition
+set `SetCondition` (`0x10269a20`) and `HasCondition` (`0x10269aa0`) write and read. A condition
+standing at the instant a schedule is installed is **destroyed by the install**, so only a stimulus
+the next pass re-observes can interrupt the new program. This is the other half of
+`DELAY_INTERRUPTS`: without it the flag would be nearly redundant. The same body also calls the
+schedule-change virtual (slot 435) first and clears `m_bDidMaintainSchedule`. `[VtMB]`
+
+Two further facts about the effective mask, neither previously recorded: the interrupt column
+supports an **inverted `!COND_*` form** (mask at `CAI_Schedule+0x00`, evaluated `mask & ~conditions`;
+no shipped schedule uses it), and the mask an NPC actually runs against is **not** the authored one
+— `CacheInterruptConditions` copies the schedule's mask onto the NPC each think and then lets
+`BuildScheduleTestBits` (`CAI_BaseNPCTroika::0x102ad140`) add and remove conditions per NPC. `[VtMB]`
 
 ### Ordinary humanoid combat selection
 

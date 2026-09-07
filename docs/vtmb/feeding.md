@@ -385,9 +385,64 @@ present:
 1. stops feeder/victim loop and heartbeat presentation;
 2. reads the victim's remaining `BloodPool`;
 3. when it is below one, selects the native death/incapacitation outcome for that victim/context;
-4. otherwise returns the victim to its non-depleted post-feed path;
+4. otherwise puts the victim into the post-feed trance (below);
 5. calls the victim feed-end callback;
 6. clears the target handle and current interval.
+
+### Step 4, decoded — the post-feed trance
+
+Step 4 is one call, and it is what a player sees as the fed-upon NPC standing entranced for a while
+before resuming its life:
+
+```c
+// FeedInterrupt 0x1033a9e0, after reading BloodPool (stat index 0xc)
+if (BloodPool >= 1) {
+    npc = victim->+0x98;                                // cached NPC downcast
+    if (npc && npc->vtbl[404](attacker) != 1) {         // IRelationType != D_HT
+        npc->vtbl[614]();                               // 0x102c23f0 — think timers := curtime
+        npc->SetSchedule(0xfb, false);                  // SCHED_TROIKA_MESMERIZED
+    }
+}
+```
+
+Slot 404 is `IRelationType`; `CAI_BaseNPCTroika`'s override is `0x10299da0` and `1` is `D_HT`. **A
+victim that already hates its attacker gets no trance** and returns straight to what it was doing,
+which is why feeding on a hostile mid-combat looks nothing like feeding on a civilian. Slot 614
+(`0x102c23f0`) stamps `m_flNextUpdateThink` and four sibling timers to `curtime`, so the schedule
+takes effect on the very next AI pass rather than waiting out the current one. `[VtMB]`
+
+`SCHED_TROIKA_MESMERIZED` (0xfb, blob at `0x105e6f40`):
+
+```text
+Tasks       TASK_MAKE_OBLIVIOUS    TRUE
+            TASK_SET_NPC_FLAG      NPCFlag:D_IS_BUSY
+            TASK_SET_NPC_FLAG      NPCFlag:DONT_INVESTIGATE
+            TASK_SET_NPC_FLAG      NPCFlag:NO_DIALOG
+            TASK_SET_ACTIVITY      ACTIVITY:ACT_DISPOSITION_MESMERIZED
+            TASK_WAIT              30
+            TASK_WAIT_RANDOM       120
+Interrupts  COND_LIGHT_DAMAGE  COND_HEAVY_DAMAGE  COND_REPEATED_DAMAGE
+Flags       DELAY_INTERRUPTS
+```
+
+**30 + uniform(0, 120) seconds**, so 30 to 150, standing in `ACT_DISPOSITION_MESMERIZED`: sensing
+nothing at all (`TASK_MAKE_OBLIVIOUS` gates the whole sense pass), taking interest in nothing,
+unconversable, refused an ordinary schedule, and breakable only by damage. The task semantics, the
+complete NPC flag vocabulary, and the schedule-change virtual that unwinds all of it are recovered
+in `docs/vtmb/npc-ai-reverse-engineering.md` → "The incapacitation tasks and the NPC flag word";
+`DELAY_INTERRUPTS` is decoded in the same document under "Interrupt conditions". The program carries
+no teardown tasks and needs none — the next schedule the victim is given releases every bit and the
+obliviousness refcount together. `[VtMB]`
+
+This is the **only** producer of `SCHED_TROIKA_MESMERIZED` in the shipped game: no other
+`SetSchedule(0xfb)` site exists in `vampire.dll`, and no script, `disciplinetgt` record or vdata
+file in the install names the string. `[VtMB] [script/data]`
+
+Two consequences worth stating because they close loops elsewhere in this document. The trance sets
+`ACT_DISPOSITION_MESMERIZED`, which is the first of the four automatic feed-acceptance states in
+"Target acquisition and acceptance" — so **a victim still in its post-feed trance can be fed on
+again with no opposed roll**. And `m_iIsOblivious > 0` is the same field `docs/vtmb/stealth.md`
+names as the backstab arc override, so a tranced victim is stealth-killable from any angle.
 
 The NPC callback surface exposes `OnFedUponBegin` and `OnFedUponEnd`; `FeedBegin` brackets the
 victim with the start callback and `FeedInterrupt` brackets it with the end callback. Those outputs

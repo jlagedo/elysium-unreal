@@ -913,7 +913,15 @@ void FElysiumNpc::RunConditionPass()
 	if (!ScriptOwner.IsSet() && ScriptPhase == EScriptPhase::None)
 	{
 		const double SenseNow = World ? World->NowSeconds() : 0.0;
-		Senses.Tick(*this, SenseNow);
+		// `CAI_BaseNPC::PerformSensing` (`0x1026e4f0`) runs the sense pass only when
+		// `m_iIsOblivious < 1`. This is the first and largest of the refcount's four consumers: an
+		// oblivious body takes in NO sight, sound or scent at all — it is not merely uninterested in
+		// what it senses, it senses nothing. That is what makes a mesmerized victim stand through a
+		// gunfight, and it is a strictly stronger statement than `DONT_INVESTIGATE` below.
+		if (!IsOblivious())
+		{
+			Senses.Tick(*this, SenseNow);
+		}
 		// The rest of the recovered decision pass, in `RunAI`'s own order — condition
 		// gathering (which contains the enemy transaction), then ideal-state selection, then the
 		// schedule work every executor below performs.
@@ -2413,6 +2421,67 @@ void FElysiumNpc::RememberFact(float What)
 	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER %g (no consumer)"), What));
 }
 
+void FElysiumNpc::MakeOblivious(bool bOblivious)
+{
+	// `CAI_BaseNPC` `0x1026d130` (set) and `0x1026d160` (clear), in their recovered order.
+	if (bOblivious)
+	{
+		// 1. `SetEnemy(NULL)`. Through the ordinary transaction, so the last-enemy transfer, the
+		//    slot and the lost-output effects all happen — an incapacitated NPC forgetting its enemy
+		//    is the same operation as any other forgetting, not a field poke.
+		ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
+		// 2. Squad disconnect (`0x1026d050`: leave the squad, `++m_iSquadDisconnected`, and set
+		//    `D_DISCONNECT_SQUAD`).
+		//
+		// SEAM (named, no substrate): this runtime has no squad object for an NPC to leave, so there
+		// is nothing to disconnect from. The flag is set because it is what the schedule-change clear
+		// and the scripted-scene teardown both look for, and because a squad layer that lands later
+		// must find the bit already correct rather than have to backfill it.
+		NpcFlags.Set(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
+		// 3. The refcount and its bookkeeping bit.
+		NpcFlags.AddOblivious();
+		// 4. `OnIncapacitatedStart`. An authored output with 10 wires across the exported maps
+		//    (`docs/vtmb/npc-ai-reverse-engineering.md`), so this is a real content surface and not a
+		//    diagnostic. The NPC is both caller and activator: nothing else is in scope at the arm.
+		FireOutput(FName(TEXT("OnIncapacitatedStart")), Handle);
+	}
+	else
+	{
+		NpcFlags.RemoveOblivious();
+		NpcFlags.Clear(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
+		FireOutput(FName(TEXT("OnIncapacitatedEnd")), Handle);
+	}
+	RecordScheduleEvent(FString::Printf(TEXT("TASK_MAKE_OBLIVIOUS %s -> %s"),
+		bOblivious ? TEXT("TRUE") : TEXT("FALSE"), *NpcFlags.Describe()));
+}
+
+void FElysiumNpc::SetNpcFlag(EElysiumNpcFlag Flag)
+{
+	NpcFlags.Set(Flag);
+	RecordScheduleEvent(FString::Printf(TEXT("TASK_SET_NPC_FLAG NPCFlag:%s"),
+		FElysiumNpcFlags::LexToString(Flag)));
+}
+
+void FElysiumNpc::ClearConditions()
+{
+	// Retail's `SetSchedule` zeroes all 192 condition bits. See
+	// `IElysiumScheduleRunner::ClearConditions` for why this is half of `DELAY_INTERRUPTS`.
+	Cognition.Conditions.Reset();
+}
+
+void FElysiumNpc::OnScheduleChange()
+{
+	// The flag half is the object's own recovered rule; what is left here is the world-facing half
+	// retail runs when the refcount actually reached zero.
+	if (NpcFlags.OnScheduleChange())
+	{
+		// Retail rejoins the squad here (`0x1026d0c0`). SEAM, for the same reason as the disconnect
+		// above: there is no squad object to rejoin. Nothing else is owed — sensing and the dialogue
+		// gate read the counter live, so both resume on their own the moment it hits zero.
+		RecordScheduleEvent(TEXT("OnScheduleChange: obliviousness released"));
+	}
+}
+
 EElysiumScheduleId FElysiumNpc::SelectDoorObstructionSchedule()
 {
 	const double Now = World ? World->NowSeconds() : 0.0;
@@ -3461,6 +3530,16 @@ void FElysiumNpc::SerializeScheduleBlock(FElysiumSaveArchive& Ar)
 	// than dropping to its stance) without pretending the state under it survived.
 	if (Ar.Version() >= FElysiumSaveVersion::NpcSchedule)
 	{
+		// The flag word travels with the schedule because it IS schedule state: every bit in it was
+		// written by a task and is released by the next schedule change.
+		//
+		// The restore below re-Starts the saved program, and `ElysiumSchedule::Start` runs
+		// `OnScheduleChange` -- which releases exactly these bits before the restarted program's own
+		// first tasks set them again. That is the same one-think round trip a live schedule change
+		// performs, so the word is not redundant: it is what keeps a mesmerized NPC from being
+		// conversable, sensing and un-oblivious in the window before its first think after a load,
+		// and what carries bits belonging to any program that does not restart at all.
+		NpcFlags.Serialize(Ar);
 		uint8 SavedSchedule = static_cast<uint8>(Schedule.Current);
 		Ar << SavedSchedule;
 		if (Ar.IsLoading())

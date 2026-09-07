@@ -559,6 +559,67 @@ and finishing on the whole pattern, a style < 32 taking nothing, and the rig's m
 `"a"`/`"m"` on an adopted source. `Elysium.Substrate.LightDynamic`: the spec the leaf publishes
 for a point and a spot, on at spawn, off on `TurnOff`, parented to a named body.
 
+### The light store — a hand pass that survives the bake
+
+`pipeline/unreal/light_store.py`, `Content/ElysiumAuthored/Lighting/<map>.lights.json`.
+
+"Lights final (R5.6)" made the baked light actor the truth on a V2 map, and in doing so made the
+**level** the only place a light's value exists. The level is a generated package the bake deletes
+and re-authors on every run, so a lighting pass done the ordinary Unreal way — open
+`/ElysiumBaked/<map>/<map>.umap`, drag the gizmo, tune the Details panel, Ctrl+S — died at the next
+`export map` with nothing said. The store closes that loop, and closes it so that it cannot be
+forgotten:
+
+1. **Harvest.** `bake_map.bake_one` calls `light_store.harvest` *before* its `new_blank_map`
+   teardown, so the first thing a bake does with a map is read the light actors off the level
+   already on disk — including whatever a human just saved into it — and write them to the JSON.
+2. **Apply.** `bake_map_v2._place_lights` places the store's records verbatim when the file
+   exists, and falls back to `derive_light` when it does not. `recipe["light_store"]` carries the
+   rows, so an edited light re-authors the level instead of `stage_level` logging "reused".
+
+**A full snapshot, never a delta.** There is no baseline to diff against, no per-field override
+toggle and no identity to reconcile: the file *is* the map's light set. A light added in the editor
+is a record with a null `src` (and is placed with no `elysium.src` tag, which is how the next
+harvest tells it apart); a light deleted in the editor is a record that is not there. This is the
+whole design, and the reason it carries no machinery — it is deliberately *not*
+`UElysiumLightCalibration`'s merge-row shape, which was built for a hand pass typed into a Details
+panel rather than one performed in the viewport.
+
+**The loop converges.** A bake harvests the level its own previous run placed, so a harvested
+record must equal the record that placed the actor or every `export map` would rewrite the store
+and re-author a level nobody edited, forever. The one lossy step is colour — the placement writes
+linear and `ULightComponent::SetLightColor` stores `FColor` — so the first harvest of a derived
+map quantises once and is stable from there. `pipeline/tests/test_light_store.py` drives
+place → harvest → place → harvest through that same sRGB quantisation and asserts the second pass
+is exact.
+
+**What it costs.** A stored map stops listening to `UElysiumLightingSettings` — that is the point,
+you have taken manual control of it — but note that a map self-stores on its **second** bake (the
+first writes a level, the second harvests it) whether or not anyone touched it. Handing a map back
+to the page is `uv run elysium export map <map> --no-light-store` **plus** deleting the JSON:
+deleting the file alone does nothing, because the harvest would read the tuned values straight back
+off the level still on the mount. The harvest also costs one level load per map per bake, which is
+what buys the property that a saved edit cannot be lost by forgetting a step.
+
+**No launch can destroy an edit it did not first read.** `bake_one` is the only thing that
+overwrites a level and the harvest is the first thing it does, so a profile bake that skips its
+launch entirely (`export_manager._bake_profile_maps`, whose receipt does not name the level) leaves
+both level and store untouched and the next launch picks the edit up. The loop therefore needs no
+receipt of its own.
+
+**Scope.** The V2 lane only: a legacy map's rig re-derives every value at load from its `.lights`
+sidecar, so a value baked into its actors would never reach a frame. The type-5 skyambient row
+places no actor and keeps coming from the staged table on both paths, and the SkyLight `_place_sky`
+stands on it is not harvested. Only lights are harvested — any other edit saved into a baked level
+still dies on the next bake.
+
+**Verification.** `bake_verify.verify_lights` and `verify_lights_baked` both stand down on a stored
+map: the `.lights` sidecar and the lighting page are no longer witnesses to its values.
+`verify_lights_stored` checks the claim that is actually being made — every store row reached the
+level exactly once and the actor carries the row's values, per the fields that light's type has
+(`_stored_fields`: no cone on a point, no attenuation radius on a sun) — plus the one renderer
+contract a hand pass cannot select, RT shadows on any local light that allows MegaLights.
+
 ### Cog Lights window: viewer, not editor
 
 The window (`ElysiumCogWindow_Lights`) is now **read-only**. Deleted outright: the "Rig tuning" tab

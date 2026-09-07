@@ -51,6 +51,7 @@
 #include "ElysiumAnimEvent.h"        // FElysiumAnimEvent — the record the boundary check scans for
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumFeedSchedules.h"   // the surviving victim's post-feed trance
 #include "Substrate/ElysiumDiceTables.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLaw.h"        // pulse / interrupt law producers
@@ -222,9 +223,22 @@ bool FElysiumCombatCharacter::IsFeedAutoAcceptState() const
 	// Retail tests the target's current activity: `ACT_DISPOSITION_MESMERIZED`, `ACT_DISORIENTED`,
 	// `ACT_LOST` and `ACT_COWER` all accept without a roll.
 	//
-	// OPEN — this runtime has no ACT_* state machine to ask, so the stand-in is the character's
-	// current disposition name: the one emotional-state value the substrate carries, and the one
-	// that selects the standing set those activities belong to.
+	// `ACT_DISPOSITION_MESMERIZED` is now answerable for real, and this is the whole of retail's
+	// producer for it: a body running `SCHED_TROIKA_MESMERIZED` had that activity put on it by the
+	// program's own `TASK_SET_ACTIVITY` and holds it for the program's 30-150 seconds. So a victim
+	// still in its post-feed trance can be fed on again with no opposed roll — which is retail
+	// behaviour reproduced rather than approximated, and it closes the loop with
+	// `ElysiumFeedSchedules::BeginPostFeedTrance`.
+	if (const FElysiumNpc* Npc = AsNpc();
+		Npc != nullptr && Npc->Schedule.Current == EElysiumScheduleId::Mesmerized)
+	{
+		return true;
+	}
+	// STILL OPEN — the other three. `ACT_DISORIENTED`, `ACT_LOST` and `ACT_COWER` have no program in
+	// this runtime that puts them on a body, so there is no activity to ask about and the stand-in
+	// below is still what answers for them: the character's current disposition name, the one
+	// emotional-state value the substrate carries and the one that selects the standing set those
+	// activities belong to. Each becomes a real test as its producer lands.
 	return IsAutoAcceptDispositionName(Disposition);
 }
 
@@ -931,6 +945,21 @@ void FElysiumCombatCharacter::CompleteFeedTransaction(bool bKeepReleaseTail)
 			// "Open verification gaps"). Only death-vs-survive is taken here; `OnKilled` is the same
 			// door the damage path uses, so `OnDeath` fires exactly once either way.
 			Victim->OnKilled();
+		}
+		else
+		{
+			// Retail's step 4 — "otherwise returns the victim to its non-depleted post-feed path".
+			// That path is one call: `SetSchedule(SCHED_TROIKA_MESMERIZED)` on a victim that does not
+			// already hate the feeder, which is what leaves a fed-upon bystander standing in a trance
+			// for 30-150 seconds instead of walking away. The policy and the program live together in
+			// `Substrate/ElysiumFeedSchedules.h`.
+			//
+			// AFTER the callback, matching the branch order above: retail reads the pool, takes one
+			// of the two outcomes, and only then fires the victim callback — but our depleted arm
+			// collapses the death lifecycle into an immediate `OnKilled`, so the callback was hoisted
+			// ahead of both arms to keep the FIFO ordering that arm needs. The trance install fires
+			// no output of its own and is order-independent with respect to `OnFedUponEnd`.
+			ElysiumFeedSchedules::BeginPostFeedTrance(*Victim, *this);
 		}
 		if (bDepleted)
 		{

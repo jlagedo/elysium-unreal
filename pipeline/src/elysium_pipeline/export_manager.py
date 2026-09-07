@@ -1027,6 +1027,7 @@ def bake_and_verify(
     *,
     force: bool = False,
     particles: bool = False,
+    light_store: bool = True,
     verify: bool = False,
 ) -> None:
     """Bake the named maps, and read the mount back only when explicitly asked to.
@@ -1040,7 +1041,7 @@ def bake_and_verify(
     if not names:
         return
     unreal.bake_maps(config, runner, names, force=force, particles=particles,
-                     batch_size=unreal.MAP_BAKE_BATCH)
+                     light_store=light_store, batch_size=unreal.MAP_BAKE_BATCH)
     missing = [
         str(_baked_package(config, name))
         for name in names
@@ -1174,6 +1175,7 @@ def export_targeted_maps(
     force: bool = False,
     intermediate_only: bool = False,
     particles: bool = False,
+    light_store: bool = True,
     verify: bool = False,
 ) -> list[str]:
     _require_export_config(config)
@@ -1237,7 +1239,7 @@ def export_targeted_maps(
         # recipes, and forcing a lane is that lane's own `--force`.
         native_model_pipeline.import_map_dependencies(config, runner)
         bake_and_verify(config, runner, names, force=force, particles=particles,
-                        verify=verify)
+                        light_store=light_store, verify=verify)
     return names
 
 

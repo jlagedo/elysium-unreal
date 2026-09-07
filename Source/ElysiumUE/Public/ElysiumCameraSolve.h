@@ -262,6 +262,16 @@ struct FElysiumCameraShot
 	// `SnapOnShotChange` (bit 0x80): `FUN_10002390` hard-copies goal -> current on the shot change.
 	bool bSnapOnShotChange = false;
 
+	// Retail's `CamMode` (`DT_BaseCineCam` `+0x638`, client `+0x45c`), reduced to the one bit the
+	// client reads. `C_BaseCineCamera::Update` (`FUN_10001a20`) runs the tracker above **only for
+	// mode 1, the named shot**: `if (CamMode == 1) FUN_10001fa0(); else current = replicated origin,
+	// angles, FOV` — every other mode (`FollowEntity` 3, `Animated` 4) copies the server's pose
+	// straight through, and the Worldcraft `camera_track` channel never reaches the cine camera at
+	// all (`CInput` `FUN_100ffb90`: `VectorAngles(target - origin)` re-derived every frame, no
+	// deadband, no rate). So a value shot is **direct** — origin and look-at are the pose — and only
+	// a `vdata/camerashots/` shot (and the conversation profiles that stand in for one) is tracked.
+	bool bTracked = false;
+
 	// One-shot render-history reset. The camera component consumes and clears it while publishing
 	// the value; it is never persistent shot state. Zero-time camera_track edits set this so Unreal
 	// does not smear the previous view across an authored hard cut.
@@ -282,6 +292,10 @@ struct FElysiumCameraShot
 // (loop `0x1006ea90`, cache `this+0x598+i*12`) — `AttachType None` is *not* "sample once", it just
 // reads that same per-tick cache back (`FUN_1006f010`). What holds a conversation camera still is
 // therefore never the anchor mode; it is this tracker's deadbands.
+//
+// **Only a tracked shot is tracked.** `FElysiumCameraShot::bTracked` is retail's `CamMode == 1`
+// test in `FUN_10001a20`; a direct shot (a `camera_track` value, a green-room pose) copies its
+// origin and its look-at-derived angles through every frame, exactly as `CInput`'s override does.
 //
 // The three functions this is:
 //   * position   `FUN_10001fe0` — hysteresis on `DistanceTolerance`, accel/decel on `MoveAccel`;

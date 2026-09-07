@@ -156,6 +156,9 @@ FElysiumCameraRequest ElysiumDialogueCamera::BuildRequest(
 	Request.Shot.Origin = Origin;
 	Request.Shot.LookAt = LookAt;
 	Request.Shot.bUseLookAt = true;
+	// A profile stands in for a `vdata/camerashots/` dialogue shot, which retail runs in `CamMode` 1:
+	// it is tracked, at the record's rate ceiling, not copied through like a `camera_track` value.
+	Request.Shot.bTracked = true;
 	Request.Shot.FieldOfView = Profile.FieldOfView;
 	Request.Shot.BlendSeconds = Request.BlendInSeconds;
 	Request.Shot.DebugName = Request.DebugName;

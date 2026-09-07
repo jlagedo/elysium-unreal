@@ -53,7 +53,7 @@ def test_bake_launches_once_per_batch_and_trusts_the_exit() -> None:
         ):
             export_manager.bake_and_verify(config, object(), ["test_map", "test_map"])
         bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=False,
-                                     particles=False,
+                                     particles=False, light_store=True,
                                      batch_size=export_manager.unreal.MAP_BAKE_BATCH)
         verify.assert_not_called()
 

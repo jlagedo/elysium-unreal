@@ -64,6 +64,12 @@ namespace
 		// programs with undecoded registration sites already take.
 		static const FScheduleMeta Die{ 0, TEXT("SCHED_DIE") };
 
+		// The post-feed trance. Its number IS decoded, from its one and only producer:
+		// `CBaseCombatCharacter::FeedInterrupt` (`0x1033a9e0`) calls `SetSchedule(0xfb)` on a
+		// surviving victim. No other `SetSchedule(0xfb)` site exists in `vampire.dll`, and no script,
+		// `disciplinetgt` record or vdata file in the shipped install names the string.
+		static const FScheduleMeta Mesmerized{ 0xfb, TEXT("SCHED_TROIKA_MESMERIZED") };
+
 		switch (Id)
 		{
 		case EElysiumScheduleId::IdleDisposition:        return IdleDisposition;
@@ -89,6 +95,7 @@ namespace
 		case EElysiumScheduleId::AlertSmallFlinch:       return AlertSmallFlinch;
 		case EElysiumScheduleId::TakeCoverFromOrigin:    return TakeCoverOrigin;
 		case EElysiumScheduleId::Die:                    return Die;
+		case EElysiumScheduleId::Mesmerized:             return Mesmerized;
 		case EElysiumScheduleId::ScriptedMoveToGoal:     return ScriptedMove;
 		case EElysiumScheduleId::ScriptedFollowPath:     return ScriptedFollow;
 		default:                                        return None;
@@ -142,6 +149,8 @@ const TCHAR* ElysiumTaskName(EElysiumTask Task)
 	case EElysiumTask::RangeAttack1:             return TEXT("TASK_RANGE_ATTACK1");
 	case EElysiumTask::SetSchedule:              return TEXT("TASK_SET_SCHEDULE");
 	case EElysiumTask::Remember:                 return TEXT("TASK_REMEMBER");
+	case EElysiumTask::MakeOblivious:            return TEXT("TASK_MAKE_OBLIVIOUS");
+	case EElysiumTask::SetNpcFlag:               return TEXT("TASK_SET_NPC_FLAG");
 	case EElysiumTask::PlayDeathSequence:        return TEXT("TASK_PLAY_DEATH_SEQUENCE");
 	case EElysiumTask::GetPathToGoal:            return TEXT("TASK_GET_PATH_TO_GOAL");
 	}
@@ -452,6 +461,18 @@ namespace
 			Runner.RememberFact(Step.Param);
 			return EElysiumTaskResult::Complete;
 
+		// The incapacitation vocabulary. Both are `StartTask`-only in retail and complete here for
+		// the same reason `TASK_SET_ACTIVITY` does: the arm does its write and calls `TaskComplete`.
+		case EElysiumTask::MakeOblivious:
+			// The operand is the compiler's float: `TRUE`/`ON` -> 1.0, `FALSE`/`OFF` -> 0.0. Retail
+			// compares against 0.0 exactly and takes the clear branch on equality.
+			Runner.MakeOblivious(Step.Param != 0.f);
+			return EElysiumTaskResult::Complete;
+
+		case EElysiumTask::SetNpcFlag:
+			Runner.SetNpcFlag(Step.Flag);
+			return EElysiumTaskResult::Complete;
+
 		case EElysiumTask::GetPathToEnemy:
 			return Runner.GetPathToEnemy(State.ToleranceUnits)
 				? EElysiumTaskResult::Complete : EElysiumTaskResult::Failed;
@@ -612,6 +633,21 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 		return false;
 	}
 	State.Current = Id;
+	// Everything retail's `CAI_BaseNPC::SetSchedule` (`0x10280e50`) does besides installing the
+	// program, in its order. All three producers reach it here rather than at their own call sites,
+	// which is what keeps a script's `ChangeSchedule`, a discipline's `AI_Schedule` and the feed's
+	// mesmerize install behaving identically.
+	//
+	// 1. The schedule-change virtual (slot 435). It releases the bits and the obliviousness the
+	//    PREVIOUS program was holding, which is how an incapacitating schedule unwinds without
+	//    carrying teardown tasks of its own.
+	Runner.OnScheduleChange();
+	// 2. Zero the gathered conditions. A stimulus standing at the instant of install is destroyed;
+	//    only one the next pass re-observes can interrupt the new program.
+	Runner.ClearConditions();
+	// 3. `m_bDidMaintainSchedule = false` -- `State.Clear()` above already did it, and it is restated
+	//    here because it is a rule of the install rather than a side effect of clearing state.
+	State.bDidMaintainSchedule = false;
 	Runner.RecordScheduleEvent(FString::Printf(TEXT("schedule %s (0x%x)"),
 		ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
 	return true;
@@ -634,7 +670,20 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 	{
 		if (const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current))
 		{
-			const FElysiumNpcConditions Firing = Active->Interrupts.Intersection(*Conditions);
+			// `DELAY_INTERRUPTS`, exactly as `CAI_BaseNPC::IsScheduleValid` (`0x10280ff0`) spells it:
+			// the flag is ANDed with `!m_bDidMaintainSchedule`, so it buys ONE think of immunity and is
+			// re-armed by every install. Nothing is latched -- a condition suppressed here is simply
+			// not consulted this pass, and a stimulus that persists is re-gathered and fires next
+			// think.
+			const bool bDelayed = Active->bDelayInterrupts && !State.bDidMaintainSchedule;
+			const FElysiumNpcConditions Firing = bDelayed
+				? FElysiumNpcConditions() : Active->Interrupts.Intersection(*Conditions);
+			if (bDelayed)
+			{
+				Runner.RecordScheduleEvent(FString::Printf(
+					TEXT("schedule %s (0x%x) DELAY_INTERRUPTS: interrupts held for this think"),
+					ElysiumScheduleName(State.Current), ElysiumScheduleNumber(State.Current)));
+			}
 			if (!Firing.IsEmpty())
 			{
 				Runner.RecordScheduleEvent(FString::Printf(
@@ -674,6 +723,10 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		if (Result == EElysiumTaskResult::Running)
 		{
 			OutNextThinkDelay = DelayFor(Step, State, Now);
+			// The pass ran, so the delay window closes -- `MaintainSchedule`'s common exit
+			// (`0x102821ae`) sets `m_bDidMaintainSchedule = 1`. This is the ONLY exit that matters:
+			// every other one clears the state or installs a new program, and both re-arm the flag.
+			State.bDidMaintainSchedule = true;
 			return true;
 		}
 		if (Result == EElysiumTaskResult::Complete)

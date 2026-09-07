@@ -892,7 +892,6 @@ void FElysiumGreenRoomRun::FrameLabCamera(const FBox& Bounds)
 	Shot.bUseLookAt = true;
 	Shot.FieldOfView = 60.0f;
 	Shot.BlendSeconds = 0.0f;
-	Shot.MaxTurnRate = FVector::ZeroVector;
 	Shot.DebugName = TEXT("green_room_lab");
 	if (CameraShotId == 0)
 	{
@@ -936,7 +935,6 @@ void FElysiumGreenRoomRun::PublishCamera(const FBox& Bounds)
 	Shot.bUseLookAt = true;
 	Shot.FieldOfView = 60.0f;
 	Shot.BlendSeconds = 0.0f;
-	Shot.MaxTurnRate = FVector::ZeroVector;
 	Shot.DebugName = TEXT("green_room");
 	if (CameraShotId == 0)
 	{

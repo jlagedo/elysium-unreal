@@ -95,6 +95,39 @@ namespace
 			Calls.Add(FString::Printf(TEXT("trace: %s"), *Row));
 		}
 
+		// The incapacitation verbs and the two install rules, recorded rather than simulated: the
+		// kernel owns WHEN they fire, and that ordering is what these tests assert.
+		FElysiumNpcFlags Flags;
+		int32 ConditionClears = 0;
+		virtual void MakeOblivious(bool bOblivious) override
+		{
+			Calls.Add(FString::Printf(TEXT("MakeOblivious %s"),
+				bOblivious ? TEXT("TRUE") : TEXT("FALSE")));
+			if (bOblivious)
+			{
+				Flags.AddOblivious();
+			}
+			else
+			{
+				Flags.RemoveOblivious();
+			}
+		}
+		virtual void SetNpcFlag(EElysiumNpcFlag Flag) override
+		{
+			Calls.Add(FString::Printf(TEXT("SetNpcFlag %s"), FElysiumNpcFlags::LexToString(Flag)));
+			Flags.Set(Flag);
+		}
+		virtual void ClearConditions() override
+		{
+			++ConditionClears;
+			Calls.Add(TEXT("ClearConditions"));
+		}
+		virtual void OnScheduleChange() override
+		{
+			Calls.Add(TEXT("OnScheduleChange"));
+			Flags.OnScheduleChange();
+		}
+
 		bool Saw(const TCHAR* Needle) const
 		{
 			return Calls.ContainsByPredicate([Needle](const FString& C) { return C.Contains(Needle); });
@@ -556,6 +589,129 @@ bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
 			Runner.Saw(TEXT("TASK_PLAY_DEATH_SEQUENCE failed")));
 		TestTrue(TEXT("the trace says nothing resolved"),
 			Runner.Saw(TEXT("-> (nothing resolved)")));
+	}
+	return true;
+}
+
+// ============================================================================================
+// `SCHED_TROIKA_MESMERIZED` (0xfb), the post-feed trance — the whole recovered program in order,
+// and the duration its two WAIT steps produce.
+//
+// `vampire.dll 0x105e6f40`: MAKE_OBLIVIOUS TRUE; SET_NPC_FLAG D_IS_BUSY; SET_NPC_FLAG
+// DONT_INVESTIGATE; SET_NPC_FLAG NO_DIALOG; SET_ACTIVITY ACT_DISPOSITION_MESMERIZED; WAIT 30;
+// WAIT_RANDOM 120.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleMesmerizedTest,
+	"Elysium.Substrate.Schedule.Mesmerized", GElysiumScheduleTestFlags)
+bool FElysiumScheduleMesmerizedTest::RunTest(const FString&)
+{
+	FRecordingRunner Runner;
+	Runner.RandomFraction = 1.f;   // the WAIT_RANDOM draw resolves to its whole 120
+	FElysiumScheduleState State;
+	double Now = 0.0;
+
+	TestTrue(TEXT("the program is registered"),
+		ElysiumSchedule::Start(State, EElysiumScheduleId::Mesmerized, Runner));
+
+	const double Started = Now;
+	const int32 Thinks = RunToEnd(State, Runner, Now);
+
+	// The task order, verbatim.
+	const TArray<FString> Expected = {
+		TEXT("MakeOblivious TRUE"),
+		TEXT("SetNpcFlag D_IS_BUSY"),
+		TEXT("SetNpcFlag DONT_INVESTIGATE"),
+		TEXT("SetNpcFlag NO_DIALOG"),
+		TEXT("SetActivity ACT_DISPOSITION_MESMERIZED"),
+	};
+	int32 Cursor = 0;
+	for (const FString& Want : Expected)
+	{
+		const int32 At = Runner.Calls.IndexOfByPredicate(
+			[&Want](const FString& C) { return C == Want; });
+		TestTrue(FString::Printf(TEXT("%s ran"), *Want), At != INDEX_NONE);
+		TestTrue(FString::Printf(TEXT("%s ran in order"), *Want), At > Cursor);
+		Cursor = At == INDEX_NONE ? Cursor : At;
+	}
+
+	// 30 flat plus a 0..120 draw. With the draw at its maximum the trance is 150 seconds; the
+	// schedule then ENDS rather than looping, which is what returns the NPC to ordinary selection.
+	TestFalse(TEXT("the program has ended"), State.IsRunning());
+	TestEqual(TEXT("30 + WAIT_RANDOM(120) at full draw is 150 seconds"),
+		static_cast<int32>(FMath::RoundToInt(Now - Started)), 150);
+	TestTrue(TEXT("it held across thinks rather than completing in one"), Thinks >= 2);
+
+	// It carries no teardown tasks: the three flags and the obliviousness are still set when the
+	// program ends, and it is the NEXT install that releases them.
+	TestTrue(TEXT("D_IS_BUSY survives the program's own end"),
+		Runner.Flags.Has(EElysiumNpcFlag::D_IS_BUSY));
+	TestTrue(TEXT("the victim is still oblivious"), Runner.Flags.IsOblivious());
+
+	// ...and now the next schedule releases all of it, through `OnScheduleChange`.
+	ElysiumSchedule::Start(State, EElysiumScheduleId::AlertLookAroundNi, Runner);
+	TestFalse(TEXT("D_IS_BUSY released by the next install"),
+		Runner.Flags.Has(EElysiumNpcFlag::D_IS_BUSY));
+	TestFalse(TEXT("NO_DIALOG released by the next install"),
+		Runner.Flags.Has(EElysiumNpcFlag::NO_DIALOG));
+	TestFalse(TEXT("DONT_INVESTIGATE released by the next install"),
+		Runner.Flags.Has(EElysiumNpcFlag::DONT_INVESTIGATE));
+	TestFalse(TEXT("and the obliviousness refcount is released with them"),
+		Runner.Flags.IsOblivious());
+	return true;
+}
+
+// ============================================================================================
+// `DELAY_INTERRUPTS` — `CAI_BaseNPC::IsScheduleValid` (`0x10280ff0`) ANDs the schedule's flag with
+// `!m_bDidMaintainSchedule`, so a flagged program is immune for exactly ONE think after install and
+// interruptible on every think after that. Nothing is latched or deferred.
+//
+// Driven on the mesmerized program, which is the only registered carrier of the flag, against its
+// own decoded interrupt mask.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleDelayInterruptsTest,
+	"Elysium.Substrate.Schedule.DelayInterrupts", GElysiumScheduleTestFlags)
+bool FElysiumScheduleDelayInterruptsTest::RunTest(const FString&)
+{
+	const FElysiumNpcConditions Damage =
+		FElysiumNpcConditions::Of({ EElysiumNpcCond::HeavyDamage });
+
+	// 1. The damage condition standing on the very first think does NOT end the program.
+	{
+		FRecordingRunner Runner;
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+
+		ElysiumSchedule::Start(State, EElysiumScheduleId::Mesmerized, Runner);
+		TestTrue(TEXT("the install cleared the gathered conditions"), Runner.ConditionClears == 1);
+
+		TestTrue(TEXT("the first think survives a condition in its own interrupt mask"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay, &Damage));
+		TestTrue(TEXT("...and says so"), Runner.Saw(TEXT("DELAY_INTERRUPTS")));
+		TestTrue(TEXT("...and the program is still running"), State.IsRunning());
+
+		// 2. The same condition on the NEXT think ends it. The window is one think, not a duration:
+		//    no time passes between these two calls.
+		TestFalse(TEXT("the second think is interrupted by the same condition"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay, &Damage));
+		TestFalse(TEXT("the program ended"), State.IsRunning());
+		TestTrue(TEXT("and the trace names the firing condition"),
+			Runner.Saw(TEXT("interrupted by")));
+	}
+
+	// 3. A program WITHOUT the flag is interrupted on its first think. Same conditions, same
+	//    kernel — the flag is the only difference, which is what makes it the cause.
+	{
+		FRecordingRunner Runner;
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+
+		// The idle program's mask carries `HEAVY_DAMAGE` and it declares no flags.
+		ElysiumSchedule::Start(State, EElysiumScheduleId::AlertLookAroundNi, Runner);
+		TestFalse(TEXT("an unflagged program is interrupted on its first think"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay, &Damage));
+		TestFalse(TEXT("and it did not report a delay"), Runner.Saw(TEXT("DELAY_INTERRUPTS")));
 	}
 	return true;
 }

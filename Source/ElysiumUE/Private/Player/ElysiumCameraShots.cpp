@@ -453,7 +453,9 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	Out.bUseLookAt = bHasTarget;
 	Out.LookAt = Look;
 	// The whole `CameraConstraints` block reaches the tracker; a field the port parsed and then never
-	// read is a field retail's camera was using.
+	// read is a field retail's camera was using. A file shot is `SetShot(name, 1, ...)` — `CamMode`
+	// 1, the one mode `C_BaseCineCamera::Update` (`FUN_10001a20`) tracks.
+	Out.bTracked = true;
 	Out.FieldOfView = Def.Constraints.FieldOfView;
 	Out.MoveSpeed = Def.Constraints.MoveSpeed;
 	Out.MoveAccel = Def.Constraints.MoveAccel;

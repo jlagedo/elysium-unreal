@@ -236,6 +236,21 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 	{
 		return;
 	}
+	// `DONT_INVESTIGATE`, the per-candidate interest predicate `0x102b3270`, whose first line is
+	// `if ((m_bfAINPCFlags & 0x4000080) != 0) return false;` — the mask being
+	// `DONT_INVESTIGATE | IN_FLEE_SCHED`. That predicate is reached only from the two per-entity
+	// sweeps `CAI_BaseNPCTroika::GatherConditions` (`0x102b27f0`) runs back to back, which is this
+	// loop, so the rejection lands here rather than inside the body.
+	//
+	// Weaker than obliviousness and deliberately separate from it: an oblivious NPC senses nothing at
+	// all, while this one still senses and simply takes no interest. `SCHED_TROIKA_MESMERIZED` sets
+	// both, and a program that set only this one would still hear and see.
+	if (Npc.NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE)
+		|| Npc.NpcFlags.Has(EElysiumNpcFlag::IN_FLEE_SCHED))
+	{
+		return;
+	}
+
 	TArray<FElysiumEntityHandle> Seen;
 	NpcCondBuildSeenSet(Npc, Seen);
 

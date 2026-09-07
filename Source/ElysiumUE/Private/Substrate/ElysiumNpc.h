@@ -72,6 +72,12 @@ public:
 	FElysiumScheduleState Schedule;
 	int32 ScheduleActivityCycle = 0;
 
+	// `m_bfAINPCFlags` / `m_bfAINPCFlags2` and the obliviousness refcount. Written by
+	// `TASK_SET_NPC_FLAG` / `TASK_MAKE_OBLIVIOUS` and released by every schedule install; saved,
+	// because retail's are datamap members and an NPC left mesmerized across a save must not wake up
+	// conversable.
+	FElysiumNpcFlags NpcFlags;
+
 	// --- The authored director's pushed order ---
 	// What an `aiscripted_schedule` last pushed onto this NPC, live for exactly as long as the
 	// program it started. Session state, not save state — the reasoning is on the struct.
@@ -531,6 +537,39 @@ public:
 
 	virtual bool GetPathToScriptedGoal() override;
 
+	// --- The incapacitation task bodies and the install rules -----------------------------------
+
+	virtual void MakeOblivious(bool bOblivious) override;
+
+	virtual void SetNpcFlag(EElysiumNpcFlag Flag) override;
+
+	virtual void ClearConditions() override;
+
+	virtual void OnScheduleChange() override;
+
+	/**
+	 * `CBaseCombatCharacter::IsBusyWithDiscipline` (`0x1033e2b0`) — the sole reader of `D_IS_BUSY`,
+	 * whose whole body is that one bit test.
+	 *
+	 * Named as its own predicate rather than left as a bit test at each site, because that is what
+	 * its 17 retail callers see: the bit and the predicate are the same fact, and a caller that
+	 * tested the bit directly would drift from them.
+	 */
+	virtual bool IsBusyWithDiscipline() const override
+	{
+		return NpcFlags.Has(EElysiumNpcFlag::D_IS_BUSY);
+	}
+
+	/**
+	 * `m_iIsOblivious > 0` (`CAI_BaseNPC` `+0x5bb4`).
+	 *
+	 * Its four recovered consumers are: the sense pass (`CAI_BaseNPC::PerformSensing` `0x1026e4f0`
+	 * skips sensing entirely), the weapon-aim pose (slot 314, `0x102bf070`, stops aiming), a
+	 * reaction predicate (slot 587, `0x1028ef20`) and `CStealthKillRules::FindVictim`
+	 * (`0x101be1f0`, which makes an oblivious body backstabbable from any angle).
+	 */
+	bool IsOblivious() const { return NpcFlags.IsOblivious(); }
+
 	// The combat schedules' movement claim. Idempotent for a token already held, and refused while
 	// another owner has the body — which is what a task turns into its own named failure. A patrol
 	// route in progress is SUSPENDED by the claim rather than lost, so the release below resumes it.
@@ -602,10 +641,27 @@ public:
 	// definition authored no `use_icon` of its own.
 	virtual int32 ResolveUseIcon(const FElysiumEntityHandle& Activator) const override;
 
-	// `m_bfAINPCFlags2 & 0x10000000` — one of the four common guards on every dialogue entry.
-	// SEAM: nothing in this runtime decodes `m_bfAINPCFlags2`, so the bit answers CLEAR and the
-	// guard never blocks. TODO(dialogue-plan): recover the flag word and its writers.
-	bool HasDialogSuppressFlag() const { return false; }
+	/**
+	 * The dialogue-suppression guard on every conversation entry — RECOVERED as TWO bits, not one.
+	 *
+	 * Retail's "can the player talk to me" predicate (virtual slot 295, `0x102c21c0`, with the
+	 * `CPayphone` override `0x101aaee0`) tests both:
+	 *
+	 *   - `m_bfAINPCFlags & 0x00080000` — `NO_DIALOG`, the PER-SCHEDULE form. A schedule sets it with
+	 *     `TASK_SET_NPC_FLAG` and the next schedule change releases it, so it lasts exactly as long
+	 *     as the program that asked for it. `SCHED_TROIKA_MESMERIZED` is one such program.
+	 *   - `m_bfAINPCFlags2 & 0x10000000` — `NO_DIALOG_PERSISTENT`, which the schedule-change clear
+	 *     does NOT touch. This is the bit the seam this replaced was named after.
+	 *
+	 * Both are now decoded and both are honoured. `NO_DIALOG_PERSISTENT` still has no writer in this
+	 * runtime — no recovered producer sets it — so today only the schedule form can block, and that
+	 * is a missing producer rather than a missing rule.
+	 */
+	bool HasDialogSuppressFlag() const
+	{
+		return NpcFlags.Has(EElysiumNpcFlag::NO_DIALOG)
+			|| NpcFlags.Has(EElysiumNpcFlag2::NO_DIALOG_PERSISTENT);
+	}
 
 	// The whole `FUN_10178280` refusal test from this NPC's side: nullptr when the conversation may
 	// open, otherwise the reason. `bForceDialogStart` short-circuits it, as retail's byte does.

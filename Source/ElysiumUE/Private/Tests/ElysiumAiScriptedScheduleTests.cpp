@@ -870,8 +870,16 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	// patrol executor issues `MoveTo` and never `Face`, so the turn is the discriminator. Routing
 	// a patrolling NPC to `ThinkPatrol` skips combat selection entirely.
 	F.Step(0.6);
+	// Asked of the PRODUCER directly rather than read off the NPC's condition set after the think,
+	// because the condition does not outlive the selection it drove: `ElysiumSchedule::Start` clears
+	// every gathered condition, which is retail's own `CAI_BaseNPC::SetSchedule` (`0x10280e50`)
+	// zeroing the six dwords at `+0x5c5c` that `SetCondition` (`0x10269a20`) writes. A post-install
+	// snapshot of the set is empty in retail too, so the old spelling of this assertion was reading a
+	// slot the install had legitimately wiped. The claim under test is unchanged.
+	FElysiumNpcConditions Attack;
+	ElysiumNpcCond::GatherAttackConditions(*F.Guard, 0.6, Attack);
 	TestTrue(TEXT("the committed enemy raises CAN_MELEE_ATTACK1"),
-		F.Debug(F.Guard, TEXT("Conditions")).Contains(TEXT("CAN_MELEE_ATTACK1")));
+		Attack.Has(EElysiumNpcCond::CanMeleeAttack1));
 	TestTrue(TEXT("a patrolling NPC in combat reaches its combat program"),
 		F.Services.Saw(TEXT("NpcMotor Face")));
 	TestTrue(TEXT("...and the program's movement claim displaced the route"),

@@ -334,9 +334,8 @@ namespace
 		}
 		else if (TurnAccel <= 0.0f)
 		{
-			// A value shot (a `camera_track` edit, a grammar profile) authors no `TurnAccel`; it runs
-			// at the rate ceiling directly, which is the rate-limited behaviour this channel had
-			// before the tracker landed.
+			// A tracked shot that authors no `TurnAccel` (the conversation profiles) runs at the rate
+			// ceiling directly. A direct shot never reaches this function.
 			InOutRate = FMath::Max(MaxRate, 0.0f);
 		}
 		else
@@ -378,6 +377,17 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 	const float Dt = FMath::Max(0.0f, DeltaSeconds);
 	if (Dt <= 0.0f)
 	{
+		return;
+	}
+
+	// `CamMode != 1` (`FUN_10001a20`'s fall-through) and the `camera_track` override (`FUN_100ffb90`):
+	// the pose *is* the shot, re-derived every frame. No deadband, no rate, no settle state — the
+	// tracker's three functions are never entered, so a `camera_track` dolly re-aims at its authored
+	// target every frame instead of freezing on the seed.
+	if (!Shot.bTracked)
+	{
+		Start(Shot);
+		bPitchSettled = bYawSettled = bRollSettled = true;
 		return;
 	}
 

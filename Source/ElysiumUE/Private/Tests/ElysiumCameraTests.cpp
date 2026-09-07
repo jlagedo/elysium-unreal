@@ -1085,6 +1085,7 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 		// Jack.txt's constraints, verbatim: MoveSpeed 500, MoveAccel 250, TurnAccel 30,
 		// MaxTurnRate [60,60,60], DistanceTolerance 5, AngularTolerance [10,10,10].
 		FElysiumCameraShot Shot;
+		Shot.bTracked = true;   // a file shot: `CamMode` 1
 		Shot.Origin = FVector(0.0f, 0.0f, 165.1f);
 		Shot.LookAt = FVector(300.0f, 0.0f, 165.1f);
 		Shot.bUseLookAt = true;
@@ -1147,9 +1148,10 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 		TestTrue(TEXT("a moving camera closes to within the 1-unit settle distance, not the tolerance"),
 			FVector::Distance(Tracker.Location, Shot.Origin) < FElysiumScriptedShotTracker::SettleDistance);
 
-		// A value shot authors no accelerations; it keeps the plain rate-limited chase this channel
-		// had before the tracker landed.
+		// A tracked shot that authors no accelerations runs at its rate ceilings outright
+		// (`FUN_10001c80` with `TurnAccel` 0; the position sibling with `MoveAccel` 0).
 		FElysiumCameraShot Value;
+		Value.bTracked = true;
 		Value.Origin = FVector(1000.0f, 0.0f, 0.0f);
 		Value.bUseLookAt = false;
 		Value.MoveSpeed = 100.0f;
@@ -1159,6 +1161,44 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 		ValueTracker.Advance(Value, 0.5f);
 		TestTrue(TEXT("with no MoveAccel the camera runs at MoveSpeed outright"),
 			FMath::IsNearlyEqual(ValueTracker.Location.X, 1050.0f, 0.01f));
+
+		// **The sp_tutorial_1 scenematic.** A `camera_track` pair publishes a direct shot — retail's
+		// `CInput` override (`FUN_100ffb90`), or any `CamMode != 1` in `FUN_10001a20` — whose origin
+		// and look-at are re-derived every frame with no tracker between them. With the tracker
+		// applied instead, the shot's zero rates froze the aim on the seed frame while the dolly
+		// travelled: the camera flew the authored path pointing at nothing.
+		FElysiumCameraShot Track;
+		Track.Origin = FVector(0.0f, 0.0f, 100.0f);
+		Track.LookAt = FVector(500.0f, 0.0f, 100.0f);
+		Track.bUseLookAt = true;
+		Track.MoveSpeed = 0.0f;
+		Track.TurnAccel = 0.0f;
+		Track.MaxTurnRate = FVector::ZeroVector;
+		TestFalse(TEXT("a value shot is direct by default"), Track.bTracked);
+		FElysiumScriptedShotTracker TrackTracker;
+		TrackTracker.Start(Track);
+		Track.Origin = FVector(0.0f, 300.0f, 100.0f);          // the dolly moved
+		Track.LookAt = FVector(0.0f, 300.0f + 500.0f, 100.0f);  // and the focus cut 90 degrees
+		TrackTracker.Advance(Track, Dt);
+		TestTrue(TEXT("a direct shot's position is the authored sample"),
+			TrackTracker.Location.Equals(Track.Origin, 0.001f));
+		TestTrue(TEXT("and its aim is re-derived from the authored target every frame"),
+			FMath::IsNearlyEqual(FRotator::NormalizeAxis(TrackTracker.Rotation.Yaw), 90.0f, 0.001f));
+		Track.LookAt = FVector(-500.0f, 300.0f, 100.0f);        // a hard cut the other way
+		TrackTracker.Advance(Track, Dt);
+		TestTrue(TEXT("an authored cut stays a cut, not a pan"),
+			FMath::IsNearlyEqual(FMath::Abs(FRotator::NormalizeAxis(TrackTracker.Rotation.Yaw)), 180.0f, 0.001f));
+
+		// The same numbers under the tracker are the defect: the aim does not leave the seed.
+		FElysiumCameraShot Frozen = Track;
+		Frozen.bTracked = true;
+		Frozen.LookAt = FVector(0.0f, 800.0f, 100.0f);
+		FElysiumScriptedShotTracker FrozenTracker;
+		FrozenTracker.Start(Frozen);
+		Frozen.LookAt = FVector(-500.0f, 300.0f, 100.0f);
+		FrozenTracker.Advance(Frozen, Dt);
+		TestTrue(TEXT("a tracked shot with no turn rate cannot re-aim, which is why the track must be direct"),
+			FMath::IsNearlyEqual(FRotator::NormalizeAxis(FrozenTracker.Rotation.Yaw), 90.0f, 0.001f));
 
 		// `SnapOnShotChange` is the file's own "cut, do not chase".
 		FElysiumCameraShot Snap = Shot;
@@ -1502,8 +1542,8 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 		Services.Count(TEXT("PushCameraShotValue")), 1);
 	TestTrue(TEXT("the composed value uses the authored target"),
 		Services.LastCameraShot.bUseLookAt && Services.LastCameraShot.LookAt.Equals(Target.Origin, 0.01f));
-	TestTrue(TEXT("the composed track shot bypasses the generic target-chase turn limiter"),
-		Services.LastCameraShot.MaxTurnRate.IsZero());
+	TestFalse(TEXT("the composed track shot is direct — retail's CInput override, not the C_BaseCineCamera tracker"),
+		Services.LastCameraShot.bTracked);
 	World.AcceptInput(TEXT("pos"), FName(TEXT("RestoreCameraToPlayerControl")), FElysiumVariant::Float(1.25f),
 		FElysiumEntityHandle(), FElysiumEntityHandle());
 	TestFalse(TEXT("restoring the current position returns the complete camera pair to the player"),

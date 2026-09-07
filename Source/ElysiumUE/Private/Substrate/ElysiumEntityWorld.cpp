@@ -1084,9 +1084,10 @@ void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
 	Shot.FieldOfView = TrackCameraFov;
 	Shot.BlendSeconds = FMath::Max(0.0f, BlendInSeconds);
 	// camera_track already owns the full per-frame path, including target interpolation and hard
-	// cuts. The generic shot channel's default 90-degree/second tracking limiter is for moving
-	// entity anchors; applying it here adds a second interpolator and turns authored cuts into pans.
-	Shot.MaxTurnRate = FVector::ZeroVector;
+	// cuts: retail applies this channel through `CInput`'s view override (`client.dll`
+	// `FUN_100ffb90`), never through `C_BaseCineCamera`'s tracker. The shot stays **direct**
+	// (`bTracked` false) so the tracker copies origin and look-at through every frame rather than
+	// adding a second interpolator that turns authored cuts into pans — or, with no rate, freezes.
 	// Selecting a new zero-blend owner supplies bCameraCut from the caller; a zero-time keyframe
 	// crossing does the same while the selected owner continues. The first shot is also a cut.
 	Shot.bCameraCut = bCameraCut

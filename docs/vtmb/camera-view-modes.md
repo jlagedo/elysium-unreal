@@ -897,9 +897,10 @@ Worldcraft tracks instead own independent **position** and **target** streams in
 not cancel the other for an internal role-local replacement or stop. Returning **player control** is
 different: a current non-held completion or `RestoreCameraToPlayerControl` clears both selected roles
 and pops the composed shot, while its stale-owner guard prevents an older clock from tearing down a
-newer camera. The composed track shot sets `MaxTurnRate` to zero: the authored position/target samples
-already define the complete view, so the generic moving-subject tracker must not add a second
-yaw/pitch scroll between them. Map teardown clears all owners.
+newer camera. The composed track shot is **direct** (`FElysiumCameraShot::bTracked` false): the
+authored position/target samples already define the complete view, and retail applies this channel
+through `CInput`'s override rather than the cine-camera tracker (see "`CamMode`" below), so no
+second yaw/pitch scroll is ever added between them. Map teardown clears all owners.
 
 ### `camera_track` / `camera_keyframe`
 
@@ -943,8 +944,8 @@ chains author 87 edits as `MoveTime 0.03`, and only its `embrace_*` chain uses e
 them). Corpus-wide the authored `TimeControl` `MoveTime` values below 0.1 s are `0.03` ×87
 (sp_theatre) and ×10 (sm_medical_1), `0.01` ×7 (sm_gallery_1), and `0.05` ×1 (sp_tutorial_1) —
 without the fold every one of them reads as a 10–50 ms slew instead of a cut. The value-shot seam
-also sets `MaxTurnRate` to zero so the generic moving-subject tracker cannot turn those authored cuts
-into secondary camera pans. Crossing a folded or exact-zero edit, replacing a zero-blend track owner,
+is also direct (`bTracked` false), so the `C_BaseCineCamera` tracker cannot turn those authored cuts
+into secondary camera pans — or, with the shot's zero rates, freeze the aim. Crossing a folded or exact-zero edit, replacing a zero-blend track owner,
 or popping a zero-blend top shot also marks Unreal's `bGameCameraCutThisFrame` and resets the
 previous view transform at the single camera apply point.
 
@@ -1118,8 +1119,8 @@ conversion is `ElysiumCam::WidenSourceFov`, applied at **apply time**, so the pa
 number its file wrote. The player view now runs through the same rule (see "The lens" below), so the
 shot weight lerps two angles in one space.
 
-**Still unrecovered.** `AutoPositionFromTarget` parses and has **no reader** anywhere; the anchor's
-`OffsetAngles` (`+0x20` of the anchor) likewise has no reader; the exact approach-integration constant
+**Still unrecovered.** The anchor's
+`OffsetAngles` (`+0x20` of the anchor) has no reader; the exact approach-integration constant
 of `FUN_10001fe0` is folded behind a normalize in the decompile, so the gating and the hysteresis are
 certain while the curve shape is approximate; and the camera think interval `_DAT_1044eb04` is not
 resolved. One port-side assumption is recorded with them: retail's decompile shows the angular
@@ -1129,6 +1130,113 @@ threshold` and gives the "turn all the way onto the target, then hold" behaviour
 tolerances imply. The port also does not implement retail's "start from the live view setup" arm of
 `FUN_10002210` (the request channel carries no view); the scripted channel's weight ramp stands in for
 that dolly-in, and the tracker seeds settled on the goal.
+
+### `CamMode` — which cameras the tracker drives (2026-09-07)
+
+Recovered because porting the tracker above fixed the conversation camera and broke the
+`sp_tutorial_1` scenematic: the tracker was applied to every scripted shot, and retail applies it to
+exactly one kind.
+
+**`CBaseCineCam` has one mode field and no subclasses.** `camera_cinematic` (`vampire.dll`, datamap
+`0x105463a8`, chain `CBaseCineCam → CBaseToggle → CBaseEntity`; `vtmb_slot` over its overrides returns
+only itself) replicates `CamMode` at `+0x638` (client `+0x45c`) in `DT_BaseCineCam` (`FUN_1006d2f0`),
+beside `m_ShotIndex` `+0x630`, `m_vecCamOrigin` `+0x5ec`, `m_vecCamTarget` `+0x5f8`, `m_angCamAngles`
+`+0x604`, `m_flFOV` `+0x634`, `m_nClientResetFrame` `+0x63c`, `m_bDrawPlayer` `+0x640`. `CamMode` is
+written only by `SetShot(name, mode, subject)` `FUN_1006e130` and cleared by `FUN_1006e0e0`. The server
+think dispatcher `CBaseCineCamSetCamThink` `FUN_1006e770` is a jump table on it:
+
+| `CamMode` | server think | what it is |
+|---|---|---|
+| 0 | none | idle |
+| 1 | `CBaseCineCamUpdate_Mode_NamedShot` `0x1006f8f0` | a `vdata/camerashots/` shot: anchors re-resolved per tick, look-at solved (`FUN_1006f670`) |
+| 2 | `CBaseCineCamUpdate_Mode_OnRails` `0x1006fde0` | **empty**, server and client |
+| 3 | `CBaseCineCamUpdate_Mode_FollowEntity` `0x1006fe00` | origin = anchor 0's world centre (vfunc `0x300`), angles = its abs angles; created by `FUN_100705d0`, **no callers** |
+| 4 | `CBaseCineCamUpdate_Mode_Animated` `0x1006f870` | pushes only `m_flFOV`; pose is the entity's own animation; created by `FUN_10070690` for `camera_animated` (`CCameraAnimated::StartCamera` `0x10071550`), **zero instances shipped** |
+| >4 | `CBaseCineCamCamEndThink` `0x1006e850` | `UTIL_Remove(this)` |
+
+**The client divides on it once.** `C_BaseCineCamera::Update` `client.dll` `FUN_10001a20`, reached
+each rendered frame from `C_BasePlayer::CalcView` `0x100a7770` → `C_BaseCineCamera::CalcView`
+`0x10001b50`:
+
+```c
+if (*(char *)(this + 0x4a1)) FUN_10002390();                 // SnapOnShotChange hard copy
+if (*(int *)(this + 0x45c) == 4) { FUN_10002200(this); return; }   // Animated: empty
+if (*(int *)(this + 0x45c) == 1) { FUN_10001fa0(this); return; }   // NamedShot: the tracker
+current origin (0x468) = m_vecCamOrigin (0x410);              // everything else: copy through
+current fov    (0x480) = m_flFOV        (0x458);
+current angles (0x474) = m_angCamAngles (0x428);
+```
+
+So the hysteresis, `MoveAccel`, `TurnAccel`, `SyncRotateOnMove` and the `VectorAngles(lookAt −
+currentOrigin)` re-derivation exist for **mode 1 only**. The snap path agrees: `FUN_10002390` copies
+replicated → current for every mode and derives angles from the look-at only `if (CamMode == 1)`.
+
+**The Worldcraft track never reaches the cine camera.** `camera_track` / `camera_keyframe` (§6) is
+applied by `CInput` (`client.dll` `FUN_100ffb90`, `CInput+0x84`) off the player's
+`m_vecCameraViewOverride` / `m_vecCameraTargetOverride`, with the scripted origin/target/roll/FOV at
+`CInput+0x17c/0x188/0x194/0x198`:
+
+```c
+e = SimpleSpline(weight);
+origin = lerp(origin, override.origin, e);
+target = lerp(viewForwardPoint, override.target, e);
+VectorAngles(target - origin, angles);      // fresh, every frame
+angles.roll = e * override.roll;
+fov = lerp(fov, override.fov, e);
+```
+
+No tracker, no deadband, no rate limit, no settle state. The `sp_tutorial_1` scenematic is this
+channel — `trackb00` as position and `focusb00` as target (`sp_tutorial_1-event-surface.md`), a
+`.vcd` with three actors and no camera channel — not a `camera_cinematic` at all. The map's three
+`camera_cinematic` entities (`DialogMediumShot`, `cam_3` `DialogDefault`, `feedcamera`
+`LookAtTarget_Snap`) are mode 1 with anchors forced by targetname: `InputStartShot` `0x10070720` →
+`FUN_10070780` resolves `startent`/`endent`/`target1`/`target2` by name, spawns or re-shots the
+player's cine camera with `SetShot(shotname, 1, player)` and `SetShotAnchorEntity` ×4, then adopts it
+(`FUN_1017cef0`) and enters the scripted view (`FUN_1015ef40`). All 51 shipped `camera_cinematic`
+entities are this shape. Script `SetCamera` (`CBasePlayer::SetCamera` `FUN_1017d020`) is the same
+mode-1 spawn with the `Position` keyword resolving the anchors (`FUN_1006ef50`: `0x1` Player →
+`UTIL_PlayerByIndex(1)`, `0x2` DialogTarget → `player+0xFE8`, `0x4` World → worldspawn; `0x80000` /
+`0x100000` are two further keywords gated on `subject+0x1538`/`+0x153c`, the grapple/victim pair),
+falling back to `DialogDefault` when the name does not load.
+
+**Retail's "aims at nothing" is (0,0,0), and it never surfaces.** The per-tick anchor cache
+`FUN_1006e8e0` writes `vec3_origin` (`DAT_1070d1b0`) for an invalid handle, and the look-at solve
+`FUN_1006f670` starts from `vec3_origin` and only overwrites it when Point1 (`flags & 4`) or Point2
+(`flags & 8`) exists — but a shot with no target is only ever used in a mode where the client never
+derives angles from the look-at.
+
+**The port.** `FElysiumCameraShot::bTracked` is the `CamMode == 1` test. `FElysiumCameraDirector::Resolve`
+(every `vdata/camerashots/` shot: `SetCamera`, the terminal shots, the dialogue source shot;
+`camera_cinematic`'s `StartShot`/`EndShot` is still the stub in `ElysiumStubClasses.cpp` and would
+land on the same converter) and the conversation profiles that stand in for a dialogue shot set it; every value
+producer — `PublishTrackCamera`, the green room, the theatre — leaves it clear and
+`FElysiumScriptedShotTracker::Advance` copies origin and look-at-derived angles through every frame.
+Before this the tracker ran for all of them, and the track shot's zero `MaxTurnRate` (its old
+"no limiter" sentinel) read as a zero rate: the dolly travelled and the aim froze on the seed frame.
+`Elysium.Substrate.Camera` drives a direct shot and its tracked twin through the tracker;
+`Elysium.Substrate.CameraTrack` asserts the composed track shot is direct.
+
+**Re-seeding on a shot change** (`C_BaseCineCamera::OnDataChanged` `0x100024c0`, adjustor thunk, real
+offsets `ESI+d+8`): a new `m_nClientResetFrame` (stamped by `SetShot`) sets shot-start pending `0x4a2`
+and `bActive` `0x465`; a new `m_ShotIndex` either requests the snap (`0x4a1`, flag `0x80`) or clears
+the three angle-settled flags so the axes re-acquire, and applies the shot's `ShowHud` (`0x200`).
+`IsActive()` `FUN_10001970` is `CamMode != 0 && bActive`, and gates the whole `CalcView`. The port's
+re-seed is the top-shot-id change in `UElysiumCameraComponent::SolveShot` / the service's
+`SelectWinner`; an update on a live id continues the tracker from its current pose, which is retail's
+End-only "dolly from where you are" for a mid-conversation shot change.
+
+**Corrections to the tracker section above.** `AutoPositionFromTarget` *does* have a reader: the
+mode-1 think `FUN_1006f8f0`, on `flags & 0x20`, recomputes the origin from anchors 2 and 3 (swapped so
+the lower-Z point is first, composed by `FUN_1013ca00`) and solves the pull-back from
+`FieldOfView` (`+0x100`) through `fsin(fov·k)` and the two points' separation — "back off until both
+target points fit the frame"; not yet ported. `point_player` / `m_bForcePlayerLook` (`+0x5e8`) is
+consumed at the tail of the same think — `FUN_10178590(player, camTarget)` — and turns the *player*,
+not the camera. Shot-record `+0xd4` (just before `MoveSpeed`) gates whether the server writes
+`m_angCamAngles` from the look-at at all (`if (*(int *)(shotRec + 0xd4) > 0)`); its parse key is not
+identified. `CBaseCineCam::FindBestShot` `FUN_1006e4c0` tries `"%s_%d"` variants from 1 upward
+(`SetShot` + think + visibility predicates `FUN_1006d9d0` / `FUN_1006db10`), picks a passing index at
+random and logs `CBaseCineCam::FindBestShot chose %s`; reached from `FUN_10070550` via
+`CBasePlayer` `FUN_10178a10`.
 
 ### Verification hooks
 
