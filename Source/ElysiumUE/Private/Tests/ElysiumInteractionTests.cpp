@@ -1573,7 +1573,7 @@ TerminalDefinition
 
 	TestTrue(TEXT("directory command reaches the authority"),
 		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("Vault")));
-	TestEqual(TEXT("a locked directory enters password mode"), Terminal->InputMode,
+	TestEqual(TEXT("a locked directory enters password mode"), Terminal->InputMode(),
 		EElysiumTerminalInputMode::Password);
 	TestTrue(TEXT("a wrong password is handled"),
 		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("wrong")));

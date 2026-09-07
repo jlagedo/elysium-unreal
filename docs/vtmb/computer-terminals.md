@@ -810,6 +810,103 @@ notify text at column 36 and the prompt on the last row.
 block) at a random cell, and the stock `+use` icon for a terminal is a monitor pictogram from the
 stock table (§7.2), not the generic hand.
 
+### 8.6 Draw bodies line by line (TERM17)
+
+Full listings, the format-string literals read out of the pinned module bytes, and a per-body
+port checklist are in `$ELYSIUM_WORK_ROOT/_terminal_explore/slice-a-decompiles.md`. The facts a
+port needs:
+
+**The clear helper.** There is no separate string-clear. `FUN_1021b140` *is* the reset: it opens
+with `FUN_10218ec0(this, 1, 1)` (type 7) and `FUN_10218db0(this)` (type 4). Bodies that draw
+without a title box (help rows, the prompt, the cracking row) never clear and simply append at the
+cursor. Client side: type 7 (`FUN_100c7e60`) writes **only** the left margin `+0xe80` and the right
+margin `+0xe84`, decrementing both while `left + right >= columns - 2` — it clears nothing;
+type 4 (`FUN_100c7f50`) fills all 864 cells with `style | ' '` and moves the cursor to
+(left margin, row 0). §8.2's "reset/clear screen" for type 7 and §8.5's "types 7 + 4 clear" are
+corrected by this: **7 sets margins, 4 clears**. Type 1 (`FUN_100c7ec0`) clamps the row to
+`rows - 1` and sets the column to `clamp(leftMargin + x, 0, columns - 1)` — **the server's column
+argument is relative to the left margin**, so `(0, rows - 1)` lands on column 1 inside a title-box
+screen. The client also accepts a type 8 (put `0x7f`); no terminal or keypad body sends it.
+
+**Type-2 prints are word-wrapped.** `FUN_100c7fb0` is not a put-char loop: per word (a run of
+non-space, non-newline bytes) it emits a newline first when
+`cursorCol + wordLen > columns - rightMargin` **and** `leftMargin + wordLen < columns - rightMargin`,
+then feeds the word to put-char, then the delimiter — swallowing a space that falls at or past
+`columns - rightMargin`. Put-char's hard column wrap (§8.3) is only the fallback for a word too
+long for a fresh line. With the box margins `(1, 1)` the text column band is 1…34.
+
+| Body | Draw order (top to bottom) |
+|---|---|
+| `FUN_1021b2b0` rule row `0x1021b2b0` | zero a 40-byte buffer, `memset(buf, '-', columns - 3)`, then `buf[0] = '+'` and `buf[columns - 3] = '+'` (`0x1021b2e7`, `0x1021b2eb`): `'+' + (columns-4)×'-' + '+'`, **`columns - 2` bytes** (34 on a 36-column screen, 32 dashes), print it **as a format string**, then print `"\n"`. It is drawn from the current column, which after the type-4 clear is the left margin, so the corners sit at columns 1 and 34. |
+| `FUN_1021b330` framed row `0x1021b330` | spaces for `columns - 3`, `'|'` at index 0 and `columns - 3`, then `memcpy(buf + margin, text, min(strlen(text), 40 - margin))` — long text overwrites the right `'|'` — print, then `"\n"`. |
+| `FUN_1021b140` title box `0x1021b140` | type 7 `(1,1)`; type 4; margin = `(columns - longest - 2) / 2`, floored to 1 when `<= 2` **only on the LogonScreen branch**; rule, empty framed row, body rows, empty framed row, rule. |
+| `FUN_1021b030` help `0x1021b030` | title box with string 20; then strings 8, 9, 10, 11, each printed as `"\n%s\n"` (`0x105b0644`) and each skipped when empty; `field_0x9ec = 1`. No ack mode — the prompt returns through the reprint flag. |
+| `FUN_1021c3c0` invalid `0x1021c3c0` | `error` cue **first**; title `"%s: %s"` (`0x105b06f0`) of string 5 and the typed line (bare string 5 for an empty line); `"\n%s\n"` string 6; `"%s\n"` (`0x1053e080`) string 7; cursor `(0, rows-1)`; string 18 printed raw; `FUN_10219270` ack. |
+| `FUN_1021c890` enter dir/mail `0x1021c890` | guard `target > subdirCount`; `+0x9dc = target`, `+0x9e0 = -1`. `-1`: directory draw + prompt. `-2`: title 16, then string **39 formatted with `email_password`**, cursor `(0, rows-1)`, string 18, ack, `m_bEmailUnlocked = 1`. First unlock of subdir *i*: flag set, title 16, then `"\n%s %c%s%c"` (`0x105b06f8`) of {string **19 formatted with `SubDir[i].password`**, `brackets[0]`, `SubDir[i].name`, `brackets[1]`}, cursor `(0, rows-1)`, string 18, ack. Already unlocked: directory draw + prompt. Every arm ends with the `accept` cue. |
+| `FUN_1021c6d0` function executor `0x1021c6d0` | guard `0 <= idx <= functionCount`; title box with the **current directory's** `description` (`+0x10`); `"\n"`; the function's `runtext` (`+0x30`) printed **as a format string**; `trigger` `0…7` fires `m_OnTrigger[t]`; then `runscript` through `CallPyDialogFunc`; then cursor `(0, rows-1)`, string 18, ack. Silent. |
+| `FUN_1021b410` prompt `0x1021b410` | `Q_strncpy(key, player+0x2078, 8)`; cursor `(0, rows-2)`; string 42; cursor `(0, rows-1)`; `"%c%s@%s%c "` (`0x105b064c`) of {`brackets[0]`, the bound `+use` key name, the directory name or string 17, `brackets[1]`}; clear `m_HackFlags 0x2`; `FUN_10219120`. |
+| `FUN_10217d60` cracking stepper `0x10217d60` | no user → clear `m_szHackPWD[0]` and stop. Running: `shown = (1 - remaining/total) * strlen(m_szHackPWD)`; a 16-byte frame of the real prefix plus `FUN_10217200(digitsOnly)` filler; `vfunc278(frame)`. Done (`FUN_1020b040 == 0.0`): `typing` cue, one type-9 `0x7f` per character, print the real buffer, `FUN_10217f50(this, 1, buffer)`. |
+| `CPropHacking::vfunc278` `0x1021d610` | cursor `(0, rows-1)`; `"%s%s     "` (`0x105b0888`) of string 12 and the frame. Overwrite, never clear; the five spaces are the erase. (`CBaseTerminal::vfunc278` `0x10217f20` is a bare print.) |
+| `FUN_1021aaa0` builtins `0x1021aaa0` | empty line → `FUN_1021aca0` + `field_0x9ec = 1`; then `Q_strnicmp(Hacking_Strings[i], line, 16)` in the order **33 quit → 34 help → 35 list → 36 email → 17 home**. The `email` arm is skipped entirely when `+0xa20 == 0`, so control falls through to `home`. No whitespace trimming anywhere. |
+
+Format strings, all consumed by `FUN_10217ac0` (`Q_vsnprintf` into the 512-byte scratch):
+
+| Address | Literal | Body |
+|---|---|---|
+| `0x10547e40` | `"\n"` | rule row, framed row, function executor |
+| `0x1053e080` | `"%s\n"` | invalid command (string 7) |
+| `0x105a1eec` | `"   %s\n"` | directory draw — every list entry |
+| `0x105a4944` | `"%s:\n"` | directory draw — "Available menus:" |
+| `0x105a4a70` | `"\n\n"` | directory draw — after the email count |
+| `0x105b0628` | `"\n%s:\n"` | directory draw — "Available commands:" |
+| `0x105b0630` | `"%s %s\n\n"` | directory draw — in-directory header, **name first, string 44 second** ("Security Menu") |
+| `0x105b063c` | `"%s\n\n"` | directory draw — root header (string 43) |
+| `0x105b0644` | `"\n%s\n"` | help rows 8–11; invalid command (string 6) |
+| `0x105b064c` | `"%c%s@%s%c "` | prompt input row |
+| `0x105b065c` | `"\n%s %c%s%c\n\n"` | password prompt notify (via `Q_snprintf` into 128 bytes, then printed) |
+| `0x105b06f0` | `"%s: %s"` | invalid-command title |
+| `0x105b06f8` | `"\n%s %c%s%c"` | first-unlock body |
+| `0x105b0888` | `"%s%s     "` | cracking row |
+| `0x105b083c` | `"[]"` | the rdata default for `brackets` (the patch file authors it empty) |
+
+Three corrections to §8.5, all from the listings: the prompt literal is `"%c%s@%s%c "` and its
+first `%s` is the player's bound `+use` key name truncated to 8 bytes (a `user@host` prompt,
+`[E@home] `), not a space; the in-directory header prints the name **before** string 44; and the
+box rows are `columns - 2` wide starting at the margin, so the corners sit at columns 1 and 34 of
+a 36-column screen. One content fact the listings settle: strings 19 and 39 take a `%s`, and the
+argument is the **password** — `SubDir[i].password` (record `+0x30`, `0x1021c98c`) and
+`email_password` (`+0x944`, `0x1021c8ed`) — so retail echoes the accepted password back at the
+player ("Password accepted: <letmein>            Entering menu.").
+
+`CPropHacking::AcceptCmd` `0x1021a830`, confirmed against the listing: `field_0x9ec = 0` is written
+**before** the `m_szHackPWD` guard branches, so a dropped line still clears the reprint flag; the
+cap is `if (strlen(line) > 16) line[16] = 0`, applied in place; there is no whitespace trim on any
+path; and the arms are tested state-first — mail (`+0x9dc == -2`), then no-password
+(`+0x9e0 == -1`), then password-pending — with string comparison happening only inside the middle
+arm, in the order builtins → subdirectory names → the current directory's function names →
+invalid. `FUN_1021b750` compares with `Q_strnicmp(name, line, 16)` against names the loader already
+lowercased, as `if (Q_strnicmp(name, line, 16) == 0 && dependency(dep)) goto unlock;` inside the
+subdirectory loop: a matched name whose dependency fails **does not stop the scan** — the loop
+continues over the remaining subdirectories and then over the current directory's function names,
+and only a complete miss ends as an invalid command. (An earlier reading of this section claimed
+the opposite; the listing settles it.)
+
+### 8.7 Port divergences (named modernizations, owner-reviewed 2026-09-07)
+
+The authority port (`Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp`,
+`ElysiumTerminalScreenBuffer.cpp`) reproduces every arm above. Four divergences are deliberate:
+
+| Divergence | Retail | Port | Why |
+|---|---|---|---|
+| Cleared cell bytes | type 4 / scroll fill each cell with `(style << 8) \| style \| 0x20` (client `FUN_100c7f50`), so a blank default-style cell is `0x80A0` | `style \| ' '` (`0x00A0`) | the high byte is a rasterizer glyph-table index the port does not carry; the character and style bits read identically, and no draw body reads the high byte back |
+| Content as format strings | `runtext`, directory descriptions, framed-row text and the pre-formatted notify are passed to `Q_vsnprintf` **as the format**, so a `%` in authored content is undefined | authored strings are printed literally; only the recovered format literals (§8.6) are formatted, through the port's `%s`/`%d`/`%c`/`%%` subset with C's NUL-on-`%c` truncation | no shipped `.txt` carries a `%` outside strings 19/31/39/45–47; the hazard is not a behaviour |
+| `FUN_1021c890` guard | `target > count` only, so `target == count` reads one record past the table | `target >= count` refuses | unreachable from the router; refusing is the only defined answer |
+| Sixth `subdir` | loaded into a five-byte flag array (overrun) | the parser rejects the file with a named error | no shipped file has six; a corrupted one fails loud |
+
+The client's acknowledge restriction (only an empty `hackcmd` leaves `m_HackFlags & 0x1`) is a
+widget rule in retail and stays one in the port (slice E); the authority's `AcceptCmd` port
+routes any line, as `0x1021a830` does.
+
 ## 9. Command router
 
 `CPropHacking::AcceptCmd` `0x1021a830`:
@@ -902,9 +999,13 @@ Success `0x1021c4d0` is `FUN_1021c890` into the pending target. `FUN_1021c890`:
 Failure `0x1021c560`:
 
 - pending `-2` → `m_nEmailAttempts++`; else increment `m_SubDirAttempts[i]` when `i` is in range;
-- if `+0x83c == 0` (typed): `FUN_1021b5e0(this, 1)` (retry prompt, which plays `error` again);
-- else (skill): slot `+0x430` (OnSkillFail path already ran inside the attempt), clear screen,
-  `FUN_1021c890(this, -1)` back to root **without leaving the terminal**.
+- `FUN_10218820(this, 2, 0)` — the HUD hint is hidden **unconditionally** (`0x1021c58d`);
+- if `+0x83c == 0` (typed): `FUN_1021b5e0(this, 1)` (retry prompt, which plays `error` again and
+  raises hint 3 again);
+- else (skill): slot `+0x430` is `GetDifficulty` (`0x1021c5d5`), whose result feeds
+  `FUN_10218820(this, 6, difficulty)` ("Skill too low to make hack attempt at difficulty N",
+  `0x1021c5e0`), then `FUN_1021c890(this, -1)` back to root **without leaving the terminal**.
+  There is **no** screen clear on this arm — the directory draw's own title box is the only reset.
 
 No attempt-count lockout exists in these bodies. `m_nEmailAttempts` is never read back.
 
@@ -927,8 +1028,12 @@ No attempt-count lockout exists in these bodies. `m_nEmailAttempts` is never rea
 4. pending-target difficulty `0x1021cae0`: `-2` and a directory whose own difficulty is `< 1`
    fall back to `FUN_1020b1c0` (entity `m_nSkillDifficulty`). An out-of-range pending index
    `DevMsg`s `"%s has invalid difficulty for subdir: %d\n"` and returns 0;
-5. if `m_LastRoll < 3`, fill `m_szHackPWD` with random characters (`FUN_10217200`) and emit type-9
-   echoes; if `>= 3`, copy the real password;
+5. if `m_LastRoll < 3`, per character of the real password: store one `FUN_10217200(digitsOnly)`
+   draw in `m_szHackPWD[i]`, draw a **second** random character and send it as a type-9 echo
+   (`FUN_102192a0`) — the stored buffer and the echoed characters differ. Each type-9 zeroes the
+   client's left margin (`C_BaseTerminal::vfunc10` cases 8/9: `this[0xe80] = 0`), so the cracking
+   row that follows is drawn at column 0, not at the box margin. If `>= 3`, copy the real
+   password (`Q_strncpy`, 16) with no echoes;
 6. play `typing`; `FUN_101e56e0` again (rating only); `FUN_10218820(this, 5, rating)` — HUD
    hint "Making hack attempt at skill %d".
 
@@ -1277,6 +1382,8 @@ here are closed from listings and from the pinned module bytes:
 | TERM14 | Screen test is `normalize(eye.xy - screen.origin.xy) · screen_forward.xy > 0.7f`. Eye is slot 193 (`GetAbsOrigin + m_vecViewOffset`). `_DAT_10457f54 = 0.7f`. Not a view-vector test. |
 | TERM15 | The client screen is a cell terminal: `FUN_100c8060` put-char (wrap at `columns`, newline to the margin, scroll at `rows - 1`, backspace), `FUN_100c8210` scroll-up, `FUN_100c77f0` rasterizer; cells are `char \| 0x80 style`, stride 36 (§8.3). |
 | TERM16 | `FUN_10218820` is the `InfoCtrl` HUD hint (type, value): 2 hide, 3 "Press CTRL-C…", 5 "Making hack attempt at skill N", 6 "Skill too low… difficulty N"; client handler `FUN_10055d30` (§8.4). Draw bodies `FUN_1021b140` / `FUN_1021aca0` / `FUN_1021b410` / `FUN_1021b5e0` joined to owner captures (§8.5). |
+| TERM18 | Port review 2026-09-07 against the listings: `FUN_1021b750` continues past a dependency-blocked name match; `0x1021c560` hides the HUD hint unconditionally, raises hint 6 with `GetDifficulty` on the skill arm and never clears the screen; `0x10217b30` echoes a second random draw per character (type 9, margin to 0) on the sub-3 roll; `thunk_FUN_10218820` has exactly six callers (`0x10217b30`, `0x10217f50`, `CBaseTerminal::vfunc42`, `AcceptCmd`, `0x1021b5e0`, `0x1021c560`) — no hint on entry; `AcceptCmd` never tests `m_HackFlags & 0x1` (the acknowledge restriction is client-side); the prompt's key name is copied without a case fold; the rule row is `columns - 2` bytes. |
+| TERM17 | Draw bodies line by line (§8.6). Type 7 (`FUN_10218ec0`/client `FUN_100c7e60`) sets the two margins and clears nothing; type 4 clears. Type-2 prints are word-wrapped by client `FUN_100c7fb0` inside `[left, columns - right)`. Type-1 columns are margin-relative (client `FUN_100c7ec0`). Box rows are `columns - 2` wide from the margin (`FUN_1021b2b0`/`FUN_1021b330`); the prompt literal is `"%c%s@%s%c "` with the bound `+use` key name; strings 19/39 echo the accepted password. |
 
 A finding is confirmed only when its native producer, state mutation and observable consumer are
 joined; an isolated field name or UI string is a seed, not closure.

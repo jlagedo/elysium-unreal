@@ -514,6 +514,7 @@ public:
 
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
 	{
+		FElysiumTriggerBase::GetDebugState(Out);
 		Out.Emplace(TEXT("Target"), Target.IsEmpty() ? TEXT("(none)") : Target);
 		Out.Emplace(TEXT("FieldOfView"), FString::Printf(TEXT("%.2f"), FieldOfView));
 		Out.Emplace(TEXT("Look progress"), FString::Printf(TEXT("%.2f / %.2f s"), LookElapsed, LookTime));

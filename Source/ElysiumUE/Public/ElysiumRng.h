@@ -34,6 +34,8 @@ enum class EElysiumRngStream : uint8
 	Footsteps,     // the NPC step's stepleft/stepright coin flip (`vampire.dll 1026d460`'s
 	               // RandomInt(0,1)), the player step's 95..105 pitch jitter (`1011e430`), the
 	               // wade branch's four-phase silent counter and the Sabbat leader's 0..6 draw
+	Terminal,      // the computer terminal's screensaver cell/style draws (`CPropHackingSS_Think`
+	               // 0x1021a740) and the cracking stepper's filler characters (`FUN_10217200`)
 	Count
 };
 

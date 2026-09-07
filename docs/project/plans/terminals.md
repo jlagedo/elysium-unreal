@@ -7,43 +7,30 @@ exploration reports and retail captures: `$ELYSIUM_WORK_ROOT/_terminal_explore/`
 
 ## Scope
 
-Landed headless: the `TerminalDefinition` parser, `FElysiumTerminal`'s exclusive explicit-use
-session, the non-bindable `hackcmd` path, the timed Hacking bypass and the `tuthack` Function
-transaction on the one queue, plus a first render-target projection through the model's exact
-`screen` slot. The state machine is a line list, not retail's screen; nothing below the entity is
-faithful yet. The 2026-09-06 exploration (audit, content facts, projection research under
-`$ELYSIUM_WORK_ROOT/_terminal_explore/`) rebuilds the subsystem in the slices below. Keyboard only;
-gamepad is out of scope by owner call. *Design:* `docs/architecture/computer-terminal-architecture.md`;
-behavior: `docs/vtmb/computer-terminals.md` (TERM15 §8.3 closes the client screen semantics).
+Landed headless (2026-09-07): the `TerminalDefinition` parser, `FElysiumTerminal`'s exclusive
+explicit-use session, the non-bindable `hackcmd` path, the timed Hacking bypass, the
+`FElysiumTerminalScreenBuffer` cell screen with every draw body in retail's order, the retail
+router by mode, the `Hacking_Strings` copy, the `InfoCtrl` hint value, the four cue sites, and
+the `FElysiumMapSlice` fixture that proves the `tuthack` transaction on the real `sp_tutorial_1`
+rows (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
+`Elysium.Substrate.TerminalScreenBuffer`). Nothing below the entity is faithful yet: the body,
+the cone, the camera, the projection and the keyboard are the slices below. The 2026-09-06
+exploration (audit, content facts, projection research, the slice-A decompiles and the B/C design
+under `$ELYSIUM_WORK_ROOT/_terminal_explore/`) is the reference. Keyboard only; gamepad is out of
+scope by owner call. *Design:* `docs/architecture/computer-terminal-architecture.md`; behavior:
+`docs/vtmb/computer-terminals.md` (TERM15 §8.3 closes the client screen semantics, TERM17/18
+§8.6 the draw bodies).
 
-**Slice A0 — the tutorial map-slice fixture (headless, first deliverable).** A test helper,
-`FElysiumMapSlice`, that opens the real `$ELYSIUM_EXPORT_ROOT/sp_tutorial_1/sp_tutorial_1.ents`,
-keeps a named set of entities plus everything their output rows target (transitively), parses
-them through `FElysiumEntityDefs`, and spawns them into a headless `FElysiumEntityWorld` with no
-bodies. The terminal slice is `tuthack`, `tutsafelock`, `tutsafe`, `trig_popup_safe`,
-`trig_popup_note`, `item_k_tutorial_chopshop_stairs_key`, `tutdoordknob`, `tutdoordknob-wesp`,
-`tutchopdoord` and the popups and logic they reach. The fixture is skipped, not failed, without the
-export root, like the other content tests. It replaces the hand-wired `math_counter` in
-`Elysium.Substrate.TerminalSession` for the transaction: the authored rows are what the game
-loads, so a map/port mismatch is caught here and nowhere later. An entity in the slice that needs a
-body, a view direction or a Python namespace to complete its arm is a named seam in the fixture
-log, never a silent pass. The helper is generic — map name plus targetnames — so every other
-tutorial beat (elevator, lockpicks, fan, Jack's teleports) reuses it.
-
-The same slice has a second host, the **terminal gym**: the slice spawned *with* bodies at its
-authored transforms into the empty stage world the movement gym already builds, plus the player
-pawn. It carries the real monitor, padlock, safe and door models and nothing else — no NPCs, no
+**The terminal gym (host for every slice below).** The `sp_tutorial_1` terminal slice
+(`tuthack`, `tutsafelock`, `tutsafe`, the popups, the knobs and the door) spawned *with* bodies
+at its authored transforms into the empty stage world the movement gym already builds, plus the
+player pawn. It carries the real monitor, padlock, safe and door models and nothing else — no NPCs, no
 logic_autos, no popups, no ambient triggers — so it is a controlled surface for everything that
 needs a body: the screen cone, the pawn pin, the camera shot, the projection, the font on the
 glass, the keyboard screen. Every slice from B on is accepted here through the Play tier's beat
 script (`do`/`wait`/`assert`/`shot`) and its shot baseline. **No acceptance in this plan runs on
 `sp_tutorial_1` or any live map** (owner call 2026-09-07: live maps are event-infested and never
-a usable acceptance surface); the tutorial completion is PP6's own Play run. *Acceptance:*
-`Elysium.Substrate.TutorialTerminalSlice` begins use of `tuthack`, submits `Safe`, `chopshop`,
-`Unlock`, Enter, `quit`, ticks the queue, and asserts `tutsafelock` unlocked then hidden at +0.5 s,
-`trig_popup_safe` enabled and `trig_popup_note` disabled, the safe's `equip0` keycard transferable
-to the player, `G.Tut_Key` written, `trig_jack_teleport_3` enabled, and both door knobs accepting
-the keycard; a second run submits `Lock` and asserts the reverse rows. Every later slice adds its
+a usable acceptance surface); the tutorial completion is PP6's own Play run. `Elysium.Substrate.TutorialTerminalSlice` is the headless host: Every later slice adds its
 assertions to this one test rather than to a new hand-built world.
 
 **Slice A — the screen buffer and the retail router (headless).** Replace `ScreenLines` with
@@ -155,21 +142,6 @@ box reads "Welcome, Jack."; `Safe`, `chopshop` (and a second run with Ctrl+C), `
 `quit`; the padlock unlocked then hidden by the authored rows; the safe opened and the keycard
 taken; the door knob opened with it; the previous view restored and the screensaver back on the
 glass. Each step is an `assert` on authority state or a `shot` against the baseline.
-
-**Working method (owner call 2026-09-07).** One writer in `Source/ElysiumUE` at a time, one build
-at a time, orchestrated from the session: subagents only for read-only work — the retail
-decompiles at the start of a slice and a review against `docs/vtmb/computer-terminals.md` at its
-end (every arm ported, no invented strings, no seam left silently). No workflow fan-out and no
-per-agent worktrees: the module, the build and the tree are one shared resource. Build order A0,
-A, B, C, E, D, F, G, H — E before D so the whole loop is proven before editor time is spent on the
-look. Slice D is the only slice that needs the editor open (the material under `ElysiumAuthored`
-and the font faces through the `elysium` MCP server). One commit per slice, the roadmap line
-updated, the landed part deleted from this file. The audit of the code as it stood on
-2026-09-06 (file:line for every arm) is `$ELYSIUM_WORK_ROOT/_terminal_explore/audit-current-implementation.md`;
-the projection research with the API names and gotchas (clear colour before the resource
-initializes, gamma flag matching the renderer's, virtual-window focus as the alternative to a
-viewport proxy, MSDF through `ISlate3DRenderer` unverified, expected screen UV span `V 0..0.75`)
-is `projection-research.md` beside it.
 
 *Deps:* 4.11, AUD2, 9.6, 11.4–11.8, and **11.10 for the gym beat script**. Until the Play tier
 lands, slices B–H are accepted on the terminal gym through a native automation test that spawns

@@ -301,12 +301,23 @@ struct FElysiumTerminalView
 	FString ScreenSaverLabel;
 	int32 Columns = 36;
 	int32 Rows = 24;
+	// The authority's cell screen, row-major `Rows * Columns`: ASCII in the low 7 bits, `0x80` the
+	// style bit (`docs/vtmb/computer-terminals.md` §8.3). `ScreenRows` is the same grid as text,
+	// one padded string per row, for readers that do not draw cells.
+	TArray<uint16> Cells;
 	TArray<FString> ScreenRows;
 	int32 CursorRow = 0;
 	int32 CursorColumn = 0;
+	// EElysiumTerminalInputMode: 0 line, 1 password, 2 acknowledge, 3 raw character.
 	uint8 InputMode = 0;
 	int32 MaxInput = 16;
+	bool bDigitsOnly = false;
 	bool bAcceptsDirectoryKeys = true;
+	// The `InfoCtrl` HUD hint (§8.4): 0 hidden, 3 "Press CTRL-C to use the Hacking feat",
+	// 5 "Making hack attempt at skill <value>", 6 "Skill too low ... difficulty <value>". The HUD
+	// draws it bottom-centre in the project's own type.
+	int32 HudHintType = 0;
+	int32 HudHintValue = 0;
 	TArray<FElysiumTerminalActionView> Actions;
 
 	bool IsOpen() const { return Owner.IsSet(); }

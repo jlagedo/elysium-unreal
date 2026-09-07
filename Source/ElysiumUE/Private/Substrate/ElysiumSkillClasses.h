@@ -43,8 +43,11 @@ protected:
 	virtual void OnSkillFailed(FElysiumCombatCharacter& User);
 	virtual void OnAttemptStopped(FElysiumCombatCharacter& User, EElysiumUseEndReason Reason) {}
 
-private:
+	// The shared attempt (`FUN_1020b090`): roll, `OnSkillAttemptCycle`, then the success / fail /
+	// botch output and virtual. The terminal's `BeginInput` (0x10217b30) runs it at once and reveals
+	// the result over the cracking interval; the lock family runs it from Think at interval end.
 	void ResolveAttempt(FElysiumCombatCharacter& User);
+	// `(5.0 - rating * 0.25)` seconds — the held-attempt cycle (docs/vtmb/skills-and-checks.md).
 	float AttemptIntervalSeconds(int32 Rating) const;
 };
 

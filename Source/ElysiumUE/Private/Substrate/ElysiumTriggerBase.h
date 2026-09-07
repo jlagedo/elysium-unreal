@@ -146,6 +146,14 @@ public:
 		Ar << bTouchSuppressed;
 	}
 
+	// The enable latch every trigger leaf shares, readable by the map-slice tests through the one
+	// debug seam (`Tests/ElysiumEntityDebugStateTestHelpers.h`). A leaf that publishes its own rows
+	// overrides and may skip this.
+	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override
+	{
+		Out.Emplace(TEXT("Disabled"), bDisabled ? TEXT("yes") : TEXT("no"));
+	}
+
 private:
 	FElysiumEntityHandle FilterHandle;
 };

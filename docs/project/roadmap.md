@@ -583,11 +583,13 @@ subtitled lines, live faces — and hands the player to the tutorial, unassisted
   consumers open.
 - [~] **[13.3 Firearms & melee basics](plans/gameplay.md)** — the damage spine and the weapon
   controller landed headless; the played lessons and the numeric RE joins open.
-- [~] **[13.4 Computer terminals & tutorial hacking](plans/terminals.md)** — the parser, a
-  line-list state machine, `hackcmd` and the `tuthack` output transaction landed headless; the
-  2026-09-06 plan rebuilds the authority on the recovered cell screen buffer, the `0.7` cone, the
-  retail `Hacking` shot, a world-lifetime projection with the screensaver, the modern cell painter,
-  the cues, email, and the keyboard-only played acceptance. Gamepad is out of scope by owner call.
+- [~] **[13.4 Computer terminals & tutorial hacking](plans/terminals.md)** — the parser,
+  the retail cell screen buffer with every draw body, the router by mode, the `Hacking_Strings`
+  copy, the hint and cue sites, `hackcmd` and the `tuthack` transaction proven on the real
+  `sp_tutorial_1` map slice landed headless (2026-09-07); open: the `0.7` cone, immobilize and
+  pin, the retail `Hacking` shot, a world-lifetime projection with the screensaver, the modern
+  cell painter, the keyboard screen, email, and the terminal-gym acceptance. Gamepad is out of
+  scope by owner call.
 - [~] **[13.5 Combat AI](plans/gameplay.md)** — bus, senses, conditions, the enemy transaction,
   the schedule families and `aiscripted_schedule` landed headless; the played beats and the flinch
   action family open. The footstep hearing producer is AUD2's.
