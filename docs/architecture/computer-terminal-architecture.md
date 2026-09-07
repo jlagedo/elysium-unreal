@@ -205,7 +205,7 @@ validation requires all three on every model a live `prop_hacking` references.
 
 ### 6.2 Projection ownership
 
-The projection — `FWidgetRenderer`, a 1024×768 `UTextureRenderTarget2D` and a dynamic instance of
+The projection — `FWidgetRenderer`, a square 1024×1024 `UTextureRenderTarget2D` (2× retail's 512×512 client texture, so the models' authored `screen` UVs land) and a dynamic instance of
 the project's screen material bound through one texture parameter to the `screen` slot — is
 created by the presentation subsystem when a terminal's body is registered and lives until the body
 goes away. Sessions borrow it; nothing about it is created or destroyed by the CommonUI screen. The
@@ -232,7 +232,7 @@ shot baseline; a dolly along the screen normal would be the named Feel moderniza
 The glass shows a clean modern terminal, not VtMB's raster:
 
 - **Cell painter.** A leaf Slate widget paints the view's cells at fixed metrics derived from the
-  render target (`1024 / columns` × `768 / rows`), one glyph per cell, so the authored grid is
+  render target — retail's fixed 14×16 cell at 2× (28×32), the block centred as the retail rasterizer centres it (`docs/vtmb/computer-terminals.md` §8.3, TERM21) — one glyph per cell, so the authored grid is
   exact. Text is **Terminus (TTF)** — the Linux console and xterm face of the late 90s, OFL 1.1
   with Reserved Font Names, shipped unmodified as `Content/Fonts/TerminusTTF-{Regular,Bold}.ttf`
   and imported as `FF_TerminusTTF_*` faces under the `Mono` role (owner call 2026-09-07). Its

@@ -4,6 +4,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "Substrate/ElysiumTerminal.h"
 #include "Substrate/ElysiumTerminalScreenBuffer.h"
 
 namespace
@@ -112,6 +113,41 @@ bool FElysiumTerminalScreenBufferTest::RunTest(const FString&)
 	Screen.SetMargins(3, 0);
 	Screen.Echo('e');
 	TestEqual(TEXT("echo drops the left margin"), Screen.LeftMargin(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalGridClampTest,
+	"Elysium.Substrate.TerminalGridClamp", GScreenBufferFlags)
+bool FElysiumTerminalGridClampTest::RunTest(const FString&)
+{
+	// `CBaseTerminal::Spawn` `0x10217880`. The corpus authors grids on both sides of this clamp, so
+	// it is load-bearing rather than defensive: la_chantry_1 `textcolumns 72`, hw_sinbin_1 42x32 and
+	// la_skyline_1's `largemonitor_hackable` 56x32 all land on it, and the client rasterizer has no
+	// answer for an unclamped grid — a `columns*14` block wider than its 512x512 texture is not
+	// drawable (§8.3).
+	auto Clamped = [](int32 Columns, int32 Rows)
+	{
+		FElysiumTerminal::ClampGrid(Columns, Rows);
+		return FIntPoint(Columns, Rows);
+	};
+
+	TestEqual(TEXT("la_chantry_1's 72x24 clamps to the retail grid"),
+		Clamped(72, 24), FIntPoint(36, 24));
+	TestEqual(TEXT("hw_sinbin_1's 42x32 clamps on both axes"),
+		Clamped(42, 32), FIntPoint(36, 24));
+	TestEqual(TEXT("la_skyline_1's 56x32 does too"), Clamped(56, 32), FIntPoint(36, 24));
+	// The high bound is `< 0x25` / `< 0x19`, so the retail grid itself passes through untouched and
+	// one more saturates.
+	TestEqual(TEXT("36x24 is inside the clamp, not on it"), Clamped(36, 24), FIntPoint(36, 24));
+	TestEqual(TEXT("37x25 saturates to it"), Clamped(37, 25), FIntPoint(36, 24));
+	// sm_bailbonds_1's apple monitor is a real in-range grid and must survive unchanged — it is the
+	// reason neither the buffer nor the painter may assume 36x24.
+	TestEqual(TEXT("sm_bailbonds_1's authored 33x23 is untouched"),
+		Clamped(33, 23), FIntPoint(33, 23));
+	// The low bound.
+	TestEqual(TEXT("a 0x0 grid floors at 4x2"), Clamped(0, 0), FIntPoint(4, 2));
+	TestEqual(TEXT("and a negative one does too"), Clamped(-9, -9), FIntPoint(4, 2));
+	TestEqual(TEXT("4x2 is on the floor, not below it"), Clamped(4, 2), FIntPoint(4, 2));
 	return true;
 }
 

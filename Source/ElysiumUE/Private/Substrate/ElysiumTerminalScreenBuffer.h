@@ -10,8 +10,17 @@
 //
 // Each cell is a `uint16`: the low 7 bits are the ASCII code, `0x80` is the style bit (the
 // rasterizer XORs the foreground/background pair on it), and a high byte selects an extended glyph.
-// Retail's storage stride is a fixed 36 cells; the stride here is the active column count, which
-// no authored screen can tell apart (every `prop_hacking` in the corpus is 36×24).
+// Retail's storage stride is a fixed 36 cells (`+0x7b4`, `0x48` bytes per row) regardless of the
+// active column count; the stride here is the active column count. The difference is unobservable:
+// nothing reads a cell right of `+0x7ac`, and put-char's wrap, the newline margin and the scroll
+// all work off the ACTIVE column count, which is what a narrower grid changes.
+//
+// The corpus is NOT uniformly 36×24 — sm_bailbonds_1's `apple_monitor_screen` authors a real,
+// in-clamp 33×23, and hw_sinbin_1 (42×32), la_chantry_1 (72×24) and la_skyline_1's
+// `largemonitor_hackable` (56×32) all author out of range and land on `CBaseTerminal::Spawn`'s
+// `[4,36] × [2,24]` clamp (`0x10217880`, `FElysiumTerminal::ClampGrid`). So neither this buffer nor
+// the painter may assume the default grid: the rasterizer centres a `columns*14 × rows*16` block in
+// its 512×512 texture, and 33×23 genuinely draws a smaller block than 36×24 does.
 //
 // Client entity-message handlers (`C_BaseTerminal::vfunc10` `0x100c83a0`), each a method below:
 //   1 `FUN_100c7ec0` set cursor      2 `FUN_100c7fb0` print (word-wrapping)

@@ -355,6 +355,14 @@ FString ElysiumTerminalFormat(const FString& Format, TArrayView<const FElysiumTe
 
 // --- CBaseTerminal ------------------------------------------------------------------------------
 
+void FElysiumTerminal::ClampGrid(int32& InOutColumns, int32& InOutRows)
+{
+	// `0x10217880`, verbatim: the high bound is tested first against `0x25`/`0x19`, so 36 and 24
+	// pass through untouched and anything at or above 37/25 saturates at 36/24.
+	InOutColumns = InOutColumns < 0x25 ? FMath::Max(InOutColumns, 4) : 36;
+	InOutRows = InOutRows < 0x19 ? FMath::Max(InOutRows, 2) : 24;
+}
+
 void FElysiumTerminal::Spawn()
 {
 	// `CBaseTerminal::Spawn` `0x10217880` clamps the grid and zeroes `m_HackFlags`, `m_nMaxInput`
@@ -363,6 +371,10 @@ void FElysiumTerminal::Spawn()
 	// §8.3); the port clamps it here so the published view never carries a palette index nobody can
 	// draw.
 	ColorScheme = FMath::Clamp(ColorScheme, 0, 3);
+	// The grid clamp was described here but never applied, so la_chantry_1's authored 72 columns
+	// and hw_sinbin_1's 42x32 built grids retail never builds — and the glass cannot show them: a
+	// block wider than the 512x512 client texture is not drawable at all (§8.3).
+	ClampGrid(TextColumns, TextRows);
 	Screen.Reset(TextColumns, TextRows);
 	FString ContentError;
 	if (!OpenContent(ContentError))
@@ -1119,7 +1131,7 @@ void FElysiumTerminal::OnDormancyChanged()
 		}
 	}
 	// The glass is the body's, so it goes with the body. An inert terminal — hidden, killed or
-	// reaped — hands its `screen` slot back its authored material and drops the 1024x768 target;
+	// reaped — hands its `screen` slot back its authored material and drops the 1024x1024 target;
 	// coming back live re-registers and re-binds it. Without this a machine destroyed mid-map keeps
 	// a render target pinned until the map epoch retires.
 	if (World && WorldBody)

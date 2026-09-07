@@ -778,7 +778,9 @@ recovered function start. The only consumer of the command string is
   branch is `if ((m_HackFlags & 1) == 0) insert` — so in raw mode the character path also
   inserts the byte into the local line and re-renders it, on top of the `hackcmd %c` the key-down
   already sent: the keypress stays echoed on the glass until the server's next print.
-- `CBaseTerminal::Spawn` also clamps columns `[4,36]` and rows `[2,24]` and zeroes `m_HackFlags` /
+- `CBaseTerminal::Spawn` (`0x10217880`) clamps columns `[4,36]` and rows `[2,24]` — load-bearing,
+  not defensive: `hw_sinbin_1` authors 42×32, `la_chantry_1` 72×24, `la_skyline_1` 56×32, all run as
+  36×24; `sm_bailbonds_1`'s `apple_monitor_screen` is a real 33×23. It and zeroes `m_HackFlags` /
   `m_nMaxInput`; `m_nColorScheme` (`+0x818`, 4 bits) is clamped `0..3` on the client only.
 
 ### 8.2 Server → client screen messages
@@ -830,11 +832,12 @@ the local line editor all land here):
 cursor row up by `n` (clamped) and clears the edit flag at `+0xe88`.
 
 `FUN_100c77f0` is the software rasterizer (`CTextConsoleProxy::vfunc1` → `FUN_100c7720` refresh):
-512×512 RGBA, 14×16-pixel glyphs from a bitmap table at `0x10232ee8`, the four colour schemes as
+512×512 RGBA (`0x100c7806`/`0x100c7818` refuse any other size), 14×16-pixel glyphs from a bitmap table at `0x10232ee8` at a **fixed pitch that does not scale with the grid** (`0x100c7856`, `0x100c785b`), the `columns×rows` block **centred** in the texture at `x0 = (512 − columns·14)/2`, `y0 = (512 − rows·16)/2` (`0x100c7870`, `0x100c7884`; (4, 64) for 36×24, (25, 72) for `apple_monitor_screen`'s 33×23), everything outside the block the `memset 0` black (`0x100c793f`), the models' `screen` UVs therefore spanning U 0.0078..0.9922 and V 0.125..0.875 for a 36×24 grid (the port's target is square for this reason, TERM21), the four colour schemes as
 `0x14`-byte records at `0x10233378` selected by `+0xf08` clamped to `0..3`, the style bit XOR-ing
 the foreground/background pair, and the cursor drawn as glyph `0x44` at `(+0xe78, +0xe7c)` only
-while in use with the line editor active (`+0xe88` set and flag bit 1 at `+0xf00`). A blank row
-between glyph rows is a half-intensity blend of its neighbours (the retail "scanline").
+while in use with the line editor active (`+0xe88` set and flag bit 1 at `+0xf00`). Every odd texture row is overwritten with `(above >> 2 & 0x3f3f3f) + (below >> 2 & 0x3f3f3f)` over
+`columns·14 + 3` pixels (`0x100c7ae5`–`0x100c7b0b`) — 192 blended lines over the 384-pixel block, eight
+per text row (the retail "scanline").
 
 The consequence for a port: the server's screen messages (§8.2) are a stream into this put-char,
 so the authority must own an equivalent cell grid with wrap, scroll, margin and style, and the
@@ -1563,6 +1566,7 @@ here are closed from listings and from the pinned module bytes:
 | TERM15 | The client screen is a cell terminal: `FUN_100c8060` put-char (wrap at `columns`, newline to the margin, scroll at `rows - 1`, backspace), `FUN_100c8210` scroll-up, `FUN_100c77f0` rasterizer; cells are `char \| 0x80 style`, stride 36 (§8.3). |
 | TERM16 | `FUN_10218820` is the `InfoCtrl` HUD hint (type, value): 2 hide, 3 "Press CTRL-C…", 5 "Making hack attempt at skill N", 6 "Skill too low… difficulty N"; client handler `FUN_10055d30` (§8.4). Draw bodies `FUN_1021b140` / `FUN_1021aca0` / `FUN_1021b410` / `FUN_1021b5e0` joined to owner captures (§8.5). |
 | TERM19 | Slice B/C listings (`slice-bc-decompiles.md`): the hull-sweep pin `0x10218320` is the far arm (eye ≥ 80 Manhattan XY units from the terminal's box), unconditional `SetAbsOrigin(endpos)` + `Relink`, mask `MASK_PLAYERSOLID`; the near arm `0x102182b0` snaps the player's eye angles at `WorldSpaceCenter()`; attachments are looked up by name per call; the cone forward is 3D-normalized with `.xy` used raw, strict `> 0.7`; a second `+use` always releases; the camera is removed on exit with no restore and no ease-out; no exposure change exists; the screensaver's type 7 is `(0,0)`, its floor Activate-only, its think unguarded. |
+| TERM21 | `FUN_100c77f0` layout: 512×512 only, fixed 14×16 cells, the block centred at `((512 − cols·14)/2, (512 − rows·16)/2)`, black outside, odd rows blended; the model UVs sample the centred block, so a port target must reproduce the centring (owner QA 2026-09-07: a full-height paint cropped three rows top and bottom). |
 | TERM20 | The client line editor (§8.1.1): activation by type 3 with a saved row and edit origin; arm order Ctrl → raw → acknowledge → line; acknowledge Enter/Escape send `"hackcmd "`; `m_nMaxInput 0` unlimited; `m_bAllowDirKeys` never raised; no wrap — an over-long keystroke is discarded; no password masking. |
 | TERM18 | Port review 2026-09-07 against the listings: `FUN_1021b750` continues past a dependency-blocked name match; `0x1021c560` hides the HUD hint unconditionally, raises hint 6 with `GetDifficulty` on the skill arm and never clears the screen; `0x10217b30` echoes a second random draw per character (type 9, margin to 0) on the sub-3 roll; `thunk_FUN_10218820` has exactly six callers (`0x10217b30`, `0x10217f50`, `CBaseTerminal::vfunc42`, `AcceptCmd`, `0x1021b5e0`, `0x1021c560`) — no hint on entry; `AcceptCmd` never tests `m_HackFlags & 0x1` (the acknowledge restriction is client-side); the prompt's key name is copied without a case fold; the rule row is `columns - 2` bytes. |
 | TERM17 | Draw bodies line by line (§8.6). Type 7 (`FUN_10218ec0`/client `FUN_100c7e60`) sets the two margins and clears nothing; type 4 clears. Type-2 prints are word-wrapped by client `FUN_100c7fb0` inside `[left, columns - right)`. Type-1 columns are margin-relative (client `FUN_100c7ec0`). Box rows are `columns - 2` wide from the margin (`FUN_1021b2b0`/`FUN_1021b330`); the prompt literal is `"%c%s@%s%c "` with the bound `+use` key name; strings 19/39 echo the accepted password. |

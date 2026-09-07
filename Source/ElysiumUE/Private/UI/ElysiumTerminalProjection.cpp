@@ -24,8 +24,15 @@ namespace
 	const FName SlateUIParameter(TEXT("SlateUI"));
 	const FName TintParameter(TEXT("TintColorAndOpacity"));
 	const FName OpacityParameter(TEXT("OpacityFromTexture"));
-	constexpr float SurfaceWidth = 1024.0f;
-	constexpr float SurfaceHeight = 768.0f;
+	// The glass is SQUARE, at 2x retail. `FUN_100c77f0` (client.dll `0x100c77f0`) returns without
+	// drawing unless its texture is 512x512 (`0x100c7806`/`0x100c7818` compare `0x200`), so every
+	// VtMB monitor model's `screen` UVs were cut against a 512x512 sheet with a centred
+	// `columns*14 x rows*16` text block in it. A 4:3 target made those UVs sample a sub-window of
+	// the grid — the live `sp_tutorial_1` glass lost three rows off each end (owner QA,
+	// 2026-09-07). `ElysiumTerminalPaint` lays the block out at retail's origin on this surface.
+	constexpr float SurfaceWidth =
+		static_cast<float>(ElysiumTerminalPaint::SurfaceExtentPx);
+	constexpr float SurfaceHeight = SurfaceWidth;
 	const FVector2D SurfaceDrawSize(SurfaceWidth, SurfaceHeight);
 	const FLinearColor ScreenBlack(0.004f, 0.009f, 0.007f, 1.0f);
 	// The project's own CRT material, authored in the editor: unlit, emissive from one texture
@@ -172,7 +179,7 @@ void UElysiumTerminalProjection::Release()
 {
 	// Hand the slot back what it was authored with. Leaving the MID installed keeps the render
 	// target referenced — the component holds the material, the material holds the texture — so a
-	// monitor destroyed mid-map would pin a 1024x768 surface until the map epoch retired, and the
+	// monitor destroyed mid-map would pin a 1024x1024 surface until the map epoch retired, and the
 	// dead body would still be showing the last frame of a terminal that no longer exists.
 	if (UPrimitiveComponent* Target = ProjectionTarget.Get();
 		Target && ProjectionMaterialIndex != INDEX_NONE && ProjectionMaterial)
@@ -237,7 +244,7 @@ bool UElysiumTerminalProjection::IsBodyResident() const
 		return ForcedResidency.GetValue();
 	}
 	// A monitor in another room, behind the player or culled has nothing to show, and rasterizing a
-	// 1024x768 Slate surface per idle terminal per frame would be the whole cost of the feature.
+	// 1024x1024 Slate surface per idle terminal per frame would be the whole cost of the feature.
 	const UPrimitiveComponent* Body = BoundBody();
 	return Body != nullptr && Body->WasRecentlyRendered();
 }

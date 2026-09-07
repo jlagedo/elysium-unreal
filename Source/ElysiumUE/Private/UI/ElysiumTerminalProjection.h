@@ -34,7 +34,7 @@ public:
 	// session on it.
 	FElysiumEntityHandle Owner;
 
-	// Bind the exact authored `screen` material slot of `Target`, allocate the 1024x768 target and
+	// Bind the exact authored `screen` material slot of `Target`, allocate the 1024x1024 target and
 	// install the material instance on the component. False = there is nothing to project onto and
 	// the reason has been logged.
 	bool Bind(UPrimitiveComponent* Target);

@@ -82,16 +82,21 @@ namespace ElysiumTerminalPaint
 		{
 			return Metrics;   // bValid stays false; nothing is drawn
 		}
-		Metrics.CellWidth = FMath::FloorToInt(static_cast<float>(SurfaceW) / Columns);
-		Metrics.CellHeight = FMath::FloorToInt(static_cast<float>(SurfaceH) / Rows);
-		if (Metrics.CellWidth <= 0 || Metrics.CellHeight <= 0)
+		// The cell is retail's, fixed, and NOT the surface divided by the grid: `FUN_100c77f0`
+		// stamps 14x16 glyphs whatever `+0x7ac` / `+0x7b0` hold, so a `textcolumns 4` / `textrows 2`
+		// terminal inside `CBaseTerminal::Spawn`'s `[4,36] x [2,24]` clamp draws a small block in
+		// the middle of the same texture rather than four fat cells across it.
+		Metrics.CellWidth = CellWidthPx;
+		Metrics.CellHeight = CellHeightPx;
+		if (Metrics.BlockWidth() > SurfaceW || Metrics.BlockHeight() > SurfaceH)
 		{
 			Metrics.CellWidth = 0;
 			Metrics.CellHeight = 0;
-			return Metrics;   // more cells than pixels: no grid is drawable at all
+			return Metrics;   // the block does not fit: no grid is drawable at all
 		}
-		// The remainder is split evenly, so the block is centred and the margin is the same on both
-		// sides. 1024 / 36 = 28 leaves 16 px, which is the authored 8 px side margin.
+		// Retail's centring, `0x100c7870` / `0x100c7884`. On 1024x1024 the 36x24 block lands at
+		// (8, 128) — 2x retail's (4, 64) — which is exactly the window the model's `screen` UVs
+		// sample.
 		Metrics.OriginX = (SurfaceW - Metrics.BlockWidth()) / 2;
 		Metrics.OriginY = (SurfaceH - Metrics.BlockHeight()) / 2;
 		Metrics.bValid = true;
@@ -205,8 +210,12 @@ int32 SElysiumTerminalCells::OnPaint(const FPaintArgs&, const FGeometry& Allotte
 	const FDrawPlan Plan = DrawPlan(Surface);
 	const FSlateBrush* Brush = SolidBrush();
 
-	// The ground first, over the WHOLE surface rather than over the text block: the side margin is
-	// part of the screen, not a hole in it.
+	// The ground first, over the WHOLE surface rather than over the text block. Retail leaves
+	// everything outside `columns*14 x rows*16` at the memset-0 black of `0x100c793f` — only set
+	// glyph bits write pixels — and all four project palettes ground at 6..10 sRGB, so one fill is
+	// that black. It matters that it covers the margin: with the block at retail's centred origin
+	// the surround is 8 px at the sides and 128 px above and below, and the model's `screen` UVs
+	// stop at the block edge.
 	FSlateDrawElement::MakeBox(OutDrawElements, LayerId,
 		AllottedGeometry.ToPaintGeometry(SurfacePx,
 			FSlateLayoutTransform(FVector2f(0.0f, 0.0f))),

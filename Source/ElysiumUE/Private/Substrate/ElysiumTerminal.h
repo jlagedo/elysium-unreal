@@ -274,10 +274,22 @@ class FElysiumTerminal : public FElysiumSkillEntity
 {
 public:
 	bool bStartEnabled = true;
+	// The AUTHORED grid, before `Spawn` clamps it. The corpus really does author values outside the
+	// clamp — la_chantry_1 `textcolumns 72`, hw_sinbin_1 42x32, la_skyline_1's
+	// `largemonitor_hackable` 56x32 — and sm_bailbonds_1's `apple_monitor_screen` authors a real
+	// in-range 33x23, so neither the grid nor the layout may assume 36x24.
 	int32 TextColumns = 36;
 	int32 TextRows = 24;
 	int32 ColorScheme = 0;
 	FString SoundGroup;
+
+	// `CBaseTerminal::Spawn` `0x10217880` clamps the authored grid before anything reads it:
+	// columns `if (c < 0x25) c = max(c, 4); else c = 0x24` -> `[4, 36]`, rows
+	// `if (r < 0x19) r = max(r, 2); else r = 0x18` -> `[2, 24]`. Pure and static so the boundaries
+	// are assertable without standing up map content, and because the whole presentation layout
+	// depends on the clamp holding: the rasterizer's block is `columns*14 x rows*16` in a 512x512
+	// texture (§8.3), so an unclamped 72-column grid does not fit the glass at all.
+	static void ClampGrid(int32& InOutColumns, int32& InOutRows);
 
 	FElysiumEntityHandle CurrentUser;
 	uint32 SessionSerial = 0;
