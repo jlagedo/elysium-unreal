@@ -39,7 +39,10 @@ bool FElysiumTerminalDefinition::ParseText(const FString& Text,
 		return false;
 	}
 
-	Out.ScreenSaver = Root->Str(TEXT("screen saver"), FString());
+	// `+0x904` is a 64-byte field and the loader fills it with `Q_strncpy` (§4.4), so a longer
+	// authored label is TRUNCATED at load, not printed in full — the screensaver think then measures
+	// `strlen` of the truncated copy when it places the row.
+	Out.ScreenSaver = Root->Str(TEXT("screen saver"), FString()).Left(ElysiumTerminalScreenSaverMax);
 	Out.Brackets = Root->Str(TEXT("brackets"), FString());
 	Out.EmailPassword = Root->Str(TEXT("email_password"), FString());
 	Out.EmailUsername = Root->Str(TEXT("email_username"), FString());
@@ -308,40 +311,74 @@ void FElysiumTerminal::Spawn()
 		}
 	}
 
-	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	// The body build is conditional; resolving the screen attachments at the end is not, because a
 	// bodiless terminal still has to report WHICH part it is missing.
-	if (Embodiment && Def && !Model.IsEmpty())
-	{
-		VisualStem = Model;
-		const FQuat StaticRotation = Def->ModelMesh.IsEmpty()
-			? FQuat(FRotator(0.0f, -Angles.Y, 0.0f)) : Def->ModelQuat;
-		const FQuat SkeletalRotation = Def->ModelMesh.IsEmpty()
-			? FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)) : Def->ModelQuat;
-		if (Embodiment->HasPlacedModelCatalogue())
-		{
-			FElysiumPlacedModelRequest Request;
-			Request.ModelPath = Model;
-			Request.StaticStem = VisualStem;
-			Request.Location = Origin;
-			Request.Rotation = SkeletalRotation;
-			Request.UniformScale = Embodiment->BodyScaleFor(*Def);
-			Request.PlacementToken = Handle.Index;
-			WorldBody = Embodiment->BuildPlacedModelBody(Request).Visual;
-		}
-		else
-		{
-			WorldBody = Embodiment->BuildPropVisual(
-				VisualStem, Origin, StaticRotation, Embodiment->BodyScaleFor(*Def));
-		}
-		if (WorldBody)
-		{
-			World->RegisterPropBody(WorldBody, Handle);
-			World->SetUseAnchorEnabled(Handle, bStartEnabled && !IsInert());
-		}
-	}
+	BuildBody();
 	ResolveScreenAttachments();
 	ReportMissingAttachments();
+}
+
+void FElysiumTerminal::BuildBody()
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Def || Model.IsEmpty())
+	{
+		return;
+	}
+	VisualStem = Model;
+	const FQuat StaticRotation = Def->ModelMesh.IsEmpty()
+		? FQuat(FRotator(0.0f, -Angles.Y, 0.0f)) : Def->ModelQuat;
+	const FQuat SkeletalRotation = Def->ModelMesh.IsEmpty()
+		? FQuat(ElysiumSkeletalBasis::FromSourceAngles(Angles)) : Def->ModelQuat;
+	if (Embodiment->HasPlacedModelCatalogue())
+	{
+		FElysiumPlacedModelRequest Request;
+		Request.ModelPath = Model;
+		Request.StaticStem = VisualStem;
+		Request.Location = Origin;
+		Request.Rotation = SkeletalRotation;
+		Request.UniformScale = Embodiment->BodyScaleFor(*Def);
+		Request.PlacementToken = Handle.Index;
+		WorldBody = Embodiment->BuildPlacedModelBody(Request).Visual;
+	}
+	else
+	{
+		WorldBody = Embodiment->BuildPropVisual(
+			VisualStem, Origin, StaticRotation, Embodiment->BodyScaleFor(*Def));
+	}
+	if (WorldBody)
+	{
+		// This is also the one site that stands the glass: `AElysiumMapActor::RegisterUseAnchor`
+		// registers the projection on the visual it was handed (slice C).
+		World->RegisterPropBody(WorldBody, Handle);
+		// Dormancy alone: `m_bEnabled` never touched retail's collision box (`InputDisable`).
+		World->SetUseAnchorEnabled(Handle, !IsInert());
+	}
+}
+
+void FElysiumTerminal::DestroyBody()
+{
+	// The anchor record, its `ELYSIUM_USE_CHANNEL` proxy and the projection bound to this body all
+	// go with it. Without this a `SetModel` appends a SECOND anchor record (the map actor
+	// de-duplicates on the proxy component, which is a fresh object every time) and leaves the glass
+	// bound to the component the rebuild is about to replace.
+	if (World)
+	{
+		World->UnregisterUseAnchor(Handle);
+	}
+	if (WorldBody)
+	{
+		WorldBody->DestroyComponent();
+		WorldBody = nullptr;
+	}
+	VisualStem.Reset();
+	bScreenAttachmentsResolved = false;
+}
+
+void FElysiumTerminal::Activate()
+{
+	FElysiumSkillEntity::Activate();
+	bReportedBodilessGlass = false;
 }
 
 void FElysiumTerminal::ResolveScreenAttachments()
@@ -419,16 +456,24 @@ bool FElysiumTerminal::GetBodyAttachmentPoint(FName Attachment, FVector& OutWorl
 	return false;
 }
 
+bool FElysiumTerminal::FacesScreen(const FElysiumUseContext& Context) const
+{
+	// `FUN_10218710` (§2): the two attachment reads and `FUN_101d1120`. A model with no `screen` /
+	// `screen_axis` fails retail's cone too — `GetAttachment01` leaves the out-vectors alone, the
+	// forward is zero-length and `FUN_101d1120` answers 0, which never exceeds 0.7. Failing closed
+	// here says WHICH part is missing instead.
+	if (!bScreenAttachmentsResolved || !Context.bHasEyeOrigin)
+	{
+		return false;
+	}
+	return ElysiumTerminalCone::Faces(ScreenPointCm, ScreenAxisPointCm, Context.EyeOrigin);
+}
+
 bool FElysiumTerminal::CanPlayerFocus(const FElysiumUseContext& Context) const
 {
-	// Use gate `0x102180c0` (§7.2): `m_bEnabled`, a requester with a player component, **either no
-	// current user or the requester IS the current user** — re-entry of the same player is allowed,
-	// a different actor is refused — and a positive screen-facing test.
-	//
-	// Availability `0x10218690` is the stricter query (no current user at all) and `ObjectCaps`
-	// `0x10218660` answers the cone alone; the port publishes one predicate, because
-	// `PlayerUseIconFilter` (`FUN_10342590`) passes on ANY of slots 32/34/35, so a terminal is
-	// icon-eligible exactly when it is usable.
+	// Use gate, slot 32 `0x102180c0` (§2.3): `m_bEnabled`, a requester with a player component,
+	// **either no current user or the requester IS the current user** — re-entry of the same player
+	// is allowed, a different actor is refused — and a positive screen-facing test.
 	if (!bStartEnabled || IsInert() || !World)
 	{
 		return false;
@@ -437,19 +482,33 @@ bool FElysiumTerminal::CanPlayerFocus(const FElysiumUseContext& Context) const
 	{
 		return false;
 	}
+	// `param_1[0x2a]` (`+0xa8`, the player component). Only slot 32 asks it.
 	const FElysiumEntity* User = World->Resolve(Context.Activator);
 	if (!User || !User->AsCombatCharacter())
 	{
 		return false;
 	}
-	// A model with no `screen` / `screen_axis` fails retail's gate too: `GetAttachment01` leaves the
-	// out-vectors alone, the forward is zero-length and `FUN_101d1120` answers 0, which never
-	// exceeds 0.7. Failing closed here says WHICH part is missing instead.
-	if (!bScreenAttachmentsResolved || !Context.bHasEyeOrigin)
+	return FacesScreen(Context);
+}
+
+bool FElysiumTerminal::CanBeUsed(const FElysiumUseContext& Context) const
+{
+	// Availability, slot 34 `0x10218690`: `m_bEnabled`, then reject if `this+0x8c` resolves to ANY
+	// live entity — the same player who is already holding it fails here, which is exactly what
+	// separates this body from slot 32 — then the cone. No player-component test.
+	if (!bStartEnabled || IsInert() || !World || CurrentUser.IsSet())
 	{
 		return false;
 	}
-	return ElysiumTerminalCone::Faces(ScreenPointCm, ScreenAxisPointCm, Context.EyeOrigin);
+	return FacesScreen(Context);
+}
+
+bool FElysiumTerminal::HasUseIconCaps(const FElysiumUseContext& Context) const
+{
+	// `ObjectCaps`, slot 35 `0x10218660`: `return -((char)cone != 0) & 2`. The cone alone, so a
+	// disabled machine — or one somebody else is at — still draws the use icon from in front of the
+	// glass. `IsInert()` is the port's dormancy, which retail expresses by removing the entity.
+	return !IsInert() && FacesScreen(Context);
 }
 
 FElysiumUseBeginResult FElysiumTerminal::BeginPlayerUse(const FElysiumUseContext& Context)
@@ -465,24 +524,36 @@ FElysiumUseBeginResult FElysiumTerminal::BeginPlayerUse(const FElysiumUseContext
 		++SessionSerial;
 	}
 	++ViewRevision;
-	// `CPropHacking` entry `0x1021a5b0` in order: the flag reset and `CBaseTerminal::vfunc39`'s cue
-	// (`BeginContentSession`), the player hold, the draws, then the `Hacking` camera.
-	BeginContentSession();
 
-	// `FUN_1015ef40(player)` -> `CBasePlayer::m_bIsImmobilized` = 1 (§7.3 step 2). The port's
+	// `CPropHacking::vfunc39` `0x1021a5b0` calls the base FIRST (`0x1021a5c1`), and
+	// `CBaseTerminal::vfunc39` `0x102181a0` is itself ordered:
+	//   1 `0x102181a9` `CBaseVampireSkillEntity::vfunc39` — `OnUseBegin` + the skill attach;
+	//   2 `0x102181ae` the `access` cue;
+	//   3 `0x102181cd` `FUN_1015ef40(player)` — immobilize;
+	//   4 `0x102181d6` the `m_iVFlags` bit;
+	//   5 `0x102181db` `m_bInUse`;
+	//   6 `0x102181e2` the `m_szHackPWD` clear.
+	// Only THEN does `CPropHacking` draw (`0x1021a5dd`) and prompt (`0x1021a5e4`), and only after
+	// those does it push the camera (`0x1021a5ef`). The hold precedes the first frame the player
+	// ever sees of the machine, which is the order this reproduces.
+	FElysiumSkillEntity::BeginPlayerUse(Context);   // step 1
+
+	// `FUN_1015ef40(player)` -> `CBasePlayer::m_bIsImmobilized` = 1 (step 3). The port's
 	// `AElysiumPlayerController::TickActor` zeroes wish movement off `IsMobile()`, which is retail's
 	// `SetupMove` button-mask arm; the pawn is held in place by `TickPlayerUse` below, exactly as
-	// retail's slot 43 does.
+	// retail's slot 43 does. Steps 4 and 5 have no port counterpart: the view-angle lock the port
+	// needs is the camera shot, and `m_bInUse` is `CurrentUser` above.
 	if (FElysiumPlayer* PlayerEntity = World ? World->FindPlayer() : nullptr)
 	{
 		PlayerEntity->SetImmobilized(true);
 	}
 
-	// `FUN_10070470("Hacking", NULL, terminal, terminal, NULL)` (§7.3 step 6): the `Hacking` block of
-	// `vdata/camerashots/special-case.txt`, with the terminal bound as its Named slots. The shot IS
-	// the framing — no distance solve, no bezel margin — so a shot that will not resolve refuses the
-	// session rather than leaving the player pinned to a screen the camera never reached
-	// (`docs/architecture/computer-terminal-architecture.md` §6.3).
+	// Steps 2 and 6 of the base, then `CPropHacking`'s own reset, email load, think cancel, draw and
+	// prompt — one body, because the port's content leaf owns the whole of the derived entry.
+	BeginContentSession();
+
+	// `FUN_10070470("Hacking", NULL, terminal, terminal, NULL)` (§3.2 step 7): the `Hacking` block
+	// of `vdata/camerashots/special-case.txt`, with the terminal bound as its Named slots.
 	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 	{
 		// The clamp is the one named Presentation modernization: the glass is the brightest thing in
@@ -491,17 +562,15 @@ FElysiumUseBeginResult FElysiumTerminal::BeginPlayerUse(const FElysiumUseContext
 			EElysiumShotExposure::Clamped);
 		if (CameraShot == 0)
 		{
+			// Retail does NOT refuse. `FUN_10070470` returns NULL when the shot will not load
+			// (§3.3 step 3), and step 8 then runs `FUN_1017cef0(player, NULL)` — which CLEARS the
+			// camera fields and leaves the client on the player's own eye. The session opens, the
+			// player is held, the screen is drawn, and there is simply no cinematic camera
+			// (`slice-bc-decompiles.md` §3.2/§3.4; supersedes the plan's refusal line).
 			UE_LOG(LogElysiumSkill, Warning,
-				TEXT("%s cannot open: the 'Hacking' shot in special-case.txt did not resolve"),
+				TEXT("%s: the 'Hacking' shot in special-case.txt did not resolve; ")
+				TEXT("the session runs cameraless, as retail's NULL camera does"),
 				*DebugString());
-			EndContentSession();
-			CurrentUser = FElysiumEntityHandle::Invalid();
-			if (FElysiumPlayer* PlayerEntity = World->FindPlayer())
-			{
-				PlayerEntity->SetImmobilized(false);
-			}
-			++ViewRevision;
-			return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
 		}
 	}
 	return FElysiumUseBeginResult::Started(EElysiumUseSessionKind::Explicit);
@@ -549,7 +618,7 @@ void FElysiumTerminal::TickPlayerUse(const FElysiumUseContext& Context)
 	Embodiment->SweepPlayerHullToward(Origin, Contact);
 }
 
-void FElysiumTerminal::EndPlayerUse(const FElysiumUseContext& Context, EElysiumUseEndReason)
+void FElysiumTerminal::EndPlayerUse(const FElysiumUseContext& Context, EElysiumUseEndReason Reason)
 {
 	if (!CurrentUser.IsSet())
 	{
@@ -579,10 +648,26 @@ void FElysiumTerminal::EndPlayerUse(const FElysiumUseContext& Context, EElysiumU
 	}
 	// 3-5. the two `m_iVFlags` bits and `m_bInUse` have no port counterpart yet: the view-angle lock
 	//    the port needs is the camera shot, and `m_bInUse` is `CurrentUser` below.
-	// 6. an `IEngineSoundServer003` slot-5 call keyed on the terminal's entity index (correction
-	//    C6). Unclaimed: slice F owns the terminal's cue table and decides what it is.
-	// 7. `OnUseEnd` + skill detach.
-	StopAttempt();
+	// 6. `10218251`-`10218278`: `sound->slot5( engine->IndexOfEdict(this+0x2e0), 0 )` on
+	//    `IEngineSoundServer003` (`DAT_1070b248`). Decompiled for slice F:
+	//    `CEngineSoundServer::vfunc5` (engine.dll `0x20002050`, `RET 8`) calls
+	//    `FUN_200ef880(filter, entIndex, /*channel*/0, /*flag*/arg2)`, and its neighbour
+	//    `vfunc6` (`0x20001fc0`) calls the same body as
+	//    `FUN_200ef880(filter, entIndex, /*channel*/arg2, /*flag*/1)`. That body writes net
+	//    message 6 — the same `svc_sounds` id `SV_StartSound` (`0x200ef320`) writes — with a
+	//    sub-type of **2** instead of 1, then 11 bits of entity, 3 bits of channel and 1 bit of
+	//    flag, and NO sample name. So the pair is stop-by-entity: `vfunc6` stops one channel and
+	//    `vfunc5(ent, 0)` clears the flag, which stops **every** sound that entity is playing.
+	//    The port's equivalent is stop-by-owner, and the terminal's cues already carry that owner.
+	if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
+	{
+		FElysiumAudioOwner StopOwner;
+		StopOwner.Kind = EElysiumAudioOwnerKind::MapEntity;
+		StopOwner.StableId = CueOwnerId();
+		Audio->CancelAudioOwner(StopOwner, /*FadeSeconds*/ 0.0f);
+	}
+	// 7. `0x1021827e` `CBaseVampireSkillEntity::vfunc42`: `OnUseEnd` + skill detach.
+	FElysiumSkillEntity::EndPlayerUse(Context, Reason);
 	// Then `CPropHacking`'s own tail: the idle title box and the directory/pending reset
 	// (`EndContentSession`), with the screensaver re-arm at `ss_start + now` left to slice C.
 	EndContentSession();
@@ -609,22 +694,19 @@ void FElysiumTerminal::Serialize(FElysiumSaveArchive& Ar)
 void FElysiumTerminal::InputEnable()
 {
 	bStartEnabled = true;
-	if (World)
-	{
-		World->SetUseAnchorEnabled(Handle, !IsInert());
-	}
 }
 
 void FElysiumTerminal::InputDisable()
 {
+	// `m_bEnabled` is an arm of slots 32 and 34 and NOTHING else: retail's terminal keeps its
+	// `SOLID_BBOX` collision box whether it is enabled or not, so a disabled machine is still
+	// swept into by the pin, still occludes what is behind it, and still draws the use icon through
+	// slot 35 (`slice-bc-decompiles.md` §2.3). The use anchor is this port's stand-in for that box,
+	// so it tracks dormancy alone — see `OnDormancyChanged`.
 	bStartEnabled = false;
-	if (World)
+	if (World && CurrentUser.IsSet())
 	{
-		World->SetUseAnchorEnabled(Handle, false);
-		if (CurrentUser.IsSet())
-		{
-			World->EndPlayerUseSession(Handle, EElysiumUseEndReason::TargetInvalid);
-		}
+		World->EndPlayerUseSession(Handle, EElysiumUseEndReason::TargetInvalid);
 	}
 }
 
@@ -688,6 +770,13 @@ void FElysiumTerminal::SetHudHint(int32 Type, int32 Value)
 	HudHintValue = Value;
 }
 
+FString FElysiumTerminal::CueOwnerId() const
+{
+	// One place, because the exit's stop-by-owner (`vfunc42` step 6) has to name exactly what
+	// `PlayCue` submitted under.
+	return FString::Printf(TEXT("entity:%u:%d"), Handle.Epoch, Handle.Index);
+}
+
 void FElysiumTerminal::PlayCue(const TCHAR* Cue)
 {
 	const FString* Rel = CueRels.Find(FName(Cue));
@@ -705,7 +794,7 @@ void FElysiumTerminal::PlayCue(const TCHAR* Cue)
 	FElysiumAudioRequest Request;
 	Request.Source = FElysiumAudioSource::Path(*Rel);
 	Request.Owner.Kind = EElysiumAudioOwnerKind::MapEntity;
-	Request.Owner.StableId = FString::Printf(TEXT("entity:%u:%d"), Handle.Epoch, Handle.Index);
+	Request.Owner.StableId = CueOwnerId();
 	Request.Category = EElysiumAudioCategory::Sfx;
 	Request.Placement.bSpatialized = true;
 	Request.AttenuationRadiusCm = CueRadiusCm;
@@ -808,11 +897,19 @@ void FElysiumTerminal::BuildIdleView(FElysiumTerminalView& Out) const
 	FillView(Out, /*Serial*/ 0);
 }
 
+const FString& FElysiumTerminal::ScreenSaverLabel() const
+{
+	static const FString None;
+	return None;
+}
+
 void FElysiumTerminal::FillView(FElysiumTerminalView& Out, uint32 Serial) const
 {
+	// --- the GLASS half: what the monitor draws whether or not anyone is at it ---------------
 	Out.Owner = Handle;
 	Out.SessionSerial = Serial;
 	Out.Revision = ViewRevision;
+	Out.ScreenSaverLabel = ScreenSaverLabel();
 	Out.Columns = Screen.Columns();
 	Out.Rows = Screen.Rows();
 	Out.Cells.Reserve(Out.Columns * Out.Rows);
@@ -827,12 +924,32 @@ void FElysiumTerminal::FillView(FElysiumTerminalView& Out, uint32 Serial) const
 	}
 	Out.CursorRow = Screen.CursorRow();
 	Out.CursorColumn = Screen.CursorColumn();
+	if (Serial == 0)
+	{
+		// --- and nothing else. An idle machine publishes no session state and, above all, runs no
+		// dependency gate: `BuildContentView` evaluates every directory's and function's authored
+		// `dependency` through the script host, and doing that for every terminal on the map every
+		// frame is work retail's idle machine does not do — its think draws the screensaver and
+		// stops. The action list is a live session's affordance and has no idle reader.
+		return;
+	}
 	Out.InputMode = static_cast<uint8>(InputMode());
 	Out.MaxInput = MaxInput;
 	Out.bDigitsOnly = (HackFlags & FlagDigitsOnly) != 0;
 	Out.HudHintType = HudHintType;
 	Out.HudHintValue = HudHintValue;
 	BuildContentView(Out);
+}
+
+void FElysiumTerminal::ReportBodilessGlass() const
+{
+	if (bReportedBodilessGlass)
+	{
+		return;
+	}
+	bReportedBodilessGlass = true;
+	UE_LOG(LogElysiumSkill, Warning,
+		TEXT("%s is live but has no body: its screen has nowhere to draw"), *DebugString());
 }
 
 void FElysiumTerminal::OnDormancyChanged()
@@ -844,10 +961,25 @@ void FElysiumTerminal::OnDormancyChanged()
 	}
 	if (World)
 	{
-		World->SetUseAnchorEnabled(Handle, bStartEnabled && !IsInert());
+		World->SetUseAnchorEnabled(Handle, !IsInert());
 		if (IsInert() && CurrentUser.IsSet())
 		{
 			World->EndPlayerUseSession(Handle, EElysiumUseEndReason::TargetInvalid);
+		}
+	}
+	// The glass is the body's, so it goes with the body. An inert terminal — hidden, killed or
+	// reaped — hands its `screen` slot back its authored material and drops the 1024x768 target;
+	// coming back live re-registers and re-binds it. Without this a machine destroyed mid-map keeps
+	// a render target pinned until the map epoch retires.
+	if (World && WorldBody)
+	{
+		if (IsInert())
+		{
+			World->UnregisterUseAnchor(Handle);
+		}
+		else
+		{
+			World->RegisterUseAnchor(WorldBody, Handle);
 		}
 	}
 }
@@ -867,16 +999,11 @@ void FElysiumTerminal::OnRuntimeTransformChanged()
 void FElysiumTerminal::OnRuntimeModelChanged()
 {
 	FElysiumEntity::OnRuntimeModelChanged();
-	// The glass follows the body. Re-registering the anchor is the one path that re-binds the
-	// world-lifetime projection (slice C) — `RegisterUseAnchor` de-duplicates the record itself, so
-	// a body that did not actually change costs nothing and one that did is re-bound.
-	//
-	// NOTE: a terminal does not yet rebuild `WorldBody` on `SetModel` the way `FElysiumProp` does;
-	// this re-arms whatever body it is standing on so the wire is in place for when it does.
-	if (World && WorldBody)
-	{
-		World->RegisterUseAnchor(WorldBody, Handle);
-	}
+	// The same rebuild `FElysiumProp::OnRuntimeModelChanged` does, in the same order: drop the old
+	// body (and with it the anchor record, the use proxy and the glass), stand the new one, and let
+	// the registration re-bind the projection to the component that now carries the `screen` slot.
+	DestroyBody();
+	BuildBody();
 	ResolveScreenAttachments();
 	ReportMissingAttachments();
 }
@@ -1063,10 +1190,9 @@ void FElysiumPropHacking::BeginContentSession()
 void FElysiumPropHacking::EndContentSession()
 {
 	// `CPropHacking` exit 0x1021a6c0, in its listing order: re-arm the screensaver, redraw the idle
-	// title, reset the two indices.
-	// Retail's exit writes the buffer, the idle title and the two indices; it does not touch
-	// `m_HackFlags` — the next entry rewrites the whole word.
-	CrackBuffer.Reset();
+	// title, reset the two indices. It touches neither `m_HackFlags` nor `m_szHackPWD` — the ONLY
+	// writer of the crack buffer on the entry/exit path is `FUN_1021a1c0` at entry (§3.2 step 1),
+	// and the next entry rewrites the whole flags word as well.
 	// `m_flNextThink = m_flSS_Start + gpGlobals->curtime` — **`ss_start`, never `ss_delay`, and with
 	// no floor**: the 2.0 floor is Activate-only (correction C15).
 	ArmScreenSaver(ScreenSaverStart);
@@ -1769,7 +1895,8 @@ void FElysiumPropHacking::OnAttemptStopped(FElysiumCombatCharacter&, EElysiumUse
 
 void FElysiumPropHacking::BuildContentView(FElysiumTerminalView& Out) const
 {
-	Out.ScreenSaverLabel = Definition.ScreenSaver;
+	// The label is glass state and `FillView` has already published it; this body is the SESSION's
+	// affordances only.
 	Out.bAcceptsDirectoryKeys = true;
 
 	auto AddAction = [&Out](const FString& Id, const FString& Label, const FString& Command)

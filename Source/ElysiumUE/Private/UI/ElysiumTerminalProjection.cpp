@@ -26,7 +26,7 @@ namespace
 	constexpr float SurfaceHeight = 768.0f;
 	const FVector2D SurfaceDrawSize(SurfaceWidth, SurfaceHeight);
 	const FLinearColor ScreenBlack(0.004f, 0.009f, 0.007f, 1.0f);
-	const FLinearColor Phosphor(0.63f, 0.88f, 0.70f, 1.0f);
+	const FLinearColor ProjectionPhosphor(0.63f, 0.88f, 0.70f, 1.0f);
 	const TCHAR* ProjectionMaterialPath =
 		TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Opaque.Widget3DPassThrough_Opaque");
 }
@@ -118,6 +118,9 @@ bool UElysiumTerminalProjection::Bind(UPrimitiveComponent* InTarget)
 		Release();
 		return false;
 	}
+	// Remembered before the override so `Release` can put it back. Null is a legitimate answer (the
+	// mesh's own default material), and `SetMaterial(index, nullptr)` restores exactly that.
+	OriginalMaterial = InTarget->GetMaterial(MaterialIndex);
 	ProjectionMaterial->SetTextureParameterValue(SlateUIParameter, RenderTarget);
 	ProjectionMaterial->SetVectorParameterValue(TintParameter, FLinearColor::White);
 	ProjectionMaterial->SetScalarParameterValue(OpacityParameter, 1.0f);
@@ -132,6 +135,16 @@ bool UElysiumTerminalProjection::IsBound() const
 
 void UElysiumTerminalProjection::Release()
 {
+	// Hand the slot back what it was authored with. Leaving the MID installed keeps the render
+	// target referenced — the component holds the material, the material holds the texture — so a
+	// monitor destroyed mid-map would pin a 1024x768 surface until the map epoch retired, and the
+	// dead body would still be showing the last frame of a terminal that no longer exists.
+	if (UPrimitiveComponent* Target = ProjectionTarget.Get();
+		Target && ProjectionMaterialIndex != INDEX_NONE && ProjectionMaterial)
+	{
+		Target->SetMaterial(ProjectionMaterialIndex, OriginalMaterial.Get());
+	}
+	OriginalMaterial.Reset();
 	ProjectionTarget.Reset();
 	ProjectionMaterialIndex = INDEX_NONE;
 	ProjectionMaterial = nullptr;
@@ -144,6 +157,18 @@ void UElysiumTerminalProjection::Release()
 bool UElysiumTerminalProjection::NeedsRedraw(const FElysiumTerminalView& View) const
 {
 	return IsBound() && View.Revision != DrawnRevision;
+}
+
+bool UElysiumTerminalProjection::IsBodyResident() const
+{
+	if (ForcedResidency.IsSet())
+	{
+		return ForcedResidency.GetValue();
+	}
+	// A monitor in another room, behind the player or culled has nothing to show, and rasterizing a
+	// 1024x768 Slate surface per idle terminal per frame would be the whole cost of the feature.
+	const UPrimitiveComponent* Body = BoundBody();
+	return Body != nullptr && Body->WasRecentlyRendered();
 }
 
 void UElysiumTerminalProjection::Draw(const FElysiumTerminalView& View)
@@ -159,11 +184,15 @@ void UElysiumTerminalProjection::Draw(const FElysiumTerminalView& View)
 
 TSharedRef<SWidget> UElysiumTerminalProjection::BuildSurface(const FElysiumTerminalView& View) const
 {
-	// The authority's grid and nothing else. Retail has no client-side draft at all — the client
-	// sends each keystroke and the SERVER echoes it into the cell buffer (type 9,
-	// `docs/vtmb/computer-terminals.md` §8.1/§8.6) — so the glass showing only what the entity has
-	// written is the retail semantic, not a gap. Slice D replaces this text block with the cell
-	// painter at fixed metrics, the style bit and the block cursor.
+	// The authority's grid and nothing else.
+	//
+	// That is NOT the whole of retail's glass. Entity message type 9 is the CRACKING echo
+	// (`FUN_10217d60` printing the scrambled password a character at a time); an ordinary typed
+	// character is composed **client-side** — `FUN_100c6d50` collects the keystroke into the local
+	// line and `FUN_100c8060` paints it over the server's cells before the screen is drawn
+	// (`docs/vtmb/computer-terminals.md` §8.1, TERM13). So the local draft is a real part of the
+	// picture and this surface does not carry it yet: slice E composes it, and slice D replaces this
+	// text block with the cell painter at fixed metrics, the style bit and the block cursor.
 	return SNew(SBorder)
 		.BorderImage(FCoreStyle::Get().GetBrush(TEXT("GenericWhiteBox")))
 		.BorderBackgroundColor(FSlateColor(ScreenBlack))
@@ -184,7 +213,7 @@ TSharedRef<SWidget> UElysiumTerminalProjection::BuildSurface(const FElysiumTermi
 						SNew(STextBlock)
 						.Text(FText::FromString(FString::Join(View.ScreenRows, TEXT("\n"))))
 						.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18))
-						.ColorAndOpacity(FSlateColor(Phosphor))
+						.ColorAndOpacity(FSlateColor(ProjectionPhosphor))
 						.Clipping(EWidgetClipping::ClipToBoundsAlways)
 					]
 				]

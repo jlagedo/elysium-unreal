@@ -8,6 +8,7 @@
 #include "ElysiumTerminalProjection.generated.h"
 
 class UMaterialInstanceDynamic;
+class UMaterialInterface;
 class UPrimitiveComponent;
 class UTextureRenderTarget2D;
 struct FElysiumTerminalView;
@@ -48,6 +49,13 @@ public:
 	// The revision gate alone. The residency gate (`WasRecentlyRendered`) belongs to the caller: a
 	// process that renders nothing would otherwise never redraw at all.
 	bool NeedsRedraw(const FElysiumTerminalView& View) const;
+	// Whether the bound body is on screen this frame, which is the caller's second gate. It is asked
+	// through this object so a `-nullrhi` case can drive the redraw path at all: nothing is ever
+	// rendered under `-nullrhi`, so `WasRecentlyRendered` is permanently false there and the whole
+	// gate would be untestable.
+	bool IsBodyResident() const;
+	// Test-only override for the line above. Unset in the game, where the engine's own answer wins.
+	TOptional<bool> ForcedResidency;
 	// Rasterize the authority's grid onto the glass and consume the view's revision.
 	void Draw(const FElysiumTerminalView& View);
 
@@ -70,6 +78,9 @@ private:
 	TObjectPtr<UMaterialInstanceDynamic> ProjectionMaterial;
 
 	TWeakObjectPtr<UPrimitiveComponent> ProjectionTarget;
+	// What the `screen` slot carried before the projection took it, restored by `Release`. Weak
+	// rather than owning: it is the mesh's own authored material and outlives this object.
+	TWeakObjectPtr<UMaterialInterface> OriginalMaterial;
 	TUniquePtr<FWidgetRenderer> WidgetRenderer;
 	int32 ProjectionMaterialIndex = INDEX_NONE;
 };

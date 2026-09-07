@@ -976,6 +976,8 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 	// Incoming damage while paired tears the feed down BEFORE the damage commits, whichever
 	// half of the pair is hit (`docs/vtmb/feeding.md` § "Interruption, completion and outputs").
 	BreakFeed();
+	// And the same position is where retail's player drops a held `+use` session (`0x10163126`).
+	OnDamageEntered();
 
 	FElysiumDmg Resolved = Dmg;
 	if (!ElysiumDamage::Apply(Resolved, Attacker, *this, FElysiumDamageContext::FromCharacter(*this),
@@ -993,6 +995,7 @@ void FElysiumCombatCharacter::TakeDamage(float Amount)
 		return;   // invincible: the scalar input reaches the same virtual in retail
 	}
 	BreakFeed();
+	OnDamageEntered();
 
 	// The scalar fallback: retail's alive path takes its positive damage EITHER from the descriptor
 	// apply callback or from here, so this route does not enter the resolver at all. The descriptor

@@ -146,7 +146,7 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	}
 	ON_SCOPE_EXIT { if (bItems) { ElysiumItems::Uninstall(Items); } };
 
-	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	UElysiumGameStateSubsystem* State = ElysiumTerminalSliceTests::MakeHeadlessGameState();
 	State->SetScriptHost(MakeUnique<FElysiumExprScriptHost>(State));
 
 	FElysiumRecordingServices Services;
@@ -236,6 +236,17 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 		{
 			TestEqual(TEXT("with no session serial"), Tuthack->SessionSerial, 0u);
 			TestEqual(TEXT("and the whole 36x24 grid"), Tuthack->Cells.Num(), 36 * 24);
+			// An idle view is the GLASS and nothing else. The action list is a live session's
+			// affordance, and building it walks every directory's and function's authored
+			// `dependency` through the script host — per terminal, per frame, ahead of the redraw
+			// gate. Retail's idle machine does no work beyond its think.
+			TestEqual(TEXT("an idle view carries no session action list"), Tuthack->Actions.Num(), 0);
+			// ... but it does carry the label, because that is what the screensaver draws.
+			TestEqual(TEXT("and does carry the authored screensaver label"),
+				Tuthack->ScreenSaverLabel, TEXT("Brothers Downtown Garage"));
+			// And it is not a session: serial 0 is exactly what `IsOpen` has to refuse, or the
+			// CommonUI screen would open over a machine nobody is standing at.
+			TestFalse(TEXT("an idle view does not read as an open session"), Tuthack->IsOpen());
 		}
 	}
 	// The first think, and the authored label is on the glass with nothing else. The reschedule is
@@ -292,13 +303,63 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	TestFalse(TEXT("trig_jack_teleport_3 starts disabled"), TriggerEnabled(Teleport));
 	TestTrue(TEXT("the door knobs start locked"), Locked(KnobA) && Locked(KnobB));
 
+	// --- slice F: the four `soundgroup` cues -------------------------------------------------
+	// `tuthack` authors `"soundgroup" "old_computer"`, and `FElysiumTerminal::Spawn` resolves
+	// `computers/old_computer` through the exported `usable/soundgroups.json`. The four cue SITES
+	// are the retail ones (`docs/vtmb/computer-terminals.md` §14): `access` at entry
+	// (`0x102181ae`), `error` on every password-prompt render and the first line of an invalid
+	// command, `accept` at the end of every `EnterDirectory` arm (`0x1021c890`), `typing` at the
+	// cracking start (`0x10217b30`) and at its flush (`FUN_10217d60`). The executor is silent.
+	TestEqual(TEXT("tuthack authors soundgroup old_computer"), Terminal->SoundGroup,
+		TEXT("old_computer"));
+	const bool bCues = Terminal->HasCue(TEXT("access")) && Terminal->HasCue(TEXT("accept"))
+		&& Terminal->HasCue(TEXT("error")) && Terminal->HasCue(TEXT("typing"));
+	if (!bCues)
+	{
+		AddInfo(TEXT("seam: usable/soundgroups.json resolves no computers/old_computer group; ")
+			TEXT("the cue-site assertions are skipped"));
+	}
+	auto CueCount = [&Services](const TCHAR* Cue)
+	{
+		return Services.Count(FString::Printf(
+			TEXT("Submit usable/computers/old_computer/%s.wav"), Cue));
+	};
+	// The four counts as one snapshot, so a site can be asserted BOTH for what it plays and for
+	// what it must not.
+	struct FCueSnapshot { int32 Access = 0; int32 Accept = 0; int32 Error = 0; int32 Typing = 0; };
+	auto SnapCues = [&CueCount]()
+	{
+		return FCueSnapshot{ CueCount(TEXT("access")), CueCount(TEXT("accept")),
+			CueCount(TEXT("error")), CueCount(TEXT("typing")) };
+	};
+	auto ExpectCues = [this, &SnapCues, bCues](const TCHAR* Where, const FCueSnapshot& Before,
+		int32 Access, int32 Accept, int32 Error, int32 Typing)
+	{
+		if (!bCues)
+		{
+			return;
+		}
+		const FCueSnapshot After = SnapCues();
+		TestEqual(FString::Printf(TEXT("%s plays %d access"), Where, Access),
+			After.Access - Before.Access, Access);
+		TestEqual(FString::Printf(TEXT("%s plays %d accept"), Where, Accept),
+			After.Accept - Before.Accept, Accept);
+		TestEqual(FString::Printf(TEXT("%s plays %d error"), Where, Error),
+			After.Error - Before.Error, Error);
+		TestEqual(FString::Printf(TEXT("%s plays %d typing"), Where, Typing),
+			After.Typing - Before.Typing, Typing);
+	};
+
 	// --- Unlock ---
+	FCueSnapshot Cues = SnapCues();
 	const FElysiumUseBeginResult Opened = World.BeginPlayerUseSession(Terminal->Handle, PlayerHandle);
 	if (!TestEqual(TEXT("+use on tuthack starts the session"), Opened.Outcome,
 		EElysiumUseOutcome::SessionStarted))
 	{
 		return false;
 	}
+	// `CBaseTerminal::vfunc39` step 2: one `access`, and the root draw and prompt are silent.
+	ExpectCues(TEXT("entry"), Cues, /*access*/ 1, /*accept*/ 0, /*error*/ 0, /*typing*/ 0);
 	const uint32 Serial = Terminal->SessionSerial;
 	// Entry step 4 (`0x1021a5d6`): `ThinkSet(NULL)`. Nothing else guards the think.
 	TestEqual(TEXT("entry cancels the screensaver think"), Terminal->NextThink,
@@ -337,6 +398,8 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 
 	FElysiumTerminalView View;
 	TestTrue(TEXT("the session publishes a view"), World.BuildTerminalView(View));
+	TestTrue(TEXT("and it reads as open"), View.IsOpen());
+	TestTrue(TEXT("a live view DOES carry the action list"), View.Actions.Num() > 0);
 	TestEqual(TEXT("the view carries the authored screensaver"), View.ScreenSaverLabel,
 		TEXT("Brothers Downtown Garage"));
 	TestEqual(TEXT("the view carries the whole 36x24 cell grid"), View.Cells.Num(), 36 * 24);
@@ -373,7 +436,9 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	}
 
 	// --- `Safe` asks for its password; the HUD hint is raised on every prompt render ---
+	Cues = SnapCues();
 	TestTrue(TEXT("Safe is accepted"), World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("Safe")));
+	ExpectCues(TEXT("the Safe password prompt"), Cues, 0, 0, /*error*/ 1, 0);
 	TestEqual(TEXT("Safe asks for its password"), Terminal->InputMode(),
 		EElysiumTerminalInputMode::Password);
 	DumpScreen(TEXT("Safe (password required)"));
@@ -387,8 +452,10 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	// `FUN_1021b5e0(this, 1)`: title 15, the notify through `"\n%s %c%s%c\n\n"` whose first `%c`
 	// is the empty `brackets`' NUL — so the print stops after the sentence and its trailing space,
 	// dropping the directory name and both newlines, and string 21 continues the same wrapped line.
+	Cues = SnapCues();
 	TestTrue(TEXT("a wrong password is accepted as a line"),
 		World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("x")));
+	ExpectCues(TEXT("the retry prompt after a wrong password"), Cues, 0, 0, /*error*/ 1, 0);
 	DumpScreen(TEXT("x (password failed)"));
 	TestEqual(TEXT("the retry titles string 15"), Row(2),
 		BoxRow(Columns, TEXT("PASSWORD FAILED"), 9));      // (36 - 15 - 2) / 2 = 9
@@ -405,8 +472,12 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 
 	// --- `quit` at a password prompt cancels to the directory, it does not end the session ---
 	// `FUN_10217f50` slot 277: pending cleared, the current directory redrawn. The session lives.
+	Cues = SnapCues();
 	TestTrue(TEXT("quit at the password prompt is accepted"),
 		World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("quit")));
+	// `FUN_10217f50`'s cancel arm redraws through `DirectoryDraw`, not `EnterDirectory`, so it is
+	// silent — the `accept` cue belongs to the directory transition, not to the redraw.
+	ExpectCues(TEXT("quit at the password prompt"), Cues, 0, 0, 0, 0);
 	TestTrue(TEXT("quit at the password prompt keeps the session open"),
 		World.BuildTerminalView(View));
 	TestEqual(TEXT("quit at the password prompt returns to line mode"), Terminal->InputMode(),
@@ -419,8 +490,10 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 
 	// --- The password, then the Function ---
 	World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("Safe"));
+	Cues = SnapCues();
 	TestTrue(TEXT("chopshop is accepted"),
 		World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("chopshop")));
+	ExpectCues(TEXT("the accepted password's directory entry"), Cues, 0, /*accept*/ 1, 0, 0);
 	TestEqual(TEXT("chopshop enters Safe"), Terminal->CurrentDirectory, 0);
 	DumpScreen(TEXT("chopshop (password succeeded)"));
 	TestEqual(TEXT("the accepted password titles string 16"), Row(2),
@@ -446,8 +519,11 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	TestEqual(TEXT("Enter leaves acknowledge mode"), Terminal->InputMode(),
 		EElysiumTerminalInputMode::Line);
 
+	Cues = SnapCues();
 	TestTrue(TEXT("Unlock is accepted"),
 		World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("Unlock")));
+	// `FUN_1021c6d0` reaches no cue site at all: the function executor is silent in retail.
+	ExpectCues(TEXT("the Unlock executor"), Cues, 0, 0, 0, 0);
 	DumpScreen(TEXT("Unlock (the function executor)"));
 	TestEqual(TEXT("the executor titles the current directory's description"), Row(2),
 		BoxRow(Columns, TEXT("Safe Security Controls"), 6));   // (36 - 22 - 2) / 2 = 6
@@ -471,9 +547,30 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	Advance(UnlockIssued + 0.5);
 	TestTrue(TEXT("tutsafelock is hidden by the +0.5 s ScriptHide row"), Padlock->IsHidden());
 
+	// `home` is `FUN_1021aaa0`'s last builtin and goes through `EnterDirectory(-1)`, whose tail is
+	// the `accept` cue on BOTH arms — the root return sounds exactly like entering a directory.
+	Cues = SnapCues();
+	TestTrue(TEXT("home is accepted"),
+		World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("home")));
+	TestEqual(TEXT("home returns to the root directory"), Terminal->CurrentDirectory, INDEX_NONE);
+	TestEqual(TEXT("and draws the root menu again"), Row(5), TEXT(" Home menu"));
+	ExpectCues(TEXT("the home/root return"), Cues, 0, /*accept*/ 1, 0, 0);
+
 	const int32 FirstShot = Terminal->CameraShot;
+	Cues = SnapCues();
+	const int32 StopsBeforeQuit = Services.Count(
+		FString::Printf(TEXT("CancelAudioOwner %s"), *Terminal->CueOwnerId()));
 	TestTrue(TEXT("quit closes the session"),
 		World.SubmitTerminalCommand(Terminal->Handle, Serial, TEXT("quit")));
+	// `CBaseTerminal::vfunc42` step 6 (`10218251`-`10218278`): `IEngineSoundServer003` slot 5 on
+	// the terminal's own entity index with the channel flag clear — engine.dll `0x20002050` writes
+	// the stop sub-type of net message 6 with no sample name, which is "stop everything this
+	// entity is playing". The port's equivalent is stop-by-owner on the cue owner.
+	TestEqual(TEXT("the exit stops every cue the terminal owns, exactly once"),
+		Services.Count(FString::Printf(TEXT("CancelAudioOwner %s"), *Terminal->CueOwnerId()))
+			- StopsBeforeQuit, 1);
+	// The exit itself is not a cue site: nothing new is submitted on the way out.
+	ExpectCues(TEXT("the exit"), Cues, 0, 0, 0, 0);
 	TestFalse(TEXT("the terminal no longer publishes"), World.BuildTerminalView(View));
 	TestTrue(TEXT("quit mobilizes the player again"), SessionPlayer->IsMobile());
 	TestEqual(TEXT("quit released the camera handle"), Terminal->CameraShot, 0);
@@ -551,6 +648,44 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	TestEqual(TEXT("and releases its own handle"), Terminal->CameraShot, 0);
 	TestEqual(TEXT("popping exactly once"),
 		Services.Count(FString::Printf(TEXT("PopCameraShot %d"), SecondShot)), 1);
+
+	// --- slice F: the two `typing` sites, on the clock ----------------------------------------
+	// `break` at a password prompt runs `BeginInput` `0x10217b30`: the attempt resolves at once,
+	// the buffer is filled, and `typing` plays THERE — then the visible cracking runs on
+	// `FUN_10217d60`, which plays `typing` a second time at the flush, when the real characters
+	// replace the scrambled ones. Relock the directory so there is a password prompt to break.
+	Terminal->DirectoryUnlocked[0] = 0;
+	TestEqual(TEXT("the terminal opens once more for the cracking cues"),
+		World.BeginPlayerUseSession(Terminal->Handle, PlayerHandle).Outcome,
+		EElysiumUseOutcome::SessionStarted);
+	const uint32 Third = Terminal->SessionSerial;
+	World.SubmitTerminalCommand(Terminal->Handle, Third, TEXT("Safe"));
+	TestEqual(TEXT("the relocked directory asks for its password again"), Terminal->InputMode(),
+		EElysiumTerminalInputMode::Password);
+	Cues = SnapCues();
+	TestTrue(TEXT("break is accepted at the password prompt"),
+		World.SubmitTerminalCommand(Terminal->Handle, Third, TEXT("break")));
+	if (TestTrue(TEXT("break started the timed attempt"), !Terminal->HackBuffer().IsEmpty()))
+	{
+		ExpectCues(TEXT("the cracking start"), Cues, 0, 0, 0, /*typing*/ 1);
+		// One `typing` at the flush and no more: the per-frame cracking row is silent.
+		Cues = SnapCues();
+		const double BreakIssued = State->GameClock().GetNow();
+		Advance(BreakIssued + 2.0);
+		ExpectCues(TEXT("the cracking rows before the flush"), Cues, 0, 0, 0, /*typing*/ 0);
+		Cues = SnapCues();
+		Advance(BreakIssued + 6.0);
+		TestTrue(TEXT("the buffer flushed"), Terminal->HackBuffer().IsEmpty());
+		if (bCues)
+		{
+			TestEqual(TEXT("the flush plays typing exactly once"),
+				CueCount(TEXT("typing")) - Cues.Typing, 1);
+		}
+	}
+	if (Terminal->CurrentUser.IsSet())
+	{
+		World.SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, TEXT("quit"));
+	}
 	return true;
 }
 

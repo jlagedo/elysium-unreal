@@ -221,8 +221,10 @@ Retail's own shot: `Hacking` from `vdata/camerashots/special-case.txt` — camer
 `DrawViewmodel 0`. The port pushes it through the existing legacy director
 (`FElysiumCameraDirector::Push`) with a named-shot loader for multi-shot files, and pops it on exit
 so the exact previous view returns. No distance solve and no bezel margin are computed; the
-authored attachment *is* the framing. If the shot cannot resolve (attachment missing) the session
-refuses to start with the named error above. Readability at 16:9 is judged on the terminal gym's
+authored attachment *is* the framing. A model without the attachments refuses the session with
+the named error above; a shot that cannot resolve for any other reason (no camera component, a
+missing shot block) is warned once by name and the session continues cameraless, as retail's
+`FUN_10070470` NULL path does (2026-09-07). Readability at 16:9 is judged on the terminal gym's
 shot baseline; a dolly along the screen normal would be the named Feel modernization if needed.
 
 ### 6.4 The rendered terminal (presentation modernization)

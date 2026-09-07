@@ -322,6 +322,12 @@ struct FElysiumRecordingServices final
 	TMap<FName, FTransform> BodyAttachments;
 	// The world bounds of the registered use body, for retail's held-use reach test. Off by default:
 	// a headless case has no body, and the reach test degenerates to "always pin".
+	//
+	// This stands for the **use ANCHOR's** box, not a render bound: `AElysiumMapActor` answers the
+	// same question from `FUseAnchorRecord::Component` (the `ELYSIUM_USE_CHANNEL` proxy), because
+	// retail measures the reach, the `WorldSpaceCenter()` snap target and the pin's sweep stop
+	// against one collision box (`slice-bc-decompiles.md` §5.1/§5.2). A case that sets this is
+	// describing the box the pin would stop at.
 	FBox UseBodyBounds = FBox(ForceInit);
 	bool bHasUseBodyBounds = false;
 	// Where the next `SweepPlayerHullToward` reports contact, and whether it moves the player there.
@@ -1430,6 +1436,11 @@ struct FElysiumRecordingServices final
 		UseAnchorEnabled.Add(Owner, bEnabled);
 		Record(FString::Printf(TEXT("SetUseAnchorEnabled %s %d"), *Owner.ToString(), bEnabled ? 1 : 0));
 	}
+	virtual void UnregisterUseAnchor(const FElysiumEntityHandle& Owner) override
+	{
+		UseAnchorEnabled.Remove(Owner);
+		Record(FString::Printf(TEXT("UnregisterUseAnchor %s"), *Owner.ToString()));
+	}
 	virtual void ClearUseAnchors() override
 	{
 		UseAnchorEnabled.Reset();
@@ -1625,12 +1636,16 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("PushCameraShot %s"), *ShotFile));
 		return ++NextCameraShotId;
 	}
+	// False stands for retail's `FUN_1006e130` failing to load the named block (`-1`), which makes
+	// `FUN_10070470` remove its `camera_cinematic` and return NULL. The push is still recorded,
+	// because the caller asking is the observable half.
+	bool bNamedCameraShotResolves = true;
 	virtual int32 PushCameraShotNamed(const FString& ShotFile, const FString& ShotName,
 		const FElysiumEntityHandle& Subject, EElysiumShotExposure Exposure) override
 	{
 		Record(FString::Printf(TEXT("PushCameraShotNamed %s:%s exposure=%s"), *ShotFile, *ShotName,
 			Exposure == EElysiumShotExposure::Clamped ? TEXT("clamped") : TEXT("scene")));
-		return ++NextCameraShotId;
+		return bNamedCameraShotResolves ? ++NextCameraShotId : 0;
 	}
 	virtual int32 PushCameraShotValue(const FElysiumCameraShot& Shot) override
 	{

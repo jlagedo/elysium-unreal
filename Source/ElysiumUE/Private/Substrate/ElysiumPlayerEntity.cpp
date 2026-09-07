@@ -991,6 +991,24 @@ void FElysiumPlayer::ClearDialogCombatTimers()
 	UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s ClearDialogCombatTimers"), *DebugString());
 }
 
+void FElysiumPlayer::OnDamageEntered()
+{
+	// `CBasePlayer::vfunc142` `0x10163020`, listing order: the two refusal early-outs
+	// (`[EAX+0x658]` at `10163034`, the damage-bits filter at `10163086`), the grapple break, then
+	// `10163126 CALL 0x10014a6a` -> `FUN_10167fd0(player)` — the ONE release body — and only after
+	// it the damage modifiers (`[EDX+0x278]` at `101631e4`), the gamerules test and the health
+	// apply (`0x1000e854` at `10163278`). So any damage the player accepts drops the terminal,
+	// the container, the sign or the lockpick session first; a killing blow is not special.
+	//
+	// `EndPlayerUseSession` with an invalid owner is "cancel whatever is active", which is exactly
+	// what retail's `resolve(player+0x1040)` does.
+	if (World)
+	{
+		World->EndPlayerUseSession(FElysiumEntityHandle::Invalid(),
+			EElysiumUseEndReason::Interrupted);
+	}
+}
+
 void FElysiumPlayer::OnDamageCommitted(const FElysiumDmg& Dmg)
 {
 	// The one producer of `+0x1d1c` this runtime has. It sits on the COMMIT, not on the entry, so a

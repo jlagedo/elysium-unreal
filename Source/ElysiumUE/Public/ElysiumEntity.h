@@ -251,6 +251,27 @@ public:
 	{
 		return IsUsable() && !IsInert();
 	}
+	// Retail's THREE gate questions are distinct bodies and the HUD's use-icon filter
+	// (`PlayerUseIconFilter` `0x10342590`) passes when ANY of them does
+	// (`slice-bc-decompiles.md` §2.3):
+	//
+	//   slot 32 `CanPlayerFocus`   — can this requester start or keep a session;
+	//   slot 34 `CanBeUsed`        — availability: is the object free for ANYONE (no requester
+	//                                identity, no player-component test);
+	//   slot 35 `HasUseIconCaps`   — `ObjectCaps`: the geometry alone, with no enable and no user.
+	//
+	// Most classes answer all three out of one predicate, which is what these defaults say. A class
+	// whose retail bodies differ — the terminal — overrides the two below, and the icon then shows
+	// where retail's shows: over a machine that is disabled, or held by somebody else, as long as
+	// the player is standing in front of the glass.
+	virtual bool CanBeUsed(const FElysiumUseContext& Context) const
+	{
+		return CanPlayerFocus(Context);
+	}
+	virtual bool HasUseIconCaps(const FElysiumUseContext& Context) const
+	{
+		return CanPlayerFocus(Context);
+	}
 	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context)
 	{
 		Use(Context.Activator);
@@ -263,10 +284,16 @@ public:
 	// of those it is. The base does nothing, which is every class that holds no session.
 	virtual void TickPlayerUse(const FElysiumUseContext& Context) {}
 	// Retail slot 44 (`+0xb0`), consulted on a rising `+use` edge while this entity is already held
-	// (`CBasePlayer::PlayerUse` step 4e): a non-zero answer runs the one release body. Most classes
-	// inherit `return 1`; the base here answers false so only the classes whose retail slot has
-	// been read take it, and the port's existing while-held sessions keep their behaviour.
-	virtual bool ReleasesOnSecondUse() const { return false; }
+	// (`CBasePlayer::PlayerUse` step 4e): a non-zero answer runs the one release body.
+	//
+	// `vtmb_slot 44` over `vampire.dll`: 501 classes fill the slot and every entity class holds the
+	// base `CAISound::FUN_100267b0` = **`return 1`**. The only entity override in the image is
+	// `CGameSign::vfunc44` `0x10212600` = `return 0` (the rest — `CGameRules`, `CHalfLife2`,
+	// `CMultiplayRules`, `CSingleplayRules` — are rules objects, not entities). In particular
+	// `CItemContainer`, `CItemContainerLock`, `CPropDoorknob`, `CPropDoorknobElectronic`,
+	// `CPropPadlock`, `CPropSign`, `CPropKeypad` and `CBaseTerminal` all inherit `return 1`, so the
+	// port's default is retail's: `E` at a held object closes it.
+	virtual bool ReleasesOnSecondUse() const { return true; }
 	virtual void OnUseCursorEnter() {}                                  // look-cursor entered (OnIn)
 	virtual void OnUseCursorLeave() {}                                  // look-cursor left (OnOut)
 	virtual void Use(const FElysiumEntityHandle& Activator) {}          // +use / Press pressed it

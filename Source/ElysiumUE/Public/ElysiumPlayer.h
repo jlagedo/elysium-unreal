@@ -1623,6 +1623,15 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 protected:
+	// Called by both `TakeDamage` overloads once the refusal early-outs have passed and BEFORE the
+	// resolver and the health commit run — the position retail's player takes at
+	// `CBasePlayer::OnTakeDamage` `0x10163020`, whose `CALL 0x10014a6a` at `10163126`
+	// (`thunk_FUN_10167fd0`) drops whatever the player is holding ahead of every damage modifier
+	// (`slice-bc-decompiles.md` §4.3). It is a player-only arm — no NPC class dispatches slot 142
+	// to that body — so it is a hook the player leaf overrides rather than a line in the shared
+	// funnel. The base does nothing.
+	virtual void OnDamageEntered() {}
+
 	// Called by `CommitDamage` once the health commit has landed, before the outputs fire. The NPC
 	// leaf records the attacker/time/amount its senses and memory read; the base does nothing,
 	// because the player has no memory of who hit it.
@@ -1915,6 +1924,9 @@ public:
 	// The player's damage terminus. `FElysiumCombatCharacter::CommitDamage` calls it once damage
 	// has actually landed, which is exactly the edge that has to refuse a conversation.
 	virtual void OnDamageCommitted(const FElysiumDmg& Dmg) override;
+	// `CBasePlayer::OnTakeDamage` `0x10163020`'s forced release, at its retail position: ahead of
+	// the damage modifiers and the health commit, on ANY accepted damage rather than on death.
+	virtual void OnDamageEntered() override;
 
 	virtual void Spawn() override;
 

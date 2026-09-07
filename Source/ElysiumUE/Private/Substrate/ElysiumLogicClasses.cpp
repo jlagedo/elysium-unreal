@@ -630,6 +630,17 @@ public:
 			return;
 		}
 		Ent->SetRuntimeTransform(CachedOrigin, CachedAngles);
+		// `CPointTeleport::InputTeleport` `0x1018dc00`: after the origin and angle writes, the body
+		// takes a player-only arm — gated on the teleported entity's `+0xa8` player component, with
+		// an RTTI fallback through its controller. That arm snaps the view, breaks a grapple, and
+		// ends with `thunk_FUN_10167fd0(player)`, the one release body
+		// (`slice-bc-decompiles.md` §4.3). A player yanked across the map cannot still be standing
+		// at the terminal he was hacking.
+		if (Ent->Handle == World->PlayerHandle())
+		{
+			World->EndPlayerUseSession(FElysiumEntityHandle::Invalid(),
+				EElysiumUseEndReason::Interrupted);
+		}
 	}
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override

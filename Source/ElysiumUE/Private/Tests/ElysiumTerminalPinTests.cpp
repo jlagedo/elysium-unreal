@@ -69,6 +69,20 @@ static FElysiumEntityDefs OneTerminal()
 	Defs.Defs.Add(MoveTemp(TerminalDef));
 	return Defs;
 }
+
+// The same fixture plus a `point_teleport` aimed at whoever fires it, for the forced-exit case.
+static FElysiumEntityDefs TerminalAndTeleport()
+{
+	FElysiumEntityDefs Defs = OneTerminal();
+	Defs.MapName = TEXT("__terminal_forced_exit__");
+	FElysiumEntityDef Teleport;
+	Teleport.Classname = TEXT("point_teleport");
+	Teleport.TargetName = TEXT("yank");
+	Teleport.Origin = FVector(5000.0f, 0.0f, 0.0f);
+	Teleport.Keys.Add(TEXT("target"), TEXT("!activator"));
+	Defs.Defs.Add(MoveTemp(Teleport));
+	return Defs;
+}
 }
 
 using namespace ElysiumTerminalPinTests;
@@ -154,8 +168,8 @@ bool FElysiumTerminalConeTest::RunTest(const FString&)
 		return Out;
 	};
 
-	// The candidate loop, the focus query and the use icon all run `CanPlayerFocus`, so one boundary
-	// walk covers all three: the icon and the prompt appear exactly where a session can start.
+	// The candidate loop drives focus off slot 32; the reticle icon is the union of slots 32/34/35
+	// (`PlayerUseIconFilter` `0x10342590`). Both are walked here.
 	Services.UseQuery = FElysiumUseQueryResult();
 	FElysiumUseCandidate Candidate;
 	Candidate.Owner = Terminal->Handle;
@@ -163,24 +177,73 @@ bool FElysiumTerminalConeTest::RunTest(const FString&)
 	Services.UseQuery.Candidates.Add(Candidate);
 
 	Services.PlayerLocation = FVector(-300.0f, 0.0f, 0.0f);
+	const FVector InCone = Services.PlayerLocation;
 	World.UpdatePlayerInteraction();
+	World.Tick(1.0);   // past the 0.10 s prompt fade-in, so `bVisible` reads the settled prompt
 	TestTrue(TEXT("inside the cone the terminal takes focus"),
 		World.GetInteractionView().bActionable);
 	TestTrue(TEXT("and the same context passes the gate"),
-		Terminal->CanPlayerFocus(Context(Services.PlayerLocation)));
+		Terminal->CanPlayerFocus(Context(InCone)));
+	TestTrue(TEXT("slot 34 agrees while nobody holds it"), Terminal->CanBeUsed(Context(InCone)));
+	TestTrue(TEXT("and slot 35 answers the cone alone"),
+		Terminal->HasUseIconCaps(Context(InCone)));
+	TestTrue(TEXT("so the use icon is drawn"), World.GetInteractionView().bVisible);
 
 	Services.PlayerLocation = FVector(0.0f, 300.0f, 0.0f);   // 90 degrees off
 	World.UpdatePlayerInteraction();
+	World.Tick(2.0);   // past the 0.15 s fade-out
 	TestFalse(TEXT("outside the cone nothing is actionable"),
 		World.GetInteractionView().bActionable);
 	TestFalse(TEXT("and the gate refuses the same context"),
 		Terminal->CanPlayerFocus(Context(Services.PlayerLocation)));
+	TestFalse(TEXT("slot 34 refuses it too"), Terminal->CanBeUsed(Context(Services.PlayerLocation)));
+	TestFalse(TEXT("and slot 35, so the icon goes away with the cone"),
+		Terminal->HasUseIconCaps(Context(Services.PlayerLocation)));
+	TestFalse(TEXT("the prompt is gone"), World.GetInteractionView().bVisible);
+
+	// --- the three bodies part company ------------------------------------------------------
+	// A DISABLED terminal inside the cone: slot 32 and slot 34 both test `m_bEnabled` and refuse,
+	// slot 35 is the cone alone and passes — so the icon shows over a machine that cannot be used.
+	Services.PlayerLocation = InCone;
+	Terminal->InputDisable();
+	TestFalse(TEXT("a disabled terminal fails slot 32"), Terminal->CanPlayerFocus(Context(InCone)));
+	TestFalse(TEXT("and slot 34"), Terminal->CanBeUsed(Context(InCone)));
+	TestTrue(TEXT("but slot 35 still answers the cone"),
+		Terminal->HasUseIconCaps(Context(InCone)));
+	World.UpdatePlayerInteraction();
+	World.Tick(3.0);
+	TestTrue(TEXT("so a disabled terminal in the cone still draws the use icon"),
+		World.GetInteractionView().bVisible);
+	TestFalse(TEXT("while nothing about it is actionable"),
+		World.GetInteractionView().bActionable);
+	Terminal->InputEnable();
+
+	// A terminal held by SOMEONE ELSE: slot 32 refuses that requester, slot 34 refuses everyone
+	// (`this+0x8c` resolves), slot 35 still passes. Same-player re-entry is slot 32's own arm.
+	World.UpdatePlayerInteraction();
+	TestEqual(TEXT("the session opens for the player"),
+		World.BeginPlayerUseSession(Terminal->Handle, Player).Outcome,
+		EElysiumUseOutcome::SessionStarted);
+	TestTrue(TEXT("the holder still passes slot 32 — same-player re-entry"),
+		Terminal->CanPlayerFocus(Context(InCone)));
+	TestFalse(TEXT("but slot 34 refuses ANY live user, including the holder"),
+		Terminal->CanBeUsed(Context(InCone)));
+	TestTrue(TEXT("and slot 35 is untouched by the user"),
+		Terminal->HasUseIconCaps(Context(InCone)));
+	FElysiumUseContext Stranger = Context(InCone);
+	Stranger.Activator = FElysiumEntityHandle(4242, 1);
+	TestFalse(TEXT("a second activator fails slot 32"), Terminal->CanPlayerFocus(Stranger));
+	TestTrue(TEXT("yet the icon union still admits it through slot 35"),
+		Terminal->HasUseIconCaps(Stranger));
+	World.EndPlayerUseSession(Terminal->Handle, EElysiumUseEndReason::Completed);
 
 	// Fails closed with no eye at all: retail reaches the eye through the player's own vtable slot,
-	// so no player is no gate.
-	FElysiumUseContext NoEye = Context(FVector(-300.0f, 0.0f, 0.0f));
+	// so no player is no gate. All three bodies read the same cone, so all three fail.
+	FElysiumUseContext NoEye = Context(InCone);
 	NoEye.bHasEyeOrigin = false;
 	TestFalse(TEXT("no eye fails the gate closed"), Terminal->CanPlayerFocus(NoEye));
+	TestFalse(TEXT("no eye fails availability closed"), Terminal->CanBeUsed(NoEye));
+	TestFalse(TEXT("no eye fails the icon closed"), Terminal->HasUseIconCaps(NoEye));
 	return true;
 }
 
@@ -287,19 +350,166 @@ bool FElysiumTerminalPinTest::RunTest(const FString&)
 		Services.Count(FString::Printf(TEXT("SnapPlayerViewTo %s"),
 			*Services.UseBodyBounds.GetCenter().ToCompactString())), 1);
 
-	// A second `+use` press releases: slot 44 inherits `return 1` (correction C11).
+	// A second `+use` press releases: slot 44 inherits `return 1` (correction C11). And retail runs
+	// `FUN_10167e00` only when there is NO rising `IN_USE` edge (§5, steps 3 and 4e), so the frame
+	// that releases runs neither arm of the maintenance.
+	const int32 SweepsBeforeRelease = Services.Count(TEXT("SweepPlayerHullToward"));
+	const int32 SnapsBeforeRelease = Services.Count(TEXT("SnapPlayerViewTo"));
 	World.QueuePlayerUseEdge(EElysiumUseEdge::Pressed);
 	World.UpdatePlayerInteraction();
 	FElysiumTerminalView View;
 	TestFalse(TEXT("a second +use press closes the terminal"), World.BuildTerminalView(View));
 	const int32 SweepsAtClose = Services.Count(TEXT("SweepPlayerHullToward"));
 	const int32 SnapsAtClose = Services.Count(TEXT("SnapPlayerViewTo"));
+	TestEqual(TEXT("the releasing frame runs no pin"), SweepsAtClose, SweepsBeforeRelease);
+	TestEqual(TEXT("and no view snap: a rising +use edge skips the maintenance arm"),
+		SnapsAtClose, SnapsBeforeRelease);
 	World.UpdatePlayerInteraction();
 	World.UpdatePlayerInteraction();
 	TestEqual(TEXT("nothing is swept after the session ends"),
 		Services.Count(TEXT("SweepPlayerHullToward")), SweepsAtClose);
 	TestEqual(TEXT("and nothing is snapped after it either"),
 		Services.Count(TEXT("SnapPlayerViewTo")), SnapsAtClose);
+	return true;
+}
+
+// A runtime `SetModel` on a terminal (slice C review, D1). The glass and the `+use` box are both
+// registered off ONE component, and `RegisterUseAnchor` de-duplicates on that component — so a
+// rebuild that only re-registers appends a second anchor record and leaves the projection bound to
+// the body it just replaced. The sequence a rebuild must run is the one `FElysiumProp` runs:
+// unregister, destroy, build, register.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalBodyRebuildTest,
+	"Elysium.Substrate.TerminalBodyRebuild", GPinFlags)
+bool FElysiumTerminalBodyRebuildTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.StandTerminalScreen(GScreen, FVector(-1.0f, 0.0f, 0.0f), 300.0f);
+	FElysiumEntityDefs Defs = OneTerminal();
+	Defs.MapName = TEXT("__terminal_rebuild__");
+	Defs.Defs[0].Keys.Add(TEXT("model"), TEXT("models/synthetic/monitor.mdl"));
+
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntityHandle Ignored;
+	FElysiumPropHacking* Terminal = StandTerminal(*this, World, Ignored);
+	if (!Terminal)
+	{
+		return false;
+	}
+	const FString Registered =
+		FString::Printf(TEXT("RegisterUseAnchor %s"), *Terminal->Handle.ToString());
+	const FString Unregistered =
+		FString::Printf(TEXT("UnregisterUseAnchor %s"), *Terminal->Handle.ToString());
+
+	UPrimitiveComponent* FirstBody = Terminal->GetAttachBody();
+	if (!TestNotNull(TEXT("the spawn pass stood a body"), FirstBody))
+	{
+		return false;
+	}
+	TestEqual(TEXT("and registered its anchor once"), Services.Count(Registered), 1);
+	TestEqual(TEXT("nothing was unregistered"), Services.Count(Unregistered), 0);
+	TestTrue(TEXT("the attachments resolved off it"), Terminal->bScreenAttachmentsResolved);
+
+	Terminal->SetRuntimeModel(TEXT("models/synthetic/monitor_hackable.mdl"));
+	TestEqual(TEXT("the rebuild unregisters the old anchor exactly once"),
+		Services.Count(Unregistered), 1);
+	TestEqual(TEXT("and registers the new one, for two in total"),
+		Services.Count(Registered), 2);
+	UPrimitiveComponent* SecondBody = Terminal->GetAttachBody();
+	if (TestNotNull(TEXT("the rebuild stood a new body"), SecondBody))
+	{
+		TestTrue(TEXT("which is a different component from the one it replaced"),
+			SecondBody != FirstBody);
+	}
+	TestTrue(TEXT("and the attachments were re-resolved off it"),
+		Terminal->bScreenAttachmentsResolved);
+	TestEqual(TEXT("the model field followed"), Terminal->Model,
+		TEXT("models/synthetic/monitor_hackable.mdl"));
+	return true;
+}
+
+// The two forced exits `slice-bc-decompiles.md` §4.3 lists that had no port wire:
+// `CBasePlayer::OnTakeDamage` `0x10163020` and `CPointTeleport::InputTeleport` `0x1018dc00`.
+// Both reach the ONE release body, so both must leave the terminal exactly as `quit` does.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalForcedExitTest,
+	"Elysium.Substrate.TerminalForcedExit", GPinFlags)
+bool FElysiumTerminalForcedExitTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.StandTerminalScreen(GScreen, FVector(-1.0f, 0.0f, 0.0f), 300.0f);
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	World.Load(TerminalAndTeleport());
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+	FElysiumEntityHandle Ignored;
+	FElysiumPropHacking* Terminal = StandTerminal(*this, World, Ignored);
+	FElysiumPlayer* PlayerEntity = World.FindPlayer();
+	if (!Terminal || !TestNotNull(TEXT("the player entity resolves"), PlayerEntity))
+	{
+		return false;
+	}
+
+	auto Open = [&]() -> int32
+	{
+		// A `point_teleport` really moves the pawn (the double's `TeleportPlayer` writes its player
+		// location), so each session is staged back on the screen's own axis first.
+		Services.PlayerLocation = FVector(-300.0f, 0.0f, 0.0f);
+		const FElysiumUseBeginResult Result = World.BeginPlayerUseSession(Terminal->Handle, Player);
+		TestEqual(TEXT("+use opens the session"), Result.Outcome,
+			EElysiumUseOutcome::SessionStarted);
+		return Terminal->CameraShot;
+	};
+
+	// --- damage: ANY accepted damage, not death (`10163126` precedes `10163278`) ---------------
+	{
+		const int32 Shot = Open();
+		FElysiumTerminalView View;
+		TestTrue(TEXT("the session publishes before the hit"), World.BuildTerminalView(View));
+		TestFalse(TEXT("and the player is held"), PlayerEntity->IsMobile());
+		PlayerEntity->TakeDamage(3.0f);
+		TestFalse(TEXT("one point of damage closes the terminal"), World.BuildTerminalView(View));
+		TestTrue(TEXT("the player is mobile again"), PlayerEntity->IsMobile());
+		TestEqual(TEXT("the camera handle is cleared"), Terminal->CameraShot, 0);
+		TestEqual(TEXT("and its shot was popped exactly once"),
+			Services.Count(FString::Printf(TEXT("PopCameraShot %d"), Shot)), 1);
+		TestEqual(TEXT("the release is reported as a cancellation, not a completion"),
+			World.GetLastUseOutcome(), EElysiumUseOutcome::Cancelled);
+		TestTrue(TEXT("the player survived it"), !PlayerEntity->HasReportedDeath());
+	}
+
+	// --- point_teleport: the player-only arm at the end of `InputTeleport` ---------------------
+	{
+		const int32 Shot = Open();
+		FElysiumTerminalView View;
+		TestTrue(TEXT("the reopened session publishes"), World.BuildTerminalView(View));
+		World.AcceptInput(TEXT("yank"), FName(TEXT("Teleport")), FElysiumVariant::Void(),
+			Player, Player);
+		TestFalse(TEXT("being teleported closes the terminal"), World.BuildTerminalView(View));
+		TestTrue(TEXT("the player is mobile again"), PlayerEntity->IsMobile());
+		TestEqual(TEXT("the camera handle is cleared"), Terminal->CameraShot, 0);
+		TestEqual(TEXT("and its shot was popped exactly once"),
+			Services.Count(FString::Printf(TEXT("PopCameraShot %d"), Shot)), 1);
+		TestTrue(TEXT("and the player really moved"),
+			FMath::IsNearlyEqual(PlayerEntity->Origin.X, 5000.0f, 1.0f));
+	}
+
+	// A teleport that does NOT move the player leaves a live session alone: retail's release is
+	// inside the `+0xa8` player-component arm, not on the entity path.
+	{
+		Open();
+		FElysiumTerminalView View;
+		World.AcceptInput(TEXT("yank"), FName(TEXT("Teleport")), FElysiumVariant::Void(),
+			Terminal->Handle, Terminal->Handle);
+		TestTrue(TEXT("teleporting something else leaves the session open"),
+			World.BuildTerminalView(View));
+		World.EndPlayerUseSession(Terminal->Handle, EElysiumUseEndReason::Completed);
+	}
 	return true;
 }
 

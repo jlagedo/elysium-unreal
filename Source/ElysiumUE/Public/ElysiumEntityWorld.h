@@ -213,6 +213,9 @@ public:
 	// collision profiles. Brush bodies also report the edge, although their own SetDormant remains
 	// the physical collision authority.
 	void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled);
+	// Drop this owner's anchors, their query proxies and anything the registration stood on them
+	// (the terminal glass). What a leaf calls before it destroys the body it registered.
+	void UnregisterUseAnchor(const FElysiumEntityHandle& Owner);
 	void SetTouchAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled);
 
 	// Register a physics constraint (built by a phys_hinge leaf) so the world tears it down
@@ -349,6 +352,11 @@ public:
 	// keeps writing into it whether or not a player is standing there — so the presentation needs the
 	// idle grid as much as the live one (`docs/project/plans/terminals.md`, slice C).
 	void BuildIdleTerminalViews(TArray<FElysiumTerminalView>& Out) const;
+	// The same set as `BuildIdleTerminalViews`, as (owner, revision) pairs and nothing else. What a
+	// publisher walks every frame; the full view is then built only for the glasses whose revision
+	// has moved past what their projection last drew.
+	void ListIdleTerminals(TArray<TPair<FElysiumEntityHandle, uint32>>& Out) const;
+	bool BuildIdleTerminalView(const FElysiumEntityHandle& Owner, FElysiumTerminalView& Out) const;
 	bool SubmitTerminalCommand(const FElysiumEntityHandle& OwnerHandle, uint32 SessionSerial,
 		const FString& Command);
 	bool SubmitActiveTerminalCommand(const FString& Command);
@@ -644,7 +652,13 @@ public:
 
 private:
 	void Teardown();
-	void TransitionUseFocus(const FElysiumUseCandidate* Candidate);
+	// `FocusCandidate` is the slot-32 answer and owns `FocusedUsable` (and therefore what a `+use`
+	// press can act on); `IconCandidate` is the union of slots 32/34/35 and owns the reticle prompt,
+	// because retail's `PlayerUseIconFilter` draws the icon on any of the three
+	// (`slice-bc-decompiles.md` §2.3). They are the same candidate for every class that does not
+	// separate the bodies.
+	void TransitionUseFocus(const FElysiumUseCandidate* FocusCandidate,
+		const FElysiumUseCandidate* IconCandidate);
 	void EndActiveUse(EElysiumUseEndReason Reason);
 	float InteractionPromptAlpha(double Now) const;
 	// Build the brush body for one entity, if it is a brush with hulls: cook the convex

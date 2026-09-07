@@ -320,7 +320,10 @@ struct FElysiumTerminalView
 	int32 HudHintValue = 0;
 	TArray<FElysiumTerminalActionView> Actions;
 
-	bool IsOpen() const { return Owner.IsSet(); }
+	// A LIVE session. An idle projection carries the same owner and the same grid with serial 0
+	// (`FElysiumTerminal::BuildIdleView`), so the owner alone cannot answer this — a machine
+	// nobody is standing at would open the CommonUI screen and block saving.
+	bool IsOpen() const { return Owner.IsSet() && SessionSerial != 0; }
 };
 
 // FElysiumStealthView — how exposed the player is, and who is looking.

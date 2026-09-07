@@ -525,26 +525,50 @@ float FElysiumEntityWorld::InteractionPromptAlpha(double Now) const
 	return FMath::Lerp(InteractionPrompt.StartAlpha, Target, T);
 }
 
-void FElysiumEntityWorld::TransitionUseFocus(const FElysiumUseCandidate* Candidate)
+void FElysiumEntityWorld::TransitionUseFocus(const FElysiumUseCandidate* FocusCandidate,
+	const FElysiumUseCandidate* IconCandidate)
 {
-	const FElysiumEntityHandle Next = Candidate ? Candidate->Owner : FElysiumEntityHandle::Invalid();
+	const FElysiumEntityHandle Next =
+		FocusCandidate ? FocusCandidate->Owner : FElysiumEntityHandle::Invalid();
+	const FElysiumEntityHandle NextIcon =
+		IconCandidate ? IconCandidate->Owner : FElysiumEntityHandle::Invalid();
+	const double Now = NowSeconds();
+	const float CurrentAlpha = InteractionPromptAlpha(Now);
+
+	// The prompt first, because it is the union answer and may name an entity the focus does not.
+	if (FElysiumEntity* NewIcon = Resolve(NextIcon))
+	{
+		// A fade-in starts only on a real change: the same owner already fading in keeps its curve,
+		// and one that had begun fading out restarts.
+		const bool bRestart =
+			NextIcon != InteractionPrompt.DisplayOwner || !InteractionPrompt.bFadingIn;
+		InteractionPrompt.DisplayOwner = NextIcon;
+		InteractionPrompt.Icon = NewIcon->ResolveUseIcon(Player);
+		InteractionPrompt.bLocked = NewIcon->IsUseLocked();
+		if (bRestart)
+		{
+			InteractionPrompt.bFadingIn = true;
+			InteractionPrompt.StartAlpha = CurrentAlpha;
+			InteractionPrompt.TransitionTime = Now;
+		}
+	}
+	else if (InteractionPrompt.DisplayOwner.IsSet() && InteractionPrompt.bFadingIn)
+	{
+		InteractionPrompt.bFadingIn = false;
+		InteractionPrompt.StartAlpha = CurrentAlpha;
+		InteractionPrompt.TransitionTime = Now;
+	}
+
 	if (Next == FocusedUsable)
 	{
-		if (FElysiumEntity* Current = Resolve(FocusedUsable))
+		if (FocusCandidate)
 		{
-			InteractionPrompt.Icon = Current->ResolveUseIcon(Player);
-			InteractionPrompt.bLocked = Current->IsUseLocked();
-		}
-		if (Candidate)
-		{
-			FocusContext.AnchorPoint = Candidate->AnchorPoint;
-			FocusContext.Selection = Candidate->Selection;
+			FocusContext.AnchorPoint = FocusCandidate->AnchorPoint;
+			FocusContext.Selection = FocusCandidate->Selection;
 		}
 		return;
 	}
 
-	const double Now = NowSeconds();
-	const float CurrentAlpha = InteractionPromptAlpha(Now);
 	if (FElysiumEntity* Old = Resolve(FocusedUsable))
 	{
 		Old->OnUseCursorLeave();
@@ -554,27 +578,14 @@ void FElysiumEntityWorld::TransitionUseFocus(const FElysiumUseCandidate* Candida
 	FocusContext.Activator = Player;
 	FocusContext.Owner = Next;
 	FocusContext.TimeSeconds = Now;
-	if (Candidate)
+	if (FocusCandidate)
 	{
-		FocusContext.AnchorPoint = Candidate->AnchorPoint;
-		FocusContext.Selection = Candidate->Selection;
+		FocusContext.AnchorPoint = FocusCandidate->AnchorPoint;
+		FocusContext.Selection = FocusCandidate->Selection;
 	}
-
 	if (FElysiumEntity* New = Resolve(FocusedUsable))
 	{
 		New->OnUseCursorEnter();
-		InteractionPrompt.DisplayOwner = New->Handle;
-		InteractionPrompt.Icon = New->ResolveUseIcon(Player);
-		InteractionPrompt.bLocked = New->IsUseLocked();
-		InteractionPrompt.bFadingIn = true;
-		InteractionPrompt.StartAlpha = CurrentAlpha;
-		InteractionPrompt.TransitionTime = Now;
-	}
-	else if (InteractionPrompt.DisplayOwner.IsSet())
-	{
-		InteractionPrompt.bFadingIn = false;
-		InteractionPrompt.StartAlpha = CurrentAlpha;
-		InteractionPrompt.TransitionTime = Now;
 	}
 
 	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) interaction-focus -> %s"),
@@ -675,7 +686,7 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 	if (!bActive || !IsTriggerResolutionEnabled())
 	{
 		PendingUseEdges.Reset();
-		TransitionUseFocus(nullptr);
+		TransitionUseFocus(nullptr, nullptr);
 		return;
 	}
 
@@ -688,6 +699,14 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 	{
 		bFrameHasEyeOrigin = Bodily->GetPlayerUseOrigin(FrameEyeOrigin);
 	}
+
+	// `CBasePlayer::PlayerUse` runs the maintenance arm (`FUN_10167e00`) from exactly two sites and
+	// **both are guarded by "no rising `IN_USE` edge"** (`slice-bc-decompiles.md` §5, steps 3 and
+	// 4e): the no-button arm, and the gate-passed arm that explicitly tests
+	// `m_afButtonPressed & IN_USE == 0`. On the frame a second press releases the session, retail
+	// runs slot 44 and `FUN_10167fd0` instead — never the pin or the view snap. This frame's queued
+	// edges are read here, before the maintenance call, for that one reason.
+	const bool bRisingUseEdge = PendingUseEdges.Contains(EElysiumUseEdge::Pressed);
 
 	if (ActiveUse.IsSet())
 	{
@@ -709,7 +728,7 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 			{
 				EndActiveUse(EElysiumUseEndReason::TargetInvalid);
 			}
-			else
+			else if (!bRisingUseEdge)
 			{
 				// Step 2, the maintenance arm: what a held session does when nothing was pressed.
 				ActiveEntity->TickPlayerUse(ActiveUse->Context);
@@ -724,6 +743,11 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 	}
 
 	const FElysiumUseCandidate* Selected = nullptr;
+	// `PlayerUseIconFilter` `0x10342590` passes on slot 32 OR slot 34 OR slot 35, so the reticle
+	// icon is answered by its own walk over the same candidates: a terminal the player cannot start
+	// a session on — disabled, or already held by someone else — still shows the icon from inside
+	// its screen cone. Focus (and therefore what a press can act on) remains slot 32 alone.
+	const FElysiumUseCandidate* IconTarget = nullptr;
 	for (const FElysiumUseCandidate& Candidate : Query.Candidates)
 	{
 		FElysiumEntity* Entity = Resolve(Candidate.Owner);
@@ -735,7 +759,13 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 		Context.TimeSeconds = NowSeconds();
 		Context.EyeOrigin = FrameEyeOrigin;
 		Context.bHasEyeOrigin = bFrameHasEyeOrigin;
-		if (Entity && Entity->CanPlayerFocus(Context))
+		const bool bFocusable = Entity && Entity->CanPlayerFocus(Context);
+		if (!IconTarget && Entity
+			&& (bFocusable || Entity->CanBeUsed(Context) || Entity->HasUseIconCaps(Context)))
+		{
+			IconTarget = &Candidate;
+		}
+		if (bFocusable)
 		{
 			Selected = &Candidate;
 			break;
@@ -747,7 +777,7 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 			break;
 		}
 	}
-	TransitionUseFocus(Selected);
+	TransitionUseFocus(Selected, IconTarget);
 	LastUseOutcome = Selected ? EElysiumUseOutcome::Completed : Query.MissOutcome;
 
 	const TArray<EElysiumUseEdge, TInlineAllocator<2>> Edges = MoveTemp(PendingUseEdges);
@@ -888,8 +918,12 @@ bool FElysiumEntityWorld::BuildTerminalView(FElysiumTerminalView& Out) const
 	return Out.IsOpen();
 }
 
-void FElysiumEntityWorld::BuildIdleTerminalViews(TArray<FElysiumTerminalView>& Out) const
+void FElysiumEntityWorld::ListIdleTerminals(
+	TArray<TPair<FElysiumEntityHandle, uint32>>& Out) const
 {
+	// Handle and revision only: no grid copy, no cell walk, no content view. A publisher decides
+	// from this which glasses actually changed and pays for a full view only for those — the
+	// alternative is `Rows * Columns` cells per terminal per frame ahead of the redraw gate.
 	Out.Reset();
 	IElysiumEmbodiment* Bodily = Embodiment();
 	if (!Bodily)
@@ -915,9 +949,41 @@ void FElysiumEntityWorld::BuildIdleTerminalViews(TArray<FElysiumTerminalView>& O
 		FBox Unused(ForceInit);
 		if (!Bodily->GetUseBodyWorldBounds(Terminal->Handle, Unused))
 		{
+			// Named once, not skipped in silence: a live machine with no body is drawing a
+			// screensaver into a buffer nothing will ever show.
+			Terminal->ReportBodilessGlass();
 			continue;
 		}
-		Terminal->BuildIdleView(Out.AddDefaulted_GetRef());
+		Out.Emplace(Terminal->Handle, Terminal->ViewRevision);
+	}
+}
+
+bool FElysiumEntityWorld::BuildIdleTerminalView(const FElysiumEntityHandle& OwnerHandle,
+	FElysiumTerminalView& Out) const
+{
+	Out = FElysiumTerminalView();
+	const FElysiumEntity* Entity = Resolve(OwnerHandle);
+	const FElysiumTerminal* Terminal = Entity ? Entity->AsTerminal() : nullptr;
+	if (!Terminal || Terminal->CurrentUser.IsSet())
+	{
+		return false;
+	}
+	Terminal->BuildIdleView(Out);
+	return true;
+}
+
+void FElysiumEntityWorld::BuildIdleTerminalViews(TArray<FElysiumTerminalView>& Out) const
+{
+	Out.Reset();
+	TArray<TPair<FElysiumEntityHandle, uint32>> Idle;
+	ListIdleTerminals(Idle);
+	for (const TPair<FElysiumEntityHandle, uint32>& Entry : Idle)
+	{
+		FElysiumTerminalView View;
+		if (BuildIdleTerminalView(Entry.Key, View))
+		{
+			Out.Add(MoveTemp(View));
+		}
 	}
 }
 

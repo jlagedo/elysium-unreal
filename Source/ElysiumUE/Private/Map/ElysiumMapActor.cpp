@@ -954,9 +954,18 @@ void AElysiumMapActor::RegisterUseAnchor(UPrimitiveComponent* Source,
 	{
 		return;
 	}
+	// De-duplicate on the SOURCE, which means either half of the record: a visual prop's anchor is a
+	// proxy box this actor made, so comparing only `Component` never matches the caller's own
+	// component and every re-registration of the same body would append a record, a second
+	// `ELYSIUM_USE_CHANNEL` box and a second projection registration. `UnregisterUseAnchor` is what
+	// a caller uses when the body really did change.
 	for (const FUseAnchorRecord& Record : UseAnchors)
 	{
-		if (Record.Component.Get() == Source && Record.Owner == OwnerHandle)
+		if (Record.Owner != OwnerHandle)
+		{
+			continue;
+		}
+		if (Record.Component.Get() == Source || Record.Visual.Get() == Source)
 		{
 			return;
 		}
@@ -1051,6 +1060,46 @@ void AElysiumMapActor::SetUseAnchorEnabled(const FElysiumEntityHandle& OwnerHand
 		// remain on ElysiumUse or the slab eats the exact ray and occludes its own knobs.
 		Component->SetCollisionResponseToChannel(
 			ELYSIUM_USE_CHANNEL, bEnabled ? ECR_Block : ECR_Ignore);
+	}
+}
+
+int32 AElysiumMapActor::NumUseAnchors(const FElysiumEntityHandle& OwnerHandle) const
+{
+	int32 Count = 0;
+	for (const FUseAnchorRecord& Record : UseAnchors)
+	{
+		Count += Record.Owner == OwnerHandle ? 1 : 0;
+	}
+	return Count;
+}
+
+void AElysiumMapActor::UnregisterUseAnchor(const FElysiumEntityHandle& OwnerHandle)
+{
+	if (!OwnerHandle.IsSet())
+	{
+		return;
+	}
+	// The glass first, while the record still names the component it is bound to: `Release()`
+	// restores the body's authored `screen` material, and a body about to be destroyed must hand it
+	// back before the component goes.
+	if (UElysiumPresentationSubsystem* Presentation =
+		UElysiumPresentationSubsystem::Get(GetWorld()))
+	{
+		Presentation->ReleaseTerminalProjection(OwnerHandle);
+	}
+	for (int32 Index = UseAnchors.Num() - 1; Index >= 0; --Index)
+	{
+		if (UseAnchors[Index].Owner != OwnerHandle)
+		{
+			continue;
+		}
+		UPrimitiveComponent* Component = UseAnchors[Index].Component.Get();
+		UseAnchors.RemoveAt(Index);
+		// Only a proxy this actor made is ours to destroy; a brush slab is the entity's own body.
+		if (Component && OwnedUseAnchorComponents.Remove(Component) > 0)
+		{
+			Component->DestroyComponent();
+		}
 	}
 }
 

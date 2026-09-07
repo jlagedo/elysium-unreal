@@ -142,6 +142,11 @@ public:
 	static int32 TeardownEndCount;
 
 	virtual bool IsUsable() const override { return true; }
+	// The world's default is retail's slot-44 `return 1` — a second `+use` press releases. This leaf
+	// exists to drive the OTHER arm: the exclusivity rules a held session imposes on a press aimed
+	// somewhere else. `CGameSign::vfunc44` `0x10212600` is retail's one entity override and answers
+	// exactly this, so a fixture that says false is not inventing a behaviour.
+	virtual bool ReleasesOnSecondUse() const override { return false; }
 	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext&) override
 	{
 		++BeginCount;
@@ -1465,6 +1470,21 @@ TerminalDefinition
 		Definition.Emails.Num(), 1);
 	TestTrue(TEXT("email autodelete is retained"), Definition.Emails[0].bAutoDelete);
 
+	// `CPropHacking+0x904` is a 64-byte field filled with `Q_strncpy`, so a longer authored label is
+	// truncated at load and the screensaver's column placement measures the truncated string
+	// (`docs/vtmb/computer-terminals.md` §4.4).
+	{
+		const FString Long = FString::ChrN(80, TEXT('Z'));
+		FElysiumTerminalDefinition Capped;
+		FString CapError;
+		TestTrue(TEXT("an over-long screensaver label still parses"),
+			FElysiumTerminalDefinition::ParseText(
+				FString::Printf(TEXT("TerminalDefinition { \"screen saver\" \"%s\" }"), *Long),
+				Capped, CapError));
+		TestEqual(TEXT("and is truncated to the retail field width"), Capped.ScreenSaver.Len(),
+			ElysiumTerminalScreenSaverMax);
+	}
+
 	FElysiumTerminalDefinition Invalid;
 	TestFalse(TEXT("an out-of-range trigger fails closed"),
 		FElysiumTerminalDefinition::ParseText(
@@ -1529,13 +1549,31 @@ TerminalDefinition
 	Trigger.Input = TEXT("Add");
 	Trigger.Param = TEXT("1");
 	TerminalDef.Outputs.Add(MoveTemp(Trigger));
+	// `CBaseVampireSkillEntity::vfunc39` / `vfunc42` (`0x102181a9` / `0x1021827e`) are the first and
+	// last things a terminal's entry and exit do. `tuthack` authors neither row, so the fixture
+	// wires them by hand — the outputs exist on `CBaseEntity`'s own map `0x10552e18`.
+	FElysiumOutputDef UseBegin;
+	UseBegin.Name = TEXT("OnUseBegin");
+	UseBegin.Target = TEXT("use_began");
+	UseBegin.Input = TEXT("Add");
+	UseBegin.Param = TEXT("1");
+	TerminalDef.Outputs.Add(MoveTemp(UseBegin));
+	FElysiumOutputDef UseEnd;
+	UseEnd.Name = TEXT("OnUseEnd");
+	UseEnd.Target = TEXT("use_ended");
+	UseEnd.Input = TEXT("Add");
+	UseEnd.Param = TEXT("1");
+	TerminalDef.Outputs.Add(MoveTemp(UseEnd));
 	Defs.Defs.Add(MoveTemp(TerminalDef));
-	FElysiumEntityDef Counter;
-	Counter.Classname = TEXT("math_counter");
-	Counter.TargetName = TEXT("triggered");
-	Counter.Keys.Add(TEXT("min"), TEXT("0"));
-	Counter.Keys.Add(TEXT("max"), TEXT("10"));
-	Defs.Defs.Add(MoveTemp(Counter));
+	for (const TCHAR* CounterName : { TEXT("triggered"), TEXT("use_began"), TEXT("use_ended") })
+	{
+		FElysiumEntityDef Counter;
+		Counter.Classname = TEXT("math_counter");
+		Counter.TargetName = CounterName;
+		Counter.Keys.Add(TEXT("min"), TEXT("0"));
+		Counter.Keys.Add(TEXT("max"), TEXT("10"));
+		Defs.Defs.Add(MoveTemp(Counter));
+	}
 
 	FElysiumRecordingServices Services;
 	// The screen cone gates every terminal session; stand the glass in front of the eye.
@@ -1560,6 +1598,13 @@ TerminalDefinition
 	TestEqual(TEXT("+use starts one explicit terminal session"), Opened.Outcome,
 		EElysiumUseOutcome::SessionStarted);
 	const uint32 FirstSerial = Terminal->SessionSerial;
+	World.Tick(0.0);
+	TestTrue(TEXT("entry fires the skill base's OnUseBegin once"),
+		FMath::IsNearlyEqual(
+			ElysiumEntityDebugTest::CounterValue(World.FindByName(TEXT("use_began"))), 1.0f));
+	TestTrue(TEXT("and OnUseEnd has not fired yet"),
+		FMath::IsNearlyEqual(
+			ElysiumEntityDebugTest::CounterValue(World.FindByName(TEXT("use_ended"))), 0.0f));
 	FElysiumTerminalView View;
 	TestTrue(TEXT("the active terminal publishes a view"), World.BuildTerminalView(View));
 	TestEqual(TEXT("the view carries the captured serial"), View.SessionSerial, FirstSerial);
@@ -1592,6 +1637,10 @@ TerminalDefinition
 
 	TestTrue(TEXT("quit closes through the captured session"),
 		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("quit")));
+	World.Tick(0.0);
+	TestTrue(TEXT("the exit fires the skill base's OnUseEnd once"),
+		FMath::IsNearlyEqual(
+			ElysiumEntityDebugTest::CounterValue(World.FindByName(TEXT("use_ended"))), 1.0f));
 	TestFalse(TEXT("the closed terminal no longer publishes"), World.BuildTerminalView(View));
 	TestTrue(TEXT("closing clears the save block"), World.ScriptedSessionSaveBlockReason().IsEmpty());
 	TestFalse(TEXT("a closed session rejects its old serial"),
@@ -1691,6 +1740,56 @@ TerminalDefinition
 				EElysiumUseOutcome::Unavailable);
 			TestEqual(TEXT("and no camera shot was pushed"),
 				Blank.Count(TEXT("PushCameraShotNamed")), 0);
+		}
+	}
+
+	// --- an UNRESOLVABLE shot does not refuse: retail runs the session cameraless -------------
+	// `FUN_10070470` returns NULL when `FUN_1006e130` cannot load the named block, and
+	// `CPropHacking::vfunc39` step 8 then calls `FUN_1017cef0(player, NULL)`, which clears the
+	// camera fields and leaves the client on the player's own eye (`slice-bc-decompiles.md`
+	// §3.2/§3.4). Everything before it — the hold, the draw, the prompt — has already happened.
+	{
+		FElysiumRecordingServices NoShot;
+		NoShot.StandTerminalScreen();
+		NoShot.bNamedCameraShotResolves = false;
+		FElysiumEntityDefs ShotDefs;
+		ShotDefs.MapName = TEXT("__terminal_no_shot__");
+		FElysiumEntityDef ShotTerminal;
+		ShotTerminal.Classname = TEXT("prop_hacking");
+		ShotTerminal.TargetName = TEXT("terminal");
+		ShotTerminal.Keys.Add(TEXT("start_enabled"), TEXT("1"));
+		ShotDefs.Defs.Add(MoveTemp(ShotTerminal));
+
+		FElysiumEntityWorld ShotWorld(nullptr, nullptr, NoShot.Bundle());
+		AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
+			EAutomationExpectedErrorFlags::Contains, 1);
+		AddExpectedError(TEXT("did not resolve; the session runs cameraless"),
+			EAutomationExpectedErrorFlags::Contains, 1);
+		ShotWorld.Load(MoveTemp(ShotDefs));
+		const FElysiumEntityHandle ShotPlayer = ShotWorld.SpawnPlayer();
+		ShotWorld.Activate(0.0);
+		FElysiumEntity* ShotEntity = ShotWorld.FindByName(TEXT("terminal"));
+		FElysiumTerminal* ShotBase = ShotEntity ? ShotEntity->AsTerminal() : nullptr;
+		if (TestNotNull(TEXT("the cameraless terminal resolves"), ShotBase))
+		{
+			ShotBase->InputEnable();
+			FElysiumPlayer* ShotPlayerEntity = ShotWorld.FindPlayer();
+			TestEqual(TEXT("an unresolvable shot still opens the session"),
+				ShotWorld.BeginPlayerUseSession(ShotBase->Handle, ShotPlayer).Outcome,
+				EElysiumUseOutcome::SessionStarted);
+			TestEqual(TEXT("the terminal holds no shot handle"), ShotBase->CameraShot, 0);
+			TestEqual(TEXT("the push was attempted exactly once"),
+				NoShot.Count(TEXT("PushCameraShotNamed special-case:Hacking exposure=clamped")), 1);
+			FElysiumTerminalView CamlessView;
+			TestTrue(TEXT("and the screen is published as usual"),
+				ShotWorld.BuildTerminalView(CamlessView));
+			if (TestNotNull(TEXT("the cameraless player resolves"), ShotPlayerEntity))
+			{
+				TestFalse(TEXT("the player is still held in place"), ShotPlayerEntity->IsMobile());
+			}
+			ShotWorld.EndPlayerUseSession(ShotBase->Handle, EElysiumUseEndReason::Completed);
+			TestEqual(TEXT("and the exit pops nothing it never pushed"),
+				NoShot.Count(TEXT("PopCameraShot")), 0);
 		}
 	}
 	return true;

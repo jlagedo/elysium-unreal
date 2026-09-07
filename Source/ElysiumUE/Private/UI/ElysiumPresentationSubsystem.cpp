@@ -366,12 +366,9 @@ void UElysiumPresentationSubsystem::RedrawTerminalProjections(const FElysiumView
 		{
 			return;
 		}
-		// The residency gate. A monitor in another room, behind the player or culled has nothing to
-		// show, and rasterizing a 1024x768 Slate surface per idle terminal per frame would be the
-		// whole cost of the feature. The revision it did not draw is still pending, so the frame it
-		// comes back on screen is the frame it catches up.
-		const UPrimitiveComponent* Body = Projection->BoundBody();
-		if (!Body || !Body->WasRecentlyRendered())
+		// The residency gate. The revision it did not draw is still pending, so the frame it comes
+		// back on screen is the frame it catches up.
+		if (!Projection->IsBodyResident())
 		{
 			return;
 		}
@@ -529,8 +526,27 @@ void UElysiumPresentationSubsystem::Publish()
 		World->BuildLootView(Next.Loot);
 		World->BuildTerminalView(Next.Terminal);
 		// Every other terminal with a body, so the world's monitors are drawn whether or not anyone
-		// is standing at one.
-		World->BuildIdleTerminalViews(Next.IdleTerminals);
+		// is standing at one — but only the ones whose glass is actually out of date. Retail's idle
+		// machine does no work beyond its think, and a full view is `Rows * Columns` cells plus a
+		// string per row. The gate is the projection's own `DrawnRevision`, not a "last published"
+		// mark, so a monitor whose redraw was skipped for residency keeps being offered until it
+		// comes back on screen and catches up.
+		Next.IdleTerminals.Reset();
+		TArray<TPair<FElysiumEntityHandle, uint32>> Idle;
+		World->ListIdleTerminals(Idle);
+		for (const TPair<FElysiumEntityHandle, uint32>& Entry : Idle)
+		{
+			const UElysiumTerminalProjection* Projection = FindTerminalProjection(Entry.Key);
+			if (!Projection || Projection->DrawnRevision == Entry.Value)
+			{
+				continue;   // no glass to write to, or the glass already carries this revision
+			}
+			FElysiumTerminalView View;
+			if (World->BuildIdleTerminalView(Entry.Key, View))
+			{
+				Next.IdleTerminals.Add(MoveTemp(View));
+			}
+		}
 
 		const FElysiumPlayer* PlayerEnt = World->FindPlayer();
 		if (PlayerEnt)

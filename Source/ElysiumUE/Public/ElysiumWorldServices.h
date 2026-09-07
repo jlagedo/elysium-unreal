@@ -906,6 +906,12 @@ public:
 	virtual void RegisterUseAnchor(UPrimitiveComponent* Source,
 		const FElysiumEntityHandle& Owner) = 0;
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) = 0;
+	// Drop every anchor this owner registered, destroy the query proxies that were made for it and
+	// release whatever the registration stood on the side (a terminal's glass). The mirror of
+	// `RegisterUseAnchor`, needed because that call de-duplicates on the COMPONENT and a rebuilt
+	// body is a new component every time — without an unregister, a runtime `SetModel` appends
+	// records instead of replacing them.
+	virtual void UnregisterUseAnchor(const FElysiumEntityHandle& Owner) {}
 	virtual void ClearUseAnchors() = 0;
 	// Loose-item DefaultTouch embodiment. The component remains presentation only: overlap produces
 	// an entity touch edge, and the item/inventory transaction decides whether acquisition succeeds.

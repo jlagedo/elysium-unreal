@@ -775,6 +775,14 @@ void FElysiumEntityWorld::RegisterTouchAnchor(UPrimitiveComponent* Component,
 	}
 }
 
+void FElysiumEntityWorld::UnregisterUseAnchor(const FElysiumEntityHandle& OwnerHandle)
+{
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Bodily->UnregisterUseAnchor(OwnerHandle);
+	}
+}
+
 void FElysiumEntityWorld::SetUseAnchorEnabled(const FElysiumEntityHandle& OwnerHandle, bool bEnabled)
 {
 	if (IElysiumEmbodiment* Bodily = Embodiment())
@@ -2065,7 +2073,7 @@ void FElysiumEntityWorld::Teardown()
 	// A captured interaction belongs to this map epoch. Give the leaf its cancellation edge while
 	// its handle and any presentation/session owner are still valid.
 	EndActiveUse(EElysiumUseEndReason::WorldTeardown);
-	TransitionUseFocus(nullptr);
+	TransitionUseFocus(nullptr, nullptr);
 	PendingUseEdges.Reset();
 	InteractionPrompt = FInteractionPrompt();
 	LastUseOutcome = EElysiumUseOutcome::NoTarget;

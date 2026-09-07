@@ -184,6 +184,138 @@ bool FElysiumTerminalProjectionOwnershipTest::RunTest(const FString&)
 		Presentation->FindTerminalProjection(Owner));
 	Presentation->ReleaseTerminalProjection(Owner);
 	TestNull(TEXT("and released by owner"), Presentation->FindTerminalProjection(Owner));
+
+	// --- a MODEL CHANGE hands the glass to the new component -----------------------------------
+	// `SetModel` destroys the old body and stands a new one, so re-registration must re-bind rather
+	// than keep the stale component. Nothing else notices: the same projection object survives.
+	Presentation->RegisterTerminalProjection(Owner, Body);
+	UElysiumTerminalProjection* Rebound = Presentation->FindTerminalProjection(Owner);
+	UStaticMeshComponent* Replacement =
+		StandScreenBody(Host, { FName(TEXT("screen")), FName(TEXT("body")) });
+	Presentation->RegisterTerminalProjection(Owner, Replacement);
+	TestTrue(TEXT("a rebuilt body reuses the same projection object"),
+		Presentation->FindTerminalProjection(Owner) == Rebound);
+	TestTrue(TEXT("re-bound to the NEW component"), Rebound->BoundBody() == Replacement);
+	TestEqual(TEXT("with no second projection standing"),
+		Presentation->NumTerminalProjections(), 1);
+
+	// --- and the anchor record is REPLACED, not appended ----------------------------------------
+	// `AElysiumMapActor::RegisterUseAnchor` de-duplicates on the component, and a rebuilt body is a
+	// new component every time — so without an unregister every `SetModel` would leave a second
+	// record, a second `ELYSIUM_USE_CHANNEL` proxy and a second projection registration behind.
+	AElysiumMapActor* AnchorMap = World->SpawnActorDeferred<AElysiumMapActor>(
+		AElysiumMapActor::StaticClass(), FTransform::Identity);
+	if (TestNotNull(TEXT("a second map actor stands for the anchor rule"), AnchorMap))
+	{
+		const FElysiumEntityHandle Anchored(11, 1);
+		AnchorMap->RegisterUseAnchor(Body, Anchored);
+		TestEqual(TEXT("one body, one anchor record"), AnchorMap->NumUseAnchors(Anchored), 1);
+		// De-duplication is on the SOURCE component, not on the proxy box the actor made from it —
+		// otherwise every dormancy toggle and every re-register would append.
+		AnchorMap->RegisterUseAnchor(Body, Anchored);
+		TestEqual(TEXT("re-registering the same body appends nothing"),
+			AnchorMap->NumUseAnchors(Anchored), 1);
+		AnchorMap->RegisterUseAnchor(Replacement, Anchored);
+		TestEqual(TEXT("registering a second body without unregistering appends"),
+			AnchorMap->NumUseAnchors(Anchored), 2);
+		AnchorMap->UnregisterUseAnchor(Anchored);
+		TestEqual(TEXT("unregistering drops every record for that owner"),
+			AnchorMap->NumUseAnchors(Anchored), 0);
+		AnchorMap->RegisterUseAnchor(Replacement, Anchored);
+		TestEqual(TEXT("so the rebuild sequence leaves exactly one"),
+			AnchorMap->NumUseAnchors(Anchored), 1);
+		FBox Bounds(ForceInit);
+		TestTrue(TEXT("and the surviving record still answers its bounds"),
+			AnchorMap->GetUseBodyWorldBounds(Anchored, Bounds));
+		AnchorMap->UnregisterUseAnchor(Anchored);
+	}
+	Presentation->ReleaseTerminalProjection(Owner);
+	return true;
+}
+
+// The redraw path itself, which no case reached before: `-nullrhi` renders nothing, so
+// `WasRecentlyRendered` is permanently false and the residency gate closed every draw. With the
+// answer injected, the whole of `RedrawTerminalProjections` is assertable headless — including its
+// order (the held session first, because it is the one a player is reading).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalProjectionRedrawTest,
+	"Elysium.Substrate.Terminal.ProjectionRedraw", GProjectionFlags)
+bool FElysiumTerminalProjectionRedrawTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	UElysiumPresentationSubsystem* Presentation = UElysiumPresentationSubsystem::Get(World);
+	AActor* Host = World->SpawnActor<AActor>();
+	if (!TestNotNull(TEXT("the world carries a presentation subsystem"), Presentation)
+		|| !TestNotNull(TEXT("the host actor stands"), Host))
+	{
+		return false;
+	}
+	USceneComponent* Root = NewObject<USceneComponent>(Host);
+	Host->SetRootComponent(Root);
+	Root->RegisterComponent();
+
+	const FElysiumEntityHandle Held(3, 1);
+	const FElysiumEntityHandle Idle(4, 1);
+	Presentation->RegisterTerminalProjection(Held,
+		StandScreenBody(Host, { FName(TEXT("screen")) }));
+	Presentation->RegisterTerminalProjection(Idle,
+		StandScreenBody(Host, { FName(TEXT("screen")) }));
+	UElysiumTerminalProjection* HeldGlass = Presentation->FindTerminalProjection(Held);
+	UElysiumTerminalProjection* IdleGlass = Presentation->FindTerminalProjection(Idle);
+	if (!TestNotNull(TEXT("the held terminal has a projection"), HeldGlass)
+		|| !TestNotNull(TEXT("and the idle one too"), IdleGlass))
+	{
+		return false;
+	}
+
+	FElysiumViewState State;
+	State.Terminal = IdleView(Held, 2);
+	State.Terminal.SessionSerial = 5;   // a LIVE session; `IsOpen` needs the serial, not the owner
+	State.IdleTerminals.Add(IdleView(Idle, 9));
+
+	// The residency gate first, on its own: a body that is not on screen consumes nothing.
+	HeldGlass->ForcedResidency = false;
+	IdleGlass->ForcedResidency = false;
+	Presentation->RedrawTerminalProjections(State);
+	TestEqual(TEXT("an off-screen body is not drawn"), HeldGlass->DrawCount, 0);
+	TestEqual(TEXT("nor an off-screen idle one"), IdleGlass->DrawCount, 0);
+	TestTrue(TEXT("and the revision it skipped is still pending"),
+		HeldGlass->NeedsRedraw(State.Terminal));
+
+	// On screen: one draw each, and the session's glass is the one that goes first.
+	HeldGlass->ForcedResidency = true;
+	IdleGlass->ForcedResidency = true;
+	Presentation->RedrawTerminalProjections(State);
+	TestEqual(TEXT("the held session is drawn"), HeldGlass->DrawCount, 1);
+	TestEqual(TEXT("the idle terminal is drawn"), IdleGlass->DrawCount, 1);
+	TestEqual(TEXT("each consuming its own revision"),
+		HeldGlass->DrawnRevision * 100 + IdleGlass->DrawnRevision, 209u);
+
+	// A second frame with nothing changed draws nothing.
+	Presentation->RedrawTerminalProjections(State);
+	TestEqual(TEXT("an unchanged frame redraws neither"),
+		HeldGlass->DrawCount + IdleGlass->DrawCount, 2);
+
+	// One revision moves; only that glass redraws.
+	State.IdleTerminals[0].Revision = 10;
+	Presentation->RedrawTerminalProjections(State);
+	TestEqual(TEXT("only the terminal whose revision moved redraws"), IdleGlass->DrawCount, 2);
+	TestEqual(TEXT("the other is left alone"), HeldGlass->DrawCount, 1);
+
+	// An idle view is NOT a session: `IsOpen` is false for serial 0, so a terminal published only
+	// as idle never reaches the session arm.
+	State.Terminal.SessionSerial = 0;
+	State.Terminal.Revision = 3;
+	Presentation->RedrawTerminalProjections(State);
+	TestEqual(TEXT("a serial-0 terminal view is not a live session and is not drawn as one"),
+		HeldGlass->DrawCount, 1);
+
+	Presentation->ReleaseAllTerminalProjections();
 	return true;
 }
 

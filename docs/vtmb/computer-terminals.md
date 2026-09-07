@@ -481,7 +481,9 @@ The control layer binds `E` to `+use` (`IN_USE` bit `0x20`). Server dispatcher
    handles (`player+0x1040` and `entity+0x8c`), and dispatches slot 39 (entry).
 5. On a rising edge with a current handle, slot 44 (`+0xb0`) decides whether to release.
    `CBaseTerminal` inherits `CAISound::FUN_100267b0` = `return 1`, so a second `+use` press
-   **always** releases a terminal.
+   **always** releases a terminal. `vtmb_slot 44`: every entity class holds that base; the one
+   entity override is `CGameSign::vfunc44 0x10212600` = `return 0`. The port's
+   `FElysiumEntity::ReleasesOnSecondUse` defaults to true accordingly.
 
 ### 7.2 Use gate, availability, screen-facing
 
@@ -578,8 +580,11 @@ modernization with no retail counterpart.
      held-use classes, cleared here defensively);
    - `m_bInUse = 0`;
    - `IEngineSoundServer003` (`DAT_1070b248`) slot 5 (`+0x14`) called with
-     `engine->vfunc(0x8c)(terminal edict, 0)` — a sound call keyed on the terminal's entity
-     index (the stop for the terminal's channel), not a screen or session handle;
+     `engine->vfunc(0x8c)(terminal edict, 0)`. engine.dll `CEngineSoundServer::vfunc5`
+     (`0x20002050`) → `FUN_200ef880(filter, entIndex, channel 0, flag arg2)` writes net message 6
+     with sub-type 2 (the `SV_StartSound` id with no sample name), 11 bits of entity, 3 of channel
+     and one flag bit; `vfunc5(ent, 0)` clears the use-channel bit, so it **stops every sound the
+     terminal is playing**. Ported as `IElysiumAudio::CancelAudioOwner` on the terminal's cue owner;
    - `CBaseVampireSkillEntity::vfunc42` → **`OnUseEnd`** (`FUN_100a5030`) and skill-component
      detach;
 3. `ThinkSet(CPropHackingSS_Think)`, `m_flNextThink = m_flSS_Start + curtime` (**unfloored**;
@@ -957,7 +962,7 @@ the opposite; the listing settles it.)
 ### 8.7 Port divergences (named modernizations, owner-reviewed 2026-09-07)
 
 The authority port (`Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp`,
-`ElysiumTerminalScreenBuffer.cpp`) reproduces every arm above. Four divergences are deliberate:
+`ElysiumTerminalScreenBuffer.cpp`) reproduces every arm above. The deliberate divergences:
 
 | Divergence | Retail | Port | Why |
 |---|---|---|---|
@@ -968,6 +973,15 @@ The authority port (`Source/ElysiumUE/Private/Substrate/ElysiumTerminal.cpp`,
 | Pin trace mask | `MASK_PLAYERSOLID` (`0x0201400b`), stopped by the terminal's own `SOLID_BBOX` | two sweeps of the pawn's hull — its movement channel for world solidity and `ELYSIUM_USE_CHANNEL` where the registered use anchor stands in for the terminal's box — the nearer contact wins (`AElysiumMapActor::SweepPlayerHullToward`) | placed prop bodies are not solid to the pawn in this port |
 | Missing `screen` / `screen_axis` | the cone reads uninitialized stack (§7.2) | one warning naming entity, model and part at spawn; the session is refused (`FElysiumTerminal::ResolveScreenAttachments`) | undefined in retail |
 | Exposure during the shot | none (§7.3) | `FElysiumShotPresentation::bClampExposure` for the handle's lifetime (`ElysiumCam::SolveExposureClamp`) | Unreal's auto-exposure reacts to the emissive panel; retail had no auto-exposure |
+| Gate bodies | slots 32 / 34 / 35 are three bodies and `PlayerUseIconFilter` ORs them | three virtuals off one `FacesScreen` (`CanPlayerFocus`, `CanBeUsed`, `HasUseIconCaps`); the world walks candidates once for focus and once for the icon union | faithful (the earlier single-predicate reading was wrong) |
+| `m_bEnabled` and the box | `Disable` removes the terminal from slots 32/34 only; `SOLID_BBOX` stays, so a disabled terminal still stops the pin and still draws the icon from the cone | the use anchor tracks dormancy only, never `start_enabled` | faithful |
+| Unresolvable `Hacking` shot | `FUN_10070470` returns NULL, `FUN_1017cef0(player, NULL)`, the session continues cameraless | one warning naming entity and shot; the session continues with no handle | faithful (supersedes the plan's refusal line) |
+| The one box | reach clamp, `WorldSpaceCenter()` snap target and the sweep stop all read `ent+0x274/0x284` | all three read the registered use-anchor box (`GetUseBodyWorldBounds`), not the visual's render bounds | faithful |
+| `screen saver` length | `Q_strncpy` into a 64-byte field (`+0x904`) | truncated to 63 characters at parse | faithful |
+| Exit and the crack buffer | `vfunc42` does not touch `m_szHackPWD` (entry-only `FUN_1021a1c0`) | same | faithful (an earlier port cleared it on exit) |
+| Screensaver randomness | engine `RandomInt` / `RandomFloat` (the shared global) | `ElysiumRng::Stream(EElysiumRngStream::Terminal)`, shared with the cracking filler, seeded per session | deterministic tests; draw order preserved |
+| Two think functions | `CPropHackingSS_Think` and the cracking stepper on one `m_flNextThink` via `ThinkSet` | one `Think()` dispatcher: cracking buffer first, else the screensaver when no user is bound; entry sets never-think, exit re-arms at `ss_start` | one clock, same order |
+| Idle glass | the client entity owns the cell buffer for the entity's lifetime | the authority publishes an idle view per terminal with a body when its revision changes; the presentation redraws the world-lifetime projection only then and only while the body rendered recently | no per-frame work on idle machines, as retail |
 | `m_iVFlags` bits `0x1` / `0x8` | origin from the special path; view-angle lock | no counterpart; the view lock the port needs is the pushed shot | the pin and the shot already own what the bits guarded |
 
 The client's acknowledge restriction (only an empty `hackcmd` leaves `m_HackFlags & 0x1`) is a

@@ -45,6 +45,12 @@ enum class EElysiumUseEndReason : uint8
 	Cancelled,
 	TargetInvalid,
 	WorldTeardown,
+	// The forced exits that are neither the player's choice nor the target going away: something
+	// happened TO the player mid-session. Retail reaches its one release body (`FUN_10167fd0`) from
+	// `CBasePlayer::OnTakeDamage` `0x10163020` and `CPointTeleport::InputTeleport` `0x1018dc00`
+	// among others (`slice-bc-decompiles.md` §4.3), and carries no reason of its own — the port
+	// names them so a case can tell "the machine was shot out from under me" from "I quit".
+	Interrupted,
 };
 
 struct FElysiumUseContext

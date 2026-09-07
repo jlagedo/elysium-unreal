@@ -14,7 +14,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumTerminalUI, Log, All);
 namespace
 {
 	const FName TerminalActions(TEXT("Terminal.Actions"));
-	const FLinearColor Phosphor(0.63f, 0.88f, 0.70f, 1.0f);
+	// Unity-blob safety: this file and ElysiumTerminalProjection.cpp both name the phosphor,
+	// and an anonymous namespace does not separate two translation units the build merges.
+	const FLinearColor ScreenPhosphor(0.63f, 0.88f, 0.70f, 1.0f);
 }
 
 UElysiumTerminalScreen::UElysiumTerminalScreen()
@@ -119,7 +121,7 @@ void UElysiumTerminalScreen::ConfigureEditor()
 	FEditableTextStyle Style = FCoreStyle::Get().GetWidgetStyle<FEditableTextStyle>(
 		TEXT("NormalEditableText"));
 	Style.SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18));
-	Style.SetColorAndOpacity(FSlateColor(Phosphor));
+	Style.SetColorAndOpacity(FSlateColor(ScreenPhosphor));
 	CommandEntry->SetWidgetStyle(Style);
 	CommandEntry->SetMinimumDesiredWidth(1.0f);
 	CommandEntry->SetClearKeyboardFocusOnCommit(false);
@@ -156,7 +158,7 @@ TSharedRef<SWidget> UElysiumTerminalScreen::BuildActionVisual(
 			SNew(STextBlock)
 			.Text(Label)
 			.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 13))
-			.ColorAndOpacity(FSlateColor(Phosphor))
+			.ColorAndOpacity(FSlateColor(ScreenPhosphor))
 		];
 }
 

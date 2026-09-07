@@ -51,6 +51,11 @@ struct FElysiumTerminalEmail
 	bool bAutoDelete = false;
 };
 
+// `CPropHacking+0x904`: a 64-byte character field, so 63 characters plus the terminator
+// (`docs/vtmb/computer-terminals.md` §4.4). The parser truncates to it because retail's `Q_strncpy`
+// does, and the screensaver's column placement measures the truncated string.
+inline constexpr int32 ElysiumTerminalScreenSaverMax = 63;
+
 // One patch-first `TerminalDefinition`. The parser preserves authored order and raw display/script
 // strings; only names used for comparisons fold at the comparison site. It is deliberately plain
 // C++ so malformed content and routing rules can be proven without a world, viewport, or RHI.
@@ -215,8 +220,16 @@ public:
 	static constexpr float HoldReachCm = 80.0f * 2.54f;
 
 	virtual void Spawn() override;
+	virtual void Activate() override;
 	virtual bool IsUsable() const override { return bStartEnabled; }
 	virtual bool CanPlayerFocus(const FElysiumUseContext& Context) const override;
+	// Slot 34 `0x10218690` — availability. `m_bEnabled`, then reject if `this+0x8c` resolves to
+	// **any** live entity (not "any entity other than the requester"), then the cone. It never looks
+	// at the requester's player component.
+	virtual bool CanBeUsed(const FElysiumUseContext& Context) const override;
+	// Slot 35 `CBaseTerminal::ObjectCaps` `0x10218660` — `return -((char)cone != 0) & 2`. The cone
+	// alone: no enable test, no user test.
+	virtual bool HasUseIconCaps(const FElysiumUseContext& Context) const override;
 	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context) override;
 	virtual void EndPlayerUse(const FElysiumUseContext& Context, EElysiumUseEndReason Reason) override;
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
@@ -224,9 +237,8 @@ public:
 	virtual void OnRuntimeTransformChanged() override;
 	virtual void OnRuntimeModelChanged() override;
 	virtual void TickPlayerUse(const FElysiumUseContext& Context) override;
-	// Slot 44 (`+0xb0`): `CBaseTerminal` inherits `CAISound::FUN_100267b0` = `return 1`, so a second
-	// `+use` press while the session is held **always** releases it (correction C11).
-	virtual bool ReleasesOnSecondUse() const override { return true; }
+	// Slot 44 (`+0xb0`) is NOT overridden: `CBaseTerminal` inherits `CAISound::FUN_100267b0` =
+	// `return 1`, which is the base's own answer here (correction C11).
 	virtual bool GetBodyAttachmentPoint(FName Attachment, FVector& OutWorld) const override;
 	virtual UPrimitiveComponent* GetAttachBody() const override;
 	virtual const TCHAR* SaveBlockReason() const override;
@@ -244,12 +256,25 @@ public:
 	void BuildIdleView(FElysiumTerminalView& Out) const;
 	EElysiumTerminalInputMode InputMode() const;
 
+	// The authored `screen saver` label the idle glass draws. On the base there is none; the content
+	// leaf answers with its own. Published on BOTH the idle and the live view, because the label is
+	// the only piece of content state an idle monitor needs and asking for it must not drag the
+	// session's action list — and its dependency evaluation — in with it.
+	virtual const FString& ScreenSaverLabel() const;
+
 	// Re-read `screen` / `screen_axis` off the standing body. Called from `Spawn`, and again from
 	// every hook that can move or replace that body.
 	void ResolveScreenAttachments();
 	// One named warning naming entity, model and the missing part — raised at spawn and after a
 	// model change, never per use press.
 	void ReportMissingAttachments() const;
+	// `FUN_10218710` itself: the plan-view screen cone, with no enable and no user test. The three
+	// gate bodies differ only in what they ask BEFORE this.
+	bool FacesScreen(const FElysiumUseContext& Context) const;
+	// One named warning, once per entity: a live terminal with no body has nowhere to put its glass,
+	// so the screensaver its think is drawing reaches nobody. Reported where the publication would
+	// otherwise have skipped it silently.
+	void ReportBodilessGlass() const;
 
 	// --- the retail entity messages, as writes into `Screen` (§8.2) ---
 	void ScreenSetCursor(int32 Column, int32 Row) { Screen.SetCursor(Column, Row); }
@@ -267,6 +292,16 @@ public:
 	void SetHudHint(int32 Type, int32 Value);
 	// `FUN_101f5950` on the entity's soundgroup: `access`, `accept`, `error`, `typing` (§14).
 	void PlayCue(const TCHAR* Cue);
+	// The stable audio-owner id every cue is submitted under, and the one the exit's stop-by-owner
+	// names. One accessor, because those two have to agree for the stop to reach the cues.
+	FString CueOwnerId() const;
+	// Whether this entity's `soundgroup` resolved the named cue. A world with no exported
+	// `usable/soundgroups.json` resolves none, which is a seam a case names rather than a failure.
+	bool HasCue(const TCHAR* Cue) const
+	{
+		const FString* Rel = CueRels.Find(FName(Cue));
+		return Rel != nullptr && !Rel->IsEmpty();
+	}
 
 	// --- the shared draw helpers (§8.5 / §8.6) ---
 	// `FUN_1021b140`: margins (1,1), clear, and the framed box around `Title` — or around every
@@ -286,9 +321,17 @@ protected:
 	// The shared body of `BuildView` / `BuildIdleView`; `Serial` is the only difference.
 	void FillView(FElysiumTerminalView& Out, uint32 Serial) const;
 
+	// The body build and its teardown, split out of `Spawn` so a runtime `SetModel` can replay the
+	// whole thing the way `FElysiumProp::OnRuntimeModelChanged` does — a re-registered anchor on a
+	// STALE body would leave the glass bound to a component the model change replaced.
+	void BuildBody();
+	void DestroyBody();
+
 	UPrimitiveComponent* WorldBody = nullptr;
 	FString VisualStem;
 	TMap<FName, FString> CueRels;
+	// Latch for `ReportBodilessGlass`: the defect is per entity, not per frame.
+	mutable bool bReportedBodilessGlass = false;
 };
 
 // `prop_hacking` (`CPropHacking`): ordered TerminalDefinition content, the directory / password
@@ -322,6 +365,7 @@ public:
 
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
+	virtual const FString& ScreenSaverLabel() const override { return Definition.ScreenSaver; }
 	virtual void Think() override;
 	// `CPropHacking::vfunc113` `0x1021a270`: the idle logon box on the glass, the FIRST screensaver
 	// tick at `RandomFloat(0,1) + curtime`, and only then the `ss_delay` floor.

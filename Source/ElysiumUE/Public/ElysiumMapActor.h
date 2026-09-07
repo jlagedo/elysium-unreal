@@ -476,6 +476,11 @@ public:
 	virtual void RegisterUseAnchor(UPrimitiveComponent* Source,
 		const FElysiumEntityHandle& Owner) override;
 	virtual void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;
+	virtual void UnregisterUseAnchor(const FElysiumEntityHandle& Owner) override;
+	// How many anchor records this owner holds. One is the only correct answer for a live entity;
+	// more than one means a rebuild appended instead of replacing, which is invisible in play and
+	// costs a second `ELYSIUM_USE_CHANNEL` box and a second projection registration.
+	int32 NumUseAnchors(const FElysiumEntityHandle& Owner) const;
 	virtual void ClearUseAnchors() override;
 	// The socket table a placed prop's `$attachment`s are read from when its own body cannot carry
 	// one. Production leaves this unset: `GetBodyAttachment` composes the model row's baked

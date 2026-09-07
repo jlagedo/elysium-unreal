@@ -143,6 +143,12 @@ public:
 	// local-player owner may remove its modal immediately instead of waiting for the next publish.
 	bool DismissSign();
 
+	// Redraw every projection whose authority revision moved and whose body is actually on screen.
+	// Public because it is the only observable half of the glass under `-nullrhi`: nothing is ever
+	// rendered there, so `Elysium.Substrate.Terminal.ProjectionRedraw` drives this directly with a
+	// forced residency answer rather than through a frame that cannot happen.
+	void RedrawTerminalProjections(const FElysiumViewState& State);
+
 	// Public so a test can read the declared frame order off the class.
 	UPROPERTY()
 	FElysiumPublishTickFunction PublishTickFunction;
@@ -157,9 +163,6 @@ private:
 	const AElysiumPlayerCameraManager* ResolveLocalCameraManager() const;
 
 	FElysiumViewState ViewState;
-
-	// Redraw every projection whose authority revision moved and whose body is actually on screen.
-	void RedrawTerminalProjections(const FElysiumViewState& State);
 
 	// An array rather than a handle-keyed map: `FElysiumEntityHandle` is a plain substrate value and
 	// not a `USTRUCT`, so it cannot key a reflected container — and reflection is what keeps these

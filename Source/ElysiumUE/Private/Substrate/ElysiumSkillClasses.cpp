@@ -17,6 +17,22 @@ namespace
 	const FName GOnSkillSuccess(TEXT("OnSkillSuccess"));
 	const FName GOnSkillFail(TEXT("OnSkillFail"));
 	const FName GOnSkillBotch(TEXT("OnSkillBotch"));
+	// `CBaseEntity`'s own output map `0x10552e18`, which is where every class on this chain gets
+	// them — the skill base is simply the one that fires them from slots 39 and 42.
+	const FName GOnUseBegin(TEXT("OnUseBegin"));
+	const FName GOnUseEnd(TEXT("OnUseEnd"));
+}
+
+FElysiumUseBeginResult FElysiumSkillEntity::BeginPlayerUse(const FElysiumUseContext& Context)
+{
+	FireOutput(GOnUseBegin, Context.Activator);
+	return FElysiumUseBeginResult::Completed();
+}
+
+void FElysiumSkillEntity::EndPlayerUse(const FElysiumUseContext& Context, EElysiumUseEndReason)
+{
+	StopAttempt();
+	FireOutput(GOnUseEnd, Context.Activator);
 }
 
 const TCHAR* FElysiumSkillEntity::FeatForSkillType(int32 SkillType)

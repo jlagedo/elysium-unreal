@@ -51,6 +51,9 @@ class FElysiumAttackUseSessionEntity final : public FElysiumEntity
 {
 public:
 	virtual bool IsUsable() const override { return true; }
+	// The captured session must survive the `+use` presses this suite drives at it; the world's
+	// retail default (slot 44 `return 1`) would close it on the second one.
+	virtual bool ReleasesOnSecondUse() const override { return false; }
 	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext&) override
 	{
 		return FElysiumUseBeginResult::Started(EElysiumUseSessionKind::Explicit);

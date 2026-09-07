@@ -349,12 +349,20 @@ bool AElysiumMapActor::GetUseBodyWorldBounds(const FElysiumEntityHandle& OwnerHa
 		{
 			return Candidate.Owner == OwnerHandle;
 		});
-	const UPrimitiveComponent* Visual = Record ? Record->Visual.Get() : nullptr;
-	if (!Visual)
+	// The ANCHOR, not the visual. Retail measures all three of the held-use questions against one
+	// collision box — `ent+0x274`/`ent+0x284`: the reach clamp (`FUN_10167e00` `10167e59`), the
+	// `WorldSpaceCenter()` the near arm snaps the view at (slot 192 = `(mins+maxs)*0.5`,
+	// `slice-bc-decompiles.md` §5.2) and the box the pin's `MASK_PLAYERSOLID` sweep stops on. In
+	// this port that one box is the registered use anchor (the `ELYSIUM_USE_CHANNEL` proxy, or the
+	// brush itself), which is exactly what the sweep already blocks against — so reading the
+	// visual's render bounds here would let the reach test and the snap target drift away from the
+	// surface the pin actually stops at.
+	const UPrimitiveComponent* Anchor = Record ? Record->Component.Get() : nullptr;
+	if (!Anchor)
 	{
 		return false;
 	}
-	OutWorld = Visual->Bounds.GetBox();
+	OutWorld = Anchor->Bounds.GetBox();
 	return true;
 }
 

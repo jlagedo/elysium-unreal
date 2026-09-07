@@ -19,6 +19,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumViewState.h"
 #include "ElysiumPlayerBody.h"
+#include "ElysiumUseIcons.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/SkeletalMeshSocket.h"
@@ -318,16 +319,90 @@ bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 	}
 
 	// --- the pin ------------------------------------------------------------------------------
+	// The one box every held-use question is measured against: the registered use anchor, which is
+	// the `ELYSIUM_USE_CHANNEL` proxy standing in for retail's `ent+0x274`/`ent+0x284`
+	// (`slice-bc-decompiles.md` §5.1). The reach clamp, the `WorldSpaceCenter()` snap target and
+	// the sweep stop all read it, so "the pawn came to rest against the machine" is asserted
+	// against THAT box and not against "closer than before".
+	FBox AnchorBox(ForceInit);
+	if (!TestTrue(TEXT("the monitor's use anchor reports world bounds"),
+		Gym.Host.MapActor->GetUseBodyWorldBounds(Terminal->Handle, AnchorBox)))
+	{
+		return false;
+	}
+	// The gap between two boxes in XY: zero when they touch or overlap. The sweep is XY-only, so
+	// the Z overlap is not part of the question.
+	auto PlanarGapTo = [&AnchorBox](const FBox& Other)
+	{
+		const double GapX = FMath::Max3(0.0, AnchorBox.Min.X - Other.Max.X, Other.Min.X - AnchorBox.Max.X);
+		const double GapY = FMath::Max3(0.0, AnchorBox.Min.Y - Other.Max.Y, Other.Min.Y - AnchorBox.Max.Y);
+		return FMath::Sqrt(GapX * GapX + GapY * GapY);
+	};
+	auto PawnBox = [&Gym]()
+	{
+		const UPrimitiveComponent* Hull =
+			Cast<UPrimitiveComponent>(Gym.Host.Pawn->GetRootComponent());
+		return Hull ? Hull->Bounds.GetBox() : FBox(ForceInit);
+	};
+	// Names what a sweep on each channel would stop on. A pin that halts on the stage or on a
+	// neighbour body is indistinguishable from one that halts on the machine unless the case says
+	// which, and on this map they are different answers.
+	auto ProbePin = [&](const TCHAR* Label)
+	{
+		UPrimitiveComponent* Hull = Cast<UPrimitiveComponent>(Gym.Host.Pawn->GetRootComponent());
+		const FVector SweepStart = Hull->GetComponentLocation();
+		const FVector SweepEnd(Terminal->Origin.X, Terminal->Origin.Y, SweepStart.Z);
+		FCollisionQueryParams Params(FName(TEXT("ElysiumGymPinProbe")), false);
+		Params.AddIgnoredActor(Gym.Host.Pawn);
+		for (const ECollisionChannel Channel :
+			{ Hull->GetCollisionObjectType(), ELYSIUM_USE_CHANNEL })
+		{
+			FHitResult Hit;
+			const bool bHit = Gym.Host.World->SweepSingleByChannel(Hit, SweepStart, SweepEnd,
+				Hull->GetComponentQuat(), Channel, Hull->GetCollisionShape(), Params);
+			AddInfo(FString::Printf(TEXT("%s: channel %d stops on %s"), Label,
+				static_cast<int32>(Channel), bHit
+					? *FString::Printf(TEXT("%s at %s"), *GetNameSafe(Hit.GetComponent()),
+						*Hit.Location.ToCompactString())
+					: TEXT("nothing")));
+		}
+	};
+
 	// 60 Source units out along the screen's own axis, well past the 80-unit slot-37 reach measured
 	// to the monitor's bounds, so the far arm sweeps the pawn in.
 	const FVector Away = Screen + Forward * (60.0f * ElysiumMove::U + 200.0f);
-	Gym.PlacePawnFeet(FVector(Away.X, Away.Y, Terminal->Origin.Z - 60.0f),
-		(-Forward).Rotation().Yaw);
+	auto StandAway = [&]()
+	{
+		Gym.PlacePawnFeet(FVector(Away.X, Away.Y, Terminal->Origin.Z - 60.0f),
+			(-Forward).Rotation().Yaw);
+	};
+	StandAway();
 	const FVector Started = Gym.Host.Pawn->GetActorLocation();
+	TestTrue(TEXT("the pawn starts clear of the machine's box"), PlanarGapTo(PawnBox()) > 50.0);
+	AddInfo(FString::Printf(TEXT("anchor box %s .. %s; pawn box %s .. %s; start gap %.2f cm"),
+		*AnchorBox.Min.ToCompactString(), *AnchorBox.Max.ToCompactString(),
+		*PawnBox().Min.ToCompactString(), *PawnBox().Max.ToCompactString(),
+		PlanarGapTo(PawnBox())));
+	ProbePin(TEXT("as authored"));
+
+	// (1) WORLD SOLIDITY. On this map `tutsafe_brush` — the safe's own `func_brush` — stands
+	// between the desk and a player three and a half metres out, so the sweep stops on the safe
+	// and NOT on the machine. That is retail: `0x10218320` traces `MASK_PLAYERSOLID` and writes
+	// `endpos` back with no fraction and no start-solid test (§1.4), so the pin never walks the
+	// player through world geometry to reach the terminal.
+	// "Touching" to within a few centimetres, not exactly: the anchor proxy is built from the
+	// source mesh's LOCAL render AABB and then rotated with it, while the pawn's own channel stops
+	// on the mesh's collision hull, so the two surfaces differ by about 3 cm on this model. The
+	// `ELYSIUM_USE_CHANNEL` arm reaches the proxy exactly (gap 0).
+	constexpr double ContactToleranceCm = 5.0;
 	Gym.Frame(0.0);
 	const FVector AfterOne = Gym.Host.Pawn->GetActorLocation();
 	TestTrue(TEXT("one frame of the held session moves the pawn toward the machine"),
 		FVector::Dist2D(AfterOne, Terminal->Origin) < FVector::Dist2D(Started, Terminal->Origin));
+	const double BlockedGap = PlanarGapTo(PawnBox());
+	TestTrue(FString::Printf(
+		TEXT("but stops on the intervening solid rather than reaching the machine (gap %.2f cm)"),
+		BlockedGap), BlockedGap > ContactToleranceCm);
 	for (int32 Frame = 1; Frame <= 10; ++Frame)
 	{
 		Gym.Frame(Frame * 0.05);
@@ -335,12 +410,126 @@ bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 	TestTrue(TEXT("and ten more frames leave it where the first put it"),
 		Gym.Host.Pawn->GetActorLocation().Equals(AfterOne, 1.0f));
 
+	// (2) THE MACHINE. Clear the corridor — every neighbour body and every other use anchor — so
+	// the only thing on the segment is the monitor, and the contact assertion measures the machine.
+	auto SetNeighboursSolid = [&](bool bSolid)
+	{
+		for (const TPair<FString, UStaticMeshComponent*>& Body : Gym.Bodies)
+		{
+			if (Body.Key != TEXT("tuthack") && Body.Value)
+			{
+				Body.Value->SetCollisionEnabled(bSolid
+					? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+			}
+		}
+		for (const TUniquePtr<FElysiumEntity>& Entity : World->Entities())
+		{
+			if (!Entity || Entity->Handle == Terminal->Handle)
+			{
+				continue;
+			}
+			Gym.Host.MapActor->SetUseAnchorEnabled(Entity->Handle, bSolid);
+			if (UPrimitiveComponent* Brush = Entity->GetAttachBody())
+			{
+				Brush->SetCollisionEnabled(bSolid
+					? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+			}
+		}
+	};
+	SetNeighboursSolid(false);
+	StandAway();
+	ProbePin(TEXT("corridor cleared"));
+	Gym.Frame(0.55);
+	// The sweep runs to its contact and writes `endpos` back with no fraction test, so one frame is
+	// the whole of it: the pawn's hull ends up against the box, not merely nearer to it.
+	const double ContactGap = PlanarGapTo(PawnBox());
+	TestTrue(FString::Printf(TEXT("with the corridor clear the pin leaves the hull touching the ")
+		TEXT("anchor box (gap %.2f cm)"), ContactGap), ContactGap <= ContactToleranceCm);
+	const FVector Pinned = Gym.Host.Pawn->GetActorLocation();
+	for (int32 Frame = 1; Frame <= 10; ++Frame)
+	{
+		Gym.Frame(0.55 + Frame * 0.05);
+	}
+	TestTrue(TEXT("and holds it there"), Gym.Host.Pawn->GetActorLocation().Equals(Pinned, 1.0f));
+
+	// (3) THE `ELYSIUM_USE_CHANNEL` ARM, ALONE. The pin is a named modernization: retail's single
+	// `MASK_PLAYERSOLID` trace is reached here as two sweeps, the pawn's own movement channel for
+	// world solidity and `ELYSIUM_USE_CHANNEL` where the use anchor stands in for the terminal's
+	// `SOLID_BBOX`. Take the monitor mesh out of the pawn's channel entirely and the second arm
+	// must still stop the pawn at the same box — otherwise the union is only the first trace.
+	if (UStaticMeshComponent* MonitorBody = Gym.Bodies.FindRef(TEXT("tuthack")))
+	{
+		MonitorBody->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		StandAway();
+		ProbePin(TEXT("use channel only"));
+		Gym.Frame(1.1);
+		const double UseChannelGap = PlanarGapTo(PawnBox());
+		TestTrue(FString::Printf(
+			TEXT("a body invisible to the pawn channel is still stopped by the use anchor ")
+			TEXT("(gap %.2f cm)"), UseChannelGap), UseChannelGap <= ContactToleranceCm);
+		MonitorBody->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	}
+	SetNeighboursSolid(true);
+
 	// --- the exit -----------------------------------------------------------------------------
 	TestTrue(TEXT("quit closes the session"),
 		World->SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, TEXT("quit")));
 	TestEqual(TEXT("the camera handle is released"), Terminal->CameraShot, 0);
 	TestEqual(TEXT("and the camera stack is back where it started"),
 		Camera->GetShots().Num(), ShotsBefore);
+
+	// --- mid-session cone loss: the per-tick gate is what ends it ------------------------------
+	// `CBasePlayer::PlayerUse` step 1 re-runs slot 32 on the held target every tick and a zero
+	// answer runs `FUN_10167fd0` (§5). Walking out of the screen cone is exactly that.
+	Gym.PlacePawnFeet(FVector(Stand.X, Stand.Y, Terminal->Origin.Z - 60.0f),
+		(-Forward).Rotation().Yaw);
+	if (TestEqual(TEXT("the session reopens for the cone-loss case"),
+		World->BeginPlayerUseSession(Terminal->Handle, World->PlayerHandle()).Outcome,
+		EElysiumUseOutcome::SessionStarted))
+	{
+		const int32 ConeShot = Terminal->CameraShot;
+		TestEqual(TEXT("with a live shot on the stack"), Camera->GetShots().Num(), ShotsBefore + 1);
+		// 90 degrees off the glass, where the cone answers 0.
+		const FVector OffAxis = Screen + Side * 200.0f;
+		Gym.PlacePawnFeet(FVector(OffAxis.X, OffAxis.Y, Terminal->Origin.Z - 60.0f),
+			(-Side).Rotation().Yaw);
+		Gym.Frame(2.0);
+		FElysiumTerminalView Lost;
+		TestFalse(TEXT("one tick outside the cone releases the session"),
+			World->BuildTerminalView(Lost));
+		TestEqual(TEXT("and drops the camera it pushed"), Terminal->CameraShot, 0);
+		TestEqual(TEXT("the stack is unwound"), Camera->GetShots().Num(), ShotsBefore);
+		TestTrue(TEXT("the shot was popped, not abandoned"), ConeShot != 0);
+	}
+
+	// --- mid-session InputDisable --------------------------------------------------------------
+	// `m_bEnabled` is an arm of slots 32 and 34, so disabling a machine somebody is using fails the
+	// per-tick gate the same way. The collision box is NOT removed: retail's terminal keeps its
+	// `SOLID_BBOX` either way, so the anchor still answers its bounds while disabled.
+	Gym.PlacePawnFeet(FVector(Stand.X, Stand.Y, Terminal->Origin.Z - 60.0f),
+		(-Forward).Rotation().Yaw);
+	if (TestEqual(TEXT("the session reopens for the InputDisable case"),
+		World->BeginPlayerUseSession(Terminal->Handle, World->PlayerHandle()).Outcome,
+		EElysiumUseOutcome::SessionStarted))
+	{
+		Terminal->InputDisable();
+		FElysiumTerminalView Disabled;
+		TestFalse(TEXT("InputDisable closes a live session"), World->BuildTerminalView(Disabled));
+		TestEqual(TEXT("and releases the camera"), Terminal->CameraShot, 0);
+		TestEqual(TEXT("the stack is unwound"), Camera->GetShots().Num(), ShotsBefore);
+		FBox StillThere(ForceInit);
+		TestTrue(TEXT("a disabled terminal keeps its collision box"),
+			Gym.Host.MapActor->GetUseBodyWorldBounds(Terminal->Handle, StillThere));
+		FElysiumUseContext IconGate;
+		IconGate.Owner = Terminal->Handle;
+		IconGate.Activator = World->PlayerHandle();
+		IconGate.bHasEyeOrigin = true;
+		IconGate.EyeOrigin = Screen + Forward * 150.0f;
+		TestFalse(TEXT("and refuses slot 32 while disabled"),
+			Terminal->CanPlayerFocus(IconGate));
+		TestTrue(TEXT("while slot 35 still draws its icon"), Terminal->HasUseIconCaps(IconGate));
+		Terminal->InputEnable();
+	}
 	return true;
 }
 
