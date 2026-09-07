@@ -20,6 +20,7 @@
 #include "ElysiumGameClock.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumRng.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumItemClasses.h"
@@ -33,7 +34,7 @@
 
 namespace ElysiumTerminalSliceTests
 {
-static constexpr EAutomationTestFlags GFlags =
+static constexpr EAutomationTestFlags GSliceFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 // UElysiumGameStateSubsystem is a UGameInstanceSubsystem, so it is outered to a throwaway
@@ -65,7 +66,7 @@ static bool Locked(const FElysiumEntity* Entity)
 	return ElysiumEntityDebugTest::Row(Entity, TEXT("Locked")) == TEXT("yes");
 }
 
-static const TCHAR* GMap = TEXT("sp_tutorial_1");
+static const TCHAR* GSliceMap = TEXT("sp_tutorial_1");
 
 static const TArray<FString>& TerminalSliceRoots()
 {
@@ -106,17 +107,17 @@ static FString BoxRow(int32 Columns, const FString& Text, int32 Margin)
 using namespace ElysiumTerminalSliceTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialTerminalSliceTest,
-	"Elysium.Substrate.TutorialTerminalSlice", GFlags)
+	"Elysium.Substrate.TutorialTerminalSlice", GSliceFlags)
 bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 {
-	if (!FElysiumMapSlice::Available(GMap))
+	if (!FElysiumMapSlice::Available(GSliceMap))
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: sp_tutorial_1.ents is not under $ELYSIUM_EXPORT_ROOT"));
 		return true;
 	}
 	FElysiumMapSlice Slice;
 	FString Error;
-	if (!FElysiumMapSlice::Build(GMap, TerminalSliceRoots(), Slice, Error))
+	if (!FElysiumMapSlice::Build(GSliceMap, TerminalSliceRoots(), Slice, Error))
 	{
 		AddError(Error);
 		return false;
@@ -152,6 +153,10 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	// The slice has no bodies, so the double supplies the `screen` / `screen_axis` pair the cone
 	// reads and stands the eye on its axis.
 	Services.StandTerminalScreen();
+	// Slice C: the idle terminal views are published for a terminal that has a BODY, and the double
+	// answers "has a body" the way the map actor does — through the use anchor's world bounds.
+	Services.bHasUseBodyBounds = true;
+	Services.UseBodyBounds = FBox(FVector(-30.0f, -30.0f, 0.0f), FVector(30.0f, 30.0f, 60.0f));
 	// The knobs parent to the rotating door's brush, which has no body headless (a slice seam).
 	AddExpectedError(TEXT("resolved parent 'tutchopdoord', but its attachment body is unavailable"),
 		EAutomationExpectedErrorFlags::Contains, 2);
@@ -175,6 +180,9 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 		}
 		World.Tick(State->GameClock().GetNow());
 	};
+	// Seeded before the first tick: the screensaver's row/column/style draws are the Terminal
+	// stream's, and this case measures the schedule those draws sit on.
+	ElysiumRng::SeedAll(20260907);
 	Advance(0.0);   // seeds materialize on the safe's first think, before any command
 
 	FElysiumEntity* TerminalEntity = World.FindByName(TEXT("tuthack"));
@@ -208,6 +216,60 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 		AddInfo(Text);
 	};
 
+	// --- slice C: the machine draws itself before anyone touches it ---------------------------
+	// `CPropHacking::vfunc113` `0x1021a270`: Activate puts the `LogonScreen` box on the glass and
+	// arms the FIRST screensaver tick inside the first second, then floors the authored
+	// `ss_delay 1.5` at 2.0. `ss_start 5.0` is never floored.
+	TestEqual(TEXT("the slice authors ss_delay 1.5, floored to 2.0 at Activate"),
+		Terminal->ScreenSaverDelay, FElysiumPropHacking::ScreenSaverDelayFloor);
+	TestEqual(TEXT("and ss_start 5.0, unfloored"), Terminal->ScreenSaverStart, 5.0f);
+	TestTrue(TEXT("Activate armed the first screensaver tick inside the first second"),
+		Terminal->NextThink >= 0.0f && Terminal->NextThink < 1.0f);
+	{
+		TArray<FElysiumTerminalView> Idle;
+		World.BuildIdleTerminalViews(Idle);
+		const FElysiumTerminalView* Tuthack = Idle.FindByPredicate(
+			[Terminal](const FElysiumTerminalView& Candidate)
+			{ return Candidate.Owner == Terminal->Handle; });
+		if (TestNotNull(TEXT("tuthack is published as an idle terminal before the first session"),
+			Tuthack))
+		{
+			TestEqual(TEXT("with no session serial"), Tuthack->SessionSerial, 0u);
+			TestEqual(TEXT("and the whole 36x24 grid"), Tuthack->Cells.Num(), 36 * 24);
+		}
+	}
+	// The first think, and the authored label is on the glass with nothing else. The reschedule is
+	// measured off the moment the tick RAN, not off the end of the advance.
+	const float FirstArmedAt = Terminal->NextThink;
+	Advance(1.0);
+	{
+		int32 LabelRow = INDEX_NONE;
+		int32 LabelColumn = INDEX_NONE;
+		for (int32 Index = 0; Index < Terminal->Screen.Rows() && LabelRow == INDEX_NONE; ++Index)
+		{
+			LabelColumn = Terminal->Screen.RowText(Index).Find(TEXT("Brothers Downtown Garage"),
+				ESearchCase::CaseSensitive);
+			LabelRow = LabelColumn == INDEX_NONE ? INDEX_NONE : Index;
+		}
+		TestTrue(TEXT("the first screensaver tick prints the authored label"),
+			LabelRow != INDEX_NONE);
+		if (LabelRow != INDEX_NONE)
+		{
+			// Row `[1, rows-1]`, column `[1, max(0, columns - len)]` — the label never sits on row 0
+			// or column 0 (`0x1021a788`-`0x1021a7a1`).
+			TestTrue(FString::Printf(TEXT("at row %d, column %d, inside the recovered bounds"),
+				LabelRow, LabelColumn),
+				LabelRow >= 1 && LabelRow <= Terminal->Screen.Rows() - 1
+					&& LabelColumn >= 1
+					&& LabelColumn <= FMath::Max(0, Terminal->Screen.Columns() - 24));
+		}
+	}
+	TestTrue(TEXT("the type-7 reset left both margins at 0"),
+		Terminal->Screen.LeftMargin() == 0 && Terminal->Screen.RightMargin() == 0);
+	TestTrue(TEXT("and it rescheduled itself the floored ss_delay later"),
+		FMath::IsNearlyEqual(Terminal->NextThink,
+			FirstArmedAt + FElysiumPropHacking::ScreenSaverDelayFloor, 0.06f));
+
 	FElysiumEntity* Padlock = World.FindByName(TEXT("tutsafelock"));
 	FElysiumEntity* SafeEntity = World.FindByName(TEXT("tutsafe"));
 	FElysiumEntity* PopupSafe = World.FindByName(TEXT("trig_popup_safe"));
@@ -238,6 +300,16 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 		return false;
 	}
 	const uint32 Serial = Terminal->SessionSerial;
+	// Entry step 4 (`0x1021a5d6`): `ThinkSet(NULL)`. Nothing else guards the think.
+	TestEqual(TEXT("entry cancels the screensaver think"), Terminal->NextThink,
+		ELYSIUM_NEVER_THINK);
+	{
+		TArray<FElysiumTerminalView> Idle;
+		World.BuildIdleTerminalViews(Idle);
+		TestFalse(TEXT("and the idle list drops tuthack for the length of the session"),
+			Idle.ContainsByPredicate([Terminal](const FElysiumTerminalView& Candidate)
+				{ return Candidate.Owner == Terminal->Handle; }));
+	}
 
 	// --- slice B on the slice: the hold, the cone and the camera handle ----------------------
 	FElysiumPlayer* SessionPlayer = World.FindPlayer();
@@ -388,12 +460,15 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	World.SubmitTerminalCommand(Terminal->Handle, Serial, FString());   // Enter past the runtext
 	TestEqual(TEXT("Enter after the function redraws the Safe menu"), Row(5), TEXT(" Safe Menu"));
 
-	Advance(0.0);
+	// Relative to the clock the Unlock was issued on: the screensaver schedule above has already
+	// moved it, and these two rows are `+0.0` and `+0.5` from the transaction, not from map load.
+	const double UnlockIssued = State->GameClock().GetNow();
+	Advance(UnlockIssued);
 	TestFalse(TEXT("OnTrigger0 unlocked tutsafelock through the authored row"), Locked(Padlock));
 	TestTrue(TEXT("OnTrigger0 enabled trig_popup_safe"), TriggerEnabled(PopupSafe));
 	TestFalse(TEXT("OnTrigger0 disabled trig_popup_note"), TriggerEnabled(PopupNote));
 	TestFalse(TEXT("the padlock is still drawn before the delayed hide"), Padlock->IsHidden());
-	Advance(0.5);
+	Advance(UnlockIssued + 0.5);
 	TestTrue(TEXT("tutsafelock is hidden by the +0.5 s ScriptHide row"), Padlock->IsHidden());
 
 	const int32 FirstShot = Terminal->CameraShot;
@@ -402,6 +477,17 @@ bool FElysiumTutorialTerminalSliceTest::RunTest(const FString&)
 	TestFalse(TEXT("the terminal no longer publishes"), World.BuildTerminalView(View));
 	TestTrue(TEXT("quit mobilizes the player again"), SessionPlayer->IsMobile());
 	TestEqual(TEXT("quit released the camera handle"), Terminal->CameraShot, 0);
+	// Exit re-arms at `ss_start + now` (`0x1021a6f6`), unfloored and never `ss_delay`.
+	TestTrue(TEXT("quit re-arms the screensaver at ss_start"),
+		FMath::IsNearlyEqual(Terminal->NextThink,
+			static_cast<float>(State->GameClock().GetNow()) + Terminal->ScreenSaverStart, 0.01f));
+	{
+		TArray<FElysiumTerminalView> Idle;
+		World.BuildIdleTerminalViews(Idle);
+		TestTrue(TEXT("and the idle list carries tuthack again"),
+			Idle.ContainsByPredicate([Terminal](const FElysiumTerminalView& Candidate)
+				{ return Candidate.Owner == Terminal->Handle; }));
+	}
 	TestEqual(TEXT("and popped exactly the shot it pushed"),
 		Services.Count(FString::Printf(TEXT("PopCameraShot %d"), FirstShot)), 1);
 

@@ -10,6 +10,7 @@
 class AElysiumMapActor;
 class AElysiumPlayerCameraManager;
 class UElysiumPresentationSubsystem;
+class UElysiumTerminalProjection;
 class UPrimitiveComponent;
 
 // Rebuild the view state after everything that could change it has run (`AElysiumMapActor` has two
@@ -128,9 +129,16 @@ public:
 	bool CloseLoot();
 	bool SubmitTerminalCommand(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
 		const FString& Command);
-	// Engine-side presentation seam for the physical monitor. The terminal view itself remains
-	// engine-neutral and carries no component or render-target state.
-	UPrimitiveComponent* ResolveTerminalDisplayTarget(const FElysiumEntityHandle& Owner) const;
+	// --- world-lifetime terminal glass (`docs/project/plans/terminals.md`, slice C) ---------------
+	// A monitor's screen is not session state: retail's screensaver think writes into the entity's
+	// own cell buffer from map load onward, so the render target lives with the BODY. The map actor
+	// registers one here when a terminal's use anchor is stood, re-registers it when that body is
+	// replaced, and releases every one when the anchors are cleared with the map epoch.
+	void RegisterTerminalProjection(const FElysiumEntityHandle& Owner, UPrimitiveComponent* Body);
+	void ReleaseTerminalProjection(const FElysiumEntityHandle& Owner);
+	void ReleaseAllTerminalProjections();
+	UElysiumTerminalProjection* FindTerminalProjection(const FElysiumEntityHandle& Owner) const;
+	int32 NumTerminalProjections() const { return TerminalProjections.Num(); }
 	// True means the request closed the panel without synchronously opening a replacement, so the
 	// local-player owner may remove its modal immediately instead of waiting for the next publish.
 	bool DismissSign();
@@ -149,6 +157,16 @@ private:
 	const AElysiumPlayerCameraManager* ResolveLocalCameraManager() const;
 
 	FElysiumViewState ViewState;
+
+	// Redraw every projection whose authority revision moved and whose body is actually on screen.
+	void RedrawTerminalProjections(const FElysiumViewState& State);
+
+	// An array rather than a handle-keyed map: `FElysiumEntityHandle` is a plain substrate value and
+	// not a `USTRUCT`, so it cannot key a reflected container — and reflection is what keeps these
+	// render targets off the GC's list of things to collect. A map carries at most a handful of
+	// terminals, so the scan is the cheaper half of the trade.
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UElysiumTerminalProjection>> TerminalProjections;
 
 	// Whether the stale-sample warning has already been issued for the run of frames currently in
 	// progress. The manager can legitimately publish nothing for many consecutive frames, and the

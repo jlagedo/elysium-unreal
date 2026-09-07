@@ -9,6 +9,7 @@
 #include "ElysiumMoveSolve.h"           // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumPlayer.h"              // FElysiumCombatCharacter — the feed probe's candidate set
 #include "ElysiumPlayerBody.h"
+#include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"                // the splash jitter and the sound-pool draw
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumUseIcons.h"
@@ -990,6 +991,28 @@ void AElysiumMapActor::RegisterUseAnchor(UPrimitiveComponent* Source,
 	Record.Component = Anchor;
 	Record.Visual = Source;
 	Record.Owner = OwnerHandle;
+
+	StandTerminalProjection(OwnerHandle, Source);
+}
+
+void AElysiumMapActor::StandTerminalProjection(const FElysiumEntityHandle& OwnerHandle,
+	UPrimitiveComponent* Visual)
+{
+	// A terminal's glass is created WITH ITS BODY and dies with it (slice C): the screensaver think
+	// is running from map load, long before any session, and the projection is what puts it on the
+	// monitor. This is the only creation site, so a body registered by the production spawn path and
+	// one stood by the terminal gym get the same projection through the same door.
+	FElysiumEntityWorld* Entities = GetEntityWorld();
+	FElysiumEntity* OwnerEntity = Entities ? Entities->Resolve(OwnerHandle) : nullptr;
+	if (!OwnerEntity || !OwnerEntity->AsTerminal())
+	{
+		return;
+	}
+	if (UElysiumPresentationSubsystem* Presentation =
+		UElysiumPresentationSubsystem::Get(GetWorld()))
+	{
+		Presentation->RegisterTerminalProjection(OwnerHandle, Visual);
+	}
 }
 
 UPrimitiveComponent* AElysiumMapActor::FindUseVisual(
@@ -1033,6 +1056,13 @@ void AElysiumMapActor::SetUseAnchorEnabled(const FElysiumEntityHandle& OwnerHand
 
 void AElysiumMapActor::ClearUseAnchors()
 {
+	// Every terminal projection is bound to one of these bodies; the map epoch that drops the
+	// anchors is the epoch that drops the glass.
+	if (UElysiumPresentationSubsystem* Presentation =
+		UElysiumPresentationSubsystem::Get(GetWorld()))
+	{
+		Presentation->ReleaseAllTerminalProjections();
+	}
 	UseAnchors.Reset();
 	for (UPrimitiveComponent* Component : OwnedUseAnchorComponents)
 	{

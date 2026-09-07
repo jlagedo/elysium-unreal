@@ -526,7 +526,12 @@ struct FElysiumViewState
 	FElysiumLootView Loot;
 
 	// Computer terminal.
+	// The held session, if there is one.
 	FElysiumTerminalView Terminal;
+	// Every OTHER terminal on the map that has a body: the grid its screensaver think is writing,
+	// with session serial 0. A monitor's glass is world state and outlives every session, so the
+	// world-lifetime projections read this rather than the session view.
+	TArray<FElysiumTerminalView> IdleTerminals;
 
 	// Stealth.
 	FElysiumStealthView Stealth;

@@ -344,6 +344,11 @@ public:
 	bool PlayerLootGive(int32 Slot);
 	bool PlayerCloseLoot();
 	bool BuildTerminalView(FElysiumTerminalView& Out) const;
+	// Every live, non-inert terminal that nobody is using and that has a body to project onto, with
+	// session serial 0. A terminal's screen is world state, not session state — the screensaver think
+	// keeps writing into it whether or not a player is standing there — so the presentation needs the
+	// idle grid as much as the live one (`docs/project/plans/terminals.md`, slice C).
+	void BuildIdleTerminalViews(TArray<FElysiumTerminalView>& Out) const;
 	bool SubmitTerminalCommand(const FElysiumEntityHandle& OwnerHandle, uint32 SessionSerial,
 		const FString& Command);
 	bool SubmitActiveTerminalCommand(const FString& Command);

@@ -23,7 +23,7 @@
 
 namespace ElysiumTerminalRouterTests
 {
-static constexpr EAutomationTestFlags GFlags =
+static constexpr EAutomationTestFlags GRouterFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 // A script host whose answer is determined by the source string, so a dependency can be driven
@@ -88,7 +88,7 @@ static FElysiumTerminalDefinition RouterDefinition()
 using namespace ElysiumTerminalRouterTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalRouterTest,
-	"Elysium.Substrate.TerminalRouter", GFlags)
+	"Elysium.Substrate.TerminalRouter", GRouterFlags)
 bool FElysiumTerminalRouterTest::RunTest(const FString&)
 {
 	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();

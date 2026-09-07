@@ -288,10 +288,6 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 {
 	if (Root)
 	{
-		if (TerminalScreen)
-		{
-			TerminalScreen->EnterScreensaver();
-		}
 		// CommonUI deactivation is what releases each screen's Elysium input scope. Do it before
 		// detaching a root during travel/controller replacement so an old world's UI cannot leave
 		// UI-only input latched into the next one.
@@ -735,25 +731,18 @@ void UElysiumPlayerUISubsystem::ShowTerminal(const FElysiumTerminalView& Termina
 		return;
 	}
 
+	// The glass is a world-lifetime fact now: `AElysiumMapActor::RegisterUseAnchor` stood this
+	// terminal's projection when its body was registered, and the authority refused the session at
+	// `BeginPlayerUse` if the machine had no `screen`/`screen_axis` to sit in front of. So a missing
+	// projection is a diagnostic, not a reason to close a session the authority already opened —
+	// submitting `quit` here would fight the substrate for a decision that is not this layer's.
 	UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get();
-	UPrimitiveComponent* Target = Presentation
-		? Presentation->ResolveTerminalDisplayTarget(Terminal.Owner)
-		: nullptr;
-	if (!TerminalScreen->SetProjectionTarget(Target))
+	if (Presentation && !Presentation->FindTerminalProjection(Terminal.Owner))
 	{
 		UE_LOG(LogElysiumPlayerUI, Warning,
-			TEXT("terminal UI refused a blind session for owner %s serial %u revision %u"),
-			*Terminal.Owner.ToString(), Terminal.SessionSerial, Terminal.Revision);
-		const bool bClosed = Presentation && Presentation->SubmitTerminalCommand(
-			Terminal.Owner, Terminal.SessionSerial, TEXT("quit"));
-		if (!bClosed)
-		{
-			UE_LOG(LogElysiumPlayerUI, Warning,
-				TEXT("terminal projection failure could not close owner %s serial %u"),
-				*Terminal.Owner.ToString(), Terminal.SessionSerial);
-		}
-		HideTerminal();
-		return;
+			TEXT("terminal UI opened for owner %s serial %u with no world projection bound; the "
+				"session is live but its screen is not on the monitor"),
+			*Terminal.Owner.ToString(), Terminal.SessionSerial);
 	}
 	ShownTerminalOwner = Terminal.Owner;
 	ShownTerminalSerial = Terminal.SessionSerial;
@@ -762,9 +751,11 @@ void UElysiumPlayerUISubsystem::ShowTerminal(const FElysiumTerminalView& Termina
 
 void UElysiumPlayerUISubsystem::HideTerminal()
 {
+	// Nothing is handed over on the way out: the authority re-arms its screensaver at `ss_start` in
+	// `EndPlayerUse` and the projection keeps drawing whatever the entity writes, with or without
+	// this screen (`docs/vtmb/computer-terminals.md` §13).
 	if (TerminalScreen)
 	{
-		TerminalScreen->EnterScreensaver();
 		RemoveWidget(EElysiumUILayer::GameModal, TerminalScreen);
 		TerminalScreen = nullptr;
 	}

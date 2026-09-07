@@ -3,18 +3,10 @@
 #include "UI/ElysiumActionButton.h"
 
 #include "Blueprint/WidgetTree.h"
-#include "Components/PrimitiveComponent.h"
-#include "Engine/TextureRenderTarget2D.h"
 #include "InputCoreTypes.h"
-#include "Materials/MaterialInstanceDynamic.h"
-#include "Materials/MaterialInterface.h"
-#include "Misc/App.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SScaleBox.h"
-#include "Widgets/Layout/SWrapBox.h"
-#include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumTerminalUI, Log, All);
@@ -22,28 +14,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumTerminalUI, Log, All);
 namespace
 {
 	const FName TerminalActions(TEXT("Terminal.Actions"));
-	const FName ScreenMaterialSlot(TEXT("screen"));
-	const FName SlateUIParameter(TEXT("SlateUI"));
-	const FName TintParameter(TEXT("TintColorAndOpacity"));
-	const FName OpacityParameter(TEXT("OpacityFromTexture"));
-	constexpr float SurfaceWidth = 1024.0f;
-	constexpr float SurfaceHeight = 768.0f;
-	const FVector2D SurfaceDrawSize(SurfaceWidth, SurfaceHeight);
-	const FLinearColor ScreenBlack(0.004f, 0.009f, 0.007f, 1.0f);
 	const FLinearColor Phosphor(0.63f, 0.88f, 0.70f, 1.0f);
-	const FLinearColor MutedPhosphor(0.32f, 0.52f, 0.39f, 1.0f);
-	const TCHAR* ProjectionMaterialPath =
-		TEXT("/Engine/EngineMaterials/Widget3DPassThrough_Opaque.Widget3DPassThrough_Opaque");
 }
 
 UElysiumTerminalScreen::UElysiumTerminalScreen()
 {
 	bIsBackHandler = true;
-}
-
-int32 UElysiumTerminalScreen::FindScreenMaterialSlot(const TArray<FName>& SlotNames)
-{
-	return SlotNames.IndexOfByKey(ScreenMaterialSlot);
 }
 
 void UElysiumTerminalScreen::ApplyTerminal(const FElysiumTerminalView& InTerminal)
@@ -63,122 +39,8 @@ void UElysiumTerminalScreen::ApplyTerminal(const FElysiumTerminalView& InTermina
 	}
 	if (bChanged && GetCachedWidget().IsValid())
 	{
-		RebuildTerminalSurface();
+		RebuildActions();
 	}
-}
-
-bool UElysiumTerminalScreen::SetProjectionTarget(UPrimitiveComponent* InTarget)
-{
-	if (ProjectionTarget.Get() == InTarget && HasProjection())
-	{
-		return true;
-	}
-
-	// Replacing a prior target intentionally leaves its last pixels/material in place. Terminal
-	// screens persist as world screensavers after CommonUI releases input ownership.
-	ReleaseProjectionOwnership();
-	if (!InTarget)
-	{
-		UE_LOG(LogElysiumTerminalUI, Warning,
-			TEXT("terminal projection failed for %s serial %u: no physical use visual"),
-			*Terminal.Owner.ToString(), Terminal.SessionSerial);
-		return false;
-	}
-
-	const TArray<FName> SlotNames = InTarget->GetMaterialSlotNames();
-	const int32 ListedIndex = FindScreenMaterialSlot(SlotNames);
-	const int32 MaterialIndex = InTarget->GetMaterialIndex(ScreenMaterialSlot);
-	if (ListedIndex == INDEX_NONE || MaterialIndex == INDEX_NONE)
-	{
-		const FString Available = FString::JoinBy(SlotNames, TEXT(", "),
-			[](const FName& MaterialSlot) { return MaterialSlot.ToString(); });
-		UE_LOG(LogElysiumTerminalUI, Warning,
-			TEXT("terminal projection failed for %s serial %u: component '%s' has no exact "
-				"'screen' material slot (available: %s)"),
-			*Terminal.Owner.ToString(), Terminal.SessionSerial, *InTarget->GetName(),
-			Available.IsEmpty() ? TEXT("none") : *Available);
-		return false;
-	}
-
-	UMaterialInterface* BaseMaterial = LoadObject<UMaterialInterface>(nullptr,
-		ProjectionMaterialPath);
-	if (!BaseMaterial)
-	{
-		UE_LOG(LogElysiumTerminalUI, Warning,
-			TEXT("terminal projection failed for %s serial %u: material '%s' did not load"),
-			*Terminal.Owner.ToString(), Terminal.SessionSerial, ProjectionMaterialPath);
-		return false;
-	}
-	if (!FApp::CanEverRender())
-	{
-		UE_LOG(LogElysiumTerminalUI, Warning,
-			TEXT("terminal projection failed for %s serial %u: this process has no renderer"),
-			*Terminal.Owner.ToString(), Terminal.SessionSerial);
-		return false;
-	}
-
-	WidgetRenderer = MakeUnique<FWidgetRenderer>(false, true);
-	RenderTarget = FWidgetRenderer::CreateTargetFor(SurfaceDrawSize, TF_Bilinear, false);
-	if (!RenderTarget)
-	{
-		UE_LOG(LogElysiumTerminalUI, Warning,
-			TEXT("terminal projection failed for %s serial %u: could not allocate %dx%d target"),
-			*Terminal.Owner.ToString(), Terminal.SessionSerial,
-			static_cast<int32>(SurfaceWidth), static_cast<int32>(SurfaceHeight));
-		ReleaseProjectionOwnership();
-		return false;
-	}
-	RenderTarget->ClearColor = ScreenBlack;
-
-	// The physical component, not this transient input screen, owns the persistent MID. That lets
-	// the screensaver remain on the monitor after CommonUI tears down the session widget.
-	ProjectionMaterial = UMaterialInstanceDynamic::Create(BaseMaterial, InTarget);
-	if (!ProjectionMaterial)
-	{
-		UE_LOG(LogElysiumTerminalUI, Warning,
-			TEXT("terminal projection failed for %s serial %u: could not create screen material"),
-			*Terminal.Owner.ToString(), Terminal.SessionSerial);
-		ReleaseProjectionOwnership();
-		return false;
-	}
-	ProjectionMaterial->SetTextureParameterValue(SlateUIParameter, RenderTarget);
-	ProjectionMaterial->SetVectorParameterValue(TintParameter, FLinearColor::White);
-	ProjectionMaterial->SetScalarParameterValue(OpacityParameter, 1.0f);
-
-	ProjectionTarget = InTarget;
-	ProjectionMaterialIndex = MaterialIndex;
-	InTarget->SetMaterial(MaterialIndex, ProjectionMaterial);
-	RenderProjection();
-	return true;
-}
-
-bool UElysiumTerminalScreen::HasProjection() const
-{
-	return ProjectionTarget.IsValid() && ProjectionMaterialIndex != INDEX_NONE
-		&& RenderTarget && ProjectionMaterial && WidgetRenderer != nullptr;
-}
-
-void UElysiumTerminalScreen::EnterScreensaver()
-{
-	if (!HasProjection())
-	{
-		ReleaseProjectionOwnership();
-		return;
-	}
-	TerminalSurface = BuildScreensaverSurface();
-	RenderProjection();
-	// The mesh retains the MID and the MID retains its texture. CommonUI can now die without
-	// blanking the physical monitor; a later session replaces this material with a fresh live one.
-	ReleaseProjectionOwnership();
-}
-
-void UElysiumTerminalScreen::ReleaseProjectionOwnership()
-{
-	ProjectionTarget.Reset();
-	ProjectionMaterialIndex = INDEX_NONE;
-	ProjectionMaterial = nullptr;
-	RenderTarget = nullptr;
-	WidgetRenderer.Reset();
 }
 
 void UElysiumTerminalScreen::SetDraftText(const FString& Text)
@@ -192,7 +54,6 @@ void UElysiumTerminalScreen::SetDraftText(const FString& Text)
 	bUpdatingDraft = true;
 	CommandEntry->SetText(FText::FromString(Clamped));
 	bUpdatingDraft = false;
-	RenderProjection();
 }
 
 FString UElysiumTerminalScreen::GetDraftText() const
@@ -217,9 +78,7 @@ void UElysiumTerminalScreen::HandleDraftChanged(const FText& Text)
 	if (Changed.Len() > Limit)
 	{
 		SetDraftText(Changed.Left(Limit));
-		return;
 	}
-	RenderProjection();
 }
 
 void UElysiumTerminalScreen::HandleDraftCommitted(const FText&, ETextCommit::Type CommitMethod)
@@ -275,24 +134,6 @@ void UElysiumTerminalScreen::ConfigureEditor()
 			: NSLOCTEXT("Elysium", "TerminalCommandHint", "Type menu or command"));
 }
 
-FText UElysiumTerminalScreen::ScreenText() const
-{
-	return FText::FromString(FString::Join(Terminal.ScreenRows, TEXT("\n")));
-}
-
-FText UElysiumTerminalScreen::DraftDisplayText() const
-{
-	if (Terminal.InputMode == 2)
-	{
-		return NSLOCTEXT("Elysium", "TerminalAcknowledgePrompt", "> Press Enter _");
-	}
-	const FString Draft = GetDraftText();
-	const FString Visible = Terminal.InputMode == 1
-		? FString::ChrN(Draft.Len(), TEXT('*'))
-		: Draft;
-	return FText::FromString(FString::Printf(TEXT("> %s_"), *Visible));
-}
-
 TSharedRef<SWidget> UElysiumTerminalScreen::BuildActionVisual(
 	UElysiumActionButton& Action, const FText& Label)
 {
@@ -319,9 +160,8 @@ TSharedRef<SWidget> UElysiumTerminalScreen::BuildActionVisual(
 		];
 }
 
-TSharedRef<SWidget> UElysiumTerminalScreen::BuildTerminalSurface()
+void UElysiumTerminalScreen::BuildTerminalActions()
 {
-	TSharedRef<SWrapBox> ActionWrap = SNew(SWrapBox).UseAllottedSize(true);
 	for (const FElysiumTerminalActionView& ActionView : Terminal.Actions)
 	{
 		const FName ActionId(*ActionView.Id);
@@ -349,105 +189,21 @@ TSharedRef<SWidget> UElysiumTerminalScreen::BuildTerminalSurface()
 			DefaultActionId = ActionId;
 		}
 		Action->SetSlateContent(BuildActionVisual(*Action, Label));
-		ActionWrap->AddSlot().Padding(FMargin(0.0f, 0.0f, 7.0f, 7.0f))
-		[
-			Action->TakeWidget()
-		];
 	}
-
-	return SNew(SBorder)
-		.BorderImage(FCoreStyle::Get().GetBrush(TEXT("GenericWhiteBox")))
-		.BorderBackgroundColor(FSlateColor(ScreenBlack))
-		.Padding(FMargin(28.0f, 24.0f))
-		.Clipping(EWidgetClipping::ClipToBoundsAlways)
-		[
-			SNew(SScaleBox)
-			.Stretch(EStretch::ScaleToFit)
-			.StretchDirection(EStretchDirection::Both)
-			[
-				SNew(SBox)
-				.WidthOverride(SurfaceWidth - 56.0f)
-				.HeightOverride(SurfaceHeight - 48.0f)
-				[
-					SNew(SVerticalBox)
-					+ SVerticalBox::Slot().FillHeight(1.0f)
-					[
-						SNew(STextBlock)
-						.Text_Lambda([this]() { return ScreenText(); })
-						.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18))
-						.ColorAndOpacity(FSlateColor(Phosphor))
-						.Clipping(EWidgetClipping::ClipToBoundsAlways)
-					]
-					+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, 8.0f)
-					[
-						SNew(SBorder)
-						.BorderImage(FCoreStyle::Get().GetBrush(TEXT("GenericWhiteBox")))
-						.BorderBackgroundColor(FSlateColor(FLinearColor(0.018f, 0.05f, 0.029f, 0.92f)))
-						.Padding(FMargin(10.0f, 7.0f))
-						[
-							SNew(STextBlock)
-							.Text_Lambda([this]() { return DraftDisplayText(); })
-							.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 18))
-							.ColorAndOpacity(FSlateColor(Phosphor))
-						]
-					]
-					+ SVerticalBox::Slot().AutoHeight()
-					[
-						ActionWrap
-					]
-				]
-			]
-		];
 }
 
-TSharedRef<SWidget> UElysiumTerminalScreen::BuildScreensaverSurface() const
-{
-	const FText Label = Terminal.ScreenSaverLabel.IsEmpty()
-		? FText::GetEmpty()
-		: FText::FromString(Terminal.ScreenSaverLabel);
-	return SNew(SBorder)
-		.BorderImage(FCoreStyle::Get().GetBrush(TEXT("GenericWhiteBox")))
-		.BorderBackgroundColor(FSlateColor(ScreenBlack))
-		.Padding(FMargin(28.0f, 24.0f))
-		[
-			SNew(SVerticalBox)
-			+ SVerticalBox::Slot().FillHeight(1.0f)
-			[
-				SNullWidget::NullWidget
-			]
-			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
-			[
-				SNew(STextBlock)
-				.Text(Label)
-				.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Mono"), 15))
-				.ColorAndOpacity(FSlateColor(MutedPhosphor))
-			]
-		];
-}
-
-void UElysiumTerminalScreen::RebuildTerminalSurface()
+void UElysiumTerminalScreen::RebuildActions()
 {
 	BeginNavigationBuild();
 	SetNavigationGroup(TerminalActions, true, true, true, true);
 	DefaultActionId = NAME_None;
 	ConfigureEditor();
-	TerminalSurface = BuildTerminalSurface();
+	BuildTerminalActions();
 	FinalizeNavigationBuild(DefaultActionId);
 	if (IsActivated() && CommandEntry && GetOwningPlayer())
 	{
 		CommandEntry->SetUserFocus(GetOwningPlayer());
 	}
-	RenderProjection();
-}
-
-void UElysiumTerminalScreen::RenderProjection()
-{
-	if (!HasProjection() || !TerminalSurface.IsValid())
-	{
-		return;
-	}
-	WidgetRenderer->DrawWidget(RenderTarget, TerminalSurface.ToSharedRef(), SurfaceDrawSize,
-		0.0f, false);
 }
 
 TSharedRef<SWidget> UElysiumTerminalScreen::RebuildWidget()
@@ -478,7 +234,7 @@ TSharedRef<SWidget> UElysiumTerminalScreen::RebuildWidget()
 		}
 	}
 
-	RebuildTerminalSurface();
+	RebuildActions();
 	// This one-pixel transparent input shell is the only viewport widget. The visible console is
 	// rendered exclusively through the monitor material above.
 	return SNew(SBox)
@@ -506,7 +262,8 @@ bool UElysiumTerminalScreen::HandleNavigation(EElysiumNavigationDirection Direct
 
 void UElysiumTerminalScreen::HandleSelectedActionChanged(FName, FName)
 {
-	RenderProjection();
+	// The selection is semantic only: the glass carries the authority's grid, and retail draws no
+	// action list on it at all.
 }
 
 FReply UElysiumTerminalScreen::NativeOnPreviewKeyDown(
@@ -563,7 +320,5 @@ bool UElysiumTerminalScreen::NativeOnHandleBackAction()
 void UElysiumTerminalScreen::ReleaseSlateResources(bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
-	ReleaseProjectionOwnership();
-	TerminalSurface.Reset();
 	CommandEntry = nullptr;
 }

@@ -8,12 +8,12 @@
 
 namespace
 {
-static constexpr EAutomationTestFlags GFlags =
+static constexpr EAutomationTestFlags GScreenBufferFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalScreenBufferTest,
-	"Elysium.Substrate.TerminalScreenBuffer", GFlags)
+	"Elysium.Substrate.TerminalScreenBuffer", GScreenBufferFlags)
 bool FElysiumTerminalScreenBufferTest::RunTest(const FString&)
 {
 	FElysiumTerminalScreenBuffer Screen;

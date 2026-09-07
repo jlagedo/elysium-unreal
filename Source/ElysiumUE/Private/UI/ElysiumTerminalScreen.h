@@ -2,23 +2,21 @@
 
 #include "Components/EditableText.h"
 #include "ElysiumViewState.h"
-#include "Slate/WidgetRenderer.h"
 #include "UI/ElysiumNavigableScreen.h"
 
 #include "ElysiumTerminalScreen.generated.h"
 
-class UMaterialInstanceDynamic;
-class UPrimitiveComponent;
-class UTextureRenderTarget2D;
 class UElysiumActionButton;
 
 DECLARE_DELEGATE_RetVal_ThreeParams(bool, FElysiumTerminalCommandDelegate,
 	const FElysiumEntityHandle&, uint32, const FString&);
 
-// Invisible CommonUI input owner for one physical computer. Its retained Slate surface is drawn
-// into a render target bound to the model's exact `screen` material slot; no terminal pixels are
-// drawn in viewport space. Gameplay owns the rows/actions, while this object owns only the local
-// draft, focus/navigation, and the engine presentation resources.
+// Invisible CommonUI input owner for one physical computer.
+//
+// It owns the local draft, focus and navigation, and nothing else. The glass itself is
+// `UElysiumTerminalProjection`, owned by `UElysiumPresentationSubsystem` for the life of the body:
+// the monitor is drawn before any session opens and after every one closes, which no session-scoped
+// widget could do. No terminal pixels are drawn in viewport space either way.
 UCLASS()
 class UElysiumTerminalScreen final : public UElysiumNavigableScreen
 {
@@ -28,16 +26,9 @@ public:
 	UElysiumTerminalScreen();
 
 	void ApplyTerminal(const FElysiumTerminalView& InTerminal);
-	bool SetProjectionTarget(UPrimitiveComponent* InTarget);
-	void EnterScreensaver();
-	bool HasProjection() const;
 	void SetDraftText(const FString& Text);
 	FString GetDraftText() const;
 	bool SubmitDraft();
-
-	// Pure exact-match helper shared with focused tests. Similar names such as `screensaver` are
-	// deliberately not accepted: only the authored `screen` material is a terminal surface.
-	static int32 FindScreenMaterialSlot(const TArray<FName>& SlotNames);
 
 	FElysiumTerminalCommandDelegate OnCommand;
 
@@ -60,15 +51,12 @@ private:
 	void HandleDraftCommitted(const FText& Text, ETextCommit::Type CommitMethod);
 
 	void ConfigureEditor();
-	void RebuildTerminalSurface();
-	void RenderProjection();
-	void ReleaseProjectionOwnership();
-	TSharedRef<SWidget> BuildTerminalSurface();
-	TSharedRef<SWidget> BuildScreensaverSurface() const;
+	// Rebuild the semantic action set the authority published, and re-seat focus. The terminal's
+	// pixels are the projection's; what is rebuilt here is navigation, not a surface.
+	void RebuildActions();
+	void BuildTerminalActions();
 	TSharedRef<SWidget> BuildActionVisual(UElysiumActionButton& Action, const FText& Label);
 	bool SubmitCommand(const FString& Command);
-	FText ScreenText() const;
-	FText DraftDisplayText() const;
 
 	FElysiumTerminalView Terminal;
 	FName DefaultActionId;
@@ -76,15 +64,5 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UEditableText> CommandEntry;
 
-	UPROPERTY(Transient)
-	TObjectPtr<UTextureRenderTarget2D> RenderTarget;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UMaterialInstanceDynamic> ProjectionMaterial;
-
-	TWeakObjectPtr<UPrimitiveComponent> ProjectionTarget;
-	TUniquePtr<FWidgetRenderer> WidgetRenderer;
-	TSharedPtr<SWidget> TerminalSurface;
-	int32 ProjectionMaterialIndex = INDEX_NONE;
 	bool bUpdatingDraft = false;
 };

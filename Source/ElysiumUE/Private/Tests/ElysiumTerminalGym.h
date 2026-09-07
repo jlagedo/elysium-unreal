@@ -51,6 +51,9 @@ struct FElysiumTerminalGym
 	// Every component below is created on `Host.MapActor` and added as one of its instance
 	// components, so the actor's own reference keeps them alive; these are non-owning views.
 	AActor* Stage = nullptr;
+	// The clock every entity think is measured on. Held so a case can step it: the screensaver's
+	// schedule is the whole of what slice C asserts on this host.
+	UElysiumGameStateSubsystem* State = nullptr;
 	FElysiumMapSlice Slice;
 	TMap<FString, UStaticMeshComponent*> Bodies;
 	TMap<FString, USkeletalMeshComponent*> Attachments;
@@ -115,7 +118,7 @@ struct FElysiumTerminalGym
 		}
 		Seams.Append(Slice.Seams);
 
-		UElysiumGameStateSubsystem* State = NewObject<UElysiumGameStateSubsystem>(
+		State = NewObject<UElysiumGameStateSubsystem>(
 			NewObject<UGameInstance>(GetTransientPackage()));
 		FElysiumWorldServices Services;
 		Services.Embodiment = Host.MapActor;
@@ -191,6 +194,25 @@ struct FElysiumTerminalGym
 			Entities->Tick(Now);
 			Entities->UpdatePlayerInteraction();
 		}
+	}
+
+	double Now() const { return State ? State->GameClock().GetNow() : 0.0; }
+
+	// Step the game clock in bounded frames (`ElysiumFrame::ClampFrameDelta`) and run one gym frame
+	// per step, exactly as the map actor's gameplay tick does. A single jump would stamp delayed
+	// rows on a clock that had not moved.
+	void Advance(double To)
+	{
+		if (!State)
+		{
+			return;
+		}
+		for (int32 Guard = 0; Guard < 8192 && State->GameClock().GetNow() < To; ++Guard)
+		{
+			State->TimeControl().AdvanceFrame(FMath::Min(0.05, To - State->GameClock().GetNow()));
+			Frame(State->GameClock().GetNow());
+		}
+		Frame(State->GameClock().GetNow());
 	}
 
 	FString Report() const

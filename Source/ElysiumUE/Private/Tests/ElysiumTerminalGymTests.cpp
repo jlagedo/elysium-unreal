@@ -17,26 +17,30 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"
+#include "ElysiumViewState.h"
 #include "ElysiumPlayerBody.h"
+#include "ElysiumPresentationSubsystem.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/SkeletalMeshSocket.h"
 #include "Engine/StaticMesh.h"
 #include "HAL/FileManager.h"
 #include "Misc/PackageName.h"
+#include "Misc/App.h"
 #include "Misc/Paths.h"
 #include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumTerminal.h"
 #include "Substrate/ElysiumTerminalCone.h"
 #include "Tests/ElysiumTerminalGym.h"
+#include "UI/ElysiumTerminalProjection.h"
 #include "UObject/SoftObjectPath.h"
 #include "Visual/ElysiumPreparedPropModels.h"
 
 namespace ElysiumTerminalGymTests
 {
-static constexpr EAutomationTestFlags GFlags =
+static constexpr EAutomationTestFlags GGymFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-static const TCHAR* GMap = TEXT("sp_tutorial_1");
+static const TCHAR* GGymMap = TEXT("sp_tutorial_1");
 
 static const TArray<FString>& GymRoots()
 {
@@ -52,7 +56,7 @@ static const TArray<FString>& GymRoots()
 using namespace ElysiumTerminalGymTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalAttachmentsTest,
-	"Elysium.Content.TerminalAttachments", GFlags)
+	"Elysium.Content.TerminalAttachments", GGymFlags)
 bool FElysiumTerminalAttachmentsTest::RunTest(const FString&)
 {
 	TArray<FString> EntsFiles;
@@ -155,17 +159,17 @@ bool FElysiumTerminalAttachmentsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalGymStandsTest,
-	"Elysium.Content.TerminalGymStands", GFlags)
+	"Elysium.Content.TerminalGymStands", GGymFlags)
 bool FElysiumTerminalGymStandsTest::RunTest(const FString&)
 {
-	if (!FElysiumTerminalGym::Available(GMap))
+	if (!FElysiumTerminalGym::Available(GGymMap))
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the sp_tutorial_1 export or /ElysiumBaked is absent"));
 		return true;
 	}
 	FElysiumTerminalGym Gym;
 	// The monitor stands at (668, -324, 376); the pawn is seated a few metres off it on the stage.
-	if (!Gym.Build(*this, GMap, GymRoots(), FVector(300.0f, -324.0f, 0.0f), 0.0f))
+	if (!Gym.Build(*this, GGymMap, GymRoots(), FVector(300.0f, -324.0f, 0.0f), 0.0f))
 	{
 		return false;
 	}
@@ -217,16 +221,16 @@ bool FElysiumTerminalGymStandsTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalGymConeTest,
-	"Elysium.Content.TerminalGymCone", GFlags)
+	"Elysium.Content.TerminalGymCone", GGymFlags)
 bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 {
-	if (!FElysiumTerminalGym::Available(GMap))
+	if (!FElysiumTerminalGym::Available(GGymMap))
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the sp_tutorial_1 export or /ElysiumBaked is absent"));
 		return true;
 	}
 	FElysiumTerminalGym Gym;
-	if (!Gym.Build(*this, GMap, GymRoots(), FVector(300.0f, -324.0f, 0.0f), 0.0f))
+	if (!Gym.Build(*this, GGymMap, GymRoots(), FVector(300.0f, -324.0f, 0.0f), 0.0f))
 	{
 		return false;
 	}
@@ -337,6 +341,108 @@ bool FElysiumTerminalGymConeTest::RunTest(const FString&)
 	TestEqual(TEXT("the camera handle is released"), Terminal->CameraShot, 0);
 	TestEqual(TEXT("and the camera stack is back where it started"),
 		Camera->GetShots().Num(), ShotsBefore);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalGymScreenSaverTest,
+	"Elysium.Content.TerminalGymScreensaver", GGymFlags)
+bool FElysiumTerminalGymScreenSaverTest::RunTest(const FString&)
+{
+	if (!FElysiumTerminalGym::Available(GGymMap))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the sp_tutorial_1 export or /ElysiumBaked is absent"));
+		return true;
+	}
+	FElysiumTerminalGym Gym;
+	if (!Gym.Build(*this, GGymMap, GymRoots(), FVector(300.0f, -324.0f, 0.0f), 0.0f))
+	{
+		return false;
+	}
+	AddInfo(Gym.Report());
+
+	FElysiumPropHacking* Terminal = Gym.Terminal(TEXT("tuthack"));
+	FElysiumEntityWorld* World = Gym.World();
+	if (!TestNotNull(TEXT("tuthack resolves"), Terminal) || !TestNotNull(TEXT("the world"), World))
+	{
+		return false;
+	}
+
+	// --- the projection is world state, stood with the body -------------------------------------
+	// `AElysiumMapActor::RegisterUseAnchor` is the only creation site, and the gym reaches it through
+	// the same call the production spawn path makes. Nobody has used the machine yet.
+	UElysiumPresentationSubsystem* Presentation =
+		UElysiumPresentationSubsystem::Get(Gym.Host.World);
+	if (!TestNotNull(TEXT("the gym world carries a presentation subsystem"), Presentation))
+	{
+		return false;
+	}
+	UElysiumTerminalProjection* Projection =
+		Presentation->FindTerminalProjection(Terminal->Handle);
+	if (!TestNotNull(TEXT("the real monitor body carries a projection before any session"),
+		Projection))
+	{
+		return false;
+	}
+	TestTrue(TEXT("bound to the SM_monitor_useable body's exact `screen` slot"),
+		Projection->IsBound());
+	TestTrue(TEXT("and to the body the gym stood"),
+		Projection->BoundBody() == Gym.Bodies.FindRef(TEXT("tuthack")));
+	// `-nullrhi` allocates no target; the named state is what the case asserts instead of a texture.
+	TestEqual(TEXT("the renderer state matches this process"), Projection->HasRenderer(),
+		FApp::CanEverRender());
+
+	// The idle publication reaches it: a terminal with a body and no user is published every frame.
+	{
+		TArray<FElysiumTerminalView> Idle;
+		World->BuildIdleTerminalViews(Idle);
+		TestTrue(TEXT("tuthack is published as an idle terminal"),
+			Idle.ContainsByPredicate([Terminal](const FElysiumTerminalView& Candidate)
+				{ return Candidate.Owner == Terminal->Handle; }));
+	}
+
+	// --- a session, then quit -------------------------------------------------------------------
+	const FVector Screen = Terminal->ScreenPointCm;
+	const FVector Forward = (Terminal->ScreenAxisPointCm - Screen).GetSafeNormal2D();
+	const FVector Stand = Screen + Forward * (60.0f * ElysiumMove::U);
+	Gym.PlacePawnFeet(FVector(Stand.X, Stand.Y, Terminal->Origin.Z - 60.0f),
+		(-Forward).Rotation().Yaw);
+	if (!TestEqual(TEXT("+use opens the session on the real body"),
+		World->BeginPlayerUseSession(Terminal->Handle, World->PlayerHandle()).Outcome,
+		EElysiumUseOutcome::SessionStarted))
+	{
+		return false;
+	}
+	TestEqual(TEXT("entry cancels the screensaver think"), Terminal->NextThink,
+		ELYSIUM_NEVER_THINK);
+	TestTrue(TEXT("quit closes the session"),
+		World->SubmitTerminalCommand(Terminal->Handle, Terminal->SessionSerial, TEXT("quit")));
+
+	// --- and the glass keeps moving on the clock afterwards -------------------------------------
+	TestTrue(TEXT("quit re-armed the screensaver at ss_start"),
+		FMath::IsNearlyEqual(Terminal->NextThink,
+			static_cast<float>(Gym.Now()) + Terminal->ScreenSaverStart, 0.01f));
+	const uint32 AfterQuit = Terminal->ViewRevision;
+	Gym.Advance(Gym.Now() + Terminal->ScreenSaverStart + 0.1);
+	const uint32 AfterFirstTick = Terminal->ViewRevision;
+	TestEqual(TEXT("the first post-quit screensaver tick lands at ss_start"),
+		AfterFirstTick, AfterQuit + 1);
+	Gym.Advance(Gym.Now() + FElysiumPropHacking::ScreenSaverDelayFloor + 0.1);
+	TestEqual(TEXT("and it keeps bumping the revision every ss_delay after that"),
+		Terminal->ViewRevision, AfterFirstTick + 1);
+	{
+		TArray<FElysiumTerminalView> Idle;
+		World->BuildIdleTerminalViews(Idle);
+		const FElysiumTerminalView* Tuthack = Idle.FindByPredicate(
+			[Terminal](const FElysiumTerminalView& Candidate)
+			{ return Candidate.Owner == Terminal->Handle; });
+		if (TestNotNull(TEXT("the idle view carries the post-quit screensaver"), Tuthack))
+		{
+			TestEqual(TEXT("at the authority's current revision"), Tuthack->Revision,
+				Terminal->ViewRevision);
+			TestTrue(TEXT("which the projection has not drawn yet under -nullrhi"),
+				Projection->NeedsRedraw(*Tuthack));
+		}
+	}
 	return true;
 }
 

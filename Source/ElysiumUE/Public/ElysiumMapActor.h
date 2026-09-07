@@ -487,6 +487,9 @@ public:
 	// Presentation-only lookup for the rendered component that supplied an entity's use anchor.
 	// Query proxies remain private; callers receive the physical mesh/brush, never the proxy box.
 	UPrimitiveComponent* FindUseVisual(const FElysiumEntityHandle& Owner) const;
+	// Create or re-bind this owner's world-lifetime screen projection when it is a terminal. Called
+	// from `RegisterUseAnchor`, which is the one place a terminal's body becomes reachable.
+	void StandTerminalProjection(const FElysiumEntityHandle& OwnerHandle, UPrimitiveComponent* Visual);
 	virtual void RegisterTouchAnchor(UPrimitiveComponent* Source,
 		const FElysiumEntityHandle& Owner) override;
 	virtual void SetTouchAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled) override;

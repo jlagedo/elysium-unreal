@@ -796,8 +796,22 @@ void FElysiumTerminal::BuildView(FElysiumTerminalView& Out) const
 	{
 		return;
 	}
+	FillView(Out, SessionSerial);
+}
+
+void FElysiumTerminal::BuildIdleView(FElysiumTerminalView& Out) const
+{
+	// Serial 0 is what says "no session": the same grid, the same revision, no user. The retail
+	// screen is the entity's own state whether or not anyone is standing at it — the screensaver
+	// think writes into the very buffer a session would — so idle and live differ only in the serial.
+	Out = FElysiumTerminalView();
+	FillView(Out, /*Serial*/ 0);
+}
+
+void FElysiumTerminal::FillView(FElysiumTerminalView& Out, uint32 Serial) const
+{
 	Out.Owner = Handle;
-	Out.SessionSerial = SessionSerial;
+	Out.SessionSerial = Serial;
 	Out.Revision = ViewRevision;
 	Out.Columns = Screen.Columns();
 	Out.Rows = Screen.Rows();
@@ -853,6 +867,16 @@ void FElysiumTerminal::OnRuntimeTransformChanged()
 void FElysiumTerminal::OnRuntimeModelChanged()
 {
 	FElysiumEntity::OnRuntimeModelChanged();
+	// The glass follows the body. Re-registering the anchor is the one path that re-binds the
+	// world-lifetime projection (slice C) — `RegisterUseAnchor` de-duplicates the record itself, so
+	// a body that did not actually change costs nothing and one that did is re-bound.
+	//
+	// NOTE: a terminal does not yet rebuild `WorldBody` on `SetModel` the way `FElysiumProp` does;
+	// this re-arms whatever body it is standing on so the wire is in place for when it does.
+	if (World && WorldBody)
+	{
+		World->RegisterUseAnchor(WorldBody, Handle);
+	}
 	ResolveScreenAttachments();
 	ReportMissingAttachments();
 }
@@ -1025,6 +1049,10 @@ void FElysiumPropHacking::BeginContentSession()
 	bSkillSubmit = false;
 	LastCommand.Reset();
 	PlayCue(TEXT("access"));
+	// Entry step 4, `0x1021a5d6`: `CBaseEntity::ThinkSet(NULL, 0.0f, NULL)`. The screensaver think
+	// carries no in-use guard of its own (correction C16), so cancelling the schedule is the whole
+	// of what keeps the label off a screen someone is typing on.
+	CancelScreenSaver();
 	// No `InfoCtrl` here: `thunk_FUN_10218820` has exactly six callers (BeginInput, the typed
 	// submit, `vfunc42`, `AcceptCmd`, the password prompt, the password failure) and entry is not
 	// one of them — the hint is already hidden because nothing raised it.
@@ -1034,11 +1062,14 @@ void FElysiumPropHacking::BeginContentSession()
 
 void FElysiumPropHacking::EndContentSession()
 {
-	// `CPropHacking` exit 0x1021a6c0: the idle title, directory and pending reset, the
-	// screensaver re-armed (slice C).
+	// `CPropHacking` exit 0x1021a6c0, in its listing order: re-arm the screensaver, redraw the idle
+	// title, reset the two indices.
 	// Retail's exit writes the buffer, the idle title and the two indices; it does not touch
 	// `m_HackFlags` — the next entry rewrites the whole word.
 	CrackBuffer.Reset();
+	// `m_flNextThink = m_flSS_Start + gpGlobals->curtime` — **`ss_start`, never `ss_delay`, and with
+	// no floor**: the 2.0 floor is Activate-only (correction C15).
+	ArmScreenSaver(ScreenSaverStart);
 	TitleBox(nullptr, Definition.LogonLines);
 	CurrentDirectory = INDEX_NONE;
 	PendingDirectory = INDEX_NONE;
@@ -1368,6 +1399,76 @@ void FElysiumPropHacking::Think()
 		// The roll already resolved at `BeginInput`; a live attempt with no buffer is a stale think.
 		StopAttempt();
 	}
+	// Retail runs two different think functions off one `m_flNextThink`: the cracking stepper while a
+	// session is printing, and `CPropHackingSS_Think` while the machine is idle. The port has one
+	// `Think()`, so the buffer decides first and the screensaver takes the tick that is left. The
+	// `CurrentUser` test is this dispatch, not a guard inside the think — entry's cancel is what
+	// keeps the label off a live screen, and it is why a stale schedule cannot clear one either.
+	if (!CurrentUser.IsSet())
+	{
+		ScreenSaverThink();
+	}
+}
+
+void FElysiumPropHacking::Activate()
+{
+	FElysiumTerminal::Activate();
+	// `0x1021a27c`: `FUN_1021b140(this, NULL)` — the idle `LogonScreen` box is on the glass from map
+	// load, before anyone has touched the machine.
+	TitleBox(nullptr, Definition.LogonLines);
+	// `0x1021a298`: `RandomFloat(0.0f, 1.0f) + curtime`. Every terminal on a map arms inside the
+	// same second but at its own offset, so a room full of monitors does not blink in lockstep.
+	ArmScreenSaver(ElysiumRng::Stream(EElysiumRngStream::Terminal).GetFraction());
+	// `0x1021a2af`: the floor, applied **after** that first schedule and nowhere else.
+	if (ScreenSaverDelay < ScreenSaverDelayFloor)
+	{
+		ScreenSaverDelay = ScreenSaverDelayFloor;
+	}
+	++ViewRevision;
+}
+
+void FElysiumPropHacking::ArmScreenSaver(float DelaySeconds)
+{
+	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0) + DelaySeconds;
+}
+
+void FElysiumPropHacking::ScreenSaverThink()
+{
+	// `CPropHackingSS_Think` `0x1021a740`, step for step (`docs/vtmb/computer-terminals.md` §13).
+	FRandomStream& Rng = ElysiumRng::Stream(EElysiumRngStream::Terminal);
+
+	// 1. type 7 with margins **(0, 0)** — the screensaver RESETS the (1,1) the title box left, and
+	//    type 7 clears nothing on its own; 2. the type-4 clear does.
+	ScreenSetMargins(0, 0);
+	ScreenClear();
+
+	// 3-5. the label's placement. `maxCol` is computed before the draws, and both draws are
+	//      inclusive on **both** bounds (`RandomInt`), so the label never sits on row 0 or column 0.
+	const FString& Label = Definition.ScreenSaver;
+	const int32 MaxColumn = FMath::Max(0, Screen.Columns() - Label.Len());
+	const int32 Row = Rng.RandRange(1, Screen.Rows() - 1);
+	const int32 Column = Rng.RandRange(1, MaxColumn);
+
+	// 6. type-1 cursor, **column first**, margin-relative — and the margin is 0 here, so absolute.
+	ScreenSetCursor(Column, Row);
+	// 7. `RandomInt(0, 1)`: 0 -> style 5 (`FUN_10218ca0`, the default), 1 -> style 6
+	//    (`FUN_10218b90`, the alternate block).
+	if (Rng.RandRange(0, 1) != 0)
+	{
+		ScreenStyleAlternate();
+	}
+	else
+	{
+		ScreenStyleDefault();
+	}
+	// 8. the type-2 print takes the label as the **format string** (`FUN_10217ac0` runs it through
+	//    `Q_vsnprintf`), so an authored `%` in a `screen saver` line is interpreted, not printed.
+	ScreenPrint(ElysiumTerminalFormat(Label));
+	// 9. style 5 again, so whatever draws next starts from the default.
+	ScreenStyleDefault();
+	++ViewRevision;
+	// 10. `m_flNextThink = m_flSS_Delay + curtime`, with `ss_delay` already floored at Activate.
+	ArmScreenSaver(ScreenSaverDelay);
 }
 
 // --- the router ---

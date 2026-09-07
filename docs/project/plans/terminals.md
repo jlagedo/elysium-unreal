@@ -15,7 +15,9 @@ the `FElysiumMapSlice` fixture that proves the `tuthack` transaction on the real
 rows, and (slice B) the `0.7` screen cone off the baked `screen`/`screen_axis` sockets, the
 immobilize, the far-arm hull-sweep pin and near-arm view snap, the named `Hacking` shot pushed on
 entry and dropped on every exit, and the terminal gym host with its three `Elysium.Content.
-TerminalGym*`/`TerminalAttachments` tests (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
+TerminalGym*`/`TerminalAttachments` tests, and (slice C) the screensaver think on the authority's
+think clock, the idle terminal views, and the world-lifetime projection owned by the presentation
+subsystem (`UElysiumTerminalProjection`, registered with the use anchor) (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
 `Elysium.Substrate.TerminalScreenBuffer`). Nothing below the entity is faithful yet: the body,
 the cone, the camera, the projection and the keyboard are the slices below. The 2026-09-06
 exploration (audit, content facts, projection research, the slice-A decompiles and the B/C design
@@ -71,19 +73,6 @@ under menus, `help`/`quit` under commands, prompt on row 22, bare input row 23) 
 prompt reproduces `04-password-failed.png` including the truncation; the HUD hint value is 3 on
 every password-prompt render and cleared on the next accepted line.
 
-**Slice C — world-lifetime projection and the screensaver.** Move `FWidgetRenderer`, the
-1024×768 render target and the material instance out of `UElysiumTerminalScreen` into a
-per-terminal projection owned by `UElysiumPresentationSubsystem`, created when the prop body is
-registered, re-applied after a model rebuild, destroyed with the body. The entity gains the
-screensaver think: first tick `RandomFloat(0,1)` after spawn, `ss_start` after exit, `ss_delay`
-(floored at 2.0) thereafter; each tick clears, picks row `[1, rows-1]`, column
-`[1, max(0, columns-len)]`, one of two styles, prints the `screen saver` label, resets the style;
-entry cancels it. The world publishes idle views for every live terminal with a body; the
-presentation redraws a projection only when its revision changes and the body rendered recently.
-*Acceptance:* screensaver schedule and bounds tests; a projection exists before the first session,
-survives it and keeps redrawing after `quit`; the widget tree of the session screen holds no
-render-target ownership.
-
 **Slice D — the modern terminal render.** `M_ElysiumTerminalScreen` in `Content/ElysiumAuthored/`
 (unlit, emissive from one texture parameter, scalar strength, faint scanlines, vignette, slight
 curvature in UV space, `FlipU`/`FlipV`/`Rotate90`, a calibration-pattern debug draw) replacing the
@@ -135,6 +124,7 @@ lands, slices B–H are accepted on the terminal gym through a native automation
 the gym world, drives the same steps through the command bus and the intents, asserts authority
 state and reads the projection's render target back for the layout checks; the beat script
 replaces that driver when 11.10 lands, with the same assertions. The terminal gym builds on the
-movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0, A and B have
-landed (2026-09-07); C next; D and E depend on C; F, G on A; H last. Every acceptance is
+movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0, A, B and C have
+landed (2026-09-07); E next (it must compose the local draft onto the glass, which retail's
+client does in its own cell buffer, TERM13); then D, F, G, H. Every acceptance is
 headless (the map slice) or on the terminal gym; nothing in this plan is accepted on a live map.

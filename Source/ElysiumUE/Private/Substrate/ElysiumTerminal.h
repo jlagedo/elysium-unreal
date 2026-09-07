@@ -238,6 +238,10 @@ public:
 	bool Submit(uint32 ExpectedSerial, const FString& Command);
 	bool BeginHack(uint32 ExpectedSerial);
 	void BuildView(FElysiumTerminalView& Out) const;
+	// The same projection with no session bound: owner, serial 0, the grid and the revision. This is
+	// what the world publishes for a terminal nobody is using, so the screensaver the authority is
+	// drawing reaches the glass without anyone standing at it.
+	void BuildIdleView(FElysiumTerminalView& Out) const;
 	EElysiumTerminalInputMode InputMode() const;
 
 	// Re-read `screen` / `screen_axis` off the standing body. Called from `Spawn`, and again from
@@ -279,6 +283,8 @@ protected:
 	virtual bool BeginContentHack() { return false; }
 	virtual void BuildContentView(FElysiumTerminalView& Out) const {}
 	virtual EElysiumTerminalInputMode ContentInputMode() const;
+	// The shared body of `BuildView` / `BuildIdleView`; `Serial` is the only difference.
+	void FillView(FElysiumTerminalView& Out, uint32 Serial) const;
 
 	UPrimitiveComponent* WorldBody = nullptr;
 	FString VisualStem;
@@ -297,6 +303,12 @@ public:
 	float ScreenSaverDelay = 1.5f;
 	float ScreenSaverStart = 5.0f;
 
+	// `_DAT_10449400`, a double `2.0` written back as the float `2.0f` (`0x40000000`). Activate is the
+	// only place it is applied, and only AFTER the first tick has already been scheduled; neither the
+	// exit re-arm nor `ss_start` is ever floored (correction C15, `docs/vtmb/computer-terminals.md`
+	// §13).
+	static constexpr float ScreenSaverDelayFloor = 2.0f;
+
 	FElysiumTerminalDefinition Definition;
 	TArray<uint8> DirectoryUnlocked;
 	TArray<int32> DirectoryAttempts;
@@ -311,6 +323,18 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 	virtual void Think() override;
+	// `CPropHacking::vfunc113` `0x1021a270`: the idle logon box on the glass, the FIRST screensaver
+	// tick at `RandomFloat(0,1) + curtime`, and only then the `ss_delay` floor.
+	virtual void Activate() override;
+
+	// `CPropHackingSS_Think` `0x1021a740`. Carries no in-use guard of its own — retail's entry
+	// cancels the think outright and that is the whole of the protection (correction C16).
+	void ScreenSaverThink();
+	// `ThinkSet(CPropHackingSS_Think, 0, NULL)` + `m_flNextThink = Delay + curtime`. The one place a
+	// screensaver schedule is written, so the three retail moments differ only in their argument.
+	void ArmScreenSaver(float DelaySeconds);
+	// Entry's `ThinkSet(NULL)` (`0x1021a5d6`).
+	void CancelScreenSaver() { NextThink = ELYSIUM_NEVER_THINK; }
 
 	// Also used by the content-independent tests. Replaces the parsed immutable definition and
 	// re-sizes only its derived persistent arrays.

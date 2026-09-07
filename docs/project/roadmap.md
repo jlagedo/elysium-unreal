@@ -587,9 +587,9 @@ subtitled lines, live faces — and hands the player to the tutorial, unassisted
   the retail cell screen buffer with every draw body, the router by mode, the `Hacking_Strings`
   copy, the hint and cue sites, `hackcmd` and the `tuthack` transaction proven on the real
   `sp_tutorial_1` map slice, the `0.7` cone, immobilize and pin, the retail `Hacking` shot and
-  the terminal-gym host landed (2026-09-07); open: a world-lifetime projection with the
-  screensaver, the modern cell painter, the keyboard screen, the cues, email, and the gym beat
-  script. Gamepad is out of scope by owner call.
+  the terminal-gym host, the screensaver think and the world-lifetime projection landed
+  (2026-09-07); open: the keyboard screen, the modern cell painter, the cue tests, email, and
+  the gym beat script. Gamepad is out of scope by owner call.
 - [~] **[13.5 Combat AI](plans/gameplay.md)** — bus, senses, conditions, the enemy transaction,
   the schedule families and `aiscripted_schedule` landed headless; the played beats and the flinch
   action family open. The footstep hearing producer is AUD2's.

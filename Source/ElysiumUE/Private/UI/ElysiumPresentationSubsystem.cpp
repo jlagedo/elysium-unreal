@@ -13,8 +13,10 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumSignData.h"
 #include "UI/ElysiumDialogueWidget.h"
+#include "UI/ElysiumTerminalProjection.h"
 #include "UI/ElysiumUISubsystem.h"
 
+#include "Components/PrimitiveComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/Level.h"
@@ -143,6 +145,9 @@ void UElysiumPresentationSubsystem::Deinitialize()
 	// The pointer fields die with the map epoch; nothing may read them after this.
 	ViewState = FElysiumViewState();
 	PendingNotifications.Reset();
+	// Each projection holds a render target and a material instance installed on a body that is
+	// going away with this world.
+	ReleaseAllTerminalProjections();
 
 	Super::Deinitialize();
 }
@@ -286,11 +291,101 @@ bool UElysiumPresentationSubsystem::SubmitTerminalCommand(
 	return World && World->SubmitTerminalCommand(Owner, SessionSerial, Command);
 }
 
-UPrimitiveComponent* UElysiumPresentationSubsystem::ResolveTerminalDisplayTarget(
+void UElysiumPresentationSubsystem::RegisterTerminalProjection(
+	const FElysiumEntityHandle& Owner, UPrimitiveComponent* Body)
+{
+	if (!Owner.IsSet() || !Body)
+	{
+		return;
+	}
+	UElysiumTerminalProjection* Projection = FindTerminalProjection(Owner);
+	const bool bFresh = Projection == nullptr;
+	if (bFresh)
+	{
+		Projection = NewObject<UElysiumTerminalProjection>(this);
+		Projection->Owner = Owner;
+		TerminalProjections.Add(Projection);
+	}
+	// Idempotent: `Bind` answers true immediately when the same component is already bound, and
+	// rebinds when a model rebuild handed the terminal a different body.
+	if (!Projection->Bind(Body) && bFresh)
+	{
+		// A body with no authored `screen` slot is not a terminal surface. Keeping an unbound
+		// projection would make `FindTerminalProjection` lie about what is on the monitor.
+		TerminalProjections.Remove(Projection);
+	}
+}
+
+void UElysiumPresentationSubsystem::ReleaseTerminalProjection(const FElysiumEntityHandle& Owner)
+{
+	for (int32 Index = TerminalProjections.Num() - 1; Index >= 0; --Index)
+	{
+		UElysiumTerminalProjection* Projection = TerminalProjections[Index];
+		if (!Projection || Projection->Owner == Owner)
+		{
+			if (Projection)
+			{
+				Projection->Release();
+			}
+			TerminalProjections.RemoveAt(Index);
+		}
+	}
+}
+
+void UElysiumPresentationSubsystem::ReleaseAllTerminalProjections()
+{
+	for (UElysiumTerminalProjection* Projection : TerminalProjections)
+	{
+		if (Projection)
+		{
+			Projection->Release();
+		}
+	}
+	TerminalProjections.Reset();
+}
+
+UElysiumTerminalProjection* UElysiumPresentationSubsystem::FindTerminalProjection(
 	const FElysiumEntityHandle& Owner) const
 {
-	const AElysiumMapActor* Map = ResolveMapActor();
-	return Map ? Map->FindUseVisual(Owner) : nullptr;
+	for (UElysiumTerminalProjection* Projection : TerminalProjections)
+	{
+		if (Projection && Projection->Owner == Owner)
+		{
+			return Projection;
+		}
+	}
+	return nullptr;
+}
+
+void UElysiumPresentationSubsystem::RedrawTerminalProjections(const FElysiumViewState& State)
+{
+	auto Consider = [this](const FElysiumTerminalView& View)
+	{
+		UElysiumTerminalProjection* Projection = FindTerminalProjection(View.Owner);
+		if (!Projection || !Projection->NeedsRedraw(View))
+		{
+			return;
+		}
+		// The residency gate. A monitor in another room, behind the player or culled has nothing to
+		// show, and rasterizing a 1024x768 Slate surface per idle terminal per frame would be the
+		// whole cost of the feature. The revision it did not draw is still pending, so the frame it
+		// comes back on screen is the frame it catches up.
+		const UPrimitiveComponent* Body = Projection->BoundBody();
+		if (!Body || !Body->WasRecentlyRendered())
+		{
+			return;
+		}
+		Projection->Draw(View);
+	};
+	// The held session first: it is the one a player is reading.
+	if (State.Terminal.IsOpen())
+	{
+		Consider(State.Terminal);
+	}
+	for (const FElysiumTerminalView& Idle : State.IdleTerminals)
+	{
+		Consider(Idle);
+	}
 }
 
 bool UElysiumPresentationSubsystem::DismissSign()
@@ -433,6 +528,9 @@ void UElysiumPresentationSubsystem::Publish()
 
 		World->BuildLootView(Next.Loot);
 		World->BuildTerminalView(Next.Terminal);
+		// Every other terminal with a body, so the world's monitors are drawn whether or not anyone
+		// is standing at one.
+		World->BuildIdleTerminalViews(Next.IdleTerminals);
 
 		const FElysiumPlayer* PlayerEnt = World->FindPlayer();
 		if (PlayerEnt)
@@ -600,6 +698,10 @@ void UElysiumPresentationSubsystem::Publish()
 	}
 
 	ViewState = MoveTemp(Next);
+
+	// The glass, before any listener reacts: a projection is world state and does not wait on a
+	// widget reconcile.
+	RedrawTerminalProjections(ViewState);
 
 	// Broadcast after the state is in place, so a listener that reads View() sees what the event is
 	// telling it about. An announcement that arrived while the surface is suppressed is dropped

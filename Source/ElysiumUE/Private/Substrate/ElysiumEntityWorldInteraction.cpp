@@ -888,6 +888,39 @@ bool FElysiumEntityWorld::BuildTerminalView(FElysiumTerminalView& Out) const
 	return Out.IsOpen();
 }
 
+void FElysiumEntityWorld::BuildIdleTerminalViews(TArray<FElysiumTerminalView>& Out) const
+{
+	Out.Reset();
+	IElysiumEmbodiment* Bodily = Embodiment();
+	if (!Bodily)
+	{
+		return;   // a headless world projects nothing; there is no glass to write to
+	}
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityList)
+	{
+		FElysiumEntity* Entity = EntPtr.Get();
+		if (!Entity || Entity->IsDead() || Entity->IsInert())
+		{
+			continue;
+		}
+		const FElysiumTerminal* Terminal = Entity->AsTerminal();
+		if (!Terminal || Terminal->CurrentUser.IsSet())
+		{
+			continue;   // a held terminal is published as the session view, not twice
+		}
+		// "With a body" is asked of the embodiment rather than of the entity: the body that carries
+		// the `screen` material slot is the one registered as this owner's use anchor, which is the
+		// same component the projection binds — and it is the only one that exists in a world where
+		// the placed-model catalogue never ran (the terminal gym).
+		FBox Unused(ForceInit);
+		if (!Bodily->GetUseBodyWorldBounds(Terminal->Handle, Unused))
+		{
+			continue;
+		}
+		Terminal->BuildIdleView(Out.AddDefaulted_GetRef());
+	}
+}
+
 bool FElysiumEntityWorld::SubmitTerminalCommand(const FElysiumEntityHandle& OwnerHandle,
 	uint32 SessionSerial, const FString& Command)
 {

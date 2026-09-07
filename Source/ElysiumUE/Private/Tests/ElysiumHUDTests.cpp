@@ -1171,18 +1171,17 @@ bool FElysiumTerminalScreenTest::RunTest(const FString&)
 		});
 
 	const TSharedRef<SWidget> Slate = Screen->TakeWidget();
-	TestFalse(TEXT("the input shell does not claim a physical projection"),
-		Screen->HasProjection());
+	// Slice C: the input shell owns no engine presentation resources at all. The render target, the
+	// material instance and the widget renderer are `UElysiumTerminalProjection`'s, and they live
+	// with the monitor's body rather than with this session-scoped widget.
+	TestNull(TEXT("the input shell declares no render target"),
+		Screen->GetClass()->FindPropertyByName(FName(TEXT("RenderTarget"))));
+	TestNull(TEXT("nor a projection material"),
+		Screen->GetClass()->FindPropertyByName(FName(TEXT("ProjectionMaterial"))));
 	TestEqual(TEXT("the terminal owns one real editable command line"),
 		CountSlateWidgetsOfType(Slate, FName(TEXT("SEditableText"))), 1);
 	TestEqual(TEXT("no terminal copy is painted into viewport Slate"),
 		CountSlateWidgetsOfType(Slate, FName(TEXT("STextBlock"))), 0);
-	TestEqual(TEXT("the exact authored screen slot resolves"),
-		UElysiumTerminalScreen::FindScreenMaterialSlot(
-			{ FName(TEXT("body")), FName(TEXT("screen")), FName(TEXT("keys")) }), 1);
-	TestEqual(TEXT("a similar screensaver slot is not accepted"),
-		UElysiumTerminalScreen::FindScreenMaterialSlot(
-			{ FName(TEXT("body")), FName(TEXT("screensaver")) }), INDEX_NONE);
 	TestNotNull(TEXT("the authoritative directory is also a semantic action"),
 		Screen->FindAction(TEXT("dir:0")));
 	TestNotNull(TEXT("quit is a semantic action"), Screen->FindAction(TEXT("quit")));

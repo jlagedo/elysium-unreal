@@ -20,7 +20,7 @@
 
 namespace ElysiumTerminalPinTests
 {
-static constexpr EAutomationTestFlags GFlags =
+static constexpr EAutomationTestFlags GPinFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 // The synthetic screen the cone cases measure: glass at the origin, forward along -X.
@@ -74,7 +74,7 @@ static FElysiumEntityDefs OneTerminal()
 using namespace ElysiumTerminalPinTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalConeTest,
-	"Elysium.Substrate.TerminalCone", GFlags)
+	"Elysium.Substrate.TerminalCone", GPinFlags)
 bool FElysiumTerminalConeTest::RunTest(const FString&)
 {
 	// --- the pure predicate (`FUN_10218710` + `FUN_101d1120`) -------------------------------
@@ -185,7 +185,7 @@ bool FElysiumTerminalConeTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalPinTest,
-	"Elysium.Substrate.TerminalPin", GFlags)
+	"Elysium.Substrate.TerminalPin", GPinFlags)
 bool FElysiumTerminalPinTest::RunTest(const FString&)
 {
 	// Every exit reason converges on the one release body, so the camera pop and the mobilize are
