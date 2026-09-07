@@ -377,6 +377,10 @@ only its presentation modernizes — legible type, reflowing line lists, subtitl
 that is not bound to 640×480. Chargen, combat, and the full RPG sheet come after the tutorial
 plays end-to-end.
 
+**[corrected 2026-09-06]** The "no parser exists anywhere yet" sentence above is stale: the
+`.dlg` parser now exists at `Source/ElysiumUE/Public/ElysiumDlg.h`; see roadmap 9.1 and
+`docs/project/plans/dialogue.md`.
+
 ---
 
 ## The ownership register — what Unreal owns, what this repo reproduces

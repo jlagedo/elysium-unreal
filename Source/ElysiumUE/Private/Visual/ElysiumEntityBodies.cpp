@@ -1657,10 +1657,11 @@ bool UElysiumEntityBodies::DescribeEyes(const USkeletalMeshComponent* Comp,
 	return EyePass.DescribeEyes(Comp, Out);
 }
 
-void UElysiumEntityBodies::TickEyes(float DeltaSeconds)
+void UElysiumEntityBodies::TickEyes(const FElysiumEyeFrame& Frame)
 {
 	// `this` is the pass's world/camera context: it is not a UObject, so the component lends it one.
-	EyePass.TickEyes(this, DeltaSeconds);
+	// The clock and the player's position it cannot reach at all, so the caller supplies them.
+	EyePass.TickEyes(this, Frame);
 }
 
 USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& ModelName, const FVector& Location,

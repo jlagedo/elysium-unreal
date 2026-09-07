@@ -1,10 +1,14 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumRulebookSubsystem.h"
+#include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumWieldRules.h"
 
 namespace
 {
@@ -424,4 +428,160 @@ bool FElysiumInventory::TransferSlot(FElysiumCombatCharacter& From, FElysiumComb
 	if (OutClassname) { *OutClassname = Classname; }
 	if (OutQuantity) { *OutQuantity = TransferQuantity; }
 	return true;
+}
+
+
+// --- The wield rule -----------------------------------------------------------------------------
+//
+// `CBaseCombatCharacter::Inventory_Can_Wield` (0x10335a70) and the sweep that enforces it,
+// `Inventory_Wield_Update` (0x10335b80). The recovery is `docs/vtmb/wielded_weapons.md`
+// § "Who may wield what: ExcludedEquipTables and equip_mask".
+//
+// What is deliberately NOT gated, because retail does not gate it: `Weapon_Equip` (0x1032d380, the
+// spawn equip), `Weapon_Switch` (0x1032dde0) and `GetBestMeleeWeapon` (0x10336f20). An NPC is
+// spawn-equipped with a weapon it may not wield, and it is the wield update that takes it away
+// again — not the grant.
+
+namespace
+{
+	// The `ExcludedEquipTables` rows in force for this character, or null.
+	//
+	// The subsystem always wins and the bound table is the headless fallback — the same shape
+	// `FElysiumCombatCharacter::SheetRules` uses, for the same reason: a Substrate-tier world has no
+	// GameInstance and therefore no rulebook at all.
+	const FElysiumExcludedEquipTable* WieldRulesFor(const FElysiumCombatCharacter& Char)
+	{
+		UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
+		if (UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr)
+		{
+			return &Rules->ExcludedEquip();
+		}
+		return ElysiumSheetRules::BoundTables().ExcludedEquip;
+	}
+
+	// `CBaseCombatWeapon::CanDeploy` (0x10253a70 / 0x10253ab0) — a weapon may be drawn when it has
+	// ammunition or needs none. A record with no `Magazine` block needs none, which is every melee
+	// weapon and the fists.
+	bool CanDeploy(const FElysiumCombatCharacter& Char, const FElysiumItem& Item)
+	{
+		const FElysiumItemDef* Record = Item.Data();
+		if (Record == nullptr || Record->AmmoType.IsEmpty())
+		{
+			return true;
+		}
+		return Item.MagazineCount > 0 || Char.Inventory.Reserve(Record->AmmoType) > 0;
+	}
+}
+
+bool FElysiumInventory::CanWield(const FElysiumCombatCharacter& Char, const FElysiumItem& Item) const
+{
+	const FElysiumItemDef* Record = Item.Data();
+	// A carried item the catalogue has no row for authors no `equip_mask`, which is mask 0 — the
+	// same answer an absent key gives, and no arm of the rule refuses it.
+	const uint32 Mask = Record ? Record->EquipMask : 0;
+
+	const FElysiumExcludedEquipTable* Table = WieldRulesFor(Char);
+	if (Table == nullptr)
+	{
+		// No rules in reach. Only the row-independent arm can still speak, and it is the one that
+		// matters: `never` refuses everything, everywhere.
+		return (Mask & (uint32)ElysiumEquipFlags::Never) == 0;
+	}
+	// Slot 31 is read CURRENT, not base: the Protean groups
+	// (`Discipline (Protean-Feral_Claws)`) write the `Clawed_Form` row onto it as a
+	// `"Value Clawed_Form"` trait effect, and a base read would never see the form the character is
+	// actually in.
+	const int32 Row = Char.Sheet.GetCurrent(EElysiumTraitContainer::Attributes,
+		ElysiumSlot::ExcludedEquipment);
+	return Table->CanWield(Row, Mask);
+}
+
+FElysiumItem* FElysiumInventory::NextBestWeapon(const FElysiumCombatCharacter& Char,
+	const FElysiumItem* Exclude) const
+{
+	FElysiumItem* Best = nullptr;
+	int32 BestWeight = TNumericLimits<int32>::Lowest();
+	for (const FElysiumEntityHandle& Handle : Slots)
+	{
+		FElysiumItem* Item = ResolveItem(Char, Handle);
+		if (Item == nullptr || Item == Exclude)
+		{
+			continue;
+		}
+		const FElysiumItemDef* Record = Item->Data();
+		if (Record == nullptr || !Record->IsControllableWeapon())
+		{
+			continue;
+		}
+		if (!CanDeploy(Char, *Item) || !CanWield(Char, *Item))
+		{
+			continue;
+		}
+		// The authored `weight` (accessor 0x10251ef0) is the whole ordering; ties keep the first
+		// carried, which is inventory-position order and so is the compact list's own walk.
+		if (Record->Weight > BestWeight)
+		{
+			BestWeight = Record->Weight;
+			Best = Item;
+		}
+	}
+	return Best;
+}
+
+void FElysiumInventory::Holster(FElysiumCombatCharacter& Char)
+{
+	FElysiumItem* Current = Active(Char);
+	if (Current == nullptr)
+	{
+		ActiveWeapon = FElysiumEntityHandle::Invalid();
+		return;
+	}
+	Current->OnHolstered(Char);
+	ActiveWeapon = FElysiumEntityHandle::Invalid();
+	// `PreviousWeapon` is untouched: `Weapon_Switch(NULL)` puts the weapon away, it does not forget
+	// what was held.
+	Char.PublishEquippedCameraClass();
+}
+
+void FElysiumInventory::WieldUpdate(FElysiumCombatCharacter& Char)
+{
+	FElysiumItem* Current = Active(Char);
+	if (Current != nullptr && CanWield(Char, *Current))
+	{
+		return;   // what is held is still legal; retail's early-out
+	}
+
+	// Arm 1 — `m_hLastWeapon`, if it is still carried and passes the rule.
+	FElysiumItem* Last = ResolveItem(Char, PreviousWeapon);
+	if (Last != nullptr && Last != Current && Last->IsOwned() && Last->Owner == Char.Handle
+		&& CanWield(Char, *Last))
+	{
+		SetActiveWeapon(Char, *Last);
+		return;
+	}
+
+	// `Weapon_Switch(NULL)` — the illegal weapon goes away BEFORE a replacement is looked for, so a
+	// character that finds none ends up holding nothing rather than holding what it may not wield.
+	if (Current != nullptr)
+	{
+		Holster(Char);
+	}
+
+	// Arm 2 — the gamerules picker.
+	if (FElysiumItem* Next = NextBestWeapon(Char, Current))
+	{
+		SetActiveWeapon(Char, *Next);
+		return;
+	}
+
+	// Arm 3 — the carried `item_w_unarmed`. It is named as a CLASSNAME by retail, and it is not the
+	// fists record: `item_w_unarmed` is `item_type hidden` and authors no `Activation` block, which
+	// is what makes it the "holding nothing" answer rather than a weapon.
+	if (FElysiumItem* Unarmed = FindOrdinary(Char, TEXT("item_w_unarmed")))
+	{
+		if (Unarmed != Current && CanWield(Char, *Unarmed))
+		{
+			SetActiveWeapon(Char, *Unarmed);
+		}
+	}
 }

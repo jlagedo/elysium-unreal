@@ -125,7 +125,12 @@ Rollout is per slice, tracked in `docs/project/seam_migration.md`:
 | Seam | Capsule |
 |---|---|
 | `vtmb:vdata:` | required, schema 1.1.0 |
+| `vtmb:dialogue:`, `vtmb:scene:`, `vtmb:sound:` | required, schema 1.1.0 (2026-09-06, the dialogue corpus slice) |
 | every other kind | adopts when its slice migrates; until then it publishes no `capsule` key |
+
+A sound unit's BIN chunk holds its decoded payload *and* its capsules; the payload keeps
+`bufferView` 0 and the capsules are appended after it, which is what `encapsulate`'s `binary` and
+`buffer_views` arguments are for. Adopting the capsule renumbers nothing a seam already emitted.
 
 ## Container
 

@@ -403,24 +403,49 @@ public:
 	FElysiumDlgConversation* GetOpenDialog() const;
 	// The NPC the open conversation belongs to (Invalid when none is open).
 	FElysiumEntityHandle GetOpenDialogOwner() const;
+	// A monotonic id for the OPEN session, bumped on every `OpenDialog` and 0 when none is open.
+	// Two conversations with the same owner, the same line and the same band are still two
+	// sessions; presentation compares this before it acts on anything it captured earlier, and
+	// `OpenDialog` itself uses it to notice that the opening line's col-4 replaced the session
+	// under it. Never reused within a run.
+	uint32 GetOpenDialogSerial() const;
 	// True while the open line's authored VCD owns this speaker's body through a live clip event.
 	bool HasActiveDialogueBodyClip(const FElysiumEntityHandle& Speaker) const;
 	// Player picked the Nth visible PC choice: advance the branch machine; end the session (firing the
 	// owner's OnDialogEnd) if the pick closed it. No-op when no conversation is open.
-	void PlayerDialogChoose(int32 VisibleIndex);
+	//
+	// `ExpectedLineId` is the `.dlg` line id presentation drew at that index
+	// (`FElysiumDlgConversation::VisibleChoiceLineId`). When it is set and the row at
+	// `VisibleIndex` is a different line, the pick is REFUSED with nothing changed: the band moved
+	// between the frame the player read and the frame the click arrived (a voice-completion flush
+	// or an NPC col-5 can re-enter the turn), and picking by position would run a sentence the
+	// player never chose. `INDEX_NONE` (the console path) skips the check.
+	void PlayerDialogChoose(int32 VisibleIndex, int32 ExpectedLineId = INDEX_NONE);
 	// Player advanced past a terminal NPC line. Also resolves a pending automatic row only when its
 	// voice could not be started and presentation exposed the explicit Continue fallback.
 	void PlayerDialogAdvance();
 	// True only for that automatic-transition failure fallback; normal Auto-Link/Auto-End turns do
 	// not accept input and advance from the current voice handle's completion.
 	bool CanPlayerAdvanceAutomatic() const;
+	// M-SKIP — the hurry verb (retail pick `-2`). Ends the current line's voice and lipsync and
+	// flushes the NPC's parked col-5 exactly as `NPCNotifyDoneTalking` would; the response band is
+	// left untouched. No-op when nothing is speaking.
+	void PlayerDialogSkip();
+	// Whether the open turn's voice is still playing — the skip hint's condition and the UI's
+	// `bNpcSpeaking`.
+	bool IsDialogueNpcSpeaking() const;
+	// Whether the skip verb would do anything right now (M-SKIP).
+	bool CanPlayerSkipDialogue() const { return IsDialogueNpcSpeaking(); }
 	// Force-close the open conversation. bSilent suppresses OnDialogEnd (a Kill/teardown must not
 	// resurrect the beat machine); a normal close fires it.
 	void CloseDialog(bool bSilent = false);
 	// Re-resolve the selected source/profile anchors against settled body positions and update the
 	// same scoped request. No candidate search occurs here; selection changes only at line boundaries.
 	void RefreshDialogueCamera();
-	bool GetDialogueCameraGaze(FVector& OutPoint) const;
+	// The `DialogPOV` gaze redirect's lens, and where it is. `None` leaves `OutPoint` untouched;
+	// `PlayerView` answers with the player entity's eye point, which an embodiment that can read the
+	// real camera component should prefer its own value over. See `EElysiumDialogueGazeLens`.
+	EElysiumDialogueGazeLens GetDialogueCameraGaze(FVector& OutPoint) const;
 	bool DialogueCameraHidesHud() const;
 	void GetDialogueDebugState(TArray<TPair<FString, FString>>& Out) const;
 	FString ScriptedSessionSaveBlockReason() const;
@@ -865,11 +890,20 @@ private:
 	// Open-dialogue state (one at a time). The conversation owns the branch cursor; the world
 	// tracks which NPC it belongs to so ending it can fire that NPC's OnDialogEnd.
 	TUniquePtr<FElysiumDialogueSession> DialogueSession;  // incomplete here; freed in the .cpp
+	// The counter behind GetOpenDialogSerial(). Session state, never saved: a conversation cannot
+	// survive a save (M-SAVE), so nothing outside this run may hold a serial.
+	uint32 NextDialogSerial = 0;
 	// End the open session: clear the slot and (unless bSilent) enqueue the owner's EndDialog input so
 	// OnDialogEnd fires through the real chokepoint (the same seam the runner reuses).
 	void EndDialogSession(bool bSilent);
 	void BeginDialogueTurn();
 	void UpdateDialogueAutomatic();
+	// The voice-completion boundary for EVERY turn, not just an automatic one: once this line's
+	// voice stops playing, the col-5 `process_npc_line` parked runs. Idempotent — the parked action
+	// is its own once-only latch.
+	void FlushDialogueVoiceCompletion();
+	// Cut the current turn's voice and lipsync (M-SKIP and the M-REVEAL pick-during-voice path).
+	void StopDialogueVoice();
 	void SelectDialogueCamera(bool bLineBoundary);
 	void UpdateSelectedDialogueCamera();
 
@@ -889,7 +923,7 @@ private:
 
 	// Join the turn's `.lip` to the speaker's phoneme table and start its clock. Replaces whatever
 	// the previous turn left.
-	void BeginDialogueLipsync(const FString& DlgSourcePath, int32 LineId);
+	void BeginDialogueLipsync(const FString& DlgSourcePath, int32 LineId, TCHAR TakeLetter);
 	// Compose and push this frame's phoneme pose onto the speaking NPC.
 	void RefreshDialogueLipsync(double Now);
 

@@ -11,12 +11,15 @@
 
 #include "Camera/PlayerCameraManager.h"
 #include "CollisionQueryParams.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "UnrealClient.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCamera, Log, All);
 
@@ -187,31 +190,22 @@ void UElysiumCameraComponent::SolveShot(float Dt)
 		bShotSeeded = false;
 	}
 
-	FVector TargetPos = Top->Origin;
-	FRotator TargetRot = Top->bUseLookAt
-		? (Top->LookAt - TargetPos).Rotation()
-		: Top->Rotation;
-	TargetRot.Roll = Top->Roll;
-
 	// A shot arriving is a *blend*, not a chase: the weight ramp is what carries the view from the
-	// player's camera to the shot, so the shot itself starts where it was authored. `MoveSpeed` and
-	// `MaxTurnRate` are the file's own limits on the shot **tracking** a moving target afterwards,
-	// which is what the shipped how-to says they are for.
+	// player's camera to the shot, so the shot itself starts where it was authored (retail's own
+	// shot-start arm for a shot that carries a `Start` anchor, `FUN_10002210`). `MoveSpeed`,
+	// `MoveAccel`, `MaxTurnRate`, `TurnAccel` and the two tolerances are the file's limits on the
+	// shot **tracking** a moving subject afterwards, and the tracker is the one place they are read.
 	if (!bShotSeeded)
 	{
-		ShotPosition = TargetPos;
-		ShotRotation = TargetRot;
+		ShotTracker.Start(*Top);
 		bShotSeeded = true;
 	}
 	else
 	{
-		ShotPosition = Top->MoveSpeed > 0.0f
-			? FMath::VInterpConstantTo(ShotPosition, TargetPos, Dt, Top->MoveSpeed)
-			: TargetPos;
-		ShotRotation.Pitch = ElysiumCam::ApproachAngle(ShotRotation.Pitch, TargetRot.Pitch, Top->MaxTurnRate.X, Dt);
-		ShotRotation.Yaw   = ElysiumCam::ApproachAngle(ShotRotation.Yaw,   TargetRot.Yaw,   Top->MaxTurnRate.Y, Dt);
-		ShotRotation.Roll  = ElysiumCam::ApproachAngle(ShotRotation.Roll,  TargetRot.Roll,  Top->MaxTurnRate.Z, Dt);
+		ShotTracker.Advance(*Top, Dt);
 	}
+	ShotPosition = ShotTracker.Location;
+	ShotRotation = ShotTracker.Rotation;
 }
 
 FElysiumShotPresentation UElysiumCameraComponent::ShotPresentation() const
@@ -254,6 +248,19 @@ void UElysiumCameraComponent::ApplyToView(FMinimalViewInfo& View) const
 
 void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 {
+	// **The lens is `default_fov`, not Unreal's component default.** Retail registers `default_fov`
+	// at 75 and it is a 4:3-referenced horizontal angle under Source's Hor+ rule, so the window's own
+	// aspect widens it — ~91.3 degrees at 16:9 (`docs/vtmb/source_movement.md` -> "View / camera",
+	// `vfov = 2*atan(tan(hfov/2)/(4/3))`). Nothing set this before, which left the player view on
+	// `UCameraComponent`'s 90 with the engine's horizontal-held constraint: a fixed horizontal angle
+	// that CROPS vertically as the window widens, the opposite of Hor+.
+	//
+	// One rule for both channels: the scripted shot's own `FieldOfView` goes through the same
+	// `WidenSourceFov` in `ApplyScriptedShotToView`, so the shot's weight lerps two angles that are
+	// in the same space rather than a Source angle against an engine constant.
+	View.FOV = ElysiumCam::WidenSourceFov(Cvars.DefaultFov,
+		ElysiumCameraView::RenderAspectRatio(View.AspectRatio));
+
 	// The strafe bank goes on FIRST, so the third-person blend below lerps it away along with
 	// everything else. VtMB's own gate is binary — it adds a literal 0.0 in third person — but the
 	// mode here is a weight rather than a flag, so the bank is scaled by the first-person share.
@@ -312,6 +319,19 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 	}
 }
 
+float ElysiumCameraView::RenderAspectRatio(float Fallback)
+{
+	if (GEngine && GEngine->GameViewport && GEngine->GameViewport->Viewport)
+	{
+		const FIntPoint Size = GEngine->GameViewport->Viewport->GetSizeXY();
+		if (Size.X > 0 && Size.Y > 0)
+		{
+			return static_cast<float>(Size.X) / static_cast<float>(Size.Y);
+		}
+	}
+	return Fallback;
+}
+
 void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) const
 {
 	const FElysiumScriptedShotView Shot = ScriptedShotView();
@@ -329,9 +349,13 @@ void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) co
 	{
 		// The scripted camera is applied on top: origin, look-at, roll and FOV all lerp by its own
 		// timed weight, which is what lets a cutscene cut on the beat it was authored for.
+		// The shot's `FieldOfView` is a **4:3-referenced** Source angle; the widening to the window's
+		// own aspect happens here, at apply time, so the parsed shot keeps the authored number.
 		float Fov = View.FOV;
 		ElysiumCam::ComposeScriptedShot(View.Location, View.Rotation, Fov,
-			Shot.Location, Shot.Rotation, Shot.FieldOfView, Shot.Weight);
+			Shot.Location, Shot.Rotation,
+			ElysiumCam::WidenSourceFov(Shot.FieldOfView,
+				ElysiumCameraView::RenderAspectRatio(View.AspectRatio)), Shot.Weight);
 		View.FOV = Fov;
 	}
 }

@@ -8,12 +8,14 @@
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Player/ElysiumCameraShots.h"
 
 #include "Camera/CameraTypes.h"
 #include "Engine/Engine.h"
 #include "Engine/LocalPlayer.h"
+#include "Misc/ScopeExit.h"
 #include "UObject/UObjectGlobals.h"
 
 static constexpr EAutomationTestFlags GElysiumDialogueCameraTestFlags =
@@ -30,6 +32,10 @@ namespace
 		int32 NextSlot = 1;
 		bool bEnabled = true;
 		bool bAcceptCandidates = true;
+		// Reject only the retail source shot, so the director walks on to the authored grammar with
+		// the same conversation's `default_camera` still standing behind it. That is the one arm the
+		// port has that retail does not, and the arm the DialogPOV carry-over is about.
+		bool bAcceptSourceShots = true;
 		TSet<int32> LiveSlots;
 		FElysiumCameraRequest LastRequest;
 		FElysiumResolvedCameraState Resolved;
@@ -69,9 +75,14 @@ namespace
 		{
 			return Handle.Epoch == 77 && LiveSlots.Contains(Handle.Slot);
 		}
-		virtual bool EvaluateDialogueCandidate(const FElysiumCameraRequest&,
+		virtual bool EvaluateDialogueCandidate(const FElysiumCameraRequest& Request,
 			FString& OutReason) const override
 		{
+			if (!bAcceptSourceShots && Request.Fallback == EElysiumCameraFallback::SourceShot)
+			{
+				OutReason = TEXT("source shot refused");
+				return false;
+			}
 			OutReason = bAcceptCandidates ? FString() : FString(TEXT("test rejection"));
 			return bAcceptCandidates;
 		}
@@ -478,6 +489,165 @@ bool FElysiumDialogueCameraGrammarTest::RunTest(const FString&)
 	return true;
 }
 
+// `DialogPOV` reaches the gaze cascade from EVERY dialogue camera path, not only from the retail
+// source shot.
+//
+// Retail has one path: `CAI_BaseNPC::MaintainAutonomousEyeDirection` (`vampire.dll` 0x1026B810)
+// asks the player's ACTIVE camera entity (`GetActiveCameraEntity` 0x1017CF90, off `player+0x19B4` /
+// `+0x1EC4`) for its current shot's flags (`FUN_1006EDB0`, shot-table stride 0x104, flags dword at
+// `+0x20`, bit 0x10; parser 0x100721E0) and, on a set bit, aims at that camera entity's own
+// position — the lens — however the shot was selected. The port has three paths, so the flag is
+// resolved once off the conversation's `default_camera` and stamped on whichever request is
+// published; with no source shot at all it defaults SET, which is the named modernization recorded
+// in `docs/architecture/camera-architecture.md` (51 of the 66 shipped shot files set it).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueCameraPovTest,
+	"Elysium.Substrate.DialogueCamera.DialogPOV", GElysiumDialogueCameraTestFlags)
+
+bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
+{
+	// One shot file's worth of text, with the flag as the only thing that varies between the two
+	// fixtures. `DialogTarget`/`Follow` is what the shipped conversation shots use, so the resolve
+	// exercises the same anchor path a real `default_camera` does.
+	auto ShotText = [](const TCHAR* Flag)
+	{
+		return FString::Printf(TEXT(R"KV(
+			CameraShotTable
+			{
+				Fixture
+				{
+					End
+					{
+						Position DialogTarget
+						AttachPos Origin
+						AttachType Follow
+						OffsetOrigin "[50, 0, 65]"
+					}
+					Target
+					{
+						Point1 { Position DialogTarget AttachPos Origin AttachType Follow }
+					}
+					CameraConstraints { FieldOfView 40 DialogPOV %s }
+				}
+			}
+		)KV"), Flag);
+	};
+
+	FElysiumCameraShotDef PovDef;
+	FElysiumCameraShotDef PlainDef;
+	if (!TestTrue(TEXT("the DialogPOV fixture shot parses"),
+			ElysiumCameraShots::ParseText(ShotText(TEXT("1")), PovDef))
+		|| !TestTrue(TEXT("the plain fixture shot parses"),
+			ElysiumCameraShots::ParseText(ShotText(TEXT("0")), PlainDef)))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the fixture's flag is the only difference"),
+		PovDef.Constraints.bDialogPOV && !PlainDef.Constraints.bDialogPOV);
+
+	// An automation run has no export mounted, so the shot table is seeded rather than loaded.
+	ElysiumCameraShots::FlushCache();
+	ElysiumCameraShots::Install(TEXT("pov-fixture"), PovDef);
+	ElysiumCameraShots::Install(TEXT("plain-fixture"), PlainDef);
+	ON_SCOPE_EXIT { ElysiumCameraShots::FlushCache(); };
+
+	FDialogueCameraRecordingService Camera;
+	FElysiumWorldServices Services;
+	Services.Camera = &Camera;
+	FElysiumEntityWorld World(nullptr, nullptr, Services);
+	World.Load(MakeDialogueWorldDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+	FElysiumEntity* Speaker = World.FindByName(TEXT("speaker"));
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("dialogue speaker"), Speaker) || !TestNotNull(TEXT("player"), Player))
+	{
+		return false;
+	}
+
+	// --- the retail path: the source shot resolved, and it sets the flag ------------------------
+	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
+		EElysiumDialogOpenerKind::Remote, 0, TEXT("pov-fixture"));
+	TestTrue(TEXT("the source shot is what the director selected"),
+		Camera.LastRequest.Fallback == EElysiumCameraFallback::SourceShot);
+	TestTrue(TEXT("the source shot's DialogPOV rides the request"), Camera.LastRequest.bDialogPOV);
+	FVector Lens = FVector::ZeroVector;
+	TestTrue(TEXT("a DialogPOV source shot redirects the gaze to the shot's own lens"),
+		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::ShotOrigin);
+	TestTrue(TEXT("...and the lens IS the camera position, not the look-at"),
+		Lens.Equals(Camera.LastRequest.Shot.Origin, 0.01f));
+	TestFalse(TEXT("the lens is not the speaker's eye"), Lens.Equals(Speaker->EyePosition(), 1.0f));
+	World.CloseDialog(/*bSilent*/ true);
+
+	// --- the authored profile, standing in for the same conversation's shot ----------------------
+	// The profile REPLACES the shot, so it has no flags of its own. The authored intent for this
+	// conversation is still the NPC's `default_camera`, so the flag carries across.
+	Camera.bAcceptSourceShots = false;
+	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
+		EElysiumDialogOpenerKind::Remote, 0, TEXT("pov-fixture"));
+	TestTrue(TEXT("refusing the source shot falls through to the authored grammar"),
+		Camera.LastRequest.Fallback == EElysiumCameraFallback::AuthoredProfile
+			&& Camera.LastRequest.bOverridePose);
+	TestTrue(TEXT("the profile carries the source shot's DialogPOV"), Camera.LastRequest.bDialogPOV);
+	Lens = FVector::ZeroVector;
+	TestTrue(TEXT("a profile shot redirects the gaze to the profile camera's lens"),
+		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::ShotOrigin);
+	TestTrue(TEXT("...and that lens is the profile's own camera origin"),
+		Lens.Equals(Camera.LastRequest.Shot.Origin, 0.01f));
+
+	// The per-frame anchor refresh rebuilds the profile request; the flag must survive it.
+	World.RefreshDialogueCamera();
+	TestTrue(TEXT("the anchor refresh does not drop the flag"), Camera.LastRequest.bDialogPOV);
+	TestTrue(TEXT("...so the redirect survives the frame after selection"),
+		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::ShotOrigin);
+	World.CloseDialog(/*bSilent*/ true);
+	Camera.bAcceptSourceShots = true;
+
+	// --- the player-view fallback ----------------------------------------------------------------
+	// No candidate survives, so the request publishes no pose and the player's own view stays up.
+	// That view IS the lens retail would aim at, so the redirect still answers — with the player.
+	Camera.bAcceptCandidates = false;
+	Player->Origin = FVector(120.f, -40.f, 0.f);
+	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
+		EElysiumDialogOpenerKind::Remote, 0, FString());
+	TestTrue(TEXT("the fallback keeps the player's own pose"),
+		Camera.LastRequest.Fallback == EElysiumCameraFallback::PlayerView
+			&& !Camera.LastRequest.bOverridePose);
+	TestTrue(TEXT("a conversation with no source shot defaults DialogPOV set"),
+		Camera.LastRequest.bDialogPOV);
+	Lens = FVector::ZeroVector;
+	TestTrue(TEXT("the fallback names the player view as the lens"),
+		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::PlayerView);
+	TestTrue(TEXT("...and answers with the player's camera location"),
+		Lens.Equals(Player->EyePosition(), 0.01f));
+	World.CloseDialog(/*bSilent*/ true);
+	Camera.bAcceptCandidates = true;
+
+	// --- a source shot that does NOT set the flag --------------------------------------------------
+	// The 15 shipped shot files that leave DialogPOV out want the NPC on the player's eye, and the
+	// default must not leak past them on any path.
+	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
+		EElysiumDialogOpenerKind::Remote, 0, TEXT("plain-fixture"));
+	TestFalse(TEXT("a source shot without the flag does not set it"), Camera.LastRequest.bDialogPOV);
+	TestTrue(TEXT("...and asks for no gaze redirect at all"),
+		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::None);
+	Camera.bAcceptSourceShots = false;
+	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
+		EElysiumDialogOpenerKind::Remote, 0, TEXT("plain-fixture"));
+	TestTrue(TEXT("the unflagged shot still falls through to the grammar"),
+		Camera.LastRequest.Fallback == EElysiumCameraFallback::AuthoredProfile);
+	TestFalse(TEXT("and the profile inherits its cleared flag too"), Camera.LastRequest.bDialogPOV);
+	TestTrue(TEXT("so no path redirects the gaze"),
+		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::None);
+	World.CloseDialog(/*bSilent*/ true);
+
+	// A closed conversation supplies no gaze point at all — the producer the eye pass's own
+	// view-target reset stands behind.
+	TestTrue(TEXT("a closed conversation supplies no gaze"),
+		World.GetDialogueCameraGaze(Lens) == EElysiumDialogueGazeLens::None);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumJackCameraBasisTest,
 	"Elysium.Substrate.DialogueCamera.JackBasis", GElysiumDialogueCameraTestFlags)
 
@@ -501,18 +671,27 @@ bool FElysiumJackCameraBasisTest::RunTest(const FString&)
 					{
 						Position DialogTarget
 						AttachPos "Bone: Bip01 Head"
-						AttachType Follow
+						AttachType None
 					}
 				}
 				CameraConstraints
 				{
-					FieldOfView 40
-					DialogPOV 1
-					SyncRotateOnMove 1
+					"MoveSpeed"		"500"
+					"MoveAccel"		"250"
+					"TurnAccel"		"30"
+					"MaxTurnRate"		"[60, 60, 60]"
+					"DistanceTolerance"	"5"
+					"AngularTolerance"	"[10, 10, 10]"
+					"FieldOfView"		"40"
+					"DialogPOV"		"1"
+					"SyncRotateOnMove"	"1"
 				}
 			}
 		}
 	)KV");
+	// The fixture is the shipped `vdata/camerashots/jack.txt` verbatim, `AttachType None` on Point1
+	// included: `None` is the offset frame, not a latch, and retail re-resolves the head bone every
+	// tick regardless (`vampire.dll` `FUN_1006e8e0`).
 	FElysiumCameraShotDef Def;
 	if (!TestTrue(TEXT("Jack source shot parses"), ElysiumCameraShots::ParseText(JackText, Def)))
 	{
@@ -547,6 +726,46 @@ bool FElysiumJackCameraBasisTest::RunTest(const FString&)
 	TestTrue(TEXT("Jack shot carries FOV 40"), FMath::IsNearlyEqual(Shot.FieldOfView, 40.0f));
 	TestTrue(TEXT("Jack shot carries DialogPOV"), Def.Constraints.bDialogPOV);
 	TestTrue(TEXT("Jack shot carries SyncRotateOnMove"), Def.Constraints.bSyncRotateOnMove);
+
+	// **The whole constraints block has to reach the tracker.** `DistanceTolerance`,
+	// `AngularTolerance`, `MoveAccel`, `TurnAccel` and `SyncRotateOnMove` were parsed and never read,
+	// which is what left the camera panning with the head bone every frame of the conversation.
+	TestTrue(TEXT("MoveSpeed reaches the resolved shot"),
+		FMath::IsNearlyEqual(Shot.MoveSpeed, 500.0f * ElysiumCam::U, 0.01f));
+	TestTrue(TEXT("MoveAccel reaches the resolved shot"),
+		FMath::IsNearlyEqual(Shot.MoveAccel, 250.0f * ElysiumCam::U, 0.01f));
+	TestTrue(TEXT("TurnAccel reaches the resolved shot"),
+		FMath::IsNearlyEqual(Shot.TurnAccel, 30.0f, 0.01f));
+	TestTrue(TEXT("MaxTurnRate reaches the resolved shot"),
+		Shot.MaxTurnRate.Equals(FVector(60.0f, 60.0f, 60.0f), 0.01f));
+	TestTrue(TEXT("DistanceTolerance reaches the resolved shot"),
+		FMath::IsNearlyEqual(Shot.DistanceTolerance, 5.0f * ElysiumCam::U, 0.01f));
+	TestTrue(TEXT("the 10-degree angular deadband reaches the resolved shot"),
+		Shot.AngularTolerance.Equals(FVector(10.0f, 10.0f, 10.0f), 0.01f));
+	TestTrue(TEXT("SyncRotateOnMove reaches the resolved shot"), Shot.bSyncRotateOnMove);
+
+	// Jack's shot renders ~51.9 degrees horizontal at 16:9, not the authored 40. The authored number
+	// is 4:3-referenced and Source is Hor+; handing it straight to Unreal was the "closer than
+	// retail" divergence.
+	TestTrue(TEXT("Jack's 40-degree shot renders about 51.8 degrees at 16:9"),
+		FMath::IsNearlyEqual(ElysiumCam::WidenSourceFov(Shot.FieldOfView, 16.0f / 9.0f), 51.78f, 0.05f));
+	TestTrue(TEXT("and exactly 40 at the 4:3 reference it was authored against"),
+		FMath::IsNearlyEqual(ElysiumCam::WidenSourceFov(Shot.FieldOfView, 4.0f / 3.0f), 40.0f, 0.01f));
+
+	// `AttachPos EyePosition` is `CBaseCombatCharacter::CalcLookData` — a FIXED offset from the
+	// origin (`CBaseEntity::EyePosition`), not an animated bounds fraction and not a head bone.
+	FElysiumCameraShotDef EyeDef;
+	TestTrue(TEXT("an EyePosition anchor parses"), ElysiumCameraShots::ParseText(TEXT(R"KV(
+		CameraShotTable { EyeShot { End { Position DialogTarget AttachPos Origin }
+			Target { Point1 { Position DialogTarget AttachPos EyePosition } } } }
+	)KV"), EyeDef));
+	FElysiumCameraShot EyeShot;
+	if (TestTrue(TEXT("the EyePosition shot resolves"),
+		FElysiumCameraDirector::Resolve(&World, EyeDef, Jack->Handle, EyeShot)))
+	{
+		TestTrue(TEXT("an EyePosition anchor is the entity's own fixed eye"),
+			EyeShot.LookAt.Equals(Jack->EyePosition(), 0.01f));
+	}
 	return true;
 }
 

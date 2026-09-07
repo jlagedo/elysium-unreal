@@ -432,9 +432,10 @@ TSharedPtr<const FElysiumLipTrack> ElysiumLip::Load(const FString& AudioPath)
 			Result = Track;
 		}
 	}
-	// No warning on either branch. 31 of the 7,136 files have no sibling audio, a handful carry a
-	// placeholder word with no phonemes, and the level scripts probe for absent `.lip` files as
-	// game logic — so a miss here is ordinary and the caller counts it.
+	// No warning on either branch. The corpus deploys 7,105 `.lip` of the install's 7,136: the 31
+	// with no sibling audio member are not deployed at all, so every one of them is a miss here.
+	// A handful of the rest carry a placeholder word with no phonemes, and the level scripts probe
+	// for absent `.lip` files as game logic — so a miss is ordinary and the caller counts it.
 
 	FScopeLock Lock(&GLipCacheLock);
 	++GLipCacheMisses;

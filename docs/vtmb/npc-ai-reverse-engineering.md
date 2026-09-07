@@ -1742,3 +1742,57 @@ the choice; scripts steer exceptional authored moments; and presentation communi
 A complete rebuild needs the boundaries as much as it needs the behaviors, because those
 boundaries are what let combat, dialogue, stealth, quests, saves, and cinematics coexist on the
 same NPC.
+
+# 2026-09-07 — `OnStateChange` (vtable slot 463) holsters and draws the active weapon
+
+Slot 463 is called on the state EDGE and takes the new `m_NPCState` as its second argument. 79
+classes fill it; most take `CAI_BaseNPCTroika::OnStateChange` (`0x102ae140`), which does **not**
+touch the weapon — `CNPC_VVampire`, `CNPC_VHuman`, `CNPC_VPedestrian`, `CNPC_VBrujah`,
+`CNPC_VGangrel`, `CNPC_VZombie` and 40-odd more. **Three bodies do, and they are the same code**
+[VtMB decompiled]:
+
+| Retail class | Body | Shared with |
+|---|---|---|
+| `CNPC_VGuard1` | `0x1037d020` | — (adds an unrelated `+0x29c`/`+0xa8` probe ahead of the switch) |
+| `CNPC_VHunter` | `0x10388880` | — |
+| `CNPC_VGhoulCroucher` | `0x103871c0` | `CNPC_VHumanCombatant`, `CNPC_VHumanCombatPatrol`, `CNPC_VSabbatGunman`, `CNPC_VStalker`, `CNPC_VYukie`, `CNPC_ProneDialog` |
+
+The body is one switch on the new state:
+
+* **1 (`NPC_STATE_IDLE`)** — `GetActiveWeapon()->Hide()` (vtable `+0x108`, `CBaseEntity::Hide`
+  `0x1009d2a0`), then chain to `CAI_BaseNPCTroika::OnStateChange`;
+* **2 (`NPC_STATE_ALERT`), 3 (`NPC_STATE_COMBAT`), 11** — `GetActiveWeapon()->Unhide()` (vtable
+  `+0x10c`, `CBaseEntity::Unhide` `0x1009d380`), then chain;
+* everything else — chain, writing nothing.
+
+Both arms are guarded by `GetActiveWeapon() != 0`. So "an armed class holsters while idle and draws
+when it goes alert" is a property of **seven concrete classnames** and of nothing else — it is not
+a base-AI behaviour and not a weapon behaviour. What the hidden bit then does to the body's
+animation is `docs/vtmb/animation_and_movers.md` → the `EF_NODRAW` entry of the same date: a hidden
+active weapon translates nothing and selects the relaxed set, exactly as empty hands do.
+
+**Four overrides remain UNREAD**, and are named here rather than assumed to be the base:
+`CNPC_VCop` (`0x10371c20`), `CNPC_VBach` (`0x103639b0`), `CNPC_VTzimisce` (`0x103ba2c0`),
+`CNPC_VSabbatLeader` (`0x103a6f70`). Two of them — `npc_VCop` and `npc_VSabbatLeader` — are
+registered leaves in this runtime today, and they take the Troika base's answer (no weapon write)
+until their bodies are decompiled. That is a stated gap.
+
+**Port.** `FElysiumNpc::ApplyStateWeaponVisibility` is the override body, taking the new state as
+retail's second argument does; `ClassHolstersOnState` is the seven-classname set, spelled from the
+retail class names with the port's `npc_` prefix (`npc_VGuard1`, `npc_VHunter`,
+`npc_VHumanCombatant`, `npc_VHumanCombatPatrol`, `npc_VSabbatGunman`, `npc_VStalker`, `npc_VYukie`,
+`npc_ProneDialog`, `npc_VGhoulCroucher` — only the first three plus `npc_VHunter` have registered
+leaves in `ElysiumNpcClasses.cpp` so far; the rest are listed so a map that spawns one behaves).
+The edge is **polled** by `FElysiumNpc::PumpStateChange`, called from `Think` after
+`RunConditionPass` and after `ResolveLoadout`: this runtime writes the state from three places (the
+ideal-state pass, `aiscripted_schedule forcestate`, and the body arbiter's scripted push), and one
+edge tracker is what keeps them from each needing a hook. The first pump always fires, which stands
+in for retail's own spawn-time `SetState(IDLE)` — that is what puts a freshly spawned guard's
+weapon away.
+
+**Retail state 11 has no port equivalent.** `EElysiumNpcState`'s other members (`Scripted`, `Prone`,
+`Dead`) are this port's own and none of them is retail's 11; nothing is known about it beyond the
+fact that it draws the weapon, so no port state is mapped onto it. Stated, not guessed.
+
+Proof: `Elysium.Substrate.WeaponHidden.StateChange` (an `npc_VHumanCombatant` hides its active
+weapon entering Idle and unhides it entering Alert/Combat; an `npc_VVampire` never changes the bit).

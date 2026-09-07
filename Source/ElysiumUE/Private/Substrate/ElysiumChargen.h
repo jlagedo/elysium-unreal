@@ -133,6 +133,9 @@ struct FElysiumChargenRules
 	const FElysiumTraitEffects* TraitEffects = nullptr;
 	const FElysiumFeatTable* Feats = nullptr;
 	const FElysiumStrings* Strings = nullptr;
+	// `system/items.txt`'s `ExcludedEquipTables` — what resolves the one trait a clan template
+	// authors by name and no `strings.txt` group carries (`Excluded_Equipment`, slot 31).
+	const struct FElysiumExcludedEquipTable* ExcludedEquip = nullptr;
 
 	bool IsValid() const { return Stats != nullptr && Clans != nullptr; }
 };

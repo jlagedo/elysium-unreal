@@ -40,6 +40,7 @@ const TCHAR* ElysiumDialogueCamera::LexToString(EElysiumDialogOpenerKind Kind)
 	case EElysiumDialogOpenerKind::Forced:   return TEXT("StartPlayerDialog");
 	case EElysiumDialogOpenerKind::Remote:   return TEXT("StartPlayerDialogRemote");
 	case EElysiumDialogOpenerKind::Unforced: return TEXT("StartPlayerDialogUnforced");
+	case EElysiumDialogOpenerKind::Use:      return TEXT("PlayerUse");
 	default:                                 return TEXT("Unknown");
 	}
 }

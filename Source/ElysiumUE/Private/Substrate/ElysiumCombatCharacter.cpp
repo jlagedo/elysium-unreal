@@ -105,14 +105,27 @@ void FElysiumCombatCharacter::RebuildEffects()
 	{
 		EffectLayer.Reset();
 		RecomputeSheet();
+		Inventory.WieldUpdate(*this);
 		return;
 	}
 	if (!EffectLayer.IsValid())
 	{
 		EffectLayer = MakeShared<FElysiumSheetEffects>();
 	}
-	EffectLayer->Build(*EffectTable, Effects, FeatTable);
+	// `Excluded_Equipment` is one of the traits a group writes (`"Value Clawed_Form"` on both
+	// Protean groups), and its names are `system/items.txt` rows rather than a `strings.txt` group —
+	// so the wield table is passed in beside the stat and string tables.
+	// The stat table comes with it because the resolver keys on the stat's authored `NameFunc`;
+	// `strings.txt` is deliberately still omitted, so the order enums stay unresolved here exactly
+	// as they were — chargen is what owns those, and this is not the place to start writing them.
+	EffectLayer->Build(*EffectTable, Effects, FeatTable, Rules ? &Rules->Stats() : Bound.Stats,
+		/*Strings*/ nullptr, Rules ? &Rules->ExcludedEquip() : Bound.ExcludedEquip);
 	RecomputeSheet();
+	// The tail retail's trait-effect apply (0x101f8620) and remove (0x101f8f30) both run:
+	// `Inventory_Wield_Update` (0x10335b80). This is the one place the port's effect list changes,
+	// so it is the one place the sweep belongs — a discipline that installs `Clawed_Form` takes the
+	// held weapon away here, and ending it gives one back.
+	Inventory.WieldUpdate(*this);
 }
 
 void FElysiumCombatCharacter::RecomputeSheet()
@@ -482,8 +495,31 @@ void FElysiumCombatCharacter::FillActivityClipRequest(FElysiumActivityClipReques
 		Request.ActorClassname.Reset();
 	}
 
+	// **A HIDDEN active weapon presents as NO weapon to the whole activity request.**
+	//
+	// Retail gates the weapon on `m_fEffects & EF_NODRAW` (+0x19c & 0x40) in both places the active
+	// weapon can reach an activity:
+	//
+	//  * `CBaseCombatCharacter::Weapon_TranslateActivity` (vampire.dll 0x10327ec0) calls the
+	//    weapon's `ActivityOverride` (`+0x5a4`, 0x1024f210) only when the bit is CLEAR;
+	//  * the human/vampire pre-translator `PreTranslate_Human` (0x103854f0, virtual `+0x5dc` for
+	//    `CNPC_VHuman`, `CNPC_VVampire` and 37 more classes) takes the same gate a rung earlier: a
+	//    NODRAW weapon leaves `m_bAggressiveAnims` at 0 and the request goes to the Troika body
+	//    unchanged, so no `ACT_WALK` -> `ACT_WALK_RELAXED` rewrite happens either.
+	//
+	// Both gates say the same thing, so the port states it ONCE, here, where the whole translation
+	// context is built: an empty `WeaponClassname` is exactly "no weapon", and it reaches the class
+	// ladder, the weapon ladder, the alert/relaxed branch and the gait fan together. Gating only one
+	// of them downstream is how a body comes to walk a relaxed gait while posing an unarmed stand.
+	//
+	// The weapon is still `m_hActiveWeapon` — `Inventory.Active` keeps answering with it, the
+	// magazine and the deadlines are untouched, and a press still fires it. Only the ANIMATION
+	// question sees no weapon, which is retail's own shape.
 	const FElysiumItem* Active = Inventory.Active(*this);
-	Request.WeaponClassname = (Active != nullptr && Active->Def != nullptr)
+	const FElysiumWeapon* ActiveWeapon = Active != nullptr
+		? const_cast<FElysiumItem*>(Active)->AsWeapon() : nullptr;
+	const bool bDrawn = ActiveWeapon == nullptr || !ActiveWeapon->IsHidden();
+	Request.WeaponClassname = (bDrawn && Active != nullptr && Active->Def != nullptr)
 		? Active->Def->Classname : FString();
 
 	// A character with no mind is not a cast member and has no state to read; idle is what the
@@ -600,6 +636,74 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 	// and the integrator are here, in retail's order.
 	const FVector Ahead = HeadPos + HeadForward * GAheadReach;
 
+	// The integrator's rate is not one number. Retail's fidget driver (`0x102c0010`) rewrites
+	// `m_flEyeIntegRate`@0x0E3C every think from the disposition table: the branch that holds a
+	// converged gaze reads index 0 and the branch that steps to the next fidget cell reads index 1
+	// (`FUN_100ecdf0`, record fields +0x23C and +0x260 — see FElysiumEyeTargetTuning). So the eyes
+	// glide between fidget cells at the disposition's own rate and snap back at the global one.
+	auto RateNow = [&Tuning](int32 Step) { return Step >= 0 ? Tuning.StepRate : Tuning.HoldRate; };
+
+	// The tail both the scripted maintainer and the cascade end in: commit the commanded point,
+	// then advance the fixed-timestep lerp. Not a rate — per 0.1 s of accumulated interval,
+	// `m_vCurEyeTarget += rate × (m_vEyeLookTarget − m_vCurEyeTarget)`. Reproducing the fixed step
+	// matters: folding the rate into a per-frame lerp would make the convergence speed depend on
+	// frame rate, which is exactly what the accumulator exists to avoid.
+	auto Integrate = [this, DeltaSeconds](const FVector& Commanded, float Rate)
+	{
+		EyeLookTarget = Commanded;
+		EyeIntegRate = Rate;
+		if (!bCurEyeTargetSeeded)
+		{
+			CurEyeTarget = Commanded;
+			bCurEyeTargetSeeded = true;
+		}
+		EyeIntegAccumulator += DeltaSeconds;
+		int32 Steps = 0;
+		while (EyeIntegAccumulator >= 0.1f && Steps < 16)
+		{
+			EyeIntegAccumulator -= 0.1f;
+			CurEyeTarget += (EyeLookTarget - CurEyeTarget) * EyeIntegRate;
+			++Steps;
+		}
+		if (Steps >= 16)
+		{
+			// A long hitch would otherwise spin this loop; land on the target and drop the backlog.
+			CurEyeTarget = EyeLookTarget;
+			EyeIntegAccumulator = 0.f;
+		}
+	};
+
+	// --- 0. A scripted look-at REPLACES the cascade -------------------------------------------
+	// `CBaseCombatCharacter::UpdateCharacter` (`0x103246d0`) branches before anything else:
+	// `if (m_scriptedEyeMode@0x0E68 == 0) slot333 MaintainEyeDirection(); else
+	// MaintainScriptedEyeDirection(dt)`. The scripted maintainer (`0x10325620`) is a whole
+	// alternative body — no dialogue partner, no enemy, no scan and, at the tail, no fidget: the
+	// early-out at `0x1026b81b` that lets `m_RelativeEyeTarget`@0x5B94 own the aim belongs to the
+	// autonomous maintainer, which is not running at all. It also never calls `SetHeadDirection`
+	// (slot 0x864), so the head filter is not advanced either; only slot 0x454 gets the smoothed
+	// point.
+	if (EyeLookMode != 0)
+	{
+		const FElysiumEntity* Scripted = (World != nullptr && !EyeLookTargetName.IsEmpty())
+			? World->FindByName(EyeLookTargetName) : nullptr;
+		if (Scripted == nullptr)
+		{
+			// `m_hEyeLookTarget` no longer resolves: retail clears the mode and returns *without*
+			// touching the eyes, so the cascade takes over on the next think rather than this one.
+			EyeLookTargetName.Reset();
+			EyeLookMode = 0;
+			return CurEyeTarget;
+		}
+		// Mode 1 → `EyePosition()` (vfunc 0x304), mode 2 → `WorldSpaceCenter()` (0x300), mode 3 →
+		// `GetAbsOrigin()` (0x364). Mode 2 is unreachable in the shipped game — see the input
+		// handlers above.
+		const FVector Aim = (EyeLookMode == 3) ? Scripted->Origin : Scripted->EyePosition();
+		// The same ±30° head cone (`FUN_10325da0`), with retail's own fallback: outside it the
+		// scripted aim is dropped for straight ahead rather than the cascade being resumed.
+		Integrate(InsideGazeCone(HeadPos, HeadForward, Aim) ? Aim : Ahead, RateNow(FidgetStep));
+		return CurEyeTarget;
+	}
+
 	// --- Selection ---------------------------------------------------------------------------
 	// Retail stores the SUBJECT (`m_hEyeLookTarget`) and only the two cases that are not an entity
 	// — the camera redirect and a scripted look-at — as a point. The tail below turns the subject
@@ -611,31 +715,36 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 
 	// 1. The dialogue partner, at their EyePosition() — eye height on the entity, not a head bone,
 	//    so the aim holds still through the partner's animation the way retail's does.
+	//
+	//    The arm is PLAYER-ONLY. Retail (`0x1026b827`-`0x1026b8ce`) resolves `m_hDialogPartner`@0xFE8
+	//    and then immediately dereferences `partner+0xA8` — the partner's player pointer — and skips
+	//    the whole arm when it is null (`JZ 0x1026b8d9`). An NPC talking to another NPC therefore
+	//    gets no dialogue arm at all and falls straight through to the target-entity arm.
+	//
+	//    Seam: this runtime's dialogue session carries one owner and its partner is always the
+	//    player, so `m_hDialogPartner` is stood for by "this character owns the open session". A
+	//    session between two NPCs cannot be expressed here yet; when it can, this is the test that
+	//    has to keep answering nothing.
 	if (World != nullptr)
 	{
 		const FElysiumEntityHandle DialogOwner = World->GetOpenDialogOwner();
-		if (DialogOwner.IsSet())
+		const FElysiumEntity* Partner = (DialogOwner.IsSet() && DialogOwner.Index == Handle.Index)
+			? World->FindPlayer() : nullptr;
+		if (Partner != nullptr && Partner != this)
 		{
-			const FElysiumEntity* Partner = nullptr;
-			if (DialogOwner.Index == Handle.Index)
+			// `DialogPOV` on the shot in effect redirects this arm to the camera. It replaces the
+			// *player* as the subject and nothing else, so every other arm of the cascade is
+			// untouched.
+			const FVector Aim = (DialogPovPoint != nullptr) ? *DialogPovPoint : Partner->EyePosition();
+			// Retail cone-tests whichever of the two it picked (`0x1026b887` for the camera,
+			// `0x1026b8b6` for the player) and, on a miss, jumps to `0x1026b8d3` — the NEXT arm.
+			// It never falls back from the camera to the partner's eyes, and it never falls back
+			// from the partner to straight ahead here: the cascade simply continues.
+			if (InsideGazeCone(HeadPos, HeadForward, Aim))
 			{
-				// This character is the one talking; its partner is the player.
-				Partner = World->FindPlayer();
-			}
-			else if (World->PlayerHandle().Index == Handle.Index)
-			{
-				Partner = World->Resolve(DialogOwner);
-			}
-			if (Partner != nullptr && Partner != this)
-			{
-				// `DialogPOV` on the shot in effect redirects this arm to the camera. It replaces the
-				// *player* as the subject and nothing else, so a character being looked at by the
-				// player still resolves normally, and every other arm of the cascade is untouched.
-				const bool bPartnerIsPlayer = World->PlayerHandle().IsSet()
-					&& Partner->Handle.Index == World->PlayerHandle().Index;
-				if (bPartnerIsPlayer && DialogPovPoint != nullptr)
+				if (DialogPovPoint != nullptr)
 				{
-					Point = *DialogPovPoint;
+					Point = Aim;
 					bHavePoint = true;
 				}
 				else
@@ -647,25 +756,7 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 		}
 	}
 
-	// 2. A scripted look-at. It still passes the cone test, and falls back to straight ahead
-	//    outside it; it also yields back to autonomous on its own when the entity goes away.
-	if (!bResolved && EyeLookMode != 0 && !EyeLookTargetName.IsEmpty() && World != nullptr)
-	{
-		if (const FElysiumEntity* Scripted = World->FindByName(EyeLookTargetName))
-		{
-			const FVector Aim = (EyeLookMode == 3) ? Scripted->Origin : Scripted->EyePosition();
-			Point = InsideGazeCone(HeadPos, HeadForward, Aim) ? Aim : Ahead;
-			bHavePoint = true;
-			bResolved = true;
-		}
-		else
-		{
-			EyeLookTargetName.Reset();
-			EyeLookMode = 0;
-		}
-	}
-
-	// 3. The target entity, then 4. the enemy — each taken when its EyePosition() is inside the
+	// 2. The target entity, then 3. the enemy — each taken when its EyePosition() is inside the
 	//    cone and otherwise passed over for the next arm, exactly as retail falls through.
 	if (!bResolved)
 	{
@@ -688,7 +779,7 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 		}
 	}
 
-	// 5. The navigation goal, then 6. a heard combat sound. Both are DIRECT: retail hands the point
+	// 4. The navigation goal, then 5. a heard combat sound. Both are DIRECT: retail hands the point
 	//    to the head filter and the eyes and returns before the commanded or smoothed targets are
 	//    written, so neither the subject nor the integrator sees these frames. The head filter
 	//    still runs because retail's does, and because its state is inspectable.
@@ -705,7 +796,7 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 		}
 	}
 
-	// 7. The autonomous scan: nearest qualifying entity inside a 300-unit sphere centred 300 units
+	// 6. The autonomous scan: nearest qualifying entity inside a 300-unit sphere centred 300 units
 	//    along the BODY's facing from the eyes, re-picked every 1-5 seconds; nothing found means
 	//    no subject (straight ahead at the tail) and a retry in half a second. Between re-picks the
 	//    subject stands and is followed.
@@ -826,33 +917,12 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 		}
 	}
 
-	EyeLookTarget = Commanded;
-
 	// --- Integration -------------------------------------------------------------------------
-	// A fixed-timestep lerp, not a rate: per 0.1 s of accumulated interval,
-	// `m_vCurEyeTarget += rate × (m_vEyeLookTarget − m_vCurEyeTarget)`. Reproducing the fixed step
-	// matters — folding the rate into a per-frame lerp would make the convergence speed depend on
-	// frame rate, which is exactly what the accumulator exists to avoid.
-	EyeIntegRate = Tuning.TurnRate;
-	if (!bCurEyeTargetSeeded)
-	{
-		CurEyeTarget = Commanded;
-		bCurEyeTargetSeeded = true;
-	}
-	EyeIntegAccumulator += DeltaSeconds;
-	int32 Steps = 0;
-	while (EyeIntegAccumulator >= 0.1f && Steps < 16)
-	{
-		EyeIntegAccumulator -= 0.1f;
-		CurEyeTarget += (EyeLookTarget - CurEyeTarget) * EyeIntegRate;
-		++Steps;
-	}
-	if (Steps >= 16)
-	{
-		// A long hitch would otherwise spin this loop; land on the target and drop the backlog.
-		CurEyeTarget = EyeLookTarget;
-		EyeIntegAccumulator = 0.f;
-	}
+	// The rate is whichever of the two the fidget driver would have published this think: the
+	// disposition's own rate while a fidget sequence is walking its cells, the global hold rate
+	// otherwise. The step is read AFTER the block above, so the think that enters a sequence
+	// already integrates at the step rate.
+	Integrate(Commanded, RateNow(FidgetStep));
 
 	FilterHeadTurn(EyeLookTarget, HeadPos, HeadForward);
 	return CurEyeTarget;

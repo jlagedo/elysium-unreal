@@ -223,10 +223,28 @@ struct FElysiumCameraShot
 	// toggle's fixed-rate blend. 0 snaps.
 	float BlendSeconds = 0.5f;
 
-	// The shot file's `CameraConstraints`, in engine units: how fast the camera is allowed to chase
-	// its own target once the shot is live. 0 = snap to it every frame.
-	float MoveSpeed = 0.0f;                                   // cm/s
+	// The shot file's `CameraConstraints`, in engine units: how the camera is allowed to chase its
+	// own goal once the shot is live. These are the client tracker's inputs — `C_BaseCineCamera`
+	// (`client.dll`), reached every rendered frame from `C_BasePlayer`'s view calc
+	// (`FUN_100a7770` -> `FUN_10001b50` -> `FUN_10001a20` -> `FUN_10001fa0`). See
+	// `FElysiumScriptedShotTracker` for what reads them.
+	float MoveSpeed = 0.0f;                                   // cm/s, 0 = snap
+	float MoveAccel = 0.0f;                                   // cm/s^2, <=0 = instant to MoveSpeed
 	FVector MaxTurnRate = FVector(90.0f, 90.0f, 90.0f);       // deg/s, (pitch, yaw, roll)
+	float TurnAccel = 0.0f;                                   // deg/s^2, <=0 = instant to MaxTurnRate
+
+	// The deadbands. **These are what keep a dialogue camera still while its subject animates**: the
+	// shot's look-at is re-resolved every frame off an animated head bone (retail does this too), and
+	// the 10-degree `AngularTolerance` the shipped conversation shots author is the only thing that
+	// stops that jitter from panning the camera.
+	float DistanceTolerance = 0.0f;                           // cm of goal drift tolerated when parked
+	FVector AngularTolerance = FVector::ZeroVector;           // deg per axis, (pitch, yaw, roll)
+
+	// `SyncRotateOnMove` (shot flags `+0x20` bit 0x100): while the camera is translating, the turn
+	// rate is sized so the pan lands with the dolly and `MaxTurnRate` is bypassed (`FUN_10001c80`).
+	bool bSyncRotateOnMove = false;
+	// `SnapOnShotChange` (bit 0x80): `FUN_10002390` hard-copies goal -> current on the shot change.
+	bool bSnapOnShotChange = false;
 
 	// One-shot render-history reset. The camera component consumes and clears it while publishing
 	// the value; it is never persistent shot state. Zero-time camera_track edits set this so Unreal
@@ -239,6 +257,63 @@ struct FElysiumCameraShot
 
 	// The name it was pushed under, for the debug read-out.
 	FString DebugName;
+};
+
+// The client-side shot tracker — `C_BaseCineCamera`, ported whole.
+//
+// **The server resolves the goal; the client decides how much of it to take.** VtMB's camera think
+// (`vampire.dll` `FUN_1006e8e0`) re-resolves all four anchors of the live shot every server tick
+// (loop `0x1006ea90`, cache `this+0x598+i*12`) — `AttachType None` is *not* "sample once", it just
+// reads that same per-tick cache back (`FUN_1006f010`). What holds a conversation camera still is
+// therefore never the anchor mode; it is this tracker's deadbands.
+//
+// The three functions this is:
+//   * position   `FUN_10001fe0` — hysteresis on `DistanceTolerance`, accel/decel on `MoveAccel`;
+//   * angles     `FUN_10001d40` — per-axis hysteresis on `AngularTolerance[i]`;
+//   * turn rate  `FUN_10001c80` — accel/decel on `TurnAccel` toward `MaxTurnRate[i]`, or the
+//                                 `SyncRotateOnMove` timing solve.
+// Shot start is `FUN_10002210`, the `SnapOnShotChange` hard copy `FUN_10002390`. Retail's fields:
+// 0x410 goal origin, 0x41c look-at, 0x468 current origin, 0x474 current angles, 0x4a4 current
+// speed, 0x4a8[3] per-axis turn rates, 0x4c0 position-settled, 0x4c1[3] per-axis angle-settled.
+//
+// Pure values: no world, no pawn, no `FMinimalViewInfo`, `DeltaTime` in — asserted headless by
+// `Elysium.Substrate.Camera`.
+struct FElysiumScriptedShotTracker
+{
+	// Where the camera actually is this frame. The goal is the shot; this is what renders.
+	FVector Location = FVector::ZeroVector;
+	FRotator Rotation = FRotator::ZeroRotator;
+
+	// `0x4a4` / `0x4a8[3]`, carried across frames because both are accelerated, not set.
+	float Speed = 0.0f;                                  // cm/s
+	FVector TurnRate = FVector::ZeroVector;              // deg/s, (pitch, yaw, roll)
+
+	// `0x4c0` / `0x4c1[3]`. A settled axis uses the shot's tolerance as its deadband; an unsettled
+	// one uses `SettleAngle` / `SettleDistance` below, so the camera parks precisely and only comes
+	// out of the park on a real drift.
+	bool bPositionSettled = true;
+	bool bPitchSettled = false;
+	bool bYawSettled = false;
+	bool bRollSettled = false;
+
+	bool bSeeded = false;
+
+	// `FUN_10002210`. The port has no seam for retail's "start from the live view setup" arm (that
+	// needs the frame's own view, which the request channel does not carry), so the seed is the
+	// Start-anchor arm: current pose = goal, position settled, rates zero. The scripted channel's
+	// weight ramp is what dollies the shot in from the player's view instead
+	// (`docs/vtmb/camera-view-modes.md` 2026-09-07).
+	void Start(const FElysiumCameraShot& Shot);
+
+	// One rendered frame. `GoalRotation` is the shot's look-at solved against **this tracker's own
+	// current origin** (retail: `VectorAngles(lookAt - currentOrigin)`), which the caller passes in
+	// because a look-at shot re-derives it after the position step.
+	void Advance(const FElysiumCameraShot& Shot, float DeltaSeconds);
+
+	// The unsettled deadbands, retail's literals. 1.0 Source unit and a tolerance small enough that
+	// an acquiring camera lands on its target rather than near it.
+	static constexpr float SettleDistance = 1.0f * 2.54f;   // cm
+	static constexpr float SettleAngle = 0.05f;             // deg
 };
 
 // The channel. Push/pop is **handle-based, not LIFO** — a conversation ends behind a cutscene that
@@ -329,6 +404,18 @@ struct FElysiumCameraCvars
 
 	// The water clearance band `SolveWaterOffset` keeps the view out of (R7.1).
 	float WaterDist = 4.0f * ElysiumCam::U;       // cl_waterdist 4
+
+	// The lenses. **Both are 4:3-referenced horizontal angles and both are Hor+**, exactly like a
+	// `vdata/camerashots/` `FieldOfView`: Source holds the vertical angle the 4:3 reference implies
+	// (`vfov = 2*atan(tan(hfov/2)/(4/3))`, `docs/vtmb/source_movement.md` -> "View / camera") and a
+	// wider window earns more horizontal. `ElysiumCam::WidenSourceFov` is the one conversion, so the
+	// player view and every scripted shot lerp against each other in the same space.
+	float DefaultFov = 75.0f;                     // default_fov 75 — the player view's lens
+	// `viewmodel_fov 54` — the first-person weapon's own projection. **The seam, answering nothing
+	// yet**: the port has no first-person viewmodel renderer at all (only `SolveDrawPolicy`'s
+	// `bViewmodelEligible` gate, which has no draw consumer), so the value is declared, loaded and
+	// readable and nothing projects with it. It stands for retail's `viewmodel_fov` ConVar.
+	float ViewmodelFov = 54.0f;
 
 	// The spring damper. **Two constants** — stiffer against a wall than in open space — which is the
 	// single most characteristic part of the VtMB camera and the reason the stock spring arm is not
@@ -431,6 +518,22 @@ namespace ElysiumCam
 	// player's field of view, which is what a shot file with no `FieldOfView` authors.
 	void ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
 		const FVector& ShotLocation, const FRotator& ShotRotation, float ShotFov, float Weight);
+
+	// The 4:3 reference a Source-authored field of view is written against.
+	inline constexpr float SourceFovAspect = 4.0f / 3.0f;
+
+	// **A `vdata/camerashots/` `FieldOfView` is a 4:3-referenced horizontal angle**, not the angle a
+	// widescreen window renders. Source is Hor+: the vertical angle is fixed by the 4:3 reference and
+	// a wider window earns more horizontal, which is why retail's own `default_fov 75` renders ~91
+	// degrees at 16:9 (`docs/vtmb/source_movement.md` -> "View / camera",
+	// `docs/vtmb/camera-view-modes.md` §5). Unreal's `FMinimalViewInfo::FOV` is the horizontal angle
+	// *at the current aspect*, so handing the authored number straight over renders a shot ~1.4x too
+	// tight on a 16:9 display — the "the dialogue camera is closer than retail" reading.
+	//
+	// This is retail Source FOV semantics, not a modernization; the player view is the one that
+	// diverges, by authoring an absolute 90-degree horizontal baseline instead of a 4:3 reference.
+	// A FOV at or below zero (no `FieldOfView` key, a value shot) passes through untouched.
+	float WidenSourceFov(float SourceFovDegrees, float AspectRatio);
 
 	// One row of the cvar surface: the VtMB name, its default **as typed** (Source units / degrees /
 	// a flag), and what it does. The table is the declaration; `FElysiumCameraCvars::LoadFrom` is the

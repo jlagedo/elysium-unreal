@@ -4383,5 +4383,147 @@ bool FElysiumAnimationSelectorsTest::RunTest(const FString&)
 	return true;
 }
 
+// =====================================================================================
+// The unowned base channel on a CAST body: retail has no "nobody owns the pose, so play
+// the weapon-translated idle" state, so the port keeps the last COMMITTED sequence.
+//
+// Retail never requests `ACT_IDLE` for a standing Troika NPC. The disposition idle
+// (0x102c12a0) plays its stance clips BY NAME, and `ResolveActivityToSequence`
+// (0x10272130) keeps `m_nSequence` on a miss and otherwise falls to sequence 0. The
+// port's base channel is a claim slot and therefore HAS the state retail does not: a
+// one-shot claim (a stance transition, a per-line `.vcd` gesture) expires, the locomotion
+// publish takes the base back in the Idle graph state, and `ACT_IDLE` resolves through
+// the full translation — which on a body holding `item_w_claws` answers `claws_idle`,
+// the crouched claw stance.
+//
+// The driver is ticked with no catalog, which is exactly the rung these cases are about:
+// what is asserted is the REQUEST the driver makes, not the clip a vocabulary answers
+// with. `Selection.Route` and `Selection.RequestedActivity` are the record's own statement
+// of it — `ElysiumAnimResolve::Resolve` stamps both before any route runs.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationBaseHoldTest,
+	"Elysium.Substrate.BaseHold.UnownedCastIdle", GElysiumAnimationTestFlags)
+bool FElysiumAnimationBaseHoldTest::RunTest(const FString&)
+{
+	constexpr float Dt = 1.0f / 60.0f;
+	const FElysiumLocomotionSample Standing = Travelling(0.0f);
+
+	auto MakeClaim = [](const TCHAR* Label)
+	{
+		FElysiumAnimationRequest Request;
+		Request.Source = EElysiumAnimSource::Npc;
+		Request.Channel = EElysiumAnimChannel::Base;
+		// An ambient stance: it outranks the idle locomotion floor and yields to travel, which is
+		// the one recovered relationship in the priority table.
+		Request.Priority = EElysiumAnimPriority::Ambient;
+		Request.Label = Label;
+		return Request;
+	};
+
+	// --- A cast body whose base claim expires keeps the clip that claim committed ---------------
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("jack");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
+		Driver.ActorClassname = TEXT("npc_VVampire");
+		// The weapon the defect was seen on: `item_w_claws` is what turns a bare `ACT_IDLE` into
+		// `claws_idle`, the crouched claw stance.
+		Driver.WeaponClassname = TEXT("item_w_claws");
+
+		const uint32 Handle = Driver.SubmitRequest(MakeClaim(TEXT("stance_talk_idle_1")));
+		TestTrue(TEXT("the stance claim takes the base channel"), Handle != 0);
+
+		Driver.Tick(Dt, Standing, nullptr, nullptr);
+		TestFalse(TEXT("a held base channel is not owned by the publish"),
+			Driver.Selection.bBasePoseOwned);
+		TestEqual(TEXT("...and the claim's clip is what the body committed"),
+			Driver.CommittedBaseLabel, FString(TEXT("stance_talk_idle_1")));
+
+		// The one-shot ends. Today the publish would take the base back and resolve `ACT_IDLE`
+		// through the full translation; retail keeps `m_nSequence`, and so does this.
+		TestTrue(TEXT("the claim is released"), Driver.ReleaseRequest(Handle));
+		Driver.Tick(Dt, Standing, nullptr, nullptr);
+		TestTrue(TEXT("the publish now owns the base pose"), Driver.Selection.bBasePoseOwned);
+		TestEqual(TEXT("the body is standing in the Idle graph state"),
+			AsInt(Driver.Selection.GraphState), AsInt(EElysiumGraphState::Idle));
+		TestEqual(TEXT("...and republishes the committed clip by name rather than resolving an idle"),
+			static_cast<int32>(Driver.Selection.Route), static_cast<int32>(EElysiumAnimRoute::ExactLabel));
+		TestTrue(TEXT("...so no activity is requested at all"),
+			Driver.Selection.RequestedActivity.IsEmpty());
+		TestEqual(TEXT("...and the remembered clip is still the claim's"),
+			Driver.CommittedBaseLabel, FString(TEXT("stance_talk_idle_1")));
+
+		// A SECOND claim replaces what is committed, and its clip is what the next expiry keeps.
+		const uint32 Second = Driver.SubmitRequest(MakeClaim(TEXT("stance_stand_idle_2")));
+		TestTrue(TEXT("a second stance claims the base"), Second != 0);
+		Driver.Tick(Dt, Standing, nullptr, nullptr);
+		TestEqual(TEXT("...and becomes the committed clip"),
+			Driver.CommittedBaseLabel, FString(TEXT("stance_stand_idle_2")));
+		TestTrue(TEXT("the second claim is released"), Driver.ReleaseRequest(Second));
+		Driver.Tick(Dt, Standing, nullptr, nullptr);
+		TestEqual(TEXT("the unowned base keeps the SECOND clip, not the first"),
+			Driver.CommittedBaseLabel, FString(TEXT("stance_stand_idle_2")));
+
+		// Travel is unchanged: a body that is going somewhere is answering a request, not standing
+		// on a leftover, so Walk/Run/Sneak keep resolving exactly as they do today.
+		Driver.GaitSpeeds.Walk = Fan(140.0f, 70.0f, 60.0f);
+		Driver.GaitSpeeds.Run = Fan(560.0f, 300.0f, 240.0f);
+		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
+		Driver.Tick(Dt, Travelling(140.0f), nullptr, nullptr);
+		TestEqual(TEXT("a travelling body stands in the walk state"),
+			AsInt(Driver.Selection.GraphState), AsInt(EElysiumGraphState::Walk));
+		TestEqual(TEXT("...and resolves it as an activity, not as a kept clip"),
+			static_cast<int32>(Driver.Selection.Route), static_cast<int32>(EElysiumAnimRoute::Activity));
+		TestFalse(TEXT("...naming the activity it asked for"),
+			Driver.Selection.RequestedActivity.IsEmpty());
+	}
+
+	// --- A cast body that never committed anything still resolves ACT_IDLE ----------------------
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("jack");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
+		Driver.WeaponClassname = TEXT("item_w_claws");
+
+		Driver.Tick(Dt, Standing, nullptr, nullptr);
+		TestTrue(TEXT("a body with no history owns its own base pose"),
+			Driver.Selection.bBasePoseOwned);
+		TestEqual(TEXT("...and falls through to the ordinary activity resolve"),
+			static_cast<int32>(Driver.Selection.Route), static_cast<int32>(EElysiumAnimRoute::Activity));
+		TestFalse(TEXT("...which names the idle it asked for"),
+			Driver.Selection.RequestedActivity.IsEmpty());
+		TestTrue(TEXT("...having committed nothing"), Driver.CommittedBaseLabel.IsEmpty());
+	}
+
+	// --- The PLAYER body is untouched -----------------------------------------------------------
+	// Retail's fact is about the Troika NPC chain. The player's selector runs off the committed gait
+	// ladder every frame and has no claim-expiry hole to fall through, so nothing here may move it.
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("player");
+		Driver.Source = EElysiumAnimSource::Player;
+		Driver.BodyKind = EElysiumAnimBodyKind::Player;
+		Driver.WeaponClassname = TEXT("item_w_claws");
+
+		const uint32 Handle = Driver.SubmitRequest(MakeClaim(TEXT("stance_talk_idle_1")));
+		Driver.Tick(Dt, Standing, nullptr, nullptr);
+		TestFalse(TEXT("the player's base channel is held by the claim"),
+			Driver.Selection.bBasePoseOwned);
+		TestTrue(TEXT("but a player body commits nothing to keep"),
+			Driver.CommittedBaseLabel.IsEmpty());
+
+		Driver.ReleaseRequest(Handle);
+		Driver.Tick(Dt, Standing, nullptr, nullptr);
+		TestTrue(TEXT("the publish takes the base back"), Driver.Selection.bBasePoseOwned);
+		TestEqual(TEXT("...and the player still resolves an activity"),
+			static_cast<int32>(Driver.Selection.Route), static_cast<int32>(EElysiumAnimRoute::Activity));
+		TestFalse(TEXT("...which it names"), Driver.Selection.RequestedActivity.IsEmpty());
+	}
+
+	return true;
+}
 
 #endif // WITH_DEV_AUTOMATION_TESTS

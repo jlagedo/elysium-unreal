@@ -8,6 +8,7 @@
 
 #include "ElysiumAnimEvent.h"                // the 2050-2053 swallow reads the record's id
 #include "ElysiumEntityDefs.h"
+#include "ElysiumStub.h"           // the dialogue holster's unrecovered halves
 #include "ElysiumEntityWorld.h"
 #include "ElysiumLocomotionSample.h"         // the step clock's whole input
 #include "ElysiumMoveSolve.h"
@@ -18,6 +19,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumFootsteps.h"      // the step clock, the landing and the hearing rules
+#include "Substrate/ElysiumItemClasses.h"   // the dialogue holster switches the active weapon
 #include "Substrate/ElysiumGameSound.h"      // the six PLAYER_* category names
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpcConditions.h"  // WeaponCapability — the block predicate's `0x18000` term
@@ -931,6 +933,130 @@ void FElysiumPlayer::InputSetSupernaturalLevel(const FElysiumInputArgs& Args)
 	ElysiumLaw::SetSupernaturalLevel(*this, ElysiumLaw::SanitizeLevel(Args.Param));
 }
 
+// --- The dialogue refusal predicate and the dialogue holster ---------------------------------
+//
+// `FUN_10178170` is the player-side predicate `FUN_10178280` consults when `m_bForceDialogStart`
+// (`npc+0x6495`) is clear: a set of combat timers on `CBasePlayer` plus a threat count and a
+// partner-state check. Reproduced arm for arm; the arms with no producer in this runtime are
+// named seams on the class and are read here so none of them is silently dropped.
+
+const TCHAR* FElysiumPlayer::DialogRefusalReason() const
+{
+	const double Now = World ? World->NowSeconds() : 0.0;
+	// `player+0x1d1c`, compared against `curtime`.
+	if (NoDialogueUntil > 0.0 && Now < NoDialogueUntil)
+	{
+		return TEXT("the player was just in combat");
+	}
+	// `player+0x1dd0` / `player+0x1dd8`, the same comparison. No producer yet (seam on the class).
+	if (DialogCombatStampA > 0.0 && Now < DialogCombatStampA)
+	{
+		return TEXT("a combat timer is running");
+	}
+	if (DialogCombatStampB > 0.0 && Now < DialogCombatStampB)
+	{
+		return TEXT("a combat timer is running");
+	}
+	// The threat count (`0x1017f770` / `0x1017f8b0`). Seam: answers 0.
+	if (DialogThreatCount() > 0)
+	{
+		return TEXT("something is still hunting the player");
+	}
+	// `player+0x1cf8`: FLT_MAX is the CLEAR sentinel, so anything else blocks. Seam: never written.
+	if (DialogRefusalFloat != TNumericLimits<float>::Max())
+	{
+		return TEXT("a combat timer is running");
+	}
+	// `0x10175180` — the partner at `player+0x1db0` is in state 3. Seam: answers false.
+	if (DialogPartnerBlocks())
+	{
+		return TEXT("the player is already occupied");
+	}
+	return nullptr;
+}
+
+void FElysiumPlayer::StampDialogCombatRefusal(double Now)
+{
+	// Retail's own duration is unrecovered; `ElysiumDialogue::DamageRefusalSeconds` carries that
+	// note. Monotonic: a second hit inside the window extends it, it never shortens it.
+	NoDialogueUntil = FMath::Max(NoDialogueUntil, Now + ElysiumDialogue::DamageRefusalSeconds);
+}
+
+void FElysiumPlayer::ClearDialogCombatTimers()
+{
+	NoDialogueUntil = 0.0;
+	DialogCombatStampA = 0.0;
+	DialogCombatStampB = 0.0;
+	DialogRefusalFloat = TNumericLimits<float>::Max();
+	UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s ClearDialogCombatTimers"), *DebugString());
+}
+
+void FElysiumPlayer::OnDamageCommitted(const FElysiumDmg& Dmg)
+{
+	// The one producer of `+0x1d1c` this runtime has. It sits on the COMMIT, not on the entry, so a
+	// refused or fully-absorbed hit does not lock the player out of a conversation.
+	StampDialogCombatRefusal(World ? World->NowSeconds() : 0.0);
+}
+
+bool FElysiumPlayer::HolsterForDialog()
+{
+	if (bDialogWeaponHolstered)
+	{
+		return true;   // already put away; a second open must not overwrite the remembered weapon
+	}
+	// `player+0x1e01` — whether the active weapon was drawable, remembered across the conversation.
+	// SEAM: this runtime carries no per-weapon "drawable" byte, so the remembered value is simply
+	// "something was in hand". TODO(dialogue-plan): recover the writer of `player+0x1e01`.
+	const FElysiumEntityHandle Previous = Inventory.ActiveWeapon;
+	FElysiumItem* Unarmed = Inventory.FindOrdinary(*this, TEXT("item_w_unarmed"));
+	if (!Unarmed)
+	{
+		// The same refusal the `Holster` input makes: no carried `item_w_unarmed` to fall back to,
+		// and the inventory has no representation for empty hands.
+		ElysiumStub::Fired(TEXT("method"), TEXT("CBasePlayer.DialogHolster"), DebugString(),
+			FString(), TEXT("dialogue open: no carried item_w_unarmed to switch to"));
+		return false;
+	}
+	if (Previous == Unarmed->Handle)
+	{
+		return true;   // already empty-handed; nothing to remember and nothing to restore
+	}
+	if (!Inventory.SetActiveWeapon(*this, *Unarmed))
+	{
+		ElysiumStub::Fired(TEXT("method"), TEXT("CBasePlayer.DialogHolster"), DebugString(),
+			FString(), TEXT("dialogue open: the equip funnel refused item_w_unarmed"));
+		return false;
+	}
+	DialogHolsteredWeapon = Previous;
+	bDialogWeaponWasDrawable = Previous.IsSet();
+	bDialogWeaponHolstered = true;
+	return true;
+}
+
+void FElysiumPlayer::RestoreDialogHolster()
+{
+	if (!bDialogWeaponHolstered)
+	{
+		return;
+	}
+	const FElysiumEntityHandle Wanted = DialogHolsteredWeapon;
+	bDialogWeaponHolstered = false;
+	DialogHolsteredWeapon = FElysiumEntityHandle::Invalid();
+	if (!bDialogWeaponWasDrawable || !Wanted.IsSet() || !World)
+	{
+		return;   // `FUN_10178400` restores nothing when the remembered byte was clear
+	}
+	FElysiumEntity* Entity = World->Resolve(Wanted);
+	FElysiumItem* Item = Entity ? Entity->AsItem() : nullptr;
+	if (!Item)
+	{
+		// The weapon was dropped, destroyed or taken while the conversation ran. Retail's restore
+		// is a handle read too, so a stale handle simply leaves the hands as they are.
+		return;
+	}
+	Inventory.SetActiveWeapon(*this, *Item);
+}
+
 void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
 	FElysiumCombatCharacter::GetDebugState(Out);
@@ -965,4 +1091,13 @@ void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		: FString::Printf(TEXT("%s tier %d, %d cast(s)"),
 			ElysiumDisciplines::InternalName(SelectedDiscipline), SelectedTier, DisciplineCastCount));
 	Out.Emplace(TEXT("Body"), (World && World->Embodiment()) ? TEXT("pawn") : TEXT("(none)"));
+	// The dialogue-entry predicate and the holster, so a refused conversation is diagnosable.
+	const TCHAR* Refusal = DialogRefusalReason();
+	Out.Emplace(TEXT("Dialog refusal"), Refusal
+		? FString::Printf(TEXT("REFUSED (%s; no-dialogue-until %.2f)"), Refusal, NoDialogueUntil)
+		: FString(TEXT("clear")));
+	Out.Emplace(TEXT("Dialog holster"), bDialogWeaponHolstered
+		? FString::Printf(TEXT("holstered %s (drawable %s)"), *DialogHolsteredWeapon.ToString(),
+			bDialogWeaponWasDrawable ? TEXT("yes") : TEXT("no"))
+		: FString(TEXT("(none)")));
 }

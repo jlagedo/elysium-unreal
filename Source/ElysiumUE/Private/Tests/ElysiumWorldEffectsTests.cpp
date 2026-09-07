@@ -848,7 +848,10 @@ bool FElysiumGazeTest::RunTest(const FString&)
 	const FVector Head(0.f, 0.f, ElysiumMove::StandViewZ);
 	const FVector Forward(1.f, 0.f, 0.f);
 	FElysiumEyeTargetTuning Tuning;
-	Tuning.TurnRate = 0.5f;
+	// Both rates the same, so every assertion below is about the point rather than which rate the
+	// driver published. The two-rate rule has its own case at the end.
+	Tuning.HoldRate = 0.5f;
+	Tuning.StepRate = 0.5f;
 	// Keep the saccade out of the way of the selection assertions — a fidget would move the
 	// commanded point off the subject as soon as the eyes converged on it.
 	Tuning.MinInterval = 1000.f;
@@ -1192,6 +1195,54 @@ bool FElysiumGazeTest::RunTest(const FString&)
 			Watcher->EyeIntegRate, 0.5f);
 	}
 
+	// --- Two integrator rates, picked by the fidget driver ------------------------------------
+	// `FUN_102c0010` rewrites `m_flEyeIntegRate` from the table every think: index 0 in the branch
+	// that holds a converged gaze, index 1 in the branch that steps to the next fidget cell
+	// (`FUN_100ecdf0` → record +0x23C and +0x260). The two authored spellings of "Eye Turn Rate" —
+	// disposition level and inside `EyeTarget` — are those two fields, not a duplicate.
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumCombatCharacter* Watcher = Raw ? Raw->AsCombatCharacter() : nullptr;
+		FElysiumPlayer* Player = World.FindPlayer();
+		if (Watcher == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+
+		FElysiumEyeTargetTuning Rates;
+		Rates.HoldRate = 0.9f;   // the disposition-level value, 0.9 on every shipped row
+		Rates.StepRate = 0.2f;   // Apathy's block value, so the two cannot be confused
+		Rates.FidgetPoints[0] = 8;
+		Rates.FidgetPoints[1] = 2;
+		Rates.FidgetPoints[2] = 8;
+		Rates.HoldMin = 0.f;
+		Rates.HoldMax = 0.f;
+
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+		Watcher->TickGaze(0.f, 0.1f, Head, Forward, Rates);
+		TestEqual(TEXT("a gaze that is not fidgeting integrates at the hold rate"),
+			Watcher->EyeIntegRate, 0.9f);
+
+		// Let the sequence start: the same think that enters a cell already integrates at the step
+		// rate, because retail reads the rate in the branch that advances the cell.
+		Watcher->NextEyeLookTime = TNumericLimits<float>::Max();
+		Watcher->NextFidgetTime = 0.f;
+		Watcher->TickGaze(1.f, 0.1f, Head, Forward, Rates);
+		TestEqual(TEXT("...and a fidget walking its cells integrates at the step rate"),
+			Watcher->EyeIntegRate, 0.2f);
+
+		// Exhausting the triple hands the rate back.
+		Watcher->TickGaze(2.f, 0.1f, Head, Forward, Rates);
+		Watcher->TickGaze(3.f, 0.1f, Head, Forward, Rates);
+		Watcher->TickGaze(4.f, 0.1f, Head, Forward, Rates);
+		TestEqual(TEXT("the exhausted sequence ends the fidget"), Watcher->FidgetStep, -1);
+		TestEqual(TEXT("...and the rate returns to the hold value"),
+			Watcher->EyeIntegRate, 0.9f);
+	}
+
 	// --- The fidget walks the authored keypad cells in order ----------------------------------
 	{
 		FElysiumEntityWorld World(nullptr, nullptr);
@@ -1204,9 +1255,6 @@ bool FElysiumGazeTest::RunTest(const FString&)
 			return false;
 		}
 		Player->Origin = FVector(500.f, 0.f, 0.f);
-		FElysiumInputArgs Args;
-		Args.Param = FElysiumVariant::String(ElysiumPlayerTargetName());
-		Watcher->InputLookAtEntityEye(Args);
 
 		// Anger's authored triple, and a zero hold so each call advances exactly one step.
 		FElysiumEyeTargetTuning Anger;
@@ -1215,9 +1263,15 @@ bool FElysiumGazeTest::RunTest(const FString&)
 		Anger.FidgetPoints[2] = 0;
 		Anger.HoldMin = 0.f;
 		Anger.HoldMax = 0.f;
-		Anger.TurnRate = 1.f;   // converge immediately so the saccade can engage
+		Anger.HoldRate = 1.f;   // converge immediately so the saccade can engage
+		Anger.StepRate = 1.f;
 
+		// The scan picks the player, and is then parked: a re-pick cancels a fidget in progress, and
+		// what is under test here is the sequence, not the scan's own clock. A scripted look-at
+		// cannot be used to hold the aim still — it replaces the whole cascade, the tail fidget with
+		// it.
 		Watcher->TickGaze(0.f, 1.f, Head, Forward, Anger);   // converge on the target
+		Watcher->NextEyeLookTime = TNumericLimits<float>::Max();
 		Watcher->TickGaze(1.f, 0.1f, Head, Forward, Anger);  // step 0 -> cell 0
 		TestEqual(TEXT("the fidget starts at the first authored cell"), Watcher->FidgetCell, 0);
 		TestEqual(TEXT("...as step 0"), Watcher->FidgetStep, 0);
@@ -1245,6 +1299,231 @@ bool FElysiumGazeTest::RunTest(const FString&)
 		Watcher->TickGaze(5.f, 0.1f, Head, Forward, Up);
 		TestEqual(TEXT("cell 8 is the top-centre cell"), Watcher->FidgetCell, 8);
 		TestTrue(TEXT("...and aims above the head"), Watcher->EyeLookTarget.Z > Head.Z);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// Gaze — the two arms that are decided by who and where, rather than by geometry alone: the
+// scripted look-at that replaces the whole cascade, and the dialogue arm's player-only gate and
+// cone rejection. Split from the cascade test above because each case needs a conversation, a
+// second NPC, or both.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGazeDialogueTest,
+	"Elysium.Substrate.GazeDialogue", GElysiumTestFlags)
+bool FElysiumGazeDialogueTest::RunTest(const FString&)
+{
+	// watcher + bystander, so a rejected dialogue arm has a lower arm to fall through TO, and so a
+	// second NPC can stand in for the far half of an NPC-to-NPC session.
+	auto MakeWorld = [](FElysiumEntityWorld& World)
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__gaze_dialogue_test__");
+		FElysiumEntityDef Watcher;
+		Watcher.Classname = TEXT("npc_VVampire");
+		Watcher.TargetName = TEXT("watcher");
+		Watcher.Origin = FVector::ZeroVector;
+		Watcher.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Defs.Defs.Add(MoveTemp(Watcher));
+		FElysiumEntityDef Bystander;
+		Bystander.Classname = TEXT("npc_VVampire");
+		Bystander.TargetName = TEXT("bystander");
+		Bystander.Origin = FVector(400.f, 0.f, 0.f);
+		Bystander.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Defs.Defs.Add(MoveTemp(Bystander));
+		FElysiumEntityDef Prop;
+		Prop.Classname = TEXT("prop_static");
+		Prop.TargetName = TEXT("statue");
+		Prop.Origin = FVector(300.f, 0.f, 0.f);
+		Defs.Defs.Add(MoveTemp(Prop));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+	};
+
+	// The smallest conversation that opens: one spoken NPC line.
+	auto OpenConversation = [](FElysiumEntityWorld& World, const FElysiumEntityHandle& Owner) -> bool
+	{
+		TSharedRef<FElysiumDlgFile> File = MakeShared<FElysiumDlgFile>();
+		if (!FElysiumDlgFile::ParseBytes(
+			ElysiumDlgBytes({ ElysiumDlgRow(11, TEXT("Hello."), TEXT("#"), TEXT(""), TEXT("")) }),
+			File.Get()))
+		{
+			return false;
+		}
+		TSharedRef<FElysiumDlgConversation> Conv = MakeShared<FElysiumDlgConversation>(
+			File, /*bMale*/ true, /*bMalk*/ false,
+			[](const FString&) { return true; }, [](const FString&) {});
+		Conv->Start();
+		World.OpenDialog(Owner, Conv);
+		return true;
+	};
+
+	const FVector Head(0.f, 0.f, ElysiumMove::StandViewZ);
+	const FVector Forward(1.f, 0.f, 0.f);
+	const FVector Ahead = Head + Forward * (500.f * ElysiumMove::U);
+	FElysiumEyeTargetTuning Tuning;
+	Tuning.HoldRate = 0.5f;
+	Tuning.StepRate = 0.5f;
+	Tuning.MinInterval = 1000.f;
+	Tuning.MaxInterval = 1000.f;
+
+	// --- A scripted look-at replaces the whole cascade ----------------------------------------
+	// `UpdateCharacter` (`0x103246d0`) chooses between the cascade and `MaintainScriptedEyeDirection`
+	// (`0x10325620`) on `m_scriptedEyeMode`@0x0E68 alone. There is no arm order to lose to: a
+	// conversation in progress, an enemy, and a fidget already walking its cells are all skipped.
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumEntity* Statue = World.FindByName(TEXT("statue"));
+		FElysiumNpc* Watcher = Raw ? Raw->AsNpc() : nullptr;
+		if (Watcher == nullptr || Player == nullptr || Statue == nullptr)
+		{
+			return false;
+		}
+		Player->Origin = FVector(500.f, 0.f, 0.f);   // dead ahead: the dialogue arm would take it
+		World.Tick(0.0);
+		if (!TestTrue(TEXT("the gaze fixture conversation opens"),
+			OpenConversation(World, Watcher->Handle)))
+		{
+			return false;
+		}
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("without a scripted mode the dialogue arm has the aim"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+
+		FElysiumInputArgs Args;
+		Args.Param = FElysiumVariant::String(TEXT("statue"));
+		Watcher->InputLookAtEntityOrigin(Args);
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("a scripted look-at outranks the dialogue partner"),
+			Watcher->EyeLookTarget.Equals(Statue->Origin, 0.1f));
+
+		// The fidget is the cascade's own tail. The scripted maintainer does not have one, so a
+		// sequence left mid-walk cannot move the scripted aim.
+		Watcher->FidgetStep = 1;
+		Watcher->FidgetCell = 8;
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+		Watcher->TickGaze(1.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("a fidget in progress does not move a scripted aim"),
+			Watcher->EyeLookTarget.Equals(Statue->Origin, 0.1f));
+		TestEqual(TEXT("...and the sequence is left exactly where it was"), Watcher->FidgetStep, 1);
+		Watcher->FidgetStep = -1;
+
+		// Outside the ±30° cone the scripted aim falls back to straight ahead — retail's own
+		// fallback at `0x1032576b`, and NOT a return to the cascade: the partner is still dead
+		// ahead and is still not looked at.
+		Statue->Origin = FVector(-300.f, 0.f, 0.f);
+		Watcher->TickGaze(2.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("a scripted target outside the cone falls back to straight ahead"),
+			Watcher->EyeLookTarget.Equals(Ahead, 0.1f));
+
+		// `LookAtEntityDefault` hands control back, and the cascade resumes on the next think.
+		Watcher->InputLookAtEntityDefault(Args);
+		Watcher->TickGaze(3.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("LookAtEntityDefault hands the cascade back"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+	}
+
+	// --- The dialogue arm is cone-gated, and rejection falls THROUGH --------------------------
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumEntity* Other = World.FindByName(TEXT("bystander"));
+		FElysiumNpc* Watcher = Raw ? Raw->AsNpc() : nullptr;
+		if (Watcher == nullptr || Player == nullptr || Other == nullptr)
+		{
+			return false;
+		}
+		World.Tick(0.0);
+		if (!OpenConversation(World, Watcher->Handle))
+		{
+			return false;
+		}
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+
+		// The partner behind the head fails the cone. Retail jumps to the next arm (`0x1026b8d3`
+		// → `0x1026b8d9`), so the committed enemy — dead ahead — is what the eyes take.
+		Player->Origin = FVector(-500.f, 0.f, 0.f);
+		Watcher->Senses.Memory.Enemy = Other->Handle;
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("a dialogue partner outside the cone is rejected for the next arm"),
+			Watcher->EyeLookTarget.Equals(Other->EyePosition(), 0.1f));
+		Watcher->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+
+		// With no lower arm answering, rejection means straight ahead — never the partner.
+		Watcher->EyeLookTargetHandle = FElysiumEntityHandle::Invalid();
+		Watcher->NextEyeLookTime = TNumericLimits<float>::Max();
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("...and with nothing below it, straight ahead"),
+			Watcher->EyeLookTarget.Equals(Ahead, 0.1f));
+
+		// The camera redirect is cone-tested as the camera, and a camera outside the cone is the
+		// same rejection: retail tests whichever point it picked and never falls back from the
+		// camera to the partner's eyes, even with the partner dead ahead.
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		const FVector CameraBehind(-200.f, 0.f, ElysiumMove::StandViewZ);
+		Watcher->EyeLookTargetHandle = FElysiumEntityHandle::Invalid();
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning, &CameraBehind);
+		TestFalse(TEXT("a DialogPOV camera outside the cone does not fall back to the partner"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+		TestTrue(TEXT("...it is rejected like any other candidate"),
+			Watcher->EyeLookTarget.Equals(Ahead, 0.1f));
+	}
+
+	// --- The dialogue arm is player-only -------------------------------------------------------
+	// Retail reads `m_hDialogPartner`@0xFE8 and then the partner's player pointer at `+0xA8`,
+	// skipping the arm outright when it is null (`0x1026b853`-`0x1026b85b`). A character in a
+	// session whose far half is not the player gets no dialogue arm at all.
+	{
+		FElysiumEntityWorld World(nullptr, nullptr);
+		MakeWorld(World);
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Raw = World.FindByName(TEXT("watcher"));
+		FElysiumEntity* OtherRaw = World.FindByName(TEXT("bystander"));
+		FElysiumNpc* Watcher = Raw ? Raw->AsNpc() : nullptr;
+		FElysiumNpc* Bystander = OtherRaw ? OtherRaw->AsNpc() : nullptr;
+		if (Watcher == nullptr || Bystander == nullptr || Player == nullptr)
+		{
+			return false;
+		}
+		World.Tick(0.0);
+		if (!OpenConversation(World, Watcher->Handle))
+		{
+			return false;
+		}
+		Bystander->NextFidgetTime = TNumericLimits<float>::Max();
+		Bystander->NextEyeLookTime = TNumericLimits<float>::Max();
+
+		// The owner's partner IS the player, so the owner's arm fires.
+		Player->Origin = FVector(500.f, 0.f, 0.f);
+		Watcher->NextFidgetTime = TNumericLimits<float>::Max();
+		Watcher->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestTrue(TEXT("the session owner's dialogue arm fires"),
+			Watcher->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+
+		// The bystander is in the same conversation's world and is not its player-facing half. With
+		// the scan parked, an arm that fired would be the only thing that could aim at the player,
+		// which is dead ahead and would otherwise be an easy pick.
+		Bystander->TickGaze(0.f, 0.f, Head, Forward, Tuning);
+		TestFalse(TEXT("a character that is not the player's partner gets no dialogue arm"),
+			Bystander->EyeLookTarget.Equals(Player->EyePosition(), 0.1f));
+		TestTrue(TEXT("...and looks straight ahead instead"),
+			Bystander->EyeLookTarget.Equals(Ahead, 0.1f));
+		TestFalse(TEXT("...with no subject committed"), Bystander->EyeLookTargetHandle.IsSet());
+
+		// A DialogPOV camera does not change that: the redirect replaces the *player* inside an arm
+		// that never ran.
+		const FVector CameraPoint(420.f, 60.f, ElysiumMove::StandViewZ + 40.f);
+		Bystander->TickGaze(0.f, 0.f, Head, Forward, Tuning, &CameraPoint);
+		TestFalse(TEXT("a DialogPOV camera does not open the arm for a non-partner"),
+			Bystander->EyeLookTarget.Equals(CameraPoint, 0.1f));
 	}
 
 	return true;

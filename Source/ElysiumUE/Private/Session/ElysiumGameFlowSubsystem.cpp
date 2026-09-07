@@ -657,6 +657,7 @@ bool UElysiumGameFlowSubsystem::SeedNewGameState(const FElysiumNewGameRequest& R
 			Rules.TraitEffects = &Book->TraitEffects();
 			Rules.Feats        = &Book->Feats();
 			Rules.Strings      = &Book->Strings();
+			Rules.ExcludedEquip = &Book->ExcludedEquip();
 		}
 		ElysiumChargen::ApplyBaseline(Chargen, Rules);
 

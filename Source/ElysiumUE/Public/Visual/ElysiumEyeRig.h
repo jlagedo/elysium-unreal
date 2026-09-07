@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumMoveSolve.h"   // ElysiumMove::U — the blink gate's radius is authored in Source units
 #include "ElysiumEyeRig.generated.h"
 
 class UElysiumEyeTuningConfig;
@@ -222,4 +223,95 @@ namespace ElysiumEyes
 	//
 	// `SecondsRemaining` is time left in the window; at or below zero the eye is open.
 	float BlinkWeight(float SecondsRemaining);
+
+	// The blink cadence's player-distance gate.
+	//
+	// `CAI_BaseNPCTroika::MaintainEyeDirection` (`vampire.dll` 0x102BFF20) wraps the WHOLE cadence
+	// in one test:
+	//
+	//     if (m_flPlayerDist < _DAT_10483AAC && (m_blinkTimer -= dt) < _DAT_104454C4) {
+	//         vfunc 0x450;                                   // CBaseFlex::Blink, 0x100B5CE0
+	//         m_blinkTimer = RandomFloat(m_flMinBlink, m_flMaxBlink);   // 2.5-6.0 s, per disposition
+	//     }
+	//
+	// So an NPC far from the player does not blink AND does not run down its timer: the countdown is
+	// frozen, not merely unread, which is why walking up to a distant NPC does not trigger a burst of
+	// backed-up blinks. Only the 0.3 s envelope is client-side; the cadence is on the server think,
+	// i.e. the game clock.
+	//
+	// TODO(gaze): retail `_DAT_10483AAC` unread. It is an unnamed `.rdata` float with eighteen
+	// readers and no writer — `CAI_BaseNPCTroika::SetPlayerLOS` (0x10291610),
+	// `CAI_BaseNPCTroika::SelectSchedule` (0x102AF660), `CNPC_Crow::vfunc481` (0x10357680),
+	// `CNPC_VPedestrian::vfunc461` (0x103A2E30) and this one all compare `m_flPlayerDist` against
+	// it — so it is the engine's single "the player is close enough to matter" radius, but the
+	// corpus has not decoded its value. 1024 Source units is a PLACEHOLDER, chosen so that every
+	// range a face is actually read at is inside it: a dialogue camera sits ~2 m from the speaker
+	// and melee is fought well within 26 m.
+	static constexpr float BlinkPlayerDistance = 1024.f * ElysiumMove::U;
+}
+
+// What the caller is asking the cadence for this frame. `Cadence` is the shipping path; the other
+// two are the green room's overrides, which are inputs to the same schedule rather than a second one.
+enum class EElysiumBlinkCommand : uint8
+{
+	Cadence,   // run retail's gated countdown
+	Force,     // start one envelope now, leaving the countdown alone
+	Hold,      // lids pinned open, and the countdown reseeded so releasing does not fire a backlog
+};
+
+// One body's blink state. Retail's `m_blinkTimer` is a COUNTDOWN (`0x102BFF20` decrements it by the
+// think delta), not a deadline, and that is load-bearing: the gate freezes it rather than letting a
+// wall-clock deadline slide past while nobody is watching.
+struct FElysiumBlinkSchedule
+{
+	// Seconds until the next blink. Starts at zero, which is retail's own initial state: the first
+	// think with the player in range blinks and reseeds.
+	float Timer = 0.f;
+	// Game-clock time the 0.3 s envelope closes at. Absolute, because the envelope is the client
+	// half and is read as `BlinkWeight(BlinkEndsAt - Now)`.
+	float BlinkEndsAt = 0.f;
+};
+
+// Retail recomputes the eye aim every think, so a body whose maintainer stopped running falls back
+// to the eyeball record's authored resting aim on the very next frame — it does not keep staring at
+// the last world point it was handed. The port's gaze decision and its eye pass are two passes, so
+// the latch carries a frame stamp: the decision stamps it, the pass rests anything the frame did not.
+struct FElysiumEyeGazeLatch
+{
+	FVector Target = FVector::ZeroVector;
+	bool bHasTarget = false;
+	uint64 Frame = 0;
+
+	void Set(const FVector& WorldTarget, uint64 InFrame)
+	{
+		Target = WorldTarget;
+		bHasTarget = true;
+		Frame = InFrame;
+	}
+
+	// Called once per eye frame, before the aim is read. A latch not stamped this frame rests.
+	bool Maintain(uint64 InFrame)
+	{
+		if (Frame != InFrame)
+		{
+			bHasTarget = false;
+		}
+		return bHasTarget;
+	}
+};
+
+namespace ElysiumEyes
+{
+	// One body's blink cadence for one frame, and the envelope weight it produces (0 open, 1 closed).
+	//
+	// `ClockDelta` is measured on the PAUSABLE game clock (`FElysiumEntityWorld::NowSeconds`), the
+	// same clock `Now` is on, so the cadence and the gaze fidget freeze together — a paused world
+	// hands a delta of zero and the schedule stands still. `PlayerDistanceCm` is body-to-player;
+	// `MinInterval`/`MaxInterval` come from the disposition table (`vdata/system/dispositiontable.txt`,
+	// mostly 2.5/6.0 s).
+	//
+	// Pure but for the reseed draw: no component, no world, no clock of its own.
+	float AdvanceBlink(FElysiumBlinkSchedule& Schedule, float Now, float ClockDelta,
+		float PlayerDistanceCm, float MinInterval, float MaxInterval,
+		EElysiumBlinkCommand Command);
 }

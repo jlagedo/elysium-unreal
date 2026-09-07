@@ -119,6 +119,15 @@ void FElysiumAnimating::InstallPreparedCharacterVisual()
 	if (Visual)
 	{
 		World->RegisterNpcBody(Visual);
+		// A character body that answers the class verb is also a +use target, exactly as a usable
+		// prop's body is (`FElysiumProp`'s animated branch registers the same anchor). Without this
+		// the `ElysiumUse` trace never hits a standing character, so an NPC carrying a `dialogname`
+		// could never be focused and `+use` could never open its conversation (D3). Inert bodies are
+		// registered disabled by `RegisterUseAnchor` itself and re-enabled by the life-state hook.
+		if (IsUsable() && !Def->bSky)
+		{
+			World->RegisterUseAnchor(Visual, Handle);
+		}
 		Embodiment->UpdateNpcDisposition(Visual, Disposition, DispositionLevel);
 		RefreshDispositionExpression();
 		if (IsInert())

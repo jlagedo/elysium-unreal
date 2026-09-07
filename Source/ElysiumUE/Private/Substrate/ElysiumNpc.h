@@ -27,6 +27,17 @@ struct FElysiumStatTable;
 class FElysiumNpc final : public FElysiumScriptedCharacter, public IElysiumScheduleRunner
 {
 public:
+	// The `WillTalk` latch (`FElysiumCombatCharacter::bWillTalk`, retail virtual `+0x49c`) SHIPS
+	// SET on a character, so `WillTalk 0` is a disabler and `WillTalk 1` a re-enabler.
+	//
+	// INFERRED, not read off an initializer: `vampire.dll` has no constructor write and no keyfield
+	// writer for the byte — `InputWillTalk` (`0x103418f0`) is its only writer — and `sp_tutorial_1`
+	// fires `Jack,WillTalk 0` at map load (`docs/vtmb/game_runtime.md` ~line 1114). A load-time
+	// disable is meaningless against a false default, and with one the 79 authored calls would be
+	// the only way any character could ever be talked to, leaving `+use` dead on every NPC no
+	// script cues. The real initializer remains unrecovered.
+	FElysiumNpc() { bWillTalk = true; }
+
 	bool  bUseInteresting = false;    // use_interesting — the NPC is a look/use target (seeded from the key)
 	bool  bInDialog = false;          // a dialog session is open (OnDialogBegin fired, OnDialogEnd pending)
 	int32 DialogFlags = 0;            // raw arg on ordinary/unforced; Remote ignores its variant
@@ -36,6 +47,13 @@ public:
 	FString PlayerReaction;           // player_reaction — authored `D_* priority` seed
 	FElysiumRelationships Relationships;
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
+
+	// `m_bForceDialogStart` (`npc+0x6495`). `FUN_10178280` refuses a conversation when this is
+	// CLEAR and the player-side refusal predicate holds; a set byte opens regardless. The forced
+	// openers (`StartPlayerDialog`, `StartPlayerDialogRemote`) set it, `StartPlayerDialogUnforced`
+	// clears it, and `+use` never touches it — so use and unforced are the two gated entries.
+	// Session state: retail's byte is not in the datamap's save block either.
+	bool bForceDialogStart = false;
 
 	// VtMB's disposition stance machine (`docs/vtmb/animation_and_movers.md`). The index and the
 	// clock are retail's own saved pair; the two latches beside them are not saved, because retail's
@@ -185,8 +203,12 @@ public:
 	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
 	virtual bool ResistsFeeding() const override;
 
+	// `EquipRules` is the `ExcludedEquipTables` block of `system/items.txt`: the template authors
+	// `Excluded_Equipment` by NAME, and slot 31 has to hold the row id the wield rule
+	// (`Inventory_Can_Wield`, 0x10335a70) selects with. Null leaves the seeded default (row 0).
 	void ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
-		const FElysiumStatTable* Table);
+		const FElysiumStatTable* Table,
+		const struct FElysiumExcludedEquipTable* EquipRules = nullptr);
 
 	// The authored creature classification wins over the clan slot: an `npctemplate` human carries
 	// `Clan None` but a Sabbat vampire template carries `Clan Brujah` AND `Kindred 1`, and only the
@@ -392,6 +414,42 @@ public:
 	// through the mind's ordinary transition path.
 	void UpdateIdealState(double Now);
 
+	// --- `OnStateChange`, vtable slot 463 -------------------------------------------------------
+	//
+	// Retail's slot 463 is called on the state EDGE and takes the new state as its second argument.
+	// Most of the cast fill it with `CAI_BaseNPCTroika::OnStateChange` (0x102ae140), which does not
+	// touch the weapon at all — `CNPC_VVampire`, `CNPC_VHuman`, `CNPC_VPedestrian` and 40-odd others.
+	// Three bodies DO, and they are the same code:
+	//
+	//   * `CNPC_VGuard1::vfunc463`            (0x1037d020)
+	//   * `CNPC_VHunter::vfunc463`            (0x10388880)
+	//   * `CNPC_VGhoulCroucher::FUN_103871c0` (0x103871c0), shared by `CNPC_VHumanCombatant`,
+	//     `CNPC_VHumanCombatPatrol`, `CNPC_VSabbatGunman`, `CNPC_VStalker`, `CNPC_VYukie`,
+	//     `CNPC_ProneDialog` and `CNPC_VGhoulCroucher` itself.
+	//
+	// Their body is: new state 1 (IDLE) -> `GetActiveWeapon()->Hide()` (`+0x108`); new state 2
+	// (ALERT), 3 (COMBAT) or 11 -> `GetActiveWeapon()->Unhide()` (`+0x10c`); then chain to the
+	// Troika base either way. `CNPC_VGuard1`'s only addition is an unrelated `+0x29c`/`+0xa8` probe
+	// ahead of the switch. So "an armed class holsters while idle and draws when it goes alert" is a
+	// property of SEVEN concrete classes and of nothing else.
+	//
+	// **A polled edge rather than a callback**, because this runtime's state is written from three
+	// places (the ideal-state pass, `forcestate`, and the body arbiter's scripted push) and a hook on
+	// each is three chances to forget one. `bStateChangeSeen` starts false so the FIRST think fires
+	// it, which is retail's own spawn-time `SetState(IDLE)` — that is what puts a freshly spawned
+	// guard's weapon away. Public so a fixture can drive the edge without a whole think.
+	void PumpStateChange();
+
+	// Whether this NPC's authored classname is one of the seven that fill slot 463 with the
+	// holster/draw body. Spelled from the retail class names with the port's `npc_` prefix.
+	bool ClassHolstersOnState() const;
+
+	// The recovered override body itself, taking the NEW state exactly as retail's second argument
+	// does. Public because it IS the virtual — retail's callers reach it through the vtable, and a
+	// fixture asserting the arms has to be able to state a transition without also driving the whole
+	// decision pass that produces one.
+	void ApplyStateWeaponVisibility(EElysiumNpcState NewState);
+
 	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
 	void ThinkStanceOrIdle(double Now);
 
@@ -518,6 +576,41 @@ public:
 	void BeginDialog(EElysiumDialogOpenerKind Opener, int32 RawFlags,
 		const FElysiumInputArgs& Args);
 
+	// --- Use-to-talk (`CBasePlayer::PlayerUse`, `0x10167850`) ---------------------------------
+	//
+	// Retail resolves the use target, tests the character's `WillTalk` latch (virtual `+0x49c`,
+	// set by `InputWillTalk` `0x103418f0`), clears the schedule, pushes AI schedule `0x6a` and
+	// calls player vtable slot 414. Here the eligibility half is `CanPlayerFocus` (so the reticle
+	// and the prompt agree with what pressing use will do) and the transaction half is
+	// `BeginPlayerUse`, which routes into the same `BeginDialog` primitive the inputs use.
+
+	// The authored `dialogname`. Empty when this NPC carries no conversation.
+	FString DialogName() const;
+
+	// True when there is a conversation to open at all. Deliberately independent of `bWillTalk`:
+	// the class verb is "this thing talks", the eligibility is `CanPlayerFocus`'s.
+	virtual bool IsUsable() const override;
+
+	// `bWillTalk && !bInDialog && !IsInert() && !IsBusyWithDiscipline()` and the AINPCFlags2 bit.
+	virtual bool CanPlayerFocus(const FElysiumUseContext& Context) const override;
+
+	// Open the conversation, or refuse with the M-REFUSE notification. Always returns a terminal
+	// result: dialogue owns the body through its own token, so no +use session may linger.
+	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context) override;
+
+	// The talk glyph (`hud/Context_Icons/Talk_Male` / `Talk_Female`, use_icon 15 / 14) when the
+	// definition authored no `use_icon` of its own.
+	virtual int32 ResolveUseIcon(const FElysiumEntityHandle& Activator) const override;
+
+	// `m_bfAINPCFlags2 & 0x10000000` — one of the four common guards on every dialogue entry.
+	// SEAM: nothing in this runtime decodes `m_bfAINPCFlags2`, so the bit answers CLEAR and the
+	// guard never blocks. TODO(dialogue-plan): recover the flag word and its writers.
+	bool HasDialogSuppressFlag() const { return false; }
+
+	// The whole `FUN_10178280` refusal test from this NPC's side: nullptr when the conversation may
+	// open, otherwise the reason. `bForceDialogStart` short-circuits it, as retail's byte does.
+	const TCHAR* DialogEntryRefusalReason() const;
+
 	// K1: each Tier-1 name enters through its own handler. Only after that handler has applied the
 	// recovered parameter posture does it join the shared dialogue-session primitive above.
 	void InputStartPlayerDialog(const FElysiumInputArgs& Args);
@@ -609,6 +702,10 @@ private:
 	// Senses and the recovered decision pass — or the stale-condition reset where a
 	// scripted owner suppresses gathering.
 	void RunConditionPass();
+
+	// The edge tracker `PumpStateChange` keeps (see the pump's own comment, in the public section).
+	EElysiumNpcState LastStateChange = EElysiumNpcState::Idle;
+	bool bStateChangeSeen = false;
 
 	// Watches a beat that stopped advancing its own move and releases the body rather than
 	// freezing it.

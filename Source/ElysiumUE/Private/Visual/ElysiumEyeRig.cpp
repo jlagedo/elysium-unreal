@@ -160,6 +160,43 @@ float ElysiumEyes::BlinkWeight(float SecondsRemaining)
 	return W > 1.f ? 2.f - W : W;
 }
 
+float ElysiumEyes::AdvanceBlink(FElysiumBlinkSchedule& Schedule, float Now, float ClockDelta,
+	float PlayerDistanceCm, float MinInterval, float MaxInterval, EElysiumBlinkCommand Command)
+{
+	const float Min = FMath::Max(0.f, MinInterval);
+	const float Max = FMath::Max(Min, MaxInterval);
+	switch (Command)
+	{
+	case EElysiumBlinkCommand::Force:
+		// The green room's manual blink. The countdown is deliberately untouched: one press is one
+		// envelope, not a reset of the cadence under it.
+		Schedule.BlinkEndsAt = Now + ElysiumEyes::BlinkSeconds;
+		break;
+	case EElysiumBlinkCommand::Hold:
+		Schedule.BlinkEndsAt = 0.f;
+		Schedule.Timer = FMath::FRandRange(Min, Max);
+		break;
+	case EElysiumBlinkCommand::Cadence:
+	default:
+		// Retail, verbatim (`CAI_BaseNPCTroika::MaintainEyeDirection`, 0x102BFF20): the distance gate
+		// wraps the countdown as well as the toggle, so a body out of range freezes its timer where
+		// it stands instead of banking blinks against the moment the player walks up.
+		if (PlayerDistanceCm < ElysiumEyes::BlinkPlayerDistance)
+		{
+			Schedule.Timer -= FMath::Max(0.f, ClockDelta);
+			if (Schedule.Timer < 0.f)
+			{
+				Schedule.BlinkEndsAt = Now + ElysiumEyes::BlinkSeconds;
+				Schedule.Timer = FMath::FRandRange(Min, Max);
+			}
+		}
+		break;
+	}
+	// The envelope is the client half and runs to completion either way: a blink already in flight
+	// when the player steps out of range still opens the lid.
+	return ElysiumEyes::BlinkWeight(Schedule.BlinkEndsAt - Now);
+}
+
 FElysiumEyeTuning ElysiumEyes::ComposeTuning(const FElysiumEyeTuning& DebugTuning,
 	const UElysiumEyeTuningConfig* Config)
 {

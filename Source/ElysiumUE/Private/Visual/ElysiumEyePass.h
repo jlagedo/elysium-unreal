@@ -56,6 +56,22 @@ struct FElysiumEyeReadout
 	bool bAiming = false;
 };
 
+// The frame inputs the eye pass cannot reach on its own. It is not a UObject and it sits under
+// `UElysiumEntityBodies`, so the clock and the player's position arrive from the map actor's
+// post-move pass beside the gaze decision that already reads them.
+struct FElysiumEyeFrame
+{
+	// The PAUSABLE game clock (`FElysiumEntityWorld::NowSeconds`), which is the clock the gaze
+	// cascade's fidget is on. The blink cadence rides it too, so a held world freezes both halves of
+	// the face together — retail runs the cadence on the server think, not on wall time.
+	float NowSeconds = 0.f;
+	// The player's eye point, for the blink cadence's distance gate
+	// (`ElysiumEyes::BlinkPlayerDistance`). Absent in a world with no player, which gates every
+	// body out — the same answer retail gives when `m_flPlayerDist` is never brought in range.
+	FVector PlayerPosition = FVector::ZeroVector;
+	bool bHavePlayer = false;
+};
+
 // The per-body application of VtMB's eye system: which slots draw as eyes, the per-frame
 // basis rebuild and material publish, the blink cadence, and the gaze debug seam. Plain C++ owned
 // by `UElysiumEntityBodies` (one instance per map epoch), which forwards its public eye methods
@@ -72,7 +88,8 @@ public:
 	// Rebuild every bound eye's basis against this frame's final pose and publish it to the
 	// material. `Context` is the owning component: the world, the rulebook subsystem and the
 	// player camera manager are all reached through it, because this pass is not a UObject.
-	void TickEyes(const UObject* Context, float DeltaSeconds);
+	// `Frame` carries what the pass cannot: the game clock and the player's position.
+	void TickEyes(const UObject* Context, const FElysiumEyeFrame& Frame);
 
 	// Fill `Out` for `Comp`, or return false when this pass has no eye binding for it.
 	bool DescribeEyes(const USkeletalMeshComponent* Comp, FElysiumEyeReadout& Out) const;
@@ -118,21 +135,25 @@ private:
 		FString Disposition;
 		int32 DispositionLevel = 1;
 
-		// Blink is two halves in retail: the server picks *when* (a random interval from the
-		// disposition table) and the client runs the 300 ms envelope. Both sit here until a
-		// gaze cascade owns the cadence and pushes the toggle through the seam.
+		// Blink is two halves in retail: the server picks *when* (a gated countdown reseeded from
+		// the disposition table) and the client runs the 300 ms envelope. `ElysiumEyes::AdvanceBlink`
+		// owns both, including the player-distance gate this body's countdown is frozen by when
+		// nobody is near enough to read its face.
 		//
 		// The envelope is asymmetric and that is authored: `w = 2*sqrt(cos(pi*u/2))` folded about
 		// 1 closes the lid 48 ms after the toggle and reopens it over the remaining 252 ms.
-		float NextBlinkTime = 0.f;
-		float BlinkEndsAt = 0.f;
+		FElysiumBlinkSchedule Blink;
 
 		// Where the substrate says this character is looking, world space, pushed once per frame
 		// through IElysiumEmbodiment::SetViewTarget. Held rather than pulled because the two halves
 		// tick in different passes: the gaze decision runs over the entity world, the eye pass runs
 		// over the bodies, and this is the one value that crosses.
-		FVector ViewTarget = FVector::ZeroVector;
-		bool bHasViewTarget = false;
+		//
+		// Frame-stamped, because retail recomputes the aim every think: a body the gaze pass did not
+		// maintain this frame — unrendered, inert, or a conversation that ended and left nothing
+		// supplying a point — rests on its authored aim rather than holding the last world point it
+		// was handed forever.
+		FElysiumEyeGazeLatch Gaze;
 
 		// The head bone, resolved once at build. The gaze cone and the fidget grid are measured in
 		// the live animated head frame, so this is looked up by name and cached — never mixed with
@@ -163,6 +184,15 @@ private:
 	// One entry per body carrying eye sections, INCLUDING a body none of whose sections joined a
 	// record — that one drives nothing and exists to be reported.
 	TArray<FElysiumEyeBinding> EyeBindings;
+	// The frame stamp `SetViewTarget` writes and `TickEyes` tests, incremented at the tail of every
+	// eye frame. The gaze decision runs first in the same pass, so a body it maintained carries the
+	// current value and a body it skipped carries a stale one.
+	uint64 GazeFrame = 1;
+	// The previous eye frame's game-clock reading, so the cadence advances by a GAME-clock delta.
+	// Held here rather than passed in because the pass is the only thing that knows when it last ran
+	// (the map actor's own delta is the frame's real time, which is not the clock the cadence is on).
+	float LastNowSeconds = 0.f;
+	bool bHasLastNow = false;
 	FElysiumEyeDebug EyeDebugState;
 	// The per-character iris is the `.vmt`'s `$iris`, decoded beside the glb rather than carried
 	// inside it, so it loads through the same per-map dedup index the world uses. Strong-ref'd for

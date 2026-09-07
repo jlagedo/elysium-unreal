@@ -72,6 +72,24 @@ namespace
 		}
 		return true;
 	}
+
+	// STATED ASSUMPTION — the wield rule's spawn-side trigger.
+	//
+	// Retail's spawn equip is deliberately UNGATED (`Weapon_Equip` 0x1032d380, reached from
+	// `CAI_BaseNPC::Spawn` 0x10273200 / Troika `NPCInit` 0x1029a0b0), and `Inventory_Can_Wield`
+	// (0x10335a70) is enforced by `Inventory_Wield_Update` (0x10335b80), whose recovered callers are
+	// the trait-effect apply (0x101f8620) and remove (0x101f8f30) tails — neither of which runs
+	// between an NPC's spawn and its first step. Yet Jack, whose `Excluded_Equipment` is `Default`
+	// and whose loadout hands him `item_w_claws`, walks sp_tutorial_1 UNARMED. Some event between
+	// the spawn equip and that walk runs the sweep, and it is NOT recovered.
+	//
+	// So the sweep is run once here, at the end of the loadout resolve — the port's own equivalent
+	// of the spawn equip's tail. It reproduces the observed retail outcome; the trigger it stands
+	// for is unknown, and this comment is the marker for replacing it when that trigger is found.
+	void WieldUpdateAfterLoadout(FElysiumNpc& Npc)
+	{
+		Npc.Inventory.WieldUpdate(Npc);
+	}
 }
 
 ElysiumNpcLoadout::EResult ElysiumNpcLoadout::Resolve(FElysiumNpc& Npc)
@@ -103,11 +121,13 @@ ElysiumNpcLoadout::EResult ElysiumNpcLoadout::Resolve(FElysiumNpc& Npc)
 	const FString& Authored = Npc.AdditionalEquipment;
 	if (!IsNoneSentinel(Authored) && GrantAndWield(Npc, Authored.TrimStartAndEnd()))
 	{
+		WieldUpdateAfterLoadout(Npc);
 		return EResult::Authored;
 	}
 
 	if (GrantAndWield(Npc, FistsClassname))
 	{
+		WieldUpdateAfterLoadout(Npc);
 		return EResult::Fallback;
 	}
 

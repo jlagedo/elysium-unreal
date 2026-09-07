@@ -65,6 +65,11 @@ struct FElysiumSaveVersion
 		// pre-27 swing resolves the same reaction and loses only the bank name on its log line.
 		WeaponSwingClipOwner = 27,
 
+		// The active weapon's drawn/hidden bit — retail's `m_fEffects & EF_NODRAW` (+0x19c & 0x40).
+		// An NPC saved while idle has holstered (hidden) its weapon, and a payload written before the
+		// bit existed carries a drawn one, which is the default the field already has.
+		WeaponHidden = 28,
+
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
 	};

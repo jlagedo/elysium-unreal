@@ -17,14 +17,17 @@
 // authored body events and leaves the other event kinds on those existing owners.
 struct FElysiumDialogueLineScene final : IElysiumChoreoCallback
 {
+	// `TakeLetter` is the line's chosen text-column take (D4). The scene, the voice and the `.lip`
+	// share one stem, so a female take performs the female body clip as well as the female mouth.
 	void Begin(FElysiumEntityWorld& InWorld, const FElysiumEntityHandle& InSpeaker,
-		const FString& DlgSourcePath, int32 LineId, double Now)
+		const FString& DlgSourcePath, int32 LineId, double Now,
+		TCHAR TakeLetter = FElysiumLineService::DefaultTake)
 	{
 		Stop();
 		World = &InWorld;
 		Speaker = InSpeaker;
 		SourceRel = FPaths::SetExtension(
-			FElysiumLineService::DialogueLineSource(DlgSourcePath, LineId), TEXT("vcd"));
+			FElysiumLineService::DialogueLineSource(DlgSourcePath, LineId, TakeLetter), TEXT("vcd"));
 		Scene = ElysiumScene::Load(SourceRel);
 		if (!Scene.IsValid())
 		{
@@ -260,6 +263,10 @@ struct FElysiumDialogueSession
 	FElysiumEntityHandle Owner;
 	FElysiumEntityHandle Listener;
 	TSharedPtr<FElysiumDlgConversation> Conversation;
+	// `FElysiumEntityWorld::GetOpenDialogSerial()` — this session's monotonic id, stamped by
+	// `OpenDialog`. Identity for anything held across a call that can replace the session: the
+	// opening line's col-4, a flushed NPC col-5, a UI frame.
+	uint32 Serial = 0;
 	EElysiumDialogOpenerKind Opener = EElysiumDialogOpenerKind::Remote;
 	int32 RawFlags = 0;
 	int32 DecodedFlags = 0;
@@ -273,8 +280,17 @@ struct FElysiumDialogueSession
 	FString FallbackReason;
 	int32 CurrentLineId = INDEX_NONE;
 	uint32 TurnRevision = 0;
+	// The `_col_<C>` text-column take the current line resolved to (D4). Published so a diagnostic
+	// can name which take is playing; `FElysiumLineService::EllipsesTake` means the shared
+	// wordless take.
+	TCHAR CurrentTakeLetter = FElysiumLineService::DefaultTake;
 	FElysiumVoiceHandle CurrentVoice;
-	bool bAutomaticFallback = false;
+	// Retail's forced-visible-response rule, not a port fallback: `process_pc_line` (`0x100e8520`)
+	// only lets an Auto-End become automatic when `LookupSpeechFile` finds audio for the NPC line;
+	// with no audio it clears the slot's flags and forces one visible response with value -1. This
+	// is that response — the manual Continue the presentation exposes for an automatic turn whose
+	// voice could not be started.
+	bool bForcedVisibleResponse = false;
 	double SelectedAt = 0.0;
 	float MinimumHoldSeconds = 0.0f;
 	float ScreenSide = 1.0f;

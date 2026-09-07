@@ -410,3 +410,15 @@ Adding those two modules to the corpus dump would close the gap; both are small.
   menu and HUD are new assets, not VtMB reproductions.
 - **`[Mods]`** — mod-directory path routing for the loader's own mod support.
 - **`[Localization]`** — extended-ANSI support and translated-string plumbing.
+
+## 6. Authoring defects in the shipped dialogue data *(appended 2026-09-06, dialogue plan D1/D2)*
+
+Not loader patch sites — defects in the shipped `.dlg` corpus itself, found while reproducing
+`CDialogDependency` (`docs/vtmb/game_runtime.md` §5). The port reproduces retail rather than
+repairing them; each is recorded here so a later data-side decision has the evidence.
+
+| Defect | Evidence | Port |
+|---|---|---|
+| **A col-4 with two Python halves can never pass.** `ParseDep` (`0x100e9290`) trims each Python half into the *same* buffer at `+0x1c`, so the second overwrites the first, and the compound then evaluates a simple dependency that was never claimed — `TestSimple`'s `Unhandled dialog dependency` arm, which is false. One shipped row does this: `IsClan(pc,"Ventrue") & G.Patch_Plus == 1`, a Ventrue Plus line that is dead in retail. **[corpus]** | 1 of 7,216 gated PC rows | reproduced (fails closed); `Elysium.Substrate.DlgDependency` pins it |
+| **Bands authoring more than four responses.** `get_pc_responses` (`0x100e82d0`) stops at 4 because the wire packet holds four dependency slots; 699 bands author more than four rows. They are gate-exclusive by design, so an overflow is an authoring slip rather than an engine limit. **[corpus]** | 699 bands | M-CAP: the port shows every passing row and logs a band whose *enabled* count exceeds four |
+| **Text-less `#` rows.** 635 NPC rows carry fewer than two characters of male text, so `read_line_data` (`0x100e61d0`) never stores them and any link to their id dangles. **[corpus]** | 635 of 50,393 rows | reproduced — the parser drops them, so link resolution matches retail |

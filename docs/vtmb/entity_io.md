@@ -1633,10 +1633,12 @@ same ownership and open/close behavior even though `OnReadEnd` has nothing to de
 
 ## `prop_hacking` (`CBaseTerminal` / `CPropHacking`)
 
-The terminal-specific class surface, content grammar, skill attempts, `OnUse*` and
-`OnTrigger0`…`OnTrigger7` production, email state, tutorial worked chain and open call-path
-questions are owned by `docs/vtmb/computer-terminals.md`. Once a terminal output fires, the generic
-wire format, name resolution and event-queue delivery specified here apply unchanged.
+The terminal-specific class surface, content grammar, skill attempts, `OnUseBegin`/`OnUseEnd`
+(fired from `FUN_100a4fe0` / `FUN_100a5030` inside skill-entity slots 39/42), `OnSkill*` and
+`OnTrigger0`…`OnTrigger7` production, email state, teardown through `FUN_10167fd0`, and the
+tutorial worked chain are owned by `docs/vtmb/computer-terminals.md`. Once a terminal output
+fires, the generic wire format, name resolution and event-queue delivery specified here apply
+unchanged.
 
 ## Proven-dead Hammer/FGD keys
 

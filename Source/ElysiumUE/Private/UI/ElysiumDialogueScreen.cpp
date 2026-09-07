@@ -7,8 +7,6 @@
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
 #include "Widgets/Layout/SDPIScaler.h"
-#include "Styling/CoreStyle.h"
-#include "Widgets/Layout/SBorder.h"
 #include "Widgets/Text/STextBlock.h"
 
 UElysiumDialogueScreen::UElysiumDialogueScreen()
@@ -34,11 +32,41 @@ void UElysiumDialogueScreen::ApplyDialogue(const FElysiumDialogueView& InDialogu
 		BeginNavigationBuild();
 		SetNavigationGroup(TEXT("Dialogue"), false, true);
 		DialogueBox->SetDialogue(Dialogue.Speaker, Dialogue.Line, Dialogue.Choices,
-			Dialogue.bTerminal, Dialogue.bAwaitingAutomatic);
-		const int32 FallbackChoice = Dialogue.Choices.IsEmpty()
-			? -1 : FMath::Clamp(PreviousChoice, 0, Dialogue.Choices.Num() - 1);
-		FinalizeNavigationBuild(ActionIdForChoice(FallbackChoice));
+			Dialogue.bTerminal, Dialogue.bAwaitingAutomatic, Dialogue.bNpcSpeaking,
+			Dialogue.bCanSkip);
+		FinalizeNavigationBuild(ActionIdForChoice(FirstFocusableChoice(PreviousChoice)));
 	}
+}
+
+int32 UElysiumDialogueScreen::FirstFocusableChoice(int32 Preferred) const
+{
+	// A contracted band repairs to the nearest surviving row, as before; M-DISABLED adds that a
+	// disabled row never becomes an action, so the repair walks outward to the nearest ENABLED one
+	// rather than landing on a position with no widget behind it. -1 is the Continue affordance.
+	const int32 Num = Dialogue.Choices.Num();
+	if (Num == 0)
+	{
+		return -1;
+	}
+	const int32 Start = FMath::Clamp(Preferred, 0, Num - 1);
+	if (Dialogue.Choices[Start].bEnabled)
+	{
+		return Start;
+	}
+	for (int32 Distance = 1; Distance < Num; ++Distance)
+	{
+		if (Dialogue.Choices.IsValidIndex(Start + Distance)
+			&& Dialogue.Choices[Start + Distance].bEnabled)
+		{
+			return Start + Distance;
+		}
+		if (Dialogue.Choices.IsValidIndex(Start - Distance)
+			&& Dialogue.Choices[Start - Distance].bEnabled)
+		{
+			return Start - Distance;
+		}
+	}
+	return -1;
 }
 
 TSharedRef<SWidget> UElysiumDialogueScreen::RebuildWidget()
@@ -53,12 +81,14 @@ TSharedRef<SWidget> UElysiumDialogueScreen::RebuildWidget()
 		.Choices(Dialogue.Choices)
 		.bTerminal(Dialogue.bTerminal)
 		.bAwaitingAutomatic(Dialogue.bAwaitingAutomatic)
+		.bNpcSpeaking(Dialogue.bNpcSpeaking)
+		.bCanSkip(Dialogue.bCanSkip)
 		.OnBuildChoice(FElysiumBuildDlgChoice::CreateUObject(
 			this, &UElysiumDialogueScreen::BuildChoiceAction));
 	TSharedRef<SWidget> Result = SNew(SDPIScaler)
 		.DPIScale_Lambda([this]() { return VirtualScale(); })
 		[ DialogueBox.ToSharedRef() ];
-	FinalizeNavigationBuild(ActionIdForChoice(Dialogue.Choices.IsEmpty() ? -1 : 0));
+	FinalizeNavigationBuild(ActionIdForChoice(FirstFocusableChoice(0)));
 	return Result;
 }
 
@@ -72,6 +102,23 @@ bool UElysiumDialogueScreen::NativeOnHandleBackAction()
 {
 	// Dialogue advances only through its authored terminal/choice actions.
 	return true;
+}
+
+FReply UElysiumDialogueScreen::NativeOnPreviewKeyDown(
+	const FGeometry& Geometry, const FKeyEvent& KeyEvent)
+{
+	// M-SKIP, claimed ahead of the navigable screen's own SpaceBar rule (which activates the
+	// focused action): while the voice runs, Space is the hurry verb, not a pick and not Continue.
+	// It is the one dialogue key that acts during an automatic wait, because it ends that wait.
+	if (ElysiumDialogueUI::IsSkipKey(KeyEvent.GetKey(), Dialogue.bNpcSpeaking, Dialogue.bCanSkip))
+	{
+		if (!KeyEvent.IsRepeat())
+		{
+			OnSkip.ExecuteIfBound();
+		}
+		return FReply::Handled();
+	}
+	return Super::NativeOnPreviewKeyDown(Geometry, KeyEvent);
 }
 
 FReply UElysiumDialogueScreen::NativeOnKeyDown(
@@ -89,10 +136,30 @@ FReply UElysiumDialogueScreen::NativeOnKeyDown(
 		{
 			return FReply::Handled();
 		}
+		// M-DISABLED: the number resolves positionally so the keys never move, and the row is
+		// refused here. The key is still consumed — it belongs to the conversation, and letting it
+		// fall through to the game would fire a weapon slot behind the open panel.
+		if (!AcceptsChoice(Choice.GetValue()))
+		{
+			return FReply::Handled();
+		}
 		ExecuteAction(ActionIdForChoice(Choice.GetValue()));
 		return FReply::Handled();
 	}
 	return Super::NativeOnKeyDown(Geometry, KeyEvent);
+}
+
+bool UElysiumDialogueScreen::AcceptsChoice(int32 Choice) const
+{
+	if (Dialogue.bAwaitingAutomatic && !Dialogue.bTerminal)
+	{
+		return false;
+	}
+	if (Choice < 0)
+	{
+		return true;   // Continue: terminal, no-valid-reply, or the forced visible response
+	}
+	return Dialogue.Choices.IsValidIndex(Choice) && Dialogue.Choices[Choice].bEnabled;
 }
 
 FName UElysiumDialogueScreen::ActionIdForChoice(int32 Choice) const
@@ -106,36 +173,50 @@ FName UElysiumDialogueScreen::ActionIdForChoice(int32 Choice) const
 	return FName(*FString::Printf(TEXT("Dialogue.Choice.%d"), StableId));
 }
 
-TSharedRef<SWidget> UElysiumDialogueScreen::BuildChoiceAction(int32 Choice, const FText& Label)
+int32 UElysiumDialogueScreen::LineIdForChoice(int32 Choice) const
 {
+	return Dialogue.ChoiceIds.IsValidIndex(Choice) ? Dialogue.ChoiceIds[Choice] : INDEX_NONE;
+}
+
+TSharedRef<SWidget> UElysiumDialogueScreen::BuildChoiceAction(int32 Choice,
+	const FElysiumDialogueRowText& Row)
+{
+	// Only ever called for a row the screen will accept — a disabled row is drawn by the box as
+	// plain Slate and gets no action, which is what keeps it out of focus and off the mouse.
 	UElysiumActionButton* Button = CreateActionButton(
-		ActionIdForChoice(Choice), TEXT("Dialogue"), Label, true,
-		[this, Choice]() { OnChoice.ExecuteIfBound(Choice); });
+		ActionIdForChoice(Choice), TEXT("Dialogue"), FText::FromString(Row.Text), true,
+		[this, Choice]() { OnChoice.ExecuteIfBound(Choice, LineIdForChoice(Choice)); });
 	check(Button);
 	const TWeakObjectPtr<UElysiumActionButton> WeakButton = Button;
+	// No plate behind the row (owner call, 2026-09-07). At the retail-tight pitch a per-row filled
+	// border reads as a table cell, and the idle fill is a grey wash over the panel; the row is
+	// bare text on the slab, exactly as `CHudDialog` paints it. Selection therefore has to live in
+	// the type, and it uses two channels so it is not brightness alone: the sentence goes bone ->
+	// white and the number takes the amber accent. An `SBox`, not an `SBorder` -- there is no
+	// brush left to draw, only padding.
+	const auto IsSelected = [WeakButton]()
+	{
+		const UElysiumActionButton* Action = WeakButton.Get();
+		return Action && Action->IsActionSelected();
+	};
 	Button->SetSlateContent(
-		SNew(SBorder)
-		.BorderImage(FCoreStyle::Get().GetBrush("GenericWhiteBox"))
-		.BorderBackgroundColor_Lambda([WeakButton]()
-		{
-			const UElysiumActionButton* Action = WeakButton.Get();
-			return FSlateColor(Action && Action->IsActionSelected()
-				? FLinearColor(0.62f, 0.10f, 0.12f, 0.55f)
-				: FLinearColor(1.0f, 1.0f, 1.0f, 0.05f));
-		})
-		.Padding(FMargin(10.0f, 6.0f))
+		SNew(SBox)
+		.Padding(FMargin(ElysiumDialogueUI::ChoiceRowPaddingHorizontal,
+			ElysiumDialogueUI::ChoiceRowPaddingVertical))
 		[
-			SNew(STextBlock)
-			.Font(FCoreStyle::GetDefaultFontStyle(
-				"Regular", ElysiumDialogueUI::ChoiceFontPoints))
-			.ColorAndOpacity_Lambda([WeakButton]()
-			{
-				const UElysiumActionButton* Action = WeakButton.Get();
-				return FSlateColor(Action && Action->IsActionSelected()
-					? FLinearColor::White : FLinearColor(0.86f, 0.85f, 0.82f, 1.0f));
-			})
-			.AutoWrapText(true)
-			.Text(Label)
+			ElysiumDialogueUI::BuildRowContent(Row,
+				TAttribute<FSlateColor>::CreateLambda([IsSelected]()
+				{
+					return FSlateColor(IsSelected()
+						? ElysiumDialogueUI::ColChoiceSelected
+						: ElysiumDialogueUI::ColChoiceIdle);
+				}),
+				TAttribute<FSlateColor>::CreateLambda([IsSelected]()
+				{
+					return FSlateColor(IsSelected()
+						? ElysiumDialogueUI::ColChoiceNumberSelected
+						: ElysiumDialogueUI::ColChoiceNumberIdle);
+				}))
 		]);
 	return Button->TakeWidget();
 }

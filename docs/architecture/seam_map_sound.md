@@ -57,13 +57,28 @@ fact so a reader can see which of the pair retail plays.
 The unit is **scene-less**: glTF has no audio object, so the payload is a buffer view reached
 through the extension and nothing else is declared.
 
+The BIN chunk holds two different things and the distinction matters. First the **payload**: the
+*decode* -- interleaved 16-bit PCM for a `.wav`, the bare MPEG frame stream for an `.mp3` -- which
+is what `payload.accessor` reads and what `frames[]` partitions. After it come the **source
+capsules** (`seam_map_unit_contract.md`, "Source capsule"): the audio member's own bytes and, when
+the install ships one, the `.lip` companion's, each in its own `bufferView`, each named by its row
+in `sourceResolution.members[]`. The payload keeps `bufferView` 0, so adopting the capsule
+renumbered nothing.
+
+A `.wav` payload is never its member (the RIFF headers are decoded away and ADPCM is expanded),
+and an `.mp3` payload is its member only when the member carries no tag and no trailer, so before
+schema 1.1.0 **no sound unit was guaranteed to carry the file the install holds**. The capsule is
+what makes `uv run elysium import sound` able to deploy a byte-exact `.wav`/`.mp3`/`.lip`.
+
 ```text
 sound.glb
 |- JSON chunk
-|  |- one buffer, one bufferView, one accessor
+|  |- one buffer, one accessor, and one bufferView per region below
 |  `- extensions.ELYSIUM_vtmb_sound
 `- BIN chunk
-   `- PCM samples (WAV) or the MPEG frame stream (MP3)
+   |- payload: PCM samples (WAV) or the MPEG frame stream (MP3)   <- bufferView 0
+   |- capsule: the `.wav`/`.mp3` member, verbatim
+   `- capsule: the `.lip` companion, verbatim (when the install ships one)
 ```
 
 ```json
@@ -73,7 +88,7 @@ sound.glb
   "extensionsRequired": ["ELYSIUM_vtmb_sound"],
   "extensions": {
     "ELYSIUM_vtmb_sound": {
-      "schemaVersion": "1.0.0",
+      "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
       "payload": {},
@@ -214,3 +229,66 @@ length and CRC against the payload bytes, re-parses the `.lip` and compares ever
 phoneme row, and checks the ledger against the source bytes. The standalone validator verifies
 the scene-less core, the single accessor's extent and digest, and that `frames[]` lengths sum to
 the payload length.
+
+## Import (2026-09-06)
+
+`uv run elysium import sound` deploys the whole sound family out of the published units and
+nothing else (`pipeline/src/elysium_pipeline/importers/sound.py`, on the shared
+`importers/corpus_deploy.py`). Each unit's two capsules are lifted and written to
+
+```text
+Content/ElysiumCorpus/sound/<rel>.wav        the audio member, verbatim
+Content/ElysiumCorpus/sound/<rel>.lip        the `.lip` companion, beside its audio
+Content/ElysiumCorpus/lip/<rel>.lip          the same bytes, under the legacy `lip/` key
+```
+
+**Why the `.lip` lands twice.** The runtime reads the two members through two accessors that root
+at two different directories: `SoundFile(Rel)` is `Root()/sound/<Rel>` and `LipFile(Rel)` is
+`Root()/lip/<Rel>`, where `Rel` is the *same* string — `ElysiumLip::NormalizeLipRel` is
+`ElysiumScene::NormalizeSceneRel` with the extension swapped, so a `.lip` is keyed by its audio's
+own path below `sound/`, lower-cased and forward-slashed. The dialogue plan (DC) asks for the
+`.lip` "beside its audio, so `SoundDir()` has one root"; the legacy mirror and today's `LipDir()`
+ask for `lip/<rel>.lip`. Both spellings are the same bytes from the same capsule, so whichever of
+the two the C++ flip settles on — `LipDir()` → `CorpusRoot()/lip`, or `CorpusRoot()/sound` — the
+file it opens is the install's, with no re-import. The duplication costs ~31 MB across 7,136
+documents against ~1 GB of audio. Retiring one spelling is a `RECIPE_VERSION` bump and one edit to
+`importers/sound.py`'s `target_of`, which prunes the other tree on the next run.
+
+**Case.** Paths are the units' own keys, which are folded to lower case. The legacy `sound/`
+mirror kept the install's mixed case (`sound/Area/Chinatown/Asian_Chimes1.wav`); the corpus does
+not, matching every other corpus family and the fold every runtime reader already applies. Windows
+is case-insensitive, so a raw `ambient_generic` `message` value resolves against either spelling.
+
+The lane's properties — recipe stamps (`Content/ElysiumCorpus/_import/sound/recipes.json`),
+per-unit failure isolation, byte-equality verification against the capsule, pruning of `sound/`
+and `lip/`, and `import_report.json` — are the same ones listed in `seam_map_dialogue.md` →
+"Import".
+
+### Measured against the legacy mirror (2026-09-06)
+
+| Tree | Legacy | Corpus | Only legacy | Only corpus | Byte differences |
+|---|---|---|---|---|---|
+| `sound/**.wav` | 5,550 | 5,550 | 0 | 0 | **1** (below) |
+| `sound/**.mp3` | 5,342 | 5,342 | 0 | 0 | 0 |
+| `lip/**.lip` | 7,136 | 7,105 | **31** (below) | 0 | 0 |
+| `sound/**.lip` | — | 7,105 | — | — | 0 against `lip/**` |
+
+**The one byte difference is a stale legacy export, not a lane defect.**
+`sound/interface/infobar/need_more_blood.wav` is 61,274 bytes in
+`Unofficial_Patch/sound/interface/infobar/`, and the corpus carries exactly those bytes with
+`origin.root = "Unofficial_Patch"`. The legacy mirror carries 31,066 bytes, byte-equal to that
+directory's `botch.wav` — what the patch shipped for that name when the legacy tree was written
+(2026-08-29). The install's copy changed on 2026-09-04. Retail has no loose or packed member for
+this path at all, so UP-first has one candidate and the corpus is the install.
+
+**Named gap: 31 `.lip` files with no sibling audio do not deploy.** A `.lip` reaches a unit only as
+the companion of an audio member (`formats/sound_glb/source.py`), so the 31 loose `.lip` documents
+whose stem ships no `.wav` and no `.mp3` — mostly `character/dlg/main characters/beckett/**`, plus
+`hollywood/andrei/line1_col_e` and `downtown la/hannahs_message/line1_col_e` — belong to no sound
+unit and this lane cannot deploy them. The runtime already treats a `.lip` miss as ordinary
+(`ElysiumLip::Load` warns on neither branch, naming this exact count), and a line with no audio is
+never voiced, so nothing regresses in play — but the corpus tree is a strict subset of the legacy
+one until an orphan-`.lip` unit exists. That is a seam addition, not an import change.
+
+Reader flip: `SoundDir`/`SoundFile`/`LipDir`/`LipFile` move from `FElysiumContentPaths::Root()` to
+`CorpusRoot()` in the C++ half of this slice.

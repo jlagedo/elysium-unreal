@@ -167,8 +167,11 @@ different ways.
 
 ## Open research gaps
 
-- The `prop_hacking` terminal difficulty/skill-attempt route is not yet joined to its feat,
-  retry and lockout policy; it remains part of RE39.
+- The `prop_hacking` terminal difficulty/skill-attempt route is joined in
+  `docs/vtmb/computer-terminals.md` §10: slot 104 forces `skilltype = 2` (Hacking, Wits +
+  Computer); `doRoll=false` yields tier 3/1; cracking duration is the same
+  `(5.0 - rating*0.25) / m_flSpeedScale` cycle as held locks; there is no attempt-count
+  lockout; a failed skill bypass returns to root without leaving the session.
 - The feed activity codes and complete transaction are joined statically in
   `docs/vtmb/feeding.md`; the resistance/stealth predicate identities and a live transition
   capture remain open.

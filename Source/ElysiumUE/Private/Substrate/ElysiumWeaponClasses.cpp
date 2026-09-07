@@ -673,6 +673,13 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 	Ar << ReloadEndTime;
 	Ar << bFireIntentDuringReload;
 
+	// `m_fEffects & EF_NODRAW`. Additive behind its own version; the default is DRAWN, which is what
+	// every payload written before the bit existed describes.
+	if (Ar.Version() >= FElysiumSaveVersion::WeaponHidden)
+	{
+		Ar << bHidden;
+	}
+
 	if (Ar.IsLoading())
 	{
 		if (World)
@@ -684,8 +691,46 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 	}
 }
 
+void FElysiumWeapon::Hide(FElysiumCombatCharacter* Wearer)
+{
+	// `CBaseEntity::Hide` (0x1009d2a0), vtable `+0x108`: set `m_fEffects |= EF_NODRAW`. The weapon
+	// stays the owner's ACTIVE weapon — nothing about the transaction, the mode or the magazine
+	// changes — it stops being drawn, and with it stops translating the body's activities
+	// (0x10327ec0 / 0x103854f0 both gate on the bit).
+	bHidden = true;
+	// The hand follows the bit. Retail's NODRAW is what stops the model rendering at all; here the
+	// wield model is a separate attached component, so it is taken off explicitly. The trail goes
+	// with it — a trail on a weapon nothing is drawing is a swing arc from an empty hand.
+	if (Wearer != nullptr)
+	{
+		if (USkeletalMeshComponent* const WearerBody = Wearer->GetSkeletalBody())
+		{
+			ElysiumNpcVisual::ClearWieldModel(WearerBody);
+			ElysiumMeleeTrail::ClearTrail(WearerBody);
+		}
+	}
+	UE_LOG(LogElysiumWeapon, Verbose, TEXT("%s hidden (EF_NODRAW set)"), *DebugString());
+}
+
+void FElysiumWeapon::Unhide(FElysiumCombatCharacter* Wearer)
+{
+	// `CBaseEntity::Unhide` (0x1009d380), vtable `+0x10c`: clear `m_fEffects &= ~EF_NODRAW`.
+	bHidden = false;
+	// The wield model is re-installed only for the wielder that is actually holding this weapon: an
+	// unhide on a weapon some other equip has since replaced must not put its model back in the hand.
+	if (Wearer != nullptr && IsActiveWeapon())
+	{
+		ApplyWieldVisual(*this, *Wearer);
+	}
+	UE_LOG(LogElysiumWeapon, Verbose, TEXT("%s unhidden (EF_NODRAW cleared)"), *DebugString());
+}
+
 void FElysiumWeapon::OnEquipped(FElysiumCombatCharacter& Wearer)
 {
+	// **The deploy commit clears EF_NODRAW** (the shared deploy body at 0x10253b70), which is what
+	// makes a weapon that was hidden by a state change draw again when it is re-equipped. Ordered
+	// before `ApplyWieldVisual` below so the hand and the bit are written by one path.
+	bHidden = false;
 	// Drawing a weapon restores its authored primary mode and holds both presses until now — a
 	// weapon holstered mid-cooldown must not draw with a deadline in the past that it never had.
 	PrimaryModeIndex = PrimaryModeSlots.IsEmpty() ? INDEX_NONE : PrimaryModeSlots[0];
@@ -705,6 +750,10 @@ void FElysiumWeapon::OnHolstered(FElysiumCombatCharacter& Wearer)
 	ClearSwing();
 	bReloading = false;
 	bFireIntentDuringReload = false;
+	// **`Holster` (0x10253ca0) ends with `Hide()`.** The holstered weapon carries EF_NODRAW away with
+	// it, so a weapon put back is one that must be DEPLOYED to draw again rather than one that
+	// silently reappears the next time some other path makes it active.
+	bHidden = true;
 	if (USkeletalMeshComponent* const WearerBody = Wearer.GetSkeletalBody())
 	{
 		ElysiumNpcVisual::ClearWieldModel(WearerBody);
@@ -720,6 +769,9 @@ void FElysiumWeapon::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 
 	const FElysiumItemDef* Record = Data();
 	Out.Emplace(TEXT("Modes"), Record ? FString::FromInt(Record->Modes.Num()) : TEXT("(no record)"));
+	// `m_fEffects & EF_NODRAW`. A hidden ACTIVE weapon reads as "no weapon" to the whole activity
+	// translation, which is a state a readout has to be able to see.
+	Out.Emplace(TEXT("Drawn"), bHidden ? TEXT("no (EF_NODRAW)") : TEXT("yes"));
 	if (const FElysiumWeaponMode* Mode = ModeAt(PrimaryModeIndex))
 	{
 		Out.Emplace(TEXT("Primary mode"), FString::Printf(TEXT("%s (%s) lethality %d rate %.2f"),

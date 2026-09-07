@@ -165,6 +165,14 @@ const FElysiumItemTable& UElysiumRulebookSubsystem::Items()
 	return Table;
 }
 
+// A failed load leaves no rows, and a table with no rows answers `CanWield` YES for every mask that
+// does not carry `never` — so a missing export costs one warning and an unrestricted character,
+// never a silently disarmed one.
+const FElysiumExcludedEquipTable& UElysiumRulebookSubsystem::ExcludedEquip()
+{
+	return Get(ExcludedEquipTable, TEXT("excludedequip"));
+}
+
 const FElysiumTerminalDefinition* UElysiumRulebookSubsystem::TerminalDefinition(
 	const FString& VirtualPath, FString& OutError)
 {
@@ -266,6 +274,9 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 
 	Out.Add({ TEXT("items"),        TEXT("items/*.txt"),
 		Items().Num(), Items().IsValid(), ItemTable.Error });
+
+	Out.Add({ TEXT("excludedequip"), TEXT("system/items.txt (ExcludedEquipTables)"),
+		ExcludedEquip().Num(), ExcludedEquip().IsValid(), ExcludedEquipTable.Error });
 
 	Out.Add({ TEXT("dispositiontable"), TEXT("system/dispositiontable.txt"),
 		Dispositions().Rows.Num(), Dispositions().IsValid(), DispositionTable.Error });

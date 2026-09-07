@@ -39,11 +39,25 @@ struct FElysiumEyeTargetTuning
 	float HoldMin = 0.15f;
 	float HoldMax = 0.25f;
 
-	// "Eye Turn Rate" as authored *inside* this block, which is the one that varies per row:
-	// 0.3 Neutral, 0.95 Anger, 0.6 Disgust, 0.2 Apathy and Confused. The file's own comment reads
-	// "0.1 is slow, 1.0 is instant", so it is the per-step coefficient of the fixed 0.1 s
+	// The integrator has TWO rates and the fidget driver picks between them every think. Retail's
+	// `FUN_102c0010` re-reads `m_flEyeIntegRate`@0x0E3C from the table through
+	// `FUN_100ecdf0(table, disposition, index)` — index 0 in the branch that holds a converged gaze
+	// (`0x100ece2a`, record field +0x23C) and index 1 in the branch that steps to the next fidget
+	// cell (`0x100ece15`, record field +0x260). The record is 0x264 bytes and the parser
+	// (`FUN_100eba00`) writes the disposition-level "Eye Turn Rate" into +0x23C and the one inside
+	// the `EyeTarget` block into +0x260 — so the two spellings the file carries are not a
+	// duplicate at all: they are the hold rate and the step rate.
+	//
+	// HoldRate is the disposition-level "Eye Turn Rate", authored 0.9 on every row that has it and
+	// inherited by the rest through `CopyDataFrom`, so in practice it is global. It is filled from
+	// `FElysiumDisposition::EyeTurnRate` by the parser, not by the `EyeTarget` block.
+	float HoldRate = 0.9f;
+
+	// StepRate is "Eye Turn Rate" as authored *inside* this block, which is the one that varies per
+	// row: 0.3 Neutral, 0.95 Anger, 0.6 Disgust, 0.2 Apathy and Confused. The file's own comment
+	// reads "0.1 is slow, 1.0 is instant", so both are the per-step coefficient of the fixed 0.1 s
 	// integrator rather than a rate in units per second.
-	float TurnRate = 0.3f;
+	float StepRate = 0.3f;
 };
 
 struct FElysiumDisposition
@@ -79,8 +93,10 @@ struct FElysiumDisposition
 
 	// The gaze block, and beside it the *second* "Eye Turn Rate" the file carries — this one at
 	// disposition level rather than inside `EyeTarget`, authored 0.9 on every row that has it. Both
-	// spellings are real and they disagree, so both are kept: the gaze integrator uses the block's,
-	// which is the one that varies per disposition.
+	// spellings are real and they disagree because they are two different rates: this one is the
+	// integrator's HOLD rate and the block's is its fidget STEP rate (see FElysiumEyeTargetTuning).
+	// The parser mirrors this value into `EyeTarget.HoldRate` so the gaze layer needs only the
+	// block.
 	FElysiumEyeTargetTuning EyeTarget;
 	float EyeTurnRate = 0.9f;
 

@@ -385,12 +385,12 @@ Two focus forms cover the reconstruction:
   orbit. It never moves or rotates the player. Losing the target or pressing cancel releases the
   request and restores the exact previous view.
 
-Computer terminals use a constrained form of Inspect: generated model metadata supplies the local
-screen centre, normal, up axis and extents; the `Focus` request faces that plane orthogonally and
-solves distance from its size and FOV. It has no orbit because the UI bridge projects the four
-screen corners into the owning viewport and clips a crisp CommonUI terminal panel to that rectangle.
-The terminal entity owns the session and the camera owns only framing. Target loss or invalid
-projection ends the use session and restores the previous view. Full contract:
+Computer terminals do not use Inspect. They push retail's own `Hacking` shot from
+`vdata/camerashots/special-case.txt` through the legacy director: the camera sits on the model's
+`screen_axis` attachment, looks at its `screen` attachment, FOV 75, HUD shown, viewmodel hidden,
+following both attachments. There is no orbit and no distance solve; the console is drawn into the
+model's own `screen` material, so the camera owns only the viewpoint. Target loss ends the use
+session and restores the previous view. Full contract:
 `docs/architecture/computer-terminal-architecture.md`.
 
 Candidate validation uses camera-channel sweeps and target visibility. Selection traces do not run
@@ -422,6 +422,66 @@ an NPC or the player; gaze, facing, gestures, and lipsync remain owned by dialog
 Original `vdata/camerashots/` definitions are parsed by the legacy-shot adapter. They do not become
 authored Data Assets, and their documented `DialogPOV`, attachment, visibility, and tracking
 semantics remain available to original scripts.
+
+### 2026-09-07 — the tracker owns steadiness, not the anchor grammar
+
+The director's per-frame anchor re-resolve is **retail's own cadence**: VtMB's camera think
+(`vampire.dll` `FUN_1006e8e0`) re-resolves all four anchors every server tick, and `AttachType None`
+is the offset's frame rather than a latch (`docs/vtmb/camera-view-modes.md` → "The shot record, the
+anchor resolve, and the client tracker"). What decides how much of that re-resolved goal reaches the
+frame is `C_BaseCineCamera`, ported as `FElysiumScriptedShotTracker`: per-shot settled state,
+`DistanceTolerance` / `AngularTolerance` hysteresis deadbands, `MoveAccel`/`MoveSpeed` and
+`TurnAccel`/`MaxTurnRate` accel-decel, and `SyncRotateOnMove` timing the pan to the dolly.
+
+The tracker is a pure value struct on `ElysiumCameraSolve.h`, and it is the **one** implementation:
+both `UElysiumCameraService::Advance` (the request channel the dialogue director publishes through)
+and `UElysiumCameraComponent::SolveShot` (the legacy `SetCamera` stack) run it, so the two channels
+cannot drift. Whoever pushed a shot still keeps its values current every frame; the camera still
+knows nothing about entities.
+
+Two consequences for this document's request contract. "Tracking rates and tolerances" in the Lens/
+Tracking rows are now genuinely read rather than carried — a request that authors none takes retail's
+parse defaults. And the Lens row is 4:3-referenced: `ElysiumCam::WidenSourceFov` widens both the
+scripted shot's `FieldOfView` and the player view's `default_fov` to the rendered aspect at apply
+time, so a shot's weight lerps two angles in the same space.
+
+The dialogue director logs one `LogElysiumWorld` line whenever a retail source shot is rejected and
+something else is published in its place, naming the rejection reason and the replacing profile, so a
+live run can tell "the retail shot framed it that way" apart from "an authored profile displaced the
+retail shot".
+
+### 2026-09-07 — `DialogPOV` reaches the gaze cascade from every path (named modernization)
+
+Retail has exactly one camera path, so `DialogPOV` is unambiguous:
+`CAI_BaseNPC::MaintainAutonomousEyeDirection` (`vampire.dll` 0x1026B810) reads the player's ACTIVE
+camera entity (`GetActiveCameraEntity` 0x1017CF90, off `player+0x19B4` / `+0x1EC4`), asks its
+current shot for the flags dword at `+0x20` (`FUN_1006EDB0`, shot-table stride 0x104; the key's
+parser is 0x100721E0, bit 0x10) and, on a set bit, aims the NPC at that camera entity's own
+position — the lens — regardless of how the shot was selected. The flag is a property of the shot
+*in effect*.
+
+This director has three paths where retail has one: the resolved retail source shot, an authored
+profile from `DA_ElysiumDialogueCameraSet`, and the player-view fallback. The flag is therefore
+resolved **once per selection**, off the conversation's `default_camera` source shot, and stamped
+on whichever request is published (`FElysiumEntityWorld::SelectDialogueCamera`; the per-frame
+anchor refresh carries it across its own rebuild).
+
+- **Source shot** — read straight off the shot, as retail does.
+- **Authored profile** — the profile replaces the shot and carries no flags of its own, so it
+  inherits the `default_camera` shot's flag: that shot is the authored intent for this
+  conversation, and the profile is standing in for it.
+- **No source shot at all** — MODERNIZATION: the flag defaults **set**. 51 of the 66 shipped shot
+  files set `DialogPOV`, so it is the ordinary case for a VtMB conversation; a ported conversation
+  with no authored shot is a case retail never had, and clearing the flag instead would leave the
+  majority of them aiming at the player's eye point while the camera watches from elsewhere.
+
+`FElysiumEntityWorld::GetDialogueCameraGaze` answers whenever the flag is set and a dialogue camera
+is live, and names which lens it means (`EElysiumDialogueGazeLens`). A request that publishes no
+pose (`bOverridePose == false`) left the player's own view up — that view *is* the lens — so it
+answers `PlayerView` with the player entity's eye point, and `AElysiumMapActor::TickGaze` upgrades
+that to the real `UElysiumCameraComponent` location, which only the embodiment can read.
+
+Asserted by `Elysium.Substrate.DialogueCamera.DialogPOV`.
 
 ## Camera triggers and public adapters
 

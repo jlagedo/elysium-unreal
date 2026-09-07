@@ -110,8 +110,16 @@ struct FElysiumSheet
 	void SeedFrom(const FElysiumStatTable& Stats);
 	// Overlay a resolved clan / NPC template's authored ratings. An absent trait means inherit, so
 	// only what the template holds is written (`FElysiumClanTable::Resolve` folds the parent chain).
+	//
+	// `EquipRules` is what turns the one trait a template authors by NAME into the number the slot
+	// holds: `Excluded_Equipment` (slot 31) names an `ExcludedEquipTables` row of
+	// `system/items.txt` (`"Excluded_Equipment" "Default"`), and the row id is the block order.
+	// With no table the slot keeps its `stats.txt` default of 0 — which is row `Default` — so a
+	// headless run is unrestricted rather than mis-restricted. The sibling `Starting_Equipment`
+	// (slot 30) is the same shape and stays a documented seam: nothing resolves its package yet.
 	void ApplyTemplate(const FElysiumClanTemplate& Template, const FElysiumStatTable* Stats,
-		const FElysiumSheetEffects* Effects = nullptr);
+		const FElysiumSheetEffects* Effects = nullptr,
+		const struct FElysiumExcludedEquipTable* EquipRules = nullptr);
 
 	// The named slots the runtime speaks.
 	int32 Clan() const  { return GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Clan); }
@@ -693,6 +701,29 @@ struct FElysiumInventory
 	bool TransferSlot(FElysiumCombatCharacter& From, FElysiumCombatCharacter& To, int32 Position,
 		FString* OutClassname = nullptr, int32* OutQuantity = nullptr);
 
+	// --- The wield rule (`docs/vtmb/wielded_weapons.md` § "Who may wield what") ------------------
+	//
+	// `Inventory_Can_Wield` (0x10335a70): the item record's `equip_mask` against the
+	// `ExcludedEquipTables` row the character's `Excluded_Equipment` stat (slot 31) names. A
+	// character with no rulebook in reach is unrestricted, which is the answer a bare substrate
+	// world has to give; the table is reached through the character's world and falls back to the
+	// bound tables (`Substrate/ElysiumSheetMath.h` -> "The headless table binding").
+	bool CanWield(const FElysiumCombatCharacter& Char, const FElysiumItem& Item) const;
+
+	// `CMultiplayRules::GetNextBestWeapon` (0x101413e0) — among the carried weapons, the one with
+	// the highest authored `weight` that can deploy (has ammunition or needs none) AND passes
+	// `CanWield`, never `Exclude`. Null when nothing qualifies.
+	FElysiumItem* NextBestWeapon(const FElysiumCombatCharacter& Char, const FElysiumItem* Exclude) const;
+
+	// `Weapon_Switch(NULL)` — put the active weapon away and hold nothing. `PreviousWeapon` is
+	// deliberately NOT cleared: `lastinv` still names what was held.
+	void Holster(FElysiumCombatCharacter& Char);
+
+	// `Inventory_Wield_Update` (0x10335b80) — the sweep that runs at the tail of every trait-effect
+	// apply (0x101f8620) and remove (0x101f8f30). If what is held may no longer be wielded, fall to
+	// the last weapon, then to the next best, then to a carried `item_w_unarmed`, then to nothing.
+	void WieldUpdate(FElysiumCombatCharacter& Char);
+
 	// Still distinct and unbuilt: player drop (`inven_drop`, world entity PRESERVED — never a
 	// shortcut through ScriptRemove) and priced `Buy`/`Sell` barter. Take/Give use TransferSlot;
 	// pricing lives in the barter path (`inventory.md` §5.3, §7).
@@ -965,6 +996,17 @@ public:
 	int32 GetStealthModifier() const { return FMath::Clamp(StealthModRaw, -10, 10); }
 
 	bool bWillTalk = false;       // WillTalk (79 calls) — this character will start a conversation
+
+	// `IsBusyWithDiscipline(npc)` — one of the four common guards `CBasePlayer::PlayerUse`
+	// (`0x10167850`) and the `StartPlayerDialog*` route through `CAI_BaseNPCTroika::StartTask`
+	// (`0x102a1910`) both apply before a conversation may open: a character in the middle of a
+	// discipline transaction does not talk.
+	//
+	// SEAM: answers false for every character. TODO(dialogue-plan): recover
+	// `CBaseCombatCharacter::IsBusyWithDiscipline` — which of the thirteen `Active_*` slots, the
+	// per-record `FElysiumDisciplineState::Recovery` deadlines, or a distinct cast latch it reads —
+	// and answer off that state instead of standing open.
+	virtual bool IsBusyWithDiscipline() const { return false; }
 
 	// `m_tEffectList` — the `TraitEffectGroup` names in force on this character: its clan's
 	// `ClanEffect`, its History's `Effect`, and (later) its items' and its frenzy state's. Held as
@@ -1481,6 +1523,10 @@ public:
 	// m_vCurEyeTarget@0x0E50 (smoothed), m_hEyeLookTarget@0x0E64, m_flEyeIntegRate@0x0E3C.
 	FVector EyeLookTarget = FVector::ZeroVector;
 	FVector CurEyeTarget = FVector::ZeroVector;
+	// Published, not authored: the fidget driver (`0x102c0010`) rewrites `m_flEyeIntegRate` from the
+	// disposition every think — the hold rate while the gaze is settled, the disposition's own step
+	// rate while a fidget sequence walks its cells. TickGaze reproduces that choice, so this field
+	// is the rate the LAST think integrated at.
 	float EyeIntegRate = 0.f;
 	// The smoothed point starts at nothing rather than at the origin, and the difference matters:
 	// testing it against zero instead would re-seed a character that is legitimately looking at the
@@ -1666,6 +1712,22 @@ protected:
 // them (`point_teleport`, a scripted `pc.SetOrigin(...)`) moves the pawn through the embodiment,
 // which is the same shape as an NPC moving its skeletal body.
 
+// The dialogue-entry constants the player half of the refusal predicate needs.
+namespace ElysiumDialogue
+{
+	// How long a hit keeps the player out of a conversation (`player+0x1d1c`, the
+	// no-dialogue-until stamp `FUN_10178170` compares against `curtime`).
+	//
+	// SEAM: the retail DURATION is unrecovered — the writer of `+0x1d1c` has not been pinned, only
+	// its reader. TODO(dialogue-plan): recover the writer and replace this literal. Five seconds is
+	// the port's own choice, long enough that a fight in progress refuses and short enough that a
+	// stray hit does not lock a scripted beat out for a noticeable time.
+	inline constexpr double DamageRefusalSeconds = 5.0;
+
+	// The M-REFUSE notification text (a named modernization: retail's refusal is silent).
+	inline const TCHAR* const RefusalNotice = TEXT("They won't talk right now.");
+}
+
 class FElysiumPlayer final : public FElysiumCombatCharacter
 {
 public:
@@ -1786,6 +1848,73 @@ public:
 	// HUD downstream of gameplay rather than beside it.
 	void OfferStealthObserver(const FElysiumEntityHandle& Who, float DistanceCm, float RadiusCm,
 		bool bDetected, double Now);
+
+	// --- The dialogue refusal predicate (`FUN_10178170`) and the dialogue holster -------------
+	//
+	// `FUN_10178280` (player vtable slot 414, the real StartDialog) refuses to open a conversation
+	// when `m_bForceDialogStart` (`npc+0x6495`) is clear and this predicate holds. The three
+	// scripted openers set the force byte; `StartPlayerDialogUnforced` and `CBasePlayer::PlayerUse`
+	// do not, so they are the two entries the predicate actually gates.
+	//
+	// `CPlayerEvents::InputClearDialogCombatTimers` (`0x10227250`) resets the whole set.
+
+	// `player+0x1d1c` — absolute substrate seconds; a conversation is refused while `Now` is below
+	// it. Stamped by the damage path (`OnDamageCommitted`). Zero = clear.
+	double NoDialogueUntil = 0.0;
+	// `player+0x1dd0` / `player+0x1dd8` — the two auxiliary stamps the predicate compares the same
+	// way. SEAM: no producer is recovered, so nothing writes them; they are cleared with the rest
+	// and are read here so the arm is not silently dropped.
+	// TODO(dialogue-plan): recover the writers of `+0x1dd0` and `+0x1dd8`.
+	double DialogCombatStampA = 0.0;
+	double DialogCombatStampB = 0.0;
+	// `player+0x1cf8` — a float whose CLEAR value is `FLT_MAX`; any other value blocks.
+	// SEAM: nothing sets it, so it stands at the sentinel.
+	// TODO(dialogue-plan): recover what `+0x1cf8` counts and who writes it.
+	float DialogRefusalFloat = TNumericLimits<float>::Max();
+
+	// The threat count the predicate reads (`0x1017f770` / `0x1017f8b0`).
+	// SEAM: this runtime has no player-side threat/enemy tally — NPC enemy memory is per-NPC and
+	// there is no aggregate — so it answers 0. TODO(dialogue-plan): wire it to the combat tracker
+	// when one exists.
+	int32 DialogThreatCount() const { return 0; }
+
+	// `0x10175180` — blocks while the entity at `player+0x1db0` (the dialogue/companion partner) is
+	// in state 3. SEAM: the port has no partner slot on the player yet, so it answers false.
+	// TODO(dialogue-plan): recover `player+0x1db0` and the state-3 enum.
+	bool DialogPartnerBlocks() const { return false; }
+
+	// The whole predicate, as one readable reason or nullptr when the player may talk. The string
+	// is the refusal's own name and is what the M-REFUSE notification and the logs quote.
+	const TCHAR* DialogRefusalReason() const;
+
+	// The damage path's stamp. Named rather than inlined so the test asserts the transaction.
+	void StampDialogCombatRefusal(double Now);
+
+	// `CPlayerEvents::InputClearDialogCombatTimers` (`0x10227250`) — reset every field above.
+	void ClearDialogCombatTimers();
+
+	// `FUN_10178280` remembers whether the active weapon was drawable (`player+0x1e01`) and
+	// switches to `item_w_unarmed`; `FUN_10178400` puts it back at `CDialog::Release`. Both are
+	// driven from `FElysiumNpc::BeginDialog` / `InputEndDialog`, the two doors of a session.
+	//
+	// `DialogHolsteredWeapon` is the weapon that was active when the conversation opened, and
+	// `bDialogWeaponWasDrawable` is retail's remembered `+0x1e01` byte.
+	FElysiumEntityHandle DialogHolsteredWeapon;
+	bool bDialogWeaponWasDrawable = false;
+	// True while the pair above describes a live holster, so a second open (or a close with no
+	// open) cannot restore a stale weapon.
+	bool bDialogWeaponHolstered = false;
+
+	// Switch to a carried `item_w_unarmed`, remembering what was active. Returns false when the
+	// switch could not be made (nothing carried to fall back to) — the seam fires and logs, exactly
+	// as the `Holster` input does, rather than inventing an empty-handed state.
+	bool HolsterForDialog();
+	// Put the remembered weapon back. A no-op when nothing was holstered.
+	void RestoreDialogHolster();
+
+	// The player's damage terminus. `FElysiumCombatCharacter::CommitDamage` calls it once damage
+	// has actually landed, which is exactly the edge that has to refuse a conversation.
+	virtual void OnDamageCommitted(const FElysiumDmg& Dmg) override;
 
 	virtual void Spawn() override;
 

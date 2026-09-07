@@ -400,7 +400,8 @@ void ApplyBaseline(FElysiumChargenState& State, const FElysiumChargenRules& Rule
 			if (!History->Effect.IsEmpty()) { GroupNames.Add(History->Effect); }
 		}
 		State.Effects.Build(
-			*Rules.TraitEffects, GroupNames, Rules.Feats, Rules.Stats, Rules.Strings);
+			*Rules.TraitEffects, GroupNames, Rules.Feats, Rules.Stats, Rules.Strings,
+			Rules.ExcludedEquip);
 	}
 
 	if (!bHasClan)
@@ -411,7 +412,7 @@ void ApplyBaseline(FElysiumChargenState& State, const FElysiumChargenRules& Rule
 	}
 
 	// 3. The clan's authored ratings.
-	State.Sheet.ApplyTemplate(Template, Rules.Stats, &State.Effects);
+	State.Sheet.ApplyTemplate(Template, Rules.Stats, &State.Effects, Rules.ExcludedEquip);
 
 	// 4. The two trait orders, which the template authors as NAMES and step 3 therefore wrote as 0.
 	const int32 AttribOrder = ResolveOrder(Rules, Template,

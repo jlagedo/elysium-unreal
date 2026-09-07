@@ -34,6 +34,7 @@ from elysium_pipeline.formats.unit_contract import (
     validate_ledgers,
     validate_sceneless,
 )
+from elysium_pipeline.formats.unit_contract.capsule import declares_capsule
 
 __all__ = [
     "SceneGlbValidationError",
@@ -586,6 +587,13 @@ def validate_document(
     validate_sceneless(document)
     validate_ledgers(root, source_members)
     validate_capsules(document, binary, root, source_members)
+    # `validate_capsules` returns early when `sourceResolution.capsule` is absent -- correct for a
+    # seam that has not adopted the capsule, but scene (schema 1.1.0) has, so the declaration
+    # itself is required here rather than merely honoured when present.
+    if not declares_capsule(root.get("sourceResolution")):
+        raise SceneGlbValidationError("scene unit declares no source capsule")
+    if document.get("accessors"):
+        raise SceneGlbValidationError("a scene unit declares no accessor")
 
     identity = root.get("identity") or {}
     key = identity.get("key")

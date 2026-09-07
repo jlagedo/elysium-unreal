@@ -114,11 +114,15 @@ public:
 		return PendingNotifications;
 	}
 
-	// The player's pick on the open conversation. The box reports an index; this resolves the world
-	// and hands it to the same PlayerDialogChoose/PlayerDialogAdvance chokepoint `elysium.dlg.choose`
-	// uses, so the UI never holds an FElysiumEntityWorld to talk back through.
-	void DialogueChoose(int32 VisibleIndex);
+	// The player's pick on the open conversation. The box reports the row's position AND the `.dlg`
+	// line id it was showing; this resolves the world and hands both to the same
+	// PlayerDialogChoose/PlayerDialogAdvance chokepoint `elysium.dlg.choose` uses, so the UI never
+	// holds an FElysiumEntityWorld to talk back through. The id is what lets the world refuse a
+	// stale pick: a position alone would name whatever sentence now sits there.
+	void DialogueChoose(int32 VisibleIndex, int32 ExpectedLineId = INDEX_NONE);
 	void DialogueAdvance();
+	// M-SKIP — the hurry verb, same chokepoint: `World->PlayerDialogSkip()`.
+	void DialogueSkip();
 	bool LootTake(int32 Slot);
 	bool LootGive(int32 Slot);
 	bool CloseLoot();

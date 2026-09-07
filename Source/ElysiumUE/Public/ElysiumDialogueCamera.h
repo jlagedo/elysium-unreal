@@ -12,6 +12,31 @@ enum class EElysiumDialogOpenerKind : uint8
 	Forced,
 	Remote,
 	Unforced,
+	// `CBasePlayer::PlayerUse` (`0x10167850`) — the player walked up and pressed +use. It reaches
+	// the same player vtable slot 414 (`FUN_10178280`) the three scripted inputs do, so it is an
+	// opener kind rather than a separate path. Appended last: the enum is UENUM-reflected and the
+	// three above are the retail input names.
+	Use,
+};
+
+// Which lens the `DialogPOV` gaze redirect aims at.
+//
+// Retail (`CAI_BaseNPC::MaintainAutonomousEyeDirection`, `vampire.dll` 0x1026B810) reads the
+// player's ACTIVE camera entity (`GetActiveCameraEntity` 0x1017CF90, off `player+0x19B4` /
+// `+0x1EC4`), asks its current shot for the flags dword at `+0x20` (`FUN_1006EDB0`, shot-table
+// stride 0x104; the `DialogPOV` key sets bit 0x10, parser 0x100721E0), and on a set bit aims at
+// that camera entity's own position — the lens — regardless of HOW the shot was selected. So the
+// flag is a property of the shot in effect, and the aim is wherever the eye actually is.
+//
+// The port's director can answer with a pose of its own (a resolved source shot or an authored
+// profile) or leave the player's view standing. The second case still has a lens — the player
+// camera — but only the embodiment can locate it, so the substrate names the case and hands back
+// the player entity's eye point as the headless stand-in.
+enum class EElysiumDialogueGazeLens : uint8
+{
+	None,        // no conversation, or the shot in effect does not set DialogPOV
+	ShotOrigin,  // the dialogue camera holds its own pose; the lens is that point
+	PlayerView,  // the request left the player's own view up; the lens IS the player camera
 };
 
 UENUM(BlueprintType)

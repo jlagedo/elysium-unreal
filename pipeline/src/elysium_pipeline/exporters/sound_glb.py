@@ -1,9 +1,15 @@
 """Isolated one-member/one-GLB sound product writer.
 
 The unit is scene-less: glTF has no audio object, so the payload is a buffer view reached through
-`ELYSIUM_vtmb_sound` and nothing else is declared. A `.wav` publishes interleaved 16-bit PCM; an
+`ELYSIUM_vtmb_sound` and no core object is declared. A `.wav` publishes interleaved 16-bit PCM; an
 `.mp3` publishes its own MPEG frame stream, and `frames[i]` locates each frame in both the source
 and the payload so a payload byte and a ledger range name the same frame.
+
+The payload is a *decode*, not the file: a `.wav` unit's BIN chunk is not its RIFF member and a
+tagged `.mp3`'s is not its member either. So the BIN chunk also carries the **source capsules**
+(schema 1.1.0) -- the audio member and, when the install ships one, the `.lip` companion, verbatim
+-- appended after the payload, which keeps `bufferView` 0. That is what lets `uv run elysium
+import sound` deploy a byte-exact `.wav`/`.mp3`/`.lip` (`seam_map_sound.md`, "Import").
 """
 
 from __future__ import annotations
@@ -22,8 +28,8 @@ from elysium_pipeline.formats.sound_glb import (
     source_keys,
 )
 from elysium_pipeline.formats.unit_contract import container
+from elysium_pipeline.formats.unit_contract.capsule import buffer_table, encapsulate
 from elysium_pipeline.formats.unit_contract.coverage import extension_root, identity_block
-from elysium_pipeline.formats.unit_contract.origin import source_resolution
 
 __all__ = ["build_document", "export", "source_keys"]
 
@@ -126,6 +132,14 @@ def build_document(model) -> tuple[dict, bytes]:
     """The unit's JSON document and its BIN payload."""
 
     payload = model.payload
+    # The BIN chunk is the decoded payload first, then the source capsules `encapsulate` appends
+    # after it. The payload view keeps index 0, so the accessor below is untouched by adoption.
+    payload_views = (
+        [{"buffer": 0, "byteOffset": 0, "byteLength": len(payload)}] if payload else []
+    )
+    resolution, buffer_views, binary = encapsulate(
+        model.members, binary=payload, buffer_views=payload_views
+    )
     identity = identity_block(
         model.asset_id,
         [member.path for member in model.members],
@@ -137,7 +151,7 @@ def build_document(model) -> tuple[dict, bytes]:
     extension = extension_root(
         schema_version=SCHEMA_VERSION,
         identity=identity,
-        source_resolution=source_resolution(model.members),
+        source_resolution=resolution,
         dependencies=model.dependencies,
         coverage=sound_coverage.build(model),
         payload={
@@ -170,12 +184,11 @@ def build_document(model) -> tuple[dict, bytes]:
             "count": len(payload) // (2 if short else 1),
             "type": "SCALAR",
         }]
-        document["bufferViews"] = [
-            {"buffer": 0, "byteOffset": 0, "byteLength": len(payload)}
-        ]
-        document["buffers"] = [{"byteLength": len(payload)}]
+    if binary:
+        document["buffers"] = buffer_table(binary)
+        document["bufferViews"] = buffer_views
     document["extensions"] = {SOUND_EXTENSION: container.plain(extension)}
-    return document, payload
+    return document, binary
 
 
 def export(

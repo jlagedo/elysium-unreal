@@ -30,7 +30,9 @@ const FMoverSoundTable& ElysiumMoverSoundManifest()
 	}
 	bLoaded = true;   // load-once, even on failure (missing manifest = movers stay silent)
 
-	const FString Path = FElysiumContentPaths::SoundDir() / TEXT("usable/soundgroups.json");
+	// Not a VtMB sound unit: a pipeline-authored index, so it stays on the legacy loose export
+	// while the sound family itself reads from the corpus (docs/project/seam_migration.md, DC).
+	const FString Path = FElysiumContentPaths::MoverSoundGroupsFile();
 	FString Text;
 	if (!FFileHelper::LoadFileToString(Text, *Path))
 	{

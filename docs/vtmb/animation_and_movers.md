@@ -4588,3 +4588,55 @@ Gameplay-action selection [VtMB — decompiled + data-verified]: hash-pinned
 `research/cases/animation-pose/specs/gameplay_actions.json`; player-model descriptor inventory from
 `research/tooling/capture/inventory_player_animations.py`. The specification records confirmed
 addresses for the closed player compact, protected, paired, completion and NPC policy surfaces.
+
+# 2026-09-07 — EF_NODRAW gates the whole activity translation, and there is no unowned-base fallback
+
+**`+0x19c & 0x40` is `m_fEffects & EF_NODRAW`, and BOTH translation gates read it** [VtMB
+decompiled]. The pre-translation branch recorded above ("no active weapon, or the weapon's
+`+0x19c & 0x40` — **clear**") names the field only by offset; it is `CBaseEntity::m_fEffects` at
+`+0x19c`, and the bit is `EF_NODRAW` (`0x40`). `CBaseEntity::Hide` (`0x1009d2a0`, vtable `+0x108`)
+sets it and `CBaseEntity::Unhide` (`0x1009d380`, vtable `+0x10c`) clears it.
+
+Two gates read it, one rung apart, and they say the same thing:
+
+1. `CBaseCombatCharacter::Weapon_TranslateActivity` (`0x10327ec0`) resolves `m_hActiveWeapon`, and
+   calls the weapon's `ActivityOverride` (vtable `+0x5a4`, `0x1024f210`) **only** when
+   `(m_fEffects & 0x40) == 0`. A NODRAW active weapon translates nothing at all.
+2. `PreTranslate_Human` (`0x103854f0`, virtual `+0x5dc` on `CNPC_VHuman`, `CNPC_VVampire` and 37
+   more classes) takes the same gate as arm 1 of its first-match chain: it leaves
+   `m_bAggressiveAnims` (`+0x6410`) at 0 and the request reaches the common Troika body unchanged —
+   so no `ACT_WALK → ACT_WALK_RELAXED`, no `ACT_RUN → ACT_RUN_RELAXED`, no `_ALERT` turn rewrites.
+
+So a hidden active weapon presents as **no weapon** to the whole activity request, while remaining
+`m_hActiveWeapon` for every other purpose — its mode, its magazine and its deadlines are untouched
+and a press still fires it. The port states this once, in
+`FElysiumCombatCharacter::FillActivityClipRequest`: a hidden active weapon leaves
+`Request.WeaponClassname` empty, which is what the class ladder, the weapon ladder, the
+alert/relaxed branch and the gait fan all read. The bit itself is `FElysiumWeapon::bHidden`
+(`IsHidden`/`Hide`/`Unhide`); the writers are `Holster` (`0x10253ca0`, which ends with `Hide()`) →
+`OnHolstered`, the shared deploy commit (`0x10253b70`, which clears it) → `OnEquipped`, and the NPC
+`OnStateChange` overrides recorded in `docs/vtmb/npc-ai-reverse-engineering.md`. The attached wield
+model is hidden and re-installed with the bit, because retail's NODRAW stops the weapon rendering
+and this runtime's hand geometry is a separate component. Proof:
+`Elysium.Substrate.WeaponHidden.ActivityRequest` / `.HolsterDeploy` / `.StateChange`.
+
+**Divergence, named:** the bit lives on the weapon leaf rather than on the shared entity base.
+Retail's `m_fEffects` is `CBaseEntity`'s and every entity carries it; here the one reader is the
+active-weapon translation gate and every writer is weapon-typed, so nothing else would answer.
+Moving it down the chain is mechanical if a second family ever needs it.
+
+**There is no "nobody owns the pose, so play the weapon-translated idle" state** [VtMB decompiled].
+Retail never requests `ACT_IDLE` for a standing Troika NPC. The disposition idle (`0x102c12a0`)
+plays its stance clips **by name**, and `ResolveActivityToSequence` (`0x10272130`) on a miss keeps
+`m_nSequence` and otherwise falls to sequence 0 — so the sequence a body stands on between two named
+clips is simply the last one it committed, and nothing re-derives a pose from the weapon in the gap.
+
+The port's base channel is a claim slot and therefore HAS the state retail does not: a one-shot claim
+(a stance transition, a per-line `.vcd` gesture) expires, the locomotion publish takes the base back
+in the Idle graph state, and `ACT_IDLE` resolves through the full translation — which on an NPC
+holding `item_w_claws` yields `claws_idle`, the crouched claw stance seen on Jack in `sp_tutorial_1`
+whenever a claim ran out. `FElysiumAnimationDriver` now remembers the clip a base claim committed
+and republishes it by name when the base is unowned in Idle on a cast body; travel states are
+unchanged, a body with no history falls through to the idle resolve, and the player is untouched.
+The design seam is `docs/architecture/animation-architecture.md`. Proof:
+`Elysium.Substrate.BaseHold.UnownedCastIdle`.

@@ -12,6 +12,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumSignData.h"
+#include "UI/ElysiumDialogueWidget.h"
 #include "UI/ElysiumUISubsystem.h"
 
 #include "Engine/Engine.h"
@@ -226,12 +227,12 @@ void UElysiumPresentationSubsystem::PostNotification(const FElysiumNotification&
 
 // The publish pass.
 
-void UElysiumPresentationSubsystem::DialogueChoose(int32 VisibleIndex)
+void UElysiumPresentationSubsystem::DialogueChoose(int32 VisibleIndex, int32 ExpectedLineId)
 {
 	const AElysiumMapActor* Map = ResolveMapActor();
 	if (FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr)
 	{
-		World->PlayerDialogChoose(VisibleIndex);
+		World->PlayerDialogChoose(VisibleIndex, ExpectedLineId);
 	}
 }
 
@@ -241,6 +242,18 @@ void UElysiumPresentationSubsystem::DialogueAdvance()
 	if (FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr)
 	{
 		World->PlayerDialogAdvance();
+	}
+}
+
+void UElysiumPresentationSubsystem::DialogueSkip()
+{
+	// M-SKIP — retail's hurry verb (`dialogpick -2` -> `0x102c0bb0`). The world ends the voice,
+	// completes the face and flushes the NPC's parked col-5 exactly as `NPCNotifyDoneTalking`
+	// would; the response band is untouched.
+	const AElysiumMapActor* Map = ResolveMapActor();
+	if (FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr)
+	{
+		World->PlayerDialogSkip();
 	}
 }
 
@@ -397,28 +410,25 @@ void UElysiumPresentationSubsystem::Publish()
 			FElysiumDialogueView& D = Next.Dialogue;
 			D.Conversation = Conv;
 			D.Revision = Conv->Revision();
+			// The identity the UI reconciles on. `Conv` is a heap address that a closed conversation
+			// can hand straight back to its successor, and `Revision()` restarts at 1, so the pair
+			// can repeat across two conversations in one frame; the world's open serial cannot.
+			D.DialogSerial = World->GetOpenDialogSerial();
 			D.Owner = World->GetOpenDialogOwner();
 			if (const FElysiumEntity* OwnerEnt = World->Resolve(D.Owner))
 			{
 				D.Speaker = OwnerEnt->Def ? OwnerEnt->Def->TargetName : FString();
 			}
 
-			const bool bMale = Conv->PlayerMale();
-			const bool bMalk = Conv->PlayerMalkavian();
-			if (const FElysiumDlgLine* NpcLine = Conv->CurrentNpcLine())
-			{
-				D.Line = NpcLine->DisplayText(bMale, bMalk);
-			}
-			for (int32 v = 0; v < Conv->VisibleChoices().Num(); ++v)
-			{
-				if (const FElysiumDlgLine* Choice = Conv->VisibleChoice(v))
-				{
-					D.Choices.Add(Choice->DisplayText(bMale, bMalk));
-					D.ChoiceIds.Add(Choice->Id);
-				}
-			}
-			D.bAwaitingAutomatic = Conv->IsAwaitingAutomatic();
+			// The turn itself — subtitle, band, labels, the no-valid-reply substitution — is a rule
+			// about the conversation and is projected by the UI layer's own pure function.
+			ElysiumDialogueUI::FillTurn(*Conv, D);
 			D.bTerminal = Conv->IsTerminalLine() || World->CanPlayerAdvanceAutomatic();
+			// M-REVEAL / M-SKIP. The band is published with the line rather than withheld behind
+			// `ShowPlayerChoices`; these two say whether the voice is still running, which is what
+			// draws the skip hint and what routes Space to the hurry verb.
+			D.bNpcSpeaking = World->IsDialogueNpcSpeaking();
+			D.bCanSkip = World->CanPlayerSkipDialogue();
 		}
 
 		World->BuildLootView(Next.Loot);
@@ -620,7 +630,7 @@ void UElysiumPresentationSubsystem::Publish()
 			DialogueOpenedEvent.Broadcast(ViewState.Dialogue);
 		}
 		else if (ViewState.Dialogue.IsOpen() && Previous.Dialogue.IsOpen()
-			&& ViewState.Dialogue.Conversation == Previous.Dialogue.Conversation
+			&& ViewState.Dialogue.DialogSerial == Previous.Dialogue.DialogSerial
 			&& ViewState.Dialogue.Revision != Previous.Dialogue.Revision)
 		{
 			// A turn advanced. There is no announcement for this — the branch machine moves inside

@@ -153,6 +153,8 @@ const FElysiumSoundScheme* FElysiumSoundSchemeManager::LoadScheme(const FString&
 	}
 	// Scheme files live under out/sound/ mirroring VtMB (SchemeRel is "sound/Schemes/x.txt", so it
 	// resolves under Root() directly, not SoundDir()). Case-insensitive on Windows filesystems.
+	// Still a LEGACY read after DC flipped the sound family to CorpusRoot(): no `sound/schemes/`
+	// unit is published, so the scheme tables have no corpus home yet (seam_migration.md, 2026-09-06).
 	const FString AbsPath = FElysiumContentPaths::Root() / SchemeRel;
 	FElysiumSoundScheme Parsed;
 	const bool bOk = FElysiumSoundScheme::ParseFile(AbsPath, Parsed);

@@ -22,20 +22,15 @@ does not run or modify the game and it does not implement the Unreal terminal.
   `keypad_strings` control?
 
 The static entity/data/save surface and the `sp_tutorial_1` `tuthack` chain are
-bounded in `docs/vtmb/computer-terminals.md`, which also carries every closed
-answer: the server session virtuals, the client character-texture renderer, the
-`hackcmd` transport and input flags, the Function dependency → runtext → enqueue
-output → synchronous runscript order (ordinary output delivery follows in the
-queue), the player use dispatcher with its 80-unit cosine cone, the `0.7`
-attachment-driven screen-facing gate, use-icon eligibility and its stock
-fallback, the four sound cue sites, the complete email state machine, and the
-screensaver placement and schedule.
-
-What is still open is narrow and is listed in that document: whether
-`CBaseVampireSkillEntity` joins the chain by single or multiple inheritance, the
-identity of the generic use outputs fired around entry and exit, whether death,
-damage or map teardown reach the dispatcher's release branch, and the meaning of
-the two player mode transitions.
+bounded in `docs/vtmb/computer-terminals.md`, which is the canonical behavior
+spec. Closed there, with addresses: single-inheritance
+`CBaseVampireSkillEntity` → `CBaseTerminal` → `CPropHacking`; `OnUseBegin` /
+`OnUseEnd` fire from skill-entity slots 39/42 (`FUN_100a4fe0` / `FUN_100a5030`);
+`FUN_10167fd0` is the one session release (use-gate fail, `QUIT`, damage,
+dialog, teleport, engine edict-match); `m_bIsImmobilized` (`+0x19f7`) zeroes
+wish move and `m_iVFlags` bit `0x1` (`+0x1d60`) keeps SetupMove from fighting
+the pin. TERM10–TERM14 (quit/exit tokens, Spawn tail-call vs Precache, cracking duration,
+keydown vs char-insert, screen-facing XY cone) are also closed there.
 
 ## Best offline discovery sequence
 

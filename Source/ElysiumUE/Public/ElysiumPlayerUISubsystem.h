@@ -86,7 +86,8 @@ private:
 	void OnSignDismiss();
 	void ShowDialogue(const FElysiumDialogueView& Dialogue);
 	void HideDialogue();
-	void OnDialogueChoice(int32 VisibleIndex);
+	void OnDialogueChoice(int32 VisibleIndex, int32 LineId);
+	void OnDialogueSkip();
 	void ReconcileLoot(const struct FElysiumLootView& Loot);
 	void ShowLoot(const struct FElysiumLootView& Loot);
 	void HideLoot();
@@ -120,10 +121,15 @@ private:
 	TArray<TObjectPtr<UElysiumNotificationScreen>> NotificationScreens;
 
 	TWeakObjectPtr<UElysiumPresentationSubsystem> BoundPresentation;
-	// Identity only: never dereferenced after publication, because the conversation is map-owned.
-	const FElysiumDlgConversation* ShownDialogue = nullptr;
 	const struct FElysiumSignData* ShownSign = nullptr;
+	// The open-dialog serial of the conversation on screen, 0 when no box is up. A serial rather
+	// than the conversation pointer: two conversations in one frame can share an address and both
+	// start at revision 1, and the box would then never rebuild (see ElysiumView::ReconcileDialogue).
+	uint32 ShownDialogSerial = 0;
 	uint32 ShownDialogueRevision = 0;
+	// Part of the dialogue reconcile key, not of the turn: the voice ending changes what the box
+	// draws (the skip hint) without being a new turn, and it flips at most once per line.
+	bool bShownDialogueSpeaking = false;
 	FElysiumEntityHandle ShownLootOwner;
 	uint32 ShownLootRevision = 0;
 	FElysiumEntityHandle ShownTerminalOwner;

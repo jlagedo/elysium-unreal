@@ -11,6 +11,17 @@
 class UElysiumUserSettings;
 class UTexture2D;
 
+namespace ElysiumCameraView
+{
+	// The aspect the frame is actually rendered at, which a `vdata/camerashots/` field of view has to
+	// be widened to (`ElysiumCam::WidenSourceFov`). `FMinimalViewInfo::AspectRatio` carries the
+	// camera component's *authored* ratio rather than the window's, and with `bConstrainAspectRatio`
+	// false — which is this project's case — the window's is what the projection actually uses. With
+	// no game viewport (a commandlet, an automation run) the caller's fallback stands, which keeps
+	// the headless assertion of the FOV path deterministic.
+	float RenderAspectRatio(float Fallback);
+}
+
 // The player camera. Design + the recovered solve: `docs/vtmb/camera-view-modes.md`;
 // where it sits in the spine: `docs/architecture/runtime-architecture.md` §9.
 //
@@ -282,8 +293,11 @@ private:
 	int32 WaterLevel = 0;
 	float WaterSurfaceZCm = 0.0f;
 
-	// Where the scripted channel's view has reached, so `MoveSpeed` / `MaxTurnRate` rate-limit the
-	// shot's own chase of its target rather than teleporting to it each frame.
+	// Where the scripted channel's view has reached. The whole approach — the tolerance deadbands,
+	// the accel/decel on `MoveSpeed`/`MoveAccel` and `MaxTurnRate`/`TurnAccel`, `SyncRotateOnMove` —
+	// is `C_BaseCineCamera`, ported into `FElysiumScriptedShotTracker`, so the legacy `SetCamera`
+	// stack and the dialogue director's request channel cannot drift apart.
+	FElysiumScriptedShotTracker ShotTracker;
 	FVector ShotPosition = FVector::ZeroVector;
 	FRotator ShotRotation = FRotator::ZeroRotator;
 	bool bShotSeeded = false;

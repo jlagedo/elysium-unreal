@@ -764,11 +764,29 @@ first↔third toggle (§3) rather than a hard cut:
 | Remington M700 | 65% | 40 / 20 | ×0.1 |
 | Crossbow | 70% | 35 / 15 | ×0.15 |
 
-Default hip-fire FOV is **90° horizontal** (~62° vertical at 16:9). Retail's own `default_fov 75`
-is Hor+ and already renders ~91° horizontal at a 16:9 window (`docs/vtmb/source_movement.md` →
-"View / camera"), so 90° keeps that widescreen baseline rather than retail's narrower 4:3
-reference. Elysium ships a user-facing FOV slider; each weapon's aim percentage above is relative
-to whatever hip FOV the player has chosen, not an absolute value.
+### The lens (2026-09-07)
+
+**Corrected.** This paragraph previously stated a 90° horizontal hip-fire baseline and "Elysium ships
+a user-facing FOV slider". Neither existed in code: nothing set the gameplay FOV at all, so the player
+view ran on `UCameraComponent`'s default 90 with Unreal's default horizontal-held aspect constraint —
+a fixed horizontal angle that *crops vertically* as the window widens, which is the opposite of
+Source's Hor+. There is no FOV slider.
+
+Retail is reproduced instead. `default_fov` (75) and `viewmodel_fov` (54) are declared into the VtMB
+console store beside the `cam_*` set, so a user's `config.cfg` and the patch aliases govern them; both
+are **horizontal angles at Source's 4:3 reference under the Hor+ rule**
+(`vfov = 2*atan(tan(hfov/2)/(4/3))`, `docs/vtmb/source_movement.md` → "View / camera"). The window's
+own aspect widens them at the point of use through the one conversion,
+`ElysiumCam::WidenSourceFov` — `default_fov 75` renders ≈ 91.3° horizontal at 16:9 and exactly 75° at
+4:3. The same function serves every `vdata/camerashots/` `FieldOfView`, so a scripted shot's weight
+lerps two angles that are in the same space.
+
+`viewmodel_fov` is declared, loaded and readable as `FElysiumCameraCvars::ViewmodelFov` and **has no
+consumer**: the port has no first-person viewmodel renderer (only `SolveDrawPolicy`'s
+`bViewmodelEligible` gate, which nothing draws from). It stands as the seam for retail's ConVar.
+
+Each weapon's aim percentage in the table above is relative to whatever `default_fov` resolves to, not
+an absolute value; no aim-FOV path is implemented yet, so the percentages are unretuned plan.
 
 Faithful first/third behaviour — the toggle, the weight ramp, `camera_class` arbitration, and the
 dedicated viewmodel projection — stays recoverable through git history and the RE record above;
@@ -973,11 +991,12 @@ CameraShotTable { <ShotName> { Start {…} End {…} Target { Point1 {…} Point
   `AttachPos` ∈ `Origin` | `Center` | `EyePosition` | `Top` | `Bottom` | `Bone: <name>` |
   `Attachment: <name>`; `AttachType` ∈ `Follow` (position + the offset rotated by the attachment's
   facing) | `FollowNoAngles` (position only) | `FollowEntAngles` (offset rotated by the entity's
-  facing) | `None` (set once, stay put). `OffsetOrigin "[F, R, U]"` is Source units.
-- **`CameraConstraints`** carries `MoveSpeed`/`MoveAccel` (inches/sec), `MaxTurnRate`/`TurnAccel`
-  (deg/s), `DistanceTolerance`/`AngularTolerance` (how far the subject may drift before the camera
-  follows), `FieldOfView`, `DialogPOV` (NPCs look at the camera rather than the player's eye),
-  `AutoPositionFromTarget`, `SyncRotateOnMove`, `SnapOnShotChange`, `ShowHud`, `DrawViewmodel`.
+  facing) | `None` (offset in world axes). `OffsetOrigin "[F, R, U]"` is Source units.
+- **`CameraConstraints`** carries `MoveSpeed`/`MoveAccel` (inches/sec, inches/sec²),
+  `MaxTurnRate`/`TurnAccel` (deg/s, deg/s²), `DistanceTolerance`/`AngularTolerance` (the **deadbands**
+  the camera parks inside — see the tracker below), `FieldOfView`, `DialogPOV` (NPCs look at the
+  camera rather than the player's eye), `AutoPositionFromTarget`, `SyncRotateOnMove`,
+  `SnapOnShotChange`, `ShowHud`, `DrawViewmodel`.
 
 `ShowHud` and `DrawViewmodel` both parse with a default of `0`; an absent field therefore asks the
 shot to hide that surface. The corpus uses explicit opt-ins for interaction shots rather than story
@@ -995,6 +1014,121 @@ not.
 
 `MoveSpeed` and `MaxTurnRate` limit the shot **tracking a moving subject** — not its arrival. A shot
 arriving is the *weight ramp*; the shot itself starts where it was authored.
+
+### The shot record, the anchor resolve, and the client tracker (2026-09-07)
+
+Recovered whole, because the port had parsed half of `CameraConstraints` and read none of it — which
+is why a conversation camera moved with the NPC's idle and framed tighter than retail's.
+
+**The record.** Shot table stride `0x104`, parser `FUN_100721e0`. `+0x20` flags: `0x01` Start,
+`0x02` End, `0x04` Point1, `0x08` Point2, `0x10` DialogPOV, `0x20` AutoPositionFromTarget, `0x40`
+DrawViewmodel, `0x80` SnapOnShotChange, `0x100` SyncRotateOnMove, `0x200` ShowHud. `+0xD8` MoveSpeed,
+`+0xDC` MoveAccel, `+0xE0` TurnAccel, `+0xE4..0xEC` MaxTurnRate[3], `+0xF0..0xF8`
+AngularTolerance[3], `+0xFC` DistanceTolerance, `+0x100` FieldOfView.
+
+**The parse defaults are not zero.** `0x100721e0` seeds the record before it reads the block, and the
+whole-block-absent path `0x10072300` seeds the identical set: MoveSpeed 150 u/s, MoveAccel 50 u/s²,
+TurnAccel 30 °/s², MaxTurnRate [90, 90, 90] °/s, DistanceTolerance 10 u, AngularTolerance [1, 1, 1] °,
+FieldOfView 75 clamped to [20, 120], every flag clear. A file that writes only `FieldOfView` still
+gets a rate-limited, deadbanded camera, which is why so few shipped shots bother with the rates.
+
+**Anchor parse** `FUN_10071e00`: `Position` Player `0x1` / DialogTarget `0x2` / World `0x4` / Named
+`0x8`; `AttachPos` Origin `0x10` (default), Center `0x20`, EyePosition `0x40`, Bottom `0x80`, Top
+`0x100`, Bone `0x200`, Attachment `0x400`; `AttachType` None `0x2000` (default), Follow `0x4000`,
+FollowNoAngles `0x8000`, FollowEntAngles `0x10000`; `0x20000` marks a non-zero OffsetOrigin.
+
+**Anchor to world** (`CBaseCineCam` `FUN_1006f080`, offset step `0x1006f430`):
+
+| `AttachPos` | resolves to |
+|---|---|
+| `Origin` | `GetAbsOrigin()`, with `GetAbsAngles()` as the rotation basis |
+| `Center` | the world-space centre (vfunc `0x300`) |
+| `EyePosition` | `CBaseCombatCharacter::CalcLookData`'s eye — a **fixed** `origin + m_vecViewOffset`, not a bounds fraction and not a bone |
+| `Top` / `Bottom` | the origin with Z taken from the collision bounds |
+| `Bone: <name>` | `GetBonePosition02`, with the bone's own angles — animated |
+| `Attachment: <name>` | `GetAttachment02` |
+
+`OffsetOrigin` is added in world axes for `None` and `FollowNoAngles`, rotated by the attach point's
+angles for `Follow`, and by the entity's abs angles for `FollowEntAngles`. **A DialogTarget/Origin/
+Follow `End` anchor therefore never moves with animation**; only a `Bone:`/`Attachment:` anchor does.
+
+**`AttachType None` is not "sample once" — correcting this document.** The camera think `FUN_1006e8e0`
+re-resolves **all four** anchors every server tick (loop `0x1006ea90`, cache `this+0x598+i*12`), and
+`FUN_1006f010` merely reads that per-tick cache back; nothing latches. `AttachType` selects the frame
+the offset is added in, nothing more. *Retail bug:* the caching arm tests the **Start** anchor's flags
+for every index, so a shot with no `Start` block caches nothing. Not reproduced — the port re-resolves
+every anchor every frame, which is the behaviour the tracker below is written against.
+
+Camera abs origin is the Start anchor when present, else the cached pose; on the very first frame with
+neither it is the player's `EyePosition` plus abs angles, so an End-only shot dollies in from the
+player's view. Look-at (`FUN_1006f670`) is Point1, Point2, or their midpoint.
+
+**The client tracker — `C_BaseCineCamera` — is what holds a shot still.** It runs every *rendered*
+frame from `C_BasePlayer`'s view calc: `FUN_100a7770` then `FUN_10001b50`, `FUN_10001a20`,
+`FUN_10001fa0`, then move `FUN_10001fe0`, turn `FUN_10001d40`, FOV `FUN_10001c20`. Fields: `0x410`
+goal origin, `0x41c` look-at, `0x468` current origin, `0x474` current angles, `0x4a4` current speed,
+`0x4a8[3]` per-axis turn rates, `0x4c0` position-settled, `0x4c1[3]` per-axis angle-settled.
+
+- **Position** `FUN_10001fe0`: `threshold = settled ? DistanceTolerance : 1.0 u`;
+  `dist = |goal - current|`; `settled = dist < threshold`. Settled means speed 0 and no movement.
+  Otherwise accelerate toward `MoveSpeed` by `MoveAccel`, decelerate by `MoveAccel` inside the
+  stopping distance, and step toward the goal. **Hysteresis**: parked until the goal drifts more than
+  `DistanceTolerance`, moving until back within 1 unit.
+- **Angles** `FUN_10001d40`: desired = `VectorAngles(lookAt - currentOrigin)`, re-derived after the
+  position step. Per axis, `tol = settled[i] ? AngularTolerance[i] : tiny`; a delta inside the band
+  settles the axis, zeroes its rate and rotates nothing; outside it, the axis turns at
+  `FUN_10001c80`'s rate, clamped to the desired angle.
+- **Turn rate** `FUN_10001c80`: accelerate by `TurnAccel` toward `MaxTurnRate[i]`, decelerate to 0
+  inside the stopping distance. With `SyncRotateOnMove` set **and the position not settled**,
+  `rate = |delta| / T`, where `T` is the predicted remaining translation time from (current speed,
+  `MoveSpeed`, `MoveAccel`, distance remaining) — `MaxTurnRate` is bypassed so the pan lands with the
+  dolly.
+- **Shot start** `FUN_10002210`: the current pose is the goal when the shot has a `Start` or has no
+  `End`; otherwise it is the live view setup, which is the dolly-in. Position is marked settled and
+  the rates zeroed. `SnapOnShotChange` additionally hard-copies goal to current (`FUN_10002390`). FOV
+  is copied to `0x480` every frame.
+
+**This is the whole answer to "the dialogue camera wobbles as the NPC animates."** `jack.txt` and
+`dialogdefault.txt` both write `Target Point1` as `Bone: Bip01 Head`, and retail re-resolves that bone
+every tick exactly as the port does — the goal angle genuinely jitters all conversation long. What
+stops the camera following it is the shipped `AngularTolerance [10, 10, 10]`, a band far wider than
+any head motion. Nothing in the anchor grammar is involved.
+
+`jack.txt`, verbatim: no `Start`; `End` DialogTarget / Origin / Follow / `OffsetOrigin [50, 0, 65]`;
+`Target Point1` DialogTarget / `Bone: Bip01 Head` / None; MoveSpeed 500, MoveAccel 250, TurnAccel 30,
+MaxTurnRate [60, 60, 60], DistanceTolerance 5, AngularTolerance [10, 10, 10], FieldOfView 40,
+DialogPOV 1, SyncRotateOnMove 1. `dialogdefault.txt` is the same shot with `OffsetOrigin [40, 0, 65]`.
+So retail's Jack camera sits 50 u (127 cm) along Jack's own forward and 65 u (165.1 cm) up, framing
+his head.
+
+**`DialogTarget` is `player+0xFE8`,** the NPC in the conversation. `StartPlayerDialog` (`0x10178280`)
+writes no origin and no angles for either party: nothing about starting a conversation turns anyone.
+
+**Units.** `OffsetOrigin`, `MoveSpeed`, `MoveAccel` and `DistanceTolerance` are raw Source units with
+no scale anywhere on the path; the conversion to cm happens once, in the parse, at
+`ElysiumCam::U = 2.54`.
+
+**Field of view is 4:3-referenced and Hor+.** A shot's `FieldOfView` is the horizontal angle at
+Source's 4:3 reference; a wider window holds the vertical angle and earns horizontal
+(`vfov = 2*atan(tan(hfov/2)/(4/3))`). Jack's authored 40 therefore renders about 51.8 degrees
+horizontal at 16:9, and handing the authored number straight to Unreal — whose
+`FMinimalViewInfo::FOV` is horizontal *at the current aspect* — magnified the shot about 1.4x and read
+as "the camera is closer than retail". This is retail Source semantics, not a modernization; the
+conversion is `ElysiumCam::WidenSourceFov`, applied at **apply time**, so the parsed shot keeps the
+number its file wrote. The player view now runs through the same rule (see "The lens" below), so the
+shot weight lerps two angles in one space.
+
+**Still unrecovered.** `AutoPositionFromTarget` parses and has **no reader** anywhere; the anchor's
+`OffsetAngles` (`+0x20` of the anchor) likewise has no reader; the exact approach-integration constant
+of `FUN_10001fe0` is folded behind a normalize in the decompile, so the gating and the hysteresis are
+certain while the curve shape is approximate; and the camera think interval `_DAT_1044eb04` is not
+resolved. One port-side assumption is recorded with them: retail's decompile shows the angular
+`settled` flag being *set* in the settled arm, and the port also *clears* it when an axis starts
+turning, which is what makes the deadband symmetric with the position arm's `settled = dist <
+threshold` and gives the "turn all the way onto the target, then hold" behaviour the shipped
+tolerances imply. The port also does not implement retail's "start from the live view setup" arm of
+`FUN_10002210` (the request channel carries no view); the scripted channel's weight ramp stands in for
+that dolly-in, and the tracker seeds settled on the goal.
 
 ### Verification hooks
 

@@ -304,7 +304,7 @@ void UElysiumPlayerUISubsystem::RemoveRoot()
 	LootScreen = nullptr;
 	TerminalScreen = nullptr;
 	NotificationScreens.Reset();
-	ShownDialogue = nullptr;
+	ShownDialogSerial = 0;
 	ShownSign = nullptr;
 	ShownDialogueRevision = 0;
 	ShownLootOwner = FElysiumEntityHandle::Invalid();
@@ -523,10 +523,10 @@ void UElysiumPlayerUISubsystem::OnPostLoadMap(UWorld* LoadedWorld)
 void UElysiumPlayerUISubsystem::ReconcileDialogue(const FElysiumDialogueView& Dialogue)
 {
 	switch (ElysiumView::ReconcileDialogue(
-		ShownDialogue, ShownDialogueRevision, Dialogue))
+		ShownDialogSerial, ShownDialogueRevision, Dialogue, bShownDialogueSpeaking))
 	{
 	case ElysiumView::EDialogueAction::Rebuild:
-		if (DialogueScreen && ShownDialogue == Dialogue.Conversation)
+		if (DialogueScreen && ShownDialogSerial == Dialogue.DialogSerial)
 		{
 			// A turn is new content inside one modal lifetime. Keep the screen, focus and input scope.
 			DialogueScreen->ApplyDialogue(Dialogue);
@@ -538,8 +538,9 @@ void UElysiumPlayerUISubsystem::ReconcileDialogue(const FElysiumDialogueView& Di
 		}
 		if (DialogueScreen)
 		{
-			ShownDialogue = Dialogue.Conversation;
+			ShownDialogSerial = Dialogue.DialogSerial;
 			ShownDialogueRevision = Dialogue.Revision;
+			bShownDialogueSpeaking = Dialogue.bNpcSpeaking;
 		}
 		break;
 
@@ -562,6 +563,7 @@ void UElysiumPlayerUISubsystem::ShowDialogue(const FElysiumDialogueView& Dialogu
 			UElysiumDialogueScreen* Screen = CastChecked<UElysiumDialogueScreen>(&Widget);
 			Screen->ApplyDialogue(Dialogue);
 			Screen->OnChoice.BindUObject(this, &UElysiumPlayerUISubsystem::OnDialogueChoice);
+			Screen->OnSkip.BindUObject(this, &UElysiumPlayerUISubsystem::OnDialogueSkip);
 			Screen->ConfigureScreenPolicy(EElysiumUIScreenKind::Dialogue);
 		}));
 }
@@ -573,11 +575,12 @@ void UElysiumPlayerUISubsystem::HideDialogue()
 		RemoveWidget(EElysiumUILayer::GameModal, DialogueScreen);
 		DialogueScreen = nullptr;
 	}
-	ShownDialogue = nullptr;
+	ShownDialogSerial = 0;
 	ShownDialogueRevision = 0;
+	bShownDialogueSpeaking = false;
 }
 
-void UElysiumPlayerUISubsystem::OnDialogueChoice(int32 VisibleIndex)
+void UElysiumPlayerUISubsystem::OnDialogueChoice(int32 VisibleIndex, int32 LineId)
 {
 	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
 	{
@@ -587,8 +590,18 @@ void UElysiumPlayerUISubsystem::OnDialogueChoice(int32 VisibleIndex)
 		}
 		else
 		{
-			Presentation->DialogueChoose(VisibleIndex);
+			// The row's `.dlg` id travels with its position so the world can refuse a pick aimed at
+			// a band it has already replaced.
+			Presentation->DialogueChoose(VisibleIndex, LineId);
 		}
+	}
+}
+
+void UElysiumPlayerUISubsystem::OnDialogueSkip()
+{
+	if (UElysiumPresentationSubsystem* Presentation = BoundPresentation.Get())
+	{
+		Presentation->DialogueSkip();
 	}
 }
 

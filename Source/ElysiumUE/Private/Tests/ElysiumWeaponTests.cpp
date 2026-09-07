@@ -35,6 +35,7 @@
 #include "Substrate/ElysiumSwingContact.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumNpc.h"   // FElysiumNpc — the OnStateChange holster/draw body
 #include "Substrate/ElysiumReactions.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "ElysiumViewState.h"
@@ -3433,13 +3434,15 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		Services.BodyClipPhase.Channel = EElysiumAnimChannel::UpperBody;
 		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
 			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
-		// Two unclaimed footsteps around the commit, one on each side of it. They are what makes the
-		// once-only assertion measurable: a claimed id never reaches the census, so the commit itself
+		// Two unclaimed ids around the commit, one on each side of it (2070/2071: arms of
+		// `0x10274e30` no handler claims yet — the footstep ids 2050-2053 are claimed by
+		// `FElysiumNpc::HandleAnimEvent` since the footstep port and never reach the census). They are
+		// what makes the once-only assertion measurable: a claimed id never reaches the census, so the commit itself
 		// cannot report how many times it fired — and a cursor re-walking a stale interval counts the
 		// record behind the playhead again on every frame that follows.
-		Timeline.Add(WeaponEv(0.05f, 2050));
+		Timeline.Add(WeaponEv(0.05f, 2070));
 		Timeline.Add(WeaponEv(0.30f, 3038, TEXT("0")));
-		Timeline.Add(WeaponEv(0.60f, 2051));
+		Timeline.Add(WeaponEv(0.60f, 2071));
 
 		// The base really is empty, asked of the seam itself rather than assumed off the fixture's
 		// field. Everything below rests on it: an assertion about the second cursor means nothing if
@@ -3667,8 +3670,8 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		ArmClipSeam(Services, 0.0f);
 		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
 			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
-		// A footstep and nothing else: a real timeline that names no commit for either family.
-		Timeline.Add(WeaponEv(0.20f, 2050));
+		// An unclaimed id (2070) and nothing else: a real timeline that names no commit for either family.
+		Timeline.Add(WeaponEv(0.20f, 2070));
 
 		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
 		if (!TestNotNull(TEXT("the pistol is granted"), Pistol))
@@ -3767,9 +3770,9 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		// An early record the swing passes BEFORE the hit, and the commit it has not reached yet.
 		// The early one is what makes the resumption assertion discriminate: an arm that resumed from
 		// zero instead of from its anchor would walk `[0, 0.45)` — which still contains the commit,
-		// so the commit alone proves nothing — and fire this footstep a second time for a step the
-		// body took once.
-		Timeline.Add(WeaponEv(0.05f, 2050));
+		// so the commit alone proves nothing — and fire this unclaimed record (2070) a second time for
+		// a step the body took once.
+		Timeline.Add(WeaponEv(0.05f, 2070));
 		Timeline.Add(WeaponEv(0.30f, 3038, TEXT("0")));
 
 		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
@@ -4321,6 +4324,265 @@ bool FElysiumInventorySelectionTest::RunTest(const FString&)
 		TestFalse(TEXT("no catalogue leaves the view invalid"), View.bValid);
 		ElysiumItems::Install(Table);
 	}
+
+	return true;
+}
+
+// =====================================================================================
+// EF_NODRAW — the drawn/hidden bit on an ACTIVE weapon, and the two things retail does
+// with it.
+//
+//  A. `CBaseCombatCharacter::Weapon_TranslateActivity` (0x10327ec0) calls the weapon's
+//     `ActivityOverride` (`+0x5a4`, 0x1024f210) only when `(m_fEffects & 0x40) == 0`, and
+//     `PreTranslate_Human` (0x103854f0, virtual `+0x5dc`) takes the same gate a rung
+//     earlier — a NODRAW weapon leaves `m_bAggressiveAnims` 0 and the request reaches the
+//     Troika body unrewritten. So a hidden active weapon presents as NO weapon to the
+//     whole activity request.
+//  B. `OnStateChange` (vtable slot 463) on seven classes hides the active weapon entering
+//     IDLE and unhides it entering ALERT/COMBAT; the other 40-odd take
+//     `CAI_BaseNPCTroika::OnStateChange` (0x102ae140), which writes nothing.
+//
+// The fixture is the suite's own content-free catalogue, so no clip vocabulary, no
+// skeletal body and no rulebook is involved: what is asserted is the bit, the request it
+// produces, and the classname the rule is joined to.
+// =====================================================================================
+
+namespace
+{
+	// Two cast bodies whose retail classes take DIFFERENT slot-463 bodies: `npc_VHumanCombatant`
+	// shares `CNPC_VGhoulCroucher::FUN_103871c0` (0x103871c0) and `npc_VVampire` takes the Troika
+	// base (0x102ae140). Both classnames are registered leaves in `ElysiumNpcClasses.cpp`.
+	FElysiumEntityDefs MakeHiddenWeaponDefs()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__weapon_hidden_test__");
+
+		FElysiumEntityDef Combatant;
+		Combatant.Classname = TEXT("npc_VHumanCombatant");
+		Combatant.TargetName = TEXT("combatant");
+		Combatant.Origin = FVector(200.0f, 0.0f, 0.0f);
+		Defs.Defs.Add(MoveTemp(Combatant));
+
+		FElysiumEntityDef Vampire;
+		Vampire.Classname = TEXT("npc_VVampire");
+		Vampire.TargetName = TEXT("vampire");
+		Vampire.Origin = FVector(400.0f, 0.0f, 0.0f);
+		Defs.Defs.Add(MoveTemp(Vampire));
+
+		return Defs;
+	}
+
+	FElysiumNpc* FindNpc(FElysiumEntityWorld& World, const TCHAR* Name)
+	{
+		FElysiumEntity* Ent = World.FindByName(Name);
+		FElysiumCombatCharacter* Char = Ent ? Ent->AsCombatCharacter() : nullptr;
+		return Char ? Char->AsNpc() : nullptr;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponHiddenRequestTest,
+	"Elysium.Substrate.WeaponHidden.ActivityRequest", GElysiumTestFlags)
+bool FElysiumWeaponHiddenRequestTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeHiddenWeaponDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumCombatCharacter* Char = FindCharacter(World, TEXT("combatant"));
+	if (!TestNotNull(TEXT("the combatant exists"), Char))
+	{
+		return false;
+	}
+	FElysiumWeapon* Katana = GiveWeapon(*Char, GKatana);
+	if (!TestNotNull(TEXT("the katana is granted"), Katana))
+	{
+		return false;
+	}
+
+	// The deploy commit (0x10253b70) clears EF_NODRAW, so a freshly equipped weapon is drawn.
+	TestFalse(TEXT("a deployed weapon carries no EF_NODRAW"), Katana->IsHidden());
+	FElysiumActivityClipRequest Drawn;
+	Char->FillActivityClipRequest(Drawn);
+	TestEqual(TEXT("a drawn active weapon names itself to the activity request"),
+		Drawn.WeaponClassname, FString(GKatana));
+
+	// `CBaseEntity::Hide` (0x1009d2a0). The weapon is STILL the active one — that is the whole
+	// point of the gate: retail reads `m_hActiveWeapon` and then refuses to translate through it.
+	Katana->Hide(Char);
+	TestTrue(TEXT("Hide sets the bit"), Katana->IsHidden());
+	TestTrue(TEXT("...and the weapon is still the active weapon"),
+		Char->Inventory.Active(*Char) == Katana);
+	FElysiumActivityClipRequest Hidden;
+	Char->FillActivityClipRequest(Hidden);
+	TestTrue(TEXT("a hidden active weapon presents as NO weapon to the activity request"),
+		Hidden.WeaponClassname.IsEmpty());
+	// Nothing else about the request moves: the gate is the weapon's alone.
+	TestEqual(TEXT("...while the model stem is unchanged"), Hidden.Stem, Drawn.Stem);
+	TestEqual(TEXT("...and the actor classname the class bodies are found by is unchanged"),
+		Hidden.ActorClassname, Drawn.ActorClassname);
+
+	// `CBaseEntity::Unhide` (0x1009d380).
+	Katana->Unhide(Char);
+	TestFalse(TEXT("Unhide clears the bit"), Katana->IsHidden());
+	FElysiumActivityClipRequest Redrawn;
+	Char->FillActivityClipRequest(Redrawn);
+	TestEqual(TEXT("and the drawn weapon names itself again"),
+		Redrawn.WeaponClassname, FString(GKatana));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponHiddenHolsterTest,
+	"Elysium.Substrate.WeaponHidden.HolsterDeploy", GElysiumTestFlags)
+bool FElysiumWeaponHiddenHolsterTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeHiddenWeaponDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumCombatCharacter* Char = FindCharacter(World, TEXT("combatant"));
+	if (!TestNotNull(TEXT("the combatant exists"), Char))
+	{
+		return false;
+	}
+
+	FElysiumWeapon* Katana = GiveWeapon(*Char, GKatana);
+	if (!TestNotNull(TEXT("the katana is granted"), Katana))
+	{
+		return false;
+	}
+	TestFalse(TEXT("the deployed katana is drawn"), Katana->IsHidden());
+
+	// The real transaction: `GiveNamedItem` -> `Equip` -> `SetActiveWeapon`, which runs the katana's
+	// `OnHolstered` before the pistol's `OnEquipped`. `Holster` (0x10253ca0) ends with `Hide()`.
+	FElysiumWeapon* Pistol = GiveWeapon(*Char, GPistol);
+	if (!TestNotNull(TEXT("the pistol is granted"), Pistol))
+	{
+		return false;
+	}
+	TestTrue(TEXT("holstering the katana hides it"), Katana->IsHidden());
+	TestFalse(TEXT("...and deploying the pistol leaves the pistol drawn"), Pistol->IsHidden());
+
+	// Drawing the katana again clears the bit: the shared deploy commit (0x10253b70) is what does
+	// it, so a weapon that was put away is not stuck hidden.
+	// `SetActiveWeapon` rather than `Equip`: the katana is already carried, and drawing a carried
+	// weapon is the switch alone — `Equip`'s `Inventory_Add` half has nothing left to do.
+	TestTrue(TEXT("the katana is drawn again"), Char->Inventory.SetActiveWeapon(*Char, *Katana));
+	TestFalse(TEXT("re-deploying the katana clears EF_NODRAW"), Katana->IsHidden());
+	TestTrue(TEXT("...and holsters the pistol hidden"), Pistol->IsHidden());
+
+	// The bit survives a save round trip: an NPC saved while idle has put its weapon away.
+	{
+		TArray<uint8> Bytes;
+		FMemoryWriter Writer(Bytes);
+		FElysiumSaveArchive Out(Writer, FElysiumSaveVersion::Latest);
+		Pistol->Serialize(Out);
+
+		Pistol->Unhide(Char);
+		TestFalse(TEXT("the pistol is drawn before the load"), Pistol->IsHidden());
+
+		FMemoryReader Reader(Bytes);
+		FElysiumSaveArchive In(Reader, FElysiumSaveVersion::Latest);
+		Pistol->Serialize(In);
+		TestTrue(TEXT("and the saved EF_NODRAW comes back"), Pistol->IsHidden());
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponHiddenStateChangeTest,
+	"Elysium.Substrate.WeaponHidden.StateChange", GElysiumTestFlags)
+bool FElysiumWeaponHiddenStateChangeTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeHiddenWeaponDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumNpc* Combatant = FindNpc(World, TEXT("combatant"));
+	FElysiumNpc* Vampire = FindNpc(World, TEXT("vampire"));
+	if (!TestNotNull(TEXT("the combatant NPC exists"), Combatant)
+		|| !TestNotNull(TEXT("the vampire NPC exists"), Vampire))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("npc_VHumanCombatant is one of the seven classes that fill slot 463 with the "
+		"holster/draw body"), Combatant->ClassHolstersOnState());
+	TestFalse(TEXT("npc_VVampire takes the Troika base, which writes nothing"),
+		Vampire->ClassHolstersOnState());
+
+	FElysiumWeapon* CombatantGun = GiveWeapon(*Combatant, GPistol);
+	FElysiumWeapon* VampireGun = GiveWeapon(*Vampire, GPistol);
+	if (!TestNotNull(TEXT("the combatant is armed"), CombatantGun)
+		|| !TestNotNull(TEXT("the vampire is armed"), VampireGun))
+	{
+		return false;
+	}
+	TestFalse(TEXT("both weapons deploy drawn"), CombatantGun->IsHidden());
+	TestFalse(TEXT("both weapons deploy drawn"), VampireGun->IsHidden());
+
+	// The first edge is retail's own spawn-time `SetState(IDLE)`: the mind starts idle, and the
+	// first pump announces it.
+	Combatant->PumpStateChange();
+	Vampire->PumpStateChange();
+	TestTrue(TEXT("an idle combatant has put its weapon away"), CombatantGun->IsHidden());
+	TestFalse(TEXT("an idle vampire has not"), VampireGun->IsHidden());
+
+	// The three arms of the recovered switch, stated as retail's callers state them: the new state,
+	// through the override body itself.
+
+	// State 2 — `GetActiveWeapon()->Unhide()`.
+	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Alert);
+	Vampire->ApplyStateWeaponVisibility(EElysiumNpcState::Alert);
+	TestFalse(TEXT("going alert draws the combatant's weapon"), CombatantGun->IsHidden());
+	TestFalse(TEXT("and the vampire's bit is still untouched"), VampireGun->IsHidden());
+
+	// State 3 keeps it drawn.
+	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Combat);
+	TestFalse(TEXT("combat keeps it drawn"), CombatantGun->IsHidden());
+
+	// State 1 — `GetActiveWeapon()->Hide()`.
+	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Idle);
+	Vampire->ApplyStateWeaponVisibility(EElysiumNpcState::Idle);
+	TestTrue(TEXT("dropping back to idle puts it away again"), CombatantGun->IsHidden());
+	TestFalse(TEXT("the vampire never changes the bit on a state change"), VampireGun->IsHidden());
+
+	// Every other state falls through to the Troika base, which writes nothing — the weapon stays
+	// exactly as the last recovered arm left it.
+	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Scripted);
+	TestTrue(TEXT("a scripted state writes nothing"), CombatantGun->IsHidden());
+	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Alert);
+	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Dead);
+	TestFalse(TEXT("and neither does death"), CombatantGun->IsHidden());
+	Combatant->ApplyStateWeaponVisibility(EElysiumNpcState::Idle);
+
+	// The hidden weapon is still the active one, and it is the ACTIVITY request that sees nothing.
+	TestTrue(TEXT("the idle combatant still holds its weapon"),
+		Combatant->Inventory.Active(*Combatant) == CombatantGun);
+	FElysiumActivityClipRequest Request;
+	Combatant->FillActivityClipRequest(Request);
+	TestTrue(TEXT("...and translates as if it had empty hands"), Request.WeaponClassname.IsEmpty());
 
 	return true;
 }

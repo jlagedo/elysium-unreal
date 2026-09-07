@@ -514,6 +514,11 @@ public:
 	// transaction before normal firing resumes" means.
 	bool bFireIntentDuringReload = false;
 
+	// `m_fEffects & EF_NODRAW` (+0x19c & 0x40). See `IsHidden`/`Hide`/`Unhide` below for the whole
+	// recovery. False is retail's own default: a spawned weapon is drawn, and the deploy commit
+	// (0x10253b70) clears the bit on every draw.
+	bool bHidden = false;
+
 	// The controller surface.
 	// One attack press. `Victim` is the explicit ranged target: the shot's world trace and spread
 	// cone are a producer that joins with the perception and player-crosshair cycles, so the
@@ -605,6 +610,33 @@ public:
 	FElysiumCombatCharacter* OwnerCharacter() const;
 	// Whether this weapon is the owner's active weapon. The commit re-validates it.
 	bool IsActiveWeapon() const;
+
+	// --- EF_NODRAW, the drawn/hidden bit an ACTIVE weapon carries ---------------------------------
+	//
+	// Retail's field is `m_fEffects` (+0x19c) on `CBaseEntity`, and the bit is `EF_NODRAW` (0x40).
+	// `CBaseEntity::Hide` (0x1009d2a0) sets it and `CBaseEntity::Unhide` (0x1009d380) clears it;
+	// they are vtable `+0x108` / `+0x10c`, which is how the NPC state machine reaches them.
+	//
+	// **It is not "holstered".** A hidden weapon is still `m_hActiveWeapon` — it keeps its mode, its
+	// magazine and its deadlines — it simply is not drawn, and every reader that asks "what is this
+	// body holding" answers with it anyway. What the bit changes is the ACTIVITY REQUEST:
+	// `CBaseCombatCharacter::Weapon_TranslateActivity` (0x10327ec0) calls the weapon's
+	// `ActivityOverride` (`+0x5a4`, 0x1024f210) only when `(m_fEffects & EF_NODRAW) == 0`, and the
+	// human/vampire pre-translator `PreTranslate_Human` (0x103854f0) takes the same gate — a NODRAW
+	// weapon leaves `m_bAggressiveAnims` at 0 and passes the request to the Troika body unchanged, so
+	// no `ACT_WALK` -> `ACT_WALK_RELAXED` rewrite happens. A hidden active weapon therefore presents
+	// as NO WEAPON to the whole translation, which is what `FillActivityClipRequest` reproduces.
+	//
+	// The bit lives on the weapon leaf rather than on `FElysiumEntity` because the one reader is the
+	// active-weapon translation gate and the one writer set is the holster/deploy pair plus the NPC
+	// `OnStateChange` overrides — all of them weapon-typed. Retail's own field is wider; that is
+	// stated here rather than reproduced, and moving it down the chain is a mechanical change if a
+	// second family ever needs it.
+	bool IsHidden() const { return bHidden; }
+	// Set/clear the bit AND the drawn wield model with it, so the hand matches what the translation
+	// answers. `Wearer` may be null — a loose weapon has no hand to take a model off.
+	void Hide(FElysiumCombatCharacter* Wearer);
+	void Unhide(FElysiumCombatCharacter* Wearer);
 
 	// `total_lethality = max(BaseLethality + attacker adjustment, 0)`, the adjustment being the
 	// descriptor's attack feat applied to the attacker. Rounded; the ranged path clamps to >= 1.

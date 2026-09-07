@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"             // the clock the combat-stance window is read against
 #include "ElysiumPlayer.h"
 #include "Visual/ElysiumActionTables.h"     // the committed player gait ladder
+#include "Visual/ElysiumAnimGraph.h"        // StateForActivity — the Idle projection the base hold reads
 
 void FElysiumAnimationDriver::AddReferencedObjects(FReferenceCollector& Collector)
 {
@@ -48,8 +49,13 @@ void FElysiumAnimationDriver::Reset()
 	LastStem.Reset();
 	LastActorClassname.Reset();
 	LastWeaponClassname.Reset();
+	LastSequenceLabel.Reset();
 	LastRoute = EElysiumAnimRoute::Activity;
 	bResolvedOnce = false;
+	// The committed base goes with the rest of the discrete state: a reset is a teleport or a map
+	// epoch, and a body re-modelled across one has no reason to be standing on the previous model's
+	// clip — the label would not even be in the new vocabulary.
+	CommittedBaseLabel.Reset();
 	// The slot keys go with the rest of the discrete state: the stack below is dropped by this same
 	// reset, so a remembered handle would report the layer as unchanged and never resolve the next one.
 	for (uint32& Handle : LastSlotHandles)
@@ -319,6 +325,16 @@ void FElysiumAnimationDriver::ArbitrateBase()
 	// Ties keep the holder: a claim is not churned by a publisher it merely equals.
 	if (Slot.bActive && Slot.Request.Priority >= Locomotion)
 	{
+		// **The committed sequence, remembered here and nowhere else.** The claim's `Label` is the
+		// clip its producer resolved and committed, which is exactly what retail's `m_nSequence`
+		// holds while that clip plays — and what `ResolveActivityToSequence` (0x10272130) would keep
+		// once the clip ends, because retail never re-requests an idle for a standing Troika NPC.
+		// Recorded on every frame the claim holds rather than on its arm, so a claim replaced in
+		// place leaves the label of the clip that is actually on screen.
+		if (BodyKind != EElysiumAnimBodyKind::Player && !Slot.Request.Label.IsEmpty())
+		{
+			CommittedBaseLabel = Slot.Request.Label;
+		}
 		Selection.bBasePoseOwned = false;
 		Selection.BaseHold = FString::Printf(TEXT("%s '%s' (%s)"),
 			ElysiumAnimIntent::SourceName(Slot.Request.Source), *Slot.Request.Label,
@@ -757,6 +773,47 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		}
 	}
 
+	// **An unowned base channel on a CAST body keeps the last committed sequence.**
+	//
+	// Retail never asks a standing Troika NPC for `ACT_IDLE`. The disposition idle (0x102c12a0)
+	// plays stance clips BY NAME, and `ResolveActivityToSequence` (0x10272130) keeps `m_nSequence`
+	// on a miss — so there is no state in which "nobody owns the pose" produces a fresh,
+	// weapon-translated idle. The port's base channel is a claim slot and therefore HAS that state:
+	// a one-shot claim expires, this publish takes the base back in the Idle graph state, and
+	// `ACT_IDLE` resolves through the full translation — which on a body holding `item_w_claws`
+	// answers `claws_idle`, the crouched claw stance.
+	//
+	// So the last COMMITTED clip is republished instead, through the exact-label route, which is
+	// what keeping `m_nSequence` amounts to here. Four gates, and every one of them is load-bearing:
+	//
+	//  * the BODY. Retail's fact is about the Troika NPC chain; the player's own selector runs every
+	//    frame off the committed gait ladder and has no claim-expiry hole to fall through.
+	//  * the base channel is UNOWNED. A held claim is already posing its clip; this is the frame
+	//    after it ends.
+	//  * the Idle graph state. Walk, Run and Sneak keep resolving as they do today — a travelling
+	//    body is answering a request, not standing on a leftover.
+	//  * something was ever committed. A body with no history has nothing to keep, and falls through
+	//    to the ordinary `ACT_IDLE` resolve.
+	//
+	// `Activity` is CLEARED rather than left standing beside the label: the intent's contract is
+	// exactly one of the two, and `ElysiumAnimResolve::Resolve` projects the graph state from the
+	// activity — an empty one projects `Idle`, which is where this body is standing.
+	const bool bKeepCommittedBase =
+		BodyKind != EElysiumAnimBodyKind::Player
+		&& Intent.Route == EElysiumAnimRoute::Activity
+		&& !Requests[static_cast<int32>(EElysiumAnimChannel::Base)].bActive
+		&& !CommittedBaseLabel.IsEmpty()
+		&& ElysiumAnimGraph::StateForActivity(ElysiumAnimIntent::ActivityCode(Intent.Activity))
+			== EElysiumGraphState::Idle;
+	// Kept whole, because the miss path below has to be able to run the request that was displaced.
+	const FElysiumAnimationIntent IdleIntent = Intent;
+	if (bKeepCommittedBase)
+	{
+		Intent.Route = EElysiumAnimRoute::ExactLabel;
+		Intent.SequenceLabel = CommittedBaseLabel;
+		Intent.Activity.Reset();
+	}
+
 	// The discrete key. Everything else about the intent is continuous and does not re-select
 	// anything: a body that turned, sped up or strafed is playing the same request.
 	const bool bChanged = !bResolvedOnce
@@ -768,6 +825,10 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		// request.
 		|| !Intent.ActorClassname.Equals(LastActorClassname, ESearchCase::IgnoreCase)
 		|| !Intent.WeaponClassname.Equals(LastWeaponClassname, ESearchCase::IgnoreCase)
+		// The exact label, for the unowned-base republish above: one held clip succeeding another
+		// moves neither the (empty) activity nor the route, so without this the second one would
+		// never resolve and the body would stand on the first for the rest of the epoch.
+		|| !Intent.SequenceLabel.Equals(LastSequenceLabel, ESearchCase::IgnoreCase)
 		// A body going alert changes which sequence set the SAME request resolves against, so the
 		// state belongs in the discrete key beside the weapon rather than in the continuous half.
 		|| Intent.ActorState != LastActorState
@@ -802,6 +863,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		LastStem = Intent.Stem;
 		LastActorClassname = Intent.ActorClassname;
 		LastWeaponClassname = Intent.WeaponClassname;
+		LastSequenceLabel = Intent.SequenceLabel;
 		LastActorState = Intent.ActorState;
 		LastRoute = Intent.Route;
 		bResolvedOnce = true;
@@ -867,6 +929,27 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	// live layer's row is written here rather than surviving from the previous frame — which is why
 	// the keys below are stamped after it rather than tested against it.
 	Anims->ResolveAnimation(Intent, Mesh, Selection, Assets, &Overlay);
+	if (bKeepCommittedBase && !Selection.NamesBaseAsset())
+	{
+		// The remembered label is not in this body's vocabulary — a claim whose `Label` named an
+		// activity rather than a clip, or a bank the body no longer includes. Retail's own miss
+		// stands on sequence 0; standing this body on nothing while the record names a clip would be
+		// worse than the pose the fix exists to remove, so the memory is dropped and the ordinary
+		// `ACT_IDLE` resolve runs in its place. Once, because the label goes with it.
+		UE_LOG(LogElysiumAnimDriver, Verbose,
+			TEXT("'%s' cannot republish its committed base clip '%s' (not in the body's vocabulary); ")
+			TEXT("the unowned base falls back to the idle resolve"),
+			*Stem, *CommittedBaseLabel);
+		CommittedBaseLabel.Reset();
+		Intent = IdleIntent;
+		// The generation was stamped after `IdleIntent` was taken, and it is what every reader
+		// downstream keys a transition on — the displaced request must not carry a zero.
+		Intent.Generation = Generation;
+		LastActivity = Intent.Activity;
+		LastSequenceLabel = Intent.SequenceLabel;
+		LastRoute = Intent.Route;
+		Anims->ResolveAnimation(Intent, Mesh, Selection, Assets, &Overlay);
+	}
 	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
 	{
 		const FElysiumOverlayLayer* Layer = Overlay.LiveLayer(SlotIndex);

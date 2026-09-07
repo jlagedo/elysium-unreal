@@ -2175,9 +2175,21 @@ void AElysiumMapActor::TickGaze(float DeltaSeconds)
 	// it, against 40 authored `LookAtEntity*` wires in the whole of VtMB.
 	FVector DialogPovValue = FVector::ZeroVector;
 	const FVector* DialogPovPoint = nullptr;
-	if (EntityWorld->GetDialogueCameraGaze(DialogPovValue))
+	const EElysiumDialogueGazeLens Lens = EntityWorld->GetDialogueCameraGaze(DialogPovValue);
+	if (Lens != EElysiumDialogueGazeLens::None)
 	{
 		DialogPovPoint = &DialogPovValue;
+		// A dialogue request that publishes no pose left the PLAYER's own view up, so the camera
+		// entity retail would aim at is the player camera. The substrate answered with the player
+		// entity's eye point because it cannot see a component; here the real lens is readable, so
+		// take it.
+		if (Lens == EElysiumDialogueGazeLens::PlayerView)
+		{
+			if (const UElysiumCameraComponent* Cam = PlayerCamera())
+			{
+				DialogPovValue = Cam->GetComponentLocation();
+			}
+		}
 	}
 	else if (CameraDirector && CameraDirector->WantsDialogPOV())
 	{
@@ -2308,7 +2320,21 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	TickGaze(DeltaSeconds);
 	if (Bodies)
 	{
-		Bodies->TickEyes(DeltaSeconds);
+		// The eye pass runs on the same pausable clock the gaze cascade does, so the blink cadence
+		// and the saccade freeze together when the world is held. Retail's cadence is on the server
+		// think, and its distance gate reads `m_flPlayerDist` — the player's position is the other
+		// input the pass cannot reach from a component.
+		FElysiumEyeFrame Frame;
+		if (EntityWorld)
+		{
+			Frame.NowSeconds = static_cast<float>(EntityWorld->NowSeconds());
+			if (const FElysiumPlayer* Player = EntityWorld->FindPlayer())
+			{
+				Frame.PlayerPosition = Player->EyePosition();
+				Frame.bHavePlayer = true;
+			}
+		}
+		Bodies->TickEyes(Frame);
 	}
 
 	// The frame's animation selection, taken from the body sample the mover published at its

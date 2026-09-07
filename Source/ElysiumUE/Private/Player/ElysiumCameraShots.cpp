@@ -89,11 +89,17 @@ namespace ElysiumCameraShotsImpl
 		{
 			return;
 		}
-		Out.MoveSpeed = Node->Flt(TEXT("MoveSpeed"), 0.0f) * ElysiumCam::U;
-		Out.MoveAccel = Node->Flt(TEXT("MoveAccel"), 0.0f) * ElysiumCam::U;
-		Out.TurnAccel = Node->Flt(TEXT("TurnAccel"), 0.0f);
-		Out.DistanceTolerance = Node->Flt(TEXT("DistanceTolerance"), 0.0f) * ElysiumCam::U;
-		Out.FieldOfView = Node->Flt(TEXT("FieldOfView"), 0.0f);
+		// **The absent-key defaults are retail's, not zero.** `FUN_100721e0` seeds every field before
+		// it reads the block, and the whole-block-absent path (`0x10072300`) seeds the identical set:
+		// MoveSpeed 150 u/s, MoveAccel 50 u/s^2, TurnAccel 30 deg/s^2, MaxTurnRate [90,90,90] deg/s,
+		// DistanceTolerance 10 u, AngularTolerance [1,1,1] deg, FieldOfView 75 clamped to [20,120],
+		// all flags clear. A file that authors only `FieldOfView` still gets a rate-limited,
+		// deadbanded camera, which is why so few shipped shots bother to write the rates.
+		Out.MoveSpeed = Node->Flt(TEXT("MoveSpeed"), 150.0f) * ElysiumCam::U;
+		Out.MoveAccel = Node->Flt(TEXT("MoveAccel"), 50.0f) * ElysiumCam::U;
+		Out.TurnAccel = Node->Flt(TEXT("TurnAccel"), 30.0f);
+		Out.DistanceTolerance = Node->Flt(TEXT("DistanceTolerance"), 10.0f) * ElysiumCam::U;
+		Out.FieldOfView = FMath::Clamp(Node->Flt(TEXT("FieldOfView"), 75.0f), 20.0f, 120.0f);
 		Out.bDialogPOV = Node->Bool(TEXT("DialogPOV"), false);
 		Out.bAutoPositionFromTarget = Node->Bool(TEXT("AutoPositionFromTarget"), false);
 		Out.bSyncRotateOnMove = Node->Bool(TEXT("SyncRotateOnMove"), false);
@@ -205,6 +211,16 @@ void ElysiumCameraShots::FlushCache()
 	Cache().Reset();
 }
 
+void ElysiumCameraShots::Install(const FString& ShotFile, const FElysiumCameraShotDef& Def)
+{
+	const FString Key = NormalizeKey(ShotFile);
+	if (Key.IsEmpty())
+	{
+		return;
+	}
+	Cache().Add(Key, MakeShared<FElysiumCameraShotDef>(Def));
+}
+
 const TCHAR* ElysiumCameraShots::LexToString(EElysiumShotPosition Position)
 {
 	switch (Position)
@@ -298,7 +314,12 @@ namespace ElysiumCameraShotsImpl
 		if (AttachPos.Equals(TEXT("Bottom"), ESearchCase::IgnoreCase))       { return BoundsPoint(0.0f); }
 		if (AttachPos.Equals(TEXT("EyePosition"), ESearchCase::IgnoreCase))
 		{
-			return Body ? BoundsPoint(0.92f) : Origin + FVector(0.0f, 0.0f, FallbackEyeHeight);
+			// **A fixed offset from the origin, not a bounds fraction and not a bone.** Retail's
+			// anchor step (`CBaseCineCam` `FUN_1006f080`) reaches the eye through
+			// `CBaseCombatCharacter::CalcLookData`, which is `GetAbsOrigin() + m_vecViewOffset` — the
+			// same value `CBaseEntity::EyePosition()` answers. Measuring the animated bounds instead
+			// made an `EyePosition` anchor breathe with the idle, where retail's holds still.
+			return Entity.EyePosition();
 		}
 		return Origin;   // "Origin", and anything unrecognised
 	}
@@ -364,9 +385,17 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	Out.Origin = Origin;
 	Out.bUseLookAt = bHasTarget;
 	Out.LookAt = Look;
+	// The whole `CameraConstraints` block reaches the tracker; a field the port parsed and then never
+	// read is a field retail's camera was using.
 	Out.FieldOfView = Def.Constraints.FieldOfView;
 	Out.MoveSpeed = Def.Constraints.MoveSpeed;
+	Out.MoveAccel = Def.Constraints.MoveAccel;
 	Out.MaxTurnRate = Def.Constraints.MaxTurnRate;
+	Out.TurnAccel = Def.Constraints.TurnAccel;
+	Out.DistanceTolerance = Def.Constraints.DistanceTolerance;
+	Out.AngularTolerance = Def.Constraints.AngularTolerance;
+	Out.bSyncRotateOnMove = Def.Constraints.bSyncRotateOnMove;
+	Out.bSnapOnShotChange = Def.Constraints.bSnapOnShotChange;
 	// `SnapOnShotChange` is the file's own "cut, do not blend" flag.
 	Out.BlendSeconds = Def.Constraints.bSnapOnShotChange ? 0.0f : 0.5f;
 
@@ -472,14 +501,12 @@ void FElysiumCameraDirector::Tick(FElysiumEntityWorld* World, UElysiumCameraComp
 		{
 			continue;
 		}
-		const bool bFollows = Entry.Def.End.IsFollowing() || Entry.Def.Start.IsFollowing()
-			|| Entry.Def.Target1.IsFollowing() || Entry.Def.Target2.IsFollowing();
-		if (!bFollows)
-		{
-			// `AttachType None` is "set yourself there and don't follow it" — re-resolving would
-			// undo exactly that.
-			continue;
-		}
+		// **Every anchor re-resolves, whatever its `AttachType`.** Retail's camera think
+		// (`FUN_1006e8e0`, loop `0x1006ea90`) walks all four anchors every server tick and rewrites
+		// the cache `FUN_1006f010` reads back, so `None` is a frame choice for the offset, not a
+		// latch. Skipping the re-resolve here made a `None` anchor stale instead of still; what keeps
+		// the camera still is the tracker's deadbands, and holding the shot values back robbed it of
+		// the drift it is supposed to be measuring.
 		FElysiumCameraShot Shot;
 		if (Resolve(World, Entry.Def, Entry.Subject, Shot))
 		{

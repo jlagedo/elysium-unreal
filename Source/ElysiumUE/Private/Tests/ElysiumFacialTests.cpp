@@ -592,6 +592,139 @@ bool FElysiumEyeSolveTest::RunTest(const FString&)
 	return true;
 }
 
+// The blink cadence's player-distance gate and its clock, and the view-target latch's rest.
+//
+// Retail's cadence is one gated statement in `CAI_BaseNPCTroika::MaintainEyeDirection`
+// (`vampire.dll` 0x102BFF20):
+//
+//     if (m_flPlayerDist < _DAT_10483AAC && (m_blinkTimer -= dt) < _DAT_104454C4) {
+//         vfunc 0x450;                                            // CBaseFlex::Blink, 0x100B5CE0
+//         m_blinkTimer = RandomFloat(m_flMinBlink, m_flMaxBlink);  // per disposition, 2.5-6.0 s
+//     }
+//
+// Three things follow, and each is asserted below: an NPC out of range does not blink; its
+// countdown is FROZEN rather than merely unread, so approaching one does not fire a backlog; and
+// the countdown is decremented by a think delta — the pausable game clock — while only the 0.3 s
+// envelope is client-side.
+//
+// The latch is the third fidelity fact: retail recomputes the eye aim every think, so a body whose
+// maintainer stopped running rests on its authored aim on the next frame instead of holding the
+// last world point it was handed.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeBlinkTest, "Elysium.Substrate.EyeBlink",
+	GElysiumFacialTestFlags)
+bool FElysiumEyeBlinkTest::RunTest(const FString&)
+{
+	constexpr float Near = 200.f;                                  // 2 m — a conversation's range
+	const float Far = ElysiumEyes::BlinkPlayerDistance + 100.f;
+	constexpr float Min = 2.5f;
+	constexpr float Max = 6.f;
+	constexpr float Step = 0.1f;
+
+	// --- a far body does not blink, and does not bank one either ---------------------------------
+	{
+		FElysiumBlinkSchedule Schedule;
+		float Now = 0.f;
+		float Peak = 0.f;
+		for (int32 i = 0; i < 200; ++i)   // 20 s, more than three of the longest intervals
+		{
+			Now += Step;
+			Peak = FMath::Max(Peak, ElysiumEyes::AdvanceBlink(Schedule, Now, Step, Far, Min, Max,
+				EElysiumBlinkCommand::Cadence));
+		}
+		TestEqual(TEXT("a body out of the player-distance gate never blinks"), Peak, 0.f);
+		TestEqual(TEXT("...and its countdown is frozen, not run down"), Schedule.Timer, 0.f);
+
+		// Walking up to it fires ONE blink — the first think in range — and reseeds from the
+		// disposition. It does not fire the twenty seconds of blinks the gate held back, because
+		// there were none held back.
+		Now += Step;
+		ElysiumEyes::AdvanceBlink(Schedule, Now, Step, Near, Min, Max, EElysiumBlinkCommand::Cadence);
+		TestTrue(TEXT("the first in-range think blinks"), Schedule.BlinkEndsAt > Now);
+		TestTrue(TEXT("...and reseeds inside the disposition's interval"),
+			Schedule.Timer >= Min && Schedule.Timer <= Max);
+	}
+
+	// --- a near body blinks, and the envelope is the authored asymmetric one ----------------------
+	{
+		FElysiumBlinkSchedule Schedule;
+		const float Toggle = 10.f;
+		const float AtToggle = ElysiumEyes::AdvanceBlink(Schedule, Toggle, Step, Near, Min, Max,
+			EElysiumBlinkCommand::Cadence);
+		TestTrue(TEXT("a body inside the gate blinks"), Schedule.BlinkEndsAt > Toggle);
+		TestEqual(TEXT("the lid is still open on the toggle frame"), AtToggle, 0.f);
+		// 48 ms later the lid is shut; it reopens over the remaining quarter second.
+		const float Shut = ElysiumEyes::AdvanceBlink(Schedule, Toggle + 0.05f, 0.05f, Near, Min, Max,
+			EElysiumBlinkCommand::Cadence);
+		TestTrue(TEXT("the lid slams shut within 50 ms of the toggle"), Shut > 0.9f);
+		const float Reopened = ElysiumEyes::AdvanceBlink(Schedule, Toggle + ElysiumEyes::BlinkSeconds,
+			0.25f, Near, Min, Max, EElysiumBlinkCommand::Cadence);
+		TestEqual(TEXT("and is open again at the end of the 0.3 s window"), Reopened, 0.f);
+
+		// The client half runs to completion regardless of the gate: stepping out of range mid-blink
+		// does not leave a lid stuck shut.
+		FElysiumBlinkSchedule Leaving;
+		ElysiumEyes::AdvanceBlink(Leaving, 0.f, Step, Near, Min, Max, EElysiumBlinkCommand::Cadence);
+		TestTrue(TEXT("an envelope in flight survives the player leaving"),
+			ElysiumEyes::AdvanceBlink(Leaving, 0.05f, 0.05f, Far, Min, Max,
+				EElysiumBlinkCommand::Cadence) > 0.9f);
+	}
+
+	// --- the pausable clock ------------------------------------------------------------------------
+	// The cadence takes a GAME-clock delta, so a held world advances neither it nor the gaze fidget
+	// beside it. A wall-clock deadline would slide past under the pause and fire on resume.
+	{
+		FElysiumBlinkSchedule Schedule;
+		ElysiumEyes::AdvanceBlink(Schedule, 1.f, Step, Near, Min, Max, EElysiumBlinkCommand::Cadence);
+		const float Seeded = Schedule.Timer;
+		TestTrue(TEXT("the schedule is seeded"), Seeded > 0.f);
+		for (int32 i = 0; i < 100; ++i)
+		{
+			ElysiumEyes::AdvanceBlink(Schedule, 1.f, 0.f, Near, Min, Max,
+				EElysiumBlinkCommand::Cadence);
+		}
+		TestEqual(TEXT("a paused clock does not advance the schedule"), Schedule.Timer, Seeded);
+	}
+
+	// --- the green room's two overrides are inputs to the same schedule ----------------------------
+	{
+		FElysiumBlinkSchedule Schedule;
+		Schedule.Timer = 4.f;
+		// Force blinks a body the gate would otherwise hold silent, and leaves the cadence alone.
+		TestTrue(TEXT("a forced blink ignores the distance gate"),
+			ElysiumEyes::AdvanceBlink(Schedule, 0.05f, Step, Far, Min, Max,
+				EElysiumBlinkCommand::Force) >= 0.f && Schedule.BlinkEndsAt > 0.05f);
+		TestEqual(TEXT("a forced blink does not reset the cadence"), Schedule.Timer, 4.f);
+		// Hold pins the lids open AND reseeds, so releasing does not fire the window's backlog.
+		TestEqual(TEXT("a held blink pins the lid open"),
+			ElysiumEyes::AdvanceBlink(Schedule, 0.06f, Step, Near, Min, Max,
+				EElysiumBlinkCommand::Hold), 0.f);
+		TestTrue(TEXT("...and reseeds while held"),
+			Schedule.Timer >= Min && Schedule.Timer <= Max && Schedule.BlinkEndsAt == 0.f);
+	}
+
+	// --- the view-target latch rests when nothing maintains it -------------------------------------
+	// `TickGaze` stamps a body it decided an aim for; `TickEyes` rests every latch the frame did not
+	// stamp. A conversation that ends stops supplying a DialogPOV point, the cascade finds no
+	// candidate, nothing calls `SetViewTarget`, and the iris returns to the record's authored aim
+	// one frame later rather than staring at the last camera position forever.
+	{
+		FElysiumEyeGazeLatch Latch;
+		TestFalse(TEXT("an unstamped latch has no aim"), Latch.Maintain(1));
+		Latch.Set(FVector(300.f, 0.f, 160.f), 1);
+		TestTrue(TEXT("the frame that stamped it aims"), Latch.Maintain(1));
+		TestTrue(TEXT("...at the point it was handed"),
+			Latch.Target.Equals(FVector(300.f, 0.f, 160.f)));
+		// One eye frame passes with no producer.
+		TestFalse(TEXT("the next frame with no producer rests the eye"), Latch.Maintain(2));
+		TestFalse(TEXT("...and the latch reports no view target at all"), Latch.bHasTarget);
+		// It does not come back on its own; only a fresh stamp re-aims it.
+		TestFalse(TEXT("a rested latch stays rested"), Latch.Maintain(3));
+		Latch.Set(FVector(10.f, 20.f, 30.f), 3);
+		TestTrue(TEXT("a fresh stamp re-aims it"), Latch.Maintain(3));
+	}
+	return true;
+}
+
 // R4.5: the corpus-wide baseline (`UElysiumEyeTuningConfig`, `/ElysiumAuthored/Eyes/DA_EyeTuning`)
 // composes additively with the Green Room's live debug nudge, and an absent asset leaves the debug
 // state untouched — both are what let the asset's defaults equal today's behaviour exactly.

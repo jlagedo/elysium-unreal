@@ -485,15 +485,17 @@ The ladder:
 
 ## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md), conversation gaps: [plans/dialogue.md](plans/dialogue.md))*
 
-- [~] **[9.1 `.dlg` parser + dlgexpr](plans/dialogue.md)** — opener landed; the dependency
-  object (negative thresholds, discipline blood gate/charge, seven clan columns), deferred NPC
-  col-5, the 4 cap and the no-reply rule open (D1, D2, D4).
-- [ ] **[DC Dialogue corpus slice](plans/dialogue.md)** — `.dlg`, `.vcd`, `.lip` and all of
-  `sound/**` still read the legacy export; capsule upgrade for `dialogue_glb`/`scene_glb`,
-  `import dialogue` + `import sound` lanes, readers flip to `CorpusRoot()`.
-- [ ] **[9.2 Conversation UI](plans/dialogue.md)** — UI slice landed; use-to-talk entry and the
-  player refusal predicate (D3), requirement labels / disabled skill rows / skip (D5), voice take
-  by text column (D4), save-refusal proof (D7) open. Line audio and subtitles are AUD3's.
+- [x] **9.1 `.dlg` parser + dlgexpr** — opener, the `FElysiumDlgDependency` object (negative
+  thresholds, discipline blood gate + charge, sex gate, compound), the seven clan columns,
+  deferred NPC col-5, no-reply rule, retail row acceptance (2026-09-06).
+- [x] **DC Dialogue corpus slice** — `dialogue_glb`/`scene_glb`/`sound_glb` are capsules
+  (1.1.0); `import dialogue` + `import sound` deploy to `Content/ElysiumCorpus`; the dlg, scene,
+  lip and sound readers are on `CorpusRoot()` (2026-09-06). `scripts/**` stays legacy.
+- [~] **[9.2 Conversation UI](plans/dialogue.md)** — use-to-talk entry, the player refusal
+  predicate, holster, save refusal, requirement labels, disabled skill rows, skip, voice take by
+  text column landed with unit tests (2026-09-06). Open: the D8 seams (combat-timer writers,
+  `IsBusyWithDiscipline`, frenzy, speech volume, faked discipline effect), D6 natives by their
+  domains, and the owner-piloted live acceptance. Line audio and subtitles are AUD3's.
 - [x] **9.3a CPython default host + auto-load** · **9.3b `ccmd` + cfg aliases** ·
   **9.3c script filesystem**.
 - [~] **[9.3 Level-script execution](plans/gameplay.md)** — core landed; delegated fills open.
@@ -559,7 +561,9 @@ Camera, controls and the played movement feel; the animation rungs are the LIFE 
 - [~] **[12.3 Facial flex track](plans/theatre.md)** — built; pending an unobstructed visual.
 - [~] **[12.4 Eyes and eyelids](plans/theatre.md)** — built through the gaze layer; debug
   surface + theatre acceptance open.
-- [ ] **[12.5 Lipsync](plans/theatre.md)** — reads AUD3's scheduled line clock.
+- [~] **[12.5 Lipsync](plans/theatre.md)** — the dialogue half landed
+  (`ElysiumEntityWorldDialogue.cpp` `BeginDialogueLipsync`) [corrected 2026-09-06]; the theatre/scene
+  half still reads AUD3's scheduled line clock, and theatre acceptance is what remains.
 
 Each of 12.3, 12.4 and 12.5 states its acceptance on a played theatre scene, so all three are
 gated on the same staging LIFE7 restores. Their implementations are unaffected; only the run that
@@ -579,10 +583,11 @@ subtitled lines, live faces — and hands the player to the tutorial, unassisted
   consumers open.
 - [~] **[13.3 Firearms & melee basics](plans/gameplay.md)** — the damage spine and the weapon
   controller landed headless; the played lessons and the numeric RE joins open.
-- [~] **[13.4 Computer terminals & tutorial hacking](plans/gameplay.md)** — the parser, state
-  machine, `hackcmd` path and the `tuthack` output transaction landed headless, and the console
-  projects through the model's `screen` slot; session escape, camera framing, the idle screensaver,
-  the CRT/type pass, email and the played acceptance open. Its cues are AUD2's.
+- [~] **[13.4 Computer terminals & tutorial hacking](plans/terminals.md)** — the parser, a
+  line-list state machine, `hackcmd` and the `tuthack` output transaction landed headless; the
+  2026-09-06 plan rebuilds the authority on the recovered cell screen buffer, the `0.7` cone, the
+  retail `Hacking` shot, a world-lifetime projection with the screensaver, the modern cell painter,
+  the cues, email, and the keyboard-only played acceptance. Gamepad is out of scope by owner call.
 - [~] **[13.5 Combat AI](plans/gameplay.md)** — bus, senses, conditions, the enemy transaction,
   the schedule families and `aiscripted_schedule` landed headless; the played beats and the flinch
   action family open. The footstep hearing producer is AUD2's.
@@ -652,7 +657,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE36 | melee block / `+wpn_secondaryatk`; open: the `vhotkey` deferral | `docs/vtmb/controls.md`; 10.6, 13.3 | [~] |
 | RE37 | the gameplay-action selection chain | `docs/vtmb/animation_and_movers.md` A.3 | [x] |
 | RE38 | inventory ownership and transfer | `docs/vtmb/inventory.md` | [x] |
-| RE39 | computer terminals; open: TERM1 skill-entity join, TERM2 generic use outputs + teardown exits, TERM9 player mode fields | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
+| RE39 | computer terminals; TERM1–TERM14 closed in `docs/vtmb/computer-terminals.md`. Implementation of 13.4 still [~] | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
 | RE41 | discipline authority/interpreter; activity/witness admission plus Elysium/HUD world-area authority and Bloodbuff/`LockPick` exception closed; open: native power consumers and client disable presentation | `docs/vtmb/disciplines.md`; 13.2 | [~] |
 | RE42 | first-person viewmodel; static composition/pose/projection/authority closed, and with it the two-entity creation with `m_hViewModel[2]` sized, the activity-translation selection chain and the `ACT_VM_*` registry (a `2` suffix is attack mode, not a hands counterpart), the idle/fidget think, deploy/holster with the switch-only `lower`, the per-frame placement transaction and its named ConVars and constants, the clan/sex hands rule with its two item suppressors, and the shell/clip eject events. Open: the alternate weapon-attachment placement source, the blend interface identity, `THAUMATURGY`'s and `ENFIELD`'s owning class, what retail does with a missing hands model, and the fourth live `viewmodel` entity. The ELGVM1 harness is built but 12 of its 13 scenarios have never run and the one that did finished partial on a timeout, so no viewmodel claim is capture-verified | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`, `wielded_weapons.md`; LIFE6 | [~] |

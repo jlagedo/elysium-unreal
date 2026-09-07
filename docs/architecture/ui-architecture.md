@@ -250,6 +250,12 @@ Faces reach the runtime as generated local **`UFontFace` assets** under `/Game/E
 `FElysiumUIFontLibrary` composes them into one runtime `UFont` per role with the weights as named
 typeface entries, because `FSlateFontInfo` resolves a composite font, not a bare face.
 
+A fourth, single-purpose role sits beside Nocturne: **`Mono`, Terminus (TTF)** (Regular and Bold,
+OFL 1.1 with Reserved Font Names, shipped unmodified), used only by the computer-terminal console
+(`docs/architecture/computer-terminal-architecture.md` §6.4). It is the Linux console and xterm
+face of the late 90s, chosen by the owner on 2026-09-07 for the retro terminal look; it never
+appears in menus, HUD or signs.
+
 Two constraints:
 
 - **`make_ui_fonts.py` cannot run in the headless content commandlet.** Importing a
@@ -448,6 +454,154 @@ the original's even where the backing system is missing.
   repairs to the nearest surviving row. Up/Down wraps, Accept uses the focused response, number
   keys 1–9 invoke the same actions, and Back is consumed. A turn rebuild replaces the response
   controls before CommonUI refreshes focus, so focus never falls through to the screen wrapper.
+
+  **2026-09-06 (D5, dialogue plan).** The view the box reads grew from a list of strings into a
+  list of decided rows. `FElysiumDialogueView::Choices` is now `FElysiumDialogueChoiceView
+  { Text, Label, bEnabled, Kind, Have, Required, BloodCost, LineId }`, beside `bNpcSpeaking`,
+  `bCanSkip` and `bNoValidReply`; `ChoiceIds` stays as the durable row identity. The gate was
+  evaluated once in the substrate (`FElysiumDlgDependency::Explain`) and the UI evaluates nothing:
+  it draws `bEnabled` and a pre-formatted `Label`. The projection itself is a pure function,
+  `ElysiumDialogueUI::FillTurn(conversation, view)`, so the whole turn rule — band, subtitle, the
+  no-valid-reply substitution — is assertable with a conversation and no world; the publisher adds
+  only what needs the entity world (speaker, owner, the two voice flags, `bTerminal`).
+
+  Four named modernizations land in the widget. **M-REQ**: `ElysiumDialogueUI::FormatRequirementLabel`
+  writes `[ PERSUASION 4/7 ]` — trait upper-cased, player rating over threshold — as a separate run
+  before the sentence in the accent colour, on passing rows as well as failing ones, with
+  `· N BLOOD` appended for a discipline; it replaces retail's font/colour encoding
+  (`GetFontForFlagsDependency` `0x10053f10`) and its dot prefix (`CDialogDependency::ToStr`
+  `0x100ea5e0`). **M-DISABLED**: a row failing only its skill front is drawn dimmed (45%) as plain
+  Slate and is never given a `UElysiumActionButton`, which is what makes it unclickable,
+  unhoverable and unreachable by focus in one stroke; numbering stays 1..N in author order across
+  enabled and disabled rows, so a key never names a different line as the player's skills change,
+  and focus repair walks outward to the nearest enabled row. **M-REVEAL**: the band is published
+  with the line rather than withheld behind `ShowPlayerChoices`. **M-SKIP**: while the voice runs
+  the box shows a "Space: skip" hint and Space is the hurry verb rather than Continue.
+
+  Input verbs, in the order the screen tests them. The skip verb is claimed in
+  `NativeOnPreviewKeyDown`, ahead of `UElysiumNavigableScreen`'s own SpaceBar rule (which activates
+  the focused action) — otherwise the hurry key would pick a response instead of ending the voice:
+  `ElysiumDialogueUI::IsSkipKey` (Space while `bNpcSpeaking && bCanSkip`) →
+  `UElysiumDialogueScreen::OnSkip` →
+  `UElysiumPresentationSubsystem::DialogueSkip` → `FElysiumEntityWorld::PlayerDialogSkip`; then
+  `ChoiceForKey` (1-9 and the numpad, positional) filtered by `UElysiumDialogueScreen::AcceptsChoice`,
+  which refuses a disabled row and refuses anything during a live automatic wait — a refused key is
+  still consumed, because it belongs to the conversation. Continue (`-1`) covers the terminal turn,
+  the no-valid-reply band and retail's forced visible response when Auto-End finds no audio.
+
+  The dialogue reconcile key gained the voice flag: `ElysiumView::ReconcileDialogue` compares
+  (conversation, revision, `bNpcSpeaking`). The voice ending is not a new turn but does change what
+  is drawn, and it flips at most once per line, so this costs one extra in-place rebuild per line
+  and never a per-frame one.
+
+  **2026-09-06 (D5 review fixes).** Four corrections, each with the reason it was not a symptom.
+  **The all-disabled band draws its rows.** `FElysiumDlgConversation::IsTerminalLine()` is defined
+  as "no *enabled* choice", so `bTerminal` is raised by exactly the M-DISABLED band whose rows all
+  fail their skill fronts; keying the Continue-only branch on it erased every requirement label at
+  the one moment the modernization exists to show them. The Continue-only branch is now gated on an
+  empty `Choices`, and a terminal band with rows draws the dimmed rows and then Continue.
+  `ChoiceForKey` follows: on such a band the number keys keep naming their rows (the screen refuses
+  them) and only Space/Enter advance, so key 1 can never silently mean Continue while row 1 is on
+  screen. **The blood-short label names the pool**: `FormatRequirementLabel` writes
+  `[ DOMINATE 3/2 · 1/2 BLOOD ]` (pool held / price) when the substrate sets
+  `FElysiumDlgGateLabel::bBloodShort`, since a bare `2 BLOOD` beside a passing rating reads as an
+  unexplained refusal; an affordable row keeps `· 2 BLOOD`. **The reconcile identity is a serial,
+  not an address**: `FElysiumDialogueView::DialogSerial` carries
+  `FElysiumEntityWorld::GetOpenDialogSerial()` and `ReconcileDialogue(ShownSerial, ShownRev, …)`
+  compares it, because a one-turn conversation that closes and opens another in the same frame can
+  put the successor on the freed allocation while every conversation restarts its revision at 1 —
+  (address, revision) repeats and the box would keep the dead band up. `Conversation` remains in the
+  view as content identity only. **The pick carries its line id**:
+  `UElysiumDialogueScreen::OnChoice(index, lineId)` →
+  `UElysiumPlayerUISubsystem::OnDialogueChoice` → `UElysiumPresentationSubsystem::DialogueChoose`
+  → `FElysiumEntityWorld::PlayerDialogChoose(index, ExpectedLineId)`, which refuses a position whose
+  id no longer matches. The id is resolved from `Dialogue.ChoiceIds` at pick time, not at button
+  build time, so it is always the sentence the box is showing.
+
+  **2026-09-06 (M-CAP and the keyboard).** Number keys cover rows 1-9 and stop there, while M-CAP
+  removes retail's four-response wire cap and allows a band of any N. Rows 10 and beyond are drawn,
+  numbered `10.`, `11.`, … in the same 1..N author order, and are reachable by mouse and by
+  gamepad/arrow focus, which walks the whole band — they simply carry no keyboard shortcut. No key
+  wraps onto them, so a number never names a different row as the band grows.
+
+  Type comes from `ElysiumUIStyle`'s faces rather than `FCoreStyle` (M-UI), all sized in the
+  768-high virtual canvas with the screen's one `SDPIScaler` applying `ElysiumUI::ScaleFor(ScreenH)`.
+
+  **2026-09-07 (owner call, the dialogue band is one face).** The band drops the Nocturne
+  three-role mix and draws entirely in **Inter** (the `Data` role) at 15/18/18/12/11 virtual px
+  (speaker / line / choice / requirement label / skip hint), down from 22/20/18/15/12. Reason:
+  conversation text is read at speed over a lit 3D scene, where Spectral's serifs close up at
+  body sizes and the mixed serif/sans band reads as decoration rather than as speech; Inter's
+  x-height and open apertures are the project's most fail-safe legibility choice and the face
+  already ships as `FF_Inter_*`. Spectral SC remains the voice of the menus, the sheet and the
+  HUD labels — it is not the voice of a conversation. The speaker's name keeps its small-caps
+  silhouette by being drawn uppercase with 0.06 em tracking (`SpeakerTrackingEm`) rather than by
+  a small-caps cut, which Inter does not ship. The emphasis order inverts with it: the spoken
+  sentence is now the largest run in the band and the speaker's name is an attribution above it,
+  asserted in `Elysium.Substrate.UI.ScalingAndDialogueInput`.
+
+  **The sizes are retail's, measured.** A 1999x1124 client capture of Jack's tutorial conversation,
+  divided by that client's 1124/768 canvas scale, gives retail's band directly:
+
+  | | retail (vp) | port |
+  |---|---|---|
+  | panel width | 866 | 864 |
+  | text column | ~791 | ~782 |
+  | panel bottom inset | 21 | 24 |
+  | font em, NPC line | 17.8 | 18 |
+  | font em, choice | 17.8 | 18 |
+  | baseline pitch | 27.7 | ~28 |
+  | leading above the em | ~9.9 | 6 of widget padding + the face's own ascent/descent |
+
+  Cap height measures 19 px and x-height 14 px (em ~26 px at that client), and the baseline pitch
+  is a dead-constant 40.5 px across all seven drawn rows. Crucially the orange NPC line and the
+  white choices **measure identically** — `CHudDialog` draws the band at one size and separates the
+  two by colour alone — which is why `LineFontVirtualPixels == ChoiceFontVirtualPixels` and why the
+  assertion is `>=` rather than `>`. The capture independently confirms `ResponsePanelWidth`:
+  retail's box is 1267 px wide, or 866 vp against the shipped 864.
+
+  The band's "wall of choices" feel is set by the **pitch, not the size**. The port's pre-measurement
+  rows spent 16 vp per row on widget padding (`SBox` 6 vertical + a 2 vp slot gap, doubled) against
+  retail's entire 9.9 vp leading — smaller type than retail on rows 25% taller than retail. The
+  padding is now 2 vertical with a 1 vp gap (`ChoiceRowPaddingVertical`, `ChoiceRowGap`), and
+  `ChoiceRowLeadingBudget < RetailBandLeadingVirtualPixels` is asserted so it cannot grow back.
+
+  Measure is **not** a divergence: retail's line runs ~94 characters against the port's ~100, so
+  narrowing `ResponsePanelWidth` would move away from retail, not toward it.
+
+  **2026-09-07 (owner call, no row plates and a black slab).** Two consequences of the tight pitch,
+  both fixed together:
+
+  - **The panel was grey, and measurably so.** The slab tint was `FLinearColor(0.02, 0.02, 0.03)` —
+    a *linear* colour, and linear 0.02 is sRGB byte **39**, not black. At its 0.86 alpha the panel
+    composited to ~40/255 over a lit scene where retail's box measures **~15/255**: 2.7x too light.
+    It is now pure `(0, 0, 0)` at **alpha 0.69**, retail's own, recovered from the Jack capture by
+    solving `inside = scene * (1 - alpha)` over six channel samples above and below the box
+    (range 0.65-0.71, mean 0.688). Zero and not a near-zero, because any lift is multiplied by the
+    slab's area.
+  - **A choice row carries no plate.** The per-row `SBorder` (white at 5% idle, blood at 55%
+    selected) was legible at the old loose pitch, but at the retail pitch four adjacent filled
+    rows read as ruled table cells — and four stacked 5% whites are themselves a grey wash over
+    the slab. Rows are now bare text on the panel, as `CHudDialog` paints them, in an `SBox` that
+    contributes padding only.
+
+  Selection therefore has to live in the type, and it uses **two channels** so it does not rest on
+  brightness alone: the sentence lifts bone -> white (`ColChoiceIdle` -> `ColChoiceSelected`) and
+  the row's number takes the amber accent (`ColChoiceNumberIdle` -> `ColChoiceNumberSelected`). The
+  four colours live in the `ElysiumDialogueUI` namespace rather than in either .cpp because the
+  enabled row is built by the screen (a CommonUI action button) and the disabled row by the box
+  (plain Slate), and the two paths must not drift. This highlight is the port's own: retail is
+  keyboard-only and paints every row identically, so it has no equivalent to reproduce; the port
+  needs one for mouse and gamepad focus.
+
+  Baldur's Gate 3 — whose bracket shape M-REQ borrows — is the reference for that *shape* only.
+  Its type is not: BG3 draws its UI in the PostAntiqua serif, ships no font-size setting, and its
+  most-installed UI mods all *enlarge* the dialogue text, so its sizing is the trait players work
+  around. No BG3 size table is recorded here or publicly published.
+
+  **M-REFUSE** needs nothing here: the substrate posts a `Generic` `FElysiumNotification` with the
+  subject "They won't talk right now." (`FElysiumNpc::BeginPlayerUse`), and
+  `UElysiumNotificationScreen` already renders `Generic` under its "NOTICE" category label.
 
 - **Tutorial/game signs** — `UElysiumSignScreen` is a game-modal, UI-only surface which does not
   request time control. A centered floating text box exposes one focusable Continue button. Enter,

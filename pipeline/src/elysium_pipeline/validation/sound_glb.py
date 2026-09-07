@@ -31,6 +31,7 @@ from elysium_pipeline.formats.sound_glb.model import (
     UNIDENTIFIED_CHUNKS,
 )
 from elysium_pipeline.formats.unit_contract import container, validate as contract_validate
+from elysium_pipeline.formats.unit_contract.capsule import declares_capsule
 
 __all__ = [
     "SoundGlbValidationError",
@@ -153,8 +154,8 @@ def _check_payload(root: Mapping[str, Any], document: Mapping[str, Any], binary:
     if not length:
         if accessors or payload.get("accessor") is not None:
             _fail("an empty payload declares no accessor")
-        if binary:
-            _fail("an empty payload publishes no BIN chunk")
+        # A BIN chunk may still be present: since schema 1.1.0 it carries the source capsules,
+        # which exist whether or not the member decoded to any samples.
         return
     if payload.get("accessor") != 0 or len(accessors) != 1:
         _fail("a sound unit publishes exactly one accessor for its payload")
@@ -560,9 +561,17 @@ def validate_document(document: dict, binary: bytes, *, source_members=None) -> 
     _check_records(root)
     _contract(contract_validate.validate_ledgers, root, source_members)
     _contract(contract_validate.validate_capsules, document, binary, root, source_members)
+    # `validate_capsules` returns early when `sourceResolution.capsule` is absent -- correct for a
+    # seam that has not adopted the capsule, but sound (schema 1.1.0) has, so the declaration
+    # itself is required here. Without it the deployed `.wav`/`.mp3`/`.lip` would have to be
+    # rebuilt from the decode, and the payload is not the file the install holds.
+    if not declares_capsule(root.get("sourceResolution")):
+        _fail("a sound unit declares no source capsule")
     partitions = _frames_partition_payload(root, binary)
 
-    if not partitions and key.endswith(".mp3") and binary:
+    # Asked of the *payload*, not of the BIN chunk: since schema 1.1.0 a chunk can be non-empty
+    # while the payload is empty, because the source capsules live there too.
+    if not partitions and key.endswith(".mp3") and int((root.get("payload") or {}).get("byteLength", 0)):
         _fail("the frame table does not partition the payload")
 
     if source_members is not None:

@@ -24,26 +24,30 @@ from elysium_pipeline.formats.dialogue_glb import source as _source
 from elysium_pipeline.formats.dialogue_glb.model import DialogueModel
 from elysium_pipeline.formats.unit_contract import (
     asset_block,
+    buffer_table,
+    encapsulate,
     extension_root,
     identity_block,
     plain,
-    source_resolution,
     write_glb,
 )
 
 
 def build_document(model: DialogueModel) -> tuple[dict, bytes]:
-    """The unit's document and its (always empty) BIN payload.
+    """The unit's document and its BIN payload.
 
     A dialogue unit is scene-less and text-only: every datum it owns is a row, a cell or a
-    tokenized expression, none of which needs a buffer view, so the unit publishes one JSON
-    chunk and no BIN chunk.
+    tokenized expression, none of which needs an accessor. The BIN chunk it does carry is the
+    source capsule alone -- the winning `.dlg` member's own bytes, so the unit is everything a
+    reader needs to reproduce the install file (`seam_map_unit_contract.md`, "Source capsule").
+    An empty `.dlg` capsules to nothing and that unit carries no BIN chunk at all.
     """
 
+    resolution, buffer_views, binary = encapsulate([model.member])
     root = extension_root(
         schema_version=SCHEMA_VERSION,
         identity=identity_block(model.asset, model.source_path),
-        source_resolution=source_resolution([model.member]),
+        source_resolution=resolution,
         dependencies=model.dependencies,
         coverage=model.coverage,
         encoding="latin-1",
@@ -53,13 +57,16 @@ def build_document(model: DialogueModel) -> tuple[dict, bytes]:
         anomalies=model.anomalies,
         omissions=model.omissions,
     )
-    document = {
+    document: dict = {
         "asset": asset_block("Dialogue"),
         "extensionsUsed": [DIALOGUE_EXTENSION],
         "extensionsRequired": [DIALOGUE_EXTENSION],
-        "extensions": {DIALOGUE_EXTENSION: plain(root)},
     }
-    return document, b""
+    if binary:
+        document["buffers"] = buffer_table(binary)
+        document["bufferViews"] = buffer_views
+    document["extensions"] = {DIALOGUE_EXTENSION: plain(root)}
+    return document, binary
 
 
 def source_keys(index: dict) -> list[str]:

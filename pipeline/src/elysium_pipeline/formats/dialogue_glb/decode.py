@@ -136,9 +136,9 @@ def decode_dialogue(closure: DialogueSourceClosure) -> DialogueModel:
                 # one byte (`}` alone) when empty, two (TAB `}`) otherwise -- never a fixed count.
                 close_offset = cell.content_offset + cell.content_length
                 close_length = cell.offset + cell.length - close_offset
-                # A dialogue unit has no BIN payload and no binary record -- `mapped` grades a
-                # binary decode -- so the cell's `{`/TAB framing bytes, like its content, are
-                # graded `mapped-text`.
+                # A dialogue unit publishes no binary record -- its BIN chunk is the source
+                # capsule alone, not a decode, and `mapped` grades a binary decode -- so the
+                # cell's `{`/TAB framing bytes, like its content, are graded `mapped-text`.
                 claimer.claim(
                     cell.offset, 2, "mapped-text", f"lines[{row.index}].fields[{cell.index}].open"
                 )
@@ -350,8 +350,9 @@ def decode_dialogue(closure: DialogueSourceClosure) -> DialogueModel:
             # The `.lip` phoneme document beside a resolved line is not a candidate this unit
             # publishes an identity for: the seam's own audio-join section calls whether it (and
             # `.vcd`) agree with the line's text "a corpus-index check across three units, not a
-            # property of this one", and its "four candidate stems" are the four languages, not
-            # four file extensions -- so `.lip` is left to the sound unit that owns it.
+            # property of this one", and its "four candidate stems" are the four text-column
+            # takes (e male, f female, m Ventrue, n Malkavian), not four file extensions -- so
+            # `.lip` is left to the sound unit that owns it.
             mp3_path, wav_path, vcd_path = (
                 f"sound/{stem}.mp3", f"sound/{stem}.wav", f"sound/{stem}.vcd",
             )

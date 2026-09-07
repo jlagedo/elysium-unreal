@@ -135,10 +135,24 @@ def test_a_missing_member_is_refused_before_any_decode():
 # --- container / extension-root shape -----------------------------------------------------------
 
 
-def test_a_scene_unit_is_scene_less_with_no_bin_chunk_and_the_contract_key_order(tmp_path):
+def test_a_scene_unit_is_scene_less_and_its_bin_chunk_is_the_source_capsule(tmp_path):
     dest = _export(BASIC_KEY, BASIC_VCD, tmp_path)
     document, binary = container.read_glb(dest)
-    assert binary == b""
+    # Schema 1.1.0: no accessor, and the whole BIN chunk is the `.vcd` member's own bytes
+    # (`read_glb` hands back the chunk as stored, so up to three bytes of container padding
+    # follow the capsule).
+    assert binary[:len(BASIC_VCD)] == BASIC_VCD
+    assert len(binary) - len(BASIC_VCD) < 4
+    assert "accessors" not in document
+    assert document["buffers"] == [{"byteLength": len(BASIC_VCD)}]
+    assert document["bufferViews"] == [
+        {"buffer": 0, "byteOffset": 0, "byteLength": len(BASIC_VCD)}
+    ]
+    resolution = document["extensions"]["ELYSIUM_vtmb_scene"]["sourceResolution"]
+    assert resolution["capsule"] == {"encoding": "raw"}
+    assert resolution["members"][0]["capsule"] == {
+        "bufferView": 0, "byteLength": len(BASIC_VCD)
+    }
     for forbidden in ("scenes", "nodes", "meshes", "images", "textures", "samplers", "animations", "skins"):
         assert forbidden not in document
     assert document["asset"]["generator"] == "Elysium Scene GLB Exporter"

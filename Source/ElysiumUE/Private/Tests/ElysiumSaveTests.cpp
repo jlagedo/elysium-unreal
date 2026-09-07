@@ -732,8 +732,11 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// of that same swing block, behind its own version. Additive: a `WeaponAnimEvent` payload
 	// restores a swing with no owner, and only the contact's diagnostic line is poorer for it — the
 	// blocked reaction itself is addressed by the body stem and `ClipLabel`, which v26 also carries.
+	// `WeaponHidden` appends the active weapon's drawn/hidden bit (retail `EF_NODRAW`, `m_fEffects`
+	// +0x19c & 0x40) behind its own version. Additive: a pre-28 payload restores a drawn weapon,
+	// which is the field's default, and the next state change re-holsters it.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::WeaponSwingClipOwner);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::WeaponHidden);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -757,7 +760,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the weapon transaction's commit route"),
 			(int32)FElysiumSaveVersion::WeaponAnimEvent),
 		TPair<const TCHAR*, int32>(TEXT("the staged swing's clip owner"),
-			(int32)FElysiumSaveVersion::WeaponSwingClipOwner) })
+			(int32)FElysiumSaveVersion::WeaponSwingClipOwner),
+		TPair<const TCHAR*, int32>(TEXT("the active weapon's hidden bit"),
+			(int32)FElysiumSaveVersion::WeaponHidden) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);

@@ -628,7 +628,9 @@ def test_build_document_opens_the_extension_root_with_the_contract_key_order():
     text = dlg_text([make_row(id_="10", male="Hi", link="#")])
     model = decode_dialogue(make_closure(text))
     document, binary = exporter.build_document(model)
-    assert binary == b""
+    # Schema 1.1.0: the BIN chunk is the source capsule and nothing else. `build_document`
+    # returns the unpadded payload; the container pads the chunk itself.
+    assert binary == model.member.data
     root = document["extensions"][DIALOGUE_EXTENSION]
     assert tuple(list(root)[: len(ROOT_KEYS)]) == ROOT_KEYS
     assert list(root)[len(ROOT_KEYS):] == ["encoding", "lines", "expressions", "audio",
@@ -638,8 +640,12 @@ def test_build_document_opens_the_extension_root_with_the_contract_key_order():
     assert document["extensionsUsed"] == [DIALOGUE_EXTENSION]
     assert document["extensionsRequired"] == [DIALOGUE_EXTENSION]
     for forbidden in ("scenes", "nodes", "meshes", "images", "textures", "samplers",
-                       "animations", "skins", "buffers", "bufferViews", "accessors"):
+                       "animations", "skins", "accessors"):
         assert forbidden not in document
+    assert document["buffers"] == [{"byteLength": len(binary)}]
+    assert document["bufferViews"] == [
+        {"buffer": 0, "byteOffset": 0, "byteLength": len(binary)}
+    ]
 
 
 def test_the_identity_names_the_dlg_root_key():

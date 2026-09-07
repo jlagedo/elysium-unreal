@@ -32,28 +32,32 @@ namespace
 	// Sandbox-relative tree prefix -> the mirror directory it is served from. Ordered: the first
 	// match wins, so `vdata/signs/` must precede `vdata/`.
 	//
-	// Most mounts are the trees the offline pipeline mirrors under Root(). `vdata/` is the
-	// exception: it now serves from FElysiumContentPaths::VdataDir(), the export_v2 capsule import
-	// onto CorpusRoot() (docs/project/seam_migration.md "Settled"); `vdata/signs/` stays on Root()'s
-	// legacy `signs/` mirror, not yet migrated. `python/` lands on out/scripts because that is where
-	// UE_extract_scripts.py puts VtMB's `Vampire/python/` tree; VtMB's own `Vampire/scripts/`
-	// (kb_act.lst and the Valve script files) is a different tree and has no mirror, which is why
-	// hunter mode's keybinding copy resolves to nothing and says so.
-	const TArray<TPair<FString, FString>>& Mounts()
+	// Most mounts are the trees the offline pipeline mirrors under Root(). Three are not:
+	// `vdata/`, `dlg/` and `sound/` serve from FElysiumContentPaths (VdataDir/DlgDir/SoundDir),
+	// the export_v2 capsule import onto CorpusRoot() (docs/project/seam_migration.md "Settled").
+	// `dlg/` and `sound/` matter here for the same reason `vdata/` did: the runtime's own readers
+	// (`DlgFromDialogname`, `SoundFile`) already resolve through the corpus, so a script that
+	// probes `fileutil.isFile("dlg/...")` to gate a line — vamputil.py:1039 does exactly that —
+	// must see the same bytes the conversation will load. One path, one byte source.
+	// `vdata/signs/` stays on Root()'s legacy `signs/` mirror, not yet migrated. `python/` lands on
+	// out/scripts because that is where UE_extract_scripts.py puts VtMB's `Vampire/python/` tree;
+	// VtMB's own `Vampire/scripts/` (kb_act.lst and the Valve script files) is a different tree and
+	// has no mirror, which is why hunter mode's keybinding copy resolves to nothing and says so.
+	//
+	// Rebuilt per call rather than cached in a static: both roots are command-line/environment
+	// pinned and a test may move them for its own scope, and a table baked on first use would keep
+	// serving whichever root happened to be installed then.
+	TArray<TPair<FString, FString>> Mounts()
 	{
-		static const TArray<TPair<FString, FString>> Table = []()
-		{
-			const FString Root = FPaths::ConvertRelativePathToFull(FElysiumContentPaths::Root());
-			TArray<TPair<FString, FString>> T;
-			T.Emplace(TEXT("cfg/"),         Root / TEXT("cfg"));
-			T.Emplace(TEXT("vdata/signs/"), Root / TEXT("signs")); // extracted flat + lowercased
-			T.Emplace(TEXT("vdata/"),       FElysiumContentPaths::VdataDir());
-			T.Emplace(TEXT("python/"),      Root / TEXT("scripts"));
-			T.Emplace(TEXT("dlg/"),         Root / TEXT("dlg"));
-			T.Emplace(TEXT("sound/"),       Root / TEXT("sound"));
-			return T;
-		}();
-		return Table;
+		const FString Root = FPaths::ConvertRelativePathToFull(FElysiumContentPaths::Root());
+		TArray<TPair<FString, FString>> T;
+		T.Emplace(TEXT("cfg/"),         Root / TEXT("cfg"));
+		T.Emplace(TEXT("vdata/signs/"), Root / TEXT("signs")); // extracted flat + lowercased
+		T.Emplace(TEXT("vdata/"),       FElysiumContentPaths::VdataDir());
+		T.Emplace(TEXT("python/"),      Root / TEXT("scripts"));
+		T.Emplace(TEXT("dlg/"),         FElysiumContentPaths::DlgDir());
+		T.Emplace(TEXT("sound/"),       FElysiumContentPaths::SoundDir());
+		return T;
 	}
 
 	// Absolute in the Windows sense a VtMB script could produce: a drive-qualified path or a UNC

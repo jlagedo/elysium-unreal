@@ -36,6 +36,7 @@ from elysium_pipeline.formats.unit_contract import (
     validate_ledgers,
     validate_sceneless,
 )
+from elysium_pipeline.formats.unit_contract.capsule import declares_capsule
 from elysium_pipeline.formats.unit_contract.validate import UnitValidationError
 
 ASSET_PREFIX = f"vtmb:{KIND}:"
@@ -428,9 +429,18 @@ def validate_document(
         )
         validate_container(document, binary)
         validate_sceneless(document)
-        _require(not binary, "a dialogue unit carries no BIN chunk")
         validate_ledgers(root, source_members)
         validate_capsules(document, binary, root, source_members)
+        # `validate_capsules` returns early when `sourceResolution.capsule` is absent -- correct
+        # for a seam that has not adopted the capsule, but dialogue (schema 1.1.0) has, so the
+        # declaration itself is required here rather than merely honoured when present.
+        _require(
+            declares_capsule(root.get("sourceResolution")),
+            "a dialogue unit declares no source capsule",
+        )
+        # The BIN chunk is the capsule and nothing else: a dialogue unit owns no accessor, so any
+        # buffer view it declares is one `encapsulate` wrote for a member.
+        _require(not document.get("accessors"), "a dialogue unit declares no accessor")
     except UnitValidationError as error:
         raise DialogueGlbValidationError(str(error)) from error
 

@@ -43,24 +43,41 @@ kept and flagged.
 | 3 | `link` | `#` NPC line; integer N a PC choice jumping to NPC line N; `0` end; empty padding |
 | 4 | `condition` | PC choice: the `dlgexpr` gate; NPC line: an action |
 | 5 | `action` | actions run when spoken or chosen, `;`-separated |
-| 6–11 | — | empty on every shipped row |
+| 6 | `textBrujah` | Brujah-clan text variant; empty on every shipped row |
+| 7 | `textGangrel` | Gangrel-clan text variant; empty on every shipped row |
+| 8 | `textNosferatu` | Nosferatu-clan text variant; empty on every shipped row |
+| 9 | `textToreador` | Toreador-clan text variant; empty on every shipped row |
+| 10 | `textTremere` | Tremere-clan text variant; empty on every shipped row |
+| 11 | `textVentrue` | Ventrue-clan text variant; shipped in `prince1.dlg` only (8 rows) |
 | 12 | `textMalkavian` | the Malkavian-PC variant, shown instead of column 1/2 when present |
 
-Columns 6–11 are `reserved-empty`: the decoder verifies each is empty and a non-empty cell
-anywhere becomes a `typedUnidentified` row carrying the column, the text and the offset, so an
-unknown use of a spare column is carried rather than dropped.
+**[dated note, 2026-09-06]** Columns 6–12 are the seven per-clan text columns, in `clan_offset`
+order Brujah, Gangrel, Nosferatu, Toreador, Tremere, Ventrue, Malkavian (`0x100e65d0`,
+`read_line_data` `0x100e61d0`; `docs/vtmb/game_runtime.md` §5). This table previously called
+6–11 `reserved/unused`; that was wrong for column 11 (Ventrue, 8 rows in `prince1.dlg`) and
+right only by data coincidence for 6–10 (Brujah/Gangrel/Nosferatu/Toreador/Tremere, unfilled in
+every shipped row). The decoder still verifies 6–10 are empty and still carries a non-empty cell
+there as a `typedUnidentified` row (evidence, not expectation, given the corrected schema); a
+non-empty column 11 is expected wherever a Ventrue variant ships and is decoded as `textVentrue`,
+not flagged as an anomaly.
 
 ## GLB structure
 
-The unit is scene-less and carries no BIN chunk.
+The unit is scene-less and declares no accessor. The BIN chunk it does carry is the **source
+capsule** alone (`seam_map_unit_contract.md`, "Source capsule"): buffer 0 holds the `.dlg` file's
+own bytes, one `bufferView` addresses them, and `sourceResolution` declares
+`"capsule": {"encoding": "raw"}` with the member row naming that view. An empty `.dlg` capsules to
+nothing and that unit carries no BIN chunk at all.
 
 ```json
 {
   "extensionsUsed": ["ELYSIUM_vtmb_dialogue"],
   "extensionsRequired": ["ELYSIUM_vtmb_dialogue"],
+  "buffers": [{"byteLength": 36112}],
+  "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 36112}],
   "extensions": {
     "ELYSIUM_vtmb_dialogue": {
-      "schemaVersion": "1.0.0",
+      "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
       "encoding": "latin-1",
@@ -132,8 +149,23 @@ dependency for every resolved `.vcd`, each with the mp3-first pair recorded as
 `seam_map_scene.md` records it. A candidate that resolves to nothing is not an anomaly: most
 lines have no `_col_f`, `_col_m` or `_col_n` take.
 
+**[dated note, 2026-09-06]** `<lang>` is misnamed: `e`/`f`/`m`/`n` are **text-column takes**, not
+languages. `0x100e15c0` (`docs/vtmb/game_runtime.md` §5, retail chain arm 6) picks the letter as
+the chosen text column: the clan letter when that clan column is non-empty (`m` Ventrue and `n`
+Malkavian are the only clan columns pinned by shipped audio), else `f` for a female PC with a
+col-2 variant, else `e`. Localisation is a whole-file `.dlg` swap (see "Subtitles" above), not a
+fifth letter; the four letters cover clan/sex text-take selection within one language's shipped
+`.dlg`.
+
 Whether the `.lip` and `.vcd` beside a resolved line agree with the line's text is a corpus-index
 check across three units, not a property of this one.
+
+**[dated note, 2026-09-06]** Every path in this template is now deployable from the units alone.
+`uv run elysium import sound` lands the `.mp3`/`.wav` and the `.lip` (see "Import" below and
+`seam_map_sound.md` → "Import"); `uv run elysium import dialogue` lands the `.vcd` under
+`Content/ElysiumCorpus/scenes/**`. So once the C++ readers flip to `CorpusRoot()`, the whole audio
+join — voice, phonemes and choreography — resolves inside `Content/ElysiumCorpus` with the legacy
+export root unset.
 
 ## Dependencies
 
@@ -146,6 +178,10 @@ Camera framing is keyed by NPC in `vdata/camerashots/` and is that unit's join; 
 dependency is declared here. A Python expression inside an action may name entities, quests or
 functions; those are carried as text and declare nothing.
 
+**[dated note, 2026-09-06]** A `sound` row's target is deployed by `uv run elysium import sound`
+and a `scene` row's by `uv run elysium import dialogue`, both out of the capsules; a dependency
+this unit declares is therefore a file the corpus carries, not only one the install had.
+
 ## Anomalies
 
 | Row | Evidence |
@@ -157,7 +193,7 @@ functions; those are carried as text and declare nothing.
 | `link-to-non-npc-line` | a `linkTarget` that names a row whose role is not `npc-line` |
 | `malformed-cell` | a cell that does not open `{` TAB and close TAB `}` |
 | `unterminated-stage-direction` | a `[` with no closing `]` |
-| `reserved-column-used` | the `typedUnidentified` case for columns 6–11 |
+| `reserved-column-used` | the `typedUnidentified` case for columns 6–10 (the five clan columns unfilled in shipped data; column 11, Ventrue, decodes as `textVentrue` and is not an anomaly) [dated note, 2026-09-06] |
 
 ## Byte ledger owners
 
@@ -179,3 +215,35 @@ A complete dialogue unit accounts for every byte of the file and has zero `unres
 every cell, role, link target, marker, stage direction and expression token with the published
 `lines[]`, re-derives every audio candidate from the key and the line ids, and checks that every
 dependency was produced by a resolved candidate the unit publishes.
+
+## Import (2026-09-06)
+
+`uv run elysium import dialogue` deploys the `.dlg` corpus out of the published units and nothing
+else — no install, no engine (`pipeline/src/elysium_pipeline/importers/dialogue.py`, on the shared
+`importers/corpus_deploy.py`). Each unit's source capsule is lifted, weighed against the
+`byteLength` and `sha256` that unit published for its member, and written to
+
+```text
+Content/ElysiumCorpus/dlg/<hub>/<name>.dlg
+```
+
+The same command deploys the scene family in the same pass; see `seam_map_scene.md` → "Import".
+The tree is the legacy loose export's, path for path and byte for byte: on 2026-09-06 the deploy
+produced 147 `.dlg` files against 147 in `$ELYSIUM_EXPORT_ROOT/dlg`, with zero path differences
+and zero byte differences.
+
+Lane properties (all `corpus_deploy`'s, shared with `import sound`):
+
+- **Recipe stamps** in `Content/ElysiumCorpus/_import/dialogue/recipes.json` — per unit, the GLB's
+  size and mtime, the lane's `recipeVersion`, and every file written with its size and digest. A
+  re-run over unchanged units opens no GLB at all and writes nothing.
+- **Per-unit failure isolation** — a unit that cannot be read, or whose capsule is missing (a
+  pre-1.1.0 export) or disagrees with its digest, is one named failure; the run continues and the
+  command exits non-zero. That unit's previously deployed files are kept, not pruned.
+- **Byte-equality verification** — every file is read back and compared with the capsule bytes
+  before the run is called a success.
+- **Pruning** — anything under `dlg/` or `scenes/` this run neither wrote nor kept is deleted.
+- **`import_report.json`** beside the stamps, carrying the counts and every failure.
+
+Reader flip: `DlgFromDialogname`/`DlgDir` move from `FElysiumContentPaths::Root()` to
+`CorpusRoot()` in the C++ half of this slice; the deployed tree is already in place for it.

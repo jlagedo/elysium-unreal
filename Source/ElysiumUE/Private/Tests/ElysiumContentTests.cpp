@@ -56,6 +56,7 @@
 #include "Substrate/ElysiumDiceTables.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumWieldRules.h"
 #include "Substrate/ElysiumQuestTables.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSceneData.h"
@@ -1263,9 +1264,11 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 		AddError(Err);
 		return false;
 	}
-	// Every row is a 13-field record, so the parse should recover them all (1116 at time of writing;
-	// assert a floor rather than an exact count so a patch revision does not brittle-fail the test).
-	TestTrue(TEXT("recovered a full conversation"), File->Lines.Num() > 1000);
+	// Every row is a 13-field record, but `read_line_data` (`0x100e61d0`) stores only the rows whose
+	// id is non-negative AND whose male text is at least two characters — 1116 records in this file
+	// become 296 stored lines, the other 820 being editor padding and text-less anchors retail never
+	// puts in its table either. Assert a floor rather than an exact count.
+	TestTrue(TEXT("recovered a full conversation"), File->Lines.Num() > 250);
 
 	const FElysiumDlgLine* Entry = File->FindById(11);
 	if (TestNotNull(TEXT("entry line 11 present"), Entry))
@@ -1281,10 +1284,10 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 	const FElysiumDlgLine* Malk = File->FindById(23);
 	if (TestNotNull(TEXT("choice 23 present"), Malk))
 	{
-		TestTrue(TEXT("23 has a col-12 Malkavian variant"), !Malk->TextMalkavian.IsEmpty());
+		TestTrue(TEXT("23 has a col-12 Malkavian variant"), !Malk->TextMalkavian().IsEmpty());
 		TestEqual(TEXT("23 non-malk reads col-1"), Malk->RawFor(true, false), Malk->Text(true));
-		TestEqual(TEXT("23 malk reads col-12"), Malk->RawFor(true, true), Malk->TextMalkavian);
-		TestNotEqual(TEXT("23 col-12 differs from col-1"), Malk->TextMalkavian, Malk->Text(true));
+		TestEqual(TEXT("23 malk reads col-12"), Malk->RawFor(true, true), Malk->TextMalkavian());
+		TestNotEqual(TEXT("23 col-12 differs from col-1"), Malk->TextMalkavian(), Malk->Text(true));
 	}
 
 	// Pin the reported retail sequence against the actual exported rows, not a transcription. The
@@ -5653,6 +5656,65 @@ bool FElysiumItemsContentTest::RunTest(const FString&)
 	{
 		AddError(Error);
 		return true;
+	}
+
+	// --- The wield rule's two halves, against the real corpus ------------------------------
+	// `docs/vtmb/wielded_weapons.md` §8. The rows are the CHARACTER half of
+	// `Inventory_Can_Wield` (0x10335a70) and `equip_mask` is the weapon half; both are parsed by
+	// the same `ParseEquipFlag` (0x1025b740), so one bad name would silently disarm a form.
+	{
+		FElysiumExcludedEquipTable Wield;
+		FString WieldError;
+		if (TestTrue(TEXT("system/items.txt's ExcludedEquipTables parses"), Wield.Load(WieldError)))
+		{
+			// Block order IS the row id, and `Default` being first is what makes an unwritten
+			// `Excluded_Equipment` stat mean "the ordinary restrictions".
+			TestEqual(TEXT("it carries thirteen rows"), Wield.Num(), 13);
+			if (const FElysiumExcludedEquipRow* Row = Wield.At(0))
+			{
+				TestEqual(TEXT("row 0 is Default"), Row->InternalName, FString(TEXT("Default")));
+				TestEqual(TEXT("...excluding ClawedForm and WolfForm"), (int32)Row->Excluded,
+					(int32)(ElysiumEquipFlags::ClawedForm | ElysiumEquipFlags::WolfForm));
+				TestEqual(TEXT("...and requiring nothing"), (int32)Row->Required, 0);
+			}
+			if (const FElysiumExcludedEquipRow* Row = Wield.At(Wield.RowIndexByName(TEXT("Clawed_Form"))))
+			{
+				TestEqual(TEXT("Clawed_Form requires the claw bit"), (int32)Row->Required,
+					(int32)ElysiumEquipFlags::ClawedForm);
+				TestEqual(TEXT("...and excludes WolfForm"), (int32)Row->Excluded,
+					(int32)ElysiumEquipFlags::WolfForm);
+			}
+			// The two consequences the recovery is stated by.
+			const FElysiumItemDef* Claws = Items.Find(TEXT("item_w_claws"));
+			if (TestNotNull(TEXT("item_w_claws is in the catalogue"), Claws))
+			{
+				TestEqual(TEXT("...and authors equip_mask ClawedForm"), (int32)Claws->EquipMask,
+					(int32)ElysiumEquipFlags::ClawedForm);
+				TestFalse(TEXT("a Default character can never wield the claws"),
+					Wield.CanWield(0, Claws->EquipMask));
+				TestTrue(TEXT("...and a Clawed_Form one can"),
+					Wield.CanWield(Wield.RowIndexByName(TEXT("Clawed_Form")), Claws->EquipMask));
+			}
+			// `Normal` is the composite 0x50 the parser answers for a literal that is not in the
+			// name table at all, and it is what locks an ordinary weapon out of a claw form.
+			if (const FElysiumItemDef* Anaconda = Items.Find(TEXT("item_w_colt_anaconda")))
+			{
+				TestEqual(TEXT("a Normal weapon parses to no_wolfform|no_clawedform"),
+					(int32)Anaconda->EquipMask, 0x50);
+				TestFalse(TEXT("a Clawed_Form character cannot wield a Normal weapon"),
+					Wield.CanWield(Wield.RowIndexByName(TEXT("Clawed_Form")), Anaconda->EquipMask));
+			}
+			// The one shipped `Never`: nothing may ever hold it, under any row.
+			if (const FElysiumItemDef* Wallet = Items.Find(TEXT("item_g_wallet")))
+			{
+				TestEqual(TEXT("item_g_wallet authors Never"), (int32)Wallet->EquipMask, 1);
+				TestFalse(TEXT("...which no row can admit"), Wield.CanWield(0, Wallet->EquipMask));
+			}
+		}
+		else
+		{
+			AddError(WieldError);
+		}
 	}
 
 	// --- The eleven semantic types, and the compile-time mirror of them --------------------

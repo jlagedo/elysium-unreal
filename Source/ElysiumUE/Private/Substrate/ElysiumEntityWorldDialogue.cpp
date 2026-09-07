@@ -28,6 +28,11 @@ FElysiumEntityHandle FElysiumEntityWorld::GetOpenDialogOwner() const
 	return DialogueSession ? DialogueSession->Owner : FElysiumEntityHandle::Invalid();
 }
 
+uint32 FElysiumEntityWorld::GetOpenDialogSerial() const
+{
+	return DialogueSession ? DialogueSession->Serial : 0u;
+}
+
 bool FElysiumEntityWorld::HasActiveDialogueBodyClip(const FElysiumEntityHandle& Speaker) const
 {
 	return DialogueSession && DialogueSession->Owner == Speaker
@@ -36,7 +41,7 @@ bool FElysiumEntityWorld::HasActiveDialogueBodyClip(const FElysiumEntityHandle& 
 
 bool FElysiumEntityWorld::CanPlayerAdvanceAutomatic() const
 {
-	return DialogueSession && DialogueSession->bAutomaticFallback
+	return DialogueSession && DialogueSession->bForcedVisibleResponse
 		&& DialogueSession->Conversation.IsValid()
 		&& DialogueSession->Conversation->IsAwaitingAutomatic();
 }
@@ -63,23 +68,31 @@ void FElysiumEntityWorld::BeginDialogueTurn()
 	DialogueSession->CurrentLineId = Line->Id;
 	DialogueSession->TurnRevision = Conversation.Revision();
 	DialogueSession->CurrentVoice = FElysiumVoiceHandle::Invalid();
-	DialogueSession->bAutomaticFallback = false;
+	DialogueSession->bForcedVisibleResponse = false;
 
 	// The spoken line is the presented turn. Any pending Auto-Link/Auto-End remains attached to it
 	// until this exact voice handle completes; it is never submitted as a subtitle or response.
 	SelectDialogueCamera(/*bLineBoundary*/ true);
+	// D4: the text column this player actually reads chooses the take, so the voice, the body scene
+	// and the phoneme track all come off one `line<id>_col_<C>` stem (`generate_speech_filename`
+	// `0x100e1680` / the column chooser `0x100e15c0`). A letterless row answers the shared ellipses
+	// take instead (`FUN_100df0b0`).
+	const TCHAR TakeLetter = FElysiumLineService::TakeLetterFor(*Line,
+		Conversation.PlayerMale(), Conversation.PlayerClanOffset());
+	DialogueSession->CurrentTakeLetter = TakeLetter;
 	DialogueSession->LineScene.Begin(*this, DialogueSession->Owner,
-		Conversation.File().SourcePath, Line->Id, NowSeconds());
+		Conversation.File().SourcePath, Line->Id, NowSeconds(), TakeLetter);
 	if (LineService)
 	{
 		FElysiumEntity* Speaker = Resolve(DialogueSession->Owner);
 		DialogueSession->CurrentVoice = LineService->PlayDialogueTurn(DialogueSession->Owner,
 			Conversation.File().SourcePath, Line->Id,
 			Speaker ? Speaker->Origin : FVector::ZeroVector,
-			Speaker ? Speaker->GetSkeletalBody() : nullptr);
+			Speaker ? Speaker->GetSkeletalBody() : nullptr, TakeLetter,
+			FElysiumLineService::SpeechVolumeFor(DialogueSession->Owner));
 		if (DialogueSession->CurrentVoice.IsValid())
 		{
-			BeginDialogueLipsync(Conversation.File().SourcePath, Line->Id);
+			BeginDialogueLipsync(Conversation.File().SourcePath, Line->Id, TakeLetter);
 		}
 	}
 
@@ -88,7 +101,7 @@ void FElysiumEntityWorld::BeginDialogueTurn()
 		// A null audio service is a supported headless configuration. In a playable world, an invalid
 		// submission is an unexpected failure and must be diagnosable. Either way the line stays on
 		// screen and presentation exposes Continue, so "Alright." cannot disappear in a zero-time hop.
-		DialogueSession->bAutomaticFallback = true;
+		DialogueSession->bForcedVisibleResponse = true;
 		if (Audio())
 		{
 			UE_LOG(LogElysiumWorld, Warning,
@@ -99,11 +112,96 @@ void FElysiumEntityWorld::BeginDialogueTurn()
 	}
 }
 
-void FElysiumEntityWorld::UpdateDialogueAutomatic()
+bool FElysiumEntityWorld::IsDialogueNpcSpeaking() const
+{
+	return DialogueSession && DialogueSession->CurrentVoice.IsValid() && Audio()
+		&& Audio()->IsVoicePlaying(DialogueSession->CurrentVoice);
+}
+
+void FElysiumEntityWorld::StopDialogueVoice()
+{
+	if (!DialogueSession)
+	{
+		return;
+	}
+	if (DialogueSession->CurrentVoice.IsValid() && Audio())
+	{
+		Audio()->StopVoice(DialogueSession->CurrentVoice, 0.f);
+	}
+	DialogueSession->CurrentVoice = FElysiumVoiceHandle::Invalid();
+	// The face completes with the voice: drop the phoneme track and let the next composition pass
+	// write every key this line was driving back to zero, exactly as the end of a turn does.
+	DialogueLipsync.Reset();
+	DialogueLineStart = -1.0;
+	DialogueSession->LineScene.Stop();
+}
+
+void FElysiumEntityWorld::FlushDialogueVoiceCompletion()
 {
 	if (!DialogueSession || !DialogueSession->Conversation.IsValid()
+		|| !DialogueSession->Conversation->HasPendingNpcAction())
+	{
+		return;
+	}
+	if (IsDialogueNpcSpeaking())
+	{
+		return;   // still talking — `CallPendingNPCEventScript` has not been reached
+	}
+	// A turn whose voice never started (no audio service, no shipped take) is finished the moment it
+	// is presented, which is the same boundary retail's `NPCNotifyDoneTalking` reports for a silent
+	// line. Hold the conversation alive across the call: the parked col-5 may close or replace it.
+	TSharedPtr<FElysiumDlgConversation> Conversation = DialogueSession->Conversation;
+	Conversation->FlushPendingNpcAction();
+}
+
+void FElysiumEntityWorld::PlayerDialogSkip()
+{
+	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
+	{
+		return;
+	}
+	// M-SKIP — retail's pick `-2` hurry verb as a skip key. The voice and the face end, the parked
+	// col-5 runs, and the response band is left exactly as it was.
+	StopDialogueVoice();
+	TSharedPtr<FElysiumDlgConversation> Conversation = DialogueSession->Conversation;
+	Conversation->FlushPendingNpcAction();
+	if (!DialogueSession || DialogueSession->Conversation != Conversation)
+	{
+		return;   // the flushed col-5 closed or replaced the session
+	}
+	if (!Conversation->IsAwaitingAutomatic())
+	{
+		return;
+	}
+	// The skip IS the done-talking edge. Retail's `NPCNotifyDoneTalking` (`0x100e4780`) flushes the
+	// parked script and then takes the turn's automatic continuation (`Pick(0)` / `Release`), so an
+	// Auto-Link that would have followed the voice must follow the skip too.
+	//
+	// Without this the skip's own `StopDialogueVoice` invalidates `CurrentVoice`, which sends
+	// `UpdateDialogueAutomatic` down its `!CurrentVoice.IsValid()` arm and raises
+	// `bForcedVisibleResponse` — a Continue the player must press a second time for a transition the
+	// engine owns. That forced response is retail's no-audio rule (`process_pc_line` `0x100e8520`),
+	// not a skip rule.
+	Conversation->ResolveAutomatic();
+	if (!DialogueSession || DialogueSession->Conversation != Conversation)
+	{
+		return;
+	}
+	if (Conversation->IsOver())
+	{
+		EndDialogSession(/*bSilent*/ false);
+		return;
+	}
+	BeginDialogueTurn();
+}
+
+void FElysiumEntityWorld::UpdateDialogueAutomatic()
+{
+	// Every turn's voice completion is a flush edge, not just an automatic one.
+	FlushDialogueVoiceCompletion();
+	if (!DialogueSession || !DialogueSession->Conversation.IsValid()
 		|| !DialogueSession->Conversation->IsAwaitingAutomatic()
-		|| DialogueSession->bAutomaticFallback)
+		|| DialogueSession->bForcedVisibleResponse)
 	{
 		return;
 	}
@@ -116,12 +214,12 @@ void FElysiumEntityWorld::UpdateDialogueAutomatic()
 			TEXT("dialogue %s automatic join lost its turn identity (line=%d revision=%u)"),
 			*DescribeHandle(DialogueSession->Owner), DialogueSession->CurrentLineId,
 			DialogueSession->TurnRevision);
-		DialogueSession->bAutomaticFallback = true;
+		DialogueSession->bForcedVisibleResponse = true;
 		return;
 	}
 	if (!DialogueSession->CurrentVoice.IsValid() || !Audio())
 	{
-		DialogueSession->bAutomaticFallback = true;
+		DialogueSession->bForcedVisibleResponse = true;
 		return;
 	}
 	if (Audio()->IsVoicePlaying(DialogueSession->CurrentVoice))
@@ -189,6 +287,7 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 		}
 	}
 	DialogueSession = MakeUnique<FElysiumDialogueSession>();
+	DialogueSession->Serial = ++NextDialogSerial;
 	DialogueSession->Owner = NewOwner;
 	DialogueSession->Listener = PlayerHandle();
 	DialogueSession->Conversation = Conversation;
@@ -198,10 +297,29 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 	DialogueSession->BodyOwner = BodyOwner;
 	DialogueSession->NormalizedCamera = ElysiumCameraShots::NormalizeKey(DefaultCamera);
 	DialogueSession->ScreenSide = (NewOwner.Index & 1) == 0 ? 1.0f : -1.0f;
+	const uint32 OpeningSerial = DialogueSession->Serial;
+
+	// The opening NPC line's col-4 is an ACTION (`process_npc_line` `0x100e8100`), and retail runs
+	// it from inside `CDialog::Acquire` — with the dialog object already installed as the player's
+	// partner. So the session is built FIRST and the conversation is started here: a col-4 that
+	// fires `EndDialog` or opens another conversation then acts on THIS session rather than on
+	// whatever was open a moment ago. `Start()` is idempotent, so a caller that started the
+	// conversation before handing it over is unaffected.
+	Conversation->Start();
+	if (!DialogueSession || DialogueSession->Serial != OpeningSerial)
+	{
+		// The opening col-4 ended this session or opened another one. Whatever is open now owns
+		// itself; this call has nothing left to announce.
+		return;
+	}
 
 	// Camera acquisition precedes the presentation announcement. A headless/null-camera world still
 	// runs exactly the same dialogue and event order.
 	BeginDialogueTurn();
+	if (!DialogueSession || DialogueSession->Serial != OpeningSerial)
+	{
+		return;
+	}
 
 	if (IElysiumPresenter* P = Presenter())
 	{
@@ -210,19 +328,38 @@ void FElysiumEntityWorld::OpenDialog(const FElysiumEntityHandle& NewOwner,
 
 	// A conversation that opened already closed (no content NPC line) ends at once, so the beat still
 	// advances (OnDialogEnd -> DialogPostProcess) rather than hanging on an empty panel.
-	if (Conversation->IsOver())
+	if (Conversation->IsOver() && DialogueSession && DialogueSession->Serial == OpeningSerial)
 	{
 		EndDialogSession(/*bSilent*/ false);
 	}
 }
 
-void FElysiumEntityWorld::PlayerDialogChoose(int32 VisibleIndex)
+void FElysiumEntityWorld::PlayerDialogChoose(int32 VisibleIndex, int32 ExpectedLineId)
 {
 	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
 	{
 		return;
 	}
 	TSharedPtr<FElysiumDlgConversation> Conversation = DialogueSession->Conversation;
+	if (ExpectedLineId != INDEX_NONE
+		&& Conversation->VisibleChoiceLineId(VisibleIndex) != ExpectedLineId)
+	{
+		// The band moved between the frame the player read and the frame the click arrived (a
+		// voice-completion flush or an NPC col-5 can re-enter the turn). Refuse rather than pick by
+		// position: nothing is cut, nothing is flushed, nothing is charged.
+		UE_LOG(LogElysiumWorld, Verbose,
+			TEXT("dialogue %s refused a stale pick at index %d (expected line %d, band holds %d)"),
+			*DescribeHandle(DialogueSession->Owner), VisibleIndex, ExpectedLineId,
+			Conversation->VisibleChoiceLineId(VisibleIndex));
+		return;
+	}
+	// M-REVEAL — retail refuses a pick while `IsTalking()` holds; the port accepts it and cuts the
+	// line instead. The voice and the face end first so the parked col-5 the pick is about to flush
+	// runs at the same boundary a completed voice would have given it.
+	if (Conversation->IsChoiceEnabled(VisibleIndex) && !Conversation->IsAwaitingAutomatic())
+	{
+		StopDialogueVoice();
+	}
 	const uint32 BeforeRevision = Conversation->Revision();
 	Conversation->Choose(VisibleIndex);
 	if (Conversation->Revision() == BeforeRevision)
@@ -253,7 +390,7 @@ void FElysiumEntityWorld::PlayerDialogAdvance()
 	}
 	if (DialogueSession->Conversation->IsAwaitingAutomatic())
 	{
-		if (!DialogueSession->bAutomaticFallback)
+		if (!DialogueSession->bForcedVisibleResponse)
 		{
 			return;
 		}
@@ -282,11 +419,13 @@ void FElysiumEntityWorld::PlayerDialogAdvance()
 
 void FElysiumEntityWorld::CloseDialog(bool bSilent)
 {
-	if (!DialogueSession || !DialogueSession->Conversation.IsValid())
+	if (!DialogueSession)
 	{
 		return;
 	}
-	DialogueSession->Conversation->Close();
+	// `EndDialogSession` closes the conversation itself — retail `CDialog::Release` (`0x100e5240`)
+	// flushes the parked NPC script on EVERY teardown path, not only on the explicit close — so
+	// there is nothing left to do here but tear the session down.
 	EndDialogSession(bSilent);
 }
 
@@ -310,10 +449,56 @@ void FElysiumEntityWorld::SelectDialogueCamera(bool bLineBoundary)
 		return;
 	}
 
-	auto Publish = [this, Service](FElysiumCameraRequest Request,
+	// `DialogPOV` is a property of the SHOT IN EFFECT, not of the camera path the director happened
+	// to take. Retail asks the active camera entity's current shot for the flag every think
+	// (`FUN_1006EDB0` -> shot-table stride 0x104, flags dword at +0x20, bit 0x10; parser
+	// 0x100721E0) and redirects the dialogue arm on a set bit however that shot was selected
+	// (`CAI_BaseNPC::MaintainAutonomousEyeDirection` 0x1026B810).
+	//
+	// The port has three camera paths where retail has one, so the flag is resolved ONCE here and
+	// stamped on whichever request is published:
+	//
+	//   * the retail source shot — the flag is read straight off it, exactly as retail does;
+	//   * an authored profile (`DA_ElysiumDialogueCameraSet`) — the profile REPLACES the shot, so it
+	//     carries the flag from the NPC's own `default_camera` source shot, which is the authored
+	//     intent for this conversation;
+	//   * no source shot at all — MODERNIZATION (`docs/architecture/camera-architecture.md`,
+	//     2026-09-07): default the flag SET, because 51 of the 66 shipped shot files set it and a
+	//     conversation with no authored shot is the case retail never had. Clearing it instead would
+	//     leave the majority of ported conversations aiming at the player's eye while the camera
+	//     looks from somewhere else, which is the divergence that reads as a wandering gaze.
+	bool bShotDialogPOV = true;
+	if (!DialogueSession->NormalizedCamera.IsEmpty())
+	{
+		if (const FElysiumCameraShotDef* FlagDef =
+			ElysiumCameraShots::Load(DialogueSession->NormalizedCamera))
+		{
+			if (FlagDef->IsValid())
+			{
+				bShotDialogPOV = FlagDef->Constraints.bDialogPOV;
+			}
+		}
+	}
+
+	// Why the retail shot did not win, when it did not. The owner's live read needs this: a source
+	// shot silently displaced by a closer authored profile is indistinguishable, in the frame, from
+	// a source shot that was simply framed wrong.
+	FString SourceShotRejection;
+
+	auto Publish = [this, Service, bShotDialogPOV, &SourceShotRejection](FElysiumCameraRequest Request,
 		EElysiumDialogueDirectorSource Source, EElysiumDialogueShotProfile Profile,
 		float MinimumHold)
 	{
+		if (!SourceShotRejection.IsEmpty() && Source != EElysiumDialogueDirectorSource::SourceShot)
+		{
+			UE_LOG(LogElysiumWorld, Log,
+				TEXT("dialogue camera: source shot '%s' rejected (%s); replaced by %s '%s'"),
+				*DialogueSession->NormalizedCamera, *SourceShotRejection,
+				Source == EElysiumDialogueDirectorSource::AuthoredProfile
+					? TEXT("authored profile") : TEXT("fallback"),
+				*Request.SelectedProfile);
+		}
+		Request.bDialogPOV = bShotDialogPOV;
 		DialogueSession->CameraRequest = MoveTemp(Request);
 		DialogueSession->DirectorSource = Source;
 		DialogueSession->SelectedProfile = Profile;
@@ -370,11 +555,13 @@ void FElysiumEntityWorld::SelectDialogueCamera(bool bLineBoundary)
 					EElysiumDialogueShotProfile::Fallback, 2.0f);
 				return;
 			}
+			SourceShotRejection = Reject;
 			DialogueSession->CandidateRejections += FString::Printf(TEXT("%s: %s"),
 				*DialogueSession->NormalizedCamera, *Reject);
 		}
 		else
 		{
+			SourceShotRejection = TEXT("missing/unresolved");
 			DialogueSession->CandidateRejections += FString::Printf(TEXT("%s: missing/unresolved"),
 				*DialogueSession->NormalizedCamera);
 		}
@@ -490,6 +677,10 @@ void FElysiumEntityWorld::UpdateSelectedDialogueCamera()
 			{
 				FElysiumCameraRequest Updated = ElysiumDialogueCamera::BuildRequest(Profile, Context);
 				Updated.FallbackReason = DialogueSession->CameraRequest.FallbackReason;
+				// The per-frame anchor refresh rebuilds the request from the profile, which knows
+				// nothing about the shot flag. Carry the selection's resolved `DialogPOV` across, or
+				// the gaze redirect would survive exactly one frame after each line boundary.
+				Updated.bDialogPOV = DialogueSession->CameraRequest.bDialogPOV;
 				DialogueSession->CameraRequest = MoveTemp(Updated);
 				break;
 			}
@@ -512,15 +703,33 @@ void FElysiumEntityWorld::RefreshDialogueCamera()
 	UpdateSelectedDialogueCamera();
 }
 
-bool FElysiumEntityWorld::GetDialogueCameraGaze(FVector& OutPoint) const
+EElysiumDialogueGazeLens FElysiumEntityWorld::GetDialogueCameraGaze(FVector& OutPoint) const
 {
-	if (!DialogueSession || !DialogueSession->CameraRequest.bDialogPOV
-		|| !DialogueSession->CameraRequest.bOverridePose)
+	// Retail's condition is the flag alone: `MaintainAutonomousEyeDirection` (0x1026B810) asks the
+	// ACTIVE camera entity for its shot's flags and, on bit 0x10, aims at that entity's position.
+	// There is no second test for "the camera moved" — a shot that leaves the view where it was is
+	// still the shot in effect, and the camera entity is still where the eye is.
+	if (!DialogueSession || !DialogueSession->CameraRequest.bDialogPOV)
 	{
-		return false;
+		return EElysiumDialogueGazeLens::None;
 	}
-	OutPoint = DialogueSession->CameraRequest.Shot.Origin;
-	return true;
+	if (DialogueSession->CameraRequest.bOverridePose)
+	{
+		OutPoint = DialogueSession->CameraRequest.Shot.Origin;
+		return EElysiumDialogueGazeLens::ShotOrigin;
+	}
+	// `bOverridePose == false` is the port's player-view fallback: the dialogue request is live and
+	// scoped, but it publishes no pose, so the player's own camera is still what is rendered. That
+	// camera IS the lens retail would aim at. The substrate cannot read a camera component, so it
+	// names the case and answers with the player entity's eye point — which is where the view sits
+	// to within the pawn's own camera offset, and is the whole answer in a headless world.
+	const FElysiumPlayer* Listener = FindPlayer();
+	if (!Listener)
+	{
+		return EElysiumDialogueGazeLens::None;
+	}
+	OutPoint = Listener->EyePosition();
+	return EElysiumDialogueGazeLens::PlayerView;
 }
 
 bool FElysiumEntityWorld::DialogueCameraHidesHud() const
@@ -606,7 +815,8 @@ static TAutoConsoleVariable<int32> CVarDialogueLipsync(
 	TEXT("A .dlg conversation turn drives the speaking NPC's mouth from the line's .lip phoneme track (1, default) or leaves it at rest (0)."),
 	ECVF_Default);
 
-void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int32 LineId)
+void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int32 LineId,
+	TCHAR TakeLetter)
 {
 	DialogueLipsync.Reset();
 	DialogueLineStart = -1.0;
@@ -628,7 +838,8 @@ void FElysiumEntityWorld::BeginDialogueLipsync(const FString& DlgSourcePath, int
 	FElysiumLipSyncBinding Binding;
 	// The audio path this turn resolves to, with the extension swapped — the one place the two
 	// halves of the join have to agree, so it goes through the line service's own rule.
-	Binding.Track = ElysiumLip::Load(FElysiumLineService::DialogueLineSource(DlgSourcePath, LineId));
+	Binding.Track = ElysiumLip::Load(
+		FElysiumLineService::DialogueLineSource(DlgSourcePath, LineId, TakeLetter));
 	FString ExpressionDiagnostic;
 	Binding.Table = ElysiumExpressions::LoadPreparedPhonemes(*Speaker, ExpressionDiagnostic);
 	if (!ExpressionDiagnostic.IsEmpty())
@@ -725,13 +936,34 @@ void FElysiumEntityWorld::RefreshDialogueLipsync(double Now)
 
 void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 {
-	const FElysiumEntityHandle Closing = GetOpenDialogOwner();
-	FElysiumBodyOwnerToken ClosingBodyOwner;
-	if (DialogueSession)
+	// DETACH FIRST. `CDialog::Release` (`0x100e5240`) flushes the pending NPC event script before it
+	// clears the live dialogue state, and that script is authored: it can fire `EndDialog` (landing
+	// back here) or `StartPlayerDialogRemote` (landing in `OpenDialog`, which ends the open session
+	// on the way in). Taking the record out of the world before running any of it is the
+	// re-entrancy guard — a nested end sees no open session and returns, and a nested OPEN installs
+	// a new session this teardown will not touch, because everything below reads the detached copy.
+	TUniquePtr<FElysiumDialogueSession> Closed = MoveTemp(DialogueSession);
+	DialogueSession.Reset();
+	if (!Closed)
 	{
-		ClosingBodyOwner = DialogueSession->BodyOwner;
-		DialogueSession->LineScene.Stop();
+		return;
 	}
+	const FElysiumEntityHandle Closing = Closed->Owner;
+	const FElysiumBodyOwnerToken ClosingBodyOwner = Closed->BodyOwner;
+	const uint32 ClosingSerial = Closed->Serial;
+	Closed->LineScene.Stop();
+	// The flush retail owes every teardown. `Close()` runs the turn's parked col-5 exactly once (it
+	// clears the buffer before calling, so a re-entrant close cannot run it twice) and is a no-op on
+	// a conversation that is already over — the ordinary path, where the pick or the terminal
+	// advance closed it. Without this, a session displaced mid-line (a second `OpenDialog`, a
+	// `Kill`, a map teardown) silently dropped the NPC line's parked col-5.
+	if (Closed->Conversation.IsValid())
+	{
+		Closed->Conversation->Close();
+	}
+	// A col-5 flushed above may have opened the next conversation. It owns the panel from here;
+	// this teardown must not close what it just opened.
+	const bool bReplaced = DialogueSession.IsValid();
 	if (LineService)
 	{
 		LineService->CancelDialogue(Closing);
@@ -749,28 +981,37 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 		}
 	}
 
-	if (DialogueSession && Camera())
+	if (Camera())
 	{
-		Camera()->ReleaseCamera(DialogueSession->CameraHandle);
+		Camera()->ReleaseCamera(Closed->CameraHandle);
 	}
 	if (FElysiumEntity* OwnerEntity = Resolve(Closing))
 	{
+		// The token is generation-stamped, so a replacement session that already re-acquired the
+		// body carries a newer one and this release cannot take the new claim away.
 		OwnerEntity->EndDialogueBodySession(ClosingBodyOwner, bSilent);
 	}
-	DialogueSession.Reset();
+	Closed.Reset();
 
-	if (IElysiumPresenter* P = Presenter())
+	if (!bReplaced)
 	{
-		P->CloseDialog();
+		if (IElysiumPresenter* P = Presenter())
+		{
+			P->CloseDialog();
+		}
 	}
 
 	if (!bSilent && Closing.IsSet())
 	{
 		// Route EndDialog to exactly the owning NPC (its InputEndDialog clears bInDialog and fires
 		// OnDialogEnd -> DialogPostProcess). Queued through chokepoint 2 like every other input, with
-		// the owner as `!self` so no name lookup can hit a same-named entity.
+		// the owner as `!self` so no name lookup can hit a same-named entity. The param carries the
+		// closed session's serial so the NPC can tell this bookkeeping close from a script-fired
+		// `EndDialog` (which must reach the world's teardown itself) and from a stale close arriving
+		// after the flushed col-5 re-opened the same NPC.
 		static const FName EndDialogInput(TEXT("EndDialog"));
-		EnqueueInput(ElysiumEntityWorldShared::GSelfTarget, EndDialogInput, FElysiumVariant::Void(), 0.0,
+		EnqueueInput(ElysiumEntityWorldShared::GSelfTarget, EndDialogInput,
+			FElysiumVariant::Int(static_cast<int32>(ClosingSerial)), 0.0,
 			FElysiumEntityHandle(), Closing);
 	}
 }

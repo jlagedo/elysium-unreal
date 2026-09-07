@@ -37,8 +37,9 @@ bool FElysiumEyePass::SetViewTarget(USkeletalMeshComponent* Body, const FVector&
 	{
 		if (Binding.Comp.Get() == Body)
 		{
-			Binding.ViewTarget = WorldTarget;
-			Binding.bHasViewTarget = true;
+			// Stamped with the frame, not merely stored: `TickEyes` rests any latch the gaze pass
+			// did not touch this frame, which is how a body stops aiming when its producer stops.
+			Binding.Gaze.Set(WorldTarget, GazeFrame);
 			return true;
 		}
 	}
@@ -91,7 +92,7 @@ void FElysiumEyePass::UpdateDisposition(USkeletalMeshComponent* Body,
 	{
 		Binding->Disposition = Disposition;
 		Binding->DispositionLevel = FMath::Max(1, DispositionLevel);
-		Binding->NextBlinkTime = 0.f;
+		Binding->Blink.Timer = 0.f;
 	}
 }
 
@@ -269,7 +270,7 @@ bool FElysiumEyePass::DescribeEyes(const USkeletalMeshComponent* Comp,
 	return true;
 }
 
-void FElysiumEyePass::TickEyes(const UObject* Context, float)
+void FElysiumEyePass::TickEyes(const UObject* Context, const FElysiumEyeFrame& Frame)
 {
 	// Everything here reads this frame's settled component-space pose, which is why it runs in the
 	// post-move pass rather than in the component's own tick: at TG_PrePhysics the transforms are
@@ -281,12 +282,26 @@ void FElysiumEyePass::TickEyes(const UObject* Context, float)
 	// `elysium.EyeTrackPlayer` overrides that with the player's camera, which is the cheapest
 	// unambiguous check that the basis math is right: if the irises converge on the camera as it
 	// moves, the record, the import transform, the solve and the plane parameters are all correct.
+	const UWorld* World = Context ? Context->GetWorld() : nullptr;
+	// The PAUSABLE game clock, handed in from the map actor's post-move pass. Retail's cadence is on
+	// the server think (`CAI_BaseNPCTroika::MaintainEyeDirection` 0x102BFF20 takes the think delta),
+	// so it stops with the world; reading `UWorld::GetTimeSeconds` here let a held world keep
+	// blinking while the gaze fidget beside it — already on `FElysiumEntityWorld::NowSeconds` —
+	// stood still.
+	const float Now = Frame.NowSeconds;
+	// The cadence's delta, measured on that same clock. A held world reports the same reading twice
+	// and the countdown does not move; a map that just loaded has no previous reading and spends its
+	// first frame at zero rather than counting down from the epoch.
+	const float ClockDelta = bHasLastNow ? FMath::Max(0.f, Now - LastNowSeconds) : 0.f;
+	LastNowSeconds = Now;
+	bHasLastNow = true;
 	if (EyeBindings.IsEmpty())
 	{
+		// Nothing to drive, but the clock has been read: a body installed next frame starts its
+		// countdown from a one-frame delta rather than from the whole of the map's uptime.
+		++GazeFrame;
 		return;
 	}
-	const UWorld* World = Context ? Context->GetWorld() : nullptr;
-	const float Now = World ? World->GetTimeSeconds() : 0.f;
 
 	// The blink cadence is content, and it is per disposition: most rows sit at 2.5/6.0 s, `Anger`
 	// blinks slowly and `Error` — the row a character falls to when its own disposition does not
@@ -327,6 +342,11 @@ void FElysiumEyePass::TickEyes(const UObject* Context, float)
 			EyeBindings.RemoveAtSwap(i);
 			continue;
 		}
+		// Retail recomputes the aim inside the think, so a body no longer maintained has no aim at
+		// all on the next frame. This is that: a latch the gaze pass did not stamp this frame rests,
+		// and the eye falls to the eyeball record's authored resting aim. Done before the render
+		// test so an off-screen body comes back rested rather than pointing where it last was told.
+		const bool bMaintainedGaze = Binding.Gaze.Maintain(GazeFrame);
 		// A binding whose sections joined no record is a diagnostic entry: there is no MID to write
 		// and no aim to solve, and writing its blink would move lids the eye pass does not own.
 		if (Binding.Slots.IsEmpty())
@@ -353,27 +373,17 @@ void FElysiumEyePass::TickEyes(const UObject* Context, float)
 			}
 		}
 		FElysiumEyeInput EyeInput;
-		if (bBlinkNow)
-		{
-			Binding.BlinkEndsAt = Now + ElysiumEyes::BlinkSeconds;
-		}
-		else if (Debug.bHoldBlink)
-		{
-			// Held open, and the schedule is held with it: releasing the hold should not fire every
-			// blink the window was open for.
-			Binding.BlinkEndsAt = 0.f;
-			Binding.NextBlinkTime = Now + FMath::FRandRange(BlinkMin, BlinkMax);
-		}
-		else if (Binding.NextBlinkTime <= 0.f)
-		{
-			Binding.NextBlinkTime = Now + FMath::FRandRange(BlinkMin, BlinkMax);
-		}
-		else if (Now >= Binding.NextBlinkTime)
-		{
-			Binding.BlinkEndsAt = Now + ElysiumEyes::BlinkSeconds;
-			Binding.NextBlinkTime = Now + FMath::FRandRange(BlinkMin, BlinkMax);
-		}
-		EyeInput.Blink = ElysiumEyes::BlinkWeight(Binding.BlinkEndsAt - Now);
+		const EElysiumBlinkCommand Command = bBlinkNow
+			? EElysiumBlinkCommand::Force
+			: (Debug.bHoldBlink ? EElysiumBlinkCommand::Hold : EElysiumBlinkCommand::Cadence);
+		// Retail's `m_flPlayerDist`, which the NPC's own sense pass maintains. Measured here from the
+		// body to the player's eye point; with no player in the world the distance is infinite, which
+		// gates every cadence off exactly as an NPC the player has never approached is gated off.
+		const float PlayerDistance = Frame.bHavePlayer
+			? static_cast<float>(FVector::Dist(Comp->GetComponentLocation(), Frame.PlayerPosition))
+			: TNumericLimits<float>::Max();
+		EyeInput.Blink = ElysiumEyes::AdvanceBlink(Binding.Blink, Now, ClockDelta,
+			PlayerDistance, BlinkMin, BlinkMax, Command);
 
 		// Where this body is looking, in priority order: the green room's override, then the cvar,
 		// then the gaze the substrate pushed for this character, then nothing. The override outranks
@@ -410,9 +420,9 @@ void FElysiumEyePass::TickEyes(const UObject* Context, float)
 			GazeWorld = TrackWorld;
 			bHaveGaze = true;
 		}
-		else if (Debug.Gaze == FElysiumEyeDebug::EGaze::Off && Binding.bHasViewTarget)
+		else if (Debug.Gaze == FElysiumEyeDebug::EGaze::Off && bMaintainedGaze)
 		{
-			GazeWorld = Binding.ViewTarget;
+			GazeWorld = Binding.Gaze.Target;
 			bHaveGaze = true;
 		}
 		// The authored resting aim is what `bEyeMove` off selects — a real retail configuration, and
@@ -462,4 +472,8 @@ void FElysiumEyePass::TickEyes(const UObject* Context, float)
 			Inst->SetEyeInput(EyeInput);
 		}
 	}
+
+	// Close the frame. Everything `SetViewTarget` stamps from here on belongs to the NEXT eye pass,
+	// so a producer that stops calling it leaves its body unstamped and rested one frame later.
+	++GazeFrame;
 }

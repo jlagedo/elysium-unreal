@@ -548,21 +548,54 @@ struct FElysiumContentPaths
 	static FString MapDecals(const FString& Map) { return MapDir(Map) / (Map + TEXT(".decals")); }
 	static FString MapRopes(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ropes")); }
 
+	// The corpus tree is deployed all-lower-case (`uv run elysium import`), while VtMB keyvalues and
+	// `dialogname` fields carry the authoring case ("dlg/Main Characters/jack_tutorial.dlg",
+	// "sound/Character/dlg/.../x.vcd"). Windows resolves either, but the accessors below fold the
+	// relative part anyway so a Linux/case-sensitive host and every string compare see one spelling.
+	// `NormalizeSceneRel`/`NormalizeLipRel`/`NormalizeSourcePath` already fold their inputs; this is
+	// the belt for the callers that do not go through them.
+	static FString CorpusRel(const FString& Rel)
+	{
+		FString Folded = Rel;
+		Folded.ReplaceInline(TEXT("\\"), TEXT("/"));
+		return Folded.ToLower();
+	}
+
 	// Audio. WAVs are game-global (shared across maps), so they live in one mirror of VtMB's
 	// `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.
 	// "Environmental/Fire/Fire_Roaring.wav"), matching an ambient_generic `message` value.
-	static FString SoundDir() { return Root() / TEXT("sound"); }
-	static FString SoundFile(const FString& Rel) { return SoundDir() / Rel; }
+	// Migrated onto CorpusRoot() by DC (docs/project/seam_migration.md, 2026-09-06): 10,892 sound
+	// units with their same-stem `.lip` beside them.
+	static FString SoundDir() { return CorpusRoot() / TEXT("sound"); }
+	static FString SoundFile(const FString& Rel) { return SoundDir() / CorpusRel(Rel); }
+
+	// The offline validation record the audio exporter writes (per-file duration/format). It is not
+	// a VtMB artifact and no capsule carries it, so it stays on the legacy loose export; its absence
+	// is already a warning, not a failure, and every read falls back to direct mirror resolution.
+	static FString AudioCatalogFile() { return Root() / TEXT("audio/catalog.json"); }
+
+	// The one sound-family read still on the legacy loose export: `usable/soundgroups.json` is a
+	// pipeline-authored index, not a VtMB sound unit, so no capsule carries it and the sound import
+	// lane does not deploy it. Remains a legacy read until the mover-sound index gets its own unit.
+	static FString MoverSoundGroupsFile()
+	{
+		return Root() / TEXT("sound/usable/soundgroups.json");
+	}
 
 	// Choreographed scenes and their phoneme sidecars, mirrored verbatim from the install by
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_scenes.py. Both trees mirror VtMB's `sound/` layout with that prefix already
 	// stripped, so a `logic_choreographed_scene`'s SceneFile ("sound/Character/dlg/.../x.vcd") reads
 	// back as scenes/Character/dlg/.../x.vcd. Rel is that stripped path — run a raw keyvalue through
 	// ElysiumScene::NormalizeSceneRel first, which also folds separators and case.
-	static FString ScenesDir() { return Root() / TEXT("scenes"); }
-	static FString SceneFile(const FString& Rel) { return ScenesDir() / Rel; }
-	static FString LipDir() { return Root() / TEXT("lip"); }
-	static FString LipFile(const FString& Rel) { return LipDir() / Rel; }
+	// Migrated onto CorpusRoot() by DC: 5,444 `.vcd`, 7,105 `.lip`.
+	static FString ScenesDir() { return CorpusRoot() / TEXT("scenes"); }
+	static FString SceneFile(const FString& Rel) { return ScenesDir() / CorpusRel(Rel); }
+	// The sound import deploys each `.lip` BOTH as `sound/<rel>.lip` (beside its audio) and as
+	// `lip/<rel>.lip` (the legacy mirror's shape). `lip/` is the spelling this accessor keeps: it is
+	// the drop-in for the pre-DC layout and it keeps `LipDir()` enumerable on its own for the
+	// coverage tests, which a tree interleaved with 10,892 audio files is not.
+	static FString LipDir() { return CorpusRoot() / TEXT("lip"); }
+	static FString LipFile(const FString& Rel) { return LipDir() / CorpusRel(Rel); }
 
 	// Faceposer's flex-controller weight tables, mirrored flat from the install's own
 	// `expressions/` directory by the same exporter. The shipped `.vfe` is the compiled twin of the
@@ -577,8 +610,10 @@ struct FElysiumContentPaths
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_scripts.py. A
 	// worldspawn `levelscript` value (e.g. "tutorial") names the hub module, which lives at
 	// scripts/<module>/<module>.py — imported into the embedded CPython VM at map load.
+	// Scripts stay on the legacy loose export until their own migration slice (the ScriptFS mounts
+	// are a separate reader); `dlg/` moved to the corpus with DC.
 	static FString ScriptsDir() { return Root() / TEXT("scripts"); }
-	static FString DlgDir() { return Root() / TEXT("dlg"); }
+	static FString DlgDir() { return CorpusRoot() / TEXT("dlg"); }
 	static FString ScriptModuleFile(const FString& Module) { return ScriptsDir() / Module / (Module + TEXT(".py")); }
 	// Console config. VtMB's `cfg/*.cfg` alias + cvar tables (Valve console syntax),
 	// mirrored under the export root's cfg/ directory by
@@ -607,9 +642,12 @@ struct FElysiumContentPaths
 	// than in the project tree. Under Saved/ because it is per-user mutable state, not content.
 	static FString ScriptFsRoot() { return FPaths::ProjectSavedDir() / TEXT("Elysium/ScriptFS"); }
 	// An NPC's `dialogname` keyfield already carries the `dlg/` prefix ("dlg/Main Characters/
-	// jack_tutorial.dlg"), so it resolves straight under the content root. Case differs from the
-	// lowercased on-disk mirror, but the Windows target's file system is case-insensitive.
-	static FString DlgFromDialogname(const FString& DialogName) { return Root() / DialogName; }
+	// jack_tutorial.dlg"), so it resolves straight under the corpus root once its authoring case is
+	// folded to the deployed lower-case spelling.
+	static FString DlgFromDialogname(const FString& DialogName)
+	{
+		return CorpusRoot() / CorpusRel(DialogName);
+	}
 
 	// Signs. VtMB's sign+popup panels are game-global `SignData` KeyValues files,
 	// mirrored flat and lowercased under the export root's signs/ directory by

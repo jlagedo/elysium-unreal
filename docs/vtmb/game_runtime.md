@@ -1254,11 +1254,26 @@ Troika typo in `kiki.dlg`; tolerate it.)
 | **3** | **Link / branch**: `#` = this is an **NPC line**; a number **N** = this is a **PC choice** that jumps to NPC line N; **`0` = END**; empty = padding. |
 | **4** | **Condition (eval)** for PC choices — a `dlgexpr` gate; **or** an **NPC-speak action** for NPC lines. |
 | **5** | **Action (exec)** run when the line is chosen/spoken (`;`-separated). |
-| 6–11 | unused (always empty). |
-| **12** | **Malkavian-PC line** — the Malkavian variant of this row's text (NPC subtitle or PC choice), shown *instead of* col 1/2 when the player is Malkavian (empty = no variant). Not a "short label": across the corpus 9,576 rows carry both and col 12 differs from col 1 in **97%**, and the differences are Malkavian-speak ("Behave, I am your kind of monster" vs "Calm down, I'm not one of them"). |
+| **6** | **Brujah-clan text variant** — always empty in shipped data. |
+| **7** | **Gangrel-clan text variant** — always empty in shipped data. |
+| **8** | **Nosferatu-clan text variant** — always empty in shipped data. |
+| **9** | **Toreador-clan text variant** — always empty in shipped data. |
+| **10** | **Tremere-clan text variant** — always empty in shipped data. |
+| **11** | **Ventrue-clan text variant** — shipped only in `prince1.dlg` (8 rows). |
+| **12** | **Malkavian-clan text variant** — the Malkavian variant of this row's text (NPC subtitle or PC choice), shown *instead of* col 1/2 when the player is Malkavian (empty = no variant). Not a "short label": across the corpus 9,576 rows carry both and col 12 differs from col 1 in **97%**, and the differences are Malkavian-speak ("Behave, I am your kind of monster" vs "Calm down, I'm not one of them"). |
 
-Animation/camera/gesture are **not** in the `.dlg` (cols 6–11 empty) — they live in the
-`.vcd` (§cinematics).
+**[corrected 2026-09-06]** Cols 6–12 are **the seven per-clan text columns**, in `clan_offset`
+order Brujah, Gangrel, Nosferatu, Toreador, Tremere, Ventrue, Malkavian (`clan_offset`
+`0x100e65d0`, read by `read_line_data` `0x100e61d0`) — col 11 is Ventrue, col 12 Malkavian. They
+were previously recorded here as "unused (always empty)"; five of the seven (6–10) are indeed
+unfilled in every shipped row, but 11 and 12 are not — Ventrue (8 rows, `prince1.dlg`) and
+Malkavian (9,576 rows) are shipped clan text. `get_display_text` (`0x100e1ad0`) prefers a filled
+clan column over the gendered text for a PC of that clan.
+
+Animation/camera/gesture are **not** in the `.dlg` — they live in the `.vcd` (§cinematics).
+**[corrected 2026-09-06]** the parenthetical "(cols 6–11 empty)" that used to qualify this
+sentence is wrong per the corrected column table above; cols 6–11 are five of the seven per-clan
+text columns (unfilled except Ventrue's col 11), not a reserved/unused block.
 
 ### Runtime / branching
 
@@ -1311,9 +1326,14 @@ Jack's opening tutorial pins the observable automatic ordering **[data, live]**:
 81 is displayed and spoken, with no response marker on screen; hidden `(Auto-Link)` row 82 then
 links to NPC row 83 (`Uhh... why don't we, uh, step out back here.`). Therefore an implementation
 must retain row 81 as the active presented turn and may not resolve row 82 synchronously while
-entering it. The exact retail completion signal has not yet been isolated in the binary
-**[inferred]**; voice-turn completion is the reproduced observable boundary, with an explicit
-manual Continue fallback when no voice can start so the displayed line is never skipped.
+entering it. **[corrected 2026-09-06]** The retail completion signal is now recovered — this
+paragraph previously read "the exact retail completion signal has not yet been isolated in the
+binary **[inferred]**". `NPCNotifyDoneTalking` (`0x100e4780`) reads `flags[0]`, and Auto-End
+(flag `0x10`) becomes automatic only when `LookupSpeechFile` (`0x100e1880`) finds audio for the
+NPC line; when it does not, the engine forces one visible response with value `-1` instead of
+auto-advancing. Voice-turn completion is the reproduced observable boundary, and that forced
+value-`-1` response — the retail rule, not a port invention — is what covers the no-audio case so
+the displayed line is never skipped.
 
 The file order is authored control flow, not an incidental parser detail. In
 `jack_tutorial.dlg`, `G.Tut_Jack == 1 and G.Tut_Patch == 1` links to line 85 before the
@@ -1336,6 +1356,22 @@ The selected line and choices write authoritative `G` values before this output 
 transition: tutorial checkpoint snapshot, teleport/fade, popup, scripted sequence, trigger/door,
 or map travel. Its module-local `G_tut` dictionary is a reset checkpoint copied by `saveState()`;
 it is not the authoritative story-state store and it does not select a dialogue opener.
+
+**Female take selection (corrected 2026-09-07).** `FUN_100e15c0` returns `'F'` only when
+`FUN_100df030(row)` holds: `col2 != NULL && strcmpi(col1, col2) != 0`. Troika's editor copies col-1
+into col-2 on most rows (17,566 filled against 211 distinct female takes shipped; every one of
+Jack's tutorial rows is a copy), so "col-2 non-empty" is the wrong test — it asks for a
+`line<id>_col_f` take that was never recorded and silences the line. A copy differing only in case
+is still a copy. Ported in `ElysiumDlgText::ChosenTakeLetter`; 17 shipped `_col_f` files sit on
+copied rows retail never selects either.
+
+**`EndDialog` input (appended 2026-09-06).** A script-fired `EndDialog` at the NPC is retail's
+`CDialog::Release` (`0x100e5240`): the parked NPC event script is flushed, the live dialogue state
+is cleared, then `m_OnDialogEnd` fires. The port's `FElysiumNpc::InputEndDialog` therefore tears the
+world session down itself when this NPC owns it, before firing `OnDialogEnd`. The world's own
+teardown queues the same input with the closed session's serial as the param, so a close that
+arrives after the flushed col-5 re-opened the same NPC is recognised as stale: the old
+conversation is counted and its output fired, the live one stays.
 
 ### Port design: state-based opener selection
 
@@ -1431,6 +1467,127 @@ Captions = the `.vcd` `speak` token → `.dlg` line-id join. Deferred beats use
 `ScheduleTask(delay, "<pysource>")`. Format + event semantics: `docs/vtmb/choreographed_scenes.md`.
 
 Implementation status against these milestones: `docs/project/roadmap.md`.
+
+### Retail conversation chain (recovered 2026-09-06)
+
+Recovered from `vampire.dll` / `client.dll` for `docs/project/plans/dialogue.md` (D0). The eight
+arms below are either reproduced or named as a modernization in that plan; nothing is silently
+dropped.
+
+1. **Entry.** `CBasePlayer::PlayerUse` (`0x10167850`) resolves the use target, tests the
+   character's `WillTalk` latch (virtual `+0x49c`, set by `InputWillTalk` `0x103418f0`), clears
+   the NPC schedule and pushes AI schedule `0x6a`, then calls player vtable slot 414
+   (`FUN_10178280`, the real StartDialog). The `StartPlayerDialog*` inputs land on the same slot
+   through `CAI_BaseNPCTroika::StartTask` (`0x102a1910`) with schedules `0x6d`/`0x6e`. Common
+   guards: a player exists, the player has no live partner (`player+0xfe8`),
+   `IsBusyWithDiscipline(npc)` false, `m_bfAINPCFlags2 & 0x10000000` clear. `Unforced` adds the
+   player-side refusal predicate `0x10178170`: a set of combat timers on the player
+   (`+0x1d1c` no-dialogue-until stamp, `+0x1dd0`/`+0x1dd8`, an enemy count, `+0x1cf8` with
+   `FLT_MAX` as the clear sentinel, and `0x10175180` blocking while the entity at `+0x1db0` is in
+   state 3). `CPlayerEvents::InputClearDialogCombatTimers` (`0x10227250`) resets them.
+   `FUN_10178280` refuses when `m_bForceDialogStart` (`npc+0x6495`) is clear and the predicate
+   holds; otherwise `CDialog::Acquire`, `SetDialogPartner`, input lock, remember whether the
+   active weapon was drawable (`player+0x1e01`) and switch to `item_w_unarmed`, then build the
+   `camera_cinematic` from `default_camera`.
+2. **Dependency.** `CDialogDependency::Parse` (`0x100e8fc0`) turns col-4 into a struct: trait
+   class (`+0x04`: 0/1 attribute-or-ability, 2 discipline, 4 feat), trait id (`+0x08`), inversion
+   flag (`+0x0c`, a negative threshold selects `<` instead of `>=`), threshold (`+0x14`), sex gate
+   (`+0x224`: 0 requires female, 1 requires male), a Python part, `m_CompoundType` (1 one only,
+   2 AND, 3 OR) and `m_CompoundPrecedence`. `TestSimple` (`0x100e9760`): classes 0/1 compare the
+   stat, class 2 requires **both** the discipline rating and the blood pool (stat `0xc`) to meet
+   the threshold and refuses discipline id 6 unless `clan_offset == 5` (Ventrue), class 4 is
+   `FeatValue >= threshold` except feat `0x16` which routes to `FrenzyComparison`. `TestPython`
+   (`0x100e9ff0`) is true iff the eval result is a non-zero `PyInt`; error is false. `ParseDep`
+   (`0x100e9290`) writes the wire flags `0x01` discipline, `0x02` feat, `0x04` python present,
+   `0x08` event script present, and records the blood cost (threshold for disciplines, 0
+   otherwise).
+3. **Turn.** `get_pc_responses` (`0x100e82d0`) walks rows after the current NPC line to the next
+   `#` or sentinel, admits ungated rows and rows passing the dependency, and **stops at 4**.
+   `process_pc_line` (`0x100e8520`) returns 1 keep, 0 drop, -1 drop and set auto-terminate. An
+   empty list without auto-terminate replaces the NPC text with `"I do not have a valid reply."`
+   and one dummy response. Auto-Link/Auto-End are flags `0x20`/`0x10`, one per turn; Auto-End
+   becomes automatic only when `LookupSpeechFile` finds audio for the NPC line, otherwise the
+   engine forces one visible response with value -1. Choices are hidden while `IsTalking()`
+   (`0x102c0aa0`: live scene or `m_flTalkTime > curtime`) through `ShowPlayerChoices`.
+4. **Ordering.** `process_npc_line` (`0x100e8100`) runs the NPC row's col-4 immediately and
+   stashes col-5 at `+0x30ea` for `CallPendingNPCEventScript` (`0x100e5c70`), flushed when the
+   NPC finishes talking, on `NPCNotifyDoneTalking` (`0x100e4780`), or on `Release`. A pick
+   (`CDialog::Pick` `0x100e4bd0`, `dialogpick` ConCommand) is refused while the NPC is still
+   speaking, maps the index to its link, echoes subtype 5 for history, **charges the dependency**
+   (`pc_charge_dependency` `0x100e8b90`: subtract blood, `AddFakedDisciplineEffect`), runs the
+   choice's col-5, then `fill_packet`/`message_send` or `Release` on link 0 / auto-terminate.
+   Pick `-1` releases, `-2` is the hurry verb (`0x102c0bb0`).
+5. **Presentation.** `CHudDialog` (client.dll, `DialogControl` `0x100553f0`) paints
+   `"%d. %s"` bottom-up; `CDialogDependency::ToStr` (`0x100ea5e0`) prefixes discipline choices
+   with N dot glyphs (`0x7f`); `GetFontForFlagsDependency` (`0x10053f10`) picks font and colour
+   by feat id 6/7/8 and discipline id 6; flags exactly `0x20` draw a pulsing
+   `"(press 1 to continue)"`; `Dlg_Malk` font for a Malkavian PC; six bracket pairs stripped
+   (`0x100e8060`). `CClientModeDialog` (`0x10042a80`) swallows movement key-downs, so held keys
+   are ignored, not cancelled.
+6. **Voice.** `generate_speech_filename` (`0x100e1680`) builds
+   `sound/character/<dlgpath>/line<id>_col_<C>.<ext>`; `0x100e15c0` picks `C` as the **text
+   column used**: the clan letter when that clan column is non-empty (only `m` Ventrue and `n`
+   Malkavian are pinned by shipped audio), else `f` for a female PC with a col-2 variant, else
+   `e`. `LookupSpeechFile` (`0x100e1880`) probes three extensions in order, mp3 first. Text with
+   no letters resolves to `sound/character/dlg/ellipses.<ext>` (`0x100df0b0`). A `.vcd` hit plays
+   through a `scripted_scene` (handle `npc+0x6554`, carries `.lip` and gestures); otherwise
+   `CHAN_STREAM` at `m_flSpeechVol`. PC lines are never voiced (`message_send` `0x100e58e0`).
+7. **Close.** `CDialog::Release` (`0x100e5240`) flushes the pending scripts, fires
+   `OnDialogEnd` (`npc+0x5f5c`), clears the partner, destroys the camera, unlocks input and
+   restores the holstered weapon (`FUN_10178400`).
+8. **Data.** Rows are 13 dwords, stride `0x34`: id, male, female, link, dependency, event
+   script, then **seven clan text columns** in `clan_offset` order Brujah, Gangrel, Nosferatu,
+   Toreador, Tremere, Ventrue, Malkavian (`0x100e65d0`, `read_line_data` `0x100e61d0`). Shipped
+   data fills Ventrue (8 rows, `prince1.dlg`) and Malkavian (9,576 rows). A row is dropped at
+   parse when the id is negative or the male text is shorter than 2 characters.
+
+### Dependency parse — measured against the shipped corpus (2026-09-06, D1)
+
+Reproducing arm 2 pinned three things the summary above leaves implicit **[corpus, data]**:
+
+- **A half is a check only if its first whitespace token RESOLVES.** `FUN_102047d0` lowercases the
+  half, strips an `M_`/`F_` prefix, replaces the first `-` with a space (raising the inversion
+  flag, so the threshold parses positive), then `strtok`s on whitespace: token 0 goes to
+  `CVStatRef` (`0x10204570` — four `stats.txt` containers in declaration order, then `feats.txt`),
+  token 1 is `atoi`'d as the threshold. **There is no relop in this grammar**, and every one of the
+  1,583 shipped skill fronts is the implicit `>=`. Because feats are searched last, `Persuasion`
+  and `Seduction` resolve as ABILITY/FEAT by that order and not by which table a reader expects.
+- **Corpus shape.** 147 files, 7,216 gated PC rows, 1,583 skill fronts over 15 trait names, of
+  which **459 are inverted** (`Humanity -8`, `Persuasion -7` — every authored low-humanity and
+  failure route) and **295 are disciplines** carrying a blood price. Zero skill-shaped fronts fail
+  to resolve.
+- **`+0x1c` is one Python buffer.** `ParseDep` `Q_trimspace`s each Python half into the same
+  256-byte field, so when BOTH halves are Python the second overwrites the first and the compound
+  still tests a simple dependency that was never claimed — `TestSimple`'s
+  `Unhandled dialog dependency` arm, i.e. false. See `retail-defects.md` §6.
+
+### Session lifetime details recovered with the 2026-09-06 defect pass
+
+Four points arms 1, 4 and 7 above leave implicit, pinned while closing a code-review pass on the
+port **[decompilation; one inference, marked]**:
+
+- **`WillTalk` ships SET.** `vampire.dll` carries no constructor write and no keyfield writer for
+  the latch at virtual `+0x49c`; `InputWillTalk` (`0x103418f0`) is its only writer.
+  `sp_tutorial_1` fires `Jack,WillTalk 0` at map load (see §"tutorial entry" above) and re-enables
+  him from `trig_off_porch`'s `OnEndTouch` with `WillTalk 1`. **INFERRED**, not read off an
+  initializer: a load-time disable is meaningless against a false default, and with one the 79
+  authored calls corpus-wide would be the only thing that could ever make a character talkable,
+  leaving `+use` dead on every NPC no script had cued. The port defaults the latch to true on
+  `FElysiumNpc` and keeps `WillTalk 0` as the disabler. The real initializer remains unrecovered.
+- **`Acquire` precedes the holster.** In `FUN_10178280` the order is `CDialog::Acquire`,
+  `SetDialogPartner`, input lock, *then* remember `player+0x1e01` and switch to `item_w_unarmed`.
+  `Acquire` is what loads and validates the `.dlg`, so an open that fails there never reaches the
+  weapon switch. The port matches: the holster is taken only after `OpenConversation` succeeds,
+  which is the same set of failures (no `dialogname`, a `.dlg` that will not load).
+- **`Release` flushes on EVERY teardown.** `CDialog::Release` (`0x100e5240`) runs the pending NPC
+  event script before it clears the live state, so a conversation displaced mid-line — a second
+  acquire, a kill, a level teardown — still runs the col-5 `process_npc_line` parked at `+0x30ea`.
+  It is not a property of the explicit close path.
+- **`pc_charge_dependency` has no inversion test.** `0x100e8b90` branches on `cost != 0` alone, so
+  an INVERTED discipline row (an authored failure route) is still charged its threshold in blood
+  when picked, even though `TestSimple`'s inverted arm never read the pool. `ParseDep` records
+  `BloodCost` for it for exactly that reason. Only the wire flag that drives the client's dot
+  glyphs is suppressed for an inverted dependency.
 
 ## 7. Open questions
 

@@ -333,7 +333,7 @@ public:
 	// Rebuild every bound eye's basis against this frame's final pose and publish it to the
 	// material. Driven from AElysiumMapActor::PostMoveTick for the reason the camera director is:
 	// it reads the frame's settled bone transforms, so the iris never lags the head by a frame.
-	void TickEyes(float DeltaSeconds);
+	void TickEyes(const FElysiumEyeFrame& Frame);
 
 	// The eye pass's debug seam.
 	//

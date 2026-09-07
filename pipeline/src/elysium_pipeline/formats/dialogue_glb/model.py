@@ -16,7 +16,9 @@ from elysium_pipeline.formats.unit_contract import extension_name, normalize_key
 
 KIND = "dialogue"
 DIALOGUE_EXTENSION = extension_name(KIND)
-SCHEMA_VERSION = "1.0.0"
+#: 1.1.0 added the source capsule: the `.dlg` member's exact bytes travel in the unit's BIN
+#: chunk, hash-checked against `sourceResolution` (`seam_map_unit_contract.md`, "Source capsule").
+SCHEMA_VERSION = "1.1.0"
 
 #: The install subdirectory every dialogue unit is cut from.
 DLG_ROOT = "dlg/"
@@ -28,7 +30,9 @@ FIELD_COUNT = 13
 #: Columns the table never assigns; any non-empty content there is `typedUnidentified`.
 RESERVED_COLUMNS = (6, 7, 8, 9, 10, 11)
 
-#: The four language takes the audio path convention resolves.
+#: The four text-column takes the audio path convention resolves: e male, f female, m Ventrue,
+#: n Malkavian (`docs/vtmb/game_runtime.md` §5, retail chain arm 6, `0x100e15c0`) -- not
+#: languages; localisation swaps the whole `.dlg` file instead.
 AUDIO_LANGUAGES = ("e", "f", "m", "n")
 
 ROLE_PADDING = "padding"

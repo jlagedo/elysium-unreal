@@ -271,6 +271,34 @@ For an NPC `.dlg` turn, the service derives
 turn cancels the prior line and closing/replacing the conversation cancels its owner. PC choices
 do not start a voice.
 
+**The take letter and the corpus root (D4/DC, 2026-09-06).** `_col_<C>` is not a language and not
+the speaker's sex: it names the **text column the player is actually reading**, which is what
+`generate_speech_filename` (`0x100e1680`) writes and `0x100e15c0` chooses. `FElysiumLineService::`
+`TakeLetterFor` reproduces that chooser through `ElysiumDlgText::ChosenTakeLetter` — the clan
+letter when the player's clan column is filled (`m` Ventrue, `n` Malkavian; the other five columns
+are voiced by nothing shipped, so they probe nothing and log once), else `f` when a female PC has a
+col-2 variant, else `e`. `DialogueLineSource(DlgPath, LineId, TakeLetter)` builds the one stem, and
+`BeginDialogueTurn` feeds that same stem to all three consumers — the voice, the line's instanced
+`.vcd` (`FElysiumDialogueLineScene::Begin`) and its `.lip` (`BeginDialogueLipsync`) — so a female
+take moves the female mouth and performs the female body clip rather than desynchronising against a
+male recording. A row whose raw col-1 carries no letter byte at all (no A-Z, a-z or >= 0xC0;
+`FUN_100df0b0`) is tested *before* the chooser and resolves the one shared `character/dlg/ellipses`
+take, which has its own `.lip` and `.vcd`. The shipped census, asserted by
+`Elysium.Content.DialogueTakes`, is e=4975, f=229, n=50, m=8, and every non-default take is
+reachable by some (sex, clan) pair. Extension probing stays where it was: the service submits a
+stem with no extension and `UElysiumAudioSubsystem::ResolveSourcePath` runs the mp3-then-wav probe
+(`LookupSpeechFile` `0x100e1880`); retail's third extension string is unread in the corpus and is
+carried as a TODO rather than guessed. `m_flSpeechVol` is a seam answering 1.0 —
+`SpeechVolumeFor()` — because no exported map, npc template or vdata table authors a
+`speechvol`-like key and no reader of the field is recovered.
+
+All four dialogue/body-sound trees resolve under `FElysiumContentPaths::CorpusRoot()` rather than
+the legacy loose export: `dlg/**`, `scenes/**`, `lip/**` and `sound/**` (`docs/project/`
+`seam_migration.md`, DC). The corpus is lower-case, so the flipped accessors fold the relative
+part; `LipDir()` is `CorpusRoot()/lip`, though the import also drops each `.lip` beside its audio.
+Three sound-family reads stay on the legacy root because no published unit carries them:
+`audio/catalog.json`, `sound/Schemes/*.txt` and `sound/usable/soundgroups.json`.
+
 The audio catalog begins loading with the GameInstance subsystem. Map activation waits for catalog
 readiness and required start-enabled point/scheme prefetch work; only then does the initial
 entity/audio pass run. A retired epoch cancels queued decode before it can realize components.

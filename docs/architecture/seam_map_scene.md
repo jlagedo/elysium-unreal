@@ -49,15 +49,22 @@ is the only version shipped, and a unit whose file has no version line publishes
 The unit is **scene-less**. A choreographed scene is an event list keyed by actor name; it has
 no node, no skeleton and no sampled channel, and a glTF `animations` entry needs a node target.
 Stating events as animation samplers would invent targets the file does not have. The timeline
-lives entirely in the extension.
+lives entirely in the extension, and the unit declares no accessor.
+
+The BIN chunk it does carry is the **source capsule** alone (`seam_map_unit_contract.md`, "Source
+capsule"): buffer 0 holds the `.vcd` file's own bytes, one `bufferView` addresses them, and
+`sourceResolution` declares `"capsule": {"encoding": "raw"}` with the member row naming that
+view. An empty `.vcd` capsules to nothing and that unit carries no BIN chunk at all.
 
 ```json
 {
   "extensionsUsed": ["ELYSIUM_vtmb_scene"],
   "extensionsRequired": ["ELYSIUM_vtmb_scene"],
+  "buffers": [{"byteLength": 1284}],
+  "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 1284}],
   "extensions": {
     "ELYSIUM_vtmb_scene": {
-      "schemaVersion": "1.0.0",
+      "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
       "version": 1,
@@ -186,3 +193,26 @@ A complete scene unit accounts for every byte of the file and has zero `unresolv
 compares every actor, channel, event, time, payload string, ramp row and rename with the
 published tree, re-derives every per-type decoded field from the raw strings, and checks that
 every dependency was produced by an event the unit publishes.
+
+## Import (2026-09-06)
+
+`uv run elysium import dialogue` deploys the `.vcd` corpus together with the `.dlg` corpus, out of
+the published units and nothing else (`pipeline/src/elysium_pipeline/importers/dialogue.py`, on
+the shared `importers/corpus_deploy.py`). Each unit's source capsule is lifted, weighed against
+its published `byteLength`/`sha256`, and written to
+
+```text
+Content/ElysiumCorpus/scenes/<path>.vcd
+```
+
+A scene's install path is `sound/<rel>.vcd` and the runtime addresses it by `<rel>` with that
+prefix already stripped and folded (`ElysiumScene::NormalizeSceneRel`), so the lane strips it too
+— exactly the legacy `scenes/` mirror's shape. On 2026-09-06 the deploy produced 5,444 `.vcd`
+files against 5,444 in `$ELYSIUM_EXPORT_ROOT/scenes`, with zero path differences and zero byte
+differences.
+
+The lane's properties — recipe stamps, per-unit failure isolation, byte-equality verification,
+pruning, `import_report.json` — are listed once in `seam_map_dialogue.md` → "Import".
+
+Reader flip: `ScenesDir`/`SceneFile` move from `FElysiumContentPaths::Root()` to `CorpusRoot()` in
+the C++ half of this slice; the deployed tree is already in place for it.

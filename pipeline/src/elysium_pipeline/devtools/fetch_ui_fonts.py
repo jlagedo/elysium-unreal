@@ -9,6 +9,11 @@ Spectral and Spectral SC ship real static weights upstream and are copied verbat
 Inter ships only a variable file, so the weights we use are instanced out of it with
 `fontTools.varLib.instancer` -- deterministic, and re-runnable from this script.
 
+The computer-terminal console (`docs/architecture/computer-terminal-architecture.md` 6.4) uses
+**Terminus (TTF)**, the Linux console/xterm face of the era, fetched as a pinned release zip from
+its maintainer. It is OFL 1.1 **with** Reserved Font Names ("Terminus Font", "Terminus (TTF)"),
+so it is shipped unmodified under its own name and never instanced or re-cut.
+
 Run once when a face is added or replaced; `uv run elysium export bundle policy` does **not** touch these
 (they are static files, not editor-built `.uasset`s). Requires network.
 
@@ -19,6 +24,7 @@ import io
 import os
 import sys
 import urllib.request
+import zipfile
 
 GF = "https://raw.githubusercontent.com/google/fonts/main/ofl"
 DEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "Content", "Fonts")
@@ -44,6 +50,15 @@ LICENCES = [
     ("spectral",   "OFL-Spectral.txt"),
     ("spectralsc", "OFL-SpectralSC.txt"),
     ("inter",      "OFL-Inter.txt"),
+]
+
+# Copied verbatim out of a pinned release zip: (url, [(member name, output name), ...]).
+TERMINUS_VERSION = "4.49.3"
+ZIPPED = [
+    (f"https://files.ax86.net/terminus-ttf/files/{TERMINUS_VERSION}/terminus-ttf-{TERMINUS_VERSION}.zip",
+     [(f"terminus-ttf-{TERMINUS_VERSION}/TerminusTTF-{TERMINUS_VERSION}.ttf",      "TerminusTTF-Regular.ttf"),
+      (f"terminus-ttf-{TERMINUS_VERSION}/TerminusTTF-Bold-{TERMINUS_VERSION}.ttf", "TerminusTTF-Bold.ttf"),
+      (f"terminus-ttf-{TERMINUS_VERSION}/COPYING",                                  "OFL-TerminusTTF.txt")]),
 ]
 
 
@@ -99,6 +114,16 @@ def main():
         data = fetch(f"{GF}/{fam}/OFL.txt")
         open(os.path.join(dest, out), "wb").write(data)
         print(f"  licence {out}")
+
+    for url, members in ZIPPED:
+        wanted = [(member, out) for member, out in members if not skip(out)]
+        if not wanted:
+            continue
+        archive = zipfile.ZipFile(io.BytesIO(fetch(url)))
+        for member, out in wanted:
+            data = archive.read(member)
+            open(os.path.join(dest, out), "wb").write(data)
+            print(f"  unzipped {out}  {len(data) // 1024} KB")
 
     print(f"  -> {dest}")
 

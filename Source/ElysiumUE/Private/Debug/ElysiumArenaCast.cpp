@@ -309,6 +309,7 @@ bool SeedPlayerCharacter(UElysiumGameStateSubsystem* GameState, int32 Clan, bool
 	Rules.TraitEffects = &Book->TraitEffects();
 	Rules.Feats        = &Book->Feats();
 	Rules.Strings      = &Book->Strings();
+	Rules.ExcludedEquip = &Book->ExcludedEquip();
 
 	FElysiumChargenState Chargen;
 	Chargen.Currency = EElysiumChargenCurrency::Pools;

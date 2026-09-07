@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumAppState.h"
 #include "ElysiumCameraSolve.h"
+#include "ElysiumDlg.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumInteraction.h"
 #include "ElysiumInventorySections.h"
@@ -210,19 +211,50 @@ namespace ElysiumFeedBar
 // The box is built from the strings here, not from the conversation: `Conversation` is identity
 // only (what the reconcile compares against), and `Revision` is what changes when the turn does.
 // Speaker resolution needs the entity world, which is precisely why it happens in the publisher.
+// One response row, already resolved. The gate was evaluated once in the substrate
+// (`FElysiumDlgDependency::Explain`) and once more never: the UI reads `bEnabled` and the
+// pre-formatted `Label` and evaluates nothing (M-REQ / M-DISABLED).
+struct FElysiumDialogueChoiceView
+{
+	FString Text;               // the sentence (DisplayText, stage directions stripped)
+	FString Label;              // "[ PERSUASION 4/7 ]"; empty when the row has no labellable skill front
+	bool bEnabled = true;       // false = M-DISABLED: shown dimmed, unpickable, non-focusable
+	EElysiumDlgTraitClass Kind = EElysiumDlgTraitClass::Unknown;
+	int32 Have = 0;             // the player's rating for the labelled trait
+	int32 Required = 0;         // the authored threshold
+	int32 BloodCost = 0;        // a discipline's blood price, 0 otherwise
+	int32 LineId = INDEX_NONE;  // the `.dlg` row id — the durable action identity across a refresh
+};
+
 struct FElysiumDialogueView
 {
 	// Valid until the next publish and never stored — the map epoch it points into ends at travel.
+	// Diagnostic/content identity only: it is NOT the reconcile key, because a closed conversation's
+	// allocation can be handed straight back to the one that replaces it in the same frame.
 	const FElysiumDlgConversation* Conversation = nullptr;
 	uint32 Revision = 0;
+	// `FElysiumEntityWorld::GetOpenDialogSerial()` — monotonic per OpenDialog, 0 when nothing is
+	// open. This is the conversation's identity for reconcile: unlike the address it is never
+	// reused, and unlike `Revision` (which restarts at 1 for every conversation) it never repeats.
+	uint32 DialogSerial = 0;
 	FElysiumEntityHandle Owner;
 
 	FString Speaker;                 // the owning NPC's targetname
 	FString Line;                    // the NPC subtitle for this turn (DisplayText, directions stripped)
-	TArray<FString> Choices;         // the visible PC choices, in author order
+	// The visible PC rows in AUTHOR order, enabled and disabled alike, numbered 1..N by position so
+	// the numbering is stable whether or not the player has the skill (M-DISABLED).
+	TArray<FElysiumDialogueChoiceView> Choices;
 	TArray<int32> ChoiceIds;          // stable .dlg row ids, parallel to Choices
 	bool bTerminal = false;          // authored terminal, or automatic voice-failure Continue fallback
 	bool bAwaitingAutomatic = false; // spoken line is up; the synthetic control row remains hidden
+	// M-REVEAL / M-SKIP. The band is published with the line rather than withheld behind
+	// `ShowPlayerChoices`, so the UI needs to know whether the voice is still running: it draws the
+	// skip hint and routes Space to the hurry verb instead of to Continue.
+	bool bNpcSpeaking = false;
+	bool bCanSkip = false;
+	// The band gated every row out with no automatic continuation: the subtitle has already been
+	// replaced with `NoValidReplyText()` and the turn carries one Continue (retail `0x100e82d0`).
+	bool bNoValidReply = false;
 
 	bool IsOpen() const { return Conversation != nullptr; }
 };
@@ -550,18 +582,29 @@ namespace ElysiumView
 		Teardown,   // the conversation is gone (ended, or withheld behind a screen)
 	};
 
-	// `ShownConv`/`ShownRev` are what the box currently has up — a null ShownConv means no box is on
-	// screen. The holder keeps the pointer for identity only and never dereferences it, which is what
-	// lets it outlive a publish; the comparison is identity + revision, never content, because two
-	// turns can read the same and are still different turns.
-	inline EDialogueAction ReconcileDialogue(const FElysiumDlgConversation* ShownConv, uint32 ShownRev,
-		const FElysiumDialogueView& Next)
+	// `ShownSerial`/`ShownRev` are what the box currently has up — a zero ShownSerial means no box
+	// is on screen. The comparison is identity + revision, never content, because two turns can read
+	// the same and are still different turns.
+	//
+	// The identity is the world's open-dialog serial, NOT the conversation pointer. A one-turn
+	// conversation that closes and opens another in the same frame can land its successor on the
+	// freed allocation, and every conversation's revision restarts at 1 — so (address, revision)
+	// could repeat and the box would keep the dead band up with no rebuild. The serial is
+	// monotonic per `OpenDialog` and cannot.
+	//
+	// `bShownSpeaking` extends the key rather than the revision: the voice ending is not a new turn
+	// (nothing in the band changes) but it does change what the box draws — the "Space: skip" hint
+	// comes down and Space becomes Continue. It flips at most once per turn, so this costs one extra
+	// in-place rebuild per line and never a per-frame one.
+	inline EDialogueAction ReconcileDialogue(uint32 ShownSerial, uint32 ShownRev,
+		const FElysiumDialogueView& Next, bool bShownSpeaking = false)
 	{
 		if (!Next.IsOpen())
 		{
-			return ShownConv ? EDialogueAction::Teardown : EDialogueAction::None;
+			return ShownSerial != 0 ? EDialogueAction::Teardown : EDialogueAction::None;
 		}
-		if (ShownConv == Next.Conversation && ShownRev == Next.Revision)
+		if (ShownSerial == Next.DialogSerial && ShownRev == Next.Revision
+			&& bShownSpeaking == Next.bNpcSpeaking)
 		{
 			return EDialogueAction::None;
 		}

@@ -76,10 +76,13 @@ runtime (the set `Content/ElysiumCorpus` must carry until that slice migrates); 
 | `npc/*.eskm`, `banks/`, `placed_models/`, `npc_manifest.json`, `tex/`, `garment/` | UE_mdl_skeletal, npc_export, UE_mdl_cloth | bake |
 | `npc/npc_index.json`, `blends/`, `eyes/` | npc_export | **both** |
 | `npc/clips/`, `facial/`, `procedural/` | npc_export | runtime |
-| `sound/**`, `audio/catalog.json` | UE_extract_sounds | runtime |
+| `sound/**` | UE_extract_sounds | **migrated** (DC, 2026-09-06: `SoundDir()`/`SoundFile()` on `CorpusRoot()`) |
+| `audio/catalog.json`, `sound/Schemes/*`, `sound/usable/soundgroups.json` | UE_extract_sounds | runtime (no unit publishes them) |
 | `audio/maps/*.json`, `schemes.json`, `entity_events.json` | UE_extract_sounds | none |
-| `scenes/**`, `lip/**`, `expressions/*` | UE_extract_scenes | runtime |
-| `scripts/**`, `dlg/**` | UE_extract_scripts | runtime |
+| `scenes/**`, `lip/**` | UE_extract_scenes | **migrated** (DC, 2026-09-06: `ScenesDir()`/`SceneFile()`/`LipDir()`/`LipFile()` on `CorpusRoot()`) |
+| `expressions/*` | UE_extract_scenes | runtime |
+| `dlg/**` | UE_extract_scripts | **migrated** (DC, 2026-09-06: `DlgDir()`/`DlgFromDialogname()` on `CorpusRoot()`) |
+| `scripts/**` | UE_extract_scripts | runtime |
 | `cfg/*` | UE_extract_cfg | runtime |
 | `vdata/**` | UE_extract_vdata | runtime (also npc_export input) |
 | `signs/*.txt` | UE_extract_signs | runtime |
@@ -3774,3 +3777,82 @@ gate this milestone. Normal build/import/save/cook and preservation of old-cover
 do. The generated M_Sky default is independent of VtMB imports, while each baked sky instance
 binds its canonical texture-lane cube. Before deleting legacy sky assets or PNG files, import
 the canonical replacements for the old-covered maps and rebind/rebake their references.
+
+## Dialogue corpus slice — the export/import half (2026-09-06)
+
+Appended, not a rewrite. The plan is `docs/project/plans/dialogue.md` → DC; this entry records
+what the offline half landed. The C++ reader flip is a separate change and the legacy-ledger rows
+above (`sound/**`, `scenes/**`, `lip/**`, `dlg/**` = *runtime*) are **still accurate until it
+lands** — the deploy exists, the readers have not moved.
+
+**Three more seams adopt the source capsule (schema 1.1.0).** `vtmb:dialogue:`, `vtmb:scene:` and
+`vtmb:sound:` now carry the exact winning source bytes of every member in the BIN chunk,
+hash-checked against `sourceResolution`, exactly as `vtmb:vdata:` does. The decode is untouched:
+the byte ledger still reads 100 % on every unit and every semantic key is what it was. Each seam's
+validator now *requires* the declaration rather than merely honouring it. Update the rollout table
+in `seam_map_unit_contract.md` → "Source capsule" when the next seam adopts.
+
+- Sound was the one that mattered. A sound unit's BIN payload is a **decode** — interleaved PCM
+  for a `.wav`, the bare frame stream for an `.mp3` — so a `.wav` unit never held its RIFF file and
+  a tagged `.mp3` unit never held its member either. The `.lip` companion was fully decoded and
+  fully ledgered but its bytes were nowhere in the unit. The plan's assumption that "the sound unit
+  already carries its bytes and its `.lip` member" was wrong; both members are now capsuled beside
+  the payload, which keeps `bufferView` 0 so nothing renumbered.
+- Re-exported: 147 dialogue units, 5,444 scene units, 10,892 sound units.
+
+**Two import lanes, on one shared runner.** `importers/corpus_deploy.py` owns recipe stamps
+(`Content/ElysiumCorpus/_import/<lane>/recipes.json`), per-unit failure isolation, byte-equality
+verification of every deployed file against the capsule it came from, orphan pruning, and
+`import_report.json`. `uv run elysium import dialogue` deploys `dlg/**` and `scenes/**`; `uv run
+elysium import sound` deploys `sound/**` plus each `.lip` twice — beside its audio and under
+`lip/**` — so the C++ flip can put `LipDir()` on either root without a re-import (the reasoning is
+in `seam_map_sound.md` → "Import").
+
+**Parity with the legacy mirror, measured 2026-09-06.** `dlg`: 147 vs 147 files, 0 path
+differences, 0 byte differences. `scenes`: 5,444 vs 5,444, 0 and 0. `sound`: 5,550 `.wav` and
+5,342 `.mp3` against the same counts, 0 path differences and **1** byte difference —
+`interface/infobar/need_more_blood.wav`, where the legacy tree (written 2026-08-29) is stale
+against an Unofficial_Patch file that changed 2026-09-04; the corpus is the install. `.lip`:
+7,105 deployed against 7,136 legacy, 0 byte differences, **31 not deployed** because their stem
+ships no audio and a `.lip` reaches a unit only as an audio member's companion — a named gap that
+needs an orphan-`.lip` unit, not an import change. The full table and both findings are in
+`seam_map_sound.md` → "Import". Corpus paths are lower-cased; the legacy `sound/` mirror kept the
+install's mixed case, which is the one deliberate divergence in the layout.
+
+**Not in this slice.** `scripts/**` stays on the legacy tree (its ScriptFS mounts are a separate
+reader), and every runtime reader named above still resolves through `Root()`.
+
+## 2026-09-06 — DC, the C++ half: the dialogue/scene/lip/sound readers move to `CorpusRoot()`
+
+The reader flip the entry above said was still outstanding has landed. In
+`Private/ElysiumContentPaths.h`, `DlgFromDialogname`, `DlgDir`, `ScenesDir`, `SceneFile`, `LipDir`,
+`LipFile`, `SoundDir` and `SoundFile` now resolve under `CorpusRoot()`
+(`Content/ElysiumCorpus`, `-ElysiumCorpusRoot=` to redirect). The four ledger rows above are
+**migrated**; nothing reads `$ELYSIUM_EXPORT_ROOT/{dlg,scenes,lip,sound}` any more.
+
+- **Case.** The corpus is deployed lower-case and VtMB keyvalues are not, so a new
+  `FElysiumContentPaths::CorpusRel()` folds separators and case on the relative part of every
+  flipped accessor. The three existing normalisers (`ElysiumScene::NormalizeSceneRel`,
+  `ElysiumLip::NormalizeLipRel`, `UElysiumAudioSubsystem::NormalizeSourcePath`) already lower-cased
+  their inputs; `dlg` and the direct `SoundFile()` callers did not, and now do. The fold is what
+  makes the tree resolvable off a case-sensitive host, not just on Windows.
+- **`.lip` spelling.** The import deploys each `.lip` twice. `LipDir()` keeps `CorpusRoot()/lip`:
+  it is the drop-in for the pre-DC layout and it stays enumerable on its own, which a directory
+  interleaved with 10,892 audio files is not. `sound/<rel>.lip` remains valid and is asserted by
+  `Elysium.Content.CorpusPathsFlip`, so a later switch costs one line.
+- **Legacy reads that remain**, all of them things no published unit carries:
+  `ScriptsDir()`/`ScriptModuleFile()` (their own slice), `audio/catalog.json` (an offline
+  validation record; absence is already a warning and every read falls back to direct mirror
+  resolution — now behind `AudioCatalogFile()`), `sound/Schemes/*.txt` (read as
+  `Root() / "sound/Schemes/x.txt"` by `FElysiumSoundSchemeManager::LoadScheme`; the corpus has no
+  `schemes/` subtree), `sound/usable/soundgroups.json` (a pipeline-authored mover index — now
+  behind `MoverSoundGroupsFile()`), plus `CfgDir`, `SignsDir`, `UiDir`, `MapDir`, `npc/`,
+  `shared/`, `items/`, `expressions/` and the `IncompleteMarker`/`IsConfigured` completeness
+  signals, which all stay on `Root()` and are unchanged by this slice.
+- **Proof.** `Elysium.Content.CorpusPathsFlip` resolves one real file through each flipped accessor
+  (`dlg/Main Characters/jack_tutorial.dlg` in authored case, its line-1001 `.vcd`, `.lip` and
+  `.mp3`, the `.lip` deployed beside the audio, `Surfaces/Concrete/stepleft1.wav`, the shared
+  `character/dlg/ellipses.mp3`) and asserts each lands under `CorpusRoot()` while `ScriptsDir()`
+  does not. `Elysium.Content` (111 cases), `Elysium.Substrate` (518) and `Elysium.Session` ran
+  green apart from four rig/anim-bank cases and `Elysium.Substrate.Weapons.AnimEvent`, none of
+  which read any flipped path.

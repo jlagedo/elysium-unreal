@@ -109,7 +109,17 @@ public:
 	void InputRemoveDisciplines()    { ++DisciplineClears; Note(TEXT("RemoveDisciplines")); }
 	void InputRemoveDisciplinesNow() { ++DisciplineClears; Note(TEXT("RemoveDisciplinesNow")); }
 
-	void InputClearDialogCombatTimers() { ++DialogTimerClears; }
+	// `CPlayerEvents::InputClearDialogCombatTimers` (`0x10227250`) — resets the combat timers the
+	// player-side dialogue refusal predicate (`FUN_10178170`) reads. Like the killable/immobilize
+	// pair above, the state lives on the player entity and the copy kept here is the inspector's.
+	void InputClearDialogCombatTimers()
+	{
+		++DialogTimerClears;
+		if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
+		{
+			Player->ClearDialogCombatTimers();
+		}
+	}
 
 	void InputAwardExp(const FElysiumInputArgs& A)
 	{

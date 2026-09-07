@@ -11,6 +11,7 @@
 
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumWieldRules.h"
 
 // The slot tables — `stats.txt` file order, transcribed.
 
@@ -380,7 +381,7 @@ void FElysiumSheet::SeedFrom(const FElysiumStatTable& Stats)
 }
 
 void FElysiumSheet::ApplyTemplate(const FElysiumClanTemplate& Template, const FElysiumStatTable* Stats,
-	const FElysiumSheetEffects* Effects)
+	const FElysiumSheetEffects* Effects, const FElysiumExcludedEquipTable* EquipRules)
 {
 	// A template authors only the traits it sets, and `Resolve` has already folded the parent chain,
 	// so an absent key means inherit — write nothing for it.
@@ -395,5 +396,27 @@ void FElysiumSheet::ApplyTemplate(const FElysiumClanTemplate& Template, const FE
 			}
 		}
 	}
+
+	// `Excluded_Equipment` (slot 31) is authored as a NAME, so the loop above wrote 0 for it — the
+	// trait maps hold ints and `TraitStr` is where the authored text survives. The row id is the
+	// `ExcludedEquipTables` block order of `vdata/system/items.txt`, which is what
+	// `Inventory_Can_Wield` (0x10335a70) selects the character's row with; retail resolves the same
+	// name through the `ExcludedEquipFunc` the stat block authors as its `NameFunc`.
+	//
+	// An unresolvable name is left at the seeded default rather than written as 0: those are two
+	// different statements, and only one of them is "row `Default`".
+	if (EquipRules != nullptr)
+	{
+		const FString Authored = Template.TraitStr(TEXT("Excluded_Equipment"));
+		if (!Authored.IsEmpty())
+		{
+			const int32 Row = EquipRules->RowIndexByName(Authored);
+			if (Row != INDEX_NONE)
+			{
+				Base[(uint8)EElysiumTraitContainer::Attributes][ElysiumSlot::ExcludedEquipment] = Row;
+			}
+		}
+	}
+
 	RecomputeCurrent(Stats, Effects);
 }

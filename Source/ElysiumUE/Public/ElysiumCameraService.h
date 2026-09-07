@@ -214,6 +214,9 @@ private:
 	uint64 Epoch = 0;
 	uint64 LastAdvancedFrame = TNumericLimits<uint64>::Max();
 	FElysiumResolvedCameraState Resolved;
+	// `C_BaseCineCamera`, ported: the deadbands and accel curves that decide how much of the
+	// re-resolved goal this frame actually takes.
+	FElysiumScriptedShotTracker Tracker;
 	FVector TrackingLocation = FVector::ZeroVector;
 	FRotator TrackingRotation = FRotator::ZeroRotator;
 	bool bTrackingSeeded = false;

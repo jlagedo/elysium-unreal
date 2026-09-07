@@ -1303,6 +1303,36 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
   drive and no `facial/` sidecar — but 57 of the 59 carry eyeball records, so the faithful
   player face is a **still face with live, aiming eyes**.
 
+### 2026-09-07 — three further eye-gaze facts recovered
+
+- **The dialogue gaze arm is player-only.** `CAI_BaseNPC::MaintainAutonomousEyeDirection`
+  (`vampire.dll` 0x1026B810) reaches its dialogue partner through `partner+0xA8`, which is the
+  cached `CBasePlayer*` the dialogue open stored, not a generic `CBaseEntity*`. There is no
+  NPC-to-NPC arm at all: two NPCs in a scripted conversation fall through to the ordinary
+  autonomous scan and its +/-30 degree cone, and look at each other only when the scan happens to
+  pick the other one. Anything that wants two NPCs locked on each other in retail has to be
+  authored, through `LookAtEntity*` or a scripted eye target (`SetScriptedEyeTarget` 0x10325CB0).
+- **The blink cadence has a player-distance gate.** `CAI_BaseNPCTroika::MaintainEyeDirection`
+  (0x102BFF20) runs the whole cadence inside one test:
+  `if (m_flPlayerDist < _DAT_10483AAC && (m_blinkTimer -= dt) < _DAT_104454C4)` — then the
+  `CBaseFlex::Blink` toggle (0x100B5CE0, vtable slot 0x450) and the
+  `RandomFloat(m_flMinBlink, m_flMaxBlink)` reseed from the disposition table (2.5-6.0 s on most
+  rows). Two consequences: an NPC far from the player does not blink, and its countdown is
+  *frozen* rather than merely unread, so walking up to a distant NPC does not fire a backlog. The
+  cadence is on the server think (the game clock); only the 0.3 s envelope is client-side.
+  `_DAT_10483AAC`'s **value is unread** — an unnamed `.rdata` float with eighteen readers and no
+  writer (`SetPlayerLOS` 0x10291610, `SelectSchedule` 0x102AF660, `CNPC_Crow::vfunc481` 0x10357680,
+  `CNPC_VPedestrian::vfunc461` 0x103A2E30 among them), so it is the engine's single "the player is
+  close enough to matter" radius. A `.rdata` read would settle it; the port carries 1024 Source
+  units as a stated placeholder (`ElysiumEyes::BlinkPlayerDistance`, `TODO(gaze)`).
+- **A DialogPOV camera outside the cone is rejected, and falls through the cascade.** The
+  `DialogPOV` redirect (flags dword at shot-table `+0x20` bit 0x10, read through `FUN_1006EDB0`;
+  the key's parser is 0x100721E0) replaces the *candidate point*, not the arm's result: the aim it
+  produces is still put through the same cone test (0x10325DA0) the autonomous scan uses. A camera
+  placed behind or far to the side of the speaker therefore fails and the arm continues down the
+  cascade to straight ahead — it does **not** fall back to the partner's eyes. That is why a badly
+  placed dialogue shot reads as an NPC staring past the player rather than at them.
+
 Implementation roll-up status for this system is in `docs/project/roadmap.md`. The capture
 instrument is retired; a named divergence in the built face escalates to a scoped capture as an
 owner call (`docs/vtmb/vtmb-animation-reverse-engineering.md` → "Programme method").

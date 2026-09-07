@@ -7,8 +7,8 @@ Documentation records design intent, VtMB reverse-engineering facts, and project
 - `project/roadmap.md` owns master sequencing, playable-path priority, and all task status —
   one line per task, linked to its specification while open.
 - `project/plans/` holds open-task specifications keyed by roadmap ID, one file per area
-  (world, gameplay, audio, characters-ui, input, spine, theatre, animation, three-cs,
-  pipeline). A plan file carries **no status marks**; landing a task deletes its entry.
+  (world, gameplay, terminals, audio, characters-ui, input, spine, theatre, animation,
+  three-cs, pipeline). A plan file carries **no status marks**; landing a task deletes its entry.
 - `project/rebuild-strategy.md` owns strategy, milestone vocabulary, and sidecar contracts.
 - `project/reconstruction-direction.md` owns modernization boundaries.
 - `architecture/` owns Unreal system designs and integration seams.

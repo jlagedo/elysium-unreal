@@ -47,11 +47,13 @@ static FAutoConsoleCommandWithWorld GElysiumDlgDump(
 			Speaker = Owner->Def ? Owner->Def->TargetName : FString();
 		}
 		const bool bMale = Conv->PlayerMale();
-		const bool bMalk = Conv->PlayerMalkavian();
+		const int32 Clan = Conv->PlayerClanOffset();
 		const FElysiumDlgLine* Line = Conv->CurrentNpcLine();
-		UE_LOG(LogElysiumDlgConsole, Display, TEXT("[%s] %s"),
+		UE_LOG(LogElysiumDlgConsole, Display, TEXT("[%s] %s%s"),
 			Speaker.IsEmpty() ? TEXT("???") : *Speaker,
-			Line ? *Line->RawFor(bMale, bMalk) : TEXT("(no line)"));
+			Conv->NoValidReply() ? FElysiumDlgConversation::NoValidReplyText()
+				: (Line ? *Line->RawFor(bMale, Clan) : TEXT("(no line)")),
+			W->IsDialogueNpcSpeaking() ? TEXT("  (speaking — elysium.dlg.skip)") : TEXT(""));
 		TArray<TPair<FString, FString>> Director;
 		W->GetDialogueDebugState(Director);
 		for (const TPair<FString, FString>& Row : Director)
@@ -75,9 +77,38 @@ static FAutoConsoleCommandWithWorld GElysiumDlgDump(
 		}
 		for (int32 v = 0; v < Conv->VisibleChoices().Num(); ++v)
 		{
+			const FElysiumDlgVisibleChoice& Entry = Conv->VisibleChoices()[v];
 			const FElysiumDlgLine* C = Conv->VisibleChoice(v);
-			UE_LOG(LogElysiumDlgConsole, Display, TEXT("  %d. %s"), v + 1,
-				C ? *C->RawFor(bMale, bMalk) : TEXT("?"));
+			// The requirement label is M-REQ's, in the same shape the panel draws it.
+			FString Label;
+			if (Entry.Gate.Label.bValid)
+			{
+				const FElysiumDlgGateLabel& L = Entry.Gate.Label;
+				FString Blood;
+				if (L.BloodCost > 0)
+				{
+					// A row greyed for its POOL says which half is short, as the panel does.
+					Blood = L.bBloodShort
+						? FString::Printf(TEXT(" %d/%d BLOOD"), L.Pool, L.BloodCost)
+						: FString::Printf(TEXT(" %d BLOOD"), L.BloodCost);
+				}
+				Label = FString::Printf(TEXT("[ %s %d/%d ]%s "), *L.Trait.ToUpper(), L.Have,
+					L.Required, *Blood);
+			}
+			UE_LOG(LogElysiumDlgConsole, Display, TEXT("  %d.%s %s%s"), v + 1,
+				Entry.bEnabled ? TEXT("") : TEXT(" (disabled)"), *Label,
+				C ? *C->RawFor(bMale, Clan) : TEXT("?"));
+		}
+	}));
+
+static FAutoConsoleCommandWithWorld GElysiumDlgSkip(
+	TEXT("elysium.dlg.skip"),
+	TEXT("elysium.dlg.skip -- M-SKIP: end the current line's voice and run its deferred NPC action."),
+	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+	{
+		if (FElysiumEntityWorld* W = DlgWorld(World))
+		{
+			W->PlayerDialogSkip();
 		}
 	}));
 

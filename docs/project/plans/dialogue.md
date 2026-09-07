@@ -120,174 +120,6 @@ modernization; nothing is silently dropped.
 - **M-REFUSE — refusal is signalled.** Retail's combat-timer refusal is silent; the port shows a
   brief HUD notification ("They won't talk right now") through the existing notification path.
 
-## D0 Record the recovery *(first; documentation only)*
-
-Write the eight-arm chain above with its addresses into `docs/vtmb/game_runtime.md` §5 and fix
-the column schema there and in `docs/architecture/seam_map_dialogue.md`: cols 6–12 are the seven
-clan columns, col 11 is Ventrue, the audio letters `e/f/m/n` are **text-column takes**, not
-languages (also the wording in `pipeline/.../dialogue_glb/model.py` `AUDIO_LANGUAGES`). Retire
-the stale "no parser exists" note in `rebuild-strategy.md` B9. Move the two dialogue stubs
-(`CAI_BaseNPC.StartPlayerDialogUnforcedGate`, `CAI_BaseNPC.DialogOpenerInteger`) to their
-recovered state: the gate is `0x10178170`; the integer is stored in `m_flSpecialDistanceAccum`
-and its reader is still open. *Acceptance:* docs cite the addresses; no code change.
-
-## DC The dialogue corpus slice *(readers off the legacy tree; owner calls 2026-09-06)*
-
-Every dialogue read is still on the legacy loose export (`FElysiumContentPaths::Root()`):
-`DlgFromDialogname` (`.dlg`), `ScenesDir` (per-line `.vcd`), `LipDir` (`.lip`), `SoundDir`
-(voice `mp3`/`wav`) and `ScriptsDir`. Only `VdataDir` is on `CorpusRoot()`, and the migration's
-legacy ledger still lists `dlg/**`, `scenes/**`, `lip/**`, `sound/**` as unmigrated runtime reads.
-The published units already exist under `exports_v2/`: 147 `dialogues/*.glb`, `scenes/**`,
-`sounds/**` (BIN payload, with the same-stem `.lip` as a member), `scripts/**`. Expression and
-phoneme tables are already imported (`DA_ExpressionTables`, R8.5) and need nothing here.
-
-- **Reader model: capsule bytes + the existing parsers.** `dialogue_glb` and `scene_glb` adopt
-  the capsule rule (schema 1.1.0, BIN chunk with the winning source bytes, hash-checked against
-  `sourceResolution`) exactly as vdata did; the decoded extension stays the validation record.
-  `FElysiumDlgFile`, the `.vcd` scene parser, the `.lip` parser and the audio decoders are
-  unchanged. The sound unit already carries its bytes and its `.lip` member.
-- **Scope: the dialogue set plus the whole sound family.** `uv run elysium import dialogue`
-  deploys `dialogues` → `Content/ElysiumCorpus/dlg/**`, `scenes` → `.../scenes/**`; `uv run
-  elysium import sound` deploys every sound unit → `.../sound/**` with its `.lip` beside it, so
-  `SoundDir()` has one root. `DlgFromDialogname`, `DlgDir`, `ScenesDir`, `SceneFile`, `LipDir`,
-  `LipFile`, `SoundDir`, `SoundFile` flip to `CorpusRoot()`. Scripts stay on the legacy tree
-  until their own slice (the ScriptFS mounts are a separate reader).
-- Import lanes follow the vdata lane's shape: recipe stamps, per-unit failure isolation, an
-  `import_report.json`, byte-equality against the capsule.
-- Update the legacy ledger rows in `seam_migration.md` (append a dated entry, do not rewrite)
-  and the "Dependencies"/"Audio join" paragraphs of `seam_map_dialogue.md`.
-
-*Tests:* pytest for the two capsule upgrades (BIN present, hash matches, decode unchanged) and
-the two lanes (deployed bytes equal the capsule's, `.lip` lands beside its audio);
-`Elysium.Content.DlgJackTutorial`, `.DialogueCameraDemand`, `.TheatreLipsync` and the choreo
-scene content tests pass against `-ElysiumCorpusRoot=` with the legacy root unset.
-*Deps:* D0. Lands before D3 so every later package is built and tested on the corpus paths once.
-
-## D1 The dependency object *(replaces the text rewrite)*
-
-`ElysiumDlgExpr::ConditionToPython` rewrites the skill-check into `pc.CalcFeat(...) >= n` text
-and leaves `Humanity -5` unrecognised (`-` is not a relop), so **447 corpus conditions never
-pass** — every low-humanity and every `Persuasion -7` failure route. Retail parses a struct.
-Build `FElysiumDlgDependency` in `ElysiumDlg.h`:
-
-- Fields: `Trait` (name), `Class` (Attribute/Ability/Discipline/Feat/Unknown, resolved through
-  the rulebook tables `stats.txt`/`feats.txt`/disciplines at parse time, `Unknown` fails closed
-  with a log), `Threshold`, `bInverted` (negative threshold → `<`), `SexGate`
-  (None/Male/Female from `M_`/`F_`), `Python` (the remaining expression, still normalised for the
-  host), `Compound` (SkillOnly/PythonOnly/And/Or), `Precedence` (skill-first/python-first from
-  token order). `BloodCost` = threshold for a discipline, else 0.
-- `Test(const IElysiumDlgSheet&)` reproduces `TestSimple` + `Test`: attribute/ability compare,
-  discipline requires rating **and** `BloodPoolValue() >= Threshold` and refuses discipline id 6
-  unless Ventrue (id→name join through the rulebook; if it does not resolve, leave the Ventrue
-  gate as a named seam), feat via `CalcFeat` with feat `0x16` routed to the frenzy comparison
-  seam. Python half through the existing host with the `PyInt` truth rule.
-- `Explain()` returns `FElysiumDlgGateResult { bPasses, bSkillFailedOnly, Label{Trait,
-  Required, Have, BloodCost} }` — the counterfactual pass (skill forced true) is computed here so
-  M-DISABLED needs no second evaluation.
-- `FElysiumDlgConversation` gains `VisibleChoices()` entries of `{Index, bEnabled, GateResult}`
-  and a `Charge(choice)` step on pick that subtracts blood and fires
-  `AddFakedDisciplineEffect(npc, trait, level)` through a new combat-character seam (the effect
-  emitters are the effects domain's; the seam fires and logs until they land).
-
-*Tests:* `Elysium.Substrate.DlgExpr` extended over the full skill vocabulary (`Humanity -8`,
-`F_Seduction 4`, `Seduction 3 & OneOfSet(1,4)`, `Persuasion 7 & pc.humanity >= 5`, `Intimidate 7
-& G.Patch_Plus == 1`, `Seduction 4 & not IsMale(pc)`); a corpus test that parses every col-4 of the
-147 files and asserts zero `Unknown` classes and zero unparsed skill fronts; a discipline test
-asserting the blood gate and the charge on pick. *Deps:* rulebook tables (9.4, landed).
-
-## D2 Retail turn rules in the branch machine
-
-All pure `FElysiumDlgConversation` changes, unit-tested without a world:
-
-- **Deferred NPC col-5.** `EnterNpcLine` runs col-4 now and parks col-5 as `PendingNpcAction`;
-  `FlushPendingNpcAction()` runs it once, called by the world at voice completion, at skip, on a
-  pick (before the pick's own col-5, matching `Pick`'s order after `NPCNotifyDoneTalking`), and on
-  `Close`. A conversation with no audio flushes at the manual continue.
-- **No cap (M-CAP).** Every passing row is admitted; log once per band when more than four
-  enabled rows survive (699 bands author more than four rows; they are gate-exclusive by design,
-  so an overflow is an authoring finding worth a line in `retail-defects.md`).
-- **No valid reply.** Empty enabled list without a pending automatic and without terminal
-  intent substitutes the NPC text `I do not have a valid reply.` with one Continue, as retail.
-- **Auto-End needs audio.** Keep the existing voice-completion boundary; the manual Continue
-  fallback is now the retail rule (forced visible response, value -1), not a port fallback.
-  Re-label `bAutomaticFallback` accordingly.
-- **Pick while speaking (M-REVEAL).** A pick during the voice is accepted: the world stops the
-  voice and lipsync, the machine flushes `PendingNpcAction`, then runs the pick's col-5 and
-  follows the link. `bNpcSpeaking` is still published for the skip hint.
-- **Pick refusal after the turn changed** stays as the revision guard.
-
-*Tests:* extend `Elysium.Substrate.DlgBranch` and `DlgAutomatic` for the flush order (NPC col-5
-before the pick's col-5, once per turn, on close), the cap, the no-reply substitution and the
-skip path. *Deps:* D1.
-
-## D3 Use-to-talk entry and the player refusal predicate
-
-`FElysiumNpc` never answers `IsUsable()`, so walking up to an NPC and pressing use does nothing;
-only scripted openers work. Reproduce arm 1:
-
-- `FElysiumNpc::IsUsable()` true when `dialogname` is set; `CanPlayerFocus` = `bWillTalk`
-  (the `WillTalk` latch already on `FElysiumCombatCharacter`) `&& !bInDialog && !IsInert()
-  && !IsBusyWithDiscipline()` (seam on the combat character) and the `AINPCFlags2 0x10000000`
-  bit (seam, answers clear). `BeginPlayerUse` → `BeginDialog(EElysiumDialogOpenerKind::Use, 0)`;
-  the use session ends immediately (dialogue owns the body through its own token).
-- **Player refusal predicate** as a first-class `FElysiumPlayerEntity::DialogRefusalReason()`
-  with the retail fields named: `NoDialogueUntil` stamp (`+0x1d1c`), the two auxiliary stamps,
-  the threat count, the `FLT_MAX`-sentinel float (`+0x1cf8`) and the state-3 partner check.
-  Fed today by the damage path (a hit stamps `NoDialogueUntil`, the retail duration is
-  unrecovered → seam with a documented constant) and cleared by
-  `InputClearDialogCombatTimers`, which currently only counts. `StartPlayerDialogUnforced`
-  consults it (closing the `UnforcedGate` stub); `Use` consults it unless `bForceDialogStart`.
-  A refused use posts the M-REFUSE notification; scripted openers refuse silently as retail.
-- **On open:** lock player movement input under the Dialogue scope (already the UI-only scope,
-  priority 40), holster to unarmed and remember drawability; **on close** restore. Wire to the
-  wielded-weapon switch; if the switch verb is not yet exposed, add the seam and log.
-- Use-focus glyph: the NPC gets the talk icon from the use-icon atlas (PL3) when focusable.
-
-*Tests:* `Elysium.Substrate.NpcUseStartsDialog` (focus, begin, body token, `OnDialogBegin`,
-`OnDialogEnd` on close, `times_talked`), `Elysium.Substrate.DialogRefusalPredicate` (stamped
-refusal, cleared by the input, forced start bypass), `Elysium.Content.DlgJackTutorial` extended
-to open Jack by use. *Deps:* none; lands first for playability.
-
-## D4 Voice take, sidecars and the seven clan columns
-
-- Parse and store all seven clan columns (`TextClan[7]`, Malkavian = slot 6); `RawFor()` takes
-  the player's clan offset and prefers a filled clan column over the gendered text, as
-  `get_display_text` (`0x100e1ad0`) does.
-- `FElysiumLineService::DialogueLineSource` takes the **chosen column letter**: clan letter when
-  that clan column is filled (`m` Ventrue, `n` Malkavian; the other five letters are unpinned →
-  probe nothing and log), else `f` when female and col-2 exists, else `e`. The same stem feeds
-  `LineScene.Begin` (`.vcd`) and `BeginDialogueLipsync` (`.lip`) so a female take moves the
-  female mouth.
-- Extension probe order mp3, wav (third unread → seam) through the audio subsystem's resolver;
-  a letterless line resolves `character/dlg/ellipses`.
-- Speech volume from the NPC `m_flSpeechVol` keyvalue if authored (seam).
-
-*Tests:* `Elysium.Audio.DialogueTakeLetter` (male/female/Malkavian/Ventrue rows → letter),
-`Elysium.Content.DialogueTakes` over the export: every `_col_f/_col_n/_col_m` file is reachable
-by some (sex, clan) pair; corpus parse keeps the 8 Ventrue rows. *Deps:* D1 for clan offset.
-
-## D5 Presentation: labels, disabled rows, skip, project fonts *(M-UI, M-REQ, M-DISABLED, M-SKIP)*
-
-- `FElysiumDialogueView` grows `Choices[] { Text, Label, bEnabled, Kind
-  (Plain/Feat/Discipline/Attribute), Have, Required, BloodCost }`, `bNpcSpeaking`, `bCanSkip`.
-  The presentation subsystem fills it from D1's gate results; the UI never evaluates anything.
-- `SElysiumDialogueBox`: one row per choice in author order, numbered 1..N across enabled and
-  disabled rows so numbering is stable; the label is a separate run before the sentence in the
-  accent colour, `[ PERSUASION 4/7 ]` (player rating / required, shown on passing rows too as
-  `[ PERSUASION 7/7 ]`); disabled rows dimmed, non-focusable, number key ignored; discipline
-  rows append `· N BLOOD`; the band is visible from the first frame (M-REVEAL) with a small
-  "Space: skip" hint while `bNpcSpeaking`; Continue for terminal and no-audio automatic turns.
-  Fonts through `ElysiumUIStyle` (Spectral for the line, Inter for choices), not `FCoreStyle`.
-- `ChoiceForKey` maps a number to the row index and the screen refuses disabled rows; Space
-  while speaking is the skip verb → `PresentationSubsystem::DialogueSkip` →
-  `World->PlayerDialogSkip()` (stop the voice, complete lipsync, flush D2's pending action).
-  Retail's history window is not reproduced (M-UI).
-
-*Tests:* `Elysium.UI.DialogueChoiceLabels` (label text for each dependency kind, disabled
-mapping, dedup of same-text pairs), `ElysiumUIScalingAndDialogueInputTest` extended for disabled
-keys and skip. Owner-piloted live check on Jack's tutorial and a discipline-gated line
-(`prince1.dlg` Dominate rows). *Deps:* D1, D2.
-
 ## D6 Side effects the corpus demands *(cross-domain; listed so the seams are named here)*
 
 On live corpus counts: `StartBarter` 108 (9.8), `React` 71 (9.9), `SeductiveFeed` 53 (feeding),
@@ -296,20 +128,44 @@ logged stub until its domain lands; this plan owns only the **blood charge and f
 effect on pick** (D1) and the `SetDisposition` reaction consumer wire (9.9). The 111
 `dialogParticles` and 106 `preBarter` calls are level-script functions and need no native.
 
-## D7 Save refusal proof *(M-SAVE)*
+## D8 Deferred seams left by the 2026-09-06 landing
 
-Enumerate every save entry (pause menu, quick-save key, autosave triggers, `elysium.save`
-console, MCP save tool) and assert each consults `ScriptedSessionSaveBlockReason()` and refuses
-with the "a conversation is open" reason while `DialogueSession` is set, including the
-Auto-Link wait and the no-audio Continue state. *Test:* `Elysium.Session.SaveRefusedInDialogue`.
-*Deps:* none.
+Every package above D6 landed on 2026-09-06 (D0, DC, D1, D2, D3, D4, D5, D7 — the retail chain,
+the seven modernizations, the corpus slice and the tests; status in `roadmap.md` P9). What
+remains is the set of named seams that answer "nothing" until their retail source is recovered,
+each carrying a `TODO(dialogue-plan)` marker in code:
+
+- **Player refusal predicate** (`ElysiumPlayer.h`): the writers of `+0x1d1c` (so
+  `ElysiumDialogue::DamageRefusalSeconds = 5.0` is the port's own number), `+0x1dd0`, `+0x1dd8`,
+  what `+0x1cf8` counts, the threat tally (`0x1017f770`/`0x1017f8b0`, answers 0 — no player-side
+  aggregate exists yet), and `player+0x1db0`'s state-3 partner enum.
+- **NPC guards** (`ElysiumNpc.h`): `CBaseCombatCharacter::IsBusyWithDiscipline` and the
+  `m_bfAINPCFlags2 & 0x10000000` word and its writers (both answer "not busy").
+- **Holster** (`ElysiumPlayerEntity.cpp`): the real `player+0x1e01` drawable byte; the
+  `CBasePlayer.DialogHolster` stub fires when no `item_w_unarmed` is carried.
+- **Dependency** (`ElysiumDlg.cpp`, `ElysiumDlgSheet.*`): feat `0x16` → `FrenzyComparison`
+  (answers false, inverted true) and is excluded from the labelled-skill-front set — the row
+  hides rather than showing a greyed `[ FRENZY 0/1 ]` retail never draws
+  (`FElysiumDlgDependency::IsUnrecoveredFrenzyFront`); `AddFakedDisciplineEffect` logs until the effects domain lands
+  `dialog_domination_emitter`/`dialog_presence_emitter`; the five unpinned clan take letters
+  (Brujah…Tremere) probe nothing.
+- **Voice** (`ElysiumLineService.*`): `m_flSpeechVol` has no authored source in the corpus (the
+  seam answers 1.0); retail's third speech extension (`DAT_10562364`) is unread.
+- **Named divergence recorded**: `Explain()` evaluates the Python half once even where retail's
+  short-circuit would skip it — that single evaluation is what buys the disabled row.
+- **Retail defect reproduced, not repaired** (`docs/vtmb/retail-defects.md` §6): a col-4 with two
+  Python halves can never pass (one shipped row).
+- **Corpus**: 31 orphan `.lip` files with no audio member do not deploy (a `.lip` miss is
+  ordinary at runtime); closing it needs an orphan-`.lip` unit. `scripts/**`, `audio/catalog.json`,
+  `sound/Schemes/*`, `sound/usable/soundgroups.json` and `expressions/*` remain legacy reads.
+- **Live acceptance** (owner-piloted, out of unit-test scope): Jack's tutorial conversation by
+  use, a refused use under the combat timer, a disabled `[ PERSUASION 4/7 ]` row beside its
+  failure route, the female take, a Dominate row's blood charge, skip mid-line.
 
 ## Order and acceptance
 
-D0 → DC → D3 → D1 → D2 → D5 → D4 → D7; D6 by its domains. Slice acceptance: `sp_tutorial_1`'s Jack
-conversation opens by **use**, posts the refusal hint while a combat timer runs, shows a disabled
-`[ PERSUASION 4/7 ]` row beside its enabled failure route, plays the female take for a female
-PC, runs Jack's NPC col-5 only after his line finishes or is skipped or cut by a pick, cannot be
-saved from, and closes into `DialogPostProcess` as before. Docs to update on landing: `roadmap.md` P9, this file, `seam_migration.md` (DC),
-`game_runtime.md` §5, `seam_map_dialogue.md`, `ui-architecture.md` §8,
-`gameplay-systems-architecture.md` §2/§5.5, `save-architecture.md`, `audio-architecture.md`.
+D6 by its domains; D8 as each retail source is recovered. Slice acceptance (live, owner-piloted):
+`sp_tutorial_1`'s Jack conversation opens by **use**, posts the refusal hint while a combat timer
+runs, shows a disabled `[ PERSUASION 4/7 ]` row beside its enabled failure route, plays the
+female take for a female PC, runs Jack's NPC col-5 only after his line finishes or is skipped or
+cut by a pick, cannot be saved from, and closes into `DialogPostProcess` as before.

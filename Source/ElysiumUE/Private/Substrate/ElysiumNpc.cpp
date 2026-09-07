@@ -26,8 +26,10 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumDamage.h"
+#include "Substrate/ElysiumDlgSheet.h"
 #include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumFootsteps.h"
+#include "ElysiumClassRegistry.h"   // FElysiumClassDesc — the registered descriptor's own name
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -58,7 +60,7 @@ bool FElysiumNpc::ResistsFeeding() const
 }
 
 void FElysiumNpc::ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
-	const FElysiumStatTable* Table)
+	const FElysiumStatTable* Table, const FElysiumExcludedEquipTable* EquipRules)
 {
 	bFastFood = Resolved.GeneralInt(TEXT("FastFood")) != 0;
 	bHasKindredTemplate = true;
@@ -92,7 +94,7 @@ void FElysiumNpc::ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
 	// mid-run still switches source.
 	FootstepTemplate = MakeShared<FElysiumClanTemplate>(Resolved);
 
-	Sheet.ApplyTemplate(Resolved, Table);
+	Sheet.ApplyTemplate(Resolved, Table, /*Effects*/ nullptr, EquipRules);
 }
 
 // --- `CAI_BaseNPC::HandleAnimEvent` (`0x10274e30`) — the footstep arm --------------------------
@@ -765,6 +767,10 @@ void FElysiumNpc::Think()
 	ResolveLoadout();
 	ReplayDeferredScriptedOrder();
 	RunConditionPass();
+	// Retail's `OnStateChange` edge (vtable slot 463), after the pass that can move the state and
+	// after `ResolveLoadout` above — the first fire has to see the weapon the loadout equipped, or a
+	// guard would spawn idle with nothing to put away and draw it on the first alert only.
+	PumpStateChange();
 	// A pair this NPC is part of owns the body outright: it advances the transaction from
 	// the feeder's think and nothing else moves either actor while it runs.
 	if (TickFeed(World ? World->NowSeconds() : 0.0))
@@ -1218,6 +1224,101 @@ EElysiumScheduleId FElysiumNpc::SelectCombatSchedule()
 	// SEAM (comment only): the base branch's fear reaction. The `COWER`/`FLEE` families are 24
 	// schedules whose contents the survey does not decode, and `SEE_FEAR` alone does not say which.
 	return EElysiumScheduleId::IdleDisposition;
+}
+
+bool FElysiumNpc::ClassHolstersOnState() const
+{
+	// The seven classes that fill vtable slot 463 with the holster/draw body, mapped from the retail
+	// class names onto the classnames a map AUTHORS. Four of them have no registered leaf in this
+	// runtime yet (`ElysiumNpcClasses.cpp` registers fourteen npc_* names); they are listed anyway,
+	// because the rule belongs to the classname and a map that spawns one must not have to wait for
+	// this table to be remembered.
+	//
+	// **Four more overrides are UNREAD and are deliberately absent**: `CNPC_VCop` (0x10371c20),
+	// `CNPC_VBach` (0x103639b0), `CNPC_VTzimisce` (0x103ba2c0) and `CNPC_VSabbatLeader`
+	// (0x103a6f70) each fill slot 463 with a body this recovery did not decompile. Two of them —
+	// npc_VCop and npc_VSabbatLeader — ARE registered classes here, so they take the Troika base's
+	// answer (no weapon write) until their bodies are read. That is a stated gap, not a decision.
+	static const TCHAR* const Holsterers[] = {
+		TEXT("npc_VGuard1"),            // CNPC_VGuard1            0x1037d020
+		TEXT("npc_VHunter"),            // CNPC_VHunter            0x10388880
+		TEXT("npc_VHumanCombatant"),    // CNPC_VHumanCombatant    0x103871c0
+		TEXT("npc_VHumanCombatPatrol"), // CNPC_VHumanCombatPatrol 0x103871c0
+		TEXT("npc_VSabbatGunman"),      // CNPC_VSabbatGunman      0x103871c0
+		TEXT("npc_VStalker"),           // CNPC_VStalker           0x103871c0
+		TEXT("npc_VYukie"),             // CNPC_VYukie             0x103871c0
+		TEXT("npc_ProneDialog"),        // CNPC_ProneDialog        0x103871c0
+		TEXT("npc_VGhoulCroucher"),     // CNPC_VGhoulCroucher     0x103871c0
+	};
+
+	// The classname a map authored, which is the key the recovered class bodies are joined to — the
+	// same read `FillActivityClipRequest` makes, and for the same reason.
+	// `Def` is the authored definition; a runtime-created NPC has none, and its registered
+	// descriptor's name is the classname it answers to. Same read `FillActivityClipRequest` makes.
+	const FString Authored = Def != nullptr ? Def->Classname
+		: (Class != nullptr ? Class->ClassName.ToString() : FString());
+	if (Authored.IsEmpty())
+	{
+		return false;
+	}
+	for (const TCHAR* Name : Holsterers)
+	{
+		if (Authored.Equals(Name, ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void FElysiumNpc::ApplyStateWeaponVisibility(EElysiumNpcState NewState)
+{
+	if (!ClassHolstersOnState())
+	{
+		// `CAI_BaseNPCTroika::OnStateChange` (0x102ae140): the base body does not touch the weapon.
+		return;
+	}
+	FElysiumItem* Active = Inventory.Active(*this);
+	FElysiumWeapon* Weapon = Active != nullptr ? Active->AsWeapon() : nullptr;
+	if (Weapon == nullptr)
+	{
+		// `GetActiveWeapon()` answered null, and both arms of the retail switch are guarded by it.
+		return;
+	}
+
+	switch (NewState)
+	{
+	case EElysiumNpcState::Idle:
+		// State 1. `GetActiveWeapon()->Hide()`.
+		Weapon->Hide(this);
+		break;
+	case EElysiumNpcState::Alert:
+	case EElysiumNpcState::Combat:
+		// States 2 and 3. `GetActiveWeapon()->Unhide()`.
+		//
+		// SEAM: retail's third unhide arm is state 11, which this runtime's `EElysiumNpcState` has
+		// no equivalent for — the enum's other members (Scripted, Prone, Dead) are this port's own
+		// and none of them is retail's 11. Nothing is known about what 11 means beyond the fact that
+		// it draws the weapon, so no port state is mapped onto it rather than guessing one.
+		Weapon->Unhide(this);
+		break;
+	default:
+		// Every other state falls straight through to the Troika base, which writes nothing. That
+		// includes this runtime's Scripted, Prone and Dead.
+		break;
+	}
+}
+
+void FElysiumNpc::PumpStateChange()
+{
+	const EElysiumNpcState Now = Mind.State();
+	if (bStateChangeSeen && Now == LastStateChange)
+	{
+		return;
+	}
+	bStateChangeSeen = true;
+	LastStateChange = Now;
+	ApplyStateWeaponVisibility(Now);
 }
 
 void FElysiumNpc::UpdateIdealState(double Now)
@@ -2629,6 +2730,15 @@ void FElysiumNpc::EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bo
 	if (bSilent)
 	{
 		bInDialog = false;
+		bForceDialogStart = false;
+		// A silent close (the owner died, the world tore down, a second conversation replaced this
+		// one) never routes `EndDialog`, so the holster's other door is here. Retail restores the
+		// weapon from `CDialog::Release` (`FUN_10178400`), which runs on every teardown path.
+		// `RestoreDialogHolster` is one-shot, so the ordinary close is unaffected.
+		if (FElysiumPlayer* DialoguePlayer = World ? World->FindPlayer() : nullptr)
+		{
+			DialoguePlayer->RestoreDialogHolster();
+		}
 	}
 	if (!bInDialog && (bPatrolActive || bUseInteresting))
 	{
@@ -2664,14 +2774,33 @@ void FElysiumNpc::BeginDialog(EElysiumDialogOpenerKind Opener, int32 RawFlags,
 	{
 		ElysiumStub::Fired(TEXT("field"), TEXT("CAI_BaseNPC.DialogOpenerInteger"),
 			DebugString(), FString::Printf(TEXT("raw=%d"), DialogFlags),
-			TEXT("RE46 — recover NPC+0x5bac before decoding flags"));
+			TEXT("RE46 — the integer lands in m_flSpecialDistanceAccum; its reader is still open"));
 	}
+	// The other half of retail's open, the input lock, needs no call here: the conversation screen
+	// pushes the `Dialogue` input scope (`ElysiumInput::Priority::Dialogue`, UIOnly) as it
+	// activates, which removes the gameplay mapping contexts and is what locks movement. That is
+	// the port's one input arbiter; a second lock from the substrate would fight it.
+
 	static const FName OnDialogBegin(TEXT("OnDialogBegin"));
 	FireOutput(OnDialogBegin, Args.Activator);
 	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s %s(raw=%d decoded=%d)"), *DebugString(),
 		ElysiumDialogueCamera::LexToString(Opener), DialogFlags, DecodedDialogFlags);
 
-	OpenConversation(Args.Activator, Opener);
+	// `FUN_10178280` runs `CDialog::Acquire` FIRST and only then remembers whether the active
+	// weapon was drawable (`player+0x1e01`) and switches to `item_w_unarmed`; `CDialog::Release`
+	// puts it back (`FUN_10178400`). That order is load-bearing here: `OpenConversation` fails
+	// exactly where `Acquire` does — no `dialogname`, or a `.dlg` that will not load — and those
+	// are the paths that leave `bInDialog` latched on the manual `EndDialog` seam with no
+	// conversation to close them. Holstering before the open would strip the player's weapon on
+	// them and nothing but a hand-fired `EndDialog` would ever give it back.
+	if (!OpenConversation(Args.Activator, Opener))
+	{
+		return;
+	}
+	if (FElysiumPlayer* DialoguePlayer = World ? World->FindPlayer() : nullptr)
+	{
+		DialoguePlayer->HolsterForDialog();
+	}
 }
 
 void FElysiumNpc::InputStartPlayerDialog(const FElysiumInputArgs& Args)
@@ -2681,6 +2810,9 @@ void FElysiumNpc::InputStartPlayerDialog(const FElysiumInputArgs& Args)
 		return;
 	}
 	// The pinned ordinary handler stores this integer at NPC+0x5bac. Its bits are not yet named.
+	// A forced opener sets `m_bForceDialogStart` (`npc+0x6495`), which is what makes
+	// `FUN_10178280` skip the player-side refusal predicate entirely.
+	bForceDialogStart = true;
 	BeginDialog(EElysiumDialogOpenerKind::Forced, Args.Param.ToInt(), Args);
 }
 
@@ -2692,6 +2824,7 @@ void FElysiumNpc::InputStartPlayerDialogRemote(const FElysiumInputArgs& Args)
 	}
 	// The pinned Remote handler never reads the input variant; authored `256` is intentionally
 	// discarded before the common primitive sees it.
+	bForceDialogStart = true;
 	BeginDialog(EElysiumDialogOpenerKind::Remote, 0, Args);
 }
 
@@ -2701,11 +2834,18 @@ void FElysiumNpc::InputStartPlayerDialogUnforced(const FElysiumInputArgs& Args)
 	{
 		return;
 	}
-	// The extra player-refusal predicate is not yet recovered. Keep the unresolved gate visible;
-	// no placement, acceptance, or flag meaning is inferred from it.
-	ElysiumStub::Fired(TEXT("input"), TEXT("CAI_BaseNPC.StartPlayerDialogUnforcedGate"),
-		DebugString(), ElysiumStub::DescribeInput(Args),
-		TEXT("RE46 — recover the player-side unforced refusal predicate"));
+	// `StartPlayerDialogUnforced` is the one input that does NOT set `m_bForceDialogStart`
+	// (`npc+0x6495`), so `FUN_10178280` runs the player-side refusal predicate (`0x10178170`) and
+	// refuses when it holds. Retail's refusal here is SILENT — no HUD, no sound — because the
+	// caller is a script, not the player pressing a key; only the `+use` entry announces itself
+	// (M-REFUSE). This closes the `CAI_BaseNPC.StartPlayerDialogUnforcedGate` stub.
+	bForceDialogStart = false;
+	if (const TCHAR* Refusal = DialogEntryRefusalReason())
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose,
+			TEXT("%s StartPlayerDialogUnforced refused: %s"), *DebugString(), Refusal);
+		return;
+	}
 	BeginDialog(EElysiumDialogOpenerKind::Unforced, Args.Param.ToInt(), Args);
 }
 
@@ -2715,11 +2855,49 @@ void FElysiumNpc::InputEndDialog(const FElysiumInputArgs& Args)
 	{
 		return;
 	}
+	// Two callers reach this input. The world's own teardown queues it after `EndDialogSession`
+	// with the closed session's serial as the param; a level script fires it bare
+	// (`Jack,EndDialog`) to throw the player out of a running conversation, which in retail lands
+	// in `CDialog::Release` (`0x100e5240`): flush the parked script, clear the live state, THEN
+	// fire `OnDialogEnd`. So a bare (or void) close while this NPC owns the open session tears the
+	// world session down first; a serial that names a session this NPC has already replaced is a
+	// stale bookkeeping close — the old conversation did end (count it, fire its output) but the
+	// live one stays.
+	if (World)
+	{
+		const bool bOwnsLive = World->GetOpenDialogOwner() == Handle;
+		const int32 QueuedSerial = Args.Param.IsInt() ? Args.Param.ToInt() : 0;
+		if (bOwnsLive && QueuedSerial != 0
+			&& QueuedSerial != static_cast<int32>(World->GetOpenDialogSerial()))
+		{
+			++TimesTalked;
+			static const FName OnDialogEndStale(TEXT("OnDialogEnd"));
+			FireOutput(OnDialogEndStale, Args.Activator);
+			UE_LOG(LogElysiumNpcEnt, Verbose,
+				TEXT("%s EndDialog for replaced session %d (live %u stays; times_talked=%d)"),
+				*DebugString(), QueuedSerial, World->GetOpenDialogSerial(), TimesTalked);
+			return;
+		}
+		if (bOwnsLive)
+		{
+			// Flush + teardown. This queues a second EndDialog carrying the serial; it finds
+			// `bInDialog` false below and returns.
+			World->CloseDialog(/*bSilent*/ false);
+		}
+	}
 	if (DialogueBodyOwner.IsSet())
 	{
 		EndDialogueBodySession(DialogueBodyOwner, /*bSilent=*/false);
 	}
 	bInDialog = false;
+	bForceDialogStart = false;
+	// `CDialog::Release` (`0x100e5240`) unlocks input and restores the holstered weapon
+	// (`FUN_10178400`). The input half is the screen's — deactivating the conversation screen pops
+	// the `Dialogue` input scope — so the weapon is what this door owes.
+	if (FElysiumPlayer* DialoguePlayer = World ? World->FindPlayer() : nullptr)
+	{
+		DialoguePlayer->RestoreDialogHolster();
+	}
 	++TimesTalked;
 	static const FName OnDialogEnd(TEXT("OnDialogEnd"));
 	FireOutput(OnDialogEnd, Args.Activator);
@@ -2727,6 +2905,133 @@ void FElysiumNpc::InputEndDialog(const FElysiumInputArgs& Args)
 	// Unconditional: leaving a conversation releases the stance machine's talking branch, so a
 	// standing character has a decision to make on the very next think.
 	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+}
+
+// --- Use-to-talk: `CBasePlayer::PlayerUse` (`0x10167850`) ------------------------------------
+//
+// Retail resolves the use target, tests the character's `WillTalk` latch (virtual `+0x49c`, set by
+// `InputWillTalk` `0x103418f0`), clears the NPC schedule, pushes AI schedule `0x6a` and calls
+// player vtable slot 414 (`FUN_10178280`, the real StartDialog). The schedule clear and the `0x6a`
+// push are `BeginDialogueBodySession`'s job here — it already cancels the scripted sequence, ends
+// the pushed schedule and takes the Dialogue body claim — so this half is the eligibility test and
+// the refusal.
+
+FString FElysiumNpc::DialogName() const
+{
+	return Def ? Def->Keys.FindRef(TEXT("dialogname")) : FString();
+}
+
+bool FElysiumNpc::IsUsable() const
+{
+	// The class verb: this NPC has a conversation to open. `CBasePlayer::PlayerUse` resolves the
+	// target first and only then tests the latches, so "usable" and "will talk right now" are two
+	// different questions and the second one is `CanPlayerFocus`'s.
+	return !DialogName().IsEmpty();
+}
+
+bool FElysiumNpc::CanPlayerFocus(const FElysiumUseContext& Context) const
+{
+	if (!IsUsable() || IsInert())
+	{
+		return false;
+	}
+	// The `WillTalk` latch (virtual `+0x49c`). 79 authored calls: a character is opened for
+	// conversation by a script, not by a player standing near it.
+	if (!bWillTalk)
+	{
+		return false;
+	}
+	// A conversation already open on this character is not a second target.
+	if (bInDialog)
+	{
+		return false;
+	}
+	// The two remaining common guards `CBasePlayer::PlayerUse` and `CAI_BaseNPCTroika::StartTask`
+	// share. Both are seams today (see the declarations) and neither blocks yet.
+	if (IsBusyWithDiscipline() || HasDialogSuppressFlag())
+	{
+		return false;
+	}
+	return true;
+}
+
+const TCHAR* FElysiumNpc::DialogEntryRefusalReason() const
+{
+	// `FUN_10178280`: the predicate only runs when `m_bForceDialogStart` is clear.
+	if (bForceDialogStart)
+	{
+		return nullptr;
+	}
+	// The NPC-side guards, restated here because the scripted openers never went through
+	// `CanPlayerFocus` — a script fires the input straight at the character.
+	if (IsBusyWithDiscipline())
+	{
+		return TEXT("the character is busy with a discipline");
+	}
+	if (HasDialogSuppressFlag())
+	{
+		return TEXT("the character refuses conversation");
+	}
+	// The player half (`0x10178170`). A world with no player refuses: retail's very first common
+	// guard is "a player exists".
+	const FElysiumPlayer* RefusingPlayer = World ? World->FindPlayer() : nullptr;
+	if (!RefusingPlayer)
+	{
+		return TEXT("there is no player");
+	}
+	return RefusingPlayer->DialogRefusalReason();
+}
+
+FElysiumUseBeginResult FElysiumNpc::BeginPlayerUse(const FElysiumUseContext& Context)
+{
+	// `+use` never sets `m_bForceDialogStart`, so the predicate stands unless a scripted opener
+	// left the byte set on this character (retail's byte is per-NPC and persists until an unforced
+	// start or the close clears it).
+	if (const TCHAR* Refusal = DialogEntryRefusalReason())
+	{
+		// M-REFUSE (named modernization): retail's refusal is silent. The port posts one brief HUD
+		// notification through the existing FIFO so the player learns the conversation was offered
+		// and declined rather than that use is broken.
+		if (World)
+		{
+			if (IElysiumPresenter* Presenter = World->Presenter())
+			{
+				FElysiumNotification Notice;
+				Notice.Kind = EElysiumNotificationKind::Generic;
+				Notice.Subject = ElysiumDialogue::RefusalNotice;
+				Presenter->PostNotification(Notice);
+			}
+		}
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s +use refused: %s"), *DebugString(), Refusal);
+		return FElysiumUseBeginResult::Refused(EElysiumUseOutcome::Unavailable);
+	}
+
+	FElysiumInputArgs Args;
+	Args.Activator = Context.Activator;
+	Args.Caller = Context.Activator;
+	BeginDialog(EElysiumDialogOpenerKind::Use, 0, Args);
+	// Completed, never SessionStarted: dialogue holds the body through its own owner token and the
+	// world's `DialogueSession` already refuses a second use edge. A lingering +use session would
+	// be a second claim on the same interaction with its own teardown.
+	return FElysiumUseBeginResult::Completed();
+}
+
+int32 FElysiumNpc::ResolveUseIcon(const FElysiumEntityHandle& Activator) const
+{
+	// `hud/Context_Icons/Talk_Female` (14) and `Talk_Male` (15) in the recovered use_icon table
+	// (`ElysiumUseIconName`). An authored `use_icon` on the definition wins — a character carrying
+	// a scripted panel glyph keeps it.
+	if (const int32 Authored = GetUseIcon(); Authored != 0)
+	{
+		return Authored;
+	}
+	if (!IsUsable())
+	{
+		return 0;
+	}
+	static constexpr int32 TalkFemaleIcon = 14;
+	static constexpr int32 TalkMaleIcon = 15;
+	return Sheet.IsMale() ? TalkMaleIcon : TalkFemaleIcon;
 }
 
 bool FElysiumNpc::OpenConversation(const FElysiumEntityHandle& Activator, EElysiumDialogOpenerKind Opener)
@@ -2750,12 +3055,14 @@ bool FElysiumNpc::OpenConversation(const FElysiumEntityHandle& Activator, EElysi
 		return false;
 	}
 
-	// Player gender + clan drive text selection: VtMB shows col-2 for a female PC, and the col-12
-	// Malkavian variant for a Malkavian PC. Clan is the 2..8 sheet encoding (Malkavian = 4).
+	// Player gender + clan drive text selection: VtMB shows col-2 for a female PC and the player's
+	// own clan column when that column is filled. `clan_offset` is the .dlg column order, which is
+	// NOT the 2..8 sheet encoding — the join lives in `ElysiumDlgClan::OffsetFromSheetClan`.
 	const UElysiumGameStateSubsystem* GameState = World->GetGameState();
 	const bool bMale = GameState ? GameState->PlayerSheet().IsMale() : true;
-	const bool bMalk = GameState
-		&& GameState->PlayerSheet().Clan() == FElysiumSheet::ClanFromName(TEXT("Malkavian"));
+	const int32 ClanOffset = GameState
+		? ElysiumDlgClan::OffsetFromSheetClan(GameState->PlayerSheet().Clan())
+		: ElysiumDlgClan::None;
 	const FElysiumEntityHandle Self = Handle;
 	FElysiumEntityWorld* W = World;
 
@@ -2764,12 +3071,16 @@ bool FElysiumNpc::OpenConversation(const FElysiumEntityHandle& Activator, EElysi
 	// obey the same live/off switch and eval log as field-6. dlgexpr -> Python via the normalizer.
 	auto Cond = [W, Self, Activator](const FString& Raw) -> bool
 	{
-		// Retail's CDialogDependency::Test gates a col-4 condition (PC choice, NPC-line entry, and
-		// starting-line sentinel) through CallPyDialogFunction: Py_eval_input, then TRUE only for a
-		// non-zero Python integer — the exact logic_pythoncheck/terminal/sign rule, not generic
-		// truthiness. A non-integer result (a string, the float 1.0) and an eval error both read
-		// FALSE, so the line is unavailable rather than wrongly offered. Error-to-false still logs
-		// inside EvalCondition/the host; an unavailable line is ordinary, not a failure.
+		// `CDialogDependency::TestPython` (`0x100e9ff0`) — CallPyDialogFunction in Py_eval_input
+		// mode, TRUE only for a non-zero Python integer: the exact logic_pythoncheck/terminal/sign
+		// rule, not generic truthiness. A non-integer result (a string, the float 1.0) and an eval
+		// error both read FALSE, so the line is unavailable rather than wrongly offered.
+		// Error-to-false still logs inside EvalCondition/the host.
+		//
+		// Only the PYTHON half of a dependency reaches here — the skill check is answered off the
+		// sheet by `FElysiumDlgDependency`, which is why `Humanity -8` finally works. The
+		// normalizer still runs because a Python half may carry parens, `and`/`or` and the odd
+		// stray join it must translate.
 		return W->EvalCondition(ElysiumDlgExpr::ConditionToPython(Raw), Self, Activator).IsPythonCheckTrue();
 	};
 	auto Act = [W, Self, Activator](const FString& Raw)
@@ -2790,9 +3101,18 @@ bool FElysiumNpc::OpenConversation(const FElysiumEntityHandle& Activator, EElysi
 	};
 
 	TSharedRef<FElysiumDlgConversation> Conv =
-		MakeShared<FElysiumDlgConversation>(DlgFile, bMale, bMalk, MoveTemp(Cond), MoveTemp(Act),
-			MoveTemp(StartFallback));
-	Conv->Start();
+		MakeShared<FElysiumDlgConversation>(DlgFile, bMale, /*bMalkavian*/ false, MoveTemp(Cond),
+			MoveTemp(Act), MoveTemp(StartFallback));
+	// The dependency's two injected halves: the rulebook names the trait's class and id, the
+	// player's own sheet answers the ratings, the blood pool and the sex/clan gates, and the charge
+	// on pick lands on this NPC. Bound before Start(), because the opener's own starting-condition
+	// sentinels are dependencies too.
+	Conv->SetGateContext(ElysiumDlgSheet::MakePlayerSheet(*W, W->PlayerHandle(), Self),
+		ElysiumDlgSheet::MakeTraitResolver(GameState ? GameState->Rulebook() : nullptr),
+		ClanOffset);
+	// UN-STARTED. `OpenDialog` calls `Start()` itself once the world's session exists, because the
+	// opening NPC line's col-4 is an action that may `EndDialog`/`OpenDialog` and must act on this
+	// conversation, not on the one it replaced (retail runs it inside `CDialog::Acquire`).
 	World->OpenDialog(Self, Conv, Opener, DialogFlags, DefaultCamera, DialogueBodyOwner);
 	UE_LOG(LogElysiumNpcEnt, Log, TEXT("%s opened dialogue '%s' (%d rows)"),
 		*DebugString(), *DialogName, DlgFile->Lines.Num());
@@ -2823,7 +3143,7 @@ void FElysiumNpc::SeedSheet()
 	{
 		if (bResolvedTemplate)
 		{
-			ApplyResolvedTemplate(Resolved, Table);
+			ApplyResolvedTemplate(Resolved, Table, Rules ? &Rules->ExcludedEquip() : nullptr);
 			// A template names its clan's `TraitEffectGroup`; that group is where the clan's
 			// gifts and banes live, for an NPC exactly as for the player.
 			const FString ClanEffect = Resolved.GeneralStr(TEXT("ClanEffect"));

@@ -1411,3 +1411,54 @@ range each axis spans; Unreal interpolates between samples by its own scheme rat
 cell selection. The authored content is reproduced; the interpolation between authored values is
 Unreal's. Tracked with the rest of the LIFE programme's divergences in
 `docs/project/plans/animation.md`.
+
+**The gaze cascade is a server behaviour with two entry points, not one (2026-09-07).** The eye
+point every frame hands the eye pass comes from `FElysiumCombatCharacter::TickGaze`, and retail
+chooses between two whole bodies before any of it runs: `CBaseCombatCharacter::UpdateCharacter`
+(`0x103246D0`) dispatches slot 333 — the `CAI_BaseNPC` cascade at `0x1026B810` — only while
+`m_scriptedEyeMode`@0x0E68 is zero, and otherwise calls `MaintainScriptedEyeDirection`
+(`0x10325620`). A map's `LookAtEntity{Eye,Center,Origin}` input therefore *replaces* the cascade
+rather than winning a priority arm inside it: no dialogue partner, no enemy, no autonomous scan,
+and no fidget at the tail, because the fidget short-circuit (`0x1026B81B`, `m_RelativeEyeTarget`
+@0x5B94) belongs to the maintainer that is not running. It resolves its target by mode
+(1 → `EyePosition()`, 2 → `WorldSpaceCenter()` and unreachable, 3 → `GetAbsOrigin()`), cone-tests
+it with the same ±30° head cone, falls back to `headPos + headForward × 500` outside it, integrates
+and returns — without advancing the head-turn filter, which only the autonomous body drives.
+`LookAtEntityDefault` clears the mode and the cascade resumes on the next think.
+
+Inside the cascade the dialogue arm is narrower than "there is a conversation". Retail reads
+`m_hDialogPartner`@0xFE8 and then the partner's player pointer at `+0xA8`, skipping the arm outright
+when it is null, so the arm is player-only; and it cone-tests whichever point it picked — the
+`DialogPOV` camera when the shot's flags carry `0x10`, the player's `EyePosition()` otherwise — and
+on a miss falls THROUGH to the target-entity arm rather than back to the partner's eyes. Finally the
+integrator has two rates, not one: the fidget driver (`0x102C0010`) rewrites `m_flEyeIntegRate`
+@0x0E3C from the disposition every think, reading index 0 while a converged gaze is held and index 1
+while a fidget sequence steps its cells (`FUN_100ECDF0` → record fields `+0x23C` and `+0x260`). That
+resolves the long-standing puzzle of `DispositionTable.txt` carrying "Eye Turn Rate" twice: the
+disposition-level `0.9` is the hold rate and the value inside the `EyeTarget` block (0.3 Neutral,
+0.95 Anger, 0.2 Apathy) is the fidget step rate. `FElysiumEyeTargetTuning` carries both as
+`HoldRate`/`StepRate`, mirrored in by the disposition parser. Proof: `Elysium.Substrate.Gaze` and
+`Elysium.Substrate.GazeDialogue`.
+
+**An unowned base channel keeps the last committed sequence on a cast body (2026-09-07).** §3.3's
+`ArbitrateBase` writes `bBasePoseOwned = true` whenever no claim holds the base slot, and the
+locomotion publish then resolves whatever the classifier asked for. In the Idle graph state on a
+cast body that is `ACT_IDLE`, taken through the full weapon/class translation — which on a body
+holding `item_w_claws` answers `claws_idle`, the crouched claw stance. Retail has no such state:
+`CAI_BaseNPCTroika`'s disposition idle (`0x102c12a0`) plays its stance clips **by name**, and
+`ResolveActivityToSequence` (`0x10272130`) keeps `m_nSequence` on a miss and otherwise falls to
+sequence 0, so a standing Troika NPC is never asked for `ACT_IDLE` at all and nothing re-derives a
+pose from the weapon between two named clips.
+
+`FElysiumAnimationDriver` now carries `CommittedBaseLabel`: the clip a base CLAIM committed,
+recorded in `ArbitrateBase` on every frame the claim holds and on cast bodies only. When the base
+channel is unowned, the projected graph state is `Idle`, the body is not the player, and something
+was committed, `Tick` republishes that label through the `ExactLabel` route instead of resolving
+`ACT_IDLE` — which is what keeping `m_nSequence` amounts to here. Travel states (`Walk`/`Run`/
+`Sneak`) resolve exactly as before: a travelling body is answering a request, not standing on a
+leftover. A body with no committed history falls through to today's behaviour, and a remembered
+label that is not in the body's vocabulary is dropped (one Verbose line) and the idle resolve runs
+in its place, so nothing can stand on a clip that does not exist. The label is part of the discrete
+key, so one held clip succeeding another re-resolves. Player behaviour is untouched — the gate is
+the body kind, matching the player's own committed gait ladder having no claim-expiry hole.
+Proof: `Elysium.Substrate.BaseHold.UnownedCastIdle`.

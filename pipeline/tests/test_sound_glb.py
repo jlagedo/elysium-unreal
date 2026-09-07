@@ -286,6 +286,24 @@ def _root(document: dict) -> dict:
     return document["extensions"][SOUND_EXTENSION]
 
 
+def _payload(document: dict, binary: bytes) -> bytes:
+    """The decoded payload alone. Since schema 1.1.0 the BIN chunk also carries the source
+    capsules, appended after the payload, so a test that means "the samples" slices them off."""
+
+    return binary[:int(_root(document)["payload"]["byteLength"])]
+
+
+def _capsule(document: dict, binary: bytes, path: str) -> bytes:
+    """One member's capsuled source bytes, addressed exactly as a reader would address them."""
+
+    member = next(
+        row for row in _root(document)["sourceResolution"]["members"] if row["path"] == path
+    )
+    view = document["bufferViews"][member["capsule"]["bufferView"]]
+    offset, length = int(view["byteOffset"]), int(view["byteLength"])
+    return binary[offset:offset + length]
+
+
 def _ledger(document: dict, path: str) -> dict:
     for row in _root(document)["coverage"]["byteLedger"]:
         if row["sourcePath"] == path:
@@ -395,7 +413,7 @@ def test_adpcm_blocks_are_graded_derived_and_pcm16_is_graded_mapped():
 
 def test_eight_bit_pcm_is_widened_into_the_int16_payload():
     _, _, document, binary = _publish({"sound/a.wav": PCM8_WAV}, "a.wav")
-    assert list(struct.unpack("<4h", binary)) == [-32768, 0, 32512, -16384]
+    assert list(struct.unpack("<4h", _payload(document, binary))) == [-32768, 0, 32512, -16384]
     assert _root(document)["payload"]["sampleFormat"] == "int16-interleaved"
     states = {
         entry["owner"]: entry["state"]
@@ -405,11 +423,11 @@ def test_eight_bit_pcm_is_widened_into_the_int16_payload():
 
 
 def test_the_adpcm_payload_is_the_samples_the_block_decodes_to():
-    _, model, _, binary = _publish({"sound/a.wav": ADPCM_WAV}, "a.wav")
+    _, model, document, binary = _publish({"sound/a.wav": ADPCM_WAV}, "a.wav")
     samples, frames, blocks, consumed = adpcm.decode(
         _adpcm_block(), 1, 32, [list(pair) for pair in COEFFICIENTS]
     )
-    assert binary == samples.tobytes()
+    assert _payload(document, binary) == samples.tobytes()
     assert blocks == 1 and consumed == 32
     assert model.codec["durationSamples"] == frames == 52
 
@@ -624,7 +642,7 @@ def test_the_payload_is_the_frame_stream_and_each_frame_locates_itself_in_both()
         source = TAGGED_MP3[row["sourceOffset"]:row["sourceOffset"] + row["length"]]
         payload = binary[row["payloadOffset"]:row["payloadOffset"] + row["length"]]
         assert source == payload
-    assert sum(row["length"] for row in rows) == len(binary)
+    assert sum(row["length"] for row in rows) == len(_payload(document, binary))
     assert model.codec["durationSamples"] == 2 * 1152
 
 
@@ -713,7 +731,7 @@ def test_a_frame_whose_crc_does_not_verify_is_recorded_and_still_carried():
     assert [row["role"] for row in model.anomalies] == ["crc-mismatch"]
     assert _root(document)["frames"][0]["crcValid"] is False
     assert _root(document)["frames"][1]["crcValid"] is True
-    assert len(binary) == len(CRC_BROKEN_MP3)
+    assert _payload(document, binary) == CRC_BROKEN_MP3
 
 
 def test_bytes_that_are_neither_a_frame_nor_a_tag_are_omitted_with_their_digest():
@@ -728,14 +746,14 @@ def test_bytes_that_are_neither_a_frame_nor_a_tag_are_omitted_with_their_digest(
     assert trailing["state"] == "omitted-proven"
     assert {"owner": "mp3.trailing", "reason": "non-frame-bytes"} in \
         _root(document)["coverage"]["omittedProven"]
-    assert len(binary) == len(TRAILING_MP3) - 3
+    assert _payload(document, binary) == TRAILING_MP3[:-3]
     _assert_partition(_ledger(document, "sound/a.mp3"), TRAILING_MP3)
 
 
 def test_the_verbatim_frame_stream_is_admitted_only_because_frames_describe_it():
     closure, _, document, binary = _publish({"sound/a.mp3": PLAIN_MP3}, "a.mp3")
     # An untagged member is exactly its own frame sequence, so the payload is the member's bytes.
-    assert binary == PLAIN_MP3
+    assert _payload(document, binary) == PLAIN_MP3
     validation.validate_document(document, binary, source_members=closure.members())
     _root(document)["payload"]["sampleFormat"] = "int16-interleaved"
     with pytest.raises(validation.SoundGlbValidationError):
@@ -953,9 +971,27 @@ def test_export_time_validation_re_reads_the_members_rather_than_trusting_the_de
     assert not list(tmp_path.rglob("*.glb")), "a failing unit was written anyway"
 
 
-def test_a_wave_unit_never_mirrors_its_member_into_the_product():
+def test_a_wave_units_payload_is_its_decode_and_its_capsule_is_its_member():
+    """Schema 1.1.0 reverses the old "never mirrors its member" rule for the capsule alone.
+
+    The payload stays the decode -- interleaved PCM, never the RIFF file -- and the member's own
+    bytes ride beside it in their own buffer view, which is what lets `import sound` deploy a
+    `.wav` the runtime's decoders read byte for byte.
+    """
+
     closure, _, document, binary = _publish({"sound/a.wav": ADPCM_WAV}, "a.wav")
-    assert ADPCM_WAV not in binary
+    assert ADPCM_WAV not in _payload(document, binary)
+    assert _capsule(document, binary, "sound/a.wav") == ADPCM_WAV
+    validation.validate_document(document, binary, source_members=closure.members())
+
+
+def test_a_lip_companion_travels_verbatim_beside_its_audio():
+    """The `.lip` is decoded into `lip{}` *and* capsuled, so the deployed file is the install's."""
+
+    members = {"sound/a.wav": ADPCM_WAV, "sound/a.lip": LIP}
+    closure, _, document, binary = _publish(members, "a.wav")
+    assert _capsule(document, binary, "sound/a.lip") == LIP
+    assert _root(document)["lip"] is not None
     validation.validate_document(document, binary, source_members=closure.members())
 
 

@@ -2,6 +2,8 @@
 
 #include "ElysiumPlayer.h"
 
+#include "Substrate/ElysiumWieldRules.h"
+
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSheet, Log, All);
 
 namespace
@@ -44,7 +46,8 @@ void FElysiumSheetEffects::Reset()
 
 void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
 	TArrayView<const FString> GroupNames, const FElysiumFeatTable* Feats,
-	const FElysiumStatTable* Stats, const FElysiumStrings* Strings)
+	const FElysiumStatTable* Stats, const FElysiumStrings* Strings,
+	const FElysiumExcludedEquipTable* EquipRules)
 {
 	Reset();
 
@@ -125,8 +128,17 @@ void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
 					*Effect.Trait, NamedContainer, NamedSlot);
 				const FElysiumStat* Stat = bHasSlot && Stats
 					? Stats->Container(NamedContainer).At(NamedSlot) : nullptr;
-				const int32 NamedValue = Stat && Strings && !Stat->NameMapping.IsEmpty()
+				int32 NamedValue = Stat && Strings && !Stat->NameMapping.IsEmpty()
 					? Strings->IndexOf(Stat->NameMapping, Effect.ValueName) : INDEX_NONE;
+				// The `NameFunc` half. `Excluded_Equipment` names no `strings.txt` group at all —
+				// its names are the `ExcludedEquipTables` rows, resolved in retail by the native
+				// `ExcludedEquipFunc` the stat block authors. Keyed on the stat's own `NameFunc` so
+				// the join is the authored one and not a hardcoded slot number.
+				if (NamedValue == INDEX_NONE && EquipRules != nullptr && Stat != nullptr
+					&& Stat->NameFunc.Equals(TEXT("ExcludedEquipFunc"), ESearchCase::IgnoreCase))
+				{
+					NamedValue = EquipRules->RowIndexByName(Effect.ValueName);
+				}
 				if (NamedValue != INDEX_NONE)
 				{
 					FRow Row;

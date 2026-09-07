@@ -42,6 +42,17 @@ namespace
 		return Count;
 	}
 
+	// One published response row, the shape the presentation subsystem hands the screen.
+	FElysiumDialogueChoiceView ElysiumTestDialogueRow(const TCHAR* Text, bool bEnabled = true,
+		const TCHAR* Label = TEXT(""))
+	{
+		FElysiumDialogueChoiceView Row;
+		Row.Text = Text;
+		Row.bEnabled = bEnabled;
+		Row.Label = Label;
+		return Row;
+	}
+
 	// The blood rail is the one horizontal box built with 15 droplet slots and the two group
 	// spacers between them. Finding it by that shape keeps the test off the widget's private
 	// internals while still asserting on the real constructed Slate.
@@ -917,15 +928,20 @@ bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
 	// removed, it repairs to the nearest surviving visible row rather than a dead widget address.
 	UElysiumDialogueScreen* Dialogue = NewObject<UElysiumDialogueScreen>();
 	FElysiumDialogueView Turn;
-	Turn.Choices = { TEXT("First"), TEXT("Second"), TEXT("Third") };
+	Turn.Choices = { ElysiumTestDialogueRow(TEXT("First")), ElysiumTestDialogueRow(TEXT("Second")),
+		ElysiumTestDialogueRow(TEXT("Third")) };
 	Turn.ChoiceIds = { 101, 202, 303 };
 	Dialogue->ApplyDialogue(Turn);
 	int32 ChoiceCount = 0;
 	int32 LastChoice = INDEX_NONE;
-	Dialogue->OnChoice.BindLambda([&ChoiceCount, &LastChoice](int32 Choice)
+	// S8: the pick carries the row's `.dlg` line id beside its position, so the substrate can refuse
+	// a pick aimed at a band it has already replaced.
+	int32 LastLineId = INDEX_NONE;
+	Dialogue->OnChoice.BindLambda([&ChoiceCount, &LastChoice, &LastLineId](int32 Choice, int32 LineId)
 	{
 		++ChoiceCount;
 		LastChoice = Choice;
+		LastLineId = LineId;
 	});
 	const TSharedRef<SWidget> DialogueSlate = Dialogue->TakeWidget();
 	TestEqual(TEXT("dialogue defaults to its first stable response"),
@@ -951,6 +967,7 @@ bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("CommonUI activation reaches the semantic choice exactly once"), ChoiceCount, 1);
 	TestEqual(TEXT("semantic callback uses visible response order"), LastChoice, 1);
+	TestEqual(TEXT("and carries that row's .dlg line id with it"), LastLineId, 202);
 
 	Turn.Revision = 2;
 	Dialogue->ApplyDialogue(Turn);
@@ -958,7 +975,7 @@ bool FElysiumUINavigationStateTest::RunTest(const FString& Parameters)
 		Dialogue->GetSelectedActionId(), FName(TEXT("Dialogue.Choice.202")));
 	Dialogue->SelectAction(TEXT("Dialogue.Choice.303"), false);
 	Turn.Revision = 3;
-	Turn.Choices = { TEXT("First"), TEXT("Second") };
+	Turn.Choices = { ElysiumTestDialogueRow(TEXT("First")), ElysiumTestDialogueRow(TEXT("Second")) };
 	Turn.ChoiceIds = { 101, 202 };
 	Dialogue->ApplyDialogue(Turn);
 	TestEqual(TEXT("contracted dialogue repairs to nearest surviving row"),
@@ -1222,23 +1239,51 @@ bool FElysiumUIScalingAndDialogueInputTest::RunTest(const FString& Parameters)
 		FVector2D(3840.0, 2160.0) })
 	{
 		const float Scale = ElysiumUI::ScaleFor(static_cast<float>(Viewport.Y));
-		constexpr float SlateRenderDPI = 96.0f;
-		constexpr float PointsPerInch = 72.0f;
-		TestTrue(*FString::Printf(TEXT("dialogue choice type follows the virtual canvas at %.0fx%.0f"),
+		// The type ramp is now handed to FElysiumUIFontLibrary in virtual pixels (the project's own
+		// Inter face across the whole band, M-UI) rather than converted to typographic points for
+		// FCoreStyle, so what has to hold is that the drawn size is the authored size times the one
+		// canvas law -- and that the band's own order of emphasis survives every edit to the ramp.
+		//
+		// Retail draws the NPC line and the choices at ONE size and tells them apart by colour
+		// alone (measured: cap height 19 px on both, `RetailBand*`), so the sentence may equal the
+		// choices but must never fall under them. The speaker's name has no retail counterpart and
+		// is an attribution above the line, not a header over it.
+		TestTrue(*FString::Printf(TEXT("dialogue line never sinks under the choices at %.0fx%.0f"),
 			Viewport.X, Viewport.Y),
-			FMath::IsNearlyEqual(
-				ElysiumDialogueUI::ChoiceFontPoints * (SlateRenderDPI / PointsPerInch) * Scale,
-				ElysiumDialogueUI::ChoiceFontVirtualPixels * Scale));
-		TestTrue(*FString::Printf(TEXT("dialogue line type follows the virtual canvas at %.0fx%.0f"),
+			ElysiumDialogueUI::LineFontVirtualPixels
+				>= ElysiumDialogueUI::ChoiceFontVirtualPixels);
+		TestTrue(*FString::Printf(TEXT("dialogue speaker never outranks the line at %.0fx%.0f"),
 			Viewport.X, Viewport.Y),
-			FMath::IsNearlyEqual(
-				ElysiumDialogueUI::LineFontPoints * (SlateRenderDPI / PointsPerInch) * Scale,
-				ElysiumDialogueUI::LineFontVirtualPixels * Scale));
-		TestTrue(*FString::Printf(TEXT("dialogue speaker type follows the virtual canvas at %.0fx%.0f"),
+			ElysiumDialogueUI::SpeakerFontVirtualPixels
+				<= ElysiumDialogueUI::LineFontVirtualPixels);
+		TestTrue(*FString::Printf(TEXT("the requirement label sits under the sentence at %.0fx%.0f"),
 			Viewport.X, Viewport.Y),
-			FMath::IsNearlyEqual(
-				ElysiumDialogueUI::SpeakerFontPoints * (SlateRenderDPI / PointsPerInch) * Scale,
-				ElysiumDialogueUI::SpeakerFontVirtualPixels * Scale));
+			ElysiumDialogueUI::LabelFontVirtualPixels
+				< ElysiumDialogueUI::ChoiceFontVirtualPixels);
+		TestTrue(*FString::Printf(TEXT("the skip hint is the quietest run at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			ElysiumDialogueUI::HintFontVirtualPixels
+				<= ElysiumDialogueUI::LabelFontVirtualPixels);
+
+		// The band's rhythm is measured against retail, not eyeballed. The reading size sits on
+		// retail's em (17.8 vp) to within a rounding step, and the row's own widget padding must
+		// stay inside retail's whole leading (~9.9 vp) -- Slate's text block already spends part
+		// of that budget on the face's ascent and descent, so the widget may not spend all of it.
+		// This is the assertion that keeps the wall of choices from growing back: it failed at the
+		// pre-2026-09-07 padding, which cost 16 vp per row against a 9.9 vp retail budget.
+		TestTrue(*FString::Printf(TEXT("the reading size tracks retail's em at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			FMath::Abs(ElysiumDialogueUI::ChoiceFontVirtualPixels
+				- ElysiumDialogueUI::RetailBandEmVirtualPixels) <= 1.0f);
+		TestTrue(*FString::Printf(TEXT("a choice row's padding fits retail's leading at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			ElysiumDialogueUI::ChoiceRowLeadingBudget
+				< ElysiumDialogueUI::RetailBandLeadingVirtualPixels);
+		TestEqual(*FString::Printf(TEXT("dialogue choice type follows the virtual canvas at %.0fx%.0f"),
+			Viewport.X, Viewport.Y),
+			ElysiumDialogueUI::ChoiceFontVirtualPixels * Scale,
+			ElysiumDialogueUI::ChoiceFontVirtualPixels
+				* static_cast<float>(Viewport.Y) / ElysiumUI::VirtualH);
 		TestEqual(*FString::Printf(TEXT("dialogue width is 63.3%% at %.0fx%.0f"),
 			Viewport.X, Viewport.Y),
 			ElysiumDialogueUI::ResponsePanelWidth * Scale / static_cast<float>(Viewport.X),
@@ -1270,6 +1315,21 @@ bool FElysiumUIScalingAndDialogueInputTest::RunTest(const FString& Parameters)
 		ElysiumDialogueUI::ChoiceForKey(EKeys::Enter, 0, true, true);
 	TestTrue(TEXT("an automatic voice failure accepts explicit fallback advance"),
 		AutomaticFallback.IsSet() && AutomaticFallback.GetValue() == -1);
+
+	// M-DISABLED: the key-to-row map is positional and stays so — the refusal is the screen's.
+	const TOptional<int32> ThirdOfMixed = ElysiumDialogueUI::ChoiceForKey(EKeys::Three, 3, false);
+	TestTrue(TEXT("a disabled row still owns its number key"),
+		ThirdOfMixed.IsSet() && ThirdOfMixed.GetValue() == 2);
+
+	// M-SKIP: Space is the hurry verb while the voice runs, and only then.
+	TestTrue(TEXT("Space skips while the NPC speaks"),
+		ElysiumDialogueUI::IsSkipKey(EKeys::SpaceBar, true, true));
+	TestFalse(TEXT("Space is not the skip verb once the voice is done"),
+		ElysiumDialogueUI::IsSkipKey(EKeys::SpaceBar, false, false));
+	TestFalse(TEXT("Space is not the skip verb when the world refuses the hurry"),
+		ElysiumDialogueUI::IsSkipKey(EKeys::SpaceBar, true, false));
+	TestFalse(TEXT("Enter is never the skip verb"),
+		ElysiumDialogueUI::IsSkipKey(EKeys::Enter, true, true));
 	return !HasAnyErrors();
 }
 

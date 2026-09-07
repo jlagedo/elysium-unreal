@@ -201,7 +201,7 @@ void UElysiumAudioSubsystem::BeginCatalogLoad()
 {
 	bCatalogReady = false;
 	CatalogLoadError.Reset();
-	const FString CatalogPath = FElysiumContentPaths::Root() / TEXT("audio/catalog.json");
+	const FString CatalogPath = FElysiumContentPaths::AudioCatalogFile();
 	const TWeakObjectPtr<UElysiumAudioSubsystem> WeakThis(this);
 	Async(EAsyncExecution::ThreadPool, [WeakThis, CatalogPath]()
 	{

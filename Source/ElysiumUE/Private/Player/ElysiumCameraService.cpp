@@ -1,5 +1,6 @@
 #include "ElysiumCameraService.h"
 
+#include "ElysiumCameraComponent.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumMapSubsystem.h"
@@ -195,29 +196,25 @@ void UElysiumCameraService::Advance(float DeltaSeconds)
 		return;
 	}
 
+	// The shot's own values are re-resolved by whoever pushed it EVERY frame — retail's camera think
+	// re-resolves all four anchors every server tick too (`vampire.dll` `FUN_1006e8e0`, loop
+	// `0x1006ea90`) — so the goal jitters with the subject's animation whenever an anchor is a bone.
+	// **What holds the camera still is this tracker, not the anchor mode**: `C_BaseCineCamera`'s
+	// tolerance deadbands (`FUN_10001fe0` / `FUN_10001d40`) park the pose until the goal drifts past
+	// the shot's own `DistanceTolerance` / `AngularTolerance`, which for a conversation shot is 10
+	// degrees — wider than any head-bone motion.
 	const FElysiumCameraShot& Shot = Resolved.Request.Shot;
-	const FRotator TargetRotation = Shot.bUseLookAt
-		? (Shot.LookAt - Shot.Origin).Rotation()
-		: Shot.Rotation;
 	if (!bTrackingSeeded)
 	{
-		TrackingLocation = Shot.Origin;
-		TrackingRotation = TargetRotation;
+		Tracker.Start(Shot);
 		bTrackingSeeded = true;
 	}
 	else
 	{
-		TrackingLocation = Shot.MoveSpeed > 0.0f
-			? FMath::VInterpConstantTo(TrackingLocation, Shot.Origin, Dt, Shot.MoveSpeed)
-			: Shot.Origin;
-		TrackingRotation.Pitch = ElysiumCam::ApproachAngle(TrackingRotation.Pitch,
-			TargetRotation.Pitch, Shot.MaxTurnRate.X, Dt);
-		TrackingRotation.Yaw = ElysiumCam::ApproachAngle(TrackingRotation.Yaw,
-			TargetRotation.Yaw, Shot.MaxTurnRate.Y, Dt);
-		TrackingRotation.Roll = ElysiumCam::ApproachAngle(TrackingRotation.Roll,
-			TargetRotation.Roll, Shot.MaxTurnRate.Z, Dt);
+		Tracker.Advance(Shot, Dt);
 	}
-	TrackingRotation.Roll = Shot.Roll;
+	TrackingLocation = Tracker.Location;
+	TrackingRotation = Tracker.Rotation;
 	Resolved.Location = TrackingLocation;
 	Resolved.Rotation = TrackingRotation;
 	Resolved.FieldOfView = Shot.FieldOfView;
@@ -229,9 +226,14 @@ void UElysiumCameraService::ApplyToView(FMinimalViewInfo& InOutView) const
 	{
 		return;
 	}
+	// A `vdata/camerashots/` `FieldOfView` is 4:3-referenced and Source is Hor+, so the authored
+	// number widens to the window's aspect here rather than in the parse — the shot keeps the value
+	// its file wrote and only the rendered frame carries the window's.
 	float Fov = InOutView.FOV;
 	ElysiumCam::ComposeScriptedShot(InOutView.Location, InOutView.Rotation, Fov,
-		Resolved.Location, Resolved.Rotation, Resolved.FieldOfView, Resolved.Weight);
+		Resolved.Location, Resolved.Rotation,
+		ElysiumCam::WidenSourceFov(Resolved.FieldOfView,
+			ElysiumCameraView::RenderAspectRatio(InOutView.AspectRatio)), Resolved.Weight);
 	InOutView.FOV = Fov;
 	if (Resolved.Request.bCameraCut && Resolved.Weight >= 1.0f)
 	{

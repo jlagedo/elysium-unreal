@@ -38,9 +38,17 @@ enum class EElysiumShotPosition : uint8
 };
 
 // How the anchor follows what it is attached to.
+//
+// **`None` is not "sample once".** The shipped how-to reads that way, but retail's camera think
+// (`vampire.dll` `FUN_1006e8e0`) re-resolves ALL FOUR anchors of the live shot every server tick
+// (loop `0x1006ea90`, cache `this+0x598+i*12`) and `FUN_1006f010` merely reads that per-tick cache
+// back; nothing latches. What `AttachType` selects is only the *frame the OffsetOrigin is added in*
+// (`0x1006f430`): world axes for `None`/`FollowNoAngles`, the attach point's angles for `Follow`,
+// the entity's abs angles for `FollowEntAngles`. The thing that keeps a camera still is the client
+// tracker's tolerance deadbands (`FElysiumScriptedShotTracker`), never this enum.
 enum class EElysiumShotAttach : uint8
 {
-	None,             // set once, then stay put
+	None,             // offset stays in world axes; the anchor still re-resolves every tick
 	Follow,           // follow the position, and rotate the offset by the attachment's facing
 	FollowNoAngles,   // follow the position only; the offset stays in world axes
 	FollowEntAngles,  // follow the position, and rotate the offset by the *entity's* facing
@@ -71,15 +79,21 @@ struct FElysiumShotAnchor
 };
 
 // The `CameraConstraints` block. Distances/speeds arrive in Source units and are held in cm.
+//
+// **The defaults are retail's parse defaults**, seeded by `FUN_100721e0` before it reads the block
+// and re-seeded identically when the block is absent entirely (`0x10072300`) — an unwritten key is
+// not zero. They are the shot-record fields at stride 0x104: `+0xD8` MoveSpeed, `+0xDC` MoveAccel,
+// `+0xE0` TurnAccel, `+0xE4..0xEC` MaxTurnRate[3], `+0xF0..0xF8` AngularTolerance[3], `+0xFC`
+// DistanceTolerance, `+0x100` FieldOfView.
 struct FElysiumShotConstraints
 {
-	float MoveSpeed = 0.0f;                            // cm/s the camera may move, 0 = snap
-	float MoveAccel = 0.0f;                            // cm/s^2 (carried; the solve is rate-limited)
+	float MoveSpeed = 150.0f * ElysiumCam::U;          // cm/s the camera may move, 0 = snap
+	float MoveAccel = 50.0f * ElysiumCam::U;           // cm/s^2 toward MoveSpeed, and back down again
 	FVector MaxTurnRate = FVector(90.0f, 90.0f, 90.0f);// deg/s, (pitch, yaw, roll)
-	float TurnAccel = 0.0f;                            // deg/s^2 (carried)
-	float DistanceTolerance = 0.0f;                    // cm of subject drift before the camera moves
-	FVector AngularTolerance = FVector::ZeroVector;    // degrees of drift before it tilts
-	float FieldOfView = 0.0f;                          // degrees, 0 = keep the player's
+	float TurnAccel = 30.0f;                           // deg/s^2 toward MaxTurnRate
+	float DistanceTolerance = 10.0f * ElysiumCam::U;   // cm of goal drift tolerated while parked
+	FVector AngularTolerance = FVector(1.0f, 1.0f, 1.0f); // deg of drift tolerated per axis
+	float FieldOfView = 75.0f;                         // degrees, 4:3-referenced, clamped [20,120]
 	bool bDialogPOV = false;                           // NPCs look at the camera, not the player's eye
 	bool bAutoPositionFromTarget = false;              // frame the target points top-to-bottom
 	bool bSyncRotateOnMove = false;
@@ -120,6 +134,12 @@ namespace ElysiumCameraShots
 
 	// Drop the cache — a re-export, and the test seam.
 	void FlushCache();
+
+	// Seed the cache with a parsed shot under a normalized key, so a fixture can stand in for a file
+	// under the content root. The shipped `vdata/camerashots/` tree is read-only corpus and an
+	// automation run has no export mounted, so this is how a headless test drives the source-shot
+	// path at all. Paired with `FlushCache` by every caller.
+	void Install(const FString& ShotFile, const FElysiumCameraShotDef& Def);
 
 	const TCHAR* LexToString(EElysiumShotPosition Position);
 	const TCHAR* LexToString(EElysiumShotAttach Attach);

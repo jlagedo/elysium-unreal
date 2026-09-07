@@ -14,23 +14,29 @@ from elysium_pipeline.formats.scene_glb import (
 from elysium_pipeline.formats.scene_glb.coverage import build_coverage
 from elysium_pipeline.formats.unit_contract import (
     asset_block,
+    buffer_table,
+    encapsulate,
     extension_root,
     identity_block,
     plain,
-    source_resolution,
     write_glb,
 )
 
 
 def build_document(model) -> tuple[dict, bytes]:
-    """The extension root and the GLB document for one decoded scene. No BIN chunk: a scene's
-    timeline is an event list keyed by actor name, not a sampled animation, so it lives entirely
-    in the extension."""
+    """The extension root and the GLB document for one decoded scene.
 
+    No accessor: a scene's timeline is an event list keyed by actor name, not a sampled
+    animation, so the decode lives entirely in the extension. The BIN chunk the unit does carry
+    is the source capsule alone -- the winning `.vcd` member's own bytes, so the unit is
+    everything a reader needs to reproduce the install file (`seam_map_unit_contract.md`,
+    "Source capsule"). An empty `.vcd` capsules to nothing and carries no BIN chunk."""
+
+    resolution, buffer_views, binary = encapsulate([model.member])
     root = extension_root(
         schema_version=SCHEMA_VERSION,
         identity=identity_block(model.asset_id, model.source_path, key=model.key),
-        source_resolution=source_resolution([model.member]),
+        source_resolution=resolution,
         dependencies=model.dependencies,
         coverage=build_coverage(
             byte_ledger_row=model.byte_ledger[0],
@@ -47,13 +53,16 @@ def build_document(model) -> tuple[dict, bytes]:
         anomalies=model.anomalies,
         omissions=model.omissions,
     )
-    document = {
+    document: dict = {
         "asset": asset_block("Scene"),
         "extensionsUsed": [SCENE_EXTENSION],
         "extensionsRequired": [SCENE_EXTENSION],
-        "extensions": {SCENE_EXTENSION: plain(root)},
     }
-    return document, b""
+    if binary:
+        document["buffers"] = buffer_table(binary)
+        document["bufferViews"] = buffer_views
+    document["extensions"] = {SCENE_EXTENSION: plain(root)}
+    return document, binary
 
 
 def export(

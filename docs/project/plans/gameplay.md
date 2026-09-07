@@ -183,29 +183,7 @@ as retail. *Deps:* 9.8, 11.10.
 
 ### 13.4 Computer terminals & tutorial hacking
 
-The parser, the plain-C++ terminal state machine, `FElysiumTerminal`'s exclusive explicit-use
-session, the authoritative non-bindable `hackcmd` path, Function ordering on the one queue and the
-console's projection through the model's exact `screen` material slot are built.
-
-**Remaining.** Make Escape and Quit end the session from every input mode and during a skill
-attempt, rather than reaching the command router — retail escapes a password prompt through the use
-dispatcher, not through `AcceptCmd`. Make a content-load failure a named error instead of a
-permanently unusable prop. Derive the screen basis from the model's `screen`/`screen_axis`
-attachments and use it for both the recovered `0.7` facing gate and a fixed `Focus` camera request
-framed to keep the bezel and part of the prop in shot; no offline screen-metadata export is needed.
-Give the screensaver ownership of the projection surface so an idle terminal is live before its
-first session, reproducing the recovered random-cell placement on `ss_start`/`ss_delay`. Add the CRT
-screen material and the monospace type tokens, and the email state machine including
-`global_email` reconciliation. The four authority-side cues over the exported `old_computer` group
-and the local keystroke click are AUD2's; this task raises them. `autodelete` is inert in retail and is not implemented. The
-controller's semantic action palette and virtual text entry reach the same handler as keyboard line
-editing; VtMB's terminal font/VGUI/512×512 raster are not reused. *Design:*
-`docs/architecture/computer-terminal-architecture.md`; behavior: `docs/vtmb/computer-terminals.md`.
-*Acceptance:* from real input, keyboard and gamepad focus `tuthack`, enter `Safe` by password or
-Hacking bypass, execute Unlock, enqueue `OnTrigger0`, reveal/unlock the safe through the authored
-map wires, quit, restore the exact
-previous camera; the grid stays readable inside the bezel at 1080p/1440p/4K. *Deps:* 4.11, AUD2, 9.6,
-11.4–11.8.
+Moved to its own plan file: [plans/terminals.md](terminals.md).
 
 ### 13.5 Combat AI — remaining
 

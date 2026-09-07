@@ -19,6 +19,7 @@
 
 struct FElysiumSheet;
 class FElysiumCombatCharacter;
+struct FElysiumExcludedEquipTable;
 
 // The resolved effect layer — one character's `m_tEffectList`.
 
@@ -71,9 +72,16 @@ struct FElysiumSheetEffects
 	// The feat table is what lets an effect target a **feat** — seven shipped traits do
 	// (`Inspection`, `Seduction`, the three combat feats, `Intrusion`, `Hacking`); with no table
 	// those rows are recorded as unresolved rather than mistaken for a stat.
+	//
+	// `EquipRules` is the one named enum that does NOT live in `strings.txt`: `Excluded_Equipment`
+	// carries a `NameFunc` (`ExcludedEquipFunc`) rather than a `NameMapping`, and the names it
+	// resolves (`"Value Clawed_Form"`, on both Protean groups) are the `ExcludedEquipTables` rows of
+	// `system/items.txt`. Omitting it leaves those rows explicitly unresolved, exactly as omitting
+	// `Strings` leaves the order enums unresolved.
 	void Build(const FElysiumTraitEffects& Table, TArrayView<const FString> GroupNames,
 		const FElysiumFeatTable* Feats, const FElysiumStatTable* Stats = nullptr,
-		const FElysiumStrings* Strings = nullptr);
+		const FElysiumStrings* Strings = nullptr,
+		const FElysiumExcludedEquipTable* EquipRules = nullptr);
 	void Reset();
 	bool IsEmpty() const { return TraitRows.IsEmpty() && FeatRows.IsEmpty() && Flags.IsEmpty(); }
 
@@ -210,6 +218,11 @@ namespace ElysiumSheetRules
 		// context otherwise gathers nothing, the defender defends with zero and no margin can be
 		// classified at all.
 		const FElysiumRules*             Rules = nullptr;
+		// `system/items.txt`'s `ExcludedEquipTables`. The wield rule (`Inventory_Can_Wield`,
+		// 0x10335a70) is read by `FElysiumInventory`, which is a plain-C++ leaf on a character that
+		// may have no GameInstance behind it at all — with no table in reach every mask that does
+		// not carry `never` is wieldable, which is the unrestricted answer and not a disarmed one.
+		const FElysiumExcludedEquipTable* ExcludedEquip = nullptr;
 	};
 
 	// Bind (or, with a default-constructed value, unbind) the fallback tables. Process-wide,

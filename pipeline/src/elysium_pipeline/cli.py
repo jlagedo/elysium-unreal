@@ -1686,6 +1686,32 @@ def export_v2_vdatas_glb(ctx: typer.Context) -> None:
     )
 
 
+def _run_corpus_lane(config: ProjectConfig, deploy, lane: str) -> None:
+    """Run one loose-corpus import lane and report it, the same way for every lane.
+
+    The lanes differ only in which units they read and where the bytes land
+    (`importers/corpus_deploy.py`); the command surface -- resolve the export root, deploy, print
+    one line, name up to ten failures and exit non-zero if there were any -- is one rule.
+    """
+
+    from elysium_pipeline.importers import corpus_deploy
+
+    if config.export_v2_root is None:
+        raise ConfigError(
+            "ELYSIUM_EXPORT_V2_ROOT is not configured; copy dev/paths.example.env to "
+            ".elysium.local.env and set the local path"
+        )
+    result = deploy(config.export_v2_root, corpus_deploy.corpus_root(config.repo_root))
+    console.print(result.summary())
+    console.print(
+        f"  report: {corpus_deploy.bookkeeping_root(result.destination_root, lane) / 'import_report.json'}"
+    )
+    if result.failures:
+        for key, detail in result.failures[:10]:
+            console.print(f"[yellow]  {key}: {detail}[/yellow]", markup=True)
+        raise RuntimeError(f"{len(result.failures)} {lane} unit(s) could not be imported")
+
+
 @import_app.command("vdata")
 def import_vdata(ctx: typer.Context) -> None:
     """Deploy the vdata corpus from the published GLB units into Content/ElysiumCorpus."""
@@ -1710,6 +1736,32 @@ def import_vdata(ctx: typer.Context) -> None:
     # No install, no engine and no generated-state lease: the units are self-contained and the
     # destination is loose text nothing bakes from, so the deploy is a file copy and nothing more.
     _execute(_state(ctx), "import vdata", ExitCode.OFFLINE_EXPORT, action, require_work=False)
+
+
+@import_app.command("dialogue")
+def import_dialogue(ctx: typer.Context) -> None:
+    """Deploy the dialogue corpus -- `.dlg` files and `.vcd` scenes -- into Content/ElysiumCorpus."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import dialogue as importer
+
+        _run_corpus_lane(config, importer.import_dialogue, "dialogue")
+
+    # No install, no engine and no generated-state lease: the units are self-contained and the
+    # destination is loose text nothing bakes from, so the deploy is a file copy and nothing more.
+    _execute(_state(ctx), "import dialogue", ExitCode.OFFLINE_EXPORT, action, require_work=False)
+
+
+@import_app.command("sound")
+def import_sound(ctx: typer.Context) -> None:
+    """Deploy the sound corpus -- audio and its `.lip` sidecars -- into Content/ElysiumCorpus."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import sound as importer
+
+        _run_corpus_lane(config, importer.import_sound, "sound")
+
+    _execute(_state(ctx), "import sound", ExitCode.OFFLINE_EXPORT, action, require_work=False)
 
 
 @import_app.command("textures")

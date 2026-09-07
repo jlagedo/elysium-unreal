@@ -85,5 +85,10 @@ namespace ElysiumSlot
 	constexpr int32 Humanity       = 27;
 	constexpr int32 Masquerade     = 28;
 	constexpr int32 ExpModifier    = 29;
+	// `Starting_Equipment` and `Excluded_Equipment`. Both are authored by NAME and hold an index
+	// into a `system/items.txt` block; slot 31's is the `ExcludedEquipTables` row
+	// `Inventory_Can_Wield` (0x10335a70) selects a character's wield rule with.
+	constexpr int32 StartingEquipment = 30;
+	constexpr int32 ExcludedEquipment = 31;
 	constexpr int32 Experience     = 34;
 }

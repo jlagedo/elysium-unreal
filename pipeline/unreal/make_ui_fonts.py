@@ -1,6 +1,7 @@
 # Imports the UI typeface set (Content/Fonts/*.ttf) into generated local `UFontFace` assets under
 # /Game/ElysiumGenerated/UI/Fonts. Roadmap 8.6; the type system is "Nocturne" (docs/architecture/ui-architecture.md):
-# Spectral SC for small-caps labels, Spectral for body copy, Inter for data and numerals.
+# Spectral SC for small-caps labels, Spectral for body copy, Inter for data and numerals, plus
+# Terminus (TTF) for the computer-terminal console.
 #
 # Why font *faces* and not one composite UFont: UE 5.8's editor Python exposes `UFontFace`
 # fully, but `unreal.Font` carries no `composite_font` property and `Typeface`/`TypefaceEntry`/
@@ -37,6 +38,11 @@ FACES = [
     ("Spectral-SemiBold.ttf",   "FF_Spectral_SemiBold"),
     ("Inter-Regular.ttf",       "FF_Inter_Regular"),
     ("Inter-SemiBold.ttf",      "FF_Inter_SemiBold"),
+    # The computer-terminal console face (docs/architecture/computer-terminal-architecture.md 6.4).
+    # Pixel-derived outlines: the C++ side raises the SDF ppem on this role so the stair corners
+    # survive Slate's distance-field rasterizer.
+    ("TerminusTTF-Regular.ttf", "FF_TerminusTTF_Regular"),
+    ("TerminusTTF-Bold.ttf",    "FF_TerminusTTF_Bold"),
 ]
 
 

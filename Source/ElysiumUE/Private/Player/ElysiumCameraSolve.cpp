@@ -264,6 +264,191 @@ FElysiumFeedCameraPose ElysiumCam::SolveOrdinaryFeedCamera(float T, float EntryY
 
 // The scripted-shot channel
 
+// The client shot tracker (`C_BaseCineCamera`)
+
+namespace
+{
+	// How long the remaining translation still takes, given the current speed, the shot's ceiling and
+	// its acceleration. `SyncRotateOnMove` divides the angular error by this so the pan lands with the
+	// dolly (`FUN_10001c80`). With no acceleration the camera runs at `MoveSpeed` outright.
+	float RemainingTranslationSeconds(float Speed, float MaxSpeed, float Accel, float Distance)
+	{
+		const float Ceiling = FMath::Max(MaxSpeed, KINDA_SMALL_NUMBER);
+		if (Accel <= 0.0f)
+		{
+			return Distance / Ceiling;
+		}
+		const float RampSeconds = FMath::Max(0.0f, Ceiling - Speed) / Accel;
+		const float RampDistance = 0.5f * (Speed + Ceiling) * RampSeconds;
+		if (RampDistance >= Distance)
+		{
+			// v*t + a*t^2/2 = d.
+			return (-Speed + FMath::Sqrt(Speed * Speed + 2.0f * Accel * Distance)) / Accel;
+		}
+		return RampSeconds + (Distance - RampDistance) / Ceiling;
+	}
+
+	// One axis of `FUN_10001d40` plus its rate solve `FUN_10001c80`. `InOutRate` is the axis' entry in
+	// the tracker's `0x4a8[3]`; `bInOutSettled` its entry in `0x4c1[3]`.
+	// `FRotator`/`FVector` components are `double` in UE5, so the axis and its rate come in by
+	// reference at that width; the shot's own limits stay the `float` the file parsed them as.
+	void AdvanceAngleAxis(double& InOutCurrent, double Desired, double& InOutRate, bool& bInOutSettled,
+		float Tolerance, float MaxRate, float TurnAccel, float SyncSeconds, float Dt)
+	{
+		const double Delta = FRotator::NormalizeAxis(Desired - InOutCurrent);
+		const double Error = FMath::Abs(Delta);
+
+		// The deadband is the shot's tolerance while the axis is parked and a hair once it is turning:
+		// the camera comes out of the park only on a real drift, and then goes all the way onto the
+		// target instead of stopping at the edge of the band.
+		const double Deadband = bInOutSettled
+			? FMath::Max(Tolerance, 0.0f) : FElysiumScriptedShotTracker::SettleAngle;
+		if (Error <= Deadband)
+		{
+			bInOutSettled = true;
+			InOutRate = 0.0f;
+			return;
+		}
+		bInOutSettled = false;
+
+		if (SyncSeconds > 0.0f)
+		{
+			// `SyncRotateOnMove` with the position still moving: size the rate to the remaining
+			// translation time. `MaxTurnRate` is deliberately bypassed here — retail lands the pan with
+			// the dolly rather than clamping it.
+			InOutRate = Error / SyncSeconds;
+		}
+		else if (TurnAccel <= 0.0f)
+		{
+			// A value shot (a `camera_track` edit, a grammar profile) authors no `TurnAccel`; it runs
+			// at the rate ceiling directly, which is the rate-limited behaviour this channel had
+			// before the tracker landed.
+			InOutRate = FMath::Max(MaxRate, 0.0f);
+		}
+		else
+		{
+			const double StoppingAngle = (InOutRate * InOutRate) / (2.0f * TurnAccel);
+			InOutRate += (Error <= StoppingAngle ? -TurnAccel : TurnAccel) * Dt;
+			InOutRate = FMath::Clamp(InOutRate, 0.0f, FMath::Max(MaxRate, 0.0f));
+		}
+
+		const double Step = InOutRate * Dt;
+		InOutCurrent = FRotator::NormalizeAxis(
+			Step >= Error ? Desired : InOutCurrent + FMath::Sign(Delta) * Step);
+	}
+}
+
+void FElysiumScriptedShotTracker::Start(const FElysiumCameraShot& Shot)
+{
+	Location = Shot.Origin;
+	Rotation = Shot.bUseLookAt ? (Shot.LookAt - Shot.Origin).Rotation() : Shot.Rotation;
+	Rotation.Roll = Shot.Roll;
+	Speed = 0.0f;
+	TurnRate = FVector::ZeroVector;
+	// Retail marks the position settled and zeroes the rates; the axes acquire on the first frame,
+	// which with the pose already at the goal is a no-op.
+	bPositionSettled = true;
+	bPitchSettled = false;
+	bYawSettled = false;
+	bRollSettled = false;
+	bSeeded = true;
+}
+
+void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float DeltaSeconds)
+{
+	if (!bSeeded)
+	{
+		Start(Shot);
+		return;
+	}
+	const float Dt = FMath::Max(0.0f, DeltaSeconds);
+	if (Dt <= 0.0f)
+	{
+		return;
+	}
+
+	// `SnapOnShotChange` is a hard copy, and a shot with no `MoveSpeed` snaps by the same grammar
+	// ("0 = the camera is not rate-limited"), so both skip the approach entirely.
+	if (Shot.bSnapOnShotChange || Shot.MoveSpeed <= 0.0f)
+	{
+		Location = Shot.Origin;
+		Speed = 0.0f;
+		bPositionSettled = true;
+	}
+	else
+	{
+		// Position, `FUN_10001fe0`.
+		const FVector ToGoal = Shot.Origin - Location;
+		const float Distance = static_cast<float>(ToGoal.Size());
+		const float Threshold = bPositionSettled
+			? FMath::Max(Shot.DistanceTolerance, 0.0f) : SettleDistance;
+		if (Distance < Threshold)
+		{
+			bPositionSettled = true;
+			Speed = 0.0f;
+		}
+		else
+		{
+			bPositionSettled = false;
+			if (Shot.MoveAccel <= 0.0f)
+			{
+				Speed = Shot.MoveSpeed;
+			}
+			else
+			{
+				const float StoppingDistance = (Speed * Speed) / (2.0f * Shot.MoveAccel);
+				Speed += (Distance <= StoppingDistance ? -Shot.MoveAccel : Shot.MoveAccel) * Dt;
+				Speed = FMath::Clamp(Speed, 0.0f, Shot.MoveSpeed);
+			}
+			const float Step = Speed * Dt;
+			Location = Step >= Distance ? Shot.Origin : Location + (ToGoal / Distance) * Step;
+		}
+	}
+
+	// Angles, `FUN_10001d40`. The desired angle is solved against the origin the position step just
+	// produced, exactly as retail does — which is why a dolly re-aims as it travels.
+	FRotator Desired = Shot.bUseLookAt ? (Shot.LookAt - Location).Rotation() : Shot.Rotation;
+	Desired.Roll = Shot.Roll;
+
+	if (Shot.bSnapOnShotChange)
+	{
+		Rotation = Desired;
+		TurnRate = FVector::ZeroVector;
+		bPitchSettled = bYawSettled = bRollSettled = true;
+		return;
+	}
+
+	// `SyncRotateOnMove`: only while the position is actually travelling.
+	const float SyncSeconds = (Shot.bSyncRotateOnMove && !bPositionSettled)
+		? FMath::Max(RemainingTranslationSeconds(Speed, Shot.MoveSpeed, Shot.MoveAccel,
+			static_cast<float>(FVector::Distance(Shot.Origin, Location))), Dt)
+		: 0.0f;
+
+	AdvanceAngleAxis(Rotation.Pitch, Desired.Pitch, TurnRate.X, bPitchSettled,
+		static_cast<float>(Shot.AngularTolerance.X), static_cast<float>(Shot.MaxTurnRate.X),
+		Shot.TurnAccel, SyncSeconds, Dt);
+	AdvanceAngleAxis(Rotation.Yaw, Desired.Yaw, TurnRate.Y, bYawSettled,
+		static_cast<float>(Shot.AngularTolerance.Y), static_cast<float>(Shot.MaxTurnRate.Y),
+		Shot.TurnAccel, SyncSeconds, Dt);
+	AdvanceAngleAxis(Rotation.Roll, Desired.Roll, TurnRate.Z, bRollSettled,
+		static_cast<float>(Shot.AngularTolerance.Z), static_cast<float>(Shot.MaxTurnRate.Z),
+		Shot.TurnAccel, SyncSeconds, Dt);
+}
+
+float ElysiumCam::WidenSourceFov(float SourceFovDegrees, float AspectRatio)
+{
+	if (SourceFovDegrees <= 0.0f || AspectRatio <= 0.0f
+		|| FMath::IsNearlyEqual(AspectRatio, SourceFovAspect, 0.001f))
+	{
+		return SourceFovDegrees;
+	}
+	const float HalfTan = FMath::Tan(FMath::DegreesToRadians(
+		FMath::Clamp(SourceFovDegrees, 1.0f, 179.0f) * 0.5f));
+	const float Widened = 2.0f * FMath::RadiansToDegrees(
+		FMath::Atan(HalfTan * AspectRatio / SourceFovAspect));
+	return FMath::Clamp(Widened, 1.0f, 170.0f);
+}
+
 int32 FElysiumCameraShotStack::Push(const FElysiumCameraShot& Shot)
 {
 	FEntry& Entry = Shots.AddDefaulted_GetRef();
@@ -392,6 +577,8 @@ TArrayView<const ElysiumCam::FCvarDef> ElysiumCam::CvarDefs()
 		{ TEXT("cl_rollangle"),           TEXT("2"),   TEXT("strafe view bank, degrees at full speed") },
 		{ TEXT("cl_rollspeed"),           TEXT("200"), TEXT("sideways speed at which the bank reaches cl_rollangle") },
 		{ TEXT("cl_waterdist"),           TEXT("4"),   TEXT("clearance the view keeps from the water plane, Source units") },
+		{ TEXT("default_fov"),            TEXT("75"),  TEXT("player horizontal field of view at the 4:3 reference (Hor+)") },
+		{ TEXT("viewmodel_fov"),          TEXT("54"),  TEXT("first-person viewmodel field of view at the 4:3 reference") },
 		{ TEXT("c_mindistance"),          TEXT("30"),  TEXT("boom length clamp, minimum") },
 		{ TEXT("c_maxdistance"),          TEXT("200"), TEXT("boom length clamp, maximum") },
 		{ TEXT("c_minpitch"),             TEXT("0"),   TEXT("orbit pitch clamp, minimum") },
@@ -443,6 +630,11 @@ void FElysiumCameraCvars::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 	RollAngle = Num(TEXT("cl_rollangle"), 2.0f);
 	RollSpeed = Num(TEXT("cl_rollspeed"), 200.0f) * ElysiumCam::U;
 	WaterDist = Num(TEXT("cl_waterdist"), 4.0f) * ElysiumCam::U;
+
+	// Degrees, unconverted, and clamped the way Source clamps a `fov` write. They stay 4:3-referenced
+	// here; `ElysiumCam::WidenSourceFov` widens them to the window at the point of use.
+	DefaultFov   = FMath::Clamp(Num(TEXT("default_fov"), 75.0f), 20.0f, 120.0f);
+	ViewmodelFov = FMath::Clamp(Num(TEXT("viewmodel_fov"), 54.0f), 20.0f, 120.0f);
 
 	bDampOn            = Flag(TEXT("cdamp_on"), true);
 	HookesConstant     = Num(TEXT("cdamp_hookesconstant"), 4.0f);

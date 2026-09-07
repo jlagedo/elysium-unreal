@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumSkillClasses.h"
 #include "Substrate/ElysiumSoundVolumeTable.h"
 #include "Substrate/ElysiumStealthTables.h"
+#include "Substrate/ElysiumWieldRules.h"
 
 #include "ElysiumRulebookSubsystem.generated.h"
 
@@ -81,6 +82,10 @@ public:
 	// (`ElysiumItems::Install`), so it has to happen before a map's item entities are created —
 	// `FElysiumEntityWorld::Load` touches it for exactly that reason.
 	const FElysiumItemTable&          Items();
+	// The `ExcludedEquipTables` block of `vdata/system/items.txt` — the CHARACTER half of
+	// `Inventory_Can_Wield` (0x10335a70). Separate from `Items()` because that one is the per-item
+	// DIRECTORY and this is one block of the system file, so the two fail independently.
+	const FElysiumExcludedEquipTable& ExcludedEquip();
 	// Patch-first `vdata/hackterminals/*`, keyed by normalized virtual path. Unlike the fixed
 	// tables above this catalogue is demand-driven by map entities, but each named definition is
 	// still parsed once for the session and shared by every placement that references it.
@@ -125,6 +130,7 @@ private:
 	TElysiumLazyTable<FElysiumSoundVolumeTable>  SoundVolumeTable;
 	TElysiumLazyTable<FElysiumStealthTables>     StealthTableSet;
 	TElysiumLazyTable<FElysiumItemTable>         ItemTable;
+	TElysiumLazyTable<FElysiumExcludedEquipTable> ExcludedEquipTable;
 	TElysiumLazyTable<FElysiumDispositionTable>  DispositionTable;
 	TElysiumLazyTable<FElysiumReactionCatalogue> ReactionCatalogue;
 	TElysiumLazyTable<FElysiumDisciplineTargets> DisciplineTargetTable;

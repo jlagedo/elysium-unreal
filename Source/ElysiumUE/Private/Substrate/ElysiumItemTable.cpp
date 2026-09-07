@@ -1,5 +1,7 @@
 #include "Substrate/ElysiumItemTable.h"
 
+#include "Substrate/ElysiumWieldRules.h"
+
 #include "ElysiumCameraSolve.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumKeyValues.h"
@@ -236,6 +238,9 @@ bool FElysiumItemTable::ParseText(const FString& Classname, const FString& Text,
 
 	Out.Bucket = Data->Int(TEXT("bucket"), 0);
 	Out.BucketPosition = Data->Int(TEXT("bucket_position"), 0);
+
+	// The wield rule's weapon half (`docs/vtmb/wielded_weapons.md` § "Who may wield what").
+	Out.EquipMask = ElysiumEquipFlags::Parse(Data->Str(TEXT("equip_mask"), FString()));
 
 	Out.Worth = Data->Int(TEXT("item_worth"), 0);
 	Out.PlayerSell = Data->Int(TEXT("player_sell"), 0);

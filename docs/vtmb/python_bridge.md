@@ -620,6 +620,27 @@ Skills seen: `Humanity` (432), `Persuasion`, `Seduction`, `Intimidate`, `Dominat
 `Dementation`, `Haggle`, `F_Seduction`/`M_Seduction`, `Appearance`, `Firearms`, `Wits`,
 `Intelligence`, `Research`, `Perception`, `Brawl`, `Trip_Name` — case is inconsistent.
 
+**(2026-09-06)** Four more `dlgexpr`/dialogue-dependency facts, recovered for
+`docs/project/plans/dialogue.md` D1:
+
+- **The negative-threshold form is `<`, not a typo.** `Humanity -5` is not "humanity minus five";
+  `CDialogDependency+0x0c` is an inversion flag set whenever the parsed threshold is negative, and
+  a negative threshold selects `<` in place of the default `>=` (`TestSimple` `0x100e9760`). The
+  stored threshold for these rows is the same negative int; the comparison uses its absolute
+  value against the stat. These are the authored failure routes (447 corpus conditions of this
+  shape), not malformed data.
+- **A discipline check gates on blood, not just rating.** Dependency class 2 (discipline) in
+  `TestSimple` requires **both** the discipline rating **and** the blood pool (stat `0xc`) to meet
+  the threshold, and refuses discipline id 6 unless `clan_offset == 5` (Ventrue).
+- **Picking a discipline choice charges blood.** `pc_charge_dependency` (`0x100e8b90`), called from
+  `CDialog::Pick` after the pick is accepted, subtracts the dependency's blood cost (the
+  threshold, for a discipline dependency) from the player's blood pool and calls
+  `AddFakedDisciplineEffect(npc, trait, level)` so the NPC reacts as if the discipline were used.
+- **The response wire caps at four.** `get_pc_responses` (`0x100e82d0`) walks the PC rows after
+  the current NPC line and **stops at 4** admitted rows regardless of how many more pass their
+  dependency — a wire-packet limit, not an authoring rule (see M-CAP in
+  `docs/project/plans/dialogue.md` for the port's named divergence from it).
+
 ## The script file layer — three path spellings and a write guard
 
 The scripts read and write the install tree directly, through stock `open` and the `nt` module.

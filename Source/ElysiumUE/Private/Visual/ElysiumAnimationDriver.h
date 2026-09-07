@@ -258,7 +258,36 @@ struct FElysiumAnimationDriver : public FGCObject
 	FString LastWeaponClassname;
 	EElysiumNpcState LastActorState = EElysiumNpcState::Idle;
 	EElysiumAnimRoute LastRoute = EElysiumAnimRoute::Activity;
+	// The exact label an unowned base republishes. It rides the discrete key because it is what the
+	// resolve is keyed on when `CommittedBaseLabel` is standing in for the request; without it a
+	// second claim's clip would never re-resolve, since the route and the (empty) activity do not
+	// move between one held clip and the next.
+	FString LastSequenceLabel;
 	bool bResolvedOnce = false;
+
+	// --- The last base clip this body COMMITTED -------------------------------------------------
+	//
+	// **Retail has no "nobody owns the pose, so play the weapon-translated idle" state, and this is
+	// what stands in its place.** A standing Troika NPC is never asked for `ACT_IDLE`: the
+	// disposition idle (0x102c12a0) plays its stance clips BY NAME, and `ResolveActivityToSequence`
+	// (0x10272130) on a miss keeps `m_nSequence` and otherwise falls to sequence 0. So the sequence
+	// a cast body is standing on between two named clips is simply the last one it committed — there
+	// is no re-request and no re-translation, and nothing re-derives a pose from the weapon.
+	//
+	// The port's base channel is a claim slot, so it HAS the state retail does not: a one-shot claim
+	// (a stance transition, a per-line `.vcd` gesture) expires, the locomotion publish takes the
+	// base back in the Idle graph state, and it resolves `ACT_IDLE` through the full translation —
+	// which on a body holding `item_w_claws` answers `claws_idle`, the crouched claw stance. This
+	// field is the committed sequence retail would have kept; `Tick` republishes it through the
+	// `ExactLabel` route instead of resolving the idle.
+	//
+	// Written from the CLAIM, in `ArbitrateBase`, and only there: the claim's label IS the clip its
+	// producer committed. It is deliberately not written from the locomotion resolve, because that
+	// would remember a walk cell and republish it under a body that had merely stopped.
+	//
+	// Cleared when the label turns out not to be in the body's vocabulary, which puts that body back
+	// on today's behaviour rather than posing nothing.
+	FString CommittedBaseLabel;
 	// Each overlay slot's own discrete key, kept apart from the base's above because the two move for
 	// unrelated reasons: a body fires without changing what it is doing, and it changes what it is
 	// doing without firing. The HANDLE and not the label, because a re-fire of the same layer is a new

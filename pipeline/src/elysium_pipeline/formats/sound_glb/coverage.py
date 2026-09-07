@@ -1,9 +1,10 @@
 """Gapless source-byte accountability for one sound unit.
 
-The unit never embeds an opaque copy of its members, so the ledger is what makes that absence
-safe: every byte of the audio member and of the `.lip` companion is claimed exactly once by the
-record that paid for it, and a range labelled `reserved-zero` or `padding-zero` is proven zero
-before publication.
+Since schema 1.1.0 the unit does carry a verbatim copy of each member (the source capsule), but
+that never excuses the decode: the ledger is still what proves the unit *read* what it carries.
+Every byte of the audio member and of the `.lip` companion is claimed exactly once by the record
+that paid for it, and a range labelled `reserved-zero` or `padding-zero` is proven zero before
+publication.
 """
 
 from __future__ import annotations

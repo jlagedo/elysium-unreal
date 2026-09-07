@@ -1928,7 +1928,9 @@ bool FElysiumDialogueConditionTruthinessTest::RunTest(const FString&)
 
 	auto ChoiceVisible = [Conv](int32 LineId) -> bool
 	{
-		const TArray<int32>& Visible = Conv->VisibleChoices();
+		// The band now carries a gate result per row (M-DISABLED); these fixtures are all Python
+		// gates, so every surviving row is enabled.
+		const TArray<FElysiumDlgVisibleChoice>& Visible = Conv->VisibleChoices();
 		for (int32 i = 0; i < Visible.Num(); ++i)
 		{
 			const FElysiumDlgLine* Line = Conv->VisibleChoice(i);

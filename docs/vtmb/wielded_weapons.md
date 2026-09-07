@@ -796,6 +796,156 @@ thrown counterparts (§6).
 `$ELYSIUM_WORK_ROOT/research/reference-source/`, and is secondary evidence. NPC carriage is
 measured from authored map entities and `vdata`.*
 
+## 8. Who may wield what: `ExcludedEquipTables` and `equip_mask` (2026-09-07)
+
+Carrying a weapon and being allowed to HOLD it are two different questions.
+`CBaseCombatCharacter::Inventory_Can_Wield` (`vampire.dll` 0x10335a70) answers the second one, and
+it is a join of two authored bitmasks.
+
+### The flag vocabulary — `ParseEquipFlag` (0x1025b740)
+
+One function parses BOTH sides. It takes a single token, compares it case-insensitively (`strcmpi`)
+against a nine-entry string table at 0x105c7638 (strings 0x105c76f8..0x105c775c) and answers the
+bit at the matching index:
+
+| bit | value | name |
+|----|-------|------|
+| 0 | 0x01 | `never` |
+| 1 | 0x02 | `blueblood` |
+| 2 | 0x04 | `no_blueblood` |
+| 3 | 0x08 | `wolfform` |
+| 4 | 0x10 | `no_wolfform` |
+| 5 | 0x20 | `clawedform` |
+| 6 | 0x40 | `no_clawedform` |
+| 7 | 0x80 | `no_npc` |
+| 8 | 0x100 | **unrecovered** — the ninth table entry could not be read back |
+
+No shipped item record and no shipped `ExcludedEquip` row uses the ninth name, so nothing
+observable depends on its spelling; the bit is reserved so the eight below it keep the engine's own
+indices.
+
+The literal `normal` is **not in the table**: the function answers `0x50` for it
+(`no_wolfform | no_clawedform`). It is by far the commonest authored value.
+
+An authored key is a SET, one call per whitespace-separated token, accumulated by this rule:
+
+* an unknown token answers 0 and is logged;
+* a value that is neither 0 nor 1 **clears bit 0** of the accumulator before it is OR'd in — so
+  `never` beside any other flag stops meaning "never";
+* an absent key is mask 0, which no arm of the evaluator refuses.
+
+### The weapon half — `equip_mask`
+
+The item parser (0x10259f80) runs the authored `equip_mask` through `ParseEquipFlag` and stores the
+result on the record at +0x5eb1c. Census over the shipped `vdata/items` corpus (36 of the records
+author the key at all): 19× `Normal` (the armour family, the pistols, the crossbow, the physics
+guns), 4× `ClawedForm` plus the special-form claws, 1× `WolfForm` (`item_w_wolf_head`),
+1× `Normal No_Npc` (`item_g_lockpick`), 1× `Never` (`item_g_wallet`); the rest is absent.
+`item_w_claws` authors `ClawedForm`.
+
+### The character half — `ExcludedEquipTables`
+
+`vdata/system/items.txt` carries an `ExcludedEquipTables` block (loader 0x101ecde0, row parser
+0x101ecb90) of 13 `ExcludedEquip` rows. Each has an `InternalName` and any number of repeated
+`ExcludedFlag` and `RequiredFlag` keys, each accumulated through the same `ParseEquipFlag`.
+
+The row is selected by the character's `Excluded_Equipment` stat — sheet slot 31, datamap
+`excluded_equipment`. **Row ids are the block order starting at 0**, so `Default` is 0. A stat
+template authors it by NAME (`Tutorial_Jack`: `"Excluded_Equipment" "Default"`); `stats.txt` gives
+the stat a `NameFunc` of `ExcludedEquipFunc` rather than a `NameMapping`, which is the native
+resolver from that name to the row id. A trait effect writes it the same way:
+`Discipline (Protean-Feral_Claws)` and the two Protean form groups carry
+`"Trait" "Excluded_Equipment"` / `"Modifier" "Value Clawed_Form"`.
+
+The shipped rows, in order:
+
+| id | InternalName | Excluded | Required |
+|----|--------------|----------|----------|
+| 0 | `Default` | `ClawedForm`, `WolfForm` | — |
+| 1 | `Toreador` | `No_BlueBlood` | — |
+| 2 | `Clawed_Form` | `WolfForm` | `ClawedForm` |
+| 3 | `Clawed_Form_Toreador` | `No_BlueBlood`, `WolfForm` | `ClawedForm` |
+| 4 | `Wolf_Form` | `ClawedForm` | `WolfForm` |
+| 5-7 | `TzimisceCreation1/2/3` | — | `ClawedForm` |
+| 8 | `Gargoyle` | — | `ClawedForm` |
+| 9 | `Hengeyokai` | — | `ClawedForm` |
+| 10 | `ManBat` | — | `ClawedForm` |
+| 11 | `ManBatMinion` | — | `ClawedForm` |
+| 12 | `ChunkGuard` | `ClawedForm`, `WolfForm`, `No_NPC` | — |
+
+`ChunkGuard` additionally carries an `Items` list under a `//???` comment; nothing reads it.
+
+### The evaluator
+
+The callback body is at 0x10220460. With `mask` the weapon's `equip_mask` and `row` the selected
+row:
+
+1. `mask & 0x01` (`never`) → **cannot wield** — row-independent;
+2. `row.Excluded & mask` non-zero → **cannot wield**;
+3. `row.Required != 0 && (mask & row.Required) == 0` → **cannot wield**;
+4. otherwise → **can wield**.
+
+*The thunk edge from 0x10335a70 to this body is not resolvable in the corpus — the callback is
+reached through an indirect call the decompilation does not bind. The body, its callers' register
+setup and the shipped data agree, which is the evidence this rests on.*
+
+Two consequences worth stating: a `Default` character — which is every ordinary NPC, Jack
+included — can **never** wield `item_w_claws`; and a Protean player in `Clawed_Form` cannot wield
+any `Normal` weapon, because that row REQUIRES the claw bit no ordinary weapon carries.
+
+### Who enforces it
+
+`Inventory_Wield_Update` (0x10335b80) is the sweep:
+
+* if there is an active weapon and it fails `Can_Wield`: try `m_hLastWeapon` if that passes;
+* else `Weapon_Switch(NULL)` — put the illegal weapon away, hold nothing — then ask gamerules
+  `GetNextBestWeapon(this, 0)` (`CMultiplayRules` vfunc 20, 0x101413e0: among the carried weapons,
+  the highest authored `weight` (accessor 0x10251ef0) that `CanDeploy` (has ammunition or needs
+  none, 0x10253a70 / 0x10253ab0) **and** passes `Can_Wield`, excluding the current one);
+* else a carried `item_w_unarmed`; then `Weapon_Switch(that)`.
+
+With no active weapon the same fallback chain runs from the last weapon. The sweep runs at the tail
+of every trait-effect apply (0x101f8620) and remove (0x101f8f30) — which is how activating and
+ending Feral Claws swaps the hand.
+
+`SwitchToNextBestWeapon` (0x101abd40) and `GetNextBestWeapon` both require `Can_Wield` too.
+
+### What is NOT gated, and stays that way
+
+`Weapon_Equip` (0x1032d380 — the spawn equip, reached from `CAI_BaseNPC::Spawn` 0x10273200 and
+Troika `NPCInit` 0x1029a0b0), `Weapon_Switch` (0x1032dde0) and `TASK_CHOOSE_BEST_MELEE_WEAPON`'s
+`GetBestMeleeWeapon` (0x10336f20, the first melee-capable carried weapon) ask the rule NOTHING. An
+NPC is spawn-equipped with a weapon it may not hold, and it is the sweep that takes it away again.
+
+### Unrecovered: the spawn-side trigger
+
+Owner-verified in retail: Jack walks `sp_tutorial_1` **unarmed** although his loadout grants him
+`item_w_claws` and his row is `Default`. Some event between the spawn equip and his first step runs
+`Inventory_Wield_Update`, and none of the recovered callers (the two trait-effect tails) fires
+there. The trigger is unknown.
+
+### The port
+
+* `ElysiumEquipFlags::Parse` / `FElysiumExcludedEquipTable` — `Private/Substrate/ElysiumWieldRules.*`
+  (the flag table, the `ExcludedEquipTables` loader and the evaluator). It is a rulebook table:
+  `UElysiumRulebookSubsystem::ExcludedEquip()`, with the headless fallback
+  `ElysiumSheetRules::FBoundTables::ExcludedEquip`.
+* `FElysiumItemDef::EquipMask` — the record's parsed `equip_mask`.
+* Slot 31 is written from a template's authored NAME by `FElysiumSheet::ApplyTemplate`, and from a
+  `"Value <row>"` trait effect by `FElysiumSheetEffects::Build`, which keys on the stat's authored
+  `NameFunc` (`ExcludedEquipFunc`) rather than on a hardcoded slot number.
+* `FElysiumInventory::CanWield` / `NextBestWeapon` / `Holster` / `WieldUpdate` — the rule and the
+  sweep. `WieldUpdate` runs at the tail of `FElysiumCombatCharacter::RebuildEffects`, which is the
+  port's single trait-effect apply/remove tail and therefore the exact place retail's two callers
+  reach.
+* **Stated assumption**: the sweep also runs once at the end of `ElysiumNpcLoadout::Resolve`,
+  standing in for the unrecovered spawn-side trigger above. The grant itself stays ungated, as
+  retail's is.
+* Proof: `Elysium.Substrate.Wield.*`.
+* Still a seam: `Starting_Equipment` (slot 30) is the same authored-by-name shape and nothing
+  resolves its package yet.
+
+
 ---
 
 *Provenance: item and NPC data read from the patch-first corpus, placements from the maps' own

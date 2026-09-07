@@ -145,6 +145,12 @@ struct FElysiumItemDef
 	int32 Bucket = 0;                   // `bucket`
 	int32 BucketPosition = 0;           // `bucket_position`
 
+	// `equip_mask`, parsed to its bits by `ElysiumEquipFlags::Parse`. The WEAPON half of
+	// `Inventory_Can_Wield` (0x10335a70): retail stores it on the record at +0x5eb1c through the
+	// same `ParseEquipFlag` (0x1025b740) the `ExcludedEquip` rows are read with. An absent key is
+	// mask 0, which no arm of the rule refuses — 190 of the shipped records author nothing.
+	uint32 EquipMask = 0;
+
 	int32 Worth = 0;                    // `item_worth`
 	int32 PlayerSell = 0;               // `player_sell` — the vendor half is the economy slice
 	int32 Weight = 0;                   // `weight`

@@ -1075,6 +1075,165 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 			SolveBoomDistance(88.0f, 220.0f, false, 0.0f, Tuning, 1.0f / 60.0f), 220.0f);
 	}
 
+	// The client shot tracker — `C_BaseCineCamera` (`FUN_10001fe0` / `FUN_10001d40` / `FUN_10001c80`).
+	//
+	// **This is the owner's "the dialogue camera wobbles while the NPC animates" defect.** The shot's
+	// look-at is a head bone, re-resolved every frame (retail's camera think does the same), so the
+	// goal angle jitters by a fraction of a degree all conversation long. Nothing in the anchor
+	// grammar suppresses that; the shot's own 10-degree `AngularTolerance` deadband is what does.
+	{
+		// Jack.txt's constraints, verbatim: MoveSpeed 500, MoveAccel 250, TurnAccel 30,
+		// MaxTurnRate [60,60,60], DistanceTolerance 5, AngularTolerance [10,10,10].
+		FElysiumCameraShot Shot;
+		Shot.Origin = FVector(0.0f, 0.0f, 165.1f);
+		Shot.LookAt = FVector(300.0f, 0.0f, 165.1f);
+		Shot.bUseLookAt = true;
+		Shot.MoveSpeed = 500.0f * ElysiumCam::U;
+		Shot.MoveAccel = 250.0f * ElysiumCam::U;
+		Shot.TurnAccel = 30.0f;
+		Shot.MaxTurnRate = FVector(60.0f, 60.0f, 60.0f);
+		Shot.DistanceTolerance = 5.0f * ElysiumCam::U;
+		Shot.AngularTolerance = FVector(10.0f, 10.0f, 10.0f);
+
+		FElysiumScriptedShotTracker Tracker;
+		Tracker.Start(Shot);
+		TestTrue(TEXT("a shot starts framed on its goal, position settled"),
+			Tracker.Location.Equals(Shot.Origin, 0.001f) && Tracker.bPositionSettled);
+		TestEqual(TEXT("and with no carried speed"), Tracker.Speed, 0.0f);
+
+		const float Dt = 1.0f / 60.0f;
+		// One second of the idle's head motion: the look-at swings a few degrees either way, which is
+		// what the animated `Bone: Bip01 Head` anchor does every frame of a conversation.
+		const FRotator Framed = Tracker.Rotation;
+		for (int32 Frame = 0; Frame < 60; ++Frame)
+		{
+			const float Jitter = 8.0f * FMath::Sin(Frame * 0.5f);   // +/- 8 degrees of yaw
+			Shot.LookAt = Shot.Origin + FVector(300.0f, 0.0f, 0.0f).RotateAngleAxis(Jitter, FVector::ZAxisVector);
+			Tracker.Advance(Shot, Dt);
+		}
+		TestTrue(TEXT("a look-at jittering inside AngularTolerance does not rotate the camera"),
+			Tracker.Rotation.Equals(Framed, 0.001f));
+		TestTrue(TEXT("and the yaw axis stays settled through it"), Tracker.bYawSettled);
+		TestTrue(TEXT("a still subject never moves the camera either"),
+			Tracker.Location.Equals(Shot.Origin, 0.001f));
+
+		// A real turn — the subject walks off the mark — is past the band, so the camera pans, and it
+		// pans all the way onto the target rather than stopping at the edge of the band.
+		Shot.LookAt = Shot.Origin + FVector(300.0f, 0.0f, 0.0f).RotateAngleAxis(45.0f, FVector::ZAxisVector);
+		for (int32 Frame = 0; Frame < 300; ++Frame)
+		{
+			Tracker.Advance(Shot, Dt);
+		}
+		TestTrue(TEXT("a drift past the tolerance does pan the camera"),
+			FMath::IsNearlyEqual(FRotator::NormalizeAxis(Tracker.Rotation.Yaw), 45.0f, 0.05f));
+
+		// Position hysteresis, the same shape one axis down: parked until the goal drifts more than
+		// DistanceTolerance (5 u = 12.7 cm), and once moving it closes to within 1 u.
+		const FVector Parked = Tracker.Location;
+		Shot.Origin = Parked + FVector(10.0f, 0.0f, 0.0f);   // under 12.7 cm
+		Tracker.Advance(Shot, Dt);
+		TestTrue(TEXT("a goal drift inside DistanceTolerance leaves the camera parked"),
+			Tracker.Location.Equals(Parked, 0.001f) && Tracker.bPositionSettled);
+		Shot.Origin = Parked + FVector(100.0f, 0.0f, 0.0f);
+		Tracker.Advance(Shot, Dt);
+		TestFalse(TEXT("a drift past it takes the camera out of the park"), Tracker.bPositionSettled);
+		TestTrue(TEXT("and it accelerates rather than teleporting"),
+			Tracker.Speed > 0.0f && Tracker.Speed <= Shot.MoveSpeed
+				&& !Tracker.Location.Equals(Shot.Origin, 0.001f));
+		for (int32 Frame = 0; Frame < 600; ++Frame)
+		{
+			Tracker.Advance(Shot, Dt);
+		}
+		TestTrue(TEXT("a moving camera closes to within the 1-unit settle distance, not the tolerance"),
+			FVector::Distance(Tracker.Location, Shot.Origin) < FElysiumScriptedShotTracker::SettleDistance);
+
+		// A value shot authors no accelerations; it keeps the plain rate-limited chase this channel
+		// had before the tracker landed.
+		FElysiumCameraShot Value;
+		Value.Origin = FVector(1000.0f, 0.0f, 0.0f);
+		Value.bUseLookAt = false;
+		Value.MoveSpeed = 100.0f;
+		FElysiumScriptedShotTracker ValueTracker;
+		ValueTracker.Start(Value);
+		Value.Origin = FVector(1100.0f, 0.0f, 0.0f);
+		ValueTracker.Advance(Value, 0.5f);
+		TestTrue(TEXT("with no MoveAccel the camera runs at MoveSpeed outright"),
+			FMath::IsNearlyEqual(ValueTracker.Location.X, 1050.0f, 0.01f));
+
+		// `SnapOnShotChange` is the file's own "cut, do not chase".
+		FElysiumCameraShot Snap = Shot;
+		Snap.bSnapOnShotChange = true;
+		Snap.Origin = FVector(-500.0f, 250.0f, 100.0f);
+		Tracker.Advance(Snap, Dt);
+		TestTrue(TEXT("SnapOnShotChange hard-copies the goal"),
+			Tracker.Location.Equals(Snap.Origin, 0.001f));
+	}
+
+	// A `vdata/camerashots/` `FieldOfView` is a 4:3-referenced Source angle, so the window's own
+	// aspect widens it (Hor+) at apply time. Rendering the authored 40 at 16:9 is what read as "the
+	// camera is closer than retail".
+	{
+		TestTrue(TEXT("a 4:3 window renders the authored angle unchanged"),
+			FMath::IsNearlyEqual(ElysiumCam::WidenSourceFov(40.0f, 4.0f / 3.0f), 40.0f, 0.01f));
+		const float Wide = ElysiumCam::WidenSourceFov(40.0f, 16.0f / 9.0f);
+		TestTrue(TEXT("a 16:9 window widens a 40-degree shot to about 51.8 degrees"),
+			FMath::IsNearlyEqual(Wide, 51.78f, 0.05f));
+		TestTrue(TEXT("retail's own default_fov 75 lands near the recovered 91 degrees at 16:9"),
+			FMath::IsNearlyEqual(ElysiumCam::WidenSourceFov(75.0f, 16.0f / 9.0f), 91.0f, 0.6f));
+		TestEqual(TEXT("a shot with no FieldOfView keeps the player's"),
+			ElysiumCam::WidenSourceFov(0.0f, 16.0f / 9.0f), 0.0f);
+	}
+
+	// The player lens is the same rule, off the same cvar surface: `default_fov` 75 renders ~91.3
+	// degrees at 16:9 and exactly 75 at the 4:3 it is written against.
+	{
+		FElysiumCameraCvars Lens;
+		TestTrue(TEXT("default_fov defaults to retail's 75"),
+			FMath::IsNearlyEqual(Lens.DefaultFov, 75.0f, 0.01f));
+		TestTrue(TEXT("viewmodel_fov defaults to retail's 54"),
+			FMath::IsNearlyEqual(Lens.ViewmodelFov, 54.0f, 0.01f));
+
+		// Both are declared into the VtMB console store, so a user's `config.cfg` governs them.
+		bool bDefaultFovDeclared = false;
+		bool bViewmodelFovDeclared = false;
+		for (const ElysiumCam::FCvarDef& Def : ElysiumCam::CvarDefs())
+		{
+			bDefaultFovDeclared |= FString(Def.Name) == TEXT("default_fov") && FString(Def.Default) == TEXT("75");
+			bViewmodelFovDeclared |= FString(Def.Name) == TEXT("viewmodel_fov") && FString(Def.Default) == TEXT("54");
+		}
+		TestTrue(TEXT("default_fov is declared at 75"), bDefaultFovDeclared);
+		TestTrue(TEXT("viewmodel_fov is declared at 54"), bViewmodelFovDeclared);
+
+		// A cfg write reaches the struct, still 4:3-referenced.
+		TMap<FString, FString> Cfg;
+		Cfg.Add(TEXT("default_fov"), TEXT("90"));
+		Lens.LoadFrom([&Cfg](const TCHAR* Name) -> FString
+		{
+			const FString* Hit = Cfg.Find(Name);
+			return Hit ? *Hit : FString();
+		});
+		TestTrue(TEXT("a config.cfg default_fov governs the player lens"),
+			FMath::IsNearlyEqual(Lens.DefaultFov, 90.0f, 0.01f));
+
+		TestTrue(TEXT("default_fov 75 renders about 91.3 degrees at 16:9"),
+			FMath::IsNearlyEqual(ElysiumCam::WidenSourceFov(75.0f, 16.0f / 9.0f), 91.31f, 0.05f));
+		TestTrue(TEXT("and exactly 75 at the 4:3 reference"),
+			FMath::IsNearlyEqual(ElysiumCam::WidenSourceFov(75.0f, 4.0f / 3.0f), 75.0f, 0.01f));
+
+		// The player view actually writes it. With no game viewport the render aspect falls back to
+		// the view's own 4:3, so the headless assertion is the authored number exactly.
+		UElysiumCameraComponent* LensCamera = NewObject<UElysiumCameraComponent>();
+		if (TestNotNull(TEXT("the lens test has a camera component"), LensCamera))
+		{
+			FMinimalViewInfo LensView;
+			LensView.FOV = 90.0f;
+			LensView.AspectRatio = 4.0f / 3.0f;
+			LensCamera->ApplyToView(LensView);
+			TestTrue(TEXT("the player view renders default_fov, not the engine's 90"),
+				FMath::IsNearlyEqual(static_cast<float>(LensView.FOV), 75.0f, 0.01f));
+		}
+	}
+
 	return true;
 }
 
@@ -1634,7 +1793,11 @@ CameraShotTable
 
 	TestTrue(TEXT("the first target point is a bone on the partner"),
 		Def.Target1.bPresent && Def.Target1.AttachPos == TEXT("Bone: Bip01 Head"));
-	TestTrue(TEXT("and it does not follow -- AttachType None is set-and-stay"),
+	// `AttachType None` selects the frame the offset is added in (world axes), NOT a one-time sample:
+	// retail's camera think re-resolves all four anchors every server tick whatever this says
+	// (`vampire.dll` `FUN_1006e8e0`, loop `0x1006ea90`). The steadiness of a conversation camera is
+	// the client tracker's deadbands, asserted in `Elysium.Substrate.Camera`.
+	TestTrue(TEXT("and it takes its offset in world axes -- AttachType None"),
 		Def.Target1.Attach == EElysiumShotAttach::None);
 	TestTrue(TEXT("the second point is the player's eye"),
 		Def.Target2.bPresent && Def.Target2.Position == EElysiumShotPosition::Player);
@@ -1653,6 +1816,46 @@ CameraShotTable
 	// that surface, and the corpus opts back in explicitly for interaction shots only.
 	TestFalse(TEXT("ShowHud defaults off"), Def.Constraints.bShowHud);
 	TestFalse(TEXT("DrawViewmodel defaults off"), Def.Constraints.bDrawViewmodel);
+
+	// The keys DialogDefault does not write take retail's parse defaults, not zero: `FUN_100721e0`
+	// seeds the whole record before it reads the block.
+	TestTrue(TEXT("an unwritten TurnAccel is retail's 30 deg/s^2"),
+		FMath::IsNearlyEqual(Def.Constraints.TurnAccel, 30.0f, 0.01f));
+	TestTrue(TEXT("an unwritten AngularTolerance is retail's [1,1,1] degrees"),
+		Def.Constraints.AngularTolerance.Equals(FVector(1.0f, 1.0f, 1.0f), 0.01f));
+
+	// A shot with no `CameraConstraints` block at all takes the identical set — retail's
+	// whole-block-absent path (`0x10072300`) seeds the same values the per-key path does.
+	FElysiumCameraShotDef Bare;
+	TestTrue(TEXT("a shot with no constraints block parses"), ElysiumCameraShots::ParseText(TEXT(R"(
+CameraShotTable { Bare { End { "Position" "DialogTarget" "AttachPos" "Origin" } } }
+)"), Bare));
+	TestTrue(TEXT("MoveSpeed defaults to retail's 150 u/s"),
+		FMath::IsNearlyEqual(Bare.Constraints.MoveSpeed, 150.0f * ElysiumCam::U, 0.01f));
+	TestTrue(TEXT("MoveAccel defaults to retail's 50 u/s^2"),
+		FMath::IsNearlyEqual(Bare.Constraints.MoveAccel, 50.0f * ElysiumCam::U, 0.01f));
+	TestTrue(TEXT("TurnAccel defaults to retail's 30 deg/s^2"),
+		FMath::IsNearlyEqual(Bare.Constraints.TurnAccel, 30.0f, 0.01f));
+	TestTrue(TEXT("MaxTurnRate defaults to retail's [90,90,90] deg/s"),
+		Bare.Constraints.MaxTurnRate.Equals(FVector(90.0f, 90.0f, 90.0f), 0.01f));
+	TestTrue(TEXT("DistanceTolerance defaults to retail's 10 u"),
+		FMath::IsNearlyEqual(Bare.Constraints.DistanceTolerance, 10.0f * ElysiumCam::U, 0.01f));
+	TestTrue(TEXT("AngularTolerance defaults to retail's [1,1,1] degrees"),
+		Bare.Constraints.AngularTolerance.Equals(FVector(1.0f, 1.0f, 1.0f), 0.01f));
+	TestTrue(TEXT("FieldOfView defaults to retail's 75"),
+		FMath::IsNearlyEqual(Bare.Constraints.FieldOfView, 75.0f, 0.01f));
+	TestFalse(TEXT("and every flag parses clear"),
+		Bare.Constraints.bDialogPOV || Bare.Constraints.bSyncRotateOnMove
+			|| Bare.Constraints.bSnapOnShotChange || Bare.Constraints.bShowHud
+			|| Bare.Constraints.bDrawViewmodel || Bare.Constraints.bAutoPositionFromTarget);
+
+	// The clamp is retail's, on the parse and not on the use.
+	FElysiumCameraShotDef Clamped;
+	ElysiumCameraShots::ParseText(TEXT(R"(
+CameraShotTable { Wide { End { "Position" "Player" } CameraConstraints { "FieldOfView" "300" } } }
+)"), Clamped);
+	TestTrue(TEXT("FieldOfView clamps to [20,120]"),
+		FMath::IsNearlyEqual(Clamped.Constraints.FieldOfView, 120.0f, 0.01f));
 
 	// A file with no shot block is a miss, not a half-built shot.
 	FElysiumCameraShotDef Empty;
@@ -1732,32 +1935,36 @@ bool FElysiumViewStateTest::RunTest(const FString&)
 	// --- the dialogue reconcile ---------------------------------------------------------------
 	// The pointers are identity only and never dereferenced, so two distinct addresses stand in for
 	// two conversations.
-	const FElysiumDlgConversation* const ConvA = reinterpret_cast<const FElysiumDlgConversation*>(0x1);
-	const FElysiumDlgConversation* const ConvB = reinterpret_cast<const FElysiumDlgConversation*>(0x2);
+	// The reconcile identity is the world's open-dialog serial, not the conversation address: the
+	// pointer only has to be non-null for `IsOpen()`, and both conversations here deliberately share
+	// one, because that is exactly what a same-frame close-and-open can produce.
+	const FElysiumDlgConversation* const ConvAddr = reinterpret_cast<const FElysiumDlgConversation*>(0x1);
 
 	FElysiumDialogueView Closed;
 	FElysiumDialogueView TurnOne;
-	TurnOne.Conversation = ConvA;
+	TurnOne.Conversation = ConvAddr;
+	TurnOne.DialogSerial = 1;
 	TurnOne.Revision = 3;
 	FElysiumDialogueView TurnTwo = TurnOne;
 	TurnTwo.Revision = 4;
 	FElysiumDialogueView Other;
-	Other.Conversation = ConvB;
+	Other.Conversation = ConvAddr;
+	Other.DialogSerial = 2;
 	Other.Revision = 3;
 
 	using EAction = ElysiumView::EDialogueAction;
 	TestEqual(TEXT("nothing open, nothing up"),
-		ElysiumView::ReconcileDialogue(nullptr, 0, Closed), EAction::None);
+		ElysiumView::ReconcileDialogue(0, 0, Closed), EAction::None);
 	TestEqual(TEXT("a conversation opens"),
-		ElysiumView::ReconcileDialogue(nullptr, 0, TurnOne), EAction::Rebuild);
+		ElysiumView::ReconcileDialogue(0, 0, TurnOne), EAction::Rebuild);
 	TestEqual(TEXT("the same turn again leaves the retained box alone"),
-		ElysiumView::ReconcileDialogue(ConvA, 3, TurnOne), EAction::None);
+		ElysiumView::ReconcileDialogue(1, 3, TurnOne), EAction::None);
 	TestEqual(TEXT("the turn advances"),
-		ElysiumView::ReconcileDialogue(ConvA, 3, TurnTwo), EAction::Rebuild);
-	TestEqual(TEXT("a different conversation at the same revision still rebuilds"),
-		ElysiumView::ReconcileDialogue(ConvA, 3, Other), EAction::Rebuild);
+		ElysiumView::ReconcileDialogue(1, 3, TurnTwo), EAction::Rebuild);
+	TestEqual(TEXT("a different conversation at the same address and revision still rebuilds"),
+		ElysiumView::ReconcileDialogue(1, 3, Other), EAction::Rebuild);
 	TestEqual(TEXT("the conversation ends"),
-		ElysiumView::ReconcileDialogue(ConvA, 3, Closed), EAction::Teardown);
+		ElysiumView::ReconcileDialogue(1, 3, Closed), EAction::Teardown);
 
 	// The bug the seam closes: the publisher withholds the whole player-facing surface while a
 	// screen is up, so a box that is on screen when the pause menu opens is told to come down.
@@ -1767,7 +1974,7 @@ bool FElysiumViewStateTest::RunTest(const FString&)
 	TestFalse(TEXT("a paused frame publishes no surface"), Paused.bPlayerSurface);
 	TestFalse(TEXT("and therefore no conversation"), Paused.Dialogue.IsOpen());
 	TestEqual(TEXT("so an open box comes down instead of drawing through the menu"),
-		ElysiumView::ReconcileDialogue(ConvA, 3, Paused.Dialogue), EAction::Teardown);
+		ElysiumView::ReconcileDialogue(1, 3, Paused.Dialogue), EAction::Teardown);
 
 	// --- the meters -------------------------------------------------------------------------
 	// Compared by value, because the change delegate fires on a difference and nothing else.

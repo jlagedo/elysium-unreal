@@ -79,7 +79,10 @@ namespace
 		if (Eye.Has(TEXT("Max Interval"))) { Out.MaxInterval = Eye.Flt(TEXT("Max Interval"), Out.MaxInterval); }
 		if (Eye.Has(TEXT("Hold Min"))) { Out.HoldMin = Eye.Flt(TEXT("Hold Min"), Out.HoldMin); }
 		if (Eye.Has(TEXT("Hold Max"))) { Out.HoldMax = Eye.Flt(TEXT("Hold Max"), Out.HoldMax); }
-		if (Eye.Has(TEXT("Eye Turn Rate"))) { Out.TurnRate = Eye.Flt(TEXT("Eye Turn Rate"), Out.TurnRate); }
+		// The block's rate is the integrator's step rate — retail's `FUN_100ecdf0` index 1, record
+		// field +0x260. The hold rate (index 0, +0x23C) is the disposition-level spelling and is
+		// mirrored in below, once the whole row has been read.
+		if (Eye.Has(TEXT("Eye Turn Rate"))) { Out.StepRate = Eye.Flt(TEXT("Eye Turn Rate"), Out.StepRate); }
 	}
 
 	void ApplyOverrides(const FString& Name, const ElysiumKeyValues::FKvNode& Node,
@@ -151,6 +154,11 @@ namespace
 		{
 			ApplyEyeOverrides(*Eye, Out.EyeTarget);
 		}
+		// The disposition-level "Eye Turn Rate" IS the integrator's hold rate (retail's record field
+		// +0x23C, read at `FUN_100ecdf0` index 0). Mirroring it into the block here means the gaze
+		// layer is handed one struct carrying both rates, and that it inherits through
+		// `CopyDataFrom` exactly like the value it is copied from.
+		Out.EyeTarget.HoldRate = Out.EyeTurnRate;
 	}
 }
 

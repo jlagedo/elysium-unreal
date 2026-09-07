@@ -201,6 +201,14 @@ path. `Weapon_Equip` calls `Inventory_Add`, performs the active-weapon switch fo
 and invokes the item's equip callback. Python `GiveItem` reaches this player-only service through
 the receiver's player component.
 
+**Being allowed to HOLD it is a separate rule (2026-09-07).** `Weapon_Equip` and `Weapon_Switch` are
+ungated; `CBaseCombatCharacter::Inventory_Can_Wield` (0x10335a70) joins the item record's
+`equip_mask` against the `ExcludedEquipTables` row the character's `Excluded_Equipment` stat (sheet
+slot 31) names, and `Inventory_Wield_Update` (0x10335b80) is what empties the hand when the answer
+turns false. So an item may be carried and un-holdable at the same time — a `Default` character
+carrying `item_w_claws` is the shipped case. The whole recovery, the flag table and the shipped rows
+are `docs/vtmb/wielded_weapons.md` §8.
+
 ### 5.2 Stack removal and destructive script removal
 
 For a stackable ordinary item with `m_iItemCount >= 2`, Python `RemoveItem` decrements the count.
