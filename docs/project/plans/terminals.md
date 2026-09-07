@@ -17,7 +17,8 @@ immobilize, the far-arm hull-sweep pin and near-arm view snap, the named `Hackin
 entry and dropped on every exit, and the terminal gym host with its three `Elysium.Content.
 TerminalGym*`/`TerminalAttachments` tests, and (slice C) the screensaver think on the authority's
 think clock, the idle terminal views, and the world-lifetime projection owned by the presentation
-subsystem (`UElysiumTerminalProjection`, registered with the use anchor) (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
+subsystem (`UElysiumTerminalProjection`, registered with the use anchor), and (slice F) the four `soundgroup` cues proven on the slice through the
+authored `old_computer` group, the executor silent, exit stopping every sound on the terminal (`Elysium.Substrate.TutorialTerminalSlice`, `Elysium.Substrate.TerminalRouter`,
 `Elysium.Substrate.TerminalScreenBuffer`). Nothing below the entity is faithful yet: the body,
 the cone, the camera, the projection and the keyboard are the slices below. The 2026-09-06
 exploration (audit, content facts, projection research, the slice-A decompiles and the B/C design
@@ -95,12 +96,6 @@ refuses to open instead. *Acceptance:* key-classification tests through the Slat
 draft clears on accept, on mode change and on session end; a pause menu covers and restores the
 terminal.
 
-**Slice F — the four cues.** Resolve the entity's `soundgroup` through the exported
-`computers/<group>` manifest the way movers do and play `access` on entry, `accept` on every
-directory or mail change, `error` on invalid command and on every password-prompt render, `typing`
-at cracking start and flush; the executor stays silent. AUD2 owns the exported group; this slice
-raises the cue sites. *Acceptance:* cue-site tests including silence inside the executor.
-
 **Slice G — email.** The 128-flag bitmask, mail unlock and attempt count, `email_password` gate,
 the visible index table rebuilt on every list draw (not deleted, dependency passes), ten rows per
 page, hotkeys `n`/`p`/`d`/`m`/`q` matched against the localized words' first character, open =
@@ -126,5 +121,5 @@ state and reads the projection's render target back for the layout checks; the b
 replaces that driver when 11.10 lands, with the same assertions. The terminal gym builds on the
 movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0, A, B and C have
 landed (2026-09-07); E next (it must compose the local draft onto the glass, which retail's
-client does in its own cell buffer, TERM13); then D, F, G, H. Every acceptance is
+client does in its own cell buffer, TERM13); then D, G, H. Every acceptance is
 headless (the map slice) or on the terminal gym; nothing in this plan is accepted on a live map.
