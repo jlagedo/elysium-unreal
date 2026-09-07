@@ -4,6 +4,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
+#include "HAL/IConsoleManager.h"
 #include "ElysiumAppState.h"
 #include "ElysiumAudioLatency.h"
 #include "ElysiumBinds.h"
@@ -1119,14 +1120,18 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 			Tracker.Location.Equals(Shot.Origin, 0.001f));
 
 		// A real turn — the subject walks off the mark — is past the band, so the camera pans, and it
-		// pans all the way onto the target rather than stopping at the edge of the band.
+		// pans until it is inside the **1-degree acquire band** (`FUN_10001d40`'s `_DAT_101e34ec`
+		// unsettled tolerance), then parks. It does not land exactly on the target: retail's acquire
+		// band is a whole degree wide, which is what the port's old 0.05 constant understated.
 		Shot.LookAt = Shot.Origin + FVector(300.0f, 0.0f, 0.0f).RotateAngleAxis(45.0f, FVector::ZAxisVector);
 		for (int32 Frame = 0; Frame < 300; ++Frame)
 		{
 			Tracker.Advance(Shot, Dt);
 		}
 		TestTrue(TEXT("a drift past the tolerance does pan the camera"),
-			FMath::IsNearlyEqual(FRotator::NormalizeAxis(Tracker.Rotation.Yaw), 45.0f, 0.05f));
+			FMath::IsNearlyEqual(FRotator::NormalizeAxis(Tracker.Rotation.Yaw), 45.0f,
+				FElysiumScriptedShotTracker::UnsettledAngleTolerance));
+		TestTrue(TEXT("and parks inside retail's 1-degree acquire band"), Tracker.bYawSettled);
 
 		// Position hysteresis, the same shape one axis down: parked until the goal drifts more than
 		// DistanceTolerance (5 u = 12.7 cm), and once moving it closes to within 1 u.
@@ -1148,8 +1153,9 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 		TestTrue(TEXT("a moving camera closes to within the 1-unit settle distance, not the tolerance"),
 			FVector::Distance(Tracker.Location, Shot.Origin) < FElysiumScriptedShotTracker::SettleDistance);
 
-		// A tracked shot that authors no accelerations runs at its rate ceilings outright
-		// (`FUN_10001c80` with `TurnAccel` 0; the position sibling with `MoveAccel` 0).
+		// A tracked shot that authors no `TurnAccel` runs at its rate ceiling outright
+		// (`FUN_10001c80` with `TurnAccel` 0). Its position sibling does **not**: `MoveAccel` 0 is
+		// retail's crawl (M7), asserted in `Elysium.Substrate.CameraTracker`.
 		FElysiumCameraShot Value;
 		Value.bTracked = true;
 		Value.Origin = FVector(1000.0f, 0.0f, 0.0f);
@@ -1159,8 +1165,9 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 		ValueTracker.Start(Value);
 		Value.Origin = FVector(1100.0f, 0.0f, 0.0f);
 		ValueTracker.Advance(Value, 0.5f);
-		TestTrue(TEXT("with no MoveAccel the camera runs at MoveSpeed outright"),
-			FMath::IsNearlyEqual(ValueTracker.Location.X, 1050.0f, 0.01f));
+		TestTrue(TEXT("with no MoveAccel the camera takes retail's decel arm and crawls at the floor"),
+			FMath::IsNearlyEqual(ValueTracker.Location.X,
+				1000.0f + FElysiumScriptedShotTracker::MinTrackSpeed * 0.5f, 0.01f));
 
 		// **The sp_tutorial_1 scenematic.** A `camera_track` pair publishes a direct shot — retail's
 		// `CInput` override (`FUN_100ffb90`), or any `CamMode != 1` in `FUN_10001a20` — whose origin
@@ -1200,13 +1207,19 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 		TestTrue(TEXT("a tracked shot with no turn rate cannot re-aim, which is why the track must be direct"),
 			FMath::IsNearlyEqual(FRotator::NormalizeAxis(FrozenTracker.Rotation.Yaw), 90.0f, 0.001f));
 
-		// `SnapOnShotChange` is the file's own "cut, do not chase".
+		// `SnapOnShotChange` is the file's own "cut, do not chase" — and it is a **one-shot**
+		// (`FUN_10002210`'s tail arms `m_bSnapPending`, `FUN_10001a20` consumes it on the next
+		// rendered frame). The shot change arms it; the frame after that tracks like any other.
 		FElysiumCameraShot Snap = Shot;
 		Snap.bSnapOnShotChange = true;
 		Snap.Origin = FVector(-500.0f, 250.0f, 100.0f);
+		Tracker.Start(Snap);
+		TestTrue(TEXT("a SnapOnShotChange shot change arms the one-shot"), Tracker.bSnapPending);
+		Snap.Origin = FVector(-800.0f, 250.0f, 100.0f);
 		Tracker.Advance(Snap, Dt);
 		TestTrue(TEXT("SnapOnShotChange hard-copies the goal"),
 			Tracker.Location.Equals(Snap.Origin, 0.001f));
+		TestFalse(TEXT("and the pending flag is consumed"), Tracker.bSnapPending);
 	}
 
 	// A `vdata/camerashots/` `FieldOfView` is a 4:3-referenced Source angle, so the window's own
@@ -1271,6 +1284,330 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 			LensCamera->ApplyToView(LensView);
 			TestTrue(TEXT("the player view renders default_fov, not the engine's 90"),
 				FMath::IsNearlyEqual(static_cast<float>(LensView.FOV), 75.0f, 0.01f));
+		}
+	}
+
+	return true;
+}
+
+// The client tracker's exact numerics and the frame contract — SC1.
+//
+// `C_BaseCineCamera` (`client.dll`): the frame latch and the two delta guards in `FUN_10001a20`, the
+// 1-degree acquire band and the 1 u/s speed floor, the one-shot snap `FUN_10002390`, retail's
+// `RemainingTime` `FUN_100010f0` with both of its defects, the `MoveAccel == 0` crawl, and the FOV
+// copy `FUN_10001c20` with its dev-cvar freeze. Every constant here is retail's, cited at its
+// declaration in `Public/ElysiumCameraSolve.h`.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTrackerTest, "Elysium.Substrate.CameraTracker",
+	GElysiumTestFlags)
+bool FElysiumCameraTrackerTest::RunTest(const FString&)
+{
+	using FTracker = FElysiumScriptedShotTracker;
+
+	// `jack.txt`'s constraints, verbatim — the game's most-seen tracked shot.
+	auto MakeJackShot = []()
+	{
+		FElysiumCameraShot Shot;
+		Shot.bTracked = true;                       // `CamMode` 1
+		Shot.Origin = FVector(0.0f, 0.0f, 165.1f);
+		Shot.LookAt = Shot.Origin + FVector(300.0f, 0.0f, 0.0f);
+		Shot.bUseLookAt = true;
+		Shot.MoveSpeed = 500.0f * ElysiumCam::U;
+		Shot.MoveAccel = 250.0f * ElysiumCam::U;
+		Shot.TurnAccel = 30.0f;
+		Shot.MaxTurnRate = FVector(60.0f, 60.0f, 60.0f);
+		Shot.DistanceTolerance = 5.0f * ElysiumCam::U;
+		Shot.AngularTolerance = FVector(10.0f, 10.0f, 10.0f);
+		return Shot;
+	};
+
+	// --- the 1-degree acquire band (`FUN_10001d40`, `tol = settled ? AngularTolerance[i] : 1.0f`) ---
+	{
+		TestEqual(TEXT("the unsettled angular tolerance is retail's 1.0 degree"),
+			FTracker::UnsettledAngleTolerance, 1.0f);
+
+		FElysiumCameraShot Shot = MakeJackShot();
+		FTracker Tracker;
+		Tracker.Start(Shot);
+		const FRotator Framed = Tracker.Rotation;
+		TestFalse(TEXT("shot start leaves the aim axes unsettled, so they acquire first"),
+			Tracker.bYawSettled);
+
+		// Half a degree of goal error: inside retail's acquire band, outside the port's old 0.05.
+		Shot.LookAt = Shot.Origin
+			+ FVector(300.0f, 0.0f, 0.0f).RotateAngleAxis(0.5f, FVector::ZAxisVector);
+		TestTrue(TEXT("0.5 degrees is inside the 1-degree band and outside the old 0.05 one"),
+			0.5f < FTracker::UnsettledAngleTolerance && 0.5f > 0.05f);
+		Tracker.Advance(Shot, 1.0f / 60.0f);
+		TestTrue(TEXT("an unsettled axis half a degree off its goal settles rather than turning"),
+			Tracker.bYawSettled);
+		TestTrue(TEXT("and the camera does not move at all"), Tracker.Rotation.Equals(Framed, 0.001f));
+		TestTrue(TEXT("its turn rate is zeroed in the settled arm"),
+			FMath::IsNearlyZero(Tracker.TurnRate.Y));
+	}
+
+	// --- the 1.0 u/s speed floor (`clamp(speed, 1.0f, MoveSpeed)`, 0x10002137-0x1000215a) ---
+	{
+		TestTrue(TEXT("the speed floor is 1.0 Source unit per second"),
+			FMath::IsNearlyEqual(FTracker::MinTrackSpeed, 2.54f, 0.0001f));
+
+		// An accelerating frame whose un-floored approach would be almost nothing.
+		FElysiumCameraShot Crawl = MakeJackShot();
+		Crawl.MoveSpeed = 500.0f * ElysiumCam::U;
+		Crawl.MoveAccel = 0.001f;                 // cm/s^2 — a rounding error of an acceleration
+		Crawl.DistanceTolerance = 0.0f;
+		FTracker Slow;
+		Slow.Start(Crawl);
+		Crawl.Origin += FVector(100.0f, 0.0f, 0.0f);
+		Slow.Advance(Crawl, 1.0f / 60.0f);
+		TestEqual(TEXT("an unsettled camera never runs below the 1 u/s floor"),
+			Slow.Speed, FTracker::MinTrackSpeed);
+		TestTrue(TEXT("and it advances by exactly the floor's step"),
+			FMath::IsNearlyEqual(static_cast<float>(Slow.Location.X),
+				FTracker::MinTrackSpeed / 60.0f, 0.0001f));
+
+		// A decelerating frame — retail's other arm — is floored by the same clamp.
+		FElysiumCameraShot Braking = MakeJackShot();
+		Braking.MoveSpeed = 500.0f * ElysiumCam::U;
+		Braking.MoveAccel = 1.0f;                 // stopDist = v^2/2a >= dist, so control decelerates
+		Braking.DistanceTolerance = 0.0f;
+		FTracker Stopping;
+		Stopping.Start(Braking);
+		Stopping.bPositionSettled = false;
+		Stopping.Speed = FTracker::MinTrackSpeed;
+		Braking.Origin += FVector(3.0f, 0.0f, 0.0f);
+		Stopping.Advance(Braking, 1.0f / 60.0f);
+		TestEqual(TEXT("the decel arm is floored by the same clamp, not driven to zero"),
+			Stopping.Speed, FTracker::MinTrackSpeed);
+
+		// The floor is what makes `FUN_100019a0`'s `speed <= 1.0` a clean "is the camera dollying".
+		TestFalse(TEXT("a camera exactly at the floor reads as not dollying"), Stopping.IsDollying());
+		Stopping.Speed = FTracker::MinTrackSpeed * 10.0f;
+		TestTrue(TEXT("a camera above the floor reads as dollying"), Stopping.IsDollying());
+	}
+
+	// --- the one-shot snap (`FUN_10002390`, armed at 0x100024c0 / the tail of FUN_10002210) ---
+	{
+		// `sp_tutorial_1`'s `LookAtTarget_Snap` shape: it cuts on the shot change and then **tracks**
+		// its anchor. Re-applying the snap every frame is what stopped it tracking at all.
+		FElysiumCameraShot Snap = MakeJackShot();
+		Snap.bSnapOnShotChange = true;
+		Snap.MoveSpeed = 150.0f * ElysiumCam::U;
+		Snap.MoveAccel = 50.0f * ElysiumCam::U;
+		Snap.DistanceTolerance = 1.0f * ElysiumCam::U;
+		Snap.AngularTolerance = FVector(1.0f, 1.0f, 1.0f);
+
+		FTracker Tracker;
+		Tracker.Start(Snap);
+		TestTrue(TEXT("the shot change arms the pending snap"), Tracker.bSnapPending);
+
+		// The anchor is somewhere else entirely by the time the first frame runs: that frame cuts.
+		Snap.Origin = FVector(-500.0f, 250.0f, 100.0f);
+		Snap.LookAt = Snap.Origin + FVector(0.0f, 300.0f, 0.0f);
+		Tracker.Advance(Snap, 1.0f / 60.0f);
+		TestTrue(TEXT("the pending frame hard-copies the goal"),
+			Tracker.Location.Equals(Snap.Origin, 0.001f));
+		TestTrue(TEXT("and re-derives the aim from the look-at, because the shot is CamMode 1"),
+			FMath::IsNearlyEqual(FRotator::NormalizeAxis(Tracker.Rotation.Yaw), 90.0f, 0.001f));
+		TestFalse(TEXT("the one-shot is consumed"), Tracker.bSnapPending);
+
+		// The hard copy itself leaves all three axes **unsettled** (retail clears `m_bAngleSettled`
+		// rather than setting it), so the frame after a cut acquires at the tight band. Asserted on
+		// the entry point directly, because the same frame's angle step re-settles a zero error.
+		FTracker Direct;
+		Direct.Start(Snap);
+		Direct.bPitchSettled = Direct.bYawSettled = Direct.bRollSettled = true;
+		Direct.Speed = 123.0f;
+		Direct.Snap(Snap);
+		TestFalse(TEXT("the snap clears the yaw settle flag"), Direct.bYawSettled);
+		TestFalse(TEXT("and the pitch one"), Direct.bPitchSettled);
+		TestFalse(TEXT("and the roll one"), Direct.bRollSettled);
+		TestTrue(TEXT("it settles the position and zeroes the speed"),
+			Direct.bPositionSettled && Direct.Speed == 0.0f);
+
+		// Ten frames of the anchor walking away. A snapping shot that still snapped would sit on the
+		// goal every frame; a tracking one closes on it at its own rate and never reaches it here.
+		const FVector CutOrigin = Tracker.Location;
+		const FVector Walked = CutOrigin + FVector(0.0f, 4000.0f, 0.0f);
+		Snap.Origin = Walked;
+		Snap.LookAt = Walked + FVector(0.0f, 300.0f, 0.0f);
+		for (int32 Frame = 0; Frame < 10; ++Frame)
+		{
+			Tracker.Advance(Snap, 1.0f / 60.0f);
+		}
+		TestFalse(TEXT("the frames after the cut track rather than snap"),
+			Tracker.Location.Equals(Walked, 0.001f));
+		TestTrue(TEXT("and they do move toward the anchor"),
+			Tracker.Location.Y > CutOrigin.Y + 0.1f);
+		TestFalse(TEXT("the camera is dollying while it closes"), Tracker.bPositionSettled);
+	}
+
+	// --- the two frame-delta guards (`FUN_10001a20`) ---
+	{
+		// Measured through the `MoveAccel == 0` crawl, whose speed is pinned at the floor, so the
+		// frame's advance is exactly `MinTrackSpeed * dt` and the effective delta is readable.
+		auto AdvanceOneFrame = [](float DeltaSeconds)
+		{
+			FElysiumCameraShot Shot;
+			Shot.bTracked = true;
+			Shot.Origin = FVector::ZeroVector;
+			Shot.bUseLookAt = false;
+			Shot.MoveSpeed = 100.0f;
+			Shot.MoveAccel = 0.0f;
+			Shot.DistanceTolerance = 0.0f;
+			FTracker Tracker;
+			Tracker.Start(Shot);
+			Shot.Origin = FVector(1000.0f, 0.0f, 0.0f);
+			Tracker.Advance(Shot, DeltaSeconds);
+			return static_cast<float>(Tracker.Location.X) / FTracker::MinTrackSpeed;
+		};
+
+		TestTrue(TEXT("a 5 second frame is clamped to the 1 second ceiling"),
+			FMath::IsNearlyEqual(AdvanceOneFrame(5.0f), FTracker::FrameDeltaCeiling, 0.0001f));
+		TestTrue(TEXT("a 0.1 ms frame is floored to 10 ms"),
+			FMath::IsNearlyEqual(AdvanceOneFrame(0.0001f), FTracker::FrameDeltaFloor, 0.0001f));
+		TestTrue(TEXT("a zero frame is floored to 10 ms, which is retail's zero handling"),
+			FMath::IsNearlyEqual(AdvanceOneFrame(0.0f), FTracker::FrameDeltaFloor, 0.0001f));
+		TestTrue(TEXT("and so is a negative one"),
+			FMath::IsNearlyEqual(AdvanceOneFrame(-1.0f), FTracker::FrameDeltaFloor, 0.0001f));
+		TestTrue(TEXT("an ordinary 60 Hz frame passes through untouched"),
+			FMath::IsNearlyEqual(AdvanceOneFrame(1.0f / 60.0f), 1.0f / 60.0f, 0.0001f));
+	}
+
+	// --- `RemainingTime` verbatim, both defects (`FUN_100010f0`) — M6 ---
+	{
+		// `jack.txt` closing 100 u from rest. Units cancel, so this is the Source-unit call.
+		const float Retail = ElysiumCam::RemainingTranslationSeconds(0.0f, 500.0f, 250.0f, 100.0f);
+		TestTrue(TEXT("RemainingTime(0, 500, 250, 100) is retail's 0.17 s"),
+			FMath::IsNearlyEqual(Retail, 0.1697f, 0.001f));
+
+		// What a correct kinematic solve answers for the same move: accelerate to the midpoint at
+		// 250 u/s^2 and brake. The port used to return this, so `jack.txt` panned ~7x slower.
+		const float Correct = 2.0f * FMath::Sqrt(2.0f * 50.0f / 250.0f);
+		TestTrue(TEXT("the correct solve is 1.27 s, which is the divergence M6 removes"),
+			FMath::IsNearlyEqual(Correct, 1.2649f, 0.001f));
+		TestTrue(TEXT("retail is about seven times faster than the truth"), Correct / Retail > 7.0f);
+
+		// The NaN band: the parse defaults (MoveSpeed 150, MoveAccel 50) enter the triangle arm for
+		// d <= 450 and drive the radicand negative past d - R2 > 4a = 200. Clamped, so finite.
+		bool bAllFinite = true;
+		for (float Distance = 200.0f; Distance <= 450.0f; Distance += 5.0f)
+		{
+			const float T = ElysiumCam::RemainingTranslationSeconds(0.0f, 150.0f, 50.0f, Distance);
+			bAllFinite &= FMath::IsFinite(T) && !FMath::IsNaN(T) && T >= 0.0f;
+		}
+		TestTrue(TEXT("the clamped radicand is finite across the whole MoveSpeed > 2*MoveAccel band"),
+			bAllFinite);
+		TestEqual(TEXT("and the radicand's zero crossing is exactly d - R2 == 4a"),
+			ElysiumCam::RemainingTranslationSeconds(0.0f, 150.0f, 50.0f, 200.0f), 0.0f);
+
+		// The trapezoid arm is entered when 2*R1 < d, and it carries retail's `(vmax - v)^2/(2a)`.
+		const float Trapezoid = ElysiumCam::RemainingTranslationSeconds(0.0f, 150.0f, 50.0f, 900.0f);
+		TestTrue(TEXT("the trapezoid arm answers finitely too"),
+			FMath::IsFinite(Trapezoid) && Trapezoid > 0.0f);
+
+		// And the `SyncRotateOnMove` gate that divides by it never produces a NaN pose.
+		FElysiumCameraShot Sync = MakeJackShot();
+		Sync.MoveSpeed = 150.0f * ElysiumCam::U;
+		Sync.MoveAccel = 50.0f * ElysiumCam::U;
+		Sync.bSyncRotateOnMove = true;
+		Sync.DistanceTolerance = 0.0f;
+		FTracker SyncTracker;
+		SyncTracker.Start(Sync);
+		Sync.Origin += FVector(300.0f * ElysiumCam::U, 0.0f, 0.0f);
+		Sync.LookAt = Sync.Origin + FVector(0.0f, 300.0f, 0.0f);
+		for (int32 Frame = 0; Frame < 30; ++Frame)
+		{
+			SyncTracker.Advance(Sync, 1.0f / 60.0f);
+		}
+		TestTrue(TEXT("a SyncRotateOnMove shot inside the NaN band keeps a finite pose"),
+			SyncTracker.Location.ContainsNaN() == false && SyncTracker.Rotation.ContainsNaN() == false
+				&& SyncTracker.TurnRate.ContainsNaN() == false);
+	}
+
+	// --- `MoveAccel == 0`: retail's crawl, through a branch (M7) ---
+	{
+		FElysiumCameraShot Crawl;
+		Crawl.bTracked = true;
+		Crawl.Origin = FVector::ZeroVector;
+		Crawl.bUseLookAt = false;
+		Crawl.MoveSpeed = 500.0f * ElysiumCam::U;
+		Crawl.MoveAccel = 0.0f;                    // retail's `0/0` compare is false: the decel arm
+		Crawl.DistanceTolerance = 0.0f;
+		FTracker Tracker;
+		Tracker.Start(Crawl);
+		Crawl.Origin = FVector(1000.0f, 0.0f, 0.0f);
+
+		Tracker.Advance(Crawl, 1.0f);
+		TestEqual(TEXT("MoveAccel 0 pins the speed at the 1 u/s floor, exactly as retail"),
+			Tracker.Speed, FTracker::MinTrackSpeed);
+		TestTrue(TEXT("so the camera crawls 2.54 cm in a second and does not reach MoveSpeed"),
+			FMath::IsNearlyEqual(static_cast<float>(Tracker.Location.X), 2.54f, 0.0001f));
+		TestTrue(TEXT("and nothing on that path divides: no NaN, no infinity"),
+			FMath::IsFinite(Tracker.Speed) && !Tracker.Location.ContainsNaN());
+
+		// A hundred seconds of it is still a crawl — the arm never falls through to MoveSpeed.
+		for (int32 Frame = 0; Frame < 100; ++Frame)
+		{
+			Tracker.Advance(Crawl, 1.0f);
+		}
+		TestTrue(TEXT("a hundred seconds of the crawl covers 2.54 m, not the shot's 1270 cm/s"),
+			static_cast<float>(Tracker.Location.X) < 300.0f);
+	}
+
+	// --- FOV: a copy every frame, and the dev-cvar freeze (`FUN_10001c20`) — M12 ---
+	{
+		FElysiumCameraShot Shot = MakeJackShot();
+		Shot.FieldOfView = 40.0f;
+		FTracker Tracker;
+		Tracker.Start(Shot);
+		TestEqual(TEXT("shot start seeds the cached FOV"), Tracker.Fov, 40.0f);
+
+		Shot.FieldOfView = 55.0f;
+		Tracker.Advance(Shot, 1.0f / 60.0f);
+		TestEqual(TEXT("the FOV is copied from the shot record every frame, never lerped"),
+			Tracker.Fov, 55.0f);
+		Shot.FieldOfView = 20.0f;
+		Tracker.Advance(Shot, 1.0f / 60.0f);
+		TestEqual(TEXT("a second frame copies the new value outright"), Tracker.Fov, 20.0f);
+
+		IConsoleVariable* Override =
+			IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.CameraShotFovOverride"));
+		if (TestNotNull(TEXT("the cine-FOV dev override is declared"), Override))
+		{
+			ON_SCOPE_EXIT { Override->Set(0.0f, ECVF_SetByCode); };
+			Override->Set(90.0f, ECVF_SetByCode);
+			Shot.FieldOfView = 25.0f;
+			TestEqual(TEXT("the guard returns the cvar"), Tracker.TrackFov(Shot), 90.0f);
+			Tracker.Advance(Shot, 1.0f / 60.0f);
+			TestEqual(TEXT("and freezes the cached FOV at its previous value, as retail does"),
+				Tracker.Fov, 20.0f);
+
+			Override->Set(0.0f, ECVF_SetByCode);
+			Tracker.Advance(Shot, 1.0f / 60.0f);
+			TestEqual(TEXT("clearing the override resumes the copy"), Tracker.Fov, 25.0f);
+		}
+	}
+
+	// --- the frame latch: one Advance per rendered frame (`m_nFrameCache`, FUN_10001a20) ---
+	{
+		// The port already has the latch, by a different route: `UElysiumCameraComponent::AdvanceFrame`
+		// and `UElysiumCameraService::Advance` both stamp `GFrameCounter` and return early on a repeat,
+		// and `UElysiumCameraModifier::ModifyCamera` zeroes the delta on the second pass. This slice
+		// asserts it rather than rebuilding it, because the tracker's whole state is per-frame.
+		UElysiumCameraComponent* Latched = NewObject<UElysiumCameraComponent>();
+		if (TestNotNull(TEXT("the frame-latch case has a camera component"), Latched))
+		{
+			FElysiumCameraShot Shot;
+			Shot.BlendSeconds = 1.0f;
+			Latched->PushShot(Shot);
+			Latched->AdvanceFrame(0.5f);
+			const float AfterOne = Latched->GetShots().GetWeight();
+			TestTrue(TEXT("one advance takes half of a one-second ramp"),
+				FMath::IsNearlyEqual(AfterOne, 0.5f, 0.001f));
+			Latched->AdvanceFrame(0.5f);
+			TestEqual(TEXT("a second pass in the same rendered frame advances nothing"),
+				Latched->GetShots().GetWeight(), AfterOne);
 		}
 	}
 

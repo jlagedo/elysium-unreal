@@ -1,5 +1,7 @@
 #include "ElysiumCameraSolve.h"
 
+#include "HAL/IConsoleManager.h"
+
 // The approach (`client.dll` 0x100fc000)
 
 float ElysiumCam::Approach(float Current, float Target, float Speed, float Dt)
@@ -280,28 +282,72 @@ FElysiumFeedCameraPose ElysiumCam::SolveOrdinaryFeedCamera(float T, float EntryY
 
 // The client shot tracker (`C_BaseCineCamera`)
 
+// `RemainingTime` (`FUN_100010f0`), verbatim from the listing `0x100010f0`-`0x100011bb` — M6.
+//
+// The decompile is unusable, so this is the listing's three arms in order. **Both of retail's defects
+// are reproduced deliberately**, because the value is a tuning constant every shipped
+// `SyncRotateOnMove` shot was authored against, not a physical answer:
+//
+//   * the trapezoid arm's acceleration distance is `(vmax - v)^2/(2a)`, which is the correct
+//     `(vmax^2 - v^2)/(2a)` only when `v == 0`;
+//   * the triangle arm's radicand is `2a - 0.5*(d - R2)` — `FUN_100010e0(a, 0.5*(d - R2))`, an
+//     acceleration minus a distance. It is dimensionally inconsistent and goes negative whenever
+//     `d - R2 > 4a`, which NaNs `vpeak` and the turn rate that divides by it.
+//
+// For `jack.txt` (MoveSpeed 500, MoveAccel 250) closing 100 u from rest retail answers **0.17 s**
+// where a correct kinematic solve answers 1.27 s, so the port's previous correct solve panned the
+// game's most-seen camera about 7x slower than retail, across 32 more `SyncRotateOnMove` shots.
+//
+// The **one** divergence is the clamp on the radicand, which removes only the NaN state: the band
+// needs `MoveSpeed > 2*MoveAccel` and no shipped `SyncRotateOnMove` shot has it.
+//
+// Units cancel, so cm and Source units both work; the port calls it in cm.
+float ElysiumCam::RemainingTranslationSeconds(float Speed, float MaxSpeed, float Accel, float Distance)
+{
+	// `FUN_100010b0(v, a) = v*v / (2*a)`. Retail divides unguarded; the callers below are only ever
+	// reached from `FUN_10001c80`, whose own `MoveAccel == 0` case never gets this far (the position
+	// solve pins the speed at the floor and never leaves the decel arm). The guard is here so no
+	// hardware divide-by-zero is ever executed — the same rule M7 applies to the position solve.
+	if (Accel <= 0.0f)
+	{
+		return 0.0f;
+	}
+	const float TwoA = 2.0f * Accel;
+	const float R1 = (MaxSpeed * MaxSpeed) / TwoA;   // distance to stop from vmax
+	const float R2 = (Speed * Speed) / TwoA;         // distance to stop from the current speed
+
+	if (2.0f * R1 < Distance)
+	{
+		// The trapezoid: accelerate, cruise, decelerate. `X` is retail's `(vmax - v)^2/(2a) + R1`.
+		const float X = ((MaxSpeed - Speed) * (MaxSpeed - Speed)) / TwoA + R1;
+		return (Distance - X) / MaxSpeed                       // cruise
+			+ FMath::Abs((MaxSpeed - Speed) / Accel)           // accelerate
+			+ FMath::Abs((0.0f - MaxSpeed) / Accel);           // decelerate
+	}
+	if (R2 >= Distance)
+	{
+		// Already inside the stopping distance: all that is left is the stop.
+		return FMath::Abs((0.0f - Speed) / Accel);
+	}
+	// The triangle: the peak stays below vmax. `FUN_100010e0(a, b) = sqrt(2*a - b)` with
+	// `b = 0.5*(d - R2)` — the defect. Clamped at zero so the NaN state cannot be produced.
+	const float Radicand = FMath::Max(0.0f, TwoA - 0.5f * (Distance - R2));
+	const float PeakSpeed = Speed + FMath::Sqrt(Radicand);
+	return FMath::Abs((PeakSpeed - Speed) / Accel) + FMath::Abs((0.0f - PeakSpeed) / Accel);
+}
+
+// The cine-FOV dev-cvar guard (`FUN_10001c20`, `DAT_102de30c`) — M12. Retail's own name is
+// unrecovered (**RC9**); when RC9 recovers it, the retail name wins and this one retires.
+static TAutoConsoleVariable<float> CVarCameraShotFovOverride(
+	TEXT("elysium.CameraShotFovOverride"),
+	0.0f,
+	TEXT("Dev override for the scripted-shot FOV (retail DAT_102de30c). While it is above the "
+		"guard threshold the shot's own FieldOfView is ignored AND the cached FOV stops being "
+		"written, so the rendered FOV freezes - retail's behaviour, reproduced. 0 = unset."),
+	ECVF_Cheat);
+
 namespace
 {
-	// How long the remaining translation still takes, given the current speed, the shot's ceiling and
-	// its acceleration. `SyncRotateOnMove` divides the angular error by this so the pan lands with the
-	// dolly (`FUN_10001c80`). With no acceleration the camera runs at `MoveSpeed` outright.
-	float RemainingTranslationSeconds(float Speed, float MaxSpeed, float Accel, float Distance)
-	{
-		const float Ceiling = FMath::Max(MaxSpeed, KINDA_SMALL_NUMBER);
-		if (Accel <= 0.0f)
-		{
-			return Distance / Ceiling;
-		}
-		const float RampSeconds = FMath::Max(0.0f, Ceiling - Speed) / Accel;
-		const float RampDistance = 0.5f * (Speed + Ceiling) * RampSeconds;
-		if (RampDistance >= Distance)
-		{
-			// v*t + a*t^2/2 = d.
-			return (-Speed + FMath::Sqrt(Speed * Speed + 2.0f * Accel * Distance)) / Accel;
-		}
-		return RampSeconds + (Distance - RampDistance) / Ceiling;
-	}
-
 	// One axis of `FUN_10001d40` plus its rate solve `FUN_10001c80`. `InOutRate` is the axis' entry in
 	// the tracker's `0x4a8[3]`; `bInOutSettled` its entry in `0x4c1[3]`.
 	// `FRotator`/`FVector` components are `double` in UE5, so the axis and its rate come in by
@@ -312,11 +358,12 @@ namespace
 		const double Delta = FRotator::NormalizeAxis(Desired - InOutCurrent);
 		const double Error = FMath::Abs(Delta);
 
-		// The deadband is the shot's tolerance while the axis is parked and a hair once it is turning:
-		// the camera comes out of the park only on a real drift, and then goes all the way onto the
-		// target instead of stopping at the edge of the band.
+		// The deadband is the shot's tolerance while the axis is parked and retail's flat **1.0
+		// degree** once it is turning (`tol = m_bAngleSettled[i] ? rec->AngularTolerance[i] : 1.0f`,
+		// the `_DAT_101e34ec` immediate): the camera comes out of the park only on a real drift, and
+		// the acquire band is a whole degree wide, not a hair.
 		const double Deadband = bInOutSettled
-			? FMath::Max(Tolerance, 0.0f) : FElysiumScriptedShotTracker::SettleAngle;
+			? FMath::Max(Tolerance, 0.0f) : FElysiumScriptedShotTracker::UnsettledAngleTolerance;
 		if (Error <= Deadband)
 		{
 			bInOutSettled = true;
@@ -356,6 +403,7 @@ void FElysiumScriptedShotTracker::Start(const FElysiumCameraShot& Shot)
 	Location = Shot.Origin;
 	Rotation = Shot.bUseLookAt ? (Shot.LookAt - Shot.Origin).Rotation() : Shot.Rotation;
 	Rotation.Roll = Shot.Roll;
+	Fov = Shot.FieldOfView;
 	Speed = 0.0f;
 	TurnRate = FVector::ZeroVector;
 	// Retail marks the position settled and zeroes the rates; the axes acquire on the first frame,
@@ -364,7 +412,60 @@ void FElysiumScriptedShotTracker::Start(const FElysiumCameraShot& Shot)
 	bPitchSettled = false;
 	bYawSettled = false;
 	bRollSettled = false;
+	// The tail of `FUN_10002210`: `if (flags & 0x80) m_bSnapPending = 1;`. Shot start is the port's
+	// shot-change edge, so this is also retail's `OnDataChanged` arm (`0x100024c0`) — both sites arm
+	// the same one-shot, and `Advance` consumes it on the very next rendered frame.
+	bSnapPending = Shot.bSnapOnShotChange;
 	bSeeded = true;
+}
+
+void FElysiumScriptedShotTracker::Snap(const FElysiumCameraShot& Shot)
+{
+	// `FUN_10002390`, in its order. The goal is copied onto the current pose; retail also re-seeds
+	// `m_vecShotStart` (0x484) and `m_vecSettledOrigin` (0x4b4), which the port derives rather than
+	// stores, so there is nothing to write for those two.
+	Location = Shot.Origin;
+	Rotation.Roll = Shot.Roll;
+	bPositionSettled = true;
+	Speed = 0.0f;
+	TurnRate = FVector::ZeroVector;
+	// All three axes are marked **unsettled**, not settled: the next frame acquires the aim at the
+	// tight 1-degree band before it parks on the shot's own tolerance.
+	bPitchSettled = false;
+	bYawSettled = false;
+	bRollSettled = false;
+	// `if (m_CamMode == 1) VectorAngles(m_vecLookAt - m_vecCurOrigin, &m_angCurAngles);` — the
+	// re-derive happens **only** for a tracked shot. A copy-through shot keeps the angles it was
+	// handed, because for it the replicated angles are the pose.
+	if (Shot.bTracked && Shot.bUseLookAt)
+	{
+		Rotation = (Shot.LookAt - Location).Rotation();
+		Rotation.Roll = Shot.Roll;
+	}
+	else if (Shot.bTracked)
+	{
+		Rotation = Shot.Rotation;
+		Rotation.Roll = Shot.Roll;
+	}
+	// The one-shot's consume.
+	bSnapPending = false;
+}
+
+float FElysiumScriptedShotTracker::TrackFov(const FElysiumCameraShot& Shot)
+{
+	// The dev-cvar guard, ahead of everything: `if (!cvar.IsCommand() && K < cvar.GetFloat())
+	// return cvar.GetFloat();` with `K = _DAT_101e34f4`. It returns **without writing `m_flCurFov`**,
+	// so the rendered FOV freezes at its previous value instead of following the cvar. That freeze is
+	// retail's behaviour and is reproduced, not smoothed over (M12).
+	const float Override = CVarCameraShotFovOverride.GetValueOnAnyThread();
+	if (FovOverrideThreshold < Override)
+	{
+		return Override;
+	}
+	// A straight copy from the **shot record**, every frame — never a lerp, and never the replicated
+	// `m_flFOV`, which `CamMode == 1` does not consult.
+	Fov = Shot.FieldOfView;
+	return Fov;
 }
 
 void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float DeltaSeconds)
@@ -374,26 +475,47 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 		Start(Shot);
 		return;
 	}
-	const float Dt = FMath::Max(0.0f, DeltaSeconds);
-	if (Dt <= 0.0f)
+	// The frame-delta guards, `FUN_10001a20`'s own, applied to the **parameter** — the tracker never
+	// reads a clock. Retail's `dt < 1/255 => 0.01` arm is also its zero-and-negative handling, which
+	// is why there is no early-out: a stalled or a paused frame still advances the tracker by a flat
+	// 10 ms, exactly as a retail frame with an unmoved `curtime` does.
+	float Dt = DeltaSeconds;
+	if (Dt > FrameDeltaCeiling)
 	{
-		return;
+		Dt = FrameDeltaCeiling;
+	}
+	else if (Dt < FrameDeltaFloorThreshold)
+	{
+		Dt = FrameDeltaFloor;
+	}
+
+	// `if (m_bSnapPending) FUN_10002390();` — consumed at the top of the frame, ahead of the CamMode
+	// dispatch, so the snap lands for a copy-through shot too.
+	if (bSnapPending)
+	{
+		Snap(Shot);
 	}
 
 	// `CamMode != 1` (`FUN_10001a20`'s fall-through) and the `camera_track` override (`FUN_100ffb90`):
 	// the pose *is* the shot, re-derived every frame. No deadband, no rate, no settle state — the
 	// tracker's three functions are never entered, so a `camera_track` dolly re-aims at its authored
-	// target every frame instead of freezing on the seed.
+	// target every frame instead of freezing on the seed. Retail's copy-through writes `m_flCurFov`
+	// from the replicated `m_flFOV`; the port's value shot carries the same number on the record.
 	if (!Shot.bTracked)
 	{
+		const bool bWasSnapPending = bSnapPending;
 		Start(Shot);
+		bSnapPending = bWasSnapPending;
 		bPitchSettled = bYawSettled = bRollSettled = true;
 		return;
 	}
 
-	// `SnapOnShotChange` is a hard copy, and a shot with no `MoveSpeed` snaps by the same grammar
-	// ("0 = the camera is not rate-limited"), so both skip the approach entirely.
-	if (Shot.bSnapOnShotChange || Shot.MoveSpeed <= 0.0f)
+	// **A port seam, not retail.** Retail's parser always hands `FUN_10001fe0` a `MoveSpeed` — the
+	// `CameraConstraints` default is 150 u/s and no shipped file writes 0 — so retail's position
+	// solve has no zero-speed arm at all. The port has producers that push a tracked shot with no
+	// constraints (the dialogue profiles stand in for `dialogdefault.txt`; SC9 gives them the file's
+	// numbers), and for those "0 = the camera is not rate-limited" is the port's own grammar.
+	if (Shot.MoveSpeed <= 0.0f)
 	{
 		Location = Shot.Origin;
 		Speed = 0.0f;
@@ -416,14 +538,22 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 			bPositionSettled = false;
 			if (Shot.MoveAccel <= 0.0f)
 			{
-				Speed = Shot.MoveSpeed;
+				// **M7 — retail, reproduced through a branch.** With `MoveAccel == 0` retail's
+				// `stopDist = FUN_100010b0(v, 0) = v*v/0` makes the `stopDist < dist` compare false
+				// (a `0/0` NaN compares false; an infinity is not less than a finite distance), so
+				// control takes the **decel** arm: `Approach(v, 0, 0, dt)` returns `v` unchanged
+				// because a zero rate moves nothing, and the clamp below pins it at the 1 u/s floor.
+				// The camera crawls. Written as a branch and never as a real divide, so no NaN or
+				// infinity is ever produced on this path.
 			}
 			else
 			{
 				const float StoppingDistance = (Speed * Speed) / (2.0f * Shot.MoveAccel);
 				Speed += (Distance <= StoppingDistance ? -Shot.MoveAccel : Shot.MoveAccel) * Dt;
-				Speed = FMath::Clamp(Speed, 0.0f, Shot.MoveSpeed);
 			}
+			// `speed = clamp(speed, 1.0f, MoveSpeed)` (`0x10002137`-`0x1000215a`). The **floor** is
+			// retail's, and it is what pins the `MoveAccel == 0` crawl at 2.54 cm/s.
+			Speed = FMath::Clamp(Speed, MinTrackSpeed, Shot.MoveSpeed);
 			const float Step = Speed * Dt;
 			Location = Step >= Distance ? Shot.Origin : Location + (ToGoal / Distance) * Step;
 		}
@@ -434,17 +564,11 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 	FRotator Desired = Shot.bUseLookAt ? (Shot.LookAt - Location).Rotation() : Shot.Rotation;
 	Desired.Roll = Shot.Roll;
 
-	if (Shot.bSnapOnShotChange)
-	{
-		Rotation = Desired;
-		TurnRate = FVector::ZeroVector;
-		bPitchSettled = bYawSettled = bRollSettled = true;
-		return;
-	}
-
-	// `SyncRotateOnMove`: only while the position is actually travelling.
+	// `SyncRotateOnMove` (`FUN_10001c80`): only while the position is actually travelling, and then
+	// `MaxTurnRate` is bypassed so the pan lands with the dolly. The floor at `Dt` is the port's, and
+	// it stands where retail's unguarded `delta / T` would divide by a zero `T`.
 	const float SyncSeconds = (Shot.bSyncRotateOnMove && !bPositionSettled)
-		? FMath::Max(RemainingTranslationSeconds(Speed, Shot.MoveSpeed, Shot.MoveAccel,
+		? FMath::Max(ElysiumCam::RemainingTranslationSeconds(Speed, Shot.MoveSpeed, Shot.MoveAccel,
 			static_cast<float>(FVector::Distance(Shot.Origin, Location))), Dt)
 		: 0.0f;
 
@@ -457,6 +581,9 @@ void FElysiumScriptedShotTracker::Advance(const FElysiumCameraShot& Shot, float 
 	AdvanceAngleAxis(Rotation.Roll, Desired.Roll, TurnRate.Z, bRollSettled,
 		static_cast<float>(Shot.AngularTolerance.Z), static_cast<float>(Shot.MaxTurnRate.Z),
 		Shot.TurnAccel, SyncSeconds, Dt);
+
+	// Third and last of `FUN_10001fa0`'s steps, after position and angles.
+	TrackFov(Shot);
 }
 
 float ElysiumCam::WidenSourceFov(float SourceFovDegrees, float AspectRatio)

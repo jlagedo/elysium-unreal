@@ -47,6 +47,21 @@ namespace ElysiumCam
 	// The same, in angle space, so a 359 -> 1 step is 2 degrees rather than 358.
 	float ApproachAngle(float Current, float Target, float Speed, float Dt);
 
+	// How long the remaining translation still takes — `RemainingTime` (`client.dll` `FUN_100010f0`,
+	// listing `0x100010f0`-`0x100011bb`), reproduced **verbatim, defects included** (M6). Only
+	// `SyncRotateOnMove` reads it: `FUN_10001c80` divides the angular error by it so the pan lands
+	// with the dolly. Distances and speeds in cm, the return in seconds.
+	//
+	// Two retail defects live in the arithmetic and are deliberately preserved, because every shipped
+	// `SyncRotateOnMove` shot was tuned against the numbers they produce:
+	//   * the trapezoid arm's acceleration distance is `(vmax - v)^2/(2a)`, not `(vmax^2 - v^2)/(2a)`
+	//     - correct only from rest;
+	//   * the triangle arm's radicand `2a - 0.5(d - R2)` subtracts a distance from an acceleration,
+	//     so it goes negative whenever `d - R2 > 4a` and NaNs `vpeak` and the turn rate with it.
+	// The radicand is **clamped at zero** — the one divergence, removing only the NaN state, which
+	// needs `MoveSpeed > 2*MoveAccel` and is unreachable on shipped content.
+	float RemainingTranslationSeconds(float Speed, float MaxSpeed, float Accel, float Distance);
+
 	// The strafe bank — `V_CalcRoll` (`client.dll` `0x101907a0`), unchanged from Quake:
 	//
 	//     side = DotProduct(velocity, right);  sign = side >= 0 ? 1 : -1;  side = |side|
@@ -314,17 +329,29 @@ struct FElysiumScriptedShotTracker
 	FVector Location = FVector::ZeroVector;
 	FRotator Rotation = FRotator::ZeroRotator;
 
+	// `m_flCurFov` (`0x480`), the FOV the frame renders. `FUN_10001c20` **copies** the shot record's
+	// `FieldOfView` (`rec+0x100`) into it every frame — never a lerp, and the replicated `m_flFOV`
+	// (`0x458`) is not consulted in `CamMode == 1`.
+	float Fov = 0.0f;                                    // degrees, 4:3-referenced; 0 = keep the player's
+
 	// `0x4a4` / `0x4a8[3]`, carried across frames because both are accelerated, not set.
 	float Speed = 0.0f;                                  // cm/s
 	FVector TurnRate = FVector::ZeroVector;              // deg/s, (pitch, yaw, roll)
 
 	// `0x4c0` / `0x4c1[3]`. A settled axis uses the shot's tolerance as its deadband; an unsettled
-	// one uses `SettleAngle` / `SettleDistance` below, so the camera parks precisely and only comes
-	// out of the park on a real drift.
+	// one uses `UnsettledAngleTolerance` / `SettleDistance` below, so the camera parks precisely and
+	// only comes out of the park on a real drift.
 	bool bPositionSettled = true;
 	bool bPitchSettled = false;
 	bool bYawSettled = false;
 	bool bRollSettled = false;
+
+	// `m_bSnapPending` (`0x4a1`). Retail arms it in exactly two places — the shot-index change in
+	// `OnDataChanged` (`0x100024c0`) and the tail of shot start (`FUN_10002210`), both when the
+	// record carries `SnapOnShotChange` (flags `0x80`) — and `FUN_10001a20` **consumes** it at the
+	// top of the very next rendered frame. It is a one-shot: the shot cuts on the change and then
+	// tracks its anchor normally, which is what `sp_tutorial_1`'s `LookAtTarget_Snap` needs.
+	bool bSnapPending = false;
 
 	bool bSeeded = false;
 
@@ -335,15 +362,59 @@ struct FElysiumScriptedShotTracker
 	// (`docs/vtmb/camera-view-modes.md` 2026-09-07).
 	void Start(const FElysiumCameraShot& Shot);
 
-	// One rendered frame. `GoalRotation` is the shot's look-at solved against **this tracker's own
-	// current origin** (retail: `VectorAngles(lookAt - currentOrigin)`), which the caller passes in
-	// because a look-at shot re-derives it after the position step.
+	// One rendered frame — `C_BaseCineCamera::Update` (`FUN_10001a20`). The look-at is solved against
+	// **this tracker's own current origin** (retail: `VectorAngles(lookAt - currentOrigin)`), after
+	// the position step, because a look-at shot re-derives its aim as it dollies.
+	//
+	// **`DeltaSeconds` is guarded here, not by the caller.** Retail computes its own delta from
+	// `engine->GetCurTime() - m_flLastTime`, clamps it to `FrameDeltaCeiling` and replaces anything
+	// below `FrameDeltaFloorThreshold` with `FrameDeltaFloor` — which is how it handles a zero or a
+	// negative delta as well. The caller supplies the frame's delta and nothing else; the tracker
+	// never reads a clock.
 	void Advance(const FElysiumCameraShot& Shot, float DeltaSeconds);
 
-	// The unsettled deadbands, retail's literals. 1.0 Source unit and a tolerance small enough that
-	// an acquiring camera lands on its target rather than near it.
-	static constexpr float SettleDistance = 1.0f * 2.54f;   // cm
-	static constexpr float SettleAngle = 0.05f;             // deg
+	// The hard copy — `FUN_10002390`. Goal -> current for origin and angles, position settled, speed
+	// and the three turn rates zeroed, all three angle axes marked **unsettled** (so the aim
+	// re-acquires at the tight 1 degree band), and the angles re-derived from the look-at **only for
+	// a tracked shot** (retail's `CamMode == 1` test). Clears `bSnapPending` on the way out — it is
+	// the one-shot's consume, and calling it directly is legal (retail's `FUN_10002390` has no other
+	// precondition).
+	void Snap(const FElysiumCameraShot& Shot);
+
+	// `FUN_10001c20`. Returns the FOV this frame renders and, in the ordinary path, copies the shot
+	// record's `FieldOfView` into `Fov`. Under the dev-cvar override it returns the cvar **without
+	// writing `Fov`**, so the rendered FOV freezes at whatever it last was — retail's own behaviour,
+	// reproduced (M12).
+	float TrackFov(const FElysiumCameraShot& Shot);
+
+	// `FUN_100019a0`'s first test: `m_flSpeed <= 1.0` (a *double* compare at `0x101e34e0`) reads as
+	// "the camera has stopped dollying", and it is clean precisely because `MinTrackSpeed` is the
+	// tracker's own speed floor — an unsettled camera can never sit below it. SC5's viewmodel
+	// predicate is `!IsDollying() && Shot.bDrawViewmodel`.
+	bool IsDollying() const { return Speed > MinTrackSpeed; }
+
+	// The unsettled deadbands, retail's literals: 1.0 Source unit of position and **1.0 degree** of
+	// angle (`_DAT_101e34ec`), so an acquiring camera lands on its target rather than near it. The
+	// settled deadbands are the shot's own `DistanceTolerance` / `AngularTolerance`.
+	static constexpr float SettleDistance = 1.0f * 2.54f;             // cm  (1.0 u)
+	static constexpr float UnsettledAngleTolerance = 1.0f;            // deg (`_DAT_101e34ec`)
+
+	// `clamp(speed, 1.0f, MoveSpeed)` at `0x10002137`-`0x1000215a`: an unsettled camera never runs
+	// slower than 1 u/s. Load-bearing twice over — it is the floor a zero `MoveAccel` pins the speed
+	// at (M7), and it is what makes `FUN_100019a0`'s `speed <= 1.0` a clean dolly test.
+	static constexpr float MinTrackSpeed = 1.0f * 2.54f;              // cm/s (1.0 u/s)
+
+	// The frame-delta guards from `FUN_10001a20`. `dt > 1.0 => 1.0` (`FCOMP _DAT_101e34ec`, then
+	// `MOV 0x3f800000`); `dt < 1/255 => 0.01` (`FCOMP _DAT_101e34e8`, then `MOV 0x3c23d70a`) — the
+	// second covers zero and negative, which is why there is no separate early-out.
+	static constexpr float FrameDeltaCeiling = 1.0f;                  // s  (`_DAT_101e34ec`)
+	static constexpr float FrameDeltaFloorThreshold = 1.0f / 255.0f;  // s  (`_DAT_101e34e8`)
+	static constexpr float FrameDeltaFloor = 0.01f;                   // s  (immediate 0x3c23d70a)
+
+	// `_DAT_101e34f4`, the cine-FOV guard's threshold: the cvar wins only while
+	// `FovOverrideThreshold < cvar.GetFloat()`. **The retail value is unrecovered** — RC9 supplies
+	// it; 0 stands in and reads as "the cvar is unset", which is what an unwritten dev cvar is.
+	static constexpr float FovOverrideThreshold = 0.0f;
 };
 
 // The channel. Push/pop is **handle-based, not LIFO** — a conversation ends behind a cutscene that
