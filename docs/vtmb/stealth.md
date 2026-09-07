@@ -362,10 +362,137 @@ If all pass, `victim` is cached in `m_hCachedVictim[player_index]`.
 3. **Grapple Mode 3 execution (`StartGrappleAttack` @ `0x10328df0`)**:
    - Stores victim handle into `player->m_hStealthKillTarget` at `+0x1c58` and `+0x1c60`.
    - Resolves paired activity pair via `CheckAndTranslateBaseActivity` (`0x10328af0`) and `TranslateBaseActivity` (`0x10328380`) based on attacker/victim gender, skeleton, and orientation.
-   - Locks both combatants into grapple mode 3 via `SetGrappleState` (`0x1032a100`), freezing standard movement and AI.
+   - Locks both combatants into grapple mode 3 via `EnterGrappleState` (`0x10329760`, vtable slot 379) — attacker with role `0`, victim with role `1` — freezing standard movement and AI; `SetGrappleActivity` (`0x1032a100`) then picks the paired activity and calls `EndGrapple` if it cannot.
    - Invokes `WeaponStealthKill` (vtable index `+0x534`) on the active weapon.
    - Snaps attacker relative to victim `Bip01` bone offset.
    - Paired death animation plays, committing fatal damage (`Event_Killed` / `TakeDamage`) on the victim upon completion.
+
+### The grapple role pair and the `m_GrappleType` enum (2026-09-07)
+
+The stealth kill is one member of a nine-valued grapple enum sharing one block of state on
+`CBaseCombatCharacter`. The field names are read out of `CBaseCombatCharacter::Dump` (`0x103222c0`):
+
+| offset | name | notes |
+|---|---|---|
+| `+0x1534` | `m_GrappleSavedMoveType` | `vfunc0x178()` captured on enter, restored on leave |
+| `+0x1538` | **`m_GrapplePartner`** | EHANDLE, `-1` when idle |
+| `+0x153c` | **`m_GrappleRole`** | **`-1` none, `0` attacker, `1` victim** |
+| `+0x1540` | **`m_GrappleType`** | the mode below |
+| `+0x1544` | `m_GrapplePosition` | the variant chosen by `CheckAndTranslateGrapplePosition` (`0x10328af0`) |
+| `+0x1548`–`+0x1550` | — | `GetAbsOrigin()` saved on enter, read back on leave |
+| `+0x1554` | — | 1 when entering holstered the active weapon |
+| `+0x1558` | `m_hGrappleAnimDriver` | written **only when `role != 0`**: the victim points at the attacker |
+
+**The role polarity is proved twice.** `StartGrappleAttack`'s two `EnterGrappleState` dispatches push
+the role literal directly — `PUSH 0x0` for the attacker at `0x10329285`, `PUSH 0x1` for the victim at
+`0x103292d3` — and `EnterGrappleState`'s `if (role != 0) m_hGrappleAnimDriver = partner` says the same
+thing: the attacker drives the paired animation. `CBaseCineCam::SetShot`'s `GrappleVictim` /
+`GrappleAttacker` anchor keywords read the same pair (see `docs/vtmb/camera-view-modes.md`), which is
+why the `Stealth_Kill_1..4` shots in `vdata/camerashots/stealth_kill.txt` frame the right body.
+
+**Writers — exactly three.**
+
+1. **`CBaseCombatCharacter::EnterGrappleState` `0x10329760`** (vtable **slot 379**, `+0x5ec`) — the only
+   setter, called twice per grapple by `StartGrappleAttack`, attacker first then victim, and rolled
+   back on the attacker if the victim refuses. It writes the whole block in one transaction, optionally
+   holsters, saves the move type, and for a player sets `MOVETYPE_NONE`.
+   Overrides: `CBasePlayer::FUN_101695f0` (base + `FUN_10181580(player, 1)`, which sets bit `0x1` of
+   `player+0x1d60`), `CAI_BaseNPC::FUN_1026cdc0`, `CAI_BaseNPCTroika::FUN_102b5c00`,
+   `CPayphone::vfunc379` (`0x101aade0`), `CNPC_VGhoulCroucher::vfunc379` (`0x1037b500`).
+2. **`CBaseCombatCharacter::LeaveGrappleState` `0x10329a70`** (slot **380**, `+0x5f0`) — the only
+   clearer; sets all five of `+0x1538`, `+0x153c`, `+0x1540`, `+0x1544`, `+0x1558` to `-1`, restores the
+   weapon and the move type, and re-places the character. Before clearing, `role == 0 && (type == 1 ||
+   type == 4)` reads the **partner's** saved origin for the exit placement.
+   `CBasePlayer::FUN_10169660` extends it with `FUN_101815b0(player, 1)` (clearing the same
+   `+0x1d60` bit), **`SetCineCamera(NULL)`** — so ending a grapple ends any scripted shot — and the feed
+   aftermath (blood stolen, bad blood, blue blood, masquerade).
+   `CBaseCombatCharacter::EndGrapple` `0x10329560` is the paired teardown that calls `vfunc0x5f0` on
+   both sides; it also fires `FUN_10175400(player, false)` when `role != -1 && type == 8`.
+3. **`CBaseCombatCharacter::CBaseCombatCharacter` `0x10326de0`** seeds `+0x1538 = -1` and
+   `+0x153c = -1`. It does **not** seed `+0x1540` / `+0x1544`, so `m_GrappleType` reads `0` until the
+   first leave — harmless, because every consumer tests the role or the partner first.
+
+**`m_GrappleType`, and where each mode is started** (`StartGrappleAttack(this = attacker, victim,
+type)` `0x10328df0`):
+
+| mode | started by | meaning |
+|---|---|---|
+| `0` | `CBasePlayer::Replenish` `0x10168320` | the feed, ordinary victim |
+| `1` | no shipped caller | the second feed variant (shares mode 0's sound and 64-u distance) |
+| `2` | the Python native `SeductiveFeed(a, b)` `0x10198150` | requires **both** parties idle; sets `player+0x14a8 = 1`; **no distance check at all** |
+| `3` | `PlayerTryStealthKill` `0x10167370` | **the stealth kill** |
+| `4` | no shipped caller | the stealth-kill twin — weapon activity `0x18` instead of `0x17` |
+| `5` | `CBasePlayer::StartPlayerDialog` `0x10178280` | the payphone (`CPayphone`) |
+| `6` | `CBasePlayer::Replenish` when `victim->vfunc0x228() == 0xd` | the feed on a type-13 victim |
+| `7` | no shipped caller | shares mode 5's 144-u distance and holster policy |
+| `8` | `CBasePlayer::BeFedOnByZombie` `0x10168700` | the player is the **victim** |
+
+Mode-dependent behaviour inside `StartGrappleAttack`:
+
+- **Facing yaw** is `VecToYaw(victim.origin − attacker.origin)`, except for **mode 5**, which takes the
+  victim's own abs-angles yaw round-tripped through 16 bits
+  (`((int)((yaw + 180) * 182.04444885f) & 0xFFFF) * 0.0054931640625f`, constants `_DAT_1044c3a8`,
+  `_DAT_1044ffe0`, `_DAT_1044ffdc`).
+- `sameSide = |AngleDiff(desiredYaw, victim.angles.yaw)| <= 90.0` (double `_DAT_1044e668`) is the
+  position hint handed to `CanStartGrappleAttack` and `CheckAndTranslateGrapplePosition`.
+- **Holster flags** are asymmetric: mode `3` holsters the **victim only**; modes `4` and `7` holster
+  neither; every other mode holsters both.
+- The post-enter jump table (`0x103293c4`, index = type, `0..4` only): modes `0`/`1` →
+  `GrappleSoundCmd(attacker, 2)` + `GrappleSoundCmd(victim, 0)`; mode `2` → nothing; mode `3` →
+  active weapon `vfunc0x534(0x17, 1, …)`; mode `4` → `vfunc0x534(0x18, 1, …)`.
+- `attacker->m_iBloodStolen = 0` is zeroed just before the enter, and the
+  `"StartGrappleAttack %s"` player event fires only for a player attacker on a live victim whose type
+  is neither `8` nor `2`.
+
+**`CBaseCombatCharacter::CanStartGrappleAttack` `0x103285a0`**, in order:
+
+1. `victim == NULL` ⇒ false.
+2. If the attacker is a player and `FL_DUCKING (0x2)`: a hull trace `[-16,-16,0]…[16,16,72]` from
+   `GetAbsOrigin()` to itself with mask `0x201400b`; **fraction < 1, startsolid or allsolid ⇒ false** —
+   a crouching player must have room to stand.
+3. `this->vfunc0x5e4(victim, type)` and `victim->vfunc0x5e8(this, type)` must both pass.
+4. If the **victim** is already grappling: its partner must be `this` **and** this's own current type
+   must equal the requested type, in which case it **succeeds immediately**, skipping the distance and
+   position checks. Otherwise false.
+5. Else if **this** is already grappling: `role != 0` ⇒ false; `role == 0` ⇒ `EndGrapple(this)` and
+   continue. An attacker can hand its grapple over; a victim cannot start one.
+6. 2-D (x/y) distance against `GetAbsOrigin()`: type `2` skips it; types `3`/`4` use
+   `CStealthKillRules`' `GrappleDistanceMax`; type `8` uses `Zombie_Grapple_Info`'s distance — both
+   skipped when the value is `<= 0`; types `5`/`7` use **144.0**; type `6` uses **120.0**; everything
+   else **64.0**.
+7. `CheckAndTranslateGrapplePosition(...) != -1`.
+
+**Readers.** `CBaseCineCam::SetShot` `0x1006e130` (the camera anchor keywords);
+`CanStartGrappleAttack`; `EndGrapple`; `LeaveGrappleState`; `CBasePlayer::Replenish` (early-out when
+already grappling); the `SeductiveFeed` native; `CPlayerMove::SetupMove` `0x10186120`;
+`CBasePlayer::GetSaveBlockedReason` `0x10174f80`; `CBaseCombatCharacter::ChooseMeleeAttackSequence`
+`0x10347180`; the player anim-state builder `0x10146e20` (`partner live && role != -1 && type == 3`
+selects the stealth-kill anim state); the locomotion-state selector `0x1016bb50` (`partner live &&
+role == 0` ⇒ state 8); the "find a grapple target" scan `0x10167470`; the crouch predicates
+`0x101671a0` / `0x10167240` (true while `type == 3`); `CWeaponMelee::SecondaryAttack` and
+`CWeaponMelee_Torch::PrimaryAttack`; the player state/HUD helpers `0x10170090`, `0x10170340`,
+`0x10174580`, `0x10181780`, `0x1018b7e0`; and `CPointTeleport::InputTeleport` `0x1018dc00`
+(`EndGrapple` before teleporting).
+
+Three of those are worth spelling out:
+
+- **`CPlayerMove::SetupMove` `0x10186120`** computes `role = (partner live) ? m_GrappleRole : -1` at the
+  top. When the role is set it switches on the player's current activity (`player+0xFF0`): for
+  `0xf88, 0xf91, 0xf9a, 0xfb7, 0xfc0, 0xff7, 0x1000, 0x1009, 0x1039` it behaves as if not grappling;
+  **otherwise it slaves the move to the partner** — `cmd.origin = partner->GetAbsOrigin()` with
+  `origin.z` corrected by the two collision-mins difference, and a globally stored view angle. This is
+  the freeze that holds a stealth-kill pair together.
+- **`CBasePlayer::GetSaveBlockedReason` `0x10174f80`** returns, in order: `2` a live dialogue partner ·
+  **`3` `role != -1` with a live partner** · `4` a live `player+0x1040` · `7` `FUN_10175180` · `6` a
+  live `player+0x19C0`, `player+0x19CC`, **a live cine camera**, or `FUN_101618a0` · `1`
+  `player+0x1EB8` or `FUN_1023bd00()->+0x4ac` · then `5` when `vfunc0x278()` and `0` otherwise. **A
+  grapple in progress blocks saving with reason 3.**
+- **`CBaseCombatCharacter::ChooseMeleeAttackSequence` `0x10347180`** only reads the pair, and for one
+  purpose: **a grappled target's partner is allowed to stand in for the target in the melee trace.** At
+  `0x103472b9` a third entity blocking the trace is compared against `EHANDLE_Get(target+0x1538)`
+  (evaluated only when `target+0x153c != -1`); a match means "not blocked", any other blocker aborts the
+  attack and raises condition `0x3a`. At `0x103479ac` the same substitution is applied inside the
+  per-sequence loop.
 
 ### Tutorial lesson completion
 

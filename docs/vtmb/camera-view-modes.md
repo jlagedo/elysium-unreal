@@ -916,7 +916,11 @@ and outputs without driving the view. `HoldAtEnd` retains a selected stream's fi
 its completion returns the complete paired camera to player control. `RestoreCameraToPlayerControl`
 (with `Restore` as a compact compatibility alias) performs the same session-level return when the
 receiver is still the current position track. `FromPlayerTime` is the push blend, `ToPlayerTime` the
-default completion blend, and an explicit restore parameter overrides the latter. `OnReachedKeyframe`,
+default completion blend, and an explicit restore parameter overrides the latter. In retail those two
+keyvalues reach the fade machinery through the virtual pair `GetCameraFadeInTime` (`vfunc0xD0`) and
+`GetCameraFadeOutTime` (`vfunc0xD4`), each `max(0, keyvalue)`, and each is a **minimum** raised over
+the caller's requested crossfade rather than an assignment — see the override-channel subsection
+below. `OnReachedKeyframe`,
 `OnLeavingKeyframe`, and exactly-once `OnAnimationCompleted` fire from crossed authored times,
 including zero-duration chains.
 
@@ -1060,7 +1064,9 @@ gets a rate-limited, deadbanded camera, which is why so few shipped shots bother
 
 **Anchor parse** `FUN_10071e00`, complete. The record is 0x2c bytes: `+0x00` flags, `+0x04` a 16-byte
 inline name (`Q_trimspace` of whatever follows `Bone:` / `Attachment:`), `+0x14` `OffsetOrigin`
-(default string `"0 0 0"`), `+0x20` `OffsetAngles` (default `"0 0 0"`).
+(default string `"[0, 0, 0]"`, literal at `0x1054732c`), `+0x20` `OffsetAngles` (the same literal).
+The `Position`, `AttachPos` and `AttachType` keys all default to the literal `"None"` (`0x10547418`),
+which matches no keyword and therefore lands on the `World` / `Origin` / `None` tails.
 
 `Position` is matched by `_strstr` in this order — Player `0x1`, DialogTarget `0x2`,
 **GrappleVictim `0x80000`**, **GrappleAttacker `0x100000`**, Named `0x8` — and **anything unrecognised
@@ -1071,10 +1077,48 @@ including the NUL — **case-sensitive, not `strstr`** — Follow `0x4000`, Foll
 FollowEntAngles `0x10000`, default None `0x2000`. `0x20000` marks a non-zero `OffsetOrigin`; `0x40000`
 marks a non-zero `OffsetAngles`.
 
+**`Position` resolves in `SetShot` (`FUN_1006e130`), and the grapple pair is `m_GrapplePartner` /
+`m_GrappleRole` (2026-09-07).** With `subject = param_3 ? param_3 : UTIL_PlayerByIndex(1)`, per anchor
+`i`:
+
+```
+Player           → UTIL_PlayerByIndex(1)
+DialogTarget     → EHANDLE_Get(subject + 0xFE8), NULL when player 1 is NULL
+GrappleVictim    → the partner  when the partner handle is live and m_GrappleRole == 0
+                 → the subject  when it is live and m_GrappleRole == 1
+                 → NULL         when the partner handle is dead
+GrappleAttacker  → the mirror of the above
+World            → FindEntityByClassname(NULL, "worldspawn")
+Named            → NULL; the caller supplies it through SetShotAnchorEntity
+```
+
+then `SetShotAnchorEntity(this, resolved, i)` for `i = 0..3`, and finally `this->+0x63c = framecount`,
+`this->+0x638 = param_2`. The pair it reads is `CBaseCombatCharacter+0x1538` **`m_GrapplePartner`**
+(EHANDLE) and `+0x153c` **`m_GrappleRole`**, whose values are **`-1` none, `0` attacker, `1` victim** —
+proved by `StartGrappleAttack`'s two `EnterGrappleState` dispatches, which push the literals `0` for
+the attacker and `1` for the victim (`0x10329285` / `0x103292d3`), and corroborated by
+`EnterGrappleState`'s `if (role != 0) m_hGrappleAnimDriver = partner`: the attacker drives the paired
+animation. The names come from `CBaseCombatCharacter::Dump` `0x103222c0`, which also names
+`+0x1534` `m_GrappleSavedMoveType`, `+0x1540` `m_GrappleType` and `+0x1544` `m_GrapplePosition`. The
+full writer/reader ledger and the nine-valued `m_GrappleType` enum are in `docs/vtmb/stealth.md`.
+
 **`OffsetAngles` is parsed and dead — settling this document's open question.** `FUN_1006f080` only
 ever reads `+0x14`, and no cine-camera site anywhere in `vampire.dll` tests `0x40000`. The key is
-accepted by the grammar and has no effect on the server. (The client mirrors the same parser at
-`client.dll` `FUN_10028a10`; that half is unaudited.)
+accepted by the grammar and has no effect on the server.
+
+**The client parses the identical grammar — one grammar, parsed twice (2026-09-07).** `client.dll`
+`FUN_10028a10` (anchor) and `FUN_10028d20` (shot record) were read against `vampire.dll`
+`FUN_10071e00` and `FUN_100721e0` field by field, and **there is no divergence at all**: the same
+`0x104` stride and the same offsets, the same `_strstr` orders and flag bits for `Position` and
+`AttachPos`, the same 16-byte inline-name extraction at `+5` / `+0xb`, the same case-sensitive
+`AttachType` byte compare with lengths `7` / `0xf` / `0x10`, the same `"None"` and `"[0, 0, 0]"`
+defaults, the same `"[90,90,90]"` / `"[1,1,1]"` vector defaults, the same 150 / 50 / 30 / 10 / 75
+scalars, the same `[20, 120]` FOV clamp in the same `if (fov <= 120) { if (fov < 20) fov = 20; } else
+fov = 120;` shape (`_DAT_101e55c0` = 120, `_DAT_10224ae8` = 20 on the client;
+`_DAT_1044f00c` / `_DAT_1044eb0c` on the server), the same key read order, the same six
+`CameraConstraints`-scoped booleans, and **the same `Point2`-without-`Point1` order-of-presence flag
+bug**. Even the dead anchor pre-init that the record-wide zero immediately overwrites is present on
+both halves. Nothing the client tracker reads can disagree with what the server think reads.
 
 **Anchor to world** (`CBaseCineCam` `FUN_1006f080`, offset step `0x1006f430`):
 
@@ -1218,9 +1262,90 @@ think dispatcher `CBaseCineCamSetCamThink` `FUN_1006e770` is a jump table on it:
 | 0 | none | idle |
 | 1 | `CBaseCineCamUpdate_Mode_NamedShot` `0x1006f8f0` | a `vdata/camerashots/` shot: anchors resolved per tick unless `AttachType None` froze them at shot start, look-at solved (`FUN_1006f670`) |
 | 2 | `CBaseCineCamUpdate_Mode_OnRails` `0x1006fde0` | **empty**, server and client |
-| 3 | `CBaseCineCamUpdate_Mode_FollowEntity` `0x1006fe00` | origin = anchor 0's world centre (vfunc `0x300`), angles = its abs angles; created by `FUN_100705d0`, **no callers** |
+| 3 | `CBaseCineCamUpdate_Mode_FollowEntity` `0x1006fe00` | origin = anchor 0's world centre (vfunc `0x300`), angles = its abs angles; **never** `m_vecCamTarget`, **never** `m_flFOV`; created by `FUN_100705d0`, **no callers** |
 | 4 | `CBaseCineCamUpdate_Mode_Animated` `0x1006f870` | pushes only `m_flFOV`; pose is the entity's own animation; created by `FUN_10070690` for `camera_animated` (`CCameraAnimated::StartCamera` `0x10071550`), **zero instances shipped** |
 | >4 | `CBaseCineCamCamEndThink` `0x1006e850` | `UTIL_Remove(this)` |
+
+**The two unshipped arms in full (2026-09-07).**
+
+```c
+// 1006fe00  CamMode 3 — FollowEntity
+if (!handleLive(this->+0x610)) this->+0x55c = 0;      // integer 0, NOT FUN_1006e8b0
+if (FUN_1006f7d0(this)) return;                        // 24 Hz reschedule + expiry
+ent = resolve(this->+0x610);                           // no null guard on this second resolve
+this->m_vecCamOrigin (+0x5ec) = ent->WorldSpaceCenter();   // vfunc 0x300
+this->m_angCamAngles (+0x604) = ent->GetAbsAngles();       // vfunc 0x36c
+
+// 1006f870  CamMode 4 — Animated
+if (!handleLive(this->+0x610)) FUN_1006e8b0(this, 0.0);    // +0x55c = curtime
+if (FUN_1006f7d0(this)) return;
+this->m_flFOV (+0x634) = shotRecord->FieldOfView (+0x100);
+```
+
+`FUN_1006e8b0(this, secs)` is `+0x55c = curtime + secs`; the constructor seeds `+0x55c = -1.0`
+(`0xbf800000`), so a fresh camera never expires, and the gate in `FUN_1006f7d0` is
+`+0x55c > 0.0f && +0x55c < curtime` — strict on both sides. Mode 4's `0.0` therefore fails the gate
+on the tick it is armed (equality) and removes the camera on the **next** think, one 1/24 s later.
+Mode 3's integer `0` fails the `> 0.0` half forever, so a mode-3 camera whose anchor dies never
+expires **and then dereferences the dead handle** — `retail-defects.md` §7. Mode 3 leaves `m_flFOV`
+at the constructor's 75.0 (`0x42960000`) because nothing on that path ever writes it.
+
+Mode 4's FOV publish is dead on arrival: the client's `if (m_CamMode == 4) { FUN_10002200(dt);
+return; }` skips the copy-through that would move `m_flFOV` into `m_flCurFov`, and `FUN_10002200` is
+an empty `RET`. An `Animated` camera renders pose *and* FOV frozen at shot start.
+
+The two factories differ in one load-bearing way. `FUN_100705d0(ent)` (mode 3) creates
+`camera_cinematic`, sets the disposable bit, `SetShot("Follow", 3, NULL)` — the only failure path,
+which `UTIL_Remove`s and returns NULL — then stores the anchor EHANDLE **directly** at `+0x610`
+(`-1` when `ent` is NULL, which walks straight into the crash above), leaving the bone/attachment
+index at `-1`; that matches `special-case.txt`'s `Follow`, which is
+`Start { Position Named; AttachPos Center; AttachType None }` and needs no index.
+`FUN_10070690(ent)` (mode 4) does the same but names `"Animated"`, mode `4`, and goes through
+`SetShotAnchorEntity` `FUN_1006ef50`, so the `Bone: cam_bone` index `special-case.txt`'s `Animated`
+block asks for is looked up. Both set `+0x204 |= 0x4`.
+
+**`camera_animated` — `CCameraAnimated` (2026-09-07).** A separate entity class
+(`LINK_ENTITY_TO_CLASS` at `FUN_10070a10`, string `10546edc`), derived from `CBaseAnimating`, not a
+mode of `camera_cinematic`. Its own datamap rows: `+0x7f0` the created cine camera's EHANDLE
+(constructor `-1`), `+0x7f4` `m_sAnimName` key **`animname`**, `+0x7f8` output **`OnCameraBegin`**,
+`+0x810` output **`OnCameraComplete`**, `+0x828` the cached `camera_showdebug` state, `+0x82c` a float
+the constructor seeds to `-1.0` and nothing opened reads. Inputs **`StartCamera`** (`10546b18`) →
+`0x10071440` and **`EndCamera`** (`10546af8`) → `0x10071470`.
+
+* `Spawn` `0x10071330` — with a model name, `Precache` then `SetModel` and return; without one,
+  `Warning("%s at %.0f %.0f %0.f missing modelname\n")` and `UTIL_Remove`. (The warning itself pushes
+  two doubles for three conversions.)
+* `StartCamera` `0x10071550` — `EndCamera` first; `m_iEFlags &= ~0x42`; `RemoveFlag(0x40000)`;
+  `cam = FUN_10070690(this)`; store its handle at `+0x7f0`; `SetCineCamera(player, cam)`;
+  `FUN_10071770(this, m_sAnimName)`; **`if (m_spawnflags & 1) SetImmobilized(player, true)`**.
+* `FUN_10071770(name)` — `LookupSequence`, else `Msg("%s no sequence named:%s\n")` and
+  `m_nSequence = 0`; on success set `m_nSequence`/`m_flCycle = 0`, `ResetSequenceInfo`, fire
+  `OnCameraBegin`, `ThinkSet(0x10071840)` and `m_flNextThink = curtime + 0.1`
+  (`_DAT_104493d0`, a **double** `0.1` read from the image).
+* The think `0x10071840` — `StudioFrameAdvance` + `DispatchAnimEvents`, then
+  `m_bSequenceFinished ? EndCamera() : (m_flNextThink = curtime + 0.1)`, then caches
+  `camera_showdebug` into `+0x828`. **The shot ends when the sequence finishes**, and the entity's own
+  clock is 10 Hz while the cine camera it drives thinks at 24 Hz.
+* `EndCamera` `0x10071660` — fire `OnCameraComplete`; `UTIL_Remove` the cine camera **directly**
+  (not through `SetCineCamera(player, NULL)`, so `m_iCameraOverrideIdx` is left pointing at a dead
+  index until the client's handle stops resolving); `MakeDormant`; `AddFlag(0x40000)`;
+  `m_nSequence = m_flCycle = 0`; `ResetSequenceInfo`; `if (m_spawnflags & 1) SetImmobilized(player,
+  false)`. It clears no `m_iVFlags` and restores nothing else.
+
+**`DeathCam` has no driver (2026-09-07).** `special-case.txt` defines the shot with the comment
+*"the game will set this to the corpse"* on its `Named` Point1. `vtmb_string "DeathCam"` returns
+**zero strings in every module** — `vampire.dll`, `client.dll`, `engine.dll`, `GameUI.dll`,
+`vguimatsurface.dll`, `vphysics.dll`, `tier0.dll` — and a byte scan of the whole shipped install finds
+the literal exactly once, at offset `720502` of `Vampire/pack101.vpk`, inside `special-case.txt`
+itself. The compiled Python (`pack008.vpk`) carries `StartShot` ×9 and `SetCamera` ×4 and no
+`DeathCam`; no dialogue file names it. Its three siblings *are* reached — `"Follow"` (`10546ea0`) by
+`FUN_100705d0`, `"Animated"` (`10546ea8`) by `FUN_10070690`, `"Hacking"` by
+`CPropHacking::vfunc39`/`CPropKeypad::vfunc39`, `"Intrusion"` by `FUN_10225070`, `"FuncMonitor"` by
+`CFuncMonitor::vfunc39` — which makes the absence conclusive rather than a search failure. **The
+retail death view is not a cine camera at all**: it is the spectator-target replace at the tail of
+`CViewRender::CalcView` `client.dll 0x10191200`, where an `IVRenderView::GetViewEntity()` index
+strictly greater than `IVEngineClient::GetMaxClients()` hard-replaces origin and angles with that
+entity's.
 
 **The client divides on it once.** `C_BaseCineCamera::Update` `client.dll` `FUN_10001a20`, reached
 each rendered frame from `C_BasePlayer::CalcView` `0x100a7770` → `C_BaseCineCamera::CalcView`
@@ -1317,7 +1442,14 @@ created on demand.
 | `+0x5dc` | `endent` | → anchor 1 |
 | `+0x5e0` | `target1` | → anchor 2 |
 | `+0x5e4` | `target2` | → anchor 3 |
-| `+0x640` | `m_bDrawPlayer` | copied to the runtime camera |
+| `+0x5e8` | `point_player` | `m_bForcePlayerLook` — parsed onto the director and **never copied anywhere**; see below |
+| `+0x640` | — | `m_bDrawPlayer`; **not a datamap key**, written by `Spawn` from `spawnflags & 2`, then copied to the runtime camera |
+
+The key names are the datamap's own (`vtmb_fields CBaseCineCam`): `shotname` / `m_sShotName`,
+`startent` / `m_sStartEnt`, `endent` / `m_sEndEnt`, `target1` / `m_sTarget1`, `target2` /
+`m_sTarget2`, `point_player` / `m_bForcePlayerLook`. `StartHidden` (5 shipped directors) is not a
+camera key either — it is `CBaseEntity::m_bStartHidden` at `+0x0e0`, read only by the two
+`CBaseEntity::PostSpawn` bodies (`0x1000c464`, `0x100aaf30`).
 
 `FUN_10070780`, in order: four `FindEntityByName(NULL, name, 0, 0)` lookups with the empty string
 substituted for a null keyvalue (a miss yields NULL and leaves that anchor to the shot file's own
@@ -1403,10 +1535,241 @@ to `-1` and `CamMode` to `0`, and **does not touch** `+0x55c` (expiry), `+0x594`
 `+0x5e8` (`m_bForcePlayerLook`) or `+0x640` (`m_bDrawPlayer`). `FUN_1006e890` (`IsActive`) is
 `CamMode != 0`. `CBaseCineCamCamEndThink` `FUN_1006e850` is `UTIL_Remove(this)` plus a reschedule.
 
-**`m_bDrawPlayer` (`+0x640`) has no server reader.** It is registered as a `DT_BaseCineCam` SendProp by
-`FUN_1006d2f0` and written by exactly two functions — `FUN_10070780` (copying the director's keyvalue)
-and `CBasePlayer::HandleAnimEvent` `0x10178a10`, where anim event 4050 forces it to 1. It is a pure
-replication channel; the drawing decision is the client's (see "The draw gates and the HUD mask").
+**`m_bDrawPlayer` (`+0x640`) has no server reader, and `spawnflags & 2` is its authored source.** It
+is registered as a `DT_BaseCineCam` SendProp by `FUN_1006d2f0` and written by exactly three
+functions — `CBaseCineCam::Spawn` (from the spawnflag, below), `FUN_10070780` (copying the director's
+byte onto the runtime camera) and `CBasePlayer::HandleAnimEvent` `0x10178a10`, where anim event 4050
+forces it to 1. It is a pure replication channel; the drawing decision is the client's (see "The draw
+gates and the HUD mask").
+
+### The entity's own class surface — `spawnflags`, the nine overridden slots, `camera_showdebug` (2026-09-07)
+
+**There is no `KeyValue` handler.** `vtmb_vtable CBaseCineCam` (table `1044e67c`, 241 slots) shows the
+class overriding exactly nine: **5** (destructor), **80/81/82** (the `DECLARE_SERVERCLASS` /
+`DECLARE_DATADESC` triple), **86** (`ShouldTransmit`), **103** (`Spawn`), **117** (`ObjectCaps`),
+**123** (`DrawDebugGeometryOverlays`) and **193** (`EyePosition`, already recorded as returning
+`m_vecCamOrigin`). Slot 107 is `CBaseEntity::ParseMapData`, 118 `AcceptInput`, 121 `ReadKeyField` —
+all inherited. Every authored key is a plain datamap row and `spawnflags` is parsed by the engine into
+`m_spawnflags` (`+0x204`); the datamap carries no `spawnflags` row at all. There is likewise **no
+`Precache` override (104), no `Activate` override (113, `CBaseEntity::Activate` `0x100a0bc0`) and no
+`UpdateOnRemove` override (180, `0x100a47d0`)** — `Spawn` is the only entity hook the class owns, and
+creation, adoption and teardown are done entirely by free functions.
+
+**`CBaseCineCam::Spawn` `0x1006d9a0` is four instructions and does not chain to its base:**
+
+```asm
+1006d9a0  TEST byte ptr [ECX + 0x204],0x2      ; m_spawnflags & 2
+1006d9a7  JZ 0x1006d9b0
+1006d9a9  MOV byte ptr [ECX + 0x640],0x1       ; m_bDrawPlayer = 1
+1006d9b0  RET
+```
+
+so the three `spawnflags` bits are:
+
+| bit | reader | meaning |
+|---|---|---|
+| `0x1` | **nothing on this class** | `CCameraAnimated`'s "freeze the player" bit (`FUN_10071550` / `FUN_10071660`). `camera_cinematic`'s `StartShot` immobilizes unconditionally, so the bit is authored and dead here |
+| `0x2` | `CBaseCineCam::Spawn` | **draw the player's body** — `m_bDrawPlayer = 1`, then copied to the runtime camera by `FUN_10070780` |
+| `0x4` | `FUN_1017cef0` (`piVar1[0x81] >> 2 & 1`) and `FUN_10070990` (`*(uint *)(this+0x204) >> 2 & 1`) | **disposable** — the same bit `FUN_10070470` / `FUN_10070550` / `FUN_100705d0` / `FUN_10070690` set at runtime with `this[0x81] \|= 4` |
+
+**Shipped census** (51 `camera_cinematic`, 0 `camera_animated`, over `E:\elysium-work\exports`):
+`spawnflags 0` ×1, `1` ×20, `3` ×18, `5` ×3, `7` ×9 — so **bit 1 on 50 (dead), bit 2 on 27, bit 4 on
+12**. The 27 that draw the player body include `sp_tutorial_1`'s `feedcamera` (`spawnflags 3`),
+`sm_hub_1`'s four, `la_library_1`'s three and `sm_asylum_1`'s `tourette_cam` and
+`jeanette_to_elevator_camera`.
+
+**The disposable bit never bites on shipped content**, because **`EndShot` is never fired**: no map
+I/O in any `.ents` targets a `camera_cinematic` with any input, and a scan of every shipped `.vpk`
+finds `EndShot` 0 times, against `StartShot` ×9 and `SetCamera` ×4 in the compiled Python
+(`pack008.vpk`) and `SetCamera` ×101 / `RemoveCamera` ×2 in `pack101.vpk`. Directors are started by
+`Find("<targetname>").StartShot()` from Python and released by `pc.RemoveCamera()` from a dialogue
+script column (`CBasePlayer::InputRemoveCamera` `0x10171f10`), by dialogue end, or by an interaction
+closer — never by `EndShot`.
+
+**`ShouldTransmit` (slot 86, `0x1006e6a0`) restricts the camera to its subject's client.**
+
+```asm
+1006e6a6  FLD [ECX + 0x90] ; FCOMP [EAX + 0xc]   ; the base's force-transmit-until vs curtime
+1006e6b6  JNZ … ; MOV AL,1 ; RET 0x14            ; inside the window -> true
+1006e6be  MOV EAX,[ECX + 0x5d0]                  ; m_hSubject; not live -> false
+1006e71f  MOV EAX,[ESP + 0xc]                    ; arg 2: the recipient's edict
+1006e723  MOV ESI,[EDX + 0x2e0]                  ; subject->m_pEdict
+1006e72b  JZ 0x1006e733 ; XOR AL,AL ; RET 0x14   ; different client -> false
+1006e733  CALL 0x10011bb7                        ; -> FUN_1006e890  IsActive()  (CamMode != 0)
+```
+
+`+0x2e0` is `m_pEdict`, the same field `FUN_1017cef0` hands to `engine->IndexOfEdict`
+(`param_1[0xb8]`); `+0x90` is the force-transmit timestamp `CBaseEntity::ShouldTransmit` `0x100ab020`
+opens on. The base's whole PVS / `EF_NODRAW` logic is replaced: a cine camera is a per-player channel.
+
+**`ObjectCaps` (slot 117, `0x1006d8f0`) is `CBaseEntity::ObjectCaps() & ~0x2`**, and the base
+(`0x100b4320`) returns the single cap `2` — `FCAP_ACROSS_TRANSITION`. So `CBaseCineCam::ObjectCaps()
+== 0` and **a live scripted shot does not cross a level transition**.
+
+**The destructor (slot 5, `0x1006d950`)** destroys `m_OnAngularMoveDone` / `m_OnLinearMoveDone`,
+chains to the base and, with bit 1 of its argument, `operator delete`s. It restores no HUD and drops
+no player state — unlike the client destructor `FUN_10001920`, which does restore the HUD. Every
+restore is the client's.
+
+**Slots 80 / 81 / 82** return `&DAT_106c816c`, `0`, and `&datamap_CBaseCineCam`. `DAT_106c816c` is
+filled by `staticinit_1006d1a0` as `{ "CBaseCineCam" (10546d30), &DAT_106c7f68 (the `DT_BaseCineCam`
+SendTable), next, … }` and head-inserted into the global ServerClass list at `DAT_1072bbd8`, so 80 is
+`GetServerClass()` and 82 is `GetDataDescMap()`. The SendTable's encoder limits, from `FUN_1006d2f0`:
+`m_ShotIndex` `+0x630` **8 bits** (a 256-shot cap), `CamMode` `+0x638` **4 bits**, `m_bDrawPlayer`
+`+0x640` 1 bit, `m_nClientResetFrame` `+0x63c` full int, and `m_vecCamOrigin` `+0x5ec` /
+`m_vecCamTarget` `+0x5f8` / `m_angCamAngles` `+0x604` / `m_flFOV` `+0x634` all `SPROP_NOSCALE`.
+
+**`camera_showdebug` is the debug cvar, and its test is `== 1`.** Registered by `FUN_1006d5b0`
+(`"camera_showdebug"` `10546df4`, default string `"0"` `105399a0`, flags 0) at `0x106c7fa0`; its only
+two readers are slot 123 and `CCameraAnimated`'s think `FUN_10071840`, both testing
+`!IsCommand() && GetInt() == 1` — not truthiness. Slot 123's body, from the listing:
+
+```c
+origin = m_vecCamOrigin (+0x5ec);  mode = CamMode (+0x638);
+if (mode == 2 || mode == 1) {
+    AngleVectors(m_angCamAngles (+0x604), &fwd);
+    Line(origin, origin + fwd * 20.0f, 255,255,255, 1, 0);      // 20.0 = _DAT_1044eb0c (image)
+    Box (origin, (-2,-2,-2), (2,2,2), 255,255,255, 1, 0);
+}
+if (handleLive(+0x610)) Box(FUN_1006f010(this,&t,0), ±2,   0,  0,255, 1, 0);  // Start  blue
+if (handleLive(+0x614)) Box(FUN_1006f010(this,&t,1), ±2,   0,255,  0, 1, 0);  // End    green
+if (handleLive(+0x618)) Box(FUN_1006f010(this,&t,2), ±2, 125,  0,  0, 1, 0);  // Point1 dark red
+if (handleLive(+0x61c)) Box(FUN_1006f010(this,&t,3), ±2, 125,  0,  0, 1, 0);  // Point2 dark red
+Box(FUN_1006f670(this), ±3, (frameCounter[0x1070ba38] % 50) + 200, 0, 0, 1, 0);  // look-at, pulsing red
+EntityText(VarArgs("(%.1f, %.1f, %.1f"), …);                                     // 10546e88, unmatched paren
+```
+
+The forward line is drawn only in modes 1 and 2, and from the **replicated** origin using the
+**replicated** angles — in mode 1 that is the server's `VectorAngles(lookAt − shotStartOrigin)`, not
+what the client renders.
+
+### The shot-start placement pose and its one-deep memory — `+0x564` / `+0x570` / `+0x588` (2026-09-07)
+
+`FUN_1006e8e0` (the shot **start**, not a think) keeps four vectors on the entity, all seeded to zero
+by the constructor `FUN_1006d620`:
+
+| offset | contents |
+|---|---|
+| `+0x564` | the **placement origin** being computed |
+| `+0x57c` | the **placement angles** being computed |
+| `+0x570` | the **saved local origin** of the previous placement |
+| `+0x588` | the **saved local angles** of the previous placement |
+
+The same constructor seeds `+0x594 = 2` (the origin selector's "leave the abs origin alone" value),
+`+0x55c = -1.0` (never expire), `+0x634 = 75.0`, `+0x630 = -1`, the four anchor handles to `-1`,
+`+0x640 = 0` and — see below — **`+0x5e8 = 1`**.
+
+```asm
+1006e8e9  CALL 0x1000e2a5                        ; FUN_1006e770  SetCamThink()  — FIRST
+1006e8ee  FLD [0x1070d1b0] ; FCOMP [ESI+0x564]   ; is the placement origin still vec3_origin?
+1006e925  JNP 0x1006e96f                         ;   yes -> save nothing
+1006e92b  CALL [EAX + 0x370] ; MOV [ESI+0x570]…  ; +0x570 = GetOrigin()   (LOCAL, vfunc 220)
+1006e94f  CALL [EDX + 0x374] ; MOV [ESI+0x588]…  ; +0x588 = GetAngles()   (LOCAL, vfunc 221)
+1006e96f  PUSH 1 ; CALL …                        ; player = UTIL_PlayerByIndex(1)
+1006e97d  CALL 0x10002a6d                        ; flags = shot record +0x20
+1006e982  TEST AL,0x1 ; JZ 0x1006e9fd
+        ; --- Start present: place at anchor 0, aim at the look-at
+1006e98f  CALL 0x10011ebe                        ; FUN_1006f010(this,&t,0)  -> +0x564
+1006e9ab  CALL 0x1000b4ce                        ; FUN_1006f670(this,&t)    -> lookAt
+1006e9f0  CALL 0x10003d4b                        ; VectorAngles(lookAt - +0x564, &+0x57c)
+1006e9fd  TEST AL,0x2 ; JZ 0x1006eabd
+        ; --- End without Start:
+1006ea0b  FCOMP [ESI + 0x570] …                  ; is the SAVED origin still vec3_origin?
+1006ea48  CALL [EAX + 0x304]                     ;   yes -> +0x564 = player->EyePosition()
+1006ea63  CALL [EAX + 0x36c]                     ;          +0x57c = player->GetAbsAngles()
+1006ea7f  MOV ECX,[ESI + 0x570] …                ;   no  -> +0x564 = +0x570,  +0x57c = +0x588
+        ; --- publish, in this order
+1006eac2  CALL [EDX + 0x360]                     ; SetAbsOrigin(+0x564)   vfunc 216
+1006eacd  CALL [EAX + 0xf8]                      ; SetOrigin   (+0x564)   vfunc 62
+1006eade  CALL [EDX + 0x100]                     ; SetAngles   (+0x57c)   vfunc 64
+1006eae9  CALL [EAX + 0x368]                     ; SetAbsAngles(+0x57c)   vfunc 218
+1006eaf1  CALL 0x1001514a                        ; Relink
+```
+
+So the memory is written on **every shot start after the first** (the first runs with
+`+0x564 == vec3_origin` and saves nothing), from the *local* transform the previous
+`FUN_1006e8e0` wrote through `SetOrigin`/`SetAngles`. It is consumed by exactly one arm, and the
+answer to what it is for is: **an `End`-without-`Start` shot continues from where the last shot left
+this camera entity instead of snapping back to the player's eye.** That is the server twin of the
+client's shot-start live-view arm (`FUN_10002210`'s `else`, taken on the same `!(End) || Start`
+test): the server seeds the replicated goal from the previous placement, the client seeds its tracker
+from the rendered view, and the tracker dollies between them.
+
+`vtmb_readers` over all three offsets and `vtmb_grep '0x15c\]|0x162\]|0x159\]'` return no cine-camera
+function besides `FUN_1006e8e0` and the constructor: **nothing else in the image touches the triple.**
+
+Neither `SetShot` `FUN_1006e130` nor the mode clear `FUN_1006e0e0` writes any of the four vectors, and
+the mode-1 think never calls `SetAbsOrigin` — so the placement survives a re-shot. `FUN_10070780`'s
+re-shot branch runs `FUN_1006e8e0` (saves, then re-places); `CBasePlayer::SetCamera` `FUN_1017d020`'s
+does **not** (neither saves nor re-places), which is why a mid-conversation `SetCamera` leaves the
+entity where the first shot put it.
+
+One ordering trap the listing exposes: `FUN_1006e8e0` calls `SetCamThink` first and, in the `Start`
+arm, resolves anchor 0 through the cache-aware `FUN_1006f010` **before** refilling the anchor cache at
+`+0x598` at the bottom of the same function. A `Start` block with `AttachType None` therefore places
+the camera from the *previous* shot's cached anchor position. `special-case.txt`'s `Follow` is the
+only shipped shot that can reach it.
+
+### `point_player` never reaches the camera that runs the shot (2026-09-07)
+
+`m_bForcePlayerLook` (`+0x5e8`, byte, key `point_player`) is initialised to **1** by the constructor
+(`FUN_1006d620`: `*(byte *)(this + 0x17a) = 1`). Its complete write set is that constructor,
+`CFuncMonitor::vfunc39` `0x10115260`, `CBasePlayer::HandleAnimEvent` 4050 `0x10178a10` and the
+`"Intrusion"` opener `FUN_10225070` — each of the last three clearing it to 0 on the camera it has
+just created — plus the datamap key on whatever entity a map authored it on. Its only reader is the
+tail of the mode-1 think.
+
+`FUN_10070780` copies **only** `+0x640` from the director to the runtime camera; `FUN_10070470`,
+`CBasePlayer::SetCamera` and `StartPlayerDialog` copy nothing; and a map-placed director is never
+adopted, so its own `+0x5e8` is never read. **All 35 authored `point_player` values — 26 of them
+`0` — are discarded**, and every director shot, script `SetCamera` shot, dialogue opening shot and
+terminal/hacking shot runs with `m_bForcePlayerLook = 1`, driving the subject's eye angles onto the
+shot's look-at every tick through `FUN_10178590` → `FUN_10178550` (`m_angEyeAngles` `+0x206c..0x2074`,
+pending flag `+0x207c`). The three explicit opt-outs are the proof that 1 is the default and that
+clearing it is deliberate. Recorded in `retail-defects.md` §7.
+
+### `player+0x1d60` is `CBasePlayer::m_iVFlags`, and what `EndShot` releases (2026-09-07)
+
+`vtmb_fields CBasePlayer --offset 0x1d60` names it `m_iVFlags` (FIELD_INTEGER, no key, not a
+SendProp). Its complete accessor set — and `vtmb_grep '0x1d60'` finds nothing else that touches the
+dword:
+
+| address | body | name |
+|---|---|---|
+| `0x10181580` | `\|= mask` | `AddVFlags` |
+| `0x101815b0` | `&= ~mask` | `RemoveVFlags` |
+| `0x101815e0` | `return m_iVFlags` | `GetVFlags` |
+| `0x10181600` | `= 0` | `ClearVFlags` — no callers |
+| `0x10181620` | `^= mask` | `ToggleVFlags` — no callers |
+| `0x10181650` | `(m_iVFlags & mask) == mask` | `HasAllVFlags` |
+
+* **`0x1` — the scripted-interaction pose lock.** Read only by `CPlayerMove::SetupMove` `0x10186120`:
+  in the not-grappling arm, `if ((GetVFlags() & 1) != 0) movedata->viewangles = this->GetAngles()`
+  (vfunc `0x374`, the **local** angles), discarding the `m_angEyeAngles.y` substitution the top of the
+  function made. "The player's body is being posed by something else — drive the move from the
+  entity's own angles." Set by `CBasePlayer::EnterGrappleState` `0x101695f0` and by the interaction
+  *openers* — `CBaseTerminal::vfunc39` `0x102181a0`, `CPropSign::vfunc39` `0x10211db0`,
+  `CTriggerBombSite::vfunc39` `0x102113c0`, `CTriggerElectricBugaloo::vfunc39` `0x10231640`, and
+  `CGameSign`'s read-begin `FUN_10212810`. Cleared by `CBasePlayer::LeaveGrappleState` `0x10169660`,
+  by each opener's matching `vfunc42`, by `FUN_100db5c0`, and by `EndShot`.
+* **`0x2` / `0x4` — a pending "grapple release" / "seductive release" animation**, consumed by
+  `CBasePlayer::SetAnimation` (slot 417, `0x10164870`) as activities `0xfa3` / `0xfc9` and cleared by
+  its `RemoveVFlags(6)`. That clear is the **only** writer of either bit in the image: both are read
+  and cleared and never set (`retail-defects.md` §7).
+* **`0x8` — the view-angle lock.** `CBasePlayer::ProcessUsercmds` `0x1016aaf0` and
+  `CPlayerMove::RunCommand` `0x101874a0` both refuse to copy `cmd->viewangles` into `m_angEyeAngles`
+  when it is set (or when the one-shot `+0x207c` is raised), and `CPlayerMove::SetupMove` feeds the
+  move `m_angEyeAngles` instead of the command's. Its only setter is `CGameSign`'s `FUN_10212810`,
+  gated on `!(sign->spawnflags & 2)`, alongside `SetImmobilized(true)` and `AddVFlags(1)`.
+
+**`EndShot` clears locks it never took.** `FUN_10070990` runs `RemoveVFlags(1)` and `RemoveVFlags(8)`,
+but `FUN_10070780` sets neither — the same trio (`SetImmobilized(false)`, `RemoveVFlags(1)`,
+`RemoveVFlags(8)`) is what `CBaseTerminal::vfunc42` `0x10218220`, `CFuncMonitor::vfunc42`
+`0x10115300` and `FUN_10212a30` run when their interaction ends. `InputEndShot` is copying that
+closer: it is a general "release the player from whatever scripted state he is in", not the mirror of
+`StartShot`. Note these are three *separate* locks: immobilize (`+0x19f7`) stops movement, jump, duck
+and weapons; VFlag `0x1` redirects the move's angle source; VFlag `0x8` stops the client's view angles
+from being accepted at all.
 
 ### The mode-1 think — the 24 Hz clock, the origin selector, `AutoPositionFromTarget` (2026-09-07)
 
@@ -1467,6 +1830,28 @@ r   = sqrt(h*h + d*d)
 camOrigin = lookAt − normalize(lookAt − camOrigin) * r
 ```
 
+**`ClosestPointOnLine` is an *infinite* line — `t` is not clamped (2026-09-07).** `FUN_1013ca00`
+delegates to `FUN_1013c940`, which is nine lines of x87 with exactly one branch, the degenerate-length
+guard:
+
+```c
+// FUN_1013c940(P, A, B, &dirOut) — the whole function
+dir  = B - A;                       // written through the fourth argument, unnormalised
+len2 = dir·dir;
+if (len2 < 1e-05f) return 0.0f;     // _DAT_1046a5e4 = 1e-05f, _DAT_104454c4 = 0.0f
+return (P·dir - A·dir) / len2;      // FDIVRP at 0x1013c9c5, RET at 0x1013c9c7 — no clamp
+```
+
+There is no `FCOM` against `0.0` or `1.0` anywhere in the body, and `FUN_1013ca00` then writes
+`out = A + t·dir` (storing `t` through its fifth argument when non-NULL). `FUN_1013cd40` is the 2-D
+twin, also unclamped and guarded by the same two constants; **the image contains no segment-clamped
+variant of either**. Read from the call site at `0x1006fa35`–`0x1006fa4b` (five arguments pushed in
+reverse), the parameters are `P = the lower-Z target point`, `A = lookAt`, `B = camOrigin`, `out = C`,
+`t out = NULL`. So `d` is the **exact perpendicular distance from the lower target point to the
+infinite camera→look-at axis**, and it stays that even when the point projects behind the camera or
+beyond the look-at, where a segment-clamped implementation would report a strictly larger `d` and back
+the camera further off.
+
 **Only the lower-Z target point participates**; the higher one is used only to decide the swap. This is
 *not* the tight `d / tan(A)` framing — retail takes the hypotenuse `d / sin(A)` and then adds a second
 `d` in quadrature, so it always backs off further than an exact fit. The arithmetic is what to
@@ -1514,6 +1899,43 @@ Neither event immobilizes. So the `FindBestShot` base names are whatever the shi
 
 ### How dialogue drives the camera (2026-09-07)
 
+**The admission test, recovered (2026-09-07).** `FUN_10178120(player)` is a one-line accessor
+returning `player + 0x1d24`, the player's embedded **`CDialog`**; `FUN_100e05f0` is
+**`CDialog::Acquire(player, npc)`** (named in the image by `s_CDialog__Acquire_10562118`). The opener's
+shape is
+
+```c
+npc = *(int**)(npcEnt + 0x98);                        // the entity's AI / combat-character pointer
+if (npc->+0x6495 == 0 && FUN_10178170(player)) {      // "the NPC does not interrupt" && "the player is busy"
+    FUN_101cebc0(player);                             // → SetDialogPartner(NULL); return
+} else if (CDialog::Acquire(player->+0x1d24, player, npc)) {
+    ... the opener below ...
+} else {
+    SetDialogPartner(player, NULL);                   // no camera, no immobilize, no holster
+}
+```
+
+`FUN_10178170` is the busy test: true if `FUN_1017f8d0(player)`; or if `FUN_101800e0(player, 1)`
+returns a time `> 0` that is `>= curtime − 10.0` (**`_DAT_1046fb2c = 10.0f`**); or if
+`max(curtime − 10.0, 0)` is below either of the timers `player+0x1dd0` / `player+0x1dd8`; or if
+`FUN_1017f770(player) > 0`; or if `FUN_1017f8b0(player) > 0`; or if `player+0x1cf8 != 0x7F7FFFFF`
+(FLT_MAX); else it defers to `FUN_10175180(player)`. `npc+0x6495` is the NPC-side override that
+bypasses the whole test. `FUN_101cebc0(player)` is not a state change — gated on `player+0x1e00 == 0`,
+it opens a `CSingleUserRecipientFilter` on the player and sends one usermessage (`DAT_10726084`).
+
+`CDialog::Acquire` itself: **`if (this->+0x8 != 0) return true;`** — a dialog is already loaded and
+nothing is re-read. Otherwise it stores `m_hNPC` (`this+0x00`, from `npc+0x98`) and `m_hPlayer`
+(`this+0x04`, from `player+0xa8`), returns false if either handle is dead, then
+`load(get_dialog_filename())` — the filename is `Q_trimspace` + `_strlwr` of the NPC's `+0x128`
+keyvalue — sets `this+0x30e8` to the load result, picks `GetStartingLine()` into `this+0x2830`
+(falling back to the dialog's first line with `"%s has invalid starting conditio…"` when that line does
+not resolve), fills and sends the packet, and shows the caption history when `cl_captions` is set.
+**Its return is `loaded && !this->+0x30e9`**: a **one-shot / bark dialog (`+0x30e9` set) sends its
+line, calls `CDialog::Release` and returns *false*** — so `StartPlayerDialog` takes the
+`SetDialogPartner(NULL)` path and **creates no camera, does not immobilize and does not holster**.
+That is a normal path, not an error path; it is distinct from "the shot file failed to load", where
+`Acquire` succeeded and only `cam` is NULL.
+
 **`CBasePlayer::StartPlayerDialog` `0x10178280`** runs the dialogue-manager admission test, sets the
 dialogue partner (`player+0xFE8`), `SetImmobilized(true)`, records whether the active weapon was drawn
 (`+0x1e01`) and holsters to `item_w_unarmed`, and then — unless the partner RTTI-casts to a payphone,
@@ -1523,6 +1945,22 @@ every anchor must come from the shot file's own `Position` keyword. It writes no
 for either party, confirming that starting a conversation turns nobody. **`StartPlayerDialog` has no
 `DialogDefault` fallback** — a shot name that does not load leaves `cam == NULL` and
 `SetCineCamera(NULL)`, and the conversation runs with no camera at all. Only `SetCamera` falls back.
+
+**The payphone arm is `CPayphone` (2026-09-07).** The test is
+`__RTDynamicCast(npc, 0, TypeDescriptor(".?AVCAI_BaseNPCTroika@@") @0x10587908,
+TypeDescriptor(".?AVCPayphone@@") @0x10587930, 0)` — a `CAI_BaseNPCTroika` → **`CPayphone`** downcast.
+`CPayphone` is a real class with its own `EnterGrappleState` override (slot 379, `0x101aade0`). On a
+hit the opener runs `StartGrappleAttack(player, phone, 5)` — `DevWarning("Couldn't grapple payphone!\n")`
+on failure — and **creates no camera**. Grapple mode 5 takes its facing yaw from the **victim's own
+abs-angles yaw**, round-tripped through 16 bits
+(`((int)((yaw + 180) * 182.04444885f) & 0xFFFF) * 0.0054931640625f`), rather than from the approach
+vector, so the player aligns to the phone; its distance limit is 144 units and both parties holster.
+
+Two more members of the same transaction, outside the camera boundary but part of the opener:
+`FUN_10167fd0(player)` releases whatever the player is currently using (`player+0x1040`), and
+`FUN_10147a60` is named in the image as **`DisciplineGlobalTeardown`** — the player's active
+disciplines are dropped when a conversation opens. `FUN_100826b0(NULL)` then sweeps `gEntList` and
+calls vfunc `0x134()` on every entity matching `FUN_10082520(ent, NULL)`.
 
 **`CBasePlayer::SetCamera` `FUN_1017d020(shotName)`** is the script path:
 
@@ -1544,10 +1982,37 @@ with "the angle comes from `GetOrigin()`", a mid-conversation `SetCamera` leaves
 (`FUN_10198070`, `PyArg_ParseTuple(args, "Os", …)`, `"bad args to SetCamera()"`), which
 `docs/vtmb/script_api.md` counts at 115 shipped call sites.
 
-**There is no engine-side per-line camera.** `vampire.dll` parses no `.dlg` file — the string does not
-occur in the image, and the dialogue tree is read by the Python bridge — and `SetCamera` has exactly
-one caller. A per-line shot therefore reaches the engine only as an explicit `SetCamera(actor, "Shot")`
-in the dialogue's own `.py` sequence; the camera created at `StartPlayerDialog` persists unchanged for
+**There is no engine-side per-line camera — proved from the `.dlg` parser (2026-09-07).**
+`CDialog::read_line_data` (`0x100e61d0`) reads exactly **thirteen** `{…}` fields per line, and the
+error strings name every one: `1` line index (`atoi`), `2` text (`"Missing text on line %d, dialog…"`),
+`3` gender text (`"Missing gender field on line %d…"`), `4` response/link — `#` becomes `-1`, else
+`atoi` (`"Missing response value on line …"`), `5` (`"Missing trait dependency field o…"`),
+`6` (`"Missing event script field on li…"`), and then a `while (i < 7)` loop of seven clan fields
+(`"Missing clan field %c on node …"`). **No camera column, no shot name, no FOV, no anchor exists in
+the record.** The exported corpus agrees: all 147 files under `dlg/` carry exactly thirteen
+tab-delimited `{…}` fields per line.
+
+The only per-line escape hatch is a Python string. `CDialog::process_npc_line` (`0x100e8100`) calls
+`CDialog::CallEventScript` (`0x100e4f30`) once per NPC line, which copies the field into a **256-byte**
+buffer (`Q_strncpy(buf, script, 0x100)` — so the field is truncated at 255 characters), splits it on
+**`;`** (`0x10562f58`) then **`&`** (`0x10562f54`), and runs each fragment through
+`CDialogDependency::CallPyDialogFunc(dep, fragment, playerEnt, npcEnt, 0x100, NULL)`. That is where
+every shipped `SetCamera` lives: 110 occurrences across five files (`downtown la/chunk2.dlg`,
+`downtown la/chunk3.dlg`, `main characters/gary.dlg`, `main characters/nines.dlg`,
+`santa monica/tourette.dlg`), always inside a script field, e.g.
+`{ pc.SetCamera("Chunk2"); npc.SetDisposition("PrinceSitting", 1) }`.
+
+The bridge itself was read: the Python native `SetCamera` is `FUN_10198070`
+(`PyArg_ParseTuple(args, "Os", …)`, `"bad args to SetCamera()"`, else
+`"SetShot needs to be called on a v…"`), which resolves the actor to a `CBasePlayer*` through `+0xa8`
+and calls `CBasePlayer::SetCamera`. Its table neighbours are the whole actor API (`GetOrigin`,
+`SetGesture`, `SetDisposition`, `React`, `SeductiveFeed`, `DialogDiscipline`, `GiveItem`,
+`StartBarter`, …) and **there is no dialogue-advance native at all** — line advance is
+`CDialog::Pick` / `goto_line_for_response` / `process_npc_line`, entirely inside `vampire.dll`, driven
+by a client usermessage, and the only thing it hands to Python is the line's script fields.
+
+A per-line shot therefore reaches the engine only as an explicit `SetCamera(actor, "Shot")`
+in the dialogue's own script field or `.py`; the camera created at `StartPlayerDialog` persists unchanged for
 every line that does not ask. When a new shot *is* set, the re-shot branch reuses the same
 `camera_cinematic` and changes only `m_ShotIndex`, the anchors and `m_nClientResetFrame` — which is
 exactly the client's "new `m_ShotIndex` ⇒ clear the three angle-settled flags and continue from the
@@ -1569,6 +2034,73 @@ is live and its shot sets `0x10`. Either choice is gated by the head-turn feasib
 (`m_hTargetEnt`, enemy, navigator goal, hint, nearest-NPC scan). Nothing else in `vampire.dll` reads
 `0x10`. So `DialogPOV 1` makes the conversation NPC address the lens rather than the player.
 
+**`FUN_1026b810` is `CAI_BaseNPC::MaintainEyeDirection`, vtable slot 333 (2026-09-07).** The base is
+`CBaseCombatCharacter::MaintainEyeDirection` `0x10325580`. Every shipped `CNPC_V*` class fills slot 333
+with `CAI_BaseNPCTroika::FUN_102bff20`, which runs the blink timer (gated on
+`m_flPlayerDist < 512.0f`, `_DAT_10483aac`), pushes the idle-scan re-schedule `+0x5d6c` to
+`curtime + 2.0` (`_DAT_10452dc4`) for as long as a dialogue partner is live — suppressing the
+nearest-NPC scan for the whole conversation — and then calls the base unchanged. **The `DialogPOV` arm
+is therefore reached by every shipped NPC.**
+
+The full chain, in order (`m_hEyeLookTarget` `+0xe64`, `m_vEyeLookTarget` `+0xe44`, `m_vCurEyeTarget`
+`+0xe50`, `m_flEyeIntegRate` `+0xe3c`, `m_RelativeEyeTarget` `+0x5b94`, next-scan time `+0x5d6c`):
+
+0. **`m_RelativeEyeTarget > 0`** — the whole selection is skipped and `FUN_1026b580` resolves a
+   relative target in the tail.
+1. **Dialogue partner.** `p = EHANDLE_Get(this->m_hDialogPartner +0xFE8)`; `player = *(p + 0xa8)` — the
+   cached `CBasePlayer*`, non-NULL only for players, the same field `EndGrapple`,
+   `CanStartGrappleAttack` and `CDialog::Acquire` use to mean "this entity is a player". NULL skips the
+   arm. Then `cine = GetCineCamera(player)` (`FUN_1017cf90`: needs `player+0x1ec4 > 0` **and** the
+   handle at `player+0x19b4` live). With `cine` live **and** its shot record's `0x10` set the candidate
+   is the camera's `vfunc0x304` (slot 193, `m_vecCamOrigin`); otherwise it is `player->EyePosition()`.
+   Whichever is chosen is gated; **a refusal from either branch falls through to step 2, it does not
+   retry the other branch.**
+2. **`m_hTargetEnt` (`+0x5ce4`)** — `EyePosition()`, gated.
+3. **`vfunc 0x29c` (the enemy)** — `EyePosition()`, gated.
+4. **The navigator goal** (`m_pNavigator +0x5d34`): position from `FUN_102ee5e0`, with its **Z replaced
+   by the NPC's own `EyePosition().z`** when `navigator+0x18 == 0`; gated; on a pass it aims and
+   **returns immediately without writing `m_hEyeLookTarget`** — a positional, non-entity target.
+5. **A sound/hint memory** — `FUN_10269aa0`/`FUN_10269c70` on `0x6d` or on `0x6a`, then `vfunc 0x768`'s
+   record whose `+0x4` is `1` or `8`, point at `record+0x20`; gated; same immediate return.
+6. **The nearest-NPC idle scan**, only when `+0x5d6c < curtime` (and first, if the gate now refuses the
+   currently held target, `+0x5d6c` is zeroed to force the scan). It sweeps a **300-unit sphere centred
+   at `EyePosition() + forward × 300`** (`_DAT_10462b84 = 300.0f`), skipping `this`, requiring
+   `+0x94 != 0` (an AI) or `GetFlags() & 0x80` (`FL_CLIENT`), taking the nearest candidate from a seed
+   distance of **16384.0**, each gated. With no winner `m_vEyeLookTarget = EyePosition() + forward ×
+   500` (`_DAT_10457f5c`) and `+0x5d6c = curtime + 0.5` (double `_DAT_10449270`); with a winner
+   `+0x5d6c = curtime + RandomInt(1,5)`.
+
+The tail always runs: a resolved handle equal to `this` is cleared; then a live handle gives
+`m_vEyeLookTarget = target->EyePosition()` and a dead one gives `CalcLookData` + `forward × 25`
+(`_DAT_10462994`); and `m_vCurEyeTarget` is integrated toward it in **fixed 0.1 s steps** (double
+`_DAT_104493d0`) as `m_vCur = (1 − rate)·m_vCur + rate·m_vLook`.
+
+**`FUN_10325da0` is a 30° cone about the head's current forward — nothing else (2026-09-07).**
+
+```c
+// FUN_10325da0(this, const Vector &target) — the whole function
+CalcLookData(this, &headPos, &headForward);          // 0x10014eb6
+v = Normalize(target - headPos);                     // VectorNormalize, length discarded
+return dot(headForward, v) > 0.866;                  // FCOMP *double* ptr [0x1049e0b8]
+```
+
+**`0x1049e0b8` is a `double` and reads `0.866`** — `acos(0.866) = 29.9995°`, i.e. a 30° half-angle
+cone. There is **no distance term, no separate yaw or pitch limit, and no flag**: one 3-D dot product
+against one constant, returning `AL = 1` only on a strict `>`. Its three callers all treat the result
+as a boolean: `CAI_BaseNPC::FUN_1026b810`, `CAI_BaseNPC::FUN_1026b270` and
+`CBaseCombatCharacter::MaintainScriptedEyeDirection` `0x10325620`.
+
+The basis matters. `CBaseCombatCharacter::CalcLookData` (`0x10331da0`) returns, when the model has a
+valid `m_idxHeadBone`, the **head bone's world position** (`m_vecViewOffset` transformed through the
+head bone matrix, cached at `+0x1090` and refreshed once per engine frame against `+0x108c`) and the
+**head's world forward** (`m_vecHeadLocalForward` rotated by the same matrix, cached at `+0x109c`);
+with no head bone it falls back to `EyePosition()` (vfunc `0x304`) and `AngleVectors(eyeAngles)`
+(vfunc `0x5bc`). Because the head's forward itself follows the previous frame's smoothed
+`m_vCurEyeTarget`, **the gate is hysteretic**: a target the head is already turned toward stays
+admissible, and one 45° off the current head pose is refused even when it is straight ahead of the
+body. The gate is an admission test, not a clamp — a refusal advances the chain rather than
+constraining the aim.
+
 ### The client view-composition chain — who wins, and how they compose (2026-09-07)
 
 `0x100a7770` is not the whole priority ladder; it is `C_BasePlayer::CalcView`, vtable slot 187, and it
@@ -1576,18 +2108,52 @@ is two arms long. The ladder is spread over four functions, in this order per re
 
 1. **`CViewRender::SetUpView` `0x10191710`** seeds the `CViewSetup` (it lives at `CViewRender + 0x10`;
    `fov` at `+0x28`, `fovViewmodel` `+0x2c`, `origin` `+0x38`, `angles` `+0x50`, `zNear` `+0x5c` =
-   `8.0`, `zFar` `+0x60` = `28400.0`, the off-centre rect at `+0x06..0x14`), calls
+   `8.0`, `zFar` `+0x60` = `28400.0`, `m_bOrtho` `+0x16` and the ortho rect `+0x18..0x24`), calls
    `CViewRender::CalcView`, and then calls `g_pClientMode->OverrideView` **only if** a cine camera is
-   adopted **or** the player is in third person with no intermission and no view-effect veto. In plain
+   adopted **or** the player is in third person with the engine's suspend flag clear and no
+   view-effect veto. In plain
    first person with no cine camera nothing after `CalcView` touches the view — so the `camera_track`
    override cannot fire in pure first person either, except that a live scripted weight is itself one
    of `CAM_IsThirdPerson`'s disjuncts (§2), which makes the test true.
+
+   **The intermission arm and the suspend flag are two different slots.** `SetUpView` reads
+   `render->vfunc37()` (`+0x94`) and calls `CViewRender::CalcIntermissionView` `0x10190a70` when it is
+   true; only when it is false does it test `render->vfunc38()` (`+0x98`) and call `CalcView` if
+   *that* is clear. Slot 38 is not the intermission query: it appears in three places and every one
+   *suspends* work — it skips `CalcView` entirely (so the view setup keeps last frame's pose), it is a
+   conjunct of the third-person `OverrideView` gate above, and it gates the weapon input dispatch in
+   `FUN_100fcca0`. It is a paused/suspended flag; the corpus names neither it nor its writer.
+
+   **The base FOV seed is the engine's own scalar.** `viewsetup.fov` is
+   `render->GetFieldOfView()` (`vfunc40`, `+0xa0`), which returns `engine.dll _DAT_201a1bd8`. That
+   scalar is written by `IVEngineClient::SetFieldOfView` (`CEngineClient::vfunc77` `0x2001b130`,
+   vtable `+0x134`), and `client.dll`'s only caller of it is `FUN_100f12b0`:
+   `engine->SetFieldOfView(localplayer ? (float)localplayer->m_iFOV /*client player+0x1690*/
+   : default_fov.GetFloat())`. **`default_fov`** is the ConVar at object `0x105f9990`, default `"75"`,
+   flags 0, constructed at `0x101622d0`. `fovViewmodel` is seeded from the ConVar at `0x105fc71c` and
+   then overridden by `m_iViewmodelFOV` (`player+0x16a4`) when it is non-zero; `zFar` is replaced by
+   `m_skybox3d_scale (player+0x17a4) × _DAT_1024fa54` when `m_skybox3d_area (+0x17b4) != 0xff` and the
+   scale is positive; and `scr_ofsx/y/z` are forced to 0 when `engine->GetMaxClients() > 1`.
+
+   `DAT_104a57e4` itself is the named interface **`VEngineRenderView008`**, `engine.dll`'s
+   `CVRenderView` (49 slots, vftable `0x20187e2c`), written once by `CHLClient::vfunc0` `0x100cb5a0`.
+   Slot 39 (`+0x9c`) is `GetViewEntity()` (`DAT_20315be0`), slot 41 (`+0xa4`) is `GetAreaBits()`.
 2. **`CViewRender::CalcView` `0x10191200`** is the ordinary first/third-person view and mentions no
    cine camera: `DriftPitch`, `CalcBob`, eye origin, engine view angles, view shake, water offset,
    `V_CalcRoll` (first person only), the three `scr_ofs*` offsets, punch angles, both viewmodel
    solves, and the Z step-smoother. Its last arm hard-replaces origin and angles with a spectated
    entity's — **there is no separate death, feed or seduction `CalcView` arm**; feed and seduction
    reach the view through the weights of §3, and a scripted feed shot through a `camera_cinematic`.
+
+   **The spectator replace, exactly** (`0x1019158e`–`0x101915f2`): `viewent =
+   render->GetViewEntity()` (`+0x9c`), `maxcl = engine->GetMaxClients()`
+   (`+0xcc` → `CEngineClient::vfunc51` `0x2001a8d0` → `DAT_20315bdc`), then
+   `CMP ESI,EAX ; JLE skip` — the replace runs only when **`viewent > maxcl`, strictly greater**. There
+   is no literal constant: in single player `maxcl` is 1, so any view-entity index ≥ 2 replaces the
+   view. `ClientEntityList->GetEnt(viewent)` (`0x100d0cf0`) must resolve; then `GetAbsOrigin()`
+   (vfunc `+0x24`) is copied into `CViewRender+0x48` and `GetAbsAngles()` (`+0x28`) into
+   `CViewRender+0x60`. FOV is not touched. (The duck/wolf arm earlier in the function tests
+   `player+0x16f4 & 0x400` and adds `_DAT_1022406c = 64.0` to `origin.z` instead of the view offset.)
 3. **`ClientModeVampire::OverrideView` `0x10029980`** is two calls: `C_BasePlayer::CalcView`, then
    `ClientModeShared::OverrideView` `0x100d4040`.
 4. **`C_BasePlayer::CalcView` `0x100a7770`** runs the vehicle arm first, then
@@ -1601,9 +2167,29 @@ is two arms long. The ladder is spread over four functions, in this order per re
 5. **`ClientModeShared::OverrideView` `0x100d4040`** applies the active weapon's own view override
    (`vfunc244`) first, then branches: with **no** live cine camera it calls `CInput` slot 31
    (`FUN_100ffb00` — `origin += m_vecCameraOffset`, `angles = m_angCamera`, then the track override);
-   with one, it calls slot 33 (`FUN_100ffb90`, the track override) **directly**. Then the two dev-cvar
-   off-centre fields; then an early return when the live shot's viewmodel predicate passes; then the
-   `scr_ofs*` viewmodel adjustment.
+   with one, it calls slot 33 (`FUN_100ffb90`, the track override) **directly**. Then the
+   orthographic block below; then an early return when the live shot's viewmodel predicate passes;
+   then the `scr_ofs*` viewmodel adjustment.
+
+   **That block is Source's orthographic debug view, not an off-centre projection** (listing
+   `0x100d40b6`–`0x100d4103`):
+
+   ```c
+   if (input->CAM_IsOrthographic() /* CInput slot 48, +0xc0 = FUN_100ff940 → CInput+0x1b8 */) {
+       v->m_bOrtho       /*CViewSetup +0x16*/ = 1;
+       input->CAM_OrthographicSize(&w, &h);   /* slot 49, +0xc4 = FUN_100ff950 */
+       v->m_OrthoLeft    /*+0x18*/ = −w * 0.5f;      // _DAT_101e34dc = 0.5
+       v->m_OrthoTop     /*+0x1c*/ = −h * 0.5f;
+       v->m_OrthoRight   /*+0x20*/ =  w * 0.5f;
+       v->m_OrthoBottom  /*+0x24*/ =  h * 0.5f;
+   }
+   ```
+
+   `w` and `h` are the ConVars **`c_orthowidth`** (object `0x104d2130`, static init `0x100fb240`) and
+   **`c_orthoheight`** (object `0x104d24f0`, init `0x100fb290`), both default `"100"` and flags `0x80`
+   (`FCVAR_ARCHIVE`); `FUN_100ff950` returns `0.0` for either when its `IsCommand()` is true. The
+   enable is `CInput+0x1b8`, reached from the `camortho` console command (`FUN_101001e0`, string
+   `0x102bd490`). No shipped content sets any of the three.
 
 **So the cine camera wins the base pose and the third-person boom is skipped entirely** — a scripted
 shot is never displaced by the boom. **The `CInput` track override then composes on top of whatever
@@ -1616,7 +2202,7 @@ drivable vehicle, so that arm is dead in retail too).
 
 **All three paths write one FOV scalar.** There is no `ScaleFOVByWidthRatio` and no aspect arithmetic
 anywhere in `client.dll` — the string does not exist, and `SetUpView` hands `viewsetup.fov` to the
-engine untouched beside `zNear`, `zFar`, an aspect field of `1.0` and the off-centre rect. The cine
+engine untouched beside `zNear`, `zFar`, an aspect field of `1.0` and the ortho rect. The cine
 camera writes that scalar (`= m_flCurFov`), the player path leaves the base FOV in it, and the track
 override lerps whatever is there toward `m_flCameraFOVOverride`. So the 4:3-referenced Hor+ widening
 recorded under "The lens" applies identically to all three; the client never distinguishes them.
@@ -1677,9 +2263,13 @@ The destructor `FUN_10001920` restores the HUD when the shot had hidden it (`(fl
 **The delta time is the camera's own, latched once per rendered frame.** `C_BaseCineCamera::Update`
 `FUN_10001a20` returns immediately when `m_nFrameCache (0x494)` already equals the engine frame count,
 so the tracker advances exactly once per rendered frame however often `CalcView` is reached. Otherwise
-`dt = engine->GetCurTime() − m_flLastTime (0x490)`, **clamped to 1.0 s at the top and replaced by a
-flat 0.01 s whenever it falls below ~1/255 s** (which covers zero and negative), then `m_flLastTime`
-and `m_nFrameCache` are restamped. It is a `curtime` difference, not `gpGlobals->frametime`.
+`dt = engine->GetCurTime() − m_flLastTime (0x490)`, **clamped to 1.0 s at the top
+(`FCOMP _DAT_101e34ec = 1.0f` at `0x10001a58`) and replaced by a flat 0.01 s whenever it falls below
+0.01 s** (`FCOMP _DAT_101e34e8` at `0x10001a75`, then `MOV 0x3c23d70a`), which covers zero and
+negative, then `m_flLastTime` and `m_nFrameCache` are restamped. It is a `curtime` difference, not
+`gpGlobals->frametime`. **`_DAT_101e34e8` reads `0.00999999977f` out of the image** — the compare
+constant and the stored literal are the same 0.01, so the floor is a single threshold and there is no
+separate ~1/255 s boundary.
 
 **Position `FUN_10001fe0`** — the listing (`0x10002083`–`0x100021b1`) resolves what the decompile's
 normalize hides:
@@ -1732,9 +2322,20 @@ is reachable only for a shot that leaves both rates at the parse defaults, which
 
 **FOV `FUN_10001c20` is a copy, never a lerp**: `m_flCurFov (0x480) = rec->FieldOfView (+0x100)`, every
 frame, from the *shot record* — the replicated `m_flFOV` is never consulted in mode 1. Ahead of it sits
-a dev-cvar guard (`DAT_102de30c`, one referrer, name unrecovered): when it is set the function returns
-the cvar's value **without writing `m_flCurFov`**, so the rendered FOV freezes at its previous value
-rather than following the cvar.
+a dev-cvar guard: when it is set the function returns the cvar's value **without writing `m_flCurFov`**,
+so the rendered FOV freezes at its previous value rather than following the cvar.
+
+**The cvar is `camera_fov`, default `"-1"`, flags 0.** `DAT_102de30c` is not the object but
+`object + 4`, the parent/self pointer the compiler emits for `ConVar::GetFloat()`; the object is at
+`0x102de308` and the CRT static init at `0x10001be0` is
+`PUSH 0 ; PUSH "-1" (0x10270c94) ; PUSH "camera_fov" (0x10270c88) ; MOV ECX,0x102de308 ;
+CALL 0x100df540`, with the `atexit` destructor pair at `0x10001c00` / `0x10001c10`. The threshold is
+**`_DAT_101e34f4 = 10.0f`** (image bytes `00 00 20 41`), so the guard is
+`if (!camera_fov.IsCommand() && camera_fov.GetFloat() > 10.0f) return camera_fov.GetFloat();`. The
+second `IsCommand()` test at `0x10001c4c` is dead — control only reaches it when the first returned
+false. Because the default is `-1`, the guard never fires in a shipped run; setting `camera_fov` above
+10 *freezes* the scripted-shot FOV rather than overriding it, since `C_BaseCineCamera::CalcView` reads
+`m_flCurFov (0x480)` directly and `FUN_10001fa0` discards the returned value (`FSTP ST0`).
 
 **Snap `FUN_10002390` is one-shot.** It copies goal origin/angles to current, re-seeds the shot start
 and settled origin, zeroes the speed and the three turn rates, clears the three angle-settled flags,
@@ -1749,6 +2350,32 @@ the last time, `0x494` the frame latch, `0x498` the reset-frame cache, `0x49c` t
 going 0, `m_iCameraOverrideIdx` going 0, and the entity being removed — are hard cuts on the frame the
 change arrives.
 
+**All of the above is ported** (`Public/ElysiumCameraSolve.h`,
+`Private/Player/ElysiumCameraSolve.cpp`, asserted by `Elysium.Substrate.CameraTracker`). The two frame
+deltas are guards on `Advance`'s `DeltaSeconds` **parameter** — `FrameDeltaCeiling` 1.0 s,
+`FrameDeltaFloorThreshold` 1/255 s, `FrameDeltaFloor` 0.01 s — because the substrate never reads a
+clock. **Retail's threshold and floor are the same constant, 0.01 s** (`_DAT_101e34e8`, read from the
+image above), so `FrameDeltaFloorThreshold` should be 0.01 s, not 1/255 s: retail floors a 5 ms frame
+to 10 ms and the port currently passes it through. The once-per-rendered-frame latch is the
+`GFrameCounter` stamp the camera component, the camera
+service and the camera modifier already take. `UnsettledAngleTolerance` is retail's 1.0°,
+`MinTrackSpeed` retail's 1.0 u/s floor, and `IsDollying()` is `FUN_100019a0`'s `speed <= 1.0` test read
+off that floor. `RemainingTranslationSeconds` is `FUN_100010f0`'s three arms verbatim with **both
+defects kept** and only the triangle arm's radicand clamped at zero. `MoveAccel == 0` is an explicit
+decel branch, so retail's crawl is reproduced without a hardware divide. `Snap()` is `FUN_10002390` as
+a real one-shot, armed by `bSnapPending` and consumed at the top of the next `Advance`. `TrackFov()` is
+the per-frame copy from the shot record, with the dev-cvar guard **including the freeze** — the guard
+returns the cvar value without writing the cached FOV — under `elysium.CameraShotFovOverride` and a
+`FovOverrideThreshold` constant. Retail's name and threshold are now read: the cvar is **`camera_fov`**
+(default `"-1"`, flags 0) and the threshold is **`_DAT_101e34f4 = 10.0f`**, so the port's cvar takes
+the retail name and `FovOverrideThreshold` becomes 10.0 with a −1 default.
+
+Two things on this path are the port's own and are marked as such in the source: a `MoveSpeed <= 0`
+arm, which retail's parser can never reach (its `CameraConstraints` default is 150 u/s and no shipped
+file writes 0) but the port's constraint-less producers rely on; and a floor of one frame's delta under
+the `SyncRotateOnMove` divisor, standing where retail's unguarded `|delta| / T` would divide by a zero
+`T`.
+
 ### The `camera_track` override channel — fields, ramp and the server fade machinery (2026-09-07)
 
 **The `CInput` override `FUN_100ffb90` (slot 33), exactly:**
@@ -1757,7 +2384,7 @@ change arrives.
 if (0.0f < m_flScriptedWeight /*CInput+0x100*/) {
   e = SimpleSpline(m_flScriptedWeight);                 // FUN_100fdb30 = t*t*(3 − 2t)
   AngleVectors(angles, fwd);
-  viewFwdPoint = *origin + fwd * 100.0f;                // 100 Source units along the current forward
+  viewFwdPoint = *origin + fwd * 240.0f;                // _DAT_1022b298, 240 Source units forward
   *origin = *origin + (m_vecOverrideOrigin /*+0x17c*/ − *origin) * e;
   dir = (viewFwdPoint + (m_vecOverrideTarget /*+0x188*/ − viewFwdPoint) * e) − *origin;
   VectorAngles(normalize(dir), angles);
@@ -1766,8 +2393,10 @@ if (0.0f < m_flScriptedWeight /*CInput+0x100*/) {
 }
 ```
 
-`viewFwdPoint` is a stand-in "what you are looking at" point — the view origin plus **100 Source units
-(254 cm) along the current view forward** — so the aim interpolates as a *point* and pitch and yaw fall
+`viewFwdPoint` is a stand-in "what you are looking at" point — the view origin plus **240 Source units
+(609.6 cm) along the current view forward** (`_DAT_1022b298`, read from the image; the listing multiplies
+each of the three forward components by it at `0x100ffbd3` / `0x100ffbdd` / `0x100ffbe7`) — so the aim
+interpolates as a *point* and pitch and yaw fall
 out of `VectorAngles`. Roll is not interpolated from the base: it is `e × override.roll`, so the base
 view's roll vanishes the instant the weight is non-zero. `CInput+0x17c/0x188/0x194/0x198` are refreshed
 once per `CAM_Think` and **only while the weight is already non-zero**, straight off the replicated
@@ -1775,11 +2404,11 @@ player fields.
 
 | server `DT_Local` | server `CBasePlayer+` | client local | client `player+` | field | encoding |
 |---|---|---|---|---|---|
-| — | — | `+0x34` | `0x168c` | `m_iHideHUD` | |
-| — | — | `+0x38` | `0x1690` | `m_iFOV` | |
-| — | — | `+0x4c` | `0x16a4` | `m_iViewmodelFOV` | |
+| `+0x34` | `0x1e74` | `+0x34` | `0x168c` | `m_iHideHUD` | int, 9 bits |
+| `+0x38` | `0x1e78` | `+0x38` | `0x1690` | `m_iFOV` | int, 9 bits |
+| `+0x3c` | `0x1e7c` | `+0x4c` | `0x16a4` | `m_iViewmodelFOV` | int, 8 bits |
 | `+0x84` | `0x1ec4` | `+0x88` | `0x16e0` | `m_iCameraOverrideIdx` | int, 11 bits |
-| — | — | `+0xd8` | `0x1730` | `m_bDrawViewmodel` | |
+| `+0xd4` | `0x1f14` | `+0xd8` | `0x1730` | `m_bDrawViewmodel` | bool, 1 bit |
 | `+0xec` | `0x1f2c` | `+0xf0` | `0x1748` | `m_vecCameraViewOverride` | Vector |
 | `+0xf8` | `0x1f38` | `+0xfc` | `0x1754` | `m_vecCameraTargetOverride` | Vector |
 | `+0x104` | `0x1f44` | `+0x108` | `0x1760` | `m_flCameraFOVOverride` | float, 10 bits, `[0, 180]` |
@@ -1787,15 +2416,32 @@ player fields.
 | `+0x10c` | `0x1f4c` | `+0x110` | `0x1768` | `m_flCameraOverrideTimestamp` | SendPropTime |
 | `+0x110` | `0x1f50` | `+0x114` | `0x176c` | `m_flCameraOverrideFadeStartTime` | SendPropTime |
 | `+0x114` | `0x1f54` | `+0x118` | `0x1770` | `m_flCameraOverrideFadeDuration` | float, 10 bits, **`[−10, +10]`** |
-| — | — | `+0x11c…+0x138` | | `m_vecCrossfadeFrom/ToLandmark`, `m_flCrossfadeYawDifference`, `…StartTime`, `…Duration` | |
-| — | — | `+0x140` | `0x1798` | `m_flResetCameraDampeningTime` | |
+| `+0x118` | `0x1f58` | `+0x11c` | | `m_vecCrossfadeFromLandmark` | Vector |
+| `+0x124` | `0x1f64` | `+0x128` | | `m_vecCrossfadeToLandmark` | Vector |
+| `+0x130` | `0x1f70` | `+0x134` | | `m_flCrossfadeYawDifference` | float, 12 bits, `[−360, 360]` |
+| `+0x134` | `0x1f74` | `+0x138` | | `m_flCrossfadeStartTime` | SendPropTime |
+| `+0x138` | `0x1f78` | `+0x13c` | | `m_flCrossfadeDuration` | float, 7 bits, `[0, 10]` |
+| `+0x13c` | `0x1f7c` | `+0x140` | `0x1798` | `m_flResetCameraDampeningTime` | SendPropTime |
 
-The client's local block is at `player+0x1658` and its offsets run **4 bytes higher than the server's
-`DT_Local` offsets throughout** — a fixed skew across every field, so one leading member is not sent.
-`m_Local` itself is `CBasePlayer + 0x1e40`. The SendProp registration (`FUN_1018a730`) is the source of
-truth for which of `+0x1f44`/`+0x1f48` is FOV and which is roll; the client-side reading of
-`SetupVisibility` transcribes them the other way round, and a re-read of `corpus asm 10352120` would
-settle it beyond the registration.
+The server column is `FUN_1018a730`'s `DT_Local` registration read prop by prop; `m_Local` itself is
+`CBasePlayer + 0x1e40`, so the `CBasePlayer+` column is `0x1e40 + DT_Local`. The registrars are
+`FUN_10246af0` (int/bool: name, offset, size, nbits, flags), `FUN_10246510` (float: … min, max,
+proxy), `FUN_10246700` (vector) and `FUN_101ab310` (SendPropTime: name, offset, size).
+
+The client's local block is at `player+0x1658`, but **the skew against the server's `DT_Local` offsets
+is not uniform**: `m_iHideHUD` and `m_iFOV` sit at the *same* `+0x34` / `+0x38` on both sides,
+`m_iViewmodelFOV` is `+0x10` higher on the client (`+0x3c` → `+0x4c`), and only from
+`m_iCameraOverrideIdx` onward does the fixed `+4` hold. The two `CPlayerLocalData` layouts simply
+differ; the skew is not one unsent leading member.
+
+**`+0x1f44` is FOV and `+0x1f48` is roll, settled three ways.** The registration above is the first:
+`m_flCameraFOVOverride` at `DT_Local +0x104` with 10 bits over `[0, 180]`, `m_flCameraRollOverride` at
+`+0x108` with 12 bits over `[−180, 180]`. Second, `SetupVisibility` writes `+0x1f44` from `vfunc0xC4`
+(`0x103521f0`) and `+0x1f48` from `vfunc0xC0` (`0x10352228`), and on a `camera_track` slot `0xC4`
+returns `m_flViewFOV` (`+0x4ec`) while slot `0xC0` returns `m_flViewRoll` (`+0x4f0`). Third, the
+`CBaseEntity` defaults are `75.0f` for slot `0xC4` (`_DAT_104454cc`, the shot-record `FieldOfView`
+default) and `0.0f` for slot `0xC0` (`_DAT_104454c4`). The client-side transcription that reads them
+the other way round is wrong.
 
 **The ramp, `FUN_100fc900`'s tail** (the same driver that advances every `CInput` weight, §3):
 
@@ -1803,15 +2449,23 @@ settle it beyond the registration.
 if (m_flCameraOverrideFadeStartTime <= 0.0f) { m_flScriptedWeight = 0.0f; return; }
 m_flScriptedWeight = 1.0f;
 dur = m_flCameraOverrideFadeDuration;
-if (dur <= 0.0039f) { if (_DAT_10235278 <= dur) goto clamp;          // ≈0 duration: stay at 1
-                      m_flScriptedWeight = 1.0f + ((now − startTime) / dur); }   // dur < 0: blend OUT
-else                  m_flScriptedWeight = (now − startTime) / dur;
+if (dur <= 0.01f /*_DAT_101e34e8*/) {
+    if (-0.01f /*_DAT_10235278*/ <= dur) goto clamp;                 // |dur| <= 0.01: stay at 1
+    m_flScriptedWeight = 1.0f + ((now − startTime) / dur);           // dur < −0.01: blend OUT
+} else  m_flScriptedWeight = (now − startTime) / dur;                // dur >  0.01: blend IN
 clamp: m_flScriptedWeight = clamp(m_flScriptedWeight, 0.0f, 1.0f);
 ```
 
-Three regimes: **`startTime ≤ 0` ⇒ the override is off**; **`0 ≤ duration ≤ 0.0039` ⇒ weight 1
-immediately, a hard cut in that stays**; **`duration < 0` ⇒ the weight starts at 1 and decays to 0 over
-`|duration|`, the blend out**. The ramp is **linear**; the ease is applied at the point of use by
+Both guards are read from the image: **`_DAT_101e34e8 = +0.00999999977f`** and
+**`_DAT_10235278 = −0.00999999977f`** (`0x100fcbd0` and `0x100fcbf7` in the listing) — a symmetric
+±10 ms dead band, not the ~1/255 s the first pass assumed. `now` is `engine->GetCurTime()`, fetched at
+`0x100fc92c` into `[ESP+0x10]`.
+
+Four regimes: **`startTime ≤ 0` ⇒ the override is off**; **`|duration| ≤ 0.01 s` ⇒ weight 1
+immediately, a hard cut in that stays** — so a *negative* duration inside the band is a cut in, not a
+blend out; **`duration > 0.01` ⇒ `(now − startTime)/duration`, the blend in**; **`duration < −0.01` ⇒
+the weight starts at 1 and decays to 0 over `|duration|`, the blend out**. The ramp is **linear**; the
+ease is applied at the point of use by
 `SimpleSpline` inside `FUN_100ffb90`. Nothing cancels the override abruptly except the server writing
 `m_flCameraOverrideFadeStartTime ≤ 0`.
 
@@ -1820,7 +2474,9 @@ state on `CBasePlayer`: `+0x19b4` the cine camera's EHANDLE, `+0x19b8` `m_flCame
 `+0x19bc` the duration **whose sign is its direction** (`> 0` fade in, `< 0` fade out), `+0x19c0/c4/c8`
 the view entity, its set time and its crossfade duration, `+0x19cc/d0/d4` the same for the target
 entity, and `+0x19d8`/`+0x19e4` a `CUtlVector` of fade-out entries with stride `0x10` —
-`{ byte kind (0 view, 1 target), EHANDLE, setTime, crossfadeDuration }`.
+`{ byte kind (0 view, 1 target), EHANDLE, setTime, crossfadeDuration }`. The corpus names the two
+handles `CBasePlayer::m_hCameraViewEntity` (`+0x19c0`) and `m_hCameraTargetEntity` (`+0x19cc`), and the
+two durations `m_flCameraViewCrossfadeDuration` / `m_flCameraTargetCrossfadeDuration`.
 
 * **`FUN_1017d900` (`GetCameraOverrideWeight`)** returns `1.0` when the duration is exactly zero,
   `clamp((t − mark)/dur, 0, 1)` when it is positive, and `clamp(1 + (t − mark)/dur, 0, 1)` when it is
@@ -1834,6 +2490,19 @@ entity, and `+0x19d8`/`+0x19e4` a `CUtlVector` of fade-out entries with stride `
   passed and its handle is live, raises the crossfade to the entity's own minimum (`vfunc0xD0`), arms
   the fade, stores the new handle/time/duration, and notifies the entity (`vfunc0xBC`). A null entity
   routes to the fade-out instead.
+* **`FUN_1017d460(player, ent, crossfade)` — set the *target* entity — is its exact twin on the
+  `+0x19cc/d0/d4` trio, with two differences.** It **does not** call `SetCineCamera(NULL)`
+  (`FUN_1017d280` opens with `PUSH 0; CALL 0x100015cd` at `0x1017d285`; `FUN_1017d460` has no such
+  call), so *only setting the view entity cancels a cine camera*; and it notifies through **`vfunc0xB8`**
+  (`0x1017d5c2`), the target notify, not `vfunc0xBC`. The push condition is the same shape —
+  `curtime > m_flCameraTargetSetTime` **and** `m_hCameraTargetEntity` still resolves — and the entry is
+  pushed to the front carrying the *outgoing* handle, set time and crossfade duration.
+* **Retail defect: both pushers write the kind byte as `0`.** `0x1017d386` (view) and `0x1017d55f`
+  (target) are both `MOV byte ptr [ESI],0x0`. `SetupVisibility` discriminates on that byte
+  (`0x10352485 TEST DL,DL ; JNZ 0x1035259e`), so a superseded **target** camera is folded through the
+  **view** arm: its `vfunc0xC8` viewpoint, `vfunc0xC0` roll and `vfunc0xC4` FOV are crossfaded into the
+  published *view* override and it consumes the *view* channel's coverage, while the target point
+  itself simply snaps. The fade list's kind-1 branch is unreachable in a shipped run.
 * **`FUN_1017d0b0(player, dur)` — arm or re-time — back-dates the start.** Fresh (`mark <= 0`): mark
   now, duration `dur`. Reversing a fade-out: keep the current weight `w` by setting `mark = t − w*dur`.
   A zero duration that has already elapsed restarts as a fade-in. A fade-in that would otherwise finish
@@ -1848,17 +2517,91 @@ entity, and `+0x19d8`/`+0x19e4` a `CUtlVector` of fade-out entries with stride `
   positive stamps the timestamp, reads the view entity's origin/FOV/roll and the target entity's aim
   point (the target is asked to aim *from* the published view origin, or from `EyePosition()` when
   there is no view entity), computes each channel's own crossfade fraction, and then walks the fade
-  list **newest first**, pulling the published value back toward each older camera by that camera's own
-  progress and accumulating coverage multiplicatively (`w = 1 − (1 − f)(1 − w)`), dropping entries
-  whose channel has reached full coverage or whose entity has died. **N cameras can be crossfading at
+  list **newest first**, pulling the published value back toward each older camera and accumulating
+  coverage multiplicatively (`w[kind] = 1 − (1 − f)(1 − w[kind])`), dropping entries whose channel has
+  reached full coverage or whose entity has died. **N cameras can be crossfading at
   once**, on top of the one global signed fade weight, and no duration on this path is ever a constant
   — every value is the caller's argument raised to whatever minimum the entity demands. Finally it adds
   the published view origin to the PVS; separately, an active cine camera **replaces** the PVS with its
   own `m_vecCamOrigin` and returns, skipping the ordinary visibility pass entirely.
 
-The decompile of the per-entry lerp confuses its factor register (it prints `curtime` where the listing
-multiplies by the entry's fraction); the shape is certain, the exact register for each of the three
-components is not. `corpus asm 10352120` is the source of truth before that stack is reproduced.
+**Which factor scales which component, read off the listing.** The frame is `SUB ESP,0x2c` plus four
+pushes, so inside the block `ESP = entry − 0x3c` and the slots are: `[ESP+0x10]` the entry's own
+fraction `f`, `[ESP+0x14]` the loop counter, `[ESP+0x18]` `now`, **`[ESP+0x1c]` `w[0]` — the view
+channel's accumulated coverage**, **`[ESP+0x20]` `w[1]` — the target channel's**, `[ESP+0x24…0x2c]`
+the `vfunc0xC8` temp, `[ESP+0x30…0x38]` the `EyePosition` / `vfunc0xCC` temp. Both weights are
+initialised to **0** at `0x10352179` / `0x1035217d` and raised to 1.0 or to the clamped live fraction
+only inside their own "entity is live" block.
+
+```
+103524c9  FMUL float ptr [ESP + 0x1c]    ; origin.x  ×  w[0]   (also .y 103524e1, .z 103524f9)
+10352542  FMUL float ptr [ESP + 0x1c]    ; roll      ×  w[0]
+1035258b  FMUL float ptr [ESP + 0x1c]    ; fov       ×  w[0]
+103525e1  FMUL float ptr [ESP + 0x20]    ; target.x  ×  w[1]   (also .y 103525f9, .z 10352611)
+10352633  FSUB float ptr [ESP + 0x10]    ; 1 − f     — the ONLY use of the entry's own fraction
+```
+
+So **all three view components — origin, roll and FOV — are folded by the channel's accumulated
+weight, and the target point by the target channel's**; the entry's own fraction `f` never scales a
+value, it only advances coverage. The drop test at the loop head is `w[kind] >= 1.0` **or** a dead
+handle (`0x103523d7`–`0x10352422`), and the drop is a `memmove` compaction plus `--count`. The live
+channel fractions are `clamp((now − setTime)/crossfadeDuration, 0, 1)`, or **1.0** when the duration is
+`<= 0.0` (`0x10352234`, `0x1035234c`). A consequence worth naming: with no live view entity `w[0]`
+stays 0, so every queued view entry folds the published value all the way back to its own camera.
+
+**The camera entity's interface — slots 46 to 53, read out of the bodies.** The two factories are
+`FUN_100cb910` (`camera_track`, `0x50c` bytes, `SetClassname("camera_track")`, vftable `0x10453b9c`)
+and `FUN_100cb580` (`camera_keyframe`, `0x4b0` bytes, base `CLogicalEntity`, two
+`CBaseEntityOutput` constructions at `+0x480`/`+0x498`, vftable `0x104536ec`). `CCameraTrack` extends
+`CCameraKeyFrame` with `m_bHoldAtEnd` (`+0x4b0`, key `HoldAtEnd`), `m_flFromPlayerTime` (`+0x4b4`,
+key `FromPlayerTime`), `m_flToPlayerTime` (`+0x4b8`, key `ToPlayerTime`) and the runtime block
+`m_flTargetStartTime`/`m_hTargetKey`/`m_bTargetPaused` (`+0x4bc/c0/c4`), `m_vecTargetPos` (`+0x4c8`),
+`m_flViewStartTime`/`m_hViewKey`/`m_bViewPaused` (`+0x4d4/d8/dc`), `m_vecViewPos` (`+0x4e0`),
+`m_flViewFOV` (`+0x4ec`), `m_flViewRoll` (`+0x4f0`), `m_OnCompleted` (`+0x4f4`). **`CCameraKeyFrame`
+fills none of these slots** — it keeps the `CBaseEntity` stubs; only `CCameraTrack` implements the
+interface.
+
+| vtable | slot | `CCameraTrack` | `CBaseEntity` default | `CBaseCombatCharacter` |
+|---|---|---|---|---|
+| `+0xB8` | 46 | `0x100cc1c0` — "you are now the camera **target**": stamp `m_flTargetStartTime`, `m_hTargetKey`, `m_bTargetPaused = 1`, fire `m_OnReached`, `SetNextThink(curtime)` + `ThinkSet(LAB_10014d58)` | `0x100267d0` `RET` | (default) |
+| `+0xBC` | 47 | `0x100cc250` — the same on the **view** trio | `0x100267f0` `RET` | (default) |
+| `+0xC0` | 48 | `0x100cbef0` → `m_flViewRoll` (`+0x4f0`) | `0x10026810` → `_DAT_104454c4` = **0.0** | (default) |
+| `+0xC4` | 49 | `0x100cbf10` → `m_flViewFOV` (`+0x4ec`) | `0x10026830` → `_DAT_104454cc` = **75.0** | (default) |
+| `+0xC8` | 50 | `0x100cc2e0` → `m_vecViewPos` (`+0x4e0`) | `0x10026850` → `WorldSpaceCenter()` (vfunc `0x300`) | `GetCameraViewpointPosition` `0x10332010` → `CalcLookData(&out, NULL)` |
+| `+0xCC` | 51 | `0x100cc320` → `m_vecTargetPos` (`+0x4c8`) | `0x10026890` → `WorldSpaceCenter()` | `GetCameraTargetPosition` `0x103320b0` |
+| `+0xD0` | 52 | `0x100cbf30` → `max(0, m_flFromPlayerTime)` | `0x100268d0` → **0.0** | `GetCameraFadeInTime` `0x103321a0` → `m_flCameraOverrideFadeTime` (`+0x10d0`) |
+| `+0xD4` | 53 | `0x100cbf70` → `max(0, m_flToPlayerTime)` | `0x100268f0` → **0.0** | `GetCameraFadeOutTime` `0x10332240` → **the same** `+0x10d0` |
+
+So the **per-entity minimum crossfade is a virtual pair, `GetCameraFadeInTime` (`0xD0`) and
+`GetCameraFadeOutTime` (`0xD4`), with two shipped implementations**: a `camera_track` answers exactly
+the authored `FromPlayerTime` / `ToPlayerTime` keyvalues clamped at zero, while a
+`CBaseCombatCharacter` answers **one runtime field for both directions**, unclamped. Any other entity
+answers 0 for both, 75.0 for the FOV and 0.0 for the roll.
+
+**The "aim from" argument of `vfunc0xCC` is dead in every shipped implementation.**
+`CCameraTrack::vfunc51` reads `[ESP+8]` (the out pointer) and never touches `[ESP+4]`; the
+`CBaseEntity` default does the same; and `CBaseCombatCharacter::GetCameraTargetPosition` writes
+`[ESP+0x14]` in **both** arms (`0x10332127` head → `CalcLookData`, `0x1033214d` body →
+`WorldSpaceCenter()`). The source vector `SetupVisibility` computes — the published view origin, or
+`EyePosition()` when there is no view entity — is never read.
+
+**How an NPC becomes the camera target.** `CBaseCombatCharacter::SetAsCameraTarget`
+(`0x1000a2d6` / `0x103322e0`) writes `m_bCameraTargetIsHead` (`+0x10d4`) and
+`m_flCameraOverrideFadeTime` (`+0x10d0`), then calls `FUN_1017d460(player, this, 0.0f)` **for every
+player index 1..maxClients** — a broadcast, not an activator dispatch, and always with a zero
+crossfade argument, so the entity's own `GetCameraFadeInTime()` is the only source of a non-zero
+target crossfade in shipped content. Its five callers are `CSceneEntity::DispatchStartEvent`
+(`0x10082ee0`, the choreo scene event) and four entity inputs on every combat character:
+
+| input | call |
+|---|---|
+| `SetHeadAsCameraTarget` `0x10332570` | `SetAsCameraTarget(1, 0)` |
+| `SetBodyAsCameraTarget` `0x10332610` | `SetAsCameraTarget(0, 0)` |
+| `FadeHeadAsCameraTarget` `0x103323d0` | `SetAsCameraTarget(1, inputdata.type == 1 ? inputdata.value : 0)` |
+| `FadeBodyAsCameraTarget` `0x103324a0` | `SetAsCameraTarget(0, same)` |
+
+`GetCameraFadeOutTime` has no static caller by design — it is only ever reached as
+`viewEnt->vfunc0xD4()` / `targetEnt->vfunc0xD4()` inside `FUN_1017d6d0`.
 
 ### The draw gates and the HUD mask (2026-09-07)
 
@@ -1875,7 +2618,10 @@ return true;
 `0x464` is read **exactly once in the image, here**, and the test does not call `IsActive` — so while a
 cine camera is merely *adopted*, the body is drawn iff the server said so through the replicated
 `m_bDrawPlayer` (`DT_BaseCineCam +0x640`), and the third-person weight has no say. This is the one
-retail input on this path with no source in the port's shot record.
+retail input on this path with no source in the port's shot record — and it is **shipped content, not
+just anim event 4050**: `CBaseCineCam::Spawn` raises it from `spawnflags & 2`, which **27 of the 51
+shipped `camera_cinematic` directors** author, including `sp_tutorial_1`'s `feedcamera` (see "The
+entity's own class surface").
 
 **The viewmodel gate carries a speed term.** `C_BasePlayer::ShouldHideViewModel` (slot 174,
 `FUN_100a7ab0`) is `cine && !ShotWantsViewmodel(cine)`, called from `C_BaseViewModel`'s `vfunc4`,
@@ -1910,19 +2656,23 @@ what happens to them.
 
 | Retail | Elysium | Bearing |
 |---|---|---|
-| unsettled angular deadband **1.0°** | `SettleAngle 0.05f` | unintended — the port parks 20× tighter on the acquire |
-| speed floor **1.0 u/s** while unsettled | `clamp(speed, 0, MoveSpeed)` | unintended |
-| `SnapOnShotChange` is a **one-shot** flag consumed by `FUN_10002390` | applied every frame (`Shot.bSnapOnShotChange \|\| MoveSpeed <= 0`) | unintended — retail snaps on the change and then tracks |
-| `RemainingTime` carries both defects above (the NaN band) | `RemainingTranslationSeconds` is a correct kinematic solve | **undecided** — the NaN band is unreachable on shipped content, and the trapezoid defect is what shipped shots are tuned against (`jack.txt` closing 100 u from rest: retail 0.17 s, the correct solve 1.27 s — the port pans ~7× slower). The owner call is M6 in `docs/project/plans/spine.md` §11.13i: reproduce retail's arithmetic with the radicand clamped at zero |
-| `MoveAccel == 0` divides by zero, pinning the speed at the 1.0 floor | an explicit `Speed = MoveSpeed` arm | **named modernization**; the parse default is 50, so no shipped shot reaches it |
+| unsettled angular deadband **1.0°** | `FElysiumScriptedShotTracker::UnsettledAngleTolerance = 1.0f` | matches — the old `SettleAngle 0.05f` parked 20× tighter on the acquire; retail's `_DAT_101e34ec` band landed with SC1, so a pan now stops inside a degree of its goal |
+| speed floor **1.0 u/s** while unsettled | `clamp(Speed, MinTrackSpeed, MoveSpeed)`, `MinTrackSpeed = 1.0 u/s` | matches — the floor landed with SC1 and is read back as `IsDollying()`, which is retail's `FUN_100019a0` `speed <= 1.0` test |
+| `SnapOnShotChange` is a **one-shot** flag consumed by `FUN_10002390` | `bSnapPending` armed by `Start` (retail's `FUN_10002210` tail and `OnDataChanged`) and consumed at the top of `Advance` by `Snap()` | matches — the shot cuts on the change and tracks its anchor afterwards, which is what `sp_tutorial_1`'s `LookAtTarget_Snap` needs |
+| `RemainingTime` carries both defects above (the NaN band) | `ElysiumCam::RemainingTranslationSeconds` is retail's three arms verbatim, radicand clamped at zero | reproduced — M6, landed with SC1. `jack.txt` closing 100 u from rest answers retail's **0.17 s** again instead of the correct solve's 1.27 s, so the pan lands with the dolly across all 33 `SyncRotateOnMove` shots. The clamp removes only the NaN state, which needs `MoveSpeed > 2·MoveAccel` and no shipped shot has it |
+| `MoveAccel == 0` divides by zero, pinning the speed at the 1.0 floor | an explicit decel branch that leaves the speed unchanged; the clamp then pins it at `MinTrackSpeed` | reproduced — M7, landed with SC1: retail's crawl, written as a branch so no hardware divide, NaN or infinity is ever produced. The parse default is 50, so nothing shipped changes; a mod that writes 0 gets the crawl |
 | every scripted-shot exit is a **hard cut** (`EndShot`, `EndPlayerDialog`, the interaction closers, `CamMode → 0`, adoption cleared, entity removed) | `FElysiumCameraShotStack` ramps the cine channel **out** over `RampSeconds` | **named modernization** — VtMB's cuts are jarring; declared here, and the authored `MoveTime ≤ 0.05` cut fold of §6 is still reproduced exactly |
 | the scripted weight is **eased at the point of use**, `e = SimpleSpline(w)` inside `FUN_100ffb90` | `ElysiumCam::ComposeScriptedShot` receives the raw linear weight (the ease is applied to `Third` and `Feed` only) | unintended |
 | composition lerps the **origin and a look-at point** (`origin + fwd*100` → the override target) and re-derives angles with `VectorAngles` | `FMath::Lerp` over `FRotator`s | unintended — for a large angular delta a point lerp swings faster at the start and settles, an angle lerp is uniform |
 | `angles.roll = e * shotRoll`, discarding the base roll | roll lerps as part of the rotator | unintended |
 | `duration < 0` **is** the blend-out encoding | `Pop(Id, BlendOutSeconds)` — the same behaviour, a different encoding | equivalent |
-| the body is drawn iff the replicated `m_bDrawPlayer` says so, short-circuiting `CAM_IsThirdPerson` | `bBodyEligible = bThirdPerson`; no `bDrawPlayer` on `FElysiumShotPresentation` | unintended — a shot cannot ask for the body |
+| the body is drawn iff the replicated `m_bDrawPlayer` says so, short-circuiting `CAM_IsThirdPerson`; its authored source is `spawnflags & 2` on the director, set on **27 of 51** shipped `camera_cinematic` entities | `bBodyEligible = bThirdPerson`; no `bDrawPlayer` on `FElysiumShotPresentation`, and no `spawnflags` parse | unintended — a shot cannot ask for the body, and 27 shipped shots are asking |
+| the runtime camera's `m_bForcePlayerLook` defaults to **1**, the director's `point_player` is never copied onto it, and only `CFuncMonitor::vfunc39`, anim event 4050 and the `"Intrusion"` opener clear it | `point_player` has no counterpart at all | unintended — every shipped scripted shot forces the subject's gaze in retail, including the 26 directors that author `point_player 0` |
+| `CBaseCineCam::ObjectCaps()` is `0` — the base's `FCAP_ACROSS_TRANSITION` is cleared, so a live shot does not survive a level change | not modelled | unintended |
+| `CBaseCineCam::ShouldTransmit` sends the camera **only** to `m_hSubject`'s client, and only while `CamMode != 0` | single-player, no transmit model | equivalent in practice; a shot whose subject is not player 1 would be invisible in retail rather than merely inactive |
 | the viewmodel gate is `DrawViewmodel && speed ≤ 1.0` | `!bThirdPerson && (!bNamed \|\| bDrawViewmodel)` — no speed term | unintended — the hands appear during the dolly |
-| `dt` is latched once per rendered frame, clamped to 1.0 s, floored at 0.01 s below ~1/255 s | the engine `DeltaSeconds` passes straight through | low-risk under Unreal's own clamp; the 0.01 s floor is real retail behaviour on a stalled frame |
+| `dt` is latched once per rendered frame, clamped to 1.0 s, floored at 0.01 s below ~1/255 s | the latch is `LastAdvancedFrame == GFrameCounter` (`ElysiumCameraComponent::AdvanceFrame`, `ElysiumCameraService::Advance`, the modifier's zeroed second pass); the two guards are applied to `Advance`'s `DeltaSeconds` parameter | matches — landed with SC1. The tracker never reads a clock: the ceiling and the 10 ms floor sit inside `Advance`, and the floor is also retail's zero-and-negative handling |
+| the cine-FOV dev cvar **`camera_fov`** (default `"-1"`) short-circuits `FUN_10001c20` above `_DAT_101e34f4 = 10.0f` and returns without writing `m_flCurFov`, so the rendered FOV **freezes** | `FElysiumScriptedShotTracker::TrackFov` behind `elysium.CameraShotFovOverride`, freeze included; the threshold is a named `FovOverrideThreshold` constant defaulting to 0 | **the name and the threshold** — M12. Retail's name and threshold are now read: the cvar is `camera_fov`, its default is `-1` and the guard fires above `10.0`, so the port takes the retail name and `FovOverrideThreshold` becomes 10.0 |
 | `AttachType` is matched **case-sensitively** | `IgnoreCase` | unintended |
 | an unrecognised `Position` value falls through to **`World`** | falls through to `Named` | unintended |
 | `Top`/`Bottom` are the abs origin's XY with only Z from the bounds; `AbsMin`/`AbsMax` are whole bounds corners | `BoundsPoint(1.0f)`/`BoundsPoint(0.0f)` — a bounds fraction on all three axes; no `AbsMin`/`AbsMax` | unintended |
@@ -1978,44 +2728,28 @@ what happens to them.
 In the scripted shot / cine camera (the 2026-09-07 subsections above) — what the two recovery passes
 left open, and nothing else:
 
-- **`FUN_1013c940`**, the closest-point-on-line kernel behind `FUN_1013ca00`, was not opened. The
-  `AutoPositionFromTarget` formula assumes it is the standard clamped projection; if retail clamps `t`
-  to `[0,1]` the pull-back changes when the target point projects behind the camera.
-- **The per-entry lerp factors in `CHL2_Player::SetupVisibility`** `0x10352120` — decompiler register
-  confusion over the three components. Reading `corpus asm 10352120` settles it.
-- **The camera-track entity's `vfunc0xBC` / `0xC0` / `0xC4` / `0xC8` / `0xCC` / `0xD0` / `0xD4`** are
-  identified only by use (notify / roll / FOV / origin / target-from / minimum crossfade in / minimum
-  crossfade out); `camera_track`'s and `camera_keyframe`'s own factories `FUN_100cb910` /
-  `FUN_100cb580` were not opened. `CBaseCombatCharacter::SetAsCameraTarget` (`0x1000a2d6`) and
-  `GetCameraFadeOutTime` (`0x10332240`) carry an authored fade time and have **zero recovered
-  callers**, so the wire from an authored `camera_track` fade to `m_flCameraOverrideFadeMarkTime` is
-  one hop short.
-- **`FUN_10325da0`**, the NPC head-turn feasibility gate that decides whether `DialogPOV` actually
-  redirects the gaze.
-- **`FUN_10178120` / `FUN_100e05f0`**, the dialogue manager and its "can this conversation start"
-  test. The claim "no per-line camera reaches the engine" rests on `SetCamera` having exactly one
-  caller and on `vampire.dll` containing no `.dlg` string — strong, but not a read of the Python
-  bridge. **What would close it:** a read of the bridge's dialogue-advance path.
-- **`FUN_1006e8e0`'s `+0x564` / `+0x570` / `+0x588` triple** (a saved local origin/angles pair, written
-  only when `+0x564` is already non-zero) is understood mechanically; its purpose — presumably
-  "remember where an End-only shot started dollying from across a re-shot" — is inferred, and nothing
-  else in the image reads `+0x570`/`+0x588`.
-- **`player+0x1d60`**, the bitfield `EndShot` clears bits `0x1` and `0x8` of, was not chased to its
-  readers.
-- **`CBaseCineCam::vfunc5 / 80 / 81 / 82 / 86 / 103 / 117 / 123`**, including its `KeyValue` handler.
-  The keyvalue *names* for `+0x5d4`, `+0x5d8`–`+0x5e4`, `+0x5e8` and `+0x640` are therefore inferred
-  from the port's vocabulary rather than read out of the datamap; opening the handler settles them.
-  (`camera_showdebug` is a cvar in the same file.)
-- **The client half of the anchor parser**, `client.dll` `FUN_10028a10`, which mirrors the server's
-  `FUN_10071e00`. Only the server half was audited.
-- **`_DAT_101e34f4`** and the **name** of the ConVar `DAT_102de30c` in `FUN_10001c20`'s cine-FOV guard
-  (one referrer, no recovered constructor).
-- **`<DAT_104a57e4>->vfunc40()`**, the base FOV `SetUpView` seeds the view setup with, and `vfunc38` /
-  `vfunc39` on the same object; its class is unnamed in the corpus.
+- **`CBaseEntity + 0x90`**, the force-transmit-until timestamp both `CBaseEntity::ShouldTransmit`
+  `0x100ab020` and `CBaseCineCam::ShouldTransmit` `0x1006e6a0` open on. Its writers were not chased;
+  `vtmb_readers 0x90 --cls CBaseEntity` returns only two `client.dll` water functions, so the
+  server-side producer is untyped and unfound.
+- **`CCameraAnimated`'s `+0x828` / `+0x82c` pair.** `+0x828` is the cached `camera_showdebug` state
+  the think writes; `+0x82c` is a float the constructor seeds to `-1.0` and nothing in the opened
+  bodies reads.
+- **Whether `m_iVFlags` has a client-side twin.** It is a datamap field with no SendProp name, but
+  `CPlayerMove::SetupMove` reads it inside the movement path; `client.dll` was not searched for a
+  predicted copy.
 - **The intent behind `FUN_100010e0(a,b) = sqrt(2a − b)` and its `0.5*(d − R2)` argument.** The bytes
   are unambiguous; the expression they came from is not.
-- **`_DAT_10235278`**, the near-zero guard in the ramp's negative-duration branch: its sign follows
-  from the branch structure, its value is unread.
+- **The identity of `IVRenderView` slot 38** (`client.dll` `DAT_104a57e4 + 0x98`, `engine.dll`
+  `CVRenderView::vfunc38` `0x2010f310`, reading `DAT_20314874`; the twin of `CEngineClient::vfunc15`
+  `0x2001a2b0`). Its three use sites all suspend work, so it behaves as a paused/suspended flag, but
+  the corpus names neither it nor a writer — `DAT_20314874` is a member of the engine's client-state
+  struct reached through a base register, so no absolute-address store exists to chase. **What would
+  close it:** a read of the engine's `svc_intermission` / pause message handlers around
+  `FUN_20025fe0`, the one other reader.
+- **The source expression behind `CCameraKeyFrame::Activate`'s `FocalLength` fallback.** The bytes are
+  now read (below) and the number is `−90.0479`; what the programmer wrote to produce a negative focal
+  length is not recoverable from the folded constants.
 
 Server-side, in the camera-track system (§6, `vampire.dll`):
 
@@ -2023,6 +2757,21 @@ Server-side, in the camera-track system (§6, `vampire.dll`):
   drives the *paired* sub-chain with a 0.1 s lookahead, together with the matching lookahead
   skip-ahead at `0x100cc5af`. Both are map-specific and unreachable from `TrackThink` on any other
   map, so only a trace of `sp_endsequences_b` playing its own chain would establish what they do.
-- The default `FocalLength` that `Activate` clamps an out-of-range authored value to. It has the
-  form `18 / sin k`, from constants `0x10453b78` / `0x10453b88`; reading those two floats out of the
-  PE settles the number.
+
+The `FocalLength` clamp is now read out of the PE. It lives in `0x100cb750` — the corpus labels that
+function `CCameraTrack::TrackThink`, but its body opens with `CBaseEntity::Activate` and it fills
+**slot 113 on both `CCameraTrack` and `CCameraKeyFrame`**, so it is the shared `Activate`, not the
+think. The guard is
+`focal < 18.0f (_DAT_10453b94)` **or** `focal > 2000.0f (_DAT_104492ac)`, and the replacement is
+
+```
+100cb780  dd 05 88 3b 45 10    FLD   qword ptr [0x10453b88]   ; 18.75   (a double)
+100cb786  d9 fe                FSIN
+100cb788  dc 3d 78 3b 45 10    FDIVR qword ptr [0x10453b78]   ; 8.95    (a double)
+100cb78e  d9 9e 60 04 00 00    FSTP  dword ptr [ESI + 0x460]  ; m_fl35mmFocalLength
+```
+
+i.e. `8.95 / sin(18.75 rad)` = **`−90.0479f`** — a *negative* focal length. Both operands are 8-byte
+doubles; the corpus's `float10` rendering hides that. An authored `FocalLength` outside `[18, 2000]`
+therefore poisons the keyframe with `−90.05` rather than falling back to anything usable. `Activate`
+also runs `m_flRollDegrees` through `anglemod` (`FUN_1013d650`).

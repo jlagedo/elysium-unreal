@@ -485,7 +485,23 @@ guard including the freeze, under the `elysium.*` name until RC9 recovers retail
 2026-09-07 under the owner framework of §7. **Deps:** RC9 for the FOV guard's constant and cvar name;
 the slice lands the guard behind the `elysium.*` name and RC9 renames it.
 
-**Closure record.**
+**Closure record.** Landed 2026-09-07. `Public/ElysiumCameraSolve.h` — `RemainingTranslationSeconds`
+declared on `ElysiumCam`; the tracker gains `Fov`, `bSnapPending`, `Snap()`, `TrackFov()`,
+`IsDollying()` and the named retail constants `UnsettledAngleTolerance` 1.0°, `MinTrackSpeed` 1.0 u/s,
+`FrameDeltaCeiling` / `FrameDeltaFloorThreshold` / `FrameDeltaFloor`, `FovOverrideThreshold`
+(`SettleAngle` removed). `Private/Player/ElysiumCameraSolve.cpp` — `RemainingTranslationSeconds` is
+`FUN_100010f0`'s three arms verbatim with the radicand clamped (M6); `elysium.CameraShotFovOverride`
+declared; `Start` arms the snap; `Snap` / `TrackFov` are `FUN_10002390` / `FUN_10001c20` including the
+FOV freeze (M12); `Advance` applies the two dt guards to its parameter, consumes the one-shot ahead of
+the `bTracked` copy-through, takes an explicit `MoveAccel <= 0` decel branch and clamps the speed to
+`[MinTrackSpeed, MoveSpeed]` (M7). Asserted by the new `Elysium.Substrate.CameraTracker`, which also
+asserts the existing `GFrameCounter` latch rather than rebuilding it.
+
+Two arms on this path are the port's own, marked in the source: the `MoveSpeed <= 0` early arm, which
+retail's parser cannot reach (default 150) but the constraint-less dialogue profiles rely on until SC9
+gives them `dialogdefault.txt`'s numbers; and the one-frame floor under the `SyncRotateOnMove` divisor,
+standing where retail's unguarded `|delta| / T` would divide by a zero `T` (`RemainingTime` legitimately
+returns 0 inside the clamped band).
 
 ---
 
