@@ -81,20 +81,16 @@ under menus, `help`/`quit` under commands, prompt on row 22, bare input row 23) 
 prompt reproduces `04-password-failed.png` including the truncation; the HUD hint value is 3 on
 every password-prompt render and cleared on the next accepted line.
 
-**Slice D — the modern terminal render (editor half).** Landed in C++ (2026-09-07): the four
-palettes keyed by `colorscheme` in the UI style tokens, the `Mono` font role on the Terminus faces,
-`SElysiumTerminalCells` (fixed cell metrics, style-bit inverse video, the blinking block cursor
-while the editor is open, the calibration pattern) painting the composed grid into the projection,
-`UElysiumTerminalScreenTuning` for per-model `FlipU`/`FlipV`/`Rotate90`, and `Bind` loading
-`/Game/ElysiumAuthored/UI/M_ElysiumTerminalScreen` with a named fallback to the engine
-pass-through (`Elysium.Substrate.Terminal.{CellMetrics,Palette,CellPaint,FontRole}`). Remaining:
-author `M_ElysiumTerminalScreen` in the editor (unlit, emissive from the `Screen` texture
-parameter, `EmissiveStrength`, faint scanlines, vignette, slight UV curvature, `FlipU`/`FlipV`/
-`Rotate90`, `UVDebug`; graph in `$ELYSIUM_WORK_ROOT/_terminal_explore/slice-ed-plan.md` §5), run
-`make_ui_fonts.py` for the Terminus distance-field settings, and the Play-tier `shot` baselines on
-the terminal gym at 1080p and 4K (grid crisp inside the bezel, layout against
-`retail-shots/01-home-menu.png`, UV orientation per model from the calibration pattern) —
-`-nullrhi` allocates no render target, so the picture is owner-piloted until 11.10.
+**Slice D — the picture (Play-tier remainder).** Landed (2026-09-07): the palettes, the `Mono`
+role on the Terminus faces (imported with distance-field tiers 48/56/64), `SElysiumTerminalCells`
+painting the composed grid with inverse video, the blinking cursor and the calibration pattern,
+`UElysiumTerminalScreenTuning`, and the authored `/Game/ElysiumAuthored/UI/M_ElysiumTerminalScreen`
+(unlit emissive from `Screen`, curvature, scanlines, vignette, bounds mask, `FlipU`/`FlipV`/
+`Rotate90`, `UVDebug`) bound by the projection. Remaining: the Play-tier `shot` baselines on the
+terminal gym at 1080p and 4K (grid crisp inside the bezel, layout against
+`retail-shots/01-home-menu.png`, UV orientation per model read back from the calibration pattern
+into `DA_ElysiumTerminalScreenTuning`, Terminus seating in the 28×32 cell) — `-nullrhi` allocates
+no render target, so the picture is owner-piloted until 11.10.
 
 **Slice H — the gym beat script (remaining half).** Landed: the read-only terminal diagnostic
 (`GetDebugState`, the `elysium_entity_get` `terminal_projection` block, the Cog inspector section),
@@ -110,5 +106,5 @@ the gym world, drives the same steps through the command bus and the intents, as
 state and reads the projection's render target back for the layout checks; the beat script
 replaces that driver when 11.10 lands, with the same assertions. The terminal gym builds on the
 movement gym's empty stage world (`docs/architecture/debug-tooling.md`, `--gym`). A0, A, B and C have
-landed (2026-09-07); the editor half of D and the Play-tier half of H remain. Every acceptance is
+landed (2026-09-07); only the Play-tier halves of D and H remain. Every acceptance is
 headless (the map slice) or on the terminal gym; nothing in this plan is accepted on a live map.
