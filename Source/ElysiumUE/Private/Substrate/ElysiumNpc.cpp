@@ -1023,7 +1023,16 @@ bool FElysiumNpc::ThinkSchedulePolicy()
 	// both shapes (patrol suspends and resumes, ambient owns a claimed place that has to be given
 	// back), and the combat programs are the registered ones.
 	const bool bScriptedPolicy = ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
-	if (!bScriptedPolicy && Mind.State() != EElysiumNpcState::Combat)
+	// A program that is ALREADY RUNNING pre-empts the executors too. Retail has no split to
+	// bridge here -- patrol is itself a schedule (`SelectSchedule` case 1 returns the patrol path's
+	// program at `+0x6590+4`), so a forced `SetSchedule` from a script's `ChangeSchedule`, a
+	// discipline's `AI_Schedule` or the feed's mesmerize install simply replaces it and
+	// `MaintainSchedule` runs the new program on the next think. This runtime keeps patrol and the
+	// ambient visit as executors outside the kernel, and only `ThinkStanceOrIdle` ticks a program:
+	// without this term a program installed by name on a patrolling NPC sat at task 0 forever while
+	// the route kept walking. A running program is the policy; which think installed it is not.
+	const bool bForcedProgram = Schedule.IsRunning();
+	if (!bScriptedPolicy && !bForcedProgram && Mind.State() != EElysiumNpcState::Combat)
 	{
 		return false;
 	}
@@ -1076,10 +1085,17 @@ void FElysiumNpc::ThinkAutonomous()
 
 EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 {
-	// 1. Choreo scene or an active discipline. `m_bInChoreoScene` maps onto the scripted body
-	//    owner we already issue; the discipline flag has no domain in this runtime yet, so only
-	//    the choreo half is answerable -- and it answers the same schedule either way.
-	if (Mind.Owner() == EElysiumBodyOwner::Sequence)
+	// 1. Choreo scene or busy with a discipline -- `CAI_BaseNPCTroika::SelectSchedule`
+	//    (`0x102af660`) case 1 opens with `if (IsBusyWithDiscipline() || m_bInChoreoScene) return
+	//    0x6b`. `m_bInChoreoScene` maps onto the scripted body owner we already issue; the busy
+	//    half is the `D_IS_BUSY` bit, which every discipline-victim schedule and the post-feed
+	//    trance set with `TASK_SET_NPC_FLAG`.
+	//
+	//    This step is HOW AN INCAPACITATING SCHEDULE ENDS. Those programs carry no teardown tasks:
+	//    when one completes, the NPC is still busy, so it selects the disposition idle here, and
+	//    that install's schedule-change virtual is what releases the bit (`FElysiumNpcFlags::
+	//    OnScheduleChange`). One hop through 0x6b, then ordinary selection -- retail's exact exit.
+	if (Mind.Owner() == EElysiumBodyOwner::Sequence || IsBusyWithDiscipline())
 	{
 		return EElysiumScheduleId::IdleDisposition;
 	}
@@ -2471,6 +2487,21 @@ void FElysiumNpc::ClearConditions()
 
 void FElysiumNpc::OnScheduleChange()
 {
+	// The navigator/motor/goal reset inside the same `PRESERVE_PATH` guard the flag clear sits
+	// in (`0x102a0940`). It is not redundant with `ReleaseScheduleBody`'s stop: that one runs only
+	// when a SCHEDULE owned the body, and a program forced onto an executor-owned NPC -- a walking
+	// patroller fed upon, a `ChangeSchedule` on an ambient visitor -- finds the route's move still
+	// outstanding. Retail stops it at install; so does this. The read is taken BEFORE the clear
+	// below releases the flag, which is retail's order too.
+	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH))
+	{
+		if (Motor != nullptr)
+		{
+			Motor->Stop();
+		}
+		bMoveIssued = false;
+		bWalkingAnimation = false;
+	}
 	// The flag half is the object's own recovered rule; what is left here is the world-facing half
 	// retail runs when the refcount actually reached zero.
 	if (NpcFlags.OnScheduleChange())
@@ -2480,6 +2511,48 @@ void FElysiumNpc::OnScheduleChange()
 		// gate read the counter live, so both resume on their own the moment it hits zero.
 		RecordScheduleEvent(TEXT("OnScheduleChange: obliviousness released"));
 	}
+}
+
+void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
+{
+	// `CAI_BaseNPCTroika::BuildScheduleTestBits` (`0x102ad140`), transcribed. The base
+	// (`0x10280fb0`) is empty.
+	if (!NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE) && !NpcFlags.Has(EElysiumNpcFlag::IN_FLEE_SCHED))
+	{
+		if (!IsBusyWithDiscipline() && !NpcFlags.Has(EElysiumNpcFlag2::D_POSSESSED))
+		{
+			// `if (!m_pHintNode || m_pHintNode->type != 0x2774)`. Hint nodes of that type are not
+			// modelled by this substrate, so the guard is always open here; it is named so the day
+			// a hint of that type lands it has its consumer.
+			InOutMask.Set(EElysiumNpcCond::InvestigateLevel);
+			InOutMask.Set(EElysiumNpcCond::CriminalFleeLevel);
+			InOutMask.Set(EElysiumNpcCond::SupernaturalFleeLevel);
+			if (!Senses.Memory.Enemy.IsSet())
+			{
+				// `m_bfNPCStateFlags` bits 4 and 5 -- the per-state capability byte `0x1026e3e0`
+				// writes on every state change: set in idle (0x31) and alert (0x39), clear in
+				// combat (0x8f), scripted (0x8), dead and the flee states. Both bits travel
+				// together in every value the table writes, so one state test answers both.
+				const EElysiumNpcState State = Mind.State();
+				if (State == EElysiumNpcState::Idle || State == EElysiumNpcState::Alert)
+				{
+					InOutMask.Set(EElysiumNpcCond::HearFlinch);
+					InOutMask.Set(EElysiumNpcCond::CriminalAttackLevel);
+					InOutMask.Set(EElysiumNpcCond::SupernaturalAttackLevel);
+				}
+			}
+			if (!NpcFlags.Has(EElysiumNpcFlag::COWERING))
+			{
+				InOutMask.Set(EElysiumNpcCond::Comfort);
+			}
+		}
+	}
+	if (NpcFlags.Has(EElysiumNpcFlag2::IGNORE_SQUAD_SEE_ENEMY))
+	{
+		InOutMask.Clear(EElysiumNpcCond::SquadSeeEnemy);
+	}
+	// `CacheInterruptConditions` (`0x1026a0f0`) adds this one unconditionally after the virtual.
+	InOutMask.Set(EElysiumNpcCond::NpcFreeze);
 }
 
 EElysiumScheduleId FElysiumNpc::SelectDoorObstructionSchedule()

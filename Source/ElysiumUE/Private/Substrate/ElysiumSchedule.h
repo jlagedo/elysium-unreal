@@ -413,6 +413,16 @@ public:
 	// completely: the NEXT schedule this NPC is given is what ends it. It is also why the mesmerize
 	// tasks always write onto a cleared word — the same virtual ran when the program was installed.
 	virtual void OnScheduleChange() {}
+
+	// `CAI_BaseNPCTroika::BuildScheduleTestBits` (`0x102ad140`), the per-NPC interrupt overlay.
+	//
+	// The mask an NPC actually runs against is NOT the authored one. Every think,
+	// `CacheInterruptConditions` (`0x1026a0f0`) copies the schedule's declared mask onto the NPC and
+	// then lets this virtual add and remove conditions by NPC state, flags and enemy. The kernel
+	// calls it on a copy of the authored mask immediately before the interrupt test, so a program
+	// registered with its decoded mask stays decoded and the overlay is the runner's own recovered
+	// rule. A runner with no NPC state leaves the mask alone.
+	virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) {}
 };
 
 // The per-NPC runner state. Saved as part of the NPC, so a schedule survives a save.

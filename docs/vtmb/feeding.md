@@ -438,6 +438,20 @@ This is the **only** producer of `SCHED_TROIKA_MESMERIZED` in the shipped game: 
 `SetSchedule(0xfb)` site exists in `vampire.dll`, and no script, `disciplinetgt` record or vdata
 file in the install names the string. `[VtMB] [script/data]`
 
+**When the program starts.** Not while the victim is still paired. `CAI_BaseNPCTroika::NPCThink`
+(`0x10292de0`) calls `RunAlternateAI` (`0x1028fd80`) and runs `RunAI` (slot `0x6c0`) only when it
+returns false; `RunAlternateAI` returns **true** while the grapple partner at `+0x1538` is valid and
+this body's role at `+0x153c` is 1 (the victim), doing nothing but `AutoMovement` for the paired
+activities. So the schedule installed by `FeedInterrupt` runs its first task on the first think
+after `LeaveGrappleState` clears the pair — after the authored release clip, not over it. The port's
+`TickFeed` early-return for the victim is the same gate by the same mechanism. `[VtMB]`
+
+**How it ends.** `CAI_BaseNPCTroika::SelectSchedule` (`0x102af660`) case 1 opens with
+`if (IsBusyWithDiscipline() || m_bInChoreoScene) return 0x6b`. When the two WAITs run out the NPC is
+still `D_IS_BUSY`, so it selects `SCHED_TROIKA_IDLE_DISPOSITION`, and that install's schedule-change
+virtual is what releases the three flags and the obliviousness. One hop through 0x6b, then ordinary
+selection. The port's `SelectIdleSchedule` step 1 carries the same test. `[VtMB]`
+
 Two consequences worth stating because they close loops elsewhere in this document. The trance sets
 `ACT_DISPOSITION_MESMERIZED`, which is the first of the four automatic feed-acceptance states in
 "Target acquisition and acceptance" — so **a victim still in its post-feed trance can be fed on

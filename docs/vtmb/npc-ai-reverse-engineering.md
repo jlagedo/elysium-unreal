@@ -1019,7 +1019,7 @@ ledger:
 |---|---|---|
 | `D_IS_BUSY` (0) | **one**: `CBaseCombatCharacter::IsBusyWithDiscipline` (`0x1033e2b0`), whose entire body is that bit test | the bit *is* the predicate. Its 17 callers include `CAI_BaseNPCTroika::SelectSchedule` (`0x102af660`), the dialogue gate (`0x102c21c0`) and all three `StartPlayerDialog` inputs — so a flagged NPC will not be re-targeted by a discipline, will not start dialogue, and is refused an ordinary schedule |
 | `NO_DIALOG` (19) | **two**, both the same virtual slot 295: `0x102c21c0` and the `CPayphone` override `0x101aaee0` | one link of the "can the player talk to me" chain, beside `m_iDialog`, `IsUnconscious`, `m_bWillTalk`, `IsBusyWithDiscipline` and `NO_DIALOG_PERSISTENT`. The per-schedule form of dialogue suppression |
-| `DONT_INVESTIGATE` (26) | **one**: `0x102b3270`, whose first line rejects on `DONT_INVESTIGATE \| IN_FLEE_SCHED` | the per-candidate interest predicate, reached only from the two per-entity sweeps `CAI_BaseNPCTroika::GatherConditions` (`0x102b27f0`) runs back to back. Every sensed entity fails the interest test |
+| `DONT_INVESTIGATE` (26) | **one**: `0x102b3270`, whose first line rejects on `DONT_INVESTIGATE \| IN_FLEE_SCHED` | the per-candidate interest predicate ("The interest predicate" below), asked by the see-unknown sweep, the sound sweep and the vision producer before they raise `COND_INVESTIGATE_SIGHT`/`_SOUND`. It does NOT gate `SEE_HATE`/`SEE_FEAR`, which the sense pass raises and `m_iIsOblivious` gates |
 
 #### `TASK_MAKE_OBLIVIOUS` and `m_iIsOblivious`
 
@@ -1072,11 +1072,240 @@ incapacitating schedule needs no teardown tasks: **the next schedule the NPC is 
 completely and symmetrically**, and the same virtual ran when the program was installed, which is
 why its tasks always write onto a cleared word. `[VtMB]`
 
-One genuine retail defect found here: virtual slot 448 (`CAI_BaseNPCTroika::FUN_1029adb0`, the
-task-failure/teardown virtual) applies `m_bfAINPCFlags2 &= 0x7fffe24f`, **clearing `MADE_OBLIVIOUS`
-without decrementing `m_iIsOblivious`**. An NPC that takes that path keeps a positive refcount with
-the bookkeeping bit gone, so no later `SetSchedule` will decrement it and the body stays sense-blind
-and stealth-killable. No compensating decrement was found. `[VtMB]`
+A retail refcount leak, **bounded**: virtual slot 448 is **`CAI_BaseNPC::TaskFail(const char*)`**
+(`0x10273fc0` — the `"TaskFail -> %s"` DevMsg and `SetCondition(COND_TASK_FAILED)`; Troika override
+`0x1029adb0`). The override applies `m_bfAINPCFlags2 &= 0x7fffe24f` (listing `0x1029aeb2`),
+clearing `MADE_OBLIVIOUS` without decrementing `m_iIsOblivious`, where its sibling
+`OnScheduleChange` uses `0x77fff14f` and decrements on the kept bit. Every writer of `+0x5bb4` is
+the inc/dec pair; the field is `FTYPEDESC_SAVE` (`0x105c9cf0`), so a leak survives a save. Verified
+by two independent adversarial recoveries. **Reachability is one corner:** of every task following
+`TASK_MAKE_OBLIVIOUS` in the 35 shipped schedules, only `TASK_STOP_MOVING` can fail in practice —
+`FAIL_STUCK_ONTOP` at `0x10288963`, requiring an active nav goal, `NAV_JUMP`, not on ground and
+near-zero velocity — i.e. an NPC wedged mid-air at the moment a discipline forces the schedule
+(`CAI_Navigator::OnNavFailed` `0x102eeae0` is a second source). `SCHED_TROIKA_MESMERIZED` carries
+no `TASK_STOP_MOVING` and cannot leak. `TASK_SET_ACTIVITY` (`0x102a1c0f`) has no fail arm. A
+leaked NPC looks normal (TaskFail's flags1 mask clears `D_IS_BUSY`/`NO_DIALOG`/`DONT_INVESTIGATE`)
+but never senses again and is stealth-killable face-on — a silent failure, consistent with the
+shipped game. `[VtMB] [script/data]`
+
+#### The three cached downcasts
+
+`CAI_BaseNPC`'s constructor (`0x1027c300`) writes `this` at `+0x94`; `CAI_BaseNPCTroika`'s
+(`0x1028d230`) at `+0x98`; `CBaseCombatCharacter`'s (`0x10326de0`) at `+0x9c`. None is a datamap
+member. So the `+0x98` that `FeedInterrupt`, `IsScheduleValid`, `MaintainSchedule` and
+`CStealthKillRules::FindVictim` dereference is the entity's own `CAI_BaseNPCTroika*` — null for
+anything that is not a Troika NPC, and `this` for one. `IsScheduleValid`'s two arms through it are
+therefore self-writes: during `NAV_CLIMB`/`NAV_JUMP` the interrupt mask is bypassed outright and a
+done/failed task sets `PRESERVE_PATH | FINISH_SPECIAL_NAV`; otherwise a set `CHOOSE_NEW_SCHEDULE`
+(flags2 `0x02000000`) is consumed and the schedule invalidated — an external "reselect now" request
+bit. `[VtMB]`
+
+#### `BuildScheduleTestBits` — the per-NPC interrupt overlay, decoded
+
+`CAI_BaseNPCTroika::BuildScheduleTestBits` (`0x102ad140`), run by `CacheInterruptConditions` every
+think on top of the schedule's authored mask:
+
+```c
+CAI_BaseNPC::BuildScheduleTestBits();                       // 0x10280fb0, empty
+if (!(m_bfAINPCFlags & (DONT_INVESTIGATE | IN_FLEE_SCHED))) {
+    if (!IsBusyWithDiscipline() && !(m_bfAINPCFlags2 & D_POSSESSED)) {
+        if (!m_pHintNode || m_pHintNode->type != 0x2774) {
+            add COND_INVESTIGATE_LEVEL (0x1e), COND_CRIMINAL_FLEE_LEVEL (0x1f),
+                COND_SUPERNATURAL_FLEE_LEVEL (0x21);
+        }
+        if (GetEnemy() == NULL) {
+            if (m_bfNPCStateFlags & 0x10) add COND_HEAR_FLINCH (0x72);
+            if (m_bfNPCStateFlags & 0x20) add COND_CRIMINAL_ATTACK_LEVEL (0x20),
+                                              COND_SUPERNATURAL_ATTACK_LEVEL (0x22);
+        }
+        if (!(m_bfAINPCFlags & COWERING)) add COND_COMFORT (0x27);
+    }
+}
+if (m_bfAINPCFlags2 & IGNORE_SQUAD_SEE_ENEMY) remove COND_SQUAD_SEE_ENEMY (0x31);
+// CacheInterruptConditions itself then always adds COND_NPC_FREEZE (0x75).
+```
+
+`m_bfNPCStateFlags` is a per-state capability byte written on every state change by `0x1026e3e0`:
+idle `0x31`, alert `0x39` (bits 4 and 5 set), combat `0x8f` (bits 4 and 5 clear), script `0x8`,
+the two flee states `0x85`/`0x7f`. So **in idle and alert with no enemy, all four law conditions
+plus `HEAR_FLINCH` are interrupts on every schedule; in combat only the two flee levels.** That is
+the decoded rule behind the four law conditions the port's idle mask used to carry with a CHOSEN
+mark; the overlay is now ported on the runner (`FElysiumNpc::BuildScheduleTestBits`) and the
+chosen entries are gone — with one correction the decode brought, that the attack levels are gated
+on "no committed enemy". It also shows the overlay is suppressed by the very flags
+`SCHED_TROIKA_MESMERIZED` sets, so that program's effective mask is exactly its authored one. `[VtMB]`
+
+Condition ordinals named on the way, from the registrar `0x102c8ce0` (global space via
+`thunk_FUN_102ea130`, `CAI_BaseNPC`-local via `thunk_FUN_102beae0`): `COND_INVESTIGATE_LEVEL` 0x1e,
+`COND_CRIMINAL_FLEE_LEVEL` 0x1f, `COND_CRIMINAL_ATTACK_LEVEL` 0x20, `COND_SUPERNATURAL_FLEE_LEVEL`
+0x21, `COND_SUPERNATURAL_ATTACK_LEVEL` 0x22, `COND_COMFORT` 0x27, `COND_SQUAD_SEE_ENEMY` 0x31,
+`COND_TASK_FAILED` 0x5c, `COND_SCHEDULE_DONE` 0x5d, `COND_HEAR_FLINCH` 0x72, `COND_NPC_FREEZE`
+0x75. `[VtMB]`
+
+#### `NO_DIALOG_PERSISTENT`'s producers
+
+Two schedules and no code: `SCHED_TROIKA_D_AFRAID` and `SCHED_TROIKA_D_POSSESSION` set it with
+`TASK_SET_NPC_FLAG`. `NPCFlag:D_IS_BUSY` is authored by 20 schedules, every one a `D_*` discipline
+effect or `SWAT_INSECTS`/`MESMERIZED` — the bit is literally "busy with a discipline effect", which
+is what `IsBusyWithDiscipline`'s name says. `[script/data]`
+
+### `MaintainSchedule`, walked
+
+`CAI_BaseNPC::MaintainSchedule` (`0x102817c0`) has three `ret` sites and **one** store of
+`m_bDidMaintainSchedule` (`mov byte [esi+0x5bb8], 1` at `0x10282342`, on the common exit
+`LAB_102821ae`). The two exits that skip it are harmless: the task-complete early return at
+`0x10282269` is gated on the `ai_step` console mode bit (`DAT_1092053c & 2`, set only by
+`0x10085830`) and unreachable in a shipping session; the `"ERROR: Missing or invalid schedule!"`
+return at `0x10282336` forces `SetActivity(ACT_IDLE)` (slot 310) and is reachable only after the
+loop's own `GetNewSchedule`/`SetSchedule` has already re-armed the flag or left no schedule at all.
+So the one-think `DELAY_INTERRUPTS` window never silently extends. `[VtMB]`
+
+The loop bound at `0x1028190e` is **10** when the `bool` argument is 0 and **1** when it is set.
+The loop continues only while tasks keep completing (`cmp [esi+0x5c44], 4` at `0x1028212e`) — it
+is a cap on task completions per think, not a spin guard — and also exits on `TaskIsRunning()`
+false, `COND_TASK_FAILED`, or an RDTSC time budget. `IsScheduleValid` is called **inside** the loop
+at `0x102819d5`, once per iteration, its argument recomputed as `!m_bDidMaintainSchedule` each time;
+its `false`, or `m_NPCState != m_IdealNPCState`, drops into the reselect block. `[VtMB]`
+
+**A reduced-think mode, previously unrecorded.** `CAI_BaseNPC::RunAI(bool)` (`0x1026f110`)
+forwards that argument: when set it **skips `GatherConditions` entirely** (slot 433), passes the
+bound of 1, and skips the end-of-pass clear of `COND_LIGHT_DAMAGE`, `COND_HEAVY_DAMAGE` and
+`COND_WAS_BUMPED`. `CAI_BaseNPC::NPCThink` always passes 0; `CAI_BaseNPCTroika::NPCThink`
+(`0x10292de0`) passes `!(m_flNextAIThink − curtime < frametime)` — so a Troika NPC whose
+`m_flNextAIThink` (`+0x6250`) is not yet due still thinks, but gathers nothing and maintains one
+task. Sibling cadences: `m_flNextUpdateThink` `+0x6244`, `m_flNextNormalThink` `+0x6248`. The port
+does not model this mode. `[VtMB]`
+
+### Two Troika virtuals, identified
+
+**Slot 314 (`+0x4e8`) is `UpdatePoseParameters(float flInterval)`** — the authored name is a
+ScopeTrace literal at `0x1053ede0` on the base `CBaseCombatCharacter::UpdatePoseParameters`
+(`0x10054060`), and `CAI_BaseNPCTroika::0x102bf070` is its override, tail-calling the base. Target =
+`m_hShootTargetOverride`, else slot 167; no target **or `m_iIsOblivious > 0`** → the null arm
+(`m_bAimWeaponAtTarget = 0`, yaw/pitch zeroed); otherwise the aim offset to the target's eye
+position, own angles subtracted, clamped to ±45°, then approached into the pose parameters with the
+shaky-hands offset. `[VtMB]`
+
+**Slot 587 (`+0x92c`) has no Source ancestor**: `vftable_CAI_BaseNPC` ends at slot 582, and the
+`CAI_BaseNPCTroika` and `CAI_BaseHumanoid` tables extend past it independently, so their slot-587
+entries are different virtuals sharing an offset. The Troika body (`0x1028ef20`) has one consumer:
+`FUN_10181be0`, a `CBasePlayer` method armed only for the `Player_Nosferatu` template, which
+enumerates NPCs in a 512-unit sphere and records the nearest one for which this returns true at
+`player+0x1ED0` — networked for the client's Masquerade warning. The body's clauses are the
+predicate half of the player-law transaction `0x1028efc0`: reject Kindred, `m_iDialog != 0`,
+oblivious, `m_bfNPCFrenziedFlags & 0x10`, `IsBusyWithDiscipline`, then true only when a supernatural
+threshold is below 3. Project name `CanWitnessSupernatural()`; the authored spelling is
+unrecoverable from this image. TVs, animals, bosses, placeholders and makers all override it to
+`return 0`. `[VtMB]`
+
+### `m_hFollowerBoss` — the follower controller
+
+`CAI_BaseNPCTroika+0x647c` is the resolved handle for the `follower_boss` keyfield
+(`m_sFollowerBoss`, `+0x6478`; `follower_type` is `+0x6480`). Exactly two writers: the constructor
+(`0xffffffff`) and **`SetFollowerBoss(const char*)`** (`0x102c44e0`), which resolves the name through
+slot 559 (the `!player`/`!self`/`!enemy`/… resolver), refuses `this`, **`Error`s on a squad member**
+("Followers can not be in squads. This functionality not implemented."), and on success sets
+`m_bfNPCFrenziedFlags |= 0x3008`. Its arming paths: `Activate` and `OnRestore` from the keyfield,
+the `SetFollowerBoss` entity input (`0x102c3350`), `CNPC_VPedestrian::Activate` clearing it, and the
+discipline-effect applier's mind-control path (`0x101dfc20` → `0x102c51a0`). No Python setter. `[VtMB]`
+
+**The controller** is virtual slot 607 (`+0x97c`, `0x102b93c0`, Troika-only, 64 tables), with one
+dispatch site: `SelectSchedule` (`0x102af660`) case 1, where a non-zero return pre-empts patrol,
+interesting places, the alert lookaround and `m_bReturnToInitialPos`. Its body is the boss distance
+against three radii `FUN_102c4680` fills from Rules.txt `Npc_Follower_Info` per `follower_type`,
+clamped `walkTo ≥ backAway + overlap`, `runTo ≥ walkTo + overlap`:
+
+| Boss distance² | Schedule |
+|---|---|
+| handle dead | none (fall through) |
+| `< FollowerDistanceBackAway²` (`+0x6484`) | `0x10c` `FOLLOWER_BACKAWAY`; writes `m_vSavePosition` = boss origin |
+| `> FollowerDistanceRunTo²` (`+0x648c`) | `0x113` `FOLLOWER_FOLLOW_RUN`; `SetTarget(boss)` |
+| `> FollowerDistanceWalkTo²` (`+0x6488`) | `0x112` `FOLLOWER_FOLLOW_WALK`; `SetTarget(boss)` |
+| otherwise | `0x115` `FOLLOWER_WAIT`; `SetTarget(boss)` |
+
+The `_F` in `COND_INSIDE/OUTSIDE_INTERRUPT_DIST_F` is Follow: those programs re-evaluate the band
+continuously. The tasks `0x86`–`0x88` `TASK_FIND_FOLLOWER_BACKAWAY_{SIMPLE,NODE,ASTAR}` read the
+handle and fail with `"NPC had no follower boss"` when it is dead. The other readers: `IRelationType`
+(D_LI toward the boss, inherit the boss's relations, D_HT toward anyone whose boss I hate),
+`GetFollowerBoss()` (slot 293), `CNPC_VHuman::SelectIdealState` (a follower whose enemy is gone goes
+to alert, a non-follower to the hunt state `0xb`), the interest predicate (never investigate the
+boss), and `CBasePlayer::UpdateClientActionState` (a follower reads as an ally on the target HUD).
+`[VtMB]`
+
+### The three `GatherConditions` sweeps and the interest predicate
+
+`CAI_BaseNPCTroika::GatherConditions` (`0x102b27f0`) makes **three** consecutive calls, and neither
+of the two previously named iterates a list:
+
+- **`0x102b15c0` — sight**, but the *see-unknown* channel only: one entity, `m_hBestSeeUnknown`
+  (`+0x6088`), player-only by construction (requires the cached `CBasePlayer*` at `+0xa8`). Not
+  seeing → the 1.5 s grace timer (`+0x6084`), then `COND_LOST_UNKNOWN` and `m_vecLastSeeUnknownPos`
+  (`+0x6090`). Seeing → a concealment test, a one-shot `MADE_INITIAL_RESPONSE` roll setting
+  `ATTACK_UNKNOWN` or `IGNORE_UNKNOWN` off `m_iSeeUnknownRepeatSightings` (`+0x60a4`) and
+  `m_bFullInvestigate` (`+0x6340`), then a 2-D closing-speed classification against `20.0f` into
+  `COND_UNKNOWN_ADVANCING/HOLDING/RETREATING` and `COND_INVESTIGATE_SIGHT` (0x26). Retail quirk:
+  `HOLDING` needs exact float equality and is effectively dead.
+- **`0x102b1a20` — the comfort list**, idle only, rate-limited 0.2–0.4 s: walks the global
+  `AddToComfortList`/`RemoveFromComfortList` array (`0x10323630`/`0x10323770`), nearest within 1024
+  units, at most 3 comforters per target, sets `COND_COMFORT` (0x27).
+- **`0x102b1cd0` — sound**: the six fixed `CSound` records (`m_LastSoundWorld` `+0x61e4`,
+  `PhysicsDanger` `+0x6134`, `Danger` `+0x6108`, `Player` `+0x61b8`, `BulletImpact` `+0x618c`,
+  `Combat` `+0x6160`), gated on `m_flNextInvestigateSoundTime` (`+0x623c`). Each arm:
+  `HasCondition(HEAR_X) && (schedule already interrupts on HEAR_X || ShouldInvestigate(owner, b))`
+  → `COND_INVESTIGATE_SOUND` (0x25); `HEAR_DANGER` skips the predicate. Last wins: combat > bullet
+  impact > player > danger > physics danger > world. Then `COND_HEAR_FLANK_SOUND` (0x33) and a
+  `COND_SEE_SOUND_SOURCE` (0x2d) tail.
+
+**The interest predicate `0x102b3270`** (`ShouldInvestigate(candidate, bCombatMode)`), in order:
+`m_bfAINPCFlags & (DONT_INVESTIGATE | IN_FLEE_SCHED)` → false; `stay_entrenched` → false; null →
+false; candidate is `m_hFollowerBoss` → false; candidate is the committed enemy → **true**; then a
+switch on `investigate_mode` (`+0x6338`) or, when `bCombatMode`, `investigate_mode_combat`
+(`+0x633c`) — the sight sweep, the world/physics-danger/player sound arms and the vision producer
+pass 0, the bullet-impact and combat sound arms pass 1. The modes are a product: 0 never; 1 players
+I hate; 2 players not neutral; 3 any player; 4 anything I hate; 5 anything not neutral; 6 anything;
+else `DevWarning("Hey FOO!!!  I don't recognize your investigate mode!")` and false. **The shipped
+default, 4 on 378 of 426 rows, is "anything I hate" — not "the player".** `bCombatMode` also
+unlocks a third-party-brawl proximity override (256 units 2-D / 80 vertical, when the candidate's
+enemy is someone I hate). `[VtMB] [script/data]`
+
+### The base condition table
+
+`FUN_102c8ce0` registers one dense namespace, `0x00`–`0x76`, 119 entries; `thunk_FUN_102beae0` is a
+wrapper onto the same table (`0x1090ff08 + 0x30`). Roughly 20 derived-class tables carry ids above
+`0x76` and were not dumped.
+
+```
+00 NONE                      1a INTERRUPT_TIME            34 HIT_BY_DOOR            4e REPEATED_DAMAGE          68 GIVE_WAY
+01 SEE_UNKNOWN               1b HAVE_ENEMY_THROW_LOS      35 SHOULD_CHARGE          4f CAN_RANGE_ATTACK1        69 WAY_CLEAR
+02 LOST_UNKNOWN              1c CLAW_HINT_INVALID         36 FLYING_WALL_HIT        50 CAN_RANGE_ATTACK2        6a HEAR_DANGER
+03 IGNORE_UNKNOWN            1d CLAW_HINT_SPECIAL_INVALID 37 FLYING_NPC_HIT         51 CAN_MELEE_ATTACK1        6b HEAR_THUMPER
+04 UNKNOWN_RUN_TIMER         1e INVESTIGATE_LEVEL         38 WAS_BUMPED             52 CAN_MELEE_ATTACK2        6c HEAR_BUGBAIT
+05 UNKNOWN_ADVANCING         1f CRIMINAL_FLEE_LEVEL       39 COVER_FAILURE          53 PROVOKED                 6d HEAR_COMBAT
+06 UNKNOWN_HOLDING           20 CRIMINAL_ATTACK_LEVEL     3a ENEMY_BLOCKED          54 NEW_ENEMY                6e HEAR_WORLD
+07 UNKNOWN_RETREATING        21 SUPERNATURAL_FLEE_LEVEL   3b PLAYER_ON_HEAD         55 ENEMY_TOO_FAR            6f HEAR_PLAYER
+08 TOO_CLOSE_FOR_RANGED      22 SUPERNATURAL_ATTACK_LEVEL 3c WEAPON_THROUGH_WALL    56 ENEMY_FACING_ME          70 HEAR_BULLET_IMPACT
+09 TOO_FAR_FOR_MELEE         23 CAN_POUNCE                3d SEE_CORPSE             57 BEHIND_ENEMY             71 HEAR_PHYSICS_DANGER
+0a BEING_ATTACKED            24 PASS_OUT                  3e SEE_CORPSE_FRIEND      58 ENEMY_DEAD               72 HEAR_FLINCH
+0b DETECTED_ATTACK           25 INVESTIGATE_SOUND         3f LOW_PRIMARY_AMMO       59 ENEMY_UNREACHABLE        73 FLOATING_OFF_GROUND
+0c SHOULD_DODGE              26 INVESTIGATE_SIGHT         40 NO_PRIMARY_AMMO        5a SEE_PLAYER               74 PLAYER_PUSHING
+0d SHOULD_BLOCK              27 COMFORT                   41 NO_SECONDARY_AMMO      5b SEE_NEMESIS              75 NPC_FREEZE
+0e SHOULD_STEPBACK           28 KNOCKBACK                 42 NO_WEAPON              5c TASK_FAILED              76 NPC_UNFREEZE
+0f SHOULD_KICK               29 HINT_INVALID              43 SEE_HATE               5d SCHEDULE_DONE
+10 SHOULD_INTERACT           2a KICK_PROP_INVALID         44 SEE_FEAR               5e SMELL
+11 SHOULD_LOITER             2b PLAYER_SNARL_RANGE        45 SEE_DISLIKE            5f TOO_CLOSE_TO_ATTACK
+12 CROSSWALK_WALK            2c STOP_BACKUP               46 SEE_ENEMY              60 TOO_FAR_TO_ATTACK
+13 CROSSWALK_DONTWALK        2d SEE_SOUND_SOURCE          47 LOST_ENEMY             61 NOT_FACING_ATTACK
+14 OUTSIDE_INTERRUPT_DIST    2e EXTENDED_BLOCKED_BY_FRIEND 48 ENEMY_OCCLUDED        62 WEAPON_HAS_LOS
+15 INSIDE_INTERRUPT_DIST     2f WAITING_ATTACK_TIME       49 TARGET_OCCLUDED        63 WEAPON_BLOCKED_BY_FRIEND
+16 OUTSIDE_INTERRUPT_DIST_E  30 ON_FIRE                   4a HAVE_ENEMY_LOS         64 WEAPON_PLAYER_IN_SPREAD
+17 INSIDE_INTERRUPT_DIST_E   31 SQUAD_SEE_ENEMY           4b HAVE_TARGET_LOS        65 WEAPON_PLAYER_NEAR_TARGET
+18 OUTSIDE_INTERRUPT_DIST_F  32 SQUAD_LOS_ENEMY           4c LIGHT_DAMAGE           66 WEAPON_SIGHT_OCCLUDED
+19 INSIDE_INTERRUPT_DIST_F   33 HEAR_FLANK_SOUND          4d HEAVY_DAMAGE           67 BETTER_WEAPON_AVAILABLE
+```
+
+Every identity the port already carried agrees with this dump; its seven placeholders (`SEE_ENEMY`,
+`SEE_FEAR`, `HEAR_COMBAT/PLAYER/WORLD/DANGER`, `INVESTIGATE_LEVEL`) are now the registered numbers.
+`[VtMB]`
 
 ### Interrupt conditions
 

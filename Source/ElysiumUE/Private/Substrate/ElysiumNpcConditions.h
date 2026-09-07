@@ -77,22 +77,45 @@ enum class EElysiumNpcCond : uint8
 	WeaponBlockedByFriend = 0x63,
 	WeaponSightOccluded   = 0x66,
 
-	// --- Named in the recovered material, identity NOT recovered ---------------------------------
-	// The survey names these in the interrupt-condition census and the incident chain but decodes no
-	// number for them. They are deliberately placed above the recovered 0x00..0x66 band so a value
-	// here can never collide with a retail identity that is decoded later; renumber in place when
-	// one is.
-	SeeEnemy   = 0xe0,
-	SeeFear    = 0xe1,
-	HearCombat = 0xe2,
-	HearPlayer = 0xe3,
-	HearWorld  = 0xe4,
-	HearDanger = 0xe5,
-	// --- The fifth law condition ---
-	// `COND_INVESTIGATE_LEVEL` is named beside the four above ("clears and recomputes
-	// `COND_INVESTIGATE_LEVEL` plus four law conditions") and its registry number is NOT stated, so
-	// it lands in this band rather than being guessed at 30 or 35.
-	InvestigateLevel = 0xe6,
+	// --- Decoded from the base condition table, `FUN_102c8ce0` -----------------------------------
+	// The `CAI_BaseNPC` registrar is one dense namespace, 0x00..0x76, 119 entries, dumped whole
+	// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "The base condition table"). These seven used to
+	// sit in a placeholder band above 0x66; every value below is the registered one.
+	SeeFear    = 0x44,
+	SeeEnemy   = 0x46,
+	HearDanger = 0x6a,
+	HearCombat = 0x6d,
+	HearWorld  = 0x6e,
+	HearPlayer = 0x6f,
+	// The fifth law condition. `BuildScheduleTestBits` adds it as a custom interrupt to every
+	// schedule of a non-busy, non-investigating NPC; `SelectSchedule` state 8 consumes it.
+	InvestigateLevel = 0x1e,
+
+	// The four `BuildScheduleTestBits` (`0x102ad140`) names beside the law conditions. Their
+	// producers are not built yet -- `COMFORT` is the comfort-list sweep `FUN_102b1a20`,
+	// `SQUAD_SEE_ENEMY` the squad layer, `HEAR_FLINCH` and `NPC_FREEZE` unrecovered -- but the
+	// overlay names them and a mask that carries an identity the runtime cannot spell would be a
+	// mask that silently drops a term.
+	Comfort       = 0x27,
+	SquadSeeEnemy = 0x31,
+	HearFlinch    = 0x72,
+	NpcFreeze     = 0x75,
+};
+
+// `investigate_mode` / `investigate_mode_combat`, the two authored keyfields the interest predicate
+// `0x102b3270` switches on. The seven values are a clean product, `{never} x {players, anything} x
+// {hated, non-neutral, any}`; anything else is retail's `DevWarning("Hey FOO!!!  I don't recognize
+// your investigate mode!")` and a refusal. The shipped default is 4 on 378 of 426 rows: NPCs
+// investigate what they HATE, not the player as such.
+enum class EElysiumInvestigateMode : uint8
+{
+	Never             = 0,
+	HatedPlayers      = 1,   // a player, and `IRelationType == D_HT`
+	NonNeutralPlayers = 2,   // a player, and `!= D_NU`
+	AnyPlayer         = 3,
+	Hated             = 4,   // anything `== D_HT`
+	NonNeutral        = 5,   // anything `!= D_NU`
+	Anything          = 6,
 };
 
 const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond);
@@ -236,6 +259,31 @@ struct FElysiumNpcCognition
 
 namespace ElysiumNpcCond
 {
+	/**
+	 * The interest predicate, `CAI_BaseNPCTroika::0x102b3270` -- "do I take an interest in this
+	 * entity". It is what the see-unknown sweep, the six-record sound sweep and the vision producer
+	 * ask before raising `COND_INVESTIGATE_SIGHT` / `COND_INVESTIGATE_SOUND`; none of those three
+	 * producers is built yet, so today the predicate has no caller in the runtime and is asserted
+	 * directly. It is here, rather than waiting for them, because its inputs are all present and
+	 * its rule is complete.
+	 *
+	 * Recovered order:
+	 *   1. `m_bfAINPCFlags & (DONT_INVESTIGATE | IN_FLEE_SCHED)` -> false.
+	 *   2. `stay_entrenched` -> false.        NOT MODELLED: the keyfield is not parsed yet.
+	 *   3. no candidate -> false.
+	 *   4. candidate is my `m_hFollowerBoss` -> false.   NOT MODELLED: no follower subsystem.
+	 *   5. candidate is my committed enemy -> TRUE, unconditionally.
+	 *   6. the mode switch, on `investigate_mode` or -- with `bCombatMode` --
+	 *      `investigate_mode_combat`.
+	 *
+	 * `bCombatMode` is retail's third argument. It is NOT sight-versus-sound: the sight sweep, the
+	 * world/physics-danger/player sound arms and the vision producer pass 0; the bullet-impact and
+	 * combat sound arms pass 1. It also unlocks a third-party-brawl proximity override (a candidate
+	 * within 256 units 2-D / 80 vertical whose enemy is someone I hate) that is NOT modelled here
+	 * because it reads the candidate's enemy, which this substrate does not expose on an entity.
+	 */
+	bool ShouldInvestigate(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, bool bCombatMode);
+
 	/**
 	 * Resolve an enemy handle for the cognition layer, which needs the distinction
 	 * `FElysiumEntityWorld::Resolve` deliberately collapses.

@@ -186,12 +186,14 @@ public:
 	int32 PlSupernaturalAttack = ElysiumNpcWitness::DefaultThreshold;
 	int32 PlInvestigate = ElysiumNpcWitness::DefaultThreshold;
 
-	// SEAM (parsed, carried, unread): the investigation POLICY keyfields. `investigate_mode` (4 on
-	// 378 rows) and `investigate_mode_combat` (4 on 375) are mode NUMBERS whose meanings are
-	// unrecovered, and `full_investigate` is an unrecovered policy beside them. The 32-schedule
-	// `INVESTIGAT` family they would select among is undecoded too, so there is nothing for a mode
-	// to choose. They are carried as authored integers so an NPC round-trips through a save with the
-	// policy it was authored with, and so the selector has values to read the day one is decoded.
+	// The investigation POLICY keyfields. `investigate_mode` (4 on 378 rows) and
+	// `investigate_mode_combat` (4 on 375) are DECODED: they are `EElysiumInvestigateMode`, the two
+	// operands of the interest predicate `0x102b3270` (`ElysiumNpcCond::ShouldInvestigate`), the
+	// second selected by the predicate's `bCombatMode` argument. Carried as the authored integers
+	// so an unrecognised value reaches the predicate's own refusal, as it does in retail.
+	//
+	// `full_investigate` (`m_bFullInvestigate`, `+0x6340`) is read by the see-unknown sweep's
+	// one-shot `ATTACK_UNKNOWN`/`IGNORE_UNKNOWN` roll, which is not built yet.
 	int32 InvestigateMode = 0;
 	int32 InvestigateModeCombat = 0;
 	int32 FullInvestigate = 0;
@@ -546,6 +548,8 @@ public:
 	virtual void ClearConditions() override;
 
 	virtual void OnScheduleChange() override;
+
+	virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) override;
 
 	/**
 	 * `CBaseCombatCharacter::IsBusyWithDiscipline` (`0x1033e2b0`) — the sole reader of `D_IS_BUSY`,

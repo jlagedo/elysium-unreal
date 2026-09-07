@@ -7,6 +7,7 @@
 #include "Substrate/ElysiumItemClasses.h"      // FElysiumItem — the active weapon's record
 #include "Substrate/ElysiumItemTable.h"        // FElysiumItemDef / FElysiumWeaponMode
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcLog.h"           // the `npc_*` category the mode refusal reports on
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumWeaponClasses.h"    // FElysiumWeapon — the reach, cone and deadlines
@@ -92,6 +93,10 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	case EElysiumNpcCond::SupernaturalFleeLevel:   return TEXT("SUPERNATURAL_FLEE_LEVEL");
 	case EElysiumNpcCond::SupernaturalAttackLevel: return TEXT("SUPERNATURAL_ATTACK_LEVEL");
 	case EElysiumNpcCond::InvestigateLevel:        return TEXT("INVESTIGATE_LEVEL");
+	case EElysiumNpcCond::Comfort:                 return TEXT("COMFORT");
+	case EElysiumNpcCond::SquadSeeEnemy:           return TEXT("SQUAD_SEE_ENEMY");
+	case EElysiumNpcCond::HearFlinch:              return TEXT("HEAR_FLINCH");
+	case EElysiumNpcCond::NpcFreeze:               return TEXT("NPC_FREEZE");
 	}
 	return TEXT("COND_?");
 }
@@ -229,6 +234,47 @@ void ElysiumNpcCond::GatherHearing(const FElysiumNpc& Npc, double PreviousGather
 	Out.Set(EElysiumNpcCond::HearWorld);
 }
 
+bool ElysiumNpcCond::ShouldInvestigate(const FElysiumNpc& Npc, const FElysiumEntity& Candidate,
+	bool bCombatMode)
+{
+	// 1. `if ((m_bfAINPCFlags & 0x4000080) != 0) return false;` -- the first line of the body.
+	if (Npc.NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE)
+		|| Npc.NpcFlags.Has(EElysiumNpcFlag::IN_FLEE_SCHED))
+	{
+		return false;
+	}
+	// 2. `stay_entrenched` and 4. the follower boss -- both named on the declaration, neither
+	//    carried by this substrate yet.
+	// 3. is folded into the reference parameter.
+	// 5. The committed enemy is always of interest.
+	if (Npc.Senses.Memory.Enemy.IsSet() && Npc.Senses.Memory.Enemy == Candidate.Handle)
+	{
+		return true;
+	}
+	// 6. The mode switch. The player test is retail's cached `CBasePlayer*` at `+0xa8`.
+	const FElysiumEntity* Player = Npc.World ? Npc.World->FindPlayer() : nullptr;
+	const bool bIsPlayer = Player != nullptr && Player == &Candidate;
+	const EElysiumRelationship Relation =
+		Npc.Relationships.Resolve(Candidate.Handle, NpcCondClassnameOf(Candidate));
+	const int32 Mode = bCombatMode ? Npc.InvestigateModeCombat : Npc.InvestigateMode;
+	switch (static_cast<EElysiumInvestigateMode>(Mode))
+	{
+	case EElysiumInvestigateMode::Never:             return false;
+	case EElysiumInvestigateMode::HatedPlayers:      return bIsPlayer && Relation == EElysiumRelationship::Hate;
+	case EElysiumInvestigateMode::NonNeutralPlayers: return bIsPlayer && Relation != EElysiumRelationship::Neutral;
+	case EElysiumInvestigateMode::AnyPlayer:         return bIsPlayer;
+	case EElysiumInvestigateMode::Hated:             return Relation == EElysiumRelationship::Hate;
+	case EElysiumInvestigateMode::NonNeutral:        return Relation != EElysiumRelationship::Neutral;
+	case EElysiumInvestigateMode::Anything:          return true;
+	default:
+		// Retail's `DevWarning("Hey FOO!!!  I don't recognize your investigate mode!")`, then false.
+		UE_LOG(LogElysiumNpcEnt, Warning,
+			TEXT("%s: unrecognised investigate mode %d (%s)"), *Npc.DebugString(), Mode,
+			bCombatMode ? TEXT("investigate_mode_combat") : TEXT("investigate_mode"));
+		return false;
+	}
+}
+
 void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out)
 {
 	FElysiumEntityWorld* World = Npc.World;
@@ -236,17 +282,15 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 	{
 		return;
 	}
-	// `DONT_INVESTIGATE`, the per-candidate interest predicate `0x102b3270`, whose first line is
-	// `if ((m_bfAINPCFlags & 0x4000080) != 0) return false;` — the mask being
-	// `DONT_INVESTIGATE | IN_FLEE_SCHED`. That predicate is reached only from the two per-entity
-	// sweeps `CAI_BaseNPCTroika::GatherConditions` (`0x102b27f0`) runs back to back, which is this
-	// loop, so the rejection lands here rather than inside the body.
-	//
-	// Weaker than obliviousness and deliberately separate from it: an oblivious NPC senses nothing at
-	// all, while this one still senses and simply takes no interest. `SCHED_TROIKA_MESMERIZED` sets
-	// both, and a program that set only this one would still hear and see.
-	if (Npc.NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE)
-		|| Npc.NpcFlags.Has(EElysiumNpcFlag::IN_FLEE_SCHED))
+	// Retail raises `SEE_HATE`/`SEE_FEAR` inside the sense pass -- `CAI_Senses::Look`, under
+	// `CAI_BaseNPC::PerformSensing` (`0x1026e4f0`), which `m_iIsOblivious` gates whole. This runtime
+	// raises them here, from the LOS memory the sense pass wrote, and that memory does not go stale
+	// on its own: an oblivious body that stopped sensing with `bPlayerLos` set would otherwise keep
+	// re-raising a sighting it is no longer having, and the enemy transaction would drag a
+	// mesmerized victim into combat off it. So the gate retail applies to the producer is applied
+	// to the classification. `DONT_INVESTIGATE` is deliberately NOT tested here: it gates the
+	// interest predicate (`ShouldInvestigate`), not the sightings themselves.
+	if (Npc.IsOblivious())
 	{
 		return;
 	}

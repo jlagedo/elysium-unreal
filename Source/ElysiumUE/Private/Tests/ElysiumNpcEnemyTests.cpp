@@ -1114,20 +1114,26 @@ bool FElysiumNpcEnemyConditionSetTest::RunTest(const FString&)
 	TestTrue(TEXT("a fresh set is empty"), C.IsEmpty());
 	TestEqual(TEXT("...and names nothing"), C.Describe(), FString(TEXT("(none)")));
 
-	// The recovered identities are retail's own numbers, and the named-without-ID members sit
-	// outside that band so neither can collide with the other.
+	// The identities are retail's own numbers, from the base condition table `0x102c8ce0`
+	// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "The base condition table"). The seven that
+	// used to sit in a placeholder band above 0x66 are decoded too, so the whole enum is one
+	// namespace with the binary's now.
 	TestEqual(TEXT("SEE_HATE is 0x43"), static_cast<int32>(EElysiumNpcCond::SeeHate), 0x43);
 	TestEqual(TEXT("HAVE_ENEMY_LOS is 0x4a"),
 		static_cast<int32>(EElysiumNpcCond::HaveEnemyLos), 0x4a);
 	TestEqual(TEXT("NEW_ENEMY is 0x54"), static_cast<int32>(EElysiumNpcCond::NewEnemy), 0x54);
 	TestEqual(TEXT("SEE_NEMESIS is 0x5b"), static_cast<int32>(EElysiumNpcCond::SeeNemesis), 0x5b);
-	TestTrue(TEXT("a named-without-ID member sits above the recovered band"),
-		static_cast<int32>(EElysiumNpcCond::SeeEnemy) > 0x66);
+	TestEqual(TEXT("SEE_ENEMY is 0x46"), static_cast<int32>(EElysiumNpcCond::SeeEnemy), 0x46);
+	TestEqual(TEXT("SEE_FEAR is 0x44"), static_cast<int32>(EElysiumNpcCond::SeeFear), 0x44);
+	TestEqual(TEXT("HEAR_COMBAT is 0x6d"), static_cast<int32>(EElysiumNpcCond::HearCombat), 0x6d);
+	TestEqual(TEXT("HEAR_DANGER is 0x6a"), static_cast<int32>(EElysiumNpcCond::HearDanger), 0x6a);
+	TestEqual(TEXT("INVESTIGATE_LEVEL is 0x1e"),
+		static_cast<int32>(EElysiumNpcCond::InvestigateLevel), 0x1e);
 
 	C.Set(EElysiumNpcCond::SeeHate);
 	C.Set(EElysiumNpcCond::HearCombat);
 	TestTrue(TEXT("a set condition is present"), C.Has(EElysiumNpcCond::SeeHate));
-	TestTrue(TEXT("...across word boundaries"), C.Has(EElysiumNpcCond::HearCombat));
+	TestTrue(TEXT("...and a second one beside it"), C.Has(EElysiumNpcCond::HearCombat));
 	TestFalse(TEXT("an unset one is not"), C.Has(EElysiumNpcCond::NewEnemy));
 	TestEqual(TEXT("the set counts what it carries"), C.Num(), 2);
 	TestTrue(TEXT("the lowest identity is what a trace names first"),

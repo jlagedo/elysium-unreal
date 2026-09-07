@@ -127,6 +127,17 @@ namespace
 			Calls.Add(TEXT("OnScheduleChange"));
 			Flags.OnScheduleChange();
 		}
+		// The per-NPC overlay, as a list a case fills: the kernel's contract is only that it asks
+		// before the test and honours what comes back.
+		TArray<EElysiumNpcCond> OverlayAdds;
+		virtual void BuildScheduleTestBits(FElysiumNpcConditions& InOutMask) override
+		{
+			Calls.Add(TEXT("BuildScheduleTestBits"));
+			for (const EElysiumNpcCond Cond : OverlayAdds)
+			{
+				InOutMask.Set(Cond);
+			}
+		}
 
 		bool Saw(const TCHAR* Needle) const
 		{
@@ -712,6 +723,53 @@ bool FElysiumScheduleDelayInterruptsTest::RunTest(const FString&)
 		TestFalse(TEXT("an unflagged program is interrupted on its first think"),
 			ElysiumSchedule::Tick(State, Runner, Now, Delay, &Damage));
 		TestFalse(TEXT("and it did not report a delay"), Runner.Saw(TEXT("DELAY_INTERRUPTS")));
+	}
+	return true;
+}
+
+// ============================================================================================
+// The per-NPC interrupt overlay -- `BuildScheduleTestBits`. The mask a program runs against is
+// the authored one PLUS whatever the runner adds each think, so a program whose authored mask is
+// empty can still be interrupted by a condition the NPC's state makes an interrupt.
+//
+// `SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE` declares no interrupts at all, which makes it the clean
+// control: the same condition, the same kernel, and the overlay is the only difference.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleTestBitsOverlayTest,
+	"Elysium.Substrate.Schedule.TestBitsOverlay", GElysiumScheduleTestFlags)
+bool FElysiumScheduleTestBitsOverlayTest::RunTest(const FString&)
+{
+	const FElysiumNpcConditions Law =
+		FElysiumNpcConditions::Of({ EElysiumNpcCond::CriminalFleeLevel });
+
+	// 1. Without an overlay the empty authored mask admits nothing.
+	{
+		FRecordingRunner Runner;
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+		ElysiumSchedule::Start(State, EElysiumScheduleId::BackAwayFromDoorNe, Runner);
+		ElysiumSchedule::Tick(State, Runner, Now, Delay, &Law);   // arms the window
+		TestTrue(TEXT("an empty authored mask is not interrupted by a law condition"),
+			State.IsRunning() && ElysiumSchedule::Tick(State, Runner, Now, Delay, &Law));
+		TestTrue(TEXT("...and the kernel asked the runner for its overlay each think"),
+			Runner.Calls.FilterByPredicate(
+				[](const FString& C) { return C == TEXT("BuildScheduleTestBits"); }).Num() >= 2);
+	}
+
+	// 2. With the overlay adding the law condition, the same program is interrupted by it.
+	{
+		FRecordingRunner Runner;
+		Runner.OverlayAdds = { EElysiumNpcCond::CriminalFleeLevel };
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+		ElysiumSchedule::Start(State, EElysiumScheduleId::BackAwayFromDoorNe, Runner);
+		ElysiumSchedule::Tick(State, Runner, Now, Delay, &Law);   // arms the window
+		TestFalse(TEXT("the overlaid mask is interrupted by the same condition"),
+			State.IsRunning() && ElysiumSchedule::Tick(State, Runner, Now, Delay, &Law));
+		TestTrue(TEXT("...and the trace names it"),
+			Runner.Saw(TEXT("interrupted by CRIMINAL_FLEE_LEVEL")));
 	}
 	return true;
 }

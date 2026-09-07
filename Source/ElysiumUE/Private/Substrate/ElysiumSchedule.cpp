@@ -207,21 +207,18 @@ TArray<FElysiumSchedule>& ElysiumScheduleRegistryStorage()
 		// Nothing narrower would let live acquisition happen at all, and nothing wider is
 		// defensible from a census. Replace this with the decoded mask, not with an empty one.
 		//
-		// The four law conditions join that mask.
-		// Same argument, same mark. A witnessed crime's whole consequence is a reselection —
-		// `FElysiumNpc::SelectSchedule`'s law branch is what submits the incident and picks the
-		// retreat — and selection runs only when the current program ends or is interrupted. An idle
-		// mask without these four would mean a standing bystander could not react to a crime until
-		// its stance clip happened to finish, which is the same starvation the paragraph above
-		// refuses for enemy acquisition. `COND_INVESTIGATE_LEVEL` is deliberately NOT added: it has
-		// no consumer yet, and an interrupt with nothing behind it would end programs for nothing.
+		// The four law conditions used to be CHOSEN into this mask by the same argument. They are
+		// no longer here, and they are still interrupts: `CAI_BaseNPCTroika::BuildScheduleTestBits`
+		// (`0x102ad140`, ported on the runner) overlays them onto EVERY schedule of a non-busy,
+		// non-investigating NPC each think -- the flee levels always, the attack levels only with no
+		// committed enemy in idle or alert -- together with `COND_INVESTIGATE_LEVEL`, `COMFORT` and
+		// `HEAR_FLINCH`. The decoded rule replaces the chosen mark, and it is narrower than the mark
+		// was: an NPC with an enemy did not get the attack-level interrupts in retail.
 		const FElysiumNpcConditions IdleInterrupts = FElysiumNpcConditions::Of({
 			EElysiumNpcCond::NewEnemy, EElysiumNpcCond::EnemyDead,
 			EElysiumNpcCond::LightDamage, EElysiumNpcCond::HeavyDamage,
 			EElysiumNpcCond::HearCombat, EElysiumNpcCond::HearDanger,
-			EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearWorld,
-			EElysiumNpcCond::CriminalFleeLevel, EElysiumNpcCond::CriminalAttackLevel,
-			EElysiumNpcCond::SupernaturalFleeLevel, EElysiumNpcCond::SupernaturalAttackLevel });
+			EElysiumNpcCond::HearPlayer, EElysiumNpcCond::HearWorld });
 
 		FElysiumSchedule& Idle = Out.AddDefaulted_GetRef();
 		Idle.Id = EElysiumScheduleId::IdleDisposition;
@@ -676,8 +673,12 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			// not consulted this pass, and a stimulus that persists is re-gathered and fires next
 			// think.
 			const bool bDelayed = Active->bDelayInterrupts && !State.bDidMaintainSchedule;
+			// The effective mask: the authored one plus the runner's per-NPC overlay
+			// (`IElysiumScheduleRunner::BuildScheduleTestBits`).
+			FElysiumNpcConditions Mask = Active->Interrupts;
+			Runner.BuildScheduleTestBits(Mask);
 			const FElysiumNpcConditions Firing = bDelayed
-				? FElysiumNpcConditions() : Active->Interrupts.Intersection(*Conditions);
+				? FElysiumNpcConditions() : Mask.Intersection(*Conditions);
 			if (bDelayed)
 			{
 				Runner.RecordScheduleEvent(FString::Printf(
@@ -698,7 +699,16 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 	// Bounded rather than looping to completion: a schedule whose every task completes instantly
 	// would otherwise run the whole program inside one think, and a fail-schedule chain could
 	// bounce between two programs forever.
-	for (int32 Guard = 0; Guard < 16; ++Guard)
+	//
+	// The bound is retail's: `MaintainSchedule` (`0x102817c0`, at `0x1028190e`) iterates at most
+	// 10 times per call, and continues only while tasks keep COMPLETING (`0x1028212e`) -- so it is a
+	// cap on how many tasks may complete in one think, which is exactly what this loop is. Retail
+	// re-tests `IsScheduleValid` inside each iteration; this kernel tests once at the top, and the
+	// two are equivalent because the only thing that could change the answer mid-loop is an install
+	// (`TASK_SET_SCHEDULE`, a fail route), and every install both re-arms the delay window and zeroes
+	// the conditions -- so a re-test after one can never fire.
+	constexpr int32 MaintainScheduleBound = 10;
+	for (int32 Guard = 0; Guard < MaintainScheduleBound; ++Guard)
 	{
 		const FElysiumSchedule* Schedule = ElysiumScheduleFor(State.Current);
 		if (Schedule == nullptr || !Schedule->Tasks.IsValidIndex(State.TaskIndex))
@@ -724,8 +734,12 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		{
 			OutNextThinkDelay = DelayFor(Step, State, Now);
 			// The pass ran, so the delay window closes -- `MaintainSchedule`'s common exit
-			// (`0x102821ae`) sets `m_bDidMaintainSchedule = 1`. This is the ONLY exit that matters:
-			// every other one clears the state or installs a new program, and both re-arm the flag.
+			// (`0x102821ae`, the single store at `0x10282342`) sets `m_bDidMaintainSchedule = 1`.
+			// Retail has two other returns and neither stores: the `ai_step` debug return, which a
+			// shipping session cannot reach, and the "Missing or invalid schedule" error, which is
+			// only reachable AFTER the loop's own `SetSchedule` has re-armed the flag or left no
+			// schedule at all. So this is the only exit that matters here too: every other path out
+			// of this function clears the state or installs a program, and both re-arm the window.
 			State.bDidMaintainSchedule = true;
 			return true;
 		}

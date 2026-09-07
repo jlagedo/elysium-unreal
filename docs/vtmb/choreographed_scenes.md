@@ -541,7 +541,13 @@ gameplay-authoritative entity. Removing that double copies its final model, tran
 applicable character state back to the player before destroying it.
 
 Neither starting a camera track nor creating the controller double calls the distinct player
-mobility lock. Content that needs that lock sends `events_player.ImmobilizePlayer` and later
+mobility lock. **A `camera_cinematic` is the exception**: its `StartShot` ends in
+`SetImmobilized(true)` (`vampire.dll` `FUN_1015ef40`, the replicated `m_bIsImmobilized` at
+`player+0x19f7`, read by `SetupMove`, `CheckJumpButton`, `Duck` and both `ItemPostFrame`s), and
+`EndShot` clears it again; `CBasePlayer::StartPlayerDialog` does the same for the duration of a
+conversation. Script `SetCamera` does not
+(`docs/vtmb/camera-view-modes.md` → "The server shot lifecycle"). Content that needs the lock outside
+those two paths sends `events_player.ImmobilizePlayer` and later
 `MobilizePlayer` (or the equivalent `player_immobilize` / `player_mobilize` server commands). The
 opening `sp_theatre` map does not send either input: its Embrace scenes stage a cast
 `player_understudy`, its courtroom/player-escort scenes bind `!playercontroller`, and later camera

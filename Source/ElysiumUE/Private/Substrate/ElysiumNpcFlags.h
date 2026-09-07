@@ -188,9 +188,9 @@ public:
 	 * The two unconditional tail clears (`Word2 &= 0x3fffffff`, `Word1 &= 0xd7ffffff`) run outside
 	 * the `PRESERVE_PATH` guard and are applied here too.
 	 *
-	 * NOT ported: the navigator/motor/goal reset inside the same guard. That is the movement half of
-	 * the virtual and this runtime's schedule kernel already stops movement through
-	 * `TASK_STOP_MOVING` and the body arbiter; wiring a second reset here would double it.
+	 * The navigator/motor/goal reset inside the same guard is the movement half of the virtual and
+	 * reaches the world, so it lives on the runner (`FElysiumNpc::OnScheduleChange`), which reads
+	 * `PRESERVE_PATH` off this object before calling in here. Same guard, same order.
 	 */
 	bool OnScheduleChange();
 
