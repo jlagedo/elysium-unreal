@@ -2026,6 +2026,10 @@ def bake_sounds(
         for row in staged.empty[:10]:
             console.print(f"[yellow]  empty: {row['unit']} ({row['reason']})[/yellow]",
                           markup=True)
+        for row in staged.placeholders:
+            console.print(
+                f"[yellow]  {row['disposition']}: {row['unit']} -> {row['assetPath']} "
+                f"({row['sampleCount']} silent samples; {row['reason']})[/yellow]", markup=True)
         if stage_only:
             if staged.failures:
                 raise RuntimeError(f"{len(staged.failures)} sound unit(s) could not be staged")
@@ -2043,6 +2047,7 @@ def bake_sounds(
                 "sound bake: "
                 f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
                 f"{report.get('pruned', 0)} pruned, {len(report.get('empty') or [])} empty, "
+                f"{len(report.get('placeholders') or [])} placeholder, "
                 f"{len(failed_assets)} failed"
             )
             loops = report.get("loops") or {}

@@ -15,13 +15,22 @@ already gets from `bake_lib`.
 * A `.wav` unit publishes its decode as interleaved 16-bit PCM in the GLB payload. The install
   member itself is usually MS-ADPCM, which is not an Unreal import format, so the stage writes a
   fresh 16-bit PCM `.wav` from the payload rather than passing the member through.
-* An `.mp3` unit's payload is the bare MPEG frame stream and no Python decoder exists, so the
-  stage writes the **original member bytes** out of the unit's source capsule. UE 5.8's
-  `USoundFactory` imports `.mp3` (`SoundFactory.cpp:160`, behind `WITH_SNDFILE_IO`).
+* An `.mp3` unit has no Python decoder, so it is imported as an mp3 -- UE 5.8's `USoundFactory`
+  takes one (`SoundFactory.cpp:160`, behind `WITH_SNDFILE_IO`). What is staged is the unit's
+  **payload**, which is the bare frame stream from the first frame to the end of the last, not
+  the raw member: 151 members carry an ID3v1 trailer or leading zero padding, and libsndfile
+  answers "Format not recognised" to a file that does not begin on a frame header. For a member
+  with no junk the payload is the member byte for byte.
 * A unit with no samples bakes nothing and is listed under `empty` in the manifest and the
   import report: 11 whose member is zero bytes (`omissions[].role == "empty-member"`) and one,
   `area/santa_monica/clinic/clinic drip flr light loop.wav`, that carries a whole MS-ADPCM
   header over a zero-length `data` chunk.
+* A unit Unreal cannot import at all stages a **silent wave of exactly its own duration** and is
+  listed under `placeholders` with the reason. One corpus unit needs this:
+  `character/dlg/hollywood/ash/line571_col_e.mp3` is a single 157-byte frame (1152 samples,
+  26 ms), which libsndfile refuses. The asset keeps its `SW_<stem>_mp3` name because the runtime
+  addresses by key, and it keeps retail's length because the spoken-line service schedules the
+  dialogue turn on the wave's duration.
 
 **Loop regions.** VtMB carries loop points in the RIFF `smpl` chunk and in the `cue ` chunk.
 Both state one thing and one only: a loop **start**. `CAudioSourceWave`'s ctor
@@ -42,7 +51,7 @@ the record and is never cut at: trimming there would end the loop body 7 ms earl
 `rain_light_loop.wav` and 29 ms early on `flow_on.wav`, which is not what retail plays.
 
 The split is a sample-range slice of the decoded payload, so it only applies to `.wav` units; an
-`.mp3` unit cannot carry a RIFF chunk and is always staged whole.
+`.mp3` unit carries no RIFF chunk and so never has an authored loop to split on.
 
 Staging is idempotent (a file is rewritten only when its bytes change) and prunes: anything under
 the staging root this run did not produce, other than the root reports, is deleted -- unless the
@@ -65,7 +74,6 @@ from elysium_pipeline.formats.sound_glb.model import (
     key_extension,
     normalize_key,
 )
-from elysium_pipeline.formats.unit_contract.capsule import extract_source_member
 from elysium_pipeline.formats.unit_contract.container import GlbContainerError, decode_glb
 
 #: The family directory this lane reads below the export_v2 root.
@@ -83,7 +91,10 @@ ASSET_PREFIX = "SW"
 #: (`0x2013a150`) is `this+0x28 >= 0` against a `-1` the ctor (`0x20139d60`) wrote.
 #: v4: the sound fold maps a space to `-` and lets a stem keep a leading underscore
 #: (`asset_names.sound_safe_name`), so every key addresses one asset and no two share one.
-RECIPE_VERSION = "elysium-sound-bake-v4"
+#: v5: an mp3 stages its frame stream (the payload) rather than the raw member, so leading
+#: and trailing junk never reaches the importer, and a stream too short to import stages a
+#: silent wave of the unit's own duration instead.
+RECIPE_VERSION = "elysium-sound-bake-v5"
 MANIFEST_SCHEMA = "1.0.0"
 MANIFEST_NAME = "manifest.json"
 #: Written by the editor phase; read back by the CLI for its summary.
@@ -96,6 +107,11 @@ ROOT_FILES = frozenset({MANIFEST_NAME, IMPORT_REPORT_NAME, RECIPES_NAME})
 #: Compression for every baked wave: the project's own default, set once in project settings
 #: rather than per asset. Everything else is left at the engine default by owner call.
 COMPRESSION = "ProjectDefined"
+
+#: The disposition an asset carries when the bake could not stage the unit's own audio and
+#: substituted a silent wave of the same duration. Named in the manifest, the import report and
+#: the CLI summary, never silent.
+PLACEHOLDER_SILENCE = "placeholder-silence"
 
 #: The role suffixes a split loop publishes. A whole-file or trimmed unit has no role.
 INTRO_ROLE = "intro"
@@ -254,26 +270,6 @@ def payload_bytes(unit: Unit) -> bytes:
     return data
 
 
-def source_bytes(unit: Unit) -> bytes:
-    """The exact install member the unit capsuled -- what an `.mp3` unit stages verbatim."""
-
-    # By `role`, not by `identity.sourcePath`: a unit that also resolved a `.lip` companion
-    # publishes `sourcePaths` (plural) and no singular key, and the audio member is the one whose
-    # role is the key's own extension -- `wav` or `mp3`, never `lip`.
-    wanted = key_extension(unit.key).lstrip(".")
-    resolution = unit.extension.get("sourceResolution") or {}
-    for member in resolution.get("members") or ():
-        if not isinstance(member, Mapping) or str(member.get("role", "")) != wanted:
-            continue
-        data = extract_source_member(unit.document, unit.binary, member)
-        digest = member.get("sha256")
-        if isinstance(digest, str) and hashlib.sha256(data).hexdigest() != digest:
-            raise SoundBakeError(
-                f"{member.get('path')}: the capsule's bytes are not the member it names")
-        return data
-    raise SoundBakeError(f"the unit carries no capsuled {wanted!r} member")
-
-
 # --- the loop region ---------------------------------------------------------------------------------
 
 
@@ -388,6 +384,36 @@ class Product:
     extension: str
     looping: bool
     loop: dict[str, Any]
+    #: `None` for an asset staged from the unit's own samples; :data:`PLACEHOLDER_SILENCE` for
+    #: one the source could not supply and the bake substituted for.
+    disposition: str | None = None
+    reason: str | None = None
+
+
+def _silent_placeholder(unit: Unit, reason: str) -> Product:
+    """A silent wave of exactly the unit's own duration, for audio Unreal will not import.
+
+    The asset keeps its `SW_<stem>_mp3` name -- the runtime addresses by key and must find
+    something at that address -- and its length is `codec.durationSamples` at the unit's own rate
+    and channel count, because the spoken-line service schedules the dialogue turn on the wave's
+    duration. A turn that keeps retail's timing and plays nothing is a bounded, visible defect;
+    a missing asset is a silent one that also shortens the scene.
+    """
+
+    codec = unit.extension.get("codec") or {}
+    count = int(codec.get("durationSamples") or 0)
+    channels = int(codec.get("channels") or 0)
+    sample_rate = int(codec.get("sampleRate") or 0)
+    if count <= 0 or channels <= 0 or sample_rate <= 0:
+        raise SoundBakeError(
+            f"cannot stand in for this unit: it declares {count} sample(s) at {sample_rate} Hz "
+            f"over {channels} channel(s)")
+    data = pcm_wav(bytes(2 * channels * count), channels=channels, sample_rate=sample_rate)
+    return Product(
+        asset_path_for(unit.key), None, data, ".wav", False,
+        {"decision": "none", "source": None, "startSample": None, "endSample": None,
+         "authoredEndSample": None, "firstSample": 0, "sampleCount": count},
+        disposition=PLACEHOLDER_SILENCE, reason=reason)
 
 
 def plan(unit: Unit) -> list[Product]:
@@ -400,13 +426,33 @@ def plan(unit: Unit) -> list[Product]:
     sample_format = str((unit.extension.get("payload") or {}).get("sampleFormat") or "")
 
     if sample_format == "mpeg-frames":
-        # No Python MPEG decoder exists and the frame stream is not a container Unreal reads, so
-        # the install member itself is what gets imported. A frame stream carries no RIFF chunk,
+        # No Python MPEG decoder exists, so an mp3 unit is imported as an mp3. What is staged is
+        # the unit's PAYLOAD, not its member: the payload accessor is exactly the bare frame
+        # stream, from the first frame's `sourceOffset` to the end of the last, so ID3 tags and
+        # the zero padding 151 corpus members carry never reach `USoundFactory`. libsndfile
+        # rejects a file whose first bytes are not a frame header ("Format not recognised"), which
+        # is what `character/dlg/generic/doll3/line341_col_f.mp3` -- 208 zero bytes of
+        # `leading-zero-padding` before frame 0 -- did on the first full run. For a member with no
+        # junk the payload IS the member, byte for byte, so 5,191 of the 5,342 mp3 units stage the
+        # same bytes as before and keep their recipe stamps. A frame stream carries no RIFF chunk,
         # so an mp3 unit never has an authored loop to split on.
-        data = source_bytes(unit)
+        data = payload_bytes(unit)
+        frame_rows = list(unit.extension.get("frames") or ())
+        if len(frame_rows) <= 1:
+            # `character/dlg/hollywood/ash/line571_col_e.mp3` is one 157-byte frame, 1152 samples
+            # of it. libsndfile refuses a stream that short outright, and there is nothing to
+            # salvage -- but the line service schedules the dialogue turn on the wave's duration,
+            # so the turn still needs a wave of retail's length.
+            return [_silent_placeholder(
+                unit, f"{len(frame_rows)} mpeg frame(s): too short for the importer")]
+        if len(data) < 4 or data[0] != 0xFF or (data[1] & 0xE0) != 0xE0:
+            raise SoundBakeError(
+                "the mpeg payload does not begin with a frame sync word "
+                f"({data[:4].hex()}); the unit's frame table and its payload disagree")
         return [Product(asset_path_for(key), None, data, ".mp3", False,
                         {"decision": "none", "source": None, "startSample": None,
-                         "endSample": None, "firstSample": 0, "sampleCount": None})]
+                         "endSample": None, "authoredEndSample": None,
+                         "firstSample": 0, "sampleCount": None})]
 
     if sample_format != "int16-interleaved":
         raise SoundBakeError(f"unknown payload sample format {sample_format!r}")
@@ -464,6 +510,8 @@ def entry_for(unit: Unit, product: Product) -> dict[str, Any]:
         "class": ASSET_CLASS,
         "unit": unit.key,
         "role": product.role,
+        "disposition": product.disposition,
+        "reason": product.reason,
         "file": file,
         "format": product.extension.lstrip("."),
         "byteLength": len(product.data),
@@ -512,6 +560,7 @@ class StageResult:
     assets: int = 0
     read: int = 0
     empty: list[dict[str, Any]] = field(default_factory=list)
+    placeholders: list[dict[str, Any]] = field(default_factory=list)
     loops: dict[str, int] = field(default_factory=dict)
     failures: list[tuple[str, str]] = field(default_factory=list)
 
@@ -520,7 +569,8 @@ class StageResult:
         return (
             f"sound staging: {self.assets} assets from {self.read} unit(s) "
             f"({self.staged} written, {self.unchanged} unchanged, {self.pruned} pruned, "
-            f"{len(self.empty)} empty, {len(self.failures)} failed); loops: {loops} "
+            f"{len(self.empty)} empty, {len(self.placeholders)} placeholder, "
+            f"{len(self.failures)} failed); loops: {loops} "
             f"-> {self.staging_root}"
         )
 
@@ -600,6 +650,11 @@ def stage_sounds(export_v2_root: Path, root: Path, *,
                     result.unchanged += 1
                 produced.add(destination.resolve())
                 entries.append(entry)
+                if product.disposition == PLACEHOLDER_SILENCE:
+                    result.placeholders.append({
+                        "unit": unit.key, "assetPath": product.asset_path,
+                        "disposition": product.disposition, "reason": product.reason,
+                        "sampleCount": entry["loop"]["sampleCount"]})
                 decision = str(entry["loop"]["decision"])
                 result.loops[decision] = result.loops.get(decision, 0) + 1
         except (SoundBakeError, GlbContainerError, OSError, ValueError) as error:
@@ -620,6 +675,7 @@ def stage_sounds(export_v2_root: Path, root: Path, *,
         "select": [key for key, _ in pairs] if selected else None,
         "keep": [],
         "empty": sorted(result.empty, key=lambda row: str(row["unit"])),
+        "placeholders": sorted(result.placeholders, key=lambda row: str(row["unit"])),
         "assets": entries,
     }
     manifest_path = root / MANIFEST_NAME

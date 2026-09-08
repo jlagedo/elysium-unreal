@@ -14,6 +14,8 @@ from pathlib import Path
 import struct
 import wave
 
+from unittest import mock
+
 import pytest
 
 from elysium_pipeline.asset_paths import AssetPathError
@@ -546,3 +548,107 @@ def test_every_corpus_key_addresses_its_own_asset():
         prior = owners.setdefault(package.casefold(), key)
         assert prior == key, f"{prior!r} and {key!r} both address {package}"
     assert len(owners) > 10000
+
+
+# --- what actually reaches the importer -----------------------------------------------------------
+
+
+def _id3v2(padding: int = 200) -> bytes:
+    """An ID3v2 header with nothing in it but zero padding -- the shape of the 208 bytes in front
+    of `character/dlg/generic/doll3/line341_col_f.mp3`."""
+    size = padding
+    synchsafe = bytes([(size >> 21) & 0x7F, (size >> 14) & 0x7F, (size >> 7) & 0x7F, size & 0x7F])
+    return b"ID3" + b"\x03\x00" + b"\0" + synchsafe + bytes(padding)
+
+
+def _id3v1() -> bytes:
+    """The 128-byte trailer 151 corpus members carry after their last frame."""
+    return b"TAG" + b"line".ljust(30, b"\0") + bytes(128 - 33)
+
+
+def test_an_mp3_stages_the_frame_stream_not_the_member_so_leading_junk_never_reaches_unreal(
+        tmp_path):
+    """`USoundFactory` hands the bytes to libsndfile, which answers "Format not recognised" when
+    the file does not begin on a frame header. `doll3/line341_col_f.mp3` carries 208 zero bytes of
+    `leading-zero-padding` and failed the first full-corpus run for exactly this."""
+    member = _id3v2() + MP3 + _id3v1()
+    _, manifest = _stage({"sound/dlg/padded.mp3": member}, tmp_path)
+    entry = _entry(manifest, "/ElysiumBaked/Sounds/dlg/SW_padded_mp3")
+    staged = (tmp_path / "stage" / entry["file"]).read_bytes()
+    assert entry["format"] == "mp3" and entry["disposition"] is None
+    assert staged == MP3, "the staged file is the frame stream, junk at neither end"
+    assert staged[0] == 0xFF and (staged[1] & 0xE0) == 0xE0, "it begins on a frame sync word"
+
+
+def test_an_mp3_with_no_junk_stages_the_member_byte_for_byte_and_keeps_its_stamp(tmp_path):
+    """The payload IS the member when there is nothing to trim, so 5,191 of the 5,342 mp3 units
+    stage the same bytes as before this rule and their recipe stamps still match."""
+    first = _stage({"sound/music/theme.mp3": MP3}, tmp_path / "a")[1]
+    entry = _entry(first, "/ElysiumBaked/Sounds/music/SW_theme_mp3")
+    assert (tmp_path / "a" / "stage" / entry["file"]).read_bytes() == MP3
+    # The same member behind an ID3 wrapper stages the same bytes, so it stamps the same recipe.
+    second = _stage({"sound/music/theme.mp3": _id3v2() + MP3 + _id3v1()}, tmp_path / "b")[1]
+    other = _entry(second, "/ElysiumBaked/Sounds/music/SW_theme_mp3")
+    assert other["recipe"]["sha256"] == entry["recipe"]["sha256"]
+
+
+def test_a_payload_that_does_not_begin_on_a_sync_word_is_one_failure(tmp_path):
+    """A unit whose frame table and payload disagree is a decode defect, not something to hand to
+    the importer and hope."""
+    unit = bake.read_unit("dlg/a.mp3", (Path(_publish({"sound/dlg/a.mp3": MP3}, tmp_path)
+                                             / "sounds" / "dlg" / "a.mp3.glb").read_bytes()))
+    broken = dict(unit.extension)
+    with mock.patch.object(bake, "payload_bytes", return_value=b"\x00\x00\x00\x00"):
+        with pytest.raises(bake.SoundBakeError, match="frame sync word"):
+            bake.plan(bake.Unit(unit.key, unit.path, unit.sha256, unit.document, unit.binary,
+                                broken))
+
+
+# --- the placeholder --------------------------------------------------------------------------------
+
+
+def test_a_single_frame_mp3_stages_a_silent_wave_of_retail_s_own_duration(tmp_path):
+    """`character/dlg/hollywood/ash/line571_col_e.mp3` is one 157-byte frame, 1152 samples at
+    44100 Hz. libsndfile refuses it outright, so the bake substitutes silence of exactly that
+    length: the line service schedules the dialogue turn on the wave's duration, and a turn that
+    keeps retail's timing and plays nothing is a bounded defect where a missing asset would also
+    shorten the scene."""
+    _, manifest = _stage({"sound/dlg/short.mp3": _mp3_frame()}, tmp_path)
+    entry = _entry(manifest, "/ElysiumBaked/Sounds/dlg/SW_short_mp3")
+
+    # The asset keeps its `_mp3` name: the runtime addresses by key and must find it there.
+    assert entry["assetPath"].endswith("/SW_short_mp3")
+    assert entry["disposition"] == bake.PLACEHOLDER_SILENCE
+    assert "1 mpeg frame(s)" in entry["reason"]
+    assert entry["format"] == "wav" and entry["looping"] is False
+
+    staged = tmp_path / "stage" / entry["file"]
+    with wave.open(str(staged)) as handle:
+        assert handle.getnframes() == 1152
+        assert (handle.getframerate(), handle.getnchannels(), handle.getsampwidth()) == (44100, 1, 2)
+        assert handle.readframes(1152) == bytes(1152 * 2), "silent, not noise"
+
+    assert manifest["placeholders"] == [{
+        "unit": "dlg/short.mp3", "assetPath": "/ElysiumBaked/Sounds/dlg/SW_short_mp3",
+        "disposition": bake.PLACEHOLDER_SILENCE,
+        "reason": entry["reason"], "sampleCount": 1152}]
+
+
+def test_a_placeholder_is_reported_not_silently_substituted(tmp_path):
+    result, _ = _stage({"sound/dlg/short.mp3": _mp3_frame(), "sound/music/theme.mp3": MP3},
+                       tmp_path)
+    assert not result.failures
+    assert [row["unit"] for row in result.placeholders] == ["dlg/short.mp3"]
+    assert "1 placeholder" in result.summary()
+
+
+def test_a_unit_that_declares_no_duration_cannot_be_stood_in_for(tmp_path):
+    """Silence of an unknown length would be a guess at the schedule, so it refuses instead."""
+    export_root = _publish({"sound/dlg/short.mp3": _mp3_frame()}, tmp_path / "export")
+    unit_file = export_root / "sounds" / "dlg" / "short.mp3.glb"
+    unit = bake.read_unit("dlg/short.mp3", unit_file.read_bytes(), unit_file)
+    extension = dict(unit.extension)
+    extension["codec"] = dict(extension["codec"], durationSamples=0)
+    with pytest.raises(bake.SoundBakeError, match="cannot stand in for this unit"):
+        bake.plan(bake.Unit(unit.key, unit.path, unit.sha256, unit.document, unit.binary,
+                            extension))

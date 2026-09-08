@@ -175,14 +175,19 @@ design is; engine-neutral retail facts are `docs/vtmb/audio_pipeline.md`.
   `IsReadyForMapActivation` waits on it; map travel cancels every old-map voice and a stale
   handle is a no-op; `dr_wav.h`, `dr_mp3.h`, `FElysiumSoundCache`, `UElysiumPcmSoundWave` are
   gone; `test substrate` and `test policy` green; the mixahead lead re-stamped. *Deps:* AUD0.
-  - [ ] **AUD1.1** `uv run elysium bake sounds` (`importers/sounds_bake.py` staging PCM wavs and
+  *State 2026-09-08:* AUD1.1/1.2/1.4/1.5 landed on a 17-asset sample set (commit a1475467; loop
+  rule and sound-only fold in `docs/vtmb/audio_pipeline.md` §12, contract fixture
+  `pipeline/tests/fixtures/sound_asset_paths.json`); live smoke: 17 assets indexed in 14 ms, an mp3
+  line and the `flow_on` intro→loop chain play. Left: the full-corpus `bake sounds` (10,883
+  assets, stage proven at 0 collisions), AUD1.3's owner measurement, the owner tutorial pass.
+  - [x] **AUD1.1** `uv run elysium bake sounds` (`importers/sounds_bake.py` staging PCM wavs and
     original mp3s under `$ELYSIUM_WORK_ROOT/_sounds_stage/`; `pipeline/unreal/import_sounds.py`
     importing them in `AssetImportTask` chunks like the texture lane) to
     `/ElysiumBaked/Sounds/<dirs>/SW_<BakedAssetName(key-with-extension)>`. Loop-end units are
     trimmed at the `smpl` end and get `bLooping`; the three intro units bake as `SW_<name>_intro`
     + `SW_<name>_loop`. Compression `ProjectDefined`, everything else engine default. The stamp,
     prune and `import_report.json` come from `bake_lib` unchanged; no verify pass, no index.
-  - [ ] **AUD1.2** Runtime on assets: `ResolveSourcePath` computes the package path from the
+  - [x] **AUD1.2** Runtime on assets: `ResolveSourcePath` computes the package path from the
     folded key and probes the mp3 asset then the wav asset (mp3-first, as today with files);
     `Submit` async-loads through `FStreamableManager` and `RealizeVoice` plays the `USoundWave`
     on the audio component (intro then loop chained on `OnAudioFinishedNative`); `Prefetch` =
@@ -196,10 +201,10 @@ design is; engine-neutral retail facts are `docs/vtmb/audio_pipeline.md`.
   - [ ] **AUD1.3** Latency: `SubmitToRenderSeconds` becomes a constant on
     `UElysiumAudioSettings`, measured once by the owner with `elysium.audio_latency`; `Lead()`
     keeps its shape. Record the number in `docs/vtmb/audio_pipeline.md`.
-  - [ ] **AUD1.4** `import sound` shrinks to the `.lip` mirror; loose `sound/**` audio is pruned;
+  - [x] **AUD1.4** `import sound` shrinks to the `.lip` mirror; loose `sound/**` audio is pruned;
     `sound/schemes` stays. `research audio_reference_dispositions` resolves against the bake's
     `import_report.json`. Update `docs/contracts/seam_map_sound.md` (owner-reviewed).
-  - [ ] **AUD1.5** Tests without VtMB data (per 44ac84f6): `FElysiumAudioContractsTest` rewritten
+  - [x] **AUD1.5** Tests without VtMB data (per 44ac84f6): `FElysiumAudioContractsTest` rewritten
     over the path resolver — fold, mp3-first order, `BakedAssetName` twin, handle generation after
     `RetireMapEpoch`. Live: owner-piloted tutorial pass — door soundgroup, one `ambient_generic`,
     one dialogue line with subtitle, scheme music fade.

@@ -227,11 +227,12 @@ class Tracker(object):
 
 
 class Report(object):
-    def __init__(self, manifest_path, package_root, select=None, empty=()):
+    def __init__(self, manifest_path, package_root, select=None, empty=(), placeholders=()):
         self.manifest = manifest_path
         self.package_root = package_root
         self.select = select
         self.empty = list(empty)
+        self.placeholders = list(placeholders)
         self.built = 0
         self.reused = 0
         self.pruned = 0
@@ -257,14 +258,16 @@ class Report(object):
             "reused": self.reused,
             "pruned": self.pruned, **self.ownership,
             "empty": self.empty,
+            "placeholders": self.placeholders,
             "loops": self.loops,
             "failed": self.failures,
             "seconds": round(time.time() - self.started, 1),
         }
 
     def summary(self):
-        return ("%d built, %d reused, %d pruned, %d empty, %d failed"
-                % (self.built, self.reused, self.pruned, len(self.empty), len(self.failures)))
+        return ("%d built, %d reused, %d pruned, %d empty, %d placeholder, %d failed"
+                % (self.built, self.reused, self.pruned, len(self.empty),
+                   len(self.placeholders), len(self.failures)))
 
 
 def _import_chunk(entries, staging_root):
@@ -346,7 +349,8 @@ def run(manifest_path, force=False):
     staging_root = os.path.dirname(os.path.abspath(manifest_path))
     package_root = manifest["packageRoot"]
     select = manifest.get("select")
-    report = Report(manifest_path, package_root, select, manifest.get("empty") or [])
+    report = Report(manifest_path, package_root, select, manifest.get("empty") or [],
+                    manifest.get("placeholders") or [])
     log("manifest %s: %d asset(s) -> %s%s%s" % (
         manifest_path, len(manifest["assets"]), package_root,
         " (select %d key(s))" % len(select) if select else "",
