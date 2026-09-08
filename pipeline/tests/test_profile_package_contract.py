@@ -20,8 +20,9 @@ def test_complete_profiles_include_every_global_bundle() -> None:
     # R6.6: `use-icons` is gone -- the HUD draws the 72 context icons off the texture lane's
     # `T_` assets, so no profile composites an atlas any more. R8: `npc` and `items` are gone --
     # characters and wield are native import lanes (`import characters`), not export bundles.
+    # AUD0.4: `audio` is gone -- the sound family is `export_v2` units deployed by
+    # `import sound` / `import sound-schemes`.
     expected = {
-        "audio",
         "particles",
         "scripts",
         "signs",

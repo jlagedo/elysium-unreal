@@ -722,23 +722,19 @@ def test_every_named_worker_delegates_to_a_declared_seam() -> None:
     assert delegating == 15  # every wrapper but the three that write the unit themselves
 
 
-def test_only_ents_consuming_bundles_wait_on_the_maps() -> None:
-    # Audio reads the exported per-map `.ents`; other retained bundles read the install.
+def test_no_retained_bundle_waits_on_the_maps() -> None:
+    # `audio` was the one bundle that read the exported per-map `.ents`, and it retired with
+    # `UE_extract_sounds.py` in AUD0.4. Every retained bundle reads the install and starts at once.
     from pathlib import Path
     from types import SimpleNamespace
 
-    bundles = [
-        "audio", "particles", "scripts", "signs", "vdata", "cfg", "scenes", "ui",
-    ]
+    bundles = ["particles", "scripts", "signs", "vdata", "cfg", "scenes", "ui"]
     config = SimpleNamespace(export_root=Path("/fake/export/root"))
     tasks = export_manager._bundle_tasks(
         config, bundles, ["m1", "m2"], {}, {bundle: "fp" for bundle in bundles})
     by_name = {task.name: task for task in tasks}
-    map_edges = ("map:m1", "map:m2")
-    assert by_name["bundle:audio"].dependencies == map_edges
+    assert export_manager.MAP_DEPENDENT_BUNDLES == frozenset()
     for bundle in bundles:
-        if bundle == "audio":
-            continue
         assert by_name[f"bundle:{bundle}"].dependencies == (), f"bundle={bundle}"
 
 
@@ -747,8 +743,8 @@ def test_profiles_retire_character_bundles_and_keep_r9_map_dependencies() -> Non
 
     for profile in ("grid", "all"):
         bundles = set(bundles_for_profile(profile))
-        assert not bundles & {"npc", "items"}
-        assert {"audio", "particles", "vdata", "scenes"} <= bundles
+        assert not bundles & {"npc", "items", "audio"}
+        assert {"particles", "vdata", "scenes"} <= bundles
 
 
 def test_structured_failure_is_strict() -> None:

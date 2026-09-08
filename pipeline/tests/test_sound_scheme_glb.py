@@ -457,7 +457,13 @@ def test_a_significant_token_after_the_root_is_an_anomaly_not_a_ledger_gap():
 def test_build_document_opens_the_extension_root_with_the_contract_key_order():
     _, _, _, model = _decode()
     document, binary = exporter.build_document(model)
-    assert binary == b""
+    # Since schema 1.1.0 the BIN chunk is the source capsule and nothing else: the scheme `.txt`
+    # verbatim, on bufferView 0, with no accessor over it.
+    assert binary == model.member.data
+    assert document["bufferViews"] == [
+        {"buffer": 0, "byteOffset": 0, "byteLength": len(model.member.data)}
+    ]
+    assert "accessors" not in document
     root = document["extensions"][SOUND_SCHEME_EXTENSION]
     assert list(root)[:5] == ["schemaVersion", "identity", "sourceResolution", "dependencies", "coverage"]
     assert document["extensionsUsed"] == document["extensionsRequired"] == [SOUND_SCHEME_EXTENSION]

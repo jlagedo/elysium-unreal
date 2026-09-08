@@ -15,8 +15,6 @@
 #include "HAL/FileManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
 #include "Sound/SoundAttenuation.h"
 #include "Sound/SoundClass.h"
 #include "Sound/SoundConcurrency.h"
@@ -101,7 +99,7 @@ namespace
 void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	BeginCatalogLoad();
+	IsSoundCorpusPresent();   // one directory probe + one warning if the corpus was never deployed
 
 	// Every voice carries its owner's map epoch, so unloading a map is what stops the ambient bed
 	// and the dialogue line it was holding.
@@ -197,48 +195,26 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		}), ECVF_Cheat));
 }
 
-void UElysiumAudioSubsystem::BeginCatalogLoad()
+// AUD0.1 (2026-09-08): the `exports/audio/catalog.json` read is gone. It was an offline validation
+// record, not a VtMB artifact — it was opened for existence and `version == 1` only, stored nothing,
+// and set `bCatalogReady` either way, so the map-activation gate it fed could only ever fail on a
+// watchdog timeout. Readiness is corpus presence: the deployed `Content/ElysiumCorpus/sound` tree,
+// checked once as a directory.
+bool UElysiumAudioSubsystem::IsSoundCorpusPresent()
 {
-	bCatalogReady = false;
-	CatalogLoadError.Reset();
-	const FString CatalogPath = FElysiumContentPaths::AudioCatalogFile();
-	const TWeakObjectPtr<UElysiumAudioSubsystem> WeakThis(this);
-	Async(EAsyncExecution::ThreadPool, [WeakThis, CatalogPath]()
+	static const bool bPresent = []()
 	{
-		FString Text;
-		FString Error;
-		if (!FFileHelper::LoadFileToString(Text, *CatalogPath))
+		const FString Dir = FElysiumContentPaths::SoundDir();
+		const bool bOk = IFileManager::Get().DirectoryExists(*Dir);
+		if (!bOk)
 		{
-			// Older exports remain playable through direct resolution. Absence is a validation
-			// warning, not an activation deadlock.
-			Error = TEXT("catalog missing; using direct sound mirror resolution");
+			UE_LOG(LogElysiumAudio, Warning,
+				TEXT("no deployed sound corpus at %s — every request will miss (run `uv run elysium import sound`)"),
+				*Dir);
 		}
-		else
-		{
-			TSharedPtr<FJsonObject> Root;
-			const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
-			if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
-			{
-				Error = TEXT("catalog JSON is invalid; using direct sound mirror resolution");
-			}
-			else if (Root->GetIntegerField(TEXT("version")) != 1)
-			{
-				Error = TEXT("unsupported audio catalog version; using direct sound mirror resolution");
-			}
-		}
-		AsyncTask(ENamedThreads::GameThread, [WeakThis, Error = MoveTemp(Error)]()
-		{
-			if (UElysiumAudioSubsystem* Self = WeakThis.Get())
-			{
-				Self->CatalogLoadError = Error;
-				Self->bCatalogReady = true;
-				if (!Error.IsEmpty())
-				{
-					UE_LOG(LogElysiumAudio, Warning, TEXT("%s"), *Error);
-				}
-			}
-		});
-	});
+		return bOk;
+	}();
+	return bPresent;
 }
 
 void UElysiumAudioSubsystem::Deinitialize()

@@ -158,41 +158,26 @@ void FElysiumCogWindow_Audio::RenderContent()
 		ImGui::EndChild();
 	}
 
-	// Mover soundgroups: door/button `soundgroup` → usable/<cat>/<group>/<sub>.wav.
-	// The offline manifest resolves a token to its subkey WAVs by directory convention (no VtMB data
-	// file). Browse it and Play any subkey 2D to audition what a door/button will emit.
-	const TMap<FString, TMap<FString, TMap<FName, FString>>>& Manifest = ElysiumMoverSoundManifest();
-	ImGui::SeparatorText("Door and switch sound groups");
-	if (Manifest.Num() == 0)
+	// Mover soundgroups: door/button/computer `soundgroup` -> usable/<cat>/<group>/<sub>.wav.
+	// There is no manifest: retail walks the shipped directories (ElysiumMoverSounds.h), and so does
+	// the resolver. Browse it and Play any subkey 2D to audition what a door/button will emit.
+	ImGui::SeparatorText("Door, switch and computer sound groups");
 	{
-		ImGui::TextDisabled("No soundgroups.json manifest (run UE_extract_sounds.py).");
-	}
-	else
-	{
-		int32 GroupCount = 0;
-		for (const auto& CatPair : Manifest) { GroupCount += CatPair.Value.Num(); }
-		ImGui::Text("%d group(s) across %d categor(y/ies)", GroupCount, Manifest.Num());
 		if (ImGui::BeginChild("##Soundgroups", ImVec2(0, GetDpiScale() * 150.0f), ImGuiChildFlags_Borders))
 		{
-			// Stable category order (openable/switches/computers), each a collapsing tree of groups.
-			TArray<FString> Cats;
-			Manifest.GetKeys(Cats);
-			Cats.Sort();
 			int32 Id = 0;
-			for (const FString& Cat : Cats)
+			for (const FString& Cat : ElysiumSoundGroups::Categories())
 			{
-				const TMap<FString, TMap<FName, FString>>& Groups = Manifest[Cat];
-				if (!ImGui::TreeNode(COG_TCHAR_TO_CHAR(*FString::Printf(TEXT("%s  (%d)"), *Cat, Groups.Num()))))
+				const TArray<FString> GroupNames = ElysiumSoundGroups::EnumerateGroups(Cat);
+				if (!ImGui::TreeNode(COG_TCHAR_TO_CHAR(
+					*FString::Printf(TEXT("%s  (%d)"), *Cat, GroupNames.Num()))))
 				{
 					continue;
 				}
-				TArray<FString> GroupNames;
-				Groups.GetKeys(GroupNames);
-				GroupNames.Sort();
 				for (const FString& Group : GroupNames)
 				{
 					ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Group));
-					const TMap<FName, FString>& Subs = Groups[Group];
+					const TMap<FName, FString>& Subs = ElysiumSoundGroups::Resolve(Cat, Group);
 					TArray<FName> SubKeys;
 					Subs.GetKeys(SubKeys);
 					SubKeys.Sort(FNameLexicalLess());

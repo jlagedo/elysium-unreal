@@ -443,8 +443,8 @@ public:
 	// The stable audio-owner id every cue is submitted under, and the one the exit's stop-by-owner
 	// names. One accessor, because those two have to agree for the stop to reach the cues.
 	FString CueOwnerId() const;
-	// Whether this entity's `soundgroup` resolved the named cue. A world with no exported
-	// `usable/soundgroups.json` resolves none, which is a seam a case names rather than a failure.
+	// Whether this entity's `soundgroup` resolved the named cue. A world with no deployed
+	// `sound/usable/computers/` corpus resolves none, which is a seam a case names rather than a failure.
 	bool HasCue(const TCHAR* Cue) const
 	{
 		const FString* Rel = CueRels.Find(FName(Cue));

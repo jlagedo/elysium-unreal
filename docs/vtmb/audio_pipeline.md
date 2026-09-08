@@ -425,6 +425,20 @@ The playable-path trio (`sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`) is joined 
 `docs/vtmb/three-map-audio-surface.md`: every `ambient_generic` / scheme / env-audio
 row, every Play/Stop/Fade wire, mover `soundgroup`s, and which WAVs actually wrap.
 
+Re-run 2026-09-08 over the full 108-map export (71,096 entities): 50 unresolved
+audio-control wires, one of them on `sp_tutorial_1` (`scheme_guns.FadeOut`). The fifteen
+above were the 23-map snapshot. The V2 sound corpus (`Content/ElysiumCorpus/sound`,
+10,892 files, lower-cased keys) resolves every audio path the tutorial references except
+five that no install ships (`three-map-audio-surface.md` §2.5).
+
+2026-09-08 (AUD0.3/0.4): the six scheme `.txt` the tutorial references are no longer legacy-only.
+The `sound-scheme` unit publishes its source capsule (schema 1.1.0) and `uv run elysium import
+sound-schemes` deploys all 174 schemes to `Content/ElysiumCorpus/sound/schemes/<stem>.txt`,
+lower-cased, byte-identical to the UP-first source (152 loose from `Unofficial_Patch`, 22 from the
+VPKs). The `export bundle audio` lane and `UE_extract_sounds.py` are deleted with their
+`audio/catalog.json`, `audio/schemes.json`, `audio/entity_events.json`, `audio/maps/*.json`,
+`sound/usable/soundgroups.json` and `sound/Schemes/*.txt` products.
+
 ## 7b. Mover sounds — the `soundgroup` convention
 
 Doors (`func_door`, `func_door_rotating`) and buttons (`func_button`) carry a
@@ -461,6 +475,63 @@ Buttons also carry explicit **`locked_sound`/`unlocked_sound`** — direct WAV p
 independent of the soundgroup. `soundgroup` is a **base-`CBaseEntity`** field
 (`m_iszVSoundGroup` @`0x0c0`), so NPCs reuse it for a voice actor's line set — those tokens
 (`Bertram`, `Young_Thug`, …) resolve through `FUN_101f55a0`'s voice path, not `usable/`.
+
+### How the convention is actually built — the `SndSchemeTables` registry [VtMB, recovered 2026-09-08]
+
+The directory convention above is not hardcoded anywhere as a string: `usable/` never appears in
+any shipped binary. It is assembled from two pieces at table-construction time.
+
+`FUN_101f66c0` @`0x101f66c0` registers the five sound-scheme tables, each with its vdata file name
+and its category token(s):
+
+| Table (→ `vdata/system/<name>.txt`) | Category token(s) |
+|---|---|
+| `SndScheme_Char` | `Female`, `Male`, `Monster`, `Animal` |
+| `SndScheme_Wpn` | `Melee`, `Ranged`, `Ejection` |
+| `SndScheme_Openable` | `Openable` |
+| `SndScheme_Switch` | `Switches` |
+| `SndScheme_Computer` | `Computers` |
+
+`FUN_101f5210` @`0x101f5210` opens `"%s%s.txt"` (vdata path + table name) and `FUN_101f5390`
+@`0x101f5390` parses it: `SoundSchemeTables/SoundScheme` yields **`Name`** (stored at `table+0x0c`)
+and `InternalName` (`table+0x08`), and every `SoundList/Sound/Name` becomes one ordinal slot — that
+list *is* the subkey vocabulary, in file order.
+
+`FUN_101f41b0` @`0x101f41b0` then builds the directory with `sprintf("%s\%s", table->Name,
+categoryToken)`. All three usable vocabulary files author `"Name" "Usable"`, and that is the **only**
+source of the `usable/` path component. So:
+
+    sndscheme_openable.txt  "Name" "Usable" + token "Openable"   -> sound\Usable\Openable
+    sndscheme_switch.txt    "Name" "Usable" + token "Switches"   -> sound\Usable\Switches
+    sndscheme_computer.txt  "Name" "Usable" + token "Computers"  -> sound\Usable\Computers
+
+Note the registered token is `Computers` (plural) while that file's `InternalName` is `Computer`
+(singular) — the two are independent strings and only the registered token reaches the path. Note
+also that the token is `Openable`, never `doors`: the `sound/usable/doors/` tree the install also
+ships (4 groups, a subset of `openable`) is **unreachable from any table** and is dead content.
+
+**The groups are the shipped directories, not a list.** `FUN_101f3810` @`0x101f3810` walks
+`sound\<dir>\*.*`: every *file* becomes a sound slot (matched to the vocabulary by stem) and every
+*subdirectory* recurses as a child table (skipping `.` and `..`, compared at `DAT_105a040c` /
+`DAT_105a0410`). Group names are therefore the on-disk directory names **verbatim**, including the
+two that carry a space — `squeaky_metal door`, `squeaky_wood door`. `FUN_101f3690` @`0x101f3690`
+prepares the base directory and strips a leading `sound\` off it (`_strstr`) plus a trailing `*`.
+
+**Lookup is verbatim and case-insensitive.** `FUN_101f39d0` @`0x101f39d0` copies the token,
+`Q_FixSlashes(…, '\')`, and compares each path component with `__strcmpi`, recursing into child
+tables. Retail tries **no** space/underscore variance and no other spelling — an authored
+`soundgroup` either names a shipped directory or it does not.
+
+**A miss is not silence.** `FUN_101f42a0` @`0x101f42a0` returns the *category root's* own base index
+when `FUN_101f39d0` answers `-1`, so an unknown token plays the default sounds sitting directly
+under `usable/<category>/` — which is exactly why the install ships loose
+`usable/openable/{open,close,locked,swing}.wav`, `usable/switches/{on,off}.wav` and
+`usable/computers/{accept,access,error,typing}.wav` beside the group directories. A *subkey* a group
+ships no file for is a different case: the directory walk simply never fills that slot, and the cue
+is silent (`switches/elevator_button` ships `on.wav` and no `off.wav`).
+
+Port: `Source/ElysiumUE/Private/Substrate/ElysiumMoverSounds.{h,cpp}` (`ElysiumSoundGroups::Resolve`),
+proven by `Elysium.Content.SoundGroupResolver`.
 
 ## 8. Sentences and surface sounds (footsteps / impacts)
 

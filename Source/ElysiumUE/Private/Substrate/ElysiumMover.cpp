@@ -229,21 +229,18 @@ void FElysiumMoverBase::TickMove(double Now)
 	}
 }
 
-// Mover sounds — per-mover playback (the manifest loader lives in ElysiumMoverSounds.cpp).
+// Mover sounds — per-mover playback (the `soundgroup` resolver lives in ElysiumMoverSounds.cpp).
 //
 // Reference: `docs/vtmb/audio_pipeline.md` + the decompiled CBaseDoor::Spawn (FUN_100ef060, reads the
 // subkeys "close"/"open"/"swing"/"locked") and CBaseButton::Spawn (FUN_100c8810, reads "on"/"off").
-// The movers resolve their `soundgroup` through the offline manifest (ElysiumMoverSoundManifest)
-// and play through the GI audio subsystem's voice pool.
+// The movers resolve their `soundgroup` through ElysiumSoundGroups::Resolve — the corpus directory
+// convention retail itself walks — and play through the GI audio subsystem's voice pool.
 
 namespace
 {
 	// Doors/buttons are heard across a room, not map-wide; sphere falloff radius for a mover voice.
 	constexpr float ElysiumMoverSoundRadiusCm = 2500.f;
 }
-
-// cat -> group(lower) -> subkey -> sound-relative WAV. Loaded once from the offline manifest.
-using FMoverSoundTable = TMap<FString, TMap<FString, TMap<FName, FString>>>;
 
 void FElysiumMoverBase::InitMoverSounds(const TCHAR* Category, int32 SilentFlag)
 {
@@ -255,14 +252,7 @@ void FElysiumMoverBase::InitMoverSounds(const TCHAR* Category, int32 SilentFlag)
 	{
 		return;
 	}
-	const FMoverSoundTable& Table = ElysiumMoverSoundManifest();
-	if (const TMap<FString, TMap<FName, FString>>* Groups = Table.Find(SoundCategory))
-	{
-		if (const TMap<FName, FString>* Subs = Groups->Find(SoundGroup))
-		{
-			SoundSubs = *Subs;   // shipped subkeys only (a group may lack e.g. swing)
-		}
-	}
+	SoundSubs = ElysiumSoundGroups::Resolve(SoundCategory, SoundGroup);   // shipped subkeys only
 }
 
 void FElysiumMoverBase::PlayMoverSoundRel(const FString& Rel)

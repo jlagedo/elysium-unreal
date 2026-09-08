@@ -5,7 +5,7 @@
 playable-path maps. Engine behaviour lives in `docs/vtmb/audio_pipeline.md`.
 Generic I/O lives in `docs/vtmb/entity_io.md`. Tutorial event graph lives in
 `docs/vtmb/sp_tutorial_1-event-surface.md`. Hub rain lives in `docs/vtmb/weather.md`.
-**Last recovered:** 2026-09-06
+**Last recovered:** 2026-09-08 (§2.5 file-resolution census)
 
 Counts are from the current patch-first JSON `.ents` under `$ELYSIUM_EXPORT_ROOT`.
 Native behaviour is pinned to retail `vampire.dll` / `engine.dll` as cited in
@@ -123,6 +123,50 @@ Retail door emission: `open`+`swing` at go-up, `swing` only at go-down, `close` 
 
 NPC `soundgroup`s: `Young_Thug` on two combatants and one maker.
 
+### 2.5 File-resolution census (2026-09-08)
+
+Full row-level census and scratch scripts: `$ELYSIUM_WORK_ROOT/_audio_census/sp_tutorial_1_audio_census.md`.
+Union of every audio path the map can reach — 76 `ambient_generic` messages, the 6 scheme files
+and every `Filename` inside them (155 blocks), 53 movers' `soundgroup`-derived
+`usable/<category>/<group>/<subkey>.wav` candidates plus explicit `locked_sound`/`unlocked_sound`/
+`startsound`/`stopsound`, 14 other sound keys (`prop_doorknob.locksnd` ×13, `params_explosion.snd_name`
+`Area/Special/Tutorial/ExplosionSabbat2.wav`), the 2 choreo `speak` paths, the 1 `PlayDialogFile`
+literal, and the 119 text-bearing `.dlg` lines (112 `jack_tutorial`, 7 `tutorial_security_guard`):
+
+| Disposition | Paths |
+|---|---:|
+| Referenced (normalized, unique) | 268 |
+| Resolve in `Content/ElysiumCorpus/sound` | 257 |
+| Legacy mirror only (`exports/sound/Schemes/*.txt`, the six scheme sources) | 6 |
+| Exist in neither corpus nor loose install | 5 |
+
+The five with no file, each with its retail disposition:
+
+- `environmental/electronic/button_beep.wav` — `unlocked_sound` on all six `func_button`s; not
+  in the install (`audio_pipeline.md` §9's eight silent refs). Silent in retail. The paired
+  `deny_beep.wav` exists.
+- `usable/switches/elevator_button/off.wav` — the group ships `on.wav` only; a group may omit a
+  subkey (§7b). Silent in retail.
+- `character/dlg/main characters/jack_tutorial/line1001_col_e.wav` and `line1006_col_e.wav` —
+  the `.vcd` `speak` params of `logic_jack_hit_1001/1006`; mp3-first resolves both to shipped
+  `.mp3`s. Not a gap.
+- `character/dlg/downtown la/tutorial_security_guard/line2_col_e.mp3` — line 2 is the stage
+  direction `[Frightened security guard]`, never voiced. Not a gap.
+
+Every text-bearing `jack_tutorial` line has its `.mp3` and `.lip` in the corpus (112/112). The
+security guard has 6/7, the seventh being line 2 above.
+
+A third path into `OnPreRaidSounds()` exists beside the map wires and `tutorial.py`:
+`jack_tutorial/line191_col_e.vcd` carries a `Scripts` channel `event python "Sabbat"` at 0.68 s
+with `param "OnPreRaidSounds()"` — the only `event python` among the 113 `jack_tutorial` per-line
+scenes. Speaking line 191 fires the pre-raid sound relay through the choreo script-event path.
+
+`logic_jack_vs_sabbat` (`CINEMATIC/tutorial/jack_VS_sabbat.vcd`) has no `speak`/`bodysound`
+event; its bed is the wired `Jack V Sabbat SFX` `ambient_generic`.
+
+The 108-map survey re-run on 2026-09-08 (71,096 entities) reports 50 unresolved audio-control
+wires; exactly one is on this map, `tutwareportal01.OnFullyClosed → scheme_guns.FadeOut`.
+
 ---
 
 ## 3. `sm_pawnshop_1`
@@ -234,3 +278,26 @@ Recorded here so a one-line wrap-the-WAV "fix" is not mistaken for retail:
 5. Tutorial env-audio brushes never Enable — implementing Touch must not invent
    begin/end pairs for disabled volumes.
 6. Door `close` at arrival; `swing` is one event, not a code loop.
+
+---
+
+## 7. AUD0.6 reference validation (2026-09-08)
+
+`research/tooling/probes/audio_reference_dispositions.py` disposes every audio-facing
+reference and wire on all 108 exported maps, cross-checking the legacy `.ents` wire graph
+against the V2 `map-entities`/`dialogue`/`scene`/`sound-scheme` GLB units' own
+`dependencies[]`. Result: **zero disagreements** between a dependency's `resolved` flag
+(checked against the VtMB install index) and direct presence under `Content/ElysiumCorpus`
+across all three playable-path maps and the full 108 -- AUD0's "10,892 units deployed 1:1"
+claim holds under this cross-check. **Zero `unclassified` references** anywhere. Totals:
+`missing_target` wires = 50 (matches the count `AUD0.6` already cites, one on
+`sp_tutorial_1`: `tutwareportal01.OnFullyClosed -> scheme_guns.FadeOut`); a second wire
+class not previously counted, `unimplemented_input` (a wire that resolves to a live entity
+but names an input the class's dispatcher does not implement -- `ambient_generic.FadeIn`/
+`FadeOut`, `ambient_soundscheme.Disable`, per `docs/vtmb/audio_pipeline.md` #7) = 5 across
+108 maps, one on `sp_tutorial_1` (`teleport_hunter.OnBeginFade -> City Soundscheme.Disable`).
+`usable/doors/` exists in the deployed corpus (10 entries, four groups) but the soundgroup
+resolver never reads it; the door category directory the resolver must use is
+`usable/openable/` (111 entries). Full per-map counts and the non-`corpus` row list are in
+`$ELYSIUM_WORK_ROOT/_audio_census/dispositions_three.{json,md}` (three maps) and
+`dispositions_all.{json,md}` (108 maps).

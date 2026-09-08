@@ -287,7 +287,6 @@ def _map_tasks(config, map_names: Sequence[str], index: dict, source_fingerprint
 
 def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
     mapping = {
-        "audio": (export_root / "audio" / "catalog.json",),
         "particles": (export_root / "particles" / "manifest.json",),
         "scripts": (export_root / "scripts", export_root / "dlg"),
         "signs": (export_root / "signs",),
@@ -300,12 +299,13 @@ def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
 
 
 #: Bundles that read per-map export products under `$ELYSIUM_EXPORT_ROOT/<map>/` and therefore
-#: wait on every map task: `audio` reads each map's `.ents` for its WAV and soundscheme
-#: references. Every other bundle
-#: reads the install (or the pre-graph shared corpus) directly and starts immediately;
-#: `scenes` only globs whatever `.ents` already exist for a report-only cross-check that its
-#: own exporter declares independent of the map export.
-MAP_DEPENDENT_BUNDLES = frozenset({"audio"})
+#: wait on every map task. There are none: the last one was `audio`, which read each map's
+#: `.ents` for its WAV and soundscheme references and retired with `UE_extract_sounds.py`
+#: (AUD0.4 -- the sound family is `export_v2` units deployed by `import sound`/`import
+#: sound-schemes`). Every remaining bundle reads the install (or the pre-graph shared corpus)
+#: directly and starts immediately; `scenes` only globs whatever `.ents` already exist for a
+#: report-only cross-check that its own exporter declares independent of the map export.
+MAP_DEPENDENT_BUNDLES: frozenset[str] = frozenset()
 
 
 def _bundle_tasks(
@@ -1209,21 +1209,14 @@ def export_targeted_maps(
             "jobs": jobs,
         },
         maps=list(names),
-        bundles=["audio"],
+        # No bundle follows a targeted map export any more: the one that did was `audio`, and
+        # the sound family is `export_v2` units now (AUD0.4).
+        bundles=[],
     )
     TaskGraph(_map_tasks(config, names, index, source_fingerprint)).run(
         jobs=jobs,
         force=force,
         manifest=manifest,
-    )
-    _raise_results(
-        export_all.export_bundles(
-            ["audio"],
-            maps=names,
-            force=force,
-            index=index,
-            continue_on_error=False,
-        )
     )
     if not intermediate_only:
         try:

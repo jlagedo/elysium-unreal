@@ -1,7 +1,12 @@
 """Isolated one-scheme/one-GLB sound-scheme product writer.
 
-Every unit is scene-less and carries no BIN chunk: a sound scheme names filenames, flags and
-numbers, all of which the source wrote as text.
+Every unit is scene-less: a sound scheme names filenames, flags and numbers, all of which the
+source wrote as text, so the decode itself needs no binary payload and declares no accessor.
+
+The BIN chunk it does carry is the **source capsule** (schema 1.1.0) -- the scheme `.txt`, byte
+for byte, as the UP-first policy selected it. That is what lets `uv run elysium import
+sound-schemes` write `Content/ElysiumCorpus/sound/schemes/<stem>.txt` out of the published unit
+alone, with no install present, and it is the only reason this kind has a buffer at all.
 """
 
 from __future__ import annotations
@@ -22,11 +27,12 @@ from elysium_pipeline.formats.sound_scheme_glb import source_keys as _source_key
 from elysium_pipeline.formats.sound_scheme_glb.coverage import coverage_block
 from elysium_pipeline.formats.unit_contract import (
     asset_block,
+    buffer_table,
     dependency,
+    encapsulate,
     extension_root,
     identity_block,
     plain,
-    source_resolution,
     write_glb,
 )
 
@@ -61,6 +67,9 @@ def build_document(model) -> tuple[dict, bytes]:
         dependency(row["role"], row["asset"], row["sourcePath"], row["resolved"])
         for row in model.dependencies
     ]
+    # The one member's bytes are the whole BIN chunk: there is no decode payload to keep ahead of
+    # them, so `encapsulate` starts from an empty buffer and the capsule owns bufferView 0.
+    resolution, buffer_views, binary = encapsulate([model.member])
     # The extension root opens with the five contract keys, in order,
     # before any kind-specific one; the seam doc's own illustrative JSON interleaves `parameters`
     # and `scheme` before `dependencies` and `comments`/`anomalies`/`omissions` before `coverage`,
@@ -69,7 +78,7 @@ def build_document(model) -> tuple[dict, bytes]:
     extension = extension_root(
         schema_version=SCHEMA_VERSION,
         identity=identity_block(model.asset_id, model.member.path),
-        source_resolution=source_resolution([model.member]),
+        source_resolution=resolution,
         dependencies=dependencies,
         coverage=coverage_block(
             ledger_row=model.ledger_row, unresolved=model.unresolved, unsupported=model.unsupported
@@ -84,11 +93,15 @@ def build_document(model) -> tuple[dict, bytes]:
         "asset": asset_block(KIND_TITLE),
         "extensionsUsed": [SOUND_SCHEME_EXTENSION],
         "extensionsRequired": [SOUND_SCHEME_EXTENSION],
-        "extensions": {SOUND_SCHEME_EXTENSION: plain(extension)},
     }
-    # A sound scheme carries no binary payload: every datum it owns is a name, a flag, or a number
-    # the source wrote as text. One JSON chunk, no BIN chunk.
-    return document, b""
+    if binary:
+        document["buffers"] = buffer_table(binary)
+        document["bufferViews"] = buffer_views
+    document["extensions"] = {SOUND_SCHEME_EXTENSION: plain(extension)}
+    # No accessor: the capsule is a file, not typed elements a glTF consumer reads. An empty
+    # scheme file (there is none in the install, but the contract admits one) capsules to zero
+    # bytes and the unit keeps its no-BIN-chunk shape.
+    return document, binary
 
 
 def export(

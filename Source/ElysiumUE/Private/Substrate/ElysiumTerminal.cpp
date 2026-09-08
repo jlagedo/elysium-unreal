@@ -385,19 +385,12 @@ void FElysiumTerminal::Spawn()
 	}
 
 	// `soundgroup` resolves by directory convention under `usable/computers/<group>/` (§14), the
-	// way movers resolve theirs; the manifest carries only the shipped subkeys.
+	// way movers resolve theirs; only the shipped subkeys come back.
 	CueRels.Reset();
 	const FString Group = SoundGroup.TrimStartAndEnd().ToLower();
 	if (!Group.IsEmpty())
 	{
-		if (const TMap<FString, TMap<FName, FString>>* Groups
-			= ElysiumMoverSoundManifest().Find(TEXT("computers")))
-		{
-			if (const TMap<FName, FString>* Subs = Groups->Find(Group))
-			{
-				CueRels = *Subs;
-			}
-		}
+		CueRels = ElysiumSoundGroups::Resolve(ElysiumSoundGroups::Computers, Group);
 	}
 
 	// The body build is conditional; resolving the screen attachments at the end is not, because a

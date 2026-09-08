@@ -86,6 +86,10 @@ def target_of(source_path: str) -> tuple[str, ...]:
     raise CorpusImportError(f"{source_path!r} is not an audio member or a .lip companion")
 
 
+#: `sound/schemes/*.txt` sits inside this lane's own root but is the `sound-schemes` lane's
+#: deploy (`importers/sound_schemes.py`), so it is stepped over rather than pruned as an orphan.
+FOREIGN_DIRECTORIES = ("sound/schemes",)
+
 LANE_SPEC = Lane(
     name=LANE,
     recipe_version=RECIPE_VERSION,
@@ -93,6 +97,7 @@ LANE_SPEC = Lane(
     target_of=target_of,
     owned_directories=("sound", "lip"),
     empty_hint="run `uv run elysium export_v2 sounds-glb` first",
+    foreign_directories=FOREIGN_DIRECTORIES,
 )
 
 
@@ -103,6 +108,7 @@ def import_sound(export_v2_root: Path, destination_root: Path) -> ImportResult:
 
 
 __all__ = [
+    "FOREIGN_DIRECTORIES",
     "LANE",
     "LANE_SPEC",
     "RECIPE_VERSION",

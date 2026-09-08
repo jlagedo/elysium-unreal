@@ -254,15 +254,13 @@ def _run_bundle(
     force: bool,
     index: dict[str, Any] | None,
 ) -> None:
-    """Invoke one existing global exporter without duplicating its policy."""
+    """Invoke one existing global exporter without duplicating its policy.
 
-    if name == "audio":
-        from elysium_pipeline.exporters import UE_extract_sounds
+    `maps` is threaded through but consumed by no bundle: the only one that read per-map export
+    products was `audio`, retired in AUD0.4 with `UE_extract_sounds.py`.
+    """
 
-        # The shared index cannot serve audio: its loose walk omits `sound/`, so the sound
-        # exporter builds its own SOUND_DIRS index or a patch's loose sound overrides vanish.
-        UE_extract_sounds.main(list(maps))
-    elif name == "particles":
+    if name == "particles":
         from elysium_pipeline.exporters import UE_extract_particles
 
         UE_extract_particles.main(force=force, index=index)

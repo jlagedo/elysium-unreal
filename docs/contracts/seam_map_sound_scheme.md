@@ -30,7 +30,7 @@ uv run elysium export_v2 sound-schemes-glb
 
 | Source member | Role | GLB destination |
 |---|---|---|
-| `sound/schemes/<stem>.txt` | unit-selecting | `parameters[]`, `scheme` |
+| `sound/schemes/<stem>.txt` | unit-selecting | `parameters[]`, `scheme`, and the source capsule |
 
 ## Grammar
 
@@ -58,15 +58,23 @@ block is a `repeated-block` anomaly and likewise resolves last-wins.
 
 ## GLB structure
 
-The unit is scene-less and carries no BIN chunk.
+The unit is scene-less and declares no accessor. The BIN chunk it does carry is the **source
+capsule** alone (`seam_map_unit_contract.md`, "Source capsule"): buffer 0 holds the scheme `.txt`
+file's own bytes, one `bufferView` addresses them, and `sourceResolution` declares
+`"capsule": {"encoding": "raw"}` with the member row naming that view. An empty source file
+capsules to nothing and that unit carries no BIN chunk at all — the shape every scheme unit had
+before schema 1.1.0, when the kind published no source bytes and `uv run elysium import
+sound-schemes` could not exist.
 
 ```json
 {
   "extensionsUsed": ["ELYSIUM_vtmb_sound_scheme"],
   "extensionsRequired": ["ELYSIUM_vtmb_sound_scheme"],
+  "buffers": [{"byteLength": 4096}],
+  "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 4096}],
   "extensions": {
     "ELYSIUM_vtmb_sound_scheme": {
-      "schemaVersion": "1.0.0",
+      "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
       "parameters": [],
@@ -139,7 +147,36 @@ seam's data. The mp3-first rule does not apply here — a scheme names the membe
 
 ## Coverage and validation
 
-A complete scheme unit accounts for every byte of the file and has zero `unresolved` and zero
-`unsupported` keys. Validation re-parses the KeyValues tree and compares every block, key,
+A complete scheme unit accounts for every byte of the file, declares a source capsule and has
+zero `unresolved` and zero `unsupported` keys. A unit that publishes no capsule is refused: the
+seam has adopted the rule, and the import lane deploys nothing else. Validation re-parses the KeyValues tree and compares every block, key,
 resolved number and file reference with the published `scheme`, and checks that every
 dependency was produced by a reference the unit publishes.
+
+## Import (2026-09-08)
+
+`uv run elysium import sound-schemes` deploys the scheme corpus out of the published units and
+nothing else (`pipeline/src/elysium_pipeline/importers/sound_schemes.py`, on the shared
+`importers/corpus_deploy.py`). Each unit's one capsule is lifted and written to
+
+```text
+Content/ElysiumCorpus/sound/schemes/<stem>.txt        the scheme file, verbatim
+```
+
+**Case.** The leaf is the unit's own key, folded to lower case, so an install
+`sound/Schemes/SP_Tutorial_City.txt` deploys as `sound/schemes/sp_tutorial_city.txt`. A map
+entity names the scheme as the install spells it (`"scheme_file" "sound/Schemes/SP_Tutorial_City.txt"`),
+so the runtime's `SchemeFile(Rel)` accessor folds before it looks — the same rule
+`NormalizeSceneRel` and the sound resolver already apply. This retires the legacy
+`sound/Schemes/*.txt` mirror the `export bundle audio` lane wrote and the raw `Root()` concat
+that read it.
+
+**Sharing `sound/` with the audio lane.** `sound/schemes/` sits inside the `sound` lane's own
+pruning root. That lane names it in its `foreign_directories`, so `import sound` steps over these
+files rather than deleting them as orphans, and `import sound-schemes` prunes `sound/schemes`
+alone. Neither lane can delete the other's deploy, and the two commands are order-independent.
+
+The lane's other properties — recipe stamps
+(`Content/ElysiumCorpus/_import/sound-schemes/recipes.json`), per-unit failure isolation,
+byte-equality verification against the capsule, and `import_report.json` — are the ones listed in
+`seam_map_dialogue.md` → "Import".

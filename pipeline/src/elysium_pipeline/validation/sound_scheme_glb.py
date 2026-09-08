@@ -32,6 +32,7 @@ from elysium_pipeline.formats.sound_scheme_glb.model import (
     sound_asset_id,
     sound_dependency_source_path,
 )
+from elysium_pipeline.formats.unit_contract.capsule import declares_capsule
 from elysium_pipeline.formats.unit_contract import (
     UnitValidationError,
     completeness,
@@ -639,6 +640,12 @@ def validate_document(document: dict, binary: bytes, *, source_members=None) -> 
     validate_sceneless(document)
     validate_ledgers(root, source_members)
     validate_capsules(document, binary, root, source_members)
+    # `validate_capsules` returns early when `sourceResolution.capsule` is absent -- correct for a
+    # seam that has not adopted the capsule (`capsule.py`'s own docstring), but this one has, as
+    # of schema 1.1.0, and `uv run elysium import sound-schemes` deploys nothing else. A unit
+    # that published no source bytes is refused here rather than at the lane.
+    if not declares_capsule(root.get("sourceResolution")):
+        raise SoundSchemeGlbValidationError("sound-scheme unit declares no source capsule")
 
     incomplete = completeness(root)
     if incomplete["unresolved"] or incomplete["unsupported"]:

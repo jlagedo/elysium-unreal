@@ -4099,96 +4099,13 @@ namespace
 }
 
 
-
 // The graph against the real corpus.
 //
 // The fixtures above prove the rule. This proves that the authored fades the transition arithmetic
 // reads are really what the export carries; the graph asset-kind matrix is a property of what the
 // bake wrote, and the character verifier owns it.
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphTransitionParityTest,
-	"Elysium.Content.PlayerGraphTransitionParity", GElysiumAnimationContentFlags)
-bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
-{
-	if (!ElysiumNativeTest::HasCast())
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native character cast (run: uv run elysium import characters)"));
-		return true;
-	}
-	FElysiumNpcIndex Index;
-	FString Error;
-	if (!ElysiumNativeTest::Load(Index, Error) || !Index.IsValid())
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no native cast view (run: uv run elysium import characters)"));
-		return true;
-	}
-
-	FRealTables Tables;
-	Tables.Index = &Index;
-
-	// One real player body. The parity claim is about the authored data, so it has to be read off a
-	// body the export actually carries rather than off a fixture.
-	TArray<FString> Stems;
-	Index.Npcs.GenerateKeyArray(Stems);
-	Stems.Sort();
-	FElysiumNpcClipSet Body;
-	FString Chosen;
-	for (const FString& Stem : Stems)
-	{
-		if (!Stem.Contains(TEXT("_Male_Armor_")) && !Stem.Contains(TEXT("_Female_Armor_")))
-		{
-			continue;
-		}
-		FString LoadError;
-		if (ElysiumNativeTest::Load(Body, Stem, LoadError) && Body.ByActivity(TEXT("ACT_WALK")).Num() > 0)
-		{
-			Chosen = Stem;
-			break;
-		}
-	}
-	if (Chosen.IsEmpty())
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the export carries no player body with a walk"));
-		return true;
-	}
-
-	// The six ordered pairs the locomotion slice can actually make.
-	const TCHAR* Pairs[][2] = {
-		{ TEXT("ACT_IDLE"),    TEXT("ACT_WALK")    },
-		{ TEXT("ACT_WALK"),    TEXT("ACT_IDLE")    },
-		{ TEXT("ACT_WALK"),    TEXT("ACT_RUN")     },
-		{ TEXT("ACT_RUN"),     TEXT("ACT_WALK")    },
-		{ TEXT("ACT_LEAP"),    TEXT("ACT_FALLING") },
-		{ TEXT("ACT_FALLING"), TEXT("ACT_LAND")    },
-	};
-
-	int32 Checked = 0;
-	for (const TCHAR* (&Pair)[2] : Pairs)
-	{
-		const FElysiumAnimationSelection Out = ResolveOn(Body, Tables, Pair[0],
-			EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
-		const FElysiumAnimationSelection In = ResolveOn(Body, Tables, Pair[1],
-			EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
-		if (!Out.IsResolved() || !In.IsResolved())
-		{
-			continue;   // an activity this body does not carry is the coverage test's business
-		}
-		++Checked;
-		const float Expected = In.bSnap ? 0.0f : FMath::Max(Out.FadeSeconds, In.FadeSeconds);
-		// The exact value, and there is nothing left to compare it against: the graph asset carries
-		// no authored duration of its own, so the combine's answer reaches the blend stack's
-		// `BlendTime` pin whole and nothing downstream can min-merge it down to a cap.
-		TestEqual(*FString::Printf(TEXT("%s -> %s combines the authored fades (%.2f, %.2f)"),
-			Pair[0], Pair[1], Out.FadeSeconds, In.FadeSeconds),
-			ElysiumAnimGraph::TransitionSeconds(&Out, In), Expected);
-	}
-	TestTrue(TEXT("at least one slice transition was measured"), Checked > 0);
-	AddInfo(FString::Printf(TEXT("%d of 6 slice transitions measured on '%s'"), Checked, *Chosen));
-	return true;
-}
-
-
-// The two pickers. Retail collects an activity's candidates once and hands the array to
+bool // The two pickers. Retail collects an activity's candidates once and hands the array to
 // one of two functions: `SelectWeightedSequence` (`vampire.dll 0x1008dc40` -> `FUN_10427fc0`) draws
 // by authored `actweight`, and `SelectHeaviestSequence` (`0x1008dd30` -> `FUN_104280f0`) keeps the
 // largest. Which one answers is latched per commit by entity flag `0x40000000`

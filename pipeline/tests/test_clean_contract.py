@@ -74,8 +74,8 @@ def test_clean_deletes_only_generated_targets_and_marks_corpus_incomplete() -> N
         # Every domain is gated after a clean, and each clears on its own.
         assert clean.incomplete_domains(export) == clean.DOMAINS
 
-        clean.mark_complete(export, ("audio",))
-        assert "audio" not in clean.incomplete_domains(export)
+        clean.mark_complete(export, ("cfg",))
+        assert "cfg" not in clean.incomplete_domains(export)
         assert "maps" in clean.incomplete_domains(export)
         # The aggregate outlives any single domain.
         assert incomplete.is_file()

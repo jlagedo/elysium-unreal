@@ -66,7 +66,7 @@ FString FElysiumMapRuntimePrerequisites::Missing() const
 	if (!bConstructionComplete) { MissingItems.Add(TEXT("runtime construction")); }
 	if (!bEntityWorldReady)     { MissingItems.Add(TEXT("entity substrate")); }
 	if (!bAnimationPreloadReady){ MissingItems.Add(TEXT("map animation residency")); }
-	if (!bAudioCatalogReady)    { MissingItems.Add(TEXT("audio catalog")); }
+	if (!bAudioPrefetchReady)   { MissingItems.Add(TEXT("audio prefetch")); }
 	if (bCollisionFailed)       { MissingItems.Add(TEXT("world collision failed")); }
 	else if (!bCollisionReady)  { MissingItems.Add(TEXT("world collision cooking")); }
 	if (bNavigationFailed)      { MissingItems.Add(TEXT("runtime navigation failed")); }
@@ -110,11 +110,6 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
 	if (bConstructionComplete && !bAnimationPreloadReady && !bAnimationPreloadPending)
 	{
 		OutFailure = TEXT("runtime construction did not complete map animation residency");
-		return EElysiumMapReadinessResult::Failed;
-	}
-	if (bConstructionComplete && !bAudioCatalogReady && WaitSeconds >= WatchdogSeconds)
-	{
-		OutFailure = TEXT("audio catalog did not become ready");
 		return EElysiumMapReadinessResult::Failed;
 	}
 	if (bConstructionComplete && !bMenuBackdrop
@@ -700,7 +695,7 @@ FElysiumMapRuntimePrerequisites AElysiumMapActor::CollectRuntimePrerequisites() 
 		&& !bNativeAnimationPreloadFailed && !bCharacterModelsPending;
 	P.bAnimationPreloadPending = bNativeAnimationPreloadPending || bCharacterModelsPending;
 	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
-	P.bAudioCatalogReady = !Audio || Audio->IsReadyForMapActivation();
+	P.bAudioPrefetchReady = !Audio || Audio->IsReadyForMapActivation();
 	P.bMenuBackdrop = bMenuBackdrop;
 	const EElysiumCollisionBuildState CollisionState = Collision
 		? Collision->GetBuildState() : EElysiumCollisionBuildState::Failed;

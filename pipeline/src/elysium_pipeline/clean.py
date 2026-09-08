@@ -16,15 +16,16 @@ OWNERSHIP_FILE = ".elysium-owned.json"
 INCOMPLETE_FILE = ".elysium-incomplete"
 MANIFEST_FILE = ".elysium-manifest.json"
 
-# The corpus is incomplete per DOMAIN, not as a whole: `export bundle audio` finishes the audio
-# catalogue and nothing else, and a content test that reads only that has no reason to abstain
+# The corpus is incomplete per DOMAIN, not as a whole: `export bundle cfg` finishes the engine
+# configuration and nothing else, and a content test that reads only that has no reason to abstain
 # because the scripts are still missing. (`npc` and `items` retired with their exporters in R8;
-# characters and wield are native import lanes with their own receipts.)  One marker per domain, named for the bundle that
+# `audio` retired with `UE_extract_sounds.py` in AUD0.4, the sound family being `export_v2` units
+# deployed by `import sound`/`import sound-schemes`; characters and wield are native import lanes
+# with their own receipts.)  One marker per domain, named for the bundle that
 # clears it (`maps` for the map exports), plus INCOMPLETE_FILE as the aggregate the repository
 # policy check and the human-facing message read.  The aggregate survives while any domain does.
 DOMAINS = (
     "maps",
-    "audio",
     "cfg",
     # The shared static corpus: every texture, material and static model in the install, decoded
     # once. Every map export and every bake resolves against it, so it is its own domain.

@@ -88,7 +88,7 @@ protected:
 	// live under sound/usable/<Category>/<soundgroup>/<subkey>.wav (RE: CBaseDoor::Spawn @0x100ef060
 	// reads open/close/swing/locked; CBaseButton::Spawn @0x100c8810 reads on/off). InitMoverSounds
 	// reads the `soundgroup` key + the SILENT spawnflag and resolves the shipped subkeys from the
-	// offline manifest (out/sound/usable/soundgroups.json). Call from the leaf's Spawn(). Category is
+	// corpus (ElysiumSoundGroups::Resolve). Call from the leaf's Spawn(). Category is
 	// "openable" (doors) or "switches" (buttons); SilentFlag is the SF bit that mutes the mover (0 = none).
 	void InitMoverSounds(const TCHAR* Category, int32 SilentFlag);
 

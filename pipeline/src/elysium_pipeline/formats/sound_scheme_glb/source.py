@@ -5,8 +5,8 @@ table -- `sound/schemes/<stem>.txt` is its own file, so the source closure is th
 carries no `span`.
 
 `install.build_index()`'s default `dirs` does not walk `sound/`; a caller resolving this seam
-against the real install rebuilds the index with `sound` added, the way
-`exporters/UE_extract_sounds.py` already does for the runtime sound export.
+against the real install rebuilds the index with `sound` added (`build_index(dirs=("sound", ...))`),
+or a patch's loose `sound/schemes/` overrides vanish behind the VPK copies.
 """
 
 from __future__ import annotations

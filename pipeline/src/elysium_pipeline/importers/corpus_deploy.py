@@ -29,7 +29,8 @@ what the stamp records -- so a stamp can never bless bytes that are not on disk.
 
 An orphan -- a file left behind by a renamed or retired unit -- is pruned: anything under a lane's
 own destination directories that this run neither wrote nor kept for a failed unit is deleted, and
-any directory the pruning empties goes with it.
+any directory the pruning empties goes with it. A subtree another lane owns is named in
+`foreign_directories` and stepped over, so two lanes can share a root without pruning each other.
 """
 
 from __future__ import annotations
@@ -254,6 +255,12 @@ class Lane:
     owned_directories: tuple[str, ...]
     #: What to tell the operator when the export root holds none of this lane's units.
     empty_hint: str
+    #: Corpus-relative subtrees that sit *inside* `owned_directories` but belong to another lane,
+    #: so this lane neither writes nor prunes them. `sound/schemes/` is the case: the scheme
+    #: `.txt` files are the `sound-schemes` lane's, below the `sound` lane's own root, and without
+    #: this every `import sound` would delete them as orphans and every `import sound-schemes`
+    #: would put them back.
+    foreign_directories: tuple[str, ...] = ()
 
 
 def _targets_current(destination_root: Path, targets: dict[str, Any]) -> bool:
@@ -379,7 +386,18 @@ def _deploy_unit(
 
 
 def _prune(destination_root: Path, lane: Lane, kept: set[Path]) -> int:
-    """Delete every file below the lane's own directories that this run did not write or keep."""
+    """Delete every file below the lane's own directories that this run did not write or keep.
+
+    A `foreign_directories` subtree is stepped over whole -- neither its files nor the directory
+    itself -- because it is another lane's deploy, not this one's orphan.
+    """
+
+    foreign = {
+        Path(destination_root, *PurePosixPath(name).parts) for name in lane.foreign_directories
+    }
+
+    def is_foreign(path: Path) -> bool:
+        return any(path == root or root in path.parents for root in foreign)
 
     pruned = 0
     for owned in lane.owned_directories:
@@ -387,7 +405,7 @@ def _prune(destination_root: Path, lane: Lane, kept: set[Path]) -> int:
         if not root.is_dir():
             continue
         for path in list(root.rglob("*")):
-            if path.is_dir() or path in kept:
+            if path.is_dir() or path in kept or is_foreign(path):
                 continue
             path.unlink()
             pruned += 1
@@ -396,6 +414,8 @@ def _prune(destination_root: Path, lane: Lane, kept: set[Path]) -> int:
             key=lambda path: len(path.parts),
             reverse=True,
         ):
+            if is_foreign(directory):
+                continue
             try:
                 directory.rmdir()
             except OSError:

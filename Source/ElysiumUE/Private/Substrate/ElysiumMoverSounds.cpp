@@ -1,79 +1,180 @@
-// Mover sounds — the soundgroup manifest loader.
-//
-// Reference: `docs/vtmb/audio_pipeline.md` + the decompiled CBaseDoor::Spawn (FUN_100ef060, reads the
-// subkeys "close"/"open"/"swing"/"locked") and CBaseButton::Spawn (FUN_100c8810, reads "on"/"off").
-// VtMB has no soundgroup *data file*: a `soundgroup` token resolves by directory convention to
-// sound/usable/<category>/<token>/<subkey>.wav (openable=doors, switches=buttons). The offline
-// UE_extract_sounds.py mirrors those WAVs and writes out/sound/usable/soundgroups.json; this loads
-// it once. Per-mover playback (FElysiumMoverBase's sound methods) lives in ElysiumMover.cpp.
+// The `soundgroup` resolver. The retail chain it reproduces — the five SndScheme tables, the
+// "Usable\<Category>" directory template, the directory walk, the verbatim case-insensitive lookup
+// and the category-root miss arm — is written out with its addresses in ElysiumMoverSounds.h.
 
 #include "Substrate/ElysiumMoverSounds.h"
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumKeyValues.h"
 #include "Substrate/ElysiumMover.h"
+#include "Substrate/ElysiumVdataLoad.h"
 
-#include "Dom/JsonObject.h"
-#include "Misc/FileHelper.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
+#include "HAL/FileManager.h"
+#include "Misc/Paths.h"
 
-// cat -> group(lower) -> subkey -> sound-relative WAV. Loaded once from the offline manifest.
-using FMoverSoundTable = TMap<FString, TMap<FString, TMap<FName, FString>>>;
-
-const FMoverSoundTable& ElysiumMoverSoundManifest()
+namespace
 {
-	static FMoverSoundTable Table;
-	static bool bLoaded = false;
-	if (bLoaded)
-	{
-		return Table;
-	}
-	bLoaded = true;   // load-once, even on failure (missing manifest = movers stay silent)
+	using ElysiumKeyValues::FKvNode;
 
-	// Not a VtMB sound unit: a pipeline-authored index, so it stays on the legacy loose export
-	// while the sound family itself reads from the corpus.
-	const FString Path = FElysiumContentPaths::MoverSoundGroupsFile();
-	FString Text;
-	if (!FFileHelper::LoadFileToString(Text, *Path))
+	// The vdata vocabulary file behind each registered category (FUN_101f66c0 @0x101f66c0 pairs the
+	// table name with its directory token; FUN_101f5210 @0x101f5210 turns the table name into
+	// `vdata/system/<table>.txt`). Note `SndScheme_Computer` is singular while its directory token
+	// is `Computers` — the two are independent strings in retail and both are reproduced verbatim.
+	const TCHAR* VocabularyFileFor(const FString& Category)
 	{
-		UE_LOG(LogElysiumMover, Log, TEXT("mover sounds: no manifest at %s (movers silent)"), *Path);
-		return Table;
+		if (Category == ElysiumSoundGroups::Openable)  { return TEXT("system/sndscheme_openable.txt"); }
+		if (Category == ElysiumSoundGroups::Switches)  { return TEXT("system/sndscheme_switch.txt"); }
+		if (Category == ElysiumSoundGroups::Computers) { return TEXT("system/sndscheme_computer.txt"); }
+		return nullptr;
 	}
 
-	TSharedPtr<FJsonObject> Root;
-	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Text);
-	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	// `SoundSchemeTables/SoundScheme/SoundList/Sound/Name`, in file order — the ordinal slots
+	// FUN_101f5390 @0x101f5390 allocates. Order is kept because retail addresses a cue by its index
+	// in this list, so a reader that ever needs the ordinal has it.
+	TArray<FName> ParseVocabulary(const FString& Category)
 	{
-		UE_LOG(LogElysiumMover, Warning, TEXT("mover sounds: manifest parse failed (%s)"), *Path);
-		return Table;
-	}
-
-	// { category: { group: { subkey: relpath } } }
-	for (const auto& CatPair : Root->Values)
-	{
-		const TSharedPtr<FJsonObject>* CatObj;
-		if (!CatPair.Value.IsValid() || !CatPair.Value->TryGetObject(CatObj))
+		TArray<FName> Out;
+		const TCHAR* Rel = VocabularyFileFor(Category);
+		if (!Rel)
 		{
-			continue;
+			return Out;
 		}
-		TMap<FString, TMap<FName, FString>>& Groups = Table.FindOrAdd(FString(CatPair.Key).ToLower());
-		for (const auto& GroupPair : (*CatObj)->Values)
+		TSharedPtr<FKvNode> Root;
+		FString Error;
+		if (!ElysiumVdata::ReadVdata(Rel, Root, Error))
 		{
-			const TSharedPtr<FJsonObject>* GroupObj;
-			if (!GroupPair.Value.IsValid() || !GroupPair.Value->TryGetObject(GroupObj))
+			UE_LOG(LogElysiumMover, Log,
+				TEXT("soundgroup: no `%s` vocabulary (%s) — every `%s` cue stays silent"),
+				*Category, *Error, *Category);
+			return Out;
+		}
+		const FKvNode* Tables = ElysiumVdata::RootBlock(Root, TEXT("SoundSchemeTables"), Rel, Error);
+		const FKvNode* Scheme = Tables ? Tables->Child(TEXT("SoundScheme")) : nullptr;
+		const FKvNode* List   = Scheme ? Scheme->Child(TEXT("SoundList")) : nullptr;
+		if (!List)
+		{
+			UE_LOG(LogElysiumMover, Warning,
+				TEXT("soundgroup: `%s` vocabulary has no SoundSchemeTables/SoundScheme/SoundList"),
+				*Category);
+			return Out;
+		}
+		for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : List->Kids)
+		{
+			if (Kid.Key != TEXT("sound") || !Kid.Value.IsValid())
 			{
 				continue;
 			}
-			TMap<FName, FString>& Subs = Groups.FindOrAdd(FString(GroupPair.Key).ToLower());
-			for (const auto& SubPair : (*GroupObj)->Values)
+			const FString Name = ElysiumVdata::Trim(Kid.Value->Str(TEXT("Name"), FString())).ToLower();
+			if (!Name.IsEmpty())
 			{
-				FString Rel;
-				if (SubPair.Value.IsValid() && SubPair.Value->TryGetString(Rel))
-				{
-					Subs.Add(FName(FString(SubPair.Key)), Rel);
-				}
+				Out.AddUnique(FName(*Name));
 			}
 		}
+		return Out;
 	}
-	return Table;
+
+	// `usable/<category>` — the "Usable\<Category>" of FUN_101f41b0 @0x101f41b0, where "Usable" is
+	// the `Name` key all three vocabulary files author. Corpus-relative, under SoundDir().
+	FString CategoryDir(const FString& Category)
+	{
+		return FString(TEXT("usable/")) + Category;
+	}
+}
+
+namespace ElysiumSoundGroups
+{
+	const TArray<FString>& Categories()
+	{
+		static const TArray<FString> All = { Openable, Switches, Computers };
+		return All;
+	}
+
+	const TArray<FName>& Subkeys(const FString& Category)
+	{
+		static TMap<FString, TArray<FName>> Cache;
+		if (const TArray<FName>* Hit = Cache.Find(Category))
+		{
+			return *Hit;
+		}
+		return Cache.Add(Category, ParseVocabulary(Category));
+	}
+
+	const TMap<FName, FString>& Resolve(const FString& Category, const FString& InGroup)
+	{
+		static TMap<FString, TMap<FName, FString>> Cache;
+		const FString Cat = Category.ToLower();
+		// Verbatim but for the case fold: retail's FUN_101f39d0 @0x101f39d0 compares the authored
+		// token with `__strcmpi` and tries no other spelling, so neither does this. The corpus is
+		// deployed all-lower-case, which is the only reason the fold is needed at all.
+		const FString Group = InGroup.TrimStartAndEnd().Replace(TEXT("\\"), TEXT("/")).ToLower();
+		const FString Key = Cat + TEXT("/") + Group;
+		if (const TMap<FName, FString>* Hit = Cache.Find(Key))
+		{
+			return *Hit;
+		}
+
+		TMap<FName, FString> Resolved;
+		const TArray<FName>& Vocabulary = Subkeys(Cat);
+		if (!Vocabulary.IsEmpty() && !Group.IsEmpty())
+		{
+			// The group's own directory if it is shipped; otherwise the category root, which is what
+			// FUN_101f42a0 @0x101f42a0 returns on a lookup miss (the table's own base index, i.e. the
+			// default `open.wav`/`close.wav`/... sitting directly under `usable/<category>/`).
+			FString Dir = CategoryDir(Cat) / Group;
+			const bool bGroupShipped =
+				IFileManager::Get().DirectoryExists(*(FElysiumContentPaths::SoundDir() / Dir));
+			if (!bGroupShipped)
+			{
+				Dir = CategoryDir(Cat);
+			}
+
+			TArray<FString> Missing;
+			for (const FName& Sub : Vocabulary)
+			{
+				const FString Rel = Dir / Sub.ToString() + TEXT(".wav");
+				if (FPaths::FileExists(FElysiumContentPaths::SoundDir() / Rel))
+				{
+					Resolved.Add(Sub, Rel);
+				}
+				else
+				{
+					Missing.Add(Sub.ToString());
+				}
+			}
+
+			// One diagnostic per (category, group), emitted once because the cache is lazy. A group
+			// that ships no file for a subkey is silent on that cue, exactly as retail's unfilled
+			// slot is (`switches/elevator_button` has `on.wav` and no `off.wav`).
+			if (!bGroupShipped)
+			{
+				UE_LOG(LogElysiumMover, Log,
+					TEXT("soundgroup '%s/%s' is not shipped; falling back to the category root %s (%d cue(s))"),
+					*Cat, *Group, *CategoryDir(Cat), Resolved.Num());
+			}
+			if (!Missing.IsEmpty())
+			{
+				UE_LOG(LogElysiumMover, Log,
+					TEXT("soundgroup '%s/%s' ships no %s — those cues are silent"),
+					*Cat, *Group, *FString::Join(Missing, TEXT(", ")));
+			}
+		}
+		return Cache.Add(Key, MoveTemp(Resolved));
+	}
+
+	TArray<FString> EnumerateGroups(const FString& Category)
+	{
+		TArray<FString> Groups;
+		IFileManager::Get().IterateDirectory(
+			*(FElysiumContentPaths::SoundDir() / CategoryDir(Category.ToLower())),
+			[&Groups](const TCHAR* Path, bool bIsDirectory)
+			{
+				if (bIsDirectory)
+				{
+					Groups.Add(FPaths::GetCleanFilename(FString(Path)));
+				}
+				return true;
+			});
+		Groups.Sort();
+		return Groups;
+	}
 }

@@ -24,7 +24,6 @@ maps = [
   "sm_smoke_1",
 ]
 bundles = [
-  "audio",
   "particles",
   "scripts",
   "signs",
@@ -37,7 +36,6 @@ bundles = [
 [profiles.all]
 discover = true
 bundles = [
-  "audio",
   "particles",
   "scripts",
   "signs",

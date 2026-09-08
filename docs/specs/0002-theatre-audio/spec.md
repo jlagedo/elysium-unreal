@@ -19,18 +19,25 @@ driving this spec: sounds loop and are not cleared at the end of the first cutsc
   resolve.
 
 ## Requirements
-1. **Catalog is patch-first and complete.** One record per normalized logical path: relative path,
-   codec, channels, sample rate, decoded frame count/duration, source provenance, referring
-   systems, a decode policy (`resident`/`stream`/`auto`), optional dialogue joins (`.lip`/`.vcd`/
-   `.dlg` line id), and validation state (case collisions, missing references). Typed sidecars
-   carry authored behaviour (map SoundSchemes incl. music states/random emitters/`Dry`/`NoPause`/
-   `RoomDSP`; entity sound schemes for `Character`/`Openable`/`Switches`/`Computer`/`Weapons`;
-   item/weapon/discipline sound-event lists; sentences and surface properties; radio/news
-   dependency lists; per-map referenced assets; unresolved I/O wires). `soundgroup` is always
-   recorded with its domain. Paths case-insensitive/slash-normalized; diagnostics keep original
-   spelling. Export fails on an absent required file, ambiguous case collision, unknown scheme
-   event, or an output naming no target; optional patch fallbacks are recorded, never silently
-   replaced. Raw audio stays gitignored under `$ELYSIUM_EXPORT_ROOT/sound/`.
+1. **The catalog is the V2 sound family, and the runtime reads nothing else.** One `sound` unit
+   per normalized logical path (`exports_v2/sounds/<key>.glb`, schema 1.1.0): codec, channels,
+   sample rate, exact decoded duration, VPK/loose provenance with sha256, `identity.referencedBy`
+   back-edges from the corpus index, the same-stem `.lip` decoded and capsuled, and the mp3-first
+   pairing as data. Typed units carry authored behaviour: `sound-scheme` (music states, random
+   emitters, `Dry`/`NoPause`/`RoomDSP`), `vdata/system/sndscheme_{char,computer,openable,switch,wpn}`,
+   `vdata/items/*` (`SoundData`/`SoundFX`), `sentences`, `surface-properties` + `sound-scripts`,
+   `vdata/system/{radio_data,newscaster_*,sound_volume_table}`, and `map-entities`
+   `dependencies[]`/`coverage.unresolved` for per-map references and dead wires. Deployed loose
+   under the gitignored `Content/ElysiumCorpus/` (`sound/`, `lip/`, `dlg/`, `scenes/`, `vdata/`,
+   and `sound/schemes/` once AUD0.3 lands) with lower-cased keys; every runtime reader folds
+   before it looks, diagnostics keep the authored spelling. Optional patch fallbacks are recorded,
+   never silently replaced; a missing reference is a per-referrer `resolved:false`, never a swap.
+   `soundgroup` resolves at runtime by retail's directory convention (§7b) over the deployed
+   `sndscheme_*` vocabularies, not through a pipeline-authored index. No audio consumer opens a
+   file under the legacy `-ElysiumContentRoot`; `catalog.json`, `soundgroups.json` and the
+   `sound/Schemes/*.txt` mirror are retired with the `export bundle audio` lane. Decode policy is
+   derived at load from `codec`; category is a property of the referrer set; case-collision
+   roll-ups belong to the corpus index.
 2. **Runtime is a request/handle service, not whole-file game-thread playback.** One canonical
    case-insensitive resolver over the catalog, worker decode, a byte-budgeted PCM LRU for short
    sounds, bounded streaming buffers for dialogue/music/radio (no long track ever exists as
@@ -104,11 +111,50 @@ engine-neutral retail facts are `docs/vtmb/audio_pipeline.md`.
   camera consume; the mix/ambience/room specs (AUD5–AUD8, out of scope here) build on this tier.
 
 ## Tasks
-- [ ] **AUD0 The catalog** — offline patch-first catalog + typed sidecars. *Acceptance:* every
-  referring system's sound resolves to a catalog record or an explicit optional/missing
-  disposition; `audio_surface_survey.py` reports no unclassified reference on the map priority set.
+- [x] **AUD0 The catalog** — the V2 sound family is the catalog; retire the last legacy reads.
+  *State 2026-09-08:* 10,892 sound units exported and deployed 1:1 to `Content/ElysiumCorpus/sound`
+  (5,550 wav + 5,342 mp3; 7,105 `.lip` beside the audio and mirrored to `lip/`), import report
+  clean; `dlg` (147), `scenes` (5,444) and `vdata` (465, incl. every `sndscheme_*`, `sound_volume_table`,
+  `radio_data`, `newscaster_*`, `items/*`) deployed. Every audio byte read in `Source/` goes through
+  `SoundDir()` on the corpus; `.lip`, `.vcd`, `.dlg`, `sound_volume_table` likewise. Landed 2026-09-08 (AUD0.1–0.6 below). Before: three files
+  were opened from the legacy export root: `audio/catalog.json`
+  (`ElysiumAudioSubsystem.cpp:204`, read for existence and `version==1` only, stores nothing),
+  `sound/usable/soundgroups.json` (`ElysiumMoverSounds.cpp:35`, consumed by movers, terminals and
+  the Cog audio window) and `sound/Schemes/*.txt` (`ElysiumSoundScheme.cpp:158`, raw `Root()`
+  concat; the `sound-scheme` unit publishes no capsule and no importer lane exists).
+  `sp_tutorial_1` census (`docs/vtmb/three-map-audio-surface.md` §2.5): 268 referenced paths,
+  257 resolve in the corpus, 6 are the scheme `.txt` (legacy only), 5 exist nowhere and each has
+  a retail disposition. *Acceptance:* no accessor or raw path in `Source/` opens an audio,
+  dialogue, scene or scheme file under `Root()`; every reference on the three playable-path maps
+  resolves to a corpus file or an explicit disposition; the legacy `audio` bundle is deleted.
+  - [x] **AUD0.1** Delete the `catalog.json` read, `AudioCatalogFile()` and the `bCatalogReady`
+    map-activation gate (`ElysiumMapActorLifecycle.cpp:69,115`); readiness is corpus presence.
+  - [x] **AUD0.2** Soundgroup resolver over the corpus: token → `usable/<category>/<group>/<subkey>.wav`,
+    subkey vocabulary from the deployed `sndscheme_{openable,switch,computer}.txt`, category by
+    class (door → `openable`, button/switch → `switches`, `prop_hacking` → `computers`), the
+    space/underscore token variance reproduced, a missing subkey silent with a diagnostic (retail
+    `elevator_button` ships no `off`). Delete `MoverSoundGroupsFile()`, `soundgroups.json` and
+    `entity_events.json`. NPC `soundgroup`s (`Young_Thug`) stay on the character voice path.
+  - [x] **AUD0.3** Schemes to the corpus: `sound_scheme_glb.py` publishes the source capsule, a new
+    `import sound-schemes` lane deploys `Content/ElysiumCorpus/sound/schemes/<name>.txt`, the runtime
+    gets a `SchemeFile(Rel)` corpus accessor replacing the `Root()` concat, and scheme `Filename`
+    values pass through the sound resolver's lower-case fold.
+  - [x] **AUD0.4** Retire `UE_extract_sounds.py`, the `audio` bundle in `profiles.toml`/`export_all.py`,
+    `exports/audio/*` and `exports/sound/**`; update `docs/contracts/seam_map_sound*.md`.
+  - [x] **AUD0.5** Tests: `Elysium.Content.CorpusPathsFlip` asserts every audio accessor (sound,
+    lip, scene, dlg, scheme) resolves under `CorpusRoot()` and none under `Root()`; a decode test
+    runs `FElysiumSoundCache::LoadSoundDecoded` on one corpus MS-ADPCM wav and one mp3 (no test
+    touches the decoder today).
+  - [x] **AUD0.6** Reference validation on the corpus index: the survey's unresolved-wire
+    disposition (50 across 108 maps; one on the tutorial, `tutwareportal01.OnFullyClosed →
+    scheme_guns.FadeOut`) and the missing-file dispositions reported from `map-entities`
+    `dependencies[].resolved` and the runtime negative cache; no unclassified reference on the
+    three playable-path maps.
 - [ ] **AUD1 The service** — resolver, worker decode, PCM LRU, streaming buffers, handles,
-  owner/epoch cancellation. *Acceptance:* a long MP3 never exists as whole-file PCM; prefetch/
+  owner/epoch cancellation. *State 2026-09-08:* resolver (lower-case fold, mp3/wav probe), worker
+  decode, 64 MiB byte LRU, generation-safe handles, `CancelOwner` and `RetireMapEpoch` exist;
+  every file, MP3 included, is decoded whole (`ElysiumSoundCache.cpp:199`), there is no streaming
+  path and no negative cache. *Acceptance:* a long MP3 never exists as whole-file PCM; prefetch/
   decode does no game-thread file/codec work; map travel cancels every old-map request; forced
   small buffers exercise underflow diagnostics without a stale-handle crash. *Deps:* AUD0.
 - [ ] **AUD2 The event surface** — typed events for movers/switches/containers, terminals,

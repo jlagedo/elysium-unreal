@@ -71,7 +71,10 @@ struct FElysiumMapRuntimePrerequisites
 	bool bEntityWorldReady = false;
 	bool bAnimationPreloadReady = false;
 	bool bAnimationPreloadPending = false;
-	bool bAudioCatalogReady = true;
+	// AUD0.1: no catalog gate any more — this is the `start_enabled` prefetch drain alone (spec
+	// 0002 requirement 7). It keeps no arm of its own; a prefetch that never lands is caught by the
+	// shared activation watchdog below, naming "audio prefetch" among the missing prerequisites.
+	bool bAudioPrefetchReady = true;
 	bool bMenuBackdrop = false;
 	bool bCollisionReady = false;   // Ready or intentionally Disabled
 	bool bCollisionFailed = false;

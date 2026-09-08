@@ -1775,6 +1775,20 @@ def import_sound(ctx: typer.Context) -> None:
     _execute(_state(ctx), "import sound", ExitCode.OFFLINE_EXPORT, action, require_work=False)
 
 
+@import_app.command("sound-schemes")
+def import_sound_schemes(ctx: typer.Context) -> None:
+    """Deploy the sound-scheme corpus -- `sound/schemes/*.txt` -- into Content/ElysiumCorpus."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import sound_schemes as importer
+
+        _run_corpus_lane(config, importer.import_sound_schemes, "sound-schemes")
+
+    _execute(
+        _state(ctx), "import sound-schemes", ExitCode.OFFLINE_EXPORT, action, require_work=False
+    )
+
+
 @import_app.command("textures")
 def import_textures(
     ctx: typer.Context,
@@ -2990,7 +3004,7 @@ def export_bundle(
     force: bool = typer.Option(False, "--force"),
 ) -> None:
     allowed = {
-        "audio", "corpus", "particles", "scripts", "signs", "vdata", "cfg", "scenes",
+        "corpus", "particles", "scripts", "signs", "vdata", "cfg", "scenes",
         "ui", "policy",
     }
     if bundle not in allowed:

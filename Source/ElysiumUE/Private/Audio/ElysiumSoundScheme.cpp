@@ -151,16 +151,18 @@ const FElysiumSoundScheme* FElysiumSoundSchemeManager::LoadScheme(const FString&
 	{
 		return Cached->bParsed ? Cached : nullptr;
 	}
-	// Scheme files live under out/sound/ mirroring VtMB (SchemeRel is "sound/Schemes/x.txt", so it
-	// resolves under Root() directly, not SoundDir()). Case-insensitive on Windows filesystems.
-	// Still a LEGACY read after DC flipped the sound family to CorpusRoot(): no `sound/schemes/`
-	// unit is published, so the scheme tables have no corpus home yet.
-	const FString AbsPath = FElysiumContentPaths::Root() / SchemeRel;
+	// AUD0.3: the scheme tables read from the corpus like every other audio byte. SchemeRel is the
+	// raw `scheme_file` keyvalue ("sound/Schemes/SP_Tutorial_City.txt"); SchemeFile() strips the
+	// leading "sound/" the way retail's own table builder does (FUN_101f3690 @0x101f3690) and folds
+	// the rest to the deployed lower-case spelling.
+	const FString AbsPath = FElysiumContentPaths::SchemeFile(SchemeRel);
 	FElysiumSoundScheme Parsed;
 	const bool bOk = FElysiumSoundScheme::ParseFile(AbsPath, Parsed);
 	if (!bOk)
 	{
-		UE_LOG(LogElysiumScheme, Warning, TEXT("scheme parse failed / missing: %s"), *AbsPath);
+		UE_LOG(LogElysiumScheme, Warning,
+			TEXT("scheme '%s' not in the corpus at %s (run `uv run elysium import sound-schemes`)"),
+			*SchemeRel, *AbsPath);
 	}
 	const FElysiumSoundScheme& Stored = SchemeCache.Add(SchemeRel, MoveTemp(Parsed));
 	return Stored.bParsed ? &Stored : nullptr;

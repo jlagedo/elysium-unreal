@@ -567,17 +567,17 @@ struct FElysiumContentPaths
 	static FString SoundDir() { return CorpusRoot() / TEXT("sound"); }
 	static FString SoundFile(const FString& Rel) { return SoundDir() / CorpusRel(Rel); }
 
-	// The offline validation record the audio exporter writes (per-file duration/format). It is not
-	// a VtMB artifact and no capsule carries it, so it stays on the legacy loose export; its absence
-	// is already a warning, not a failure, and every read falls back to direct mirror resolution.
-	static FString AudioCatalogFile() { return Root() / TEXT("audio/catalog.json"); }
-
-	// The one sound-family read still on the legacy loose export: `usable/soundgroups.json` is a
-	// pipeline-authored index, not a VtMB sound unit, so no capsule carries it and the sound import
-	// lane does not deploy it. Remains a legacy read until the mover-sound index gets its own unit.
-	static FString MoverSoundGroupsFile()
+	// Sound schemes. A `logic_soundscheme`/`ambient_soundscheme` `scheme_file` keyvalue carries the
+	// install-relative spelling "sound/Schemes/SP_Tutorial_City.txt"; `uv run elysium import
+	// sound-schemes` deploys the same bytes as `sound/schemes/<name>.txt`, lower-cased. Retail's own
+	// table builder strips a leading "sound\\" off the directory it was handed before it walks it
+	// (FUN_101f3690 @vampire.dll 0x101f3690, `_strstr(dir, "sound\\")`), so accepting either
+	// spelling is what the engine does, not a convenience.
+	static FString SchemeFile(const FString& Rel)
 	{
-		return Root() / TEXT("sound/usable/soundgroups.json");
+		FString Sub = CorpusRel(Rel);
+		if (Sub.StartsWith(TEXT("sound/"))) { Sub.RightChopInline(6); }
+		return SoundDir() / Sub;
 	}
 
 	// Choreographed scenes and their phoneme sidecars, mirrored verbatim from the install by

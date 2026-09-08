@@ -16,7 +16,11 @@ from elysium_pipeline.formats.unit_contract.references import asset_id as _contr
 
 KIND = "sound-scheme"
 KIND_TITLE = "Sound-scheme"
-SCHEMA_VERSION = "1.0.0"
+#: 1.1.0 added the source capsule: the scheme `.txt`'s exact bytes travel in the unit's BIN
+#: chunk, which is what lets `uv run elysium import sound-schemes` deploy the file the
+#: install holds without the install. Before it, a sound-scheme unit carried no BIN chunk at
+#: all, because everything it decodes the source wrote as text.
+SCHEMA_VERSION = "1.1.0"
 
 #: The install directory every unit is cut from, and the extension every one of its files carries.
 SOURCE_ROOT = "sound/schemes/"

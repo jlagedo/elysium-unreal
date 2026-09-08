@@ -270,9 +270,10 @@ public:
 	void SetPitch(FElysiumVoiceHandle Handle, float Pitch);
 	void CancelOwner(const FElysiumAudioOwner& Owner, float FadeSeconds = 0.f);
 	void RetireMapEpoch(uint64 MapEpoch);
-	bool IsCatalogReady() const { return bCatalogReady; }
-	bool IsReadyForMapActivation() const { return bCatalogReady && PendingPrefetches == 0; }
-	const FString& CatalogError() const { return CatalogLoadError; }
+	// Map activation waits on the outstanding prefetches only. AUD0.1 deleted the `catalog.json`
+	// gate: readiness is corpus presence, and that is a directory probe answered once at startup.
+	static bool IsSoundCorpusPresent();
+	bool IsReadyForMapActivation() const { return PendingPrefetches == 0; }
 
 	FElysiumVoiceEventDelegate& OnVoiceEvent() { return VoiceEvents; }
 	FElysiumNoiseEventDelegate& OnGameplayNoise() { return NoiseEvents; }
@@ -330,7 +331,6 @@ private:
 	void CompleteAt(int32 VoiceIndex, EElysiumVoiceCompletion Completion);
 	void ApplyMasterGain();
 	void HandleAudioFinished(UAudioComponent* Component);
-	void BeginCatalogLoad();
 	float OutputGain(const FElysiumAudioRequest& Request) const;
 	void RealizeVoice(FElysiumVoiceHandle Handle, FElysiumSoundCache::FDecodedPtr Decoded);
 	void EmitGameplayNoise(const FElysiumAudioVoice& Voice);
@@ -346,9 +346,7 @@ private:
 	FElysiumVoiceEventDelegate VoiceEvents;
 	FElysiumNoiseEventDelegate NoiseEvents;
 	TArray<IConsoleObject*> ConsoleObjects;
-	bool bCatalogReady = false;
 	int32 PendingPrefetches = 0;
-	FString CatalogLoadError;
 
 	FElysiumAudioLatency Latency;
 	bool bLatencyQueried = false;
