@@ -3,8 +3,8 @@
 Two identities share this package: `vtmb:font:<stem>` for one `.fnt` glyph table below
 `materials/fonts/`, and the single `vtmb:font-list:fontlist` registry unit cut from
 `materials/fonts/fontlist.txt`. Each declares its own extension, `ELYSIUM_vtmb_font` and
-`ELYSIUM_vtmb_font_list` respectively, per `seam_map_unit_contract.md`'s "every unit declares its
-own extension" rule -- mirroring the sibling two-identity seam, `shader_program_glb`.
+`ELYSIUM_vtmb_font_list` respectively, per the unit contract's rule that every unit declares its
+own extension -- mirroring the sibling two-identity seam, `shader_program_glb`.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ FONT_EXTENSION = extension_name("font")
 FONT_LIST_EXTENSION = extension_name("font-list")
 SCHEMA_VERSION = "1.0.0"
 
-#: The `asset.generator` title each kind signs its product with (`seam_map_unit_contract.md`:
-#: `Elysium <Kind> GLB Exporter`, hyphenating a multi-word kind to match its kind slug, e.g.
+#: The `asset.generator` title each kind signs its product with
+#: (`Elysium <Kind> GLB Exporter`, hyphenating a multi-word kind to match its kind slug, e.g.
 #: `Expression-table`, `Nav-graph`, `Shader-source`). `font-list`'s own slug hyphenates the same
 #: way, so its title is `Font-list`, not `Font List`.
 FONT_GENERATOR_TITLE = "Font"

@@ -502,7 +502,7 @@ void FElysiumTerminal::ResolveScreenAttachments()
 
 void FElysiumTerminal::ReportMissingAttachments() const
 {
-	// The one named content error (`docs/architecture/computer-terminal-architecture.md` §3.3):
+	// The one named content error:
 	// entity, model, which part is missing. It is raised where the pair is READ, not where a session
 	// is refused, because a model that does not carry `screen` / `screen_axis` is an authored/bake
 	// defect that exists from spawn — and because the world's own gate refuses the session before

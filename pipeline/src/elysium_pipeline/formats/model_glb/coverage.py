@@ -6,7 +6,7 @@ omission or a verified zero range, and one unclaimed non-zero byte aborts public
 
 The walkers below run over the *whole* model corpus rather than the character subset, so they meet
 compiler-retained donor payloads the declared tables do not index. Those are classified and named,
-never skipped: `seam_map_unit_contract.md` § Non-canonical storage is what forbids the shortcut.
+never skipped: the unit contract's non-canonical-storage rule is what forbids the shortcut.
 """
 
 from __future__ import annotations
@@ -1536,7 +1536,7 @@ def cover_vtx(
     through. `None` means every LOD does, which is the primary variant and any model that ships
     one variant alone. The legacy twin of a model that ships both publishes only the LODs the
     primary lacks: its remaining topology is the same triangles read a second time, so those bytes
-    are `omitted-proven` rather than `mapped`, which is what `seam_map_model.md` § Source closure
+    are `omitted-proven` rather than `mapped`, which is what the model seam's source-closure rule
     asks for and what keeps `mapped` meaning "this range reached the product".
     """
 

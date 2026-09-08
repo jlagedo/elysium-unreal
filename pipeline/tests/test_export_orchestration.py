@@ -368,8 +368,8 @@ def test_each_singular_glb_command_writes_the_key_it_was_given(unit, seam) -> No
     build_index.assert_called_once_with()
     assert export.call_args.args[1] == "a/one"
     assert destination.name == "a_one.glb"
-    # `seam_map_corpus_index.md` ("Unit identity"): the index is "rewritten by any single-unit
-    # command so that its `units[]` row for that unit is current", so every singular command
+    # The index is rewritten by any single-unit
+    # command so that its `units[]` row for that unit is current, so every singular command
     # ends by handing the corpus index the file it just wrote.
     refresh.assert_called_once_with(config.export_v2_root, destination)
 
@@ -478,7 +478,7 @@ def test_the_map_corpus_builds_one_index_for_all_four_units() -> None:
 
 
 def test_the_sound_script_command_publishes_the_manifest_and_the_soundscapes() -> None:
-    # `seam_map_sound_script.md` gives the manifest and the soundscapes no singular command of
+    # The sound-script seam gives the manifest and the soundscapes no singular command of
     # their own, so `sound-scripts-glb` is the only place they publish.
     index = {"one": object()}
     seams = (
@@ -573,8 +573,7 @@ def test_every_glb_seam_is_named_once_and_runs_a_callable() -> None:
 
 
 def test_the_corpus_index_is_the_last_seam_export_all_runs() -> None:
-    # It is written over the published corpus, so every other seam has to have run first
-    # (`seam_map_corpus_index.md`, "Unit identity").
+    # It is written over the published corpus, so every other seam has to have run first.
     assert export_manager.GLB_SEAMS[-1][0] == "corpus-index"
     assert export_manager.GLB_SEAMS[-1][1] is export_manager.export_all_corpus_index_glbs
 

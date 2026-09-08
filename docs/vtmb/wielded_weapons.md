@@ -708,6 +708,17 @@ axis on local-Y in the male file and local-Z in the female. The difference is no
 the two sexes do not render alike. Both files resolve from `pack001.vpk` (`.mdl`) and `pack008.vpk`
 (`.vtx`) and exist in exactly one version each; the Unofficial Patch does not replace either.
 
+### Bank clips state mounts away from bind, and the male/female mount banks diverge
+
+`character_shared_female_baseball`'s clip states its `handle` mount 123.5° and 7.5 cm from the
+bind pose of every body that plays it. `character_shared_female_pc_g2`'s clip states its
+`bush hook` mount 176.6° and 9.7 cm from `heather`'s bind. An untracked mount bone otherwise
+resolves to the playing mesh's own bind, so these are not redundant constant channels — a dropped
+one mounts the weapon at the wrong fixed offset while the body animates.
+
+The male locomotion bank's melee mount channels equal the body's own reference-pose local
+(removing them changes nothing on a male body), while the female bank's diverge by up to 2°.
+
 ### Materials
 
 The 67 models' materials resolve to 89 distinct texture keys, all present patch-first. Nearly every

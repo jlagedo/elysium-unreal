@@ -1,4 +1,4 @@
-"""R5.6 (`docs/architecture/seam_map_map_lighting.md` -> "## Import" -> "Lights final"): the V2
+"""R5.6: the V2
 map bake writes every VtMB-derived light value once, from the staged `lights[]` table.
 
 Three things in that section can change shipped content without any other test noticing: the

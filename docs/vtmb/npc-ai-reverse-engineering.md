@@ -340,6 +340,11 @@ it does not replace their native state, schedule, navigation, or interruption ma
 `SQUAD_SEE_ENEMY`, confirming that group knowledge is also a native combat/investigation concern,
 not just an editor grouping label.
 
+`CAI_Squad` is held at `+0x5da4`, with `m_iSquadDisconnected` at `+0x5bb0`, leave at `0x10316700`
+and rejoin at `0x10009601`, alongside `D_DISCONNECT_SQUAD`, the `SQUAD_SEE_ENEMY`/`SQUAD_NEW_ENEMY`
+producers and `IGNORE_SQUAD_SEE_ENEMY`. The `squadslot` namespace resolves through a table at
+`0x10920484`.
+
 ## Native NPC object and state
 
 The recovered `CAI_BaseNPC` datamap is rooted at `0x105c9814`. Important recovered state includes:
@@ -987,6 +992,9 @@ unknown name is an `Error`. The task arm routes on that sign bit into `m_bfAINPC
 routing marker, not a flag. `TASK_CLEAR_NPC_FLAG` is the exact mirror (`0x102a97d0` / `0x102a9830`).
 `[VtMB]`
 
+A separate generic flag applier pair, `0x101de6e1`/`0x101def10`, reads its mask from
+`[obj+0xa8]`; it has zero recovered callers.
+
 `m_bfAINPCFlags` (`+0x14b8`), bit 0 → 30:
 
 `D_IS_BUSY`, `DO_STARTLED`, `AT_CROSSWALK`, `PRESERVE_PATH`, `FINDING_BODY`, `CARRYING_BODY`,
@@ -1227,10 +1235,12 @@ The `_F` in `COND_INSIDE/OUTSIDE_INTERRUPT_DIST_F` is Follow: those programs re-
 continuously. The tasks `0x86`–`0x88` `TASK_FIND_FOLLOWER_BACKAWAY_{SIMPLE,NODE,ASTAR}` read the
 handle and fail with `"NPC had no follower boss"` when it is dead. The other readers: `IRelationType`
 (D_LI toward the boss, inherit the boss's relations, D_HT toward anyone whose boss I hate),
-`GetFollowerBoss()` (slot 293), `CNPC_VHuman::SelectIdealState` (a follower whose enemy is gone goes
-to alert, a non-follower to the hunt state `0xb`), the interest predicate (never investigate the
-boss), and `CBasePlayer::UpdateClientActionState` (a follower reads as an ally on the target HUD).
-`[VtMB]`
+`GetFollowerBoss()` (slot 293), `CNPC_VHuman::SelectIdealState` (`0x103851e0`) (a follower whose
+enemy is gone goes to alert, a non-follower to the hunt state `0xb` when the ConVar at
+`DAT_1092447c` is on), the interest predicate (never investigate the boss), and
+`CBasePlayer::UpdateClientActionState` (a follower reads as an ally on the target HUD). `[VtMB]`
+
+A second, unrecovered ConVar sits beside it at `DAT_10924f74`.
 
 ### The three `GatherConditions` sweeps and the interest predicate
 

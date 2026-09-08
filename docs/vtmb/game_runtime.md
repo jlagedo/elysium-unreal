@@ -14,12 +14,11 @@ the opening sequence:
 - `docs/vtmb/entity_io.md` — the Source I/O bus (7-field outputs, `ScriptHide`/`Unhide`, the
   usable set, `use_icon`).
 - `docs/vtmb/level_transitions.md` — the map chain and the three spawn mechanisms.
-- `docs/recovered/dice-system.md` — the World-of-Darkness d10 resolution.
+- `docs/vtmb/dice-system.md` — the World-of-Darkness d10 resolution.
 - `docs/vtmb/audio_pipeline.md` — the sound engine (Miles mixer, MS-ADPCM/MP3 codecs),
   the bespoke SoundScheme ambience/music system, DSP rooms.
 - `docs/vtmb/animation_and_movers.md` — skeletal `.mdl` v2531 animation (bones, the RLE
   keyframe tracks, skinning) and brush movers (doors/buttons/spinners).
-- `docs/project/rebuild-strategy.md` — the milestone roadmap this feeds.
 
 Evidence is tagged where it matters: **[VtMB]** = read from the user's own DLLs
 (strings/symbols/addresses); **[SDK]** = Source SDK 2013 reference; **[data]** =
@@ -246,7 +245,7 @@ Python-side is call-triggered and needs no separate scheduler.
 | Entity I/O dispatch (delays) | vampire.dll `CEventQueue` | `EventQueue`, output field 3 **[VtMB/doc]** |
 | Think scheduling | vampire.dll | `SetNextThink`/`m_flNextThink`/`Physics_RunThinkFunctions` **[VtMB]** |
 | AI / NPC / nav | vampire.dll | `npc_VHumanCombatant` 28-input surface **[doc]** |
-| RPG rules (dice/combat/disciplines/feats) | vampire.dll (compiled), parameterised by data | `Failed to match Discipline Event` **[VtMB]**; `CalcFeat`/`BumpStat` **[doc]**; `docs/recovered/dice-system.md` |
+| RPG rules (dice/combat/disciplines/feats) | vampire.dll (compiled), parameterised by data | `Failed to match Discipline Event` **[VtMB]**; `CalcFeat`/`BumpStat` **[doc]**; `docs/vtmb/dice-system.md` |
 | Quests | vampire.dll state + Python logic | `SetQuest`/`GetQuestState` **[doc]** |
 | Dialogue | vampire.dll eval, `.dlg` data, Python expr half | `CDialog::GetStartingLine` `0x100e0b10`, `CDialogDependency::TestPython` `0x100e9ff0` **[VtMB]** |
 | Camera (cutscene/track) | vampire.dll entities with thinks | `CCameraTrackTrackThink`, `RestoreCameraToPlayerControl` **[VtMB/doc]** |
@@ -446,7 +445,7 @@ and which only compare — is consolidated in `docs/vtmb/skills-and-checks.md`.
 
 `.dlg` skill-checks and verb rolls are **Feats**, not raw stats. A Feat sums a **variable-length
 `Base%d` list** and is read via `pc.CalcFeat("<feat>")` (case-insensitive), each naming a
-`"Normal"` dice weighting table (where `docs/recovered/dice-system.md`'s d10 resolver plugs in):
+`"Normal"` dice weighting table (where `docs/vtmb/dice-system.md`'s d10 resolver plugs in):
 
 | Feat | = Attribute + Ability | Feat | = Attribute + Ability |
 |---|---|---|---|
@@ -604,8 +603,8 @@ group in `strings_internal.txt` and are what select the tier split above; `Start
 the `Attributes` block but have no trait behind them, so a reader that stores the block as
 name → int loses them entirely and reads both orders as ordering 0.
 
-**Two marked divergences in our chargen** (`docs/project/reconstruction-direction.md` — logic layer, so both are
-recorded beside the faithful behaviour rather than silently taken):
+**Two marked divergences in our chargen** — both are recorded beside the faithful
+behaviour rather than silently taken:
 
 - **Route 3 of the entry popup is omitted.** `Help_Popup0`'s third action — the Unofficial Patch's
   "replay some Bloodlines missions as a human hunter from the Society of Leopold" — leads to
@@ -963,7 +962,7 @@ twice.
   against Humanity, plus `Frenzy_Check_Mod` (clan bane) and a low-blood penalty;
   cooldowns 190s success / 120s failure.
 
-The die itself (pool → tier, 10-again, botch table) is `docs/recovered/dice-system.md`.
+The die itself (pool → tier, 10-again, botch table) is `docs/vtmb/dice-system.md`.
 
 ### Zone legality — where a verb is allowed
 
@@ -1466,12 +1465,10 @@ cinematic model; the cast binds **by actor name**, not through `target1..4`) wit
 Captions = the `.vcd` `speak` token → `.dlg` line-id join. Deferred beats use
 `ScheduleTask(delay, "<pysource>")`. Format + event semantics: `docs/vtmb/choreographed_scenes.md`.
 
-Implementation status against these milestones: `docs/project/roadmap.md`.
-
 ### Retail conversation chain (recovered 2026-09-06)
 
-Recovered from `vampire.dll` / `client.dll` for `docs/project/plans/dialogue.md` (D0). The eight
-arms below are either reproduced or named as a modernization in that plan; nothing is silently
+Recovered from `vampire.dll` / `client.dll` (D0). The eight
+arms below are either reproduced or named as a modernization; nothing is silently
 dropped.
 
 1. **Entry.** `CBasePlayer::PlayerUse` (`0x10167850`) resolves the use target, tests the
@@ -1620,7 +1617,7 @@ Consolidated from the four investigations; each gates a real decision.
 - ~~Feat roll math — how `Base0 + Base1` forms the dice pool.~~ **Resolved (RE24):** the base list
   is variable-length and `Feats::FeatValue` sums it into the pool, clamped to `MaxValue` — see
   "What a feat evaluates to" above. The `"Normal"` weighting *curve* stays with
-  `docs/recovered/dice-system.md`; what is settled here is that the feat resolves to an index into that table.
+  `docs/vtmb/dice-system.md`; what is settled here is that the feat resolves to an index into that table.
 - ~~`Cost.Raise` operand — is `Current_Rating` pre- or post-purchase?~~ **Resolved (RE25):
   pre-purchase**, and it is the stat's **base** value; `Sell(r) ≡ Buy(r−1)`. See "Buying a
   dot" above.

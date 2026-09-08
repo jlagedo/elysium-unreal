@@ -1,6 +1,6 @@
 """Identity and stable-name rules for the ui-resource GLB seam.
 
-`docs/architecture/seam_map_ui_resource.md` owns the facts; this module is their code. A unit is
+A unit is
 one VGUI2 `.res` layout/scheme, one VGUI1 dialog script, one HUD sprite table, one key-binding
 table, the launcher/options scripts, the localized string table or the main-menu particle scene.
 The key is the install-relative path *with its extension*, because `scripts/` mixes extensions and
@@ -25,7 +25,7 @@ UI_RESOURCE_EXTENSION = extension_name(KIND)
 #: The output family directory every unit is written below.
 FAMILY_DIR = "ui-resources"
 
-#: The seven grammars a ui-resource unit may declare (`seam_map_ui_resource.md`, "GLB structure").
+#: The seven grammars a ui-resource unit may declare.
 GRAMMARS = frozenset(
     {
         "keyvalues",
@@ -55,8 +55,7 @@ CATEGORIES = frozenset(
     }
 )
 
-#: The members read as UTF-16 LE with a byte-order mark; every other member is Latin-1
-#: (`seam_map_ui_resource.md`, "Encoding").
+#: The members read as UTF-16 LE with a byte-order mark; every other member is Latin-1.
 UTF16_KEYS = frozenset({"resource/gameui_english.txt", "scripts/kb_trans.lst"})
 
 #: `resource/*.res` scheme files, plus the one scheme below `scripts/`.
@@ -91,40 +90,39 @@ LINE_LIST_KEYS = frozenset({"scripts/rooms.lst"})
 WON_LIST_KEYS = frozenset({"scripts/woncomm.lst"})
 
 #: The install-relative keys the source member table's "Live" column names as unloaded, keyed to
-#: the owning document's own evidence (`seam_map_ui_resource.md`, "Source closure": "A unit whose
-#: file the shipped binaries never read carries `identity.dormant: true` with the owning
-#: document's evidence").
+#: the owning document's own evidence: a unit whose file the shipped binaries never read carries
+#: `identity.dormant: true` with the owning document's evidence.
 _DORMANT_EVIDENCE = {
     "resource/vampirece2scheme.res": (
-        "seam_map_ui_resource.md's source member table: 'vampirece2scheme.res is not loaded'."
+        "the source member table: 'vampirece2scheme.res is not loaded'."
     ),
     "scripts/320_hud.txt": (
-        "seam_map_ui_resource.md's source member table names "
+        "the source member table names "
         "'scripts/320_hud.txt, 640_hud.txt' Live as 'dormant'."
     ),
     "scripts/640_hud.txt": (
-        "seam_map_ui_resource.md's source member table names "
+        "the source member table names "
         "'scripts/320_hud.txt, 640_hud.txt' Live as 'dormant'."
     ),
     "scripts/titles.txt": (
-        "seam_map_ui_resource.md's source member table names 'scripts/titles.txt' Live as "
+        "the source member table names 'scripts/titles.txt' Live as "
         "'dormant'."
     ),
     "scripts/settings.scr": (
-        "seam_map_ui_resource.md's source member table names 'scripts/settings.scr' Live as "
+        "the source member table names 'scripts/settings.scr' Live as "
         "'dormant'."
     ),
     "scripts/rooms.lst": (
-        "seam_map_ui_resource.md's source member table names "
+        "the source member table names "
         "'scripts/rooms.lst, scripts/woncomm.lst' Live as 'dormant'."
     ),
     "scripts/woncomm.lst": (
-        "seam_map_ui_resource.md's source member table names "
+        "the source member table names "
         "'scripts/rooms.lst, scripts/woncomm.lst' Live as 'dormant'."
     ),
 }
 _DORMANT_DIALOG_EVIDENCE = (
-    "seam_map_ui_resource.md's source member table names 'scripts/dialog_*' Live as 'dormant'."
+    "the source member table names 'scripts/dialog_*' Live as 'dormant'."
 )
 
 
@@ -136,7 +134,7 @@ def normalize_key(raw: str) -> str:
     """The unit key: install-relative, lower case, forward-slashed, extension kept.
 
     The singular export command "tolerates the root prefix and the source extension on its
-    argument" (`seam_map_unit_contract.md`): a caller may spell the family directory prefix or a
+    argument": a caller may spell the family directory prefix or a
     trailing `.glb`, and both fold to the same key as the bare install-relative path.
     """
 

@@ -1264,7 +1264,7 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 	}
 
 	// Retail's flinch draws at random, so this one does too — off the session's own Reaction stream,
-	// whose position is in the save (`docs/architecture/save-architecture.md` §8). Every blow is a
+	// whose position is in the save. Every blow is a
 	// fresh pick, jitter and weighted choice; nothing here is a function of the victim or of how many
 	// times it has been hit.
 	FRandomStream& Rng = ElysiumRng::Stream(EElysiumRngStream::Reaction);
@@ -1391,7 +1391,7 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	Resolve.Activity = Request.Activity;
 	// Retail's `SelectWeightedSequence` picks among the equal activity's variants with `random()`, so
 	// the weighted pick re-rolls with every reaction. Off the session's own Reaction stream, whose
-	// position is in the save (`docs/architecture/save-architecture.md` §8).
+	// position is in the save.
 	Resolve.Variant = ElysiumRng::Stream(EElysiumRngStream::Reaction).RandHelper(MAX_int32);
 	Resolve.HitYaw = Request.HitYawDegrees;
 	Resolve.Source = EElysiumAnimSource::Damage;

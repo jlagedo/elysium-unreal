@@ -5,8 +5,7 @@ Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import
 -ImportMapCollision=<manifest.json>`). The offline stage (`importers/map_collision.py`, R4.2) already
 read `<map>.hulls`, `<map>.dispcol` and the brush-entity `hulls` of `<map>.ents`, applied the one
 transform the runtime applies (the 3D-skybox scale) and asserted parity against those files; this
-script only turns those numbers into cooked `UBodySetup`s and saves them
-(`docs/architecture/seam_map_map.md` -> "Import").
+script only turns those numbers into cooked `UBodySetup`s and saves them.
 
 Nothing is decided here. Every number written below is copied from the manifest verbatim, and every
 body-setup flag is set by the asset's own C++ authoring functions rather than by this script, so the

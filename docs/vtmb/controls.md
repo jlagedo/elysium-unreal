@@ -578,9 +578,7 @@ nothing else.
 
 ## Notes for Elysium-Unreal
 
-Facts that constrain the rebuild, not decisions. The Unreal design they feed is
-**`docs/architecture/input-architecture.md`** (build task: roadmap **10.6**; the remapping screen is **8.10** on
-**8.6**'s stack):
+Facts that constrain the rebuild, not decisions:
 
 - **`kb_act.lst`'s whitelist**, in the patch's richer, better-labelled form, is the natural
   source for a remapping screen's action list — already grouped, labelled, and the players'
@@ -597,10 +595,8 @@ Facts that constrain the rebuild, not decisions. The Unreal design they feed is
   `$ELYSIUM_EXPORT_ROOT/` exists so that read resolves (roadmap 9.3b, `docs/vtmb/python_bridge.md`).
   The file is a projection of the Enhanced Input key profile rather than the settings model, but
   **the projection cannot be write-only**: `FixKeyBindings` reads it and then issues `bind`, so a
-  runtime `bind` has to reach the key profile or the patch's own re-routing silently does nothing
-  (`docs/architecture/input-architecture.md` § "Remapping and persistence").
+  runtime `bind` has to reach the key profile or the patch's own re-routing silently does nothing.
 - Auto-aim (`sv_aim`) defaults to **off**.
 - Gamepad support has no original to reproduce (see "Joystick" above). Anything here is new
   work under the Presentation/Feel axes rather than a port; the device layer is the engine's
-  `GameInputWindows` plugin with authored PlayStation device configs (`docs/architecture/input-architecture.md` §
-  Gamepad).
+  `GameInputWindows` plugin with authored PlayStation device configs.

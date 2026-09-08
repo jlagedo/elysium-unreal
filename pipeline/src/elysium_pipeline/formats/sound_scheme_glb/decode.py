@@ -1,6 +1,6 @@
 """Decode one `sound/schemes/*.txt` file into its complete model plus a gapless byte ledger.
 
-The grammar is a closed vocabulary (`seam_map_sound_scheme.md`): six block names, sixteen keys
+The grammar is a closed vocabulary: six block names, sixteen keys
 between them, nothing else. A key outside that vocabulary is `unsupported`; a block name outside
 it carries its pairs into `parameters[]` (so the ledger stays gapless) but contributes nothing to
 `scheme`, and is `unsupported` too.
@@ -35,12 +35,12 @@ KNOWN_BLOCKS = {
 
 #: The keys each block kind accepts, folded to lower case.
 SCHEME_PARAMS_KEYS = frozenset({"randomsoundcount", "roomdsp"})
-#: `seam_map_sound_scheme.md`'s own `Ambient` column is `Filename`, `Volume` alone; three shipped
+#: The scheme grammar's own `Ambient` column is `Filename`, `Volume` alone; three shipped
 #: schemes (`la_abandoned_building_1.txt`, `sm_junkyard_1.txt`, `test2.txt`) author `NoPause`
 #: there too, and `test2.txt` authors `Dry` there as well, both with the same meaning `Music`,
 #: `Combat` and `Alert` give them, so `Ambient` is decoded with the same vocabulary as those three.
 MUSIC_LIKE_KEYS = frozenset({"filename", "volume", "dry", "nopause"})
-#: `Dry` is not in `seam_map_sound_scheme.md`'s own `RandomSound` key column, but one shipped
+#: `Dry` is not in the scheme grammar's own `RandomSound` key column, but one shipped
 #: scheme (`test2.txt`) authors it there with the same routes-to-the-dry-bus meaning `Music`,
 #: `Combat` and `Alert` give it; real data would otherwise carry an avoidable `unsupported` row
 #: for a key whose meaning is not actually in question.
@@ -106,7 +106,7 @@ def _collect_dependencies(
 
 def _number(text: str) -> float | None:
     """A finite number, or `None` -- `"nan"`/`"inf"` parse under bare `float()` but the container's
-    JSON chunk rejects them (`seam_map_unit_contract.md`, Container), so a non-finite result is
+    JSON chunk rejects them, so a non-finite result is
     graded `value-is-not-a-number` here rather than surfacing as a write-time crash."""
 
     try:

@@ -1,5 +1,5 @@
 // `camera_cinematic` — the director entity, the adoption slot, the five `CamMode` arms, the 24 Hz
-// goal publish and the immobilize pair (`docs/project/camera_scripted.md` §SC4, as corrected by
+// goal publish and the immobilize pair (as corrected by
 // `$ELYSIUM_WORK_ROOT/_camera_recovery/rc_group_a.md` RC2/RC3/RC4/RC12).
 //
 // Everything here runs on a bare `FElysiumEntityWorld` + `FElysiumRecordingServices`: no UWorld, no

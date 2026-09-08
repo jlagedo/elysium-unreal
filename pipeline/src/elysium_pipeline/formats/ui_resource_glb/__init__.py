@@ -2,7 +2,7 @@
 
 One unit is one VGUI2 `.res` layout/scheme, one VGUI1 dialog script, one HUD sprite table, one
 key-binding table, the launcher/options scripts, the localized string table or the main-menu
-particle scene (`docs/architecture/seam_map_ui_resource.md`). Identity, source resolution, the
+particle scene. Identity, source resolution, the
 container and the kind-independent half of validation are `elysium_pipeline.formats.unit_contract`'s;
 this package states only what is specific to the kind.
 """

@@ -1,7 +1,7 @@
 """A pure-numpy ps.1.1 / ps.1.4 pixel-shader interpreter -- SF-4.6's parity oracle.
 
-`Program` parses one `vtmb:shader-source:` unit's `ELYSIUM_vtmb_shader_source.source` block (the
-schema `docs/architecture/seam_map_shader_program.md` documents) into a closed instruction list.
+`Program` parses one `vtmb:shader-source:` unit's `ELYSIUM_vtmb_shader_source.source` block into a
+closed instruction list.
 `evaluate` runs that program over `(N, 4)` float32 register arrays and returns `r0`, the pixel
 colour every ps.1.x program's compiled twin ultimately writes.
 

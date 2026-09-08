@@ -21,7 +21,7 @@ key verbatim. So this lane deploys each `.lip` **twice**:
 
 * `Content/ElysiumCorpus/sound/<rel>.lip` -- beside its audio, which is what the dialogue plan
   asks for ("deploys every sound unit -> `.../sound/**` with its `.lip` beside it, so
-  `SoundDir()` has one root", `docs/project/plans/dialogue.md` DC); and
+  `SoundDir()` has one root"); and
 * `Content/ElysiumCorpus/lip/<rel>.lip` -- the legacy mirror's own shape, so flipping
   `LipDir()` from `Root()/lip` to `CorpusRoot()/lip` is a one-word change that needs no new fold.
 

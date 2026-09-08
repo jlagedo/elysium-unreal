@@ -1,8 +1,7 @@
 """Stage the texture corpus out of the published GLB units, and measure what Unreal built.
 
 `uv run elysium import textures` lands every `$ELYSIUM_EXPORT_V2_ROOT/textures/**/*.glb` as one
-Unreal texture asset below `/ElysiumBaked/Textures` (`docs/architecture/seam_map_texture.md` →
-"Import"). This module is the offline half of that lane:
+Unreal texture asset below `/ElysiumBaked/Textures`. This module is the offline half of that lane:
 
 **Phase 1 — stage.** For each unit: hash the GLB, parse its KTX2 payload, reorder a cubemap's
 faces into Unreal's order (`texture_cube`, block-exact), decode every block-compressed level to

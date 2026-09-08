@@ -293,7 +293,7 @@ void UElysiumBipedAnimInstance::PublishSelection(const FElysiumAnimationSelectio
 	//
 	// **Who owns the base is the record's arbitration verdict, decided nowhere else.** The driver
 	// ranked its own publish against the base channel's standing claim on the priority table
-	// (`docs/architecture/animation-architecture.md` §3.3 step 1) and wrote the answer; this obeys
+	// and wrote the answer; this obeys
 	// it. A publish whose record yielded — an ambient stance holding against a standing body, a
 	// scene holding against a travelling one — leaves the clip alone however the body moves, and a
 	// publish that won ends it. A hand-built record defaults to owning the base, because a debug or

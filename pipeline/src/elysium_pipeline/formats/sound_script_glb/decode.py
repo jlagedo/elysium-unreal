@@ -27,7 +27,7 @@ WAVE_PREFIXES: dict[str, str] = {
 
 GAME_SOUND_KEYS = {"channel", "volume", "pitch", "soundlevel", "wave", "rndwave"}
 SOUNDSCAPE_TOP_KEYS = {"dsp", "playlooping", "playrandom", "playsoundscape"}
-#: `attenuation` is not in `seam_map_sound_script.md`'s soundscape vocabulary line, but the
+#: `attenuation` is not in the soundscape vocabulary, but the
 #: shipped `cabin` and `cabin_outdoor` entries use it, so it is accepted here rather than
 #: raised as `unsupported`.
 SOUNDSCAPE_BLOCK_KEYS = {

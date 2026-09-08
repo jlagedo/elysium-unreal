@@ -1,6 +1,5 @@
 // Content-free Substrate automation for `UElysiumMapEnvironment`'s conversions to the plain
-// substrate structs — the R4.4 transport's asset-side reader
-// (docs/architecture/seam_map_map.md -> "Import — environment"). The asset is a transport change
+// substrate structs — the R4.4 transport's asset-side reader. The asset is a transport change
 // and nothing else, so what is asserted here is that `ToEnvDef`/`ToSkyDef`/`ToSpawnDef` copy every
 // field straight across, and that the three "this map has none" states — no sky faces, no
 // miniature, no spawn — read back exactly as `FElysiumEnvDef`/`FElysiumSkyDef`/`FElysiumSpawnDef`'s

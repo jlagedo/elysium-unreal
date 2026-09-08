@@ -2,8 +2,7 @@
 # from the published map root unit (`vtmb:map:<map>`) instead of the legacy `<map>.obj`,
 # `<map>_sky.obj`, `brushes/*.obj` and `<map>.props` sidecars.
 #
-# Roadmap R5.1 (`docs/project/seam_migration.md` -> "Roadmap -- one pipeline"); the ruling is
-# `docs/architecture/seam_map_map.md` -> "## Import -- geometry and placements (R5.1)".
+# Roadmap R5.1.
 #
 # **Beside the legacy bake, not over it.** This module holds only the inputs and the stages that
 # differ; everything else -- decals, fog stamping, the player start, pruning, recipes and
@@ -11,7 +10,7 @@
 # reaches a line of this file. The 3D-skybox transform is this lane's own since R6.7
 # (`_read_sky` answers from the staged manifest, never from `<map>.sky`).
 #
-# **Lights (R5.6, `seam_map_map_lighting.md` -> "## Import" -> "Lights final").** One actor per
+# **Lights (R5.6).** One actor per
 # lump-15 `worldLights[]` row, from the staged `lights` table (`UE_map_sidecars.light_rows`, the
 # `.lights` producer's own rows), with every value `UElysiumLightRig::ApplyToSource` used to derive
 # at load written here once by `derive_light` from the `UElysiumLightingSettings` page, plus the
@@ -20,13 +19,13 @@
 # `elysium_pipeline.map_transport.is_map_on_v2_models`, the tracked list in
 # `Config/DefaultElysium.ini`.
 #
-# **Materials (R5.4, `seam_map_map.md` -> "## Import -- materials").** A V2 surface binds the
+# **Materials (R5.4).** A V2 surface binds the
 # imported `MI_` the material lane already made for its `vtmb:material:*` unit -- a PAKFILE-patched
 # face by its `maps/<map>/...` id -- resolved offline into the staged manifest's `materials` table
 # and loaded here by asset path. NO per-map material package is authored for a V2 map at all: both
 # `/ElysiumBaked/<map>/Materials` and `/ElysiumBaked/<map>/Materials/Decals` are pruned.
 #
-# **Decals (R7.2, `seam_migration.md` -> "R7.2 Decals", rulings 2 and 3).** `M_V2_Decal` is the one
+# **Decals (R7.2, rulings 2 and 3).** `M_V2_Decal` is the one
 # `MD_DeferredDecal` master a `UDecalComponent` draws, and the material lane stages one shared
 # `MI_<unit>_Decal` projector instance per `$decal` / `decalmodulate` unit. Every `.decals` line
 # binds that instance by its own `vtmb:material:` id (`_place_decals`, shared with the legacy
@@ -43,15 +42,15 @@
 # `array` alone -- the same offline-stage / editor-import split the model, material and texture
 # lanes use.
 #
-# **Detail props (R6.3, `seam_map_map.md` -> "Detail props (R6.3)").** Every `dprp` record of the
+# **Detail props (R6.3).** Every `dprp` record of the
 # staged `details` table becomes one instance of an `AElysiumDetailPropActor`'s instanced component
 # -- one actor per model (and per 3D-skybox half) per map, on the R1 corpus mesh, instances in lump
 # order, no collision, no shadow, culled at VtMB's `cl_detaildist`/`cl_detailfade` off the Models
 # page, the record's `swayAmount / 255` as per-instance custom data float 0, and the material lane's
 # `MI_` re-bound through a `MI_DetailSway_*` child that switches the master's `UseDetailSway` term
-# on (`seam_map_material.md` -> "Detail sway on the model masters (R6.3)").
+# on.
 #
-# **Sprites (R6.1, `seam_map_map.md` -> "Sprites (R6.1)").** Every staged `sprites[]` row (one per
+# **Sprites (R6.1).** Every staged `sprites[]` row (one per
 # `env_sprite` block, lump order) becomes one `AElysiumSpriteActor`: the imported `MI_` of the
 # sprite VMT re-parented once per `(MI_, blend)` through an `MI_Sprite_*` child that overrides the
 # blend the entity's `rendermode` selects and switches the master's vertex colour/alpha on, the
@@ -60,15 +59,15 @@
 # glow rule (screen-constant size, `19000 / dist^2`, the occlusion-query fade) is the runtime
 # proxy's, off the Sprites settings page; the bake writes only the facts.
 #
-# **Effects (R7.3, `seam_map_map.md` -> "Import -- effects (R7.3)").** Every staged `effects[]` row
+# **Effects (R7.3).** Every staged `effects[]` row
 # (one per `env_particle` / `func_particle`, lump order, whose root resolved) becomes one
 # `AElysiumEffectActor` carrying the row's fields under the same names and its root's
 # `particleTrees{}` entry as the actor's `Tree`; every `dustmotes[]` / `steam[]` / `beams[]` row one
 # `AElysiumDustActor` / `AElysiumSteamActor` / `AElysiumBeamActor` carrying its row. The actor is
 # tagged `elysium.effect` + `elysium.ent=<index>` (+ `elysium.sky` inside the miniature, with the
 # miniature transform a sprite takes), so the leaf's inputs reach it by entity index. The bake writes
-# facts only: the Niagara user parameters are the actor's own writer at adopt (`effects-architecture.md`
-# section 5.3). A property the actor class does not expose is a loud failure naming it
+# facts only: the Niagara user parameters are the actor's own writer at adopt. A property the actor
+# class does not expose is a loud failure naming it
 # (`EFFECT_ROW_FIELDS` / `EFFECT_NODE_FIELDS` are the one mapping both halves build to).
 #
 # `bake_map.py` is an editor *script* (`-run=pythonscript`), so it calls `main()` at module scope.
@@ -108,7 +107,7 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: instance this lane binds a `$decal` face group's mesh slot to and lays every `.decals` line on.
 #: 9 (R7.1): and the `water` table -- one `volumes[]` row per `LEAFWATERDATA` record with its fog
 #: keys and its `CONTENTS_WATER` brushes as plane sets, which this lane folds into the one
-#: `AElysiumWaterVolumes` actor (`docs/architecture/water-architecture.md`).
+#: `AElysiumWaterVolumes` actor.
 #: 10 (R7.4, water-complete): `map_geometry.section_key` splits a material group on two per-face
 #: facts, each its own `materials` row (`underside`/`undersideAsset`, `lightStyle`) --
 #: `_V2Material.slot_asset` resolves the `_Underside` twin for the first, `_chunk_world` keeps the
@@ -143,9 +142,8 @@ def underside_asset_path(surface_asset_path):
     return surface_asset_path + UNDERSIDE_ASSET_SUFFIX
 
 
-#: The R1 model corpus (`docs/architecture/seam_map_model.md` -> "Import" -> "Identity and
-#: naming"), `importers.models.PACKAGE_ROOT`'s value restated for the same reason. Its C++ twin
-#: after this task's flip is `FElysiumContentPaths::BakedMeshes`.
+#: The R1 model corpus, `importers.models.PACKAGE_ROOT`'s value restated for the same reason. Its
+#: C++ twin after this task's flip is `FElysiumContentPaths::BakedMeshes`.
 V2_MESH_PACKAGE = "/ElysiumBaked/Models"
 V2_SKIN_ASSET = corpus_path("model", "DA", "PropSkins")
 V2_PLACED_ASSET = corpus_path("model", "DA", "PlacedModels")
@@ -157,8 +155,7 @@ DETAIL_SWAY_SWITCH = "UseDetailSway"
 TAG_DETAIL = "elysium.detail"
 #: R6.7: the miniature's scope marker (`bake_map.TAG_SKY` / `ElysiumBakedTags::Sky` restated so the
 #: pure placement functions can carry it). A sky chunk or sky prop carries it *instead of* a class
-#: tag; a detail component actor or a sprite actor carries it *beside* its class tag
-#: (`seam_map_map.md` -> "3D-skybox composition (R6.7)").
+#: tag; a detail component actor or a sprite actor carries it *beside* its class tag.
 TAG_SKY = "elysium.sky"
 #: The shape `_place_details` writes a group as -- bumped when the writer changes what it puts on
 #: the actor for the same staged rows (2: the R6.7 scope marker), so the level re-authors.
@@ -193,7 +190,7 @@ TAG_EFFECT = "elysium.effect"
 #: The shape `_place_effects` writes a row as -- bumped when the writer changes what it puts on
 #: the actor for the same staged row, so the level re-authors.
 EFFECT_ACTOR_SHAPE = 1
-#: The actor class per staged table (`effects-architecture.md` section 5.2 / 5.6).
+#: The actor class per staged table.
 EFFECT_ACTOR_CLASSES = {
     "effects": "ElysiumEffectActor", "dustmotes": "ElysiumDustActor",
     "steam": "ElysiumSteamActor", "beams": "ElysiumBeamActor",
@@ -645,9 +642,9 @@ def _build_class():
 
         def _read_sky(self):
             """R6.7: the miniature transform is the staged manifest's own `sky` block (the unit's
-            `sky_camera` join), never the legacy `<map>.sky` sidecar -- `seam_map_map.md` ->
-            "3D-skybox composition (R6.7)". Every sky-flagged row of every lane, and the sky
-            chunks the host's `stage_level` places, go through this one answer."""
+            `sky_camera` join), never the legacy `<map>.sky` sidecar. Every sky-flagged row of
+            every lane, and the sky chunks the host's `stage_level` places, go through this one
+            answer."""
 
             return self.geometry.sky_scale, self.geometry.sky_origin
 
@@ -655,8 +652,8 @@ def _build_class():
                          world_fog=None, sky_fog=None):
             """Every `staticProps[]` record as one `AStaticMeshActor` on the R1 corpus mesh.
 
-            The placement record is the collision authority, not the model
-            (`seam_map_model.md` -> "Import" -> "Collision"): `solid` decides whether this
+            The placement record is the collision authority, not the model:
+            `solid` decides whether this
             placement blocks, `skin` which family it is painted in, and the FADES flag whether it
             culls with distance. All three are placement facts the bake writes once, because a
             GAME_LUMP prop is not an entity and never changes any of them at runtime.
@@ -752,7 +749,7 @@ def _build_class():
         def _place_details(self, actors, sky_scale, sky_origin, world_fog, sky_fog):
             """Every staged `details.records[]` row as one instance of an
             `AElysiumDetailPropActor`'s instanced component -- one actor per `(model, sky)` group,
-            instances in lump order (`seam_map_map.md` -> "Detail props (R6.3)").
+            instances in lump order.
 
             The record is the whole authority: transform from the placements-scene node, no
             collision (the lump is client-only in VtMB), no shadow (VRAD never lit by one), the
@@ -890,8 +887,8 @@ def _build_class():
         # ------------------------------------------------------------------ sprites (R6.1)
 
         def _place_sprites(self, actors, sky_scale, sky_origin):
-            """Every staged `sprites[]` row as one `AElysiumSpriteActor` (`seam_map_map.md` ->
-            "Sprites (R6.1)"): the imported `MI_` through its per-blend child, the size in Source
+            """Every staged `sprites[]` row as one `AElysiumSpriteActor` (R6.1): the imported `MI_`
+            through its per-blend child, the size in Source
             units, the colour, the mode, the orientation, the spawn-hidden rule and the entity
             index tag. Returns `(placed, glow, hidden)`."""
 
@@ -1018,8 +1015,8 @@ def _build_class():
 
         def _place_effects(self, actors, sky_scale, sky_origin, world_fog, sky_fog):
             """Every staged `effects[]` row whose root resolved as one `AElysiumEffectActor`, and
-            every `dustmotes[]` / `steam[]` / `beams[]` row as its family actor
-            (`seam_map_map.md` -> "Import -- effects (R7.3)"). Returns the placed count."""
+            every `dustmotes[]` / `steam[]` / `beams[]` row as its family actor (R7.3). Returns
+            the placed count."""
 
             geometry = self.geometry
             tables = (
@@ -1252,7 +1249,7 @@ def _build_class():
 
         def _place_water(self, actors):
             """Every staged `water.volumes[]` row folded into the one `AElysiumWaterVolumes`
-            actor (`water-architecture.md` section 5.2) -- one actor per map, not one per volume,
+            actor -- one actor per map, not one per volume,
             because `FindVolumeAt` / `ClassifyBody` need the whole set to answer "which volume".
             No rows, no actor: a map with no `LEAFWATERDATA` gives the runtime nothing to adopt
             and `PreMoveTick` classifies every body `None` (`UElysiumMapVisuals::GetWaterVolumes`
@@ -1414,8 +1411,7 @@ def _build_class():
             return records
 
         def _place_one_light(self, actors, rec):
-            """One light actor from one record, carrying its FINAL values
-            (`seam_map_map_lighting.md` -> "## Import" -> "Lights final (R5.6)")."""
+            """One light actor from one record, carrying its FINAL values (R5.6)."""
 
             kind = int(rec["kind"])
             if kind not in LIGHT_KIND_LABELS:
@@ -1456,7 +1452,7 @@ def _build_class():
             if kind in (0, 1, 2):
                 component.set_attenuation_radius(rec["reach_cm"])
                 # VtMB light is ~flat within its authored radius, so gentle-exponent
-                # falloff, not inverse-square (docs/architecture/rendering-perf.md).
+                # falloff, not inverse-square.
                 properties["use_inverse_squared_falloff"] = rec["use_inverse_squared_falloff"]
                 properties["light_falloff_exponent"] = rec["falloff_exponent"]
                 # Elysium's hundreds of movable local lights depend on fixed-cost RT
@@ -1527,8 +1523,8 @@ def _build_class():
 
         def _place_captures(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
             """One `ASphereReflectionCapture` per `cubemaps[]` sample, at the sample's own
-            position and at the settings page's `CaptureRadius` (`seam_map_map.md` -> "Import --
-            reflection captures (R5.5)"). A sample inside the 3D-skybox miniature takes the sky
+            position and at the settings page's `CaptureRadius` (R5.5). A sample inside the
+            3D-skybox miniature takes the sky
             transform like a miniature light: position scaled about the sky origin, radius scaled
             by the same factor. The VtMB probe the sample names is provenance; the capture renders
             the baked scene."""
@@ -1816,7 +1812,7 @@ LIGHTING_SETTINGS_FIELDS = (
 def lighting_calibration():
     """The lighting page (`UElysiumLightingSettings`, Project Settings -> Elysium -> Lighting,
     the tracked ini) plus the surfaces page's `LightSpecularScale` (R5.5), as one plain dict --
-    never a literal (`seam_map_map_lighting.md` -> "Import"). Read off the CDOs so the level in
+    never a literal. Read off the CDOs so the level in
     the editor and the values an owner sees on the page are the same numbers, and returned as
     plain Python so `derive_light` needs no `unreal` and the recipe can carry it."""
 
@@ -1842,7 +1838,7 @@ def derive_light(row, calibration, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
     can pin it against the rig's formulas. `row` is `UE_map_sidecars.light_rows`' dict; the
     caller has already dropped rows with `max(rgb) <= 0` and the type-5 skyambient.
 
-    The table in `seam_map_map_lighting.md` -> "Lights final (R5.6)" is this function."""
+    The table this function implements is R5.6's "Lights final"."""
 
     kind = int(row["type"])
     rgb = [float(v) for v in row["rgb"]]
@@ -2141,7 +2137,7 @@ class _StagedGeometry(object):
         self.steam = list(self.manifest.get("steam") or [])
         self.beams = list(self.manifest.get("beams") or [])
         self.effect_stats = dict(self.manifest.get("effectStats") or {})
-        # R7.1: `water.volumes[]` (`water-architecture.md` section 5.1). `.get("water")` rather
+        # R7.1: `water.volumes[]`. `.get("water")` rather
         # than a required key -- a manifest staged before the stage-geometry lane's own bump
         # carries no "water" key at all, and `_place_water` reads an empty list the same as a
         # map with no `LEAFWATERDATA`.

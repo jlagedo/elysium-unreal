@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 // The look path, from what a device reports to the degrees that reach the view — the whole of it, as
-// values and pure functions (`docs/architecture/input-architecture.md` § Feel). Two devices, two
+// values and pure functions. Two devices, two
 // tunings, one file: `FElysiumLookTuning` is the mouse and `FElysiumStickTuning` is the pad. Plain
 // C++, no UObject reflection and no console: the shaping is the entire rule, so it is asserted with
 // no world, no local player and no input device — `Elysium.Substrate.LookCurve` and
@@ -99,9 +99,9 @@ namespace ElysiumInput
 	//   * `AccelScale` lets a sustained hold outrun the precision curve without raising the rate a
 	//     small deflection produces.
 	//
-	// **Gamepad feel has no original to reproduce** (`docs/architecture/input-architecture.md` →
-	// Gamepad: VtMB ships raw joystick cvars, no UI, no default binds and a `joystick.cfg` that does
-	// not exist). So unlike `FElysiumLookTuning`, nothing here is recovered and there is no retail
+	// **Gamepad feel has no original to reproduce**: VtMB ships raw joystick cvars, no UI, no default
+	// binds and a `joystick.cfg` that does not exist. So unlike `FElysiumLookTuning`, nothing here is
+	// recovered and there is no retail
 	// identity to stay inert against — these are ours outright, and they sit on the Feel axis.
 	struct FElysiumStickTuning
 	{

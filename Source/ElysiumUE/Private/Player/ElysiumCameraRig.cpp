@@ -240,7 +240,7 @@ ElysiumRig::FElysiumCameraRigTuning ElysiumRig::ResolveTuning(
 	// A Hooke rate expressed as the half-life that decays at the same speed. `x' = -Kx` halves in
 	// `ln 2 / K` seconds, so the recovered stiffness survives while the integrator becomes exact at
 	// any subdivision of a step — which is the one part of the damper that is deliberately not
-	// retail's (`docs/architecture/camera-architecture.md` → the divergence table).
+	// retail's.
 	auto HalfLifeFor = [](float HookeConstant, float Fallback)
 	{
 		return HookeConstant > 0.0f ? (UE_LN2 / HookeConstant) : Fallback;

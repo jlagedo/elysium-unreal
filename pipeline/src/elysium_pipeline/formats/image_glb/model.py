@@ -2,7 +2,7 @@
 
 An image is a raw `.tga` or `.bmp` file below the install -- particle sprites, loose art below
 `materials/`, the shipped `screenshots/` and the Faceposer tool icons below `gfx/hlfaceposer/` --
-as distinct from a VTF-wrapped texture. `docs/architecture/seam_map_image.md` owns the format
+as distinct from a VTF-wrapped texture. The image seam owns the format
 rules; this module states only the identity and the semantic model the decoders fill in.
 """
 

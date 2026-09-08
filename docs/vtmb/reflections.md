@@ -3,10 +3,7 @@
 What VtMB's cubemap reflection actually is, measured out of the shipped shader assembly and
 the whole-game material set, and how the reconstruction reproduces it on a fully-dynamic Lumen path.
 
-Per-task status belongs in `docs/project/roadmap.md` (7.5). Related: `docs/architecture/rendering-perf.md` (the render path,
-and → "Lumen surface-cache engine facts" for why the surface cache is what a reflection ray
-hits), `docs/vtmb/sky-ambience.md` → "K7" (the same `.psh`-as-data route), `docs/architecture/asset-enhancement.md` (the
-PBR-synthesis track that later feeds these same slots).
+Related: `docs/vtmb/sky-ambience.md` → "K7" (the same `.psh`-as-data route).
 
 ## The shipped shader is readable data
 
@@ -93,8 +90,11 @@ The grey tints are dim-downs — `0.5`, `0.33`, `0.25` — scaling reflection st
 chromatic 102 are the game naming its own materials: `0.65 0.5 0.0` and `1.0 0.7 0.0` (brass and
 gold), `0.74 0.57 0.31` and `0.52 0.36 0.25` (copper), `1.0 0.0 0.0`, and a blue/teal set
 (`0.5 0.6 0.9`, `0.3 0.6 1.0`, `0.4 0.8 0.8`) that is **tinted glass, not metal**. This is a
-hand-authored metal mask, which is exactly what `docs/architecture/asset-enhancement.md` requires before any
+hand-authored metal mask, required before any
 surface is allowed to go metallic — it is read here, never inferred.
+
+Of the 7,501 patched map materials (per-map `include` patches), 7,448 set nothing but `$envmap`;
+the 68 non-`$envmap` rows change a parameter only via 49 `$waterdepth` rows.
 
 ## The Unreal translation
 
@@ -204,8 +204,8 @@ authored cube, mask, tint, wetness state, or map lighting.
   map's authored Sky Light level.
 - **The runtime A/B is gone, not replaced yet.** `ApplyMaterialOverrides` (a dynamic-instance pass
   standing a MID in front of each baked material so `elysium.RoughBase`/`SpecBase`/`RoughReflect`/
-  `SpecReflect`/`EnvReflect` could be turned live) was retired in R4.5
-  (`docs/project/seam_migration.md`), superseded by `UElysiumSurfaceSettings` as the project's one
+  `SpecReflect`/`EnvReflect` could be turned live) was retired in R4.5,
+  superseded by `UElysiumSurfaceSettings` as the project's one
   taste-tuning surface. It reached only the pre-V2 baked per-map materials and is not yet wired to
   them; per-material reflection tuning on that path is bake-time (`pipeline/unreal/make_world_materials.py`)
   until R5.4 rebinds maps onto the V2 masters `UElysiumSurfaceSettings` already drives.

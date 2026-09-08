@@ -6,7 +6,7 @@
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumNpcClips.h"
 
-// Steps 4, 5 and 6 of `docs/architecture/animation-architecture.md` section 3.3 — resolve the model
+// Steps 4, 5 and 6 — resolve the model
 // vocabulary, resolve the asset shape, publish the graph parameters.
 //
 // Pure C++: a catalog view in, a selection record out. No UObject, no filesystem, no mesh — which is

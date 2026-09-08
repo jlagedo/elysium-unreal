@@ -1,6 +1,5 @@
 // Elysium.Policy.V2MasterParams -- SF-4.3's binding-contract check for the V2 material-import
-// masters (`pipeline/unreal/make_v2_materials.py`,
-// docs/architecture/seam_map_material.md -> "Import" -> "Exposed parameters, by master"). The
+// masters (`pipeline/unreal/make_v2_materials.py`). The
 // stage (SF-4.4) writes exactly the names in `ElysiumSurfaceParams.h` onto an imported MI_
 // instance; a master that drifts off one of them fails an import silently at runtime unless
 // something asserts the binding here, in a generated-content tier that needs no corpus export.
@@ -8,8 +7,8 @@
 // Deliberately its own translation unit, not folded into ElysiumContentTests.cpp: SF-4.3
 // (this file) and other in-flight work land in the same window and touch that file for unrelated
 // reasons, so a new file is the low-conflict surface. Not built or run by the agent that wrote
-// this revision either -- see `docs/project/seam_migration.md` for the concurrency rule (no
-// editor/engine build runs alongside another agent's). The next agent to touch Source/ builds
+// this revision either -- the concurrency rule is no
+// editor/engine build runs alongside another agent's. The next agent to touch Source/ builds
 // and runs this tier; the parameter lists below are unverified against a real compile until then.
 //
 // Masters land family-by-family (mechanics doc "Ordering, concurrency, tests, risks"); this test
@@ -287,8 +286,8 @@ namespace
 	};
 
 	// R7.1: `M_ElysiumUnderwater` is a post-process master, not a surface one, so it carries no
-	// class LUT, no textures and no switches -- only the fog triple `ElysiumFog::Pack` fills
-	// (`water-architecture.md` ruling D). The same three names the decal master declares, because
+	// class LUT, no textures and no switches -- only the fog triple `ElysiumFog::Pack` fills.
+	// The same three names the decal master declares, because
 	// one packer serves the scene fog, the decals and the view under the plane.
 	static const FName UnderwaterScalars[] = {
 		ElysiumSurfaceParamsDecal::Scalars::FogStart,

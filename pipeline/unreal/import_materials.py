@@ -5,8 +5,7 @@ Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import
 -ImportMaterials=<manifest.json>`). The offline stage already decided everything -- asset path,
 parent (a generated master, or another `MI_` for a patched map material), every texture/scalar/
 vector/switch, the base-property overrides, the physical material, the surface class -- and wrote
-it to the manifest this script reads (`docs/architecture/seam_map_material.md` -> "Import";
-`import/design/phase4_mechanics.md` §4.5). This script only executes those decisions against the
+it to the manifest this script reads. This script only executes those decisions against the
 editor:
 
   * order every entry so a patched instance is authored strictly after the base instance it
@@ -93,8 +92,7 @@ _mel = unreal.MaterialEditingLibrary
 _tools = unreal.AssetToolsHelpers.get_asset_tools()
 
 #: `basePropertyOverrides.blendMode` -> `unreal.BlendMode` member name, mirroring the strings
-#: `importers/materials.py` writes (`docs/architecture/seam_map_material.md` -> "Master
-#: inventory").
+#: `importers/materials.py` writes.
 BLEND_MODE_MEMBERS = {
     "Opaque": "BLEND_OPAQUE",
     "Masked": "BLEND_MASKED",

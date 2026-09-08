@@ -10,8 +10,7 @@
 // Neither stage is in the clips. Unreal owns decode, blending, skinning and LOD; these are the only
 // two things it has no equivalent for, and both run after the graph has blended locals and before
 // skinning — which is retail's own order. The rules are `docs/vtmb/animation_and_movers.md` A.4a
-// and `docs/vtmb/procedural_bones.md`; the Unreal design is
-// `docs/architecture/animation-architecture.md`.
+// and `docs/vtmb/procedural_bones.md`.
 //
 //   1. Split inheritance (`Flags & 0x2`, normally one bone — `Bip01 Spine1`): rotation from the
 //      component root rather than the parent, translation from the parent.

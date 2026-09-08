@@ -1,8 +1,7 @@
 """Isolated one-file/one-GLB ui-resource product writer.
 
 Every unit is scene-less and carries no BIN chunk: a ui-resource member names strings, flags,
-numbers and geometry-free layout data, all of which the source wrote as text
-(`docs/architecture/seam_map_ui_resource.md`).
+numbers and geometry-free layout data, all of which the source wrote as text.
 """
 
 from __future__ import annotations
@@ -99,7 +98,7 @@ def _font_resolver(index: dict) -> Callable[[str], bool]:
     """Whether the UP-first index holds the `.fnt` a scheme tier's composed `vtmb:font:` key names.
 
     The font seam owns both the key rule and the file layout, so this asks it: a tier that matches
-    no `.fnt` is `resolved: false` and warns (`seam_map_ui_resource.md`, "Dependencies"), which is
+    no `.fnt` is `resolved: false` and warns, which is
     the engine rasterizing from the installed system face.
     """
 

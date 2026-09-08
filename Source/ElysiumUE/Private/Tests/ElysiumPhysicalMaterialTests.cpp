@@ -1,7 +1,6 @@
 // Content-free Substrate automation for UElysiumPhysicalMaterial: the flattened surface entry a
 // baked physical material carries from its `vtmb:surface-property:` unit, and the provenance record
-// that says which entry in the base chain authored each field
-// (docs/architecture/seam_map_surface_property.md -> "Import").
+// that says which entry in the base chain authored each field.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

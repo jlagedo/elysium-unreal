@@ -69,9 +69,9 @@ def _check_core_geometry(document: dict[str, Any], binary: bytes, root: dict[str
     if num_nodes != len(nodes_ext):
         raise NavGraphGlbValidationError("header.numNodes disagrees with nodes[] length")
     # A declared `TotalNumLinks` that disagrees with the actual link region is the seam's
-    # `link-count-mismatch` anomaly -- published, never fatal (`seam_map_unit_contract.md`,
-    # Non-canonical storage: "a unit that is recoverable only in part publishes what the install
-    # holds and warns"). `links[]` itself is always internally consistent with what was decoded,
+    # `link-count-mismatch` anomaly -- published, never fatal, because a unit that is
+    # recoverable only in part publishes what the install holds and warns. `links[]` itself is
+    # always internally consistent with what was decoded,
     # so only an *undeclared* disagreement is a writer bug worth failing on here.
     link_count_mismatch = any(row.get("role") == "link-count-mismatch" for row in anomalies)
     if not link_count_mismatch and int(header.get("totalNumLinks", -1)) != len(links_ext):

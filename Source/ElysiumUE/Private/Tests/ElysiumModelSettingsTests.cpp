@@ -1,5 +1,5 @@
 // Content-free Substrate automation for UElysiumModelSettings: the model-import lane's LOD mapping
-// knobs (docs/architecture/seam_map_model.md -> "Import" -> "Geometry").
+// knobs.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -27,7 +27,7 @@ bool FElysiumModelSettingsDefaultsTest::RunTest(const FString&)
 	}
 
 	// "the values are a wiring default, not a tuning judgement" -- pinned exactly as the contract
-	// states them (seam_map_model.md -> "Import" -> "Geometry").
+	// states them.
 	TestEqual(TEXT("LodSwitchConstant default"), Settings->LodSwitchConstant, 1.0f);
 	TestEqual(TEXT("LodScreenSizeFloor default"), Settings->LodScreenSizeFloor, 0.001f);
 	TestEqual(TEXT("LodScreenSizeCeiling default"), Settings->LodScreenSizeCeiling, 0.9f);

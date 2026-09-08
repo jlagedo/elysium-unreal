@@ -8,7 +8,7 @@
 
 /**
  * Screen-presentation taste knobs, Project Settings -> Elysium -> UI, tracked at
- * `Config/DefaultElysium.ini` (R4.5, `docs/project/seam_migration.md` -> "Wire first, tune later").
+ * `Config/DefaultElysium.ini`.
  * `elysium.MenuScrim` was the first orphan value in this domain -- a hardcoded cvar default with no
  * settings-page home; R6.6 added the front end's wallpaper plate, which is not VtMB art and so has
  * no lane to import it. This page is the group's home for whatever else the UI lane migrates next.
@@ -36,8 +36,7 @@ public:
 	float MenuScrim = 0.22f;
 
 	/**
-	 * The front end's static plate, drawn beneath the rail with uniform cover scaling (R6.6,
-	 * `docs/architecture/ui-architecture.md` -> "6. The menu plate"). Project art, never a VtMB
+	 * The front end's static plate, drawn beneath the rail with uniform cover scaling. Project art, never a VtMB
 	 * texture, so it is an authored asset reference rather than an import; unset, the rail stands
 	 * on the boot world's black. Pause and game-over menus never use it.
 	 */

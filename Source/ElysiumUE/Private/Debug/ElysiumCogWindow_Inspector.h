@@ -11,8 +11,8 @@ class FElysiumEntity;
 class FElysiumEntityWorld;
 struct FElysiumPickResult;
 
-// Detail view of the shared-selected entity and the primary test harness
-// (`docs/architecture/debug-tooling.md`). It reads one entity's identity, chain-walked live
+// Detail view of the shared-selected entity and the primary test harness.
+// It reads one entity's identity, chain-walked live
 // fields, raw keyvalues, and 7-field outputs, and fires any input on it by hand through the real
 // event queue (FElysiumEntityWorld::EnqueueInput) so the delivery shows up in the Event Queue
 // window and is single-steppable. Everything but the fire buttons is read-only.

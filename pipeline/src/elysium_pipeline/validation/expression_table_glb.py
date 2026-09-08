@@ -1,8 +1,7 @@
 """Independent structural validator for the Expression-table GLB seam.
 
 Re-decodes the selected source independently of `exporters.expression_table_glb.build_document`
-and compares every field it publishes, per `docs/architecture/seam_map_unit_contract.md`'s
-validation split.
+and compares every field it publishes.
 """
 
 from __future__ import annotations

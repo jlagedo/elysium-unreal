@@ -1,5 +1,4 @@
-// Elysium.Substrate.MaterialFactory -- R6.5's factory shape (docs/architecture/seam_map_material.md
-// -> "Ropes on `MI_`, and the factory shape"): `FElysiumMaterialFactory::Create(MI_)` is a dynamic
+// Elysium.Substrate.MaterialFactory -- the factory shape: `FElysiumMaterialFactory::Create(MI_)` is a dynamic
 // child of the imported instance and nothing else. No master selection, no texture, no feature
 // switch -- the MID carries zero overrides of its own, so every VMT-derived value is the instance's.
 #include "Misc/AutomationTest.h"

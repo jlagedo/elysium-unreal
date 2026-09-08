@@ -1,5 +1,4 @@
-// R7.1 -- water volumes (`docs/architecture/water-architecture.md` rulings B/C/D,
-// `seam_map_map.md` -> "Import — water volumes"). The stage emits the rows and the bake places one
+// R7.1 -- water volumes (rulings B/C/D). The stage emits the rows and the bake places one
 // actor; the runtime's whole share is the point-in-brush classification `CheckWater` asks for, the
 // tag contract the visuals bucket by, and the post-process state machine the renderer walks. Each
 // is pinned here -- the classification content-free, the actor against a bare test world.

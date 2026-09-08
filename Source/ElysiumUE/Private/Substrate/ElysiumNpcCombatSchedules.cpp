@@ -387,8 +387,8 @@ namespace
 			// Registered, and deliberately NOT selected by anything yet. The recovered alert branch
 			// reaches it through "a recovered facing test" whose threshold the survey does not
 			// state, and the faithful cover behaviour is a claim on an authored `info_node_cover_*`
-			// entity — an entity read this runtime does not carry yet
-			// (`gameplay-systems-architecture.md` 5.5.4). What is registered is the reduced form:
+			// entity — an entity read this runtime does not carry yet.
+			// What is registered is the reduced form:
 			// leave the attack origin by the projected retreat. It exists so the alert selector has
 			// somewhere to land the moment either half is recovered, rather than needing a program
 			// invented at that point.

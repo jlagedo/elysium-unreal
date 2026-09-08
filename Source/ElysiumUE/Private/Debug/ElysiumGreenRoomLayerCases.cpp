@@ -95,8 +95,8 @@ bool FElysiumGreenRoomRun::PickLayerCaseBody(const TArray<FString>& Candidates, 
 	{
 		return false;
 	}
-	// The PLAYER body first, and the same one the rung's own acceptance names
-	// (`docs/project/three-cs-roadmap.md`). It matters which: a player body resolves its gaits
+	// The PLAYER body first, and the same one the rung's own acceptance names.
+	// It matters which: a player body resolves its gaits
 	// through the PC-only bank while the cast resolves the same labels through the shared one, so a
 	// layer judged over a cast body is being judged over the wrong host.
 	//

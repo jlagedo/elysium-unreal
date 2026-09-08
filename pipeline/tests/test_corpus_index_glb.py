@@ -284,7 +284,7 @@ DORMANT_SOUNDS = (
 
 
 def test_a_name_two_sound_script_tables_declare_is_claimed_by_the_table_it_is_cut_from(tmp_path):
-    """`seam_map_sound_script.md` gives both tables one identity namespace and the seam resolves
+    """Both sound-script tables share one identity namespace and the seam resolves
     a repeated name in favour of the live table. Asking each table for its own names would
     attribute the shared units to `scripts/sounds.txt`, whose bytes they were not cut from."""
 
@@ -1364,7 +1364,7 @@ def test_surface_sound_scripts_fails_on_an_undeclared_entry(tmp_path):
 
 
 def test_nav_graph_stamp_records_the_pair_and_does_not_assert_the_unfound_rule(tmp_path):
-    """`seam_map_nav_graph.md` documents the stamp's meaning as unidentified and states that the
+    """The stamp's meaning is unidentified, and the
     value on sp_tutorial_1 is not the map's revision, so the index records the pair rather than
     failing on it."""
 
@@ -1873,7 +1873,7 @@ def die_on_rename(*_args, **_kwargs):
 
 def test_a_back_fill_interrupted_before_the_rename_leaves_the_unit_it_rewrites(tmp_path,
                                                                               monkeypatch):
-    # `seam_map_unit_contract.md` ("Validation") writes a unit to a temporary sibling and renames
+    # Validation writes a unit to a temporary sibling and renames
     # it over the destination. The back-fill rewrites an already-published unit whose bytes the
     # index has recorded a hash for, so it lands the same way: a half-written unit is exactly
     # what the rename rule exists to prevent.

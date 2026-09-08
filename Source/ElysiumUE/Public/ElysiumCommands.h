@@ -5,7 +5,7 @@
 
 class FElysiumEntityWorld;
 
-// S7 — one command registry (`docs/architecture/runtime-architecture.md` §8.2). VtMB has no action
+// One command registry. VtMB has no action
 // abstraction: **an action is a console command string**, and the Unofficial Patch's whole
 // vocabulary is aliases over those strings (`f` → `vm_feed` → `checkFeed()`), so a key bound to a
 // compiled verb and a key bound to a user alias have to be indistinguishable. That is only true if

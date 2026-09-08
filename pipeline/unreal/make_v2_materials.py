@@ -1,7 +1,7 @@
 # SF-4.3: the V2 material-import masters, built on the graph-authoring helper layer in
-# `matgraph.py`. Design: docs/architecture/seam_map_material.md -> "Import" (master inventory,
-# exposed-parameter table, post-lighting math, reflection contract, knob contract, class
-# fallback). Build mechanics: import/design/phase4_mechanics.md section 3.
+# `matgraph.py` (master inventory, exposed-parameter table, post-lighting math, reflection
+# contract, knob contract, class fallback). Build mechanics: import/design/phase4_mechanics.md
+# section 3.
 #
 # Part 2 of SF-4.3 (commit series, complete): the three previous commits reconciled `M_V2_Lit` to
 # the revised design (2026-08-31 "Revise the material import design after review" -- binding
@@ -58,7 +58,7 @@ DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 #: The code half of every master's recipe: bump it when this generator, `matgraph.py` or
 #: `mat_fog.py` changes what a master's graph is, and a re-run re-authors the masters even when
 #: nothing on disk changed. The data half (collection rows, cited shader units, parameter
-#: tables) is content-hashed. Code is never hashed (`seam_map_unit_contract.md` -> "Recipes").
+#: tables) is content-hashed. Code is never hashed.
 GRAPH_VERSION = 13
 
 #: `MPC_ElysiumSurfaces` (SF-4.1, C++, landed) owns every one of these rows and their defaults --
@@ -428,7 +428,7 @@ def _make_default_dudv_frames_array(force=False):
     Its own asset rather than a second binding of `T_V2_DefaultNormalFrames`, because the two are
     sampled through DIFFERENT sampler types and Unreal refuses the mismatch at compile time. The
     DUDV lane samples `SAMPLERTYPE_LINEAR_COLOR`: `TA_water_dudv` is staged
-    `TC_VECTOR_DISPLACEMENTMAP` (`water_audit/phase0/U1b_textures.md`), whose default sampler type
+    `TC_VECTOR_DISPLACEMENTMAP`, whose default sampler type
     IS linear colour, and the graph applies Source's own `value x 2 - 1` DUDV bias explicitly
     rather than letting `UnpackNormalMap` do it -- the normal lane's `SAMPLERTYPE_NORMAL` object
     would be a "Sampler type is Normal, should be Linear Color" error against that texture, and
@@ -514,8 +514,8 @@ def _load_surfaces_collection():
 #: per-instance. It is a *different* asset from `MPC_ElysiumSurfaces` (owned by
 #: `UElysiumSurfaceSettings`, "single writer" ruling in the knob contract), so wetness reads it
 #: through its own `CollectionParameter` node rather than folding it into the surfaces collection.
-#: This is R5.3's chosen home for the wetness axis (seam_map_material.md -> "Decal fog and
-#: wetness homes (R5.3)"): a global live value, never a per-map material instance.
+#: This is R5.3's chosen home for the wetness axis: a global live value, never a per-map material
+#: instance.
 ENVIRONMENT_COLLECTION = "MPC_ElysiumEnvironment"
 
 
@@ -648,7 +648,7 @@ def _probe_all_switches_true(mat, asset, switch_names):
 
 
 def _detail_sway(g, switch_name, x, y):
-    """R6.3 (`seam_map_material.md` -> "Detail sway on the model masters"): one World Position
+    """R6.3: one World Position
     Offset term behind the static switch `switch_name` (default off):
 
         sway   = PerInstanceCustomData[0]           -- swayAmount / 255; 0 on a non-instanced draw
@@ -921,7 +921,7 @@ def _class_lut_influenced(g, lut_param_name, lut_texture, index_name, x, y):
 # ============================================================================================
 
 
-#: R7.5 G6 (`water_audit/AUDIT.md` section 9 G6, owner decision 4): the Custom Primitive Data slot
+#: R7.5 G6 (owner decision 4): the Custom Primitive Data slot
 #: the runtime's lightstyle clock writes into. Declared beside `ElysiumFog`'s own slots 0-5
 #: (colour 0..3, start 4, 1/range 5) as `ElysiumLightStyle::SlotBrightness` on the C++ side; stated
 #: here as the one literal this generator uses, never repeated at a call site.
@@ -953,7 +953,7 @@ def _light_style_brightness(g, param_name, x, y):
 
 
 def _scene_fog(g, base_color, base_out, emissive, emissive_out, specular, specular_out, x, y):
-    """R5.4 (`seam_map_material.md` -> "Scene fog on the world masters"): Source's per-map distance
+    """R5.4: Source's per-map distance
     fog as the per-primitive Custom Primitive Data term every world / 3D-skybox / prop primitive
     carries -- `mat_fog.fog_from_primitive`, the exact graph the legacy `M_World_*` masters run,
     reading the slots `ElysiumFog::Pack` writes (colour 0..3, start 4, 1/range 5) and
@@ -1161,7 +1161,7 @@ def _build_lit(mat, collection, environment_collection, lut_texture, default_fra
                           default=False)
     env_mask_scale = g.scalar(P.Scalars.EnvMapMaskScale, 1.0, -900, 660)
     mask_scaled = g.mul(mask_step3, "", env_mask_scale, "", 100, 580)
-    # Authored wetness (R5.3, `seam_map_material.md` -> "Decal fog and wetness homes (R5.3)")
+    # Authored wetness (R5.3)
     # raises the reflection mask exactly like the legacy `M_World_*` masters' own `env_wet` term:
     # a rain-slicked surface reads reflective even where its own $envmapmask does not say so. A
     # surface with no `globalwetness` proxy carries `WetnessDriven` 0, so `wet_response` is
@@ -2102,8 +2102,8 @@ class WaterParams:
     Fresnel base fraction), `WaterMurkiness`, the fog quadruple, the two scroll rates, the two
     flipbook lanes, `LightStyleBrightness`.
 
-    Declared, not wired, and why -- the whole set traces to ONE measurement (`water_audit/phase0/
-    U2_primitives.md`): **VtMB's shipped water vertex program never moves a vertex.** DX9 binds
+    Declared, not wired, and why -- the whole set traces to ONE measurement:
+    **VtMB's shipped water vertex program never moves a vertex.** DX9 binds
     `Water_vs20_old` (`stdshader_dx8.dll 100138a0`), which writes `oPos = dp4(v0, cModelViewProj)`
     on the untouched input position; no water VS in the corpus contains a `sincos` or a time
     constant, and `BuildMSurfacePrimVerts` (`engine.dll FUN_20074f40`) copies every compiled
@@ -2201,9 +2201,8 @@ WATER_PARAM_TABLE = {
 
 
 def _build_water(mat, collection, lut_texture, default_normal_frames, default_dudv_frames):
-    """Single Layer Water, rebuilt to `Water_Old`'s own program (R7.5 look pass,
-    `E:/elysium-work/scratch/water_audit/LOOK_SPEC.md`; the transcription lives in
-    `docs/vtmb/water.md` -> "The live program").
+    """Single Layer Water, rebuilt to `Water_Old`'s own program (R7.5 look pass; the
+    transcription lives in `docs/vtmb/water.md` -> "The live program").
 
     The live class is `Water_Old_dx80_dx81_dx90` in `stdshader_dx8.dll`; its three draw
     functions (FUN_100138a0 refract, FUN_10013b30 reflect, FUN_10013d30 cheap) bind the SM2
@@ -2258,9 +2257,9 @@ def _build_water(mat, collection, lut_texture, default_normal_frames, default_du
 
     Not carried: the map's range fog on the surface itself (`CalcFog RANGE` in `Water_vs11`) --
     the water master's `FogStart`/`FogEnd`/`FogColor` names are the VMT volume keys, so the
-    per-primitive scene-fog lane (`_scene_fog`) cannot share them; recorded in
-    `water-architecture.md`. Every parameter that stays declared-not-wired is named, with its
-    VtMB fact, in `WaterParams`' own docstring -- that table is the contract, not this docstring.
+    per-primitive scene-fog lane (`_scene_fog`) cannot share them. Every parameter that stays
+    declared-not-wired is named, with its VtMB fact, in `WaterParams`' own docstring -- that
+    table is the contract, not this docstring.
     """
     g = Graph(mat, collection=collection)
     P = WaterParams
@@ -2295,7 +2294,7 @@ def _build_water(mat, collection, lut_texture, default_normal_frames, default_du
     connect(base_uv, "", base_tex, "UVs")
     base_tex_rgb = g.mask(base_tex, "rgb", -900, -400)
     base_tex_a = g.mask(base_tex, "a", -900, -320, src_out="RGBA")
-    # BLACK, not white, when no base texture is bound (R7.5 look pass, `water_audit/LOOK_SPEC.md`):
+    # BLACK, not white, when no base texture is bound (R7.5 look pass):
     # `Water_Old` has no diffuse term at all -- its three passes are the refracted scene, the
     # mirrored scene and the cheap cube, none of them lit -- so the untextured water family must
     # put nothing into BaseColor for Lumen to light. A white base here was the pier's tan sheet and
@@ -2348,7 +2347,7 @@ def _build_water(mat, collection, lut_texture, default_normal_frames, default_du
     # `sampler="linear"`, not `"normal"`: `TA_water_dudv` stages `TC_VECTOR_DISPLACEMENTMAP`
     # (whose default sampler type is linear colour), and its payload is Source's own unsigned-byte
     # DUDV encoding -- "signed" is the shader's `x * 2 - 1` reading of an unsigned texel
-    # (`water_audit/phase0/U1b_textures.md` section 4, verified byte-exact against the VTF). The
+    # (verified byte-exact against the VTF). The
     # bias is therefore explicit below rather than borrowed from `UnpackNormalMap`.
     dudv_object = g.tex_object(P.Textures.DuDvMapFrames, -1100, 620, default_dudv_frames,
                                sampler="linear")
@@ -2362,7 +2361,7 @@ def _build_water(mat, collection, lut_texture, default_normal_frames, default_du
     # `WaterReflect_ps11` (`texbem` off the DUDV, matrix = `$refractamount` / `$reflectamount`,
     # `water_dx80.cpp::DrawRefraction/DrawReflection`; the SM2 `_old` twins take the same amounts
     # through VS c44, FUN_100138a0 / FUN_10013b30). The two warps land on two different pins here
-    # (R7.5 look pass, `water_audit/LOOK_SPEC.md`):
+    # (R7.5 look pass):
     #
     # - the REFRACTION warp is the Refraction pin in `RM_2D_OFFSET` mode -- the same explicit
     #   screen-UV offset `Water_Old` applied to `_rt_WaterRefraction`, which SLW's base pass reads
@@ -2608,7 +2607,7 @@ def _build_underwater(mat):
     # `M_UnderWater_PostProcess_Volume` (Water plugin, the shipped precedent ruling D cites)
     # carries no `MaterialExpressionSceneDepth` at all and reads its depth this way.
     #
-    # Witnessed 2026-09-04 (`water-architecture.md` section 11): the fog is applied, and on the two
+    # Witnessed 2026-09-04: the fog is applied, and on the two
     # converted maps it is nearly invisible *by the authored numbers*, not by a defect. The
     # underside surface writes its own depth, so every pixel that sees the above-water world
     # through the plane fogs at the plane's distance -- 20 cm overhead, one to three metres along
@@ -2900,7 +2899,7 @@ def make_sprite():
 # M_V2_SpriteZ / M_V2_SpriteZLit -- the particle floor's depth-tested twins (R7.3)
 # ============================================================================================
 #
-# `docs/architecture/effects-architecture.md` section 5.4: VtMB draws every particle through
+# VtMB draws every particle through
 # `$spriterendermode 8` -- `BlendFunc(ONE, ONE_MINUS_SRC_ALPHA)`, depth test ON, depth write off --
 # and `M_V2_Sprite` is depth-test-off on the master itself (`bDisableDepthTest` is material-only,
 # never a per-instance override), so the floor needs a twin with the same graph and the depth test
@@ -3034,7 +3033,7 @@ def make_sprite_z_lit():
     return _make_sprite_z("M_V2_SpriteZLit", lit=True)
 
 
-#: The four particle material children (`effects-architecture.md` section 5.4), authored below the
+#: The four particle material children, authored below the
 #: material lane's package root beside the corpus instances (`importers/materials.py` names them
 #: under `keep`, so its prune leaves them). `(name, master, blend, switches on)`; the sprite
 #: children turn the two vertex switches on -- the tint and the mask ride the quad's vertex colour
@@ -3398,8 +3397,7 @@ DECAL_PARAM_TABLE = {
 
 
 def _build_decal(mat, collection, lut_texture):
-    """R7.2 (`seam_map_material.md` -> "M_V2_Decal"; `seam_migration.md` -> "R7.2 Decals", ruling
-    1): the projector master, re-cut to `MD_DeferredDecal` / `BLEND_Translucent` / DefaultLit --
+    """R7.2: the projector master, re-cut to `MD_DeferredDecal` / `BLEND_Translucent` / DefaultLit --
     the one deferred-decal domain a `UDecalComponent` actually draws (`FDeferredDecalProxy`
     substitutes the engine default for anything else, and DBuffer rewrites a would-be Modulate to
     Translucent regardless -- `DecalRenderingCommon.cpp` 47-49). This retires the two-instance
@@ -3409,8 +3407,8 @@ def _build_decal(mat, collection, lut_texture):
     `BaseTexture` RGB x `Color` (the shared four-parameter table) -> BaseColor, `BaseTexture` A x
     `Alpha` (shared) -> Opacity. `Emissive` x `EmissiveScale` (default 0, the 3 `$selfillum`
     units) -> the self-illum term, always added to whatever lands on Emissive. `Unlit` (the 28
-    `unlitgeneric` projector units, `seam_map_material.md` -> "The eight real unresolved
-    families") routes the (fogged) base colour into Emissive instead and leaves BaseColor black --
+    `unlitgeneric` projector units) routes the (fogged) base colour into Emissive instead and
+    leaves BaseColor black --
     DefaultLit has no separate unlit shading model to fall back to, so this is the same
     "fake it through Emissive" trick this file already plays for every Unlit-look-under-DefaultLit
     surface (`_build_lit`'s own self-illum term). `UseVertexColor` is dropped: a projected decal
@@ -3424,8 +3422,8 @@ def _build_decal(mat, collection, lut_texture):
     `pipeline/unreal/make_decal_material.py` (`Constant2Vector(1, -1)` scale + `Constant2Vector(0,
     1)` offset on the base `TextureCoordinate`).
 
-    Fog is `mat_fog.fog_from_params`, R5.3's chosen home (`seam_map_material.md` -> "Decal fog and
-    wetness homes"), unchanged by this ruling: a `UDecalComponent` is a `USceneComponent`, not a
+    Fog is `mat_fog.fog_from_params`, R5.3's chosen home, unchanged by this ruling: a
+    `UDecalComponent` is a `USceneComponent`, not a
     `UPrimitiveComponent`, so it carries no Custom Primitive Data; the three named instance
     parameters default neutral (unfogged) and the placement lane (later, the runtime `Lay()`
     caller too) sets them per decal instance from the map's own fog, never from a per-map material
@@ -3581,9 +3579,9 @@ MISSING_SWITCHES = {name: (name == UnlitParams.Switches.UseBaseTexture)
 def make_missing():
     """`MI_V2_Missing`: one tracked `M_V2_Unlit` instance wearing the checker.
 
-    Every `vtmb:missing-material:` sentinel slot in the model corpus binds this one asset
-    (`docs/architecture/seam_map_model.md` -> "Import" -> "Material binding"): 1,328 slots over 461
-    referenced units. It is deliberately loud, and being `BLEND_Opaque` it never vetoes Nanite.
+    Every `vtmb:missing-material:` sentinel slot in the model corpus binds this one asset:
+    1,328 slots over 461 referenced units. It is deliberately loud, and being `BLEND_Opaque` it
+    never vetoes Nanite.
     """
     name = "MI_V2_Missing"
     asset = "%s/%s" % (PKG, name)

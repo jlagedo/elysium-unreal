@@ -63,6 +63,9 @@ handles Bink intro-video audio (`media/*.bik`) separately — outside this pipel
 
 **Dialogue localization** [data]: line files carry a language/take suffix —
 `line901_col_e.mp3` (English, 4,843), `_col_f` (216), `_col_m` (8), `_col_n` (48).
+
+The shipped dialogue take-letter census across the whole corpus is `e`=4975, `f`=229, `n`=50,
+`m`=8, and every non-default take is reachable by some (sex, clan) pair.
 Played by `Character.PlayDialogFile("Character/dlg/.../lineNNN_col_e.mp3")` [script],
 resolved through the datamap method table (see `docs/vtmb/python_bridge.md`), with the paired
 `.lip` driving mouth animation and the `.vcd` sequencing the scene.
@@ -529,9 +532,6 @@ every HL2 `game_sounds*.txt` line is commented out [data]. `scripts/soundscapes.
 `scripts/titles.txt` (HL2 placeholder captions — VtMB subtitles come from the
 dialogue layer, not here) are all dormant. `CSoundscapeSystem` still exists in the
 binaries but no map spawns `env_soundscape`, so it never runs.
-
-The Unreal system that consumes this surface is `docs/architecture/audio-architecture.md`. Implementation
-priority and status live in `docs/project/roadmap.md`.
 
 ## 11. Provenance — key addresses (`engine.dll`, base `0x20000000`) [VtMB]
 

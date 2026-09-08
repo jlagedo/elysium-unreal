@@ -1,4 +1,4 @@
-"""R7.4 (water-complete contract 3, `docs/architecture/water-architecture.md`): a face row
+"""R7.4: a face row
 carrying a non-0/non-255 lightstyle (`objects/surf`'s 34 faces on `sm_pier_1`, 21 of them also
 `32`) becomes its own world/sky chunk, keyed beside the existing (cell, opaque) bucket by the
 style its `_V2Material.light_style` names -- `stage_level` tags that chunk's actor

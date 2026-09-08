@@ -567,8 +567,7 @@ def import_map_entities(config, runner, manifest_path, *, force: bool = False) -
     """Run the editor phase of `import map-entities` over one staged manifest.
 
     `pipeline/unreal/import_map_entities.py` (R4.1) reads the manifest and authors one
-    `UElysiumMapEntities` per map under `/ElysiumBaked/<map>/`
-    (`docs/architecture/seam_map_map_entities.md` -> "Import"). No unit root travels: the stage
+    `UElysiumMapEntities` per map under `/ElysiumBaked/<map>/`. No unit root travels: the stage
     already read the GLB units and carried every row in the manifest.
     """
     _run(
@@ -601,9 +600,8 @@ def import_map_collision(config, runner, manifest_path, *, force: bool = False) 
     """Run the editor phase of `import map-collision` over one staged manifest.
 
     `pipeline/unreal/import_map_collision.py` (R4.2) reads the manifest and authors one
-    `UElysiumMapCollisionPayload` per map under `/ElysiumBaked/<map>/`
-    (`docs/architecture/seam_map_map.md` -> "Import"). No unit root travels: the stage already read
-    the sidecars and carried every number in the manifest.
+    `UElysiumMapCollisionPayload` per map under `/ElysiumBaked/<map>/`. No unit root travels: the
+    stage already read the sidecars and carried every number in the manifest.
     """
     _run(
         config,
@@ -634,8 +632,7 @@ def import_map_environment(config, runner, manifest_path, *, force: bool = False
     """Run the editor phase of `import map-environment` over one staged manifest.
 
     `pipeline/unreal/import_map_environment.py` (R4.4) reads the manifest and authors one
-    `UElysiumMapEnvironment` per map under `/ElysiumBaked/<map>/`
-    (`docs/architecture/seam_map_map.md` -> "Import — environment"). No unit root travels: the
+    `UElysiumMapEnvironment` per map under `/ElysiumBaked/<map>/`. No unit root travels: the
     stage already read the sidecars and carried every value in the manifest.
     """
     _run(
@@ -685,7 +682,7 @@ def make_lookdev_map(config, runner, *, set_path=None, props_set_path=None, map_
 
     Lays the tracked review set (`pipeline/unreal/lookdev_set.json`, or `set_path` when given)
     out on a grid under `/Game/ElysiumGenerated/Lookdev/Materials` (or `map_path`), plus one props row
-    (R1.6, `docs/project/seam_migration.md` -> Roadmap) below it from the tracked
+    below it from the tracked
     `pipeline/unreal/lookdev_props_set.json` (or `props_set_path`), and saves it. A review-set
     entry whose `MI_`/`SM_` does not exist yet is placed on a loud placeholder rather than a
     crash, so this can be generated before every asset it names has landed -- but the editor

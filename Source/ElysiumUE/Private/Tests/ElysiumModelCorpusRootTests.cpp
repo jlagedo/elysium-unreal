@@ -1,6 +1,5 @@
-// Content-free Substrate automation for R5.1's model-corpus flip
-// (`docs/architecture/seam_map_map.md` -> "## Import -- geometry and placements" -> "The per-map
-// cutover flag"). Two things can silently undo that flip: the second cutover list quietly becoming
+// Content-free Substrate automation for R5.1's model-corpus flip, the per-map
+// cutover flag. Two things can silently undo that flip: the second cutover list quietly becoming
 // an alias of the R4.6 one, and a path accessor stopping composing from `BakedMeshesFor`. Neither
 // shows up as a compile error and neither shows up in a shot -- a map just draws the other corpus's
 // props, or none.

@@ -3,7 +3,7 @@
 `.ents`, `.hulls`, `.dispcol` and `.ropes` feed no baked actor -- `AElysiumMapActor` reads them at
 map load, not the bake -- so nothing else in the recipe notices a touched one. Without a digest
 here the tracker would keep serving a level stamped against an input that no longer matches: a
-stale level that reads as a runtime bug (`docs/project/seam_migration.md`, R2.3/MP-1.3).
+stale level that reads as a runtime bug.
 """
 
 from __future__ import annotations

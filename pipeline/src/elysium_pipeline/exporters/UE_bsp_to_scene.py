@@ -413,7 +413,7 @@ def write_ropes(data, out_dir, base, idx, ents=None):
 
     # R6.5: the line names the rope material by its `vtmb:material:` id; the imported `MI_`
     # carries the texture, the normal map and the shader mode, so nothing is decoded or
-    # flagged here (docs/architecture/seam_map_material.md -> "Ropes on `MI_`").
+    # flagged here.
 
     # RopeShader index -> material, from CRopeKeyframe::KeyValue (0x1019f2b0).
     ROPE_SHADER = {0: "cable/cable", 1: "cable/rope", 2: "cable/chain"}

@@ -10,8 +10,7 @@
 Byte layouts, struct offsets and decoded values belong to `docs/vtmb/mdl_v2531.md`; this brief
 cites that document rather than restating it. Skeletal-animation behaviour belongs to
 `docs/vtmb/animation_and_movers.md`, flex and gaze to `docs/vtmb/facial_animation.md`, bone-chain
-motion to `docs/vtmb/secondary_motion.md`, collision to `docs/vtmb/phy_vphysics.md`. Work
-sequencing and status live only in `docs/project/roadmap.md`.
+motion to `docs/vtmb/secondary_motion.md`, collision to `docs/vtmb/phy_vphysics.md`.
 The impact ranking below is an assessment of what each finding would change, not a schedule.
 
 ---

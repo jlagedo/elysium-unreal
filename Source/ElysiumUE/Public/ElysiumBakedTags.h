@@ -12,9 +12,8 @@ namespace ElysiumBakedTags
 {
 	// One spatial cell of the world's baked geometry.
 	inline const FName World(TEXT("elysium.world"));
-	// The 3D-skybox miniature (sky_camera) geometry, already scaled/offset by the bake -- and,
-	// since R6.7, the miniature's scope marker for every class placed inside it
-	// (`seam_map_map.md` -> "3D-skybox composition (R6.7)"): a sky chunk and a sky prop carry
+	// The 3D-skybox miniature (sky_camera) geometry, already scaled/offset by the bake -- and
+	// the miniature's scope marker for every class placed inside it: a sky chunk and a sky prop carry
 	// it INSTEAD of a class tag (both AStaticMeshActors, one bucket), a Detail or Sprite actor
 	// inside the miniature carries it BESIDE its class tag. AdoptBakedLevel therefore buckets by
 	// the class tags first and reads InMiniature() second.

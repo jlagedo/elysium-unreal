@@ -1,6 +1,4 @@
-// Content-free Substrate automation: the export-readiness gate Travel and ExportedMaps share
-// (docs/project/seam_migration.md R2.4, docs/architecture/map-architecture.md "The
-// export-readiness gate").
+// Content-free Substrate automation: the export-readiness gate Travel and ExportedMaps share.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -70,8 +68,7 @@ bool FElysiumMapExportGateTest::RunTest(const FString&)
 	return true;
 }
 
-// The marker is a presence-only signal (docs/architecture/map-architecture.md "The
-// export-readiness gate": "read for content, only for presence"). Two ways that could be gotten
+// The marker is a presence-only signal, read for content, only for presence. Two ways that could be gotten
 // wrong without either being caught by the first test: reading the bytes at all, and treating a
 // same-named directory as if it were the file.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapExportGateMarkerIsPresenceOnlyTest,
@@ -87,7 +84,7 @@ bool FElysiumMapExportGateMarkerIsPresenceOnlyTest::RunTest(const FString&)
 	static const FString Map(TEXT("sm_gatetest_2"));
 	IFileManager::Get().MakeDirectory(*FElysiumContentPaths::MapDir(Map), /*Tree*/ true);
 
-	// The marker is a presence-only signal (docs/architecture/map-architecture.md): its bytes are
+	// The marker is a presence-only signal: its bytes are
 	// never read, so writing a marker with content still satisfies the gate the same as an empty one.
 	TestTrue(TEXT("writing a non-empty readiness marker"),
 		FFileHelper::SaveStringToFile(TEXT("not read"), *FElysiumContentPaths::MapExportReady(Map)));
@@ -107,8 +104,7 @@ bool FElysiumMapExportGateMarkerIsPresenceOnlyTest::RunTest(const FString&)
 
 // R5.1 narrows the `.obj` half of the gate: once a map is on `MapsOnV2Models` nothing reads its
 // `.obj`, so a stale one left on disk from an older export must not vouch for the sidecars beside
-// it (`docs/architecture/seam_map_map.md` -> "## Import -- geometry and placements" -> "Travel's
-// gate follows the same flag"). The marker still accepts on either lane -- the branch is about
+// it — Travel's gate follows the same flag. The marker still accepts on either lane -- the branch is about
 // which artifact is EVIDENCE, not about which maps may travel.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapExportGateObjOnlyCountsOffTheV2LaneTest,
 	"Elysium.Substrate.MapExportGateObjOnlyCountsOffTheV2Lane", GElysiumMapExportGateTestFlags)

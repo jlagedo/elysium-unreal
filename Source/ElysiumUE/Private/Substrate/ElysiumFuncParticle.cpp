@@ -1,4 +1,4 @@
-// func_particle -- CFuncParticle (`docs/vtmb/effects.md` §3.1, `effects-architecture.md` §5.8):
+// func_particle -- CFuncParticle (`docs/vtmb/effects.md` §3.1):
 // the env_particle leaf on a brush. `Activate` forces attach mode 15 (a uniform random point in
 // the brush's world AABB, no solid test) whatever the key says, and folds the brush's size scalar
 // -- clamp(volume / 128^3, 0.01, 100) in Source units -- into the one rate float. The 98 rows are

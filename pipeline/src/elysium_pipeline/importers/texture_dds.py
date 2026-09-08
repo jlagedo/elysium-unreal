@@ -1,6 +1,6 @@
 """KTX2 → DDS staging and BC block decoding for the texture import lane.
 
-The texture unit's BIN chunk is one KTX 2.0 file (`seam_map_texture.md` → "KTX 2.0 payload").
+The texture unit's BIN chunk is one KTX 2.0 file.
 Unreal opens DDS, not KTX2, and -- the fact that shapes this module -- Unreal 5.8 opens only an
 **uncompressed** DDS: both import paths (`InterchangeDDSTranslator.cpp` and the legacy factory in
 `EditorFactories.cpp`) map the DXGI format through `UE::DDS::DXGIFormatGetClosestRawFormat`,

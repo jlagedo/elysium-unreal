@@ -449,8 +449,8 @@ void FElysiumCameraCinematic::DrawDebugGeometryOverlays(int32 ShowDebugCvarValue
 	// **M16 — ruled by the owner, 2026-09-07: no overlay is drawn.** `camera_showdebug 1` does
 	// nothing on live retail (the draw path is dead in the shipped build), so there is no behaviour
 	// to reproduce and no diagnostic worth rebuilding. The cvar stays declared under retail's own
-	// name, the `== 1` gate stays asserted, the recovered geometry stays recorded above and in
-	// `docs/project/camera_scripted.md` §7, and the substrate grows no debug-draw seam for it.
+	// name, the `== 1` gate stays asserted, the recovered geometry stays recorded above, and the
+	// substrate grows no debug-draw seam for it.
 	UE_LOG(LogElysiumCineCam, Verbose,
 		TEXT("%s: camera_showdebug 1 — shot '%s', mode %d, origin %s"),
 		*DebugString(), *ShotDef.Name, CamMode, *PlacementOrigin.ToCompactString());

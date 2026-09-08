@@ -2,7 +2,7 @@
 
 Every test builds its own fake install index and `read_bytes` closure -- never the real one --
 so the suite is a pin on this seam's own decode/export/validate contract, independent of the
-corpus. `docs/architecture/seam_map_engine_config.md` owns the facts these tests check.
+corpus.
 """
 
 from __future__ import annotations
@@ -285,7 +285,7 @@ def test_every_byte_of_lights_rad_is_claimed_exactly_once():
 
 
 def test_mixed_line_endings_is_reported_outside_the_console_script_grammar_too():
-    """`seam_map_engine_config.md` scopes `mixed-line-endings` to no grammar in particular."""
+    """`mixed-line-endings` is scoped to no grammar in particular."""
 
     text = b"lights/a\t1 2 3 4\r\nlights/b\t1 2 3 4\n"
     _, _, _, model = _decode({"lights.rad": text}, "lights.rad")
@@ -558,7 +558,7 @@ def test_a_lip_reference_resolves_the_paired_mp3_first():
 
 
 def test_a_lip_reference_with_neither_companion_is_an_ordinary_unresolved_dependency():
-    """Per `seam_map_unit_contract.md` ("References between units"), a reference whose target is
+    """A reference whose target is
     another seam's data and merely fails to resolve is an ordinary `dependencies` row, `resolved:
     false` -- not the `vtmb:missing-<kind>:` sentinel, which is reserved for a reference the
     *referenced kind's own rules* make unreachable to the engine. Neither `.mp3` nor `.wav`
@@ -740,7 +740,7 @@ _INCOMPLETE_FIELD_STREAM = struct.pack("<HH", 3, 0) + b"abc" + b"\xff\xff\xff\xf
 
 
 def test_a_zlib_span_whose_walk_does_not_complete_is_typed_unidentified_not_derived():
-    """`seam_map_engine_config.md` ("Save fragment"): `derived` only where the save decoder both
+    """`derived` applies only where the save decoder both
     inflates *and walks* the span; an incomplete walk represents none of the inflated bytes, so
     the compressed span itself is carried as `typedUnidentified` instead."""
 
@@ -940,7 +940,7 @@ def test_every_grammar_round_trips_through_export_and_standalone_validation(path
     assert summary["byteCoveragePercent"] == 100.0
     assert destination.exists()
     # Re-reading and re-validating from the file alone (no install) agrees with the export-time
-    # summary -- the standalone half of the split `seam_map_unit_contract.md` describes.
+    # summary -- the standalone half of the export/validate split.
     again = validation.validate(destination)
     assert again == summary
 

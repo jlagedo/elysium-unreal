@@ -588,7 +588,7 @@ public:
 
 	// --- Persistence ---
 	// Everything a class registers as a `Save` field is enumerated by the field walk and needs no code
-	// here (`docs/architecture/save-architecture.md` §4). This is the hook for the one thing that does not fit it: a
+	// here. This is the hook for the one thing that does not fit it: a
 	// leaf's *derived* runtime state — a mover's phase and its move endpoints, a sequence cursor —
 	// state that is neither a keyvalue nor a field, and that a rebuild from the def cannot re-derive.
 	// Called after the field walk, in both directions (the archive knows which). Bodies are never
@@ -598,7 +598,7 @@ public:
 	// True when this entity leaves the map with the player rather than staying behind — an inventory
 	// item that is an owned entity. The freeze records such an entity in the snapshot's
 	// `AbsentEntities` set instead of its state, which is what stops walking back into a map from
-	// re-materialising everything carried out of it (VtMB's `.HL3`, `docs/architecture/save-architecture.md` §5).
+	// re-materialising everything carried out of it.
 	virtual bool TravelsWithPlayer() const { return false; }
 
 	// `CBaseEntity::ObjectCaps()` (slot 117) — of its bits the port can act on exactly one,

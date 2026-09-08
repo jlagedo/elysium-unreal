@@ -40,7 +40,7 @@ struct FElysiumContentPaths
 
 	// The deployed, gitignored, runtime-parsed corpus written by `uv run elysium import` --
 	// distinct from Root(), which is the offline pipeline's loose export tree. vdata is the first
-	// family imported onto it (docs/project/seam_migration.md "Settled"); more follow as the
+	// family imported onto it; more follow as the
 	// migration converges the runtime onto one resolution mechanism. `-ElysiumCorpusRoot=` mirrors
 	// Root()'s `-ElysiumContentRoot=` pin so tests/dev can redirect the corpus independently.
 	static FString CorpusRoot()
@@ -208,7 +208,7 @@ struct FElysiumContentPaths
 	static FString BakedSharedMaterials() { return BakedSharedDir() / TEXT("Materials"); }
 	static FString BakedSharedMeshes() { return BakedSharedDir() / TEXT("Meshes"); }
 	// The texture lane's package root (`uv run elysium import textures`): one `T_` per
-	// `vtmb:texture:` unit, `docs/architecture/seam_map_texture.md` -> "Identity and naming".
+	// `vtmb:texture:` unit.
 	static FString BakedTexturesDir() { return BakedMount() / TEXT("Textures"); }
 	// The baked-unit contract's object-path resolver. Python's asset_paths.baked_unit returns
 	// the corresponding package path; both walk pipeline/tests/fixtures/baked_paths.json.
@@ -297,7 +297,7 @@ struct FElysiumContentPaths
 		return BakedUnit(TEXT("vtmb:texture:") + Key, Prefix);
 	}
 	// The material lane's package root (`uv run elysium import materials`): one `MI_` per
-	// `vtmb:material:` unit, `docs/architecture/seam_map_material.md` -> "Identity and naming".
+	// `vtmb:material:` unit.
 	static FString BakedMaterialsDir() { return BakedMount() / TEXT("Materials"); }
 	// `vtmb:material:<dir>/<stem>` -> `/ElysiumBaked/Materials/<dir>/MI_<safe stem>.MI_<safe stem>`,
 	// the object path of the imported instance. The C++ twin of
@@ -380,8 +380,7 @@ struct FElysiumContentPaths
 	}
 	// The V2 model corpus (R1): one `UStaticMesh` per referenced model unit, imported from the
 	// published GLB with its slots bound to the V2 material instances and its collision cooked from
-	// VtMB's own convex hulls (docs/architecture/seam_map_model.md -> "Import" -> "Identity and
-	// naming"). A sibling of the legacy shared bake at the mount root, never over it: the two
+	// VtMB's own convex hulls. A sibling of the legacy shared bake at the mount root, never over it: the two
 	// corpora carry the same asset names, stems and slot names, so which root a map reads is the
 	// only difference between them. Its Python twin is
 	// `elysium_pipeline.importers.models.PACKAGE_ROOT`.
@@ -528,8 +527,7 @@ struct FElysiumContentPaths
 	// per map and per position. Every surface texture is the corpus's.
 	static FString MapTexDir(const FString& Map) { return MapDir(Map) / TEXT("tex"); }
 	static FString MapObj(const FString& Map) { return MapDir(Map) / (Map + TEXT(".obj")); }
-	// The new export lane's readiness marker (docs/project/seam_migration.md R2.4; the ruling is
-	// `docs/architecture/map-architecture.md` "The export-readiness gate"). An empty file a new-lane
+	// The new export lane's readiness marker (the ruling is "the export-readiness gate"). An empty file a new-lane
 	// producer writes only once every sidecar `Travel` depends on is complete on disk for this map --
 	// `UElysiumMapSubsystem::HasTravelableExport` accepts this OR MapObj, so the gate never goes
 	// without both while the lanes coexist. Nothing writes it yet; R3.2 is the first producer.
@@ -564,7 +562,7 @@ struct FElysiumContentPaths
 	// Audio. WAVs are game-global (shared across maps), so they live in one mirror of VtMB's
 	// `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.
 	// "Environmental/Fire/Fire_Roaring.wav"), matching an ambient_generic `message` value.
-	// Migrated onto CorpusRoot() by DC (docs/project/seam_migration.md, 2026-09-06): 10,892 sound
+	// Migrated onto CorpusRoot() by DC on 2026-09-06: 10,892 sound
 	// units with their same-stem `.lip` beside them.
 	static FString SoundDir() { return CorpusRoot() / TEXT("sound"); }
 	static FString SoundFile(const FString& Rel) { return SoundDir() / CorpusRel(Rel); }
@@ -628,9 +626,8 @@ struct FElysiumContentPaths
 	// VtMB's whole RPG/rules layer is Valve-KeyValues text under `vdata/`, now sourced from the
 	// export_v2 capsule import (`uv run elysium import vdata`) onto CorpusRoot() rather than from
 	// Root(). Per-table consumer map: `docs/vtmb/vdata-catalog.md`. Signs stay on the legacy
-	// export root (SignsDir() below) -- a deliberate divergence, not yet migrated. See
-	// docs/project/seam_migration.md "Settled": rulebook tables read corpus-only, terminal
-	// definitions stay overlay-first over this same directory.
+	// export root (SignsDir() below) -- a deliberate divergence, not yet migrated: rulebook
+	// tables read corpus-only, terminal definitions stay overlay-first over this same directory.
 	static FString VdataDir() { return CorpusRoot() / TEXT("vdata"); }
 	static FString VdataFile(const FString& Rel) { return VdataDir() / Rel; }
 

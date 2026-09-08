@@ -1,5 +1,4 @@
-"""Contract tests for `pipeline/unreal/lookdev_props_set.json`, the R1.6 props row
-(`docs/project/seam_migration.md` -> Roadmap -> "R1.6 Verify + lookdev").
+"""Contract tests for `pipeline/unreal/lookdev_props_set.json`, the R1.6 props row.
 
 Same shape as `test_lookdev_set.py`'s material-grid contract: the set names real corpus model
 units and the `SM_` asset path the props importer's own naming rule derives from each one, going
@@ -85,7 +84,7 @@ def test_set_covers_a_handful_of_entries():
 
 
 def test_set_covers_the_sentinel_unit():
-    # docs/project/seam_migration.md R1.6 notes name this exact stem: the unit whose slot binds
+    # R1.6 names this exact stem: the unit whose slot binds
     # the vtmb:missing-material: sentinel (MI_V2_Missing), so the props row proves the model and
     # material lanes join correctly, not just that a mesh exists.
     sentinel = _expected_mesh("vtmb:model:scenery/structural/warrens/floorblock")

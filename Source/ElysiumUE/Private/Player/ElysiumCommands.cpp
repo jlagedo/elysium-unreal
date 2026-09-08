@@ -123,8 +123,7 @@ namespace
 		{ TEXT("speed"),        EK::ButtonPair, EG::Movement, EB::Speed,        TEXT("walk modifier -- held selects the slow gait") },
 		{ TEXT("strafe"),       EK::ButtonPair, EG::Movement, EB::Strafe,       TEXT("strafe modifier -- the turn keys strafe while held") },
 		// `duck` stays an ordinary pair carrying an ordinary button. **The crouch's retention is not
-		// here.** A command is one frame of requested input (`docs/architecture/animation-architecture.md`
-		// § 3), so `IN_DUCK` means "the key is down this frame" and nothing more; the mover's press
+		// here.** A command is one frame of requested input, so `IN_DUCK` means "the key is down this frame" and nothing more; the mover's press
 		// edge is what toggles, and the retained state it toggles is `bDuckRequested` beside
 		// `m_bDucked`'s own. Faking a held button here would put a stance in the command stream and
 		// make a recording claim a key was down on frames it was not.

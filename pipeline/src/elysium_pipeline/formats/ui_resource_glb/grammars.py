@@ -1,4 +1,4 @@
-"""The four line/row grammars `seam_map_ui_resource.md` names besides `keyvalues`.
+"""The four line/row grammars besides `keyvalues`.
 
 `titles` (`scripts/titles.txt`), `settings-scr` (`scripts/settings.scr`), `tab-rows` and
 `key-value-lines` (the `.lst` key-binding tables and `liblist.gam`), `line-list` (`rooms.lst`)
@@ -406,7 +406,7 @@ def decode_row_grammar(closure: UiResourceSourceClosure) -> UiResourceModel:
             # A blank line or a comment-only line: every byte in `span` is already claimed above
             # (whitespace/comment tokens are claimed unconditionally, independent of grouping),
             # so publishing a row here would fabricate a `cells: []` entry the source never
-            # authored (seam_map_unit_contract.md, "Non-canonical storage").
+            # authored.
             continue
         index = len(entries)
         cells = []
@@ -448,8 +448,8 @@ def decode_row_grammar(closure: UiResourceSourceClosure) -> UiResourceModel:
 
 def decode_line_list(closure: UiResourceSourceClosure) -> UiResourceModel:
     """Plain text lines, one room name per line -- except a `//` line, which is a comment, not a
-    row (`seam_map_ui_resource.md`'s "Byte ledger owners" names `comments[i]` as the owner of one
-    `//` comment, whatever grammar the member is in)."""
+    row (the seam's "Byte ledger owners" names `comments[i]` as the owner of one `//` comment,
+    whatever grammar the member is in)."""
 
     member = closure.member
     text = lexer.decode_text(member.data, "latin-1")
@@ -462,8 +462,7 @@ def decode_line_list(closure: UiResourceSourceClosure) -> UiResourceModel:
         stripped = text[start:end].rstrip("\r\n").strip()
         if not stripped:
             # A blank line names no room: claim it as ordinary insignificant whitespace rather
-            # than fabricating a `{"text": ""}` row the source never authored
-            # (seam_map_unit_contract.md, "Non-canonical storage").
+            # than fabricating a `{"text": ""}` row the source never authored.
             ledger.claim(start, end - start, "omitted-proven", "whitespace")
             whitespace_total += end - start
             continue

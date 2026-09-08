@@ -1,5 +1,4 @@
-// The computer terminal's mail area (docs/project/plans/terminals.md, slice G;
-// docs/vtmb/computer-terminals.md §12).
+// The computer terminal's mail area (docs/vtmb/computer-terminals.md §12).
 //
 // `Elysium.Substrate.TerminalEmail` drives the whole retail chain on a hand-built definition: the
 // `email` builtin's gate, the `email_password` prompt and the acknowledged entry, the visible-index

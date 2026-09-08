@@ -7,8 +7,8 @@ class UGameInstance;
 class UWorld;
 struct FElysiumGameClock;
 
-// The one pause / time-scale facade, over the substrate clock AND engine time
-// (`docs/architecture/runtime-architecture.md` §4). It lives on UElysiumGameStateSubsystem beside the clock it
+// The one pause / time-scale facade, over the substrate clock AND engine time.
+// It lives on UElysiumGameStateSubsystem beside the clock it
 // drives, and it is the clock's only writer: FElysiumGameClock keeps Advance/SetPaused/
 // SetScale/Reset private and friends this struct, so "one clock, advanced in one place" is
 // a compile-time property rather than a convention.
@@ -31,7 +31,7 @@ struct FElysiumTimeControl
 	// resolves the live world through it, so travel never leaves a stale world pointer behind.
 	void Bind(UGameInstance* InGameInstance) { GameInstance = InGameInstance; }
 
-	// The frame (`docs/architecture/runtime-architecture.md` §3).
+	// The frame.
 	// Step 2 — the only place `Now` moves, called first thing in the map actor's gameplay tick.
 	// DeltaSeconds is that tick's own delta, which the engine has already dilated. Returns the
 	// game-time delta applied (0 while held).

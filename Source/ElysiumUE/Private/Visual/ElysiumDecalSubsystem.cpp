@@ -1,5 +1,5 @@
-// R7.2 -- the one owner of every decal in a world (`docs/project/seam_migration.md` -> "R7.2
-// Decals", ruling 4 and owner call B). The header carries the design; this file is its mechanics.
+// R7.2 -- the one owner of every decal in a world (ruling 4 and owner call B). The header carries
+// the design; this file is its mechanics.
 
 #include "ElysiumDecalSubsystem.h"
 

@@ -46,8 +46,7 @@ class SoundSchemeSourceClosure:
 def source_keys(index: dict) -> list[str]:
     """Every sound-scheme stem the UP-first install index resolves, folded and sorted.
 
-    174 schemes resolve in the merged install (147 in the VPKs alone), per
-    `seam_map_sound_scheme.md`.
+    174 schemes resolve in the merged install (147 in the VPKs alone).
     """
 
     stems: set[str] = set()

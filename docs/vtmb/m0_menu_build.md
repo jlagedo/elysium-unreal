@@ -8,9 +8,9 @@
 > and alias tables (§4), the dialog `.res` inventory (§6), and the particle-scene structure (§9).
 
 > **Reference, not a port target. Elysium-Unreal does not port VGUI.** The direction is
-> *reconstruction* (`docs/project/reconstruction-direction.md` axis 1): VtMB's screen **structure** — inventory,
+> *reconstruction*: VtMB's screen **structure** — inventory,
 > panel anatomy, reading order, palette, iconography, strings — is kept and re-skinned on a
-> modern resolution-independent Slate/UMG stack with vector type (roadmap **8.6**). No classic
+> modern resolution-independent Slate/UMG stack with vector type. No classic
 > UI mode, no 640×480 scale box, no runtime `.fnt` bitmap atlas.
 >
 > What this doc is for: the record of what the original UI contains and why — the `GameUI.dll`
@@ -24,7 +24,6 @@ particle scene — not a hand-composited look-alike. Actions may be stubbed
 (settings/load/save unimplemented); the target is that **look, structure, and
 behavior** are exact. Current state against that target is the ledger in §0.
 
-Companion: `docs/project/rebuild-strategy.md` (this is the drill-down for its M0 milestone).
 Decompile tooling + dumps live under `$ELYSIUM_WORK_ROOT/research/ghidra/` (`README.md`).
 
 **Bring-your-own:** every byte below comes from the user's own install. The pipeline

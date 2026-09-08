@@ -164,7 +164,7 @@ def test_every_byte_of_a_well_formed_definition_is_claimed_exactly_once():
 
 
 def test_text_ranges_are_graded_mapped_text_not_mapped():
-    """`seam_map_unit_contract.md` reserves the ledger state `mapped` for a binary record or
+    """The ledger state `mapped` is reserved for a binary record or
     payload; `particles/*.txt` is a plain-text KeyValues file, so `root`, every `keys[i].key`/
     `keys[i].value` and every `blocks[i].name`/`blocks[i].braces` this seam claims must be graded
     `mapped-text`. This grammar's own `bom` token folds onto `whitespace` (`omitted-proven`), so

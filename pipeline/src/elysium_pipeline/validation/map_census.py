@@ -28,7 +28,7 @@ from elysium_pipeline.formats.unit_contract import read_glb
 from elysium_pipeline.paths import export_v2_root
 from elysium_pipeline.validation.shots_diff import git_commit
 
-#: The effects-entity family R7.3 lands (`docs/architecture/effects-architecture.md` section 5.8,
+#: The effects-entity family that R7.3 lands drives
 #: the real census over the 108 maps -- R2.2's `env_fire` / `env_embers` / `env_lightglow` /
 #: `point_spotlight` / `env_sun` guesses have 0 placements and are gone); a class this map never
 #: authors still gets a zero row, so a later diff sees the vocabulary hold steady across a

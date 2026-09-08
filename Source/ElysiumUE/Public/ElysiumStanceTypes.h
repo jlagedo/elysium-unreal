@@ -15,7 +15,7 @@ struct FElysiumDisposition;
 //
 // Nothing here touches the engine: the clip names arrive resolved, the tuning arrives as a row,
 // and the randomness arrives as a stream. That is what lets the whole machine be asserted in the
-// Substrate tier against literals (`gameplay-systems-architecture.md` K10).
+// Substrate tier against literals.
 namespace ElysiumStance
 {
 	// VtMB authors exactly three stances per disposition and indexes them directly. It is not a

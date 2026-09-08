@@ -4,7 +4,7 @@
 
 struct FElysiumMoveTuning;
 
-// The movement gym's specification (`docs/architecture/movement-architecture.md` → "The gym").
+// The movement gym's specification.
 //
 // A gym's dimensions *are* its specification, so this one is **generated from `ElysiumMove`'s own
 // constants** rather than authored: each riser, roof, ramp and aperture is placed at

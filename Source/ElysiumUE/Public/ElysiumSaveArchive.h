@@ -4,7 +4,7 @@
 #include "ElysiumSaveTypes.h"
 #include "Serialization/ArchiveProxy.h"
 
-// The payload writer/reader (`docs/architecture/save-architecture.md` §2). An `FArchiveProxy`, so every stock
+// The payload writer/reader. An `FArchiveProxy`, so every stock
 // `operator<<` still works and our own free operators compose with them, and it carries the one
 // thing a bare archive cannot: **the schema id**, so a reader can branch or refuse (`Version()`).
 //

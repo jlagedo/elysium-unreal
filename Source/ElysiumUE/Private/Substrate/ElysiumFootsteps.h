@@ -6,7 +6,7 @@
 #include "ElysiumLocomotionSample.h"   // EElysiumWaterLevel — the clock's water arm switches on it
 #include "Math/RandomStream.h"         // the coin flip's stream, taken by reference
 
-// The footstep subsystem's RULE MODULE (`docs/architecture/footstep-architecture.md` §4.3): pure
+// The footstep subsystem's RULE MODULE: pure
 // functions over value types, one per retail function, with every recovered constant named beside
 // the address it was read from. Nothing here touches a `UObject`, an entity or a service, so the
 // whole of VtMB's stepping arithmetic is asserted with no world

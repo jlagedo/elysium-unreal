@@ -15,7 +15,7 @@ isn't one, and adding one is a defect.
 ## Two lanes, never mixed
 
 Niagara in this project runs on two lanes, and the split is the whole rule (owner call
-2026-09-03, `docs/architecture/effects-architecture.md` §5.3):
+2026-09-03):
 
 - **Authored.** The hero systems (`NS_ElysiumRain`, `NS_ElysiumMeleeTrail`, `NS_ElysiumDust`,
   `NS_ElysiumSteam`, `NS_ElysiumBeam`), plus the **base emitters and module scripts** under
@@ -46,8 +46,6 @@ work on the next `reconstruct` or put game-derived bytes inside the tracked set.
 | Cloth | `Cloth/DA_ClothTuning` — material and solver judgment values | `/ElysiumBaked/Characters/Cloth/CLOTH_<stem>`, built by `pipeline/unreal/make_cloth_assets.py` |
 | Eye tuning (R4.5) | `Eyes/DA_EyeTuning` — the corpus-wide `EyeSize`/`EyeShift` baseline | none — no generated payload pairs with it; every rendered eye composes against the same two scalars (`ElysiumEyes::ComposeTuning`) |
 
-Design and behaviour for these live in `docs/architecture/effects-architecture.md`,
-`docs/architecture/animation-architecture.md` §8, and `docs/architecture/bouncy-boobs-dynamics.md`.
 The namespace boundary is `Content/CLAUDE.md`.
 
 ## Never

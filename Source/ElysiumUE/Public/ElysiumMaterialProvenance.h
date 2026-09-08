@@ -10,9 +10,9 @@ class FJsonObject;
 class UMaterialInterface;
 
 /**
- * One row of the unit's `parameters`, in source order (`docs/architecture/seam_map_material.md` →
- * "Import" → "Provenance"). Carried for every parameter the unit authors, including the ones this
- * lane does not consume, so no VMT key is silently lost between the sidecar and the asset.
+ * One row of the unit's `parameters`, in source order. Carried for every parameter the unit
+ * authors, including the ones this lane does not consume, so no VMT key is silently lost between
+ * the sidecar and the asset.
  */
 USTRUCT(BlueprintType)
 struct FElysiumMaterialParameter
@@ -48,8 +48,7 @@ struct FElysiumMaterialBlock
 };
 
 /**
- * One row of the unit's `proxies` (`docs/architecture/seam_map_material.md` → "Import" → "Proxy
- * policy"): a Source proxy chain instance and where it landed -- a material-graph node, a
+ * One row of the unit's `proxies`: a Source proxy chain instance and where it landed -- a material-graph node, a
  * runtime-factory binding, or provenance only. `Name` and `ParameterIndices` are not published by
  * the stage today (it writes `sourceName` and pre-resolved `arguments`, not raw parameter
  * indices); they stay at their defaults.
@@ -74,7 +73,7 @@ struct FElysiumMaterialProxy
 
 /**
  * One row of `omissions[]`: a VMT key or a keyvalues-shape note this lane recorded but applied
- * nowhere (`docs/architecture/seam_map_material.md` -> "Import" -> "Provenance"; C-2). A real
+ * nowhere. A real
  * staged sidecar carries at least two shapes -- a blanket `{reason, role}` insignificant-
  * whitespace note on every unit, and a named `{key, kind, reason}` row for a per-unit divergence
  * (`UNIT_DIVERGENCES`) -- both always carry `reason`; every other field lands in `Extra`
@@ -177,8 +176,8 @@ struct FElysiumMaterialDependency
 
 /**
  * Everything a `vtmb:material:` unit knows that a `UMaterialInstance` has no slot for, carried on
- * the baked asset as AssetUserData so a packaged game can read it and the editor can inspect it
- * (`docs/architecture/seam_map_material.md` → "Import" → "Provenance"). `UMaterialInterface`
+ * the baked asset as AssetUserData so a packaged game can read it and the editor can inspect it.
+ * `UMaterialInterface`
  * implements `IInterface_AssetUserData` directly, so no carrier class is needed the way
  * `UElysiumPhysicalMaterial` needed one for `UPhysicalMaterial`.
  *

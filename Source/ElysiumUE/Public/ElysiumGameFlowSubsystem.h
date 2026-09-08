@@ -62,7 +62,7 @@ struct FElysiumNewGameRequest
 	bool bReplayEntryMap = false;
 };
 
-// The retail New Game chain, in order (`docs/architecture/runtime-architecture.md` §10). Held as data because the
+// The retail New Game chain, in order. Held as data because the
 // transitions between these maps are the maps' own `trigger_changelevel` wires, not code.
 namespace ElysiumStory
 {
@@ -144,8 +144,8 @@ namespace ElysiumStory
 // scope stack), and a dynamic delegate would force the enum into UObject reflection for nothing.
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumAppStateChanged, EElysiumAppState /*Old*/, EElysiumAppState /*New*/);
 
-// The application state machine and the session's entry points
-// (`docs/architecture/runtime-architecture.md` §10). GI-scoped: boot, the session and the app state all outlive any
+// The application state machine and the session's entry points.
+// GI-scoped: boot, the session and the app state all outlive any
 // one world, and travel is exactly when they change.
 //
 // This is the only owner of `EElysiumAppState`, of the boot decision, and of the loading screen.

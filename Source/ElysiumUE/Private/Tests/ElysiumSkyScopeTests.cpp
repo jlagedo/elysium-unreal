@@ -1,5 +1,4 @@
-// R6.7 -- 3D-skybox composition (`docs/architecture/seam_map_map.md` -> "3D-skybox composition
-// (R6.7)"). The bake places every miniature class through the one transform; the runtime's whole
+// R6.7 -- 3D-skybox composition. The bake places every miniature class through the one transform; the runtime's whole
 // share is the scope marker it buckets by second, the fog set it stamps a detail component with,
 // and the toggle that hides the miniature as one thing. Pinned here content-free, on a level of
 // five tagged actors the test spawns itself.

@@ -6,7 +6,7 @@
 //
 // The wizard is a `client.dll` panel, so nothing here is a layout: `Region`/`TextRegion` are read
 // as authored *intent* (which answer sits above which, how much room the question wanted), never as
-// a runtime coordinate system (`docs/project/reconstruction-direction.md` axis 1). What is load-bearing is the graph —
+// a runtime coordinate system. What is load-bearing is the graph —
 // which popup follows which, which answer increments which abstract trait, and how the tallies
 // score each clan. The model: `docs/vtmb/game_runtime.md` → "Chargen — a personality quiz".
 

@@ -1,5 +1,4 @@
-// light / light_spot / light_dynamic -- the light entities (R6.2,
-// `docs/architecture/seam_map_map_lighting.md` -> "Switched lights and lightstyles").
+// light / light_spot / light_dynamic -- the light entities.
 //
 // `light` and `light_spot` are CLight (vampire.dll 10130460 Spawn, 10130610 on, 10130690 off,
 // 101306f0 toggle, 10130780 SetPattern, 10130800 FadeToPattern, 101308d0 FadeThink). The entity

@@ -135,7 +135,7 @@ bool UElysiumMapCollisionPayload::GetPhysicsTriMeshData(FTriMeshCollisionData* C
 	// `bFlipNormals` matches what the procedural-mesh component states for the same soup (a Chaos
 	// trimesh is two-sided either way). `bDeformableMesh`/`bFastCook` deliberately do NOT: those
 	// two exist because a procedural mesh cooks while the game runs, and this payload cooks
-	// offline (`docs/architecture/seam_map_map.md` -> "Import" -> "What the payload carries").
+	// offline.
 	CollisionData->bFlipNormals = true;
 	CollisionData->bDeformableMesh = false;
 	CollisionData->bFastCook = false;

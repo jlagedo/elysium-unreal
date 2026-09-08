@@ -1,4 +1,4 @@
-// The terminal keyboard (`docs/project/plans/terminals.md`, slice E).
+// The terminal keyboard.
 //
 // Retail's client input is two bodies, not one: `C_BaseTerminal::vfunc25` `0x100c7090` classifies
 // the key and *eats* every printable without inserting it, and `FUN_100c6d50` does the insert.

@@ -25,9 +25,8 @@ BASE_MAPPED_FIELDS = (
 
 #: The typed-projection fields a unit may populate, `(json name, model attribute)`. Exactly one
 #: (or, for a `keyvalues`-grammar unit, `tree` plus at most one) is not `None` on a given unit; a
-#: unit is graded `mapped` only for the field(s) it actually carries
-#: (`seam_map_unit_contract.md`'s semantic states grade "a source field or record", not a field
-#: name the unit never populated).
+#: unit is graded `mapped` only for the field(s) it actually carries (the unit contract's semantic
+#: states grade "a source field or record", not a field name the unit never populated).
 _OPTIONAL_FIELDS = (
     ("tree", "tree"),
     ("scheme", "scheme"),
@@ -54,7 +53,7 @@ def mapped_fields(model: Any) -> list[str]:
 def omitted_proven_rows(whitespace_bytes: int) -> list[dict[str, Any]]:
     """The single `coverage.omittedProven` row a grammar's insignificant whitespace earns once it
     has claimed at least one byte of it, evidencing the ledger's `omitted-proven` whitespace
-    claims per `seam_map_unit_contract.md`'s "an evidence-backed omission carrying its reason in
+    claims per the unit contract's "an evidence-backed omission carrying its reason in
     `omissions` or `coverage.omittedProven`"."""
 
     if not whitespace_bytes:

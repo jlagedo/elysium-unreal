@@ -33,7 +33,7 @@ struct FElysiumImpactOutcomes
 
 /**
  * One entry of `scripts/surfaceproperties.txt` as an Unreal physical material, with the fields
- * Unreal has no slot for (`docs/architecture/seam_map_surface_property.md` → "Import").
+ * Unreal has no slot for.
  *
  * **Identity is the asset.** There is one of these per surface entry, at
  * `/ElysiumBaked/SurfaceProperties/PM_<name>`, and a hit's `PhysMaterial` *is* this object — so

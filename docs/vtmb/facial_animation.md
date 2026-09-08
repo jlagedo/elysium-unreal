@@ -41,7 +41,7 @@ clan bodies `clandoc000.txt` names (roadmap PL13) have no flexdescs, no
 controllers, no rules and no `StudioFlex` records at all. The PC's face is authored only in the
 NPC-model portraits VtMB shows elsewhere; on the body itself there is nothing to drive. So the
 lipsync and expression layers (12.3, 12.5) apply to NPCs, and any PC facial performance would be
-a reconstruction addition under `docs/project/reconstruction-direction.md`'s rule, not a reproduction.
+a reconstruction addition, not a reproduction.
 
 **The PC's eyes are the exception, and they cut the other way.** 57 of those 59 player models
 carry a full pair of `StudioEyeball` records. Eye aiming needs no flex data — it is a
@@ -187,7 +187,7 @@ the opposite brow's lowerer.
 
 **Reproduce it.** The behaviour is visible rather than inert — unlike `mouth`, every rule
 here reaches a morph — so symmetrising the three rules changes what a face does and is a
-Logic-layer change under `docs/project/reconstruction-direction.md`, not a decode fix. Nothing in
+Logic-layer change, not a decode fix. Nothing in
 Elysium's replay special-cases them: the rules ship as data in the facial sidecar and are
 evaluated as written.
 
@@ -264,6 +264,13 @@ the same wav by the same tool, so Elysium reads the envelope out of the line fil
 at the event's authored start. Retail's courtroom jaw comes from `mstudiomouth_t` driven live
 off the playing sample by the sound engine, which this path does not reproduce: **the outcome
 matches and the source of the envelope does not.**
+
+### `$clientshader "mouthshader"` — a shipped mechanism with no consumer
+
+`$clientshader "mouthshader"` is set on exactly two VtMB materials — the female Malkavian PC's
+teeth. `StudioRender.dll` compares the string and sets a per-slot boolean with no parameters. It
+is not itself a shader. Nothing in the client implements it, and the PC body carries no flex rig
+to drive it, so it is a shipped mechanism with no consumer in the client at all.
 
 ### The read-out pattern
 
@@ -561,6 +568,17 @@ defaults, so every other disposition inherits from it. Retail values:
 
 Disposition-level and therefore global: blink interval **2.5–6.0 s**, eye turn rate **0.9**,
 fidget interval **5–8 s**.
+
+**`DispositionTable.txt`'s "Eye Turn Rate" is used twice with different meanings.** The
+disposition-level value (`0.9`, global) is the *hold* rate — the integrator's rate while a
+converged gaze is held. The value inside each disposition's `EyeTarget` block (the per-row
+values above: `0.3` Neutral, `0.95` Anger, `0.2` Apathy, etc.) is the *fidget step* rate, used only
+while a fidget sequence is stepping its cells. The fidget driver (`0x102C0010`) rewrites
+`m_flEyeIntegRate`@0x0E3C from the disposition every think, reading index 0 (hold) while a
+converged gaze is held and index 1 (step) while the fidget cells are advancing. The gaze fidget
+driver itself steps its cells via `FUN_100ECDF0`, reading record fields `+0x23C` and `+0x260`. Its
+short-circuit — the branch that ends fidgeting and returns to a converged gaze — lives at
+`0x1026B81B` and reads `m_RelativeEyeTarget`@0x5B94.
 
 **Selection** is a priority cascade — dialogue partner, target entity, enemy, navigation goal,
 heard sound, then an autonomous scan — with every candidate gated by
@@ -1333,7 +1351,7 @@ set by its dialogue clips (`heather` +2.4 %) and the whole of a glb that has non
   cascade to straight ahead — it does **not** fall back to the partner's eyes. That is why a badly
   placed dialogue shot reads as an NPC staring past the player rather than at them.
 
-Implementation roll-up status for this system is in `docs/project/roadmap.md`. The capture
+The capture
 instrument is retired; a named divergence in the built face escalates to a scoped capture as an
 owner call (`docs/vtmb/vtmb-animation-reverse-engineering.md` → "Programme method").
 

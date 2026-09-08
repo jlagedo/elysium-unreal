@@ -1,6 +1,6 @@
 """Decode one expression-table unit: the compiled VFE, the readable TXT, or both.
 
-`docs/architecture/seam_map_expression_table.md` owns the shape. The VFE is the runtime
+The expression-table seam owns the shape. The VFE is the runtime
 authority and is restated twice: `vfe` carries the compiled header and setting records as
 stored, and `table` reshapes them into the shared `keys[]`/`hasWeighting`/`rows[]` view the TXT's
 `authoring` block also fills, so the two can be compared without ever being merged.

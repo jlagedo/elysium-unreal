@@ -43,7 +43,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumVitalsChanged, const FElysiumVital
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumNotification, const FElysiumNotification& /*Notification*/);
 DECLARE_MULTICAST_DELEGATE(FOnElysiumViewEvent);
 
-// The presentation seam (`docs/architecture/runtime-architecture.md` section 11).
+// The presentation seam.
 //
 // One publisher, one struct, one set of events. Everything the player sees that comes out of the
 // running game is assembled here, once per frame, into an FElysiumViewState; the CommonUI screens
@@ -129,7 +129,7 @@ public:
 	bool CloseLoot();
 	bool SubmitTerminalCommand(const FElysiumEntityHandle& Owner, uint32 SessionSerial,
 		const FString& Command);
-	// --- the five terminal intents (`docs/project/plans/terminals.md`, slice E) -------------------
+	// --- the five terminal intents -------------------
 	// Retail's client has exactly one channel to the terminal — the `hackcmd` ConCommand
 	// (`FUN_100dace0`) — and its key handler picks the string. These name the five strings that
 	// handler can send, so the widget never spells a command out and every one re-resolves the map,
@@ -157,7 +157,7 @@ public:
 	void SetTerminalDraft(const FElysiumEntityHandle& Owner, const FString& Draft);
 	const FString& TerminalDraft() const { return TerminalDraftText; }
 	const FElysiumEntityHandle& TerminalDraftOwner() const { return TerminalDraftHandle; }
-	// --- world-lifetime terminal glass (`docs/project/plans/terminals.md`, slice C) ---------------
+	// --- world-lifetime terminal glass ---------------
 	// A monitor's screen is not session state: retail's screensaver think writes into the entity's
 	// own cell buffer from map load onward, so the render target lives with the BODY. The map actor
 	// registers one here when a terminal's use anchor is stood, re-registers it when that body is

@@ -1,6 +1,6 @@
 """The typed `projection` layer: the tree restated under one root key's own vocabulary.
 
-`seam_map_vdata.md` names a vocabulary -- `closed` or `open` -- per root key. This module
+The vdata spec names a vocabulary -- `closed` or `open` -- per root key. This module
 implements the ones the spec spells out in enough depth to type without guessing:
 
 * `WeaponData` (`items/*`, 244 files) -- `docs/vtmb/wielded_weapons.md` §1 and the seam spec's own
@@ -75,7 +75,7 @@ _WEAPON_MODEL_ROLES = ("viewmodel", "playermodel", "wieldmodel_f", "wieldmodel_m
 
 
 def _model_asset_id(path: str) -> str:
-    """`vtmb:model:<key>` for a `models/<key>.mdl` path (`seam_map_model.md`: "the normalized
+    """`vtmb:model:<key>` for a `models/<key>.mdl` path ("the normalized
     path below `models/` without `.mdl`"). The caller keeps the un-stripped path for `raw`/
     `resolved` lookups against the install index; only the published identity is stripped."""
 
@@ -88,7 +88,7 @@ def _model_asset_id(path: str) -> str:
 
 
 def _sound_asset_id(path: str) -> str:
-    """`vtmb:sound:<key>` for a `sound/<key>.<ext>` path (`seam_map_sound.md`: "the normalized
+    """`vtmb:sound:<key>` for a `sound/<key>.<ext>` path ("the normalized
     path below `sound/` with its extension")."""
 
     key = path
@@ -172,8 +172,8 @@ def find_root(nodes: list[dict], key: str) -> dict | None:
 def last_scalars_by_key(nodes: list[dict]) -> dict[str, dict]:
     """Every direct scalar child, keyed by its folded name, last occurrence winning.
 
-    KeyValues resolves a repeated scalar leaf to its last value (`seam_map_vdata.md`, "Generic
-    decode"); the tree keeps every occurrence, this view is what a typed field reads from.
+    KeyValues resolves a repeated scalar leaf to its last value (the vdata spec's "Generic
+    decode" rule); the tree keeps every occurrence, this view is what a typed field reads from.
     """
 
     result: dict[str, dict] = {}
@@ -675,7 +675,7 @@ _WS_FIX_PATTERN = re.compile(r"^\s*(.+?)\s*,\s*ws-fix\b", re.IGNORECASE)
 def ws_fix_value(comment_text: str) -> str | None:
     """The residual value a `//<old value>, ws-fix` trailing comment preserves, or `None`.
 
-    `seam_map_vdata.md`'s `SignData` section demonstrates the pattern (`"XPos" "" //1, ws-fix`);
+    The vdata spec's `SignData` section demonstrates the pattern (`"XPos" "" //1, ws-fix`);
     nothing in the grammar ties it to one root key, so this is checked against every trailing
     comment regardless of root.
     """

@@ -5,8 +5,7 @@ install — the character sheet, dice tables, clans, disciplines, quests, items,
 vendors, stealth, NPC social rules, sound schemes, UI strings, dialogue-camera framing, and
 the hacking minigame. The engine (`vampire.dll`) loads each by name at runtime; nothing here
 is compiled or map-scoped. This doc is the **inventory + consumer map**: what each table is
-and which system reads it. Implementation priority and status for wiring each table up:
-`docs/project/roadmap.md`.
+and which system reads it.
 
 ## Import
 

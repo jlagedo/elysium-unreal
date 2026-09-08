@@ -1,6 +1,6 @@
 """Identity and stable-name rules for the sound-scheme GLB seam.
 
-`docs/architecture/seam_map_sound_scheme.md` owns the facts; this module is their code. A unit is
+A unit is
 one `sound/schemes/*.txt` KeyValues file -- one VtMB map SoundScheme -- so every name here folds
 to the lower-cased stem below `sound/schemes/`, which is the seam's identity key.
 """
@@ -35,7 +35,7 @@ def normalize_stem(raw: str) -> str:
     dropped whether or not the caller supplied them.
 
     The singular export command "tolerates the root prefix and the source extension on its
-    argument" (`seam_map_unit_contract.md`), so a bare stem and a full install path both resolve
+    argument", so a bare stem and a full install path both resolve
     to the same key.
     """
 
@@ -70,7 +70,7 @@ def sound_asset_id(path: str) -> str:
     """The stable ID for a `.wav`/`.mp3` a scheme names directly.
 
     Filenames are relative to `sound/`, in either slash direction and any case (the same rule
-    `seam_map_surface_property.md` states for a footstep or impact `Filename`).
+    the surface-property seam states for a footstep or impact `Filename`).
     """
 
     normalized = str(path).replace("\\", "/").strip().strip('"').lower()
@@ -96,7 +96,7 @@ def sound_source_path(path: str) -> str:
 def sound_dependency_source_path(path: str) -> str:
     """The install-relative path one authored `Filename` names, spelling preserved.
 
-    `seam_map_unit_contract.md` (References between units) defines a dependency's `sourcePath` as
+    The unit contract's "References between units" rule defines a dependency's `sourcePath` as
     "the install-relative path the referrer authored (spelling preserved)"; only the `sound/` root,
     slash direction and surrounding quotes/whitespace are normalized here, the way
     `sound_source_path` normalizes them for the case-folded form used for install lookups.

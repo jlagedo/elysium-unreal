@@ -379,14 +379,14 @@ authored glass material is the visible window. `tools/black` remains renderable 
 R6.4 (2026-09-02) gave `func_areaportalwindow` a class that carries `FadeStartDist`/`FadeDist`/
 `TranslucencyLimit` and the two names, but writes no cull range: the only brush those distances
 govern is the omitted backing above. Whether to re-mesh the backing with a minimum draw distance
-(transparent near, black far — VtMB's two end states) is the owner call recorded in
-`docs/project/seam_migration.md` → R7; `func_lod`'s `DisappearDist` lands as `cull_max_cm`
-(`docs/architecture/seam_map_map.md` → "Brush fade distances (R6.4)").
+(transparent near, black far — VtMB's two end states) is an owner call; `func_lod`'s
+`DisappearDist` lands as `cull_max_cm`. `C_Func_LOD::ShouldDraw`
+(`client.dll 0x100bb710`) is a hard draw/no-draw hysteresis cull on view distance, not an alpha
+fade.
 
 ## The `<map>.ents` sidecar
 
-The complete JSON contract is `docs/project/rebuild-strategy.md` → "Sidecar contracts." Entity I/O relies
-on three properties: entities are exported unfiltered; `outputs[]` preserves all seven fields;
+Entity I/O relies on three properties: entities are exported unfiltered; `outputs[]` preserves all seven fields;
 and brush `hulls` and `brush_mesh` vertices are entity-local Unreal-centimetre geometry whose
 world transform is the entity origin. `elevator_floors` is the fixed eight-entry absolute-Z
 table already converted to Unreal centimetres. `start_hidden` gates collision, visibility and

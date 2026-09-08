@@ -1244,7 +1244,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	// So the engine's mode is turned off rather than corrected: `FAnimNode_ElysiumBankRemap` states
 	// all four outcomes at the seam retail states them at, reading the same two bind poses off the
 	// sequence's own `RetargetSource` and the playing mesh. Leaving both running would apply the
-	// mapping twice. Design: `docs/architecture/animation-architecture.md`.
+	// mapping twice.
 	Skeleton->SetBoneTranslationRetargetingMode(0, EBoneTranslationRetargetingMode::Animation,
 		/*bChildrenToo=*/true);
 

@@ -346,7 +346,7 @@ def _recheck_audio(root: dict[str, Any], key: str) -> None:
             # Only a resolved candidate declares a `dependencies` row; the mp3-first rule means a
             # resolved `.mp3` always wins over a `.wav` at the same stem, so it alone carries the
             # `resolution` marker (the shadowed row's own `sourcePath` is the `.wav` convention
-            # path either way, matching `seam_map_scene.md`'s worked example).
+            # path either way).
             if mp3_resolved:
                 expected[("sound", mp3_asset)] = {
                     "sourcePath": wav_path, "resolved": True, "resolution": "mp3-first",

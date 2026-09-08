@@ -462,7 +462,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			// Read verbatim. The sidecar is Unreal-native — centimetres, Z-up, left-handed,
 			// written by a `UE_` exporter — so there is no basis change here and there must
 			// never be one: the repository's coordinate rule is that the runtime converts
-			// nothing (`docs/project/rebuild-strategy.md`).
+			// nothing.
 			Rest.Add(VectorFrom(Value->AsArray()));
 		}
 		TArray<FIntVector3> Faces;

@@ -1,6 +1,6 @@
 // `Elysium.Content.TheatreCamera` — the Play-tier theatre witness, run headless.
 //
-// `docs/project/camera_scripted.md` §9 rows the theatre beat as "the `courtroom_*` and `walk_out_*`
+// This beat is "the `courtroom_*` and `walk_out_*`
 // chains (87 authored `MoveTime 0.03` edits) and the `embrace_*` chain (28 exact zeros)", proving
 // that **SC2's composition shape does not turn the authored cuts into slews** and that **SC3's
 // crossfade stack survives the folded edits and repeated owner replacement without drift**.

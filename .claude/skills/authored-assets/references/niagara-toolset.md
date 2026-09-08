@@ -11,7 +11,7 @@ is Experimental, it has no compile call and no batch, every call rebuilds a full
 model, and it cannot touch lightweight emitters or Niagara Data Channels. It is **not** the way
 shipping content is produced: the per-root `NS_<root>` systems are generated headlessly by the
 bake (below), and nothing under `Content/ElysiumGenerated/VFX/` is ever touched through this
-toolset. Owner call 2026-09-03, `docs/architecture/effects-architecture.md` §5.3.
+toolset. Owner call 2026-09-03.
 
 ## Headless lane — the generator
 

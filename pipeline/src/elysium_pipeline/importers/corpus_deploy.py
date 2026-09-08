@@ -3,8 +3,8 @@
 A corpus lane deploys **loose source files** out of published `export_v2` units: it lifts each
 unit's source capsule -- the exact bytes the UP-first policy selected -- and writes them where the
 runtime reads them, below `Content/ElysiumCorpus`. No install and no engine are involved, because
-a capsuled unit is self-contained (`docs/architecture/seam_map_unit_contract.md`, "Source
-capsule"); the deploy is a copy out of a file the export already validated, weighed once more
+a capsuled unit is self-contained; the deploy is a copy out of a file the export already validated,
+weighed once more
 against the `byteLength` and `sha256` the unit published for that member.
 
 Three properties every lane gets from here, matching the texture lane's own shape

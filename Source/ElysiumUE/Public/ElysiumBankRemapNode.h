@@ -15,7 +15,7 @@ struct FElysiumBankRemap;
  * overlay slot's own closure -- reproduced here because Unreal's own
  * `EBoneTranslationRetargetingMode::OrientAndScale` covers only the similarity category and
  * applies it PER SEQUENCE, which double-counts the affine pure-translation branch
- * across a base+additive pair (`docs/architecture/animation-architecture.md`).
+ * across a base+additive pair.
  *
  * **Translation only.** Every outcome (`FElysiumBankRemap`'s own header carries the arithmetic)
  * leaves rotation and scale untouched; this node writes nothing but a bone's local translation,

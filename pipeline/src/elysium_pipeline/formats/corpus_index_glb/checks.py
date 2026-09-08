@@ -1,8 +1,8 @@
 """The nine properties no single unit can validate.
 
 Cross-unit consistency -- an inheritance chain, a model's include tree, a map's material closure
--- is a corpus property checked here, not something one unit can be validated against
-(`seam_map_unit_contract.md`, "Validation"). Each check is one `crossUnitChecks[]` row with
+-- is a corpus property checked here, not something one unit can be validated against.
+Each check is one `crossUnitChecks[]` row with
 `name`, `passed` and `failures[]`, and a failed check fails the corpus export like an unclaimed
 member does. A check whose rule the owning seam map has not identified yet carries the pair it
 would compare in `observations[]` and passes: `nav-graph-stamp` is the one such check.
@@ -265,7 +265,7 @@ def surface_sound_scripts(edges, published) -> dict[str, Any]:
 def nav_graph_stamp(roots: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """Each `.loc` value against its map's `mapRevision`, recorded rather than asserted.
 
-    `seam_map_nav_graph.md`, "The `.loc` stamp": the stamp's meaning is typed-unidentified -- on
+    The `.loc` stamp's meaning is typed-unidentified -- on
     sp_tutorial_1 the value equals neither the BSP's `mapRevision` nor the CRC-32 of the patched
     BSP -- and "the corpus index carries the cross-check once the rule is found". Until it is,
     this check states the pair it would compare: every nav graph that ships a `.loc` beside a
@@ -429,8 +429,8 @@ def texture_material_roles(units: Sequence[Unit], edges: Sequence[Reference]) ->
 
     A texture some other kind reaches without any material binding it is the failure: it means a
     referrer composed a texture path the material layer never declares. A baked reflection probe
-    (SF-1.3, `maps/<map>/c<x>_<y>_<z>`) is the one named exception -- the owner call "Baked
-    reflection probes are not reflection content" (`seam_migration.md`, 2026-08-31) is that a
+    (SF-1.3, `maps/<map>/c<x>_<y>_<z>`) is the one named exception -- the owner call is that "baked
+    reflection probes are not reflection content": a
     probe's pixels are never sampled by a surface, only its origin placed as a capture, so a map
     binding one by its own `cubemaps[]` lump (role `texture`, source kind `map`) is exactly as
     legitimate a binder as a material and is not the gap this check exists to catch.
@@ -457,7 +457,7 @@ def map_references_published(
     roots: Mapping[str, Mapping[str, Any]], units: Sequence[Unit]
 ) -> dict[str, Any]:
     """Every unit a map root names in `textures[]`, `cubemaps[]` or `pakfile.entries[].unit` is
-    published by the corpus (`seam_migration.md` -> "Plan -- surfaces track" -> SF-1.5)."""
+    published by the corpus (SF-1.5)."""
 
     return _row("map-references-published", unpublished_map_references(roots, units))
 

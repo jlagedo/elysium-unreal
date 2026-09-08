@@ -34,7 +34,7 @@ namespace
 	//
 	// Most mounts are the trees the offline pipeline mirrors under Root(). Three are not:
 	// `vdata/`, `dlg/` and `sound/` serve from FElysiumContentPaths (VdataDir/DlgDir/SoundDir),
-	// the export_v2 capsule import onto CorpusRoot() (docs/project/seam_migration.md "Settled").
+	// the export_v2 capsule import onto CorpusRoot.
 	// `dlg/` and `sound/` matter here for the same reason `vdata/` did: the runtime's own readers
 	// (`DlgFromDialogname`, `SoundFile`) already resolve through the corpus, so a script that
 	// probes `fileutil.isFile("dlg/...")` to gate a line — vamputil.py:1039 does exactly that —

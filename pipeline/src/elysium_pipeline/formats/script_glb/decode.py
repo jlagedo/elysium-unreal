@@ -49,7 +49,7 @@ EMPTY_MEMBER_REASONS = {
 #: The calls whose first argument is a sound path even though the path names no directory.
 SOUND_CALLS = ("PlayDialogFile", "PlaySound")
 
-#: The two spellings `seam_map_sound.md` publishes a unit for. A member below `sound/` under any
+#: The two spellings a sound unit is published for. A member below `sound/` under any
 #: other extension -- the `.lip` lipsync companions the patch probes for -- is no sound unit, so
 #: naming one `vtmb:sound:` would invent an identity the corpus will never hold.
 SOUND_EXTENSIONS = (".wav", ".mp3")

@@ -1,4 +1,4 @@
-// The terminal gym and the terminal content contract (docs/project/plans/terminals.md, slice B).
+// The terminal gym and the terminal content contract.
 //
 // `Elysium.Content.TerminalAttachments` is the content half: every model a live `prop_hacking`
 // references across the export must carry the `screen` material slot and both `$attachment`s, or the
@@ -175,8 +175,8 @@ bool FElysiumTerminalAttachmentsTest::RunTest(const FString&)
 	// **writes neither out-parameter** on a lookup miss (`slice-bc-decompiles.md` §2.1, correction
 	// C9), so that terminal's screen-facing test reads uninitialized stack — its usability is
 	// undefined, not merely different. The port refuses it with the named error instead, which is
-	// the divergence `docs/architecture/computer-terminal-architecture.md` §3.3 asks for. Listed
-	// here so the nine models that DO carry the contract stay gated and a tenth cannot creep in.
+	// a deliberate divergence from retail. Listed here so the nine models that DO carry the
+	// contract stay gated and a tenth cannot creep in.
 	static const TSet<FString> KnownUnusable = {
 		TEXT("models/scenery/furniture/computer_new/monitor.mdl") };
 
@@ -701,8 +701,7 @@ bool FElysiumTerminalGymScreenSaverTest::RunTest(const FString&)
 	return true;
 }
 
-// The whole tutorial terminal beat, end to end, on the real bodies
-// (`docs/project/plans/terminals.md`, slice H).
+// The whole tutorial terminal beat, end to end, on the real bodies.
 //
 // The plan's acceptance for this beat is the Play tier's `do`/`wait`/`assert`/`shot` script, which
 // needs 11.10 and is not landed. This is the plan's stated interim: the same steps in the same

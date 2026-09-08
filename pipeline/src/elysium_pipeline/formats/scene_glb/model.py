@@ -17,7 +17,7 @@ from elysium_pipeline.formats.unit_contract import extension_name
 
 SCENE_EXTENSION = extension_name("scene")
 #: 1.1.0 added the source capsule: the `.vcd` member's exact bytes travel in the unit's BIN
-#: chunk, hash-checked against `sourceResolution` (`seam_map_unit_contract.md`, "Source capsule").
+#: chunk, hash-checked against `sourceResolution`.
 SCHEMA_VERSION = "1.1.0"
 
 #: The install directory a scene's key sits below, and the source extension the key drops.

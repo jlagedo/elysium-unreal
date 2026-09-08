@@ -876,7 +876,7 @@ bool FElysiumKnockbackRngTest::RunTest(const FString&)
 	// selected bucket. The stand-in offers exactly one candidate, so there is nothing to draw for —
 	// and until the table is recovered, a knockback must move the Reaction stream by NOTHING.
 	// Otherwise how many knockbacks a fight contained would silently reshuffle every reaction after
-	// it (`docs/architecture/save-architecture.md` § 8).
+	// it.
 	ElysiumRng::SeedAll(0x4B4E4B32);
 	FRandomStream& Rng = ElysiumRng::Stream(EElysiumRngStream::Reaction);
 	const int32 SeedBefore = Rng.GetCurrentSeed();

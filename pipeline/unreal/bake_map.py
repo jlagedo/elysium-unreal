@@ -1,5 +1,4 @@
-# Bakes one exported map into real Unreal assets under the /ElysiumBaked mount (the
-# .uasset-bake spike -- docs/architecture/uasset-bake-spike.md).
+# Bakes one exported map into real Unreal assets under the /ElysiumBaked mount.
 #
 # Where the shipping runtime builds every engine object in code at map-load time, this pass
 # runs once in a headless editor and writes the same world out as Texture2D / MaterialInstance
@@ -54,7 +53,7 @@ MASTERS = {
     "refract": "%s/M_Refract.M_Refract" % mounts.MATERIALS,
     "additive": "%s/M_Additive.M_Additive" % mounts.MATERIALS,
 }
-# R7.2 ruling 2 (`docs/project/seam_migration.md` -> "R7.2 Decals"): there is no `decal` master
+# R7.2: there is no `decal` master
 # here any more. `M_Decal` is deleted along with its generator; the one decal material in the
 # project is `M_V2_Decal`, and the one instance a decal binds is the shared `MI_<unit>_Decal` the
 # material lane stages per `$decal` / `decalmodulate` unit -- never a per-map copy.
@@ -409,9 +408,9 @@ def _build_sky_dome_dynamic_mesh():
 
 
 def light_specular_scale():
-    """`UElysiumSurfaceSettings.LightSpecularScale`, the one global light-specular knob (R5.5,
-    `seam_map_map.md` -> "Import -- reflection captures (R5.5)" -> "`LightSpecularScale` rides
-    along"): the bake stamps the same value the rig re-applies at adopt, so the level in the editor
+    """`UElysiumSurfaceSettings.LightSpecularScale`, the one global light-specular knob (R5.5):
+    `LightSpecularScale` rides along -- the bake stamps the same value the rig re-applies at
+    adopt, so the level in the editor
     and the adopted level in the game agree. Read from the settings CDO -- the ini -- never a
     literal; the legacy `SPECULAR_SCALE = 0.0` was the third of the repudiated three zeroes."""
     settings = unreal.get_default_object(unreal.ElysiumSurfaceSettings)
@@ -1877,12 +1876,12 @@ class Bake(object):
                 # the plural call brackets the batch in a single `PreEditChange`/`PostEditChange`
                 # pair, and each singular one runs a full `ULightComponent::PostEditChangeProperty`
                 # of its own. `specular_scale` is the one global knob, not the legacy zero (the
-                # matte-world premise is repudiated, `seam_migration.md` 2026-08-31); the rig
-                # re-derives from the same page at adopt.
+                # matte-world premise is repudiated, 2026-08-31); the rig re-derives it at adopt.
                 properties = {"specular_scale": specular_scale}
                 if kind in (0, 1, 2):
                     # VtMB light is ~flat within its authored radius, so gentle-exponent
-                    # falloff, not inverse-square (docs/architecture/rendering-perf.md calibration).
+                    # falloff, not inverse-square.
+
                     properties["use_inverse_squared_falloff"] = False
                     properties["light_falloff_exponent"] = FALLOFF_EXPONENT
                 component.set_light_color(color)
@@ -2752,8 +2751,7 @@ def bake_one(map_name, digest_cache, force=False):
     Which lane authors its geometry and placements is the tracked per-map flag's call, never this
     process's: a map listed under `MapsOnV2Models` in `Config/DefaultElysium.ini` is authored from
     its published root unit (R5.1, `bake_map_v2`), and every other map keeps the legacy `.obj`/
-    `.props` path byte for byte (`docs/architecture/seam_map_map.md` -> "## Import -- geometry and
-    placements (R5.1)").
+    `.props` path byte for byte.
 
     The previous map's world goes first, before anything of this map's is BUILT, and
     unconditionally. (The light-store harvest above it is the one read that comes earlier, and it

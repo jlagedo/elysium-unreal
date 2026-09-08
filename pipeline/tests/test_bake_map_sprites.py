@@ -1,4 +1,4 @@
-"""R6.1 (`docs/architecture/seam_map_map.md` -> "Sprites (R6.1)"): the V2 map bake places one
+"""R6.1: the V2 map bake places one
 billboard actor per `env_sprite` off the staged `sprites` table.
 
 What can change shipped content without any other test noticing: the **row** the offline stage

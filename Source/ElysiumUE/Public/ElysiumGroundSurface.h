@@ -8,7 +8,7 @@ struct FHitResult;
 
 /**
  * The surface under a body's feet, as both locomotion producers publish it
- * (`FElysiumLocomotionSample::GroundSurface`, `docs/architecture/footstep-architecture.md` §4.1).
+ * (`FElysiumLocomotionSample::GroundSurface`).
  *
  * Retail asks this once, in the ground trace it was already running: `CGameMovement::
  * CategorizePosition` caches the hit's `surfacedata_t` on the mover, and `CAI_Navigator::MoveEnact`

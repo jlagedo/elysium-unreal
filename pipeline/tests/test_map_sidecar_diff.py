@@ -1,6 +1,6 @@
 """The R3.3 differ's pure functions (`pipeline/src/elysium_pipeline/validation/map_sidecar_diff.py`).
 
-`docs/project/seam_migration.md` -> "Roadmap -- one pipeline" R3.3 asks for a byte diff of the
+R3.3 asks for a byte diff of the
 producer's sidecars against the legacy exporter's, plus a structural `.ents` diff, with the two
 pre-declared divergences (`la_hub_1`'s corrupted legacy hulls, `.dispcol`'s printed 4th decimal)
 recognized by name rather than reported as defects. These tests build small file trees under

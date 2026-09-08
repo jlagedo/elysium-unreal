@@ -25,6 +25,14 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
   `Content/ElysiumGenerated/**` - Generated content from pipeline (vtmb based or generated helpers)
 - `Plugins/` — assets directly generated from VTMB install and baked into Unreal Assets.
 
+### Docs
+
+- `docs/vision.md` — what Elysium is and is not, and how it is built.
+- `docs/decisions.md` — dated ledger of owner calls: divergences, modernizations, traps.
+- `docs/vtmb/` — the oracle: recovered retail facts and addresses. Never port narrative.
+- `docs/contracts/` — the seam data formats shared by the pipeline and the runtime.
+- `docs/specs/NNNN-<witness>/` — one open thread per folder; deleted when it lands.
+
 ## Project rules
 
 - Save game files are disposable, we have not released and don't try to migrate or keep compatibility
@@ -54,5 +62,5 @@ A reported defect is a question about VtMB, never a request for a patch.
   retail field it stands for. Say explicitly what remains unrecovered.
 - Prove it in code and automation tests (`uv run elysium test Elysium.<...>`); record
   the recovery in the matching `docs/vtmb/` document. Live checks are owner-piloted.
-- Divergences from retail are allowed only as named modernizations
-  (see `chase-unreal-improvements-over-vtmb-limits`), stated in the answer and the docs.
+- Divergences from retail are allowed only as named modernizations, stated in the answer
+  and recorded as a dated entry in `docs/decisions.md`.

@@ -45,9 +45,9 @@ public:
 	void InitBrush(const FElysiumEntityHandle& InOwner, const TArray<FElysiumConvexHull>& Hulls,
 		EElysiumBrushSolidity Solidity);
 
-	// The same body, adopted from the map's R4.2 cooked collision payload instead of cooked here:
-	// `Cooked` is one entity's `UBodySetup`, authored offline from these same hulls
-	// (`docs/architecture/seam_map_map.md` -> "Import"). The component keeps the setup but does not
+	// The same body, adopted from the map's cooked collision payload instead of cooked here:
+	// `Cooked` is one entity's `UBodySetup`, authored offline from these same hulls.
+	// The component keeps the setup but does not
 	// own it — the payload asset does, and it outlives the map load.
 	void InitBrushFromPayload(const FElysiumEntityHandle& InOwner, UBodySetup* Cooked,
 		EElysiumBrushSolidity Solidity);

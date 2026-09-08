@@ -1,11 +1,11 @@
-"""R3.5 (`docs/project/seam_migration.md` -> "Roadmap -- one pipeline"): the R3.2 producer becomes
+"""R3.5: the R3.2 producer becomes
 the default source of a map's legacy sidecars, and `.weather`/`.particles` generation re-points at
 the producer's `.ents` instead of the legacy one `UE_bsp_to_scene.main` already used and discarded.
 
 These pin the orchestration in `elysium_pipeline.exporters.export_all` -- call order and which
 `.ents` each downstream sidecar reads -- with the producer, `weather` and `particles` mocked out,
 so the test needs no BSP, no VtMB install and no published V2 units. The scoped bake against the
-real three-map corpus is the integration witness (`seam_migration.md`'s Settled entry for R3.5).
+real three-map corpus is the integration witness.
 """
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 """Fetch the UI typeface set into `Content/Fonts/`.
 
-The UI type system is **Nocturne** (`docs/architecture/ui-architecture.md`): Spectral SC for
+The UI type system is **Nocturne**: Spectral SC for
 small-caps labels, Spectral for body copy, Inter for data and numerals. All three are
 SIL OFL 1.1 with **no Reserved Font Name**, so they are redistributable as-is and a
 static instance cut from a variable source needs no rename.
@@ -9,7 +9,7 @@ Spectral and Spectral SC ship real static weights upstream and are copied verbat
 Inter ships only a variable file, so the weights we use are instanced out of it with
 `fontTools.varLib.instancer` -- deterministic, and re-runnable from this script.
 
-The computer-terminal console (`docs/architecture/computer-terminal-architecture.md` 6.4) uses
+The computer-terminal console uses
 **Terminus (TTF)**, the Linux console/xterm face of the era, fetched as a pinned release zip from
 its maintainer. It is OFL 1.1 **with** Reserved Font Names ("Terminus Font", "Terminus (TTF)"),
 so it is shipped unmodified under its own name and never instanced or re-cut.

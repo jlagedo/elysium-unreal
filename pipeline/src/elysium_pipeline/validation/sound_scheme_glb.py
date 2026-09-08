@@ -1,7 +1,7 @@
 """Independent structural validator for sound-scheme GLB products.
 
 This re-decodes nothing through `exporters.sound_scheme_glb.build_document`: it re-parses the
-published extension against the vocabulary `seam_map_sound_scheme.md` states and the byte-ledger
+published extension against its own vocabulary and the byte-ledger
 and container rules `formats.unit_contract` states, so a writer bug cannot pass its own check.
 
 When `source_members` is given (the export-time path), it goes one step further and re-tokenizes
@@ -85,7 +85,7 @@ ANOMALY_ROLES = {
 #: own four-key vocabulary (see `specDeviations` in the seam's export manifest).
 MUSIC_LIKE_FIELDS = {"file", "asset", "parameter", "volume", "dry", "noPause"}
 AMBIENT_FIELDS = MUSIC_LIKE_FIELDS
-#: `dry` is not in `seam_map_sound_scheme.md`'s own `RandomSound` column; the decoder accepts it
+#: `dry` is not in `RandomSound`'s own column; the decoder accepts it
 #: there too because one shipped scheme authors it with `Music`/`Combat`/`Alert`'s own meaning
 #: (see `specDeviations` in the seam's export manifest).
 RANDOM_SOUND_FIELDS = {
@@ -694,8 +694,7 @@ def warnings_for(summary: dict[str, Any]) -> list[str]:
     """What a published unit could not resolve, phrased for the operator.
 
     A filename or DSP preset the install lacks warns rather than failing the unit -- the target
-    belongs to another seam's data (`seam_map_unit_contract.md`, References) -- so this is the one
-    place that gap surfaces to an operator.
+    belongs to another seam's data -- so this is the one place that gap surfaces to an operator.
     """
 
     warnings: list[str] = []

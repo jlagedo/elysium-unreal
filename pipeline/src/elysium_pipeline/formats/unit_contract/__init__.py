@@ -1,7 +1,6 @@
 """The rules every export_v2 GLB unit shares, in one importable place.
 
-`docs/architecture/seam_map_unit_contract.md` owns these rules; this package is their code. A
-seam depends on it for identity, source resolution, the container, cross-unit references, the
+A seam depends on it for identity, source resolution, the container, cross-unit references, the
 coverage vocabulary, the byte ledger and the kind-independent half of validation, and states in
 its own `formats/<kind>_glb/` package only what is specific to its unit kind.
 """

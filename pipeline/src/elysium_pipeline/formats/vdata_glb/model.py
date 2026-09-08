@@ -1,6 +1,6 @@
 """Identity and stable-name rules for the vdata GLB seam.
 
-`docs/architecture/seam_map_vdata.md` owns the facts; this module is their code. A unit is one
+A unit is one
 `vdata/<subtree>/<name>.txt` KeyValues (or, for `experience_table.txt`, pipe-delimited) file, so
 every name here folds to the lower-cased path below `vdata/`, which is the seam's identity key.
 The install already lower-cases every key it indexes (`formats/install.py`), so the key a unit
@@ -43,7 +43,7 @@ def normalize_key(raw: str) -> str:
     whether or not the caller supplied them.
 
     The singular export command "tolerates the root prefix and the source extension on its
-    argument" (`seam_map_unit_contract.md`), so a bare `<subtree>/<name>` and a full install path
+    argument", so a bare `<subtree>/<name>` and a full install path
     both resolve to the same key.
     """
 

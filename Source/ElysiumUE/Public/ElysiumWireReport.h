@@ -3,8 +3,7 @@
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
 
-// The per-wire accounting instrument (`docs/architecture/gameplay-systems-architecture.md` §7,
-// `docs/vtmb/sp_tutorial_1-event-surface.md` §14). Acceptance has to classify every authored wire,
+// The per-wire accounting instrument (`docs/vtmb/sp_tutorial_1-event-surface.md` §14). Acceptance has to classify every authored wire,
 // and "the map ran" is not an answer: a wire that never fired, one whose target does not exist, one
 // whose receiver has no such input and one that delivered into a system with no visible side effect
 // all look identical from the outside. This is the runtime half — a tally per authored output row,

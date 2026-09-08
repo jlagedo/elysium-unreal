@@ -47,7 +47,7 @@ def _fake_install(files: dict[str, bytes]) -> tuple[dict, callable]:
 
 #: Exercises: SchemeParams (both keys), a repeated Music block (last-wins, with the discarded
 #: first occurrence flagged both `repeated-block` and `volume-out-of-range`), Combat's `Dry`,
-#: Ambient's `NoPause` (outside `seam_map_sound_scheme.md`'s own Ambient column -- accepted by
+#: Ambient's `NoPause` (outside its own `Ambient` grammar column -- accepted by
 #: `MUSIC_LIKE_KEYS`), an out-of-vocabulary block, two `RandomSound` occurrences (one with a
 #: repeated `Volume`, an inverted `Pitch` range, a wrapping `Angle` range that is *not* flagged,
 #: an out-of-vocabulary key and an unresolved `Filename`; the other with a second unresolved
@@ -162,7 +162,7 @@ def test_the_ledger_has_no_span_and_hashes_the_whole_file():
 
 
 def test_text_ranges_are_graded_mapped_text_not_mapped():
-    """`seam_map_unit_contract.md` reserves the ledger state `mapped` for a binary record or
+    """The ledger state `mapped` is reserved for a binary record or
     payload; every range this seam claims is a text token (`root.name`, `root.braces`, a block's
     name/braces, a key/value pair, a comment) decoded into a structured table, so it must be
     graded `mapped-text`. Only a byte-order-mark claim -- which this sample carries none of -- may
@@ -251,9 +251,9 @@ def test_the_sound_role_names_every_filename_the_published_scheme_still_makes():
     # "FX/Drip.wav" and "fx/drip.wav" normalize to one asset and dedupe to one row, keeping the
     # first authored spelling.
     drip = next(row for row in sound_rows if row["asset"] == "vtmb:sound:fx/drip.wav")
-    # Install-relative, spelling preserved (`seam_map_unit_contract.md`, References between
-    # units) -- not the bare authored token: the `dsp-preset` row two lines below is already
-    # install-relative (`scripts/dsp_presets.txt#<id>`), and `sound` now agrees with it.
+    # Install-relative, spelling preserved -- not the bare authored token: the `dsp-preset` row
+    # two lines below is already install-relative (`scripts/dsp_presets.txt#<id>`), and `sound`
+    # now agrees with it.
     assert drip["sourcePath"] == "sound/FX/Drip.wav"
     assert len(sound_rows) == len(assets)
 
@@ -364,7 +364,7 @@ def test_a_discarded_singleton_blocks_unresolved_file_raises_no_anomaly():
 
 
 def test_ambient_accepts_nopause_beyond_its_own_grammar_column():
-    """`seam_map_sound_scheme.md`'s own `Ambient` column is `Filename`, `Volume` alone; real data
+    """The `Ambient` grammar column is `Filename`, `Volume` alone; real data
     (`la_abandoned_building_1.txt`, `sm_junkyard_1.txt`, `test2.txt`) authors `NoPause` (and, in
     `test2.txt`, `Dry`) there too -- accepted by `MUSIC_LIKE_KEYS`."""
 
@@ -403,8 +403,9 @@ def test_a_value_that_is_present_but_not_a_number_is_unsupported():
 
 def test_a_nonfinite_number_is_unsupported_not_a_write_time_crash():
     """`float("nan")`/`float("inf")` both parse under bare `float()`; the container's JSON chunk
-    rejects them (`seam_map_unit_contract.md`, Container), so this is graded at decode time rather
+    rejects them, so this is graded at decode time rather
     than surfacing as a late `ValueError` out of the GLB writer."""
+
 
     text = SAMPLE.replace(b'"RandomSoundCount"\t"3"', b'"RandomSoundCount"\t"nan"')
     _, _, _, model = _decode(text)

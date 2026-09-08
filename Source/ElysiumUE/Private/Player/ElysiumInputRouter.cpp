@@ -184,7 +184,7 @@ void UElysiumInputRouter::BindDefault(UInputComponent* Input, const FElysiumDefa
 void UElysiumInputRouter::BindDebugChords(UInputComponent* Input)
 {
 #if !UE_BUILD_SHIPPING
-	// The dev layer occupies no bare key a player can bind (`docs/architecture/input-architecture.md` § Reserved keys):
+	// The dev layer occupies no bare key a player can bind:
 	// `v` is `+movedown` and `t` is `toggleuiside`, so the two Elysium dev toggles are chords.
 	BindLine(Input, FInputChord(EKeys::V, /*bShift*/ false, /*bCtrl*/ true, false, false), IE_Pressed,
 		TEXT("noclip"), /*bEngineCommand*/ false);
@@ -351,7 +351,7 @@ void UElysiumInputRouter::RefreshLookTuning()
 
 	// Say so out loud the first time the curve is engaged. VtMB's mouse path is linear, so this is a
 	// Feel divergence rather than a setting, and it belongs in any A/B run's log rather than only in
-	// a cvar dump (`docs/architecture/input-architecture.md` § Feel).
+	// a cvar dump.
 	if (!LookTuning.IsRetailLinear() && !bWarnedLookCurve)
 	{
 		bWarnedLookCurve = true;

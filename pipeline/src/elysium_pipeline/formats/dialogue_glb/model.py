@@ -1,6 +1,6 @@
 """Identity and shape for the Dialogue GLB seam.
 
-`docs/architecture/seam_map_dialogue.md` owns the rules; this module states only the constants
+The dialogue seam owns the rules; this module states only the constants
 and small helpers `source.py`, `decode.py` and the exporter share, plus the frozen records the
 row lexer hands back.
 """
@@ -17,7 +17,7 @@ from elysium_pipeline.formats.unit_contract import extension_name, normalize_key
 KIND = "dialogue"
 DIALOGUE_EXTENSION = extension_name(KIND)
 #: 1.1.0 added the source capsule: the `.dlg` member's exact bytes travel in the unit's BIN
-#: chunk, hash-checked against `sourceResolution` (`seam_map_unit_contract.md`, "Source capsule").
+#: chunk, hash-checked against `sourceResolution`.
 SCHEMA_VERSION = "1.1.0"
 
 #: The install subdirectory every dialogue unit is cut from.

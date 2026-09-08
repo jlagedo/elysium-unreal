@@ -1,8 +1,7 @@
 """The ui-resource seam's members as the install resolves them: one file, one unit.
 
 A ui-resource unit is never cut from a shared table and never reads another member: the source
-closure is always the whole file, carries no `span`, and the member's role is `unit-selecting`
-(`seam_map_ui_resource.md`, "Source closure").
+closure is always the whole file, carries no `span`, and the member's role is `unit-selecting`.
 """
 
 from __future__ import annotations

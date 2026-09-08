@@ -2,13 +2,13 @@
 
 Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/make_lookdev_map.py
 -LookdevSet=<path> -LookdevMap=<package path>`). This is written and unit-tested now (Phase 4,
-`docs/project/seam_migration.md` -> Plan -> SF-4.7); the real run -- an actual editor session
+SF-4.7); the real run -- an actual editor session
 producing a saved `.umap` -- happens once the material import (SF-4.5) has landed real `MI_`
 assets to look at. Nothing here depends on that landing: a review-set entry whose `MI_` does not
 exist yet is placed on a loud, unmistakable placeholder material rather than failing the run, so
-the map can be generated at any point in Phase 4 (`docs/architecture/phase4_mechanics.md` ->
-"6. SF-4.7 Lookdev map") -- but the run itself now fails (`SystemExit(1)`) once any entry is
-missing, unless `-LookdevAllowMissing=1` says that is expected right now. A silent placeholder
+the map can be generated at any point in Phase 4 -- but the run itself now fails
+(`SystemExit(1)`) once any entry is missing, unless `-LookdevAllowMissing=1` says that is
+expected right now. A silent placeholder
 that never fails the run is how a missing asset goes unnoticed; a loud one that does fail is not.
 
 Layout: a grid of `GRID_COLUMNS` bays, `GRID_PITCH_CM` apart. Each bay carries a 3x-scaled
@@ -22,8 +22,8 @@ hides a material's real values, plus a `PlayerStart` so PIE has somewhere to spa
 -- the boot-plan bypass `phase4_mechanics.md` names, so PIE does not travel off the generated map
 through `AElysiumGameMode::BeginPlay` -> `NotifyWorldReady` -> `EnterFrontEnd`. No C++ change.
 
-Below the material grid, one more row (R1.6, `docs/project/seam_migration.md` -> Roadmap ->
-"R1.6 Verify + lookdev") carries a handful of the props lane's own baked `SM_` meshes, read from
+Below the material grid, one more row (R1.6) carries a handful of the props lane's own baked
+`SM_` meshes, read from
 `-LookdevPropsSet=` (default `lookdev_props_set.json`, tracked). Each prop stands on its own --
 no plane tile, no material override, since the point is to look at the mesh the props importer
 actually baked, materials and all -- and a mesh that does not resolve gets the same loud
@@ -106,7 +106,7 @@ SPHERE_MESH_PATH = "/Engine/BasicShapes/Sphere.Sphere"
 PLANE_MESH_PATH = "/Engine/BasicShapes/Plane.Plane"
 
 #: Neutral grey the sky light samples. `/Engine/EngineResources/DefaultTextureCube` is also every
-#: V2 master's own `EnvMap` default (seam_map_material.md -> "M_V2_Lit / M_V2_LitTranslucent"),
+#: V2 master's own `EnvMap` default,
 #: so the rig lights every entry -- including one whose instance falls back to that default --
 #: with the same image the master would show it anyway. Picked over `SLS_CapturedScene` because a
 #: real asset already exists on disk; a captured scene would need something in the (empty) scene

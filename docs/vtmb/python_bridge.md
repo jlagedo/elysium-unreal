@@ -620,8 +620,7 @@ Skills seen: `Humanity` (432), `Persuasion`, `Seduction`, `Intimidate`, `Dominat
 `Dementation`, `Haggle`, `F_Seduction`/`M_Seduction`, `Appearance`, `Firearms`, `Wits`,
 `Intelligence`, `Research`, `Perception`, `Brawl`, `Trip_Name` — case is inconsistent.
 
-**(2026-09-06)** Four more `dlgexpr`/dialogue-dependency facts, recovered for
-`docs/project/plans/dialogue.md` D1:
+**(2026-09-06)** Four more `dlgexpr`/dialogue-dependency facts (D1):
 
 - **The negative-threshold form is `<`, not a typo.** `Humanity -5` is not "humanity minus five";
   `CDialogDependency+0x0c` is an inversion flag set whenever the parsed threshold is negative, and
@@ -638,8 +637,8 @@ Skills seen: `Humanity` (432), `Persuasion`, `Seduction`, `Intimidate`, `Dominat
   `AddFakedDisciplineEffect(npc, trait, level)` so the NPC reacts as if the discipline were used.
 - **The response wire caps at four.** `get_pc_responses` (`0x100e82d0`) walks the PC rows after
   the current NPC line and **stops at 4** admitted rows regardless of how many more pass their
-  dependency — a wire-packet limit, not an authoring rule (see M-CAP in
-  `docs/project/plans/dialogue.md` for the port's named divergence from it).
+  dependency — a wire-packet limit, not an authoring rule (see M-CAP for the port's
+  named divergence from it).
 
 ## The script file layer — three path spellings and a write guard
 

@@ -1,7 +1,7 @@
 """Tests for the `font_glb` export_v2 seam: `vtmb:font:` and `vtmb:font-list:` units.
 
 Every fixture here is synthetic, built byte-for-byte against the reverse-engineered `.fnt` layout
-(`docs/architecture/seam_map_font.md`, `formats/fnt.py`); no test touches the real VtMB install.
+(`formats/fnt.py`); no test touches the real VtMB install.
 """
 
 from __future__ import annotations
@@ -330,7 +330,7 @@ def test_the_font_list_identity_is_the_one_fixed_key():
 
 def test_the_font_list_unit_declares_its_own_extension_and_generator_title():
     # `font-list` is its own `<kind>`, distinct from `font`, so it declares its own extension
-    # (seam_map_unit_contract.md: "every unit declares its own extension `ELYSIUM_vtmb_<kind>`"),
+    # (every unit declares its own extension `ELYSIUM_vtmb_<kind>`),
     # mirroring the sibling two-identity seam, `shader_program_glb`.
     model = decode_font_list(_font_list_closure(), font_keys={CLEAN_KEY})
     document, binary = exporter.build_font_list_document(model)
@@ -382,10 +382,10 @@ def test_the_font_list_units_dependency_role_is_font():
 
 
 def test_a_page_the_glyph_table_uses_and_the_install_lacks_is_a_page_missing_anomaly_not_unresolved():
-    # seam_map_font.md reads a missing referenced page as the font's own structure and grades it
+    # A missing referenced page counts as the font's own structure and grades it
     # `coverage.unresolved`; the real install ships members that reference a page it never shipped
-    # at all (times_new_roman_98/122/147_900_000 -> page 1), which is
-    # seam_map_unit_contract.md's non-canonical-storage case instead: a reference to another
+    # at all (times_new_roman_98/122/147_900_000 -> page 1), which is the
+    # non-canonical-storage case instead: a reference to another
     # seam's data that merely fails to resolve, so the unit publishes what the install holds and
     # warns rather than failing (specDeviation).
     closure = _closure(CLEAN_KEY, CLEAN_DATA, pages={}, font_list_present=True)
@@ -564,7 +564,7 @@ def test_a_font_a_row_names_resolves_the_join():
 
 def test_without_font_list_present_the_join_is_a_warning_not_a_failing_unresolved_row():
     # The registry is another seam's data, not this `.fnt`'s own structure -- the glyph table
-    # decodes completely without it -- so seam_map_unit_contract.md's non-canonical-storage rule
+    # decodes completely without it -- so the non-canonical-storage rule
     # applies (specDeviation): `dependencies` states `resolved: false`, `anomalies[]` names it, and
     # the unit warns instead of entering `coverage.unresolved` and failing.
     closure = _closure(CLEAN_KEY, CLEAN_DATA, pages={0: _page(CLEAN_KEY, 0)}, font_list_present=False)
@@ -701,8 +701,8 @@ def test_font_keys_enumerates_every_fnt_stem_sorted():
 
 
 def test_source_keys_appends_the_font_list_sentinel_when_the_registry_is_present():
-    # `fonts-glb` publishes every font unit and the list unit in one pass (seam_map_font.md:
-    # "the join is checked in both directions"); the plural runner only ever calls
+    # `fonts-glb` publishes every font unit and the list unit in one pass (the join is checked
+    # in both directions); the plural runner only ever calls
     # `source_keys`/`export`, so the sentinel and the dispatch below are what makes that true.
     index, _ = _index_and_reader(CLEAN_KEY, CLEAN_DATA, pages=(0,), font_list=True)
     index[font_path(QUIRKY_KEY)] = ("loose", "/x/other.fnt")

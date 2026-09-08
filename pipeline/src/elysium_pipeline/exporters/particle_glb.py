@@ -67,8 +67,7 @@ def _retail_index_override(index: dict, path: str, *, retail_index: dict | None 
     return overridden
 
 
-#: The extension-root keys this seam publishes past the five the contract fixes, in the order
-#: `docs/architecture/seam_map_particle.md` -> "GLB structure" states them.
+#: The extension-root keys this seam publishes past the five the contract fixes, in this order.
 _MAPPED_FIELDS = (
     "identity", "sourceResolution", "root", "keys", "blocks", "projection", "role",
     "precipitation", "comments", "dependencies",

@@ -1,6 +1,6 @@
 #pragma once
 
-// The terminal gym (`docs/project/plans/terminals.md`, "The terminal gym"): the `sp_tutorial_1`
+// The terminal gym: the `sp_tutorial_1`
 // terminal slice spawned **with bodies** at its authored transforms into the empty stage world the
 // movement gym already builds, plus the player pawn. It carries the real monitor, padlock, safe and
 // door models and nothing else, so everything that needs a body — the screen cone, the pawn pin,

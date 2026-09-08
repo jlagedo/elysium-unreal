@@ -1,5 +1,5 @@
 """The R3.3 differ: `UE_map_sidecars.py`'s output against the legacy `UE_bsp_to_scene.py`'s, for a
-map list (`docs/project/seam_migration.md` -> "Roadmap -- one pipeline" R3.3, MP-2.3).
+map list.
 
 Every sidecar R3.2 reproduces (`.ents`, `.hulls`, `.dispcol`, `.lights`, `.env`, `.sky`, `.spawn`,
 `.ropes`) is compared byte for byte between a legacy directory (default `$ELYSIUM_EXPORT_ROOT/<map>/`)
@@ -62,13 +62,13 @@ SIDECAR_SUFFIXES = (".ents", ".hulls", ".dispcol", ".lights", ".env", ".sky", ".
 #: deliberate margin above that, not a re-derivation -- see `UE_map_sidecars.displacement_triangles`.
 DISPCOL_TOLERANCE_CM = 0.01
 
-#: `seam_migration.md` R3.3: pre-declared, named divergences that a byte diff must not flag as a
+#: R3.3: pre-declared, named divergences that a byte diff must not flag as a
 #: producer defect.
 DISPCOL_NAMED_DIVERGENCE = (
     "seam-precision limit: DISP_VERTS is not published numerically in the root unit, so the "
     "producer recovers displacement geometry from the mesh's float32 POSITION accessor instead "
-    "(UE_map_sidecars.displacement_triangles); R3.4 decided to accept this rather than publish "
-    "DISP_VERTS numerically (seam_map_map.md -> \"R3.4 -- the two the port surfaced\")."
+    "(UE_map_sidecars.displacement_triangles), accepted rather than publishing "
+    "DISP_VERTS numerically."
 )
 KNOWN_MAP_DIVERGENCES: dict[str, str] = {
     "la_hub_1": "the legacy exporter's own signed-int16 planenum overflow corrupts its "
@@ -242,7 +242,7 @@ def _row_differs(diff: dict[str, Any]) -> bool:
 
 def ents_structural_diff(legacy_path: Path, producer_path: Path) -> dict[str, Any]:
     """Every `.ents` divergence, one row per entity index that differs -- `entities[]` is one row
-    per lump block in lump order with no drops (`seam_map_map.md`), so comparing by index is the
+    per lump block in lump order with no drops, so comparing by index is the
     same alignment the game's save system depends on."""
 
     legacy_entities = _read_entities(legacy_path)

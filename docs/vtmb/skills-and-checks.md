@@ -7,7 +7,7 @@ result. This document owns that **consumer policy** and the boundary between rat
 
 The storage model, trait effects and exact `Feats::FeatValue` algorithm remain canonical in
 `docs/vtmb/game_runtime.md` section 3. The d10 algorithm, result struct and tiering remain
-canonical in `docs/recovered/dice-system.md`. Combat damage after a check is owned by
+canonical in `docs/vtmb/dice-system.md`. Combat damage after a check is owned by
 `docs/vtmb/combat-and-damage.md`.
 
 ## Evidence boundary

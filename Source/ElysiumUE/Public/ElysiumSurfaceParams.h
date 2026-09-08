@@ -2,8 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The exposed-parameter contract for the V2 material-import masters (SF-4.3,
-// docs/architecture/seam_map_material.md -> "Import" -> "Exposed parameters, by master"). The
+// The exposed-parameter contract for the V2 material-import masters (SF-4.3). The
 // stage (SF-4.4, pipeline/src/elysium_pipeline/importers/materials.py's EXPOSED_PARAMS) writes
 // exactly these names onto an imported MI_ instance and the masters
 // (`pipeline/unreal/make_v2_materials.py`) expose exactly these names; a name on one side and not
@@ -80,7 +79,6 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName SineMax(TEXT("SineMax"));
 		inline const FName SinePeriod(TEXT("SinePeriod"));
 		inline const FName SineTimeOffset(TEXT("SineTimeOffset"));
-		// R5.3 (docs/architecture/seam_map_material.md -> "Decal fog and wetness homes"):
 		// WetnessScale is back as a real per-instance scalar, reversing the 2026-08-31 revision's
 		// "gone" call above -- the master now reads the live global wetness value off
 		// MPC_ElysiumEnvironment itself (`_wetness_response` in make_v2_materials.py), so no
@@ -88,7 +86,6 @@ namespace ElysiumSurfaceParamsLit
 		// (0 on every instance the stage never marked wetness-driven).
 		inline const FName WetnessScale(TEXT("WetnessScale"));
 		inline const FName WetnessDriven(TEXT("WetnessDriven"));
-		// R5.4 (docs/architecture/seam_map_material.md -> "Scene fog on the world masters"):
 		// Source's per-map distance fog, read off the primitive's Custom Primitive Data (slots
 		// ElysiumFog::SlotStart / SlotInvRange, `mat_fog.fog_from_primitive`), never off the
 		// instance -- the stage writes neither. `FogInscatter` is the instance half: 0 on an
@@ -123,7 +120,6 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName TexScaleOffset(TEXT("TexScaleOffset"));
 		inline const FName SineTargetMask(TEXT("SineTargetMask"));
 		inline const FName SineChannelMask(TEXT("SineChannelMask"));
-		// R7.1 ruling J (docs/architecture/water-architecture.md -> "Surf sine UV translate"):
 		// (ampU, ampV, offU, offV), the base texture's UV slide a `sine` -> `texturetransform`
 		// proxy chain authors (`objects/surf`, the sm_pier_1 wave cards). Added to the base
 		// coordinate as `amp x wave + off`, `wave` being the sine lane's own 0..1 wave, so the
@@ -133,8 +129,7 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName FogColor(TEXT("FogColor"));
 	}
 
-	// Named `Use...`/`MetallicTint` nowhere `bUse...` -- the design's own table
-	// (docs/architecture/seam_map_material.md -> "Exposed parameters, by master") spells every
+	// Named `Use...`/`MetallicTint` nowhere `bUse...` -- the design's own table spells every
 	// switch this way, and this header mirrors it verbatim rather than a C++ convention.
 	namespace Switches
 	{
@@ -151,8 +146,7 @@ namespace ElysiumSurfaceParamsLit
 		inline const FName MetallicTint(TEXT("MetallicTint"));
 		inline const FName UseAnimatedFrames(TEXT("UseAnimatedFrames"));
 		inline const FName UseAnimatedNormalFrames(TEXT("UseAnimatedNormalFrames"));
-		// R6.3 (docs/architecture/seam_map_material.md -> "Detail sway on the model masters"):
-		// the World Position Offset term's gate. Never the stage's to set -- only the map bake's
+		// The World Position Offset term's gate. Never the stage's to set -- only the map bake's
 		// `MI_DetailSway_*` child of an imported instance turns it on.
 		inline const FName UseDetailSway(TEXT("UseDetailSway"));
 	}
@@ -184,7 +178,6 @@ namespace ElysiumSurfaceParamsUnlit
 		inline const FName SineMax(TEXT("SineMax"));
 		inline const FName SinePeriod(TEXT("SinePeriod"));
 		inline const FName SineTimeOffset(TEXT("SineTimeOffset"));
-		// R5.4 (docs/architecture/seam_map_material.md -> "Scene fog on the world masters"):
 		// Source's per-map distance fog, read off the primitive's Custom Primitive Data (slots
 		// ElysiumFog::SlotStart / SlotInvRange, `mat_fog.fog_from_primitive`), never off the
 		// instance -- the stage writes neither. `FogInscatter` is the instance half: 0 on an
@@ -245,7 +238,6 @@ namespace ElysiumSurfaceParamsTwoTexture
 		inline const FName SineMax(TEXT("SineMax"));
 		inline const FName SinePeriod(TEXT("SinePeriod"));
 		inline const FName SineTimeOffset(TEXT("SineTimeOffset"));
-		// R5.4 (docs/architecture/seam_map_material.md -> "Scene fog on the world masters"):
 		// Source's per-map distance fog, read off the primitive's Custom Primitive Data (slots
 		// ElysiumFog::SlotStart / SlotInvRange, `mat_fog.fog_from_primitive`), never off the
 		// instance -- the stage writes neither. `FogInscatter` is the instance half: 0 on an
@@ -324,8 +316,8 @@ namespace ElysiumSurfaceParamsEyes
 
 // `M_V2_Water` -- the `water` family plus every `%compilewater` unit whatever family its VMT
 // names (R7.5 contract 2: `water/invisible_water`, `maps/sm_pier_1/water/invisible_water_depth_33`,
-// `water/cheap_water`, `dev/dev_waterbeneath`). Since R7.1 a Single Layer Water master
-// (`docs/architecture/water-architecture.md` section 4): `UseFogEnable`/`FogColor`/`FogStart`/
+// `water/cheap_water`, `dev/dev_waterbeneath`). Since R7.1 a Single Layer Water master:
+// `UseFogEnable`/`FogColor`/`FogStart`/
 // `FogEnd` are the VMT's own water-fog keys and become the SLW volume's scattering/absorption
 // (`WaterFogScale / ((FogEnd - FogStart) x 2.54)` per cm, split by the decoded colour);
 // `RefractTint` is Color Scale Behind Water; `ReflectTint`'s luma scales the class specular;
@@ -458,7 +450,6 @@ namespace ElysiumSurfaceParamsRefract
 	namespace Scalars
 	{
 		inline const FName RefractAmount(TEXT("RefractAmount"));
-		// R5.4 (docs/architecture/seam_map_material.md -> "Scene fog on the world masters"):
 		// Source's per-map distance fog, read off the primitive's Custom Primitive Data (slots
 		// ElysiumFog::SlotStart / SlotInvRange, `mat_fog.fog_from_primitive`), never off the
 		// instance -- the stage writes neither. `FogInscatter` is the instance half: 0 on an
@@ -485,8 +476,7 @@ namespace ElysiumSurfaceParamsRefract
 	}
 }
 
-// `M_V2_Decal` -- R7.2 (docs/project/seam_migration.md -> "R7.2 Decals", ruling 1;
-// docs/architecture/seam_map_material.md -> "M_V2_Decal"): the projector master for every
+// `M_V2_Decal` -- R7.2, ruling 1: the projector master for every
 // `$decal`/`decalmodulate` unit, re-cut to `MD_DeferredDecal` / `BLEND_Translucent` / DefaultLit
 // -- the one deferred-decal domain a `UDecalComponent` actually draws (`FDeferredDecalProxy`
 // substitutes the engine default for anything else, and DBuffer rewrites a would-be Modulate to
@@ -509,8 +499,7 @@ namespace ElysiumSurfaceParamsDecal
 		inline const FName Emissive(TEXT("Emissive"));
 	}
 
-	// R5.3 (docs/architecture/seam_map_material.md -> "Decal fog and wetness homes"), unchanged
-	// by the R7.2 re-cut: the world's own distance fog as three named instance parameters -- a
+	// Unchanged by the R7.2 re-cut: the world's own distance fog as three named instance parameters -- a
 	// UDecalComponent carries no Custom Primitive Data of its own, unlike every mesh primitive.
 	// No corpus unit authors a fog key on a decalmodulate VMT, so the stage never writes these;
 	// the placement lane sets them per decal instance (an MID at load,

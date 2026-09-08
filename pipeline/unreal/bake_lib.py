@@ -512,8 +512,7 @@ def configure_texture(texture, role):
     call brackets the whole dict in a single `PreEditChange(nullptr)`/`PostEditChange()` pair
     (`PyWrapperObject.cpp`, `FMethods::SetEditorProperties`), while each singular call runs its
     own -- and a texture's `PostEditChangeProperty` re-encodes the whole source payload, so the
-    two/three writes below cost two/three full re-encodes of every texture the bake configures
-    (`docs/architecture/uasset-bake-spike.md` -> "Engine facts this pinned down").
+    two/three writes below cost two/three full re-encodes of every texture the bake configures.
 
     The two shapes are not identical, and the difference is an invariant this bake owes:
     `UTexture::PostEditChange` reached with a *named* property sets `RequiresNotifyMaterials`
@@ -777,7 +776,7 @@ def delete_owned_assets(asset_paths):
 # draw-list rebuild for every primitive drawing that master. Paid once per *parameter*, that is
 # what made a map's material stage climb from 0.057 s to 1.31 s per instance in a multi-map run,
 # where a previous map's level was still registered in the scene and every primitive in it was in
-# that rebuild (`docs/architecture/uasset-bake-spike.md` -> "Engine facts this pinned down").
+# that rebuild.
 #
 # So the four setters below write only the parameter *value*, exactly the way
 # `UMaterialInstance::Set*ParameterValueInternal` does -- find the row whose `ParameterInfo`
@@ -920,8 +919,8 @@ def set_phy_collision(static_mesh, phys):
     opts.set_editor_property("emit_transaction", False)
     # The engine default is True for all three: GetDetectedSimpleShape runs before the convex
     # path even at max_convex_hulls_per_mesh=1, so a box- or sphere/capsule-shaped ledge would
-    # be silently swapped for a fitted primitive instead of the authored hull. The contract
-    # (seam_map_model.md "### Collision") is "reproduced, not approximated" -- off, so every
+    # be silently swapped for a fitted primitive instead of the authored hull. The contract is
+    # "reproduced, not approximated" -- off, so every
     # ledge always comes back as the FKConvexElem the .phy actually authored.
     opts.set_editor_property("auto_detect_spheres", False)
     opts.set_editor_property("auto_detect_boxes", False)

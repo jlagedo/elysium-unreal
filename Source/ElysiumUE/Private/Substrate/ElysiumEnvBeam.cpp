@@ -1,4 +1,4 @@
-// env_beam -- CEnvBeam (`docs/vtmb/effects.md` §3.1, `effects-architecture.md` §5.6): the beam
+// env_beam -- CEnvBeam (`docs/vtmb/effects.md` §3.1): the beam
 // between two targetnames. The leaf resolves the endpoints (a random pick among duplicates, a
 // random point within `Radius` when one is missing), runs the striker clock (`life` seconds on,
 // then `StrikeTime` -- random 0..StrikeTime under flag 4 -- until the next), and applies `damage`

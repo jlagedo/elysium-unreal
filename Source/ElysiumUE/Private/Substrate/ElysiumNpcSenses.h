@@ -15,7 +15,7 @@ struct FElysiumSaveArchive;
 // memory they produce. Plain C++ owned by `FElysiumNpc` and driven from its think — the
 // `FElysiumNpcMind` posture, with no actor, no UObject and no clock of its own.
 //
-// The seam rule (`docs/architecture/gameplay-systems-architecture.md` §5.5.3, K13): the engine
+// The seam rule: the engine
 // answers one world term — is the segment between two points clear — and nothing else. Cone,
 // range, the 2 s cadence, the 8 s grace, the ten-failure debounce, the `vision`/`hearing`/
 // `npc_perception` tuning and the hearing radii are substrate rules and stay here.

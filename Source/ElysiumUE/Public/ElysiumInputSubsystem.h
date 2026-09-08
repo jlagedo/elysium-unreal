@@ -14,7 +14,7 @@ class UGameInstance;
 class UInputMappingContext;
 enum class ECommonInputType : uint8;
 
-// S6 — the one input-mode arbiter (`docs/architecture/runtime-architecture.md` §8.1). Mode, cursor and
+// S6 — the one input-mode arbiter. Mode, cursor and
 // mapping contexts come from the top of one priority stack, and nothing else in the
 // project calls SetInputMode: the menu, the dialogue box, sign panels, cutscenes, chargen and Cog
 // all push a scope while they are up and pop it when they go away.

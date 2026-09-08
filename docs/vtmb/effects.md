@@ -7,12 +7,8 @@ main menu. Separate Source leftovers (`env_steam`, `func_dustmotes`, `env_shake`
 `env_fade`) and two physics-impulse entities sit beside that system. This document is
 the inventory of those families and the contracts a reconstruction has to cover.
 
-Unreal reproduction — modern look, reproduced logic — lives in
-`docs/architecture/effects-architecture.md`. Rain, wetness and the particle-definition
-*grammar* live in `docs/vtmb/weather.md`. Collision models named `.phy` are not effects;
-they live in `docs/vtmb/phy_vphysics.md`.
-
-Status of any runtime or bake work lives only in `docs/project/roadmap.md`.
+Rain, wetness and the particle-definition *grammar* live in `docs/vtmb/weather.md`. Collision
+models named `.phy` are not effects; they live in `docs/vtmb/phy_vphysics.md`.
 
 ---
 
@@ -37,10 +33,8 @@ collision files and not particle systems:
 Both cluster on `sm_junkyard_1` (cars, exploding barrels) and `sm_warehouse_1` (the
 scripted blast). Keys: `magnitude`, plus `directionentityname` / `target_position`
 (`env_physimpact`) or `radius` / `targetentityname` (`env_physexplosion`). They move
-already-simulated Chaos/VPhysics bodies. They do not draw. The Unreal impulse is
-`docs/architecture/physics-architecture.md`'s seam; `env_physexplosion`'s LOS-gated
-centre-of-mass push is **not** a linear-falloff radial impulse, and
-`effects-architecture.md` §5.10 states which seam call each class makes.
+already-simulated Chaos/VPhysics bodies. They do not draw. `env_physexplosion`'s LOS-gated
+centre-of-mass push is **not** a linear-falloff radial impulse.
 
 A typical junkyard barrel is therefore four authored pieces, not one:
 
@@ -134,11 +128,10 @@ them** — `fire2_emitter` (204 rows, 6 maps), `fire3_emitter` (140, 13 maps),
 | `rotate` (particle body), `radius` on a drawing particle, `frames` inside `spawn` | **not in the runtime's key tables — read by nothing** | debris (`debries`), warehouse HUD explosion, gasoline-trail fire |
 | malformed brace files | the engine's lexer structures what it can | `fire2_emitter`, Tourette suicide |
 
-The V2 particle unit (`docs/architecture/seam_map_particle.md`) decodes every one of these
-like any other key, and only three placed references are truly broken
+The V2 particle unit decodes every one of these like any other key, and only three placed
+references are truly broken
 (`d_animalism_pestilence_cast_emitter`, `smoke3`, a `{` typo). The heat card is authored
-intent, not an accident of 2004: it is wired on the refraction master, never dropped
-(`effects-architecture.md` §5.4).
+intent, not an accident of 2004: it is wired on the refraction master, never dropped.
 
 ### 2.4 The runtime, decoded [decompiled]
 
@@ -757,10 +750,23 @@ product (`UDecalComponent`). Particle `collide { decal { particle … } }` is a
 a numbered range (0 placed uses). Same Unreal primitive, different lifetime; the runtime
 spawn is R7.2's decal seam.
 
+**VtMB's runtime decal producers, and the corpus census (recovered 2026-09-07).** The runtime
+decal producers are the client temp entities `C_TEGunshotDecal`, `C_TEPlayerDecal`,
+`C_TEFootprintDecal`, `C_TEDecal`, `C_TEWorldDecal`, `C_TEBSPDecal`, gated by cvar `r_decals`
+(`engine.dll 0x201a13d4`; default set in `staticinit_2007af40`, not yet read).
+
+108-map decal census: 5,143 `infodecal` entities -> 5,095 projector lines over 92 maps (36
+unmatched, 12 without an origin/texture), 473 distinct decal materials (`lightmappedgeneric` 426,
+`unlitgeneric` 28, `vertexlitgeneric` 9, `decalmodulate` 10). Of 550 `$decal 1` units, 448 are
+projector-only, 15 are both a projector and a real world face, 9 are world-face-only, 78 are
+unused.
+
+Decal VMTs use 18 distinct keys in total; the canonical unit is `$basetexture $translucent 1
+$decal 1 $decalscale 0.25`; no `vdecal_*` material exists in the corpus or the packs.
+
 ### 4.15 Water surface
 
-Map water is a material / Single Layer Water problem
-(`docs/architecture/water-architecture.md`), not a particle. Splashes, bubbles and
+Map water is a material / Single Layer Water problem, not a particle. Splashes, bubbles and
 rain-on-water are particles that land on it; the entry and wade splashes are fired by the
 water lane on the water-level transition (`docs/vtmb/water.md` → "The events water raises").
 
@@ -812,8 +818,6 @@ system is *driven*, not whether fire is fire.
 
 ## 6. Related docs
 
-- `docs/architecture/effects-architecture.md` — Unreal mapping and what to open in
-  the 5.8 install.
 - `docs/vtmb/weather.md` — grammar, rain, wetness.
 - `docs/vtmb/phy_vphysics.md` — `.phy` collision.
 - `docs/vtmb/entity_visuals.md` — sprites, ropes, render keys.

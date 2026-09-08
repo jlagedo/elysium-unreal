@@ -39,6 +39,14 @@ strings, each letter a brightness sample from `'a'` (0, dark) through `'m'` (1.0
 unanimated 12–31 are constant; 32+ are switchable (held at a fixed level until toggled by
 entity I/O — see `docs/vtmb/entity_io.md` for the light-toggling inputs).
 
+`CLight` (`client.dll`) implements the switched/pattern behaviour: `Spawn` `0x10130460`
+(`START_OFF` -> pattern `"a"`, else the authored pattern, else `"m"`), `On` `0x10130610` (the
+pattern only if it has >= 2 letters and does not start with `'a'`, else `"m"`), `Off`
+`0x10130690` (`"a"`), `Toggle` `0x101306f0`, `SetPattern` `0x10130780`, `FadeToPattern`
+`0x10130800`, `FadeThink` `0x101308d0` (one letter per step towards the target's first letter,
+re-thinking every `fade_time` — `0.05` on every corpus light). `CDynamicLight::Spawn`
+`0x10056a90` turns the light on.
+
 ## The `$envmap` reflection term
 
 World and prop materials carry a `$envmap` reflection term composited pre-lightmap. Full
@@ -49,5 +57,4 @@ derivation, the `vertexlitgeneric` counterpart, and the whole-game authoring sur
 
 VtMB itself is DX8/LDR with no post-processing. Lump 8 (the LIGHTING lump) is present in every
 BSP but is not decoded for runtime rendering; it **is** decoded offline for lighting
-analysis/calibration — `research/tooling/probes/lightmap.py`, `research/tooling/probes/probe_light_calibration.py`; see
-`docs/architecture/rendering-perf.md`.
+analysis/calibration — `research/tooling/probes/lightmap.py`, `research/tooling/probes/probe_light_calibration.py`.

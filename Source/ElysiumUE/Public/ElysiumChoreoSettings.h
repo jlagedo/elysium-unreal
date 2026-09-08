@@ -7,7 +7,7 @@
 
 /**
  * Choreography-track taste knobs, Project Settings -> Elysium -> Choreo, tracked at
- * `Config/DefaultElysium.ini` (R4.5, `docs/project/seam_migration.md` -> "Wire first, tune later").
+ * `Config/DefaultElysium.ini`.
  * Every value here used to be a hardcoded `TAutoConsoleVariable` default with no editor home;
  * moving them here changes where the numbers live, not what they are.
  *

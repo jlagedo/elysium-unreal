@@ -729,6 +729,9 @@ different function.
 outputs and neither is a footstep. `ShouldPlayStepSound` (vfunc `+0x3c`) is still unread, so the
 port's unforced step is never suppressed.
 
+`CGameMovement::ShouldPlayStepSound`'s multiplayer-only predicate `0x1011e3c0` hides a player
+footstep when 2D speed is below 195 units/s; it does not apply in single player.
+
 **Tests.** `Elysium.Substrate.Footsteps.PlayerClock` / `PlayerVolumes` / `PlayerLanding` /
 `PlayerWater` / `PlayerHearing` / `PlayerSwallows` / `PlayerServerFootstepsOff`
 (`Private/Tests/ElysiumPlayerFootstepTests.cpp`).

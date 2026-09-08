@@ -1,4 +1,4 @@
-// The footstep subsystem's SEAMS — wave 1's half of `docs/architecture/footstep-architecture.md`.
+// The footstep subsystem's SEAMS — wave 1's half.
 //
 // Four Substrate-tier cases with no RHI, no actors and no export corpus, plus one content case that
 // reads the baked surfaceprop assets:

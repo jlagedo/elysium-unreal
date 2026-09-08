@@ -1,8 +1,7 @@
 // The weapon controller over the item entity and the damage spine.
 //
-// `docs/vtmb/combat-and-damage.md` is the specification and owns every fact below; the seam layout
-// is `docs/architecture/gameplay-systems-architecture.md` §5.4. Nothing here re-implements the
-// descriptor, the soak resolver or the health commit: a weapon decides lethality, defense and the
+// `docs/vtmb/combat-and-damage.md` is the specification and owns every fact below. Nothing here
+// re-implements the descriptor, the soak resolver or the health commit: a weapon decides lethality, defense and the
 // opposed margin, and hands the result to `FElysiumCombatCharacter::TakeDamage`, which is the one
 // typed route into `ElysiumDamage::Apply` and `CommitDamage`.
 
@@ -520,8 +519,8 @@ namespace
 	// The equip funnel: put the wield table's answer for (classname, wielder sex) in the wielder's
 	// hand, or take away whatever it was holding. This is the one door a real equip/holster
 	// transaction reaches the attachment the green room's `gr_wield` lane proves
-	// (`docs/vtmb/wielded_weapons.md` §2, `docs/architecture/wielded-weapon-integration.md` —
-	// "Player and NPC"). One path serves both: sex is read off `Wearer.Sheet.IsMale()`, which every
+	// (`docs/vtmb/wielded_weapons.md` §2, "Player and NPC"). One path serves both: sex is read off
+	// `Wearer.Sheet.IsMale()`, which every
 	// combat character carries, so there is no player-only branch.
 	void ApplyWieldVisual(const FElysiumWeapon& Weapon, FElysiumCombatCharacter& Wearer)
 	{
@@ -2679,7 +2678,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	// impulse still belong to a later cycle. The re-roll is a SOAK rule, not a reaction one: it adds
 	// bonus soak dice from attribute slot 2 and re-classifies, so it changes the NUMBER the block
 	// family then reacts to. It lands with the soak work rather than here, which owns the pose and
-	// not the number (`docs/vtmb/combat-and-damage.md:485-488`, `docs/project/plans/animation.md:69-70`).
+	// not the number (`docs/vtmb/combat-and-damage.md:485-488`).
 	//
 	// The attacker's own classification stays on this line rather than branching the reaction below:
 	// retail gives the attacker ONE blocked-reaction source — the activity its swing sequence stores

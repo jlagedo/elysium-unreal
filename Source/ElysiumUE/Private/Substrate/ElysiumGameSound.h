@@ -7,8 +7,7 @@
 struct FElysiumSoundLevel;
 struct FElysiumSoundVolumeTable;
 
-// The substrate game-sound bus — the THIRD event kind
-// (`docs/architecture/gameplay-systems-architecture.md` §2.5.3), and deliberately not a second
+// The substrate game-sound bus — the THIRD event kind, and deliberately not a second
 // transport. Nothing here delivers anything: a producer stamps a stimulus into a bounded retention
 // window, and every consumer polls that window during its own think (§5.5.3, "hearing needs no
 // service at all"). No queue entry, no receiver, no scheduler.
@@ -54,8 +53,8 @@ namespace ElysiumGameSounds
 	}
 	// `NPC_DISCIPLINE_ALERT` — "An NPC was hit by a discipline that should alert others", the
 	// authored `sound_volume_table.txt` row a `disciplinetgt` record with `TriggerAISound` emits at
-	// each committed target (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "Overt/AI-sound
-	// classification emits on the sound bus"). It is a producer category like every other name here,
+	// each committed target ("Overt/AI-sound classification emits on the sound bus"). It is a
+	// producer category like every other name here,
 	// so it lives in this catalogue rather than beside its one producer: the NPC hear path
 	// (§5.5.3) and the discipline domain's own `ShouldRemove_OnHearCombat` poll both switch on it,
 	// and two consumers reading a name spelled in a third file is exactly the drift this namespace

@@ -9,8 +9,7 @@
 // able to refuse a value out loud.
 ELYSIUMUE_API DECLARE_LOG_CATEGORY_EXTERN(LogElysiumFootsteps, Log, All);
 
-// VtMB's footstep cvars, reproduced 1:1 by name and default
-// (`docs/architecture/footstep-architecture.md` §2.1, §2.2).
+// VtMB's footstep cvars, reproduced 1:1 by name and default.
 //
 // Same posture as `FElysiumMoveTuning` (`ElysiumMoveSolve.h`): they are **declared into the VtMB
 // console store** (`ElysiumCommandBus::Console`), not registered as engine `elysium.*` cvars, so a

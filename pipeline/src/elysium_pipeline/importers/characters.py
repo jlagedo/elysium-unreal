@@ -21,8 +21,7 @@ from elysium_pipeline.model_usage import skeletal_candidate, discover_placed_ani
 from elysium_pipeline import ornament_models
 
 #: The code half of every staged character entry: bump when a stage rule changes what it emits.
-#: The data half is the unit's sha256 and the bank/wield inputs. Code is never hashed
-#: (`docs/architecture/seam_map_unit_contract.md` -> "Recipes").
+#: The data half is the unit's sha256 and the bank/wield inputs. Code is never hashed.
 SETTINGS_VERSION = "elysium-character-stage-v2"
 
 

@@ -1,4 +1,4 @@
-// env_steam -- Valve's CSteamJet (`docs/vtmb/effects.md` §3.1, `effects-architecture.md` §5.6):
+// env_steam -- Valve's CSteamJet (`docs/vtmb/effects.md` §3.1):
 // the clinic's leftover jet. `lifetime = JetLength / Speed`, the square spread, the raw-seconds
 // size ramp, the hardcoded +-8 deg/s roll and the `sin(pi)` alpha law are the actor's on
 // `NS_ElysiumSteam`; the leaf owns the keys, `InitialState` and TurnOn / TurnOff / Toggle, and

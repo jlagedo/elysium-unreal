@@ -9,7 +9,7 @@
 class UTexture;
 class FJsonObject;
 
-/** The eight Source sampling flags a texture unit decodes (`seam_map_texture.md` → `sampling`). */
+/** The eight Source sampling flags a texture unit decodes. */
 USTRUCT(BlueprintType)
 struct FElysiumTextureSampling
 {
@@ -62,8 +62,7 @@ struct FElysiumCubeFaceMapping
 
 /**
  * Everything a `vtmb:texture:` unit knows that a UTexture has no slot for, carried on the baked
- * asset as AssetUserData so a packaged game can read it and the editor can inspect it
- * (`docs/architecture/seam_map_texture.md` → "Import" → "Provenance").
+ * asset as AssetUserData so a packaged game can read it and the editor can inspect it.
  *
  * `uv run elysium import textures` attaches one per asset through `ApplyJson`, from the
  * provenance sidecar the offline stage writes beside each DDS. A texture carries at most one:

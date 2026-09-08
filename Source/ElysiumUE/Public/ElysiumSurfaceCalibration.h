@@ -9,9 +9,8 @@
 class UTexture2D;
 
 /**
- * One surface class's roughness/specular/metallic row (`docs/architecture/seam_map_material.md` →
- * "Import" → "Knob contract"). The class key is `$surfaceprop` when present, else the VMT's top
- * directory, else the shader family's default row (`seam_migration.md` 2026-08-31); `Name` is
+ * One surface class's roughness/specular/metallic row. The class key is `$surfaceprop` when present, else the VMT's top
+ * directory, else the shader family's default row; `Name` is
  * that resolved key.
  */
 USTRUCT(BlueprintType)
@@ -44,9 +43,8 @@ struct FElysiumSurfaceClassRow
 
 /**
  * The per-surface-class roughness/specular/metallic table, edited as a grid and baked to a 128x1
- * lookup texture every V2 master samples by `SurfaceClassIndex`
- * (`docs/architecture/seam_map_material.md` → "Import" → "Knob contract";
- * `docs/project/seam_migration.md` 2026-08-31, "Calibration happens on knobs inside the editor").
+ * lookup texture every V2 master samples by `SurfaceClassIndex`. Calibration happens on knobs
+ * inside the editor.
  *
  * A saved asset, not transient: `/Game/ElysiumGenerated/Materials/V2/DA_SurfaceCalibration`, with
  * its `Lut` texture created *inside* this asset's own package (object name `T_SurfaceClassLUT`,

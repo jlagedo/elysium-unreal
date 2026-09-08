@@ -1,7 +1,7 @@
 // `CBaseCineCam::FindBestShot` `FUN_1006e4c0`, its two predicates (`FUN_1006d9d0` /
 // `FUN_1006db10`), the factory `FUN_10070550` and the anim-event channel that is their only route in
 // — `CBasePlayer::HandleAnimEvent` `0x10178a10` events **4050** (`0xfd2`) and **4051** (`0xfd3`).
-// `docs/project/camera_scripted.md` §SC8; the recovery is
+// The recovery is
 // `$ELYSIUM_WORK_ROOT/_camera_recovery/server_cine_camera.md` §4 with `rc_group_a.md` (the
 // `point_player` default) and `rc_group_de.md` RC13 (the grapple role pair).
 //

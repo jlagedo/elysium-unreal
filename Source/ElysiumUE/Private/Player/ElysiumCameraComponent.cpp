@@ -449,7 +449,7 @@ void UElysiumCameraComponent::ApplyScriptedShotToView(FMinimalViewInfo& View) co
 		View.PostProcessSettings.MotionBlurAmount = 0.0f;
 
 		// The pusher's exposure ask, for the handle's lifetime (`FElysiumShotPresentation`, the named
-		// Presentation modernization in `docs/architecture/computer-terminal-architecture.md` §6.4).
+		// Presentation modernization).
 		// A terminal shot frames one bright emissive panel at close range and the eye would otherwise
 		// ramp the rest of the room into black around it.
 		float ExposureMin = 0.0f;

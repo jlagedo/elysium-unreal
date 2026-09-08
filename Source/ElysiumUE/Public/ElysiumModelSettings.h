@@ -6,8 +6,7 @@
 #include "ElysiumModelSettings.generated.h"
 
 /**
- * The model-import lane's LOD mapping knobs (`docs/architecture/seam_map_model.md` -> "Import" ->
- * "Geometry"): VtMB's `switchPoints` grows with distance while Unreal's `ScreenSize` shrinks with
+ * The model-import lane's LOD mapping knobs: VtMB's `switchPoints` grows with distance while Unreal's `ScreenSize` shrinks with
  * it, so the stage maps one to the other through one reciprocal constant and a floor/ceiling clamp,
  *
  * ```text
@@ -18,15 +17,15 @@
  * read out of `Config/DefaultElysium.ini` section `[/Script/ElysiumUE.ElysiumModelSettings]`,
  * exactly as the material stage reads `ChromaThreshold` off `UElysiumSurfaceSettings`. The three
  * values ride in the model-import recipe, so changing one re-imports the multi-LOD units and
- * nothing else -- they are a wiring default, not a tuning judgement ("What this lane does not do":
- * the owner's LOD pass happens on this page after the roadmap, "wire first, tune later").
+ * nothing else -- they are a wiring default, not a tuning judgement: the owner's LOD pass happens
+ * on this page later, "wire first, tune later".
  *
  * Unlike `UElysiumSurfaceSettings`, this page pushes nothing at runtime: the three knobs are
  * bake-time inputs to an offline Python stage, not scalars a running material graph samples, so
  * there is no `MPC_*` to keep in sync and no `PostEditChangeProperty` override.
  *
  * `BlueprintType` so the class is exported to the editor's Python (`unreal.ElysiumModelSettings`):
- * the map bake reads the R6.3 detail-prop distances off this CDO (`bake_map_v2.detail_cull`),
+ * the map bake reads the detail-prop distances off this CDO (`bake_map_v2.detail_cull`),
  * exactly as it reads the lighting page, and the Python glue exports only Blueprint-visible
  * classes -- `UElysiumLightingSettings` is visible through its `BlueprintCallable` push, this page
  * has no such function, so the type flag is the honest spelling.
@@ -51,7 +50,7 @@ public:
 	UPROPERTY(EditAnywhere, Config, Category = "LOD", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float LodScreenSizeCeiling = 0.9f;
 
-	// --- detail props (R6.3, `docs/architecture/seam_map_map.md` -> "Detail props (R6.3)") ----
+	// --- detail props ----
 	/**
 	 * The distance past which a `dprp` detail instance is culled: VtMB's `cl_detaildist`, default
 	 * 600 inches (`CDetailObjectSystem::vfunc10`, client.dll 100e0d90), in centimetres. The map

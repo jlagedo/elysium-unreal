@@ -1,5 +1,4 @@
-// env_sprite -- glow coronas, light shafts, candle flames, cop flashers, lightning (R6.1,
-// `docs/architecture/seam_map_map.md` -> "Sprites (R6.1)").
+// env_sprite -- glow coronas, light shafts, candle flames, cop flashers, lightning.
 //
 // The billboard is the bake's (`AElysiumSpriteActor`, tagged with this entity's index); the
 // entity owns nothing but its on/off state, CSprite's (vampire.dll 1042e550 Spawn, 1042ef40

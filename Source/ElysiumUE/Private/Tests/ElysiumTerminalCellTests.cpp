@@ -1,4 +1,4 @@
-// The terminal cell painter (`docs/project/plans/terminals.md`, slice D).
+// The terminal cell painter.
 //
 // Every automation tier runs `-nullrhi`, so nothing here renders a frame: the assertions are on the
 // pure `ElysiumTerminalPaint::BuildDrawPlan`, which is the whole picture — metrics, palette, the

@@ -1,5 +1,5 @@
 // Content-free Substrate automation for UElysiumTextureProvenance: the record a baked texture
-// carries from its `vtmb:texture:` unit (docs/architecture/seam_map_texture.md -> "Import").
+// carries from its `vtmb:texture:` unit.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

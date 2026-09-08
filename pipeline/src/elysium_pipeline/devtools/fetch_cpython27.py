@@ -2,7 +2,7 @@
 """Fetch + vendor the embedded CPython 2.7 SDK for the runtime (P5 5.5 / 9.3).
 
 The Elysium runtime embeds a maintained CPython 2.7.18 (qnox/python-2.7) to run VtMB's own
-loose Python 2.1 level scripts 1:1 (see docs/project/roadmap.md decision log, 2026-07-22 5.5 entry).
+loose Python 2.1 level scripts 1:1.
 The interpreter is open source (PSF), not game-sourced -- but it is ~37 MB, so like the rest
 of $ELYSIUM_EXPORT_ROOT it is regenerable, not committed. This script downloads the pinned release, verifies
 its SHA-256, and lays it out under Source/ElysiumUE/ThirdParty/CPython27/ exactly as ElysiumUE.Build.cs

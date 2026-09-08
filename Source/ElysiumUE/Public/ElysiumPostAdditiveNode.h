@@ -19,7 +19,7 @@
  * changes with whatever pose the delta lands on.
  *
  * That is why this is a runtime rule rather than a bake input, and it is one of the four the
- * animation programme names (`docs/architecture/animation-architecture.md`). A `_delta` ships as
+ * animation programme names. A `_delta` ships as
  * an ordinary sequence holding the raw decoded delta -- every track parent-relative, every bone
  * the clip does not animate at identity rotation and zero translation -- and this node states
  * what composing it means. The clip needs no VtMB knowledge to be evaluated; the composition

@@ -1,6 +1,6 @@
 """Identity and stable-name rules for the engine-config GLB seam.
 
-`docs/architecture/seam_map_engine_config.md` owns the facts; this module is their code. A unit
+The engine-config seam owns the facts; this module is their code. A unit
 is one console script, table or binary state file the seam names explicitly -- there is no
 directory scan, because the member list itself is the seam's own closed vocabulary.
 """
@@ -110,8 +110,8 @@ class EngineConfigModelError(ValueError):
 def normalize_key(raw: str) -> str:
     """The unit key: lower case, forward-slashed, the family root prefix tolerated and dropped.
 
-    The singular export command "tolerates the root prefix ... on its argument"
-    (`seam_map_unit_contract.md`), so `engine-config/cfg/user.cfg` and `cfg/user.cfg` are one key.
+    The singular export command tolerates the root prefix on its argument,
+    so `engine-config/cfg/user.cfg` and `cfg/user.cfg` are one key.
     """
 
     normalized = _normalize_key(str(raw)).strip().strip("/")

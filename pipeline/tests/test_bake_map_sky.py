@@ -1,4 +1,4 @@
-"""R5.2 (`docs/project/seam_migration.md` -> "Roadmap -- one pipeline" -> "R5.2 Sky baked"):
+"""R5.2:
 the bake-side half of the sky join `pipeline/unreal/bake_map.py::_place_sky` now finishes for a
 `MapsOnV2Models` map instead of deferring to the runtime.
 

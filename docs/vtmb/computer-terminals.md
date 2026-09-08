@@ -9,11 +9,7 @@ in `docs/vtmb/game_runtime.md` and `docs/vtmb/skills-and-checks.md`; sound resol
 `docs/vtmb/savegame_format.md`; Python evaluation remains in `docs/vtmb/python_bridge.md`; and the
 map-specific tutorial graph remains in `docs/vtmb/sp_tutorial_1-event-surface.md`.
 
-The Unreal implementation and presentation counterpart is
-`docs/architecture/computer-terminal-architecture.md`.
-
-This is a VtMB behavior specification. Implementation priority and status live only in
-`docs/project/roadmap.md`.
+This is a VtMB behavior specification.
 
 ## 1. Evidence boundary
 

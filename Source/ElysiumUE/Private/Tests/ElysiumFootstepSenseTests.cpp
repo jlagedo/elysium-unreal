@@ -1,8 +1,7 @@
 // A1 (footsteps) — the ground-surface sense: what the two locomotion producers publish about the
 // floor under the body, and what the doubles carry so a Substrate case can pin it.
 //
-// The subsystem's design is `docs/architecture/footstep-architecture.md` §4.1; the retail fact
-// being ported is the cached `surfacedata_t*` both producers keep — `CAI_BaseNPC +0x5b90`, written
+// The retail fact being ported is the cached `surfacedata_t*` both producers keep — `CAI_BaseNPC +0x5b90`, written
 // only by `CAI_Navigator::MoveEnact 0x102ef870` and cleared by `0x10273390` / `0x1027bf50`, and
 // `CGameMovement`'s own, written by `CategorizePosition` and read as a `gamematerial` letter by
 // `UpdateStepSound 0x1011e940`.

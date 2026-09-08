@@ -1,4 +1,4 @@
-// R6.4 -- brush fade distances (`docs/architecture/seam_map_map.md` -> "Brush fade distances").
+// Brush fade distances.
 // The producer wrote `cull_max_cm`; the seam under test is the world applying it to the brush
 // visual it attaches, and nothing else deriving it.
 #include "Misc/AutomationTest.h"

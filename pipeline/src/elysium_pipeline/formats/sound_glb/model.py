@@ -19,7 +19,7 @@ KIND = "sound"
 SOUND_EXTENSION = contract_coverage.extension_name(KIND)
 #: 1.1.0 added the source capsule: the audio member's exact bytes and, when the install ships
 #: one, the `.lip` companion's, travel in the unit's BIN chunk after the decoded payload,
-#: hash-checked against `sourceResolution` (`seam_map_unit_contract.md`, "Source capsule").
+#: hash-checked against `sourceResolution`.
 #: The payload is a *decode* -- interleaved PCM for a `.wav`, the bare frame stream for an
 #: `.mp3` -- so before 1.1.0 no sound unit carried the file the install actually holds.
 SCHEMA_VERSION = "1.1.0"

@@ -1,6 +1,6 @@
 // Content-free Substrate automation: retail's TWO scripted channels and the composition shape.
 //
-// SC2 of `docs/project/camera_scripted.md`. VtMB runs a cine camera that **hard-writes** the base
+// VtMB runs a cine camera that **hard-writes** the base
 // pose with no weight at all (`C_BaseCineCamera::CalcView` `client.dll` `FUN_10001b50`) and a
 // `camera_track` override that is the only blended one, composed on top of whichever base won
 // (`CInput::OverrideView` `FUN_100ffb90`). They are one camera in series, never two viewpoints, and

@@ -7,13 +7,13 @@
 
 /**
  * The rain "enhanced" presentation preset, Project Settings -> Elysium -> Weather, tracked at
- * `Config/DefaultElysium.ini` (R4.5, `docs/project/seam_migration.md` -> "Wire first, tune later").
+ * `Config/DefaultElysium.ini`.
  *
  * Every field here used to live only as a literal argument on the Cog Environment window's
  * "Enhanced defaults" button (`ElysiumCogWindow_Environment.cpp`, retired by this task), which
  * pushed the combination onto the live `elysium.Rain*`/`elysium.EnvironmentWetnessScale` cvars in
  * one click and had no other home. Those seven cvars are kept — each already has its own live Cog
- * slider (`docs/project/seam_migration.md`'s audit classes them "drop to editor", not "delete";
+ * slider (each already classed "drop to editor", not "delete";
  * this page is that drop for the one combination the button hardcoded) — this page is simply
  * where the preset combination itself now lives, editable rather than buried in a button.
  *

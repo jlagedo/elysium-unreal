@@ -1,5 +1,4 @@
-// Content-tier parity for the R4.2 collision transport (`docs/architecture/seam_map_map.md` ->
-// "Import"): the baked `UElysiumMapCollisionPayload` and the `<map>.hulls` / `<map>.dispcol` /
+// Content-tier parity for the collision transport: the baked `UElysiumMapCollisionPayload` and the `<map>.hulls` / `<map>.dispcol` /
 // `<map>.ents` documents it replaces must describe the same solid world.
 //
 // This is the parity that matters, and it is deliberately not the stage's. The stage compares

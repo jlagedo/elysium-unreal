@@ -1,5 +1,4 @@
-// The C++ half of the model-name twin (docs/architecture/seam_map_model.md -> "Import" ->
-// "Identity and naming"): `FElysiumContentPaths::PropModelStem` walked over the same golden table
+// The C++ half of the model-name twin: `FElysiumContentPaths::PropModelStem` walked over the same golden table
 // `pipeline/tests/test_model_import_editor.py` walks with `shared_corpus.static_stem`. Neither
 // implementation may change without the other failing, which is the point -- the stem is what the
 // baked `SM_` asset is named after, and the four substrate call sites that recompute it live

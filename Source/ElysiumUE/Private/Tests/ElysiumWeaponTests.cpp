@@ -672,13 +672,12 @@ bool FElysiumWeaponInstallTest::RunTest(const FString&)
 
 // =====================================================================================
 // The equip funnel: OnEquipped/OnHolstered are the ONE door a real equip/holster
-// transaction reaches the wield attach through, for an NPC and the player alike
-// (`docs/project/plans/animation.md` -> "The equip funnels"). This suite is
+// transaction reaches the wield attach through, for an NPC and the player alike. This suite is
 // content-free and builds neither wearer a `model`, so neither stands a skeletal body
 // (`FElysiumAnimating::BuildBody`) and `ApplyWieldVisual`'s
-// `Wearer.GetSkeletalBody() == nullptr` early-out is what actually runs on both sides
-// (docs/architecture/wielded-weapon-integration.md's live acceptance instrument is the
-// green room's `elysium.gr_wield_check`, which does stand a body). What this proves is
+// `Wearer.GetSkeletalBody() == nullptr` early-out is what actually runs on both sides (the
+// live acceptance instrument is the green room's `elysium.gr_wield_check`, which does stand a
+// body). What this proves is
 // that the real transaction — `GiveNamedItem` -> `Equip` -> `SetActiveWeapon` ->
 // `OnEquipped`/`OnHolstered` — runs the SAME call for both chain leaves with no crash and
 // no player/NPC branch in its bookkeeping.

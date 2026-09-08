@@ -1,7 +1,7 @@
 """The Source symbol tables the six sound-script tables spend on `channel`, `soundlevel`,
 `pitch`, `volume` and the DSP processor grammar.
 
-`seam_map_sound_script.md` says a table's vocabulary is "the ones the file's own header comment
+A table's vocabulary is "the ones the file's own header comment
 lists". Read literally per file that is incomplete: `CHAN_*` is documented in `sounds.txt`'s
 header but not in `game_sounds_surfaceproperties.txt`'s, and neither file's header documents
 `PITCH_*` or `VOL_NORM` even though both use them (`game_sounds_surfaceproperties.txt`'s own

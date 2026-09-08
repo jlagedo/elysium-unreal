@@ -364,8 +364,7 @@ FString UElysiumParticleAssetBuilder::ValidateParticleSystem(
 // ============================================================ the generated lane (R7.3)
 //
 // One `NS_<root>` per VtMB root, one inherited emitter per drawing node of the staged tree
-// (`docs/project/niagara_authoring_strategy.md` 4.1; the design note is
-// `E:/elysium-work/scratch/effects/generator_design.md`). Everything above this line belongs to
+// (the design note is `E:/elysium-work/scratch/effects/generator_design.md`). Everything above this line belongs to
 // the legacy per-map closure lane and is untouched.
 
 #if WITH_EDITOR

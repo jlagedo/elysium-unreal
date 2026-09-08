@@ -5,8 +5,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumMapEntities.generated.h"
 
-// One map's entity table as cooked content (R4.1, `docs/architecture/seam_map_map_entities.md` ->
-// "Import"). This is a transport change and nothing else: the rows below carry exactly what the
+// One map's entity table as cooked content. This is a transport change and nothing else: the rows below carry exactly what the
 // `<map>.ents` document carries, in lump order, and deserialize into exactly the plain
 // `FElysiumEntityDef` array the JSON reader has always produced. No field is added, dropped,
 // retyped or re-derived on the way through.
@@ -133,7 +132,7 @@ namespace ElysiumEntityDefSource
 	// The one entry point for "give me this map's defs". A map listed in
 	// `UElysiumMapTransportSettings::MapsOnNewTransport` (R4.6) tries the baked asset first, falling
 	// back to the `.ents` sidecar if it turns out missing; an unlisted map goes straight to the
-	// sidecar (`docs/architecture/seam_map_map_entities.md` -> "Import" -> "Cutover").
+	// sidecar.
 	ELYSIUMUE_API EElysiumEntityDefSource Load(const FString& MapName, FElysiumEntityDefs& Out,
 		float SkyScale = 1.f, const FVector& SkyOrigin = FVector::ZeroVector);
 

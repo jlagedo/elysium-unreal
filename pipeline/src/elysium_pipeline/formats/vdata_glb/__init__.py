@@ -1,6 +1,6 @@
 """Isolated lossless vdata GLB format aggregation.
 
-One unit is one `vdata/<subtree>/<name>.txt` file (`docs/architecture/seam_map_vdata.md`).
+One unit is one `vdata/<subtree>/<name>.txt` file.
 Identity, source resolution, the container and the kind-independent half of validation are
 `elysium_pipeline.formats.unit_contract`'s; this package states only what is specific to the kind.
 """

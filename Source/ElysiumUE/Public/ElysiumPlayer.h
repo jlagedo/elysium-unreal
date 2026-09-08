@@ -39,8 +39,7 @@ enum class EElysiumDmgFamily : int32;
 //
 // The chain mirrors VtMB's because VtMB's *data* is authored against it: a `.dlg` action calls
 // `npc.SetDisposition(...)` and a Hammer wire fires `MoneyAdd` on the same class, so one name table
-// per class (R2) only pays off if the classes are the same ones. Design: `docs/architecture/runtime-architecture.md`
-// sections 5-6; the input inventory: `docs/vtmb/script_api.md`.
+// per class only pays off if the classes are the same ones. The input inventory: `docs/vtmb/script_api.md`.
 
 // The chain-node classnames. They never appear in a `.ents` file — they exist so the registry's
 // base-chain walk reaches the inputs and fields they own.
@@ -570,7 +569,7 @@ struct FElysiumGlobalEmailRecord
 // into the save.
 //
 // Health is deliberately NOT a "player stat" here: `m_iHealth` is a Save-flagged entity field on the
-// chain (`docs/architecture/save-architecture.md` section 4 — VtMB's own placement), and the copy below exists only
+// chain, and the copy below exists only
 // because our entity dies with its map, so something has to carry the value across a travel. The
 // entity's field stays the one the save walk enumerates.
 //

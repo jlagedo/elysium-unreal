@@ -6,8 +6,7 @@
 #include "ElysiumSpriteSettings.generated.h"
 
 /**
- * The `env_sprite` runtime rule's knobs (R6.1, `docs/architecture/seam_map_map.md` -> "Sprites
- * (R6.1)"), read out of `Config/DefaultElysium.ini` section `[/Script/ElysiumUE.ElysiumSpriteSettings]`
+ * The `env_sprite` runtime rule's knobs, read out of `Config/DefaultElysium.ini` section `[/Script/ElysiumUE.ElysiumSpriteSettings]`
  * and applied by `FElysiumSpriteSceneProxy` at creation (a page edit reaches the next map load).
  *
  * Every default is VtMB's own, read off the shipped `client.dll` (`GlowBlend`, `100c24a0`): the

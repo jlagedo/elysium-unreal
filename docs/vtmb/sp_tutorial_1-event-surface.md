@@ -7,7 +7,7 @@
 **Document role:** cross-system research brief; not a status tracker or a generic behavior owner
 **Last reviewed:** 2026-08-11
 
-The master sequence and completion state remain in `docs/project/roadmap.md`. Generic Source entity
+Generic Source entity
 I/O behavior belongs in `docs/vtmb/entity_io.md`; Python hosting belongs in
 `docs/vtmb/python_bridge.md`; inventory behavior belongs in `docs/vtmb/inventory.md`; the
 script-call inventory belongs in `docs/vtmb/script_api.md`; the tutorial beat machine belongs in
@@ -1050,10 +1050,8 @@ an unmet prerequisite, or still unexplained. “No error in the log” is not cl
   `docs/vtmb/inventory.md`.
 - Confirmed tutorial progression and RPG semantics are written into
   `docs/vtmb/game_runtime.md`.
-- Confirmed audio behavior is written into `docs/vtmb/audio_pipeline.md`; Unreal integration stays
-  in `docs/architecture/audio-architecture.md`.
-- Unreal system seams remain in the appropriate `docs/architecture/` document.
-- Priority, task identifiers, and completion state remain only in `docs/project/roadmap.md`.
+- Confirmed audio behavior is written into `docs/vtmb/audio_pipeline.md`.
+- Unreal system seams are not recorded here; the code is their record.
 
 This brief remains the cross-system demand inventory. It should be regenerated or corrected when
 the patch-first input hashes change, a retail trace contradicts an intent inference, or a new

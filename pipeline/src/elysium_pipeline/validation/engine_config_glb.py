@@ -1,7 +1,7 @@
 """Independent structural validator for engine-config GLB products.
 
 This re-parses nothing through `exporters.engine_config_glb.build_document`: it checks the
-published extension against the vocabulary `seam_map_engine_config.md` states and the byte-ledger
+published extension against its own vocabulary and the byte-ledger
 and container rules `formats.unit_contract` states, so a writer bug cannot pass its own check.
 """
 
@@ -60,7 +60,7 @@ _ANOMALY_ROLES = {
 
 #: The three ranges this seam can prove contribute no payload byte. A localized `.lip` whose
 #: audio the install does not ship is not one of them: it is an ordinary `resolved: false`
-#: dependency row, per `seam_map_unit_contract.md` ("References between units"), so no omission
+#: dependency row referencing another unit, so no omission
 #: role names it and a document that carries one is rejected.
 _OMISSION_ROLES = {"empty-member", "trailing-fill", "insignificant-whitespace"}
 
@@ -243,11 +243,10 @@ def _check_omissions(omissions: list) -> None:
 def _check_against_decode(root: Mapping[str, Any], source_members, resolver) -> None:
     """Re-decode the selected member independently and compare every published field.
 
-    `seam_map_engine_config.md` ("Coverage and validation"): "Export-time validation
-    re-tokenizes every console script, re-splits every alias body and binding string, and
-    compares every table row and dependency with the writer's output." A decode bug that also
-    lives in `exporters.engine_config_glb.build_document` would pass its own check, so this
-    imports `decode_engine_config` instead of that module.
+    Export-time validation re-tokenizes every console script, re-splits every alias body and
+    binding string, and compares every table row and dependency with the writer's output. A
+    decode bug that also lives in `exporters.engine_config_glb.build_document` would pass its
+    own check, so this imports `decode_engine_config` instead of that module.
     """
 
     from elysium_pipeline.formats.engine_config_glb.decode import decode_engine_config

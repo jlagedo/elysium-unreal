@@ -1,8 +1,7 @@
 // CBaseAnimating, the chain node that owns a skeletal body.
 //
-// The design is `docs/architecture/runtime-architecture.md` sections 5-6; the public declaration
-// stays the chain header `Public/ElysiumPlayer.h`, and the class registration stays at the one
-// registration site, `ElysiumPlayerClasses.cpp`.
+// The public declaration stays the chain header `Public/ElysiumPlayer.h`, and the class
+// registration stays at the one registration site, `ElysiumPlayerClasses.cpp`.
 
 #include "ElysiumPlayer.h"
 

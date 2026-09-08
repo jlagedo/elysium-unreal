@@ -57,8 +57,8 @@ def coverage_block(
     """The six-key coverage object: what the seam maps, plus the one byte-ledger row.
 
     `omitted_proven` carries the seam's own `omissions[]` rows: the evidence for every
-    `omitted-proven` byte the ledger claims (`whitespace`, `bom`, `empty-member`), per
-    `seam_map_unit_contract.md`'s "an evidence-backed omission carrying its reason in `omissions`
+    `omitted-proven` byte the ledger claims (`whitespace`, `bom`, `empty-member`), per the unit
+    contract's "an evidence-backed omission carrying its reason in `omissions`
     or `coverage.omittedProven`".
     """
 

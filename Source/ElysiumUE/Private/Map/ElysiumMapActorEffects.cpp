@@ -1,4 +1,4 @@
-// AElysiumMapActor's effects domain (R7.3, `docs/architecture/effects-architecture.md` §5): on a
+// AElysiumMapActor's effects domain: on a
 // `MapsOnV2Models` map the env_particle / func_particle publish drives the bake-placed
 // AElysiumEffectActor by entity index; the three Valve classes drive their own actors the same
 // way; and `SpawnParticleRoot` stands a transient root for a code producer. The legacy per-map

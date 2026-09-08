@@ -1,6 +1,5 @@
 // Content-free Substrate automation for R4.5: the orphan taste values that used to live only as
-// hardcoded cvar/literal defaults now have `UDeveloperSettings` homes
-// (`docs/project/seam_migration.md` -> "R4.5 Orphan taste values get editor homes").
+// hardcoded cvar/literal defaults now have `UDeveloperSettings` homes.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

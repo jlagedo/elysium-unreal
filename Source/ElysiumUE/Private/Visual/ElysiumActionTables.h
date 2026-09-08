@@ -16,7 +16,7 @@
 // `vampire.dll`, and no runtime path re-derives a row.
 //
 // The recovered behaviour is `docs/vtmb/animation_and_movers.md` A.3, and the design is
-// `docs/architecture/animation-architecture.md` section 3.4. This header declares the shape; the
+// This header declares the shape; the
 // generated data and its accessors live in `ElysiumWeaponActivityTables.cpp`, and the pure
 // functions over them live in `ElysiumActionTables.cpp`.
 //

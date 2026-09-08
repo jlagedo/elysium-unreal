@@ -250,9 +250,9 @@ models — so a single observation names a pair without establishing that the id
 
 ## How Elysium solves the same problem
 
-This section describes **this repository's implementation**, not VtMB. It sits here rather than
-in `docs/architecture/animation-architecture.md` because the comparison against the capture is
-the point of the document; the architecture file owns the design itself.
+This section describes **this repository's implementation**, not VtMB. It sits here because the
+comparison against the capture is the point of the document; the design itself is owned
+elsewhere.
 
 ### The shape of our answer
 
@@ -703,6 +703,9 @@ resolved rather than deleted, because each one's answer is load-bearing.
   118 shipped `_delta` sequences carries `0x14`, so retail always post-multiplies. The pre-multiply
   side is not dead code, though — `CalcBoneAdj` calls it at weight 1.0 for every rotational bone
   controller, a path that is itself inert because no shipped model declares a controller.
+- **The additive `scale` term is a shortest-arc slerp from identity**, implemented at `0x1013add0`.
+  `QuaternionMA`'s scaled-delta argument is not a linear scale of the quaternion's components; it is
+  `Slerp(Identity, D, s)`, matching `FQuat::Slerp(FQuat::Identity, D, s)`.
 - **The three unread virtuals — settled.** `+0x438` is `IsPlayingGesture(Activity)`, `+0x43c` is
   `FindGestureLayer(Activity)` (matching on `weight != 0 && activity != -1 && activity == wanted`),
   and `+0x1c0` is `OnLayerFinished(int iLayer, int nActivity)`. The base is empty and there is
@@ -753,6 +756,13 @@ disassembly rather than by analogy with its neighbours.
 **A change key compared against the previous call.** With more than one body, consecutive calls
 belong to different entities, so such a key suppresses nothing and the budget goes on restating
 the same few tuples. A key over a crowd must be partitioned by the entity.
+
+**Ghidra prints a double's low half as a float.** `vampire.dll _DAT_1044c398` disassembles as
+reading `2.0f`, but the instruction width is `FCOMP m64fp` over the constant's low 32 bits — the
+real value is the double `(double)0.01f`. `_DAT_101e34e0` likewise prints as `0.0f` where the real
+value is the double `1.0`. `vampire.dll .rdata` spans `0x10445000..0x10532d12`; `.data` starts at
+`0x10533000` (file offset equals RVA there). *Rule:* read the instruction width (`FCOMP m64fp` vs
+`m32fp`) and the raw bytes at the VA before trusting a decompiler-printed constant.
 
 **Reading a deferred hook's arguments on the way out.** Once a call returns, its argument area
 is below the caller's stack pointer, and the interceptor's own return path writes there. The

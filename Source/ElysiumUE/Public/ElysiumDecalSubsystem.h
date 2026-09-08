@@ -84,7 +84,7 @@ struct FElysiumLaidDecal
 };
 
 /**
- * The one owner of every decal in a world (R7.2 owner call B, `docs/project/seam_migration.md`).
+ * The one owner of every decal in a world.
  *
  * Two halves, one owner:
  *   (a) **Adoption** (ruling 4). A bake cannot save a `UMaterialInstanceDynamic` into a level, so
@@ -211,7 +211,7 @@ private:
  * corpus carries exactly six pools of five (`decals/hits/{concrete,metal,wood,glass}/shot1-5`,
  * `decals/hits/flesh/{blood,soak}1-5`) -- so the pool is chosen by the surface alone and the
  * variation is a roll inside it. `decals/hits/concrete/impact1-5` also exist and are NOT one of
- * the six: they are hand-placed `infodecal` art (`seam_migration.md`'s R7.2 census).
+ * the six: they are hand-placed `infodecal` art.
  *
  * The `scorch` column has no material in the corpus and therefore no row here.
  */
@@ -241,8 +241,8 @@ namespace ElysiumImpactDecals
 	 * (`decals/hits/concrete/shot`). Never empty: an unnamed surface is concrete.
 	 *
 	 * `GameMaterial` is `UElysiumPhysicalMaterial::GameMaterial`, VtMB's own single-letter
-	 * `gamematerial` code. `seam_map_surface_property.md` says the letters' meanings are recorded
-	 * nowhere in the install, so this groups them by the units that DECLARE each one, read off the
+	 * `gamematerial` code. The letters' meanings are recorded nowhere in the install, so this
+	 * groups them by the units that DECLARE each one, read off the
 	 * 63 staged `surface-properties/*.provenance.json` (2026-09-03):
 	 *
 	 *   `F` fish_fresh / fish_frozen / flesh / watermelon      -> `flesh/blood`

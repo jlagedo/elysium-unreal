@@ -173,8 +173,8 @@ def test_surface_classes_seed_order_is_default_first():
     """`SeedDefaultRows` assigns Index 0..N-1 in the given order for a brand-new row, and
     `make_surface_knobs.py` passes `SURFACE_CLASSES` straight through -- so `default` (the master's
     fallback lookup for an unresolved SurfaceClassIndex) must be first in that list, and the list
-    must fit `UElysiumSurfaceCalibration::MaxRows` (128, `docs/architecture/seam_map_material.md`
-    revision 2026-08-31: the class table grew to 69-72 entries, over the original 64-row cap).
+    must fit `UElysiumSurfaceCalibration::MaxRows` (128; as of 2026-08-31 the class table grew to
+    69-72 entries, over the original 64-row cap).
     """
     from elysium_pipeline.importers.surface_classes import SURFACE_CLASSES
 

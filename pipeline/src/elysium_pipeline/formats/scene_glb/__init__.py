@@ -1,7 +1,7 @@
 """Isolated lossless Scene GLB format aggregation.
 
 One binary glTF 2.0 unit per Faceposer `.vcd` choreography file below `sound/`.
-`docs/architecture/seam_map_scene.md` owns the format contract this package implements.
+The scene seam owns the format contract this package implements.
 """
 
 from elysium_pipeline.formats.scene_glb.decode import (

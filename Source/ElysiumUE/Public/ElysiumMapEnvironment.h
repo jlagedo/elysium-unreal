@@ -5,8 +5,7 @@
 #include "ElysiumEnvironment.h"
 #include "ElysiumMapEnvironment.generated.h"
 
-// One map's `.env` / `.sky` / `.spawn` values as cooked content (R4.4,
-// `docs/architecture/seam_map_map.md` -> "Import — environment"). A transport change and nothing
+// One map's `.env` / `.sky` / `.spawn` values as cooked content. A transport change and nothing
 // else: every field below is what the three sidecars already carry, copied straight into the
 // `FElysiumEnvDef` / `FElysiumSkyDef` / `FElysiumSpawnDef` the runtime has always consumed. The fog
 // values in particular are a taste-free passthrough feeding `UElysiumMapVisuals::ApplySceneFog`

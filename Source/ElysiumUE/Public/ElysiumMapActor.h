@@ -93,7 +93,7 @@ const TCHAR* ElysiumMapRuntimePhaseName(EElysiumMapRuntimePhase Phase);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumMapRuntimeReady, AElysiumMapActor*);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumMapRuntimeFailed, AElysiumMapActor*, const FString&);
 
-// The map's pre-move tick (`docs/architecture/runtime-architecture.md` §3, steps 2-3). The first of the actor's
+// The map's pre-move tick. The first of the actor's
 // four tick functions, in TG_PrePhysics, carrying everything that must be settled BEFORE the pawn
 // moves: the frame order's own wiring, the one clock advance, and the player entity's own think.
 // Retail runs the whole player move out of the `clc_move` drain, ahead of `GameFrame`, with the
@@ -118,7 +118,7 @@ struct TStructOpsTypeTraits<FElysiumPreMoveTickFunction> : public TStructOpsType
 	enum { WithCopy = false };
 };
 
-// GameFrame after every player/NPC movement tick (`docs/architecture/runtime-architecture.md` §3, steps 5-6).
+// GameFrame after every player/NPC movement tick.
 // This cannot be AElysiumMapActor::PrimaryActorTick: CharacterMovement automatically depends on
 // the primary tick of the actor owning its floor, and the runtime world collision is map-owned.
 // A separate tick can depend on those movement ticks without forming the reverse edge.
@@ -141,7 +141,7 @@ struct TStructOpsTypeTraits<FElysiumGameplayTickFunction> : public TStructOpsTyp
 	enum { WithCopy = false };
 };
 
-// The map's post-move tick (`docs/architecture/runtime-architecture.md` §3, step 8). A fourth tick function on
+// The map's post-move tick. A fourth tick function on
 // the same actor, in TG_PostPhysics, carrying the work that must see the frame's FINAL positions:
 // the `+use` camera/body query sees where a door actually ended up this frame, not where it was
 // before its swept move and the pawn's. Four tick functions on one actor is the engine's own
@@ -417,7 +417,7 @@ public:
 	virtual bool SetMouthOpen(USkeletalMeshComponent* Body, float Open) override;
 	virtual bool PlayAttachedEffect(USkeletalMeshComponent* Body, const FString& Definition,
 		FName Attachment) override;
-	// R7.3 (`effects-architecture.md` §5.9): the producer entry point -- one transient effect actor
+	// The producer entry point -- one transient effect actor
 	// on the floor (or its family override), the tree from `DA_ElysiumParticleTrees`.
 	virtual FElysiumEffectHandle SpawnParticleRoot(const FString& Root,
 		const FElysiumEntityHandle* Parent, int32 AttachMode, FName AttachName, int32 AttachPoint,
@@ -872,7 +872,7 @@ private:
 	// emitting a fresh begin edge. Refresh the pawn's overlap cache, then reconcile every runtime
 	// brush currently containing it into the deduplicating entity touch bus.
 	void ReconcilePlayerBrushTouches(APawn* Pawn);
-	// R7.1 (`water-architecture.md` ruling C): classify the player's feet / waist / eyes against the
+	// Classify the player's feet / waist / eyes against the
 	// map's water volumes and publish the answer — the level to the mover, whose `FullWalkMove`
 	// already branches on it, and the level plus the volume's surface plane to the camera, whose
 	// clearance step keeps the view out of the plane's band. Runs pre-move, on the declared edge

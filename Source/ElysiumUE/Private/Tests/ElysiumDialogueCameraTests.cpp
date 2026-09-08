@@ -500,7 +500,7 @@ bool FElysiumDialogueCameraGrammarTest::RunTest(const FString&)
 // position — the lens — however the shot was selected. The port has three paths, so the flag is
 // resolved once off the conversation's `default_camera` and stamped on whichever request is
 // published; with no source shot at all it defaults SET, which is the named modernization recorded
-// in `docs/architecture/camera-architecture.md` (51 of the 66 shipped shot files set it).
+// (51 of the 66 shipped shot files set it).
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueCameraPovTest,
 	"Elysium.Substrate.DialogueCamera.DialogPOV", GElysiumDialogueCameraTestFlags)
 
@@ -600,7 +600,7 @@ bool FElysiumDialogueCameraPovTest::RunTest(const FString&)
 	// (`StartPlayerDialog` has no `DialogDefault` fallback — only `SetCamera` does). The port offers
 	// the authored grammar in that one gap, never in front of a shot that DID load, and with no
 	// source shot to read the flag off it defaults the redirect SET — 51 of the 66 shipped shot
-	// files set it (`docs/architecture/camera-architecture.md`).
+	// files set it.
 	World.OpenDialog(Speaker->Handle, MakeOneLineConversation(),
 		EElysiumDialogOpenerKind::Remote, 0, TEXT("no-such-fixture"));
 	TestFalse(TEXT("a default_camera that does not load adopts no camera"),

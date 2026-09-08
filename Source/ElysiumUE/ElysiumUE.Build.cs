@@ -138,7 +138,7 @@ public class ElysiumUE : ModuleRules
 				// and the running game only ever loads the result.
 				"Chaos", "ChaosCloth", "ChaosClothAsset"
 			});
-			// Lumen card baking (docs/architecture/uasset-bake-spike.md). IMeshUtilities::GenerateCardRepresentationData
+			// Lumen card baking. IMeshUtilities::GenerateCardRepresentationData
 			// is the real surfel-fitted card builder; it ray-traces the mesh through Embree, so it only
 			// exists in the editor. The bake runs here and writes a sidecar the runtime deserializes,
 			// which is what keeps Embree out of the shipping build.

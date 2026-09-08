@@ -2,8 +2,8 @@
 
 `uv run elysium import map-collision --maps <map>...` turns each named map's collision sidecars
 into one `/ElysiumBaked/Maps/<map>/DA_<map>_Collision` asset carrying the same convex sets and the same
-triangle soup, cooked once offline instead of on every map load
-(`docs/architecture/seam_map_map.md` -> "Import"). This module is the offline stage half: it reads
+triangle soup, cooked once offline instead of on every map load. This module is the offline
+stage half: it reads
 `<map>.hulls`, `<map>.dispcol` and the brush-entity `hulls` of `<map>.ents`, applies the one
 transform the runtime applies (the 3D-skybox scale on a `sky` brush entity), asserts parity against
 the files it read, and writes one `manifest.json` the editor phase
@@ -11,8 +11,8 @@ the files it read, and writes one `manifest.json` the editor phase
 
 **The rows come from the sidecars, not from a second port of the hull solver.** Since R3.5 those
 files are written by the R3.2 producer from the published GLB units, so re-deriving them here would
-mean a second implementation of `brush_hull` with its own tolerances -- exactly the divergence
-`seam_map_map.md` -> "Producer join" exists to prevent.
+mean a second implementation of `brush_hull` with its own tolerances -- exactly the divergence the
+producer-join rule exists to prevent.
 
 **Scope.** The stage refuses to run unscoped: there is no `--all` here, because one asset per map
 over 108 maps is a separately approved operation, not this lane's working mode.

@@ -306,7 +306,7 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigTest,
 	"Elysium.Substrate.LightRig", GElysiumTestFlags)
 
-// R4.3 (`docs/project/seam_migration.md`): the derivation-math assertions below (non-inverse-square
+// R4.3: the derivation-math assertions below (non-inverse-square
 // falloff, MegaLights, shadows-from-calibration, spot cone from stopdot/stopdot2) exercise exactly
 // the formulas `ApplyToSource` computes fresh on every map load today and R5.6 will instead compute
 // once at bake time -- the roadmap line's "re-homed to bake verification" describes moving these
@@ -428,7 +428,7 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLightRigBakedTest,
 	"Elysium.Substrate.LightRigBaked", GElysiumTestFlags)
 
-// R5.6 (`seam_map_map_lighting.md` -> "Import" -> "Lights final"): on a `MapsOnV2Models` map the
+// R5.6: on a `MapsOnV2Models` map the
 // bake wrote every derived value, so `AdoptBaked` opens no sidecar and derives nothing -- the
 // actor's values are the baseline, a settings push leaves them alone, a revert returns to them,
 // and the R4.3 calibration asset still applies by the same lump-15 ordinal. No tick here: an

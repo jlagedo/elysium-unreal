@@ -297,7 +297,7 @@ class GameSoundDirectory:
     `game_sounds_manifest.txt` precaches only the live table, so a name the dormant table repeats
     is dead data shadowed by the live entry of the same name: the collision is a real property of
     the shipped corpus (16 names, `Metal_Barrel.Impact` and `Test.Sound` among them), not
-    something `seam_map_sound_script.md` resolves, and this seam keeps the live entry's identity
+    something this seam resolves away, and this seam keeps the live entry's identity
     and records the dormant duplicate as shadowed -- the live unit's `shadowed-dormant-entry`
     anomaly (see `decode.decode_game_sound`) -- rather than publishing two units for one asset id.
     """

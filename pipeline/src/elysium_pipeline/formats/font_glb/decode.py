@@ -354,10 +354,10 @@ def decode_font(closure, *, font_list_rows: list[dict[str, Any]] | None = None) 
                 {"role": "page-vmt-missing-basetexture", "page": page_index, "path": available.vmt_path}
             )
         if page_index in used_pages and not texture_present:
-            # `seam_map_font.md` reads this as the font's own structure and grades it
+            # The font seam reads this as the font's own structure and grades it
             # `coverage.unresolved`; the real install ships members that reference a page it never
-            # shipped (neither the `.tth` nor its `.vmt`), which is exactly
-            # `seam_map_unit_contract.md`'s non-canonical-storage case instead -- a reference to
+            # shipped (neither the `.tth` nor its `.vmt`), which is exactly the unit contract's
+            # non-canonical-storage case instead -- a reference to
             # another seam's data (the page's texture and material units) that merely fails to
             # resolve, so the unit publishes what the install holds and warns. See `specDeviations`.
             using_glyphs = sorted(g["index"] for g in glyphs if g["page"] == page_index)

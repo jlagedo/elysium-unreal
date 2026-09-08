@@ -9,9 +9,9 @@
 #include "Serialization/MemoryWriter.h"
 
 // --- Persistence ---
-// The map snapshot. Both halves run against the *same* world the game runs against, which is what
-// `docs/architecture/save-architecture.md` §5 means by "a snapshot is produced by exactly the same code path a save
-// uses": a travel boundary and a Save Game call reach Freeze identically.
+// The map snapshot. Both halves run against the *same* world the game runs against: "a snapshot
+// is produced by exactly the same code path a save uses", so a travel boundary and a Save Game
+// call reach Freeze identically.
 
 FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) const
 {

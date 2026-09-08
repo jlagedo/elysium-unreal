@@ -19,8 +19,7 @@ A zero-byte member declares `{"byteLength": 0}` and no view, because glTF has no
 therefore still carries no BIN chunk at all.
 
 `sourceResolution.capsule` is what says the seam has adopted the rule; a seam that has not
-publishes no such key and is validated exactly as before (`seam_map_unit_contract.md`, "Source
-capsule", owns the rollout).
+publishes no such key and is validated exactly as before.
 """
 
 from __future__ import annotations

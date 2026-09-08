@@ -1,5 +1,4 @@
-// Content-free Substrate automation for UElysiumPropSkinSet::Find's skin-index clamp
-// (docs/architecture/seam_map_model.md -> "Import" -> "Material binding" and -> "Skins table"):
+// Content-free Substrate automation for UElysiumPropSkinSet::Find's skin-index clamp:
 // VtMB's `skin` keyfield/input is an unclamped int write, so a placement can name a family past
 // the model's own count, and the engine clamps to the last family rather than falling back to 0
 // or refusing to draw. The clamp lives in `Find`, not at any call site.

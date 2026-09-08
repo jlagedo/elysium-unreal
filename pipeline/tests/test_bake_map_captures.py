@@ -1,4 +1,4 @@
-"""R5.5 (`docs/architecture/seam_map_map.md` -> "Import -- reflection captures (R5.5)"): the
+"""R5.5: the
 editor half of the capture placement, `pipeline/unreal/bake_map_v2.py`.
 
 `capture_placement` is the one pure rule in that file -- a world sample stands where the unit put

@@ -4,9 +4,8 @@ Runs inside a headless editor (`-run=pythonscript
 -script=pipeline/unreal/import_surface_properties.py -ImportSurfaceProperties=<manifest.json>`).
 The offline stage already decided everything -- asset path, the flattened values, which entry in
 the base chain authored each one, and the `EPhysicalSurface` row the entry's `gamematerial` maps
-to -- and wrote it to the manifest and the per-unit sidecars this script reads
-(`docs/architecture/seam_map_surface_property.md` -> "Import"). This script only executes those
-decisions against the editor:
+to -- and wrote it to the manifest and the per-unit sidecars this script reads. This script only
+executes those decisions against the editor:
 
   * per entry, compare the manifest's recipe against the stamp the asset carries
     (`bake_lib.RECIPE_TAG`) and touch only what is new, changed or forced;

@@ -1,9 +1,9 @@
 """The colour/data role a texture asset imports under, derived from its material bindings.
 
-A texture unit does not own its meaning; the material binding does (`seam_map_material.md`), and
+A texture unit does not own its meaning; the material binding does, and
 Unreal decides sRGB per asset. So the lane reads every material unit's `dependencies[]` once,
-collects the set of parameters that bind each texture, and applies the one rule
-`seam_map_texture.md` → "Import" → "Role, sRGB and compression" states:
+collects the set of parameters that bind each texture, and applies the one rule the texture
+seam's "Role, sRGB and compression" section states:
 
 - any colour binding, or no binding at all -> `colour`, sRGB on;
 - only normal-class bindings -> `data-normal`, sRGB off;

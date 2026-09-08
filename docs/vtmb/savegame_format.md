@@ -11,8 +11,7 @@ symbol table, not reconstructions. Class names come from MSVC RTTI in `Vampire/d
 explicitly marked open at the end.
 
 Related: `docs/vtmb/python_bridge.md` (the CPython embedding and `G`), `docs/vtmb/entity_io.md` (the datamap and the
-I/O bus), `docs/vtmb/level_transitions.md` (the three spawn mechanisms), `docs/architecture/engine-core.md` (the entity
-object model this must reload into), `docs/vtmb/vdata-catalog.md` (the rulebook tables the sheet indexes).
+I/O bus), `docs/vtmb/level_transitions.md` (the three spawn mechanisms), `docs/vtmb/vdata-catalog.md` (the rulebook tables the sheet indexes).
 
 ## Where saves live
 
@@ -439,8 +438,6 @@ character that can punch.
   themselves are read fresh from `vdata/` at load. A patched rulebook therefore re-applies to an
   existing save.
 - **No dialogue text or `.dlg` state** beyond what the scripts wrote into `G`.
-
-Unreal mapping: see `docs/architecture/save-architecture.md`.
 
 ## Tooling
 

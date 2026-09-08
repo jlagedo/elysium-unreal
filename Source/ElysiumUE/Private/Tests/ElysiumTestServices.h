@@ -1996,7 +1996,7 @@ private:
 // The ordered I/O recorder. Every sink tap writes ONE formatted line into ONE array, so the whole
 // causality stream of a headless world — what was fired, what entered the queue, what came back
 // out, in what order — is a single sequence a test can assert positions inside. The event-order
-// contract (`docs/architecture/gameplay-systems-architecture.md` §2.5.1) is a statement about
+// contract is a statement about
 // relative order, and relative order is what a per-facility counter cannot express.
 //
 // Line grammar: `<kind> <detail>`, kind being the first whitespace-delimited token.

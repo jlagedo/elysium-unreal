@@ -1,6 +1,4 @@
-// Content-tier parity check for the props lane's model import (R1.6, `docs/project/seam_migration.md`
-// -> Roadmap -> "R1.6 Verify + lookdev", contract in `docs/architecture/seam_map_model.md` ->
-// "Import"): every model the three test-corpus maps (`sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`)
+// Content-tier parity check for the props lane's model import: every model the three test-corpus maps (`sp_tutorial_1`, `sm_pawnshop_1`, `sm_hub_1`)
 // reference must have landed a real `SM_` under `/ElysiumBaked/Meshes`, with the exact slot names
 // `materialBindings.slots[]` names and a collision setup the placement lane can select without
 // going back to the source.
@@ -88,8 +86,7 @@ namespace
 	// `<Root>/SM_<stem>` -> `<Root>/SM_<stem>.SM_<stem>`, the `LoadObject` object-path shape every
 	// other Content test builds from a `FElysiumContentPaths::Baked*` accessor -- built here by
 	// hand because the V2 mesh root (`/ElysiumBaked/Meshes`) has no accessor yet: the flip that
-	// gives it one is roadmap R5.1's own task, not this one's
-	// (`docs/architecture/seam_map_model.md` -> "Import" -> "Identity and naming").
+	// gives it one is roadmap R5.1's own task, not this one's.
 	FString ObjectPathFor(const FString& AssetPath)
 	{
 		FString Name;
@@ -104,7 +101,7 @@ namespace
 
 // The main parity sweep: every asset the staged manifest lists resolves to a real `UStaticMesh`
 // with the manifest's own slot names, in order, and a collision setup that matches the manifest's
-// own `mode`/`hullCount`/`massKg` (`docs/architecture/seam_map_model.md` -> "Import" -> "Collision").
+// own `mode`/`hullCount`/`massKg`.
 // The loop always runs to completion; only the verdict afterward decides abstain vs. fail (below),
 // so one broken asset among many resolved ones is a failure, never a silent abstain.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelParitySlotsAndCollisionTest,
@@ -145,8 +142,7 @@ bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
 		}
 
 		// Slot names, in order: `materialBindings.slots[]` disambiguated names, exactly as landed
-		// on the mesh (seam_map_model.md -> "Identity and naming" -> "Slot names are
-		// safe_name(...)").
+		// on the mesh via `safe_name(...)`.
 		TArray<TSharedPtr<FJsonValue>> ManifestSlots = Asset->GetArrayField(TEXT("slots"));
 		ManifestSlots.Sort([](const TSharedPtr<FJsonValue>& A, const TSharedPtr<FJsonValue>& B)
 		{
@@ -177,8 +173,7 @@ bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
 		}
 
 		// Collision: uniform CTF_UseSimpleAndComplex, one convex hull per manifest hullCount for a
-		// `.phy`-bearing model or exactly one box for the header-hull bbox fallback
-		// (seam_map_model.md -> "Import" -> "Collision").
+		// `.phy`-bearing model or exactly one box for the header-hull bbox fallback.
 		const TSharedPtr<FJsonObject> Collision = Asset->GetObjectField(TEXT("collision"));
 		const FString Mode = Collision->GetStringField(TEXT("mode"));
 		const int32 ExpectedHullCount = static_cast<int32>(Collision->GetNumberField(TEXT("hullCount")));
@@ -192,9 +187,9 @@ bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
 				// `bake_lib.set_phy_collision` cooks each `.phy` ledge through GeometryScript's
 				// convex-hull generator with box/sphere/capsule auto-detection explicitly off, so
 				// every ledge lands as its own `FKConvexElem` -- the hull is reproduced, not
-				// approximated (seam_map_model.md -> "Import" -> "Collision": "one convex shape per
-				// `physics.solids[i].hulls[j]` ledge, unsimplified" / "a cooked shape count that
-				// disagrees with the ledge count is a stage failure").
+				// approximated: one convex shape per `physics.solids[i].hulls[j]` ledge,
+				// unsimplified -- a cooked shape count that disagrees with the ledge count is a
+				// stage failure.
 				bCollisionMatches = Body->AggGeom.ConvexElems.Num() == ExpectedHullCount
 					&& Body->AggGeom.GetElementCount() == ExpectedHullCount;
 				double MassKg = 0.0;
@@ -259,7 +254,7 @@ bool FElysiumModelParitySlotsAndCollisionTest::RunTest(const FString&)
 // Spot-check named in the R1.6 notes: the sentinel unit `SM_models_scenery_structural_warrens_
 // floorblock`, whose one slot has no real material (a `vtmb:missing-material:` sentinel) and so
 // must bind `MI_V2_Missing` -- proving the model and material lanes join correctly, not just that
-// a mesh exists (`docs/architecture/seam_map_model.md` -> "Import" -> "Material binding").
+// a mesh exists.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelParitySentinelUnitTest,
 	"Elysium.Content.ModelParity.SentinelUnit", GElysiumModelParityTestFlags)
 bool FElysiumModelParitySentinelUnitTest::RunTest(const FString&)
@@ -308,8 +303,7 @@ bool FElysiumModelParitySentinelUnitTest::RunTest(const FString&)
 }
 
 // Spot-check named in the R1.6 notes: a multi-LOD unit's dropped/kept LOD rows land as real
-// `FStaticMeshSourceModel` entries, not silently collapsed to one (`docs/architecture/
-// seam_map_model.md` -> "Import" -> "Geometry").
+// `FStaticMeshSourceModel` entries, not silently collapsed to one.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumModelParityMultiLodUnitTest,
 	"Elysium.Content.ModelParity.MultiLodUnit", GElysiumModelParityTestFlags)
 bool FElysiumModelParityMultiLodUnitTest::RunTest(const FString&)

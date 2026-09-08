@@ -39,8 +39,8 @@ ASSET_PREFIX = "vtmb:vdata:"
 
 _GRAMMARS = {"keyvalues", "delimited", "freeform"}
 
-#: Every `anomalies[]` role the decoder is allowed to publish (`seam_map_vdata.md`, "Anomalies and
-#: omissions"), plus the three this decoder needed and named in `specDeviations`.
+#: Every `anomalies[]` role the decoder is allowed to publish, plus the three this decoder needed
+#: and named in `specDeviations`.
 _ANOMALY_ROLES = {
     "repeated-scalar-key",
     "unbalanced-braces",
@@ -119,7 +119,7 @@ def _line_spans(text: str) -> list[tuple[int, int]]:
 
 def _redecode_delimited_rows(text: str) -> list[dict[str, Any]]:
     """An independent re-derivation of the delimited grammar's row classification, written fresh
-    from `seam_map_vdata.md`'s own rule rather than by importing the writer's row builder."""
+    rather than by importing the writer's row builder."""
 
     rows: list[dict[str, Any]] = []
     for index, (start, end) in enumerate(_line_spans(text)):

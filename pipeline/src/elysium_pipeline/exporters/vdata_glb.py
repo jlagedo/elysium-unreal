@@ -1,9 +1,9 @@
 """Isolated one-file/one-GLB vdata product writer.
 
 Every unit is scene-less and declares no accessor: a vdata table names strings, flags and numbers,
-all of which the source wrote as text (`docs/architecture/seam_map_vdata.md`). The BIN chunk it
+all of which the source wrote as text. The BIN chunk it
 does carry is the source capsule alone -- the member's own bytes, so the unit is everything a
-reader needs to reproduce the install file (`seam_map_unit_contract.md`, "Source capsule").
+reader needs to reproduce the install file.
 """
 
 from __future__ import annotations

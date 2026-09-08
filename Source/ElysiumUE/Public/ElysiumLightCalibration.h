@@ -5,16 +5,15 @@
 
 #include "ElysiumLightCalibration.generated.h"
 
-// One map's hand-tuned light overrides (R4.3, `docs/architecture/seam_map_map_lighting.md` ->
-// "Import"): the per-map half of the lighting seam, `UElysiumLightingSettings` being the global
+// One map's hand-tuned light overrides: the per-map half of the lighting seam, `UElysiumLightingSettings` being the global
 // half. A row is a **merge**, not a replacement -- every field below is its own on/off switch plus
 // a value, so a row can move one light's reach without restating its colour, intensity and every
 // other attribute the calibrated baseline already got right. A source absent from `Rows` keeps
 // exactly the value `UElysiumLightRig::ApplyToSource` derives for it; the asset states only what a
 // human decided should differ from that.
 //
-// Keyed by the `.lights` line index (`worldLights[]`'s `sourceOffset` order,
-// `docs/architecture/seam_map_map_lighting.md`), which survives a re-export -- not the rig's live
+// Keyed by the `.lights` line index (`worldLights[]`'s `sourceOffset` order),
+// which survives a re-export -- not the rig's live
 // array position, which drops the skyambient row and any row with no matching baked actor.
 //
 // No producer writes this asset. It ships with zero rows for every map (today's faithful defaults,

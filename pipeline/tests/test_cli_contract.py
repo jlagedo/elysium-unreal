@@ -52,8 +52,8 @@ def test_export_help_retires_wield() -> None:
 
 
 #: Every command `export_v2` registers: one singular and one plural per unit kind, plus the
-#: whole-corpus runner and the corpus index. `seam_map_unit_contract.md` owns the shape; each
-#: seam map names its own. The corpus index has no plural: there is exactly one per export root.
+#: whole-corpus runner and the corpus index. The corpus index has no plural: there is exactly one
+#: per export root.
 EXPORT_V2_COMMANDS = (
     "texture-glb", "textures-glb",
     "surface-property-glb", "surface-properties-glb",
@@ -98,7 +98,7 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
         assert command in result.output, command
 
 
-#: Every command the import family registers; `seam_migration.md` owns which those are. The
+#: Every command the import family registers. The
 #: destination is per lane, not one tree: `vdata` deploys loose bytes to `Content/ElysiumCorpus`,
 #: while `textures` and `surface-properties` author `.uasset` content under `/ElysiumBaked`. The
 #: last two are not corpus families at all but per-map lanes (R4.1, R4.2), which is why they refuse

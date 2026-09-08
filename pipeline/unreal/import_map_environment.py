@@ -4,8 +4,7 @@
 Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import_map_environment.py
 -ImportMapEnvironment=<manifest.json>`). The offline stage (`importers/map_environment.py`, R4.4)
 already read `<map>.env`, `<map>.sky` and `<map>.spawn` and asserted parity against them; this
-script only turns those values into reflected properties and saves them
-(`docs/architecture/seam_map_map.md` -> "Import — environment").
+script only turns those values into reflected properties and saves them.
 
 Nothing is decided here. Every value written below is copied from the manifest row verbatim -- the
 asset is a transport change and nothing else, so a transformation in this file would be a divergence

@@ -1,6 +1,6 @@
 """Identity, number semantics and the reference vocabulary of the map-entities sub-unit.
 
-`docs/architecture/seam_map_map_entities.md` owns the rules; this module is their code. The unit
+The map-entities seam owns the rules; this module is their code. The unit
 is one BSP's ENTITIES lump (lump 0) read as an addressable table, so what lives here is what the
 decoder, the exporter and the validator must all agree on without agreeing on each other: the
 key rule, the stable IDs the entity keyvalues name, C `atof` semantics, and the coordinate
@@ -145,8 +145,8 @@ def output_relative_path(key: str) -> PurePosixPath:
 def _normalized(value: str) -> str:
     """One authored value read as a path: forward slashes, no quotes, blanks or empty segments.
 
-    The case is left exactly as the map authored it, because `seam_map_unit_contract.md`
-    ("References between units") defines a dependency's `sourcePath` as the install-relative path
+    The case is left exactly as the map authored it, because the unit contract's rule on
+    references between units defines a dependency's `sourcePath` as the install-relative path
     the referrer authored, spelling preserved. Only the asset key and the install lookup fold.
     """
 

@@ -1,6 +1,6 @@
 """The `dlgexpr` token classes a column-4/5 cell segments into.
 
-`docs/architecture/seam_map_dialogue.md` "expressions[]" names four token classes the runtime
+The dialogue seam's `expressions[]` names four token classes the runtime
 normalizer (`Source/ElysiumUE/Public/ElysiumDlg.h`, `ElysiumDlgExpr`) recognises: a skill-check
 apply (`<Skill> <threshold>`, implicit `>=`), the condition joiners `&` and `|`, the action
 separator `;`, and a Python-expression segment carried verbatim. This module names the segments

@@ -8,7 +8,7 @@ path, slot list and slot names, the material each slot binds, every skin family,
 are built and at what `ScreenSize`, the collision mode, the Nanite verdict, the physical material
 -- and wrote it to the manifest and one provenance sidecar per unit. This script only executes
 those decisions against the editor, and reads the unit's own GLB for the one thing the manifest
-cannot carry: the geometry (`docs/architecture/seam_map_model.md` -> "Import").
+cannot carry: the geometry.
 
   * per entry, compare the manifest recipe against the stamp the asset carries
     (`bake_lib.RECIPE_TAG`) and touch only what is new, changed or forced;
@@ -1092,9 +1092,8 @@ SKIN_SET_CLASS = "ElysiumPropSkinSet"
 
 
 def author_skin_set(manifest, materials_cache, force=False):
-    """Regenerate `/ElysiumBaked/Meshes/DA_ElysiumPropSkins` -- the corpus skin table
-    (`docs/architecture/seam_map_model.md` -> "Import" -> "Skins table") -- from this run's own
-    manifest, a finalize step over every entry rather than a per-entry one.
+    """Regenerate `/ElysiumBaked/Meshes/DA_ElysiumPropSkins` -- the corpus skin table --
+    from this run's own manifest, a finalize step over every entry rather than a per-entry one.
 
     The diff-against-family-0 fold that turns each entry's full, undiffed `skinFamilies` into the
     table's own short rows is `importers.model_skins.build_skin_table`, pure data with no Unreal

@@ -39,7 +39,7 @@ def build_document(model: DialogueModel) -> tuple[dict, bytes]:
     A dialogue unit is scene-less and text-only: every datum it owns is a row, a cell or a
     tokenized expression, none of which needs an accessor. The BIN chunk it does carry is the
     source capsule alone -- the winning `.dlg` member's own bytes, so the unit is everything a
-    reader needs to reproduce the install file (`seam_map_unit_contract.md`, "Source capsule").
+    reader needs to reproduce the install file.
     An empty `.dlg` capsules to nothing and that unit carries no BIN chunk at all.
     """
 

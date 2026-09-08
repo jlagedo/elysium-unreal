@@ -7,10 +7,10 @@ class UElysiumPhysicalMaterial;
 
 // The engine half of the surface sound table: the baked `UElysiumPhysicalMaterial` behind a
 // surfaceprop name, and its audio fields as the engine-neutral record the substrate resolves a
-// footstep against (`docs/architecture/footstep-architecture.md` §4.2).
+// footstep against.
 //
-// One surface entry is one asset at `/ElysiumBaked/SurfaceProperties/PM_<name>`
-// (`docs/architecture/seam_map_surface_property.md`), and the importer has already flattened the
+// One surface entry is one asset at `/ElysiumBaked/SurfaceProperties/PM_<name>`,
+// and the importer has already flattened the
 // `base` chain into it — so `brick`, which declares no `stepleft` of its own, carries `concrete`'s
 // four alternates by the time it is baked. Resolution is therefore one load, never a chain walk.
 //

@@ -6,18 +6,16 @@
 #include "ElysiumMapTransportSettings.generated.h"
 
 /**
- * The explicit per-map cutover switch (R4.6, `docs/architecture/seam_map_map.md` -> "## Import" ->
- * "The explicit per-map cutover flag (R4.6)"), Project Settings -> Elysium -> Map Transport,
+ * The explicit per-map cutover switch, Project Settings -> Elysium -> Map Transport,
  * tracked at `Config/DefaultElysium.ini`.
  *
- * R4.1/R4.2/R4.4 each gave their own resolver an "asset wins when present" rule, which answered
+ * Earlier resolvers each had their own "asset wins when present" rule, which answered
  * "is this map on the new transport" only by accident of whichever producer last ran. This page is
  * the one tracked, reviewable list that answers it on purpose: a listed map's entity/collision/
  * environment resolvers attempt their baked asset first (falling back to the sidecars if the asset
  * turns out to be missing or unreadable); an unlisted map never attempts the asset at all and keeps
- * running the pre-R4 sidecar path exactly as it always has, whether or not an asset happens to
- * exist for it on disk. R4.3's light-calibration merge is deliberately NOT gated by this list — see
- * `docs/architecture/seam_map_map_lighting.md` -> "## Import" -> "Cutover" for why.
+ * running the legacy sidecar path exactly as it always has, whether or not an asset happens to
+ * exist for it on disk. The light-calibration merge is deliberately NOT gated by this list.
  */
 UCLASS(Config = Elysium, DefaultConfig, meta = (DisplayName = "Map Transport"))
 class ELYSIUMUE_API UElysiumMapTransportSettings : public UDeveloperSettings

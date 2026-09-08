@@ -1,5 +1,4 @@
-// Coverage for `UElysiumMapBakeLibrary` (R5.5, `docs/architecture/seam_map_map.md` ->
-// "## Import -- reflection captures (R5.5)"): the content-free failure paths of the build, count
+// Coverage for `UElysiumMapBakeLibrary`: the content-free failure paths of the build, count
 // and save calls, and (content-gated) the one thing those cannot show -- that every converted
 // map's baked level actually carries a rendered cube per placed capture in its `_BuiltData`
 // registry. A capture that placed but never built is invisible to an actor census (the image

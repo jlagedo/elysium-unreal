@@ -38,6 +38,20 @@ leaf; `bsp.pvs_faces(data, origin)` returns the model-0 faces visible from a poi
 `strings_from_blob`, plus `read_game_lump(data) -> {fourcc: (version, bytes)}`,
 `read_pakfile(data) -> {name: bytes}`, and `read_dispinfos`/`read_dispverts` (displacements).
 
+## Brushes, brush models and collision (recovered 2026-09-07)
+
+`dbrushside_t` in VtMB's BSP is four little-endian int16s, so `planenum` is signed 16-bit;
+`la_hub_1` has 216 of 63,096 brushsides naming a plane >= 32768, a signed-`planenum` int16 overflow.
+
+`DISP_VERTS` per-vertex alpha is a raw `0..255` byte, not normalized.
+
+Player blocking (`blocks_player`) is `contents & 0x1400B` over hull-producing brushes.
+
+Brush model `models[N].origin` is always zero in VtMB's compiled BSPs; placement uses only the
+entity's `origin` keyvalue.
+
+vbsp emits a PHYSCOLLIDE entry for every brush-model entity, not only the classes that need one.
+
 ## Faces (`dface_t`, lump 7)
 
 **VtMB's `dface_t` is 104 bytes** (`DFaceVTMB`; modern Source is 56). Full layout:
@@ -132,5 +146,4 @@ legacy spheremap, dropped); the container they ship in is `docs/vtmb/texture_for
 ## Coordinates
 
 The Source→Unreal transforms live once in `pipeline/src/elysium_pipeline/formats/bsp.py` and are
-described in the repo-root `CLAUDE.md` → "Coordinates are read verbatim" and
-`docs/project/rebuild-strategy.md` → "Coordinate conventions" — not repeated here.
+described in the repo-root `CLAUDE.md` → "Coordinates are read verbatim" — not repeated here.

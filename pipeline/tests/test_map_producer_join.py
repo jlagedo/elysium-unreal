@@ -1,7 +1,6 @@
 """The entities+root join behind `.ents` (R3.1, MP-2.1).
 
-`docs/architecture/seam_map_map.md` -> "Producer join: the entities+root join behind `.ents`"
-states the join the sidecar producer performs and the hull solver it ports verbatim. These tests
+This states the join the sidecar producer performs and the hull solver it ports verbatim. These tests
 pin the two solver halves against synthetic lumps -- the tolerances and the tree walk are the
 contract, and a port that silently changes one of them changes shipped collision -- and pin the
 hull-frame invariant against a real rotating door in the exported corpus.

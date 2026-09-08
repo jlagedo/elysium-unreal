@@ -1,6 +1,6 @@
 """Decode one nav-graph's `.ain`/`.loc` pair into its complete model plus a gapless byte ledger.
 
-`seam_map_nav_graph.md` describes the node stream as a fixed 32 tokens per node, verified against
+The nav-graph seam's specification describes the node stream as a fixed 32 tokens per node, verified against
 `sp_tutorial_1` alone. Walking the full retail corpus (100 `.ain` files) shows the per-node width
 is a per-map constant that is *not* always 32 -- it ranges from 29 to 47 tokens once `NumHulls`
 per-hull floats are accounted for -- while the trailing 2-token `lead` pair and the 25-token link
@@ -30,7 +30,7 @@ from elysium_pipeline.formats.nav_graph_glb.model import (
 from elysium_pipeline.formats.nav_graph_glb.source import NavGraphSourceClosure, bsp_path
 from elysium_pipeline.formats.unit_contract import dependency
 
-#: Tokens per link line: `src`, `dst`, and 23 further fields (`seam_map_nav_graph.md`).
+#: Tokens per link line: `src`, `dst`, and 23 further fields.
 LINK_TOKEN_WIDTH = 25
 
 NODE_LABEL = "Nodes:"
@@ -120,7 +120,7 @@ def _decode_loc(
     loc_text = closure.loc.data
     if not loc_text:
         # An empty member is recorded with its own zero-byte ledger row and an `empty-member`
-        # omission (`seam_map_unit_contract.md`, "Source resolution") rather than being folded
+        # omission rather than being folded
         # into the malformed-stamp anomaly below -- the two departures are distinct and a reader
         # of `omissions[]` should not have to infer "zero bytes" from a `malformed-loc` reason.
         omissions.append(
@@ -155,11 +155,11 @@ def _decode_loc(
             {"field": "stamp", "sourceOffset": 0, "value": stamp.value, "sha256": stamp.sha256}
         )
     else:
-        # The `.loc` companion is named optional (`seam_map_nav_graph.md`), so a companion that
+        # The `.loc` companion is named optional, so a companion that
         # resolved but does not parse as a decimal stamp plus CRLF still publishes the
         # `.ain`-derived unit: the anomaly is recorded and `stamp` carries no parsed value. `raw`
         # is `None`, never the file's own bytes -- a unit never embeds an opaque copy of its
-        # source member (`seam_map_unit_contract.md`, "Unit" and "Byte ledger"); the member's own
+        # source member; the member's own
         # `byteLength`/`sha256` (already published in `sourceResolution`) is what identifies it.
         anomalies.append(
             {
@@ -194,8 +194,8 @@ def _build_dependencies(closure: NavGraphSourceClosure) -> tuple[list[dict[str, 
     """The `map`/`map-entities` dependency rows, plus an anomaly naming either as unresolved.
 
     Both roles resolve against the same `.bsp`, so both warn identically -- a reference whose
-    target is another seam's data and merely fails to resolve warns rather than failing the unit
-    (`seam_map_unit_contract.md`, "References between units"); the anomaly is what makes that
+    target is another seam's data and merely fails to resolve warns rather than failing the unit;
+    the anomaly is what makes that
     warning actually surface through `unit_contract.warnings_for`, which does not itself read
     `dependencies[].resolved`.
     """
@@ -221,8 +221,8 @@ def _build_dependencies(closure: NavGraphSourceClosure) -> tuple[list[dict[str, 
 def _decode_empty_ain(closure: NavGraphSourceClosure) -> NavGraphModel:
     """The `.ain` selecting member resolved but holds zero bytes.
 
-    `seam_map_unit_contract.md`'s "Source resolution": "a unit whose selecting member is empty
-    publishes with a warning" -- there is nothing to tokenize, so every stream publishes empty
+    The unit contract's source-resolution rule is that a unit whose selecting member is empty
+    publishes with a warning -- there is nothing to tokenize, so every stream publishes empty
     rather than the tokenizer raising on an file with no `Version` token.
     """
 
@@ -382,7 +382,7 @@ def decode_nav_graph(closure: NavGraphSourceClosure) -> NavGraphModel:
         residual_tokens: list[lexer.Token] = []
         if remainder:
             # The node region does not divide evenly by NumNodes -- a stray token (or a few)
-            # among the node data. This is exactly the departure `seam_map_nav_graph.md` names
+            # among the node data. This is exactly the departure the nav-graph seam names
             # publishable (a unit recoverable only in part still publishes), so the graph is
             # decoded at the floor width for every node and the leftover tokens are claimed
             # under their own owner rather than aborting the whole unit.
@@ -606,7 +606,7 @@ def decode_nav_graph(closure: NavGraphSourceClosure) -> NavGraphModel:
     mapped.append("wcLookup")
 
     # A short `wcLookup` (`wclookup-count-mismatch`, above) leaves some nodes past the end of the
-    # declared table; `seam_map_nav_graph.md` gives `wcId: 0` the distinct meaning "no entity
+    # declared table; the nav-graph seam gives `wcId: 0` the distinct meaning "no entity
     # carries the id", so a node the table never reached publishes no fabricated value at all
     # (`None`, not `0`) rather than the exporter inventing one. `Node` is frozen, so the id is
     # applied by rebuilding the record, never by mutating a published instance in place.

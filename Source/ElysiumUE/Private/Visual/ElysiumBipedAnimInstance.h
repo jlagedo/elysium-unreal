@@ -24,7 +24,7 @@ struct FElysiumResolvedAnimation;
 // **It decides nothing.** `FElysiumAnimationDriver` has already classified, translated, picked and
 // resolved by the time anything here runs; this projects that record onto the properties the graph
 // reads and asks the graph for one blend. That is step 6 of
-// `docs/architecture/animation-architecture.md` section 3.3 — "publish graph parameters, it does not
+// — "publish graph parameters, it does not
 // repeat selection" — made structural rather than remembered.
 //
 // The graph asset is a TEMPLATE Animation Blueprint: it carries no target skeleton and no asset
@@ -463,7 +463,7 @@ public:
 	// generated property copy. Published because the debug surface reads what the graph was given.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	FName RequestedUpperBodyMaskName;
-	// Retail's per-layer caller weight has no recovered value (`docs/project/animation-roadmap.md`):
+	// Retail's per-layer caller weight has no recovered value:
 	// 1.0 is the named stand-in whenever `PublishSelection` hands over a layer, and
 	// `SetUpperBodyLayerWeight`/`SetAdditiveLayerWeight` below are the seam a caller ramps instead.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")

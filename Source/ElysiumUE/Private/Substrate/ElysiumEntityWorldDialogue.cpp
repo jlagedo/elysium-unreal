@@ -795,8 +795,8 @@ void FElysiumEntityWorld::SelectDialogueCamera(bool bLineBoundary)
 	//   * an authored profile (`DA_ElysiumDialogueCameraSet`) — the profile REPLACES the shot, so it
 	//     carries the flag from the NPC's own `default_camera` source shot, which is the authored
 	//     intent for this conversation;
-	//   * no source shot at all — MODERNIZATION (`docs/architecture/camera-architecture.md`,
-	//     2026-09-07): default the flag SET, because 51 of the 66 shipped shot files set it and a
+	//   * no source shot at all — MODERNIZATION (2026-09-07): default the flag SET, because 51 of
+	//     the 66 shipped shot files set it and a
 	//     conversation with no authored shot is the case retail never had. Clearing it instead would
 	//     leave the majority of ported conversations aiming at the player's eye while the camera
 	//     looks from somewhere else, which is the divergence that reads as a wandering gaze.

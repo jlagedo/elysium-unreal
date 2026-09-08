@@ -9,7 +9,7 @@
 // carry a run across a load (`Public/ElysiumRng.h`).
 //
 // The recovered algorithm — the roll struct's field map, the exploding-10 loop, the two 250 caps,
-// the tiering and the health penalty — is canonical in `docs/recovered/dice-system.md` and is
+// the tiering and the health penalty — is canonical and is
 // implemented here verbatim. The die's face distribution is NOT `rand()%10`: it is a 100-entry
 // lookup the caller supplies as `FElysiumDiceTable` (`Substrate/ElysiumDiceTables.h`), loaded from
 // `vdata/system/dicerolls.txt`.

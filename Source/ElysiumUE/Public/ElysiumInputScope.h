@@ -5,7 +5,7 @@
 class SWidget;
 struct FElysiumUserCmd;
 
-// S6 — the input scope stack (`docs/architecture/runtime-architecture.md` §8.1). Plain C++, no UObject
+// S6 — the input scope stack. Plain C++, no UObject
 // reflection: the stack and its arbitration are the whole rule set, so they are asserted with no
 // game instance, no world, no local player and no RHI — `Elysium.Substrate.InputScopes`.
 // `UElysiumInputSubsystem` owns one of these and is the only thing that writes the engine's input
@@ -237,7 +237,7 @@ namespace ElysiumInput
 	// mouse away from the world entirely — a menu, a conversation, chargen — revokes any ImGui
 	// capture that was already up when it opened. Cog's capture is a Slate-layer catcher widget, so
 	// an inherited one swallows the click before Slate reaches the screen underneath and the screen
-	// is simply dead (`docs/architecture/ui-architecture.md` §1); no input mode can arbitrate that, only revocation.
+	// is simply dead; no input mode can arbitrate that, only revocation.
 	//
 	// Deliberately *at push time only*. Pressing F1 afterwards is a developer asking for the debug UI
 	// over that screen and gets it — which is the front end's whole workflow, since a menu is up

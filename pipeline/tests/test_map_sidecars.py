@@ -122,7 +122,8 @@ def test_split_output_delay_atof_reads_the_longest_numeric_prefix():
 def test_source_position_inverts_the_transform_in_binary32():
     # 1.5 Source inches -- the half-thickness of sm_pawnshop_1's `havenrm` door panel -- does not
     # come back bit-exactly in binary64, and does in binary32. Solving hulls on the binary64 value
-    # changes vertex sets (`seam_map_map.md`).
+    # changes vertex sets.
+
     gltf = (1.5 * 0.0254, 3.0 * 0.0254, -6.0 * 0.0254)
     assert gltf[0] / 0.0254 != 1.5
 
@@ -146,7 +147,7 @@ def test_is_output_key_datamap_typing_promotes_and_demotes():
     # R3.4: opting in swaps the shape test for the class's datamap. `game_ui`'s `PlayerOn` is
     # declared under a name the shape test misses (promoted); `trigger_player_activity_level`'s
     # `OnTrigger` is shape-matched but the datamap does not declare it (demoted) -- the shipped
-    # example `seam_map_map_entities.md` -> "Outputs" names on `sm_diner_1`.
+    # example is on `sm_diner_1`.
     typed = EntityDivergences(datamap_output_typing=True)
     assert is_output_key("game_ui", "PlayerOn", typed) is True
     assert is_output_key("trigger_player_activity_level", "OnTrigger", typed) is False
@@ -203,7 +204,7 @@ def test_entity_lump_text_reproduces_the_embedded_quote_the_legacy_regex_trips_o
     ]
 
 
-# --- R6.4: brush fade distances (`seam_map_map.md` -> "Brush fade distances") ------------------
+# --- R6.4: brush fade distances ------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(

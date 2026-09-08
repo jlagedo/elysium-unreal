@@ -14,12 +14,12 @@ class UElysiumLightRig;
 // toggle, a per-source list (type / colour / raw magnitude / reach / lightstyle), and per-light
 // identification by clicking a marker in the world. Subsumes the Canvas HUD's lights readout.
 //
-// R4.3 (`docs/architecture/seam_map_map_lighting.md` -> "Import") retired every tuning affordance
+// R4.3 retired every tuning affordance
 // this window used to carry -- global calibration sliders, the sky-light/height-fog panel and
 // skylight-leaking A/B, the per-light editor and gizmo, batch enable/disable, and the JSON survey's
 // Save/Load -- in favour of `UElysiumLightingSettings` (Project Settings -> Elysium -> Lighting) and
 // the per-map `UElysiumLightCalibration` data asset, both edited the ordinary Unreal way ("the
-// Unreal editor is the tuning surface", `docs/project/seam_migration.md`). What is left is exactly
+// Unreal editor is the tuning surface"). What is left is exactly
 // what a human still needs Cog for: seeing which light in the world a `.lights` row is.
 //
 // Lights carry no collision, so the world pick here is its own thing rather than ElysiumPick — it

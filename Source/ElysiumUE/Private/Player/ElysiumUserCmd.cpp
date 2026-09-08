@@ -209,7 +209,7 @@ FElysiumUserCmd FElysiumUserCmdBuilder::Build(float DeltaSeconds)
 	//
 	// At the shipped tuning this is the identity — `look_curve` is 0, the gain is exactly 1.0, and
 	// VtMB's `sensitivity` x `m_yaw` path is unchanged. A non-zero `look_curve` is a **stated Feel
-	// divergence** (`docs/architecture/input-architecture.md` § Feel): VtMB's mouse path carries no
+	// divergence**: VtMB's mouse path carries no
 	// acceleration and no filter, and no `CInput::MouseMove` decompile exists to recover one from.
 	Cmd.LookDelta += ElysiumInput::ShapeMouseLook(LookAccum, LookTuning, DeltaSeconds);
 

@@ -5,8 +5,7 @@
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 
-// The runtime's one material shape on a converted map (R6.5, docs/architecture/seam_map_material.md
-// -> "Ropes on `MI_`, and the factory shape"): a dynamic child of the `MI_` the material lane
+// The runtime's one material shape on a converted map: a dynamic child of the `MI_` the material lane
 // imported for a `vtmb:material:` unit. It builds nothing — no master selection, no texture load,
 // no feature switch: every VMT-derived value is the instance's own, wetness arrives through the
 // `MPC_ElysiumEnvironment` write and scene fog through custom primitive data. The MID exists so

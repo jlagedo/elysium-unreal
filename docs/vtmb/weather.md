@@ -5,21 +5,18 @@ precipitation, the world has a global wetness channel the level scripts drive, a
 outdoor maps carry a lightning rig. None of it is Source's weather: Troika removed Valve's
 precipitation entity and built their own particle system inside a forked `engine.dll`.
 
-This doc holds the engine-neutral facts and the Unreal plan. Status and next work live in
-`docs/project/roadmap.md` — task **7.9** (the runtime), **PL12** (mirror the particle definitions),
-**RE23** (close the format and the wetness semantics).
+This doc holds the engine-neutral facts and the Unreal plan.
 
 Related: `docs/vtmb/sky-ambience.md` (the 3D skybox miniature the rain draws inside), `docs/vtmb/entity_io.md`
-(the I/O bus `FadeGlobalWetness` arrives on), `docs/vtmb/audio_pipeline.md` (the SoundScheme layer),
-`docs/architecture/rendering-perf.md` (the translucency budget this has to fit).
+(the I/O bus `FadeGlobalWetness` arrives on), `docs/vtmb/audio_pipeline.md` (the SoundScheme layer).
 
 ## Confidence
 
 The **entity inventory**, **patch-first particle closure**, **material proxy shape**, and
 `sm_hub_1` timer graph are verified from the user's current merged install and the generated
 intermediates. The **particle-definition grammar and its runtime semantics** are decoded from
-`engine.dll`'s `CParticleManager` (2026-09-02; `docs/vtmb/effects.md` §2.4 owns the facts,
-`docs/architecture/seam_map_particle.md` → "Semantics" the unit rules): lifetime, ramps,
+`engine.dll`'s `CParticleManager` (2026-09-02; `docs/vtmb/effects.md` §2.4 owns the facts
+and the unit rules): lifetime, ramps,
 emission, motion, size, the blend and `mask`, collision and the precipitation gate are
 VERIFIED. `attach_type=11` is the dumped enum's `PlayerSky`. Wetness time units and
 `ambient_generic` rain fades remain retail-validation hypotheses.
@@ -352,8 +349,7 @@ and `vdecal_first` / `vdecal_last` / `vdecal_angle_spread`. The trace runs again
   `particles_enable_precipitation` is off — an authored quality setting. The other half is
   geometry: **a `precipitation "1"` particle dies the moment its BSP leaf lacks the
   sky-visible bit** (`engine.dll 0x200d3f10`), so rain stops under cover regardless of the
-  pairs. Reproducing that gate needs the visibility unit's leaf sky bit — this plan's named
-  follow-up (`effects-architecture.md` §5.11).
+  pairs. Reproducing that gate needs the visibility unit's leaf sky bit — a named follow-up.
 - **Only `raindrops2` collides in the resolved follow closure.** Its 1,000 drops/s spawn
   `rainsplash_new` and lay `rainstain`; `rainfog` has no collision relation.
 
@@ -361,9 +357,8 @@ For `sm_hub_1`, the resolved Unreal-space contract is **1.5 × 76 cm** motion-al
 (`DropletFast` 5 × 25, `size 3`, `height 10` through the aspect formula — not the 7.62 × 25.4
 the size key alone suggested) at `(50.8, 50.8 up, -1016…-1524)` cm/s in the emitter basis,
 63.5 cm maximum authored impact rings, 5.08–10.16 cm stains, and 1,270 cm fog sprites. On
-the V2 lane every live field in this closure is a staged tree field
-(`seam_map_map.md` → "Import — effects (R7.3)"); the legacy compiler still fails an
-unsupported field rather than ignoring it.
+the V2 lane every live field in this closure is a staged tree field; the legacy compiler still
+fails an unsupported field rather than ignoring it.
 
 ## What we do not know
 

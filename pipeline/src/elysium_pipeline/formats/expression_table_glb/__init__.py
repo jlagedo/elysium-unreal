@@ -1,4 +1,4 @@
-"""The isolated Expression-table GLB seam: `docs/architecture/seam_map_expression_table.md`.
+"""The isolated Expression-table GLB seam.
 
 One unit is one Faceposer expression or phoneme table selected by its stem below
 `expressions/`: the compiled `.vfe` the runtime loads and, where it ships, the readable `.txt`

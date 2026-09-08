@@ -1,7 +1,8 @@
 // Item entities, the keyring, combat-character inventories, and loot containers.
 //
-// The contract is `docs/vtmb/inventory.md` §§2-6 and the design is
-// `docs/architecture/gameplay-systems-architecture.md` §5.2. Player drop (which PRESERVES a world
+// The contract is `docs/vtmb/inventory.md` §§2-6.
+//
+// Player drop (which PRESERVES a world
 // entity) and priced Buy/Sell remain separate operations: `ScriptRemove` must never become the
 // shared "delete item" shortcut a drop or transfer path reuses.
 

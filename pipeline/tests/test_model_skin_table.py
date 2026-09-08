@@ -1,7 +1,6 @@
 """Contract tests for `importers.models.build_skin_table` (R1.5): the diff-against-family-0 fold
 that turns a staged `manifest.json`'s per-unit `skinFamilies`/`familyCount` into
-`/ElysiumBaked/Meshes/DA_ElysiumPropSkins`'s own rows
-(`docs/architecture/seam_map_model.md` -> "Import" -> "Skins table").
+`/ElysiumBaked/Meshes/DA_ElysiumPropSkins`'s own rows.
 
 The fixtures are manifest `assets[]` entries in the exact shape `stage_unit` writes -- `stem`,
 `familyCount`, and `skinFamilies` as `[{"family": n, "slots": [...], "materials": [...]}]`,

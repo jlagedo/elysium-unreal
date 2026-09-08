@@ -171,8 +171,8 @@ struct FElysiumCameraShotDef
 	// look-derived angle, one without keeps the entity's abs angles.
 	int32 TargetPointCount = 0;
 
-	// **Retail's order-of-presence flag bug, reproduced (§4 row 1 of `camera_scripted.md`,
-	// `retail-defects.md` §7).** The parser raises `flags |= 1 << (count + 2); count++` per sub-block
+	// **Retail's order-of-presence flag bug, reproduced (`docs/vtmb/retail-defects.md` §7).**
+	// The parser raises `flags |= 1 << (count + 2); count++` per sub-block
 	// found, so the bit follows the ORDER the blocks appear in while the data goes into the fixed
 	// slot above. A file that authors `Point2` without `Point1` writes anchor 3 but raises the
 	// `Point1` bit, and the look-at (`FUN_1006f670`) then reads the empty slot 2 — the shot aims at

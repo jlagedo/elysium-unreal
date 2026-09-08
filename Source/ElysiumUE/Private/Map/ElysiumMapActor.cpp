@@ -71,7 +71,7 @@ namespace
 	}
 }
 
-// The pre-move tick function (`docs/architecture/runtime-architecture.md` §3, steps 2-3).
+// The pre-move tick function.
 
 void FElysiumPreMoveTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
 	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -97,7 +97,7 @@ FName FElysiumPreMoveTickFunction::DiagnosticContext(bool bDetailed)
 	return FName(TEXT("ElysiumMapActorPreMove"));
 }
 
-// The gameplay tick function (`docs/architecture/runtime-architecture.md` §3, steps 5-6).
+// The gameplay tick function.
 
 void FElysiumGameplayTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
 	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -123,7 +123,7 @@ FName FElysiumGameplayTickFunction::DiagnosticContext(bool bDetailed)
 	return FName(TEXT("ElysiumMapActorGameplay"));
 }
 
-// The post-move tick function (`docs/architecture/runtime-architecture.md` §3, step 8).
+// The post-move tick function.
 
 void FElysiumPostMoveTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
 	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -2419,7 +2419,7 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	// The frame's animation selection, taken from the body sample the mover published at its
 	// tick tail. It belongs in this pass for the reason the three above do: the sample is settled only
 	// after the last stepper substep, and a selection read before that is a selection made from a
-	// half-integrated frame (`docs/architecture/animation-architecture.md` section 3.2).
+	// half-integrated frame.
 	TickPlayerAnimation(DeltaSeconds);
 
 	// The tail of a released frame: a dev step spends one here, and the last one re-holds the world.

@@ -7,7 +7,7 @@
 class UMaterialInterface;
 
 /**
- * One `env_sprite` billboard (R6.1, `docs/architecture/seam_map_map.md` -> "Sprites (R6.1)").
+ * One `env_sprite` billboard.
  *
  * The bake writes every field: the imported `MI_`'s per-blend child, the size in Source units
  * (`scale x texture`), `rendercolor`/`renderamt`, the entity's `rendermode` and `renderfx`, and

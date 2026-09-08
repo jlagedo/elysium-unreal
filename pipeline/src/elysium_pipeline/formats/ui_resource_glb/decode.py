@@ -1,6 +1,6 @@
 """Decode one ui-resource unit: the `keyvalues`-grammar categories.
 
-`seam_map_ui_resource.md` names seven grammars; the four line/row grammars (`tab-rows`,
+The ui-resource seam names seven grammars; the four line/row grammars (`tab-rows`,
 `titles`, `settings-scr`, `line-list`, `won-lists`, `key-value-lines`) are decoded by
 `grammars.py`. This module owns the `keyvalues` grammar, which every `.res` scheme and layout,
 the VGUI1 dialog scripts, the HUD sprite tables, the launcher/game substitution scripts, the
@@ -182,7 +182,7 @@ def _scan_material_and_token_references(
 ) -> list[dict[str, Any]]:
     """Every `material`/`image`/`file` key and every `#GameUI_*` token value in the whole tree.
 
-    `seam_map_ui_resource.md`'s "Dependencies" table states both rules with no category
+    The seam's "Dependencies" table states both rules with no category
     qualifier, so this scan runs once over the whole tree rather than once per typed projection.
     """
 
@@ -259,8 +259,8 @@ def _font_flags(fields: dict[str, Any]) -> int:
 
 def _font_join_key(fields: dict[str, Any]) -> str:
     """The face/size/weight/flags join key a scheme `Fonts` tier states
-    (`seam_map_ui_resource.md`, "Dependencies": "joined to a `vtmb:font:` unit by face, size,
-    weight and flags"), in the tier's own spelling."""
+    ("joined to a `vtmb:font:` unit by face, size, weight and flags"), in the tier's own
+    spelling."""
 
     face = str(fields.get("name") or "").strip().lower()
     tall = str(fields.get("tall") or "").strip()
@@ -338,7 +338,7 @@ def _project_scheme(
             join_key = _font_join_key(fields)
             stem = _font_stem(fields)
             if stem is None:
-                # `seam_map_unit_contract.md`, "References between units": a reference the
+                # Per the unit contract's "References between units" rule, a reference the
                 # referenced kind's own rules make unreachable keeps a `vtmb:missing-<kind>:`
                 # identity, produces no `dependencies` row and enters coverage as
                 # `omitted-proven` with the seam's reason.
@@ -486,8 +486,8 @@ def _project_menu_scene(
             asset = _ref_asset_id("texture", path)
             resolved = bool(resolve_texture(path)) if resolve_texture else False
             skybox_faces.append({"face": face, "path": path, "asset": asset, "resolved": resolved})
-            # `dependencies[].sourcePath` is the install-relative path the reference resolves to
-            # (seam_map_unit_contract.md, "References between units"), not the bare join key `path`
+            # `dependencies[].sourcePath` is the install-relative path the reference resolves to,
+            # not the bare join key `path`
             # already carries in `skyboxFaces[].path`/`asset` -- the skybox face convention names a
             # `.vmt` under `materials/`.
             dependencies.append(dependency("texture", asset, f"materials/{path}.vmt", resolved))
@@ -608,8 +608,8 @@ def _dedupe_dependencies(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     A reference scanned once per occurrence in the source (a repeated `#GameUI_*` token, a HUD
     sprite's `file` key that is also picked up by the whole-tree material/token scan) would
-    otherwise publish the same dependency many times over, which `seam_map_unit_contract.md`'s
-    "Every reference the unit makes is declared once in `dependencies`" forbids.
+    otherwise publish the same dependency many times over, which the unit contract's
+    "Every reference the unit makes is declared once in `dependencies`" rule forbids.
     """
 
     seen: dict[tuple[str, str, str], dict[str, Any]] = {}

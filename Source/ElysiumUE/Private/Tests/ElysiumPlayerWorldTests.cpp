@@ -1355,7 +1355,7 @@ bool FElysiumNpcStandingGroundTest::RunTest(const FString&)
 	TestTrue(TEXT("...standing still"), Sample.Speed2D() <= UE_KINDA_SMALL_NUMBER);
 
 	// The sleep policy is the thing this fix must not trade away: an idle body still does not tick
-	// movement or own a crowd agent (`docs/architecture/map-architecture.md`).
+	// movement or own a crowd agent.
 	TestFalse(TEXT("a standing body still does not wake CharacterMovement"), Movement->IsActive());
 
 	// The payoff, through the pure rules the cast actually poses from: the latch stays grounded and

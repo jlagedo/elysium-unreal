@@ -7,8 +7,7 @@
 class UElysiumSpriteComponent;
 
 /**
- * One `env_sprite` in the baked level (R6.1, `docs/architecture/seam_map_map.md` -> "Sprites
- * (R6.1)"): a plain actor whose root is the billboard component. The bake (`bake_map_v2.
+ * One `env_sprite` in the baked level: a plain actor whose root is the billboard component. The bake (`bake_map_v2.
  * _place_sprites`) writes the component's every value, the `CSprite::Spawn` hidden state, the
  * `elysium.sprite` / `elysium.ent=<index>` tags and `EntityIndex`; the runtime buckets it once
  * (`UElysiumMapVisuals::AdoptBakedLevel`) and the entity's inputs reach it through

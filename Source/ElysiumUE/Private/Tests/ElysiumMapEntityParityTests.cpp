@@ -1,5 +1,4 @@
-// Content-tier parity for the R4.1 entity transport (`docs/architecture/seam_map_map_entities.md`
-// -> "Import"): the baked `UElysiumMapEntities` and the `<map>.ents` document it replaces must
+// Content-tier parity for the entity transport: the baked `UElysiumMapEntities` and the `<map>.ents` document it replaces must
 // produce the same `FElysiumEntityDef` array, through their own deserializers.
 //
 // This is the parity that matters, and it is deliberately not the stage's. The stage compares rows

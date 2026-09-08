@@ -3,7 +3,7 @@
 `lexer.parse_records` supplies the one grammar rule the format has; this module supplies the
 meaning -- which keyword opens which kind of record, which per-type fields a `speak` or
 `expression` event carries beside its two raw payload strings, and the sound / expression-table
-references a scene makes. The unit is scene-less (`docs/architecture/seam_map_scene.md`): there
+references a scene makes. The unit is scene-less: there
 is no node, no skeleton, no sampled channel, so nothing here ever touches core glTF.
 """
 

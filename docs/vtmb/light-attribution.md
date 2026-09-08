@@ -2,12 +2,12 @@
 
 The per-map light set was curated **by hand** in the Lights Cog window — VtMB's lights are authored like a painting, for the baked result rather than as
 physical fixtures, so no automatic rule ships. The classifier below is a candidate-ranker/advisor
-for that hand pass. Per-task status: `docs/project/roadmap.md`.
+for that hand pass.
 
 **2026-09-01 (R4.3):** the Lights Cog window's editing surface described below — the per-light
 Enabled/override grid, batch on/off, and the JSON survey's Save/Load
 (`UElysiumLightRig::LoadSurvey`, `$ELYSIUM_EXPORT_ROOT/_lights/<map>.json`) — was deleted; the
-window is now a read-only viewer (`docs/architecture/seam_map_map_lighting.md` -> "Import"). A
+window is now a read-only viewer. A
 per-map hand pass now edits the map's `UElysiumLightCalibration` data asset directly in the
 Content Browser, keyed the same way (the `.lights` line / `SourceIndex`) the JSON survey's `index`
 used. No survey file existed on disk to migrate, and the classifier's own output
@@ -247,7 +247,7 @@ the rule largely abstains there.
 
 **The unresolved disagreement is `sm_hub_1`.** Its hand survey retains many non-emissive lights
 that the classifier ranks as fill. The map's authored sky term is documented in
-`docs/vtmb/sky-ambience.md`; the classifier question and next work remain in `docs/project/roadmap.md`.
+`docs/vtmb/sky-ambience.md`; the classifier question remains open.
 
 **No classifier-driven change to the light rig is justified yet.** Hand-authored curation is
 decided and running; an *automatic*

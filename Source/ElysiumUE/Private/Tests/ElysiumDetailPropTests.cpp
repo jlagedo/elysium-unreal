@@ -1,4 +1,4 @@
-// R6.3 -- detail props (`docs/architecture/seam_map_map.md` -> "Detail props (R6.3)"). The bake
+// Detail props. The bake
 // instances the lump; the runtime's whole share is the two settings pages the bake reads, the tag
 // contract it buckets by, and the actor shape it adopts. Each is pinned here, content-free.
 #include "Misc/AutomationTest.h"

@@ -1,6 +1,6 @@
 // `Elysium.Content.TerminalCamera` — the Play-tier terminal witness, run headless.
 //
-// `docs/project/camera_scripted.md` §9 rows this beat as **M8** (the terminal on the shared adoption
+// This beat is **M8** (the terminal on the shared adoption
 // slot with retail's destroy rule) plus `special-case.txt`'s `Hacking` (`ShowHud 1`,
 // `DrawViewmodel 0`) and `Intrusion` (`ShowHud 1`, `DrawViewmodel 1`) driving SC5's HUD edge and the
 // **speed-gated** viewmodel — "the hands appear only after the dolly parks" — with both blocks on

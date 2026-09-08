@@ -215,7 +215,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	}
 
 	// The spawn pass is finished, so this is what a rebuild of this map produces: record it
-	// as the omission baseline a freeze diffs against (`docs/architecture/save-architecture.md` §4).
+	// as the omission baseline a freeze diffs against.
 	Baseline.Reset();
 	Baseline.SetNum(EntityList.Num());
 	for (int32 i = 0; i < EntityList.Num(); ++i)
@@ -2394,7 +2394,7 @@ void FElysiumEntityWorld::Teardown()
 			PlayerEnt->Dehydrate(GameState->PlayerRecord());
 
 			// And the map itself is frozen into the session, beside the record, by the same
-			// call a save uses (`docs/architecture/save-architecture.md` §5). Gated on there having been a player: a
+			// call a save uses. Gated on there having been a player: a
 			// menu backdrop and a headless logic world run the substrate in full but are not part of
 			// anyone's run, so they must not join the visited-map set.
 			if (!bDetached && !Defs.MapName.IsEmpty())

@@ -7,8 +7,7 @@
 // The Discipline runtime: selection, the shared cast authority, the two execution families
 // and the one teardown.
 //
-// `docs/vtmb/disciplines.md` owns the behaviour, `docs/architecture/gameplay-systems-architecture.md`
-// §5.6 owns the decomposition. This is a plain-C++ domain service beside `ElysiumDamage` and
+// `docs/vtmb/disciplines.md` owns the behaviour. This is a plain-C++ domain service beside `ElysiumDamage` and
 // `ElysiumSheetMath`: it reaches the engine only through `FElysiumWorldServices`, adds no clock and
 // no scheduler, and every timed step is an owned event on the one queue.
 //

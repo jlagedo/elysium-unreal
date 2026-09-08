@@ -1,8 +1,7 @@
 // D7 — M-SAVE: no save inside a conversation, no exceptions.
 //
-// Retail allows saving mid-dialogue; the port refuses every entry while a `DialogueSession` is set
-// (`docs/architecture/save-architecture.md`, `docs/project/plans/dialogue.md` M-SAVE). The refusal
-// has exactly one gate, and every entry reaches it:
+// Retail allows saving mid-dialogue; the port refuses every entry while a `DialogueSession` is set.
+// The refusal has exactly one gate, and every entry reaches it:
 //
 //   * pause-menu Save        — `UElysiumMainMenu::Execute` -> `UElysiumGameFlowSubsystem::SaveGame`
 //   * quick-save key / console — the `save` command binding -> `SaveGame(Quick|Manual)`

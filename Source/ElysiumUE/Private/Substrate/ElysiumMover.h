@@ -231,8 +231,8 @@ public:
 	virtual void Spawn() override;
 	virtual void Think() override;
 
-	// The door's derived state is exactly the case `docs/architecture/save-architecture.md` §4 carves out for a
-	// leaf hook: `m_toggle_state` and the lock are neither keyvalues nor registered fields, and a
+	// The door's derived state is exactly the case that carves out a leaf hook: `m_toggle_state`
+	// and the lock are neither keyvalues nor registered fields, and a
 	// rebuild from the def cannot re-derive them (it would put every door back at its spawn pose).
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 

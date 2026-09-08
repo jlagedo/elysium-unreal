@@ -1,6 +1,6 @@
 """Isolated lossless sound-scheme GLB format aggregation.
 
-One unit is one `sound/schemes/*.txt` KeyValues file (`docs/architecture/seam_map_sound_scheme.md`).
+One unit is one `sound/schemes/*.txt` KeyValues file.
 Identity, source resolution, the container and the kind-independent half of validation are
 `elysium_pipeline.formats.unit_contract`'s; this package states only what is specific to the kind.
 """

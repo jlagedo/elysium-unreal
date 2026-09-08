@@ -4,10 +4,10 @@
 #include "GameFramework/SaveGame.h"
 #include "ElysiumSaveGame.generated.h"
 
-// The container (`docs/architecture/save-architecture.md` §2). `USaveGame` buys slot management, platform-safe
+// The container. `USaveGame` buys slot management, platform-safe
 // paths and `UGameplayStatics::AsyncSaveGameToSlot` **without owning the content**: the payload is
 // our own versioned, compressed block stream, written by `FElysiumSaveArchive`, because none of the
-// game state is UPROPERTY-reflected and none of it should become so (`docs/architecture/engine-core.md`).
+// game state is UPROPERTY-reflected and none of it should become so.
 //
 // The header fields are reflected and sit **ahead of the payload**, uncompressed, so the load menu
 // can list slots by reading them without inflating anything — the reason `userName`, `comment` and

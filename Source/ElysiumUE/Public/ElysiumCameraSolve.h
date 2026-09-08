@@ -135,8 +135,8 @@ namespace ElysiumCam
 	float SolveViewRoll(const FVector& VelocityCm, const FRotator& ViewRot,
 		float RollAngleDeg, float RollSpeedCm);
 
-	// The water clearance — `CViewRender::GetWaterOffset`, driven by `cl_waterdist` 4
-	// (`docs/architecture/water-architecture.md` §7). VtMB walks the view origin in one-unit Z
+	// The water clearance — `CViewRender::GetWaterOffset`, driven by `cl_waterdist` 4.
+	// VtMB walks the view origin in one-unit Z
 	// steps against `MASK_WATER` whenever the body's water level is above 1, and the two directions
 	// are opposite: **treading** (level 2) raises the view until it is clear of the plane, so the
 	// camera stays dry, while **submerged** (level 3) lowers it until it is back under, so the
@@ -248,8 +248,7 @@ struct FElysiumShotPresentation
 	// the anim event.
 	bool bDrawPlayerBody = false;
 
-	// **Named Presentation modernization** (`docs/architecture/computer-terminal-architecture.md`
-	// §6.4). Nothing in `vdata/camerashots/` authors an exposure key -- retail's renderer has no
+	// **Named Presentation modernization.** Nothing in `vdata/camerashots/` authors an exposure key -- retail's renderer has no
 	// eye adaptation to fight -- so this is never parsed. It is the pusher's ask, carried for the
 	// handle's lifetime: a terminal shot fills the frame with one bright emissive panel and UE's
 	// auto-exposure would otherwise ramp the whole image down around it.

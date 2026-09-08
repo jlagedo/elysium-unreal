@@ -2,8 +2,8 @@
 
 An image is a raw `.tga` or `.bmp` install member -- particle sprites, loose art below
 `materials/`, `screenshots/`, and the Faceposer icons below `gfx/hlfaceposer/` -- as distinct
-from a VTF-wrapped texture (`formats/texture_glb`). `docs/architecture/seam_map_image.md` owns
-the format; `docs/architecture/seam_map_unit_contract.md` owns the shared unit rules this package
+from a VTF-wrapped texture (`formats/texture_glb`). The image seam owns
+the format; the unit contract owns the shared unit rules this package
 builds on through `formats/unit_contract`.
 """
 

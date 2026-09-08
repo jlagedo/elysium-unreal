@@ -2,7 +2,7 @@
 
 `uv run elysium import surface-properties` lands every
 `$ELYSIUM_EXPORT_V2_ROOT/surface-properties/*.glb` as one `UElysiumPhysicalMaterial` below
-`/ElysiumBaked/SurfaceProperties` (`docs/architecture/seam_map_surface_property.md` → "Import").
+`/ElysiumBaked/SurfaceProperties`.
 This module is the offline half of that lane.
 
 **Phase 1 — stage.** For each unit: hash the GLB, read the `ELYSIUM_vtmb_surface_property`

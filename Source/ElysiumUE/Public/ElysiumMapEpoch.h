@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Delegates/Delegate.h"
 
-// The map epoch as a value (`docs/architecture/runtime-architecture.md`). One epoch spans one AElysiumMapActor's
+// The map epoch as a value. One epoch spans one AElysiumMapActor's
 // life: minted when the actor enters play, retired when it leaves. Anything an application-lifetime
 // object holds ON BEHALF OF a map is keyed by it, so the boundary that frees it is a broadcast
 // rather than a hand-maintained list of collaborators.
@@ -41,8 +41,8 @@ private:
 	uint64 NextEpoch = 1;
 };
 
-// Broadcast by UElysiumMapSubsystem, which map-architecture.md names as the only owner of map
-// lifecycle. Subscribers bind in their own Initialize and unbind in Deinitialize; ordering between
+// Broadcast by UElysiumMapSubsystem, the only owner of map lifecycle. Subscribers bind in their
+// own Initialize and unbind in Deinitialize; ordering between
 // them is deliberately undefined, because nothing retired at this boundary depends on anything else
 // retired at it.
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumMapEpochBegin, uint64);

@@ -183,7 +183,7 @@ private:
 	float Interval() const
 	{
 		// S8 — an owned, seeded stream, not FMath: the interval is game-visible time, so a load has to
-		// reproduce the sequence the save was in the middle of (`docs/architecture/save-architecture.md` §8).
+		// reproduce the sequence the save was in the middle of.
 		return bUseRandomTime
 			? ElysiumRng::Stream(EElysiumRngStream::LogicTimer).FRandRange(LowerRandomBound, UpperRandomBound)
 			: RefireTime;

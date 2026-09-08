@@ -4,11 +4,10 @@ This document owns the recovered behavior of VtMB's inventory system: carried-it
 item identity, stacking, equipment, ammunition, pickup and drop, the keyring, loot containers,
 barter transfers, inventory predicates, and persistence. The map-specific worked example is
 `docs/vtmb/sp_tutorial_1-event-surface.md`; the Python binding inventory and current remake
-backing are in `docs/vtmb/script_api.md`; implementation status remains in
-`docs/project/roadmap.md`.
+backing are in `docs/vtmb/script_api.md`.
 
-This is a behavior specification, not an implementation description. The inventory runtime in
-roadmap 9.8 remains unimplemented.
+This is a behavior specification, not an implementation description. The inventory runtime
+remains unimplemented.
 
 ## 1. Evidence boundary
 

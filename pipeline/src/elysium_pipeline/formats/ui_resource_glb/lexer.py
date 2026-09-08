@@ -1,7 +1,7 @@
 """Offset-carrying KeyValues lexer and tree parser for the ui-resource seam.
 
-The tokenizer and recursive tree builder are copied from `formats/vdata_glb/lexer.py` per
-`seam_map_ui_resource.md`'s instruction to borrow the KeyValues tree shape from the vdata spec:
+The tokenizer and recursive tree builder are copied from `formats/vdata_glb/lexer.py`, borrowing
+the KeyValues tree shape from the vdata spec:
 `//` outside a quoted string starts a line comment, `"` quotes a string that may span lines and
 may carry `\\"`, `{`/`}` nest to arbitrary depth, and anything else runs to the next whitespace,
 brace, quote or comment. A malformed file degrades the same way: the tree stands up to the point
@@ -93,8 +93,8 @@ def _tokenize_units(text: str, unit_width: int, *, escape_quotes: bool) -> list[
     that escape, and `kb_keys.lst`/`kb_trans.lst` name the literal backslash key as `"\\"`: read
     with escaping on, that `\\"` reads as an escaped quote rather than a one-character value
     closed by the very next quote, and every quoted cell after it in the file mis-tokenizes. This
-    is a spec deviation (`seam_map_ui_resource.md` names one KeyValues-shaped tree for every
-    grammar) the decoder needed against real data, recorded in `specDeviations`.
+    is a spec deviation (the seam names one KeyValues-shaped tree for every grammar) the decoder
+    needed against real data, recorded in `specDeviations`.
     """
 
     tokens: list[Token] = []
@@ -458,8 +458,8 @@ def mixed_line_ending_offset(text: str) -> int | None:
     """The character offset of the first line terminator that breaks a consistent `\\r\\n` or
     bare `\\n` convention, or `None` when the file is consistent throughout.
 
-    Shared by every grammar (`seam_map_ui_resource.md`, "Anomalies and omissions" is not
-    qualified by grammar), so a patched install carrying a `tab-rows`/`titles`/`settings-scr`/
+    Shared by every grammar (the seam's "Anomalies and omissions" is not qualified by grammar), so
+    a patched install carrying a `tab-rows`/`titles`/`settings-scr`/
     `line-list`/`won-lists` member with mixed endings still reports it.
     """
 

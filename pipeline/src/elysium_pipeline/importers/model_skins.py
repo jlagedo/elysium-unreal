@@ -1,7 +1,6 @@
 """The corpus skin table's own data (R1.5): the diff-against-family-0 fold that turns a staged
 `manifest.json`'s per-unit `skinFamilies`/`familyCount` into
-`/ElysiumBaked/Meshes/DA_ElysiumPropSkins`'s own rows
-(`docs/architecture/seam_map_model.md` -> "Import" -> "Skins table").
+`/ElysiumBaked/Meshes/DA_ElysiumPropSkins`'s own rows.
 
 Kept apart from `importers.models` (the offline stage, R1.3) on purpose: that module's own imports
 reach into the MDL/VTX decoders (`formats.model_glb` -> ... -> `numpy`), fine for the offline stage

@@ -7,8 +7,7 @@
 // One struct, two producers: the player's mover fills it at its tick tail and the NPC motor fills it
 // from its own movement, so the cast's locomotion and the player's cannot become two systems that
 // happen to play the same files. Everything downstream — the animation intent, the resolver, the
-// graph's parameters — reads this rather than reaching into a mover, a controller or an entity
-// (`docs/architecture/animation-architecture.md` §3.2).
+// graph's parameters — reads this rather than reaching into a mover, a controller or an entity.
 //
 // It is a POD with no UObject and no engine gameplay type, so it is asserted with no world
 // (`Elysium.Substrate.Locomotion`), the same split `ElysiumMoveSolve.h` and `ElysiumCameraSolve.h`

@@ -90,7 +90,7 @@ def source_keys(
 def sprite_source_keys(index: dict) -> list[str]:
     """Every particle sprite the install resolves, as texture keys (`particles/<stem>`), sorted.
 
-    R7.3 (`seam_map_texture.md` -> "Texture unit" -> "Particle sprites"): the 318 raw
+    R7.3: the 318 raw
     `particles/*.tga` members are texture units too, so the particle floor draws them off
     `/ElysiumBaked/Textures/particles/T_<stem>`. Kept apart from `source_keys` on purpose: that
     selector is the corpus index's disposition rule for `materials/**.tth`, and the `.tga` members

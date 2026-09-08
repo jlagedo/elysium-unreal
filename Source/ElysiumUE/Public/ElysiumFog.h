@@ -72,8 +72,8 @@ namespace ElysiumFog
 		Out[SlotInvRange] = (bEnabled && EndCm > StartCm) ? 1.f / (EndCm - StartCm) : 0.f;
 	}
 
-	// R5.3's chosen home for the decal axis (`seam_map_material.md` -> "Decal fog and wetness
-	// homes"): a `UDecalComponent` is a `USceneComponent`, not a `UPrimitiveComponent`, so it
+	// The chosen home for the decal axis: a `UDecalComponent` is a `USceneComponent`, not a
+	// `UPrimitiveComponent`, so it
 	// carries no Custom Primitive Data of its own and `Pack` above does not apply to it. A decal
 	// is only ever a world surface (`mat_fog.fog_from_params`'s own docstring), so it needs one
 	// per-map value, never a per-primitive one -- set here as the three named instance parameters
@@ -101,8 +101,8 @@ namespace ElysiumFog
 	}
 }
 
-// R7.4 (`water-architecture.md` ruling M, owner decision 4): VtMB's per-face LIGHTSTYLE, as the one
-// Custom Primitive Data slot past the fog block above.
+// Owner decision: VtMB's per-face LIGHTSTYLE, as the one Custom Primitive Data slot past the fog
+// block above.
 //
 // VtMB modulates a face's LIGHTMAP page by its style's pattern -- the pier's 34 `objects/surf` foam
 // cards carry style 1, 21 of them style 32 as well (G6) -- and the port has no lightmaps at all:

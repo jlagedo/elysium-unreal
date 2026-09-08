@@ -317,8 +317,7 @@ void AElysiumMapActor::LoadMap()
 	LoadedMap = MapName;
 	Bodies->SetMap(MapName);
 
-	// This map's environment (R4.4, `docs/architecture/seam_map_map.md` -> "Import —
-	// environment"): the baked `UElysiumMapEnvironment` when this map has one, the
+	// This map's environment: the baked `UElysiumMapEnvironment` when this map has one, the
 	// `.env`/`.sky`/`.spawn` sidecars otherwise. Resolved first because three later steps need
 	// SkyDef: the light rig scales a miniature source's reach by it, the `.ents` parser carries
 	// sky-scope entities through it, and a miniature body takes its mesh scale from it. The
@@ -401,7 +400,7 @@ void AElysiumMapActor::LoadMap()
 		{
 			FElysiumEntityDefs EntDefs;
 			// The baked `UElysiumMapEntities` when this map has one, the `.ents` sidecar when it
-			// does not (R4.1 — `seam_map_map_entities.md` -> "Import" -> "Cutover"). Same defs
+			// does not. Same defs
 			// either way; nothing below this line knows which transport answered.
 			const EElysiumEntityDefSource DefSource = ElysiumEntityDefSource::Load(
 				MapName, EntDefs, SkyDef.Scale, SkyDef.OriginCm);
@@ -438,7 +437,7 @@ void AElysiumMapActor::LoadMap()
 				ReleasePropAndWieldModels();
 				EntityWorld = MakePimpl<FElysiumEntityWorld>(this, GameState, Services);
 				// The map's cooked per-entity collision, when Collision->Build adopted a payload
-				// above (R4.2 — `seam_map_map.md` -> "Import"). Null on an unconverted map, and
+				// above. Null on an unconverted map, and
 				// then every brush body cooks from its def's hulls as it always has.
 				EntityWorld->SetCollisionPayload(Collision ? Collision->GetPayload() : nullptr);
 				// Observe model keys without changing definitions or Source I/O. The normal
@@ -492,8 +491,8 @@ void AElysiumMapActor::LoadMap()
 					EntityWorld->SpawnPlayer();
 
 					// If the run has been here before (this session, or a loaded save), the
-					// map is not new: apply the frozen snapshot over the freshly-built world
-					// (`docs/architecture/save-architecture.md` §5). After SpawnPlayer, so the player exists for the
+					// map is not new: apply the frozen snapshot over the freshly-built world.
+					// After SpawnPlayer, so the player exists for the
 					// records that reference it, and before the first Tick, so nothing has run yet.
 					//
 					// A dev fresh-state entry (`elysium.newgame_ttd`) drops the snapshot here rather

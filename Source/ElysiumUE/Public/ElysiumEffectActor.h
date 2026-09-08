@@ -12,8 +12,7 @@ class USkeletalMeshComponent;
 class UTexture2D;
 struct FElysiumWeatherEmitterState;
 
-// R7.3 (`docs/architecture/effects-architecture.md` §5, `docs/architecture/seam_map_map.md` ->
-// "Import — effects (R7.3)"): the staged particle tree as the bake writes it onto the placed
+// The staged particle tree as the bake writes it onto the placed
 // actor, field for field. A ramp is a keyframe list in normalized age: `[[t, lo, hi], ...]`, a
 // scalar one keyframe `(0, v, v)`, `lo != hi` rolled per particle at spawn.
 
@@ -206,7 +205,7 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium")
 	TObjectPtr<UNiagaraComponent> Niagara;
 
-	// --- The row (`seam_map_map.md` -> "effects[]") ---
+	// --- The row ---
 	UPROPERTY(EditAnywhere, Category = "Elysium") int32 EntityIndex = INDEX_NONE;
 	UPROPERTY(EditAnywhere, Category = "Elysium") FName Classname;          // env_particle | func_particle
 	UPROPERTY(EditAnywhere, Category = "Elysium") FString Root;             // vtmb:particle:<key>

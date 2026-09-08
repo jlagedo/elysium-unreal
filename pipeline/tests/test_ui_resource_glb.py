@@ -1269,8 +1269,7 @@ def test_validator_rejects_a_ledger_whose_owner_is_missing(tmp_path):
 def test_validator_rejects_a_byte_ledger_that_is_internally_consistent_but_disagrees_with_the_redecode():
     """A ledger row can pass `validate_ledgers` (internally consistent, right hash, right length)
     while naming a partition that has nothing to do with what the source actually decodes to --
-    export-time validation must also weigh the published ledger against the independent re-decode
-    (`seam_map_unit_contract.md`, "Validation")."""
+    export-time validation must also weigh the published ledger against the independent re-decode."""
 
     from elysium_pipeline.formats.unit_contract import ranges_sha256
 

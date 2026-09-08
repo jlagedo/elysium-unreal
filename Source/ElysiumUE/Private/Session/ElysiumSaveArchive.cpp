@@ -7,7 +7,7 @@
 #include "Serialization/MemoryWriter.h"
 
 // The payload's schema id, registered as an engine custom version so a nested engine serializer
-// sees it on the archive (`docs/architecture/save-architecture.md` §2). The number is also written into the prologue,
+// sees it on the archive. The number is also written into the prologue,
 // because a raw memory archive carries no custom-version container of its own.
 const FGuid FElysiumSaveVersion::GUID(0x45'4C'59'53, 0x53'41'56'45, 0x31'31'2E'39, 0x50'4C'44'00);
 

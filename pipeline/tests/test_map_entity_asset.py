@@ -2,8 +2,7 @@
 
 `pipeline/src/elysium_pipeline/importers/map_entities.py` turns the R3.2 producer's entity join
 into the manifest `pipeline/unreal/import_map_entities.py` executes, and refuses to write one whose
-rows do not match the `<map>.ents` document the asset replaces
-(`docs/architecture/seam_map_map_entities.md` -> "Import").
+rows do not match the `<map>.ents` document the asset replaces.
 
 These pin the pieces that decide whether a wrong asset can be authored at all: the parity
 comparison itself, the refusal it drives, the asset path that must stay the twin of

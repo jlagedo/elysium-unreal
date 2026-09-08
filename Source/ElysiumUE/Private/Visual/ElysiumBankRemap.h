@@ -36,8 +36,7 @@ struct FReferenceSkeleton;
 // SEQUENCE instead, which is wrong for the second: TRANSLATE is affine, so a base clip and an
 // additive corrected separately double the offset ((a+t) + (b+t) = a+b+2t against retail's single
 // a+b+t). The fix is to disable Unreal's own retargeting entirely and reproduce this table as a
-// post-process over the composed closure -- `FAnimNode_ElysiumBankRemap`
-// (`docs/architecture/animation-architecture.md`).
+// post-process over the composed closure -- `FAnimNode_ElysiumBankRemap`.
 
 // Which transform category one of retail's four observable outcomes reduces to. Both binds near
 // the origin and binds within the copy threshold are distinct retail paths but both reduce to Copy.

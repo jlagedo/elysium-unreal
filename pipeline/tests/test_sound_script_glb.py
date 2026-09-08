@@ -292,7 +292,7 @@ def test_every_manifest_byte_is_claimed_exactly_once():
 
 
 def test_sentence_and_dsp_preset_text_ranges_are_graded_mapped_text_not_mapped():
-    """`seam_map_unit_contract.md` reserves the ledger state `mapped` for a binary record or
+    """The ledger state `mapped` is reserved for a binary record or
     payload; a sentence's name/path/length tokens and a DSP preset's header/processor tokens are
     all text decoded into a structured record, so they must be graded `mapped-text`, never the
     bare `mapped` this seam once used for them."""

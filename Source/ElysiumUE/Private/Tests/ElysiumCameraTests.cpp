@@ -2908,7 +2908,7 @@ CameraShotTable
 	return true;
 }
 
-// The presentation seam (`docs/architecture/runtime-architecture.md` §11). FElysiumViewState is a value and its
+// The presentation seam. FElysiumViewState is a value and its
 // rules are total functions over it, so the whole set is asserted with no world, no HUD and no
 // viewport — the hand-built state a widget renders from is exactly what is built here.
 //

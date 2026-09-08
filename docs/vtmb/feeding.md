@@ -112,7 +112,10 @@ For an ordinary target, `AttemptFeed` at `0x10168910` applies this policy:
 
 1. `ACT_DISPOSITION_MESMERIZED`, `ACT_DISORIENTED`, `ACT_LOST` and `ACT_COWER` are automatic
    acceptance states.
-2. A target whose `ResistsFeeding` predicate is false also accepts without a roll.
+2. A target whose `ResistsFeeding` predicate is false also accepts without a roll. The NPC stat
+   template value `General.FastFood` resolves through inherited stat-template inheritance to
+   `ResistsFeeding == false`; this is general template behavior, not a tutorial-specific special
+   case.
 3. Otherwise the attacker succeeds when current `Close_Combat_Brawl` is greater than the
    victim's non-negative Hacking net at difficulty 6.
 4. A separate stealth predicate can still authorize the feed after that opposed comparison

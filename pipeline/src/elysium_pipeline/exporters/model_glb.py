@@ -168,7 +168,7 @@ def _without_bind(
 ) -> dict[str, Any]:
     """One record without the bind transform its glTF node already carries.
 
-    `seam_map_model.md` § Core content gives the bind locals to the joint, attachment and eye
+    The node's own content gives the bind locals to the joint, attachment and eye
     nodes, so restating them here would state one datum twice. A stored value the node cannot
     give back -- a quaternion the writer had to normalise -- stays, and says why.
     """

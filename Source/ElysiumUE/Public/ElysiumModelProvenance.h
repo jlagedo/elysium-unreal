@@ -4,9 +4,8 @@
 #include "Engine/AssetUserData.h"
 // Reuses the two generic provenance-row structs the material lane already declared --
 // `FElysiumProvenanceAnomaly` (`Kind` + `Extra`) and `FElysiumProvenanceNote` (`Reason` + `Extra`)
-// are not material-specific despite living in that header (`docs/architecture/seam_map_material.md`
-// -> "Import" -> "Provenance", C-2); the model lane's `anomalies[]`/`omissions[]` rows are the same
-// shape (`docs/architecture/seam_map_model.md` -> "Import" -> "Provenance and idempotency"), and
+// are not material-specific despite living in that header; the model lane's
+// `anomalies[]`/`omissions[]` rows are the same shape, and
 // UHT forbids two reflected structs of the same name in one module, so this reuses rather than
 // redeclares them.
 #include "ElysiumMaterialProvenance.h"
@@ -17,8 +16,7 @@ class FJsonObject;
 class UStaticMesh;
 
 /**
- * One row of `materialBindings.slots` plus this lane's own resolution
- * (`docs/architecture/seam_map_model.md` -> "Import" -> "Material binding").
+ * One row of `materialBindings.slots` plus this lane's own resolution.
  */
 USTRUCT(BlueprintType)
 struct FElysiumModelSlotProvenance
@@ -56,8 +54,8 @@ struct FElysiumModelSkinOverride
 };
 
 /**
- * One row of `materialBindings.skinFamilies[]`, as written into `DA_ElysiumPropSkins`
- * (`docs/architecture/seam_map_model.md` -> "Import" -> "Skins table"). Family 0 is the mesh's own
+ * One row of `materialBindings.skinFamilies[]`, as written into `DA_ElysiumPropSkins`.
+ * Family 0 is the mesh's own
  * default slots and carries no row in the skin table itself, but is still recorded here so the
  * asset states its full family count without a second lookup.
  */
@@ -104,8 +102,8 @@ struct FElysiumModelHullBounds
 
 /**
  * Everything a `vtmb:model:` unit's import decided that a `UStaticMesh` has no slot for, carried on
- * the baked asset as AssetUserData so a packaged game can read it and the editor can inspect it
- * (`docs/architecture/seam_map_model.md` -> "Import" -> "Provenance and idempotency"). `UStaticMesh`
+ * the baked asset as AssetUserData so a packaged game can read it and the editor can inspect it.
+ * `UStaticMesh`
  * implements `IInterface_AssetUserData` directly, so no carrier class is needed the way
  * `UElysiumPhysicalMaterial` needed one for `UPhysicalMaterial`.
  *
@@ -188,8 +186,8 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumProvenanceNote> Omissions;
 	/**
 	 * The unit's own `coverage` object, carried field-by-field and stringified the same tolerant way
-	 * `FElysiumMaterialParameter::Value` is (C-2): the coverage object's exact shape belongs to
-	 * `seam_map_unit_contract.md` and to whatever summary this lane's own sidecar publishes, neither
+	 * `FElysiumMaterialParameter::Value` is: the coverage object's exact shape is owned by the unit's
+	 * own contract and by whatever summary this lane's own sidecar publishes, neither
 	 * of which this reader pins a field list to, so nothing in it is silently dropped either way.
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TMap<FString, FString> Coverage;

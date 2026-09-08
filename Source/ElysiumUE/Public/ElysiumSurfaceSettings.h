@@ -9,9 +9,8 @@ class UMaterialParameterCollection;
 
 /**
  * The global surface-shading knobs a human tunes by eye and the project ships as
- * `Config/DefaultElysium.ini` (`docs/architecture/seam_map_material.md` → "Import" → "Knob
- * contract"; `docs/project/seam_migration.md` 2026-08-31, "Calibration happens on knobs inside the
- * editor, never in a loop").
+ * `Config/DefaultElysium.ini`. Calibration happens on knobs inside the
+ * editor, never in a loop.
  *
  * This is the single writer of `MPC_ElysiumSurfaces`'s scalars: every V2 master reads the
  * collection rather than a literal, so the Cog Environment window and the Project Settings page
@@ -124,7 +123,7 @@ public:
 	/**
 	 * The peak World Position Offset, in centimetres, of a fully swaying detail instance
 	 * (`swayAmount` 255) -- the `UseDetailSway` term on `M_V2_Lit`/`M_V2_LitTranslucent`/
-	 * `M_V2_Unlit` (`seam_map_material.md` -> "Detail sway on the model masters (R6.3)"). VtMB's
+	 * `M_V2_Unlit`. VtMB's
 	 * own client never read the byte, so the default is the first Source build's that did:
 	 * `cl_detail_max_sway` 5 world units (owner call filed to R7; wire first, tune later).
 	 */
@@ -133,7 +132,7 @@ public:
 
 	// --- water (R7.1) ---------------------------------------------------------------------------
 	/**
-	 * The one translation knob on `M_V2_Water` (`water-architecture.md` section 4.2): the water
+	 * The one translation knob on `M_V2_Water`: the water
 	 * volume's extinction is `WaterFogScale / (($fogend - $fogstart) x 2.54)` per centimetre, split
 	 * into scattering and absorption by the decoded `$fogcolor`. VtMB's fog is linear (fully fogged
 	 * at `$fogend`); SLW's is exponential; no one value makes the two curves coincide, so the

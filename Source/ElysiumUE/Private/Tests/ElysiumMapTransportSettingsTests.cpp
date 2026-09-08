@@ -1,6 +1,4 @@
-// Content-free Substrate automation for R4.6: the explicit per-map cutover flag
-// (`docs/architecture/seam_map_map.md` -> "## Import" -> "The explicit per-map cutover flag
-// (R4.6)"). Exercises the pure resolver against synthetic `NewObject`-built settings, the same
+// Content-free Substrate automation for the explicit per-map cutover flag. Exercises the pure resolver against synthetic `NewObject`-built settings, the same
 // shape `UElysiumLightRig::ApplySettings`'s own Substrate coverage uses (R4.3) -- no baked asset or
 // scratch content root needed, since the resolver never loads one.
 #include "Misc/AutomationTest.h"

@@ -1,4 +1,4 @@
-"""Grammar dispatch for the engine-config seam: one decode function per `seam_map_engine_config.md`
+"""Grammar dispatch for the engine-config seam: one decode function per grammar
 table, sharing the console-script parser (`console.py`), the KeyValues lexer (`lexer.py`) and the
 save-fragment reader (`savefragment.py`)."""
 
@@ -61,7 +61,7 @@ def _line_spans(text: str) -> list[tuple[int, int, int]]:
 def _mixed_line_endings(text: str) -> list[dict[str, Any]]:
     """`anomalies[] mixed-line-endings`: CRLF and a lone LF both present in one file.
 
-    `seam_map_engine_config.md` ("Anomalies and omissions") names this for the format generally,
+    The engine-config seam names this for the format generally,
     not for the console-script grammar alone, so every line-oriented text grammar in this module
     calls this, not just `console.py`'s own copy.
     """
@@ -183,8 +183,8 @@ def _own_pairs(node: lexer.KVNode) -> dict[str, lexer.Token]:
 def _effective_children(node: lexer.KVNode) -> list[lexer.KVNode]:
     """`node.children`, with an anonymous (nameless) wrapper transparently unwrapped.
 
-    Retail `detail.vbsp` carries one unnamed `{` with no name to attach to
-    (`seam_map_engine_config.md` names no such anomaly; see `specDeviations`); unwrapping it here
+    Retail `detail.vbsp` carries one unnamed `{` with no name to attach to (an anomaly the
+    format does not otherwise name; see `specDeviations`); unwrapping it here
     is what keeps the type it interrupts (`branches`) three levels deep like every other one.
     """
 
@@ -251,7 +251,7 @@ def decode_detail_vbsp(member: SourceMember, *, model_exists: Resolver | None = 
 
     anomalies: list[dict[str, Any]] = list(parsed.file_anomalies) + _mixed_line_endings(text)
 
-    # `seam_map_engine_config.md`'s owner table spells this `tree.nodes[i].keys[j]` with an
+    # The owner table spells this `tree.nodes[i].keys[j]` with an
     # ordinal `i`, not the byte offset the node's name happens to sit at; `_node_ordinal` counts
     # every node this pre-order walk visits, parent before child, so `i` is stable and matches
     # the spec's own spelling.
@@ -399,8 +399,8 @@ def decode_pack_values(member: SourceMember, *, engine_config_exists: Resolver |
             continue
         row_index = len(keys)
         # `packerKeys[i]`, the extension-root field this row is actually published under
-        # (`seam_map_unit_contract.md`: "owner is the decoder's path to the record that paid for
-        # the range").
+        # -- the unit contract's "owner" is the decoder's path to the record that paid for
+        # the range.
         ledger.claim(start, content_end - start, "mapped-text", f"packerKeys[{row_index}]")
         if terminator_end > content_end:
             ledger.claim(content_end, terminator_end - content_end, "omitted-proven", "whitespace")
@@ -443,11 +443,11 @@ def decode_pack_values(member: SourceMember, *, engine_config_exists: Resolver |
 # --------------------------------------------------------------------------------- localized-list
 
 #: Extension -> the seam family this seam declares a reference to. `.vcd` and `.lip` do not
-#: resolve through `vtmb:dialogue:` the way the spec's own prose reads: `seam_map_dialogue.md`
+#: resolve through `vtmb:dialogue:` the way the spec's own prose reads: the dialogue seam
 #: keys a dialogue unit by a path below `dlg/`, which a `sound/...` path never has, and `.vcd`
-#: and `.lip` are `seam_map_scene.md`'s and `seam_map_sound.md`'s own keys respectively (see
-#: `specDeviations`). `.mdl`/`.vtx` are `seam_map_model.md`'s `vtmb:model:`; `.res`/`.lst`/`.txt`
-#: are `seam_map_ui_resource.md`'s `vtmb:ui-resource:`.
+#: and `.lip` are the scene and sound seams' own keys respectively (see
+#: `specDeviations`). `.mdl`/`.vtx` are `vtmb:model:`; `.res`/`.lst`/`.txt`
+#: are `vtmb:ui-resource:`.
 _ROLE_BY_EXTENSION = {
     ".vmt": "material",
     ".tth": "texture",
@@ -461,7 +461,7 @@ _ROLE_BY_EXTENSION = {
     ".txt": "ui-resource",
 }
 
-#: The two `.vtx` topology variants `seam_map_model.md` names, each a companion of the same-stem
+#: The two `.vtx` topology variants the model seam names, each a companion of the same-stem
 #: `.mdl` rather than a reference of its own.
 _VTX_SUFFIXES = (".dx80.vtx", ".dx7_2bone.vtx")
 
@@ -483,7 +483,7 @@ def _normalize_localized_path(path: str) -> str:
 
 def _model_reference(path: str) -> tuple[str, str]:
     """`(sourcePath, key)` for a `.mdl` or `.vtx` path: the `.vtx` variant strips to its `.mdl`
-    companion, `seam_map_model.md`'s own unit -- the one this project actually publishes for
+    companion, the model seam's own unit -- the one this project actually publishes for
     both, since no seam exports a `.vtx` on its own."""
 
     normalized = _normalize_localized_path(path)
@@ -500,7 +500,7 @@ def _model_reference(path: str) -> tuple[str, str]:
 
 
 def _scene_reference(path: str) -> tuple[str, str]:
-    """`(sourcePath, key)` for a `.vcd`: `seam_map_scene.md`'s own key, a path below `sound/`."""
+    """`(sourcePath, key)` for a `.vcd`: the scene seam's own key, a path below `sound/`."""
 
     normalized = _normalize_localized_path(path)
     if normalized.startswith("sound/"):
@@ -513,11 +513,11 @@ def _scene_reference(path: str) -> tuple[str, str]:
 def _sound_reference(path: str, path_exists: Resolver | None) -> dict[str, Any]:
     """The `vtmb:sound:` reference a `.lip` companion names.
 
-    `seam_map_sound.md` keys a sound unit by its audio path *with* extension and resolves
+    The sound seam keys a sound unit by its audio path *with* extension and resolves
     mp3-first; a `.lip` alone does not say which of the two the install ships, so both candidates
     are checked in that order and the identity is spelled after whichever one answered. Neither
-    resolving is an ordinary reference whose target merely fails to resolve, per
-    `seam_map_unit_contract.md` ("References between units") -- the sound seam's own rules do not
+    resolving is an ordinary reference whose target merely fails to resolve, per the unit
+    contract's rule on references between units -- the sound seam's own rules do not
     make the reference unreachable, the install simply lacks the file, so this is `resolved:
     false`, not the `vtmb:missing-<kind>:` sentinel (that namespace is reserved for a reference
     the *referenced kind's own rules* make unreachable to the engine).
@@ -613,8 +613,8 @@ def decode_localized_list(member: SourceMember, *, path_exists: Resolver | None 
                 row["resolved"] = resolved
                 # A reference whose target is another seam's data and merely fails to resolve
                 # (a `.lip` companion the install lacks, a texture the corpus never shipped) is
-                # an ordinary `dependencies` row, `resolved: false` -- per
-                # `seam_map_unit_contract.md` ("References between units"), the `vtmb:missing-
+                # an ordinary `dependencies` row, `resolved: false` -- per the unit contract's
+                # rule on references between units, the `vtmb:missing-
                 # <kind>:` sentinel is reserved for a reference the *referenced kind's own rules*
                 # make unreachable to the engine, which none of this seam's roles ever produce.
                 dependencies.setdefault(

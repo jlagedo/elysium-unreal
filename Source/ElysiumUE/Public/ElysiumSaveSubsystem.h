@@ -15,8 +15,8 @@ struct FElysiumSaveSlotInfo
 	FElysiumSaveHeaderData Header;
 };
 
-// The owner of the slot list, the autosave ring and the freeze/thaw pass
-// (`docs/architecture/save-architecture.md` §9). GI-scoped, because a save outlives every world it describes.
+// The owner of the slot list, the autosave ring and the freeze/thaw pass.
+// GI-scoped, because a save outlives every world it describes.
 //
 // **Writing is off the game thread in the half that can be**: the freeze is a synchronous memory
 // walk (it has to be atomic with respect to the frame), and the compress + write go through

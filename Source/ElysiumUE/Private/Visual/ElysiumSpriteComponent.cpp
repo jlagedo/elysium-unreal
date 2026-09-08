@@ -1,4 +1,4 @@
-// The env_sprite billboard proxy (R6.1, `docs/architecture/seam_map_map.md` -> "Sprites (R6.1)"):
+// The env_sprite billboard proxy:
 // one quad per view, Source's glow rule off the Sprites page, and the per-sprite occlusion query
 // that gates the blend. The one piece of rendering code the task allows; it draws nothing the
 // bake did not write and reads no file.

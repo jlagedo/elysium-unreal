@@ -32,8 +32,8 @@ bool FElysiumGreenRoomRun::PrepareTheatreCase()
 
 	// sp_theatre's own entity table, read for the embrace camera track alone: the green room stands
 	// its case in whatever map is loaded, so the track's authored points come off the theatre's
-	// defs rather than the live world. Through the R4.1 transport resolver (baked asset first,
-	// `.ents` second) like every other def read — `seam_map_map_entities.md` -> "Import".
+	// defs rather than the live world. Through the transport resolver (baked asset first,
+	// `.ents` second) like every other def read.
 	FElysiumEntityDefs Defs;
 	if (ElysiumEntityDefSource::Load(TEXT("sp_theatre"), Defs) == EElysiumEntityDefSource::None)
 	{

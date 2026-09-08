@@ -1,7 +1,7 @@
 """Isolated one-scheme/one-GLB sound-scheme product writer.
 
 Every unit is scene-less and carries no BIN chunk: a sound scheme names filenames, flags and
-numbers, all of which the source wrote as text (`docs/architecture/seam_map_sound_scheme.md`).
+numbers, all of which the source wrote as text.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def build_document(model) -> tuple[dict, bytes]:
         dependency(row["role"], row["asset"], row["sourcePath"], row["resolved"])
         for row in model.dependencies
     ]
-    # `seam_map_unit_contract.md`'s extension root opens with the five contract keys, in order,
+    # The extension root opens with the five contract keys, in order,
     # before any kind-specific one; the seam doc's own illustrative JSON interleaves `parameters`
     # and `scheme` before `dependencies` and `comments`/`anomalies`/`omissions` before `coverage`,
     # which `validate_extension_root` (and every other seam) would refuse. This follows the

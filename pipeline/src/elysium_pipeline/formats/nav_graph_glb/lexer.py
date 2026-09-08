@@ -1,7 +1,7 @@
 """Offset-carrying whitespace tokenizer for the `.ain` node-graph grammar.
 
 The `.ain` file has no quoting, no comments and no nesting: it is CRLF, ASCII, and
-whitespace-tokenized end to end (`seam_map_nav_graph.md`, "The `.ain` grammar"). `tokenize` walks
+whitespace-tokenized end to end. `tokenize` walks
 the decoded text once and returns every non-whitespace run as a `Token`, carrying its byte offset
 and 1-based source line, so the decoder can group tokens into records while the byte ledger claims
 the exact spans the records and the whitespace between them occupy.

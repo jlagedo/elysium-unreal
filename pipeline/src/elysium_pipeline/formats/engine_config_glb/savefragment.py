@@ -1,6 +1,6 @@
 """`hl2.tmp`: the `+header`/`-header` block stream the save system writes.
 
-`seam_map_engine_config.md` ("Save fragment") names only what its grammar reaches: the block
+The save-fragment grammar names only what it reaches: the block
 framing, the map/landmark strings that precede a zlib body, and the zlib span itself -- decoded
 with `formats/sav.py` where it reaches. Everything else in a block is content this decode cannot
 name from `docs/vtmb/savegame_format.md` alone, so it is carried as a `typedUnidentified` range
@@ -109,8 +109,7 @@ def decode_save_fragment(member_path: str, data: bytes) -> dict[str, Any]:
 
     def claim_trailing_fill(offset: int, length: int, owner: str) -> None:
         """The allocation past the last block's own decoded content: `padding-zero` when zero,
-        `omitted-proven` with an `omissions[] trailing-fill` row otherwise
-        (`seam_map_engine_config.md`, "Save fragment")."""
+        `omitted-proven` with an `omissions[] trailing-fill` row otherwise."""
 
         if length <= 0:
             return
@@ -143,7 +142,7 @@ def decode_save_fragment(member_path: str, data: bytes) -> dict[str, Any]:
         guard_present = data[block_end - 4:block_end] == BLOCK_GUARD and block_end - 4 >= header_end
         body_end = block_end - 4 if guard_present else block_end
         # A guard-terminated block closed properly, whatever its index; "the trailing allocation
-        # past the last block" (`seam_map_engine_config.md`, "Save fragment") only exists once the
+        # past the last block" only exists once the
         # block stream itself has run out without one.
         is_last_block = is_last_block and not guard_present
 
@@ -191,7 +190,7 @@ def decode_save_fragment(member_path: str, data: bytes) -> dict[str, Any]:
             zlib_abs = header_end + zoff
             walk = _walk_fields(inflated)
             if walk["complete"]:
-                # `seam_map_engine_config.md` ("Save fragment"): "derived" only where the walk
+                # "derived" only where the walk
                 # both inflates and walks the stream -- the inflated bytes are then represented by
                 # the field count/consumed-length pair below, not merely claimed as present.
                 ledger.claim(zlib_abs, zlen, "derived", f"saveFragment.blocks[{index}].zlib")

@@ -463,7 +463,7 @@ def test_globalwetness_proxy_writes_wetness_scale_and_runtime_row(tmp_path):
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/asphalt/MI_wet"]
     # R5.3: a real per-instance scalar pair on M_V2_Lit (the only master with a wetness lane),
-    # not provenance-only any more -- see "Decal fog and wetness homes" in seam_map_material.md.
+    # not provenance-only any more.
     assert entry["scalars"]["WetnessScale"] == 0.56
     assert entry["scalars"]["WetnessDriven"] == 1.0
     provenance = _provenance(tmp_path / "stage", entry)
@@ -472,7 +472,7 @@ def test_globalwetness_proxy_writes_wetness_scale_and_runtime_row(tmp_path):
 
 
 def test_additive_blend_writes_fog_inscatter_zero_on_a_scene_fog_master(tmp_path):
-    """R5.4 (seam_map_material.md -> "Scene fog on the world masters"): Source forces the fog colour
+    """R5.4: Source forces the fog colour
     to black under additive blending, so an `Additive` instance of a scene-fog master carries
     `FogInscatter = 0` and fades out in fog instead of adding the haze on top. Every other
     instance leaves the master's default (1.0) untouched, and the three primitive-driven names
@@ -860,7 +860,7 @@ def test_decalmodulate_family_takes_decal_master_and_modulate_blend(tmp_path):
 
 
 def test_projector_instance_is_staged_beside_the_surface_one_for_decal_units_only(tmp_path):
-    """R7.2 ruling 2 (`seam_migration.md` -> "R7.2 Decals"): a `$decal 1` unit and a
+    """Decal ruling (R7.2 ruling 2): a `$decal 1` unit and a
     `decalmodulate` unit each stage `MI_<unit>_Decal` beside their surface instance, parented to
     `M_V2_Decal` and blending Translucent (owner call A); an ordinary unit stages nothing extra."""
     export = tmp_path / "v2"
@@ -1932,7 +1932,7 @@ def test_anomaly_rollup_counts_by_kind_in_manifest_and_summary(tmp_path):
 
 
 def _water_normal_unit(key: str = "water/sewer_water") -> dict:
-    """A `Water` unit shaped like every real one (`water-architecture.md` section 4.4): both
+    """A `Water` unit shaped like every real one: both
     `$normalmap` (`dev/water_normal`) and `$bumpmap` (`dev/water_dudv`) are 29-frame VTFs, and the
     `animatedtexture` proxy names `$bumpmap` because `Water_Old` reads `$bumpframe` as the frame
     index of both."""
@@ -1968,7 +1968,7 @@ def _water_texture_stage(tmp_path: Path) -> Path:
 
 
 def test_water_normal_frames_come_from_normalmap_not_the_dudv(tmp_path):
-    """R7.1 (`water-architecture.md` section 4.4): the proxy names `$bumpmap`, which on the water
+    """R7.1: the proxy names `$bumpmap`, which on the water
     family binds `DuDvMap` -- so the frames array it used to write into `NormalMapFrames` was the
     signed offset map, and `dev/water_normal` reached nothing. The array is `$normalmap`'s own
     (its `_linear` twin, since that texture unit is a role-conflicted colour), the rate is still
@@ -2629,7 +2629,7 @@ def test_a_water_unit_with_no_envmap_binds_the_engine_default_cube(tmp_path):
     """`water.cpp::SHADER_INIT_PARAMS`: a `Water` unit naming no `$envmap` gets
     `engine/defaultcubemap` unless it authors `$forceexpensive`, and the cheap pass samples it,
     blended by distance over the expensive result. The `env_cubemap -> Lumen` rule is for lit
-    surfaces; water always binds a texture (`water_audit/LOOK_SPEC.md`)."""
+    surfaces; water always binds a texture."""
     export = tmp_path / "v2"
     _publish(export, "water/canal", _unit(
         "water/canal", shader="water",

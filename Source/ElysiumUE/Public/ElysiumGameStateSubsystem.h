@@ -120,7 +120,7 @@ public:
 
 	// Clear the unread marker on every row belonging to `Hub` (and to the cross-hub `main` table,
 	// which the screen shows in every tab). **Ours, not VtMB's** — the engine sets the byte on every
-	// write and never reads it, so the panel's own clear rule is unrecovered (`docs/architecture/ui-architecture.md`).
+	// write and never reads it, so the panel's own clear rule is unrecovered.
 	void MarkQuestsRead(int32 Hub);
 
 	// The player record + New Game.
@@ -192,7 +192,7 @@ public:
 
 	// The per-map snapshots.
 	// A run holds the current map plus a frozen snapshot of every other map visited, so walking back
-	// into Santa Monica finds it as you left it (`docs/architecture/save-architecture.md` §5). They live here for the
+	// into Santa Monica finds it as you left it. They live here for the
 	// same reason `G` does: session lifetime, not map lifetime. The entity world writes one at every
 	// teardown and reads one back at every build, which is why travel and save cannot drift apart.
 	const FElysiumMapSnapshot* FindMapSnapshot(const FString& Map) const;
@@ -215,8 +215,8 @@ public:
 	// actor's gameplay tick, through TimeControl().AdvanceFrame.
 	const FElysiumGameClock& GameClock() const { return Clock; }
 
-	// The one pause / time-scale facade, over the clock and engine time together
-	// (runtime-architecture.md §4). `elysium.pause` / `elysium.timescale` / `elysium.step`.
+	// The one pause / time-scale facade, over the clock and engine time together.
+	// `elysium.pause` / `elysium.timescale` / `elysium.step`.
 	FElysiumTimeControl& TimeControl() { return TimeCtl; }
 	const FElysiumTimeControl& TimeControl() const { return TimeCtl; }
 

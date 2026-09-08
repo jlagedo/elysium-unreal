@@ -8,7 +8,7 @@
 #include "Widgets/SLeafWidget.h"
 
 // The character-cell painter: the one leaf that turns a terminal's `uint16` grid into pixels on the
-// monitor's glass (`docs/project/plans/terminals.md`, slice D).
+// monitor's glass.
 //
 // It is a LEAF and not a composition of text rows on purpose. Retail's screen is a fixed grid — the
 // rasterizer walks `rows * columns` cells and stamps one glyph per cell at

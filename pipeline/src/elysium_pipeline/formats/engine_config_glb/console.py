@@ -2,7 +2,7 @@
 
 A console script is a sequence of commands separated by line ends or `;`, with `//` comments and
 double-quoted arguments; `unbindall`, `bind`, `alias`, `exec` and `stuffcmds` are commands like
-any other (`seam_map_engine_config.md`, "Console scripts").
+any other.
 """
 
 from __future__ import annotations

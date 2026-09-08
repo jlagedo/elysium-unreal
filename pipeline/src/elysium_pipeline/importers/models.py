@@ -3,9 +3,8 @@
 `uv run elysium import models` turns every **referenced** model unit into one `UStaticMesh` below
 `/ElysiumBaked/Models/<dir>/SM_<base>`, slots bound to the landed V2 material instances,
 collision cooked from VtMB's own convex hulls and complete skin families staged for the
-merged static/skeletal corpus catalogue
-(`docs/architecture/seam_map_model.md` -> "Import"). This module is the offline stage half of that
-lane (R1.3 of `docs/project/seam_migration.md` -> "R1 -- props"); it mirrors `materials.py`'s shape:
+merged static/skeletal corpus catalogue. This module is the offline stage half of that
+lane; it mirrors `materials.py`'s shape:
 stage every selected unit, write one provenance sidecar per unit plus one `manifest.json`, recipe
 stamp, and let the editor phase (R1.4, not this module) do the headless import.
 
@@ -63,7 +62,7 @@ MI_V2_MISSING = f"{materials.MASTER_ROOT}/MI_V2_Missing"
 #: Bumped whenever this lane's mapping changes in a way that must re-stage every unit.
 #: v2: bake_lib.set_phy_collision now disables GeometryScript's box/sphere/capsule
 #: auto-detection so every .phy ledge reproduces as its own convex hull (the Settled
-#: "not approximated" contract in seam_map_model.md "### Collision"), instead of a
+#: "not approximated" contract), instead of a
 #: box- or primitive-shaped ledge being silently substituted with a fitted shape.
 #: v3: unit-addressed SM products and producer-scoped publication under the shared Models root.
 SETTINGS_VERSION = "elysium-model-import-v3"

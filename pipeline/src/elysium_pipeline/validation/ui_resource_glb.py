@@ -44,8 +44,8 @@ from elysium_pipeline.formats.ui_resource_glb.source import UiResourceSourceClos
 
 ASSET_PREFIX = "vtmb:ui-resource:"
 
-#: Every `anomalies[]` role this decoder is allowed to publish: the four `seam_map_ui_resource.md`
-#: names, plus the ones the decoder needed and named in `specDeviations`.
+#: Every `anomalies[]` role this decoder is allowed to publish, plus the ones the decoder needed
+#: and named in `specDeviations`.
 _ANOMALY_ROLES = {
     "repeated-key",
     "unterminated-block",
@@ -95,11 +95,11 @@ def _scrub_resolved(value: Any) -> Any:
 
 def _verify_utf16_offsets(root: Mapping[str, Any], data: bytes) -> None:
     """`data[offset:offset+length]`, decoded and re-tokenized independently of the writer, names
-    the same key and value the document publishes at that offset -- `seam_map_ui_resource.md`'s
-    "Encoding" names this literal check for a UTF-16 LE member: "re-decodes the code units and
-    checks each token's ... text against its stated offset and length". A `strings.tokens[]`
-    entry's `byteOffset`/`byteLength` span the whole `"Key" "Value"` record (`decode.py`'s
-    `_make_scalar`), so the span is re-tokenized rather than decoded and compared bare."""
+    the same key and value the document publishes at that offset: for a UTF-16 LE member, this
+    re-decodes the code units and checks each token's text against its stated offset and length.
+    A `strings.tokens[]` entry's `byteOffset`/`byteLength` span the whole `"Key" "Value"` record
+    (`decode.py`'s `_make_scalar`), so the span is re-tokenized rather than decoded and compared
+    bare."""
 
     for token in (root.get("strings") or {}).get("tokens") or []:
         offset, length = token.get("byteOffset"), token.get("byteLength")
@@ -215,7 +215,7 @@ def validate_document(
     validate_ledgers(root, source_members)
     validate_capsules(document, binary, root, source_members)
 
-    # `seam_map_ui_resource.md`, "GLB structure": "Every unit is scene-less with no BIN chunk".
+    # Every unit is scene-less with no BIN chunk.
     # `validate_container` permits a *consistent* BIN chunk (buffer/view/binary agree); this seam
     # never carries one at all, so any BIN payload -- consistent or not -- is itself the defect.
     if binary or document.get("buffers") or document.get("bufferViews"):
@@ -276,9 +276,9 @@ def validate_document(
         if not isinstance(row, Mapping) or row.get("role") not in _ANOMALY_ROLES:
             raise UiResourceGlbValidationError(f"unknown source anomaly {row!r}")
 
-    # seam_map_unit_contract.md's ledger table: `omitted-proven` is "an evidence-backed omission
-    # carrying its reason in `omissions` or `coverage.omittedProven`" -- a range claiming that
-    # state with neither published is an omission with no evidence behind it.
+    # `omitted-proven` is an evidence-backed omission carrying its reason in `omissions` or
+    # `coverage.omittedProven` -- a range claiming that state with neither published is an
+    # omission with no evidence behind it.
     ledger_rows_for_evidence = (root.get("coverage") or {}).get("byteLedger") or [{}]
     has_omitted_proven_range = any(
         row.get("state") == "omitted-proven" for row in ledger_rows_for_evidence[0].get("ranges") or []

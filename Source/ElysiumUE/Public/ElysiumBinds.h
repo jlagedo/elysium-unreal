@@ -30,7 +30,7 @@ namespace ElysiumBinds
 	const TArray<FElysiumDefaultBind>& Defaults();
 
 	// The bare keys the **development layer** occupies, which no default bind and no player rebind
-	// may take (`docs/architecture/input-architecture.md` § "Reserved keys"). Everything else the dev layer uses
+	// may take. Everything else the dev layer uses
 	// is a chord — Cog's layout save/load menu items are `Ctrl+F1`–`Ctrl+F4`, and Elysium's own dev
 	// toggles are `Ctrl+V` (noclip) and `Ctrl+T` (the 3D-skybox A/B), precisely so `v` and `t` stay
 	// the player's.

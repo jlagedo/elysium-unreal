@@ -1,5 +1,5 @@
 // The terminal cell screen against the client put-char / scroll / print bodies
-// (docs/vtmb/computer-terminals.md §8.3, TERM15; docs/project/plans/terminals.md slice A).
+// (docs/vtmb/computer-terminals.md §8.3, TERM15).
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

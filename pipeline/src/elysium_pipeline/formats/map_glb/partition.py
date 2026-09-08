@@ -3,7 +3,7 @@
 A VtMB BSP is one member cut into four `export_v2` units -- the map root and the entities,
 lighting and visibility sub-units -- so before any of them is published somebody has to prove
 that the four together account for every byte of the file exactly once. That proof is this
-module, and it is the map root's to own (`docs/architecture/seam_map_map.md` -> "Lump partition").
+module, and it is the map root's to own.
 
 Public API (stable; the three sub-unit seams import it):
 

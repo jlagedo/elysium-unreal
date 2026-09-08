@@ -1,6 +1,6 @@
 """Decode one `.dlg` source closure into its complete model plus a gapless byte ledger.
 
-`docs/architecture/seam_map_dialogue.md` owns the rules this module implements literally: the
+The dialogue seam owns the rules this module implements literally: the
 row/cell shape, the column schema, the marker classifications, the audio-join path convention and
 the named anomalies. Nothing here resolves a `dlgexpr` condition or action -- only the runtime
 normalizer does that -- this module only segments and carries it.

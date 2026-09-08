@@ -1,4 +1,4 @@
-// The tutorial terminal on the real map slice (docs/project/plans/terminals.md, slices A0 and A).
+// The tutorial terminal on the real map slice.
 //
 // `sp_tutorial_1`'s `tuthack` and everything its rows reach are cut out of the exported `.ents`,
 // spawned headless, and driven through the same command bus the game uses. The authored wires —

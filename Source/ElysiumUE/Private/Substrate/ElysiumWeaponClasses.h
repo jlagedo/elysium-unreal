@@ -3,9 +3,8 @@
 // The weapon controller: mode dispatch, next-attack scheduling on the substrate clock, the
 // two-half attack transaction, reload and dry fire.
 //
-// The behaviour reproduced here is canonical in `docs/vtmb/combat-and-damage.md`; the design seam
-// is `docs/architecture/gameplay-systems-architecture.md` §5.4. This file owns no damage
-// arithmetic beyond the weapon's own lethality/margin stage — the descriptor, the shared resolver
+// The behaviour reproduced here is canonical in `docs/vtmb/combat-and-damage.md`. This file owns
+// no damage arithmetic beyond the weapon's own lethality/margin stage — the descriptor, the shared resolver
 // and the one typed health commit are `Substrate/ElysiumDamage.h` and
 // `FElysiumCombatCharacter::CommitDamage`, and every hit lands through them.
 //

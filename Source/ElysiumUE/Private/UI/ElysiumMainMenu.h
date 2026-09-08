@@ -28,7 +28,7 @@ enum class EElysiumMenuCommand : uint8
 
 // Main / pause / game-over menu, driven by the app state machine. Visual tree is built in C++
 // Slate — CommonUI supplies the activation stack, input routing and focus; no Widget Blueprint
-// asset is involved (`docs/architecture/ui-architecture.md`).
+// asset is involved.
 //
 // Two layouts, selected by `elysium.MenuLayout`, both authored in VtMB's 1024x768 virtual canvas
 // under one `SDPIScaler` at `ScreenH/768`:
@@ -36,8 +36,7 @@ enum class EElysiumMenuCommand : uint8
 //  - Rail (1, default) — a right-hand rail over a veil that falls to nothing by mid-frame, so the
 //    backdrop's own darkness carries the type and the lit half of the scene is never dimmed to
 //    rescue it. Items rest in bone and arm in blood, marked by one tick sliding along the rail's
-//    hairline; the seal behind them is a `mm_<clan>` sigil off the menu particle sheet. Why this
-//    diverges from the recovered law: `docs/architecture/ui-architecture.md`.
+//    hairline; the seal behind them is a `mm_<clan>` sigil off the menu particle sheet.
 //  - Column (0) — `CVMainMenu::PerformLayout`: every item sized to the widest label plus 20x4
 //    virtual px, stacked at `pitch = height + 2`, the column centred, the whole screen behind it
 //    knocked back by `UElysiumUISettings::MenuScrim` (Project Settings -> Elysium -> UI).

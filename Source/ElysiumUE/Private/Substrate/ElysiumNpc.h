@@ -315,9 +315,9 @@ public:
 	 * Assign a NAMED native schedule to this NPC and run it through the ordinary kernel.
 	 *
 	 * One door, two producers: the script input, and the Discipline runtime's `HitInfo.AI_Schedule`
-	 * channel (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "AI schedule assignment
-	 * (§5.5 kernel)"). A `disciplinetgt` record names a schedule the victim is to run, which is the
-	 * same operation a script's `ChangeSchedule` performs and must not become a second one.
+	 * channel, which is how AI schedule assignment reaches the kernel. A `disciplinetgt` record
+	 * names a schedule the victim is to run, which is the same operation a script's
+	 * `ChangeSchedule` performs and must not become a second one.
 	 *
 	 * Resolution is `ElysiumScheduleIdFromName` and nothing else, so only a REGISTERED program
 	 * starts; an unregistered name funnels to the stub surface keyed on the name and returns false.

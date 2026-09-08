@@ -9,9 +9,8 @@ class UStaticMesh;
 class UWorld;
 
 /**
- * The editor-only questions `pipeline/unreal/bake_map.py` asks about a level's reflection captures
- * (R5.5, `docs/architecture/seam_map_map.md` -> "## Import -- reflection captures (R5.5)"), which
- * have no Python scripting surface of their own: rendering the placed captures' contents into the
+ * The editor-only questions `pipeline/unreal/bake_map.py` asks about a level's reflection captures,
+ * which have no Python scripting surface of their own: rendering the placed captures' contents into the
  * level's `UMapBuildDataRegistry`, counting how many captures actually carry that data, saving the
  * separate `_BuiltData` package that registry lives in, and re-counting off the saved file.
  *

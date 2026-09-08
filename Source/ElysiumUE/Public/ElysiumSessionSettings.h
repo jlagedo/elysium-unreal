@@ -7,7 +7,7 @@
 
 /**
  * Game-flow taste knobs, Project Settings -> Elysium -> Session, tracked at
- * `Config/DefaultElysium.ini` (R4.5, `docs/project/seam_migration.md` -> "Wire first, tune later").
+ * `Config/DefaultElysium.ini`.
  * Read at map-load time (`UElysiumGameFlowSubsystem::OnPrepareLoadingScreen`); nothing here is
  * live-pushed, the same way `UElysiumModelSettings`'s bake-time knobs are not.
  */

@@ -355,8 +355,7 @@ The solver `0x100fd350`:
 
 *Elysium divergence, owner-called.* The recovered sweep is a `UTIL_TraceHull` **box** of half-extents
 `±cam_trace_radius`; Elysium sweeps a **sphere** of that radius on its own camera channel. Geometry
-queries belong to the engine (`docs/project/reconstruction-direction.md` → the Ownership test), so the
-recovered *rule* — probe from the eye toward the desired point at the authored radius, allow
+queries belong to the engine, so the recovered *rule* — probe from the eye toward the desired point at the authored radius, allow
 `dist * fraction`, skip entirely under `cam_collide 0` — is reproduced while the query itself is
 Unreal's. A sphere rounds the corners a box would catch, so the camera clears a doorway jamb slightly
 earlier than retail's.
@@ -716,9 +715,8 @@ unwrapping** — the keys are normalised once in `Activate` and then swept liter
 
 ## 7. Rebuild compatibility surface
 
-Implementation status is `docs/project/roadmap.md`. This document owns the faithful evaluator,
-original script/map inputs, and remaining RE questions. The shipped player/dialogue/focus/cinematic
-architecture is `docs/architecture/camera-architecture.md`.
+This document owns the faithful evaluator, original script/map inputs, and remaining RE
+questions.
 
 ### Divergence, owner-called — no first-person weapon camera
 
@@ -825,8 +823,7 @@ Retail's cvar surface is in **Source units**; the cm column is the × 2.54 conve
 
 Angles (`cam_targetangle`, `cam_yaw`, `c_min*`/`c_max*`) are degrees and need no conversion, but
 Source's `(pitch, yaw, roll)` maps to `FRotator(Pitch, Yaw, Roll)` with **pitch sign flipped** —
-the same rule the rest of the pipeline already applies (`docs/project/rebuild-strategy.md` →
-*Coordinate conventions*).
+the same rule the rest of the pipeline already applies for coordinate conventions.
 
 ### Console surface
 
@@ -998,8 +995,7 @@ behind the standard 36 mm horizontal-gate conversion
 clamps an out-of-range focal length once at spawn to a default of the same `18 / sin k` form (§6 —
 the default's exact value is not pinned). Both streams and their elapsed/output latches are runtime
 session state. Elysium refuses a save while an authored legacy or Sequencer camera track is
-active, so those latches are neither serialized nor republished after load
-(`docs/architecture/save-architecture.md`).
+active, so those latches are neither serialized nor republished after load.
 
 ### `vdata/camerashots/` — the shot files
 
@@ -2340,6 +2336,8 @@ is live and its shot sets `0x10`. Either choice is gated by the head-turn feasib
 (`m_hTargetEnt`, enemy, navigator goal, hint, nearest-NPC scan). Nothing else in `vampire.dll` reads
 `0x10`. So `DialogPOV 1` makes the conversation NPC address the lens rather than the player.
 
+**51 of the 66 shipped `vdata/camerashots/` shot files set the `DialogPOV` flag (bit `0x10`).**
+
 **`FUN_1026b810` is `CAI_BaseNPC::MaintainEyeDirection`, vtable slot 333 (2026-09-07).** The base is
 `CBaseCombatCharacter::MaintainEyeDirection` `0x10325580`. Every shipped `CNPC_V*` class fills slot 333
 with `CAI_BaseNPCTroika::FUN_102bff20`, which runs the blink timer (gated on
@@ -3189,8 +3187,7 @@ enforcement**, so a HUD-hiding shot replaced by another HUD-hiding shot does not
 ### Divergences from retail in the scripted camera (2026-09-07)
 
 Recorded beside the faithful behaviour, per `docs/CLAUDE.md`. Only rows that are **still open** or
-that are a **named modernization** remain; resolved rows are gone and the rulings themselves live in
-`docs/project/camera_scripted.md`.
+that are a **named modernization** remain; resolved rows are gone.
 
 | Retail | Disposition |
 |---|---|

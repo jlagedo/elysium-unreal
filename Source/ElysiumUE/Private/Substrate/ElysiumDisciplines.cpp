@@ -1,6 +1,5 @@
 // The Discipline runtime. `Substrate/ElysiumDisciplines.h` is the contract;
-// `docs/vtmb/disciplines.md` is the behaviour and `docs/architecture/gameplay-systems-architecture.md`
-// §5.6 the decomposition.
+// `docs/vtmb/disciplines.md` is the behaviour.
 //
 // Two execution families over one shared authority, both landing behind existing seams: the sheet
 // (blood, the thirteen learned/active slot pairs, `HealthBuffer`, `Automatic_Soak_Successes`), the
@@ -937,7 +936,7 @@ namespace
 	}
 
 	// --- The `HitInfo` AI-schedule channel ---
-	// `docs/architecture/gameplay-systems-architecture.md` §5.6: the cast "executes `HitInfo` as
+	// The cast "executes `HitInfo` as
 	// independent channels — ... AI schedule assignment (§5.5 kernel) ...". §5.5.4's kernel owns
 	// what a schedule IS; this channel only names one, so it goes through the one door that already
 	// turns a name into a running program (`FElysiumNpc::StartNamedSchedule`) rather than reaching
@@ -1626,7 +1625,7 @@ void ExecuteEndAll(FElysiumEntityWorld& World)
 }   // namespace ElysiumDisciplines
 
 // --- The block's one field list ---
-// `docs/architecture/save-architecture.md` — persistent state is a declared save block with one
+// Persistent state is a declared save block with one
 // owner. This domain's state has two HOMES (the player record, because the player entity is
 // excluded from the map snapshot; the NPC leaf, because a targeted effect lands on whichever
 // character the cast hit) and exactly one field list, which is this function. Both call sites gate

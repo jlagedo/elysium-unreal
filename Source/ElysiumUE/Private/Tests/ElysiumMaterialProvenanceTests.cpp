@@ -1,6 +1,5 @@
 // Content-free Substrate automation for UElysiumMaterialProvenance: the record a baked material
-// instance carries from its `vtmb:material:` unit (docs/architecture/seam_map_material.md ->
-// "Import" -> "Provenance").
+// instance carries from its `vtmb:material:` unit.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS

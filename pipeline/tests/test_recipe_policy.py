@@ -1,8 +1,7 @@
 """Recipes are data content plus a producer version. Code is never hashed.
 
-`docs/architecture/seam_map_unit_contract.md` -> "Baked assets" -> "Recipes". Hashing a script,
-a module or the editor DLL into a recipe re-authored whole lanes for a comment edit or an
-unrelated C++ change; the version string is the code half, bumped on purpose.
+Hashing a script, a module or the editor DLL into a recipe re-authored whole lanes for a comment
+edit or an unrelated C++ change; the version string is the code half, bumped on purpose.
 """
 from pathlib import Path
 import re

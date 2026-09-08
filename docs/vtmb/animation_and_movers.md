@@ -1575,8 +1575,7 @@ Verifying any of the four needs a live debugger against the running game, not st
 > four unrecovered terms gate rungs 2, 3 and 4, and nothing in this runtime can set the flags they
 > read, so no rung they own is reachable either way. **A body in `NPC_STATE_COMBAT` answers neither
 > predicate** and keeps its untranslated request, because rung 5's combat arm terminates in a ConVar
-> whose default is not recoverable above; guessing it would invent a branch. The design is
-> `docs/architecture/animation-architecture.md` § 3.4.
+> whose default is not recoverable above; guessing it would invent a branch.
 
 Six classes replace that inherited pre-translation leaf [VtMB decompiled]:
 
@@ -3069,16 +3068,21 @@ does not automatically preserve the rule after runtime sequence/layer blending.
 The faithful representation therefore needs either split-inheritance evaluation
 after blending or a complete pose representation that re-expresses the result as
 ordinary parent-relative locals. Which representation Elysium uses is an Unreal
-design decision owned by `docs/architecture/animation-architecture.md`; this RE
+design decision; this RE
 constrains both choices. In particular, **no fixed left or right multiplier, no
 model-wide quarter-turn and no skeletal-component yaw follows from the retail
 rule**. Every required rotation varies with authored pose state.
 
+**The size of the helper-bone correction, measured on the cast.** `Bip01` — the chain sitting
+above the split bone — rotates 63° from bind on a weapon idle sequence and 82–99° on a walk or
+run. Through `A_dance01` on `goth_female`, an arm swung 71° from bind drives `Bip01 L Shoulder`
+47° and `Bip01 L Elbow` 46° from their own binds.
+
 ## A.4b Retail pose pipeline — durable Ghidra proof path
 
 The capture instrument is retired to closure — its corpus is banked under
-`$ELYSIUM_WORK_ROOT/research` and returns as an escalation oracle on a named divergence
-(`docs/project/roadmap.md`, the LIFE programme). Three tracked investigation specifications divide the
+`$ELYSIUM_WORK_ROOT/research` and returns as an escalation oracle on a named divergence.
+Three tracked investigation specifications divide the
 retail path at its DLL boundaries: `animation_pose.json` (`client.dll`),
 `animation_skinning.json` (`engine.dll`), and `animation_studiorender.json`
 (`StudioRender.dll`) under `research/cases/animation-pose/specs/`. They preserve pinned binary
@@ -3692,7 +3696,7 @@ all of these seams:
 
 The independent source/output audit was the internal
 `elysium_pipeline.validation.validate_skeletal_pipeline` library module. It read the legacy
-`npc/` export tree and retired with it in R8 (`docs/project/seam_migration.md` -> R8); the
+`npc/` export tree and retired with it in R8; the
 native replacements are `validation/skeletal_diff.py` against the frozen legacy baseline and
 `verify characters --fidelity` against the GLB units. The findings below are its recorded
 measurements.
@@ -3830,8 +3834,7 @@ operands what decides it is the clip being entered, not whatever is already runn
 the corpus.
 
 The `!in` operand is structurally unrepresentable in the reproduction — a selection that named no
-clip never reaches a blend request — so only `!out` and the `0x2` cut carry into it
-(`docs/architecture/animation-architecture.md` § 4).
+clip never reaches a blend request — so only `!out` and the `0x2` cut carry into it.
 
 ### Transitions are client-side only
 
@@ -4096,15 +4099,12 @@ not stored anywhere on disk, but the builder writes each group's own range into
 `StudioModelGroup`+0x08/+0x0c at load, so reading those from a live process resolves any global
 sequence number to its owning bank and owner-local index without inferring the order at all.
 One session's read maps 27,810 numbers this way across nine player bodies. Elysium resolves
-first-in-tree-order and measures what that leaves unreachable
-(`docs/architecture/animation-architecture.md` § 2.4); comparing that against the read ranges
-is what tests the rule. Method: `animation_rig_resolution.md`.
+first-in-tree-order and measures what that leaves unreachable; comparing that against the read
+ranges is what tests the rule. Method: `animation_rig_resolution.md`.
 
 The consuming representation must retain the include DAG's `clip → owning model` resolution and
 bind shared clips by bone name. It need not merge every included bank into every model, but an
-engine's own cross-skeleton retargeter is not part of Troika's rule. Elysium's generated-asset
-layout and the reason bank sequences are family-bound live in
-`docs/architecture/animation-architecture.md`.
+engine's own cross-skeleton retargeter is not part of Troika's rule.
 
 The patch-first grid contains one explicit source exception. The Night Watchman in
 `sm_junkyard_1` references
@@ -4638,5 +4638,4 @@ holding `item_w_claws` yields `claws_idle`, the crouched claw stance seen on Jac
 whenever a claim ran out. `FElysiumAnimationDriver` now remembers the clip a base claim committed
 and republishes it by name when the base is unowned in Idle on a cast body; travel states are
 unchanged, a body with no history falls through to the idle resolve, and the player is untouched.
-The design seam is `docs/architecture/animation-architecture.md`. Proof:
-`Elysium.Substrate.BaseHold.UnownedCastIdle`.
+Proof: `Elysium.Substrate.BaseHold.UnownedCastIdle`.

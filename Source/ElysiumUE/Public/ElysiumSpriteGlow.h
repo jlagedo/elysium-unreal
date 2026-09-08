@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// Source's sprite glow rule (R6.1, `docs/architecture/seam_map_map.md` -> "Sprites (R6.1)"),
+// Source's sprite glow rule,
 // restated as pure functions so the proxy applies exactly what `Elysium.Substrate.SpriteGlow`
 // pins. Every constant is `client.dll`'s `GlowBlend` (`100c24a0`): the defaults below are the
 // `.rdata` doubles and the two cvar default strings, and `FParams::FromSettings` reads the

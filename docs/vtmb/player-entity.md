@@ -658,5 +658,4 @@ The player-wide investigation keeps these questions open:
 The faithful game object is one entity identity with inherited game state and one command-timed
 update transaction. Unreal may own its pawn, collision, movement solving, camera evaluation and
 rendering, but those engine objects are embodiment and query providers. They do not become a
-second character sheet, inventory owner, event target or save authority. The corresponding Unreal
-ownership design is `docs/architecture/runtime-architecture.md`.
+second character sheet, inventory owner, event target or save authority.

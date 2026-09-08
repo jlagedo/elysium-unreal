@@ -270,7 +270,7 @@ bool FElysiumFogPackTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// The decal axis of R5.3 (seam_map_material.md -> "Decal fog and wetness homes"): a
+// The decal axis: a
 // UDecalComponent carries no Custom Primitive Data, so the same fog values the CPD path packs
 // for a mesh primitive are applied to an MID's three named instance parameters instead. This
 // checks ApplyToDecalMID reproduces Pack's own numbers on those parameters, content-free (the

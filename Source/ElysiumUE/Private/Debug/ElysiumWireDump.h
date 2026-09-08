@@ -4,8 +4,8 @@
 
 class FElysiumEntityWorld;
 
-// The dump half of the per-wire accounting instrument (`docs/architecture/gameplay-systems-architecture.md`
-// §7). The tally itself lives on the entity world and is readable without any of this; what is here
+// The dump half of the per-wire accounting instrument. The tally itself lives on the entity world
+// and is readable without any of this; what is here
 // is the artifact an acceptance run leaves behind — one JSON file per map, holding every authored
 // wire whether or not it ever did anything, which is the input the offline joiner reads against the
 // research inventory.

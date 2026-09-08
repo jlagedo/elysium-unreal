@@ -1,5 +1,4 @@
-// The terminal screensaver (`docs/vtmb/computer-terminals.md` §13, slice C of
-// `docs/project/plans/terminals.md`).
+// The terminal screensaver (`docs/vtmb/computer-terminals.md` §13).
 //
 // `CPropHackingSS_Think` `0x1021a740` is one repositioned label, not an animation, and its whole
 // observable surface is a schedule and two bounded draws. Both are proven here on a seeded

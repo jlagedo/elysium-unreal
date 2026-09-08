@@ -114,8 +114,7 @@ enum class EElysiumNpcMoveStatus : uint8
 
 // Which of the body's own authored locomotion fans a travel request rides. Retail NPC travel speed
 // is the selected cycle's own authored movement rather than a scalar, so a caller names the gait and
-// the body answers with the number (`docs/architecture/movement-architecture.md` → "The speed
-// authority").
+// the body answers with the number.
 enum class EElysiumNpcGaitKind : uint8
 {
 	Walk,
@@ -245,7 +244,7 @@ public:
 
 	// The body's realized locomotion — **the same record the player's mover publishes**, so
 	// the cast's locomotion and the player's cannot become two systems that happen to play the same
-	// files (`docs/architecture/animation-architecture.md` §3.2). Distinct from `Sample` above, which
+	// files. Distinct from `Sample` above, which
 	// answers where the body is and whether its request is done; this answers how it is moving.
 	//
 	// Computed on demand rather than cached, and that is not an inconsistency with the player's
@@ -255,7 +254,7 @@ public:
 	virtual FElysiumLocomotionSample SampleLocomotion() const = 0;
 };
 
-// The substrate's outbound seam (`docs/architecture/runtime-architecture.md` §7).
+// The substrate's outbound seam.
 //
 // FElysiumEntityWorld and every entity class under it are plain C++. What they need from the
 // engine — a body to stand, a voice to play, a map to travel to, a panel to put on screen — comes
@@ -315,7 +314,7 @@ struct FElysiumDynamicLightSpec
 	bool bSpot = false;                         // `_cone` > 0
 };
 
-// R7.3 (`effects-architecture.md` §5.9): one transient particle root a producer started through
+// One transient particle root a producer started through
 // `SpawnParticleRoot`. Invalid when the root's tree is unknown or there is no world to stand it in.
 struct FElysiumEffectHandle
 {
@@ -716,7 +715,7 @@ public:
 	virtual bool PlayAttachedEffect(USkeletalMeshComponent* Body, const FString& Definition,
 		FName Attachment) { return false; }
 
-	// R7.3 (`effects-architecture.md` §5.9): "spawn root X at attachment Y with mode Z" -- one
+	// "Spawn root X at attachment Y with mode Z" -- one
 	// transient effect actor on the slotted floor (or its family override), the tree from the shared
 	// `DA_ElysiumParticleTrees`. `Root` is the folded `vtmb:particle` key or the bare root name;
 	// `Parent` may be null for a world spawn; `AttachMode` the 19-value enum; `AttachName` the bone /
@@ -954,8 +953,7 @@ public:
 		return FElysiumEntityHandle::Invalid();
 	}
 
-	// The two perception queries (`docs/architecture/gameplay-systems-architecture.md`
-	// §5.5.3). Each supplies a missing WORLD TERM and never a verdict: cone, range, cadence, grace,
+	// The two perception queries. Each supplies a missing WORLD TERM and never a verdict: cone, range, cadence, grace,
 	// debounce, the `vision`/`hearing`/`npc_perception` tuning and every threshold stay substrate
 	// rules (K13). A service that answered "this NPC can see the player" would have taken the
 	// decision instead of supplying the term.
@@ -1052,8 +1050,7 @@ public:
 	// unoccluded whole-map values that would otherwise read every interior as fully lit.
 	virtual float QueryLightAtPoint(const FVector& PointCm) const { return 1.0f; }
 
-	// R6.2 (`seam_map_map_lighting.md` -> "Switched lights and lightstyles"): Source's
-	// `engine->LightStyle(style, pattern)`. A `light`/`light_spot` writes its style's pattern here
+	// Source's `engine->LightStyle(style, pattern)`. A `light`/`light_spot` writes its style's pattern here
 	// and the rig's clock reaches every baked source carrying that style. Headless: nothing.
 	virtual void SetLightStylePattern(int32 Style, const FString& Pattern) {}
 	virtual FString LightStylePattern(int32 Style) const { return FString(); }
@@ -1064,7 +1061,7 @@ public:
 	virtual class ULightComponent* BuildDynamicLight(const struct FElysiumDynamicLightSpec& Spec,
 		USceneComponent* Parent) { return nullptr; }
 	virtual void DestroyDynamicLight(class ULightComponent* Light) {}
-	// R6.1 (`seam_map_map.md` -> "Sprites (R6.1)"): CSprite's draw switch. The billboard is the
+	// CSprite's draw switch. The billboard is the
 	// bake's actor tagged with the entity's lump ordinal; the `env_sprite` leaf writes its
 	// `bOn && !IsInert()` here on spawn, on every input and on load. Headless, and on a map with
 	// no baked sprites: nothing.
@@ -1191,8 +1188,7 @@ public:
 	virtual bool IsNpcMakerInPlayerViewCone(const FVector&) const { return false; }
 	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector&, float) const { return false; }
 
-	// R7.2 -- the ranged shot's forward world trace and the stain it leaves
-	// (`docs/project/seam_migration.md` -> "R7.2 Decals", owner call B).
+	// R7.2 -- the ranged shot's forward world trace and the stain it leaves, owner call B.
 	//
 	// The substrate owns WHEN (a shot that has been paid for) and the variation roll; the trace,
 	// the hit's `UElysiumPhysicalMaterial` and the decal itself are engine questions and live on
@@ -1223,8 +1219,7 @@ public:
 	// takes that as a refusal, because the shot IS the framing.
 	// `Exposure` has no retail counterpart at all -- this engine has no tonemapper and no exposure
 	// cvar (`slice-bc-decompiles.md` §7, correction C20). It is the pusher's own ask, carried for the
-	// handle's lifetime, and the one named Presentation modernization in
-	// `docs/architecture/computer-terminal-architecture.md` §6.4: a terminal shot fills the frame
+	// handle's lifetime, and the one named Presentation modernization: a terminal shot fills the frame
 	// with one bright emissive panel at close range, which UE's auto-exposure would answer by ramping
 	// the rest of the room into black.
 	// `Exposure` is stated at every call site rather than defaulted: this header only forward-declares
@@ -1465,9 +1460,9 @@ struct FElysiumWeatherEmitterState
 	bool bDead = false;
 	// Bumped by every `TurnOn` input. VtMB's client rebuilds the emitter whenever the activation
 	// timestamp changes, so a `TurnOn` on an already-active emitter restarts it; the embodiment
-	// restarts when this changes while `bActive` holds (`effects-architecture.md` §5.2).
+	// restarts when this changes while `bActive` holds.
 	uint32 TurnOnSerial = 0;
-	// VtMB's `attach_type`, the 19-value enum (`effects-architecture.md` §5.7). 0/-1 origin,
+	// VtMB's `attach_type`, the 19-value enum. 0/-1 origin,
 	// 1/3 bone tree, 2 bone point, 6/17 attachment (follow / snap once), 9 the parent's box,
 	// 10/11 the viewer box (weather's rain follow), 15 the brush box (`func_particle`).
 	int32 AttachType = 0;
@@ -1486,7 +1481,7 @@ struct FElysiumWeatherEmitterState
 	float VolumeScale = 1.0f;
 };
 
-// R7.3 (`effects-architecture.md` §5.6): what a `func_dustmotes` publishes to stand its motes.
+// What a `func_dustmotes` publishes to stand its motes.
 // Points are world cm, pre-sampled inside the brush solid by the leaf (ten retries each, the
 // convex set off the entity's own hulls); the actor re-expresses them in its own frame.
 struct FElysiumDustState

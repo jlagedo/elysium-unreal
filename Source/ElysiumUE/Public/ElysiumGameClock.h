@@ -53,8 +53,8 @@ namespace ElysiumFrame
 // entity world and its queue die with the map actor).
 //
 // Advanced in exactly one place. `Advance` is private and reachable only through
-// FElysiumTimeControl, which the map actor's gameplay tick calls as its first statement
-// (`docs/architecture/runtime-architecture.md` §3, step 2). Pause and scale are recorded
+// FElysiumTimeControl, which the map actor's gameplay tick calls as its first statement.
+// Pause and scale are recorded
 // here and mirrored onto the engine by that same facade; nothing else writes them.
 struct FElysiumGameClock
 {
@@ -68,7 +68,7 @@ struct FElysiumGameClock
 
 	// The recorded time scale, mirrored onto engine time dilation by FElysiumTimeControl.
 	// The clock never multiplies by it: engine dilation has already scaled the frame delta
-	// handed to Advance, and scale is applied exactly once (runtime-architecture.md §4).
+	// handed to Advance, and scale is applied exactly once.
 	double GetScale() const { return Scale; }
 
 private:

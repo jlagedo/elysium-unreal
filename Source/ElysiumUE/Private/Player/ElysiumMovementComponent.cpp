@@ -699,8 +699,8 @@ void UElysiumMovementComponent::Duck()
 
 	// **The press edge decides; the release does nothing.** This is the action layer, and it is the
 	// only place the crouch is retained: the command says whether the key is down this frame
-	// (`docs/architecture/animation-architecture.md` § 3 — "a key press never selects an animation
-	// asset"), the classifier reads the realized stance off the body sample, and neither of them
+	// ("a key press never selects an animation asset"), the classifier reads the realized stance
+	// off the body sample, and neither of them
 	// holds a crouch between frames. `m_nOldButtons` keeps tracking the button's true level, because
 	// that is what makes the edge detectable at all — the same latch `CheckJumpButton` uses.
 	//

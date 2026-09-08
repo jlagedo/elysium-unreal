@@ -319,7 +319,7 @@ EElysiumFeedVerdict FElysiumCombatCharacter::EvaluateFeedAcceptance(FElysiumComb
 	}
 	// SEAM — a separate stealth predicate can still authorise the feed after the opposed comparison
 	// fails (`feeding.md` § "Target acquisition and acceptance", item 4). Its identity is OPEN and
-	// stealth itself (`gameplay-systems-architecture.md` §5.9) has not landed, so the override is
+	// stealth itself has not landed, so the override is
 	// declared here and unimplemented rather than approximated.
 	return EElysiumFeedVerdict::RefusedOpposedCheck;
 }

@@ -1,4 +1,4 @@
-// R6.1 -- sprites (`docs/architecture/seam_map_map.md` -> "Sprites (R6.1)"). Two seams, both
+// R6.1 -- sprites. Two seams, both
 // content-free: the `env_sprite` leaf's on/off rule observed on the recording double, and the
 // glow rule the proxy applies -- the settings defaults, the pure formulas, the tag contract and
 // the actor shape the bake relies on.

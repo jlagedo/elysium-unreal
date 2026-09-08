@@ -1198,8 +1198,7 @@ float AElysiumMapActor::OutputLeadSeconds() const
 	return Audio ? Audio->OutputLeadSeconds() : ElysiumAudioLatency::FallbackLeadSeconds;
 }
 
-// R7.2 (`docs/project/seam_migration.md` -> "R7.2 Decals", owner call B). The substrate asked for
-// a shot's mark; the trace, the surface character and the decal are all on this side of the seam.
+// The substrate asked for a shot's mark; the trace, the surface character and the decal are all on this side of the seam.
 // A world with no decal subsystem (a headless substrate run) answers false and marks nothing.
 bool AElysiumMapActor::LayShotImpactDecal(const FVector& FromCm, const FVector& Direction,
 	float RangeCm, int32 Variation)

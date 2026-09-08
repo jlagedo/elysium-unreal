@@ -2,13 +2,14 @@
 
 Engine-neutral facts about VtMB's user interface: which code owns which screen, what data
 drives it, where the art lives, and the coordinate model it is authored in. This is the
-**design intent** the modern re-skin is checked against (`docs/project/reconstruction-direction.md` axis 1 — the
+**design intent** the modern re-skin is checked against (axis 1 — the
 UI has no classic mode), not a port target.
 
-Its Unreal counterpart is **`docs/architecture/ui-architecture.md`** (the CommonUI/Slate stack, the design tokens,
-the screen inventory as rebuilt). The pairing works like `docs/vtmb/controls.md` ↔ `docs/architecture/input-architecture.md`:
+Its Unreal counterpart holds the CommonUI/Slate stack, the design tokens, and
+the screen inventory as rebuilt. The pairing works like `docs/vtmb/controls.md` and its Unreal
+counterpart:
 a new fact about how *VtMB* draws a screen goes here; a decision about how *Elysium* draws it
-goes there. Per-task status lives in `docs/project/roadmap.md` (**PL8**, **8.6**, 8.8, 8.9, 8.10).
+goes there.
 
 `docs/vtmb/m0_menu_build.md` is the `GameUI.dll` decompile reference and is **partly superseded by this
 doc** — see "Corrections" at the end.

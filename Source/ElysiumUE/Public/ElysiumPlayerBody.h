@@ -55,7 +55,7 @@ public:
 
 	// The frame's settled body state — the same record the NPC motor publishes, so the
 	// player's locomotion and the cast's cannot become two systems that happen to play the same
-	// files (`docs/architecture/animation-architecture.md` §3.2). It is on the interface rather than
+	// files. It is on the interface rather than
 	// on the pawn because both bodies can answer it: the box body hands back what its mover
 	// published, the capsule body derives it from CharacterMovement.
 	virtual FElysiumLocomotionSample GetLocomotionSample() const = 0;

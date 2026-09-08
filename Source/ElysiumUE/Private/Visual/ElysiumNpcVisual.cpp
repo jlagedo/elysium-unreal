@@ -34,7 +34,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNpcVisual, Log, All);
 
-// The simulated-garment enhancement (`docs/architecture/asset-enhancement.md`). Retail garment
+// The simulated-garment enhancement. Retail garment
 // motion is a StudioRender particle solve carried by the model, independently from its hair/body
 // bone-chain solver. The approximation artifacts are built by
 // pipeline/src/elysium_pipeline/enhancement/cloth_spike.py; the baked-character path does not

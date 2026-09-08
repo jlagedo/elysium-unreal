@@ -1,6 +1,6 @@
 """Gapless byte accountability for one nav-graph's `.ain` and `.loc` members.
 
-Every owner in `seam_map_nav_graph.md`'s "Byte ledger owners" table claims one contiguous range
+Every owner in the nav-graph seam's byte-ledger-owners table claims one contiguous range
 -- a header line's label and value, one node's tokens, one link's tokens -- including whatever
 whitespace separates its own tokens; `whitespace` then sweeps whatever the decoder's own claims do
 not reach, which the grammar guarantees is exactly the separators between records (spaces, tabs,

@@ -6,8 +6,7 @@
 
 // The per-world game mode: the pawn/HUD/controller classes, the no-pawn-in-front-end rule, and
 // one `NotifyWorldReady` on BeginPlay. Boot, the app state machine and the session live on
-// UElysiumGameFlowSubsystem — a game mode is per-world, and all three must survive travel
-// (`docs/architecture/runtime-architecture.md` §10).
+// UElysiumGameFlowSubsystem — a game mode is per-world, and all three must survive travel.
 UCLASS()
 class AElysiumGameMode : public AGameModeBase
 {

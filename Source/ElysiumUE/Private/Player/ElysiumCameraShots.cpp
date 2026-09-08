@@ -341,7 +341,7 @@ bool ElysiumCameraShots::ParseAllText(const FString& Text, TArray<FElysiumCamera
 			// `flags |= 1 << (count + 2); count++` per sub-block found, exactly as retail: the flag
 			// follows the ORDER of presence while the anchor goes into the fixed slot. `Point2`
 			// alone therefore raises the `Point1` bit and leaves slot 2 empty — the look-at reads
-			// the empty slot and the shot aims at the world origin (§4 row 1).
+			// the empty slot and the shot aims at the world origin.
 			auto RaisePresence = [&Def]()
 			{
 				(Def.TargetPointCount == 0 ? Def.bTargetPoint1Flagged : Def.bTargetPoint2Flagged) = true;
@@ -521,7 +521,7 @@ bool ElysiumCameraShots::LatchesAnchors(const FElysiumCameraShotDef& Def)
 	// `FUN_1006f010(this, out, i)` opens with `thunk_FUN_1006ee10(this, 0)` — a **literal 0**, so it
 	// reads anchor 0's flags whatever index it was asked for. That is retail's bug and it is what
 	// decides which shots latch, so reproducing the latch without it would change 55 of the 66
-	// shipped shots (`camera_scripted.md` §4 row 4, `docs/vtmb/retail-defects.md` §7).
+	// shipped shots (`docs/vtmb/retail-defects.md` §7).
 	//
 	// **The retail test is one term, not two.** `FUN_1006f010` tests only `anchor[0].flags & 0x2000`
 	// (`None`); the record's `Start`-present bit is tested by the *caller* `FUN_1006e8e0`, and only
@@ -1125,7 +1125,7 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	//   neither -> `(0,0,0)`.
 	// Because the parser raises those two bits by order of presence while writing the fixed slot, a
 	// shot that authors `Point2` alone raises the `Point1` bit and this reads the empty slot 2 — the
-	// shot aims at the world origin (§4 row 1). An anchor that does not resolve leaves the zero
+	// shot aims at the world origin. An anchor that does not resolve leaves the zero
 	// there for the same reason retail does: `FUN_1006f080` wrote nothing.
 	FVector Point1 = FVector::ZeroVector;
 	FVector Point2 = FVector::ZeroVector;

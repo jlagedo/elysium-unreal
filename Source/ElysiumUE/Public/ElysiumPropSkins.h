@@ -52,8 +52,7 @@ struct FElysiumPropSkinModel
 
 	// Index = VtMB's skin number. Element 0 is the authored set and is always empty. A family
 	// identical to family 0 produces no row either, so this array may be shorter than FamilyCount
-	// -- trimmed after the last family that actually repaints something
-	// (docs/architecture/seam_map_model.md -> "Import" -> "Skins table").
+	// -- trimmed after the last family that actually repaints something.
 	UPROPERTY(EditAnywhere) TArray<FElysiumSkinFamily> Families;
 
 	// The stem's true family count (`materialBindings.skinFamilies.Num()`), so `Find` can clamp an
@@ -67,8 +66,8 @@ struct FElysiumPropSkinModel
 
 // The corpus prop-skin table. Authored either by pipeline/unreal/bake_map.py (the legacy shared
 // bake, one asset for the whole corpus under `/ElysiumBaked/Shared/Meshes`) or by
-// pipeline/unreal/import_models.py (the V2 lane, `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`,
-// docs/architecture/seam_map_model.md -> "Import" -> "Skins table") -- one asset either way, never
+// pipeline/unreal/import_models.py (the V2 lane, `/ElysiumBaked/Meshes/DA_ElysiumPropSkins`)
+// -- one asset either way, never
 // per map, so a single load reaches every alternate material in the corpus and the hard references
 // keep them all reachable from a level that places any of them.
 UCLASS(BlueprintType)

@@ -231,13 +231,13 @@ def classify(
         return _row(
             "unreachable-member",
             "the model path rule composes models/<model>.mdl, so no engine path reaches this "
-            "prefix (seam_map_model.md, 'Retired identities')",
+            "prefix",
         )
     if key.startswith("models/") and extension == ".vmt":
         return _row(
             "unreachable-member",
             "the material path rule composes materials/<material>.vmt, so no engine path "
-            "reaches a .vmt below models/ (seam_map_material.md, 'Unit identity')",
+            "reaches a .vmt below models/",
         )
     if key.startswith(_MODEL_ORPHAN_TREE) and facts is not None:
         stems = _model_stems(key)
@@ -245,8 +245,7 @@ def classify(
             return _row(
                 "unreachable-member",
                 "the model loader opens a VTX or PHY only beside the MDL it was compiled with, "
-                f"and {stems[0]}.mdl is absent from the install "
-                "(seam_map_model.md, 'Source closure')",
+                f"and {stems[0]}.mdl is absent from the install",
             )
     if key.startswith(_SOUND_TREE) and extension == ".lip" and facts is not None:
         stem = key[: -len(".lip")]
@@ -254,8 +253,7 @@ def classify(
             return _row(
                 "unreachable-member",
                 "a LIP is loaded beside the sound it was authored for, and neither "
-                f"{stem}.wav nor {stem}.mp3 is in the install "
-                "(seam_map_sound.md, 'Source closure')",
+                f"{stem}.wav nor {stem}.mp3 is in the install",
             )
     if (
         key.startswith(_SOUND_TREE)

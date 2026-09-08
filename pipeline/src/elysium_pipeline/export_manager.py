@@ -608,7 +608,7 @@ POLICY_GENERATOR_OUTPUTS = {
         "Input/IMC_Player_Gamepad.uasset"),
     "make_dialogue_camera_set.py": ("Camera/DA_ElysiumDialogueCameraSet.uasset",),
     "make_boot_map.py": ("Boot.umap",),
-    # `make_missing()`'s two products (docs/project/seam_migration.md R1.6 follow-up): every
+    # `make_missing()`'s two products: every
     # `vtmb:missing-material:` sentinel slot in the model corpus binds `MI_V2_Missing`, so an
     # umbrella rerun that silently failed to author it must not report complete.
     "make_v2_materials.py": (
@@ -1662,7 +1662,7 @@ def export_all_surface_property_glbs(config, runner, *, jobs=None) -> list[Path]
 
 # --- the uniform isolated-GLB seam ------------------------------------------------------------
 #
-# `seam_map_unit_contract.md` gives every unit kind one shape: one identity is one file, the
+# The uniform isolated-GLB seam gives every unit kind one shape: one identity is one file, the
 # singular command writes one unit and the plural command writes every key the kind's own
 # `source_keys(index)` resolves, and the seam's own validator reads each published file back.
 # Only four facts differ per kind -- which module owns it, which family directory it publishes
@@ -1744,7 +1744,7 @@ def refresh_corpus_index_row(config, destination: Path) -> None:
     """Bring the corpus index's `units[]` row for one just-published unit up to date.
 
     The corpus index is "rewritten by any single-unit command so that its `units[]` row for that
-    unit is current" (`seam_map_corpus_index.md`, "Unit identity"), so every singular export ends
+    unit is current", so every singular export ends
     here. Before the first `export-all` there is no index and this does nothing; a refresh that
     fails is reported and does not fail the export that already succeeded, because the unit on
     disk is what the command was asked for.
@@ -1997,7 +1997,7 @@ def export_sound_script_glb(config, runner, key: str) -> Path:
 def export_all_sound_script_glbs(config, runner, *, jobs=None) -> list[Path]:
     """Write every game sound, the game-sound manifest and every soundscape.
 
-    `seam_map_sound_script.md` gives the manifest and the soundscapes no singular command of
+    The sound-script seam gives the manifest and the soundscapes no singular command of
     their own; `sound-scripts-glb` is where those two kinds publish.
     """
     from elysium_pipeline.formats import install
@@ -2219,7 +2219,7 @@ def export_corpus_index_glb(config, runner) -> Path:
     unit owns every member or why nothing does, and carries the cross-unit reference graph over
     every unit already published below `$ELYSIUM_EXPORT_V2_ROOT`. It fails while any member is
     unclaimed or any cross-unit check fails, which is the mechanical form of "no data left
-    undecoded" (`seam_map_corpus_index.md`, "The guarantee").
+    undecoded".
     """
     del runner
     _require_export_v2_config(config)
@@ -2305,8 +2305,7 @@ GLB_SEAMS = (
     ("nav-graph", export_all_nav_graph_glbs),
     ("engine-config", export_all_engine_config_glbs),
     # Last, and last for a reason: the corpus index is written over the published corpus, so
-    # every seam above has to have run before it can name what it indexes
-    # (`seam_map_corpus_index.md`, "Unit identity").
+    # every seam above has to have run before it can name what it indexes.
     ("corpus-index", export_all_corpus_index_glbs),
 )
 

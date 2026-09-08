@@ -125,7 +125,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 
-// S2 — the frame order (runtime-architecture.md §3), asserted at both levels it is declared
+// The frame order, asserted at both levels it is declared
 // at: the engine tick table (tick groups + the pause split, read off the class defaults —
 // the late-bound prerequisites are wired at registration and belong to the Play tier), and
 // the substrate's own two-pass drive inside one frame.
@@ -791,7 +791,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 				> static_cast<int32>(Map->PostMoveTickFunction.TickGroup));
 	}
 
-	// §4 — before activation, the lifecycle-bearing passes are allowed to poll while held, but
+	// Before activation, the lifecycle-bearing passes are allowed to poll while held, but
 	// their gameplay branches are phase-gated. ActivateRuntime restores their flags to false; the
 	// post-move gameplay pass is never needed for readiness. Presentation remains live throughout.
 	TestTrue(TEXT("the pre-move pass can poll readiness while held"), Map->PreMoveTickFunction.bTickEvenWhenPaused);

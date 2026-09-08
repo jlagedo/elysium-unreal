@@ -1,5 +1,4 @@
-// R6.2 -- switched lights and lightstyles (`docs/architecture/seam_map_map_lighting.md` ->
-// "Switched lights and lightstyles"). The seam is the pattern a light entity writes for its style,
+// Switched lights and lightstyles. The seam is the pattern a light entity writes for its style,
 // observed on the recording double, and the multiplier the rig's table turns it into.
 #include "Misc/AutomationTest.h"
 

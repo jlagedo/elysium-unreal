@@ -5,7 +5,7 @@ Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import
 -ImportMapEntities=<manifest.json>`). The offline stage (`importers/map_entities.py`, R4.1) already
 ran the R3.2 producer's entity join and asserted def-count and per-index parity against the
 `<map>.ents` document the asset replaces; this script only turns those rows into reflected structs
-and saves them (`docs/architecture/seam_map_map_entities.md` -> "Import").
+and saves them.
 
 Nothing is decided here. Every value written below is copied from the manifest row verbatim -- the
 asset is a transport change and nothing else, so a transformation in this file would be a

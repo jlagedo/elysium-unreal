@@ -1,7 +1,7 @@
 // The registration site for the player entity and the two chain nodes above it (S3).
 //
-// `docs/architecture/runtime-architecture.md` sections 5-6 is the design; `docs/vtmb/script_api.md`
-// is the input inventory. The three classes here are ordinary registry nodes: nothing about the
+// `docs/vtmb/script_api.md` is the input inventory. The three classes here are ordinary registry
+// nodes: nothing about the
 // player is special-cased — `pc.MoneyAdd(50)` from a level script, `MoneyAdd` on a Hammer wire and
 // `elysium.ent_fire !player MoneyAdd 50` from the console are one input, reached by one R2 walk.
 //

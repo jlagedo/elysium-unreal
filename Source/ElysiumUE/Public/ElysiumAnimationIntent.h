@@ -11,8 +11,8 @@
 
 // What a body asks the animation layer for, and what it is told back.
 //
-// `FElysiumAnimationIntent` in, `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6 of
-// `docs/architecture/animation-architecture.md` section 3.3. This header owns the pure half: the
+// `FElysiumAnimationIntent` in, `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6.
+// This header owns the pure half: the
 // records (the intent, the channel request and the selection), step 1's priority table, the
 // locomotion classifier and the jump latch. It reads `FElysiumLocomotionSample` and
 // nothing else, so it is asserted with no world, no catalog and no UObject —
@@ -120,8 +120,7 @@ namespace ElysiumAnimIntent
 // The one recovered relationship inside it is Ambient vs the two locomotion rows: an ambient
 // stance, fidget or dialogue clip holds against a standing body's every-tick publish and yields
 // the moment the body travels — which is retail's own observable behaviour for the ambient cast.
-// The rest of the order is ours until capture-verified (`docs/architecture/animation-architecture.md`
-// section 3.3 step 1): a scripted beat outranks travel, a damage reaction outranks a scripted
+// The rest of the order is ours until capture-verified: a scripted beat outranks travel, a damage reaction outranks a scripted
 // beat, a choreographed scene owns the body outright, and the owner's hand outranks everything.
 enum class EElysiumAnimPriority : uint8
 {

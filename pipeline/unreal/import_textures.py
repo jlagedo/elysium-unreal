@@ -2,9 +2,8 @@
 
 Runs inside a headless editor (`-run=pythonscript -script=pipeline/unreal/import_textures.py
 -ImportTextures=<manifest.json>`). The offline stage already decided everything -- asset path,
-class, sRGB, compression, mips, sampling -- and wrote it to the manifest this script reads
-(`docs/architecture/seam_map_texture.md` -> "Import" -> "The staging manifest"). This script
-only executes those decisions against the editor:
+class, sRGB, compression, mips, sampling -- and wrote it to the manifest this script reads. This
+script only executes those decisions against the editor:
 
   * per entry, compare the manifest's recipe against the stamp the asset carries
     (`bake_lib.RECIPE_TAG`) and import only what is new, changed or forced;
@@ -22,7 +21,7 @@ only executes those decisions against the editor:
 
 Failures are isolated per entry: an exception names the entry in the report and the run goes on,
 so a defect late in an 11k-unit run costs one relaunch (which resumes from the stamps), not the
-run. The first run is the whole corpus by owner call (`docs/project/seam_migration.md`).
+run. The first run is the whole corpus by owner call.
 
 Command line:
   -ImportTextures=<path>   the manifest (required)
@@ -249,8 +248,7 @@ def apply_settings(texture, entry):
     `UTexture::PostEditChangeProperty` is a `SetLightingGuid` + `ValidateSettingsAfterImportOrEdit`
     + `UpdateResource()`, i.e. a fresh DDC re-encode of the whole source payload. Six to eight
     singular writes were six to eight re-encodes of every texture in the corpus, and
-    `verify_built` then blocks on the last one
-    (`docs/architecture/uasset-bake-spike.md` -> "Engine facts this pinned down").
+    `verify_built` then blocks on the last one.
 
     The plural call reaches `PostEditChange` with a null property, and that branch forces
     `RequiresNotifyMaterials = false` (Texture.cpp ~833) where `compression_settings`/`srgb`/

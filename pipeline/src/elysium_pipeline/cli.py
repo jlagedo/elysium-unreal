@@ -2179,7 +2179,7 @@ def import_models(
     """Import the referenced model corpus from published GLBs into /ElysiumBaked/Models.
 
     Stages every model the selection names into a manifest under `import/models/` and then runs
-    the headless editor import over it (`docs/architecture/seam_map_model.md` -> "Import").
+    the headless editor import over it.
     """
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
@@ -2274,8 +2274,7 @@ def import_map_entities(
 
     Runs the R3.2 producer's entity join over the published units, asserts def-count and per-index
     parity against the `<map>.ents` document the asset replaces, and then authors one
-    `UElysiumMapEntities` per map in a headless editor
-    (`docs/architecture/seam_map_map_entities.md` -> "Import").
+    `UElysiumMapEntities` per map in a headless editor.
     """
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
@@ -2360,7 +2359,7 @@ def import_map_collision(
 
     Reads `<map>.hulls`, `<map>.dispcol` and the brush-entity `hulls` of `<map>.ents`, asserts
     parity against them, and then authors one cooked `UElysiumMapCollisionPayload` per map in a
-    headless editor (`docs/architecture/seam_map_map.md` -> "Import").
+    headless editor.
     """
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
@@ -2441,8 +2440,7 @@ def import_map_environment(
     """Import each named map's environment into /ElysiumBaked/<map>/DA_<map>_Environment.
 
     Reads `<map>.env`, `<map>.sky` and `<map>.spawn` verbatim, asserts parity against them, and
-    then authors one `UElysiumMapEnvironment` per map in a headless editor
-    (`docs/architecture/seam_map_map.md` -> "Import — environment").
+    then authors one `UElysiumMapEnvironment` per map in a headless editor.
     """
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:

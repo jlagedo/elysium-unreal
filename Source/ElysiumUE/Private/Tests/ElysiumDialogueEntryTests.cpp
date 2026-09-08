@@ -1,6 +1,6 @@
 // D3 — use-to-talk entry, the player-side dialogue refusal predicate and the dialogue holster.
 //
-// Retail chain (`docs/project/plans/dialogue.md` arm 1, `docs/vtmb/game_runtime.md` §5):
+// Retail chain (`docs/vtmb/game_runtime.md` §5):
 // `CBasePlayer::PlayerUse` (`0x10167850`) resolves the use target, tests the character's `WillTalk`
 // latch (virtual `+0x49c`, `InputWillTalk` `0x103418f0`), clears the schedule and calls player
 // vtable slot 414 (`FUN_10178280`). That function refuses when `m_bForceDialogStart` (`npc+0x6495`)

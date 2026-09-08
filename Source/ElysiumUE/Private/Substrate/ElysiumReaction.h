@@ -2,8 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The RPG/social reaction score — the third social domain (K4,
-// `docs/architecture/gameplay-systems-architecture.md` §5.5.7): a pure function over explicit
+// The RPG/social reaction score — the third social domain (K4): a pure function over explicit
 // inputs, consumed by dialogue and never by combat targeting or emotional disposition. No world, no
 // entity, no `FElysiumCombatCharacter` — the caller (the eventual dialogue consumer) gathers every
 // fact this needs and hands them in, the split `ElysiumDice::Roll` and `ElysiumFeats::FeatValue`

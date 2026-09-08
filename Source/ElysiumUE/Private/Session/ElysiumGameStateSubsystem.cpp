@@ -120,8 +120,8 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 	// time scale and armed dev step, which is what makes the run pristine rather than merely reseeded.
 	TimeCtl.ResetClock();
 
-	// Every game-visible draw comes from an owned, seeded stream whose state is in the save
-	// (`docs/architecture/save-architecture.md` §8). A run takes one session seed; the five streams derive from it.
+	// Every game-visible draw comes from an owned, seeded stream whose state is in the save.
+	// A run takes one session seed; the five streams derive from it.
 	ElysiumRng::SeedAll(static_cast<int32>(FPlatformTime::Cycles()));
 
 	Record.Reset();

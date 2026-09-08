@@ -1,7 +1,7 @@
 # Composes one Niagara system per VtMB particle root -- `NS_<root>` under
 # `/Game/ElysiumGenerated/VFX` -- from an authored base emitter and the staged `particleTrees{}`.
 #
-# The ruling is `docs/project/niagara_authoring_strategy.md` 4.1 (option A+B): ~10 hand-authored
+# The ruling (4.1, option A+B) is ~10 hand-authored
 # assets, and one generated system per root with one *inherited* emitter per drawing node. The
 # design note for this lane is `E:/elysium-work/scratch/effects/generator_design.md`.
 #

@@ -10,7 +10,7 @@
 // The pending time-sorted I/O deliveries with their fire times, the always-on I/O history ring
 // buffer (the delivered/unknown/Python causality stream), and the pause / single-step controls.
 // Pause holds the queue's service loop; Step releases one due event at a time — the causality
-// single-stepper (`docs/architecture/debug-tooling.md` Layer 2). The controls write the queue's
+// single-stepper. The controls write the queue's
 // pause/step flags; everything else is read-only.
 class FElysiumCogWindow_EventQueue : public FElysiumCogWindow
 {

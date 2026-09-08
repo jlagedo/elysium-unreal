@@ -1,5 +1,4 @@
-// Elysium.Substrate.UiArt -- R6.6's path -> asset resolution (docs/architecture/ui-architecture.md
-// -> "9. Art from assets"): the key a screen names folds to the texture lane's `T_` package by the
+// Elysium.Substrate.UiArt -- R6.6's path -> asset resolution: the key a screen names folds to the texture lane's `T_` package by the
 // same rule that named it at import, the use-icon enum folds to its `hud/context_icons/` art with
 // the two on-disk aliases, and the clan sigil table is total over VtMB's 2..8 encoding. Content-
 // free: nothing here loads an asset; `Elysium.Content.UiArt` walks the real mount.

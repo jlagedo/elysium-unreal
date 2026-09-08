@@ -511,6 +511,22 @@ files even though their table limits differ, and those solids name ragdoll body 
 hair or garment bones. No affected bone declares `ProcType`, `Flags & 0x1`, or `Flags & 0x2`, and
 VtMB's decoded procedural enum stops at AxisInterp rather than later Source's JIGGLE value.
 
+**Breast-like bone-chain records, a distinct sub-census of the corpus above.** Across the
+installed corpus there are 113 breast-like bone-chain records on 55 character models (25 unique
+NPCs, 9 player/shared female bodies, 21 other); 110 records walk exactly one bone, only 3 walk
+two-or-more. Parents are `Bip01 Spine1` on 106 records, with a handful on `Spine`/`Spine2`/
+`Spine3`/`Spine7`; first-bone names cluster as `BoobLeft03`/`BoobRight01` (18 each), `left breast`/
+`right breast` (11 each), generic `Bone01`/`Bone03`/`Bone05`, and `left_breast`/`right_breast`.
+
+Three distinct authoring-parameter clusters recur across the named NPCs carrying these records:
+"tight jiggle" (gravity 0, spring exponent 0.3, max 30°), "loose ceiling" (gravity 0, spring
+exponent 2.0, max 90°), and "sag" (gravity 3, spring exponent 0.3, max 15°).
+
+The unique NPCs whose models carry a breast bone pair are Yukie, Damsel, Pisha, VV/`vvstrip`,
+Maria, Imalia, Kerri, Misti/`mistidance`, Tawni, stalker (both paths), Heather/`heather_3`/
+`heather_goth`, Jeanette, Lily/`lilydamaged`, Rosa, Therese, Tourette, and
+`vampire_hunter_chick`/`vampire_hunter_chock`.
+
 ## Confidence ledger and remaining unknowns
 
 | Claim | Standing | What remains |

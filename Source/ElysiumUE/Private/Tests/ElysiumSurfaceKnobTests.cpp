@@ -1,6 +1,4 @@
-// Content-free Substrate automation for SF-4.1: the surface-shading knobs a human tunes by eye
-// (docs/architecture/seam_map_material.md -> "Import" -> "Knob contract";
-// docs/project/seam_migration.md 2026-08-31, "Calibration happens on knobs inside the editor").
+// Content-free Substrate automation for SF-4.1: the surface-shading knobs a human tunes by eye.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -37,8 +35,7 @@ bool FElysiumSurfaceSettingsDefaultsTest::RunTest(const FString&)
 
 	// The ten named in the mechanics plan, plus the design doc's Overbright, MaskMetallicMax,
 	// ChromaticTintStrength and ChromaThreshold (fourteen), plus ClassInfluence (the
-	// Default*-vs-class-table lerp weight) -- fifteen settings scalars in all
-	// (seam_map_material.md knob contract; owner review addendum 2026-08-31). R7.2 retired
+	// Default*-vs-class-table lerp weight) -- fifteen settings scalars in all. R7.2 retired
 	// DecalDepthOffset: a mesh decal is coplanar with its wall and has no bias to apply.
 	TestTrue(TEXT("at least fifteen scalar bindings"), Bindings.Num() >= 15);
 

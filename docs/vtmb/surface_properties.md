@@ -40,6 +40,10 @@ their deltas: 24 of the 63 carry no physics field of their own at all, and 37 ca
 
 `default` is the fallback root and the only entry carrying the complete key set.
 
+Source's surfaceproperties inheritance copies the parent `surfacedata_t` wholesale and then
+re-parses the child's keys, so a child naming one `stepleft` replaces the parent's whole
+left-footstep pool for that slot rather than appending to it.
+
 ## Fields
 
 ### Physics
@@ -58,8 +62,7 @@ clamps rather than assumes.
 
 `density`'s unit is the table's own, kg/m³; `UPhysicalMaterial::Density` is g/cm³, so
 `uv run elysium import surface-properties` converts on the way in and keeps the authored kg/m³
-value alongside it (`docs/architecture/seam_map_surface_property.md` → "Import" → "The staged
-sidecar, and what it becomes").
+value alongside it in the staged sidecar.
 
 ### Movement
 

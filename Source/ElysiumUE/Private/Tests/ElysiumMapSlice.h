@@ -3,7 +3,7 @@
 // A map slice: the real `<map>.ents` cut down to a named set of entities plus everything their
 // authored rows reach, parsed through the production parser and ready for a headless
 // `FElysiumEntityWorld`. The authored rows are what the game loads, so a map/port mismatch is
-// caught by the slice test and nowhere later (docs/project/plans/terminals.md, slice A0).
+// caught by the slice test and nowhere later.
 //
 // The helper is generic — map name plus targetnames — so every tutorial beat (terminal, elevator,
 // lockpicks, fan, Jack's teleports) builds its fixture the same way. It is skipped, never failed,

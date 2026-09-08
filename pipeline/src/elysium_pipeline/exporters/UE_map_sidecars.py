@@ -1,12 +1,11 @@
 """The legacy map sidecars, produced from the published V2 map units (R3.2, MP-2.2).
 
-`docs/project/seam_migration.md` -> "Roadmap -- one pipeline" R3.2 asks for one producer that reads
+R3.2 asks for one producer that reads
 a map's four published GLB units and writes the sidecars the running game already reads --
 `.ents`, `.hulls`, `.dispcol`, `.lights`, `.env`, `.sky`, `.spawn`, `.ropes` -- plus the R2.4
-export-readiness marker `<map>.ready`. The join it performs is stated in
-`docs/architecture/seam_map_map.md` -> "Producer join: the entities+root join behind `.ents`";
-this module is that specification executed, and nothing here decides anything the doc does not
-already state.
+export-readiness marker `<map>.ready`. The join it performs is the entities+root join behind
+`.ents`; this module is that specification executed, and nothing here decides anything the
+specification does not already state.
 
 Two rules govern every line below.
 
@@ -22,7 +21,7 @@ needed no flag. Silently changing a default would be the one thing this task mus
 
 **Binary32.** Root positional tables are published in glTF metres and the BSP stores them as
 float32, so every recovered plane, vertex and bound is rounded back to binary32 before it is used
-(`seam_map_map.md` -> "Which table owns which fact": inverting the transform in binary64 leaves
+(inverting the transform in binary64 leaves
 4,772 of the three test maps' 35,594 plane distances off by up to 9.09e-13 Source inches, which
 measurably changes hull vertex sets; in binary32 none of them move).
 
@@ -130,7 +129,7 @@ def source_position(gltf: Sequence[float]) -> tuple[float, float, float]:
 
     The contract's forward rule is `(x, y, z)_gltf = (x, z, -y)_source * 0.0254`, so the inverse
     is `(x, -z, y)_gltf / 0.0254`. Rounding the quotient to binary32 returns the BSP's own float32
-    bit-for-bit; leaving it in binary64 does not (`seam_map_map.md`).
+    bit-for-bit; leaving it in binary64 does not.
     """
 
     x, y, z = (float(gltf[0]), float(gltf[1]), float(gltf[2]))
@@ -251,55 +250,53 @@ def hull_vertices(points: np.ndarray) -> list[float]:
 @dataclass(frozen=True)
 class EntityDivergences:
     """Opt-in switches for the `.ents` behaviours where the legacy sidecar and the entities unit's
-    own reading disagree (`seam_migration.md` -> R3.4; `seam_map_map.md` -> "Producer join", the
-    six-item list). Every flag defaults to the legacy behaviour, so `write_sidecars` stays
-    byte-comparable against `UE_bsp_to_scene.py` unless a caller asks for the corrected reading --
+    own reading disagree (the six-item list). Every flag defaults to the legacy behaviour, so
+    `write_sidecars` stays byte-comparable against `UE_bsp_to_scene.py` unless a caller asks for the corrected reading --
     each flag is documented at its own R3.4 commit.
     """
 
     #: `False` (legacy, default): a key is an output when it matches `^(On|Out)` case-insensitively
     #: and its value holds >= 4 commas. `True`: the class's datamap decides instead
     #: (`entity_model.OUTPUT_KEY`/`NOT_OUTPUT_KEYS`/`OUTPUT_KEYS_BY_CLASS`/`DISABLED_KEY_SUFFIX`),
-    #: matching the entities unit's own `outputLike` demotions and promotions
-    #: (`seam_map_map_entities.md` -> "Outputs"). Measured zero effect on the three-map corpus:
+    #: matching the entities unit's own `outputLike` demotions and promotions.
+    #: Measured zero effect on the three-map corpus:
     #: `game_ui`'s promoted keys and `trigger_player_activity_level`'s demotion are both authored
     #: on maps outside it (`la_hub_1`, `sm_diner_1`).
     datamap_output_typing: bool = False
 
     #: `False` (legacy, default): a repeated key is the same `keys` slot only when it repeats under
     #: the *exact same spelling*, so `"Origin"` and `"origin"` survive as two independent last-wins
-    #: slots (`seam_map_map.md` -> "Producer join": "Keys are **not** folded"). `True`: two spellings
-    #: of one key are the same slot -- the entities unit's own identity rule (`decode.py`'s
+    #: slots. `True`: two spellings of one key are the same slot -- the entities unit's own
+    #: identity rule (`decode.py`'s
     #: `occurrences` map, keyed by the already-folded `pair.key`) -- and the slot's value and its
     #: printed spelling both become the *last* occurrence's, in that occurrence's own casing (never
-    #: forced lowercase: `seam_map_map.md`'s "authored spelling" rule for `keys` still holds).
+    #: forced lowercase: the authored-spelling rule for `keys` still holds).
     #: Measured zero effect on the three-map corpus: no entity repeats a key under two spellings.
     fold_keys: bool = False
 
     #: `False` (legacy, default): an output row's `param` field (index 2) is carried verbatim,
-    #: whitespace and all -- the one string field `split_output` does not `.strip()`
-    #: (`seam_map_map.md` -> "Producer join": "`param` **not** stripped"). `True`: `param` gets the
-    #: same strip every other string field already gets. Measured zero effect on the three-map
+    #: whitespace and all -- the one string field `split_output` does not `.strip()`.
+    #: `True`: `param` gets the same strip every other string field already gets. Measured zero
+    #: effect on the three-map
     #: corpus: no output's `parameter` carries leading or trailing whitespace.
     strip_param: bool = False
 
     #: `False` (legacy, default): an output row's `delay` field (index 3) is read with a plain
     #: `float()`, `0.0` on any parse failure -- reject-the-whole-token, unlike every positional
     #: keyvalue in `.ents` (`origin`, `hingeaxis`, `floor1..8`), which reads with `atof`, the
-    #: engine's own longest-numeric-prefix rule (`seam_map_map.md` -> "Producer join": "`delay` a
-    #: plain `float()` with `0.0` on failure"). `True`: `delay` reads with this module's own
+    #: engine's own longest-numeric-prefix rule. `True`: `delay` reads with this module's own
     #: `atof()` instead, matching every other number `.ents` carries. Measured zero effect on the
     #: three-map corpus: every authored `delay` is already a plain `float()`-parseable token.
     delay_atof: bool = False
 
     #: `False` (legacy, default): field 6 (`extra`, everything after `python`) is dropped -- the
-    #: legacy split reads exactly six fields and never looks past them (`seam_map_map.md`'s field
-    #: list: "field 6 (`extra`) dropped"). `True`: `extra` is added to the row, verbatim and
+    #: legacy split reads exactly six fields and never looks past them. `True`: `extra` is added
+    #: to the row, verbatim and
     #: unjoined-comma-restored (`",".join(fields[6:])`, matching the entities unit's own
     #: `Output.extra`), present only when the value's split actually reached a 7th field. **Not**
     #: zero effect: retail always writes seven comma-separated fields even when the 7th is empty,
     #: so this is the one R3.4 flag whose measured delta is the size of the whole `outputs` list,
-    #: not a rare edge case -- see the R3.4 doc line in `seam_map_map.md` for the exact count.
+    #: not a rare edge case.
     keep_extra: bool = False
 
 
@@ -329,8 +326,8 @@ def is_output_key(
     classname: str, key: str, fields: EntityDivergences = LEGACY_ENTITY_FIELDS
 ) -> bool:
     """Whether one keyvalue's key is tried as an output row at all -- the gate `write_entities`
-    applies before `split_output`. `fields.datamap_output_typing` picks which of the two rules in
-    `seam_map_map.md` -> "Producer join" decides it."""
+    applies before `split_output`. `fields.datamap_output_typing` picks which of the two rules
+    decides it."""
 
     if fields.datamap_output_typing:
         return _is_datamap_output(classname, key)
@@ -343,8 +340,8 @@ def collect_entity_fields(
     """One block's pairs split into output rows and the `keys` catch-all, the R3.4-aware read
     `write_entities` performs per entity.
 
-    The `keys` catch-all is always emitted with **authored spelling** (`seam_map_map.md` ->
-    "Producer join": "every remaining keyvalue, authored spelling, last-wins") -- what `fold_keys`
+    The `keys` catch-all is always emitted with **authored spelling** -- every remaining keyvalue,
+    authored spelling, last-wins -- what `fold_keys`
     changes is only *which* occurrences are considered the same slot. Legacy (`fold_keys=False`)
     treats `"Origin"` and `"origin"` as two independent slots, each keeping its own last value.
     `fold_keys=True` treats them as one slot -- the entities unit's own identity rule (`decode.py`'s
@@ -730,8 +727,8 @@ def meshed_faces(
 
     **`SURF_NODRAW` is honoured too** (R7.1 follow-up), which the name test alone could not do: a
     `%compilenodraw` unit outside the `tools/` namespace escaped it and drew as an opaque
-    `tools/toolsinvisible` sheet -- `water/invisible_water`, `sm_pier_1`'s ocean, which
-    `water-architecture.md` -> "Family resolution" rules as a volume with *no drawn surface*. The
+    `tools/toolsinvisible` sheet -- `water/invisible_water`, `sm_pier_1`'s ocean, a volume with
+    *no drawn surface* by family resolution. The
     name test stays because the trigger textures leave the flag clear (`UE_bsp_to_scene.py:32-39`);
     the flag test is added because a `water/`-pathed nodraw unit leaves the name clear. Measured
     2026-09-04 over all 108 published root units: the two tests overlap on every `tools/` face and
@@ -810,8 +807,7 @@ def displacement_triangles(units: MapUnits, world_faces: Sequence[int]) -> list[
     exactly (3,584 rows on `sp_tutorial_1`, 288 on `sm_hub_1`), 228 and 100 of those rows are
     byte-identical, 17,908 of 32,256 and 372 of 2,592 printed floats differ, max |delta| 0.0019 cm
     and 0.0006 cm. That is a seam-precision limit, not a choice made here; R3.3 must expect it by
-    name; R3.4 decided to accept it rather than publish DISP_VERTS numerically in the root unit
-    (`seam_map_map.md` -> "R3.4 -- the two the port surfaced").
+    name; R3.4 decided to accept it rather than publish DISP_VERTS numerically in the root unit.
     """
 
     faces = units.root["faces"]
@@ -956,7 +952,7 @@ def write_lights(units: MapUnits, sky: SkyScope, out_dir: Path) -> dict[str, int
 
 
 def brush_cull_max_cm(classname: str, keys: dict[str, str]) -> float | None:
-    """R6.4 (`seam_map_map.md` -> "Brush fade distances"): the distance beyond which a brush
+    """R6.4: the distance beyond which a brush
     entity's baked mesh is not drawn, in Unreal centimetres, or None when the row has none.
 
     Only `func_lod` carries one -- `DisappearDist`, VtMB's hard client-side draw cutoff
@@ -983,8 +979,8 @@ def build_entities(
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """The `.ents` entity rows and this run's numbers -- the join, without the file.
 
-    The field list, its emission order and every rounding are `seam_map_map.md` -> "The field list
-    `.ents` must reproduce". `entities[]` is one row per lump block in lump order with no drops and
+    The field list, its emission order and every rounding are what `.ents` must
+    reproduce. `entities[]` is one row per lump block in lump order with no drops and
     no reorders: `ElysiumEntityWorldPersistence.cpp` applies saved entity state by index, so the
     ordinal is a save key. `fields` opts into the R3.4 divergences one at a time; the default
     reproduces `UE_bsp_to_scene.py` byte for byte **except** for one unconditional ruling: a
@@ -995,7 +991,7 @@ def build_entities(
     which is what that report is for.
 
     `write_entities` writes these rows to `<map>.ents`; R4.1's `UElysiumMapEntities` stage
-    (`importers/map_entities.py`, `seam_map_map_entities.md` -> "Import") lands the same rows as
+    (`importers/map_entities.py`) lands the same rows as
     cooked content. Both read the join here so neither can drift from the other.
     """
 
@@ -1287,7 +1283,7 @@ def write_ropes(
     here is the RE'd runtime state rather than the raw keyvalue -- the rest length applies `Slack`
     twice, subtracts a flat 100 units and truncates through an integer divide; `nodes` comes from
     `Type`, not `Subdiv`. All of it is ported from `UE_bsp_to_scene.write_ropes`. R6.5: the line
-    carries the material's `vtmb:material:` id (`seam_map_material.md` -> "Ropes on `MI_`") and no
+    carries the material's `vtmb:material:` id and no
     decoded texture or shader flag -- the imported `MI_` owns those.
     """
 
@@ -1424,7 +1420,7 @@ class MapJoin:
 
 
 def prepare_join(map_name: str, root: Path | None = None, compile_water=None) -> MapJoin:
-    """Read one map's units and derive the shared tables (`seam_map_map.md` -> "Producer join").
+    """Read one map's units and derive the shared tables.
 
     `compile_water` is `meshed_faces`' own argument, passed through: the map-geometry stage has the
     material lane's staged provenance and can answer "is this unit `%compilewater`", the sidecar
@@ -1454,8 +1450,8 @@ def write_sidecars(
     """Produce one map's legacy sidecars from its published units and return the run's numbers.
 
     The `.ready` marker is written **last** and only when every sidecar Travel depends on is on
-    disk, which is exactly what `docs/architecture/map-architecture.md` -> "The export-readiness
-    gate" defines it to mean (R2.4). `entity_fields` opts `.ents` into the R3.4 divergences one at
+    disk, which is exactly what the export-readiness gate is defined to mean (R2.4).
+    `entity_fields` opts `.ents` into the R3.4 divergences one at
     a time; the default keeps this run byte-comparable to `UE_bsp_to_scene.py`.
     """
 

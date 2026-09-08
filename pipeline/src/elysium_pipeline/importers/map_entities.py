@@ -2,7 +2,7 @@
 
 `uv run elysium import map-entities --maps <map>...` turns each named map's published GLB units
 into one `/ElysiumBaked/Maps/<map>/DA_<map>_Entities` asset carrying the same rows the `<map>.ents`
-document carries, in the same order (`docs/architecture/seam_map_map_entities.md` -> "Import").
+document carries, in the same order.
 This module is the offline stage half: it runs the R3.2 producer's own entity join
 (`exporters.UE_map_sidecars.build_entities`), asserts def-count and per-index parity against the
 `.ents` file the asset replaces, and writes one `manifest.json` the editor phase

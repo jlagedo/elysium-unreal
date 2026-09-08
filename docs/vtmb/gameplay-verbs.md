@@ -201,5 +201,4 @@ for a successful hit, and an animation for proof that damage committed.
 - Join representative NPC combat schedules/tasks to the same attack, defense and damage seams,
   including decision cooldowns and target policy.
 
-Project implementation status belongs to `docs/project/roadmap.md`: the current combat slice is
-13.3 and this cross-cutting research is RE40.
+This cross-cutting research is tracked as RE40.

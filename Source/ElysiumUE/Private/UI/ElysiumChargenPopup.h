@@ -14,7 +14,7 @@ struct FSlateBrush;
 // left and the surviving answers as numbered lines below it. The entry popup and every quiz question
 // are the same widget — they differ only in the `FElysiumWizPopup` handed to it.
 //
-// The same C++ Slate / `SDPIScaler` idiom as the character screen (`docs/architecture/ui-architecture.md`), and
+// The same C++ Slate / `SDPIScaler` idiom as the character screen, and
 // the same guard on every image: `out/ui/art` is gitignored, so a missing page degrades to the
 // screen's own scrim rather than leaving a hole.
 //

@@ -508,7 +508,7 @@ def verify_lights_stored(actors, stored, map_name):
 def verify_lights_baked(actors, world_dir, map_name):
     """R5.6, `MapsOnV2Models` maps only: light-count parity against the legacy `.lights`, and the
     four derivation assertions re-homed from `Elysium.Substrate.LightRig` onto the bake's own
-    output (`seam_map_map_lighting.md` -> "Lights final (R5.6)" -> "Verification, re-homed").
+    output.
 
     Parity: one `elysium.light` actor per `.lights` row that places one (type 0-3, `max(rgb) > 0`),
     every actor's `elysium.src` resolving to exactly one such row, no row placed twice. The
@@ -619,7 +619,7 @@ def _staged_details(map_name):
 
 
 def verify_details(actors, map_name):
-    """R6.3 (`seam_map_map.md` -> "Detail props (R6.3)"), `MapsOnV2Models` maps only: every
+    """R6.3, `MapsOnV2Models` maps only: every
     `elysium.detail` actor's instanced component counted back against the staged `details`
     table -- one component per `(model, sky)` group, the same instance count, no model missing and
     none extra -- plus the cull range the Models page names and exactly one custom-data float per
@@ -722,7 +722,7 @@ def _staged_sprites(map_name):
 
 
 def verify_sprites(actors, map_name):
-    """R6.1 (`seam_map_map.md` -> "Sprites (R6.1)"), `MapsOnV2Models` maps only: every
+    """R6.1, `MapsOnV2Models` maps only: every
     `elysium.sprite` actor matched to its staged row by the entity index tag -- size, colour,
     mode, orientation, the spawn-hidden state, and the material child's parent and blend -- no
     row missing and no actor extra."""
@@ -825,7 +825,7 @@ EFFECT_ACTOR_CLASSES = {
 
 
 def verify_effects(actors, map_name):
-    """R7.3 (`seam_map_map.md` -> "Import -- effects (R7.3)"), `MapsOnV2Models` maps only: every
+    """R7.3, `MapsOnV2Models` maps only: every
     `elysium.effect` actor matched to its staged row by the entity index tag -- the class per
     table, and for an `effects[]` row the root, the attach data and the tree's leaf count -- no
     row missing (an unresolved root places no actor, by VtMB's own rule) and no actor extra."""
@@ -917,7 +917,7 @@ LIGHT_STYLE_TAG_PREFIX = "elysium.style="
 
 
 def verify_water(actors, map_name):
-    """R7.1 (`water-architecture.md` section 5.2), `MapsOnV2Models` maps only: exactly one
+    """R7.1, `MapsOnV2Models` maps only: exactly one
     `elysium.water` actor iff the map stages a `water.volumes[]` row, the actor's row count, and
     each row's `surface_z_cm` and brush count against the staged manifest -- no volume the actor
     disagrees with the stage on, and no actor at all when the stage places none.
@@ -1216,7 +1216,7 @@ def _fog_slots(component):
 
 
 def verify_sky_scope(actors, map_name):
-    """R6.7 (`seam_map_map.md` -> "3D-skybox composition (R6.7)"), `MapsOnV2Models` maps whose
+    """R6.7, `MapsOnV2Models` maps whose
     manifest says `sky.ok`: every class the corpus places in the miniature counted back against
     the staged rows through the one transform -- sky props (`elysium.sky` static-mesh actors
     labelled `Prop_`; position `scale * (p - origin)` and actor scale `scale` per row), sky detail
@@ -1390,7 +1390,7 @@ def verify_sky_scope(actors, map_name):
 
 
 def verify_ropes(world_dir, map_name):
-    """R6.5 (`seam_map_material.md` -> "Ropes on `MI_`, and the factory shape"): every line of
+    """R6.5: every line of
     `<map>.ropes` names a `vtmb:material:` id that folds, by the R5.4 rule
     (`importers.materials.asset_path_for`), to an existing `MaterialInstanceConstant` package under
     `/ElysiumBaked/Materials/`. The runtime binds exactly that asset; nothing else on the line is
@@ -1458,7 +1458,7 @@ def _atof(text):
 
 
 def verify_brush_cull(map_name, ents_path):
-    """R6.4 (`seam_map_map.md` -> "Brush fade distances"): every meshed `func_lod` row carries
+    """R6.4: every meshed `func_lod` row carries
     `cull_max_cm == DisappearDist x 2.54` in the `.ents`, no other row carries one, and the R4.1
     entity asset (`DA_<map>_Entities`, the transport a listed map actually loads) says the same
     number at the same index."""

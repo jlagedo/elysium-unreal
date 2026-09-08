@@ -70,6 +70,11 @@ the large mips zlib'd in `.ttz` (small mips in `.tth`); recompiled maps store un
 full-res mip's first six faces and deliberately drops the fallback face. The naming convention that ties a cubemap to a BSP face is
 `docs/vtmb/bsp_format.md` → "Cubemaps".
 
+Of the 1,325 baked reflection probes embedded in the 108 map BSPs' PAKFILE zips, 575 carry no
+`.ttz` because the whole 7-mip pyramid fits the `.tth`'s inline range (declared `.ttz` length 0);
+552 of those are `BGR888`, 23 are small `DXT5` `cubemapdefault`. The split is the ordinary
+inline/external size threshold every VtMB texture uses, not a clean format rule.
+
 ## VMT materials (`pipeline/src/elysium_pipeline/formats/vmt.py`)
 
 KeyValues text. `parse(text, resolve_include)` returns `basetexture` (normalized, `\`→`/`,
@@ -79,6 +84,9 @@ lowercased), `selfillum`, `translucent`, `alphatest`. Shader `"patch"` follows o
 
 Material resolution: material name → `materials/<name>.vmt` → `$basetexture` →
 `materials/<basetexture>.tth`/`.ttz`.
+
+317 of the 1,078 install materials under the UI trees name a different texture in their own VMT
+than their material path (e.g. `hud/disciplines/bloodheal_hud` -> `bloodheal_base`).
 
 `Refract` is a separate framebuffer-distortion shader and does not require `$basetexture`.
 Its `$dudvmap` is a signed vector field: UVWQ8888 stores U/V/W as two's-complement bytes centred

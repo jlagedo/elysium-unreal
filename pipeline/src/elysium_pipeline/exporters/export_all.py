@@ -200,12 +200,12 @@ def rewrite_sidecars_via_producer(
     `UE_bsp_to_scene.main` has just written `.ents`/`.hulls`/`.dispcol`/`.lights`/`.env`/`.sky`/
     `.spawn`/`.ropes` into ``out_dir`` (plus `.obj`/`.mtl`/`.props`/`.decals`/`.water`,
     which the producer does not reproduce and this call leaves alone). `UE_map_sidecars.write_sidecars`
-    (`docs/architecture/seam_map_map.md` -> "Producer join") overwrites the eight it does own with
+    overwrites the eight it does own with
     its own bytes, reading the map's published V2 units rather than the BSP.
 
     `.weather`/`.particles` read `.ents` back off disk, so they are re-run here against the
     producer's `.ents` instead of the legacy one `UE_bsp_to_scene.main` already used and discarded
-    -- see `seam_migration.md` -> "Roadmap -- one pipeline" R3.5. Weather's mesh-derived inputs
+    -- R3.5. Weather's mesh-derived inputs
     (`cover_triangles`/bounds) are geometry, not entity data, so `UE_bsp_to_scene.main` hands them
     back in ``legacy_report`` rather than this call recomputing them.
 

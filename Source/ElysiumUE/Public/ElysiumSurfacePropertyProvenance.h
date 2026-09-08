@@ -10,8 +10,7 @@ class FJsonObject;
 /**
  * Everything a `vtmb:surface-property:` unit knows that a UPhysicalMaterial has no slot for, and
  * everything about *where each value came from*, carried on the baked asset as AssetUserData so a
- * packaged game can read it and the editor can inspect it
- * (`docs/architecture/seam_map_surface_property.md` → "Import" → "Provenance").
+ * packaged game can read it and the editor can inspect it.
  *
  * The record exists because a surface-property asset is a **flattened** view: 42 of the 63 entries
  * state only their deltas and inherit the rest, so an asset's Friction may have been authored four

@@ -1,6 +1,6 @@
 """Mirror the VtMB UI source -- layouts, schemes and strings -- into `$ELYSIUM_EXPORT_ROOT/ui/`.
 
-Roadmap **PL8**. The UI has no classic mode (`docs/project/reconstruction-direction.md` axis 1), so this
+Roadmap **PL8**. The UI has no classic mode, so this
 is an extractor of **design intent**, not of a runtime layout engine: the `.res` trees and the
 two schemes are copied verbatim as the record of what each screen contains and how it is
 grouped, and the localized string table is the one thing the runtime reads.
@@ -13,7 +13,7 @@ sheet, the HUD -- and carries the gold `V*` palette; `TrackerScheme.res` skins
 The `.fnt` bitmap atlases are deliberately **not** extracted: they are not the runtime
 type. Vector faces live in `Content/Fonts` (`pipeline/src/elysium_pipeline/devtools/fetch_ui_fonts.py`).
 
-**No art** (R6.6, `docs/architecture/ui-architecture.md` -> "9. Art from assets"). The HUD and
+**No art**. The HUD and
 interface trees, the title lockup, the feed-vision mask, the menu particle sprites and the
 `MM_Skybox` faces this exporter used to decode to PNG are the texture lane's `T_` assets
 (`uv run elysium import textures`), and every screen draws those; nothing reads `ui/art`,

@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 // One `surfacedata_t`'s AUDIO half, as a plain value the substrate can resolve a footstep against
-// without touching a `UObject` (`docs/architecture/footstep-architecture.md` §4.2).
+// without touching a `UObject`.
 //
 // Retail reads exactly these fields off the `surfacedata_t*` the NPC caches at `+0x5b90`
 // (`vampire.dll 1026d460`) and the player caches as `m_pSurfaceData`:

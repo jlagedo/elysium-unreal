@@ -24,7 +24,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumScheme, Log, All);
 
 // Tunables (debug/calibration). The crossfade time and the random-sound cadence base moved to
-// `UElysiumAudioSettings` (R4.5); these two stay cvars — they are debug A/Bs with a live Cog
+// `UElysiumAudioSettings`; these two stay cvars — they are debug A/Bs with a live Cog
 // surface (elysium.MusicState is the Cog Sound Schemes window's own echo of combat scoring), not
 // orphan taste values.
 static TAutoConsoleVariable<int32> CVarMusicState(
@@ -48,7 +48,7 @@ namespace
 	using ElysiumKeyValues::Tokenize;
 	using ElysiumKeyValues::ParseBlock;
 
-	// Parse a Music/Combat/Alert/Ambient block, applying the retail defaults (§12). bDryDefault /
+	// Parse a Music/Combat/Alert/Ambient block, applying the retail defaults. bDryDefault /
 	// bNoPauseDefault differ per block (Ambient NoPause defaults 0; the music trio default 1).
 	FElysiumSchemeSound ReadSound(const FKvNode* Block, bool bDryDefault, bool bNoPauseDefault)
 	{
@@ -154,7 +154,7 @@ const FElysiumSoundScheme* FElysiumSoundSchemeManager::LoadScheme(const FString&
 	// Scheme files live under out/sound/ mirroring VtMB (SchemeRel is "sound/Schemes/x.txt", so it
 	// resolves under Root() directly, not SoundDir()). Case-insensitive on Windows filesystems.
 	// Still a LEGACY read after DC flipped the sound family to CorpusRoot(): no `sound/schemes/`
-	// unit is published, so the scheme tables have no corpus home yet (seam_migration.md, 2026-09-06).
+	// unit is published, so the scheme tables have no corpus home yet.
 	const FString AbsPath = FElysiumContentPaths::Root() / SchemeRel;
 	FElysiumSoundScheme Parsed;
 	const bool bOk = FElysiumSoundScheme::ParseFile(AbsPath, Parsed);

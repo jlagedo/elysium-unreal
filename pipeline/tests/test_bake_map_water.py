@@ -1,5 +1,4 @@
-"""R7.1 (`docs/architecture/water-architecture.md` -> section 5, "The volume: `water.volumes[]`"
-and section 5.2, "The actor"): the V2 map bake folds every staged `water.volumes[]` row into the
+"""R7.1: the V2 map bake folds every staged `water.volumes[]` row into the
 one `AElysiumWaterVolumes` actor.
 
 What can change shipped content without any other test noticing: the **placement** the editor
@@ -149,8 +148,8 @@ def test_water_actor_values_merges_every_brush_of_the_first_volume(module) -> No
 
 
 def test_water_actor_values_falls_back_to_the_surface_when_the_volume_has_no_brush(module) -> None:
-    # A row with no matched brush is dropped by the stage lane (`water-architecture.md` section
-    # 5.1), but the placement rule stays total: no crash on a volume carrying an empty list.
+    # A row with no matched brush is dropped by the stage lane, but the placement rule stays
+    # total: no crash on a volume carrying an empty list.
     values = module.water_actor_values([_volume(brushes=[])])
     assert values["position"] == pytest.approx((0.0, 0.0, -14937.74))
 
@@ -203,7 +202,7 @@ def test_water_actor_shape_and_tag_constants(module) -> None:
 
 def test_zero_row_manifest_places_nothing(module) -> None:
     # No staged volume: `_place_water` returns 0 and never asks the editor to spawn an actor --
-    # "no rows, no actor" (`water-architecture.md` section 5.2).
+    # "no rows, no actor".
     module.bind({"Bake": object, "log": lambda *a, **k: None, "fail": lambda *a, **k: None})
     klass = module.bake_class()
     instance = klass.__new__(klass)

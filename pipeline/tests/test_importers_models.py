@@ -237,7 +237,7 @@ def test_joint0_not_identity_fails_static_shape_unit():
 
 def test_map_scoped_selection_matches_real_corpus():
     """`--maps sp_tutorial_1 sm_pawnshop_1 sm_hub_1` resolves the exact referenced set the design
-    pins (`seam_map_model.md` -> "Import" -> "Scope and selection"): 242 / 95 / 178, 414 union."""
+    pins: 242 / 95 / 178, 414 union."""
 
     try:
         export_v2_root = paths.export_v2_root()

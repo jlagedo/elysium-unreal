@@ -21,7 +21,7 @@
 //     `SetImmobilized(false)`, the weapon re-draw, `SetDialogPartner(NULL)` and the events-manager
 //     notify, all on one frame with **no blend** (M1, ruled 2026-09-07).
 //
-// Recovery: `docs/project/camera_scripted.md` §SC9, and `$ELYSIUM_WORK_ROOT/_camera_recovery/`
+// Recovery: `$ELYSIUM_WORK_ROOT/_camera_recovery/`
 // `rc_group_de.md` RC5 (the 30-degree head cone and `MaintainEyeDirection`'s full chain), RC6 (the
 // admission, the payphone arm, and the proof that `.dlg` has no camera column) and RC13 (the
 // grapple role pair). The facts land in `docs/vtmb/camera-view-modes.md` §"How dialogue drives the

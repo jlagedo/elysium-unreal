@@ -1,6 +1,6 @@
 """The V2 map bake's geometry and placement reader (R5.1).
 
-`docs/architecture/seam_map_map.md` -> "## Import -- geometry and placements" states where a map's
+This states where a map's
 world/sky/brush meshes and its static-prop placements come from once a map is on the V2 lane. Two
 things in that section can change shipped content without changing any other test: the **frame**
 (one reflection and one quaternion conjugation, wrong in a way that is invisible until a whole map
@@ -35,7 +35,7 @@ def _bake_map_v2_manifest_version() -> int:
     assert found, "bake_map_v2.py states no MANIFEST_VERSION"
     return int(found.group(1))
 
-#: The three-map working corpus (`seam_migration.md` -> R1); a whole-corpus run is a separate,
+#: The three-map working corpus (R1); a whole-corpus run is a separate,
 #: owner-approved step and this module never asks for one.
 WORKING_MAPS = ("sp_tutorial_1", "sm_pawnshop_1", "sm_hub_1")
 #: The maps on the V2 model root. R7.1 adds `sm_pier_1` (the water scope) and, on the owner's call
@@ -78,7 +78,8 @@ def test_placement_reads_solid_skin_and_fade_off_the_record_not_the_model():
         return MG.Placement(**fields)
 
     # SOLID_NONE is the one value that does not block; every other SolidType_t does, including the
-    # VPHYSICS placements of models that ship no `.phy` (the ruling in seam_map_map.md).
+    # VPHYSICS placements of models that ship no `.phy`.
+
     assert placement(solid=MG.SOLID_NONE).solid_blocks is False
     for solid in (1, 2, 3, 4, 5, 6):
         assert placement(solid=solid).solid_blocks is True
@@ -169,7 +170,7 @@ def test_reader_reproduces_every_legacy_props_row_on_the_working_corpus(map_name
 
 # --- R6.3: detail props -----------------------------------------------------------------------------
 #
-# `seam_map_map.md` -> "Detail props (R6.3)": every `dprp` record becomes one instance of its
+# Every `dprp` record becomes one instance of its
 # model's instanced component, in lump order, through the same frame a static prop takes, with the
 # record's `swayAmount` carried raw. The first case pins the mapping on a synthetic unit (the
 # dictionary join, the order, the frame, the miniature flag, the loud out-of-range failure); the
@@ -302,7 +303,7 @@ def _read_obj_groups(path):
 
 # --- R5.4: the materials table ---------------------------------------------------------------------
 #
-# `seam_map_map.md` -> "## Import -- materials (R5.4)": every face group binds the imported `MI_`
+# Every face group binds the imported `MI_`
 # its `vtmb:material:*` unit became, resolved through the material lane's own provenance sidecars.
 # The cases below pin the resolution (a patched `maps/<map>/...` id lands on its own map-scoped
 # instance, the root master/blend come from the base through `patchBase`), the loud failure for a
@@ -497,7 +498,7 @@ def _fake_units_with_cubemaps(rows, translations):
 
 
 def test_cubemap_sample_takes_the_placement_frame_and_the_sky_area_rule():
-    # `seam_map_map.md` -> "Import -- reflection captures (R5.5)": position is the node translation
+    # Position is the node translation
     # through the one placement frame, `origin` is the row's Source-inch triple carried verbatim,
     # and sky membership is the same area rule a prop or a light takes -- asked of the SOURCE
     # position, not the glTF one.
@@ -842,7 +843,7 @@ def test_water_volumes_on_the_exported_corpus(map_name, surface_z_cm, material, 
 
 # ------------------------------------------------------- water, complete (R7.4)
 #
-# `docs/architecture/water-architecture.md` rulings K/L/M/N and the water audit's gap list. Four
+# Rulings K/L/M/N and the water audit's gap list. Four
 # facts vbsp published and this stage never read -- the face's own plane (underside), the face's
 # lightstyles, the compiler's `fluid { }` / convex pieces / leaf boxes, and the PVS the near-water
 # set derives from -- plus the two drops the audit reversed: a `%compilewater` face is never dropped

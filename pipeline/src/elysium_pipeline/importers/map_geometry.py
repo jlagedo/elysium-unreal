@@ -1,10 +1,10 @@
 """The map root unit's geometry and placements, read for the V2 map bake (R5.1, R7.4 water).
 
-`docs/project/seam_migration.md` -> "Roadmap -- one pipeline" R5.1 asks for a map authored from the
+R5.1 asks for a map authored from the
 published map root unit -- its `world`, `brushModels`, `displacements` and `placements` scenes --
-instead of the legacy `<map>.obj` / `<map>_sky.obj` / `brushes/*.obj` / `<map>.props` sidecars. The
-ruling this module executes is `docs/architecture/seam_map_map.md` -> "## Import -- geometry and
-placements (R5.1)"; nothing here decides anything that section does not already state.
+instead of the legacy `<map>.obj` / `<map>_sky.obj` / `brushes/*.obj` / `<map>.props` sidecars.
+Nothing here decides anything the R5.1 geometry-and-placements import ruling does not already
+state.
 
 This is the **offline half**, and it has to be: reading the unit needs `numpy` (the sky-area BSP
 walk, the accessor decode) and Unreal's embedded CPython does not carry it. So this module runs in
@@ -30,7 +30,7 @@ the root unit's `textures[]` row resolved, a PAKFILE-patched face by its `maps/<
 the stage resolves each one through the material lane's own staged provenance sidecars
 (`$ELYSIUM_WORK_ROOT/import/materials/<key>.provenance.json`) to the imported `MI_` asset path
 (`importers.materials.asset_path_for`, the same pure function that named the asset), the root
-master and the blend mode (`seam_map_map.md` -> "## Import -- materials (R5.4)"). The sidecars,
+master and the blend mode. The sidecars,
 not `manifest.json`: that manifest describes the material lane's LAST run, which a `--select`
 narrows to one directory, while every staged unit's sidecar stays on disk until its own scope
 prunes it. The editor half binds exactly that asset; no `<map>.mtl` table and no per-map material
@@ -62,34 +62,31 @@ VERTEX_NAME = "geometry.bin"
 MANIFEST_SCHEMA = "elysium.map-geometry"
 #: 2 (R5.4): the manifest carries `materials`, one row per face group, and `materialReport`.
 #: 3 (R5.5): the manifest carries `cubemaps`, one row per lump-42 sample, the reflection-capture
-#: placements (`docs/architecture/seam_map_map.md` -> "## Import -- reflection captures (R5.5)").
+#: placements.
 #: 4 (R5.6): the manifest carries `lights`, one row per lump-15 `worldLights[]` record in lump
-#: order (`UE_map_sidecars.light_rows`, the `.lights` producer's own rows), the light placements
-#: (`docs/architecture/seam_map_map_lighting.md` -> "## Import" -> "Lights final (R5.6)").
+#: order (`UE_map_sidecars.light_rows`, the `.lights` producer's own rows), the light placements.
 #: 5 (R6.3): the manifest carries `details`, the `dprp` game lump as `models[]` (the model
 #: dictionary resolved to R1 stems) and `records[]` (one row per detail record, lump order), the
-#: instanced placements (`docs/architecture/seam_map_map.md` -> "Detail props (R6.3)").
+#: instanced placements.
 #: 6 (R6.1): the manifest carries `sprites`, one row per `env_sprite` in lump order, resolved to
 #: the imported `MI_`, the texture size and the blend the entity's `rendermode` selects, the
-#: billboard placements (`docs/architecture/seam_map_map.md` -> "Sprites (R6.1)").
+#: billboard placements.
 #: 7 (R7.3): the manifest carries `effects`, `particleTrees`, `dustmotes`, `steam`, `beams` and
 #: `effectStats` -- every effects entity joined to its particle closure, brush bounds and sprite
-#: textures (`importers.effects`; `docs/architecture/seam_map_map.md` -> "Import -- effects
-#: (R7.3)").
+#: textures (`importers.effects`).
 #: 8 (R7.2): every `materials` row carries `decalAsset` (the `MI_<unit>_Decal` projector instance
 #: the material lane staged beside the surface one, or `null`) and `isDecalSurface` -- the pair the
-#: bake binds a `$decal` face group's mesh slot from, and keeps out of the Nanite buckets
-#: (`docs/project/seam_migration.md` -> "R7.2 Decals", rulings 2 and 3).
+#: bake binds a `$decal` face group's mesh slot from, and keeps out of the Nanite buckets.
 #: 9 (R7.1): the manifest carries `water` -- one `volumes[]` row per real `LEAFWATERDATA` record
 #: with its fog keys and its `CONTENTS_WATER` brushes as plane sets, plus the `dropped[]` rows that
-#: name what produced none (`docs/architecture/water-architecture.md` -> section 5.1).
+#: name what produced none.
 #: 10 (R7.4): the water lane is complete. Face groups split on two per-face facts vbsp published and
 #: the bake never read -- `#underside` (the plane normal faces down, so the group binds the material
 #: lane's `_Underside` twin) and `#style<n>` (the face carries a lightstyle, so the chunk gets the
 #: runtime's style brightness) -- every `materials` row states which it is; each `water.volumes[]`
 #: row carries the compiler's `fluid{}`, its convex `pieces[]`, its `leafBoxesCm[]` and the
 #: `nearBoxesCm[]` the PVS derives; and `water.faces[]` is one row per water face with the fields
-#: G11/G13/G22/G26 name (`docs/architecture/water-architecture.md`, AUDIT section 9).
+#: G11/G13/G22/G26 name.
 #: 11 (R7.4, integrator): each `water.faces[]` row also carries `meshedAreaCm2`, the area this
 #: stage actually meshed for the face. `faces[].area` beside it is what vbsp computed, so the
 #: G26/verdict B3 area pin is answerable offline, per face and per section, without an editor
@@ -129,7 +126,7 @@ LEGACY_MASTER_RULES = (
 )
 LEGACY_MASTER_DEFAULT = "M_World_Opaque"
 
-#: The proxy kinds the V2 masters implement live (`seam_map_material.md` -> "Proxy policy"); a
+#: The proxy kinds the V2 masters implement live: a
 #: material carrying one of these on its V2 instance is animated now where the legacy `.mtl` lane
 #: flattened it to a static bind. `animatedtexture` only animates when its frames array staged --
 #: the provenance omission `animatedFramesArrayUnavailable` says when it did not.
@@ -151,8 +148,8 @@ GLTF_TO_UNREAL = 100.0
 #: are Source inches; every other bit is a lighting/flashlight hint this lane does not consume).
 STATIC_PROP_FLAG_FADES = 0x1
 
-#: R6.1 (`seam_map_map.md` -> "Sprites (R6.1)"): the blend state an `env_sprite`'s `rendermode`
-#: selects, the `$spriterendermode` row table of `seam_map_material.md` -> `M_V2_Sprite` (VtMB's
+#: R6.1: the blend state an `env_sprite`'s `rendermode`
+#: selects, from the `$spriterendermode` row table's `M_V2_Sprite` mapping (VtMB's
 #: client writes the entity's mode into that material var at draw). Mode 6 (`kRenderEnvironmental`)
 #: has no program and is a named failure; every other value is a mode the table does not name.
 #:
@@ -183,7 +180,7 @@ SF_SPRITE_START_ON = 0x1
 DISP_ALPHA_FULL = 255.0
 
 #: `SolidType_t` (`docs/vtmb/phy_vphysics.md` -> "Which entities get a collision model"). The bake
-#: only distinguishes `SOLID_NONE` from the rest -- see the ruling in `seam_map_map.md`.
+#: only distinguishes `SOLID_NONE` from the rest.
 SOLID_NONE = 0
 
 #: `CONTENTS_SOLID` (`bspflags.h`). vbsp writes one dummy solid leaf per map at index 0 -- cluster
@@ -194,7 +191,7 @@ CONTENTS_SOLID = 0x1
 #: `CONTENTS_WATER` (`bspflags.h`). A brush is a water volume's when it carries the bit AND at
 #: least one non-bevel side whose material authors `%compilewater`: `0x18000120` shadow casters
 #: sided entirely with `tools/tools_shadow` carry the bit too and are not water, while
-#: `0x18000020` `func_detail` water is (`water-architecture.md` section 5.1).
+#: `0x18000020` `func_detail` water is.
 CONTENTS_WATER = 0x20
 #: The `%compilewater` key vbsp reads to give a brush that content bit; carried on the material
 #: unit's own VMT provenance, so a patched instance only shows it through its `patchBase`.
@@ -209,7 +206,7 @@ WATER_SURFACE_TOLERANCE_CM = 2.54
 #: water tops are axis-aligned; the bound keeps a steep bank side from ever being mistaken for one.
 WATER_TOP_NORMAL_Z = 0.99
 
-#: R7.4 ruling E (revised 2026-09-04, per-face underside; `water-architecture.md` section 1 -- N is
+#: R7.4 ruling E (revised 2026-09-04, per-face underside -- N is
 #: the four standing divergences). `Mod_LoadFaces` (engine.dll `FUN_200b73d0`) tests the face's
 #: own plane normal against the .rdata constant `_DAT_201734e8 = 0.0` and, when it is negative,
 #: undefines `$reflecttexture` on the material -- so an underside water face is not "the same
@@ -353,8 +350,7 @@ class Placement:
 
 @dataclass(frozen=True)
 class DetailPlacement:
-    """One `detailProps.records[]` record (`dprp` v2), resolved for the bake (R6.3,
-    `seam_map_map.md` -> "Detail props (R6.3)").
+    """One `detailProps.records[]` record (`dprp` v2), resolved for the bake (R6.3).
 
     `model` is the record's index into the lump's own dictionary and `stem` that entry's R1 corpus
     stem -- the same `static_stem` fold a static prop uses, so the instanced component and a static
@@ -376,8 +372,8 @@ class DetailPlacement:
 
 @dataclass(frozen=True)
 class SpriteRecord:
-    """One `env_sprite` block of the entity lump, read for the bake (R6.1, `seam_map_map.md` ->
-    "Sprites (R6.1)") before its material is resolved.
+    """One `env_sprite` block of the entity lump, read for the bake (R6.1) before its material is
+    resolved.
 
     `index` is the block's lump ordinal -- the entity's `FElysiumEntityHandle::Index`, the tag the
     baked actor carries and the key the leaf's visibility writes land on. `material` is the
@@ -493,8 +489,7 @@ class WaterFluid:
 
 @dataclass(frozen=True)
 class WaterVolume:
-    """One real `LEAFWATERDATA` record joined to its material and its brushes (R7.1,
-    `docs/architecture/water-architecture.md` section 5.1).
+    """One real `LEAFWATERDATA` record joined to its material and its brushes (R7.1).
 
     `index` is the lump ordinal, `surface_z_cm`/`min_z_cm` the record's own two floats in Unreal
     centimetres. `fog_color` is carried **as authored** -- `{r g b}` already divided by 255, `[r g
@@ -1999,8 +1994,7 @@ def _near_water_boxes(units: sidecars.MapUnits, visibility, record_index: int):
 def resolve_water_volumes(
     units: sidecars.MapUnits, read_sidecar, map_name: str = "", visibility=None,
 ) -> tuple[list[WaterVolume], list[dict[str, Any]]]:
-    """The map's water volumes, and the `LEAFWATERDATA` rows that produced none (R7.1,
-    `docs/architecture/water-architecture.md` -> section 5.1).
+    """The map's water volumes, and the `LEAFWATERDATA` rows that produced none (R7.1).
 
     One volume per real record, in lump order: a `surfaceTexInfoID` of -1 is vbsp's sentinel and is
     dropped, a record no water brush stands at is dropped and named (a `tools/tools_shadow` caster

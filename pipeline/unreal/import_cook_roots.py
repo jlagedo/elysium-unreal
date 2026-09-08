@@ -10,7 +10,7 @@ import re
 
 
 #: The code half of the cook-root recipe; bump when this writer or `UElysiumCookRoot` changes
-#: what it authors. Never hash code (`seam_map_unit_contract.md` -> "Recipes").
+#: what it authors. Never hash code.
 PRODUCER_VERSION = "r8-cook-roots-v1"
 
 

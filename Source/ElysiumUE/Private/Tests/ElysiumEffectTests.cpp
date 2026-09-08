@@ -1,5 +1,4 @@
-// R7.3 -- effects (`docs/architecture/effects-architecture.md` §5, the one runtime row the
-// ambient set authorizes): `SetRateScale` on an env_particle ramps linearly, through the leaf's
+// Effects — the one runtime row the ambient set authorizes: `SetRateScale` on an env_particle ramps linearly, through the leaf's
 // publish, into the placed actor's one rate float -- `User.RateScale = rampedScale x VolumeScale`
 // -- and TurnOff / TurnOn reach the actor's on/off state on the same seam.
 #include "Misc/AutomationTest.h"

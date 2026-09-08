@@ -7,7 +7,7 @@
 
 /**
  * `SoundScheme` playback taste knobs, Project Settings -> Elysium -> Audio, tracked at
- * `Config/DefaultElysium.ini` (R4.5, `docs/project/seam_migration.md` -> "Wire first, tune later").
+ * `Config/DefaultElysium.ini`.
  * Distinct from `UElysiumUserSettings` (`UGameUserSettings`), which is the player-facing volume-slider
  * save; these are developer-tuned playback constants read at scheme-evaluation time
  * (`ElysiumSoundScheme.cpp`), the same way `UElysiumModelSettings`'s knobs are.

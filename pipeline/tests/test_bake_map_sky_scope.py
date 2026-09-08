@@ -1,4 +1,4 @@
-"""R6.7 (`docs/architecture/seam_map_map.md` -> "3D-skybox composition (R6.7)"): every lane the
+"""R6.7: every lane the
 corpus places inside the 3D-skybox miniature goes through the one transform and carries the one
 scope marker.
 

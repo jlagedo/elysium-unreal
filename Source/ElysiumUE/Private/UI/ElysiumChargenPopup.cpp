@@ -23,10 +23,9 @@ namespace
 {
 	namespace Layout
 	{
-		// The authored `Region`/`TextRegion` are read as INTENT, not as a coordinate system
-		// (`docs/project/reconstruction-direction.md` axis 1): the page is centred in the 1024x768 virtual canvas
-		// and its text column takes the proportion the data asks for, rather than being placed at
-		// literal pixels.
+		// The authored `Region`/`TextRegion` are read as INTENT, not as a coordinate system: the
+		// page is centred in the 1024x768 virtual canvas and its text column takes the proportion
+		// the data asks for, rather than being placed at literal pixels.
 		inline constexpr float PageW      = 1024.0f;
 		inline constexpr float PageH      = 768.0f;
 		inline constexpr float TextInsetX = 190.0f;   // the shipped TextRegion's own left inset

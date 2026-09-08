@@ -345,8 +345,7 @@ bool UElysiumMapSubsystem::Travel(const FString& Map, const FString& Landmark)
 	}
 	// The sidecars the runtime still reads (.ents, .hulls, .ropes, .spawn) live beside the export,
 	// so a baked level with no export would build a world with no entities at all. Either producer's
-	// own proof that it ran satisfies this (docs/architecture/map-architecture.md "The
-	// export-readiness gate").
+	// own proof that it ran satisfies this ("the export-readiness gate").
 	if (!HasTravelableExport(Map))
 	{
 		UE_LOG(LogElysiumMap, Warning,

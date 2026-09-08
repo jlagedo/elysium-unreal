@@ -1,5 +1,5 @@
 // Content-free Substrate automation: the RPG/social reaction-score calculator — the third social
-// domain (K4, `docs/architecture/gameplay-systems-architecture.md` §5.5.7). Every table here is
+// domain. Every table here is
 // built in code, fabricated to match what `system/reaction.txt` and `system/reactions000.txt`
 // actually author (`docs/vtmb/npc-ai-reverse-engineering.md` → "Emotional disposition and social
 // reaction are different domains"), so these cases are this runtime's statement of the contract

@@ -5,10 +5,8 @@ props, ropes/cables, particle emitters, and signage. Scope is **VtMB format fact
 data contracts**: what these entity classes carry, how the offline exporter
 (`pipeline/src/elysium_pipeline/exporters/UE_bsp_to_scene.py`) turns them into runtime intermediates, and what a renderer needs to
 draw them. It does not own the Unreal-side entity substrate or spawn/behavior design — that is
-`FElysiumEntityWorld`, documented in `docs/architecture/engine-core.md` (the entity object model, the two-phase
-build plan, the classname registry) and `docs/architecture/runtime-architecture.md` (the substrate's place in
-the map epoch, the spawn pass, `AcceptInput`, the event queue). Per-task build status lives in
-`docs/project/roadmap.md`, never here.
+`FElysiumEntityWorld` (the entity object model, the two-phase build plan, the classname registry,
+the substrate's place in the map epoch, the spawn pass, `AcceptInput`, the event queue).
 
 The behavior surface these visuals eventually wire into (I/O dispatch, `ScriptHide`/`ScriptUnhide`,
 output firing) is `docs/vtmb/entity_io.md`; Python evaluation is `docs/vtmb/python_bridge.md`.
@@ -57,7 +55,7 @@ additive, world-scaled). Both blend additive; glow adds the occlusion fade.
 
 ### 3.1 `.ents` (the entity source of truth)
 
-The complete schema is `docs/project/rebuild-strategy.md` → "Sidecar contracts." Visual consumers use the
+Visual consumers use the
 raw render keys plus `model_mesh`/`model_quat` for decoded static-model bodies, `hinge_axis`
 for constraints, and `sky` for 3D-skybox scope. Skeletal `npc_*` models remain on the character
 export path. These annotations extend the entity record; they never replace it.
@@ -81,8 +79,7 @@ keyed back to the entity, never a replacement for it.
 
 ### 3.3 Coordinate conventions (reference)
 
-The single coordinate rule is `docs/project/rebuild-strategy.md` → "Coordinate conventions." Visual
-consumers read normalized fields such as `origin` and `model_quat` in Unreal space; raw
+Visual consumers read normalized fields such as `origin` and `model_quat` in Unreal space; raw
 `keys.origin`/`keys.angles` remain Source values when the original authoring is needed.
 
 ---
@@ -105,6 +102,12 @@ Two `env_sprite`-specific facts a renderer needs:
 - Orientation: `parallel_upright` in the sprite's VMT constrains the billboard to the world
   Y-axis only; its absence means a full camera-facing (`vp_parallel`) billboard.
 - World size is `scale × textureSize` (Source inches → Unreal cm).
+
+**`GlowBlend` (`client.dll` `0x100c24a0`) is the glow rule for a rendermode-3 corona:** width is
+`size × dist/200` (screen-constant), brightness is `clamp(19000/dist^2, 0.05, 1)`. `renderfx 14`
+(`kRenderFxNoDissipation`, `0x100c30e9`) skips the whole distance block, so the corona stays at
+`scale × texture` with no `19000/dist^2` and no screen-constant scaling. `kRenderWorldGlow`
+(mode 9, `0x100c3197`) keeps its world-space size too; only mode 3 scales.
 
 ---
 
@@ -191,8 +194,8 @@ The embedded `CRopePhysics<10>` starts at 0x458, so its node count is 0x464 and 
 **The `.ropes` sidecar** (`write_ropes`) emits one line per segment, 12 whitespace-separated tokens
 (R6.5): `vtmb:material:<key> ax ay az bx by bz width_cm rest_cm nodes texscale flags`. The first
 token is the rope material's unit id (`RopeShader` 0/1/2 → `cable/cable`/`cable/rope`/`cable/chain`,
-else `RopeMaterial`, else `cable/cable`), which the runtime resolves to the imported `MI_`
-(`docs/architecture/seam_map_material.md` → "Ropes on `MI_`"); `a`/`b` are the two node origins
+else `RopeMaterial`, else `cable/cable`), which the runtime resolves to the imported `MI_`;
+`a`/`b` are the two node origins
 (Unreal cm); the segment parameters (`width_cm`, `rest_cm`, `nodes`, `texscale`, `flags`) come from
 the *start* node A, computed per the RE above rather than passed through raw. The shader mode is
 the `MI_`'s own — load-bearing for `cable/chain`/`cable/chainb`, which are `$alphatest 1` over a
@@ -206,8 +209,7 @@ tube with a chain painted on it.
 `particle_definition` names a Troika `particles/<name>.txt` script — not a Source `.pcf`.
 The full effect inventory (every producer, every family, and the `env_phys*` impulse
 classes that sit beside the particle language) is `docs/vtmb/effects.md`. The definition
-grammar is `docs/vtmb/weather.md`. Unreal reproduction is
-`docs/architecture/effects-architecture.md`.
+grammar is `docs/vtmb/weather.md`.
 
 ---
 
@@ -219,9 +221,8 @@ Both classes render a **full-screen VGUI window**, not world geometry: each carr
 opened by the `OpenWindow` input or a `+use` on the prop. `game_sign` (73 across the patch map
 set) is bodiless — the tutorial's `popup_*` help windows; `prop_sign` (100) is a world `.mdl`
 (note, bus-stop sign, newspaper) whose model decodes through the ordinary static-mesh path and
-whose `use_icon` resolves through the use-cursor system. The window itself is tracked in
-`docs/project/roadmap.md` **4.10** (entity classes + panel) and **8.8** (VGUI-fidelity panel), with **PL5c**
-exporting the definitions — nothing about signs is a quad/decal rendering problem.
+whose `use_icon` resolves through the use-cursor system. Nothing about signs is a quad/decal
+rendering problem.
 
 ---
 
@@ -291,9 +292,9 @@ per-value visual table for this build has not been decoded.
 
 `docs/vtmb/entity_io.md` (the 7-field I/O, `use_icon`, `StartHidden`/`ScriptHide` — the runtime
 behavior surface this data feeds), `docs/vtmb/python_bridge.md` (name→delegate namespace, the five
-Python call paths), `docs/architecture/engine-core.md` (`FElysiumEntityWorld`, the classname registry, the
-spawn pass — the Unreal substrate that consumes `.ents`), `docs/architecture/runtime-architecture.md` (the
-substrate's place in the map epoch and frame), `docs/vtmb/lighting.md` (real-time lighting),
+Python call paths), `FElysiumEntityWorld` (the classname registry, the spawn pass — the Unreal
+substrate that consumes `.ents`, and its place in the map epoch and frame), `docs/vtmb/lighting.md`
+(real-time lighting),
 `docs/vtmb/mdl_v2531.md` (prop model decode), `docs/vtmb/effects.md` (particle framework and
 every effect family), `pipeline/CLAUDE.md` ("BSP format", "Static props /
 models", "Collision models").

@@ -7,7 +7,7 @@
 
 class UNiagaraSystem;
 
-// R7.3 (`docs/architecture/effects-architecture.md` §5.5, §5.9): the two data assets beside the
+// The two data assets beside the
 // effect actor -- the family overrides and the shared producer trees -- and the asset paths the
 // runtime binds by.
 

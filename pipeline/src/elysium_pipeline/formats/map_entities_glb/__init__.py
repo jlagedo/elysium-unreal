@@ -1,7 +1,7 @@
 """Isolated lossless Map-entities GLB format aggregation.
 
 One binary glTF 2.0 unit per VtMB map's ENTITIES lump (lump 0), published beside the map root.
-`docs/architecture/seam_map_map_entities.md` owns the contract this package implements.
+The map-entities seam owns the contract this package implements.
 """
 
 from elysium_pipeline.formats.map_entities_glb.coverage import (

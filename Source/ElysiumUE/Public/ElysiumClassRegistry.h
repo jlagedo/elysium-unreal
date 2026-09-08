@@ -33,7 +33,7 @@ using FElysiumInputThunk = void(*)(FElysiumEntity& Self, const FElysiumInputArgs
 // What a registered field is *for*. VtMB's datamap flags carry the same two bits we need:
 // 0x8 (FTYPEDESC_KEY — writable from a keyvalue/Python) and 0x2 (FTYPEDESC_SAVE — walked by the
 // save/restore pass). Persistence is the field table's fifth consumer, beside I/O, the Python
-// datamap walk, keyvalue application and the inspector (`docs/architecture/save-architecture.md` §4), so it is a
+// datamap walk, keyvalue application and the inspector, so it is a
 // flag on the registration rather than a second list somebody has to remember to edit.
 enum class EElysiumField : uint8
 {
@@ -45,8 +45,8 @@ ENUM_CLASS_FLAGS(EElysiumField)
 
 // The default a registration takes when it says nothing: a keyable field the save walk carries.
 // Saving a field that never changes costs nothing — the freeze diffs against a fresh build of the
-// same def and omits everything that matches (`docs/architecture/save-architecture.md` §4's zero-omission rule,
-// generalised from "zero" to "what the rebuild would produce").
+// same def and omits everything that matches (the zero-omission rule, generalised from "zero" to
+// "what the rebuild would produce").
 inline constexpr EElysiumField ElysiumFieldDefault = EElysiumField::Key | EElysiumField::Save;
 
 // One typed accessor over a live entity field. Get/Set marshal through the variant;

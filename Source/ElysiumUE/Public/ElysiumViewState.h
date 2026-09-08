@@ -11,7 +11,7 @@
 class FElysiumDlgConversation;
 struct FElysiumSignData;
 
-// The presentation seam's value type and its rules (`docs/architecture/runtime-architecture.md` §11).
+// The presentation seam's value type and its rules.
 //
 // Plain C++, no UObject reflection, exactly like ElysiumAppState.h and ElysiumInputScope.h: the
 // struct is data and the rules below are total functions over it, so the whole set is asserted with
@@ -537,7 +537,7 @@ struct FElysiumViewState
 
 	// The camera's resolved draw policy, projected once.
 	// The only camera facts on this state. Widgets read these and never query the pawn or the camera
-	// manager (`docs/architecture/camera-architecture.md` → Input, settings and presentation).
+	// manager.
 	FElysiumCameraView Camera;
 
 	// Interaction.

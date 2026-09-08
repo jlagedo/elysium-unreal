@@ -9,8 +9,7 @@
 
 The capture instrument is retired to closure; the banked corpus under
 `$ELYSIUM_WORK_ROOT/research` is the standing oracle, and a renewed capture is a scoped owner
-call on a named divergence (status: `docs/project/roadmap.md`, the LIFE programme). Confirmed
-VtMB behavior belongs in
+call on a named divergence. Confirmed VtMB behavior belongs in
 `docs/vtmb/animation_and_movers.md`, `docs/vtmb/facial_animation.md`, and
 `docs/vtmb/choreographed_scenes.md`. This document owns the programme's evidence
 model and method, including the working rules and evidence gate in
@@ -1995,9 +1994,8 @@ Next experiment:
 
 ## 13. Investigation order
 
-This document owns the evidence model and method, not task status. Status is
-`docs/project/roadmap.md`'s. The sequence below remains the method for any renewed,
-owner-called capture scope.
+This document owns the evidence model and method, not task status. The sequence below remains
+the method for any renewed, owner-called capture scope.
 
 The durable investigation sequence is:
 
@@ -2026,8 +2024,7 @@ index, process-reuse, or compression machinery only for an observed limit.
 ## 14. Task ownership and programme method
 
 Completed capabilities, open research slices, priorities, and acceptance gates
-are not duplicated here. Status lives in `docs/project/roadmap.md` (the LIFE
-programme and the `RE32`/`RE33` rows).
+are not duplicated here.
 
 ### 14.1 Working rules
 
@@ -2113,8 +2110,7 @@ draw coverage; keep records self-bounded with disposable indexes; infrastructure
 inside the two tracks (the evidence loop and the delivery) with one current task each;
 runtime carry-over is authorized by the evidence gate, not phase completion; a closed-format
 system is never re-derived by capture; and closure is stated against the adjudicated baseline —
-the recorded compute-every-bone divergence in `docs/architecture/animation-architecture.md` —
-rather than against retail unconditionally.
+the recorded compute-every-bone divergence — rather than against retail unconditionally.
 
 ---
 

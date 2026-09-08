@@ -17,9 +17,6 @@ root/entity transform — is `docs/vtmb/animation_and_movers.md` A.4a. Method, e
 grades, and the standing of the public decoders are
 `docs/vtmb/vtmb-animation-reverse-engineering.md`.
 
-The Unreal design that consumes these facts is
-`docs/architecture/animation-architecture.md`.
-
 ## Where the rule lives in the model
 
 Three fields of the 160-byte `StudioBone` declare it:
@@ -382,9 +379,7 @@ something downstream does the overriding. What must not happen is baking the rul
 
 ## Where the Unreal side lives
 
-The host-engine design that consumes this stage — where the two composition rules sit in
-Unreal's animation pipeline, what the exporter has to carry and why the basis forces a
-single exporter — is `docs/architecture/animation-architecture.md`. The constraint it hangs
+The constraint the host-engine design hangs
 off is the ordering above: decode, blend, compose, then apply this rule, then skin.
 
 ## Open questions

@@ -7,9 +7,6 @@ this module. **No imports of `elysium_pipeline.importers.materials` or anything 
 `numpy`** (`textures.py` does, at module scope): that is the whole reason this module exists
 separately rather than being read straight out of `materials.py`. `materials.py` re-exports every
 name below so existing call sites keep working unchanged.
-
-Design: `docs/architecture/seam_map_material.md` -> "Import" -> "Identity and naming".
-`seam_migration.md` 2026-08-31, "Revised after review".
 """
 
 from __future__ import annotations
@@ -29,12 +26,12 @@ _SURFACEPROP_NAMES = (
     "roller", "rubber", "sand", "snow", "stone", "strider", "tile", "tin", "wade", "water",
     "watermelon", "weapon", "wood", "woodpanel",
 )
-#: VMT top-directory names the design's tier-2 fallback names (`seam_map_material.md` -> "Identity
-#: and naming") that are not already a `$surfaceprop` entry name.
+#: VMT top-directory names the design's tier-2 fallback names (its "Identity and naming" rule)
+#: that are not already a `$surfaceprop` entry name.
 _TOP_DIRECTORY_ONLY = ("asphalt", "blends", "cable", "drapery", "grates", "ground")
 #: The four `$surfaceprop` values the 63-entry table does not define, each getting a class row of
 #: its own; `asphalt` is already counted via `_TOP_DIRECTORY_ONLY` above, so only three are new
-#: here -- the revision's own accounting (`seam_migration.md` -> "Revised after review").
+#: here.
 _TIER1_ADDITIONS = ("bone", "cloth", "leather")
 #: The ordered class table: `default` at index 0 (the class LUT's row 0), everything else sorted so
 #: the table is stable across regeneration. 72 rows: 63 (`_SURFACEPROP_NAMES`, `default` included)

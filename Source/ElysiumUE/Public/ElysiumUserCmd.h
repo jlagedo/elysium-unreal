@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumLookCurve.h"
 
-// S5 — intent is data (`docs/architecture/runtime-architecture.md` §8.3). One frame of player intent as
+// S5 — intent is data. One frame of player intent as
 // a value: what the player asked for, not which key is currently down. Movement, the camera and the
 // command bus all read this, and nothing anywhere polls a key — which is what makes headless play,
 // deterministic replay and a rebindable `+speed` gait the same mechanism rather than three.

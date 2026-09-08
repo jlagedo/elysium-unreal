@@ -784,7 +784,7 @@ bool FElysiumRulebookTest::RunTest(const FString&)
 // cross-checked against the recovered algorithm applied by hand to the same stream's RAW draws,
 // which is what makes a wrong table lookup or a swapped branch visible rather than merely different.
 //
-// The facts: `docs/recovered/dice-system.md`. The consumer boundary this deliberately stops at:
+// The consumer boundary this deliberately stops at:
 // `docs/vtmb/skills-and-checks.md`.
 // =====================================================================================
 
@@ -1533,7 +1533,7 @@ bool FElysiumTimeControlTest::RunTest(const FString&)
 	TestEqual(TEXT("a frame applies its whole delta"), Time.AdvanceFrame(0.05), 0.05);
 	TestEqual(TEXT("now advanced"), Clock.GetNow(), 0.05);
 
-	// Scale is applied EXACTLY ONCE (runtime-architecture.md §4). Engine dilation has already
+	// Scale is applied EXACTLY ONCE. Engine dilation has already
 	// scaled the tick's delta by the time it reaches AdvanceFrame, so the clock must multiply by
 	// nothing: at 0.25x a 0.02 s delta is still 0.02 s of game time, not 0.005.
 	Time.SetScale(0.25);

@@ -2,8 +2,8 @@
 
 One unit is one Faceposer expression or phoneme table selected by its stem below
 `expressions/`. The compiled `.vfe` is the runtime authority; the readable `.txt` is authoring
-evidence carried and compared, never merged into the VFE's table -- `docs/architecture/
-seam_map_expression_table.md` owns the shape.
+evidence carried and compared, never merged into the VFE's table -- the expression-table seam
+owns the shape.
 """
 
 from __future__ import annotations

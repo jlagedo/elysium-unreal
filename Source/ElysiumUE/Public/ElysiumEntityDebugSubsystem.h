@@ -13,8 +13,8 @@ struct FElysiumIOEvent;
 struct FElysiumOutputDef;
 class IConsoleObject;
 
-// The Source-style `ent_*` verb set, on the entity-substrate chokepoints
-// (`docs/architecture/debug-tooling.md` Layer 2). A world subsystem (one per game/PIE world,
+// The Source-style `ent_*` verb set, on the entity-substrate chokepoints. A world subsystem
+// (one per game/PIE world,
 // surviving map-actor travels) that:
 //   * registers the `elysium.ent_*` console verbs and drives them off the live entity world
 //     (reached through the map subsystem's current map actor),
@@ -36,7 +36,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	// Debug drawing is presentation, so it keeps running while the world is held: the overlays,
 	// gizmos and I/O beams have to stay on screen through a pause and a frame step, which is
-	// exactly when they are read (`docs/architecture/debug-tooling.md`).
+	// exactly when they are read.
 	virtual bool IsTickableWhenPaused() const override { return true; }
 	virtual TStatId GetStatId() const override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;

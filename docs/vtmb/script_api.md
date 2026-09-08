@@ -455,5 +455,3 @@ integer `0`. The corpus writes **1,226 distinct `G` flags across 3,782 assignmen
 
 The restore adapter is binding/save mechanism, not an action name; its recovered contract is
 `docs/vtmb/python_bridge.md` → "Reproduction."
-
-Implementation priority and status for this action inventory: `docs/project/roadmap.md`.

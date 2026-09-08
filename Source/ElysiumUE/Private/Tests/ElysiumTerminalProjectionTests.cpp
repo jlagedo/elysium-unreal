@@ -1,4 +1,4 @@
-// The world-lifetime terminal projection (`docs/project/plans/terminals.md`, slice C).
+// The world-lifetime terminal projection.
 //
 // The render target, the material instance and the widget renderer belong to the MONITOR, not to a
 // CommonUI session: retail's screensaver think writes into the entity's cell buffer from map load

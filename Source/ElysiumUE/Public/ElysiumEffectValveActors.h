@@ -8,7 +8,7 @@ struct FElysiumDustState;
 struct FElysiumSteamState;
 struct FElysiumBeamState;
 
-// R7.3 (`docs/architecture/effects-architecture.md` §5.6): the three Valve classes' actors, one per
+// The three Valve classes' actors, one per
 // `dustmotes[]` / `steam[]` / `beams[]` row, each on its own authored family system and driven by
 // its leaf's published state through `AElysiumMapActor`. Fields are the staged row's.
 

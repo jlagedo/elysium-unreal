@@ -1,4 +1,4 @@
-"""R6.3 (`docs/architecture/seam_map_map.md` -> "Detail props (R6.3)"): the V2 map bake instances
+"""R6.3: the V2 map bake instances
 every `dprp` record off the staged `details` table.
 
 Two things in that section can change shipped content without any other test noticing: the

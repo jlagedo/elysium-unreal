@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumCameraSolve.h"
 
-// The third-person rig's rule set (`docs/architecture/camera-architecture.md`).
+// The third-person rig's rule set.
 //
 // It is a separate file from `ElysiumCameraSolve.h`, which holds the recovered VtMB *rules* — the
 // weights, the latches, the draw policy, the fade band, the cvar surface. Nothing here reproduces a
@@ -19,8 +19,7 @@
 // the whole rig is asserted with no pawn (`Elysium.Substrate.CameraRig`). The engine half owns the
 // sweep and hands the hit back in.
 //
-// Three things it does differently from the recovered rig, and each is a stated Feel divergence
-// (`docs/architecture/camera-architecture.md` -> the divergence table):
+// Three things it does differently from the recovered rig, and each is a stated Feel divergence:
 //
 //   * **the damper is frame-rate independent.** VtMB's is an Euler step scaled by `K * Dt` and
 //     clamped, so the same motion settles differently at 60 and 144 Hz. This one decays by a

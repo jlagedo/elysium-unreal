@@ -8,7 +8,7 @@
 #include "ElysiumEntity.h"         // FElysiumEntity — the emitter parent attach resolve
 #include "ElysiumEntityDefs.h"     // FElysiumEntityDef — an emitter parent's authored origin
 #include "ElysiumEntityWorld.h"    // FindByName / EnqueueInput — the weather timer's entity I/O door
-#include "ElysiumMapTransportSettings.h"   // IsMapOnV2Models -- the R7.3 effects cutover
+#include "ElysiumMapTransportSettings.h"   // IsMapOnV2Models -- the effects cutover
 #include "Map/ElysiumMapLog.h"
 
 #include "Engine/World.h"
@@ -152,8 +152,8 @@ bool IsFollowRainDefinition(const FString& Definition)
 
 void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 {
-	// R7.3: on a converted map the emitter is a bake-placed actor; the viewer-box modes 10/11 are
-	// weather's rain follow on either path (`effects-architecture.md` §5.7).
+	// On a converted map the emitter is a bake-placed actor; the viewer-box modes 10/11 are
+	// weather's rain follow on either path.
 	const bool bPlacedEffects = ElysiumMapTransport::IsMapOnV2Models(MapName);
 	const bool bViewerBox = Emitter.AttachType == 10 || Emitter.AttachType == 11;
 	// One viewer-volume system for every rain_follow_emitter. Two hub entities share it.

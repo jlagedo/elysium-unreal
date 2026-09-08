@@ -35,8 +35,8 @@ struct FElysiumCharacterScreenMode
 // One screen entered on a tab. `L` opens it on the quest log, `C` on the sheet, and pressing the
 // other key while it is up switches tab rather than closing — two doors into one screen.
 //
-// Tree is built in C++ Slate under one `SDPIScaler` at `ScreenH/768`
-// (`docs/architecture/ui-architecture.md`). The chrome is VtMB's own decoded sheet art, each piece
+// Tree is built in C++ Slate under one `SDPIScaler` at `ScreenH/768`. The chrome is VtMB's own
+// decoded sheet art, each piece
 // guarded: `out/ui/art/` is gitignored, so every image degrades to a token-drawn equivalent rather
 // than leaving a hole.
 //

@@ -1,7 +1,7 @@
 """Cubemap face order for the texture import lane, and the seam check that accepts it.
 
-A texture unit stores a cubemap's six faces in glTF order and orientation
-(`seam_map_texture.md` → "faces"): the exporter permuted Source's faces by
+A texture unit stores a cubemap's six faces in glTF order and orientation: the exporter permuted
+Source's faces by
 `SOURCE_TO_GLTF_FACE_ORDER` and rotated each by `SOURCE_TO_GLTF_FACE_TRANSFORMS`, and it recorded
 both per face in `faces[]`. Unreal samples a `UTextureCube` through the plain D3D face table, which
 is also the layout VtMB's env cubemaps were authored for -- the legacy bake imports them in VTF

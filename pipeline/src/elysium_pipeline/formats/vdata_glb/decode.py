@@ -1,6 +1,6 @@
 """Decode one vdata unit: the KeyValues tree, the delimited rows, or a freeform line list.
 
-Grammar selection (`seam_map_vdata.md`, "GLB structure"): `experience_table.txt` is the one
+Grammar selection: `experience_table.txt` is the one
 pipe-delimited file; every other file is attempted as KeyValues. A file that tokenizes with no
 `{`/`}` at all -- `credits.txt` and its variants, `masquerade.txt`, `charaction_sounds.txt` -- is
 not KeyValues by any reading (a real vdata KeyValues file always wraps its data in at least one
@@ -55,7 +55,7 @@ def _attach_comments(
 
     A comment sharing its line with the token before it reads as documenting that token (the
     overwhelmingly common shape in the corpus: `"weight" "2" // added by wesp`); a comment that
-    opens its own line reads as documenting whatever comes next. `seam_map_vdata.md` states only
+    opens its own line reads as documenting whatever comes next. The vdata spec states only
     the second rule ("attached to the node they precede"); the first is this decoder's own
     resolution of the many trailing comments the spec's own examples show, recorded in
     `specDeviations`.

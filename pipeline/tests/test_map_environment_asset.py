@@ -1,8 +1,7 @@
 """The per-map environment asset's offline stage (R4.4).
 
 `pipeline/src/elysium_pipeline/importers/map_environment.py` turns `<map>.env`, `<map>.sky` and
-`<map>.spawn` into the manifest `pipeline/unreal/import_map_environment.py` executes
-(`docs/architecture/seam_map_map.md` -> "Import — environment").
+`<map>.spawn` into the manifest `pipeline/unreal/import_map_environment.py` executes.
 
 These pin the pieces that decide whether a wrong environment can be authored at all: each sidecar's
 own absent-file default (the identity `FElysiumSkyDef`/`FElysiumSpawnDef`/`FElysiumEnvDef` reads

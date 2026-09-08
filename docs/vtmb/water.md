@@ -2,14 +2,14 @@
 
 How VtMB authors water, how VBSP compiles it, what the 2004 renderer draws, and what the game
 does when a body enters it. This is the engine-neutral inventory and the evidence behind every
-water ruling. The Unreal reproduction is `docs/architecture/water-architecture.md`.
+water ruling.
 
 What stays elsewhere: movement constants (`WaterMove`, the accel tail, the water-jump pair) in
 `docs/vtmb/source_movement.md`; rain, wet streets and `WaterDrops_Timer` in
 `docs/vtmb/weather.md`; particle grammar in `docs/vtmb/effects.md`; `$envmap` on ordinary world
 materials in `docs/vtmb/reflections.md`; the shader-combo selection table in
 `docs/vtmb/shader_combos.md`; the `water` / `wade` surfaceprop rows in
-`docs/vtmb/surface_properties.md`. Status lives only in `docs/project/roadmap.md`.
+`docs/vtmb/surface_properties.md`.
 
 ---
 

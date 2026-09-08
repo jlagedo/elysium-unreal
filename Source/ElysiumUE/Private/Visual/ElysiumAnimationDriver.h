@@ -20,7 +20,7 @@ class USkeletalMesh;
 //
 // **It resolves only when the discrete request changes.** The weighted pick and the asset load happen
 // on an activity change; every other frame rewrites the continuous parameters in place. That is
-// `docs/architecture/animation-architecture.md` section 3.7 made structural rather than remembered.
+// made structural rather than remembered.
 //
 // This rung resolves and records; it drives no pose. The player graph consumes the published
 // selection.

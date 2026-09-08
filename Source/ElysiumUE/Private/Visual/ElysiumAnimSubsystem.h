@@ -287,7 +287,6 @@ public:
 	// one pick are how the player and the cast come to disagree about a bank silently.
 	//
 	// `Mesh` may be null — the record is still complete, and `OutAssets` simply comes back empty.
-	// `docs/architecture/animation-architecture.md` section 3.3.
 	//
 	// `Overlay` is the body's standing overlay stack (retail's `CBaseAnimatingOverlay`), or null when
 	// nothing is layered on this body. It is a parameter rather than a field of the intent because it

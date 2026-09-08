@@ -7,7 +7,7 @@ character then applies blood shield, health counters and aggravated tracking.
 
 This document owns that damage pipeline. Feat construction and the consumer-specific check
 policies are in `docs/vtmb/skills-and-checks.md`; the die algorithm is in
-`docs/recovered/dice-system.md`; command and action layers are in
+`docs/vtmb/dice-system.md`; command and action layers are in
 `docs/vtmb/gameplay-verbs.md`; animation selection is in
 `docs/vtmb/animation_and_movers.md`.
 
@@ -1155,8 +1155,8 @@ the blocked/stagger family and recorded here beside the behaviour it departs fro
   change the triggering hit either.
 - **The flinch occupies the base channel where retail's `DamageFlinch` is a 3-slot gesture
   overlay.** A melee block or stagger reaction therefore *holds* the base channel for its held
-  seconds, and the flinch yields to it without advancing the `Reaction` RNG stream
-  (`docs/architecture/save-architecture.md` § 8). Both are consequences of the channel
+  seconds, and the flinch yields to it without advancing the `Reaction` RNG stream. Both are
+  consequences of the channel
   substitution rather than recovered rules. The envelope the substitution carries is the recovered
   one — the 0.1 s / 0.3 s fade pair of "Damage flinch" below, in seconds. Which contacts reach the
   flinch at all is not affected by the substitution: the flinch is requested from `TraceAttack`, not

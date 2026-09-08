@@ -27,7 +27,7 @@ namespace
 {
 	// Layout, in VtMB's 1024x768 virtual canvas. Horizontal values are measured from an edge, never
 	// as a fraction of 1024: the canvas widens with the aspect ratio, so a fraction would drift the
-	// content inward on ultrawide (`docs/architecture/ui-architecture.md` section 2).
+	// content inward on ultrawide.
 	namespace Layout
 	{
 		inline constexpr float PadX        = 34.0f;   // from the left and right edges
@@ -292,7 +292,7 @@ void UElysiumCharacterScreen::SetHub(int32 InHub)
 		return;
 	}
 	// Leaving a hub is what marks its rows read: the player has now seen them. Ours, not VtMB's —
-	// the engine writes the unread byte and never reads it (`docs/architecture/ui-architecture.md`).
+	// the engine writes the unread byte and never reads it.
 	if (UElysiumGameStateSubsystem* State = StateFor(this))
 	{
 		State->MarkQuestsRead(Hub);
@@ -1435,7 +1435,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(FName GroupId,
 
 	// A row of selectable words rather than a dropdown: at chargen every list is short enough to
 	// show whole, and a list that is always open is one fewer state than a combo box. The UI has
-	// no classic mode (`docs/project/reconstruction-direction.md`).
+	// no classic mode.
 	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
 	for (int32 i = 0; i < Options.Num(); ++i)
 	{

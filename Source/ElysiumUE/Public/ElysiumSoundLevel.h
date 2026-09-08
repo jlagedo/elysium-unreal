@@ -4,7 +4,7 @@
 #include "Sound/SoundAttenuation.h"   // FSoundAttenuationSettings — returned by value
 
 // Source's SOUND LEVEL, in dB, and the distance law it buys — the engine half of the footstep
-// subsystem (`docs/architecture/footstep-architecture.md` §4.6, contract 8). The recovery is
+// subsystem. The recovery is
 // `docs/vtmb/footsteps.md` §3, "The engine's distance law".
 //
 // **This is not `sound_volume_table.txt`.** `FElysiumSoundLevel` in

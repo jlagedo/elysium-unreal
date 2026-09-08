@@ -134,9 +134,9 @@ def _stamp_json(model: NavGraphModel) -> dict[str, Any] | None:
 def _source_offsets_json(model: NavGraphModel) -> dict[str, Any]:
     """Where each offset-derived record that is not already `sourceOffset`-carrying itself
     (`header.*`, `zones`, `wcLookup`, `stamp`) sits in the `.ain`/`.loc` byte stream, so a ledger
-    range and the record it pays for can always be tied back to the same place, per
-    `seam_map_unit_contract.md`'s "numeric records that came from a file offset keep that
-    offset" rule. `nodes[]`/`links[]` already carry their own `sourceOffset` field and are not
+    range and the record it pays for can always be tied back to the same place, per the rule that
+    numeric records that came from a file offset keep that offset. `nodes[]`/`links[]` already
+    carry their own `sourceOffset` field and are not
     repeated here.
     """
 
@@ -159,9 +159,7 @@ def _source_offsets_json(model: NavGraphModel) -> dict[str, Any]:
     # An empty zone line (`ZoneCount: 0`) or a `.loc` companion that never produced a parsed
     # stamp (absent, empty or malformed) has no real file offset to state -- `model.zones.offset`
     # and `model.stamp.offset` default to `0` in that case, which is indistinguishable from a
-    # genuine offset at the start of the file, so the entry is omitted rather than fabricated
-    # (`seam_map_unit_contract.md`: "Numeric records that came from a file offset keep that
-    # offset").
+    # genuine offset at the start of the file, so the entry is omitted rather than fabricated.
     if model.zones.length:
         offsets["zones"] = {"offset": model.zones.offset, "length": model.zones.length}
     if model.stamp is not None and model.stamp.length:

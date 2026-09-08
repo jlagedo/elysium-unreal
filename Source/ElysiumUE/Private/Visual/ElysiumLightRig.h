@@ -64,7 +64,7 @@ public:
 	// Its position is already scaled by the bake; only the reach is re-derived here.
 	int32 Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath, float SkyReach = 1.f);
 
-	// V2 lane (R5.6, `MapsOnV2Models`; `seam_map_map_lighting.md` -> "Import" -> "Lights final").
+	// V2 lane.
 	// The bake already wrote every derived value -- intensity, reach, falloff, cone, shadows,
 	// specular, Lumen/fog scales and the MegaLights policy -- from `worldLights[]` through the same
 	// formulas `ApplyToSource` holds, so this opens no file and derives nothing: each source is
@@ -75,7 +75,7 @@ public:
 	// lightstyle animation off the `elysium.style` tag. Returns the number of lights bound.
 	int32 AdoptBaked(const TArray<FAdoptedLight>& Adopted, const FString& InMapName);
 
-	// R6.2 (`seam_map_map_lighting.md` -> "Switched lights and lightstyles"): the lightstyle
+	// The lightstyle
 	// pattern table, Source's `engine->LightStyle(style, pattern)`. 64 entries (MAX_LIGHTSTYLES):
 	// 0-11 the engine's own animated patterns, everything else "m" (full) until an entity writes
 	// it -- a named `light`'s TurnOn/TurnOff/SetPattern/FadeToPattern lands here, keyed by the
@@ -91,7 +91,7 @@ public:
 	// How many adopted sources carry a style >= 32 (entity-switched), for the readout.
 	int32 SwitchedSourceCount() const;
 
-	// R7.4 (G6, `water-architecture.md` ruling M, owner decision 4): a lightstyle on a FACE, not on
+	// Owner decision: a lightstyle on a FACE, not on
 	// a light. VtMB modulates the face's lightmap page by the style's pattern -- the pier's 34
 	// `objects/surf` foam cards carry style 1, 21 of them 32 as well -- and Lumen replaced the page
 	// project-wide, so the style survives as a brightness the lit base colour and the emissive are

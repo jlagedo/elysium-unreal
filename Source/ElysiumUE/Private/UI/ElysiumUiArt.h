@@ -4,7 +4,7 @@
 
 class UTexture2D;
 
-// UI art from assets (R6.6, docs/architecture/ui-architecture.md -> "9. Art from assets").
+// UI art from assets.
 //
 // Every image a screen draws is the `T_` asset the texture lane imported for the same install
 // path the screen always named -- a `materials/` path without extension, exactly as the HUD

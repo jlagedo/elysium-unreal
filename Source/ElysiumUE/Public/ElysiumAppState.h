@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The application's six states (runtime-architecture.md §10). Plain C++, no UObject reflection:
+// The application's six states. Plain C++, no UObject reflection:
 // the transition table below is the whole rule set, so it is testable with no game instance, no
 // world and no RHI — `Elysium.Substrate.AppState`.
 //

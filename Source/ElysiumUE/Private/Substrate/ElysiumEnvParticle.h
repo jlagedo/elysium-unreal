@@ -7,8 +7,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
 
-// env_particle -- CEnvParticle (`docs/vtmb/effects.md` §3.1, `docs/architecture/effects-architecture.md`
-// §5.2). The leaf owns the I/O and the linear rate ramp and publishes one
+// env_particle -- CEnvParticle (`docs/vtmb/effects.md` §3.1). The leaf owns the I/O and the linear rate ramp and publishes one
 // `FElysiumWeatherEmitterState` through `IElysiumWeather::ApplyEmitter` on every change; the
 // embodiment decides what draws it -- the bake-placed `AElysiumEffectActor` by entity index on a
 // `MapsOnV2Models` map, the legacy per-map `NS_<root>` component elsewhere.

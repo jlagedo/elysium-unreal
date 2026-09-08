@@ -42,7 +42,7 @@ struct FElysiumCameraSample
 	FElysiumCameraDrawPolicy Draw;
 };
 
-// The one final view per local player (`docs/architecture/camera-architecture.md` -> rule 1).
+// The one final view per local player.
 //
 // The seam is **`UpdateViewTargetInternal`**, not `UpdateViewTarget`. The outer function owns four
 // branches that must keep working and that this class has no business reimplementing: the

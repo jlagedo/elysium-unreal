@@ -6,15 +6,15 @@
 #include "ElysiumLightingSettings.generated.h"
 
 /**
- * The light rig's global calibration knobs (R4.3, `docs/architecture/seam_map_map_lighting.md` ->
- * "Import"), Project Settings -> Elysium -> Lighting, tracked at `Config/DefaultElysium.ini`. These
+ * The light rig's global calibration knobs, Project Settings -> Elysium -> Lighting, tracked at
+ * `Config/DefaultElysium.ini`. These
  * were `UElysiumLightRig`'s own hardcoded field defaults (`ElysiumLightRig.h` ~157-188) plus three
  * boot-time console variables (`elysium.LightScale`, `elysium.LightFit`, `elysium.LightCurve`); both
  * are retired in favour of this one object, so a live rig, a fresh map load and the Project Settings
  * page all read the same values through the same path.
  *
  * Every value shipped here is today's faithful default, unchanged -- this task moves *where* the
- * numbers live, not what they are (`docs/project/seam_migration.md`, "Wire first, tune later").
+ * numbers live, not what they are.
  *
  * Unlike `UElysiumSurfaceSettings` (which follows an interactive slider drag live, because it only
  * has to touch a parameter collection), this settings object pushes on the terminal `ValueSet` event

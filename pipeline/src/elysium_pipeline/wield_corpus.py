@@ -3,8 +3,8 @@
 `vdata/items` names a `wieldmodel_f` and a `wieldmodel_m` per definition, and VtMB poses the
 resulting entity by copying the wearer's world matrix into every bone whose **name matches**,
 leaving the rest to FK off the nearest matched ancestor -- driven by the weapon entity's own
-evaluated sequence, not by its bind pose. `docs/vtmb/wielded_weapons.md` owns that behaviour and
-`docs/architecture/wielded-weapon-integration.md` owns what it becomes in Unreal.
+evaluated sequence, not by its bind pose. `docs/vtmb/wielded_weapons.md` owns that behaviour; this
+module owns what it becomes in Unreal.
 
 This module owns the **decisions** that follow from it and performs no manifest I/O: which bone a
 model mounts on, which binding mode that implies, which local pose the bake must carry, and whether
@@ -325,7 +325,7 @@ class Classification(NamedTuple):
     skinned_bone_count: int
     anomalies: tuple
 
-#: Every binding mode, in the order `docs/architecture/wielded-weapon-integration.md` lists them.
+#: Every binding mode.
 BINDINGS = ("socket_prop", "socket_hand", "leader_pose", "copy_pose", "projectile")
 
 

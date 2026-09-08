@@ -1,7 +1,7 @@
 """The vdata rulebook as the install resolves it: one `.txt` file, one unit.
 
-A vdata unit is never cut from a shared table and never reads another vdata file (`seam_map_vdata.md`
-Source closure), so the source closure is always the whole member, carries no `span`, and the
+A vdata unit is never cut from a shared table and never reads another vdata file, so the source
+closure is always the whole member, carries no `span`, and the
 member's role is `unit-selecting` -- the one row the seam's own source-closure table names.
 """
 
@@ -43,7 +43,7 @@ class VdataSourceClosure:
 def source_keys(index: dict) -> list[str]:
     """Every vdata key the UP-first install index resolves, folded and sorted.
 
-    743 units resolve in the merged install across six subtrees (`seam_map_vdata.md`);
+    743 units resolve in the merged install across six subtrees;
     `vdata/system/stealth.xls` is a design-source spreadsheet the engine never opens and is
     excluded by the `.txt` filter alone.
     """

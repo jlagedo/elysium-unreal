@@ -1,5 +1,4 @@
-// R7.2 -- the decal subsystem's seam (`docs/project/seam_migration.md` -> "R7.2 Decals", owner
-// call B): what `Lay` puts in the world, what the cap recycles, what `Records`/`Restore` carry
+// The decal subsystem's seam (owner call B): what `Lay` puts in the world, what the cap recycles, what `Records`/`Restore` carry
 // across a save, and what the ranged shot's forward trace resolves a surface character into.
 //
 // Content-free. Two things stand in for the material lane's output, and only two: the engine's own

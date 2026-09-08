@@ -15,7 +15,7 @@ Why the question is asked at all: on the V2 lane a baked `Texture2D` reports
 `HasAlphaChannel = False` exactly when `TC_Default` resolved `AutoDXT` to DXT1, which happens
 exactly when no source texel is non-opaque. "No alpha channel" is therefore a statement about the
 AUTHORED payload, not about the bake -- and telling the two apart is what
-`bake_verify.verify_v2_materials` needs (`seam_map_map.md` -> the alpha assertion).
+`bake_verify.verify_v2_materials` needs.
 """
 
 from __future__ import annotations

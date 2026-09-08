@@ -1,5 +1,5 @@
 # Imports the UI typeface set (Content/Fonts/*.ttf) into generated local `UFontFace` assets under
-# /Game/ElysiumGenerated/UI/Fonts. Roadmap 8.6; the type system is "Nocturne" (docs/architecture/ui-architecture.md):
+# /Game/ElysiumGenerated/UI/Fonts. The type system is "Nocturne":
 # Spectral SC for small-caps labels, Spectral for body copy, Inter for data and numerals, plus
 # Terminus (TTF) for the computer-terminal console.
 #
@@ -34,7 +34,6 @@ SRC = os.path.join(_bootstrap.REPO, "Content", "Fonts")
 # as a blur rather than as a console. Raising the three ppem tiers keeps the corners: the field is
 # generated close enough to the drawn size that the median of the three channels lands on the
 # corner rather than between two of them. Editor-only asset properties, applied on import below.
-# (docs/project/plans/terminals.md, slice D.)
 TERMINUS_DISTANCE_FIELD = {
     "enable_distance_field_rendering": True,
     "min_multi_distance_field_ppem": 48,
@@ -52,7 +51,7 @@ FACES = [
     ("Spectral-SemiBold.ttf",   "FF_Spectral_SemiBold"),
     ("Inter-Regular.ttf",       "FF_Inter_Regular"),
     ("Inter-SemiBold.ttf",      "FF_Inter_SemiBold"),
-    # The computer-terminal console face (docs/architecture/computer-terminal-architecture.md 6.4).
+    # The computer-terminal console face.
     # Pixel-derived outlines: the C++ side raises the SDF ppem on this role so the stair corners
     # survive Slate's distance-field rasterizer.
     ("TerminusTTF-Regular.ttf", "FF_TerminusTTF_Regular"),

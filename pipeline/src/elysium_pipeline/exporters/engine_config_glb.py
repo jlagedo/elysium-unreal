@@ -1,8 +1,7 @@
 """Isolated one-member/one-GLB engine-config product writer.
 
 Every unit is scene-less and carries no BIN chunk: every engine-config member the seam names is
-text or a small typed binary blob, none of it a general glTF-drawable payload
-(`docs/architecture/seam_map_engine_config.md`).
+text or a small typed binary blob, none of it a general glTF-drawable payload.
 """
 
 from __future__ import annotations
@@ -41,7 +40,7 @@ def build_document(model) -> tuple[dict, bytes]:
         for row in model.dependencies
     ]
     identity_extra = {"residue": True} if model.key in _RESIDUE_KEYS() else {}
-    # `seam_map_unit_contract.md`'s extension root opens with the five contract keys, in order,
+    # The extension root opens with the five contract keys, in order,
     # before any kind-specific one; the seam doc's own illustrative JSON interleaves `grammar`
     # and the per-grammar table keys before `dependencies` and `comments`/`anomalies`/`omissions`
     # before `coverage`, which `validate_extension_root` (and every other seam) would refuse.

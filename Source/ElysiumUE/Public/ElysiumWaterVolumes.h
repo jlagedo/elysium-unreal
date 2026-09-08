@@ -15,8 +15,7 @@ class UMaterialInstanceDynamic;
 class UPrimitiveComponent;
 class USceneComponent;
 
-// R7.1 (`docs/architecture/water-architecture.md` rulings B/C/D, `seam_map_map.md` -> "Import —
-// water volumes"): VtMB's water VOLUME, as the map lane stages it and the bake places it.
+// R7.1, rulings B/C/D: VtMB's water VOLUME, as the map lane stages it and the bake places it.
 //
 // The volume is the second of water's four stacked facts and the only one the runtime owns: the
 // surface look is a material, the underside is a face set, and both are already drawn by the time

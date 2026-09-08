@@ -6,19 +6,19 @@ Phases B and C, tasks B1–B8b and C0–C5 — **landed 2026-07-26**. This doc k
 engine-neutral facts and the instruments that measured them; status, history and decisions
 live in the tracker set:
 
-- **Status and next work:** `docs/project/roadmap.md` — the SKY row (done), and the open residue promoted
+- **Status and next work:** the SKY row (done), and the open residue promoted
   to **3.6/3.7** (the measured tonemapper toe — the one remaining visible gap to displayed
   parity), **3.10** (volumetric fog layer calibration), **3.12** (`sm_hub_1` fill adjudication),
   and **3.13** (decal fog liveness). **3.11** (`elysium.LumenDiffuseBoost` verification) is
-  retired: R4.5 (`docs/project/seam_migration.md`) deleted the live cvar A/B along with the
+  retired: a prior pass deleted the live cvar A/B along with the
   rest of the light-leak scaffolding, unwired and unverified, in favour of a future bake-time
-  value (R5.6).
+  value.
 - **The decisions** (D1–D7; D6 dissolved, D4 amended, D3 corrected) are stated as facts in the
   sections below.
 
 Related: `docs/vtmb/lighting.md` (WORLDLIGHTS facts), `docs/vtmb/light-attribution.md`
-(fixture-vs-fill), `docs/architecture/rendering-perf.md` (why Lumen is load-bearing), `docs/vtmb/color_gamma.md`
-(the LDR look), `docs/architecture/asset-enhancement.md` (upscaled sky faces as an A/B layer).
+(fixture-vs-fill; why Lumen is load-bearing), `docs/vtmb/color_gamma.md`
+(the LDR look; upscaled sky faces as an A/B layer).
 
 ## Why this exists
 
@@ -48,7 +48,7 @@ engine works. Two things force the revisit:
 | Fact | Source |
 |---|---|
 | **World** ambience has no runtime GI and no global ambient constant: it = baked radiosity (lump 8) + author-sprayed fill lights + optional sky pair + fog. (Models are the exception — see the K3/K5 rows below) | `docs/vtmb/lighting.md`, `docs/vtmb/light-attribution.md`, RE-A3 |
-| The look is **bounce-dominated**: a direct-light model (even correctly shadowed) fits the baked lightmaps with R² ≈ 0 | `research/tooling/probes/probe_light_calibration.py`, `docs/architecture/rendering-perf.md` |
+| The look is **bounce-dominated**: a direct-light model (even correctly shadowed) fits the baked lightmaps with R² ≈ 0 | `research/tooling/probes/probe_light_calibration.py` |
 | WORLDLIGHTS (lump 15) carries the compiled light-source set; type 3 `emit_skylight` (sun) and type 5 `emit_skyambient` come from `light_environment` | `docs/vtmb/lighting.md`, `pipeline/src/elysium_pipeline/formats/bsp.py` |
 | v17 `dface_t` reserves two extra lightstyle arrays (`day[8]` @56, `night[8]` @64) beside `styles[8]` @48, plus `avgLightColor[8]` at offset 0; the modern ambient-cube lumps are empty in VtMB data | `pipeline/CLAUDE.md` (byte-probed) |
 | **K4 is settled** — the `day`/`night` arrays are **all-zero in all 108 maps** and **no engine code reads them**; lump 8 holds exactly **one** bake, keyed by `styles[8]` alone. There is no day/night set to choose between | RE-A4 (below), `research/tooling/probes/probe_daynight.py` |
@@ -1602,7 +1602,7 @@ never of the backdrop** — which is a constraint on B8, not just a fidelity not
   relationship rather than add a separate sky exposure.
 - The backdrop remains unfogged while the 3D miniature uses `sky_camera` fog.
 - Upscaled sky faces must preserve absolute texel values, because mean shifts change brightness
-  one-for-one. Work status lives in `docs/project/roadmap.md`; any deliberate divergence belongs beside the
+  one-for-one. Any deliberate divergence belongs beside the
   faithful behavior in this document.
 
 ### Loose ends (seen, deliberately not chased)

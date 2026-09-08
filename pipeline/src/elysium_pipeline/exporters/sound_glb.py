@@ -9,7 +9,7 @@ The payload is a *decode*, not the file: a `.wav` unit's BIN chunk is not its RI
 tagged `.mp3`'s is not its member either. So the BIN chunk also carries the **source capsules**
 (schema 1.1.0) -- the audio member and, when the install ships one, the `.lip` companion, verbatim
 -- appended after the payload, which keeps `bufferView` 0. That is what lets `uv run elysium
-import sound` deploy a byte-exact `.wav`/`.mp3`/`.lip` (`seam_map_sound.md`, "Import").
+import sound` deploy a byte-exact `.wav`/`.mp3`/`.lip`.
 """
 
 from __future__ import annotations

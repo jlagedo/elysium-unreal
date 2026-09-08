@@ -8,8 +8,8 @@
 
 #include "HAL/FileManager.h"
 
-// The `camera_cinematic` director corpus (docs/project/camera_scripted.md §9 "Content tier";
-// $ELYSIUM_WORK_ROOT/_camera_recovery/rc_group_a.md RC2). `CBaseCineCam` overrides nine vtable
+// The `camera_cinematic` director corpus
+// (`$ELYSIUM_WORK_ROOT/_camera_recovery/rc_group_a.md` RC2). `CBaseCineCam` overrides nine vtable
 // slots and none of them is a `KeyValue` handler -- every authored key is a plain `CBaseEntity`
 // datamap field, and `spawnflags` is not even in the datamap: it is read by code alone.
 // `CBaseCineCam::Spawn` (`vampire.dll` 0x1006d9a0) is four instructions:

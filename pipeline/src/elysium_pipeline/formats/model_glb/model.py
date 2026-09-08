@@ -2,7 +2,7 @@
 
 One `models/**.mdl` is one unit whatever it holds: a character body, a shared animation bank, a
 one-bone scenery prop, a wield model or a view model all decode through the same records with the
-sections their bytes do not fill left empty. `seam_map_model.md` owns the rules; this module owns
+sections their bytes do not fill left empty. The model seam owns the rules; this module owns
 the identity arithmetic and the record shapes the decoder fills and the writer reads.
 """
 
@@ -50,8 +50,8 @@ SHAPE_STATIC = "static"
 SHAPE_SKELETAL = "skeletal"
 SHAPES = (SHAPE_BANK, SHAPE_STATIC, SHAPE_SKELETAL)
 
-#: `identity.roles`, the closed vocabulary of what another unit uses a model *as*
-#: (`seam_map_model.md`, "identity"). The field is empty at export and filled by the corpus index
+#: `identity.roles`, the closed vocabulary of what another unit uses a model *as*.
+#: The field is empty at export and filled by the corpus index
 #: from the inverse of every `model` reference in the corpus.
 ROLE_CHARACTER_BODY = "character-body"
 ROLE_ANIMATION_BANK = "animation-bank"

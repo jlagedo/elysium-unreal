@@ -4,9 +4,8 @@ P4 4.10 (PL5c) asset-delivery step. A `game_sign` / `prop_sign` entity names a
 `definition_file` -- `vdata/Signs/<name>.txt`, a Source KeyValues panel rooted `SignData`
 that the engine draws as a full-screen window (`CSignUI` in `client.dll`). This step
 mirrors those definitions **verbatim** (no parse, no transcode). Their `BackgroundImage`
-materials are the texture lane's `T_` assets (R6.6, `docs/architecture/ui-architecture.md`
--> "9. Art from assets"): the runtime resolves `BackgroundImage.Name` to the imported texture by
-the same install path, so nothing is decoded here any more.
+materials are the texture lane's `T_` assets: the runtime resolves `BackgroundImage.Name` to the
+imported texture by the same install path, so nothing is decoded here any more.
 
 Whole-game, not map-scoped -- one mirror, like the script/dialogue copy (PL2). Resolution
 is patch-first (patch loose > retail loose > VPK), matching the engine's search order.

@@ -1,6 +1,6 @@
 """Identity, vocabulary and record shapes for the corpus-index GLB seam.
 
-`docs/architecture/seam_map_corpus_index.md` owns the facts; this module is their code. There is
+The seam's specification owns the facts; this module is their code. There is
 exactly one corpus index per export root: a scene-less unit with no BIN chunk and no byte ledger,
 because it is a product over other products and every byte it describes is ledgered by the unit
 that owns it.

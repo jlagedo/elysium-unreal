@@ -1,7 +1,7 @@
 """The Dialogue GLB seam: one `.dlg` conversation, one binary glTF unit.
 
-`docs/architecture/seam_map_dialogue.md` owns the rules; `docs/architecture/seam_map_unit_contract.md`
-owns the shared shape every export_v2 unit follows.
+The dialogue seam owns the rules; the unit contract owns the shared shape every export_v2
+unit follows.
 """
 
 from elysium_pipeline.formats.dialogue_glb import exprlex, rules

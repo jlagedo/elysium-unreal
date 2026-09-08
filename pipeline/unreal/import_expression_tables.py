@@ -10,7 +10,7 @@ import re
 
 #: The code half of every expression-table recipe; bump when this writer or the
 #: `UElysiumExpressionData`/`UElysiumExpressionTables` classes change what they author.
-#: Never hash code (`seam_map_unit_contract.md` -> "Recipes").
+#: Never hash code.
 PRODUCER_VERSION = "expression-tables-v1"
 
 

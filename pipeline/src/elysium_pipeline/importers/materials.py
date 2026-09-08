@@ -2,7 +2,7 @@
 
 `uv run elysium import materials` turns every published material unit into one Unreal material
 instance below `/ElysiumBaked/Materials`, parented to one of nine generated masters under
-`/Game/ElysiumGenerated/Materials/V2` (`docs/architecture/seam_map_material.md` -> "Import"). This
+`/Game/ElysiumGenerated/Materials/V2`. This
 module is the offline half of that lane and mirrors `textures.py`'s shape exactly: stage every
 unit, write one provenance sidecar per unit plus one `manifest.json`, recipe-stamp, prune, and let
 the editor phase (SF-4.5, not this module) do the headless import.
@@ -61,7 +61,7 @@ FAMILY = "materials"
 PACKAGE_ROOT = "/ElysiumBaked/Materials"
 #: The tracked package the nine hand-built masters (SF-4.3) live under.
 MASTER_ROOT = "/Game/ElysiumGenerated/Materials/V2"
-#: R7.2 ruling 2 (`seam_migration.md` -> "R7.2 Decals"): a `$decal` / `decalmodulate` unit stages a
+#: R7.2 ruling 2: a `$decal` / `decalmodulate` unit stages a
 #: SECOND shared instance beside its surface one -- same package, the surface instance's name plus
 #: this suffix -- parented to `M_V2_Decal`, the one `MD_DeferredDecal` master a `UDecalComponent`
 #: (and a mesh-decal section) actually draws. Everything that lays or bakes a decal binds this
@@ -69,7 +69,7 @@ MASTER_ROOT = "/Game/ElysiumGenerated/Materials/V2"
 DECAL_INSTANCE_SUFFIX = "_Decal"
 #: The master that twin parents to.
 DECAL_MASTER = "M_V2_Decal"
-#: R7.5 contract 1 (`water_audit/phase0/PHASE0_VERDICT.md` verdict B2): a water unit stages a
+#: R7.5 contract 1 (verdict B2): a water unit stages a
 #: SECOND instance beside its surface one -- same package, the surface instance's name plus this
 #: suffix -- for the DOWN-FACING half of every water brush. VtMB decides that per face (the plane
 #: normal's z, `Mod_LoadFaces`) and answers it by undefining `$reflecttexture` on the face's
@@ -80,7 +80,7 @@ UNDERSIDE_INSTANCE_SUFFIX = "_Underside"
 #: The Single Layer Water master, named once: the underside twin, the `%compilewater` reroute and
 #: the blend rule all key off it.
 WATER_MASTER = "M_V2_Water"
-#: R7.3 (`docs/architecture/effects-architecture.md` section 5.4): the four particle material
+#: R7.3: the four particle material
 #: children `make_v2_materials.make_particle_children` authors below this lane's package root,
 #: beside the corpus instances and map-independent like them. They are not units of this lane, so
 #: the manifest names them under `keep` on every run and the editor phase's prune leaves them be.
@@ -91,7 +91,7 @@ EFFECT_MATERIAL_CHILDREN = (
     f"{PACKAGE_ROOT}/particles/MI_ParticleRefract",
 )
 #: Bumped whenever the mapping below changes in a way that must re-stage every unit. v2: the
-#: revised design (`seam_migration.md` -> "Revised after review", 2026-08-31).
+#: revised design (2026-08-31).
 SETTINGS_VERSION = "elysium-material-import-v2"
 MANIFEST_SCHEMA = "1.0.0"
 MANIFEST_NAME = "manifest.json"
@@ -183,9 +183,7 @@ IGNOREZ_NAMED_DIVERGENCE_UNITS = frozenset({"models/scenery/furniture/displaytab
 #: genuinely has no destination on *that* unit's own master, not a bug in the parameter table.
 #: `unit key -> {vmt key (lower-cased) -> reason}`; every key named here is dropped from
 #: classification (never bound to a parameter) and recorded in provenance as
-#: `unitDivergenceProvenanceOnly` instead of failing the stage. See
-#: `docs/architecture/seam_map_material.md` -> "Import" -> "Per-unit divergences" for the
-#: narrative form of this table. `$vertexalpha` on the rerouted sprite unit
+#: `unitDivergenceProvenanceOnly` instead of failing the stage. `$vertexalpha` on the rerouted sprite unit
 #: (`engine/vertexcolorblend`) is deliberately **not** here any more: `M_V2_Sprite` now exposes
 #: `UseVertexAlpha`, so that key has a real destination and stages cleanly.
 UNIT_DIVERGENCES: dict[str, dict[str, str]] = {
@@ -237,7 +235,7 @@ UNIT_DIVERGENCES: dict[str, dict[str, str]] = {
 }
 
 
-#: R7.5 contract 2 (`water_audit/AUDIT.md` section 9 G1, owner decision 2, verdict B1): the VMT key
+#: R7.5 contract 2 (owner decision 2, verdict B1): the VMT key
 #: that makes a brush a water brush at compile time. VBSP reads it, not the shader name, so a
 #: `%compilewater` unit is a water surface whatever family its own VMT declares -- and four of the
 #: corpus's 27 declare something else (`water/invisible_water` and `dev/dev_waterbeneath` an unlit
@@ -305,7 +303,7 @@ _SINE_LANE = {
     "SineMin": "S", "SineMax": "S", "SinePeriod": "S", "SineTimeOffset": "S",
     "SineTargetMask": "V", "SineChannelMask": "V",
 }
-#: R7.1 ruling J (`water-architecture.md` -> "Surf sine UV translate"): the one vector a
+#: R7.1 ruling J ("Surf sine UV translate"): the one vector a
 #: `sine` -> `texturetransform` -> `$basetexturetransform` chain resolves to, `(ampU, ampV, offU,
 #: offV)`, added to the base UV coordinate as `amp x wave + off`. Only the Lit pair carries it --
 #: `objects/surf`, the pier's wave cards, is the whole population.
@@ -319,7 +317,7 @@ _NORMAL_ANIM_LANE = {
     "NormalFrameRate": "S", "NormalFrameCount": "S", "NormalMapFrames": "T",
     "UseAnimatedNormalFrames": "#",
 }
-#: R7.5 G3 (`water_audit/AUDIT.md` section 9 G3, verdict C2): the DUDV flipbook lane, water only.
+#: R7.5 G3 (verdict C2): the DUDV flipbook lane, water only.
 #: `$bumpmap` on a water unit is the signed UVWQ offset field (`dev/water_dudv`, 29 frames), which
 #: stages as a `Texture2DArray` and therefore never bound to the plain `DuDvMap` `Texture2D` slot
 #: (`textureClassMismatch`). `Water_Old` reads `$bumpframe` as the shared frame index of both
@@ -335,7 +333,7 @@ _DUDV_ANIM_LANE = {
 #: for a lightstyle-bearing water face); the STAGE never writes it -- it is a primitive value, like
 #: the scene-fog triple, and the master's own default (1) is what an untagged component reads.
 _LIGHTSTYLE_LANE = {"LightStyleBrightness": "S"}
-#: R5.4 (seam_map_material.md -> "Scene fog on the world masters (R5.4)"): Source's per-map
+#: R5.4: Source's per-map
 #: distance fog as the Custom-Primitive-Data-driven term every world / 3D-skybox / prop primitive
 #: carries (`ElysiumFog.h`, `mat_fog.fog_from_primitive`). `FogColor`/`FogStart`/`FogInvRange` are
 #: read off the primitive (slots 0..3, 4, 5), never off the instance, so the stage never writes
@@ -380,13 +378,13 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
             "UseVertexAlpha": "#", "UseEnvMap": "#", "UseEnvMapMask": "#",
             "UseBaseAlphaEnvMapMask": "#", "UseNormalMapAlphaEnvMapMask": "#", "UseFixedCube": "#",
             "MetallicTint": "#",
-            # R5.3 (seam_map_material.md -> "Decal fog and wetness homes"): a real per-instance
+            # R5.3: `WetnessScale`/`WetnessDriven` are a real per-instance
             # scalar pair, not provenance-only -- `WetnessScale` is static per unit (baked once at
             # import, same as every other instance scalar) and `WetnessDriven` gates a global,
             # live `MPC_ElysiumEnvironment` read in the graph, so no per-map material instance is
             # needed for the live half either.
             "WetnessScale": "S", "WetnessDriven": "S",
-            # R6.3 (seam_map_material.md -> "Detail sway on the model masters"): declared for the
+            # R6.3: `UseDetailSway` is declared for the
             # three-way name pin; no VMT key maps to it and the stage never sets it true -- only
             # the map bake's `MI_DetailSway_*` child of an imported instance does.
             "UseDetailSway": "#",
@@ -438,7 +436,7 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
         "RefractAmount": "S", "RefractTint": "V", "EnvMapTint": "V",
         "UseBaseTexture": "#", "UseNormalMap": "#", "UseEnvMap": "#", "UseFixedCube": "#",
     }),
-    # R7.2 (seam_migration.md -> "R7.2 Decals", ruling 1): re-cut MD_DeferredDecal/Translucent/
+    # R7.2 (ruling 1): re-cut MD_DeferredDecal/Translucent/
     # DefaultLit projector master. `UseVertexColor` is dropped (a projected decal has no vertex
     # colour); `Emissive`/`EmissiveScale` and the `Unlit` switch are new. Two callers bind this
     # master: `resolve_master` (the 38 `decalmodulate` units' own surface instance) and
@@ -446,8 +444,9 @@ EXPOSED_PARAMS: dict[str, dict[str, str]] = {
     # 2) -- only the second ever writes `Unlit`, and only for an unlit-family unit.
     "M_V2_Decal": _merged(_SHARED_PARAMS, {
         "BaseTexture": "T", "Emissive": "T", "EmissiveScale": "S", "Unlit": "#",
-        # R5.3 (seam_map_material.md -> "Decal fog and wetness homes"), unchanged by the R7.2
-        # re-cut: the world's own distance fog, as three named instance parameters -- a
+        # R5.3, unchanged by the R7.2
+        # re-cut: `FogColor`/`FogStart`/`FogInvRange` carry the world's own distance fog, as three
+        # named instance parameters -- a
         # UDecalComponent carries no Custom Primitive Data of its own. No corpus unit authors
         # these (decalmodulate ships no fog keys), so the stage never writes them; the placement
         # lane sets them per decal instance from the map's own environment, never from a per-map
@@ -516,8 +515,8 @@ TEXTURE_PARAM_MAP = {
 #: Data-class texture slots -- the `_linear` twin rule applies to these, never to a colour slot.
 DATA_CLASS_TEXTURE_PARAMS = frozenset({"NormalMap", "DuDvMap", "EnvMapMask", "CloudAlphaTexture"})
 #: Texture-class keys with no destination among the nine masters' exposed slots (none of them is
-#: on any master's texture column, `docs/architecture/seam_map_material.md` -> "Exposed parameters,
-#: by master"): the texture reference is still resolved and recorded in provenance, never bound to
+#: on any master's "Exposed parameters, by master" texture column): the texture reference is
+#: still resolved and recorded in provenance, never bound to
 #: an instance parameter, so a build never receives a name the master does not have. `$detail`,
 #: `$detail2` and `$glassenvmap` bind nothing per "`Detail` is dropped".
 TEXTURE_PROVENANCE_KEYS = frozenset({
@@ -553,7 +552,7 @@ SCALAR_PARAM_MAP = {
     "$cheapwaterstartdistance": "CheapWaterStartDistance",
     "$cheapwaterenddistance": "CheapWaterEndDistance",
     "$alpha_bias": "AlphaBias",
-    # R7.5 G5 (`water_audit/AUDIT.md` section 9 G5): authored on 19 units and, until this ruling,
+    # R7.5 G5: authored on 19 units and, until this ruling,
     # in `PROVENANCE_ONLY_KEYS`. NAMED MODERNIZATION, not a VtMB fact: `docs/vtmb/reflections.md`
     # ("`$envmapcontrast` and `$envmapsaturation` do not exist") measured that no term for it
     # appears in any shipped `.psh`, so the 2004 renderer dropped the author's intent on the
@@ -629,8 +628,8 @@ SWITCH_PARAM_MAP = {
     "$forcecheap": "CheapWater",
     "$fogenable": "UseFogEnable",
     "$bumpbasetexture2withbumpmap": "UseBumpOnBaseTexture2",
-    # `$normalalphaenvmapmask` is a one-off misspelling of `$normalmapalphaenvmapmask`
-    # (`seam_map_material.md` -> "Static switch"); treated as the correct key, anomaly recorded.
+    # `$normalalphaenvmapmask` is a one-off misspelling of `$normalmapalphaenvmapmask`;
+    # treated as the correct key, anomaly recorded.
     "$normalalphaenvmapmask": "UseNormalMapAlphaEnvMapMask",
 }
 #: Recorded per the reflection contract but never a switch and never a master ("no switch, no
@@ -728,7 +727,7 @@ PROXY_PROVENANCE_ONLY = frozenset({"camo", "waterlod", "lampbeam", "lamphalo", "
 SINE_TARGET_COMPONENT = {"$alpha": 0, "$color": 1, "$selfillumtint": 2, "$envmaptint": 3}
 #: `sine` `resultvar` targets that are a *named* destination but emit nothing in the material.
 SINE_PROVENANCE_TARGETS = frozenset({"$detailscale"})
-#: R7.1 ruling J (`water-architecture.md`, "Surf sine UV translate"): the proxy scratch registers a
+#: R7.1 ruling J ("Surf sine UV translate"): the proxy scratch registers a
 #: `sine` -> `texturetransform` chain writes its wave into before a `translatevar` reads it back as
 #: a UV slide (`objects/surf`, the pier's 17 wave cards). Exactly these three spellings -- `$tempvec`
 #: is a *vector* register no corpus chain translates with, and keeps the omission it has today.
@@ -1723,7 +1722,7 @@ _STATIC_FRAME_LANES: dict[str, tuple[str, str, str, str, str]] = {
         "UseAnimatedDuDvFrames",
     ),
 }
-#: The VMT key that authors each slot's fixed frame index -- `seam_migration.md`'s ruling: a
+#: The VMT key that authors each slot's fixed frame index -- the ruling: a
 #: non-zero authored value is a real divergence from the frame this fallback samples (always 0),
 #: recorded as `staticFrameOffsetUnsupported` rather than silently honoured or silently dropped.
 _STATIC_FRAME_OFFSET_KEYS = {"BaseTexture": "$frame", "NormalMap": "$bumpframe",
@@ -2041,7 +2040,7 @@ def _apply_proxies(
                 ("DuDvMap" if family in ("water", "refract", "heatglow") else "NormalMap")
                 if normal_lane else "BaseTexture"
             )
-            # R7.1 (`water-architecture.md` section 4.4): on the water master the only frames lane
+            # R7.1: on the water master the only frames lane
             # is the *normal* one, and `Water_Old` reads `$bumpframe` as the shared frame index of
             # both `$bumpmap` (the DUDV, `DuDvMap`, declared-not-wired on the SLW master) and
             # `$normalmap`. The proxy names `$bumpmap`, but the array that has to land in
@@ -2143,7 +2142,7 @@ def _apply_proxies(
             params.scalars[u_name] = round(params.scalars.get(u_name, 0.0) + rate * math.cos(radians), 6)
             params.scalars[v_name] = round(params.scalars.get(v_name, 0.0) + rate * math.sin(radians), 6)
         elif kind == "globalwetness" and "scale" in args:
-            # R5.3 (seam_map_material.md -> "Decal fog and wetness homes"): a real per-instance
+            # R5.3: `WetnessScale`/`WetnessDriven` are a real per-instance
             # scalar pair on M_V2_Lit/M_V2_LitTranslucent, which alone declare the wetness lane
             # (`_wetness_response` in make_v2_materials.py, reading the live global
             # `MPC_ElysiumEnvironment` value the same way every unit's own `WetnessScale` scales
@@ -2571,8 +2570,8 @@ def stage_unit(
 # --- the projector twin (R7.2 ruling 2) ---------------------------------------------------------
 
 
-#: The three fog parameters `M_V2_Decal` exposes that the STAGE never writes (R5.3,
-#: `seam_map_material.md` -> "Decal fog and wetness homes"): a `UDecalComponent` carries no Custom
+#: The three fog parameters `M_V2_Decal` exposes that the STAGE never writes (R5.3): a
+#: `UDecalComponent` carries no Custom
 #: Primitive Data, so the world's own distance fog rides three named instance parameters that the
 #: placement lane -- and, at runtime, the decal subsystem's MID -- sets per decal from the map's own
 #: environment. A `$decal` surface unit whose VMT happens to author `$fogcolor`/`$fogstart` (the
@@ -2594,7 +2593,7 @@ def projector_entry(entry: dict, provenance: dict) -> dict:
       `SelfIllumAmount`;
     * the `Unlit` static switch for an unlit-family unit (28 `unlitgeneric` projectors): DefaultLit
       has no unlit shading model, so the master routes the base colour into Emissive instead;
-    * blend `Translucent` always. Owner call A (`seam_migration.md` -> "R7.2 Decals"): the 38
+    * blend `Translucent` always. Owner call A: the 38
       `decalmodulate` units draw as translucent stains, because a deferred decal may only blend
       Translucent/AlphaComposite/Modulate and DBuffer rewrites Modulate to Translucent anyway. A
       `$alphatest` projector (1 unit) takes the same route -- Masked is not a decal blend mode, and

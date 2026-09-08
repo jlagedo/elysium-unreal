@@ -1,5 +1,5 @@
-// func_dustmotes -- Valve's C_Func_Dust (`docs/vtmb/effects.md` §3.1, `effects-architecture.md`
-// §5.6): a brush volume of motes that spawn INSIDE the brush solid. The leaf rejection-samples
+// func_dustmotes -- Valve's C_Func_Dust (`docs/vtmb/effects.md` §3.1): a brush volume of motes
+// that spawn INSIDE the brush solid. The leaf rejection-samples
 // the entity's own convex set (ten retries per point, VtMB's count) and publishes the candidates
 // with the keys through `IElysiumWeather::ApplyDust`; the actor on `NS_ElysiumDust` draws them
 // with no gravity, a zero wind term, the `sin(pi t)` alpha law, `DistMax` and `Frozen`.

@@ -154,8 +154,7 @@ def _inflate_with_recovery(data: bytes) -> tuple[bytes, bool]:
 
 
 def _decode_sprite(closure) -> TextureModel:
-    """R7.3: one raw `particles/<stem>.tga` member as a one-level BGRA8 texture unit
-    (`seam_map_texture.md` -> "Texture unit" -> "Particle sprites").
+    """R7.3: one raw `particles/<stem>.tga` member as a one-level BGRA8 texture unit.
 
     The pixels are the image seam's own TGA decode (`formats.image_glb.tga.decode_tga`: header,
     optional colour map, uncompressed or RLE image, orientation put top-down), widened from

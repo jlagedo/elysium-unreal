@@ -1,5 +1,5 @@
 // Content-free Substrate automation for UElysiumMapEntities::Deserialize — the R4.1 transport's
-// asset-side reader (docs/architecture/seam_map_map_entities.md -> "Import"). The asset is a
+// asset-side reader. The asset is a
 // transport change and nothing else, so what is asserted here is that the two reads the JSON path
 // performs at parse time happen on this path too, in the same place and with the same result: the
 // retail `times` 0 -> -1 (unlimited) rewrite, and the 3D-skybox placement transform.

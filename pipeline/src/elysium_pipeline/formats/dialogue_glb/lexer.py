@@ -102,8 +102,8 @@ def split_cells(text: str, row_offset: int) -> tuple[CellSpan, ...]:
 def split_rows(text: str) -> tuple[tuple[Row, ...], int]:
     """Every row of the file, plus the offset where genuine trailing bytes begin.
 
-    A row is exactly its cells and its terminator (`docs/architecture/seam_map_dialogue.md`
-    "Byte ledger owners"), gapless across the whole file: every CRLF-terminated row is one row,
+    A row is exactly its cells and its terminator, gapless across the whole file: every
+    CRLF-terminated row is one row,
     and whatever non-empty content is left after the last CRLF is one more row missing only its
     terminator, not residue -- a file with a missing final newline is still a file of complete
     rows. `trailing` is left for a genuinely empty (or, defensively, incidental) remainder.

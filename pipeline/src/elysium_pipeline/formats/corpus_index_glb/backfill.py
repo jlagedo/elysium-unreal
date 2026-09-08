@@ -1,6 +1,6 @@
 """The fields no unit can write about itself, written into the target units and re-hashed.
 
-`seam_map_corpus_index.md`, "References", names four of them:
+Four of them:
 
 | Written into | From |
 |---|---|
@@ -14,7 +14,7 @@
 shader name inside `shaderResolution`, not as a dependency, so that one inverse is read from the
 material units' own field.
 
-`vtmb:model:` `identity.roles` is not a row list either. `seam_map_model.md` types it as the
+`vtmb:model:` `identity.roles` is not a row list either. The model seam types it as the
 closed vocabulary `character-body`, `animation-bank`, `wield`, `view-model`, `ground-item`,
 `placed-prop`, `static-prop`, `include-only` -- "every role another unit assigns it" -- so each
 inbound `model` edge is classified from the referrer's own published field:

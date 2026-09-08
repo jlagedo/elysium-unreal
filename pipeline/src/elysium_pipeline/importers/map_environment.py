@@ -3,8 +3,8 @@
 `uv run elysium import map-environment --maps <map>...` turns each named map's `<map>.env`,
 `<map>.sky` and `<map>.spawn` sidecars into one `/ElysiumBaked/Maps/<map>/DA_<map>_Environment` asset
 carrying the same values -- the 2D-sky flag and its two fog sets, the 3D-skybox miniature's
-placement transform, and the initial player spawn (`docs/architecture/seam_map_map.md` -> "Import —
-environment"). This module is the offline stage half: it reads the three sidecars verbatim, asserts
+placement transform, and the initial player spawn. This module is the offline stage half: it
+reads the three sidecars verbatim, asserts
 parity against them, and writes one `manifest.json` the editor phase
 (`pipeline/unreal/import_map_environment.py`) executes.
 

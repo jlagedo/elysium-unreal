@@ -4,8 +4,8 @@
 // unimplemented keyword is not a gap to discover later — it is a shot that silently frames the
 // wrong thing. This test walks every file, feeds every `Position` / `AttachPos` / `AttachType`
 // token the corpus writes back through the port's own parser, and fails loudly on one that does not
-// round-trip. The census beside it is the evidence behind several of `camera_scripted.md`'s
-// rulings, so the numbers are asserted rather than described.
+// round-trip. The census beside it is the evidence behind several owner rulings, so the numbers
+// are asserted rather than described.
 //
 // Self-abstains when the corpus is not mounted (`Elysium.Content.*` convention).
 
@@ -442,7 +442,7 @@ bool FElysiumCameraShotGrammarTest::RunTest(const FString&)
 		NaNBandShots.Num(), 0);
 
 	// --- the `CameraConstraints` census --------------------------------------------------------------
-	// The plan's table (§9) labelled these "files"; read against the corpus they are **shots that
+	// The plan's table labelled these "files"; read against the corpus they are **shots that
 	// write the key**, and two of the six differ from the numbers recorded there. The real numbers
 	// are asserted, and both metrics are stated so neither reading can drift again:
 	//   written (shots): DialogPOV 59, SyncRotateOnMove 34, SnapOnShotChange 9,

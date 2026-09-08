@@ -124,8 +124,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 
-// The event-resolution contract — `docs/architecture/gameplay-systems-architecture.md` §2.5.1,
-// over the retail facts in `docs/vtmb/entity_io.md` → "Output-list and queue order" and the two
+// The event-resolution contract, over the retail facts in `docs/vtmb/entity_io.md` → "Output-list and queue order" and the two
 // worked orderings in `docs/vtmb/sp_tutorial_1-event-surface.md` §5.2 / §11.5.
 //
 // The five rules, each with a test below:
@@ -986,7 +985,7 @@ bool FElysiumDoorPartnerChokepointTest::RunTest(const FString&)
 	// CBaseDoor::DoorknobUse toggles this leaf and then its `linked_door` partner. The partner's
 	// half is delivered through chokepoint 1 so the sinks, the I/O ring and the queue debugger see
 	// the second leaf swing — synchronously, because DoorUse is already running inside an executing
-	// Use handler (gameplay-systems-architecture.md §2.5.1's sanctioned seam).
+	// Use handler, the sanctioned seam for this case.
 	//
 	// Both leaves are bodiless: a mover with no brush body cannot travel, but it still runs the
 	// whole decision — locked check, toggle-state flip, OnOpen — which is the half this asserts.
@@ -1147,7 +1146,7 @@ bool FElysiumTriggerStateSaveTest::RunTest(const FString&)
 
 	// A trigger's gate state is not derivable from its def: the `wait` window is measured from the
 	// last fire, a dwell is a partial accumulation, and a pending self-removal is a scheduled think
-	// with a reason. All of it rides the leaf blob (save-architecture.md §4), so all of it is
+	// with a reason. All of it rides the leaf blob, so all of it is
 	// asserted the same way — freeze one world, rebuild a second from the same defs, apply, and
 	// drive the second forward from where the first stopped.
 
@@ -1313,7 +1312,7 @@ bool FElysiumTriggerStateSaveTest::RunTest(const FString&)
 		After.Load(MakeDefs());
 		FElysiumOrderedIOSink* Sink = Record(After);
 		// Index only: the epoch is the world's teardown generation, so two loads never agree on it —
-		// which is exactly why the applier re-stamps every restored handle (save-architecture.md §6).
+		// which is exactly why the applier re-stamps every restored handle.
 		TestEqual(TEXT("the restored player takes the same entity index"),
 			After.SpawnPlayer().Index, Player.Index);
 		After.ApplySnapshot(MidDwell);

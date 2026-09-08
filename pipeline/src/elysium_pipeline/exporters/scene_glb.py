@@ -29,8 +29,8 @@ def build_document(model) -> tuple[dict, bytes]:
     No accessor: a scene's timeline is an event list keyed by actor name, not a sampled
     animation, so the decode lives entirely in the extension. The BIN chunk the unit does carry
     is the source capsule alone -- the winning `.vcd` member's own bytes, so the unit is
-    everything a reader needs to reproduce the install file (`seam_map_unit_contract.md`,
-    "Source capsule"). An empty `.vcd` capsules to nothing and carries no BIN chunk."""
+    everything a reader needs to reproduce the install file. An empty `.vcd` capsules to
+    nothing and carries no BIN chunk."""
 
     resolution, buffer_views, binary = encapsulate([model.member])
     root = extension_root(

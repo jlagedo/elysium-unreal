@@ -6,9 +6,7 @@ the evidence for them.
 
 What the programs compute stays with the topic that owns the channel: the `$envmap` composite is
 `docs/vtmb/reflections.md`, the overbright factor is `docs/vtmb/color_gamma.md`, water is
-`docs/vtmb/water.md`, the Eyes shader is `docs/vtmb/facial_animation.md`. Which install members
-ship the programs, and the decision not to export them, is a row in
-`docs/architecture/seam_map.md`.
+`docs/vtmb/water.md`, the Eyes shader is `docs/vtmb/facial_animation.md`.
 
 ## Why the name is not the program
 
@@ -56,6 +54,9 @@ the recovered selectors read, with their bit positions:
 | 17 | `ENVMAPSPHERE` | `$envmapsphere` | 11 |
 | 19 | `ENVMAPCAMERASPACE` | `$envmapcameraspace` | 1 |
 | 20 | `BASEALPHAENVMAPMASK` | `$basealphaenvmapmask` | 14 |
+
+`$envmapsphere`'s 11 corpus users break down as 9 `shadertest/`/`dev/` debug materials and one
+shipped break-glass pair (`envmap/gioint`, `skybox/hav_env`), one of which has no `$envmap` bound.
 
 ## LightmappedGeneric
 
@@ -251,7 +252,8 @@ only at index 2 — base-alpha mask, no mask texture, no self-illumination.
 39 `vertexlitgeneric*.psh` ship; the selector can name only 12. The other 27 — the 13 `_detail*`
 combos, the 5 pre-`V2` envmap spellings, the 8 `_diffbump*` combos and `_selfillumonly` — appear
 as no string anywhere in `stdshader_dx8.dll`. **This build's VertexLitGeneric registers no
-`$detail` parameter at all.**
+`$detail` parameter at all**; all 28 `$detail` authors in the install corpus are `shadertest/*` or
+a `shatteredglass` crack-material path.
 
 ## UnlitGeneric
 
@@ -432,4 +434,14 @@ Everything above comes from the install and the decompilation corpus:
   addresses named here.
 
 The resolution each material selects is published in its material GLB as
-`ELYSIUM_vtmb_material.shaderResolution` (`docs/architecture/seam_map_material.md`).
+`ELYSIUM_vtmb_material.shaderResolution`.
+
+## Recovered from architecture notes (2026-09-07)
+
+Source's `$alphatest` clips at `AlphaFunc GEQUAL 0.5`; `$alphatestreference` is a registered VMT
+parameter no corpus material authors.
+
+Source samples frame 0 of a multi-frame texture when no `animatedtexture` proxy animates it.
+
+`$halflambert` occurs on 0 of 11,624 material units in the install corpus — it is a fixed
+StudioRender lighting term VtMB never actually authored against.

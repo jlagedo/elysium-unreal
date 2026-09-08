@@ -235,8 +235,7 @@ struct FElysiumSchedule
 	bool IsValid() const { return Id != EElysiumScheduleId::None && !Tasks.IsEmpty(); }
 };
 
-// The registry. Schedules are data, so they are stated once here rather than built per NPC
-// (`gameplay-systems-architecture.md` K9).
+// The registry. Schedules are data, so they are stated once here rather than built per NPC.
 const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id);
 
 namespace ElysiumSchedule

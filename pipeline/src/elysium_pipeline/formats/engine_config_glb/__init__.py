@@ -1,6 +1,6 @@
 """Isolated lossless engine-config GLB format aggregation.
 
-One unit is one console script, table or binary state file `seam_map_engine_config.md` names
+One unit is one console script, table or binary state file the seam names
 explicitly. Identity, source resolution, the container and the kind-independent half of
 validation are `elysium_pipeline.formats.unit_contract`'s; this package states only what is
 specific to the kind.

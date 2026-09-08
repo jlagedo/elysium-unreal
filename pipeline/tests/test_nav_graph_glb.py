@@ -295,8 +295,8 @@ def test_a_zero_byte_loc_is_an_empty_member_omission_not_a_malformed_stamp():
 
 
 def test_a_zero_byte_ain_publishes_empty_with_a_warning():
-    # The `.ain` is the selecting member; `seam_map_unit_contract.md`'s "Source resolution":
-    # "a unit whose selecting member is empty publishes with a warning" -- there is nothing to
+    # The `.ain` is the selecting member; a unit whose selecting member is empty publishes with a
+    # warning -- there is nothing to
     # tokenize, so this must not raise the way a genuinely malformed (non-empty) `.ain` does.
     closure = _closure(ain=b"")
     model = decode_nav_graph(closure)
@@ -599,8 +599,7 @@ def test_offset_derived_records_publish_their_source_offset_beside_the_field():
 def test_a_node_position_is_not_stated_twice_in_the_extension():
     # `nodes[].origin` carries only the source-space value; the glTF value is recoverable through
     # `coordinateTransform` and is already stated once by the core POSITION accessor and the core
-    # node's own `translation` (`seam_map_unit_contract.md`: "the same datum is never stated
-    # twice").
+    # node's own `translation` -- the same datum is never stated twice.
     model = _model()
     document, binary = exporter.build_document(model)
     root = document["extensions"]["ELYSIUM_vtmb_nav_graph"]
@@ -675,9 +674,7 @@ def test_the_validator_rejects_an_index_accessor_value_outside_the_position_rang
     model = decode_nav_graph(closure)
     document, binary = exporter.build_document(model)
     # Tamper the BIN chunk directly -- bypassing the exporter's own clamping entirely -- to prove
-    # the standalone validator bounds the line-list primitive's indices on its own, per
-    # `seam_map_nav_graph.md`'s "the standalone validator checks ... the line-list primitive's
-    # index range".
+    # the standalone validator bounds the line-list primitive's indices on its own.
     tampered_binary = bytearray(binary)
     position_bytes = 2 * 3 * 4  # two nodes' POSITION floats, 3 floats * 4 bytes each
     struct.pack_into("<I", tampered_binary, position_bytes, 99)

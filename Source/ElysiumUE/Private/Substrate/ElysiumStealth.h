@@ -11,7 +11,7 @@ class FElysiumPlayer;
 struct FElysiumStealthTables;
 
 // The rules over the player's stealth target surface
-// (`docs/architecture/gameplay-systems-architecture.md` §5.9, `docs/vtmb/stealth.md`).
+// (`docs/vtmb/stealth.md`).
 //
 // The storage is `FElysiumStealthSurface` on `FElysiumPlayer` (retail's `+0x1c6c..+0x1c8c`); the
 // authored numbers are `FElysiumStealthTables` in the rulebook (K9). This is the third piece: what

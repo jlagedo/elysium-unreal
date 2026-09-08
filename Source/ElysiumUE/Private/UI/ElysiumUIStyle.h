@@ -65,7 +65,7 @@ namespace ElysiumUI
 		inline const FLinearColor Scrim     = FLinearColor(0.0f, 0.0f, 0.0f, 0.55f);
 	}
 
-	// One computer terminal's glass, by `colorscheme` (`docs/project/plans/terminals.md`, slice D).
+	// One computer terminal's glass, by `colorscheme`.
 	//
 	// `m_nColorScheme` (`DT_BaseTerminal+0x818`) is the index the retail rasterizer reads its four
 	// palette records at `0x10233378` with, clamped to `[0, 3]` at spawn. The INDEX is retail; the
@@ -124,7 +124,7 @@ namespace ElysiumUI
 	}
 }
 
-// Which of the Nocturne families a piece of text belongs to (docs/architecture/ui-architecture.md).
+// Which of the Nocturne families a piece of text belongs to.
 enum class EElysiumFontRole : uint8
 {
 	Label,   // Spectral SC — small caps: menu items, sheet rows, HUD labels, headers

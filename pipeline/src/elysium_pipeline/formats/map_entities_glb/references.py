@@ -1,6 +1,6 @@
 """The closed vocabulary of keyvalues that name another unit.
 
-`docs/architecture/seam_map_map_entities.md` -> "References" owns this table. It is the vocabulary
+The map-entities seam owns this table. It is the vocabulary
 observed over the 108 maps and it is closed at export: a value carrying a known file extension
 under a key this module does not type produces an `untyped-file-reference` anomaly, so the
 vocabulary grows by recorded evidence rather than by guesswork at read time.

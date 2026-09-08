@@ -1,6 +1,6 @@
 """Semantic records for one particle-definition GLB unit.
 
-`docs/architecture/seam_map_particle.md` owns the shape; this module holds the frozen records the
+The particle seam owns the shape; this module holds the frozen records the
 decoder fills and the exporter reads back verbatim, plus the identity helpers every other module
 in the package shares.
 """

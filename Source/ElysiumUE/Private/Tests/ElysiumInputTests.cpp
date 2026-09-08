@@ -263,7 +263,7 @@ bool FElysiumPlayerViewModelsTest::RunTest(const FString&)
 }
 
 
-// The command registry (`docs/architecture/runtime-architecture.md` §8.2). The inventory, the +/- pair
+// The command registry. The inventory, the +/- pair
 // semantics, implementation stacking and the button latch are plain C++, so all of it is
 // asserted with no world, no controller and no input device.
 
@@ -418,7 +418,7 @@ bool FElysiumCommandsTest::RunTest(const FString&)
 }
 
 
-// Intent is data (`docs/architecture/runtime-architecture.md` §8.3). The user command is built from
+// Intent is data. The user command is built from
 // button latches and analog accumulators with no engine input in sight, which is what makes
 // headless play and replay the same mechanism as playing.
 
@@ -693,7 +693,7 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 }
 
 
-// The look response curve (`docs/architecture/input-architecture.md` § Feel). The whole
+// The look response curve. The whole
 // mouse path from counts to degrees is one pure function, which is what lets the retail claim be
 // asserted rather than recalled: at the shipped tuning the curve is the identity, exactly, so
 // `Elysium.Substrate.LookCurve` failing means the faithful path moved.
@@ -837,7 +837,7 @@ bool FElysiumLookCurveTest::RunTest(const FString&)
 }
 
 
-// The stick path (`docs/architecture/input-architecture.md` § Gamepad). A pad reports a *held
+// The stick path. A pad reports a *held
 // deflection* that the game integrates, so the device's noise is integrated with it — measured on
 // the shipped pad, the resting centre sits ~0.04 off zero and a steady hold swings ±0.2 between
 // frames. Every property below is one of the terms that answers that, asserted with no world, no
@@ -1264,7 +1264,7 @@ bool FElysiumChannelRecorderTest::RunTest(const FString&)
 }
 
 
-// The application state machine (`docs/architecture/runtime-architecture.md` §10). The transition table is
+// The application state machine. The transition table is
 // plain C++ with no game instance behind it, so the whole rule set is asserted here rather than
 // inferred from a play-through — including the two rules the acceptance turns on: the front end
 // deliberately does not pause, and Boot is reachable from nowhere.
@@ -1355,7 +1355,7 @@ bool FElysiumAppStateTest::RunTest(const FString&)
 }
 
 
-// The input scope stack (`docs/architecture/runtime-architecture.md` §8.1). The arbitration is plain
+// The input scope stack. The arbitration is plain
 // C++, so the whole rule set is asserted with no local player, no controller and no viewport:
 // what the top scope resolves to, what an out-of-order pop restores, and that the stack is
 // balanced across every screen transition the game can make.

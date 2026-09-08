@@ -1,4 +1,4 @@
-"""R7.3 (`docs/architecture/seam_map_map.md` -> "Import -- effects (R7.3)"): the map stage's
+"""R7.3: the map stage's
 particle tree, at the seam the legacy compiler failed.
 
 One row, the one the note authorizes: `fire2_emitter` -- the most-placed root (204 rows), whose

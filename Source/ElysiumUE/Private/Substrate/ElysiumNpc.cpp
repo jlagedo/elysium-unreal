@@ -3719,9 +3719,9 @@ void FElysiumNpc::SerializeWitnessBlock(FElysiumSaveArchive& Ar)
 void FElysiumNpc::SerializeDisciplineBlock(FElysiumSaveArchive& Ar)
 {
 	// The NPC's own tracked discipline effects.
-	// A targeted `disciplinetgt` cast lands its trait-effect groups on whichever character it hit
-	// (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "Active targeted effects are
-	// tracked on the affected character"), and the affected character is usually an NPC. Both
+	// A targeted `disciplinetgt` cast lands its trait-effect groups on whichever character it hit —
+	// active targeted effects are tracked on the affected character — and the affected character
+	// is usually an NPC. Both
 	// halves must persist: without this block a Dominate group on a guard evaporates across a save
 	// while its owned expiry event rides the map snapshot's queue block and comes back looking for
 	// it.

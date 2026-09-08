@@ -562,7 +562,7 @@ def test_a_fresh_run_authors_all_compiling_masters(tmp_path, monkeypatch):
 
 
 def test_water_master_is_single_layer_water_with_the_volume_pins_fed(tmp_path, monkeypatch):
-    """R7.1 ruling A (`water-architecture.md` section 4): `M_V2_Water` is `MSM_SingleLayerWater`,
+    """R7.1 ruling A: `M_V2_Water` is `MSM_SingleLayerWater`,
     opaque, one-sided, never Nanite, and its `SingleLayerWaterMaterialOutput` node is fed on all
     four pins -- the VMT fog keys as extinction, `RefractTint` as Color Scale Behind Water. The
     underwater post-process master lands beside it in the post-process domain."""
@@ -1002,7 +1002,7 @@ def test_light_style_brightness_reads_custom_primitive_data_slot_six(tmp_path, m
 
 
 def test_water_normal_folds_the_dudv_flipbook_into_one_normal(tmp_path, monkeypatch):
-    """R7.5 look pass (`water_audit/LOOK_SPEC.md`). `Water_Old` perturbed the UVs of BOTH render
+    """R7.5 look pass. `Water_Old` perturbed the UVs of BOTH render
     targets by `dev/water_dudv`'s signed offset field, scaled per pass by `$refractamount` /
     `$reflectamount` (`texbem`, `water_dx80.cpp`). The two warps land on two pins: the REFRACTION
     warp is the Refraction pin's explicit 2D screen offset (`RefractAmount x WaterWarpScale`), the
@@ -1184,7 +1184,7 @@ _SINE_UV_MASTERS = ("M_V2_Lit", "M_V2_LitTranslucent")
 
 
 def test_sine_uv_translate_reaches_the_base_lane_only(tmp_path, monkeypatch):
-    """R7.1 ruling J (`water-architecture.md` -> "Surf sine UV translate"): `SineUVTranslate` moves
+    """R7.1 ruling J ("Surf sine UV translate"): `SineUVTranslate` moves
     the BASE texture's coordinate by `amp x wave + off`, and nothing else -- Source's
     `$baseTextureTransform` translates the base map and leaves `$bumpTransform` alone, so the
     normal lane must still read the untranslated, un-slid coordinate. Walked backwards from each

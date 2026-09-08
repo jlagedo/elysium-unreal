@@ -1,8 +1,7 @@
 """The per-map effects product for the V2 map bake (R7.3).
 
-`docs/architecture/seam_map_map.md` -> "Import -- effects (R7.3)" is the contract this module
-executes; `docs/architecture/seam_map_particle.md` -> "Semantics" owns the unit rules the particle
-definitions are converted on. Nothing here decides anything those two sections do not state.
+The map bake's effects import contract and the particle seam's own unit rules are what this
+module executes; nothing here decides anything those two contracts do not state.
 
 The stage joins each effects entity row of the entities unit (`env_particle`, `func_particle`,
 `func_dustmotes`, `env_steam`, `env_beam`) to its references -- the particle units of the root's
@@ -103,8 +102,8 @@ DEFINITION_KEYS = frozenset({
     "movealign", "flat", "sortfront", "no_z_test", "lighting", "depth_offset",
     "surface_color", "use_surface_color", "ignore_surface_color",
 })
-#: Keys the corpus authors that the runtime's tables have no row for (`seam_map_particle.md` ->
-#: "Vocabulary", the "authored, unread" row): carried nowhere, never a warning.
+#: Keys the corpus authors that the runtime's tables have no row for (the particle seam's
+#: "Vocabulary" table, the "authored, unread" row): carried nowhere, never a warning.
 UNREAD_PARTICLE_KEYS = frozenset({"rotate", "radius", "burst"})
 UNREAD_SPAWN_KEYS = frozenset({"loop", "frames", "depth_offset"})
 #: The four collide scalars the corpus writes inside a nested `collide { spawn { } }` block
@@ -256,7 +255,7 @@ def ramp_of(parsed: dict[str, Any] | None, frames: float, scale: float,
 
     A scalar is `[[0, v, v]]`, a range `[[0, a, b]]`, a ramp one keyframe per element: a `v(n)`
     position is a frame index normalised by `frames` (negative wraps from the end), an element
-    without one is spaced evenly over `[0, 1]` by its index (`seam_map_particle.md` -> "Ramps";
+    without one is spaced evenly over `[0, 1]` by its index (the particle seam's own "Ramps" rule;
     INFERRED for the unpinned form). Returns None for a value with no number in it, so the caller
     can warn rather than drop it.
     """

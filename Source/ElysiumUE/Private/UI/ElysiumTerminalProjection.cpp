@@ -15,7 +15,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumTerminalProjection, Log, All);
 namespace
 {
 	const FName ScreenMaterialSlot(TEXT("screen"));
-	// The authored material's own parameters (`docs/project/plans/terminals.md`, slice D).
+	// The authored material's own parameters.
 	const FName ScreenParameter(TEXT("Screen"));
 	const FName FlipUParameter(TEXT("FlipU"));
 	const FName FlipVParameter(TEXT("FlipV"));

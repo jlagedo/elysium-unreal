@@ -1046,7 +1046,7 @@ bool UElysiumMapVisuals::AreLightsVisible() const
 
 // The 3D-skybox A/B is a **dev** verb, not a player one, so it lives on plane 1: an `elysium.*`
 // console command, reached by a chord (Ctrl+T) rather than by a bare key — `t` is `toggleuiside` in
-// VtMB's default set (`docs/architecture/input-architecture.md` § "Reserved keys").
+// VtMB's default set.
 static FAutoConsoleCommandWithWorld GElysiumToggleSky(
 	TEXT("elysium.togglesky"),
 	TEXT("Show/hide the 3D skybox miniature and the backdrop dome together."),

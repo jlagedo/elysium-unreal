@@ -1,5 +1,4 @@
-// func_lod and func_areaportalwindow -- the two distance-culled brush classes (R6.4,
-// `docs/architecture/seam_map_map.md` -> "Brush fade distances").
+// func_lod and func_areaportalwindow -- the two distance-culled brush classes.
 //
 // Neither class derives anything at runtime. A `func_lod`'s cull range is the producer's
 // `cull_max_cm` (its `DisappearDist x 2.54`), which `FElysiumEntityWorld::BuildBrushBody` writes

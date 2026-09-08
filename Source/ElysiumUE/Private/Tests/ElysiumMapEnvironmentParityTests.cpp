@@ -1,5 +1,4 @@
-// Content-tier parity for the R4.4 environment transport (`docs/architecture/seam_map_map.md` ->
-// "Import — environment"): the baked `UElysiumMapEnvironment` and the `<map>.env` / `<map>.sky` /
+// Content-tier parity for the environment transport: the baked `UElysiumMapEnvironment` and the `<map>.env` / `<map>.sky` /
 // `<map>.spawn` sidecars it replaces must produce the same values.
 //
 // This is the parity that matters, and it is deliberately not the stage's. The stage compares

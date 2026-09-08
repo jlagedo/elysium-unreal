@@ -250,6 +250,13 @@ Only the duration gates, active slot, translucency effects and separate native f
 this pass. The precise line-by-line native consumer for movement, bump, interaction, stealth kill
 and break-damage multiplication remains **[open]**.
 
+### Obfuscate's material is not the TV-static noise chain
+
+The four `dev_tvmonitor1a`/`danetv8inch0*screen` materials' `$a_*`/`$j_*`/`$xo_*`
+`gaussiannoise` → `lessorequal` proxy chain is a CRT static-and-roll effect, unrelated to
+Obfuscate. The real Obfuscate materials are `highlights/obfuscate_character`,
+`effects/obfuscate_overlay` and the discipline info model.
+
 ## Targeted `DisciplineTgt` path
 
 ### Transaction

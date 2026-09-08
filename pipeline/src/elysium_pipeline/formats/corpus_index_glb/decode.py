@@ -170,7 +170,7 @@ def write_inverse(model: CorpusIndexModel) -> CorpusIndexModel:
     """Write the fields no unit can write about itself, and re-hash the units that changed.
 
     "The index writes those fields into the target units' JSON chunks as its last step and
-    re-hashes them" (`seam_map_corpus_index.md`, "References"). The reference graph is unchanged
+    re-hashes them". The reference graph is unchanged
     by it -- the fields are identity, not dependencies -- so only the rows that quote a unit's
     bytes are rebuilt.
     """

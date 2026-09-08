@@ -64,8 +64,8 @@ class TextureModel:
 
 
 #: R7.3: the one install directory whose raw `.tga` members are admitted as texture units beside
-#: the `materials/**.tth` corpus -- the 318 particle sprites (`seam_map_texture.md` -> "Texture
-#: unit" -> "Particle sprites"). The key keeps the directory (`particles/<stem>`), so the asset
+#: the `materials/**.tth` corpus -- the 318 particle sprites. The key keeps the directory
+#: (`particles/<stem>`), so the asset
 #: lands under `/ElysiumBaked/Textures/particles/`.
 SPRITE_FAMILY = "particles"
 SPRITE_SUFFIX = ".tga"

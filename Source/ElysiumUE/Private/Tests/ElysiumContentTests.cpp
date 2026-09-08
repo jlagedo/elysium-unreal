@@ -3018,8 +3018,8 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 	return true;
 }
 
-// Freeze/thaw a real map's `.ents` world (`docs/architecture/save-architecture.md` §10, the content
-// tier). The substrate tier proves the mechanism on three synthetic entities; this proves
+// Freeze/thaw a real map's `.ents` world — the content
+// tier. The substrate tier proves the mechanism on three synthetic entities; this proves
 // it against the shapes the shipped data actually holds — 1,000+ records, every registered
 // classname, real output tables, the runtime-spawned player. Self-skips with no export.
 

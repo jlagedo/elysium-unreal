@@ -1,6 +1,5 @@
 // Content-free Substrate automation for UElysiumModelProvenance: the record a baked static mesh
-// carries from its `vtmb:model:` unit (docs/architecture/seam_map_model.md -> "Import" ->
-// "Provenance and idempotency").
+// carries from its `vtmb:model:` unit.
 //
 // Reconciled against the landed stage (R1.4): this fixture is now the shape
 // `importers/models.py::stage_unit` actually writes, not the camelCase transliteration an earlier

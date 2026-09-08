@@ -190,8 +190,7 @@ So any zoom-out resets the field of view to the sentinel `0` instead of restorin
 configured value. The loader hooks both sites to cache and restore.
 
 **Bearing: reproduce the corrected behaviour**, and record the RE fact: **`+0x1E78` is the
-player FOV field**. This meets the camera contract in
-[`../architecture/camera-architecture.md`](../architecture/camera-architecture.md), where
+player FOV field**. This meets the camera contract, where
 `config.cfg` and the Unofficial Patch's aliases keep governing FOV. Credited to C6. [loader]
 
 ### 2.4 Ragdoll solidity is spawnflag-gated — `vampire.dll` `CRagdollProp`

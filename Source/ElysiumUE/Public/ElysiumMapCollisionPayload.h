@@ -7,7 +7,7 @@
 
 class UBodySetup;
 
-// One map's collision as cooked content (R4.2, `docs/architecture/seam_map_map.md` -> "Import").
+// One map's collision as cooked content.
 // It carries the three colliders the running game stands on -- the world's convex brush set, the
 // displacement terrain trimesh, and one convex body per brush entity -- as authored `UBodySetup`s
 // with a stable `BodySetupGuid`, so the Chaos cook happens once offline (DDC in the editor, the
@@ -91,7 +91,7 @@ public:
 
 	// Local-space bounds of the two world colliders. A collision-only procedural mesh has no render
 	// section to bound it, so the components take these explicitly or register with navigation as
-	// empty (`docs/architecture/seam_map_map.md` -> "Import" -> "Consumption and cutover").
+	// empty.
 	FBox WorldHullBounds() const;
 	FBox DisplacementBounds() const;
 

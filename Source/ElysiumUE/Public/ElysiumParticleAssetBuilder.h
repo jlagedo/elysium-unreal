@@ -136,11 +136,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Elysium|Particles")
 	static FString ValidateParticleSystem(UNiagaraSystem* System, int32 ExpectedLayers);
 
-	// ------------------------------------------------------------------ the generated lane (R7.3)
+	// ------------------------------------------------------------------ the generated lane
 	//
 	// One `NS_<root>` per VtMB root, one inherited emitter per *drawing* node of the staged
-	// `particleTrees{}` entry, composed headless and compiled explicitly
-	// (`docs/project/niagara_authoring_strategy.md` 4.1). The four calls above stay for the legacy
+	// `particleTrees{}` entry, composed headless and compiled explicitly. The four calls above stay for the legacy
 	// per-map lane (`make_particle_systems.py`), which flattens a closure into `FElysiumParticleLayer`
 	// and knows nothing about trees.
 

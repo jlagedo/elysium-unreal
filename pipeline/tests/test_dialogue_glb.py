@@ -261,8 +261,8 @@ def test_decode_classifies_every_role_and_carries_raw_and_derived_fields():
 
 
 def test_a_whitespace_only_condition_or_action_cell_is_still_non_empty_and_gets_an_expression():
-    """seam_map_dialogue.md "expressions[]": "every non-empty column-4 and column-5 cell,
-    tokenized" -- a cell holding a single space is non-empty by that wording even though it is
+    """`expressions[]` covers every non-empty column-4 and column-5 cell, tokenized -- a cell
+    holding a single space is non-empty by that wording even though it is
     meaningless once stripped, so it still publishes a record."""
 
     text = dlg_text([make_row(id_="1", male="Hi", link="#", cond=" ", action=" ")])
@@ -578,7 +578,7 @@ def test_a_final_row_with_no_trailing_crlf_is_still_a_real_row():
 
 
 def test_a_zero_byte_member_publishes_the_contracts_empty_member_omission_with_no_lines():
-    """`seam_map_unit_contract.md` "Source resolution": an empty member is recorded with
+    """An empty member is recorded with
     `byteLength: 0`, the SHA-256 of the empty string, and an `omissions` row `empty-member`;
     a unit whose selecting member is empty publishes rather than raising."""
 

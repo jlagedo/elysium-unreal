@@ -22,7 +22,7 @@
 // by the engine into `m_spawnflags`, and the only entity hook the class has is `Spawn` (slot 103),
 // which is four instructions: `if (spawnflags & 2) m_bDrawPlayer = 1`.
 //
-// The plan of record is `docs/project/camera_scripted.md` §SC4; the recovery it rests on is
+// The recovery it rests on is
 // `$ELYSIUM_WORK_ROOT/_camera_recovery/server_cine_camera.md` §1/§2/§6 and `rc_group_a.md`
 // (RC2/RC3/RC4/RC12). The facts land in `docs/vtmb/camera-view-modes.md`.
 

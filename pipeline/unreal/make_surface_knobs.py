@@ -1,8 +1,7 @@
 # SF-4.1 (part 2): authors the two data assets `UElysiumSurfaceSettings::PushToCollection` and
 # every V2 master read from -- `MPC_ElysiumSurfaces` and `DA_SurfaceCalibration` -- so both exist
 # with real defaults before `make_v2_materials.py` (SF-4.3) builds a master that samples them.
-# Design: docs/architecture/seam_map_material.md -> "Import" -> "Knob contract". Mechanics:
-# import/design/phase4_mechanics.md section 1.
+# Mechanics: import/design/phase4_mechanics.md section 1.
 #
 # Registered in `build_content.py` GENERATORS ahead of `make_v2_materials.py`: that generator's
 # own `make_surfaces_collection()` only ever *adds* a scalar row missing from `MPC_ElysiumSurfaces`

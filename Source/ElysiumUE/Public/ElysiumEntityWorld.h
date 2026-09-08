@@ -202,7 +202,7 @@ public:
 	// `EndSession` returns).
 	void ForgetPlayer() { Player = FElysiumEntityHandle::Invalid(); }
 
-	// --- Persistence (`docs/architecture/save-architecture.md` §5) ---
+	// --- Persistence ---
 	// Freeze this map to a snapshot. Pure read: the same call serves a travel boundary and a save,
 	// which is what keeps the two from drifting apart. Every entity is diffed against a **fresh
 	// build of its own def** and contributes nothing when it matches — the generalisation of VtMB's
@@ -383,7 +383,7 @@ public:
 	// Every live, non-inert terminal that nobody is using and that has a body to project onto, with
 	// session serial 0. A terminal's screen is world state, not session state — the screensaver think
 	// keeps writing into it whether or not a player is standing there — so the presentation needs the
-	// idle grid as much as the live one (`docs/project/plans/terminals.md`, slice C).
+	// idle grid as much as the live one.
 	void BuildIdleTerminalViews(TArray<FElysiumTerminalView>& Out) const;
 	// The same set as `BuildIdleTerminalViews`, as (owner, revision) pairs and nothing else. What a
 	// publisher walks every frame; the full view is then built only for the glasses whose revision
@@ -585,7 +585,7 @@ public:
 	IElysiumWeather*    Weather() const    { return WorldServices.Weather; }
 	IElysiumCameraService* Camera() const  { return WorldServices.Camera; }
 	// --- Game-sound stimulus (the third event kind) ------------------------------------
-	// `docs/architecture/gameplay-systems-architecture.md` §2.5.3. A domain that makes a noise the
+	// A domain that makes a noise the
 	// world can react to calls this from its real producer site; nothing is delivered, and there is
 	// no fifth transport. Consumers poll `GameSounds()` during their own think.
 	//
@@ -698,7 +698,7 @@ public:
 	int32 TouchBegins() const { return TouchBeginCount; }
 	int32 TouchEnds() const { return TouchEndCount; }
 
-	// --- Per-wire accounting (`docs/architecture/gameplay-systems-architecture.md` §7) -------------
+	// --- Per-wire accounting -------------
 	// The instrument that turns "are events working?" into a number. Every authored output row is a
 	// wire; the tally says what each one did, so acceptance can tell "never fired" from "target not
 	// found" from "receiver refused" instead of reading a whole map as one pass/fail. Accounting

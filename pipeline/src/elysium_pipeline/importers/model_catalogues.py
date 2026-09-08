@@ -63,7 +63,7 @@ def bounded_path(root, relative):
 
 #: The code half of every catalogue projection: bump when a projection rule changes what it
 #: emits. The data half is the input ledger (every read file's digest) and the inventories.
-#: Code is never hashed (`docs/architecture/seam_map_unit_contract.md` -> "Recipes").
+#: Code is never hashed.
 RULES_VERSION = "model-catalogues-v2-ornaments"
 
 

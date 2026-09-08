@@ -1,6 +1,5 @@
 """The per-map light store: hand-tuned lights, harvested out of the baked level and re-applied
-by the next bake (`docs/architecture/seam_map_map_lighting.md` -> "## Import" -> "The light
-store").
+by the next bake.
 
 R5.6 made the baked light actor the truth on a V2 map: `bake_map_v2._place_lights` writes every
 final value once, from `worldLights[]` through `derive_light`, and the runtime rig derives

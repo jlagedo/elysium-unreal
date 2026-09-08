@@ -1,7 +1,7 @@
 """Isolated lossless Sound-script GLB format aggregation.
 
 Five unit kinds -- game sound, sound-script manifest, soundscape, sentence, DSP preset -- cut
-from the six `scripts/*.txt` tables `docs/architecture/seam_map_sound_script.md` names, sharing
+from the six `scripts/*.txt` tables, sharing
 one extension (`ELYSIUM_vtmb_sound_script`) and one schema version.
 """
 

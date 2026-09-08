@@ -161,7 +161,7 @@ def _cut_table_keys(kind: str, path: str, index: dict) -> list[str]:
 def _game_sound_claim() -> SeamClaim:
     """The one game-sound claim over the two tables the seam's directory merges.
 
-    `seam_map_sound_script.md` gives `game_sounds_surfaceproperties.txt` and `sounds.txt` one
+    The sound-script seam gives `game_sounds_surfaceproperties.txt` and `sounds.txt` one
     identity namespace, and `source.GameSoundDirectory` resolves the 16 names both declare in
     favour of the live table -- the manifest precaches only that one -- recording the dormant
     twin as the live unit's `shadowed-dormant-entry` anomaly. Two independent claims, one per
@@ -222,8 +222,8 @@ def _model_companions(index: dict, units: dict) -> dict[str, str]:
     """Every VTX and PHY spelling beside one MDL.
 
     The model seam opens two VTX variants; the install also ships the odd bare `.vtx`. All of them
-    are owned by the MDL's unit -- `seam_map_corpus_index.md` says "a VTX or PHY by its model" --
-    so the companion rule is the stem, not the subset the decoder happens to open.
+    are owned by the MDL's unit -- the corpus-index seam's own rule is "a VTX or PHY by its
+    model" -- so the companion rule is the stem, not the subset the decoder happens to open.
     """
 
     found: dict[str, str] = {}

@@ -1,5 +1,5 @@
 // `CPropHacking::AcceptCmd` 0x1021a830, arm by arm, on a hand-built definition
-// (docs/vtmb/computer-terminals.md §9; docs/project/plans/terminals.md, slice A).
+// (docs/vtmb/computer-terminals.md §9).
 //
 // The router is a state machine before it is a parser: mail, then "no password pending", then
 // "password pending", and only inside the middle arm is anything compared as a string — builtins,

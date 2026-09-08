@@ -70,9 +70,8 @@ const TCHAR* ElysiumCollisionSourceName(EElysiumCollisionSource Source);
 // clipped off excluded), and `<map>.dispcol` is the displacement terrain trimesh the convex set
 // cannot represent. Both are collision-only — never drawn.
 //
-// Since R4.2 both may instead arrive cooked, as one `UElysiumMapCollisionPayload` per map: same
-// geometry, same component recipe, but the Chaos cook happened offline
-// (`docs/architecture/seam_map_map.md` → "Import"). The payload wins when the map has one and the
+// Both may instead arrive cooked, as one `UElysiumMapCollisionPayload` per map: same
+// geometry, same component recipe, but the Chaos cook happened offline. The payload wins when the map has one and the
 // sidecar readers answer otherwise; the asset's presence is the cutover flag.
 //
 // A component on AElysiumMapActor, deliberately separate from UElysiumMapVisuals: what the map
