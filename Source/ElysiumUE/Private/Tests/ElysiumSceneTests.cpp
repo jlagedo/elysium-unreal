@@ -1144,6 +1144,268 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 	return true;
 }
 
+// ------------------------------------------------------------------------------------------------
+// 12.5 — the three choreo camera event types: `CSceneEntity::DispatchStartEvent` `0x10082ee0`
+// cases `0x10` (`cameramove`), `0x11` (`camerashot`) and `0x12` (`camerarestore`), recovered in
+// `$ELYSIUM_WORK_ROOT/_camera_recovery/rc_group_f.md` §RC15.4.
+//
+// **Zero shipped `.vcd` authors a camera event.** A case-insensitive search for the substring
+// `camera` over all 5,444 files returns no matches: no `cameramove`, no `camerashot`, no
+// `camerarestore`, no `targethead`. VtMB moves its camera with `camera_keyframe` entities and
+// `vdata/camerashots/` files. So every scene here is hand-built, and this case is the only thing
+// that exercises the arms at all — `Elysium.Content.SceneCorpus` is what keeps the corpus side at
+// zero.
+namespace ElysiumSceneCameraEventTests
+{
+// The corpus writes an event block with the brace on its own line; so does this.
+static FString CameraEvent(const TCHAR* Type, const TCHAR* Name, float Start, float End,
+	const TCHAR* Param, const TCHAR* Param2, const TCHAR* TargetHead)
+{
+	FString S = FString::Printf(TEXT("    event %s \"%s\"\n    {\n      time %f %f\n"),
+		Type, Name, Start, End);
+	if (Param != nullptr) { S += FString::Printf(TEXT("      param \"%s\"\n"), Param); }
+	if (Param2 != nullptr) { S += FString::Printf(TEXT("      param2 \"%s\"\n"), Param2); }
+	// `FileSaveEvent` `0x1007c600` emits `targethead "%d"` only for type 0x10 — quoted, like every
+	// other int token it writes.
+	if (TargetHead != nullptr)
+	{
+		S += FString::Printf(TEXT("      targethead \"%s\"\n"), TargetHead);
+	}
+	return S + TEXT("    }\n");
+}
+
+static FString CameraScene(const FString& Events)
+{
+	return TEXT("// Choreo version 1\nactor \"A\"\n{\n  channel \"C\"\n  {\n")
+		+ Events + TEXT("  }\n}\nfps 60\nsnap off\n");
+}
+
+// One scene entity, the actor its channel names, a combat character and a `camera_track` for the
+// two `param`/`param2` roles, and a player.
+//
+//   `subject`   — `npc_VVampire`, the combat character the `SetAsCameraTarget` arm consumes.
+//   `viewtrack` — `camera_track`, an override source that is NOT a combat character, so the view
+//                 slot takes the plain `SetCameraViewEntity` path with the event's own duration.
+static void BuildCameraWorld(FElysiumEntityWorld& World, const TCHAR* SceneFile)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__scene_camera__");
+
+	FElysiumEntityDef S;
+	S.Classname = TEXT("logic_choreographed_scene");
+	S.TargetName = TEXT("scene1");
+	S.Keys.Add(TEXT("SceneFile"), SceneFile);
+	Defs.Defs.Add(MoveTemp(S));
+
+	FElysiumEntityDef Actor;
+	Actor.Classname = TEXT("logic_relay");
+	Actor.TargetName = TEXT("A");
+	Defs.Defs.Add(MoveTemp(Actor));
+
+	FElysiumEntityDef Npc;
+	Npc.Classname = TEXT("npc_VVampire");
+	Npc.TargetName = TEXT("subject");
+	Npc.Origin = FVector(200.f, 0.f, 0.f);
+	Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+	Defs.Defs.Add(MoveTemp(Npc));
+
+	FElysiumEntityDef Track;
+	Track.Classname = TEXT("camera_track");
+	Track.TargetName = TEXT("viewtrack");
+	Track.Origin = FVector(0.f, 400.f, 90.f);
+	Defs.Defs.Add(MoveTemp(Track));
+
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneCameraEventsTest,
+	"Elysium.Substrate.SceneCameraEvents", GElysiumTestFlags)
+
+bool FElysiumSceneCameraEventsTest::RunTest(const FString&)
+{
+	using namespace ElysiumSceneCameraEventTests;
+	ON_SCOPE_EXIT { ElysiumScene::ClearCache(); };
+
+	// --- 1. The parser: `targethead`, and `GetDuration()` as an accessor -------------------------
+	{
+		FElysiumSceneData Data;
+		ElysiumScene::ParseText(CameraScene(
+			CameraEvent(TEXT("cameramove"), TEXT("head"), 1.f, 3.5f, TEXT("v"), TEXT("t"), TEXT("1"))
+			+ CameraEvent(TEXT("cameramove"), TEXT("body"), 4.f, 5.f, TEXT("v"), TEXT("t"), TEXT("0"))
+			+ CameraEvent(TEXT("cameramove"), TEXT("plain"), 6.f, 7.f, TEXT("v"), TEXT("t"), nullptr)
+			+ CameraEvent(TEXT("camerarestore"), TEXT("back"), 8.f, -1.f, nullptr, nullptr, nullptr)
+			+ CameraEvent(TEXT("camerashot"), TEXT("shot"), 9.f, 10.f, TEXT("s"), nullptr, nullptr)),
+			TEXT("test/camera_tokens.vcd"), Data);
+
+		if (!TestEqual(TEXT("all five camera events parsed"), Data.Events.Num(), 5))
+		{
+			return false;
+		}
+		TestEqual(TEXT("cameramove is type 0x10"), static_cast<int32>(Data.Events[0].Type),
+			static_cast<int32>(EElysiumChoreoEvent::CameraMove));
+		TestEqual(TEXT("camerarestore is type 0x12"), static_cast<int32>(Data.Events[3].Type),
+			static_cast<int32>(EElysiumChoreoEvent::CameraRestore));
+		TestEqual(TEXT("camerashot is type 0x11"), static_cast<int32>(Data.Events[4].Type),
+			static_cast<int32>(EElysiumChoreoEvent::CameraShot));
+
+		// `SetTargetHead(this, v != 0)` -> `+0x33c`, and the constructor's seed of 1 when the token
+		// is absent — the default is HEAD, not body.
+		TestTrue(TEXT("targethead \"1\" round-trips"), Data.Events[0].bTargetHead);
+		TestFalse(TEXT("targethead \"0\" round-trips"), Data.Events[1].bTargetHead);
+		TestTrue(TEXT("an event with no targethead keeps the constructor's 1"),
+			Data.Events[2].bTargetHead);
+		TestTrue(TEXT("and so does an event of another type"), Data.Events[3].bTargetHead);
+
+		// `GetDuration()` `0x10076b30` — `HasEndTime() ? end - start : 0`.
+		TestEqual(TEXT("the crossfade duration is the event's own authored length"),
+			Data.Events[0].GetDuration(), 2.5f, 1.e-4f);
+		TestEqual(TEXT("an instantaneous event (end -1) has a duration of 0, i.e. a cut"),
+			Data.Events[3].GetDuration(), 0.f);
+	}
+
+	// --- 2. `cameramove` with `targethead 0` drives both override slots ---------------------------
+	{
+		ElysiumScene::RegisterInline(TEXT("test/cam_body.vcd"), CameraScene(
+			CameraEvent(TEXT("cameramove"), TEXT("cm"), 1.f, 3.5f,
+				TEXT("viewtrack"), TEXT("subject"), TEXT("0"))));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		BuildCameraWorld(World, TEXT("test/cam_body.vcd"));
+
+		FElysiumEntity* Raw = World.FindByName(TEXT("subject"));
+		FElysiumCombatCharacter* Subject = Raw ? Raw->AsCombatCharacter() : nullptr;
+		const FElysiumEntity* Track = World.FindByName(TEXT("viewtrack"));
+		if (!TestNotNull(TEXT("the fixture has a combat character"), Subject)
+			|| !TestNotNull(TEXT("the fixture has a camera_track"), Track))
+		{
+			return false;
+		}
+		TestTrue(TEXT("the override channel starts clear"),
+			World.CameraOverrideChannel().IsClear());
+
+		double T = 1.0;
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+		World.Tick(T);
+		TestTrue(TEXT("nothing fires before the event's own start"),
+			World.CameraOverrideChannel().IsClear());
+
+		T = 2.1; World.Tick(T);   // scene time 1.1 — past the event's start at 1.0
+
+		// `SetAsCameraTarget(cc, GetTargetHead(), GetDuration())` — the two fields land on the
+		// CHARACTER, and the broadcast that follows passes a crossfade of 0, so the character's own
+		// `GetCameraFadeInTime()` (the field just written) is what the slot ends up holding.
+		TestFalse(TEXT("targethead 0 aims at the body"), Subject->bCameraTargetIsHead);
+		TestEqual(TEXT("the event's duration became the character's own fade field"),
+			Subject->CameraOverrideFadeTime, 2.5f, 1.e-4f);
+		TestEqual(TEXT("the target slot holds the character"),
+			World.CameraOverrideChannel().TargetSlot().Entity.Index, Subject->Handle.Index);
+		TestEqual(TEXT("with the event's duration as its crossfade"),
+			World.CameraOverrideChannel().TargetSlot().CrossfadeDuration, 2.5f, 1.e-4f);
+
+		// `SetCameraViewEntity(p, viewEnt, GetDuration())` — the plain path, no character involved.
+		TestEqual(TEXT("the view slot holds param1's entity"),
+			World.CameraOverrideChannel().ViewSlot().Entity.Index, Track->Handle.Index);
+		TestEqual(TEXT("with the same authored duration"),
+			World.CameraOverrideChannel().ViewSlot().CrossfadeDuration, 2.5f, 1.e-4f);
+		// Engaging, not restoring: `FUN_1017d0b0` arms a POSITIVE duration.
+		TestTrue(TEXT("the channel is engaging, so the signed duration is positive"),
+			World.CameraOverrideChannel().SignedDuration() > 0.f);
+	}
+
+	// --- 3. The `targethead` default is HEAD ------------------------------------------------------
+	{
+		ElysiumScene::RegisterInline(TEXT("test/cam_head.vcd"), CameraScene(
+			CameraEvent(TEXT("cameramove"), TEXT("cm"), 1.f, 2.f,
+				TEXT("viewtrack"), TEXT("subject"), nullptr)));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		BuildCameraWorld(World, TEXT("test/cam_head.vcd"));
+		FElysiumEntity* Raw = World.FindByName(TEXT("subject"));
+		FElysiumCombatCharacter* Subject = Raw ? Raw->AsCombatCharacter() : nullptr;
+
+		double T = 1.0;
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+		World.Tick(T);
+		T = 2.1; World.Tick(T);
+
+		if (TestNotNull(TEXT("the fixture has a combat character"), Subject))
+		{
+			// `CChoreoEvent`'s constructor `FUN_10075aa0` seeds `+0x33c = 1`, and the port's own
+			// field defaults to FALSE, so this is the token's default doing the work.
+			TestTrue(TEXT("an unauthored targethead aims at the head/look point"),
+				Subject->bCameraTargetIsHead);
+			TestEqual(TEXT("and the duration still rides through"),
+				Subject->CameraOverrideFadeTime, 1.f, 1.e-4f);
+		}
+	}
+
+	// --- 4. `camerarestore` fades the channel out over its own duration ---------------------------
+	{
+		ElysiumScene::RegisterInline(TEXT("test/cam_restore.vcd"), CameraScene(
+			CameraEvent(TEXT("camerarestore"), TEXT("cr"), 1.f, 2.5f, nullptr, nullptr, nullptr)));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		BuildCameraWorld(World, TEXT("test/cam_restore.vcd"));
+		FElysiumEntity* Raw = World.FindByName(TEXT("subject"));
+		FElysiumCombatCharacter* Subject = Raw ? Raw->AsCombatCharacter() : nullptr;
+		if (!TestNotNull(TEXT("the fixture has a combat character"), Subject))
+		{
+			return false;
+		}
+
+		// Something has to be engaged for `RestoreCamera` to have anything to do: its first act is
+		// `if (CurrentOverrideFraction(player) <= 0) return`.
+		double T = 1.0;
+		World.Tick(T);
+		Subject->InputSetBodyAsCameraTarget(FElysiumInputArgs());
+		TestFalse(TEXT("the channel is engaged before the event"),
+			World.CameraOverrideChannel().IsClear());
+
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+		T = 1.05; World.Tick(T);
+		T = 2.2; World.Tick(T);
+
+		// `FUN_1017d6d0` writes the NEGATIVE duration — the sign is the direction.
+		TestEqual(TEXT("camerarestore fades out over the event's own length"),
+			World.CameraOverrideChannel().SignedDuration(), -1.5f, 1.e-3f);
+	}
+
+	// --- 5. `camerashot` is a no-op --------------------------------------------------------------
+	//
+	// `DispatchStartEvent`'s switch has labels `1`-`0x10`, `0x12` and `0x13`; `0x11` is absent, so
+	// the event lands on `default:` and retail only prints. The port leaves it on `default:` too.
+	{
+		ElysiumScene::RegisterInline(TEXT("test/cam_shot.vcd"), CameraScene(
+			CameraEvent(TEXT("camerashot"), TEXT("cs"), 1.f, 2.f,
+				TEXT("viewtrack"), TEXT("subject"), nullptr)));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		BuildCameraWorld(World, TEXT("test/cam_shot.vcd"));
+		FElysiumEntity* Raw = World.FindByName(TEXT("subject"));
+		const FElysiumCombatCharacter* Subject = Raw ? Raw->AsCombatCharacter() : nullptr;
+
+		double T = 1.0;
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+		World.Tick(T);
+		T = 2.1; World.Tick(T);
+
+		TestTrue(TEXT("camerashot leaves the override channel untouched"),
+			World.CameraOverrideChannel().IsClear());
+		TestFalse(TEXT("and does not run the camera-target arm"), World.HasScriptedCamera());
+		if (Subject != nullptr)
+		{
+			TestEqual(TEXT("and writes no fade field on its param2"),
+				Subject->CameraOverrideFadeTime, 0.f);
+		}
+	}
+
+	ElysiumScene::ClearCache();
+	return true;
+}
+
 } // namespace ElysiumSceneTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

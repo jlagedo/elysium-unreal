@@ -1999,6 +1999,26 @@ enum class EElysiumViewFlags : uint8
 };
 ENUM_CLASS_FLAGS(EElysiumViewFlags)
 
+// `m_lifeState` (`CBasePlayer+0x200`), Source's four states, ported whole because
+// `PlayerDeathThink`'s arms are written against them and the transitions are observable
+// (`interface/final_death.wav` rides one of them).
+//
+// The walk in a shipped run is `Alive -> Dying` (`Event_Killed` `0x10163af0`), `Dying -> Dead` on
+// the first frame after the death animation finishes **or** after 60 death-think frames, whichever
+// comes first, and `Dead -> Respawnable` on the first frame with no button held. **And there it
+// stays**: everything past `Respawnable` in `PlayerDeathThink` — `StartDeathCam`, `mp_forcerespawn`,
+// `respawn()` — is behind `CHalfLife2::IsMultiplayer()` (`0x101abcc0`, whose body is `return 0`), and
+// `respawn()` itself (`0x10352ed0`) is a `RET` when both single-player `gpGlobals` bytes are 0. The
+// only exit retail has is a load, which runs `CHL2_Player::Spawn` (slot 103, `0x1016d260`); in the
+// port that is the game-over screen's load-or-quit (RC14 §5.6).
+enum class EElysiumLifeState : uint8
+{
+	Alive = 0,
+	Dying = 1,
+	Dead = 2,
+	Respawnable = 3,
+};
+
 class FElysiumPlayer final : public FElysiumCombatCharacter
 {
 public:
@@ -2294,6 +2314,33 @@ public:
 	// The player's surface has exactly one writer — the pawn, from the camera's draw policy. This
 	// entity contributes only its own hide state and never touches the component's flags directly.
 	virtual void GateVisual() override;
+
+	// === The death sequence (RC14, `docs/vtmb/camera-view-modes.md` -> "The death view") =========
+	//
+	// `m_lifeState` (`CBasePlayer+0x200`), and the think that walks it. Retail has **no** death
+	// camera and no observer mode: `Event_Killed` freezes the player where he stands, and the view
+	// stays on his own eye. What is camera-visible is the FOV write, the velocity the friction below
+	// bleeds, and the fact that nothing here touches the scripted camera slot.
+	EElysiumLifeState LifeState = EElysiumLifeState::Alive;
+
+	// `m_iRespawnFrames` (`+0x20ec`) — **a float incremented by 1.0 per server frame**, not a
+	// timer, compared against `_DAT_104492a4` = 60.0.
+	float DeathFrames = 0.f;
+
+	// Stands for `m_bSequenceFinished` (`+0x65c`) on the death animation: the substrate clock time
+	// the death performance the port asked for is due to end at, or a negative when the body played
+	// none. Retail's own guard is `GetModelIndex() && !m_bSequenceFinished`, so "no body / nothing
+	// playing" takes the transition on the very first death-think frame rather than waiting 60.
+	double DeathAnimEndTime = -1.0;
+
+	// `CBasePlayer::PlayerDeathThink` `0x101668b0`. **Once per server frame**, from
+	// `CHL2_Player::PreThink`'s tail (`0x10350830`) — never a `SetThink` target — which is why
+	// `FElysiumEntityWorld::RunPlayerThink` calls it ahead of the deadline-driven `Think` and
+	// returns, exactly as `PreThink` returns after it.
+	void PlayerDeathThink();
+
+	bool IsAlive() const { return LifeState == EElysiumLifeState::Alive; }
+	// =============================================================================================
 
 	// The run ends: fire OnDeath, then tell the session (which raises the game-over screen).
 	virtual void OnKilled() override;

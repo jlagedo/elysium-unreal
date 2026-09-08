@@ -72,6 +72,16 @@ struct FElysiumSceneEvent
 	// `fixedlength` — the event's length is the asset's, not the authored range. The dialogue path
 	// acts on it.
 	bool  bFixedLength = false;
+	// `targethead <int>` — `CChoreoEvent`'s `m_bTargetHead` at `+0x33c`, a byte. **The constructor
+	// `FUN_10075aa0` seeds it to 1**, so the default is "aim at the head". Written only by
+	// `SetTargetHead` `FUN_10075ce0` (the parser's `targethead` arm) and read only by
+	// `GetTargetHead` `FUN_10075cc0`, from `DispatchStartEvent`'s `cameramove` case. The writer
+	// `CChoreoScene::FileSaveEvent` `0x1007c600` emits it **only for type `0x10`**, exactly as
+	// `loopcount` is emitted only for `loop`, so it is a cameramove-only token in the grammar; it is
+	// parsed unconditionally here and only the cameramove arm reads it. Its meaning is fixed by its
+	// consumer, `SetAsCameraTarget(cc, bHead, fade)`: 1 = the head/look point (`CalcLookData`),
+	// 0 = `WorldSpaceCenter`. No shipped `.vcd` authors it.
+	bool  bTargetHead = true;
 	// `sequenceduration <s>` — 56 gesture events carry it. Parsed and surfaced, not acted on.
 	float SequenceDuration = 0.f;
 
@@ -90,6 +100,12 @@ struct FElysiumSceneEvent
 	// expression events 1,153 fit only the event-relative reading and none fits the absolute one.
 	// An event with no authored ramp is at full intensity, so this returns 1.
 	float RampAt(float T) const;
+
+	// `CChoreoEvent::GetDuration()` `0x10076b30` — `HasEndTime() ? EndTime - StartTime : 0`, where
+	// `HasEndTime` (`0x10075f30`) is `m_flEndTime != -1.0f`. **An accessor, not a field**: the three
+	// camera arms crossfade over the event's own authored length, and an instantaneous event
+	// (`time <t> -1`) therefore cuts. There is no `cameraTime` and no `fadetime` token.
+	float GetDuration() const { return bHasEnd ? EndTime - StartTime : 0.f; }
 };
 
 struct FElysiumSceneChannel

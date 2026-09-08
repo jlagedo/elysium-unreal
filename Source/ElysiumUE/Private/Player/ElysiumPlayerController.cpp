@@ -6,6 +6,8 @@
 #include "ElysiumInputRouter.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumMoveSolve.h"
+#include "ElysiumPawn.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayerCameraManager.h"
@@ -97,44 +99,93 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 	}
 	if (FeedPlayer && !FeedPlayer->IsMobile())
 	{
-		Current.ClearMovement();
+		// `CPlayerMove::SetupMove` `0x10186120`'s immobilize pair and **only** that pair:
+		// `mv->m_nButtons &= ~0x807` (attack, jump, duck, attack2) and `forward = side = up = 0`.
+		// It is not `ClearMovement`, which clears the opposite half of the command:
+		// `ElysiumInput::ImmobilizeButtonMask` spells out why `IN_USE` and the direction bits are
+		// left standing — an immobilized player is normally immobilized *for* an interaction he is
+		// holding `+use` on, and releasing it is how the interaction ends.
+		Current.ApplyImmobilize();
 		bCmdChanged = true;
 	}
 
-	// --- `m_iVFlags`, the two locks beside immobilize (RC4, SC4) --------------------------------
+	// --- `m_iVFlags`, and `SetupMove`'s body-angle arm (RC4, RC15.2) ----------------------------
 	//
-	// This function is the port's `CBasePlayer::ProcessUsercmds` / `CPlayerMove::RunCommand`: it is
-	// where the command's own view angles would be accepted. Retail's test there is
+	// This function is the port's `CBasePlayer::ProcessUsercmds` / `CPlayerMove::RunCommand` /
+	// `CPlayerMove::SetupMove`: the frame's command has been sampled, nothing has consumed it, and
+	// the engine's `UpdateRotation` — which carries the control rotation into the pawn's
+	// `FaceRotation`, the port's `FinishMove` body writeback — runs the moment this returns.
+	//
+	// Retail's view-angle test is
 	//
 	//     if (+0x207c == 0 && !HasAllVFlags(this, 8)) m_angEyeAngles = cmd->viewangles;
 	//
 	// — the persistent lock and the one-shot pending snap, two doors onto the same refusal. Both are
 	// read here, and the one-shot is consumed exactly as the drain consumes it.
+	ElysiumMove::FSetupMoveBodyState BodyState;
 	if (FeedPlayer)
 	{
 		FRotator PendingAngles;
 		FVector PendingPoint;
 		const bool bSnapPending = FeedPlayer->ConsumePendingEyeAngleSnap(PendingAngles, PendingPoint);
-		if (bSnapPending || FeedPlayer->HasViewFlags(EElysiumViewFlags::ViewAngleLock))
+		if (!ElysiumMove::EyeAnglesAdoptCommand(bSnapPending,
+			FeedPlayer->HasViewFlags(EElysiumViewFlags::ViewAngleLock)))
 		{
 			// The server owns this frame's view angles; the command's look delta is discarded
-			// rather than integrated over the snap the server just wrote.
+			// rather than integrated over the snap the server just wrote. One authoritative view
+			// makes that the whole of retail's refusal — `m_angEyeAngles` stops advancing, and
+			// because `m_vecAngles.yaw` is unconditionally `m_angEyeAngles.y` the body's yaw
+			// freezes with it, which here is the control rotation the pawn is faced from.
+			//
+			// The **pending snap takes precedence** and is consumed on the frame it is read, so a
+			// `point_player` tick or a terminal's near-arm snap lands and then releases, exactly as
+			// `+0x207c` does; `ViewAngleLock` is the arm that stays down until its closer clears it.
+			//
+			// Named divergence: retail's *dropped/paused* `ProcessUsercmds` arm (`0x1016aaf0`,
+			// `param_5 != 0`) goes further and rewrites every one of the `numcmds` queued commands,
+			// storing `m_angEyeAngles` into each `cmd->viewangles` and zeroing each command's
+			// buttons, forwardmove, sidemove and upmove before setting `numbackup = 0`. This port
+			// samples one command per frame and keeps no backlog — a paused frame produces no
+			// command at all (the `bGamePaused` return above) — so there is nothing queued to
+			// rewrite and the arm has no port-side subject.
 			Current.LookDelta = FVector2D::ZeroVector;
 			bCmdChanged = true;
 		}
-		// `EElysiumViewFlags::MoveAnglesFromEntity` (`0x1`) has one retail reader,
-		// `CPlayerMove::SetupMove` `0x10186120`, which replaces the move's angles with the posing
-		// entity's own. **The port has no move-angle source seam**: the wish direction comes from
-		// the pawn's control rotation, and there is nothing here that could stand in for "the
-		// entity's angles" without inventing a pose channel. The flag is read at the gate the
-		// substitution belongs to so the state is live and asserted, and the substitution itself
-		// lands with whoever builds that seam.
-		if (FeedPlayer->HasViewFlags(EElysiumViewFlags::MoveAnglesFromEntity))
+
+		// `CMoveData::m_vecAngles` (`+0x58`), which is the **body-angle writeback**, not the frame
+		// the mover resolves forward/side against — that is `m_vecViewAngles` (`+0x0c`), and
+		// `CGameMovement::PlayerMove` (`client.dll 0x100edd80`) is what proves it, feeding `+0x0c`
+		// to `AngleVectors(&m_vecForward, &m_vecRight, &m_vecUp)`. Neither `m_iVFlags & 0x1` nor the
+		// grapple touches the view angles, so **the wish direction is not redirected and forward
+		// is not cleared**: what changes is only whether the body's yaw is snapped to the eye's.
+		// The rule and its precedence live in `ElysiumMove::BodyYawFollowsEye`.
+		BodyState.bGrapplePartnerLive = FeedPlayer->IsGrappling();
+		BodyState.bGrappleReleaseActivity =
+			FeedPlayer->FeedState.Phase == EElysiumFeedPhase::Release
+			|| FeedPlayer->FeedState.Phase == EElysiumFeedPhase::ReleaseTail;
+		BodyState.bMoveAnglesFromEntity =
+			FeedPlayer->HasViewFlags(EElysiumViewFlags::MoveAnglesFromEntity);
+	}
+	if (AElysiumPawn* BodyPawn = Cast<AElysiumPawn>(GetPawn()))
+	{
+		// Re-decided every tick from live state, as retail re-reads the handle and the flag every
+		// tick. Pushed even with no player entity, so the latch cannot survive a world teardown.
+		BodyPawn->SetBodyPosedExternally(!ElysiumMove::BodyYawFollowsEye(BodyState));
+
+		// `SetupMove`'s partner arm — the hard glue that makes a grappled player immobile, which is
+		// **not** the flag: it runs on the grapple handle whether or not `0x1` is set, and it is off
+		// exactly during the nine release verbs, when the player carries himself out of the pairing.
+		if (FeedPlayer && ElysiumMove::GrappleGluesBody(BodyState))
 		{
-			// Retail also stops the player steering itself out of the pose it is being held in,
-			// which immobilize already does for every shipped opener (they all set both).
-			Current.ClearMovement();
-			bCmdChanged = true;
+			if (const FElysiumCombatCharacter* Partner = FeedPlayer->ResolveGrapplePartner())
+			{
+				// Both collision minima are measured from a body's own feet origin in this runtime,
+				// so retail's `-(playerMins.z - partnerMins.z)` correction evaluates to zero; it is
+				// passed rather than folded away so the recovered term stays at its point of use.
+				constexpr float FeetRelativeCollisionMinZ = 0.0f;
+				BodyPawn->GlueBodyToFeetOrigin(ElysiumMove::GluedBodyFeetOrigin(
+					Partner->Origin, FeetRelativeCollisionMinZ, FeetRelativeCollisionMinZ));
+			}
 		}
 	}
 
@@ -194,14 +245,14 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 		//
 		// `Current` rather than `Sampled`, so both gates above reach what crosses — and they reach
 		// different halves of it. The feed gate keeps only `+feed`, so a paired feeder forwards no
-		// combat bit and no direction at all. The mobility gate is narrower: `ClearMovement` drops
-		// the movement bits and leaves the four combat bits standing, so an immobilised player still
-		// publishes a held attack while publishing no direction. Nothing is lost either way, because
-		// a direction is read only on a frame that swings and an immobilised player's whole weapon
-		// frame is refused by the substrate's own `IsMobile()` test in
-		// `FElysiumEntityWorld::UpdatePlayerWeaponFrame`. Forwarding the ATTACK bit through that gate
-		// rather than hiding it is what lets that frame spend the press instead of banking it for the
-		// moment control returns.
+		// combat bit and no direction at all. The mobility gate is retail's `0x807`
+		// (`ApplyImmobilize`): it drops attack, jump, duck and attack2 and leaves the direction bits
+		// standing, so an immobilised player publishes his held direction and no attack. That is the
+		// opposite of what the port used to forward, and it is the retail arrangement — the
+		// direction bits are inert anyway because the analog pair is zeroed, while the attack bit
+		// must not reach a weapon frame the player is not allowed to swing.
+		// `FElysiumEntityWorld::UpdatePlayerWeaponFrame`'s own `IsMobile()` test refuses that frame
+		// as well, so the two agree rather than one covering for the other.
 		//
 		// **The movement bits are part of the field, not decoration**: direction-keyed attack
 		// selection compares each candidate sequence's authored mask against exactly the seven bits

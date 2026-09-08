@@ -275,6 +275,14 @@ namespace
 			{
 				Ev.bFixedLength = true;
 			}
+			else if (WordIs(C, 0, TEXT("targethead")) && C.Words.Num() >= 2)
+			{
+				// `ParseEvent` `0x1007ab40`, literal `0x10547ca4`: an int, passed to
+				// `SetTargetHead(this, v != 0)` `0x10075ce0` -> `+0x33c`. A `targethead` line with no
+				// payload leaves the constructor's 1 standing, which is what retail's
+				// "read the next token as an int" does with nothing to read.
+				Ev.bTargetHead = FCString::Atoi(*C.Words[1]) != 0;
+			}
 			else if (WordIs(C, 0, TEXT("sequenceduration")) && C.Words.Num() >= 2)
 			{
 				Ev.SequenceDuration = FCString::Atof(*C.Words[1]);
@@ -292,9 +300,10 @@ namespace
 				Ev.Ramp.Sort([](const FVector2f& A, const FVector2f& B) { return A.X < B.X; });
 			}
 			// Everything else (tags, absolutetags, relativetag, flextimingtags, flexanimations,
-			// resumecondition, loopcount, yaw, targethead, mapname, ramp, …) is recognised by
+			// resumecondition, loopcount, pitch, yaw, mapname, ramp, …) is recognised by
 			// VtMB's parser and used by nothing in the shipped corpus. Parsed into nodes, dropped
 			// here — deliberately without a warning, since every file carries some.
+			// (`targethead` left that list on 2026-09-07: it is read by `cameramove`'s arm.)
 		}
 
 		// The corpus is dirty and a reader must tolerate it rather than assert: one event ends 86

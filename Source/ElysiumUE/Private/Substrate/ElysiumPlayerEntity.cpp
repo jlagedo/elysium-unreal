@@ -64,6 +64,25 @@ void FElysiumPlayer::Spawn()
 		}
 	}
 
+	// **The one thing that ends a death.** `CHL2_Player::Spawn` (slot 103, `0x1016d260`) is the only
+	// exit retail's death sequence has — nothing in the game advances past `LIFE_RESPAWNABLE` — and
+	// what it resets is `m_lifeState`, `m_fEffects`, `m_afPhysicsFlags` and `m_iFOV` (it writes the
+	// same 0 `Event_Killed` does, which is why VtMB's ordinary play lens is the latched 60). Here it
+	// is a load or a level change, since this runtime's saves are the only way back.
+	LifeState = EElysiumLifeState::Alive;
+	DeathFrames = 0.f;
+	DeathAnimEndTime = -1.0;
+	// The once-only latch on the death commit goes with it, for the same reason: a run that comes
+	// back through a load has not reported this player's death yet.
+	bDeathReported = false;
+	if (IElysiumEmbodiment* Bodily = World ? World->Embodiment() : nullptr)
+	{
+		// The port's living lens stays `default_fov` rather than retail's latched 60: that is the
+		// standing lens decision recorded in `docs/vtmb/camera-view-modes.md` -> "The lens", so the
+		// override is CLEARED here (the seam's negative) rather than written to retail's 0.
+		Bodily->SetPlayerFovOverride(-1);
+	}
+
 	// Arm the think for the first stealth recompute. The surface's deadline is negative
 	// ("due now") on a fresh entity, and `Think` re-arms itself from it after every pass; without
 	// this first arm the deadline-driven think would never start.
@@ -488,15 +507,6 @@ void FElysiumPlayer::UpdatePlayerSound(double NowSeconds)
 
 bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
 {
-	// `CBasePlayer::HandleAnimEvent` swallows 2050-2053: claimed, and nothing played. The player's
-	// clips carry the same footfall records the cast's do, and the player's steps come off
-	// `UpdateStepSound`'s millisecond clock instead — so letting one through would double every
-	// step the moment a handler above claimed it.
-	if (ElysiumFootsteps::PlayerSwallows(Event.Event))
-	{
-		return true;
-	}
-
 	// `CBasePlayer::HandleAnimEvent` `0x10178a10`, and its gate:
 	//
 	//     if (!this->vfunc0x658() && event->owner == this) { ...the whole switch... }
@@ -515,6 +525,17 @@ bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
 	{
 		return true;
 	}
+
+	// 2050-2053, **inside** the gate where the listing puts them: the switch that swallows them is
+	// the same switch 4050/4051 sit in, so an observer reaches none of the four. Claimed, and
+	// nothing played — the player's clips carry the same footfall records the cast's do, and the
+	// player's steps come off `UpdateStepSound`'s millisecond clock instead, so letting one through
+	// would double every step the moment a handler above claimed it.
+	if (ElysiumFootsteps::PlayerSwallows(Event.Event))
+	{
+		return true;
+	}
+
 	switch (Event.Event)
 	{
 	case 4050:
@@ -1053,16 +1074,183 @@ void FElysiumPlayer::GateVisual()
 	}
 }
 
+// --- Death (RC14): `Event_Killed`, and the think that walks the life state --------------------
+//
+// **Retail has no death camera.** `vampire.dll` never sets a view entity on a player in any
+// situation: `IVEngineServer::SetView` (engine slot 86) is never dispatched, `m_hViewEntity` does not
+// exist as a string in any module, `point_viewcontrol` is not in the factory table, and the strings
+// `observer` / `ObserverMode` / `spec_` / `DeathCam` return nothing in every module. `StartDeathCam`
+// (`0x10166cc0`) and `StartObserverMode` (`0x10167030`) are complete Source ports and both are
+// unreachable — their guard is `CHalfLife2::IsMultiplayer()`, whose whole body is `return 0`
+// (`0x101abcc0`) — so **neither is ported**; they are recovered in full in
+// `docs/vtmb/camera-view-modes.md` so nothing has to re-open them.
+//
+// What death actually is, is a freeze: the sign goes up, the body plays its death animation and
+// becomes a client-side ragdoll, and the view stays on the player's own eye, at the world position
+// and view offset he died at, with mouse look still live. The only camera-visible writes are
+// `m_iFOV = 0` and the velocity the think below bleeds to zero.
+
 void FElysiumPlayer::OnKilled()
 {
-	FElysiumCombatCharacter::OnKilled();
-	// The run is lost. The session owns what that means to the application (the GameOver state
-	// holds the world and raises its screen); the substrate only reports it, and only through the
-	// game-state subsystem it was already handed.
-	if (UElysiumGameStateSubsystem* State = World ? World->GetGameState() : nullptr)
+	// `m_lifeState` is retail's own re-entry guard: `Event_Killed` is reached from the damage commit,
+	// and a second killing blow on a body already dying must not restart the sequence.
+	if (!IsAlive())
 	{
-		State->NotifyPlayerKilled();
+		return;
 	}
+
+	// `Event_Killed` step 1 is the death **sign** (`vdata/Signs/death.txt`, `0x10586354`), raised on a
+	// `CSingleUserRecipientFilter` at the very top of the function: a 2-D UI panel drawn over a world
+	// that keeps running, and the only "death camera" retail has. **The port raises nothing here**,
+	// and the reason is stated rather than assumed: the session's game-over screen is not that sign —
+	// it is the port's expression of where the sequence ENDS (`LIFE_RESPAWNABLE`, retail's terminal
+	// state, whose only exit is a load) — and raising it now pauses the substrate clock and the
+	// engine with it, which would stop the death animation, the friction and
+	// `interface/final_death.wav` from ever happening. It is raised from `PlayerDeathThink`'s
+	// `LIFE_DEAD -> LIFE_RESPAWNABLE` step instead. A sign-shaped overlay at this instant is UI the
+	// port does not have; that, and only that, is what is missing here.
+
+	// Step 5 — `SetAnimation(4)`, the death animation (`CBasePlayer::SetAnimation` `0x10164240`,
+	// slot 449). Asked for through the one Reaction-band producer, on the same ladder
+	// `TASK_PLAY_DEATH_SEQUENCE` walks, so the player and the cast resolve a death performance the
+	// same way. What it is worth to the view is its LENGTH: retail's think waits on
+	// `m_bSequenceFinished`, and a body that plays nothing takes the transition on the first frame.
+	{
+		FElysiumReactionPlayRequest Die;
+		Die.Activity = ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::DieSimple);
+		Die.bAllowFallbackLadder = false;
+		float Seconds = 0.f;
+		DeathAnimEndTime = PlayReactionActivity(Die, &Seconds) && Seconds > 0.f
+			? (World ? World->NowSeconds() : 0.0) + static_cast<double>(Seconds)
+			: -1.0;
+	}
+
+	// Step 6 — `m_lifeState = LIFE_DYING`, and `pl.deadflag = 1` beside it.
+	LifeState = EElysiumLifeState::Dying;
+	DeathFrames = 0.f;
+
+	// Step 10 — `m_iFOV (+0x1e78) = 0`, **the only camera-visible write in the whole death path**.
+	// It is a cancel-the-weapon-zoom write, not a death FOV: the client's HUD think resolves the
+	// zero to 60 (`FUN_100f28d0`), which is VtMB's ordinary play lens. Do not push 75 — that is only
+	// the no-local-player fallback (RC14 §3c, correcting RC10).
+	if (IElysiumEmbodiment* Bodily = World ? World->Embodiment() : nullptr)
+	{
+		Bodily->SetPlayerFovOverride(0);
+	}
+
+	// Step 11 — `CBaseCombatCharacter::Event_Killed` (`0x1032b9b0`) LAST, which is where the OnDeath
+	// output and the owner notification live. Its own tail builds the ragdoll force and calls
+	// `CreateCorpse` -> `BecomeClientRagdoll` (`0x10090180`): the pose freezes, the entity goes
+	// `FSOLID_NOT_SOLID` and `MOVETYPE_NONE`, its bbox collapses to a point and its think stops —
+	// and **its origin and view offset are never written**, which is exactly why the view does not
+	// move. The port's body half of that (the ragdoll, `EF_NODRAW` on the server model) belongs to
+	// the body lane and is NOT done here: hiding the player's model with no client ragdoll drawing
+	// in its place would be a divergence in the other direction.
+	FElysiumCombatCharacter::OnKilled();
+}
+
+void FElysiumPlayer::PlayerDeathThink()
+{
+	const double Now = World ? World->NowSeconds() : 0.0;
+
+	// `SetNextThink(curtime + 0.1)` (`_DAT_104493d0`), retail's own first line. It is a leftover:
+	// `PlayerDeathThink` is not a `SetThink` target — its one caller is `PreThink`, once per frame —
+	// so the deadline it arms is never what runs it. Ported because it is state a load can observe.
+	NextThink = static_cast<float>(Now + 0.1);
+
+	IElysiumEmbodiment* Bodily = World ? World->Embodiment() : nullptr;
+
+	// The ground friction. `FL_ONGROUND` only, and 20 SOURCE UNITS PER FRAME (`_DAT_1044eb0c`),
+	// not per second: the think is frame-driven, so the constant is too. This is the only thing that
+	// still moves in the death view — the roll (`V_CalcRoll`, and retail's `CalcBob` beside it) keeps
+	// composing over a velocity that reaches zero in two or three frames.
+	if (Bodily != nullptr && Bodily->IsPlayerOnGround())
+	{
+		Bodily->BleedPlayerBodyVelocity(20.0f * ElysiumMove::U);
+	}
+
+	// `if (HasWeapons()) PackDeadPlayerItems()` — slot `0x6e4`, UNRECOVERED. It is the next thing
+	// retail does and it is deliberately not invented here; it touches the corpse's inventory rather
+	// than the view, so nothing in this document depends on it.
+
+	// The `LIFE_DYING` hold: `GetModelIndex() && !m_bSequenceFinished` -> `StudioFrameAdvance()` and
+	// `if (++m_iRespawnFrames < 60.0f) return;`. **Both exits are real**: the animation finishing
+	// ends it early, and 60 frames ends it whatever the animation is doing. A body that plays no
+	// death performance at all (`DeathAnimEndTime < 0`) has a finished sequence by this test and
+	// falls straight through, which is retail's `GetModelIndex() == 0` arm.
+	if (LifeState == EElysiumLifeState::Dying && DeathAnimEndTime >= 0.0 && Now < DeathAnimEndTime)
+	{
+		DeathFrames += 1.0f;   // `_DAT_104454c0` = 1.0, added to a FLOAT counter
+		if (DeathFrames < 60.0f)   // `_DAT_104492a4` = 60.0
+		{
+			return;
+		}
+	}
+
+	if (LifeState == EElysiumLifeState::Dying)
+	{
+		// `LIFE_DYING -> LIFE_DEAD`, with the one cue the whole sequence has:
+		// `interface/final_death.wav` (`0x10586440`) on channel 2, volume 1.0, attenuation 0.8,
+		// pitch 100, through a `CPASAttenuationFilter` built at the player's own ear position.
+		LifeState = EElysiumLifeState::Dead;
+		if (IElysiumAudio* Audio = World ? World->Audio() : nullptr)
+		{
+			FElysiumAudioRequest Request;
+			Request.Source = FElysiumAudioSource::Path(TEXT("interface/final_death.wav"));
+			Request.Owner.Kind = EElysiumAudioOwnerKind::GameplaySystem;
+			Request.Owner.StableId = TEXT("player.final_death");
+			Request.Placement.bSpatialized = false;   // the filter is built AT the listener's ear
+			Request.Gain = 1.0f;
+			Request.Pitch = 1.0f;
+			Request.Routing = EElysiumAudioRouting::NoGameplayNoise;
+			Request.ConcurrencyKey = TEXT("player.final_death");
+			Audio->Submit(MoveTemp(Request));
+		}
+	}
+
+	// The tail retail reaches on every frame from here on: `m_fEffects |= 0x10` (`EF_NODRAW` — the
+	// server model stops drawing because the CLIENT ragdoll is drawing instead) and
+	// `m_flPlaybackRate = 0` (`StopAnimation`). Both are body facts with no view of their own, and
+	// the port has no client ragdoll to put in the model's place, so neither is applied — see
+	// `OnKilled` above.
+
+	if (LifeState == EElysiumLifeState::Dead)
+	{
+		// `LIFE_DEAD -> LIFE_RESPAWNABLE` on the first frame with no button held. Retail's mask is
+		// `buttons & ~IN_SCORE` (`0x10000`, the multiplayer scoreboard), and this runtime has no
+		// scoreboard bit at all, so every published button counts. The published mask is the
+		// controller's combat subset, which is the whole of what the substrate is told.
+		if (World != nullptr && World->GetPlayerButtons() != 0)
+		{
+			return;
+		}
+		// `g_pGameRules->FPlayerCanRespawn(this)` — `CHalfLife2` slot 37 (`0x101abee0`), whose whole
+		// body is `return 1`. A constant, so there is no rules object to ask.
+		LifeState = EElysiumLifeState::Respawnable;
+
+		// **The port's game-over screen goes up HERE**, on the transition into retail's terminal
+		// state, because that is the state it expresses: a run that will not advance again and whose
+		// only exit is a load. Retail's own UI at this instant is nothing new — the sign has been up
+		// since `Event_Killed` — but retail also has a main menu behind Escape at any time, and this
+		// screen is the port's load-or-quit door rather than a reproduction of the sign
+		// (`menu-hud-not-vtmb-reproduction`). Raising it also pauses the clock and the engine, which
+		// is why it cannot go up before the sequence has run: everything above this line would stop.
+		if (UElysiumGameStateSubsystem* State = World ? World->GetGameState() : nullptr)
+		{
+			State->NotifyPlayerKilled();
+		}
+		return;
+	}
+
+	// `LIFE_RESPAWNABLE`, and **this is where a shipped run stops, forever.** Everything below the
+	// transition in retail is multiplayer-gated and dead in single player:
+	//
+	//   * `StartDeathCam` at `m_flDeathTime + 6.0` — behind `IsMultiplayer()` (`return 0`);
+	//   * `mp_forcerespawn` (`0x1070a9f8`, default "1") and the `+5.0 s` forced respawn — the same;
+	//   * `respawn()` (`0x10352ed0`) — a `RET` when both single-player `gpGlobals` bytes are 0.
+	//
+	// So the port must not auto-respawn and must not advance on its own. The death UI owns the exit,
+	// and the only thing that clears the state is a load through `CHL2_Player::Spawn` (slot 103).
 }
 
 void FElysiumPlayer::InputGiveItem(const FElysiumInputArgs& Args)
@@ -1254,6 +1442,16 @@ void FElysiumPlayer::RestoreDialogHolster()
 void FElysiumPlayer::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
 	FElysiumCombatCharacter::GetDebugState(Out);
+	// `m_lifeState`, and the death think's frame counter beside it — the two the death view is a
+	// function of. Named states rather than the integer, because the integer is Source's.
+	{
+		static const TCHAR* const StateNames[] = { TEXT("alive"), TEXT("dying"), TEXT("dead"),
+			TEXT("respawnable") };
+		const int32 Index = FMath::Clamp(static_cast<int32>(LifeState), 0, 3);
+		Out.Emplace(TEXT("Life state"), LifeState == EElysiumLifeState::Alive
+			? FString(StateNames[Index])
+			: FString::Printf(TEXT("%s (%.0f death-think frames)"), StateNames[Index], DeathFrames));
+	}
 	Out.Emplace(TEXT("Origin"), Origin.ToString());
 	Out.Emplace(TEXT("Facing"), FString::Printf(TEXT("yaw %.0f"), -Angles.Y));
 	Out.Emplace(TEXT("Law"), FString::Printf(TEXT("criminal %d / supernatural %d / investigate %d"),

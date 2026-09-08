@@ -462,6 +462,19 @@ void ElysiumCameraShots::InstallNamed(const FString& ShotFile,
 	Cache().Add(Key, List);
 }
 
+void ElysiumCameraShots::InstallMiss(const FString& ShotFile)
+{
+	const FString Key = NormalizeKey(ShotFile);
+	if (Key.IsEmpty())
+	{
+		return;
+	}
+	// The remembered-miss representation is `LoadFile`'s own: a null list under the key, which is
+	// what it writes for a file that does not open. Seeding it here makes `Load`/`LoadNamed` take
+	// the identical early-out without a disk read.
+	Cache().Add(Key, TSharedPtr<FShotList>());
+}
+
 const TCHAR* ElysiumCameraShots::LexToString(EElysiumShotPosition Position)
 {
 	switch (Position)
@@ -1027,10 +1040,31 @@ namespace ElysiumCameraShotsImpl
 	}
 }
 
+void FElysiumCameraDirector::FillShotStartCache(FElysiumEntityWorld* World,
+	const FElysiumCameraShotDef& Def, FElysiumShotBindings& Bindings)
+{
+	const FElysiumShotAnchor* const Anchors[FElysiumShotBindings::Num] =
+		{ &Def.Start, &Def.End, &Def.Target1, &Def.Target2 };
+	for (int32 Index = 0; Index < FElysiumShotBindings::Num; ++Index)
+	{
+		FElysiumShotAnchorBinding& Binding = Bindings.Anchors[Index];
+		// `handleLive(+0x584 + i)` else `vec3_origin` — and an anchor the record does not declare
+		// has no handle either, so it caches the origin too. `ResolveAnchor` leaves the zero in
+		// place on both roads (an absent block returns false; a dead handle writes `vec3_origin`
+		// with the offset **not** applied, `0x1006f09b`).
+		FVector Point = FVector::ZeroVector;
+		ResolveAnchor(World, *Anchors[Index], Binding, /*bLatched*/ false, Point);
+		// **Unconditional.** The retail loop has no "already cached" test; this is the write that
+		// makes a re-shot re-latch.
+		Binding.Cached = Point;
+		Binding.bCached = true;
+	}
+}
+
 bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
 	const FElysiumEntityHandle& Subject, FElysiumCameraShot& Out,
 	FElysiumShotBindings* Bindings, EElysiumShotResolvePass Pass,
-	EElysiumShotOriginSelector OriginSelector)
+	EElysiumShotOriginSelector OriginSelector, const FElysiumShotEntityPose* EntityPose)
 {
 	// A caller with no live shot behind it (the dialogue ladder) gets a one-shot binding table on
 	// the stack: bound from the definition and the subject, resolved once, thrown away.
@@ -1043,6 +1077,15 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	}
 	const bool bLatched = Pass == EElysiumShotResolvePass::Think
 		&& ElysiumCameraShots::LatchesAnchors(Def);
+
+	// The shot-start pass **is** `FUN_1006e8e0`'s fill loop, which rewrites all four cache slots on
+	// every shot start. It runs before the solve below rather than after it only because the port
+	// has one resolve where retail has a placement and a fill; the values are identical either way,
+	// since the shot-start pass never latches and re-resolves each anchor live.
+	if (Pass == EElysiumShotResolvePass::ShotStart)
+	{
+		FillShotStartCache(World, Def, *Bindings);
+	}
 
 	// The origin selector `+0x594`, the mode-1 think's own order (`FUN_1006f8f0`): `sel == 1`
 	// publishes anchor 0 (`Start`), `sel == 0` publishes anchor 1 (`End`), and the selected anchor is
@@ -1122,11 +1165,30 @@ bool FElysiumCameraDirector::Resolve(FElysiumEntityWorld* World, const FElysiumC
 	// authored a `Target` block at all; one without keeps the entity's own abs angles.
 	const bool bHasTarget = Def.TargetPointCount > 0;
 
+	// **`m_angCamAngles`, published every tick and as a real field of the goal.** `0x1006f8f0` seeds
+	// `fStack_24..1c` from `GetAbsAngles()` (vfunc `0x36c`) unconditionally, replaces them with
+	// `VectorAngles(lookAt - GetOrigin())` under the `+0xd4` gate — `GetOrigin()` is vfunc `0x370`,
+	// the entity's **local** transform, i.e. the shot start's placement and *not* the origin the
+	// selector just chose — and writes the triple to `param_1[0x181..0x183]`. A `Target`-less shot
+	// therefore publishes the entity's abs angles every 24 Hz tick rather than nothing, and an
+	// `End`-driven `Start` shot publishes an angle measured from a point its own origin is not at.
+	//
+	// With no camera entity behind the call the measuring point is the solved origin and the
+	// `+0xd4 == 0` answer is a zero rotation, which is the state a value producer already carries.
+	const FVector AngleOrigin = EntityPose ? EntityPose->Origin : Origin;
+	const FRotator PublishedAngles = bHasTarget
+		? (Look - AngleOrigin).Rotation()
+		: (EntityPose ? EntityPose->Angles : FRotator::ZeroRotator);
+
 	Out = FElysiumCameraShot();
 	Out.DebugName = Def.Name;
 	Out.Origin = Origin;
 	Out.bUseLookAt = bHasTarget;
 	Out.LookAt = Look;
+	Out.Rotation = PublishedAngles;
+	// This resolve **is** the server publish, so the copy-through readers take the triple straight
+	// rather than re-deriving it (`FElysiumCameraShot::bAnglesPublished`).
+	Out.bAnglesPublished = true;
 	// The record's presence flags and its `+0xd4` count travel with the shot: shot start's arm test
 	// (`(flags & 2) == 0 || (flags & 1) != 0`) and the `+0xd4` angle gate are both client-side reads
 	// of the record, and the tracker has no other way to see them.

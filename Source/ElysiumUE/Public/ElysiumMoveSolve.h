@@ -178,6 +178,87 @@ namespace ElysiumMove
 	//
 	// A `MaxSpeed` of zero zeroes the command, which is retail's own arithmetic at that value.
 	bool ClampCommandSpeed(FVector& CommandCmS, float MaxSpeed);
+
+	// --- `CPlayerMove::SetupMove` `0x10186120`: `CMoveData::m_vecAngles` and the grapple glue ----
+	//
+	// **What `m_vecAngles` (`+0x58`) is.** Not the frame the mover resolves forward/side against —
+	// that is `m_vecViewAngles` (`+0x0c`), which `CGameMovement::PlayerMove` `client.dll 0x100edd80`
+	// feeds to `AngleVectors(mv+0x0c, &m_vecForward, &m_vecRight, &m_vecUp)`.
+	// `+0x58` is the **body-angle writeback**: `CPlayerMove::FinishMove` `0x10186c10` clamps its
+	// pitch to ±90, pushes that pitch into the `body_pitch` pose parameter, and calls
+	// `SetLocalAngles(mv->m_vecAngles)` (slot `+0x100`). (This corrects `rc_group_f.md` §RC15.2 and
+	// the same sentence in `docs/vtmb/camera-view-modes.md`; the store listing in both is right, the
+	// consumer named for it is not.)
+	//
+	// **What `SetupMove` writes into it.** Every tick, unconditionally
+	// (`0x10186458`-`0x1018647d`): all three components from `GetAngles()` (slot 221, the entity's
+	// own local angles), then `m_vecAngles.yaw = m_angEyeAngles.y (+0x2070)`. The body's yaw is
+	// snapped to the eye's, its pitch and roll are written back unchanged. At the tail the arm
+	// below can re-take all three from `GetAngles()`, discarding that substitution.
+	//
+	// The port's default arm is `AElysiumPawn`'s `bUseControllerRotationYaw = true` with pitch and
+	// roll off — the same rotation, by the same rule, one frame later in `FaceRotation`.
+	struct FSetupMoveBodyState
+	{
+		// `EHANDLE_Get(player+0x1538) != NULL && player+0x153c != -1` — a live grapple partner.
+		bool bGrapplePartnerLive = false;
+
+		// `m_IdealActivity (+0xff0)` is one of the nine the grapple switch exempts. All nine are
+		// the **release** verbs of the feed families, recovered by name from
+		// `RegisterGrappleActivity` `0x10412590`'s call list in `0x104126e0`:
+		//   0xf88  3976  ACT_FEEDING_FEED_RELEASE
+		//   0xf91  3985  ACT_FEEDING_RELEASE
+		//   0xf9a  3994  ACT_FEEDING_RELEASE_PC_FLYBACK
+		//   0xfb7  4023  ACT_SEDUCTIVE_RELEASE
+		//   0xfc0  4032  ACT_SEDUCTIVE_RELEASE_TO_MEZ
+		//   0xff7  4087  ACT_ZOMBIE_FEEDING_FEED_RELEASE
+		//   0x1000 4096  ACT_ZOMBIE_FEEDING_RELEASE
+		//   0x1009 4105  ACT_ZOMBIE_FEEDING_RELEASE_PC_FL…  (symbol truncated at 32 chars)
+		//   0x1039 4153  ACT_RAT_FEED_RELEASE
+		// So the exemption is not an arbitrary set: **while the release is playing the glue is off
+		// and the player carries himself out of the pairing.** The port's `EElysiumFeedPhase`
+		// `Release`/`ReleaseTail` are those verbs.
+		bool bGrappleReleaseActivity = false;
+
+		// `m_iVFlags & 0x1` — `EElysiumViewFlags::MoveAnglesFromEntity`.
+		bool bMoveAnglesFromEntity = false;
+	};
+
+	// `CBasePlayer::ProcessUsercmds` `0x1016aaf0` and `CPlayerMove::RunCommand` `0x101874a0`, which
+	// carry the same test verbatim:
+	//
+	//     if (player->+0x207c == 0 && !HasAllVFlags(player, 8)) m_angEyeAngles = cmd->viewangles;
+	//
+	// `+0x207c` is the one-shot "a forced snap is pending" latch `FUN_10178550` raises and `0x8` is
+	// the persistent `EElysiumViewFlags::ViewAngleLock` — two doors onto one refusal, and the
+	// one-shot is the higher-priority of the pair because a `point_player` tick or a terminal's
+	// near-arm snap has just written the angles the command would overwrite. `SetupMove` then feeds
+	// `mv->m_vecViewAngles (+0x0c)` from the frozen `m_angEyeAngles` rather than from the command,
+	// so the *move* runs on the frozen view too.
+	bool EyeAnglesAdoptCommand(bool bPendingEyeAngleSnap, bool bViewAngleLock);
+
+	// False when the tail arm re-takes all three components from `GetAngles()`, i.e. when the yaw
+	// substitution made at the top of `SetupMove` is discarded and the body keeps its own yaw.
+	//
+	// Note the precedence, which is the arm's whole shape: **with a live partner the flag is never
+	// consulted** — both switch arms `goto ANGLES_FROM_ENTITY` — and only without one does
+	// `GetVFlags() & 1` decide.
+	bool BodyYawFollowsEye(const FSetupMoveBodyState& State);
+
+	// True in the partner arm: a live grapple outside the nine release verbs. That arm re-origins
+	// the move onto the partner every tick and zeroes the velocity, and it runs whether or not
+	// `m_iVFlags & 0x1` is set. This — not the flag — is what makes a grappled player immobile.
+	bool GrappleGluesBody(const FSetupMoveBodyState& State);
+
+	// `mv->m_vecAbsOrigin = partner->GetOrigin(); mv->m_vecAbsOrigin.z -= (playerMins.z -
+	// partnerMins.z);` — the correction that lines the two collision hulls' feet up. Both operands
+	// are the bottom of an entity's collision bounds **relative to its own origin**; this runtime
+	// places every body's origin at its feet (`AElysiumMapActor::TeleportPlayer`), so both are 0 and
+	// the correction is identically zero. The parameters exist so the recovered term is present at
+	// the point it applies rather than silently folded away, and so a body whose origin ever stops
+	// being its feet fails here instead of drifting.
+	FVector GluedBodyFeetOrigin(const FVector& PartnerFeetOrigin, float PlayerCollisionMinZ,
+		float PartnerCollisionMinZ);
 }
 
 // The timestep.

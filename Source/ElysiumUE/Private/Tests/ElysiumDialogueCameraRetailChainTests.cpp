@@ -560,6 +560,164 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 		}
 	}
 
+	// --- 6b. Both of the opener's failure arms run `SetCineCamera(NULL)` -----------------------
+	//
+	// `0x10178280`'s non-payphone arm is four statements and the last one is unconditional:
+	//
+	//     puVar6 = piVar5[0x1931];                       // npc->default_camera
+	//     if (puVar6 == NULL) puVar6 = &DAT_106b8540;    // the empty string
+	//     piVar5 = FUN_10070470(puVar6, NULL,NULL,NULL,NULL);
+	//     FUN_1017cef0(this, piVar5);                    // cam may be NULL
+	//
+	// `FUN_1017cef0(this, NULL)` clears `m_iCameraOverrideIdx`, drops the handle and destroys the
+	// outgoing camera when it is disposable. So a conversation opened while a terminal shot, a
+	// `StartShot` shot or a previous conversation's camera is adopted **takes that camera down**,
+	// whether or not the NPC's own `default_camera` loads.
+	{
+		FLadderService Ladder;   // the ladder OFF: retail's own answer is what is asserted
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		FElysiumWorldServices Bundle = Services.Bundle();
+		Bundle.Camera = &Ladder;
+		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		World.Load(MakeDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumEntity* SpeakerEnt = World.FindByName(GSpeaker);
+		if (!TestNotNull(TEXT("the speaker exists"), SpeakerEnt))
+		{
+			return false;
+		}
+
+		// Arm one — a name the shot table does not hold. A DISPOSABLE camera is adopted first
+		// (`FUN_10070470` marks every runtime camera `+0x204 |= 4`), which is the terminal /
+		// `StartShot` / previous-conversation case.
+		const FElysiumEntityHandle NoAnchors[FElysiumShotBindings::Num] = {};
+		const FElysiumEntityHandle Outgoing = FElysiumCameraCinematic::CreateRuntimeCamera(World,
+			TEXT("Tourette"), static_cast<int32>(EElysiumCineCamMode::NamedShot), NoAnchors);
+		FElysiumEntity* OutgoingEnt = World.Resolve(Outgoing);
+		if (TestNotNull(TEXT("a disposable camera to be standing in the slot"), OutgoingEnt))
+		{
+			FElysiumCameraCinematic* Cine = OutgoingEnt->AsCameraCinematic();
+			World.SetCineCamera(Cine->Handle, Cine->PublishedShotId, Cine->bDisposable,
+				Cine->ShotDef.Name);
+			TestTrue(TEXT("the outgoing camera owns the slot"), World.HasScriptedCamera());
+
+			World.OpenDialog(SpeakerEnt->Handle, MakeConversation(/*bBark*/ false),
+				EElysiumDialogOpenerKind::Use, 0, TEXT("NoSuchShot"));
+			TestFalse(TEXT("a default_camera that does not load CLEARS the slot"),
+				World.HasScriptedCamera());
+			TestFalse(TEXT("...handle and all"), World.CineCameraEntity().IsSet());
+			const FElysiumEntity* Dead = World.Resolve(Outgoing);
+			TestTrue(TEXT("...and destroys the outgoing disposable camera with it"),
+				Dead == nullptr || Dead->IsDead());
+			World.CloseDialog(/*bSilent*/ false);
+		}
+
+		// Arm two — the NPC names no camera at all. Retail substitutes the empty string
+		// (`&DAT_106b8540`), `FUN_10070470("")` answers NULL, and the same clear runs.
+		const FElysiumEntityHandle Second = FElysiumCameraCinematic::CreateRuntimeCamera(World,
+			TEXT("Tourette"), static_cast<int32>(EElysiumCineCamMode::NamedShot), NoAnchors);
+		FElysiumEntity* SecondEnt = World.Resolve(Second);
+		if (TestNotNull(TEXT("a second camera for the empty-name arm"), SecondEnt))
+		{
+			FElysiumCameraCinematic* Cine = SecondEnt->AsCameraCinematic();
+			World.SetCineCamera(Cine->Handle, Cine->PublishedShotId, Cine->bDisposable,
+				Cine->ShotDef.Name);
+			TestTrue(TEXT("the second camera owns the slot"), World.HasScriptedCamera());
+
+			World.OpenDialog(SpeakerEnt->Handle, MakeConversation(/*bBark*/ false),
+				EElysiumDialogOpenerKind::Use, 0, FString());
+			TestFalse(TEXT("an NPC with no default_camera clears the slot too"),
+				World.HasScriptedCamera());
+			const FElysiumEntity* Dead = World.Resolve(Second);
+			TestTrue(TEXT("...and takes the outgoing disposable camera down"),
+				Dead == nullptr || Dead->IsDead());
+			World.CloseDialog(/*bSilent*/ false);
+		}
+	}
+
+	// --- 6c. `SetShot` stamps `m_nClientResetFrame`, so a per-line `SetCamera` CUTS ------------
+	//
+	// `FUN_1006e130`'s tail is `+0x63c = engine->GetFrameCount(); +0x638 = camMode; return 1;`, so
+	// `FUN_1006e8e0` is not the only stamp site — and it is exactly the site `FUN_1017d020`'s
+	// re-shot arm skips. Every one of the 115 shipped `pc.SetCamera("Shot")` calls therefore arms
+	// `m_bShotStartPending` on the client and runs `FUN_10002210`, which for a `Start`-bearing shot
+	// re-seeds from the **goal**: `m_flSpeed = 0`, the three turn rates 0, `m_bPositionSettled = 1`
+	// and the pose on the framing. A cut, not a dolly.
+	{
+		// A `Start`-bearing shot: `StartsOnGoal()` is `(flags & 2) == 0 || (flags & 1) != 0`, and
+		// ten shipped shots (`kilpatrick`, `tong`, `npcfollow*`, `stealth_kill`, …) have the bit.
+		FElysiumCameraShotDef Kilpatrick;
+		Kilpatrick.Name = TEXT("Kilpatrick");
+		Kilpatrick.Start.bPresent = true;
+		Kilpatrick.Start.Position = EElysiumShotPosition::Player;
+		Kilpatrick.Start.AttachPos = TEXT("Origin");
+		Kilpatrick.Start.AttachPoint = EElysiumShotAttachPos::Origin;
+		Kilpatrick.Start.Attach = EElysiumShotAttach::Follow;
+		Kilpatrick.Start.OffsetOrigin = FVector(-150.0f, 0.0f, 90.0f);
+		Kilpatrick.Constraints.MoveSpeed = 150.0f * ElysiumMove::U;
+		Kilpatrick.Constraints.MoveAccel = 50.0f * ElysiumMove::U;
+		ElysiumCameraShots::Install(TEXT("Kilpatrick"), Kilpatrick);
+
+		FLadderService Ladder;
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		FElysiumWorldServices Bundle = Services.Bundle();
+		Bundle.Camera = &Ladder;
+		FElysiumEntityWorld World(nullptr, nullptr, Bundle);
+		World.Load(MakeDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		// The opener's camera is in the slot; the per-line `SetCamera` re-shots that same entity.
+		World.SetScriptedCamera(TEXT("DialogDefault"), FElysiumEntityHandle::Invalid());
+		const FElysiumEntityHandle Live = World.CineCameraEntity();
+		TestTrue(TEXT("a camera is adopted"), Live.IsSet());
+
+		const int32 StampsBefore = Services.Count(TEXT("RestartCameraShot"));
+		World.SetScriptedCamera(TEXT("Kilpatrick"), FElysiumEntityHandle::Invalid());
+		TestTrue(TEXT("the re-shot lands on the same camera"), World.CineCameraEntity() == Live);
+		TestTrue(TEXT("and SetShot re-stamped m_nClientResetFrame, which arms shot start"),
+			Services.Count(TEXT("RestartCameraShot")) > StampsBefore);
+
+		// The re-shot arm runs no shot start, so the new record reaches the channel on the next
+		// 24 Hz think — which is retail's own split, and is why the stamp above has to come from
+		// `SetShot` rather than from `FUN_1006e8e0`.
+		World.Tick(0.06);
+		World.Tick(0.12);
+
+		// The other half, at the value level the client works at: a new reset frame arms shot
+		// start, and shot start on a `Start`-bearing shot seeds from the goal.
+		FElysiumCameraShot Goal = Services.LastCameraShot;
+		TestTrue(TEXT("the re-shot's goal is Start-bearing, so it starts ON the goal"),
+			Goal.StartsOnGoal());
+
+		FElysiumScriptedShotTracker Tracker;
+		FElysiumShotStartEdges Edges;
+		// Where the previous shot's dolly had got to: away from the framing and moving.
+		FElysiumViewSetup LiveView;
+		LiveView.Location = FVector(-800.0f, 300.0f, 160.0f);
+		LiveView.Rotation = FRotator(5.0f, 200.0f, 0.0f);
+		Tracker.Start(Goal, LiveView);
+		Tracker.Location = LiveView.Location;
+		Tracker.Speed = 120.0f;
+		Tracker.bPositionSettled = false;
+
+		Goal.ResetFrame += 1;   // the stamp `SetShot` just asked the embodiment for
+		Edges.OnDataChanged(Goal, Tracker);
+		TestTrue(TEXT("a new reset frame arms shot start"), Edges.bShotStartPending);
+		Tracker.Start(Goal, LiveView);
+		TestTrue(TEXT("a per-line SetCamera onto a Start-bearing shot CUTS to the goal"),
+			Tracker.Location.Equals(Goal.Origin, 0.01f));
+		TestEqual(TEXT("...with the speed zeroed, so nothing dollies"), Tracker.Speed, 0.0f);
+		TestTrue(TEXT("...and the turn rates with it"), Tracker.TurnRate.IsNearlyZero());
+		TestTrue(TEXT("...and the position marked settled"), Tracker.bPositionSettled);
+	}
+
 	// --- 7. `DialogTarget` resolves to the player's dialogue partner ---------------------------
 	{
 		FLadderService Ladder;

@@ -157,6 +157,35 @@ void AElysiumPawn::SetMovementFrozen(bool bFrozen)
 	}
 }
 
+void AElysiumPawn::FaceRotation(FRotator NewControlRotation, float DeltaTime)
+{
+	// Retail's tail arm is `m_vecAngles = GetAngles()` — all three components, no substitution — so
+	// `FinishMove`'s writeback becomes `SetLocalAngles(GetAngles())` and the body's angles do not
+	// move. Returning here is that no-op exactly: with the yaw substitution suppressed there is
+	// nothing left for `APawn::FaceRotation` to write, because pitch and roll are already off.
+	if (bBodyPosedExternally)
+	{
+		return;
+	}
+	Super::FaceRotation(NewControlRotation, DeltaTime);
+}
+
+void AElysiumPawn::GlueBodyToFeetOrigin(const FVector& FeetOrigin)
+{
+	// `mv->m_vecVelocity = vec3_origin` first: the placement is a hard re-origin, not a move, and a
+	// surviving velocity would be integrated out of the pairing on the same tick.
+	if (Movement)
+	{
+		Movement->Velocity = FVector::ZeroVector;
+	}
+	// Source places an entity's absorigin at its feet and this box is centred, the same conversion
+	// `AElysiumMapActor::TeleportPlayer` makes. `TeleportPhysics` because retail's `SetLocalOrigin`
+	// is an assignment: the glue does not sweep and is not blocked by whatever the partner is
+	// standing in.
+	SetActorLocation(FeetOrigin + FVector(0.0, 0.0, GetBodyHalfHeight()),
+		false, nullptr, ETeleportType::TeleportPhysics);
+}
+
 void AElysiumPawn::ApplyUserCmd(const FElysiumUserCmd& Cmd)
 {
 	if (Movement)

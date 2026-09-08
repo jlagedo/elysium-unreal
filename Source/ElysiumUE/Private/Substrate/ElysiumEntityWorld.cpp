@@ -1001,16 +1001,19 @@ void FElysiumEntityWorld::SetScriptedCamera(const FString& ShotFile, const FElys
 	// camera already in it rather than stacking a second one — which is also why the entity is never
 	// re-placed by the second call. A headless world runs the whole chain: the camera entity exists
 	// and thinks, and only its goal publish (`PublishGoal`) needs an embodiment to reach.
-	// **The two channels are mutually exclusive** (SC2). `CBasePlayer::SetCameraViewEntity`
-	// (`vampire.dll` `FUN_1017d280`) begins with `SetCineCamera(NULL)`, and the map teardown
-	// `FUN_10071970` tears both down together: retail cannot reach a state where a cine camera and a
-	// `camera_track` override both own the view, which is exactly why the release of either is a cut
-	// rather than a blend — there is no "one fading out while the other ramps in" to arbitrate. The
-	// other direction is in `SelectTrackCameraRole`.
+	// **The channel exclusion is one-directional, and this is not the direction.**
+	// `CBasePlayer::SetCameraViewEntity` (`vampire.dll` `FUN_1017d280`, the `camera_track` role
+	// setter) opens with `SetCineCamera(NULL)` — leasing a track role drops the adopted cine camera.
+	// Nothing goes the other way: the listing of `FUN_1017d020` below is four calls and contains no
+	// track-channel step at all, so a `pc.SetCamera(...)` fired while a `camera_track` chain is
+	// running leaves the chain running. The cine arm simply wins in `C_BasePlayer::CalcView`, the
+	// track override composes over it (`CInput::OverrideView` `FUN_100ffb90`, which is the two-branch
+	// apply `UElysiumCameraComponent::ApplyScriptedShotToView` reproduces), and the track is back on
+	// its own when the cine camera dies. The map teardown `FUN_10071970` is what tears both down
+	// together, and that is a teardown rather than an exclusion.
 	//
-	// The track side is cleared with **no blend**: the shots it owned are gone the same tick, which
-	// is what `UTIL_Remove` does to a `camera_track`.
-	ClearTrackCamera(0.0f);
+	// This used to clear the track channel here (landed in `ad54d6e1`); the clear was not retail's
+	// and is gone. The one direction retail does have is in `SelectTrackCameraRole`.
 
 	// **`CBasePlayer::SetCamera` `FUN_1017d020`, verbatim** (SC9):
 	//
@@ -1132,10 +1135,20 @@ bool FElysiumEntityWorld::SelectTrackCameraRole(bool bTargetRole,
 	{
 		return false;
 	}
-	// **`FUN_1017d280` starts with `SetCineCamera(NULL)`** (SC2). Leasing a `camera_track` role drops
-	// whatever cine camera was adopted, unconditionally and on the same tick — the two channels
-	// cannot both own the view. The other direction is in `SetScriptedCamera`.
-	ClearScriptedCamera();
+	// **`FUN_1017d280` starts with `SetCineCamera(NULL)`** (SC2). Leasing the `camera_track` POSITION
+	// role is `SetAsCameraPosition` -> `SetCameraViewEntity` -> `FUN_1017d280`, so it drops whatever
+	// cine camera was adopted, unconditionally and on the same tick — the two channels cannot both
+	// own the view. The other direction is in `SetScriptedCamera`.
+	//
+	// **The TARGET role does not.** `SetAsCameraTarget` reaches `FUN_1017d460`, which has no
+	// `SetCineCamera` call at all (`FUN_1017d280` opens with `PUSH 0; CALL 0x100015cd` at
+	// `0x1017d285`; the target setter has no counterpart) — the exclusion is the VIEW slot's alone.
+	// This used to clear for both roles, which read the view setter's evidence onto the target
+	// setter's path.
+	if (!bTargetRole)
+	{
+		ClearScriptedCamera();
+	}
 	FElysiumEntityHandle& OwnerSlot = bTargetRole
 		? TrackCameraTargetOwner
 		: TrackCameraPositionOwner;
@@ -1156,9 +1169,13 @@ void FElysiumWorldCameraOverrideResolver::ClearCineCamera()
 {
 	// `CBasePlayer::SetCineCamera(NULL)` `FUN_1017cef0`, which `FUN_1017d280` calls first and
 	// unconditionally: the cine channel and the track override channel are mutually exclusive by
-	// construction, so leasing the VIEW role cancels a live scripted shot. SC2 put the same call on
-	// `SelectTrackCameraRole`, one step earlier in the same lease; both are retail's, and
+	// construction, so setting the VIEW entity cancels a live scripted shot. SC2 put the same call
+	// on `SelectTrackCameraRole`, one step earlier in the same lease; both are retail's, and
 	// `ClearScriptedCamera` is idempotent, so the second is a no-op rather than a duplicate.
+	//
+	// **Reaching this at all is a real handoff.** `PublishTrackCamera` routes its per-frame re-drive
+	// of a reaped slot through `ReadoptViewEntity`, which never gets here — the exclusion is a
+	// property of the view entity changing, not of a frame passing.
 	if (World)
 	{
 		World->ClearScriptedCamera();
@@ -1228,9 +1245,23 @@ void FElysiumEntityWorld::PublishTrackCamera(bool bTargetRole,
 			TrackCameraOverride.SetTargetEntity(Now, TrackOwner, BlendInSeconds,
 				TrackCameraOverrideResolver);
 		}
+		else if (TrackCameraOverride.AdoptedViewEntity() == TrackOwner)
+		{
+			// **The slot was reaped under an owner that never stopped being the view entity.**
+			// `GetWeight` clears both handles whenever the mark is not positive, which the port
+			// reaches at substrate time zero (retail's `curtime` never is) — so an occupant that
+			// differs from the lease holder here is not always a handoff. Re-arm without
+			// `SetCineCamera(NULL)`: retail ties that clear to the view entity CHANGING
+			// (`FUN_1017d280`, one call per real handoff), and nothing of retail's runs it on a
+			// per-frame path. Carrying it here dropped a cutscene camera adopted mid-track on the
+			// track's next think.
+			TrackCameraOverride.ReadoptViewEntity(Now, TrackOwner, BlendInSeconds,
+				TrackCameraOverrideResolver);
+		}
 		else
 		{
-			// The view setter drops any live cine shot first, exactly as `FUN_1017d280` does.
+			// A genuinely new view entity — the view setter drops any live cine shot first, exactly
+			// as `FUN_1017d280` does.
 			TrackCameraOverride.SetViewEntity(Now, TrackOwner, BlendInSeconds,
 				TrackCameraOverrideResolver);
 		}
@@ -1408,6 +1439,27 @@ void FElysiumEntityWorld::RunPlayerThink(double Now)
 	FElysiumPlayer* PlayerEnt = FindPlayer();
 	if (!PlayerEnt)
 	{
+		return;
+	}
+	// **The death think, at `CHL2_Player::PreThink`'s own position** (`0x10350830`, tail):
+	//
+	//     if (g_fGameOver) return;
+	//     if (m_iPlayerLocked) return;
+	//     ... ItemPreFrame / water / flags ...
+	//     if (0 < m_lifeState) { PlayerDeathThink(this); return; }
+	//
+	// ONCE PER FRAME, and ahead of the deadline gate below, because retail's death think is not a
+	// `SetThink` target: its friction is per frame and its counter counts frames. The `return` is
+	// retail's own — a dead player runs no ordinary think.
+	//
+	// The `m_iPlayerLocked` gate is **not** reproduced, and that is a recovery rather than an
+	// omission: the field is read by `PreThink`, by `PostThink` (`0x1016be10`) and cleared by
+	// `CBasePlayer::Spawn` (`0x1016d260`), and no function in `vampire.dll` sets it — so in a
+	// shipped run it is always 0 and the gate always passes. It is a different field from
+	// `m_bIsImmobilized` (`+0x19f7`, `FElysiumPlayer::SetImmobilized`), which does NOT gate this.
+	if (!PlayerEnt->IsInert() && !PlayerEnt->IsAlive())
+	{
+		PlayerEnt->PlayerDeathThink();
 		return;
 	}
 	if (PlayerEnt->IsInert() || PlayerEnt->NextThink == ELYSIUM_NEVER_THINK || PlayerEnt->NextThink > Now)
@@ -1641,7 +1693,11 @@ void FElysiumEntityWorld::RunThinks(double Now)
 			continue;
 		}
 		Ent.NextThink = ELYSIUM_NEVER_THINK;
-		Ent.Think();
+		// The tick's substrate second goes **in**: this pass is the one place that has it, and a
+		// leaf whose think is cadenced (the cine camera's 24 Hz accumulator) must measure its own
+		// delta from a parameter rather than read a clock. The default `ThinkAt` forwards to
+		// `Think()`, so every other leaf is unaffected.
+		Ent.ThinkAt(Now);
 	}
 }
 

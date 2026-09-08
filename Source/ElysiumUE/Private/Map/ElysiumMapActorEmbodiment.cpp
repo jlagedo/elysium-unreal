@@ -15,6 +15,7 @@
 #include "ElysiumSurfaceSounds.h"        // A2: FElysiumSurfaceSounds — the surface table's row
 #include "Audio/ElysiumSurfaceSoundTable.h" // A2: the baked PM_<name> loader behind it
 #include "ElysiumMapSubsystem.h"         // the travel owner behind IElysiumTravel
+#include "ElysiumMovementComponent.h"    // the death think's ground friction writes its velocity
 #include "ElysiumPlayerBody.h"           // IElysiumPlayerBody — the pawn's camera accessor
 #include "Audio/ElysiumSoundScheme.h"    // FElysiumSoundSchemeManager — the scheme fade forwards
 #include "Map/ElysiumMapLog.h"
@@ -890,6 +891,44 @@ UElysiumCameraComponent* AElysiumMapActor::PlayerCamera() const
 	const APawn* Pawn = ResolvePlayerPawn();
 	const IElysiumPlayerBody* Body = Cast<IElysiumPlayerBody>(Pawn);
 	return Body ? Body->GetCameraComponent() : nullptr;
+}
+
+void AElysiumMapActor::BleedPlayerBodyVelocity(float StepCm)
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	UElysiumMovementComponent* Move = Pawn != nullptr
+		? Pawn->FindComponentByClass<UElysiumMovementComponent>() : nullptr;
+	if (Move == nullptr)
+	{
+		// No mover on the pawn is the ordinary headless/backdrop answer here, unlike the melee stop
+		// next door: the death think asks every frame for the whole death, and a run with no
+		// movement port has no carried motion for the friction to take off in the first place.
+		return;
+	}
+	// `VectorLength - 20`, then `VectorNormalize * speed` or `vec3_origin` — the component's own
+	// velocity, which is what `SetLocalVelocity` writes and what the published sample is derived
+	// from. The vertical term is inside the length exactly as it is in the original: retail takes
+	// the whole vector, and the arm only runs while the body is on the ground anyway.
+	const float Speed = static_cast<float>(Move->Velocity.Size()) - StepCm;
+	Move->Velocity = Speed > 0.f ? Move->Velocity.GetSafeNormal() * Speed : FVector::ZeroVector;
+}
+
+void AElysiumMapActor::SetPlayerFovOverride(int32 SourceFov)
+{
+	// The replicated integer, handed to the camera that resolves it. A frame with no pawn drops it:
+	// `m_iFOV` is player state and a run with no player is exactly the case retail's `default_fov`
+	// fallback covers.
+	if (UElysiumCameraComponent* Camera = PlayerCamera())
+	{
+		if (SourceFov < 0)
+		{
+			Camera->ClearPlayerFovOverride();   // the seam's "no producer has spoken"
+		}
+		else
+		{
+			Camera->SetPlayerFovOverride(SourceFov);
+		}
+	}
 }
 
 int32 AElysiumMapActor::PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject)

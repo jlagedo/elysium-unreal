@@ -203,6 +203,20 @@ public:
 	void SetViewEntity(double Now, const FElysiumEntityHandle& Entity, float Crossfade,
 		IElysiumCameraOverrideResolver& Resolver);
 
+	// `SetViewEntity` **minus `SetCineCamera(NULL)`**, and nothing else — the port's re-drive of a
+	// view slot the lazy reap emptied under an entity that never stopped being the view entity.
+	//
+	// It has no retail counterpart because retail has no per-frame path into the setter at all:
+	// `FUN_1017d280` is called when the view entity *changes* (an `InputPlayAsCameraPosition`, a
+	// choreo `CameraMove`) and `SetupVisibility` then PULLS the pose out of the slot every frame.
+	// This port inverts that — a `camera_track` PUSHES its sample through
+	// `FElysiumEntityWorld::PublishTrackCamera` every frame — so a slot `GetWeight` has reaped
+	// (`mark <= 0`, which the port reaches at substrate time zero where retail's `curtime` never is)
+	// has to be re-armed from that per-frame path. Carrying the cine clear along would turn retail's
+	// one-time exclusion into a per-frame one and drop a cutscene camera adopted mid-track.
+	void ReadoptViewEntity(double Now, const FElysiumEntityHandle& Entity, float Crossfade,
+		const IElysiumCameraOverrideResolver& Resolver);
+
 	// `FUN_1017d460(player, ent, crossfade)`. **Not a twin of `SetViewEntity`**: it does not clear
 	// the cine camera, it works the target trio, and it notifies through slot 0xB8.
 	void SetTargetEntity(double Now, const FElysiumEntityHandle& Entity, float Crossfade,
@@ -246,6 +260,13 @@ public:
 	double MarkTime() const { return Mark; }
 	float SignedDuration() const { return Duration; }
 	const FSlot& ViewSlot() const { return View; }
+	// **Who the view entity is, as the last *set* left it** — retail's `FUN_1017d280` argument,
+	// kept across `GetWeight`'s reap of `View.Entity`. Retail never needs it: the setter runs once
+	// per real handoff, so the slot handle and the identity are the same fact. The port's per-frame
+	// pusher needs to tell "this slot was reaped under its owner" from "a new entity is taking the
+	// view", and the raw handle cannot: the reaper wipes it without the view entity changing.
+	// `ReleaseSlot` clears it, because giving the slot up IS ceasing to be the view entity.
+	const FElysiumEntityHandle& AdoptedViewEntity() const { return ViewAdopted; }
 	const FSlot& TargetSlot() const { return Target; }
 	const TArray<FEntry>& OutgoingEntries() const { return Entries; }
 	const FPublished& PublishedState() const { return Published; }
@@ -255,6 +276,11 @@ private:
 	// only thing that differs between the two copies is which slot is read — and the kind byte,
 	// which is where the defect is.
 	void PushOutgoing(double Now, EElysiumCameraOverrideKind Kind, const FSlot& Slot,
+		const IElysiumCameraOverrideResolver& Resolver);
+
+	// Everything `FUN_1017d280` does after its opening `SetCineCamera(NULL)`. Shared by the setter
+	// and by the re-drive above, so the two can never drift apart.
+	void AdoptViewEntity(double Now, const FElysiumEntityHandle& Entity, float Crossfade,
 		const IElysiumCameraOverrideResolver& Resolver);
 
 	// `clamp((Now - SetTime)/CrossfadeDuration, 0, 1)`, or 1.0 when the duration is <= 0
@@ -267,4 +293,9 @@ private:
 	FSlot Target;             // +0x19cc/d0/d4
 	TArray<FEntry> Entries;   // +0x19d8 / +0x19e4, newest first
 	FPublished Published;     // the replicated block, persistent
+
+	// **The port's, not retail's** — see `AdoptedViewEntity`. It deliberately survives `Clear`,
+	// because the reap is bookkeeping over a dead mark and not a statement that the view entity
+	// changed; only an explicit `ReleaseSlot` gives it up.
+	FElysiumEntityHandle ViewAdopted;
 };

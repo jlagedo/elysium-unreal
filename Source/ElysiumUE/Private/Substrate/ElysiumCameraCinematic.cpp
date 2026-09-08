@@ -227,15 +227,39 @@ bool FElysiumCameraCinematic::SetShot(const FString& Name, int32 InCamMode,
 	// `Named` answers NULL here and the caller fills the slot.
 	FElysiumCameraDirector::BindAnchors(World, ShotDef, Subject, Bindings);
 
-	// `m_nClientResetFrame` is stamped before the mode; the port's reset edge is the shot-change
-	// edge the camera component already latches off the top shot's id, so there is no separate
-	// frame counter to carry.
-	//
 	// **`CamMode` is written last**, which is what makes the whole update atomic for a reader that
 	// only tests `IsActive()`.
+	//
+	// **And no `ThinkSet`** (M4): `FUN_1006e770` is called by `FUN_1006e8e0` and by nothing on the
+	// `SetShot`-only path. Two things follow, both reproduced. A `SetCamera` re-shot of a camera
+	// left **idle** by a failed `InputStartShot` sets `CamMode = 1` with no think installed, so it
+	// publishes nothing ever; and the 24 Hz phase survives a re-shot, because nothing here resets
+	// the accumulator or the next-think deadline.
 	CamMode = InCamMode;
-	SetCamThink();
+
+	// `m_nClientResetFrame` `+0x63c`. Retail writes it one instruction *before* `CamMode`; the port
+	// writes it after, because the stamp is a call on the published shot handle rather than a field
+	// on this object and no reader sits between the two. This is the stamp `FUN_1017d020`'s re-shot
+	// arm depends on: it never runs the shot start, so without this a mid-conversation `SetCamera`
+	// would leave `FElysiumShotStartEdges` seeing no change and the tracker dollying from its
+	// current speed and pose where retail cuts.
+	RestampClientResetFrame();
 	return true;
+}
+
+void FElysiumCameraCinematic::RestampClientResetFrame()
+{
+	// `engine->GetFrameCount()` into `+0x63c`. An un-adopted camera has no shot handle to stamp —
+	// retail's field is replicated off the entity and reaches nobody while `ShouldTransmit` refuses
+	// it — so the first adoption's stamp rides the push in `PublishGoal` instead.
+	if (PublishedShotId == 0)
+	{
+		return;
+	}
+	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+	{
+		Embodiment->RestartCameraShot(PublishedShotId);
+	}
 }
 
 void FElysiumCameraCinematic::SetShotAnchorEntity(int32 Index, const FElysiumEntityHandle& Entity,
@@ -267,7 +291,13 @@ void FElysiumCameraCinematic::StartShotPlacement()
 	// **before** the cache at `+0x598` is refilled at the bottom of the same function, so a `Start`
 	// block with `AttachType None` places the camera from the *previous* shot's cached anchor.
 	// `special-case.txt`'s `Follow` is the only shipped shot that can see it.
-	SetCamThink();
+	//
+	// This is the one clock read on the whole camera: a shot start is an **event** — an input, a
+	// script call, an anim event — not a think, so it has no tick parameter to take `curtime` from
+	// and retail's own `FUN_1006e770` reads `gpGlobals->curtime` here for the same reason. The
+	// think chain below takes `Now` as a parameter from end to end.
+	const double Now = World ? World->NowSeconds() : 0.0;
+	SetCamThink(Now);
 
 	// The one-deep previous-placement memory. The guard reads the LIVE placement, not the saved
 	// slot, so the first shot on a fresh entity (`+0x564 == vec3_origin` from the constructor)
@@ -296,7 +326,13 @@ void FElysiumCameraCinematic::StartShotPlacement()
 		{
 			PlacementOrigin = StartPoint;
 		}
-		if (bProbed && Probe.bUseLookAt)
+		// **Unconditional** (M3). The listing's arm A is two calls with no `+0xd4` test between
+		// them — `1006e9ab CALL FUN_1006f670` (the look-at, `vec3_origin` when neither `Target`
+		// flag is raised) then `1006e9f0 CALL VectorAngles(dir, &this->+0x57c)`. The gate belongs
+		// to the mode-1 think alone, so a `Start`-bearing `Target`-less shot places the entity
+		// facing the **world origin**, and that is the value the one-deep `+0x588` memory keeps for
+		// the next `End`-only shot to read back.
+		if (bProbed)
 		{
 			PlacementAngles = (Probe.LookAt - PlacementOrigin).Rotation();
 		}
@@ -336,12 +372,21 @@ void FElysiumCameraCinematic::StartShotPlacement()
 	}
 
 	// The shot-start anchor cache at `+0x598 + i*12`, refilled last, and the publish. `Resolve`'s
-	// `ShotStart` pass is exactly that fill: it resolves every anchor live and writes the cache.
+	// `ShotStart` pass is exactly that fill (`FElysiumCameraDirector::FillShotStartCache`): all four
+	// anchors, resolved live and written **unconditionally**, so a second shot start on the same
+	// entity re-latches from the new anchors instead of keeping the first shot's cache — which is
+	// what `InputStartShot`'s re-shot branch and `FindBestShot`'s per-candidate loop depend on.
 	// It cannot fail: an anchor retail cannot resolve answers `vec3_origin` (`0x1006f09b`), so there
 	// is no "the shot did not anchor" state to fall back from.
+	//
+	// The entity pose goes in because `m_angCamAngles` is measured from it, not from the anchor the
+	// selector publishes (`FElysiumShotEntityPose`). At the shot start the two agree for arm A and
+	// the publish below overwrites the angle with the placement anyway; it is passed for the same
+	// reason the think passes it — one producer, one rule.
+	const FElysiumShotEntityPose EntityPose{ PlacementOrigin, PlacementAngles };
 	FElysiumCameraShot Shot;
 	FElysiumCameraDirector::Resolve(World, ShotDef, Subject, Shot, &Bindings,
-		EElysiumShotResolvePass::ShotStart, OriginSelector);
+		EElysiumShotResolvePass::ShotStart, OriginSelector, &EntityPose);
 	Shot.DebugName = ShotDef.Name;
 	// **The shot start publishes the PLACEMENT, not the anchor.** `1006ebcb`/`1006ebe9` write
 	// `m_vecCamOrigin = +0x564` and `m_angCamAngles = +0x57c` — the pose the entity was just moved
@@ -355,30 +400,24 @@ void FElysiumCameraCinematic::StartShotPlacement()
 	// `1006ebaf`: `m_nClientResetFrame = engine->GetFrameCount()`, **every shot start** — including
 	// a re-shot of the camera the player has already adopted, whose id never changes. The first
 	// adoption's stamp rides the push below; a re-shot needs the explicit re-stamp, and the 24 Hz
-	// publish must not do it (that would re-seed the tracker every tick).
-	if (PublishedShotId != 0)
-	{
-		if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
-		{
-			Embodiment->RestartCameraShot(PublishedShotId);
-		}
-	}
+	// publish must not do it (that would re-seed the tracker every tick). Retail stamps twice on
+	// this path — `FUN_1006e130`'s tail and then here — and the second write is idempotent.
+	RestampClientResetFrame();
 	PublishGoal(Shot);
 }
 
-void FElysiumCameraCinematic::SetExpiry(float Seconds)
+void FElysiumCameraCinematic::SetExpiry(float Seconds, double Now)
 {
-	// `FUN_1006e8b0`: `+0x55c = curtime + secs`.
-	ExpiryTime = static_cast<float>((World ? World->NowSeconds() : 0.0)) + Seconds;
+	// `FUN_1006e8b0`: `+0x55c = curtime + secs`. `curtime` is the tick's own second, handed in.
+	ExpiryTime = static_cast<float>(Now) + Seconds;
 }
 
-void FElysiumCameraCinematic::SetCamThink()
+void FElysiumCameraCinematic::SetCamThink(double Now)
 {
 	// `FUN_1006e770`: mode 0 installs no think at all; every other arm ends with
 	// `m_flNextThink = curtime + 1/24`. The port's think queue is deadline-driven, so the entity
 	// asks to be woken now and gates the publish on its own accumulator inside `Think()` — which is
 	// what lets the 24 Hz cadence be measured against the caller's delta instead of a clock read.
-	const double Now = World ? World->NowSeconds() : 0.0;
 	NextThink = CamMode == 0 ? ELYSIUM_NEVER_THINK : static_cast<float>(Now);
 	LastThinkNow = -1.0;
 	ThinkAccumulator = 0.0f;
@@ -407,8 +446,11 @@ void FElysiumCameraCinematic::DrawDebugGeometryOverlays(int32 ShowDebugCvarValue
 	// dark red); a 3-unit pulsing red box at the look-at; and the look-at printed with retail's own
 	// unbalanced `"(%.1f, %.1f, %.1f"` format string.
 	//
-	// The substrate has no debug-draw seam (`ElysiumWorldServices` carries no line/box primitive),
-	// so the hook is the gate and the diagnostic; the geometry lands when that seam exists.
+	// **M16 — ruled by the owner, 2026-09-07: no overlay is drawn.** `camera_showdebug 1` does
+	// nothing on live retail (the draw path is dead in the shipped build), so there is no behaviour
+	// to reproduce and no diagnostic worth rebuilding. The cvar stays declared under retail's own
+	// name, the `== 1` gate stays asserted, the recovered geometry stays recorded above and in
+	// `docs/project/camera_scripted.md` §7, and the substrate grows no debug-draw seam for it.
 	UE_LOG(LogElysiumCineCam, Verbose,
 		TEXT("%s: camera_showdebug 1 — shot '%s', mode %d, origin %s"),
 		*DebugString(), *ShotDef.Name, CamMode, *PlacementOrigin.ToCompactString());
@@ -416,9 +458,8 @@ void FElysiumCameraCinematic::DrawDebugGeometryOverlays(int32 ShowDebugCvarValue
 
 // --- The 24 Hz think ---------------------------------------------------------------------------
 
-void FElysiumCameraCinematic::Think()
+void FElysiumCameraCinematic::ThinkAt(double Now)
 {
-	const double Now = World ? World->NowSeconds() : 0.0;
 	if (CamMode == 0)
 	{
 		// `ThinkSet(NULL)`.
@@ -429,9 +470,9 @@ void FElysiumCameraCinematic::Think()
 	// Ask to be woken on the next world tick; the cadence is the accumulator's, not the queue's.
 	NextThink = static_cast<float>(Now);
 
-	// `FElysiumEntityWorld::Tick(double Now)` hands an ABSOLUTE substrate second, so the delta is
-	// measured here, between successive stamps, and no clock is read
-	// (`.claude/rules/cpp.md` — DeltaTime arrives as a parameter).
+	// `FElysiumEntityWorld::RunThinks(double Now)` hands an ABSOLUTE substrate second **as a
+	// parameter**, so the delta is measured here, between successive stamps, and no clock is read
+	// anywhere under this entry (`.claude/rules/cpp.md` — DeltaTime arrives as a parameter).
 	const float Delta = LastThinkNow >= 0.0
 		? static_cast<float>(FMath::Max(0.0, Now - LastThinkNow))
 		: 0.0f;
@@ -449,7 +490,7 @@ void FElysiumCameraCinematic::Think()
 	// once and keeps 0.458 s, so the goal advances at 24 Hz and never bursts — which is what retail
 	// does through `m_flNextThink`, one think per frame at most.
 	ThinkAccumulator -= ElysiumCineCam::ThinkInterval;
-	RunCamThink();
+	RunCamThink(Now);
 }
 
 bool FElysiumCameraCinematic::ThinkPrologue(double Now)
@@ -468,13 +509,13 @@ bool FElysiumCameraCinematic::ThinkPrologue(double Now)
 	return false;
 }
 
-void FElysiumCameraCinematic::RunCamThink()
+void FElysiumCameraCinematic::RunCamThink(double Now)
 {
 	// `FUN_1006e770`'s jump table, every arm.
 	switch (CamMode)
 	{
 	case static_cast<int32>(EElysiumCineCamMode::NamedShot):
-		ThinkNamedShot();
+		ThinkNamedShot(Now);
 		return;
 	case static_cast<int32>(EElysiumCineCamMode::OnRails):
 		// `0x1006fde0` is an **empty function** on the server and `FUN_10002200` is a confirmed
@@ -482,26 +523,25 @@ void FElysiumCameraCinematic::RunCamThink()
 		// last replicated pose through. It is a real arm of the jump table and it is ported as the
 		// nothing it is — including running the prologue, which is what would expire it if anything
 		// ever armed its expiry.
-		ThinkPrologue(World ? World->NowSeconds() : 0.0);
+		ThinkPrologue(Now);
 		return;
 	case static_cast<int32>(EElysiumCineCamMode::FollowEntity):
-		ThinkFollowEntity();
+		ThinkFollowEntity(Now);
 		return;
 	case static_cast<int32>(EElysiumCineCamMode::Animated):
-		ThinkAnimated();
+		ThinkAnimated(Now);
 		return;
 	default:
 		// `default:` (`CamMode > 4`) — reachable because `CamMode` replicates in 4 bits. It installs
 		// `CamEndThink` **only** when the expiry is armed and past, and otherwise installs no think
 		// at all while still re-arming `m_flNextThink`.
-		ThinkPrologue(World ? World->NowSeconds() : 0.0);
+		ThinkPrologue(Now);
 		return;
 	}
 }
 
-void FElysiumCameraCinematic::ThinkNamedShot()
+void FElysiumCameraCinematic::ThinkNamedShot(double Now)
 {
-	const double Now = World ? World->NowSeconds() : 0.0;
 	if (ThinkPrologue(Now))
 	{
 		return;
@@ -524,9 +564,21 @@ void FElysiumCameraCinematic::ThinkNamedShot()
 	// Steps 1, 2, 4 and 5 — and arms 0/1 of step 3 — are `FElysiumCameraDirector::Resolve`'s, which
 	// is the one solver both the dialogue ladder and this entity share. Arm 2 of the selector is
 	// applied here, because it is the arm that says "do not touch the origin at all".
+	//
+	// Step 5 is the one that needs the entity's own transform, and needs it as two separate reads:
+	// `GetAbsAngles()` (vfunc `0x36c`) seeds the published triple **unconditionally**, and
+	// `GetOrigin()` (vfunc `0x370` — the LOCAL transform, i.e. the placement `FUN_1006e8e0` wrote
+	// with `SetOrigin(+0x564)`) is the point the look-at angle is measured from. Neither is the
+	// origin the `+0x594` selector publishes, so retail publishes an origin from anchor 1 and an
+	// angle measured from anchor 0's placement and the two disagree for the whole shot. Handing the
+	// pair to `Resolve` is what makes `m_angCamAngles` a real field of the goal rather than
+	// something the client re-derives — the mode-1 tracker does re-derive its per-frame aim from
+	// `m_vecLookAt - m_vecCurOrigin` (`FUN_10001d40`), but the shot-start seed (`FUN_10002210`,
+	// `0x474..0x47c = 0x428..0x430`) and every copy-through mode read the published triple straight.
+	const FElysiumShotEntityPose EntityPose{ PlacementOrigin, PlacementAngles };
 	FElysiumCameraShot Shot;
 	FElysiumCameraDirector::Resolve(World, ShotDef, Subject, Shot,
-		&Bindings, EElysiumShotResolvePass::Think, OriginSelector);
+		&Bindings, EElysiumShotResolvePass::Think, OriginSelector, &EntityPose);
 	if (OriginSelector == EElysiumShotOriginSelector::Entity)
 	{
 		// `sel == 2` — "leave the entity's own abs origin alone". `Resolve` has already suppressed
@@ -538,11 +590,17 @@ void FElysiumCameraCinematic::ThinkNamedShot()
 	DecorateGoal(Shot);
 	PublishGoal(Shot);
 
-	// Step 7, last and every tick.
-	ApplyForcePlayerLook(Shot.bUseLookAt ? Shot.LookAt : Shot.Origin);
+	// Step 7, last and every tick — and the argument is `m_vecCamTarget`, **always**:
+	// `thunk_FUN_10178590(this, param_1[0x17e], param_1[0x17f], param_1[0x180])`. That field is
+	// `FUN_1006f670`'s answer, which is `vec3_origin` when neither `Target` flag is raised, so with
+	// `m_bForcePlayerLook` 1 by construction retail spins the subject toward `(0,0,0)` every tick of
+	// a `Target`-less shot. It never aims him at the lens; the port did, which was a divergence on
+	// `special-case.txt`'s `Follow` and `Animated`, the two shipped shots with no `Target` block.
+	// `Resolve` already leaves `LookAt` at zero on that arm.
+	ApplyForcePlayerLook(Shot.LookAt);
 }
 
-void FElysiumCameraCinematic::ThinkFollowEntity()
+void FElysiumCameraCinematic::ThinkFollowEntity(double Now)
 {
 	// `FUN_1006fe00`, verbatim.
 	//
@@ -562,7 +620,7 @@ void FElysiumCameraCinematic::ThinkFollowEntity()
 		// shot**, and retail then dereferences the dead handle and faults the server.
 		ExpiryTime = 0.0f;
 	}
-	if (ThinkPrologue(World ? World->NowSeconds() : 0.0))
+	if (ThinkPrologue(Now))
 	{
 		return;
 	}
@@ -595,7 +653,7 @@ void FElysiumCameraCinematic::ThinkFollowEntity()
 	PublishGoal(Shot);
 }
 
-void FElysiumCameraCinematic::ThinkAnimated()
+void FElysiumCameraCinematic::ThinkAnimated(double Now)
 {
 	// `FUN_1006f870`, verbatim:
 	//
@@ -613,9 +671,9 @@ void FElysiumCameraCinematic::ThinkAnimated()
 	const FElysiumEntity* Anchor = World ? World->Resolve(Bindings.Anchors[0].Entity) : nullptr;
 	if (!Anchor)
 	{
-		SetExpiry(0.0f);
+		SetExpiry(0.0f, Now);
 	}
-	if (ThinkPrologue(World ? World->NowSeconds() : 0.0))
+	if (ThinkPrologue(Now))
 	{
 		return;
 	}
@@ -646,6 +704,11 @@ void FElysiumCameraCinematic::DecorateGoal(FElysiumCameraShot& Shot) const
 	Shot.bCine = true;
 	Shot.bTracked = CamMode == static_cast<int32>(EElysiumCineCamMode::NamedShot);
 	Shot.BlendSeconds = 0.0f;
+	// **This entity is the server publish.** Every arm that reaches here has written a real
+	// `m_angCamAngles` into `Shot.Rotation` — the mode-1 think's `+0xd4` answer measured from the
+	// placement, the shot start's `+0x57c`, mode 3's anchor abs angles — so the client's
+	// copy-through readers take the triple straight instead of re-deriving it from the look-at.
+	Shot.bAnglesPublished = true;
 	// `m_bDrawPlayer` `+0x640`, the director's `spawnflags & 2` copied onto the runtime camera by
 	// `FUN_10070780` and forced to 1 by anim event 4050. SC5 consumes it.
 	Shot.Presentation.bDrawPlayerBody = bDrawPlayerBody;

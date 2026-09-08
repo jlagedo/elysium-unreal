@@ -90,16 +90,28 @@ struct FElysiumScriptedShotView
 	float ChannelWeight() const { return Cine.bLive ? 1.0f : Weight; }
 };
 
-// `CViewRender::CalcView`'s last arm (`client.dll` `0x10191200`, tail `0x1019158e`-`0x101915f2`):
-// when the engine's view entity index is **strictly above** `IVEngineClient::GetMaxClients()` — 1 in
-// single player, so any index of 2 or more — origin and angles are hard-replaced by that entity's
-// abs origin and abs angles. The FOV is **not** touched. That is VtMB's death / observer view; there
-// is no separate death, feed or seduction `CalcView` arm (RC10).
-struct FElysiumSpectatedView
+namespace ElysiumCameraView
 {
-	FVector Origin = FVector::ZeroVector;
-	FRotator Angles = FRotator::ZeroRotator;
-};
+	// `m_iFOV` (`CBasePlayer+0x1e78`), resolved the way the client resolves it.
+	//
+	// The player's own FOV override is an INTEGER whose zero means "no override", and the client
+	// HUD think (`client.dll` `FUN_100f28d0`) latches that zero to **60** before
+	// `IVEngineClient::SetFieldOfView` ever sees it:
+	//
+	//     if (localplayer && localplayer->m_iFOV == 0) localplayer->m_iFOV = 0x3c;   // 60
+	//
+	// `default_fov` (75) is only reached by `FUN_100f12b0` when there is **no local player at all**
+	// — it is the no-player fallback, not the play lens (RC14 §3c, correcting RC10).
+	inline constexpr int32 NoPlayerFovOverride = 0;
+	inline constexpr float ZeroFovLatchDegrees = 60.0f;
+
+	// The whole rule, as a function of the override alone, so a test can assert it with no camera.
+	inline float LatchPlayerFov(int32 SourceFov)
+	{
+		return SourceFov == NoPlayerFovOverride
+			? ZeroFovLatchDegrees : static_cast<float>(SourceFov);
+	}
+}
 
 UCLASS()
 class UElysiumCameraComponent : public UCameraComponent
@@ -271,15 +283,21 @@ public:
 	void SetOrthographic(bool bOrtho) { bOrthographic = bOrtho; }
 	bool IsOrthographic() const { return bOrthographic; }
 
-	// The spectator replace (`CViewRender::CalcView`'s last arm, RC10). **The seam answers nothing
-	// yet**: the port has no observer, death-cam or spectator producer, so nothing calls this, and it
-	// stands for retail's `IVRenderView::GetViewEntity()` (slot 39 on `VEngineRenderView008`) with the
-	// `index > GetMaxClients()` test already made by whoever would write it. When it is set, the base
-	// view's origin and angles are replaced outright and the FOV is left alone, in retail's own place
-	// in the order — after the ordinary view, ahead of the cine hard write.
-	void SetSpectatedView(const FElysiumSpectatedView& View) { SpectatedView = View; }
-	void ClearSpectatedView() { SpectatedView.Reset(); }
-	const TOptional<FElysiumSpectatedView>& GetSpectatedView() const { return SpectatedView; }
+	// `m_iFOV` (`CBasePlayer+0x1e78`), the player's own FOV override, replicated to the client and
+	// resolved there by `ElysiumCameraView::LatchPlayerFov`.
+	//
+	// Retail's writers are the scope path (`CWeaponRanged::FUN_10239d10` / `FUN_10239d80`),
+	// `FUN_100d2d80`, `CHL2_Player::Spawn` (`0x1016d260`, writes 0) and
+	// `CBasePlayer::Event_Killed` (`0x10163af0`, writes 0 — cancel any weapon zoom). The port has no
+	// scope yet, so **death is the one producer**, and what it produces is the zero that latches 60.
+	//
+	// Unset means "no `m_iFOV` producer has spoken", and the lens is then `default_fov` — which is
+	// the port's own standing lens decision (`docs/vtmb/camera-view-modes.md` -> "The lens"), NOT
+	// retail's resolution of a zero override. The two disagree while alive and agree once death has
+	// written the zero; the divergence is recorded in that document rather than hidden here.
+	void SetPlayerFovOverride(int32 SourceFov) { PlayerFovOverride = SourceFov; }
+	void ClearPlayerFovOverride() { PlayerFovOverride.Reset(); }
+	const TOptional<int32>& GetPlayerFovOverride() const { return PlayerFovOverride; }
 
 	// Debug.
 	// The solved boom length in cm (0 in first person), for `elysium_player_get` and the Cog window.
@@ -384,8 +402,8 @@ private:
 	FElysiumShotHudGate HudGate;
 	// `CInput+0x1b8`, the `camortho` latch.
 	bool bOrthographic = false;
-	// Retail's spectated view entity, when something ever sets it. See `SetSpectatedView`.
-	TOptional<FElysiumSpectatedView> SpectatedView;
+	// `m_iFOV`. Unset until a producer writes it; see `SetPlayerFovOverride`.
+	TOptional<int32> PlayerFovOverride;
 	// Set by the shot mutation phase; cleared only when CalcCamera publishes the cut to Unreal.
 	bool bTemporalCameraCutPending = false;
 

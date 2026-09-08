@@ -224,6 +224,31 @@ enum class EElysiumShotResolvePass : uint8
 	Think,
 };
 
+// The camera **entity's own transform**, as `0x1006f8f0` reads it — and it is not the pose the
+// resolve publishes.
+//
+//   `pfVar5 = (**(code **)(*param_1 + 0x36c))();  fStack_24..1c = *pfVar5;`   // GetAbsAngles()
+//   ... the origin selector picks the published origin from anchor 0 or anchor 1 ...
+//   `if (0 < rec->+0xd4) { pfVar5 = (**(code **)(*param_1 + 0x370))();        // GetOrigin(), LOCAL
+//                          VectorAngles(lookAt - *pfVar5, &fStack_24); }`
+//   `param_1[0x181..0x183] = fStack_24..1c;`                                  // m_angCamAngles
+//
+// `vfunc 0x370` is the pose `FUN_1006e8e0` wrote with `SetOrigin(+0x564)` — the shot start's
+// **placement** — while `param_1[0x17b..0x17d]` publishes the *selector's* origin. So retail
+// publishes an origin from one anchor and an angle measured from another, and on every `End`-driven
+// `Start` shot (and on all five `AutoPositionFromTarget` shots, where the angle is measured from the
+// pre-pull-back placement) the two disagree for the whole shot. The `+0xd4 == 0` answer is the
+// entity's abs angles, seeded unconditionally and never zero.
+//
+// A caller with no camera entity behind it — the dialogue ladder resolves a shot file as pure
+// values — passes nothing and gets the solved origin as the measuring point, which is the same
+// answer whenever the placement and the published origin coincide.
+struct FElysiumShotEntityPose
+{
+	FVector Origin = FVector::ZeroVector;      // `GetOrigin()` vfunc `0x370` == `+0x564`
+	FRotator Angles = FRotator::ZeroRotator;   // `GetAbsAngles()` vfunc `0x36c` == `+0x57c`
+};
+
 namespace ElysiumCameraShots
 {
 	// Normalize every observed `default_camera` value form to one identity: separators are folded,
@@ -263,6 +288,16 @@ namespace ElysiumCameraShots
 	// The same seam for a multi-shot file: install the whole authored list under one key, so a
 	// fixture can drive `LoadNamed` with no export mounted.
 	void InstallNamed(const FString& ShotFile, TArrayView<const FElysiumCameraShotDef> Defs);
+
+	// The opposite seam: remember `ShotFile` as a **miss**, so `Load`/`LoadNamed` answer null without
+	// touching disk. It seeds the very entry `LoadFile` writes when the file is not on disk (a null
+	// list under the normalized key), so the "cannot resolve this shot" path a test drives is the
+	// production path and not a second one.
+	//
+	// A test that wants a shot absent cannot get there with `FlushCache` alone: `vdata/camerashots/`
+	// is shipped corpus and, on a machine with the export mounted, a flushed cache simply re-reads
+	// the real file. Paired with `FlushCache` by every caller, exactly as `Install` is.
+	void InstallMiss(const FString& ShotFile);
 
 	const TCHAR* LexToString(EElysiumShotPosition Position);
 	const TCHAR* LexToString(EElysiumShotAttach Attach);
@@ -367,11 +402,33 @@ public:
 	// an anchor whose EHANDLE is dead and the caller cannot tell — so an unanchored shot frames the
 	// world origin rather than being refused. The `bool` is kept because it reads as one at every
 	// call site and because a future arm may want it; nothing may key behaviour off `false`.
+	//
+	// `EntityPose` is the camera entity's own transform, the pair `0x1006f8f0` reads through vfuncs
+	// `0x36c` and `0x370` to build `m_angCamAngles` — see `FElysiumShotEntityPose`. It is what makes
+	// the published angle a real field of the goal rather than something the reader re-derives, and
+	// a caller without a camera entity passes nothing.
 	static bool Resolve(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
 		const FElysiumEntityHandle& Subject, FElysiumCameraShot& Out,
 		FElysiumShotBindings* Bindings = nullptr,
 		EElysiumShotResolvePass Pass = EElysiumShotResolvePass::ShotStart,
-		EElysiumShotOriginSelector OriginSelector = EElysiumShotOriginSelector::EndAnchor);
+		EElysiumShotOriginSelector OriginSelector = EElysiumShotOriginSelector::EndAnchor,
+		const FElysiumShotEntityPose* EntityPose = nullptr);
+
+	// `FUN_1006e8e0`'s anchor-cache fill loop, `1006eb2f`-`1006eba5`, on its own:
+	//
+	//     for (i = 0; i < 4; ++i)
+	//       if (!handleLive(+0x584 + i)) { +0x598 + i*12 = vec3_origin; }
+	//       else                         { +0x598 + i*12 = FUN_1006f080(this, &tmp, i); }
+	//
+	// **Every shot start, unconditionally, all four anchors** — and never through the cache-aware
+	// reader `FUN_1006f010`, so a second shot start on the same entity re-latches from the new
+	// anchors rather than keeping the first shot's cache. `FUN_1006e0e0` (the mode clear)
+	// deliberately does not clear the cache, which is what makes the ordering trap RC3 exposes
+	// visible; this is the other half of that pair, and without it a re-shot of a latching shot —
+	// `InputStartShot`'s re-shot branch, and `FindBestShot`'s per-candidate loop, where a latching
+	// candidate would poison the ones after it — keeps a stale point forever.
+	static void FillShotStartCache(FElysiumEntityWorld* World, const FElysiumCameraShotDef& Def,
+		FElysiumShotBindings& Bindings);
 
 	// Retail's `SetShot` anchor loop: resolve each anchor's `Position` to an entity and bind it.
 	// Exposed because the shot-start pass and `SetShotAnchorEntity` share it.

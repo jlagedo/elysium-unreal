@@ -1150,6 +1150,36 @@ public:
 	// touches a component.
 	virtual void StopPlayerBody() {}
 
+	// `PlayerDeathThink`'s ground friction (`0x101668b0`, the `FL_ONGROUND` arm): take `StepCm` off
+	// the body's carried speed **along its own direction**, and stop dead when that would cross zero.
+	// Retail's expression, verbatim:
+	//
+	//     speed = VectorLength(GetAbsVelocity()) - 20.0;            // `_DAT_1044eb0c` = 20 units
+	//     if (speed > 0) { v = GetAbsVelocity(); VectorNormalize(v); SetLocalVelocity(v * speed); }
+	//     else             SetLocalVelocity(vec3_origin);
+	//
+	// It is **not** `StopPlayerBody`: that is the melee tail's instantaneous stop and it also clears
+	// the published locomotion record. This one is a per-frame bleed whose whole point is that the
+	// view keeps composing over a shrinking velocity — `V_CalcRoll` (and retail's `CalcBob`) read it
+	// for two or three more frames while the body settles, which is the only motion the death view
+	// has. A caller passing a step at or above the current speed gets the same zero.
+	//
+	// Deliberately a command with a step rather than a "set the velocity": the substrate decides
+	// WHEN and by HOW MUCH on retail's own constant, and never touches a movement component.
+	virtual void BleedPlayerBodyVelocity(float StepCm) {}
+
+	// `m_iFOV` (`CBasePlayer+0x1e78`), the player's own FOV override, pushed at the camera.
+	// **Zero is not "no FOV"** — it is the value the client latches to 60 (`FUN_100f28d0`), which is
+	// what `CBasePlayer::Event_Killed` writes and therefore what the death view renders at. The
+	// resolution lives on the camera (`ElysiumCameraView::LatchPlayerFov`) because that is where the
+	// client resolves it; the substrate only replicates the integer.
+	//
+	// A **negative** clears the override, which is the port's "no producer has spoken" state and not
+	// a retail value: retail's field is always live and its living value is 0, while this port's
+	// living lens is `default_fov` (the named lens decision in
+	// `docs/vtmb/camera-view-modes.md` -> "The lens"). `Spawn` clears; death writes the 0.
+	virtual void SetPlayerFovOverride(int32 SourceFov) {}
+
 	// CNPCMaker's host geometry. The substrate owns admission order and all policy; these four calls
 	// only answer the engine-shaped questions at the point each guard is reached. Defaults are the
 	// supported headless/fail-open posture.

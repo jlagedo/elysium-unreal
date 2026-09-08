@@ -1457,8 +1457,13 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 			LensView.FOV = 90.0f;
 			LensView.AspectRatio = 4.0f / 3.0f;
 			LensCamera->ApplyToView(LensView);
-			TestTrue(TEXT("the player view renders default_fov, not the engine's 90"),
-				FMath::IsNearlyEqual(static_cast<float>(LensView.FOV), 75.0f, 0.01f));
+			// Retail's living lens is the `m_iFOV == 0` latch (`CHud::Think` `FUN_100f28d0` at
+			// `0x100f29c0`, unconditional), not `default_fov`: `CHL2_Player::Spawn` writes the zero and
+			// `ClientModeShared::Update` hands the latched 60 to `SetFieldOfView`. `default_fov` is
+			// reached only with no local player (`rc_living_fov.md`).
+			TestTrue(TEXT("the player view renders retail's 60-degree latch, not default_fov or the engine's 90"),
+				FMath::IsNearlyEqual(static_cast<float>(LensView.FOV),
+					ElysiumCameraView::ZeroFovLatchDegrees, 0.01f));
 		}
 	}
 
@@ -2513,14 +2518,20 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	return true;
 }
 
-// The two channels are mutually exclusive — SC2.
+// The channel exclusion is **one-directional** — SC2.
 //
 // `CBasePlayer::SetCameraViewEntity` (`vampire.dll` `FUN_1017d280`, the `camera_track` role setter)
-// **opens with `SetCineCamera(NULL)`**, and nothing anywhere in the cine path touches `+0x19b8`; the
-// map teardown `FUN_10071970` tears both channels down together. Retail therefore cannot reach a
-// state where an adopted cine camera and a live track override both own the view — which is exactly
-// why the release of either is a cut (M1) and not a blend: there is no "one fading out while the
-// other ramps in" for a blend to arbitrate.
+// **opens with `SetCineCamera(NULL)`**: leasing a track role drops the adopted cine camera, on the
+// same tick and unconditionally.
+//
+// **Nothing goes the other way.** `CBasePlayer::SetCamera` `FUN_1017d020` is four calls — the
+// `GetCineCamera()` test, the two `FUN_10070470` factories and `FUN_1017cef0` — and contains no
+// track-channel step at all. So a `pc.SetCamera(...)` fired while a `camera_track` chain is running
+// leaves the chain running: the cine arm wins in `C_BasePlayer::CalcView`, the track override
+// composes over it (`CInput::OverrideView` `FUN_100ffb90`, the two-branch apply
+// `UElysiumCameraComponent::ApplyScriptedShotToView` reproduces), and the track has the view back
+// on its own when the cine camera dies. What tears both down together is the map teardown
+// `FUN_10071970`, which is a teardown and not an exclusion.
 //
 // A separate case rather than an edit to the temporal-cut cluster above, so the exclusion rule reads
 // as its own claim and survives SC4 rebuilding the adoption slot underneath it.
@@ -2534,8 +2545,35 @@ bool FElysiumCameraChannelExclusionTest::RunTest(const FString&)
 	Track.Classname = TEXT("camera_track");
 	Track.TargetName = TEXT("pos");
 	Track.Origin = FVector(100.0f, 0.0f, 0.0f);
-	Track.Keys.Add(TEXT("Pause"), TEXT("30"));      // long enough that nothing completes on its own
+	// Two keyframes, so the tick below crosses a KEYFRAME HANDOFF inside one playing track. Retail
+	// samples keyframes inside `CCameraTrack` and a keyframe never becomes the view entity — the
+	// track entity is, for the whole chain — so a handoff must not re-run `FUN_1017d280` and must
+	// not clear the cine camera.
+	Track.Keys.Add(TEXT("TimeControl"), TEXT("1"));
+	Track.Keys.Add(TEXT("MoveTime"), TEXT("0.4"));
+	Track.Keys.Add(TEXT("NextKey"), TEXT("pos_end"));
+	Track.Keys.Add(TEXT("HoldAtEnd"), TEXT("1"));
 	Defs.Defs.Add(MoveTemp(Track));
+
+	FElysiumEntityDef TrackEnd;
+	TrackEnd.Classname = TEXT("camera_keyframe");
+	TrackEnd.TargetName = TEXT("pos_end");
+	TrackEnd.Origin = FVector(200.0f, 0.0f, 0.0f);
+	TrackEnd.Keys.Add(TEXT("Pause"), TEXT("30"));   // long enough that nothing completes on its own
+	// `OnReachedKeyframe` fires from the keyframe that is reached, so this counter is the handoff
+	// itself rather than the play that started the chain.
+	FElysiumOutputDef Reached;
+	Reached.Name = TEXT("OnReachedKeyframe");
+	Reached.Target = TEXT("reached");
+	Reached.Input = TEXT("Add");
+	Reached.Param = TEXT("1");
+	TrackEnd.Outputs.Add(MoveTemp(Reached));
+	Defs.Defs.Add(MoveTemp(TrackEnd));
+
+	FElysiumEntityDef ReachedCounter;
+	ReachedCounter.Classname = TEXT("math_counter");
+	ReachedCounter.TargetName = TEXT("reached");
+	Defs.Defs.Add(MoveTemp(ReachedCounter));
 
 	// SC9 rebuilt `SetScriptedCamera` into `CBasePlayer::SetCamera` `FUN_1017d020`, which creates a
 	// real runtime `camera_cinematic` off the named shot and needs both a subject (player 1, through
@@ -2562,27 +2600,58 @@ bool FElysiumCameraChannelExclusionTest::RunTest(const FString&)
 		World.AcceptInput(TEXT("pos"), FName(TEXT("PlayAsCameraPosition")), FElysiumVariant::Void(),
 			FElysiumEntityHandle(), FElysiumEntityHandle());
 	};
+	const auto KeyframesReached = [&World]()
+	{
+		TArray<TPair<FString, FString>> Rows;
+		if (FElysiumEntity* Counter = World.FindByName(TEXT("reached")))
+		{
+			Counter->GetDebugState(Rows);
+		}
+		for (const TPair<FString, FString>& Row : Rows)
+		{
+			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+		}
+		return -1.0f;
+	};
 
 	// A track lease, alone.
 	PlayTrack();
 	TestTrue(TEXT("the track lease owns the view"), World.HasTrackCamera());
 	TestFalse(TEXT("and no cine camera is adopted"), World.HasScriptedCamera());
+	TestEqual(TEXT("the track starts on its root keyframe, having handed off to nothing yet"),
+		KeyframesReached(), 0.0f);
 
-	// Adopting a cine camera drops it — `SetCamera` is "*the* cinematic camera mode".
+	// Adopting a cine camera over it changes nothing about the track: `FUN_1017d020` has no track
+	// step. Both channels are live, and the compose puts the track over the cine pose.
 	World.SetScriptedCamera(TEXT("jack"), FElysiumEntityHandle());
 	TestTrue(TEXT("the cine camera is adopted"), World.HasScriptedCamera());
-	TestFalse(TEXT("and the adoption cleared the live track lease"), World.HasTrackCamera());
-	TestFalse(TEXT("including the role itself, so a superseded track cannot reclaim it"),
+	TestTrue(TEXT("and the live track lease survives it — SetCamera has no track step"),
+		World.HasTrackCamera());
+	TestTrue(TEXT("including the role, which nothing on the cine path releases"),
 		World.TrackCameraOwner(/*bTargetRole*/ false).IsSet());
 
-	// The superseded track's own clock keeps running and still cannot take the view back.
+	// The track's own clock keeps running underneath the adopted camera. `MoveTime 0.4` means this
+	// tick lands past the first keyframe, so it is a keyframe HANDOFF as well as a plain think.
 	World.Tick(1.0);
-	TestFalse(TEXT("a running track that lost its lease does not repossess the view"),
-		World.HasTrackCamera());
+	TestTrue(TEXT("the track keeps running under the cine camera"), World.HasTrackCamera());
+	TestEqual(TEXT("...and it handed off to its second keyframe on the way"),
+		KeyframesReached(), 1.0f);
+	// **A keyframe handoff is not a view-entity change.** Retail samples the chain inside
+	// `CCameraTrack`; a `camera_keyframe` never becomes the view entity, the TRACK is the view
+	// entity for the whole chain, so nothing re-enters `FUN_1017d280` and nothing re-runs its
+	// `SetCineCamera(NULL)`. Nothing on any per-frame path clears the cine camera at all.
 	TestTrue(TEXT("and the cine camera is untouched by it"), World.HasScriptedCamera());
+	TestTrue(TEXT("including across the keyframe handoff, which is no view-entity change"),
+		World.HasScriptedCamera() && World.TrackCameraOwner(/*bTargetRole*/ false).IsSet());
+	World.Tick(1.5);
+	TestTrue(TEXT("and a further think inside the same keyframe leaves it adopted too"),
+		World.HasScriptedCamera());
 
-	// And the other direction: leasing a track role clears the adopted camera, retail's
+	// The one direction retail does have: leasing a track role clears the adopted camera, retail's
 	// `SetCineCamera(NULL)` at the top of `FUN_1017d280`.
+	World.ClearTrackCamera(/*BlendOutSeconds*/ 0.0f);
+	TestFalse(TEXT("the track releases"), World.HasTrackCamera());
+	TestTrue(TEXT("leaving the cine camera adopted"), World.HasScriptedCamera());
 	PlayTrack();
 	TestTrue(TEXT("the track lease is back"), World.HasTrackCamera());
 	TestFalse(TEXT("and leasing it dropped the adopted cine camera"), World.HasScriptedCamera());
@@ -2953,6 +3022,204 @@ bool FElysiumViewStateTest::RunTest(const FString&)
 	FElysiumVitals Bled = Same;
 	Bled.BloodPool = Same.BloodPool - 1;
 	TestTrue(TEXT("and neither does one point of blood"), Bled != Same);
+
+	return true;
+}
+
+// The death view (RC14) — what the camera does when the player dies, which is almost nothing.
+//
+// Retail ships **no** death camera and no reachable observer mode: nothing in `vampire.dll` ever
+// sets a view entity, `StartDeathCam` / `StartObserverMode` are behind `IsMultiplayer()` (a
+// `return 0`), and `CalcView`'s view-entity replace is the `cl_view_entity` console command's
+// rendering. The view stays on the player's own eye, at the position and view offset he died at,
+// with the FOV snapped back to 60 and a velocity the death think bleeds to nothing.
+//
+// Every number here is `docs/vtmb/camera-view-modes.md` -> "The death view".
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDeathViewTest, "Elysium.Substrate.DeathView", GElysiumTestFlags)
+bool FElysiumDeathViewTest::RunTest(const FString&)
+{
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__death_view__");
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("the death-view case has a player"), Player))
+	{
+		return false;
+	}
+
+	// The lens, live. A bare component so the compose is the production `ApplyToView` with no pawn,
+	// no rig and no RHI; a 4:3 window, so `WidenSourceFov` passes the angle through untouched and
+	// every number below is the Source angle itself.
+	UElysiumCameraComponent* Camera = NewObject<UElysiumCameraComponent>();
+	if (!TestNotNull(TEXT("...and a camera component"), Camera))
+	{
+		return false;
+	}
+	auto Compose = [Camera]()
+	{
+		FMinimalViewInfo View;
+		View.Location = FVector(0.0f, 0.0f, 160.0f);
+		View.Rotation = FRotator::ZeroRotator;
+		View.AspectRatio = 4.0f / 3.0f;
+		Camera->ApplyToView(View);
+		return View;
+	};
+	// The substrate replicates `m_iFOV`; the camera resolves it. The double records the integer, and
+	// this is the wire between them, stated once.
+	auto ReplicateFov = [Camera, &Services]()
+	{
+		if (Services.PlayerFovOverride.IsSet()) { Camera->SetPlayerFovOverride(*Services.PlayerFovOverride); }
+		else                                    { Camera->ClearPlayerFovOverride(); }
+	};
+
+	++GFrameCounter;
+	Camera->AdvanceFrame(1.0f / 60.0f);
+	ReplicateFov();
+	const FMinimalViewInfo Alive = Compose();
+	TestTrue(TEXT("the player starts alive"), Player->IsAlive());
+	TestFalse(TEXT("and nothing has written m_iFOV"), Services.PlayerFovOverride.IsSet());
+	// **The living lens is the zero-`m_iFOV` latch, 60 — not `default_fov`** (RC14,
+	// `rc_living_fov.md`). `ClientModeShared::Update` (`client.dll FUN_100f12b0`) runs `CHud::Think`
+	// (`FUN_100f28d0`) first, whose latch at `0x100f29c0` is unconditional — `MOV [ESI+0x1690],0x3c`
+	// whenever `m_iFOV == 0` — and only then hands `(float)m_iFOV` to `SetFieldOfView`.
+	// `default_fov.GetFloat()` (75) is reached only on the **no-local-player** branch
+	// (`0x100f12dc JZ`): the menu, a load, the frames before the player arrives. `CHL2_Player::Spawn`
+	// (`0x1016d260`) writes `m_iFOV = 0`, so a living player renders 60, which is the same number the
+	// dead one below renders — the death write is a zoom cancel, not a death FOV.
+	TestTrue(TEXT("so the living lens is the zero-m_iFOV latch, 60 — not default_fov"),
+		FMath::IsNearlyEqual(static_cast<float>(Alive.FOV),
+			ElysiumCameraView::ZeroFovLatchDegrees, 0.01f));
+	TestTrue(TEXT("and default_fov, the no-local-player fallback the play lens never reaches, is 75"),
+		FMath::IsNearlyEqual(Camera->GetCvars().DefaultFov, 75.0f, 0.01f));
+
+	// A live cine shot, adopted BEFORE the death. Retail's client runs `ClientModeVampire::
+	// OverrideView` after `CalcView`, and no death-path function calls `SetCineCamera`,
+	// `FUN_1017d280` or `FUN_1017d6d0` — so a cutscene camera keeps the view straight through a
+	// death and ends on its own terms. No `FieldOfView`, so the shot keeps the player's lens, which
+	// is what makes the FOV assertions below about the death write rather than about the shot.
+	FElysiumCameraShot Cine;
+	Cine.bCine = true;
+	Cine.bTracked = true;
+	Cine.BlendSeconds = 0.0f;
+	Cine.Origin = FVector(-4000.0f, 250.0f, 900.0f);
+	Cine.LookAt = Cine.Origin + FVector(0.0f, 300.0f, 0.0f);
+	Cine.bUseLookAt = true;
+	Cine.DebugName = TEXT("death-view cine");
+	const int32 CineId = Camera->PushShot(Cine);
+	++GFrameCounter;
+	Camera->AdvanceFrame(1.0f / 60.0f);
+	const FMinimalViewInfo Adopted = Compose();
+	TestTrue(TEXT("the adopted cine shot owns the view before the death"),
+		Adopted.Location.Equals(Cine.Origin, 0.01f));
+
+	// The eye, and the body's carried motion, as the death finds them.
+	const FVector DiedAt = Player->Origin;
+	Services.bPlayerOnGround = true;
+	Services.PlayerBodySpeedCm = 300.0f;
+
+	// `CBasePlayer::Event_Killed` `0x10163af0`. Called at its terminus rather than through the
+	// damage pipeline: this case is about what death DOES, not about what kills.
+	Player->OnKilled();
+	ReplicateFov();
+
+	TestEqual(TEXT("the life state is LIFE_DYING"), static_cast<int32>(Player->LifeState),
+		static_cast<int32>(EElysiumLifeState::Dying));
+	TestTrue(TEXT("Event_Killed wrote m_iFOV"), Services.PlayerFovOverride.IsSet());
+	TestEqual(TEXT("...and what it wrote is ZERO — cancel the weapon zoom, not a death FOV"),
+		Services.PlayerFovOverride.Get(-1), 0);
+	TestTrue(TEXT("which the client latches to 60, not to default_fov's 75"),
+		FMath::IsNearlyEqual(ElysiumCameraView::LatchPlayerFov(0), 60.0f, 0.001f));
+	TestTrue(TEXT("the eye keeps the position it died at — BecomeClientRagdoll never moves it"),
+		Player->Origin.Equals(DiedAt, 0.01f));
+
+	// The composed view, after death: the cine shot still wins, and the FOV is 60.
+	const FMinimalViewInfo Dead = Compose();
+	TestTrue(TEXT("the composed field of view is 60 while the record still says 75"),
+		FMath::IsNearlyEqual(static_cast<float>(Dead.FOV), 60.0f, 0.01f)
+			&& FMath::IsNearlyEqual(Camera->GetCvars().DefaultFov, 75.0f, 0.01f));
+	TestTrue(TEXT("the cine shot adopted before the death still composes after it"),
+		Dead.Location.Equals(Cine.Origin, 0.01f));
+	TestTrue(TEXT("...and death did not pop the shot off the stack"),
+		Camera->GetShots().Num() > 0 && CineId != 0);
+
+	// Without the shot, the base view is the player's own eye at 60 — the death view proper.
+	Camera->PopShot(CineId, 0.0f);
+	++GFrameCounter;
+	Camera->AdvanceFrame(1.0f / 60.0f);
+	const FMinimalViewInfo Eye = Compose();
+	TestTrue(TEXT("with the shot gone the eye is where it was, un-replaced by any spectated entity"),
+		Eye.Location.Equals(FVector(0.0f, 0.0f, 160.0f), 0.01f)
+			&& Eye.Rotation.Equals(FRotator::ZeroRotator, 0.01f));
+	TestTrue(TEXT("still at 60"),
+		FMath::IsNearlyEqual(static_cast<float>(Eye.FOV), 60.0f, 0.01f));
+
+	// --- `PlayerDeathThink` `0x101668b0`, once per FRAME from `PreThink`'s tail -------------------
+	//
+	// The death performance a headless body cannot play would take the transition on the first
+	// frame (retail's `GetModelIndex() == 0` arm), so the 60-frame cap is asserted against a
+	// sequence that is still running — which is the arm that has the constant in it.
+	Player->DeathAnimEndTime = World.NowSeconds() + 1000.0;
+	// A button is held, so the `LIFE_DEAD -> LIFE_RESPAWNABLE` step cannot run in the same frame the
+	// `LIFE_DYING -> LIFE_DEAD` one does — which it otherwise would, exactly as retail's does.
+	World.SetPlayerButtons(static_cast<uint64>(EElysiumButton::Attack));
+
+	World.RunPlayerThink(0.0);
+	TestEqual(TEXT("one death-think frame has been counted"), Player->DeathFrames, 1.0f);
+	TestTrue(TEXT("the ground friction took 20 SOURCE UNITS off the carried speed, not 20 cm"),
+		FMath::IsNearlyEqual(Services.PlayerBodySpeedCm, 300.0f - 20.0f * ElysiumMove::U, 0.01f));
+
+	for (int32 Frame = 2; Frame <= 59; ++Frame)
+	{
+		World.RunPlayerThink(0.0);
+	}
+	TestEqual(TEXT("59 frames in, the player is still LIFE_DYING"),
+		static_cast<int32>(Player->LifeState), static_cast<int32>(EElysiumLifeState::Dying));
+	TestTrue(TEXT("and the friction has bled the body to a standstill and left it there"),
+		FMath::IsNearlyEqual(Services.PlayerBodySpeedCm, 0.0f, 0.01f));
+
+	World.RunPlayerThink(0.0);
+	TestEqual(TEXT("the 60th frame is the transition to LIFE_DEAD"),
+		static_cast<int32>(Player->LifeState), static_cast<int32>(EElysiumLifeState::Dead));
+	TestTrue(TEXT("...carrying interface/final_death.wav, the sequence's one cue"),
+		Services.Saw(TEXT("Submit interface/final_death.wav")));
+
+	World.RunPlayerThink(0.0);
+	TestEqual(TEXT("a held button keeps it there"), static_cast<int32>(Player->LifeState),
+		static_cast<int32>(EElysiumLifeState::Dead));
+
+	World.SetPlayerButtons(0);
+	World.RunPlayerThink(0.0);
+	TestEqual(TEXT("the first button-free frame reaches LIFE_RESPAWNABLE"),
+		static_cast<int32>(Player->LifeState), static_cast<int32>(EElysiumLifeState::Respawnable));
+
+	// And there it stays. `StartDeathCam`, `mp_forcerespawn` and `respawn()` are all behind
+	// `CHalfLife2::IsMultiplayer()` = `return 0`, so nothing in the game ends the state.
+	for (int32 Frame = 0; Frame < 120; ++Frame)
+	{
+		World.RunPlayerThink(0.0);
+	}
+	TestEqual(TEXT("two more seconds of frames do not respawn, re-camera or advance anything"),
+		static_cast<int32>(Player->LifeState), static_cast<int32>(EElysiumLifeState::Respawnable));
+	TestTrue(TEXT("the eye never moved through any of it"), Player->Origin.Equals(DiedAt, 0.01f));
+
+	// The one exit: a load, which runs `CHL2_Player::Spawn` (slot 103).
+	Player->Spawn();
+	ReplicateFov();
+	TestTrue(TEXT("a load clears the death"), Player->IsAlive());
+	TestFalse(TEXT("and hands the lens back"), Services.PlayerFovOverride.IsSet());
+	// `Spawn` writes `m_iFOV = 0` exactly as `Event_Killed` did, so the lens comes back to the same
+	// latched 60 it had while alive — the whole death costs the view nothing (`rc_living_fov.md` §1,
+	// rows (a) and (b)).
+	TestTrue(TEXT("which is the zero-m_iFOV latch again, the same 60 it was alive"),
+		FMath::IsNearlyEqual(static_cast<float>(Compose().FOV),
+			ElysiumCameraView::ZeroFovLatchDegrees, 0.01f));
 
 	return true;
 }

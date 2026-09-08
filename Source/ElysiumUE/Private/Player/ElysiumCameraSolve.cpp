@@ -594,6 +594,24 @@ float ElysiumCam::RemainingTranslationSeconds(float Speed, float MaxSpeed, float
 
 namespace
 {
+	// `m_angCamAngles` as the two copy-through readers see it — `FUN_10002210`'s goal arm
+	// (`0x474..0x47c = 0x428..0x430`) and `FUN_10001a20`'s fall-through. Both copy the replicated
+	// triple straight across; **neither re-derives it from the look-at**, which is what makes an
+	// `End`-driven `Start` shot open aimed from its `Start` placement while its origin is the `End`
+	// anchor's (the `+0xd4` gate in `0x1006f8f0` measures from `GetOrigin()` and publishes the
+	// selector's origin, and the two disagree for the whole shot).
+	//
+	// A port value shot has no server half to publish that triple (`bAnglesPublished` false) and
+	// states its aim as a look-at, so the derive stands in for the publish it never ran.
+	FRotator PublishedShotAngles(const FElysiumCameraShot& Shot)
+	{
+		if (Shot.bAnglesPublished || !Shot.bUseLookAt)
+		{
+			return Shot.Rotation;
+		}
+		return (Shot.LookAt - Shot.Origin).Rotation();
+	}
+
 	// `Approach` (`FUN_10001070`), verbatim from the listing `0x10001070`-`0x100010ae`:
 	//
 	//     cur > goal -> cur - rate*dt        (`FSUBR`, 0x10001081, no clamp at the goal)
@@ -691,8 +709,13 @@ void FElysiumScriptedShotTracker::Start(const FElysiumCameraShot& Shot,
 		// The **replicated-goal** arm — no `End`, or an authored `Start`. `m_vecCurOrigin`,
 		// `m_angCurAngles` and `m_vecShotStart` all come from the goal, so the shot opens on its own
 		// framing and the tracker has nothing to close.
+		//
+		// `m_angCurAngles = m_angCamAngles` (`0x10002253`-`0x10002265`): the **published** angle,
+		// copied through. Retail does not re-derive it from the look-at here, and for an
+		// `End`-driven `Start` shot the two differ — the goal origin is the `End` anchor's and the
+		// published angle was measured from the `Start` placement (`PublishedShotAngles`).
 		Location = Shot.Origin;
-		Rotation = Shot.bUseLookAt ? (Shot.LookAt - Shot.Origin).Rotation() : Shot.Rotation;
+		Rotation = PublishedShotAngles(Shot);
 		Rotation.Roll = Shot.Roll;
 	}
 	else
@@ -734,7 +757,7 @@ void FElysiumScriptedShotTracker::Snap(const FElysiumCameraShot& Shot)
 	// only then overwritten from the look-at on the `CamMode == 1` arm below. The net pose is the
 	// same for a tracked shot, but `Snap()` is a public entry point and a copy-through shot reaching
 	// it directly must land on the replicated angles rather than keep whatever it had.
-	Rotation = Shot.bUseLookAt ? (Shot.LookAt - Shot.Origin).Rotation() : Shot.Rotation;
+	Rotation = PublishedShotAngles(Shot);
 	Rotation.Roll = Shot.Roll;
 	bPositionSettled = true;
 	Speed = 0.0f;

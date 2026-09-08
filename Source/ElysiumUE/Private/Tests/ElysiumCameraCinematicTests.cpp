@@ -11,6 +11,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
+#include "ElysiumClassRegistry.h"   // FElysiumClassDesc — the camera_animated leaf is found by class
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -20,6 +21,7 @@
 #include "Substrate/ElysiumCameraAnimated.h"
 #include "Substrate/ElysiumCameraCinematic.h"
 #include "ElysiumContentPaths.h"
+#include "ElysiumSaveTypes.h"   // the map snapshot: the port's whole ObjectCaps transition carry
 #include "Tests/ElysiumMapSlice.h"
 #include "Tests/ElysiumTestServices.h"
 
@@ -291,28 +293,41 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 		// (`0x10253ea0` / `0x103eaec0`). All five read ONE latch, which is `IsMobile()` here.
 		TestFalse(TEXT("StartShot immobilized the player"), PlayerEnt->IsMobile());
 		{
-			// Move, jump and duck: `AElysiumPlayerController::ProcessPlayerInput` answers
-			// `!IsMobile()` with `ClearMovement()`, which is the port's `SetupMove` button mask.
+			// `CPlayerMove::SetupMove` `0x10186120`, the whole of what the immobilize does to a
+			// command: `mv->m_nButtons &= ~DAT_10589050` with `DAT_10589050 == 0x807`
+			// (`IN_ATTACK | IN_JUMP | IN_DUCK | IN_ATTACK2`), and `forward = side = up = 0` in the
+			// same gate. That is `FElysiumUserCmd::ApplyImmobilize` and **not** `ClearMovement`:
+			// the two clear disjoint halves of the command and mean opposite things. Retail leaves
+			// the direction bits standing (the analog pair is already zeroed) and drops the combat
+			// ones.
 			FElysiumUserCmd Cmd;
 			Cmd.Move = FVector2D(1.0f, 1.0f);
+			Cmd.Up = 1.0f;
 			Cmd.Buttons = static_cast<uint64>(EElysiumButton::Forward)
 				| static_cast<uint64>(EElysiumButton::Jump)
 				| static_cast<uint64>(EElysiumButton::Duck)
-				| static_cast<uint64>(EElysiumButton::Attack);
-			Cmd.ClearMovement();
+				| static_cast<uint64>(EElysiumButton::Attack)
+				| static_cast<uint64>(EElysiumButton::Attack2)
+				| static_cast<uint64>(EElysiumButton::Use);
+			Cmd.ApplyImmobilize();
 			TestTrue(TEXT("the immobilize gate zeroes the wish move"), Cmd.Move.IsNearlyZero());
-			TestEqual(TEXT("... and drops forward"),
-				Cmd.Buttons & static_cast<uint64>(EElysiumButton::Forward), 0ull);
+			TestEqual(TEXT("... and the up axis with it"), Cmd.Up, 0.0f);
+			TestEqual(TEXT("0x807 drops attack"),
+				Cmd.Buttons & static_cast<uint64>(EElysiumButton::Attack), 0ull);
 			TestEqual(TEXT("... and jump"),
 				Cmd.Buttons & static_cast<uint64>(EElysiumButton::Jump), 0ull);
 			TestEqual(TEXT("... and duck"),
 				Cmd.Buttons & static_cast<uint64>(EElysiumButton::Duck), 0ull);
-			// The weapon consumer is `FElysiumEntityWorld::UpdatePlayerWeaponFrame`, which takes the
-			// same `!IsMobile()` early-out (`ElysiumEntityWorldInteraction.cpp`) — the attack bit is
-			// deliberately still set on the command, because retail does not mask it either: it is
-			// `ItemPostFrame` that refuses to act on it.
-			TestTrue(TEXT("attack survives the mask; ItemPostFrame is what refuses it"),
-				(Cmd.Buttons & static_cast<uint64>(EElysiumButton::Attack)) != 0);
+			TestEqual(TEXT("... and attack2"),
+				Cmd.Buttons & static_cast<uint64>(EElysiumButton::Attack2), 0ull);
+			// **`IN_USE` is not in the mask.** Every shipped opener that immobilizes does it *for*
+			// an interaction the player is holding `+use` on, so masking it would make the
+			// interaction unendable — an immobilized player can still press use.
+			TestTrue(TEXT("IN_USE survives the mask: an immobilized player can still end the shot"),
+				(Cmd.Buttons & static_cast<uint64>(EElysiumButton::Use)) != 0);
+			// The direction bits are not masked either; retail zeroes the analog pair instead.
+			TestTrue(TEXT("and the direction bits stand, inert, exactly as retail leaves them"),
+				(Cmd.Buttons & static_cast<uint64>(EElysiumButton::Forward)) != 0);
 		}
 
 		// --- 3. A director survives its own StartShot -------------------------------------------
@@ -747,7 +762,9 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 				const FElysiumEntity* Alive = World.Resolve(H);
 				TestTrue(TEXT("mode 5 with no expiry armed is not removed"),
 					Alive != nullptr && !Alive->IsDead());
-				Cine->SetExpiry(0.0f);
+				// `FUN_1006e8b0(this, 0.0)` — `+0x55c = curtime`. `curtime` is handed in, because
+				// nothing under the think chain reads a clock.
+				Cine->SetExpiry(0.0f, Now);
 				Step(0.1);
 				const FElysiumEntity* Gone = World.Resolve(H);
 				TestTrue(TEXT("mode 5 past its expiry is removed"),
@@ -909,9 +926,379 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 		TestTrue(TEXT("camera_showdebug 1 shows the overlay"), ElysiumCineCam::ShowsDebug(1));
 		TestFalse(TEXT("camera_showdebug 2 does NOT"), ElysiumCineCam::ShowsDebug(2));
 		TestFalse(TEXT("camera_showdebug 0 does not"), ElysiumCineCam::ShowsDebug(0));
-		// `CBaseCineCam::ObjectCaps()` clears the base's single `FCAP_ACROSS_TRANSITION`.
-		TestEqual(TEXT("a cine camera carries no object caps at all"),
-			FElysiumCameraCinematic::ObjectCaps(), 0);
+
+		// **`ShouldTransmit` (slot 86), called.** Its two recovered rules are "only to the client
+		// whose player is `m_hSubject`" and "only while `CamMode != 0`"; the base's force-transmit
+		// window (`+0x90 > curtime`) has no port counterpart and its producer is unrecovered.
+		// Asserting the slot means calling the predicate on a real camera in every state, not
+		// naming it in a section header.
+		//
+		// And `ObjectCaps`: `CBaseCineCam::ObjectCaps()` clears the base's single
+		// `FCAP_ACROSS_TRANSITION` (RC2.4), so a live scripted shot is never carried across a
+		// `trigger_changelevel`. The port's whole carry is `FElysiumEntityWorld::Freeze`, which
+		// reads the cap — so the assertion is the freeze, not a literal compared with itself.
+		ElysiumCameraShots::FlushCache();
+		ElysiumCameraShots::Install(TEXT("LookAtTarget_Snap"), LookAtTargetSnap());
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.PlayerLocation = FVector(0.0f, 0.0f, 100.0f);
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__cine_transmit__");
+		Defs.Defs.Add(Point(TEXT("tutwareportal03"), FVector(900.0f, 0.0f, 120.0f)));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		const FElysiumEntity* Ordinary = World.FindByName(TEXT("tutwareportal03"));
+		const FElysiumEntityHandle NoAnchors[FElysiumShotBindings::Num] = {};
+		const FElysiumEntityHandle TransmitHandle = FElysiumCameraCinematic::CreateRuntimeCamera(
+			World, TEXT("LookAtTarget_Snap"),
+			static_cast<int32>(EElysiumCineCamMode::NamedShot), NoAnchors);
+		FElysiumEntity* TransmitEntity = World.Resolve(TransmitHandle);
+		FElysiumCameraCinematic* Transmit =
+			TransmitEntity ? TransmitEntity->AsCameraCinematic() : nullptr;
+		if (TestNotNull(TEXT("a runtime camera to ask ShouldTransmit about"), Transmit)
+			&& TestNotNull(TEXT("and an ordinary entity to compare caps against"), Ordinary))
+		{
+			const FElysiumPlayer* Subject = World.FindPlayer();
+			const FElysiumEntityHandle SubjectHandle =
+				Subject ? Subject->Handle : FElysiumEntityHandle::Invalid();
+			TestTrue(TEXT("an active camera transmits to its own subject"),
+				Transmit->ShouldTransmit(SubjectHandle));
+			// A recipient that is not `m_hSubject`, standing in for a second client: retail's shot
+			// is invisible to it.
+			TestFalse(TEXT("... and to nobody else"),
+				Transmit->ShouldTransmit(Ordinary->Handle));
+			TestFalse(TEXT("... nor to an unset recipient"),
+				Transmit->ShouldTransmit(FElysiumEntityHandle::Invalid()));
+
+			// The caps, through the BASE's virtual — the wire, not the leaf's literal.
+			const FElysiumEntity* AsBase = TransmitEntity;
+			TestEqual(TEXT("a cine camera carries no object caps at all"),
+				AsBase->ObjectCaps(), 0);
+			TestEqual(TEXT("while an ordinary entity carries the transition bit"),
+				Ordinary->ObjectCaps() & ElysiumEntityCaps::AcrossTransition,
+				ElysiumEntityCaps::AcrossTransition);
+
+			// A live scripted shot is not written into the map snapshot, so walking back into the
+			// map cannot restore one — and it is not recorded *absent* either, which is what would
+			// delete a map-placed director on the next load.
+			FElysiumMapSnapshot Snapshot;
+			World.Freeze(Snapshot);
+			bool bCarried = false;
+			for (const FElysiumEntityState& State : Snapshot.Entities)
+			{
+				bCarried = bCarried || State.Index == TransmitHandle.Index;
+			}
+			TestFalse(TEXT("the freeze does not carry a live cine camera across the transition"),
+				bCarried);
+			TestFalse(TEXT("nor record it absent"),
+				Snapshot.AbsentEntities.Contains(TransmitHandle.Index));
+
+			// `CamMode == 0` refuses every client, which is the port's "the goal is released".
+			Transmit->ClearMode();
+			TestFalse(TEXT("an idle camera transmits to nobody, subject included"),
+				Transmit->ShouldTransmit(SubjectHandle));
+		}
+	}
+
+	// --- 14. A shot with **no `Target` block**: the published angles, and `point_player` ----------
+	//
+	// `0x1006f8f0` seeds `fStack_24..1c` from `GetAbsAngles()` (vfunc `0x36c`) **unconditionally**
+	// and publishes them at `param_1[0x181..0x183]`; the `+0xd4` gate only decides whether they are
+	// *replaced* by `VectorAngles(lookAt - GetOrigin())`. So a `TargetPointCount == 0` shot carries
+	// the entity's own angles at every 24 Hz publish, not a zero rotation.
+	//
+	// And the tail is `thunk_FUN_10178590(this, param_1[0x17e..0x180])` — `m_vecCamTarget`,
+	// **always**, which is `vec3_origin` when neither `Target` flag is raised. With
+	// `m_bForcePlayerLook` 1 by construction, retail spins the subject toward `(0,0,0)`.
+	//
+	// `special-case.txt`'s `Follow` is one of the two shipped shots that can reach this.
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallSpecialCase();
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.PlayerLocation = FVector(0.0f, 0.0f, 100.0f);
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__cine_no_target__");
+		Defs.Defs.Add(Point(TEXT("anchor"), FVector(600.0f, 0.0f, 200.0f)));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		FElysiumEntity* AnchorEnt = World.FindByName(TEXT("anchor"));
+		FElysiumPlayer* PlayerEnt = World.FindPlayer();
+		if (TestNotNull(TEXT("the anchor exists"), AnchorEnt)
+			&& TestNotNull(TEXT("and the player"), PlayerEnt))
+		{
+			FElysiumEntityHandle Anchors[FElysiumShotBindings::Num] = {};
+			Anchors[0] = AnchorEnt->Handle;
+			const FElysiumEntityHandle H = FElysiumCameraCinematic::CreateRuntimeCamera(World,
+				TEXT("Follow"), static_cast<int32>(EElysiumCineCamMode::NamedShot), Anchors);
+			FElysiumCameraCinematic* Cine = CineOf(World, H);
+			if (TestNotNull(TEXT("the Target-less shot loads and places"), Cine))
+			{
+				// `FUN_1006e8e0`'s arm A is unconditional (M3): `FUN_1006f670` answers
+				// `vec3_origin` and `VectorAngles` of the direction to it is what `+0x57c` keeps.
+				// So the placement faces the world origin from the anchor.
+				const FRotator FacingOrigin =
+					(FVector::ZeroVector - Cine->PlacementOrigin).Rotation();
+				TestTrue(TEXT("a Target-less Start shot places facing the world origin"),
+					Cine->PlacementAngles.Equals(FacingOrigin, 0.05f));
+
+				TestFalse(TEXT("the published goal has no look-at"),
+					Services.LastCameraShot.bUseLookAt);
+				TestTrue(TEXT("and the shot start publishes the placement angles"),
+					Services.LastCameraShot.Rotation.Equals(Cine->PlacementAngles, 0.05f));
+
+				// The 24 Hz think: the angles are published again, and are NOT a zero rotation.
+				World.Tick(0.001);
+				World.Tick(0.06);
+				TestTrue(TEXT("every think republishes the entity's abs angles, not zero"),
+					Services.LastCameraShot.Rotation.Equals(Cine->PlacementAngles, 0.05f));
+				TestFalse(TEXT("which is not the zero rotation the port used to publish"),
+					Services.LastCameraShot.Rotation.IsNearlyZero());
+				// The goal carries a real `m_angCamAngles`, so the client copies it through rather
+				// than re-deriving it.
+				TestTrue(TEXT("the goal is marked as a real m_angCamAngles publish"),
+					Services.LastCameraShot.bAnglesPublished);
+
+				// `point_player`: `m_vecCamTarget` is `vec3_origin`, and it is passed anyway.
+				TestTrue(TEXT("the Target-less shot still raises the subject's eye snap"),
+					PlayerEnt->HasPendingEyeAngleSnap());
+				TestTrue(TEXT("aimed at the world origin, not at the lens"),
+					PlayerEnt->PendingEyeLookPoint.IsNearlyZero());
+			}
+		}
+	}
+
+	// --- 15. The `+0xd4` gate measures from the PLACEMENT, not from the published origin ----------
+	//
+	// `if (0 < rec->+0xd4) { pfVar5 = GetOrigin(); VectorAngles(lookAt - *pfVar5, &fStack_24); }`
+	// with `GetOrigin()` (vfunc `0x370`) the entity's LOCAL transform — the pose `FUN_1006e8e0`
+	// wrote with `SetOrigin(+0x564)` — while `param_1[0x17b..0x17d]` publishes the **selector's**
+	// origin. A `Start` + `End` shot has the two at different points, and retail's published angle
+	// is the one measured from `Start`.
+	{
+		ElysiumCameraShots::FlushCache();
+		FElysiumCameraShotDef Both;
+		Both.Name = TEXT("StartAndEnd");
+		Both.Start.bPresent = true;
+		Both.Start.Position = EElysiumShotPosition::Named;
+		Both.Start.Attach = EElysiumShotAttach::Follow;
+		Both.End.bPresent = true;
+		Both.End.Position = EElysiumShotPosition::Named;
+		Both.End.Attach = EElysiumShotAttach::Follow;
+		Both.Target1.bPresent = true;
+		Both.Target1.Position = EElysiumShotPosition::Named;
+		Both.Target1.Attach = EElysiumShotAttach::Follow;
+		Both.TargetPointCount = 1;
+		Both.bTargetPoint1Flagged = true;
+		ElysiumCameraShots::Install(TEXT("StartAndEnd"), Both);
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.PlayerLocation = FVector(0.0f, 0.0f, 100.0f);
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__cine_gate_origin__");
+		Defs.Defs.Add(Point(TEXT("startpt"), FVector(0.0f, 500.0f, 100.0f)));
+		Defs.Defs.Add(Point(TEXT("endpt"), FVector(0.0f, -500.0f, 100.0f)));
+		Defs.Defs.Add(Point(TEXT("looktarget"), FVector(800.0f, 0.0f, 100.0f)));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		FElysiumEntity* StartPt = World.FindByName(TEXT("startpt"));
+		FElysiumEntity* EndPt = World.FindByName(TEXT("endpt"));
+		FElysiumEntity* LookPt = World.FindByName(TEXT("looktarget"));
+		if (TestNotNull(TEXT("start point"), StartPt) && TestNotNull(TEXT("end point"), EndPt)
+			&& TestNotNull(TEXT("look target"), LookPt))
+		{
+			FElysiumEntityHandle Anchors[FElysiumShotBindings::Num] = {};
+			Anchors[0] = StartPt->Handle;
+			Anchors[1] = EndPt->Handle;
+			Anchors[2] = LookPt->Handle;
+			const FElysiumEntityHandle H = FElysiumCameraCinematic::CreateRuntimeCamera(World,
+				TEXT("StartAndEnd"), static_cast<int32>(EElysiumCineCamMode::NamedShot), Anchors);
+			FElysiumCameraCinematic* Cine = CineOf(World, H);
+			if (TestNotNull(TEXT("the two-anchor shot loads"), Cine))
+			{
+				// The live `End` handle set the selector to 0, so the published origin is `End`'s.
+				TestTrue(TEXT("a live End anchor drives the origin"),
+					Cine->OriginSelector == EElysiumShotOriginSelector::EndAnchor);
+				TestTrue(TEXT("and arm A placed the entity on the Start anchor"),
+					Cine->PlacementOrigin.Equals(StartPt->Origin, 0.1f));
+
+				World.Tick(0.001);
+				World.Tick(0.06);
+				const FElysiumCameraShot& Goal = Services.LastCameraShot;
+				TestTrue(TEXT("the think publishes the End anchor as the origin"),
+					Goal.Origin.Equals(EndPt->Origin, 0.1f));
+				// The whole finding: the angle is measured from `Start`, and the two differ.
+				const FRotator FromPlacement =
+					(LookPt->Origin - StartPt->Origin).Rotation();
+				const FRotator FromPublished =
+					(LookPt->Origin - EndPt->Origin).Rotation();
+				TestFalse(TEXT("the two measuring points really do disagree"),
+					FromPlacement.Equals(FromPublished, 1.0f));
+				TestTrue(TEXT("m_angCamAngles is measured from the placement, not the origin"),
+					Goal.Rotation.Equals(FromPlacement, 0.05f));
+
+				// And the shot-start seed takes the published triple straight through
+				// (`FUN_10002210`, `0x474..0x47c = 0x428..0x430`) — no look-at re-derive. This is a
+				// `Start`-bearing shot, so `StartsOnGoal()` puts it on the goal arm.
+				TestTrue(TEXT("a Start-bearing shot seeds on the goal"), Goal.StartsOnGoal());
+				FElysiumScriptedShotTracker Tracker;
+				FElysiumViewSetup LiveView;
+				LiveView.Location = FVector(-1000.0f, 0.0f, 0.0f);
+				LiveView.Rotation = FRotator(30.0f, 180.0f, 0.0f);
+				Tracker.Start(Goal, LiveView);
+				TestTrue(TEXT("the seed is the published origin"),
+					Tracker.Location.Equals(Goal.Origin, 0.1f));
+				TestTrue(TEXT("and the published angle, not one re-derived from the look-at"),
+					Tracker.Rotation.Equals(FromPlacement, 0.05f));
+			}
+		}
+	}
+
+	// --- 16. The shot-start anchor cache is refilled on EVERY shot start --------------------------
+	//
+	// `FUN_1006e8e0`'s fill loop (`1006eb2f`-`1006eba5`) writes `+0x598 + i*12` unconditionally,
+	// and `FUN_1006e0e0` deliberately does not clear it — so a second shot start on the same entity
+	// re-latches from the new anchors. Only `Start` + `AttachType None` shots latch at all, which is
+	// `special-case.txt`'s `Follow`; without the refill a re-shot would frame the first anchor
+	// forever, and `FindBestShot`'s per-candidate loop would let a latching candidate poison the
+	// candidates after it.
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallSpecialCase();
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.PlayerLocation = FVector(0.0f, 0.0f, 100.0f);
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__cine_relatch__");
+		Defs.Defs.Add(Point(TEXT("first"), FVector(300.0f, 0.0f, 100.0f)));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		FElysiumEntity* First = World.FindByName(TEXT("first"));
+		if (TestNotNull(TEXT("first anchor"), First))
+		{
+			FElysiumEntityHandle Anchors[FElysiumShotBindings::Num] = {};
+			Anchors[0] = First->Handle;
+			const FElysiumEntityHandle H = FElysiumCameraCinematic::CreateRuntimeCamera(World,
+				TEXT("Follow"), static_cast<int32>(EElysiumCineCamMode::NamedShot), Anchors);
+			FElysiumCameraCinematic* Cine = CineOf(World, H);
+			if (TestNotNull(TEXT("the latching shot loads"), Cine))
+			{
+				TestTrue(TEXT("the shot start latched anchor 0"),
+					Cine->Bindings.Anchors[0].bCached);
+				const FVector FirstCached = Cine->Bindings.Anchors[0].Cached;
+				TestTrue(TEXT("and the placement is that same point"),
+					Cine->PlacementOrigin.Equals(FirstCached, 0.1f));
+				// Every anchor the record does not declare is cached too — retail's loop writes
+				// `vec3_origin` for a dead handle rather than leaving the slot alone.
+				TestTrue(TEXT("and the undeclared anchors cached the world origin"),
+					Cine->Bindings.Anchors[1].bCached
+					&& Cine->Bindings.Anchors[1].Cached.IsNearlyZero());
+
+				// The re-shot, in `FindBestShot`'s own shape: `SetShot` (which clears the mode and
+				// re-binds the anchors, but NOT the cache) then the shot start. No
+				// `SetShotAnchorEntity`, so nothing re-opens the cache by hand — the refill has to
+				// come from the shot start itself. `Follow`'s anchor is `Position Named`, which
+				// `SetShot` resolves to the subject, so the new anchor is the player.
+				Cine->SetShot(TEXT("Follow"),
+					static_cast<int32>(EElysiumCineCamMode::NamedShot),
+					FElysiumEntityHandle());
+				Cine->StartShotPlacement();
+
+				// **RC3's ordering trap, preserved:** arm A reads the cache-aware anchor reader
+				// *before* the fill at the bottom of the same function, so the placement is the
+				// PREVIOUS shot's cached point.
+				TestTrue(TEXT("the re-shot's placement still comes from the stale cache (RC3)"),
+					Cine->PlacementOrigin.Equals(FirstCached, 0.1f));
+				// **And the fill still runs**, so the next think latches the new anchor rather than
+				// the first shot's forever.
+				TestTrue(TEXT("but the shot start refilled the cache from the NEW anchor"),
+					Cine->Bindings.Anchors[0].bCached
+					&& !Cine->Bindings.Anchors[0].Cached.Equals(FirstCached, 0.1f));
+			}
+		}
+	}
+
+	// --- 17. `SetShot` installs no think, and does not reset the 24 Hz phase (M4) -----------------
+	//
+	// `FUN_1006e130`'s tail is `+0x63c = GetFrameCount(); +0x638 = camMode; return 1;` — there is no
+	// `ThinkSet` on it. `FUN_1006e770` is called by `FUN_1006e8e0` alone. So a `SetCamera` re-shot
+	// of a camera left **idle** by a failed `InputStartShot` sets `CamMode = 1` with no think
+	// installed and publishes nothing, ever.
+	{
+		ElysiumCameraShots::FlushCache();
+		ElysiumCameraShots::Install(TEXT("StartHere"), StartOnly(TEXT("StartHere")));
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__cine_setshot_think__");
+		Defs.Defs.Add(Point(TEXT("anchor"), FVector(400.0f, 0.0f, 100.0f)));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		FElysiumEntity* AnchorEnt = World.FindByName(TEXT("anchor"));
+		if (TestNotNull(TEXT("the anchor exists"), AnchorEnt))
+		{
+			FElysiumEntityHandle Anchors[FElysiumShotBindings::Num] = {};
+			Anchors[0] = AnchorEnt->Handle;
+			Anchors[2] = AnchorEnt->Handle;
+			const FElysiumEntityHandle H = FElysiumCameraCinematic::CreateRuntimeCamera(World,
+				TEXT("StartHere"), static_cast<int32>(EElysiumCineCamMode::NamedShot), Anchors);
+			FElysiumCameraCinematic* Cine = CineOf(World, H);
+			if (TestNotNull(TEXT("the camera creates"), Cine))
+			{
+				// Idle it the way a failed `InputStartShot` re-shot does, and let the think queue
+				// see mode 0 once so the deadline goes to "never".
+				Cine->ClearMode();
+				World.Tick(0.001);
+				TestEqual(TEXT("an idle camera schedules no think"),
+					Cine->NextThink, ELYSIUM_NEVER_THINK);
+
+				// `SetShot` alone: the mode is written, and nothing re-arms the deadline.
+				const bool bSet = Cine->SetShot(TEXT("StartHere"),
+					static_cast<int32>(EElysiumCineCamMode::NamedShot),
+					FElysiumEntityHandle());
+				TestTrue(TEXT("the re-shot succeeds"), bSet);
+				TestTrue(TEXT("and sets CamMode 1"), Cine->IsActive());
+				TestEqual(TEXT("but installs NO think: the camera publishes nothing, ever"),
+					Cine->NextThink, ELYSIUM_NEVER_THINK);
+
+				// The 24 Hz phase is likewise untouched by `SetShot` — only the shot start re-arms
+				// it, which is what makes a mid-conversation `SetCamera` keep the cadence.
+				Cine->ThinkAccumulator = 0.02f;
+				Cine->SetShot(TEXT("StartHere"),
+					static_cast<int32>(EElysiumCineCamMode::NamedShot),
+					FElysiumEntityHandle());
+				TestEqual(TEXT("SetShot does not reset the accumulator"),
+					Cine->ThinkAccumulator, 0.02f);
+				Cine->StartShotPlacement();
+				TestEqual(TEXT("the shot start does"), Cine->ThinkAccumulator, 0.0f);
+			}
+		}
 	}
 	return true;
 }
@@ -1065,6 +1452,315 @@ bool FElysiumTutorialFeedCameraTest::RunTest(const FString&)
 		FElysiumEntityHandle(), FElysiumEntityHandle());
 	TestFalse(TEXT("EndShot cuts the shot on the same frame"), World.HasScriptedCamera());
 	TestTrue(TEXT("and mobilizes the player on it"), PlayerEnt->IsMobile());
+	return true;
+}
+
+// ------------------------------------------------------------------------------------------------
+// `camera_animated` — `CCameraAnimated`'s sequence path (`StartCamera` `0x10071550`,
+// `FUN_10071770`, the think `FUN_10071840`, `EndCamera` `0x10071660`), recovered in
+// `$ELYSIUM_WORK_ROOT/_camera_recovery/rc_group_f.md` §RC15.3.
+//
+// No shipped map places one (0 instances across 108 `.ents`), so every case here is hand-built. The
+// body comes up through the **animated-prop** route, which is the route a camera rig's model can
+// actually take: `FElysiumAnimating::BuildBody` stands a character body only, and the clip resolve
+// under it refuses any stem outside the manifest's `npcs`/`banks` groups.
+namespace ElysiumCameraAnimatedTests
+{
+// The rig's model, and the `animated_props` stem the fixture maps it to.
+static const TCHAR* const RigModel = TEXT("models/props/camrig.mdl");
+static const TCHAR* const RigStem = TEXT("camrig");
+
+static FElysiumEntityDef AnimatedCamera(const TCHAR* Name, const TCHAR* AnimName,
+	const TCHAR* SpawnFlags)
+{
+	FElysiumEntityDef Def;
+	Def.Classname = TEXT("camera_animated");
+	Def.TargetName = Name;
+	Def.Origin = FVector(120.0f, -40.0f, 60.0f);
+	Def.Keys.Add(TEXT("model"), RigModel);
+	Def.Keys.Add(TEXT("animname"), AnimName);
+	Def.Keys.Add(TEXT("spawnflags"), SpawnFlags);
+	FElysiumOutputDef Begin;
+	Begin.Name = TEXT("OnCameraBegin");
+	Begin.Target = TEXT("counter1");
+	Begin.Input = TEXT("Add");
+	Begin.Param = TEXT("1");
+	Def.Outputs.Add(Begin);
+	FElysiumOutputDef Complete;
+	Complete.Name = TEXT("OnCameraComplete");
+	Complete.Target = TEXT("counter1");
+	Complete.Input = TEXT("Add");
+	Complete.Param = TEXT("100");
+	Def.Outputs.Add(Complete);
+	return Def;
+}
+
+static float CounterValue(const FElysiumEntity* Entity)
+{
+	if (Entity == nullptr)
+	{
+		return -1.0f;
+	}
+	TArray<TPair<FString, FString>> State;
+	Entity->GetDebugState(State);
+	for (const TPair<FString, FString>& Row : State)
+	{
+		if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
+	}
+	return -1.0f;
+}
+
+// One world holding one `camera_animated`, one `math_counter` its two outputs add into, and a
+// player. `Services` stays with the caller because every case reads its call log.
+static void BuildWorld(FElysiumEntityWorld& World, FElysiumEntityDef&& Camera)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__camera_animated__");
+	Defs.Defs.Add(MoveTemp(Camera));
+	FElysiumEntityDef Counter;
+	Counter.Classname = TEXT("math_counter");
+	Counter.TargetName = TEXT("counter1");
+	Defs.Defs.Add(MoveTemp(Counter));
+	World.Load(MoveTemp(Defs));
+	World.SpawnPlayer();
+	World.Activate(0.0);
+}
+
+// There is no `AsCameraAnimated()` on the entity base, so the leaf is reached by its own registered
+// classname — null if the class ever fell back to a record-only stub, which is the thing worth
+// failing on rather than casting through.
+static FElysiumCameraAnimated* CameraOf(FElysiumEntityWorld& World, const TCHAR* Name)
+{
+	FElysiumEntity* Ent = World.FindByName(Name);
+	if (Ent == nullptr || Ent->Class == nullptr || Ent->Class->bStub
+		|| Ent->Class->ClassName != FName(TEXT("camera_animated")))
+	{
+		return nullptr;
+	}
+	return static_cast<FElysiumCameraAnimated*>(Ent);
+}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraAnimatedTest,
+	"Elysium.Substrate.CameraAnimated", GFlags)
+bool FElysiumCameraAnimatedTest::RunTest(const FString&)
+{
+	using namespace ElysiumCameraAnimatedTests;
+
+	ElysiumCameraShots::FlushCache();
+	ON_SCOPE_EXIT { ElysiumCameraShots::FlushCache(); };
+
+	// --- 1. A resolvable `animname`: begin, a 0.1 s think, and an end on the finished flag --------
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallSpecialCase();
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.ClipSeconds = 2.0f;   // the rig's authored sequence length
+		Services.AnimatedPropModels.Add(RigModel, RigStem);
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		BuildWorld(World, AnimatedCamera(TEXT("animcam"), TEXT("swoop"), TEXT("1")));
+
+		FElysiumCameraAnimated* Cam = CameraOf(World, TEXT("animcam"));
+		if (!TestNotNull(TEXT("camera_animated resolves as its own leaf"), Cam))
+		{
+			return false;
+		}
+		const FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		FElysiumPlayer* PlayerEnt = World.FindPlayer();
+		if (!TestNotNull(TEXT("the fixture has a player"), PlayerEnt))
+		{
+			return false;
+		}
+
+		// `Spawn` `0x10071330` requires a model and calls `SetModel`. The port's build order picks
+		// the `animated_props` vocabulary, so `Bone: cam_bone` has a body to resolve against.
+		TestTrue(TEXT("Spawn stood the rig through the animated-prop route"),
+			Services.Saw(TEXT("BuildAnimatedPropVisual camrig")));
+		TestFalse(TEXT("and not through the character route"),
+			Services.Saw(TEXT("BuildNpcVisual")));
+		TestEqual(TEXT("a spawned camera_animated is idle"), Cam->NextThink, ELYSIUM_NEVER_THINK);
+		TestEqual(TEXT("nothing has fired yet"), CounterValue(Count), 0.0f);
+
+		// Retail's `curtime` is never zero; move the clock before the input so the deadline the
+		// think arms is readable.
+		World.Tick(1.0);
+		World.AcceptInput(TEXT("animcam"), FName(TEXT("StartCamera")), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+
+		// `FUN_10070690` created the `CamMode 4` camera and `SetCineCamera` adopted it.
+		TestTrue(TEXT("StartCamera adopted a cine camera"), World.HasScriptedCamera());
+		FElysiumCameraCinematic* Runtime = AdoptedCamera(World);
+		if (TestNotNull(TEXT("the adopted camera is a camera_cinematic"), Runtime))
+		{
+			TestEqual(TEXT("and it runs CamMode 4"), Runtime->CamMode,
+				static_cast<int32>(EElysiumCineCamMode::Animated));
+			TestTrue(TEXT("it is disposable, as the factory's spawnflags |= 4 says"),
+				Runtime->bDisposable);
+		}
+		// `FUN_10071770`: the sequence resolved, so `OnCameraBegin` fired and the think is armed at
+		// `curtime + 0.1` — `_DAT_104493d0`, a double 0.1, ten times slower than the cine camera's
+		// own 1/24 s.
+		TestTrue(TEXT("the named sequence played on the rig"),
+			Services.Saw(TEXT("PlayAnimatedPropClip camrig swoop")));
+		TestEqual(TEXT("the think is armed at curtime + 0.1"),
+			static_cast<double>(Cam->NextThink), 1.1, 1.e-4);
+		// `spawnflags & 1` — the one class that reads the freeze bit.
+		TestFalse(TEXT("spawnflags 1 immobilized the player"), PlayerEnt->IsMobile());
+
+		// Outputs ride the I/O queue, so one tick short of the think delivers `OnCameraBegin`
+		// without advancing the sequence.
+		World.Tick(1.05);
+		TestEqual(TEXT("OnCameraBegin fired"), CounterValue(Count), 1.0f);
+		TestEqual(TEXT("and the think is still armed at 1.1"),
+			static_cast<double>(Cam->NextThink), 1.1, 1.e-4);
+
+		// The think re-arms at 0.1 while the sequence runs, and NOT on a cycle test.
+		World.Tick(1.15);
+		TestTrue(TEXT("the camera is still adopted mid-sequence"), World.HasScriptedCamera());
+		TestEqual(TEXT("and the think re-armed at another 0.1"),
+			static_cast<double>(Cam->NextThink), 1.25, 1.e-4);
+		TestEqual(TEXT("OnCameraComplete has not fired"), CounterValue(Count), 1.0f);
+
+		// `m_bSequenceFinished` — the clip's own 2 s at `ResetSequenceInfo`'s rate 1.0.
+		World.Tick(3.05);
+		TestFalse(TEXT("EndCamera removed the camera it created"), World.HasScriptedCamera());
+		TestTrue(TEXT("and released the freeze"), PlayerEnt->IsMobile());
+		TestEqual(TEXT("a finished camera_animated stops thinking"), Cam->NextThink,
+			ELYSIUM_NEVER_THINK);
+		World.Tick(3.1);
+		TestEqual(TEXT("the finished flag fires OnCameraComplete"), CounterValue(Count), 101.0f);
+	}
+
+	// --- 2. A looping clip ends the camera on its FIRST wrap --------------------------------------
+	//
+	// `StudioFrameAdvance` raises `m_bSequenceFinished` on the wrap regardless of
+	// `m_bSequenceLoops`, and the think reads only that byte — so `STUDIO_LOOPING` buys the clip
+	// nothing here. The clip is still PLAYED looping, exactly as `ResetSequenceInfo` copies the flag.
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallSpecialCase();
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.ClipSeconds = 1.5f;
+		Services.AnimatedPropModels.Add(RigModel, RigStem);
+		Services.AnimatedPropClipLoops.Add(FString(RigStem) + TEXT("|orbit"), true);
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		BuildWorld(World, AnimatedCamera(TEXT("animcam"), TEXT("orbit"), TEXT("0")));
+
+		FElysiumCameraAnimated* Cam = CameraOf(World, TEXT("animcam"));
+		const FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		World.Tick(1.0);
+		World.AcceptInput(TEXT("animcam"), FName(TEXT("StartCamera")), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+
+		TestTrue(TEXT("the looping clip is played with its own STUDIO_LOOPING bit"),
+			Services.Saw(TEXT("PlayAnimatedPropClip camrig orbit loop=1")));
+		if (Cam != nullptr)
+		{
+			TestTrue(TEXT("m_bSequenceLoops is recorded"), Cam->bSequenceLoops);
+		}
+		World.Tick(1.4);
+		TestTrue(TEXT("the shot is live before the wrap"), World.HasScriptedCamera());
+		World.Tick(2.55);
+		TestFalse(TEXT("the first wrap ends the camera anyway"), World.HasScriptedCamera());
+		World.Tick(2.6);
+		TestEqual(TEXT("and OnCameraComplete fired on it"), CounterValue(Count), 101.0f);
+	}
+
+	// --- 3. A missing sequence STRANDS the adopted camera ------------------------------------------
+	//
+	// `FUN_10071770`'s `seq < 0` arm writes `m_nSequence = 0` and returns: no `OnCameraBegin`, no
+	// `ThinkSet`, no `m_flNextThink`. The `CamMode 4` camera adopted two lines earlier stays
+	// adopted, `OnCameraComplete` never fires, and the `spawnflags & 1` freeze `StartCamera` applies
+	// immediately AFTER the failed call is never released. RC15.3 §3.2; recorded in
+	// `docs/vtmb/retail-defects.md` §7.
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallSpecialCase();
+		AddExpectedError(TEXT("no sequence named:missing_clip"),
+			EAutomationExpectedErrorFlags::Contains, 1);
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.AnimatedPropModels.Add(RigModel, RigStem);
+		// An explicit empty rest clip is the fixture's "this model bakes no clip", which is what
+		// makes `FindAnimatedPropClip` answer false — the port's `LookupSequence` returning < 0.
+		Services.AnimatedPropRestClips.Add(RigStem, FString());
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		BuildWorld(World, AnimatedCamera(TEXT("animcam"), TEXT("missing_clip"), TEXT("1")));
+
+		FElysiumCameraAnimated* Cam = CameraOf(World, TEXT("animcam"));
+		const FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		FElysiumPlayer* PlayerEnt = World.FindPlayer();
+		World.Tick(1.0);
+		World.AcceptInput(TEXT("animcam"), FName(TEXT("StartCamera")), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+
+		TestFalse(TEXT("nothing was played"), Services.Saw(TEXT("PlayAnimatedPropClip")));
+		TestEqual(TEXT("no output fired — not OnCameraBegin, not OnCameraComplete"),
+			CounterValue(Count), 0.0f);
+		TestTrue(TEXT("the camera the factory created is adopted"), World.HasScriptedCamera());
+		if (Cam != nullptr)
+		{
+			TestEqual(TEXT("no think was armed"), Cam->NextThink, ELYSIUM_NEVER_THINK);
+			TestTrue(TEXT("and the entity still holds its camera handle"), Cam->CineCamera.IsSet());
+		}
+		if (PlayerEnt != nullptr)
+		{
+			TestFalse(TEXT("the freeze bit still bit"), PlayerEnt->IsMobile());
+		}
+
+		// Ticking forever changes nothing: the only exit is EndCamera, and nothing calls it.
+		for (int32 i = 0; i < 20; ++i)
+		{
+			World.Tick(1.0 + 0.5 * static_cast<double>(i + 1));
+		}
+		TestTrue(TEXT("the view is still stuck on the still camera"), World.HasScriptedCamera());
+		TestEqual(TEXT("and still nothing has fired"), CounterValue(Count), 0.0f);
+		if (PlayerEnt != nullptr)
+		{
+			TestFalse(TEXT("the player is still frozen"), PlayerEnt->IsMobile());
+		}
+
+		// A map that wires `EndCamera` by hand is the only way out, and it works — the strand is
+		// "nothing fires it", not "the exit is broken".
+		World.AcceptInput(TEXT("animcam"), FName(TEXT("EndCamera")), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+		TestFalse(TEXT("a hand-fired EndCamera drops the camera"), World.HasScriptedCamera());
+		World.Tick(11.5);
+		TestEqual(TEXT("and completes it — the only output the strand ever reaches"),
+			CounterValue(Count), 100.0f);
+		if (PlayerEnt != nullptr)
+		{
+			TestTrue(TEXT("and releases the freeze"), PlayerEnt->IsMobile());
+		}
+	}
+
+	// --- 4. Without the freeze bit the player keeps moving ----------------------------------------
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallSpecialCase();
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.ClipSeconds = 0.5f;
+		Services.AnimatedPropModels.Add(RigModel, RigStem);
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		BuildWorld(World, AnimatedCamera(TEXT("animcam"), TEXT("swoop"), TEXT("0")));
+
+		FElysiumPlayer* PlayerEnt = World.FindPlayer();
+		World.Tick(1.0);
+		World.AcceptInput(TEXT("animcam"), FName(TEXT("StartCamera")), FElysiumVariant::Void(),
+			FElysiumEntityHandle(), FElysiumEntityHandle());
+		TestTrue(TEXT("the shot runs"), World.HasScriptedCamera());
+		if (PlayerEnt != nullptr)
+		{
+			TestTrue(TEXT("spawnflags 0 leaves the player mobile"), PlayerEnt->IsMobile());
+		}
+	}
 	return true;
 }
 

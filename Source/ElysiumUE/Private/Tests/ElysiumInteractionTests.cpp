@@ -64,8 +64,10 @@
 #include "ElysiumPawn.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "ElysiumRng.h"
+#include "Substrate/ElysiumCameraCinematic.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumItemClasses.h"
@@ -2338,6 +2340,525 @@ bool FElysiumDialogueConditionTruthinessTest::RunTest(const FString&)
 		Conv->VisibleChoices().Num(), 2);
 
 	World.CloseDialog(/*bSilent=*/true);
+	return true;
+}
+
+
+// ------------------------------------------------------------------------------------------------
+// The lock family's `Intrusion` camera and placement — `CBaseLockableEnt` slots 32/36/37/39-43.
+//
+// Recovered in `$ELYSIUM_WORK_ROOT/_camera_recovery/rc_group_f.md` §RC15.1. `CPropDoorknob`,
+// `CPropPadlock`, `CPropDoorknobElectronic` and `CItemContainerLock` share ONE body per slot:
+//
+//   32 `FUN_10224ae0`  the `+USE` gate — and there is no distance arm anywhere in it;
+//   36 `FUN_10224ca0`  `"item_g_lockpick"`;
+//   37 `FUN_10224eb0`  `_DAT_104454c8` = 80.0 units;
+//   39 `FUN_10225070`  `FUN_10070470("Intrusion", NULL, this, this, NULL)`,
+//                      `cam->m_bForcePlayerLook = 0`, `SetCineCamera`, `SetImmobilized(true)`,
+//                      then `OnSkillAttemptBegin`;
+//   40 / 43 `FUN_10224440`  place the player at the lock, through the model's `camera_position` /
+//                      `camera_target` attachments;
+//   41 `FUN_102252f0`  the per-tick view snap plus the timed roll;
+//   42 `FUN_10225140`  `OnUseEnd`, `SetCineCamera(NULL)` (a CUT), `SetImmobilized(false)`, usermsg 6.
+//
+// **Straying past 80 units is a REPOSITION, not a break-off**: `FUN_10167e00`'s far arm dispatches
+// slot 43 and its near arm slot 41, and only slot 32 failing — or the player letting go — ends a
+// session. Case 4 asserts exactly that, because the brief this slice was cut from said "break-off".
+//
+// Everything runs on a bare `FElysiumEntityWorld` + `FElysiumRecordingServices`, with the shipped
+// `Intrusion` block hand-built and seeded through `ElysiumCameraShots::InstallNamed` so the real
+// factory (`FElysiumCameraCinematic::CreateRuntimeCamera`) runs with no export mounted.
+namespace ElysiumLockableCameraTests
+{
+// `vdata/camerashots/special-case.txt`'s `Intrusion` block, key for key. Two `Named` anchors on the
+// lock model's own attachments, both `AttachType Follow`, **no `Start`** (so the shot eases in from
+// the player's own eye), and constraints faster than `Hacking`'s in every axis.
+static FElysiumCameraShotDef IntrusionShot()
+{
+	FElysiumCameraShotDef Def;
+	Def.Name = TEXT("Intrusion");
+	Def.End.bPresent = true;
+	Def.End.Position = EElysiumShotPosition::Named;
+	Def.End.AttachPos = TEXT("Attachment: camera_position");
+	Def.End.AttachPoint = EElysiumShotAttachPos::Attachment;
+	Def.End.AttachPointName = TEXT("camera_position");
+	Def.End.Attach = EElysiumShotAttach::Follow;
+	Def.Target1.bPresent = true;
+	Def.Target1.Position = EElysiumShotPosition::Named;
+	Def.Target1.AttachPos = TEXT("Attachment: camera_target");
+	Def.Target1.AttachPoint = EElysiumShotAttachPos::Attachment;
+	Def.Target1.AttachPointName = TEXT("camera_target");
+	Def.Target1.Attach = EElysiumShotAttach::Follow;
+	Def.TargetPointCount = 1;
+	Def.bTargetPoint1Flagged = true;
+	Def.Constraints.MoveAccel = 450.0f * ElysiumCam::U;
+	Def.Constraints.TurnAccel = 250.0f;
+	Def.Constraints.MoveSpeed = 300.0f * ElysiumCam::U;
+	Def.Constraints.MaxTurnRate = FVector(320.0f, 320.0f, 320.0f);
+	Def.Constraints.DistanceTolerance = 5.0f * ElysiumCam::U;
+	Def.Constraints.AngularTolerance = FVector(3.0f, 3.0f, 3.0f);
+	Def.Constraints.FieldOfView = 75.0f;
+	Def.Constraints.bDialogPOV = false;
+	Def.Constraints.bSyncRotateOnMove = true;
+	// The pair that separates this block from `Hacking`, which authors `DrawViewmodel 0`: the
+	// lockpick is EQUIPPED for the shot, never holstered.
+	Def.Constraints.bDrawViewmodel = true;
+	Def.Constraints.bShowHud = true;
+	return Def;
+}
+
+static void InstallIntrusion()
+{
+	TArray<FElysiumCameraShotDef> Blocks;
+	Blocks.Add(IntrusionShot());
+	ElysiumCameraShots::InstallNamed(TEXT("special-case"), Blocks);
+}
+
+// Slot 36's one classname, as a minimal catalogue: the entity-class registration is what makes a
+// loose `item_g_lockpick` an `FElysiumItem` the inventory can see. `is_wieldable 0` is the shipped
+// record's own value and it is load-bearing here — it is why acquisition does NOT make the pick
+// active, which is exactly the state that sends `FUN_10167e00` down its slot-40 arm.
+static FElysiumItemTable LockpickTable()
+{
+	FElysiumItemTable Table;
+	FElysiumItemDef Pick;
+	Pick.Classname = TEXT("item_g_lockpick");
+	Pick.PrintName = TEXT("Lockpicks");
+	Pick.Type = EElysiumItemType::Generic;
+	Pick.PlayerModel = TEXT("models/items/test/lockpick.mdl");
+	Table.Items.Add(MoveTemp(Pick));
+	Table.Reindex();
+	return Table;
+}
+
+// One lock leaf on its parent, deliberately BODILESS: the lock's geometry reaches this port through
+// `GetUseBodyWorldBounds` and `GetBodyAttachment`, both of which the double answers directly, and a
+// bodiless child raises no physical-attachment warning.
+struct FLockWorld
+{
+	FElysiumRecordingServices Services;
+	TUniquePtr<FElysiumEntityWorld> World;
+	FElysiumEntityHandle Player;
+	FElysiumLockableEntity* Lock = nullptr;
+	FElysiumPlayer* PlayerEntity = nullptr;
+};
+
+static TUniquePtr<FLockWorld> StandLock(const TCHAR* LockClass, const TCHAR* ParentClass,
+	const FVector& LockOrigin)
+{
+	TUniquePtr<FLockWorld> Fixture = MakeUnique<FLockWorld>();
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__lockable_camera__");
+
+	FElysiumEntityDef Parent;
+	Parent.Classname = ParentClass;
+	Parent.TargetName = TEXT("holder");
+	if (FCString::Strifind(ParentClass, TEXT("item_container")) != nullptr)
+	{
+		Parent.ModelMesh = TEXT("test_crate");
+		Parent.Keys.Add(TEXT("model"), TEXT("models/test/crate.mdl"));
+		Parent.Keys.Add(TEXT("use_icon"), TEXT("5"));
+	}
+	else
+	{
+		Parent.Keys.Add(TEXT("wait"), TEXT("-1"));
+	}
+	Defs.Defs.Add(MoveTemp(Parent));
+
+	FElysiumEntityDef LockDef;
+	LockDef.Classname = LockClass;
+	LockDef.TargetName = TEXT("lock");
+	LockDef.Origin = LockOrigin;
+	LockDef.Keys.Add(TEXT("parentname"), TEXT("holder"));
+	// A non-zero `difficulty` seeds the lock LOCKED in Spawn, and 10 against a headless rating of 0
+	// keeps the timed roll a failure — so a session opened here stays open until the case ends it.
+	LockDef.Keys.Add(TEXT("difficulty"), TEXT("10"));
+	LockDef.Keys.Add(TEXT("skilltype"), TEXT("1"));   // the Intrusion feat, as all 800 shipped do
+	Defs.Defs.Add(MoveTemp(LockDef));
+
+	FElysiumEntityDef Loose;
+	Loose.Classname = TEXT("item_g_lockpick");
+	Loose.TargetName = TEXT("picks");
+	Defs.Defs.Add(MoveTemp(Loose));
+
+	Fixture->Services.bHasPlayer = true;
+	Fixture->Services.PlayerLocation = LockOrigin + FVector(60.0, 0.0, 0.0);
+	Fixture->World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Fixture->Services.Bundle());
+	Fixture->World->Load(MoveTemp(Defs));
+	Fixture->Player = Fixture->World->SpawnPlayer();
+	Fixture->World->Activate(0.0);
+	Fixture->PlayerEntity = Fixture->World->FindPlayer();
+	FElysiumEntity* LockEntity = Fixture->World->FindByName(TEXT("lock"));
+	Fixture->Lock = LockEntity ? LockEntity->AsLockableEntity() : nullptr;
+	// `CBaseCombatWeaponDefaultTouch` — the acquisition route the tutorial's own lockpicks take.
+	if (FElysiumEntity* Picks = Fixture->World->FindByName(TEXT("picks")))
+	{
+		Fixture->World->RouteEntityTouch(Picks->Handle, Fixture->Player, /*bBegin*/ true);
+	}
+	return Fixture;
+}
+
+static FElysiumCameraCinematic* AdoptedCine(FElysiumEntityWorld& World)
+{
+	FElysiumEntity* Entity = World.Resolve(World.CineCameraEntity());
+	return Entity ? Entity->AsCameraCinematic() : nullptr;
+}
+
+static FElysiumUseContext HeldContext(const FLockWorld& Fixture, const FVector& EyeCm)
+{
+	FElysiumUseContext Context;
+	Context.Activator = Fixture.Player;
+	Context.Owner = Fixture.Lock->Handle;
+	Context.EyeOrigin = EyeCm;
+	Context.bHasEyeOrigin = true;
+	return Context;
+}
+}
+
+using namespace ElysiumLockableCameraTests;
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLockableCameraTest,
+	"Elysium.Substrate.LockableCamera", GElysiumTestFlags)
+bool FElysiumLockableCameraTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Items = LockpickTable();
+	ElysiumItems::Install(Items);
+	ElysiumCameraShots::FlushCache();
+	ON_SCOPE_EXIT
+	{
+		ElysiumCameraShots::FlushCache();
+		ElysiumItems::Uninstall(Items);
+	};
+
+	const FVector LockOrigin(0.0, 0.0, 100.0);
+	// The two `$attachment`s the `Intrusion` block anchors on and `FUN_10224440` measures with:
+	// `camera_target` on the lock face, `camera_position` one metre out along -X, which makes the
+	// flattened standing axis exactly (-1, 0, 0).
+	const FVector CameraPositionCm(-100.0, 0.0, 100.0);
+	const FVector CameraTargetCm = LockOrigin;
+	// `_DAT_1048c35c` = 31.0 units out from the lock's OWN abs origin along that axis. Spelled with
+	// float literals because the runtime's constant is a float and `ToString` prints three decimals.
+	const FVector StandCm = LockOrigin + FVector(-31.0f * 2.54f, 0.0, 0.0);
+	const FVector ProbeEndCm = StandCm - FVector(0.0, 0.0, 1024.0f * 2.54f);
+
+	// --- 1. A doorknob adopts the `Intrusion` shot, bound to itself on anchors 1 and 2 ------------
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallIntrusion();
+		TUniquePtr<FLockWorld> Fixture = StandLock(TEXT("prop_doorknob"),
+			TEXT("func_door_rotating"), LockOrigin);
+		if (!TestNotNull(TEXT("the doorknob resolves"), Fixture->Lock)
+			|| !TestNotNull(TEXT("the player entity resolves"), Fixture->PlayerEntity))
+		{
+			return false;
+		}
+		Fixture->Services.BodyAttachments.Add(FName(TEXT("camera_position")),
+			FTransform(CameraPositionCm));
+		Fixture->Services.BodyAttachments.Add(FName(TEXT("camera_target")),
+			FTransform(CameraTargetCm));
+		TestTrue(TEXT("the knob starts locked from its own difficulty"),
+			Fixture->Lock->IsUseLocked());
+		TestTrue(TEXT("and the player carries slot 36's item_g_lockpick"),
+			Fixture->PlayerEntity->Inventory.Has(*Fixture->PlayerEntity, TEXT("item_g_lockpick")));
+		TestTrue(TEXT("the player starts mobile"), Fixture->PlayerEntity->IsMobile());
+
+		const FElysiumUseBeginResult Opened =
+			Fixture->World->BeginPlayerUseSession(Fixture->Lock->Handle, Fixture->Player);
+		TestEqual(TEXT("+use on a pickable lock opens an explicit session"), Opened.Outcome,
+			EElysiumUseOutcome::SessionStarted);
+
+		FElysiumCameraCinematic* Cine = AdoptedCine(*Fixture->World);
+		if (!TestNotNull(TEXT("slot 39 adopted a runtime camera_cinematic"), Cine))
+		{
+			return false;
+		}
+		TestEqual(TEXT("carrying the Intrusion shot"), Cine->ShotDef.Name,
+			FString(TEXT("Intrusion")));
+		TestEqual(TEXT("on CamMode 1, the mode FUN_10070470 passes"), Cine->CamMode,
+			static_cast<int32>(EElysiumCineCamMode::NamedShot));
+		// `FUN_10070470(name, Start, End, Point1, Point2)` called with `(NULL, this, this, NULL)`.
+		TestFalse(TEXT("anchor 0 (Start) is unbound — the shot authors no Start block"),
+			Cine->Bindings.Anchors[0].Entity.IsSet());
+		TestTrue(TEXT("anchor 1 (End) is the lock itself"),
+			Cine->Bindings.Anchors[1].Entity == Fixture->Lock->Handle);
+		TestTrue(TEXT("anchor 2 (Target Point1) is the lock itself"),
+			Cine->Bindings.Anchors[2].Entity == Fixture->Lock->Handle);
+		TestFalse(TEXT("anchor 3 (Point2) is unbound"), Cine->Bindings.Anchors[3].Entity.IsSet());
+		TestTrue(TEXT("both anchors resolved their Attachment: name on the lock's model"),
+			Cine->Bindings.Anchors[1].IsPointIndexResolved()
+				&& Cine->Bindings.Anchors[2].IsPointIndexResolved());
+		// The load-bearing line: the constructor seeds 1 and the opener writes 0, so this is the one
+		// interaction shot besides `FuncMonitor` that does NOT turn the player's eye every tick.
+		TestFalse(TEXT("m_bForcePlayerLook was cleared on the camera the opener created"),
+			Cine->bForcePlayerLook);
+		TestTrue(TEXT("the runtime camera carries the disposable bit"), Cine->bDisposable);
+		TestTrue(TEXT("the shared cine slot holds its published shot"),
+			Fixture->World->CineCameraShotId() != 0
+				&& Fixture->World->CineCameraShotId() == Cine->PublishedShotId);
+		// Order — `0x1022509b` `FUN_1017cef0`, then `0x102250a1` `FUN_1015ef40`. Nothing headless
+		// observes the interleave of two calls inside one body, so what is asserted is the pair of
+		// post-conditions plus (case 3) that the hold is NOT gated on the adoption succeeding.
+		TestFalse(TEXT("and the player is immobilized once the opener has adopted"),
+			Fixture->PlayerEntity->IsMobile());
+
+		// --- slot 42, the close: a same-tick cut that destroys the disposable camera -------------
+		const FElysiumEntityHandle CameraHandle = Cine->Handle;
+		const int32 AdoptedShot = Fixture->World->CineCameraShotId();
+		const int32 PopsBefore = Fixture->Services.Count(TEXT("PopCameraShot"));
+		Fixture->World->EndPlayerUseSession(Fixture->Lock->Handle, EElysiumUseEndReason::Released);
+		TestFalse(TEXT("the closer drops the cine slot"), Fixture->World->HasScriptedCamera());
+		TestEqual(TEXT("... to nothing, never to a previously stacked shot"),
+			Fixture->World->CineCameraShotId(), 0);
+		FElysiumEntity* Dead = Fixture->World->Resolve(CameraHandle);
+		TestTrue(TEXT("and destroys the disposable camera with it"),
+			Dead == nullptr || Dead->IsDead());
+		TestEqual(TEXT("the release is a CUT — a zero-second pop, no ramp"),
+			Fixture->Services.Count(FString::Printf(TEXT("PopCameraShot %d blend=0.00"),
+				AdoptedShot)), 1);
+		TestEqual(TEXT("exactly one pop"), Fixture->Services.Count(TEXT("PopCameraShot")),
+			PopsBefore + 1);
+		TestTrue(TEXT("and the player is mobile again"), Fixture->PlayerEntity->IsMobile());
+	}
+
+	// --- 2. A padlock and a container lock run the very same slot-39 body ------------------------
+	// `CPropDoorknobElectronic` is the fourth leaf and shares it too, but its Spawn forces
+	// `requires_key`, so slot 32 refuses the pick path before the camera is ever reached.
+	{
+		struct FLeaf { const TCHAR* Lock; const TCHAR* Parent; };
+		const FLeaf Leaves[] =
+		{
+			{ TEXT("prop_padlock"), TEXT("func_door_rotating") },
+			{ TEXT("item_container_lock"), TEXT("item_container") },
+		};
+		for (const FLeaf& Leaf : Leaves)
+		{
+			ElysiumCameraShots::FlushCache();
+			InstallIntrusion();
+			TUniquePtr<FLockWorld> Fixture = StandLock(Leaf.Lock, Leaf.Parent, LockOrigin);
+			if (!TestNotNull(*FString::Printf(TEXT("%s resolves"), Leaf.Lock), Fixture->Lock))
+			{
+				continue;
+			}
+			Fixture->Services.BodyAttachments.Add(FName(TEXT("camera_position")),
+				FTransform(CameraPositionCm));
+			Fixture->Services.BodyAttachments.Add(FName(TEXT("camera_target")),
+				FTransform(CameraTargetCm));
+			TestEqual(*FString::Printf(TEXT("%s opens a session"), Leaf.Lock),
+				Fixture->World->BeginPlayerUseSession(Fixture->Lock->Handle,
+					Fixture->Player).Outcome, EElysiumUseOutcome::SessionStarted);
+			FElysiumCameraCinematic* Cine = AdoptedCine(*Fixture->World);
+			if (!TestNotNull(*FString::Printf(TEXT("%s adopts a camera"), Leaf.Lock), Cine))
+			{
+				continue;
+			}
+			TestEqual(*FString::Printf(TEXT("%s adopts the Intrusion shot"), Leaf.Lock),
+				Cine->ShotDef.Name, FString(TEXT("Intrusion")));
+			TestTrue(*FString::Printf(TEXT("%s binds anchor 1 to itself"), Leaf.Lock),
+				Cine->Bindings.Anchors[1].Entity == Fixture->Lock->Handle);
+			TestTrue(*FString::Printf(TEXT("%s binds anchor 2 to itself"), Leaf.Lock),
+				Cine->Bindings.Anchors[2].Entity == Fixture->Lock->Handle);
+			TestFalse(*FString::Printf(TEXT("%s clears m_bForcePlayerLook"), Leaf.Lock),
+				Cine->bForcePlayerLook);
+			TestFalse(*FString::Printf(TEXT("%s immobilizes the player"), Leaf.Lock),
+				Fixture->PlayerEntity->IsMobile());
+			Fixture->World->EndPlayerUseSession(Fixture->Lock->Handle,
+				EElysiumUseEndReason::Released);
+			TestFalse(*FString::Printf(TEXT("%s cuts the slot on the way out"), Leaf.Lock),
+				Fixture->World->HasScriptedCamera());
+			TestTrue(*FString::Printf(TEXT("%s mobilizes the player"), Leaf.Lock),
+				Fixture->PlayerEntity->IsMobile());
+		}
+	}
+
+	// --- 3. A shot that will not load does NOT refuse the session ---------------------------------
+	// `FUN_10070470` returns NULL, and slot 39 still reaches `FUN_1017cef0(player, NULL)` and
+	// `FUN_1015ef40(player)`. The attempt runs cameraless and the player is still held.
+	{
+		// `FlushCache` alone would not make it miss: `vdata/camerashots/special-case.txt` is shipped
+		// corpus, so on a machine with the export mounted the flushed cache re-reads the real file
+		// and `Intrusion` resolves. `InstallMiss` seeds the remembered-miss entry `LoadFile` writes
+		// for an absent file, which is the production refusal path.
+		ElysiumCameraShots::FlushCache();
+		ElysiumCameraShots::InstallMiss(TEXT("special-case"));
+		TUniquePtr<FLockWorld> Fixture = StandLock(TEXT("prop_doorknob"),
+			TEXT("func_door_rotating"), LockOrigin);
+		if (!TestNotNull(TEXT("the cameraless doorknob resolves"), Fixture->Lock))
+		{
+			return false;
+		}
+		TestEqual(TEXT("an unresolvable Intrusion shot still opens the session"),
+			Fixture->World->BeginPlayerUseSession(Fixture->Lock->Handle, Fixture->Player).Outcome,
+			EElysiumUseOutcome::SessionStarted);
+		TestEqual(TEXT("nothing was adopted into the cine slot"),
+			Fixture->World->CineCameraShotId(), 0);
+		TestFalse(TEXT("... and the slot is empty"), Fixture->World->HasScriptedCamera());
+		TestNull(TEXT("no camera entity survived the failed SetShot"),
+			AdoptedCine(*Fixture->World));
+		TestFalse(TEXT("the hold is unconditional — it is not gated on the adoption"),
+			Fixture->PlayerEntity->IsMobile());
+		TestTrue(TEXT("and the timed attempt is running"), Fixture->Lock->AttemptUser.IsSet());
+		Fixture->World->EndPlayerUseSession(Fixture->Lock->Handle, EElysiumUseEndReason::Released);
+		TestTrue(TEXT("the closer still mobilizes"), Fixture->PlayerEntity->IsMobile());
+	}
+
+	// --- 4. Slot 37's 80 units picks an ARM of the maintenance body, and ends nothing --------------
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallIntrusion();
+		TUniquePtr<FLockWorld> Fixture = StandLock(TEXT("prop_doorknob"),
+			TEXT("func_door_rotating"), LockOrigin);
+		if (!TestNotNull(TEXT("the reach doorknob resolves"), Fixture->Lock))
+		{
+			return false;
+		}
+		FElysiumRecordingServices& Services = Fixture->Services;
+		Services.BodyAttachments.Add(FName(TEXT("camera_position")), FTransform(CameraPositionCm));
+		Services.BodyAttachments.Add(FName(TEXT("camera_target")), FTransform(CameraTargetCm));
+		// Retail measures against the held entity's own collision box, so give it one: a 20 cm cube
+		// on the lock's origin. The reach itself is `80.0 * 2.54 = 203.2 cm`.
+		Services.bHasUseBodyBounds = true;
+		Services.UseBodyBounds = FBox(LockOrigin - FVector(10.0), LockOrigin + FVector(10.0));
+		// Floor under the standing spot, so the 1024-unit probe finds ground.
+		FElysiumRecordingServices::FCameraHullBlocker Floor;
+		Floor.PointCm = FVector(StandCm.X, StandCm.Y, 40.0);
+		Floor.RadiusCm = 32.0f;
+		Services.CameraHullBlockers.Add(Floor);
+		Services.bPlayerSweepMoves = true;
+		Services.PlayerSweepContact = FVector(StandCm.X, StandCm.Y, 60.0);
+
+		TestEqual(TEXT("the reach session opens"),
+			Fixture->World->BeginPlayerUseSession(Fixture->Lock->Handle, Fixture->Player).Outcome,
+			EElysiumUseOutcome::SessionStarted);
+
+		// (a) FAR — the eye is 400 cm out, the nearest point on the box is at x = 10, so the
+		//     manhattan XY distance is 390 cm, past the 203.2 cm reach.
+		const int32 SweepsBefore = Services.Count(TEXT("SweepPlayerHullToward"));
+		Fixture->Lock->TickPlayerUse(HeldContext(*Fixture, LockOrigin + FVector(400.0, 0.0, 0.0)));
+		TestEqual(TEXT("beyond the reach, slot 43 sweeps the player in"),
+			Services.Count(TEXT("SweepPlayerHullToward")), SweepsBefore + 1);
+		// The whole point of the case: nothing here ends anything.
+		TestTrue(TEXT("straying past 80 units does NOT end the session — the attempt survives"),
+			Fixture->Lock->AttemptUser.IsSet());
+		TestTrue(TEXT("... and neither does the camera"), Fixture->World->HasScriptedCamera());
+		TestFalse(TEXT("... nor the hold"), Fixture->PlayerEntity->IsMobile());
+
+		// (b) NEAR with the pick carried but NOT active — 20 cm of manhattan distance. Retail's
+		//     middle arm switches to it (`player+0x724`) and then runs slot 40, the same placement.
+		TestNull(TEXT("acquisition alone does not make a non-wieldable pick active"),
+			Fixture->PlayerEntity->Inventory.Active(*Fixture->PlayerEntity));
+		const int32 SweepsBeforeEquip = Services.Count(TEXT("SweepPlayerHullToward"));
+		Fixture->Lock->TickPlayerUse(HeldContext(*Fixture, LockOrigin + FVector(30.0, 0.0, 0.0)));
+		FElysiumItem* NowActive = Fixture->PlayerEntity->Inventory.Active(*Fixture->PlayerEntity);
+		if (TestNotNull(TEXT("inside the reach the maintenance arm equips the lockpick"), NowActive))
+		{
+			TestEqual(TEXT("... and it is slot 36's classname"), NowActive->ClassName(),
+				FString(TEXT("item_g_lockpick")));
+		}
+		TestEqual(TEXT("the equip arm then runs slot 40, the same placement body"),
+			Services.Count(TEXT("SweepPlayerHullToward")), SweepsBeforeEquip + 1);
+
+		// (c) NEAR with the pick now active — slot 41's per-tick half is the view snap at the lock's
+		//     `WorldSpaceCenter()` (vfunc 0x300), the collision box's centre and not an attachment,
+		//     and it moves nobody.
+		const int32 SweepsBeforeRoll = Services.Count(TEXT("SweepPlayerHullToward"));
+		const int32 SnapsBeforeRoll = Services.Count(TEXT("SnapPlayerViewTo"));
+		Fixture->Lock->TickPlayerUse(HeldContext(*Fixture, LockOrigin + FVector(30.0, 0.0, 0.0)));
+		TestEqual(TEXT("slot 41 snaps the view at the box centre"),
+			Services.Count(FString::Printf(TEXT("SnapPlayerViewTo %s"),
+				*Services.UseBodyBounds.GetCenter().ToCompactString())), 1);
+		TestEqual(TEXT("... exactly once more"), Services.Count(TEXT("SnapPlayerViewTo")),
+			SnapsBeforeRoll + 1);
+		TestEqual(TEXT("and slot 41 never moves the player"),
+			Services.Count(TEXT("SweepPlayerHullToward")), SweepsBeforeRoll);
+
+		Fixture->World->EndPlayerUseSession(Fixture->Lock->Handle, EElysiumUseEndReason::Released);
+	}
+
+	// --- 5. `FUN_10224440`: the standing axis, the ground probe and the facing ---------------------
+	{
+		ElysiumCameraShots::FlushCache();
+		InstallIntrusion();
+		TUniquePtr<FLockWorld> Fixture = StandLock(TEXT("prop_doorknob"),
+			TEXT("func_door_rotating"), LockOrigin);
+		if (!TestNotNull(TEXT("the placement doorknob resolves"), Fixture->Lock))
+		{
+			return false;
+		}
+		FElysiumRecordingServices& Services = Fixture->Services;
+		Services.BodyAttachments.Add(FName(TEXT("camera_position")), FTransform(CameraPositionCm));
+		Services.BodyAttachments.Add(FName(TEXT("camera_target")), FTransform(CameraTargetCm));
+		Services.bHasUseBodyBounds = false;   // no box: the reach test degenerates to the far arm
+
+		// (a) No floor under the standing spot -> `fraction == 1` -> retail refuses to move at all.
+		const FVector StartLocation = Services.PlayerLocation;
+		Fixture->Lock->TickPlayerUse(HeldContext(*Fixture, LockOrigin + FVector(400.0, 0.0, 0.0)));
+		TestEqual(TEXT("no solid ground over the lockpick position: nothing is swept"),
+			Services.Count(TEXT("SweepPlayerHullToward")), 0);
+		TestEqual(TEXT("... and nothing is turned"), Services.Count(TEXT("SnapPlayerViewTo")), 0);
+		TestEqual(TEXT("... so the player has not moved"), Services.PlayerLocation, StartLocation);
+		TestEqual(TEXT("the probe ran from the 31-unit standing spot, straight down 1024 units"),
+			Services.Count(FString::Printf(TEXT("TraceCameraHull %s -> %s"), *StandCm.ToString(),
+				*ProbeEndCm.ToString())), 1);
+
+		// (b) The hull already inside geometry -> `startsolid` -> the other refusal.
+		FElysiumRecordingServices::FCameraHullBlocker Wall;
+		Wall.PointCm = StandCm;
+		Wall.RadiusCm = 32.0f;
+		Services.CameraHullBlockers.Add(Wall);
+		Fixture->Lock->TickPlayerUse(HeldContext(*Fixture, LockOrigin + FVector(400.0, 0.0, 0.0)));
+		TestEqual(TEXT("too close to solid geometry to pick: still nothing is swept"),
+			Services.Count(TEXT("SweepPlayerHullToward")), 0);
+		Services.CameraHullBlockers.Reset();
+
+		// (c) Floor found -> sweep the player's hull to it, then face the `camera_position`
+		//     attachment. That last step is `LookAtEntity(this, false)`, whose target for a lock is
+		//     slot 193 `CPropDoorknob::vfunc193` `FUN_102243c0` = the `camera_position` attachment.
+		FElysiumRecordingServices::FCameraHullBlocker Floor;
+		Floor.PointCm = FVector(StandCm.X, StandCm.Y, 40.0);
+		Floor.RadiusCm = 32.0f;
+		Services.CameraHullBlockers.Add(Floor);
+		Services.bPlayerSweepMoves = true;
+		Services.PlayerSweepContact = FVector(StandCm.X, StandCm.Y, 60.0);
+		Fixture->Lock->TickPlayerUse(HeldContext(*Fixture, LockOrigin + FVector(400.0, 0.0, 0.0)));
+		TestEqual(TEXT("the placement sweeps the player's hull once"),
+			Services.Count(TEXT("SweepPlayerHullToward")), 1);
+		TestEqual(TEXT("the pawn lands on the sweep's contact"), Services.PlayerLocation,
+			Services.PlayerSweepContact);
+		TestEqual(TEXT("and the view is snapped onto the camera_position attachment"),
+			Services.Count(FString::Printf(TEXT("SnapPlayerViewTo %s"),
+				*CameraPositionCm.ToCompactString())), 1);
+		TestEqual(TEXT("... which is where the player is now facing"), Services.PlayerRotation,
+			(CameraPositionCm - Services.PlayerSweepContact).Rotation());
+
+		// (d) A model with neither attachment: retail degrades to centre-to-centre behind its DevMsg
+		//     and still places, rather than refusing. Both centres are `WorldSpaceCenter()`, which
+		//     for a bodiless entity is VtMB's standing hull on its origin — the same fallback the
+		//     `Center` anchor takes — and the facing follows `camera_position`'s own fallback to it.
+		Services.BodyAttachments.Remove(FName(TEXT("camera_position")));
+		Services.BodyAttachments.Remove(FName(TEXT("camera_target")));
+		const FVector LockCentre =
+			ElysiumCameraShots::SurroundingBounds(*Fixture->Lock).GetCenter();
+		const FVector UserCentre =
+			ElysiumCameraShots::SurroundingBounds(*Fixture->PlayerEntity).GetCenter();
+		FVector FallbackAxis = LockCentre - UserCentre;
+		FallbackAxis.Z = 0.0;
+		const FVector FallbackStand =
+			Fixture->Lock->Origin + FallbackAxis.GetSafeNormal() * (31.0f * 2.54f);
+		Services.CameraHullBlockers.Reset();
+		FElysiumRecordingServices::FCameraHullBlocker FallbackFloor;
+		FallbackFloor.PointCm = FVector(FallbackStand.X, FallbackStand.Y, 40.0);
+		FallbackFloor.RadiusCm = 32.0f;
+		Services.CameraHullBlockers.Add(FallbackFloor);
+		const int32 SnapsBefore = Services.Count(TEXT("SnapPlayerViewTo"));
+		Fixture->Lock->TickPlayerUse(HeldContext(*Fixture, LockOrigin + FVector(400.0, 0.0, 0.0)));
+		TestEqual(TEXT("a lock with no attachments still turns the player, at its own centre"),
+			Services.Count(FString::Printf(TEXT("SnapPlayerViewTo %s"),
+				*LockCentre.ToCompactString())), 1);
+		TestEqual(TEXT("... exactly once more"), Services.Count(TEXT("SnapPlayerViewTo")),
+			SnapsBefore + 1);
+	}
+
 	return true;
 }
 

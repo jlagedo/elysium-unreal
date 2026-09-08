@@ -108,6 +108,17 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 			Out.AbsentEntities.Add(E.Handle.Index);
 			continue;
 		}
+		// `ObjectCaps() & FCAP_ACROSS_TRANSITION` — the port's transition carry **is** this
+		// snapshot, so an entity that clears the bit is simply not written into it. It is not
+		// recorded absent either: a map-placed entity must come back from its own def on the next
+		// load, fresh, and a runtime one must not come back at all. `CBaseCineCam::ObjectCaps()`
+		// returns 0 (RC2.4), so a live scripted shot never rides a `trigger_changelevel` or a save
+		// — the map teardown `FUN_10071970` has already ended it on the way out, and this is the
+		// same statement from the persistence side.
+		if ((E.ObjectCaps() & ElysiumEntityCaps::AcrossTransition) == 0)
+		{
+			continue;
+		}
 
 		FElysiumEntityState S = CaptureState(E);
 		const int32 Index = E.Handle.Index;

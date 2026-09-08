@@ -90,6 +90,7 @@
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
+#include "Tests/ElysiumPlayerWorldFixture.h"   // the transient world + faithful pawn preamble
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumUseIcons.h"
@@ -1786,6 +1787,221 @@ bool FElysiumArenaSpecTest::RunTest(const FString&)
 	else
 	{
 		AddError(TEXT("the arena has no behind_cover pad"));
+	}
+
+	return true;
+}
+
+
+// `CPlayerMove::SetupMove` `0x10186120`'s three non-wish arms, and `m_iVFlags`' two live bits.
+//
+// The four things this pins, each of which the port previously had wrong or absent:
+//   1. immobilize masks `0x807` — attack, jump, duck, attack2 — and **keeps `IN_USE`**;
+//   2. `m_iVFlags & 0x1` changes only the BODY's angles, never the move frame and never the
+//      command, so a posed player still walks;
+//   3. a live grapple partner outranks the flag entirely and is what glues the player;
+//   4. the view-angle refusal is `+0x207c == 0 && !HasAllVFlags(8)`, the one-shot first.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerViewFlagsTest,
+	"Elysium.Substrate.PlayerViewFlags", GElysiumTestFlags)
+bool FElysiumPlayerViewFlagsTest::RunTest(const FString&)
+{
+	// --- 1. The immobilize button mask is `0x807`, and `IN_USE` is not in it -------------------
+	{
+		TestEqual(TEXT("the immobilize mask is exactly IN_ATTACK|IN_JUMP|IN_DUCK|IN_ATTACK2"),
+			ElysiumInput::ImmobilizeButtonMask,
+			static_cast<uint64>(EElysiumButton::Attack)
+			| static_cast<uint64>(EElysiumButton::Jump)
+			| static_cast<uint64>(EElysiumButton::Duck)
+			| static_cast<uint64>(EElysiumButton::Attack2));
+
+		FElysiumUserCmd Cmd;
+		Cmd.Move = FVector2D(1.0f, -1.0f);
+		Cmd.Up = 1.0f;
+		Cmd.Buttons =
+			static_cast<uint64>(EElysiumButton::Attack)
+			| static_cast<uint64>(EElysiumButton::Attack2)
+			| static_cast<uint64>(EElysiumButton::Jump)
+			| static_cast<uint64>(EElysiumButton::Duck)
+			| static_cast<uint64>(EElysiumButton::Use)
+			| static_cast<uint64>(EElysiumButton::Forward)
+			| static_cast<uint64>(EElysiumButton::SecondaryAtk);
+		Cmd.ApplyImmobilize();
+
+		// `if (FL_FROZEN || !IsMobile) mv->forward = mv->side = mv->up = 0;`
+		TestTrue(TEXT("immobilize zeroes forwardmove and sidemove"), Cmd.Move.IsNearlyZero());
+		TestTrue(TEXT("... and upmove"), FMath::IsNearlyZero(Cmd.Up));
+
+		TestFalse(TEXT("immobilize clears attack"), Cmd.IsDown(EElysiumButton::Attack));
+		TestFalse(TEXT("... and jump"), Cmd.IsDown(EElysiumButton::Jump));
+		TestFalse(TEXT("... and duck"), Cmd.IsDown(EElysiumButton::Duck));
+		TestFalse(TEXT("... and attack2"), Cmd.IsDown(EElysiumButton::Attack2));
+
+		// The point of the mask's shape. `IN_USE` survives because every shipped opener immobilizes
+		// the player *for* an interaction he is holding `+use` on.
+		TestTrue(TEXT("IN_USE survives immobilize"), Cmd.IsDown(EElysiumButton::Use));
+		// Retail masks four bits and no more: the direction bits stay (the analog pair having been
+		// zeroed makes them inert), and `+wpn_secondaryatk` is a VtMB verb, not `IN_ATTACK2`.
+		TestTrue(TEXT("the direction bits survive immobilize, as retail leaves them"),
+			Cmd.IsDown(EElysiumButton::Forward));
+		TestTrue(TEXT("+wpn_secondaryatk is not IN_ATTACK2 and survives"),
+			Cmd.IsDown(EElysiumButton::SecondaryAtk));
+	}
+
+	// --- 2. `m_iVFlags & 0x1` with no grapple partner ------------------------------------------
+	{
+		ElysiumMove::FSetupMoveBodyState State;
+		TestTrue(TEXT("with nothing set the body's yaw follows the eye, as every ordinary tick does"),
+			ElysiumMove::BodyYawFollowsEye(State));
+		TestFalse(TEXT("... and nothing is glued"), ElysiumMove::GrappleGluesBody(State));
+
+		State.bMoveAnglesFromEntity = true;
+		TestFalse(TEXT("the pose lock stops the body's yaw being snapped to the eye"),
+			ElysiumMove::BodyYawFollowsEye(State));
+		TestFalse(TEXT("the pose lock glues nothing — that is the partner arm's job"),
+			ElysiumMove::GrappleGluesBody(State));
+
+		// **The command is not touched.** `m_iVFlags & 0x1` writes `m_vecAngles (+0x58)` only; it
+		// never reaches `m_nButtons`, `forwardmove` or `sidemove`, so a posed player still walks.
+		// The port used to answer this arm with `ClearMovement()`, which made "posed but still
+		// walking" — the state the flag exists for after `LeaveGrappleState` — unexpressable.
+		FElysiumUserCmd Posed;
+		Posed.Move = FVector2D(1.0f, 0.0f);
+		Posed.Buttons = static_cast<uint64>(EElysiumButton::Forward);
+		const FElysiumUserCmd Before = Posed;
+		TestTrue(TEXT("the pose lock leaves the command exactly as sampled"),
+			Posed.SameIntent(Before) && !Posed.Move.IsNearlyZero()
+			&& Posed.IsDown(EElysiumButton::Forward));
+
+		// And the wish frame is still the EYE. `CGameMovement::PlayerMove` (`client.dll
+		// 0x100edd80`) builds forward/right/up from `mv->m_vecViewAngles (+0x0c)`, which neither the
+		// flag nor the grapple writes — only `m_vecAngles (+0x58)`, the body-angle writeback
+		// `CPlayerMove::FinishMove` `0x10186c10` hands to `SetLocalAngles`. So a posed body facing
+		// one way and an eye facing another walk where the EYE points.
+		float Scale = 0.0f;
+		const FRotator EyeFrame(0.0f, 90.0f, 0.0f);
+		const FVector Wish = ElysiumMove::WishDirection(Posed.Move, 0.0f, EyeFrame,
+			/*bIncludePitch*/ false, Scale);
+		TestTrue(TEXT("forward under the pose lock still walks along the eye yaw"),
+			Wish.Equals(FVector(0.0, 1.0, 0.0), 1e-3));
+	}
+
+	// --- 3. A live grapple partner outranks the flag -------------------------------------------
+	{
+		ElysiumMove::FSetupMoveBodyState State;
+		State.bGrapplePartnerLive = true;
+
+		TestFalse(TEXT("a live partner suppresses the yaw substitution with the flag clear"),
+			ElysiumMove::BodyYawFollowsEye(State));
+		TestTrue(TEXT("... and glues the body"), ElysiumMove::GrappleGluesBody(State));
+
+		State.bMoveAnglesFromEntity = true;
+		TestFalse(TEXT("the flag changes nothing while a partner is live"),
+			ElysiumMove::BodyYawFollowsEye(State));
+		TestTrue(TEXT("... and the glue runs whether or not it is set"),
+			ElysiumMove::GrappleGluesBody(State));
+
+		// The nine exempt `m_IdealActivity` values are all `ACT_*_RELEASE` verbs, so the glue is off
+		// exactly while the pairing is being released and the player carries himself out of it.
+		State.bGrappleReleaseActivity = true;
+		TestFalse(TEXT("a release verb turns the glue off"), ElysiumMove::GrappleGluesBody(State));
+		TestFalse(TEXT("... while still keeping the body's own yaw"),
+			ElysiumMove::BodyYawFollowsEye(State));
+
+		// `mv->m_vecAbsOrigin.z -= (playerMins.z - partnerMins.z)`. Both minima are measured from a
+		// body's own feet origin here, so the glued origin is the partner's outright.
+		const FVector PartnerFeet(250.0, -75.0, 40.0);
+		TestTrue(TEXT("the glued origin is the partner's feet origin"),
+			ElysiumMove::GluedBodyFeetOrigin(PartnerFeet, 0.0f, 0.0f).Equals(PartnerFeet, 1e-3));
+		// The recovered term is still live: a body whose collision floor is not its origin moves.
+		TestTrue(TEXT("a differing collision floor moves the glued origin by the difference"),
+			ElysiumMove::GluedBodyFeetOrigin(PartnerFeet, 10.0f, 4.0f)
+				.Equals(PartnerFeet - FVector(0.0, 0.0, 6.0), 1e-3));
+	}
+
+	// --- 4. The view-angle refusal, and the one-shot's precedence ------------------------------
+	{
+		TestTrue(TEXT("an ordinary frame adopts the command's view angles"),
+			ElysiumMove::EyeAnglesAdoptCommand(/*bPendingSnap*/ false, /*bLock*/ false));
+		TestFalse(TEXT("ViewAngleLock refuses them for as long as it is held"),
+			ElysiumMove::EyeAnglesAdoptCommand(false, true));
+		TestFalse(TEXT("the one-shot pending snap refuses them on its own"),
+			ElysiumMove::EyeAnglesAdoptCommand(true, false));
+		TestFalse(TEXT("... and both together still refuse"),
+			ElysiumMove::EyeAnglesAdoptCommand(true, true));
+
+		// What the refusal is worth on this port's single authoritative view: the frame's look delta
+		// is dropped instead of being integrated onto the angles the server just wrote, so the eye
+		// angles hold across a view-angle change. Integrating the gated command reproduces
+		// `AElysiumPlayerController::ProcessPlayerInput`'s arm without a controller.
+		FElysiumUserCmd Look;
+		Look.LookDelta = FVector2D(37.0f, -12.0f);
+		const FRotator Frozen(5.0f, 90.0f, 0.0f);
+
+		FElysiumUserCmd Locked = Look;
+		if (!ElysiumMove::EyeAnglesAdoptCommand(false, /*bLock*/ true))
+		{
+			Locked.LookDelta = FVector2D::ZeroVector;
+		}
+		const FRotator Held(Frozen.Pitch + Locked.LookDelta.Y, Frozen.Yaw + Locked.LookDelta.X, 0.0f);
+		TestTrue(TEXT("ViewAngleLock freezes the eye angles across a view-angle change"),
+			Held.Equals(Frozen, 1e-3f));
+
+		// And the same frame with the lock down but a snap pending still *lands* the snap: the
+		// one-shot is consumed where it is read, so the next frame turns again.
+		FElysiumUserCmd Free = Look;
+		if (!ElysiumMove::EyeAnglesAdoptCommand(/*bPendingSnap*/ false, false))
+		{
+			Free.LookDelta = FVector2D::ZeroVector;
+		}
+		TestTrue(TEXT("a released lock turns again on the very next frame"),
+			!Free.LookDelta.IsNearlyZero());
+	}
+
+	// --- 5. The body arms on the real pawn ------------------------------------------------------
+	{
+		FPlayerWorldFixture Fixture;
+		if (!Fixture.CreateWorld(*this))
+		{
+			return false;
+		}
+		AElysiumPawn* Pawn = Fixture.SpawnPawn(FVector::ZeroVector, FRotator(0.0f, 30.0f, 0.0f));
+		if (!TestNotNull(TEXT("the fixture spawned the faithful player pawn"), Pawn))
+		{
+			return false;
+		}
+
+		// The ordinary tick: `m_vecAngles.yaw = m_angEyeAngles.y`, which on this port is
+		// `bUseControllerRotationYaw` carrying the control rotation into the body.
+		Pawn->SetBodyPosedExternally(false);
+		Pawn->FaceRotation(FRotator(0.0f, 120.0f, 0.0f), 0.0f);
+		TestEqual(TEXT("an ordinary tick snaps the body's yaw to the eye"),
+			static_cast<float>(Pawn->GetActorRotation().Yaw), 120.0f, 0.01f);
+
+		// The suppressed tick: `m_vecAngles = GetAngles()` all three, so `SetLocalAngles` writes the
+		// body's own angles back and the pose owner's yaw survives a turning eye.
+		Pawn->SetBodyPosedExternally(true);
+		Pawn->FaceRotation(FRotator(0.0f, -40.0f, 0.0f), 0.0f);
+		TestEqual(TEXT("a posed body keeps its own yaw while the eye turns"),
+			static_cast<float>(Pawn->GetActorRotation().Yaw), 120.0f, 0.01f);
+		Pawn->SetBodyPosedExternally(false);
+
+		// The partner arm: `m_vecAbsOrigin = partner->GetOrigin()` and `m_vecVelocity = 0`, which
+		// `FinishMove` writes back through `SetLocalOrigin` / `SetAbsVelocity`.
+		UPawnMovementComponent* Movement = Pawn->GetMovementComponent();
+		if (TestNotNull(TEXT("the pawn brings its mover"), Movement))
+		{
+			Movement->Velocity = FVector(300.0, -120.0, 45.0);
+		}
+		const FVector PartnerFeet(250.0, -75.0, 40.0);
+		Pawn->GlueBodyToFeetOrigin(PartnerFeet);
+		TestTrue(TEXT("the glue pins the body onto the partner's feet origin"),
+			Pawn->GetActorLocation().Equals(
+				PartnerFeet + FVector(0.0, 0.0, Pawn->GetBodyHalfHeight()), 0.5));
+		if (Movement)
+		{
+			TestTrue(TEXT("... and zeroes the velocity, which is the grapple's immobility"),
+				Movement->Velocity.IsNearlyZero());
+		}
 	}
 
 	return true;

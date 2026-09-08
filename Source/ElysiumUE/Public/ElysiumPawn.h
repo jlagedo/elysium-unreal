@@ -42,6 +42,30 @@ public:
 	// applying.
 	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
 
+	// `CPlayerMove::SetupMove` `0x10186120` → `CPlayerMove::FinishMove` `0x10186c10`'s
+	// `SetLocalAngles(mv->m_vecAngles)`, which is the tick's body-angle writeback: the entity's own
+	// pitch and roll with `m_angEyeAngles.y` substituted for its yaw. `bUseControllerRotationYaw`
+	// with pitch and roll off is that rule, so the override only has to reproduce the *suppression*
+	// — `SetupMove`'s tail arm re-taking all three from `GetAngles()`, which leaves the body's yaw
+	// where the pose owner put it.
+	virtual void FaceRotation(FRotator NewControlRotation, float DeltaTime = 0.f) override;
+
+	// The frame's answer to `ElysiumMove::BodyYawFollowsEye` — a live grapple partner, or
+	// `m_iVFlags & 0x1` with none. Pushed by `AElysiumPlayerController::ProcessPlayerInput`, which
+	// is the port's `SetupMove` seam and the only place the player entity's state is read; the pawn
+	// itself reads no game state (S3). It is a per-tick latch rather than a stored mode because
+	// retail re-decides it every tick from live handles.
+	void SetBodyPosedExternally(bool bPosed) { bBodyPosedExternally = bPosed; }
+	bool IsBodyPosedExternally() const { return bBodyPosedExternally; }
+
+	// `SetupMove`'s partner arm: `mv->m_vecAbsOrigin = partner->GetOrigin()` (z-corrected by the
+	// difference of the two collision minima) and `mv->m_vecVelocity = vec3_origin`, applied every
+	// tick while a grapple is live outside the nine release verbs. `FinishMove` writes both back
+	// through `SetLocalOrigin` / `SetAbsVelocity`, so in the port it is a placement plus a velocity
+	// kill on the body rather than a movement mode. **The argument is a feet origin**, matching the
+	// entity's own `Origin`; the pawn lifts it by its half-height because the box is centred.
+	void GlueBodyToFeetOrigin(const FVector& FeetOrigin);
+
 	// IElysiumPlayerBody
 	virtual bool IsNoclip() const override;
 	virtual void SetNoclip(bool bEnable) override;
@@ -81,6 +105,7 @@ private:
 	FElysiumEntityHandle PlayerEntity;
 	FElysiumCameraDrawPolicy DrawPolicy;
 	bool bEntityHidden = false;
+	bool bBodyPosedExternally = false;
 
 	// The last resolved draw gate, so the cloth hand-off runs on the **edge**. `ApplyDrawPolicy` is
 	// called every frame by the camera manager, and resuming a garment re-teleports and resets it —

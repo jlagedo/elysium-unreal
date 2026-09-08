@@ -521,9 +521,29 @@ void FElysiumEntityWorld::StartPlayerDialogTail()
 		&& Automatic != nullptr && Automatic->IsAutoEnd();
 	if (DialogueSession->bOneShot)
 	{
+		// **`SetDialogPartner(this, NULL)` is what retail returns through here.** `0x10178280`'s
+		// bark path (`FUN_10178170` true => `FUN_101cebc0`) and its `Acquire`-refused path both
+		// fall out of the `if` and hit `CBaseCombatCharacter::SetDialogPartner(this, NULL)` on the
+		// way to the `return` — the partner field is cleared, not left holding the NPC.
+		//
+		// The port has no `m_hDialogPartner` field: it models the partner as "a session is open and
+		// this entity owns it" (`GetOpenDialogOwner()`), so the equivalence is the session's own
+		// lifetime — the write retail makes here is the port never *promoting* the bark into a
+		// conversation. `bOneShot` is that statement: no camera (`SelectDialogueCamera`'s first
+		// arm), no immobilize, no holster, and the session closes with the automatic line.
+		//
+		// **Residual, stated rather than hidden:** retail clears the field on this instruction, so
+		// its window is zero, while the port's stand-in answers the owner for as long as the bark's
+		// line is playing. One live reader can tell — `TickGaze`'s dialogue arm
+		// (`ElysiumCombatCharacter.cpp`, the `+0xFE8` stand-in) — which means a barking NPC holds
+		// the player in its gaze for the length of the bark where retail's would fall through to
+		// the ordinary chain. Closing that needs the partner to become a field of its own rather
+		// than a query over the session, because the session is also what the HUD, the `dlg`
+		// console and the presentation layer read to name the speaker.
 		UE_LOG(LogElysiumWorld, Verbose,
 			TEXT("dialogue %s is a one-shot (CDialog +0x30e9): the line is sent, no camera, ")
-			TEXT("no immobilize, no holster"), *DescribeHandle(DialogueSession->Owner));
+			TEXT("no immobilize, no holster; retail's SetDialogPartner(NULL) is this session ")
+			TEXT("never becoming a conversation"), *DescribeHandle(DialogueSession->Owner));
 		return;
 	}
 
@@ -581,8 +601,26 @@ void FElysiumEntityWorld::StartPlayerDialogTail()
 
 bool FElysiumEntityWorld::AdoptDialogueCineCamera(const FString& ShotName)
 {
-	if (!DialogueSession || ShotName.IsEmpty())
+	if (!DialogueSession)
 	{
+		return false;
+	}
+	// `0x10178280`'s non-payphone arm, verbatim:
+	//
+	//     puVar6 = piVar5[0x1931];                       // npc->default_camera
+	//     if (puVar6 == NULL) puVar6 = &DAT_106b8540;    // the empty string
+	//     piVar5 = FUN_10070470(puVar6, NULL,NULL,NULL,NULL);
+	//     FUN_1017cef0(this, piVar5);                    // UNCONDITIONAL — cam may be NULL
+	//
+	// **`FUN_1017cef0(this, NULL)` is the clear**: it writes `m_iCameraOverrideIdx = 0`, drops the
+	// handle and destroys the outgoing camera when that camera is disposable. So an NPC with no
+	// `default_camera`, or one naming a shot the table does not hold, does not merely run
+	// cameraless — it takes down whatever was adopted when the conversation opened: a terminal
+	// shot, a `StartShot` shot, the previous conversation's camera. Both failure arms below are
+	// that same clear.
+	if (ShotName.IsEmpty())
+	{
+		ClearScriptedCamera();
 		return false;
 	}
 	const FElysiumEntityHandle NoAnchors[FElysiumShotBindings::Num] = {};
@@ -593,12 +631,16 @@ bool FElysiumEntityWorld::AdoptDialogueCineCamera(const FString& ShotName)
 	if (!Camera)
 	{
 		// **No `DialogDefault` fallback here** — that literal belongs to `CBasePlayer::SetCamera`
-		// (`FUN_1017d020`) alone. A `default_camera` that does not load leaves `cam == NULL` and the
-		// conversation runs cameraless. The port's authored-profile ladder below is a NAMED
-		// MODERNIZATION standing in that gap; with it off (`DialogueCamerasEnabled()` false, or an
-		// empty profile set) the port reproduces retail exactly.
+		// (`FUN_1017d020`) alone. A `default_camera` that does not load leaves `cam == NULL`, and
+		// `FUN_1017cef0(this, NULL)` runs on it anyway: the conversation runs cameraless **and the
+		// slot is cleared**. The port's authored-profile ladder below is a NAMED MODERNIZATION
+		// standing in that gap; it publishes on Channel B and is unaffected by this clear. With it
+		// off (`DialogueCamerasEnabled()` false, or an empty profile set) the port reproduces
+		// retail exactly.
+		ClearScriptedCamera();
 		UE_LOG(LogElysiumWorld, Log,
-			TEXT("dialogue %s default_camera '%s' did not load; retail runs cameraless here"),
+			TEXT("dialogue %s default_camera '%s' did not load; retail runs cameraless here ")
+			TEXT("and clears the cine slot"),
 			*DescribeHandle(DialogueSession->Owner), *ShotName);
 		return false;
 	}

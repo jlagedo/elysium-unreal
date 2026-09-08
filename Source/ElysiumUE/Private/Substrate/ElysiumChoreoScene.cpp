@@ -996,6 +996,17 @@ public:
 			BeginExpression(Event);
 			break;
 
+		// `DispatchStartEvent` `0x10082ee0` case `0x10`. Case `0x12` is `CameraRestore` below;
+		// **case `0x11` (`CameraShot`) has no label at all** and falls to `default:`, which re-reads
+		// the type and prints — so it stays on `default:` here too, deliberately unrouted.
+		case EElysiumChoreoEvent::CameraMove:
+			CameraMove(Event);
+			break;
+
+		case EElysiumChoreoEvent::CameraRestore:
+			CameraRestore(Event);
+			break;
+
 		// The line's amplitude envelope, cut from the wav at author time. It drives the jaw through
 		// the model's own `mstudiomouth_t` — a flexdesc, so it lands below the flex-rule layer the
 		// expression track above feeds, not beside it. The span is latched here and read by
@@ -1009,6 +1020,9 @@ public:
 			}
 			break;
 
+		// `CameraShot` (`0x11`) lands here, exactly as it does in retail: the switch carries labels
+		// `1`-`0x10`, `0x12` and `0x13`, and `0x11` is absent. VtMB parses the token, names it in the
+		// table at `0x10547984`, and then only prints "unhandled event type". Zero authored uses.
 		default:
 			break;
 		}
@@ -1089,6 +1103,81 @@ public:
 			return;
 		}
 		FireOutput(FName(*FString::Printf(TEXT("OnTrigger%d"), N)), Activator);
+	}
+
+	// --- The three camera event types -----------------------------------------------------------
+	//
+	// **No shipped `.vcd` authors any of them.** A case-insensitive search for the substring
+	// `camera` over all 5,444 files under `exports/scenes/` returns no matches at all: no
+	// `cameramove`, no `camerashot`, no `camerarestore`, no `targethead`. VtMB moves its cinematic
+	// camera with `camera_keyframe` + `PlayAsCameraPosition`/`PlayAsCameraTarget` entities and its
+	// scripted shots with `vdata/camerashots/` files, never through choreo. These arms are live code
+	// in retail with no shipped caller, and they are ported for fidelity of the event table — the
+	// `Elysium.Content.SceneCorpus` assertion that keeps the dead ten at zero is what pins that.
+	//
+	// They drive the **override channel**, not the cine-shot channel: retail's
+	// `SetCameraViewEntity`/`SetCameraTargetEntity`/`RestoreCamera` move the player's own view, and
+	// `SetCameraViewEntity` explicitly drops any live `camera_cinematic` first (`FUN_1017d280`'s
+	// opening `SetCineCamera(player, NULL)`) — which is the single adoption slot arbitration, not a
+	// third stack. Retail broadcasts to every player index; there is one player here, so the loop
+	// collapses to one call.
+
+	// `DispatchStartEvent` case `0x10`.
+	void CameraMove(const FElysiumSceneEvent& Event)
+	{
+		if (World == nullptr)
+		{
+			return;
+		}
+		// `p1 = GetParameters(); viewEnt = *p1 ? FindNamedEntity(p1) : NULL;` — the same by-name
+		// lookup `firetrigger`'s siblings use, so the `!targetN` aliases resolve here too.
+		const FElysiumEntity* ViewEnt = Event.Param.IsEmpty()
+			? nullptr : ResolveActorByName(Event.Param);
+		FElysiumEntity* TargetEnt = Event.Param2.IsEmpty()
+			? nullptr : ResolveActorByName(Event.Param2);
+
+		const float Duration = Event.GetDuration();
+
+		// The two-arm split, and the subtlety of the case: a `param2` that resolves to a combat
+		// character (retail casts `tgtEnt->+0x9c`) goes through `SetAsCameraTarget(cc, bHead, dur)`,
+		// which stores `m_bCameraTargetIsHead` and `m_flCameraOverrideFadeTime` on the CHARACTER and
+		// broadcasts the target push with a crossfade of **0.0** — the character's own field is then
+		// what raises it. The local pointer is nulled afterwards, so that target is **not** pushed
+		// again by the broadcast below. A `param2` that is not a combat character is pushed
+		// directly, with the event's own duration as the crossfade.
+		if (TargetEnt != nullptr)
+		{
+			if (FElysiumCombatCharacter* Character = TargetEnt->AsCombatCharacter())
+			{
+				Character->SetAsCameraTarget(Event.bTargetHead, Duration);
+				TargetEnt = nullptr;
+			}
+		}
+
+		if (ViewEnt != nullptr)
+		{
+			// `SetCameraViewEntity(p, viewEnt, GetDuration())` `FUN_1017d280`.
+			World->CameraOverrideChannelMutable().SetViewEntity(World->NowSeconds(),
+				ViewEnt->Handle, Duration, World->CameraOverrideResolver());
+		}
+		if (TargetEnt != nullptr)
+		{
+			// `SetCameraTargetEntity(p, tgtEnt, GetDuration())` `FUN_1017d460` — which, unlike the
+			// view setter, leaves a live cine shot alone.
+			World->SetCameraOverrideTarget(TargetEnt->Handle, Duration);
+		}
+	}
+
+	// `DispatchStartEvent` case `0x12` — `RestoreCamera(p, GetDuration())` `FUN_1017d6d0` at every
+	// client, and nothing else.
+	void CameraRestore(const FElysiumSceneEvent& Event)
+	{
+		if (World == nullptr)
+		{
+			return;
+		}
+		World->CameraOverrideChannelMutable().FadeOut(World->NowSeconds(), Event.GetDuration(),
+			World->CameraOverrideResolver());
 	}
 
 	void PlayActorClip(const FElysiumSceneEvent& Event, float SceneTime)

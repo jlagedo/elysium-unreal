@@ -3,8 +3,13 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumSkeletalBasis.h"
+#include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumCameraCinematic.h"
 #include "Substrate/ElysiumClassFields.h"
+
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCamAnimated, Log, All);
 
@@ -29,15 +34,84 @@ void FElysiumCameraAnimated::Spawn()
 		Kill();
 		return;
 	}
+	BuildCameraVisual();
+}
+
+void FElysiumCameraAnimated::BuildCameraVisual()
+{
+	// Retail's `SetModel` gives the entity one model and `LookupSequence` runs on it. The port has
+	// three model manifests behind one `model` key, so the build order IS the vocabulary choice, and
+	// it is the order `FElysiumLockableEntity::Spawn` already uses for the same reason:
+	//
+	//  1. `animated_props` — a camera rig is a prop rig. This is the route that makes the class work
+	//     at all: `FElysiumAnimating::BuildBody` stands a CHARACTER body only, and the clip resolve
+	//     under it (`UElysiumAnimSubsystem::ResolveClip`) refuses any stem outside the manifest's
+	//     `npcs`/`banks` groups — which a camera rig is never in. `special-case.txt`'s
+	//     `AttachPos "Bone: cam_bone"` names a bone on exactly this body.
+	//  2. the character manifest, for a rig authored as one.
+	//  3. a static prop, which stands the model and plays nothing — the same observable state
+	//     retail's `seq < 0` arm leaves behind, reached for the same reason (no sequence).
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Def)
+	{
+		return;   // headless: no body, and `animname` then strands exactly as a missing sequence does
+	}
+
+	AnimatedStem = Embodiment->AnimatedPropStemForModel(Model);
+	if (!AnimatedStem.IsEmpty())
+	{
+		const FQuat Rotation(ElysiumSkeletalBasis::FromSourceAngles(Angles));
+		Visual = Embodiment->BuildAnimatedPropVisual(AnimatedStem, Origin, Rotation,
+			Embodiment->BodyScaleFor(*Def), Handle.Index);
+		if (Visual != nullptr)
+		{
+			// Teardown only: no use anchor. `CCameraAnimated` declares no `+USE` verb, so the rig
+			// must not become a focus target the way a lockable's body does.
+			World->RegisterPropBody(Visual);
+			return;
+		}
+		AnimatedStem.Reset();
+	}
+
 	BuildBody();
+	if (Visual != nullptr)
+	{
+		return;
+	}
+
+	StaticBody = Embodiment->BuildPropVisual(Model, Origin,
+		FQuat(FRotator(0.0f, -Angles.Y, 0.0f)), Embodiment->BodyScaleFor(*Def));
+	if (StaticBody != nullptr)
+	{
+		World->RegisterPropBody(StaticBody);
+	}
 }
 
 void FElysiumCameraAnimated::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 {
 	Out.Emplace(TEXT("AnimName"), AnimName.IsEmpty() ? TEXT("<none>") : AnimName);
+	// Which of the three routes `BuildCameraVisual` took, because it is also which clip vocabulary
+	// `animname` was looked up in.
+	FString BodyRow(TEXT("<none>"));
+	if (!AnimatedStem.IsEmpty())
+	{
+		BodyRow = FString::Printf(TEXT("animated prop %s"), *AnimatedStem);
+	}
+	else if (Visual != nullptr)
+	{
+		BodyRow = TEXT("character");
+	}
+	else if (StaticBody != nullptr)
+	{
+		BodyRow = TEXT("static prop");
+	}
+	Out.Emplace(TEXT("Body"), MoveTemp(BodyRow));
 	Out.Emplace(TEXT("Camera"), CineCamera.IsSet() ? TEXT("live") : TEXT("<none>"));
 	Out.Emplace(TEXT("SequenceEnds"), SequenceEndTime >= 0.0
 		? FString::Printf(TEXT("%.3f"), SequenceEndTime) : TEXT("<not playing>"));
+	// `m_bSequenceLoops` is shown beside the deadline precisely because it does not move it.
+	Out.Emplace(TEXT("SequenceLoops"), bSequenceLoops ? TEXT("yes (ends on the first wrap)")
+		: TEXT("no"));
 	Out.Emplace(TEXT("FreezePlayer"),
 		(SpawnFlags & ElysiumCineCam::SF_FreezePlayer) != 0 ? TEXT("yes") : TEXT("no"));
 }
@@ -92,6 +166,36 @@ void FElysiumCameraAnimated::InputStartCamera()
 	}
 }
 
+bool FElysiumCameraAnimated::PlayCameraSequence(float& OutSeconds, bool& bOutLoops)
+{
+	// `CBaseAnimating::LookupSequence(this, animName)` on the entity's own model, then play it.
+	// Whichever manifest stood the body owns the lookup; there is no second attempt, because retail
+	// has exactly one and because a stem answered by one manifest is never in the other.
+	OutSeconds = 0.0f;
+	bOutLoops = false;
+	if (AnimName.IsEmpty())
+	{
+		return false;   // `m_sAnimName ? ... : ""` — LookupSequence("") answers < 0
+	}
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment != nullptr && Visual != nullptr && !AnimatedStem.IsEmpty())
+	{
+		// `FindAnimatedPropClip` IS the lookup and it hands back the clip's own `STUDIO_LOOPING`
+		// bit, which is what `ResetSequenceInfo` copies into `m_bSequenceLoops`. The clip is played
+		// with that bit, exactly as retail plays the sequence with its own flags; the shot still
+		// ends on the first wrap (see `SequenceEndTime`).
+		if (!Embodiment->FindAnimatedPropClip(AnimatedStem, AnimName, bOutLoops))
+		{
+			return false;
+		}
+		return Embodiment->PlayAnimatedPropClip(Visual, AnimatedStem, AnimName, bOutLoops,
+			&OutSeconds);
+	}
+	// The character vocabulary. `PlayAnimClip` returns false with no body at all, which is the
+	// headless world and the static-prop body alike.
+	return PlayAnimClip(AnimName, /*bLoop*/ false, &OutSeconds);
+}
+
 void FElysiumCameraAnimated::PlayCameraAnimation()
 {
 	// `FUN_10071770`:
@@ -101,26 +205,35 @@ void FElysiumCameraAnimated::PlayCameraAnimation()
 	//   FireOutput(m_OnCameraBegin);
 	//   ThinkSet(CameraAnimatedThink, 0.0); m_flNextThink = curtime + 0.1;
 	float Seconds = 0.0f;
-	const bool bPlaying = !AnimName.IsEmpty()
-		&& PlayAnimClip(AnimName, /*bLoop*/ false, &Seconds);
+	bool bLoops = false;
+	const bool bPlaying = PlayCameraSequence(Seconds, bLoops);
 	const double Now = World ? World->NowSeconds() : 0.0;
 
 	if (!bPlaying)
 	{
-		// **A named divergence, stated.** Retail's `seq < 0` arm `Msg`s and *returns* — it fires no
-		// `OnCameraBegin`, arms no think, and leaves the cine camera adopted with nothing to end it,
-		// so the view is stuck on a still camera until something else takes the slot. The port's
-		// animation seam resolves a clip through the NPC clip manifest
-		// (`FElysiumAnimating::PlayAnimClip`), which a camera rig's own model need not be in, so
-		// this arm is reachable for a reason retail's is not. Ending the camera on the next think is
-		// chosen over reproducing a view with no exit; the missing piece is "play an arbitrary named
-		// sequence on a bare animating entity".
-		UE_LOG(LogElysiumCamAnimated, Warning, TEXT("%s no sequence named:%s"),
+		// **The strand, reproduced (RC15.3 §3.2).** Retail's `seq < 0` arm prints, writes
+		// `m_nSequence = 0` — not `-1` — and *returns*. It fires no `OnCameraBegin`, calls no
+		// `ThinkSet`, and never touches `m_flNextThink`. So the think never runs, `EndCamera`
+		// (`FUN_10071660`, the only exit) is never reached, the `CamMode 4` camera adopted two lines
+		// earlier in `StartCamera` stays adopted frozen at sequence 0 cycle 0, `OnCameraComplete`
+		// never fires, and the `spawnflags & 1` freeze `StartCamera` applies immediately AFTER this
+		// call is never released. The view is stuck on a still camera, with the player frozen, until
+		// something else takes the adoption slot or the map fires `EndCamera` by hand.
+		//
+		// Everything below this line is left exactly as it was: no deadline, no think. The warning
+		// is the port's own diagnostic, since a stranded view is otherwise silent; retail's `Msg` is
+		// itself defective (`"%s no sequence named:%s\n"` pushes ONE argument for two `%s`, so the
+		// name it prints is the entity's and the sequence is never shown). Recorded in
+		// `docs/vtmb/retail-defects.md` §7.
+		UE_LOG(LogElysiumCamAnimated, Warning,
+			TEXT("%s no sequence named:%s — the camera is stranded (retail FUN_10071770 seq < 0)"),
 			*DebugString(), *AnimName);
-		SequenceEndTime = Now;
-		NextThink = static_cast<float>(Now + ElysiumCameraAnimatedImpl::AnimatedThinkInterval);
+		SequenceEndTime = -1.0;
+		bSequenceLoops = false;
+		NextThink = ELYSIUM_NEVER_THINK;
 		return;
 	}
+	bSequenceLoops = bLoops;
 	SequenceEndTime = Now + FMath::Max(0.0f, Seconds);
 	FireOutput(FName(TEXT("OnCameraBegin")), FElysiumEntityHandle::Invalid());
 	NextThink = static_cast<float>(Now + ElysiumCameraAnimatedImpl::AnimatedThinkInterval);
@@ -134,9 +247,11 @@ void FElysiumCameraAnimated::Think()
 	//   this->+0x828 = camera_showdebug.IsCommand() ? 0 : (camera_showdebug.GetInt() != 0);
 	//
 	// The frame advance and the event dispatch are the world's own animation pass here
-	// (`FElysiumEntityWorld::AdvanceAnimEvents`), so what is left is the finished test.
+	// (`FElysiumEntityWorld::AdvanceAnimEvents`), so what is left is the finished test — and that
+	// test is `m_bSequenceFinished` alone. No cycle compare, and no `m_bSequenceLoops` consultation:
+	// a looping clip ends the camera on its first wrap.
 	const double Now = World ? World->NowSeconds() : 0.0;
-	if (SequenceEndTime >= 0.0 && Now >= SequenceEndTime)
+	if (IsSequenceFinished(Now))
 	{
 		InputEndCamera();
 		return;
@@ -185,7 +300,10 @@ void FElysiumCameraAnimated::InputEndCamera()
 		}
 	}
 	CineCamera = FElysiumEntityHandle::Invalid();
+	// `m_nSequence = 0; m_flCycle = 0; ResetSequenceInfo()` — which is also the only reset of
+	// `m_bSequenceFinished` and of `m_bSequenceLoops`.
 	SequenceEndTime = -1.0;
+	bSequenceLoops = false;
 	NextThink = ELYSIUM_NEVER_THINK;
 	ScriptHide();
 }

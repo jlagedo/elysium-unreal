@@ -1663,6 +1663,26 @@ struct FElysiumRecordingServices final
 		++StopPlayerBodyCount;
 		Record(TEXT("StopPlayerBody"));
 	}
+	// The death think's ground friction. A Substrate world runs no mover, so the double keeps the
+	// carried speed itself and applies retail's own rule to it — which is what lets a case assert
+	// the -20 units/frame bleed and the stop at zero with no body at all.
+	float PlayerBodySpeedCm = 0.f;
+	int32 BleedPlayerBodyVelocityCount = 0;
+	virtual void BleedPlayerBodyVelocity(float StepCm) override
+	{
+		++BleedPlayerBodyVelocityCount;
+		PlayerBodySpeedCm = PlayerBodySpeedCm - StepCm > 0.f ? PlayerBodySpeedCm - StepCm : 0.f;
+		Record(FString::Printf(TEXT("BleedPlayerBodyVelocity step=%.2f -> %.2f"), StepCm,
+			PlayerBodySpeedCm));
+	}
+	// `m_iFOV`, as the camera would be handed it. Unset is the port's "no producer has spoken";
+	// death writes 0, which the camera latches to 60.
+	TOptional<int32> PlayerFovOverride;
+	virtual void SetPlayerFovOverride(int32 SourceFov) override
+	{
+		if (SourceFov < 0) { PlayerFovOverride.Reset(); } else { PlayerFovOverride = SourceFov; }
+		Record(FString::Printf(TEXT("SetPlayerFovOverride %d"), SourceFov));
+	}
 	virtual float ResolveNpcMakerGroundZ(const FVector& Origin, float Depth) const override
 	{
 		const float Result = bUseNpcMakerGroundZ ? NpcMakerGroundZ : Origin.Z;

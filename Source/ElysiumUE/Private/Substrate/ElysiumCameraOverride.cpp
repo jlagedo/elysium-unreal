@@ -112,6 +112,12 @@ void FElysiumCameraOverrideChannel::ReleaseSlot(EElysiumCameraOverrideKind Kind)
 {
 	FSlot& Slot = (Kind == EElysiumCameraOverrideKind::Target) ? Target : View;
 	Slot.Entity = FElysiumEntityHandle::Invalid();
+	if (Kind != EElysiumCameraOverrideKind::Target)
+	{
+		// An explicit release IS "this entity has stopped being the view entity", so the next set
+		// of any entity is a real handoff and carries the cine clear again.
+		ViewAdopted = FElysiumEntityHandle::Invalid();
+	}
 }
 
 bool FElysiumCameraOverrideChannel::IsClear() const
@@ -150,6 +156,20 @@ void FElysiumCameraOverrideChannel::SetViewEntity(double Now, const FElysiumEnti
 	// The two channels are mutually exclusive by construction.
 	Resolver.ClearCineCamera();
 
+	AdoptViewEntity(Now, Entity, Crossfade, Resolver);
+}
+
+void FElysiumCameraOverrideChannel::ReadoptViewEntity(double Now,
+	const FElysiumEntityHandle& Entity, float Crossfade,
+	const IElysiumCameraOverrideResolver& Resolver)
+{
+	// No `ClearCineCamera` — that is the whole point of the split. See the header.
+	AdoptViewEntity(Now, Entity, Crossfade, Resolver);
+}
+
+void FElysiumCameraOverrideChannel::AdoptViewEntity(double Now, const FElysiumEntityHandle& Entity,
+	float Crossfade, const IElysiumCameraOverrideResolver& Resolver)
+{
 	if (Crossfade < 0.0f)
 	{
 		Crossfade = 0.0f;
@@ -158,6 +178,8 @@ void FElysiumCameraOverrideChannel::SetViewEntity(double Now, const FElysiumEnti
 	IElysiumCameraOverrideSource* Incoming = LiveSource(Entity, Resolver);
 	if (Incoming == nullptr)
 	{
+		// Retail leaves the slot alone on a dead handle and only fades out, so the remembered
+		// occupant is left alone too.
 		FadeOut(Now, Crossfade, Resolver);
 		return;
 	}
@@ -171,6 +193,7 @@ void FElysiumCameraOverrideChannel::SetViewEntity(double Now, const FElysiumEnti
 	View.Entity = Entity;
 	View.SetTime = Now;
 	View.CrossfadeDuration = Crossfade;
+	ViewAdopted = Entity;
 
 	Incoming->OnBecameCameraView();   // slot 0xBC, `0x1017d3e9`
 }

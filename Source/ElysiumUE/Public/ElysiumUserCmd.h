@@ -112,6 +112,29 @@ namespace ElysiumInput
 		static_cast<uint64>(EElysiumButton::Forward)   | static_cast<uint64>(EElysiumButton::MoveLeft),
 	};
 
+	// `DAT_10589050`, the immobilize button mask `CPlayerMove::SetupMove` `0x10186120` applies:
+	//
+	//     mv->m_nButtons = cmd->buttons;
+	//     if (!IsMobile(player)) mv->m_nButtons &= ~DAT_10589050;
+	//
+	// The dword read out of the PE at that address is **`0x807`** =
+	// `IN_ATTACK | IN_JUMP | IN_DUCK | IN_ATTACK2`. Four bits, and the omissions are the point:
+	//
+	// * **`IN_USE` is not masked.** Every shipped opener that immobilizes (`CBaseTerminal`,
+	//   `CPropSign`, `CGameSign`, `CTriggerBombSite`, `CTriggerElectricBugaloo`) immobilizes the
+	//   player *for* an interaction he is holding `+use` on, so masking `IN_USE` would make the
+	//   interaction unendable. An immobilized player can still press use.
+	// * **The direction bits are not masked either.** Retail leaves `IN_FORWARD`/`IN_BACK`/
+	//   `IN_MOVELEFT`/`IN_MOVERIGHT` standing and instead zeroes `forwardmove`/`sidemove`/`upmove`
+	//   in the same gate (`!(GetFlags() & FL_FROZEN) && IsMobile()`), which is why the port's
+	//   `ApplyImmobilize` zeroes the analog pair and leaves those bits alone. `+wpn_secondaryatk`
+	//   is a VtMB verb of its own and is **not** `IN_ATTACK2`, so it is not in the mask.
+	inline constexpr uint64 ImmobilizeButtonMask =
+		static_cast<uint64>(EElysiumButton::Attack)   |   // IN_ATTACK  0x001
+		static_cast<uint64>(EElysiumButton::Jump)     |   // IN_JUMP    0x002
+		static_cast<uint64>(EElysiumButton::Duck)     |   // IN_DUCK    0x004
+		static_cast<uint64>(EElysiumButton::Attack2);     // IN_ATTACK2 0x800
+
 	// The direction bits a move vector states, for the consumers that read a BUTTON FIELD rather than
 	// the vector — chiefly direction-keyed melee selection, which compares each candidate sequence's
 	// authored mask against the held bits (`ElysiumCombo::SelectionMask`).
@@ -209,6 +232,20 @@ struct FElysiumUserCmd
 			static_cast<uint64>(EElysiumButton::Speed) |
 			static_cast<uint64>(EElysiumButton::Strafe)
 		);
+	}
+
+	// `CPlayerMove::SetupMove` `0x10186120`'s immobilize pair, and the whole of what it does to a
+	// command: `mv->m_nButtons &= ~0x807` and `forward = side = up = 0`. It is deliberately not
+	// `ClearMovement` — the two clear disjoint halves of the command and mean opposite things.
+	// `ClearMovement` drops the direction bits and keeps the combat ones; retail's immobilize drops
+	// the combat ones (`attack`, `jump`, `duck`, `attack2`) and keeps the direction bits, because
+	// zeroing the analog pair has already made them inert and `IN_USE` has to survive
+	// (`ElysiumInput::ImmobilizeButtonMask`).
+	void ApplyImmobilize()
+	{
+		Move = FVector2D::ZeroVector;
+		Up = 0.0f;
+		Buttons &= ~ElysiumInput::ImmobilizeButtonMask;
 	}
 
 	FString Describe() const;

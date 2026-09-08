@@ -391,6 +391,22 @@ struct FElysiumCameraShot
 	bool bUseLookAt = true;
 	FRotator Rotation = FRotator::ZeroRotator;
 
+	// **`Rotation` carries a real `m_angCamAngles`.** The server publishes that triple every 24 Hz
+	// tick (`0x1006f8f0` seeds it from `GetAbsAngles()` — vfunc `0x36c` — and replaces it with
+	// `VectorAngles(lookAt - GetOrigin())` only when the record declares a `Target` block), and the
+	// client reads it at exactly two places: the shot-start seed `FUN_10002210` (`0x474..0x47c` =
+	// `0x428..0x430`, copied through with **no** look-at re-derive) and the copy-through arm of
+	// `FUN_10001a20` for every `CamMode` other than 1 and 4. The mode-1 tracker re-derives `desired`
+	// from `m_vecLookAt - m_vecCurOrigin` every frame instead, which is why the two can disagree for
+	// the whole shot: retail publishes the origin the `+0x594` selector chose and the angle measured
+	// from the entity's own **placement** (`0x1006e8e0`'s `SetOrigin(+0x564)`).
+	//
+	// A port producer that pushes a bare value shot — `camera_track`, a VCD edit, the green room —
+	// has no server half and states its aim as a look-at instead, so it leaves this false and the two
+	// readers above derive the angle themselves. `FElysiumCameraDirector::Resolve` and
+	// `FElysiumCameraCinematic` set it, because those two *are* the server publish.
+	bool bAnglesPublished = false;
+
 	// `CInput+0x194` / `+0x198`: the shot's own roll and field of view, both lerped by the weight. A
 	// FieldOfView of 0 keeps the player's.
 	float Roll = 0.0f;

@@ -13,10 +13,11 @@
 //
 // Two things the fixture cannot give, said out loud rather than worked around:
 //
-//  * **The port has no `Intrusion` pusher yet.** `PushCameraShotNamed` has exactly one shipped
-//    caller (`FElysiumTerminal::BeginPlayerUse`, `special-case:Hacking`); the lockpick path pushes
-//    no camera at all, and the gym stands no prop carrying `camera_position`/`camera_target`
-//    attachments. So the `Intrusion` arm below is the **authored** `Intrusion` block — its own
+//  * **The gym stands no lock.** The `Intrusion` shot is adopted by the lock family
+//    (`FElysiumLockableEntity::OpenIntrusionCamera`, retail `CBaseLockableEnt` slot 39 ->
+//    `FUN_10070470("Intrusion", NULL, this, this, NULL)`), asserted in
+//    `Elysium.Substrate.LockableCamera`; the gym stands no doorknob/padlock carrying
+//    `camera_position`/`camera_target` attachments. So the `Intrusion` arm below is the **authored** `Intrusion` block — its own
 //    `CameraConstraints`, its own `AttachType Follow` anchors — with only its two attachment NAMES
 //    retargeted onto the monitor's `screen_axis`/`screen`, installed through
 //    `ElysiumCameraShots::InstallNamed` so it stands on this fixture. Every key the case asserts on
@@ -221,9 +222,9 @@ bool FElysiumTerminalCameraTest::RunTest(const FString&)
 	const FElysiumCameraShotDef Installed[] = { HackingDef, IntrusionOnGlass };
 	ElysiumCameraShots::InstallNamed(TEXT("special-case"), MakeArrayView(Installed, 2));
 	ON_SCOPE_EXIT { ElysiumCameraShots::FlushCache(); };
-	AddInfo(TEXT("fixture seam: the port has no Intrusion pusher and the gym stands no lockpick "
-		"prop, so the authored Intrusion block is re-anchored onto the monitor's screen_axis/screen "
-		"attachments; its CameraConstraints are the shipped file's, untouched"));
+	AddInfo(TEXT("fixture seam: the gym stands no lock (the Intrusion adopter is the lock family, "
+		"Elysium.Substrate.LockableCamera), so the authored Intrusion block is re-anchored onto the "
+		"monitor's screen_axis/screen attachments; its CameraConstraints are the shipped file's, untouched"));
 
 	// Stand the pawn square in front of the real glass, as the gym's cone case does.
 	const FVector Screen = Terminal->ScreenPointCm;

@@ -199,9 +199,20 @@ public:
 	// (104), `Activate` (113) and `UpdateOnRemove` (180) are all inherited and empty for this class:
 	// creation, adoption and teardown are free functions, never virtuals.
 	virtual void Spawn() override;
-	virtual void Think() override;
+	// **The tick's substrate second arrives as a parameter** and is threaded through the whole
+	// think chain below (`.claude/rules/cpp.md`): the 24 Hz accumulator measures its delta between
+	// successive stamps, and every arm that needs `curtime` — the expiry gate, the mode-3/4 expiry
+	// arms, the next-think re-arm — reads the same one. Nothing under this entry reaches back
+	// through the world for a clock.
+	virtual void ThinkAt(double Now) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 	virtual FElysiumCameraCinematic* AsCameraCinematic() override { return this; }
+
+	// `ObjectCaps` (slot 117): the base's single `FCAP_ACROSS_TRANSITION` (`0x2`) is cleared, so
+	// `CBaseCineCam::ObjectCaps() == 0` — **a live scripted shot does not cross a level transition**
+	// and is not carried by a save. `FElysiumEntityWorld::Freeze` is the port's whole carry and
+	// reads this, so the cap is wired rather than only recorded.
+	virtual int32 ObjectCaps() const override { return 0; }
 
 	// --- Inputs --------------------------------------------------------------------------------
 
@@ -229,7 +240,20 @@ public:
 
 	// `SetShot` `FUN_1006e130(name, camMode, subject)`. Clears the mode first, normalizes the name,
 	// looks it up, and **returns false with the mode still 0** when the name is unknown — which is
-	// what leaves a re-shot camera idle rather than falling back. Writes `CamMode` last.
+	// what leaves a re-shot camera idle rather than falling back.
+	//
+	// Its tail is two writes and nothing else:
+	//
+	//     uVar8 = engine->GetFrameCount();
+	//     *(undefined4 *)((int)in_ECX + 0x63c) = uVar8;    // m_nClientResetFrame
+	//     *(undefined4 *)((int)in_ECX + 0x638) = param_2;  // CamMode, last
+	//     return 1;
+	//
+	// So `FUN_1006e8e0` is **not** the only reset-frame stamp site — and it is exactly the site
+	// `CBasePlayer::SetCamera` `FUN_1017d020`'s re-shot arm skips. Every one of the 115 shipped
+	// `pc.SetCamera("Shot")` calls therefore arms `m_bShotStartPending` on the client and runs
+	// `FUN_10002210`, which for a `Start`-bearing shot re-seeds the pose **from the goal** — a cut.
+	// There is no `ThinkSet` here (M4); the think is `FUN_1006e8e0`'s alone.
 	bool SetShot(const FString& Name, int32 InCamMode, const FElysiumEntityHandle& InSubject);
 
 	// `FUN_1006ef50(this, ent, i)` — bind anchor `Index` and resolve its inline `Bone:`/
@@ -244,23 +268,24 @@ public:
 	// selector when the `End` handle is live, and publishes the first goal.
 	void StartShotPlacement();
 
-	// `FUN_1006e8b0(this, secs)` — `+0x55c = curtime + secs`.
-	void SetExpiry(float Seconds);
+	// `FUN_1006e8b0(this, secs)` — `+0x55c = curtime + secs`. `Now` is the tick's second, handed in.
+	void SetExpiry(float Seconds, double Now);
 
 	// `FUN_1006e770` — `SetCamThink`: the jump table on `CamMode`, which always ends by scheduling
 	// the next think 1/24 s out (mode 0 schedules nothing).
-	void SetCamThink();
+	//
+	// **`FUN_1006e130` does not call it.** The only caller is `FUN_1006e8e0` (`1006e8e9`, its very
+	// first instruction), so a `SetShot` with no shot start behind it installs no think: retail's
+	// `SetCamera` re-shot of a camera left idle by a failed `InputStartShot` sets `CamMode = 1` and
+	// publishes nothing, ever. It also means the 24 Hz phase survives a re-shot, because nothing
+	// re-arms `m_flNextThink` on that path.
+	void SetCamThink(double Now);
 
 	// `ShouldTransmit` (slot 86): the force-transmit window, else **only to the client whose player
 	// is `m_hSubject`**, and only while `CamMode != 0`. The whole PVS/`EF_NODRAW` logic of the base
 	// is replaced. One player here, so this is a fact recorded as state rather than a wire filter:
 	// a shot whose subject is not the player would in retail be invisible to it.
 	bool ShouldTransmit(const FElysiumEntityHandle& Recipient) const;
-
-	// `ObjectCaps` (slot 117): the base's single `FCAP_ACROSS_TRANSITION` (`0x2`) is cleared, so
-	// `CBaseCineCam::ObjectCaps() == 0` — **a live scripted shot does not cross a level transition**
-	// and is not carried by a save/transition.
-	static constexpr int32 ObjectCaps() { return 0; }
 
 	// `DrawDebugGeometryOverlays` (slot 123), gated on `camera_showdebug == 1` exactly. Retail draws
 	// the forward line **in modes 1 and 2 only**, from the replicated origin using the replicated
@@ -325,19 +350,25 @@ public:
 private:
 	// One 1/24 s tick of the mode dispatcher's arm. Split out so the accumulator above and the
 	// think body below are separately assertable.
-	void RunCamThink();
+	void RunCamThink(double Now);
 
 	// `FUN_1006f7d0` — the prologue every cine think runs first: schedule the next think 1/24 s out,
 	// then hand off to `CamEndThink` when the expiry is armed **and strictly past**. Returns true
 	// when the update must abort.
 	bool ThinkPrologue(double Now);
 
+	// `m_nClientResetFrame` `+0x63c`: `engine->GetFrameCount()`, stamped by **both**
+	// `FUN_1006e130` (its tail, ahead of `CamMode`) and `FUN_1006e8e0` (`1006ebaf`). The port's
+	// equivalent is the camera component's shot-start edge, which the embodiment re-arms on the
+	// published shot handle, so an un-adopted camera has nothing to stamp and says so.
+	void RestampClientResetFrame();
+
 	// The mode-1 body `0x1006f8f0`, in retail's verbatim order: anchor cache -> look-at ->
 	// the `+0x594` origin selector -> `AutoPositionFromTarget` -> the `+0xd4` angle gate ->
 	// publish origin / target / angles / FOV -> `point_player`.
-	void ThinkNamedShot();
-	void ThinkFollowEntity();
-	void ThinkAnimated();
+	void ThinkNamedShot(double Now);
+	void ThinkFollowEntity(double Now);
+	void ThinkAnimated(double Now);
 
 	// The three fields every arm stamps onto the goal before it is published: the channel
 	// (`bCine`), retail's `CamMode == 1` as `bTracked`, and `m_bDrawPlayer`.

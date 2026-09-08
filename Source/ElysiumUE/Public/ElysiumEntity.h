@@ -20,6 +20,18 @@ class IElysiumCameraOverrideSource;
 // `0x7f7fffff` (FLT_MAX) write in CBaseEntity::ScriptHide (entity_io.md).
 inline constexpr float ELYSIUM_NEVER_THINK = FLT_MAX;
 
+// Source's `FCAP_*` bits, as far as the port reads them. `ObjectCaps` (slot 117) is a bitfield of
+// engine capabilities; the two the port's own machinery can act on are the transition bit and the
+// use bits, and only the first has a consumer here — the map snapshot, which is the port's whole
+// "carried across a level change".
+namespace ElysiumEntityCaps
+{
+	// `FCAP_ACROSS_TRANSITION` `0x2`. `CBaseEntity::ObjectCaps()` sets it; `CBaseCineCam::ObjectCaps`
+	// clears it and returns 0 outright, which is retail saying a live scripted shot is never carried
+	// across a `trigger_changelevel`.
+	inline constexpr int32 AcrossTransition = 0x2;
+}
+
 // How a `scripted_sequence` sends its NPC to the mark — `m_fMoveTo`'s travelling values. 0 ("No")
 // and 4 ("Instantaneous") never reach the seam: the first touches nothing, the second is a
 // placement.
@@ -587,6 +599,14 @@ public:
 	// re-materialising everything carried out of it (VtMB's `.HL3`, `docs/architecture/save-architecture.md` §5).
 	virtual bool TravelsWithPlayer() const { return false; }
 
+	// `CBaseEntity::ObjectCaps()` (slot 117) — of its bits the port can act on exactly one,
+	// `FCAP_ACROSS_TRANSITION` (`0x2`). The base carries it, so an ordinary entity's state is
+	// written into the map snapshot and restored when the player walks back in. A leaf that clears
+	// it is saying "I am never carried across a level change": `CBaseCineCam::ObjectCaps()` is
+	// `return 0` (RC2.4), so a live scripted shot never crosses a `trigger_changelevel` and never
+	// rides a save. The freeze is the port's whole transition carry, so that is where this is read.
+	virtual int32 ObjectCaps() const { return ElysiumEntityCaps::AcrossTransition; }
+
 	// ScriptUnhide's stashed think. Exposed because the snapshot carries it: an entity frozen while
 	// hidden restores with the think it will resume on, not with "never".
 	float GetSavedNextThink() const { return SavedNextThink; }
@@ -623,6 +643,18 @@ public:
 	virtual void PreloadForActivation() {}
 
 	virtual void Think() {}
+
+	// The same think, with the tick's substrate second handed **in**. `RunThinks(double Now)` already
+	// has it — it is the deadline it just compared `NextThink` against — so a leaf whose think is
+	// cadenced takes the clock as a parameter instead of reaching back through the world for it
+	// (`.claude/rules/cpp.md`: DeltaTime and the clock arrive as parameters). `RunThinks` calls
+	// **this**, and the default forwards, so every leaf that does not care keeps overriding
+	// `Think()` and nothing changes for it.
+	//
+	// A separate name rather than an overload of `Think`, deliberately: fourteen leaves declare
+	// `virtual void Think() override`, and an overload would have every one of them hide the other
+	// signature.
+	virtual void ThinkAt(double Now) { Think(); }
 
 	// A playing choreographed scene blocks NPC-maker admission. The world derives the global gate
 	// from live entities so overlapping scenes and save restoration need no separate latch.

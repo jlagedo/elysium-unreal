@@ -19,6 +19,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumCameraSolve.h"
+// The two `m_angCamAngles` cases below drive the real producer (`FElysiumCameraDirector::Resolve`)
+// rather than hand-setting the field the tracker then reads back.
+#include "Player/ElysiumCameraShots.h"
 
 namespace ElysiumCameraShotStartTests
 {
@@ -172,25 +175,88 @@ bool FElysiumCameraShotStartTest::RunTest(const FString&)
 			Tracker.bSnapPending);
 	}
 
-	// --- no `Target` block: the authored angles stand ---------------------------------------------
+	// --- no `Target` block: the entity's abs angles are what gets published -----------------------
+	//
+	// **Driven from the producer**, not from a hand-set field. The two producers of a named shot's
+	// goal are `FElysiumCameraDirector::Resolve` and `FElysiumCameraCinematic::ThinkNamedShot`, and
+	// the rule under test is theirs: `0x1006f8f0` seeds `fStack_24..1c` from `GetAbsAngles()`
+	// (vfunc `0x36c`) **unconditionally** and publishes them at `param_1[0x181..0x183]`; the `+0xd4`
+	// gate only decides whether they are *replaced* by `VectorAngles(lookAt - GetOrigin())`. A shot
+	// with no `Target` block therefore publishes the entity's own angles at every 24 Hz tick.
+	// Asserting a rotation the case itself wrote would be true by construction and green while the
+	// producer published a zero.
+	//
+	// Values only: no world, so every anchor answers `vec3_origin` exactly as a dead handle does
+	// (`0x1006f09b`), which is all this needs — the question is the ANGLE, and its two sources are
+	// the entity pose the caller hands in.
 	{
-		FElysiumCameraShot Shot = MakeTrackedShot();
-		Shot.bHasStartAnchor = true;          // the goal arm, so the angles come from the shot
-		Shot.TargetPointCount = 0;            // `rec->+0xd4 == 0`
-		Shot.bTargetPoint1Flagged = false;
-		Shot.bTargetPoint2Flagged = false;
-		Shot.bUseLookAt = false;
-		Shot.Rotation = FRotator(-25.0f, 120.0f, 0.0f);
+		FElysiumCameraShotDef Def;
+		Def.Name = TEXT("NoTargetBlock");
+		Def.Start.bPresent = true;                 // the goal arm, `(flags & 1) != 0`
+		Def.TargetPointCount = 0;                  // `rec->+0xd4 == 0`
+		Def.Constraints.MoveSpeed = 250.0f * ElysiumCam::U;
+		Def.Constraints.MoveAccel = 100.0f * ElysiumCam::U;
+
+		// `GetOrigin()` (vfunc `0x370`) and `GetAbsAngles()` (vfunc `0x36c`) — the placement
+		// `FUN_1006e8e0` wrote, which is what the entity answers for the rest of the shot.
+		const FElysiumShotEntityPose Pose{ FVector(700.0f, -200.0f, 150.0f),
+			FRotator(-25.0f, 120.0f, 0.0f) };
+
+		FElysiumShotBindings Bindings;
+		FElysiumCameraShot Shot;
+		FElysiumCameraDirector::Resolve(nullptr, Def, FElysiumEntityHandle::Invalid(), Shot,
+			&Bindings, EElysiumShotResolvePass::ShotStart,
+			EElysiumShotOriginSelector::StartAnchor, &Pose);
+
+		TestFalse(TEXT("a Target-less shot publishes no look-at"), Shot.bUseLookAt);
+		TestTrue(TEXT("the PUBLISHED goal carries the entity's abs angles, not a zero rotation"),
+			Shot.Rotation.Equals(Pose.Angles, 0.01f));
+		TestTrue(TEXT("and says so, so the client copies them through"), Shot.bAnglesPublished);
 
 		FElysiumScriptedShotTracker Tracker;
 		Tracker.Start(Shot, LiveView);
-		TestTrue(TEXT("with no Target block the shot keeps its authored angles"),
-			Tracker.Rotation.Equals(Shot.Rotation, 0.01f));
+		TestTrue(TEXT("shot start seeds on the published angles"),
+			Tracker.Rotation.Equals(Pose.Angles, 0.01f));
 
-		// And it keeps them across a frame: the `+0xd4` gate is not a shot-start-only decision.
+		// And they hold across a frame: the `+0xd4` gate is not a shot-start-only decision, and the
+		// think republishes the same triple every tick.
 		Tracker.Advance(Shot, 1.0f / 60.0f);
 		TestTrue(TEXT("and holds them while the shot runs"),
-			Tracker.Rotation.Equals(Shot.Rotation, 0.01f));
+			Tracker.Rotation.Equals(Pose.Angles, 0.01f));
+	}
+
+	// --- with a `Target` block: the angle is measured from the entity's origin ---------------------
+	//
+	// `if (0 < rec->+0xd4) { pfVar5 = GetOrigin(); VectorAngles(lookAt - *pfVar5, ...); }` — the
+	// LOCAL transform, while `param_1[0x17b..0x17d]` publishes the origin the `+0x594` selector
+	// chose. Here the two are deliberately different points, and the published angle is the one
+	// measured from the entity.
+	{
+		FElysiumCameraShotDef Def;
+		Def.Name = TEXT("TargetBlock");
+		Def.Start.bPresent = true;
+		Def.Target1.bPresent = true;
+		Def.TargetPointCount = 1;
+		Def.bTargetPoint1Flagged = true;
+
+		const FElysiumShotEntityPose Pose{ FVector(0.0f, 900.0f, 0.0f),
+			FRotator(-25.0f, 120.0f, 0.0f) };
+
+		FElysiumShotBindings Bindings;
+		FElysiumCameraShot Shot;
+		FElysiumCameraDirector::Resolve(nullptr, Def, FElysiumEntityHandle::Invalid(), Shot,
+			&Bindings, EElysiumShotResolvePass::ShotStart,
+			EElysiumShotOriginSelector::StartAnchor, &Pose);
+
+		// Unbound anchors answer the world origin, so the look-at and the published origin are both
+		// `(0,0,0)` and the entity is 9 m away in +Y.
+		TestTrue(TEXT("the published origin is the selected anchor's"), Shot.Origin.IsNearlyZero());
+		TestTrue(TEXT("and the look-at is the world origin"),
+			Shot.bUseLookAt && Shot.LookAt.IsNearlyZero());
+		TestTrue(TEXT("the published angle is measured from the ENTITY, not from that origin"),
+			Shot.Rotation.Equals((Shot.LookAt - Pose.Origin).Rotation(), 0.01f));
+		TestFalse(TEXT("which is not what re-deriving from the published origin would give"),
+			Shot.Rotation.Equals((Shot.LookAt - Shot.Origin).Rotation(), 1.0f));
 	}
 
 	// --- the reset-frame signal: arms shot start, clears no settle flag ---------------------------

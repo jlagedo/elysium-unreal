@@ -466,45 +466,64 @@ bool FElysiumCameraComposeTest::RunTest(const FString&)
 		}
 	}
 
-	// --- the spectator replace: `CalcView`'s last arm, the seam nothing writes yet (RC10) ---
+	// --- `m_iFOV`, the player's own override, in the place the spectator replace used to hold -----
+	//
+	// **The `cl_view_entity` arm is gone.** RC10 read `CalcView`'s tail (`0x1019158e`) as retail's
+	// death/observer view and this suite asserted the compose branch for it; RC14 closed the writer
+	// search — `engine.dll DAT_20315be0` has exactly one writer in the image and it is the
+	// `cl_view_entity` console command (`0x200276d0`), so no shipped run ever takes the arm. Under
+	// the owner's ruling on dev-only console toggles the branch, its struct and its setter were
+	// deleted; what is asserted instead is that the *observable* surface no longer offers the
+	// replace, and that the one FOV rule the death path does need is in its place.
 	{
-		UElysiumCameraComponent* Spectating = NewObject<UElysiumCameraComponent>();
-		if (TestNotNull(TEXT("the spectator case has a camera component"), Spectating))
+		UElysiumCameraComponent* Fov = NewObject<UElysiumCameraComponent>();
+		if (TestNotNull(TEXT("the FOV case has a camera component"), Fov))
 		{
 			++GFrameCounter;
-			Spectating->AdvanceFrame(1.0f / 60.0f);
-			Spectating->SetSolvedBoom(FVector(-250.0f, 0.0f, 0.0f), FRotator::ZeroRotator, false);
+			Fov->AdvanceFrame(1.0f / 60.0f);
+			Fov->SetSolvedBoom(FVector(-250.0f, 0.0f, 0.0f), FRotator::ZeroRotator, false);
+
+			// The pure rule, with no camera at all: zero latches to 60 (`FUN_100f28d0`), and any
+			// other override is the angle itself.
+			TestTrue(TEXT("a zero m_iFOV latches to 60"),
+				FMath::IsNearlyEqual(ElysiumCameraView::LatchPlayerFov(0), 60.0f, 0.001f));
+			TestTrue(TEXT("and a live zoom override is its own angle"),
+				FMath::IsNearlyEqual(ElysiumCameraView::LatchPlayerFov(20), 20.0f, 0.001f));
 
 			FMinimalViewInfo Ordinary;
 			Ordinary.Location = FVector(0.0f, 0.0f, 160.0f);
 			Ordinary.Rotation = FRotator::ZeroRotator;
 			Ordinary.AspectRatio = 4.0f / 3.0f;
-			Spectating->ApplyBaseToView(Ordinary);
+			Fov->ApplyBaseToView(Ordinary);
 
-			TestFalse(TEXT("nothing in the port sets the spectated view yet"),
-				Spectating->GetSpectatedView().IsSet());
+			TestFalse(TEXT("no producer has written m_iFOV on a fresh camera"),
+				Fov->GetPlayerFovOverride().IsSet());
+			// A 4:3 view, so `WidenSourceFov` passes the authored angle through untouched and the
+			// composed number is the record's own.
+			// ...and retail has no "unset" state: a fresh player carries `m_iFOV == 0` from `Spawn`,
+			// which the HUD think latches to 60 before the engine sees it. `default_fov` is the
+			// no-local-player branch only (`FUN_100f12b0` `0x100f12dc`), so it never renders in play.
+			TestTrue(TEXT("so the living lens is the 60-degree latch, not default_fov"),
+				FMath::IsNearlyEqual(static_cast<float>(Ordinary.FOV),
+					ElysiumCameraView::ZeroFovLatchDegrees, 0.01f));
+			TestFalse(TEXT("and default_fov (75) is not what a living player renders"),
+				FMath::IsNearlyEqual(static_cast<float>(Ordinary.FOV), Fov->GetCvars().DefaultFov, 0.01f));
 
-			FElysiumSpectatedView Watched;
-			Watched.Origin = FVector(-4000.0f, 250.0f, 900.0f);
-			Watched.Angles = FRotator(-20.0f, 135.0f, 7.0f);
-			Spectating->SetSpectatedView(Watched);
+			// What `Event_Killed` writes.
+			Fov->SetPlayerFovOverride(0);
+			FMinimalViewInfo Dead;
+			Dead.Location = FVector(0.0f, 0.0f, 160.0f);
+			Dead.Rotation = FRotator::ZeroRotator;
+			Dead.AspectRatio = 4.0f / 3.0f;
+			Fov->ApplyBaseToView(Dead);
+			TestTrue(TEXT("a zero override composes 60, not the record's 75"),
+				FMath::IsNearlyEqual(static_cast<float>(Dead.FOV), 60.0f, 0.01f));
+			TestTrue(TEXT("and the eye is not moved by the FOV write"),
+				Dead.Location.Equals(Ordinary.Location, 0.01f));
 
-			FMinimalViewInfo Replaced;
-			Replaced.Location = FVector(0.0f, 0.0f, 160.0f);
-			Replaced.Rotation = FRotator::ZeroRotator;
-			Replaced.AspectRatio = 4.0f / 3.0f;
-			Spectating->ApplyBaseToView(Replaced);
-
-			TestTrue(TEXT("origin and angles are hard-replaced by the spectated entity's"),
-				Replaced.Location.Equals(Watched.Origin, 0.01f)
-					&& Replaced.Rotation.Equals(Watched.Angles, 0.01f));
-			TestTrue(TEXT("and the field of view is not touched by the arm"),
-				FMath::IsNearlyEqual(static_cast<float>(Replaced.FOV),
-					static_cast<float>(Ordinary.FOV), 0.001f));
-
-			Spectating->ClearSpectatedView();
-			TestFalse(TEXT("clearing it returns the ordinary view"),
-				Spectating->GetSpectatedView().IsSet());
+			Fov->ClearPlayerFovOverride();
+			TestFalse(TEXT("clearing it hands the lens back to default_fov"),
+				Fov->GetPlayerFovOverride().IsSet());
 		}
 	}
 

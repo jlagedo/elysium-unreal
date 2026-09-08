@@ -528,6 +528,10 @@ public:
 	// The forced-sequence record the melee stop's rule is evaluated over, and the stop
 	// itself. Both are the player body's, so both live on this actor beside the driver that owns it.
 	virtual void StopPlayerBody() override;
+	// The death think's ground friction and the player's `m_iFOV`. Both are the player body's own
+	// state, so both land here beside the mover and the camera component this actor already reaches.
+	virtual void BleedPlayerBodyVelocity(float StepCm) override;
+	virtual void SetPlayerFovOverride(int32 SourceFov) override;
 	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 		float TraceDepthCm) const override;
 	virtual bool IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const override;

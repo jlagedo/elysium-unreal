@@ -300,7 +300,22 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 	// One rule for both channels: the scripted shot's own `FieldOfView` goes through the same
 	// `WidenSourceFov` in `ApplyScriptedShotToView`, so the shot's weight lerps two angles that are
 	// in the same space rather than a Source angle against an engine constant.
-	View.FOV = ElysiumCam::WidenSourceFov(Cvars.DefaultFov,
+	//
+	// **The lens is `m_iFOV`, never `default_fov`, whenever a local player exists** (RC14,
+	// `rc_living_fov.md`). `ClientModeShared::Update` (`client.dll FUN_100f12b0`, listing
+	// `0x100f12d0`-`0x100f131c`) runs `CHud::Think` (`FUN_100f28d0`) first, whose latch at
+	// `0x100f29c0` is unconditional -- `MOV [ESI+0x1690],0x3c` whenever `m_iFOV == 0` -- and only
+	// then hands `(float)m_iFOV` to `IVEngineClient::SetFieldOfView`; `default_fov.GetFloat()` is
+	// reached only on the no-local-player branch (`0x100f12dc JZ`). `CHL2_Player::Spawn`
+	// (`0x1016d260`) and `Event_Killed` (`0x10163af0`) both write `m_iFOV = 0`, so a living player
+	// and a dead one render the same 60 degrees at retail's 4:3 reference; a weapon zoom or the
+	// cheat-gated `fov n` command are the only non-zero writers. There is no "unset" state in
+	// retail, so an unset override here takes the same latch arm rather than the cvar. Retail's
+	// `m_iFOV == 0 => default_fov` rule (`C_BasePlayer::GetFOV` `FUN_100aa5f0`) exists in the image
+	// but its render-path consumer (`FUN_100aa5d0`, slot 186) has no callers.
+	const float SourceFov = ElysiumCameraView::LatchPlayerFov(
+		PlayerFovOverride.IsSet() ? *PlayerFovOverride : ElysiumCameraView::NoPlayerFovOverride);
+	View.FOV = ElysiumCam::WidenSourceFov(SourceFov,
 		ElysiumCameraView::RenderAspectRatio(View.AspectRatio));
 
 	// The strafe bank goes on FIRST, so the third-person blend below lerps it away along with
@@ -365,18 +380,20 @@ void UElysiumCameraComponent::ApplyBaseToView(FMinimalViewInfo& View) const
 		PP.VignetteTexture = FeedVisionMask;
 	}
 
-	// The spectator replace, `CViewRender::CalcView`'s last arm (`0x1019158e`-`0x101915f2`, RC10):
-	// origin and angles hard-replaced by the entity the engine's view is on, FOV untouched. It is
-	// last inside `CalcView`, so it beats the bob, the shake, the water offset and `scr_ofs*` — and
-	// it is still ahead of the cine hard write, which is why a cutscene camera beats a death view.
-	//
-	// **Nothing sets this yet**: the port has no observer, death-cam or spectator producer. See
-	// `SetSpectatedView`.
-	if (SpectatedView.IsSet())
-	{
-		View.Location = SpectatedView->Origin;
-		View.Rotation = SpectatedView->Angles;
-	}
+	// **`cl_view_entity` is not ported, and there is nothing here.** `CViewRender::CalcView`'s last
+	// arm (`client.dll` `0x1019158e`-`0x101915f2`) hard-replaces origin and angles with the entity
+	// `IVRenderView::GetViewEntity()` names whenever that index is above `GetMaxClients()`. RC10 read
+	// it as retail's death/observer view and this file carried the compose arm for it; RC14 closed
+	// the writer search and the answer is that **no writer exists** in `vampire.dll` at all — the
+	// datum `engine.dll DAT_20315be0` has exactly one writer in the whole image and it is the
+	// `cl_view_entity <index>` console command's handler (`engine.dll 0x200276d0`, not in any vtable,
+	// 0 callers). VtMB ships no `SetViewEntity`, no `m_hViewEntity`, no `point_viewcontrol` and no
+	// reachable observer mode; retail's death view is the player's own frozen first-person eye
+	// (`Substrate/ElysiumPlayerEntity.cpp` -> `PlayerDeathThink`). A shipped run always takes the
+	// `JLE` at `0x101915ae` and never executes the arm. Under the owner's standing ruling on
+	// dev-only console toggles (`camera_showdebug`), a debug command with no shipped producer is not
+	// ported, so `FElysiumSpectatedView` / `SetSpectatedView` and this branch were deleted rather
+	// than left as a seam.
 
 	// `camortho`: Source's orthographic debug view (`ClientModeShared::OverrideView` `100d40b6`, the
 	// block the client report mis-read as an off-centre projection — M11, re-scoped by RC9). Retail

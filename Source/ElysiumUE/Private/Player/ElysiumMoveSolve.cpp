@@ -161,6 +161,40 @@ bool ClampCommandSpeed(FVector& CommandCmS, float MaxSpeed)
 	return true;
 }
 
+bool EyeAnglesAdoptCommand(bool bPendingEyeAngleSnap, bool bViewAngleLock)
+{
+	return !bPendingEyeAngleSnap && !bViewAngleLock;
+}
+
+bool BodyYawFollowsEye(const FSetupMoveBodyState& State)
+{
+	// The tail arm, transcribed:
+	//
+	//   if (bGrappling) { switch (m_IdealActivity) { the nine: goto ANGLES; default: glue; goto ANGLES; } }
+	//   else if (GetVFlags() & 1) { ANGLES: m_vecAngles = GetAngles(); }
+	//
+	// Every path through a live grapple reaches ANGLES_FROM_ENTITY, so the partner alone suppresses
+	// the substitution; the flag is only reachable when there is no partner.
+	if (State.bGrapplePartnerLive)
+	{
+		return false;
+	}
+	return !State.bMoveAnglesFromEntity;
+}
+
+bool GrappleGluesBody(const FSetupMoveBodyState& State)
+{
+	return State.bGrapplePartnerLive && !State.bGrappleReleaseActivity;
+}
+
+FVector GluedBodyFeetOrigin(const FVector& PartnerFeetOrigin, float PlayerCollisionMinZ,
+	float PartnerCollisionMinZ)
+{
+	FVector Out = PartnerFeetOrigin;
+	Out.Z -= static_cast<double>(PlayerCollisionMinZ) - static_cast<double>(PartnerCollisionMinZ);
+	return Out;
+}
+
 
 static const FCvarDef GMoveCvars[] =
 {
