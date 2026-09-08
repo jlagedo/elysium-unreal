@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$GROK_WORKSPACE_ROOT/.grok/hooks/with-git-bash.cmd\" \"$GROK_WORKSPACE_ROOT/.claude/hooks/elysium-mcp-context.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$GROK_WORKSPACE_ROOT/.grok/hooks/with-git-bash.cmd\" \"$GROK_WORKSPACE_ROOT/.claude/hooks/agents-md-guard.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"$GROK_WORKSPACE_ROOT/.grok/hooks/with-git-bash.cmd\" \"$GROK_WORKSPACE_ROOT/.claude/hooks/claude-md-guard.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$GROK_WORKSPACE_ROOT/.grok/hooks/with-git-bash.cmd\" \"$GROK_WORKSPACE_ROOT/.claude/hooks/agents-md-sync.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
