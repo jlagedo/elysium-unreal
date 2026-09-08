@@ -62,11 +62,10 @@ enum class EElysiumMapReadinessResult : uint8
 
 // Pure snapshot of the independently completing activation prerequisites. The map actor builds
 // one from current engine state each poll; keeping the decision engine-neutral makes completion
-// order, backdrop rules and fail-closed timeout behaviour directly testable.
+// order and backdrop rules directly testable. There is no timeout: an input that cannot arrive
+// fails on its own arm below, and one that can is waited for however long it takes.
 struct FElysiumMapRuntimePrerequisites
 {
-	static constexpr double WatchdogSeconds = 8.0;
-
 	bool bConstructionComplete = false;
 	bool bEntityWorldReady = false;
 	bool bAnimationPreloadReady = false;
@@ -89,7 +88,7 @@ struct FElysiumMapRuntimePrerequisites
 	bool bTickPrerequisitesReady = false;
 
 	FString Missing() const;
-	EElysiumMapReadinessResult Evaluate(double WaitSeconds, FString& OutFailure) const;
+	EElysiumMapReadinessResult Evaluate(FString& OutFailure) const;
 };
 
 const TCHAR* ElysiumMapRuntimePhaseName(EElysiumMapRuntimePhase Phase);

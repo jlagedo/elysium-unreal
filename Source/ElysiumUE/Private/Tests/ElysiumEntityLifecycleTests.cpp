@@ -290,7 +290,7 @@ bool FElysiumMapReadinessTest::RunTest(const FString&)
 	Gameplay.bFinalPlacementReady = true;
 	Gameplay.bTickPrerequisitesReady = true;
 	TestEqual(TEXT("out-of-order partial completion waits"),
-		Gameplay.Evaluate(0.5, Failure), EElysiumMapReadinessResult::Waiting);
+		Gameplay.Evaluate(Failure), EElysiumMapReadinessResult::Waiting);
 
 	Gameplay.bCollisionReady = true;
 	Gameplay.bSpawnTransformReady = true;
@@ -298,10 +298,10 @@ bool FElysiumMapReadinessTest::RunTest(const FString&)
 	Gameplay.bEntityWorldReady = true;
 	Gameplay.bAnimationPreloadReady = true;
 	TestEqual(TEXT("construction has not completed yet"),
-		Gameplay.Evaluate(1.0, Failure), EElysiumMapReadinessResult::Waiting);
+		Gameplay.Evaluate(Failure), EElysiumMapReadinessResult::Waiting);
 	Gameplay.bConstructionComplete = true;
 	TestEqual(TEXT("all gameplay prerequisites open the gate in any completion order"),
-		Gameplay.Evaluate(1.0, Failure), EElysiumMapReadinessResult::Ready);
+		Gameplay.Evaluate(Failure), EElysiumMapReadinessResult::Ready);
 
 	FElysiumMapRuntimePrerequisites Backdrop;
 	Backdrop.bMenuBackdrop = true;
@@ -310,50 +310,33 @@ bool FElysiumMapReadinessTest::RunTest(const FString&)
 	Backdrop.bAnimationPreloadReady = true;
 	Backdrop.bCollisionReady = true;
 	TestEqual(TEXT("a backdrop omits every pawn prerequisite"),
-		Backdrop.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Ready);
+		Backdrop.Evaluate(Failure), EElysiumMapReadinessResult::Ready);
 
 	FElysiumMapRuntimePrerequisites CollisionFailure = Gameplay;
 	CollisionFailure.bCollisionReady = false;
 	CollisionFailure.bCollisionFailed = true;
 	TestEqual(TEXT("a collision failure never opens the gate"),
-		CollisionFailure.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Failed);
+		CollisionFailure.Evaluate(Failure), EElysiumMapReadinessResult::Failed);
 	TestTrue(TEXT("collision failure is structured"), Failure.Contains(TEXT("collision")));
-
-	FElysiumMapRuntimePrerequisites Timeout = Gameplay;
-	Timeout.bPossessedPawnReady = false;
-	Timeout.bFinalPlacementReady = false;
-	TestEqual(TEXT("an incomplete map waits before the watchdog"),
-		Timeout.Evaluate(FElysiumMapRuntimePrerequisites::WatchdogSeconds - 0.01, Failure),
-		EElysiumMapReadinessResult::Waiting);
-	TestEqual(TEXT("the watchdog fails closed"),
-		Timeout.Evaluate(FElysiumMapRuntimePrerequisites::WatchdogSeconds, Failure),
-		EElysiumMapReadinessResult::Failed);
-	TestTrue(TEXT("watchdog reason names missing prerequisites"),
-		Failure.Contains(TEXT("possessed player pawn"))
-		&& Failure.Contains(TEXT("final player placement")));
 
 	FElysiumMapRuntimePrerequisites MissingAnimations = Gameplay;
 	MissingAnimations.bAnimationPreloadReady = false;
 	TestEqual(TEXT("a completed build cannot activate before its map animations are resident"),
-		MissingAnimations.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Failed);
+		MissingAnimations.Evaluate(Failure), EElysiumMapReadinessResult::Failed);
 	TestTrue(TEXT("animation residency failure is structured"),
 		Failure.Contains(TEXT("animation residency")));
 	MissingAnimations.bAnimationPreloadPending = true;
 	TestEqual(TEXT("an active native request waits behind the activation barrier"),
-		MissingAnimations.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Waiting);
-	TestEqual(TEXT("native asset loading can exceed the old short prerequisite window"),
-		MissingAnimations.Evaluate(20.0, Failure), EElysiumMapReadinessResult::Waiting);
-	TestEqual(TEXT("native loading still has a bounded failure deadline"),
-		MissingAnimations.Evaluate(120.0, Failure), EElysiumMapReadinessResult::Failed);
+		MissingAnimations.Evaluate(Failure), EElysiumMapReadinessResult::Waiting);
 	MissingAnimations.bAnimationPreloadPending = false;
 	MissingAnimations.bAnimationPreloadReady = true;
 	TestEqual(TEXT("completed native loading admits the same ready state"),
-		MissingAnimations.Evaluate(20.0, Failure), EElysiumMapReadinessResult::Ready);
+		MissingAnimations.Evaluate(Failure), EElysiumMapReadinessResult::Ready);
 
 	FElysiumMapRuntimePrerequisites MissingSubstrate = Backdrop;
 	MissingSubstrate.bEntityWorldReady = false;
 	TestEqual(TEXT("a completed build with no substrate fails immediately"),
-		MissingSubstrate.Evaluate(0.0, Failure), EElysiumMapReadinessResult::Failed);
+		MissingSubstrate.Evaluate(Failure), EElysiumMapReadinessResult::Failed);
 	return true;
 }
 

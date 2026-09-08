@@ -87,8 +87,7 @@ FString FElysiumMapRuntimePrerequisites::Missing() const
 	return FString::Join(MissingItems, TEXT(", "));
 }
 
-EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
-	double WaitSeconds, FString& OutFailure) const
+EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(FString& OutFailure) const
 {
 	OutFailure.Reset();
 	if (bCollisionFailed)
@@ -124,12 +123,6 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
 	if (Missing().IsEmpty())
 	{
 		return EElysiumMapReadinessResult::Ready;
-	}
-	const double Deadline=bAnimationPreloadPending?120.0:WatchdogSeconds;
-	if (WaitSeconds >= Deadline)
-	{
-		OutFailure = FString::Printf(TEXT("activation watchdog expired; missing: %s"), *Missing());
-		return EElysiumMapReadinessResult::Failed;
 	}
 	return EElysiumMapReadinessResult::Waiting;
 }
@@ -749,7 +742,7 @@ void AElysiumMapActor::PollRuntimeActivation()
 
 	const FElysiumMapRuntimePrerequisites P = CollectRuntimePrerequisites();
 	FString Failure;
-	switch (P.Evaluate(GetRuntimeWaitSeconds(), Failure))
+	switch (P.Evaluate(Failure))
 	{
 	case EElysiumMapReadinessResult::Ready:
 		RuntimePhase = EElysiumMapRuntimePhase::Activating;

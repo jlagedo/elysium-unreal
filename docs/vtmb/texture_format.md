@@ -45,6 +45,23 @@ patch's uncompressed re-exports keep none and leave the per-mip columns unfilled
 totals row is load-bearing. `encode_like(template_tth, img)` clones a shipped texture's format,
 flags and mip policy — BGR888 round-trips bit-exact, DXT5 within a re-encode.
 
+### What the engine does with the rows (recovered 2026-09-08)
+
+`MaterialSystem.dll` `0x10036930` (slot 6 of the TTH texture object built by `0x10034b10`,
+called from the material loader `0x100156e0` with the `.tth` and `.ttz` buffers) takes a
+**mip skip level** `s` (texture detail / `mat_picmip`):
+
+- if `mip_count <= s`, or `mip_count - s <= inline_mips`, the wanted pyramid is entirely in
+  the `.tth`: unserialize from the bytes after the rows and never touch the `.ttz`;
+- otherwise take row `mip_count - s`: allocate `raw_offset` bytes, copy the `.tth`'s
+  `vtf_blob_len` prefix, then `inflate` exactly `ttz_prefix` compressed bytes into the rest
+  (`Z_FINISH` when `s == 0`, `Z_SYNC_FLUSH` otherwise) and require both counts to hit zero.
+
+That is the purpose of the table: a reduced-detail load reads and inflates only a prefix of
+the `.ttz`, and a low enough level skips the file. A `.tth` with `mip_count = 0` and zeroed
+rows loads fine at full detail (forced onto the `.tth`-only path), and only breaks when the
+engine asks for `s > 0` — the per-mip rows are `(0, 0)` and the inflate fails.
+
 Retail compiler bookkeeping is not uniformly canonical: the outer mip count may exceed the
 dimension-derived chain, individual inline counts and VTF mip counts may be stale, and declared
 meaningful TTH/TTZ lengths may be followed by arbitrary allocation-fill bytes. A small set of

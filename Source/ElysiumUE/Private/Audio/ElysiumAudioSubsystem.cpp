@@ -201,8 +201,8 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 // AUD0.1 (2026-09-08): the `exports/audio/catalog.json` read is gone. It was an offline validation
 // record, not a VtMB artifact — it was opened for existence and `version == 1` only, stored nothing,
-// and set `bCatalogReady` either way, so the map-activation gate it fed could only ever fail on a
-// watchdog timeout. AUD1.2 moved the answer again: presence is the baked family's presence, which
+// and set `bCatalogReady` either way, so the map-activation gate it fed could never
+// actually close. AUD1.2 moved the answer again: presence is the baked family's presence, which
 // is the asset-registry index over `/ElysiumBaked/Sounds` built once on first use.
 bool UElysiumAudioSubsystem::IsSoundCorpusPresent()
 {

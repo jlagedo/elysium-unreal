@@ -34,6 +34,31 @@ cluster bit rows — a `0x00` byte is followed by a count of zero bytes.
 32 B): `planenum` i @0, `children[2]` i @4. `bsp.point_leaf(data, pt)` walks the node tree to a
 leaf; `bsp.pvs_faces(data, origin)` returns the model-0 faces visible from a point.
 
+### Leaf `contents` bits (recovered 2026-09-08)
+
+The rest of `dleaf_t`: `mins[3]`/`maxs[3]` int16 @8/@14, `firstleafbrush` H @24,
+`numleafbrushes` H @26, `leafWaterDataID` int16 @28, 2 B pad. `Mod_LoadLeafs` (`0x200b7da0`)
+copies it into a 64-byte `mleaf_t` (`contents` @+4, `leafWaterDataID` @+0x38).
+LEAFWATERDATA is lump 36, 12 B per entry (`surfaceZ` f, `minZ` f, `surfaceTexInfoID` h, pad),
+loaded by `0x200b7f20` into `worldmodel+0xd8`.
+
+VtMB's `bspflags.h` differs from the 2003 leak in the 0x100..0x2000 band. What the engine
+reads, and what retail data carries (tallied over all 102 shipped maps):
+
+| bit | engine reader | retail data |
+|---|---|---|
+| `0x100` | nothing in engine.dll | 944 `TOOLS/TOOLS_SHADOW` brushes (la_bradbury_3); compile-time only |
+| `0x200` | `CONTENTS_TESTFOGVOLUME`: `R_GetVisibleFogVolume` (`0x20081390`) reads it on the **eye's leaf** and only then walks the tree (`0x20081470`) for the first in-frustum leaf with `leafWaterDataID != -1` | leaf-only, 6,472 leaves in the 22 water maps, no brush |
+| `0x400` | nothing | never set |
+| `0x800` | precipitation: `CParticleManager` (`0x200d3f10`) kills every rain particle whose leaf lacks it; the system flag comes from the `precipitation` key in `particles/<name>.txt` (`0x200c8a90`), gated by cvar `particles_enable_precipitation` | leaf-only, 30,538 leaves in 53 maps, no brush. Matches "a vertical ray up from the leaf reaches a `toolsskybox` face before solid" on la_hub_1 / sm_hub_1 / ch_temple_1 (0..14 flagged leaves fail that test; 30..160 open leaves are unflagged, so the tool's test is a little stricter than a centre sample). Set by Troika's vvis/vbsp, not by any material |
+| `0x1000` | msurface flag, not a leaf test | 127 `TOOLS/NOVIS` brushes and 10,882 leaves |
+| `0x2000` | -- | `TOOLS/TOOLSNPCCLIP` brushes |
+
+So a rebuilt map that never sets `0x800` on open-air leaves has no rain, and one that never
+sets `0x200` on the leaves that see water has no visible fog volume (black or missing water
+reflection); the vvis rule that matches the engine is the 2003 leak's "flag both leaves whose
+`leafWaterDataID` differ", since the engine tests the eye's own leaf.
+
 `pipeline/src/elysium_pipeline/formats/bsp.py` is the shared reader: `read_lump`/`lump_ptr`, the struct-offset constants,
 `strings_from_blob`, plus `read_game_lump(data) -> {fourcc: (version, bytes)}`,
 `read_pakfile(data) -> {name: bytes}`, and `read_dispinfos`/`read_dispverts` (displacements).
