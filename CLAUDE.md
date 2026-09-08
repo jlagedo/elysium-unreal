@@ -39,7 +39,7 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 - The port is a VM host for VtMB's data. Schedules, dialogue and map scripts are the bytecode; the C++ substrate is the interpreter. Anything the bytecode can observe is reproduced verbatim: task semantics, condition order, interrupt timing, what a failure writes, and bugs, because shipped programs were tuned against them.
 - Modernization is a peripheral swap. Two halves: visual-only (Unreal renders it better; adopt freely) and an algorithm Unreal already ships (adopt only with the retail contract and event sequencing kept). Nothing that changes event order or state is a modernization.
 - Build the host in dependency order. Clock before programs, kernel before consumers.
-- A defect claim needs a program that reaches it, not a mask read.
+- A defect claim needs the retail script, schedule or map that reaches it, not a mask read.
 
 ## When a problem is reported
 
@@ -60,6 +60,6 @@ A reported defect is a question about VtMB, never a request for a patch.
 - Where a retail input has no source in the substrate yet, build the seam (the hook,
   the field, the accessor) and leave it answering "nothing" with a comment naming the
   retail field it stands for. Say explicitly what remains unrecovered.
-- Record the recovery in the matching `docs/vtmb/` document. Live checks are owner-piloted.
+- Record the recovery in the matching `docs/vtmb/` document.
 - Divergences from retail are allowed only as named modernizations, stated in the answer
   and recorded as a dated entry in `docs/decisions.md`.

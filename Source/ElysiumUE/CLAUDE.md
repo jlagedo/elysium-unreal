@@ -12,7 +12,3 @@
 - `RecomputeCurrent(Stats)` compiles with the effect layer defaulted to null and silently drops every clan bane and gift. Use `FElysiumCombatCharacter::RecomputeSheet()`.
 - `IElysiumNpcMotor::SetEnabled(false)` also hides the body. `SetFrozen` immobilises a cutscene actor on camera; `SetIgnoreCharacterCollision` is the character-vs-character switch. Each setter resolves the whole state via `ApplyEnabledState`/`ApplyCollisionState`/`ApplyCrowdState` — never touch the capsule directly.
 - The player hull is a box, not a capsule — `StepMove` needs a flat bottom and `ACharacter` will not take a box root.
-
-## Tests
-
-- Every tier runs `-nullrhi`, so no test covers a rendered frame. Pixel comparison is `validation/shots_diff.py` against a baseline under `$ELYSIUM_EXPORT_ROOT/_shots/_baseline/`, run locally outside automation.

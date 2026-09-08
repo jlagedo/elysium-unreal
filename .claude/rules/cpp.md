@@ -43,13 +43,6 @@ touched code only; do not mix a formatting sweep with a behavioral change.
   layer path, a thin registration site may remain behind), then make the behavioral edit — and
   keep the verbatim move and the behavioral change reviewable as separate diffs (separate
   commits when both land together). Pure moves change no behavior and no names.
-- **Testability:** the properties that let the whole `Substrate` tier answer in seconds are
-  structural, and each is lost by one ordinary-looking line. Below `Private/Substrate/` nothing
-  reaches `GetWorld()`, `GEngine`, `GWorld` or `GetFirstPlayerController` — the world is reached
-  through `FElysiumWorldServices`, which is what the recording doubles substitute for. Gameplay
-  logic never reads `FPlatformTime::Seconds`; `DeltaTime` arrives as a parameter. Randomness is
-  drawn from a named `ElysiumRng::Stream`, never `FMath::Rand*`. Logic lives in C++ and a graph
-  carries composition, data and cosmetics only, so everything assertable has a C++ entry point.
 - **APIs and diagnostics:** avoid boolean flag lists and long parameter lists; use an enum or a
   parameter struct. Use `TEXT()` for Unreal string literals, sized integers for serialized or
   replicated formats, named log categories, and the appropriate `check`/`verify`/`ensure` family.
