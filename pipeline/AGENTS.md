@@ -58,3 +58,18 @@ difference from, leaving the runtime no VtMB rule to apply.
 `make_player_anim_bp.py` calls `main()` at module scope with no `__main__` guard, so importing it
 — to reuse a helper, or to inspect it — rebuilds and saves the Animation Blueprint as a side
 effect of the import.
+
+## V2 pipeline map bake procedure
+
+```
+uv run elysium export_v2 map-glb <map>
+# add <map> to MapsOnV2Models and MapsOnNewTransport in Config/DefaultElysium.ini
+uv run elysium export map <map>
+uv run elysium import map-entities    --maps <map>
+uv run elysium import map-collision   --maps <map>
+uv run elysium import map-environment --maps <map>
+uv run elysium verify
+```
+
+`MapsOnV2Models` selects `MapBakeV2` over the legacy `Bake`; without the ini line
+`export map` reads `<map>.obj`/`.mtl`/`.props` instead of the GLB units.
