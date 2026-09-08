@@ -36,6 +36,7 @@ struct FElysiumNpcMemory;
 enum class EElysiumNpcCond : uint8
 {
 	None = 0x00,
+	SeeUnknown = 0x01,
 
 	// --- Recovered identities --------------------------------------------------------------------
 	// --- The four law conditions ---
@@ -72,6 +73,9 @@ enum class EElysiumNpcCond : uint8
 	EnemyDead             = 0x58,
 	EnemyUnreachable      = 0x59,
 	SeeNemesis            = 0x5b,
+	SeePlayer             = 0x5a,
+	TaskFailed            = 0x5c,
+	ScheduleDone          = 0x5d,
 	TooCloseToAttack      = 0x5f,
 	TooFarToAttack        = 0x60,
 	WeaponBlockedByFriend = 0x63,
@@ -84,9 +88,14 @@ enum class EElysiumNpcCond : uint8
 	SeeFear    = 0x44,
 	SeeEnemy   = 0x46,
 	HearDanger = 0x6a,
+	HearThumper = 0x6b,
+	HearBugbait = 0x6c,
 	HearCombat = 0x6d,
 	HearWorld  = 0x6e,
 	HearPlayer = 0x6f,
+	HearBulletImpact = 0x70,
+	HearPhysicsDanger = 0x71,
+	Smell = 0x5e,
 	// The fifth law condition. `BuildScheduleTestBits` adds it as a custom interrupt to every
 	// schedule of a non-busy, non-investigating NPC; `SelectSchedule` state 8 consumes it.
 	InvestigateLevel = 0x1e,
@@ -248,13 +257,6 @@ struct FElysiumNpcCognition
 	// starving selection is a different fact. Retail's registered schedule number, or -1.
 	int32 StarvedScheduleNumber = -1;
 
-	// A damage memory expired and left the COMMITTED enemy with no eligible relation behind it
-	// (`ElysiumNpcEnemy::ExpireDamageMemory`, the only writer). `ShouldChooseNewEnemy` reads it, and
-	// it is cleared by the pass that gets through the interrupt gate and by any new enemy episode —
-	// so a schedule that refuses to be interrupted keeps the fact until it can be acted on rather
-	// than dropping it. Transient, like every other byte here: the row it describes cannot survive a
-	// save either.
-	bool bEnemyHostilityLapsed = false;
 };
 
 namespace ElysiumNpcCond

@@ -9,6 +9,7 @@ class UPrimitiveComponent;
 class UElysiumLightCalibration;
 class UElysiumLightingSettings;
 class UElysiumSurfaceSettings;
+class UElysiumMapLightQueryData;
 
 // Real-time light rig: one Unreal light per VtMB WORLDLIGHTS source. The light *actors* are baked
 // into the map's level (pipeline/unreal/bake_map.py, one per `<map>.lights` line, tagged with its line
@@ -88,6 +89,10 @@ public:
 	// The multiplier the tick applies right now for a style: 'a' = 0, 'm' = 1, 'z' ~ 2.08, 10 Hz
 	// keyframes lerped on the rig's own clock. 1 for a style outside the table.
 	float StyleMultiplier(int32 Style) const;
+	// engine.dll 0x20076eb0 writes one discrete 10-Hz letter * 22; slot 118 divides by 264.
+	float GameplayStyleMultiplier(int32 Style) const;
+	bool IsGameplayLightAvailable() const { return bGameplayLightAvailable; }
+	float QueryGameplayLight(const FVector& PointCm) const;
 	// How many adopted sources carry a style >= 32 (entity-switched), for the readout.
 	int32 SwitchedSourceCount() const;
 
@@ -291,6 +296,14 @@ private:
 	// frame by the lightstyle curve so fluorescents/candles flicker; all sources can be re-tuned
 	// live from this data (ApplyLiveTuning).
 	TArray<FLightSource> LightSources;
+	void AdoptGameplayLight(const FString& InMapName);
+	UPROPERTY(Transient) TObjectPtr<UElysiumMapLightQueryData> GameplayLightData;
+	UPROPERTY(Transient) TArray<TObjectPtr<UPrimitiveComponent>> GameplayLightColliders;
+	UPROPERTY(Transient) TObjectPtr<UPrimitiveComponent> GameplaySkyCollider;
+	TArray<TWeakObjectPtr<UPrimitiveComponent>> GameplayShadowProps;
+	bool bGameplayLightAvailable = false;
+	// CWorld seeds only styles0..11; other engine patterns stay empty until LightStyle writes.
+	TSet<int32> AssignedGameplayStyles;
 
 	// R7.4 (G6): one styled chunk. `LastBrightness` is kept so the tick writes custom primitive
 	// data only when the pattern actually moved -- a style whose keyframe has not changed costs a

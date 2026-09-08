@@ -91,7 +91,9 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: stage actually meshed for the face. `faces[].area` beside it is what vbsp computed, so the
 #: G26/verdict B3 area pin is answerable offline, per face and per section, without an editor
 #: geometry query on a baked asset.
-MANIFEST_VERSION = 11
+#: 12 (0005 requirement 1): lightQuery carries native gameplay illumination inputs and shadow geometry.
+#: 13 (0005 requirement 19): human AIN jump connections are native navigation bake inputs.
+MANIFEST_VERSION = 13
 #: The R5.4 material report beside the manifest -- every material the map binds, classified from
 #: the import lane's provenance against the legacy `.mtl` lane's own master choice.
 MATERIAL_REPORT_NAME = "materials_report.json"
@@ -2347,6 +2349,8 @@ def stage_map(map_name: str, root: Path | None = None,
 
     from elysium_pipeline.importers import effects as effects_lane
     from elysium_pipeline.importers import map_visibility as visibility_lane
+    from elysium_pipeline.importers import map_light_query as light_query_lane
+    from elysium_pipeline.importers import map_jump_links as jump_link_lane
     from elysium_pipeline.importers import textures as texture_lane
 
     staging = material_staging_root(work_root)
@@ -2421,6 +2425,8 @@ def stage_map(map_name: str, root: Path | None = None,
         ],
         "cubemaps": [sample.as_row() for sample in geometry.cubemaps],
         "lights": list(geometry.lights),
+        "lightQuery": light_query_lane.stage_for_join(geometry.join, root),
+        "jumpLinks": jump_link_lane.stage_map(map_name, root),
         "details": {
             "fields": list(DETAIL_RECORD_FIELDS),
             "models": geometry.detail_models(),

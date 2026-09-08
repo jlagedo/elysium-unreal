@@ -26,6 +26,8 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumDamage.h"
+#include "Substrate/ElysiumDisciplines.h"
+#include "Substrate/ElysiumPhysProp.h"
 #include "Substrate/ElysiumDlgSheet.h"
 #include "Substrate/ElysiumFeed.h"
 #include "Substrate/ElysiumFootsteps.h"
@@ -295,11 +297,17 @@ void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 	Senses.Memory.LastDamageTime = Now;
 	Senses.Memory.LastDamageAmount = Dmg.CommittedDamage();
 	// The other half of step 3 — "records the attack position and attacker, updates enemy memory".
-	// The record above is the attacker half; this is the memory half, and it is what makes the
-	// attacker eligible for the enemy transaction the next decision pass runs. It takes the commit's
-	// own `Now` because the memory it writes is the recovered five-second one
-	// (`Substrate/ElysiumNpcEnemy.h` -> `RememberAttacker`, where the store is marked).
-	ElysiumNpcEnemy::RememberAttacker(*this, Dmg.Source, Now);
+	// The record above is the transient damage notice; `RememberDamage` selects the recovered
+	// persistent CAI_Memory-style record. Its observed-actor lifetime is not a five-second
+	// relationship window (0x10265ed0 calls into the memory component; 0x102df320 removes only
+	// invalid/dead handles).
+	// Troika's separate surviving-damage tail (0x102beda0 -> 0x1028e8b0 -> 0x1028e940) max-writes
+	// the live FVisible range-override deadline. It neither creates a relation nor expires memory.
+	if (Dmg.CommittedDamage() > 0 && World != nullptr && World->Resolve(Dmg.Source) != nullptr)
+	{
+		Senses.ExtendVisionOverride(*this, Dmg.Source, Now, 5.0);
+	}
+	ElysiumNpcEnemy::RememberDamage(*this, Dmg, Now);
 	// Step 5 of the recovered damage-to-AI transaction: the one-second accumulation window
 	// `REPEATED_DAMAGE` is derived from. The window arithmetic is the conditions layer's rule.
 	ElysiumNpcCond::AccumulateDamage(Senses.Memory, Dmg.CommittedDamage(), Now);
@@ -1786,6 +1794,7 @@ bool FElysiumNpc::IsBodyVisible() const
 
 float FElysiumNpc::PlayActivity(const FString& Activity)
 {
+	ScheduleIdealActivity = FElysiumClipIdentity();
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (Embodiment == nullptr || Visual == nullptr)
 	{
@@ -1799,14 +1808,45 @@ float FElysiumNpc::PlayActivity(const FString& Activity)
 
 	FElysiumActivityClip Clip;
 	float Seconds = 0.f;
-	// The task asks for a one-shot; the selected row's own loop bit still wins, and the length it
-	// plays for is what the schedule executor waits on.
-	if (!Embodiment->ResolveNpcActivityClip(Request, Clip)
-		|| !PlayAnimClip(Clip.Label, Clip.bLooping, &Seconds))
+	// The task asks for a one-shot; the selected row's own loop bit still wins. Completion is the
+	// base-channel phase identity reaching the resolved ideal, with the kernel's retail watchdog;
+	// this clip length remains the body's presentation result only.
+	if (!Embodiment->ResolveNpcActivityClip(Request, Clip))
+	{
+		return -1.f;
+	}
+	// `FElysiumActivityClip::OwnerStem` and Label are the resolver's canonical bank identity -- the
+	// exact pair the clip player later publishes in the base-channel phase. Do not keep the requested
+	// ACT_* name here: several activities can resolve to one sequence, while equal labels in different
+	// banks are different sequences.
+	ScheduleIdealActivity = FElysiumClipIdentity(Clip.OwnerStem, Clip.Label);
+	if (!PlayAnimClip(Clip.Label, Clip.bLooping, &Seconds))
 	{
 		return -1.f;
 	}
 	return Seconds;
+}
+
+bool FElysiumNpc::IsIdealActivityCurrent() const
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr || !ScheduleIdealActivity.IsValid())
+	{
+		return false;
+	}
+
+	FElysiumClipPhase Current;
+	if (!Embodiment->GetBodyClipPhase(Visual, EElysiumAnimChannel::Base, Current)
+		|| !Current.IsValid())
+	{
+		return false;
+	}
+	// Both sides are canonicalized before they cross their seams: the activity resolver supplies the
+	// owning include-DAG bank, and the body publishes that same committed identity. Case-insensitive
+	// comparison is the convention at every other identity join; no source-model alias participates.
+	return Current.OwnerStem.Equals(ScheduleIdealActivity.OwnerStem, ESearchCase::IgnoreCase)
+		&& Current.OwnerRoot.Equals(ScheduleIdealActivity.OwnerRoot, ESearchCase::IgnoreCase)
+		&& Current.Label.Equals(ScheduleIdealActivity.Label, ESearchCase::IgnoreCase);
 }
 
 float FElysiumNpc::PlayDeathActivity(const FString& Activity)
@@ -1910,7 +1950,9 @@ void FElysiumNpc::ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerT
 	{
 		// Whatever the program had the body doing stops with the claim. A schedule that ended
 		// mid-path must not leave an outstanding move running under whatever selects next.
-		if (Motor != nullptr)
+		const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
+		if (Motor && !NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH)
+			&& Nav.Type != EElysiumNpcNavType::Jump && Nav.Type != EElysiumNpcNavType::Climb)
 		{
 			Motor->Stop();
 		}
@@ -2177,7 +2219,6 @@ bool FElysiumNpc::StartNamedSchedule(const FString& Requested, const FString& Su
 	// activity translation are all whatever the named program declares. Nothing about being named by
 	// a script — or by a Discipline record — changes how it runs, which is the whole recovered point
 	// of these commands.
-	Schedule.Clear();
 	ReleaseScheduleBody(*Surface);
 	if (!ElysiumSchedule::Start(Schedule, Id, *this))
 	{
@@ -2197,24 +2238,174 @@ void FElysiumNpc::StopMoving()
 	bWalkingAnimation = false;
 }
 
+EElysiumTaskResult FElysiumNpc::StopMovingTask()
+{
+	ScheduleHost.PendingFailureReason = 0;
+	const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
+	if (Nav.Type == EElysiumNpcNavType::Jump)
+	{
+		// CAI_BaseNPC::RunTask 0x102888d4..0x10288963: keep a moving jump alive;
+		// at <= 0.01 Source units/s fail instead of holding TASK_STOP_MOVING forever.
+		if (!Nav.bGrounded && Nav.VelocityCmPerSecond.Size() > 0.01 * ElysiumMove::U)
+			return EElysiumTaskResult::Running;
+		// RunTask switches to NAV_GROUND before invoking the failure virtual. That changes
+		// TaskFail's PRESERVE_PATH test; a direct navigator failure can still retain NAV_JUMP.
+		if (Motor) Motor->SetNavigationType(EElysiumNpcNavType::Ground);
+		if (!Nav.bGrounded)
+		{
+			ScheduleHost.PendingFailureReason = 0x1c;
+			return EElysiumTaskResult::Failed;
+		}
+	}
+	if (Nav.Type == EElysiumNpcNavType::Climb) return EElysiumTaskResult::Running;
+	bMoveIssued = false;
+	bWalkingAnimation = false;
+	return EElysiumTaskResult::Complete;
+}
+
+EElysiumTaskResult FElysiumNpc::BeginStopMovingTask()
+{
+	// StartTask 0x10282d71: only an active goal enters RunTask. Clearing the goal must
+	// retain nav type and flight velocity, which RunTask still reads in this same think.
+	const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
+	if (!Nav.bActiveGoal)
+	{
+		bMoveIssued = false;
+		return EElysiumTaskResult::Complete;
+	}
+	Motor->ClearNavigationGoal();
+	ScheduleHost.DesiredMoveYaw = 0.f;
+	return StopMovingTask();
+}
+
+void FElysiumNpc::SetGoalTolerance(float Units)
+{
+	ScheduleHost.GoalToleranceCm = Units * ElysiumMove::U;
+}
+
+void FElysiumNpc::TaskFail(int32 Reason)
+{
+	// Troika slot 448 (0x1029adb0), then CAI_BaseNPC 0x10273fc0. In particular,
+	// OnScheduleChange is not a substitute: its masks and oblivious refcount writes differ.
+	if (CurrentAmbientSpot()) FinishAmbientUse(bAmbientArrived, false);
+	const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
+	if (Nav.Type != EElysiumNpcNavType::Jump && Nav.Type != EElysiumNpcNavType::Climb)
+		NpcFlags.Clear(EElysiumNpcFlag::PRESERVE_PATH);
+	if (Motor) Motor->ResetSteering();
+	const double Now = World ? World->NowSeconds() : 0.0;
+	ScheduleHost.DesiredMoveYaw = 0.f;
+	ScheduleHost.ResetThinkTimers(Now);
+	NextThink = static_cast<float>(Now);
+	ScheduleHost.GoalToleranceCm = 0.f;
+	Schedule.ToleranceUnits = 0.f;
+	ScheduleHost.InsideInterruptDistanceSqr = ScheduleHost.OutsideInterruptDistanceSqr = 0.f;
+	ScheduleHost.InterruptTime = 0.0;
+	ScheduleHost.MoveTarget = FElysiumEntityHandle::Invalid();
+	if (FElysiumEntity* Prop = World ? World->Resolve(ScheduleHost.KickProp) : nullptr)
+	{
+		if (Prop->Class && Prop->Class->ClassName == FName(TEXT("prop_physics")))
+			static_cast<FElysiumPhysProp*>(Prop)->bNpcKickable = false;
+		ScheduleHost.KickProp = FElysiumEntityHandle::Invalid();
+	}
+	ScheduleHost.MemoryBits &= ~0x2000u;
+	ScheduleHost.MemoryBits &= 0x0fffffffu;
+	const bool RestoreSleep = NpcFlags.Has(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
+	if (NpcFlags.OnTaskFail())
+		RecordScheduleEvent(TEXT("TaskFail retail leak: MADE_OBLIVIOUS cleared, refcount retained (0x1029adb0)"));
+	if (RestoreSleep)
+	{
+		SetAttackExtents(ScheduleHost.SavedSleepExtents);
+		ScheduleHost.SavedSleepExtents = FVector(-1.0);
+		NpcFlags.Clear(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
+	}
+	ScheduleHost.bSavePositionWalk = false;
+	ClearScheduleHint(5.f);
+	ScheduleHost.bMotorAnimationMovement = false;
+	ScheduleHost.Unknown6300 = ScheduleHost.Unknown659c = 0;
+	ScheduleHost.bPatrolPathUseHint = false;
+	bMoveIssued = false;
+	ScheduleHost.FailureReason = Reason;
+	ScheduleHost.PendingFailureReason = 0;
+	Cognition.Conditions.Set(EElysiumNpcCond::TaskFailed);
+	RecordScheduleEvent(FString::Printf(TEXT("TaskFail 0x%x: %s"), Reason, ElysiumTaskFailureName(Reason)));
+	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s TaskFail 0x%x: %s"), *DebugString(), Reason, ElysiumTaskFailureName(Reason));
+}
+
+void FElysiumNpc::ScheduleDone()
+{
+	Cognition.Conditions.Set(EElysiumNpcCond::ScheduleDone);
+}
+
+void FElysiumNpc::ClearScheduleHint(float ReuseDelay)
+{
+	// 0x10295ab0: a missing hint performs no writes, and another owner's hint is
+	// forgotten locally without imposing our cooldown on that owner.
+	if (ScheduleHost.HintNode == INDEX_NONE) return;
+	if (ScheduleHost.bOwnsHint)
+	{
+		ScheduleHost.bOwnsHint = false;
+		ScheduleHost.HintReusableAt = (World ? World->NowSeconds() : 0.0) + ReuseDelay;
+	}
+	ScheduleHost.HintNode = INDEX_NONE;
+	ScheduleHost.FailedCoverLosChecks = 0;
+	NpcFlags.Clear(EElysiumNpcFlag::AT_COVER_HINT);
+	ScheduleHost.SavedSleepExtents = FVector(-1.0);
+}
+
+void FElysiumNpc::ClearOwnedActivityCopyProps()
+{
+	// 0x1018e910 enumerates activity_copy_prop and deletes rows whose owner +0x730
+	// resolves to this NPC. Its class and owner producer are not implemented yet;
+	// this named seam currently finds no owned copies.
+}
+
+void FElysiumNpc::DisconnectFromSquad()
+{
+	// 0x1026d050: the refcount is real even while no named squad exists. R17 supplies
+	// the shared/global enemy-memory redirection; this host must not invent a local squad.
+	++ScheduleHost.SquadDisconnected;
+	NpcFlags.Set(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
+}
+
+void FElysiumNpc::ReconnectToSquad()
+{
+	// 0x1026d0c0. At zero R17 rejoins the squad's shared CAI_Memory.
+	ScheduleHost.SquadDisconnected = FMath::Max(0, ScheduleHost.SquadDisconnected - 1);
+	NpcFlags.Clear(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
+}
+
+void FElysiumNpc::EndDisciplineSchedule()
+{
+	// HitInfo expiry 0x101def10 reconnects first, then TaskComplete(false) for only
+	// the two interruptible temporary programs. It neither clears nor replaces a schedule.
+	if (NpcFlags.Has(EElysiumNpcFlag2::D_DISCONNECT_SQUAD)) ReconnectToSquad();
+	const int32 Number = ElysiumScheduleNumber(Schedule.Current);
+	if ((Number == 0xe1 || Number == 0xe3) && !Cognition.Conditions.Has(EElysiumNpcCond::TaskFailed))
+		Schedule.bTaskCompletedExternally = true;
+}
+
 bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
 {
+	ScheduleHost.PendingFailureReason = 0;
 	const FElysiumEntity* Enemy = World
 		? ElysiumNpcCond::ResolveEnemyHandle(*World, Senses.Memory.Enemy) : nullptr;
 	if (Enemy == nullptr || Enemy->IsInert())
 	{
 		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: no live committed enemy"));
+		ScheduleHost.PendingFailureReason = 0x06;
 		return false;
 	}
 	if (Motor == nullptr)
 	{
 		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: this NPC has no motor"));
+		ScheduleHost.PendingFailureReason = 0x0c;
 		return false;
 	}
 	if (!AcquireScheduleBody(TEXT("TASK_GET_PATH_TO_ENEMY")))
 	{
 		Mind.RecordExternal(FString::Printf(
 			TEXT("TASK_GET_PATH_TO_ENEMY refused: %s owns the body"), LexToString(Mind.Owner())));
+		ScheduleHost.PendingFailureReason = 0x0c;
 		return false;
 	}
 	// The operand is the schedule's own tolerance, in Source units. A program that never ran
@@ -2231,6 +2422,7 @@ bool FElysiumNpc::GetPathToEnemy(float ToleranceUnits)
 	if (!bMoveIssued)
 	{
 		Mind.RecordExternal(TEXT("TASK_GET_PATH_TO_ENEMY refused: the body would not take the path"));
+		ScheduleHost.PendingFailureReason = 0x0c;
 	}
 	return bMoveIssued;
 }
@@ -2432,9 +2624,8 @@ bool FElysiumNpc::RangeAttack1()
 
 void FElysiumNpc::RememberFact(float What)
 {
-	// Traced and otherwise inert — the memory-bit table the operand indexes is not decoded
-	// (`EElysiumTask::Remember`).
-	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER %g (no consumer)"), What));
+	ScheduleHost.MemoryBits |= static_cast<uint32>(What);
+	Mind.RecordExternal(FString::Printf(TEXT("TASK_REMEMBER 0x%x"), static_cast<uint32>(What)));
 }
 
 void FElysiumNpc::MakeOblivious(bool bOblivious)
@@ -2453,7 +2644,7 @@ void FElysiumNpc::MakeOblivious(bool bOblivious)
 		// is nothing to disconnect from. The flag is set because it is what the schedule-change clear
 		// and the scripted-scene teardown both look for, and because a squad layer that lands later
 		// must find the bit already correct rather than have to backfill it.
-		NpcFlags.Set(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
+		DisconnectFromSquad();
 		// 3. The refcount and its bookkeeping bit.
 		NpcFlags.AddOblivious();
 		// 4. `OnIncapacitatedStart`. An authored output with 10 wires across the exported maps
@@ -2464,7 +2655,7 @@ void FElysiumNpc::MakeOblivious(bool bOblivious)
 	else
 	{
 		NpcFlags.RemoveOblivious();
-		NpcFlags.Clear(EElysiumNpcFlag2::D_DISCONNECT_SQUAD);
+		ReconnectToSquad();
 		FireOutput(FName(TEXT("OnIncapacitatedEnd")), Handle);
 	}
 	RecordScheduleEvent(FString::Printf(TEXT("TASK_MAKE_OBLIVIOUS %s -> %s"),
@@ -2487,30 +2678,50 @@ void FElysiumNpc::ClearConditions()
 
 void FElysiumNpc::OnScheduleChange()
 {
-	// The navigator/motor/goal reset inside the same `PRESERVE_PATH` guard the flag clear sits
-	// in (`0x102a0940`). It is not redundant with `ReleaseScheduleBody`'s stop: that one runs only
-	// when a SCHEDULE owned the body, and a program forced onto an executor-owned NPC -- a walking
-	// patroller fed upon, a `ChangeSchedule` on an ambient visitor -- finds the route's move still
-	// outstanding. Retail stops it at install; so does this. The read is taken BEFORE the clear
-	// below releases the flag, which is retail's order too.
+	// Base slot 435 (0x1027a700) precedes the Troika override. Navigator's notification
+	// and the dead strategy-slot namespace have no additional substrate state to release.
+	ScheduleHost.MoveWaitFinished = 0.0;
+	NpcFlags.BeginScheduleChange();
 	if (!NpcFlags.Has(EElysiumNpcFlag::PRESERVE_PATH))
 	{
-		if (Motor != nullptr)
-		{
-			Motor->Stop();
-		}
+		const FElysiumNpcNavigationSample Nav = Motor ? Motor->SampleNavigation() : FElysiumNpcNavigationSample();
+		if (Motor && Nav.Type != EElysiumNpcNavType::Jump && Nav.Type != EElysiumNpcNavType::Climb)
+			Motor->ClearNavigationGoal();
+		if (CurrentAmbientSpot()) FinishAmbientUse(bAmbientArrived, false);
+		ScheduleHost.Unknown6300 = ScheduleHost.Unknown659c = 0;
+		if (Motor) Motor->ResetSteering();
 		bMoveIssued = false;
 		bWalkingAnimation = false;
+		ScheduleHost.GoalToleranceCm = 0.f;
+		ScheduleHost.InsideInterruptDistanceSqr = ScheduleHost.OutsideInterruptDistanceSqr = 0.f;
+		ScheduleHost.InterruptTime = 0.0;
+		ScheduleHost.MoveTarget = FElysiumEntityHandle::Invalid();
+		// m_hOpeningDoor/slot532's close operation is supplied with the door obstruction lane.
+		if (NpcFlags.ApplyScheduleChangeMasks())
+		{
+			// UnOblivious 0x1026d160 always calls Reconnect, even if its bookkeeping bit
+			// was already cleared by a separate discipline-expiry owner.
+			ReconnectToSquad();
+			RecordScheduleEvent(TEXT("OnScheduleChange: obliviousness released"));
+		}
+		if (NpcFlags.Has(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX))
+		{
+			SetAttackExtents(ScheduleHost.SavedSleepExtents);
+			ScheduleHost.SavedSleepExtents = FVector(-1.0);
+			NpcFlags.Clear(EElysiumNpcFlag2::SLEEP_BOUNDING_BOX);
+		}
+		ScheduleHost.bMotorAnimationMovement = false;
+		ScheduleHost.DesiredMoveYaw = 0.f;
+		ScheduleHost.bWaitFinishedSet = false;
 	}
-	// The flag half is the object's own recovered rule; what is left here is the world-facing half
-	// retail runs when the refcount actually reached zero.
-	if (NpcFlags.OnScheduleChange())
+	if (NpcFlags.Has(EElysiumNpcFlag2::ACTIVITY_COPY_PROP_CLEAN))
 	{
-		// Retail rejoins the squad here (`0x1026d0c0`). SEAM, for the same reason as the disconnect
-		// above: there is no squad object to rejoin. Nothing else is owed — sensing and the dialogue
-		// gate read the counter live, so both resume on their own the moment it hits zero.
-		RecordScheduleEvent(TEXT("OnScheduleChange: obliviousness released"));
+		ElysiumDisciplines::NotifyScheduleChanged(*this);
+		ClearOwnedActivityCopyProps();
+		bInvincible = false;
 	}
+	NpcFlags.FinishScheduleChange();
+	ScheduleHost.MemoryBits &= ~0x2000u;
 }
 
 void FElysiumNpc::BuildScheduleTestBits(FElysiumNpcConditions& InOutMask)
@@ -2655,12 +2866,12 @@ void FElysiumNpc::BeginAmbientLeave(double Now)
 	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
 }
 
-void FElysiumNpc::FinishAmbientUse(bool bFireLeft)
+void FElysiumNpc::FinishAmbientUse(bool bFireLeft, bool bStopMovement)
 {
 	// This is the single exit for an ambient claim, including UseInteresting(0), a disabled spot,
 	// dialogue, dormancy and a patrol taking ownership. Cancel a request before forgetting it so
 	// the native controller cannot keep walking an entity the substrate now considers idle.
-	if (AmbientPhase == EAmbientPhase::Moving && bMoveIssued && Motor)
+	if (bStopMovement && AmbientPhase == EAmbientPhase::Moving && bMoveIssued && Motor)
 	{
 		Motor->Stop();
 	}
@@ -2673,6 +2884,8 @@ void FElysiumNpc::FinishAmbientUse(bool bFireLeft)
 		Spot->Release(Handle);
 	}
 	CurrentSpotIndex = INDEX_NONE;
+	NpcFlags.Clear(EElysiumNpcFlag::INTERESTING_INTO);
+	NpcFlags.Clear(EElysiumNpcFlag2::INTERESTING_LOST);
 	AmbientPhase = EAmbientPhase::None;
 	bAmbientArrived = false;
 	bMoveIssued = false;
@@ -3413,9 +3626,19 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	SerializeScheduleBlock(Ar);
 	SerializeSocialBlock(Ar);
 	SerializeSensesBlock(Ar);
+	if (Ar.Version() >= FElysiumSaveVersion::NpcEnemyMemory)
+	{
+		EnemyMemory.Serialize(Ar);
+		if (Ar.IsLoading() && World)
+		{
+			EnemyMemory.Rebase(*World);
+		}
+	}
 	SerializeLoadoutBlock(Ar);
 	SerializeWitnessBlock(Ar);
 	SerializeDisciplineBlock(Ar);
+	SerializeDisciplineFlags(Ar);
+	ScheduleHost.Serialize(Ar, World);
 
 	if (Ar.IsLoading())
 	{
@@ -3744,6 +3967,15 @@ void FElysiumNpc::SerializeDisciplineBlock(FElysiumSaveArchive& Ar)
 			// Session state, never simulation state: a restored character starts from the live
 			// sound bus rather than replaying a retention window that no longer exists.
 			Disciplines.SoundCursor = 0;
+			// HitInfo end/interrupt callbacks (0x101dfe80) retain the original caster.
+			// Handle archives strip the map epoch; restore it before expiry resolves the source.
+			if (World)
+			{
+				for (FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
+				{
+					Effect.Source = World->RebaseSavedHandle(Effect.Source);
+				}
+			}
 
 			// The tracked rows say which authored groups this NPC is carrying; `Effects` is the
 			// list they were installed into, and an NPC's `Effects` is rebuilt at spawn from its
@@ -3887,7 +4119,7 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Enemy"), Mem.Enemy.IsSet()
 		? FString::Printf(TEXT("%s (%s, %d failed LOS checks%s)"), *Mem.Enemy.ToString(),
 			Mem.bEnemyOccluded ? TEXT("OCCLUDED") : TEXT("has LOS"), Mem.EnemyLosFailures,
-			Mem.bEnemyEluded ? TEXT(", ELUDED") : TEXT(""))
+			EnemyMemory.IsEluded(Mem.Enemy) ? TEXT(", ELUDED") : TEXT(""))
 		: TEXT("(none)"));
 	Out.Emplace(TEXT("Last enemy"), Mem.LastEnemy.IsSet()
 		? Mem.LastEnemy.ToString() : FString(TEXT("(none)")));

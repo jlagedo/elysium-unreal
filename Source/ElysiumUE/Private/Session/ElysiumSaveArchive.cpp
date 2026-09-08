@@ -298,6 +298,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 		// identical bytes; the prologue above stays here because it is player-record state, not
 		// discipline state. The stream shape is byte-for-byte what this block already wrote.
 		R.Disciplines.Serialize(Ar);
+		Ar << R.MiscFlags << R.ComfortingCount;
 		if (Ar.IsLoading())
 		{
 			// The bus cursor is session state, not simulation state: a restored character starts
@@ -338,6 +339,8 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 		uint8 Eligible = R.Stealth.bEligible ? 1 : 0;
 		Ar << Eligible;
 		Ar << R.Stealth.Generation;
+		if (Version >= FElysiumSaveVersion::StealthSampleValidity) Ar << R.Stealth.bHasLightSample;
+		else if (Ar.IsLoading()) R.Stealth.bHasLightSample = false;
 		if (Ar.IsLoading())
 		{
 			R.Stealth.bEligible = Eligible != 0;
@@ -433,6 +436,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 	{
 		M.SchemaVersion = Ar.CustomVer(FElysiumSaveVersion::GUID);
 	}
+	Ar << M.ComfortTargets;
 	return Ar;
 }
 

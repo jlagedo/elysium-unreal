@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumSkillClasses.h"
 #include "Substrate/ElysiumSoundVolumeTable.h"
 #include "Substrate/ElysiumStealthTables.h"
+#include "Substrate/ElysiumStealthKillRules.h"
 #include "Substrate/ElysiumWieldRules.h"
 
 #include "ElysiumRulebookSubsystem.generated.h"
@@ -67,6 +68,7 @@ public:
 	// the sight-range and cone scalar matrices, the hearing-distance reduction and the descending
 	// light-row thresholds. Read by `Substrate/ElysiumStealth.h`'s recompute, never by the senses.
 	const FElysiumStealthTables&      Stealth();
+	const FElysiumStealthKillRules&   StealthKillRules();
 	// `vdata/system/dispositiontable.txt`. Both halves of a row are read from here: the
 	// `Animation Name` column the standing-idle vocabulary is keyed on, and the fidget/stance-change
 	// pacing the disposition stance machine rolls against.
@@ -129,6 +131,7 @@ private:
 	TElysiumLazyTable<FElysiumDiceTables>        DiceTables;
 	TElysiumLazyTable<FElysiumSoundVolumeTable>  SoundVolumeTable;
 	TElysiumLazyTable<FElysiumStealthTables>     StealthTableSet;
+	TElysiumLazyTable<FElysiumStealthKillRules>  StealthKillTable;
 	TElysiumLazyTable<FElysiumItemTable>         ItemTable;
 	TElysiumLazyTable<FElysiumExcludedEquipTable> ExcludedEquipTable;
 	TElysiumLazyTable<FElysiumDispositionTable>  DispositionTable;

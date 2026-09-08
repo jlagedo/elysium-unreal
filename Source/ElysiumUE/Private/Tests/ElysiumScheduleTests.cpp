@@ -31,6 +31,21 @@ namespace
 		FRecordingRunner() { Motor.Calls = &Calls; }
 
 		TArray<FString> Calls;
+		TArray<int32> FailureReasons;
+		int32 CompletedSchedules = 0;
+		const FElysiumScheduleState* ObservedState = nullptr;
+		TArray<EElysiumScheduleId> OutgoingSchedules;
+		bool bPathAvailable = false;
+		EElysiumMoveWatch MovementResult = EElysiumMoveWatch::Failed;
+		virtual bool GetPathToScriptedGoal() override { return bPathAvailable; }
+		virtual EElysiumMoveWatch WaitForMovement() override { return MovementResult; }
+		virtual void TaskFail(int32 Reason) override
+		{
+			FailureReasons.Add(Reason);
+			Flags.OnTaskFail();
+			Calls.Add(FString::Printf(TEXT("TaskFail %d"), Reason));
+		}
+		virtual void ScheduleDone() override { ++CompletedSchedules; }
 
 		// Knobs a test turns to drive each branch.
 		bool bVisible = true;
@@ -38,6 +53,7 @@ namespace
 		float ActivitySeconds = 1.f;
 		bool bIdleAvailable = true;
 		bool bActivityResolves = true;
+		bool bIdealActivityCurrent = true;
 		bool bMotor = true;
 		// `WAIT_RANDOM` draws through the NPC schedule stream in the real runner; here it is fixed
 		// so a duration is a literal in the test rather than a seed to reverse-engineer.
@@ -63,6 +79,7 @@ namespace
 			Calls.Add(FString::Printf(TEXT("SetActivity %s"), *Activity));
 			return bActivityResolves ? ActivitySeconds : -1.f;
 		}
+		virtual bool IsIdealActivityCurrent() const override { return bIdealActivityCurrent; }
 		virtual bool FaceSavePosition() override
 		{
 			Calls.Add(TEXT("FaceSavePosition"));
@@ -124,6 +141,7 @@ namespace
 		}
 		virtual void OnScheduleChange() override
 		{
+			if (ObservedState) OutgoingSchedules.Add(ObservedState->Current);
 			Calls.Add(TEXT("OnScheduleChange"));
 			Flags.OnScheduleChange();
 		}
@@ -267,22 +285,44 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 		TestFalse(TEXT("nothing is left running"), State.IsRunning());
 	}
 
-	// --- A failing task WITH a fail schedule falls through to it ------------------------------
-	// Cover that cannot be held must still leave the NPC out of the doorway, which is what
-	// `SCHED_TROIKA_TAKE_COVER_HINT_DOOR`'s fall-through to backing away is for.
+	// --- A TASK_SET_ACTIVITY miss still advances the program -----------------------------------
+	// Troika StartTask arm 0x102a1c0f has no TaskFail branch. Its RunTask arm waits for the current
+	// sequence or a one-second watchdog. The cover program has a fail schedule, which makes it the
+	// control: an unresolved activity must advance through the watchdog without taking it.
 	{
 		FRecordingRunner Runner;
-		Runner.bActivityResolves = false;   // the cover pose will not resolve
+		Runner.bActivityResolves = false;   // preserve the real negative return from PlayActivity
+		Runner.bIdealActivityCurrent = false;
 		FElysiumScheduleState State;
 		double Now = 0.0;
 		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::TakeCoverHintDoor, Runner);
-		ElysiumSchedule::Tick(State, Runner, Now, Delay);
-		TestTrue(TEXT("unheld cover falls through to backing away from the door"),
+		TestTrue(TEXT("the unresolved activity starts without failing"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+		TestTrue(TEXT("the trace records the body's unresolved activity"),
+			Runner.Saw(TEXT("TASK_SET_ACTIVITY ACT_IDLE unresolved")));
+		TestFalse(TEXT("the miss is not reported as a failed task"),
+			Runner.Saw(TEXT("TASK_SET_ACTIVITY failed")));
+		TestEqual(TEXT("the original schedule holds at its activity before the watchdog"), State.Current,
+			EElysiumScheduleId::TakeCoverHintDoor);
+		TestEqual(TEXT("the unresolved activity is still the current task"), State.TaskIndex, 0);
+		TestFalse(TEXT("the cover fail schedule is not installed"),
 			Runner.Saw(TEXT("SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE")));
-		TestEqual(TEXT("and that is the schedule now running"), State.Current,
-			EElysiumScheduleId::BackAwayFromDoorNe);
+
+		Now = 0.5;
+		TestTrue(TEXT("the miss waits until the one-second watchdog"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+		TestEqual(TEXT("it remains on the activity before the deadline"), State.TaskIndex, 0);
+
+		Now = 1.0;
+		TestTrue(TEXT("the watchdog completes into the authored wait"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+		TestEqual(TEXT("the original schedule advances to its wait"), State.Current,
+			EElysiumScheduleId::TakeCoverHintDoor);
+		TestEqual(TEXT("the wait is the second task after the watchdog"), State.TaskIndex, 1);
+		TestFalse(TEXT("the watchdog still does not install the fail schedule"),
+			Runner.Saw(TEXT("SCHED_TROIKA_BACK_AWAY_FROM_DOOR_NE")));
 	}
 
 	// --- An unregistered schedule is refused by name, not silently skipped --------------------
@@ -771,6 +811,55 @@ bool FElysiumScheduleTestBitsOverlayTest::RunTest(const FString&)
 		TestTrue(TEXT("...and the trace names it"),
 			Runner.Saw(TEXT("interrupted by CRIMINAL_FLEE_LEVEL")));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleFailureDispatchTest,
+	"Elysium.Substrate.Schedule.FailureDispatch", GElysiumScheduleTestFlags)
+bool FElysiumScheduleFailureDispatchTest::RunTest(const FString&)
+{
+	FRecordingRunner Runner;
+	FElysiumScheduleState State;
+	TestFalse(TEXT("an absent program refuses installation"), ElysiumSchedule::Start(State, EElysiumScheduleId::None, Runner));
+	TestEqual(TEXT("missing schedule uses retail failure 5"), Runner.FailureReasons.Last(), 0x05);
+	TestEqual(TEXT("the source reason table names follower failure"), FString(ElysiumTaskFailureName(0x29)), FString(TEXT("NPC had no follower boss")));
+	Runner.bIdleAvailable = false;
+	ElysiumSchedule::Start(State, EElysiumScheduleId::IdleDisposition, Runner);
+	Runner.Flags.AddOblivious();
+	Runner.Flags.Set(EElysiumNpcFlag::NO_DIALOG);
+	double Delay = 0.0;
+	TestFalse(TEXT("failed activity routes through the failure transaction"), ElysiumSchedule::Tick(State, Runner, 1.0, Delay));
+	TestEqual(TEXT("the kernel invokes TaskFail before dropping the program"), Runner.FailureReasons.Last(), 0x15);
+	TestFalse(TEXT("failure releases NO_DIALOG"), Runner.Flags.Has(EElysiumNpcFlag::NO_DIALOG));
+	TestFalse(TEXT("failure clears the bookkeeping bit"), Runner.Flags.Has(EElysiumNpcFlag2::MADE_OBLIVIOUS));
+	TestTrue(TEXT("retail failure retains the oblivious refcount"), Runner.Flags.IsOblivious());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleCompletionHostTest,
+	"Elysium.Substrate.Schedule.CompletionHost", GElysiumScheduleTestFlags)
+bool FElysiumScheduleCompletionHostTest::RunTest(const FString&)
+{
+	FRecordingRunner Runner;
+	FElysiumScheduleState State;
+	Runner.ObservedState = &State;
+	ElysiumSchedule::Start(State, EElysiumScheduleId::IdleDisposition, Runner);
+	ElysiumSchedule::Start(State, EElysiumScheduleId::ScriptedMoveToGoal, Runner);
+	TestTrue(TEXT("schedule change observes the outgoing program"),
+		Runner.OutgoingSchedules.Last() == EElysiumScheduleId::IdleDisposition);
+	Runner.bPathAvailable = true;
+	Runner.MovementResult = EElysiumMoveWatch::Arrived;
+	double Delay = 0.0;
+	TestFalse(TEXT("an immediately arrived goal finishes the program"), ElysiumSchedule::Tick(State, Runner, 0.0, Delay));
+	TestEqual(TEXT("schedule done is emitted once at the last completion"), Runner.CompletedSchedules, 1);
+	ElysiumSchedule::Start(State, EElysiumScheduleId::ScriptedFollowPath, Runner);
+	TestTrue(TEXT("a continuing path yields at the maintenance bound"), ElysiumSchedule::Tick(State, Runner, 1.0, Delay));
+	TestTrue(TEXT("the bounded pass retains the path program"), State.Current == EElysiumScheduleId::ScriptedFollowPath);
+	TestTrue(TEXT("the bounded pass closes DELAY_INTERRUPTS"), State.bDidMaintainSchedule);
+	FElysiumNpcConditions Failed = FElysiumNpcConditions::Of({EElysiumNpcCond::TaskFailed});
+	const int32 PreviousFailures = Runner.FailureReasons.Num();
+	TestFalse(TEXT("external TASK_FAILED routes a still-running program"), ElysiumSchedule::Tick(State, Runner, 2.0, Delay, &Failed));
+	TestEqual(TEXT("routing an external failure does not duplicate TaskFail"), Runner.FailureReasons.Num(), PreviousFailures);
 	return true;
 }
 

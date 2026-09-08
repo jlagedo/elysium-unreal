@@ -410,6 +410,7 @@ FVector AElysiumNpcBody::FeetLocation() const
 void AElysiumNpcBody::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	ServiceNavigationJump();
 	// Retail refreshes the NPC's ground surface once per move step and nowhere else
 	// (`CAI_Navigator::MoveEnact 0x102ef870` -> `0x10270290` -> `+0x5b90`), so a body that is not
 	// travelling pays for no trace and keeps the answer its last leg left — which is also what
@@ -438,7 +439,7 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 	float SpeedCmPerSecond, bool bAllowPartialPath, TOptional<EElysiumNpcGaitKind> GaitKind)
 {
 	bFaceRequested = false;
-	if (!bRuntimeReady || !bRequestedEnabled || bFrozen)
+	if (!bRuntimeReady || !bRequestedEnabled || bFrozen || bNavigationJumpInProgress)
 	{
 		return false;   // a scene owns this body; it does not take travel requests
 	}
@@ -456,6 +457,7 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 	}
 
 	Movement->Activate();
+	bNavigationJumpFailed = false;
 	Movement->MaxWalkSpeed = FMath::Max(1.0f, SpeedCmPerSecond);
 	RequestedFeet = FeetDestination;
 	RequestedAcceptanceCm = FMath::Max(1.0f, AcceptanceRadiusCm);
@@ -484,6 +486,9 @@ void AElysiumNpcBody::Face(float YawDegrees)
 
 void AElysiumNpcBody::Stop()
 {
+	ResetNavigationJump();
+	NavigationType = EElysiumNpcNavType::Ground;
+	bNavigationJumpFailed = false;
 	// A launch ends here too. Freeze, teleport and the disable path all funnel through
 	// `Stop()`, so clearing the recording flag once here covers every one of them.
 	EndLaunchRecording();
@@ -597,7 +602,7 @@ void AElysiumNpcBody::ApplyEnabledState()
 		{
 			Stop();
 		}
-		else if (bMoveRequested)
+		else if (bMoveRequested || bNavigationJumpInProgress)
 		{
 			Movement->Activate();
 		}
@@ -704,6 +709,14 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 {
 	OutFeetOrigin = FeetLocation();
 	OutYawDegrees = GetActorRotation().Yaw;
+	if (bNavigationJumpFailed)
+	{
+		Stop();
+		return EElysiumNpcMoveStatus::Failed;
+	}
+	// Crossing the final goal's XY tolerance while airborne is not arrival. The smart link
+	// must first finish its capsule flight and return control to the normal path follower.
+	if (bNavigationJumpInProgress) return EElysiumNpcMoveStatus::Moving;
 	if (!bMoveRequested)
 	{
 		return bFaceRequested ? EElysiumNpcMoveStatus::Moving : EElysiumNpcMoveStatus::Idle;
@@ -788,9 +801,54 @@ bool AElysiumNpcBody::SampleBallistic(FElysiumBallisticSample& Out) const
 	return true;
 }
 
+FElysiumNpcNavigationSample AElysiumNpcBody::SampleNavigation() const
+{
+	FElysiumNpcNavigationSample Sample;
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	Sample.bActiveGoal = bMoveRequested;
+	Sample.Type = NavigationType;
+	if (Movement)
+	{
+		Sample.bGrounded = Movement->IsMovingOnGround();
+		Sample.VelocityCmPerSecond = Movement->Velocity;
+	}
+	// A launched reaction has no navigation goal; only an authored AIN link supplies Jump.
+	return Sample;
+}
+
+void AElysiumNpcBody::ClearNavigationGoal()
+{
+	if (NavigationType != EElysiumNpcNavType::Jump && NavigationType != EElysiumNpcNavType::Climb)
+	{
+		Stop();
+		return;
+	}
+	if (AAIController* AI = Cast<AAIController>(GetController()))
+	{
+		if (UPathFollowingComponent* Following = AI->GetPathFollowingComponent())
+			Following->AbortMove(*this, FPathFollowingResultFlags::ForcedScript,
+				FAIRequestID::CurrentRequest, EPathFollowingVelocityMode::Keep);
+	}
+	bMoveRequested = false;
+	bFaceRequested = false;
+	RequestedGaitKind.Reset();
+}
+
+void AElysiumNpcBody::ResetSteering()
+{
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->RotationRate.Yaw = 180.f; // Troika TaskFail -> motor 0x102e0a60(180)
+	}
+}
+
+
 void AElysiumNpcBody::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
+	// ACharacter::Landed is called before CharacterMovement changes its falling mode. Defer
+	// resuming the follower until the next motor service, after the floor/mode are settled.
+	bNavigationJumpLanded = bNavigationJumpInProgress;
 	// The flight is over as far as the ENGINE is concerned. Whether the CHAIN is over is the
 	// substrate's rule, read off the next `SampleBallistic`; all this does is stop recording
 	// contacts for a launch that is no longer in the air.

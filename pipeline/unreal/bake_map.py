@@ -2251,6 +2251,7 @@ class Bake(object):
         log("level: %d light actors (%d in the 3D skybox)" % (lights, sky_lights))
         self._place_sky(actors, sky_ambient)
         self._place_player_start(actors)
+        self._place_navigation(actors)
         # R5.5: captures last, so every surface, prop, light and the sky are in the render.
         captures = self._place_captures(actors, sky_scale, sky_origin)
         # **Built once before the save and once after it, because the two halves of a reflection
@@ -2552,6 +2553,10 @@ class Bake(object):
             # (run: uv run elysium import materials).
             fail("decal material has no projector instance: %s" % name)
         return placed
+
+    def _place_navigation(self, actors):
+        """The V2 lane authors its decoded AIN links into this level."""
+        return 0
 
     def _place_player_start(self, actors):
         path = os.path.join(self.dir, "%s.spawn" % self.map)

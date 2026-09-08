@@ -129,6 +129,9 @@ struct FElysiumDiscHit
 	float GestureDuration = 0.f;
 	FString PlayerAnim;                  // the compact player action
 	FString MiscFlag;
+	// 0x101ddfb0 ORs an authored MiscFlag into the inherited +0xa4 mask; it does
+	// not replace an inherited flag when a child authors a different one.
+	uint32 InheritedMiscFlags = 0;
 	int32 FlinchPercent = INDEX_NONE;
 	int32 KnockbackPercent = INDEX_NONE;
 	int32 AddToComfort = INDEX_NONE;

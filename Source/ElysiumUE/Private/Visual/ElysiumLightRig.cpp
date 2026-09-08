@@ -6,6 +6,7 @@
 #include "ElysiumLightCalibration.h"
 #include "ElysiumLightingSettings.h"
 #include "ElysiumSurfaceSettings.h"
+#include "ElysiumMapLightQueryData.h"
 
 #include "Components/DirectionalLightComponent.h"
 #include "Components/LightComponent.h"
@@ -93,6 +94,7 @@ bool UElysiumLightRig::SetStylePattern(int32 Style, const FString& Pattern)
 		return false;
 	}
 	StylePatterns[Style] = Pattern;
+	AssignedGameplayStyles.Add(Style);
 	int32 Reached = 0;
 	for (const FLightSource& S : LightSources)
 	{
@@ -111,6 +113,13 @@ FString UElysiumLightRig::StylePattern(int32 Style) const
 float UElysiumLightRig::StyleMultiplier(int32 Style) const
 {
 	return (Style >= 0 && Style < MaxLightStyles) ? PatternIntensity(StylePatterns[Style], StyleTime) : 1.f;
+}
+
+float UElysiumLightRig::GameplayStyleMultiplier(int32 Style) const
+{
+	if (Style < 0 || Style >= MaxLightStyles || StylePatterns[Style].IsEmpty()) return 256.f / 264.f;
+	if (Style >= LsCount && !AssignedGameplayStyles.Contains(Style)) return 256.f / 264.f;
+	return ElysiumWorldLight::StyleValue(StylePatterns[Style], StyleTime);
 }
 
 int32 UElysiumLightRig::SwitchedSourceCount() const
@@ -167,6 +176,7 @@ void UElysiumLightRig::RemoveRuntimeSource(ULightComponent* Light)
 int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FString& LightsPath,
 	float SkyReach)
 {
+	AdoptGameplayLight(FPaths::GetBaseFilename(LightsPath));
 	SkyReachScale = SkyReach > 0.f ? SkyReach : 1.f;
 
 	Lights.Reset();
@@ -356,6 +366,7 @@ int32 UElysiumLightRig::Adopt(const TArray<FAdoptedLight>& Adopted, const FStrin
 
 int32 UElysiumLightRig::AdoptBaked(const TArray<FAdoptedLight>& Adopted, const FString& InMapName)
 {
+	AdoptGameplayLight(InMapName);
 	SkyReachScale = 1.f;
 	Lights.Reset();
 	LightSources.Reset();

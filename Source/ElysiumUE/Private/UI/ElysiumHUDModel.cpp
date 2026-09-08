@@ -103,7 +103,8 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	Stealth = FElysiumHUDStealthView();
 	Stealth.bSneaking = View.Stealth.bSneaking;
 	Stealth.bConcealmentValid = View.Stealth.bConcealmentValid;
-	Stealth.ConcealmentStep = FMath::Clamp(View.Stealth.ConcealmentStep, 0, ElysiumHUDArt::ConcealmentSteps - 1);
+	Stealth.ConcealmentStep = FMath::RoundToInt(FMath::Clamp(View.Stealth.LightRow, 0, 10)
+		* float(ElysiumHUDArt::ConcealmentSteps - 1) / 10.f);
 	Stealth.bObserverValid = View.Stealth.bObserverValid;
 	Stealth.ObserverDistanceMetres = View.Stealth.ObserverDistanceCm / 100.0f;
 	switch (View.Stealth.Detection)

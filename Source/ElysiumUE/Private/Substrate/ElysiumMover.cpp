@@ -673,7 +673,8 @@ void FElysiumDoorBase::EmitDoorGameSound()
 		return;
 	}
 	World->EmitGameSound(Body ? Body->GetComponentLocation() : Origin, ElysiumGameSounds::Door(),
-		/*RadiusCm, table-resolved*/ -1.f, Handle);
+		/*RadiusCm, table-resolved*/ -1.f, LastActivator, 0.f,
+		/*CBaseDoor inserts SOUND_PLAYER type 4 for two seconds*/ ElysiumGameSounds::Player, 2.0);
 }
 
 void FElysiumDoorBase::DoorGoUp(const FElysiumEntityHandle& Activator, bool bResolveSwing)

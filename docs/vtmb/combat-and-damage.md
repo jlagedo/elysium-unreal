@@ -1554,19 +1554,29 @@ rounding points around scalar damage, remain open.
 6. Emit the NPC damage sound/event path.
 
 The Troika NPC override at `0x102beda0` first saves the complete incoming damage packet at
-`+0x660c`, then composes the base transaction. A surviving positive hit remembers the attacker for
-five seconds and notifies the active schedule. A special NPC flag can force `Event_Killed`; its
-authored semantic name is not yet proven and must remain an explicit flag rather than an invented
-general rule.
+`+0x660c`, then composes the base transaction. Its surviving-attacker tail calls
+`0x1028e8b0(this, attacker, 5.0)`, which filters the attacker against the NPC/player ownership
+pair and calls `0x1028e940`; that helper max-writes
+`m_flStealthVisionOverrideTime(+0x6604, curtime + 5)`. `CAI_BaseNPCTroika::FVisible`
+(`0x102b4760`) reads that deadline to bypass only the ordinary visual range gate. It is not a
+relationship write and it is not `CAI_Memory` expiry. A special NPC flag can force `Event_Killed`;
+its authored semantic name is not yet proven and must remain an explicit flag rather than an
+invented general rule.
 
-**The reproduction carries that memory as a derived, unsaved hostility row** — a mechanism note
-beside the faithful lifetime, not a behavioural divergence. `ElysiumNpcEnemy::RememberAttacker`
-(`Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h`) writes a `D_HT` relationship toward the
-attacker at priority 5, expiring after `DamageMemorySeconds = 5.0` and re-stamped (not extended) by
-every qualifying hit. Retail keeps a per-actor enemy-memory component that `BestEnemy` walks; this
-runtime has no such component, so the relationship table is the eligibility surface a remembered
-attacker has to reach. The lifetime is retail's; the store is ours, and a persistent authored row
-at a higher priority still supersedes it.
+`CAI_BaseNPC::OnTakeDamageAlive` (`0x10265ed0`) itself calls `UpdateEnemyMemory` (slot 544,
+`0x102709c0`) through the same component `BestEnemy` reads. Existing actor records refresh; its
+unknown-attacker route can request a position-only record from the packet's attack position. The
+record remains until `RefreshMemories` (`0x102df320`) drops an invalid/dead handle; no five-second
+derived `D_HT` relationship exists in the retail call chain. The port carries the three recovered
+known/current/anonymous CAI_Memory branches behind an explicit damage-packet inflictor/attack-point
+seam. Retail melee sets packet `+0x28` from weapon `this` (`CBaseCombatWeapon::102579f0`), and the
+ranged packet carries weapon `this` at `+0x98` (`0x102387b0` → `0x10268330`); the port wires both
+identities separately from owner `Source`. Held weapon position is recovered too: `Weapon_Equip`
+sets move type FOLLOW plus owner/aim, and `PhysicsFollow` copies the live aim owner's absolute
+origin with zero offset. The damage consumer applies that rule to every live owned weapon inflictor;
+a loose live weapon instead uses its current world Origin, while a stale owner is refused. Discipline descriptors still lack a distinct inflictor/hit
+point. The packet-position producer and five-second vision override remain sensing work; neither is
+fabricated as hostility or decay.
 
 Five reaction concepts are independent:
 

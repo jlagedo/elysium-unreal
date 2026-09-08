@@ -661,27 +661,27 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 
 	// `ScriptedBody` writes the cutscene body state mid-record inside two leaf blocks — a scene's
 	// frozen cast and a beat's NPC claim — so an older payload would read those bytes as the fields
-	// that followed them. It is therefore a breaking schema, not an additive one, and it carries the
-	// floor up with it.
-	TestEqual(TEXT("the floor is the scripted-body schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::ScriptedBody);
+	// that followed them. NpcEnemyMemory likewise sits before later NPC leaf blocks. Saves are
+	// disposable, so the floor is deliberately moved to that schema rather than migrated.
+	TestEqual(TEXT("the floor is the enemy-memory schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::StealthSampleValidity);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
-	TestTrue(TEXT("feeding is additive, so it did not move the floor"),
-		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::Feeding);
+	TestTrue(TEXT("the disposable enemy-memory floor refuses the historical feeding payload"),
+		(int32)FElysiumSaveVersion::MinSupported >= (int32)FElysiumSaveVersion::Feeding);
 	// `EventClock` adds the queue's backward-clock guard state beside the queue it guards. The field
 	// sits mid-record but is written and read behind its own version, so a `Feeding` payload skips
 	// those bytes and restores with the guard at its default — additive for the same reason, and the
 	// floor stays put again.
-	TestTrue(TEXT("the event-clock guard is additive, so the floor did not move with it"),
-		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::EventClock);
+	TestTrue(TEXT("the disposable enemy-memory floor also covers event-clock payloads"),
+		(int32)FElysiumSaveVersion::MinSupported >= (int32)FElysiumSaveVersion::EventClock);
 	// `WireIdentity` appends the authored output row a pending queue record came from to the END of
 	// the event record, read behind its own version — so an `EventClock` payload restores with an
 	// unset wire rather than being refused. Additive again, and again the floor stays where the last
 	// breaking schema left it.
-	TestTrue(TEXT("wire identity remains additive"),
-		(int32)FElysiumSaveVersion::MinSupported < (int32)FElysiumSaveVersion::WireIdentity);
+	TestTrue(TEXT("the disposable enemy-memory floor also covers wire-identity payloads"),
+		(int32)FElysiumSaveVersion::MinSupported >= (int32)FElysiumSaveVersion::WireIdentity);
 	// `NpcMaker` appends owner/notification state to the NPC leaf behind its own version, `NpcMind`
 	// the resumable state/body intent after it, `NpcSchedule` the running idle schedule,
 	// `NpcSocial` the independent relationship table, `Activation` the entity lifecycle latch, and
@@ -739,7 +739,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// on the player side the slot it occupies previously held an unwritten `TArray<FString>`
 	// placeholder that nothing ever filled, so an older payload reads and discards it.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::TerminalEmail);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::StealthSampleValidity);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -769,8 +769,8 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the terminal's mail flags and the player's global email"),
 			(int32)FElysiumSaveVersion::TerminalEmail) })
 	{
-		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
-			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);
+		TestTrue(*FString::Printf(TEXT("%s is below the disposable-schema floor"), Appended.Key),
+			(int32)FElysiumSaveVersion::MinSupported >= Appended.Value);
 	}
 
 	// Build the exact v6 player byte stream (which has no ArmorSlot field) and read it through the

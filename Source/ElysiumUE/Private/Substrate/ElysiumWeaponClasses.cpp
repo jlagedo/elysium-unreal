@@ -824,6 +824,26 @@ FElysiumCombatCharacter* FElysiumWeapon::OwnerCharacter() const
 	return Ent ? Ent->AsCombatCharacter() : nullptr;
 }
 
+bool FElysiumWeapon::HeldSourcePosition(FVector& OutPosition) const
+{
+	const FElysiumCombatCharacter* Char = OwnerCharacter();
+	if (Owner.IsSet())
+	{
+		if (Char == nullptr)
+		{
+			return false; // stale owner handle: not a loose world weapon
+		}
+		OutPosition = Char->Origin;
+		return true;
+	}
+	if (IsInert())
+	{
+		return false;
+	}
+	OutPosition = Origin;
+	return true;
+}
+
 bool FElysiumWeapon::IsActiveWeapon() const
 {
 	const FElysiumCombatCharacter* Char = OwnerCharacter();
@@ -2128,7 +2148,8 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 		// surface here rather than inside the bus — the parameter is producer-side by design.
 		World->EmitGameSound(Attacker->Origin, ElysiumGameSounds::Gunshot(),
 			/*RadiusCm, table-resolved*/ -1.f, Attacker->Handle,
-			ElysiumStealth::HearingReductionCmFor(Attacker));
+			ElysiumStealth::HearingReductionCmFor(Attacker), ElysiumGameSounds::Combat,
+			/*GetSoundDuration is unavailable for the weapon row; one second is its recovered floor*/ 1.0);
 	}
 
 	// SEAM (R7.2, closed) — retail traces forward first and accepts a valid obstruction hit.
@@ -2816,6 +2837,10 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 
 	FElysiumDmg Dmg = ModeDmg;
 	Dmg.Source = Attacker.Handle;
+	// CBaseCombatWeapon::102579f0 writes packet+0x28 from weapon `this` after 101c2770 seeds
+	// the attacker. Identity is valid even while the held-weapon spatial seam has not supplied a
+	// packet position; RememberDamage keeps those two facts separate.
+	Dmg.Inflictor = Handle;
 	// The direct-damage route: the value above IS the damage-success count, so the resolver's damage
 	// roll is bypassed. Its soak test still runs.
 	Dmg.Flags |= ElysiumDamage::FlagDirectInput;
@@ -3059,6 +3084,9 @@ void FElysiumWeapon::RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCom
 
 	FElysiumDmg Dmg = ModeDmg;
 	Dmg.Source = Attacker.Handle;
+	// Shot102387b0 writes its weapon `this` to the ranged packet's +0x98 inflictor field; the
+	// downstream CAI-sound path maps that to the same `CVDmg_t` +0x28 field.
+	Dmg.Inflictor = Handle;
 	Dmg.Flags |= ElysiumDamage::FlagDirectInput;
 	Dmg.ExtraInput = Value;
 

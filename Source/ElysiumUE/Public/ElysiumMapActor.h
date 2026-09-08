@@ -509,6 +509,9 @@ public:
 	// The two perception queries. Geometry only; every threshold stays substrate.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
+	virtual bool IsLightQueryAvailable() const override;
+	virtual bool SamplePlayerStealthBounds(FBox& OutBounds, FVector& OutCenter) const override;
+	virtual bool IsPlayerDucking() const override;
 	// SC8: `FindBestShot`'s visibility predicate `FUN_1006db10` — a swept 2-unit hull from a shot
 	// anchor to the look-at that the shot's subject cannot block.
 	virtual bool TraceCameraHull(const FVector& FromCm, const FVector& ToCm,
@@ -574,6 +577,7 @@ public:
 	virtual void StopVoice(FElysiumAudioVoiceHandle Handle, float FadeSeconds) override;
 	virtual void SetVoiceVolume(FElysiumAudioVoiceHandle Handle, float Volume) override;
 	virtual bool IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const override;
+	virtual float SoundDurationSeconds(const FString& Rel) const override;
 	virtual void FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds) override;
 	virtual void FadeOutScheme(const FString& SchemeRel, float FadeSeconds) override;
 	virtual FString ActiveSchemeRel() const override;

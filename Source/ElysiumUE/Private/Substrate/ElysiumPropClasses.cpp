@@ -114,6 +114,7 @@ static void BuildPropSignClass(FElysiumClassDesc& D)
 // the skin inputs are stubs (skin 0 only exported); no EnableMotion/DisableMotion/Sleep exist in VtMB.
 static void BuildPhysPropClass(FElysiumClassDesc& D)
 {
+	ElysiumAddClassField(D, TEXT("npc_kickable"), &FElysiumPhysProp::bNpcKickable);
 	D.Input(TEXT("Wake"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumPhysProp&>(E).InputWake(Args); });
 	D.Input(TEXT("Break"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)

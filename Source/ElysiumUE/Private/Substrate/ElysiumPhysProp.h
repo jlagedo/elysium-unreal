@@ -22,6 +22,7 @@ public:
 	UStaticMeshComponent* Visual = nullptr;   // the simulating body, or null (gated off / decode failed)
 	USkeletalMeshComponent* PosedVisual = nullptr; // collision-free authored resting pose
 	bool  bBroken = false;
+	bool bNpcKickable = false; // CPhysicsProp +0x788, npc_kickable; TaskFail consumes this authored permission.
 	int32 Skin = 0;
 	float SkinFadeTime = 0.0f;                // m_flSkinCrossfadeTime — stored, unread (skins snap)
 	bool  bSimulating = false;                // elysium.PhysicsProps decided sim on at spawn

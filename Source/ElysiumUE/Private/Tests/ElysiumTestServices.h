@@ -40,6 +40,16 @@
 
 struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 {
+	FElysiumNpcNavigationSample Navigation;
+	virtual FElysiumNpcNavigationSample SampleNavigation() const override { return Navigation; }
+	virtual void ClearNavigationGoal() override
+	{
+		Navigation.bActiveGoal = false;
+		if (Navigation.Type != EElysiumNpcNavType::Jump && Navigation.Type != EElysiumNpcNavType::Climb) Stop();
+		Record(TEXT("NpcMotor ClearNavigationGoal"));
+	}
+	virtual void SetNavigationType(EElysiumNpcNavType Type) override { Navigation.Type = Type; Record(TEXT("NpcMotor SetNavigationType")); }
+	virtual void ResetSteering() override { Record(TEXT("NpcMotor ResetSteering")); }
 	TArray<FString>* Calls = nullptr;
 	FVector Feet = FVector::ZeroVector;
 	FVector RequestedFeet = FVector::ZeroVector;
@@ -92,6 +102,7 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		RequestedSpeedCmPerSecond = SpeedCmPerSecond;
 		RequestedGaitKind = GaitKind;
 		bMoving = bEnabled && bAcceptMoves;
+		Navigation.bActiveGoal = bMoving;
 		bFacing = false;
 		const TCHAR* GaitKindName = TEXT("none");
 		if (GaitKind.IsSet())
@@ -116,6 +127,7 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	}
 	virtual void Stop() override
 	{
+		Navigation.bActiveGoal = false;
 		bMoving = false;
 		bFacing = false;
 		Record(TEXT("NpcMotor Stop"));
@@ -1491,9 +1503,24 @@ struct FElysiumRecordingServices final
 	// so a case that does not care about perception keeps running exactly as it did: every segment
 	// is clear and every point is fully lit.
 	bool bLineOfSightClear = true;
+	TFunction<bool(const FVector&, const FVector&)> LineOfSightQuery;
 	float LightAtPoint = 1.0f;
+	bool bLightQueryAvailable = true;
+	bool bPlayerDucking = false;
+	bool bPlayerStealthBoundsAvailable = true;
+	FBox PlayerStealthBounds = FBox(FVector(-16,-16,0) * ElysiumMove::U, FVector(16,16,72) * ElysiumMove::U);
+	FVector PlayerStealthCenter = PlayerStealthBounds.GetCenter();
+	virtual bool IsLightQueryAvailable() const override { return bLightQueryAvailable; }
+	virtual bool IsPlayerDucking() const override { return bPlayerDucking; }
+	virtual bool SamplePlayerStealthBounds(FBox& OutBounds, FVector& OutCenter) const override
+	{
+		OutBounds = PlayerStealthBounds;
+		OutCenter = PlayerStealthCenter;
+		return bPlayerStealthBoundsAvailable;
+	}
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override
 	{
+		if (LineOfSightQuery) return LineOfSightQuery(FromCm, ToCm);
 		Record(FString::Printf(TEXT("QueryLineOfSight %s -> %s = %s"), *FromCm.ToString(),
 			*ToCm.ToString(), bLineOfSightClear ? TEXT("clear") : TEXT("blocked")));
 		return bLineOfSightClear;

@@ -7,6 +7,7 @@
 #include "Substrate/ElysiumItemClasses.h"      // FElysiumItem — the active weapon's record
 #include "Substrate/ElysiumItemTable.h"        // FElysiumItemDef / FElysiumWeaponMode
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcLog.h"           // the `npc_*` category the mode refusal reports on
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
@@ -16,19 +17,12 @@ namespace
 {
 	// The seen set for one decision pass.
 	//
-	// SCOPE, DELIBERATE: the sight path tracks exactly one candidate — the player
-	// (`FElysiumNpcSenses::TickSight` resolves `SetClosestPlayer` and nothing else), because that is
-	// the only observer transaction the stealth recovery closes. NPC-vs-NPC sight has no recovered
-	// admission rule here yet, so this runtime does not invent one. Everything downstream of this
-	// function already takes a LIST of handles and joins each through the relationship table, so
-	// admitting other observers later is an addition HERE and nowhere else.
+	// CAI_Senses::Look supplies a fresh list, distinct from closest-player LOS cache. Its admission
+	// already applies player/NPC/object cadence and the non-player D_HT/D_FR gate; conditions only
+	// classify the observation and must not replay cache flags.
 	void NpcCondBuildSeenSet(const FElysiumNpc& Npc, TArray<FElysiumEntityHandle>& Out)
 	{
-		const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-		if (Memory.bPlayerLos && Memory.ClosestPlayer.IsSet())
-		{
-			Out.Add(Memory.ClosestPlayer);
-		}
+		Out = Npc.Senses.Sighted();
 	}
 
 	FString NpcCondClassnameOf(const FElysiumEntity& Entity)
@@ -53,6 +47,15 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	switch (Cond)
 	{
 	case EElysiumNpcCond::None:                  return TEXT("COND_NONE");
+	case EElysiumNpcCond::SeeUnknown:            return TEXT("SEE_UNKNOWN");
+	case EElysiumNpcCond::SeePlayer:             return TEXT("SEE_PLAYER");
+	case EElysiumNpcCond::TaskFailed:            return TEXT("TASK_FAILED");
+	case EElysiumNpcCond::ScheduleDone:          return TEXT("SCHEDULE_DONE");
+	case EElysiumNpcCond::HearBulletImpact:      return TEXT("HEAR_BULLET_IMPACT");
+	case EElysiumNpcCond::HearPhysicsDanger:     return TEXT("HEAR_PHYSICS_DANGER");
+	case EElysiumNpcCond::HearThumper:           return TEXT("HEAR_THUMPER");
+	case EElysiumNpcCond::HearBugbait:           return TEXT("HEAR_BUGBAIT");
+	case EElysiumNpcCond::Smell:                 return TEXT("SMELL");
 	case EElysiumNpcCond::ShouldDodge:           return TEXT("SHOULD_DODGE");
 	case EElysiumNpcCond::ShouldBlock:           return TEXT("SHOULD_BLOCK");
 	case EElysiumNpcCond::ShouldStepback:        return TEXT("SHOULD_STEPBACK");
@@ -151,7 +154,9 @@ bool ElysiumNpcCond::IsHearFamily(EElysiumNpcCond Cond)
 	return Cond == EElysiumNpcCond::HearCombat
 		|| Cond == EElysiumNpcCond::HearPlayer
 		|| Cond == EElysiumNpcCond::HearWorld
-		|| Cond == EElysiumNpcCond::HearDanger;
+		|| Cond == EElysiumNpcCond::HearDanger || Cond == EElysiumNpcCond::HearFlinch
+		|| Cond == EElysiumNpcCond::HearBulletImpact || Cond == EElysiumNpcCond::HearPhysicsDanger
+		|| Cond == EElysiumNpcCond::HearThumper || Cond == EElysiumNpcCond::HearBugbait;
 }
 
 void ElysiumNpcCond::AccumulateDamage(FElysiumNpcMemory& Memory, int32 CommittedDamage, double Now)
@@ -211,29 +216,8 @@ void ElysiumNpcCond::GatherDamage(const FElysiumNpc& Npc, double PreviousGatherT
 void ElysiumNpcCond::GatherHearing(const FElysiumNpc& Npc, double PreviousGatherTime,
 	FElysiumNpcConditions& Out)
 {
-	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
-	if (Memory.LastHeardTime < 0.0 || Memory.LastHeardTime <= PreviousGatherTime)
-	{
-		return;
-	}
-	// SEAM (comment only, never set): `HEAR_DANGER` is named in the interrupt census (54 schedules)
-	// but nothing in the recovered sound material says which categories raise it, and the volume
-	// table carries no danger level. An invented mapping would silently interrupt 54 schedules.
-	if (IsCombatSoundCategory(Memory.LastHeardCategory.ToLower()))
-	{
-		Out.Set(EElysiumNpcCond::HearCombat);
-		return;
-	}
-	const FElysiumEntityHandle PlayerHandle = Npc.World
-		? Npc.World->PlayerHandle() : FElysiumEntityHandle::Invalid();
-	if (Memory.LastHeardSource.IsSet() && PlayerHandle.IsSet() && Memory.LastHeardSource == PlayerHandle)
-	{
-		Out.Set(EElysiumNpcCond::HearPlayer);
-		return;
-	}
-	Out.Set(EElysiumNpcCond::HearWorld);
+	if (!Npc.IsOblivious()) Out |= Npc.Senses.HeardConditions;
 }
-
 bool ElysiumNpcCond::ShouldInvestigate(const FElysiumNpc& Npc, const FElysiumEntity& Candidate,
 	bool bCombatMode)
 {
@@ -299,6 +283,10 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 	NpcCondBuildSeenSet(Npc, Seen);
 
 	FElysiumNpcMemory& Memory = Npc.Senses.Memory;
+	if (Npc.Senses.bSeeUnknownThisPass)
+	{
+		Out.Set(EElysiumNpcCond::SeeUnknown);
+	}
 	for (const FElysiumEntityHandle& Handle : Seen)
 	{
 		const FElysiumEntity* Target = World->Resolve(Handle);
@@ -307,20 +295,49 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 			continue;
 		}
 		const EElysiumRelationship Relation = Npc.Relationships.Resolve(Handle, NpcCondClassnameOf(*Target));
-		// SEAM (comment only, never set): `SEE_DISLIKE` (0x43's neighbour, 0x45) and `SEE_NEMESIS`
-		// (0x5b) have no producer, because the recovered `D_*` token set is exactly
-		// hate/fear/like/neutral — neither "dislike" nor "nemesis" is a relation this table can
-		// hold. Whatever raises them is a second classification the survey has not decoded, so the
-		// two conditions are gathered by nobody and their last-seen memory slots stay unwritten.
-		// `ShouldChooseNewEnemy` still tests both, exactly as retail does.
+		// OnLooked 0x1026a2c0 skips the current unknown BEFORE the player/relationship arms.
+		const FElysiumEntityHandle Skip = Npc.NpcFlags.Has(EElysiumNpcFlag::IGNORE_UNKNOWN)
+			? Memory.LastSeeUnknown : Memory.BestSeeUnknown;
+		if (Handle == Skip) continue;
+		if (Handle == World->PlayerHandle()) Out.Set(EElysiumNpcCond::SeePlayer);
+		if (Handle == World->PlayerHandle() && Relation == EElysiumRelationship::Hate
+			&& (!Npc.Def || !Npc.Def->Classname.Equals(TEXT("npc_VRat"), ESearchCase::IgnoreCase)))
+		{
+			if (FElysiumPlayer* Player = World->FindPlayer())
+			{
+				Player->LastHostileAssessment = Npc.Handle;
+				Player->LastHostileAssessmentTime = Now;
+			}
+		}
+		// Troika's `OnLooked` classifies D_HT by its raw IRelationPriority: negative is DISLIKE,
+		// 0..10 HATE, and 11+ NEMESIS.  The relationship store deliberately retains D_HT as its
+		// disposition, so this is the one place the priority expands it into the three conditions.
+		// Only actual HATE and FEAR take the base `UpdateEnemyMemory` write.
+		const int32 Priority = Npc.Relationships.ResolvePriority(Handle, NpcCondClassnameOf(*Target));
 		FElysiumNpcMemory::ESeen Slot = FElysiumNpcMemory::ESeen::Count;
 		switch (Relation)
 		{
 		case EElysiumRelationship::Hate:
-			Out.Set(EElysiumNpcCond::SeeHate);
-			Slot = FElysiumNpcMemory::ESeen::Hate;
+			// 0x1026a3e0 diverts D_HT under D_CALM into an arm that rejects D_CALM.
+			if (Npc.NpcFlags.Has(EElysiumNpcFlag2::D_CALM)) break;
+			if (Priority < 0)
+			{
+				Out.Set(EElysiumNpcCond::SeeDislike);
+				Slot = FElysiumNpcMemory::ESeen::Dislike;
+			}
+			else if (Priority <= 10)
+			{
+				Out.Set(EElysiumNpcCond::SeeHate);
+				Slot = FElysiumNpcMemory::ESeen::Hate;
+			}
+			else
+			{
+				Out.Set(EElysiumNpcCond::SeeNemesis);
+				Slot = FElysiumNpcMemory::ESeen::Nemesis;
+			}
 			break;
 		case EElysiumRelationship::Fear:
+			if (Npc.NpcFlags.Has(EElysiumNpcFlag2::D_CALM)) break;
 			Out.Set(EElysiumNpcCond::SeeFear);
 			Slot = FElysiumNpcMemory::ESeen::Fear;
 			break;
@@ -331,6 +348,12 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 		{
 			Memory.LastSeen[static_cast<int32>(Slot)] = Handle;
 			Memory.LastSeenTime[static_cast<int32>(Slot)] = Now;
+			if (Relation == EElysiumRelationship::Hate || Relation == EElysiumRelationship::Fear)
+			{
+				// A sighting is the admission write; hearing and cached sight flags never manufacture
+				// a BestEnemy candidate.
+				Npc.EnemyMemory.Update(Npc, Handle, Now);
+			}
 		}
 	}
 }
@@ -365,10 +388,8 @@ void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcCon
 	// consecutive failures the committed enemy retains `HAVE_ENEMY_LOS`; at ten it flips.
 	Out.Set(Memory.bEnemyOccluded ? EElysiumNpcCond::EnemyOccluded : EElysiumNpcCond::HaveEnemyLos);
 
-	// `SEE_ENEMY` is the ADMISSION answer rather than the tracking one: it stands when the committed
-	// enemy is in this pass's seen set. Today that set holds only the player (`NpcCondBuildSeenSet`),
-	// so an NPC enemy never raises it — the same scope mark, one function up.
-	if (Memory.Enemy == World->PlayerHandle() && Memory.bPlayerLos)
+	// `SEE_ENEMY` is the fresh Look admission answer, never closest-player cache replay.
+	if (Npc.Senses.Sighted().Contains(Memory.Enemy))
 	{
 		Out.Set(EElysiumNpcCond::SeeEnemy);
 	}

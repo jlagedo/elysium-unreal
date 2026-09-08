@@ -9,6 +9,7 @@
 
 class AElysiumMapActor;
 class AElysiumNpcBody;
+class ANavLinkProxy;
 
 // The cast's animation pass, in TG_PostPhysics. A SECOND tick function rather than the
 // actor's own tick, because the engine wires no prerequisite between an actor's tick and its own
@@ -120,6 +121,12 @@ public:
 	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees) const override;
 	virtual bool Launch(const FVector& VelocityCmPerSecond) override;
 	virtual bool SampleBallistic(FElysiumBallisticSample& Out) const override;
+	virtual FElysiumNpcNavigationSample SampleNavigation() const override;
+	virtual void ClearNavigationGoal() override;
+	virtual void SetNavigationType(EElysiumNpcNavType Type) override;
+	// Entered by the baked smart link, without aborting its suspended path follower.
+	bool BeginNavigationJump(ANavLinkProxy* Link, const FVector& DestinationFeet);
+	virtual void ResetSteering() override;
 
 	// Unreal's own landing and blocking-hit notifications. They exist ONLY to record what
 	// `SampleBallistic` reports: nothing is decided here, and neither one calls into the substrate.
@@ -146,6 +153,16 @@ public:
 	void RefreshGroundSurface();
 
 private:
+	void ServiceNavigationJump();
+	void FinishNavigationJump(bool bSucceeded);
+	void ResetNavigationJump();
+	EElysiumNpcNavType NavigationType = EElysiumNpcNavType::Ground;
+	TWeakObjectPtr<ANavLinkProxy> NavigationJumpLink;
+	FVector NavigationJumpDestination = FVector::ZeroVector;
+	bool bNavigationJumpInProgress = false;
+	bool bNavigationJumpLanded = false;
+	bool bNavigationJumpFailed = false;
+
 	// Clear every trace of a recording launch. Called from `Landed` and from `Stop()`, which is the
 	// funnel freeze, teleport and disable all reach.
 	void EndLaunchRecording();

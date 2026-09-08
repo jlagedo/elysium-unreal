@@ -108,8 +108,19 @@ void FElysiumNpcFlags::RemoveOblivious()
 
 bool FElysiumNpcFlags::OnScheduleChange()
 {
-	Set(EElysiumNpcFlag2::SCHEDULE_CHANGED);
+	BeginScheduleChange();
+	const bool Released = ApplyScheduleChangeMasks();
+	FinishScheduleChange();
+	return Released;
+}
 
+void FElysiumNpcFlags::BeginScheduleChange()
+{
+	Word2 |= 0x80000004u; // The transient high bit is set by the virtual, not the name parser.
+}
+
+bool FElysiumNpcFlags::ApplyScheduleChangeMasks()
+{
 	bool bReleasedOblivious = false;
 	if (!Has(EElysiumNpcFlag::PRESERVE_PATH))
 	{
@@ -121,9 +132,21 @@ bool FElysiumNpcFlags::OnScheduleChange()
 			bReleasedOblivious = true;
 		}
 	}
-	Word1 &= GScheduleChangeTailKeep1;
-	Word2 &= GScheduleChangeTailKeep2;
 	return bReleasedOblivious;
+}
+
+void FElysiumNpcFlags::FinishScheduleChange()
+{
+	Word2 &= GScheduleChangeTailKeep2;
+	Word1 &= GScheduleChangeTailKeep1;
+}
+
+bool FElysiumNpcFlags::OnTaskFail()
+{
+	const bool HadOblivious = Has(EElysiumNpcFlag2::MADE_OBLIVIOUS);
+	Word2 &= 0x7fffe24fu;
+	Word1 &= 0xa3f40178u;
+	return HadOblivious; // 0x1029adb0 contains no decrement of +0x5bb4.
 }
 
 void FElysiumNpcFlags::Serialize(FElysiumSaveArchive& Ar)

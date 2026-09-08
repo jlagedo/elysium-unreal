@@ -1,4 +1,5 @@
 #include "Substrate/ElysiumDisciplineTargetTables.h"
+#include "Substrate/ElysiumMiscFlags.h"
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumKeyValues.h"
@@ -292,6 +293,9 @@ void FElysiumDiscHit::InheritFromRow(const FElysiumDiscHit& Base)
 	TakeString(Expression, Base.Expression);
 	TakeString(GestureAnim, Base.GestureAnim);
 	TakeString(PlayerAnim, Base.PlayerAnim);
+	uint32 BaseMiscFlag = 0;
+	ElysiumMiscFlags::ParseName(Base.MiscFlag, BaseMiscFlag);
+	InheritedMiscFlags |= Base.InheritedMiscFlags | BaseMiscFlag;
 	TakeString(MiscFlag, Base.MiscFlag);
 	if (GestureDuration == 0.f) { GestureDuration = Base.GestureDuration; }
 

@@ -115,7 +115,7 @@ MANIFEST_SCHEMA = "elysium.map-geometry"
 #: older-staged manifest still loads (`_place_water` writes them only when present).
 #: 11 (R7.4, integrator): `water.faces[]` gains `meshedAreaCm2` beside `areaCm2`, which this lane
 #: does not read -- the G26 area pin is answered on the staged side, where both numbers are.
-MANIFEST_VERSION = 11
+MANIFEST_VERSION = 13
 
 #: The VtMB light types that place an actor (`type` 0 texlight, 1 point, 2 spot, 3 sun); type 5
 #: skyambient tints the SkyLight through `_place_sky`'s R5.2 join and places none.
@@ -562,6 +562,8 @@ def _build_class():
             recipe = Bake._level_recipe(self)
             recipe["lane"] = self.lane
             recipe["unit_sha256"] = self.geometry.unit_sha256
+            recipe["light_query"] = self.geometry.manifest.get("lightQuery", {}).get("sha256")
+            recipe["jump_links"] = self.geometry.manifest.get("jumpLinks", {}).get("sha256")
             # R7.2 ruling 3: the SLOT each face group binds, so a unit that gained (or lost) its
             # projector twin -- or, R7.4, its `_Underside` twin -- re-authors the level instead of
             # reusing a level bound to the other one. `slot_asset` already resolves both.
@@ -714,6 +716,8 @@ def _build_class():
                     sky_placed += 1
                 actor.set_actor_label("Prop_%d_%s" % (placement.index, placement.stem))
                 actor.tags = [HOST.TAG_SKY if placement.sky else HOST.TAG_PROP]
+                if not placement.sky and not (placement.flags & 0x10):
+                    actor.tags = list(actor.tags) + ["elysium.stealth-shadow"]
                 actor.set_folder_path("Sky/Props" if placement.sky else "Props")
                 placed += 1
             if missing:
@@ -1342,6 +1346,11 @@ def _build_class():
             sky ambient once, globally, and the engine's multi-`light_environment` rule is
             first-wins too, RE-A3/RE-A5), which `_place_sky` joins with the baked cube (R5.2)."""
 
+            from pipeline.unreal import bake_light_query
+            query = self.geometry.manifest.get("lightQuery")
+            if query is None:
+                raise ValueError("map manifest has no gameplay light-query payload; stage the V2 map again")
+            bake_light_query.author(query)
             calibration = lighting_calibration()
             placed = sky_placed = 0
             sky_ambient = None
@@ -1424,6 +1433,14 @@ def _build_class():
                 else calibration["MaxBrightness"],
                 " (extended)" if calibration["bUseExtendedBrightnessCeiling"] else ""))
             return placed, sky_placed, sky_ambient
+
+        def _place_navigation(self, actors):
+            """Author the decoded AIN's human jump connections as native smart links."""
+            from pipeline.unreal import bake_jump_links
+            payload = self.geometry.manifest.get("jumpLinks")
+            if payload is None:
+                raise ValueError("map manifest has no AIN jump links; stage the V2 map again")
+            return bake_jump_links.author(actors, payload)
 
         # ---------------------------------------------------------------- captures (R5.5)
 

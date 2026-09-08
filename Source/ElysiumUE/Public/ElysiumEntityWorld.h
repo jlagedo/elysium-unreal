@@ -202,6 +202,12 @@ public:
 	// `EndSession` returns).
 	void ForgetPlayer() { Player = FElysiumEntityHandle::Invalid(); }
 
+	// 0x10323630 appends even an existing handle; 0x10323770 removes only the
+	// first match. The comfort condition sweep consumes this order, including duplicates.
+	void AddComfortTarget(const FElysiumEntityHandle& Target);
+	void RemoveComfortTarget(const FElysiumEntityHandle& Target);
+	const TArray<FElysiumEntityHandle>& ComfortTargets() const { return ComfortTargetList; }
+
 	// --- Persistence ---
 	// Freeze this map to a snapshot. Pure read: the same call serves a travel boundary and a save,
 	// which is what keeps the two from drifting apart. Every entity is diffed against a **fresh
@@ -594,7 +600,8 @@ public:
 	// producer whose source is a character reads it off that character's committed stealth surface
 	// through `ElysiumStealth::HearingReductionCmFor`, and a world-made noise (a door) passes 0.
 	void EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
-		const FElysiumEntityHandle& Source, float StealthHearingReductionCm = 0.f);
+		const FElysiumEntityHandle& Source, float StealthHearingReductionCm = 0.f,
+		uint32 TypeMask = 0, double DurationSeconds = 0.0);
 
 	// **The player's ONE permanently reserved locomotion stimulus** — `CBasePlayer::UpdatePlayerSound`
 	// (`vampire.dll 0x1016b480`), which inserts nothing and rewrites one `CSound` record every think
@@ -606,7 +613,8 @@ public:
 	// equal to the category's authored reach on the think the sound is loudest. Ask
 	// `GameSoundRadiusUnits` for the value it decays towards.
 	void RefreshGameSound(uint64& Slot, const FVector& PositionCm, FName Category, float RadiusCm,
-		const FElysiumEntityHandle& Source, float StealthHearingReductionCm = 0.f);
+		const FElysiumEntityHandle& Source, float StealthHearingReductionCm = 0.f,
+		uint32 TypeMask = 0, double DurationSeconds = 0.2);
 	// The authored reach of a named category, SOURCE UNITS, with the volume table bound on first
 	// use exactly as `EmitGameSound` binds it. 0 for `NAME_None`.
 	float GameSoundRadiusUnits(FName Category);
@@ -803,6 +811,7 @@ private:
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
 	FElysiumWorldServices WorldServices;              // the outbound seam; members may be null
 	FElysiumWeatherState WeatherState;
+	TArray<FElysiumEntityHandle> ComfortTargetList;
 	// A2 (footsteps): VtMB's seven footstep cvars, held by value at their retail defaults. Refreshed
 	// from the console store by the map actor's pre-move pass; a headless world never refreshes it
 	// and therefore runs on exactly the defaults a stock install has.

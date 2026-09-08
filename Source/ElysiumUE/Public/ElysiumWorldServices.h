@@ -143,10 +143,26 @@ struct FElysiumBallisticSample
 	FVector ContactNormal = FVector::ZeroVector;
 };
 
+// CAI_Navigator's native navigation type, read by the schedule host.
+enum class EElysiumNpcNavType : uint8 { Ground = 0, Jump = 1, Fly = 2, Climb = 3 };
+struct FElysiumNpcNavigationSample
+{
+	EElysiumNpcNavType Type = EElysiumNpcNavType::Ground;
+	bool bActiveGoal = false;
+	bool bGrounded = true;
+	FVector VelocityCmPerSecond = FVector::ZeroVector;
+};
+
 class IElysiumNpcMotor
 {
 public:
 	virtual ~IElysiumNpcMotor() = default;
+	virtual FElysiumNpcNavigationSample SampleNavigation() const { return {}; }
+	// Clear the route while retaining special traversal velocity/type. Unlike Stop, a stopped
+	// jump must remain observable by TASK_STOP_MOVING's RunTask arm (0x102888d4).
+	virtual void ClearNavigationGoal() { Stop(); }
+	virtual void SetNavigationType(EElysiumNpcNavType Type) {}
+	virtual void ResetSteering() {}
 
 	// --- The ballistic pair ---
 	//
@@ -1049,6 +1065,9 @@ public:
 	// a point in a lit room's shadow reads as lit; and it ignores the sky/sun terms, which are
 	// unoccluded whole-map values that would otherwise read every interior as fully lit.
 	virtual float QueryLightAtPoint(const FVector& PointCm) const { return 1.0f; }
+	virtual bool IsLightQueryAvailable() const { return false; }
+	virtual bool SamplePlayerStealthBounds(FBox& OutBounds, FVector& OutCenter) const { return false; }
+	virtual bool IsPlayerDucking() const { return false; }
 
 	// Source's `engine->LightStyle(style, pattern)`. A `light`/`light_spot` writes its style's pattern here
 	// and the rig's clock reaches every baked source carrying that style. Headless: nothing.
@@ -1296,6 +1315,8 @@ class IElysiumAudio
 {
 public:
 	virtual ~IElysiumAudio() = default;
+	// Engine-owned wave duration; ambient_generic floors an unavailable answer to one second.
+	virtual float SoundDurationSeconds(const FString& Rel) const { return 0.f; }
 
 	// The map implementation stamps its active epoch before forwarding. Stable ownership remains
 	// logical here; a weak attachment is only resolved by the subsystem on the game thread.

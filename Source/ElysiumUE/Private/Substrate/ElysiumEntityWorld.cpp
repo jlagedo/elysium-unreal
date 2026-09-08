@@ -18,6 +18,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
 #include "Substrate/ElysiumSoundVolumeTable.h"
+#include "Substrate/ElysiumStealth.h"
 #include "ElysiumUseIcons.h"
 
 #include "Components/SceneComponent.h"
@@ -1548,6 +1549,8 @@ void FElysiumEntityWorld::Tick(double Now)
 	// After the thinks, so a turn opened this frame already has its track bound — the same ordering
 	// FElysiumChoreoScene::Think uses for RefreshFacialPose.
 	RefreshDialogueLipsync(Now);
+	// All minds and queued outputs have committed before presentation receives its snapshot.
+	if (FElysiumPlayer* PlayerEnt = FindPlayer()) ElysiumStealth::PublishObservers(*PlayerEnt, Now);
 }
 
 const FElysiumGameSoundBus& FElysiumEntityWorld::GameSounds() const
@@ -1606,7 +1609,8 @@ float FElysiumEntityWorld::GameSoundRadiusUnits(FName Category)
 }
 
 void FElysiumEntityWorld::RefreshGameSound(uint64& Slot, const FVector& PositionCm, FName Category,
-	float RadiusCm, const FElysiumEntityHandle& Source, float StealthHearingReductionCm)
+	float RadiusCm, const FElysiumEntityHandle& Source, float StealthHearingReductionCm,
+	uint32 TypeMask, double DurationSeconds)
 {
 	if (Category.IsNone() || RadiusCm <= 0.f)
 	{
@@ -1624,11 +1628,14 @@ void FElysiumEntityWorld::RefreshGameSound(uint64& Slot, const FVector& Position
 	Request.RadiusCm = RadiusCm;
 	Request.Source = Source;
 	Request.StealthHearingReductionCm = StealthHearingReductionCm;
+	Request.TypeMask = TypeMask;
+	Request.DurationSeconds = DurationSeconds;
 	GameSoundBus->Refresh(Slot, Request, NowSeconds());
 }
 
 void FElysiumEntityWorld::EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
-	const FElysiumEntityHandle& Source, float StealthHearingReductionCm)
+	const FElysiumEntityHandle& Source, float StealthHearingReductionCm, uint32 TypeMask,
+	double DurationSeconds)
 {
 	BindSoundVolumes();
 
@@ -1638,6 +1645,8 @@ void FElysiumEntityWorld::EmitGameSound(const FVector& PositionCm, FName Categor
 	Request.RadiusCm = RadiusCm;
 	Request.Source = Source;
 	Request.StealthHearingReductionCm = StealthHearingReductionCm;
+	Request.TypeMask = TypeMask;
+	Request.DurationSeconds = DurationSeconds;
 	GameSoundBus->Emit(Request, NowSeconds());
 }
 
@@ -2359,6 +2368,17 @@ FString FElysiumEntityWorld::FormatEventLine(double Now, const FElysiumIOEvent& 
 
 // --- Teardown ---------------------------------------------------------------------------
 
+void FElysiumEntityWorld::AddComfortTarget(const FElysiumEntityHandle& Target)
+{
+	ComfortTargetList.Add(Target);
+}
+
+void FElysiumEntityWorld::RemoveComfortTarget(const FElysiumEntityHandle& Target)
+{
+	const int32 At = ComfortTargetList.IndexOfByKey(Target);
+	if (At != INDEX_NONE) { ComfortTargetList.RemoveAt(At); }
+}
+
 void FElysiumEntityWorld::Teardown()
 {
 	// Dialogue cursors and scoped camera handles never enter a map snapshot. Release silently before
@@ -2431,6 +2451,7 @@ void FElysiumEntityWorld::Teardown()
 
 	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once.
 	Epoch = 0;
+	ComfortTargetList.Reset();
 	EventQueue.Reset();
 	NameIndex.Empty();
 	ClassIndex.Empty();

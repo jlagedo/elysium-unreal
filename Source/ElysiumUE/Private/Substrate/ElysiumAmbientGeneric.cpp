@@ -15,6 +15,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumGameSound.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAmbient, Log, All);
 
@@ -82,6 +83,9 @@ public:
 		RadiusCm = FMath::Max(AmbientKeyFloat(Def, TEXT("radius"), 1250.f) * AmbientInchToCm, 1.f);
 		Pitch = FMath::Max(AmbientKeyFloat(Def, TEXT("pitch"), 100.f) / 100.f, 0.01f);
 		SourceEntityName = Def ? Def->Keys.FindRef(TEXT("SourceEntityName")) : FString();
+		SoundEventType = Def ? FCString::Atoi(*Def->Keys.FindRef(TEXT("sound_event"))) : 0;
+		SoundEventLevel = Def ? FCString::Atoi(*Def->Keys.FindRef(TEXT("sound_event_level"))) : 0;
+		SoundEventOwnerName = Def ? Def->Keys.FindRef(TEXT("sound_event_owner")) : FString();
 		AuthoredFadeIn = FMath::Max(0.0f, AmbientKeyFloat(Def, TEXT("fadein"), 0.0f));
 		AuthoredFadeOut = FMath::Max(0.0f, AmbientKeyFloat(Def, TEXT("fadeout"), 0.0f));
 
@@ -157,6 +161,9 @@ private:
 	// (Re)start the voice — stop any prior one first so a repeated PlaySound restarts cleanly.
 	void StartVoice(float FadeInSeconds)
 	{
+		// Native calls InsertSound immediately after its EmitSound attempt. The substrate's audio
+		// backend may be absent in a headless world, but that cannot erase the gameplay producer.
+		EmitAiSoundEvent();
 		IElysiumAudio* Audio = World ? World->Audio() : nullptr;
 		if (!Audio || SoundRel.IsEmpty())
 		{
@@ -203,6 +210,48 @@ private:
 		VoiceHandle = FElysiumAudioVoiceHandle::Invalid();
 	}
 
+	void EmitAiSoundEvent()
+	{
+		// `ambient_generic::Use` 0x101ad470 inserts only a nonzero raw event.  `sound_event=0`
+		// remains audio-only (notably every tutorial diversion), regardless of sound_event_level.
+		if (SoundEventType == 0 || World == nullptr)
+		{
+			return;
+		}
+		FElysiumEntityHandle Owner;
+		if (!SoundEventOwnerName.IsEmpty())
+		{
+			if (FElysiumEntity* Resolved = World->FindByName(SoundEventOwnerName))
+			{
+				Owner = Resolved->Handle;
+			}
+		}
+		const uint32 Type = static_cast<uint32>(SoundEventType);
+		if (!Owner.IsSet() && (Type & ~(ElysiumGameSounds::Carcass | ElysiumGameSounds::Flinch)) != 0)
+		{
+			UE_LOG(LogElysiumAmbient, Warning, TEXT("%s: sound_event %u needs a live sound_event_owner"),
+				*DebugString(), Type);
+			return;
+		}
+		const int32 Level = FMath::Clamp(SoundEventLevel, 1, 3);
+		if (Level != SoundEventLevel)
+		{
+			UE_LOG(LogElysiumAmbient, Warning, TEXT("%s: sound_event_level %d clamped to %d"),
+				*DebugString(), SoundEventLevel, Level);
+		}
+		const float EventRadiusCm = (Level == 1 ? 180.f : Level == 2 ? 240.f : 1200.f) * 2.54f;
+		FElysiumGameSoundRequest Request;
+		Request.Position = Owner.IsSet() && World->Resolve(Owner) ? World->Resolve(Owner)->Origin : Origin;
+		Request.Category = FName(TEXT("AMBIENT_GENERIC_AI"));
+		Request.TypeMask = Type;
+		Request.RadiusCm = EventRadiusCm;
+		const IElysiumAudio* Audio = World->Audio();
+		Request.DurationSeconds = FMath::Max(1.f, Audio ? Audio->SoundDurationSeconds(SoundRel) : 0.f);
+		Request.Source = Owner;
+		Request.bForceNonOccludable = true;
+		World->GameSounds().Emit(Request, World->NowSeconds());
+	}
+
 	// SourceEntityName parents the sound to a moving entity (§7, 154 uses). Resolve the named entity
 	// and attach to its brush body so the sound tracks it. An NPC has no brush body, so a named
 	// NPC parent returns null and the sound plays world-static at the def origin.
@@ -221,6 +270,9 @@ private:
 
 	FString SoundRel;
 	FString SourceEntityName;
+	FString SoundEventOwnerName;
+	int32 SoundEventType = 0;
+	int32 SoundEventLevel = 0;
 	float   Volume = 1.f;        // 0..1 linear
 	float   RadiusCm = 1250.f * AmbientInchToCm;
 	float   Pitch = 1.f;

@@ -76,6 +76,18 @@ struct FElysiumSaveVersion
 		// that placeholder and discards it rather than mis-parsing the fields after it.
 		TerminalEmail = 29,
 
+		// CAI_Memory's per-NPC observed-actor records. This is an appended NPC-leaf block; old
+		// payloads are intentionally refused by the current disposable-save policy rather than
+		// replayed through a shifted leaf.
+		NpcEnemyMemory = 30,
+		// R6 appends the live sight/hearing records (including damage range override and unknown
+		// attention state) inside the NPC senses leaf. Saves are disposable, so reject old layout.
+		NpcSensesDetail = 31,
+		NpcSenseTiming = 32, // saved delayed hearing, concealment seam, retained sound reduction
+		NpcScheduleHost = 33, // TaskFail state and four think clocks
+		DisciplineFlags = 34, // HitInfo cleanup masks, common misc word and ordered comfort targets
+		StealthSampleValidity = 35, // measured light remains distinguishable from unavailable queries
+
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
 	};
@@ -89,11 +101,10 @@ struct FElysiumSaveVersion
 	// are additions to the player block with no upgrade branch: an older payload is refused, not
 	// half-read.
 	//
-	// `ScriptedBody` is the same kind of break. A choreographed scene now records which of its cast
-	// it immobilised and a `scripted_sequence` records which NPC it has claimed, both mid-record in
-	// their leaf blocks; a payload written before that reads those bytes as the fields that followed
-	// them, so it is refused rather than mis-restored.
-	static constexpr int32 MinSupported = ScriptedBody;
+	// `NpcEnemyMemory` inserts the CAI_Memory block ahead of later NPC leaf blocks. Saves are
+	// disposable, so the build refuses every older payload rather than attempting a migration or
+	// replaying a shifted leaf.
+	static constexpr int32 MinSupported = StealthSampleValidity;
 
 	static const FGuid GUID;
 };
@@ -199,6 +210,7 @@ struct FElysiumMapSnapshot
 
 	FElysiumSavedFade Fade;
 	FElysiumWeatherState Weather;
+	TArray<FElysiumEntityHandle> ComfortTargets;
 
 	bool IsValid() const { return !MapName.IsEmpty(); }
 };

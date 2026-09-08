@@ -27,6 +27,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"        // Cycle 11b — the AI_Schedule channel's receiver
+#include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumWeaponClasses.h"
@@ -1593,34 +1594,38 @@ bool FElysiumDisciplineAlertSoundTest::RunTest(const FString&)
 		return false;
 	}
 	SeedCharacter(*Listener, Rules.Stats, /*ClanIndex*/ 0);
+	ListenerNpc->Senses = FElysiumNpcSenses(); // a fresh listener, before this timestamp's insertion
 
 	const uint64 SerialBefore = World.GameSounds().LastSerial();
 
 	// The Bloodshield record carries `TriggerAISound`. It is self-shaped, so the committed target
-	// is the caster, and the stimulus is emitted THERE — "an NPC was hit by a discipline that
-	// should alert others" places the sound at whoever took the hit.
+	// is also the caster, so source COMBAT and target BULLET_IMPACT share a position.
 	Learn(*Player, ED::Thaumaturgy, 3);
 	TestEqual(TEXT("the overt cast commits"), (int32)ED::Use(*Player, ED::Thaumaturgy, 3),
 		(int32)ED::EResult::Accepted);
 
 	TArrayView<const FElysiumGameSoundEvent> Emitted = World.GameSounds().EventsSince(SerialBefore);
-	if (!TestEqual(TEXT("a TriggerAISound record emits exactly one stimulus per committed target"),
-		Emitted.Num(), 1))
+	if (!TestEqual(TEXT("source activation and target HitGroup each emit one stimulus"),
+		Emitted.Num(), 2))
 	{
 		return false;
 	}
-	TestEqual(TEXT("...under the shared catalogue's authored category name"),
-		Emitted[0].Category, ElysiumGameSounds::DisciplineAlert());
+	TestEqual(TEXT("source uses its gunshot volume row"), Emitted[0].Category, ElysiumGameSounds::Gunshot());
+	TestEqual(TEXT("source sound is combat"), Emitted[0].TypeMask, ElysiumGameSounds::Combat);
+	TestEqual(TEXT("target uses discipline-alert volume row"), Emitted[1].Category, ElysiumGameSounds::DisciplineAlert());
+	TestEqual(TEXT("target sound is bullet impact"), Emitted[1].TypeMask, ElysiumGameSounds::BulletImpact);
+	TestTrue(TEXT("both raw durations are 0.2 seconds"), NearlyEqual(Emitted[0].ExpireTime - Emitted[0].Time, 0.2)
+		&& NearlyEqual(Emitted[1].ExpireTime - Emitted[1].Time, 0.2));
 	TestEqual(TEXT("...attributed to the caster"), Emitted[0].Source.Index, Player->Handle.Index);
 	TestTrue(TEXT("...with the table-resolved reach, not an invented one"),
 		Emitted[0].RadiusCm > 0.f);
 
 	// The senses' ordinary hear path then reacts for free: no discipline-specific listener exists,
 	// and none should — the category is one row on the same bus every other producer writes to.
-	ListenerNpc->Senses.TickHearing(*ListenerNpc, 1.0);
-	TestEqual(TEXT("the NPC hear path admits it like any other stimulus"),
-		ListenerNpc->Senses.Memory.LastHeardCategory,
-		ElysiumGameSounds::DisciplineAlert().ToString());
+	ListenerNpc->Senses.TickHearing(*ListenerNpc, World.NowSeconds());
+	TestTrue(TEXT("the NPC hear path admits the ordinary raw stimuli"),
+		ListenerNpc->Senses.Memory.LastHeardCategory == ElysiumGameSounds::DisciplineAlert().ToString()
+		|| ListenerNpc->Senses.Memory.LastHeardCategory == ElysiumGameSounds::Gunshot().ToString());
 	TestEqual(TEXT("...remembering the caster as its source"),
 		ListenerNpc->Senses.Memory.LastHeardSource.Index, Player->Handle.Index);
 
@@ -1795,6 +1800,299 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineSoundTransactionsTest,
+	"Elysium.Substrate.Discipline.SoundTransactions", GElysiumTestFlags)
+bool FElysiumDisciplineSoundTransactionsTest::RunTest(const FString&)
+{
+	FRulesFixture Rules;
+	for (FElysiumDisciplineTgt& Record : Rules.Targets.Records)
+	{
+		if (Record.InternalName == GDazeRecord)
+		{
+			Record.bTriggerAISound = true;
+			Record.BloodCost = 0;
+			Record.RecoveryTime = 0;
+		}
+	}
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeDisciplineTestDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!Player) { return false; }
+	SeedCharacter(*Player, Rules.Stats);
+	Player->Origin = FVector::ZeroVector;
+	Learn(*Player, ED::Dominate, 1);
+	for (const TCHAR* Name : { TEXT("victim0"), TEXT("victim1"), TEXT("victim2") })
+	{
+		SeedCharacter(*FindCharacter(World, Name), Rules.Stats, 0);
+	}
+	uint64 Before = World.GameSounds().LastSerial();
+	ED::Use(*Player, ED::Dominate, 1);
+	const auto Events = World.GameSounds().EventsSince(Before);
+	if (!TestEqual(TEXT("one source plus three target sounds"), Events.Num(), 4)) { return false; }
+	TestEqual(TEXT("source combat is inserted before target loop"), Events[0].TypeMask, ElysiumGameSounds::Combat);
+	TestTrue(TEXT("source position and owner"), Events[0].Position == Player->Origin && Events[0].Source == Player->Handle);
+	for (int32 i = 1; i < Events.Num(); ++i)
+	{
+		TestEqual(TEXT("each target emits bullet impact"), Events[i].TypeMask, ElysiumGameSounds::BulletImpact);
+		TestTrue(TEXT("target owns its own sound"), Events[i].Source != Player->Handle);
+		TestTrue(TEXT("target sound lasts 0.2 seconds"), NearlyEqual(Events[i].ExpireTime - Events[i].Time, 0.2));
+	}
+	Before = World.GameSounds().LastSerial();
+	ED::Use(*Player, ED::Dominate, 1);
+	TestEqual(TEXT("active source status suppresses only source repetition"),
+		World.GameSounds().EventsSince(Before).Num(), 3);
+	// The source activation deadline rides the same saved discipline state as active target owners.
+	TArray<uint8> Bytes;
+	{
+		FMemoryWriter Writer(Bytes, true);
+		Player->Disciplines.Serialize(Writer);
+	}
+	FElysiumDisciplineState Restored;
+	{
+		FMemoryReader Reader(Bytes, true);
+		Restored.Serialize(Reader);
+	}
+	const double* Deadline = Restored.SourceActivationEnd.Find(GDazeRecord);
+	TestTrue(TEXT("source suppression deadline survives save"), Deadline && NearlyEqual(*Deadline, 0.1));
+	World.Tick(0.101);
+	Before = World.GameSounds().LastSerial();
+	ED::Use(*Player, ED::Dominate, 1);
+	const auto Later = World.GameSounds().EventsSince(Before);
+	TestTrue(TEXT("expired source status permits a new source activation"),
+		Later.Num() == 4 && Later[0].TypeMask == ElysiumGameSounds::Combat);
+	return true;
+}
+
+// R8: the non-task flag writer, including direct-mask overlap and cleanup callbacks.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineFlagResolverTest,
+	"Elysium.Substrate.Discipline.FlagResolvers", GElysiumTestFlags)
+bool FElysiumDisciplineFlagResolverTest::RunTest(const FString&)
+{
+	const TCHAR* Names[] = { TEXT("Unconscious"), TEXT("D_Targeted"), TEXT("Allow_Fort_Soak"),
+		TEXT("Allow_Thaum_Exp"), TEXT("Gave_Fighting_Wpns"), TEXT("Allow_Discipline_Fx"),
+		TEXT("Update_Auto_Leveling"), TEXT("Picked_Up_Item"), TEXT("Obf_Bumped_Object"),
+		TEXT("Has_Special_Dmg_Mod"), TEXT("Has_Special_Hit_Mod"), TEXT("Was_Hateful"),
+		TEXT("Double_Humanity_Mods"), TEXT("Feed_Bonus_Opp_Gender"), TEXT("Feed_Bonus_Tramps"),
+		TEXT("Increased_Rat_Feed"), TEXT("Cannot_Rat_Feed"), TEXT("Forced_BloodShield"),
+		TEXT("No_Resist_Feeding"), TEXT("No_Ragdoll_Death"), TEXT("Gain_Stealth_Atk_Bonus"),
+		TEXT("Fired_Gun") };
+	for (int32 i = 0; i < UE_ARRAY_COUNT(Names); ++i)
+	{
+		uint32 Mask = 0;
+		TestTrue(Names[i], ElysiumMiscFlags::ParseName(FString(Names[i]).ToLower(), Mask));
+		TestEqual(TEXT("retail table bit order"), Mask, 1u << i);
+	}
+	uint32 Missing = ~0u;
+	TestFalse(TEXT("unknown misc name"), ElysiumMiscFlags::ParseName(TEXT("unrecovered_flag"), Missing));
+	TestEqual(TEXT("unknown resolves to zero"), Missing, 0u);
+	FElysiumDiscHit Base;
+	Base.MiscFlag = TEXT("Was_Hateful");
+	Base.AiNpcFlag = TEXT("NO_DIALOG");
+	FElysiumDiscHit Child;
+	Child.MiscFlag = TEXT("Forced_BloodShield");
+	Child.AiNpcFlag = TEXT("D_CALM");
+	Child.InheritFromRow(Base);
+	TestEqual(TEXT("misc inheritance ORs, it does not replace the base mask"), Child.InheritedMiscFlags, 0x800u);
+	TestEqual(TEXT("NPC flag inheritance is replacement"), Child.AiNpcFlag, FString(TEXT("D_CALM")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineFlagLifecycleTest,
+	"Elysium.Substrate.Discipline.FlagLifecycle", GElysiumTestFlags)
+bool FElysiumDisciplineFlagLifecycleTest::RunTest(const FString&)
+{
+	FRulesFixture Rules;
+	Rules.Targets = FElysiumDisciplineTargets();
+	for (int32 Tier = 1; Tier <= 5; ++Tier)
+	{
+		FElysiumDisciplineTgt Record;
+		Record.InternalName = FString::Printf(TEXT("Flag_Test_%d"), Tier);
+		Record.Discipline = TEXT("Dominate");
+		Record.Level = Tier;
+		Record.AoE.Shape = EElysiumDiscShape::Self;
+		Record.AoE.Tables.Add(MakeCatchAll(TEXT("Hit")));
+		Record.bRemoveOnTakeDamage = Tier == 3;
+		Record.bRemoveOnWasBumped = Tier == 4;
+		FElysiumDiscHit Hit = MakeHit(TEXT("Hit"));
+		Hit.Duration.Parse(FString::FromInt(Tier * 10));
+		Hit.AiNpcFlag = Tier == 5 ? TEXT("NO_DIALOG") : TEXT("D_CALM");
+		Hit.MiscFlag = TEXT("Forced_BloodShield");
+		Hit.AddToComfort = 1;
+		if (Tier == 3 || Tier == 4)
+		{
+			FElysiumDiscHit Callback = MakeHit(TEXT("OnInterrupt"));
+			Callback.AiNpcFlag = TEXT("D_CALM");
+			Callback.MiscFlag = TEXT("Was_Hateful");
+			Hit.OnInterrupt.Add(Callback);
+		}
+		if (Tier == 5)
+		{
+			FElysiumDiscHit Callback = MakeHit(TEXT("OnEnd"));
+			Callback.AiNpcFlag = TEXT("DONT_INVESTIGATE");
+			Hit.OnEnd.Add(Callback);
+		}
+		Record.Hits.Add(Hit);
+		Rules.Targets.Add(MoveTemp(Record));
+	}
+	Rules.Rebind();
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeDisciplineTestDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+	FElysiumCombatCharacter* Char = FindCharacter(World, TEXT("victim0"));
+	FElysiumNpc* Npc = Char ? Char->AsNpc() : nullptr;
+	if (!TestNotNull(TEXT("flag receiver"), Npc)) { return false; }
+	SeedCharacter(*Npc, Rules.Stats, 0);
+	Learn(*Npc, ED::Dominate, 5);
+	TestTrue(TEXT("a flag-only hit is a committed cast"), ED::Accepted(ED::Use(*Npc, ED::Dominate, 1)));
+	TestTrue(TEXT("word two applied"), Npc->NpcFlags.Has(EElysiumNpcFlag2::D_CALM));
+	TestEqual(TEXT("flag-only hit owns a timer"), Npc->Disciplines.TargetEffects.Num(), 1);
+	const int32 First = Npc->Disciplines.TargetEffects[0].Serial;
+	TestEqual(TEXT("routing marker retained in cleanup payload"), Npc->Disciplines.TargetEffects[0].AiNpcFlag2,
+		static_cast<uint32>(EElysiumNpcFlag2::D_CALM) | 0x80000000u);
+	TestEqual(TEXT("misc flag applied beside source Fired_Gun"), Npc->MiscFlags, 0x220000u);
+	Npc->ComfortingCount = 2;
+	TestTrue(TEXT("a second record can share the flag"), ED::Accepted(ED::Use(*Npc, ED::Dominate, 2)));
+	TestEqual(TEXT("duplicate comfort entries are preserved"), World.ComfortTargets().Num(), 2);
+	TestEqual(TEXT("each add resets comforting count"), Npc->ComfortingCount, 0);
+	Npc->ComfortingCount = 3;
+	ED::CommitExpiry(*Npc, First);
+	TestFalse(TEXT("first expiry clears shared NPC bit, no reference count"), Npc->NpcFlags.Has(EElysiumNpcFlag2::D_CALM));
+	TestEqual(TEXT("second effect still has its own lifecycle"), Npc->Disciplines.TargetEffects.Num(), 1);
+	TestEqual(TEXT("expiry removes the first comfort occurrence only"), World.ComfortTargets().Num(), 1);
+	TestEqual(TEXT("remove clears comforting count"), Npc->ComfortingCount, 0);
+	TestEqual(TEXT("misc flag remains after expiry"), Npc->MiscFlags, 0x220000u);
+	ED::CommitExpiry(*Npc, First);
+	TestEqual(TEXT("stale expiry does not remove another comfort entry"), World.ComfortTargets().Num(), 1);
+	ED::ClearAll(*Npc);
+	TestEqual(TEXT("clear all unwinds remaining comfort owner"), World.ComfortTargets().Num(), 0);
+	TestEqual(TEXT("clear all preserves persistent misc bits"), Npc->MiscFlags, 0x220000u);
+	ED::Use(*Npc, ED::Dominate, 3);
+	ED::NotifyDamaged(*Npc);
+	TestEqual(TEXT("interruption removes flag-only owner"), Npc->Disciplines.TargetEffects.Num(), 0);
+	TestTrue(TEXT("OnInterrupt runs after original NPC flag clear"), Npc->NpcFlags.Has(EElysiumNpcFlag2::D_CALM));
+	TestEqual(TEXT("callback misc flag ORs into persistent word"), Npc->MiscFlags, 0x220800u);
+	TestEqual(TEXT("direct HitInfo callback does not create an owner"), World.ComfortTargets().Num(), 0);
+	ED::Use(*Npc, ED::Dominate, 4);
+	ED::NotifyBumped(*Npc);
+	TestTrue(TEXT("bump runs the interrupt callback"), Npc->NpcFlags.Has(EElysiumNpcFlag2::D_CALM));
+	ED::Use(*Npc, ED::Dominate, 5);
+	TestTrue(TEXT("word one applied"), Npc->NpcFlags.Has(EElysiumNpcFlag::NO_DIALOG));
+	ED::CommitExpiry(*Npc, Npc->Disciplines.TargetEffects[0].Serial);
+	TestFalse(TEXT("word one cleared"), Npc->NpcFlags.Has(EElysiumNpcFlag::NO_DIALOG));
+	TestTrue(TEXT("OnEnd applies direct HitInfo"), Npc->NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineFlagSaveTest,
+	"Elysium.Substrate.Discipline.FlagSave", GElysiumTestFlags)
+bool FElysiumDisciplineFlagSaveTest::RunTest(const FString&)
+{
+	FRulesFixture Rules;
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeDisciplineTestDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+	FElysiumCombatCharacter* First = FindCharacter(World, TEXT("victim0"));
+	FElysiumCombatCharacter* Second = FindCharacter(World, TEXT("victim1"));
+	if (!First || !Second) { return false; }
+	First->MiscFlags = 0x20800;
+	First->AddToComfortList();
+	Second->AddToComfortList();
+	First->AddToComfortList();
+	First->ComfortingCount = 3;
+	FElysiumActiveDisciplineEffect Effect;
+	Effect.Record = GDazeRecord;
+	Effect.HitTable = TEXT("Hit_Human");
+	Effect.AiNpcFlag1 = static_cast<uint32>(EElysiumNpcFlag::NO_DIALOG);
+	Effect.AiNpcFlag2 = static_cast<uint32>(EElysiumNpcFlag2::D_CALM) | 0x80000000u;
+	Effect.bAddedToComfort = true;
+	Effect.Source = Second->Handle;
+	Effect.Serial = ++First->Disciplines.SerialCounter;
+	Effect.EndTime = 10.0;
+	First->Disciplines.TargetEffects.Add(Effect);
+	First->AsNpc()->NpcFlags.Set(EElysiumNpcFlag::NO_DIALOG);
+	First->AsNpc()->NpcFlags.Set(EElysiumNpcFlag2::D_CALM);
+	FElysiumMapSnapshot Snapshot;
+	World.Freeze(Snapshot);
+	TArray<uint8> Bytes;
+	{
+		FMemoryWriter Writer(Bytes, true);
+		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
+		Ar << Snapshot;
+	}
+	FElysiumMapSnapshot Loaded;
+	{
+		FMemoryReader Reader(Bytes, true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+		Ar << Loaded;
+	}
+	{
+		FElysiumEntityWorld Restored(nullptr, nullptr, Services.Bundle());
+		Restored.Load(MakeDisciplineTestDefs());
+		Restored.SpawnPlayer();
+		Restored.ApplySnapshot(Loaded);
+		FElysiumCombatCharacter* Receiver = FindCharacter(Restored, TEXT("victim0"));
+		if (!TestNotNull(TEXT("restored flag receiver"), Receiver)) { return false; }
+		TestEqual(TEXT("misc word persisted"), Receiver->MiscFlags, 0x20800u);
+		TestEqual(TEXT("comfort count persisted"), Receiver->ComfortingCount, 3);
+		TestTrue(TEXT("saved callback source resolves to the restored caster"),
+			Receiver->Disciplines.TargetEffects.Num() == 1
+			&& Restored.Resolve(Receiver->Disciplines.TargetEffects[0].Source)
+				== FindCharacter(Restored, TEXT("victim1")));
+		TestEqual(TEXT("ordered registry and duplicates persisted"), Restored.ComfortTargets().Num(), 3);
+		if (Restored.ComfortTargets().Num() == 3)
+		{
+			TestTrue(TEXT("first entry rebased"), Restored.ComfortTargets()[0] == Receiver->Handle);
+			TestTrue(TEXT("third entry is same target"), Restored.ComfortTargets()[2] == Receiver->Handle);
+		}
+		ED::CommitExpiry(*Receiver, Effect.Serial);
+		TestFalse(TEXT("saved cleanup mask clears word one"), Receiver->AsNpc()->NpcFlags.Has(EElysiumNpcFlag::NO_DIALOG));
+		TestFalse(TEXT("saved cleanup mask clears word two"), Receiver->AsNpc()->NpcFlags.Has(EElysiumNpcFlag2::D_CALM));
+		TestEqual(TEXT("one saved comfort membership removed"), Restored.ComfortTargets().Num(), 2);
+		TestEqual(TEXT("cleanup preserves saved misc flags"), Receiver->MiscFlags, 0x20800u);
+	}
+	FElysiumEntityWorld FreshMap(nullptr, nullptr, Services.Bundle());
+	FreshMap.Load(MakeDisciplineTestDefs());
+	TestTrue(TEXT("fresh map epoch has no prior comfort registrations"), FreshMap.ComfortTargets().IsEmpty());
+	First->OnKilled();
+	TestEqual(TEXT("death removes one comfort occurrence"), World.ComfortTargets().Num(), 2);
+	First->Kill();
+	TestEqual(TEXT("entity removal independently removes one occurrence"), World.ComfortTargets().Num(), 1);
+	TestTrue(TEXT("unrelated comfort target survives both removals"), World.ComfortTargets()[0] == Second->Handle);
+	FElysiumPlayer* Player = World.FindPlayer();
+	Player->MiscFlags = 0x20800;
+	Player->ComfortingCount = 2;
+	FElysiumPlayerRecord PlayerRecord;
+	Player->Dehydrate(PlayerRecord);
+	Bytes.Reset();
+	{
+		FMemoryWriter Writer(Bytes, true);
+		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
+		Ar << PlayerRecord;
+	}
+	FElysiumPlayerRecord ReadPlayer;
+	{
+		FMemoryReader Reader(Bytes, true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+		Ar << ReadPlayer;
+	}
+	Player->MiscFlags = 0;
+	Player->ComfortingCount = 0;
+	Player->Hydrate(ReadPlayer);
+	TestEqual(TEXT("player misc word round trip"), Player->MiscFlags, 0x20800u);
+	TestEqual(TEXT("player comfort counter round trip"), Player->ComfortingCount, 2);
+	return true;
+}
 
 // The Content tier: the real `disciplinetgt_*` corpus, and the `Active_*` blocks beside it
 

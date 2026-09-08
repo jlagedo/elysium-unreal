@@ -94,6 +94,12 @@ struct FElysiumDmg
 	FString SourceTrait;
 	FString AttackFeat;                                   // words 9..12 — the attack feat/reference
 	FElysiumEntityHandle Source;                          // word 13
+	// Packet `m_hInflictor` / attack-position seam for CAI_Memory's damage producer. Existing
+	// descriptor producers do not yet carry a distinct projectile/weapon body or impact vector, so
+	// absence remains explicit; it must never be guessed from Source/Attacker.
+	FElysiumEntityHandle Inflictor;
+	FVector AttackPosition = FVector::ZeroVector;
+	bool bHasAttackPosition = false;
 	// Word 14 — a forced soak value. NEGATIVE selects the normal soak resolver.
 	int32 ForcedSoak = -1;
 	// Word 15 — the accumulated template damage filter. Populated where the victim's data allows

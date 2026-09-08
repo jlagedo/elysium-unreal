@@ -533,14 +533,20 @@ every other light is **PVS-gated** by its cluster, then `scale = d_lightstyleval
 r_lightmapcolorscale / 264 × DistanceFalloff`, and contributes `intensity × scale × Angle` **only
 if a trace from the point to the light origin has `fraction == 1.0`**.
 
-- Falloff `0x200a5620` = Source's `Engine_WorldLightDistanceFalloff`: type 0 `1/d²` with the
+- Falloff `0x200a5620` = Source's `Engine_WorldLightDistanceFalloff`: type 0 `1/max(d², 1)` with the
   `radius` cutoff; types 1/2 `1/(quad·d² + linear·d + const)` with the cutoff; type 4
-  `radius − d`; 3/5 `1.0`. **Not flat inside the radius.**
+  `max(linear_attn − d, 0)` (field `+0x44`, **not** radius `+0x3c`); 3/5 `1.0`.
+  Radius equality is admitted. **Not flat inside the radius.**
+  Type 0's near-source cap lives behind the `InvRSquared` dispatch at `0x201a65a8`, assigned
+  by `0x200b3730` to scalar `0x200ad040` or SSE `0x200ad3f0`; both cap the squared distance at
+  one Source unit squared before taking its reciprocal.
 - Angle `0x200a57e0` = `Engine_WorldLightAngle` called with `snormal == delta == direction to the
   light`, so point lights read 1.0, spots apply the `stopdot/stopdot2/exponent` cone, texlights
   and sky `−dot(lightnormal, dir)` when `> 0.01`.
 - **Lightstyles apply at query time**: `d_lightstylevalue[]` (`0x20a6dcb0`), normalized by 264,
-  animated by `0x20076eb0`. A flickering style modulates the player's light directly.
+  animated by `0x20076eb0`. The raw body selects `trunc(time × 10) % patternLength` and writes
+  `(letter − 'a') × 22`; there is **no interpolation**. An empty pattern writes 256 (therefore
+  256/264 in this query). A flickering style modulates the player's light directly.
 - `r_lightmapcolorscale` (`0x20a6e400`, default `"1"`, quantized 1/2/4/8/16) multiplies every
   contribution; inert at default.
 - **No dynamic lights of any kind** — no dlights, entity lights, muzzle flashes; they are
@@ -640,9 +646,36 @@ spotted edge (`player+0x16f4 & 0x40`) plays `player_stealth_discovered.wav`. Deb
 printer; the `m_bfNPCFrenziedFlags` bits have no table; virtual slot 587 has no string, VProf
 scope or Python native. Stop searching for these; keep the project names.
 
-**For the port.** The query is Unreal's trace plus the light rig's authored worldlights; the
-contract is: per light in radius, Source falloff by type, cone/angle term, live style value,
-occlusion by world geometry and static props only (a dedicated trace channel that doors,
-props and characters do not block), the first sun through a sky trace, luminance reduction,
-unclamped sum, `[0, 1]` clamp. Replace the current flat falloff, the sun skip and the missing
-occlusion; keep the 0.1 s cadence and the one-point-per-pass round robin.
+**Additional closure (2026-09-08).** `FUN_1017ff40` excludes class id 13 before writing the
+assessment timestamp/handle: slot 138 is `CNPC_VRat::vfunc138` `0x103ad660`, which returns 13.
+`FUN_101672d0` requires that handle still resolve and uses strict `time + 1.0 > curtime`;
+equality at one second is eligible. The torch's byte `+0x871` is class capability, not deployment:
+`CWeaponMelee` constructor `0x103e9ac0` writes 1; `CWeaponUnarmed` constructor `0x103f53f0`
+writes 0; several blunt weapon `vfunc103` methods clear it. A torch on the melee class retains 1.
+
+**Port data seam and query (0005 requirement 1).** The V2 map bake now authors
+`DA_<map>_LightQuery`: original worldlight rows (including rows that place no rendering actor),
+the BSP node/leaf partition and decompressed PVS, mask-`0x4191` world convexes, displacement
+triangles, and the `SURF_SKY` boundaries of those world brushes. Positions, planes and falloff
+coefficients are converted to native centimetres offline. Source I/O and the live style patterns
+remain runtime-owned. The native asset uses Unreal's cooked collision data; `QueryGameplayLight`
+queries those components and the unflagged GAME_LUMP static props directly. Direct component
+traces implement the filter without a second global collision channel: no door, brush entity,
+physics entity, NPC or player is enumerated. Glass/grate and playerclip-only world brushes are
+absent; invisible shadow-only brushes are present. A sun requires an authored sky hit at or
+before the first blocking boundary, not merely an unobstructed ray.
+
+`Adopt` and `AdoptBaked` both load this same gameplay asset. Rendering's `FLightSource` calibration,
+disabled-light list, transformed miniature lights and `light_dynamic` actors never enter it.
+`ElysiumWorldLight::Query` preserves source order, first-sun selection, cluster/PVS gates, Source
+falloff and angle branches, discrete live styles and unclamped luminance. The player then takes
+one point per 0.1 s from the collision world AABB, with the real centre, and clamps only the
+`0.083325` aggregate against the shipped 0/1 range. Ineligibility overwrites four values with the
+`-1`/neutral arm after row computation; it never freezes sampling. Missing native query data
+warns and reports service unavailable, preserving the last surface instead of manufacturing light.
+
+The tutorial V2 stage witness retains **396/396** raw RGB rows, **2651** clusters, **2335** world
+shadow convexes, **1468** sky triangles and **3584** displacement triangles. Focused pipeline
+tests establish those counts and raw intensity conservation; cooked/native component traces and
+rendered crouch/occlusion remain separate execution acceptance gates. `r_lightmapcolorscale`
+retains its shipped default 1; the retail developer min/max and override consoles are not exposed.

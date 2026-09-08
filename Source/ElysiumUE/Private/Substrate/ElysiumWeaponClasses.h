@@ -607,6 +607,9 @@ public:
 
 	// The owner as a combat character, or null (a loose weapon, or an owner that is gone).
 	FElysiumCombatCharacter* OwnerCharacter() const;
+	// Retail FOLLOW physics copies the live owner/aim origin to a held weapon with zero offset. A
+	// loose live weapon instead answers its own current world origin; false only for stale ownership.
+	bool HeldSourcePosition(FVector& OutPosition) const;
 	// Whether this weapon is the owner's active weapon. The commit re-validates it.
 	bool IsActiveWeapon() const;
 

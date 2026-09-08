@@ -38,26 +38,20 @@ namespace ElysiumStealth
 	// The `m_flLightOnMe` value the non-stealth fallback writes. It is a sentinel, not a light
 	// level: nothing indexes a table with it, and it is how a reader tells "not in the eligible
 	// stealth state" from "standing in the dark".
-	inline constexpr float InactiveLightSentinel = -4.0f;
+	inline constexpr float InactiveLightSentinel = -1.0f;
 
-	// CHOSEN, NOT RECOVERED — the configured world light minimum/maximum. Retail clamps the raw
-	// aggregate to a configured pair and renormalizes over the remaining range; the pair's authored
-	// source is not recovered, and retail's per-point sample is a lightmap value on a scale
-	// `1 / 0.083325 = 12` implies is [0, 4] per point. This runtime's own seam contract
-	// (`IElysiumEmbodiment::QueryLightAtPoint`) is normalized 0..1 per point instead, so the
-	// configured maximum is set to what three fully lit samples produce through the recovered
-	// constant. The arithmetic is therefore the recovered one and only the pair is ours; replace
-	// the pair, not the formula, when the authored values are recovered.
+	// worldlight_min/max, vampire.dll 0x10351770/0x103516e0: shipped defaults 0 and 1.
+	// The engine's per-point luminance is unbounded; only the body aggregate is clamped.
 	inline constexpr float DefaultWorldLightMin = 0.f;
-	inline constexpr float DefaultWorldLightMax = 3.f * RawLightScale;
+	inline constexpr float DefaultWorldLightMax = 1.f;
 
-	// The vertical body column the three points are taken on, as fractions of feet -> eye. The two
-	// outer weights are recovered (`0.125` / `0.875`). CHOSEN, NOT RECOVERED: the middle one — the
-	// recovery names only the pair, and the midpoint is the one place a point called "centre" can
-	// sit. Replace the number, not the column, if the third weight is recovered.
+	// Fractions of the world collision AABB's vertical extent (0x103518da..0x103519dc).
+	// The centre sample uses WorldSpaceCenter verbatim, including its X/Y for all three points.
 	inline constexpr float FeetSampleWeight = 0.125f;
 	inline constexpr float CentreSampleWeight = 0.5f;
 	inline constexpr float HeadSampleWeight = 0.875f;
+	FVector SamplePoint(const FBox& WorldBounds, const FVector& WorldCenter, int32 Index);
+	bool IsEligible(const FElysiumPlayer& Player, bool bDucking, double Now);
 
 	// The active usable weapon that forces normalized light to 1.0 — you cannot hide behind a lit
 	// torch. Compared against the item entity's own registered classname.
@@ -85,10 +79,8 @@ namespace ElysiumStealth
 
 	struct FRecomputeInputs
 	{
-		// Step 1. False returns without manufacturing replacement values — the surface keeps what it
-		// last committed. Nothing in this runtime sets it false: the light seam always answers (a
-		// world with no rig reports full light by contract), so it exists for the recovered arm and
-		// for the test that drives it.
+		// Step 1. False preserves the previous surface. The embodied service becomes available only
+		// after its authored worldlights and cooked shadow colliders are ready.
 		bool bLightServiceAvailable = true;
 
 		// Step 3. The eligibility predicate's answer. False installs the fallback arm below; it does
@@ -145,6 +137,8 @@ namespace ElysiumStealth
 	// observer has gone stale, inert or invalid. Runs from the player think — AFTER gameplay has
 	// committed — and bumps the snapshot's generation only when the published values change.
 	void CommitObserverSnapshot(FElysiumPlayer& Player, double Now);
+	// World-tick tail: aggregate already committed NPC observations, without performing sensing.
+	void PublishObservers(FElysiumPlayer& Player, double Now);
 
 	// The Sneaking feat as the recompute consumes it: resolved through `ElysiumFeats::Calc` (which
 	// adds this character's clamped `trigger_stealth_mod` aggregate) and capped at 10. Answers 0

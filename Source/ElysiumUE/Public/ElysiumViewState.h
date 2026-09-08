@@ -380,15 +380,17 @@ enum class EElysiumDetection : uint8
 	Detected,
 };
 
+class FElysiumPlayer;
 struct FElysiumStealthView
 {
-	// The duck stance, including its ramp — one fact with one producer, the locomotion sample.
+	// Settled FL_DUCKING, sampled from the body.
 	bool bSneaking = false;
 
 	// The concealment gauge's step, 0 (fully lit) to 4 (fully dark), mirroring the five exported
 	// `lightgauge` frames. False validity means no light sample has a producer yet.
 	bool bConcealmentValid = false;
-	int32 ConcealmentStep = 0;
+	int32 LightRow = 0; // gameplay's eleven rows, 0 fully lit .. 10 dark
+	static FElysiumStealthView FromPlayer(const FElysiumPlayer* Player, bool bDucking);
 
 	// The nearest eligible hostile observer. Absent is an ordinary state and clears the readout;
 	// it is never a failure and never a reason to invent a distance.
@@ -399,7 +401,7 @@ struct FElysiumStealthView
 	bool operator==(const FElysiumStealthView& Other) const
 	{
 		return bSneaking == Other.bSneaking
-			&& bConcealmentValid == Other.bConcealmentValid && ConcealmentStep == Other.ConcealmentStep
+			&& bConcealmentValid == Other.bConcealmentValid && LightRow == Other.LightRow
 			&& bObserverValid == Other.bObserverValid
 			&& ObserverDistanceCm == Other.ObserverDistanceCm && Detection == Other.Detection;
 	}

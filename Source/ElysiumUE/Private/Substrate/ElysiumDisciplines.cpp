@@ -5,7 +5,7 @@
 // (blood, the thirteen learned/active slot pairs, `HealthBuffer`, `Automatic_Soak_Successes`), the
 // trait-effect layer, the typed damage path, and one owned timed event per (character, discipline)
 // on the one queue. Nothing here adds a clock, a scheduler or a dispatcher.
-// `AI_NPCFlag` remains a carried, warned channel.
+// HitInfo flag words and comfort membership use the same apply/cleanup lifecycle as trait effects.
 
 #include "Substrate/ElysiumDisciplines.h"
 
@@ -21,6 +21,7 @@
 #include "Substrate/ElysiumDisciplineTargetTables.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLaw.h"      // the law channels the commit writes through
+#include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpc.h"      // the `AI_Schedule` channel's one door
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -30,6 +31,8 @@
 namespace
 {
 	using EC = EElysiumTraitContainer;
+	// DAT_10739a64 is zero only while HitInfo installs its authored AI_Schedule.
+	bool GApplyingDisciplineSchedule = false;
 
 	// The compiled Discipline order. These are `stats.txt`'s own InternalNames for the thirteen
 	// learned slots, so one array serves the slot lookup, the `DisciplineTgt` `Discipline` key and
@@ -851,8 +854,12 @@ void EndNative(FElysiumCombatCharacter& Char, int32 Index)
 
 namespace
 {
+	bool ApplyHit(FElysiumCombatCharacter* Caster, FElysiumCombatCharacter& Target,
+		const FElysiumDisciplineTgt& Record, const FElysiumDiscHit& Hit, double Now, int32 Depth,
+		bool bTrackOwner = true);
+
 	// Remove one tracked targeted effect: drop the groups it installed, forget the row, recompute.
-	void RemoveTargetEffect(FElysiumCombatCharacter& Char, int32 EffectIndex)
+	void RemoveTargetEffect(FElysiumCombatCharacter& Char, int32 EffectIndex, bool bInterrupted = false)
 	{
 		FElysiumDisciplineState& State = Char.Disciplines;
 		if (!State.TargetEffects.IsValidIndex(EffectIndex))
@@ -879,6 +886,36 @@ namespace
 		{
 			Char.RebuildEffects();
 		}
+		// 0x101dfe80 -> 0x101def10: remove the trait effect, clear the original
+		// HitInfo's raw mask, remove ONE comfort entry, then run the schedule tail.
+		// Multiple effects sharing a bit do not retain it after the first expiry.
+		if (FElysiumNpc* Npc = Char.AsNpc())
+		{
+			Npc->NpcFlags.Clear(static_cast<EElysiumNpcFlag>(Effect.AiNpcFlag1));
+			Npc->NpcFlags.Clear(static_cast<EElysiumNpcFlag2>(Effect.AiNpcFlag2));
+		}
+		if (Effect.bAddedToComfort) { Char.RemoveFromComfortList(); }
+		if (Effect.bHadAiSchedule)
+		{
+			if (FElysiumNpc* Npc = Char.AsNpc()) { Npc->EndDisciplineSchedule(); }
+		}
+		// MiscFlag is deliberately persistent: 0x101def10 has no +0xa4 clear.
+		// End/interrupt are direct HitInfo calls, not new HitGroups with new timers.
+		{
+			const FRules Rules = ResolveRules(Char);
+			const FElysiumDisciplineTgt* Record = Rules.Targets ? Rules.Targets->Find(Effect.Record) : nullptr;
+			FElysiumDiscHit Hit;
+			if (Record && Record->ResolveHit(Effect.HitTable, Hit))
+			{
+				const TArray<FElysiumDiscHit>& Callbacks = bInterrupted ? Hit.OnInterrupt : Hit.OnEnd;
+				FElysiumEntity* Source = Char.World ? Char.World->Resolve(Effect.Source) : nullptr;
+				for (const FElysiumDiscHit& Callback : Callbacks)
+				{
+					ApplyHit(Source ? Source->AsCombatCharacter() : nullptr, Char, *Record, Callback,
+						Char.World ? Char.World->NowSeconds() : 0.0, 0, false);
+				}
+			}
+		}
 		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s lost %s/%s"),
 			*Char.DebugString(), *Effect.Record, *Effect.HitTable);
 	}
@@ -898,19 +935,10 @@ namespace
 				FString::Printf(TEXT("`%s`/%s authors %s \"%s\" — parsed and carried, not executed (%s)"),
 					*Record.InternalName, *Hit.Name, Channel, *Value, Owner));
 		};
-		// `AI_Schedule` executes in `ApplyAiSchedule` below, through the same named-schedule door
-		// a script's `ChangeSchedule` takes. Only the flag half of this channel remains unexecuted.
-		//
-		// SEAM — `AI_NPCFlag` remains unexecuted. The authored values are NPC condition/flag
-		// names whose table is not decoded, so there is nothing to set: unlike a schedule name,
-		// which resolves against a registry this runtime owns, a flag name has no registry to fail
-		// against. It closes when the condition/flag table is recovered.
-		Carry(TEXT("AI_NPCFlag"), Hit.AiNpcFlag, TEXT("the NPC condition/flag surface"));
 		Carry(TEXT("Expression"), Hit.Expression, TEXT("the disposition/expression layer"));
 		Carry(TEXT("Gesture_Anim"), Hit.GestureAnim, TEXT("the gesture layer has no producer"));
 		Carry(TEXT("Player_Anim"), Hit.PlayerAnim,
 			TEXT("the compact player-action resolver is unbuilt"));
-		Carry(TEXT("MiscFlag"), Hit.MiscFlag, TEXT("no consumer is recovered"));
 		if (Hit.FlinchPercent != INDEX_NONE || Hit.KnockbackPercent != INDEX_NONE)
 		{
 			ReportOnce(FString::Printf(TEXT("hit.%s.%s.impulse"), *Record.InternalName, *Hit.Name),
@@ -918,12 +946,11 @@ namespace
 					"reaction and impulse producers are the combat animation cycle's"),
 					*Record.InternalName, *Hit.Name));
 		}
-		if (Hit.bDoFrenzy || Hit.bDoPossession || Hit.bGibOnDeath || Hit.bClearCopyProp
-			|| Hit.AddToComfort != INDEX_NONE)
+		if (Hit.bDoFrenzy || Hit.bDoPossession || Hit.bGibOnDeath || Hit.bClearCopyProp)
 		{
 			ReportOnce(FString::Printf(TEXT("hit.%s.%s.flags"), *Record.InternalName, *Hit.Name),
 				FString::Printf(TEXT("`%s`/%s authors DoFrenzy/DoPossession/GibOnDeath/"
-					"Clear_Copy_Prop/AddToComfort — parsed and carried; the frenzy family stays "
+					"Clear_Copy_Prop — parsed and carried; the frenzy family stays "
 					"pending and the rest have no consumer"), *Record.InternalName, *Hit.Name));
 		}
 		if (Record.bHasProjectile)
@@ -963,15 +990,12 @@ namespace
 					*Record.InternalName, *Hit.Name, *Hit.AiSchedule));
 			return false;
 		}
+		TGuardValue<bool> ScheduleGuard(GApplyingDisciplineSchedule, true);
 		return Npc->StartNamedSchedule(Hit.AiSchedule,
 			FString::Printf(TEXT("DisciplineTgt.%s/%s.AI_Schedule(%s)"),
 				*Record.InternalName, *Hit.Name, *Hit.AiSchedule),
 			FString::Printf(TEXT("record=%s hit=%s"), *Record.InternalName, *Hit.Name));
 	}
-
-	// Apply one resolved `HitInfo` to one target. Returns whether anything committed.
-	bool ApplyHit(FElysiumCombatCharacter& Caster, FElysiumCombatCharacter& Target,
-		const FElysiumDisciplineTgt& Record, const FElysiumDiscHit& Hit, double Now, int32 Depth);
 
 	// `Trigger_Casting` — a nested cast into another record. Only a helper record (zero blood, zero
 	// recovery) is executed, and only its implementable channels: a nested cast is an effect-graph
@@ -1027,13 +1051,14 @@ namespace
 			FElysiumDiscHit NestedHit;
 			if (!HitTable.IsEmpty() && Nested->ResolveHit(HitTable, NestedHit))
 			{
-				ApplyHit(Caster, Receiver, *Nested, NestedHit, Now, Depth + 1);
+				ApplyHit(&Caster, Receiver, *Nested, NestedHit, Now, Depth + 1);
 			}
 		}
 	}
 
-	bool ApplyHit(FElysiumCombatCharacter& Caster, FElysiumCombatCharacter& Target,
-		const FElysiumDisciplineTgt& Record, const FElysiumDiscHit& Hit, double Now, int32 Depth)
+	bool ApplyHit(FElysiumCombatCharacter* Caster, FElysiumCombatCharacter& Target,
+		const FElysiumDisciplineTgt& Record, const FElysiumDiscHit& Hit, double Now, int32 Depth,
+		bool bTrackOwner)
 	{
 		// `Chance_Effective` gates the whole payload: the target was hit, and the hit did nothing.
 		if (Hit.ChanceEffectivePercent < 100 && RollPercent() > Hit.ChanceEffectivePercent)
@@ -1043,8 +1068,56 @@ namespace
 			return false;
 		}
 		ReportCarriedChannels(Record, Hit);
+		// 0x101dfc20 emits a target BULLET_IMPACT sound independently of source
+		// activation. Direct HitInfo callbacks do not repeat the HitGroup prelude.
+		if (bTrackOwner && Record.bTriggerAISound && Target.World)
+		{
+			Target.World->EmitGameSound(Target.Origin, ElysiumGameSounds::DisciplineAlert(),
+				-1.f, Target.Handle, 0.f, ElysiumGameSounds::BulletImpact, 0.2);
+		}
 
 		bool bCommitted = false;
+		FElysiumActiveDisciplineEffect Effect;
+		Effect.Record = Record.InternalName;
+		Effect.HitTable = Hit.Name;
+		Effect.Source = Caster ? Caster->Handle : FElysiumEntityHandle();
+		Effect.bRemoveOnTakeDamage = Record.bRemoveOnTakeDamage;
+		Effect.bRemoveOnHearCombat = Record.bRemoveOnHearCombat;
+		Effect.bRemoveOnWasBumped = Record.bRemoveOnWasBumped;
+		Effect.bHadAiSchedule = !Hit.AiSchedule.IsEmpty();
+		// 0x101de660 writes these before damage and before installing AI_Schedule.
+		uint32 MiscMask = 0;
+		if (!Hit.MiscFlag.IsEmpty() && !ElysiumMiscFlags::ParseName(Hit.MiscFlag, MiscMask))
+		{
+			ReportOnce(TEXT("miscflag.") + Hit.MiscFlag,
+				FString::Printf(TEXT("unknown MiscFlag '%s' in %s/%s; resolver returns zero"),
+					*Hit.MiscFlag, *Record.InternalName, *Hit.Name));
+		}
+		MiscMask |= Hit.InheritedMiscFlags;
+		ElysiumMiscFlags::Set(Target.MiscFlags, MiscMask);
+		bCommitted |= MiscMask != 0;
+		if (!Hit.AiNpcFlag.IsEmpty())
+		{
+			EElysiumNpcFlag Flag1;
+			EElysiumNpcFlag2 Flag2;
+			if (!FElysiumNpcFlags::ParseName(Hit.AiNpcFlag, Flag1, Flag2))
+			{
+				ReportOnce(TEXT("npcflag.") + Hit.AiNpcFlag,
+					FString::Printf(TEXT("unknown AI_NPCFlag '%s' in %s/%s"),
+						*Hit.AiNpcFlag, *Record.InternalName, *Hit.Name));
+			}
+			else if (FElysiumNpc* Npc = Target.AsNpc())
+			{
+				Effect.AiNpcFlag1 = static_cast<uint32>(Flag1);
+				// The resolver's sign bit is also ORed into the retail word, and the
+				// expiry clears it along with the named bit (0x101de6e1/0x101def10).
+				Effect.AiNpcFlag2 = Flag2 == EElysiumNpcFlag2::None ? 0
+					: static_cast<uint32>(Flag2) | 0x80000000u;
+				Npc->NpcFlags.Set(Flag1);
+				Npc->NpcFlags.Set(static_cast<EElysiumNpcFlag2>(Effect.AiNpcFlag2));
+				bCommitted = true;
+			}
+		}
 
 		// --- Health buffer (the Bloodshield join, §5.1/§5.3) ------------------------------------
 		if (Hit.HealthBuffer.bAuthored)
@@ -1085,7 +1158,7 @@ namespace
 			if (Stolen > 0)
 			{
 				Target.AddBlood(-Stolen);
-				Caster.AddBlood(Stolen);
+				if (Caster) { Caster->AddBlood(Stolen); }
 				bCommitted = true;
 			}
 		}
@@ -1110,30 +1183,35 @@ namespace
 				Dmg.Flags = ElysiumDamage::FlagDirectInput;
 				Dmg.ExtraInput = Amount;
 				Dmg.ForcedSoak = 0;
-				Dmg.Source = Caster.Handle;
-				Target.TakeDamage(Dmg, &Caster);
+				Dmg.Source = Caster ? Caster->Handle : FElysiumEntityHandle();
+				Target.TakeDamage(Dmg, Caster);
 				bCommitted = true;
 			}
 		}
 
 		// --- Trait-effect groups and their duration ----------------------------------------------
+		if (Hit.AddToComfort != INDEX_NONE && Hit.AddToComfort != 0)
+		{
+			Target.AddToComfortList();
+			Effect.bAddedToComfort = true;
+			bCommitted = true;
+		}
 		if (!Hit.TraitEffects.IsEmpty())
 		{
-			FElysiumActiveDisciplineEffect Effect;
-			Effect.Record = Record.InternalName;
-			Effect.HitTable = Hit.Name;
-			Effect.Source = Caster.Handle;
-			Effect.bRemoveOnTakeDamage = Record.bRemoveOnTakeDamage;
-			Effect.bRemoveOnHearCombat = Record.bRemoveOnHearCombat;
-			Effect.bRemoveOnWasBumped = Record.bRemoveOnWasBumped;
-
 			for (const FString& Group : Hit.TraitEffects)
 			{
 				Effect.Effects.Add(Group);
 				Target.Effects.Add(Group);
 			}
 			Target.RebuildEffects();
-
+			bCommitted = true;
+		}
+		// Track flag/schedule/comfort-only HitGroups too. Retail AddDiscFlag is called
+		// for the HitGroup, irrespective of whether it has a TraitEffect channel.
+		if (bTrackOwner && (!Effect.Effects.IsEmpty() || Effect.AiNpcFlag1 != 0
+			|| Effect.AiNpcFlag2 != 0 || MiscMask != 0 || Effect.bAddedToComfort
+			|| Effect.bHadAiSchedule || !Hit.OnEnd.IsEmpty() || !Hit.OnInterrupt.IsEmpty()))
+		{
 			const int32 Seconds = Hit.Duration.bAuthored ? ResolveAmount(Hit.Duration) : 0;
 			if (Seconds > 0)
 			{
@@ -1142,7 +1220,7 @@ namespace
 				if (Target.World)
 				{
 					Target.World->EnqueueInput(TEXT("!self"), ExpiryInput(),
-						FElysiumVariant::Int(Effect.Serial), Seconds, Caster.Handle, Target.Handle);
+						FElysiumVariant::Int(Effect.Serial), Seconds, Effect.Source, Target.Handle);
 				}
 			}
 			else
@@ -1173,7 +1251,7 @@ namespace
 			bCommitted = true;
 		}
 
-		RunTriggerCasting(Caster, Target, Record, Hit, Now, Depth);
+		if (Caster) { RunTriggerCasting(*Caster, Target, Record, Hit, Now, Depth); }
 		return bCommitted;
 	}
 }
@@ -1257,6 +1335,19 @@ namespace
 		//    and sounds only in the shipped corpus, so the executed half is the AI-sound
 		//    classification, which is a real producer on the substrate sound bus (§2.5.3).
 		FElysiumPlayer* Player = Char.World ? Char.World->FindPlayer() : nullptr;
+		const double* SourceEnd = State.SourceActivationEnd.Find(Record->InternalName);
+		if ((!SourceEnd || *SourceEnd < Now) && !Char.HasDisciplineStatus(Record->InternalName))
+		{
+			// 0x101e3560 before the per-target loop: source status, Fired_Gun misc
+			// bit, then COMBAT. DAT_1072bc40/bcb0 are the gunshot table globals.
+			State.SourceActivationEnd.Add(Record->InternalName, Now + 0.1);
+			ElysiumMiscFlags::Set(Char.MiscFlags, 0x200000u);
+			if (Record->bTriggerAISound && Char.World)
+			{
+				Char.World->EmitGameSound(Char.Origin, ElysiumGameSounds::Gunshot(), -1.f,
+					Char.Handle, 0.f, ElysiumGameSounds::Combat, 0.2);
+			}
+		}
 		const bool bPlayerCaster = (Player == &Char);
 		if (bPlayerCaster)
 		{
@@ -1283,20 +1374,9 @@ namespace
 						*Record->InternalName, *HitTable));
 				continue;
 			}
-			if (ApplyHit(Char, *Candidate.Char, *Record, Hit, Now, /*Depth*/ 0))
+			if (ApplyHit(&Char, *Candidate.Char, *Record, Hit, Now, /*Depth*/ 0))
 			{
 				++Committed;
-				// The AI-sound classification, from its real producer: the stimulus is authored as
-				// "an NPC was hit by a discipline that should alert others", so it is emitted at the
-				// target that took the hit, not at the caster. `Overt` is the independent byte and
-				// is not read here (`docs/vtmb/disciplines.md` — the parser stores the two apart).
-				if (Record->bTriggerAISound && Char.World)
-				{
-					// The category is the shared catalogue's row.
-					Char.World->EmitGameSound(Candidate.Char->Origin,
-						ElysiumGameSounds::DisciplineAlert(),
-						/*RadiusCm, table-resolved*/ -1.f, Char.Handle);
-				}
 			}
 		}
 
@@ -1436,6 +1516,7 @@ void ClearAll(FElysiumCombatCharacter& Char)
 		RemoveTargetEffect(Char, i);
 	}
 	State.Recovery.Reset();
+	State.SourceActivationEnd.Reset();
 	// Retire every pending expiry input in one step: a delivery whose serial is not the live one is
 	// dropped, and after this nothing on this character holds a live serial.
 	++State.SerialCounter;
@@ -1482,7 +1563,7 @@ namespace
 			}
 			UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s: %s interrupted by %s"),
 				*Char.DebugString(), *State.TargetEffects[i].Record, Reason);
-			RemoveTargetEffect(Char, i);
+			RemoveTargetEffect(Char, i, true);
 		}
 	}
 }
@@ -1510,7 +1591,7 @@ void NotifyDamaged(FElysiumCombatCharacter& Char)
 		});
 		if (!bAnyLive)
 		{
-			State.TargetEffects.RemoveAt(i);
+			RemoveTargetEffect(Char, i);
 		}
 	}
 }
@@ -1569,6 +1650,14 @@ void NotifyBumped(FElysiumCombatCharacter& Char)
 {
 	Interrupt(Char, TEXT("bump"), [](const FElysiumActiveDisciplineEffect& Effect)
 		{ return Effect.bRemoveOnWasBumped; });
+}
+
+void NotifyScheduleChanged(FElysiumCombatCharacter& Char)
+{
+	if (!GApplyingDisciplineSchedule)
+	{
+		Interrupt(Char, TEXT("schedule change"), [](const FElysiumActiveDisciplineEffect&) { return true; });
+	}
 }
 
 // --- The declared verbs ---
@@ -1632,6 +1721,9 @@ void ExecuteEndAll(FElysiumEntityWorld& World)
 // it on their own schema version and re-zero `SoundCursor`, which is session state.
 void FElysiumDisciplineState::Serialize(FArchive& Ar)
 {
+	Ar << bObfuscateCloaked;
+	Ar << bObfuscateDetectionReady;
+	Ar << ObfuscateDetectionRadiusUnits;
 	for (int32 i = 0; i < SlotCount; ++i)
 	{
 		Ar << EndTime[i];
@@ -1639,6 +1731,7 @@ void FElysiumDisciplineState::Serialize(FArchive& Ar)
 		Ar << Groups[i];
 	}
 	Ar << Recovery;
+	Ar << SourceActivationEnd;
 	Ar << SerialCounter;
 
 	int32 NumEffects = TargetEffects.Num();
@@ -1653,5 +1746,32 @@ void FElysiumDisciplineState::Serialize(FArchive& Ar)
 		Ar << Effect.EndTime << Effect.Serial;
 		Ar << Effect.bRemoveOnTakeDamage << Effect.bRemoveOnHearCombat << Effect.bRemoveOnWasBumped;
 		Ar << Effect.Source;
+		Ar << Effect.AiNpcFlag1 << Effect.AiNpcFlag2;
+		Ar << Effect.bAddedToComfort << Effect.bHadAiSchedule;
+	}
+}
+
+void FElysiumCombatCharacter::AddToComfortList()
+{
+	if (World) { World->AddComfortTarget(Handle); }
+	ComfortingCount = 0;
+}
+
+void FElysiumCombatCharacter::RemoveFromComfortList()
+{
+	if (World) { World->RemoveComfortTarget(Handle); }
+	ComfortingCount = 0;
+}
+
+void FElysiumCombatCharacter::SerializeDisciplineFlags(FElysiumSaveArchive& Ar)
+{
+	if (Ar.Version() >= FElysiumSaveVersion::DisciplineFlags)
+	{
+		Ar << MiscFlags << ComfortingCount;
+	}
+	else if (Ar.IsLoading())
+	{
+		MiscFlags = 0;
+		ComfortingCount = 0;
 	}
 }

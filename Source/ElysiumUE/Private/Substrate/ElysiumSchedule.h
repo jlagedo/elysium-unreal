@@ -50,8 +50,8 @@ enum class EElysiumTask : uint8
 	// Redirect this program's failure route (`TASK_SET_FAIL_SCHEDULE`, 328 invocations). Reads
 	// `FElysiumTaskStep::Target`.
 	SetFailSchedule,
-	// Cancel the outstanding movement request (`TASK_STOP_MOVING`, 275). A body that was not moving
-	// is not a failure, so this always completes.
+	// TASK_STOP_MOVING 0x69. StartTask clears an active goal; RunTask waits out Jump/Climb
+	// and fails a motionless airborne jump with reason 0x1c (0x10288963).
 	StopMoving,
 	// How close to the goal counts as arrived, in SOURCE UNITS (`TASK_SET_TOLERANCE_DISTANCE`, 175).
 	// The one conversion to centimetres happens at the motor call, like every other recovered
@@ -153,6 +153,7 @@ enum class EElysiumScheduleId : uint8
 int32 ElysiumScheduleNumber(EElysiumScheduleId Id);
 const TCHAR* ElysiumScheduleName(EElysiumScheduleId Id);
 const TCHAR* ElysiumTaskName(EElysiumTask Task);
+const TCHAR* ElysiumTaskFailureName(int32 Reason);
 
 // The name -> id direction, for the two script-facing schedule commands.
 //
@@ -335,8 +336,15 @@ public:
 	virtual float RunSpecialIdleActivity(double Now) = 0;
 	// `TASK_WAIT_PVS` -- is the body visible to the player right now?
 	virtual bool IsBodyVisible() const = 0;
-	// `TASK_SET_ACTIVITY` -- play a named ACT_*. Returns its length, or negative when unresolvable.
+	// `TASK_SET_ACTIVITY` -- request a named ACT_*. Returns its length, or negative when
+	// unresolvable. Either answer starts the task: Troika RunTask decides completion by whether the
+	// body's CURRENT base-channel clip identity reached the resolved IDEAL identity, with a one-second
+	// watchdog when it did not.
 	virtual float PlayActivity(const FString& Activity) = 0;
+	// The current base-channel clip is the resolved ideal clip this task requested. False also covers
+	// a resolver/play miss and a body whose channel is held by another producer; neither is a task
+	// failure, and the kernel completes on its recovered watchdog instead.
+	virtual bool IsIdealActivityCurrent() const { return false; }
 	// `TASK_FACE_SAVEPOSITION` / `TASK_MOVE_AWAY_PATH` -- the door-obstruction motor verbs. Both
 	// answer false where there is no motor, which fails the task rather than pretending it ran.
 	virtual bool FaceSavePosition() { return false; }
@@ -348,8 +356,8 @@ public:
 
 	// The combat verbs.
 	// Every one defaults to the answer a runner with no body can honestly give. The movement verbs
-	// default to refusing, which fails their task by name; `StopMoving` and `RememberFact` cannot
-	// fail, because neither asserts anything about the world.
+	// default to refusing, which fails their task by name. StopMoving is the immediate motor
+	// command; the task's Start/Run pair below additionally reads the native traversal state.
 
 	virtual void StopMoving() {}
 	// Issue the path to the committed enemy. `ToleranceUnits` is the schedule's own operand, in
@@ -402,6 +410,13 @@ public:
 	// produce retail's behaviour — a condition standing at the instant of install is destroyed, and
 	// only a stimulus the NEXT pass re-observes can end the program.
 	virtual void ClearConditions() {}
+	virtual void TaskFail(int32 Reason) {}
+	virtual void ScheduleDone() {}
+	virtual int32 TaskFailureReason() const { return 0; }
+	virtual void TaskStarting() {}
+	virtual void SetGoalTolerance(float Units) {}
+	virtual EElysiumTaskResult BeginStopMovingTask() { return StopMovingTask(); }
+	virtual EElysiumTaskResult StopMovingTask() { StopMoving(); return EElysiumTaskResult::Complete; }
 
 	// Retail's schedule-change virtual, slot 435 — `CAI_BaseNPCTroika::OnScheduleChange`
 	// (`0x102a0940`), which `ForceScheduleChange` (`0x102ae490`) dispatches at the tail of every
@@ -432,6 +447,7 @@ struct FElysiumScheduleState
 	// Set when a timed task starts; the substrate clock decides when it completes.
 	double TaskEndsAt = 0.0;
 	bool bTaskStarted = false;
+	bool bTaskCompletedExternally = false; // TaskComplete(false), consumed by MaintainSchedule
 
 	// What `TASK_SET_FAIL_SCHEDULE` and `TASK_SET_TOLERANCE_DISTANCE` wrote for THIS run of the
 	// program. Both are per-run rather than per-program: the same schedule reached from two
@@ -462,6 +478,7 @@ struct FElysiumScheduleState
 		TaskIndex = 0;
 		TaskEndsAt = 0.0;
 		bTaskStarted = false;
+		bTaskCompletedExternally = false;
 		FailScheduleOverride = EElysiumScheduleId::None;
 		ToleranceUnits = -1.f;
 		bDidMaintainSchedule = false;
@@ -470,8 +487,8 @@ struct FElysiumScheduleState
 
 namespace ElysiumSchedule
 {
-	// Begin `Id`, discarding whatever was running. Returns false for an unknown or empty schedule,
-	// which leaves the state cleared rather than half-started.
+	// Begin Id after running the outgoing program's teardown. An unknown program reports
+	// TaskFail(5) without installing it, leaving the current program available to failure routing.
 	bool Start(FElysiumScheduleState& State, EElysiumScheduleId Id, IElysiumScheduleRunner& Runner);
 
 	// Advance the running schedule by one think.

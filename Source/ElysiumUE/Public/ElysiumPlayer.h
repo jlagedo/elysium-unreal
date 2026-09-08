@@ -417,6 +417,10 @@ struct FElysiumActiveDisciplineEffect
 	bool bRemoveOnHearCombat = false;
 	bool bRemoveOnWasBumped = false;
 	FElysiumEntityHandle Source; // the caster
+	uint32 AiNpcFlag1 = 0;
+	uint32 AiNpcFlag2 = 0;
+	bool bAddedToComfort = false;
+	bool bHadAiSchedule = false;
 
 	bool IsInfinite() const { return EndTime < 0.0; }
 };
@@ -426,6 +430,13 @@ struct FElysiumActiveDisciplineEffect
 // slots on this class, and a targeted effect lands on whichever character it hit.
 struct FElysiumDisciplineState
 {
+	// Obfuscate's 0x10146a80 (+0x14dc) visibility latch and the observer's
+	// 0x10146b20 target record (+0x97/+0xac). Spec 0007 supplies their producers;
+	// absent a recovered effect source these answer nothing, rather than deriving a cloak
+	// from the active rank alone. Senses still consume the real active sheet and effects.
+	bool bObfuscateCloaked = false;
+	bool bObfuscateDetectionReady = false;
+	float ObfuscateDetectionRadiusUnits = 0.f;
 	// The compiled array is thirteen, not `stats.txt`'s seventeen (`Public/ElysiumSheetSlots.h`).
 	static constexpr int32 SlotCount = 13;
 
@@ -439,6 +450,9 @@ struct FElysiumDisciplineState
 	// The caster's per-record recovery deadlines, keyed by the record's InternalName — step 8 of
 	// the targeted transaction.
 	TMap<FString, double> Recovery;
+	// 0x101e3560's caster source status lasts 0.1 seconds and suppresses duplicate
+	// source activation. A targeted status of the same record also satisfies the guard.
+	TMap<FString, double> SourceActivationEnd;
 
 	TArray<FElysiumActiveDisciplineEffect> TargetEffects;
 
@@ -498,9 +512,9 @@ struct FElysiumStealthSurface
 	float HearingReductionCm = 0.f;
 	int32 NextSampleIndex = 0;         // m_nNextLightPositionTest (+0x1c7c)
 	float Samples[NumSamples] = { 1.f, 1.f, 1.f };   // m_flLightOnFeet/Center/Head (+0x1c80..0x1c88)
-	// m_flLightOnMe (+0x1c8c): the normalized aggregate, or the `-4.0` inactive sentinel the
+	// m_flLightOnMe (+0x1c8c): the normalized aggregate, or the `-1.0` inactive sentinel the
 	// non-stealth fallback writes.
-	float LightOnMe = -4.f;
+	float LightOnMe = -1.f;
 
 	// The two resolved table indices. Retail keeps them as debug feat/light indices; they are kept
 	// here for the same reason — a wrong scalar is traceable to a row rather than to arithmetic.
@@ -514,6 +528,7 @@ struct FElysiumStealthSurface
 	// produced is invalid (`docs/vtmb/stealth.md`), so this is what makes the group one generation:
 	// a reader that saw generation N knows every field it read came out of the same pass.
 	int32 Generation = 0;
+	bool bHasLightSample = false;
 
 	void Reset() { *this = FElysiumStealthSurface(); }
 };
@@ -661,6 +676,8 @@ struct FElysiumPlayerRecord
 	// eligibility and transition teardown") applied at the map boundary.
 	FElysiumDisciplineState Disciplines;
 	FString DisciplineMap;
+	uint32 MiscFlags = 0;
+	int32 ComfortingCount = 0;
 
 	// `vdiscipline_int`'s stored selection and the remembered tier beside it. INDEX_NONE is "nothing
 	// selected", which is what `vdiscipline_last` refuses on.
@@ -1052,6 +1069,15 @@ public:
 	// thirteen `Active_*` slots are, and because a targeted effect lands on whichever character the
 	// cast resolved onto. The rules over it are `Substrate/ElysiumDisciplines.h`.
 	FElysiumDisciplineState Disciplines;
+	// 0x1033c6b0's persistent word; 0x10323630/0x10323770's target counter.
+	uint32 MiscFlags = 0;
+	int32 ComfortingCount = 0;
+	void AddToComfortList();
+	void RemoveFromComfortList();
+	void SerializeDisciplineFlags(FElysiumSaveArchive& Ar);
+	bool IsObfuscatedForSenses() const;
+	bool CanPerceiveConcealment(const FElysiumCombatCharacter& Target) const;
+	bool HasDisciplineStatus(const FString& Record) const;
 
 	// Push the equipped item's authored `camera_class` at the camera, so drawing a weapon re-runs the
 	// arbitration that can force the view mode. **Every writer of `Inventory.ActiveWeapon` calls
@@ -2064,6 +2090,11 @@ public:
 	// The candidate the senses passes have offered since the last commit. Session state: it is
 	// rebuilt from the observers' own caches within one sight cadence, so it is not saved.
 	FElysiumStealthObserver PendingObserver;
+	// FUN_1017ff40's admitted D_HT assessment. Eligibility reads this independent of the HUD.
+	FElysiumEntityHandle LastHostileAssessment;
+	double LastHostileAssessmentTime = -1.0;
+	bool WasRecentlyObservedByHostile(double Now) const;
+	bool IsInStealthPosture() const;
 
 	bool bImmobilized = false;
 	bool bHiddenByController = false;

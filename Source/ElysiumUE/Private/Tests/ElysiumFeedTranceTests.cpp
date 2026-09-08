@@ -36,8 +36,8 @@ namespace
 {
 	double Cm(double SourceUnits) { return SourceUnits * ElysiumMove::U; }
 
-	// A model key, so the leaf builds a body and the recording services build a motor -- without
-	// one `TASK_SET_ACTIVITY` has nothing to play on and the program would fail at its fifth step.
+	// A model key, so the leaf builds a body and the recording services build a motor. Its activity
+	// resolver deliberately keeps its default miss: `TASK_SET_ACTIVITY` must still advance at step 5.
 	const TCHAR* const GModel =
 		TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl");
 
@@ -62,10 +62,6 @@ namespace
 		{
 			ElysiumRng::SeedAll(0x54524e43);
 			Services.bProvideNpcMotor = true;
-			// The program's fifth task is `TASK_SET_ACTIVITY ACT_DISPOSITION_MESMERIZED`, and the
-			// kernel fails a task whose activity does not resolve. The double's default is the
-			// old-export fallback where nothing resolves; the trance needs the manifest path.
-			Services.bNpcActivitiesResolve = true;
 
 			FElysiumEntityDefs Defs;
 			Defs.MapName = TEXT("__feed_trance_test__");
@@ -280,7 +276,8 @@ bool FElysiumFeedTranceStandingTest::RunTest(const FString&)
 		static_cast<int32>(EElysiumScheduleId::Mesmerized));
 	TestFalse(TEXT("...and has not run a task yet"), F.Guard->IsOblivious());
 
-	// The first think runs the program's five instant tasks.
+	// The first think runs the four flag writes and starts `TASK_SET_ACTIVITY`. Its resolver keeps the
+	// default negative answer, so retail's one-second RunTask watchdog owns the advance from here.
 	Now += 0.1;
 	F.Step(Now);
 	if (!F.Guard->IsOblivious())
@@ -293,10 +290,20 @@ bool FElysiumFeedTranceStandingTest::RunTest(const FString&)
 	TestTrue(TEXT("NO_DIALOG: the dialogue gate refuses"), F.Guard->HasDialogSuppressFlag());
 	TestTrue(TEXT("DONT_INVESTIGATE is set"),
 		F.Guard->NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE));
-	TestTrue(TEXT("ACT_DISPOSITION_MESMERIZED was put on the body"),
+	TestFalse(TEXT("the unresolved activity does not fake a body presentation"),
 		F.Services.Saw(TEXT("PlayNpcClip")));
+	TestTrue(TEXT("TASK_SET_ACTIVITY records the resolver miss without failing"),
+		F.Guard->GetMind().Trace().ContainsByPredicate([](const FString& Row)
+		{
+			return Row.Contains(TEXT("TASK_SET_ACTIVITY ACT_DISPOSITION_MESMERIZED unresolved"));
+		}));
 	TestEqual(TEXT("OnIncapacitatedStart fired once"), F.Counter(TEXT("incap_start")), 1.0f);
-	TestTrue(TEXT("the program is holding at its wait"),
+	TestTrue(TEXT("the unresolved activity is running, not routed to a fail schedule"),
+		F.Guard->Schedule.IsRunning() && F.Guard->Schedule.TaskIndex == 4);
+
+	Now += 1.0;
+	F.Step(Now);
+	TestTrue(TEXT("the one-second watchdog advances to the authored wait"),
 		F.Guard->Schedule.IsRunning() && F.Guard->Schedule.TaskIndex >= 5);
 	// The trance is one of the four automatic feed-acceptance states.
 	TestTrue(TEXT("a tranced victim accepts a second feed with no roll"),
@@ -314,6 +321,43 @@ bool FElysiumFeedTranceStandingTest::RunTest(const FString&)
 	// exits -- never from the schedule-change release. A map wired to it must not see one here.
 	TestEqual(TEXT("OnIncapacitatedEnd does NOT fire on the schedule-change release"),
 		F.Counter(TEXT("incap_end")), 0.0f);
+	return true;
+}
+
+// ============================================================================================
+// `TASK_SET_ACTIVITY`'s RunTask completion is the current base-channel sequence identity, not the
+// ACT_* request. The resolved `ACT_DISPOSITION_MESMERIZED` below becomes the bank clip
+// `(move_and_ranged, walk)`; the same authoritative phase with different case reaches ideal before
+// the watchdog. This catches an implementation that compared the requested activity or model stem.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTranceActivityIdentityTest,
+	"Elysium.Substrate.FeedTrance.ActivityIdentity", GElysiumTestFlags)
+bool FElysiumFeedTranceActivityIdentityTest::RunTest(const FString&)
+{
+	FTranceFixture F(FTranceFixture::FSetup{});
+	if (!TestNotNull(TEXT("guard"), F.Guard) || !TestNotNull(TEXT("player"), F.Player))
+	{
+		return false;
+	}
+	F.Services.bNpcActivitiesResolve = true;
+	// `MaintainSchedule` calls RunTask after StartTask in the same loop. Put the body on the resolved
+	// sequence before that think, so the identity probe must advance without spending the watchdog.
+	F.Services.bBodyClipPhaseSet = true;
+	F.Services.BodyClipPhase.OwnerStem = TEXT("MOVE_AND_RANGED");
+	F.Services.BodyClipPhase.Label = TEXT("WALK");
+
+	double Now = 0.0;
+	F.FeedAndInterrupt(Now);
+	Now += 0.1;
+	F.Step(Now);
+	TestTrue(TEXT("the current resolved identity completes in StartTask's same maintain pass"),
+		F.Guard->Schedule.IsRunning() && F.Guard->Schedule.TaskIndex >= 5);
+	TestTrue(TEXT("the body was asked to play the resolved clip"), F.Services.Saw(TEXT("PlayNpcClip")));
+	TestFalse(TEXT("the resolving body wrote no miss trace"),
+		F.Guard->GetMind().Trace().ContainsByPredicate([](const FString& Row)
+		{
+			return Row.Contains(TEXT("TASK_SET_ACTIVITY ACT_DISPOSITION_MESMERIZED unresolved"));
+		}));
 	return true;
 }
 
@@ -372,11 +416,25 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 		static_cast<int32>(F.Guard->Schedule.Current),
 		static_cast<int32>(EElysiumScheduleId::Mesmerized));
 
-	// The program ticks despite the executor, and the route does not.
+	// The program pre-empts the executor while the unresolved activity is still running.
 	Now += 0.1;
 	F.Step(Now);
-	TestTrue(TEXT("the program ran its tasks"), F.Guard->IsOblivious());
-	TestTrue(TEXT("...and is holding at its wait"),
+	TestTrue(TEXT("the mesmerized program still owns the patroller"),
+		F.Guard->Schedule.Current == EElysiumScheduleId::Mesmerized && F.Guard->Schedule.IsRunning());
+	TestTrue(TEXT("the program made the patroller oblivious"), F.Guard->IsOblivious());
+	TestTrue(TEXT("...and marked it busy with the discipline"), F.Guard->IsBusyWithDiscipline());
+	TestTrue(TEXT("...and suppresses dialogue"), F.Guard->HasDialogSuppressFlag());
+	TestTrue(TEXT("...and blocks investigation"),
+		F.Guard->NpcFlags.Has(EElysiumNpcFlag::DONT_INVESTIGATE));
+	TestTrue(TEXT("the unresolved activity is still running, without a fail schedule"),
+		F.Guard->Schedule.TaskIndex == 4);
+	TestEqual(TEXT("no patrol leg is issued while the activity waits"),
+		F.Services.Count(TEXT("NpcMotor MoveTo")), MovesBefore);
+
+	// `TASK_SET_ACTIVITY` advances only when its actual one-second watchdog expires.
+	Now += 1.0;
+	F.Step(Now);
+	TestTrue(TEXT("the watchdog advances to the authored wait"),
 		F.Guard->Schedule.IsRunning() && F.Guard->Schedule.TaskIndex >= 5);
 	Now += 5.0;
 	F.Step(Now);

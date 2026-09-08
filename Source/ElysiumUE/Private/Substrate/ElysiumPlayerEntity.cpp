@@ -34,8 +34,23 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Misc/Paths.h"
 
+bool FElysiumPlayer::WasRecentlyObservedByHostile(double Now) const
+{
+	return World && World->Resolve(LastHostileAssessment) && Now < LastHostileAssessmentTime + 1.0;
+}
+
+bool FElysiumPlayer::IsInStealthPosture() const
+{
+	const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	return IsObfuscatedForSenses()
+		|| (IsGrappling() && Grapple.Type == EElysiumGrappleType::StealthKill)
+		|| (Embodiment && Embodiment->IsPlayerDucking() && !WasRecentlyObservedByHostile(World->NowSeconds()));
+}
+
 void FElysiumPlayer::Spawn()
 {
+	LastHostileAssessment = FElysiumEntityHandle::Invalid();
+	LastHostileAssessmentTime = -1.0;
 	// The body is the pawn, already standing: nothing to build, and the first SyncFromBody puts the
 	// entity where the pawn is.
 	//
@@ -144,7 +159,6 @@ void FElysiumPlayer::Think()
 	// The observer snapshot is committed straight after, in the same pass, so the HUD's view is
 	// always downstream of the gameplay state it describes (§5.9).
 	ElysiumStealth::TickPlayerSurface(*this, Now);
-	ElysiumStealth::CommitObserverSnapshot(*this, Now);
 
 	// The law expiry pass (`docs/vtmb/player-entity.md` § "Law, Masquerade and world response"). It
 	// rides the same 0.1 s heartbeat as the stealth recompute, for the same reason: retail's
@@ -502,7 +516,8 @@ void FElysiumPlayer::UpdatePlayerSound(double NowSeconds)
 	// no such scale, so the two orders are identical here.
 	World->RefreshGameSound(PlayerSoundSlot, Origin, PlayerSoundCategory,
 		PlayerSoundRadiusUnits * ElysiumMove::U, Handle,
-		ElysiumStealth::HearingReductionCmFor(this));
+		ElysiumStealth::HearingReductionCmFor(this), ElysiumGameSounds::Player,
+		/*reserved CSound freshness*/ 0.2);
 }
 
 bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
@@ -856,11 +871,14 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 	SelectedDiscipline = Record.SelectedDiscipline;
 	SelectedTier = Record.SelectedTier;
 	DisciplineCastCount = Record.DisciplineCastCount;
+	MiscFlags = Record.MiscFlags;
+	ComfortingCount = 0;
 	const bool bSameDisciplineMap =
 		World && !Record.DisciplineMap.IsEmpty() && Record.DisciplineMap == World->MapName();
 	if (bSameDisciplineMap)
 	{
 		Disciplines = Record.Disciplines;
+		ComfortingCount = Record.ComfortingCount;
 		for (FElysiumActiveDisciplineEffect& Effect : Disciplines.TargetEffects)
 		{
 			// A saved handle carries a dead epoch, exactly as one in the map snapshot does.
@@ -881,6 +899,8 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 	StealthModRaw = 0;
 	Observer.Reset();
 	PendingObserver.Reset();
+	LastHostileAssessment = FElysiumEntityHandle::Invalid();
+	LastHostileAssessmentTime = -1.0;
 	if (World && !Record.StealthMap.IsEmpty() && Record.StealthMap == World->MapName())
 	{
 		Stealth = Record.Stealth;
@@ -921,6 +941,8 @@ void FElysiumPlayer::Dehydrate(FElysiumPlayerRecord& Record) const
 	// events and tracked effects belong to.
 	Record.Disciplines = Disciplines;
 	Record.DisciplineMap = World ? World->MapName() : FString();
+	Record.MiscFlags = MiscFlags;
+	Record.ComfortingCount = ComfortingCount;
 	Record.SelectedDiscipline = SelectedDiscipline;
 	Record.SelectedTier = SelectedTier;
 	Record.DisciplineCastCount = DisciplineCastCount;

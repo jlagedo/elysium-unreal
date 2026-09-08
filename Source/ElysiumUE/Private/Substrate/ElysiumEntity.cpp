@@ -5,6 +5,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumLineService.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
 #include "Visual/ElysiumNpcVisual.h"   // GateLeaderCloth -- a native placed model's garments
@@ -108,6 +109,9 @@ void FElysiumEntity::Kill()
 			World->Lines()->CancelDialogue(Handle);
 		}
 	}
+	// CBaseCombatCharacter::UpdateOnRemove 0x10327790 removes one comfort
+	// entry before its handle is invalidated. Other entity classes have no entry.
+	if (FElysiumCombatCharacter* Character = AsCombatCharacter()) { Character->RemoveFromComfortList(); }
 	bDead = true;
 	NextThink = ELYSIUM_NEVER_THINK;
 	if (!bHidden)

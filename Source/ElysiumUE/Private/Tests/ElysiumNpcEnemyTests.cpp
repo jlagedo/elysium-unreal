@@ -24,7 +24,9 @@
 #include "ElysiumSaveTypes.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpcEnemy.h"
+#include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -145,6 +147,7 @@ namespace
 			if (Guard && Target)
 			{
 				Guard->Relationships.SetEntity(Target->Handle, EElysiumRelationship::Hate, Priority);
+				Guard->EnemyMemory.Update(*Guard, Target->Handle, 0.0);
 			}
 		}
 
@@ -153,6 +156,7 @@ namespace
 			if (Guard && Target)
 			{
 				Guard->Relationships.SetEntity(Target->Handle, EElysiumRelationship::Fear, Priority);
+				Guard->EnemyMemory.Update(*Guard, Target->Handle, 0.0);
 			}
 		}
 
@@ -311,7 +315,8 @@ bool FElysiumNpcEnemyShouldChooseTest::RunTest(const FString&)
 	TestTrue(TEXT("a dead enemy searches"),
 		ElysiumNpcEnemy::ShouldChooseNewEnemy(*F.Guard, Empty));
 	F.ThugA->bDead = false;
-	F.Guard->Senses.Memory.bEnemyEluded = true;
+	F.Guard->EnemyMemory.Update(*F.Guard, F.ThugA->Handle, 0.0);
+	F.Guard->EnemyMemory.MarkEluded(F.ThugA->Handle);
 	TestTrue(TEXT("an eluded enemy searches"),
 		ElysiumNpcEnemy::ShouldChooseNewEnemy(*F.Guard, Empty));
 	return true;
@@ -391,15 +396,15 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 			return false;
 		}
 		F.Guard->Senses.Memory.Enemy = StaleHandle(F.ThugA->Handle);
-		TestTrue(TEXT("the idle program starts"),
-			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::IdleDisposition, *F.Guard));
+		TestTrue(TEXT("the terminal swing program starts"),
+			ElysiumSchedule::Start(F.Guard->Schedule, EElysiumScheduleId::MeleeAttack1Swing, *F.Guard));
 
 		FElysiumNpcConditions Cond;
 		for (int32 i = 0; i < 4; ++i)
 		{
 			// Four passes, one warning: the latch is per NPC per schedule, and `AddExpectedError`
 			// above asserts the count rather than merely tolerating it.
-			TestFalse(TEXT("the search stays skipped every pass"),
+			TestFalse(TEXT("an empty mask admits neither NEW_ENEMY nor LOST_ENEMY"),
 				ElysiumNpcEnemy::ChooseEnemy(*F.Guard, Cond, 10.0 + i));
 		}
 		TestTrue(TEXT("the enemy handle is left alone rather than given a plausible fallback"),
@@ -449,7 +454,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 
 		// The eluded marker excludes its own target.
 		F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
-		F.Guard->Senses.Memory.bEnemyEluded = true;
+		F.Guard->EnemyMemory.MarkEluded(F.ThugA->Handle);
 		TestFalse(TEXT("an eluded target is excluded"),
 			ElysiumNpcEnemy::BestEnemy(*F.Guard).IsSet());
 	}
@@ -492,6 +497,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 			return false;
 		}
 		// The player is far and SEEN; the thug is near and unseen. Same priority.
+		F.Services.LineOfSightQuery = [](const FVector&, const FVector& To) { return To.X > Cm(1000.f); };
 		F.Player->Origin = FVector(Cm(2000.f), 0.0, 0.0);
 		F.ThugA->Origin = FVector(Cm(100.f), 0.0, 0.0);
 		F.Hate(F.Player, 5);
@@ -530,6 +536,129 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 		F.Hate(LateEntity, 5);
 		TestTrue(TEXT("a closer unseen candidate does NOT displace a visible incumbent"),
 			ElysiumNpcEnemy::BestEnemy(*F.Guard) == F.Player->Handle);
+	}
+	return true;
+}
+
+
+// CAI_Memory is admission, not a relationship-world scan. The tutorial's thug is about 2380
+// Source units from Jack's dialogue; its 540-unit sight admission leaves a hostile player absent
+// from both the store and selection until an actual sight pass writes the record.
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyMemoryAdmissionTest,
+	"Elysium.Substrate.NpcEnemy.MemoryAdmission", GElysiumTestFlags)
+bool FElysiumNpcEnemyMemoryAdmissionTest::RunTest(const FString&)
+{
+	FEnemyFixture F;
+	if (F.Guard == nullptr || F.Player == nullptr)
+	{
+		return false;
+	}
+	F.Guard->Senses.Perception.VisionDistanceCm = Cm(540.f);
+	F.Player->Origin = FVector(Cm(2380.f), 0.0, 0.0);
+	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
+
+	F.Guard->Senses.TickSight(*F.Guard, 10.0);
+	ElysiumNpcEnemy::GatherConditions(*F.Guard, 10.0);
+	TestFalse(TEXT("the unseen hostile tutorial-distance player has no memory record"),
+		F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
+	TestFalse(TEXT("...and relationship alone cannot select it"),
+		ElysiumNpcEnemy::BestEnemy(*F.Guard).IsSet());
+	TestFalse(TEXT("...including through the real decision pass"),
+		F.Guard->Senses.Memory.Enemy.IsSet());
+
+	// Hearing records a sound stimulus only. It does not manufacture an enemy-memory candidate.
+	FElysiumGameSoundRequest Sound;
+	Sound.Position = FVector(Cm(100.f), 0.0, 0.0);
+	Sound.Category = FName(TEXT("PLAYER_GUNSHOT_BASE"));
+	Sound.RadiusCm = Cm(1200.f);
+	Sound.Source = F.Player->Handle;
+	Sound.TypeMask = ElysiumGameSounds::Combat;
+	F.World.GameSounds().Emit(Sound, 10.05);
+	F.Guard->Senses.TickHearing(*F.Guard, 10.1);
+	TestTrue(TEXT("hearing consumed the player stimulus"),
+		F.Guard->Senses.Memory.LastHeardSource == F.Player->Handle);
+	TestFalse(TEXT("...without an enemy-memory write"),
+		F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
+
+	F.Player->Origin = FVector(Cm(500.f), 0.0, 0.0);
+	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
+	F.Guard->Senses.TickSight(*F.Guard, 11.0);
+	ElysiumNpcEnemy::GatherConditions(*F.Guard, 11.0);
+	TestTrue(TEXT("a seen hostile player gains the actor record"),
+		F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
+	TestTrue(TEXT("...and can now be selected"),
+		ElysiumNpcEnemy::BestEnemy(*F.Guard) == F.Player->Handle);
+
+	// No age expiry: time does not remove the observation. Elusion is per record and a later
+	// UpdateMemory sight write clears it; refresh only removes dead/invalid handles.
+	F.Guard->EnemyMemory.MarkEluded(F.Player->Handle);
+	TestFalse(TEXT("an eluded record is excluded"), ElysiumNpcEnemy::BestEnemy(*F.Guard).IsSet());
+	F.Guard->EnemyMemory.Refresh(F.World, 11.5);
+	TestTrue(TEXT("refresh keeps the record's elusion marker"),
+		F.Guard->EnemyMemory.IsEluded(F.Player->Handle));
+	TestTrue(TEXT("a live record has no time expiry"),
+		F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
+	F.Guard->EnemyMemory.MarkEluded(F.Player->Handle, false);
+	F.Guard->EnemyMemory.Update(*F.Guard, F.Player->Handle, 20.0);
+	F.Player->Origin = FVector(Cm(501.f), 0.0, 0.0);
+	F.Guard->EnemyMemory.Refresh(F.World, 20.249);
+	TestEqual(TEXT("free knowledge refreshes position strictly before .25 seconds"),
+		F.Guard->EnemyMemory.Find(F.Player->Handle)->LastPosition, F.Player->Origin);
+	F.Player->Origin = FVector(Cm(502.f), 0.0, 0.0);
+	F.Guard->EnemyMemory.Refresh(F.World, 20.25);
+	TestFalse(TEXT("free knowledge expires at the equality boundary"),
+		F.Guard->EnemyMemory.Find(F.Player->Handle)->LastPosition == F.Player->Origin);
+	F.Player->bDead = true;
+	F.Guard->EnemyMemory.Refresh(F.World, 21.0);
+	TestEqual(TEXT("a dead actor is removed at refresh"), F.Guard->EnemyMemory.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageMemoryTest,
+	"Elysium.Substrate.NpcEnemy.DamageMemory", GElysiumTestFlags)
+bool FElysiumNpcEnemyDamageMemoryTest::RunTest(const FString&)
+{
+	auto Damage = [](FElysiumNpc& Npc, const FElysiumEntityHandle& Source, const FVector& Position)
+	{
+		FElysiumDmg Dmg;
+		Dmg.Source = Source;
+		Dmg.AttackPosition = Position;
+		Dmg.bHasAttackPosition = true;
+		return ElysiumNpcEnemy::RememberDamage(Npc, Dmg, 10.0);
+	};
+	// Unknown, unseen attacker writes only an anonymous position record.
+	{
+		FEnemyFixture F;
+		if (!F.Guard || !F.Player) return false;
+		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
+		TestTrue(TEXT("unknown unseen damage enters the producer"),
+			Damage(*F.Guard, F.Player->Handle, FVector(77.f, 0.f, 0.f)));
+		TestFalse(TEXT("unknown damage does not manufacture an actor record"),
+			F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
+		TestTrue(TEXT("...but retains its position-only record"),
+			F.Guard->EnemyMemory.Records()[0].bPositionOnly);
+	}
+	// A known attacker refreshes its actor record at the packet attack position.
+	{
+		FEnemyFixture F;
+		if (!F.Guard || !F.Player) return false;
+		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
+		F.Guard->EnemyMemory.Update(*F.Guard, F.Player->Handle, 0.0);
+		Damage(*F.Guard, F.Player->Handle, FVector(88.f, 0.f, 0.f));
+		TestEqual(TEXT("known damage updates that actor's position"),
+			F.Guard->EnemyMemory.Find(F.Player->Handle)->LastPosition, FVector(88.f, 0.f, 0.f));
+	}
+	// An unknown attacker with a current unseen enemy refreshes that committed target instead.
+	{
+		FEnemyFixture F;
+		if (!F.Guard || !F.Player || !F.ThugA) return false;
+		F.Player->Origin = FVector(Cm(-100.f), 0.f, 0.f);
+		F.Guard->EnemyMemory.Update(*F.Guard, F.ThugA->Handle, 0.0);
+		F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
+		Damage(*F.Guard, F.Player->Handle, FVector(99.f, 0.f, 0.f));
+		TestEqual(TEXT("current enemy receives the unknown attack position"),
+			F.Guard->EnemyMemory.Find(F.ThugA->Handle)->LastPosition, FVector(99.f, 0.f, 0.f));
 	}
 	return true;
 }
@@ -603,7 +732,7 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 		}
 		F.Hate(F.Player, 5);
 		F.Guard->Senses.Memory.Enemy = F.Player->Handle;
-		F.Guard->Senses.Memory.bEnemyEluded = true;
+		F.Guard->EnemyMemory.MarkEluded(F.Player->Handle);
 		F.Guard->Schedule.Clear();
 
 		FElysiumNpcConditions Cond;
@@ -882,10 +1011,14 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	F.Quiet();
 
 	// A heard combat sound promotes idle -> alert through the real think.
-	F.Guard->Senses.Memory.LastHeardCategory = TEXT("PLAYER_GUNSHOT_BASE");
-	F.Guard->Senses.Memory.LastHeardTime = 3.0;
-	F.Guard->Senses.Memory.LastHeardSource = FElysiumEntityHandle::Invalid();
-	ElysiumNpcEnemy::GatherConditions(*F.Guard, 3.5);
+	FElysiumGameSoundRequest Sound;
+	Sound.Category = FName(TEXT("PLAYER_GUNSHOT_BASE"));
+	Sound.TypeMask = ElysiumGameSounds::Combat;
+	Sound.Position = F.Guard->EyePosition();
+	F.World.GameSounds().Emit(Sound, 3.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 3.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 3.91);
+	ElysiumNpcEnemy::GatherConditions(*F.Guard, 3.91);
 	TestTrue(TEXT("the heard stimulus raises HEAR_COMBAT"),
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::HearCombat));
 	F.Guard->UpdateIdealState(3.5);
@@ -1166,7 +1299,16 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 	F.Guard->EnemySightings = 3;
 	F.Guard->bNoAlertState = true;
 	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
-	F.Guard->Senses.Memory.bEnemyEluded = true;
+	F.Guard->EnemyMemory.Update(*F.Guard, F.Player->Handle, 12.5);
+	F.Guard->EnemyMemory.MarkEluded(F.Player->Handle);
+	if (FElysiumNpcEnemyMemoryRecord* Record = F.Guard->EnemyMemory.FindMutable(F.Player->Handle))
+	{
+		Record->LastPosition = FVector(101.f, 202.f, 303.f);
+		Record->Anchor = FVector(404.f, 505.f, 606.f);
+		Record->Velocity = FVector(7.f, 8.f, 9.f);
+		Record->LastNavNode = 11;
+		Record->AnchorNavNode = 12;
+	}
 	F.Guard->Senses.Memory.RepeatedDamageWindowStart = 12.5;
 	F.Guard->Senses.Memory.RepeatedDamageAccumulated = 17;
 	F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::SeeHate);
@@ -1191,7 +1333,18 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 
 	const FElysiumNpcMemory& Restored = G.Guard->Senses.Memory;
 	TestTrue(TEXT("the committed enemy survives"), Restored.Enemy == G.Player->Handle);
-	TestTrue(TEXT("the eluded marker survives"), Restored.bEnemyEluded);
+	TestTrue(TEXT("the eluded marker survives"), G.Guard->EnemyMemory.IsEluded(G.Player->Handle));
+	const FElysiumNpcEnemyMemoryRecord* RestoredRecord =
+		G.Guard->EnemyMemory.Find(G.Player->Handle);
+	if (!TestNotNull(TEXT("the actor record rebase survives"), RestoredRecord))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the record's last position survives"), RestoredRecord->LastPosition,
+		FVector(101.f, 202.f, 303.f));
+	TestEqual(TEXT("...with its anchor"), RestoredRecord->Anchor, FVector(404.f, 505.f, 606.f));
+	TestEqual(TEXT("...velocity and nav identities"), RestoredRecord->LastNavNode, 11);
+	TestEqual(TEXT("...and its anchor nav identity"), RestoredRecord->AnchorNavNode, 12);
 	TestEqual(TEXT("the repeated-damage window sum survives"),
 		Restored.RepeatedDamageAccumulated, 17);
 	TestTrue(TEXT("...with its window root"),
@@ -1221,8 +1374,8 @@ bool FElysiumNpcEnemySaveTest::RunTest(const FString&)
 		FMemoryReader Reader(Legacy, /*bIsPersistent*/ true);
 		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::NpcSenses);
 		H.Guard->Serialize(Ar);
-		TestFalse(TEXT("a pre-cognition payload restores an un-eluded enemy"),
-			H.Guard->Senses.Memory.bEnemyEluded);
+		TestEqual(TEXT("a pre-enemy-memory payload restores no observed actors"),
+			H.Guard->EnemyMemory.Num(), 0);
 		TestEqual(TEXT("...and no open damage window"),
 			H.Guard->Senses.Memory.RepeatedDamageAccumulated, 0);
 	}

@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumEntityHandle.h"
+#include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumNpcConditions.h"
 
 class FElysiumEntity;
 class FElysiumEntityWorld;
@@ -42,12 +44,9 @@ namespace ElysiumNpcSense
 	// The `-1.0` sentinel `InitPerceptionDistances` reads on `vision` and `hearing`.
 	inline constexpr float DerivedSentinel = -1.0f;
 
-	// CHOSEN, NOT RECOVERED: the observer's own cone threshold. `FInViewCone` (`0x10326750`)
-	// compares a dot product against the observer's field-of-view member, and neither VtMB's
-	// authored default nor the member's spawn value is recovered. This is Source's stock NPC
-	// value (0.5 = a 120-degree cone), which is also what the stealth cone-scalar table's neutral
-	// 1.0 multiplies to nothing. Replace it, not the multiply, when the value is recovered.
-	inline constexpr float DefaultViewConeDot = 0.5f;
+	// Troika's field-of-view member is 0.2 (`FInViewCone` 0x103264d0). The target's stealth cone
+	// scalar multiplies this cosine threshold inside the strict apex/cone test.
+	inline constexpr float DefaultViewConeDot = 0.2f;
 
 	// The `Inspection` feat's two nested tables, by their authored `InternalName`.
 	inline const TCHAR* VisionTableName = TEXT("Inspection_Vision_Distances");
@@ -111,6 +110,17 @@ struct FElysiumNpcMemory
 	FVector LastHeardPosition = FVector::ZeroVector;
 	FString LastHeardCategory;                 // the `SoundTypes` name, as emitted
 	double LastHeardTime = -1.0;
+	// `CAI_BaseNPCTroika::OnListened` retains one record per raw CSound family.  These are
+	// deliberately records, rather than seven booleans: the later investigate programs need the
+	// source, origin and type that won `CommitBestSound`.
+	FElysiumGameSoundEvent LastSoundCombat;
+	FElysiumGameSoundEvent LastSoundBulletImpact;
+	FElysiumGameSoundEvent LastSoundFlinch;
+	FElysiumGameSoundEvent LastSoundPlayer;
+	FElysiumGameSoundEvent LastSoundDanger;
+	FElysiumGameSoundEvent LastSoundPhysicsDanger;
+	FElysiumGameSoundEvent LastSoundWorld;
+	FElysiumGameSoundEvent BestSound;
 
 	// --- Last damage ---------------------------------------------------------------------------
 	// Retail's NPC override saves the complete incoming packet before composing the base
@@ -148,16 +158,6 @@ struct FElysiumNpcMemory
 	// per-think. One acquisition episode fires `OnFoundEnemy` once and `OnLostEnemyLOS` once.
 	bool bEnemyLosLatched = false;
 
-	// The eluded marker on the committed enemy's enemy-memory record. `ShouldChooseNewEnemy` and
-	// `BestEnemy` both read it, and `ChooseEnemy`'s went-null/eluded arm is what fires
-	// `OnLostPlayer`/`OnLostEnemy`.
-	//
-	// SEAM: nothing WRITES it. Retail's enemy-memory component marks a record eluded from its own
-	// timeout over an unrecovered interval, and inferring it from the LOS debounce would be wrong by
-	// construction — losing sight of an enemy is explicitly not losing the enemy. The consumers are
-	// complete and a test drives the bit directly; the producer arrives with the memory component.
-	bool bEnemyEluded = false;
-
 	// --- Closest player + its LOS cache (`SetClosestPlayer` / `SetPlayerLOS`) -------------------
 	// The nearest-player cache is NOT hostility admission and fires no output on its own.
 	FElysiumEntityHandle ClosestPlayer;
@@ -168,6 +168,20 @@ struct FElysiumNpcMemory
 	bool bPlayerLos = false;
 	double PlayerLosLastClearTime = -1.0;
 	double PlayerLosNextUpdateTime = -1.0;     // negative means "due now"
+	// `m_flStealthVisionOverrideTime` (+0x6604), max-written by the surviving-damage tail.
+	// It bypasses only the normal visual range gate; cone, concealment and trace remain live.
+	double StealthVisionOverrideUntil = -1.0;
+
+	// Slot-472 unknown-vision state. Requirement 10 consumes the flags/timers; R6 owns the
+	// observation records so that later programs do not reconstruct a second seen system.
+	FElysiumEntityHandle BestSeeUnknown;
+	FElysiumEntityHandle LastSeeUnknown;
+	FVector LastSeeUnknownPosition = FVector::ZeroVector;
+	int32 SeeUnknownRepeatSightings = 0;
+	double SeeUnknownRunTimer = -1.0;
+	double SeeUnknownStartTimer = -1.0;
+	bool bIgnoreUnknown = false;
+	bool bMadeInitialUnknownResponse = false;
 
 	void Reset();
 	void Serialize(FElysiumSaveArchive& Ar);
@@ -186,19 +200,28 @@ class FElysiumNpcSenses
 public:
 	FElysiumNpcPerception Perception;
 	FElysiumNpcMemory Memory;
+	// 0x10937a8c's unnamed ConVar supplies the pulled-back apex distance in retail.
+	// Its default/writer remains unrecovered; the substrate seam answers zero until recovered.
+	float ViewConeBodyOffsetCm = 0.f;
+	FElysiumNpcConditions HeardConditions;
+	bool bSeeUnknownThisPass = false;
 
 	// Resolve `vision`/`hearing`/`npc_perception` into the effective pair. Called from Activate,
 	// and idempotent: the resolution is authored data, not runtime state.
 	void ResolveTuning(FElysiumNpc& Npc);
 
-	// One condition-gathering pass. Sight runs on its own 2 s cadence, hearing and the
-	// committed-enemy debounce run every think. Safe with no motor, no body and no services.
+	// One condition-gathering pass. `Look` scans actual candidates on their 0.15/0.25/0.45 s
+	// cadences; the separate closest-player LOS cache remains 2 s. Hearing and the committed-enemy
+	// debounce run every think. Safe with no motor, no body and no services.
 	void Tick(FElysiumNpc& Npc, double Now);
 
 	// The three halves, exposed so a test can drive one without the others.
 	void TickSight(FElysiumNpc& Npc, double Now);
 	void GatherEnemyLos(FElysiumNpc& Npc, double Now);
 	void TickHearing(FElysiumNpc& Npc, double Now);
+	const TArray<FElysiumEntityHandle>& Sighted() const { return SeenThisPass; }
+	void CommitBestSound(const FElysiumNpcConditions& Conditions);
+	void ExtendVisionOverride(FElysiumNpc& Npc, FElysiumEntityHandle Source, double Now, double Duration);
 
 	// Where this NPC's hearing has consumed the game-sound bus up to. Serial 0 is "nothing seen
 	// yet"; a restored NPC deliberately starts at the live head rather than replaying a window it
@@ -214,12 +237,25 @@ public:
 	// surface, which is every character except the player.
 	static bool IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm,
 		float TargetConeScalar = 1.0f);
+	// Troika FVisible, also BestEnemy's fallback. No Look-only cone or 3072-unit prefilter.
+	static bool IsVisible(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, double Now);
 
 	void Serialize(FElysiumSaveArchive& Ar, FElysiumNpc& Npc);
 
 private:
+	struct FPendingSound
+	{
+		EElysiumNpcCond Condition = EElysiumNpcCond::None;
+		double PromoteAt = -1.0;
+	};
 	uint64 Cursor = 0;
+	TArray<FPendingSound> PendingSounds;
+	// `CAI_Senses::Look` keeps per-candidate throttles separate from closest-player/PVS cache.
+	double NextLookTime[3] = { -1.0, -1.0, -1.0 };
+	TArray<FElysiumEntityHandle> SeenByChannel[3];
+	double LastListenTime = -1.0;
 	// One report per NPC for an unreachable perception table. It is a K9 rulebook fact, not a
 	// per-think event, and a map full of NPCs must not turn it into a wall.
 	bool bWarnedPerception = false;
+	TArray<FElysiumEntityHandle> SeenThisPass;
 };

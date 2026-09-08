@@ -27,6 +27,16 @@ struct FElysiumSoundVolumeTable;
 // before the engine's name table exists.
 namespace ElysiumGameSounds
 {
+	inline constexpr uint32 Combat = 0x001;
+	inline constexpr uint32 World = 0x002;
+	inline constexpr uint32 Player = 0x004;
+	inline constexpr uint32 Danger = 0x008;
+	inline constexpr uint32 BulletImpact = 0x010;
+	inline constexpr uint32 Carcass = 0x020;
+	inline constexpr uint32 Thumper = 0x100;
+	inline constexpr uint32 Bugbait = 0x200;
+	inline constexpr uint32 PhysicsDanger = 0x400;
+	inline constexpr uint32 Flinch = 0x800;
 	// `PLAYER_GUNSHOT_BASE` — "the player fired a basic, non-classified weapon".
 	//
 	// SEAM: the shipped table classifies gunshots per weapon family (`_PISTOL`, `_SHOTGUN`,
@@ -51,7 +61,9 @@ namespace ElysiumGameSounds
 		static const FName Name(TEXT("PLAYER_AGGRESSIVE_FEED"));
 		return Name;
 	}
-	// `NPC_DISCIPLINE_ALERT` — "An NPC was hit by a discipline that should alert others", the
+	// `NPC_DISCIPLINE_ALERT` — the target-side BULLET_IMPACT sound from HitGroup apply (0x101dfc20).
+	// The source activation independently emits COMBAT using the gunshot volume row (0x101e3560).
+	// "An NPC was hit by a discipline that should alert others", the
 	// authored `sound_volume_table.txt` row a `disciplinetgt` record with `TriggerAISound` emits at
 	// each committed target ("Overt/AI-sound classification emits on the sound bus"). It is a
 	// producer category like every other name here,
@@ -121,6 +133,10 @@ struct FElysiumGameSoundRequest
 	FVector Position = FVector::ZeroVector;   // world, Unreal cm
 	// The `SoundTypes` name, e.g. `PLAYER_GUNSHOT_BASE`, `NPC_TAKE_DAMAGE`, `DOOR_NORMAL`.
 	FName Category;
+	// CSound's raw interest bitmask. Category remains the authored volume-table join.
+	uint32 TypeMask = 0;
+	// Source duration; the event expires at Time + Duration. A refreshed player slot restamps it.
+	double DurationSeconds = 0.0;
 	// <= 0 asks the sound-volume table for the category's own radius, which is the ordinary case.
 	// A positive value is an explicit reach in CENTIMETRES and skips that lookup; the category's
 	// occlusion policy still applies, because overriding how far a sound carries is not the same
@@ -137,16 +153,23 @@ struct FElysiumGameSoundRequest
 	// bus reaching back for it. Only the player carries a surface — retail's field is CBasePlayer's
 	// — so every other source passes 0, which is not a failure and is not warned.
 	float StealthHearingReductionCm = 0.f;
+	// ambient_generic insertion is explicitly non-occludable; this is a raw CSound property.
+	bool bForceNonOccludable = false;
 };
 
 // One emitted stimulus, with every authored question already answered.
 struct FElysiumGameSoundEvent
 {
+	// Retained independently so a listener applies sensitivity before the target reduction.
+	float StealthHearingReductionCm = 0.f;
+	float UnadjustedRadiusCm = 0.f;
 	FVector Position = FVector::ZeroVector;
 	FName Category;
+	uint32 TypeMask = 0;
 	float RadiusCm = 0.f;                  // post-stealth-adjustment audible reach
 	FElysiumEntityHandle Source;
 	double Time = 0.0;                     // substrate clock seconds
+	double ExpireTime = 0.0;
 	uint64 Serial = 0;                     // monotonic within one bus, 1-based; 0 is "none yet"
 	bool bOccludable = false;              // the table's `OccludedVolumeLevels` answer
 };

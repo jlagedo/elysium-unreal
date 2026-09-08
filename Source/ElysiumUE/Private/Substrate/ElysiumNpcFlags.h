@@ -193,6 +193,13 @@ public:
 	 * `PRESERVE_PATH` off this object before calling in here. Same guard, same order.
 	 */
 	bool OnScheduleChange();
+	// Split stages let the host restore bounds/reconnect and dispatch discipline interruption
+	// before 0x102a0940's unconditional tail consumes ACTIVITY_COPY_PROP_CLEAN.
+	void BeginScheduleChange();
+	bool ApplyScheduleChangeMasks();
+	void FinishScheduleChange();
+	// Slot 448 deliberately clears MADE_OBLIVIOUS without releasing its refcount.
+	bool OnTaskFail();
 
 	void Serialize(FElysiumSaveArchive& Ar);
 

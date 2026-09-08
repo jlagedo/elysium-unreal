@@ -352,20 +352,19 @@ bool FElysiumStealthRecomputeTest::RunTest(const FString&)
 	TestTrue(TEXT("the raw aggregate is (feet + centre + head) * 0.083325"),
 		NearlyEqual(ElysiumStealth::NormalizeBodyLight(1.f, 1.f, 1.f, 0.f, 1.f),
 			3.f * ElysiumStealth::RawLightScale, 0.0001f));
-	// Over the configured range this runtime uses, three fully lit samples normalize to 1.0 and the
-	// answer is the mean of the triplet.
-	TestTrue(TEXT("three fully lit samples normalize to 1.0"),
+	// The shipped 0..1 range does not turn the query into an average.
+	TestTrue(TEXT("three unit-luminance samples retain the raw scale"),
 		NearlyEqual(ElysiumStealth::NormalizeBodyLight(1.f, 1.f, 1.f,
-			ElysiumStealth::DefaultWorldLightMin, ElysiumStealth::DefaultWorldLightMax), 1.f));
+			ElysiumStealth::DefaultWorldLightMin, ElysiumStealth::DefaultWorldLightMax), 3.f * ElysiumStealth::RawLightScale));
 	TestTrue(TEXT("three dark samples normalize to 0.0"),
 		NearlyEqual(ElysiumStealth::NormalizeBodyLight(0.f, 0.f, 0.f,
 			ElysiumStealth::DefaultWorldLightMin, ElysiumStealth::DefaultWorldLightMax), 0.f));
-	TestTrue(TEXT("one lit point out of three carries a third of the aggregate"),
+	TestTrue(TEXT("one unit-luminance point carries the recovered aggregate coefficient"),
 		NearlyEqual(ElysiumStealth::NormalizeBodyLight(1.f, 0.f, 0.f,
 			ElysiumStealth::DefaultWorldLightMin, ElysiumStealth::DefaultWorldLightMax),
-			1.f / 3.f, 0.002f));
+			ElysiumStealth::RawLightScale, 0.0001f));
 	TestTrue(TEXT("a value above the configured maximum clamps rather than exceeding 1.0"),
-		NearlyEqual(ElysiumStealth::NormalizeBodyLight(4.f, 4.f, 4.f,
+		NearlyEqual(ElysiumStealth::NormalizeBodyLight(5.f, 5.f, 5.f,
 			ElysiumStealth::DefaultWorldLightMin, ElysiumStealth::DefaultWorldLightMax), 1.f));
 	TestTrue(TEXT("a degenerate configured range reads as full light, not as a divide by zero"),
 		NearlyEqual(ElysiumStealth::NormalizeBodyLight(0.f, 0.f, 0.f, 0.5f, 0.5f), 1.f));
@@ -394,11 +393,11 @@ bool FElysiumStealthRecomputeTest::RunTest(const FString&)
 		In.bEligible = true;
 		In.Sneaking = 7;
 		// A mean of 0.5 lands between the 0.60 and 0.42 thresholds, which is Light5.
-		In.Samples[0] = In.Samples[1] = In.Samples[2] = 0.5f;
+		In.Samples[0] = In.Samples[1] = In.Samples[2] = 2.f;
 		const ElysiumStealth::FRecomputeResult Out = ElysiumStealth::Recompute(Tables, In);
 		TestTrue(TEXT("an eligible pass commits"), Out.bCommitted);
 		TestTrue(TEXT("...and reports the arm it took"), Out.bEligible);
-		TestTrue(TEXT("the normalized aggregate is the triplet's mean"),
+		TestTrue(TEXT("the raw triplet is scaled by 0.083325"),
 			NearlyEqual(Out.LightOnMe, 0.5f, 0.002f));
 		TestEqual(TEXT("0.5 selects Light5"), Out.LightRow, 5);
 		TestEqual(TEXT("the Sneaking column is the resolved rating"), Out.StealthRow, 7);
@@ -444,11 +443,11 @@ bool FElysiumStealthRecomputeTest::RunTest(const FString&)
 		const ElysiumStealth::FRecomputeResult Out = ElysiumStealth::Recompute(Tables, In);
 		TestTrue(TEXT("the ineligible pass still commits — it INSTALLS the fallback"), Out.bCommitted);
 		TestFalse(TEXT("...and reports the arm it took"), Out.bEligible);
-		TestTrue(TEXT("m_flLightOnMe is the -4.0 inactive sentinel, not a light level"),
+		TestTrue(TEXT("m_flLightOnMe is the -1.0 inactive sentinel, not a light level"),
 			NearlyEqual(Out.LightOnMe, ElysiumStealth::InactiveLightSentinel));
 		TestTrue(TEXT("the sight scalar is 1.0"), NearlyEqual(Out.VisionScalar, 1.f));
-		TestEqual(TEXT("the reported rows are Light0/Stealth0"), Out.LightRow, 0);
-		TestEqual(TEXT("..."), Out.StealthRow, 0);
+		TestEqual(TEXT("the reported light row still describes the dark room"), Out.LightRow, 10);
+		TestEqual(TEXT("the feat row is preserved while ineligible"), Out.StealthRow, 10);
 		TestTrue(TEXT("the cone scalar is the Light0/Stealth0 cell"),
 			NearlyEqual(Out.ConeScalar, ExpectedCone(0, 0)));
 		TestTrue(TEXT("the hearing reduction is the Stealth0 row"),
@@ -483,7 +482,7 @@ bool FElysiumStealthCadenceTest::RunTest(const FString&)
 		AddError(TEXT("no player entity"));
 		return false;
 	}
-	F.Services.bPlayerSneaking = true;
+	F.Services.bPlayerDucking = true;
 
 	// --- Nothing recomputes between due passes ----------------------------------------------------
 	F.Services.LightAtPoint = 0.2f;
@@ -525,8 +524,8 @@ bool FElysiumStealthCadenceTest::RunTest(const FString&)
 		F.Player->Stealth.Generation, FirstGeneration + 3);
 
 	// The three retained samples are what the aggregate reads — the whole point of the ~0.3 s lag.
-	TestTrue(TEXT("the aggregate is the mean of the retained triplet, not the newest sample"),
-		NearlyEqual(F.Player->Stealth.LightOnMe, (0.90f + 0.30f + 0.60f) / 3.f, 0.002f));
+	TestTrue(TEXT("the aggregate uses the retained triplet and the recovered coefficient"),
+		NearlyEqual(F.Player->Stealth.LightOnMe, (0.90f + 0.30f + 0.60f) * ElysiumStealth::RawLightScale, 0.002f));
 
 	// --- Three distinct body points ---------------------------------------------------------------
 	// The recorded queries carry their own positions, so the rotation is visible from outside.
@@ -553,8 +552,8 @@ bool FElysiumStealthCadenceTest::RunTest(const FString&)
 		&& PointOf(LightQueries[0]) != PointOf(LightQueries[2])
 		&& PointOf(LightQueries[3]) == PointOf(LightQueries[0]));
 
-	// --- The ineligible arm neither samples nor rotates --------------------------------------------
-	F.Services.bPlayerSneaking = false;
+	// --- The ineligible arm still samples and rotates --------------------------------------------
+	F.Services.bPlayerDucking = false;
 	const int32 BeforeIndex = F.Player->Stealth.NextSampleIndex;
 	const int32 BeforeQueries = LightQueries.Num();
 	F.PlayerThink(0.5);
@@ -562,10 +561,45 @@ bool FElysiumStealthCadenceTest::RunTest(const FString&)
 		NearlyEqual(F.Player->Stealth.LightOnMe, ElysiumStealth::InactiveLightSentinel));
 	TestTrue(TEXT("...and the dark room's sight advantage is gone"),
 		NearlyEqual(F.Player->Stealth.VisionScalar, 1.f));
-	TestEqual(TEXT("the fallback arm does not advance the sample rotation"),
-		F.Player->Stealth.NextSampleIndex, BeforeIndex);
+	TestEqual(TEXT("the ineligible arm advances the sample rotation"),
+		F.Player->Stealth.NextSampleIndex, (BeforeIndex + 1) % 3);
 	const int32 After = F.Services.Count(TEXT("QueryLightAtPoint"));
-	TestEqual(TEXT("...and costs no light query"), After, BeforeQueries);
+	TestEqual(TEXT("...and still samples one point"), After, BeforeQueries + 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthEligibilityTest,
+	"Elysium.Substrate.Stealth.EligibilityAndBounds", GElysiumTestFlags)
+bool FElysiumStealthEligibilityTest::RunTest(const FString&)
+{
+	FStealthFixture F;
+	if (!F.Player || !F.Guard) return false;
+	const FBox Bounds(FVector(-100, 20, 30), FVector(40, 100, 190));
+	const FVector Center(7, 61, 115); // The virtual centre need not equal the AABB midpoint.
+	TestEqual(TEXT("feet use centre XY and AABB 1/8 height"),
+		ElysiumStealth::SamplePoint(Bounds, Center, 0), FVector(7, 61, 50));
+	TestEqual(TEXT("centre uses the virtual answer verbatim"), ElysiumStealth::SamplePoint(Bounds, Center, 1), Center);
+	TestEqual(TEXT("head uses centre XY and AABB 7/8 height"),
+		ElysiumStealth::SamplePoint(Bounds, Center, 2), FVector(7, 61, 170));
+	TestFalse(TEXT("standing is ineligible"), ElysiumStealth::IsEligible(*F.Player, false, 5));
+	TestTrue(TEXT("ducked and unobserved is eligible"), ElysiumStealth::IsEligible(*F.Player, true, 5));
+	F.Player->LastHostileAssessment = F.Guard->Handle;
+	F.Player->LastHostileAssessmentTime = 5;
+	TestFalse(TEXT("hostile observation suppresses tables before one second"), ElysiumStealth::IsEligible(*F.Player, true, 5.999));
+	TestTrue(TEXT("exactly one second is eligible"), ElysiumStealth::IsEligible(*F.Player, true, 6));
+	F.Player->LastHostileAssessment = FElysiumEntityHandle();
+	TestTrue(TEXT("invalid observer handle cannot suppress stealth"), ElysiumStealth::IsEligible(*F.Player, true, 5.5));
+	F.Services.bPlayerDucking = true;
+	F.Services.PlayerStealthBounds = Bounds;
+	F.Services.PlayerStealthCenter = Center;
+	F.Services.bLightQueryAvailable = false;
+	F.PlayerThink(0);
+	TestEqual(TEXT("unavailable service does not publish a sample"), F.Player->Stealth.Generation, 0);
+	TestEqual(TEXT("unavailable service costs no trace"), F.Services.Count(TEXT("QueryLightAtPoint")), 0);
+	F.Services.bLightQueryAvailable = true;
+	F.PlayerThink(0.11);
+	TestTrue(TEXT("first actual sample publishes validity"), F.Player->Stealth.bHasLightSample);
+	TestTrue(TEXT("the service receives the world-AABB feet point"), F.Services.Saw(TEXT("QueryLightAtPoint X=7.000 Y=61.000 Z=50.000")));
 	return true;
 }
 
@@ -681,22 +715,22 @@ bool FElysiumStealthSensesTest::RunTest(const FString&)
 	F.Player->Origin = FVector(StandOffCm, 0.0, 0.0);
 
 	// --- Not sneaking: the neutral surface admits the player --------------------------------------
-	F.Services.bPlayerSneaking = false;
+	F.Services.bPlayerDucking = false;
 	F.PlayerThink(0.0);
 	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
-	F.Guard->Senses.TickSight(*F.Guard, 1.0);
+	F.Guard->Senses.TickSight(*F.Guard, 0.0);
 	TestTrue(TEXT("a non-sneaking player is inside the guard's authored vision distance"),
 		F.Guard->Senses.Memory.bPlayerInRange);
 
 	// --- Sneaking in the dark: the sight scalar shrinks the effective radius -----------------------
 	// Sneaking 5, pitch dark -> Light10/Stealth5 -> 1.0 - 0.6 - 0.1 = 0.30. 1000 * 0.30 = 300 units,
 	// and the player is standing at 900.
-	F.Services.bPlayerSneaking = true;
+	F.Services.bPlayerDucking = true;
 	F.Services.LightAtPoint = 0.f;
-	// One whole feet/centre/head cycle, driven just past each deadline (see the cadence case).
-	F.PlayerThink(0.11);
-	F.PlayerThink(0.22);
-	F.PlayerThink(0.33);
+	// The previous hostile assessment first expires; then sample a full body cycle.
+	F.PlayerThink(1.11);
+	F.PlayerThink(1.22);
+	F.PlayerThink(1.33);
 	TestTrue(TEXT("a fully dark triplet reads as Light10"), F.Player->Stealth.LightRow == 10);
 	TestEqual(TEXT("...at the fixture's Sneaking 5"), F.Player->Stealth.StealthRow, 5);
 	TestTrue(TEXT("...for the table's own scalar"),
@@ -706,8 +740,8 @@ bool FElysiumStealthSensesTest::RunTest(const FString&)
 	F.Guard->Senses.TickSight(*F.Guard, 2.0);
 	TestFalse(TEXT("the target's sight scalar shrinks the observer's effective radius"),
 		F.Guard->Senses.Memory.bPlayerInRange);
-	TestFalse(TEXT("...so the guard has no line of sight on the player"),
-		F.Guard->Senses.Memory.bPlayerLos);
+	TestFalse(TEXT("actual Look rejects the player outside the stealth radius"),
+		F.Guard->Senses.Sighted().Contains(F.Player->Handle));
 
 	// Step inside the shrunken radius and the same guard sees again — the scalar moved the radius,
 	// it did not blind the guard.
@@ -718,23 +752,22 @@ bool FElysiumStealthSensesTest::RunTest(const FString&)
 		F.Guard->Senses.Memory.bPlayerInRange);
 
 	// --- The cone scalar ---------------------------------------------------------------------------
-	// The observer's threshold is `DefaultViewConeDot * TargetConeScalar`, so a scalar below 1
-	// LOWERS the dot a target has to clear and widens the cone.
+	// FinViewCone3dNew 0x1032669c multiplies the cosine, then compares against 0.2.
 	{
-		// A point 60 degrees off the guard's +X facing: dot = 0.5, exactly the neutral threshold.
+		// A point 60 degrees off the guard's +X facing: inside the neutral 0.2 threshold.
 		const FVector Offset(FMath::Cos(FMath::DegreesToRadians(60.f)) * 500.f,
 			FMath::Sin(FMath::DegreesToRadians(60.f)) * 500.f, 0.0);
-		TestTrue(TEXT("a target exactly on the neutral cone edge is inside it"),
+		TestTrue(TEXT("a target at 60 degrees is inside the neutral cone"),
 			FElysiumNpcSenses::IsInViewCone(*F.Guard, Offset, 1.0f));
 		// Narrowing the cone (a scalar above 1) pushes the same point out.
-		TestFalse(TEXT("a cone scalar above 1 narrows the cone and rejects it"),
-			FElysiumNpcSenses::IsInViewCone(*F.Guard, Offset, 1.4f));
+		TestFalse(TEXT("a smaller scalar narrows the cone and rejects it"),
+			FElysiumNpcSenses::IsInViewCone(*F.Guard, Offset, 0.3f));
 		// A point 75 degrees off is outside the neutral cone but inside a widened one.
 		const FVector Wide(FMath::Cos(FMath::DegreesToRadians(75.f)) * 500.f,
 			FMath::Sin(FMath::DegreesToRadians(75.f)) * 500.f, 0.0);
-		TestFalse(TEXT("a target beyond the neutral cone is rejected"),
+		TestTrue(TEXT("75 degrees remains inside the neutral 157 degree cone"),
 			FElysiumNpcSenses::IsInViewCone(*F.Guard, Wide, 1.0f));
-		TestTrue(TEXT("...and the stealth cone scalar's own direction widens it back in"),
+		TestFalse(TEXT("the stealth cone scalar narrows this angle out"),
 			FElysiumNpcSenses::IsInViewCone(*F.Guard, Wide, 0.4f));
 	}
 
@@ -797,59 +830,42 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthObserverTest,
 	"Elysium.Substrate.Stealth.Observer", GElysiumTestFlags)
 bool FElysiumStealthObserverTest::RunTest(const FString&)
 {
-	FStealthFixture F(/*GuardVisionUnits*/ 4000.f);
-	if (!F.Player || !F.Guard)
-	{
-		AddError(TEXT("no player or guard"));
-		return false;
-	}
+	FStealthFixture F(4000.f);
+	if (!F.Player || !F.Guard) return false;
 	F.Guard->Senses.ResolveTuning(*F.Guard);
-	F.Player->Origin = FVector(500.f * ElysiumMove::U, 0.0, 0.0);
-
-	F.PlayerThink(0.0);
-	TestFalse(TEXT("nothing has observed the player yet"), F.Player->Observer.IsSet());
-	const int32 Empty = F.Player->Observer.Generation;
-
-	// One sight pass offers; the snapshot is published only by the player think.
-	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
-	F.Guard->Senses.TickSight(*F.Guard, 0.11);
-	TestFalse(TEXT("the senses pass offers but does not publish"), F.Player->Observer.IsSet());
-
-	F.PlayerThink(0.11);
-	TestTrue(TEXT("the player think commits the snapshot"), F.Player->Observer.IsSet());
-	TestTrue(TEXT("...naming the observer"), F.Player->Observer.Observer == F.Guard->Handle);
-	TestTrue(TEXT("...at its distance"),
-		NearlyEqual(F.Player->Observer.DistanceCm, 500.f * ElysiumMove::U, 1.f));
-	TestTrue(TEXT("...with a meter between 0 and 1"),
-		F.Player->Observer.Meter >= 0.f && F.Player->Observer.Meter <= 1.f);
-	const int32 First = F.Player->Observer.Generation;
-	TestTrue(TEXT("...and a bumped generation"), First > Empty);
-
-	// An unchanged snapshot does not bump the generation — that is what makes it a gate.
-	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
-	F.Guard->Senses.TickSight(*F.Guard, 0.22);
-	F.PlayerThink(0.22);
-	TestEqual(TEXT("an unchanged snapshot does not bump the generation"),
-		F.Player->Observer.Generation, First);
-
-	// A moved observer does.
-	F.Player->Origin = FVector(200.f * ElysiumMove::U, 0.0, 0.0);
-	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
-	F.Guard->Senses.TickSight(*F.Guard, 0.33);
-	F.PlayerThink(0.33);
-	TestTrue(TEXT("a changed distance bumps it"), F.Player->Observer.Generation > First);
-	const int32 Second = F.Player->Observer.Generation;
-
-	// An observer that stops offering goes stale and clears presentation without touching gameplay.
-	F.PlayerThink(10.0);
-	TestFalse(TEXT("a stale observer clears the published snapshot"), F.Player->Observer.IsSet());
-	TestTrue(TEXT("...and the clear is itself a generation"),
-		F.Player->Observer.Generation > Second);
-	TestTrue(TEXT("clearing presentation mutated no gameplay state"),
-		F.Guard->Senses.Memory.ClosestPlayer == F.Player->Handle);
+	F.Player->Origin = FVector(500.f * ElysiumMove::U, 0, 0);
+	F.Guard->Senses.TickSight(*F.Guard, .11);
+	TestFalse(TEXT("sensing does not publish a partial snapshot"), F.Player->Observer.IsSet());
+	ElysiumStealth::PublishObservers(*F.Player, .11);
+	TestTrue(TEXT("the committed observation identifies the observer"), F.Player->Observer.Observer == F.Guard->Handle);
+	TestFalse(TEXT("sight without enemy commitment is searching"), F.Player->Observer.bDetected);
+	const int32 Searching = F.Player->Observer.Generation;
+	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+	F.Guard->Senses.GatherEnemyLos(*F.Guard, .2);
+	TestFalse(TEXT("the committed enemy edge still waits for snapshot publication"), F.Player->Observer.bDetected);
+	ElysiumStealth::PublishObservers(*F.Player, .2);
+	TestTrue(TEXT("snapshot follows the committed enemy LOS edge"), F.Player->Observer.bDetected);
+	TestTrue(TEXT("the detection transition advances its generation"), F.Player->Observer.Generation > Searching);
+	const int32 Detected = F.Player->Observer.Generation;
+	F.Services.Calls.Reset();
+	ElysiumStealth::PublishObservers(*F.Player, .21);
+	TestEqual(TEXT("unchanged snapshot retains its generation"), F.Player->Observer.Generation, Detected);
+	TestFalse(TEXT("publication performs no detection trace"), F.Services.Saw(TEXT("QueryLineOfSight")));
+	F.Guard->bDead = true;
+	ElysiumStealth::PublishObservers(*F.Player, .22);
+	TestFalse(TEXT("dead observer disappears in the committed frame"), F.Player->Observer.IsSet());
+	TestTrue(TEXT("presentation cleanup does not change enemy identity"), F.Guard->Senses.Memory.Enemy == F.Player->Handle);
+	F.Guard->bDead = false;
+	F.Guard->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
+	F.Guard->Senses.Memory.BestSeeUnknown = F.Player->Handle;
+	F.Player->Origin = FVector(-500.f * ElysiumMove::U, 0, 0);
+	F.Guard->Senses.TickSight(*F.Guard, 1.0);
+	ElysiumStealth::PublishObservers(*F.Player, 1.0);
+	TestTrue(TEXT("the retained unknown handle survives loss of current sight"),
+		F.Guard->Senses.Memory.BestSeeUnknown == F.Player->Handle);
+	TestFalse(TEXT("a remembered unknown cannot keep HUD searching forever"), F.Player->Observer.IsSet());
 	return true;
 }
-
 // =====================================================================================
 // Save: the whole surface as one generation, and the raw aggregate beside it.
 // =====================================================================================

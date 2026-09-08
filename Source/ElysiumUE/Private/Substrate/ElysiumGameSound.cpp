@@ -16,15 +16,24 @@ FElysiumGameSoundEvent FElysiumGameSoundBus::Emit(const FElysiumGameSoundRequest
 	FElysiumGameSoundEvent Event;
 	Event.Position = Request.Position;
 	Event.Category = Request.Category;
+	// Raw interest is producer-owned. A category only joins authored volume data; it must never
+	// infer AI semantics, because arbitrary ambient/category names are not CSound type evidence.
+	Event.TypeMask = Request.TypeMask;
 	Event.Source = Request.Source;
 	Event.Time = Now;
-	Event.bOccludable = Level.bOccludable;
+	// Existing category producers predate raw duration plumbing; retain their prior bus window until
+	// each producer supplies its recovered source duration.
+	Event.ExpireTime = Request.DurationSeconds > 0.0 ? Now + Request.DurationSeconds
+		: Now + RetentionSeconds;
+	Event.bOccludable = !Request.bForceNonOccludable && Level.bOccludable;
 
 	// The table is authored in Source game units; this is the one place the conversion happens.
 	const float TableRadiusCm = Level.RadiusUnits * ElysiumMove::U;
 	const float RequestedCm = Request.RadiusCm > 0.f ? Request.RadiusCm : TableRadiusCm;
 	// `AdjustSoundDistForStealth`: subtract at insertion, floor at zero.
 	Event.RadiusCm = FMath::Max(0.f, RequestedCm - FMath::Max(0.f, Request.StealthHearingReductionCm));
+	Event.UnadjustedRadiusCm = RequestedCm;
+	Event.StealthHearingReductionCm = FMath::Max(0.f, Request.StealthHearingReductionCm);
 
 	Event.Serial = ++Serial;
 	Evict(Now);
@@ -98,7 +107,7 @@ void FElysiumGameSoundBus::Evict(double Now)
 	// Both bounds trim from the same (oldest) end, so the array stays ordered by serial either way.
 	const double Oldest = Now - RetentionSeconds;
 	int32 Drop = 0;
-	while (Drop < Events.Num() && Events[Drop].Time < Oldest)
+	while (Drop < Events.Num() && (Events[Drop].Time < Oldest || Events[Drop].ExpireTime < Now))
 	{
 		++Drop;
 	}

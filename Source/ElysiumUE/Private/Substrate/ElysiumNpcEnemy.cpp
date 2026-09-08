@@ -2,9 +2,14 @@
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumWeaponClasses.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
@@ -23,7 +28,7 @@ namespace
 	{
 		FElysiumEntityHandle Handle;
 		int32 Priority = 0;
-		int32 DistanceUnits = 0;   // integer, as retail compares it
+		int32 DistanceUnits = 0;   // truncated squared Source distance, as retail compares it
 		bool bVisible = false;
 		bool bReachable = true;
 	};
@@ -46,12 +51,11 @@ namespace
 	// the reason step 4 of the arbitration is exercisable at all today.
 	bool NpcEnemyIsCandidateVisible(const FElysiumNpc& Npc, const FElysiumEntityHandle& Handle)
 	{
-		const FElysiumEntityWorld* World = Npc.World;
-		if (World == nullptr || !World->PlayerHandle().IsSet() || Handle != World->PlayerHandle())
-		{
-			return false;
-		}
-		return Npc.Senses.Memory.bPlayerLos;
+		// BestEnemy's visibility tie-break is this Look pass's actual seen set, not the two-second
+		// closest-player cache. That also makes NPC/object candidates follow the same admission.
+		const FElysiumEntity* Candidate = Npc.World ? Npc.World->Resolve(Handle) : nullptr;
+		return Npc.Senses.Sighted().Contains(Handle)
+			|| (Candidate && FElysiumNpcSenses::IsVisible(Npc, *Candidate, Npc.World->NowSeconds()));
 	}
 
 	// The recovered arbitration, as a strict "does Candidate displace Incumbent".
@@ -71,6 +75,8 @@ namespace
 		//    UNSEEN incumbent; a closer unseen candidate displaces only an unseen incumbent.
 		if (Candidate.bVisible != Incumbent.bVisible)
 		{
+			// At equal priority/reachability a visible candidate displaces an unseen incumbent even
+			// when it is farther; an unseen candidate never displaces a visible incumbent.
 			return Candidate.bVisible;
 		}
 		// 3. At equal priority and the same visibility class, smaller integer distance wins. Ties go
@@ -85,114 +91,54 @@ int32 ElysiumNpcEnemy::RelationPriority(const FElysiumNpc& Npc, const FElysiumEn
 	return Npc.Relationships.ResolvePriority(Candidate.Handle, NpcEnemyClassnameOf(Candidate));
 }
 
-bool ElysiumNpcEnemy::RememberAttacker(FElysiumNpc& Npc, const FElysiumEntityHandle& Attacker,
-	double Now)
+bool ElysiumNpcEnemy::RememberDamage(FElysiumNpc& Npc, const FElysiumDmg& Dmg, double Now)
 {
 	FElysiumEntityWorld* World = Npc.World;
-	if (World == nullptr || !Attacker.IsSet() || Attacker == Npc.Handle)
+	const FElysiumEntity* Attacker = World ? World->Resolve(Dmg.Source) : nullptr;
+	if (Attacker == nullptr || Attacker->AsCombatCharacter() == nullptr || Attacker->Handle == Npc.Handle)
 	{
-		return false;   // a character hurting itself remembers nothing
-	}
-	// The live/dead distinction the enemy layer needs: `Resolve` collapses a dead actor into null,
-	// and a corpse is not something to become hostile toward.
-	const FElysiumEntity* Entity = ElysiumNpcCond::ResolveEnemyHandle(*World, Attacker);
-	if (Entity == nullptr || Entity->IsInert() || Entity->AsCombatCharacter() == nullptr)
-	{
-		// `trigger_hurt`, a crushing mover, an I/O `TakeDamage` whose activator is a logic entity, or
-		// an attacker that died in the same instant. There is no actor to remember; `BestEnemy` would
-		// refuse the candidate for the same reason. An ordinary negative, not a failure.
 		return false;
 	}
-
-	// Both halves of the PERSISTENT row in one walk: the value decides the short-circuit and the
-	// priority is what the refusal arm below reports. The persistent surface is the one asked,
-	// because what this needs to know is what an author, a script or dialogue decided — a hate row
-	// this same path stamped five seconds ago is not a reason to skip renewing it.
-	const FString Classname = NpcEnemyClassnameOf(*Entity);
-	EElysiumRelationship Persistent = EElysiumRelationship::Neutral;
-	int32 PersistentPriority = 0;
-	Npc.Relationships.ResolvePersistentRow(Attacker, Classname, Persistent, PersistentPriority);
-	if (Persistent == EElysiumRelationship::Hate)
+	FElysiumEntity* Inflictor = World->Resolve(Dmg.Inflictor);
+	FElysiumItem* HeldItem = Inflictor ? Inflictor->AsItem() : nullptr;
+	FElysiumWeapon* HeldWeapon = HeldItem ? HeldItem->AsWeapon() : nullptr;
+	FVector HeldPosition = FVector::ZeroVector;
+	const bool bHeldPosition = HeldWeapon && HeldWeapon->HeldSourcePosition(HeldPosition);
+	const bool bGenericInflictorPosition = Inflictor != nullptr && HeldWeapon == nullptr
+		&& !Inflictor->IsInert();
+	const bool bHasPosition = Dmg.bHasAttackPosition || bHeldPosition || bGenericInflictorPosition;
+	if (!bHasPosition)
 	{
-		// Already hostile for a reason that does not expire — an authored `player_reaction D_HT`, a
-		// scripted `SetRelationship`, the law lane's own attack row. There is nothing to derive: a
-		// five-second window beside a permanent one would decide nothing and would then lapse.
+		return false; // identity is known, but held/projectile position is not yet available
+	}
+	// Weapon_Equip -> weapon slot 298 sets MoveType FOLLOW, aim/owner = character; PhysicsFollow
+	// copies the aim entity's absolute origin with zero offset. This is a held-item rule only.
+	const FVector AttackPosition = bHeldPosition ? HeldPosition
+		: (bGenericInflictorPosition ? Inflictor->Origin : Dmg.AttackPosition);
+	const bool bVisible = FElysiumNpcSenses::IsInViewCone(Npc, Attacker->Origin)
+		&& (World->Embodiment() == nullptr
+			|| World->Embodiment()->QueryLineOfSight(Npc.EyePosition(), Attacker->EyePosition()));
+	if (bVisible)
+	{
 		return false;
 	}
-
-	// Whether this hit CHANGES anything is read before the write, because the write is what makes it
-	// true. A live derived row means the fight is already on and this hit only renews the window.
-	const bool bWasHostile =
-		Npc.Relationships.Resolve(Attacker, Classname) == EElysiumRelationship::Hate;
-
-	if (!Npc.Relationships.SetDerivedEntity(Attacker, EElysiumRelationship::Hate,
-		AttackerRelationPriority, Now + DamageMemorySeconds))
+	const FElysiumEntityHandle Current = Npc.Senses.Memory.Enemy;
+	const FElysiumEntity* CurrentEntity = World->Resolve(Current);
+	if (CurrentEntity != nullptr && Npc.EnemyMemory.Find(Dmg.Source) == nullptr
+		&& !Npc.Cognition.Conditions.Has(EElysiumNpcCond::SeeEnemy))
 	{
-		// The row was REFUSED: a persistent exact-entity row replaces or blocks a derived one only at
-		// an equal-or-higher priority, so an authored `player_reaction D_LI 10` keeps its character
-		// friendly through a punch. That is an authored decision beating a derived one, not an error —
-		// and it repeats on every hit of a fight, so the standing fact is read from the NPC
-		// inspector's own "Relationship to the player" row rather than written to the log once per
-		// swing.
-		//
-		// The line names the incumbent VALUE rather than claiming the character stayed non-hostile:
-		// a refused `D_FR` row outranks the derived one and is still an eligible enemy relation in
-		// `BestEnemy`, so "non-hostile" would be false on that arm.
-		UE_LOG(LogElysiumNpcEnt, Verbose,
-			TEXT("%s kept its authored %s relationship toward %s after taking damage from it: "
-				"priority %d outranks the derived D_HT %d"),
-			*Npc.DebugString(), ElysiumRelationships::LexToString(Persistent),
-			*World->DescribeHandle(Attacker), PersistentPriority, AttackerRelationPriority);
-		return false;
+		Npc.EnemyMemory.UpdateAtPosition(Npc, Current, AttackPosition, Now);
+		return true;
 	}
-	if (bWasHostile)
+	if (Npc.EnemyMemory.Find(Dmg.Source) != nullptr)
 	{
-		return false;   // the window was re-stamped; nothing about this character changed
+		Npc.EnemyMemory.UpdateAtPosition(Npc, Dmg.Source, AttackPosition, Now);
 	}
-	// One line per hostility EDGE, not per hit — every later hit from the same attacker renews the
-	// window silently above. This is the moment a neutral character joins the fight, and a QA pass
-	// reads it back without opening a Cog window.
-	Npc.RecordScheduleEvent(FString::Printf(
-		TEXT("damage: attacker %s remembered -> D_HT %d for %.0fs"),
-		*World->DescribeHandle(Attacker), AttackerRelationPriority, DamageMemorySeconds));
-	UE_LOG(LogElysiumNpcEnt, Log,
-		TEXT("%s turned hostile toward %s after taking damage from it (%.0fs damage memory)"),
-		*Npc.DebugString(), *World->DescribeHandle(Attacker), DamageMemorySeconds);
+	else
+	{
+		Npc.EnemyMemory.UpdatePositionOnly(AttackPosition, Now);
+	}
 	return true;
-}
-
-void ElysiumNpcEnemy::ExpireDamageMemory(FElysiumNpc& Npc, double Now)
-{
-	if (Npc.Relationships.ExpireDerived(Now) == 0)
-	{
-		return;
-	}
-	const FElysiumEntityHandle Enemy = Npc.Senses.Memory.Enemy;
-	FElysiumEntityWorld* World = Npc.World;
-	if (!Enemy.IsSet() || World == nullptr)
-	{
-		return;
-	}
-	const FElysiumEntity* Entity = ElysiumNpcCond::ResolveEnemyHandle(*World, Enemy);
-	if (Entity == nullptr)
-	{
-		return;   // a handle that no longer resolves is `ChooseEnemy`'s went-null arm, not this one
-	}
-	// `BestEnemy`'s own eligibility gate, asked about the incumbent. Anything still hostile — a
-	// second attacker's live window, an authored row, the law lane's — keeps the fight as it is.
-	const EElysiumRelationship Relation =
-		Npc.Relationships.Resolve(Enemy, NpcEnemyClassnameOf(*Entity));
-	if (Relation == EElysiumRelationship::Hate || Relation == EElysiumRelationship::Fear)
-	{
-		return;
-	}
-	Npc.Cognition.bEnemyHostilityLapsed = true;
-	Npc.RecordScheduleEvent(FString::Printf(
-		TEXT("damage memory for %s lapsed after %.0fs: no eligible relation left"),
-		*World->DescribeHandle(Enemy), DamageMemorySeconds));
-	UE_LOG(LogElysiumNpcEnt, Verbose,
-		TEXT("%s forgot the attacker %s after %.0fs and will re-choose an enemy"),
-		*Npc.DebugString(), *World->DescribeHandle(Enemy), DamageMemorySeconds);
 }
 
 bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpc& Npc, const FElysiumNpcConditions& Cond)
@@ -208,14 +154,8 @@ bool ElysiumNpcEnemy::ShouldChooseNewEnemy(const FElysiumNpc& Npc, const FElysiu
 	{
 		return true;   // the actor is dead, or gone; this is the same pass that noticed it
 	}
-	if (Memory.bEnemyEluded)
+	if (Npc.EnemyMemory.IsEluded(Memory.Enemy))
 	{
-		return true;
-	}
-	if (Npc.Cognition.bEnemyHostilityLapsed)
-	{
-		// The stand-in store's own route to "there is no record for this actor any more": its damage
-		// memory expired and nothing persistent kept it hostile. See the header.
 		return true;
 	}
 	// `SEE_FEAR` is deliberately absent — see the header.
@@ -232,7 +172,7 @@ EElysiumNpcCond ElysiumNpcEnemy::RequiredInterrupt(const FElysiumNpc& Npc)
 	{
 		const FElysiumEntity* Enemy =
 			ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Memory.Enemy);
-		if (Enemy == nullptr || Memory.bEnemyEluded)
+		if (Enemy == nullptr || Npc.EnemyMemory.IsEluded(Memory.Enemy))
 		{
 			return EElysiumNpcCond::LostEnemy;   // eluded, or the handle went null
 		}
@@ -248,15 +188,30 @@ bool ElysiumNpcEnemy::IsScheduleInterested(const FElysiumNpc& Npc, EElysiumNpcCo
 {
 	if (!Npc.Schedule.IsRunning())
 	{
-		// CHOSEN, NOT RECOVERED: retail's NPC always owns a schedule, so "no active schedule" is a
-		// state the recovered gate never sees. This runtime idles between selections with none, and
-		// treating that as uninterested would starve enemy selection permanently — nothing would
-		// ever acquire a first enemy. An NPC running no program is therefore interested in
-		// everything.
+		// Recovered from ChooseEnemy (0x10279dd0): when the active-schedule pointer is null, it
+		// seeds all three interrupt answers true before the replacement predicates run. The port's
+		// spawn/idle gap is therefore interested, rather than a permissive fallback invented to
+		// compensate for missing installation.
 		return true;
 	}
 	const FElysiumSchedule* Active = ElysiumScheduleFor(Npc.Schedule.Current);
-	return Active != nullptr && Active->Interrupts.Has(Required);
+	if (Active == nullptr)
+	{
+		return false;
+	}
+	// ChooseEnemy (0x10279dd0) accepts ordinary NEW_ENEMY beside the exceptional interrupt: a
+	// marked-eluded handle tests NEW_ENEMY || LOST_ENEMY, and a dead one NEW_ENEMY || ENEMY_DEAD.
+	if (Required == EElysiumNpcCond::LostEnemy)
+	{
+		return Active->Interrupts.Has(EElysiumNpcCond::NewEnemy)
+			|| Active->Interrupts.Has(EElysiumNpcCond::LostEnemy);
+	}
+	if (Required == EElysiumNpcCond::EnemyDead)
+	{
+		return Active->Interrupts.Has(EElysiumNpcCond::NewEnemy)
+			|| Active->Interrupts.Has(EElysiumNpcCond::EnemyDead);
+	}
+	return Active->Interrupts.Has(EElysiumNpcCond::NewEnemy);
 }
 
 FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
@@ -271,12 +226,12 @@ FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
 	bool bHaveBest = false;
 	FNpcEnemyCandidate Best;
 
-	// Candidate discovery walks the entity list in world order, which is insertion order: the
-	// arbitration's ties therefore resolve to whichever eligible entity the map declared first.
-	for (const TUniquePtr<FElysiumEntity>& Entry : World->Entities())
+	// Candidate discovery walks only this NPC's CAI_Memory records. A hostile world actor that has
+	// never been observed is absent here and cannot be selected.
+	for (const FElysiumNpcEnemyMemoryRecord& Record : Npc.EnemyMemory.Records())
 	{
-		FElysiumEntity* Entity = Entry.Get();
-		if (Entity == nullptr || Entity->Handle == Npc.Handle)
+		FElysiumEntity* Entity = World->Resolve(Record.Handle);
+		if (Entity == nullptr || Entity->Handle == Npc.Handle || Record.bEluded)
 		{
 			continue;   // never self
 		}
@@ -296,26 +251,45 @@ FElysiumEntityHandle ElysiumNpcEnemy::BestEnemy(const FElysiumNpc& Npc)
 		{
 			continue;   // only D_HT and D_FR are eligible
 		}
-		if (Memory.bEnemyEluded && Memory.Enemy.IsSet() && Entity->Handle == Memory.Enemy)
-		{
-			// The eluded marker excludes its own target. SEAM: retail's enemy-memory component
-			// carries one eluded bit PER remembered actor; this runtime carries the committed
-			// enemy's only, because nothing else has a producer for one. A second eluded candidate
-			// is therefore eligible here where retail might refuse it.
-			continue;
-		}
 
 		FNpcEnemyCandidate Candidate;
 		Candidate.Handle = Entity->Handle;
 		Candidate.Priority = Priority;
-		Candidate.DistanceUnits = FMath::TruncToInt(FVector::Dist(Npc.Origin, Entity->Origin));
+		Candidate.DistanceUnits = FMath::TruncToInt(
+			FVector::DistSquared(Npc.Origin, Entity->Origin) / (ElysiumMove::U * ElysiumMove::U));
 		Candidate.bVisible = NpcEnemyIsCandidateVisible(Npc, Entity->Handle);
 		Candidate.bReachable = NpcEnemyIsReachable(Npc, *Entity);
 
-		if (!bHaveBest || NpcEnemyDisplaces(Candidate, Best))
+		if (!bHaveBest)
 		{
 			Best = Candidate;
 			bHaveBest = true;
+			continue;
+		}
+		if (Candidate.bReachable != Best.bReachable)
+		{
+			if (Candidate.bReachable)
+			{
+				Best = Candidate;
+			}
+			continue;
+		}
+		if (Candidate.Priority != Best.Priority)
+		{
+			if (Candidate.Priority > Best.Priority)
+			{
+				// 0x102744e6's higher-priority arm replaces the actor/priority/distance but leaves
+				// the visibility latch untouched. The next equal-priority candidate observes that
+				// stale byte, which is a retail selection quirk rather than a clean lexicographic key.
+				const bool bPriorVisibleLatch = Best.bVisible;
+				Best = Candidate;
+				Best.bVisible = bPriorVisibleLatch;
+			}
+			continue;
+		}
+		if (NpcEnemyDisplaces(Candidate, Best))
+		{
+			Best = Candidate;
 		}
 	}
 	return bHaveBest ? Best.Handle : FElysiumEntityHandle::Invalid();
@@ -338,11 +312,6 @@ void ElysiumNpcEnemy::SetEnemy(FElysiumNpc& Npc, const FElysiumEntityHandle& New
 	Memory.bEnemyOccluded = false;
 	Memory.bEnemyLosLatched = false;
 	Memory.EnemyLastLosTime = -1.0;
-	Memory.bEnemyEluded = false;
-	// A lapse is a fact about the enemy being replaced, so it does not outlive it — including on the
-	// direct assignment path a scripted order takes, which never passes the gate above.
-	Npc.Cognition.bEnemyHostilityLapsed = false;
-
 	// SEAM (comment only): a non-null enemy is also registered with retail's response system, which
 	// drives idle/combat speech selection. No response system exists here, so nothing is registered
 	// and nothing pretends to be.
@@ -407,16 +376,11 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond,
 	// A pass that got through the gate clears the latch: the next refusal, even by the same
 	// schedule, is a fresh episode rather than one already reported.
 	Npc.Cognition.StarvedScheduleNumber = -1;
-	// The lapse is consumed by the search it asked for, whatever that search decides. It is held
-	// until here rather than cleared at expiry so a schedule that refused the interrupt — a swing
-	// mid-transaction — still de-escalates once its program ends.
-	Npc.Cognition.bEnemyHostilityLapsed = false;
-
 	const FElysiumEntityHandle Old = Memory.Enemy;
 	const FElysiumEntity* OldEntity = ElysiumNpcCond::ResolveEnemyHandle(*World, Old);
 	const bool bOldWentNull = Old.IsSet() && OldEntity == nullptr;
 	const bool bOldDead = OldEntity != nullptr && OldEntity->IsInert();
-	const bool bOldEluded = Old.IsSet() && Memory.bEnemyEluded;
+	const bool bOldEluded = Old.IsSet() && Npc.EnemyMemory.IsEluded(Old);
 
 	const FElysiumEntityHandle New = BestEnemy(Npc);
 	if (New == Old)
@@ -430,7 +394,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond,
 	{
 		Cond.Set(EElysiumNpcCond::EnemyDead);
 	}
-	if (bOldWentNull || bOldEluded)
+	if ((bOldWentNull || bOldEluded) && !New.IsSet())
 	{
 		Cond.Set(EElysiumNpcCond::LostEnemy);
 		// The remembered target kind decides which surface fires. These are the LOST-THE-ACTOR
@@ -486,17 +450,6 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	const double Previous = Npc.Cognition.GatheredAt;
 	Cond.Reset();
 
-	// 0. The damage memory's own clock, ahead of every reader below it — the hostile-category
-	//    conditions in step 1, the law lane at its tail, and the arbitration in step 3 all have to
-	//    see one answer. The one relationship reader it does NOT precede is the sense pass's
-	//    stealth-observer offer, which `FElysiumNpc::RunConditionPass` runs one step earlier and
-	//    which therefore answers off a closing window for one think — a presentation offer nothing
-	//    reads back, and true anyway for as long as the enemy stays committed. It is not a
-	//    recovered step of
-	//    `GatherConditions`: retail's enemy-memory records expire inside the component this runtime
-	//    does not have, and the pass head is where a store with no think of its own gets one.
-	ExpireDamageMemory(Npc, Now);
-
 	// 1. Senses and the hostile-category conditions.
 	ElysiumNpcCond::GatherDamage(Npc, Previous, Cond);
 	ElysiumNpcCond::GatherHearing(Npc, Previous, Cond);
@@ -515,14 +468,16 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	// half, and keeping the two apart is the recovered split.
 	ElysiumNpcWitness::GatherLawConditions(Npc, Now, Cond);
 
-	// 2. The enemy-memory refresh: the recovered pass updates its records BEFORE `ChooseEnemy` runs,
-	//    which is what lets the stickiness test see a death in the same pass that noticed it. The
-	//    handle itself is deliberately left in place — whether it went null, or resolves to a dead
-	//    actor, is the distinction `ChooseEnemy` owns, and clearing it here would erase it.
+	// 2. RefreshMemories before ChooseEnemy. Invalid/dead record entries leave this NPC's store;
+	// the separately committed handle stays in place for the went-null/dead transaction below.
+	if (Npc.World)
+	{
+		Npc.EnemyMemory.Refresh(*Npc.World, Now);
+	}
 	if (Npc.Senses.Memory.Enemy.IsSet() && Npc.World)
 	{
-		const FElysiumEntity* Enemy =
-			ElysiumNpcCond::ResolveEnemyHandle(*Npc.World, Npc.Senses.Memory.Enemy);
+		const FElysiumEntity* Enemy = ElysiumNpcCond::ResolveEnemyHandle(*Npc.World,
+			Npc.Senses.Memory.Enemy);
 		if (Enemy != nullptr && Enemy->IsInert())
 		{
 			Cond.Set(EElysiumNpcCond::EnemyDead);

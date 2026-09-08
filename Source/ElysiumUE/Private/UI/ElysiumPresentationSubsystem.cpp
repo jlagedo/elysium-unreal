@@ -766,7 +766,7 @@ void UElysiumPresentationSubsystem::Publish()
 		// The stance half of the stealth readout, off the same locomotion sample the animation graph
 		// is steered by. The concealment gauge and the observer stay invalid until stealth authority
 		// commits them; presentation runs no perception of its own.
-		Next.Stealth.bSneaking = Map->IsPlayerSneaking();
+		Next.Stealth = FElysiumStealthView::FromPlayer(PlayerEnt, Map->IsPlayerDucking());
 
 		// The hand, what is worn, and the browsed section. Built every frame from the inventory
 		// itself, so an item picked up, dropped or reloaded is on the readout the frame after it

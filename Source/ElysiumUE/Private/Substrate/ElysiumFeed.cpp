@@ -833,15 +833,8 @@ bool FElysiumCombatCharacter::Feed(double Now)
 		PlayerBefore, BloodPoolValue(), VictimBefore, Victim->BloodPoolValue(), FeedState.BloodStolen);
 	UE_LOG(LogElysiumFeed, Display, TEXT("%s"), *PulseLog);
 
-	// `PLAYER_AGGRESSIVE_FEED`, from its real producer. The pulse is the transaction's own beat, so
-	// the stimulus rides it rather than the grapple's beginning: a feed that is interrupted after
-	// one pulse made one noise, and a long drain keeps making them.
-	if (World != nullptr)
-	{
-		World->EmitGameSound(Origin, ElysiumGameSounds::Feed(),
-			/*RadiusCm, table-resolved*/ -1.f, Handle,
-			ElysiumStealth::HearingReductionCmFor(this));
-	}
+	// GrappleSoundCmd(0) emits the victim's DANGER sound once at ordinary feed engagement,
+	// in EnterGrapplePair. A blood-transfer pulse is not an additional hearing producer.
 
 	// The accepted ordinary feed pulse is also a player-law producer (`docs/vtmb/feeding.md`).
 	// For a player feeder it raises supernatural activity to 2 and criminal activity to 3, each

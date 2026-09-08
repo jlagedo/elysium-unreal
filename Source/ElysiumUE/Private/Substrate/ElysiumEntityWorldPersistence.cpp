@@ -86,6 +86,7 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 	Out.MapName = Defs.MapName;
 	Out.DefCount = Defs.Defs.Num();
 	Out.FrozenAt = NowSeconds();
+	Out.ComfortTargets = ComfortTargetList;
 
 	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityList)
 	{
@@ -311,6 +312,12 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	// live enqueue after the load compares against the time the save was written at.
 	EventQueue.SetLastEnqueue(Snapshot.QueueLastEnqueue);
 
+	ComfortTargetList.Reset();
+	for (const FElysiumEntityHandle& Saved : Snapshot.ComfortTargets)
+	{
+		const FElysiumEntityHandle Target = RebaseHandle(Saved);
+		if (Target.IsSet()) { ComfortTargetList.Add(Target); }
+	}
 	ScreenFade = FScreenFade::FromSaved(Snapshot.Fade);
 	WeatherState = Snapshot.Weather;
 	WeatherState.Tick(NowSeconds());

@@ -1096,6 +1096,76 @@ leaked NPC looks normal (TaskFail's flags1 mask clears `D_IS_BUSY`/`NO_DIALOG`/`
 but never senses again and is stealth-killable face-on — a silent failure, consistent with the
 shipped game. `[VtMB] [script/data]`
 
+#### `TaskFail` and stopped special navigation, walked (2026-09-08)
+
+Slot 448 is `CAI_BaseNPCTroika::TaskFail` `0x1029adb0`, chaining to the base
+`0x10273fc0`. The integer reasons occupy the first 42 entries of the pointer-shaped argument:
+`FUN_10316fa0` resolves values `< 0x2a` through the pointer table at `0x106152b0`; larger values
+are already text pointers. A raw PE read confirms all 42 strings, including the literal holes
+`FAIL_CODE_10`, `FAIL_CODE_20`, `FAIL_CODE_30`, and `FAIL_CODE_40`. Selected identities: `0x05`
+"Schedule not found", `0x06` "Don't have an enemy", `0x0c` "Don't have a route", `0x17`
+"No player", `0x1c` "Stuck on top of something", `0x29` "NPC had no follower boss".
+
+The override's complete transaction, before the base failure condition:
+
+1. `0x102b53d0` releases the interesting-place visit. Keep `PRESERVE_PATH` only when the
+   navigator currently reports `NAV_CLIMB (3)` or `NAV_JUMP (1)`; this step never sets the bit.
+2. Motor `+0x1c := 180.0` through `0x102e0a60`; desired move yaw zero; all four next-think
+   stamps equal current time. Goal tolerance, both squared interrupt distances and interrupt time
+   zero; clear the move-target handle.
+3. When the kick-prop handle resolves, write its `m_bNpcKickable (+0x788) := false`, then
+   invalidate the handle. This consumes an authored kickable prop; it is not a balanced claim.
+   An already invalid handle takes no branch.
+4. Clear memory bit `0x2000`; apply `flags2 &= 0x7fffe24f`, `memory &= 0x0fffffff`,
+   `flags1 &= 0xa3f40178`. `MADE_OBLIVIOUS` is lost without calling `UnOblivious`: neither
+   obliviousness nor squad-disconnect refcount is decremented.
+5. If the old flags2 word carried `SLEEP_BOUNDING_BOX`, call slot 15, **SetAttackExtents**
+   (`0x1009af40`), with `m_vecSavedAttackExtents`; set that saved vector to `(-1,-1,-1)` and
+   clear the sleep bit. `SetAttackExtents` updates the attack partition through collision's
+   `0x100dc220` and entity `+0x50..58`; it does not set the movement hull. The vector is an
+   **additive margin**, not an absolute half-size: engine `CSpatialPartition::vfunc0`
+   `0x20040fc0` stores it at each partition record's `+0x28..30`; attack-aware box/ray
+   enumeration (`0x200426e0`, `0x20042b70`) tests `[collisionMins-margin, collisionMaxs+margin]`.
+   Zero components are valid. `SetAbsoluteAttackExtents` `0x1009b060` explicitly subtracts
+   the collision half-size before calling this setter.
+6. Clear `m_fSavePositionWalk`; `ClearHintNode(5.0)` (`0x10295ab0`) only acts when a hint exists.
+   The hint's owner test (`0x102d1450`) gates its unlock and `nextUse := now+5`
+   (`0x102d1420`). The NPC then loses its hint pointer, failed-cover-LOS count and
+   `AT_COVER_HINT`, and resets saved attack extents to `(-1,-1,-1)`.
+7. Clear motor `+0x28`, NPC `+0x6300`, `+0x659c`, and `m_bPatrolPathUseHint`. The base then
+   clears `m_bShouldMove`, writes the supplied reason to `+0x5c50`, and sets
+   `COND_TASK_FAILED (0x5c)`. `MaintainSchedule` zeros the reason when the next task starts.
+
+**`TASK_STOP_MOVING` is two distinct arms.** Base StartTask's two-table dispatch maps id `0x69`
+to `0x10282d71` (`0x10287138[id-1]`, then `0x10286f8c`). No active goal means clear
+`m_bShouldMove` and complete. An active goal calls navigator ClearGoal (`0x102ee270`), resets
+the `move_yaw` pose parameter if present, and remains running; ClearGoal does not change the
+navigator's type. MaintainSchedule can invoke RunTask immediately in that same iteration.
+
+RunTask's arm at `0x102888d4` reads navigation type independently of the cleared goal. Jump on
+ground becomes Ground. Jump in the air with speed `> 0.01` Source units/s keeps running; at
+`<= 0.01`, it **sets Ground before TaskFail(0x1c)** (`0x10288940..63`). Climb keeps running.
+The remaining path selects the arrival activity, clears `m_bShouldMove`, and calls
+TaskComplete(false), which cannot overwrite an already set TASK_FAILED condition. Therefore this
+particular stuck-jump failure clears `PRESERVE_PATH`; a navigator-delivered TaskFail while its
+type is still Jump/Climb retains the bit. The active-goal requirement is at StartTask admission,
+not at each RunTask probe.
+
+`NextScheduledTask` `0x10280f40` raises `COND_SCHEDULE_DONE (0x5d)` when incrementing beyond the
+last task. `MaintainSchedule`'s ten-iteration bound exits through `0x102821ae`, retaining task
+position and setting `m_bDidMaintainSchedule`; it does not discard a program at the bound.
+`SetSchedule` `0x10280e50` invokes the outgoing schedule-change virtual before replacing its
+task state, so callbacks can still inspect and complete the outgoing program.
+
+The sibling `OnScheduleChange` `0x102a0940` sets flags2 `|= 0x80000004`, then performs its
+conditional movement/mask/refcount/extents cleanup under `!PRESERVE_PATH`. Only afterwards it
+tests the surviving `ACTIVITY_COPY_PROP_CLEAN (0x40000000)`, interrupts discipline effects
+when `DAT_10739a64` permits, removes `activity_copy_prop` rows whose owner handle at `+0x730`
+resolves to this NPC (`0x1018e910`), and clears invincibility. Finally it applies unconditional
+`flags2 &= 0x3fffffff`, `flags1 &= 0xd7ffffff`, and clears memory bit `0x2000`.
+`UnOblivious` (`0x1026d160`) always calls ReconnectToSquad after its clamped decrement;
+Reconnect (`0x1026d0c0`) decrements with a floor at zero and clears D_DISCONNECT_SQUAD.
+
 #### The three cached downcasts
 
 `CAI_BaseNPC`'s constructor (`0x1027c300`) writes `this` at `+0x94`; `CAI_BaseNPCTroika`'s
@@ -2255,8 +2325,11 @@ m_flStealthVisionOverrideTime(+0x6604)`: `d = |vecHim − vecMe|` (true 3-D);
 `0x10146b20(targetCC, this)` (Obfuscate stats `0xe`/`1` > 0, or beyond the per-observer obfuscate
 radius from `DAT_10738d10` `+0xac`) → false. **Two bypasses:** a COMBAT-state NPC with a
 non-occluded enemy admits every candidate on range out to the 3072 prefilter (the only unbounded
-sight path in retail); and `+0x6604`, which is written only to `0` by spawn (`0x1029a0b0`) and
-read only here — dead. `CAI_BaseNPCTroika::FVisible` (`0x102b4630`) = slot 594 →
+sight path in retail); and `+0x6604` (`m_flStealthVisionOverrideTime`), which spawn
+(`0x1029a0b0`) clears and the Troika damage override (`0x102beda0`) extends through
+`0x1028e8b0` → `0x1028e940` by five seconds after a surviving hit with an attacker. It bypasses
+only the ordinary range test; it does not alter `IRelationType` or itself create an enemy-memory
+actor record. `CAI_BaseNPCTroika::FVisible` (`0x102b4630`) = slot 594 →
 `HasStatusEffect(Dominate_BrainWipe)` (`0x1033d2f0`) → `CBaseEntity::FVisible` trace.
 
 **`OnLooked` and the memory write.** Troika `0x102b39a0` (slot 469) adds only
@@ -2409,6 +2482,51 @@ seeing the player there.
 `HEAR_WORLD` (+0x61e4). `CAI_BaseNPCTroika::GetBestSound` (slot 474, `0x102b4520`) returns
 `&m_BestSound` unconditionally, so the "no best sound → `TaskFail`" arms of
 `TASK_ALERT_LOOK_AT_BEST_SOUND` / `TASK_GET_PATH_TO_BESTSOUND` are dead on every Troika NPC.
+
+**Port R6 state boundary (2026-09-08).** `FElysiumNpcSenses` keeps actual `Look` candidates
+separate from the two-second closest-player/PVS/LOS cache: 3072-unit prefilter, then player
+0.15 s, NPC 0.25 s, object 0.45 s cadence, full 3-D apex/cone/scalar test, admission, and trace.
+Only an actual D_HT/D_FR observation writes `FElysiumNpcEnemyMemory`; cached player LOS never
+replays that write. The senses record also retains the slot-472 unknown-vision handles/position,
+repeat/timers and the seven raw sound snapshots. `m_flStealthVisionOverrideTime` is saved as the
+live five-second range-only deadline. BrainWipe/Obfuscate ownership remains an explicit target
+status seam until its existing discipline state has a stable substrate accessor; no guessed flag is
+used as a substitute.
+
+### R6 integration corrections from raw bodies (2026-09-08)
+
+- `FinViewCone3dNew` disassembly `0x103265af` rejects a negative front-plane dot before the
+  apex offset; `0x1032669c` multiplies the normalized viewing cosine by the **target scalar**,
+  then compares against the observer's FOV. A smaller scalar narrows the cone. The unnamed
+  `0x10937a8c` ConVar's default remains unrecovered; `ViewConeBodyOffsetCm` is its explicit
+  zero-answer seam, not a claim that retail's default is zero.
+- `FVisible` `0x102b4630` calls `HasStatusEffect(Dominate_BrainWipe)` on **this observer**.
+  `0x10146b20(target, observer)` returns permission to perceive: no active cloak, observer
+  active stat `0xe` or `1`, or the ready observer detection record admitting the distance.
+  Those observer stats do not cause concealment; the earlier summary inverted this branch.
+  The port reads the active sheet and tracked BrainWipe effect. The cloak `+0x14dc` and
+  detection record `+0x97/+0xac` are explicit fields whose effect producers remain in 0007.
+- `OnLooked` `0x1026a2c0` skips the current best unknown (or last unknown under
+  `IGNORE_UNKNOWN`) before the player and relationship arms. All three D_HT priority branches
+  write enemy memory. `D_CALM` is on the **observer**; its D_HT diversion reaches the D_FR arm
+  whose second D_CALM test suppresses that arm as well.
+- `OnListened` `0x1026a5e0` queues the exact raw type's condition, calls delayed promotion,
+  then fires `OnHearWorld`/`OnHearPlayer`/`OnHearCombat` with **self as activator**. Both the
+  condition and output are delayed. A combined raw type is not expanded into multiple sounds.
+  `0x102cc6c0` has eight pending entries; the capacity check precedes duplicate lookup.
+  `0x102cc590` keeps the earlier deadline when another sound of that type arrives.
+- `GetClosestSound` `0x103105d0` prefers the current enemy's sound, otherwise the nearest
+  sound of that type in the current Listen. Retained snapshots are separate from delayed
+  conditions. `CommitBestSound` chooses only among conditions currently raised, preventing an
+  old combat snapshot from permanently outranking fresh footsteps.
+- Sound interests (slot 473): Troika/humanoids/cop `0x81f` (`0x102b4070`, `0x103846e0`,
+  `0x10387180`); animals `0x1f` (`0x1035f540`); cameras zero (`0x103692a0`); pedestrians
+  `0x81d` (`0x103a28f0`); zombies `0x17` (`0x103df260`).
+- The V2 `vdata/system/stealthkillrules.glb` source member SHA-256
+  `6cf156a97285ca81f4015a01aab4b4038bf29774aa0ba9cf9b226443cc03e4ef` authors arc keys **1..10**,
+  a 95-unit maximum distance and a 2.5 maximum hearing scalar. Those override loader defaults
+  70 and 3.0. `InDeafZone` `0x101be710` suppresses the player's type-4 sound only when eligible,
+  strictly inside the rear arc and **farther than** the minimum approach depth.
 
 ## `ambient_generic` as an AI sound source (2026-09-08)
 
@@ -2733,6 +2851,56 @@ teardown), reached through the effect-expiry table. The sibling key `"MiscFlag"`
 `0x1033cb00`. This corrects the earlier claim that the task vocabulary is the only writer of the
 words: a HitGroup sets flags on the target with no task, and `OnScheduleChange`'s masks will
 clear them like any other.
+
+**Apply/expiry implementation detail (2026-09-08, spec 0005 requirement 8).** Re-reading the
+whole bodies corrects two shorthand descriptions above. `0x101de660` writes `MiscFlag` first
+(`AddMiscFlag`, `0x1033c6b0`, plain OR), then the NPC mask, before health and schedule channels.
+`0x101def10` clears the original NPC mask with `&= ~mask`, including the word-two routing bit;
+it **does not clear MiscFlag**. The UP `Thaumaturgy` HitGroup
+`Hit_Supernatural_BloodGuardian` explicitly calls `Forced_BloodShield` a permanent visual effect.
+The misc resolver `0x1033cb00` compares all 22 names case insensitively and returns zero for an
+unknown name. Loader `0x101ddfb0` ORs an authored misc mask into inherited `+0xa4`, whereas
+`AI_NPCFlag +0xa8` replaces its inherited mask. Multiple live effects that write the same NPC bit
+do not reference-count it: the first cleanup clears it even when another effect remains.
+
+`AddToComfortList` (`0x10323630`) appends a handle **without deduplication** and zeroes
+`m_iComfortingCount`. `RemoveFromComfortList` (`0x10323770`) removes the **first** matching
+handle, preserving the rest of the array's order, and zeroes the count even when no match exists.
+The original HitInfo's nonzero `AddToComfort` byte causes one removal during cleanup.
+`Event_Killed` (`0x1032b9b0`) and `UpdateOnRemove` (`0x10327790`) each independently call this
+same removal after their discipline-visual/presence cleanup; duplicates are not collapsed there.
+
+The `AI_Schedule` cleanup is a **task completion request**, not a wholesale schedule clear:
+after flag and comfort cleanup, an originally nonempty schedule channel checks the current
+`D_DISCONNECT_SQUAD` bit and reconnects (`0x10009601`: decrement `+0x5bb0`, rejoin the squad's
+memory at zero, `flags2 &= 0x7f7fffff`). It then reads the current schedule, and only local IDs
+`0xe1`/`0xe3` call `TaskComplete(false)` (`0x10273e80`): if condition `0x5c` is clear, write task
+status `+0x5c44 = 4`. It does not invoke `OnScheduleChange`. `0x101dfe80` removes the trait
+effect, runs this original-HitInfo cleanup, then directly applies `OnInterrupt +0x20c` or
+`OnEnd +0xb4`; these callbacks are HitInfo calls and create no new HitGroup timer. Conversely,
+`0x102a0940`'s `ACTIVITY_COPY_PROP_CLEAN` arm interrupts targeted effects before the unconditional
+flag tail. `DAT_10739a64` suppresses that interruption while HitInfo installs its own schedule.
+
+The port stores resolved cleanup masks and channel-presence bits on every flag/comfort/schedule
+effect, including effects without trait modifiers, and persists them with the shared discipline
+block. The common misc word and comforting count persist on both player and NPC; the ordered
+comfort registry persists on the map with handle rebasing. Expiry, explicit clear, interruptions,
+and exhausted-effect reconciliation use the same cleanup. Possession/frenzy and shared squad
+memory remain the separate requirements 16/17; no substitute state is inferred from a flag.
+The original caster handle also rebases when an NPC's discipline block loads: the direct
+`OnEnd`/`OnInterrupt` HitInfo dispatch from `0x101dfe80` still receives that caster after restore.
+
+**The two `TriggerAISound` producers (2026-09-08, requirement-6 integration).** The parser's
+record byte `+0x35` (`0x101e06a0`) controls both. Source activation `0x101e3560`, called once by
+`0x101e2f50` before its target loop, checks the same record's active status, adds a 0.1-second
+source status if absent, sets misc `Fired_Gun 0x200000`, and inserts **COMBAT `1`** at the caster,
+owned by the caster, for **0.2 seconds** using `DAT_1072bc40`/`DAT_1072bcb0` (the gunshot row).
+The HitGroup prelude `0x101dfc20`, after target `AddDiscFlag` and before `0x101de660`, inserts
+**BULLET_IMPACT `0x10`** at and owned by the target, also for **0.2 seconds**, using
+`DAT_1072bc58`/`DAT_1072bcb6` (`NPC_DISCIPLINE_ALERT`). These are two real insertions; neither
+replaces the other. `0x10` is not DANGER (`0x8`). Direct OnEnd/OnInterrupt HitInfo callbacks do
+not repeat the HitGroup prelude. The source status guard is record-wide, so a live targeted status
+for the same record also suppresses repeated source activation.
 
 **Derived condition tables, tutorial classes.** Registrar helper `0x102ea130` =
 `CAI_ClassScheduleIdSpace::AddSymbol` (63 callers); derived local ids start at `0x78`.

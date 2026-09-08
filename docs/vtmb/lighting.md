@@ -4,8 +4,9 @@ Lump 15 is VtMB's compiled light-*source* set: every point, spot, sun, sky-ambie
 emit-surface (texlight) the artists placed, including texlights and skyambient that no entity
 carries.
 
-**It is not what the original engine rendered the world from.** At runtime lump 15 is read only
-by the model light cache, which lights dynamic models and static props; world surfaces are lit
+**It is not what the original engine rendered the world from.** At runtime lump 15 is read
+by the model light cache, which lights dynamic models and static props, and by the live
+`GetLightForPoint` service (`engine.dll 0x200a4e90`) used for player stealth; world surfaces are lit
 by the baked lightmaps in lump 8 alone (below). Decompiled in RE-A3 —
 `docs/vtmb/sky-ambience.md` → "K3 / K5". Driving a real-time light set from lump 15 is therefore a
 reconstruction of the authored look, not a reproduction of a path the game had.
@@ -35,7 +36,9 @@ sprayed fill. Full inventory + the RE plan: `docs/vtmb/sky-ambience.md`.
 
 A light's `style` field (1–11) makes it flicker/pulse: the classic Quake/Source pattern
 strings, each letter a brightness sample from `'a'` (0, dark) through `'m'` (1.0, normal) to
-`'z'` (≈2.08, over-bright), advanced at 10 Hz and lerped between keyframes. Style 0 and the
+`'z'` (≈2.08, over-bright), advanced in **discrete 10 Hz steps** (`engine.dll 0x20076eb0`;
+`letter × 22` in the 264-normalized light query). The port's rendering interpolation is a visual
+treatment; gameplay uses the discrete value from the same pattern and clock. Style 0 and the
 unanimated 12–31 are constant; 32+ are switchable (held at a fixed level until toggled by
 entity I/O — see `docs/vtmb/entity_io.md` for the light-toggling inputs).
 

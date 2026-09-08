@@ -1,6 +1,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumHUDModel.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumHUDTypes.h"
 #include "ElysiumPresentationSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
@@ -688,7 +689,7 @@ bool FElysiumHUDEquipmentProjectionTest::RunTest(const FString&)
 		// PP6's committed snapshot, once it lands: the gauge and the observer project verbatim, and
 		// centimetres become metres exactly once.
 		Sneak.Stealth.bConcealmentValid = true;
-		Sneak.Stealth.ConcealmentStep = 3;
+		Sneak.Stealth.LightRow = 8;
 		Sneak.Stealth.bObserverValid = true;
 		Sneak.Stealth.ObserverDistanceCm = 1250.0f;
 		Sneak.Stealth.Detection = EElysiumDetection::Searching;
@@ -701,7 +702,7 @@ bool FElysiumHUDEquipmentProjectionTest::RunTest(const FString&)
 			Model->Stealth.Detection == EElysiumHUDDetection::Searching);
 
 		// A step outside the five exported gauge frames is clamped rather than indexing past the art.
-		Sneak.Stealth.ConcealmentStep = 99;
+		Sneak.Stealth.LightRow = 99;
 		Model->Apply(Sneak);
 		TestEqual(TEXT("an out-of-range step clamps to the last gauge frame"),
 			Model->Stealth.ConcealmentStep, ElysiumHUDArt::ConcealmentSteps - 1);
@@ -1497,6 +1498,37 @@ bool FElysiumUICompositionPolicyTest::RunTest(const FString& Parameters)
 	}
 
 	return !HasAnyErrors();
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDStealthLightProducerTest,
+	"Elysium.Substrate.UI.HUDStealthLightProducer",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumHUDStealthLightProducerTest::RunTest(const FString&)
+{
+	FElysiumPlayer Player;
+	Player.Stealth.LightRow = 8;
+	TestFalse(TEXT("a computed row without a sample remains invalid"),
+		FElysiumStealthView::FromPlayer(&Player, true).bConcealmentValid);
+	Player.Stealth.bHasLightSample = true;
+	FElysiumViewState View;
+	View.Stealth = FElysiumStealthView::FromPlayer(&Player, true);
+	TestTrue(TEXT("the first real sample makes the producer valid"), View.Stealth.bConcealmentValid);
+	TestEqual(TEXT("the producer publishes the eleven-row identity"), View.Stealth.LightRow, 8);
+	UElysiumHUDModel* Model = NewObject<UElysiumHUDModel>();
+	const int32 Steps[11] = {0,0,1,1,2,2,2,3,3,4,4};
+	for (int32 Row = 0; Row <= 10; ++Row)
+	{
+		Player.Stealth.LightRow = Row;
+		View.Stealth = FElysiumStealthView::FromPlayer(&Player, true);
+		Model->Apply(View);
+		TestEqual(*FString::Printf(TEXT("light row %d maps to the authored five-step gauge"), Row),
+			Model->Stealth.ConcealmentStep, Steps[Row]);
+	}
+	View.Stealth = FElysiumStealthView::FromPlayer(&Player, false);
+	Model->Apply(View);
+	TestFalse(TEXT("standing suppresses the stealth display"), Model->Stealth.bSneaking);
+	TestTrue(TEXT("standing does not discard a measured sample"), Model->Stealth.bConcealmentValid);
+	return true;
 }
 
 #endif

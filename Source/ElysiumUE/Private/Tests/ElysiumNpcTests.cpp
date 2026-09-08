@@ -922,6 +922,12 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		FElysiumEntityHandle::Invalid(), JackHandle);
 	World.Tick(0.0);
 
+	// Install the program this ownership assertion requires. A D_FR table row alone no longer
+	// manufactures an enemy and a combat schedule before a sight pass has admitted the player.
+	FElysiumNpc* ScheduledJack = JackEnt->AsNpc();
+	if (!TestNotNull(TEXT("Jack has an NPC mind"), ScheduledJack)) return false;
+	TestTrue(TEXT("the forced trance program installs"), ScheduledJack->StartNamedSchedule(
+		TEXT("SCHED_TROIKA_MESMERIZED"), TEXT("Npc.Classes ownership fixture"), FString()));
 	// The Python surface calls these exact names on sm_hub_1's two cops. The recording motor keeps
 	// the route engine-neutral while making its move/stop requests observable in this tier.
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
@@ -938,8 +944,8 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	// here, so the armed route is parked and NOTHING is commanded -- the arbiter, not the patrol,
 	// decides who drives. The moving half of the rule is `Elysium.Substrate.Npc.TravelSpeed`,
 	// whose walker has no schedule to park it.
-	TestTrue(TEXT("a scheduled body stays owned by its schedule while a patrol is armed"),
-		DebugRow(World.Resolve(JackHandle), TEXT("Body owner")).StartsWith(TEXT("Schedule")));
+	TestTrue(TEXT("the forced program stays running while a patrol is armed"),
+		ScheduledJack->Schedule.Current == EElysiumScheduleId::Mesmerized);
 	FElysiumRecordingNpcMotor* JackMotor = Services.NpcMotors.IsEmpty()
 		? nullptr : Services.NpcMotors[0].Get();
 	if (TestNotNull(TEXT("Jack owns the recording motor"), JackMotor))

@@ -123,6 +123,11 @@ const FElysiumStealthTables& UElysiumRulebookSubsystem::Stealth()
 	return Get(StealthTableSet, TEXT("stealth"));
 }
 
+const FElysiumStealthKillRules& UElysiumRulebookSubsystem::StealthKillRules()
+{
+	return Get(StealthKillTable, TEXT("stealthkillrules"));
+}
+
 const FElysiumDispositionTable& UElysiumRulebookSubsystem::Dispositions()
 {
 	return Get(DispositionTable, TEXT("dispositiontable"));

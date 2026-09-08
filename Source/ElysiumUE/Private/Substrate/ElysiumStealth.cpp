@@ -9,6 +9,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealthTables.h"
+#include "Substrate/ElysiumNpc.h"
 
 // The pure rule's input triplet is spelled as a literal 3 so the header stays free of the storage
 // type. This is what holds the two in step: a surface that grew a fourth sample would copy three
@@ -66,19 +67,6 @@ FRecomputeResult Recompute(const FElysiumStealthTables& Tables, const FRecompute
 	Out.bCommitted = true;
 	Out.bEligible = In.bEligible;
 
-	// 3. The fallback arm. Failure does not skip the update: it INSTALLS the non-stealth values,
-	//    which is what stops ordinary movement from retaining the last dark room's advantage.
-	if (!In.bEligible)
-	{
-		Out.LightOnMe = InactiveLightSentinel;
-		Out.VisionScalar = 1.f;
-		Out.LightRow = 0;
-		Out.StealthRow = 0;
-		Out.HearingReductionCm = Tables.HearingUnits(0) * ElysiumMove::U;
-		Out.ConeScalar = Tables.Cone(0, 0);
-		return Out;
-	}
-
 	// 4./5. A lit torch forces full light; otherwise the retained triplet is aggregated and
 	//       normalized over the configured world range.
 	Out.LightOnMe = In.bTorchEquipped
@@ -93,6 +81,14 @@ FRecomputeResult Recompute(const FElysiumStealthTables& Tables, const FRecompute
 	Out.VisionScalar = Tables.Vision(Out.LightRow, Out.StealthRow);
 	Out.ConeScalar = Tables.Cone(Out.LightRow, Out.StealthRow);
 	Out.HearingReductionCm = Tables.HearingUnits(Out.StealthRow) * ElysiumMove::U;
+	// 0x10351c95: overwrite only these four values AFTER computing/publishing the two rows.
+	if (!In.bEligible)
+	{
+		Out.LightOnMe = InactiveLightSentinel;
+		Out.VisionScalar = 1.f;
+		Out.HearingReductionCm = Tables.HearingUnits(0) * ElysiumMove::U;
+		Out.ConeScalar = Tables.Cone(0, 0);
+	}
 	return Out;
 }
 
@@ -121,19 +117,22 @@ int32 ResolveSneaking(const FElysiumCombatCharacter& Character)
 	return FMath::Clamp(Character.CalcFeat(TEXT("Sneaking")), 0, MaxStealthRow);
 }
 
+FVector SamplePoint(const FBox& WorldBounds, const FVector& WorldCenter, int32 Index)
+{
+	FVector Point = WorldCenter;
+	if (Index != 1)
+		Point.Z = FMath::Lerp(WorldBounds.Min.Z, WorldBounds.Max.Z,
+			Index == 2 ? HeadSampleWeight : FeetSampleWeight);
+	return Point;
+}
+
+bool IsEligible(const FElysiumPlayer& Player, bool bDucking, double Now)
+{
+	return bDucking && !Player.WasRecentlyObservedByHostile(Now);
+}
+
 namespace
 {
-	// The three body points, on the feet -> eye column. Feet is the entity's own origin (Source
-	// places absorigin at the feet) and the eye is `EyePosition()`, so nothing here invents a hull.
-	FVector SamplePoint(const FElysiumPlayer& Player, int32 Index)
-	{
-		static constexpr float Weights[FElysiumStealthSurface::NumSamples] =
-			{ FeetSampleWeight, CentreSampleWeight, HeadSampleWeight };
-		const FVector Feet = Player.Origin;
-		const FVector Eye = Player.EyePosition();
-		const int32 Clamped = FMath::Clamp(Index, 0, FElysiumStealthSurface::NumSamples - 1);
-		return Feet + (Eye - Feet) * Weights[Clamped];
-	}
 
 	// The active usable weapon's registered classname, folded, or empty.
 	bool IsTorchEquipped(const FElysiumPlayer& Player)
@@ -167,27 +166,25 @@ void TickPlayerSurface(FElysiumPlayer& Player, double Now)
 	const IElysiumEmbodiment* Embodiment = Player.World ? Player.World->Embodiment() : nullptr;
 
 	FRecomputeInputs In;
-	// The seam always answers — a world with no rig reports full light by contract — so the
-	// recovered "service unavailable" arm has no producer in this runtime and is never taken here.
-	In.bLightServiceAvailable = true;
-	In.bEligible = Embodiment != nullptr && Embodiment->IsPlayerSneaking();
+	In.bLightServiceAvailable = Embodiment && Embodiment->IsLightQueryAvailable();
+	if (!In.bLightServiceAvailable) return;
+	In.bEligible = IsEligible(Player, Embodiment->IsPlayerDucking(), Now);
 	In.bTorchEquipped = IsTorchEquipped(Player);
 	In.Sneaking = ResolveSneaking(Player);
 
 	// ONE point per pass, index advancing. The other two retained samples participate unchanged, so
 	// a step from light into shadow takes ~0.3 s to be fully believed.
 	//
-	// The sample is taken only on the arm that consumes it: the fallback writes fixed values and
-	// the torch forces the aggregate to 1.0 outright, and the recovered order reaches the sampling
-	// step after both of those have already answered. So neither arm costs a light query and
-	// neither advances the rotation — a triplet is refreshed exactly as often as it is read.
+	// Ineligibility does not suppress sampling. Only the usable torch skips the body query.
 	const int32 Index = FMath::Clamp(Surface.NextSampleIndex, 0,
 		FElysiumStealthSurface::NumSamples - 1);
-	if (In.bEligible && !In.bTorchEquipped)
+	if (!In.bTorchEquipped)
 	{
-		Surface.Samples[Index] = Embodiment != nullptr
-			? Embodiment->QueryLightAtPoint(SamplePoint(Player, Index))
-			: 1.f;
+		FBox Bounds(ForceInit);
+		FVector Center;
+		if (!Embodiment->SamplePlayerStealthBounds(Bounds, Center) || !Bounds.IsValid) return;
+		Surface.Samples[Index] = Embodiment->QueryLightAtPoint(SamplePoint(Bounds, Center, Index));
+		Surface.bHasLightSample = true;
 		Surface.NextSampleIndex = (Index + 1) % FElysiumStealthSurface::NumSamples;
 	}
 
@@ -239,6 +236,27 @@ void CommitObserverSnapshot(FElysiumPlayer& Player, double Now)
 	const int32 Generation = Published.Generation;
 	Published = Pending;
 	Published.Generation = Generation + 1;
+}
+
+void PublishObservers(FElysiumPlayer& Player, double Now)
+{
+	Player.PendingObserver.Reset();
+	if (Player.World)
+	{
+		for (const auto& Entity : Player.World->Entities())
+		{
+			const FElysiumNpc* Npc = Entity ? Entity->AsNpc() : nullptr;
+			if (!Npc || Npc->IsInert() || Npc->IsOblivious()) continue;
+			const auto& Memory = Npc->Senses.Memory;
+			const bool EnemyIsPlayer = Memory.Enemy == Player.Handle;
+			if (!EnemyIsPlayer && Npc->Relationships.Resolve(Player.Handle, TEXT("player")) != EElysiumRelationship::Hate) continue;
+			const bool Detected = EnemyIsPlayer && Memory.bEnemyLosLatched && !Memory.bEnemyOccluded;
+			if (!Detected && !Npc->Senses.Sighted().Contains(Player.Handle)) continue;
+			Player.OfferStealthObserver(Npc->Handle, FVector::Dist(Npc->Origin, Player.Origin),
+				Npc->Senses.Perception.VisionDistanceCm * Player.Stealth.VisionScalar, Detected, Now);
+		}
+	}
+	CommitObserverSnapshot(Player, Now);
 }
 
 float HearingReductionCmFor(const FElysiumEntity* Source)

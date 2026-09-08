@@ -185,6 +185,11 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("DA_") + Map + TEXT("_LightCalibration");
 		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
 	}
+	static FString BakedMapLightQuery(const FString& Map)
+	{
+		const FString Asset = TEXT("DA_") + Map + TEXT("_LightQuery");
+		return BakedMapDir(Map) / Asset + TEXT(".") + Asset;
+	}
 	// This map's environment as cooked content (R4.4): the `UElysiumMapEnvironment` that replaces
 	// `<map>.env`, `<map>.sky` and `<map>.spawn` -- the 2D-sky/fog set, the 3D-skybox miniature's
 	// placement transform, and the initial player spawn. One asset per map, beside

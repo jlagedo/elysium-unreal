@@ -4,6 +4,7 @@
 // scheme forwards, and IElysiumTravel with the subsystem accessors behind all of them.
 
 #include "ElysiumMapActor.h"
+#include "Substrate/ElysiumNpc.h"
 
 #include "ElysiumAudioSubsystem.h"       // the GI-scoped voice mixer every audio forward reaches
 #include "ElysiumCameraComponent.h"      // the pawn camera the shot channel drives
@@ -1152,6 +1153,13 @@ bool AElysiumMapActor::IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const
 {
 	const UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
 	return Audio && Audio->IsVoicePlaying(Handle);
+}
+
+float AElysiumMapActor::SoundDurationSeconds(const FString& Rel) const
+{
+	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();
+	const FElysiumSoundAssetRow* Row = Audio ? Audio->Probe(Rel) : nullptr;
+	return Row ? Row->DurationSeconds : 0.f;
 }
 
 void AElysiumMapActor::FadeInScheme(const FString& SchemeRel, const FVector& Anchor, float FadeSeconds)

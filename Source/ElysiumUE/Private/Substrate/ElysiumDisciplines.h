@@ -129,6 +129,9 @@ namespace ElysiumDisciplines
 	// the substrate. The entry exists and is exercised by the Substrate tier so the producer that
 	// lands only has to call it.
 	void NotifyBumped(FElysiumCombatCharacter& Char);
+	// 0x102a0940's ACTIVITY_COPY_PROP_CLEAN arm before its tail clears; the
+	// caller tests that bit. HitInfo's own AI_Schedule suppresses this callback.
+	void NotifyScheduleChanged(FElysiumCombatCharacter& Char);
 
 	// --- Joins ---------------------------------------------------------------------------------
 	// The active value of one compiled Discipline — the `Active_*` sheet slot. What

@@ -417,11 +417,23 @@ namespace
 			const float Seconds = Runner.PlayActivity(Step.Activity);
 			if (Seconds < 0.f)
 			{
-				return EElysiumTaskResult::Failed;
+				// Troika `StartTask` arm 0x102a1c0f sets the ideal activity and its one-second
+				// watchdog. It has neither a TaskComplete nor a TaskFail branch; `RunTask`
+				// 0x102aad1f completes when current reaches ideal or that watchdog expires.
+				// Keep the body's negative availability result visible without turning it into a
+				// schedule failure.
+				Runner.RecordScheduleEvent(FString::Printf(
+					TEXT("TASK_SET_ACTIVITY %s unresolved (PlayActivity=%.3f); completing (0x102a1c0f)"),
+					*Step.Activity, Seconds));
 			}
-			// `TASK_SET_ACTIVITY` sets the pose and completes; the schedule's own WAIT steps are
-			// what hold it. Playing and completing in one step is the faithful shape.
-			return EElysiumTaskResult::Complete;
+			// Troika stamps m_flWaitFinished to curtime + 1.0 in StartTask. RunTask then completes when
+			// current sequence equals ideal, or when this watchdog expires; neither path TaskFails.
+			State.TaskEndsAt = Now + 1.0;
+			// `MaintainSchedule` invokes RunTask immediately after a still-running StartTask in the same
+			// loop iteration. Mirror that first probe here, so a body already standing on the resolved
+			// identity advances this think; a miss stays running until a later phase or the watchdog.
+			return Runner.IsIdealActivityCurrent() ? EElysiumTaskResult::Complete
+				: EElysiumTaskResult::Running;
 		}
 		case EElysiumTask::Wait:
 			State.TaskEndsAt = Now + static_cast<double>(FMath::Max(0.f, Step.Param));
@@ -448,11 +460,11 @@ namespace
 
 		case EElysiumTask::SetToleranceDistance:
 			State.ToleranceUnits = Step.Param;
+			Runner.SetGoalTolerance(Step.Param);
 			return EElysiumTaskResult::Complete;
 
 		case EElysiumTask::StopMoving:
-			Runner.StopMoving();
-			return EElysiumTaskResult::Complete;
+			return Runner.BeginStopMovingTask();
 
 		case EElysiumTask::Remember:
 			Runner.RememberFact(Step.Param);
@@ -586,12 +598,18 @@ namespace
 		{
 			return Runner.IsBodyVisible() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 		}
+		if (Step.Task == EElysiumTask::StopMoving) return Runner.StopMovingTask();
 		if (Step.Task == EElysiumTask::WaitForMovement)
 		{
 			const EElysiumMoveWatch Watch = Runner.WaitForMovement();
 			return Watch == EElysiumMoveWatch::Arrived ? EElysiumTaskResult::Complete
 				: (Watch == EElysiumMoveWatch::Failed ? EElysiumTaskResult::Failed
 					: EElysiumTaskResult::Running);
+		}
+		if (Step.Task == EElysiumTask::SetActivity)
+		{
+			return Runner.IsIdealActivityCurrent() || Now >= State.TaskEndsAt
+				? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 		}
 		return Now >= State.TaskEndsAt ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 	}
@@ -612,6 +630,12 @@ namespace
 			// position visibly behind the body it is chasing an enemy with.
 			return 0.05;
 		}
+		if (Step.Task == EElysiumTask::SetActivity)
+		{
+			// Poll the current body identity before the one-second watchdog. A delayed animation host
+			// must be allowed to reach ideal on its next frame rather than needlessly waiting a second.
+			return 0.05;
+		}
 		return FMath::Max(0.05, State.TaskEndsAt - Now);
 	}
 }
@@ -619,7 +643,6 @@ namespace
 bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 	IElysiumScheduleRunner& Runner)
 {
-	State.Clear();
 	const FElysiumSchedule* Schedule = ElysiumScheduleFor(Id);
 	if (Schedule == nullptr || !Schedule->IsValid())
 	{
@@ -627,9 +650,9 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 		// trace says which one and the NPC selects again instead of silently idling.
 		Runner.RecordScheduleEvent(FString::Printf(TEXT("refused schedule %s (%d): not registered"),
 			ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
+		Runner.TaskFail(0x05);
 		return false;
 	}
-	State.Current = Id;
 	// Everything retail's `CAI_BaseNPC::SetSchedule` (`0x10280e50`) does besides installing the
 	// program, in its order. All three producers reach it here rather than at their own call sites,
 	// which is what keeps a script's `ChangeSchedule`, a discipline's `AI_Schedule` and the feed's
@@ -639,6 +662,9 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 	//    PREVIOUS program was holding, which is how an incapacitating schedule unwinds without
 	//    carrying teardown tasks of its own.
 	Runner.OnScheduleChange();
+	// The old task is visible to the callback, including HitInfo expiry's TaskComplete.
+	State.Clear();
+	State.Current = Id;
 	// 2. Zero the gathered conditions. A stimulus standing at the instant of install is destroyed;
 	//    only one the next pass re-observes can interrupt the new program.
 	Runner.ClearConditions();
@@ -657,6 +683,19 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 	if (!State.IsRunning())
 	{
 		return false;
+	}
+	// A navigator can invoke TaskFail outside StartTask/RunTask. Its condition is the
+	// routing authority, independent of whether the current task would otherwise keep running.
+	if (Conditions && Conditions->Has(EElysiumNpcCond::TaskFailed))
+	{
+		const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current);
+		const EElysiumScheduleId Fail = State.FailScheduleOverride != EElysiumScheduleId::None
+			? State.FailScheduleOverride : Active ? Active->FailSchedule : EElysiumScheduleId::None;
+		if (Fail == EElysiumScheduleId::None || !Start(State, Fail, Runner))
+		{
+			State.Clear();
+			return false;
+		}
 	}
 
 	// The interrupt check runs at the TOP of the tick, before any task work: a schedule aborted by
@@ -714,15 +753,23 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		if (Schedule == nullptr || !Schedule->Tasks.IsValidIndex(State.TaskIndex))
 		{
 			// Ran off the end: the schedule completed.
+			if (Schedule) Runner.ScheduleDone();
+			else Runner.TaskFail(0x05);
 			State.Clear();
 			return false;
 		}
 
 		const FElysiumTaskStep& Step = Schedule->Tasks[State.TaskIndex];
 		EElysiumTaskResult Result;
-		if (!State.bTaskStarted)
+		if (State.bTaskCompletedExternally)
+		{
+			State.bTaskCompletedExternally = false;
+			Result = EElysiumTaskResult::Complete;
+		}
+		else if (!State.bTaskStarted)
 		{
 			State.bTaskStarted = true;
+			Runner.TaskStarting();
 			Result = BeginTask(Step, State, Runner, Now);
 		}
 		else
@@ -752,7 +799,7 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 				// replaced in place and keeps running this same think, which is what makes
 				// "face, stop, then swing" one uninterruptible decision rather than three.
 				const EElysiumScheduleId Next = Step.Target;
-				if (Next == EElysiumScheduleId::None || !ElysiumSchedule::Start(State, Next, Runner))
+				if (!ElysiumSchedule::Start(State, Next, Runner))
 				{
 					State.Clear();
 					return false;
@@ -761,10 +808,28 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			}
 			++State.TaskIndex;
 			State.bTaskStarted = false;
+			if (State.TaskIndex == Schedule->Tasks.Num())
+			{
+				Runner.ScheduleDone();
+				State.Clear();
+				return false;
+			}
 			continue;
 		}
 
 		// Failed.
+		int32 Reason = Runner.TaskFailureReason();
+		if (Reason == 0)
+		{
+			switch (Step.Task)
+			{
+			case EElysiumTask::GetPathToEnemy: case EElysiumTask::FaceEnemy: Reason = 0x06; break;
+			case EElysiumTask::MeleeAttack1: case EElysiumTask::RangeAttack1: Reason = 0x03; break;
+			case EElysiumTask::SpecialIdleActivity: Reason = 0x15; break;
+			default: Reason = 0x0c; break;
+			}
+		}
+		Runner.TaskFail(Reason);
 		Runner.RecordScheduleEvent(FString::Printf(TEXT("task %s failed in %s"),
 			ElysiumTaskName(Step.Task), ElysiumScheduleName(State.Current)));
 		// `TASK_SET_FAIL_SCHEDULE` wins over the program's declared route when it ran: retail's own
@@ -778,11 +843,9 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 		}
 	}
 
-	// The guard tripped: something completes instantly and re-enters. End the schedule rather than
-	// spinning, and say so.
-	Runner.RecordScheduleEvent(TEXT("schedule exceeded its per-think task budget"));
-	State.Clear();
-	return false;
+	// 0x102821ae: reaching the bounded loop's end preserves the task position for next think.
+	State.bDidMaintainSchedule = true;
+	return true;
 }
 
 // `TASK_MOVE_AWAY_PATH`.

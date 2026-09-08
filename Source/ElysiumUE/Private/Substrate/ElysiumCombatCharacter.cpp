@@ -37,6 +37,34 @@
 #include "Substrate/ElysiumStealth.h"
 #include "Substrate/ElysiumWeaponClasses.h"  // FElysiumWeapon — the operator hop the weapon band takes
 
+bool FElysiumCombatCharacter::IsObfuscatedForSenses() const
+{
+	return Sheet.GetCurrent(EElysiumTraitContainer::ActiveDisciplines, 8) > 0
+		&& Disciplines.bObfuscateCloaked;
+}
+
+bool FElysiumCombatCharacter::CanPerceiveConcealment(const FElysiumCombatCharacter& Candidate) const
+{
+	// FUN_10146b20(target, observer): these two observer stats bypass concealment.
+	if (!Candidate.IsObfuscatedForSenses()
+		|| Sheet.GetCurrent(EElysiumTraitContainer::ActiveDisciplines, 0xe) > 0
+		|| Sheet.GetCurrent(EElysiumTraitContainer::ActiveDisciplines, 1) > 0)
+	{
+		return true;
+	}
+	return Disciplines.bObfuscateDetectionReady
+		&& (Disciplines.ObfuscateDetectionRadiusUnits == 0.f
+			|| FVector::Dist(Origin, Candidate.Origin) <= Disciplines.ObfuscateDetectionRadiusUnits * 2.54f);
+}
+
+bool FElysiumCombatCharacter::HasDisciplineStatus(const FString& Record) const
+{
+	return Disciplines.TargetEffects.ContainsByPredicate([&Record](const FElysiumActiveDisciplineEffect& Effect)
+	{
+		return Effect.Record.Equals(Record, ESearchCase::IgnoreCase);
+	});
+}
+
 // --- FElysiumCombatCharacter — CBaseCombatCharacter ---
 
 void FElysiumCombatCharacter::PendingInput(const TCHAR* Input, const TCHAR* Owner,
@@ -1176,7 +1204,7 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 	{
 		World->EmitGameSound(Origin, ElysiumGameSounds::NpcTakeDamage(),
 			/*RadiusCm, table-resolved*/ -1.f, Handle,
-			ElysiumStealth::HearingReductionCmFor(this));
+			ElysiumStealth::HearingReductionCmFor(this), ElysiumGameSounds::Combat, 0.2);
 	}
 
 	// The senses/memory record the schedule kernel reads. A no-op on the base.
@@ -1735,6 +1763,12 @@ bool FElysiumCombatCharacter::EnterGrapplePair(FElysiumCombatCharacter& Victim,
 		return false;
 	}
 	Victim.EnterGrappleState(Handle, EElysiumGrappleRole::Victim, Type, Position, bHolsterVictim);
+	if (World && Victim.AsNpc() && (Type == EElysiumGrappleType::Feed || Type == EElysiumGrappleType::FeedVariant))
+	{
+		// StartGrappleAttack -> victim GrappleSoundCmd(0) 0x1033b100, once at engagement.
+		World->EmitGameSound(Victim.Origin, ElysiumGameSounds::Feed(), -1.f, Victim.Handle,
+			ElysiumStealth::HearingReductionCmFor(&Victim), ElysiumGameSounds::Danger, 0.2);
+	}
 	return true;
 }
 
@@ -1785,6 +1819,7 @@ void FElysiumCombatCharacter::OnKilled()
 	// makes the character's own answer to `IsHoldingReaction` agree with it, on both leaves.
 	ReleaseHeldReaction();
 	static const FName OnDeath(TEXT("OnDeath"));
+	RemoveFromComfortList(); // Event_Killed 0x1032b9b0 removes one occurrence, including duplicates.
 	FireOutput(OnDeath, Handle);   // one of CAI_BaseNPC's 16 outputs; the player wires none
 	// Preserve producer order: the child's own OnDeath rows enter the queue before its maker's
 	// OnNPCDied rows. Retail's relative order is still an open live-capture question; this is the

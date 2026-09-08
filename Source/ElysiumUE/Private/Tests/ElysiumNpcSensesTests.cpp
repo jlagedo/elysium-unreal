@@ -19,11 +19,17 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "Misc/ScopeExit.h"
+#include "ElysiumKeyValues.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumStealthKillRules.h"
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSoundVolumeTable.h"
 #include "Tests/ElysiumTestServices.h"
@@ -323,7 +329,7 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		F.Guard->Senses.TickSight(*F.Guard, 10.0);
 
 		TestTrue(TEXT("an in-cone target inside 512 units is seen"), F.Guard->Senses.Memory.bPlayerLos);
-		TestFalse(TEXT("...without asking the engine for a trace"),
+		TestTrue(TEXT("actual Look still traces inside the bookkeeping bypass"),
 			F.Services.Saw(TEXT("QueryLineOfSight")));
 		TestTrue(TEXT("the closest-player cache carries the handle"),
 			F.Guard->Senses.Memory.ClosestPlayer == F.Player->Handle);
@@ -404,6 +410,27 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		TestFalse(TEXT("...and is not seen"), F.Guard->Senses.Memory.bPlayerLos);
 		TestFalse(TEXT("...without spending a trace on it"),
 			F.Services.Saw(TEXT("QueryLineOfSight")));
+	}
+
+	// --- The damage override bypasses range only ---------------------------------------------------
+	{
+		FSensesFixture F(/*VisionUnits=*/100.f);
+		if (F.Guard == nullptr || F.Player == nullptr)
+		{
+			return false;
+		}
+		F.Player->Origin = FVector(Cm(300.f), 0.0, 0.0);
+		F.Guard->Senses.TickSight(*F.Guard, 10.0);
+		TestFalse(TEXT("a target beyond ordinary range is not looked at"),
+			F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+		F.Guard->Senses.Memory.StealthVisionOverrideUntil = 16.0;
+		F.Guard->Senses.TickSight(*F.Guard, 11.0);
+		TestTrue(TEXT("the live five-second override admits it through range"),
+			F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+		F.Player->Origin = FVector(Cm(-300.f), 0.0, 0.0);
+		F.Guard->Senses.TickSight(*F.Guard, 12.0);
+		TestFalse(TEXT("the override does not bypass the 3-D cone"),
+			F.Guard->Senses.Sighted().Contains(F.Player->Handle));
 	}
 	return true;
 }
@@ -523,112 +550,71 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesHearingTest,
 bool FElysiumNpcSensesHearingTest::RunTest(const FString&)
 {
 	const FElysiumSoundVolumeTable Volumes = MakeVolumeTable();
+	FSensesFixture F(4000.f, 2.f);
+	if (!F.Guard || !F.Player) return false;
+	F.World.GameSounds().SetVolumeTable(&Volumes);
+	F.Guard->Senses.StartSoundCursorAtHead(*F.Guard);
+	FElysiumGameSoundRequest Sound;
+	Sound.Category = FName(TEXT("DOOR_NORMAL"));
+	Sound.TypeMask = ElysiumGameSounds::Player;
+	Sound.Source = F.Player->Handle;
+	Sound.Position = FVector(Cm(400.f), 0.0, F.Guard->EyePosition().Z);
+	F.World.GameSounds().Emit(Sound, 1.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 1.0);
+	F.Flush(1.0);
+	TestEqual(TEXT("Listen queues the output, not just its condition"), F.Counter(TEXT("c_hearplayer")), 0.f);
+	TestTrue(TEXT("the sound snapshot is immediate"), F.Guard->Senses.Memory.LastSoundPlayer.Serial != 0);
+	TestTrue(TEXT("hearing never acquires enemy memory"), F.Guard->EnemyMemory.Num() == 0);
+	F.Guard->Senses.TickHearing(*F.Guard, 1.199);
+	TestFalse(TEXT("no player condition before minimum delay"), F.Guard->Senses.HeardConditions.Has(EElysiumNpcCond::HearPlayer));
+	F.Guard->Senses.TickHearing(*F.Guard, 1.9);
+	F.Flush(1.9);
+	TestTrue(TEXT("player condition promoted by maximum delay"), F.Guard->Senses.HeardConditions.Has(EElysiumNpcCond::HearPlayer));
+	TestEqual(TEXT("raw PLAYER publishes OnHearPlayer"), F.Counter(TEXT("c_hearplayer")), 1.f);
+	F.Guard->Senses.TickHearing(*F.Guard, 2.0);
+	F.Flush(2.0);
+	TestEqual(TEXT("the serial cursor does not replay"), F.Counter(TEXT("c_hearplayer")), 1.f);
+	TestTrue(TEXT("heard conditions last one Listen"), F.Guard->Senses.HeardConditions.IsEmpty());
 
-	// --- Radius x the observer's hearing scalar decides admission ---------------------------------
-	{
-		FSensesFixture F(/*VisionUnits=*/4000.f, /*HearingScalar=*/2.0f);
-		if (F.Guard == nullptr)
-		{
-			return false;
-		}
-		F.World.GameSounds().SetVolumeTable(&Volumes);
-		F.Guard->Senses.StartSoundCursorAtHead(*F.Guard);
+	Sound.TypeMask = ElysiumGameSounds::World;
+	Sound.Position.X = Cm(600.f);
+	F.World.GameSounds().Emit(Sound, 3.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 3.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 3.9);
+	F.Flush(3.9);
+	TestEqual(TEXT("outside radius times hearing is rejected"), F.Counter(TEXT("c_hearworld")), 0.f);
 
-		// A 240-unit stimulus 400 units away: out of reach unheard, in reach at 2.0x.
-		F.World.EmitGameSound(FVector(Cm(400.f), 0.0, 0.0), FName(TEXT("DOOR_NORMAL")), 0.f,
-			FElysiumEntityHandle::Invalid());
-		F.Guard->Senses.TickHearing(*F.Guard, 1.0);
-		F.Flush(1.0);
-		TestEqual(TEXT("the observer's hearing scalar extends the authored reach"),
-			F.Counter(TEXT("c_hearworld")), 1.f);
-		TestTrue(TEXT("...and the stimulus lands in memory"),
-			F.Guard->Senses.Memory.LastHeardCategory == TEXT("DOOR_NORMAL"));
-		TestTrue(TEXT("...with its position"),
-			F.Guard->Senses.Memory.LastHeardPosition.Equals(FVector(Cm(400.f), 0.0, 0.0)));
-
-		// The cursor has advanced: the same stimulus is not consumed twice.
-		F.Guard->Senses.TickHearing(*F.Guard, 1.1);
-		F.Flush(1.1);
-		TestEqual(TEXT("the serial cursor stops a second consume"),
-			F.Counter(TEXT("c_hearworld")), 1.f);
-
-		// 600 units away is past 240 x 2.0.
-		F.World.EmitGameSound(FVector(Cm(600.f), 0.0, 0.0), FName(TEXT("DOOR_NORMAL")), 0.f,
-			FElysiumEntityHandle::Invalid());
-		F.Guard->Senses.TickHearing(*F.Guard, 2.0);
-		F.Flush(2.0);
-		TestEqual(TEXT("a stimulus past radius x scalar is not heard"),
-			F.Counter(TEXT("c_hearworld")), 1.f);
-	}
-
-	// --- Occlusion: an occludable stimulus behind a wall is dropped; a loud one is not ------------
-	{
-		FSensesFixture F;
-		if (F.Guard == nullptr)
-		{
-			return false;
-		}
-		F.World.GameSounds().SetVolumeTable(&Volumes);
-		F.Guard->Senses.StartSoundCursorAtHead(*F.Guard);
-		F.Services.bLineOfSightClear = false;
-
-		F.World.EmitGameSound(FVector(Cm(100.f), 0.0, 0.0), FName(TEXT("DOOR_NORMAL")), 0.f,
-			FElysiumEntityHandle::Invalid());
-		F.Guard->Senses.TickHearing(*F.Guard, 1.0);
-		F.Flush(1.0);
-		TestEqual(TEXT("an occludable stimulus behind a wall is dropped"),
-			F.Counter(TEXT("c_hearworld")), 0.f);
-
-		// The loud level is non-occluded in the table, so the same wall does not stop it.
-		F.World.EmitGameSound(FVector(Cm(100.f), 0.0, 0.0), FName(TEXT("PLAYER_GUNSHOT_BASE")),
-			0.f, FElysiumEntityHandle::Invalid());
-		F.Guard->Senses.TickHearing(*F.Guard, 2.0);
-		F.Flush(2.0);
-		TestEqual(TEXT("a non-occluded stimulus is heard through the same wall"),
-			F.Counter(TEXT("c_hearcombat")), 1.f);
-	}
-
-	// --- Own sounds are skipped, and the category mapping picks one output ------------------------
-	{
-		FSensesFixture F;
-		if (F.Guard == nullptr || F.Player == nullptr)
-		{
-			return false;
-		}
-		F.World.GameSounds().SetVolumeTable(&Volumes);
-		F.Guard->Senses.StartSoundCursorAtHead(*F.Guard);
-
-		F.World.EmitGameSound(F.Guard->Origin, FName(TEXT("NPC_TAKE_DAMAGE")), 0.f,
-			F.Guard->Handle);
-		F.Guard->Senses.TickHearing(*F.Guard, 1.0);
-		F.Flush(1.0);
-		TestEqual(TEXT("an NPC does not hear its own noise"), F.Counter(TEXT("c_hearcombat")), 0.f);
-		TestTrue(TEXT("...and it leaves no last-heard memory"),
-			F.Guard->Senses.Memory.LastHeardTime < 0.0);
-
-		// A combat category from the player takes the combat surface, not the player one.
-		F.World.EmitGameSound(FVector(Cm(50.f), 0.0, 0.0), FName(TEXT("PLAYER_GUNSHOT_BASE")),
-			0.f, F.Player->Handle);
-		F.Guard->Senses.TickHearing(*F.Guard, 2.0);
-		F.Flush(2.0);
-		TestEqual(TEXT("a combat category outranks the player surface"),
-			F.Counter(TEXT("c_hearcombat")), 1.f);
-		TestEqual(TEXT("...so exactly one output fires"), F.Counter(TEXT("c_hearplayer")), 0.f);
-
-		// A non-combat category the player made takes OnHearPlayer.
-		F.World.EmitGameSound(FVector(Cm(50.f), 0.0, 0.0), FName(TEXT("PLAYER_FOOTSTEP_SNEAK")),
-			0.f, F.Player->Handle);
-		F.Guard->Senses.TickHearing(*F.Guard, 3.0);
-		F.Flush(3.0);
-		TestEqual(TEXT("a non-combat player stimulus takes OnHearPlayer"),
-			F.Counter(TEXT("c_hearplayer")), 1.f);
-		TestEqual(TEXT("...and not OnHearWorld"), F.Counter(TEXT("c_hearworld")), 0.f);
-		TestTrue(TEXT("the last-heard source is the player"),
-			F.Guard->Senses.Memory.LastHeardSource == F.Player->Handle);
-	}
+	Sound.Position.X = Cm(100.f);
+	F.Services.bLineOfSightClear = false;
+	F.World.GameSounds().Emit(Sound, 4.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 4.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 4.9);
+	F.Flush(4.9);
+	TestEqual(TEXT("occlusion blocks an occludable world sound"), F.Counter(TEXT("c_hearworld")), 0.f);
+	Sound.Category = FName(TEXT("PLAYER_GUNSHOT_BASE"));
+	Sound.TypeMask = ElysiumGameSounds::Combat;
+	F.World.GameSounds().Emit(Sound, 5.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 5.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 5.9);
+	F.Flush(5.9);
+	TestEqual(TEXT("nonoccludable combat reaches through that wall"), F.Counter(TEXT("c_hearcombat")), 1.f);
+	F.Guard->Senses.CommitBestSound(F.Guard->Senses.HeardConditions);
+	TestTrue(TEXT("commit uses this pass's promoted combat condition"), F.Guard->Senses.Memory.BestSound.TypeMask == ElysiumGameSounds::Combat);
+	F.Services.bLineOfSightClear = true;
+	Sound.Category = FName(TEXT("DOOR_NORMAL"));
+	Sound.TypeMask = ElysiumGameSounds::Player;
+	F.World.GameSounds().Emit(Sound, 6.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 6.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 6.9);
+	F.Guard->Senses.CommitBestSound(F.Guard->Senses.HeardConditions);
+	TestTrue(TEXT("an old combat snapshot does not outrank a newly heard player"), F.Guard->Senses.Memory.BestSound.TypeMask == ElysiumGameSounds::Player);
+	Sound.Source = F.Guard->Handle;
+	F.World.GameSounds().Emit(Sound, 7.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 7.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 7.9);
+	TestTrue(TEXT("the observer ignores itself"), F.Guard->Senses.HeardConditions.IsEmpty());
 	return true;
 }
-
 
 // The memory is what survives losing sight, so it is what a save has to carry.
 
@@ -748,8 +734,10 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 		F.Guard->NextThink = 0.0f;
 		F.World.Tick(2.0);
 
+		// The sound must be newer than the last Listen, whose timestamp is exactly 2.0.
+		F.Flush(2.1);
 		F.World.EmitGameSound(FVector(Cm(50.f), 0.0, 0.0), FName(TEXT("PLAYER_GUNSHOT_BASE")),
-			0.f, FElysiumEntityHandle::Invalid());
+			0.f, FElysiumEntityHandle::Invalid(), 0.f, ElysiumGameSounds::Combat);
 		F.Guard->ScriptOwner = F.Guard->Handle;   // a beat owns the body
 		F.Guard->NextThink = 0.0f;
 		F.World.Tick(3.0);
@@ -762,6 +750,9 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 		F.Guard->NextThink = 0.0f;
 		F.World.Tick(4.0);
 		F.World.Tick(4.1);
+		F.Guard->NextThink = 0.0f;
+		F.World.Tick(4.91);
+		F.World.Tick(4.92);
 		TestEqual(TEXT("...and hearing resumes once the beat releases it"),
 			F.Counter(TEXT("c_hearcombat")), 1.f);
 	}
@@ -788,6 +779,213 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 		F.Guard->Senses.Tick(*F.Guard, 30.0);
 		TestTrue(TEXT("...and a live one does"), F.Guard->Senses.Memory.bPlayerLos);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesAdmissionTest,
+	"Elysium.Substrate.NpcSenses.AdmissionDetails", GElysiumTestFlags)
+bool FElysiumNpcSensesAdmissionTest::RunTest(const FString&)
+{
+	FSensesFixture F(540.f);
+	if (!F.Guard || !F.Player) return false;
+	F.Player->Origin = FVector(Cm(100.f), 0, 0);
+	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 11);
+	F.Guard->Senses.TickSight(*F.Guard, 1.0);
+	FElysiumNpcConditions Conditions;
+	ElysiumNpcCond::GatherSight(*F.Guard, 1.0, Conditions);
+	TestTrue(TEXT("priority 11 is NEMESIS"), Conditions.Has(EElysiumNpcCond::SeeNemesis));
+	TestTrue(TEXT("SEE_PLAYER uses its actual registered identity"), Conditions.Has(EElysiumNpcCond::SeePlayer));
+	TestTrue(TEXT("NEMESIS still writes the D_HT enemy memory"), F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
+	F.Player->Origin.X = Cm(2000.f);
+	F.Guard->Senses.TickSight(*F.Guard, 1.1);
+	TestTrue(TEXT("player Look retains the preceding list until 0.15 s"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	F.Guard->Senses.TickSight(*F.Guard, 1.151);
+	TestFalse(TEXT("the next player Look rejects beyond its authored radius"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	F.Player->Origin.X = Cm(100.f);
+	F.Player->Sheet.SetBase(EElysiumTraitContainer::ActiveDisciplines, 8, 1);
+	F.Player->Sheet.RecomputeCurrent(nullptr);
+	F.Player->Disciplines.bObfuscateCloaked = true;
+	F.Guard->Senses.TickSight(*F.Guard, 2.0);
+	TestFalse(TEXT("an active cloak is hidden without observer detection"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	F.Guard->Disciplines.bObfuscateDetectionReady = true;
+	F.Guard->Disciplines.ObfuscateDetectionRadiusUnits = 100.f;
+	F.Guard->Senses.TickSight(*F.Guard, 3.0);
+	TestTrue(TEXT("the recovered observer radius includes equality"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	FElysiumActiveDisciplineEffect BrainWipe;
+	BrainWipe.Record = TEXT("Dominate_BrainWipe");
+	F.Guard->Disciplines.TargetEffects.Add(BrainWipe);
+	F.Guard->Senses.TickSight(*F.Guard, 4.0);
+	TestFalse(TEXT("BrainWipe belongs to the observer"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	F.Guard->Disciplines.TargetEffects.Reset();
+	F.Player->Disciplines.TargetEffects.Add(BrainWipe);
+	F.Guard->Senses.TickSight(*F.Guard, 5.0);
+	TestTrue(TEXT("a brain-wiped target is still visible"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	F.Guard->Senses.ViewConeBodyOffsetCm = Cm(1000.f);
+	TestFalse(TEXT("the front-plane test runs before the apex shift"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, F.Guard->EyePosition() + FVector(-1, 0, 0)));
+	TestTrue(TEXT("the pulled-back apex admits a front-side target"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, F.Guard->EyePosition() + FVector(1, 100, 0)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesDeafRulesTest,
+	"Elysium.Substrate.NpcSenses.DeafZoneRules", GElysiumTestFlags)
+bool FElysiumNpcSensesDeafRulesTest::RunTest(const FString&)
+{
+	const auto Root = ElysiumKeyValues::ParseText(TEXT("StealthKillRules { DeafZoneArc { 1 60 2 80 } StatInfo { StealthKillDistMax 95 HearingScalarMax 2.5 } }"));
+	FElysiumStealthKillRules Rules;
+	FString Error;
+	if (!Root || !TestTrue(TEXT("the authored rule shape parses"), Rules.Parse(*Root, Error))) return false;
+	TestEqual(TEXT("authored reach overrides the 70-unit fallback"), Rules.DistanceMaxUnits, 95.f);
+	TestEqual(TEXT("a short degree table extends its last entry"), Rules.DeafArcDegrees[19], 80.f);
+	TestEqual(TEXT("maximum sneaking and zero hearing give zero depth"), Rules.MinDepthUnits(10, 0), 0.f);
+	TestEqual(TEXT("minimum sneaking and maximum hearing give twice the reach"), Rules.MinDepthUnits(1, 2.5f), 190.f);
+	FSensesFixture F;
+	if (!F.Guard || !F.Player) return false;
+	F.Player->Origin = FVector(-Cm(500.f), 0, 0);
+	F.Services.bPlayerDucking = true;
+	TestEqual(TEXT("an invalid combat feat closes the arc"), Rules.ArcDot(0), 1.f);
+	TestEqual(TEXT("an out-of-table combat feat is not clamped"), Rules.ArcDot(21), 1.f);
+	TestFalse(TEXT("an unequipped player has no rear deaf arc"), Rules.InDeafZone(*F.Player, *F.Guard));
+	F.Player->Origin.X = -0.01;
+	TestFalse(TEXT("inside minimum depth the victim hears the approach"), Rules.InDeafZone(*F.Player, *F.Guard));
+	F.Player->Origin.X = Cm(500.f);
+	TestFalse(TEXT("a front approach has no deaf zone"), Rules.InDeafZone(*F.Player, *F.Guard));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesCombatArcTest,
+	"Elysium.Substrate.NpcSenses.CombatArc", GElysiumTestFlags)
+bool FElysiumNpcSensesCombatArcTest::RunTest(const FString&)
+{
+	FElysiumFeatTable Feats;
+	for (int32 Index = 0; Index <= 10; ++Index)
+	{
+		FElysiumFeat Feat;
+		Feat.InternalName = FString::Printf(TEXT("sense_fixture_%d"), Index);
+		Feat.MaxValue = 20;
+		if (Index == 1) { Feat.InternalName = TEXT("Sneaking"); Feat.Bases.Add(FElysiumTraitRef::Parse(TEXT("Dexterity"))); }
+		if (Index == 9) { Feat.InternalName = TEXT("Close_Combat_Brawl"); Feat.Bases.Add(FElysiumTraitRef::Parse(TEXT("Strength"))); }
+		if (Index == 10) { Feat.InternalName = TEXT("Close_Combat_Melee"); Feat.Bases.Add(FElysiumTraitRef::Parse(TEXT("Dexterity"))); }
+		Feats.Feats.Add(Feat);
+	}
+	Feats.Reindex();
+	const auto Previous = ElysiumSheetRules::BoundTables();
+	auto Bound = Previous;
+	Bound.Feats = &Feats;
+	ElysiumSheetRules::BindTables(Bound);
+	ON_SCOPE_EXIT { ElysiumSheetRules::BindTables(Previous); };
+	FElysiumItemTable Items;
+	for (const TCHAR* Name : { TEXT("item_w_sense_arc_brawl"), TEXT("item_w_sense_arc_melee") })
+	{
+		FElysiumItemDef Item;
+		Item.Classname = Name;
+		Item.Type = EElysiumItemType::WeaponMelee;
+		FElysiumWeaponMode Mode;
+		Mode.Tag = TEXT("Primary");
+		Mode.Type = EElysiumWeaponModeType::Attack;
+		Mode.Dmg = FString(Name).EndsWith(TEXT("melee"))
+			? TEXT("2 Lethal Close_Combat_Melee DMG_SLASH") : TEXT("2 Bashing Close_Combat_Brawl DMG_FIST");
+		Item.Modes.Add(Mode);
+		Items.Items.Add(Item);
+	}
+	Items.Reindex();
+	ElysiumItems::Install(Items);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Items); };
+	FSensesFixture F;
+	if (!F.Guard || !F.Player) return false;
+	F.Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Strength, 10);
+	F.Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Dexterity, 1);
+	F.Player->Sheet.RecomputeCurrent(nullptr);
+	FElysiumStealthKillRules Rules;
+	Rules.DeafArcDegrees[0] = 60.f;
+	for (int32 Index = 1; Index < 20; ++Index) Rules.DeafArcDegrees[Index] = 80.f;
+	const float Angle = FMath::DegreesToRadians(35.f);
+	F.Player->Origin = FVector(-FMath::Cos(Angle) * Cm(500.f), FMath::Sin(Angle) * Cm(500.f), 0);
+	F.Services.bPlayerDucking = true;
+	for (const TCHAR* Name : { TEXT("item_w_sense_arc_brawl"), TEXT("item_w_sense_arc_melee") })
+	{
+		const auto Handle = F.Player->Inventory.GiveNamedItem(*F.Player, Name);
+		FElysiumEntity* Entity = F.World.Resolve(Handle);
+		FElysiumItem* Item = Entity ? Entity->AsItem() : nullptr;
+		if (!TestNotNull(TEXT("the active-weapon fixture was granted"), Item)) return false;
+		TestTrue(TEXT("the weapon becomes active"), F.Player->Inventory.SetActiveWeapon(*F.Player, *Item));
+		const bool Brawl = FString(Name).EndsWith(TEXT("brawl"));
+		TestEqual(TEXT("arc follows active combat feat, not unchanged Sneaking"), Rules.InDeafArc(*F.Player, *F.Guard), Brawl);
+		TestEqual(TEXT("rear hearing uses the same active-weapon arc"), Rules.InDeafZone(*F.Player, *F.Guard), Brawl);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesUnknownAuthorityTest,
+	"Elysium.Substrate.NpcSenses.UnknownAuthority", GElysiumTestFlags)
+bool FElysiumNpcSensesUnknownAuthorityTest::RunTest(const FString&)
+{
+	FSensesFixture F(540.f);
+	if (!F.Guard || !F.Player) return false;
+	F.Guard->InvestigateMode = 4; // thug_1's authored hated-target investigation policy
+	F.Services.bPlayerDucking = true;
+	F.Player->Origin = FVector(Cm(500.f), 0, 0);
+	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
+	F.Guard->Senses.TickSight(*F.Guard, 1.0);
+	FElysiumNpcConditions Conditions;
+	ElysiumNpcCond::GatherSight(*F.Guard, 1.0, Conditions);
+	TestTrue(TEXT("outer-band approach is unknown"), Conditions.Has(EElysiumNpcCond::SeeUnknown));
+	TestFalse(TEXT("unknown is skipped before the hated observation"), Conditions.Has(EElysiumNpcCond::SeeHate));
+	TestFalse(TEXT("unknown creates no enemy record"), F.Guard->EnemyMemory.Find(F.Player->Handle) != nullptr);
+	TestEqual(TEXT("a new unknown increments the retail sighting counter"), F.Guard->EnemySightings, 1);
+	F.Player->Observer.bDetected = true; // a stale/different nearest-observer presentation sample
+	F.Guard->Senses.TickSight(*F.Guard, 1.2);
+	Conditions.Reset();
+	ElysiumNpcCond::GatherSight(*F.Guard, 1.2, Conditions);
+	TestTrue(TEXT("HUD detection cannot turn unknown contact into acquisition"), Conditions.Has(EElysiumNpcCond::SeeUnknown));
+	TestFalse(TEXT("presentation cannot author hostile-observation history"), F.Player->LastHostileAssessment.IsSet());
+	TestEqual(TEXT("the same unknown is not a repeat encounter every look"), F.Guard->EnemySightings, 1);
+	F.Player->Origin.X = Cm(200.f);
+	F.Guard->Senses.TickSight(*F.Guard, 2.0);
+	Conditions.Reset();
+	ElysiumNpcCond::GatherSight(*F.Guard, 2.0, Conditions);
+	TestTrue(TEXT("leaving the band admits real hate observation"), Conditions.Has(EElysiumNpcCond::SeeHate));
+	TestTrue(TEXT("real admitted observation supplies the one-second predicate"), F.Player->WasRecentlyObservedByHostile(2.999));
+	TestFalse(TEXT("exactly one second later the predicate expires"), F.Player->WasRecentlyObservedByHostile(3.0));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesOverrideDebounceTest,
+	"Elysium.Substrate.NpcSenses.OverrideAndDebounce", GElysiumTestFlags)
+bool FElysiumNpcSensesOverrideDebounceTest::RunTest(const FString&)
+{
+	FSensesFixture F(540.f);
+	if (!F.Guard || !F.Player) return false;
+	F.Player->Origin = FVector(Cm(800.f), 0, 0);
+	FElysiumGameSoundRequest Shot;
+	Shot.Category = ElysiumGameSounds::Gunshot();
+	Shot.TypeMask = ElysiumGameSounds::Combat;
+	Shot.RadiusCm = Cm(1200.f);
+	Shot.Position = F.Player->EyePosition();
+	Shot.Source = F.Player->Handle;
+	Shot.DurationSeconds = .2;
+	F.World.GameSounds().Emit(Shot, 10.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 10.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 10.91);
+	F.Guard->Senses.TickSight(*F.Guard, 11.0);
+	TestTrue(TEXT("hearing with no committed enemy opens one second of range override"),
+		F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	F.Guard->Senses.TickSight(*F.Guard, 11.91);
+	TestFalse(TEXT("override expires at equality"), F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	F.Player->Origin.X = Cm(100.f);
+	F.Guard->Senses.Memory.Enemy = F.Player->Handle;
+	F.Guard->Senses.GatherEnemyLos(*F.Guard, 12.0);
+	FElysiumActiveDisciplineEffect BrainWipe;
+	BrainWipe.Record = TEXT("Dominate_BrainWipe");
+	F.Guard->Disciplines.TargetEffects.Add(BrainWipe);
+	for (int32 Count = 0; Count < 9; ++Count) F.Guard->Senses.GatherEnemyLos(*F.Guard, 13.0 + Count * .1);
+	TestFalse(TEXT("BrainWipe retains LOS below ten failed samples"), F.Guard->Senses.Memory.bEnemyOccluded);
+	F.Guard->Senses.GatherEnemyLos(*F.Guard, 14.0);
+	TestTrue(TEXT("the tenth BrainWipe sample becomes occluded despite clear geometry"), F.Guard->Senses.Memory.bEnemyOccluded);
+	F.Guard->Disciplines.TargetEffects.Reset();
+	F.Guard->Senses.GatherEnemyLos(*F.Guard, 14.1);
+	TestFalse(TEXT("removing the effect restores actual visibility"), F.Guard->Senses.Memory.bEnemyOccluded);
 	return true;
 }
 

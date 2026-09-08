@@ -488,6 +488,37 @@ unregistered component, so it is not driven there), and a revert returns to the 
 
 ### Switched lights and lightstyles (R6.2)
 
+**Gameplay-light consumer (0005 requirement 1, 2026-09-08).** The map bake additionally authors
+`DA_<map>_LightQuery` from the V2 lighting, root and visibility units. This native asset retains
+every raw worldlight RGB/type/style/cluster/attenuation/cone row, including rows with no Unreal
+light actor. Positions and planes are Unreal centimetres; linear/quadratic attenuation coefficients
+are divided by 2.54 and 2.54 squared, respectively. The engine load fixups remain the producer's:
+zero point/spot attenuation becomes quadratic 1, zero spot exponent becomes 1, radius below one
+Source unit becomes zero cutoff. Type-4's distance budget is the original `linearAttn`, separately
+stated in cm; its attenuation does not consume the radius field.
+
+The native asset also carries the world BSP partition and decompressed cluster PVS, mask-`0x4191`
+world convexes, displacement triangles and sky brush boundaries, cooked through
+`UElysiumMapCollisionPayload`. `importers.map_light_query` reuses the established hull/displacement
+producer, selecting the light mask (including shadow-only, excluding glass/grate/clip). The V2
+placement bake stamps `elysium.stealth-shadow` on unflagged (`flags & 0x10 == 0`) GAME_LUMP
+static props outside the miniature. The rig queries these components directly through Unreal
+collision, so mutable entity bodies never enter the filter. These query colliders ignore all
+ordinary channels and do not register with navigation.
+
+`Adopt` and `AdoptBaked` join this same asset through `BakedMapLightQuery`, independently of visual
+light calibration. Missing/invalid cooked data emits a Warning and leaves the light service
+unavailable. Visual light actor tags still carry only the rendering facts listed above; raw
+gameplay illumination is owned by the map query asset. Its stage hash is part of the level recipe
+and manifest version 12 requires it, so a light, PVS or shadow-geometry change invalidates the bake.
+No running game reads a GLB or derives geometry from retail bytes.
+
+The query consumes the live style **pattern and clock**, not a calibrated component's intensity.
+Retail `engine.dll 0x20076eb0` holds each 10-Hz letter at `(letter-'a')*22/264`; the port's visual
+interpolation remains on its rendering path. The worldlight sum is raw luminance and unbounded;
+`CHL2_Player::vfunc471` is the sole aggregate `[0,1]` clamp. Full retail branches and addresses are
+recorded in `docs/vtmb/stealth.md`, "The light query, recovered".
+
 R6.2 of `docs/project/seam_migration.md` -> "Roadmap -- one pipeline" [R7.1 / MP-5.1] wires the
 light entities to the rig's lightstyle clock. Nothing here is a bake change: the bake already tags
 every actor `elysium.style=<s>` (R5.6) and the rig already animates styles per frame; what was

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+#include "ElysiumAnimationIntent.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
@@ -9,8 +10,10 @@
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
+#include "Substrate/ElysiumNpcScheduleHost.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
@@ -71,6 +74,10 @@ public:
 	// The running schedule and the variant token its activity picks ride on.
 	FElysiumScheduleState Schedule;
 	int32 ScheduleActivityCycle = 0;
+	// The resolved (bank, label) pair `TASK_SET_ACTIVITY` most recently made ideal. It is session
+	// state: schedule restore restarts at task zero because neither the current body pose nor the
+	// watchdog survives a load. The body phase, not this record, is the current sequence authority.
+	FElysiumClipIdentity ScheduleIdealActivity;
 
 	// `m_bfAINPCFlags` / `m_bfAINPCFlags2` and the obliviousness refcount. Written by
 	// `TASK_SET_NPC_FLAG` / `TASK_MAKE_OBLIVIOUS` and released by every schedule install; saved,
@@ -174,6 +181,9 @@ public:
 	// The sensory transaction and everything it remembers, including the last damaging hit this
 	// NPC took (`Senses.Memory.LastDamage*`, written by the typed commit below).
 	FElysiumNpcSenses Senses;
+	// CAI_Memory is the observed-actor admission store. This stays distinct from
+	// `Senses.Memory.Enemy`, the committed sticky enemy selected from it.
+	FElysiumNpcEnemyMemory EnemyMemory;
 
 	// --- Player-law witnessing (`ElysiumNpcWitness.h`) ---
 	// The four authored thresholds the two law lanes compare a player activity level against, and
@@ -499,6 +509,7 @@ public:
 	virtual bool IsBodyVisible() const override;
 
 	virtual float PlayActivity(const FString& Activity) override;
+	virtual bool IsIdealActivityCurrent() const override;
 
 	// One rung of `TASK_PLAY_DEATH_SEQUENCE`'s ladder. It goes through the same Reaction-band
 	// producer every other combat reaction does, because a death pose has to replace whatever owns
@@ -520,6 +531,26 @@ public:
 	// back once, where the program ends (`ReleaseScheduleBody`).
 
 	virtual void StopMoving() override;
+	virtual EElysiumTaskResult StopMovingTask() override;
+	virtual EElysiumTaskResult BeginStopMovingTask() override;
+	virtual void TaskStarting() override { ScheduleHost.FailureReason = ScheduleHost.PendingFailureReason = 0; }
+	virtual void SetGoalTolerance(float Units) override;
+	virtual void TaskFail(int32 Reason) override;
+	virtual void ScheduleDone() override;
+	virtual int32 TaskFailureReason() const override { return ScheduleHost.PendingFailureReason; }
+	FElysiumNpcScheduleHost ScheduleHost;
+	// CBaseEntity::SetAttackExtents 0x1009af40; attack partition only, never the motor capsule.
+	void SetAttackExtents(const FVector& MarginCm) { ScheduleHost.AttackExtentsCm = MarginCm; }
+	FBox AttackBounds(const FBox& CollisionBounds) const
+	{
+		return FBox(CollisionBounds.Min - ScheduleHost.AttackExtentsCm,
+			CollisionBounds.Max + ScheduleHost.AttackExtentsCm);
+	}
+	void ClearScheduleHint(float ReuseDelay);
+	void ClearOwnedActivityCopyProps();
+	void EndDisciplineSchedule();
+	void DisconnectFromSquad();
+	void ReconnectToSquad();
 
 	virtual bool GetPathToEnemy(float ToleranceUnits) override;
 
@@ -605,7 +636,7 @@ public:
 
 	void BeginAmbientLeave(double Now);
 
-	void FinishAmbientUse(bool bFireLeft);
+	void FinishAmbientUse(bool bFireLeft, bool bStopMovement = true);
 
 	void ThinkAmbient();
 
