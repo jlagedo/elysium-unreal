@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumEntityHandle.h"
 
 class FElysiumPlayer;
 class FElysiumNpc;
@@ -21,4 +22,12 @@ struct FElysiumStealthKillRules
 	float MinDepthUnits(int32 Sneaking, float Hearing) const;
 	bool InDeafArc(const FElysiumPlayer& Player, const FElysiumNpc& Victim) const;
 	bool InDeafZone(const FElysiumPlayer& Player, const FElysiumNpc& Victim) const;
+
+	// `CStealthKillRules::FindVictim` `0x101be1f0`. Per-frame cache on this table (retail `+0xb4` /
+	// `+0x134`); a same-`Now` caller returns the cached NPC without re-tracing.
+	FElysiumNpc* FindVictim(FElysiumPlayer& Player) const;
+
+private:
+	mutable FElysiumEntityHandle CachedVictim;
+	mutable double CachedAt = -1.0;
 };

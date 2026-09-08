@@ -850,6 +850,12 @@ bool FElysiumWeapon::IsActiveWeapon() const
 	return Char != nullptr && Char->Inventory.ActiveWeapon == Handle;
 }
 
+bool FElysiumWeapon::CanStealthKill() const
+{
+	const FElysiumItemDef* Record = Data();
+	return Record != nullptr && Record->Type == EElysiumItemType::WeaponMelee;
+}
+
 int32 FElysiumWeapon::TotalLethality(int32 ModeIndex, const FElysiumCombatCharacter& Attacker,
 	const FElysiumWeaponContext& Context) const
 {

@@ -131,7 +131,7 @@ faithful re-shaping of the tree with no completeness claim beyond the tree's.
 | `ReactionsData` | `reaction.txt`, `reactions000.txt` | open | — |
 | `InterestingPlaceTypeList` | `interestingplacetypelist.txt` | open | — |
 | `ItemTypeData`, `VendorData` | `items.txt`, `vendors.txt` | open | — |
-| `StealthData`, `StealthKillRules` | `stealth.txt`, `stealthkillrules.txt` | open | `docs/vtmb/stealth.md` |
+| `StealthData`, `StealthKillRules` | `stealth.txt`, `stealthkillrules.txt` | loader + `FindVictim` closed; HUD/commitment open | `docs/vtmb/stealth.md` |
 | `SoundSchemeTables` | `sndscheme_char/computer/openable/switch/wpn.txt` | open | — |
 | `SoundVolumeTable`, `ParticleImpactTable` | `sound_volume_table.txt`, `particleimpacttable.txt` | open | — |
 | `StringData` | `strings.txt`, `strings_internal.txt` and variants | closed | `docs/vtmb/game_runtime.md`; two files share the root key and merge by index |

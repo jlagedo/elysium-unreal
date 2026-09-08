@@ -2096,6 +2096,13 @@ public:
 	bool WasRecentlyObservedByHostile(double Now) const;
 	bool IsInStealthPosture() const;
 
+	// `PlayerStealthKillEligibility` `0x10167320`. Not `IsInStealthPosture()`: that function also
+	// requires a 1.0 s unseen-by-`D_HT` window, which is the light-query term, not this one.
+	bool CanAttemptStealthKill() const;
+	// `CStealthKillRules::FindVictim` `0x101be1f0` through the bound rulebook table. Null when the
+	// table is absent (a headless fixture calls `FElysiumStealthKillRules::FindVictim` itself).
+	class FElysiumNpc* FindStealthKillVictim();
+
 	bool bImmobilized = false;
 	bool bHiddenByController = false;
 

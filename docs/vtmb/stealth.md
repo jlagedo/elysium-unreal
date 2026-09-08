@@ -327,30 +327,31 @@ High Sneaking against deaf/unaware targets reduces $\text{MinDepth}$ toward zero
 
 ### Victim selection and per-frame cache (`FindVictim` @ `0x101be1f0`)
 
-`CStealthKillRules::FindVictim` maintains a per-player-slot cache (`m_hCachedVictim` at `+0xb4`, `m_nCachedFrame` at `+0x134`) updated once per engine frame:
+Recovered 2026-09-08 from the 611-byte listing. `CStealthKillRules::FindVictim` is a **query**, not a think: HUD `FUN_10174580` and `PlayerTryStealthKill` `0x10167370` call it. Cache is on the rules singleton, `m_hCachedVictim[userId-1]` at `+0xb4` and `m_nCachedFrame[userId-1]` at `+0x134`. `IVEngineServer` slot 35 is `GetPlayerUserId(edict)` then `-1`; slot 120 is `framecount`. A new frame clears the slot, runs the chain, then stamps the frame even on failure. Same-frame callers return the cached pointer.
 
-1. **Player eligibility (`PlayerStealthKillEligibility` @ `0x10167320`)**:
-   - Player must not be busy in dialog, cinematics, death, menus or camera lock (`0x101681a0`).
-   - Player must be in sneak posture, ducking, or active Obfuscate (`0x101671a0`).
-   - Active weapon (`GetActiveWeapon()`) must author stealth-kill capability (`m_bCanStealthKill` at `weapon + 0x872 != 0`).
-2. **Forward acquisition trace**:
-   - Traces forward from player eye position along eye view direction by `StealthKillDistMax` (70 units) with mask `0x201400b` (`MASK_SHOT`), filtering out the player.
-3. **Victim admission (`IsValidStealthKillTarget` @ `0x10341850` / `0x102c2300` / `0x1037bbc0`)**:
-   - Base `CBaseCombatCharacter::IsValidStealthKillTarget` returns `false`.
-   - `CVHuman::IsValidStealthKillTarget` enforces:
-     - Target must be alive (`!IsDead()`);
-     - Target must not already be in a grapple/paired action (`m_hGrapplePartner == NULL`);
-     - Target must not have boss/immunity flag (`m_bNoStealthKill == 0` at `+0x18f6`);
-     - Target state (`GetNPCState()`) must be `NPC_STATE_IDLE` (1) or `NPC_STATE_ALERT` (0xd); target cannot be `NPC_STATE_DEAD` (7) or in active combat (`NPC_STATE_COMBAT`);
-     - Target must NOT have conditions `COND_SEE_PLAYER` (`0x6f`) or `COND_IN_COMBAT` (`0x5a`);
-     - Target must be human/biped (`IsHuman()`).
-   - `CNPC_VGhoulCroucher::IsValidStealthKillTarget` override allows croucher ghouls when undisturbed (`!IsDisturbed()` at `+0x6666 == 0`).
-4. **Arc test or state override**:
-   - Requires `InDeafArc(player, victim)` **OR** victim mesmerized/blinded/trance override (`victim->NPCData + 0x5bb4 > 0`).
-5. **Grapple admission**:
-   - Verifies `CombatCharacterCanStartGrapple(player, victim, 3)`.
+On a miss, in this order:
 
-If all pass, `victim` is cached in `m_hCachedVictim[player_index]`.
+1. **Player eligibility (`0x10167320`)**:
+   - Not busy (`0x101681a0`): live `GetCineCamera` `0x1017cf90`, dialogue / lock handles, menus. If `0x10175180` is true the busy tests are skipped (unrecovered cheat/skip; shipping path is the tests).
+   - Stealth posture `0x101671a0`: active Obfuscate (discipline 3, power ≥ 1, `player+0x14dc`) **or** already in a type-3 grapple **or** (`FL_DUCKING` and not `0x101672d0`, a duck-transition timer). This is **not** the light-query eligibility (unseen by `D_HT` for 1.0 s).
+   - Active weapon byte `weapon+0x872 != 0`. Not a vdata key: `CWeaponMelee` ctor `0x103e9ac0` and `CWeaponUnarmed` ctor `0x103f53f0` write 1; `CWeapon` `0x10250ac0` writes 0. Fists stealth-kill; firearms do not.
+2. **`StealthKillDistMax` (`+0xb0`, default 70) > 0**, else abort. `ComputeMinDepth` `0x101bef50` is **not** in this function — it belongs to hearing's `InDeafZone` `0x101be710`.
+3. **Forward acquisition trace.** Start = player `EyePosition` (slot 193, `0x100b7f70`). Direction = player `BodyDirection2D` (slot 368, `0x10331950`) — body yaw, **Z flattened**, not camera look. End = start + DistMax × dir. `TraceRay` mask **`0x201400b` (`MASK_PLAYERSOLID`)**, not `MASK_SHOT`. Filter skips the player. Hit entity is `CGameTrace+0x9c`.
+4. **`IsValidStealthKillTarget` slot 294 (`+0x498`)**:
+   - `CBaseCombatCharacter` `0x10341850`: always false.
+   - `CAI_BaseNPCTroika` `0x102c2300` (there is no `CVHuman` override in the image). Troika enforces:
+     1. `m_bScriptHidden` (`+0xf4`) set → false.
+     2. `m_iDialog` (`+0x128`, key `dialogname`) non-zero → false. NPCs with an authored conversation cannot be stealth-killed; tutorial `stealth_victim` has none.
+     3. `m_bInvincible` (`+0x63d8`, key `invincible`) set → false. There is no `m_bNoStealthKill` at `+0x18f6`.
+     4. `GetNPCState` is `IDLE` (1) or `ALERT` (0xd). A debug ConVar at `DAT_10924afc` relaxes this to “not `DEAD` (7)”; shipping default is the IDLE/ALERT pair.
+     5. `HasCondition(HEAR_PLAYER 0x6f)` → false.
+     6. `HasCondition(SEE_PLAYER 0x5a)` → false. These are **not** `COND_SEE_PLAYER` at `0x6f` / `COND_IN_COMBAT` at `0x5a`.
+     7. `m_lifeState == 0` (alive). Slot 158 (`0x100b4dc0`) is this test; it is **not** a species/`IsHuman` check.
+   - `CNPC_VGhoulCroucher` `0x1037bbc0`: if `!IsDisturbed()` (`+0x6666`) return true (skip Troika); else chain to Troika. Tutorial `stealth_victim` is `npc_VVampire` and never takes this arm.
+5. **Arc or oblivious.** `InDeafArc(player, victim)` **or** Troika `m_iIsOblivious` (`+0x5bb4`) `> 0`, read through the cached Troika* at entity `+0x98`. Oblivious bypasses **only** the rear-arc test. A post-feed trance is one writer of that counter.
+6. **`CanStartGrappleAttack(player, victim, type=3, 1)` `0x103285a0`.** For type 3/4 the distance is 2-D (x/y) against `StealthKillDistMax`. Attacker/victim vfuncs `0x5e4`/`0x5e8` return true on both `CBasePlayer` and `CAI_BaseNPC`. An already-paired victim with a different partner is refused. A crouched attacker also hull-traces `(-16,-16,0)–(16,16,72)` with the same mask. `CheckAndTranslateGrapplePosition` `0x10328af0` is the paired-clip search; commitment owns it.
+
+If all pass, `victim` is stored in `m_hCachedVictim[player_index]`.
 
 ### HUD publication and input commitment
 

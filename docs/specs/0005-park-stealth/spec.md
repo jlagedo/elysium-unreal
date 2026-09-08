@@ -96,7 +96,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   (`InDeafArc` `0x101be500`) and minimum approach depth (`ComputeMinDepth` `0x101bef50`),
   active-weapon Brawl/Melee arc selection, the rear deaf zone shared with hearing. Oracle:
   `stealth.md` § "Stealth-kill transaction (RE50)".
-- [ ] **3b. Stealth kill: victim selection.**
+- [x] **3b. Stealth kill: victim selection.**
   Retail: `FindVictim` (`0x101be1f0`) runs per frame with a cache; admission is the trace to
   the victim, the weapon's stealth-kill capability, the arc and depth from 3a; an oblivious
   victim (7) admits a backstab from any angle.

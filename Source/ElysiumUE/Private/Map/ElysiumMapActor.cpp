@@ -1686,6 +1686,66 @@ bool AElysiumMapActor::QueryLineOfSight(const FVector& FromCm, const FVector& To
 	return !World->LineTraceSingleByChannel(Hit, FromCm, ToCm, ELYSIUM_USE_CHANNEL, Params);
 }
 
+bool AElysiumMapActor::TracePlayerSolid(const FVector& FromCm, const FVector& ToCm,
+	const FElysiumEntityHandle& Ignore, FElysiumEntityHandle& OutHit) const
+{
+	OutHit = FElysiumEntityHandle::Invalid();
+	UWorld* World = GetWorld();
+	if (World == nullptr || !EntityWorld)
+	{
+		return false;
+	}
+	const FVector Delta = ToCm - FromCm;
+	if (Delta.IsNearlyZero())
+	{
+		return true;
+	}
+	FCollisionQueryParams Params(FName(TEXT("ElysiumPlayerSolid")), /*bTraceComplex*/ false);
+	if (const APawn* Pawn = ResolvePlayerPawn())
+	{
+		Params.AddIgnoredActor(Pawn);
+	}
+	float BestT = 1.0f;
+	FHitResult WorldHit;
+	if (World->LineTraceSingleByChannel(WorldHit, FromCm, ToCm, ELYSIUM_USE_CHANNEL, Params))
+	{
+		BestT = WorldHit.Time;
+	}
+	FElysiumEntityHandle BestNpc;
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
+	{
+		FElysiumEntity* Ent = EntPtr.Get();
+		FElysiumNpc* Npc = Ent ? Ent->AsNpc() : nullptr;
+		if (!Npc || Npc->IsInert() || Npc->Handle == Ignore)
+		{
+			continue;
+		}
+		FBox Candidate(ForceInit);
+		if (const USkeletalMeshComponent* Body = Ent->GetSkeletalBody())
+		{
+			Candidate = Body->Bounds.GetBox();
+		}
+		else
+		{
+			Candidate = ElysiumStandHullAt(Ent->Origin);
+		}
+		if (!FMath::LineBoxIntersection(Candidate, FromCm, ToCm, Delta))
+		{
+			continue;
+		}
+		const FVector Closest = Candidate.GetClosestPointTo(FromCm);
+		const float T = FVector::DotProduct(Closest - FromCm, Delta) / Delta.SizeSquared();
+		if (T < 0.0f || T > BestT)
+		{
+			continue;
+		}
+		BestT = T;
+		BestNpc = Ent->Handle;
+	}
+	OutHit = BestNpc;
+	return true;
+}
+
 float AElysiumMapActor::QueryLightAtPoint(const FVector& PointCm) const
 {
 	const UElysiumMapVisuals* MapVisuals = GetVisuals();

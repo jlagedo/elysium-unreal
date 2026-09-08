@@ -1525,6 +1525,25 @@ struct FElysiumRecordingServices final
 			*ToCm.ToString(), bLineOfSightClear ? TEXT("clear") : TEXT("blocked")));
 		return bLineOfSightClear;
 	}
+	// Unset = the headless answer (`false`): FindVictim then tests NPC standing hulls itself.
+	// Set `bPlayerSolidAnswered` to force a miss or a scripted character hit.
+	bool bPlayerSolidAnswered = false;
+	FElysiumEntityHandle PlayerSolidHit;
+	virtual bool TracePlayerSolid(const FVector& FromCm, const FVector& ToCm,
+		const FElysiumEntityHandle& Ignore, FElysiumEntityHandle& OutHit) const override
+	{
+		OutHit = FElysiumEntityHandle::Invalid();
+		if (!bPlayerSolidAnswered)
+		{
+			Record(FString::Printf(TEXT("TracePlayerSolid %s -> %s ignore=%s = headless"),
+				*FromCm.ToString(), *ToCm.ToString(), *Ignore.ToString()));
+			return false;
+		}
+		OutHit = PlayerSolidHit;
+		Record(FString::Printf(TEXT("TracePlayerSolid %s -> %s ignore=%s = %s"),
+			*FromCm.ToString(), *ToCm.ToString(), *Ignore.ToString(), *OutHit.ToString()));
+		return true;
+	}
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override
 	{
 		Record(FString::Printf(TEXT("QueryLightAtPoint %s = %.2f"), *PointCm.ToString(),

@@ -79,3 +79,107 @@ bool FElysiumStealthKillRules::InDeafZone(const FElysiumPlayer& Player, const FE
 		&& FVector::Dist(Player.Origin, Victim.Origin) > MinDepthUnits(
 			Player.CalcFeat(TEXT("Sneaking")), Victim.Senses.Perception.HearingScalar) * ElysiumMove::U;
 }
+
+namespace
+{
+	FBox StealthKillStandHull(const FVector& FeetOriginCm)
+	{
+		const FVector Half(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, 0.0f);
+		return FBox(FeetOriginCm - Half,
+			FeetOriginCm + Half + FVector(0.0f, 0.0f, ElysiumMove::StandHeight));
+	}
+
+	FElysiumNpc* TraceNpcHulls(FElysiumEntityWorld& World, const FVector& FromCm, const FVector& ToCm,
+		const FElysiumEntityHandle& Ignore)
+	{
+		const FVector Delta = ToCm - FromCm;
+		if (Delta.IsNearlyZero())
+		{
+			return nullptr;
+		}
+		FElysiumNpc* Best = nullptr;
+		float BestT = 1.0f;
+		for (const TUniquePtr<FElysiumEntity>& EntPtr : World.Entities())
+		{
+			FElysiumEntity* Ent = EntPtr.Get();
+			FElysiumNpc* Npc = Ent ? Ent->AsNpc() : nullptr;
+			if (!Npc || Npc->IsInert() || Npc->Handle == Ignore)
+			{
+				continue;
+			}
+			const FBox Hull = StealthKillStandHull(Npc->Origin);
+			if (!FMath::LineBoxIntersection(Hull, FromCm, ToCm, Delta))
+			{
+				continue;
+			}
+			const FVector Closest = Hull.GetClosestPointTo(FromCm);
+			const float T = FVector::DotProduct(Closest - FromCm, Delta) / Delta.SizeSquared();
+			if (T < 0.0f || T > BestT)
+			{
+				continue;
+			}
+			BestT = T;
+			Best = Npc;
+		}
+		return Best;
+	}
+}
+
+FElysiumNpc* FElysiumStealthKillRules::FindVictim(FElysiumPlayer& Player) const
+{
+	FElysiumEntityWorld* World = Player.World;
+	const double Now = World ? World->NowSeconds() : 0.0;
+	if (CachedAt == Now)
+	{
+		FElysiumEntity* Cached = World ? World->Resolve(CachedVictim) : nullptr;
+		return Cached ? Cached->AsNpc() : nullptr;
+	}
+	CachedVictim = FElysiumEntityHandle::Invalid();
+	CachedAt = Now;
+
+	if (!World || DistanceMaxUnits <= 0.f || !Player.CanAttemptStealthKill())
+	{
+		return nullptr;
+	}
+
+	const FVector From = Player.EyePosition();
+	const FVector Dir = Player.BodyDirection2D();
+	const FVector To = From + Dir * (DistanceMaxUnits * ElysiumMove::U);
+
+	FElysiumNpc* Victim = nullptr;
+	FElysiumEntityHandle Hit;
+	const IElysiumEmbodiment* Embodiment = World->Embodiment();
+	if (Embodiment && Embodiment->TracePlayerSolid(From, To, Player.Handle, Hit))
+	{
+		FElysiumEntity* Ent = World->Resolve(Hit);
+		Victim = Ent ? Ent->AsNpc() : nullptr;
+	}
+	else
+	{
+		Victim = TraceNpcHulls(*World, From, To, Player.Handle);
+	}
+	if (!Victim || !Victim->IsValidStealthKillTarget(Player))
+	{
+		return nullptr;
+	}
+	if (!InDeafArc(Player, *Victim) && !Victim->IsOblivious())
+	{
+		return nullptr;
+	}
+	// Type-3 `CanStartGrappleAttack` `0x103285a0`: 2-D origin distance vs DistMax. Crouch hull
+	// and `CheckAndTranslateGrapplePosition` `0x10328af0` are 3c; they pass here.
+	const float Dx = Player.Origin.X - Victim->Origin.X;
+	const float Dy = Player.Origin.Y - Victim->Origin.Y;
+	const float MaxCm = DistanceMaxUnits * ElysiumMove::U;
+	if (Dx * Dx + Dy * Dy > MaxCm * MaxCm)
+	{
+		return nullptr;
+	}
+	if (Victim->IsGrappling() && Victim->ResolveGrapplePartner() != &Player)
+	{
+		return nullptr;
+	}
+
+	CachedVictim = Victim->Handle;
+	return Victim;
+}

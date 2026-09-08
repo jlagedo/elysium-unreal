@@ -989,6 +989,20 @@ public:
 	// carries no NPC/player bits, so a body standing between two points does not break the line.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const { return true; }
 
+	// `CStealthKillRules::FindVictim` `0x101be1f0`'s acquisition ray. Mask `0x201400b`
+	// (`MASK_PLAYERSOLID`: world and characters), `CTraceFilterSimple` skipping `Ignore`.
+	// Distinct from `QueryLineOfSight` (no monster bit) and `TraceCameraHull` (brush-only).
+	//
+	// True means a collision world (or a test double) answered: `OutHit` is the first character
+	// along the ray, or Invalid when the ray missed or a wall won. False is the headless answer —
+	// no geometry — and the caller then tests NPC standing hulls in the entity world itself.
+	virtual bool TracePlayerSolid(const FVector& FromCm, const FVector& ToCm,
+		const FElysiumEntityHandle& Ignore, FElysiumEntityHandle& OutHit) const
+	{
+		OutHit = FElysiumEntityHandle::Invalid();
+		return false;
+	}
+
 	// `CBaseCineCam::FindBestShot`'s visibility predicate `FUN_1006db10` (SC8): can the camera see
 	// what the shot is aimed at?
 	//

@@ -640,6 +640,11 @@ public:
 	void Hide(FElysiumCombatCharacter* Wearer);
 	void Unhide(FElysiumCombatCharacter* Wearer);
 
+	// `m_bCanStealthKill` at `weapon+0x872`. `CWeaponMelee` `0x103e9ac0` and `CWeaponUnarmed`
+	// `0x103f53f0` write 1; `CWeapon` `0x10250ac0` writes 0. This port's unarmed records are
+	// authored `WeaponMelee`, so the item type is the whole of the byte.
+	bool CanStealthKill() const;
+
 	// `total_lethality = max(BaseLethality + attacker adjustment, 0)`, the adjustment being the
 	// descriptor's attack feat applied to the attacker. Rounded; the ranged path clamps to >= 1.
 	int32 TotalLethality(int32 ModeIndex, const FElysiumCombatCharacter& Attacker,

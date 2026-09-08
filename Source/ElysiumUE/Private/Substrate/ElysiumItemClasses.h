@@ -108,6 +108,10 @@ public:
 	virtual FElysiumItem* AsItem() { return this; }
 	virtual FElysiumKeyring* AsKeyring() { return nullptr; }
 	virtual class FElysiumWeapon* AsWeapon() { return nullptr; }
+	const class FElysiumWeapon* AsWeapon() const
+	{
+		return const_cast<FElysiumItem*>(this)->AsWeapon();
+	}
 
 	// Stand / tear down the loose world body. Ownership is what decides: an owned item is carried,
 	// so it has no presence in the world.

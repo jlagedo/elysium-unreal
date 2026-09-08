@@ -22,6 +22,7 @@
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumFootsteps.h"      // the step clock, the landing and the hearing rules
 #include "Substrate/ElysiumItemClasses.h"   // the dialogue holster switches the active weapon
+#include "Substrate/ElysiumWeaponClasses.h"
 #include "Substrate/ElysiumGameSound.h"      // the six PLAYER_* category names
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpcConditions.h"  // WeaponCapability — the block predicate's `0x18000` term
@@ -30,6 +31,8 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealth.h"
+#include "Substrate/ElysiumNpc.h"
+#include "Substrate/ElysiumStealthKillRules.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Misc/Paths.h"
@@ -45,6 +48,47 @@ bool FElysiumPlayer::IsInStealthPosture() const
 	return IsObfuscatedForSenses()
 		|| (IsGrappling() && Grapple.Type == EElysiumGrappleType::StealthKill)
 		|| (Embodiment && Embodiment->IsPlayerDucking() && !WasRecentlyObservedByHostile(World->NowSeconds()));
+}
+
+bool FElysiumPlayer::CanAttemptStealthKill() const
+{
+	// `0x101681a0`. Other handles (`+0xfe8`, `+0x1040`, `+0x1eb8`, `+0x19c0`, `+0x19cc`,
+	// menu `0x1023bd00`) and the `0x10175180` skip have no producer here and answer not-busy.
+	if (!IsAlive() || IsInert())
+	{
+		return false;
+	}
+	if (World && World->CineCameraEntity().IsSet())
+	{
+		return false;
+	}
+	const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	const bool bPosture = IsObfuscatedForSenses()
+		|| (IsGrappling() && Grapple.Type == EElysiumGrappleType::StealthKill)
+		|| (Embodiment && Embodiment->IsPlayerDucking());
+	// `0x101672d0` (duck interpolator vs `gpGlobals->curtime`) is a named seam: ducking is enough.
+	if (!bPosture)
+	{
+		return false;
+	}
+	const FElysiumItem* Item = Inventory.Active(*this);
+	const FElysiumWeapon* Weapon = Item ? Item->AsWeapon() : nullptr;
+	return Weapon && Weapon->CanStealthKill();
+}
+
+FElysiumNpc* FElysiumPlayer::FindStealthKillVictim()
+{
+	if (!World)
+	{
+		return nullptr;
+	}
+	UElysiumGameStateSubsystem* GameState = World->GetGameState();
+	UElysiumRulebookSubsystem* Book = GameState ? GameState->Rulebook() : nullptr;
+	if (!Book)
+	{
+		return nullptr;
+	}
+	return Book->StealthKillRules().FindVictim(*this);
 }
 
 void FElysiumPlayer::Spawn()

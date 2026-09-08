@@ -508,6 +508,8 @@ public:
 	virtual FElysiumEntityHandle QueryAimTarget(float MaxRangeCm) const override;
 	// The two perception queries. Geometry only; every threshold stays substrate.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
+	virtual bool TracePlayerSolid(const FVector& FromCm, const FVector& ToCm,
+		const FElysiumEntityHandle& Ignore, FElysiumEntityHandle& OutHit) const override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
 	virtual bool IsLightQueryAvailable() const override;
 	virtual bool SamplePlayerStealthBounds(FBox& OutBounds, FVector& OutCenter) const override;

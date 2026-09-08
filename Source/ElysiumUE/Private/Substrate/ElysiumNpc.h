@@ -23,6 +23,7 @@ struct FElysiumClanTemplate;
 struct FElysiumDmg;
 struct FElysiumSaveArchive;
 struct FElysiumStatTable;
+class FElysiumPlayer;
 
 // The character leaf shared by every living `npc_*` classname. It stands a skeletal model at its
 // origin, follows named patrols or interesting-place routes, and owns dialogue gates.
@@ -604,6 +605,10 @@ public:
 	 * (`0x101be1f0`, which makes an oblivious body backstabbable from any angle).
 	 */
 	bool IsOblivious() const { return NpcFlags.IsOblivious(); }
+
+	// `CAI_BaseNPCTroika::IsValidStealthKillTarget` `0x102c2300` (slot 294). The attacker argument
+	// is unused in the listing, matching retail.
+	bool IsValidStealthKillTarget(const FElysiumPlayer& Attacker) const;
 
 	// The combat schedules' movement claim. Idempotent for a token already held, and refused while
 	// another owner has the body — which is what a task turns into its own named failure. A patrol

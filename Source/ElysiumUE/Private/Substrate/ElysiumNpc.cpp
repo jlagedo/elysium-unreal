@@ -15,6 +15,7 @@
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
@@ -3274,6 +3275,37 @@ void FElysiumNpc::InputEndDialog(const FElysiumInputArgs& Args)
 FString FElysiumNpc::DialogName() const
 {
 	return Def ? Def->Keys.FindRef(TEXT("dialogname")) : FString();
+}
+
+bool FElysiumNpc::IsValidStealthKillTarget(const FElysiumPlayer& /*Attacker*/) const
+{
+	// `CAI_BaseNPCTroika` `0x102c2300`. `CNPC_VGhoulCroucher` `0x1037bbc0` short-circuits when
+	// `!IsDisturbed()` (`+0x6666`); that producer is not in this runtime, so every classname
+	// including a croucher takes the Troika body. The debug ConVar at `DAT_10924afc` that
+	// relaxes the state test to "not DEAD" is a developer arm and is not ported.
+	if (bHidden)
+	{
+		return false;
+	}
+	if (!DialogName().IsEmpty())
+	{
+		return false;
+	}
+	if (bInvincible)
+	{
+		return false;
+	}
+	const EElysiumNpcState State = GetMind().State();
+	if (State != EElysiumNpcState::Idle && State != EElysiumNpcState::Alert)
+	{
+		return false;
+	}
+	if (Cognition.Conditions.Has(EElysiumNpcCond::HearPlayer)
+		|| Cognition.Conditions.Has(EElysiumNpcCond::SeePlayer))
+	{
+		return false;
+	}
+	return !bDead && !HasReportedDeath();
 }
 
 bool FElysiumNpc::IsUsable() const
