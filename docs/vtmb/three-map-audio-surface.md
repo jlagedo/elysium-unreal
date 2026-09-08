@@ -296,8 +296,9 @@ class not previously counted, `unimplemented_input` (a wire that resolves to a l
 but names an input the class's dispatcher does not implement -- `ambient_generic.FadeIn`/
 `FadeOut`, `ambient_soundscheme.Disable`, per `docs/vtmb/audio_pipeline.md` #7) = 5 across
 108 maps, one on `sp_tutorial_1` (`teleport_hunter.OnBeginFade -> City Soundscheme.Disable`).
-`usable/doors/` exists in the deployed corpus (10 entries, four groups) but the soundgroup
+`usable/doors/` exists in the deployed corpus (six patch WAVs, four groups) but the soundgroup
 resolver never reads it; the door category directory the resolver must use is
-`usable/openable/` (111 entries). Full per-map counts and the non-`corpus` row list are in
+`usable/openable/` (111 entries). The `doors/` files are reached by direct path from
+`sm_oceanhouse_2` / `sm_asylum_1` keys and stay deployed (`audio_pipeline.md` §7b). Full per-map counts and the non-`corpus` row list are in
 `$ELYSIUM_WORK_ROOT/_audio_census/dispositions_three.{json,md}` (three maps) and
 `dispositions_all.{json,md}` (108 maps).

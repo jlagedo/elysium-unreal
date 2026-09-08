@@ -508,7 +508,10 @@ source of the `usable/` path component. So:
 Note the registered token is `Computers` (plural) while that file's `InternalName` is `Computer`
 (singular) — the two are independent strings and only the registered token reaches the path. Note
 also that the token is `Openable`, never `doors`: the `sound/usable/doors/` tree the install also
-ships (4 groups, a subset of `openable`) is **unreachable from any table** and is dead content.
+ships (six Unofficial Patch loose WAVs in 4 groups) is **unreachable from any soundgroup table**.
+It is not dead content: four of the six are referenced by direct path from `sm_oceanhouse_2` and
+`sm_asylum_1` entity keys [data, corpus index `referencedBy`], so they resolve as ordinary sound
+paths and must stay in the corpus.
 
 **The groups are the shipped directories, not a list.** `FUN_101f3810` @`0x101f3810` walks
 `sound\<dir>\*.*`: every *file* becomes a sound slot (matched to the vocabulary by stem) and every
