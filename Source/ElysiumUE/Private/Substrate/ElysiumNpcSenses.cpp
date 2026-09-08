@@ -221,6 +221,11 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	SerializeSound(LastSoundPhysicsDanger);
 	SerializeSound(LastSoundWorld);
 	SerializeSound(BestSound);
+	// The sound sweep's committed source and its two clocks. Version `SoundSweep` is the save floor,
+	// so this is unconditional -- an older payload is refused whole rather than half-read.
+	Ar << BestSoundSource;
+	Ar << NextInvestigateSoundTime;
+	Ar << NextSeeSoundSourceTime;
 	// Version 19 appends the repeated-damage window at the END of the memory record. Elusion belongs
 	// to CAI_Memory's per-observed-actor record, not the committed-enemy tracking cache here.
 	if (Ar.Version() >= FElysiumSaveVersion::NpcCognition)
@@ -295,6 +300,7 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 	RebaseSoundOwner(LastSoundPhysicsDanger);
 	RebaseSoundOwner(LastSoundWorld);
 	RebaseSoundOwner(BestSound);
+	BestSoundSource = World.RebaseSavedHandle(BestSoundSource);
 	LastDamageAttacker = World.RebaseSavedHandle(LastDamageAttacker);
 	ClosestPlayer = World.RebaseSavedHandle(ClosestPlayer);
 	BestSeeUnknown = World.RebaseSavedHandle(BestSeeUnknown);
@@ -742,7 +748,15 @@ void FElysiumNpcSenses::CommitBestSound(const FElysiumNpcConditions& Conditions)
 		&Memory.LastSoundPhysicsDanger, &Memory.LastSoundWorld };
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Priority); ++Index)
 	{
-		if (Conditions.Has(Priority[Index])) { Memory.BestSound = *Records[Index]; return; }
+		if (Conditions.Has(Priority[Index]))
+		{
+			Memory.BestSound = *Records[Index];
+			// `*(param_1 + 0x5b78) = *(param_1 + 0x60b0)`: the winner's owner handle, copied out of
+			// the record before the sticky mirror. The sweep's `SEE_SOUND_SOURCE` tail is its only
+			// reader.
+			Memory.BestSoundSource = Memory.BestSound.Source;
+			return;
+		}
 	}
 }
 void FElysiumNpcSenses::Serialize(FElysiumSaveArchive& Ar, FElysiumNpc& Npc)

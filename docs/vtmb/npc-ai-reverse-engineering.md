@@ -1334,7 +1334,124 @@ of the two previously named iterates a list:
   `HasCondition(HEAR_X) && (schedule already interrupts on HEAR_X || ShouldInvestigate(owner, b))`
   → `COND_INVESTIGATE_SOUND` (0x25); `HEAR_DANGER` skips the predicate. Last wins: combat > bullet
   impact > player > danger > physics danger > world. Then `COND_HEAR_FLANK_SOUND` (0x33) and a
-  `COND_SEE_SOUND_SOURCE` (0x2d) tail.
+  `COND_SEE_SOUND_SOURCE` (0x2d) tail. Walked whole below.
+
+#### The sound sweep `0x102b1cd0`, walked
+
+Read off the decompilation while porting story 10a; it corrects the summary above in three places.
+
+**Entry.** `ClearCondition(INVESTIGATE_SOUND 0x25)` and `ClearCondition(HEAR_FLANK_SOUND 0x33)`,
+unconditionally, before the gate. `GatherConditions` itself clears neither, so the sweep owns them.
+`SEE_SOUND_SOURCE` is *not* cleared here — its tail has two arms that leave it standing.
+
+**Gate.** The whole six-arm body runs only when `m_flNextInvestigateSoundTime (+0x623c) <= curtime`.
+The gate is never re-armed inside this function; all six writers are in `SelectSchedule` and the
+sound selectors.
+
+**The arms.** In evaluation order, each claiming the winner, so the last one to pass wins:
+
+| # | Condition | Record | `bCombatMode` |
+|---|---|---|---:|
+| 1 | `HEAR_WORLD` 0x6e | `+0x61e4` | 0 |
+| 2 | `HEAR_PHYSICS_DANGER` 0x71 | `+0x6134` | 0 |
+| 3 | `HEAR_DANGER` 0x6a | `+0x6108` | predicate skipped |
+| 4 | `HEAR_PLAYER` 0x6f | `+0x61b8` | 0 |
+| 5 | `HEAR_BULLET_IMPACT` 0x70 | `+0x618c` | 1 |
+| 6 | `HEAR_COMBAT` 0x6d | `+0x6160` | 1 |
+
+**Correction 1 — there is no Flinch arm.** The `Flinch` record `+0x6210` is a real seventh record
+and `CommitBestSound` ranks it third, but `0x102b1cd0` never touches it: `HEAR_FLINCH` cannot
+produce `INVESTIGATE_SOUND`. It reaches a decision only through `FUN_102b9060`'s own
+`HasInterruptCondition(HEAR_FLINCH)`. The "six records" and "seven records" statements elsewhere in
+this document are each half right; this is the whole of it.
+
+**Correction 2 — the mask tester is `0x10269c70`, not `HasInterruptCondition`.** Three distinct
+testers exist and the sweep uses the third:
+
+| Address | Needs a schedule | Reads `+0x5c5c` | Reads the mask |
+|---|:-:|:-:|---|
+| `0x10269aa0` `HasCondition` | no | yes | — |
+| `0x10269d30` `HasInterruptCondition` | yes | yes | `+0x5c74` |
+| `0x10269c70` (the sweep's) | yes | **no** | `+0x5c74` **OR** `+0x5c8c` |
+
+Inside the six arms the difference is invisible — the arm already `&&`s with `HasCondition`. For the
+`0x33` and `0x2d` gates it is the whole rule: they are pure "does the running program list this"
+tests, satisfied with the condition unset, and they accept the second mask word too.
+
+**`HEAR_FLANK_SOUND` 0x33.** All of: the mask lists `0x33`; there is a winner; `GetEnemy()` is
+non-null and equals the winner's owner (a resolved-pointer comparison, not a handle one); and
+`dot(soundAt - GetAbsOrigin(), m_vecForward (+0x6290)) < 0.0f` (`_DAT_104454c4` = `0.0f`, confirmed
+by its use as the `0.0f <` threshold on the interrupt distances in `0x102b27f0`). Measured from
+`GetAbsOrigin` (slot 217), not the eye. No consumer is recovered.
+
+`soundAt` is **not** simply the record's stored origin. It is `FUN_101b99d0(record)`:
+
+```c
+if ((record[1] == 0x10 || record[1] == 0x400) && record[0] /*owner*/ resolves)
+    return owner->GetAbsOrigin();   // vfunc 0x364
+return record + 0x20;               // the stored origin
+```
+
+`record+0x04` is the raw CSound type word, so for `BULLET_IMPACT` (`0x10`) and `PHYSICS_DANGER`
+(`0x400`) with a live owner the test measures to the owner's CURRENT position, and only for the
+other four arms to where the sound was made. Since the gate has already established the owner is
+the committed enemy, those two arms ask "is my enemy behind me now" rather than "is the bullet hole
+behind me".
+
+**The `SEE_SOUND_SOURCE` 0x2d tail.** Outside the gate. Gated on the mask listing `0x2d`; if it does
+not, fall straight through to `ClearCondition(0x2d)`. The subject is `m_hBestSoundSource (+0x5b78)`
+— the source the last `CommitBestSound` chose, not this sweep's winner. Comparisons are between
+*resolved pointers* throughout.
+
+1. `FUN_102b8cd0(this, source)`: true only when `source != NULL` **and**
+   `IRelationType(source)` is neither `D_HT` (1) nor `D_FR` (2). False → `return`, leaving `0x2d`
+   untouched. The polarity reads backwards and is worth stating: the tail runs only for a source
+   the NPC neither hates nor fears.
+2. A first-match chain; the match demands its own sight condition, and a match without it (or no
+   match) falls to `ClearCondition(0x2d)`:
+
+   | `source ==` | requires | status |
+   |---|---|---|
+   | `m_hClosestPlayer` `+0x628c` | `SEE_PLAYER` 0x5a | live |
+   | `GetEnemy()` | `SEE_ENEMY` 0x46 | live, but only for a `D_LI`/`D_NU` enemy after step 1 |
+   | `m_hLastSeenHateEnt` `+0x5b68` | `SEE_HATE` 0x43 | live; needs the relation to have left `D_HT` |
+   | `m_hLastSeenFearEnt` `+0x5b6c` | `SEE_FEAR` 0x44 | live; needs the relation to have left `D_FR` |
+   | `m_hLastSeenDislikeEnt` `+0x5b70` | `SEE_DISLIKE` 0x45 | live; same `D_HT` caveat |
+   | `m_hLastSeenNemesisEnt` `+0x5b74` | `SEE_NEMESIS` 0x5b | live; same `D_HT` caveat |
+
+3. Otherwise the stranger arm. `curtime < +0x6418` → `return` (sticky). Else
+   `FInViewCone(source)` `&& FVisible(source, 0x2804091)` (slot 201, Troika `0x102b4630`)
+   — both dispatched virtually, so on a Troika NPC the cone test is the slot-363 override
+   `0x102b4540` (which adds two dev-global arms and an unconditional accept when `GetTarget()` is
+   `m_hClosestPlayer` with the target's `+0x6279` byte set) and NOT the base
+   `CBaseCombatCharacter::FInViewCone` `0x10326750` → `SetCondition(0x2d)`, else `ClearCondition(0x2d)`; then
+   `+0x6418 = curtime + 0.5f` (`_DAT_104454d0`).
+
+**Correction 3 — `+0x6418`.** It is the stranger arm's own rate limit, `0.5 s`; this sweep is its
+only reader and only writer. It appears nowhere else in this document.
+
+**The four `m_hLastSeen*Ent` handles are live.** `CAI_BaseNPC::OnLooked` (`0x1026a2c0`, the base of
+Troika slot 469) writes one of them per assessed sighting: the `D_HT` case splits on
+`IRelationPriority` into `m_hLastSeenDislikeEnt` (`< 0`, condition 0x45),
+`m_hLastSeenHateEnt` (`< 0xb`, 0x43) and `m_hLastSeenNemesisEnt` (else, 0x5b); the `D_FR` case
+writes `m_hLastSeenFearEnt` (0x44). Both cases sit behind `m_bfAINPCFlags2 & 0x10000` (`D_CALM`):
+the `D_HT` arm jumps to the `case 2` label when it is set, and `case 2` re-tests the same flag and
+does nothing — so a sighting under `D_CALM` writes no handle AND raises no condition. `FUN_1027c300`
+resets all four to `0xffffffff`.
+
+A method note, because this was got wrong once during the 10a port and corrected here: a
+`vtmb_grep` for the decompiler's untyped dword rendering (`param_1[0x16da]`) finds only the reset
+and this sweep, and `vtmb_readers` scoped to `CAI_BaseNPCTroika` reports zero accesses — the writer
+renders as a NAMED FIELD on the base class, `CAI_BaseNPC::m_hLastSeenHateEnt`. Query the ledger at
+the class that declares the field, not the one that reads it, before calling storage dead.
+
+The practical reachability of those three `D_HT`-derived rungs is still narrow: step 1 rejects a
+source the NPC currently hates or fears, so the rung fires only when the relation has changed since
+the sighting that wrote the handle. Narrow is not dead.
+
+Constants, read out of retail `vampire.dll`'s `.rdata` at file offsets `0x4454c4` / `0x4454d0` (image base `0x10000000`): **`_DAT_104454c4 = 0.0f`** (`00 00 00 00`) and **`_DAT_104454d0 = 0.5f`** (`00 00 00 3f`). Both are shared pool constants with hundreds of readers, so neither can be pinned from the corpus alone — the corpus exposes referrers, not `.rdata` values. `m_vecForward = +0x6290` (cached by
+`NPCThink` and `GatherConditions`). The `(**(*DAT_10924a6c + 4))()` call preceding every
+`SetCondition` is an AI trace hook with its result discarded; it has no gameplay effect. `[VtMB]`
 
 **The interest predicate `0x102b3270`** (`ShouldInvestigate(candidate, bCombatMode)`), in order:
 `m_bfAINPCFlags & (DONT_INVESTIGATE | IN_FLEE_SCHED)` → false; `stay_entrenched` → false; null →
@@ -2316,6 +2433,26 @@ non-players only at `D_HT`/`D_FR`; rejected by `DAT_10924fba` (all-blind), `DAT_
 total, for every VtMB humanoid. Player 0.5; `CNPC_Crow` −1.0; `CNPC_VMingXiao`/`VTzimisce` −0.5.
 UNRECOVERED: the body-offset term inside `0x103264d0` (register-garbled decompile).
 
+**The Troika cone override `0x102b4540` (slot 363), walked — and NOT PORTED.** Every sight
+admission and the sound sweep's `SEE_SOUND_SOURCE` stranger arm dispatch the cone test virtually,
+so on a VtMB NPC the function that actually runs is this override, not the base:
+
+1. `target == NULL` → false.
+2. `DAT_10924fba` (all-blind) → false.
+3. `DAT_10924fb9` (`ai_ignoreplayers`) and `target+0xa8` (the target is a player) → false.
+4. `GetTarget()` (slot 293) non-null, `GetTarget() == m_hClosestPlayer` (+0x628c), `target+0x98`
+   non-null and the byte `*(target->+0x98 + 0x6279)` set → **return true, skipping the cone
+   entirely**.
+5. Otherwise the base `CBaseCombatCharacter::FInViewCone` `0x10326750`.
+
+`FElysiumNpcSenses::IsInViewCone` ports step 5 only. Arms 2 and 3 are the two dev globals, which
+also gate `QuerySeeEntity` above and are off in shipped play, so the observable gap is **arm 4**: an
+NPC whose current target is the closest player accepts that player at ANY angle when the flag byte
+is set. Reproducing it needs `CAI_BaseNPC+0x98`'s entity and `+0x6279`, both still UNRECOVERED —
+`+0x98` is also read by `OnLooked` (`0x1026a2c0`) through slot `0x928`, which is the lead to follow.
+This is a story-6 gap surfaced while porting 10a, which is a new consumer of the same test; it is
+recorded here rather than silently ported around.
+
 **Admission body `0x102b4760` (slot 594), exactly.** `+0x6081` (outer-band byte, no datamap
 name) is cleared per call. `vecMe = EyePosition()`, `vecHim = target EyePosition()`. The range
 test runs only when `(m_NPCState != 2 || m_bEnemyWentOccluded(+0x5bc5) != 0) && curtime >=
@@ -2482,6 +2619,16 @@ seeing the player there.
 `HEAR_WORLD` (+0x61e4). `CAI_BaseNPCTroika::GetBestSound` (slot 474, `0x102b4520`) returns
 `&m_BestSound` unconditionally, so the "no best sound → `TaskFail`" arms of
 `TASK_ALERT_LOOK_AT_BEST_SOUND` / `TASK_GET_PATH_TO_BESTSOUND` are dead on every Troika NPC.
+
+**NOT PORTED: the two records are one.** `CommitBestSound` writes the winner to `m_BestSound`
+(`+0x60b0`) and then mirrors it to `m_InvestigateSound` (`+0x60dc`); the runtime carries a single
+`FElysiumNpcMemory::BestSound`. They are distinguishable in retail — `+0x60b0` is the volatile
+task-facing record `GetBestSound` (slot 474) hands out and every commit overwrites, while `+0x60dc`
+is the sticky saved decision copy that `ShouldInvestigate`, `GetSchedule` (`0x102ae920`),
+`0x102993c0` and `0x10299700` read, and which `FUN_102b9060`'s `HEAR_WORLD` arm writes WITHOUT
+going through `CommitBestSound` (so that arm updates `+0x60dc` and leaves `+0x5b78` stale). None of
+those readers exists yet, so the collapse is not observable today; the story that builds the sound
+selectors must split the field before wiring `FUN_102b9060`.
 
 **Port R6 state boundary (2026-09-08).** `FElysiumNpcSenses` keeps actual `Look` candidates
 separate from the two-second closest-player/PVS/LOS cache: 3072-unit prefilter, then player

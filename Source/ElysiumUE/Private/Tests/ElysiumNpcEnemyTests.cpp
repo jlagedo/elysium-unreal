@@ -686,9 +686,11 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	TestEqual(TEXT("the first committed-enemy LOS fires OnFoundEnemy"),
 		F.Counter(TEXT("c_foundenemy")), 1.f);
 	TestTrue(TEXT("...and latches"), F.Guard->Senses.Memory.bEnemyLosLatched);
+	// The LOS edge publishes detection; it does NOT count a sighting. Retail's two writers of
+	// `m_iEnemySightings` are both in the sense pass (see `LookaroundChance`).
 	const int32 SightingsAfterFirst = F.Guard->EnemySightings;
-	TestEqual(TEXT("...and counts one enemy sighting, because the enemy is the player"),
-		SightingsAfterFirst, 1);
+	TestEqual(TEXT("...and counts no enemy sighting: that is the sense pass's write, not this edge"),
+		SightingsAfterFirst, 0);
 
 	// A replacement transfers the old handle and clears the episode.
 	F.Guard->Senses.Memory.EnemyLosFailures = 3;
@@ -709,7 +711,7 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	TestEqual(TEXT("the new enemy gets its own found edge"), F.Counter(TEXT("c_foundenemy")), 2.f);
 	TestEqual(TEXT("...but not an OnFoundPlayer, because it is not the player"),
 		F.Counter(TEXT("c_foundplayer")), 1.f);
-	TestEqual(TEXT("...and does not count as an enemy sighting"),
+	TestEqual(TEXT("...and still counts no enemy sighting"),
 		F.Guard->EnemySightings, SightingsAfterFirst);
 	return true;
 }
@@ -1067,7 +1069,14 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 	TestEqual(TEXT("...and the cap holds above it"),
 		ElysiumNpcCond::AlertLookaroundChance(50), 30);
 
-	// The producer: an acquisition episode against the player, and only against the player.
+	// The producers. Retail has exactly two INCREMENTS of `m_iEnemySightings` (+0x60a8), both
+	// inside the sense pass (the third writer is the spawn reset `0x1029a0b0`):
+	//   - Troika `OnLooked` `FUN_102b39a0` (slot 469): base call, then
+	//     `if (HasCondition(NEW_ENEMY 0x54)) ++m_iEnemySightings`.
+	//   - the outer-band see-unknown path `FUN_102b3e00` @ `0x102b3e90`: incremented immediately
+	//     after `m_hBestSeeUnknown` (+0x6088) takes a NEW candidate.
+	// `FElysiumNpcSenses::TickSight` reproduces both. There is NO writer in the committed-enemy LOS
+	// edge and no player-only rule; this test previously asserted both, and neither is in the image.
 	{
 		FEnemyFixture F;
 		if (F.Guard == nullptr || F.Player == nullptr || F.ThugA == nullptr)
@@ -1078,31 +1087,36 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 		TestEqual(TEXT("an NPC that has never seen an enemy starts at zero"),
 			F.Guard->EnemySightings, 0);
 
+		// The committed-enemy LOS edge is NOT a writer, however many times it fires.
 		F.Guard->Senses.Memory.Enemy = F.Player->Handle;
 		F.Guard->Senses.GatherEnemyLos(*F.Guard, 1.0);
-		TestEqual(TEXT("one acquisition episode is one sighting"), F.Guard->EnemySightings, 1);
-
-		// Staying visible is the same episode.
+		TestTrue(TEXT("the found edge latched"), F.Guard->Senses.Memory.bEnemyLosLatched);
+		TestEqual(TEXT("...but the LOS edge does not count a sighting: retail has no writer there"),
+			F.Guard->EnemySightings, 0);
 		for (int32 i = 0; i < 5; ++i)
 		{
 			F.Guard->Senses.GatherEnemyLos(*F.Guard, 2.0 + i);
 		}
-		TestEqual(TEXT("continued sight is not a second sighting"), F.Guard->EnemySightings, 1);
+		TestEqual(TEXT("...nor does staying in sight"), F.Guard->EnemySightings, 0);
 
-		// A fresh episode counts again.
-		F.Services.bLineOfSightClear = false;
-		for (int32 i = 0; i <= ElysiumNpcSense::EnemyLosFailureLimit; ++i)
-		{
-			F.Guard->Senses.GatherEnemyLos(*F.Guard, 10.0 + i);
-		}
-		F.Services.bLineOfSightClear = true;
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 40.0);
-		TestEqual(TEXT("a re-acquisition is a second sighting"), F.Guard->EnemySightings, 2);
+		// `OnLooked`: the sense pass counts one when NEW_ENEMY stands.
+		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
+		F.Guard->Senses.TickSight(*F.Guard, 10.0);
+		TestEqual(TEXT("a sense pass with NEW_ENEMY standing counts one sighting"),
+			F.Guard->EnemySightings, 1);
 
-		// A non-player enemy does not count.
+		// ...and nothing when it does not. This is the whole condition: the enemy's identity is
+		// never consulted, so a non-player acquisition counts exactly the same.
+		F.Guard->Cognition.Conditions.Clear(EElysiumNpcCond::NewEnemy);
+		F.Guard->Senses.TickSight(*F.Guard, 11.0);
+		TestEqual(TEXT("a sense pass without NEW_ENEMY counts nothing"),
+			F.Guard->EnemySightings, 1);
+
 		ElysiumNpcEnemy::SetEnemy(*F.Guard, F.ThugA->Handle);
-		F.Guard->Senses.GatherEnemyLos(*F.Guard, 50.0);
-		TestEqual(TEXT("an NPC enemy is not a player sighting"), F.Guard->EnemySightings, 2);
+		F.Guard->Cognition.Conditions.Set(EElysiumNpcCond::NewEnemy);
+		F.Guard->Senses.TickSight(*F.Guard, 12.0);
+		TestEqual(TEXT("an NPC acquisition counts too: there is no player-only rule"),
+			F.Guard->EnemySightings, 2);
 	}
 
 	// The chance actually reaches the selector: with the same seed, a capped NPC takes the

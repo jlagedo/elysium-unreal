@@ -121,6 +121,23 @@ struct FElysiumNpcMemory
 	FElysiumGameSoundEvent LastSoundPhysicsDanger;
 	FElysiumGameSoundEvent LastSoundWorld;
 	FElysiumGameSoundEvent BestSound;
+	// `m_hBestSoundSource` (+0x5b78), written by `CommitBestSound` alongside the record copy and
+	// read only by the sound sweep's `SEE_SOUND_SOURCE` tail. It is deliberately the COMMITTED
+	// sound's owner, not the sound the current sweep just picked: the tail answers about the
+	// sound the NPC decided to act on, which the selector commits (10d), one pass earlier.
+	FElysiumEntityHandle BestSoundSource;
+
+	// --- The sound sweep's two clocks ----------------------------------------------------------
+	// `m_flNextInvestigateSoundTime` (+0x623c), `FIELD_TIME`, saved, zeroed at Spawn. Gates the
+	// WHOLE six-arm body of `FUN_102b1cd0`. Its six writers all live in `SelectSchedule` and the
+	// sound selectors (`curtime + 2.0`, or `curtime + 20.0` from the third-party tail
+	// `FUN_102b8d20`), which are story 10d -- so until 10d lands nothing re-arms it and the sweep
+	// runs every pass. That is an unfinished chain, not a divergence: the reader is exact, and a
+	// sweep-local re-arm would be a rule retail does not have.
+	double NextInvestigateSoundTime = 0.0;
+	// `+0x6418`, the `SEE_SOUND_SOURCE` stranger arm's own rate limit, `curtime + 0.5`. Unlike the
+	// gate above, this field's single writer IS the sweep, so it is complete here.
+	double NextSeeSoundSourceTime = 0.0;
 
 	// --- Last damage ---------------------------------------------------------------------------
 	// Retail's NPC override saves the complete incoming packet before composing the base

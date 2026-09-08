@@ -124,9 +124,12 @@ public:
 	// Sheriff authors it in `sp_tutorial_1` and no-sells the same scalar `TakeDamage 100` that kills
 	// the Sabbat beside him.
 	bool bInvincible = false;
-	// `m_iEnemySightings` (+0x60a8). Incremented once per committed-enemy acquisition episode in
-	// which the enemy is the player (`FElysiumNpcSenses::GatherEnemyLos`); it drives the recovered
-	// alert-lookaround chance `min(30, (sightings+2)*5)`.
+	// `m_iEnemySightings` (+0x60a8). Retail has exactly two writers, both in the sense pass and
+	// neither in the committed-enemy LOS edge: Troika `OnLooked` (`FUN_102b39a0`, slot 469) adds one
+	// when `COND_NEW_ENEMY` stands after the base call, and the outer-band see-unknown path
+	// (`FUN_102b3e00` @ `0x102b3e90`) adds one when `m_hBestSeeUnknown` takes a NEW candidate.
+	// There is no player-only rule. `FElysiumNpcSenses::TickSight` reproduces both.
+	// It drives the recovered alert-lookaround chance `min(30, (sightings+2)*5)`.
 	int32 EnemySightings = 0;
 
 	// The decision pass's gathered conditions and its once-latch diagnostics. Conditions are

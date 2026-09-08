@@ -1,7 +1,9 @@
 // The interest predicate `CAI_BaseNPCTroika::0x102b3270` (`ElysiumNpcCond::ShouldInvestigate`):
 // the `investigate_mode` / `investigate_mode_combat` switch, the flag reject, and the enemy
-// override, asserted directly on a headless world because none of its three retail callers -- the
-// see-unknown sweep, the sound sweep, the vision producer -- is built yet.
+// override, asserted directly on a headless world. Of its three retail callers the sound sweep is
+// now built and drives the predicate for real in
+// `Elysium.Substrate.NpcConditions.SoundSweepArms`; the see-unknown sweep (story 10b) and the
+// vision producer are not, so the direct assertions here remain the only cover for the rest.
 //
 // `docs/vtmb/npc-ai-reverse-engineering.md` -> "The interest predicate" owns every fact here.
 

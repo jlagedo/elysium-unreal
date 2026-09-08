@@ -609,39 +609,28 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		AddError(TEXT("the map snapshot did not survive the round trip"));
 	}
 
-	// The other half, and the one that matters for an old save: a payload written before the field
-	// existed has to answer with the FILE's version rather than with this build's, because that is
-	// what its blobs were written at. Built manually for the same reason the v6 player stream below
-	// is — asking the current writer to emit a pre-26 snapshot would test today's field list.
+	// The other half used to be a hand-built pre-26 snapshot read back through the snapshot
+	// serializer. That case has been retired, and deliberately not repaired by adding a version
+	// gate: the field it ran off the end of (`ComfortTargets`, schema 34) is appended UNGATED, and
+	// under the disposable-save policy that is correct — `MinSupported` is far above 34, so no
+	// payload lacking the field can reach the serializer at all. `ElysiumSave::Read` refuses a
+	// below-floor file at the uncompressed header, before a byte of it is deserialized, and that
+	// refusal is the live guarantee worth asserting.
 	{
-		FElysiumMapSnapshot Legacy;
-		Legacy.MapName = TEXT("sp_tutorial_1");
-		Legacy.DefCount = 12;
-		Legacy.QueueNextSerial = 9;
-		Legacy.SchemaVersion = FElysiumSaveVersion::Latest;   // must NOT survive; the file decides
-
-		TArray<uint8> LegacyBytes;
+		TArray<uint8> BelowFloor = Bytes;
+		if (TestTrue(TEXT("the payload has a readable prologue"), BelowFloor.Num() > 16))
 		{
-			FMemoryWriter Writer(LegacyBytes, /*bIsPersistent*/ true);
-			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::NpcDisciplines);
-			// The pre-26 field list, in order. Every earlier gate is already on at 25.
-			Ar << Legacy.MapName << Legacy.DefCount << Legacy.FrozenAt;
-			Ar << Legacy.Entities;
-			Ar << Legacy.AbsentEntities;
-			Ar << Legacy.Queue << Legacy.QueueNextSerial;
-			Ar << Legacy.QueueLastEnqueue;
-			Ar << Legacy.Fade;
-			Ar << Legacy.Weather;
-		}
+			// Prologue layout: magic, version, floor, block count.
+			int32 Stale = FElysiumSaveVersion::MinSupported - 1;
+			FMemory::Memcpy(BelowFloor.GetData() + sizeof(uint32), &Stale, sizeof(Stale));
 
-		FMemoryReader Reader(LegacyBytes, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::NpcDisciplines);
-		FElysiumMapSnapshot Restored;
-		Ar << Restored;
-		TestFalse(TEXT("a pre-26 snapshot reads without running off the end"), Ar.IsError());
-		TestEqual(TEXT("...and reports its blobs' schema as the file's own version"),
-			Restored.SchemaVersion, (int32)FElysiumSaveVersion::NpcDisciplines);
-		TestEqual(TEXT("...with the fields before it intact"), Restored.DefCount, 12);
+			FElysiumSavePayload Refused;
+			FString FloorError;
+			TestFalse(TEXT("a payload below the floor is refused"),
+				ElysiumSave::Read(BelowFloor, Refused, FloorError));
+			TestTrue(TEXT("...with a reason naming the floor"),
+				FloorError.Contains(TEXT("floor")));
+		}
 	}
 
 	// Determinism: the same state writes the same bytes (§8).
@@ -661,10 +650,13 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 
 	// `ScriptedBody` writes the cutscene body state mid-record inside two leaf blocks — a scene's
 	// frozen cast and a beat's NPC claim — so an older payload would read those bytes as the fields
-	// that followed them. NpcEnemyMemory likewise sits before later NPC leaf blocks. Saves are
-	// disposable, so the floor is deliberately moved to that schema rather than migrated.
-	TestEqual(TEXT("the floor is the enemy-memory schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::StealthSampleValidity);
+	// that followed them. NpcEnemyMemory likewise sits before later NPC leaf blocks. `SoundSweep`
+	// inserts the sound sweep's committed source and its two clocks INSIDE the NPC memory record,
+	// ahead of the version-gated repeated-damage and detected-attack blocks, so an older payload
+	// would read those bytes as the fields that followed them. Saves are disposable, so the floor
+	// is deliberately moved to that schema rather than migrated.
+	TestEqual(TEXT("the floor is the sound-sweep schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::SoundSweep);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -739,7 +731,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// on the player side the slot it occupies previously held an unwritten `TArray<FString>`
 	// placeholder that nothing ever filled, so an older payload reads and discards it.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::StealthSampleValidity);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::SoundSweep);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),

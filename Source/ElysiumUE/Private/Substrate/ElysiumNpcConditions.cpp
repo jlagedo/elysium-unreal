@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"                  // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumGameSound.h"       // the raw CSound type words the flank test branches on
 #include "Substrate/ElysiumItemClasses.h"      // FElysiumItem — the active weapon's record
 #include "Substrate/ElysiumItemTable.h"        // FElysiumItemDef / FElysiumWeaponMode
 #include "Substrate/ElysiumNpc.h"
@@ -11,6 +12,7 @@
 #include "Substrate/ElysiumNpcLog.h"           // the `npc_*` category the mode refusal reports on
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
+#include "Substrate/ElysiumSchedule.h"      // the running program's interrupt mask, the sweep's gate
 #include "Substrate/ElysiumWeaponClasses.h"    // FElysiumWeapon — the reach, cone and deadlines
 
 namespace
@@ -100,6 +102,9 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	case EElysiumNpcCond::SquadSeeEnemy:           return TEXT("SQUAD_SEE_ENEMY");
 	case EElysiumNpcCond::HearFlinch:              return TEXT("HEAR_FLINCH");
 	case EElysiumNpcCond::NpcFreeze:               return TEXT("NPC_FREEZE");
+	case EElysiumNpcCond::InvestigateSound:        return TEXT("INVESTIGATE_SOUND");
+	case EElysiumNpcCond::HearFlankSound:          return TEXT("HEAR_FLANK_SOUND");
+	case EElysiumNpcCond::SeeSoundSource:          return TEXT("SEE_SOUND_SOURCE");
 	}
 	return TEXT("COND_?");
 }
@@ -356,6 +361,210 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 			}
 		}
 	}
+}
+
+void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out)
+{
+	FElysiumEntityWorld* World = Npc.World;
+	FElysiumNpcMemory& Memory = Npc.Senses.Memory;
+
+	// 1. The two clears the sweep owns, before the gate and before anything else.
+	Out.Clear(EElysiumNpcCond::InvestigateSound);
+	Out.Clear(EElysiumNpcCond::HearFlankSound);
+
+	// The mask tester the sweep uses is `0x10269c70` -- the running program's mask ONLY, no
+	// condition-set read. See `ElysiumSchedule::MaskHasCondition`.
+	//
+	// Resolved once for the whole sweep rather than per gate, which is also what retail does:
+	// `CacheInterruptConditions` (`0x1026a0f0`) builds `m_ScheduleTestBits` once per think and every
+	// tester reads the cached word. Nothing between these gates can install a schedule.
+	const FElysiumNpcConditions Mask = ElysiumSchedule::EffectiveInterrupts(Npc.Schedule, Npc);
+	const auto MaskLists = [&Mask](EElysiumNpcCond Cond) { return Mask.Has(Cond); };
+
+	// 2. The gate on the whole six-arm body.
+	const FElysiumGameSoundEvent* Winner = nullptr;
+	if (Memory.NextInvestigateSoundTime <= Now)
+	{
+		// 3. The six arms, in retail's own evaluation order. The last one that passes claims the
+		//    winner, which is why the order below is the effective priority
+		//    combat > bullet impact > player > danger > physics danger > world -- and why it is NOT
+		//    the same order `CommitBestSound` ranks by.
+		struct FArm
+		{
+			EElysiumNpcCond Condition;
+			const FElysiumGameSoundEvent* Record;
+			bool bCombatMode;
+			bool bSkipPredicate;   // `HEAR_DANGER` alone
+		};
+		const FArm Arms[] = {
+			{ EElysiumNpcCond::HearWorld,         &Memory.LastSoundWorld,         false, false },
+			{ EElysiumNpcCond::HearPhysicsDanger, &Memory.LastSoundPhysicsDanger, false, false },
+			{ EElysiumNpcCond::HearDanger,        &Memory.LastSoundDanger,        false, true  },
+			{ EElysiumNpcCond::HearPlayer,        &Memory.LastSoundPlayer,        false, false },
+			{ EElysiumNpcCond::HearBulletImpact,  &Memory.LastSoundBulletImpact,  true,  false },
+			{ EElysiumNpcCond::HearCombat,        &Memory.LastSoundCombat,        true,  false },
+		};
+		for (const FArm& Arm : Arms)
+		{
+			if (!Out.Has(Arm.Condition))
+			{
+				continue;
+			}
+			if (!Arm.bSkipPredicate && !MaskLists(Arm.Condition))
+			{
+				// The predicate's candidate is the sound's OWNER. Retail resolves the record's
+				// handle and hands the result -- possibly null -- straight to `ShouldInvestigate`,
+				// whose third line rejects null. An ownerless sound (a door, or an
+				// `ambient_generic` inserting a null-owner type) therefore cannot be investigated
+				// unless the running program already lists its condition.
+				const FElysiumEntity* Owner = World
+					? ResolveEnemyHandle(*World, Arm.Record->Source) : nullptr;
+				if (Owner == nullptr || !ShouldInvestigate(Npc, *Owner, Arm.bCombatMode))
+				{
+					continue;
+				}
+			}
+			Out.Set(EElysiumNpcCond::InvestigateSound);
+			Winner = Arm.Record;
+		}
+
+		// 4. `HEAR_FLANK_SOUND`. All four terms, in retail's order. The enemy test is a RESOLVED
+		//    POINTER comparison -- `GetEnemy()` (slot 167) against the record owner's resolved
+		//    entity -- not a handle compare: a committed handle whose entity is gone is still
+		//    `IsSet()`, and retail's `GetEnemy()` answers null for it.
+		const FElysiumEntity* FlankEnemy = World ? ResolveEnemyHandle(*World, Memory.Enemy) : nullptr;
+		const FElysiumEntity* WinnerOwner = (World && Winner != nullptr)
+			? ResolveEnemyHandle(*World, Winner->Source) : nullptr;
+		if (MaskLists(EElysiumNpcCond::HearFlankSound) && Winner != nullptr
+			&& FlankEnemy != nullptr && FlankEnemy == WinnerOwner)
+		{
+			// Where the sound IS, per `FUN_101b99d0(record)`: for raw types `0x10` BULLET_IMPACT and
+			// `0x400` PHYSICS_DANGER with a resolvable owner it returns the OWNER's live
+			// `GetAbsOrigin()`, and only otherwise the record's stored origin (`record + 0x20`).
+			// So for those two arms retail asks "is my enemy behind me now", not "is the bullet hole
+			// behind me" -- and the flank gate above has already established the owner IS my enemy.
+			const bool bUseOwnerOrigin = WinnerOwner != nullptr
+				&& (Winner->TypeMask == ElysiumGameSounds::BulletImpact
+					|| Winner->TypeMask == ElysiumGameSounds::PhysicsDanger);
+			const FVector SoundAt = bUseOwnerOrigin ? WinnerOwner->Origin : Winner->Position;
+			// Retail measures from `GetAbsOrigin` (slot 217), not the eye, and against the cached
+			// `m_vecForward` (+0x6290). Source angles carry the inverse Unreal yaw, the same
+			// construction `IsInViewCone` uses.
+			const float PitchRadians = FMath::DegreesToRadians(static_cast<float>(Npc.Angles.X));
+			const float YawRadians = FMath::DegreesToRadians(-static_cast<float>(Npc.Angles.Y));
+			const FVector Forward(FMath::Cos(PitchRadians) * FMath::Cos(YawRadians),
+				FMath::Cos(PitchRadians) * FMath::Sin(YawRadians), -FMath::Sin(PitchRadians));
+			// `< 0.0f`, strictly: a sound exactly abeam does not flank.
+			if (FVector::DotProduct(SoundAt - Npc.Origin, Forward) < 0.0)
+			{
+				Out.Set(EElysiumNpcCond::HearFlankSound);
+			}
+		}
+	}
+
+	// 5. The `SEE_SOUND_SOURCE` tail. Outside the gate, and over `m_hBestSoundSource` -- the source
+	//    the LAST commit chose, not this sweep's winner.
+	if (!MaskLists(EElysiumNpcCond::SeeSoundSource))
+	{
+		Out.Clear(EElysiumNpcCond::SeeSoundSource);
+		return;
+	}
+	// Retail compares RESOLVED POINTERS throughout this tail, not handles, which is what makes the
+	// dead-handle arms below reachable at all.
+	// `ResolveEnemyHandle`, not `Resolve`: retail dereferences an EHANDLE here, which answers with a
+	// dead actor as readily as a live one. `Resolve` collapses dead into null for the script
+	// contract, and that would silently take the null gate below.
+	const FElysiumEntity* Source = World ? ResolveEnemyHandle(*World, Memory.BestSoundSource) : nullptr;
+
+	// `FUN_102b8cd0(this, source)`: true only when the source is non-null and my `IRelationType`
+	// to it is NEITHER `D_HT` (1) NOR `D_FR` (2). False and the tail returns WITHOUT touching the
+	// condition, so a previously raised `SEE_SOUND_SOURCE` stands.
+	//
+	// The polarity is retail's and it is worth stating plainly, because it reads backwards: the
+	// tail runs only for a source I do NOT hate and do NOT fear, which leaves the `SEE_ENEMY` rung
+	// live only for a committed enemy I relate to as `D_LI`/`D_NU`.
+	if (Source == nullptr)
+	{
+		return;
+	}
+	{
+		const EElysiumRelationship Relation =
+			Npc.Relationships.Resolve(Source->Handle, NpcCondClassnameOf(*Source));
+		if (Relation == EElysiumRelationship::Hate || Relation == EElysiumRelationship::Fear)
+		{
+			return;
+		}
+	}
+
+	const FElysiumEntity* ClosestPlayer = World ? ResolveEnemyHandle(*World, Memory.ClosestPlayer) : nullptr;
+	const FElysiumEntity* Enemy = World ? ResolveEnemyHandle(*World, Memory.Enemy) : nullptr;
+
+	// The comparison chain. First match wins and demands its own sight condition; a match whose
+	// condition is unset, or no match at all, falls through past the loop.
+	//
+	// The last four rungs are `m_hLastSeenHateEnt` / `Fear` / `Dislike` / `NemesisEnt`
+	// (+0x5b68/6c/70/74). They are LIVE: `CAI_BaseNPC::OnLooked` (`0x1026a2c0`) writes one of them
+	// on every assessed sighting -- case `D_HT` splits by `IRelationPriority` into
+	// Dislike (`< 0`) / Hate (`< 0xb`) / Nemesis, and case `D_FR` writes Fear behind the same
+	// `flags2 & 0x10000` gate -- and `FUN_1027c300` resets all four to `0xffffffff` at spawn.
+	// `Memory.LastSeen[]` is this runtime's copy of exactly those four, written by `GatherSight`
+	// from the same priority split, so it is the correct comparand.
+	//
+	// In practice the three `D_HT`-derived rungs need the source's relation to have CHANGED away
+	// from `D_HT` since the sighting, because step 1 above rejects a hated source outright; Fear
+	// likewise. Narrow, but not unreachable, and the chain is reproduced whole.
+	struct FSourceArm
+	{
+		const FElysiumEntity* Comparand;
+		EElysiumNpcCond Requires;
+	};
+	const auto LastSeen = [&](FElysiumNpcMemory::ESeen Slot) -> const FElysiumEntity*
+	{
+		return World ? ResolveEnemyHandle(*World, Memory.Seen(Slot)) : nullptr;
+	};
+	const FSourceArm Chain[] = {
+		{ ClosestPlayer,                                    EElysiumNpcCond::SeePlayer  },
+		{ Enemy,                                            EElysiumNpcCond::SeeEnemy   },
+		{ LastSeen(FElysiumNpcMemory::ESeen::Hate),         EElysiumNpcCond::SeeHate    },
+		{ LastSeen(FElysiumNpcMemory::ESeen::Fear),         EElysiumNpcCond::SeeFear    },
+		{ LastSeen(FElysiumNpcMemory::ESeen::Dislike),      EElysiumNpcCond::SeeDislike },
+		{ LastSeen(FElysiumNpcMemory::ESeen::Nemesis),      EElysiumNpcCond::SeeNemesis },
+	};
+	for (const FSourceArm& Arm : Chain)
+	{
+		// A rung whose handle has never been written resolves to null, and `Source` cannot be null
+		// here -- step 1 returned on that. So an unwritten rung simply never matches.
+		if (Source != Arm.Comparand)
+		{
+			continue;
+		}
+		if (Out.Has(Arm.Requires))
+		{
+			Out.Set(EElysiumNpcCond::SeeSoundSource);
+		}
+		else
+		{
+			Out.Clear(EElysiumNpcCond::SeeSoundSource);
+		}
+		return;
+	}
+
+	// The stranger arm: something I have no standing sight condition about. Rate limited, and while
+	// the limit stands the condition is left ALONE rather than cleared.
+	if (Now < Memory.NextSeeSoundSourceTime)
+	{
+		return;
+	}
+	if (FElysiumNpcSenses::IsInViewCone(Npc, Source->EyePosition())
+		&& FElysiumNpcSenses::IsVisible(Npc, *Source, Now))
+	{
+		Out.Set(EElysiumNpcCond::SeeSoundSource);
+	}
+	else
+	{
+		Out.Clear(EElysiumNpcCond::SeeSoundSource);
+	}
+	Memory.NextSeeSoundSourceTime = Now + SeeSoundSourceCadenceSeconds;
 }
 
 void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcConditions& Out)

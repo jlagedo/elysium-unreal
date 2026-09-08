@@ -109,6 +109,19 @@ enum class EElysiumNpcCond : uint8
 	SquadSeeEnemy = 0x31,
 	HearFlinch    = 0x72,
 	NpcFreeze     = 0x75,
+
+	// --- The sound sweep's three products, `FUN_102b1cd0` -----------------------------------------
+	// `INVESTIGATE_SOUND` is the ONLY route by which an alert NPC reaches a heard sound: the hunt
+	// state accepts raw `HEAR_*`, alert does not. The raw condition and this one are therefore not
+	// redundant -- the raw one says "I heard it", this one says "I heard it AND I take an interest",
+	// and only the second reaches `SelectSchedule`'s alert ladder.
+	InvestigateSound = 0x25,
+	// Raised when the winning sound's owner is my committed enemy and the sound came from BEHIND
+	// me. No consumer is recovered; the producer is.
+	HearFlankSound   = 0x33,
+	// "I can see whatever made the sound I last committed." Read by the sound selector and the hunt
+	// ladder, both 10d.
+	SeeSoundSource   = 0x2d,
 };
 
 // `investigate_mode` / `investigate_mode_combat`, the two authored keyfields the interest predicate
@@ -263,11 +276,10 @@ namespace ElysiumNpcCond
 {
 	/**
 	 * The interest predicate, `CAI_BaseNPCTroika::0x102b3270` -- "do I take an interest in this
-	 * entity". It is what the see-unknown sweep, the six-record sound sweep and the vision producer
-	 * ask before raising `COND_INVESTIGATE_SIGHT` / `COND_INVESTIGATE_SOUND`; none of those three
-	 * producers is built yet, so today the predicate has no caller in the runtime and is asserted
-	 * directly. It is here, rather than waiting for them, because its inputs are all present and
-	 * its rule is complete.
+	 * entity". It is what the see-unknown sweep, the sound sweep and the vision producer ask before
+	 * raising `COND_INVESTIGATE_SIGHT` / `COND_INVESTIGATE_SOUND`. Of those three the sound sweep
+	 * (`GatherSounds`, below) is built; the see-unknown sweep is story 10b and the vision producer
+	 * is not built, so two of its retail callers are still absent.
 	 *
 	 * Recovered order:
 	 *   1. `m_bfAINPCFlags & (DONT_INVESTIGATE | IN_FLEE_SCHED)` -> false.
@@ -285,6 +297,35 @@ namespace ElysiumNpcCond
 	 * because it reads the candidate's enemy, which this substrate does not expose on an entity.
 	 */
 	bool ShouldInvestigate(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, bool bCombatMode);
+
+	/**
+	 * `FUN_102b1cd0`, the third of `CAI_BaseNPCTroika::GatherConditions`' three sweeps (after the
+	 * see-unknown sweep `0x102b15c0` and the comfort sweep `0x102b1a20`, neither of which is built:
+	 * stories 10b and 10c).
+	 *
+	 * It turns raw `HEAR_*` into the one condition alert selection can act on. Walked:
+	 *
+	 *  1. UNCONDITIONALLY clear `INVESTIGATE_SOUND` and `HEAR_FLANK_SOUND`. The sweep owns those two
+	 *     -- `GatherConditions` itself clears neither. `SEE_SOUND_SOURCE` is cleared by the tail,
+	 *     not here, and that asymmetry is real: the tail has two arms that leave it STICKY.
+	 *  2. Gate the whole six-arm body on `m_flNextInvestigateSoundTime <= curtime`.
+	 *  3. Six arms, in retail's evaluation order, LAST passing arm wins. There is no Flinch arm:
+	 *     `+0x6210` is never swept, and reaches a decision only through `CommitBestSound`'s ranking
+	 *     and the selector's own `HasInterruptCondition(HEAR_FLINCH)` (10d).
+	 *
+	 *       world 0x6e (b=0), physics danger 0x71 (b=0), danger 0x6a (predicate SKIPPED),
+	 *       player 0x6f (b=0), bullet impact 0x70 (b=1), combat 0x6d (b=1)
+	 *
+	 *     Each: `HasCondition(HEAR_X) && (mask lists HEAR_X || ShouldInvestigate(owner, b))`.
+	 *     `HEAR_DANGER` tests neither -- it sets and claims the winner on `HasCondition` alone.
+	 *  4. `HEAR_FLANK_SOUND`: the mask lists it, there IS a winner, I have a committed enemy, the
+	 *     enemy owns the winning sound, and the sound is behind me.
+	 *  5. The `SEE_SOUND_SOURCE` tail, OUTSIDE the gate, over the previously committed source.
+	 *
+	 * Takes a mutable NPC because step 5 writes the stranger arm's rate limit. `Out` is the pass's
+	 * condition set, already carrying the raw `HEAR_*` bits `GatherHearing` put there.
+	 */
+	void GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
 
 	/**
 	 * Resolve an enemy handle for the cognition layer, which needs the distinction
@@ -314,6 +355,10 @@ namespace ElysiumNpcCond
 	// max health sets `REPEATED_DAMAGE` (0x4e); an expired window is reset rather than decayed.
 	inline constexpr double RepeatedDamageWindowSeconds = 1.0;
 	inline constexpr float RepeatedDamageFraction = 0.15f;
+
+	// `_DAT_104454d0`, the sound sweep's `SEE_SOUND_SOURCE` stranger-arm re-arm: `+0x6418 =
+	// curtime + 0.5`. Written and read only by that arm.
+	inline constexpr double SeeSoundSourceCadenceSeconds = 0.5;
 
 	// The accumulator half of that rule, run from the typed damage commit. Kept here rather than on
 	// the leaf so the window arithmetic has one owner and one test.

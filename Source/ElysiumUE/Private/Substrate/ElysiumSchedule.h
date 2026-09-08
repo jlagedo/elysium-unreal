@@ -505,6 +505,61 @@ namespace ElysiumSchedule
 	bool Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
 		double& OutNextThinkDelay, const FElysiumNpcConditions* Conditions = nullptr);
 
+	/**
+	 * The mask the NPC actually runs against this think: the installed program's authored
+	 * `Interrupts` plus the runner's `BuildScheduleTestBits` overlay.
+	 *
+	 * This is retail's `CacheInterruptConditions` (`0x1026a0f0`) product, `m_ScheduleTestBits`
+	 * `+0x5c74`. With no installed schedule there is no mask at all, and retail's two mask testers
+	 * both answer false in that case rather than falling back to an authored default.
+	 *
+	 * Extracted from `Tick`, which consumes it, so the interrupt test and the condition sweeps that
+	 * consult the same mask cannot drift apart.
+	 */
+	FElysiumNpcConditions EffectiveInterrupts(const FElysiumScheduleState& State,
+		IElysiumScheduleRunner& Runner);
+
+	/**
+	 * `0x10269c70` -- "does the running program's mask list this condition", and NOTHING else.
+	 *
+	 * Three testers exist in retail and the differences are load-bearing:
+	 *   - `HasCondition` (`0x10269aa0`) reads the condition set `+0x5c5c` only, and needs no
+	 *     installed schedule.
+	 *   - `HasInterruptCondition` (`0x10269d30`) needs an installed schedule and the bit in BOTH
+	 *     the condition set and the mask.
+	 *   - this one needs an installed schedule and the bit in the mask, and never reads the
+	 *     condition set at all.
+	 *
+	 * The sound sweep `0x102b1cd0` uses this one for all three of its gates. Inside its six
+	 * `HEAR_*` arms the distinction is invisible, because the arm has already tested `HasCondition`
+	 * itself; for the `HEAR_FLANK_SOUND` and `SEE_SOUND_SOURCE` gates it is the whole rule -- they
+	 * are pure "did the running program ask for this" tests, satisfied with the condition unset.
+	 *
+	 * Retail reads two mask words here, `+0x5c74` OR `+0x5c8c`, and they are NOT the same kind of
+	 * thing. `CacheInterruptConditions` (`0x1026a0f0`) fills `+0x5c74` from `m_pSchedule[10..15]`
+	 * (the normal interrupt mask, `CAI_Schedule+0x28`) and `+0x5c8c` from `m_pSchedule[0..5]`
+	 * (`CAI_Schedule+0x00`, the INVERTED mask -- the parser `0x1030d850` routes a `!`-prefixed
+	 * interrupt token there, and `IsScheduleValid` evaluates
+	 * `(conds & +0x5c74) | (~conds & +0x5c8c)`). The per-NPC overlay is not `+0x5c8c`: it ORs into
+	 * `+0x5c74` via `SetScheduleTestBits` (`0x10269eb0`).
+	 *
+	 * This runtime models the normal mask only, which is exact because no shipped schedule uses the
+	 * inverted one (see the oracle's interrupt-conditions section). If that is ever modelled it must
+	 * be a SEPARATE word: folding it in here would make `HasInterruptCondition` below honour `!COND`
+	 * bits that retail's `0x10269d30` — which reads `+0x5c74` alone — deliberately ignores.
+	 */
+	bool MaskHasCondition(const FElysiumScheduleState& State, IElysiumScheduleRunner& Runner,
+		EElysiumNpcCond Cond);
+
+	/**
+	 * `CAI_BaseNPC::HasInterruptCondition` (`0x10269d30`): an installed schedule, and the bit in
+	 * both the gathered condition set and the effective mask. Retail's selectors mix this with
+	 * plain `HasCondition` deliberately -- the driving stimulus is honoured only when the running
+	 * program lists it, while refinements read the raw condition.
+	 */
+	bool HasInterruptCondition(const FElysiumScheduleState& State, IElysiumScheduleRunner& Runner,
+		const FElysiumNpcConditions& Conditions, EElysiumNpcCond Cond);
+
 	// `TASK_MOVE_AWAY_PATH`, whole.
 	// Where the step back wants to land, whether the world will have it, and whether what the world
 	// handed back is still a retreat. It lives here rather than inside the NPC leaf for the reason

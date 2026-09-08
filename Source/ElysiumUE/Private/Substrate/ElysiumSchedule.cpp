@@ -676,6 +676,34 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 	return true;
 }
 
+FElysiumNpcConditions ElysiumSchedule::EffectiveInterrupts(const FElysiumScheduleState& State,
+	IElysiumScheduleRunner& Runner)
+{
+	// No installed program is no mask. Retail's testers both read `m_ScheduleTestBits` only after
+	// checking `m_pSchedule != NULL` (`+0x5c38`), so an NPC between programs lists nothing rather
+	// than inheriting whatever the last program cached.
+	const FElysiumSchedule* Active = ElysiumScheduleFor(State.Current);
+	if (Active == nullptr)
+	{
+		return FElysiumNpcConditions();
+	}
+	FElysiumNpcConditions Mask = Active->Interrupts;
+	Runner.BuildScheduleTestBits(Mask);
+	return Mask;
+}
+
+bool ElysiumSchedule::MaskHasCondition(const FElysiumScheduleState& State,
+	IElysiumScheduleRunner& Runner, EElysiumNpcCond Cond)
+{
+	return EffectiveInterrupts(State, Runner).Has(Cond);
+}
+
+bool ElysiumSchedule::HasInterruptCondition(const FElysiumScheduleState& State,
+	IElysiumScheduleRunner& Runner, const FElysiumNpcConditions& Conditions, EElysiumNpcCond Cond)
+{
+	return Conditions.Has(Cond) && MaskHasCondition(State, Runner, Cond);
+}
+
 bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
 	double& OutNextThinkDelay, const FElysiumNpcConditions* Conditions)
 {
@@ -713,9 +741,9 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 			// think.
 			const bool bDelayed = Active->bDelayInterrupts && !State.bDidMaintainSchedule;
 			// The effective mask: the authored one plus the runner's per-NPC overlay
-			// (`IElysiumScheduleRunner::BuildScheduleTestBits`).
-			FElysiumNpcConditions Mask = Active->Interrupts;
-			Runner.BuildScheduleTestBits(Mask);
+			// (`IElysiumScheduleRunner::BuildScheduleTestBits`). Shared with the condition sweeps
+			// that consult the same mask -- see `ElysiumSchedule::EffectiveInterrupts`.
+			const FElysiumNpcConditions Mask = ElysiumSchedule::EffectiveInterrupts(State, Runner);
 			const FElysiumNpcConditions Firing = bDelayed
 				? FElysiumNpcConditions() : Mask.Intersection(*Conditions);
 			if (bDelayed)

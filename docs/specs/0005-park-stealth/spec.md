@@ -122,7 +122,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   (`0x102743c0`) walks this list only; `ChooseEnemy` (`0x10279dd0`) treats a null active
   schedule as interested in `NEW_ENEMY` / `LOST_ENEMY` / `ENEMY_DEAD`, so no substitute spawn
   schedule. Oracle: § "The enemy memory — `CAI_Memory`".
-- [x] **6. Sight and hearing.** 3072-unit prefilter; cadences 0.15 s players / 0.25 s NPCs /
+- [x] **6a. Sight and hearing.** 3072-unit prefilter; cadences 0.15 s players / 0.25 s NPCs /
   0.45 s objects; `m_flFieldOfView 0.2`; `SEE_PLAYER 0x5a`; `IRelationPriority` `<0` DISLIKE /
   `0..10` HATE / `≥11` NEMESIS; `FinViewCone3dNew`'s strict front test then the apex cosine
   times the target's cone scalar; the combat-state range bypass; concealment `0x10146b20`; the
@@ -136,6 +136,24 @@ the retail contract the code must match, the job, and what it consumes or provid
   investigate leftovers, closed". Named seams: the cone-apex ConVar (`0x10937a8c`, no writer in
   `.text`) and the 2-D cone mode (`0x10936f74`); 0007's cloak/detection-record producers.
   Settled as not in the image: `+0x6081`.
+- [ ] **6b. The Troika cone override.**
+  Retail: `FInViewCone` is slot 363 and every caller dispatches it virtually, so on a VtMB NPC
+  the body that runs is `CAI_BaseNPCTroika` `0x102b4540`, not the base
+  `CBaseCombatCharacter::FInViewCone` `0x10326750` that 6a ported. Its arms, in order: null
+  target → false; `DAT_10924fba` (all-blind) → false; `DAT_10924fb9` (`ai_ignoreplayers`) and
+  the target is a player (`target+0xa8`) → false; `GetTarget()` (slot 293) non-null and
+  `== m_hClosestPlayer` (+0x628c) and `target->+0x98` non-null and the byte
+  `*(target->+0x98 + 0x6279)` set → **true, skipping the cone entirely**; else the base. The
+  first two globals also gate `QuerySeeEntity` (slot 468, `0x102b38b0`).
+  Job: the override in `FElysiumNpcSenses::IsInViewCone`, the two globals as ConVars, and the
+  any-angle accept.
+  Consumed by: every sight admission (6a) and 10a's `SEE_SOUND_SOURCE` stranger arm, both of
+  which currently run the base body.
+  Oracle: § "The sense pass for a hated player, walked" (Cone; "The Troika cone override
+  `0x102b4540`, walked").
+  Unrecovered: `CAI_BaseNPC+0x98`'s entity and the `+0x6279` byte, which arm 4 cannot be built
+  without; `+0x98` is also read by `OnLooked` (`0x1026a2c0`) through slot `0x928`, the lead to
+  follow. Arms 1-3 and the base fall-through are buildable now.
 - [x] **7. Obliviousness.** `TASK_MAKE_OBLIVIOUS` 0x131: `flags2 |= 0x80001000`,
   `SetEnemy(NULL)`, squad disconnect (`0x1026d050`, a seam until 17), `++m_iIsOblivious`
   (+0x5bb4, saved), `OnIncapacitatedStart`. Consumers: `PerformSensing` skips the pass,
@@ -192,8 +210,13 @@ the retail contract the code must match, the job, and what it consumes or provid
   third-party tail `FUN_102b8d20` (D_HT → 0x89, D_FR → 0x73). `HasInterruptCondition` needs
   the bit in the running mask; `HasCondition` does not, and every selector mixes the two. The
   hunt-state case 0xb exists only under `debug_allow_npc_hunting` (default `"0"`).
+  `CommitBestSound` writes `m_BestSound` +0x60b0 and mirrors it to `m_InvestigateSound` +0x60dc;
+  `FUN_102b9060`'s `HEAR_WORLD` arm writes +0x60dc directly, bypassing the commit and leaving
+  `m_hBestSoundSource` +0x5b78 stale. 10a collapsed both into one `Memory.BestSound`, which is
+  unobservable only while +0x60dc has no reader.
   Job: the two selectors, the ladder, the tail, the case-3 order, 0x4c/0x4d/0x4b as the
-  ladder's targets; `HasInterruptCondition` on the kernel.
+  ladder's targets; `HasInterruptCondition` on the kernel; the +0x60b0 / +0x60dc split, before
+  `FUN_102b9060` is wired.
   Oracle: § "The `INVESTIGATE` family, decoded" (Selection).
 - [ ] **10e. The sound-investigation programs.**
   Retail: 0x50, 0x51, 0x52, 0x53, 0x54, 0x58 with their task lists and interrupt sets; 0x53
@@ -423,5 +446,5 @@ the retail contract the code must match, the job, and what it consumes or provid
   (13) and the cadence (15) every later program family runs on (0006, 0007); the composed
   relation (16b) to 0006, 0007 and the target HUD; the trance and the flag word to the feed
   and dialogue gates (0004).
-- Consumes: the HitGroup apply path and the cloak/detection-record producers from 0007 (6,
+- Consumes: the HitGroup apply path and the cloak/detection-record producers from 0007 (6a,
   16c); the grapple state machine and damage from 0006 (3c, 21c).
