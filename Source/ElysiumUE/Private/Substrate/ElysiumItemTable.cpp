@@ -253,6 +253,17 @@ bool FElysiumItemTable::ParseText(const FString& Classname, const FString& Text,
 	Out.WieldModelM = Data->Str(TEXT("wieldmodel_m"), FString());
 	Out.WieldModelF = Data->Str(TEXT("wieldmodel_f"), FString());
 	Out.AnimPrefix = Data->Str(TEXT("anim_prefix"), FString());
+	if (const FKvNode* Sounds = Data->Child(TEXT("SoundData")))
+	{
+		if (const FKvNode* Kill = Sounds->Child(TEXT("stealth_kill_success")))
+		{
+			for (int32 Index = 1; Index <= 16; ++Index)
+			{
+				const FString Sound = Kill->Str(*FString::Printf(TEXT("sound%d"), Index), FString());
+				if (!Sound.IsEmpty()) Out.StealthKillSounds.Add(Sound);
+			}
+		}
+	}
 
 	Out.CameraClass = ElysiumCam::ParseCameraClass(Data->Str(TEXT("camera_class"), FString()));
 

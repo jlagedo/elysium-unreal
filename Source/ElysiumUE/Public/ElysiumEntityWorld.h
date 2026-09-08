@@ -894,6 +894,8 @@ private:
 	FElysiumEntityHandle FocusedUsable;
 	FElysiumUseContext FocusContext;
 	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingUseEdges;
+	bool bPlayerUseHeld = false;
+	FElysiumEntityHandle StealthPromptTarget;
 	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingFeedEdges;
 	// The combat button field (retail's player `+0x2088`) and the copy the last weapon frame
 	// consumed, which is what a press edge is measured against. Live input state, not simulation

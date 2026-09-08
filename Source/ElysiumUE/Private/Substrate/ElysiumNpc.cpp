@@ -330,7 +330,7 @@ void FElysiumNpc::OnKilled()
 	//    body, because a claim outliving its producer is what parks a channel: the executors below
 	//    are about to stop existing, and none of them will come back with its handle.
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment != nullptr && Visual != nullptr)
+	if (Embodiment != nullptr && Visual != nullptr && !bStealthDeathCommitted)
 	{
 		Embodiment->ReleaseBodyAnimClaims(Visual);
 	}
@@ -354,6 +354,15 @@ void FElysiumNpc::OnKilled()
 	//    which is right and is also the only way: the mind is already dead, and a dead mind selects
 	//    nothing.
 	bDeathHandoffDone = false;
+	if (bStealthDeathCommitted)
+	{
+		// The paired death already supplied its terminal pose. The existing corpse handoff
+		// consumes that pose now; a second generic death clip would overwrite the action.
+		Schedule.Clear();
+		CompleteDeathHandoff();
+		NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+		return;
+	}
 	if (!ElysiumSchedule::Start(Schedule, EElysiumScheduleId::Die, *this))
 	{
 		// `Start` already reported the refusal by name. The handoff still has to happen, and the
@@ -754,6 +763,34 @@ bool FElysiumNpc::IsFeedBusy() const
 	return bInDialog || FElysiumCombatCharacter::IsFeedBusy();
 }
 
+bool FElysiumNpc::EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role,
+	EElysiumGrappleType Type, int32 Position, bool bHolster)
+{
+	if (Type == EElysiumGrappleType::StealthKill)
+	{
+		// CAI_BaseNPC 0x1026cdc0 -> 0x1026d130. Unlike TASK_MAKE_OBLIVIOUS this
+		// increments the raw count without MADE_OBLIVIOUS or OnIncapacitatedStart.
+		ElysiumNpcEnemy::SetEnemy(*this, FElysiumEntityHandle::Invalid());
+		DisconnectFromSquad();
+		NpcFlags.AddGrappleOblivious();
+		FireOutput(TEXT("OnGrappleBegin"), Partner);
+	}
+	return FElysiumCombatCharacter::EnterGrappleState(Partner, Role, Type, Position, bHolster);
+}
+
+void FElysiumNpc::LeaveGrappleState()
+{
+	const bool bStealth = Grapple.Type == EElysiumGrappleType::StealthKill;
+	if (bStealth) FireOutput(TEXT("OnGrappleEnd"), Grapple.Partner);
+	FElysiumCombatCharacter::LeaveGrappleState();
+	if (bStealth)
+	{
+		// 0x1026ce30 -> 0x10007ea0: saturating decrement, then reconnect.
+		NpcFlags.RemoveGrappleOblivious();
+		ReconnectToSquad();
+	}
+}
+
 void FElysiumNpc::Think()
 {
 	// The phase order is the recovered pass's own, and every bool phase keeps the power to end
@@ -768,6 +805,12 @@ void FElysiumNpc::Think()
 	if (ThinkDead())
 	{
 		return;
+	}
+	// RunAlternateAI: the attacker owns a mode-3 pair; do not sense or replace its animation.
+	if (Grapple.bOwnsStealthAction)
+	{
+		if (ResolveGrapplePartner()) return;
+		LeaveGrappleState();
 	}
 	if (RunAdmissionBarrier())
 	{

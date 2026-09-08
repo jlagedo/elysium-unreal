@@ -166,16 +166,8 @@ FElysiumNpc* FElysiumStealthKillRules::FindVictim(FElysiumPlayer& Player) const
 	{
 		return nullptr;
 	}
-	// Type-3 `CanStartGrappleAttack` `0x103285a0`: 2-D origin distance vs DistMax. Crouch hull
-	// and `CheckAndTranslateGrapplePosition` `0x10328af0` are 3c; they pass here.
-	const float Dx = Player.Origin.X - Victim->Origin.X;
-	const float Dy = Player.Origin.Y - Victim->Origin.Y;
-	const float MaxCm = DistanceMaxUnits * ElysiumMove::U;
-	if (Dx * Dx + Dy * Dy > MaxCm * MaxCm)
-	{
-		return nullptr;
-	}
-	if (Victim->IsGrappling() && Victim->ResolveGrapplePartner() != &Player)
+	// FindVictim passes literal position hint 1, before StartGrappleAttack derives its own hint.
+	if (!Player.CanStartStealthKill(*Victim, DistanceMaxUnits, 1))
 	{
 		return nullptr;
 	}

@@ -1002,6 +1002,15 @@ public:
 		OutHit = FElysiumEntityHandle::Invalid();
 		return false;
 	}
+	// CanStartGrappleAttack 0x103285a0: stationary standing hull, MASK_PLAYERSOLID.
+	// False also means the geometry service cannot answer; admission then refuses.
+	virtual bool CanStandForGrapple(const FVector& FeetCm,
+		const FElysiumEntityHandle& Ignore) const { return false; }
+	// StartGrappleAttack 0x10329179: sample the selected victim clip's Bip01 at cycle zero.
+	// Returns component-space centimetres; an absent bone is the retail zero-offset case.
+	virtual bool SampleGrappleRoot(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& Clip, FVector& OutPosition) { return false; }
+	virtual bool SyncGrappleClip(USkeletalMeshComponent* Body, float PositionSeconds, bool bTerminal) { return false; }
 
 	// `CBaseCineCam::FindBestShot`'s visibility predicate `FUN_1006db10` (SC8): can the camera see
 	// what the shot is aimed at?

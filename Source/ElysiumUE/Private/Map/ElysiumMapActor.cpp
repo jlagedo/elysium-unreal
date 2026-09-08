@@ -1746,6 +1746,27 @@ bool AElysiumMapActor::TracePlayerSolid(const FVector& FromCm, const FVector& To
 	return true;
 }
 
+bool AElysiumMapActor::CanStandForGrapple(const FVector& FeetCm,
+	const FElysiumEntityHandle& Ignore) const
+{
+	UWorld* World = GetWorld();
+	if (!World || !EntityWorld) return false;
+	FCollisionQueryParams Params(FName(TEXT("ElysiumGrappleStand")), false);
+	if (const APawn* Pawn = ResolvePlayerPawn()) Params.AddIgnoredActor(Pawn);
+	const FVector Extent(16.f * ElysiumMove::U, 16.f * ElysiumMove::U, 36.f * ElysiumMove::U);
+	const FVector Center = FeetCm + FVector(0, 0, Extent.Z);
+	if (World->OverlapBlockingTestByChannel(Center, FQuat::Identity, ELYSIUM_USE_CHANNEL,
+		FCollisionShape::MakeBox(Extent), Params)) return false;
+	const FBox Standing(Center - Extent, Center + Extent);
+	for (const TUniquePtr<FElysiumEntity>& Entry : EntityWorld->Entities())
+	{
+		const FElysiumNpc* Npc = Entry ? Entry->AsNpc() : nullptr;
+		if (Npc && !Npc->IsInert() && !Npc->HasReportedDeath() && Npc->Handle != Ignore
+			&& Standing.Intersect(ElysiumStandHullAt(Npc->Origin))) return false;
+	}
+	return true;
+}
+
 float AElysiumMapActor::QueryLightAtPoint(const FVector& PointCm) const
 {
 	const UElysiumMapVisuals* MapVisuals = GetVisuals();

@@ -644,6 +644,7 @@ public:
 	// `0x103f53f0` write 1; `CWeapon` `0x10250ac0` writes 0. This port's unarmed records are
 	// authored `WeaponMelee`, so the item type is the whole of the byte.
 	bool CanStealthKill() const;
+	void PlayStealthKillSound();
 
 	// `total_lethality = max(BaseLethality + attacker adjustment, 0)`, the adjustment being the
 	// descriptor's attack feat applied to the attacker. Rounded; the ranged path clamps to >= 1.

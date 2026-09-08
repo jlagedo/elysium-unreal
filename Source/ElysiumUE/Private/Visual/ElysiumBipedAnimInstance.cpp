@@ -1523,6 +1523,7 @@ bool UElysiumBipedAnimInstance::PlayOneShot(const FElysiumClipIdentity& Identity
 	// this one number rather than the transaction keeping a private copy of it.
 	ActiveSlotMontage = PlaySlotAnimationAsDynamicMontage(Sequence, FAnimSlotGroup::DefaultSlotName,
 		BlendIn, BlendOut, PlayRate, /*LoopCount=*/ bLoop ? LoopingHoldCount : 1);
+	bHoldSlotFinalPose = false;
 	if (ActiveSlotMontage == nullptr)
 	{
 		return false;
@@ -1734,6 +1735,30 @@ void UElysiumBipedAnimInstance::ResyncClip(float PositionSeconds)
 	GetProxyOnGameThread<FElysiumBipedAnimProxy>().ResyncPosition(PositionSeconds);
 }
 
+void UElysiumBipedAnimInstance::HoldCurrentClipAtEnd()
+{
+	if (FAnimMontageInstance* Montage = GetActiveInstanceForMontage(ActiveSlotMontage))
+	{
+		Montage->bEnableAutoBlendOut = false;
+		bHoldSlotFinalPose = true;
+	}
+}
+
+bool UElysiumBipedAnimInstance::SyncGrappleClip(float PositionSeconds)
+{
+	if (bHoldSlotFinalPose && Montage_IsActive(ActiveSlotMontage))
+	{
+		Montage_SetPosition(ActiveSlotMontage, PositionSeconds);
+		return true;
+	}
+	if (GetPlayingClip())
+	{
+		ResyncClip(PositionSeconds);
+		return true;
+	}
+	return false;
+}
+
 // The base channel's phase clock.
 //
 // One PUBLISHED timeline per body, because retail has exactly one: `DispatchAnimEvents` stores the
@@ -1800,7 +1825,8 @@ EElysiumBasePhaseSource UElysiumBipedAnimInstance::LiveBaseSource(FElysiumBipedA
 	{
 		return EElysiumBasePhaseSource::Reaction;
 	}
-	if (ActiveSlotMontage != nullptr && Montage_IsPlaying(ActiveSlotMontage))
+	if (ActiveSlotMontage != nullptr && (Montage_IsPlaying(ActiveSlotMontage)
+		|| bHoldSlotFinalPose))
 	{
 		return EElysiumBasePhaseSource::Montage;
 	}
@@ -1861,6 +1887,14 @@ float UElysiumBipedAnimInstance::LiveBaseCycle(EElysiumBasePhaseSource Source,
 		// fraction of one segment. A one-shot's position saturates at its own length while the
 		// blend-out runs, and `Frac` of exactly 1 is 0 — which would read as a wrap and fire the
 		// whole timeline again on a clip that has ended. It clamps instead, and 1 is terminal.
+		// UE's montage instance clamps a one-shot to the final sub-step and then marks it
+		// stopped. Retail's m_bSequenceFinished is the terminal state, so a held grapple
+		// montage that has stopped is exactly cycle 1 even though Montage_GetPosition may
+		// report the last pre-stop sample.
+		if (bHoldSlotFinalPose && !Montage_IsPlaying(ActiveSlotMontage))
+		{
+			return 1.0f;
+		}
 		const float Position = Montage_GetPosition(ActiveSlotMontage);
 		return Arm.bLooping
 			? FMath::Frac(Position / Arm.LengthSeconds)

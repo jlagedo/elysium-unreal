@@ -358,15 +358,86 @@ If all pass, `victim` is stored in `m_hCachedVictim[player_index]`.
 1. **HUD prompt**:
    `CBasePlayer::UpdateClientActionState` (`0x101755d0`) / `FUN_10174580` queries `FindVictim`. When non-null, it publishes the stealth-kill interaction icon/prompt (`player + 0x1ea4`).
 2. **Input precedence**:
-   - **Secondary attack (`+attack2` / `+wpn_secondaryatk`)**: `CWeaponMelee::SecondaryAttack` (`0x103eaca0`) calls `PlayerTryStealthKill` (`0x10167370`) before regular heavy attack or blocking. If a victim is qualified, the stealth kill commits immediately.
-   - **Primary attack / Use**: Handled via `PlayerTryStealthKillThunk` (`0x100154a1`).
+   - **Primary attack**: the melee primary body at `0x103eaca0` calls the stealth thunk at
+     `0x103ead0b`, before its ordinary activity requests. The corpus's Torch-qualified label
+     names a shared body. Secondary attack is `0x103eae00`: its complete assembly requests
+     `ACT_MELEE_ATTACK_HEAVY (0x4e)` and contains no stealth attempt.
+   - **Use**: `PlayerUse (0x10167850)` calls `PlayerTryStealthKillThunk (0x100154a1)` after
+     existing-target validation, `(buttons | pressed | released) & IN_USE`, and the
+     Protean-other exclusion, before ordinary use targeting. Successful commitment consumes use.
 3. **Grapple Mode 3 execution (`StartGrappleAttack` @ `0x10328df0`)**:
-   - Stores victim handle into `player->m_hStealthKillTarget` at `+0x1c58` and `+0x1c60`.
+   - Stores the victim into **`m_hMeleeOpponent (+0x1c58)`** and **`m_hLastOpponent (+0x1c60)`**
+     before attempting entry, including when entry fails; these are the datamap's actual names.
    - Resolves paired activity pair via `CheckAndTranslateBaseActivity` (`0x10328af0`) and `TranslateBaseActivity` (`0x10328380`) based on attacker/victim gender, skeleton, and orientation.
    - Locks both combatants into grapple mode 3 via `EnterGrappleState` (`0x10329760`, vtable slot 379) — attacker with role `0`, victim with role `1` — freezing standard movement and AI; `SetGrappleActivity` (`0x1032a100`) then picks the paired activity and calls `EndGrapple` if it cannot.
-   - Invokes `WeaponStealthKill` (vtable index `+0x534`) on the active weapon.
+   - Invokes weapon **sound** slot `+0x534(0x17, 1, 0, 0, 0, 0)`, not a weapon animation.
    - Snaps attacker relative to victim `Bip01` bone offset.
-   - Paired death animation plays, committing fatal damage (`Event_Killed` / `TakeDamage`) on the victim upon completion.
+   - The attacker's sequence completion enters `0x10165d90`: copy `Max_Health` into the
+     damage-taken stat, call **`Event_Killed` directly**, then `Event_Dying`. No `TakeDamage` call.
+
+**Detection during a committed stealth kill (2026-09-08).** Retail does not clear the player-side
+observer record as a gameplay mutation when the grapple starts. The observer writer is
+`FUN_1017ff40`, reached from `CAI_BaseNPC::GatherSight` `0x1026a2c0` only for a targetable
+observer; it stamps the observer slot time/handle and nearest distance. The NPC grapple entry
+`0x1026cdc0 → 0x1026d130` clears the enemy, disconnects the squad, and increments
+`m_iIsOblivious`; `PerformSensing` `0x1026e4f0` then skips the entire sense pass while that
+counter is positive. Therefore no new `SEE_PLAYER`, `HEAR_PLAYER`, or observer offer is produced
+by the grappled victim, and the retail chain does not emit `OnFoundPlayer` after commitment.
+
+The port keeps that gameplay rule. Its world-tick observer pass is downstream presentation, but
+the use/attack commit occurs after the previous frame's observer publication; the committed mode-3
+owner therefore clears only the presentation snapshot at the next publication boundary. It does
+not clear NPC conditions, enemy memory, or the sense state by inventing a gameplay transition.
+
+### Mode-3 completion, translation, and sound (2026-09-08)
+
+**Completion.** `CBasePlayer` virtual `+0x694`, body **`0x10165d90`**, returns false while
+`m_bSequenceFinished (+0x65c)` is zero. Once finished, a live partner and nonnegative role cause:
+
+1. Construct `CVDmg_t`, `SetSrc(player)`, `m_iDiceAmt = 1`, `m_iToHitSuccesses = 1`.
+2. Construct the damage-info wrapper (`0x101c26d0`) with player as inflictor and attacker,
+   amount `1.0`, flags zero, the descriptor, and final index `-1`.
+3. Find the victim's Attributes stat list (`+0x13bc/+0x13c0`, list id 0); the missing-list arm
+   uses the shared empty stat list. `SetBaseToStatValue (0x10200a70)` copies stat **17**
+   (`Max_Health`) into base stat **15** (`Health`, damage TAKEN).
+4. Dispatch **`+0x240 Event_Killed`**, then **`+0x64c Event_Dying`**. The base latter is empty
+   (`0x1032bdf0`, thunk `0x10015a91`); player `0x10163ed0` is its separate override.
+
+The function returns true even if the partner has disappeared. The outer `SetAnimation`
+router **`0x10164240`** then calls `EndGrapple`, raises `0x40000000`, and reselects ordinary
+animation. Only role 0 advances it; role 1 returns without independently running this leaf.
+This direct death route does not roll soak, consume HealthBuffer, cause an ordinary hit flinch,
+or emit ordinary `OnDamaged`. The descriptor attributes death; it is not a one-point attack.
+
+**Translation.** `GetGrappleSize (0x103282e0)` returns **IsMale**, not mesh height. Base
+`0x1015` becomes `base + 1 + partnerMale + 2*role + 4*position`; position 0 is FRONT and 1 BACK.
+`CheckAndTranslateGrapplePosition (0x10328af0)` tries the hinted position then its complement,
+victim first and attacker second. Both `+0x5f4` calls are on the **attacker**, proved by ECX=ESI
+at `0x10328b9e` and `0x10328bc3`; only the vocabulary searched changes. Admission uses
+`SelectHeaviestSequence`; `SetGrappleActivity` uses weighted selection for playback.
+
+**Placement.** `StartGrappleAttack` samples the selected victim sequence's `Bip01` at cycle 0
+(`CalcPose` call `0x10329179`). The victim keeps its origin; the attacker subtracts that bone's
+x/y rotated by attacker yaw (`0x10329228`), using victim origin z. A missing bone keeps zero
+offset. Position 0 rotates victim facing by 180 degrees using the recovered 16-bit angle
+quantization; position 1 shares attacker facing. Entry saves origins before placing either side.
+
+**NPC entry/exit.** `0x1026cdc0` first runs `0x1026d130`: clear enemy, disconnect squad,
+increment raw `m_iIsOblivious`; then `OnGrappleBegin(partner)` and base entry. This does not set
+`MADE_OBLIVIOUS` or emit `OnIncapacitatedStart`. Exit `0x1026ce30` emits `OnGrappleEnd(partner)`
+before base leave and ends with a saturating raw decrement/reconnect (`0x10007ea0`). Existing
+squad hooks remain the named seam until story 17. Troika entry `0x102b5c00` additionally refuses
+after applying its queued reactive-damage array (`+0x65a8/+0x65b4`); that array's producer remains
+unrecovered. Ghoul-croucher override `0x1037b500` burns a player for 10 and refuses when its
+spawn-burning byte is set. These subclass entry arms are not established as implemented by 3b.
+
+**Sound.** Melee vtable `0x104ddd7c + 0x534` contains `0x10012201`, the thunk to weapon sound
+body **`0x10254450`**. Slot **0x17** selects `SoundData/stealth_kill_success` through
+`0x10252120`; slot 0x18 is the failure sound. The current patch-first V2 item corpus has
+**22 success blocks**, each with only one `sound1`, no pitch override. Fists author
+`Weapons/Melee/Fists/Stealth_Fists.wav`. The start call supplies gain 1; the sound body defaults
+pitch to 100 and attenuation to 0.27. Camera activation is the existing authored event **4050**
+consumer, not a synthetic camera timer in the kill transaction.
 
 ### The grapple role pair and the `m_GrappleType` enum (2026-09-07)
 
@@ -507,6 +578,24 @@ The tutorial stealth-kill sequence in `sp_tutorial_1` completes when:
 - The qualified tutorial guard is dispatched via grapple mode 3;
 - The guard's `OnDeath` output triggers the tutorial progression relay;
 - Jack advances the lesson script.
+
+Verified against `exports_v2/maps/sp_tutorial_1.entities.glb` on 2026-09-08: maker **440**,
+`stealth_victim_maker`, authors `OnDeath → thug_maker_4.Spawn` and a separate Python
+`OnDeath` row **`G.Tut_Stealthkill = 1`**. `thug_maker_4` is entity **624**. Its outputs and
+the other maker rows retain their original event names and queue order; the port must not
+replace the flag write or spawn with a special tutorial callback.
+
+**The observed reset is a separate authored discipline gate, not a stealth-kill failure.** The
+same child `OnDeath` also calls `OnKillDisc1()`. `tutorial.py` defines `cAuspex = 0x0004` and,
+for Malkavian/Toreador/Tremere, `OnKillDisc1()` unlocks the next door only when
+`(G.Tutorial_Discflags & cAuspex)` is set; otherwise it triggers `logic_disc1_nodisc`.
+That relay opens `popup_55` (`tutorial_popup_detected_1.txt`), and `popup_55.OnUseEnd` triggers
+`logic_reset_disc1`. The reset then fades, removes disciplines, clears
+`G.Tutorial_Discflags`, teleports the player, respawns the victim, and reopens the discipline
+lesson. The captured runtime chain is in `Saved/Logs/ElysiumUE-backup-2026.09.08-21.39.06.log`
+at the `OnKillDisc1 → logic_disc1_nodisc → popup_55 → logic_reset_disc1` entries. A successful
+stealth kill is therefore compatible with this reset when the preceding Auspex lesson flag is
+absent; `G.Tut_Stealthkill` is already set by the successful victim `OnDeath` output.
 
 ## The light query, recovered (2026-09-08)
 

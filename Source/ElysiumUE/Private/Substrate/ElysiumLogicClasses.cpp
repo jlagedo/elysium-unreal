@@ -638,6 +638,11 @@ public:
 		// at the terminal he was hacking.
 		if (Ent->Handle == World->PlayerHandle())
 		{
+			if (FElysiumPlayer* Player = World->FindPlayer())
+			{
+				if (Player->FeedState.IsPaired()) Player->BreakFeed();
+				else Player->LeaveGrapplePair();
+			}
 			World->EndPlayerUseSession(FElysiumEntityHandle::Invalid(),
 				EElysiumUseEndReason::Interrupted);
 		}

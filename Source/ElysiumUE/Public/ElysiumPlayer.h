@@ -365,6 +365,12 @@ struct FElysiumGrappleState
 	bool bHolsteredOnEnter = false;
 	// +0x1558 `m_hGrappleAnimDriver`, set only when `role != 0` — the victim points at the attacker.
 	FElysiumEntityHandle AnimDriver;
+	// Type-3 action ownership. The authored clip phase, never a wall-clock timeout, ends it.
+	bool bOwnsStealthAction = false;
+	FString ClipLabel;
+	FString ClipOwner;
+	float ClipSeconds = 0.f;
+	uint32 ClipPlayId = 0;
 
 	// Structurally paired. Retail's readers test `role != -1` **and** that the `+0x1538` EHANDLE is
 	// still live, and only the world can answer the second half here (`FElysiumEntityHandle::IsSet`
@@ -1191,6 +1197,11 @@ public:
 	// aggravated tracking, then the outputs and the death test. Nothing else writes the health
 	// slots from a damage path.
 	void CommitDamage(const FElysiumDmg& Dmg);
+	// Player mode-3 completion (0x10165d90): SetBaseToStatValue(Health, MaxHealth),
+	// Event_Killed, Event_Dying. It bypasses OnTakeDamage and its soak/buffer/flinch path.
+	void CommitStealthDeath(const FElysiumEntityHandle& Attacker);
+	FElysiumEntityHandle DeathAttacker;
+	bool bStealthDeathCommitted = false;
 
 	// `CBaseCombatCharacter::DamageFlinch`, from the one health commit. Picks the head or
 	// torso hit activity, steers the `hit_yaw` fan by where the attacker stands relative to this
@@ -1587,7 +1598,7 @@ public:
 	// blend and re-placement, `MOVETYPE_NONE` for a player, `CBasePlayer::FUN_101695f0`'s
 	// `AddVFlags(1)` pose lock (RC4), and the feeder's `m_iClientFeedMaxBloodPool` latch, which the
 	// feed transaction already writes.
-	void EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role,
+	virtual bool EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role,
 		EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true);
 
 	// `CBaseCombatCharacter::LeaveGrappleState` `0x10329a70` (slot 380) — the ONLY clearer. Every
@@ -1596,7 +1607,7 @@ public:
 	// `CBasePlayer`'s override `0x10169660` additionally clears the pose-lock VFlag and calls
 	// **`SetCineCamera(NULL)`**, so ending a grapple ends the scripted shot. That camera edge is
 	// SC4/SC9's to wire; it is recorded in `docs/vtmb/camera-view-modes.md`.
-	void LeaveGrappleState();
+	virtual void LeaveGrappleState();
 
 	// `StartGrappleAttack` `0x10328df0`'s enter pair: the attacker enters first, then the victim,
 	// and the attacker is rolled back if the victim refuses. The admission
@@ -2102,6 +2113,15 @@ public:
 	// `CStealthKillRules::FindVictim` `0x101be1f0` through the bound rulebook table. Null when the
 	// table is absent (a headless fixture calls `FElysiumStealthKillRules::FindVictim` itself).
 	class FElysiumNpc* FindStealthKillVictim();
+	bool TryStealthKill();
+	bool TryStealthKill(const struct FElysiumStealthKillRules& Rules);
+	bool CanStartStealthKill(class FElysiumNpc& Victim, float MaxDistanceUnits,
+		int32 PositionHint, struct FElysiumStealthPairClips* OutClips = nullptr);
+	bool StartStealthKill(class FElysiumNpc& Victim, float MaxDistanceUnits);
+	void TickStealthKill();
+	// Retail player +0x1c58/+0x1c60, written before StartGrappleAttack even on refusal.
+	FElysiumEntityHandle MeleeOpponent;
+	FElysiumEntityHandle LastOpponent;
 
 	bool bImmobilized = false;
 	bool bHiddenByController = false;

@@ -7,6 +7,7 @@
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumItemTable.h"   // EElysiumItemType — the weapon frame's melee/ranged split
 #include "Substrate/ElysiumSkillClasses.h"
 #include "Substrate/ElysiumWeaponClasses.h"
@@ -779,9 +780,21 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 	}
 	TransitionUseFocus(Selected, IconTarget);
 	LastUseOutcome = Selected ? EElysiumUseOutcome::Completed : Query.MissOutcome;
+	FElysiumPlayer* StealthPlayer = FindPlayer();
+	FElysiumNpc* StealthVictim = StealthPlayer ? StealthPlayer->FindStealthKillVictim() : nullptr;
+	StealthPromptTarget = StealthVictim ? StealthVictim->Handle : FElysiumEntityHandle::Invalid();
 
 	const TArray<EElysiumUseEdge, TInlineAllocator<2>> Edges = MoveTemp(PendingUseEdges);
 	PendingUseEdges.Reset();
+	// PlayerUse 0x10167850 tests buttons|pressed|released, before ordinary use dispatch.
+	const bool bUseThisFrame = bPlayerUseHeld || !Edges.IsEmpty();
+	for (EElysiumUseEdge Edge : Edges) bPlayerUseHeld = Edge == EElysiumUseEdge::Pressed;
+	if (bUseThisFrame && StealthPlayer && StealthPlayer->TryStealthKill())
+	{
+		StealthPromptTarget = FElysiumEntityHandle::Invalid();
+		LastUseOutcome = EElysiumUseOutcome::Completed;
+		return;
+	}
 	for (EElysiumUseEdge Edge : Edges)
 	{
 		if (Edge == EElysiumUseEdge::Released)
@@ -857,6 +870,14 @@ void FElysiumEntityWorld::UpdatePlayerInteraction()
 FElysiumInteractionView FElysiumEntityWorld::GetInteractionView() const
 {
 	FElysiumInteractionView View;
+	if (Resolve(StealthPromptTarget) && FindPlayer() && !FindPlayer()->IsGrappling())
+	{
+		View.bVisible = View.bActionable = true;
+		View.Icon = 0x13; // FUN_10174580's stealth action, published to +0x1ea4.
+		View.PromptAlpha = 1.f;
+		View.Action = TEXT("StealthKill");
+		return View;
+	}
 	if (ActiveUse.IsSet() && ActiveUse->Kind == EElysiumUseSessionKind::Explicit)
 	{
 		return View;

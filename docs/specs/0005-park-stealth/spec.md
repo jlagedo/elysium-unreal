@@ -102,7 +102,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   victim (7) admits a backstab from any angle.
   Job: the victim query on the player, the weapon capability read, the obliviousness override.
   Oracle: `stealth.md` § "Victim selection and per-frame cache".
-- [ ] **3c. Stealth kill: commitment and the paired action.**
+- [x] **3c. Stealth kill: commitment and the paired action.**
   Retail: the input commits the kill; grapple type 3 pairs attacker and victim through the
   `m_GrappleType` role pair; the victim's death is synchronized to the action; the tutorial's
   lesson completes on the victim's `OnDeath`.

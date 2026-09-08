@@ -206,6 +206,11 @@ struct FElysiumAnimationRequest
 // travels, and that is the one recovered relationship in the priority table above.
 struct FElysiumClipSegment
 {
+	// Optional resolved bank identity. Paired weapon clips share labels across banks.
+	FString OwnerStem;
+	FString AnimationName;
+	// A paired one-shot must publish cycle 1 and retain that pose until gameplay releases it.
+	bool bHoldFinalPose = false;
 	// The vocabulary label this segment plays, resolved through the body's own clip manifest exactly
 	// as every other clip request is.
 	FString ClipName;
@@ -676,6 +681,8 @@ struct FElysiumAnimationIntent
 	// producer whose retail analogue commands a state change states `Heaviest` instead — see
 	// `EElysiumAnimSelect`.
 	EElysiumAnimSelect Select = EElysiumAnimSelect::Weighted;
+	// Grapple selection calls +0x5f4 directly; no subsequent NPC activity rewrite.
+	bool bWeaponTranslationOnly = false;
 
 	// Translation context.
 	// The active weapon's ENTITY CLASSNAME (`item_w_glock_17c`), which is the key authored content
@@ -1102,6 +1109,8 @@ struct FElysiumGaitSpeedRequest
 // committed weapon ladders and the armed/alert branch with nothing saying they never ran.
 struct FElysiumActivityClipRequest
 {
+	EElysiumAnimSelect Select = EElysiumAnimSelect::Weighted;
+	bool bWeaponTranslationOnly = false;
 	FString Stem;
 	// A stable ACT_* name — the logical request, before any translation.
 	FString Activity;

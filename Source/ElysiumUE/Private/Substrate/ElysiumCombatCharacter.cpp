@@ -1684,7 +1684,7 @@ FElysiumCombatCharacter* FElysiumCombatCharacter::ResolveGrapplePartner() const
 	return Ent ? Ent->AsCombatCharacter() : nullptr;
 }
 
-void FElysiumCombatCharacter::EnterGrappleState(const FElysiumEntityHandle& Partner,
+bool FElysiumCombatCharacter::EnterGrappleState(const FElysiumEntityHandle& Partner,
 	EElysiumGrappleRole Role, EElysiumGrappleType Type, int32 Position, bool bHolster)
 {
 	Grapple.Partner = Partner;
@@ -1693,6 +1693,13 @@ void FElysiumCombatCharacter::EnterGrappleState(const FElysiumEntityHandle& Part
 	Grapple.Position = Position;
 	Grapple.EnterOrigin = Origin;                  // `+0x1548..0x1550 = GetAbsOrigin()`
 	Grapple.bHolsteredOnEnter = bHolster;
+	if (Type == EElysiumGrappleType::StealthKill)
+	{
+		FElysiumItem* Item = Inventory.Active(*this);
+		FElysiumWeapon* Weapon = Item ? Item->AsWeapon() : nullptr;
+		Grapple.bHolsteredOnEnter = bHolster && Weapon && !Weapon->IsHidden();
+		if (Grapple.bHolsteredOnEnter) Weapon->Hide(this);
+	}
 	// `+0x1558 = (role != 0) ? partner : -1` — only the victim points at its attacker, because the
 	// attacker is the half that drives the paired animation.
 	Grapple.AnimDriver = (Role != EElysiumGrappleRole::Attacker)
@@ -1706,10 +1713,29 @@ void FElysiumCombatCharacter::EnterGrappleState(const FElysiumEntityHandle& Part
 	{
 		PlayerEnt->AddViewFlags(EElysiumViewFlags::MoveAnglesFromEntity);
 	}
+	return true;
 }
 
 void FElysiumCombatCharacter::LeaveGrappleState()
 {
+	if (Grapple.Type == EElysiumGrappleType::StealthKill)
+	{
+		if (Grapple.bHolsteredOnEnter)
+		{
+			FElysiumItem* Item = Inventory.Active(*this);
+			if (FElysiumWeapon* Weapon = Item ? Item->AsWeapon() : nullptr) Weapon->Unhide(this);
+		}
+		if (Grapple.bOwnsStealthAction)
+		{
+			ReleaseAnimSegment();
+			if (!HasReportedDeath())
+			{
+				SetBodyFrozen(false);
+				ResetAnimToIdle();
+			}
+			NextThink = float(World ? World->NowSeconds() : 0.0);
+		}
+	}
 	// Every field back to retail's `-1`, in one transaction. The exit placement retail computes
 	// from `+0x1548` (and, for `role == 0 && (type == 1 || type == 4)`, from the *partner's* saved
 	// origin) is the movement half and belongs with whoever placed the bodies; the port's feed pair
@@ -1756,13 +1782,18 @@ bool FElysiumCombatCharacter::EnterGrapplePair(FElysiumCombatCharacter& Victim,
 	const bool bHolsterVictim = Type != EElysiumGrappleType::StealthKillTwin
 		&& Type != EElysiumGrappleType::PayphoneVariant;
 
-	EnterGrappleState(Victim.Handle, EElysiumGrappleRole::Attacker, Type, Position, bHolsterAttacker);
+	if (!EnterGrappleState(Victim.Handle, EElysiumGrappleRole::Attacker, Type, Position, bHolsterAttacker))
+		return false;
 	if (!Victim.Handle.IsSet())
 	{
 		LeaveGrappleState();   // the roll-back arm
 		return false;
 	}
-	Victim.EnterGrappleState(Handle, EElysiumGrappleRole::Victim, Type, Position, bHolsterVictim);
+	if (!Victim.EnterGrappleState(Handle, EElysiumGrappleRole::Victim, Type, Position, bHolsterVictim))
+	{
+		LeaveGrappleState();
+		return false;
+	}
 	if (World && Victim.AsNpc() && (Type == EElysiumGrappleType::Feed || Type == EElysiumGrappleType::FeedVariant))
 	{
 		// StartGrappleAttack -> victim GrappleSoundCmd(0) 0x1033b100, once at engagement.

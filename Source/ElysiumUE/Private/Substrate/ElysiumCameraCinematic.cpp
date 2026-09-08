@@ -70,6 +70,31 @@ namespace ElysiumCineCamImpl
 		{
 			return nullptr;
 		}
+		// Retail's shot table is keyed by parsed block name, while the per-file port first
+		// probes a file named exactly like the candidate. FindBestShot enumerates
+		// `stealth_kill_1`, etc.; those blocks live in the single `stealth_kill.txt`
+		// table. Recover that table lookup before falling through to special-case.
+		int32 Underscore = INDEX_NONE;
+		if (NormalizedName.FindLastChar(TEXT('_'), Underscore)
+			&& Underscore > 0 && Underscore + 1 < NormalizedName.Len())
+		{
+			const FString Suffix = NormalizedName.Mid(Underscore + 1);
+			if (Suffix.IsNumeric())
+			{
+				const FString Family = NormalizedName.Left(Underscore);
+				if (const FElysiumCameraShotDef* Def = ElysiumCameraShots::LoadNamed(Family, NormalizedName))
+				{
+					return Def;
+				}
+				// A present family file with no matching numbered block is the retail scan
+				// terminator. Do not probe a fictitious `<candidate>.txt` and report an
+				// expected miss as a content failure.
+				if (ElysiumCameraShots::Load(Family) != nullptr)
+				{
+					return nullptr;
+				}
+			}
+		}
 		if (const FElysiumCameraShotDef* Def = ElysiumCameraShots::Load(NormalizedName))
 		{
 			return Def;

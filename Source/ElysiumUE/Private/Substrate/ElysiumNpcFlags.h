@@ -160,6 +160,9 @@ public:
 	 * two reasons stays oblivious when one of them ends.
 	 */
 	bool IsOblivious() const { return ObliviousCount > 0; }
+	// Grapples own a raw nesting reference, not TASK_MAKE_OBLIVIOUS's bookkeeping bit.
+	void AddGrappleOblivious() { ++ObliviousCount; }
+	void RemoveGrappleOblivious() { ObliviousCount = FMath::Max(0, ObliviousCount - 1); }
 
 	/**
 	 * `CAI_BaseNPC` `0x1026d130` / `0x1026d160` -- the increment and decrement halves.

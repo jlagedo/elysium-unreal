@@ -1155,6 +1155,17 @@ bool AElysiumMapActor::IsVoicePlaying(FElysiumAudioVoiceHandle Handle) const
 	return Audio && Audio->IsVoicePlaying(Handle);
 }
 
+bool AElysiumMapActor::SampleGrappleRoot(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& Clip, FVector& OutPosition)
+{
+	return Bodies && Bodies->SampleGrappleRoot(Body, Stem, Clip, OutPosition);
+}
+
+bool AElysiumMapActor::SyncGrappleClip(USkeletalMeshComponent* Body, float PositionSeconds, bool bTerminal)
+{
+	return Bodies && Bodies->SyncGrappleClip(Body, PositionSeconds, bTerminal);
+}
+
 float AElysiumMapActor::SoundDurationSeconds(const FString& Rel) const
 {
 	UElysiumAudioSubsystem* Audio = GetAudioSubsystem();

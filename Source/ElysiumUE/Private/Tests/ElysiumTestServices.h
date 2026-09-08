@@ -361,6 +361,14 @@ struct FElysiumRecordingServices final
 	// Opt-in activity resolution mirrors the real manifest path. Default false preserves the
 	// supported old-export fallback exercised by most Substrate tests.
 	bool bNpcActivitiesResolve = false;
+	bool bStandClear = true;
+	bool bRootAvailable = true;
+	virtual bool SyncGrappleClip(USkeletalMeshComponent*, float, bool) override { return true; }
+	FVector GrappleRoot = FVector::ZeroVector;
+	virtual bool CanStandForGrapple(const FVector&, const FElysiumEntityHandle&) const override
+	{ return bStandClear; }
+	virtual bool SampleGrappleRoot(USkeletalMeshComponent*, const FString&, const FString&,
+		FVector& Out) override { Out = GrappleRoot; return bRootAvailable; }
 	FString ResolvedNpcActivityLabel = TEXT("walk");
 	FString ResolvedNpcActivityClip = TEXT("walk_0");
 	// The bank the include DAG named, which a one-shot producer addresses the cell through.

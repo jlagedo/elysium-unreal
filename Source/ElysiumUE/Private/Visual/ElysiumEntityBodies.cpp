@@ -20,6 +20,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
 #include "Animation/BlendSpace.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
@@ -520,13 +521,18 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	const FElysiumClipSegment& Segment, float* OutSeconds)
 {
 	const FString& ClipName = Segment.ClipName;
+	const FString& ClipStem = Segment.OwnerStem.IsEmpty() ? Stem : Segment.OwnerStem;
 	const bool bLoop = Segment.bLoop;
 	// The segment's own channel decides which answer the resolver may give: a baked partial-body
 	// layer is refused for the base pose and handed over for a layer channel, and a caller that let
 	// the base default stand for a layer would be told its layer does not exist.
-	UAnimSequence* Anim = Body
-		? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset(), Segment.Channel)
-		: nullptr;
+	UAnimSequence* Anim = nullptr;
+	if (Body)
+	{
+		Anim = Segment.OwnerStem.IsEmpty()
+			? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset(), Segment.Channel)
+			: ResolveOneShotClip(Body->GetSkeletalMeshAsset(), Segment.OwnerStem, Segment.AnimationName);
+	}
 	if (Anim == nullptr)
 	{
 		return false;
@@ -554,7 +560,7 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// pose, advancing nothing. Discarding the answer made that a silent T-pose.
 	// The authored fade both ways: this funnel carries one number and passes it as both (in = the
 	// fade, out = the fade unless the clip loops).
-	const float Fade = ClipFadeSeconds(Stem, ClipName);
+	const float Fade = ClipFadeSeconds(ClipStem, ClipName);
 	// The identity the clip's event timeline is keyed by. The OWNER is the include DAG's
 	// answer (this body's own stem, or the bank that carries the clip) and the label is the name the
 	// caller asked for, never the animation the cell resolved to. It is the same vocabulary lookup
@@ -567,10 +573,10 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// owner the resolver recorded against the owner published here — so two spellings of one rule is
 	// a silently lost commit, not a cosmetic difference.
 	UElysiumAnimSubsystem* Anims = GetAnims();
-	const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(Stem) : nullptr;
+	const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(ClipStem) : nullptr;
 	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipName) : nullptr;
 	const FElysiumClipIdentity Identity(
-		Clip == nullptr || Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner, ClipName);
+		Clip == nullptr || Clip->IsOwnedBy(ClipStem) ? ClipStem : Clip->Owner, ClipName);
 
 	// The segment's claim on the base channel, at the band the PRODUCER states. The
 	// band-less door means `Ambient`: it holds the pose against a standing body's every-tick publish
@@ -663,6 +669,11 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 		// never set a rate is changed by one that does.
 		: Inst->PlayOneShot(Identity, Anim, bLoop, Fade, Fade, /*bRestart=*/false,
 			Segment.PlaybackRate);
+	if (bPlayed && Segment.bHoldFinalPose)
+	{
+		if (UElysiumBipedAnimInstance* Biped = Cast<UElysiumBipedAnimInstance>(Inst))
+			Biped->HoldCurrentClipAtEnd();
+	}
 	if (!bPlayed)
 	{
 		// **The overlay arm names its own refusal, and this one does not restate it.** Every gate on
@@ -1340,6 +1351,22 @@ bool UElysiumEntityBodies::GetCinematicClipPosition(USkeletalMeshComponent* Body
 	return true;
 }
 
+bool UElysiumEntityBodies::SampleGrappleRoot(USkeletalMeshComponent* Body, const FString& Stem,
+	const FString& Clip, FVector& OutPosition)
+{
+	OutPosition = FVector::ZeroVector;
+	if (!Body || !Body->GetSkeletalMeshAsset()) return false;
+	UAnimSequence* Sequence = ResolveOneShotClip(Body->GetSkeletalMeshAsset(), Stem, Clip);
+	if (!Sequence || !Sequence->GetSkeleton()) return false;
+	const FReferenceSkeleton& Ref = Sequence->GetSkeleton()->GetReferenceSkeleton();
+	const int32 Bone = Ref.FindBoneIndex(TEXT("Bip01"));
+	if (Bone == INDEX_NONE) return true; // retail's LookupBone miss keeps zero offset.
+	FTransform Sample;
+	Sequence->GetBoneTransform(Sample, FSkeletonPoseBoneIndex(Bone), FAnimExtractContext(0.0), false);
+	OutPosition = Sample.GetTranslation();
+	return true;
+}
+
 bool UElysiumEntityBodies::ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds)
 {
 	if (Body == nullptr)
@@ -1358,6 +1385,18 @@ bool UElysiumEntityBodies::ResyncCinematicClip(USkeletalMeshComponent* Body, flo
 	// Deliberately WITHOUT the SetPlayRate(0.f) that SeekCinematicClip pairs with SetPosition: the
 	// clip is meant to keep running from its corrected phase, not freeze at it.
 	Body->SetPosition(FMath::Max(0.f, PositionSeconds), /*bFireNotifies=*/false);
+	return true;
+}
+
+bool UElysiumEntityBodies::SyncGrappleClip(USkeletalMeshComponent* Body, float PositionSeconds, bool bTerminal)
+{
+	UElysiumBipedAnimInstance* Inst = Body ? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	if (!Inst || !Inst->SyncGrappleClip(PositionSeconds)) return false;
+	if (bTerminal)
+	{
+		Body->TickAnimation(0.f, false);
+		Body->RefreshBoneTransforms();
+	}
 	return true;
 }
 

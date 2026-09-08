@@ -118,6 +118,9 @@ public:
 	// releases through this so the idle's own claim is not refused by a dead scene's.
 	void ReleaseCinematicClaim(USkeletalMeshComponent* Body);
 	bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const;
+	bool SampleGrappleRoot(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& Clip, FVector& OutPosition);
+	bool SyncGrappleClip(USkeletalMeshComponent* Body, float PositionSeconds, bool bTerminal);
 	bool ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 
 	// Write named flex controllers on a body's facial rig. INDEX_NONE when the body has no

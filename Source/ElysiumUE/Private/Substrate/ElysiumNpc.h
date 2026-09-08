@@ -609,6 +609,9 @@ public:
 	// `CAI_BaseNPCTroika::IsValidStealthKillTarget` `0x102c2300` (slot 294). The attacker argument
 	// is unused in the listing, matching retail.
 	bool IsValidStealthKillTarget(const FElysiumPlayer& Attacker) const;
+	virtual bool EnterGrappleState(const FElysiumEntityHandle& Partner, EElysiumGrappleRole Role,
+		EElysiumGrappleType Type, int32 Position = INDEX_NONE, bool bHolster = true) override;
+	virtual void LeaveGrappleState() override;
 
 	// The combat schedules' movement claim. Idempotent for a token already held, and refused while
 	// another owner has the body — which is what a task turns into its own named failure. A patrol

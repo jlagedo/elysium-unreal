@@ -1534,6 +1534,8 @@ void FElysiumEntityWorld::Tick(double Now)
 	// on any body whose animation host named the clip it armed. A body standing on a clip nobody
 	// named — a preview stand, a lab grid — publishes nothing, and its cursor stays unarmed.
 	AdvanceAnimEvents();
+	// SetAnimation's paired completion is per frame, not the player's 0.1-second rule heartbeat.
+	if (FElysiumPlayer* PlayerEnt = FindPlayer()) PlayerEnt->TickStealthKill();
 	RunThinks(Now);
 	ServiceEvents(Now);
 	// Auto-Link/Auto-End observes the exact submitted voice handle after world events have had their
@@ -2393,6 +2395,12 @@ void FElysiumEntityWorld::Teardown()
 	EndActiveUse(EElysiumUseEndReason::WorldTeardown);
 	TransitionUseFocus(nullptr, nullptr);
 	PendingUseEdges.Reset();
+	bPlayerUseHeld = false;
+	StealthPromptTarget = FElysiumEntityHandle::Invalid();
+	if (FElysiumPlayer* PlayerEnt = FindPlayer(); PlayerEnt && PlayerEnt->Grapple.bOwnsStealthAction)
+	{
+		PlayerEnt->LeaveGrapplePair();
+	}
 	InteractionPrompt = FInteractionPrompt();
 	LastUseOutcome = EElysiumUseOutcome::NoTarget;
 	if (IElysiumEmbodiment* Bodily = Embodiment())

@@ -241,6 +241,15 @@ void CommitObserverSnapshot(FElysiumPlayer& Player, double Now)
 void PublishObservers(FElysiumPlayer& Player, double Now)
 {
 	Player.PendingObserver.Reset();
+	// A mode-3 grapple is the committed stealth action. The victim's grapple entry has
+	// already made its mind oblivious, and any observer snapshot from the pre-commit
+	// frame is presentation history rather than a live sense result. Clear it before
+	// the HUD projection can reuse that stale state.
+	if (Player.Grapple.bOwnsStealthAction)
+	{
+		Player.Observer.Reset();
+		return;
+	}
 	if (Player.World)
 	{
 		for (const auto& Entity : Player.World->Entities())

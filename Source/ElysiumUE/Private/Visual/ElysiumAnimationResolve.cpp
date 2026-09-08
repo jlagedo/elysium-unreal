@@ -533,6 +533,14 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 		return Result.Activity;
 	};
 
+	if (Intent.bWeaponTranslationOnly)
+	{
+		Out.Iterations = 1;
+		Out.FirstWeaponActivity = WeaponTranslate(Out.Requested);
+		Out.WeaponActivity = Out.FirstWeaponActivity;
+		Out.Resolved = Out.WeaponActivity;
+		return Out;
+	}
 	if (!bCast)
 	{
 		// The pinned player order: `SetIdealActivity` -> `+0x5f4` -> `+0x5e0` -> `SetActivity`. One
@@ -767,6 +775,8 @@ FElysiumPoseParams PoseFrom(const FElysiumAnimationIntent& Intent)
 FElysiumAnimationIntent ActivityIntentFor(const FElysiumActivityClipRequest& Request)
 {
 	FElysiumAnimationIntent Intent;
+	Intent.Select = Request.Select;
+	Intent.bWeaponTranslationOnly = Request.bWeaponTranslationOnly;
 	Intent.Stem = Request.Stem;
 	Intent.Activity = Request.Activity;
 	Intent.Variant = Request.Variant;

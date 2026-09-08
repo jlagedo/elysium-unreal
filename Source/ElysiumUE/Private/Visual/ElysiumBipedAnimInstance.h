@@ -824,6 +824,8 @@ public:
 	// re-phases only when the two have parted company.
 	float GetClipPosition() const;
 	void ResyncClip(float PositionSeconds);
+	void HoldCurrentClipAtEnd();
+	bool SyncGrappleClip(float PositionSeconds);
 
 	// How many upper-body layers are composing — the overlay and the additive are separate slots, so
 	// this is 0, 1 or 2. Read off the published state rather than off a node, so a readout and the
@@ -1117,6 +1119,7 @@ private:
 	// The montage the one-shot seam is currently running, so `StopOneShot` ends that one rather than
 	// whatever else the slot may have picked up.
 	UPROPERTY(Transient) TObjectPtr<UAnimMontage> ActiveSlotMontage = nullptr;
+	bool bHoldSlotFinalPose = false;
 
 	// The reaction's phase clock.
 	//

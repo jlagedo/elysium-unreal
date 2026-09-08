@@ -174,6 +174,11 @@ bool UElysiumSaveSubsystem::CanSave(FString& OutReason) const
 		OutReason = TEXT("this world has no player");
 		return false;
 	}
+	if (World->FindPlayer()->IsGrappling())
+	{
+		OutReason = TEXT("a grapple is in progress"); // GetSaveBlockedReason 0x10174f80, reason 3.
+		return false;
+	}
 	// Neither a sign panel nor an open conversation carries a resume point the payload models: the
 	// panel is a modal the player has to dismiss, and the conversation holds a branch cursor the
 	// snapshot does not serialize. Refusing loudly beats writing a slot that reopens on nothing.

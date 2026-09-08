@@ -510,6 +510,11 @@ public:
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
 	virtual bool TracePlayerSolid(const FVector& FromCm, const FVector& ToCm,
 		const FElysiumEntityHandle& Ignore, FElysiumEntityHandle& OutHit) const override;
+	virtual bool CanStandForGrapple(const FVector& FeetCm,
+		const FElysiumEntityHandle& Ignore) const override;
+	virtual bool SampleGrappleRoot(USkeletalMeshComponent* Body, const FString& Stem,
+		const FString& Clip, FVector& OutPosition) override;
+	virtual bool SyncGrappleClip(USkeletalMeshComponent* Body, float PositionSeconds, bool bTerminal) override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
 	virtual bool IsLightQueryAvailable() const override;
 	virtual bool SamplePlayerStealthBounds(FBox& OutBounds, FVector& OutCenter) const override;

@@ -118,6 +118,8 @@ bool ElysiumItemTypeIsWorn(EElysiumItemType Type);
 // are deliberately not mirrored here.
 struct FElysiumItemDef
 {
+	// SoundData/stealth_kill_success, weapon sound slot 0x17 (0x10252120).
+	TArray<FString> StealthKillSounds;
 	FString Classname;          // the file's basename — the entity classname
 	FString PrintName;          // `printname` — the display name
 	FString Description;

@@ -856,6 +856,35 @@ bool FElysiumWeapon::CanStealthKill() const
 	return Record != nullptr && Record->Type == EElysiumItemType::WeaponMelee;
 }
 
+void FElysiumWeapon::PlayStealthKillSound()
+{
+	// StartGrappleAttack calls weapon +0x534(0x17, 1, 0, 0, 0, 0): WeaponSound,
+	// not an activity request. All 22 shipped success blocks author one sound1 and no pitch override.
+	const FElysiumItemDef* Item = Data();
+	FElysiumCombatCharacter* Wielder = OwnerCharacter();
+	IElysiumAudio* Audio = World ? World->Audio() : nullptr;
+	if (!Item || Item->StealthKillSounds.IsEmpty()) return;
+	if (!Audio || !Wielder)
+	{
+		UE_LOG(LogElysiumWeapon, Warning, TEXT("%s cannot play stealth kill sound without owner/audio"), *DebugString());
+		return;
+	}
+	FElysiumAudioRequest Request;
+	Request.Source = FElysiumAudioSource::Path(Item->StealthKillSounds[
+		ElysiumRng::Stream(EElysiumRngStream::Ambient).RandRange(0, Item->StealthKillSounds.Num() - 1)]);
+	Request.Owner.Kind = EElysiumAudioOwnerKind::GameplaySystem;
+	Request.Owner.StableId = FString::Printf(TEXT("stealthkill.%d"), Wielder->Handle.Index);
+	Request.Category = EElysiumAudioCategory::Sfx;
+	Request.Placement.bSpatialized = true;
+	Request.Placement.AttachTo = Wielder->GetAttachBody();
+	Request.Placement.Location = Wielder->Origin;
+	Request.Gain = 1.f;
+	Request.Pitch = 1.f;
+	Request.AttenuationRadiusCm = (1000.f / 0.27f) * ElysiumMove::U;
+	if (!Audio->Submit(MoveTemp(Request)).IsValid())
+		UE_LOG(LogElysiumWeapon, Warning, TEXT("%s failed to submit stealth kill sound"), *DebugString());
+}
+
 int32 FElysiumWeapon::TotalLethality(int32 ModeIndex, const FElysiumCombatCharacter& Attacker,
 	const FElysiumWeaponContext& Context) const
 {
@@ -1478,6 +1507,17 @@ FElysiumWeapon::EVerdict FElysiumWeapon::AttackIntent(EIntent Intent,
 	if (Now < Deadline)
 	{
 		return EVerdict::NotReady;
+	}
+	// Melee PrimaryAttack 0x103ead0b tries the paired kill before the normal swing.
+	// SecondaryAttack 0x103eae00 never calls this; both refuse while already paired.
+	if (CanStealthKill())
+	{
+		if (Char->IsGrappling()) return EVerdict::Busy;
+		if (Intent == EIntent::Primary)
+		{
+			FElysiumPlayer* Player = Char->AsGrapplingPlayer();
+			if (Player && Player->TryStealthKill()) return EVerdict::Accepted;
+		}
 	}
 
 	// `CWeaponRanged::ModeDispatch` — the authored `Type` decides what a press does.
