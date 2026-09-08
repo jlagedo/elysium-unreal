@@ -14,6 +14,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
+#include "Player/ElysiumCameraShots.h"
 #include "Substrate/ElysiumCameraOverride.h"
 
 namespace ElysiumCameraOverrideTests
@@ -524,6 +525,109 @@ bool FElysiumCameraOverrideCharacterTest::RunTest(const FString&)
 		Subject->GetCameraRoll(), ElysiumCameraOverride::DefaultRollDegrees);
 	TestEqual(TEXT("...and the CBaseEntity default FOV of 75"),
 		Subject->GetCameraFieldOfView(), ElysiumCameraOverride::DefaultFieldOfView);
+
+	return true;
+}
+
+// The `CBaseEntity` half of the interface: an entity that overrides NONE of slots 46-53 is still a
+// legal camera view and a legal camera target, because retail declares all eight on `CBaseEntity`
+// and `FUN_1017d280` / `FUN_1017d460` dispatch through the vtable without asking what class they
+// were handed (`_camera_recovery/rc_group_bc.md` RC7). An `info_target` has no leaf class here, so
+// it is exactly that entity.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraOverrideBareEntityTest,
+	"Elysium.Substrate.CameraOverrideBareEntity", GElysiumTestFlags)
+bool FElysiumCameraOverrideBareEntityTest::RunTest(const FString&)
+{
+	FElysiumEntityWorld World(nullptr, nullptr);
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__camera_override_bare_test__");
+		FElysiumEntityDef Point;
+		Point.Classname = TEXT("info_target");
+		Point.TargetName = TEXT("mark");
+		Point.Origin = FVector(300.f, -40.f, 20.f);
+		Defs.Defs.Add(MoveTemp(Point));
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+	}
+	// `mark > 0` is read literally off `FUN_1017d900`, so the clock has to have moved.
+	World.Tick(1.0);
+
+	FElysiumEntity* Mark = World.FindByName(TEXT("mark"));
+	if (!TestNotNull(TEXT("the map has the point entity"), Mark))
+	{
+		return false;
+	}
+	TestNull(TEXT("an info_target overrides none of slots 46-53"),
+		Mark->GetCameraOverrideSource());
+
+	IElysiumCameraOverrideResolver& Resolver = World.CameraOverrideResolver();
+	IElysiumCameraOverrideSource* Bare = Resolver.ResolveCameraOverrideSource(Mark->Handle);
+	if (!TestNotNull(TEXT("...and the resolver still answers it: the CBaseEntity bodies"), Bare))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the resolve is stable — the same entity answers the same address"),
+		Resolver.ResolveCameraOverrideSource(Mark->Handle), Bare);
+
+	// `WorldSpaceCenter()` (vfunc `0x300`), which the port reads through the one accessor the
+	// `Center` shot anchor and the mode-3 follow think also read.
+	const FVector Centre = ElysiumCameraShots::SurroundingBounds(*Mark).GetCenter();
+	TestTrue(TEXT("slot 50 is WorldSpaceCenter"),
+		Bare->GetCameraViewpointPosition().Equals(Centre, 0.01));
+	TestTrue(TEXT("slot 51 is the same centre, and ignores the dead `from` argument"),
+		Bare->GetCameraTargetPosition(FVector(9000.f, 9000.f, 9000.f)).Equals(Centre, 0.01));
+	TestEqual(TEXT("slot 48 is the CBaseEntity roll of 0"),
+		Bare->GetCameraRoll(), ElysiumCameraOverride::DefaultRollDegrees);
+	TestEqual(TEXT("slot 49 is the CBaseEntity FOV of 75"),
+		Bare->GetCameraFieldOfView(), ElysiumCameraOverride::DefaultFieldOfView);
+	TestEqual(TEXT("slot 52 demands no minimum crossfade in"), Bare->GetCameraFadeInTime(), 0.f);
+	TestEqual(TEXT("...nor out"), Bare->GetCameraFadeOutTime(), 0.f);
+
+	// --- As the VIEW entity: `FUN_1017d280` adopts it, and the fold publishes its centre. -------
+	FElysiumCameraOverrideChannel& Ch = World.CameraOverrideChannelMutable();
+	Ch.SetViewEntity(World.NowSeconds(), Mark->Handle, /*Crossfade*/ 0.0f, Resolver);
+	TestEqual(TEXT("the plain entity took the VIEW slot rather than routing to FadeOut"),
+		Ch.ViewSlot().Entity.Index, Mark->Handle.Index);
+	TestEqual(TEXT("...with the caller's crossfade, since the entity raises no minimum"),
+		Ch.ViewSlot().CrossfadeDuration, 0.f);
+	TestEqual(TEXT("...and a zero crossfade arms the instantaneous fade"), Ch.SignedDuration(), 0.f);
+
+	{
+		const FElysiumCameraOverrideChannel::FPublished& Pub =
+			Ch.Publish(World.NowSeconds(), Resolver, FVector(1.f, 2.f, 3.f));
+		TestTrue(TEXT("the override is live"), Pub.bActive);
+		TestEqual(TEXT("...at full weight"), Pub.Weight, 1.f);
+		TestTrue(TEXT("the published view origin is the entity's centre"),
+			Pub.ViewOrigin.Equals(Centre, 0.01));
+		TestEqual(TEXT("...published with the CBaseEntity roll"),
+			Pub.Roll, ElysiumCameraOverride::DefaultRollDegrees);
+		TestEqual(TEXT("...and the CBaseEntity FOV of 75, not zero"),
+			Pub.FieldOfView, ElysiumCameraOverride::DefaultFieldOfView);
+	}
+
+	// --- As the TARGET entity: `FUN_1017d460`, which aims the composed shot at the same centre. --
+	World.Tick(2.0);
+	Ch.SetTargetEntity(World.NowSeconds(), Mark->Handle, /*Crossfade*/ 0.0f, Resolver);
+	TestEqual(TEXT("the plain entity took the TARGET slot too"),
+		Ch.TargetSlot().Entity.Index, Mark->Handle.Index);
+	{
+		const FElysiumCameraOverrideChannel::FPublished& Pub =
+			Ch.Publish(World.NowSeconds(), Resolver, FVector(1.f, 2.f, 3.f));
+		TestTrue(TEXT("the composed shot aims at the entity's centre"),
+			Pub.TargetPoint.Equals(Centre, 0.01));
+		TestTrue(TEXT("...and the target arm reports a live target"), Pub.bHasTarget);
+	}
+
+	// --- The lazy reap still bites on a dead handle. -------------------------------------------
+	// The adapter is not a lease: `IsCameraSourceAlive` re-reads the entity's own dead flag, so
+	// killing the entity leaves the channel with two invalid ends and the getter reaps.
+	Mark->Kill();
+	World.Tick(3.0);
+	TestEqual(TEXT("both ends are dead, so the weight getter answers 0"),
+		Ch.GetWeight(World.NowSeconds(), Resolver), 0.f);
+	TestTrue(TEXT("...and the getter is the reaper: the channel is clean"), Ch.IsClear());
 
 	return true;
 }

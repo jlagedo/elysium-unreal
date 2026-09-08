@@ -15,6 +15,9 @@
 #include "ElysiumWorldServices.h"
 // By value: the world owns the `camera_track` override channel, retail's `CBasePlayer` fade state.
 #include "Substrate/ElysiumCameraOverride.h"
+// By value again: the resolver below owns the pool of `CBaseEntity`-default camera sources it hands
+// back for an entity that implements none of slots 46-53.
+#include "Substrate/ElysiumBareEntityCameraSource.h"
 
 struct FElysiumSignData;
 struct FElysiumLootView;
@@ -42,6 +45,11 @@ class FElysiumEntityWorld;
 // cine shot when the VIEW entity is set. Held by value on the world so the channel never stores a
 // world pointer of its own — the whole point of the interface is that the channel is assertable
 // with a hand-built resolver and no world at all.
+//
+// **Every live entity resolves.** Retail declares the eight camera slots on `CBaseEntity`, so a
+// handle to *anything* answers them; only two classes override any. An entity that overrides none
+// gets the `CBaseEntity` bodies out of `FElysiumBareEntityCameraSourcePool`, which is what makes an
+// `info_target` a legal camera view or target here as it is in retail.
 class FElysiumWorldCameraOverrideResolver final : public IElysiumCameraOverrideResolver
 {
 public:
@@ -53,6 +61,10 @@ public:
 
 private:
 	FElysiumEntityWorld* World = nullptr;
+	// Mutable because the resolve is const — retail's call is a vtable dispatch on the entity and
+	// stores nothing; the pool is the port's stand-in for that vtable, so binding a slot is not a
+	// change of observable state.
+	mutable FElysiumBareEntityCameraSourcePool BareSources;
 };
 
 // The substrate: one plain-C++ object per map, owned by AElysiumMapActor, that

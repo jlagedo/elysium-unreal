@@ -348,8 +348,10 @@ public:
 	// The `camera_track` override channel's view of this entity — retail's vtable slots 46 to 53
 	// (`+0xB8`..`+0xD4`): become-view / become-target, roll, FOV, viewpoint, target point and the
 	// two minimum crossfades. `CBaseEntity` declares all eight and only `CCameraTrack` and
-	// `CBaseCombatCharacter` fill any of them, so the base answers null and the channel then treats
-	// this entity as "not a camera source" rather than reading defaults off it.
+	// `CBaseCombatCharacter` fill any of them, so the base answers null — meaning "I override
+	// none of the eight", NOT "I cannot be a camera". The world's resolver turns that null into
+	// `FElysiumBareEntityCameraSource`, which is the `CBaseEntity` bodies themselves, so any live
+	// entity is a legal view or target entity exactly as it is in retail.
 	//
 	// Declared here for the same no-RTTI reason `GetAttachBody` and `GetSkeletalBody` are: the
 	// channel's resolver holds an `FElysiumEntity*` and must not know which leaf implements the

@@ -1144,7 +1144,10 @@ public:
 		// broadcasts the target push with a crossfade of **0.0** — the character's own field is then
 		// what raises it. The local pointer is nulled afterwards, so that target is **not** pushed
 		// again by the broadcast below. A `param2` that is not a combat character is pushed
-		// directly, with the event's own duration as the crossfade.
+		// directly, with the event's own duration as the crossfade — and that push lands, because
+		// the world's resolver answers the `CBaseEntity` slot-46..53 bodies for an entity that
+		// overrides none of them (`FElysiumBareEntityCameraSource`). An `info_target` here frames
+		// its `WorldSpaceCenter()`, exactly as the retail vtable dispatch does.
 		if (TargetEnt != nullptr)
 		{
 			if (FElysiumCombatCharacter* Character = TargetEnt->AsCombatCharacter())

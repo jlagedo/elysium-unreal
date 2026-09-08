@@ -258,9 +258,6 @@ static int32 ChosenIndex(const FString& ShotName, const TCHAR* BaseName)
 	}
 	return FCString::Atoi(*ShotName.Mid(Prefix.Len()));
 }
-}
-
-using namespace ElysiumFindBestShotTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraFindBestShotTest,
 	"Elysium.Substrate.CameraFindBestShot", GFlags)
@@ -646,5 +643,7 @@ bool FElysiumCameraFindBestShotTest::RunTest(const FString&)
 
 	return true;
 }
+
+}   // namespace ElysiumFindBestShotTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

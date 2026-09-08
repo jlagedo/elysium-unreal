@@ -1162,7 +1162,21 @@ IElysiumCameraOverrideSource* FElysiumWorldCameraOverrideResolver::ResolveCamera
 {
 	// `handleLive()` — index, epoch and the dead flag, all of which `Resolve` already tests.
 	FElysiumEntity* Entity = World ? World->Resolve(Handle) : nullptr;
-	return Entity ? Entity->GetCameraOverrideSource() : nullptr;
+	if (Entity == nullptr)
+	{
+		return nullptr;
+	}
+	// `CCameraTrack` (`100cb910`) and `CBaseCombatCharacter` are the only two classes that override
+	// any of slots 46-53; they answer for themselves.
+	if (IElysiumCameraOverrideSource* Own = Entity->GetCameraOverrideSource())
+	{
+		return Own;
+	}
+	// Everything else answers the `CBaseEntity` bodies — roll 0, FOV 75, both positions
+	// `WorldSpaceCenter()`, no minimum crossfade, both notifies `RET`. Retail reaches them by plain
+	// vtable dispatch, so a null here would be the port inventing a class of entity that cannot be
+	// a camera; there is no such class (`_camera_recovery/rc_group_bc.md` RC7).
+	return BareSources.Bind(*Entity);
 }
 
 void FElysiumWorldCameraOverrideResolver::ClearCineCamera()

@@ -1186,6 +1186,9 @@ static FString CameraScene(const FString& Events)
 //   `subject`   — `npc_VVampire`, the combat character the `SetAsCameraTarget` arm consumes.
 //   `viewtrack` — `camera_track`, an override source that is NOT a combat character, so the view
 //                 slot takes the plain `SetCameraViewEntity` path with the event's own duration.
+//   `mark`      — `info_target`, an entity that overrides NONE of slots 46-53 and so answers the
+//                 `CBaseEntity` bodies through the resolver's bare-entity adapter. Retail's
+//                 `tgtEnt->+0x9c` cast fails on it, so it takes the same plain path as the track.
 static void BuildCameraWorld(FElysiumEntityWorld& World, const TCHAR* SceneFile)
 {
 	FElysiumEntityDefs Defs;
@@ -1214,6 +1217,12 @@ static void BuildCameraWorld(FElysiumEntityWorld& World, const TCHAR* SceneFile)
 	Track.TargetName = TEXT("viewtrack");
 	Track.Origin = FVector(0.f, 400.f, 90.f);
 	Defs.Defs.Add(MoveTemp(Track));
+
+	FElysiumEntityDef Mark;
+	Mark.Classname = TEXT("info_target");
+	Mark.TargetName = TEXT("mark");
+	Mark.Origin = FVector(-150.f, 60.f, 10.f);
+	Defs.Defs.Add(MoveTemp(Mark));
 
 	World.Load(MoveTemp(Defs));
 	World.SpawnPlayer();
@@ -1313,6 +1322,56 @@ bool FElysiumSceneCameraEventsTest::RunTest(const FString&)
 		// Engaging, not restoring: `FUN_1017d0b0` arms a POSITIVE duration.
 		TestTrue(TEXT("the channel is engaging, so the signed duration is positive"),
 			World.CameraOverrideChannel().SignedDuration() > 0.f);
+	}
+
+	// --- 2b. A `param2` that is not a combat character drives the target slot directly -------------
+	//
+	// Retail casts `tgtEnt->+0x9c` and only the character arm consumes the entity; anything else
+	// falls through to `SetCameraTargetEntity(p, tgtEnt, GetDuration())` `FUN_1017d460` with the
+	// event's own duration as the crossfade. That call reaches the entity's slots 46-53, which for
+	// an entity that overrides none of them are the `CBaseEntity` bodies — so an `info_target` is a
+	// legal target and the shot frames its `WorldSpaceCenter()`.
+	{
+		ElysiumScene::RegisterInline(TEXT("test/cam_bare.vcd"), CameraScene(
+			CameraEvent(TEXT("cameramove"), TEXT("cm"), 1.f, 3.f,
+				TEXT("viewtrack"), TEXT("mark"), TEXT("0"))));
+
+		FElysiumEntityWorld World(nullptr, nullptr);
+		BuildCameraWorld(World, TEXT("test/cam_bare.vcd"));
+
+		FElysiumEntity* Mark = World.FindByName(TEXT("mark"));
+		FElysiumEntity* Raw = World.FindByName(TEXT("subject"));
+		const FElysiumCombatCharacter* Subject = Raw ? Raw->AsCombatCharacter() : nullptr;
+		if (!TestNotNull(TEXT("the fixture has the bare point entity"), Mark))
+		{
+			return false;
+		}
+		TestNull(TEXT("...which is not a combat character"), Mark->AsCombatCharacter());
+
+		double T = 1.0;
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+		World.Tick(T);
+		T = 2.1; World.Tick(T);
+
+		TestEqual(TEXT("the target slot holds the bare entity"),
+			World.CameraOverrideChannel().TargetSlot().Entity.Index, Mark->Handle.Index);
+		TestEqual(TEXT("...with the event's own duration as the crossfade, not the character path's 0"),
+			World.CameraOverrideChannel().TargetSlot().CrossfadeDuration, 2.f, 1.e-4f);
+		if (Subject != nullptr)
+		{
+			TestEqual(TEXT("the character arm never ran"), Subject->CameraOverrideFadeTime, 0.f);
+		}
+
+		// And the composed shot aims at it: `WorldSpaceCenter()`, the `CBaseEntity` slot-51 body.
+		// A second into the 2 s fade — the event has only just armed, so at the mark itself the
+		// weight is exactly 0 and `SetupVisibility` takes its early-out.
+		const FElysiumCameraOverrideChannel::FPublished& Pub =
+			World.CameraOverrideChannelMutable().Publish(
+				World.NowSeconds() + 1.0, World.CameraOverrideResolver(), FVector::ZeroVector);
+		TestTrue(TEXT("the override is live mid-fade"), Pub.bActive);
+		TestTrue(TEXT("the target arm is live"), Pub.bHasTarget);
+		TestTrue(TEXT("...and aims at the bare entity's surrounding-bounds centre"),
+			Pub.TargetPoint.Equals(ElysiumCameraShots::SurroundingBounds(*Mark).GetCenter(), 0.01));
 	}
 
 	// --- 3. The `targethead` default is HEAD ------------------------------------------------------

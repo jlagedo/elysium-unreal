@@ -82,8 +82,10 @@ namespace ElysiumCameraOverride
 //   +0xC4 49  GetCameraFieldOfView      +0xD4 53  GetCameraFadeOutTime
 //
 // The defaults below are `CBaseEntity`'s own bodies. Only the two position getters are pure: they
-// are `WorldSpaceCenter()` in retail, and the port has no generic world-space centre on the entity
-// base, so each implementor answers for itself.
+// are `WorldSpaceCenter()` in retail, and this header sits below the entity layer, so each
+// implementor answers for itself. The base bodies for an entity that overrides nothing live in
+// `Substrate/ElysiumBareEntityCameraSource.h`, which the world's resolver hands back for every
+// entity that is neither a `camera_track` nor a combat character.
 class IElysiumCameraOverrideSource
 {
 public:
