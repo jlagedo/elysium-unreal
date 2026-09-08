@@ -53,7 +53,7 @@ def test_bake_launches_once_per_batch_and_trusts_the_exit() -> None:
         ):
             export_manager.bake_and_verify(config, object(), ["test_map", "test_map"])
         bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=False,
-                                     particles=False, light_store=True,
+                                     particles=False,
                                      batch_size=export_manager.unreal.MAP_BAKE_BATCH)
         verify.assert_not_called()
 
@@ -488,3 +488,58 @@ def test_focused_character_policy_runs_only_character_material_generators() -> N
 
         assert result.status == "ok"
         policy.assert_called_once()
+
+
+def _v2_config(temporary: str, map_name: str = "test_map"):
+    config = _config(temporary)
+    config.game_root = Path(temporary) / "game"
+    config.work_root = Path(temporary) / "work"
+    (config.export_root / map_name).mkdir(parents=True, exist_ok=True)
+    (config.export_root / map_name / f"{map_name}.env").write_text("sky 0\n", encoding="utf-8")
+    return config
+
+
+def test_bake_v2_maps_runs_only_the_v2_lane() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        config = _v2_config(temporary)
+        with (
+            mock.patch("elysium_pipeline.map_transport.is_map_on_v2_models", return_value=True),
+            mock.patch.object(export_manager.native_model_pipeline, "require_map_prerequisites")
+            as prerequisites,
+            mock.patch.object(export_manager, "adopt_export_root"),
+            mock.patch.object(export_manager, "ensure_world_material_content") as masters,
+            mock.patch.object(export_manager, "bake_and_verify") as bake,
+        ):
+            names = export_manager.bake_v2_maps(
+                config, object(), ["test_map", "test_map"], force=True, verify=True)
+        assert names == ["test_map"]
+        prerequisites.assert_called_once_with(config)
+        masters.assert_called_once()
+        bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=True,
+                                     particles=False, verify=True)
+
+
+def test_bake_v2_maps_refuses_a_map_off_the_v2_flag() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        config = _v2_config(temporary)
+        with (
+            mock.patch("elysium_pipeline.map_transport.is_map_on_v2_models", return_value=False),
+            mock.patch.object(export_manager, "bake_and_verify") as bake,
+        ):
+            with pytest.raises(export_manager.ExportBakeFailure) as caught:
+                export_manager.bake_v2_maps(config, object(), ["test_map"])
+        assert "MapsOnV2Models" in str(caught.value)
+        bake.assert_not_called()
+
+
+def test_bake_v2_maps_refuses_a_map_with_no_export_directory() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        config = _v2_config(temporary)
+        with (
+            mock.patch("elysium_pipeline.map_transport.is_map_on_v2_models", return_value=True),
+            mock.patch.object(export_manager, "bake_and_verify") as bake,
+        ):
+            with pytest.raises(export_manager.ExportBakeFailure) as caught:
+                export_manager.bake_v2_maps(config, object(), ["never_exported"])
+        assert "--intermediate-only" in str(caught.value)
+        bake.assert_not_called()

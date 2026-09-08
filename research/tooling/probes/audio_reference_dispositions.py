@@ -18,6 +18,13 @@ Sources, in the order the spec names them:
   unit's own ``dependencies[]`` (every scheme ``Filename``), the referenced ``dialogue`` unit's
   own ``dependencies[]`` (every voiced line's derived mp3, mp3-first already applied), and the
   referenced ``scene`` unit's own ``dependencies[]`` (a `.vcd`'s ``speak``/``bodysound`` params).
+* ``$ELYSIUM_EXPORT_V2_ROOT/sounds/<key>.glb`` for the ``corpus`` disposition itself: since
+  AUD1 the audio a reference resolves *to* is a baked ``USoundWave``
+  (``/ElysiumBaked/Sounds/**/SW_<name>``), not a loose file, and the bake's input is the V2 unit.
+  A reference is disposed ``corpus`` when that unit exists and is not an empty member (its
+  ``omissions[]`` carries no ``empty-member`` role -- the 11 zero-byte corpus entries bake to
+  nothing), and every such row reports the baked object path
+  (``asset_paths.baked_unit("vtmb:sound:" + key, "SW")``) beside it.
 * ``Content/ElysiumCorpus/vdata/system/sndscheme_{openable,switch,computer}.txt`` for the
   soundgroup subkey vocabulary, to synthesize ``usable/<category>/<group>/<subkey>.wav``
   candidates the reference vocabulary cannot see (``soundgroup`` carries no extension).
@@ -40,7 +47,9 @@ import re
 from pathlib import Path
 from typing import Any
 
+from elysium_pipeline.asset_paths import AssetPathError, baked_unit
 from elysium_pipeline.formats.unit_contract.container import read_document
+from elysium_pipeline.importers.sounds_bake import ASSET_PREFIX, FAMILY
 from elysium_pipeline.paths import export_root, export_v2_root, repo_root, vtmb_root
 
 from research.tooling.probes.audio_surface_survey import AUDIO_INPUTS, resolve_targets
@@ -108,17 +117,74 @@ def mp3_sibling(path: str) -> str | None:
 
 
 class Corpus:
-    """Filesystem checks against the deployed corpus and every retail source tree."""
+    """Resolution checks against the V2 sound units, and every retail source tree behind them.
+
+    "In the corpus" used to mean a loose file below ``Content/ElysiumCorpus/sound``. That deploy
+    is retired (AUD1.4): the runtime addresses audio as a baked ``USoundWave``, so what a
+    reference must resolve to is a **published V2 unit that bakes to an asset** -- the unit GLB
+    under ``$ELYSIUM_EXPORT_V2_ROOT/sounds/`` that is not an empty member. The ``corpus``
+    disposition keeps its name and its meaning ("this reference has audio behind it"); only the
+    thing checked moved from the file to the unit.
+    """
 
     def __init__(self) -> None:
-        self.sound_root = repo_root() / "Content" / "ElysiumCorpus" / "sound"
+        self.unit_root = export_v2_root() / FAMILY
         self.vdata_root = repo_root() / "Content" / "ElysiumCorpus" / "vdata" / "system"
         self.v1_root = export_root() / "sound"
         self.loose_root = vtmb_root() / "Vampire" / "sound"
         self.patch_root = vtmb_root() / "Unofficial_Patch" / "sound"
+        self._units: dict[str, bool] = {}
+
+    def unit_path(self, relpath: str) -> Path:
+        return self.unit_root / (relpath + ".glb")
 
     def in_corpus(self, relpath: str) -> bool:
-        return (self.sound_root / relpath).exists()
+        """Whether a published, non-empty V2 unit stands behind this key."""
+
+        cached = self._units.get(relpath)
+        if cached is None:
+            cached = self._units[relpath] = self._probe_unit(relpath)
+        return cached
+
+    def _probe_unit(self, relpath: str) -> bool:
+        path = self.unit_path(relpath)
+        if not path.is_file():
+            return False
+        try:
+            document = read_document(path)
+        except Exception:
+            return False
+        for extension in (document.get("extensions") or {}).values():
+            if not isinstance(extension, dict):
+                continue
+            for omission in extension.get("omissions") or ():
+                if isinstance(omission, dict) and omission.get("role") == "empty-member":
+                    # One of the 11 zero-byte corpus entries: a unit exists, no asset is baked.
+                    return False
+        return True
+
+    def resolved_key(self, relpath: str) -> str:
+        """The key that actually has a unit: this one, or its mp3 sibling; `""` for neither.
+
+        Retail's mp3-first rule means an authored `.wav` reference is answered by the shipped
+        `.mp3`, and the asset the runtime opens is the mp3's -- so that is the key reported.
+        """
+
+        if self.in_corpus(relpath):
+            return relpath
+        mp3 = mp3_sibling(relpath)
+        return mp3 if mp3 and self.in_corpus(mp3) else ""
+
+    def baked_path(self, relpath: str) -> str:
+        """The `USoundWave` object path this reference resolves to, or `""` when nothing bakes."""
+
+        key = self.resolved_key(relpath)
+        if not key:
+            return ""
+        try:
+            return baked_unit("vtmb:sound:" + key, ASSET_PREFIX)
+        except AssetPathError:
+            return ""
 
     def in_any_legacy(self, relpath: str) -> bool:
         return (
@@ -235,12 +301,16 @@ class MapAudit:
         self, path: str, kind: str, referrer: str, *, note: str = "", forced: str | None = None,
     ) -> None:
         disposition, note = self.corpus.classify(path, kind=kind, note=note, forced=forced)
+        norm = normalize(path)
         self.references.append({
             "map": self.map,
-            "path": normalize(path),
+            "path": norm,
             "kind": kind,
             "referrer": referrer,
             "disposition": disposition,
+            # The asset the runtime actually opens, reported for every row with audio behind it;
+            # "" when nothing is baked for the key.
+            "baked": self.corpus.baked_path(norm),
             "note": note,
         })
 
@@ -429,9 +499,10 @@ class MapAudit:
     def cross_check(self) -> None:
         """Compare the V2 map-entities `resolved` set against a direct corpus check.
 
-        `resolved` answers "is this in the VtMB install," which is a superset test of "is this
-        deployed to the corpus" only once AUD0's deploy is complete; a disagreement here is a
-        deploy gap worth naming, not silently absorbed into a disposition.
+        `resolved` answers "is this in the VtMB install," which is a superset test of "does a
+        bakeable V2 unit exist for it" only once the sound family has been exported whole; a
+        disagreement here is an export gap worth naming, not silently absorbed into a
+        disposition.
         """
 
         if not self.map_ext:
@@ -447,13 +518,13 @@ class MapAudit:
                 self.disagreements.append({
                     "map": self.map, "path": norm,
                     "v2_resolved": True, "corpus_present": False,
-                    "detail": "resolves in the VtMB install index but not in the deployed corpus",
+                    "detail": "resolves in the VtMB install index but has no bakeable V2 unit",
                 })
             elif not dep["resolved"] and in_corpus:
                 self.disagreements.append({
                     "map": self.map, "path": norm,
                     "v2_resolved": False, "corpus_present": True,
-                    "detail": "absent from the VtMB install index but present in the corpus",
+                    "detail": "absent from the VtMB install index but published as a V2 unit",
                 })
 
     def run(self) -> None:
@@ -492,13 +563,13 @@ def discover_maps() -> list[str]:
 
 
 def doors_dir_note(corpus: Corpus) -> str:
-    doors = corpus.sound_root / "usable" / "doors"
-    openable = corpus.sound_root / "usable" / "openable"
-    doors_n = sum(1 for _ in doors.rglob("*")) if doors.exists() else 0
-    openable_n = sum(1 for _ in openable.rglob("*")) if openable.exists() else 0
+    doors = corpus.unit_root / "usable" / "doors"
+    openable = corpus.unit_root / "usable" / "openable"
+    doors_n = sum(1 for _ in doors.rglob("*.glb")) if doors.exists() else 0
+    openable_n = sum(1 for _ in openable.rglob("*.glb")) if openable.exists() else 0
     return (
-        f"usable/doors/ exists ({doors_n} entries) but the soundgroup resolver never reads it; "
-        f"the door category directory is usable/openable/ ({openable_n} entries)."
+        f"usable/doors/ exists ({doors_n} units) but the soundgroup resolver never reads it; "
+        f"the door category directory is usable/openable/ ({openable_n} units)."
     )
 
 
@@ -525,12 +596,12 @@ def render_markdown(reports: list[dict], corpus: Corpus) -> str:
         lines.append(f"### {r['map']}")
         lines.append("")
         if non_corpus:
-            lines.append("| path | kind | referrer | disposition | note |")
-            lines.append("|---|---|---|---|---|")
+            lines.append("| path | kind | referrer | disposition | baked asset | note |")
+            lines.append("|---|---|---|---|---|---|")
             for row in non_corpus:
                 lines.append(
                     f"| {row['path']} | {row['kind']} | {row['referrer']} | "
-                    f"{row['disposition']} | {row['note']} |"
+                    f"{row['disposition']} | {row.get('baked', '')} | {row['note']} |"
                 )
             lines.append("")
         for w in r["wires_missing_target"]:

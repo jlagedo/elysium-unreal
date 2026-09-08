@@ -3,12 +3,11 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "ElysiumAudioLatency.h"
-#include "ElysiumSoundCache.h"
 #include "ElysiumAudioSubsystem.generated.h"
 
 class UAudioComponent;
 class USceneComponent;
-class USoundWaveProcedural;
+class USoundWave;
 class IConsoleObject;
 // A request may carry a whole authored falloff instead of a radius (the body-sound path builds one
 // from a Source sound level). Held by shared pointer to an INCOMPLETE type on purpose: the settings
@@ -227,26 +226,45 @@ struct FElysiumAudioVoice
 	GENERATED_BODY()
 
 	UPROPERTY() TObjectPtr<UAudioComponent> Comp = nullptr;
-	UPROPERTY() TObjectPtr<USoundWaveProcedural> Wave = nullptr;
+	UPROPERTY() TObjectPtr<USoundWave> Wave = nullptr;
+	// The loop body of a unit the bake split at its `smpl` region: `Wave` is the intro one-shot and
+	// this is chained onto the same component when it finishes. Null for every other voice, which
+	// is every voice but the three shipped intro+loop units.
+	UPROPERTY() TObjectPtr<USoundWave> LoopWave = nullptr;
 
 	FElysiumVoiceHandle Handle;
 	FElysiumAudioRequest Request;
 	FElysiumVoiceEvent Event;
 	double DestroyAudioClock = -1.0;
 	double InactiveSinceAudioClock = -1.0;
-	// FPlatformTime::Seconds() at Submit, ahead of the async decode.
+	// FPlatformTime::Seconds() at Submit, ahead of the async asset load.
 	double SubmitSeconds = -1.0;
-	// The mixer's render head for this voice, written by the sound generator on the audio
-	// render thread. Null until the voice is realized, and on any wave the PCM path did not build.
-	FElysiumVoiceRenderProbePtr Render;
-	// Latched once the voice's submit → first-pull has been folded into the rolling measurement, so
-	// a voice that lives for ten seconds contributes one reading rather than one per tick.
-	bool bRenderLatencyObserved = false;
+	// True once the intro half has handed over to the loop body, so the chained finish is not read
+	// as the voice's natural end.
+	bool bLoopChained = false;
+};
 
-	// Where the mixer has actually reached inside this voice's media, in seconds. Distinct from
-	// Event.ScheduledAudioClock, which is stamped at submit and so cannot see the decode.
-	// Negative when the mixer has not pulled from this voice yet.
-	double RenderHeadSeconds() const;
+// One row of the loaded/pending/retained ledger the audio debugger and `elysium_audio_state` read:
+// what the resolver made of a key and what the engine did with the asset. Replaces the decode log
+// the hand-rolled decoder wrote (AUD1.2) -- there is no decode to log, because Unreal's stream
+// cache is the decoder.
+struct FElysiumSoundAssetRow
+{
+	// The object path the key folded to, whether or not the bake carries it.
+	FString ObjectPath;
+	// Set when the bake split the unit into an intro one-shot and a looping body.
+	FString LoopObjectPath;
+	float DurationSeconds = 0.f;
+	int32 Channels = 0;
+	int32 SampleRate = 0;
+	// The asset is in memory (a load completed and something still holds it).
+	bool bLoaded = false;
+	// An async load is outstanding.
+	bool bPending = false;
+	// `Prefetch` primed it: its compressed audio is retained for the session.
+	bool bRetained = false;
+	// The resolver found no asset for this key -- a diagnostic, never a negative cache.
+	bool bMissing = false;
 };
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FElysiumVoiceEventDelegate, const FElysiumVoiceEvent&);
@@ -271,7 +289,8 @@ public:
 	void CancelOwner(const FElysiumAudioOwner& Owner, float FadeSeconds = 0.f);
 	void RetireMapEpoch(uint64 MapEpoch);
 	// Map activation waits on the outstanding prefetches only. AUD0.1 deleted the `catalog.json`
-	// gate: readiness is corpus presence, and that is a directory probe answered once at startup.
+	// gate: readiness is the baked family's presence, and that is one asset-registry index built
+	// once on first use (AUD1.2 -- it was a directory probe while the corpus was read loose).
 	static bool IsSoundCorpusPresent();
 	bool IsReadyForMapActivation() const { return PendingPrefetches == 0; }
 
@@ -281,7 +300,10 @@ public:
 	static FString NormalizeSourcePath(const FString& AuthoredPath);
 	static FString ResolveSourcePath(const FElysiumAudioSource& Source);
 
-	const FElysiumSoundInfo* Probe(const FString& Rel);
+	// Resolve one authored spelling and record what the bake carries for it, loading the asset
+	// synchronously so the row answers with the wave's own duration/format. The audio debugger's
+	// inspect button and `elysium.sound_info`; nothing on a gameplay path calls it.
+	const FElysiumSoundAssetRow* Probe(const FString& Rel);
 	UAudioComponent* PreviewSound2D(const FString& Rel, float VolumeMultiplier = 1.f, float PitchMultiplier = 1.f);
 
 	FElysiumAudioVoiceHandle PlayVoice(const FString& Rel, const FElysiumPlayParams& Params);
@@ -301,7 +323,10 @@ public:
 	void TickAudio(float DeltaSeconds);
 	void StopAllVoices();
 
-	const TMap<FString, FElysiumSoundInfo>& Results() const { return DecodeResults; }
+	// Every key this session resolved, with what happened to its asset. The registry the audio
+	// debugger's table and `elysium_audio_state` read.
+	const TMap<FString, FElysiumSoundAssetRow>& AssetRows() const { return SoundAssets; }
+	int32 PendingLoadCount() const { return PendingPrefetches + PendingVoiceLoads; }
 	const TArray<FElysiumAudioVoice>& ActiveVoices() const { return Voices; }
 
 	// The audio render clock every voice's ScheduledAudioClock is stamped against, so a reader can
@@ -310,18 +335,17 @@ public:
 
 	// The output path's latency, term by term, and the lead a cue must be scheduled with so
 	// its first sample is heard at the authored instant. The device half is queried once and cached
-	// (it only changes on a device swap); the submit → first-pull half accumulates over every voice
-	// that plays, so the reading gets better the longer the session runs.
+	// (it only changes on a device swap); the submit → first-pull half is the owner-stamped
+	// constant on `UElysiumAudioSettings` (AUD1.3 -- a plain wave has nowhere to hang a render
+	// probe, and a primed asset feeds the mixer from memory).
 	const FElysiumAudioLatency& OutputLatency() const { return Latency; }
 	float OutputLeadSeconds() const { return Latency.Lead(); }
 	// Re-ask the device. Called on the first voice of a session and by `elysium.audio_latency`.
 	void RefreshOutputLatency();
 
 private:
-	// Fold one live voice's submit → first-pull into the rolling measurement, once.
-	void ObserveRenderLatency(FElysiumAudioVoice& Voice);
-
-	FElysiumSoundCache::FDecodedPtr LoadAndRecord(const FString& Rel);
+	// Record what the resolver made of a key, and what the engine now holds for it.
+	FElysiumSoundAssetRow& RowFor(const FString& Rel);
 	FElysiumAudioVoice* FindVoice(FElysiumVoiceHandle Handle);
 	const FElysiumAudioVoice* FindVoice(FElysiumVoiceHandle Handle) const;
 	FElysiumVoiceHandle AllocateHandle();
@@ -332,10 +356,15 @@ private:
 	void ApplyMasterGain();
 	void HandleAudioFinished(UAudioComponent* Component);
 	float OutputGain(const FElysiumAudioRequest& Request) const;
-	void RealizeVoice(FElysiumVoiceHandle Handle, FElysiumSoundCache::FDecodedPtr Decoded);
+	void RealizeVoice(FElysiumVoiceHandle Handle, USoundWave* Wave, USoundWave* LoopWave);
 	void EmitGameplayNoise(const FElysiumAudioVoice& Voice);
 
-	TMap<FString, FElysiumSoundInfo> DecodeResults;
+	TMap<FString, FElysiumSoundAssetRow> SoundAssets;
+	// What `Prefetch` primed: the wave is held (so the load is not undone by a GC) and its
+	// compressed audio retained (so the stream cache keeps its first chunk resident). Session
+	// lifetime, released in Deinitialize -- a prefetch carries no owner or epoch to release on.
+	UPROPERTY()
+	TMap<FString, TObjectPtr<USoundWave>> RetainedWaves;
 
 	UPROPERTY()
 	TArray<FElysiumAudioVoice> Voices;
@@ -347,9 +376,8 @@ private:
 	FElysiumNoiseEventDelegate NoiseEvents;
 	TArray<IConsoleObject*> ConsoleObjects;
 	int32 PendingPrefetches = 0;
+	int32 PendingVoiceLoads = 0;
 
 	FElysiumAudioLatency Latency;
 	bool bLatencyQueried = false;
-	double SubmitToRenderTotal = 0.0;
-	double DecodeTotal = 0.0;
 };

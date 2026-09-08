@@ -20,9 +20,12 @@ corpus reproducible on a case-sensitive filesystem.
 
 ## Sharing `sound/` with the audio lane
 
-`sound/schemes/` is a subtree of the `sound` lane's own root. That lane names it in its
-`foreign_directories`, so `import sound` steps over these files instead of pruning them as
-orphans, and this lane prunes only `sound/schemes`. Neither lane can delete the other's deploy.
+`sound/schemes/` is a subtree of the `sound` lane's own root. Since AUD1 that lane deploys
+nothing under `sound/` at all -- audio is a baked `USoundWave` -- but it still *owns* the tree so
+that its prune sweeps the retired loose audio out of an existing deployment. It names
+`sound/schemes` in its `foreign_directories`, so `import sound` steps over these files instead of
+pruning them as orphans, and this lane prunes only `sound/schemes`. Neither lane can delete the
+other's deploy, and `sound/schemes/*.txt` is the only thing left below the corpus's `sound/`.
 
 Everything else -- recipe stamps, per-unit failure isolation, byte-equality verification against
 the capsule, `import_report.json`, pruning -- is `importers/corpus_deploy.py`'s.

@@ -1,10 +1,9 @@
 #include "Audio/ElysiumWaterAudio.h"
 
 #include "Audio/ElysiumSurfaceSoundTable.h"
-#include "ElysiumContentPaths.h"
 #include "ElysiumPhysicalMaterial.h"
+#include "ElysiumSoundAssets.h"
 
-#include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 
 namespace
@@ -37,8 +36,9 @@ namespace
 		return FString();
 	}
 
-	// Divergence 1 in the header: the script's wavs, enumerated out of the surfaceprop's folder.
-	// One listing per (folder, verb) for the session -- a footstep must not touch the disk.
+	// Divergence 1 in the header: the script's wavs, enumerated out of the surfaceprop's folder --
+	// now the baked family's folder, listed through the asset registry (AUD1.2). One listing per
+	// (folder, verb) for the session; a footstep must not touch the disk, and now nothing does.
 	const TArray<FString>& ScriptPool(const FString& Folder, const TCHAR* Verb)
 	{
 		static TMap<FString, TArray<FString>> Pools;
@@ -50,16 +50,19 @@ namespace
 		TArray<FString> Names;
 		if (!Folder.IsEmpty())
 		{
-			const FString Directory = FElysiumContentPaths::SoundDir() / Folder;
-			const FString Wildcard = Directory / (FString(Verb) + TEXT("*.wav"));
-			IFileManager::Get().FindFiles(Names, *Wildcard, true, false);
+			const FString Prefix = Folder / Verb;
+			for (const FString& Member : ElysiumSoundAssets::ListFolder(Folder))
+			{
+				if (Member.StartsWith(Prefix, ESearchCase::IgnoreCase) &&
+					Member.EndsWith(TEXT(".wav"), ESearchCase::IgnoreCase))
+				{
+					Names.Add(Member);
+				}
+			}
 			// Deterministic order: the variation index is a draw into this list, and a list whose
 			// order came off the filesystem would make the same draw a different sound per machine.
+			// The registry listing is already sorted; sorting again states the requirement.
 			Names.Sort();
-			for (FString& Name : Names)
-			{
-				Name = Folder / Name;
-			}
 		}
 		return Pools.Add(Key, MoveTemp(Names));
 	}
@@ -70,8 +73,7 @@ namespace
 	// file plays exactly what `CBaseEntity::PhysicsCheckWaterTransition` names.
 	bool ExitSoundExists()
 	{
-		static const bool bExists = IFileManager::Get().FileExists(
-			*(FElysiumContentPaths::SoundDir() / ElysiumWaterAudio::ExitSound));
+		static const bool bExists = ElysiumSoundAssets::Exists(ElysiumWaterAudio::ExitSound);
 		return bExists;
 	}
 

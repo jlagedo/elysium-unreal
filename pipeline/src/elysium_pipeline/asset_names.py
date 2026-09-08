@@ -41,6 +41,41 @@ def baked_asset_name(text):
     return _UNSAFE.sub("_", text)
 
 
+#: The sound fold keeps the hyphen, which is legal in an Unreal package and object name and which
+#: :data:`_UNSAFE` would otherwise turn into an underscore.
+_SOUND_UNSAFE = re.compile(r"[^A-Za-z0-9_-]+")
+
+
+def sound_safe_name(text, *, stem=False):
+    """`FElysiumContentPaths`'s fold for **sound keys only**: space becomes a hyphen.
+
+    The sound corpus is the one family whose keys are not injective under :func:`safe_name`. Two
+    defects, both found by staging all 10,892 units at once and neither visible on a sample:
+
+    * A space and an underscore both fold to `_`, so 14 package paths were claimed by two units
+      each -- `character/female/asian/target_giveup 1.wav` beside `target_giveup_1.wav`,
+      `character/female/patron diner/` beside `patron_diner/`, `whispers/moaning/child_moan
+      alt3.wav` beside `child_moan_alt3.wav`, `character/male/officer/float_1 .wav` beside
+      `float_1.wav`. These are distinct install members with distinct bytes.
+    * `safe_name` strips a leading underscore, and `_segment` reserves one outright, so
+      `character/monster/{ming xiao,spiderchick}/_period.wav` could not be addressed at all.
+
+    So for sounds a space maps to `-` **before** the fold, and the fold keeps `-`. The twins
+    separate (`SW_target_giveup-1_wav` against `SW_target_giveup_1_wav`) without touching any
+    other family's names. `stem=True` -- the last key segment, which becomes the object name after
+    the `SW_` prefix -- additionally keeps a leading or trailing underscore, so `_period.wav`
+    lands as `SW__period_wav`; directories keep the reservation and the strip.
+
+    A hyphen already in a key is left alone, which is only safe because no corpus key pairs an
+    authored `-` against a space in the same position; `test_sounds_bake` asserts that over the
+    whole corpus, and the fixture beside it pins the mapping the C++ twin has to reproduce.
+    """
+    folded = _SOUND_UNSAFE.sub("_", text.replace(" ", "-"))
+    if stem:
+        return folded or "unnamed"
+    return folded.strip("_") or "unnamed"
+
+
 _RIG_UNSAFE = re.compile(r"[^A-Za-z0-9_\-.| ]")
 
 

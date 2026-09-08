@@ -8,12 +8,12 @@
 #include "Debug/ElysiumCogWindow.h"
 #include "imgui.h"
 
-// Test harness for the runtime WAV (dr_wav) + MP3 (dr_mp3) decoders. Type (or pick from the map's
-// ambient_generic references) a path under out/sound/, Play it 2D, and inspect every decode's
-// format/metadata (codec/on-disk tag, channels, sample rate, bits, frames, duration, decode ms,
-// errors) in a live table over the audio subsystem's shared registry — plus a summary of the
-// MS-ADPCM/IMA/PCM/MP3 mix. Drives + reads UElysiumAudioSubsystem, the WorldViz window<->subsystem
-// shared-state pattern.
+// Test harness for the baked sound family. Type (or pick from the map's ambient_generic
+// references) a logical path under sound/, Play it 2D, and inspect what the resolver made of every
+// key this session — the asset it named, whether that asset is loaded, retained by a prefetch,
+// still loading or missing from the bake, plus its channels/rate/duration and whether the bake
+// split it into an intro and a loop body. Drives + reads UElysiumAudioSubsystem, the WorldViz
+// window<->subsystem shared-state pattern.
 class FElysiumCogWindow_Audio : public FElysiumCogWindow
 {
 	typedef FElysiumCogWindow Super;
@@ -30,7 +30,7 @@ private:
 
 	FString PendingPath;                 // the path in the input box
 	ImGuiTextFilter RefFilter;           // filters the map's ambient_generic reference list
-	ImGuiTextFilter DecodeFilter;        // filters the decode-results table
+	ImGuiTextFilter DecodeFilter;        // filters the resolved-asset table
 	bool bRefsDirty = true;              // recollect the reference list on map change / first open
 	TArray<FString> MapRefs;             // cached ambient_generic WAV/MP3 references
 	FString LastMap;                     // map name the refs were collected for

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from elysium_pipeline.asset_names import safe_name
+from elysium_pipeline.asset_names import safe_name, sound_safe_name
 
 BAKED_MOUNT = "/ElysiumBaked"
 KIND_ROOTS = {
@@ -27,17 +27,33 @@ class AssetPathError(ValueError):
     """An identity cannot be addressed without violating the baked-asset contract."""
 
 
-def _segment(value: str) -> str:
-    if not value or value in (".", "..") or value.startswith("_") or any(
-            c in value for c in "/\\:"):
+#: The one kind whose segments go through :func:`asset_names.sound_safe_name` instead of
+#: :func:`asset_names.safe_name`. Sound keys are the only family that is not injective under the
+#: shared fold; that function states why, and no other kind's names change spelling.
+SOUND_FOLD_KINDS = frozenset({"sound"})
+
+
+def _segment(value: str, *, kind: str | None = None, stem: bool = False) -> str:
+    """One source segment as a legal name.
+
+    `stem` marks the last segment of a key, which becomes the object name after its class prefix
+    and so may keep a leading underscore where the kind's fold allows it; a directory never may.
+    """
+    if not value or value in (".", "..") or any(c in value for c in "/\\:"):
+        raise AssetPathError(f"invalid or reserved source segment: {value!r}")
+    if kind in SOUND_FOLD_KINDS:
+        if value.startswith("_") and not stem:
+            raise AssetPathError(f"invalid or reserved source segment: {value!r}")
+        return sound_safe_name(value, stem=stem)
+    if value.startswith("_"):
         raise AssetPathError(f"invalid or reserved source segment: {value!r}")
     return safe_name(value)
 
 
-def _product(prefix: str, name: str) -> str:
+def _product(prefix: str, name: str, *, folded: bool = False) -> str:
     if prefix not in PREFIXES:
         raise AssetPathError(f"unknown baked class prefix: {prefix!r}")
-    return f"{prefix}_{_segment(name)}"
+    return f"{prefix}_{name if folded else _segment(name)}"
 
 
 def baked_path(kind: str, key: str, prefix: str, role: str | None = None,
@@ -45,8 +61,9 @@ def baked_path(kind: str, key: str, prefix: str, role: str | None = None,
     """Return a package path from a unit kind/key; labels retain their authored case."""
     if kind not in KIND_ROOTS:
         raise AssetPathError(f"unknown baked kind: {kind!r}")
-    parts = [_segment(part) for part in key.split("/")]
-    directory, base = parts[:-1], parts[-1]
+    raw = key.split("/")
+    directory = [_segment(part, kind=kind) for part in raw[:-1]]
+    base = _segment(raw[-1], kind=kind, stem=True)
     root = "/".join([BAKED_MOUNT, KIND_ROOTS[kind], *directory])
     if not prefix:
         if kind != "map" or label is not None or role is not None:
@@ -54,7 +71,10 @@ def baked_path(kind: str, key: str, prefix: str, role: str | None = None,
         return f"{root}/{base}/{base}"
     if label is not None:
         root += "/" + base
-    name = _product(prefix, label if label is not None else base)
+    # `base` is folded already; re-folding it would strip the leading underscore a sound stem is
+    # allowed to keep. A label is authored text and folds here for the first time.
+    name = (_product(prefix, label) if label is not None
+            else _product(prefix, base, folded=True))
     if role is not None:
         name += "_" + _segment(role)
     return root + "/" + name

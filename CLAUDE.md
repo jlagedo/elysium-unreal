@@ -28,10 +28,8 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 ### Docs
 
 - `docs/vision.md` — what Elysium is and is not, and how it is built.
-- `docs/decisions.md` — dated ledger of owner calls: divergences, modernizations, traps.
 - `docs/vtmb/` — the oracle: recovered retail facts and addresses. Never port narrative.
 - `docs/contracts/` — the seam data formats shared by the pipeline and the runtime.
-- `docs/specs/NNNN-<witness>/` — one open thread per folder; deleted when it lands.
 
 ## Project rules
 

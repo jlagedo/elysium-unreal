@@ -65,6 +65,11 @@ public class ElysiumUE : ModuleRules
 			"CableComponent",
 			// The `.ents` entity sidecar is one JSON blob (unlike the line-based sidecars).
 			"Json",
+			// The baked sound family is addressed by package path: the resolver asks the asset
+			// registry whether a key's USoundWave exists and lists a soundgroup's folder through
+			// it (ElysiumSoundAssets). A runtime module -- the editor-only block below asks for it
+			// again for the character bake, which is a separate concern on the same dependency.
+			"AssetRegistry",
 			// Dev console UI is built directly in Slate.
 			"Slate", "SlateCore",
 			// The UI foundation. CommonUI is the engine-native game-UI stack: the
@@ -84,11 +89,12 @@ public class ElysiumUE : ModuleRules
 			"MoviePlayer"
 		});
 
-		// Audio: Audio Mixer/Modulation own semantic routing and user control buses. Loose
-		// VtMB media remains procedural and uses the vendored single-header decoders below --
-		// dr_wav (MS-ADPCM/IMA/PCM) and dr_mp3 (dialogue/music/radio MP3). Only the
-		// include path is added -- USoundWave/USoundWaveProcedural and PlaySound2D/SpawnSound2D
-		// all live in Engine (already a public dep), so no audio module dependency is needed.
+		// Audio: Audio Mixer/Modulation own semantic routing and user control buses. Every VtMB
+		// sound unit is baked to a USoundWave asset (AUD1.2, owner call 2026-09-08), so the
+		// vendored dr_wav/dr_mp3 decoders are gone and Unreal's stream cache is the decoder.
+		// USoundWave and PlaySound2D/SpawnSound2D all live in Engine (already a public dep), so no
+		// audio module dependency is needed. The private include path stays for the embedded
+		// CPython header beside them.
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Private", "ThirdParty"));
 
 		// Cog debug UI (ImGui). CogCommon carries the interfaces that survive a Shipping
@@ -117,10 +123,6 @@ public class ElysiumUE : ModuleRules
 				// Offline weather-content generation authors the one native Niagara system
 				// through UE's editor stack API. No NiagaraEditor code reaches Game/Shipping.
 				"NiagaraEditor",
-				// The character bake (UElysiumCharacterBakeLibrary) registers each asset it writes
-				// so the commandlet's own does-asset-exist checks and the verifier see it without a
-				// rescan.
-				"AssetRegistry",
 				// The player animation graph is generated from tracked T3D text through
 				// FEdGraphUtilities -- the engine's own clipboard paste path -- plus the blueprint
 				// create/compile entry points beside it. Editor-only by construction: a graph is

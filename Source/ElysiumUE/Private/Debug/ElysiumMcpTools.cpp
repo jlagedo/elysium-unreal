@@ -35,6 +35,7 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Sound/SoundWave.h"
 #include "HAL/PlatformMisc.h"
 #include "IModelContextProtocolModule.h"
 #include "IModelContextProtocolTool.h"
@@ -1866,7 +1867,21 @@ namespace ElysiumMcpImpl
 					TSharedRef<FJsonObject> Body = Obj();
 					Body->SetBoolField(TEXT("muted"), Audio->IsMuted());
 					Body->SetNumberField(TEXT("master_gain"), Audio->MasterGain());
-					Body->SetNumberField(TEXT("decoded_files"), Audio->Results().Num());
+					// The asset ledger's shape: how many keys resolved this session and what the
+					// engine holds for them. There is no decode count any more -- Unreal's stream
+					// cache is the decoder (AUD1.2).
+					int32 Loaded = 0, Retained = 0, Missing = 0;
+					for (const TPair<FString, FElysiumSoundAssetRow>& Row : Audio->AssetRows())
+					{
+						if (Row.Value.bLoaded)   { ++Loaded; }
+						if (Row.Value.bRetained) { ++Retained; }
+						if (Row.Value.bMissing)  { ++Missing; }
+					}
+					Body->SetNumberField(TEXT("resolved_keys"), Audio->AssetRows().Num());
+					Body->SetNumberField(TEXT("loaded_assets"), Loaded);
+					Body->SetNumberField(TEXT("retained_assets"), Retained);
+					Body->SetNumberField(TEXT("missing_assets"), Missing);
+					Body->SetNumberField(TEXT("pending_loads"), Audio->PendingLoadCount());
 					// The render clock every voice is scheduled against. `scheduled_audio_clock` says
 					// when a voice was *asked for*; `render_head` below says where the mixer has
 					// actually reached inside it, which is the read that survives a slow decode.
@@ -1874,7 +1889,7 @@ namespace ElysiumMcpImpl
 
 					// The lead every cue is scheduled with and the terms it is made of. The
 					// device half is queried, the endpoint half modelled from those queried frame
-					// counts, the submit->render half measured on the voices that have played.
+					// counts, the submit->render half owner-stamped in Config/DefaultElysium.ini.
 					const FElysiumAudioLatency& Lat = Audio->OutputLatency();
 					TSharedRef<FJsonObject> Latency = Obj();
 					Latency->SetBoolField(TEXT("device_queried"), Lat.bDeviceQueried);
@@ -1887,10 +1902,8 @@ namespace ElysiumMcpImpl
 					Latency->SetNumberField(TEXT("endpoint_frames"), Lat.EndpointFrames);
 					Latency->SetNumberField(TEXT("mixer_queue"), Lat.MixerQueueSeconds);
 					Latency->SetNumberField(TEXT("endpoint"), Lat.EndpointSeconds);
+					// Stamped on `UElysiumAudioSettings`, not measured: AUD1.3.
 					Latency->SetNumberField(TEXT("submit_to_render"), Lat.SubmitToRenderSeconds);
-					Latency->SetNumberField(TEXT("submit_to_render_peak"), Lat.SubmitToRenderPeakSeconds);
-					Latency->SetNumberField(TEXT("submit_to_render_samples"), Lat.SubmitToRenderSamples);
-					Latency->SetNumberField(TEXT("decode"), Lat.DecodeSeconds);
 					Latency->SetNumberField(TEXT("lead"), Lat.Lead());
 					Body->SetObjectField(TEXT("latency"), Latency);
 
@@ -1911,12 +1924,12 @@ namespace ElysiumMcpImpl
 						Row->SetNumberField(TEXT("scheduled_audio_clock"), Voice.Event.ScheduledAudioClock);
 						Row->SetNumberField(TEXT("media_offset"), Voice.Event.MediaOffsetSeconds);
 						Row->SetNumberField(TEXT("duration"), Voice.Event.DurationSeconds);
-						// Where the mixer's render head sits inside this voice's own media, and how
-						// long the file read + decode + realization took before it got there.
-						// Negative on both until the mixer has pulled from the voice once.
-						Row->SetNumberField(TEXT("render_head"), Voice.RenderHeadSeconds());
-						Row->SetNumberField(TEXT("submit_to_render"),
-							Voice.Render ? Voice.Render->SubmitToRenderSeconds() : -1.0);
+						// The asset behind the voice, and whether it is playing the intro half of a
+						// split loop unit. The render head is gone with the procedural generator
+						// that wrote it: a plain USoundWave reports no position to the game thread.
+						Row->SetStringField(TEXT("asset"),
+							Voice.Wave ? Voice.Wave->GetPathName() : FString());
+						Row->SetBoolField(TEXT("loop_chained"), Voice.bLoopChained);
 						Voices.Add(MakeShared<FJsonValueObject>(Row));
 					}
 					Body->SetArrayField(TEXT("voices"), Voices);

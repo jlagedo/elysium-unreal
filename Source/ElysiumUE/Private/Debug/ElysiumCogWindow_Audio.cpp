@@ -8,8 +8,8 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMapActor.h"
+#include "ElysiumSoundAssets.h"
 #include "Substrate/ElysiumMoverSounds.h"
-#include "ElysiumSoundCache.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
 #include "CogWidgets.h"
@@ -26,12 +26,13 @@ void FElysiumCogWindow_Audio::RenderHelp()
 	ImGui::Text(
 		"Mute is the non-persistent global debug gate (cvar elysium.Mute) and defaults to OFF. "
 		"Muting does not stop any voice, so unmuting rejoins the ambience mid-stream.\n\n"
-		"Runtime audio decoder test harness (P6.1 WAV / P6.2 MP3). Type a path under out/sound/ (or "
-		"click one of this map's ambient_generic references) and Play it 2D, or Info to decode without "
-		"playing. dr_wav decodes VtMB's Microsoft ADPCM, IMA ADPCM and PCM WAVs; dr_mp3 decodes the loose "
-		"dialogue/music/radio MP3s (.mp3) - both into a procedural sound wave (Unreal has no runtime path "
-		"for loose MP3s). The table lists every decode this session with its codec/on-disk format, "
-		"channels, sample rate, bit depth, frame count, duration and decode time - the same registry the "
+		"Audio request harness over the baked sound family (AUD1.2). Type a logical path under "
+		"sound/ (or click one of this map's ambient_generic references) and Play it 2D, or Inspect "
+		"to resolve and load it without playing. Every sound unit is a USoundWave under "
+		"/ElysiumBaked/Sounds/**/SW_<name>: the resolver folds the key, probes the mp3 asset before "
+		"the wav, and the engine's stream cache is the decoder. The table lists every key this "
+		"session resolved with the asset it named and whether that asset is loaded, retained by a "
+		"prefetch, still loading or missing from the bake - the same registry the "
 		"elysium.playsound / elysium.sound_info verbs write.");
 }
 
@@ -99,7 +100,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 
 	if (ImGui::BeginTabItem("Preview"))
 	{
-	ImGui::TextDisabled("WAV/MP3 path under the exported sound folder");
+	ImGui::TextDisabled("Logical path under sound/ (the baked asset is resolved from it)");
 	ImGui::SetNextItemWidth(-FLT_MIN);   // full width: these are long relative paths
 	FCogWidgets::InputTextWithHint("##Path", "Environmental/Fire/Fire_Roaring.wav", PendingPath);
 	ImGui::BeginDisabled(PendingPath.IsEmpty());
@@ -108,7 +109,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 		Audio->PreviewSound2D(PendingPath);
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Info (decode only)"))
+	if (ImGui::Button("Inspect (resolve + load)"))
 	{
 		Audio->Probe(PendingPath);
 	}
@@ -259,61 +260,56 @@ void FElysiumCogWindow_Audio::RenderContent()
 		ImGui::EndTabItem();
 	}
 
-	const TMap<FString, FElysiumSoundInfo>& Results = Audio->Results();
+	// The asset ledger: every key this session resolved and what the engine did with it. There is
+	// no decode log any more — Unreal's stream cache is the decoder (AUD1.2) — so what is worth
+	// showing is what the resolver made of a key and whether the wave is loaded, retained or
+	// missing.
+	const TMap<FString, FElysiumSoundAssetRow>& Rows = Audio->AssetRows();
 
-	int32 NumMsAdpcm = 0, NumImaAdpcm = 0, NumPcm = 0, NumMp3 = 0, NumOther = 0, NumFailed = 0;
-	double TotalDecodeMs = 0.0;
-	for (const TPair<FString, FElysiumSoundInfo>& Pair : Results)
+	int32 NumLoaded = 0, NumRetained = 0, NumMissing = 0;
+	for (const TPair<FString, FElysiumSoundAssetRow>& Pair : Rows)
 	{
-		const FElysiumSoundInfo& Info = Pair.Value;
-		TotalDecodeMs += Info.DecodeMilliseconds;
-		if (!Info.Error.IsEmpty()) { ++NumFailed; continue; }
-		if (Info.Codec == EElysiumAudioCodec::Mp3) { ++NumMp3; continue; }
-		switch (Info.FormatTag)
-		{
-		case 0x0002: ++NumMsAdpcm; break;   // DR_WAVE_FORMAT_ADPCM
-		case 0x0011: ++NumImaAdpcm; break;  // DR_WAVE_FORMAT_DVI_ADPCM
-		case 0x0001: ++NumPcm; break;       // DR_WAVE_FORMAT_PCM
-		default:     ++NumOther; break;
-		}
+		if (Pair.Value.bMissing)  { ++NumMissing; }
+		if (Pair.Value.bLoaded)   { ++NumLoaded; }
+		if (Pair.Value.bRetained) { ++NumRetained; }
 	}
 
-	const FString DecodeLabel = FString::Printf(TEXT("Decode log  %d###DecodeLog"), Results.Num());
-	if (ImGui::BeginTabItem(COG_TCHAR_TO_CHAR(*DecodeLabel)))
+	const FString AssetLabel = FString::Printf(TEXT("Assets  %d###AssetLog"), Rows.Num());
+	if (ImGui::BeginTabItem(COG_TCHAR_TO_CHAR(*AssetLabel)))
 	{
-	ImGui::Text("%d decoded  ·  %.1f ms total", Results.Num(), TotalDecodeMs);
-	if (NumFailed > 0)
+	ImGui::Text("%d resolved  ·  %d loaded  ·  %d retained  ·  %d in flight",
+		Rows.Num(), NumLoaded, NumRetained, Audio->PendingLoadCount());
+	if (NumMissing > 0)
 	{
 		ImGui::SameLine();
-		ImGui::TextColored(ElysiumCogStyle::ColError, "·  %d failed", NumFailed);
+		ImGui::TextColored(ElysiumCogStyle::ColError, "·  %d missing", NumMissing);
 	}
-	ImGui::TextDisabled("MS-ADPCM %d · IMA %d · PCM %d · MP3 %d · other %d",
-		NumMsAdpcm, NumImaAdpcm, NumPcm, NumMp3, NumOther);
+	ImGui::TextDisabled("%d baked sound assets indexed under /ElysiumBaked/Sounds",
+		ElysiumSoundAssets::Count());
 
-	// Its own filter: this table is populated by every decode this session, the reference list above
-	// only by this map's ambient_generic keys. One shared filter left the table silently narrowed by
-	// a search box that is not even drawn on a map with no ambient_generic references.
-	FCogWidgets::SearchBar("##DecodeFilter", DecodeFilter, GetDpiScale() * 180.0f);
+	// Its own filter: this table is populated by every key this session resolved, the reference
+	// list above only by this map's ambient_generic keys. One shared filter left the table silently
+	// narrowed by a search box that is not even drawn on a map with no ambient_generic references.
+	FCogWidgets::SearchBar("##AssetFilter", DecodeFilter, GetDpiScale() * 180.0f);
 
 	TArray<FString> Keys;
-	Results.GetKeys(Keys);
+	Rows.GetKeys(Keys);
 	Keys.Sort();
 
 	const ImGuiTableFlags TableFlags =
 		ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_ScrollY |
 		ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
 
-	if (ImGui::BeginTable("##Decodes", 8, TableFlags))
+	if (ImGui::BeginTable("##Assets", 7, TableFlags))
 	{
 		ImGui::TableSetupScrollFreeze(0, 1);
-		ImGui::TableSetupColumn("Path");
-		ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 78.0f);
+		ImGui::TableSetupColumn("Key");
+		ImGui::TableSetupColumn("Asset");
+		ImGui::TableSetupColumn("State", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 78.0f);
 		ImGui::TableSetupColumn("Ch", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 30.0f);
 		ImGui::TableSetupColumn("Rate", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 52.0f);
-		ImGui::TableSetupColumn("Bits", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 38.0f);
-		ImGui::TableSetupColumn("Frames", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 66.0f);
 		ImGui::TableSetupColumn("Dur", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 52.0f);
-		ImGui::TableSetupColumn("ms", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 48.0f);
+		ImGui::TableSetupColumn("Loop", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 44.0f);
 		ImGui::TableHeadersRow();
 
 		for (const FString& Key : Keys)
@@ -322,8 +318,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 			{
 				continue;
 			}
-			const FElysiumSoundInfo& Info = Results[Key];
-			const bool bError = !Info.Error.IsEmpty();
+			const FElysiumSoundAssetRow& Row = Rows[Key];
 
 			ImGui::TableNextRow();
 
@@ -334,25 +329,39 @@ void FElysiumCogWindow_Audio::RenderContent()
 			}
 
 			ImGui::TableNextColumn();
-			if (bError)
+			ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Row.ObjectPath));
+
+			ImGui::TableNextColumn();
+			if (Row.bMissing)
 			{
-				ImGui::TextColored(ElysiumCogStyle::ColError, "error");
+				ImGui::TextColored(ElysiumCogStyle::ColError, "missing");
 				if (ImGui::IsItemHovered())
 				{
-					ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*Info.Error));
+					ImGui::SetTooltip("the bake carries no asset for this key");
 				}
+			}
+			else if (Row.bPending)
+			{
+				ImGui::TextColored(ElysiumCogStyle::ColWarn, "loading");
+			}
+			else if (Row.bRetained)
+			{
+				ImGui::TextColored(ElysiumCogStyle::ColOk, "retained");
+			}
+			else if (Row.bLoaded)
+			{
+				ImGui::TextColored(ElysiumCogStyle::ColOk, "loaded");
 			}
 			else
 			{
-				ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Info.FormatName()));
+				ImGui::TextDisabled("resolved");
 			}
 
-			ImGui::TableNextColumn(); ImGui::Text("%d", Info.Channels);
-			ImGui::TableNextColumn(); ImGui::Text("%d", Info.SampleRate);
-			ImGui::TableNextColumn(); ImGui::Text("%d", Info.BitsPerSample);
-			ImGui::TableNextColumn(); ImGui::Text("%lld", Info.FrameCount);
-			ImGui::TableNextColumn(); ImGui::Text("%.2fs", Info.DurationSeconds);
-			ImGui::TableNextColumn(); ImGui::Text("%.2f", Info.DecodeMilliseconds);
+			ImGui::TableNextColumn(); ImGui::Text("%d", Row.Channels);
+			ImGui::TableNextColumn(); ImGui::Text("%d", Row.SampleRate);
+			ImGui::TableNextColumn(); ImGui::Text("%.2fs", Row.DurationSeconds);
+			ImGui::TableNextColumn();
+			ImGui::TextUnformatted(Row.LoopObjectPath.IsEmpty() ? "-" : "intro+body");
 		}
 		ImGui::EndTable();
 	}

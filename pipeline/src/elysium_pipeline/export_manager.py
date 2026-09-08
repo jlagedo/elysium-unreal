@@ -1027,7 +1027,6 @@ def bake_and_verify(
     *,
     force: bool = False,
     particles: bool = False,
-    light_store: bool = True,
     verify: bool = False,
 ) -> None:
     """Bake the named maps, and read the mount back only when explicitly asked to.
@@ -1041,7 +1040,7 @@ def bake_and_verify(
     if not names:
         return
     unreal.bake_maps(config, runner, names, force=force, particles=particles,
-                     light_store=light_store, batch_size=unreal.MAP_BAKE_BATCH)
+                     batch_size=unreal.MAP_BAKE_BATCH)
     missing = [
         str(_baked_package(config, name))
         for name in names
@@ -1054,6 +1053,55 @@ def bake_and_verify(
     else:
         print("[bake] trusting the bake exit; pass --verify or run `elysium verify maps` "
               "to read the mount back")
+
+
+def bake_v2_maps(
+    config,
+    runner,
+    maps: Sequence[str],
+    *,
+    force: bool = False,
+    particles: bool = False,
+    verify: bool = False,
+) -> list[str]:
+    """Author the named maps' levels from their published V2 units, and nothing else.
+
+    `export map` reaches the same bake through the legacy decode and an unconditional
+    re-verification of the character and catalogue corpora (about twenty minutes that import
+    nothing when they are current). This is the V2 lane's own entry: the prerequisite check,
+    the world-material masters, the staged root unit and `bake_map.py`.
+
+    Only a map listed under `MapsOnV2Models` is accepted -- any other map would take the legacy
+    `.obj`/`.props` lane, which this verb does not own. The V2 lane still reads `.env`,
+    `.decals` and `.weather.json` off the map's export directory, so that directory must exist
+    from one `export map <map> --intermediate-only`; that residue is R9's to remove.
+    """
+    _require_export_config(config)
+    from elysium_pipeline import map_transport
+
+    names = list(dict.fromkeys(maps))
+    if not names:
+        return []
+    off_lane = [name for name in names if not map_transport.is_map_on_v2_models(name)]
+    if off_lane:
+        raise ExportBakeFailure(
+            "not on MapsOnV2Models in Config/DefaultElysium.ini: " + ", ".join(off_lane)
+            + "; list the map there (and on MapsOnNewTransport) before baking it on the V2 lane")
+    unexported = [str(config.export_root / name) for name in names
+                  if not (config.export_root / name / f"{name}.env").is_file()]
+    if unexported:
+        raise ExportBakeFailure(
+            "no export directory for: " + ", ".join(unexported)
+            + "; run `elysium export map <map> --intermediate-only` once to write the sidecars "
+            "the V2 lane still reads")
+    native_model_pipeline.require_map_prerequisites(config)
+    adopt_export_root(config.export_root, config.work_root)
+    try:
+        ensure_world_material_content(config, runner)
+    except Exception as exc:
+        raise ExportBakeFailure(str(exc)) from exc
+    bake_and_verify(config, runner, names, force=force, particles=particles, verify=verify)
+    return names
 
 
 def _maps_bake_fingerprint(config, maps: Sequence[str], *,
@@ -1175,7 +1223,6 @@ def export_targeted_maps(
     force: bool = False,
     intermediate_only: bool = False,
     particles: bool = False,
-    light_store: bool = True,
     verify: bool = False,
 ) -> list[str]:
     _require_export_config(config)
@@ -1232,7 +1279,7 @@ def export_targeted_maps(
         # recipes, and forcing a lane is that lane's own `--force`.
         native_model_pipeline.import_map_dependencies(config, runner)
         bake_and_verify(config, runner, names, force=force, particles=particles,
-                        light_store=light_store, verify=verify)
+                        verify=verify)
     return names
 
 

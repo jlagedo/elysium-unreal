@@ -4,12 +4,11 @@
 
 #include "Substrate/ElysiumMoverSounds.h"
 
-#include "ElysiumContentPaths.h"
 #include "ElysiumKeyValues.h"
+#include "ElysiumSoundAssets.h"
 #include "Substrate/ElysiumMover.h"
 #include "Substrate/ElysiumVdataLoad.h"
 
-#include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 
 namespace
@@ -74,7 +73,8 @@ namespace
 	}
 
 	// `usable/<category>` — the "Usable\<Category>" of FUN_101f41b0 @0x101f41b0, where "Usable" is
-	// the `Name` key all three vocabulary files author. Corpus-relative, under SoundDir().
+	// the `Name` key all three vocabulary files author. A sound key, so it addresses the baked
+	// family: retail's directory walk is an existence check by package path (AUD1.2).
 	FString CategoryDir(const FString& Category)
 	{
 		return FString(TEXT("usable/")) + Category;
@@ -121,8 +121,7 @@ namespace ElysiumSoundGroups
 			// FUN_101f42a0 @0x101f42a0 returns on a lookup miss (the table's own base index, i.e. the
 			// default `open.wav`/`close.wav`/... sitting directly under `usable/<category>/`).
 			FString Dir = CategoryDir(Cat) / Group;
-			const bool bGroupShipped =
-				IFileManager::Get().DirectoryExists(*(FElysiumContentPaths::SoundDir() / Dir));
+			const bool bGroupShipped = ElysiumSoundAssets::FolderExists(Dir);
 			if (!bGroupShipped)
 			{
 				Dir = CategoryDir(Cat);
@@ -132,7 +131,7 @@ namespace ElysiumSoundGroups
 			for (const FName& Sub : Vocabulary)
 			{
 				const FString Rel = Dir / Sub.ToString() + TEXT(".wav");
-				if (FPaths::FileExists(FElysiumContentPaths::SoundDir() / Rel))
+				if (ElysiumSoundAssets::Exists(Rel))
 				{
 					Resolved.Add(Sub, Rel);
 				}
@@ -163,18 +162,9 @@ namespace ElysiumSoundGroups
 
 	TArray<FString> EnumerateGroups(const FString& Category)
 	{
-		TArray<FString> Groups;
-		IFileManager::Get().IterateDirectory(
-			*(FElysiumContentPaths::SoundDir() / CategoryDir(Category.ToLower())),
-			[&Groups](const TCHAR* Path, bool bIsDirectory)
-			{
-				if (bIsDirectory)
-				{
-					Groups.Add(FPaths::GetCleanFilename(FString(Path)));
-				}
-				return true;
-			});
-		Groups.Sort();
-		return Groups;
+		// The group directories the bake carries under the category, listed through the asset
+		// registry. Names come back in the bake's own folded spelling (`door_wood`), which is what
+		// `Resolve` folds an authored token to anyway.
+		return ElysiumSoundAssets::ListSubfolders(CategoryDir(Category.ToLower()));
 	}
 }

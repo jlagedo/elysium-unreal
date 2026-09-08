@@ -92,13 +92,5 @@ Which toolset applies:
   (the engine's experimental plugin, enabled in the uproject). Read
   `references/niagara-toolset.md` first: it holds the measured gotchas that cost a session.
 
-## Verifying
-
-Editing an authored asset changes content, not code, so the check is visual: `uv run elysium run
-play` (or `run editor`) and look, using the smallest unit that proves the change — one map, one
-NPC, one placed model. Do not start a build, a test sweep, an export, or a bake for a
-content-only edit. If you also changed C++, the gate is `uv run elysium build` and a focused
-`uv run elysium test <filter>`.
-
 An authored-asset commit carries an unreadable LFS binary diff, so the message has to say which
 asset, which values, and why.

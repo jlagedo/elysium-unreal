@@ -1,0 +1,397 @@
+{
+ "description": "The sound key -> baked asset address contract, for both sides to test against. Python: elysium_pipeline.asset_paths.baked_unit('vtmb:sound:' + key, 'SW', role=role). C++: FElysiumContentPaths::BakedUnit. The fold, per segment: replace ' ' with '-', then replace every run of characters outside [A-Za-z0-9_-] with a single '_'. A directory additionally strips leading and trailing '_' and may not begin with one; the stem (which becomes the object name after the 'SW_' prefix) keeps them. The key keeps its audio extension, which is what separates a wav/mp3 stem pair. A role suffixes the object name.",
+ "prefix": "SW",
+ "kind": "sound",
+ "entries": [
+  {
+   "key": "interface/bubble_click_on.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/interface/SW_bubble_click_on_wav",
+   "objectPath": "/ElysiumBaked/Sounds/interface/SW_bubble_click_on_wav.SW_bubble_click_on_wav"
+  },
+  {
+   "key": "usable/openable/car_trunk/open.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/usable/openable/car_trunk/SW_open_wav",
+   "objectPath": "/ElysiumBaked/Sounds/usable/openable/car_trunk/SW_open_wav.SW_open_wav"
+  },
+  {
+   "key": "character/female/asian/target_giveup_1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup_1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup_1_wav.SW_target_giveup_1_wav"
+  },
+  {
+   "key": "epic/wind.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/epic/SW_wind_wav",
+   "objectPath": "/ElysiumBaked/Sounds/epic/SW_wind_wav.SW_wind_wav"
+  },
+  {
+   "key": "music/creepy_ambience1.mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/music/SW_creepy_ambience1_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/music/SW_creepy_ambience1_mp3.SW_creepy_ambience1_mp3"
+  },
+  {
+   "key": "character/dlg/chinatown/ox/line311_col_e.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/dlg/chinatown/ox/SW_line311_col_e_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/dlg/chinatown/ox/SW_line311_col_e_wav.SW_line311_col_e_wav"
+  },
+  {
+   "key": "character/dlg/chinatown/ox/line311_col_e.mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/dlg/chinatown/ox/SW_line311_col_e_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/character/dlg/chinatown/ox/SW_line311_col_e_mp3.SW_line311_col_e_mp3"
+  },
+  {
+   "key": "character/vampire burning death.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/SW_vampire-burning-death_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/SW_vampire-burning-death_wav.SW_vampire-burning-death_wav"
+  },
+  {
+   "key": "whispers/moaning/child_moan alt3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/whispers/moaning/SW_child_moan-alt3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/whispers/moaning/SW_child_moan-alt3_wav.SW_child_moan-alt3_wav"
+  },
+  {
+   "key": "whispers/moaning/child_moan_alt3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/whispers/moaning/SW_child_moan_alt3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/whispers/moaning/SW_child_moan_alt3_wav.SW_child_moan_alt3_wav"
+  },
+  {
+   "key": "character/dlg/main characters/beckett/line1001_col_e.mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/dlg/main-characters/beckett/SW_line1001_col_e_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/character/dlg/main-characters/beckett/SW_line1001_col_e_mp3.SW_line1001_col_e_mp3"
+  },
+  {
+   "key": "character/monster/ming xiao/movement.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/monster/ming-xiao/SW_movement_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/monster/ming-xiao/SW_movement_wav.SW_movement_wav"
+  },
+  {
+   "key": "character/female/patron diner/float_1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/patron-diner/SW_float_1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/patron-diner/SW_float_1_wav.SW_float_1_wav"
+  },
+  {
+   "key": "character/female/patron_diner/float_1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/patron_diner/SW_float_1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/patron_diner/SW_float_1_wav.SW_float_1_wav"
+  },
+  {
+   "key": "character/monster/ming xiao/_period.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/monster/ming-xiao/SW__period_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/monster/ming-xiao/SW__period_wav.SW__period_wav"
+  },
+  {
+   "key": "character/monster/spiderchick/_period.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/monster/spiderchick/SW__period_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/monster/spiderchick/SW__period_wav.SW__period_wav"
+  },
+  {
+   "key": "music/all that could ever be (unused).mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/music/SW_all-that-could-ever-be-_unused_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/music/SW_all-that-could-ever-be-_unused_mp3.SW_all-that-could-ever-be-_unused_mp3"
+  },
+  {
+   "key": "music/china boss battle (unused).mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/music/SW_china-boss-battle-_unused_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/music/SW_china-boss-battle-_unused_mp3.SW_china-boss-battle-_unused_mp3"
+  },
+  {
+   "key": "music/edward's theme (unused).mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/music/SW_edward_s-theme-_unused_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/music/SW_edward_s-theme-_unused_mp3.SW_edward_s-theme-_unused_mp3"
+  },
+  {
+   "key": "music/die my darling - needle's eye.mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/music/SW_die-my-darling---needle_s-eye_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/music/SW_die-my-darling---needle_s-eye_mp3.SW_die-my-darling---needle_s-eye_mp3"
+  },
+  {
+   "key": "area/santa_monica/ocean_house/vine-stretch.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/area/santa_monica/ocean_house/SW_vine-stretch_wav",
+   "objectPath": "/ElysiumBaked/Sounds/area/santa_monica/ocean_house/SW_vine-stretch_wav.SW_vine-stretch_wav"
+  },
+  {
+   "key": "weapons/tireiron/tireiron-swing.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/weapons/tireiron/SW_tireiron-swing_wav",
+   "objectPath": "/ElysiumBaked/Sounds/weapons/tireiron/SW_tireiron-swing_wav.SW_tireiron-swing_wav"
+  },
+  {
+   "key": "environmental/machines/elevator_pre-fall_snap.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/environmental/machines/SW_elevator_pre-fall_snap_wav",
+   "objectPath": "/ElysiumBaked/Sounds/environmental/machines/SW_elevator_pre-fall_snap_wav.SW_elevator_pre-fall_snap_wav"
+  },
+  {
+   "key": "interface/infobar/need_more_blood - hunter.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/interface/infobar/SW_need_more_blood---hunter_wav",
+   "objectPath": "/ElysiumBaked/Sounds/interface/infobar/SW_need_more_blood---hunter_wav.SW_need_more_blood---hunter_wav"
+  },
+  {
+   "key": "music/laziest men on mars - all your base are belong to us.mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/music/SW_laziest-men-on-mars---all-your-base-are-belong-to-us_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/music/SW_laziest-men-on-mars---all-your-base-are-belong-to-us_mp3.SW_laziest-men-on-mars---all-your-base-are-belong-to-us_mp3"
+  },
+  {
+   "key": "music/licenced/05. chiasm - isolated.mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/music/licenced/SW_05_-chiasm---isolated_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/music/licenced/SW_05_-chiasm---isolated_mp3.SW_05_-chiasm---isolated_mp3"
+  },
+  {
+   "key": "music/santa_monica/clinic - come into our roomremix3.mp3",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/music/santa_monica/SW_clinic---come-into-our-roomremix3_mp3",
+   "objectPath": "/ElysiumBaked/Sounds/music/santa_monica/SW_clinic---come-into-our-roomremix3_mp3.SW_clinic---come-into-our-roomremix3_mp3"
+  },
+  {
+   "key": "area/santa_monica/clinic/gurney1.wav.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/area/santa_monica/clinic/SW_gurney1_wav_wav",
+   "objectPath": "/ElysiumBaked/Sounds/area/santa_monica/clinic/SW_gurney1_wav_wav.SW_gurney1_wav_wav"
+  },
+  {
+   "key": "cinematic/la/chambers/give key stereo final.wav.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/cinematic/la/chambers/SW_give-key-stereo-final_wav_wav",
+   "objectPath": "/ElysiumBaked/Sounds/cinematic/la/chambers/SW_give-key-stereo-final_wav_wav.SW_give-key-stereo-final_wav_wav"
+  },
+  {
+   "key": "environmental/machines/transformer buzz.loop.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/environmental/machines/SW_transformer-buzz_loop_wav",
+   "objectPath": "/ElysiumBaked/Sounds/environmental/machines/SW_transformer-buzz_loop_wav.SW_transformer-buzz_loop_wav"
+  },
+  {
+   "key": "environmental/sewers/pipe rattle.loop.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/environmental/sewers/SW_pipe-rattle_loop_wav",
+   "objectPath": "/ElysiumBaked/Sounds/environmental/sewers/SW_pipe-rattle_loop_wav.SW_pipe-rattle_loop_wav"
+  },
+  {
+   "key": "character/male/officer/float_1 .wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/male/officer/SW_float_1-_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/male/officer/SW_float_1-_wav.SW_float_1-_wav"
+  },
+  {
+   "key": "character/male/officer/float_1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/male/officer/SW_float_1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/male/officer/SW_float_1_wav.SW_float_1_wav"
+  },
+  {
+   "key": "area/santa_monica/rain_moderate _loop.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/area/santa_monica/SW_rain_moderate-_loop_wav",
+   "objectPath": "/ElysiumBaked/Sounds/area/santa_monica/SW_rain_moderate-_loop_wav.SW_rain_moderate-_loop_wav"
+  },
+  {
+   "key": "area/santa_monica/rain_moderate_loop.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/area/santa_monica/SW_rain_moderate_loop_wav",
+   "objectPath": "/ElysiumBaked/Sounds/area/santa_monica/SW_rain_moderate_loop_wav.SW_rain_moderate_loop_wav"
+  },
+  {
+   "key": "character/female/asian/target_giveup 1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup-1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup-1_wav.SW_target_giveup-1_wav"
+  },
+  {
+   "key": "character/female/asian/target_giveup 2.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup-2_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup-2_wav.SW_target_giveup-2_wav"
+  },
+  {
+   "key": "character/female/asian/target_giveup_2.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup_2_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup_2_wav.SW_target_giveup_2_wav"
+  },
+  {
+   "key": "character/female/asian/target_giveup 3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup-3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup-3_wav.SW_target_giveup-3_wav"
+  },
+  {
+   "key": "character/female/asian/target_giveup_3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup_3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_giveup_3_wav.SW_target_giveup_3_wav"
+  },
+  {
+   "key": "character/female/asian/target_lost 1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost-1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost-1_wav.SW_target_lost-1_wav"
+  },
+  {
+   "key": "character/female/asian/target_lost_1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost_1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost_1_wav.SW_target_lost_1_wav"
+  },
+  {
+   "key": "character/female/asian/target_lost 2.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost-2_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost-2_wav.SW_target_lost-2_wav"
+  },
+  {
+   "key": "character/female/asian/target_lost_2.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost_2_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost_2_wav.SW_target_lost_2_wav"
+  },
+  {
+   "key": "character/female/asian/target_lost 3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost-3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost-3_wav.SW_target_lost-3_wav"
+  },
+  {
+   "key": "character/female/asian/target_lost_3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost_3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_lost_3_wav.SW_target_lost_3_wav"
+  },
+  {
+   "key": "character/female/asian/target_suspect 1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect-1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect-1_wav.SW_target_suspect-1_wav"
+  },
+  {
+   "key": "character/female/asian/target_suspect_1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect_1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect_1_wav.SW_target_suspect_1_wav"
+  },
+  {
+   "key": "character/female/asian/target_suspect 2.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect-2_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect-2_wav.SW_target_suspect-2_wav"
+  },
+  {
+   "key": "character/female/asian/target_suspect_2.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect_2_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect_2_wav.SW_target_suspect_2_wav"
+  },
+  {
+   "key": "character/female/asian/target_suspect 3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect-3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect-3_wav.SW_target_suspect-3_wav"
+  },
+  {
+   "key": "character/female/asian/target_suspect_3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect_3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/asian/SW_target_suspect_3_wav.SW_target_suspect_3_wav"
+  },
+  {
+   "key": "character/female/patron diner/float_2.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/patron-diner/SW_float_2_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/patron-diner/SW_float_2_wav.SW_float_2_wav"
+  },
+  {
+   "key": "character/female/patron_diner/float_2.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/patron_diner/SW_float_2_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/patron_diner/SW_float_2_wav.SW_float_2_wav"
+  },
+  {
+   "key": "character/female/patron diner/float_3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/patron-diner/SW_float_3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/patron-diner/SW_float_3_wav.SW_float_3_wav"
+  },
+  {
+   "key": "character/female/patron_diner/float_3.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/female/patron_diner/SW_float_3_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/female/patron_diner/SW_float_3_wav.SW_float_3_wav"
+  },
+  {
+   "key": "area/hollywood/warrens/flow_on.wav",
+   "role": "intro",
+   "packagePath": "/ElysiumBaked/Sounds/area/hollywood/warrens/SW_flow_on_wav_intro",
+   "objectPath": "/ElysiumBaked/Sounds/area/hollywood/warrens/SW_flow_on_wav_intro.SW_flow_on_wav_intro"
+  },
+  {
+   "key": "area/hollywood/warrens/flow_on.wav",
+   "role": "loop",
+   "packagePath": "/ElysiumBaked/Sounds/area/hollywood/warrens/SW_flow_on_wav_loop",
+   "objectPath": "/ElysiumBaked/Sounds/area/hollywood/warrens/SW_flow_on_wav_loop.SW_flow_on_wav_loop"
+  },
+  {
+   "key": "environmental/machines/steam2.wav",
+   "role": "intro",
+   "packagePath": "/ElysiumBaked/Sounds/environmental/machines/SW_steam2_wav_intro",
+   "objectPath": "/ElysiumBaked/Sounds/environmental/machines/SW_steam2_wav_intro.SW_steam2_wav_intro"
+  },
+  {
+   "key": "environmental/machines/steam2.wav",
+   "role": "loop",
+   "packagePath": "/ElysiumBaked/Sounds/environmental/machines/SW_steam2_wav_loop",
+   "objectPath": "/ElysiumBaked/Sounds/environmental/machines/SW_steam2_wav_loop.SW_steam2_wav_loop"
+  },
+  {
+   "key": "environmental/machines/steam3.wav",
+   "role": "intro",
+   "packagePath": "/ElysiumBaked/Sounds/environmental/machines/SW_steam3_wav_intro",
+   "objectPath": "/ElysiumBaked/Sounds/environmental/machines/SW_steam3_wav_intro.SW_steam3_wav_intro"
+  },
+  {
+   "key": "environmental/machines/steam3.wav",
+   "role": "loop",
+   "packagePath": "/ElysiumBaked/Sounds/environmental/machines/SW_steam3_wav_loop",
+   "objectPath": "/ElysiumBaked/Sounds/environmental/machines/SW_steam3_wav_loop.SW_steam3_wav_loop"
+  },
+  {
+   "key": "character/monster/ming xiao/_period.wav",
+   "role": "loop",
+   "packagePath": "/ElysiumBaked/Sounds/character/monster/ming-xiao/SW__period_wav_loop",
+   "objectPath": "/ElysiumBaked/Sounds/character/monster/ming-xiao/SW__period_wav_loop.SW__period_wav_loop"
+  },
+  {
+   "key": "null.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/SW_null_wav",
+   "objectPath": "/ElysiumBaked/Sounds/SW_null_wav.SW_null_wav"
+  },
+  {
+   "key": "character/conversations/beach house/kitchen/mikecarlconversation1.wav",
+   "role": null,
+   "packagePath": "/ElysiumBaked/Sounds/character/conversations/beach-house/kitchen/SW_mikecarlconversation1_wav",
+   "objectPath": "/ElysiumBaked/Sounds/character/conversations/beach-house/kitchen/SW_mikecarlconversation1_wav.SW_mikecarlconversation1_wav"
+  }
+ ]
+}

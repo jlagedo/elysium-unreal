@@ -211,7 +211,9 @@ struct FElysiumContentPaths
 	// `vtmb:texture:` unit.
 	static FString BakedTexturesDir() { return BakedMount() / TEXT("Textures"); }
 	// The baked-unit contract's object-path resolver. Python's asset_paths.baked_unit returns
-	// the corresponding package path; both walk pipeline/tests/fixtures/baked_paths.json.
+	// the corresponding package path; both walk pipeline/tests/fixtures/baked_paths.json, and the
+	// `sound` kind additionally walks pipeline/tests/fixtures/sound_asset_paths.json (65 entries,
+	// asserted by `Elysium.Substrate.AudioContracts`).
 	static FString BakedUnit(const FString& Id, const FString& Prefix,
 		const FString& Role = FString(), const FString& Label = FString())
 	{
@@ -229,16 +231,24 @@ struct FElysiumContentPaths
 		const auto ValidSegment = [](const FString& Part)
 		{
 			return !Part.IsEmpty() && Part != TEXT(".") && Part != TEXT("..")
-				&& !Part.StartsWith(TEXT("_")) && !Part.Contains(TEXT("/"))
+				&& !Part.Contains(TEXT("/"))
 				&& !Part.Contains(TEXT("\\")) && !Part.Contains(TEXT(":"));
 		};
+		// The `sound` kind is the ONE family whose keys are not injective under `SafeName` --
+		// `asset_names.SOUND_FOLD_KINDS`. See `SoundSafeName` below for the two defects that
+		// forced it; no other kind's spelling changes.
+		const bool bSoundFold = (Kind == TEXT("sound"));
 		TArray<FString> Parts;
 		Key.ParseIntoArray(Parts, TEXT("/"), false);
 		if (Parts.IsEmpty()) return FString();
-		for (FString& Part : Parts)
+		for (int32 I = 0; I < Parts.Num(); ++I)
 		{
-			if (!ValidSegment(Part)) return FString();
-			Part = SafeName(Part);
+			// The last segment becomes the object name after the class prefix, so a sound stem may
+			// keep a leading underscore (`_period.wav`). A directory never may, in any kind.
+			const bool bStem = (I == Parts.Num() - 1);
+			if (!ValidSegment(Parts[I])) return FString();
+			if (Parts[I].StartsWith(TEXT("_")) && !(bSoundFold && bStem)) return FString();
+			Parts[I] = bSoundFold ? SoundSafeName(Parts[I], bStem) : SafeName(Parts[I]);
 		}
 		FString Package = BakedMount() / *Root;
 		for (int32 I = 0; I < Parts.Num() - 1; ++I) Package /= Parts[I];
@@ -258,13 +268,16 @@ struct FElysiumContentPaths
 			if (!Prefixes.Contains(Prefix)) return FString();
 			if (!Label.IsEmpty())
 			{
-				if (!ValidSegment(Label)) return FString();
+				if (!ValidSegment(Label) || Label.StartsWith(TEXT("_"))) return FString();
 				Package /= Base;
 			}
+			// `Base` is folded already; re-folding it would strip the leading underscore a sound
+			// stem is allowed to keep. A label and a role are authored text and fold here for the
+			// first time, through the shared fold whatever the kind (`_segment(role)`).
 			Asset = Prefix + TEXT("_") + (Label.IsEmpty() ? Base : SafeName(Label));
 			if (!Role.IsEmpty())
 			{
-				if (!ValidSegment(Role)) return FString();
+				if (!ValidSegment(Role) || Role.StartsWith(TEXT("_"))) return FString();
 				Asset += TEXT("_") + SafeName(Role);
 			}
 		}
@@ -353,6 +366,52 @@ struct FElysiumContentPaths
 	// entirely is `unnamed`. NOT BakedAssetName (which keeps the leading/trailing run) and NOT
 	// PropModelStem (which keeps `.` and `-` and lower-cases) — three folds, three contracts.
 	static FString MaterialSafeName(const FString& Text) { return SafeName(Text); }
+	// `asset_names.sound_safe_name`: the fold for SOUND keys only -- a space becomes a HYPHEN
+	// before the run collapse, and the collapse keeps `-`. Two defects found by staging all 10,892
+	// units at once forced it, and neither is visible on a sample:
+	//
+	//  * a space and an underscore both fold to `_` under `SafeName`, so 14 package paths were
+	//    claimed by two distinct install members each -- `target_giveup 1.wav` beside
+	//    `target_giveup_1.wav`, `character/female/patron diner/` beside `patron_diner/`,
+	//    `whispers/moaning/child_moan alt3.wav` beside `child_moan_alt3.wav`;
+	//  * `SafeName` strips a leading underscore and `BakedUnit` reserves one outright, so
+	//    `character/monster/{ming xiao,spiderchick}/_period.wav` could not be addressed at all.
+	//
+	// `bStem` is the last key segment -- the object name after the `SW_` prefix -- and keeps a
+	// leading or trailing underscore (`SW__period_wav`); a directory keeps the strip and the
+	// reservation. An authored hyphen is left alone, which is only safe because no corpus key
+	// pairs an authored `-` against a space in the same position (`test_sounds_bake` asserts that
+	// over the whole corpus). NOT `SafeName` and NOT `BakedAssetName` -- four folds now, four
+	// contracts, and they never meet on one input.
+	static FString SoundSafeName(const FString& Text, bool bStem)
+	{
+		FString Out;
+		Out.Reserve(Text.Len());
+		bool bInRun = false;
+		for (const TCHAR Raw : Text)
+		{
+			const TCHAR Ch = (Raw == TEXT(' ')) ? TEXT('-') : Raw;
+			const bool bLegal = (Ch >= TEXT('a') && Ch <= TEXT('z')) ||
+				(Ch >= TEXT('A') && Ch <= TEXT('Z')) ||
+				(Ch >= TEXT('0') && Ch <= TEXT('9')) || Ch == TEXT('_') || Ch == TEXT('-');
+			if (bLegal)
+			{
+				Out.AppendChar(Ch);
+				bInRun = false;
+			}
+			else if (!bInRun)
+			{
+				Out.AppendChar(TEXT('_'));
+				bInRun = true;
+			}
+		}
+		if (!bStem)
+		{
+			while (Out.RemoveFromStart(TEXT("_"))) {}
+			while (Out.RemoveFromEnd(TEXT("_"))) {}
+		}
+		return Out.IsEmpty() ? FString(TEXT("unnamed")) : Out;
+	}
 	static FString SafeName(const FString& Text)
 	{
 		FString Out;
@@ -559,13 +618,13 @@ struct FElysiumContentPaths
 		return Folded.ToLower();
 	}
 
-	// Audio. WAVs are game-global (shared across maps), so they live in one mirror of VtMB's
-	// `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.
-	// "Environmental/Fire/Fire_Roaring.wav"), matching an ambient_generic `message` value.
-	// Migrated onto CorpusRoot() by DC on 2026-09-06: 10,892 sound
-	// units with their same-stem `.lip` beside them.
-	static FString SoundDir() { return CorpusRoot() / TEXT("sound"); }
-	static FString SoundFile(const FString& Rel) { return SoundDir() / CorpusRel(Rel); }
+	// Audio has NO loose accessor. Every `sound` unit is baked to a `USoundWave` under
+	// `/ElysiumBaked/Sounds/**/SW_<name>` and addressed by package path through
+	// `ElysiumSoundAssets` (`BakedUnit("vtmb:sound:" + key, "SW")`), so `SoundDir()`/`SoundFile()`
+	// are deleted rather than left as a second way to reach the same bytes -- AUD1.2, owner call
+	// 2026-09-08 in `docs/decisions.md`. What still lives under the corpus's own `sound/` tree is
+	// the `.lip` mirror (reached as `lip/` by `LipFile`) and the scheme text below; no shipped
+	// script opens a file under `sound/`, so the script sandbox no longer mounts it either.
 
 	// Sound schemes. A `logic_soundscheme`/`ambient_soundscheme` `scheme_file` keyvalue carries the
 	// install-relative spelling "sound/Schemes/SP_Tutorial_City.txt"; `uv run elysium import
@@ -577,7 +636,7 @@ struct FElysiumContentPaths
 	{
 		FString Sub = CorpusRel(Rel);
 		if (Sub.StartsWith(TEXT("sound/"))) { Sub.RightChopInline(6); }
-		return SoundDir() / Sub;
+		return CorpusRoot() / TEXT("sound") / Sub;
 	}
 
 	// Choreographed scenes and their phoneme sidecars, mirrored verbatim from the install by
@@ -588,10 +647,10 @@ struct FElysiumContentPaths
 	// Migrated onto CorpusRoot() by DC: 5,444 `.vcd`, 7,105 `.lip`.
 	static FString ScenesDir() { return CorpusRoot() / TEXT("scenes"); }
 	static FString SceneFile(const FString& Rel) { return ScenesDir() / CorpusRel(Rel); }
-	// The sound import deploys each `.lip` BOTH as `sound/<rel>.lip` (beside its audio) and as
-	// `lip/<rel>.lip` (the legacy mirror's shape). `lip/` is the spelling this accessor keeps: it is
-	// the drop-in for the pre-DC layout and it keeps `LipDir()` enumerable on its own for the
-	// coverage tests, which a tree interleaved with 10,892 audio files is not.
+	// `import sound` deploys each `.lip` ONCE, as `lip/<rel>.lip`. The beside-the-audio copy
+	// (`sound/<rel>.lip`) went with the loose audio when AUD1.4 pruned it: the audio is baked asset
+	// content now, so there is no audio tree left to sit beside. `lip/` was always the spelling
+	// this accessor kept, and it keeps `LipDir()` enumerable on its own for the coverage tests.
 	static FString LipDir() { return CorpusRoot() / TEXT("lip"); }
 	static FString LipFile(const FString& Rel) { return LipDir() / CorpusRel(Rel); }
 

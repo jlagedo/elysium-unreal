@@ -1,5 +1,9 @@
 """Contract tests for the sound capsule and `uv run elysium import sound`.
 
+Since AUD1 the lane deploys the `.lip` mirror and nothing else -- audio is a baked `USoundWave`
+under `/ElysiumBaked/Sounds/**` -- and owns the corpus's retired `sound/` tree for the prune
+alone, stepping over the `sound-schemes` lane's `sound/schemes/`.
+
 Every fixture is a synthetic `.wav`/`.lip` exported into a temporary `export_v2` root from
 hand-built bytes and a fake install index -- never the real VtMB install, and never a real
 deployed corpus. The one test that reads the machine's own trees is the legacy-parity check at
@@ -64,12 +68,9 @@ MEMBERS = {
     "sound/area/chinatown/asian_chimes1.wav": _wav(bytes(range(64, 128))),
 }
 
-#: Every corpus-relative file the lane should produce from `MEMBERS`.
+#: Every corpus-relative file the lane should produce from `MEMBERS`: the `.lip` mirror only.
 EXPECTED = {
-    "sound/character/dlg/jack/line1.wav": MEMBERS["sound/character/dlg/jack/line1.wav"],
-    "sound/character/dlg/jack/line1.lip": LIP,
     "lip/character/dlg/jack/line1.lip": LIP,
-    "sound/area/chinatown/asian_chimes1.wav": MEMBERS["sound/area/chinatown/asian_chimes1.wav"],
 }
 
 
@@ -162,15 +163,18 @@ def test_every_member_deploys_to_the_path_the_runtime_reads(tmp_path):
     assert result.units == 2
     assert result.written == len(EXPECTED)
     assert _deployed(corpus, "sound", "lip") == EXPECTED
+    # Not one audio byte lands loose: the corpus's own `sound/` tree is never created.
+    assert not (corpus / "sound").exists()
 
 
-def test_a_lip_lands_beside_its_audio_and_under_the_lip_root(tmp_path):
-    """`SoundDir()` wants it beside the audio; `LipDir()` wants it under `lip/` -- both get it."""
+def test_a_lip_lands_under_the_lip_root_and_audio_lands_nowhere(tmp_path):
+    """`LipFile` is the only loose reader left; audio is addressed as a baked `USoundWave`."""
 
     assert importer.target_of("sound/character/dlg/jack/line1.lip") == (
-        "sound/character/dlg/jack/line1.lip", "lip/character/dlg/jack/line1.lip",
+        "lip/character/dlg/jack/line1.lip",
     )
-    assert importer.target_of("sound/a/b.mp3") == ("sound/a/b.mp3",)
+    assert importer.target_of("sound/a/b.mp3") == ()
+    assert importer.target_of("sound/a/b.wav") == ()
     with pytest.raises(corpus_deploy.CorpusImportError):
         importer.target_of("sound/a/b.vcd")
     with pytest.raises(corpus_deploy.CorpusImportError):
@@ -200,12 +204,46 @@ def test_a_stale_file_is_overwritten_and_an_orphan_is_pruned(tmp_path):
     target = corpus / "lip" / "character" / "dlg" / "jack" / "line1.lip"
     target.write_bytes(b"stale")
     orphan = corpus / "sound" / "area" / "chinatown" / "retired.wav"
+    orphan.parent.mkdir(parents=True, exist_ok=True)
     orphan.write_bytes(b"no longer exported")
 
     result = importer.import_sound(tmp_path / "exports_v2", corpus)
     assert result.written == 1
     assert target.read_bytes() == LIP
     assert result.pruned == 1 and not orphan.exists()
+
+
+def test_the_retired_loose_audio_is_pruned_and_the_schemes_survive(tmp_path):
+    """The AUD1 sweep: a deployment written by the old recipe loses its audio, keeps the schemes.
+
+    `sound` stays in `owned_directories` for exactly this -- the lane writes nothing there any
+    more, so every file left below it is an orphan of the retired recipe -- and `sound/schemes`
+    stays foreign, so the `sound-schemes` lane's deploy is stepped over rather than swept.
+    """
+
+    _publish(tmp_path / "exports_v2")
+    corpus = tmp_path / "Content" / "ElysiumCorpus"
+    legacy = {
+        "sound/character/dlg/jack/line1.wav": MEMBERS["sound/character/dlg/jack/line1.wav"],
+        "sound/character/dlg/jack/line1.lip": LIP,
+        "sound/area/chinatown/asian_chimes1.wav": b"RIFF",
+        "sound/schemes/sp_tutorial_city.txt": b"scheme text",
+    }
+    for relative, data in legacy.items():
+        path = corpus / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+    result = importer.import_sound(tmp_path / "exports_v2", corpus)
+
+    assert result.failures == []
+    assert result.pruned == 3
+    assert _deployed(corpus, "sound", "lip") == {
+        "sound/schemes/sp_tutorial_city.txt": b"scheme text", **EXPECTED,
+    }
+    # The emptied audio directories go with their files; the schemes' own parents stay.
+    assert not (corpus / "sound" / "character").exists()
+    assert (corpus / "sound" / "schemes").is_dir()
 
 
 def test_a_unit_from_before_the_capsule_is_one_failure_and_not_a_crash(tmp_path):
@@ -227,8 +265,9 @@ def test_a_unit_from_before_the_capsule_is_one_failure_and_not_a_crash(tmp_path)
     result = importer.import_sound(tmp_path / "exports_v2", corpus)
     assert [key for key, _ in result.failures] == ["sounds/area/chinatown/asian_chimes1.wav"]
     assert "capsule" in result.failures[0][1]
-    assert not (corpus / "sound" / "area").exists()
-    assert result.written == len(EXPECTED) - 1
+    assert not (corpus / "sound").exists()
+    # The failed unit carried no `.lip`, so the good unit's mirror is still every file expected.
+    assert result.written == len(EXPECTED)
 
 
 def test_the_import_report_names_the_counts(tmp_path):
@@ -308,9 +347,9 @@ def _legacy_root() -> Path | None:
     return root if root and root.is_dir() else None
 
 
-@pytest.mark.parametrize("directory, suffix", [("sound", ".lip"), ("lip", ".lip")])
+@pytest.mark.parametrize("directory, suffix", [("lip", ".lip")])
 def test_the_deployed_lip_tree_matches_the_legacy_mirror_byte_for_byte(directory, suffix):
-    """Both `.lip` spellings are the legacy `lip/` mirror's own bytes, under the legacy key.
+    """The deployed `lip/` mirror is the legacy `lip/` mirror's own bytes, under the legacy key.
 
     Skipped unless both this machine's legacy export and its deployed corpus exist.
     """

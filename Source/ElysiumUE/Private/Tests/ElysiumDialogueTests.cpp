@@ -53,7 +53,6 @@
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
 #include "Map/ElysiumMapCollision.h"
-#include "ElysiumSoundCache.h"
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
@@ -111,8 +110,6 @@
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Sound/SoundGenerator.h"
-#include "Sound/SoundWaveProcedural.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -907,10 +904,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgCorpusMountTest,
 bool FElysiumDlgCorpusMountTest::RunTest(const FString&)
 {
 	// One path, one byte source. The runtime loads a conversation through
-	// `FElysiumContentPaths::DlgFromDialogname` (the corpus) and a line's audio through
-	// `SoundFile`; VtMB's own scripts probe the same two trees by hand (`fileutil.isFile` gating a
-	// dialogue line, vamputil.py:1039) through the script filesystem. Both spellings have to land
-	// on the same directory or a script can gate a line on a file the loader will not read.
+	// `FElysiumContentPaths::DlgFromDialogname` (the corpus), and VtMB's own scripts probe that
+	// same tree by hand (`fileutil.isFile` gating a dialogue line, vamputil.py:1039) through the
+	// script filesystem. Both spellings have to land on the same directory or a script can gate a
+	// line on a file the loader will not read.
+	//
+	// `sound/` used to be mounted beside it and is not any more: audio is baked asset content
+	// (AUD1.2) and no shipped script opens a file under `sound/`.
 	FString Real;
 	if (TestTrue(TEXT("dlg/ is mounted"),
 		FElysiumScriptFS::MapToMirror(TEXT("dlg/main characters/jack_tutorial.dlg"), Real)))
@@ -918,14 +918,6 @@ bool FElysiumDlgCorpusMountTest::RunTest(const FString&)
 		TestTrue(TEXT("dlg/ serves from the corpus, not the legacy export root"),
 			Real.Replace(TEXT("\\"), TEXT("/")).StartsWith(
 				FElysiumContentPaths::DlgDir().Replace(TEXT("\\"), TEXT("/")) + TEXT("/"),
-				ESearchCase::IgnoreCase));
-	}
-	if (TestTrue(TEXT("sound/ is mounted"),
-		FElysiumScriptFS::MapToMirror(TEXT("sound/character/dlg/ellipses.wav"), Real)))
-	{
-		TestTrue(TEXT("sound/ serves from the corpus too"),
-			Real.Replace(TEXT("\\"), TEXT("/")).StartsWith(
-				FElysiumContentPaths::SoundDir().Replace(TEXT("\\"), TEXT("/")) + TEXT("/"),
 				ESearchCase::IgnoreCase));
 	}
 	// The mount point itself resolves, which is what `nt.listdir` on a tree asks for.

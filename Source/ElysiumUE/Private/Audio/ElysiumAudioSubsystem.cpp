@@ -1,24 +1,26 @@
 #include "ElysiumAudioSubsystem.h"
 
-#include "Audio/ElysiumPcmSoundWave.h"
+#include "ElysiumAudioSettings.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapSubsystem.h"
+#include "ElysiumSoundAssets.h"
 #include "ElysiumUserSettings.h"
 
 #include "AudioDevice.h"
-#include "Async/Async.h"
 #include "Components/AudioComponent.h"
 #include "Components/SceneComponent.h"
+#include "Engine/AssetManager.h"
 #include "Engine/Engine.h"
+#include "Engine/StreamableManager.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
-#include "HAL/FileManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/Paths.h"
 #include "Sound/SoundAttenuation.h"
 #include "Sound/SoundClass.h"
 #include "Sound/SoundConcurrency.h"
-#include "Sound/SoundWaveProcedural.h"
+#include "Sound/SoundWave.h"
+#include "UObject/SoftObjectPath.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAudio, Log, All);
 
@@ -27,6 +29,13 @@ static TAutoConsoleVariable<int32> CVarMute(
 	TEXT("elysium.Mute"), 0,
 	TEXT("Non-persistent audio debug override: 1 = mute every Elysium voice, 0 = audible."),
 	ECVF_Default);
+
+// Every async load in flight. A streamable handle the caller drops is a load the manager cancels,
+// so the requests are kept here until they complete and pruned on the audio tick — which is also
+// the only place they are ever inspected. File-scope rather than a member so the public header
+// (reached by most of the runtime) does not have to pull `Engine/StreamableManager.h` behind it;
+// the subsystem is GameInstance-scoped and single-instanced, and `StopAllVoices` empties it.
+static TArray<TSharedPtr<FStreamableHandle>> GLoadHandles;
 
 namespace
 {
@@ -99,7 +108,9 @@ namespace
 void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
-	IsSoundCorpusPresent();   // one directory probe + one warning if the corpus was never deployed
+	// One asset-registry scan of `/ElysiumBaked/Sounds`, and one warning if the bake never ran.
+	// Done here rather than on the first request so the cost is paid at subsystem start.
+	IsSoundCorpusPresent();
 
 	// Every voice carries its owner's map epoch, so unloading a map is what stops the ambient bed
 	// and the dialogue line it was holding.
@@ -141,18 +152,19 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				UE_LOG(LogElysiumAudio, Display, TEXT("usage: elysium.sound_info <logical path>"));
 				return;
 			}
-			const FString Rel = ResolveSourcePath(FElysiumAudioSource::Path(FString::Join(Args, TEXT(" "))));
-			const FElysiumSoundInfo* Info = Probe(Rel);
-			if (!Info)
+			const FString Rel = FString::Join(Args, TEXT(" "));
+			const FElysiumSoundAssetRow* Row = Probe(Rel);
+			if (!Row)
 			{
 				UE_LOG(LogElysiumAudio, Warning, TEXT("sound_info: unresolved %s"), *Rel);
 				return;
 			}
 			UE_LOG(LogElysiumAudio, Display,
-				TEXT("%s: %s %dch %dHz %lld frames %.3fs decode=%.2fms%s"),
-				*Rel, *Info->FormatName(), Info->Channels, Info->SampleRate, Info->FrameCount,
-				Info->DurationSeconds, Info->DecodeMilliseconds,
-				Info->Error.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" error=%s"), *Info->Error));
+				TEXT("%s -> %s%s: %dch %dHz %.3fs%s"),
+				*Rel, *Row->ObjectPath,
+				Row->LoopObjectPath.IsEmpty() ? TEXT("") : TEXT(" (+ loop body)"),
+				Row->Channels, Row->SampleRate, Row->DurationSeconds,
+				Row->bMissing ? TEXT(" -- MISSING, the bake carries no asset") : TEXT(""));
 		}), ECVF_Cheat));
 
 	// The lead a cue is scheduled with, term by term and labelled by where each came from,
@@ -175,46 +187,26 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				*L.DeviceName, *L.PlatformApi, L.SampleRate, L.CallbackFrames, L.OutputBuffers,
 				L.DevicePeriodFrames, L.EndpointFrames);
 			UE_LOG(LogElysiumAudio, Display,
-				TEXT("  mixer queue %.1f ms (queried) + endpoint %.1f ms (modelled) + submit->render %.1f ms "
-					 "(measured over %d dialogue lines, peak %.1f, of which decode %.1f) = lead %.1f ms"),
+				TEXT("  mixer queue %.1f ms (queried) + endpoint %.1f ms (modelled) + submit->render "
+					 "%.1f ms (Elysium.Audio SubmitToRenderSeconds, owner-stamped) = lead %.1f ms"),
 				L.MixerQueueSeconds * 1000.f, L.EndpointSeconds * 1000.f,
-				L.SubmitToRenderSeconds * 1000.f, L.SubmitToRenderSamples,
-				L.SubmitToRenderPeakSeconds * 1000.f, L.DecodeSeconds * 1000.f,
-				L.Lead() * 1000.f);
-			for (const FElysiumAudioVoice& Voice : Voices)
-			{
-				const double Head = Voice.RenderHeadSeconds();
-				if (Head >= 0.0)
-				{
-					UE_LOG(LogElysiumAudio, Display,
-						TEXT("  voice %s: render head %.3fs of %.3fs, submit->render %.1f ms"),
-						*Voice.Event.ResolvedPath, Head, Voice.Event.DurationSeconds,
-						Voice.Render->SubmitToRenderSeconds() * 1000.0);
-				}
-			}
+				L.SubmitToRenderSeconds * 1000.f, L.Lead() * 1000.f);
+			UE_LOG(LogElysiumAudio, Display,
+				TEXT("  %d live voice(s), %d baked sound assets indexed, %d key(s) resolved, "
+					 "%d retained, %d load(s) in flight"),
+				Voices.Num(), ElysiumSoundAssets::Count(), SoundAssets.Num(),
+				RetainedWaves.Num(), PendingLoadCount());
 		}), ECVF_Cheat));
 }
 
 // AUD0.1 (2026-09-08): the `exports/audio/catalog.json` read is gone. It was an offline validation
 // record, not a VtMB artifact — it was opened for existence and `version == 1` only, stored nothing,
 // and set `bCatalogReady` either way, so the map-activation gate it fed could only ever fail on a
-// watchdog timeout. Readiness is corpus presence: the deployed `Content/ElysiumCorpus/sound` tree,
-// checked once as a directory.
+// watchdog timeout. AUD1.2 moved the answer again: presence is the baked family's presence, which
+// is the asset-registry index over `/ElysiumBaked/Sounds` built once on first use.
 bool UElysiumAudioSubsystem::IsSoundCorpusPresent()
 {
-	static const bool bPresent = []()
-	{
-		const FString Dir = FElysiumContentPaths::SoundDir();
-		const bool bOk = IFileManager::Get().DirectoryExists(*Dir);
-		if (!bOk)
-		{
-			UE_LOG(LogElysiumAudio, Warning,
-				TEXT("no deployed sound corpus at %s — every request will miss (run `uv run elysium import sound`)"),
-				*Dir);
-		}
-		return bOk;
-	}();
-	return bPresent;
+	return ElysiumSoundAssets::Count() > 0;
 }
 
 void UElysiumAudioSubsystem::Deinitialize()
@@ -235,8 +227,16 @@ void UElysiumAudioSubsystem::Deinitialize()
 	}
 	ConsoleObjects.Empty();
 	StopAllVoices();
-	DecodeResults.Empty();
-	FElysiumSoundCache::FlushAll();
+	SoundAssets.Empty();
+	// Give the stream cache its retained chunks back: nothing this subsystem primed outlives it.
+	for (TPair<FString, TObjectPtr<USoundWave>>& Pair : RetainedWaves)
+	{
+		if (USoundWave* Wave = Pair.Value.Get())
+		{
+			Wave->ReleaseCompressedAudio();
+		}
+	}
+	RetainedWaves.Empty();
 	Super::Deinitialize();
 }
 
@@ -276,16 +276,15 @@ FString UElysiumAudioSubsystem::ResolveSourcePath(const FElysiumAudioSource& Sou
 	if (Source.Domain == EElysiumAudioSourceDomain::Whisper &&
 		FPaths::GetExtension(Rel).IsEmpty())
 	{
-		TArray<FString> Candidates;
-		const FString Directory = FPaths::Combine(FElysiumContentPaths::SoundDir(), Rel);
-		IFileManager::Get().FindFiles(Candidates, *(Directory / TEXT("*.wav")), true, false);
-		Candidates.Sort();
+		// Typed whisper events are sets: the members are whatever the bake carries in the set's
+		// own folder, listed through the asset registry rather than off the disk (AUD1.2).
+		const TArray<FString> Candidates = ElysiumSoundAssets::ListFolder(Rel);
 		if (!Candidates.IsEmpty())
 		{
-			// Typed whisper events are sets. Selection is stable for a given semantic id until the
-			// game RNG adapter takes ownership of variation.
+			// Selection is stable for a given semantic id until the game RNG adapter takes
+			// ownership of variation.
 			const int32 Pick = static_cast<int32>(GetTypeHash(Source.EventId.ToLower()) % Candidates.Num());
-			return NormalizeSourcePath(Rel / Candidates[Pick]);
+			return NormalizeSourcePath(Candidates[Pick]);
 		}
 	}
 
@@ -296,37 +295,56 @@ FString UElysiumAudioSubsystem::ResolveSourcePath(const FElysiumAudioSource& Sou
 	}
 
 	// VtMB lines and dynamic script paths frequently omit a suffix. One policy owns the authored
-	// MP3-first, WAV-fallback rule instead of each caller probing the filesystem.
+	// MP3-first, WAV-fallback rule instead of each caller probing for itself — the same order it
+	// had while the corpus was loose files, now asked of the baked family.
 	const FString Mp3 = Rel + TEXT(".mp3");
-	if (FPaths::FileExists(FPaths::Combine(FElysiumContentPaths::SoundDir(), Mp3)))
+	if (ElysiumSoundAssets::Exists(Mp3))
 	{
 		return Mp3;
 	}
 	const FString Wav = Rel + TEXT(".wav");
-	if (FPaths::FileExists(FPaths::Combine(FElysiumContentPaths::SoundDir(), Wav)))
+	if (ElysiumSoundAssets::Exists(Wav))
 	{
 		return Wav;
 	}
 	return Mp3;
 }
 
-FElysiumSoundCache::FDecodedPtr UElysiumAudioSubsystem::LoadAndRecord(const FString& Rel)
+FElysiumSoundAssetRow& UElysiumAudioSubsystem::RowFor(const FString& Rel)
 {
-	const FElysiumSoundCache::FDecodedPtr Decoded =
-		FElysiumSoundCache::LoadSoundDecoded(FElysiumContentPaths::SoundDir(), Rel);
-	if (Decoded)
+	FElysiumSoundAssetRow& Row = SoundAssets.FindOrAdd(Rel);
+	if (Row.ObjectPath.IsEmpty())
 	{
-		DecodeResults.Add(Rel, Decoded->Info);
+		const ElysiumSoundAssets::FRef Ref = ElysiumSoundAssets::Resolve(Rel);
+		Row.ObjectPath = Ref.IsValid() ? Ref.ObjectPath : ElysiumSoundAssets::ObjectPathFor(Rel);
+		Row.LoopObjectPath = Ref.LoopObjectPath;
+		Row.bMissing = !Ref.IsValid();
 	}
-	return Decoded;
+	return Row;
 }
 
-const FElysiumSoundInfo* UElysiumAudioSubsystem::Probe(const FString& Rel)
+const FElysiumSoundAssetRow* UElysiumAudioSubsystem::Probe(const FString& Rel)
 {
 	const FString Resolved = ResolveSourcePath(FElysiumAudioSource::Path(Rel));
-	const FElysiumSoundCache::FDecodedPtr Decoded = LoadAndRecord(Resolved);
-	const FElysiumSoundInfo* Recorded = DecodeResults.Find(Resolved);
-	return Decoded ? Recorded : nullptr;
+	FElysiumSoundAssetRow& Row = RowFor(Resolved);
+	if (Row.bMissing)
+	{
+		UE_LOG(LogElysiumAudio, Warning,
+			TEXT("sound '%s' resolves to %s, which the bake does not carry"),
+			*Resolved, *Row.ObjectPath);
+		return &Row;
+	}
+	// The one synchronous load in the subsystem, and it is a debug verb: an inspector has nothing
+	// to show until the wave is real.
+	if (USoundWave* Wave = Cast<USoundWave>(
+		FSoftObjectPath(Row.ObjectPath).TryLoad()))
+	{
+		Row.bLoaded = true;
+		Row.DurationSeconds = Wave->Duration;
+		Row.Channels = Wave->NumChannels;
+		Row.SampleRate = static_cast<int32>(Wave->GetSampleRateForCurrentPlatform());
+	}
+	return &Row;
 }
 
 FElysiumVoiceHandle UElysiumAudioSubsystem::AllocateHandle()
@@ -377,66 +395,18 @@ const FElysiumAudioVoice* UElysiumAudioSubsystem::FindVoice(FElysiumVoiceHandle 
 		: nullptr;
 }
 
-double FElysiumAudioVoice::RenderHeadSeconds() const
-{
-	if (!Render || !Render->HasRendered())
-	{
-		return -1.0;
-	}
-	const double Head = Render->RenderHeadSeconds();
-	// A loop's generator wraps its cursor, so the head keeps climbing past the file. Folding it
-	// back is what makes the reading a *position* rather than a total.
-	return (Request.bLooping && Event.DurationSeconds > 0.f)
-		? FMath::Fmod(Head, static_cast<double>(Event.DurationSeconds))
-		: Head;
-}
-
 void UElysiumAudioSubsystem::RefreshOutputLatency()
 {
-	const FElysiumAudioLatency Queried = ElysiumAudioLatency::QueryDevice(GetWorld());
-	// The measured half belongs to the session, not to the device query, so it survives a refresh.
-	const float Mean = Latency.SubmitToRenderSeconds;
-	const float Peak = Latency.SubmitToRenderPeakSeconds;
-	const float Decode = Latency.DecodeSeconds;
-	const int32 Samples = Latency.SubmitToRenderSamples;
-	Latency = Queried;
-	Latency.SubmitToRenderSeconds = Mean;
-	Latency.SubmitToRenderPeakSeconds = Peak;
-	Latency.DecodeSeconds = Decode;
-	Latency.SubmitToRenderSamples = Samples;
+	Latency = ElysiumAudioLatency::QueryDevice(GetWorld());
+	// AUD1.3: the submit → first-pull term is no longer measured on the render path. A baked wave
+	// is a plain USoundWave with no generator of ours to stamp, and a primed asset feeds the mixer
+	// out of the stream cache, so the term is what the owner measured once with
+	// `elysium.audio_latency` and wrote to `Config/DefaultElysium.ini`.
+	if (const UElysiumAudioSettings* Settings = GetDefault<UElysiumAudioSettings>())
+	{
+		Latency.SubmitToRenderSeconds = FMath::Max(0.f, Settings->SubmitToRenderSeconds);
+	}
 	bLatencyQueried = true;
-}
-
-void UElysiumAudioSubsystem::ObserveRenderLatency(FElysiumAudioVoice& Voice)
-{
-	if (Voice.bRenderLatencyObserved || !Voice.Render || !Voice.Render->HasRendered())
-	{
-		return;
-	}
-	// Dialogue only. The lead this feeds is the one a scene schedules speech with, and a 209-second
-	// ambience bed or a 223-second music stream costs an order of magnitude more to decode than a
-	// spoken line — folding those in would lead every line by a delay no line ever pays.
-	if (Voice.Request.Category != EElysiumAudioCategory::Dialogue)
-	{
-		return;
-	}
-	const double Observed = Voice.Render->SubmitToRenderSeconds();
-	if (Observed < 0.0)
-	{
-		return;
-	}
-	Voice.bRenderLatencyObserved = true;
-	SubmitToRenderTotal += Observed;
-	if (const FElysiumSoundInfo* Info = DecodeResults.Find(Voice.Event.ResolvedPath))
-	{
-		DecodeTotal += Info->DecodeMilliseconds * 0.001;
-	}
-	++Latency.SubmitToRenderSamples;
-	Latency.SubmitToRenderSeconds =
-		static_cast<float>(SubmitToRenderTotal / Latency.SubmitToRenderSamples);
-	Latency.DecodeSeconds = static_cast<float>(DecodeTotal / Latency.SubmitToRenderSamples);
-	Latency.SubmitToRenderPeakSeconds =
-		FMath::Max(Latency.SubmitToRenderPeakSeconds, static_cast<float>(Observed));
 }
 
 double UElysiumAudioSubsystem::AudioClock() const
@@ -473,10 +443,9 @@ FElysiumVoiceHandle UElysiumAudioSubsystem::Submit(const FElysiumAudioRequest& R
 	Voice.Event.MediaOffsetSeconds = FMath::Max(Request.StartOffsetSeconds, 0.f);
 	Voice.Event.ScheduledAudioClock =
 		Request.ScheduledAudioClock >= 0.0 ? Request.ScheduledAudioClock : AudioClock();
-	// The submit instant on the wall clock, stamped here because everything that follows
-	// (the file read, the mp3 decode, the game-thread realization) happens after this line and is
-	// invisible to ScheduledAudioClock. The probe itself is minted by the wave, so the stamp rides
-	// on the voice until there is one to hand it to.
+	// The submit instant on the wall clock, stamped here because everything that follows (the async
+	// asset load and the game-thread realization) happens after this line and is invisible to
+	// ScheduledAudioClock.
 	Voice.SubmitSeconds = FPlatformTime::Seconds();
 
 	VoiceEvents.Broadcast(Voice.Event);
@@ -484,61 +453,90 @@ FElysiumVoiceHandle UElysiumAudioSubsystem::Submit(const FElysiumAudioRequest& R
 	const FString ResolvedPath = Voice.Event.ResolvedPath;
 	Voices.Add(MoveTemp(Voice));
 
-	const TWeakObjectPtr<UElysiumAudioSubsystem> WeakThis(this);
-	Async(EAsyncExecution::ThreadPool, [WeakThis, Handle, ResolvedPath]()
+	FElysiumSoundAssetRow& Row = RowFor(ResolvedPath);
+	if (Row.bMissing)
 	{
-		FElysiumSoundCache::FDecodedPtr Decoded =
-			FElysiumSoundCache::LoadSoundDecoded(FElysiumContentPaths::SoundDir(), ResolvedPath);
-		AsyncTask(ENamedThreads::GameThread,
-			[WeakThis, Handle, Decoded = MoveTemp(Decoded)]() mutable
+		// A reference with no asset is a diagnostic and a failed voice, never a negative cache and
+		// never a substitution (spec 0002 §2). Completed on the next line so the ledger sees the
+		// same submit → complete shape a missing file used to produce.
+		UE_LOG(LogElysiumAudio, Warning,
+			TEXT("sound '%s' resolves to %s, which the bake does not carry"),
+			*ResolvedPath, *Row.ObjectPath);
+		const int32 Index = Voices.IndexOfByPredicate(
+			[Handle](const FElysiumAudioVoice& Item) { return Item.Handle == Handle; });
+		if (Index != INDEX_NONE)
+		{
+			CompleteAt(Index, EElysiumVoiceCompletion::MissingSource);
+		}
+		return Handle;
+	}
+
+	Row.bPending = true;
+	++PendingVoiceLoads;
+	TArray<FSoftObjectPath> Paths{ FSoftObjectPath(Row.ObjectPath) };
+	if (!Row.LoopObjectPath.IsEmpty())
+	{
+		Paths.Add(FSoftObjectPath(Row.LoopObjectPath));
+	}
+	const TWeakObjectPtr<UElysiumAudioSubsystem> WeakThis(this);
+	GLoadHandles.Add(UAssetManager::GetStreamableManager().RequestAsyncLoad(Paths,
+		FStreamableDelegate::CreateWeakLambda(this, [WeakThis, Handle, Paths]()
+		{
+			UElysiumAudioSubsystem* Self = WeakThis.Get();
+			if (!Self)
 			{
-				if (UElysiumAudioSubsystem* Self = WeakThis.Get())
-				{
-					Self->RealizeVoice(Handle, MoveTemp(Decoded));
-				}
-			});
-	});
+				return;
+			}
+			Self->PendingVoiceLoads = FMath::Max(0, Self->PendingVoiceLoads - 1);
+			USoundWave* Wave = Cast<USoundWave>(Paths[0].ResolveObject());
+			USoundWave* Loop = Paths.Num() > 1
+				? Cast<USoundWave>(Paths[1].ResolveObject()) : nullptr;
+			Self->RealizeVoice(Handle, Wave, Loop);
+		})));
 	return Handle;
 }
 
 void UElysiumAudioSubsystem::RealizeVoice(
-	FElysiumVoiceHandle Handle, FElysiumSoundCache::FDecodedPtr Decoded)
+	FElysiumVoiceHandle Handle, USoundWave* LoadedWave, USoundWave* LoadedLoopWave)
 {
 	check(IsInGameThread());
 	FElysiumAudioVoice* VoicePtr = FindVoice(Handle);
 	if (!VoicePtr)
 	{
-		return; // owner/epoch retired while decode was queued
+		return; // owner/epoch retired while the load was in flight
 	}
-	if (!Decoded || !Decoded->Info.Error.IsEmpty())
+	{
+		FElysiumSoundAssetRow& PendingRow = RowFor(VoicePtr->Event.ResolvedPath);
+		PendingRow.bPending = false;
+		PendingRow.bLoaded = LoadedWave != nullptr;
+	}
+	if (!LoadedWave)
 	{
 		const int32 Index = Voices.IndexOfByPredicate(
 			[Handle](const FElysiumAudioVoice& Item) { return Item.Handle == Handle; });
 		if (Index != INDEX_NONE)
 		{
-			CompleteAt(Index, Decoded
-				? EElysiumVoiceCompletion::DecodeFailed
-				: EElysiumVoiceCompletion::MissingSource);
+			CompleteAt(Index, EElysiumVoiceCompletion::MissingSource);
 		}
 		return;
 	}
-	DecodeResults.Add(VoicePtr->Event.ResolvedPath, Decoded->Info);
 
-	// Component realization is deliberately game-thread-only. The worker only touched bytes and
-	// decoder state, so an obsolete epoch can be canceled without ever creating a UObject.
+	// Component realization is deliberately game-thread-only. The load only touched package bytes,
+	// so an obsolete epoch can be canceled without ever creating a UObject.
 	FElysiumAudioVoice& Voice = *VoicePtr;
 	const FElysiumAudioRequest& Request = Voice.Request;
 	UWorld* World = GetWorld();
-	USoundWaveProcedural* Wave = World
-		? FElysiumSoundCache::MakeWave(Decoded, Request.bLooping)
-		: nullptr;
-	if (!World || !Wave)
+	// `bLooping` is the ASSET's, off the unit's own `smpl`/`cue ` region — never the request's.
+	// Retail's mixer wrap is a property of the media, and `Request.bLooping` stays what it always
+	// was here: the ledger's own completion semantics (spec 0002 §7).
+	USoundWave* Wave = LoadedWave;
+	if (!World)
 	{
 		const int32 Index = Voices.IndexOfByPredicate(
 			[Handle](const FElysiumAudioVoice& Item) { return Item.Handle == Handle; });
 		if (Index != INDEX_NONE)
 		{
-			CompleteAt(Index, EElysiumVoiceCompletion::DecodeFailed);
+			CompleteAt(Index, EElysiumVoiceCompletion::PlaybackRejected);
 		}
 		return;
 	}
@@ -626,18 +624,14 @@ void UElysiumAudioSubsystem::RealizeVoice(
 
 	Voice.Comp = Comp;
 	Voice.Wave = Wave;
-	// The probe is created with the wave and written by its generator on the render thread. Handing
-	// it the submit stamp here closes the one gap ScheduledAudioClock cannot see: how long the file
-	// read, the decode and this realization actually took before a single sample was pulled.
-	if (const UElysiumPcmSoundWave* PcmWave = Cast<UElysiumPcmSoundWave>(Wave))
+	Voice.LoopWave = LoadedLoopWave;
+	Voice.Event.DurationSeconds = Wave->Duration;
 	{
-		Voice.Render = PcmWave->RenderProbe();
-		if (Voice.Render)
-		{
-			Voice.Render->SubmitSeconds.store(Voice.SubmitSeconds, std::memory_order_relaxed);
-		}
+		FElysiumSoundAssetRow& Row = RowFor(Voice.Event.ResolvedPath);
+		Row.DurationSeconds = Wave->Duration;
+		Row.Channels = Wave->NumChannels;
+		Row.SampleRate = static_cast<int32>(Wave->GetSampleRateForCurrentPlatform());
 	}
-	Voice.Event.DurationSeconds = Decoded->Info.DurationSeconds;
 	Comp->OnAudioFinishedNative.AddUObject(this, &UElysiumAudioSubsystem::HandleAudioFinished);
 	const double Now = AudioClock();
 	if (Request.ScheduledAudioClock > Now)
@@ -667,24 +661,55 @@ void UElysiumAudioSubsystem::EmitGameplayNoise(const FElysiumAudioVoice& Voice)
 void UElysiumAudioSubsystem::Prefetch(const FElysiumAudioSource& Source)
 {
 	const FString Resolved = ResolveSourcePath(Source);
-	++PendingPrefetches;
-	const TWeakObjectPtr<UElysiumAudioSubsystem> WeakThis(this);
-	Async(EAsyncExecution::ThreadPool, [WeakThis, Resolved]()
+	FElysiumSoundAssetRow& Row = RowFor(Resolved);
+	if (Row.bMissing)
 	{
-		const FElysiumSoundCache::FDecodedPtr Decoded =
-			FElysiumSoundCache::LoadSoundDecoded(FElysiumContentPaths::SoundDir(), Resolved);
-		AsyncTask(ENamedThreads::GameThread, [WeakThis, Resolved, Decoded]()
+		UE_LOG(LogElysiumAudio, Log,
+			TEXT("prefetch '%s' resolves to %s, which the bake does not carry"),
+			*Resolved, *Row.ObjectPath);
+		return;
+	}
+	if (Row.bRetained)
+	{
+		return;   // already primed for this session
+	}
+	Row.bPending = true;
+	++PendingPrefetches;
+
+	TArray<FSoftObjectPath> Paths{ FSoftObjectPath(Row.ObjectPath) };
+	if (!Row.LoopObjectPath.IsEmpty())
+	{
+		Paths.Add(FSoftObjectPath(Row.LoopObjectPath));
+	}
+	const TWeakObjectPtr<UElysiumAudioSubsystem> WeakThis(this);
+	// Prefetch is the async load plus the prime: retaining the compressed audio is what puts the
+	// wave's first chunk in the stream cache, so the voice that follows starts from memory. This is
+	// the whole of what the deleted PCM cache existed to do.
+	GLoadHandles.Add(UAssetManager::GetStreamableManager().RequestAsyncLoad(Paths,
+		FStreamableDelegate::CreateWeakLambda(this, [WeakThis, Resolved, Paths]()
 		{
-			if (UElysiumAudioSubsystem* Self = WeakThis.Get(); Self && Decoded)
+			UElysiumAudioSubsystem* Self = WeakThis.Get();
+			if (!Self)
 			{
-				Self->DecodeResults.Add(Resolved, Decoded->Info);
+				return;
 			}
-			if (UElysiumAudioSubsystem* Self = WeakThis.Get())
+			Self->PendingPrefetches = FMath::Max(0, Self->PendingPrefetches - 1);
+			FElysiumSoundAssetRow& Loaded = Self->RowFor(Resolved);
+			Loaded.bPending = false;
+			for (const FSoftObjectPath& Path : Paths)
 			{
-				Self->PendingPrefetches = FMath::Max(0, Self->PendingPrefetches - 1);
+				if (USoundWave* Wave = Cast<USoundWave>(Path.ResolveObject()))
+				{
+					Wave->RetainCompressedAudio();
+					Self->RetainedWaves.Add(Path.ToString(), Wave);
+					Loaded.bLoaded = true;
+					Loaded.bRetained = true;
+					Loaded.DurationSeconds = FMath::Max(Loaded.DurationSeconds, Wave->Duration);
+					Loaded.Channels = Wave->NumChannels;
+					Loaded.SampleRate = static_cast<int32>(Wave->GetSampleRateForCurrentPlatform());
+				}
 			}
-		});
-	});
+		})));
 }
 
 void UElysiumAudioSubsystem::Stop(FElysiumVoiceHandle Handle, float FadeSeconds)
@@ -890,9 +915,6 @@ void UElysiumAudioSubsystem::CompleteAt(int32 VoiceIndex, EElysiumVoiceCompletio
 		return;
 	}
 	FElysiumAudioVoice& Voice = Voices[VoiceIndex];
-	// A short line can be submitted, rendered and finished between two game frames, so the reading
-	// is taken here too rather than only on the tick that sees the voice alive.
-	ObserveRenderLatency(Voice);
 	UAudioComponent* Comp = Voice.Comp.Get();
 	EElysiumVoiceState TerminalState = EElysiumVoiceState::Canceled;
 	if (Completion == EElysiumVoiceCompletion::NaturalEnd)
@@ -933,6 +955,22 @@ void UElysiumAudioSubsystem::HandleAudioFinished(UAudioComponent* Component)
 		[Component](const FElysiumAudioVoice& Voice) { return Voice.Comp.Get() == Component; });
 	if (Index != INDEX_NONE)
 	{
+		// The intro half of a split loop unit handing over to its body. Retail's mixer reads one
+		// file whose `smpl` region says "play to here, then wrap here"; the bake states that as two
+		// assets, so the wrap is this chain on the SAME voice slot — the handle, the owner, the
+		// placement and the ledger row are all unchanged, and only the media moves on.
+		FElysiumAudioVoice& Chaining = Voices[Index];
+		if (!Chaining.bLoopChained && Chaining.LoopWave != nullptr &&
+			Chaining.Event.State != EElysiumVoiceState::Fading &&
+			IsValid(Chaining.Comp))
+		{
+			Chaining.bLoopChained = true;
+			Chaining.Comp->SetSound(Chaining.LoopWave);
+			Chaining.Comp->Play(0.f);
+			Chaining.Event.MediaOffsetSeconds = 0.f;
+			Chaining.Event.DurationSeconds = Chaining.LoopWave->Duration;
+			return;
+		}
 		const EElysiumVoiceCompletion Completion =
 			Voices[Index].Event.State == EElysiumVoiceState::Fading
 				? Voices[Index].Event.Completion
@@ -944,6 +982,12 @@ void UElysiumAudioSubsystem::HandleAudioFinished(UAudioComponent* Component)
 void UElysiumAudioSubsystem::TickAudio(float /*DeltaSeconds*/)
 {
 	const double Now = AudioClock();
+	// Retire the async loads that have landed. Holding a completed handle keeps nothing alive that
+	// the voice does not already own.
+	GLoadHandles.RemoveAll([](const TSharedPtr<FStreamableHandle>& Handle)
+	{
+		return !Handle.IsValid() || Handle->HasLoadCompleted() || Handle->WasCanceled();
+	});
 	if (!bLatencyQueried && GetWorld() != nullptr)
 	{
 		// Deferred to the first tick rather than done in Initialize: a GameInstance subsystem comes
@@ -953,7 +997,6 @@ void UElysiumAudioSubsystem::TickAudio(float /*DeltaSeconds*/)
 	for (int32 Index = Voices.Num() - 1; Index >= 0; --Index)
 	{
 		FElysiumAudioVoice& Voice = Voices[Index];
-		ObserveRenderLatency(Voice);
 		if (Voice.Event.State == EElysiumVoiceState::PendingDecode ||
 			Voice.Event.State == EElysiumVoiceState::Scheduled)
 		{
@@ -1006,6 +1049,7 @@ void UElysiumAudioSubsystem::StopAllVoices()
 	{
 		CompleteAt(Index, EElysiumVoiceCompletion::Stopped);
 	}
+	GLoadHandles.Empty();
 }
 
 FElysiumAudioVoiceHandle UElysiumAudioSubsystem::PlayVoice(

@@ -6,17 +6,7 @@ The embedded CPython runtime is a separate game-logic system.
 
 No module constructs a repository-relative output path or assumes a current directory.
 
-## Tests
-
-Python tests are `pytest`, run from the repository root as `uv run pytest`, one module as
-`uv run pytest pipeline/tests/<module>.py`, and one test as
-`uv run pytest pipeline/tests/<module>.py::<test>`. `uv run elysium test` runs the C++ automation
-tiers only and has no Python path.
-
-`sqlite3.connect()` used as a context manager commits but does not close. On Windows the
-open handle blocks `tmp_path` cleanup, so a test that opens a session database closes it
-explicitly or fails in teardown with `PermissionError` rather than on the assertion it was
-making.
+Python tests run from the repository root as `uv run pytest`.
 
 ## Path contract
 
@@ -64,12 +54,14 @@ effect of the import.
 ```
 uv run elysium export_v2 map-glb <map>
 # add <map> to MapsOnV2Models and MapsOnNewTransport in Config/DefaultElysium.ini
-uv run elysium export map <map>
+uv run elysium export map <map> --intermediate-only   # once: the sidecars the lane still reads
+uv run elysium bake map --maps <map>
 uv run elysium import map-entities    --maps <map>
 uv run elysium import map-collision   --maps <map>
 uv run elysium import map-environment --maps <map>
 uv run elysium verify
 ```
 
-`MapsOnV2Models` selects `MapBakeV2` over the legacy `Bake`; without the ini line
-`export map` reads `<map>.obj`/`.mtl`/`.props` instead of the GLB units.
+`MapsOnV2Models` selects `MapBakeV2` over the legacy `Bake`; `bake map` refuses a map that is
+not listed. `export map <map>` (no flag) reaches the same bake through the legacy decode plus
+an unconditional re-verification of the character and catalogue corpora, ~20 minutes.

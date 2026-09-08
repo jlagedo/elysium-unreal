@@ -31,7 +31,6 @@ import unreal
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 from pipeline.unreal import bake_map_v2 as v2  # noqa: E402
-from pipeline.unreal import light_store  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
@@ -242,10 +241,6 @@ PROFILE_PROP_SOLID = "ElysiumPropSolid"  # blocks the pawn, occludes +use, picka
 
 def log(msg):
     unreal.log("[bake] %s" % msg)
-
-
-def warn(msg):
-    unreal.log_warning("[bake] %s" % msg)
 
 
 #: The shared corpus's two documents, parsed and validated once per process. Both are
@@ -2753,11 +2748,8 @@ def bake_one(map_name, digest_cache, force=False):
     its published root unit (R5.1, `bake_map_v2`), and every other map keeps the legacy `.obj`/
     `.props` path byte for byte.
 
-    The previous map's world goes first, before anything of this map's is BUILT, and
-    unconditionally. (The light-store harvest above it is the one read that comes earlier, and it
-    keeps the contract: it loads this map's previous level, and the teardown below then leaves the
-    blank world every stage from here on expects.) It used to go inside `stage_level`, which is
-    both too late and conditional:
+    The previous map's world goes first, before anything of this map's is read, and
+    unconditionally. It used to go inside `stage_level`, which is both too late and conditional:
     too late, because every material-instance write in between runs an `FMaterialUpdateContext`,
     which walks the scene and rebuilds a static draw list for every primitive still registered in
     it -- sm_hub_2's material stage measured 0.057 s per instance against an empty scene and
@@ -2770,25 +2762,12 @@ def bake_one(map_name, digest_cache, force=False):
     `EditorDestroyWorld` keeps `GARBAGE_COLLECTION_KEEPFLAGS`, which takes the actors but leaves
     every RF_Standalone texture, material instance and mesh the map loaded.
     """
-    from elysium_pipeline.asset_paths import map_package
-
-    on_v2 = map_transport.is_map_on_v2_models(map_name)
-    # The light store is harvested HERE, before the teardown below, because this is the last
-    # moment the level a human saved a lighting pass into still exists: `stage_level` authors
-    # into a blank world and overwrites the package. Reading it costs one level load per map per
-    # bake, which is what buys the property that a saved edit cannot be lost by forgetting a
-    # step. V2 only -- a legacy map's rig re-derives every value at load from its `.lights`
-    # sidecar, so a value baked into its actors would never reach a frame
-    # (`light_store` module docstring).
-    if on_v2 and LIGHT_STORE[0]:
-        light_store.harvest(
-            light_store.content_dir(), map_name,
-            "%s/%s" % (map_package(map_name), map_name), log=log, warn=warn)
     if not unreal.EditorLoadingAndSavingUtils.new_blank_map(False):
         fail("%s: new_blank_map returned null" % map_name)
         return False
     _collect_garbage()
     tracker = AssetTracker(map_name, digest_cache, force=force)
+    on_v2 = map_transport.is_map_on_v2_models(map_name)
     log("%s: %s lane" % (map_name, "V2 (map root unit)" if on_v2 else "legacy (.obj/.props)"))
     bake = (v2.bake_class() if on_v2 else Bake)(map_name, tracker, digest_cache)
     if not bake.load_masters() or not bake.load_sources():
@@ -2827,15 +2806,6 @@ v2.bind(globals())
 #: the pass off a map's existing `NS_`, `T_` and `MI_P_` particle packages are left exactly as
 #: they are -- skipping the stage never prunes what it did not author.
 BAKE_PARTICLES = [False]
-
-
-#: Whether this launch harvests and applies the per-map light store, cleared by `-NoLightStore=1`.
-#: On by default and on purpose: the store's whole value is that a lighting pass saved into the
-#: editor cannot be lost by forgetting a step, which an opt-in flag would hand straight back.
-#: The flag is for the two cases where the store is in the way -- re-deriving a map from
-#: `UElysiumLightingSettings` without deleting its JSON, and a bake that must not touch the
-#: working tree.
-LIGHT_STORE = [True]
 
 
 def _collect_garbage():
@@ -3010,12 +2980,10 @@ def main():
         map_names = [cmdline_arg("BakeMap", "sp_tutorial_1")]
     force = bool(cmdline_arg("BakeForce", ""))
     BAKE_PARTICLES[0] = bool(cmdline_arg("BakeParticles", ""))
-    LIGHT_STORE[0] = not cmdline_arg("NoLightStore", "")
-    log("maps=%s%s%s%s" % (
+    log("maps=%s%s%s" % (
         ",".join(map_names),
         " (forced)" if force else "",
-        " (+particles)" if BAKE_PARTICLES[0] else " (particle systems off)",
-        "" if LIGHT_STORE[0] else " (light store off)"))
+        " (+particles)" if BAKE_PARTICLES[0] else " (particle systems off)"))
 
     from elysium_pipeline.asset_paths import map_package
     _scan_packages(list(MAP_SCAN_PACKAGES) + [map_package(name) for name in map_names])

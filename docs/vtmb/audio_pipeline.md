@@ -657,3 +657,129 @@ sentences. **`vampire.dll`** = SoundScheme parser + `ambient_soundscheme` +
 combat/radio signalling (+ dormant `CSoundscapeSystem`) — **imported and pinned above**.
 **`client.dll`** = music-state cross-fader, `RoomDSP` application, wet/dry, ducking —
 the music-state addresses there are not yet pinned (importing `client.dll` would pin them).
+
+## 12. Loop regions: what the corpus authors and what retail reads
+
+[VtMB, decompiled 2026-09-08 + corpus census 2026-09-08 over 10,892 `export_v2` sound units]
+
+`CAudioSourceWave`'s RIFF chunk dispatcher `FUN_2013a030` handles exactly four ids and
+keeps **one number** out of the two that matter:
+
+- `smpl` (`0x6c706d73`): copies `0x3c` bytes of the chunk, returns early when the dword at
+  `+0x28` of that copy is nonzero, and otherwise stores a single dword into `this+0x28`.
+- `cue ` (`0x20657563`): copies `0x18` bytes and stores a single dword into `this+0x28`.
+- `fact` (`0x74636166`): ignored.
+- `VDAT` (`0x54414456`): "Old lipsync data found in %s" DevWarning only.
+
+`this+0x28` is the loop **start** (§7's `FUN_2013a120(true)` writes the same field with 0
+when `flag_force_looping` forces a loop on a file that has none). There is no loop-end
+field: retail wraps at **end of file** in every case, and a `cue ` point is a loop start
+exactly like an `smpl` start.
+
+**Carrying either chunk is what makes a source loop.** Three addresses close it:
+
+- `CAudioSourceWave::CAudioSourceWave` `0x20139d60` initialises `this+0x28` to `-1`.
+- The `cue ` arm above stores the point's offset **unconditionally** — 0 is stored like any
+  other value — and the `smpl` arm stores the loop start unless it returned early.
+- `IsLooped` (vtable slot 8, `FUN_2013a150` `0x2013a150`) is nothing but
+  `return -1 < this+0x28`.
+
+So a source loops iff some `smpl` or `cue ` chunk wrote that field, and a `cue ` point at
+sample **0** loops the whole file exactly as loudly as one at 6077. Only a member with
+neither chunk stays at `-1` and does not loop.
+
+Two details of the `smpl` arm, read off the same `0x3c`-byte copy: the early-return test is
+on `loops[0].type` (offset `0x28` in the copy), so a **non-forward** loop — ping-pong or
+reverse — is refused and stores nothing, leaving whatever an earlier chunk left; and the
+stored dword is `loops[0].start` (offset `0x2c`). Only the first loop of a chunk is
+reachable, and since the dispatcher runs once per chunk in file order, **the last chunk to
+write wins**.
+
+**The census** (10,892 units). **220 loop**: 57 by `smpl` (58 loops —
+`environmental/music/music_rock2 less muffled.wav` ships two `smpl` chunks, both stating a
+start of 0, so last-writer-wins cannot change what plays) and **163 by `cue `**, of which
+161 sit at offset 0 (`epic/wind.wav`, `area/downtown/downtown_main.wav`, …) and 2 do not
+(`environmental/machines/steam2.wav` at 6077, `steam3.wav` at 6475). Only **3** of the 220
+start past sample 0 — `area/hollywood/warrens/flow_on.wav` (`smpl` 572416) and those two
+`cue ` units — so 217 wrap the whole file. Every `smpl` loop in the corpus is type 0, so the
+non-forward refusal above is unexercised here. **12 units carry no samples at all**: 11
+whose member the install ships as zero bytes (e.g.
+`area/santa_monica/clinic/clinic main bg.wav`) and
+`area/santa_monica/clinic/clinic drip flr light loop.wav`, which has a complete MS-ADPCM
+header over a zero-length `data` chunk. Retail plays nothing from any of them.
+
+**What the bake does with it** (`importers/sounds_bake.py`, AUD1.1). A start of 0 bakes one
+whole-file asset with `bLooping`; a start past 0 bakes `SW_<name>_intro` (`[0, start)`, not
+looping) and `SW_<name>_loop` (`[start, last sample]`, looping), which the runtime chains.
+**The bake wraps at end of file exactly as retail does**: the loop body always runs to the
+last sample and the `smpl` chunk's own `end` field is never cut at, only carried into the
+manifest as `authoredEndSample`. Trimming there would have ended the body 159 samples (7 ms)
+early on `rain_light_loop.wav` and 1262 samples (29 ms) early on `flow_on.wav`, which is not
+what retail plays. A degenerate `start 0 end 0` loop is no special case either — it is a
+start of 0, which is a whole-file loop.
+
+Whole-corpus decision counts from a stage over all 10,892 units: **10,660 plain, 217
+whole-file loops, 3 intro + 3 loop** = 10,883 assets, 12 units empty. §7's claim that a
+`cue ` chunk alone makes the mixer wrap is confirmed here at the source rather than
+inferred: it is `IsLooped`'s `>= 0` against the ctor's `-1`.
+
+## 13. The port's scheduling lead, after the asset swap
+
+[Port fact, not a retail one — recorded here because §3's `snd_mixahead` is what it stands in for.]
+
+Retail hands every scene `snd_mixahead` (0.100 s), which is *Source's mixer's* lead: the behaviour
+it buys is "the first sample is heard at the authored instant", and the number is a property of
+Source's output path. Unreal's path is a different number, so the port composes it instead of
+inheriting it — `FElysiumAudioLatency::Lead()` is three terms:
+
+1. **mixer queue** — queried (`FMixerDevice::GetNumOutputBuffers` × `GetNumOutputFrames`);
+2. **endpoint** — modelled from the queried callback size and the device period;
+3. **submit → the mixer's first pull** — not reported by any engine interface.
+
+Term 3 used to be measured per voice: the hand-rolled decoder minted a `USoundWaveProcedural`
+whose generator stamped its own first pull, and the mean over dialogue voices was 37–62 ms per
+spoken line, most of it the whole-file MP3 decode. **AUD1.3 (2026-09-08) retired that
+measurement.** Rendering moved onto baked `USoundWave` assets (owner call in `docs/decisions.md`
+§Audio), a plain wave has nowhere to hang a render probe, and a primed asset feeds the mixer out of
+Unreal's stream cache rather than paying a decode — so the term stopped being content-dependent
+and became a property of the path.
+
+It is now the config constant `UElysiumAudioSettings::SubmitToRenderSeconds`
+(Project Settings → Elysium → Audio, `Config/DefaultElysium.ini`). **Shipped at 0.0**: the
+pre-asset readings were dominated by a decode that no longer happens, so re-using one would lead
+every line by a delay no line pays. The owner re-stamps it from a live `elysium.audio_latency`
+reading against asset playback, and the stamped number belongs in this section when it exists.
+
+## 14. What the loose corpus still holds, after the asset swap (2026-09-08)
+
+[Port fact, not a retail one.]
+
+**AUD1.4 retired the loose audio deploy.** `uv run elysium import sound` used to write every
+`.wav`/`.mp3` to `Content/ElysiumCorpus/sound/<rel>` and each `.lip` twice — beside its audio and
+under `lip/<rel>.lip`. With rendering on baked `USoundWave` assets (owner call in
+`docs/decisions.md` §Audio) and `SoundDir()`/`SoundFile()` deleted, not one of those audio bytes
+was read any more, so the lane shrank to the `.lip` mirror alone: one file per `.lip` member, at
+`lip/<rel>.lip`, which is the key `FElysiumContentPaths::LipFile` already looks under
+(`ElysiumLip::NormalizeLipRel` = the audio key with the extension swapped).
+
+The corpus tree below `Content/ElysiumCorpus` now holds, for audio:
+
+| path | who writes it | what reads it |
+|---|---|---|
+| `lip/**.lip` | `import sound` (7,105 files, ~31 MB) | `FElysiumContentPaths::LipFile` |
+| `sound/schemes/*.txt` | `import sound-schemes` (174 files) | `FElysiumContentPaths::SchemeFile` |
+| `sound/**` audio | nobody | nobody — it is `/ElysiumBaked/Sounds/**/SW_<name>` |
+
+`sound/schemes/` is the only thing left below `sound/`. The `sound` lane keeps `sound` in its
+`owned_directories` although it writes nothing there, so `corpus_deploy`'s ordinary prune sweeps
+the retired audio out of any deployment that ever ran the old recipe (one run: 17,997 files,
+1,016 MB → 1.4 MB), and keeps `sound/schemes` in `foreign_directories` so the scheme lane's deploy
+is stepped over rather than swept. The whole corpus went 1.1 GB → 62 MB.
+
+`research audio_reference_dispositions` moved with it: the `corpus` disposition no longer asks
+whether a loose file exists but whether a published, non-empty V2 unit stands behind the key
+(`$ELYSIUM_EXPORT_V2_ROOT/sounds/<key>.glb` with no `empty-member` omission), and every row now
+also reports the baked object path it resolves to. Every disposition count is unchanged by the
+move — three maps 494 `corpus` / 931 `mp3-first` / 3 `absent-subkey` / 13 `never-voiced` /
+2 `silent-in-retail` / 0 `unclassified`, 108 maps 15,800 references and 0 disagreements — which is
+the check that the bake's inputs cover exactly what the loose deploy did.

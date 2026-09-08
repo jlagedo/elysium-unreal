@@ -85,7 +85,6 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
-from pipeline.unreal import light_store  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import paths  # noqa: E402
 from elysium_pipeline.asset_paths import baked_unit, corpus_path  # noqa: E402
@@ -263,9 +262,6 @@ WATER_ACTOR_SHAPE = 2
 #: have to wait for the last name the host defines.
 HOST = None
 _CLASS = [None]
-
-#: "the light store has not been read yet", told apart from the `None` a map with no store answers.
-_STORE_UNREAD = object()
 
 
 class _Host(object):
@@ -629,12 +625,6 @@ def _build_class():
             # (the runtime no longer re-derives on a converted map).
             recipe["lights"] = [row.as_dict() for row in self.geometry.lights]
             recipe["lighting"] = lighting_calibration()
-            # The light store, when the map has one, is the level's ACTUAL light input -- neither
-            # the staged rows above nor the lighting page is read on that path -- so it belongs
-            # here too. Without it, a lighting pass saved in the editor and harvested at the top
-            # of this bake would leave the recipe untouched, `stage_level` would log "reused",
-            # and the edit would land in the store and never in a level.
-            recipe["light_store"] = self._stored_lights()
             # The rest clip a skeletal-rest placement is dealt is a function of its model path and
             # its lump index, so it belongs in the recipe: a re-deal has to re-author the level.
             recipe["rest_poses"] = dict(sorted(self.rest_labels.items()))
@@ -1338,185 +1328,101 @@ def _build_class():
 
         # ------------------------------------------------------------------ lights (R5.6)
 
-        def _stored_lights(self):
-            """The map's light store, read once (`pipeline/unreal/light_store.py`).
-
-            `None` when the map has no store, when the file will not parse, or when the launch
-            carries `-NoLightStore=1` -- each of which means "derive", the path this lane took
-            before the store existed. Cached because `_level_recipe` and `_place_lights` both
-            ask and the two have to get the same answer: a level whose recipe named the derived
-            set but whose actors came from the store would be reused against the wrong input for
-            the rest of that map's life.
-            """
-
-            cached = getattr(self, "_light_store_cache", _STORE_UNREAD)
-            if cached is _STORE_UNREAD:
-                cached = (light_store.load(light_store.content_dir(), self.map, log=HOST.log)
-                          if HOST.LIGHT_STORE[0] else None)
-                self._light_store_cache = cached
-            return cached
-
-        def _sky_ambient(self):
-            """The first type-5 row's `(colour, magnitude)` -- first wins, by lump order, VRAD
-            resolving the sky ambient once, globally, and the engine's multi-`light_environment`
-            rule being first-wins too (RE-A3/RE-A5). `_place_sky` joins it with the baked cube
-            (R5.2).
-
-            Always the staged table's, never the store's: a type-5 row places no actor, so there
-            is nothing in the level for a hand pass to move and nothing for the harvest to read
-            back. The SkyLight itself is `_place_sky`'s and is likewise not harvested.
-            """
-
-            for row in self.geometry.lights:
-                mag = max(row.rgb)
-                if mag > 0.0 and row.type == 5:
-                    return (unreal.LinearColor(
-                        row.rgb[0] / mag, row.rgb[1] / mag, row.rgb[2] / mag, 1.0), mag)
-            return None
-
-        def _derived_light_records(self, sky_scale, sky_origin):
-            """The light set this map derives from its staged rows, in `light_store`'s shape.
+        def _place_lights(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
+            """One light actor per staged `lights[]` row, carrying its FINAL values (R5.6).
 
             `derive_light` is `UElysiumLightRig::ApplyToSource` restated, fed from the
             `UElysiumLightingSettings` page and the surfaces page's `LightSpecularScale`; the
             runtime rig on this map snapshots the actor and derives nothing. A styled source is
             placed at its unanimated base intensity (the rig animates it per frame off the
             `elysium.style` tag). A row inside the 3D-skybox miniature takes the sky transform
-            for position and reach, the owner call of 2026-07-26.
-
-            The records go through the store's own builder so that the two paths into
-            `_place_one_light` are one shape, and so the file a harvest writes is the file this
-            derivation would have written -- which is what makes the harvest/apply loop reach a
-            fixed point instead of rewriting the store on every bake.
-            """
+            for position and reach, the owner call of 2026-07-26. Returns
+            `(placed, sky_placed, sky_ambient)` in the host's shape: `sky_ambient` is the first
+            type-5 row's `(colour, magnitude)` (first wins, by lump order -- VRAD resolves the
+            sky ambient once, globally, and the engine's multi-`light_environment` rule is
+            first-wins too, RE-A3/RE-A5), which `_place_sky` joins with the baked cube (R5.2)."""
 
             calibration = lighting_calibration()
-            records = []
+            placed = sky_placed = 0
+            sky_ambient = None
             for row in self.geometry.lights:
-                if max(row.rgb) <= 0.0 or row.type == 5:
+                mag = max(row.rgb)
+                if mag <= 0.0:
+                    continue
+                if row.type == 5:
+                    if sky_ambient is None:
+                        sky_ambient = (unreal.LinearColor(
+                            row.rgb[0] / mag, row.rgb[1] / mag, row.rgb[2] / mag, 1.0), mag)
                     continue
                 if row.type not in LIGHT_KIND_LABELS:
                     continue
                 final = derive_light(row.as_dict(), calibration, sky_scale, sky_origin)
-                # Only a spot and the sun are aimed. A point light's rotation is not read by
-                # anything, and leaving it at identity keeps this path writing the same level it
-                # wrote before the store existed.
-                rotator = (HOST._dir_rotator(unreal.Vector(*row.direction))
-                           if row.type in (2, 3) else unreal.Rotator(0.0, 0.0, 0.0))
-                records.append(light_store.record(
-                    final, src=row.index, style=row.style, sky=bool(row.sky),
-                    rotation=[rotator.pitch, rotator.yaw, rotator.roll],
-                    label="Light_%d_%s%s" % (
-                        row.index, LIGHT_KIND_LABELS[row.type], "_sky" if row.sky else "")))
-            return records
-
-        def _place_one_light(self, actors, rec):
-            """One light actor from one record, carrying its FINAL values (R5.6)."""
-
-            kind = int(rec["kind"])
-            if kind not in LIGHT_KIND_LABELS:
-                HOST.warn("light %s: unknown kind %d, not placed" % (rec.get("label"), kind))
-                return False
-            origin = unreal.Vector(*rec["position"])
-            rotator = unreal.Rotator(*rec["rotation"])
-            if kind in (0, 1):
-                actor = actors.spawn_actor_from_class(unreal.PointLight, origin, rotator)
-                component = actor.point_light_component if actor else None
-            elif kind == 2:
-                actor = actors.spawn_actor_from_class(unreal.SpotLight, origin, rotator)
-                component = actor.spot_light_component if actor else None
-            else:
-                actor = actors.spawn_actor_from_class(
-                    unreal.DirectionalLight, origin, rotator)
-                # ADirectionalLight exposes only ALight's generic component property.
-                component = actor.light_component if actor else None
-            if not actor or not component:
-                fail("light %s: spawn failed at %s" % (rec.get("label"), rec["position"]))
-                raise SystemExit(1)
-            # Movable FIRST: radius and cone writes are dropped in silence on a Stationary
-            # light (`bake_map._make_movable`).
-            HOST._make_movable(component)
-            component.set_light_color(unreal.LinearColor(*rec["color"], 1.0))
-            component.set_intensity(rec["intensity"])
-            component.set_cast_shadows(rec["cast_shadows"])
-            # Every reflected property this light needs, in one `set_editor_properties`: the
-            # plural call brackets the whole dict in a single `PreEditChange`/`PostEditChange`
-            # pair, where each singular `set_editor_property` runs a full
-            # `ULightComponent::PostEditChangeProperty` of its own -- eight of them per light,
-            # over hundreds of lights per map.
-            properties = {
-                "specular_scale": rec["specular_scale"],
-                "indirect_lighting_intensity": rec["indirect_lighting_intensity"],
-                "volumetric_scattering_intensity": rec["volumetric_scattering_intensity"],
-            }
-            if kind in (0, 1, 2):
-                component.set_attenuation_radius(rec["reach_cm"])
-                # VtMB light is ~flat within its authored radius, so gentle-exponent
-                # falloff, not inverse-square.
-                properties["use_inverse_squared_falloff"] = rec["use_inverse_squared_falloff"]
-                properties["light_falloff_exponent"] = rec["falloff_exponent"]
-                # Elysium's hundreds of movable local lights depend on fixed-cost RT
-                # MegaLights: a renderer contract the rig used to restate every load.
-                properties["allow_mega_lights"] = rec["allow_mega_lights"]
-                properties["mega_lights_shadow_method"] = (
-                    unreal.MegaLightsShadowMethod.RAY_TRACING)
-            if kind == 2:
-                component.set_outer_cone_angle(rec["outer_cone_deg"])
-                component.set_inner_cone_angle(rec["inner_cone_deg"])
-            if kind == 3:
-                properties["light_source_angle"] = rec["sun_source_angle_deg"]
-                properties["light_source_soft_angle"] = rec["sun_soft_source_angle_deg"]
-            component.set_editor_properties(properties)
-            actor.set_actor_label(rec["label"] or "Light_%s" % LIGHT_KIND_LABELS[kind])
-            # The lump-15 ordinal is the R4.3 calibration asset's key and the type/style tags are
-            # the two facts the slim rig still needs (`ElysiumBakedTags`). A light a hand pass
-            # ADDED has no lump-15 row and so carries no `elysium.src`, which is exactly how the
-            # next harvest tells it apart from the ones the corpus placed.
-            tags = [HOST.TAG_LIGHT]
-            if rec["src"] is not None:
-                tags.append("elysium.src=%d" % int(rec["src"]))
-            tags.extend(["elysium.type=%d" % kind, "elysium.style=%d" % int(rec["style"])])
-            actor.tags = tags
-            actor.set_folder_path("Sky/Lights" if rec["sky"] else "Lights")
-            return True
-
-        def _place_lights(self, actors, sky_scale=16.0, sky_origin=(0.0, 0.0, 0.0)):
-            """The map's light actors, from its store when it has one and from `derive_light`
-            when it does not (`pipeline/unreal/light_store.py`).
-
-            A stored map is one whose lights a human has tuned in the editor: the store is a full
-            snapshot harvested off the saved level at the top of this bake, so it is placed
-            verbatim and neither the staged rows nor the lighting page is read for a value. That
-            is the trade the store makes -- `UElysiumLightingSettings` no longer reaches the map
-            until its JSON is deleted.
-
-            Returns `(placed, sky_placed, sky_ambient)` in the host's shape.
-            """
-
-            sky_ambient = self._sky_ambient()
-            records = self._stored_lights()
-            stored = records is not None
-            if not stored:
-                records = self._derived_light_records(sky_scale, sky_origin)
-            placed = sky_placed = 0
-            for rec in records:
-                if not self._place_one_light(actors, rec):
-                    continue
+                origin = unreal.Vector(*final["position"])
+                direction = unreal.Vector(*row.direction)
+                if row.type in (0, 1):
+                    actor = actors.spawn_actor_from_class(unreal.PointLight, origin)
+                    component = actor.point_light_component if actor else None
+                elif row.type == 2:
+                    actor = actors.spawn_actor_from_class(
+                        unreal.SpotLight, origin, HOST._dir_rotator(direction))
+                    component = actor.spot_light_component if actor else None
+                else:
+                    actor = actors.spawn_actor_from_class(
+                        unreal.DirectionalLight, origin, HOST._dir_rotator(direction))
+                    # ADirectionalLight exposes only ALight's generic component property.
+                    component = actor.light_component if actor else None
+                if not actor or not component:
+                    fail("light %d: spawn failed at %s" % (row.index, final["position"]))
+                    raise SystemExit(1)
+                # Movable FIRST: radius and cone writes are dropped in silence on a Stationary
+                # light (`bake_map._make_movable`).
+                HOST._make_movable(component)
+                component.set_light_color(unreal.LinearColor(*final["color"], 1.0))
+                component.set_intensity(final["intensity"])
+                component.set_cast_shadows(final["cast_shadows"])
+                # Every reflected property this light needs, in one `set_editor_properties`: the
+                # plural call brackets the whole dict in a single `PreEditChange`/`PostEditChange`
+                # pair, where each singular `set_editor_property` runs a full
+                # `ULightComponent::PostEditChangeProperty` of its own -- eight of them per light,
+                # over hundreds of lights per map.
+                properties = {
+                    "specular_scale": final["specular_scale"],
+                    "indirect_lighting_intensity": final["indirect_lighting_intensity"],
+                    "volumetric_scattering_intensity": final["volumetric_scattering_intensity"],
+                }
+                if row.type in (0, 1, 2):
+                    component.set_attenuation_radius(final["reach_cm"])
+                    # VtMB light is ~flat within its authored radius, so gentle-exponent
+                    # falloff, not inverse-square.
+                    properties["use_inverse_squared_falloff"] = False
+                    properties["light_falloff_exponent"] = final["falloff_exponent"]
+                    # Elysium's hundreds of movable local lights depend on fixed-cost RT
+                    # MegaLights: a renderer contract the rig used to restate every load.
+                    properties["allow_mega_lights"] = True
+                    properties["mega_lights_shadow_method"] = (
+                        unreal.MegaLightsShadowMethod.RAY_TRACING)
+                if row.type == 2:
+                    component.set_outer_cone_angle(final["outer_cone_deg"])
+                    component.set_inner_cone_angle(final["inner_cone_deg"])
+                if row.type == 3:
+                    properties["light_source_angle"] = final["sun_source_angle_deg"]
+                    properties["light_source_soft_angle"] = final["sun_soft_source_angle_deg"]
+                component.set_editor_properties(properties)
+                actor.set_actor_label("Light_%d_%s%s" % (
+                    row.index, LIGHT_KIND_LABELS[row.type], "_sky" if row.sky else ""))
+                # The lump-15 ordinal is the R4.3 calibration asset's key and the type/style
+                # tags are the two facts the slim rig still needs (`ElysiumBakedTags`).
+                actor.tags = [HOST.TAG_LIGHT, "elysium.src=%d" % row.index,
+                              "elysium.type=%d" % row.type, "elysium.style=%d" % row.style]
+                actor.set_folder_path("Sky/Lights" if row.sky else "Lights")
                 placed += 1
-                sky_placed += 1 if rec["sky"] else 0
-            if stored:
-                log("lights: %d placed (%d in the 3D skybox) from the light store "
-                    "(%d hand-added); the lighting page is not read on a stored map"
-                    % (placed, sky_placed,
-                       sum(1 for rec in records if rec["src"] is None)))
-            else:
-                calibration = lighting_calibration()
-                log("lights: %d placed (%d in the 3D skybox) with final values; ceiling %.1f%s"
-                    % (placed, sky_placed,
-                       calibration["ExtendedMaxBrightness"]
-                       if calibration["bUseExtendedBrightnessCeiling"]
-                       else calibration["MaxBrightness"],
-                       " (extended)" if calibration["bUseExtendedBrightnessCeiling"] else ""))
+                sky_placed += 1 if row.sky else 0
+            log("lights: %d placed (%d in the 3D skybox) with final values; ceiling %.1f%s" % (
+                placed, sky_placed,
+                calibration["ExtendedMaxBrightness"]
+                if calibration["bUseExtendedBrightnessCeiling"]
+                else calibration["MaxBrightness"],
+                " (extended)" if calibration["bUseExtendedBrightnessCeiling"] else ""))
             return placed, sky_placed, sky_ambient
 
         # ---------------------------------------------------------------- captures (R5.5)

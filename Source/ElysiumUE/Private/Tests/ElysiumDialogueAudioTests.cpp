@@ -17,8 +17,6 @@
 //   * `Elysium.Content.SoundGroupResolver` — a `soundgroup` token resolves to the WAVs retail's own
 //                                           directory walk would find, and a subkey the group ships
 //                                           no file for comes back absent rather than substituted.
-//   * `Elysium.Content.SoundDecode`       — `FElysiumSoundCache::LoadSoundDecoded` decodes one
-//                                           shipped MS-ADPCM WAV and one shipped dialogue MP3.
 
 #include "Misc/AutomationTest.h"
 
@@ -27,7 +25,6 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumDlg.h"
 #include "ElysiumLineService.h"
-#include "ElysiumSoundCache.h"
 #include "Substrate/ElysiumMoverSounds.h"
 
 #include "HAL/FileManager.h"
@@ -195,11 +192,5 @@ bool FElysiumDialogueTakeLetterTest::RunTest(const FString&)
 // FUN_101f3810 @0x101f3810 walks it, FUN_101f39d0 @0x101f39d0 is the `__strcmpi` lookup and
 // FUN_101f42a0 @0x101f42a0 is the miss arm. The vocabulary is the `SoundList` of
 // `vdata/system/sndscheme_{openable,switch,computer}.txt` (FUN_101f5390 @0x101f5390).
-
-// ---------------------------------------------------------------------------------------------
-// Elysium.Content.SoundDecode
-//
-// The decoder itself, over shipped bytes: one MS-ADPCM WAV (the ambient family) and one MP3 (a
-// dialogue take). No test reached FElysiumSoundCache::LoadSoundDecoded before AUD0.5.
 
 #endif // WITH_DEV_AUTOMATION_TESTS

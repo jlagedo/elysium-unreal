@@ -1,41 +1,42 @@
-"""Deploy the sound corpus -- every `.wav`/`.mp3` and its `.lip` companion -- from the units.
+"""Deploy the `.lip` companions of the sound corpus -- and nothing else -- from the units.
 
 `uv run elysium import sound` reads `$ELYSIUM_EXPORT_V2_ROOT/sounds/**/*.glb`, lifts each unit's
-source capsule and writes it where the runtime reads it.
-
-## The layout, and why it is this one
-
-A sound unit carries two members: the audio file that selects it and, when the install ships one,
-the same-stem `.lip` (`formats/sound_glb/source.py`). The runtime reads them through two
-different accessors that today root at two different directories:
+`.lip` member out of its source capsule and writes it where the runtime reads it:
 
 ```text
-FElysiumContentPaths::SoundFile(Rel)  ->  Root()/sound/<Rel>     e.g. character/dlg/a/line1.mp3
-FElysiumContentPaths::LipFile(Rel)    ->  Root()/lip/<Rel>       e.g. character/dlg/a/line1.lip
+FElysiumContentPaths::LipFile(Rel)  ->  CorpusRoot()/lip/<Rel>   e.g. character/dlg/a/line1.lip
 ```
 
-`Rel` is the same string in both cases: `ElysiumLip::NormalizeLipRel` is
-`ElysiumScene::NormalizeSceneRel` with the extension swapped, so a `.lip` is keyed by the audio's
-own path below `sound/`, lower-cased and forward-slashed, and the legacy `lip/` mirror is that
-key verbatim. So this lane deploys each `.lip` **twice**:
+`Rel` is the audio's own path below the install's `sound/`, lower-cased and forward-slashed:
+`ElysiumLip::NormalizeLipRel` is `ElysiumScene::NormalizeSceneRel` with the extension swapped, so
+the mirror's key is the audio key with `.lip` for `.wav`/`.mp3`.
 
-* `Content/ElysiumCorpus/sound/<rel>.lip` -- beside its audio, which is what the dialogue plan
-  asks for ("deploys every sound unit -> `.../sound/**` with its `.lip` beside it, so
-  `SoundDir()` has one root"); and
-* `Content/ElysiumCorpus/lip/<rel>.lip` -- the legacy mirror's own shape, so flipping
-  `LipDir()` from `Root()/lip` to `CorpusRoot()/lip` is a one-word change that needs no new fold.
+## Why no audio (AUD1, owner call 2026-09-08 -- `docs/decisions.md`, "Audio")
 
-Both spellings are the same bytes out of the same capsule, so whichever of the two roots the C++
-slice settles on, the file it opens is the install's. The duplication costs ~31 MB across 7,136
-documents -- a rounding error beside the ~1 GB of audio -- and buys the C++ flip the freedom to go
-either way without a re-import. Retiring one spelling is a `RECIPE_VERSION` bump and one edit to
-`target_of`, which prunes the other tree on the next run.
+Sound rendering moved to baked `USoundWave` assets: `uv run elysium bake sounds`
+(`importers/sounds_bake.py` + `pipeline/unreal/import_sounds.py`) writes
+`/ElysiumBaked/Sounds/**/SW_<name>` and the runtime addresses them by package path
+(`asset_paths.baked_unit("vtmb:sound:" + key, "SW")`). The C++ side deleted `SoundDir()` and
+`SoundFile()` outright, so not one audio byte below `Content/ElysiumCorpus/sound` is read any
+more. Deploying ~1 GB of `.wav`/`.mp3` a second time, loose, would be a second way to reach bytes
+that already live in an asset -- so this lane stopped. Same reasoning retired the *beside-audio*
+`.lip` spelling (`sound/<rel>.lip`): with no audio next to it there is nothing for it to be beside,
+and `LipFile` was always the accessor that mattered.
 
-Paths are the units' own keys, which are folded to lower case. The legacy `sound/` mirror kept the
-install's mixed case (`sound/Area/Chinatown/Asian_Chimes1.wav`); the corpus does not, matching
-every other corpus family and the fold every runtime reader already applies before it looks
-(`NormalizeSceneRel`, and the sound resolver's own fold). Windows is case-insensitive, so a raw
-`ambient_generic` `message` value resolves against either spelling.
+## Who prunes the retired `sound/` tree
+
+The lane keeps `sound` in `owned_directories` even though it no longer writes a single file
+there, and keeps `sound/schemes` in `foreign_directories`. `corpus_deploy._prune` deletes
+everything under an owned directory that the run neither wrote nor kept and steps over a foreign
+subtree whole, so the first run under the new `RECIPE_VERSION` sweeps the ~1 GB of orphaned audio
+and the 7,105 beside-audio lips out of an existing deployment, leaves `sound/schemes/*.txt` (the
+`sound-schemes` lane's deploy) alone, and every later run keeps that tree swept for free.
+
+A one-time sweep guarded by a marker file would do the same once and then rot; declaring `sound`
+prune-only says the true thing -- *this lane owns that tree and deploys nothing into it* -- in the
+mechanism the lane already has, with no new code and no state to age out. The two lanes stay
+exactly as consistent as before: `sound-schemes` owns `sound/schemes` and prunes only that, this
+lane owns `sound` + `lip` and cannot touch the schemes.
 
 Everything else -- recipe stamps, per-unit failure isolation, byte-equality verification against
 the capsule, `import_report.json`, pruning -- is `importers/corpus_deploy.py`'s.
@@ -58,11 +59,13 @@ LANE = "sound"
 
 #: Bumped whenever the mapping from a unit to the files it deploys changes, which discards every
 #: stamp written under the old one. v1: `sound/**` audio, `.lip` beside it and mirrored to `lip/**`.
-RECIPE_VERSION = "elysium-sound-corpus-v1"
+#: v2 (AUD1.4): the `lip/**` mirror only -- audio is a baked `USoundWave`, and the first run under
+#: this version prunes the retired loose audio and the beside-audio lips.
+RECIPE_VERSION = "elysium-sound-corpus-v2"
 
 #: The install prefix every member of a sound unit carries.
 SOUND_ROOT = "sound/"
-#: The second home a `.lip` gets, keyed exactly as `ElysiumLip::NormalizeLipRel` keys it.
+#: The one home a `.lip` gets, keyed exactly as `ElysiumLip::NormalizeLipRel` keys it.
 LIP_CORPUS_ROOT = "lip/"
 
 AUDIO_EXTENSIONS = (".wav", ".mp3")
@@ -72,17 +75,18 @@ LIP_EXTENSION = ".lip"
 def target_of(source_path: str) -> tuple[str, ...]:
     """Where one capsuled member lands, corpus-relative.
 
-    Audio deploys once, below `sound/`. A `.lip` deploys twice -- see this module's docstring for
-    the two readers that each want their own root.
+    A `.lip` deploys once, under `lip/`. An audio member deploys nowhere: it is a baked
+    `USoundWave` now, so the lane recognises it -- an unknown member is still a defect -- and
+    returns no target.
     """
 
     if not source_path.startswith(SOUND_ROOT):
         raise CorpusImportError(f"{source_path!r} is not a member below sound/")
     relative = source_path[len(SOUND_ROOT):]
     if source_path.endswith(AUDIO_EXTENSIONS):
-        return (source_path,)
+        return ()
     if source_path.endswith(LIP_EXTENSION):
-        return (source_path, LIP_CORPUS_ROOT + relative)
+        return (LIP_CORPUS_ROOT + relative,)
     raise CorpusImportError(f"{source_path!r} is not an audio member or a .lip companion")
 
 
@@ -90,19 +94,24 @@ def target_of(source_path: str) -> tuple[str, ...]:
 #: deploy (`importers/sound_schemes.py`), so it is stepped over rather than pruned as an orphan.
 FOREIGN_DIRECTORIES = ("sound/schemes",)
 
+#: `lip` is where this lane writes; `sound` it owns for the prune alone -- see the module
+#: docstring. Dropping `sound` here would strand ~1 GB of retired audio in every deployment that
+#: ever ran the old recipe.
+OWNED_DIRECTORIES = ("sound", "lip")
+
 LANE_SPEC = Lane(
     name=LANE,
     recipe_version=RECIPE_VERSION,
     families=(("sounds", SOUND_EXTENSION),),
     target_of=target_of,
-    owned_directories=("sound", "lip"),
+    owned_directories=OWNED_DIRECTORIES,
     empty_hint="run `uv run elysium export_v2 sounds-glb` first",
     foreign_directories=FOREIGN_DIRECTORIES,
 )
 
 
 def import_sound(export_v2_root: Path, destination_root: Path) -> ImportResult:
-    """Deploy every sound unit under `export_v2_root` into `destination_root`."""
+    """Deploy every sound unit's `.lip` under `export_v2_root` into `destination_root`."""
 
     return corpus_deploy.deploy_lane(export_v2_root, destination_root, LANE_SPEC)
 
@@ -111,6 +120,7 @@ __all__ = [
     "FOREIGN_DIRECTORIES",
     "LANE",
     "LANE_SPEC",
+    "OWNED_DIRECTORIES",
     "RECIPE_VERSION",
     "CorpusImportError",
     "ImportResult",

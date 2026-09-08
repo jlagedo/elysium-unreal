@@ -43,7 +43,7 @@ WORKING_MAPS = ("sp_tutorial_1", "sm_pawnshop_1", "sm_hub_1")
 #: `dev_water2_cheap` basin, 40 drip emitters). Both are in `MapsOnV2Models` in
 #: `Config/DefaultElysium.ini` and neither is in `WORKING_MAPS`, because the parametrized corpus
 #: cases above walk the three-map corpus and neither ruling authorized a wider run of those.
-V2_MODEL_MAPS = WORKING_MAPS + ("sm_pier_1", "sp_soc_3")
+V2_MODEL_MAPS = WORKING_MAPS + ("sm_pier_1", "sp_soc_3", "sp_theatre")
 
 
 def test_gltf_frame_matches_source_to_unreal_through_the_units_own_transform():
@@ -270,14 +270,15 @@ def test_reader_places_every_detail_record_of_the_root_unit(map_name):
                for d in geometry.details)
 
 
-def test_the_v2_model_flag_is_its_own_list_and_excludes_sp_theatre():
-    # sp_theatre is on the R4.6 entity/collision/environment transport but its models have not been
-    # imported, so it must not be carried onto the V2 model root by reusing that list.
+def test_the_v2_model_flag_is_its_own_list():
+    # The V2 model root is its own ini list, read from its own key rather than derived from the
+    # R4.6 entity/collision/environment transport list, so a map joins it only by being named.
     v2 = map_transport.read_array(map_transport.V2_MODELS_KEY)
     transport = map_transport.read_array(map_transport.NEW_TRANSPORT_KEY)
     assert set(v2) == set(V2_MODEL_MAPS)
     assert "sp_theatre" in transport
-    assert map_transport.is_map_on_v2_models("sp_theatre") is False
+    assert map_transport.is_map_on_v2_models("sp_theatre") is True
+    assert map_transport.is_map_on_v2_models("sm_hub_2") is False
     # Matched case-insensitively, exactly as `ElysiumMapTransport::IsMapOnV2Models` matches.
     assert map_transport.is_map_on_v2_models("SP_Tutorial_1") is True
 

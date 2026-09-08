@@ -38,13 +38,18 @@ driving this spec: sounds loop and are not cleared at the end of the first cutsc
    `sound/Schemes/*.txt` mirror are retired with the `export bundle audio` lane. Decode policy is
    derived at load from `codec`; category is a property of the referrer set; case-collision
    roll-ups belong to the corpus index.
-2. **Runtime is a request/handle service, not whole-file game-thread playback.** One canonical
-   case-insensitive resolver over the catalog, worker decode, a byte-budgeted PCM LRU for short
-   sounds, bounded streaming buffers for dialogue/music/radio (no long track ever exists as
-   whole-file PCM), generation-safe handles, owner and map-epoch cancellation, completion carrying
-   actual audio start and duration. Game thread does no file/codec work; prefetch is first-class.
-   Failed lookups use a negative cache scoped to the export generation. Budgets, buffer lead and
-   underflow counters are visible in the audio debugger.
+2. **Runtime is a request/handle service over baked sound wave assets, not a hand-rolled
+   decoder.** (Owner call 2026-09-08, `docs/decisions.md` Audio.) Every `sound` unit is baked to
+   a `USoundWave` under `/ElysiumBaked/Sounds/**/SW_<name>`; Unreal's stream cache is the worker
+   decode, byte budget and streaming buffer, and audio components are the voices. What stays in
+   the port because the bytecode observes it: one canonical case-insensitive resolver that computes
+   the asset path from the folded corpus key (mp3 probed before wav), retail's soundgroup walk as
+   existence checks by path, generation-safe handles, owner and map-epoch cancellation, completion
+   carrying scheduled start and duration, first-class prefetch (async load + prime). A reference
+   with no asset is a per-referrer `resolved:false` at bake and a diagnostic at runtime, so no
+   negative cache exists. Game thread does no file/codec work
+   because there is no file/codec work. Loaded/pending/retained counts are visible in the audio
+   debugger; the mixahead lead is re-stamped once against asset playback.
 3. **Every gameplay producer resolves a typed event through domain + entity/item override**, never
    a bare `soundgroup` lookup: movers/switches/containers (`Openable`/`Switches`, `locked_sound`,
    `unlocked_sound`, elevator start/stop, animated-container `soundgroup`, plain `item_container`
@@ -94,13 +99,13 @@ driving this spec: sounds loop and are not cleared at the end of the first cutsc
 
 ## Design
 `pipeline/` writes the offline catalog + typed sidecars (AUD0) that the runtime resolves through
-one case-insensitive service (AUD1: resolver, worker decode, PCM LRU, streaming buffers, handles,
-owner/epoch cancellation). Every gameplay domain (AUD2) and the dialogue/choreo line service
-(`FElysiumLineService`, AUD3) sit on top of AUD1 and issue ordinary requests/handles rather than
-touching files or codecs themselves. Authored `ambient_generic` (AUD4) is one logical voice set per
-entity built from the same handles, keyed to the map epoch so it starts/stops/dies with its
-entities rather than free-running. The governing design is;
-engine-neutral retail facts are `docs/vtmb/audio_pipeline.md`.
+one case-insensitive service (AUD1: path resolver over baked `USoundWave` assets, async
+load/prime, audio-component voices, handles, owner/epoch cancellation). Every gameplay domain
+(AUD2) and the dialogue/choreo line service (`FElysiumLineService`, AUD3) sit on top of AUD1 and
+issue ordinary requests/handles rather than touching assets or codecs themselves. Authored
+`ambient_generic` (AUD4) is one logical voice set per entity built from the same handles, keyed to
+the map epoch so it starts/stops/dies with its entities rather than free-running. The governing
+design is; engine-neutral retail facts are `docs/vtmb/audio_pipeline.md`.
 
 ## Seams
 - Consumes: LIFE7 (choreo-scene rewire, theatre staging), 12.1 (theatre scene join), 9.1, 11.8
@@ -150,13 +155,54 @@ engine-neutral retail facts are `docs/vtmb/audio_pipeline.md`.
     scheme_guns.FadeOut`) and the missing-file dispositions reported from `map-entities`
     `dependencies[].resolved` and the runtime negative cache; no unclassified reference on the
     three playable-path maps.
-- [ ] **AUD1 The service** — resolver, worker decode, PCM LRU, streaming buffers, handles,
-  owner/epoch cancellation. *State 2026-09-08:* resolver (lower-case fold, mp3/wav probe), worker
-  decode, 64 MiB byte LRU, generation-safe handles, `CancelOwner` and `RetireMapEpoch` exist;
-  every file, MP3 included, is decoded whole (`ElysiumSoundCache.cpp:199`), there is no streaming
-  path and no negative cache. *Acceptance:* a long MP3 never exists as whole-file PCM; prefetch/
-  decode does no game-thread file/codec work; map travel cancels every old-map request; forced
-  small buffers exercise underflow diagnostics without a stale-handle crash. *Deps:* AUD0.
+- [ ] **AUD1 The service** — bake the V2 sound family to sound wave assets once, resolve by
+  path, delete the hand-rolled decode path. *Owner call 2026-09-08* (`docs/decisions.md` Audio):
+  finishing the custom service would reimplement Unreal's stream cache; the swap is peripheral.
+  The corpus is 20 years old and never changes, so the lane is a one-shot bake with no index, no
+  contract and no incremental machinery beyond what `bake_lib` already gives every lane. *State
+  2026-09-08:* the subsystem renders through `UElysiumPcmSoundWave` over `FElysiumSoundCache`'s
+  whole-file dr_wav/dr_mp3 decode (`ElysiumSoundCache.cpp:143`); every consumer already goes
+  through `IElysiumAudio` (`ElysiumWorldServices.h:1295`) or the request/handle API, so the swap
+  is confined to `Private/Audio/`, `ElysiumMoverSounds.cpp`, `ElysiumWaterAudio.cpp` and the Cog
+  window. Corpus facts (probe 2026-09-08, 10,892 units): 5,539 wav with int16 PCM already in the
+  GLB payload (MS-ADPCM is not an Unreal import format, so the stage writes PCM wavs); 5,342 mp3
+  as raw frames with no Python decoder, imported as `.mp3` (UE 5.8 `SoundFactory.cpp:160`); 11
+  zero-byte members bake to nothing; 58 `smpl` loops, 3 with a real intro (`warrens/flow_on.wav`,
+  `machines/steam2.wav`, `steam3.wav`); keys with spaces/parentheses go through
+  `BakedAssetName` with the extension kept so the 13 wav/mp3 stem pairs stay distinct.
+  *Acceptance:* every reference on the three playable-path maps resolves to a baked asset or an
+  explicit disposition; a 600 s radio loop plays from the stream cache; `Prefetch` primes and
+  `IsReadyForMapActivation` waits on it; map travel cancels every old-map voice and a stale
+  handle is a no-op; `dr_wav.h`, `dr_mp3.h`, `FElysiumSoundCache`, `UElysiumPcmSoundWave` are
+  gone; `test substrate` and `test policy` green; the mixahead lead re-stamped. *Deps:* AUD0.
+  - [ ] **AUD1.1** `uv run elysium bake sounds` (`importers/sounds_bake.py` staging PCM wavs and
+    original mp3s under `$ELYSIUM_WORK_ROOT/_sounds_stage/`; `pipeline/unreal/import_sounds.py`
+    importing them in `AssetImportTask` chunks like the texture lane) to
+    `/ElysiumBaked/Sounds/<dirs>/SW_<BakedAssetName(key-with-extension)>`. Loop-end units are
+    trimmed at the `smpl` end and get `bLooping`; the three intro units bake as `SW_<name>_intro`
+    + `SW_<name>_loop`. Compression `ProjectDefined`, everything else engine default. The stamp,
+    prune and `import_report.json` come from `bake_lib` unchanged; no verify pass, no index.
+  - [ ] **AUD1.2** Runtime on assets: `ResolveSourcePath` computes the package path from the
+    folded key and probes the mp3 asset then the wav asset (mp3-first, as today with files);
+    `Submit` async-loads through `FStreamableManager` and `RealizeVoice` plays the `USoundWave`
+    on the audio component (intro then loop chained on `OnAudioFinishedNative`); `Prefetch` =
+    async load + `RetainCompressedAudio`, counted by `PendingPrefetches`; duration read from the
+    wave. `ElysiumSoundGroups::Resolve` checks subkey assets by path; whisper sets and water pools
+    list their folder through the asset registry. Delete `FElysiumSoundCache`,
+    `UElysiumPcmSoundWave`, `ElysiumDrWav.cpp`, `ElysiumDrMp3.cpp`, `Private/ThirdParty/dr_*.h`,
+    `Results()`, `SoundDir()`/`SoundFile()` (keep `ElysiumScriptFS`'s `sound/` mount only if a
+    shipped script opens one — grep first); Cog "Decode log" tab and the MCP rows become
+    loaded/pending/retained.
+  - [ ] **AUD1.3** Latency: `SubmitToRenderSeconds` becomes a constant on
+    `UElysiumAudioSettings`, measured once by the owner with `elysium.audio_latency`; `Lead()`
+    keeps its shape. Record the number in `docs/vtmb/audio_pipeline.md`.
+  - [ ] **AUD1.4** `import sound` shrinks to the `.lip` mirror; loose `sound/**` audio is pruned;
+    `sound/schemes` stays. `research audio_reference_dispositions` resolves against the bake's
+    `import_report.json`. Update `docs/contracts/seam_map_sound.md` (owner-reviewed).
+  - [ ] **AUD1.5** Tests without VtMB data (per 44ac84f6): `FElysiumAudioContractsTest` rewritten
+    over the path resolver — fold, mp3-first order, `BakedAssetName` twin, handle generation after
+    `RetireMapEpoch`. Live: owner-piloted tutorial pass — door soundgroup, one `ambient_generic`,
+    one dialogue line with subtitle, scheme music fade.
 - [ ] **AUD2 The event surface** — typed events for movers/switches/containers, terminals,
   weapons/items/disciplines, characters, surfaces, radio/news, the AI-hearing event. *Acceptance:*
   one door, container lid, computer, NPC voice set, alternating surface footstep, weapon shot,

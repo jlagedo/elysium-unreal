@@ -15,7 +15,6 @@ import re
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
-from pipeline.unreal import light_store  # noqa: E402
 from elysium_pipeline import map_transport  # noqa: E402
 from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
@@ -295,11 +294,6 @@ def verify_lights(actors, world_dir, map_name):
     depend on, and a Stationary light is the state in which they cannot be trusted at all.
     """
     errors = []
-    if light_store.load(light_store.content_dir(), map_name) is not None:
-        # A stored map's reach and cone are a hand pass's, not the sidecar's, so the sidecar is
-        # not a witness to them any more. `verify_lights_stored` checks the level against the
-        # store instead, which is the input the bake actually placed from.
-        return errors
     path = os.path.join(world_dir, "%s.lights" % map_name)
     if not os.path.isfile(path):
         return errors
@@ -391,120 +385,6 @@ def _lights_rows_that_place(path):
     return rows
 
 
-#: Which record fields are meaningful for which VtMB light type, and so which ones the level has
-#: to agree with the store on. A point light has no cone and a sun has no attenuation radius, so
-#: the component never carries those properties and the harvest reads its default back -- comparing
-#: them would report a difference that no renderer can see.
-_STORED_FIELDS_ALL = ("kind", "style", "sky", "position", "color", "intensity", "cast_shadows",
-                      "specular_scale", "indirect_lighting_intensity",
-                      "volumetric_scattering_intensity")
-_STORED_FIELDS_LOCAL = ("reach_cm", "falloff_exponent", "use_inverse_squared_falloff",
-                        "allow_mega_lights")
-_STORED_FIELDS_SPOT = ("rotation", "outer_cone_deg", "inner_cone_deg")
-_STORED_FIELDS_SUN = ("rotation", "sun_source_angle_deg", "sun_soft_source_angle_deg")
-
-
-def _stored_fields(kind):
-    fields = list(_STORED_FIELDS_ALL)
-    if kind in (0, 1, 2):
-        fields.extend(_STORED_FIELDS_LOCAL)
-    if kind == 2:
-        fields.extend(_STORED_FIELDS_SPOT)
-    if kind == 3:
-        fields.extend(_STORED_FIELDS_SUN)
-    return fields
-
-
-def _stored_field_equal(field, got, want):
-    """One field of a harvested record against the store row that placed it.
-
-    Colour gets a whole 8-bit step of slack: the placement writes linear and the component keeps
-    `FColor`, so a store hand-edited to a colour off the sRGB grid quantises on the way in and can
-    never read back exactly. Everything else is a float the property round-trips."""
-
-    if isinstance(want, (list, tuple)):
-        tolerance = 0.01 if field == "color" else 1e-3
-        return (len(got) == len(want)
-                and all(math.isclose(float(a), float(b), rel_tol=1e-4, abs_tol=tolerance)
-                        for a, b in zip(got, want)))
-    if isinstance(want, bool) or isinstance(got, bool):
-        return bool(got) == bool(want)
-    if isinstance(want, (int, float)):
-        return math.isclose(float(got), float(want), rel_tol=1e-4, abs_tol=1e-3)
-    return got == want
-
-
-def _stored_key(row):
-    """A store row's identity for the join: its lump-15 ordinal, or its label when a hand pass
-    added it and it has none. Unreal keeps actor labels unique within a level, so the fallback is
-    a key rather than a guess."""
-
-    return ("src", int(row["src"])) if row.get("src") is not None else ("label", row["label"])
-
-
-def verify_lights_stored(actors, stored, map_name):
-    """A `MapsOnV2Models` map carrying a light store (`pipeline/unreal/light_store.py`): the
-    level IS the store, and that is the whole claim to check.
-
-    The page-derived assertions `verify_lights_baked` makes are not facts about a stored map --
-    a hand pass may have switched a light off, moved it, given it inverse-square falloff, or
-    added one with no lump-15 row at all -- so what is verified here instead is that every store
-    row reached the level exactly once and that the actor carries the row's values, per the
-    fields that light's type actually has (`_stored_fields`). The one renderer contract that
-    survives a hand pass is checked too: a local light that allows MegaLights must ray-trace its
-    shadows, because nothing in the store selects the method.
-    """
-
-    errors = []
-    lights = [actor for actor in actors if LIGHT_TAG in [str(tag) for tag in actor.tags]]
-    rows = {}
-    for row in stored:
-        key = _stored_key(row)
-        if key in rows:
-            errors.append("light store: %s appears twice" % (key,))
-        rows[key] = row
-
-    seen = set()
-    for actor in lights:
-        label = actor.get_actor_label()
-        harvested = light_store._record_from_actor(actor)
-        if harvested is None:
-            errors.append("%s: has no light component" % label)
-            continue
-        key = _stored_key(harvested)
-        row = rows.get(key)
-        if row is None:
-            errors.append("%s: %s is in the level but not in the light store" % (label, (key,)))
-            continue
-        if key in seen:
-            errors.append("%s: light store row %s was placed more than once" % (label, (key,)))
-            continue
-        seen.add(key)
-        for field in _stored_fields(int(row["kind"])):
-            if not _stored_field_equal(field, harvested[field], row[field]):
-                errors.append("%s: %s is %r, the light store says %r"
-                              % (label, field, harvested[field], row[field]))
-        component = actor.light_component
-        if (component is not None and int(row["kind"]) in (0, 1, 2)
-                and bool(row["allow_mega_lights"])):
-            method = component.get_editor_property("mega_lights_shadow_method")
-            if method != unreal.MegaLightsShadowMethod.RAY_TRACING:
-                errors.append("%s: MegaLights shadow method %s, not RayTracing" % (label, method))
-
-    missing = sorted(str(key) for key in set(rows) - seen)
-    if missing:
-        errors.append("%d light store row(s) reached no actor: %s%s" % (
-            len(missing), ", ".join(missing[:8]), " ..." if len(missing) > 8 else ""))
-    unreal.log("[verify] lights: %d actor(s) / %d light store row(s) / %d matched (stored map; "
-               "the lighting page is not its input)" % (len(lights), len(rows), len(seen)))
-    for message in errors[:8]:
-        unreal.log_error("[verify] " + message)
-    if len(errors) > 8:
-        unreal.log_error("[verify] ... and %d more stored-light finding(s) on %s"
-                         % (len(errors) - 8, map_name))
-    return errors
-
-
 def verify_lights_baked(actors, world_dir, map_name):
     """R5.6, `MapsOnV2Models` maps only: light-count parity against the legacy `.lights`, and the
     four derivation assertions re-homed from `Elysium.Substrate.LightRig` onto the bake's own
@@ -522,13 +402,6 @@ def verify_lights_baked(actors, world_dir, map_name):
     errors = []
     if not map_transport.is_map_on_v2_models(map_name):
         return errors
-    stored = light_store.load(light_store.content_dir(), map_name)
-    if stored is not None:
-        # A stored map's lights are a hand pass's, not the page's, so the page-derived
-        # assertions below are not facts about it any more: a light may have been switched off,
-        # moved, given inverse-square falloff, or added with no lump-15 row at all. What the bake
-        # still claims is that the level IS the store, and that is what gets checked instead.
-        return verify_lights_stored(actors, stored, map_name)
     path = os.path.join(world_dir, "%s.lights" % map_name)
     if not os.path.isfile(path):
         errors.append("%s: on MapsOnV2Models but no %s.lights to check parity against"

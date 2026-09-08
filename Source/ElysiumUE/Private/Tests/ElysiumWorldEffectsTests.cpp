@@ -50,14 +50,15 @@
 #include "ElysiumHUD.h"
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
+#include "ElysiumAudioSubsystem.h"
 #include "ElysiumLineService.h"
+#include "ElysiumSoundAssets.h"
 #include "ElysiumLookCurve.h"                // the mouse path's pure rules
 #include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
 #include "Map/ElysiumMapCollision.h"
-#include "ElysiumSoundCache.h"
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
@@ -109,15 +110,17 @@
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "Camera/CameraActor.h"
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Sound/SoundGenerator.h"
-#include "Sound/SoundWaveProcedural.h"
 #include "HAL/FileManager.h"
+#include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Misc/Paths.h"
 
 // One context flag (runs anywhere) + the product filter (this project's own suite bucket).
@@ -226,6 +229,13 @@ bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
 	return true;
 }
 
+// AUD1.5 — the audio service's contracts, over the baked sound family and nothing else.
+//
+// Every assertion here is a pure-function or fabricated-state one: no test may read the VtMB corpus
+// or a baked asset (commit 44ac84f6 retired that tier). Asset presence is fabricated through
+// `ElysiumSoundAssets::FScopedKeySet`, which is the seam the resolver's existence check goes
+// through, so the mp3-before-wav order and retail's directory walk are provable with no bake on
+// disk.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAudioContractsTest,
 	"Elysium.Substrate.AudioContracts", GElysiumTestFlags)
 
@@ -240,6 +250,172 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 			TEXT("E:/game/dlg/Main Characters/jack_tutorial.dlg"), 42),
 		FString(TEXT("character/dlg/Main Characters/jack_tutorial/line42_col_e")));
 
+	// --- the folded key names exactly one asset -------------------------------------------------
+	//
+	// Sounds take their own fold: a space becomes a HYPHEN before the run collapse (14 shipped
+	// space-vs-underscore twin pairs would otherwise claim one package each -- `target_giveup 1.wav`
+	// beside `target_giveup_1.wav`), and the stem keeps a leading underscore (two `_period.wav`
+	// members are unaddressable without it). The extension is KEPT because 13 stems ship as both
+	// `.wav` and `.mp3`. Four shapes pinned here by hand; the whole contract is asserted against
+	// the pipeline's own fixture below.
+	const auto ExpectPath = [this](const TCHAR* Key, const TCHAR* Package, const TCHAR* Asset)
+	{
+		TestEqual(FString::Printf(TEXT("'%s' names one baked asset"), Key),
+			ElysiumSoundAssets::ObjectPathFor(UElysiumAudioSubsystem::NormalizeSourcePath(Key)),
+			FString::Printf(TEXT("%s/%s.%s"), Package, Asset, Asset));
+	};
+	ExpectPath(TEXT("character/monster/ming xiao/movement.wav"),
+		TEXT("/ElysiumBaked/Sounds/character/monster/ming-xiao"), TEXT("SW_movement_wav"));
+	ExpectPath(TEXT("music/all that could ever be (unused).mp3"),
+		TEXT("/ElysiumBaked/Sounds/music"), TEXT("SW_all-that-could-ever-be-_unused_mp3"));
+	ExpectPath(TEXT("area/santa_monica/rain_moderate _loop.wav"),
+		TEXT("/ElysiumBaked/Sounds/area/santa_monica"), TEXT("SW_rain_moderate-_loop_wav"));
+	ExpectPath(TEXT("interface/bubble_click_on.wav"),
+		TEXT("/ElysiumBaked/Sounds/interface"), TEXT("SW_bubble_click_on_wav"));
+	ExpectPath(TEXT("character/monster/ming xiao/_period.wav"),
+		TEXT("/ElysiumBaked/Sounds/character/monster/ming-xiao"), TEXT("SW__period_wav"));
+	ExpectPath(TEXT("character/female/asian/target_giveup 1.wav"),
+		TEXT("/ElysiumBaked/Sounds/character/female/asian"), TEXT("SW_target_giveup-1_wav"));
+	ExpectPath(TEXT("character/female/asian/target_giveup_1.wav"),
+		TEXT("/ElysiumBaked/Sounds/character/female/asian"), TEXT("SW_target_giveup_1_wav"));
+	TestEqual(TEXT("an empty key names no asset"),
+		ElysiumSoundAssets::ObjectPathFor(FString()), FString());
+
+	// --- the whole address contract, against the pipeline's own fixture --------------------------
+	//
+	// `pipeline/tests/fixtures/sound_asset_paths.json` is a repo-tracked file (not VtMB data): the
+	// key -> object-path rows both sides test against, so a drift in either fold is caught here
+	// rather than by a runtime asking for a package the bake did not write. `test_sounds_bake`
+	// asserts the same rows on the Python side.
+	{
+		const FString Fixture =
+			FPaths::ProjectDir() / TEXT("pipeline/tests/fixtures/sound_asset_paths.json");
+		FString Json;
+		if (TestTrue(FString::Printf(TEXT("the sound path fixture is readable (%s)"), *Fixture),
+			FFileHelper::LoadFileToString(Json, *Fixture)))
+		{
+			TSharedPtr<FJsonObject> Root;
+			const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
+			if (TestTrue(TEXT("  and parses"), FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid()))
+			{
+				const TArray<TSharedPtr<FJsonValue>>* Entries = nullptr;
+				if (TestTrue(TEXT("  and carries its entries"),
+					Root->TryGetArrayField(TEXT("entries"), Entries) && Entries != nullptr))
+				{
+					int32 Checked = 0;
+					for (const TSharedPtr<FJsonValue>& Value : *Entries)
+					{
+						const TSharedPtr<FJsonObject>* Entry = nullptr;
+						if (!Value.IsValid() || !Value->TryGetObject(Entry)) { continue; }
+						const FString Key = (*Entry)->GetStringField(TEXT("key"));
+						const FString Expected = (*Entry)->GetStringField(TEXT("objectPath"));
+						FString Role;
+						(*Entry)->TryGetStringField(TEXT("role"), Role);
+						const FString Actual = Role.IsEmpty()
+							? ElysiumSoundAssets::ObjectPathFor(Key)
+							: ElysiumSoundAssets::VariantObjectPathFor(Key, *Role);
+						TestEqual(FString::Printf(TEXT("fixture: '%s'%s"), *Key,
+							Role.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" [%s]"), *Role)),
+							Actual, Expected);
+						++Checked;
+					}
+					TestEqual(TEXT("  every fixture row was checked"), Checked, Entries->Num());
+				}
+			}
+		}
+	}
+
+	// --- mp3 before wav, as VtMB's own PlayDialogFile pairs them --------------------------------
+	{
+		const FString Stem(TEXT("character/dlg/jack/line1_col_e"));
+		{
+			// Both takes baked: the mp3 is the one that plays, exactly as retail's file probe
+			// answered before the corpus was baked.
+			ElysiumSoundAssets::FScopedKeySet Both({ Stem + TEXT(".mp3"), Stem + TEXT(".wav") });
+			TestEqual(TEXT("mp3 wins when both takes are baked"),
+				UElysiumAudioSubsystem::ResolveSourcePath(FElysiumAudioSource::Path(Stem)),
+				Stem + TEXT(".mp3"));
+		}
+		{
+			ElysiumSoundAssets::FScopedKeySet WavOnly({ Stem + TEXT(".wav") });
+			TestEqual(TEXT("wav is the fallback, not the first choice"),
+				UElysiumAudioSubsystem::ResolveSourcePath(FElysiumAudioSource::Path(Stem)),
+				Stem + TEXT(".wav"));
+		}
+		{
+			ElysiumSoundAssets::FScopedKeySet Neither({ FString(TEXT("character/dlg/other.wav")) });
+			// A reference the bake carries nothing for still resolves to a spelling: the miss is a
+			// per-referrer diagnostic at play time, never a substitution and never a negative cache.
+			TestEqual(TEXT("an unbaked stem still answers with the mp3 spelling"),
+				UElysiumAudioSubsystem::ResolveSourcePath(FElysiumAudioSource::Path(Stem)),
+				Stem + TEXT(".mp3"));
+			TestFalse(TEXT("  and existence says so"),
+				ElysiumSoundAssets::Exists(Stem + TEXT(".mp3")));
+		}
+		{
+			// An authored extension is honoured verbatim: only a suffix-less reference pairs.
+			ElysiumSoundAssets::FScopedKeySet Both({ Stem + TEXT(".mp3"), Stem + TEXT(".wav") });
+			TestEqual(TEXT("an authored extension is never re-paired"),
+				UElysiumAudioSubsystem::ResolveSourcePath(
+					FElysiumAudioSource::Path(Stem + TEXT(".WAV"))),
+				Stem + TEXT(".wav"));
+		}
+	}
+
+	// --- the split loop unit resolves as its two halves -----------------------------------------
+	{
+		const FString Key(TEXT("environmental/machines/steam2.wav"));
+		ElysiumSoundAssets::FScopedKeySet Split({ Key + TEXT("|intro"), Key + TEXT("|loop") });
+		const ElysiumSoundAssets::FRef Ref = ElysiumSoundAssets::Resolve(Key);
+		TestTrue(TEXT("a unit baked as intro+loop still resolves"), Ref.IsValid());
+		TestTrue(TEXT("  and carries the loop body to chain"), Ref.HasIntroLoopPair());
+		TestEqual(TEXT("  the intro plays first"), Ref.ObjectPath,
+			FString(TEXT("/ElysiumBaked/Sounds/environmental/machines/")
+				TEXT("SW_steam2_wav_intro.SW_steam2_wav_intro")));
+		TestEqual(TEXT("  and the body wraps"), Ref.LoopObjectPath,
+			FString(TEXT("/ElysiumBaked/Sounds/environmental/machines/")
+				TEXT("SW_steam2_wav_loop.SW_steam2_wav_loop")));
+	}
+
+	// --- retail's directory walk, as existence checks by path -----------------------------------
+	{
+		ElysiumSoundAssets::FScopedKeySet Usable({
+			FString(TEXT("usable/openable/open.wav")),
+			FString(TEXT("usable/openable/close.wav")),
+			FString(TEXT("usable/openable/door wood/open.wav")),
+			FString(TEXT("usable/switches/elevator_button/on.wav")) });
+		TestTrue(TEXT("a shipped group directory is found"),
+			ElysiumSoundAssets::FolderExists(TEXT("usable/openable/door wood")));
+		TestFalse(TEXT("an unshipped group directory is not"),
+			ElysiumSoundAssets::FolderExists(TEXT("usable/openable/door_metal")));
+		TestTrue(TEXT("a subkey the group ships is found by path"),
+			ElysiumSoundAssets::Exists(TEXT("usable/openable/door wood/open.wav")));
+		TestFalse(TEXT("a subkey it does not ship stays silent"),
+			ElysiumSoundAssets::Exists(TEXT("usable/openable/door wood/close.wav")));
+		TestEqual(TEXT("the category root's own cues list"),
+			ElysiumSoundAssets::ListFolder(TEXT("usable/openable")).Num(), 2);
+		const TArray<FString> Groups = ElysiumSoundAssets::ListSubfolders(TEXT("usable/openable"));
+		TestEqual(TEXT("one group directory under the category"), Groups.Num(), 1);
+		if (!Groups.IsEmpty())
+		{
+			// The enumerated spelling is the FOLDED one -- the registry never saw the authored
+			// space -- and folding it again lands back on the same package, which is what lets an
+			// enumerated pick be submitted as an ordinary request.
+			TestEqual(TEXT("  named as the bake spells it"), Groups[0], FString(TEXT("door-wood")));
+		}
+		const TArray<FString> Pool =
+			ElysiumSoundAssets::ListFolder(TEXT("usable/switches/elevator_button"));
+		TestEqual(TEXT("an enumerated pool member reads back as a key"), Pool.Num(), 1);
+		if (!Pool.IsEmpty())
+		{
+			TestEqual(TEXT("  with its extension recovered"), Pool[0],
+				FString(TEXT("usable/switches/elevator_button/on.wav")));
+			TestTrue(TEXT("  and it resolves to the asset it was listed from"),
+				ElysiumSoundAssets::Exists(Pool[0]));
+		}
+	}
+
+	// --- handles are generation-safe across a map epoch ------------------------------------------
 	const FElysiumVoiceHandle First{ 7, 2 };
 	const FElysiumVoiceHandle Reused{ 7, 3 };
 	TestTrue(TEXT("generation distinguishes a reused slot"), First != Reused);
@@ -247,45 +423,54 @@ bool FElysiumAudioContractsTest::RunTest(const FString&)
 	Handles.Add(First);
 	TestFalse(TEXT("stale generation cannot find a reused voice"), Handles.Contains(Reused));
 
-	TSharedPtr<FElysiumSoundCache::FDecoded, ESPMode::ThreadSafe> Pcm =
-		MakeShared<FElysiumSoundCache::FDecoded, ESPMode::ThreadSafe>();
-	Pcm->Info.Channels = 1;
-	Pcm->Info.SampleRate = 4;
-	Pcm->Info.FrameCount = 4;
-	Pcm->Info.DurationSeconds = 1.f;
-	const int16 Samples[] = { MIN_int16, -1, 0, MAX_int16 };
-	Pcm->Pcm16.Append(reinterpret_cast<const uint8*>(Samples), sizeof(Samples));
-
-	FSoundGeneratorInitParams GeneratorParams;
-	GeneratorParams.NumChannels = 1;
-	GeneratorParams.NumFramesPerCallback = 8;
-	GeneratorParams.StartTime = 0.f;
-
-	USoundWaveProcedural* OneShot = FElysiumSoundCache::MakeWave(Pcm, false);
-	TestNotNull(TEXT("one-shot wave is created"), OneShot);
-	if (OneShot)
 	{
-		TestEqual(TEXT("one-shot advances to EOF while inaudible"),
-			OneShot->VirtualizationMode, EVirtualizationMode::PlayWhenSilent);
-		ISoundGeneratorPtr Generator = OneShot->CreateSoundGenerator(GeneratorParams);
-		float Out[8] = {};
-		TestEqual(TEXT("one-shot generator stops at decoded EOF"),
-			Generator->GetNextBuffer(Out, UE_ARRAY_COUNT(Out)), 4);
-		TestTrue(TEXT("one-shot generator reports completion"), Generator->IsFinished());
-	}
+		// The ledger's own answer, over a subsystem with no world: a request whose asset the bake
+		// does not carry completes on the spot, so its slot returns to the pool with a bumped
+		// generation. Retiring the epoch it belonged to must then find nothing, and every operation
+		// addressed by the stale handle must be a no-op rather than reaching the voice that took
+		// the slot next.
+		ElysiumSoundAssets::FScopedKeySet Nothing(TArray<FString>{});
+		// A GameInstance subsystem's ClassWithin is UGameInstance, so it is outered to one. The
+		// instance is never initialized and has no world: nothing below reaches either.
+		UGameInstance* GameInstance = NewObject<UGameInstance>(GetTransientPackage());
+		UElysiumAudioSubsystem* Audio = NewObject<UElysiumAudioSubsystem>(GameInstance);
+		FElysiumAudioRequest Request;
+		Request.Source = FElysiumAudioSource::Path(TEXT("environmental/never_baked.wav"));
+		Request.Owner.Kind = EElysiumAudioOwnerKind::MapEntity;
+		Request.Owner.StableId = TEXT("test.ambient");
+		Request.Owner.MapEpoch = 11;
 
-	USoundWaveProcedural* Loop = FElysiumSoundCache::MakeWave(Pcm, true);
-	TestNotNull(TEXT("looping wave is created"), Loop);
-	if (Loop)
-	{
-		TestEqual(TEXT("loop retains phase while inaudible"),
-			Loop->VirtualizationMode, EVirtualizationMode::PlayWhenSilent);
-		ISoundGeneratorPtr Generator = Loop->CreateSoundGenerator(GeneratorParams);
-		float Out[10] = {};
-		TestEqual(TEXT("looping generator fills across sample wrap"),
-			Generator->GetNextBuffer(Out, UE_ARRAY_COUNT(Out)), 8);
-		TestFalse(TEXT("looping generator does not report completion"), Generator->IsFinished());
-		TestEqual(TEXT("loop wrap restarts at the first sample"), Out[4], Out[0]);
+		const FElysiumVoiceHandle Stale = Audio->Submit(Request);
+		TestTrue(TEXT("a submitted request is handed a valid handle"), Stale.IsValid());
+		TestFalse(TEXT("an unbaked reference completes immediately"), Audio->IsVoicePlaying(Stale));
+
+		Audio->RetireMapEpoch(11);
+		TestEqual(TEXT("the epoch retires no voice, because none is left"),
+			Audio->ActiveVoices().Num(), 0);
+
+		const FElysiumVoiceHandle Next = Audio->Submit(Request);
+		TestEqual(TEXT("the freed slot is handed out again"),
+			static_cast<int32>(Next.Slot), static_cast<int32>(Stale.Slot));
+		TestNotEqual(TEXT("  under a new generation"),
+			static_cast<int32>(Next.Generation), static_cast<int32>(Stale.Generation));
+		TestFalse(TEXT("the stale handle addresses nothing"), Audio->IsVoicePlaying(Stale));
+
+		// Stop/Seek/SetGain on a retired handle are no-ops rather than reaching a later voice.
+		Audio->Stop(Stale);
+		Audio->SetGain(Stale, 0.5f);
+		Audio->Seek(Stale, 1.f);
+
+		const TMap<FString, FElysiumSoundAssetRow>& Rows = Audio->AssetRows();
+		const FElysiumSoundAssetRow* Row = Rows.Find(TEXT("environmental/never_baked.wav"));
+		TestNotNull(TEXT("the miss is recorded as a row, not a negative cache"), Row);
+		if (Row)
+		{
+			TestTrue(TEXT("  marked missing"), Row->bMissing);
+			TestFalse(TEXT("  and holding nothing"), Row->bLoaded || Row->bRetained);
+			TestEqual(TEXT("  against the path the bake would have written"), Row->ObjectPath,
+				FString(TEXT("/ElysiumBaked/Sounds/environmental/")
+					TEXT("SW_never_baked_wav.SW_never_baked_wav")));
+		}
 	}
 
 	const FElysiumClassRegistry& Registry = FElysiumClassRegistry::Get();

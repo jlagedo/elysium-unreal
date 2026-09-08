@@ -46,6 +46,7 @@ export_v2_app = typer.Typer(help="Run isolated lossless GLB export pipelines.")
 # `import` is a Python keyword, so the sub-app object cannot be named after the command it
 # registers; the command surface is still `uv run elysium import <family>`.
 import_app = typer.Typer(help="Deploy published export_v2 units into the runtime corpus.")
+bake_app = typer.Typer(help="Author baked Unreal assets from published export_v2 units.")
 verify_app = typer.Typer(help="Check baked packages against what the export declares.")
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
@@ -55,6 +56,7 @@ app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
 app.add_typer(export_v2_app, name="export_v2")
 app.add_typer(import_app, name="import")
+app.add_typer(bake_app, name="bake")
 app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
@@ -630,16 +632,6 @@ def export_map(
     force: bool = typer.Option(False, "--force"),
     intermediate_only: bool = typer.Option(False, "--intermediate-only"),
     particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
-    no_light_store: bool = typer.Option(
-        False,
-        "--no-light-store",
-        help=(
-            "Skip the per-map light store: do not harvest the lights off the baked level, and "
-            "derive every light from UElysiumLightingSettings instead of applying the map's "
-            "Content/ElysiumAuthored/Lighting/<map>.lights.json. Delete that file and bake once "
-            "with this flag to hand a hand-tuned map back to the settings page."
-        ),
-    ),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -659,7 +651,6 @@ def export_map(
             force=force,
             intermediate_only=intermediate_only,
             particles=particles,
-            light_store=not no_light_store,
             verify=verify,
         )
         console.print("map export complete: " + ", ".join(names))
@@ -1765,7 +1756,7 @@ def import_dialogue(ctx: typer.Context) -> None:
 
 @import_app.command("sound")
 def import_sound(ctx: typer.Context) -> None:
-    """Deploy the sound corpus -- audio and its `.lip` sidecars -- into Content/ElysiumCorpus."""
+    """Deploy the sound corpus's `.lip` sidecars into Content/ElysiumCorpus (audio is baked)."""
 
     def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
         from elysium_pipeline.importers import sound as importer
@@ -1941,6 +1932,142 @@ def import_surface_properties(
     _execute(
         _state(ctx),
         "import surface-properties",
+        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
+        action,
+        require_work=True,
+        require_ue=not stage_only,
+        activity=not stage_only,
+    )
+
+
+@bake_app.command("map")
+def bake_map(
+    ctx: typer.Context,
+    maps: list[str] = typer.Option(
+        ...,
+        "--maps",
+        help=(
+            "Map stem to bake (repeatable: --maps sp_tutorial_1 --maps sm_hub_1). Required -- "
+            "the lane refuses to run unscoped. The map must be listed under MapsOnV2Models."
+        ),
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Rebake the level even when its recipe stamp is current."
+    ),
+    particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help=(
+            "Run the deep bake verification commandlet after the bake (acceptance check; "
+            "iteration trusts a clean bake exit)."
+        ),
+    ),
+) -> None:
+    """Author each named map's level from its published V2 units: stage the root unit, run
+    `bake_map.py`, nothing else. `export map` is the legacy-lane orchestrator around the same
+    bake."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        names = export_manager.bake_v2_maps(
+            config, runner, maps, force=force, particles=particles, verify=verify)
+        console.print("map bake complete: " + ", ".join(names))
+
+    _execute(
+        _state(ctx),
+        "bake map",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        require_ue=True,
+        activity=True,
+    )
+
+
+@bake_app.command("sounds")
+def bake_sounds(
+    ctx: typer.Context,
+    keys: list[str] = typer.Option(
+        None,
+        "--keys",
+        help=(
+            "Only these sound units, by key with the extension kept "
+            "(interface/bubble_click_on.wav). Repeatable, and each value may be a "
+            "comma-separated list. Omit for the whole corpus, which is also the only "
+            "scope that prunes."
+        ),
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Re-import every asset even when its recipe stamp is current."
+    ),
+    stage_only: bool = typer.Option(
+        False, "--stage-only", help="Write the staged audio and manifest; launch no editor."
+    ),
+) -> None:
+    """Bake the V2 sound units to `USoundWave` assets under `/ElysiumBaked/Sounds`."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import unreal
+        from elysium_pipeline.importers import sounds_bake as importer
+
+        if config.export_v2_root is None or config.work_root is None:
+            raise ConfigError(
+                "ELYSIUM_EXPORT_V2_ROOT and ELYSIUM_WORK_ROOT must be configured; copy "
+                "dev/paths.example.env to .elysium.local.env and set the local paths"
+            )
+        root = importer.staging_root(config.work_root)
+        selection = importer.parse_keys(keys)
+        staged = importer.stage_sounds(config.export_v2_root, root, keys=selection)
+        console.print(staged.summary())
+        for key, detail in staged.failures[:10]:
+            console.print(f"[yellow]  {key}: {detail}[/yellow]", markup=True)
+        for row in staged.empty[:10]:
+            console.print(f"[yellow]  empty: {row['unit']} ({row['reason']})[/yellow]",
+                          markup=True)
+        if stage_only:
+            if staged.failures:
+                raise RuntimeError(f"{len(staged.failures)} sound unit(s) could not be staged")
+            return
+
+        editor_failure: Exception | None = None
+        try:
+            unreal.bake_sounds(config, runner, staged.manifest_path, force=force)
+        except unreal.UnrealFailure as error:
+            editor_failure = error
+        report = _read_json(root / importer.IMPORT_REPORT_NAME)
+        failed_assets = (report.get("failed") or []) if report else []
+        if report:
+            console.print(
+                "sound bake: "
+                f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
+                f"{report.get('pruned', 0)} pruned, {len(report.get('empty') or [])} empty, "
+                f"{len(failed_assets)} failed"
+            )
+            loops = report.get("loops") or {}
+            if loops:
+                console.print("  loop decisions: " + ", ".join(
+                    f"{count} {name}" for name, count in sorted(loops.items())))
+            for row in failed_assets[:10]:
+                console.print(
+                    f"[yellow]  {row.get('assetPath')}: {row.get('reason')}[/yellow]", markup=True
+                )
+        problems = []
+        if staged.failures:
+            problems.append(f"{len(staged.failures)} unit(s) could not be staged")
+        if failed_assets:
+            problems.append(f"{len(failed_assets)} asset(s) failed to import")
+        if editor_failure is not None:
+            problems.append(str(editor_failure))
+        if problems:
+            raise RuntimeError("; ".join(problems))
+
+    # The stage is a file transform over the published units; the editor phase needs the engine
+    # and the work root, never the game install: the units are self-contained.
+    _execute(
+        _state(ctx),
+        "bake sounds",
         ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
         action,
         require_work=True,

@@ -20,6 +20,7 @@ def test_root_help_exposes_the_single_public_command_families() -> None:
         "export",
         "export_v2",
         "import",
+        "bake",
         "test",
         "run",
         "debug",
@@ -120,6 +121,26 @@ def test_import_help_names_every_import_lane() -> None:
     result = RUNNER.invoke(app, ["import", "--help"], env={"COLUMNS": "200"})
     assert result.exit_code == 0, result.output
     for command in IMPORT_COMMANDS:
+        assert command in result.output, command
+
+
+#: Every command the bake family registers. `bake` is the lane that authors `.uasset` content
+#: from published units with no loose corpus half at all -- `import` still names the lanes that
+#: deploy bytes into `Content/ElysiumCorpus`.
+BAKE_COMMANDS = ("map", "sounds")
+
+
+def test_bake_registers_exactly_the_asset_authoring_lanes() -> None:
+    from elysium_pipeline.cli import bake_app
+
+    registered = {command.name for command in bake_app.registered_commands}
+    assert registered == set(BAKE_COMMANDS)
+
+
+def test_bake_help_names_every_bake_lane() -> None:
+    result = RUNNER.invoke(app, ["bake", "--help"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0, result.output
+    for command in BAKE_COMMANDS:
         assert command in result.output, command
 
 

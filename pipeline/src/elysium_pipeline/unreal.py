@@ -370,6 +370,41 @@ def import_textures(config, runner, manifest_path, *, force: bool = False,
     )
 
 
+#: The whole sound corpus (10,892 units, ~11k waves, each an encode of the project codec on a
+#: cold DDC) through one editor process. Sized like the texture import for the same reason: cold
+#: DDC, first full run. A sample run finishes in a minute and never approaches it.
+SOUND_BAKE_TIMEOUT_SECONDS = 4 * 3600.0
+
+
+def bake_sounds(config, runner, manifest_path, *, force: bool = False) -> None:
+    """Run the editor phase of `bake sounds` over one staged manifest.
+
+    `pipeline/unreal/import_sounds.py` reads the manifest, imports each staged `.wav`/`.mp3` as a
+    `USoundWave`, applies the loop flag and the compression type, stamps the recipe and (on an
+    unscoped run) prunes. Per-asset reuse is the commandlet's own decision off the recipe stamp,
+    so a current corpus launches, reports every asset reused, and exits.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/import_sounds.py'}",
+            f"-ImportSounds={manifest_path}",
+            *(["-ImportForce=1"] if force else []),
+            "-AllowCommandletRendering",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=SOUND_BAKE_TIMEOUT_SECONDS,
+    )
+
+
 #: 63 physical materials through one editor process: no import, no build, no encode -- an object
 #: created, filled from a JSON sidecar and saved. The whole run is editor boot plus a second, so
 #: this is a short leash: anything past it is a hang, not a long run.
@@ -757,7 +792,6 @@ def bake_maps(
     *,
     force: bool = False,
     particles: bool = False,
-    light_store: bool = True,
     batch_size: int | None = None,
 ) -> None:
     """Bake the named maps, `batch_size` maps per editor process (the whole list when None).
@@ -765,14 +799,6 @@ def bake_maps(
     `particles` opts the map's Niagara authoring pass in; it is off by default because
     force-deleting a Niagara package the asset compiler still owns crashes the editor, and a
     launch without it leaves whatever particle packages the mount already carries untouched.
-
-    `light_store` is on by default and is the harvest/apply loop of
-    `pipeline/unreal/light_store.py`: a lighting pass saved into a baked level is read off it at
-    the top of every map and re-applied by the same bake. Clearing it is how a map that has been
-    hand-tuned is handed back to `UElysiumLightingSettings` -- delete the map's
-    `Content/ElysiumAuthored/Lighting/<map>.lights.json` and bake once with this off, which
-    re-derives the level; the next ordinary bake then harvests that derived level into a fresh
-    store.
 
     Editor start-up (module load, plugin init, registry scan) is the fixed cost per process, and
     it buys the only release that is certain: process exit. Between maps the commandlet now
@@ -839,7 +865,6 @@ def bake_maps(
                 f"-BakeMaps={','.join(batch)}",
                 *(["-BakeForce=1"] if force else []),
                 *(["-BakeParticles=1"] if particles else []),
-                *([] if light_store else ["-NoLightStore=1"]),
                 "-AllowCommandletRendering",
                 "-unattended",
                 "-nosplash",

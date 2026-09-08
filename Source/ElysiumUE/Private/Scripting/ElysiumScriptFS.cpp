@@ -32,13 +32,17 @@ namespace
 	// Sandbox-relative tree prefix -> the mirror directory it is served from. Ordered: the first
 	// match wins, so `vdata/signs/` must precede `vdata/`.
 	//
-	// Most mounts are the trees the offline pipeline mirrors under Root(). Three are not:
-	// `vdata/`, `dlg/` and `sound/` serve from FElysiumContentPaths (VdataDir/DlgDir/SoundDir),
-	// the export_v2 capsule import onto CorpusRoot.
-	// `dlg/` and `sound/` matter here for the same reason `vdata/` did: the runtime's own readers
-	// (`DlgFromDialogname`, `SoundFile`) already resolve through the corpus, so a script that
-	// probes `fileutil.isFile("dlg/...")` to gate a line — vamputil.py:1039 does exactly that —
-	// must see the same bytes the conversation will load. One path, one byte source.
+	// Most mounts are the trees the offline pipeline mirrors under Root(). Two are not: `vdata/`
+	// and `dlg/` serve from FElysiumContentPaths (VdataDir/DlgDir), the export_v2 capsule import
+	// onto CorpusRoot.
+	// `dlg/` matters here for the same reason `vdata/` did: the runtime's own reader
+	// (`DlgFromDialogname`) already resolves through the corpus, so a script that probes
+	// `fileutil.isFile("dlg/...")` to gate a line — vamputil.py:1039 does exactly that — must see
+	// the same bytes the conversation will load. One path, one byte source.
+	// `sound/` is NOT mounted: audio is baked asset content now (AUD1.2), and no shipped script
+	// opens a file under `sound/` — every `sound`-ish name in the 36 loose scripts is an entity
+	// name handed to `Find()`, not a path. A script that asked for one would get the sandbox's
+	// "no such file", which is what it would get from a VtMB install with the VPKs unmounted.
 	// `vdata/signs/` stays on Root()'s legacy `signs/` mirror, not yet migrated. `python/` lands on
 	// out/scripts because that is where UE_extract_scripts.py puts VtMB's `Vampire/python/` tree;
 	// VtMB's own `Vampire/scripts/` (kb_act.lst and the Valve script files) is a different tree and
@@ -56,7 +60,6 @@ namespace
 		T.Emplace(TEXT("vdata/"),       FElysiumContentPaths::VdataDir());
 		T.Emplace(TEXT("python/"),      Root / TEXT("scripts"));
 		T.Emplace(TEXT("dlg/"),         FElysiumContentPaths::DlgDir());
-		T.Emplace(TEXT("sound/"),       FElysiumContentPaths::SoundDir());
 		return T;
 	}
 
