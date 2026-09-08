@@ -226,8 +226,7 @@ the balanced contribution, not an I/O pulse and not a request to hide the player
 Removal, disable, and save/load while a combat character remains inside a modifier volume require
 focused live acceptance. Static code proves ordinary paired enter/leave and generic touch-list
 teardown rules, but does not yet prove which edge rebuilds or releases this specialized contribution
-across every abnormal teardown. The implementation uses an overlap lease keyed by trigger/contact,
-so a tested teardown policy can be attached without changing the aggregate contract.
+across every abnormal teardown.
 
 ## HUD observability is not authority
 
@@ -390,16 +389,11 @@ thing: the attacker drives the paired animation. `CBaseCineCam::SetShot`'s `Grap
 `GrappleAttacker` anchor keywords read the same pair (see `docs/vtmb/camera-view-modes.md`), which is
 why the `Stealth_Kill_1..4` shots in `vdata/camerashots/stealth_kill.txt` frame the right body.
 
-**The scripted camera is a consumer of this pair, and the port's is too (2026-09-07).**
-`stealth_kill.txt` anchors on `GrappleAttacker` ×6 and `GrappleVictim` ×2 — the only file in the whole
-66-file shot corpus that writes either keyword — and each resolves to *the partner* or to *the subject
-itself* purely off `m_GrappleRole`. In the port the pair is `FElysiumGrappleState` on
-`FElysiumCombatCharacter` (`Public/ElysiumPlayer.h`), written only by
-`EnterGrappleState` / `LeaveGrappleState` (and their two-party `EnterGrapplePair` / `LeaveGrapplePair`
-wrappers) in `Private/Substrate/ElysiumCombatCharacter.cpp`; the camera anchor resolve in
-`Private/Player/ElysiumCameraShots.cpp` reads it. **A stealth-kill system that sets any other state
-will leave those four shots framing the world origin**, because the anchor arms fall through to
-`World` the moment the partner handle is not live. The feed path already enters the pair as mode 0.
+**The scripted camera is a consumer of this pair (2026-09-07).** `stealth_kill.txt` anchors on
+`GrappleAttacker` ×6 and `GrappleVictim` ×2 — the only file in the whole 66-file shot corpus that
+writes either keyword — and each resolves to *the partner* or to *the subject itself* purely off
+`m_GrappleRole`. The anchor arms fall through to `World` the moment the partner handle is not live,
+so those four shots frame the world origin for any pair state other than this one.
 
 **Writers — exactly three.**
 

@@ -673,7 +673,7 @@ the paired partner at `+0x1538` resolving and the paired role at `+0x153c` being
 half - and calls `OnFeedAnimEvent` from the authored record. The vtable slots are named:
 `+0x57c` is `CBaseCombatCharacter::FeedBegin` `0x10339d90` and `+0x584` is
 `CBaseCombatCharacter::FeedInterrupt` `0x1033a9e0`. Full recovery:
-`docs/vtmb/animation_events.md` -> "Port status - combat character band".
+`docs/vtmb/animation_events.md` -> "The combat-character band".
 
 **The phase scheduler is kept as the FALLBACK, not removed.** `feeding.md`'s own recreation
 contract requires engage -> bite -> loop -> release to run with nothing rendered, and that is

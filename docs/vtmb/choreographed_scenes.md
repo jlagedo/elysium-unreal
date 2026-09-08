@@ -125,10 +125,21 @@ snap off
 `FUN_1007ab40` (event), `FUN_1007b7b0` (actor) and their siblings recognise a token set
 inherited from Valve's Faceposer. Scanning all 5,444 files, these are recognised and
 **never used**: `tags`, `absolutetags`, `relativetag`, `flextimingtags`, `flexanimations`,
-`resumecondition`, `loopcount`, `yaw`, `targethead`, `mapname`, `ramp`, and the flex-track
+`resumecondition`, `loopcount`, `pitch`, `yaw`, `targethead`, `mapname`, `ramp`, and the flex-track
 modifiers `range`, `combo`, `disabled`, `samples_use_time`. A reimplementation only needs
 the live subset: `actor`, `channel`, `event`, `time`, `param`, `param2`, `fixedlength`,
 `sequenceduration`, `event_ramp`, `bonerename`, `faceposermodel`, `active`, `fps`, `snap`.
+
+**`targethead` is the one unauthored token with a live consumer** *(recovered 2026-09-07)*. It is
+`CChoreoEvent::m_bTargetHead` at **`+0x33c`**, a byte: the constructor `FUN_10075aa0` seeds it to
+**1**, `SetTargetHead` `FUN_10075ce0` is the parser's only writer (token literal `0x10547ca4`, read
+as an int and stored as `!= 0`), and `GetTargetHead` `FUN_10075cc0` has exactly one reader — the
+`cameramove` arm. The writer `CChoreoScene::FileSaveEvent` `0x1007c600` emits `targethead "%d"`
+**only when the event type is `0x10`**, exactly as `loopcount` is emitted only for `loop`, so in the
+grammar it is a cameramove-only token. Its meaning is fixed by its consumer,
+`CBaseCombatCharacter::SetAsCameraTarget(cc, bHead, fade)`: **`1` = aim at the head/look point**
+(`CalcLookData`), **`0` = aim at `WorldSpaceCenter`** — the same pair as the entity inputs
+`SetHeadAsCameraTarget` / `SetBodyAsCameraTarget`.
 
 ## Event types
 
@@ -153,9 +164,9 @@ for anything else:
 | 13 | `SILENCE` | `silence` | **12,089** | handed to the actor (see below) |
 | 14 | `LOUD` | `loud` | **9,809** | handed to the actor |
 | 15 | `PYTHON` | `python` | **2** | handed to the actor |
-| 16 | `CAMERAMOVE` | `cameramove` | 0 | resolve `param`/`param2` as entities and push both at every client |
+| 16 | `CAMERAMOVE` | `cameramove` | 0 | resolve `param`/`param2` as entities and push both at every client (see below) |
 | 17 | `CAMERASHOT` | `camerashot` | 0 | **no handler** — the jump table sends it to the unknown-type branch |
-| 18 | `CAMERARESTORE` | `camerarestore` | 0 | return the camera to player control, at every client |
+| 18 | `CAMERARESTORE` | `camerarestore` | 0 | `RestoreCamera(p, GetDuration())` `FUN_1017d6d0` at every client, and nothing else |
 | 19 | `BODYSOUND` | `bodysound` | **1** | emit `param` at the actor on sound channel 4; `param2` = dB, default 80, floored at 75 |
 
 Types 13–15 (`SILENCE`, `LOUD`, `PYTHON`) share one dispatch arm at `0x1008320e`: gated on a
@@ -213,6 +224,53 @@ the default arm that re-reads the type and prints `Unhandled event type: %d`. `S
 handlers but zero authored uses; VtMB's cinematics move the camera with
 `camera_keyframe` + `PlayAsCameraPosition`/`PlayAsCameraTarget` entities instead
 (`docs/vtmb/game_runtime.md`).
+
+### The three camera events, exactly *(recovered 2026-09-07)*
+
+```c
+case 0x10:  // CAMERAMOVE
+  p1 = event->GetParameters();                                   // 10075c50
+  viewEnt = *p1 ? this->FindNamedEntity(p1) : NULL;              // vfunc +0x430
+  p2 = event->GetParameters2();  tgtEnt = NULL;                  // 10075ca0
+  if (*p2) {
+      tgtEnt = this->FindNamedEntity(p2);
+      cc = tgtEnt ? (CBaseCombatCharacter *)tgtEnt->+0x9c : NULL;
+      if (cc) { SetAsCameraTarget(cc, event->GetTargetHead(), event->GetDuration());  // 103322e0
+                tgtEnt = NULL; }                                 // consumed — NOT broadcast below
+  }
+  for (i = 1; i <= maxClients; i++) { p = UTIL_PlayerByIndex(i); if (!p) continue;
+      if (viewEnt) SetCameraViewEntity  (p, viewEnt, event->GetDuration());   // FUN_1017d280
+      if (tgtEnt)  SetCameraTargetEntity(p, tgtEnt,  event->GetDuration()); } // FUN_1017d460
+  return;
+
+case 0x12:  // CAMERARESTORE
+  for (i = 1; i <= maxClients; i++) { p = UTIL_PlayerByIndex(i); if (!p) continue;
+      RestoreCamera(p, event->GetDuration()); }                  // FUN_1017d6d0
+  return;
+```
+
+Three facts the shape hides:
+
+* **The crossfade is not a token.** `FUN_10076b30` is `CChoreoEvent::GetDuration()`:
+  `HasEndTime() ? m_flEndTime (+0x188) - m_flStartTime (+0x184) : 0.0f`, where `HasEndTime`
+  (`0x10075f30`) is `m_flEndTime != -1.0f`, the sentinel `0xbf800000` the constructor seeds. So a
+  camera event crossfades over **its own authored `time <start> <end>` length**, and an
+  instantaneous event (`end -1`) cuts. There is no `cameraTime` and no `fadetime`.
+* **The `param2` split is the subtlety.** A `param2` that resolves to a combat character goes
+  through `SetAsCameraTarget`, which writes `m_bCameraTargetIsHead` and `m_flCameraOverrideFadeTime`
+  on the *character* and broadcasts the target push with a crossfade argument of **0.0** — the
+  character's own field is then what raises it — and is suppressed from the loop. A `param2` that is
+  not a combat character is pushed directly with the event's duration.
+* **Only the VIEW setter cancels a cine camera.** `FUN_1017d280` opens with
+  `SetCineCamera(player, NULL)`; `FUN_1017d460` has no such call. The two are one channel, not two
+  (`docs/vtmb/camera-view-modes.md` → "The `camera_track` override channel").
+
+**The shipped corpus authors none of them.** A case-insensitive search for the substring `camera`
+across all 5,444 `.vcd` files returns **no matches at all** — no `cameramove`, no `camerashot`, no
+`camerarestore`, no `targethead`. The complete token census is `actor · channel · event · time ·
+param · param2 · fixedlength · event_ramp · sequenceduration · bonerename · active · fps · snap ·
+faceposermodel`. Camera work in VtMB is authored through `vdata/camerashots/*.txt` and the map's
+camera entities, never through choreo; these arms are live code with no shipped caller.
 
 ### `speak` — audio resolution is `.mp3`-first
 
@@ -556,16 +614,11 @@ no receiver (§ `!playercontroller` in `docs/vtmb/entity_io.md`). Therefore the 
 scripted camera or a body double is not evidence that the real pawn is immobilised; that state must
 be recovered from the particular scene, map wiring or script.
 
-**The lock exists in the port (2026-09-07).** `camera_cinematic`'s `StartShot` calls
-`FElysiumPlayer::SetImmobilized(true)` and its `EndShot` clears it on the same frame, joining the
-terminal and `events_player.ImmobilizePlayer` on the one latch every consumer reads (`IsMobile()` —
-the controller's move gate and `UpdatePlayerWeaponFrame`). `EndShot` additionally clears the two
-`m_iVFlags` locks it never took — `EElysiumViewFlags::MoveAnglesFromEntity` and `ViewAngleLock`,
-retail's `+0x1d60` bits `0x1` and `0x8` — because retail's `FUN_10070990` is copying the terminal /
-sign / monitor *closer*, not the symmetric partner of its own opener
-(`docs/vtmb/camera-view-modes.md` → "`player+0x1d60` is `CBasePlayer::m_iVFlags`"). Script `SetCamera`
-still does not immobilize, and neither does a `camera_track` or a controller double, so the sentence
-above stands: the presence of a scripted camera is not evidence the pawn is locked — the *entity* is.
+**`EndShot` clears more than its own opener took** *(recovered 2026-09-07)*. Besides releasing
+`m_bIsImmobilized`, `FUN_10070990` clears the two `m_iVFlags` locks `StartShot` never raised —
+`player+0x1d60` bits `0x1` and `0x8` — because it is copying the terminal / sign / monitor *closer*
+rather than being the symmetric partner of its own opener
+(`docs/vtmb/camera-view-modes.md` → "`player+0x1d60` is `CBasePlayer::m_iVFlags`").
 
 ### The effect bit a scripted jump raises
 

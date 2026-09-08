@@ -859,6 +859,70 @@ The edge-friction *trace* still runs (its result feeds `surfaceFriction`), but t
 best statement of Troika's intended tuning and are what a port with no player
 animation should use — they are simply wired to nothing in the retail build.
 
+## What `SetupMove` does besides the wish
+
+`CPlayerMove::SetupMove` `0x10186120` fills `CMoveData` from the command, and three of the fields it
+fills are not the wish at all.
+
+### The immobilize button mask is `0x807`, and `IN_USE` is not in it
+
+```c
+mv->m_nButtons (+0x24) = cmd->buttons (+0x30);
+if (!IsMobile(player)) mv->m_nButtons &= ~DAT_10589050;      // FUN_1015ef20: player+0x19f7 == 0
+```
+
+`DAT_10589050`, read out of the PE at that address, is **`0x807`** =
+`IN_ATTACK | IN_JUMP | IN_DUCK | IN_ATTACK2`. Four bits, and both omissions are deliberate:
+
+* **`IN_USE` is not masked.** Every shipped opener that immobilizes — `CBaseTerminal::vfunc39`
+  `0x102181a0`, `CPropSign::vfunc39` `0x10211db0`, `CGameSign`'s `FUN_10212810`,
+  `CTriggerBombSite::vfunc39` `0x102113c0`, `CTriggerElectricBugaloo::vfunc39` `0x10231640` —
+  immobilizes the player *for* an interaction he is holding `+use` on. Masking `IN_USE` would make
+  the interaction unendable. **An immobilized player can still press use.**
+* **The direction bits are not masked either.** They are made inert instead, by the same function's
+  other gate: `if (!(GetFlags() & FL_FROZEN 0x40) && IsMobile()) { forward/side/up from the command
+  or from root motion } else { forward = side = up = 0; }`.
+
+`+wpn_secondaryatk` is a VtMB verb of its own and is not `IN_ATTACK2`, so it is outside the mask.
+
+### `CMoveData::m_vecAngles` (`+0x58`) is the body-angle writeback
+
+Not the frame the mover resolves forward/side against — that is `m_vecViewAngles` (`+0x0c`), which
+`CGameMovement::PlayerMove` (`client.dll 0x100edd80`) hands to
+`AngleVectors(mv + 0x0c, &m_vecForward, &m_vecRight, &m_vecUp)`. `+0x58`'s only consumer is
+`CPlayerMove::FinishMove` `0x10186c10`, which clamps its pitch to ±90, pushes that pitch into the
+`body_pitch` pose parameter, and calls `SetLocalAngles(mv->m_vecAngles)` (slot `+0x100`).
+
+`SetupMove` seeds it every tick, unconditionally, as **the entity's own angles with the yaw replaced
+by `m_angEyeAngles.y`** (`0x10186458`–`0x1018647d`) — the third-person body's yaw follows the eye,
+its pitch and roll are written back untouched. At the tail one arm can re-take all three from
+`GetAngles()`, which turns the writeback into a no-op and leaves the body's yaw where its poser put
+it. That arm is entered when a grapple partner is live (**always**, whatever the activity), and
+otherwise when `m_iVFlags & 0x1` is set. The complete recovery, the nine exempt `ACT_*_RELEASE`
+activities and the partner arm's origin glue are in
+`docs/vtmb/camera-view-modes.md` § "What `SetupMove` actually substitutes for each lock".
+
+The wish direction is untouched by either lock, because neither writes `m_vecViewAngles`.
+
+### The grapple glue
+
+With a live partner and an ideal activity outside the nine release verbs, `SetupMove` re-origins the
+move onto the partner every tick and zeroes the velocity:
+
+```c
+mv->m_vecAbsOrigin (+0x70)  = partner->GetOrigin();
+mv->m_vecAbsOrigin.z       -= (player->OBBMins().z - partner->OBBMins().z);
+mv->m_vecVelocity  (+0x40)  = vec3_origin;
+```
+
+`FinishMove` writes both back (`SetLocalOrigin`, `SetAbsVelocity`), so this is a hard per-tick glue
+and **not** a movement gate: it runs whether or not `m_iVFlags & 0x1` is set, and it — not the flag —
+is what makes a grappled player immobile. Co-locating the two bodies is what a paired grapple clip
+needs; the two clips carry the separation.
+
+**Not yet recovered.** This is only the player half of the grapple placement; the victim-side
+`CheckAndTranslateGrapplePosition` translation is still unrecovered.
+
 ## The melee lock drives the move from the clip
 
 The tables above are the ordinary path: the client writes an animation speed into the command and

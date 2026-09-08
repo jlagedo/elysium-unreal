@@ -62,12 +62,10 @@ regression — P9's slice acceptance becomes a CI run. *Deps:* 11.6, 2.7, 2.9.
 
 The whole scripted-camera subsystem — `camera_cinematic` / `CBaseCineCam`, `C_BaseCineCamera`, the
 `CInput` override channel, the view-composition chain, the dialogue / script / anim-event / terminal
-drivers and the draw gates — has its own consolidated design note,
-[`docs/project/camera_scripted.md`](../camera_scripted.md). It carries the nine dependency-ordered
-slices SC1–SC9, the thirteen recovery tasks in the five groups RG-A–RG-E, the per-behaviour gap
-ledger re-verified against HEAD, the modernization register M1–M13 with the default each proceeds
-under, the rulings on every retail behaviour that is unreachable on shipped content, and the
-acceptance ladder (per-slice Substrate tests, the content-tier grammar over all 66 shot files, five
-Play-tier witnesses, then owner-piloted live checks). The raw decompiles are at
-`$ELYSIUM_WORK_ROOT/_camera_recovery/`. Status for every slice and recovery group lives in
-`docs/project/roadmap.md`, one row each, linked to that note's anchors.
+drivers and the draw gates — has its own **open-items note**,
+[`docs/project/camera_scripted.md`](../camera_scripted.md). It carries the subsystem's scope, the
+owner's ruled modernization register M1–M16, and what is still open: the recovery rows that fall
+outside the camera boundary, the owner actions, and the test seams a future witness needs. The
+recovered retail facts are in `docs/vtmb/camera-view-modes.md` and its sibling `docs/vtmb/` files;
+the raw decompiles are at `$ELYSIUM_WORK_ROOT/_camera_recovery/`. Status lives in
+`docs/project/roadmap.md`.

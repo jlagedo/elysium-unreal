@@ -239,7 +239,7 @@ Ranged fire is the whole range `3030..3044`; melee contact is `{3001} ∪ {3030.
 | 4100 / 4101 / 4102 | — | attach `"%s.mdl"` from options as the follow model / detach it / attach the **gendered** `"%s_%s.mdl"` | 28 / 5 / 36 |
 | 4150 … 4155 | — | `Interesting_places/<gender>/<opt>.wav` on channel 4 or 2, plus their stop verbs and a second slot each | 10, 2, 2, 0, 2, 0 |
 
-4100/4102's model paths are recovered and baked by the ornament lane below (`pipeline/src/elysium_pipeline/ornament_models.py`, `DA_OrnamentModels`).
+4100/4102's model paths are recovered in "Ornament models (4100/4102)" below.
 
 ### 5001 … 5120 — the client band
 
@@ -286,7 +286,7 @@ hands a `const char*` to the handler; every handler parses its own.
 | `sscanf("%d %d")` | 6001–6004 |
 | `strstr(";")` + split | **5118 only** |
 | raw sound/sentence name | 1004, 1005, 1008, 2005, 4150–4155, 5004, 5005 |
-| raw discipline name | 4020 (`FUN_101e3e70`, see "Port status - combat character band") |
+| raw discipline name | 4020 (`FUN_101e3e70`, see "The combat-character band" below) |
 | raw model path | 4100, 4102 (4101 reads no options) |
 | raw bone name | 2070, 2071 |
 | raw activity/sequence name | 2042, 2044, 5105 |
@@ -325,14 +325,6 @@ timeline lives on the descriptor.
 The one thing it does not carry beside the events is the sequence's `flags & 1` (`STUDIO_LOOPING`),
 which the wrap rule needs — and which is already read in the same walk.
 
-## Against this repo's runtime
-
-`Source/ElysiumUE/Private/Substrate/ElysiumAnimEvents.cpp` implements `[Lo, Hi)` with
-`Lo = LastCycle` and `Hi = Cycle` — the **catch-up** reading, with no look-ahead. Its wrap is
-`[Last, 1)` then `[0, Cycle)`, which covers the same interval as retail's but **shifted 0.1 s
-later**. Its server-band ceiling matches retail's 5000. The comment calling it "the recovered
-comparison verbatim" is true of the shape and false on the upper operand.
-
 ## Provenance
 
 Read from `vampire.dll` and `client.dll` via the RE corpus under `ELYSIUM_WORK_ROOT`. Shipped counts
@@ -355,7 +347,7 @@ table anywhere:
 The options string is used verbatim: retail never strips an extension it already carries. The
 shipped 4102 option `models/scenery/misc/wineglass/wineglass.mdl` therefore really asks for
 `models/scenery/misc/wineglass/wineglass.mdl_male.mdl`, and the Unofficial Patch ships exactly
-that file — so the typo is load-bearing and the port reproduces it rather than repairing it.
+that file — so the typo is load-bearing.
 
 The 100 shipped requests (28 × 4100, 36 × 4102 × 2 genders) name **16** paths. 15 resolve to a
 published model unit; `models/items/walkie_talkie.mdl` — asked for by
@@ -363,38 +355,29 @@ published model unit; `models/items/walkie_talkie.mdl` — asked for by
 (`Unofficial_Patch` included) and is retained as an explicit source gap, because retail's own
 spawn answers nothing there too.
 
-`pipeline/src/elysium_pipeline/ornament_models.py` recovers the demand from the published V2
-model corpus and `/ElysiumBaked/Models/_Corpus/DA_OrnamentModels` carries the join; see
-`docs/architecture/seam_map_model.md` -> "Ornament models (4100/4102)".
+## The combat-character band — `CBaseCombatCharacter::HandleAnimEvent` `0x1032e330`
 
-## Port status - combat character band
+The handler runs in retail's own order: the weapon forward, then the switch, then
+`CBaseAnimating::HandleAnimEvent` as `default:`. The `sprintf` recovery is the section above.
 
-`FElysiumCombatCharacter::HandleAnimEvent`
-(`Source/ElysiumUE/Private/Substrate/ElysiumCombatCharacter.cpp`) is now the whole of
-`CBaseCombatCharacter::HandleAnimEvent` `0x1032e330`, in retail's own order: the weapon forward,
-then the switch, then `CBaseAnimating::HandleAnimEvent` as `default:`. The `sprintf` recovery is
-the section above; this one is the runtime half.
-
-**The NPC footfall band is a different handler and a different document.** `2050`–`2053` reach
-`CAI_BaseNPC::HandleAnimEvent` `0x10274e30`, not the combat-character switch, so their port status
-lives in [footsteps.md](footsteps.md) §1.8 (where each retail input lives in the port) and in the status section
-of `docs/architecture/footstep-architecture.md` (what landed, by file). The content proof that the
-records reach this runtime at all is `Elysium.Content.FootstepEventCensus`.
+**The NPC footfall band is a different handler.** `2050`–`2053` reach
+`CAI_BaseNPC::HandleAnimEvent` `0x10274e30`, not the combat-character switch; that chain is
+recovered in [footsteps.md](footsteps.md).
 
 **A guard that fails is not the same as an id nothing owns.** Retail's `0xfa6`/`0xfa7` arms `break`
 to `LAB_1032e630` - the epilogue - not to the base handler (`1032e5b0` jumps straight to
 `1032e630`). So a feed boundary on a character in no pair is *swallowed*: no
-`DevWarning("Unhandled animation event")`, and in the port no census row. Every arm below therefore
-answers **claimed**, and a refusal is a Verbose line on the handler instead.
+`DevWarning("Unhandled animation event")`. Every arm below is therefore **claimed** whether or not
+its guard passes.
 
-| code | retail | port | status |
-|---:|---|---|---|
-| 4006 | `+0x584` = `CBaseCombatCharacter::FeedInterrupt` `0x1033a9e0` | `OnFeedAnimEvent(EventFeedTeardown)` | **real** |
-| 4007 | `+0x57c` = `CBaseCombatCharacter::FeedBegin` `0x10339d90`, called with the partner | `OnFeedAnimEvent(EventFeedBegin)` | **real** |
-| 4020 | `FUN_101e3e70(&DAT_10739a4c, this, options)` - a **discipline callback hit** | claimed, warns once per name | **mocked** |
-| 4100 | remove, then `"%s.mdl"` -> `FUN_10190e50` | `IElysiumEmbodiment::AttachOrnamentModel` | **real** |
-| 4101 | remove, handle = `0xffffffff` | `DetachOrnamentModel` | **real** |
-| 4102 | remove, then `"%s_%s.mdl"` with the gender word | `AttachOrnamentModel` | **real** |
+| code | retail |
+|---:|---|
+| 4006 | `+0x584` = `CBaseCombatCharacter::FeedInterrupt` `0x1033a9e0` |
+| 4007 | `+0x57c` = `CBaseCombatCharacter::FeedBegin` `0x10339d90`, called with the partner |
+| 4020 | `FUN_101e3e70(&DAT_10739a4c, this, options)` - a **discipline callback hit** |
+| 4100 | remove, then `"%s.mdl"` -> `FUN_10190e50` |
+| 4101 | remove, handle = `0xffffffff` |
+| 4102 | remove, then `"%s_%s.mdl"` with the gender word |
 
 The two vtable slots are named, not inferred: slot 351 (`+0x57c`) is `FeedBegin` and slot 353
 (`+0x584`) is `FeedInterrupt` across all 254 classes that fill them.
@@ -406,15 +389,12 @@ both require the partner to resolve **and** the role to be `0`. The `0xfa6` arm 
 excludes `role == 1` up front (`1032e5a9`). Role 1 is the victim half - which is why only attacker
 clips carry these records, and why a victim's complementary clip firing one would still do nothing.
 
-`FeedBegin` refuses while `m_hFeedTarget` (`+0x149c`) is already set, and that guard is ported as
-`FeedState.IsTransacting()`. It is what makes a boundary that reaches the transaction twice
-**inert** rather than a second transaction.
+`FeedBegin` refuses while `m_hFeedTarget` (`+0x149c`) is already set. That guard is what makes a
+boundary that reaches the transaction twice **inert** rather than a second transaction.
 
 `0x153c` is the paired ROLE and `0x1540` the paired MODE: `FeedBegin`'s own entry guard is
 `(0x153c == -1 || 0x1540 != 8)`, and mode 8 is zombie feeding (`docs/vtmb/feeding.md`); `-1` is
-"unpaired". The port has no grapple router, so `FElysiumFeedState::Peer` stands for `0x1538` and
-`FElysiumFeedState::bVictim` for `0x153c`. There is no port spelling of `0x1540` yet, because only
-paired mode 0 is built.
+"unpaired".
 
 ### The removal order is load-bearing
 
@@ -431,54 +411,17 @@ name, spawn, and if `GetModelPtr` comes back null ->
 (`0x100a0670`), `SetOwnerEntity(character)`, movetype none, `Relink`.
 
 `IsMale` (`0x10336920`) reads the character's own stat list at slot `0xb` - the Gender attribute -
-and answers true on exactly `1`. `FElysiumSheet::IsMale` is that same slot.
-
-### What the runtime builds
-
-- The slot is `FElysiumCombatCharacter::AnimFollowModel`, an `FString` holding the formatted path.
-  Retail's field is an EHANDLE to an entity; the port's ornament is a component the visual seam
-  owns, so the shadow of the handle is the path. Empty is retail's `0xffffffff`. Not saved: retail's
-  handle is a live entity reference, and the next 4102 the running clip fires re-establishes it.
-- The seam is `IElysiumEmbodiment::AttachOrnamentModel(Body, RetailPath)` /
-  `DetachOrnamentModel(Body)`, keyed by the BODY like every other embodiment call, so the player and
-  every NPC take one path: `AElysiumMapActor` -> `UElysiumEntityBodies` -> `ElysiumNpcVisual`.
-  `RetailPath` is the formatted path lowercased, which is also the catalogue key. The shipped
-  options are mixed case (`models/items/Cigarette/Cigarette`,
-  `models/scenery/misc/SprayCan/SprayCan`); the fold is hygiene rather than correctness, because
-  `TMap<FString, ...>` hashes case-insensitively and a mixed-case key would resolve anyway - it is
-  done once, at the format, so the catalogue and the raw options can never be mistaken for one
-  another in a diff.
-- The component is a `USkeletalMeshComponent` tagged `ElysiumOrnamentModel` plus a second
-  `ElysiumOrnamentPath:<path>` tag, attached to the body with `SetLeaderPoseComponent(Body)`,
-  `NoCollision` and `ElysiumLightStyle::StampUnstyled` - the 13-bone `Bip01` merge rigs evaluate no
-  pose of their own, so this is exactly the wield-model leader case. It is swept on re-issue, on
-  4101, and on player-body teardown (`AElysiumMapActor::ClearPlayerVisual`), which is the same
-  ownership trap `SweepWieldModels` documents: the component belongs to the OWNING ACTOR and only
-  attaches to the body.
-- The rows are made resident with the map's other native model contexts by
-  `FElysiumPreparedOrnamentModels`, world-keyed like the wield scope. Residency, not on-demand
-  loading: the request arrives from an animation event, mid-frame, with nowhere to wait for a
-  stream.
-- A path with no catalogue row is mocked rather than fatal - one Warning per path, and the slot
-  stays empty, which is exactly the state retail's own failure tail leaves behind.
+and answers true on exactly `1`.
 
 ### Named modernization - an unchanged re-issue is a no-op
 
 `cigarette_Idle` and `cigarette_Inhale` both carry 4102 at cycle 0, so a smoking body re-issues the
-same path on every loop wrap (roughly 0.5 Hz). Retail destroys and re-creates the entity each time.
-`ElysiumNpcVisual::InstallOrnamentModel` instead returns early when a LIVE component on this body
-already carries the same path tag **and is still led by this body**, avoiding a skeletal component
-and render-proxy rebuild twice a second per smoking body for no observable difference. The leader
-test is what makes a re-modelled body rebuild: `FElysiumAnimating::OnRuntimeModelChanged` carries
-every attach child onto the new body, so a carried ornament arrives with the right tag and a
-destroyed leader. **The substrate issues one seam call per record, not two**: the handler resets
-the slot and calls `AttachOrnamentModel`, whose contract is replace (remove first, unconditionally,
-then create) — a separate `DetachOrnamentModel` ahead of it would sweep the component before the
-guard could see it and make the modernization unreachable. 4101, an empty option, a bodiless
-character and a failed create all still end with nothing worn and the slot empty, which is
-`1032e4ce`.
+same path on every loop wrap (roughly 0.5 Hz), and retail destroys and re-creates the entity each
+time. **Ruling: a re-issue of the path already worn is a no-op** — the visible result is identical,
+and the destroy/create churn is not reproduced. Every other path (4101, an empty option, a bodiless
+character, a failed create) still ends with nothing worn and the slot empty, which is `1032e4ce`.
 
-### What remains unrecovered
+### 4020 and the foreign-source clause
 
 - **4020.** `FUN_101e3e70` resolves `options` to a discipline through the manager at `0x10739a4c`
   (`0x101e1590` name to id, `0x101e1870` id to bit), tests the character's own discipline mask at
@@ -486,64 +429,43 @@ character and a failed create all still end with nothing worn and the slot empty
   announces itself `DevMsg(3, "Discipline<%s> CallbackHit", name)`. The level block is chosen from
   the character's own rating (`0x1033d380` state, `0x1033d410` level). **It is not a sound**: the
   options table above lists it under its own "raw discipline name" row, and "named effect" in the
-  code table is right. The port commits a discipline from `FElysiumDisciplineState`'s own path
-  rather than from the cast clip's timeline, so routing this id there is a *re-timing* of an
-  existing commit and would double-apply until that path stands down for it. The arm claims the id
-  and reports once per name; the one shipped record is `Thaumaturgy_Purge` (Blood Purge).
+  code table is right. The one shipped record is `Thaumaturgy_Purge` (Blood Purge).
 - **The foreign-source clause.** Retail also forwards to the weapon when `pEvent->pSource != this`,
-  whatever the id (`1032e39f`). `FElysiumAnimEvent` carries no source, because every timeline this
-  runtime walks is the body's own.
-- **`+0x1540`, the paired MODE**, per the feed note above.
+  whatever the id (`1032e39f`).
 
-### Tests
+### What the shared male `misc` bank carries
 
-`Elysium.Substrate.OrnamentAnimEvents` (the format rule and all six arms against the recording
-double), `Elysium.Substrate.FeedBoundaryAnimEvents` (retail's partner/role guards, the swallow, and
-`FeedBegin`'s own re-entry refusal), `Elysium.Content.OrnamentAnimEventRecords` (the male `misc`
-bank's real timelines, end to end to the catalogue key) and
-`Elysium.Content.Catalogues.OrnamentKeys` (the doubled-extension key and the recorded absence).
+32 records over `Cards_*` (4100), `cellphone_*` (4102 at cycle 0 and a 4101 at 0.6667 in
+`cellphone_outof` - the slot's whole life inside one clip), `cigarette_*` (4102), `Drink_*` (4102),
+`Graffiti_*` (4100) and the six `party_*`/`wine_drink` wineglass records (4102). `cigarette_Into`
+carries 4102 at cycle `0.0029` with options `models/items/Cigarette/Cigarette`, which formats to
+`models/items/cigarette/cigarette_male.mdl`.
 
-`OrnamentAnimEventRecords` enumerates what the shared male `misc` bank actually carries: 32 records
-over `Cards_*` (4100), `cellphone_*` (4102 at cycle 0 and a 4101 at 0.6667 in `cellphone_outof` -
-the slot's whole life inside one clip), `cigarette_*` (4102), `Drink_*` (4102), `Graffiti_*` (4100)
-and the six `party_*`/`wine_drink` wineglass records (4102). `cigarette_Into` carries 4102 at cycle
-`0.0029` with options `models/items/Cigarette/Cigarette`, which the runtime formats to the catalogue
-key `models/items/cigarette/cigarette_male.mdl`.
+## The NPC footstep band (2050-2053) — `CAI_BaseNPC::HandleAnimEvent` `0x10274e30`
 
-## Port status - NPC footstep band (2050-2053)
+The chain behind the four footfall ids is `0x1026d460`, recovered in full in
+[footsteps.md](footsteps.md) §1.
 
-`FElysiumNpc::HandleAnimEvent` (`Source/ElysiumUE/Private/Substrate/ElysiumNpc.cpp`) claims the four
-footfall ids and nothing else of `CAI_BaseNPC::HandleAnimEvent` `0x10274e30` yet. The chain behind
-them is `0x1026d460`, recovered in full in [footsteps.md](footsteps.md) §1 and ported per §1.9.
+| code | retail |
+|---:|---|
+| 2050 | `0x1026d460(this, 0)` - walk footfall, "normal" |
+| 2051 | `0x1026d460(this, 0)` - the same arm; the foot is discarded |
+| 2052 | `0x1026d460(this, 1)` - run footfall, "heavy" |
+| 2053 | `0x1026d460(this, 1)` |
 
-| code | retail | port | status |
-|---:|---|---|---|
-| 2050 | `0x1026d460(this, 0)` - walk footfall, "normal" | `NpcStep(2050, bHeavy=false)` | **real** |
-| 2051 | `0x1026d460(this, 0)` - the same arm; the foot is discarded | `NpcStep(2051, false)` | **real** |
-| 2052 | `0x1026d460(this, 1)` - run footfall, "heavy" | `NpcStep(2052, bHeavy=true)` | **real** |
-| 2053 | `0x1026d460(this, 1)` | `NpcStep(2053, true)` | **real** |
-
-**All four answer claimed on every arm**, the same rule the combat-character band above states:
+**All four are claimed on every arm**, the same rule the combat-character band above states:
 `0x1026d460` returns from each early exit - the player gate, the null `surfacedata_t`, the empty
-sound name - and never reaches `CBaseAnimating::HandleAnimEvent`. A footfall the port decided to
-make no sound for is therefore handled, not unclaimed, and must not appear on the census.
+sound name - and never reaches `CBaseAnimating::HandleAnimEvent`. A footfall that makes no sound is
+still handled, not unclaimed.
 
-The species overrides on the same virtual (`CNPC_VMingXiao` `0x10392a70`, `CNPC_VHengeyokai`
-`0x1037fb60`, `CNPC_VTzimisceHeadClaw` `0x103c1540`, `CNPC_VTzimisceRunner` `0x103c32c0`) landed as
-a classname-keyed policy table read by `FElysiumNpc::OverrideFootstep` before the shared chain runs.
-`npc_VTzimisceRunner` is the only one of those classnames this port registers; its wav pools play
-and the two shake rows report their unbuilt `UTIL_ScreenShake` once each
+The same virtual is overridden per species: `CNPC_VMingXiao` `0x10392a70`, `CNPC_VHengeyokai`
+`0x1037fb60`, `CNPC_VTzimisceHeadClaw` `0x103c1540`, `CNPC_VTzimisceRunner` `0x103c32c0`
 ([footsteps.md](footsteps.md) §4.1).
 
-**The rest of `0x10274e30`'s switch is not claimed here.** 1003, 2021/2022, 2040, 2070/2071 and
-4150-4155 still fall through to `FElysiumCombatCharacter::HandleAnimEvent` and then to the census,
-which is what keeps them on the work list.
+**The rest of `0x10274e30`'s switch — 1003, 2021/2022, 2040, 2070/2071 and 4150-4155 — falls
+through to `CBaseCombatCharacter::HandleAnimEvent`.**
 
-Tests: `Elysium.Substrate.Footsteps.{NpcNormal, NpcHeavy, NpcCvarPath, NpcMuted, NpcNoSurface,
-NpcNoPool, CoinFlip, SpeciesPolicy}` (the chain against the recording double) and
-`Elysium.Content.FootstepRecords` (the baked shared male banks' own 2050-2053 timelines).
-
-`FootstepRecords` reads six shared male banks and finds **72 walk records and 74 run records over 37
+Six shared male banks carry **72 walk records and 74 run records over 37
 run clips** - the same 37 the table above counts. Every clip carrying `2052`/`2053` is a `*_run`, and
 every one of their cycles is one of the four recovered values: the `move_and_ranged` family authors
 `2052 @ 1/3` with `2053 @ 8/9`, and the `claws`/`frenzy` family authors `2052 @ 7/9` with
@@ -553,16 +475,14 @@ every one of their cycles is one of the four recovered values: the `move_and_ran
 **A `*_run` label does not imply the heavy pair.** The four `panic_run*` clips in the shared male
 `misc` bank carry `2050`/`2051` at `0.3889` / `0.8889` - the walk ids on a running clip - so the
 walk/run split is what the ANIMATOR authored per record, and the handler reads the record and never
-the label. The implication that holds, and the one the test asserts, is the other direction: a clip
-carrying `2052`/`2053` is always a `*_run`.
+the label. The implication that holds is the other direction: a clip carrying `2052`/`2053` is
+always a `*_run`.
 
-## Port status - the scripted-camera band (4050/4051)
+## The scripted-camera band (4050/4051) — `CBasePlayer::HandleAnimEvent` `0x10178a10`
 
-`FElysiumPlayer::HandleAnimEvent`
-(`Source/ElysiumUE/Private/Substrate/ElysiumPlayerEntity.cpp`) carries the two ids
-`CBasePlayer::HandleAnimEvent` `0x10178a10` owns. They are **the player's own handler**, not the
-combat-character switch: `CBasePlayer` overrides the virtual, handles `0xfd2`, `0xfd3` and `0x80c`
-itself, and delegates everything else to `CBaseCombatCharacter::HandleAnimEvent`.
+4050 and 4051 are **the player's own handler**, not the combat-character switch: `CBasePlayer`
+overrides the virtual, handles `0xfd2`, `0xfd3` and `0x80c` itself, and delegates everything else to
+`CBaseCombatCharacter::HandleAnimEvent`.
 
 **The handler opens with a gate, and the base call is inside it.**
 `if (!this->IsObserver() && event->owner == this) { ...the whole switch, default included... }` — so
@@ -570,18 +490,20 @@ an event that fails the gate reaches no handler at all and produces no
 `DevWarning("Unhandled animation event")`. `IsObserver` is `vfunc +0x658` / `FUN_1015ee60`, reading
 `m_bIsObserver` `+0x19f6`; the byte's only two writers (`FUN_1015ee80`, `FUN_1015eea0`) are
 reachable solely through thunks nothing calls, so **it is false everywhere in the shipped game** and
-the gate is a constant pass. It is ported as the named predicate `FElysiumPlayer::IsObserver()` over
-a `bObserver` field with no producer — for exactly the reason retail's has none. `event->owner ==
-this` is structural in the port: the dispatcher hands a record to the entity whose clip carries it.
+the gate is a constant pass. `event->owner == this` holds for every timeline an entity walks itself.
 
-| code | retail | port | status |
-|---:|---|---|---|
-| 4050 | `options` is the shot **base name**; `FUN_10070550(options)` creates a disposable `camera_cinematic` and runs `CBaseCineCam::FindBestShot` `FUN_1006e4c0` over `<base>_1`, `<base>_2`, …; on success `cam->m_bDrawPlayer = 1`, `FUN_1017cef0(this, cam)` (adopt), `cam->m_bForcePlayerLook = 0` | `FElysiumCameraCinematic::CreateFindBestShotCamera` -> `FindBestShot`, then `bDrawPlayerBody = true`, `FElysiumEntityWorld::SetCineCamera`, `bForcePlayerLook = false` | **real** |
-| 4051 | `FUN_1017cef0(this, NULL)` — drop **and destroy**, because 4050's camera carries the disposable bit — then `AngleVectors(GetAngles())`, `fwd.z = 0`, normalize, `FUN_10178590(this, EyePosition() + fwd * 1000.0f)` | `ClearScriptedCamera()`, then `LookAtWorldPoint(EyePosition() + flattenedForward * 1000 u)` through the same pending-eye-angle pair `point_player` uses | **real** |
+**4050.** `options` is the shot **base name**. `FUN_10070550(options)` creates a disposable
+`camera_cinematic` and runs `CBaseCineCam::FindBestShot` `FUN_1006e4c0` over `<base>_1`, `<base>_2`,
+…; on success `cam->m_bDrawPlayer = 1`, then `FUN_1017cef0(this, cam)` (adopt), then
+`cam->m_bForcePlayerLook = 0`, in that order.
 
-Both arms answer **claimed** on every path, including the two refusals retail also swallows: an empty
-`options` on 4050 (`name && *name`) and a `FindBestShot` that finds no candidate. Neither id may
-appear on the census any more.
+**4051.** `FUN_1017cef0(this, NULL)` — drop **and destroy**, because 4050's camera carries the
+disposable bit — then `AngleVectors(GetAngles())`, `fwd.z = 0`, normalize,
+`FUN_10178590(this, EyePosition() + fwd * 1000.0f)`, through the same pending-eye-angle pair
+`point_player` uses.
+
+Both arms are **claimed** on every path, including the two refusals retail swallows: an empty
+`options` on 4050 (`name && *name`) and a `FindBestShot` that finds no candidate.
 
 **Neither event immobilizes.** `FUN_1015ef40` is not on either path — only `StartShot`
 (`FUN_10070780`) and `StartPlayerDialog` `0x10178280` freeze the player — and 4051 does not mobilize
@@ -595,8 +517,3 @@ constant.
 
 The 40 shipped 4050 records and 40 shipped 4051 records are the stealth-kill clips, and
 `vdata/camerashots/stealth_kill.txt`'s `Stealth_Kill_1..4` is the `"%s_%d"` family they name.
-
-Tests: `Elysium.Substrate.CameraFindBestShot` — the enumeration's first-gap terminator, both
-predicates (including "a candidate whose only obstruction is the subject is admitted"), the seeded
-uniform pick, both events, "neither immobilizes", and the whole chain over `stealth_kill.txt`
-verbatim with both grapple roles live.

@@ -577,23 +577,17 @@ falls back to the player's own eye). Nothing on the entry path touches exposure,
 any `mat_` cvar (`xposure` matches no string in any module): the port's exposure clamp is a named
 modernization with no retail counterpart.
 
-**The terminal has no camera handle of its own (M8, ruled 2026-09-07).** It used to
-keep the `Hacking` shot's director id on the entity (`ElysiumTerminal.h`, pushed at the entry and
-popped at the exit) *beside* `FElysiumEntityWorld`'s scripted-camera slot, on the reading that retail
-stores its `camera_cinematic` on the player rather than in the script slot. Retail stores it in
+**The terminal has no camera handle of its own (M8, ruled 2026-09-07).** Retail stores it in
 exactly **one** place: `CFuncMonitor::vfunc39`, `CPropHacking::vfunc39`, `CPropKeypad::vfunc39` and
 the `Intrusion` opener `FUN_10225070` all reach `FUN_10070470` and then `FUN_1017cef0` — the same
 one-camera slot `SetCamera` and `camera_cinematic`'s `StartShot` reach, with the same
 destroy-the-previous rule. "Which camera is live" is a *transition*, and it cannot be arbitrated by a
 second stack.
 
-So the terminal now adopts through `FElysiumEntityWorld::SetCineCamera` and its closer runs
-`ClearScriptedCamera()` — unconditional, exactly as retail's `FUN_1017cef0(player, NULL)` is; the
-terminal does not test whether the camera it is dropping is the one it pushed. Two consequences are
-contract: **a terminal opened over a live cine shot destroys that shot's disposable camera**, and **a
-terminal closer drops to the player view**, never back to a shot that was live before the session
-opened. Asserted by `Elysium.Substrate.CameraCinematic`
-(`Private/Tests/ElysiumCameraCinematicTests.cpp`, the adoption-slot case).
+`FUN_1017cef0(player, NULL)` on the exit path is unconditional: the closer does not test whether the
+camera it drops is the one its own opener pushed. Two consequences are contract: **a terminal opened
+over a live cine shot destroys that shot's disposable camera**, and **a terminal closer drops to the
+player view**, never back to a shot that was live before the session opened.
 
 `CPropHacking` exit `0x1021a6c0`:
 
@@ -1485,11 +1479,60 @@ same-tick — the same exit shape §7.3 already records for the terminal.
 already open (`m_LastRoll (+0x780) >= 3`), when someone else holds `+0x8c`, when a linked door is
 mid-move, and — after the key check — when `requires_key` is set or the player has no
 `item_g_lockpick`. Slot 36 (`FUN_10224ca0`) hardcodes that classname. Slot 37 (`FUN_10224eb0`)
-returns `80.0`. Slots 40 and 43 share one body, `FUN_10224440`, which places the player at the lock:
-it reads the model's **`camera_position`** and **`camera_target`** attachments, traces for headroom
-(`"%d %s no solid ground over lock"`, `"%d %s too close to solid geometry"`), teleports the player and
-faces him at the lock; when either attachment is missing it prints `"%s : %s not set up correctly to
-b…"` and falls back to the lock's and the player's world-space centres.
+returns `80.0`. Slots 40 and 43 share one body, `FUN_10224440`.
+
+**Slot 37 selects an arm; it does not break the session off** (corrected 2026-09-07, from the
+listing of `FUN_10167e00`). The maintenance arm reads
+
+```c
+maxDist = ent->vfunc37();                                  // 80.0
+if (maxDist <= |eye.x - clamped.x| + |eye.y - clamped.y|)   // MANHATTAN, XY, against the entity box
+     ent->vfunc43(player);                                  // FAR  -> reposition
+else {
+     req = ent->vfunc36();                                  // "item_g_lockpick"
+     if (!req || activeWeapon->classname == req) ent->vfunc41(player);          // roll
+     else if (Inventory_Find(req)) { player->vfunc(0x724)(req); ent->vfunc40(player); }  // equip, reposition
+}
+```
+
+so straying past 80 units pulls the player back in. Slot 32 (`FUN_10224ae0`) carries **no distance
+arm at all**, and it is the only per-tick gate `CBasePlayer::PlayerUse` can release a session on — so
+nothing about distance ever ends a lock session.
+
+**`FUN_10224440`, line by line** (constants read out of `.rdata`):
+
+```c
+if (!GetAttachment01(this, "camera_position", &pos) ||
+    !GetAttachment01(this, "camera_target",   &tgt)) {
+    DevMsg("%s (%s) not set up correctly to be a doorknob!\n");     // 105b256c
+    pos = this->WorldSpaceCenter();  tgt = player->WorldSpaceCenter();
+}
+dir   = VectorNormalize((pos - tgt) with z := 0);
+stand = this->GetAbsOrigin() + dir * 31.0;                          // _DAT_1048c35c = 31.0
+Ray_t::Init(stand, stand - (0,0,1024.0));                           // _DAT_1045d650 = 1024.0
+TraceRay(ray, MASK_PLAYERSOLID 0x201400b, CTraceFilterSimple(player, 0), &tr);
+if (tr.startsolid)    { DevWarning("(%d)%s too close to solid geometry to pick!\n");        return; }
+if (tr.fraction == 1) { DevWarning("(%d)%s no solid ground over lockpick position!\n");     return; }
+Ray_t::Init(player->GetAbsOrigin(), tr.endpos, playerMins, playerMaxs);
+TraceRay(ray, 0x201400b, CTraceFilterSimple(player, COLLISION_GROUP_PLAYER_MOVEMENT=3), &tr);
+UTIL_SetOrigin(player, tr.endpos, /*bFireTriggers*/ false);         // 100043cc, unconditional
+player->LookAtEntity(this, /*bUseWorldSpaceCenter*/ false);         // slot 306, 10178660
+```
+
+Note which attachment does what: **`camera_position` is the origin of the standing axis and
+`camera_target` its far end**, and the 31 units are measured from the ENTITY's abs origin, not from
+either attachment. Both refusals leave the player exactly where he was. The final facing is
+`LookAtEntity(this, false)`, which for a lock (no combat-character look data at `+0x98`) resolves
+through slot 193 — and `CPropDoorknob::vfunc193` `FUN_102243c0` is *"the `camera_position`
+attachment, else `WorldSpaceCenter()`"*, so the facing depends on `camera_position` **alone** even
+when the pair fell back.
+
+**Slot 41, `FUN_102252f0`,** is two things in one body: the per-tick half — `FUN_10178590(player,
+this->WorldSpaceCenter())`, the eye-angle snap, plus the lockpick weapon's own tick and the HUD
+progress byte `+0x816` — and the timed roll, which fires when `FUN_1020b040`
+(`interval + m_flLastAttempt - curtime`) reaches zero and hands off to `FUN_10224fa0`: the shared
+`FUN_1020b090` roll, `CWeaponLockpick`'s result callback `FUN_103f4fe0`, and `FUN_10167fd0`
+(EndInteractiveUse) once the lock has opened.
 
 **The shot.** `vdata/camerashots/special-case.txt`'s `Intrusion` block has **no `Start`** (so the
 camera eases in from wherever the view already is), `End` = `Named` / `Attachment: camera_position` /
@@ -1512,19 +1555,18 @@ appears on any of these classes. `OnSkillAttemptBegin` — the output the opener
 camera — is authored exactly four times, all `prop_doorknob` in `sp_giovanni_2a` / `sp_giovanni_2b`,
 wired to `Bruno_Event → Trigger`.
 
-**In the port.** `FElysiumLockableEntity` (`Private/Substrate/ElysiumLockable.{h,cpp}`) reproduces
-the I/O, the key path and the feat check, but **pushes no camera and applies no immobilize** —
-`PushCameraShotNamed` has exactly one caller in the module, `FElysiumTerminal::BeginPlayerUse`. The
-two missing steps land in `BeginPlayerUse` (`ElysiumLockable.cpp:169-206`, in the arm where
-`StartAttempt` succeeded, after the `OnUseBegin` output so the retail order holds: push the shot,
-`SetCineCamera`, *then* `SetImmobilized(true)`) and in `EndPlayerUse` (`:208-226`, after
-`FinishUseOutputs`: `ClearScriptedCamera()` then `SetImmobilized(false)`). `Shot == 0` must not
-refuse — retail runs `FUN_1017cef0(player, NULL)` and the attempt proceeds cameraless — and the
-`Intrusion` push takes **no** exposure clamp, since that clamp is the terminal glass's named
-Presentation modernization. Slots 37/40/43 have no port counterpart at all: the lock family has no
-`TickPlayerUse`, so neither the 80-unit break-off, the auto-equip of `item_g_lockpick`, nor the
-place-the-player-at-the-lock step exists, and the shot's two anchors share the latter's dependency on
-the lock model's `camera_position` / `camera_target` attachments surviving the bake.
+**Named divergences (owner call, 2026-09-07).** Three, all in the seams rather than in the logic:
+
+* the exposure clamp is the terminal glass's named Presentation modernization and does **not** extend
+  to the `Intrusion` adoption;
+* the ground probe runs on a brush-only use channel where retail uses `MASK_PLAYERSOLID`, so a
+  character standing on the lockpick spot blocks retail's probe and not this one;
+* the hull sweep flattens its end to the player's own Z, because this runtime's pawn root is the hull
+  centre where retail's abs origin is the feet. On level ground the last two agree with retail
+  exactly.
+
+**Open dependency.** The lock models' `camera_position` / `camera_target` attachments have to survive
+the bake: the shot's two anchors and the placement read the same pair.
 
 ## 16. Localized `Hacking_Strings` indices
 

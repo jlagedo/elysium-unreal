@@ -262,7 +262,7 @@ Substrate tier, recording services, no RHI:
 4. **L4 later.** Species overrides (§2.1 list), the 0.1 s event look-ahead (G3 in
    `plans/animation.md`) which shifts NPC steps relative to foot contact, terminal-session muting.
 
-Each lane ends with its tests, a "Port status" row in `docs/vtmb/animation_events.md`, and the
+Each lane ends with its tests, its retail band in `docs/vtmb/animation_events.md`, and the
 recovery in a new `docs/vtmb/footsteps.md` (this section 2, plus the L3 emission-site finding).
 
 ## 7. Decisions asked of the owner
