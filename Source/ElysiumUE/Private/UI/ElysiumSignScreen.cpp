@@ -2,10 +2,9 @@
 
 #include "UI/ElysiumActionButton.h"
 #include "UI/ElysiumUiArt.h"
+#include "UI/ElysiumUIStyle.h"
 
-#include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
-#include "Engine/GameViewportClient.h"
 #include "HAL/IConsoleManager.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Layout/SBorder.h"
@@ -60,12 +59,7 @@ void UElysiumSignScreen::ApplySign(const FElysiumSignData& InSign, float InAlpha
 
 float UElysiumSignScreen::VirtualScale() const
 {
-	FVector2D Size(1920.0f, 1080.0f);
-	if (GEngine && GEngine->GameViewport)
-	{
-		GEngine->GameViewport->GetViewportSize(Size);
-	}
-	return ElysiumSign::ScaleFor(static_cast<float>(Size.Y));
+	return ElysiumUI::ScaleFor(*this);
 }
 
 FText UElysiumSignScreen::BuildBodyText() const

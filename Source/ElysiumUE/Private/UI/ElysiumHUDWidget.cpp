@@ -7,8 +7,6 @@
 #include "UI/ElysiumUITexture.h"
 
 #include "CommonInputSubsystem.h"
-#include "Engine/Engine.h"
-#include "Engine/GameViewportClient.h"
 #include "Engine/Texture2D.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Images/SImage.h"
@@ -1031,12 +1029,7 @@ void UElysiumHUDWidget::ReleaseSlateResources(bool bReleaseChildren)
 
 float UElysiumHUDWidget::VirtualScale() const
 {
-	FVector2D Size(0, ElysiumUI::VirtualH);
-	if (GEngine && GEngine->GameViewport)
-	{
-		GEngine->GameViewport->GetViewportSize(Size);
-	}
-	return ElysiumUI::ScaleFor(Size.Y);
+	return ElysiumUI::ScaleFor(*this);
 }
 
 FText UElysiumHUDWidget::UseBindingText() const

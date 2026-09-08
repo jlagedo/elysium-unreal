@@ -5,6 +5,7 @@
 #include "UObject/StrongObjectPtr.h"
 
 class UFont;
+class UWidget;
 
 // The UI design-token layer. One place that owns the palette, the type ramp and the metric scale,
 // so every screen reads the same values instead of re-deriving them.
@@ -15,8 +16,8 @@ class UFont;
 // space and is multiplied by `ElysiumUI::ScaleFor(ScreenH)` at draw time, so the layout law the
 // RE recovered *is* the layout code and the UI is resolution-independent by construction.
 // Scaling is applied once, by an `SDPIScaler` at the root of each screen, rather than through
-// the engine's `UIScaleCurve` — the curve would have to restate the same ratio in an ini and
-// could then drift from the canvas the panels are authored against.
+// the engine's `UIScaleCurve`. The project pins that curve to 1 in `DefaultEngine.ini` so
+// `SGameLayerManager` is identity; `ScaleFor` is the only scale, in PIE and in `-game` alike.
 namespace ElysiumUI
 {
 	// VtMB's authored UI canvas. Height is the divisor because the UI is vertically anchored;
@@ -24,8 +25,14 @@ namespace ElysiumUI
 	inline constexpr float VirtualW = 1024.0f;
 	inline constexpr float VirtualH = 768.0f;
 
-	// Virtual units -> pixels. Mirrors ElysiumSign::ScaleFor so signs, menu and HUD share one law.
+	// Height of `Widget` in the space an `SDPIScaler` inside it paints. Prefers cached paint
+	// geometry so editor DPI cannot inflate the canvas; falls back to the game viewport in
+	// Slate units (pixels / window DPI) before the first layout.
+	float PaintHeight(const UWidget& Widget);
+
+	// Virtual units -> paint units. Mirrors ElysiumSign::ScaleFor so signs, menu and HUD share one law.
 	inline float ScaleFor(float ScreenH) { return (ScreenH > 0.0f) ? (ScreenH / VirtualH) : 1.0f; }
+	inline float ScaleFor(const UWidget& Widget) { return ScaleFor(PaintHeight(Widget)); }
 
 	// Read from the install's own `VampireScheme.res` (the scheme client.dll loads) and confirmed
 	// against reference captures. The chrome is gold; blood red is an accent reserved for the menu

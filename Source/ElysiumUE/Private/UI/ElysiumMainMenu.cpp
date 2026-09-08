@@ -12,8 +12,6 @@
 #include "UI/ElysiumUiArt.h"
 #include "UI/ElysiumUITexture.h"
 
-#include "Engine/Engine.h"
-#include "Engine/GameViewportClient.h"
 #include "Engine/Texture2D.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
@@ -116,12 +114,7 @@ UElysiumMainMenu::UElysiumMainMenu()
 
 float UElysiumMainMenu::VirtualScale() const
 {
-	FVector2D Size(1920.0f, 1080.0f);
-	if (GEngine && GEngine->GameViewport)
-	{
-		GEngine->GameViewport->GetViewportSize(Size);
-	}
-	return ElysiumUI::ScaleFor(static_cast<float>(Size.Y));
+	return ElysiumUI::ScaleFor(*this);
 }
 
 TArray<UElysiumMainMenu::FMenuEntry> UElysiumMainMenu::BuildItemSet() const

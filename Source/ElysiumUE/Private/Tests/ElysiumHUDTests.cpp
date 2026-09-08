@@ -25,6 +25,7 @@
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Engine/UserInterfaceSettings.h"
 #include "HAL/FileManager.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
@@ -1310,6 +1311,20 @@ bool FElysiumUIScalingAndDialogueInputTest::RunTest(const FString& Parameters)
 		ElysiumUI::ScaleFor(2160.0f), 2160.0f / ElysiumUI::VirtualH);
 	TestEqual(TEXT("4K HUD metrics are exactly twice Full HD metrics"),
 		ElysiumUI::ScaleFor(2160.0f) / ElysiumUI::ScaleFor(1080.0f), 2.0f);
+
+	const UUserInterfaceSettings* UISettings = GetDefault<UUserInterfaceSettings>();
+	TestNotNull(TEXT("UserInterfaceSettings CDO is available"), UISettings);
+	if (UISettings)
+	{
+		for (const FIntPoint Size : { FIntPoint(1280, 720), FIntPoint(1600, 900),
+			FIntPoint(1920, 1080), FIntPoint(2560, 1440), FIntPoint(3840, 2160) })
+		{
+			TestEqual(*FString::Printf(
+				TEXT("engine UIScaleCurve is identity at %dx%d so ScaleFor is the only scale"),
+				Size.X, Size.Y),
+				UISettings->GetDPIScaleBasedOnSize(Size), 1.0f);
+		}
+	}
 
 	// The response band is authored from the retail framing, then kept resolution-independent by
 	// the shared virtual-canvas scale. All supported acceptance resolutions are 16:9, so both

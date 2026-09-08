@@ -2,8 +2,6 @@
 
 #include "UI/ElysiumUIStyle.h"
 
-#include "Engine/Engine.h"
-#include "Engine/GameViewportClient.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SDPIScaler.h"
@@ -199,12 +197,7 @@ void UElysiumNotificationScreen::ReleaseSlateResources(bool bReleaseChildren)
 
 float UElysiumNotificationScreen::VirtualScale() const
 {
-	FVector2D Size(1920.0f, 1080.0f);
-	if (GEngine && GEngine->GameViewport)
-	{
-		GEngine->GameViewport->GetViewportSize(Size);
-	}
-	return ElysiumUI::ScaleFor(Size.Y);
+	return ElysiumUI::ScaleFor(*this);
 }
 
 void UElysiumNotificationScreen::ApplyAnimationState()

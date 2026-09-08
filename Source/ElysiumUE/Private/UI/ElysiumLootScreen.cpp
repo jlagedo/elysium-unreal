@@ -1,9 +1,8 @@
 #include "UI/ElysiumLootScreen.h"
 
 #include "UI/ElysiumActionButton.h"
+#include "UI/ElysiumUIStyle.h"
 
-#include "Engine/Engine.h"
-#include "Engine/GameViewportClient.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -42,12 +41,7 @@ void UElysiumLootScreen::ApplyLoot(const FElysiumLootView& InLoot)
 
 float UElysiumLootScreen::VirtualScale() const
 {
-	FVector2D Size(1920.0f, 1080.0f);
-	if (GEngine && GEngine->GameViewport)
-	{
-		GEngine->GameViewport->GetViewportSize(Size);
-	}
-	return FMath::Clamp(static_cast<float>(Size.Y) / 1080.0f, 0.75f, 2.0f);
+	return FMath::Clamp(ElysiumUI::PaintHeight(*this) / 1080.0f, 0.75f, 2.0f);
 }
 
 TSharedRef<SWidget> UElysiumLootScreen::BuildActionVisual(UElysiumActionButton& Action,

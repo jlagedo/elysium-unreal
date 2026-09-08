@@ -4,8 +4,6 @@
 #include "UI/ElysiumActionButton.h"
 #include "UI/ElysiumUIStyle.h"
 
-#include "Engine/Engine.h"
-#include "Engine/GameViewportClient.h"
 #include "Widgets/Layout/SDPIScaler.h"
 #include "Widgets/Text/STextBlock.h"
 
@@ -223,10 +221,5 @@ TSharedRef<SWidget> UElysiumDialogueScreen::BuildChoiceAction(int32 Choice,
 
 float UElysiumDialogueScreen::VirtualScale() const
 {
-	FVector2D Size(1920.0f, 1080.0f);
-	if (GEngine && GEngine->GameViewport)
-	{
-		GEngine->GameViewport->GetViewportSize(Size);
-	}
-	return ElysiumUI::ScaleFor(static_cast<float>(Size.Y));
+	return ElysiumUI::ScaleFor(*this);
 }

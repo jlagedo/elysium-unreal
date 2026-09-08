@@ -1,8 +1,11 @@
 #include "UI/ElysiumUIStyle.h"
 
 #include "ElysiumContentPaths.h"
+#include "Components/Widget.h"
+#include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "Engine/FontFace.h"
+#include "Engine/GameViewportClient.h"
 #include "Fonts/CompositeFont.h"
 #include "Styling/CoreStyle.h"
 #include "UObject/Package.h"
@@ -90,6 +93,36 @@ namespace
 
 namespace ElysiumUI
 {
+	float PaintHeight(const UWidget& Widget)
+	{
+		const float LocalH = static_cast<float>(Widget.GetCachedGeometry().GetLocalSize().Y);
+		if (LocalH > 0.0f)
+		{
+			return LocalH;
+		}
+
+		FVector2D Size(1920.0f, 1080.0f);
+		UGameViewportClient* ViewportClient = nullptr;
+		if (const UWorld* World = Widget.GetWorld())
+		{
+			ViewportClient = World->GetGameViewport();
+		}
+		if (!ViewportClient && GEngine)
+		{
+			ViewportClient = GEngine->GameViewport;
+		}
+		if (ViewportClient)
+		{
+			ViewportClient->GetViewportSize(Size);
+			const float Dpi = ViewportClient->GetDPIScale();
+			if (Dpi > KINDA_SMALL_NUMBER)
+			{
+				Size.Y /= Dpi;
+			}
+		}
+		return static_cast<float>(Size.Y);
+	}
+
 	const FElysiumTerminalPalette& TerminalPalette(int32 ColorScheme)
 	{
 		// One record per authored `colorscheme`, in the order retail's four records sit in at
