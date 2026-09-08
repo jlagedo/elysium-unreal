@@ -939,6 +939,6 @@ bool FElysiumStealthSaveTest::RunTest(const FString&)
 // The real `vdata/system/stealth.txt`. Self-skips when no export corpus is mounted.
 // =====================================================================================
 
-bool }   // namespace ElysiumStealthTests
+}   // namespace ElysiumStealthTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

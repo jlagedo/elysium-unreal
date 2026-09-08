@@ -441,6 +441,6 @@ bool FElysiumFeedBoundaryAnimEventTest::RunTest(const FString&)
 	return true;
 }
 
-bool }
+}
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

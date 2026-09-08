@@ -4105,7 +4105,7 @@ namespace
 // reads are really what the export carries; the graph asset-kind matrix is a property of what the
 // bake wrote, and the character verifier owns it.
 
-bool // The two pickers. Retail collects an activity's candidates once and hands the array to
+// The two pickers. Retail collects an activity's candidates once and hands the array to
 // one of two functions: `SelectWeightedSequence` (`vampire.dll 0x1008dc40` -> `FUN_10427fc0`) draws
 // by authored `actweight`, and `SelectHeaviestSequence` (`0x1008dd30` -> `FUN_104280f0`) keeps the
 // largest. Which one answers is latched per commit by entity flag `0x40000000`

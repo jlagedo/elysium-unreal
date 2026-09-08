@@ -1303,7 +1303,7 @@ bool FElysiumCameraCinematicTest::RunTest(const FString&)
 	return true;
 }
 
-bool // ------------------------------------------------------------------------------------------------
+// ------------------------------------------------------------------------------------------------
 // `camera_animated` — `CCameraAnimated`'s sequence path (`StartCamera` `0x10071550`,
 // `FUN_10071770`, the think `FUN_10071840`, `EndCamera` `0x10071660`), recovered in
 // `$ELYSIUM_WORK_ROOT/_camera_recovery/rc_group_f.md` §RC15.3.

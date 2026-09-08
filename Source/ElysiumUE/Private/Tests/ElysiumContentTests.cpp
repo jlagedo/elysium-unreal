@@ -259,12 +259,12 @@ namespace
 // sp_tutorial_1 — the canonical vertical slice.
 
 
-bool // Genesis's routing premises. These are deliberately content assertions rather than a hand-built
+// Genesis's routing premises. These are deliberately content assertions rather than a hand-built
 // duplicate: if the exporter drops the trigger, rewrites its wire, or moves the spawn out of it,
 // New Game must fail here before the live route silently stops opening the wizard.
 
 
-bool // Every exported ChangeNow output must resolve through the real trigger_changelevel registry.
+// Every exported ChangeNow output must resolve through the real trigger_changelevel registry.
 // The 88-wire count was measured on the 23-map bench of docs/vtmb/exported-map-event-surface.md,
 // so it is counted over exactly those maps by name: the export root now reaches all 108 maps of
 // the patch-first install and a corpus-wide literal would go stale on every widening. The bench
@@ -272,23 +272,23 @@ bool // Every exported ChangeNow output must resolve through the real trigger_ch
 // from their own map and so cannot be classified by target.
 
 
-bool // sm_pawnshop_1 — the cross-map travel destination. Confirms it parses and offers a
+// sm_pawnshop_1 — the cross-map travel destination. Confirms it parses and offers a
 // landmark to travel to (the P4.6 precondition), without standing up a live travel.
 
 
-bool // Decals — the `<map>.decals` projector sidecar. Validates that every line is a
+// Decals — the `<map>.decals` projector sidecar. Validates that every line is a
 // well-formed projector (unit normal, positive extents) and that its material resolves in
 // the shared `<map>.mtl`, so the bake always finds a texture for each ADecalActor it places.
 
 
-bool // Ropes — the `<map>.ropes` cable sidecar. Validates that every segment is a well-formed
+// Ropes — the `<map>.ropes` cable sidecar. Validates that every segment is a well-formed
 // cable (distinct endpoints, positive width, non-negative slack, a node count inside VtMB's
 // [2, 10] ROPE_MAX_SEGMENTS bound) and that its `vtmb:material:` id resolves to an imported
 // `MI_` package under /ElysiumBaked/Materials (R6.5), so the runtime's BuildRopes always finds
 // the instance for each UCableComponent. The tutorial strings its telephone lines this way.
 
 
-bool bool bool // 7.5 — the reflection channel is bound BY NAME from two places (pipeline/unreal/make_world_materials.py
+// 7.5 — the reflection channel is bound BY NAME from two places (pipeline/unreal/make_world_materials.py
 // authors it, pipeline/unreal/bake_map.py binds it onto each baked instance on an unconverted map;
 // the runtime builder that used to be the third retired at R6.5). A rename that misses one of them
 // binds nothing and fails silently in the frame, so the contract is asserted here instead: every
@@ -514,12 +514,12 @@ bool FElysiumRefractMasterTest::RunTest(const FString&)
 // that the branch machine can drive Jack's beat from entry to the `G.Tut_Jack = 1` action and END.
 
 
-bool // The captured Sheriff transaction depends on a small authored join spanning touch, controller
+// The captured Sheriff transaction depends on a small authored join spanning touch, controller
 // locomotion, camera tracks, and three particle attachment shapes. Pin that join against the user's
 // exported map so a patch/corpus drift cannot silently turn the focused runtime tests into fiction.
 
 
-bool // scripted_sequence × the NPC clip manifest — every animation a cutscene beat names must
+// scripted_sequence × the NPC clip manifest — every animation a cutscene beat names must
 // resolve in the vocabulary the offline export gives that NPC. This is the seam that breaks
 // silently: a clip lives in a shared animation bank pulled through the studiohdr include DAG, so
 // an exporter change that drops a bank turns a beat into a no-op with only a runtime warning.
@@ -529,7 +529,7 @@ bool // scripted_sequence × the NPC clip manifest — every animation a cutscen
 // from the NPC manifest this test audits and is excluded here.
 
 
-bool // The player bodies × the character export — every `.mdl` the clan table names as a PC
+// The player bodies × the character export — every `.mdl` the clan table names as a PC
 // body has a glb on disk. No entity on any map references a player model, so the export seeds
 // this half of the set from `vdata/system/clandoc000.txt` itself; this asserts the two have not
 // drifted, which is the whole reason the seed is the rulebook and not a hand-written list.
@@ -538,12 +538,12 @@ bool // The player bodies × the character export — every `.mdl` the clan tabl
 // resolving to 56 distinct models (each clan's top two slots repeat its tier-3 suit).
 
 
-bool // 12.1 opening content: the authored camera graphs are closed acyclic chains, the six embrace
+// 12.1 opening content: the authored camera graphs are closed acyclic chains, the six embrace
 // props resolve through npc_index v4 with every clip their wires request, and the player material
 // keeps the masked/dithered ModelAlpha contract the scripted-camera body path depends on.
 
 
-bool bool bool IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedPropMaterialUsageTest,
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedPropMaterialUsageTest,
 	"Elysium.Policy.PlacedPropMaterialUsage", GElysiumPolicyTestFlags)
 bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 {
@@ -570,12 +570,12 @@ bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 	return true;
 }
 
-bool bool bool bool bool // Freeze/thaw a real map's `.ents` world — the content
+// Freeze/thaw a real map's `.ents` world — the content
 // tier. The substrate tier proves the mechanism on three synthetic entities; this proves
 // it against the shapes the shipped data actually holds — 1,000+ records, every registered
 // classname, real output tables, the runtime-spawned player. Self-skips with no export.
 
-bool // The rulebook — every `vdata/system/` table the RPG layer reads, against the real
+// The rulebook — every `vdata/system/` table the RPG layer reads, against the real
 // exported files. Two kinds of assertion, and the second is the point of the test:
 //
 //   * **shape** — the row counts, so a re-export that drops or duplicates rows is a failure
@@ -589,7 +589,7 @@ bool // The rulebook — every `vdata/system/` table the RPG layer reads, agains
 // where a data revision is plausible.
 
 
-bool // 9.6 — `dicerolls.txt` against the real file, and the resolver over what it loaded.
+// 9.6 — `dicerolls.txt` against the real file, and the resolver over what it loaded.
 //
 // The claim under test is that the shipped weighting tables are a plain uniform d10, which is what
 // makes the resolver's fail-open fallback faithful rather than an approximation. A patched install
@@ -599,7 +599,7 @@ bool // 9.6 — `dicerolls.txt` against the real file, and the resolver over wha
 // The algorithm itself is pinned content-free in `Elysium.Substrate.Dice`.
 
 
-bool // `sound_volume_table.txt` against the real file — the authored half of NPC hearing.
+// `sound_volume_table.txt` against the real file — the authored half of NPC hearing.
 //
 // Two claims: the four documented levels still carry the radii and occlusion policy
 // `docs/vtmb/npc-ai-reverse-engineering.md` records, and every category this runtime's producers
@@ -610,7 +610,7 @@ bool // `sound_volume_table.txt` against the real file — the authored half of 
 // The bus's own resolution rules are pinned content-free in `Elysium.Substrate.GameSound.Resolve`.
 
 
-bool // The character sheet against the real rulebook — the audit that keeps the compiled slot table
+// The character sheet against the real rulebook — the audit that keeps the compiled slot table
 // honest.
 //
 // `ElysiumSheetSlots.h` freezes the layout in C++ because VtMB freezes it in `vampire.dll`; the
@@ -618,27 +618,27 @@ bool // The character sheet against the real rulebook — the audit that keeps t
 // compiled slot and asserts the file names the same trait at the same index.
 
 
-bool // The sheet's arithmetic against the real rulebook — the halves the content-free tier
+// The sheet's arithmetic against the real rulebook — the halves the content-free tier
 // cannot reach: the trait-effect layer resolved out of `traiteffects000.txt`, the feat evaluator
 // over the shipped 23 feats, and the award values in `experience_table.txt`.
 
 
-bool // Quests against the real catalogue — what the content-free tier's hand-built fixture
+// Quests against the real catalogue — what the content-free tier's hand-built fixture
 // cannot answer: that the shipped 161 `AwardXP` keys are actually REACHABLE through the state
 // change that owes them, not merely present in the file. The entity-side award walk itself
 // (give-once, Experience_Modifier, the remainder-keeping /100) is `Elysium.Content.SheetMath`'s.
 
 
-bool // Chargen over the real rulebook — the pools a clan produces and the baseline it stands on.
+// Chargen over the real rulebook — the pools a clan produces and the baseline it stands on.
 
 
-bool // The blink cadence the eye pass schedules from. The table authors the key under two
+// The blink cadence the eye pass schedules from. The table authors the key under two
 // spellings — `"Min Blink Interval"` on four rows and `"MinBlinkInterval"` on six — and reading only
 // one is a silent fallback to the defaults rather than a parse error, which is exactly the shape of
 // bug this tier exists to catch: the two rows that carry a cadence other than 2.5/6.0 are both
 // spelled the second way.
 
-bool bool IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMouseInputAssetsContentTest,
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMouseInputAssetsContentTest,
 	"Elysium.Policy.MouseInputAssets", GElysiumPolicyTestFlags)
 
 bool FElysiumMouseInputAssetsContentTest::RunTest(const FString&)
@@ -1275,7 +1275,7 @@ namespace
 // reports the actuals through AddInfo when they disagree with the recorded numbers.
 
 
-bool // B6 — the tutorial's authored feeding wires, against the real `sp_tutorial_1.ents`.
+// B6 — the tutorial's authored feeding wires, against the real `sp_tutorial_1.ents`.
 //
 // `blueblood_maker.Spawn` creates the child; feeding the child has to reach the MAKER-authored
 // `OnFedUponBegin` / `OnFedUponEnd` rows (`docs/vtmb/sp_tutorial_1-event-surface.md` §11.2), which
@@ -1326,7 +1326,7 @@ namespace
 	}
 }
 
-bool // A hub door stays selectable through the transition volume it stands in.
+// A hub door stays selectable through the transition volume it stands in.
 //
 // sm_hub_1's exits are wired `OnFullyOpen -> <Teleport>.ChangeNow`, and the `trigger_changelevel`
 // is authored across the doorway approach — so the player's eye is inside that volume whenever
@@ -1335,4 +1335,4 @@ bool // A hub door stays selectable through the transition volume it stands in.
 // ever be selected. Both bodies are built from the map's own exported hulls at their own relative
 // placement, carried rigidly in front of the test pawn.
 
-bool #endif // WITH_DEV_AUTOMATION_TESTS
+#endif // WITH_DEV_AUTOMATION_TESTS

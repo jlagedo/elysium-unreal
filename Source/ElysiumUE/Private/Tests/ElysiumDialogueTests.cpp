@@ -1892,8 +1892,8 @@ bool FElysiumDlgStartingLineTest::RunTest(const FString&)
 
 
 #if defined(ELYSIUM_WITH_CPYTHON) && ELYSIUM_WITH_CPYTHON
-bool #endif // ELYSIUM_WITH_CPYTHON
+#endif // ELYSIUM_WITH_CPYTHON
 
-bool } // namespace ElysiumDialogueTests
+} // namespace ElysiumDialogueTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

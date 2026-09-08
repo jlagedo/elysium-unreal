@@ -909,7 +909,7 @@ bool FElysiumEyeLidTest::RunTest(const FString&)
 // is the check that would otherwise only exist in a running game: the anim-curve route from the
 // proxy's Evaluate to a morph weight is silent when it fails.
 
-bool // The Faceposer weight table — the reader, against a hand-written fixture.
+// The Faceposer weight table — the reader, against a hand-written fixture.
 
 //
 // The one thing this format lets a reader get wrong while still producing a plausible face is
@@ -1398,7 +1398,7 @@ bool FElysiumSceneJawTest::RunTest(const FString&)
 // An unresolvable reference here is a finding about the export or the map data, not a case to skip,
 // so each one is reported by name.
 
-bool // The amplitude jaw against the real export: every envelope, and the face it has to reach.
+// The amplitude jaw against the real export: every envelope, and the face it has to reach.
 
 //
 // Two joins, over every map-placed choreo scene the export resolves. For a `silence`/`loud` event:
@@ -1411,7 +1411,7 @@ bool // The amplitude jaw against the real export: every envelope, and the face 
 // asserts about it is that it is *reported*, and the runtime's own answer for it (a `SetMouthOpen`
 // returning false, changing nothing) is covered content-free by `Elysium.Substrate.SceneJaw`.
 
-bool // Lipsync: the `.lip` reader, the recovered envelope, and the scene driver.
+// Lipsync: the `.lip` reader, the recovered envelope, and the scene driver.
 
 
 namespace
@@ -1909,4 +1909,4 @@ bool FElysiumPhonemeFilterTest::RunTest(const FString&)
 }
 
 
-bool bool #endif // WITH_DEV_AUTOMATION_TESTS
+#endif // WITH_DEV_AUTOMATION_TESTS

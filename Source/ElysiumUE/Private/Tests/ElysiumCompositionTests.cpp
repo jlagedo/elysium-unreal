@@ -255,4 +255,4 @@ bool FElysiumAxisInterpRuleTest::RunTest(const FString&)
 // wrong basis misses by a limb length; inches or metres instead of centimetres miss by a factor.
 // ---------------------------------------------------------------------------------------------
 
-bool #endif
+#endif

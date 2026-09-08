@@ -440,6 +440,6 @@ bool FElysiumWaterTest::RunTest(const FString&)
 	return true;
 }
 
-bool } // namespace ElysiumWaterTests
+} // namespace ElysiumWaterTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

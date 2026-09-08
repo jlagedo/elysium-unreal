@@ -289,5 +289,3 @@ bool FElysiumWieldAttachTest::RunTest(const FString&)
 	}
 	return true;
 }
-
-bool 

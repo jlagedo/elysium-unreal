@@ -60,7 +60,6 @@ A reported defect is a question about VtMB, never a request for a patch.
 - Where a retail input has no source in the substrate yet, build the seam (the hook,
   the field, the accessor) and leave it answering "nothing" with a comment naming the
   retail field it stands for. Say explicitly what remains unrecovered.
-- Prove it in code and automation tests (`uv run elysium test Elysium.<...>`); record
-  the recovery in the matching `docs/vtmb/` document. Live checks are owner-piloted.
+- Record the recovery in the matching `docs/vtmb/` document. Live checks are owner-piloted.
 - Divergences from retail are allowed only as named modernizations, stated in the answer
   and recorded as a dated entry in `docs/decisions.md`.

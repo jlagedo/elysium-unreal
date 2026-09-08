@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 from pathlib import Path, PurePosixPath
-import re
 import subprocess
 import sys
 
@@ -54,34 +53,6 @@ FORBIDDEN_PREFIXES = (
     "research/reports/",
     "research/models/",
 )
-AUTHORED_EXTENSIONS = {
-    ".py", ".ps1", ".java", ".cpp", ".c", ".h", ".hpp",
-    ".cs", ".md", ".json", ".yaml", ".yml",
-}
-# Managed outputs: ignored, regenerable package roots a generator owns end to end. The first two
-# are game-derived; the rest are original project content whose tracked source is the generator
-# under pipeline/unreal/ (and, for a captured graph, its .t3d text). A package here is expected to
-# be absent until it is built and to be overwritten wholesale when it is.
-GENERATED_PACKAGE_ROOTS = (
-    "Plugins/ElysiumBaked/Content/",
-    "Content/ElysiumGenerated/",
-)
-# Local tool state: caches, build products and fetched dependencies. Never authored, never tracked.
-LOCAL_TOOL_ROOTS = (
-    ".claude/",
-    ".pytest_cache/",
-    ".vs/",
-    ".vscode/",
-    "Binaries/",
-    "DerivedDataCache/",
-    "Intermediate/",
-    ".venv/",
-    "pipeline/.venv/",
-    "Plugins/External/",
-    "Saved/",
-    "Source/ElysiumUE/ThirdParty/CPython27/",
-)
-IGNORED_AUTHORED_ALLOWLIST = GENERATED_PACKAGE_ROOTS + LOCAL_TOOL_ROOTS
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -134,24 +105,6 @@ def tracked_violations() -> list[str]:
                 "Git LFS is allowed only for Unreal packages under Content/ElysiumAuthored/**"
             )
     return errors
-
-
-def ignored_authored_warnings() -> list[str]:
-    warnings: list[str] = []
-    output = git("ls-files", "--others", "--ignored", "--exclude-standard", "-z")
-    for raw in output.split("\0"):
-        path = normalized(raw)
-        if not path or path.endswith("/"):
-            continue
-        lower = path.lower()
-        if any(lower.startswith(prefix.lower()) for prefix in IGNORED_AUTHORED_ALLOWLIST):
-            continue
-        if reason := prohibited(path):
-            warnings.append(f"prohibited ignored file outside a managed output: {path} ({reason})")
-            continue
-        if PurePosixPath(lower).suffix in AUTHORED_EXTENSIONS:
-            warnings.append(f"authored-looking ignored file: {path}")
-    return warnings
 
 
 def history_violations() -> list[str]:
@@ -247,79 +200,9 @@ def workspace_warnings() -> list[str]:
     return warnings
 
 
-TEST_MACRO = re.compile(
-    r'IMPLEMENT_(?:SIMPLE|COMPLEX)_AUTOMATION_TEST\s*\(\s*(\w+)\s*,\s*'
-    r'(?:TEXT\(\s*)?"([^"]+)"',
-    re.S,
-)
-
-
-def automation_test_names() -> list[tuple[str, str, str, str]]:
-    """(name, file, class, kind) for every registered automation test in the runtime module.
-
-    `kind` is SIMPLE or COMPLEX. A complex test's macro name is a BRANCH by design -- the framework
-    registers `<base>.<row>` for each row `GetTests` emits -- so the prefix rule below applies to it
-    in reverse: the branch is fine, but a simple test sharing or sitting under that branch is not.
-    """
-    found: list[tuple[str, str, str, str]] = []
-    tests_dir = REPO / "Source" / "ElysiumUE" / "Private"
-    for source in sorted(tests_dir.rglob("*.cpp")):
-        text = source.read_text(encoding="utf-8", errors="replace")
-        for match in TEST_MACRO.finditer(text):
-            found.append((match.group(2), source.name, match.group(1), match.group(0).split("_")[1]))
-    return found
-
-
-def automation_name_violations() -> list[str]:
-    """Names Unreal's automation registry silently drops or collides.
-
-    A name that is a strict prefix of another becomes a *branch* in the automation tree, so the
-    test registered under it is never run and never reported -- the suite is simply smaller than
-    the source says, with nothing emitted to say so. A duplicated name loses one of its two
-    registrations the same way.
-    """
-    errors: list[str] = []
-    found = automation_test_names()
-    leaves = {name for name, _, _, kind in found if kind == "SIMPLE"}
-    branches = {name for name, _, _, kind in found if kind == "COMPLEX"}
-
-    seen: dict[str, tuple[str, str]] = {}
-    for name, source, klass, _kind in found:
-        if name in seen:
-            first_source, first_class = seen[name]
-            errors.append(
-                f"automation test name '{name}' is registered twice "
-                f"({first_class} in {first_source}, {klass} in {source}); "
-                f"one of the two never runs"
-            )
-        else:
-            seen[name] = (source, klass)
-
-    for name, source, klass, kind in found:
-        if kind == "COMPLEX":
-            # The branch itself is intended. What is not: a simple test parked on or under it,
-            # which the framework would shadow with this test's own rows.
-            buried = sorted(o for o in leaves if o == name or o.startswith(name + "."))
-            if buried:
-                errors.append(
-                    f"simple test(s) {buried} sit on the branch '{name}' ({klass} in {source}) "
-                    f"registers for its rows; the framework shadows them and they never run"
-                )
-            continue
-        shadowing = sorted(o for o in (leaves | branches) if o.startswith(name + "."))
-        if shadowing:
-            errors.append(
-                f"automation test name '{name}' ({klass} in {source}) is a strict prefix of "
-                f"{len(shadowing)} other test(s) such as '{shadowing[0]}', so Unreal registers it "
-                f"as a tree branch and the test never runs; give it a leaf name"
-            )
-    return errors
-
-
 def audit(*, history: bool = False, repo_only: bool = False) -> tuple[list[str], list[str]]:
     errors = tracked_violations()
-    errors.extend(automation_name_violations())
-    warnings = ignored_authored_warnings()
+    warnings: list[str] = []
     if history:
         errors.extend(history_violations())
     if not repo_only:

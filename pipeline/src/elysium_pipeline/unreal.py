@@ -39,10 +39,10 @@ CLANG_DATABASE_LOCK = ".elysium-clang-database.lock"
 #: substring and reports success for a selection that matched nothing.
 TEST_TIERS = {
     "substrate": "Elysium.Substrate.",
-    "content": "Elysium.Content.",
-    # Needs a generated `/Game` package but no export corpus -- a real material graph, a declared
-    # input asset. Separate from `content` so a corpus run is not slowed by generated-asset policy
-    # and a reader is not told the run needed the user's own game.
+    # Needs a generated `/Game` package -- a real material graph, a declared input asset. It reads
+    # no VtMB corpus: the `content` tier that did was retired, because a suite whose coverage
+    # depended on which export profile a machine happened to have run guaranteed nothing, and made
+    # every edit pay for a parse of the whole install.
     "policy": "Elysium.Policy.",
 }
 

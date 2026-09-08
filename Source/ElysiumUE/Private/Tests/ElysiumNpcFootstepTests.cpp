@@ -791,6 +791,6 @@ bool FElysiumNpcFootstepSpeciesTest::RunTest(const FString&)
 // on the walk family and `2052`/`2053` on `*_run`, which is
 // `docs/vtmb/animation_events.md` -> "2050/2051 versus 2052/2053 is the walk/run split".
 
-bool }
+}
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

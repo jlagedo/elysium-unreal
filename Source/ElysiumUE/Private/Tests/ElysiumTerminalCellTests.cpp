@@ -290,4 +290,4 @@ bool FElysiumTerminalCellPaintTest::RunTest(const FString&)
 	return true;
 }
 
-bool #endif   // WITH_DEV_AUTOMATION_TESTS
+#endif   // WITH_DEV_AUTOMATION_TESTS

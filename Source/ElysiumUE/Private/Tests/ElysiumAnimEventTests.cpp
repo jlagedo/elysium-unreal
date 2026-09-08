@@ -1005,6 +1005,6 @@ bool FElysiumOneShotVisibilityTest::RunTest(const FString&)
 
 // The carrier, end to end.
 
-bool }   // namespace ElysiumAnimEventTests
+}   // namespace ElysiumAnimEventTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

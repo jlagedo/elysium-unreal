@@ -507,6 +507,6 @@ namespace
 	};
 }
 
-bool } // namespace ElysiumFootstepSeamTests
+} // namespace ElysiumFootstepSeamTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -183,10 +183,10 @@ bool FElysiumDialogueTakeLetterTest::RunTest(const FString&)
 // ---------------------------------------------------------------------------------------------
 // Elysium.Content.DialogueTakes
 
-bool // ---------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
 // Elysium.Content.CorpusPathsFlip
 
-bool // ---------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
 // Elysium.Content.SoundGroupResolver
 //
 // Retail resolves a `soundgroup` by walking `sound\Usable\<Category>\` and matching directory and
@@ -196,10 +196,10 @@ bool // ------------------------------------------------------------------------
 // FUN_101f42a0 @0x101f42a0 is the miss arm. The vocabulary is the `SoundList` of
 // `vdata/system/sndscheme_{openable,switch,computer}.txt` (FUN_101f5390 @0x101f5390).
 
-bool // ---------------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------------------------
 // Elysium.Content.SoundDecode
 //
 // The decoder itself, over shipped bytes: one MS-ADPCM WAV (the ambient family) and one MP3 (a
 // dialogue take). No test reached FElysiumSoundCache::LoadSoundDecoded before AUD0.5.
 
-bool #endif // WITH_DEV_AUTOMATION_TESTS
+#endif // WITH_DEV_AUTOMATION_TESTS

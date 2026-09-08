@@ -97,7 +97,7 @@ bool FElysiumGaitSubstitutionGateTest::RunTest(const FString&)
 }
 
 
-bool // The non-fanned half of retail's one speed pipeline.
+// The non-fanned half of retail's one speed pipeline.
 //
 // `ResetSequenceInfo` (`0x10090950`) calls `GetSequenceGroundSpeed` (`0x10091490`) for every
 // sequence it commits; that is `GetSequenceMoveDist` (`0x1008fbe0`, the magnitude of
@@ -161,4 +161,4 @@ bool FElysiumFlatGaitFanTest::RunTest(const FString&)
 }
 
 
-bool #endif // WITH_DEV_AUTOMATION_TESTS
+#endif // WITH_DEV_AUTOMATION_TESTS

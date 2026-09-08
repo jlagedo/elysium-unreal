@@ -231,4 +231,4 @@ bool FElysiumHairDynamicsResetRoutingTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-bool #endif
+#endif

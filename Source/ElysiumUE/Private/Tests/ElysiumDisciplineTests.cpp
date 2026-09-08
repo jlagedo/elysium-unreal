@@ -1799,6 +1799,6 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 // The Content tier: the real `disciplinetgt_*` corpus, and the `Active_*` blocks beside it
 
 
-bool }   // namespace ElysiumDisciplineTests
+}   // namespace ElysiumDisciplineTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

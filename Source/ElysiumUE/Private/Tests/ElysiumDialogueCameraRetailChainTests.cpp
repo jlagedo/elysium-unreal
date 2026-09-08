@@ -873,6 +873,6 @@ bool FElysiumDialogueCameraRetailChainTest::RunTest(const FString&)
 	return true;
 }
 
-bool }   // namespace ElysiumDialogueCameraRetailChainTests
+}   // namespace ElysiumDialogueCameraRetailChainTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

@@ -114,6 +114,6 @@ bool FElysiumEnvSpriteTest::RunTest(const FString&)
 	return true;
 }
 
-bool } // namespace ElysiumSpriteTests
+} // namespace ElysiumSpriteTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS
