@@ -13,6 +13,13 @@ Owner rulings from the thread, binding on everything below:
    shipped and plays. (See §4 for how that went.)
 3. **Recovered behaviour is ported, never parked**; divergences are owner-named modernizations.
 4. **One tracker.** Update this file; do not open another.
+5. **The port is a VM host: retail bugs are reproduced verbatim.** Code above the host was
+   authored against the bug. Modernization has two halves — visual-only (Unreal renders it
+   better; adopt freely) and an algorithm Unreal already ships (adopt only with the retail
+   contract and event sequencing kept). Nothing that changes event order or state is a
+   modernization. Under this rule: pathfinding is Unreal NavMesh with the nav-type / failure
+   contract kept; sensing order, schedule selection and think cadence stay retail (no
+   AIPerception, no Behavior/State Trees).
 
 The retail facts are at full length in `docs/vtmb/npc-ai-reverse-engineering.md` (sections "The
 incapacitation tasks and the NPC flag word", "`DELAY_INTERRUPTS`, decoded", "`MaintainSchedule`,
@@ -249,15 +256,17 @@ OnNavFailed` `0x102eeae0` is a second source). **`SCHED_TROIKA_MESMERIZED` has n
 face-on — silent, consistent with a shipped game. Troika authored `TASK_SET_FAIL_SCHEDULE
 Idle_Stand` on 22/35 and `TASK_SET_PRESERVE_PATH 0` on 33/35.
 
-Ruling: **not a blocker, no owner action.** When `TaskFail` is built, port its masks verbatim
-except keep `MADE_OBLIVIOUS` and the refcount moving together (`FElysiumNpcFlags` never clears the
-bit without the decrement) — a one-line named modernization, recorded in
-`docs/vtmb/retail-defects.md` as "bounded: NAV_JUMP + discipline" **at that time** (that file is
-currently a peer's working copy; do not touch it until their commit lands).
+Ruling (owner, 2026-09-07, under ruling 5): **not a blocker; port the leak verbatim.** When
+`TaskFail` is built, apply both masks exactly — `MADE_OBLIVIOUS` cleared, `+0x5bb4` NOT
+decremented — and write a trace row when the bit was set so the leak stays observable. Record it
+in `docs/vtmb/retail-defects.md` as "bounded: NAV_JUMP + discipline; reproduced" **at that time**
+(that file is currently a peer's working copy; do not touch it until their commit lands).
 
 ---
 
 ## 5. Build queue, in order, in plain names
+
+Order under ruling 5: kernel failure gaps → think cadence → followers → sweeps → squads.
 
 ### Next: the schedule kernel's two failure gaps
 
@@ -271,17 +280,28 @@ curtime, `m_flGoalTolerance = 0`, interrupt distances 0, `m_hMoveTargetEnt` clea
 handle released, `m_afMemory &= 0x0fffffff`, `flags2 &= 0x7fffe24f`, `flags1 &= 0xa3f40178`,
 `SLEEP_BOUNDING_BOX` restore, `ClearHintNode(5.0)`, `m_bPatrolPathUseHint = 0`. Port: the kernel's
 `Failed` result calls a runner verb `TaskFail(reason)` before routing to the fail schedule;
-`FElysiumNpcFlags::OnTaskFail()` holds the two masks with the modernization from §4;
+`FElysiumNpcFlags::OnTaskFail()` holds the two masks verbatim (ruling in §4: the refcount is
+NOT decremented; trace row when the bit was set);
 `COND_TASK_FAILED` (0x5c) and `COND_SCHEDULE_DONE` (0x5d) join the condition enum. Also add
 `FAIL_STUCK_ONTOP`'s test to `StopMoving`: the port has the airborne state (`AElysiumNpcBody::
 Launch` sets `MOVE_Falling`, `bLaunched`) — `TASK_STOP_MOVING` fails when launched, not on ground,
 `|v| ≤ 0.01`. *Tests:* kernel test that a failing task records the reason and the fail schedule's
-install releases flags; `OnTaskFail` keeps the refcount balanced. *Deps:* none.
+install releases flags; `OnTaskFail` leaves the refcount as retail does (a test asserts the
+leak). *Deps:* none.
 
 **5b. `TASK_SET_ACTIVITY` completes on a miss.** Retail arm `0x102a1c0f` (id `0x4b`) has no fail
 path; the port fails the task on an unresolvable activity. Fix: complete, record the miss in the
 trace, let the body's own ladder (`animation_and_movers.md`) answer; then drop
 `bNpcActivitiesResolve = true` from the trance fixture and confirm it still holds. *Deps:* none.
+
+### Then: the Troika reduced-think mode (the VM clock — before followers, so their tests run on the right cadence)
+
+`CAI_BaseNPC::RunAI(bool)` `0x1026f110`; `CAI_BaseNPCTroika::NPCThink` passes
+`!(m_flNextAIThink − curtime < frametime)` (`0x10290700`/`0x10290660`): set → skip
+`GatherConditions` (slot 433), `MaintainSchedule` bound 1, skip the end-of-pass clear of
+`LIGHT_DAMAGE`/`HEAVY_DAMAGE`/`WAS_BUMPED` 0x38. Cadences `m_flNextUpdateThink` `+0x6244`,
+`m_flNextNormalThink` `+0x6248`, `m_flNextAIThink` `+0x6250`; the writers are `0x10290720`/
+`0x10290b60`/`0x1029bd40` in `NPCThink` — recover them first. *Deps:* none.
 
 ### Then: followers (`m_hFollowerBoss`)
 
@@ -331,15 +351,6 @@ undecoded — decode it (byte-scan + `FUN_102b9810`) so the conditions have some
 `IGNORE_SQUAD_SEE_ENEMY`, the `squadslot` namespace (table `0x10920484`). The disconnect/rejoin
 in `MakeOblivious`/`OnScheduleChange` are named seams today. *Deps:* followers (they refuse
 squads).
-
-### Then: the Troika reduced-think mode
-
-`CAI_BaseNPC::RunAI(bool)` `0x1026f110`; `CAI_BaseNPCTroika::NPCThink` passes
-`!(m_flNextAIThink − curtime < frametime)` (`0x10290700`/`0x10290660`): set → skip
-`GatherConditions` (slot 433), `MaintainSchedule` bound 1, skip the end-of-pass clear of
-`LIGHT_DAMAGE`/`HEAVY_DAMAGE`/`WAS_BUMPED` 0x38. Cadences `m_flNextUpdateThink` `+0x6244`,
-`m_flNextNormalThink` `+0x6248`, `m_flNextAIThink` `+0x6250`; the writers are `0x10290720`/
-`0x10290b60`/`0x1029bd40` in `NPCThink` — recover them first. *Deps:* none.
 
 ### Elsewhere: jump links (world plan)
 

@@ -28,6 +28,10 @@ as a playable game — **modernized** — on **Unreal Engine 5.8 + C++**.
 ## Project rules
 
 - Save game files are disposable, we have not released and don't try to migrate or keep compatibility
+- The port is a VM host for VtMB's data. Schedules, dialogue and map scripts are the bytecode; the C++ substrate is the interpreter. Anything the bytecode can observe is reproduced verbatim: task semantics, condition order, interrupt timing, what a failure writes, and bugs, because shipped programs were tuned against them.
+- Modernization is a peripheral swap. Two halves: visual-only (Unreal renders it better; adopt freely) and an algorithm Unreal already ships (adopt only with the retail contract and event sequencing kept). Nothing that changes event order or state is a modernization.
+- Build the host in dependency order. Clock before programs, kernel before consumers.
+- A defect claim needs a program that reaches it, not a mask read.
 
 ## When a problem is reported
 
