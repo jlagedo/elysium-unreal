@@ -2216,3 +2216,1054 @@ fact that it draws the weapon, so no port state is mapped onto it. Stated, not g
 
 Proof: `Elysium.Substrate.WeaponHidden.StateChange` (an `npc_VHumanCombatant` hides its active
 weapon entering Idle and unhides it entering Alert/Combat; an `npc_VVampire` never changes the bit).
+
+## The sense pass for a hated player, walked (2026-09-08)
+
+Recovered against `sp_tutorial_1`'s `thug_1` (`npc_VVampire` via `npc_maker`, `vision 540`,
+`hearing 1.00`, `npc_perception 3`, `player_reaction "D_HT 5"`). The chain is
+`CAI_BaseNPC::GatherConditions` (`0x1026ec30`) → `PerformSensing` (`0x1026e4f0`, gated on
+`m_iIsOblivious < 1`) → `CAI_Senses::PerformSensing` (`0x10310710`, gated on `senses+0x80
+m_bCanPerformSenses`) → `Look(m_LookDist)` (`0x1030ff10`) then `Listen()` (`0x1030f940`).
+
+**Look.** `CAI_Senses` is built in `0x1027cc10` with **`m_LookDist = 3072.0`** (`+0x10`, datamap,
+save-restored, no other writer) and three cadences: **players every 0.15 s** (`+0x68/+0x6c`), NPCs
+0.25 s, objects 0.45 s. `LookForPlayers` (`0x1030fff0`) walks client slots with a `3072²`
+distance prefilter; `LookForNPCs` (`0x10310130`) walks the global AI list the same way. Per
+candidate (`0x1030ffa0`): not already seen (`0x1030fb90`); `0x1030fa00` — alive (slot 158),
+not `FL_NOTARGET` (0x8000), not `spawnflags & 1`, `+0x1480` targetable, not hidden
+(`0x100b5190`), then **`QuerySeeEntity` slot 468 = `0x102b38b0`**; then **`FInViewCone` slot
+363 = `0x102b4540`** and **`FVisible` slot 201 = `0x102b4630`** (trace mask `0x2804091`); then
+`0x1030fc50` dispatches **slot 472 (`0x102b3e00`, the attention path)** and appends to the seen
+list. `QuerySeeEntity` admits **any player** regardless of relation (`ent+0xa8 != 0`) and
+non-players only at `D_HT`/`D_FR`; rejected by `DAT_10924fba` (all-blind), `DAT_10924fb9`
+(`ai_ignoreplayers`) and the frenzy friend-player.
+
+**Cone.** `CBaseCombatCharacter::FInViewCone` (`0x10326750`) → `FinViewCone3dNew`
+(`0x103264d0`; the 2-D variant when the cvar object at `0x10936f74` reads 2). Inputs:
+`m_flFieldOfView`, the candidate position (slot 192) and the candidate-side cone scalar (slot 29,
+`CHL2_Player` → `m_flStealthVisionCone +0x1c74`). Anything strictly behind (`dot < 0`) is out.
+**`CAI_BaseNPCTroika` spawn (`0x10298d30`) sets `m_flFieldOfView = 0.2`** — ±78.5°, ≈157°
+total, for every VtMB humanoid. Player 0.5; `CNPC_Crow` −1.0; `CNPC_VMingXiao`/`VTzimisce` −0.5.
+UNRECOVERED: the body-offset term inside `0x103264d0` (register-garbled decompile).
+
+**Admission body `0x102b4760` (slot 594), exactly.** `+0x6081` (outer-band byte, no datamap
+name) is cleared per call. `vecMe = EyePosition()`, `vecHim = target EyePosition()`. The range
+test runs only when `(m_NPCState != 2 || m_bEnemyWentOccluded(+0x5bc5) != 0) && curtime >=
+m_flStealthVisionOverrideTime(+0x6604)`: `d = |vecHim − vecMe|` (true 3-D);
+`radius = target->vtable[+0x70]() /*m_flStealthVisionScalar*/ × m_flSeekDistInspection(+0x63b8)`;
+`d > radius` → false (strict); `d > 0.7·radius` → `+0x6081 = 1`. Then the concealment test
+`0x10146b20(targetCC, this)` (Obfuscate stats `0xe`/`1` > 0, or beyond the per-observer obfuscate
+radius from `DAT_10738d10` `+0xac`) → false. **Two bypasses:** a COMBAT-state NPC with a
+non-occluded enemy admits every candidate on range out to the 3072 prefilter (the only unbounded
+sight path in retail); and `+0x6604`, which is written only to `0` by spawn (`0x1029a0b0`) and
+read only here — dead. `CAI_BaseNPCTroika::FVisible` (`0x102b4630`) = slot 594 →
+`HasStatusEffect(Dominate_BrainWipe)` (`0x1033d2f0`) → `CBaseEntity::FVisible` trace.
+
+**`OnLooked` and the memory write.** Troika `0x102b39a0` (slot 469) adds only
+`if (HasCondition(NEW_ENEMY 0x54)) m_iEnemySightings++` and chains to `CAI_BaseNPC::OnLooked`
+(`0x1026a2c0`): clear the SEE family (table `0x105c979c`, 6); compute the one skipped entity
+(`GetBestSeeUnknown` slot 586 → `m_hBestSeeUnknown +0x6088`, or `m_hLastSeeUnknown +0x608c`
+under `IGNORE_UNKNOWN`); for each seen entity `rel = IRelationType(ent)`:
+- player (`ent+0xa8`) → **`SetCondition(0x5a COND_SEE_PLAYER)`** (`0x5a`, not `0x6f` — `0x6f` is
+  `HEAR_PLAYER`), plus the player-side observer publication `0x1017ff40` when `m_bIsBCCTargetable`;
+- `rel != D_NU`: `ent == GetEnemy()` → `SEE_ENEMY 0x46`; **`D_HT`**: `p = IRelationPriority(ent)`
+  — `p < 0` → `m_hLastSeenDislikeEnt`, `SEE_DISLIKE 0x45`; `0 ≤ p < 11` → `m_hLastSeenHateEnt`,
+  **`SEE_HATE 0x43`**; `p ≥ 11` → `m_hLastSeenNemesisEnt`, `SEE_NEMESIS 0x5b`; then
+  **`UpdateEnemyMemory(ent, origin)` slot 544**; **`D_FR`** → `m_hLastSeenFearEnt`,
+  `UpdateEnemyMemory`, `SEE_FEAR 0x44`; `D_LI`/`D_NU` nothing. (`flags2 & 0x10000` on a `D_HT`
+  target diverts into the FEAR arm.) So the shipped `player_reaction "D_HT 99"` rows raise
+  `SEE_NEMESIS`, not `SEE_HATE`; `"D_HT 5"` raises `SEE_HATE`. This also closes `COND_SEE_DISLIKE`'s
+  disposition: it is `D_HT` with a negative `IRelationPriority`, not a separate `Disposition_t`.
+
+**The attention path `0x102b3e00` (slot 472).** For every candidate that passed cone + trace:
+`if (!(flags2 & 0x4000000 NO_UNKNOWN_VISION) && +0x6081 && ShouldInvestigate(ent, false))`: a
+player passing `0x101671a0` (visible, or in a grapple with `+0x1540 == 3`, or `FL_DUCKING` and
+`!0x101672d0`) → `SetCondition(0x01 SEE_UNKNOWN)`; if `m_hBestSeeUnknown != ent`: set it,
+`m_iEnemySightings(+0x60a8)++`; if it equals `m_hLastSeeUnknown` → `+0x60a4
+m_iSeeUnknownRepeatSightings++`, clear `IGNORE_UNKNOWN|MADE_INITIAL_RESPONSE`; else fire
+**`OnUnknownVisionPlayer`**, `m_hLastSeeUnknown = ent`, `m_vecLastSeeUnknownPos(+0x6090)`,
+repeat = 0, `m_flSeeUnknownRunTimer = curtime + RandomFloat(10, 20)`, `m_flSeeUnknownStartTimer
+= curtime + RandomFloat(5, 10)`, clear `LOOKED_AT_UNKNOWN|IGNORE_UNKNOWN|MADE_INITIAL_RESPONSE`.
+A non-player in the band sets `ATTACK_UNKNOWN` (flags1 `0x800000`). Outside the band:
+`m_hBestSeeUnknown` cleared if it was this entity, the three flags cleared. The band arm and the
+`SEE_HATE` arm are not exclusive — one candidate can carry `SEE_PLAYER + SEE_HATE + memory` and
+`SEE_UNKNOWN` in one pass.
+
+**The numbers for `thug_1`.** `vision 540` is not the sentinel → `+0x63b8 = 540`, perception
+inert (it would have given `Inspection_Vision_Distances[3] = 440`). `StealthVisionScalarTable`
+spans `0.14 … 1.00`. Effective radius **75.6 … 540 units**; band `0.7×`; cone `0.2` × player cone
+scalar `0.50 … 1.00`; LOS mask `0x2804091` eye to eye. At 2380 units no retail sight path admits
+the player.
+
+## The enemy memory — `CAI_Memory` (2026-09-08)
+
+`UpdateEnemyMemory` (`CAI_BaseNPC::FUN_102709c0`, slot 544, **no override in any of the 77
+classes**): `GetMemory()` (slot 541, `0x10273e10`); squad dedupe on `ent+0x94` (inert for a
+player); `IsEluded` (`0x102e0210`: walk `mem+0xc`, match entry `+0x24`, return `+0x35`) → slot
+494; then `CAI_Memory::UpdateMemory` `0x102df700(mem, navigator+0x2c, ent, pos, vel)`.
+
+Record (list head **`mem+0xc`**, stride from `0x102df130`):
+
+| off | meaning |
+|---|---|
+| `+0x00` | last known position |
+| `+0x0c` | anchor position (re-latched when moved further than `[0x10497c80]` = 0.0 — always) |
+| `+0x18` | last known velocity |
+| `+0x24` | **actor EHANDLE** (`-1` for a position-only record) |
+| `+0x28` | last-seen `curtime` |
+| `+0x2c/+0x30` | nearest nav node ids (`0x102f41b0`), `-1` with no network |
+| `+0x34` | position-only byte |
+| `+0x35` | **eluded byte — 0 on every create and every refresh** |
+| `+0x38` | next |
+
+`CAI_Memory::RefreshMemories` (`0x102df320`) drops an entry only when its handle dies or its
+NPC's state (slot 464) is 7 (dead); otherwise it re-copies the target's origin while `curtime <
+lastSeen + m_flFreeKnowledgeDuration`. **No time-based expiry**: once sensed, the player is a
+permanent `BestEnemy` candidate until eluded or the map ends. `BestEnemy` (`0x102743c0`) walks
+this list and nothing else — gates: handle resolves, `!FL_NOTARGET`, `+0x1480`, `!= this`,
+`IsAlive`, `IsValidEnemy` (slot 479 = `0x101a6820`, `return 1`, **no override anywhere**),
+relation ∈ {D_HT, D_FR}, `!eluded`; ranking reachability (`+0x848`) > `IRelationPriority` >
+integer distance, visibility = `senses->DidSeeEntity` (`0x1030fb10`) or `FVisible`.
+
+**Port consequence.** This runtime's `BestEnemy` walked the world entity list gated on the
+relationship table (`ElysiumNpcEnemy.cpp`), so a `D_HT` player anywhere on the map was a
+candidate the moment an NPC spawned; verified live on `sp_tutorial_1` 2026-09-08 (`thug_1`
+committed the player at ~2380 units with 0 sightings and 10 failed LOS checks, and ran to him).
+The record store above is the missing subsystem; see `docs/specs/0005-park-stealth/spec.md`.
+
+## Dialogue does not gate bystanders (2026-09-08)
+
+`CBasePlayer::StartPlayerDialog` (`0x10178280`) writes the player's own `m_hDialogPartner`
+(`SetDialogPartner` `0x10107050`), `m_bIsImmobilized (+0x19f7) = 1` (a SendProp with **zero
+server-side readers**), forces `item_w_unarmed`, opens the UI and rebuilds the transmit list
+(`0x100826b0`). The NPC side, `CAI_BaseNPCTroika::StartTalking` (`0x102c0270`), sets its own
+partner. **Every one of the 25 readers of `m_hDialogPartner` reads `this->`**; likewise
+`m_bInChoreoScene` (`+0x5bc4`, 8 self accesses). The one AI effect is in `CAI_BaseNPC::RunAI`
+(`0x1026f110`): `if (!scriptOwner && !m_hDialogPartner) GatherConditions();` — **the dialogue
+partner itself stops sensing, remembering and choosing enemies but still maintains its
+schedule.** No other NPC can see the player's dialogue state; `IsValidEnemy`, `BestEnemy`,
+`ShouldChooseNewEnemy`, `GatherEnemyConditions`, both `SelectIdealState`s and `SelectSchedule`
+carry no dialogue term; `COND_NPC_FREEZE` (`0x75`) has one setter (`0x1027c1f0`, a command body
+with no recovered caller). A hated NPC inside its effective radius acquires and chases the player
+mid-conversation.
+
+## Hearing, walked (2026-09-08)
+
+**Insertion.** `CSoundEnt::InsertSound` `0x101bac90` (thunk `0x1000bca8`) `(iType, origin,
+iVolume, flDuration, bOccludable, pOwner)`. Records are stride `0x2c` at `CSoundEnt
+(DAT_1072c464) + 0x464`: `+0x00` owner EHANDLE, `+0x04` type bitmask, `+0x08` volume/radius
+(**int**), `+0x0c` insertion `curtime`, `+0x10` expire, `+0x14` occludable, `+0x18/+0x1c` links,
+`+0x20` origin. Types (DevMsg switch `0x101badab`): `1 COMBAT`, `2 WORLD`, `4 PLAYER`,
+`8 DANGER`, `0x10 BULLET_IMPACT`, `0x20 CARCASS`, `0x40` unnamed, `0x80 GARBAGE`,
+`0x100 THUMPER`, `0x200 BUGBAIT`, `0x400 PHYSICS_DANGER`, `0x800 FLINCH`. A player-owned insert
+at the "loud" row (`VolumeLevels[3]`, 1200) also calls the masquerade hook
+`0x10227a30(&DAT_10750cb4, player, 6)`. **Player footsteps never call `InsertSound`**: the
+player's one reserved `CSound` is rewritten every think by `UpdatePlayerSound` (`0x1016b480`;
+`footsteps.md` §2.5) — type 4, radius from `sound_volume_table.txt` (sneak 180, walk/run 240,
+jump 240, land soft 180, land hard 240), `m_flTime = curtime`, so the freshness gate below
+always passes. The only type-4 `InsertSound` is the **door** (`0x100ee560`: `DOOR_STEALTH` 250 /
+`DOOR_NORMAL` 500, duration 2.0, owner = the activator, skipped on `spawnflags & 0x1000`).
+
+**Listen** (`CAI_Senses::Listen` `0x1030f940`): `mask = GetSoundInterests()` (slot 473; VVampire
+`0x103846e0`); for each active sound with `type & mask` and `CanHearSound` (`0x1030f7b0`) link it;
+`OnListened` (slot 470); `senses+0x84 = curtime`. `CanHearSound`, asm-exact: owner hidden
+(`0x10014da8`) or not targetable (`+0x1480 == 0`) → reject; owner == me → reject; **`sound.time
+<= senses+0x84` (not inserted since my last Listen) → reject**; `d = |origin − EarPosition()|`
+(slot 196, 3-D); **`radius = HearingSensitivity() × (int)volume`** — slot 476 `0x101aa5f0` returns
+`+0x63c0` verbatim, so `hearing` is a **multiplier on the sound's radius**, never on distance;
+`AdjustSoundDistForStealth` (`0x1009d850`, in place, any owner with the stealth surface,
+`StealthHearingDistTable` 0…80 units); occlusion `0x102703f0` when occludable; `d > radius` →
+reject; then `QueryHearSound` (slot 467, Troika `0x102b35b0`): `DAT_10924fba`; `ai_ignoreplayers`
+for a player owner; frenzy friend; owner == self; the same concealment test as sight
+(`0x10146b20`) — **Obfuscate silences as well as hides**; **type 4 from a player →
+`CStealthKillRules::InDeafZone(&DAT_1072c540, player, this)` ⇒ false** (the deaf arc suppresses
+the player's movement sound outright); `flags1 & 0x20400` (COWERING bit 10, SLEEPING bit 17)
+→ a second test at **`HearingSensitivity × volume × 0.25`** (`[0x1044bef8]`).
+
+**`OnListened`** (`CAI_BaseNPC` `0x1026a5e0`): clear the HEAR family (table `0x105c97b4`, 10),
+zero the six-dword heard-type field at `+0x5ca8`, map type → condition: `1→0x6d HEAR_COMBAT`,
+`2→0x6e HEAR_WORLD`, `4→0x6f HEAR_PLAYER`, `8→0x6a HEAR_DANGER`, `0x10→0x70 HEAR_BULLET_IMPACT`,
+`0x100→0x6b HEAR_THUMPER`, `0x200→0x6c HEAR_BUGBAIT`, `0x400→0x71 HEAR_PHYSICS_DANGER`,
+`0x800→0x72 HEAR_FLINCH`, others DevMsg and dropped; `0x101b9920` false → `0x5e SMELL`. **The
+condition is not set immediately** — it is queued on `m_DelayedConditionList` with delay slot 471
+(`0x1026a8a0` = `RandomFloat(0.2, 0.9)`; `HEAR_FLINCH` `RandomFloat(0, 0.5)`), then `0x102cc760`
+promotes what is due. Outputs: `OnHearWorld` on `0x6e`, **`OnHearPlayer` on `0x6f`**,
+`OnHearCombat` on `0x6d || 0x70 || 0x6a`. The Troika override `0x102b39e0` then snapshots one
+`CSound` per heard type into **seven** records — `m_LastSoundWorld +0x61e4`, `PhysicsDanger
++0x6134`, `Danger +0x6108`, `Player +0x61b8`, `BulletImpact +0x618c`, `Combat +0x6160`, and
+**`Flinch +0x6210`** (a seventh, missing from the sweep section above) — and calls
+`0x1028e8b0(this, owner, 1.0)` for `HEAR_COMBAT`/`HEAR_BULLET_IMPACT` only (forwarded to
+`0x1028e940` only when the owner is or shares my enemy).
+
+**Hearing cannot acquire an enemy.** Nothing in the hear path writes `CAI_Memory`.
+`HEAR_PLAYER` yields the delayed condition, the `m_LastSoundPlayer` copy (on the NPC, not in
+memory), `OnHearPlayer`, the idle→alert promotion in `CAI_BaseNPC::SelectIdealState`
+(`0x1026f660` case 1, no `m_bNoAlertState` test), and via the sound sweep + `ShouldInvestigate`
+`COND_INVESTIGATE_SOUND 0x25`. An NPC turns hostile from a noise only by walking to it and then
+seeing the player there.
+
+**`CommitBestSound` `0x102b4090`** (the sweep→task seam): copies the winning record into
+`m_BestSound +0x60b0`, `+0x5b78 = owner`, mirrors to `+0x60dc`. Priority, first match:
+`HEAR_COMBAT` (+0x6160) > `HEAR_BULLET_IMPACT` (+0x618c) > **`HEAR_FLINCH` (+0x6210)** >
+`HEAR_PLAYER` (+0x61b8) > `HEAR_DANGER` (+0x6108) > `HEAR_PHYSICS_DANGER` (+0x6134) >
+`HEAR_WORLD` (+0x61e4). `CAI_BaseNPCTroika::GetBestSound` (slot 474, `0x102b4520`) returns
+`&m_BestSound` unconditionally, so the "no best sound → `TaskFail`" arms of
+`TASK_ALERT_LOOK_AT_BEST_SOUND` / `TASK_GET_PATH_TO_BESTSOUND` are dead on every Troika NPC.
+
+## `ambient_generic` as an AI sound source (2026-09-08)
+
+Datamap: `+0x450 m_radius` (`radius`, audio only), `+0x4cc m_nSoundEvent` (**`sound_event`**),
+`+0x4d0 m_nSoundEventLevel` (**`sound_event_level`**), `+0x4d4 m_iszSoundEventOwner`
+(`sound_event_owner`). The one consumer is the Use/Toggle handler `0x101ad470`, in the branch
+that starts playback, after `EmitSound`:
+`if (m_nSoundEvent != 0)`: resolve the owner (`0x101ad9a0`); a null owner is legal only for
+`CARCASS 0x20` / `FLINCH 0x800`, otherwise `Warning("… invalid NPC sound event …")` and nothing is
+inserted; `lvl` outside `1..3` warns and clamps; `dur = GetSoundDuration(wav)` floored at 1.0;
+**`InsertSound(m_nSoundEvent /*raw type bitmask*/, owner origin, VolumeLevels[lvl], dur,
+bOccludable = 0, owner)`** — **once per activation, never per think**. Level 1 = 180, 2 = 240,
+3 = 1200 (`0x1072bccc + lvl*4`). `radius` plays no part.
+
+**Every `ambient_generic` in `sp_tutorial_1` carries `sound_event "0"`** — `sound_combat_1..4`,
+`sound_jackflash`, `sound_window_break`, `sound_fire_2`, `sound_thugs_w_guns`, `sound_howl_2` —
+so the tutorial's "gunfire diversion" (`trig_diversion → logic_gunfire`) is **audio only**: it
+inserts no AI sound and no NPC hears it. `sound_event_level 2` is dead data on all of them.
+
+## Interesting places: the selector, the programs, the wait (2026-09-08)
+
+**Selector** (`CAI_BaseNPCTroika::SelectSchedule` case 1 step 4, asm `0x102af6eb`–`0x102af7f3`):
+```
+if (m_bUseInteresting +0x63d9) {
+  if (navigator state (0x100037e2) == 8 || m_hInterestingPlace +0x62ec != 0) {
+    if (HasCondition(0x13 CROSSWALK_DONTWALK)) return 0x102;
+    if (HasCondition(0x10 SHOULD_INTERACT))    return 0x106;
+    if (HasCondition(0x11 SHOULD_LOITER))      return 0x105;
+    return 0x100;
+  }
+  return 0xff;
+}
+```
+Producers: `0x12/0x13` from `UpdatePedestrianInfo` (`0x102a0d20`); `0x10` from `0x102a0cb0`
+(sets it on both NPCs; **zero recovered callers**); **`0x11 SHOULD_LOITER` has no setter in the
+image** — `SCHED_TROIKA_LOITER` is unreachable from this selector in retail.
+
+**Blobs** (byte-scanned; registrar `FUN_102b9810`):
+- `0xff SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_SETUP` (`0x105e6aa8`): `SET_FAIL_SCHEDULE
+  Idle_Stand; FIND_INTERESTING_PLACE; SET_PRESERVE_PATH 1; SET_SCHEDULE 0x100`. Interrupts
+  `NEW_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE INVESTIGATE_SOUND INVESTIGATE_SIGHT
+  IGNORE_UNKNOWN DETECTED_ATTACK PLAYER_ON_HEAD`.
+- `0x100 SCHED_TROIKA_WALK_TO_INTERESTING_PLACE` (`0x105e67b8`): `SET_FAIL_SCHEDULE
+  …_FAILED; GET_PATH_TO_INTERESTING_PLACE; WALK_PATH; WAIT_FOR_MOVEMENT; STOP_MOVING;
+  FACE_INTEREST; SET_SCHEDULE SCHED_TROIKA_DO_INTEREST_ACTIVITY`. Interrupts add `GIVE_WAY
+  SHOULD_INTERACT SHOULD_LOITER CROSSWALK_DONTWALK`.
+- `SCHED_TROIKA_DO_INTEREST_ACTIVITY` (`0x105e6130`): `SET_FAIL_SCHEDULE Idle_Stand;
+  SET_PRESERVE_PATH 0; DO_INTEREST_ACTIVITY; WAIT_PVS`. `…_FAILED` (`0x105e6520`):
+  `SET_ACTIVITY ACT_IDLE; WAIT 5; WAIT_RANDOM 5; SET_SCHEDULE 0xff`.
+- `0x105 SCHED_TROIKA_LOITER` (`0x105e5eb8`): `SET_FAIL_SCHEDULE Idle_Stand; STOP_MOVING;
+  DO_LOITER_ACTIVITY; WAIT_PVS`. `0x106 SCHED_TROIKA_INTERACT` (`0x105e5d10`): `…;
+  DO_INTERACT_ACTIVITY; WAIT_PVS`. `0x102 SCHED_TROIKA_WAIT_AT_CROSSWALK` (`0x105e6308`):
+  `…; PAUSE_MOVING; FACE_NEXT_NODE; WAIT_INDEFINITE`, interrupt `CROSSWALK_WALK`.
+None of these carries `SEE_ENEMY` or any `HEAR_*` — an interest program is broken by
+`NEW_ENEMY` (the enemy actually replaced), not by merely seeing.
+
+**Eligibility** (`0x102dad60`, restating with the field names): `m_bEnabled +0x57c` (key
+`enabled`), `+0x57d == 0` (dead: only the constructor writes it, to 0), `max_npcs +0x584 −
++0x58c − +0x588 > 0`, `(m_iGroupID +0x574 & m_iInterestingPlaceGroups +0x62dc) != 0`, `|place −
+npc|² ≤ 1.0e8`. **Both sides are bitmasks** (corrected 2026-09-08): `CAI_InterestingPlace::Spawn`
+(`0x102d9c20`) converts the place's `group_id` `1..32` to `1 << (id−1)` and anything else to
+`1` (group 1), and clamps `rating` to `0..5`; the NPC's `interesting_place_groups` is a
+space-separated list of 1-based indices → mask (`FUN_10298910`; empty or `"0"` → 0, no place
+ever matches). So a place matches only an NPC that lists its group. On `sp_tutorial_1` `thug_1`
+(`"2"`) matches `pt1`, `pt2`, `pt3` (all `group_id 2`) and nothing else; with `pt2`/`pt3`
+authored `enabled 0` his pool at spawn is **`pt1` alone**, 30–60 s per visit. `m_bEnabled`'s only
+writers are `InputEnable` (`0x102db420`) and `InputDisable` (`0x102db440`).
+
+**The wait.** `0x102a9f40(npc, place, activityIdx, bInto)` — shared by
+`TASK_DO_INTEREST_ACTIVITY` / `_LOITER_` / `_INTERACT_` (both call sites in Troika `StartTask`):
+`ClaimMarker` (`0x102da7c0`); fire `npc+0x5f74`; if the type has an INTO activity
+(`0x102dae70`) → `flags1 |= 0x20000000 INTERESTING_INTO`, `+0x6304 = 1`, `SetActivity(into)`,
+`+0x63d4 = -1`; else `+0x6304 = 2`, `SetActivity(idle)`, `+0x63d4 = curtime + RandomFloat(2,
+10)`; **`m_flWaitFinished (+0x5db4) = curtime + RandomFloat(m_fMinStayTime +0x568, m_fMaxStayTime
++0x56c)`** — the same field every `TASK_WAIT*` uses, no clamp, no swap (`ip_20`'s authored
+`10/5` is a shipped inversion); `match_orientation +0x570` sets the yaw from the marker.
+
+## The `INVESTIGATE` family, decoded (2026-09-08)
+
+691 schedule blobs in the image; **31** carry `INVESTIGAT` (the doc's earlier count of 32 included
+`SCHED_INVESTIGATE_SOUND`, a Source-SDK name at `0x105d3754` that lives only in the stale debug
+name array `0x105d1488` — no blob, no id; never use that array for numbers). Registration in
+`FUN_102b9810` is `mov [esp+0x10], name; mov [esp+0x14], id; call 0x1001528a` immediately before
+the blob's `call 0x1000ce8c`. **No `INVESTIGATE` program declares `Flags`** (no
+`DELAY_INTERRUPTS`).
+
+| id | name | blob |
+|---|---|---|
+| 0x50 | SCHED_TROIKA_INVESTIGATE_SOUND_FLINCH | 0x105ff320 |
+| 0x51 | SCHED_TROIKA_INVESTIGATE_SOUND | 0x105fef58 |
+| 0x52 | SCHED_TROIKA_INVESTIGATE_OTHER_SOUND | 0x105feca8 |
+| 0x53 | SCHED_TROIKA_INVESTIGATE_SOUND_FLINCH_NO | 0x105feb38 |
+| 0x54 | SCHED_TROIKA_INVESTIGATE_SOUND_NO | 0x105fe860 |
+| 0x58 | SCHED_TROIKA_ALERT_INVESTIGATE_UNKNOWN_ATTACKER | 0x105fdb78 |
+| 0x59 | SCHED_TROIKA_INVESTIGATE_UNKNOWN | 0x105fd948 |
+| 0x5a | SCHED_TROIKA_INVESTIGATE_UNKNOWN_QUICK | 0x105fd728 |
+| 0x5b | SCHED_TROIKA_INVESTIGATE_UNKNOWN_ATTACK | 0x105fd5c0 |
+| 0x5c | SCHED_TROIKA_INVESTIGATE_UNKNOWN_OTHER | 0x105fd298 |
+| 0x5d | SCHED_TROIKA_INVESTIGATE_UNKNOWN_LOST | 0x105fcfb8 |
+| 0x5e | SCHED_TROIKA_INVESTIGATE_UNKNOWN_OTHER_RUN | 0x105fcc80 |
+| 0x5f | SCHED_TROIKA_INVESTIGATE_UNKNOWN_LOST_RUN | 0x105fc960 |
+| 0x60 | SCHED_TROIKA_INVESTIGATE_UNKNOWN_IGNORE | 0x105fc698 |
+| 0x61 | SCHED_TROIKA_INVESTIGATE_UNKNOWN_OTHER_IGNORE | 0x105fc3b0 |
+| 0x62 | SCHED_TROIKA_INVESTIGATE_UNKNOWN_RETURN | 0x105fbf50 |
+| 0x63 | SCHED_TROIKA_INVESTIGATE_UNKNOWN_RETURN_GIVEUP | 0x105fbae8 |
+| 0x64 / 0x66 / 0x68 | SCHED_TROIKA_INVESTIGATE_NODE / _WALK / _HUNT | 0x105fb858 / 0x105fb360 / 0x105faea0 |
+| 0x7f | SCHED_TROIKA_HUNT_INVESTIGATE_FLINCH | 0x105f87b0 |
+| 0x80 | SCHED_TROIKA_HUNT_INVESTIGATE | 0x105f8510 |
+| 0x81 | SCHED_TROIKA_HUNT_INVESTIGATE_UNKNOWN | 0x105f8240 |
+| 0x82 | SCHED_TROIKA_HUNT_INVESTIGATE_UNKNOWN_LOST | 0x105f7fa8 |
+
+Species tables (own id spaces): `0x15a VHENGEYOKAI_INVESTIGATE_UNKNOWN_ATTACK` (`0x1063eeb0`),
+`0x15b/0x15c VFRENZYSHADOW_HUNT_INVESTIGATE(_UNKNOWN)` (`0x106388f8`/`0x106386a0`),
+`0x15c/0x15d VTZIMISCE_HUNT_INVESTIGATE(_UNKNOWN)` (`0x1065b7e0`/`0x1065b568`),
+`0x15d VGARGOYLE_INVESTIGATE_UNKNOWN_ATTACK` (`0x10639db0`, `TASK_LOOK_AT_PLAYER`),
+`0x168 VZOMBIE_IGNORE_INVESTIGATE_UNKNOWN_ATTACK` (`0x10665120`).
+
+**The programs, verbatim.**
+
+`0x51 INVESTIGATE_SOUND`: `STOP_MOVING; STORE_LASTPOSITION; REMEMBER MEMORY:INVESTIGATING;
+ALERT_LOOK_AT_BEST_SOUND; WAIT_RANDOM 0.5; PLAY_SOUND SOUND:Target_Suspect; WAIT_RANDOM 1.5;
+SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_BESTSOUND; SET_NPC_FLAG IGNORE_DOOR_FAILURE;
+SET_FAIL_SCHEDULE SCHED_TROIKA_ALERT_LOOK_AROUND; WALK_RUN_PATH_COMBAT_SOUND; WAIT_FOR_MOVEMENT;
+SET_SCHEDULE SCHED_TROIKA_ALERT_LOOK_AROUND`. Interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY
+SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE INVESTIGATE_SOUND SEE_SOUND_SOURCE PLAYER_ON_HEAD`.
+`0x52 INVESTIGATE_OTHER_SOUND`: `PLAY_SOUND Target_Suspect; SET_TOLERANCE_DISTANCE 5;
+GET_PATH_TO_BESTSOUND; SET_NPC_FLAG IGNORE_DOOR_FAILURE; SET_FAIL_SCHEDULE ALERT_LOOK_AROUND;
+WALK_RUN_PATH_COMBAT_SOUND; WAIT_FOR_MOVEMENT; SET_SCHEDULE ALERT_LOOK_AROUND`; interrupts as
+0x51 minus `SEE_SOUND_SOURCE`. `0x54 _SOUND_NO`: tasks as 0x52; interrupts with
+`SEE_SOUND_SOURCE`, without `INVESTIGATE_SOUND`. `0x50 _SOUND_FLINCH`: `ADD_EVENT_EXPRESSION
+EXPRESSION:FLINCH; PLAY_COWER ACT_COWER_INTO; SET_SCHEDULE 0x51`; interrupts `LIGHT_DAMAGE
+HEAVY_DAMAGE`. `0x53 _FLINCH_NO`: identical, also transfers to **0x51** (retail asymmetry).
+`0x58 ALERT_INVESTIGATE_UNKNOWN_ATTACKER`: as 0x51 with `ALERT_LOOK_AT_UNKNOWN_ATTACKER` in
+place of the best-sound look; no `SEE_SOUND_SOURCE`.
+
+`0x59 INVESTIGATE_UNKNOWN`: `STOP_MOVING; STORE_LASTPOSITION; REMEMBER INVESTIGATING;
+LOOK_AT_BEST_UNKNOWN; WAIT_RANDOM 0.5; PLAY_SOUND Target_Suspect; WAIT_RANDOM 1.5; SET_NPC_FLAG
+LOOKED_AT_UNKNOWN`; interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE
+HEAVY_DAMAGE PLAYER_ON_HEAD`. `0x5a _QUICK`: same minus the first two tasks.
+`0x5b _ATTACK`: `SET_ACTIVITY ACT_IDLE; WAIT 0.25; PLAY_SOUND Target_Acquired; WAIT_RANDOM
+0.25`; interrupts `NEW_ENEMY LIGHT_DAMAGE HEAVY_DAMAGE`.
+`0x5c _OTHER`: `REMEMBER INVESTIGATING; SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_BESTUNKNOWN;
+SET_PRESERVE_PATH 1; SET_NPC_FLAG IGNORE_DOOR_FAILURE; SET_FAIL_SCHEDULE 0x62; WALK_PATH_HUNT;
+WAIT_FOR_MOVEMENT; SET_SCHEDULE 0x62`; interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR
+LIGHT_DAMAGE HEAVY_DAMAGE LOST_UNKNOWN UNKNOWN_RUN_TIMER PLAYER_ON_HEAD`. `0x5e _OTHER_RUN`:
+adds `SET_NPC_FLAG FORCE_RELAXED_ANIMS`, `RUN_PATH` for `WALK_PATH_HUNT`; interrupts end at
+`LOST_UNKNOWN`. `0x5d _LOST`: `REMEMBER INVESTIGATING; SET_PRESERVE_PATH 0; SET_NPC_FLAG
+IGNORE_DOOR_FAILURE; SET_FAIL_SCHEDULE 0x62; WALK_PATH_HUNT; WAIT_FOR_MOVEMENT; SET_SCHEDULE
+0x62`; interrupts `… HEAVY_DAMAGE INVESTIGATE_SIGHT DETECTED_ATTACK PLAYER_ON_HEAD`.
+`0x5f _LOST_RUN`: plus `FORCE_RELAXED_ANIMS`, `RUN_PATH`.
+`0x60 _IGNORE`: `STOP_MOVING; SET_NPC_FLAG NO_UNKNOWN_ATTACK; LOOK_AT_BEST_UNKNOWN; WAIT_RANDOM
+0.5; PLAY_SOUND Target_Suspect; WAIT_RANDOM 1.5; UNLOOK_AT; CLEAR_NPC_FLAG NO_UNKNOWN_ATTACK;
+SET_NPC_FLAG FINISHED_IGNORE_UNKNOWN`; interrupts `… HEAVY_DAMAGE UNKNOWN_ADVANCING
+PLAYER_ON_HEAD`. `0x61 _OTHER_IGNORE`: `SET_PRESERVE_PATH 0; SET_NPC_FLAG NO_UNKNOWN_ATTACK;
+LOOK_AT_BEST_UNKNOWN; WAIT 1.0; WAIT_RANDOM 1.0; UNLOOK_AT; CLEAR_NPC_FLAG NO_UNKNOWN_ATTACK;
+SET_NPC_FLAG FINISHED_IGNORE_UNKNOWN; SET_SCHEDULE 0x52`.
+`0x62 _RETURN`: `REMEMBER INVESTIGATING; PLAY_SEQUENCE ACT_IDLE; SET_ACTIVITY
+ACT_ALERT_FIDGET_AGRO_LOOKAROUND; WAIT 5; PLAY_SOUND SUSPECT_GIVEUP; WAIT_RANDOM 1; SET_ACTIVITY
+ACT_IDLE; WAIT_RANDOM 0; SET_NPC_FLAG FORCE_RELAXED_ANIMS; WAIT_RANDOM 1; SET_TOLERANCE_DISTANCE
+5; GET_PATH_TO_LASTPOSITION; WALK_PATH; WAIT_FOR_MOVEMENT; FACE_LASTANGLE; CLEAR_LASTPOSITION;
+FORGET INVESTIGATING; CLEAR_NPC_FLAG LOOKED_AT_UNKNOWN`; interrupts `… HEAVY_DAMAGE
+INVESTIGATE_SOUND INVESTIGATE_SIGHT DETECTED_ATTACK`. `0x63 _RETURN_GIVEUP`: `STOP_MOVING;
+SET_PRESERVE_PATH 0; REMEMBER INVESTIGATING; PLAY_SOUND Target_Lost; SET_ACTIVITY
+ACT_ALERT_FIDGET_AGRO_LOOKAROUND; WAIT 4; WAIT_RANDOM 2; SET_ACTIVITY ACT_IDLE; WAIT_RANDOM 1;
+SET_NPC_FLAG FORCE_RELAXED_ANIMS; SET_TOLERANCE_DISTANCE 5; GET_PATH_TO_LASTPOSITION; WALK_PATH;
+WAIT_FOR_MOVEMENT; FORGET INVESTIGATING; FACE_LASTANGLE; CLEAR_LASTPOSITION; CLEAR_NPC_FLAG
+LOOKED_AT_UNKNOWN` (forget before facing, unlike 0x62); interrupts add `IGNORE_UNKNOWN`.
+`0x64 INVESTIGATE_NODE`: `SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_PATROL_POINT; SET_NPC_FLAG
+FORCE_RELAXED_ANIMS; RUN_PATH; WAIT_FOR_MOVEMENT; FACE_PATROL_INTEREST;
+DO_PATROL_INTEREST_ACTIVITY; NEXT_PATROL_POINT`; interrupts `NEW_ENEMY SEE_ENEMY
+SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE INVESTIGATE_SOUND INVESTIGATE_SIGHT
+IGNORE_UNKNOWN DETECTED_ATTACK PLAYER_ON_HEAD`; `0x66 _WALK` uses `WALK_PATH` without the flag;
+`0x68 _HUNT` uses `WALK_PATH_HUNT`. These three are **patrol** programs: `SelectSchedule` case 1
+returns `*(uint*)(m_sppPatrolPath(+0x6590) + 4)`, the path object's own id, one of the three
+`INVESTIGATE_NODE` or three `FOLLOW_PATROL_PATH` (0x65/0x67/0x69) ids.
+`0x80 HUNT_INVESTIGATE`: `SET_FAIL_SCHEDULE SCHED_TROIKA_HUNT_LOOK_AROUND; STOP_MOVING;
+SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_BESTSOUND; FACE_IDEAL; SET_TOLERANCE_DISTANCE 5;
+WALK_PATH_HUNT; WAIT_FOR_MOVEMENT; SET_SCHEDULE HUNT_LOOK_AROUND`; interrupts `NEW_ENEMY
+LIGHT_DAMAGE HEAVY_DAMAGE INVESTIGATE_SOUND INVESTIGATE_SIGHT SEE_SOUND_SOURCE IGNORE_UNKNOWN
+DETECTED_ATTACK`. `0x81 _UNKNOWN`: `…; GET_PATH_TO_BESTUNKNOWN; SET_PRESERVE_PATH 1; FACE_IDEAL;
+SET_NPC_FLAG FORCE_RELAXED_ANIMS; RUN_PATH; WAIT_FOR_MOVEMENT; SET_PRESERVE_PATH 0; SET_SCHEDULE
+HUNT_LOOK_AROUND`; interrupts `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE
+HEAVY_DAMAGE LOST_UNKNOWN`. `0x82 _UNKNOWN_LOST`: `SET_FAIL_SCHEDULE HUNT_LOOK_AROUND;
+SET_PRESERVE_PATH 0; SET_NPC_FLAG FORCE_RELAXED_ANIMS; RUN_PATH; WAIT_FOR_MOVEMENT; SET_SCHEDULE
+HUNT_LOOK_AROUND`. `0x7f HUNT_INVESTIGATE_FLINCH`: as 0x50, transferring to 0x80.
+
+**Selection.** Two testers, and the distinction is load-bearing: `HasCondition` (`0x10269aa0`)
+reads the condition set only; **`HasInterruptCondition` (`0x10269d30`)** requires an installed
+schedule, translates through the class id-space (slot `+0x910`), and needs the bit in **both**
+the condition set (`+0x5c5c`) and the cached interrupt mask (`+0x5c74`). The driving stimulus is
+honoured only when the running program lists it; refinements use plain `HasCondition`.
+
+`CAI_BaseNPCTroika::SelectSchedule` (`0x102af660`) **case 3 (ALERT)**, in order: (1)
+`FUN_102b8a60`, the see-unknown selector; (2) `FUN_102b8c40`: `HasInterruptCondition(LIGHT_
+DAMAGE 0x4c || HEAVY_DAMAGE 0x4d)` → `m_vSavePosition = +0x5b9c`, `0x8a SCHED_TROIKA_SHOT_BY_
+UNKNOWN`; (3) `HasCondition(DETECTED_ATTACK 0x0b)` → `0x56 SCHED_TROIKA_ALERT_TURN_TO_DETECTED_
+ATTACK`; (4) `FUN_102b7370` door obstruction; (5) **`FUN_102b9060`, the sound-investigate
+selector**; (6) `m_bGoToIdleState = 1; m_bForceStateChange = 1;` → `0x4b SCHED_TROIKA_ALERT_WAIT`.
+
+`FUN_102b9060`:
+```
+if (HasInterruptCondition(INVESTIGATE_SOUND 0x25)) {
+  if (HasCondition(HEAR_COMBAT 0x6d) || HasCondition(HEAR_BULLET_IMPACT 0x70)) {
+    m_flNextInvestigateSoundTime(+0x623c) = curtime + DAT_10452dc4;  CommitBestSound();
+    m_eAlertLevel(+0x63f4) = 3;
+    if (m_afMemory & 0x8000000 INVESTIGATING) return 0x52;
+    if (!(m_bfNPCFrenziedFlags(+0x5b84) & 0x10000) && RandomInt(0,99) < 100) return 0x50;  // roll is dead: always
+    return 0x51;
+  }
+  if (HasCondition(HEAR_WORLD 0x6e)) { m_BestSound = m_LastSoundWorld; copy to +0x60dc; return 0x51; }
+  if (HasCondition(HEAR_PLAYER 0x6f) || HasCondition(HEAR_DANGER 0x6a)) { CommitBestSound(); return FUN_102b8980(); }
+}
+if (HasCondition(SEE_SOUND_SOURCE 0x2d) && (r = FUN_102b8d20(this, 0x89, 0x73))) return r;
+if (!(m_bfNPCFrenziedFlags & 0x10000) && HasInterruptCondition(HEAR_FLINCH 0x72)) { CommitBestSound(); return 0x50; }
+return 0;
+```
+`FUN_102b8980`, the alert ladder (what `full_investigate` short-circuits): `if
+(m_bFullInvestigate +0x6340) m_eAlertLevel = 3; switch (m_eAlertLevel +0x63f4) { 0: level = 1,
+return 0x4c SCHED_TROIKA_ALERT_TURN_TO_SOUND; 1: level = 2, return 0x4d _ALERT_STEP_TOWARDS_
+SOUND; 2/3: level = 3, return 0x51 + (INVESTIGATING ? 1 : 0) }`. Turn → step → walk/run.
+`m_eAlertLevel` is written only by `FUN_102b5dc0` (values 1/2/3) and read only here;
+UNRECOVERED: what ever resets it to 0. `FUN_102b8d20(this, hitSched, fearSched)` — the
+`SEE_SOUND_SOURCE` third-party tail: `src = m_hBestSoundSource(+0x5b78)`, `foe = src->GetEnemy()`;
+`IRelationType(foe)`: D_HT → compute `m_vSavePosition (+0x5dd0)`, return `hitSched` (alert
+`0x89 RUN_TO_SAVED`, hunt `0x84 HUNT_RUN_TO_SAVED`); D_FR → `fearSched` (`0x73 FLEE_AND_COWER`);
+else bump `m_flNextInvestigateSoundTime` by `DAT_1044eb0c`, 0.
+
+`FUN_102b8a60`, the see-unknown selector: `if (HasInterruptCondition(IGNORE_UNKNOWN 0x03) &&
+!INVESTIGATING) return 0x60; if (HasInterruptCondition(SEE_UNKNOWN 0x01) ||
+HasInterruptCondition(UNKNOWN_ADVANCING 0x05) || HasCondition(INVESTIGATE_SIGHT 0x26)) {
+m_eAlertLevel = 3; if (!INVESTIGATING) return 0x59; if (flags1 & 0x200000 LOOKED_AT_UNKNOWN)
+return HasCondition(UNKNOWN_RUN_TIMER 0x04) ? 0x5e : 0x5c; return 0x5a; } if
+(HasInterruptCondition(LOST_UNKNOWN 0x02)) return (INVESTIGATING && HasCondition(0x04)) ? 0x5f :
+0x5d; if (flags1 & LOOKED_AT_UNKNOWN) return 0x5c; return 0;`. Note `INVESTIGATE_SIGHT` is a
+plain `HasCondition` — it need not be in the mask.
+
+**Case 0xb (HUNT)**, in order: `SEE_UNKNOWN` or `INVESTIGATE_SIGHT` (interrupt) → `0x81`;
+`FUN_102b8c40` damage; `LOST_UNKNOWN` (interrupt) → `0x82`; any of `INVESTIGATE_SOUND 0x25,
+HEAR_DANGER 0x6a, HEAR_COMBAT 0x6d, HEAR_WORLD 0x6e, HEAR_BULLET_IMPACT 0x70, HEAR_PLAYER 0x6f`
+(interrupt) → re-arm `+0x623c`, `CommitBestSound`, `(HEAR_COMBAT || HEAR_BULLET_IMPACT)` → `0x7f`
+else `0x80`; `HEAR_FLINCH` (interrupt) → `0x50`; `SEE_SOUND_SOURCE && FUN_102b8d20(0x84, 0x73)`;
+then the hunt-expiry chain (`0x85/0x7c/0x7d/0x7e`). **The hunt state accepts raw `HEAR_*`
+conditions; alert reaches sounds only through `INVESTIGATE_SOUND`, i.e. through the interest
+predicate.**
+
+Other entries: `0x5b _ATTACK` from `CAI_BaseNPCTroika::GetSchedule` (`0x102ae920`), combat state
+only: `if (flags1 & 0x800000 ATTACK_UNKNOWN) { clear; if (!(flags2 & 0x80 NO_UNKNOWN_ATTACK) &&
+!(frenzied & 0x80)) return 0x5b; }`. `0x62` and `0x58` are pure data (reached by
+`TASK_SET_SCHEDULE`/`_FAIL_SCHEDULE` only). **Dead in code: `0x53`, `0x54`, `0x61`, `0x63`** — no
+immediate in `0x102a0000–0x102c9000`, no blob names them; reachable only by name through
+`ChangeSchedule`/`aiscripted_schedule`. UNRECOVERED: the `m_bfNPCFrenziedFlags` bit `0x10000`
+that gates the flinch arms; `DAT_10452dc4` (investigate-sound re-arm) and `DAT_1044eb0c`.
+
+**`m_afMemory` bits** (token table `FUN_1030c800`): `PROVOKED 1, INCOVER 2, SUSPICIOUS 4,
+PATH_FAILED 0x20, FLINCHED 0x40, TOURGUIDE 0x100, LOCKED_HINT 0x400, TURNING 0x2000, TURNHACK
+0x4000, HAD_ENEMY 0x8000, HAD_PLAYER 0x10000, HAD_LOS 0x20000, INVESTIGATING 0x8000000, CUSTOM4
+0x10000000, CUSTOM3 0x20000000, CUSTOM2 0x40000000, CUSTOM1 0x80000000`. Three selectors read
+`INVESTIGATING` to choose the first-response program over the `_OTHER` one.
+
+**Tasks the port lacks, with arms** (shared registrar ids 0–0x114, Troika 0x115–0x149; `StartTask`
+/ `RunTask`): `STORE_LASTPOSITION 0x17` (base `0x10282afd`: `m_vecLastPosition +0x5db8 =
+origin; m_angLastAngle +0x5dc4 = angles`), `CLEAR_LASTPOSITION 0x18` (`0x10282b5b`),
+`GET_PATH_TO_LASTPOSITION 0x1c` (`0x10285bb0`), `GET_PATH_TO_BESTSOUND 0x20` (`0x10285df8`:
+`AI_NavGoal_t{type 4 LOCATION, dest = m_BestSound+0x20, tolerance = [0x1049a160] overriding the
+schedule's, flags −1}` → navigator `SetGoal`), `WALK_PATH 0x23` (`0x10286438`), `FACE_IDEAL 0x2b`
+(`0x10283cd5` / Troika run `0x102aae43`), `PLAY_SEQUENCE 0x52` (`0x10282dde`/`0x102891c8`),
+`FORGET 0x6d` (`0x102829e9`), `GET_PATH_TO_BESTUNKNOWN 0x79` (Troika `0x102a3599`),
+`GET_PATH_TO_PATROL_POINT 0x7a` (`0x102a39be`/`0x102ab00f`), `NEXT_PATROL_POINT 0x7d`
+(`0x102a3b91`), `FACE_PATROL_INTEREST 0xb3` (`0x102a63bd`/`0x102ab974`),
+`DO_PATROL_INTEREST_ACTIVITY 0xb5` (`0x102a64a6`/`0x102aba6c`), `ADD_EVENT_EXPRESSION 0xbe`
+(`0x102a4a07`), `SET_PRESERVE_PATH 0xc4` (`0x102a3cfa`), `WALK_RUN_PATH_COMBAT_SOUND 0xd7`
+(`0x102a4bd8`: `m_BestSound.type == 1 COMBAT || 0x10 BULLET_IMPACT` → `ACT_RUN` if the model has
+it, else `ACT_WALK`; `SetMovementSequence`; clear `MEMORY:INCOVER`), `PLAY_COWER 0xe6`
+(`0x102a5125`/`0x102ab83c`), `ALERT_LOOK_AT_BEST_SOUND 0xf9` (`0x102a5515`; shared run
+`0x102ab76a`: look at the point, complete when `m_flLookTimer +0x5db4` elapses or the head-turn
+virtual reports done, clearing `PLAYING_FACE_ANIM 0x08000000`), `LOOK_AT_PLAYER 0xfb`
+(`0x102a5599`), `LOOK_AT_BEST_UNKNOWN 0xfc` (`0x102a55e3`), `UNLOOK_AT 0xfe` (`0x102a56a2`),
+`CLEAR_NPC_FLAG 0x101` (`0x102a58ae` — the port's "no program clears a flag" premise is false:
+0x60/0x61 clear `NO_UNKNOWN_ATTACK`, 0x62/0x63 clear `LOOKED_AT_UNKNOWN`), `WALK_PATH_HUNT 0x104`
+(`0x102a5932`), `FACE_LASTANGLE 0x11d` (`0x102a6fd8`/`0x102ab900`), `PLAY_SOUND 0x11e`
+(`0x102a7000`: `g_VSoundTable(0x1073dc28)->PlayNPCSound(this, idx, 2, 1.0, 1.25)` via
+`0x101f5950`, start-only), `ALERT_LOOK_AT_UNKNOWN_ATTACKER 0x148` (`0x102a7722`, handle `+0x5b7c`,
+`TaskFail(0x21)` when dead).
+
+## Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload (2026-09-08)
+
+**The HitGroup record.** A discipline's `HitGroupList` entry (`0x374` bytes; loader `0x101e0080`)
+holds five `0xac`-byte `HitInfo` blocks (instant `+0x08`, `OnEnd +0xb4`, `OnCallback +0x160`,
+`OnInterrupt +0x20c`, `OnInterruptSchedule +0x2b8`), `Duration +0x364`, the trait effect `+0x36c`,
+and two bytes parsed by `0x101dfa00`: **`+0x370` = key `DoPossession`** (`0x105a2870`), **`+0x371`
+= key `DoFrenzy`** (`0x105a2864`), both default 0, copied verbatim by `InheritFrom` (`0x101df340`).
+The earlier "make follower vs calm" reading was wrong: `+0x371` is frenzy; `D_CALM` is written only
+by `SCHED_TROIKA_CALMED`'s `TASK_SET_NPC_FLAG`. The sole reader is `0x101dfc20` (DevMsg
+`"Discipline<%s>: HitGroup: <%s> Hit Triggered on %s (%s)"`): apply the instant `HitInfo`
+(`0x101de660`), then on the target's `+0x98` Troika pointer `DoPossession` first, else `DoFrenzy`,
+then the trait effect. Chain: cast `0x101e2f50` → per target `0x101e3730` (Affects table picks the
+HitGroup) → `0x101e3850` (or `CDisciplineProjectile::vfunc266` `0x101da020` on impact) →
+`0x101dfc20`. The HitGroup's `AI_Schedule` is installed by `0x101de660` **before** either arm.
+
+**`DoPossession` arm `0x102c51a0`** (the `SetFollowerBoss` path): `AddMiscFlag(0x800)` when the
+enemy or the caster is hated; squad disconnect `0x1026d050`; `0x102b52a0` (`SetEnemy(NULL)`,
+`SetTarget(NULL)`, `+0x5d8c &= 0xf7fc7fff`, clear hint); slot 304; `flags2 |= D_POSSESSED |
+D_DISCONNECT_SQUAD`; caster a player → `0x10273790(this, "player D_LI 99")`;
+**`SetFollowerBoss(ent)` `0x102c4470`** (`"!player"` for a player caster, else the caster's name)
+→ `SetFollowerBoss(name)` `0x102c44e0`; **`SetFollowerType("Combat")` `0x102c4640`** → radii from
+`Npc_Follower_Info` (`0x102c4680`); ideal state 1; `m_hTargetEnt (+0x5ce4)` and `m_hFriendPlayer
+(+0x60ac)` = caster; slot 614; `m_bfNPCFrenziedFlags (+0x5b84) = 0x3b1c`; slot `0x94c` =
+`0x102b4cc0` sweeps a 1024×1024×128 box and `SetEnemy`s the nearest hated entity.
+**`DoFrenzy` arm `0x102c5310`**: the same first four steps, the hate acquisition, then `flags2 |=
+D_INSANE | D_DISCONNECT_SQUAD`, the `D_LI 99` write, ideal state `0xb` (hunt),
+`investigate_mode` and `_combat` = 6, `m_hFriendPlayer`, `frenziedFlags = 0x9fbd`; no follower.
+Shipped setters (`disciplinetgt_001/002.txt`): `DoFrenzy` — `Dementation_Berserk` and
+`Dementation_Bedlam`; `DoPossession` — `Dominate_Possession`. Presence, Animalism, Thaumaturgy,
+Dominate 1/2/3/5 set neither.
+
+**The `AI_NPCFlag` payload — a non-task writer of the flag words.** `HitInfo+0xa8` is the key
+`"AI_NPCFlag"` (`0x105a26b4`), parsed by `0x101ddfb0` through the same 62-name resolver
+`0x1030cbd0` as `TASK_SET_NPC_FLAG` (sign bit = word two). `0x101de6e1` is not a function but the
+set arm inside `0x101de660` (`|=` on `+0x14b8`/`+0x14bc` of the target's Troika pointer);
+`0x101def10` is the matching clear (`&= ~mask`, plus `RemoveFromComfortList` and a schedule
+teardown), reached through the effect-expiry table. The sibling key `"MiscFlag"` → `+0xa4` via
+`0x1033cb00`. This corrects the earlier claim that the task vocabulary is the only writer of the
+words: a HitGroup sets flags on the target with no task, and `OnScheduleChange`'s masks will
+clear them like any other.
+
+**Derived condition tables, tutorial classes.** Registrar helper `0x102ea130` =
+`CAI_ClassScheduleIdSpace::AddSymbol` (63 callers); derived local ids start at `0x78`.
+`CNPC_VVampire` (`0x103c4ab0`), `CNPC_VHuman` (`0x10384230`), `CNPC_VHumanCombatant`
+(`0x10386cb0`), `CNPC_VPedestrian` (`0x103a1fd0`) register **no** condition above `0x76`;
+`CNPC_VRat` has no registrar and inherits `CNPC_VScurrying`'s (`0x103abd70`): **`0x78
+COND_VSCURRYING_PLAYER_TOOCLOSE`** (its global id is load-order assigned). The 17 classes that do
+add conditions: Crow, VAndreiBlood, VBach, VBatSwarm, VChangBros, VDog, VFrenzyShadow,
+VGhoulCroucher, VMingXiao, VMingXiaoTentacle, VSabbatLeader, VScurrying, VSheriffMan,
+VSheriffSwarm, VTzimisce, VWerewolf, VZombie.
+
+**`stay_entrenched`** is a `CAI_BaseNPCTroika` datamap keyfield: `m_bStayEntrenched +0x6435`,
+`FIELD_BOOLEAN`, builder `0x1028cd70`; plus the input `StayEntrenched` → `0x102c2bd0` (writes 0
+on any non-boolean variant). Readers: `0x102ae920` (combat state only: an entrenched NPC that
+passes slot 592 and gets a schedule from `0x102b7690` returns it and skips the ordinary tail) and
+`NPCThink` `0x10292de0`. UNRECOVERED: `0x102b7690`'s arms, slot 592, the `NPCThink` arm.
+UNRECOVERED elsewhere in this section: the `m_bfNPCFrenziedFlags` vocabulary (`0x3008` from
+`SetFollowerBoss`, `0x3b1c`/`0x9fbd` from the arms, `& 0x80` in `0x102ae920`), slots 304 and 614 (misc-flag bit 11 is `Was_Hateful`, see below).
+
+## Sense and investigate leftovers, closed (2026-09-08)
+
+Method note: the field ledger and name-based grep miss accesses the decompiler renders as a
+dword index (`param_1[0x16e1]` for `+0x5b84`, `[0x188f]` for `+0x623c`); cross-check with a grep
+on `0x<offset/4>]`.
+
+- **`m_eAlertLevel` (+0x63f4)** is `FIELD_INTEGER`, `FTYPEDESC_SAVE` (flags `0x2`; `0x4` = KEY,
+  calibrated on `m_iIsOblivious`/`m_bNoAlertState`). Writers: the slot-420 NPCInit
+  (`0x1029a0b0`, VCamera `0x103692c0`) → 0, `FUN_102b8980` → 1/2/3, `FUN_102b8a60` and
+  `FUN_102b9060` → 3. Slot 420 is dispatched only from `Spawn` bodies (and `CNPC_VPedestrian`'s
+  level-reset respawn). **Nothing resets it: the turn → step → walk ladder runs once per life and
+  survives saves**; every later `HEAR_PLAYER`/`HEAR_DANGER` goes straight to `0x51`/`0x52`.
+- **`debug_allow_npc_hunting`** (object `0x10924478`, ctor `0x1028c840`, default **`"0"`**, flags
+  0, help "Set this to 1 to allow NPCs to do their 'scouring the area' hunting state") is the
+  ConVar behind `DAT_1092447c`, read only by `CNPC_VHuman::SelectIdealState` (`0x103851e0`).
+  **In retail no `CNPC_VHuman` enters the HUNT state from `SelectIdealState`**; the case-0xb ladder
+  and `SCHED_TROIKA_HUNT_*` are reachable only by `aiscripted_schedule`/`ChangeSchedule` or with
+  the cvar flipped. `debug_allow_move_facing` (`0x10924f70`, ctor `0x1028c720`, default `"1"`,
+  "If this is on, NPCs will move facing the NPC when they run for cover") is `DAT_10924f74`;
+  readers `0x10278cb0/d20/d90` (facing forwarders), `NPCThink`, `0x102b93c0`,
+  `CNPC_VAndreiBlood::PreTranslate_Human`.
+- **`m_bfNPCFrenziedFlags` (+0x5b84)**: `FIELD_INTEGER`, saved, no external name, **no name
+  table anywhere** (only `NPCFlag:` `0x1030cbd0` and `MiscFlag:` `0x1030d850` parsers exist) —
+  UNRECOVERED authored names. Writers: base init `0x10273390` → 0 (VCamera/VNewscaster/
+  VPlayerController likewise); `CNPC_VFrenzyShadow::vfunc420` → `0x5ddf`; `CNPC_VScurrying::
+  Spawn` `0x103ac430` → `|= 0x10000`; `VTzimisceHeadClaw`/`VTzimisceRunner` Spawn → `|= 0x80`;
+  `SetFollowerBoss` `0x102c44e0` → `|= 0x3008`; `DoPossession` arm → `= 0x3b1c`; `DoFrenzy` arm →
+  `= 0x9fbd`. Bit meanings from their readers: `0x8` always-PVS/LOS bookkeeping (`0x10290b60`,
+  `0x10291230`, `SetPlayerLOS`); **`0x10` "does not witness"** — first gate of the player-law
+  sweep `0x1028efc0` and a reject rung of slot 587; `0x80` suppresses the unknown-attacker
+  response (`0x102ae920` ×3); `0x800` the frenzy friend-player reject in `QuerySeeEntity`/
+  `QueryHearSound`; `0x2000` ally banter permission (one reader `0x102b7cf0`: `SEE_ENEMY`,
+  cooldown `+0x65a4`, `!D_INSANE`, `!stay_entrenched` → `0x8c`/`0x8d`, re-arm 10–20 s);
+  **`0x10000` no-flinch** — set only by `CNPC_VScurrying::Spawn`, read only by `FUN_102b9060`.
+  Further readers: `0x2` (`FUN_102b5900`, `0x10385d70`), `0x400` (`FUN_102b2570`), `0x4000`
+  (`CWeaponMelee::RequestActivity` `0x103e9e00`). The bits have no name table anywhere in the
+  image (settled; the `Frenzied` string at `0x1061ab20` belongs to an unreferenced 10-entry mood
+  table at `0x10619f24`: `Diablerist_, Kindred_, Afraid, Angry, Calm, Confused, Frenzied,
+  Innocent, Obfuscated, Suspicious`, consumer unrecovered).
+- **The misc-flag name table** (`0x10619ec8`, 22 pointers; name→index `0x1030d390` for the
+  `MiscFlag:` parser `0x1030d850`, name→mask `0x1033cb00`, mask→name `0x1033cb50`), bit order:
+  `Unconscious, D_Targeted, Allow_Fort_Soak, Allow_Thaum_Exp, Gave_Fighting_Wpns,
+  Allow_Discipline_Fx, Update_Auto_Leveling, Picked_Up_Item, Obf_Bumped_Object,
+  Has_Special_Dmg_Mod, Has_Special_Hit_Mod, **Was_Hateful (0x800)**, Double_Humanity_Mods,
+  Feed_Bonus_Opp_Gender, Feed_Bonus_Tramps, Increased_Rat_Feed, Cannot_Rat_Feed,
+  Forced_BloodShield, No_Resist_Feeding, No_Ragdoll_Death, Gain_Stealth_Atk_Bonus, Fired_Gun`.
+  So the possession/frenzy arms' `AddMiscFlag(0x800)` mark the target `Was_Hateful`, read by
+  `0x1033d580` ("counts as an ordinary killable human").
+- **`CAI_InterestingPlace+0x57d`**: written only by the constructor `0x102d99d0` (= 0); never set
+  to 1. The predicate arm is dead; only `m_bEnabled` disables a node. `+0x57e` likewise.
+- **`COND_SHOULD_INTERACT`**: `FUN_102a0cb0` has zero references in the image (full `E8`/`E9`/
+  absolute-dword scan; only its own uncalled link thunk `0x10013039`). `m_flNextPedInteractTime`
+  is zeroed at spawn and read by nobody; `UpdatePedestrianInfo` clears `0x10` every navigating
+  think. **`SCHED_TROIKA_INTERACT` (0x106) is unreachable in retail**, like `LOITER` (0x105).
+- **`m_flNextInvestigateSoundTime` (+0x623c)**, `FIELD_TIME`, saved. Writers: the slot-420 init
+  → 0; `SelectSchedule` at `0x102afb8d` (hunt) and `0x102b0349` (the `INVESTIGATE_SOUND`
+  interrupt arm that also clears `COWER_PATH 0x200`, commits the best sound and returns `0x48`),
+  `FUN_102b9060`, `CNPC_VPedestrian::vfunc438` (`0x103a29f0`), `CNPC_VTzimisce::vfunc438`
+  (`0x103bb7c0`) — all `curtime + 2.0`; `FUN_102b8d20` → `curtime + 20.0`. One reader:
+  the sound sweep `0x102b1cd0`, gating its whole body. **`DAT_10452dc4 = 2.0f`,
+  `DAT_1044eb0c = 20.0f`**; also `[0x1049a160] = −1.0f` (the best-sound path tolerance
+  override), `[0x1044bef8] = 0.25f`.
+- **`+0x60dc` is `m_InvestigateSound`** (`FIELD_EMBEDDED`, saved), the `CSound` immediately after
+  `m_BestSound` (`+0x60b0 + 0x2c`); `+0x60e0` its `m_iType`. Written by `CommitBestSound` and by
+  `FUN_102b9060`'s `HEAR_WORLD` arm; read by `ShouldInvestigate` `0x102b3270` (the type test for
+  1/0x10), `GetSchedule` `0x102ae920`, `0x102993c0`, `0x10299700`. Two copies because
+  `m_BestSound` is the volatile task-facing record `GetBestSound` hands out and re-commits, while
+  `m_InvestigateSound` is the sticky decision-layer copy that outlives it across saves.
+- **`m_bfAINPCFlags` bit 21 = `LOOKED_AT_UNKNOWN` (0x200000), bit 25 = `FINISHED_IGNORE_UNKNOWN`
+  (0x2000000)**, both set/cleared only by `TASK_SET/CLEAR_NPC_FLAG` from `0x59`/`0x62`/`0x63` and
+  `0x60`/`0x61`. Bit 21 is read only by `FUN_102b8a60`; **bit 25 has zero readers** — bookkeeping
+  like `MADE_OBLIVIOUS`, cleared by `OnScheduleChange`'s `&= 0xd7ffffff`.
+- **`+0x6081`**: no datamap entry, not saved. Writer `0x102b4760` (`= 1` when `d > 0.7 ×
+  radius`, `DAT_10457f54 = 0.7f`); readers `0x102b3e00` and the two slot-472 overrides
+  `CNPC_VCop::vfunc472` (`0x10371ae0`), `CNPC_VHunter::vfunc472` (`0x103887d0`).
+- **Slots.** 434 = `PrescheduleThink()` (`0x101a6560`, empty; proved by `CNPC_VSabbatLeader::
+  PrescheduleThink` `0x103a7650`; called from `RunAI`; Troika does not override it). 436 =
+  `OnStartSchedule(int)` (`0x101a6580`, empty; `MaintainSchedule` calls it on `m_iCurTask == 0`
+  with the local id). 445 = `StartTaskOverlay()` (`0x10288710`, the move-and-shoot overlay;
+  twin `RunTaskOverlay` `0x10289c90`, non-virtual). 447 = `GetLocalScheduleId(int)`
+  (`0x101a6620`, `GetClassScheduleIdSpace()->ScheduleGlobalToLocal`). None of the four is
+  overridden in the Troika hierarchy. `MaintainSchedule` = `0x102817c0` (VProf
+  `"CAI_BaseNPC::RunAI::MaintainSchedule"`, `StartTask` slot 442, `RunTask` slot 444).
+  **Slot 587** (`0x1028ef20`; overrides on `CAI_BaseHumanoid`, `VAnimal`, `VMingXiao`,
+  `CNPCMaker`, `VNewscaster`, `VPlaceholder`): `IsKindred()` → false; `m_iDialog != 0` → false;
+  `m_iIsOblivious > 0` → false; `frenzied & 0x10` → false; `IsBusyWithDiscipline()` → false;
+  else `(pl_supernatural_flee < 3) || (pl_supernatural_attack < 3)`. Dispatched from
+  `CAI_BaseHumanoid::vfunc333` and the Nosferatu player think `0x10181be0` (template
+  `Player_Nosferatu`, 512-unit sphere, nearest passer → SendProp **`m_idxNosferatuRadarNPC`**
+  at player `+0x1ED0`, consumed by `hud/Context_Icons/Nosferatu_Warning`). Its authored name is
+  UNRECOVERED; `CanWitnessSupernatural()` stays the project name.
+
+## The think cadence, decoded (2026-09-08)
+
+All eight stamps are `CAI_BaseNPCTroika`-only: `m_flNextUpdateThink +0x6244`, `NextNormal
++0x6248`, `NextMove +0x624c`, `NextAI +0x6250`, and `m_flLast{Update,Normal,Move,AI}Think`
+`+0x6254..+0x6260`. Inputs: `m_flPlayerDist +0x6264`, `m_hClosestPlayer +0x628c`,
+`m_bInPlayerPVS +0x6278`, `m_bInPlayerLOS +0x6279`, `m_flLastInPlayerLOS +0x6280`,
+`m_flNextPlayerLOS +0x6284`. Names from VProf literals: `CalcNextUpdateThink 0x10290720`,
+`CalcNextNormalThink 0x10290b60`, `CalcNextMoveThink 0x10290fc0`, `CalcNextAIThink 0x10291230`,
+`SetClosestPlayer 0x10293a80`, `SetPlayerLOS 0x10291610`, `UpdateCharacter 0x10298070` (slot
+312). `0x1029bd40` is the `ai` debug distance overlay, not a writer.
+
+**Due test** `IsThinkDue(stamp)` `0x10290660`: `(stamp − curtime) ≤ frametime` (equality is due;
+`FCOMP` + `TEST AH,0x41`). The move gate `0x102906e0` is `return true`.
+
+**Writers.** `NPCInit` `0x1029a0b0` sets all eight to `curtime` and seeds `PVS = LOS = 1`
+(a fresh NPC is due on every clock). The four `Calc*`. **`TaskFail` `0x1029adb0`** sets the four
+`Next` stamps to `curtime` (not the `Last` ones): a failure forces a full think next frame.
+**`0x102c23f0` = slot 614 `ResetThinkTimers()`** (all four `Next` + `m_flNextThink` := curtime),
+dispatched virtually by `FeedInterrupt` before the trance and by the possession arm — the effect
+takes hold on the same frame. Subclass writers of `+0x6250`:
+`CNPC_VCamera` `0x10369120`/`0x103692c0`, `CNPC_VNewscaster::vfunc431` `0x103a05b0`
+(UNRECOVERED arithmetic).
+
+**The interval laws** (constants from the DLL; epilogue for each: `*out = Next − Last; Last =
+Next; Next = max(Next, curtime) + i`):
+- Update: no closest player → `0.03`; else `v = (m_flPlayerDist − 512) / 704`, `v > 8 → 8 +
+  RandomFloat(0, 0.8)`, `v < 0.03 → 0.03`, `v == 8 → v + RandomFloat(0, 0.8)`; then `!PVS → ×10
+  cap 16`, `!LOS → ×5 cap 12`; `ShouldThinkFrequently()` → `0.03`.
+- Normal: `ShouldThinkFrequently()` → `0.01`; `frenzied & 0x8` or `flags2 & 0x4
+  SCHEDULE_CHANGED` or `LOS` → `0.1` (no PVS scaling); else no player → `0.1`, else `v =
+  (dist − 2048) × 3/4096`, `v > 3 → 3 + RandomFloat(0, 0.3)`, `v < 0.1 → 0.1`; `!PVS → ×10 cap 16`,
+  `!LOS → ×3 cap 6`.
+- AI: `frenzied & 0x8` or `SCHEDULE_CHANGED` or `LOS` or no player → `0.1`; else `v = (dist −
+  512) / 896`, `v > 4 → 4 + RandomFloat(0, 0.4)`, `v < 0.1 → 0.1`. No PVS scaling, no
+  `ShouldThinkFrequently`.
+- Move: `curtime + 0.001`, always.
+`ShouldThinkFrequently()` `0x102c2430` = `IsInDialog()` (`0x102c1170`: `m_bIsTalking +0x64c0`,
+`m_szDialogQue[0] +0x64ec`, `m_hDialogPartner`, handle `+0x6554`) ∥ `m_scriptState +0x5d70 ∈
+{4,5,6}` ∥ (`curtime > m_flTeleportMoveTimer +0x65dc ? m_bForceFrequentThink +0x63f0 : true`).
+Note the asymmetry: out of LOS lengthens the update think, while being in LOS pins normal and AI
+to 0.1 s. `m_NPCState` enters none of the laws; state changes the rate only through LOS,
+`SCHEDULE_CHANGED` (set by `SetSchedule`, cleared at the top of every think), `TaskFail`, and
+dialogue/script. There are no `ai_think_*` cadence cvars.
+
+**`SetClosestPlayer`**: nearest player by 3-D distance, seed `20000.0`, → `m_hClosestPlayer`,
+`m_flPlayerDist`. **`SetPlayerLOS`**: forced `PVS = LOS = 1` when `m_bfNPCStateFlags & 0x8`
+(UNRECOVERED name), `frenzied & 0x8`, or no player; else at most every 2.0 s: `PVS = engine
+PVS test 0x101d1a90`; in PVS and `dist < 512` → `LOS = 1` without a trace; else eye-to-eye trace
+mask `0x4091`; then `if (!LOS && PVS && curtime − m_flLastInPlayerLOS < 8.0) LOS = 1`.
+
+**One `NPCThink` (`0x10292de0`), in order**: `NPCThinkDebugPre`; `flags2 &= ~SCHEDULE_CHANGED`;
+`if (m_bDisableAI +0x6080) return`; `normalDue = IsThinkDue(NextNormal)` — the master gate; when
+due: `SetClosestPlayer`; enemy distance/height/last-known (`+0x6268/+0x626c/+0x6270`, `5000.0`
+when none) and the `MOVE_FACE_ENEMY` facing under `debug_allow_move_facing`; `AngleVectors` →
+`+0x6290/+0x629c`; `SetPlayerLOS`; `CacheInterruptConditions`; `AutoMovement` under
+`ANIM_MOVEMENT 0x4000`; hint upkeep (`m_flOccludedDelay` from cover/normal; invalid hint, or
+`!stay_entrenched && m_hHintCoverObject == enemy && (0x2e || 0x48)` → `ClearHintNode(5.0)` +
+`TaskFail(0x29)`); shoot-target override; a 1 % `"Scream_Death"` under `frenzied & 0x8000`;
+`updateDue`; `ResolveStandingOnHead`; fall-to-ground unless `DONT_FALL_TO_GROUND`; `move_yaw`
+pose; `DISAPPEAR 0x20000000` removal when out of the player's PVS or unseen; the AI console gate
+`0x1026c3d0` (refusal → `m_flNextThink = curtime + 0.1`, return); **`bReduced =
+!IsThinkDue(NextAI)`**; `RunAlternateAI(bReduced)` (`0x1028fd80`) and, if it returns 0,
+`RunAI(bReduced)` (slot 432); `PostRun` → `PerformMovement(interval)`; `CalcNextMoveThink`;
+`CalcNextAIThink`. Then (whether or not normal was due): if `updateDue` → `UpdateCharacter`
+(slot 312) and `FinishTalking` when `m_bIsTalking && !IsInDialog()`; `CalcNextUpdateThink`;
+`CalcNextNormalThink`; **`m_flNextThink = min(NextUpdate, NextNormal)`**; `m_bJumping +0x6498` →
+`curtime + 0.01`; the debug overlay.
+
+**`RunAI(bReduced)` `0x1026f110`**: `m_bConditionsGathered = 0`; `GatherConditions` (slot 433)
+only if `!bReduced && m_hDialogPartner invalid`; the head probe `0x1026ab50`; `PrescheduleThink`
+(slot 434); `MaintainSchedule(this, bReduced)` — bound 10, or 1 when reduced (`0x1028190e`);
+`if (!bReduced)` clear `LIGHT_DAMAGE 0x4c`, `HEAVY_DAMAGE 0x4d`, `WAS_BUMPED 0x38`. The base
+`CAI_BaseNPC::NPCThink` `0x1026ca80` is a flat `curtime + 0.1` with `RunAI(0)`; no Troika NPC
+runs it.
+
+## Squads, decoded (2026-09-08)
+
+**`CAI_Squad`** (0x78 bytes; ctor `0x103164c0`, link `0x103165f0`, dtor `0x10316440`; list head
+`g_pSquadList 0x10936c68`): `+0x00 next`, `+0x04 name`, **`+0x08 m_memory` — an embedded
+`AI_Enemies`**, `+0x1c EHANDLE m_hMembers[16]`, `+0x5c m_nNumMembers`, `+0x60
+m_flSquadSoundWaitTime`, `+0x64 m_squadSlotsUsed` (32-bit `CVarBitVec`), `+0x70 m_hFocusEntity`,
+`+0x74 m_flFocusExpireTimer`. `datamap_CAI_Squad` (`0x10315610`) holds the last five only; the
+member array and name are not saved. NPC side: `m_pSquad +0x5da4` (not in the datamap),
+`m_iSquadDisconnected +0x5bb0` (datamap, an int refcount like `m_iIsOblivious`), `m_SquadName
++0x5da8` (key **`squadname`**), `m_pEnemies +0x5d88`.
+
+**The whole coupling is the shared memory.** `CAI_BaseNPC::GetEnemies()` (slot 541,
+`0x10273e10`) = `m_iSquadDisconnected < 1 ? m_pEnemies : g_DisconnectedEnemies` (the global
+`AI_Enemies` at `0x109203f0`). Joining (`InitSquad` `0x10273d30`: `m_pSquad == NULL &&
+CapabilitiesGet() & bits_CAP_SQUAD 0x4000000`, then `FindCreateSquad(name)` `0x10315800` and
+`SetSquadEnemies` slot 542 `0x10273dd0` — delete the private memory, point `m_pEnemies` at
+`squad+8`; or the `SQUAD` tweak param → `CAI_BaseNPCTroika::SetSquad` `0x1029a930`) swaps the
+NPC's enemy memory for the squad's. `FindCreateSquad`: `strcmpi` walk; a 17th recruit DevMsgs
+`"Squad %s is too big"` and overwrites the 16th. `GetMember(i)` `0x103160c0` returns NULL for
+every index when member 0 is disconnected. `RemoveFromSquad` `0x103158f0` (callers:
+`Event_Killed` `0x10265ad0`, `0x1027ca30`, `SetSquad`, `CNPC_VCamera`) compacts the array and
+calls slot 578 (UNRECOVERED name) on each survivor. Squads are freed only by `DeleteAllSquads`
+`0x103162d0` at level shutdown. `SetSquadFocus` `0x10316660` / `GetSquadFocus` `0x103166b0`
+(15 s expiry). No `GetLeader` exists; `CNPC_VChangBros` and `logic_squad_condition`
+(`0x10135930`, `squad_name`, `SquadSeesPlayer`) walk `NumMembers`/`GetMember`.
+**`LeaveSquad` `0x10316700` is `RET 4` — an empty stub.**
+
+**Disconnect / reconnect.** `DisconnectFromSquad` `0x1026d050`: if not already disconnected and in
+a squad, `LeaveSquad` (no-op) then **`g_DisconnectedEnemies->ClearMemory()`** (`0x102dfc10`) —
+one global scratch memory shared by every disconnected NPC, wiped on each disconnect; then
+`++m_iSquadDisconnected`. `ReconnectToSquad` `0x1026d0c0`: `--count`; at 0 → `squad->
+AddSelfToSquadMemory(this)` `0x10316720`; `flags2 &= ~D_DISCONNECT_SQUAD`.
+`TASK_DISCONNECT_FROM_SQUAD` is task `0xf5` (the only task of `SCHED_TROIKA_D_BRAINWIPE`);
+other callers: `TASK_MAKE_OBLIVIOUS`'s `0x1026d130`, the possession and frenzy arms.
+
+**Conditions.** `COND_SQUAD_SEE_ENEMY 0x31` producer `0x102b2730` (from Troika
+`GatherConditions`): `m_iSquadDisconnected < 1 && m_pSquad && enemy && AI_Enemies::LastTimeSeen
+(GetEnemies(), enemy) + 0.2 ≥ curtime` → set 0x31, and `COND_SQUAD_LOS_ENEMY 0x32` when
+`HAVE_ENEMY_LOS 0x4a` — "someone sharing my memory saw him in the last 0.2 s", no broadcast.
+`TASK_SQUAD_NEW_ENEMY` = task `0x138` → `CAI_Squad::SquadNewEnemy` `0x103161a0`: for each
+member not disconnected, not already on this enemy, without `SEE_ENEMY`, still sharing the
+memory → `SetEnemy`, `m_flLastAttackTime +0x5d9c = 0`, `NEW_ENEMY`. Other callers `0x1026f590`
+(slot 460: idle/alert, `NEW_ENEMY`, enemy set → broadcast, or set `flags2 |= SQUAD_NEW_ENEMY` on
+the entity at `CAI_BaseNPC+0x98`, UNRECOVERED), `0x102ae920`, `0x10374e50`, `0x10397380`.
+**`SQUAD_NEW_ENEMY` (flags2 bit 13) and `IGNORE_SQUAD_SEE_ENEMY` (bit 6) have zero readers in
+the image** — write-only bookkeeping; the port's clear of `SquadSeeEnemy` under
+`IGNORE_SQUAD_SEE_ENEMY` is a divergence to remove.
+
+**Saving** (`0x1030bfd0`): squad count, each squad's five datamap fields, then the private
+`CAI_Memory` of every NPC that is disconnected or squadless. Membership is rebuilt on restore
+from each NPC's `squadname` through `InitSquad`; order is not preserved; `m_pSquad` itself is
+never serialized.
+
+**Strategy slots ship dead.** The `squadslot` namespace (`0x10920484`) receives exactly two
+names, `SQUAD_SLOT_ATTACK1/2` (`0x10316e80`, ids `0x3b9aca00/01`), with no consumer; every class
+registers zero squadslots; there is no `OccupyStrategySlot`/`VacateStrategySlot`;
+`m_squadSlotsUsed` is touched only by ctor, dtor and save. Do not build them.
+
+UNRECOVERED: `CAI_BaseNPC+0x98`'s entity; slot 578; slot 168 (`+0x2a0`, the `GetEnemy` variant
+the producer uses); `m_iMySquadSlot`'s offset (zero readers); `m_bfNPCStateFlags` bit 3;
+`CAI_Squad` `0x10316890/ab0/bc0/ec0/fa0/fd0` (memory-forwarding wrappers).
+
+## The flee state and the cower, disoriented and lost programs (2026-09-08)
+
+Blob census: 691 blobs; 62 carry bare names without `SCHED_` (the base table's `COWER`,
+`STANDOFF`, `DIE`…). The registration pair comes in three codegens (`mov [esp+0x10/+0x14]`,
+other displacements, and `push id; push name`); the nearest preceding pair self-verifies on 617
+of 627 named blobs.
+
+| id | name | blob |
+|---|---|---|
+| 0x70 / 0x71 | SCHED_TROIKA_FLEE_AND_COWER_TURN_TO_PLAYER / _NEAR | 0x105fa230 / 0x105fa0a0 |
+| 0x72 | SCHED_TROIKA_FLEE_AND_COWER_SCREAM | 0x105f9f60 |
+| 0x73 | SCHED_TROIKA_FLEE_AND_COWER | 0x105f9d28 |
+| 0x74 / 0x75 | _STALL / _STALL_FAILED | 0x105f9b28 / 0x105f9978 |
+| 0x76 | _NO_ENEMY | 0x105f9740 |
+| 0x77 / 0x78 | SCHED_TROIKA_COWER / _HINT | 0x105f9598 / 0x105f9410 |
+| 0x109 / 0x10a / 0x10b | SCHED_TROIKA_COWER_SIMPLE / _HINT / _NOSEE | 0x105e5788 / 0x105e5590 / 0x105e5398 |
+| 0x12d / 0x12e | SCHED_TROIKA_DISORIENTED / SCHED_TROIKA_LOST | 0x105dfe28 / 0x105dfca0 |
+
+Neighbours: `0x6f FLEE_AND_DIE`, `0x107 FLEE`, `0x108 FLEE_RANDOM`, `0x12f COMFORT`, `0x130
+CALMED`, `0x132 LAUGHING`. The base-class `COWER` (`0x10604f98`: `STOP_MOVING; PLAY_SEQUENCE
+ACT_COWER`) is Source's `SCHED_COWER`; its base id is UNRECOVERED (compiled-in enum).
+
+**Programs.** `0x12d DISORIENTED`: `SET_NPC_FLAG DONT_INVESTIGATE; SET_NPC_FLAG NO_DIALOG;
+SET_FAIL_SCHEDULE Idle_Stand; SET_PRESERVE_PATH 0; STOP_MOVING; PLAY_SEQUENCE ACT_DISORIENTED;
+WAIT_PVS`; no interrupts; `DELAY_INTERRUPTS`. `0x12e LOST` identical with `ACT_LOST`. Their
+effective mask is `{NPC_FREEZE}` alone (`DONT_INVESTIGATE` suppresses the overlay) and
+`WAIT_PVS` holds them until the body enters the player's PVS.
+`0x109 COWER_SIMPLE`: `CLEAR_NPC_FLAG IN_FLEE_SCHED; SET_NPC_FLAG COWERING; SET_NPC_FLAG
+ONE_HIT_KILL; PLAY_COWER ACT_COWER_INTO; SET_COWER ACT_COWER; WAIT 10; WAIT_RANDOM 20;
+SUGGEST_STATE STATE:IDLE`; interrupts `SEE_ENEMY SEE_FEAR SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE
+REPEATED_DAMAGE INVESTIGATE_SOUND` (`SEE_FEAR` twice, verbatim). `0x10a`/`0x10b`: same tasks,
+empty interrupts. `0x77 COWER`: `SET_FAIL_SCHEDULE 0x109; FLIP_NEXT_IDEAL_YAW 1; FACE_ENEMY;
+FLIP_NEXT_IDEAL_YAW 0; SET_SCHEDULE 0x109` (turn the back to the enemy); interrupts damage +
+`DETECTED_ATTACK`. `0x78 COWER_HINT`: `SET_FAIL_SCHEDULE 0x10a; FACE_HINTNODE; SET_SCHEDULE
+0x10a`. `0x73 FLEE_AND_COWER`: `SET_NPC_FLAG IN_FLEE_SCHED; SET_FAIL_SCHEDULE 0x74;
+SET_TOLERANCE_DISTANCE 12; GET_PATH_TO_COWER_NODE; RUN_PATH_FLEE; WAIT_FOR_MOVEMENT;
+SET_PRESERVE_PATH 0; CLEAR_NPC_FLAG IN_FLEE_SCHED; SET_SCHEDULE 0x77`; interrupt
+`COVER_FAILURE`. `0x74 _STALL`: fail `0x10b`, `GET_PATH_TO_RANDOM_NODE 1024`. `0x76 _NO_ENEMY`:
+`GET_PATH_TO_COWER_NODE_SAVE_POS`, fail `0x74`. `0x75 _STALL_FAILED`: `SET_NPC_FLAG IN_FLEE_SCHED;
+SET_ACTIVITY ACT_IDLE; WAIT 2; WAIT_RANDOM 1; CLEAR_NPC_FLAG IN_FLEE_SCHED; SET_SCHEDULE 0x77`.
+`0x72 _SCREAM`: `SET_NPC_FLAG IN_FLEE_SCHED; STOP_MOVING; WAIT_RANDOM 0.2; SET_PRESERVE_PATH 1;
+SET_SCHEDULE 0x73`. `0x70/0x71 _TURN_TO_PLAYER(_NEAR)`: `SET_NPC_FLAG IN_FLEE_SCHED;
+PAUSE_MOVING; LOOK_AT_PLAYER 0.2 (0.1); SET_PRESERVE_PATH 1; SET_SCHEDULE 0x73`.
+
+**Selection.** The flee state is `m_NPCState == 8`, entered only in `CAI_BaseNPCTroika::
+SelectIdealState` (`0x102ad660`) from idle and alert on `COND_SUPERNATURAL_FLEE_LEVEL 0x21` or
+`COND_CRIMINAL_FLEE_LEVEL 0x1f` (setting `flags1 |= 0x100 INITIAL_FLEE`); `case 8` returns 8 —
+**terminal**; `SetState` writes `m_bfNPCStateFlags = 0x85` for it. `SelectSchedule` case 8, in
+order: `COVER_FAILURE 0x39` → `0x73`; none of `SEE_ENEMY, SEE_FEAR, LIGHT/HEAVY/REPEATED_DAMAGE,
+0x21, 0x1f` → (`DETECTED_ATTACK` → `0x56`; `INVESTIGATE_SOUND` → re-arm `+0x623c`, clear
+`INITIAL_FLEE`, `CommitBestSound`, `0x48 SCHED_VTROIKA_TURN_TO_SOUND`; else `0x77 COWER`);
+`INITIAL_FLEE` not set → `0x73` (every pass after the first); clear it, `m_flNextFleeSoundTime =
+curtime + RandomFloat(10, 20)`, the flee vocalisation (slot `+0x7c8`); damage → `0x72`; no law
+level and `SEE_FEAR` → slot `0x950`(`m_hLastSeenFearEnt`), `0x72`; supernatural branch (tested
+before criminal): offender valid → slot `0x950`; closest player ≠ offender → offender valid ?
+`0x73` : (`m_vSavePosition = m_vecPLSupernaturalLocation`, `0x76`); `MakeAISound(type 8, player
+eye, DAT_1072bc88, 10.0, DAT_1072bcc2)`; `ReportSupernaturalAct` (`0x1017f4a0`) unless
+`m_bPLSupernaturalActFleeOnly` (then `0x1017fd60` only with `SEE_PLAYER`); `m_flPlayerDist <
+DAT_10483aac && RandomInt(0,99) < 80` → `0x71` else `0x70`; criminal branch mirrors it with
+`m_hCriminalOffender`, `ReportCriminalAct` (`0x1017f2a0`), `m_vecPLCriminalLocation`.
+`TranslateSchedule` (`0x102b12f0`): `0x77` → `0x78` when `m_pHintNode` is type `0x2774`; `1`/`0x6b`
+→ `0x132 LAUGHING` under `D_MILDLY_CRAZY 0x80000`. `GetSchedule` (`0x102ae920`) idle chain:
+`KNOCKBACK 0x28` → `0x14c`; `COMFORT 0x27` → `0x12f`; `D_CALM 0x10000` → `0x130`; `D_FOLLOW
+0x100000` → `0x131`; `D_POSSESSED 0x40000` → `0x131`; dialogue partner → `0x6a`. `D_AFRAID` is not
+a flag but `SCHED_TROIKA_D_AFRAID` (`0x105db1f8`), a discipline-installed flee leg ending in
+`0x77`. **Nothing selects `0x12d` or `0x12e`**: `DISORIENTED` is the terminal `SET_SCHEDULE` of
+16 programs (`D_MESMERIZE`, `D_PURGE`, `D_BLOODSHOT_BOSS`, `D_HALLUCINATION`, `D_HYSTERIA`,
+`D_TRANCE`, `D_BLOODSUCKERS_COMMUNION`, `LAUGHING`, `DO_BLOODBOIL/VOMIT/THEFTOFVITAE/BLOODYEYE/
+MADNESS/HAUNTING/SLEEP/MESMERIZE_ACTIVITY`) and of five discipline `HitInfo` `AI_Schedule`
+keys in retail `pack101.vpk`; **`LOST` has no producer anywhere in the shipped game.** `FLEE`/
+`FLEE_RANDOM` are likewise never returned by a selector. `CNPC_VHuman`/`CNPC_VPedestrian`
+selectors do not touch the family.
+
+**Activities and the feed.** `ACT_DISPOSITION_MESMERIZED 0x104e`, `ACT_DISORIENTED 0x1068`,
+`ACT_LOST 0x1069`, `ACT_COWER_INTO 0x1097`, `ACT_COWER 0x1098`, `ACT_COWER2 0x109b`,
+`ACT_COWER3 0x109e`. **`AttemptFeed` (`0x10168910`) reads the victim's `m_IdealActivity`
+(`+0xff0`)**, not the current activity, and auto-accepts on `0x104e || 0x1068 || 0x1069 ||
+0x1098` only. `TASK_PLAY_COWER` (`0x102a5125`) rolls `m_iCowerAnimOffset +0x6414 = RandomInt(0,2)
+× 3` on `ACT_COWER_INTO` and `TASK_SET_COWER` (`0x102a516c`) reuses it, so the loop activity is
+`ACT_COWER`/`COWER2`/`COWER3`: **a cowering NPC auto-accepts a feed one time in three**; the other
+variants and the `_INTO` window go through the opposed roll. This corrects `feeding.md`'s
+activity-based reading.
+
+**Flags the family writes.** `COWERING` (bit 10): readers `BuildScheduleTestBits` (no `COMFORT`
+while cowering) and the hearing quarter-radius. `ONE_HIT_KILL` (bit 30): one reader,
+`OnTakeDamage` `0x102beda0` — any non-light hit kills outright (slot `0x240`). `IN_FLEE_SCHED`
+(bit 7): set by every flee leg, cleared first thing by `COWER_SIMPLE*` so the interest overlay
+re-enables while cowering.
+
+**Tasks missing from the port** (Troika StartTask / base StartTask / Troika RunTask / base RunTask;
+`—` = default arm): `SUGGEST_STATE 0x06` (`0x102a1b2b` / `0x10286c0d`; reads `frenzied & 1`,
+routes `STATE:` into the ideal-state request), `GET_PATH_TO_RANDOM_NODE 0x1f` (— / `0x10285d7f` /
+— / `0x10289718`), `FACE_HINTNODE 0x2f` (`0x102a382a` / `0x10283a36` / — / `0x10288b4c`),
+`PLAY_SEQUENCE 0x52`, `GET_PATH_TO_COWER_NODE 0x84` (`0x102a2882`: threat = enemy or self, radius
+= operand, node query through slot `0x688` into `+0x5ddc`), `_SAVE_POS 0x85` (`0x102a2bd8`,
+anchored on `m_vSavePosition +0x5dd0`), `PAUSE_MOVING 0xa6` (`0x102a1f06`), `SET_PRESERVE_PATH
+0xc4` (`0x102a3cfa`: `0` → `flags1 &= ~0x08`, else `|= 0x08`), `PLAY_COWER 0xe6` (`0x102a5125` /
+run `0x102ab83c`), `SET_COWER 0xe7` (`0x102a516c` / run `0x102ab4b2`), `LOOK_AT_PLAYER 0xfb`,
+`CLEAR_NPC_FLAG 0x101`, `RUN_PATH_FLEE 0x103` (`0x102a58d7`: `ACT_PANIC_RUN 0x1093`, else activity
+`0x13`), `FLIP_NEXT_IDEAL_YAW 0x106` (`0x102a59eb`). **`DAT_10483aac = 512.0f`** (the "player near" distance for `0x71` vs `0x70`).
+`DAT_1072bc88`/`DAT_1072bcc2` are `.data` cells filled at startup from `sound_volume_table.txt`
+(the flee sound's radius row and type byte) — read them from the table, not the image.
+UNRECOVERED: `+0x6364`, the authored names of hint types `0x2774`/`0x27d8`.
+
+## Species slot-435 overrides all chain (2026-09-08)
+
+`vtmb_slot 435`: 79 classes. `CNPC_VGargoyle` `0x10378fc0`, `CNPC_VHengeyokai` `0x10383090`,
+`CNPC_VTzimisce` `0x103bf610`, `CNPC_VWerewolf::OnScheduleChange` `0x103ced10` **all call the
+Troika body `0x102a0940` first**, then, gated on `PRESERVE_PATH` clear, decrement a per-species
+shun counter (`m_iShunnedFindPillar` / `m_iShunnedFindFish` with `+0x6680 = 0` / `m_iShunnedFindBody`
+with `m_ePathMode = 0`); the werewolf keeps a 50-entry schedule history at `+0x668c`. No
+classname branch is needed in the port's single `OnScheduleChange`. Classes on the plain base
+reset `0x1027a700` (no flag word): `CAI_BaseNPC`, `CAI_BaseHumanoid`, `CAI_ExpressiveNPC`,
+`CAI_TestHull`, `CCineNPC`, `CCineAI`, `CCineAISchedule`, `CGenericNPC`, `CGenericSabbat_NPC`,
+`CGeneric_NPC_bathack`, `CNPC_Bullseye`, `CNPC_Crow`, `CScriptedTarget`; `CGeneric_NPC`,
+`CNPC_ProneDialog`, `CPayphone` and the makers carry the Troika body.
+
+## The cover and kick chooser, and the combat leftovers (2026-09-08)
+
+**`FUN_102b7690(bCover, bCorner, bKickOver, bKickAt)`**, callers `SelectSchedule 0x102ae920`
+`(1,0,0,0)`, the dodge selector `0x102b7cf0` `(1,1,1,1)`, the melee selectors `0x10385e40` /
+`0x10396050` `(0,1,0,1)`, every call gated on **slot 592 `CanSeekCover()` `0x102953e0`**:
+`COND_ENEMY_OCCLUDED 0x48` → true; `m_flCanSeekCoverTimer ≤ curtime` → true; `timer − 1.0 <
+curtime && !COND_CAN_RANGE_ATTACK1 0x4f` → true; else false (sole override `CNPC_VLasombra`
+`0x103893c0`: true while `m_flCoverDisableOverride` is in the future).
+- Arm A, kick-prop acquisition: `bKickAt && allow_kick_hint_use && !m_pHintNode && !(flags1 &
+  0x800 DODGING) && no prop && curtime ≥ +0x6438` → `+0x6438 = curtime + 2.0`; `m_hKickPhysicsProp
+  +0x643c = FUN_102b6650` (needs an enemy; `UTIL_EntitiesInBox` ±512/±512/±64, cap 20,
+  `m_edtDerivedType & 4` PHYSICS_PROP; **`prop->m_bNpcKickable +0x788`** (key `npc_kickable`);
+  nearest by 2-D distance; `0x102b62e0`).
+- Arm B: a live prop → **`0xa9 KICK_PROP_AT_ENEMY`**, before any hint search.
+- Arm C: `!m_pHintNode && !DODGING && no prop` → `+0x6448 = enemy`; mask `cover 1 | corner 2 |
+  (kickOver && flag) 4 | (kickAt && flag) 8` → `FUN_102b7110` (search `0x102d2980` flags 8,
+  distance slot 550 = 1024, one retry when `stay_entrenched`; on success `m_iPeekOutCount +0x640c
+  = 0`, `m_iFailedCoverLOSChecks +0x6404 = 0`, reserve `0x102d1350`, corner lean side `+0x63fd`
+  from the 2-D cross of enemy−hint with the hint yaw). Category bits: 100/101/10200 → 1,
+  10300 → 4, 10301 → 8, 10400 → 0x10, 10000/10100 none; **mask bit 2 matches nothing**, so the
+  melee call can only return a kick-at node.
+- Arm D on `m_pHintNode->m_nHintType`: 10300 → **`0xa7 HINT_KICK_OVER`**; 10301 → **`0xa8
+  HINT_KICK_AT_ENEMY`**; 100/101/10200 → the cover arm; else 0. Cover arm: not `AT_COVER_HINT
+  0x2000` → clear `COVER_VS_MELEE_MODE` (flags2 `0x100`), **`0x9b TAKE_COVER_HINT`**; else
+  `bMeleeThreat = !(enemy's weapon flags & 0x6000)`; slot 609 `0x102b6b50` (the shoot-at hint,
+  type 10400, retry `+0x6440 = curtime + RandomFloat(2, 2.5)`) → **`0xa2 …_SHOOT_AT_HINT`**; else
+  `0x102b5de0` (can I still shoot from cover): false → `m_iPeekOutCount++`; `< 5 && !0x48` →
+  **`0x9d PEEK_OUT`**; else clear the mode, `stay_entrenched ? 0x9e PEEK_OUT_WAIT :
+  ClearHintNode(60) + 0`; true → `peek = max(peek − 2, 0)`, `roll = RandomInt(0, 99)` (drawn
+  before the branch); ranged enemy: not already in `0x9e` and mode clear → **`0xa3
+  …_HINT_ATTACK`**, else clear the mode and `roll > 29 ? 0xa0 PEEK_OUT_FIRE : 0xa1
+  PEEK_OUT_RETURN`; melee enemy: same guard → **`0xa4 …_VS_MELEE`**, else set the mode →
+  **`0xa5 …_VS_MELEE_ATK`**. `ClearHintNode(t)` `0x10295ab0`: 60 s hint cooldown
+  (`m_flNextUseTime +0x5ec`), clear `AT_COVER_HINT`, reset the attack extents.
+- Programs: `0xa9`: `SET_TOLERANCE_DISTANCE 0; GET_PATH_TO_KICK_PROP; SET_NPC_FLAG
+  FORCE_RELAXED_ANIMS; RUN_PATH; WAIT_FOR_MOVEMENT; SNAP_TO_KICK_PROP; KICK_PROP; CLEAR_NPC_FLAG
+  FORCE_RELAXED_ANIMS`, interrupts `NEW_ENEMY, KICK_PROP_INVALID`; `0xa7` ends `FACE_HINTNODE;
+  KICK_HINT`, `0xa8` `FACE_ENEMY; KICK_HINT_AT`, interrupts `NEW_ENEMY, HINT_INVALID`. `0xa4` is
+  the only program that sets `COVER_VS_MELEE_MODE` by task.
+
+**The kick predicate `0x102b62e0`**: 2-D dot of the 3-D-normalised `(prop − me)` and `(enemy −
+prop)` **> cos 10°** (`0x1049ae94`), then a clear trace from `(prop.x, prop.y, prop.z + 8)` to the
+enemy's slot-192 point, mask `0x200400b`, `fraction ≥ 1 && !allsolid && !startsolid`.
+`m_bNpcKickable`'s only code writer is `TaskFail` `0x1029adb0` (zeroes it and drops the handle):
+a kickable prop is consumed by the first task failure of its kicker. Retail authors `npc_kickable
+1` on six barrels (`sm_junkyard_1` ×5, `sm_warehouse_1`). **`COND_KICK_PROP_INVALID 0x2a` has no
+producer** (dead interrupt); `COND_HINT_INVALID 0x29` is set at `0x10293160`, `0x102d30b9`,
+`0x1038943e`.
+
+**The occluded selector's latches.** `flags2 & 0x40000` is NPCFlag **`D_POSSESSED`**
+(`0x80040000`; `0x40000` alone on flags1 is `BOTCHED_ATTACK`), produced only by the possession
+arm; `frenzied & 0x100` is produced by `CNPC_VFrenzyShadow::vfunc420` (`0x5ddf`), the possession
+arm (`0x3b1c`) and the frenzy arm (`0x9fbd`). `0x103675a0` and `0x103b2550` are **jump thunks to
+the base selector** owned by `CNPC_VBatSwarm` (vtable `0x104aab04`) and `CNPC_VSheriffSwarm`
+(`0x104c7284`); `CNPC_VBach` (`0x10364280`) is the only real override among 64 classes.
+
+**Hint type 10000** is never a `m_pHintNode`: no category bit, no `FValidateHintType` case
+(`0x10295c20` handles `0x27d8`, 100/101, `0x2774`, `0x283c/d`, `0x28a0`; base returns 0), so both
+searches reject it. Its only lookup is by **name**: `0x102d2840` walks the hint list for type
+`10000 || 800` with `stricmp(hint->m_strGroup +0x5f0, name)`, `0x102d2900` returns the node id;
+callers `InputFollowPatrolPath 0x1029ed90` and `InputWalkToNode 0x1029e840`, which tokenize the
+input and build the `CAI_PatrolPath` at `+0x6590` from node ids. `hint_groups` does not filter
+patrol points. `CNodeEnt::Spawn` `0x102d78d0` → `0x102d7d30` maps classnames to types
+(`_cover_med` 100, `_cover_low` 101, `_cover_corner` 0x27d8, `_crosswalk` 11000, tzimisce claws
+14000/0x36b1, `_kick_over` 0x283c, `_kick_at` 0x283d, `_shoot_at` 0x28a0, werewolf/sabbat/bach/
+chang families 16000+, `_manbat_fly_to_point` 20000); 10000 is the FGD default on
+`info_node_hint`/`info_node_patrol_point`. UNRECOVERED: what authors type 800.
+
+**`FinViewCone3dNew` `0x103264d0`**, called by `FInViewCone 0x10326750` with the target's slot-192
+point, its cone scalar (slot 29) and `m_flFieldOfView`: test 1 `dot(target − eye, fwd) > 0`
+(strict, unnormalised); test 2 `apex = eye − k·fwd` (`k` = the float of the ConVar at
+`0x10937a8c`, UNRECOVERED name, shared with `CWeaponMelee::RequestActivity`), `dot(fwd,
+normalize(target − apex)) × coneScalar > m_flFieldOfView` (strict). The scalar multiplies the
+cosine, not the threshold; the pulled-back apex widens the cone with proximity (the debug wedge
+`0x1029c4a0` draws it the same way). The 2-D variant is taken when the ConVar at `0x10936f74`
+reads 2.
+
+**The possession arm's virtuals**: slot 304 = `CBaseCombatCharacter::GiveBaseFightingItems`
+(Troika `0x102b5b20`: no melee (slot 307) and no ranged (slot 308) weapon → `GiveItem
+("item_w_fists")`, `AddMiscFlag(0x10 Gave_Fighting_Wpns)`); slot 614 = `ResetThinkTimers()`
+`0x102c23f0`; slot 595 = `AcquireNearestHatedTarget()` `0x102b4cc0` (box ±1024/±1024/±128, flag
+mask `0x40`, targetable, alive, not hidden, `IRelationType == D_HT`, nearest → slot 596
+`SetEnemy`). Possession calls 304 then 614 then 595; frenzy calls 595 first.
+
+## The navigation and reaction keyfields (2026-09-08)
+
+Seven `CAI_BaseNPCTroika` keys the port did not read, each with its readers and a verdict
+(ROUTE COST = a term Unreal NavMesh must be given; SELECTION = schedule/task selection, ported
+verbatim; ANIMATION). None appears in any vdata pack; they are map-only.
+
+- **`bright_route_penalty`** — `m_iBrightRoutePenalty +0x6344`, int. **Unconsumed in retail**: the
+  only access in the image is the copy in `CNPCMaker_Fleshpile::MakeNPC` (`0x1034c2d0`); no
+  pathfinder cost reads it (checked `+0x6344`, the index form `[0x18d1]`, and every "Penalty"
+  string). Authored `0` on 1802 NPCs and `100000` on the three `npc_VLasombra` in
+  `la_bradbury_2`. Verdict: nothing to port; a NavMesh light cost would be a divergence.
+- **`percent_occluded_wait/_cover/_walk/_flank/_chase`** — `+0x6420/24/28/2c/30`, int.
+  **Spawn normalizes them into a cumulative 0–100 ladder** (`0x10298d30`): `sum = all five; if
+  (sum > 0) { chase = 100; wait = wait·100/sum; cover = wait + cover·100/sum; walk = cover +
+  walk·100/sum; flank = walk + flank·100/sum }`; if `chase != 100` DevMsg and, if `chase < 1`,
+  the fallback `10/40/50/70/100`. `_chase` is forced to 100 and **never compared**. `thug_1`'s
+  `10/30/10/20/30` normalizes to exactly the fallback. Consumer: the occluded-enemy selector
+  `FUN_102b8320` (vtable `+0x978`, slot 606), reached from `CNPC_VHuman::SelectScheduleRangedCombat`
+  (`0x10386560`) and `0x103967d0` — **ranged combat only**, never from the melee selector
+  `0x10385e40`. Order: `!COND_ENEMY_OCCLUDED 0x48` → 0; `COND_ENEMY_UNREACHABLE 0x59` → `0xaa
+  WAIT_FOR_OCCLUDED_ENEMY`; `frenzied & 0x100` → `0xb4 CHASE_ENEMY_LKP`; `flags2 & 0x40000` →
+  `roll < 70 ? 0xb6 LKP_FLANK : 0xb4`; `flags1 & 0x10000000` (cleared; set by `0x102b7cf0`'s
+  `COMBAT_DODGE_WAIT` arm) → `roll < 80 ? 0xb6 : 0xb4`; else `roll = RandomInt(0, 99)` against
+  the ladder — with `COND_SQUAD_SEE_ENEMY 0x31`: `< wait` `0xab`, `< cover` `0xb0`, `< walk`
+  `0xb3`, else `0xb2` (the flank arm also returns `0xb2`: no squad flank variant); without:
+  `< wait` `0xaa`, `< cover` `0xaf COVER_FROM_OCCLUDED_ENEMY`, `< walk` `0xb5 CHASE_ENEMY_LKP_WALK`,
+  `< flank` `0xb6`, else `0xb4`. `CNPC_VBach` overrides (`0x10364280`, latches `+0x66a3`).
+  Verdict: SELECTION, verbatim including the dead `_chase` and the duplicated squad arm.
+  UNRECOVERED: producers of `frenzied & 0x100` and `flags2 & 0x40000`; the owners of the two
+  code-folded copies `0x103675a0`/`0x103b2550` (slot 606 is past the vtable dump).
+- **`hint_groups`** — `m_sHintGroups +0x62e0` → `m_iHintGroups +0x62e4`, parser `FUN_102989e0`
+  (from Spawn and `ProcessTweakParam` `0x1029aa10` token `HINTGROUPS`): a **space-separated list
+  of 1-based indices**, each `1 << (n−1)` for `1..32`; **empty = `0xFFFFFFFF` (all groups)**. Sole
+  reader `CAI_BaseNPCTroika::FValidateHintType` (`0x10295c20`, slot 566): `(hint->m_iGroupID
+  +0x470 & m_iHintGroups) == 0` → reject, then a switch on `m_nHintType`. `CAI_Hint::Spawn`
+  (`0x102d0b60`) converts the hint's `group_id` `1..32` to `1 << (id−1)`, anything else to
+  `0xFFFFFFFF`, and assigns a category bit at `+0x474` per type: `100 info_node_cover_med` 1,
+  `101 _cover_low` 1, `10000 info_node_hint`/`info_node_patrol_point` none, **`10100 (0x2774)
+  info_hint` none**, `10200 _cover_corner` 1, `10300 info_node_kick_over` 4, `10301
+  info_node_kick_at` 8, `10400 info_node_shoot_at` 0x10 (with per-type angle/distance/rating
+  defaults). The mask search `FUN_102d2980` (global list `DAT_10925450`, cursor `DAT_10925454`;
+  flags 1 LOS, 2 nearest, 8 rating-weighted) requires a category bit, so `info_hint` is found
+  only by the type-keyed search `0x102d1af0(this, 0x2774, 2, …)` in Troika `StartTask`;
+  `FUN_102b7110` stores the result in `m_pHintNode +0x5ddc`. 1716 of ~1830 NPCs author the full
+  `"1 … 32"`, identical to leaving it blank. Verdict: SELECTION. UNRECOVERED: the search path for
+  type 10000 (no category bit, no validate case).
+- **`allow_kick_hint_use`** — `m_bAllowKickHintUse +0x6436`, bool; input `AllowKickHintUse`
+  (`0x102c2c10`); copied to children by `CNPCMaker::MakeNPC` (`0x1034b7b0`). Sole consumer
+  `FUN_102b7690(bCover, bCorner, bKickOver, bKickAt)`: the kick-prop search (`bKickAt && flag &&
+  no hint && !(flags 0x800) && no prop && curtime >= +0x6438` → timer `+2.0`, `m_hKickPhysicsProp
+  +0x643c = FUN_102b6650` — needs an enemy, ±512/±512/±64 box, cap 20, prop flag `+0x788`,
+  nearest passing `0x102b62e0`); a live prop → **`0xa9 SCHED_TROIKA_KICK_PROP_AT_ENEMY`** before
+  any hint search; and the search mask bits `4`/`8` (kick-over 10300 → `0xa7 HINT_KICK_OVER`,
+  kick-at 10301 → `0xa8 HINT_KICK_AT_ENEMY`). Callers: `0x102ae920` `(1,0,0,0)` (entrenched
+  cover), the melee selector `0x10385e40` `(0,1,0,1)`, `0x102b7cf0` `(1,1,1,1)`. No hint type
+  carries category bit 2, so **for a melee NPC the hint search returns only a kick-at node, and
+  only under this flag**. Retail maps hold exactly one kick hint (`sm_beachhouse_1` `kick_spot`,
+  10300) and no kick-at nodes; the live path is the physics-prop kick. Verdict: SELECTION.
+  UNRECOVERED: `0x102b62e0`, `prop+0x788`, the producer of `COND_KICK_PROP_INVALID 0x2a`.
+- **`stay_entrenched`** — seven readers, all "do not give up my cover": `NPCThink` (`0x10292de0`,
+  suppresses the hint release on `m_hHintCoverObject == enemy && (0x2e || 0x48)`); the cover-hint
+  evaluator `0x10296c40` (accept own hint immediately; skip the max-range reject); `SelectSchedule`
+  `0x102ae920` (combat + slot 592 → `FUN_102b7690(1,0,0,0)` ahead of the ordinary tail);
+  `0x102b7110` (retry the search once); `0x102b7690` (cover LOS failed and `m_iPeekOutCount
+  +0x640c >= 5` or occluded: entrenched → `0x9e TAKE_COVER_PEEK_OUT_WAIT`, else `ClearHintNode(60)`);
+  `0x102b7cf0` (no dodge-reposition `0x8c`/`0x8d` when entrenched); `ShouldInvestigate`.
+  Authored `1` on 65 NPCs. Verdict: SELECTION.
+- **`combat_start_activity`** — `m_sCombatStartActivity +0x65e0` → activity id `+0x65e4`
+  (`FUN_1029f340` → `ActivityFromName 0x10412520`; absent, `"-1"` and `"ACT_INVALID"` all give
+  −1). Gate at the top of `SelectSchedule` `0x102ae920`: `m_iSquadDisconnected < 1 && squad &&
+  (flags2 & 0x2000)` → consume the latch; `activity != −1 && !(frenzied & 0x80)` → **`0xeb
+  SCHED_TROIKA_START_COMBAT_SQUAD`** (`WAIT_FACE_ENEMY 0.2; PLAY_SOUND Target_Acquired;
+  TASK_PLAY_COMBAT_START_SEQUENCE 0x137; TASK_SQUAD_NEW_ENEMY; WAIT_RANDOM 0.2`), else notify the
+  squad (`0x103161a0`). `0xea START_COMBAT` (on `NEW_ENEMY && !frenzied`) has no activity task.
+  Retail authors a real activity on exactly one NPC (`sec_cam_1_npc`, `la_museum_1`, no squad),
+  so the animation is unobservable in shipped content. Verdict: ANIMATION plus the `0xeb` gate.
+- **`interesting_place_groups`** — `+0x62d8` → `+0x62dc`, parser `FUN_10298910`: the **same
+  1-based index list → mask** as `hint_groups`, but **empty or `"0"` leaves the mask `0`** (no
+  place ever matches; 1005 retail NPCs author `"0"`). `CNPC_VCamera::Spawn` zeroes it. This
+  corrects the "raw AND of two decimal integers" reading in the interesting-places section for
+  the NPC side. UNRECOVERED: whether `CAI_InterestingPlace` converts its own `group_id` to
+  `1 << (id−1)` as `CAI_Hint::Spawn` does; if it does, `thug_1`'s pool is `pt1` alone, if the
+  place keeps the raw integer the seven-node pool stands — **decided: it converts**
+  (`CAI_InterestingPlace::Spawn` `0x102d9c20`), so `thug_1`'s pool is `pt1` alone; the
+  interesting-places section above is corrected.

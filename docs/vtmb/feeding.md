@@ -710,3 +710,15 @@ self-healing, since a clip that stops being dispatched makes the predicate false
 fires. `Elysium.Substrate.Feeding` and `Elysium.Substrate.FeedMakerOutputs` are unchanged and still
 green: with no clip phase published, the predicate is false and the scheduler behaves exactly as
 before.
+
+## The auto-accept test reads the ideal activity (2026-09-08)
+
+`AttemptFeed` (`0x10168910`) tests the victim's **`m_IdealActivity`** (`+0xff0`), not the playing
+activity, against exactly `ACT_DISPOSITION_MESMERIZED 0x104e`, `ACT_DISORIENTED 0x1068`,
+`ACT_LOST 0x1069`, `ACT_COWER 0x1098` ("Feed attempt! Success is automatic because defender is
+mesmerized, disoriented, lost or cowering", `0x105865a8`); anything else goes through the
+`ResistsFeeding` gate and the opposed roll. Because `TASK_PLAY_COWER`/`TASK_SET_COWER` pick
+`ACT_COWER`, `COWER2` or `COWER3` by `m_iCowerAnimOffset` (`+0x6414`), only one cowering NPC in
+three auto-accepts, and the `ACT_COWER_INTO` window never does. The producers of the four
+activities are in `npc-ai-reverse-engineering.md`, "The flee state and the cower, disoriented
+and lost programs".

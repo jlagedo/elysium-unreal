@@ -47,7 +47,7 @@ reads, and what retail data carries (tallied over all 102 shipped maps):
 
 | bit | engine reader | retail data |
 |---|---|---|
-| `0x100` | nothing in engine.dll | 944 `TOOLS/TOOLS_SHADOW` brushes (la_bradbury_3); compile-time only |
+| `0x100` | the light/shadow trace mask `0x4191` (`GetLightForPoint` `0x200a4e90`, `0x2006e3d0`, `0x200a9ee0`) — not the LOS mask `0x4091` | 944 `TOOLS/TOOLS_SHADOW` brushes across 57 maps; a shadow-only brush blocks the stealth light query and the shadow paths while staying invisible and non-solid (`docs/vtmb/stealth.md`, "The trace mask `0x4191`") |
 | `0x200` | `CONTENTS_TESTFOGVOLUME`: `R_GetVisibleFogVolume` (`0x20081390`) reads it on the **eye's leaf** and only then walks the tree (`0x20081470`) for the first in-frustum leaf with `leafWaterDataID != -1` | leaf-only, 6,472 leaves in the 22 water maps, no brush |
 | `0x400` | nothing | never set |
 | `0x800` | precipitation: `CParticleManager` (`0x200d3f10`) kills every rain particle whose leaf lacks it; the system flag comes from the `precipitation` key in `particles/<name>.txt` (`0x200c8a90`), gated by cvar `particles_enable_precipitation` | leaf-only, 30,538 leaves in 53 maps, no brush. Matches "a vertical ray up from the leaf reaches a `toolsskybox` face before solid" on la_hub_1 / sm_hub_1 / ch_temple_1 (0..14 flagged leaves fail that test; 30..160 open leaves are unflagged, so the tool's test is a little stricter than a centre sample). Set by Troika's vvis/vbsp, not by any material |

@@ -53,12 +53,13 @@ The player think at `0x10350830` runs the stealth-factor virtual at `0x103517e0`
 reaches `m_flNextStealthUpdate`, then advances the deadline by **0.1 seconds**. The recompute is
 ordered:
 
-1. If the world-light service is unavailable, return without manufacturing replacement values.
+1. If the engine's client entity list is unavailable (engine slot 3), return without
+   manufacturing replacement values.
 2. Resolve the Sneaking feat through the ordinary CharacterData path. Category 1 includes
    `CBaseCombatCharacter::GetStealthModifier`; the result is capped at 10 before table lookup.
-3. Evaluate the native eligibility predicate. Its concrete test is a player-state flag bit plus a
-   second state helper; their stable human-readable names remain unresolved. Failure does not skip
-   the update: it installs the non-stealth fallback described below.
+3. Evaluate the eligibility predicate: `FL_DUCKING` set and no `D_HT` NPC has assessed the
+   player within the last 1.0 s (decoded 2026-09-08, see "The light query, recovered"). Failure
+   does not skip the update: it installs the non-stealth fallback described below.
 4. If the active usable weapon is `item_w_torch`, force normalized light to `1.0`. Otherwise sample
    one of three vertical body points—feet, centre, head—and advance the saved sample index. Point
    construction uses the recovered `0.875/0.125` weights.
@@ -75,7 +76,7 @@ Only one body point is refreshed per 0.1-second pass, so a complete feet/centre/
 about **0.3 seconds**. The other two saved samples participate unchanged. This lag is part of the
 retail transaction; querying three points every observer frame changes both cost and behavior.
 
-When the eligibility predicate is false, the routine writes `m_flLightOnMe = -4.0`, sight scalar
+When the eligibility predicate is false, the routine writes `m_flLightOnMe = -1.0`, sight scalar
 `1.0`, hearing `Stealth0` (`0` in retail), and cone `Light0/Stealth0` (`1.0` in retail). Thus the
 tables shape detection only while the player is in the eligible stealth state; ordinary movement
 does not retain the last dark-room advantage.
@@ -505,3 +506,143 @@ The tutorial stealth-kill sequence in `sp_tutorial_1` completes when:
 - The qualified tutorial guard is dispatched via grapple mode 3;
 - The guard's `OnDeath` output triggers the tutorial progression relay;
 - Jack advances the lesson script.
+
+## The light query, recovered (2026-09-08)
+
+The "world-light service" above is now decoded end to end. It is **not a lightmap or leaf-ambient
+sample**: it is a live, per-light, ray-traced evaluation of the BSP's worldlight array (lump 15),
+run three times per player think on the server.
+
+**The call.** `CHL2_Player::vfunc471` (`0x103517e0`) reads the `VEngineServer014` interface from
+`0x1070b22c` and calls **slot 118** (`engine.dll CVEngineServer::vfunc118` `0x20108970`) with one
+`Vector*` at `0x10351966`, `0x103519b1`, `0x103519d6`; a float returns in `ST0`. Slot 118 is the
+server twin of `IVEngineClient::GetLightForPoint` (client slot 23, `0x2001a450`); its authored
+server name is UNRECOVERED. Body:
+```
+FUN_200a4e90(&rgb, point, bClamp = 0);
+return rgb.r*0.30 + rgb.g*0.59 + rgb.b*0.11;     // doubles at 0x20174c20/28/30 — luminance, unclamped
+```
+
+**`GetLightForPoint` (`engine.dll 0x200a4e90`).** Point → leaf (`0x2002fbc0`) → cluster
+(`0x2002f2b0`); either `< 0` (a point in solid) returns black. `CM_ClusterPVS` (`0x20031f80`).
+Loop over `worldbrush(0x20b42aec)+0x13c` entries of `dworldlight_t` (stride 0x58; offsets as in
+`lighting.md`): a light with `cluster < 0` is skipped; **type 5 skyambient is skipped**; **type 3
+sun**: only the first one, a trace of `−MAX_TRACE_LENGTH · normal` (`−56755.84`) that ends on
+`SURF_SKY` adds the raw `intensity` with no attenuation, style or angle term, not PVS-gated;
+every other light is **PVS-gated** by its cluster, then `scale = d_lightstylevalue[style] ×
+r_lightmapcolorscale / 264 × DistanceFalloff`, and contributes `intensity × scale × Angle` **only
+if a trace from the point to the light origin has `fraction == 1.0`**.
+
+- Falloff `0x200a5620` = Source's `Engine_WorldLightDistanceFalloff`: type 0 `1/d²` with the
+  `radius` cutoff; types 1/2 `1/(quad·d² + linear·d + const)` with the cutoff; type 4
+  `radius − d`; 3/5 `1.0`. **Not flat inside the radius.**
+- Angle `0x200a57e0` = `Engine_WorldLightAngle` called with `snormal == delta == direction to the
+  light`, so point lights read 1.0, spots apply the `stopdot/stopdot2/exponent` cone, texlights
+  and sky `−dot(lightnormal, dir)` when `> 0.01`.
+- **Lightstyles apply at query time**: `d_lightstylevalue[]` (`0x20a6dcb0`), normalized by 264,
+  animated by `0x20076eb0`. A flickering style modulates the player's light directly.
+- `r_lightmapcolorscale` (`0x20a6e400`, default `"1"`, quantized 1/2/4/8/16) multiplies every
+  contribution; inert at default.
+- **No dynamic lights of any kind** — no dlights, entity lights, muzzle flashes; they are
+  client-side. This is why `item_w_torch` is hard-forced to 1.0.
+
+**Shadows.** Both traces go through the **client** engine-trace object (`PTR_DAT_201a0228 →
+0x20a57180`, `vftable_CEngineTraceClient`), slot 4 `TraceRay`, mask `0x4191` (the shared engine
+light/shadow mask; its VtMB `CONTENTS_*` decomposition is UNRECOVERED), filter
+`CTraceFilterAllowWorldAndShadowProps` (`0x20174c3c`): trace type 3, `ShouldHitEntity` = is a
+static prop (handle bit `0x40000000`) **and** its flag byte `+0xac` lacks bit `0x10`. So light is
+blocked by **world brushes, displacements and unflagged static props only**; doors, `func_brush`,
+physics props, NPCs and the player cast no stealth shadow. The availability gate (step 1 above)
+is engine slot 3 (`0x201089f0`): "the client entity list exists and entity 0 is present" — the
+only use of that slot in `vampire.dll`.
+
+**The min/max are two flag-0 ConVars, never written.** `worldlight_min` (object `0x10938310`,
+ctor `0x10351770`, default `"0.0"`) and `worldlight_max` (`0x10938358`, ctor `0x103516e0`,
+default `"1.0"`); their only readers are `vfunc471` and the `debug_stealth_toggle` printer
+(`vfunc470` `0x10351e10`: `"World Min: %.2f   Max: %.2f   Scale: %.2f"`). A binary grep of the
+whole retail install (every `.bsp`, `.vpk`, `cfg/`, `python/`) for `worldlight_m` matches only
+`vampire.dll`. **In shipped play the normalization is an identity; only the `[0, 1]` clamp
+survives.** `debug_stealth_light` (`0x109384d8`, default `-1`, range `-1..10`, applied after the
+torch label so it overrides the torch too) and `debug_stealth_show_light` (`0x109383a0`, a spew
+interval; `"%6.3f feet %6.3f cent %6.3f head -> %6.3f -> %d"`) are the two debug knobs.
+
+**The eligibility predicate, resolved** (`0x10351865`): `(GetFlags() & FL_DUCKING 0x2) &&
+!FUN_101672d0(this)`, where `0x101672d0` = "a `D_HT` NPC has assessed me within the last 1.0 s"
+(`this+0x1d28+4·cat` = the time, `+0x1d3c+4·cat` = the handle, written by `0x1017ff40` from the
+NPC `OnLooked` pass `0x1026a2c0` with `cat` = the NPC's disposition to the player; 1 = D_HT).
+**The tables apply only while crouched and unseen by any hostile for a second.** Obfuscate and the
+sneak activity do not enter this predicate (they enter the general `0x101671a0`).
+
+**Three corrections to the sections above.** (1) The inactive sentinel is **`-1.0`**
+(`0x10351c99`), not `-4.0`. (2) A failed predicate does **not** skip the update: the AABB, the
+three samples, the round-robin and the row/feat indices are all computed first; only
+`m_flLightOnMe`, the vision scalar (`1.0`), the hearing reduction (`hearing[0] = 0.0`) and the
+cone (`cone[0] = 1.0`) are then overwritten at `0x10351c95`. (3) The DLL-compiled row thresholds
+are `0.9 … 0.1, 0.05, 0.0`; the `0.99, 0.95, 0.87 …` set is what `StealthLightRangeTable`
+overwrites them with.
+
+**The three sample points** (`0x103518da`–`0x103519dc`): `absmin/absmax` = the world-space
+collision AABB (`0x100dcd90`); `centre = WorldSpaceCenter()` (slot 192, `0x10027160`) verbatim;
+`head = (centre.x, centre.y, 0.875·absmax.z + 0.125·absmin.z)`; `feet = (centre.x, centre.y,
+0.875·absmin.z + 0.125·absmax.z)` (`0x104a3050/54`). Round-robin state `+0x1c7c`: `1` → centre →
+`2`; `2` → head → `0`; else feet → `1`. The centre is its own virtual's answer, numerically the
+0.5/0.5 midpoint. Aggregate `× 0.083325` (`0x104a304c`, not `1/12`). The torch branch skips the
+sampling entirely, so the saved samples go stale while it is held. The `SuppressLists(4, …)`
+bracket around the query is inert (nothing in `engine.dll` reads the mask).
+
+**Consumers.** `m_flLightOnMe` (`+0x1c8c`) has exactly one reader besides its writer:
+`CBasePlayer::DrawDebugTextOverlays` (`0x10161460`, `"Light: %f"`). It is saved, never
+networked. NPC admission reads only the derived scalar (`0x1029c9f0`: `max(dist × player+0x1c70,
+0)`). The HUD light gauge (`client.dll CStealth::vfunc98` `0x10062690`, `hud/lightgauge_%d`)
+animates from the **networked row index** (`m_iDebugStealthLight` = `field_0x1c98`), never the
+raw luminance. `lighting.md`'s claim that lump 15 is read at runtime only by the model light
+cache is corrected by this: `0x200a4e90` is a second consumer, and the stealth system is built
+on it.
+
+**The trace mask `0x4191`, decomposed.** VtMB's `CONTENTS_*` enum is stock Source below `0x100`
+(`MASK_SOLID 0x200400b` etc. are literals in `PhysicsSolidMaskForEntity` `client.dll 0x1011c520`;
+`MASK_WATER 0x4030` in `PhysicsCheckWater` `0x1003e880`) and shifted above it (`TESTFOGVOLUME`
+is `0x200`). `0x4191 = SOLID 0x1 | SLIME 0x10 | OPAQUE 0x80 | 0x100 | MOVEABLE 0x4000`. Across the
+101 shipped BSPs: `SOLID` on 121 350 brushes; `SLIME` on none (inert); `OPAQUE` on 8; **`0x100` on
+944 brushes over 57 maps, all `0x18000120` — the `%compileShadowOnly` / `TOOLS_SHADOW` bit**, so
+shadow-only brushes block light while being invisible and non-solid (this corrects
+`bsp_format.md`'s "`0x100`: nothing in engine.dll reads it"); `MOVEABLE` is engine-set and never
+reached. Absent: `WINDOW 0x2` and `GRATE 0x8` — glass and grates cast no stealth shadow. The
+sibling `0x4091` (no `0x100`) is the NPC line-of-sight mask (`SetPlayerLOS`, `StartTask`), so a
+`TOOLS_SHADOW` brush blocks light but not sight. Brush entities (`func_door`, `func_brush`, movers)
+carry `SOLID` and would pass the mask; they are removed by the **filter**
+(`CTraceFilterAllowWorldAndShadowProps`, trace type 3: every enumerated entity that is not an
+unflagged static prop answers false). The `0x100` bit's authored name is not in the image.
+
+**The HUD light gauge, decoded** (`client.dll CStealth::vfunc98` `0x10062690`, the vgui
+`Paint` slot; sprites from `FUN_10063210`). There is **no row-to-frame mapping**: the five
+`hud/lightgauge_%d` sprites, `lightgauge_frame`, `HealthSneak_*` and `Light_Level` are allocated
+and never drawn (a superseded HUD generation). The live gauge: `m_iGaugeValue +0x1ac` starts at
+`-1` and on its first paint snaps to the raw row (0..10), then every painted frame moves toward
+`row × 10` by **±3, unscaled by frame time**; `clipTop = trunc(2.97 × (value − 100)) + 404`,
+and `hud/new_ui/stealthfillfull` (64×404 at (30, 128) on a 1024×768 reference layout) is drawn
+clipped to `[clipTop, 404]` over `stealthfillbg`, under `stealthframe` (31, 110). The bar fills
+from the bottom; **full = fully lit (row 0), empty = fully dark (row 10)**, linear at 29.7 px per
+row. It is drawn only while `m_fFlags & FL_DUCKING` (the client does not mirror the server's
+"unseen by a hostile for 1 s" arm, so the bar keeps reporting light while a hostile watches).
+Beside it an icon from `stealth_green / _orange / _red / _seen` chosen by `(player+0x16b4 >> 8) &
+0x7f`, forced to `_seen` when spotted, with the number `player+0x16b4 & 0x7f` under it; with
+Obfuscate active (stat 8 of the discipline list) `Sneak_Icon_Obfuscated` replaces both. The
+spotted edge (`player+0x16f4 & 0x40`) plays `player_stealth_discovered.wav`. Debug text under
+`m_iDebugFlags +0x15f4`: `LIGHT:` / `ST(%3d) * LI(%3d)` (`m_iDebugStealthFeat +0x15f8`,
+`m_iDebugStealthLight +0x15fc`) / `-> LIs(%3.0f%%)` (`(1 − m_flStealthVisionScalar) × 100`,
+`+0x1604`); and under bit 2 the sound lines with `m_iDebugStealthSound +0x1600` and
+`m_flStealthHearingDist +0x1608`. UNRECOVERED: the recv-prop names of `+0x16b4` and `+0x16f4`.
+
+**Names not in the image.** `IVEngineServer` slot 118 carries no string (only its client twin
+`CEngineClient::GetLightForPoint` is named; `CVEngineServer` has 124 slots, only the four
+`Precache*` methods carry strings); `CAI_BaseNPCTroika+0x6081` has no datamap entry and no
+printer; the `m_bfNPCFrenziedFlags` bits have no table; virtual slot 587 has no string, VProf
+scope or Python native. Stop searching for these; keep the project names.
+
+**For the port.** The query is Unreal's trace plus the light rig's authored worldlights; the
+contract is: per light in radius, Source falloff by type, cone/angle term, live style value,
+occlusion by world geometry and static props only (a dedicated trace channel that doors,
+props and characters do not block), the first sun through a sky trace, luminance reduction,
+unclamped sum, `[0, 1]` clamp. Replace the current flat falloff, the sun skip and the missing
+occlusion; keep the 0.1 s cadence and the one-point-per-pass round robin.

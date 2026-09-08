@@ -1,28 +1,37 @@
 # Elysium-Unreal
 
-Elysium-Unreal is a research project that reconstructs *Vampire: The Masquerade – Bloodlines* (2004) gameplay on Unreal Engine 5.8, reading your own installed copy of the original game as source data.
+Elysium-Unreal is a research project that reconstructs *Vampire: The Masquerade – Bloodlines*
+(2004) gameplay on Unreal Engine 5.8, reading your own installed copy of the original game as
+source data.
 
-It exists to study how the retail game actually works and to see how far a modern engine can be driven from recovered behavior. It ships no game content: assets, scripts and maps are read from your installation at build time and never leave your machine. See [`NOTICE.md`](NOTICE.md).
+It exists to study how the retail game actually works and to see how far a modern engine can be
+driven from recovered behavior. It ships no game content: assets, scripts and maps are read from
+your installation at build time and never leave your machine. See [`NOTICE.md`](NOTICE.md).
 
 This is a **reconstruction** workflow, not a port:
 
 - Pipeline converts VtMB source files into engine-neutral intermediates.
 - Unreal bakes visual look into local content packages.
-- Runtime loads the baked world and reconstructs gameplay systems (entities, scripts, audio, interaction, save/load) from sidecars.
+- Runtime loads the baked world and reconstructs gameplay systems (entities, scripts, audio,
+  interaction, save/load) from those intermediates.
 
 ## What it is
 
-- `pipeline/`: Python tooling for export, validation, and package generation.
+- `pipeline/`: Python tooling for export, import, bake, validation, and package generation.
 - `Source/ElysiumUE/`: Unreal runtime and gameplay implementation.
-- `docs/`: design contracts, source behavior notes, and status.
+- `Source/ElysiumUEAnimGraph/`: editor-only faces of the two custom animation nodes.
+- `docs/`: vision, seam contracts, recovered retail notes, and open specs.
 - `research/`: reverse-engineering cases and tooling.
 
 ## How it works (high level)
 
 1. `ELYSIUM_VTMB_ROOT` is used as read-only source.
-2. `UV elysium export` writes intermediates under `ELYSIUM_EXPORT_ROOT`.
+2. `uv run elysium export` writes intermediates under `ELYSIUM_EXPORT_ROOT` (defaults to
+   `$ELYSIUM_WORK_ROOT/exports`). Lossless GLB units go under `ELYSIUM_EXPORT_V2_ROOT`
+   (defaults to `$ELYSIUM_WORK_ROOT/exports_v2`).
 3. Native Unreal commandlets bake map look into local packages.
-4. At runtime, Unreal opens the baked map and builds entities + logic from exported sidecars.
+4. At runtime, Unreal opens the baked map and builds entities + logic from the exported
+   intermediates. The running game is given `-ElysiumContentRoot`.
 5. Generated content and game-derived outputs are not committed.
 
 ## Requirements
@@ -51,10 +60,11 @@ ELYSIUM_VTMB_ROOT=E:\Games\Vampire The Masquerade - Bloodlines
 ELYSIUM_WORK_ROOT=D:\elysium-work
 ```
 
-Optional override:
+Optional overrides:
 
 ```text
-ELYSIUM_EXPORT_ROOT=E:\elysium-work\exports
+ELYSIUM_EXPORT_ROOT=D:\elysium-work\exports
+ELYSIUM_EXPORT_V2_ROOT=D:\elysium-work\exports_v2
 ```
 
 Resolution rule:
@@ -65,16 +75,18 @@ Resolution rule:
 
 ## Build from zero
 
-Run this once to validate workspace and perform a full rebuild:
+Run this once to validate the workspace and rebuild the generated tree from the install:
 
 ```powershell
 uv sync --locked
 uv run elysium deps sync
 uv run elysium doctor
-uv run elysium reconstruct --clean --rebuild
+uv run elysium reconstruct --rebuild
 ```
 
-That path restores dependencies, builds Unreal, exports and bakes configured maps, and runs required checks.
+That path restores dependencies, rebuilds Unreal, and re-exports every map from a clean mount.
+`reconstruct` always cleans and always forces; verifying the result is a separate
+`uv run elysium test` run.
 
 ## Main day-to-day commands
 
@@ -82,13 +94,19 @@ That path restores dependencies, builds Unreal, exports and bakes configured map
 uv run elysium build
 uv run elysium export map sp_tutorial_1
 uv run elysium export map sp_tutorial_1 --intermediate-only
-uv run elysium test Substrate
+uv run elysium bake map --maps sp_tutorial_1
+uv run elysium test substrate
+uv run elysium test policy
+uv run pytest
 uv run elysium run editor
+uv run elysium run play
 uv run elysium run play sp_tutorial_1
 uv run elysium run play gr
 uv run elysium debug greenroom
 uv run elysium debug modelroom
 ```
+
+`run play` with no map boots to the menu. `run play gr` is the green room (one body, live).
 
 ## How this was built
 
@@ -111,9 +129,7 @@ reverse engineering and contributions in full.
 
 ## Useful docs
 
-- Status and task tracking: [docs/project/roadmap.md](docs/project/roadmap.md)
-- Core strategy and ownership model: [docs/project/rebuild-strategy.md](docs/project/rebuild-strategy.md)
-- Reconstruction contract: [docs/project/reconstruction-direction.md](docs/project/reconstruction-direction.md)
-- Runtime architecture: [docs/architecture/](docs/architecture/)
-- VtMB factual notes: [docs/vtmb/](docs/vtmb/)
-- Repository policy and commands: [docs/operations/repository.md](docs/operations/repository.md)
+- Vision: [docs/vision.md](docs/vision.md)
+- Open specs: [docs/specs/](docs/specs/)
+- Seam contracts: [docs/contracts/](docs/contracts/)
+- Recovered retail facts: [docs/vtmb/](docs/vtmb/)

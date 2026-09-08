@@ -19,10 +19,9 @@ graph, ranged weapons) is witnessed later on `sm_hub_1`.
   - **13.3 Firearms & melee basics** — the melee half only: the damage spine, the one typed
     health commit, the melee half of the weapon controller's two-part attack transaction, the
     melee contact instant. Firearms/ranged goes to 0009.
-  - **13.5 Combat AI** — the enemy transaction / attack half only: the ideal-state pass reaching
-    an attack, the alert/combat schedule families as they drive this one fight, the enemy
-    transaction itself. The sound-event bus, senses, stimulus memory and the conditions layer go
-    to 0005.
+  - **13.5 Combat AI** — none built here. The whole NPC AI (senses, memory, the enemy
+    transaction, the alert/combat schedule families, the schedule host) is **0005**'s; this spec
+    witnesses the first fight against it and owns the weapon, damage, death and ragdoll half.
   - **LIFE4 Weapons in hands — third person** (whole row).
   - **LIFE5 Reactions and combat actions** (whole row).
   - **PHYS1 The ragdoll rig** (whole row).
@@ -35,9 +34,8 @@ graph, ranged weapons) is witnessed later on `sm_hub_1`.
   - PHYS2 The physics hands, PHYS3 The rest of the physics world — separate specs.
   - LIFE6 The first-person viewmodel, LIFE7 The cinematic path and gestures, LIFE10 the weapon
     layer composition gap — separate specs.
-  - `COND_HIT_BY_DOOR` / door-obstruction retreat, the `Prone` state — parked (10.7), unspecified
-    owner.
-  - The footstep hearing producer (AUD2) — 13.5 depends on it but does not build it.
+  - `COND_HIT_BY_DOOR` / door-obstruction retreat, the `Prone` state — **0005**.
+  - The footstep hearing producer — **0005**.
   - Paired actions — moved to LIFE7 (owner call, made).
   - The multi-enemy / full schedule-graph combat system — witnessed on `sm_hub_1` in a later spec.
 
