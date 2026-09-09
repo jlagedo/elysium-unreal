@@ -673,6 +673,7 @@ bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
 	State.bDidMaintainSchedule = false;
 	Runner.RecordScheduleEvent(FString::Printf(TEXT("schedule %s (0x%x)"),
 		ElysiumScheduleName(Id), ElysiumScheduleNumber(Id)));
+	Runner.DebugScheduleInstalled(Id);
 	return true;
 }
 

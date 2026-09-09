@@ -5,11 +5,18 @@
 #include "ElysiumWorldServices.h"
 #include "GameFramework/Character.h"
 #include "Templates/PimplPtr.h"
+#include "VisualLogger/VisualLoggerDebugSnapshotInterface.h"
 #include "ElysiumNpcBody.generated.h"
 
 class AElysiumMapActor;
 class AElysiumNpcBody;
 class ANavLinkProxy;
+class FElysiumEntityWorld;
+class FElysiumNpc;
+
+#if ENABLE_VISUAL_LOG
+struct FVisualLogEntry;
+#endif
 
 // The cast's animation pass, in TG_PostPhysics. A SECOND tick function rather than the
 // actor's own tick, because the engine wires no prerequisite between an actor's tick and its own
@@ -41,7 +48,8 @@ struct TStructOpsTypeTraits<FElysiumNpcAnimTickFunction>
 // is attached at feet-relative offset; this actor supplies the capsule, CharacterMovement, Detour
 // crowd following, and the small engine-neutral IElysiumNpcMotor surface.
 UCLASS(Transient, NotBlueprintable)
-class AElysiumNpcBody final : public ACharacter, public IElysiumNpcMotor
+class AElysiumNpcBody final : public ACharacter, public IElysiumNpcMotor,
+	public IVisualLoggerDebugSnapshotInterface
 {
 	GENERATED_BODY()
 
@@ -61,6 +69,10 @@ public:
 	// which silently keys every request a MOVING body makes on no classname and empty hands.
 	void SetOwningEntity(AElysiumMapActor* InMap, const FElysiumEntityHandle& InOwner);
 	FElysiumEntityHandle GetOwningEntity() const { return OwningEntity; }
+	// The NPC this body wears, through its own map. Null once the map or the entity is gone, or
+	// when the owner is not an NPC. OutWorld is the entity world it was resolved in, or null. The
+	// one resolution path the debug readers share, so a stale body reads as stale everywhere.
+	const FElysiumNpc* ResolveOwningNpc(const FElysiumEntityWorld*& OutWorld) const;
 	// The model this body wears and the repeatable token its weighted picks ride on. Set once when
 	// the motor is built, because that is the one place that knows both.
 	void SetModelStem(const FString& InStem, USkeletalMeshComponent* InVisual, int32 InVariant);
@@ -151,6 +163,10 @@ public:
 	// changes its answer. Public so an engine-tier test can drive it without a navmesh, a
 	// controller and a crowd agent standing between it and one trace.
 	void RefreshGroundSurface();
+
+#if ENABLE_VISUAL_LOG
+	virtual void GrabDebugSnapshot(FVisualLogEntry* Snapshot) const override;
+#endif
 
 private:
 	void ServiceNavigationJump();

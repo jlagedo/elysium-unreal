@@ -18,6 +18,7 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
+#include "Debug/ElysiumNpcDebugLogging.h"
 
 // Retail ConCommands `npc_ignore_player` / `npc_ignore_senses` (`0x10088c70` / `0x10088d70`)
 // toggle `DAT_10924fb9` / `DAT_10924fba`. The spec's job is those bytes as ConVars; they are
@@ -370,16 +371,22 @@ void FElysiumNpcSenses::StartSoundCursorAtHead(const FElysiumNpc& Npc)
 	Cursor = Npc.World ? Npc.World->GameSounds().LastSerial() : 0;
 }
 
+FVector FElysiumNpcSenses::ViewForward(const FElysiumNpc& Npc)
+{
+	// Source angles carry the inverse Unreal yaw in this substrate; pitch remains Source pitch,
+	// so construct the full forward vector rather than flattening a target above/below the
+	// observer into its horizontal ray.
+	const float PitchRadians = FMath::DegreesToRadians(static_cast<float>(Npc.Angles.X));
+	const float YawRadians = FMath::DegreesToRadians(-static_cast<float>(Npc.Angles.Y));
+	return FVector(FMath::Cos(PitchRadians) * FMath::Cos(YawRadians),
+		FMath::Cos(PitchRadians) * FMath::Sin(YawRadians), -FMath::Sin(PitchRadians));
+}
+
 bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm,
 	float TargetConeScalar)
 {
-	// `FInViewCone` at 0x103264d0 is a strict 3-D apex test.  Source angles carry the inverse
-	// Unreal yaw in this substrate; pitch remains Source pitch, so construct the full forward
-	// vector here rather than flattening a target above/below the observer into its horizontal ray.
-	const float PitchRadians = FMath::DegreesToRadians(static_cast<float>(Npc.Angles.X));
-	const float YawRadians = FMath::DegreesToRadians(-static_cast<float>(Npc.Angles.Y));
-	const FVector Forward(FMath::Cos(PitchRadians) * FMath::Cos(YawRadians),
-		FMath::Cos(PitchRadians) * FMath::Sin(YawRadians), -FMath::Sin(PitchRadians));
+	// `FInViewCone` at 0x103264d0 is a strict 3-D apex test.
+	const FVector Forward = ViewForward(Npc);
 	const FVector ToTarget = TargetCm - Npc.EyePosition();
 	// 0x103265af rejects strictly behind the original eye before shifting the apex.
 	if (FVector::DotProduct(Forward, ToTarget) < 0.0) return false;
@@ -555,10 +562,19 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 			continue;
 		}
 		SeenByChannel[Channel].Add(Candidate->Handle);
-		if (!bRangeBypass && !bDamageOverride
+		const bool bOuterBand = !bRangeBypass && !bDamageOverride
 			&& !Npc.NpcFlags.Has(EElysiumNpcFlag2::NO_UNKNOWN_VISION)
-			&& EyeDistance > ElysiumNpcSense::OuterBandFraction * Perception.VisionDistanceCm * Scalar
-			&& ElysiumNpcCond::ShouldInvestigate(Npc, *Candidate, false))
+			&& EyeDistance > ElysiumNpcSense::OuterBandFraction * Perception.VisionDistanceCm * Scalar;
+		{
+			FElysiumNpcSightingDebug Sighting;
+			Sighting.EffectiveRadiusCm = Perception.VisionDistanceCm * Scalar;
+			Sighting.TargetConeScalar = ConeScalar;
+			Sighting.bOuterBand = bOuterBand;
+			Sighting.bRangeBypass = bRangeBypass;
+			Sighting.bDamageOverride = bDamageOverride;
+			ElysiumNpcDebugLogging::Sighting(Npc, *Candidate, Sighting);
+		}
+		if (bOuterBand && ElysiumNpcCond::ShouldInvestigate(Npc, *Candidate, false))
 		{
 			const bool Eligible = bPlayer && Player && Player->IsInStealthPosture();
 			if (!Eligible)

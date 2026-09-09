@@ -39,6 +39,7 @@
 #include "Substrate/ElysiumNpcEnemy.h"
 #include "Substrate/ElysiumNpcLoadout.h"
 #include "Substrate/ElysiumNpcLog.h"
+#include "Debug/ElysiumNpcDebugLogging.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumWeaponClasses.h"
@@ -1917,6 +1918,11 @@ float FElysiumNpc::RandomSeconds(float Max)
 void FElysiumNpc::RecordScheduleEvent(const FString& Row)
 {
 	Mind.RecordExternal(Row);
+}
+
+void FElysiumNpc::DebugScheduleInstalled(EElysiumScheduleId InstalledSchedule)
+{
+	ElysiumNpcDebugLogging::ScheduleInstalled(*this, InstalledSchedule);
 }
 
 bool FElysiumNpc::FaceSavePosition()

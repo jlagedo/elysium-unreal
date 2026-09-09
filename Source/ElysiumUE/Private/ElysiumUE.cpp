@@ -5,6 +5,11 @@
 #include "InputCoreTypes.h"
 #include "Modules/ModuleManager.h"
 
+#if WITH_GAMEPLAY_DEBUGGER
+#include "GameplayDebugger.h"
+#include "Debug/ElysiumNpcGameplayDebugger.h"
+#endif
+
 #define LOCTEXT_NAMESPACE "ElysiumInputKeys"
 
 namespace
@@ -32,9 +37,27 @@ public:
 			LOCTEXT("DualSensePS", "DualSense PS"));
 		RegisterGamepadKey(ElysiumInputAssets::DualSenseMuteKey,
 			LOCTEXT("DualSenseMute", "DualSense Mute"));
+
+#if WITH_GAMEPLAY_DEBUGGER
+		IGameplayDebugger& GameplayDebugger = IGameplayDebugger::Get();
+		GameplayDebugger.RegisterCategory(
+			TEXT("ElysiumNPC"),
+			IGameplayDebugger::FOnGetCategory::CreateStatic(&FElysiumNpcGameplayDebuggerCategory::MakeInstance),
+			EGameplayDebuggerCategoryState::EnabledInGameAndSimulate,
+			INDEX_NONE);
+		GameplayDebugger.NotifyCategoriesChanged();
+#endif
 	}
 	virtual void ShutdownModule() override
 	{
+#if WITH_GAMEPLAY_DEBUGGER
+		if (IGameplayDebugger::IsAvailable())
+		{
+			IGameplayDebugger& GameplayDebugger = IGameplayDebugger::Get();
+			GameplayDebugger.UnregisterCategory(TEXT("ElysiumNPC"));
+			GameplayDebugger.NotifyCategoriesChanged();
+		}
+#endif
 		ElysiumAnimationDataModel::Unregister();
 		FDefaultGameModuleImpl::ShutdownModule();
 	}

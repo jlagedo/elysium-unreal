@@ -374,7 +374,7 @@ the retail contract the code must match, the job, and what it consumes or provid
 - [x] **19. Jump links.** `NavLinkProxy`s from the decoded `.ain` links with retail's
   disabled-bit and capability filter; the motor reports `Jump` while traversing one and
   `Ground` before arrival or failure. Oracle: `navigation-jump-links.md`; the Unreal flight
-  service is a named modernization in `docs/decisions.md` (2026-09-08).
+  service is a named modernization.
 
 ### Incapacitation
 - [x] **20. The trance.** `FeedInterrupt` (`0x1033a9e0`) on a victim with `BloodPool ≥ 1` and
@@ -435,7 +435,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   Job: the map baked on the V2 lane so the light query reads its 396 worldlights (1) and the
   nine hull-0 Jump links `22, 24, 30, 88, 110, 115, 147, 163, 218` exist as link actors (19).
   Until then 13's stuck-on-top failure is unreachable in the tutorial.
-- [ ] **23. The NPC debugger** (visual-only modernization, out of Shipping, reads only).
+- [x] **23. The NPC debugger** (visual-only modernization, out of Shipping, reads only).
   Job: an `FGameplayDebuggerCategory` "ElysiumNPC" whose `CollectData` packs mind state,
   schedule/task, conditions, enemy memory, sense radii and the trace, and whose `DrawData`
   draws the vision circle and cone, hearing radius, enemy LOS line and held place; an

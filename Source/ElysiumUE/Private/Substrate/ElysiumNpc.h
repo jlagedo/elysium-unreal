@@ -524,6 +524,7 @@ public:
 	virtual float RandomSeconds(float Max) override;
 
 	virtual void RecordScheduleEvent(const FString& Row) override;
+	virtual void DebugScheduleInstalled(EElysiumScheduleId InstalledSchedule) override;
 
 	virtual bool FaceSavePosition() override;
 
@@ -782,6 +783,17 @@ public:
 	// what it is doing. Const on purpose — a panel that could call `RequestState` would be a second
 	// producer of NPC state.
 	const FElysiumNpcMind& GetMind() const { return Mind; }
+
+	// Requirement 23: the debugger may show the authored place this NPC currently owns, but it
+	// must not reach into the private ambient phase/index state or acquire/release a claim.
+	const FElysiumInterestingPlace* GetCurrentAmbientSpotForDebug() const
+	{
+		return CurrentAmbientSpot();
+	}
+	int32 GetAmbientPhaseForDebug() const
+	{
+		return static_cast<int32>(AmbientPhase);
+	}
 
 private:
 	// --- Think(), phase by phase, in the order Think() calls them. A bool phase returns true

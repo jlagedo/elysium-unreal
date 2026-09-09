@@ -18,6 +18,13 @@
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcLog.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
+#if ENABLE_VISUAL_LOG
+#include "Substrate/ElysiumNpc.h"    // the snapshot's DebugString()
+#include "VisualLogger/VisualLoggerTypes.h"
+#if !UE_BUILD_SHIPPING && WITH_GAMEPLAY_DEBUGGER
+#include "Debug/ElysiumNpcDebugData.h"
+#endif
+#endif
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
 
@@ -406,6 +413,58 @@ FVector AElysiumNpcBody::FeetLocation() const
 	const UCapsuleComponent* Capsule = GetCapsuleComponent();
 	return GetActorLocation() - FVector(0.0f, 0.0f, Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.0f);
 }
+
+const FElysiumNpc* AElysiumNpcBody::ResolveOwningNpc(const FElysiumEntityWorld*& OutWorld) const
+{
+	const AElysiumMapActor* Map = OwningMap.Get();
+	OutWorld = Map ? Map->GetEntityWorld() : nullptr;
+	const FElysiumEntity* Entity = OutWorld ? OutWorld->Resolve(OwningEntity) : nullptr;
+	return Entity ? Entity->AsNpc() : nullptr;
+}
+
+#if ENABLE_VISUAL_LOG
+
+void AElysiumNpcBody::GrabDebugSnapshot(FVisualLogEntry* Snapshot) const
+{
+	if (Snapshot == nullptr)
+	{
+		return;
+	}
+	Snapshot->Location = GetActorLocation();
+
+	FVisualLogStatusCategory Status(TEXT("Elysium NPC"));
+	const FElysiumEntityWorld* EntityWorld = nullptr;
+	const FElysiumNpc* Npc = ResolveOwningNpc(EntityWorld);
+	if (Npc == nullptr)
+	{
+		Status.Add(TEXT("State"), TEXT("stale or unavailable entity owner"));
+		Snapshot->Status.Add(Status);
+		return;
+	}
+
+	Status.Add(TEXT("Entity"), Npc->DebugString());
+	Status.Add(TEXT("Epoch"), FString::FromInt(static_cast<int32>(EntityWorld->GetEpoch())));
+#if !UE_BUILD_SHIPPING && WITH_GAMEPLAY_DEBUGGER
+	// The snapshot is grabbed once per Visual Logger entry, so the row arrays stay out of it.
+	FElysiumNpcDebugData Data;
+	Data.Build(*Npc, *EntityWorld, EElysiumNpcDebugRows::SummaryOnly);
+	Status.Add(TEXT("Mind"), FString::Printf(TEXT("%s / %s / %s"),
+		*Data.State, *Data.IdealState, *Data.BodyOwner));
+	Status.Add(TEXT("Schedule"), FString::Printf(TEXT("%s task %d/%d %s"),
+		*Data.ScheduleName, Data.TaskIndex + 1, Data.TaskCount, *Data.CurrentTask));
+	Status.Add(TEXT("Conditions"), Data.Conditions);
+	Status.Add(TEXT("Interrupt hits"), Data.InterruptHits);
+	Status.Add(TEXT("Enemy"), FString::Printf(TEXT("%s failures=%d%s"), *Data.Enemy,
+		Data.EnemyLosFailures, Data.bEnemyOccluded ? TEXT(" occluded") : TEXT("")));
+	Status.Add(TEXT("Memory records"), FString::FromInt(Data.EnemyMemoryCount));
+	Status.Add(TEXT("Trace"), Data.Trace.Num() > 0 ? Data.Trace.Last() : TEXT("(none)"));
+#else
+	Status.Add(TEXT("State"), TEXT("debug projection unavailable in this build"));
+#endif
+	Snapshot->Status.Add(Status);
+}
+
+#endif // ENABLE_VISUAL_LOG
 
 void AElysiumNpcBody::Tick(float DeltaSeconds)
 {

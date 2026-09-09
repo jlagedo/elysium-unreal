@@ -353,6 +353,9 @@ public:
 	virtual float RandomSeconds(float Max) = 0;
 	// One trace row, so a decision is readable without a rebuild.
 	virtual void RecordScheduleEvent(const FString& Row) {}
+	// Read-only observability hook. The gameplay owner may attach a Visual Logger event after the
+	// schedule install; the default keeps engine-neutral test runners unchanged.
+	virtual void DebugScheduleInstalled(EElysiumScheduleId) {}
 
 	// The combat verbs.
 	// Every one defaults to the answer a runner with no body can honestly give. The movement verbs

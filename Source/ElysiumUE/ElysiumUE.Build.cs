@@ -89,6 +89,12 @@ public class ElysiumUE : ModuleRules
 			"MoviePlayer"
 		});
 
+		// Requirement 23: the engine Gameplay Debugger for the NPC category. The helper supplies the
+		// WITH_GAMEPLAY_DEBUGGER* definitions and adds GameplayDebugger privately whenever the
+		// target's bUseGameplayDebugger holds, which the 5.8 default already limits to Development
+		// and DebugGame; Shipping and Test compile it out without a Target.cs override.
+		SetupGameplayDebuggerSupport(Target);
+
 		// Audio: Audio Mixer/Modulation own semantic routing and user control buses. Every VtMB
 		// sound unit is baked to a USoundWave asset (AUD1.2, owner call 2026-09-08), so the
 		// vendored dr_wav/dr_mp3 decoders are gone and Unreal's stream cache is the decoder.

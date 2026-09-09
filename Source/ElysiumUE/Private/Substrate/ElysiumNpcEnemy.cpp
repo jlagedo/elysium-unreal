@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Debug/ElysiumNpcDebugLogging.h"
 
 namespace
 {
@@ -319,6 +320,10 @@ void ElysiumNpcEnemy::SetEnemy(FElysiumNpc& Npc, const FElysiumEntityHandle& New
 	Npc.RecordScheduleEvent(FString::Printf(TEXT("SetEnemy: %s -> %s"),
 		Old.IsSet() ? *Old.ToString() : TEXT("(none)"),
 		NewEnemy.IsSet() ? *NewEnemy.ToString() : TEXT("(none)")));
+	if (Npc.World != nullptr && Old != NewEnemy)
+	{
+		ElysiumNpcDebugLogging::EnemyChoice(Npc, *Npc.World, Old, NewEnemy);
+	}
 }
 
 bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond, double Now)
