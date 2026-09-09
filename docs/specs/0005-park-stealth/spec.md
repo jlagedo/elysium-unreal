@@ -136,24 +136,26 @@ the retail contract the code must match, the job, and what it consumes or provid
   investigate leftovers, closed". Named seams: the cone-apex ConVar (`0x10937a8c`, no writer in
   `.text`) and the 2-D cone mode (`0x10936f74`); 0007's cloak/detection-record producers.
   Settled as not in the image: `+0x6081`.
-- [ ] **6b. The Troika cone override.**
+- [x] **6b. The Troika cone override.**
   Retail: `FInViewCone` is slot 363 and every caller dispatches it virtually, so on a VtMB NPC
   the body that runs is `CAI_BaseNPCTroika` `0x102b4540`, not the base
   `CBaseCombatCharacter::FInViewCone` `0x10326750` that 6a ported. Its arms, in order: null
-  target → false; `DAT_10924fba` (all-blind) → false; `DAT_10924fb9` (`ai_ignoreplayers`) and
-  the target is a player (`target+0xa8`) → false; `GetTarget()` (slot 293) non-null and
-  `== m_hClosestPlayer` (+0x628c) and `target->+0x98` non-null and the byte
-  `*(target->+0x98 + 0x6279)` set → **true, skipping the cone entirely**; else the base. The
-  first two globals also gate `QuerySeeEntity` (slot 468, `0x102b38b0`).
+  target → false; `DAT_10924fba` (`npc_ignore_senses`) → false; `DAT_10924fb9`
+  (`npc_ignore_player`) and the target is a player (`target+0xa8`) → false; slot 293
+  (`GetFollowerBoss` `0x102c5470`) returns `boss+0x9c` equal to `m_hClosestPlayer` (+0x628c)
+  and `target->+0x98` (Troika self-pointer) non-null and `*(+0x6279)` (`m_bInPlayerLOS`) set →
+  **true, skipping the cone entirely**; else the base. The first two globals also gate
+  `QuerySeeEntity` (slot 468, `0x102b38b0`), `QueryHearSound` (slot 467, `0x102b35b0`) and
+  Troika `FVisible` (slot 201, `0x102b4630`). Arm 4 is a follower looking at an NPC in player
+  LOS, not a player-behind skip; a player does not write `+0x98`.
   Job: the override in `FElysiumNpcSenses::IsInViewCone`, the two globals as ConVars, and the
-  any-angle accept.
-  Consumed by: every sight admission (6a) and 10a's `SEE_SOUND_SOURCE` stranger arm, both of
-  which currently run the base body.
+  arm-4 seam.
+  Consumed by: every sight admission (6a) and 10a's `SEE_SOUND_SOURCE` stranger arm.
   Oracle: § "The sense pass for a hated player, walked" (Cone; "The Troika cone override
   `0x102b4540`, walked").
-  Unrecovered: `CAI_BaseNPC+0x98`'s entity and the `+0x6279` byte, which arm 4 cannot be built
-  without; `+0x98` is also read by `OnLooked` (`0x1026a2c0`) through slot `0x928`, the lead to
-  follow. Arms 1-3 and the base fall-through are buildable now.
+  Unrecovered as a live producer: `m_hFollowerBoss` (16a) and the target's `m_bInPlayerLOS`
+  overlay (15). Arms 1-3, the sibling gates, and the base fall-through are ported; arm 4 is
+  the named seam.
 - [x] **7. Obliviousness.** `TASK_MAKE_OBLIVIOUS` 0x131: `flags2 |= 0x80001000`,
   `SetEnemy(NULL)`, squad disconnect (`0x1026d050`, a seam until 17), `++m_iIsOblivious`
   (+0x5bb4, saved), `OnIncapacitatedStart`. Consumers: `PerformSensing` skips the pass,

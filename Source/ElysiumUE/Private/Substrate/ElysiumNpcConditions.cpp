@@ -555,7 +555,7 @@ void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcCondi
 	{
 		return;
 	}
-	if (FElysiumNpcSenses::IsInViewCone(Npc, Source->EyePosition())
+	if (FElysiumNpcSenses::IsInViewCone(Npc, *Source)
 		&& FElysiumNpcSenses::IsVisible(Npc, *Source, Now))
 	{
 		Out.Set(EElysiumNpcCond::SeeSoundSource);

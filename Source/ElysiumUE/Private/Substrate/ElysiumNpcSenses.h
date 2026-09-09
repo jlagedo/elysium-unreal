@@ -48,6 +48,12 @@ namespace ElysiumNpcSense
 	// scalar multiplies this cosine threshold inside the strict apex/cone test.
 	inline constexpr float DefaultViewConeDot = 0.2f;
 
+	// `DAT_10924fb9` / `DAT_10924fba`. ConVars `npc_ignore_player` / `npc_ignore_senses`, default
+	// off, not saved. Non-zero is on. The recovered constructors are ConCommands that toggle
+	// those bytes (`0x10088c70` / `0x10088d70`); the spec's job is the live bytes as ConVars.
+	bool IgnorePlayer();
+	bool IgnoreSenses();
+
 	// The `Inspection` feat's two nested tables, by their authored `InternalName`.
 	inline const TCHAR* VisionTableName = TEXT("Inspection_Vision_Distances");
 	inline const TCHAR* HearingTableName = TEXT("Inspection_Hearing_Scalars");
@@ -246,13 +252,21 @@ public:
 	uint64 SoundCursor() const { return Cursor; }
 	void StartSoundCursorAtHead(const FElysiumNpc& Npc);
 
-	// The observer's cone test, `FInViewCone` in this runtime's frame. Horizontal only: an NPC
-	// body carries a yaw, and retail's own observer test is a yaw-plane comparison.
+	// Base `CBaseCombatCharacter::FInViewCone` / `FinViewCone3dNew` (`0x10326750` /
+	// `0x103264d0`). Strict 3-D apex test: Source pitch and inverse-Unreal yaw, reject a
+	// negative front-plane dot, then cosine × target cone scalar vs 0.2. Point-only callers
+	// (the closest-player cache, witness origins, geometry tests) use this body because they
+	// are not slot-363 dispatches.
 	//
 	// `TargetConeScalar` is the TARGET's own `m_flStealthVisionCone`, which retail applies inside
 	// this test alongside the observer's own threshold. 1.0 is a target carrying no stealth
 	// surface, which is every character except the player.
 	static bool IsInViewCone(const FElysiumNpc& Npc, const FVector& TargetCm,
+		float TargetConeScalar = 1.0f);
+	// Troika slot 363 (`0x102b4540`): the two sense-off ConVars, then the follower any-angle
+	// seam, then the base body at the target's eye. Look and the `SEE_SOUND_SOURCE` stranger
+	// arm dispatch this.
+	static bool IsInViewCone(const FElysiumNpc& Npc, const FElysiumEntity& Target,
 		float TargetConeScalar = 1.0f);
 	// Troika FVisible, also BestEnemy's fallback. No Look-only cone or 3072-unit prefilter.
 	static bool IsVisible(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, double Now);

@@ -1,5 +1,6 @@
 #include "Substrate/ElysiumNpcSenses.h"
 
+#include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMoveSolve.h"
@@ -8,6 +9,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
 #include "ElysiumWorldServices.h"
+#include "HAL/IConsoleManager.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -16,6 +18,30 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
+
+// Retail ConCommands `npc_ignore_player` / `npc_ignore_senses` (`0x10088c70` / `0x10088d70`)
+// toggle `DAT_10924fb9` / `DAT_10924fba`. The spec's job is those bytes as ConVars; they are
+// not saved. Help strings are the recovered ones.
+static TAutoConsoleVariable<int32> CVarNpcIgnorePlayer(
+	TEXT("npc_ignore_player"),
+	0,
+	TEXT("NPCs will not hear or see the player"),
+	ECVF_Default);
+static TAutoConsoleVariable<int32> CVarNpcIgnoreSenses(
+	TEXT("npc_ignore_senses"),
+	0,
+	TEXT("NPCs will not hear or see anything"),
+	ECVF_Default);
+
+bool ElysiumNpcSense::IgnorePlayer()
+{
+	return CVarNpcIgnorePlayer.GetValueOnGameThread() != 0;
+}
+
+bool ElysiumNpcSense::IgnoreSenses()
+{
+	return CVarNpcIgnoreSenses.GetValueOnGameThread() != 0;
+}
 
 namespace
 {
@@ -363,6 +389,28 @@ bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FVector& Targ
 		>= ElysiumNpcSense::DefaultViewConeDot;
 }
 
+bool FElysiumNpcSenses::IsInViewCone(const FElysiumNpc& Npc, const FElysiumEntity& Target,
+	float TargetConeScalar)
+{
+	// Troika `FInViewCone` slot 363 (`0x102b4540`). Null-target is retail arm 1; this overload
+	// takes a reference, and Look / the stranger arm never pass a missing entity.
+	if (ElysiumNpcSense::IgnoreSenses())
+	{
+		return false;
+	}
+	if (ElysiumNpcSense::IgnorePlayer() && Npc.World && Target.Handle == Npc.World->PlayerHandle())
+	{
+		return false;
+	}
+	// Arm 4, named seam that currently answers nothing. Slot 293 (`FUN_102c5470`) is
+	// `GetFollowerBoss`: resolve `m_hFollowerBoss` (`+0x647c`) and return `boss+0x9c` (the
+	// cached `CBaseCombatCharacter*`). If that equals `m_hClosestPlayer` (`+0x628c`),
+	// `target+0x98` (Troika self-pointer) is non-null, and `*(+0x6279)` (`m_bInPlayerLOS`) is
+	// set, skip the cone. A player does not write `+0x98`, so a Look at the player cannot take
+	// this arm. 16a owns the follower handle; `SetPlayerLOS` owns the target's LOS byte.
+	return IsInViewCone(Npc, Target.EyePosition(), TargetConeScalar);
+}
+
 void FElysiumNpcSenses::Tick(FElysiumNpc& Npc, double Now)
 {
 	if (Npc.IsInert() || Npc.World == nullptr)
@@ -383,6 +431,16 @@ void FElysiumNpcSenses::Tick(FElysiumNpc& Npc, double Now)
 
 bool FElysiumNpcSenses::IsVisible(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, double Now)
 {
+	// Troika `FVisible` `0x102b4630` reads the same two bytes before slot 594. Retail writes
+	// `*blocker = 0` when the caller passed one; this port has no blocker out-param.
+	if (ElysiumNpcSense::IgnoreSenses())
+	{
+		return false;
+	}
+	if (ElysiumNpcSense::IgnorePlayer() && Npc.World && Candidate.Handle == Npc.World->PlayerHandle())
+	{
+		return false;
+	}
 	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
 	const bool RangeBypass = (Npc.GetMind().State() == EElysiumNpcState::Combat && !Memory.bEnemyOccluded)
 		|| Now < Memory.StealthVisionOverrideUntil;
@@ -459,6 +517,17 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		const bool bPlayer = Candidate->Handle == World->PlayerHandle();
 		const bool bNpc = Candidate->AsNpc() != nullptr;
 		const FString Classname = Candidate->Def ? Candidate->Def->Classname : FString();
+		// QuerySeeEntity slot 468 (`0x102b38b0`): the two sense-off bytes, then any player /
+		// non-players only at D_HT/D_FR. Frenzy-friend (`m_bfNPCFrenziedFlags & 0x800` vs
+		// `m_hFriendPlayer`) is 16c; the seam answers "not a friend".
+		if (ElysiumNpcSense::IgnoreSenses())
+		{
+			continue;
+		}
+		if (ElysiumNpcSense::IgnorePlayer() && bPlayer)
+		{
+			continue;
+		}
 		const EElysiumRelationship Relation = Npc.Relationships.Resolve(Candidate->Handle, Classname);
 		if (!bPlayer && Relation != EElysiumRelationship::Hate && Relation != EElysiumRelationship::Fear)
 		{
@@ -480,7 +549,7 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		{
 			continue;
 		}
-		if (!IsInViewCone(Npc, Candidate->EyePosition(), ConeScalar)
+		if (!IsInViewCone(Npc, *Candidate, ConeScalar)
 			|| !IsVisible(Npc, *Candidate, Now))
 		{
 			continue;
@@ -647,6 +716,10 @@ void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 		if (Event.Time <= LastListenTime || Event.ExpireTime < Now || Event.Source == Npc.Handle) continue;
 		const FElysiumEntity* Owner = Event.Source.IsSet() ? World->Resolve(Event.Source) : nullptr;
 		if (Event.Source.IsSet() && (!Owner || Owner->IsInert())) continue;
+		// QueryHearSound slot 467 (`0x102b35b0`): the same two bytes as QuerySeeEntity. Frenzy
+		// friend is 16c.
+		if (ElysiumNpcSense::IgnoreSenses()) continue;
+		if (ElysiumNpcSense::IgnorePlayer() && Owner && Owner->Handle == World->PlayerHandle()) continue;
 		if (Owner)
 		{
 			const FElysiumCombatCharacter* Character = Owner->AsCombatCharacter();

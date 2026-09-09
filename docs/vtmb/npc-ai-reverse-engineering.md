@@ -1422,8 +1422,8 @@ not, fall straight through to `ClearCondition(0x2d)`. The subject is `m_hBestSou
 3. Otherwise the stranger arm. `curtime < +0x6418` → `return` (sticky). Else
    `FInViewCone(source)` `&& FVisible(source, 0x2804091)` (slot 201, Troika `0x102b4630`)
    — both dispatched virtually, so on a Troika NPC the cone test is the slot-363 override
-   `0x102b4540` (which adds two dev-global arms and an unconditional accept when `GetTarget()` is
-   `m_hClosestPlayer` with the target's `+0x6279` byte set) and NOT the base
+   `0x102b4540` (the two `npc_ignore_*` ConVars, then the follower/`m_bInPlayerLOS` seam, then
+   the base) and NOT the base
    `CBaseCombatCharacter::FInViewCone` `0x10326750` → `SetCondition(0x2d)`, else `ClearCondition(0x2d)`; then
    `+0x6418 = curtime + 0.5f` (`_DAT_104454d0`).
 
@@ -2422,8 +2422,8 @@ not `FL_NOTARGET` (0x8000), not `spawnflags & 1`, `+0x1480` targetable, not hidd
 363 = `0x102b4540`** and **`FVisible` slot 201 = `0x102b4630`** (trace mask `0x2804091`); then
 `0x1030fc50` dispatches **slot 472 (`0x102b3e00`, the attention path)** and appends to the seen
 list. `QuerySeeEntity` admits **any player** regardless of relation (`ent+0xa8 != 0`) and
-non-players only at `D_HT`/`D_FR`; rejected by `DAT_10924fba` (all-blind), `DAT_10924fb9`
-(`ai_ignoreplayers`) and the frenzy friend-player.
+non-players only at `D_HT`/`D_FR`; rejected by `DAT_10924fba` (`npc_ignore_senses`),
+`DAT_10924fb9` (`npc_ignore_player`) and the frenzy friend-player.
 
 **Cone.** `CBaseCombatCharacter::FInViewCone` (`0x10326750`) → `FinViewCone3dNew`
 (`0x103264d0`; the 2-D variant when the cvar object at `0x10936f74` reads 2). Inputs:
@@ -2433,25 +2433,44 @@ non-players only at `D_HT`/`D_FR`; rejected by `DAT_10924fba` (all-blind), `DAT_
 total, for every VtMB humanoid. Player 0.5; `CNPC_Crow` −1.0; `CNPC_VMingXiao`/`VTzimisce` −0.5.
 UNRECOVERED: the body-offset term inside `0x103264d0` (register-garbled decompile).
 
-**The Troika cone override `0x102b4540` (slot 363), walked — and NOT PORTED.** Every sight
-admission and the sound sweep's `SEE_SOUND_SOURCE` stranger arm dispatch the cone test virtually,
-so on a VtMB NPC the function that actually runs is this override, not the base:
+**The Troika cone override `0x102b4540` (slot 363), walked.** Every sight admission and the
+sound sweep's `SEE_SOUND_SOURCE` stranger arm dispatch the cone test virtually, so on a VtMB NPC
+the function that actually runs is this override, not the base:
 
 1. `target == NULL` → false.
-2. `DAT_10924fba` (all-blind) → false.
-3. `DAT_10924fb9` (`ai_ignoreplayers`) and `target+0xa8` (the target is a player) → false.
-4. `GetTarget()` (slot 293) non-null, `GetTarget() == m_hClosestPlayer` (+0x628c), `target+0x98`
-   non-null and the byte `*(target->+0x98 + 0x6279)` set → **return true, skipping the cone
-   entirely**.
+2. `DAT_10924fba` (`npc_ignore_senses`) → false.
+3. `DAT_10924fb9` (`npc_ignore_player`) and `target+0xa8` (the target is a player) → false.
+4. Slot 293 (`FUN_102c5470`, also `GetFollowerBoss`) resolves `m_hFollowerBoss` (`+0x647c`) and
+   returns `boss+0x9c` (the cached `CBaseCombatCharacter*` self-pointer). If that equals
+   `m_hClosestPlayer` (`+0x628c`), `target+0x98` is non-null, and `*(target->+0x98 + 0x6279)`
+   (`m_bInPlayerLOS`) is set → **return true, skipping the cone entirely**.
 5. Otherwise the base `CBaseCombatCharacter::FInViewCone` `0x10326750`.
 
-`FElysiumNpcSenses::IsInViewCone` ports step 5 only. Arms 2 and 3 are the two dev globals, which
-also gate `QuerySeeEntity` above and are off in shipped play, so the observable gap is **arm 4**: an
-NPC whose current target is the closest player accepts that player at ANY angle when the flag byte
-is set. Reproducing it needs `CAI_BaseNPC+0x98`'s entity and `+0x6279`, both still UNRECOVERED —
-`+0x98` is also read by `OnLooked` (`0x1026a2c0`) through slot `0x928`, which is the lead to follow.
-This is a story-6 gap surfaced while porting 10a, which is a new consumer of the same test; it is
-recorded here rather than silently ported around.
+`ai_ignoreplayers` is HL2's name and is **not in the image**. The two bytes are the live state
+of ConCommands `npc_ignore_player` / `npc_ignore_senses` (constructors `0x10088c70` /
+`0x10088d70`, help `"NPCs will not hear or see the player"` / `"NPCs will not hear or see
+anything"`, toggles `0x10088be0` / `0x10088ce0`, `DevMsg` at `0x1054c188`). Default both 0.
+The same bytes also gate `QuerySeeEntity` `0x102b38b0`, `QueryHearSound` `0x102b35b0`, and
+Troika `FVisible` `0x102b4630`.
+
+Arm 4 is not "accept the player at any angle". `+0x98` is the Troika self-pointer
+(`CAI_BaseNPCTroika` ctor `0x1028d3bc` `MOV [ESI+0x98], ESI`; `animation_and_movers.md`); a
+player does not write it, so a Look at the player cannot take the arm. The arm is: a follower
+of the closest player, looking at an NPC whose `m_bInPlayerLOS` is set, skip the cone.
+`thug_1` has no `follower_boss`. `+0x9c` is the CC self-pointer (`PrecacheSoundTable`
+`0x1009d460` calls `IsMale` on it; choreo `CAMERAMOVE` uses `tgtEnt+0x9c` the same way).
+`+0xa8` is the player self-pointer, the existing "is player" test. `OnLooked` (`0x1026a2c0`)
+reads observer `+0x98` through slot `0x928` (`GetBestSeeUnknown`) to skip one seen entity; that
+is the same self-pointer, not a separate "lead to follow" object.
+
+**Port (6b).** `FElysiumNpcSenses::IsInViewCone(Npc, Entity)` is slot 363: arms 2–3 as ConVars
+`npc_ignore_player` / `npc_ignore_senses` (the spec's ConVar job; the toggle+`DevMsg` command
+bodies are not bytecode-observable), arm 4 a named seam that currently answers nothing (no
+follower field, no target Troika overlay producer), then the 6a point body. Look and 10a's
+stranger arm dispatch the entity overload. The closest-player `bPlayerInCone` cache keeps the
+point body: retail `SetPlayerLOS` `0x10291610` does not call `FInViewCone`. The same two
+ConVars also gate the inlined QuerySeeEntity, QueryHearSound, and `IsVisible`. Frenzy-friend
+(`m_bfNPCFrenziedFlags & 0x800`) remains a 16c seam.
 
 **Admission body `0x102b4760` (slot 594), exactly.** `+0x6081` (outer-band byte, no datamap
 name) is cleared per call. `vecMe = EyePosition()`, `vecHim = target EyePosition()`. The range
@@ -2583,8 +2602,9 @@ always passes. The only type-4 `InsertSound` is the **door** (`0x100ee560`: `DOO
 `+0x63c0` verbatim, so `hearing` is a **multiplier on the sound's radius**, never on distance;
 `AdjustSoundDistForStealth` (`0x1009d850`, in place, any owner with the stealth surface,
 `StealthHearingDistTable` 0…80 units); occlusion `0x102703f0` when occludable; `d > radius` →
-reject; then `QueryHearSound` (slot 467, Troika `0x102b35b0`): `DAT_10924fba`; `ai_ignoreplayers`
-for a player owner; frenzy friend; owner == self; the same concealment test as sight
+reject; then `QueryHearSound` (slot 467, Troika `0x102b35b0`): `DAT_10924fba`
+(`npc_ignore_senses`); `DAT_10924fb9` (`npc_ignore_player`) for a player owner; frenzy friend;
+owner == self; the same concealment test as sight
 (`0x10146b20`) — **Obfuscate silences as well as hides**; **type 4 from a player →
 `CStealthKillRules::InDeafZone(&DAT_1072c540, player, this)` ⇒ false** (the deaf arc suppresses
 the player's movement sound outright); `flags1 & 0x20400` (COWERING bit 10, SLEEPING bit 17)

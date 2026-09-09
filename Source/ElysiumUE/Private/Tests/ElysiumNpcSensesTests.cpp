@@ -19,7 +19,9 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/ScopeExit.h"
+#include "Substrate/ElysiumRelationships.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
@@ -825,6 +827,124 @@ bool FElysiumNpcSensesAdmissionTest::RunTest(const FString&)
 		FElysiumNpcSenses::IsInViewCone(*F.Guard, F.Guard->EyePosition() + FVector(-1, 0, 0)));
 	TestTrue(TEXT("the pulled-back apex admits a front-side target"),
 		FElysiumNpcSenses::IsInViewCone(*F.Guard, F.Guard->EyePosition() + FVector(1, 100, 0)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesTroikaConeTest,
+	"Elysium.Substrate.NpcSenses.TroikaCone", GElysiumTestFlags)
+bool FElysiumNpcSensesTroikaConeTest::RunTest(const FString&)
+{
+	IConsoleVariable* IgnorePlayerCVar =
+		IConsoleManager::Get().FindConsoleVariable(TEXT("npc_ignore_player"));
+	IConsoleVariable* IgnoreSensesCVar =
+		IConsoleManager::Get().FindConsoleVariable(TEXT("npc_ignore_senses"));
+	if (!TestNotNull(TEXT("npc_ignore_player is registered"), IgnorePlayerCVar)
+		|| !TestNotNull(TEXT("npc_ignore_senses is registered"), IgnoreSensesCVar))
+	{
+		return false;
+	}
+	const int32 WasIgnorePlayer = IgnorePlayerCVar->GetInt();
+	const int32 WasIgnoreSenses = IgnoreSensesCVar->GetInt();
+	ON_SCOPE_EXIT
+	{
+		IgnorePlayerCVar->Set(WasIgnorePlayer, ECVF_SetByCode);
+		IgnoreSensesCVar->Set(WasIgnoreSenses, ECVF_SetByCode);
+	};
+	IgnorePlayerCVar->Set(0, ECVF_SetByCode);
+	IgnoreSensesCVar->Set(0, ECVF_SetByCode);
+
+	FSensesFixture F;
+	if (!TestNotNull(TEXT("the guard leaf constructs"), F.Guard)
+		|| !TestNotNull(TEXT("the player exists"), F.Player))
+	{
+		return false;
+	}
+	FElysiumEntity* Other = F.World.FindByName(TEXT("c_hearworld"));
+	if (!TestNotNull(TEXT("a non-player entity exists"), Other))
+	{
+		return false;
+	}
+	F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
+	Other->Origin = FVector(Cm(100.f), 0.0, 0.0);
+	F.Guard->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
+	F.Guard->Relationships.SetEntity(Other->Handle, EElysiumRelationship::Hate, 5);
+
+	TestTrue(TEXT("default off: a player ahead is in the entity cone"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, *F.Player));
+	TestTrue(TEXT("default off: a hated non-player ahead is in the entity cone"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, *Other));
+	F.Guard->Senses.TickSight(*F.Guard, 1.0);
+	TestTrue(TEXT("default off: Look admits the player"),
+		F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+
+	IgnorePlayerCVar->Set(1, ECVF_SetByCode);
+	TestFalse(TEXT("npc_ignore_player rejects the player entity cone"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, *F.Player));
+	TestTrue(TEXT("...and still uses the base cone on a hated non-player"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, *Other));
+	TestTrue(TEXT("the point body is not the Troika override"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, F.Player->EyePosition()));
+	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
+	F.Guard->Senses.TickSight(*F.Guard, 2.0);
+	TestFalse(TEXT("Look does not admit the ignored player"),
+		F.Guard->Senses.Sighted().Contains(F.Player->Handle));
+	TestTrue(TEXT("...and still admits a hated non-player ahead"),
+		F.Guard->Senses.Sighted().Contains(Other->Handle));
+	TestTrue(TEXT("the closest-player cache still fills bPlayerInCone from the base body"),
+		F.Guard->Senses.Memory.bPlayerInCone);
+	TestFalse(TEXT("IsVisible also refuses the ignored player"),
+		FElysiumNpcSenses::IsVisible(*F.Guard, *F.Player, 2.0));
+
+	F.Player->Origin = FVector(Cm(-100.f), 0.0, 0.0);
+	TestFalse(TEXT("arm 4 does not accept a player behind the observer"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, *F.Player));
+	F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
+
+	const FElysiumSoundVolumeTable Volumes = MakeVolumeTable();
+	F.World.GameSounds().SetVolumeTable(&Volumes);
+	F.Guard->Senses.StartSoundCursorAtHead(*F.Guard);
+	FElysiumGameSoundRequest Sound;
+	Sound.Category = FName(TEXT("DOOR_NORMAL"));
+	Sound.TypeMask = ElysiumGameSounds::Player;
+	Sound.Source = F.Player->Handle;
+	Sound.Position = FVector(Cm(50.f), 0.0, F.Guard->EyePosition().Z);
+	F.World.GameSounds().Emit(Sound, 3.0);
+	F.Guard->Senses.TickHearing(*F.Guard, 3.0);
+	TestTrue(TEXT("npc_ignore_player does not snapshot a player sound"),
+		F.Guard->Senses.Memory.LastSoundPlayer.Serial == 0);
+	Sound.TypeMask = ElysiumGameSounds::World;
+	Sound.Source = FElysiumEntityHandle::Invalid();
+	F.World.GameSounds().Emit(Sound, 3.1);
+	F.Guard->Senses.TickHearing(*F.Guard, 3.1);
+	TestTrue(TEXT("...and still snapshots a non-player sound"),
+		F.Guard->Senses.Memory.LastSoundWorld.Serial != 0);
+
+	IgnorePlayerCVar->Set(0, ECVF_SetByCode);
+	IgnoreSensesCVar->Set(1, ECVF_SetByCode);
+	TestFalse(TEXT("npc_ignore_senses rejects the player entity cone"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, *F.Player));
+	TestFalse(TEXT("...and a hated non-player"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, *Other));
+	TestTrue(TEXT("the point body still answers the base cone"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, F.Player->EyePosition()));
+	TestFalse(TEXT("IsVisible refuses everyone"),
+		FElysiumNpcSenses::IsVisible(*F.Guard, *F.Player, 4.0)
+		|| FElysiumNpcSenses::IsVisible(*F.Guard, *Other, 4.0));
+	F.Guard->Senses.TickSight(*F.Guard, 4.0);
+	TestFalse(TEXT("Look admits nobody"),
+		F.Guard->Senses.Sighted().Contains(F.Player->Handle)
+		|| F.Guard->Senses.Sighted().Contains(Other->Handle));
+	F.Guard->Senses.Memory.LastSoundPlayer = FElysiumGameSoundEvent();
+	Sound.TypeMask = ElysiumGameSounds::Player;
+	Sound.Source = F.Player->Handle;
+	F.World.GameSounds().Emit(Sound, 4.1);
+	F.Guard->Senses.TickHearing(*F.Guard, 4.1);
+	TestTrue(TEXT("npc_ignore_senses does not snapshot a player sound"),
+		F.Guard->Senses.Memory.LastSoundPlayer.Serial == 0);
+
+	IgnoreSensesCVar->Set(0, ECVF_SetByCode);
+	TestTrue(TEXT("restoring the switches returns the entity cone"),
+		FElysiumNpcSenses::IsInViewCone(*F.Guard, *F.Player));
 	return true;
 }
 
