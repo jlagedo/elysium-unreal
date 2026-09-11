@@ -39,7 +39,7 @@ driving this spec: sounds loop and are not cleared at the end of the first cutsc
    derived at load from `codec`; category is a property of the referrer set; case-collision
    roll-ups belong to the corpus index.
 2. **Runtime is a request/handle service over baked sound wave assets, not a hand-rolled
-   decoder.** (Owner call 2026-09-08, `docs/decisions.md` Audio.) Every `sound` unit is baked to
+   decoder.** (Owner call 2026-09-08.) Every `sound` unit is baked to
    a `USoundWave` under `/ElysiumBaked/Sounds/**/SW_<name>`; Unreal's stream cache is the worker
    decode, byte budget and streaming buffer, and audio components are the voices. What stays in
    the port because the bytecode observes it: one canonical case-insensitive resolver that computes
@@ -156,7 +156,7 @@ design is; engine-neutral retail facts are `docs/vtmb/audio_pipeline.md`.
     `dependencies[].resolved` and the runtime negative cache; no unclassified reference on the
     three playable-path maps.
 - [ ] **AUD1 The service** — bake the V2 sound family to sound wave assets once, resolve by
-  path, delete the hand-rolled decode path. *Owner call 2026-09-08* (`docs/decisions.md` Audio):
+  path, delete the hand-rolled decode path. *Owner call 2026-09-08*:
   finishing the custom service would reimplement Unreal's stream cache; the swap is peripheral.
   The corpus is 20 years old and never changes, so the lane is a one-shot bake with no index, no
   contract and no incremental machinery beyond what `bake_lib` already gives every lane. *State

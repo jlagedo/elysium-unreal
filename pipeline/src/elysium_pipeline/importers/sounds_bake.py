@@ -4,7 +4,7 @@ The lane lands every `$ELYSIUM_EXPORT_V2_ROOT/sounds/**.glb` unit as one `USound
 `/ElysiumBaked/Sounds`. This module is the offline half; `pipeline/unreal/import_sounds.py` is
 the editor half and reads the `manifest.json` this writes.
 
-**Why a bake at all.** Owner call 2026-09-08 (`docs/decisions.md`, Audio): audio rendering moves
+**Why a bake at all.** Owner call 2026-09-08: audio rendering moves
 onto Unreal sound wave assets and the hand-rolled dr_wav/dr_mp3 decode path is deleted rather
 than finished. The corpus is twenty years old and never changes, so this is a one-shot lane: no
 index asset, no verify pass, and no incremental machinery beyond the recipe stamp every bake lane

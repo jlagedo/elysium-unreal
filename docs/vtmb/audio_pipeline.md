@@ -739,8 +739,8 @@ inheriting it — `FElysiumAudioLatency::Lead()` is three terms:
 Term 3 used to be measured per voice: the hand-rolled decoder minted a `USoundWaveProcedural`
 whose generator stamped its own first pull, and the mean over dialogue voices was 37–62 ms per
 spoken line, most of it the whole-file MP3 decode. **AUD1.3 (2026-09-08) retired that
-measurement.** Rendering moved onto baked `USoundWave` assets (owner call in `docs/decisions.md`
-§Audio), a plain wave has nowhere to hang a render probe, and a primed asset feeds the mixer out of
+measurement.** Rendering moved onto baked `USoundWave` assets, a plain wave has nowhere to
+hang a render probe, and a primed asset feeds the mixer out of
 Unreal's stream cache rather than paying a decode — so the term stopped being content-dependent
 and became a property of the path.
 
@@ -756,8 +756,8 @@ reading against asset playback, and the stamped number belongs in this section w
 
 **AUD1.4 retired the loose audio deploy.** `uv run elysium import sound` used to write every
 `.wav`/`.mp3` to `Content/ElysiumCorpus/sound/<rel>` and each `.lip` twice — beside its audio and
-under `lip/<rel>.lip`. With rendering on baked `USoundWave` assets (owner call in
-`docs/decisions.md` §Audio) and `SoundDir()`/`SoundFile()` deleted, not one of those audio bytes
+under `lip/<rel>.lip`. With rendering on baked `USoundWave` assets and
+`SoundDir()`/`SoundFile()` deleted, not one of those audio bytes
 was read any more, so the lane shrank to the `.lip` mirror alone: one file per `.lip` member, at
 `lip/<rel>.lip`, which is the key `FElysiumContentPaths::LipFile` already looks under
 (`ElysiumLip::NormalizeLipRel` = the audio key with the extension swapped).

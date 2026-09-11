@@ -59,5 +59,4 @@ A reported defect is a question about VtMB, never a request for a patch.
   the field, the accessor) and leave it answering "nothing" with a comment naming the
   retail field it stands for. Say explicitly what remains unrecovered.
 - Record the recovery in the matching `docs/vtmb/` document.
-- Divergences from retail are allowed only as named modernizations, stated in the answer
-  and recorded as a dated entry in `docs/decisions.md`.
+- Divergences from retail are allowed only as named modernizations, stated in the answer.

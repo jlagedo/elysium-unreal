@@ -7,8 +7,9 @@ to the engine's `CSaveRestore` machinery and the Source datamap, and the invento
 **Status: verified by decoding.** Every structure below was read out of real save files with
 `pipeline/src/elysium_pipeline/formats/sav.py`; the field names are the game's own datamap strings, carried inside the save's
 symbol table, not reconstructions. Class names come from MSVC RTTI in `Vampire/dlls/vampire.dll`
-(`research/tooling/ghidra/driver/run.ps1 -Script DumpGrep -ScriptArgs "cls=SaveRestore listcls=1"`). Two items are
-explicitly marked open at the end.
+(`research/tooling/ghidra/driver/run.ps1 -Script DumpGrep -ScriptArgs "cls=SaveRestore listcls=1"`). Open items are
+listed at the end. The dated witness audit, port comparison and implementation requirements are
+in `docs/specs/0011-save-game/spec.md`; that document is not a complete datamap type dictionary.
 
 Related: `docs/vtmb/python_bridge.md` (the CPython embedding and `G`), `docs/vtmb/entity_io.md` (the datamap and the
 I/O bus), `docs/vtmb/level_transitions.md` (the three spawn mechanisms), `docs/vtmb/vdata-catalog.md` (the rulebook tables the sheet indexes).
@@ -187,7 +188,7 @@ Each `DECALLIST` group holds four fields in datamap order:
 | `position` | 12 | Vector — world space for a world decal, **entity-local** when `entityIndex` is set |
 | `name` | 128 | material path — `decals/structural/parkingdsan`, `decals/signs/number7` |
 | `entityIndex` | 2 | `short` — the `saveentityindex` of the entity the decal is stuck to |
-| `flags` | 1 | 1 in all 504 records observed |
+| `flags` | 1 | `1` on every map-authored decal, `4` on every runtime impact decal (`decals/hits/*`) |
 
 So a world decal is **161 bytes** (`8 + 16 + 132 + 5`) and an entity-attached one **167**. That
 reproduces every map's decal region to the byte: `210×161 + 2×167 = 34144` for the Santa Monica
@@ -280,7 +281,8 @@ and thrown props keep their pose and velocity.
 ### `Python` — the script layer
 
 A chain of records, outside the field-stream convention: `byte tag; int len; byte pickle[len]`,
-each a **CPython 2.1 protocol-0 pickle** of a flat `str -> int` dict —
+each a **CPython 2.1 protocol-0 pickle** of a dictionary. Most flag values are integers, but
+lists and strings also occur; it is not restricted to `str -> int`. An integer example is
 `(dp1\nS'Tut_Elev'\np2\nI1\ns…`. The two dicts are `G` and `G.morgue`; the block handler, its
 vftable, and the full `G`/morgue mechanism belong to `docs/vtmb/python_bridge.md` ("`G` is the save unit").
 What follows is specific to the decoded saves themselves, written flag-dict first:
@@ -416,7 +418,7 @@ are baked into the model path), `m_nSequence`, `m_flCycle`, `m_flPoseParameter[]
 
 ### Inventory is entities, not a list
 
-There is no inventory array. Each carried item is a **full entity in the entity table** —
+There is no independent array of copied item objects. Each carried item is a **full entity in the entity table** —
 `item_g_lockpick`, `item_w_tire_iron`, `item_a_lt_cloth`, `item_g_bloodpack` — with
 `m_hOwnerEntity` set to the player's save id and `FENTTABLE_MOVEABLE` in its table flags. The
 player holds only handles into that set: `m_hMyWeapons[]`, `m_hActiveWeapon`, `m_hLastWeapon`,
@@ -455,7 +457,196 @@ uv run elysium research probe_sav <file.sav> --extract DIR     # inflated .HL1/.
 Both read a save file the user points them at and touch no game install. Pickles are loaded
 through a restricted unpickler that refuses any class construction.
 
+`research/tooling/probes/sav_to_json.py` decodes a whole save into one JSON document with every
+byte accounted for (`uv run elysium research sav_to_json <file.sav> <out.json> [--audit]`);
+`docs/specs/0011-save-game/save_example.json` is its output for a three-map tutorial save (`Vampire-015.sav`,
+`sp_tutorial_1` current, `sp_theatre` and `sp_genesisdevice_1` frozen).
+
+## Typing a record, and the raw writes between records
+
+A record carries no type. The datamap does: VtMB's `fieldtype_t` has no `QUATERNION` or `TICK`
+slot, so its numbering is `1 FLOAT, 2 STRING, 3 VECTOR, 4 INTEGER, 5 BOOLEAN, 6 SHORT,
+7 CHARACTER, 8 COLOR32, 9 EMBEDDED, 10 CUSTOM, 11 CLASSPTR, 12 EHANDLE, 13 EDICT,
+14 POSITION_VECTOR, 15 TIME, 16 MODELNAME, 17 SOUNDNAME, 18 INPUT, 19 FUNCTION` (the corpus
+field ledger's `fieldType N` notes; `m_usSolidFlags` is the lone 6, `m_pfnScriptSavedThink` a 19).
+Consequences for a reader:
+
+- `EMBEDDED` and most `CUSTOM` payloads are a nested record stream opening with their own
+  class header (`m_Collision` → `CCollisionProperty 7`, `m_Local` → `CPlayerLocalData`).
+- `TIME` is written as `value − baseTime` (`CSave` slot 25, `101a0a80`), so every saved time
+  is relative to `Save Header.time`; `1e11` is a "never" sentinel.
+- `FUNCTION` is the handler's **name** — `"CChangeLevelTouchChangeLevel"` — not an address.
+- `char[N]` fields are copied whole: bytes after the first NUL are uninitialised memory.
+
+`ISave` has two families of write, and the save interleaves them. The **named** writes produce
+records; the **unnamed** ones append raw bytes with no header. From `CSave`'s vftable
+(`10476fbc`): `+0x08` WriteAll(obj, datamap), `+0x0c` WriteFields(name, …) (a `name, count`
+header record then the fields), `+0x10`/`+0x18` StartBlock()/EndBlock() (a record with token 0
+wrapping its content), `+0x20` raw `short`, `+0x28` raw `int[]`, `+0x30` raw bytes (slot 12,
+`101a07b0`, the primitive under all of them), `+0x44` a named string record, `+0x64` raw time,
+`+0x80` raw entity index, `+0x90` raw EHANDLE → save id (slot 36, `101a1080`).
+
+### Block bodies
+
+| Block | Retail `Save` | Body layout |
+|---|---|---|
+| `EventQueue` | `100cfee0` → `100cfd00` | `WriteFields("EventQueue")` (`m_iListCount`), then `WriteFields("PEvent")` per pending event |
+| `Physics` | `10043c70` | per object `WriteAll(PhysObjectHeader_t)` + StartBlock(); per sub-object StartBlock(), raw vphysics object pointer, `vphysics_save_*` fields; EndBlock() |
+| `AI` | `1030bfd0` | raw `short` squad count; per squad a token-0 string record (name) + `WriteAll(CAI_Squad)`; raw `short` count; per NPC raw EHANDLE + `WriteAll(CAI_Memory)` |
+| `Python` | `1019adc0` | per namespace raw `bool` present, raw `int` length, cPickle protocol-0 dump (`G`, then `G.morgue`) |
+
+Every block's header area opens with a raw `short` version (`WriteSaveHeaders`, slot 3):
+EventQueue 1, Physics 5 (followed by `PhysBlockHeader_t`), AI 1, Python 1.
+
+### Entity streams end with raw writes
+
+`CBaseEntity::Save` (`100a9f70`, vtable slot 126) writes the datamap chain; an override may then
+append raw data after the last class group:
+
+- **Player** (`CBasePlayer` `1016ea00` → `FUN_10299c60`): raw `bool` (`DAT_109253f8`, the
+  `CAI_CsActList` singleton, is allocated — `FUN_102ca030`, size `0xa0c`);
+  `CAI_CsActList::Save` (`102ca130`: `int n` at `+0xa04`, `n × WriteFields("CSAct")`, a
+  trailing `int` from the stack); `FUN_103707e0`; then raw int `DAT_1092053c`. 29 bytes
+  when the act list is empty. `CAI_CsAct` (stride `0x28`) is one criminal/supernatural act:
+  `m_hIgnoreEnt`, `m_vecLocation`, `m_iLevel`, `m_flExpirationTime`, `m_hOffender`,
+  `m_hOwner`, `m_bIsCorpse`. The four `FUN_103707e0` globals: EHANDLE `1093ac3c` is the
+  entity cops currently treat as the response target (`FUN_10370560` writes
+  `GetRefEHandle()`, `FUN_103705b0` clears to `-1`; `CNPC_VCop` slot 404 `10372b70`
+  short-circuits while `curtime` is before TIME `1093aca8`); `1093acac` is the count of
+  alive `CNPC_VCop` with `m_bCountedAlive` (spawn slot 103 `10371a20` / remove `10371a90`);
+  `1093acb0` is cops committed to a player-response schedule (`SelectSchedule` slot 438
+  `10371ee0` refuses another if `alive − committed < 4`). `1092053c` bit 0 is `ai_disable`
+  (`FUN_10265680`; `FUN_1030c560` also ORs it on `ERROR: Mistake in default schedule`).
+- **Troika NPCs** (`CAI_BaseNPCTroika` `102993c0`): raw `bool` (`this+0x630c` non-null),
+  then two raw ints from that pedestrian-info record (`+4`, `+8`) when set. Restore
+  (`10299700`) reads them into `+0x6310` / `+0x6314`; `OnRestore` `102998c0` rebuilds the
+  pointer via `FUN_102f96e0`. `UpdatePedestrianInfo` `102a0d20` tests lane bits at
+  `record+0x64`. The one trailing `00` on every NPC in the tutorial save (pointer always
+  null there).
+- `CAI_BaseNPC` (`1027bc60`) writes `WriteAll(AIExtendedSaveHeader_t)` **before** the chain,
+  so an NPC's stream opens with that group rather than `CBaseEntity`.
+
+### Custom field ops
+
+| Op | Retail | Payload |
+|---|---|---|
+| `variant_t` | `CVariantSaveDataOps` `100d0c90` | raw `int fieldType`, then `WriteFields(<field>)` holding the one typed value (empty when zero) |
+| `EntityOutput` (`m_On*`) | — | raw `int` event count, the `Value` variant, then one `EntityOutput` group per event (`m_iTarget`, `m_iTargetInput`, `m_iScript`, `m_nTimesToFire`, `m_iIDStamp`, …) |
+| `m_Relationship` | `CRelationshipSaveDataOps` `10349100` | raw `int` count; per non-null slot EHANDLE + four ints: `+4` `Class_T` (`CLASS_PLAYER = 1`; `0` on entity rows), `+8` `Disposition_t` (`D_HT=1` … `D_NU=4`), `+0xc` `IRelationPriority`, `+0x10` dialog reaction modifier (`10332fc0` / `103330f0`). Entity `-1` is a class-wide row |
+| `m_pMarkers` | `CAI_InterestingPlaceMarkersSaveRestoreOps` `102d9240` | raw `int` (`+0x584`), raw `int` count; per marker EHANDLE + two vectors |
+| `m_sppPatrolPath*` | `CAI_NPCPatrolPathSaveRestoreOps` `1028cc00` | raw `bool`; when set `WriteFields("PatrolPath")` |
+| `m_pPyObj` (PEvent) | `CPyObjStrSaveRestoreDataOps` | raw `bool`, raw `int` strlen, the Python source string + NUL |
+
+The current implementation comparison and import requirements are in
+`docs/specs/0011-save-game/spec.md`. Decoder byte coverage does not establish the meaning or
+type of every key: the research decoder still uses name/size heuristics where datamap typing
+is unavailable.
+
+## 2026-09-10 audit — exact `Vampire-015.sav` and restore semantics
+
+Input: `E:\elysium-work\Vampire-015.sav`, 320,883 bytes, SHA-256
+`3d478bdcdb863e2897968df885639af796c45b87b4b12b7f08075faef199b38d`.
+Rerunning `uv run elysium research sav_to_json` produced a byte-identical copy of
+`docs/specs/0011-save-game/save_example.json`: 7,288,381 bytes, SHA-256
+`4a0b2feb6782c58f4079860078a44ded3c72097d96294433211a039a7fc10292`.
+Output/report scratch is `E:\elysium-work\research\saves\0011-audit\`.
+The decoder reports zero unparsed bytes; its `--audit` still reports type fallbacks.
+
+This witness uses the retail engine with **Unofficial Patch content**: `Patch_Plus=1`, `PP=1`,
+history `eldritch prodigy`, and queued `AThingOfSomeKind()` from the patched `vamputil.py`.
+These identify patch content, not its precise release or the originating install's hashes.
+The older illustrative values elsewhere in this document are not substitutes for this file's
+actual values. The implementation spec pins its full witness inventory and map counts.
+
+### Two independent save-selection questions
+
+The server `CEntitySaveRestoreBlockHandler::Save` (handler slot 2, `0x101a37c0`) walks
+the 0x30-byte entity-table records. For a valid live entity it calls ObjectCaps (entity slot
+117, `+0x1d4`) and, if the signed result is nonnegative, calls Save (slot 126, `+0x1f8`).
+There is no test of the across-transition bit `0x2` in this ordinary save selection.
+The source is reached through the handler's block interface; most calls are virtual, not
+direct named calls. `vtmb_callees(101a37c0)` reports these two dispatch slots explicitly.
+
+`CBaseCineCam::ObjectCaps` (slot 117, `0x1006d8f0`) calls its base and clears `0x2`.
+It inherits `CBaseEntity::Save`/`Restore` at slots 126/127. The witness nevertheless contains
+normal camera records, including theatre `camera_track` id 75 (`cinematic_shot_1`, 542 bytes).
+Thus “does not travel” cannot justify dropping its map state from an ordinary save.
+This is a concrete divergence in the current Elysium `Freeze` filter, not a modernization.
+
+Handler Restore (slot 7, `0x101a2e40`) first builds identities from table records, rejecting
+empty classname/zero-size entries and entries with the upper-word `0x40000000` exclusion flag.
+It then seeks each record and calls Restore (slot 127), followed by capability-dependent
+reconstruction (`+0x19c`/`+0x1a0`). Interpret these operations through each class's virtual
+implementation; a universal “replay Spawn on everything” or “never run restore hooks” rule
+is not the retail contract. Identity allocation precedes cross-reference use.
+
+### NPC progress survives valid restoration
+
+`CAI_BaseNPC::Save` (`0x1027bc60`, entity slot 126) writes `AIExtendedSaveHeader_t` before
+the inherited chain. It records version 1, flags for required references/path state, the active
+schedule name and a CRC of the task array. The inherited datamap also carries
+`m_ScheduleState`, wait times and navigator/motor state. Restore (`0x1027c160`, slot 127)
+reads the extended header and inherited chain, then restores special time sentinels.
+
+OnRestore (`0x1027bf50`) validates scripted-state/cinematic relationship, header version/name
+and the references marked required by saved flags. If valid, it resolves the schedule by name
+(`0x1030f350`), checks its task-array CRC against the saved value, and retains the restored
+task state when compatible. Missing schedule, bad CRC or failed prerequisites instead call
+the fallback at `0x1027be60`. The saved path flag controls navigator reconstruction; its
+failure also takes that fallback. A task/status value above the checked bound is normalized
+by this function. Do not replace this whole branch structure with unconditional task restart.
+
+`CAI_BaseNPCTroika::OnRestore` (`0x102998c0`) checks both patrol-path objects, calls that
+base OnRestore, resolves interesting-place/pedestrian references, rebinds follower data and
+combat-start activity, and performs explicit timer/state updates. In particular it draws a
+2.0–2.5 second interval for one post-restore timer. Therefore byte-identical pre/post capture
+is not a complete oracle for every field; intentional retail restore transformations matter.
+
+Concrete records: tutorial `sentry2` id 1009 has
+`SCHED_TROIKA_FOLLOW_PATROL_PATH_WALK`, flags 4 and task index 3. `rat_2` ids 450 and 678
+both have `SCHED_VSCURRYING_DO_INTEREST_ACTIVITY`, task index 3. Jack id 870 has a
+remaining wait of 2.4788208 seconds. The port's unconditional schedule restart is observable
+against these saved states, even if its own incomplete serializer round-trips successfully.
+
+### Python values and the first queued witness
+
+`CPython_SaveRestoreBlockHandler` Save/Restore (`0x1019adc0` / `0x1019b130`, slots 2/7)
+write and replace the flag dict `0x1072b370` and morgue dict `0x1072b374` separately.
+The tutorial section has 31 flags and four morgue entries, while genesis/theatre hold earlier
+copies (1/5 flags, no morgue entries). Explicit load takes the current section's live globals.
+
+The queued tutorial event is `AThingOfSomeKind()` at relative TIME `0.5272217`. This
+install's `Unofficial_Patch/python/vamputil.py`, function at line 2751, reads
+`G.Pos_One[0]` and `[1]` to compare the player's movement. Its producer `IsIdling` stores
+`pc.GetOrigin()` at line 2699. The saved list has three floating-point numbers; converting
+it to a textual repr changes the program. `vamputil.MarkAsDead` / `IsDead` likewise require
+the real morgue mapping, not a missing-global integer zero. These are source-script witnesses
+for the typed-global and morgue gaps, not conjectures based only on serialized masks.
+
+### Time and identity are semantic conversions
+
+`CSave::WriteTime` (slot 25, `0x101a0a80`) subtracts the section's base. The special restore
+helper `0x101cf2f0` maps the large encoded sentinel back to `-1` for policies 1/2, zero for
+policy 3, or maximum float for policy 4. Preserve the owning field's policy; a blanket
+`1e11 -> now`/zero conversion is incorrect. Exact inactive-map aging and engine transition
+base selection remain separate recovery work.
+
+The player's `m_hMyWeapons[224]` contains ids 1160, 1157, 1158, 1159, 213, 1154 and 1161
+at slots 0, 21, 28, 29, 30, 76 and 77. This sparse saved arrangement needs to be reconciled
+with the compact-on-removal recovery in `inventory.md` before a converter renumbers it.
+`ETABLE.id`, client `saveentityindex`, source map ordinal and native def index are distinct.
+The two `rat_2` names also rule out unique-targetname matching.
+
+Native entity HP is 56 while both sheet health slots are 44; bloodpool is 15 with maximum 10.
+Those are the observed saved values, not data to repair. The 221 tutorial decals include 103
+runtime impacts and 32 attached records. These are explicit behavioral/visual witnesses, while
+the empty act list and absent populated mail state do not establish those systems' coverage.
+
 ## Open questions
 
-- **`flags` bit semantics in the decal record.** The byte is `1` in all 504 records across the
-  saves inspected, so the data cannot distinguish which bits exist. It does not affect reading.
+- **Decal `flags` bits.** `1` marks authored decals and `4` impact decals in every record seen;
+  what other bits exist, and what the client does with them, is unrecovered.
+- **`ASSIGNED_QUEST+0x3c`.** Written `1` on every journal write (unread / "new" marker);
+  nothing in the image reads it, so what would clear it is unrecovered.
+- **`m_vDiscBloodType` writer** and **`m_sPlayerName` writer** (the setter `10170ad0` has no
+  recovered callers; live name is `pl.netname` and the `.HL2` trailer).

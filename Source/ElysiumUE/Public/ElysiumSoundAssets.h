@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The baked sound family's address space (AUD1.2, owner call 2026-09-08 in `docs/decisions.md`).
+// The baked sound family's address space (AUD1.2, owner call 2026-09-08).
 //
 // Every V2 `sound` unit is baked to one `USoundWave` under `/ElysiumBaked/Sounds/**/SW_<name>`, so
 // "does this reference resolve" is an asset-existence question rather than a file probe, and

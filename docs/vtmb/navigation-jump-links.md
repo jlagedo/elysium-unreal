@@ -73,8 +73,7 @@ a CharacterMovement flight after a native capsule arc probe succeeds, preserves 
 follower after a valid landing or publishes failure with Ground. Goal cancellation preserves
 airborne velocity. The substrate can therefore observe airborne Jump with effectively zero
 velocity and run its recovered stuck-on-top arm. No extra flight deadline is introduced.
-An actual lost/aborted path request or movement service reports failure. Engine flight details and their stated
-modernization boundary are recorded in `docs/decisions.md`.
+An actual lost/aborted path request or movement service reports failure.
 
 The map staging version and jump payload hash participate in level invalidation. Malformed or
 missing decoded graphs fail staging with a concrete source/export diagnostic. The pipeline

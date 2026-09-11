@@ -10,7 +10,9 @@ def author(row):
     name = "DA_%s_LightQuery" % row["map"]
     directory = map_package(row["map"])
     path = directory + "/" + name
-    asset = unreal.EditorAssetLibrary.load_asset(path)
+    # LoadObject, not EditorAssetLibrary.load_asset: the latter logs a hard Error when the
+    # registry has no such asset, which is the normal first-bake path and would fail the run.
+    asset = unreal.load_asset(path)
     if asset is None:
         factory = unreal.DataAssetFactory()
         factory.set_editor_property("data_asset_class", unreal.ElysiumMapLightQueryData)

@@ -11,7 +11,7 @@ FElysiumContentPaths::LipFile(Rel)  ->  CorpusRoot()/lip/<Rel>   e.g. character/
 `ElysiumLip::NormalizeLipRel` is `ElysiumScene::NormalizeSceneRel` with the extension swapped, so
 the mirror's key is the audio key with `.lip` for `.wav`/`.mp3`.
 
-## Why no audio (AUD1, owner call 2026-09-08 -- `docs/decisions.md`, "Audio")
+## Why no audio (AUD1, owner call 2026-09-08)
 
 Sound rendering moved to baked `USoundWave` assets: `uv run elysium bake sounds`
 (`importers/sounds_bake.py` + `pipeline/unreal/import_sounds.py`) writes

@@ -627,7 +627,7 @@ struct FElysiumContentPaths
 	// `/ElysiumBaked/Sounds/**/SW_<name>` and addressed by package path through
 	// `ElysiumSoundAssets` (`BakedUnit("vtmb:sound:" + key, "SW")`), so `SoundDir()`/`SoundFile()`
 	// are deleted rather than left as a second way to reach the same bytes -- AUD1.2, owner call
-	// 2026-09-08 in `docs/decisions.md`. What still lives under the corpus's own `sound/` tree is
+	// 2026-09-08. What still lives under the corpus's own `sound/` tree is
 	// the `.lip` mirror (reached as `lip/` by `LipFile`) and the scheme text below; no shipped
 	// script opens a file under `sound/`, so the script sandbox no longer mounts it either.
 

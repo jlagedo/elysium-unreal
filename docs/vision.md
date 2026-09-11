@@ -8,9 +8,8 @@ not a pixel-perfect recreation: where the original made a choice, we keep it; wh
 original was *constrained*, we are not.
 
 This document is the single north-star: what Elysium is and is not, the rule that governs
-every change, and the shape of the build. Dated owner calls and divergences live in
-`docs/decisions.md`; open threads live under `docs/specs/`; the retail oracle is `docs/vtmb/`;
-seam data formats are `docs/contracts/`.
+every change, and the shape of the build. Open threads live under `docs/specs/`; the retail
+oracle is `docs/vtmb/`; seam data formats are `docs/contracts/`.
 
 ## What Elysium is, and is not
 
@@ -46,8 +45,8 @@ decompiled behaviour, here is why 2004 shipped it that way, here is what I want 
    proposed once the faithful behaviour is known (reverse-engineered or verified in-game).
    Ignorance is not licence.
 3. **Divergence needs an owner's call.** The project owner approves each behavioural
-   divergence explicitly, and it is recorded in `docs/decisions.md` — the faithful behaviour
-   stated next to the chosen one, marked as a divergence. No silent drift.
+   divergence explicitly, with the faithful behaviour stated next to the chosen one,
+   marked as a divergence. No silent drift.
 4. **The reverse-engineering backlog does not shrink because of this rule.** Decompiling stays
    as valuable as ever — you cannot judge what to keep until you know what is there.
 
