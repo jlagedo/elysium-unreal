@@ -642,6 +642,40 @@ Those are the observed saved values, not data to repair. The 221 tutorial decals
 runtime impacts and 32 attached records. These are explicit behavioral/visual witnesses, while
 the empty act list and absent populated mail state do not establish those systems' coverage.
 
+## Native session save entry (SG-01, 2026-09-11)
+
+Rechecked through `vtmb-corpus` before the ownership refactor: the entity block handler
+`CEntitySaveRestoreBlockHandler::Save` (`0x101a37c0`, slot 2) walks the entity table and
+dispatches ObjectCaps at slot 117 (`+0x1d4`). A nonnegative result admits Save at slot 126
+(`+0x1f8`). `CBaseEntity::Save` (`0x100a9f70`) derives `m_flNextThinkSR` from
+`m_flNextThink`, preserving max-float versus the nonpositive-time representation, then
+passes the datamap returned by slot 82 (`+0x148`) to `SaveDataDescBlock`.
+The slot census confirms that terminals, math counters, relays and cameras inherit this
+Save, while player (`0x1016ea00`), combat weapon (`0x102583e0`), NPC (`0x1027bc60`)
+and Troika NPC (`0x102993c0`) override it. Moving the native save entry does not replace
+these owning leaf contracts.
+
+Reaching content: the `sp_tutorial_1` witness contains terminal `tuthack` (server id 89),
+including its inherited `CBaseEntity` state and terminal state. The installed patch's
+`python/tutorial/tutorial.py::DialogPostProcess` reads `G.Tut_Jack` (lines 58–78 onward);
+the current save has value 18. Python block Save `0x1019adc0` separately writes the
+global and morgue dictionaries. These are concrete map/script consumers of saved state,
+not evidence that Elysium already supports every Python value or terminal field.
+
+Admission `CBasePlayer::GetSaveBlockedReason` (`0x10174f80`) remains the ordered chain
+documented in `entity_io.md`; unresolved predicate meanings are not resolved by the Session
+rename. `CTriggerSave::Touch` (`0x101c9810`, slot 175) was also checked in assembly because
+the decompilation marks its tail jump damaged: after the player self-pointer check at
+`+0xa8`, it requests removal and sends `autosave\n` through engine slot 59 (`+0xec`).
+The retail command-buffer boundary and deferred autosave policy remain SG-42 work.
+
+SG-01 retains native schema 36, the existing `Freeze`/`Dehydrate` state coverage and existing
+admission restrictions. In particular, the known AcrossTransition filter is still narrower
+than retail normal-save eligibility (SG-09/SG-40); collection/morgue support is SG-11.
+Native slot spelling, operation IDs and Unreal asynchronous storage are storage adaptations,
+not claims of new retail gameplay coverage. Capture and compression run synchronously;
+only the native platform write is asynchronous. No importer is introduced in this slice.
+
 ## Open questions
 
 - **Decal `flags` bits.** `1` marks authored decals and `4` impact decals in every record seen;

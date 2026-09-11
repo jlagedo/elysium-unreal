@@ -13,7 +13,7 @@
 #include "ElysiumDecalSubsystem.h"         // ElysiumImpactDecals::PoolSize — the shot's variation roll
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
@@ -245,7 +245,7 @@ FElysiumMeleeMargins FElysiumMeleeMargins::FromRules(const FElysiumRules& Rules)
 FElysiumWeaponContext FElysiumWeaponContext::FromCharacter(const FElysiumCombatCharacter& Char)
 {
 	FElysiumWeaponContext Context;
-	UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
 	UElysiumRulebookSubsystem* Rulebook = GameState ? GameState->Rulebook() : nullptr;
 
 	// **The subsystem always wins; the bound tables are the fallback** — `ElysiumSheetRules`'

@@ -40,7 +40,7 @@
 #include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumGymSpec.h"
 #include "Visual/ElysiumPoseDeviation.h"
 #include "ElysiumHUD.h"
@@ -2048,15 +2048,15 @@ public:
 	virtual const TCHAR* Name() const override { return TEXT("sentinel"); }
 };
 
-// UElysiumGameStateSubsystem is a UGameInstanceSubsystem (ClassWithin GameInstance), so a
+// UElysiumSessionSubsystem is a UGameInstanceSubsystem (ClassWithin GameInstance), so a
 // NewObject with a package/transient outer ensures ("created in invalid Outer Package"). Outer it to
 // a throwaway UGameInstance instead to get a valid, un-Initialized game state whose SetScriptHost is
 // all these dependency-gate tests need — no running game, no subsystem collection. The instance is
 // kept alive by the returned subsystem's outer chain for the synchronous test scope.
-static UElysiumGameStateSubsystem* MakeHeadlessGameState()
+static UElysiumSessionSubsystem* MakeHeadlessGameState()
 {
 	UGameInstance* GameInstance = NewObject<UGameInstance>(GetTransientPackage());
-	return NewObject<UElysiumGameStateSubsystem>(GameInstance);
+	return NewObject<UElysiumSessionSubsystem>(GameInstance);
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDependencyTruthinessTest,
@@ -2065,7 +2065,7 @@ bool FElysiumTerminalDependencyTruthinessTest::RunTest(const FString&)
 {
 	// A prop_hacking directory is visible iff its dependency passes the gate; an empty dependency
 	// short-circuits to visible without evaluating (preserved from retail).
-	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	UElysiumSessionSubsystem* State = MakeHeadlessGameState();
 	State->SetScriptHost(MakeUnique<FElysiumSentinelScriptHost>());
 
 	FElysiumEntityDefs Defs;
@@ -2186,7 +2186,7 @@ bool FElysiumSignDependencyTruthinessTest::RunTest(const FString&)
 		return false;
 	}
 
-	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	UElysiumSessionSubsystem* State = MakeHeadlessGameState();
 	State->SetScriptHost(MakeUnique<FElysiumSentinelScriptHost>());
 	FElysiumEntityWorld World(nullptr, State);
 	World.Activate(0.0);
@@ -2267,7 +2267,7 @@ bool FElysiumDialogueConditionTruthinessTest::RunTest(const FString&)
 		return false;
 	}
 
-	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	UElysiumSessionSubsystem* State = MakeHeadlessGameState();
 	State->SetScriptHost(MakeUnique<FElysiumSentinelScriptHost>());
 
 	FElysiumRecordingServices Services;

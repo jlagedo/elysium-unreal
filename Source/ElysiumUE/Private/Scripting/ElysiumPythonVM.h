@@ -4,7 +4,7 @@
 #include "Debug/ElysiumConsole.h"
 #include "ElysiumVariant.h"
 
-class UElysiumGameStateSubsystem;
+class UElysiumSessionSubsystem;
 struct FElysiumScriptContext;
 
 // Process-global embedded CPython 2.7 VM.
@@ -17,7 +17,7 @@ struct FElysiumScriptContext;
 // try/except, imports, exec -- past what any hand-rolled subset can carry).
 //
 // This owns: the vendored PythonHome + Py_Initialize/Finalize and the `vampire` C-module -- `G`
-// proxied onto UElysiumGameStateSubsystem (attribute AND mapping protocol, since VtMB's `G[k]` is
+// proxied onto UElysiumSessionSubsystem (attribute AND mapping protocol, since VtMB's `G[k]` is
 // its `G.k`), plus the entity/native object surface in ElysiumPythonEntity (the Entity type
 // and the 11 module globals) -- and the Python bootstrap that star-imports that module into
 // `__main__`, which is the bus every level script reaches the engine through.
@@ -43,8 +43,8 @@ public:
 
 	// Bind the G store that vampire.G reads/writes (the current game instance's subsystem). The
 	// CPython script host sets this when installed; the console verbs fall back to the live world.
-	void SetGameState(UElysiumGameStateSubsystem* InState);
-	UElysiumGameStateSubsystem* GameState() const;
+	void SetGameState(UElysiumSessionSubsystem* InState);
+	UElysiumSessionSubsystem* GameState() const;
 
 	// Run a statement block in a scratch namespace (stdout/stderr captured to LogElysiumPy).
 	// Returns false + OutError on exception.
@@ -102,5 +102,5 @@ private:
 	// forward-slashed as it was written. Empty when no map script is installed.
 	FString MapScriptPath;
 	FElysiumConsole ConsoleStore;
-	TWeakObjectPtr<UElysiumGameStateSubsystem> GameStateWeak;
+	TWeakObjectPtr<UElysiumSessionSubsystem> GameStateWeak;
 };

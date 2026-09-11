@@ -1,4 +1,4 @@
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 
 #include "ElysiumEntityWorld.h"
 #include "ElysiumExpr.h"
@@ -34,31 +34,31 @@ EElysiumNotificationKind ElysiumQuestNotifications::KindForStateType(const FStri
 
 // The player: live entity first, record second.
 
-FElysiumPlayer* UElysiumGameStateSubsystem::PlayerEntity() const
+FElysiumPlayer* UElysiumSessionSubsystem::PlayerEntity() const
 {
 	FElysiumEntityWorld* World = CurrentEntityWorld();
 	return World ? World->FindPlayer() : nullptr;
 }
 
-const FElysiumSheet& UElysiumGameStateSubsystem::PlayerSheet() const
+const FElysiumSheet& UElysiumSessionSubsystem::PlayerSheet() const
 {
 	const FElysiumPlayer* Player = PlayerEntity();
 	return Player ? Player->Sheet : Record.Sheet;
 }
 
-FElysiumSheet& UElysiumGameStateSubsystem::PlayerSheet()
+FElysiumSheet& UElysiumSessionSubsystem::PlayerSheet()
 {
 	FElysiumPlayer* Player = PlayerEntity();
 	return Player ? Player->Sheet : Record.Sheet;
 }
 
-UElysiumRulebookSubsystem* UElysiumGameStateSubsystem::Rulebook() const
+UElysiumRulebookSubsystem* UElysiumSessionSubsystem::Rulebook() const
 {
 	UGameInstance* GI = GetGameInstance();
 	return GI ? GI->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
 }
 
-const FElysiumStatTable* UElysiumGameStateSubsystem::Stats() const
+const FElysiumStatTable* UElysiumSessionSubsystem::Stats() const
 {
 	UElysiumRulebookSubsystem* Rules = Rulebook();
 	if (!Rules)
@@ -71,7 +71,7 @@ const FElysiumStatTable* UElysiumGameStateSubsystem::Stats() const
 	return Table.IsValid() ? &Table : nullptr;
 }
 
-void UElysiumGameStateSubsystem::NotifyPlayerKilled()
+void UElysiumSessionSubsystem::NotifyPlayerKilled()
 {
 	UE_LOG(LogElysiumState, Display, TEXT("the player died — ending the run"));
 	if (UGameInstance* GI = GetGameInstance())
@@ -83,7 +83,7 @@ void UElysiumGameStateSubsystem::NotifyPlayerKilled()
 	}
 }
 
-void UElysiumGameStateSubsystem::NotifyMasqueradeBreach()
+void UElysiumSessionSubsystem::NotifyMasqueradeBreach()
 {
 	UE_LOG(LogElysiumState, Display, TEXT("the masquerade broke — ending the run"));
 	if (UGameInstance* GI = GetGameInstance())
@@ -95,7 +95,7 @@ void UElysiumGameStateSubsystem::NotifyMasqueradeBreach()
 	}
 }
 
-void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
+void UElysiumSessionSubsystem::BeginNewGame(int32 Clan, bool bMale)
 {
 	// The running world stops owning any part of the session before anything below is cleared. New
 	// Game's travel is deferred to the end of the frame, so that world's teardown lands AFTER this
@@ -147,7 +147,7 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 		Record.Sheet.IsMale() ? TEXT("male") : TEXT("female"));
 }
 
-void UElysiumGameStateSubsystem::CommitChargen(const FElysiumChargenState& State)
+void UElysiumSessionSubsystem::CommitChargen(const FElysiumChargenState& State)
 {
 	Record.Name = State.Name;
 	// The sheet carries clan and sex as slots, so this one assignment lands the whole character —
@@ -187,7 +187,7 @@ void UElysiumGameStateSubsystem::CommitChargen(const FElysiumChargenState& State
 		HistoryName.IsEmpty() ? TEXT("none") : *HistoryName, Record.Effects.Num());
 }
 
-void UElysiumGameStateSubsystem::EndSession()
+void UElysiumSessionSubsystem::EndSession()
 {
 	ClearAllGlobals();
 	Quests.Reset();
@@ -210,12 +210,12 @@ void UElysiumGameStateSubsystem::EndSession()
 
 // The per-map snapshots.
 
-const FElysiumMapSnapshot* UElysiumGameStateSubsystem::FindMapSnapshot(const FString& Map) const
+const FElysiumMapSnapshot* UElysiumSessionSubsystem::FindMapSnapshot(const FString& Map) const
 {
 	return Snapshots.Find(Map);
 }
 
-void UElysiumGameStateSubsystem::StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot)
+void UElysiumSessionSubsystem::StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot)
 {
 	if (!Snapshot.IsValid())
 	{
@@ -226,12 +226,12 @@ void UElysiumGameStateSubsystem::StoreMapSnapshot(FElysiumMapSnapshot&& Snapshot
 	Snapshots.Add(Key, MoveTemp(Snapshot));
 }
 
-void UElysiumGameStateSubsystem::SetMapSnapshots(TMap<FString, FElysiumMapSnapshot>&& In)
+void UElysiumSessionSubsystem::SetMapSnapshots(TMap<FString, FElysiumMapSnapshot>&& In)
 {
 	Snapshots = MoveTemp(In);
 }
 
-void UElysiumGameStateSubsystem::ClearMapSnapshot(const FString& Map)
+void UElysiumSessionSubsystem::ClearMapSnapshot(const FString& Map)
 {
 	// Both halves: the snapshot is what ApplySnapshot would replay, and the visited entry is what
 	// the World block calls a first visit.
@@ -239,9 +239,10 @@ void UElysiumGameStateSubsystem::ClearMapSnapshot(const FString& Map)
 	Visited.Remove(Map);
 }
 
-void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+void UElysiumSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
+	RegisterSaveCommands();
 
 	// The time facade reaches the engine (pause, dilation) through the game instance's
 	// current world, resolved per call so travel never leaves it holding a dead one.
@@ -258,7 +259,7 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 	if (UElysiumMapSubsystem* Maps = Collection.InitializeDependency<UElysiumMapSubsystem>())
 	{
 		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
-			this, &UElysiumGameStateSubsystem::OnMapEpochRetired);
+			this, &UElysiumSessionSubsystem::OnMapEpochRetired);
 	}
 
 	// `elysium.quest` — the journal, one quest, or drive a real state change. Quest titles carry
@@ -453,7 +454,7 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 		ECVF_Cheat));
 }
 
-void UElysiumGameStateSubsystem::OnMapEpochRetired(uint64 Epoch)
+void UElysiumSessionSubsystem::OnMapEpochRetired(uint64 Epoch)
 {
 	// The level script belonged to the map that is leaving: drop the interpreter state that named it,
 	// so the next map's import starts from the same place a first import does.
@@ -466,7 +467,7 @@ void UElysiumGameStateSubsystem::OnMapEpochRetired(uint64 Epoch)
 	}
 }
 
-void UElysiumGameStateSubsystem::Deinitialize()
+void UElysiumSessionSubsystem::Deinitialize()
 {
 	if (MapEpochRetiredHandle.IsValid())
 	{
@@ -497,7 +498,7 @@ void UElysiumGameStateSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UElysiumGameStateSubsystem::SetScriptHost(TUniquePtr<IElysiumScriptHost> InHost)
+void UElysiumSessionSubsystem::SetScriptHost(TUniquePtr<IElysiumScriptHost> InHost)
 {
 	// Ignore a null argument so ScriptHost()
 	// always dereferences a live host.
@@ -516,7 +517,7 @@ void UElysiumGameStateSubsystem::SetScriptHost(TUniquePtr<IElysiumScriptHost> In
 	}
 }
 
-TUniquePtr<IElysiumScriptHost> UElysiumGameStateSubsystem::MakePreferredScriptHost()
+TUniquePtr<IElysiumScriptHost> UElysiumSessionSubsystem::MakePreferredScriptHost()
 {
 	if (FElysiumCPythonScriptHost::IsAvailable())
 	{
@@ -534,7 +535,7 @@ TUniquePtr<IElysiumScriptHost> UElysiumGameStateSubsystem::MakePreferredScriptHo
 	return MakeUnique<FElysiumExprScriptHost>(this);
 }
 
-bool UElysiumGameStateSubsystem::LoadLevelScript(const FString& Module)
+bool UElysiumSessionSubsystem::LoadLevelScript(const FString& Module)
 {
 	LevelScriptModule = Module.TrimStartAndEnd();
 	bLevelScriptLoaded = false;
@@ -564,7 +565,7 @@ bool UElysiumGameStateSubsystem::LoadLevelScript(const FString& Module)
 	return bLevelScriptLoaded;
 }
 
-FElysiumVariant UElysiumGameStateSubsystem::GetGlobal(const FString& Key) const
+FElysiumVariant UElysiumSessionSubsystem::GetGlobal(const FString& Key) const
 {
 	if (const FElysiumVariant* Found = Globals.Find(Key))
 	{
@@ -573,7 +574,7 @@ FElysiumVariant UElysiumGameStateSubsystem::GetGlobal(const FString& Key) const
 	return FElysiumVariant::Int(0); // default-on-miss = 0 (confirmed, python_bridge.md)
 }
 
-void UElysiumGameStateSubsystem::SetGlobal(const FString& Key, const FElysiumVariant& Value)
+void UElysiumSessionSubsystem::SetGlobal(const FString& Key, const FElysiumVariant& Value)
 {
 	// Assigning None (Void here) deletes the key — tp_setattr semantics.
 	if (Value.IsVoid())
@@ -584,35 +585,35 @@ void UElysiumGameStateSubsystem::SetGlobal(const FString& Key, const FElysiumVar
 	Globals.Add(Key, Value);
 }
 
-bool UElysiumGameStateSubsystem::HasGlobal(const FString& Key) const
+bool UElysiumSessionSubsystem::HasGlobal(const FString& Key) const
 {
 	return Globals.Contains(Key);
 }
 
-void UElysiumGameStateSubsystem::ClearGlobal(const FString& Key)
+void UElysiumSessionSubsystem::ClearGlobal(const FString& Key)
 {
 	Globals.Remove(Key);
 }
 
-void UElysiumGameStateSubsystem::ClearAllGlobals()
+void UElysiumSessionSubsystem::ClearAllGlobals()
 {
 	Globals.Empty();
 }
 
-TArray<FString> UElysiumGameStateSubsystem::GlobalKeys() const
+TArray<FString> UElysiumSessionSubsystem::GlobalKeys() const
 {
 	TArray<FString> Keys;
 	Globals.GetKeys(Keys);
 	return Keys;
 }
 
-int32 UElysiumGameStateSubsystem::GetQuestState(const FString& Quest) const
+int32 UElysiumSessionSubsystem::GetQuestState(const FString& Quest) const
 {
 	const int32* Found = Quests.Find(Quest);
 	return Found ? *Found : 0;
 }
 
-void UElysiumGameStateSubsystem::SetQuestState(const FString& Quest, int32 State)
+void UElysiumSessionSubsystem::SetQuestState(const FString& Quest, int32 State)
 {
 	// The map write is unconditional and comes first: default-0-on-miss is the contract every one
 	// of the 732 call sites reads through, so an unknown title still stores its value here even
@@ -705,7 +706,7 @@ void UElysiumGameStateSubsystem::SetQuestState(const FString& Quest, int32 State
 	}
 }
 
-void UElysiumGameStateSubsystem::ExecQuest(const TArray<FString>& Args)
+void UElysiumSessionSubsystem::ExecQuest(const TArray<FString>& Args)
 {
 	UElysiumRulebookSubsystem* Rules = Rulebook();
 	if (!Rules)
@@ -785,7 +786,7 @@ void UElysiumGameStateSubsystem::ExecQuest(const TArray<FString>& Args)
 	}
 }
 
-void UElysiumGameStateSubsystem::RestoreQuests(TArray<TPair<FString, int32>>&& In)
+void UElysiumSessionSubsystem::RestoreQuests(TArray<TPair<FString, int32>>&& In)
 {
 	// A load is a wholesale replace, and it must be SILENT: routing it through SetQuestState would
 	// replay every award the run ever made. The journal is not rebuilt here either — it arrives
@@ -797,7 +798,7 @@ void UElysiumGameStateSubsystem::RestoreQuests(TArray<TPair<FString, int32>>&& I
 	}
 }
 
-void UElysiumGameStateSubsystem::MarkQuestsRead(int32 Hub)
+void UElysiumSessionSubsystem::MarkQuestsRead(int32 Hub)
 {
 	// The rows the screen just showed: the selected hub, plus `main`, which rides along in every tab.
 	// A hub outside the table range clears nothing rather than clearing everything.
@@ -814,12 +815,12 @@ void UElysiumGameStateSubsystem::MarkQuestsRead(int32 Hub)
 	}
 }
 
-bool UElysiumGameStateSubsystem::HasQuest(const FString& Quest) const
+bool UElysiumSessionSubsystem::HasQuest(const FString& Quest) const
 {
 	return Quests.Contains(Quest);
 }
 
-void UElysiumGameStateSubsystem::SetLiveScriptEval(bool bEnable)
+void UElysiumSessionSubsystem::SetLiveScriptEval(bool bEnable)
 {
 	if (bEnable == IsLiveScriptEval())
 	{
@@ -835,13 +836,13 @@ void UElysiumGameStateSubsystem::SetLiveScriptEval(bool bEnable)
 	}
 }
 
-bool UElysiumGameStateSubsystem::IsLiveScriptEval() const
+bool UElysiumSessionSubsystem::IsLiveScriptEval() const
 {
 	// Live = any real evaluator (expr or cpython); only the null host is "dark".
 	return ScriptHostPtr && FCString::Strcmp(ScriptHostPtr->Name(), TEXT("null")) != 0;
 }
 
-FElysiumEntityWorld* UElysiumGameStateSubsystem::CurrentEntityWorld() const
+FElysiumEntityWorld* UElysiumSessionSubsystem::CurrentEntityWorld() const
 {
 	const UGameInstance* GI = GetGameInstance();
 	const UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
@@ -849,7 +850,7 @@ FElysiumEntityWorld* UElysiumGameStateSubsystem::CurrentEntityWorld() const
 	return Map ? Map->GetEntityWorld() : nullptr;
 }
 
-FElysiumVariant UElysiumGameStateSubsystem::EvalScript(const FString& Source, FString& OutError)
+FElysiumVariant UElysiumSessionSubsystem::EvalScript(const FString& Source, FString& OutError)
 {
 	// Through the installed host, so a hand-run eval sees exactly what a field-6 payload sees —
 	// same evaluator, same namespace (the loaded level script), same error-to-false. Routing this
@@ -867,7 +868,7 @@ FElysiumVariant UElysiumGameStateSubsystem::EvalScript(const FString& Source, FS
 	return ScriptHostPtr->Eval(Source, Ctx, &OutError);   // the host records into the eval ring
 }
 
-void UElysiumGameStateSubsystem::RecordEval(const FString& Source, const FElysiumVariant& Result,
+void UElysiumSessionSubsystem::RecordEval(const FString& Source, const FElysiumVariant& Result,
 	bool bError, const FString& Error)
 {
 	FElysiumEvalRecord Rec;
@@ -882,7 +883,7 @@ void UElysiumGameStateSubsystem::RecordEval(const FString& Source, const FElysiu
 	}
 }
 
-void UElysiumGameStateSubsystem::RecordNativeCall(const FString& Call, const FElysiumVariant& Result,
+void UElysiumSessionSubsystem::RecordNativeCall(const FString& Call, const FElysiumVariant& Result,
 	bool bStub, FName Name)
 {
 	NativeCallCounts.FindOrAdd(Name)++;

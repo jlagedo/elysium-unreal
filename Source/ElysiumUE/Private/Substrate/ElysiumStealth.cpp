@@ -2,7 +2,7 @@
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U — the one units conversion
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
@@ -96,7 +96,7 @@ FRecomputeResult Recompute(const FElysiumStealthTables& Tables, const FRecompute
 
 const FElysiumStealthTables& TablesFor(const FElysiumEntityWorld* World)
 {
-	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = World ? World->GetGameState() : nullptr;
 	if (UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr)
 	{
 		return Rules->Stealth();

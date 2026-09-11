@@ -1,6 +1,6 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumItemClasses.h"
@@ -451,7 +451,7 @@ namespace
 	// GameInstance and therefore no rulebook at all.
 	const FElysiumExcludedEquipTable* WieldRulesFor(const FElysiumCombatCharacter& Char)
 	{
-		UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
+		UElysiumSessionSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
 		if (UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr)
 		{
 			return &Rules->ExcludedEquip();

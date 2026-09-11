@@ -4,7 +4,7 @@
 #include "ElysiumCameraSolve.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEditorLabels.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumLineService.h"
 #include "ElysiumMapCollisionPayload.h"
 #include "ElysiumPlayer.h"
@@ -85,7 +85,7 @@ namespace ElysiumEntityWorldShared
 	const TCHAR* const GSelfTarget = TEXT("!self");
 }
 
-FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsystem* InGameState,
+FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsystem* InGameState,
 	const FElysiumWorldServices& InServices)
 	: Owner(InOwner)
 	, GameState(InGameState)

@@ -6,7 +6,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameClock.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumLightRig.h"
 #include "Visual/ElysiumMapVisuals.h"
@@ -186,7 +186,7 @@ void FElysiumCogWindow_Environment::RenderContent()
 	if (Authored.Duration > 0.0f)
 	{
 		double Now = Authored.StartTime;
-		if (const UElysiumGameStateSubsystem* State = GetGameState())
+		if (const UElysiumSessionSubsystem* State = GetGameState())
 		{
 			Now = State->GameClock().GetNow();
 		}

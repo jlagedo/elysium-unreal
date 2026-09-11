@@ -44,7 +44,7 @@
 #include "ElysiumCameraSolve.h"
 #include "ElysiumCameraService.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumUserCmd.h"
@@ -177,7 +177,7 @@ namespace
 	// translation units must not grow a shared back door to the subsystem.)
 	UElysiumRulebookSubsystem* FeedRulebook(const FElysiumCombatCharacter& Char)
 	{
-		UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
+		UElysiumSessionSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
 		return GameState ? GameState->Rulebook() : nullptr;
 	}
 

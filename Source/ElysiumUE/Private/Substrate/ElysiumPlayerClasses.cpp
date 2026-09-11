@@ -18,7 +18,7 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumClassFields.h"
@@ -490,7 +490,7 @@ static FElysiumClassRegistrar GRegPlayer(
 			Acc.Type = EElysiumVariantType::Int;
 			Acc.Get = [](const FElysiumEntity& E)
 			{
-				const UElysiumGameStateSubsystem* State = E.World ? E.World->GetGameState() : nullptr;
+				const UElysiumSessionSubsystem* State = E.World ? E.World->GetGameState() : nullptr;
 				return FElysiumVariant::Int(State ? State->PlayerRecord().HistoryId : INDEX_NONE);
 			};
 			Acc.Set = [](FElysiumEntity&, const FElysiumVariant&) {};

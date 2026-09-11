@@ -2,7 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Scripting/ElysiumPythonEntity.h"
 #include "Scripting/ElysiumScriptFS.h"
@@ -32,11 +32,11 @@ namespace
 	using ElysiumPy::VariantToPy;
 
 	// The `vampire.G` proxy type: attribute access <-> the C++ game-state store.
-	// A data-less PyObject; every read/write forwards to the current UElysiumGameStateSubsystem.
+	// A data-less PyObject; every read/write forwards to the current UElysiumSessionSubsystem.
 	// Methods (keys/has_key/ClearAll) resolve first via the generic path, then any other name is a
 	// G flag (default int 0 on a miss, delete on assign-None) -- exactly VtMB's tp_getattr/tp_setattr.
 
-	UElysiumGameStateSubsystem* GStore()
+	UElysiumSessionSubsystem* GStore()
 	{
 		return FElysiumPythonVM::Get().GameState();
 	}
@@ -58,7 +58,7 @@ namespace
 		{
 			return nullptr;
 		}
-		UElysiumGameStateSubsystem* S = GStore();
+		UElysiumSessionSubsystem* S = GStore();
 		const FElysiumVariant V = S ? S->GetGlobal(FString(UTF8_TO_TCHAR(Name))) : FElysiumVariant::Void();
 		return V.IsVoid() ? PyInt_FromLong(0) : VariantToPy(V); // miss -> 0 (retail default)
 	}
@@ -70,7 +70,7 @@ namespace
 		{
 			return -1;
 		}
-		UElysiumGameStateSubsystem* S = GStore();
+		UElysiumSessionSubsystem* S = GStore();
 		if (!S)
 		{
 			return 0; // no store bound yet -- drop the write
@@ -90,7 +90,7 @@ namespace
 	PyObject* PyG_keys(PyObject* /*Self*/, PyObject* /*Args*/)
 	{
 		PyObject* List = PyList_New(0);
-		if (UElysiumGameStateSubsystem* S = GStore())
+		if (UElysiumSessionSubsystem* S = GStore())
 		{
 			for (const FString& K : S->GlobalKeys())
 			{
@@ -109,14 +109,14 @@ namespace
 		{
 			return nullptr;
 		}
-		UElysiumGameStateSubsystem* S = GStore();
+		UElysiumSessionSubsystem* S = GStore();
 		const bool bHas = S && S->HasGlobal(FString(UTF8_TO_TCHAR(Name)));
 		return PyBool_FromLong(bHas ? 1 : 0);
 	}
 
 	PyObject* PyG_ClearAll(PyObject* /*Self*/, PyObject* /*Args*/)
 	{
-		if (UElysiumGameStateSubsystem* S = GStore())
+		if (UElysiumSessionSubsystem* S = GStore())
 		{
 			S->ClearAllGlobals();
 		}
@@ -163,7 +163,7 @@ namespace
 
 	Py_ssize_t PyG_length(PyObject*)
 	{
-		UElysiumGameStateSubsystem* S = GStore();
+		UElysiumSessionSubsystem* S = GStore();
 		return S ? static_cast<Py_ssize_t>(S->GlobalKeys().Num()) : 0;
 	}
 
@@ -268,7 +268,7 @@ namespace
 		GType.tp_setattro   = PyG_setattro;
 		GType.tp_as_mapping = &GMapping;
 		GType.tp_methods    = GMethods;
-		GType.tp_doc        = "VtMB global flag store (G) -- proxied onto UElysiumGameStateSubsystem";
+		GType.tp_doc        = "VtMB global flag store (G) -- proxied onto UElysiumSessionSubsystem";
 		if (PyType_Ready(&GType) < 0)
 		{
 			OutError = FString::Printf(TEXT("PyType_Ready(vampire.G) failed: %s"), *FetchPyError());
@@ -449,12 +449,12 @@ bool FElysiumPythonVM::IsAvailable()
 #endif
 }
 
-void FElysiumPythonVM::SetGameState(UElysiumGameStateSubsystem* InState)
+void FElysiumPythonVM::SetGameState(UElysiumSessionSubsystem* InState)
 {
 	GameStateWeak = InState;
 }
 
-UElysiumGameStateSubsystem* FElysiumPythonVM::GameState() const
+UElysiumSessionSubsystem* FElysiumPythonVM::GameState() const
 {
 	return GameStateWeak.Get();
 }
@@ -876,13 +876,13 @@ TArray<FString> FElysiumPythonVM::GetModuleCallables(const FString&) const { ret
 
 namespace
 {
-	UElysiumGameStateSubsystem* ResolveGameState(UWorld* World)
+	UElysiumSessionSubsystem* ResolveGameState(UWorld* World)
 	{
 		if (World)
 		{
 			if (UGameInstance* GI = World->GetGameInstance())
 			{
-				return GI->GetSubsystem<UElysiumGameStateSubsystem>();
+				return GI->GetSubsystem<UElysiumSessionSubsystem>();
 			}
 		}
 		return nullptr;
@@ -890,7 +890,7 @@ namespace
 
 	void BindStore(UWorld* World)
 	{
-		if (UElysiumGameStateSubsystem* S = ResolveGameState(World))
+		if (UElysiumSessionSubsystem* S = ResolveGameState(World))
 		{
 			FElysiumPythonVM::Get().SetGameState(S);
 		}
@@ -965,7 +965,7 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyPoc(
 	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
 	{
 		FElysiumPythonVM& VM = FElysiumPythonVM::Get();
-		UElysiumGameStateSubsystem* S = ResolveGameState(World);
+		UElysiumSessionSubsystem* S = ResolveGameState(World);
 		VM.SetGameState(S);
 		bool bAll = true;
 		FString Err;
@@ -1025,7 +1025,7 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyFirstBeat(
 	TEXT("Run the B2 first-beat acceptance on sp_tutorial_1 and log a PASS/FAIL summary."),
 	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
 	{
-		UElysiumGameStateSubsystem* S = ResolveGameState(World);
+		UElysiumSessionSubsystem* S = ResolveGameState(World);
 		FElysiumEntityWorld* W = S ? S->CurrentEntityWorld() : nullptr;
 		if (!S || !W)
 		{

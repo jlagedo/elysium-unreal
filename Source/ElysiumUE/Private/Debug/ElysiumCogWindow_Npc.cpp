@@ -10,7 +10,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumCameraSolve.h"   // CameraClass — what a drawn weapon is doing to the view
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumNpcSubsystem.h"
@@ -217,7 +217,7 @@ void FElysiumCogWindow_Npc::GatherNpcs(TArray<FElysiumNpc*>& Out) const
 
 void FElysiumCogWindow_Npc::RenderSpawnControls(FElysiumEntityWorld& World)
 {
-	UElysiumGameStateSubsystem* GameState = GetGameState();
+	UElysiumSessionSubsystem* GameState = GetGameState();
 	if (bCatalogsDirty)
 	{
 		Stems = ElysiumArenaCast::BodyStems();

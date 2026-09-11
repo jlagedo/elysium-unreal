@@ -32,7 +32,7 @@ class FElysiumLineService;
 namespace ElysiumNpcWitness { class FElysiumLawEventBus; }
 class AActor;
 class UElysiumBrushComponent;
-class UElysiumGameStateSubsystem;
+class UElysiumSessionSubsystem;
 class UElysiumMapCollisionPayload;
 class UPhysicsConstraintComponent;
 class UPrimitiveComponent;
@@ -86,7 +86,7 @@ private:
 class FElysiumEntityWorld
 {
 public:
-	FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsystem* InGameState,
+	FElysiumEntityWorld(AActor* InOwner, UElysiumSessionSubsystem* InGameState,
 		const FElysiumWorldServices& InServices = FElysiumWorldServices());
 	~FElysiumEntityWorld();
 
@@ -576,7 +576,7 @@ public:
 	IElysiumCameraOverrideResolver& CameraOverrideResolver();
 
 	// The game-state subsystem (the `G`/quest store, player sheet, script host). Outlives the world.
-	UElysiumGameStateSubsystem* GetGameState() const { return GameState; }
+	UElysiumSessionSubsystem* GetGameState() const { return GameState; }
 
 	// --- The outbound seam ---
 	// The five services, injected at construction. **Every one may be null** — a headless world has
@@ -808,7 +808,7 @@ private:
 	void BindSoundVolumes();
 
 	AActor* Owner = nullptr;                          // component outer + VLOG context; not owned
-	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
+	UElysiumSessionSubsystem* GameState = nullptr;  // clock + script host; outlives the world
 	FElysiumWorldServices WorldServices;              // the outbound seam; members may be null
 	FElysiumWeatherState WeatherState;
 	TArray<FElysiumEntityHandle> ComfortTargetList;

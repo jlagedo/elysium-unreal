@@ -7,7 +7,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumStub.h"
 #include "Scripting/ElysiumPythonVM.h"
 #include "Scripting/ElysiumScriptNatives.h"
@@ -25,7 +25,7 @@ namespace
 	// stack of its own: FScopedContext saves and restores, so nesting works.
 	FElysiumScriptContext GContext;
 
-	UElysiumGameStateSubsystem* State()
+	UElysiumSessionSubsystem* State()
 	{
 		return FElysiumPythonVM::Get().GameState();
 	}
@@ -932,7 +932,7 @@ FElysiumEntityWorld* CurrentWorld()
 	{
 		return GContext.World;   // the world that is delivering this payload
 	}
-	UElysiumGameStateSubsystem* S = State();
+	UElysiumSessionSubsystem* S = State();
 	return S ? S->CurrentEntityWorld() : nullptr;   // a console-run eval between deliveries
 }
 

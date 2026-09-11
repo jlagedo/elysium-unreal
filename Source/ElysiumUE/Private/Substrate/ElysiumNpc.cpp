@@ -16,7 +16,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumRng.h"
 #include "ElysiumSaveArchive.h"
@@ -3494,7 +3494,7 @@ bool FElysiumNpc::OpenConversation(const FElysiumEntityHandle& Activator, EElysi
 	// Player gender + clan drive text selection: VtMB shows col-2 for a female PC and the player's
 	// own clan column when that column is filled. `clan_offset` is the .dlg column order, which is
 	// NOT the 2..8 sheet encoding — the join lives in `ElysiumDlgClan::OffsetFromSheetClan`.
-	const UElysiumGameStateSubsystem* GameState = World->GetGameState();
+	const UElysiumSessionSubsystem* GameState = World->GetGameState();
 	const bool bMale = GameState ? GameState->PlayerSheet().IsMale() : true;
 	const int32 ClanOffset = GameState
 		? ElysiumDlgClan::OffsetFromSheetClan(GameState->PlayerSheet().Clan())
@@ -3557,7 +3557,7 @@ bool FElysiumNpc::OpenConversation(const FElysiumEntityHandle& Activator, EElysi
 
 void FElysiumNpc::SeedSheet()
 {
-	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = World ? World->GetGameState() : nullptr;
 	const FElysiumStatTable* Table = GameState ? GameState->Stats() : nullptr;
 	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
 	FElysiumClanTemplate Resolved;

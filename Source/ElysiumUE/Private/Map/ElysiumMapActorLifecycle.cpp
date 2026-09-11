@@ -9,7 +9,7 @@
 #include "ElysiumEntity.h"                // FElysiumEntity — the landmark resolve
 #include "ElysiumEntityDefs.h"            // FElysiumEntityDefs — the .ents parse
 #include "ElysiumEntityWorld.h"           // the Track-B world this actor builds and owns
-#include "ElysiumGameStateSubsystem.h"    // the clock, the level script, map snapshots
+#include "ElysiumSessionSubsystem.h"    // the clock, the level script, map snapshots
 #include "ElysiumMapEntities.h"           // ElysiumEntityDefSource::Load — the asset-or-sidecar transport
 #include "ElysiumMapEnvironment.h"        // ElysiumMapEnvironmentSource::Load — the .env/.sky/.spawn transport
 #include "ElysiumMapSubsystem.h"          // epochs, backdrop state, landmark/restore placements
@@ -144,7 +144,7 @@ void AElysiumMapActor::BeginPlay()
 	// world so a hold or a time scale set before travel survives the map change.
 	if (const UGameInstance* GI = GetGameInstance())
 	{
-		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 		{
 			GameState->TimeControl().ApplyToWorld();
 		}
@@ -188,7 +188,7 @@ void AElysiumMapActor::BuildStageWorld()
 	// entity in it. All of that holds with zero entity definitions.
 	if (UGameInstance* GI = GetGameInstance())
 	{
-		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 		{
 			SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
 			SchemeManager->SetMapEpoch(MapEpoch);
@@ -384,7 +384,7 @@ void AElysiumMapActor::LoadMap()
 	// separate pass. The world ticks from AElysiumMapActor::Tick.
 	if (UGameInstance* GI = GetGameInstance())
 	{
-		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 		{
 			FElysiumEntityDefs EntDefs;
 			// The baked `UElysiumMapEntities` when this map has one, the `.ents` sidecar when it
@@ -853,7 +853,7 @@ void AElysiumMapActor::ActivateRuntime()
 	double Now = 0.0;
 	if (const UGameInstance* GI = GetGameInstance())
 	{
-		if (const UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		if (const UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 		{
 			Now = GameState->GameClock().GetNow();
 		}

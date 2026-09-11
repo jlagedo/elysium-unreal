@@ -4,7 +4,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumStub.h"
 #include "Scripting/ElysiumScriptNatives.h"
@@ -751,7 +751,7 @@ namespace
 
 		FVal EvalGMethod(FName Method, const TArray<FElysiumVariant>& Args)
 		{
-			UElysiumGameStateSubsystem* S = Env.State;
+			UElysiumSessionSubsystem* S = Env.State;
 			if (Method == FName(TEXT("has_key")))
 			{
 				const bool bHas = S && Args.Num() > 0 && S->HasGlobal(Args[0].ToString());

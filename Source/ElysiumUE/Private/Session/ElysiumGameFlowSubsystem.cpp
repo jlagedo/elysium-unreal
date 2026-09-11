@@ -2,14 +2,13 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityWorld.h"   // FElysiumEntityWorld::Detach — New Game's session disclaim
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumSessionSettings.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerUISubsystem.h"
-#include "ElysiumSaveSubsystem.h"
 #include "UI/ElysiumLoadingScreen.h"
 #include "UI/ElysiumUISubsystem.h"
 
@@ -62,7 +61,7 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// are reached per call (they are siblings on the same game instance), but the dependency is
 	// declared so ordering is not a matter of luck.
 	Collection.InitializeDependency<UElysiumMapSubsystem>();
-	Collection.InitializeDependency<UElysiumGameStateSubsystem>();
+	Collection.InitializeDependency<UElysiumSessionSubsystem>();
 	Collection.InitializeDependency<UElysiumUISubsystem>();
 	if (UElysiumMapSubsystem* Maps = GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>())
 	{
@@ -276,7 +275,7 @@ void UElysiumGameFlowSubsystem::RegisterCommands()
 	}));
 
 	// `save quick` / `load quick` are the two the default binds carry (F9 / F12); a bare slot name
-	// is a manual save. Both land on UElysiumSaveSubsystem.
+	// is a manual save. Both land on UElysiumSessionSubsystem.
 	Bindings.Add(Registry.Bind(TEXT("save"), [this](const FElysiumCommandCall& Call)
 	{
 		const bool bQuick = Call.Args.Equals(TEXT("quick"), ESearchCase::IgnoreCase);
@@ -353,8 +352,8 @@ void UElysiumGameFlowSubsystem::ReleasePauseHold()
 		// what keeps a hold alive across a travel.
 		return;
 	}
-	if (UElysiumGameStateSubsystem* GameState = GetGameInstance()
-		? GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+	if (UElysiumSessionSubsystem* GameState = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumSessionSubsystem>() : nullptr)
 	{
 		GameState->TimeControl().SetPaused(false);
 	}
@@ -611,7 +610,7 @@ namespace ElysiumStory
 bool UElysiumGameFlowSubsystem::SeedNewGameState(const FElysiumNewGameRequest& Request)
 {
 	UGameInstance* GI = GetGameInstance();
-	UElysiumGameStateSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+	UElysiumSessionSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 	if (!GameState)
 	{
 		UE_LOG(LogElysiumFlow, Error, TEXT("New Game: no game-state subsystem; session was not seeded"));
@@ -705,7 +704,7 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 {
 	UGameInstance* GI = GetGameInstance();
 	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
-	if (!Maps || !GI || !GI->GetSubsystem<UElysiumGameStateSubsystem>())
+	if (!Maps || !GI || !GI->GetSubsystem<UElysiumSessionSubsystem>())
 	{
 		UE_LOG(LogElysiumFlow, Error,
 			TEXT("New Game: required map/game-state subsystem is unavailable"));
@@ -764,7 +763,7 @@ bool UElysiumGameFlowSubsystem::LoadGame(const FString& SlotName)
 	// One restore path, and it is the one travel already uses: the save subsystem writes the
 	// payload back over the session and asks for the travel, and this subsystem owns the state move.
 	UGameInstance* GI = GetGameInstance();
-	UElysiumSaveSubsystem* Saves = GI ? GI->GetSubsystem<UElysiumSaveSubsystem>() : nullptr;
+	UElysiumSessionSubsystem* Saves = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 	if (!Saves)
 	{
 		return false;
@@ -800,17 +799,17 @@ bool UElysiumGameFlowSubsystem::LoadGame(const FString& SlotName)
 bool UElysiumGameFlowSubsystem::SaveGame(const FString& SlotName, EElysiumSaveKind Kind)
 {
 	UGameInstance* GI = GetGameInstance();
-	UElysiumSaveSubsystem* Saves = GI ? GI->GetSubsystem<UElysiumSaveSubsystem>() : nullptr;
+	UElysiumSessionSubsystem* Saves = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 	if (!Saves)
 	{
 		return false;
 	}
 	FString Slot;
 	FString Error;
-	if (!Saves->Save(Kind, SlotName, Slot, Error))
+	if (!Saves->RequestSave({Kind, SlotName}, Slot, Error))
 	{
 		UE_LOG(LogElysiumFlow, Warning, TEXT("SaveGame(%s) refused: %s"),
-			UElysiumSaveSubsystem::KindName(Kind), *Error);
+			UElysiumSessionSubsystem::KindName(Kind), *Error);
 		return false;
 	}
 	return true;
@@ -834,7 +833,7 @@ bool UElysiumGameFlowSubsystem::QuitToMenu()
 
 	// Only past the point of no return: the run is over.
 	ReleasePauseHold();
-	if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+	if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 	{
 		GameState->EndSession();
 	}
@@ -893,7 +892,7 @@ bool UElysiumGameFlowSubsystem::EnterStage(FString& OutError, bool bWithGreenRoo
 	// own player, and seeding is destructive (BeginNewGame clears `G`, the quests, the snapshots, the
 	// sheet and the clock). The clan slot is the test because it is what a valid character always
 	// has and a zeroed record never does.
-	if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+	if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 	{
 		if (!FElysiumSheet::IsValidClan(GameState->PlayerRecord().Sheet.Clan()))
 		{
@@ -953,7 +952,7 @@ void UElysiumGameFlowSubsystem::SetPaused(bool bPaused)
 	}
 
 	UGameInstance* GI = GetGameInstance();
-	if (UElysiumGameStateSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+	if (UElysiumSessionSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr)
 	{
 		// Both halves at once: engine pause freezes actor ticks, physics and animation; the clock
 		// hold freezes thinks, the event queue, movers and ScheduleTask.
@@ -979,7 +978,7 @@ void UElysiumGameFlowSubsystem::TriggerGameOver(EElysiumGameOverReason Reason)
 	GameOverReason = Reason;
 
 	UGameInstance* GI = GetGameInstance();
-	if (UElysiumGameStateSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+	if (UElysiumSessionSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr)
 	{
 		GameState->TimeControl().SetPaused(true);
 	}

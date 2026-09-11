@@ -1,148 +1,113 @@
-#include "ElysiumSaveSubsystem.h"
-
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumSaveArchive.h"
-#include "ElysiumSaveGame.h"
 #include "ElysiumWorldServices.h"
-
 #include "Engine/GameInstance.h"
-#include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
-#include "Kismet/GameplayStatics.h"
-#include "Misc/Paths.h"
-
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSave, Log, All);
 
-namespace
+void UElysiumSessionSubsystem::PublishSaveResult(const FElysiumSaveResult& Result)
 {
-	// `.sav` files live under Saved/SaveGames/ — the player's own data, gitignored like everything
-	// else generated. This is where USaveGame's platform-safe path resolves on desktop.
-	FString SaveGamesDir()
-	{
-		return FPaths::ProjectSavedDir() / TEXT("SaveGames");
-	}
-
-	constexpr int32 GUserIndex = 0;
-	const TCHAR* const GQuickSlot = TEXT("Quick");
-	const TCHAR* const GManualPrefix = TEXT("Elysium-");
-	const TCHAR* const GAutoPrefix = TEXT("Auto");
+	SaveResult = Result;
+	const TCHAR* Phase = Result.State == EElysiumSaveOperationState::Capturing ? TEXT("capturing") :
+		Result.State == EElysiumSaveOperationState::Writing ? TEXT("writing") :
+		Result.State == EElysiumSaveOperationState::Written ? TEXT("written") : TEXT("failed");
+	UE_LOG(LogElysiumSave, Display, TEXT("save operation %llu '%s': %s %s"),
+		Result.OperationId, *Result.Slot, Phase, *Result.Error);
+	// Broadcast a local value: a listener can submit another request on terminal completion.
+	const FElysiumSaveResult Published = Result;
+	SaveResults.Broadcast(Published);
 }
 
-const TCHAR* UElysiumSaveSubsystem::KindName(EElysiumSaveKind Kind)
+bool UElysiumSessionSubsystem::ExecuteSaveCommand(const TArray<FString>& Args,
+	FString& OutSlot, FString& OutError)
 {
-	switch (Kind)
-	{
-	case EElysiumSaveKind::Quick: return TEXT("quick");
-	case EElysiumSaveKind::Auto:  return TEXT("auto");
-	default:                      return TEXT("manual");
-	}
+	OutSlot.Reset();
+	if (Args.Num() > 1) { OutError = TEXT("usage: elysium.save [slot]"); return false; }
+	return RequestSave({EElysiumSaveKind::Manual, Args.IsEmpty() ? FString() : Args[0]}, OutSlot, OutError);
 }
 
-void UElysiumSaveSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+bool UElysiumSessionSubsystem::RequestSave(const FElysiumSaveRequest& Request,
+	FString& OutSlot, FString& OutError)
 {
-	Super::Initialize(Collection);
-	RegisterCommands();
-}
-
-void UElysiumSaveSubsystem::Deinitialize()
-{
-	for (IConsoleObject* Object : ConsoleObjects)
+	check(IsInGameThread());
+	OutSlot.Reset();
+	OutError.Reset();
+	// Do not overwrite the active operation's observable result on a rejected competing request.
+	if (bCapturingSave || SaveStorage.IsWriting())
 	{
-		IConsoleManager::Get().UnregisterConsoleObject(Object);
-	}
-	ConsoleObjects.Reset();
-	Super::Deinitialize();
-}
-
-// Slots.
-
-FString UElysiumSaveSubsystem::ResolveSlotName(EElysiumSaveKind Kind, const FString& Requested) const
-{
-	if (Kind == EElysiumSaveKind::Quick)
-	{
-		return GQuickSlot;   // one quicksave, always the same slot
-	}
-	if (Kind == EElysiumSaveKind::Auto)
-	{
-		return FString::Printf(TEXT("%s%d"), GAutoPrefix, AutoRingCursor % AutoRingSize);
-	}
-	if (!Requested.IsEmpty())
-	{
-		return Requested;
-	}
-	// The next free manual slot. Sequential rather than "highest + 1" so a deleted slot is reused
-	// and the list never grows holes the menu has to render around.
-	for (int32 i = 1; i < 1000; ++i)
-	{
-		const FString Candidate = FString::Printf(TEXT("%s%03d"), GManualPrefix, i);
-		if (!UGameplayStatics::DoesSaveGameExist(Candidate, GUserIndex))
-		{
-			return Candidate;
-		}
-	}
-	return FString::Printf(TEXT("%s999"), GManualPrefix);
-}
-
-bool UElysiumSaveSubsystem::ReadSlotHeader(const FString& Slot, FElysiumSaveHeaderData& Out) const
-{
-	const UElysiumSaveGame* Game = Cast<UElysiumSaveGame>(
-		UGameplayStatics::LoadGameFromSlot(Slot, GUserIndex));
-	if (!Game)
-	{
+		OutError = TEXT("write in progress (one save operation at a time)");
 		return false;
 	}
-	// Reflected, uncompressed, ahead of the payload: listing a slot never inflates one.
-	Out.PayloadVersion  = Game->PayloadVersion;
-	Out.Map             = Game->Map;
-	Out.Label           = Game->Label;
-	Out.ClanName        = Game->ClanName;
-	Out.Clan            = Game->Clan;
-	Out.PlaytimeSeconds = Game->PlaytimeSeconds;
-	Out.Timestamp       = Game->Timestamp;
-	Out.Kind            = Game->Kind;
+	FElysiumSaveResult Operation;
+	Operation.OperationId = ++NextSaveOperation;
+	if (!SaveStorage.ResolveSlotName(Request.Kind, Request.Slot, Operation.Slot, OutError) || !CanSave(OutError))
+	{
+		Operation.Error = OutError;
+		PublishSaveResult(Operation);
+		return false;
+	}
+	TGuardValue<bool> CaptureGuard(bCapturingSave, true);
+	Operation.State = EElysiumSaveOperationState::Capturing;
+	// No external observer runs halfway through capture.
+	FElysiumSavePayload Captured;
+	if (!BuildPayload(Captured, OutError))
+	{
+		Operation.State = EElysiumSaveOperationState::Failed;
+		Operation.Error = OutError;
+		PublishSaveResult(Operation);
+		return false;
+	}
+	const FElysiumSavePayload Snapshot = MoveTemp(Captured);
+	PublishSaveResult(Operation);
+	TWeakObjectPtr<UElysiumSessionSubsystem> WeakThis(this);
+	if (!SaveStorage.Write(Operation.Slot, Request.Kind, Snapshot,
+		[WeakThis, Operation](bool Success) mutable
+		{
+			Operation.State = Success ? EElysiumSaveOperationState::Written : EElysiumSaveOperationState::Failed;
+			if (!Success) Operation.Error = TEXT("native slot write failed");
+			if (UElysiumSessionSubsystem* Session = WeakThis.Get()) Session->PublishSaveResult(Operation);
+		}, OutError))
+	{
+		Operation.State = EElysiumSaveOperationState::Failed;
+		Operation.Error = OutError;
+		PublishSaveResult(Operation);
+		return false;
+	}
+	// Unreal may invoke the delegate inline when the platform service or envelope write
+	// fails (GameplayStatics.cpp::AsyncSaveGameToSlot). Never turn that terminal result
+	// back into Writing, and do not report acceptance for an already-failed request.
+	if (SaveResult.OperationId == Operation.OperationId && SaveResult.State == EElysiumSaveOperationState::Failed)
+	{
+		OutError = SaveResult.Error;
+		return false;
+	}
+	OutSlot = Operation.Slot;
+	if (SaveResult.OperationId != Operation.OperationId || SaveResult.State != EElysiumSaveOperationState::Written)
+	{
+		Operation.State = EElysiumSaveOperationState::Writing;
+		PublishSaveResult(Operation);
+	}
 	return true;
 }
 
-void UElysiumSaveSubsystem::ListSlots(TArray<FElysiumSaveSlotInfo>& Out) const
+bool UElysiumSessionSubsystem::CanSave(FString& OutReason) const
 {
-	Out.Reset();
-
-	TArray<FString> Files;
-	IFileManager::Get().FindFiles(Files, *(SaveGamesDir() / TEXT("*.sav")), /*Files*/ true, /*Dirs*/ false);
-	for (const FString& File : Files)
+	if (bCapturingSave || SaveStorage.IsWriting())
 	{
-		FElysiumSaveSlotInfo Info;
-		Info.Slot = FPaths::GetBaseFilename(File);
-		if (ReadSlotHeader(Info.Slot, Info.Header))
-		{
-			Out.Add(MoveTemp(Info));
-		}
+		OutReason = TEXT("write in progress (one save operation at a time)");
+		return false;
 	}
-	Out.Sort([](const FElysiumSaveSlotInfo& A, const FElysiumSaveSlotInfo& B)
-	{
-		return A.Header.Timestamp > B.Header.Timestamp;
-	});
-}
-
-bool UElysiumSaveSubsystem::DeleteSlot(const FString& Slot)
-{
-	return UGameplayStatics::DeleteGameInSlot(Slot, GUserIndex);
-}
-
-// Freeze / thaw.
-
-bool UElysiumSaveSubsystem::CanSave(FString& OutReason) const
-{
 	UGameInstance* GI = GetGameInstance();
 	const UElysiumGameFlowSubsystem* Flow = GI ? GI->GetSubsystem<UElysiumGameFlowSubsystem>() : nullptr;
 	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
-	UElysiumGameStateSubsystem* State = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
-	if (!Flow || !Maps || !State)
+	const UElysiumSessionSubsystem* State = this;
+	if (!Flow || !Maps)
 	{
 		OutReason = TEXT("no session subsystems");
 		return false;
@@ -196,18 +161,13 @@ bool UElysiumSaveSubsystem::CanSave(FString& OutReason) const
 	return true;
 }
 
-bool UElysiumSaveSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& OutError) const
+bool UElysiumSessionSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& OutError) const
 {
 	Out = FElysiumSavePayload();
 
 	UGameInstance* GI = GetGameInstance();
-	UElysiumGameStateSubsystem* State = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+	const UElysiumSessionSubsystem* State = this;
 	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
-	if (!State)
-	{
-		OutError = TEXT("no game-state subsystem");
-		return false;
-	}
 
 	// Session.
 	Out.Session.ClockNow = State->GameClock().GetNow();
@@ -286,14 +246,9 @@ bool UElysiumSaveSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& OutE
 	return true;
 }
 
-void UElysiumSaveSubsystem::ApplyPayload(const FElysiumSavePayload& In)
+void UElysiumSessionSubsystem::ApplyPayload(const FElysiumSavePayload& In)
 {
-	UGameInstance* GI = GetGameInstance();
-	UElysiumGameStateSubsystem* State = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
-	if (!State)
-	{
-		return;
-	}
+	UElysiumSessionSubsystem* State = this;
 
 	// The world that is about to die must not write over any of this: travel is deferred to the end
 	// of the frame, so its teardown lands after we return. Detach is what ForgetPlayer is for
@@ -321,111 +276,13 @@ void UElysiumSaveSubsystem::ApplyPayload(const FElysiumSavePayload& In)
 
 	State->PlayerRecord() = In.Player;
 
-	TMap<FString, FElysiumMapSnapshot> Snapshots = In.Maps;
-	State->SetMapSnapshots(MoveTemp(Snapshots));
-	TArray<FString> Visited = In.World.VisitedMaps;
-	State->SetVisitedMaps(MoveTemp(Visited));
+	TMap<FString, FElysiumMapSnapshot> RestoredMaps = In.Maps;
+	State->SetMapSnapshots(MoveTemp(RestoredMaps));
+	TArray<FString> RestoredVisits = In.World.VisitedMaps;
+	State->SetVisitedMaps(MoveTemp(RestoredVisits));
 }
 
-FElysiumSaveHeaderData UElysiumSaveSubsystem::MakeHeader(const FElysiumSavePayload& Payload,
-	EElysiumSaveKind Kind) const
-{
-	FElysiumSaveHeaderData H;
-	H.PayloadVersion  = FElysiumSaveVersion::Latest;
-	H.Map             = Payload.World.CurrentMap;
-	H.Clan            = Payload.Player.Sheet.Clan();
-	H.ClanName        = FElysiumSheet::ClanName(Payload.Player.Sheet.Clan());
-	H.PlaytimeSeconds = Payload.Session.ClockNow;
-	H.Timestamp       = FDateTime::UtcNow();
-	H.Kind            = KindName(Kind);
-	// The label is what the load menu shows. VtMB's `comment` is the map's display name plus the
-	// clan; there is no display-name table yet, so the map name stands in.
-	H.Label = FString::Printf(TEXT("%s — %s"), *H.Map, *H.ClanName);
-	return H;
-}
-
-// Save / load.
-
-bool UElysiumSaveSubsystem::Save(EElysiumSaveKind Kind, const FString& RequestedSlot,
-	FString& OutSlot, FString& OutError)
-{
-	OutSlot.Reset();
-	if (!CanSave(OutError))
-	{
-		UE_LOG(LogElysiumSave, Warning, TEXT("save refused: %s"), *OutError);
-		return false;
-	}
-
-	// The freeze is synchronous and must be atomic with respect to the frame — it is a memory walk
-	// over the live world, and half of it taken before a tick and half after would be a wrong save.
-	FElysiumSavePayload Payload;
-	if (!BuildPayload(Payload, OutError))
-	{
-		UE_LOG(LogElysiumSave, Warning, TEXT("save refused: %s"), *OutError);
-		return false;
-	}
-
-	TArray<uint8> Bytes;
-	if (!ElysiumSave::Write(Payload, Bytes, OutError))
-	{
-		UE_LOG(LogElysiumSave, Error, TEXT("save refused: %s"), *OutError);
-		return false;
-	}
-
-	UElysiumSaveGame* Game = Cast<UElysiumSaveGame>(
-		UGameplayStatics::CreateSaveGameObject(UElysiumSaveGame::StaticClass()));
-	if (!Game)
-	{
-		OutError = TEXT("could not create the save-game object");
-		return false;
-	}
-	const FElysiumSaveHeaderData Header = MakeHeader(Payload, Kind);
-	Game->PayloadVersion  = Header.PayloadVersion;
-	Game->Map             = Header.Map;
-	Game->Label           = Header.Label;
-	Game->ClanName        = Header.ClanName;
-	Game->Clan            = Header.Clan;
-	Game->PlaytimeSeconds = Header.PlaytimeSeconds;
-	Game->Timestamp       = Header.Timestamp;
-	Game->Kind            = Header.Kind;
-	Game->Payload         = MoveTemp(Bytes);
-
-	OutSlot = ResolveSlotName(Kind, RequestedSlot);
-	if (Kind == EElysiumSaveKind::Auto)
-	{
-		AutoRingCursor = (AutoRingCursor + 1) % AutoRingSize;   // rotate, like VtMB's ring
-	}
-
-	const int32 PayloadBytes = Game->Payload.Num();
-	const FString Slot = OutSlot;
-	// Compress-and-write goes off the game thread; the state it describes is already a private copy.
-	UGameplayStatics::AsyncSaveGameToSlot(Game, Slot, GUserIndex,
-		FAsyncSaveGameToSlotDelegate::CreateWeakLambda(this,
-			[Slot, PayloadBytes](const FString&, const int32, bool bSuccess)
-			{
-				UE_LOG(LogElysiumSave, Display, TEXT("save '%s': %s (%d payload bytes)"),
-					*Slot, bSuccess ? TEXT("written") : TEXT("FAILED"), PayloadBytes);
-			}));
-
-	UE_LOG(LogElysiumSave, Display, TEXT("saving '%s' (%s) — map %s, %d maps, %d payload bytes"),
-		*OutSlot, KindName(Kind), *Header.Map, Payload.Maps.Num(), PayloadBytes);
-	return true;
-}
-
-bool UElysiumSaveSubsystem::ReadSlotPayload(const FString& Slot, FElysiumSavePayload& Out,
-	FString& OutError) const
-{
-	const UElysiumSaveGame* Game = Cast<UElysiumSaveGame>(
-		UGameplayStatics::LoadGameFromSlot(Slot, GUserIndex));
-	if (!Game)
-	{
-		OutError = FString::Printf(TEXT("no save in slot '%s'"), *Slot);
-		return false;
-	}
-	return ElysiumSave::Read(Game->Payload, Out, OutError);
-}
-
-bool UElysiumSaveSubsystem::Load(const FString& Slot, FString& OutError)
+bool UElysiumSessionSubsystem::Load(const FString& Slot, FString& OutError)
 {
 	UGameInstance* GI = GetGameInstance();
 	UElysiumMapSubsystem* Maps = GI ? GI->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
@@ -468,10 +325,16 @@ bool UElysiumSaveSubsystem::Load(const FString& Slot, FString& OutError)
 	return true;
 }
 
-// Verbs.
-
-void UElysiumSaveSubsystem::RegisterCommands()
+void UElysiumSessionSubsystem::RegisterSaveCommands()
 {
+	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
+		TEXT("elysium.save"), TEXT("elysium.save [slot] — capture the run and write a native slot."),
+		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
+		{
+			FString Slot, Error;
+			if (!ExecuteSaveCommand(Args, Slot, Error))
+				UE_LOG(LogElysiumSave, Warning, TEXT("save refused: %s"), *Error);
+		}), ECVF_Default));
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.save.slots"),
 		TEXT("List every save slot on disk with its header (map, clan, playtime, kind)."),
@@ -510,7 +373,7 @@ void UElysiumSaveSubsystem::RegisterCommands()
 		TEXT("elysium.save.delete <slot> — remove a save slot."),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
-			if (Args.Num() < 1)
+			if (Args.Num() != 1)
 			{
 				UE_LOG(LogElysiumSave, Display, TEXT("usage: elysium.save.delete <slot>"));
 				return;

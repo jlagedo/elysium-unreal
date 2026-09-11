@@ -14,7 +14,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameClock.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumVariant.h"
 #include "ElysiumViewState.h"
@@ -43,10 +43,10 @@ public:
 	virtual const TCHAR* Name() const override { return TEXT("router-sentinel"); }
 };
 
-static UElysiumGameStateSubsystem* MakeHeadlessGameState()
+static UElysiumSessionSubsystem* MakeHeadlessGameState()
 {
 	UGameInstance* GameInstance = NewObject<UGameInstance>(GetTransientPackage());
-	return NewObject<UElysiumGameStateSubsystem>(GameInstance);
+	return NewObject<UElysiumSessionSubsystem>(GameInstance);
 }
 
 // The fixture: one `vault` directory behind a password, holding an `open` function and a `logs`
@@ -91,7 +91,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalRouterTest,
 	"Elysium.Substrate.TerminalRouter", GRouterFlags)
 bool FElysiumTerminalRouterTest::RunTest(const FString&)
 {
-	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	UElysiumSessionSubsystem* State = MakeHeadlessGameState();
 	State->SetScriptHost(MakeUnique<FElysiumRouterScriptHost>());
 
 	FElysiumEntityDefs Defs;
@@ -277,7 +277,7 @@ bool FElysiumTerminalHudHintTest::RunTest(const FString&)
 {
 	using namespace ElysiumHackingStrings;
 
-	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	UElysiumSessionSubsystem* State = MakeHeadlessGameState();
 	State->SetScriptHost(MakeUnique<FElysiumRouterScriptHost>());
 
 	FElysiumEntityDefs Defs;

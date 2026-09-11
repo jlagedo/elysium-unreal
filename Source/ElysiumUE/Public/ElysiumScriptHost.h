@@ -5,7 +5,7 @@
 #include "ElysiumVariant.h"
 
 class FElysiumEntityWorld;
-class UElysiumGameStateSubsystem;
+class UElysiumSessionSubsystem;
 
 // The provenance a field-6 Python call string is evaluated against. VtMB wraps the string as
 // `__main__.<source>` and evals it with the firing entity's context bound (`!self`) plus the
@@ -44,7 +44,7 @@ public:
 		return false;
 	}
 
-	// The map-epoch boundary, forwarded by UElysiumGameStateSubsystem because a host is plain
+	// The map-epoch boundary, forwarded by UElysiumSessionSubsystem because a host is plain
 	// C++ and cannot subscribe to a UObject delegate itself. A host that resolves level scripts
 	// against per-map interpreter state releases it here. Hosts that carry none do nothing.
 	virtual void OnMapEpochRetired() {}
@@ -73,13 +73,13 @@ public:
 class FElysiumExprScriptHost final : public IElysiumScriptHost
 {
 public:
-	explicit FElysiumExprScriptHost(UElysiumGameStateSubsystem* InState) : State(InState) {}
+	explicit FElysiumExprScriptHost(UElysiumSessionSubsystem* InState) : State(InState) {}
 	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx,
 		FString* OutError = nullptr) override;
 	virtual const TCHAR* Name() const override { return TEXT("expr"); }
 
 private:
-	UElysiumGameStateSubsystem* State = nullptr;  // owns the `G` store; outlives this host
+	UElysiumSessionSubsystem* State = nullptr;  // owns the `G` store; outlives this host
 };
 
 // The embedded-CPython host — routes field-6 + pythoncheck through the real CPython 2.7 VM
@@ -91,7 +91,7 @@ private:
 class FElysiumCPythonScriptHost final : public IElysiumScriptHost
 {
 public:
-	explicit FElysiumCPythonScriptHost(UElysiumGameStateSubsystem* InState);
+	explicit FElysiumCPythonScriptHost(UElysiumSessionSubsystem* InState);
 	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx,
 		FString* OutError = nullptr) override;
 	virtual bool LoadLevelScript(const FString& Module, FString& OutError) override;
@@ -106,6 +106,6 @@ public:
 	static bool IsAvailable();  // module built with the vendored CPython SDK
 
 private:
-	UElysiumGameStateSubsystem* State = nullptr;
+	UElysiumSessionSubsystem* State = nullptr;
 	bool bVmStarted = false;
 };

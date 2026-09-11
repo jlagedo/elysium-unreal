@@ -40,7 +40,7 @@
 #include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumGymSpec.h"
 #include "Visual/ElysiumPoseDeviation.h"
 #include "ElysiumHUD.h"

@@ -4,7 +4,7 @@
 
 #include "ElysiumAudioSubsystem.h"
 #include "Debug/ElysiumCogStyle.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumNpcSubsystem.h"
@@ -40,11 +40,11 @@ FElysiumEntityWorld* FElysiumCogWindow::GetEntityWorld() const
 	return Map ? Map->GetEntityWorld() : nullptr;
 }
 
-UElysiumGameStateSubsystem* FElysiumCogWindow::GetGameState() const
+UElysiumSessionSubsystem* FElysiumCogWindow::GetGameState() const
 {
 	const UWorld* World = GetWorld();
 	const UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
-	return GameInstance ? GameInstance->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+	return GameInstance ? GameInstance->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 }
 
 UElysiumAudioSubsystem* FElysiumCogWindow::GetAudioSubsystem() const

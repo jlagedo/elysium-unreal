@@ -107,7 +107,7 @@ public:
 
 	// A loaded save places the player where they were standing, which is neither
 	// info_player_start nor a landmark offset but an absolute pose the World block carried. Set by
-	// UElysiumSaveSubsystem before it travels; consumed once by the freshly-loaded map actor, after
+	// UElysiumSessionSubsystem before it travels; consumed once by the freshly-loaded map actor, after
 	// the landmark pass, so it wins over both.
 	void RequestRestorePlacement(const FVector& Origin, float Yaw);
 	bool ConsumeRestorePlacement(FVector& OutOrigin, float& OutYaw);
@@ -163,6 +163,7 @@ public:
 	FElysiumGreenRoomRun* EnsureGreenRoomLab(FString& OutError);
 
 private:
+	friend struct FElysiumSessionSaveFixture;
 	void HandleRuntimeReady(AElysiumMapActor* Map);
 	void HandleRuntimeFailed(AElysiumMapActor* Map, const FString& Reason);
 

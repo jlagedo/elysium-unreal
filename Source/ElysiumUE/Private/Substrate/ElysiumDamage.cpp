@@ -2,7 +2,7 @@
 
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumDice.h"
@@ -45,7 +45,7 @@ FString FElysiumDmg::Describe() const
 FElysiumDamageContext FElysiumDamageContext::FromCharacter(const FElysiumCombatCharacter& Char)
 {
 	FElysiumDamageContext Context;
-	UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
 	UElysiumRulebookSubsystem* Rulebook = GameState ? GameState->Rulebook() : nullptr;
 	if (!Rulebook)
 	{

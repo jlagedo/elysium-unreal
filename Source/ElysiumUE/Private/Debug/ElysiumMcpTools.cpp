@@ -11,7 +11,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameFlowSubsystem.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumGraphState.h"
 #include "Debug/ElysiumLogTap.h"
 #include "ElysiumMapActor.h"
@@ -1753,7 +1753,7 @@ namespace ElysiumMcpImpl
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
-					UElysiumGameStateSubsystem* State = Sub<UElysiumGameStateSubsystem>();
+					UElysiumSessionSubsystem* State = Sub<UElysiumSessionSubsystem>();
 					if (!State)
 					{
 						return MakeErrorResult(TEXT("no game running"));
@@ -1789,7 +1789,7 @@ namespace ElysiumMcpImpl
 				Schema,
 				[](const TSharedPtr<FJsonObject>& Params) -> FModelContextProtocolToolResult
 				{
-					UElysiumGameStateSubsystem* State = Sub<UElysiumGameStateSubsystem>();
+					UElysiumSessionSubsystem* State = Sub<UElysiumSessionSubsystem>();
 					if (!State)
 					{
 						return MakeErrorResult(TEXT("no game running"));

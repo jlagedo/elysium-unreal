@@ -12,7 +12,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumLocomotionSample.h"         // the step clock's whole input
 #include "ElysiumMoveSolve.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumRng.h"                      // EElysiumRngStream::Footsteps
 #include "ElysiumSheetSlots.h"
 #include "ElysiumSkeletalBasis.h"            // 4051 flattens the body's own Source angles
@@ -82,7 +82,7 @@ FElysiumNpc* FElysiumPlayer::FindStealthKillVictim()
 	{
 		return nullptr;
 	}
-	UElysiumGameStateSubsystem* GameState = World->GetGameState();
+	UElysiumSessionSubsystem* GameState = World->GetGameState();
 	UElysiumRulebookSubsystem* Book = GameState ? GameState->Rulebook() : nullptr;
 	if (!Book)
 	{
@@ -517,7 +517,7 @@ void FElysiumPlayer::UpdatePlayerSound(double NowSeconds)
 	// **Ducking is the whole of "sneaking"** on this path — not the Stealth feat, not the light
 	// level, not the player's stealth surface.
 	In.bDucked = IsPlayerDucking(Sample);
-	if (UElysiumGameStateSubsystem* GameState = World->GetGameState())
+	if (UElysiumSessionSubsystem* GameState = World->GetGameState())
 	{
 		if (UElysiumRulebookSubsystem* Rules = GameState->Rulebook())
 		{
@@ -689,7 +689,7 @@ bool FElysiumPlayer::HandleAnimEvent(const FElysiumAnimEvent& Event)
 
 void FElysiumPlayer::RefreshClanEffects()
 {
-	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = World ? World->GetGameState() : nullptr;
 	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
 	if (!Rules)
 	{
@@ -745,7 +745,7 @@ int32 FElysiumPlayer::AwardExperience(const FString& Key)
 		return 0;
 	}
 
-	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = World ? World->GetGameState() : nullptr;
 	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
 	const FElysiumExperienceEntry* Row = Rules ? Rules->Experience().Find(Key) : nullptr;
 	if (!Row)
@@ -829,7 +829,7 @@ void FElysiumPlayer::OnMasqueradeBreached()
 
 	// The second loss condition. Same shape as death: the substrate reports, and the session owns
 	// what it means to the application (the GameOver state, with its own reason).
-	if (UElysiumGameStateSubsystem* State = World ? World->GetGameState() : nullptr)
+	if (UElysiumSessionSubsystem* State = World ? World->GetGameState() : nullptr)
 	{
 		State->NotifyMasqueradeBreach();
 	}
@@ -843,7 +843,7 @@ void FElysiumPlayer::Hydrate(const FElysiumPlayerRecord& Record)
 	MaxHealth  = Record.MaxHealth;
 	Law        = Record.Law;
 	// The law/police block crosses UNSCOPED, unlike the feed, discipline and stealth blocks below.
-	// Every deadline in it is on the session clock (`UElysiumGameStateSubsystem`'s, which outlives
+	// Every deadline in it is on the session clock (`UElysiumSessionSubsystem`'s, which outlives
 	// the map), and a wanted level with four seconds left, a Masquerade window, a pursuit count and
 	// a heightened alert all mean exactly what they meant in the previous map — none of them
 	// describes THIS map's geometry, light or cast. The single exception is the pending response's
@@ -1301,7 +1301,7 @@ void FElysiumPlayer::PlayerDeathThink()
 		// screen is the port's load-or-quit door rather than a reproduction of the sign
 		// (`menu-hud-not-vtmb-reproduction`). Raising it also pauses the clock and the engine, which
 		// is why it cannot go up before the sequence has run: everything above this line would stop.
-		if (UElysiumGameStateSubsystem* State = World ? World->GetGameState() : nullptr)
+		if (UElysiumSessionSubsystem* State = World ? World->GetGameState() : nullptr)
 		{
 			State->NotifyPlayerKilled();
 		}

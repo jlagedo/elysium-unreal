@@ -5,11 +5,12 @@
 #include "ElysiumGameClock.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveTypes.h"
+#include "ElysiumSaveStorage.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumVariant.h"
 #include "ElysiumWorldServices.h"
-#include "ElysiumGameStateSubsystem.generated.h"
+#include "ElysiumSessionSubsystem.generated.h"
 
 // `G` and the quest map mirror Python dicts, which are case-sensitive — Unreal's default
 // FString/FName map keys are not. These key funcs restore case sensitivity so `G.Story_State`
@@ -65,13 +66,29 @@ struct FElysiumNativeCallRecord
 // FElysiumVariant/int (no object refs), so there is nothing for the GC to trace and
 // save/load is mechanical.
 UCLASS()
-class UElysiumGameStateSubsystem : public UGameInstanceSubsystem
+class UElysiumSessionSubsystem : public UGameInstanceSubsystem
 {
 	GENERATED_BODY()
 
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
+
+	// The save entry for console, flow/UI, quicksave and autosave. Success means the
+	// private snapshot was accepted for writing; only the completion publishes Written.
+	bool RequestSave(const FElysiumSaveRequest& Request, FString& OutSlot, FString& OutError);
+	bool ExecuteSaveCommand(const TArray<FString>& Args, FString& OutSlot, FString& OutError);
+	bool CanSave(FString& OutReason) const;
+	const FElysiumSaveResult& LastSaveResult() const { return SaveResult; }
+	FOnElysiumSaveResult& OnSaveResult() { return SaveResults; }
+	bool BuildPayload(FElysiumSavePayload& Out, FString& OutError) const;
+	void ApplyPayload(const FElysiumSavePayload& In);
+	bool Load(const FString& Slot, FString& OutError); // existing route; restore barrier is SG-02
+	void ListSlots(TArray<FElysiumSaveSlotInfo>& Out) const { SaveStorage.ListSlots(Out); }
+	bool ReadSlotHeader(const FString& Slot, FElysiumSaveHeaderData& Out) const { return SaveStorage.ReadSlotHeader(Slot, Out); }
+	bool ReadSlotPayload(const FString& Slot, FElysiumSavePayload& Out, FString& Error) const { return SaveStorage.ReadSlotPayload(Slot, Out, Error); }
+	bool DeleteSlot(const FString& Slot) { return SaveStorage.DeleteSlot(Slot); }
+	static const TCHAR* KindName(EElysiumSaveKind Kind) { return FElysiumSaveStorage::KindName(Kind); }
 
 	// `G` — the global flag bag.
 	// Engine-owned in VtMB (a `PyDataManager` injected into __main__), one flat namespace,
@@ -282,6 +299,13 @@ public:
 	FElysiumEntityWorld* CurrentEntityWorld() const;
 
 private:
+	void RegisterSaveCommands();
+	void PublishSaveResult(const FElysiumSaveResult& Result);
+	FElysiumSaveStorage SaveStorage;
+	FElysiumSaveResult SaveResult;
+	FOnElysiumSaveResult SaveResults;
+	uint64 NextSaveOperation = 0;
+	bool bCapturingSave = false;
 	// `elysium.quest` — the journal, one quest, or a real state change.
 	void ExecQuest(const TArray<FString>& Args);
 	// The map-epoch boundary: drop the leaving map's level-script state and forward the retire

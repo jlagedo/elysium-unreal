@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumAppState.h"
 #include "ElysiumCommands.h"
+#include "ElysiumSessionTypes.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "ElysiumGameFlowSubsystem.generated.h"
@@ -11,15 +12,6 @@ class AGameModeBase;
 class UWorld;
 class AElysiumMapActor;
 class UElysiumLoadingScreen;
-
-// Which slot ring a save belongs to. `trigger_autosave` fires Auto; the pause menu fires Manual;
-// the quicksave binding fires Quick. The slots themselves live on UElysiumSaveSubsystem.
-enum class EElysiumSaveKind : uint8
-{
-	Manual,
-	Quick,
-	Auto,
-};
 
 // Why the run ended. Both are VtMB loss conditions (`docs/vtmb/game_runtime.md` §3): the combat character's
 // death path, and the masquerade meter reaching 5.
@@ -184,7 +176,7 @@ public:
 	static bool ShouldSkipIntro();
 	static void SetSkipIntro(bool bSkip);
 
-	// UElysiumSaveSubsystem owns the payload; these are the seam every caller (menu,
+	// UElysiumSessionSubsystem owns the payload; these are the seam every caller (menu,
 	// `trigger_autosave`, the quicksave binding, MCP) goes through.
 	bool LoadGame(const FString& SlotName);
 	bool SaveGame(const FString& SlotName, EElysiumSaveKind Kind);
@@ -229,6 +221,7 @@ public:
 	EElysiumGameOverReason LastGameOverReason() const { return GameOverReason; }
 
 private:
+	friend struct FElysiumSessionSaveFixture;
 	// The one state writer. Refuses a transition the table forbids (with a warning), broadcasts on a
 	// real change, and reconciles the screen with the new state.
 	bool SetAppState(EElysiumAppState NewState);

@@ -2,7 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "Scripting/ElysiumPythonVM.h"
 
 #include "HAL/FileManager.h"
@@ -44,7 +44,7 @@ bool FElysiumCPythonScriptHost::IsAvailable()
 	return FElysiumPythonVM::IsAvailable();
 }
 
-FElysiumCPythonScriptHost::FElysiumCPythonScriptHost(UElysiumGameStateSubsystem* InState)
+FElysiumCPythonScriptHost::FElysiumCPythonScriptHost(UElysiumSessionSubsystem* InState)
 	: State(InState)
 {
 	// Point the VM's `G` proxy at this subsystem's store, then bring the interpreter up so the

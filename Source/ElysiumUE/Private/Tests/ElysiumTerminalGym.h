@@ -28,7 +28,7 @@
 #include "Debug/ElysiumGymBuilder.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumGymSpec.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMoveSolve.h"
@@ -53,7 +53,7 @@ struct FElysiumTerminalGym
 	AActor* Stage = nullptr;
 	// The clock every entity think is measured on. Held so a case can step it: the screensaver's
 	// schedule is the whole of what slice C asserts on this host.
-	UElysiumGameStateSubsystem* State = nullptr;
+	UElysiumSessionSubsystem* State = nullptr;
 	FElysiumMapSlice Slice;
 	TMap<FString, UStaticMeshComponent*> Bodies;
 	TMap<FString, USkeletalMeshComponent*> Attachments;
@@ -118,7 +118,7 @@ struct FElysiumTerminalGym
 		}
 		Seams.Append(Slice.Seams);
 
-		State = NewObject<UElysiumGameStateSubsystem>(
+		State = NewObject<UElysiumSessionSubsystem>(
 			NewObject<UGameInstance>(GetTransientPackage()));
 		FElysiumWorldServices Services;
 		Services.Embodiment = Host.MapActor;

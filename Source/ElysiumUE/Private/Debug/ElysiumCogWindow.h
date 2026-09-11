@@ -12,7 +12,7 @@
 class AElysiumMapActor;
 class FElysiumEntityWorld;
 class UElysiumAudioSubsystem;
-class UElysiumGameStateSubsystem;
+class UElysiumSessionSubsystem;
 class UElysiumMapSubsystem;
 class UElysiumNpcSubsystem;
 
@@ -40,7 +40,7 @@ protected:
 	// The Track-B entity substrate for the current map, or null if the map has none loaded.
 	FElysiumEntityWorld* GetEntityWorld() const;
 	// The persistent game-state subsystem (the `G` store, quests, and the game clock), or null.
-	UElysiumGameStateSubsystem* GetGameState() const;
+	UElysiumSessionSubsystem* GetGameState() const;
 	// The audio subsystem (WAV decode registry + preview playback), or null.
 	UElysiumAudioSubsystem* GetAudioSubsystem() const;
 	// The NPC skeletal-test subsystem, or null.

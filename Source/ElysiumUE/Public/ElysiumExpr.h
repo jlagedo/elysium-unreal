@@ -4,7 +4,7 @@
 #include "ElysiumScriptHost.h"   // FElysiumScriptContext (Self / Activator / World)
 #include "ElysiumVariant.h"
 
-class UElysiumGameStateSubsystem;
+class UElysiumSessionSubsystem;
 
 // The runtime expression evaluator. A self-contained recursive-descent parser + AST +
 // tree-walking interpreter over the restricted Python-2.1 expression subset VtMB scripts speak
@@ -40,7 +40,7 @@ namespace ElysiumExpr
 	// (a worldless or stateless probe eval) — resolution simply fails to those names then.
 	struct FEnv
 	{
-		UElysiumGameStateSubsystem* State = nullptr;
+		UElysiumSessionSubsystem* State = nullptr;
 		FElysiumScriptContext Ctx;
 
 		// Set true when evaluation could not complete; `Error` carries a one-line reason. The result

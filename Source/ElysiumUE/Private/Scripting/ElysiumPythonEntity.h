@@ -6,7 +6,7 @@
 #include "ElysiumVariant.h"
 
 class FElysiumEntityWorld;
-class UElysiumGameStateSubsystem;
+class UElysiumSessionSubsystem;
 
 // Forward-declared so this header stays clear of Python.h, which every .cpp that touches the
 // C-API must include LAST, after all Unreal headers (Private/ThirdParty/ElysiumPython.h).

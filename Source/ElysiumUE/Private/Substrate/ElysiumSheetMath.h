@@ -192,7 +192,7 @@ namespace ElysiumSheetRules
 	// The headless table binding.
 	//
 	// Every sheet reader ordinarily reaches its tables through
-	// `UElysiumGameStateSubsystem::Rulebook()`, which is a GameInstance subsystem — so a bare
+	// `UElysiumSessionSubsystem::Rulebook()`, which is a GameInstance subsystem — so a bare
 	// substrate world (K10: "every domain runs headless") has no rulebook at all, and the clan
 	// banes, the feat evaluator and the Discipline blocks all read as absent.
 	//

@@ -49,7 +49,7 @@ namespace ElysiumFrame
 // next-think — through the one FElysiumEventQueue; the queue and think times both
 // serialize, so game time must be ours, never FTimerManager.
 //
-// The clock lives on UElysiumGameStateSubsystem and persists across map travel (only the
+// The clock lives on UElysiumSessionSubsystem and persists across map travel (only the
 // entity world and its queue die with the map actor).
 //
 // Advanced in exactly one place. `Advance` is private and reachable only through

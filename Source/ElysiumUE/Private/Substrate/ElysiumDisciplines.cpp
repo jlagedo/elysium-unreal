@@ -11,7 +11,7 @@
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U — the one units conversion
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
@@ -70,7 +70,7 @@ namespace
 	FRules ResolveRules(const FElysiumCombatCharacter& Char)
 	{
 		FRules Out;
-		UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
+		UElysiumSessionSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
 		if (UElysiumRulebookSubsystem* Book = GameState ? GameState->Rulebook() : nullptr)
 		{
 			Out.Stats = &Book->Stats();
@@ -251,7 +251,7 @@ namespace
 		switch (Index)
 		{
 		case ElysiumDisciplines::Celerity:
-			// The consumer is reachable — `UElysiumGameStateSubsystem::TimeControl().SetScale` is
+			// The consumer is reachable — `UElysiumSessionSubsystem::TimeControl().SetScale` is
 			// the one place world time scales — but the per-rank curve is the missing value.
 			ReportOnce(TEXT("native.celerity"),
 				TEXT("Celerity's time/movement consumer is unbuilt: `FElysiumTimeControl::SetScale` "

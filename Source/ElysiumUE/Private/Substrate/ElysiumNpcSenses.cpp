@@ -2,7 +2,7 @@
 
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
@@ -349,7 +349,7 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 
 void FElysiumNpcSenses::ResolveTuning(FElysiumNpc& Npc)
 {
-	UElysiumGameStateSubsystem* GameState = Npc.World ? Npc.World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = Npc.World ? Npc.World->GetGameState() : nullptr;
 	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
 
 	FString Report;
@@ -714,7 +714,7 @@ void FElysiumNpcSenses::TickHearing(FElysiumNpc& Npc, double Now)
 	const auto& Bus = World->GameSounds();
 	const auto Pending = Bus.EventsSince(Cursor);
 	if (!Pending.IsEmpty()) Cursor = Pending.Last().Serial;
-	UElysiumGameStateSubsystem* State = World->GetGameState();
+	UElysiumSessionSubsystem* State = World->GetGameState();
 	UElysiumRulebookSubsystem* Rules = State ? State->Rulebook() : nullptr;
 	TSet<EElysiumNpcCond> Recorded;
 	const FString Class = Npc.Def ? Npc.Def->Classname.ToLower() : FString();

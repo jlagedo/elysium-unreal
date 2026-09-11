@@ -14,7 +14,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumEnvironment.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"   // the arena's boot-time player loadout reads the rulebook
+#include "ElysiumSessionSubsystem.h"   // the arena's boot-time player loadout reads the rulebook
 #include "ElysiumMovementComponent.h"
 #include "ElysiumPawn.h"
 #include "ElysiumPlayerUISubsystem.h"
@@ -1725,7 +1725,7 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 				// 999 ceiling the AI window's reserve slider tops out at: an arena run is about the
 				// fight, not about running dry mid-test.
 				const ElysiumArenaCast::FArmResult Armed = ElysiumArenaCast::ArmPlayerWithArsenal(
-					*EntityWorld, GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr,
+					*EntityWorld, GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr,
 					/*ReservePerType=*/999);
 				UE_LOG(LogElysiumGreenRoom, Log,
 					TEXT("arena: armed the player — %d melee, %d firearm(s), %d thrown, %d ammo type(s)"),

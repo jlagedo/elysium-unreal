@@ -12,7 +12,7 @@
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U / StandViewZ — the one units conversion
 #include "ElysiumRng.h"                // the session's owned random streams
 #include "ElysiumSheetSlots.h"
@@ -103,7 +103,7 @@ void FElysiumCombatCharacter::InputMoneyRemove(const FElysiumInputArgs& Args)
 
 const FElysiumStatTable* FElysiumCombatCharacter::SheetRules() const
 {
-	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = World ? World->GetGameState() : nullptr;
 	if (GameState != nullptr)
 	{
 		return GameState->Stats();
@@ -117,7 +117,7 @@ const FElysiumStatTable* FElysiumCombatCharacter::SheetRules() const
 // The rulebook this character reads its rules out of, or null in a bare world.
 static UElysiumRulebookSubsystem* CharRulebook(const FElysiumCombatCharacter& Char)
 {
-	UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
 	return GameState ? GameState->Rulebook() : nullptr;
 }
 

@@ -6,7 +6,7 @@
 #include "ElysiumVariant.h"
 
 class FElysiumEntityWorld;
-class UElysiumGameStateSubsystem;
+class UElysiumSessionSubsystem;
 
 // The engine `vampire`-module surface, shared by every scripting host (`docs/vtmb/python_bridge.md`
 // "Binding"): the 11 module globals and the 24 Character methods `vampire.dll` binds, their
@@ -63,14 +63,14 @@ namespace ElysiumScriptNatives
 	// Log a native call + push it onto the game state's native-call ring and per-name counter.
 	// `bStub` flags a pure-logging call (no backing system yet). The `Find*` globals call this
 	// directly, since their dispatch stays with each host.
-	void Record(UElysiumGameStateSubsystem* State, FName Name, const FString& Display,
+	void Record(UElysiumSessionSubsystem* State, FName Name, const FString& Display,
 		const FElysiumVariant& Result, bool bStub);
 
 	// A Character method dispatched off the PC (`Self` unset) or an NPC entity handle. SetQuest /
 	// GetQuestState route to the real quest map; everything else — including a name outside the
 	// known 24, which retail's forgiving surface also accepts — logs a stub and returns its
 	// default. Records the call either way.
-	FElysiumVariant CallCharacterMethod(UElysiumGameStateSubsystem* State, FElysiumEntityWorld* World,
+	FElysiumVariant CallCharacterMethod(UElysiumSessionSubsystem* State, FElysiumEntityWorld* World,
 		const FElysiumEntityHandle& Self, FName Method, TArrayView<const FElysiumVariant> Args);
 
 	// The module globals whose result is a plain value: ScheduleTask and ChangeMap (both real — they go
@@ -80,6 +80,6 @@ namespace ElysiumScriptNatives
 	// globals — the CPython host implements them directly (ElysiumPythonEntity) and only the expr
 	// fallback lands here as a stub. `Ctx` supplies the provenance the deferred work is attributed to.
 	// Records the call. A name this does not know logs as a stub.
-	FElysiumVariant CallSimpleGlobal(UElysiumGameStateSubsystem* State, FElysiumEntityWorld* World,
+	FElysiumVariant CallSimpleGlobal(UElysiumSessionSubsystem* State, FElysiumEntityWorld* World,
 		const FElysiumScriptContext& Ctx, FName Name, TArrayView<const FElysiumVariant> Args);
 }

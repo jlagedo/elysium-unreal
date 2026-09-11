@@ -1,7 +1,7 @@
 #include "UI/ElysiumUISubsystem.h"
 
 #include "ElysiumGameFlowSubsystem.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumInputScope.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerUISubsystem.h"
@@ -194,8 +194,8 @@ void UElysiumUISubsystem::ReleaseChargenHold()
 	{
 		return;
 	}
-	if (UElysiumGameStateSubsystem* State = GetGameInstance()
-		? GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+	if (UElysiumSessionSubsystem* State = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumSessionSubsystem>() : nullptr)
 	{
 		State->TimeControl().SetPaused(false);
 	}
@@ -335,7 +335,7 @@ void UElysiumUISubsystem::ShowCharacterScreen(EElysiumCharacterTab Tab)
 	// ACCEPT, so CANCEL is a discard rather than an undo log. Same shape chargen uses, differing
 	// only in the currency (`Substrate/ElysiumChargen.h`).
 	TSharedPtr<FElysiumChargenState> Scratch;
-	if (UElysiumGameStateSubsystem* State = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+	if (UElysiumSessionSubsystem* State = GI->GetSubsystem<UElysiumSessionSubsystem>())
 	{
 		const FElysiumPlayer* Player = State->PlayerEntity();
 		const FElysiumSheetEffects* Effects = Player ? Player->SheetEffects() : nullptr;
@@ -394,7 +394,7 @@ void UElysiumUISubsystem::ShowChargen()
 	UGameInstance* GI = GetGameInstance();
 	APlayerController* PC = GI ? GI->GetFirstLocalPlayerController() : nullptr;
 	UElysiumPlayerUISubsystem* PlayerUI = UElysiumPlayerUISubsystem::Get(GI);
-	UElysiumGameStateSubsystem* State = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+	UElysiumSessionSubsystem* State = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 	UElysiumRulebookSubsystem* Book = GI ? GI->GetSubsystem<UElysiumRulebookSubsystem>() : nullptr;
 	if (!PC || !PlayerUI || !State || !Book)
 	{
@@ -566,7 +566,7 @@ void UElysiumUISubsystem::OpenChargenSheet()
 void UElysiumUISubsystem::CommitChargen()
 {
 	UGameInstance* GI = GetGameInstance();
-	UElysiumGameStateSubsystem* State = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+	UElysiumSessionSubsystem* State = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 	TSharedPtr<FElysiumChargenState> Chargen =
 		CharacterScreen ? CharacterScreen->SpendState() : nullptr;
 
@@ -601,7 +601,7 @@ void UElysiumUISubsystem::UpdateCharacterStageBody()
 void UElysiumUISubsystem::CommitCharacterSpend()
 {
 	UGameInstance* GI = GetGameInstance();
-	UElysiumGameStateSubsystem* State = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+	UElysiumSessionSubsystem* State = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 	TSharedPtr<FElysiumChargenState> Scratch =
 		CharacterScreen ? CharacterScreen->SpendState() : nullptr;
 
@@ -663,8 +663,8 @@ void UElysiumUISubsystem::HideCharacterScreen()
 	// in-game Sheet/Quest/Info and level-up hosts on their ordinary close path.
 	if (bChargenHold)
 	{
-		if (UElysiumGameStateSubsystem* State = GetGameInstance()
-			? GetGameInstance()->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
+		if (UElysiumSessionSubsystem* State = GetGameInstance()
+			? GetGameInstance()->GetSubsystem<UElysiumSessionSubsystem>() : nullptr)
 		{
 			State->TimeControl().SetPaused(false);
 		}

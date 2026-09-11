@@ -5,7 +5,7 @@
 #include "ElysiumBrushComponent.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMovementComponent.h"   // the gait-speed push
 #include "ElysiumMoveSolve.h"           // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumPlayer.h"              // FElysiumCombatCharacter — the feed probe's candidate set
@@ -2030,7 +2030,7 @@ void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 
 	if (UGameInstance* GI = GetGameInstance())
 	{
-		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 		{
 			// Step 2 — the only place `Now` moves. DeltaSeconds is already dilated by the
 			// engine, and the clock applies no factor of its own, so a time scale is applied once.
@@ -2258,7 +2258,7 @@ void AElysiumMapActor::GameplayTick(float DeltaSeconds)
 	// RE21 pins. This whole branch is admitted only after the activation transaction.
 	if (UGameInstance* GI = GetGameInstance())
 	{
-		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 		{
 			// Steps 5-6 — the substrate, think-first (retail order: Physics_RunThinkFunctions,
 			// then CEventQueue::ServiceEvents).
@@ -2488,7 +2488,7 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 	// The tail of a released frame: a dev step spends one here, and the last one re-holds the world.
 	if (const UGameInstance* GI = GetGameInstance())
 	{
-		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+		if (UElysiumSessionSubsystem* GameState = GI->GetSubsystem<UElysiumSessionSubsystem>())
 		{
 			GameState->TimeControl().EndFrame();
 		}

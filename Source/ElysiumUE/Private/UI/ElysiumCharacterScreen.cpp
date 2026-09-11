@@ -1,6 +1,6 @@
 #include "UI/ElysiumCharacterScreen.h"
 
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumQuestTables.h"
 #include "Substrate/ElysiumQuestView.h"
@@ -234,10 +234,10 @@ namespace
 		return FName(*FString::Printf(TEXT("%s.%d"), *Group.ToString(), Option));
 	}
 
-	UElysiumGameStateSubsystem* StateFor(const UWidget* Widget)
+	UElysiumSessionSubsystem* StateFor(const UWidget* Widget)
 	{
 		UGameInstance* GI = Widget ? Widget->GetGameInstance() : nullptr;
-		return GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+		return GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 	}
 
 	// The one styling every selectable control shares: `On` while the row is its screen's current
@@ -293,7 +293,7 @@ void UElysiumCharacterScreen::SetHub(int32 InHub)
 	}
 	// Leaving a hub is what marks its rows read: the player has now seen them. Ours, not VtMB's —
 	// the engine writes the unread byte and never reads it.
-	if (UElysiumGameStateSubsystem* State = StateFor(this))
+	if (UElysiumSessionSubsystem* State = StateFor(this))
 	{
 		State->MarkQuestsRead(Hub);
 		State->SetQuestLogArea(InHub);
@@ -308,7 +308,7 @@ void UElysiumCharacterScreen::NotifyClosing()
 	{
 		return;
 	}
-	if (UElysiumGameStateSubsystem* State = StateFor(this))
+	if (UElysiumSessionSubsystem* State = StateFor(this))
 	{
 		State->MarkQuestsRead(Hub);
 		State->SetQuestLogArea(Hub);
@@ -416,7 +416,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildRule(const FText& Label)
 TSharedRef<SWidget> UElysiumCharacterScreen::BuildHeader()
 {
 	FElysiumUIFontLibrary& Fonts = ElysiumUIFonts();
-	UElysiumGameStateSubsystem* State = StateFor(this);
+	UElysiumSessionSubsystem* State = StateFor(this);
 
 	// The header reads whatever the screen is editing: the scratch while one is open — so a clan
 	// change on the Base tab reflags the sigil immediately — and the live character otherwise.
@@ -875,7 +875,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildQuestLog()
 {
 	FElysiumUIFontLibrary& Fonts = ElysiumUIFonts();
 
-	UElysiumGameStateSubsystem* State = StateFor(this);
+	UElysiumSessionSubsystem* State = StateFor(this);
 	UElysiumRulebookSubsystem* Rules = State ? State->Rulebook() : nullptr;
 
 	ElysiumQuestView::FView View;
@@ -989,7 +989,7 @@ void UElysiumCharacterScreen::SetSpendState(TSharedPtr<FElysiumChargenState> InS
 FElysiumChargenRules UElysiumCharacterScreen::SpendRules() const
 {
 	FElysiumChargenRules Out;
-	UElysiumGameStateSubsystem* State = StateFor(this);
+	UElysiumSessionSubsystem* State = StateFor(this);
 	UElysiumRulebookSubsystem* Book = State ? State->Rulebook() : nullptr;
 	if (Book == nullptr)
 	{
@@ -1014,7 +1014,7 @@ const FElysiumSheet& UElysiumCharacterScreen::ViewSheet() const
 	}
 	// No scratch — the tab still draws, over the live character, with nothing buyable.
 	static const FElysiumSheet Empty;
-	UElysiumGameStateSubsystem* State = StateFor(this);
+	UElysiumSessionSubsystem* State = StateFor(this);
 	return State ? State->PlayerSheet() : Empty;
 }
 
@@ -1627,7 +1627,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::RebuildWidget()
 	// first time this character ever opens the screen.
 	if (Hub == INDEX_NONE)
 	{
-		UElysiumGameStateSubsystem* State = StateFor(this);
+		UElysiumSessionSubsystem* State = StateFor(this);
 		UElysiumRulebookSubsystem* Rules = State ? State->Rulebook() : nullptr;
 		if (State)
 		{

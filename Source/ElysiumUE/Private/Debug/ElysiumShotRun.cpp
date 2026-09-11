@@ -3,7 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "Debug/ElysiumScreenshot.h"
 #include "Debug/ElysiumVantages.h"
 
@@ -227,7 +227,7 @@ bool FElysiumShotRun::Tick(float /*DeltaSeconds*/)
 	{
 		if (UGameInstance* GI = World->GetGameInstance())
 		{
-			if (UElysiumGameStateSubsystem* State = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+			if (UElysiumSessionSubsystem* State = GI->GetSubsystem<UElysiumSessionSubsystem>())
 			{
 				const double Now = State->GameClock().GetNow();
 				if (Now <= LastObservedWeatherClock + KINDA_SMALL_NUMBER)
@@ -261,8 +261,8 @@ bool FElysiumShotRun::Tick(float /*DeltaSeconds*/)
 				{
 					if (UGameInstance* GI = World->GetGameInstance())
 					{
-						if (UElysiumGameStateSubsystem* State =
-							GI->GetSubsystem<UElysiumGameStateSubsystem>())
+						if (UElysiumSessionSubsystem* State =
+							GI->GetSubsystem<UElysiumSessionSubsystem>())
 						{
 							const bool bWasPaused = State->TimeControl().IsPaused();
 							const bool bWorldWasPaused = World->IsPaused();

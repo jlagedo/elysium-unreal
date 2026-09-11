@@ -5,7 +5,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumNpcSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumChargen.h"
@@ -61,7 +61,7 @@ TArray<FString> BodyStems()
 	return Baked;
 }
 
-TArray<FString> StatTemplates(UElysiumGameStateSubsystem* GameState)
+TArray<FString> StatTemplates(UElysiumSessionSubsystem* GameState)
 {
 	TArray<FString> Names;
 	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
@@ -84,7 +84,7 @@ TArray<FString> StatTemplates(UElysiumGameStateSubsystem* GameState)
 	return Names;
 }
 
-TArray<FItemOption> WeaponCatalog(UElysiumGameStateSubsystem* GameState)
+TArray<FItemOption> WeaponCatalog(UElysiumSessionSubsystem* GameState)
 {
 	TArray<FItemOption> Out;
 	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
@@ -249,7 +249,7 @@ int32 ClearSpawned(FElysiumEntityWorld& World)
 	return Killed;
 }
 
-TArray<FClanOption> PlayableClans(UElysiumGameStateSubsystem* GameState)
+TArray<FClanOption> PlayableClans(UElysiumSessionSubsystem* GameState)
 {
 	TArray<FClanOption> Out;
 	UElysiumRulebookSubsystem* Rules = GameState ? GameState->Rulebook() : nullptr;
@@ -277,7 +277,7 @@ TArray<FClanOption> PlayableClans(UElysiumGameStateSubsystem* GameState)
 	return Out;
 }
 
-bool SeedPlayerCharacter(UElysiumGameStateSubsystem* GameState, int32 Clan, bool bMale,
+bool SeedPlayerCharacter(UElysiumSessionSubsystem* GameState, int32 Clan, bool bMale,
 	FString& OutBodyStem, FString& OutError)
 {
 	OutBodyStem.Reset();
@@ -388,7 +388,7 @@ int32 StockPlayerAmmo(FElysiumEntityWorld& World, int32 Amount, FString& OutErro
 }
 
 FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
-	UElysiumGameStateSubsystem* GameState, int32 ReservePerType)
+	UElysiumSessionSubsystem* GameState, int32 ReservePerType)
 {
 	FArmResult Result;
 	FElysiumPlayer* Player = World.FindPlayer();

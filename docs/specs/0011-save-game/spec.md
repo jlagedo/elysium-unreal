@@ -580,7 +580,7 @@ evidence/resource/dependency and what resolves it; implementable independent wor
 Mark done only when its scope and acceptance are fulfilled and checked. Record owner, commit,
 schema/content changes, actual executed test counts, report paths and any remaining limitation.
 Record the landed commit hash at the next ledger update rather than attempting a self-referential
-hash. Current entries are all todo: existing scaffolding is not completion of these slices.
+hash. The initial plan marked every entry todo: existing scaffolding is not completion of these slices.
 
 **Scope growth.** If recovery reveals another required class, state source or unsupported arm,
 add a narrowly scoped successor entry here using a suffix id, update dependencies and retain
@@ -709,7 +709,7 @@ retail/witness evidence, or explicitly state the coverage checked and any remain
 **Recommended model:** GPT-6 Astra (`gpt-6-astra`), reasoning `high`.  
 **Execution focus.** Establish one run owner; follow every existing save caller and preserve the current capture contract.
 
-**Status:** todo  
+**Status:** done
 **Depends on:** none  
 **Audit references:** G16  
 **Commit intent:** `feat(session): route named saves through the run owner`
@@ -722,8 +722,47 @@ retail/witness evidence, or explicitly state the coverage checked and any remain
 
 **Acceptance.** In a running fixture, change a global and a registered entity field, save to a named slot, read it through the native reader and assert both values. Mutate the world after acceptance and prove the snapshot remains unchanged. Bare save selects an unused manual slot; invalid/extra/path arguments fail. Existing save clients invoke the same owner; no duplicate store is introduced.
 
-**Completion record:** owner —; commit —; schema/content —; executed checks/reports —;
-blockers/limitations —.
+**Completion record:** owner Codex, using the task-selected model/effort without overrides or
+escalation; commit this SG-01 commit (landed hash to be entered at the next ledger update).
+No predecessors (`Depends on: none`), verified against baseline `0bf11624`.
+GameState was renamed into the sole Session store; the former Save subsystem was removed.
+`RequestSave` owns admission/capture/results; `FElysiumSaveStorage` owns native envelope/slot I/O.
+The exact console command and existing Flow/manual/UI/quick/auto clients reach that owner.
+Schema/minimum remain **36**; no content, game-install assets or importer mappings changed.
+Retail recheck and the tutorial script/terminal witness are recorded in
+[savegame_format.md](../../vtmb/savegame_format.md#native-session-save-entry-sg-01-2026-09-11).
+
+Executed: `uv run elysium build` passed (final report
+`E:/elysium-work/logs/20260911T035555.000138Z-build.json`).
+`uv run elysium test Elysium.Session.Save` executed **2/2**, both passed, **0 not run**
+([report](E:/elysium-work/reports/tests/20260911T035636.326355Z-elysium-session-save/index.json)).
+`uv run elysium test Elysium.Substrate.Save` executed **4/4**, all passed, **0 not run**
+([report](E:/elysium-work/reports/tests/20260911T035352.743243Z-elysium-substrate-save/index.json)):
+SaveOutputCardinality, SavePayload, SaveRoundTrip and SaveSchema. **6 selected tests passed**;
+earlier failed build/test attempts were corrected, not counted as passing validation.
+The running transient-world fixture performed **3 completed native writes/reads** (named,
+unused bare manual, replacement via UI forwarding), preserved global 17/counter 5 after live
+mutation to 99/25, applied every captured entity record, then observed the restored counter
+remain 5 before t=10, become 8 at t=10 and remain 8 afterwards. It also executed invalid/path/
+reserved/extra-argument rejection, case-insensitive reads, pending-write rejection, and
+quick/auto common-admission refusals without overwriting user service slots. Test-owned slots
+were removed. The session reports retain 2 intentional refusal warnings and 7 pre-existing
+content-free dialogue warnings; none are skipped assertions or proof of dialogue-media support.
+
+Code/evidence review in this task resolved member-name collisions after consolidation,
+fixture front-end boot interference, fixture service lifetime, omitted player construction
+in the restore fixture, admission diagnostic disagreement while writing, and Unreal's
+synchronous failure callback being overwritten by a later Writing result. The final native
+writer is the only production envelope writer; all other changed consumers are mechanical
+type/include references. No independent reviewer/model was launched.
+
+Limitations retained deliberately within SG-01's scope: existing domain coverage and admission
+restrictions, Flow-based readiness, synchronous capture/compression, current load/travel
+lifecycle, and the known save-versus-transition eligibility gap. One write at a time is the
+explicit initial storage policy. Full restore validation/barrier (SG-02), staged durable commit
+and expanded async failure/order proof (SG-06), retail autosave boundary/retry (SG-42), typed
+collections/morgue (SG-11), and domain/import completeness remain their existing later slices.
+No new gameplay modernization or completed missing substrate is claimed.
 
 ### SG-02 — Load a named slot through a validated restore barrier
 

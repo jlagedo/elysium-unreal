@@ -148,7 +148,7 @@ namespace
 			Services.SurfaceSounds.Add(FName(TEXT("concrete")), ConcreteRow());
 			Services.SurfaceSounds.Add(FName(TEXT("glass")), PoollessRow());
 			World = MakeUnique<FElysiumEntityWorld>(static_cast<AActor*>(nullptr),
-				static_cast<UElysiumGameStateSubsystem*>(nullptr), Services.Bundle());
+				static_cast<UElysiumSessionSubsystem*>(nullptr), Services.Bundle());
 			World->Load(MakeFootstepDefs());
 			World->Activate(0.0);
 			// One deterministic think, no executor action: `Activate` only ARMS the mind's admission

@@ -7,7 +7,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "Scripting/ElysiumPythonVM.h"
 #include "ElysiumScriptHost.h"
@@ -173,7 +173,7 @@ void FElysiumCogWindow_Scripting::RenderContent()
 			}
 
 			// 9.3 — the map load imports this automatically; report what actually happened.
-			if (const UElysiumGameStateSubsystem* State = GetGameState())
+			if (const UElysiumSessionSubsystem* State = GetGameState())
 			{
 				ImGui::Text("  import:");
 				ImGui::SameLine();
@@ -223,7 +223,7 @@ void FElysiumCogWindow_Scripting::RenderCPythonPanel()
 	ImGui::SeparatorText("Embedded Python 2.7");
 
 	FElysiumPythonVM& VM = FElysiumPythonVM::Get();
-	UElysiumGameStateSubsystem* State = GetGameState();
+	UElysiumSessionSubsystem* State = GetGameState();
 
 	if (!FElysiumPythonVM::IsAvailable())
 	{
@@ -385,7 +385,7 @@ void FElysiumCogWindow_Scripting::RenderEvalPanel()
 {
 	ImGui::SeparatorText("Expression runner");
 
-	UElysiumGameStateSubsystem* State = GetGameState();
+	UElysiumSessionSubsystem* State = GetGameState();
 	if (State == nullptr)
 	{
 		ImGui::TextDisabled("Game-state subsystem unavailable.");
@@ -408,7 +408,7 @@ void FElysiumCogWindow_Scripting::RenderEvalPanel()
 	}
 
 	// The eval input box. Expression and statement shapes both run down one path — the installed
-	// host (UElysiumGameStateSubsystem::EvalScript), so this resolves what a field-6 payload does.
+	// host (UElysiumSessionSubsystem::EvalScript), so this resolves what a field-6 payload does.
 	ImGui::SetNextItemWidth(-FLT_MIN);
 	FCogWidgets::InputTextWithHint("##EvalInput", "G.Tut_Elev = 1   |   1 + 2   |   G.Story_State", EvalInput);
 	ImGui::BeginDisabled(EvalInput.TrimStartAndEnd().IsEmpty());
@@ -441,7 +441,7 @@ void FElysiumCogWindow_Scripting::RenderEvalPanel()
 
 void FElysiumCogWindow_Scripting::RenderGStore()
 {
-	UElysiumGameStateSubsystem* State = GetGameState();
+	UElysiumSessionSubsystem* State = GetGameState();
 	if (State == nullptr)
 	{
 		return;
@@ -558,7 +558,7 @@ void FElysiumCogWindow_Scripting::RenderGStore()
 
 void FElysiumCogWindow_Scripting::RenderNativeBindings()
 {
-	UElysiumGameStateSubsystem* State = GetGameState();
+	UElysiumSessionSubsystem* State = GetGameState();
 
 	ImGui::SeparatorText("Available script bindings");
 	ImGui::TextColored(GColorDim,
@@ -606,7 +606,7 @@ void FElysiumCogWindow_Scripting::RenderNativeBindings()
 
 void FElysiumCogWindow_Scripting::RenderRecentNativeCalls()
 {
-	UElysiumGameStateSubsystem* State = GetGameState();
+	UElysiumSessionSubsystem* State = GetGameState();
 	if (State == nullptr)
 	{
 		return;
@@ -654,7 +654,7 @@ void FElysiumCogWindow_Scripting::RenderRecentNativeCalls()
 
 void FElysiumCogWindow_Scripting::RenderRecentEvals()
 {
-	UElysiumGameStateSubsystem* State = GetGameState();
+	UElysiumSessionSubsystem* State = GetGameState();
 	if (State == nullptr)
 	{
 		return;

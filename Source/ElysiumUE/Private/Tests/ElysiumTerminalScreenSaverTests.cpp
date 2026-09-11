@@ -17,7 +17,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumRng.h"
 #include "ElysiumViewState.h"
 #include "Engine/GameInstance.h"
@@ -74,7 +74,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalScreenSaverTest,
 bool FElysiumTerminalScreenSaverTest::RunTest(const FString&)
 {
 	UGameInstance* GameInstance = NewObject<UGameInstance>(GetTransientPackage());
-	UElysiumGameStateSubsystem* State = NewObject<UElysiumGameStateSubsystem>(GameInstance);
+	UElysiumSessionSubsystem* State = NewObject<UElysiumSessionSubsystem>(GameInstance);
 
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__terminal_screensaver__");

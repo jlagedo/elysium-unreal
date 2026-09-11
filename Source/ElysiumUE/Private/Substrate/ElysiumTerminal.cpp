@@ -6,7 +6,7 @@
 #include "ElysiumBinds.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
@@ -244,7 +244,7 @@ namespace ElysiumHackingStrings
 		{
 			return *GInstalledForTests;
 		}
-		UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+		UElysiumSessionSubsystem* GameState = World ? World->GetGameState() : nullptr;
 		UElysiumRulebookSubsystem* Rulebook = GameState ? GameState->Rulebook() : nullptr;
 		return Rulebook ? Rulebook->Strings() : HeadlessStrings();
 	}
@@ -1341,7 +1341,7 @@ bool FElysiumPropHacking::OpenContent(FString& OutError)
 		return false;
 	}
 	FElysiumTerminalDefinition Parsed;
-	UElysiumGameStateSubsystem* GameState = World ? World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* GameState = World ? World->GetGameState() : nullptr;
 	UElysiumRulebookSubsystem* Rulebook = GameState ? GameState->Rulebook() : nullptr;
 	if (Rulebook)
 	{

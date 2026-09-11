@@ -8,7 +8,7 @@ class UWorld;
 struct FElysiumGameClock;
 
 // The one pause / time-scale facade, over the substrate clock AND engine time.
-// It lives on UElysiumGameStateSubsystem beside the clock it
+// It lives on UElysiumSessionSubsystem beside the clock it
 // drives, and it is the clock's only writer: FElysiumGameClock keeps Advance/SetPaused/
 // SetScale/Reset private and friends this struct, so "one clock, advanced in one place" is
 // a compile-time property rather than a convention.

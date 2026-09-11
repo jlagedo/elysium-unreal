@@ -6,12 +6,12 @@
 //   * pause-menu Save        — `UElysiumMainMenu::Execute` -> `UElysiumGameFlowSubsystem::SaveGame`
 //   * quick-save key / console — the `save` command binding -> `SaveGame(Quick|Manual)`
 //   * autosave triggers      — `trigger_autosave` -> `SaveGame(FString(), Auto)`
-//   * `elysium.save.cansave` — reports `UElysiumSaveSubsystem::CanSave` verbatim
+//   * `elysium.save.cansave` — reports `UElysiumSessionSubsystem::CanSave` verbatim
 //   * MCP                    — the toolset exposes no save verb (audited 2026-09-06)
 //
-// All four writers funnel through `UElysiumSaveSubsystem::Save`, whose first act is `CanSave`,
+// All four writers funnel through `UElysiumSessionSubsystem::RequestSave`, whose first act is `CanSave`,
 // which asks `FElysiumEntityWorld::ScriptedSessionSaveBlockReason()`. There is no second writer:
-// `Save` is the only caller of `BuildPayload` + `ElysiumSave::Write` on the write path. This case
+// `RequestSave` captures with `BuildPayload`, then storage calls `ElysiumSave::Write`. This case
 // therefore proves the gate itself, in every state a conversation can be sitting in — the ordinary
 // response band, the Auto-Link automatic wait, and the no-audio Continue fallback — because a
 // state-dependent hole is the only way the one chokepoint could still let a save through.

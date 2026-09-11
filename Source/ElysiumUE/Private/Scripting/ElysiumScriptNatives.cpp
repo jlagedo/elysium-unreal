@@ -1,7 +1,7 @@
 #include "Scripting/ElysiumScriptNatives.h"
 
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumStub.h"
@@ -109,7 +109,7 @@ namespace
 
 	// The default return for a stubbed Character method (no backing system yet). Predicate-shaped
 	// methods read false so a gate over them fails closed (error-to-false's spirit).
-	FElysiumVariant CharMethodStubResult(FName Method, UElysiumGameStateSubsystem* State)
+	FElysiumVariant CharMethodStubResult(FName Method, UElysiumSessionSubsystem* State)
 	{
 		if (Method == FName(TEXT("IsMale")))
 		{
@@ -186,7 +186,7 @@ namespace ElysiumScriptNatives
 		return Out;
 	}
 
-	void Record(UElysiumGameStateSubsystem* State, FName Name, const FString& Display,
+	void Record(UElysiumSessionSubsystem* State, FName Name, const FString& Display,
 		const FElysiumVariant& Result, bool bStub)
 	{
 		UE_LOG(LogElysiumNative, Verbose, TEXT("[native%s] %s -> %s"),
@@ -212,7 +212,7 @@ namespace ElysiumScriptNatives
 		if (State) { State->RecordNativeCall(Display, Result, bStub, Name); }
 	}
 
-	FElysiumVariant CallCharacterMethod(UElysiumGameStateSubsystem* State, FElysiumEntityWorld* World,
+	FElysiumVariant CallCharacterMethod(UElysiumSessionSubsystem* State, FElysiumEntityWorld* World,
 		const FElysiumEntityHandle& Self, FName Method, TArrayView<const FElysiumVariant> Args)
 	{
 		// Receiver label: the PC (FindPlayer()) or the resolved NPC handle.
@@ -459,7 +459,7 @@ namespace ElysiumScriptNatives
 		return R;
 	}
 
-	FElysiumVariant CallSimpleGlobal(UElysiumGameStateSubsystem* State, FElysiumEntityWorld* World,
+	FElysiumVariant CallSimpleGlobal(UElysiumSessionSubsystem* State, FElysiumEntityWorld* World,
 		const FElysiumScriptContext& Ctx, FName Name, TArrayView<const FElysiumVariant> Args)
 	{
 		const FString Display = FString::Printf(TEXT("%s(%s)"), *Name.ToString(), *DescribeArgs(Args));

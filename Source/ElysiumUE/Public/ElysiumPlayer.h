@@ -625,7 +625,7 @@ struct FElysiumPlayerRecord
 	// The police-response / Masquerade-timer / pursuit block beside the activity
 	// channels. Deliberately NOT map-scoped the way `FeedMap`, `DisciplineMap` and `StealthMap`
 	// are: every deadline in both structs is on the session clock, which
-	// `UElysiumGameStateSubsystem` owns and which persists across map travel, and a wanted level
+	// `UElysiumSessionSubsystem` owns and which persists across map travel, and a wanted level
 	// with four seconds left means exactly the same thing in the next map. The one member that
 	// names a map entity is `ResponseWitness`, so `FElysiumPlayer::Hydrate` rebases-or-drops that
 	// single handle rather than scoping the whole block to a map name.

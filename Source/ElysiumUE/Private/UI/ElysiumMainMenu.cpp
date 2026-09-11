@@ -3,7 +3,7 @@
 #include "UI/ElysiumActionButton.h"
 #include "Player/ElysiumCommandBus.h"
 #include "ElysiumGameFlowSubsystem.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumUISettings.h"
 #include "UI/ElysiumUIStrings.h"
@@ -250,7 +250,7 @@ UTexture2D* UElysiumMainMenu::ResolveSeal()
 	{
 		if (UGameInstance* GI = GetGameInstance())
 		{
-			if (const UElysiumGameStateSubsystem* State = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+			if (const UElysiumSessionSubsystem* State = GI->GetSubsystem<UElysiumSessionSubsystem>())
 			{
 				Clan = State->PlayerSheet().Clan();
 			}

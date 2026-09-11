@@ -17,7 +17,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumScriptHost.h"
@@ -65,10 +65,10 @@ public:
 // and both files put a file-scope `using namespace` over it, so the two go ambiguous the moment the
 // build merges them into one translation unit — which it does, and which the blob composition
 // decides, so adding an unrelated test file is enough to trip it.
-static UElysiumGameStateSubsystem* MailHeadlessGameState()
+static UElysiumSessionSubsystem* MailHeadlessGameState()
 {
 	UGameInstance* GameInstance = NewObject<UGameInstance>(GetTransientPackage());
-	return NewObject<UElysiumGameStateSubsystem>(GameInstance);
+	return NewObject<UElysiumSessionSubsystem>(GameInstance);
 }
 
 // Twelve visible mails — enough to cross the ten-row page — plus a thirteenth whose dependency
@@ -257,7 +257,7 @@ bool FElysiumTerminalEmailTest::RunTest(const FString&)
 	using namespace ElysiumHackingStrings;
 	const FMailStringScope Strings;
 
-	UElysiumGameStateSubsystem* State = MailHeadlessGameState();
+	UElysiumSessionSubsystem* State = MailHeadlessGameState();
 	TUniquePtr<FElysiumMailScriptHost> OwnedHost = MakeUnique<FElysiumMailScriptHost>();
 	FElysiumMailScriptHost* Host = OwnedHost.Get();
 	State->SetScriptHost(MoveTemp(OwnedHost));

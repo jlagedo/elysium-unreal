@@ -5,7 +5,7 @@
 #include "Debug/ElysiumCogStyle.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameClock.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumMapVisuals.h"
 #include "Map/ElysiumMapCollision.h"
@@ -76,7 +76,7 @@ void FElysiumCogWindow_Status::RenderContent()
 		ImGui::TextDisabled("No .ents substrate on this map.");
 	}
 
-	if (const UElysiumGameStateSubsystem* GameState = GetGameState())
+	if (const UElysiumSessionSubsystem* GameState = GetGameState())
 	{
 		const FElysiumGameClock& Clock = GameState->GameClock();
 		Row("Now", FString::Printf(TEXT("%.2f s"), Clock.GetNow()));

@@ -2,7 +2,7 @@
 
 #include "ElysiumContentPaths.h"
 #include "ElysiumGameFlowSubsystem.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumPlayerBody.h"
 #include "Debug/ElysiumGreenRoomConsole.h"
@@ -57,7 +57,7 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			const FString Landmark = (Args.Num() > 1) ? Args[1] : FString();
 
 			UGameInstance* GI = GetGameInstance();
-			UElysiumGameStateSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
+			UElysiumSessionSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumSessionSubsystem>() : nullptr;
 			if (GameState && !FElysiumSheet::IsValidClan(GameState->PlayerRecord().Sheet.Clan()))
 			{
 				if (ExportedMaps().Contains(Target))

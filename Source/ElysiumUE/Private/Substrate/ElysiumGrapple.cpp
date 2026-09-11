@@ -1,7 +1,7 @@
 #include "Substrate/ElysiumGrapple.h"
 
 #include "ElysiumEntityWorld.h"
-#include "ElysiumGameStateSubsystem.h"
+#include "ElysiumSessionSubsystem.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSheetSlots.h"
@@ -83,7 +83,7 @@ bool FElysiumPlayer::CanStartStealthKill(FElysiumNpc& Victim, float MaxDistanceU
 
 bool FElysiumPlayer::TryStealthKill()
 {
-	UElysiumGameStateSubsystem* State = World ? World->GetGameState() : nullptr;
+	UElysiumSessionSubsystem* State = World ? World->GetGameState() : nullptr;
 	UElysiumRulebookSubsystem* Book = State ? State->Rulebook() : nullptr;
 	return Book && TryStealthKill(Book->StealthKillRules());
 }

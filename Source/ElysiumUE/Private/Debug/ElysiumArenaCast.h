@@ -8,7 +8,7 @@
 
 class FElysiumEntityWorld;
 class FElysiumNpc;
-class UElysiumGameStateSubsystem;
+class UElysiumSessionSubsystem;
 
 // Standing characters up in a room and outfitting the player, for the combat arena.
 //
@@ -34,7 +34,7 @@ namespace ElysiumArenaCast
 	// character's `stattemplate` key selects, and it is the difference between a body with a health
 	// ceiling, soak, damage filters and a Kindred classification and one with a zeroed sheet whose
 	// damage path stays fail-closed.
-	TArray<FString> StatTemplates(UElysiumGameStateSubsystem* GameState);
+	TArray<FString> StatTemplates(UElysiumSessionSubsystem* GameState);
 
 	struct FItemOption
 	{
@@ -52,7 +52,7 @@ namespace ElysiumArenaCast
 	// Every controllable weapon and every ammunition record, from the parsed item catalog. Policy
 	// comes from `FElysiumItemDef::IsControllableWeapon`, never from an `item_w_` prefix — the
 	// prefix is a filename convention and nothing in the game reads it as a type.
-	TArray<FItemOption> WeaponCatalog(UElysiumGameStateSubsystem* GameState);
+	TArray<FItemOption> WeaponCatalog(UElysiumSessionSubsystem* GameState);
 
 
 
@@ -131,13 +131,13 @@ namespace ElysiumArenaCast
 		FString MaleStem;
 		FString FemaleStem;
 	};
-	TArray<FClanOption> PlayableClans(UElysiumGameStateSubsystem* GameState);
+	TArray<FClanOption> PlayableClans(UElysiumSessionSubsystem* GameState);
 
 	/**
 	 * Seed the player record with a real, baselined character of `Clan`.
 	 *
 	 * It goes through chargen's own two doors — `ElysiumChargen::ApplyBaseline` and
-	 * `UElysiumGameStateSubsystem::CommitChargen` — so the clan template, its `ClanEffect` gifts and
+	 * `UElysiumSessionSubsystem::CommitChargen` — so the clan template, its `ClanEffect` gifts and
 	 * banes, the auto-levelled baseline and the derived health block all arrive exactly as they do
 	 * from New Game. Nothing here writes a sheet slot directly.
 	 *
@@ -149,7 +149,7 @@ namespace ElysiumArenaCast
 	 *
 	 * `OutBodyStem` receives the clan's player body stem, so a caller can stand the matching body.
 	 */
-	bool SeedPlayerCharacter(UElysiumGameStateSubsystem* GameState, int32 Clan, bool bMale,
+	bool SeedPlayerCharacter(UElysiumSessionSubsystem* GameState, int32 Clan, bool bMale,
 		FString& OutBodyStem, FString& OutError);
 
 
@@ -180,7 +180,7 @@ namespace ElysiumArenaCast
 	// `AmmoCount` reports the loaded magazine, `GiveAmmo` adds to the reserve), and a test that
 	// wants to press reload wants the reserve.
 	FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
-		UElysiumGameStateSubsystem* GameState, int32 ReservePerType = 100);
+		UElysiumSessionSubsystem* GameState, int32 ReservePerType = 100);
 
 	// One named item onto the player, through the same route. Returns false with `OutError` for a
 	// classname the item catalog does not carry.
