@@ -255,7 +255,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `NPCThink` hint upkeep (12b), shoot-target override (0008), death-scream roll (16c), the
   motor's contact/gravity/turn-pose arms (the motor, this spec's navigator half, no story yet), the boss registry (a boss story).
   Size: XL. Effort: Fable / high.
-- [ ] **10a. The sound sweep.**
+- [x] **10a. The sound sweep.**
   Retail: `0x102b1cd0` over the seven sound records (incl. `Flinch` +0x6210); gate
   `m_flNextInvestigateSoundTime` +0x623c re-armed 2.0 s, 20.0 s for a stranger's sound;
   `HasCondition(HEAR_X) && (mask has HEAR_X || ShouldInvestigate)` → `INVESTIGATE_SOUND` 0x25;
