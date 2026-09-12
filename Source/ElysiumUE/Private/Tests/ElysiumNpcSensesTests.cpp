@@ -358,6 +358,9 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		// Directly BEHIND the guard, and past the near bypass so the trace decides. Retail's cached
 		// LOS carries no cone term at all, which is the whole reason it is not the sighting.
 		F.Player->Origin = FVector(Cm(-1000.f), 0.0, 0.0);
+		// The fixture's own admission think already ran one refresh at t=0, so the gate is armed
+		// for t=2. This case is about the gate, not about when the fixture opened it.
+		F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
 		F.Guard->Senses.SetClosestPlayer(*F.Guard, 1.0);
 		F.Guard->Senses.SetPlayerLos(*F.Guard, 1.0);
 		TestTrue(TEXT("a player behind the observer still has cached LOS"),

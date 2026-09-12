@@ -795,6 +795,8 @@ private:
 	// It takes no clock: the dispatcher's whole rule is an interval over a NORMALIZED cycle the pose
 	// layer publishes, so nothing in the walk reads world time (`Substrate/ElysiumAnimEvents.h`).
 	void AdvanceAnimEvents();
+	// The per-frame NPC record sync -- a named divergence, documented at the definition.
+	void SyncMovingNpcRecords();
 	void RunThinks(double Now);
 	void DeliverEvent(const FElysiumIOEvent& Event, double Now);
 	void DeliverInputTo(FElysiumEntity& Target, const FElysiumIOEvent& Event, double Now);

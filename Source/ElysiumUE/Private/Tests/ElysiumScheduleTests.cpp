@@ -169,11 +169,10 @@ namespace
 		int32 MaxThinks = 200)
 	{
 		int32 Thinks = 0;
-		double Delay = 0.0;
-		while (Thinks < MaxThinks && ElysiumSchedule::Tick(State, Runner, Now, Delay))
+		while (Thinks < MaxThinks && ElysiumSchedule::Tick(State, Runner, Now))
 		{
 			++Thinks;
-			Now += FMath::Max(0.01, Delay);
+			Now = FMath::Max(Now + 0.01, State.TaskEndsAt);
 		}
 		return Thinks;
 	}
@@ -233,16 +232,18 @@ bool FElysiumScheduleWaitPvsTest::RunTest(const FString&)
 	Runner.IdleClipSeconds = 1.f;
 	FElysiumScheduleState State;
 	double Now = 0.0;
-	double Delay = 0.0;
 
 	ElysiumSchedule::Start(State, EElysiumScheduleId::IdleDisposition, Runner);
 
-	// Long past the stance clip's end, so the only thing still holding is the PVS task.
+	// Long past the stance clip's end, so the only thing still holding is the PVS task. The step is
+	// the case's own: the kernel proposes no cadence (retail's `MaintainSchedule` never informs the
+	// think clocks), and how often an unseen body is asked is the NPC think cadence's answer, not
+	// this task's.
 	for (int32 i = 0; i < 60; ++i)
 	{
 		TestTrue(TEXT("an unseen NPC's idle schedule stays open"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
-		Now += FMath::Max(0.01, Delay);
+			ElysiumSchedule::Tick(State, Runner, Now));
+		Now = FMath::Max(Now + 0.5, State.TaskEndsAt);
 	}
 	const int32 SelectionsWhileUnseen = Runner.Calls.FilterByPredicate([](const FString& C)
 	{
@@ -250,12 +251,12 @@ bool FElysiumScheduleWaitPvsTest::RunTest(const FString&)
 	}).Num();
 	TestEqual(TEXT("and selects exactly once — the throttle is the whole point"),
 		SelectionsWhileUnseen, 1);
-	TestTrue(TEXT("an unseen NPC is polled slowly rather than every think"), Now >= 25.0);
+	TestTrue(TEXT("...however long it is held open for"), Now >= 25.0);
 
 	// Coming back into view releases it, and the schedule ends so the NPC selects again.
 	Runner.bVisible = true;
 	TestFalse(TEXT("becoming visible completes the wait and ends the schedule"),
-		ElysiumSchedule::Tick(State, Runner, Now, Delay));
+		ElysiumSchedule::Tick(State, Runner, Now));
 	TestFalse(TEXT("the state is cleared for the next selection"), State.IsRunning());
 	return true;
 }
@@ -275,11 +276,10 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 		Runner.bIdleAvailable = false;
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::IdleDisposition, Runner);
 		TestFalse(TEXT("a body with no stance machine ends its idle schedule"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+			ElysiumSchedule::Tick(State, Runner, Now));
 		TestTrue(TEXT("and the trace names the task that failed"),
 			Runner.FailureReasons.Contains(0x15));
 		TestFalse(TEXT("nothing is left running"), State.IsRunning());
@@ -295,11 +295,10 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 		Runner.bIdealActivityCurrent = false;
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::TakeCoverHintDoor, Runner);
 		TestTrue(TEXT("the unresolved activity starts without failing"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+			ElysiumSchedule::Tick(State, Runner, Now));
 		TestTrue(TEXT("the trace records the body's unresolved activity"),
 			Runner.Saw(TEXT("TASK_SET_ACTIVITY ACT_IDLE unresolved")));
 		TestTrue(TEXT("the miss is not reported as a failed task"),
@@ -312,12 +311,12 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 
 		Now = 0.5;
 		TestTrue(TEXT("the miss waits until the one-second watchdog"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+			ElysiumSchedule::Tick(State, Runner, Now));
 		TestEqual(TEXT("it remains on the activity before the deadline"), State.TaskIndex, 0);
 
 		Now = 1.0;
 		TestTrue(TEXT("the watchdog completes into the authored wait"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+			ElysiumSchedule::Tick(State, Runner, Now));
 		TestEqual(TEXT("the original schedule advances to its wait"), State.Current,
 			EElysiumScheduleId::TakeCoverHintDoor);
 		TestEqual(TEXT("the wait is the second task after the watchdog"), State.TaskIndex, 1);
@@ -376,11 +375,10 @@ bool FElysiumScheduleDoorTest::RunTest(const FString&)
 		Runner.bMotor = false;
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::BackAwayFromDoorNe, Runner);
 		TestFalse(TEXT("a bodiless NPC cannot back away, and says so"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+			ElysiumSchedule::Tick(State, Runner, Now));
 		TestTrue(TEXT("the trace names the motor task that failed"),
 			Runner.Saw(TEXT("TASK_FACE_SAVEPOSITION failed")));
 		TestTrue(TEXT("...with the generic task-failure reason"),
@@ -480,14 +478,13 @@ bool FElysiumScheduleRetreatProjectionTest::RunTest(const FString&)
 		Runner.Motor.ProjectedOverride = FVector(150.0, 0.0, 0.0);   // no longer a retreat
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::BackAwayFromDoorNe, Runner);
 		int32 Thinks = 0;
-		while (Thinks < 8 && ElysiumSchedule::Tick(State, Runner, Now, Delay))
+		while (Thinks < 8 && ElysiumSchedule::Tick(State, Runner, Now))
 		{
 			++Thinks;
-			Now += FMath::Max(0.01, Delay);
+			Now = FMath::Max(Now + 0.01, State.TaskEndsAt);
 		}
 		TestFalse(TEXT("the schedule ends rather than repeating a retreat that is not one"),
 			State.IsRunning());
@@ -528,14 +525,13 @@ bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
 		FRecordingRunner Runner;
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		TestTrue(TEXT("the death schedule is registered"),
 			ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner));
 		TestTrue(TEXT("starting it traces its name"), Runner.Saw(TEXT("SCHED_DIE")));
 
 		TestFalse(TEXT("the program ends inside its first think"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+			ElysiumSchedule::Tick(State, Runner, Now));
 
 		const TArray<FString> Rungs = DeathRungs(Runner);
 		if (TestEqual(TEXT("the ladder tries exactly two rungs"), Rungs.Num(), 2))
@@ -560,11 +556,10 @@ bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
 		Runner.PlayableDeathActivities.Add(TEXT("ACT_DIESIMPLE"));
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
 		TestTrue(TEXT("a real death clip holds the task open for its own length"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+			ElysiumSchedule::Tick(State, Runner, Now));
 
 		const TArray<FString> Rungs = DeathRungs(Runner);
 		if (TestEqual(TEXT("the ladder stops at the first rung that resolves"), Rungs.Num(), 1))
@@ -572,12 +567,15 @@ bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
 			TestEqual(TEXT("and that rung is ACT_DIESIMPLE"), Rungs[0],
 				FString(TEXT("DeathActivity ACT_DIESIMPLE")));
 		}
-		TestEqual(TEXT("the hold is the resolved clip's own length"), Delay,
+		// The hold is the task's own deadline. It used to be read back through the kernel's
+		// `OutNextThinkDelay`, which the think cadence retired -- retail's `MaintainSchedule` never
+		// informs the think clocks.
+		TestEqual(TEXT("the hold is the resolved clip's own length"), State.TaskEndsAt - Now,
 			static_cast<double>(Runner.DeathClipSeconds), 1e-6);
 
 		Now += Runner.DeathClipSeconds;
 		TestFalse(TEXT("and the program ends when the clip does"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+			ElysiumSchedule::Tick(State, Runner, Now));
 	}
 
 	// --- The argument rung wins over both fixed ones ----------------------------------------------
@@ -593,10 +591,9 @@ bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
 		Runner.PlayableDeathActivities.Add(TEXT("ACT_DEATH_INTO"));
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
-		ElysiumSchedule::Tick(State, Runner, Now, Delay);
+		ElysiumSchedule::Tick(State, Runner, Now);
 
 		const TArray<FString> Rungs = DeathRungs(Runner);
 		if (TestEqual(TEXT("the argument is tried alone when it resolves"), Rungs.Num(), 1))
@@ -613,10 +610,9 @@ bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
 		FRecordingRunner Runner;
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
-		ElysiumSchedule::Tick(State, Runner, Now, Delay);
+		ElysiumSchedule::Tick(State, Runner, Now);
 
 		const TArray<FString> Rungs = DeathRungs(Runner);
 		if (TestEqual(TEXT("all three rungs are tried"), Rungs.Num(), 3))
@@ -636,10 +632,9 @@ bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
 		Runner.PlayableDeathActivities.Reset();
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
-		TestFalse(TEXT("the program ends"), ElysiumSchedule::Tick(State, Runner, Now, Delay));
+		TestFalse(TEXT("the program ends"), ElysiumSchedule::Tick(State, Runner, Now));
 		TestTrue(TEXT("and it ended by completing, not by failing"),
 			Runner.FailureReasons.IsEmpty());
 		TestTrue(TEXT("the trace says nothing resolved"),
@@ -735,20 +730,19 @@ bool FElysiumScheduleDelayInterruptsTest::RunTest(const FString&)
 		FRecordingRunner Runner;
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::Mesmerized, Runner);
 		TestTrue(TEXT("the install cleared the gathered conditions"), Runner.ConditionClears == 1);
 
 		TestTrue(TEXT("the first think survives a condition in its own interrupt mask"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay, &Damage));
+			ElysiumSchedule::Tick(State, Runner, Now, &Damage));
 		TestTrue(TEXT("...and says so"), Runner.Saw(TEXT("DELAY_INTERRUPTS")));
 		TestTrue(TEXT("...and the program is still running"), State.IsRunning());
 
 		// 2. The same condition on the NEXT think ends it. The window is one think, not a duration:
 		//    no time passes between these two calls.
 		TestFalse(TEXT("the second think is interrupted by the same condition"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay, &Damage));
+			ElysiumSchedule::Tick(State, Runner, Now, &Damage));
 		TestFalse(TEXT("the program ended"), State.IsRunning());
 		TestTrue(TEXT("and the trace names the firing condition"),
 			Runner.Saw(TEXT("interrupted by")));
@@ -760,12 +754,11 @@ bool FElysiumScheduleDelayInterruptsTest::RunTest(const FString&)
 		FRecordingRunner Runner;
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 
 		// The idle program's mask carries `HEAVY_DAMAGE` and it declares no flags.
 		ElysiumSchedule::Start(State, EElysiumScheduleId::AlertLookAroundNi, Runner);
 		TestFalse(TEXT("an unflagged program is interrupted on its first think"),
-			ElysiumSchedule::Tick(State, Runner, Now, Delay, &Damage));
+			ElysiumSchedule::Tick(State, Runner, Now, &Damage));
 		TestFalse(TEXT("and it did not report a delay"), Runner.Saw(TEXT("DELAY_INTERRUPTS")));
 	}
 	return true;
@@ -791,11 +784,10 @@ bool FElysiumScheduleTestBitsOverlayTest::RunTest(const FString&)
 		FRecordingRunner Runner;
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 		ElysiumSchedule::Start(State, EElysiumScheduleId::BackAwayFromDoorNe, Runner);
-		ElysiumSchedule::Tick(State, Runner, Now, Delay, &Law);   // arms the window
+		ElysiumSchedule::Tick(State, Runner, Now, &Law);   // arms the window
 		TestTrue(TEXT("an empty authored mask is not interrupted by a law condition"),
-			State.IsRunning() && ElysiumSchedule::Tick(State, Runner, Now, Delay, &Law));
+			State.IsRunning() && ElysiumSchedule::Tick(State, Runner, Now, &Law));
 		TestTrue(TEXT("...and the kernel asked the runner for its overlay each think"),
 			Runner.Calls.FilterByPredicate(
 				[](const FString& C) { return C == TEXT("BuildScheduleTestBits"); }).Num() >= 2);
@@ -807,11 +799,10 @@ bool FElysiumScheduleTestBitsOverlayTest::RunTest(const FString&)
 		Runner.OverlayAdds = { EElysiumNpcCond::CriminalFleeLevel };
 		FElysiumScheduleState State;
 		double Now = 0.0;
-		double Delay = 0.0;
 		ElysiumSchedule::Start(State, EElysiumScheduleId::BackAwayFromDoorNe, Runner);
-		ElysiumSchedule::Tick(State, Runner, Now, Delay, &Law);   // arms the window
+		ElysiumSchedule::Tick(State, Runner, Now, &Law);   // arms the window
 		TestFalse(TEXT("the overlaid mask is interrupted by the same condition"),
-			State.IsRunning() && ElysiumSchedule::Tick(State, Runner, Now, Delay, &Law));
+			State.IsRunning() && ElysiumSchedule::Tick(State, Runner, Now, &Law));
 		TestTrue(TEXT("...and the trace names it"),
 			Runner.Saw(TEXT("interrupted by CRIMINAL_FLEE_LEVEL")));
 	}
@@ -831,8 +822,7 @@ bool FElysiumScheduleFailureDispatchTest::RunTest(const FString&)
 	ElysiumSchedule::Start(State, EElysiumScheduleId::IdleDisposition, Runner);
 	Runner.Flags.AddOblivious();
 	Runner.Flags.Set(EElysiumNpcFlag::NO_DIALOG);
-	double Delay = 0.0;
-	TestFalse(TEXT("failed activity routes through the failure transaction"), ElysiumSchedule::Tick(State, Runner, 1.0, Delay));
+	TestFalse(TEXT("failed activity routes through the failure transaction"), ElysiumSchedule::Tick(State, Runner, 1.0));
 	TestEqual(TEXT("the kernel invokes TaskFail before dropping the program"), Runner.FailureReasons.Last(), 0x15);
 	TestFalse(TEXT("failure releases NO_DIALOG"), Runner.Flags.Has(EElysiumNpcFlag::NO_DIALOG));
 	TestFalse(TEXT("failure clears the bookkeeping bit"), Runner.Flags.Has(EElysiumNpcFlag2::MADE_OBLIVIOUS));
@@ -853,16 +843,15 @@ bool FElysiumScheduleCompletionHostTest::RunTest(const FString&)
 		Runner.OutgoingSchedules.Last() == EElysiumScheduleId::IdleDisposition);
 	Runner.bPathAvailable = true;
 	Runner.MovementResult = EElysiumMoveWatch::Arrived;
-	double Delay = 0.0;
-	TestFalse(TEXT("an immediately arrived goal finishes the program"), ElysiumSchedule::Tick(State, Runner, 0.0, Delay));
+	TestFalse(TEXT("an immediately arrived goal finishes the program"), ElysiumSchedule::Tick(State, Runner, 0.0));
 	TestEqual(TEXT("schedule done is emitted once at the last completion"), Runner.CompletedSchedules, 1);
 	ElysiumSchedule::Start(State, EElysiumScheduleId::ScriptedFollowPath, Runner);
-	TestTrue(TEXT("a continuing path yields at the maintenance bound"), ElysiumSchedule::Tick(State, Runner, 1.0, Delay));
+	TestTrue(TEXT("a continuing path yields at the maintenance bound"), ElysiumSchedule::Tick(State, Runner, 1.0));
 	TestTrue(TEXT("the bounded pass retains the path program"), State.Current == EElysiumScheduleId::ScriptedFollowPath);
 	TestTrue(TEXT("the bounded pass closes DELAY_INTERRUPTS"), State.bDidMaintainSchedule);
 	FElysiumNpcConditions Failed = FElysiumNpcConditions::Of({EElysiumNpcCond::TaskFailed});
 	const int32 PreviousFailures = Runner.FailureReasons.Num();
-	TestFalse(TEXT("external TASK_FAILED routes a still-running program"), ElysiumSchedule::Tick(State, Runner, 2.0, Delay, &Failed));
+	TestFalse(TEXT("external TASK_FAILED routes a still-running program"), ElysiumSchedule::Tick(State, Runner, 2.0, &Failed));
 	TestEqual(TEXT("routing an external failure does not duplicate TaskFail"), Runner.FailureReasons.Num(), PreviousFailures);
 	return true;
 }

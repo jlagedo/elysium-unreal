@@ -230,6 +230,11 @@ public:
 	// The body's live feet/yaw plus what its outstanding request is doing. A turn-in-place reports
 	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
+	// The body's live feet/yaw with NO request bookkeeping. `Sample` above CONSUMES a terminal
+	// status -- arrival calls `Stop()` -- so anything that only wants to know where the body is
+	// standing asks here instead of stealing that edge from the executor waiting on it. The
+	// world's per-frame record sync is the caller.
+	virtual void SampleTransform(FVector& OutFeetOrigin, float& OutYawDegrees) const = 0;
 
 	// This body's own authored travel speed for one gait at one facing-relative direction, cm/s —
 	// the cell of that gait's resolved fan the body is about to play. It is the number a travel

@@ -127,6 +127,7 @@ public:
 	virtual void SetEnabled(bool bEnabled) override;
 	virtual void SetFrozen(bool bFrozen) override;
 	virtual void SetIgnoreCharacterCollision(bool bIgnore) override;
+	virtual void SampleTransform(FVector& OutFeetOrigin, float& OutYawDegrees) const override;
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
 	virtual FElysiumLocomotionSample SampleLocomotion() const override;
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override;

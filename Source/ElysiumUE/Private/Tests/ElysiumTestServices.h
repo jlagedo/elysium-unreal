@@ -224,6 +224,11 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		Out.GroundSurface = GroundSurface;
 		return Out;
 	}
+	virtual void SampleTransform(FVector& OutFeetOrigin, float& OutYawDegrees) const override
+	{
+		OutFeetOrigin = Feet;
+		OutYawDegrees = Yaw;
+	}
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override
 	{
 		OutFeetOrigin = Feet;

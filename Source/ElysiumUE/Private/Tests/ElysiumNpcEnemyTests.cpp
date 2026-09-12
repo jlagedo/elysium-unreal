@@ -1141,13 +1141,12 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 	{
 		FKernelRunner Runner;
 		FElysiumScheduleState State;
-		double Delay = 0.0;
 		TestTrue(TEXT("the door-cover program starts"),
 			ElysiumSchedule::Start(State, EElysiumScheduleId::TakeCoverHintDoor, Runner));
 		TestTrue(TEXT("its first task runs"),
-			ElysiumSchedule::Tick(State, Runner, 0.0, Delay, &Firing));
+			ElysiumSchedule::Tick(State, Runner, 0.0, &Firing));
 		TestTrue(TEXT("a schedule with no mask is not interrupted by anything"),
-			ElysiumSchedule::Tick(State, Runner, 0.1, Delay, &Firing));
+			ElysiumSchedule::Tick(State, Runner, 0.1, &Firing));
 		TestTrue(TEXT("...and is still running"), State.IsRunning());
 	}
 
@@ -1155,7 +1154,6 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 	{
 		FKernelRunner Runner;
 		FElysiumScheduleState State;
-		double Delay = 0.0;
 		// The cover program is the only registered one with a fail schedule, so it is what proves
 		// an interrupt does not take that route.
 		ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::TakeCoverHintDoor,
@@ -1163,11 +1161,11 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 		TestTrue(TEXT("the cover program starts"),
 			ElysiumSchedule::Start(State, EElysiumScheduleId::TakeCoverHintDoor, Runner));
 		TestTrue(TEXT("its first task runs"),
-			ElysiumSchedule::Tick(State, Runner, 0.0, Delay, nullptr));
+			ElysiumSchedule::Tick(State, Runner, 0.0, nullptr));
 		TestTrue(TEXT("...leaving it mid-program"), State.IsRunning());
 
 		TestFalse(TEXT("a masked condition ends the program"),
-			ElysiumSchedule::Tick(State, Runner, 0.1, Delay, &Firing));
+			ElysiumSchedule::Tick(State, Runner, 0.1, &Firing));
 		TestFalse(TEXT("...and nothing is running afterwards"), State.IsRunning());
 		TestFalse(TEXT("...specifically NOT its fail schedule, which is task failure's route"),
 			State.Current == EElysiumScheduleId::BackAwayFromDoorNe);
@@ -1183,15 +1181,14 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 	{
 		FKernelRunner Runner;
 		FElysiumScheduleState State;
-		double Delay = 0.0;
 		// The scope REPLACES the registered mask rather than adding to it, which is what makes this
 		// a statement about the mask under test and not about the idle program's own.
 		ElysiumSchedule::FInterruptMaskScope Scope(EElysiumScheduleId::IdleDisposition,
 			FElysiumNpcConditions::Of({ EElysiumNpcCond::EnemyDead }));
 		ElysiumSchedule::Start(State, EElysiumScheduleId::IdleDisposition, Runner);
-		ElysiumSchedule::Tick(State, Runner, 0.0, Delay, nullptr);
+		ElysiumSchedule::Tick(State, Runner, 0.0, nullptr);
 		TestTrue(TEXT("a condition the mask does not carry leaves the program alone"),
-			ElysiumSchedule::Tick(State, Runner, 0.1, Delay, &Firing));
+			ElysiumSchedule::Tick(State, Runner, 0.1, &Firing));
 	}
 
 	// --- The mask scope restores what it borrowed --------------------------------------------------

@@ -58,6 +58,21 @@ protected:
 	// SetRuntimeOrigin, which would teleport the body back. Callers guarantee a motor.
 	EElysiumNpcMoveStatus SampleMotorIntoEntity();
 
+public:
+	// **Named divergence.** Retail's entity origin IS the body: `PerformMovement(interval)`
+	// integrates the whole elapsed interval inside `NPCThink`, so a far NPC hops but its record is
+	// never wrong. This runtime's body is a movement component integrated on the actor tick while
+	// `Origin` is written only from a think -- and under the NPC think cadence a body out of the
+	// player's PVS thinks as rarely as every six seconds, which would leave every distance test in
+	// the game (other NPCs' senses, sound propagation, triggers, the witness lanes) reading a
+	// position the guard left long ago. So the record is synced on the FRAME instead.
+	//
+	// It reads `SampleTransform`, not `Sample`: the latter consumes the terminal `Reached` status
+	// by calling `Stop()`, and stealing that from the executor waiting on it would strand the move.
+	void SyncMovingRecord();
+
+protected:
+
 	IElysiumNpcMotor* Motor = nullptr;
 	EScriptPhase ScriptPhase = EScriptPhase::None;
 	FVector ScriptMark = FVector::ZeroVector;

@@ -764,6 +764,12 @@ FElysiumLocomotionSample AElysiumNpcBody::SampleLocomotion() const
 	return Out;
 }
 
+void AElysiumNpcBody::SampleTransform(FVector& OutFeetOrigin, float& OutYawDegrees) const
+{
+	OutFeetOrigin = FeetLocation();
+	OutYawDegrees = GetActorRotation().Yaw;
+}
+
 EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& OutYawDegrees)
 {
 	OutFeetOrigin = FeetLocation();

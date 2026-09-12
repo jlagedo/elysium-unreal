@@ -614,30 +614,6 @@ namespace
 		return Now >= State.TaskEndsAt ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 	}
 
-	// How long before this task is worth asking again.
-	double DelayFor(const FElysiumTaskStep& Step, const FElysiumScheduleState& State, double Now)
-	{
-		if (Step.Task == EElysiumTask::WaitPvs)
-		{
-			// Visibility is not on a clock, so it is polled -- slowly, because an NPC nobody can
-			// see is exactly the one whose think budget this task exists to protect.
-			return 0.5;
-		}
-		if (Step.Task == EElysiumTask::WaitForMovement)
-		{
-			// A travelling body is sampled on the patrol executor's own cadence: the entity's origin
-			// is written from the motor at every sample, so a slower poll would leave the logical
-			// position visibly behind the body it is chasing an enemy with.
-			return 0.05;
-		}
-		if (Step.Task == EElysiumTask::SetActivity)
-		{
-			// Poll the current body identity before the one-second watchdog. A delayed animation host
-			// must be allowed to reach ideal on its next frame rather than needlessly waiting a second.
-			return 0.05;
-		}
-		return FMath::Max(0.05, State.TaskEndsAt - Now);
-	}
 }
 
 bool ElysiumSchedule::Start(FElysiumScheduleState& State, EElysiumScheduleId Id,
@@ -706,9 +682,8 @@ bool ElysiumSchedule::HasInterruptCondition(const FElysiumScheduleState& State,
 }
 
 bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
-	double& OutNextThinkDelay, const FElysiumNpcConditions* Conditions)
+	const FElysiumNpcConditions* Conditions, bool bReduced)
 {
-	OutNextThinkDelay = 0.25;
 	if (!State.IsRunning())
 	{
 		return false;
@@ -775,7 +750,10 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 	// two are equivalent because the only thing that could change the answer mid-loop is an install
 	// (`TASK_SET_SCHEDULE`, a fail route), and every install both re-arms the delay window and zeroes
 	// the conditions -- so a re-test after one can never fire.
-	constexpr int32 MaintainScheduleBound = 10;
+	// ...and at most ONCE on a reduced pass. A reduced think is the AI clock declining to think;
+	// letting a chain of instantly-completing tasks run ten deep inside one would spend the whole
+	// decision budget the reduction exists to save.
+	const int32 MaintainScheduleBound = bReduced ? 1 : 10;
 	for (int32 Guard = 0; Guard < MaintainScheduleBound; ++Guard)
 	{
 		const FElysiumSchedule* Schedule = ElysiumScheduleFor(State.Current);
@@ -808,7 +786,6 @@ bool ElysiumSchedule::Tick(FElysiumScheduleState& State, IElysiumScheduleRunner&
 
 		if (Result == EElysiumTaskResult::Running)
 		{
-			OutNextThinkDelay = DelayFor(Step, State, Now);
 			// The pass ran, so the delay window closes -- `MaintainSchedule`'s common exit
 			// (`0x102821ae`, the single store at `0x10282342`) sets `m_bDidMaintainSchedule = 1`.
 			// Retail has two other returns and neither stores: the `ai_step` debug return, which a

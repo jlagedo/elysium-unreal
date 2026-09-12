@@ -1929,6 +1929,10 @@ protected:
 	// invalidation do not.
 	void CompleteFeedTransaction(bool bKeepReleaseTail);
 	// The next think the pair needs: the earlier of the phase boundary and the next pulse.
+	// The feed transaction's next boundary. The player half writes it into its own `NextThink`
+	// (`ScheduleFeedThink`); an NPC half is PULLED by the think cadence's tail instead, because
+	// that tail is the only writer of an NPC's `NextThink`.
+	double FeedThinkDeadline(double Now) const;
 	void ScheduleFeedThink(double Now);
 	// The damage one pulse heals on the feeder. OPEN — see `ElysiumFeed.cpp`.
 	int32 FeedHealAmount() const;

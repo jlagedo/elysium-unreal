@@ -1040,18 +1040,31 @@ void FElysiumCombatCharacter::BreakFeed()
 
 // --- The state machine ---------------------------------------------------------------------------
 
-void FElysiumCombatCharacter::ScheduleFeedThink(double Now)
+double FElysiumCombatCharacter::FeedThinkDeadline(double Now) const
 {
+	// The transaction's next boundary: the phase deadline, and the blood pulse while it is
+	// actually draining. Split out of `ScheduleFeedThink` because an NPC half no longer writes its
+	// own think -- the NPC think cadence owns `NextThink` and PULLS this through
+	// `FElysiumNpc::HardThinkDeadline`. The player half still writes it, below.
 	if (FeedState.Phase == EElysiumFeedPhase::None)
 	{
-		return;
+		return static_cast<double>(ELYSIUM_NEVER_THINK);
 	}
 	float Next = FeedState.PhaseDeadline;
 	if (FeedState.IsTransacting())
 	{
 		Next = FMath::Min(Next, FeedState.NextPulse);
 	}
-	NextThink = FMath::Max(Next, static_cast<float>(Now));
+	return static_cast<double>(FMath::Max(Next, static_cast<float>(Now)));
+}
+
+void FElysiumCombatCharacter::ScheduleFeedThink(double Now)
+{
+	const double Deadline = FeedThinkDeadline(Now);
+	if (Deadline < static_cast<double>(ELYSIUM_NEVER_THINK))
+	{
+		NextThink = static_cast<float>(Deadline);
+	}
 }
 
 bool FElysiumCombatCharacter::ShouldReleaseFeed() const

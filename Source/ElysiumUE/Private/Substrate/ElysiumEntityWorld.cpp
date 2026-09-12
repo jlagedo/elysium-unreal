@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumDialogueSession.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumGameSound.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
@@ -308,6 +309,7 @@ void FElysiumEntityWorld::Activate(double Now)
 	LastTickNow = Now;
 	// The pawn has reached its final frozen placement by this point. Publish its Source feet/view
 	// transform before any late entity activation resolves !player (point_teleport spawnflag 1).
+	SyncMovingNpcRecords();
 	if (FElysiumPlayer* PlayerEnt = FindPlayer())
 	{
 		PlayerEnt->SyncFromBody();
@@ -1703,6 +1705,26 @@ void FElysiumEntityWorld::AdvanceAnimEvents()
 			continue;   // nothing without a skeletal body has a clip to advance
 		}
 		EntPtr->AdvanceAnimEvents();
+	}
+}
+
+void FElysiumEntityWorld::SyncMovingNpcRecords()
+{
+	// **Named divergence**, and the NPC think cadence's prerequisite. Retail's entity origin IS the
+	// body: `PerformMovement(interval)` integrates the whole elapsed interval inside `NPCThink`, so
+	// a far NPC hops but its record is never wrong. This runtime's bodies are integrated by their
+	// movement components on the actor tick while `Origin` is written only from a think -- and the
+	// cadence's own point is that a body out of the player's PVS may not think for seconds. Every
+	// distance test in the game reads `Origin`, so it is refreshed on the frame instead.
+	//
+	// Immediately before the player's own `SyncFromBody` and for the same reason: everything later
+	// this frame must see where the bodies actually are.
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityList)
+	{
+		if (FElysiumNpc* Npc = EntPtr ? EntPtr->AsNpc() : nullptr)
+		{
+			Npc->SyncMovingRecord();
+		}
 	}
 }
 

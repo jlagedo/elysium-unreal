@@ -465,9 +465,9 @@ public:
 	void ApplyStateWeaponVisibility(EElysiumNpcState NewState);
 
 	// The standing-pose arm, reached from both the idle fall-through and the dialogue arm.
-	void ThinkStanceOrIdle(double Now);
+	void ThinkStanceOrIdle(double Now, bool bReduced);
 
-	void ThinkPatrol();
+	void ThinkPatrol(double Now);
 
 	FElysiumInterestingPlace* CurrentAmbientSpot() const;
 
@@ -674,7 +674,7 @@ public:
 
 	void FinishAmbientUse(bool bFireLeft, bool bStopMovement = true);
 
-	void ThinkAmbient();
+	void ThinkAmbient(double Now);
 
 	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin, then run the NPC's `.dlg`
 	// conversation. When the `dialogname` file is missing/unloadable the session falls back to the
@@ -836,16 +836,39 @@ public:
 	int32 NumPatrolPointsForDebug() const { return PatrolPoints.Num(); }
 
 private:
-	// --- Think(), phase by phase, in the order Think() calls them. A bool phase returns true
-	// when it consumed this think, and Think() returns with it -----------------------------------
+	// --- Think(), phase by phase, in `NPCThink`'s (`0x10292de0`) order ---------------------------
+	//
+	// A phase that ends the PASS is not a phase that ends the THINK. Only `IsInert`, the
+	// `m_bDisableAI` gate and a terminal `ThinkDead` return out of `Think()`; every other phase
+	// falls through to the cadence tail, which is the sole writer of `NextThink`.
 
-	// A dead NPC's whole think: advance the death program while it runs, then hand the body to
-	// physics (or freeze it) and stop thinking. It is FIRST in the pass because a corpse admits
-	// nothing, senses nothing and selects nothing.
-	bool ThinkDead();
+	// A dead NPC's whole think. FIRST in the pass and outside the cadence entirely, because a
+	// corpse in retail carries no think function at all -- there is no clock a stamp could name
+	// for it, and routing one through the distance laws would delay the ragdoll handoff by up to
+	// six seconds for a body the player is not near.
+	enum class EDeadThink : uint8 { NotDead, Running, Terminal };
+	EDeadThink ThinkDead();
 
-	// The activation barrier: the mind is admitted on its first frozen-time think.
+	// The activation barrier: the mind is admitted on its first frozen-time think. Returns true on
+	// the think that admitted, which suppresses the AI pass and nothing else.
 	bool RunAdmissionBarrier();
+
+	// `RunAlternateAI` (`0x1028fd80`): a transaction that owns this body outright and replaces the
+	// AI pass. Non-zero suppresses `RunAi` and NOTHING else -- the cadence tail still runs, which
+	// is what keeps a feeding NPC's stamps advancing.
+	bool RunAlternateAi(double Now);
+
+	// `RunAI(bReduced)` (`0x1026f110`). Reduced skips `GatherConditions` whole and bounds schedule
+	// maintenance at one task completion instead of ten.
+	void RunAi(double Now, bool bReduced);
+
+	// `UpdateCharacter`, slot 312, on the update clock. Only `FinishTalking` is recovered of its
+	// body; the rest is UNRECOVERED and deliberately left empty rather than invented.
+	void UpdateCharacter(double Now);
+
+	// The one clamp on the cadence tail, retail's own shape (`m_bJumping -> curtime + 0.01`).
+	// Polled rather than registered: nothing subscribes, the tail asks.
+	double HardThinkDeadline(double Now) const;
 
 	// The combat loadout, resolved once on the first ordinary think after admission.
 	void ResolveLoadout();
@@ -853,9 +876,9 @@ private:
 	// A director's push that fired before this NPC's first think replays here.
 	void ReplayDeferredScriptedOrder();
 
-	// Senses and the recovered decision pass — or the stale-condition reset where a
-	// scripted owner suppresses gathering.
-	void RunConditionPass();
+	// Senses and the recovered decision pass. Suppressed where retail suppresses `GatherConditions`
+	// (slot 433), and suppression is a plain SKIP: the standing condition set survives it.
+	void RunConditionPass(double Now, bool bReduced);
 
 	// The edge tracker `PumpStateChange` keeps (see the pump's own comment, in the public section).
 	EElysiumNpcState LastStateChange = EElysiumNpcState::Idle;
@@ -865,17 +888,19 @@ private:
 	// freezing it.
 	bool TickScriptWatchdog();
 
-	// An open conversation: the per-line clip hold, else the stance machine's talking branch.
-	bool ThinkInDialog();
+	// An open conversation: the per-line clip hold, else the stance machine's talking branch. The
+	// clip hold needs no cadence of its own -- an NPC in dialogue is a `ShouldThinkFrequently`
+	// body, pinned to the normal law's 0.01 s floor.
+	bool ThinkInDialog(double Now, bool bReduced);
 
 	// A scripted owner drives this body's pose; the think only lands a deferred beat claim.
-	bool ThinkScriptOwned();
+	bool ThinkScriptOwned(double Now);
 
 	// Schedule selection pre-empts an autonomous executor.
-	bool ThinkSchedulePolicy();
+	bool ThinkSchedulePolicy(double Now, bool bReduced);
 
 	// The autonomous executors: the patrol route, an interesting place, or the standing stance.
-	void ThinkAutonomous();
+	void ThinkAutonomous(double Now, bool bReduced);
 
 	// --- Serialize(), one helper per version block, in exact archive order ----------------------
 
@@ -983,6 +1008,10 @@ private:
 	bool bDeathHandoffDone = false;
 	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
 	bool bDisableAi = false;
+	// A disposition transition clip is playing: do not re-decide the stance until it ends. This is
+	// a HOLD, not a cadence -- it used to be spelled as a `NextThink` write, which the think
+	// cadence now owns. Session state, the same posture `AmbientNextActivityAt` beside it takes.
+	double StanceTransitionUntil = 0.0;
 	// The interesting-place visit's phase machine and the state riding on it.
 	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
 	EAmbientPhase AmbientPhase = EAmbientPhase::None;

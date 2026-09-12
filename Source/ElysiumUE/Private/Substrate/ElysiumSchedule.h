@@ -497,19 +497,23 @@ namespace ElysiumSchedule
 	// TaskFail(5) without installing it, leaving the current program available to failure routing.
 	bool Start(FElysiumScheduleState& State, EElysiumScheduleId Id, IElysiumScheduleRunner& Runner);
 
-	// Advance the running schedule by one think.
+	// Advance the running schedule by one think. Returns false once the schedule has ended
+	// (completed, failed through to nothing, or been interrupted), which is the caller's signal to
+	// select again.
 	//
-	// `OutNextThinkDelay` receives how long the caller should wait before asking again -- a timed
-	// task hands back its own remainder, so a five-second wait costs one think rather than fifty.
-	// Returns false once the schedule has ended (completed, failed through to nothing, or been
-	// interrupted), which is the caller's signal to select again.
+	// It proposes no cadence. Retail's `MaintainSchedule` never informs the think clocks -- the four
+	// `Calc*` laws read distance, PVS, LOS, `SCHEDULE_CHANGED`, frenzy and `ShouldThinkFrequently`
+	// and nothing else -- so a running task is simply re-polled on the next normal think.
 	//
 	// `Conditions` is this decision pass's gathered set, checked against the active schedule's
 	// interrupt mask at the top of the tick and before any task work. Null means "no conditions
 	// were gathered for this pass" -- a headless kernel test, or a think that ran with condition
 	// gathering suppressed -- and skips the check entirely rather than testing an empty set.
+	//
+	// `bReduced` is `RunAI`'s own argument: the AI clock declining to think. It bounds task
+	// completions at one instead of ten.
 	bool Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
-		double& OutNextThinkDelay, const FElysiumNpcConditions* Conditions = nullptr);
+		const FElysiumNpcConditions* Conditions = nullptr, bool bReduced = false);
 
 	/**
 	 * The mask the NPC actually runs against this think: the installed program's authored

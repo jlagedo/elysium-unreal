@@ -315,10 +315,15 @@ bool FElysiumNpcCombatLoadoutTest::RunTest(const FString&)
 		}
 		TestEqual(TEXT("the keyfield parsed"), F.Fighter->AdditionalEquipment, FString(GPistol));
 		TestTrue(TEXT("`cantdropweapons` parses beside it"), F.Fighter->bCantDropWeapons);
-		TestFalse(TEXT("nothing is granted before the loadout runs"), F.Fighter->bLoadoutResolved);
+		// The fixture's world has already run one think, and under `NPCThink`'s recovered shape
+		// admission and the loadout are the same normal-due pass -- admission suppresses only the
+		// AI pass. Retail resolves the loadout at spawn; the port defers it exactly one think,
+		// because creating an item entity inside the spawn pass invalidates the array being
+		// iterated.
+		TestTrue(TEXT("admission and the loadout are one think"), F.Fighter->bLoadoutResolved);
 
 		F.RunAdmissionAndLoadout();
-		TestTrue(TEXT("the loadout latch is set once the think has run"), F.Fighter->bLoadoutResolved);
+		TestTrue(TEXT("...and the latch holds across further thinks"), F.Fighter->bLoadoutResolved);
 
 		FElysiumWeapon* Weapon = F.ActiveWeapon(F.Fighter);
 		if (!TestNotNull(TEXT("the authored weapon is the ACTIVE weapon"), Weapon))
@@ -800,9 +805,8 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	TestTrue(TEXT("the chase starts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, EId::ChaseEnemy, *F.Fighter));
 
-	double Delay = 0.0;
 	TestTrue(TEXT("the first think reaches the movement watch"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0, Delay,
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0,
 			&F.Fighter->Cognition.Conditions));
 
 	// The body-owner arbiter: the `Schedule` owner is live for the first time.
@@ -820,21 +824,20 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 
 	// Still travelling: the watch holds the task rather than advancing it.
 	TestTrue(TEXT("an in-flight path keeps the schedule open"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1, Delay,
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1,
 			&F.Fighter->Cognition.Conditions));
-	TestTrue(TEXT("...on a fast sample cadence"), Delay <= 0.05 + KINDA_SMALL_NUMBER);
 
 	// Arrival ends the program.
 	Motor->SampleStatus = EElysiumNpcMoveStatus::Reached;
 	TestFalse(TEXT("arrival completes the last task and ends the chase"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.2, Delay,
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.2,
 			&F.Fighter->Cognition.Conditions));
 	TestFalse(TEXT("nothing is left running"), F.Fighter->Schedule.IsRunning());
 
 	// The claim is given back where the program ended, before the next selection runs.
 	F.Fighter->Senses.Memory.Enemy = FElysiumEntityHandle::Invalid();
 	F.Fighter->Cognition.Conditions.Reset();
-	F.Fighter->ThinkStanceOrIdle(10.3);
+	F.Fighter->ThinkStanceOrIdle(10.3, /*bReduced=*/false);
 	TestTrue(TEXT("the ended program hands the body back"),
 		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::None);
 	TestTrue(TEXT("...and stops the request it was holding"), F.Services.Saw(TEXT("NpcMotor Stop")));
@@ -901,8 +904,7 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	// transfer, announce, attack.
 	TestTrue(TEXT("the approach starts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1, *F.Fighter));
-	double Delay = 0.0;
-	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0, Delay,
+	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0,
 		&F.Fighter->Cognition.Conditions);
 
 	TestTrue(TEXT("TASK_ANNOUNCE_ATTACK wrote the victim's detected-attack record"),
@@ -966,14 +968,14 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 		TestTrue(TEXT("the swing program restarts"),
 			ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1Swing, *F.Fighter));
 		TestFalse(TEXT("with a mask installed, NEW_ENEMY aborts it"),
-			ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5, Delay, &Storm));
+			ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5, &Storm));
 		TestEqual(TEXT("...and no attack was pressed"), Weapon->Swing.Serial, SerialBefore);
 	}
 
 	// The registered posture: no interrupts, so the same storm cannot stop the swing.
 	TestTrue(TEXT("the swing program restarts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1Swing, *F.Fighter));
-	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5, Delay, &Storm);
+	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 2.5, &Storm);
 	TestTrue(TEXT("a NEW_ENEMY mid-swing does not abort the terminal attack"),
 		Weapon->Swing.Serial > SerialBefore);
 	TestFalse(TEXT("...and nothing reported an interrupt"),
@@ -1001,9 +1003,8 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 
 	TestTrue(TEXT("the chase starts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, EId::ChaseEnemy, *F.Fighter));
-	double Delay = 0.0;
 	TestTrue(TEXT("the chase reaches its movement watch"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0, Delay,
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0,
 			&F.Fighter->Cognition.Conditions));
 
 	// The recovered mask: a chase interrupts on a new, dead, unreachable, occluded or lost enemy and
@@ -1024,7 +1025,7 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 
 	const FElysiumNpcConditions Dead = FElysiumNpcConditions::Of({ ECond::EnemyDead });
 	TestFalse(TEXT("ENEMY_DEAD mid-chase ends the program"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1, Delay, &Dead));
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.1, &Dead));
 	TestFalse(TEXT("...returning the NPC to selection rather than to a fail schedule"),
 		F.Fighter->Schedule.IsRunning());
 	TestTrue(TEXT("...and the trace names the condition that fired"),
@@ -1084,9 +1085,8 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 		F.Fighter->Cognition.Conditions.Has(ECond::NewEnemy));
 
 	// The interrupt then ends the idle program, and the ideal-state pass takes the NPC to combat.
-	double Delay = 0.0;
 	TestFalse(TEXT("NEW_ENEMY interrupts the disposition idle"),
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 20.0, Delay,
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 20.0,
 			&F.Fighter->Cognition.Conditions));
 	F.Fighter->UpdateIdealState(20.0);
 	TestTrue(TEXT("a committed enemy takes the NPC to combat"),
@@ -1175,9 +1175,8 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	TestTrue(TEXT("...and an enemy inside reach and faced is attackable"),
 		Victim.Cognition.Conditions.Has(ECond::CanMeleeAttack1));
 
-	double Delay = 0.0;
 	TestFalse(TEXT("the damage interrupts the disposition idle"),
-		ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.0, Delay, &Victim.Cognition.Conditions));
+		ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.0, &Victim.Cognition.Conditions));
 	Victim.UpdateIdealState(1.0);
 	TestTrue(TEXT("the ideal-state pass takes the struck bystander to combat"),
 		Victim.GetMind().State() == EElysiumNpcState::Combat);
@@ -1203,7 +1202,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	const int32 SerialBefore = Fists->Swing.Serial;
 	TestTrue(TEXT("the swing program starts"),
 		ElysiumSchedule::Start(Victim.Schedule, EId::MeleeAttack1, Victim));
-	ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.1, Delay, &Victim.Cognition.Conditions);
+	ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.1, &Victim.Cognition.Conditions);
 	TestTrue(TEXT("TASK_MELEE_ATTACK1 staged a real weapon transaction"), Fists->Swing.bActive);
 	TestTrue(TEXT("...pressing the controller rather than reporting one"),
 		Fists->Swing.Serial > SerialBefore);
@@ -1398,9 +1397,8 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 
 		TestTrue(TEXT("the retreat starts"),
 			ElysiumSchedule::Start(F.Fighter->Schedule, EId::RunAway, *F.Fighter));
-		double Delay = 0.0;
 		TestTrue(TEXT("the retreat reaches its movement watch"),
-			ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0, Delay,
+			ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0,
 				&F.Fighter->Cognition.Conditions));
 		TestTrue(TEXT("the world was asked where the extrapolated point lands"),
 			F.Services.Saw(TEXT("NpcMotor ProjectToNavigable")));
@@ -1429,8 +1427,7 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 
 		TestTrue(TEXT("the retreat starts"),
 			ElysiumSchedule::Start(F.Fighter->Schedule, EId::RunAway, *F.Fighter));
-		double Delay = 0.0;
-		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0, Delay, nullptr);
+		ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 10.0, nullptr);
 		TestTrue(TEXT("an unprojectable retreat was asked and refused"),
 			F.Services.Saw(TEXT("NpcMotor ProjectToNavigable")));
 		TestFalse(TEXT("...and the retreat never became a move request"), Motor->bMoving);
@@ -1460,8 +1457,7 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 
 	TestTrue(TEXT("the swing program starts"),
 		ElysiumSchedule::Start(F.Fighter->Schedule, EId::MeleeAttack1Swing, *F.Fighter));
-	double Delay = 0.0;
-	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0, Delay, nullptr);
+	ElysiumSchedule::Tick(F.Fighter->Schedule, *F.Fighter, 0.0, nullptr);
 
 	TestEqual(TEXT("no damage is dealt out of nothing"), F.DamageTaken(F.Target), 0);
 	TestNotEqual(TEXT("the failed swing left its own program"), F.Fighter->Schedule.Current,

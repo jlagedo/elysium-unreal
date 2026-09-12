@@ -148,6 +148,27 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 	return true;
 }
 
+void FElysiumScriptedCharacter::SyncMovingRecord()
+{
+	if (Motor == nullptr || IsInert())
+	{
+		return;
+	}
+	FVector Feet = Origin;
+	float Yaw = -Angles.Y;
+	Motor->SampleTransform(Feet, Yaw);
+	if (Feet.Equals(Origin, 0.01) && FMath::IsNearlyEqual(-Yaw, Angles.Y, 0.01f))
+	{
+		return;   // a standing body costs nothing
+	}
+	Origin = Feet;
+	Angles.Y = -Yaw;
+	if (World)
+	{
+		World->NotifyVisualChanged(*this);
+	}
+}
+
 EElysiumNpcMoveStatus FElysiumScriptedCharacter::SampleMotorIntoEntity()
 {
 	FVector Feet = Origin;
