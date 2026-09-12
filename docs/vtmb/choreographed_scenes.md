@@ -460,10 +460,18 @@ authors it**: 31 `logic_choreographed_scene` entities across the five maps that 
 | `Pause` | `InputPausePlayback` → `+0x3cc` = `0x10082ad0` | set `m_bPaused` (only while playing) |
 | `Resume` | `InputResumePlayback` → `+0x3d0` = `0x10082b00` | clear `m_bPaused`, re-apply the anim set; the unchanged start clock catches up next frame |
 | `Cancel` | `InputCancelPlayback` → `+0x3d4` = `0x10082b80` | stop and fire `OnCanceled` |
+| `Kill` (generic) | `CSceneEntity::UpdateOnRemove` `0x10080a80` | **while `m_bIsPlayingBack`, dispatches `+0x3d4` (`Cancel`) first**, then `0x10083a60`, then `CBaseEntity::UpdateOnRemove` — a killed playing scene thaws its cast, restores their AI and fires `OnCanceled`, never `OnCompletion` |
 
 Map data only ever sends **`Start` (131 wires)** and **`Cancel` (18)** — `Pause`/`Resume`
 are never used. Scenes also receive the generic `Kill` (20), `ScriptHide` (11) and
-`ScriptUnhide` (6). The senders are ordinary logic: `logic_relay` 76, `logic_case` 31,
+`ScriptUnhide` (6). The `Kill` arm is load-bearing: `sp_theatre`'s `scene_over_relay` kills
+`courtroom_scene_bip2` (the Prince's speech, `position_start 1`) 1.7 s before its end, and only the
+remove-time cancel gives Prince1 his AI back before `Prince_Escort_*` binds him again (recovered
+2026-09-12; the port's `FElysiumChoreoScene::OnDormancyChanged` runs the cancel on death). The
+finish walk `0x100847e0` skips only an actor held by a cine (`m_hCine`) or in a dialogue
+(`m_hDialogPartner`); the port had also skipped its own cast, because the scene stamps
+`ScriptOwner` on its actors and thaws them before releasing that claim — so no placed cast had
+ever had its AI restored. Fixed the same day: the scene's own claim does not count as a cine. The senders are ordinary logic: `logic_relay` 76, `logic_case` 31,
 another `logic_choreographed_scene` 18, `npc_VHumanCombatant` 12, `logic_pythoncheck` 11,
 `trigger_multiple` 11, `trigger_once` 10, `scripted_sequence` 8. Level scripts start scenes
 the same way, through the datamap: `Find("vv_dance_4").Start()` in `hollywood.py`

@@ -678,7 +678,15 @@ public:
 		}
 		Bound[Index].bAiSaved = false;
 		FElysiumNpc* Npc = A.AsNpc();
-		if (Npc == nullptr || Npc->ScriptOwner.IsSet() || Npc->Dialogue.bInDialog)
+		// Retail's skip is `m_hCine` (a `scripted_sequence` holds the actor) or `m_hDialogPartner`.
+		// This runtime spells the cine claim through `ScriptOwner`, and the scene stamps the same
+		// field on its own cast (`ClaimActors`), which is still standing here because the thaw
+		// runs ahead of `ReleaseActors`: the scene's own claim is not a cine and must not count,
+		// or no placed cast ever gets its AI back (sp_theatre's Prince1 stayed disabled into the
+		// hub until this was found, 2026-09-12).
+		const bool bHeldByAnotherScript = Npc != nullptr && Npc->ScriptOwner.IsSet()
+			&& !(Npc->ScriptOwner == Handle);
+		if (Npc == nullptr || bHeldByAnotherScript || Npc->Dialogue.bInDialog)
 		{
 			return;
 		}
@@ -888,6 +896,26 @@ public:
 	// FUN_10082b80: stop, unhide, fire OnCanceled — and deliberately do NOT apply position_end or
 	// fire OnCompletion. A cancelled scene must not unlock what its completion would have.
 	void InputCancel(const FElysiumInputArgs&)
+	{
+		CancelPlayback();
+	}
+
+	// `CSceneEntity::UpdateOnRemove` `0x10080a80`: a scene removed while `m_bIsPlayingBack` first
+	// dispatches slot 245, `InputCancelPlayback` `0x10082b80`, then the base remove. So a `Kill`
+	// on a playing scene is a cancel: the cast is thawed and its AI restored, `OnCanceled` fires,
+	// `OnCompletion` does not. sp_theatre authors exactly this (`scene_over_relay ->
+	// courtroom_scene_bip2 Kill` while the Prince's speech is 1.7 s from its end), and without
+	// the cancel Prince1 stayed AI-disabled and held through the escort and out of the intro.
+	virtual void OnDormancyChanged() override
+	{
+		FElysiumEntity::OnDormancyChanged();
+		if (bDead && bPlaying)
+		{
+			CancelPlayback();
+		}
+	}
+
+	void CancelPlayback()
 	{
 		if (!bPlaying)
 		{

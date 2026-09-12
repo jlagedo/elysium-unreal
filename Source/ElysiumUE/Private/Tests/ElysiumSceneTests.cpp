@@ -787,7 +787,8 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		+ SceneEvent(TEXT("firetrigger"), TEXT("bad"), 2.5f, -1.f, TEXT("7"))));
 
 	auto BuildWorld = [&](FElysiumEntityWorld& World, int32 PositionStart, int32 PositionEnd,
-		const TCHAR* SceneFile, const TCHAR* ActorName)
+		const TCHAR* SceneFile, const TCHAR* ActorName,
+		const TCHAR* ActorClassname = TEXT("logic_relay"))
 	{
 		FElysiumEntityDefs Defs;
 		Defs.MapName = TEXT("__test__");
@@ -809,8 +810,9 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 
 		// A point entity the world will place: the scene drives SetRuntimeOrigin, which is on the
 		// base, so a logic_relay stands in for an NPC exactly as the scripted_sequence test does.
+		// A case about the cast's AI names a real NPC leaf instead.
 		FElysiumEntityDef A;
-		A.Classname = TEXT("logic_relay");
+		A.Classname = ActorClassname;
 		A.TargetName = ActorName;
 		A.Origin = FVector(10.f, 20.f, 30.f);
 		Defs.Defs.Add(MoveTemp(A));
@@ -972,6 +974,35 @@ bool FElysiumChoreoSceneTest::RunTest(const FString&)
 		// Keep ticking well past the scene's end: OnCompletion must never arrive.
 		for (int32 i = 0; i < 10; ++i) { T += 1.0; World.Tick(T); }
 		TestEqual(TEXT("a cancelled scene never completes"), CounterValue(Count), 1101.f);
+	}
+
+	// --- Kill while playing is a cancel (CSceneEntity::UpdateOnRemove 0x10080a80) ------------
+	// The theatre kills the Prince's speech 1.7 s before its end; the cast has to come back.
+	{
+		// A real NPC leaf needs the service bundle behind it, as every NPC suite stands one.
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		BuildWorld(World, /*position_start*/ 1, /*position_end*/ 0, TEXT("test/scene.vcd"), TEXT("A"),
+			TEXT("npc_VHumanCombatant"));
+		const FElysiumEntity* Count = World.FindByName(TEXT("counter1"));
+		FElysiumEntity* Actor = World.FindByName(TEXT("A"));
+
+		double T = 0.0;
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")), FElysiumVariant::Void(), 0.0, {}, {});
+		World.Tick(T);
+		T = 1.2; World.Tick(T);
+		TestEqual(TEXT("the scene is running"), CounterValue(Count), 1001.f);
+		TestTrue(TEXT("position_start parked the actor's think"),
+			Actor != nullptr && Actor->NextThink == ELYSIUM_NEVER_THINK);
+
+		World.EnqueueInput(TEXT("scene1"), FName(TEXT("Kill")), FElysiumVariant::Void(), 0.0, {}, {});
+		T = 1.3; World.Tick(T);
+		TestEqual(TEXT("a killed playing scene fires OnCanceled"), CounterValue(Count), 1101.f);
+		T = 1.4; World.Tick(T);
+		TestTrue(TEXT("...and gives its cast their AI back: the actor thinks again"),
+			Actor != nullptr && Actor->NextThink != ELYSIUM_NEVER_THINK);
+		for (int32 i = 0; i < 10; ++i) { T += 1.0; World.Tick(T); }
+		TestEqual(TEXT("...and never completes"), CounterValue(Count), 1101.f);
 	}
 
 	// --- position_start places ONCE and freezes; position_end 2 restores ---------------------
