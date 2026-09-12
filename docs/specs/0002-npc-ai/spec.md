@@ -211,7 +211,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   draws the vision circle and cone, hearing radius, enemy LOS line and held place; an
   `IVisualLoggerDebugSnapshotInterface` on the body actor with `UE_VLOG` shapes at sense
   admission, enemy choice and schedule install.
-- [ ] **15. The think cadence.**
+- [x] **15. The think cadence.**
   Retail: four stamps with four interval laws (`CalcNextUpdateThink` `0x10290720`, `Normal`
   `0x10290b60`, `Move` `0x10290fc0`, `AI` `0x10291230`), distance/PVS/LOS-driven, none reading
   NPC state; due when `(stamp − curtime) ≤ frametime`; `NPCThink` (`0x10292de0`) runs its
