@@ -4,6 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumMoveSolve.h"                  // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumPlayer.h"
+#include "ElysiumRng.h"                        // the see-unknown sweep's two one-shot rolls
 #include "Substrate/ElysiumGameSound.h"       // the raw CSound type words the flank test branches on
 #include "Substrate/ElysiumItemClasses.h"      // FElysiumItem — the active weapon's record
 #include "Substrate/ElysiumItemTable.h"        // FElysiumItemDef / FElysiumWeaponMode
@@ -50,6 +51,13 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	{
 	case EElysiumNpcCond::None:                  return TEXT("COND_NONE");
 	case EElysiumNpcCond::SeeUnknown:            return TEXT("SEE_UNKNOWN");
+	case EElysiumNpcCond::LostUnknown:           return TEXT("LOST_UNKNOWN");
+	case EElysiumNpcCond::IgnoreUnknown:         return TEXT("IGNORE_UNKNOWN");
+	case EElysiumNpcCond::UnknownRunTimer:       return TEXT("UNKNOWN_RUN_TIMER");
+	case EElysiumNpcCond::UnknownAdvancing:      return TEXT("UNKNOWN_ADVANCING");
+	case EElysiumNpcCond::UnknownHolding:        return TEXT("UNKNOWN_HOLDING");
+	case EElysiumNpcCond::UnknownRetreating:     return TEXT("UNKNOWN_RETREATING");
+	case EElysiumNpcCond::InvestigateSight:      return TEXT("INVESTIGATE_SIGHT");
 	case EElysiumNpcCond::SeePlayer:             return TEXT("SEE_PLAYER");
 	case EElysiumNpcCond::TaskFailed:            return TEXT("TASK_FAILED");
 	case EElysiumNpcCond::ScheduleDone:          return TEXT("SCHEDULE_DONE");
@@ -394,6 +402,159 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 				Npc.EnemyMemory.Update(Npc, Handle, Now);
 			}
 		}
+	}
+}
+
+void ElysiumNpcCond::GatherSeeUnknown(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out)
+{
+	FElysiumEntityWorld* World = Npc.World;
+	FElysiumNpcMemory& Memory = Npc.Senses.Memory;
+	// Retail's outer `GatherConditions` (`0x102b27f0`) clears every condition this sweep owns before
+	// the sense pass runs; `Cond.Reset()` at the top of `ElysiumNpcEnemy::GatherConditions` already
+	// does that for the whole pass, so nothing here needs its own unconditional clear except the
+	// mid-function retraction below, which retail performs inside this very function.
+	if (!Out.Has(EElysiumNpcCond::SeeUnknown))
+	{
+		// `FUN_1028e360`: no best-see-unknown handle at all, or one that no longer resolves, answers
+		// "lost" immediately; a still-resolving handle arms the 1.5 s grace on the first miss and
+		// answers "lost" only once it elapses.
+		if (Memory.BestSeeUnknown.IsSet())
+		{
+			const FElysiumEntity* Best = World ? ResolveEnemyHandle(*World, Memory.BestSeeUnknown) : nullptr;
+			if (Best != nullptr)
+			{
+				if (Memory.SeeUnknownGraceUntil < 0.0)
+				{
+					Memory.SeeUnknownGraceUntil = Now + SeeUnknownGraceSeconds;
+					return;
+				}
+				if (Now < Memory.SeeUnknownGraceUntil)
+				{
+					return;
+				}
+				Memory.BestSeeUnknown = FElysiumEntityHandle::Invalid();
+				// Retail dereferences an unresolved `m_hLastSeeUnknown` (`0x1028e411`, `MOV EDX,[ECX]`
+				// with `ECX = 0`) and crashes; the port keeps the last recorded position instead, the
+				// one divergence in this arm.
+				const FElysiumEntity* Last = World ? ResolveEnemyHandle(*World, Memory.LastSeeUnknown) : nullptr;
+				if (Last != nullptr)
+				{
+					Memory.LastSeeUnknownPosition = Last->Origin;
+				}
+			}
+		}
+		if (ElysiumSchedule::MaskHasCondition(Npc.Schedule, Npc, EElysiumNpcCond::LostUnknown))
+		{
+			Out.Set(EElysiumNpcCond::LostUnknown);
+		}
+		return;
+	}
+
+	// Seeing it again resets the grace sentinel unconditionally, whether or not anything below finds
+	// a player to classify.
+	Memory.SeeUnknownGraceUntil = -1.0;
+
+	// Player-only by construction: retail reads the target's cached `CBasePlayer*` at `+0xa8`, which
+	// is null for anything else.
+	if (World == nullptr || Memory.BestSeeUnknown != World->PlayerHandle())
+	{
+		return;
+	}
+	FElysiumPlayer* Player = World->FindPlayer();
+	if (Player == nullptr)
+	{
+		return;
+	}
+
+	if (!Player->IsInStealthPosture())
+	{
+		// Clearly visible: the one-shot roll picks ATTACK_UNKNOWN off the repeat-sightings ramp,
+		// clamped at 100%; the flag then drives UNKNOWN_RUN_TIMER every pass it stands, fresh roll
+		// or not.
+		if (!Npc.NpcFlags.Has(EElysiumNpcFlag::MADE_INITIAL_RESPONSE))
+		{
+			Npc.NpcFlags.Set(EElysiumNpcFlag::MADE_INITIAL_RESPONSE);
+			const int32 Chance = FMath::Min(100, (Memory.SeeUnknownRepeatSightings + 5) * 20);
+			if (ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 99) < Chance)
+			{
+				Npc.NpcFlags.Set(EElysiumNpcFlag::ATTACK_UNKNOWN);
+			}
+			else
+			{
+				Npc.NpcFlags.Clear(EElysiumNpcFlag::ATTACK_UNKNOWN);
+			}
+		}
+		if (Npc.NpcFlags.Has(EElysiumNpcFlag::ATTACK_UNKNOWN))
+		{
+			Out.Set(EElysiumNpcCond::UnknownRunTimer);
+		}
+		if (ShouldInvestigate(Npc, *Player, false))
+		{
+			Out.Set(EElysiumNpcCond::InvestigateSight);
+		}
+		return;
+	}
+
+	// Hidden, crouched-unseen, or grappled: the one-shot roll instead picks IGNORE_UNKNOWN off the
+	// same ramp run the other way, unless `full_investigate` forces every sighting to be answered.
+	if (!Npc.NpcFlags.Has(EElysiumNpcFlag::MADE_INITIAL_RESPONSE))
+	{
+		Npc.NpcFlags.Set(EElysiumNpcFlag::MADE_INITIAL_RESPONSE);
+		const int32 Chance = FMath::Max(0, 50 - Memory.SeeUnknownRepeatSightings * 20);
+		if (Npc.FullInvestigate == 0
+			&& ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).RandRange(0, 99) < Chance)
+		{
+			Npc.NpcFlags.Set(EElysiumNpcFlag::IGNORE_UNKNOWN);
+			Npc.NpcFlags.Clear(EElysiumNpcFlag::FINISHED_IGNORE_UNKNOWN);
+		}
+		else
+		{
+			Npc.NpcFlags.Clear(EElysiumNpcFlag::IGNORE_UNKNOWN);
+		}
+	}
+
+	// The 2-D closing speed: the player's velocity dotted with the normalized direction from the
+	// player toward this NPC. Positive is the player closing in; retail normalizes only the
+	// direction, never the velocity. Converted to Source units per second, the threshold's own.
+	FVector Direction(Npc.Origin.X - Player->Origin.X, Npc.Origin.Y - Player->Origin.Y, 0.0);
+	Direction = Direction.GetSafeNormal();
+	const double ClosingSpeed = (Player->Velocity.X * Direction.X + Player->Velocity.Y * Direction.Y)
+		/ ElysiumMove::U;
+
+	if (Npc.NpcFlags.Has(EElysiumNpcFlag::IGNORE_UNKNOWN))
+	{
+		if (ClosingSpeed > UnknownClosingSpeedThreshold && Now >= Memory.SeeUnknownStartTimer)
+		{
+			Out.Set(EElysiumNpcCond::UnknownAdvancing);
+			Out.Set(EElysiumNpcCond::InvestigateSight);
+			return;
+		}
+		// The retraction: retail clears SEE_UNKNOWN mid-sweep here, overriding what the sense pass
+		// raised earlier in this very same pass.
+		Out.Clear(EElysiumNpcCond::SeeUnknown);
+		if (Npc.NpcFlags.Has(EElysiumNpcFlag::LOOKED_AT_UNKNOWN)
+			|| Npc.NpcFlags.Has(EElysiumNpcFlag::FINISHED_IGNORE_UNKNOWN))
+		{
+			return;
+		}
+		Out.Set(EElysiumNpcCond::IgnoreUnknown);
+		return;
+	}
+
+	Out.Set(EElysiumNpcCond::InvestigateSight);
+	if (ClosingSpeed < UnknownClosingSpeedThreshold)
+	{
+		Out.Set(EElysiumNpcCond::UnknownRetreating);
+	}
+	else if (ClosingSpeed <= UnknownClosingSpeedThreshold)
+	{
+		// Retail quirk: reachable only on exact float equality with the threshold, so effectively
+		// dead. Reproduced rather than fixed.
+		Out.Set(EElysiumNpcCond::UnknownHolding);
+	}
+	else
+	{
+		Out.Set(EElysiumNpcCond::UnknownAdvancing);
 	}
 }
 

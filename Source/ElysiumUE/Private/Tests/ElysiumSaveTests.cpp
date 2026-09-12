@@ -653,10 +653,11 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// that followed them. NpcEnemyMemory likewise sits before later NPC leaf blocks. `SoundSweep`
 	// inserts the sound sweep's committed source and its two clocks INSIDE the NPC memory record,
 	// ahead of the version-gated repeated-damage and detected-attack blocks, so an older payload
-	// would read those bytes as the fields that followed them. Saves are disposable, so the floor
-	// is deliberately moved to that schema rather than migrated.
-	TestEqual(TEXT("the floor is the sound-sweep schema"),
-		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::SoundSweep);
+	// would read those bytes as the fields that followed them. `SeeUnknownSweep` does the same with
+	// the see-unknown grace timer. Saves are disposable, so the floor is deliberately moved to that
+	// schema rather than migrated.
+	TestEqual(TEXT("the floor is the see-unknown-sweep schema"),
+		(int32)FElysiumSaveVersion::MinSupported, (int32)FElysiumSaveVersion::SeeUnknownSweep);
 	// `Feeding` appends an in-progress feed to the END of the player record and reads it behind its
 	// own version, so it is additive: a `ScriptedBody` payload restores with no feed rather than
 	// being refused, and the floor stays where the last breaking schema left it.
@@ -730,8 +731,12 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// restores an inbox with nothing read and nothing deleted, which is what it was saved with);
 	// on the player side the slot it occupies previously held an unwritten `TArray<FString>`
 	// placeholder that nothing ever filled, so an older payload reads and discards it.
+	//
+	// `SeeUnknownSweep` writes the see-unknown sweep's grace timer mid-record in the NPC memory and
+	// drops the two dead latch copies there, so it moves the floor: a `SoundSweep` payload is
+	// refused.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::SoundSweep);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::SeeUnknownSweep);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -759,7 +764,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the active weapon's hidden bit"),
 			(int32)FElysiumSaveVersion::WeaponHidden),
 		TPair<const TCHAR*, int32>(TEXT("the terminal's mail flags and the player's global email"),
-			(int32)FElysiumSaveVersion::TerminalEmail) })
+			(int32)FElysiumSaveVersion::TerminalEmail),
+		TPair<const TCHAR*, int32>(TEXT("the sound sweep's committed source"),
+			(int32)FElysiumSaveVersion::SoundSweep) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is below the disposable-schema floor"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported >= Appended.Value);

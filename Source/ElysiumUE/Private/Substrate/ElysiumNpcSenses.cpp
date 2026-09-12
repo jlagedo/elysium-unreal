@@ -242,10 +242,7 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << SeeUnknownRepeatSightings;
 	Ar << SeeUnknownRunTimer;
 	Ar << SeeUnknownStartTimer;
-	uint8 IgnoreUnknown = bIgnoreUnknown ? 1 : 0;
-	uint8 MadeInitialUnknownResponse = bMadeInitialUnknownResponse ? 1 : 0;
-	Ar << IgnoreUnknown;
-	Ar << MadeInitialUnknownResponse;
+	Ar << SeeUnknownGraceUntil;
 	SerializeSound(LastSoundCombat);
 	SerializeSound(LastSoundBulletImpact);
 	SerializeSound(LastSoundFlinch);
@@ -254,8 +251,8 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	SerializeSound(LastSoundPhysicsDanger);
 	SerializeSound(LastSoundWorld);
 	SerializeSound(BestSound);
-	// The sound sweep's committed source and its two clocks. Version `SoundSweep` is the save floor,
-	// so this is unconditional -- an older payload is refused whole rather than half-read.
+	// The sound sweep's committed source and its two clocks. Below the save floor, so this is
+	// unconditional -- an older payload is refused whole rather than half-read.
 	Ar << BestSoundSource;
 	Ar << NextInvestigateSoundTime;
 	Ar << NextSeeSoundSourceTime;
@@ -295,8 +292,6 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 		bPlayerVisible = PlayerVisible != 0;
 		bPlayerInPvs = PlayerInPvs != 0;
 		bPlayerLos = PlayerLos != 0;
-		bIgnoreUnknown = IgnoreUnknown != 0;
-		bMadeInitialUnknownResponse = MadeInitialUnknownResponse != 0;
 		EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0,
 			ElysiumNpcSense::EnemyLosFailureLimit);
 		// A negative accumulator would make the 15% test unfalsifiable rather than merely wrong, so
@@ -704,7 +699,6 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 			if (Memory.LastSeeUnknown == Candidate->Handle)
 			{
 				++Memory.SeeUnknownRepeatSightings;
-				Memory.bIgnoreUnknown = Memory.bMadeInitialUnknownResponse = false;
 				Npc.NpcFlags.Clear(EElysiumNpcFlag::IGNORE_UNKNOWN);
 				Npc.NpcFlags.Clear(EElysiumNpcFlag::MADE_INITIAL_RESPONSE);
 			}
@@ -715,7 +709,6 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 				Memory.SeeUnknownRepeatSightings = 0;
 				Memory.SeeUnknownRunTimer = Now + ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(10.f, 20.f);
 				Memory.SeeUnknownStartTimer = Now + ElysiumRng::Stream(EElysiumRngStream::NpcSchedule).FRandRange(5.f, 10.f);
-				Memory.bIgnoreUnknown = Memory.bMadeInitialUnknownResponse = false;
 				Npc.NpcFlags.Clear(EElysiumNpcFlag::IGNORE_UNKNOWN);
 				Npc.NpcFlags.Clear(EElysiumNpcFlag::MADE_INITIAL_RESPONSE);
 				Npc.NpcFlags.Clear(EElysiumNpcFlag::LOOKED_AT_UNKNOWN);
@@ -727,7 +720,6 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		if (Memory.BestSeeUnknown == Candidate->Handle)
 		{
 			Memory.BestSeeUnknown = FElysiumEntityHandle::Invalid();
-			Memory.bIgnoreUnknown = Memory.bMadeInitialUnknownResponse = false;
 			Npc.NpcFlags.Clear(EElysiumNpcFlag::IGNORE_UNKNOWN);
 			Npc.NpcFlags.Clear(EElysiumNpcFlag::MADE_INITIAL_RESPONSE);
 			Npc.NpcFlags.Clear(EElysiumNpcFlag::LOOKED_AT_UNKNOWN);

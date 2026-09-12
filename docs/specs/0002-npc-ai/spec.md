@@ -266,7 +266,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Oracle: § "The three `GatherConditions` sweeps and the interest predicate", § "The
   `INVESTIGATE` family, decoded" (selection).
   Size: M. Effort: Sonnet / high.
-- [ ] **10b. The see-unknown sweep.**
+- [x] **10b. The see-unknown sweep.**
   Retail: `0x102b15c0`: `m_hBestSeeUnknown` +0x6088 with 1.5 s grace +0x6084,
   `m_vecLastSeeUnknownPos` +0x6090; the one-shot `MADE_INITIAL_RESPONSE` roll over
   `m_iSeeUnknownRepeatSightings` +0x60a4 and `full_investigate` +0x6340 setting

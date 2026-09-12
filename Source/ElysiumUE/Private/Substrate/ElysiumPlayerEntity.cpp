@@ -1113,6 +1113,17 @@ void FElysiumPlayer::SyncFromBody()
 	// teleports the pawn — every frame, to where it already is.
 	Origin = Feet;
 	Angles = ElysiumPlayerView::ToSource(View);
+	// `CBasePlayer+0x3d4` `m_vecVelocity`, world cm/s. The see-unknown sweep's closing speed
+	// (`0x102b15c0`) and the enemy memory's observed velocity read it. The sample carries the body's
+	// motion in its facing frame, so it goes back to world axes here; a body with no published
+	// sample keeps its last velocity, as it keeps its last position above.
+	FElysiumLocomotionSample Sample;
+	if (Embodiment->SamplePlayerLocomotion(Sample))
+	{
+		const FVector Planar = FRotator(0.0f, Sample.FacingYaw, 0.0f)
+			.RotateVector(FVector(Sample.LocalVelocity.X, Sample.LocalVelocity.Y, 0.0));
+		Velocity = FVector(Planar.X, Planar.Y, Sample.LocalVelocity.Z);
+	}
 }
 
 void FElysiumPlayer::OnRuntimeTransformChanged()

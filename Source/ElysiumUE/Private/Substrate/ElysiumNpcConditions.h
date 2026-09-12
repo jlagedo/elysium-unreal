@@ -38,6 +38,22 @@ enum class EElysiumNpcCond : uint8
 	None = 0x00,
 	SeeUnknown = 0x01,
 
+	// --- The see-unknown sweep's other six products, `FUN_102b15c0` -------------------------------
+	// Story 10b. `LOST_UNKNOWN` is the "stopped seeing it" edge, gated on the running program's mask
+	// like the sound sweep's tail; `IGNORE_UNKNOWN` and the three closing-speed conditions are read
+	// only while `SEE_UNKNOWN` still stands this pass, and `IGNORE_UNKNOWN`'s own arm can retract
+	// that very bit mid-sweep. `INVESTIGATE_SIGHT` is the sight analogue of `INVESTIGATE_SOUND` --
+	// the interest predicate's other named caller.
+	LostUnknown       = 0x02,
+	IgnoreUnknown     = 0x03,
+	UnknownRunTimer   = 0x04,
+	UnknownAdvancing  = 0x05,
+	// Retail quirk: reachable only on exact float equality with the closing-speed threshold, so
+	// effectively dead. Reproduced rather than fixed.
+	UnknownHolding    = 0x06,
+	UnknownRetreating = 0x07,
+	InvestigateSight  = 0x26,
+
 	// --- Recovered identities --------------------------------------------------------------------
 	// --- The four law conditions ---
 	// The registry numbers the survey states in decimal (`docs/vtmb/npc-ai-reverse-engineering.md`
@@ -303,10 +319,52 @@ namespace ElysiumNpcCond
 	 */
 	bool ShouldInvestigate(const FElysiumNpc& Npc, const FElysiumEntity& Candidate, bool bCombatMode);
 
+	// `_DAT_1044f02c`, the see-unknown sweep's "stopped seeing it" grace: `+0x6084 = curtime + 1.5`.
+	// Armed on the first miss, read as a deadline on every miss after.
+	inline constexpr double SeeUnknownGraceSeconds = 1.5;
+	// `_DAT_1044eb0c`, the see-unknown sweep's 2-D closing-speed edge, in Source units per second (the
+	// sweep converts the player's cm/s velocity before comparing). Strictly below is retreating,
+	// strictly above is advancing, and the single point of exact equality is `UNKNOWN_HOLDING` --
+	// see its own comment on the enum identity.
+	inline constexpr double UnknownClosingSpeedThreshold = 20.0;
+
+	/**
+	 * `FUN_102b15c0`, the first of `CAI_BaseNPCTroika::GatherConditions`' three sweeps (before the
+	 * comfort sweep `0x102b1a20`, not built: story 10c, and `GatherSounds` below).
+	 *
+	 * The see-unknown channel only tracks one entity, `Memory.BestSeeUnknown`, and is player-only by
+	 * construction: retail reads the target's cached `CBasePlayer*`, which is null for anything
+	 * else. Walked:
+	 *
+	 *  1. Not seeing it this pass (`SEE_UNKNOWN` unset, which `GatherSight` has already gathered
+	 *     earlier in the same pass): no tracked entity, or one whose handle no longer resolves,
+	 *     answers `LOST_UNKNOWN` (gated on the running program's mask) immediately. A still-live
+	 *     handle arms the 1.5 s grace on the first miss and answers nothing until it elapses, then
+	 *     drops the handle, remembers its last position, and answers `LOST_UNKNOWN`.
+	 *  2. Seeing it: reset the grace sentinel. Not the player, or no player resolved, is a return
+	 *     with nothing else touched.
+	 *  3. Not in "stealth posture" (`FElysiumPlayer::IsInStealthPosture`, i.e. plainly visible): a
+	 *     ONE-SHOT `MADE_INITIAL_RESPONSE` roll sets or clears `ATTACK_UNKNOWN` off a chance
+	 *     `min(100, (repeat_sightings + 5) * 20)` -- always 100, but the draw is still taken; `ATTACK_UNKNOWN` standing (fresh or carried from
+	 *     an earlier pass) raises `UNKNOWN_RUN_TIMER`; then `ShouldInvestigate` gates
+	 *     `INVESTIGATE_SIGHT`.
+	 *  4. In stealth posture (hidden, crouched-unseen, or grappled): the same one-shot roll instead
+	 *     sets or clears `IGNORE_UNKNOWN` off `max(0, 50 - repeat_sightings * 20)`, skipped entirely
+	 *     under `full_investigate`. Then the 2-D closing speed -- the player's velocity dotted with
+	 *     the normalized direction from the player toward this NPC -- classifies:
+	 *       - `IGNORE_UNKNOWN` standing: closing past the threshold AND `SeeUnknownStartTimer`
+	 *         elapsed raises `UNKNOWN_ADVANCING` + `INVESTIGATE_SIGHT`; otherwise this is where
+	 *         retail RETRACTS `SEE_UNKNOWN` mid-sweep, and raises `IGNORE_UNKNOWN` unless
+	 *         `LOOKED_AT_UNKNOWN` or `FINISHED_IGNORE_UNKNOWN` already stands.
+	 *       - Otherwise: `INVESTIGATE_SIGHT`, then `UNKNOWN_RETREATING` / `UNKNOWN_HOLDING` (the
+	 *         dead exact-equality case) / `UNKNOWN_ADVANCING` by the same threshold.
+	 */
+	void GatherSeeUnknown(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
+
 	/**
 	 * `FUN_102b1cd0`, the third of `CAI_BaseNPCTroika::GatherConditions`' three sweeps (after the
-	 * see-unknown sweep `0x102b15c0` and the comfort sweep `0x102b1a20`, neither of which is built:
-	 * stories 10b and 10c).
+	 * see-unknown sweep `0x102b15c0` and the comfort sweep `0x102b1a20`, the latter of which is not
+	 * built: story 10c).
 	 *
 	 * It turns raw `HEAR_*` into the one condition alert selection can act on. Walked:
 	 *

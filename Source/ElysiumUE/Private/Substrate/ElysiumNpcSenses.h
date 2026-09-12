@@ -225,8 +225,12 @@ struct FElysiumNpcMemory
 	int32 SeeUnknownRepeatSightings = 0;
 	double SeeUnknownRunTimer = -1.0;
 	double SeeUnknownStartTimer = -1.0;
-	bool bIgnoreUnknown = false;
-	bool bMadeInitialUnknownResponse = false;
+	// The `IGNORE_UNKNOWN` / `MADE_INITIAL_RESPONSE` latches live in `FElysiumNpc::NpcFlags`
+	// (`m_bfAINPCFlags` +0x14b8), where retail keeps them; the memory carries no copy.
+	// `+0x6084`, `FIELD_TIME`. Sentinel `-1.0` means "no grace armed"; the see-unknown sweep
+	// (`ElysiumNpcCond::GatherSeeUnknown`, story 10b) arms it to `curtime + 1.5` on the first missed
+	// pass and answers `LOST_UNKNOWN` once `Now` reaches it.
+	double SeeUnknownGraceUntil = -1.0;
 
 	void Reset();
 	void Serialize(FElysiumSaveArchive& Ar);

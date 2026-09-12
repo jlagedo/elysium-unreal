@@ -199,7 +199,7 @@ public:
 	// so an unrecognised value reaches the predicate's own refusal, as it does in retail.
 	//
 	// `full_investigate` (`m_bFullInvestigate`, `+0x6340`) is read by the see-unknown sweep's
-	// one-shot `ATTACK_UNKNOWN`/`IGNORE_UNKNOWN` roll, which is not built yet.
+	// one-shot `IGNORE_UNKNOWN` roll (`ElysiumNpcCond::GatherSeeUnknown`): nonzero skips the draw.
 	int32 InvestigateMode = 0;
 	int32 InvestigateModeCombat = 0;
 	int32 FullInvestigate = 0;

@@ -1336,6 +1336,108 @@ of the two previously named iterates a list:
   impact > player > danger > physics danger > world. Then `COND_HEAR_FLANK_SOUND` (0x33) and a
   `COND_SEE_SOUND_SOURCE` (0x2d) tail. Walked whole below.
 
+#### The see-unknown sweep `0x102b15c0`, walked
+
+Read off the decompilation and disassembly while porting story 10b. `this+0x1821` (dword index) is
+`+0x6084`, the same field the summary above names as the grace timer; `this+0x52e` is `+0x14b8`,
+`m_bfAINPCFlags` word one, read and written as a raw dword throughout.
+
+**Entry.** `HasCondition(SEE_UNKNOWN 0x01)` — `0x10269aa0`, needs no schedule — is the whole branch.
+
+**Not seeing it (`SEE_UNKNOWN` false).** Calls `FUN_1028e360(this)`, walked next; a false return is
+a plain `return` with nothing touched. A true return asks `0x10269c70(this, LOST_UNKNOWN 0x02)` —
+the mask-only tester `GatherSounds`'s doc also names, needing an installed schedule and the bit in
+the mask, never the condition set — and only then `SetCondition(LOST_UNKNOWN)`.
+
+`FUN_1028e360`, the grace timer, in full:
+
+```
+m_hBestSeeUnknown (+0x6088) == -1        -> return true                    (nothing tracked)
+resolve the handle; slot dead/mismatched -> return true                    (stale, no grace)
+else, the handle is live:
+  +0x6084 == 0xbf800000 (-1.0f, the sentinel)
+    -> +0x6084 = curtime + 1.5f (_DAT_1044f02c)   ; return false           (arm the grace)
+  curtime < +0x6084
+    -> return false                                                       (still holding)
+  else (grace elapsed):
+    +0x6088 = -1                                                          (drop the handle)
+    resolve m_hLastSeeUnknown (+0x608c); GetAbsOrigin() (vfunc +0x364) into +0x6090/+0x6094/+0x6098
+    -> return true
+```
+
+The `+0x608c` resolve has no null test: an unresolved handle leaves `ECX = 0` (`0x1028e40f`) and
+`0x1028e411 MOV EDX,[ECX]` faults. The port keeps the last recorded position instead.
+
+A `true` return is "answer `LOST_UNKNOWN` now" in every one of its three arms (nothing tracked, a
+stale handle, or the grace has elapsed) — only the third also writes `m_vecLastSeeUnknownPos`
+(`+0x6090`) and drops the handle; the other two leave `+0x6088` exactly as they found it. `false` is
+the two "wait" arms: the grace was just armed, or it is still running.
+
+**Seeing it (`SEE_UNKNOWN` true).** `+0x6084 = 0xbf800000` unconditionally — every real sighting
+resets the grace sentinel, whether or not anything below finds a player to classify. Then the
+committed `m_hBestSeeUnknown` entity is resolved (through slot 586, `0x101aa5d0`, which returns
+`m_hBestSeeUnknown` for every Troika class) and its `+0xa8` field (the cached `CBasePlayer*`,
+the same field the outer-band attention path `0x102b3e00` reads) is tested: null is a bare `return`,
+so a tracked non-player entity is never classified past this point — the channel is player-only by
+construction, not by a relationship or classname test.
+
+`this+0x14bb` is the top byte of `m_bfAINPCFlags` (bits 24–31), so `~byte & 1` is exactly
+"`MADE_INITIAL_RESPONSE` (`0x01000000`) is NOT set" — the one-shot latch both rolls below share.
+
+`bVar3 = FUN_101671a0(player)` — the same admission test the outer-band path uses, true for a player
+who is obfuscated (`0x10146a80`: the stat-8 effect list non-empty and `+0x14dc` set), or in a grapple
+with `+0x1540 == 3`, or `FL_DUCKING` and `!0x101672d0`; ported as
+`FElysiumPlayer::IsInStealthPosture()`. It is a stealth test, not a visibility test. **`!bVar3` (plainly visible)**
+takes the first roll; **`bVar3` (hidden/grappled/crouched-unseen)** takes the second and the
+closing-speed classification.
+
+**Roll A — plainly visible.** Only when `MADE_INITIAL_RESPONSE` is unset: set it; `threshold =
+min(100, (m_iSeeUnknownRepeatSightings(+0x60a4) + 5) * 20)`; `RandomInt(0, 99) < threshold` sets
+`ATTACK_UNKNOWN` (`0x00800000`), else clears it. **The threshold is never below 100** for any
+`repeat_sightings >= 0` (the only reachable domain — the field is only ever `++`'d or zeroed), so
+the roll is retail dead code on its own terms: `ATTACK_UNKNOWN` deterministically sets every time
+this arm's one-shot fires — but the `RandomInt(0, 99)` draw is still taken, so the stream advances. Then, UNCONDITIONALLY (latched or freshly rolled): `ATTACK_UNKNOWN`
+standing sets `COND_UNKNOWN_RUN_TIMER` (0x04); `ShouldInvestigate(this, player, false)` (`0x102b3270`
+via `0x1000e5e3`) gates `SetCondition(INVESTIGATE_SIGHT 0x26)`. Returns.
+
+**Roll B — hidden/grappled/crouched-unseen.** Only when `MADE_INITIAL_RESPONSE` is unset: set it;
+`threshold = max(0, 50 - repeat_sightings * 20)` (no upper clamp — 50 is already the ceiling at
+`repeat_sightings == 0`); `m_bFullInvestigate (+0x6340) == 0 && RandomInt(0, 99) < threshold` sets
+`IGNORE_UNKNOWN` (`0x00400000`, also clearing `FINISHED_IGNORE_UNKNOWN` `0x02000000`), else clears
+`IGNORE_UNKNOWN`. Unlike Roll A this ceiling IS reachable (50% at zero repeats, 0% from three on),
+so the roll is live.
+
+Then, unconditionally, the 2-D closing speed. `(dx, dy, dz) = GetAbsOrigin(this) -
+GetAbsOrigin(player)` is written to a scratch triple (`[ESP+0x1c]`); `(dx, dy, 0)` is copied to
+`[ESP+0x10]` and normalized in place by `VectorNormalize` (`0x1057966c`, `ECX = &[ESP+0x10]`), whose
+returned length is discarded (`FSTP ST0`). `fVar2 = dot((dx, dy)_normalized, (vel.x, vel.y))` reads
+that normalized vector, where `vel` is the player's `m_vecVelocity` (`CBasePlayer+0x3d4`, copied to
+`[ESP+0x28]` before the origins are fetched). The velocity is never normalized; `fVar2` is Source
+units per second. Positive is the player closing on this NPC. The port's player velocity is world
+cm/s, fed each frame by `FElysiumPlayer::SyncFromBody`, and is divided by `ElysiumMove::U` before the
+compare.
+
+- `IGNORE_UNKNOWN` standing: `fVar2 > 20.0f (_DAT_1044eb0c)` **and**
+  `m_flSeeUnknownStartTimer (+0x60a0) <= curtime` → `SetCondition(UNKNOWN_ADVANCING 0x05)` +
+  `SetCondition(INVESTIGATE_SIGHT)`, return. Otherwise: `ClearCondition(SEE_UNKNOWN 0x01)` — the
+  mid-sweep retraction, overriding what the sense pass raised earlier in this same
+  `GatherConditions` call — then, unless `LOOKED_AT_UNKNOWN (0x00200000)` or
+  `FINISHED_IGNORE_UNKNOWN` already stands, `SetCondition(IGNORE_UNKNOWN 0x03)`. Return either way.
+- Not ignoring: `SetCondition(INVESTIGATE_SIGHT)` unconditionally, then `fVar2 < 20.0f` →
+  `UNKNOWN_RETREATING` (0x07); else `fVar2 <= 20.0f` (reachable only on exact equality, since `<`
+  already took the strictly-below case) → `UNKNOWN_HOLDING` (0x06), retail's own dead arm; else
+  `UNKNOWN_ADVANCING` (0x05).
+
+Constant `_DAT_1044eb0c = 20.0f` and `_DAT_1044f02c = 1.5f` are shared `.rdata` pool values with
+dozens of unrelated readers (damage force vectors, a rat-plane solver, weapon code), so neither can
+be pinned to this sweep from the corpus's referrer list alone; both are read here as the closing-
+speed edge and the grace duration respectively, matching the summary above.
+
+Job done as `ElysiumNpcCond::GatherSeeUnknown`, called from `ElysiumNpcEnemy::GatherConditions`
+immediately after `GatherSight` (which raises `SEE_UNKNOWN` from `TickSight`'s outer-band write) and
+before `GatherSounds`, matching retail's own see-unknown / comfort / sound order — comfort (story
+10c) is the still-missing middle step. `[VtMB]`
+
 #### The sound sweep `0x102b1cd0`, walked
 
 Read off the decompilation while porting story 10a; it corrects the summary above in three places.

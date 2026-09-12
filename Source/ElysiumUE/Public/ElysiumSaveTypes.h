@@ -88,6 +88,9 @@ struct FElysiumSaveVersion
 		DisciplineFlags = 34, // HitInfo cleanup masks, common misc word and ordered comfort targets
 		StealthSampleValidity = 35, // measured light remains distinguishable from unavailable queries
 		SoundSweep = 36, // the sound sweep's committed source and its two investigate clocks
+		// The see-unknown sweep's "stopped seeing it" grace timer beside the other see-unknown fields,
+		// and the memory's two dead latch copies dropped: a mid-record change, so the floor moves.
+		SeeUnknownSweep = 37,
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
@@ -105,7 +108,7 @@ struct FElysiumSaveVersion
 	// `NpcEnemyMemory` inserts the CAI_Memory block ahead of later NPC leaf blocks. Saves are
 	// disposable, so the build refuses every older payload rather than attempting a migration or
 	// replaying a shifted leaf.
-	static constexpr int32 MinSupported = SoundSweep;
+	static constexpr int32 MinSupported = SeeUnknownSweep;
 
 	static const FGuid GUID;
 };
