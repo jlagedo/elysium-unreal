@@ -71,7 +71,10 @@ The seven Society hunters and `sentry2` at the far end of the BSP are an Unoffic
 level-select hub, not tutorial content.
 
 ## Stories
-In build order within each theme. A story is done when every behaviour it lists is in the
+In build order within each theme. Across themes the open order is 15 first, then 10a, 10b,
+10c, 10g, 11, 10d, 10e, 10f, 10h, 12a, 12b, 13b, 16a, 16b, 16c, 17, 21a, 21b, 21c, 22
+(decided 2026-09-12: the cadence before any program family, the executors retired before
+any selector). A story is done when every behaviour it lists is in the
 substrate and its recovery is written in the oracle section it names. Numbers are stable ids
 cited by other documents; a split keeps the number and adds a letter. Each open story carries
 the retail contract the code must match, the job, and what it consumes or provides.
@@ -202,8 +205,47 @@ the retail contract the code must match, the job, and what it consumes or provid
   `BuildScheduleTestBits` withholds it while `COWERING`.
   Job: the sweep and the condition over the comfort list 8 already keeps.
   Oracle: § "The three `GatherConditions` sweeps and the interest predicate".
+- [ ] **10g. The patrol programs.**
+  Retail: 0x64 / 0x66 / 0x68 `INVESTIGATE_NODE` / `_WALK` / `_HUNT`; `SelectSchedule` case 1
+  returns the patrol path object's own id (`m_sppPatrolPath` +0x6590 → `+4`), one of these
+  three or `FOLLOW_PATROL_PATH` 0x65/0x67/0x69. Patrol is a schedule like any other: an alert
+  or combat program replaces it through `SetSchedule`, and case 1 re-selects it from the path
+  object when that program ends.
+  Job: the three programs and `GET_PATH_TO_PATROL_POINT` 0x7a, `NEXT_PATROL_POINT` 0x7d,
+  `FACE_PATROL_INTEREST` 0xb3, `DO_PATROL_INTEREST_ACTIVITY` 0xb5, `FACE_IDEAL` 0x2b; the
+  path object's id read in the idle selector (step 3), running under the ordinary `Schedule`
+  body owner. Retires the port's patrol executor (`ThinkPatrol`, `IssuePatrolMove`,
+  `bPatrolActive` / `bMoveIssued` / `bWalkingAnimation`, the `Patrol` body owner and its
+  suspend/resume path in `ThinkSchedulePolicy`) and the idle and alert selectors' `None`
+  return on `bPatrolActive`; the saved route state moves into the schedule block. Save files
+  are disposable.
+  Decided 2026-09-12: patrol and interesting places (11) become kernel programs here, before
+  10d; no selector returns `None` to defer to an executor after this story, and no routing
+  branch is added to `ThinkSchedulePolicy` to bridge one.
+  Oracle: § "The `INVESTIGATE` family, decoded", § "Followers, patrols, and loitering".
+- [ ] **11. Interesting places: the selector arms.**
+  Retail: arms `0xff SETUP` / `0x100 WALK` / `0x102 CROSSWALK` / `0x105 LOITER` / `0x106
+  INTERACT`; the last two unreachable (no setter for `SHOULD_LOITER`, no caller pairs NPCs for
+  `SHOULD_INTERACT`; do not invent one); `group_id` and `interesting_place_groups` are 1-based
+  index lists → masks, empty `interesting_place_groups` matches nothing; eligibility
+  `0x102dad60`; `RandomFloat(min_time, max_time)` into `m_flWaitFinished`; `Enable`/`Disable`
+  on the place. The visit is a schedule: an alert or combat program replaces it through
+  `SetSchedule` and case 1 re-selects a place when that program ends.
+  Job: each of the three reachable arms and its program compared against retail and ported;
+  the masks; the wait; the arms read in the idle selector (step 4), running under the
+  ordinary `Schedule` body owner. Retires the port's ambient executor (`ThinkAmbient`,
+  `EAmbientPhase`, `ClaimAmbientSpot` / `BeginAmbientUse` / `BeginAmbientLeave` /
+  `FinishAmbientUse`, the `Ambient` body owner and its finish-on-claim path in
+  `ThinkSchedulePolicy`) and the idle and alert selectors' `None` return on
+  `bUseInteresting`; the held place index and the wait deadline become the program's
+  operands in the schedule block. Same decision as 10g.
+  Oracle: § "Interesting places: the selector, the programs, the wait", § "Interesting-place
+  eligibility".
 - [ ] **10d. The alert selectors and the ladder.**
-  Retail: `SelectSchedule` (`0x102af660`) case 3 in order: see-unknown selector
+  Retail: `SelectSchedule` (`0x102af660`) case 3 runs regardless of what the NPC was doing:
+  an investigate program replaces a patrol or interesting-place program through
+  `SetSchedule`, and case 1 re-selects that program when the investigation ends (10g, 11).
+  Case 3 in order: see-unknown selector
   `FUN_102b8a60`, damage `FUN_102b8c40` → 0x8a, `DETECTED_ATTACK` 0x0b → 0x56, door
   obstruction `FUN_102b7370`, sound selector `FUN_102b9060`, else 0x4b `ALERT_WAIT`. The ladder
   `FUN_102b8980` on `m_eAlertLevel` +0x63f4 (saved, zeroed only at Spawn: once per life;
@@ -239,30 +281,11 @@ the retail contract the code must match, the job, and what it consumes or provid
   `CLEAR_NPC_FLAG` 0x101, `GET_PATH_TO_LASTPOSITION` 0x1c, `WALK_PATH` 0x23, `FACE_LASTANGLE`
   0x11d, `CLEAR_LASTPOSITION` 0x18, `FORGET` 0x6d, `PLAY_SEQUENCE` 0x52.
   Oracle: § "The `INVESTIGATE` family, decoded".
-- [ ] **10g. The patrol programs.**
-  Retail: 0x64 / 0x66 / 0x68 `INVESTIGATE_NODE` / `_WALK` / `_HUNT`; `SelectSchedule` case 1
-  returns the patrol path object's own id (`m_sppPatrolPath` +0x6590 → `+4`), one of these
-  three or `FOLLOW_PATROL_PATH` 0x65/0x67/0x69.
-  Job: the three programs and `GET_PATH_TO_PATROL_POINT` 0x7a, `NEXT_PATROL_POINT` 0x7d,
-  `FACE_PATROL_INTEREST` 0xb3, `DO_PATROL_INTEREST_ACTIVITY` 0xb5, `FACE_IDEAL` 0x2b; the
-  path object's id read in the idle selector.
-  Oracle: § "The `INVESTIGATE` family, decoded", § "Followers, patrols, and loitering".
 - [ ] **10h. The hunt-investigation programs.**
   Retail: 0x7f, 0x80, 0x81, 0x82 and the hunt-state case 0xb order (raw `HEAR_*` accepted
   there, unlike alert). Reached in retail only by script, by name, or by `DoFrenzy` (16c).
   Job: the four programs; case 0xb behind the `"0"` default.
   Oracle: § "The `INVESTIGATE` family, decoded" (Case 0xb).
-- [ ] **11. Interesting places: the selector arms.**
-  Retail: arms `0xff SETUP` / `0x100 WALK` / `0x102 CROSSWALK` / `0x105 LOITER` / `0x106
-  INTERACT`; the last two unreachable (no setter for `SHOULD_LOITER`, no caller pairs NPCs for
-  `SHOULD_INTERACT`; do not invent one); `group_id` and `interesting_place_groups` are 1-based
-  index lists → masks, empty `interesting_place_groups` matches nothing; eligibility
-  `0x102dad60`; `RandomFloat(min_time, max_time)` into `m_flWaitFinished`; `Enable`/`Disable`
-  on the place. The port has the step and the place entity.
-  Job: each of the three reachable arms and its program compared against retail and ported;
-  the masks; the wait.
-  Oracle: § "Interesting places: the selector, the programs, the wait", § "Interesting-place
-  eligibility".
 - [ ] **12a. The reaction keyfields.**
   Retail: `percent_occluded_*` normalized at Spawn to a cumulative ladder, `_chase` forced to
   100 and never compared, rolled only in the ranged occluded selector `0x102b8320`;
@@ -307,9 +330,15 @@ the retail contract the code must match, the job, and what it consumes or provid
   `SCHEDULE_CHANGED`, LOS and dialogue pin normal and AI to 0.1 s; `SetPlayerLOS` at most every
   2 s with the 512-unit bypass and 8 s hysteresis. The port runs one `NextThink`, bound 10
   always, no `WasBumped`; 13 already resets the four stamps.
-  Job: the four stamps and laws on the NPC, the reduced mode gating the condition pass and the
-  completion bound, the pins, `WAS_BUMPED`.
-  Provides: the clock 16's and 17's programs run on.
+  Job: the four stamps and laws on the NPC, `IsThinkDue` per stamp, the reduced mode gating the
+  condition pass and the completion bound, the pins, `WAS_BUMPED`; every literal `NextThink`
+  write in `ElysiumNpc.cpp` (44 sites, 0.05–2.0 s) replaced by a stamp write, so no cadence
+  literal remains when the story closes; the shared test fixture stops pinning `NextThink` to
+  never and cases advance the world clock instead, so the cadence is under test rather than
+  bypassed.
+  Provides: the clock every later program family runs on (10d–10h, 16, 17, 21): `DELAY_INTERRUPTS`'
+  "one think", the sweeps' reduced-mode gating, the follower distance checks and the squad's
+  0.2 s sighting window are all stated in thinks.
   Oracle: § "The think cadence, decoded". Unrecovered: `m_bfNPCStateFlags` bit 3 (forces
   PVS/LOS true), the subclass writers of `m_flNextAIThink` (`CNPC_VCamera`, `CNPC_VNewscaster`),
   `CAI_BaseNPC+0x98`'s entity, slot 578 (the survivor callback), slot 168 (the `GetEnemy`
