@@ -1115,7 +1115,26 @@ void FElysiumNpc::RunConditionPass(double Now, bool bReduced)
 		// `GatheredAt` is deliberately NOT advanced. It belongs to the next FULL pass to consume,
 		// and advancing it here would swallow the edge.
 		ElysiumNpcCond::GatherDamage(*this, Cognition.GatheredAt, Cognition.Conditions);
+		ElysiumNpcCond::GatherBump(*this, Cognition.GatheredAt, Cognition.Conditions);
 	}
+}
+
+void FElysiumNpc::OnBumped(double Now)
+{
+	// The NPC half of the player's touch handler `0x10147690`. Its whole body, in order: the
+	// toucher takes `MiscFlag 0x100` (`Obf_Bumped_Object`); then, only when the toucher is a player
+	// (`+0xa8`) and the touched thing is a Troika NPC (`+0x98`), `ConditionInterruptsCurrent
+	// Schedule(WAS_BUMPED)` (`0x10269c70`) is consulted and the bit set only if it passes.
+	//
+	// That guard is the recovered fact worth having: retail does NOT raise `WAS_BUMPED`
+	// unconditionally. The bit never stands on an NPC whose running program does not list it, so
+	// no program in this runtime observes a bump today -- and the day 10d/10e lands one that does,
+	// this answers without a second producer being invented.
+	if (!ElysiumSchedule::MaskHasCondition(Schedule, *this, EElysiumNpcCond::WasBumped))
+	{
+		return;
+	}
+	Senses.Memory.LastBumpTime = Now;
 }
 
 bool FElysiumNpc::TickScriptWatchdog()

@@ -544,6 +544,11 @@ public:
 	// NOT what `TaskFail` (`0x1029adb0`) does: that one writes the four and deliberately leaves
 	// `m_flNextThink` alone, and the difference is observable -- see `FElysiumNpc::TaskFail`.
 	void ResetThinkTimers(double Now);
+	// `COND_WAS_BUMPED`'s NPC-side producer, the second half of the player's touch handler
+	// `0x10147690`. **SEAM**: no caller. The bump EVENT is the locomotion layer's -- see
+	// `ElysiumDisciplines::NotifyBumped`, which states the same absence -- and this is the arm the
+	// producer calls when it lands.
+	void OnBumped(double Now);
 	// `m_scriptState in {4,5,6}`, the third term of `ShouldThinkFrequently()` (`0x102c2430`) --
 	// the aiscripted states in which a beat is actively driving this body. Mapped rather than
 	// transcribed: this runtime spells the same fact as a scripted owner holding the body or a

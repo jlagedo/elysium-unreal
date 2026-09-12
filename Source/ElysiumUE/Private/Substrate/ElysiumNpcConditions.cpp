@@ -65,6 +65,7 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	case EElysiumNpcCond::Knockback:             return TEXT("KNOCKBACK");
 	case EElysiumNpcCond::WaitingAttackTime:     return TEXT("WAITING_ATTACK_TIME");
 	case EElysiumNpcCond::HitByDoor:             return TEXT("HIT_BY_DOOR");
+	case EElysiumNpcCond::WasBumped:             return TEXT("WAS_BUMPED");
 	case EElysiumNpcCond::WeaponThroughWall:     return TEXT("WEAPON_THROUGH_WALL");
 	case EElysiumNpcCond::NoPrimaryAmmo:         return TEXT("NO_PRIMARY_AMMO");
 	case EElysiumNpcCond::SeeHate:               return TEXT("SEE_HATE");
@@ -179,6 +180,20 @@ void ElysiumNpcCond::AccumulateDamage(FElysiumNpcMemory& Memory, int32 Committed
 		Memory.RepeatedDamageAccumulated = 0;
 	}
 	Memory.RepeatedDamageAccumulated += CommittedDamage;
+}
+
+void ElysiumNpcCond::GatherBump(const FElysiumNpc& Npc, double PreviousGatherTime,
+	FElysiumNpcConditions& Out)
+{
+	// The same one-pass reconstruction `GatherDamage` uses below, against the same clock. Retail
+	// raises the bit inside the player's touch (`0x10147690`) and clears it at the end of the next
+	// non-reduced `RunAI`; this runtime rebuilds the whole set each full pass, so the life is
+	// expressed as "the bump is newer than the last pass that read one".
+	const double LastBump = Npc.Senses.Memory.LastBumpTime;
+	if (LastBump >= 0.0 && LastBump > PreviousGatherTime)
+	{
+		Out.Set(EElysiumNpcCond::WasBumped);
+	}
 }
 
 void ElysiumNpcCond::GatherDamage(const FElysiumNpc& Npc, double PreviousGatherTime,

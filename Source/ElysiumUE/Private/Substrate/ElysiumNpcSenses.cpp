@@ -232,6 +232,7 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << PlayerInPvs;
 	Ar << PlayerLos;
 	Ar << SightingLastClearTime;
+	Ar << LastBumpTime;
 	Ar << PlayerLosLastClearTime;
 	Ar << PlayerPvsLastClearTime;
 	Ar << PlayerLosNextUpdateTime;

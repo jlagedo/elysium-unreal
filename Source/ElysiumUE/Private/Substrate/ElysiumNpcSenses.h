@@ -204,6 +204,9 @@ struct FElysiumNpcMemory
 	// answers no longer share a producer: this one is stamped by a clear far segment TO AN IN-CONE
 	// player, the other by `SetPlayerLOS` with no cone term at all.
 	double SightingLastClearTime = -1.0;
+	// `COND_WAS_BUMPED`'s commit time. `FElysiumNpc::OnBumped` writes it; `ElysiumNpcCond::
+	// GatherBump` turns it into the condition for exactly one full pass.
+	double LastBumpTime = -1.0;
 	// `m_bInPlayerPVS` (+0x6278) and `m_bInPlayerLOS` (+0x6279). These are the CADENCE's inputs,
 	// not a sighting: retail's `SetPlayerLOS` (`0x10291610`) carries no cone term, so `bPlayerLos`
 	// is true for a player standing behind this NPC with a clear line to its eye. Reading it as

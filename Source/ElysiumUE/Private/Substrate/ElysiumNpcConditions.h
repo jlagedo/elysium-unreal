@@ -55,6 +55,11 @@ enum class EElysiumNpcCond : uint8
 	Knockback             = 0x28,
 	WaitingAttackTime     = 0x2f,
 	HitByDoor             = 0x34,
+	// `COND_WAS_BUMPED`. `RunAI` (`0x1026f110`) clears it at the end of every NON-reduced pass,
+	// beside `LIGHT_DAMAGE` and `HEAVY_DAMAGE`, and `CAI_BaseNPCTroika::GetSchedule`
+	// (`0x102ae920`) reads it in combat. Its one producer is the player's own touch handler
+	// (`0x10147690`) -- see `FElysiumNpc::OnBumped`.
+	WasBumped             = 0x38,
 	WeaponThroughWall     = 0x3c,
 	NoPrimaryAmmo         = 0x40,
 	SeeHate               = 0x43,
@@ -383,6 +388,10 @@ namespace ElysiumNpcCond
 
 	// `LIGHT_DAMAGE` / `HEAVY_DAMAGE` / `REPEATED_DAMAGE` from the last committed packet.
 	void GatherDamage(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
+	// `COND_WAS_BUMPED`, reconstructed the same way and for the same reason as the damage pair:
+	// retail sets the bit inside the touch and clears it when a non-reduced `RunAI` ends, so it is
+	// decision input for exactly one full pass.
+	void GatherBump(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
 
 	// The `HEAR_*` family from the last accepted stimulus, by the same category mapping the
 	// senses output selection uses.
