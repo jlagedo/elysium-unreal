@@ -206,6 +206,14 @@ bool FElysiumWorldLightQueryTest::RunTest(const FString&)
 	Data->Records.Pvs = {1, 2};
 	TestEqual(TEXT("partition equality takes front leaf"), Data->ClusterAt(FVector::ZeroVector), 0);
 	TestEqual(TEXT("solid leaf remains invalid"), Data->ClusterAt(FVector(-1, 0, 0)), -1);
+	// The same pair `SetPlayerLOS` (`0x10291610`) reaches through the engine PVS test
+	// `0x101d1a90`. The rows are `{1, 2}`: cluster 0 sees only itself, cluster 1 only itself.
+	TestTrue(TEXT("a cluster sees itself"), Data->ClusterVisible(0, 0));
+	TestFalse(TEXT("an unset PVS bit is not visible"), Data->ClusterVisible(0, 1));
+	TestTrue(TEXT("the second row is read at its own stride"), Data->ClusterVisible(1, 1));
+	TestFalse(TEXT("an out-of-range cluster is not visible"), Data->ClusterVisible(0, 2));
+	TestFalse(TEXT("an unresolved cluster is not visible at the data layer"),
+		Data->ClusterVisible(-1, 0));
 	FElysiumWorldLight Point;
 	Point.Type = 1; Point.Cluster = 0; Point.Constant = 1;
 	Point.Position = FVector(100, 0, 0); Point.Intensity = FVector(2, 2, 2); Point.Style = 32;

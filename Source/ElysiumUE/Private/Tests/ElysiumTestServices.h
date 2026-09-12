@@ -1558,6 +1558,19 @@ struct FElysiumRecordingServices final
 			LightAtPoint));
 		return LightAtPoint;
 	}
+	// The engine PVS test. Unset = everything shares a PVS, which is `NPCInit`'s seeded state and
+	// the answer a case that is not about PVS wants. `PvsQuery` is the scriptable half: a case that
+	// needs a body out of the player's PVS supplies a predicate over the two points.
+	bool bPvsQueryAvailable = true;
+	TFunction<bool(const FVector&, const FVector&)> PvsQuery;
+	virtual bool IsPvsQueryAvailable() const override { return bPvsQueryAvailable; }
+	virtual bool ArePointsInSamePvs(const FVector& APointCm, const FVector& BPointCm) const override
+	{
+		const bool bVisible = PvsQuery ? PvsQuery(APointCm, BPointCm) : true;
+		Record(FString::Printf(TEXT("ArePointsInSamePvs %s -> %s = %s"), *APointCm.ToString(),
+			*BPointCm.ToString(), bVisible ? TEXT("visible") : TEXT("hidden")));
+		return bVisible;
+	}
 	// SC8 — the geometry `FindBestShot`'s visibility predicate asks about, as a scriptable list
 	// rather than a collision world. Each blocker is a world-space point with a radius: it stops the
 	// swept hull when it lies within `RadiusCm` of the segment, and `Owner` is what makes the

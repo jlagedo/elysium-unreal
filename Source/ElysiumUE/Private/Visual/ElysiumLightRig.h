@@ -93,6 +93,9 @@ public:
 	float GameplayStyleMultiplier(int32 Style) const;
 	bool IsGameplayLightAvailable() const { return bGameplayLightAvailable; }
 	float QueryGameplayLight(const FVector& PointCm) const;
+	// The engine PVS test `0x101d1a90`, over the same decoded cluster partition the light query
+	// walks. A point that resolves to no cluster answers TRUE — see `ArePointsInSamePvs`.
+	bool ArePointsInSamePvs(const FVector& APointCm, const FVector& BPointCm) const;
 	// How many adopted sources carry a style >= 32 (entity-switched), for the readout.
 	int32 SwitchedSourceCount() const;
 

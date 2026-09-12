@@ -517,6 +517,8 @@ public:
 	virtual bool SyncGrappleClip(USkeletalMeshComponent* Body, float PositionSeconds, bool bTerminal) override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
 	virtual bool IsLightQueryAvailable() const override;
+	virtual bool ArePointsInSamePvs(const FVector& APointCm, const FVector& BPointCm) const override;
+	virtual bool IsPvsQueryAvailable() const override;
 	virtual bool SamplePlayerStealthBounds(FBox& OutBounds, FVector& OutCenter) const override;
 	virtual bool IsPlayerDucking() const override;
 	// SC8: `FindBestShot`'s visibility predicate `FUN_1006db10` — a swept 2-unit hull from a shot

@@ -1781,6 +1781,20 @@ bool AElysiumMapActor::IsLightQueryAvailable() const
 	return Rig && Rig->IsGameplayLightAvailable();
 }
 
+bool AElysiumMapActor::ArePointsInSamePvs(const FVector& APointCm, const FVector& BPointCm) const
+{
+	const UElysiumMapVisuals* MapVisuals = GetVisuals();
+	const UElysiumLightRig* Rig = MapVisuals ? MapVisuals->GetLightRig() : nullptr;
+	return Rig ? Rig->ArePointsInSamePvs(APointCm, BPointCm) : true;
+}
+
+bool AElysiumMapActor::IsPvsQueryAvailable() const
+{
+	const UElysiumMapVisuals* MapVisuals = GetVisuals();
+	const UElysiumLightRig* Rig = MapVisuals ? MapVisuals->GetLightRig() : nullptr;
+	return Rig && Rig->IsGameplayLightAvailable();
+}
+
 bool AElysiumMapActor::SamplePlayerStealthBounds(FBox& OutBounds, FVector& OutCenter) const
 {
 	const APawn* Pawn = ResolvePlayerPawn();

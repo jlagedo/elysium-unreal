@@ -64,6 +64,19 @@ void UElysiumLightRig::AdoptGameplayLight(const FString& InMapName)
 		*InMapName, GameplayLightData->Records.Lights.Num(), GameplayLightData->Records.NumClusters, GameplayShadowProps.Num());
 }
 
+bool UElysiumLightRig::ArePointsInSamePvs(const FVector& APointCm, const FVector& BPointCm) const
+{
+	if (!bGameplayLightAvailable || !GameplayLightData) return true;
+	const int32 A = GameplayLightData->ClusterAt(APointCm);
+	const int32 B = GameplayLightData->ClusterAt(BPointCm);
+	// A point in solid, or off the partition entirely, resolves to no cluster. Retail's `NPCInit`
+	// (`0x1029a0b0`) seeds `m_bInPlayerPVS = 1`, so "visible" is the state an NPC starts in and
+	// the answer that costs it nothing: an unplaceable point must not silently throttle a body's
+	// think or delete it through `NPCThink`'s `DISAPPEAR` arm.
+	if (A < 0 || B < 0) return true;
+	return GameplayLightData->ClusterVisible(A, B);
+}
+
 float UElysiumLightRig::QueryGameplayLight(const FVector& PointCm) const
 {
 	if (!bGameplayLightAvailable || !GameplayLightData) return 0.f;

@@ -1089,6 +1089,21 @@ public:
 	// unoccluded whole-map values that would otherwise read every interior as fully lit.
 	virtual float QueryLightAtPoint(const FVector& PointCm) const { return 1.0f; }
 	virtual bool IsLightQueryAvailable() const { return false; }
+
+	// The engine PVS test `0x101d1a90`, which `SetPlayerLOS` (`0x10291610`) calls before it traces
+	// and `NPCThink`'s `DISAPPEAR` arm calls before it removes a body. Answered from the decoded
+	// BSP cluster partition the gameplay light query already stands on — same data asset, same
+	// `ClusterAt` / `ClusterVisible` pair.
+	//
+	// The headless/null answer is **true**, and so is the answer for a point that resolves to no
+	// cluster: `NPCInit` (`0x1029a0b0`) seeds `m_bInPlayerPVS = 1`, so "visible" is the state an
+	// NPC starts in and the one that costs it nothing.
+	virtual bool ArePointsInSamePvs(const FVector& APointCm, const FVector& BPointCm) const
+	{
+		return true;
+	}
+	virtual bool IsPvsQueryAvailable() const { return false; }
+
 	virtual bool SamplePlayerStealthBounds(FBox& OutBounds, FVector& OutCenter) const { return false; }
 	virtual bool IsPlayerDucking() const { return false; }
 
