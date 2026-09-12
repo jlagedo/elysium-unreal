@@ -281,7 +281,7 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 		TestFalse(TEXT("a body with no stance machine ends its idle schedule"),
 			ElysiumSchedule::Tick(State, Runner, Now, Delay));
 		TestTrue(TEXT("and the trace names the task that failed"),
-			Runner.Saw(TEXT("TASK_SPECIAL_IDLE_ACTIVITY failed")));
+			Runner.FailureReasons.Contains(0x15));
 		TestFalse(TEXT("nothing is left running"), State.IsRunning());
 	}
 
@@ -302,8 +302,8 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 			ElysiumSchedule::Tick(State, Runner, Now, Delay));
 		TestTrue(TEXT("the trace records the body's unresolved activity"),
 			Runner.Saw(TEXT("TASK_SET_ACTIVITY ACT_IDLE unresolved")));
-		TestFalse(TEXT("the miss is not reported as a failed task"),
-			Runner.Saw(TEXT("TASK_SET_ACTIVITY failed")));
+		TestTrue(TEXT("the miss is not reported as a failed task"),
+			Runner.FailureReasons.IsEmpty());
 		TestEqual(TEXT("the original schedule holds at its activity before the watchdog"), State.Current,
 			EElysiumScheduleId::TakeCoverHintDoor);
 		TestEqual(TEXT("the unresolved activity is still the current task"), State.TaskIndex, 0);
@@ -331,7 +331,7 @@ bool FElysiumScheduleFailureTest::RunTest(const FString&)
 		FElysiumScheduleState State;
 		TestFalse(TEXT("an unregistered schedule does not start"),
 			ElysiumSchedule::Start(State, EElysiumScheduleId::None, Runner));
-		TestTrue(TEXT("and says so rather than idling quietly"), Runner.Saw(TEXT("refused schedule")));
+		TestTrue(TEXT("and says so rather than idling quietly"), Runner.FailureReasons.Contains(0x05));
 		TestFalse(TEXT("leaving nothing half-started"), State.IsRunning());
 	}
 	return true;
@@ -383,6 +383,8 @@ bool FElysiumScheduleDoorTest::RunTest(const FString&)
 			ElysiumSchedule::Tick(State, Runner, Now, Delay));
 		TestTrue(TEXT("the trace names the motor task that failed"),
 			Runner.Saw(TEXT("TASK_FACE_SAVEPOSITION failed")));
+		TestTrue(TEXT("...with the generic task-failure reason"),
+			Runner.FailureReasons.Contains(0x0c));
 	}
 	return true;
 }
@@ -491,6 +493,8 @@ bool FElysiumScheduleRetreatProjectionTest::RunTest(const FString&)
 			State.IsRunning());
 		TestTrue(TEXT("the trace names the failed move task"),
 			Runner.Saw(TEXT("TASK_MOVE_AWAY_PATH failed")));
+		TestTrue(TEXT("...with the generic task-failure reason"),
+			Runner.FailureReasons.Contains(0x0c));
 		TestTrue(TEXT("...and the runner recorded why the world refused it"),
 			Runner.Saw(TEXT("no longer a retreat")));
 		TestFalse(TEXT("the body was never asked to move"), Runner.Motor.bMoving);
@@ -636,8 +640,8 @@ bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
 
 		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
 		TestFalse(TEXT("the program ends"), ElysiumSchedule::Tick(State, Runner, Now, Delay));
-		TestFalse(TEXT("and it ended by completing, not by failing"),
-			Runner.Saw(TEXT("TASK_PLAY_DEATH_SEQUENCE failed")));
+		TestTrue(TEXT("and it ended by completing, not by failing"),
+			Runner.FailureReasons.IsEmpty());
 		TestTrue(TEXT("the trace says nothing resolved"),
 			Runner.Saw(TEXT("-> (nothing resolved)")));
 	}

@@ -795,6 +795,12 @@ public:
 		return static_cast<int32>(AmbientPhase);
 	}
 
+	// Read side for the automation tests and the inspector: whether `FollowPatrolPath` armed a
+	// route on this leaf, and how many points that route resolved to (the count is kept whether
+	// or not the route is currently armed).
+	bool IsPatrolActiveForDebug() const { return bPatrolActive; }
+	int32 NumPatrolPointsForDebug() const { return PatrolPoints.Num(); }
+
 private:
 	// --- Think(), phase by phase, in the order Think() calls them. A bool phase returns true
 	// when it consumed this think, and Think() returns with it -----------------------------------

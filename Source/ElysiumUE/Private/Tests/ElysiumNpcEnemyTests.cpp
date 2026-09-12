@@ -30,6 +30,7 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 #include "Serialization/MemoryReader.h"
@@ -49,91 +50,58 @@ namespace
 	// the derive path stays out of every case that is not about it.
 	struct FEnemyFixture
 	{
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World;
+		FElysiumNpcWorldFixture Fixture;
+		FElysiumRecordingServices& Services;
+		FElysiumEntityWorld& World;
 		FElysiumNpc* Guard = nullptr;
 		FElysiumNpc* ThugA = nullptr;
 		FElysiumNpc* ThugB = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
-		FEnemyFixture()
-			: World(nullptr, nullptr, Services.Bundle())
+		static FElysiumNpcWorldBuilder BuildWorld()
 		{
-			ElysiumRng::SeedAll(0x454E454D);
+			FElysiumNpcWorldBuilder Builder(TEXT("__npcenemy_test__"), 0x454E454D);
 
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__npcenemy_test__");
-
-			FElysiumEntityDef GuardDef;
-			GuardDef.Classname = TEXT("npc_VHumanCombatant");
-			GuardDef.TargetName = TEXT("guard");
-			GuardDef.Origin = FVector::ZeroVector;
+			FElysiumEntityDef& GuardDef = Builder.AddNpc(TEXT("guard"));
 			GuardDef.Keys.Add(TEXT("vision"), TEXT("4000"));
 			GuardDef.Keys.Add(TEXT("hearing"), TEXT("1.0"));
-			auto Wire = [&GuardDef](const TCHAR* Output, const TCHAR* Counter)
-			{
-				FElysiumOutputDef Row;
-				Row.Name = Output;
-				Row.Target = Counter;
-				Row.Input = TEXT("Add");
-				Row.Param = TEXT("1");
-				GuardDef.Outputs.Add(MoveTemp(Row));
-			};
-			Wire(TEXT("OnFoundEnemy"),  TEXT("c_foundenemy"));
-			Wire(TEXT("OnFoundPlayer"), TEXT("c_foundplayer"));
-			Wire(TEXT("OnLostEnemy"),   TEXT("c_lostenemy"));
-			Wire(TEXT("OnLostPlayer"),  TEXT("c_lostplayer"));
-			Defs.Defs.Add(MoveTemp(GuardDef));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnFoundEnemy"),  TEXT("c_foundenemy"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnFoundPlayer"), TEXT("c_foundplayer"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnLostEnemy"),   TEXT("c_lostenemy"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnLostPlayer"),  TEXT("c_lostplayer"));
 
 			for (const TCHAR* Name : { TEXT("thug_a"), TEXT("thug_b") })
 			{
-				FElysiumEntityDef Thug;
-				Thug.Classname = TEXT("npc_VHumanCombatant");
-				Thug.TargetName = Name;
-				Thug.Origin = FVector(Cm(500.f), 0.0, 0.0);
-				Defs.Defs.Add(MoveTemp(Thug));
+				Builder.AddNpc(Name, FVector(Cm(500.f), 0.0, 0.0));
 			}
 
 			for (const TCHAR* Name : { TEXT("c_foundenemy"), TEXT("c_foundplayer"),
 				TEXT("c_lostenemy"), TEXT("c_lostplayer") })
 			{
-				FElysiumEntityDef Counter;
-				Counter.Classname = TEXT("math_counter");
-				Counter.TargetName = Name;
-				Defs.Defs.Add(MoveTemp(Counter));
+				Builder.AddCounter(Name);
 			}
+			return Builder;
+		}
 
-			World.Load(MoveTemp(Defs));
-			World.SpawnPlayer();
-			World.Activate(0.0);
-			World.Tick(0.0);
-
-			Guard = static_cast<FElysiumNpc*>(World.FindByName(TEXT("guard")));
-			ThugA = static_cast<FElysiumNpc*>(World.FindByName(TEXT("thug_a")));
-			ThugB = static_cast<FElysiumNpc*>(World.FindByName(TEXT("thug_b")));
-			Player = World.FindPlayer();
-			if (Guard)
-			{
-				// The Source health ceiling the damage predicates read. A headless world has no
-				// rulebook behind `SeedSheet`, so it is stated here rather than derived.
-				Guard->MaxHealth = 100;
-				// Whatever the admission think may have selected is not this case's setup: every
-				// schedule under test is started explicitly.
-				Guard->Schedule.Clear();
-			}
+		FEnemyFixture()
+			: Fixture(BuildWorld())
+			, Services(Fixture.Services)
+			, World(Fixture.World)
+		{
+			Guard = Fixture.Npc(TEXT("guard"));
+			ThugA = Fixture.Npc(TEXT("thug_a"));
+			ThugB = Fixture.Npc(TEXT("thug_b"));
+			Player = Fixture.Player();
+			// Whatever the admission think may have selected is not this case's setup: every
+			// schedule under test is started explicitly.
+			FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
 			Quiet();
 		}
 
 		// Nothing here wants an NPC's own think competing with the pass the case is driving.
 		void Quiet()
 		{
-			for (FElysiumNpc* Npc : { Guard, ThugA, ThugB })
-			{
-				if (Npc)
-				{
-					Npc->NextThink = ELYSIUM_NEVER_THINK;
-				}
-			}
+			FElysiumNpcWorldFixture::Quiet({ Guard, ThugA, ThugB });
 		}
 
 		void Flush(double Now)
@@ -164,26 +132,12 @@ namespace
 		// else uses, so a test asserts through the same surface a developer would look at.
 		FString Debug(const FElysiumEntity* Entity, const TCHAR* Key) const
 		{
-			if (Entity == nullptr)
-			{
-				return FString();
-			}
-			TArray<TPair<FString, FString>> Rows;
-			Entity->GetDebugState(Rows);
-			for (const TPair<FString, FString>& Row : Rows)
-			{
-				if (Row.Key == Key)
-				{
-					return Row.Value;
-				}
-			}
-			return FString();
+			return FElysiumNpcWorldFixture::Debug(Entity, Key);
 		}
 
 		float Counter(const TCHAR* Name)
 		{
-			const FElysiumEntity* Ent = World.FindByName(Name);
-			return Ent ? FCString::Atof(*Debug(Ent, TEXT("Value"))) : -1.f;
+			return Fixture.Counter(Name);
 		}
 	};
 
@@ -1025,7 +979,7 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 		F.Guard->Cognition.Conditions.Has(EElysiumNpcCond::HearCombat));
 	F.Guard->UpdateIdealState(3.5);
 	TestTrue(TEXT("the NPC promotes to alert"),
-		F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Alert")));
+		F.Guard->GetMind().State() == EElysiumNpcState::Alert);
 
 	// Alert selects the lookaround, which alert state is what makes reachable.
 	TestTrue(TEXT("alert selects the lookaround program"),
@@ -1036,7 +990,7 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	F.Guard->Senses.Memory.Enemy = F.ThugA->Handle;
 	F.Guard->UpdateIdealState(4.0);
 	TestTrue(TEXT("a committed enemy takes the NPC to combat"),
-		F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Combat")));
+		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 
 	// The guard is unarmed — a content-free fixture installs no item catalogue — so the recovered
 	// capability split takes the melee branch with bare-hands defaults, and thug A standing 500

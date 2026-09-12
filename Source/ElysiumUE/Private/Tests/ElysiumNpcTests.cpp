@@ -897,25 +897,28 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		}
 		return FString();
 	};
+	FElysiumNpc* JackNpc = JackEnt->AsNpc();
 	if (Blueblood)
 	{
-		TestEqual(TEXT("maker forwards interesting-place groups"),
-			DebugRow(Blueblood, TEXT("Interesting groups")), FString(TEXT("31")));
+		FElysiumNpc* BluebloodNpc = Blueblood->AsNpc();
+		TestTrue(TEXT("maker forwards interesting-place groups"),
+			BluebloodNpc && BluebloodNpc->InterestingPlaceGroups == TEXT("31"));
 	}
 	TestTrue(TEXT("player_reaction seeds the independent relationship table"),
-		DebugRow(World.Resolve(JackHandle), TEXT("Relationship to player")).StartsWith(TEXT("D_LI")));
+		JackNpc && JackNpc->Relationships.Resolve(World.PlayerHandle(), TEXT("player"))
+			== EElysiumRelationship::Like);
 	// A `D_FR` row is a real enemy-selection input: a hostile or feared row can commit this NPC to
 	// an enemy on a later think, and combat selection now answers with a registered fight program
 	// rather than a refusal (`Elysium.Substrate.NpcCombat.*` owns those assertions).
 	World.AcceptInput(TEXT("!self"), FName(TEXT("SetRelationship")),
 		FElysiumVariant::String(TEXT("player D_FR 5")), JackHandle, JackHandle);
 	TestTrue(TEXT("SetRelationship rewrites the independent combat-relationship table"),
-		DebugRow(World.Resolve(JackHandle), TEXT("Relationship to player")).Contains(TEXT("D_FR")));
+		JackNpc && JackNpc->Relationships.Resolve(World.PlayerHandle(), TEXT("player"))
+			== EElysiumRelationship::Fear);
 	TestTrue(TEXT("...carrying the authored IRelationPriority with it"),
-		DebugRow(World.Resolve(JackHandle), TEXT("Relationship to player")).Contains(
-			TEXT("priority 5")));
+		JackNpc && JackNpc->Relationships.ResolvePriority(World.PlayerHandle(), TEXT("player")) == 5);
 
-	TestEqual(TEXT("WillTalk latched"), DebugRow(World.Resolve(JackHandle), TEXT("WillTalk")), FString(TEXT("yes")));
+	TestTrue(TEXT("WillTalk latched"), JackNpc && JackNpc->bWillTalk);
 	TestEqual(TEXT("OnDialogBegin fired once (counter=1)"),
 		FCString::Atof(*DebugRow(World.FindByName(TEXT("dlgcount")), TEXT("Value"))), 1.0f);
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("EndDialog")), FElysiumVariant::Void(), 0.0,
@@ -938,7 +941,8 @@ bool FElysiumNpcTest::RunTest(const FString&)
 		FElysiumEntityHandle::Invalid(), JackHandle);
 	World.Tick(0.0);
 	TestTrue(TEXT("named patrol resolves and arms both authored points"),
-		DebugRow(World.Resolve(JackHandle), TEXT("Patrol")).Contains(TEXT("point 1/2")));
+		JackNpc && JackNpc->IsPatrolActiveForDebug() && JackNpc->PatrolIndex == 0
+			&& JackNpc->NumPatrolPointsForDebug() == 2);
 	World.Tick(0.05);
 	// Arming a patrol is not the same as walking one. Jack's body belongs to the schedule arbiter
 	// here, so the armed route is parked and NOTHING is commanded -- the arbiter, not the patrol,

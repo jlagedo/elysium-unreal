@@ -37,6 +37,7 @@
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
 
@@ -141,71 +142,54 @@ namespace
 	// target's `OnDamaged` so the cycle-1 commit is observable as a number.
 	struct FCombatFixture
 	{
-		FElysiumRecordingServices Services;
 		FElysiumItemTable Items;
-		FElysiumEntityWorld World;
+		bool bInstalled = false;
+		FElysiumNpcWorldFixture Fixture;
+		FElysiumRecordingServices& Services;
+		FElysiumEntityWorld& World;
 		FElysiumNpc* Fighter = nullptr;
 		FElysiumNpc* Target = nullptr;
 		FElysiumPlayer* Player = nullptr;
-		bool bInstalled = false;
 
-		FCombatFixture(const TCHAR* FighterEquip, bool bWithFists = true, bool bInstallCatalogue = true)
-			: Items(MakeCombatItemTable(bWithFists))
-			, World(nullptr, nullptr, Services.Bundle())
+		static FElysiumNpcWorldBuilder BuildWorld(const TCHAR* FighterEquip)
 		{
-			ElysiumRng::SeedAll(0x4E504343);
-			if (bInstallCatalogue)
-			{
-				ElysiumItems::Install(Items);
-				bInstalled = true;
-			}
-			// The recording motor is opt-in, and every movement task in this suite needs one.
-			Services.bProvideNpcMotor = true;
+			FElysiumNpcWorldBuilder Builder(TEXT("__npccombat_test__"), 0x4E504343);
 
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__npccombat_test__");
-
-			FElysiumEntityDef FighterDef;
-			FighterDef.Classname = TEXT("npc_VHumanCombatant");
-			FighterDef.TargetName = TEXT("fighter");
-			FighterDef.Origin = FVector::ZeroVector;
+			FElysiumEntityDef& FighterDef = Builder.AddNpc(TEXT("fighter"));
 			FighterDef.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
 			FighterDef.Keys.Add(TEXT("vision"), TEXT("4000"));
 			FighterDef.Keys.Add(TEXT("hearing"), TEXT("1.0"));
 			FighterDef.Keys.Add(TEXT("additionalequipment"), FighterEquip);
 			FighterDef.Keys.Add(TEXT("cantdropweapons"), TEXT("1"));
-			Defs.Defs.Add(MoveTemp(FighterDef));
 
-			FElysiumEntityDef TargetDef;
-			TargetDef.Classname = TEXT("npc_VHumanCombatant");
-			TargetDef.TargetName = TEXT("target");
-			TargetDef.Origin = FVector(100.0, 0.0, 0.0);
+			FElysiumEntityDef& TargetDef = Builder.AddNpc(TEXT("target"), FVector(100.0, 0.0, 0.0));
 			TargetDef.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/blueblood/male/Blueblood_Male.mdl"));
-			FElysiumOutputDef Row;
-			Row.Name = TEXT("OnDamaged");
-			Row.Target = TEXT("damagedcount");
-			Row.Input = TEXT("Add");
-			Row.Param = TEXT("1");
-			TargetDef.Outputs.Add(MoveTemp(Row));
-			Defs.Defs.Add(MoveTemp(TargetDef));
+			Builder.WireOutput(TEXT("target"), TEXT("OnDamaged"), TEXT("damagedcount"));
 
-			FElysiumEntityDef Counter;
-			Counter.Classname = TEXT("math_counter");
-			Counter.TargetName = TEXT("damagedcount");
-			Defs.Defs.Add(MoveTemp(Counter));
+			Builder.AddCounter(TEXT("damagedcount"));
+			return Builder;
+		}
 
-			World.Load(MoveTemp(Defs));
-			World.SpawnPlayer();
-			World.Activate(0.0);
-			World.Tick(0.0);
-
+		FCombatFixture(const TCHAR* FighterEquip, bool bWithFists = true, bool bInstallCatalogue = true)
+			: Items(MakeCombatItemTable(bWithFists))
+			, Fixture(BuildWorld(FighterEquip), [this, bInstallCatalogue](FElysiumRecordingServices& S)
+				{
+					if (bInstallCatalogue)
+					{
+						ElysiumItems::Install(Items);
+						bInstalled = true;
+					}
+					// The recording motor is opt-in, and every movement task in this suite needs one.
+					S.bProvideNpcMotor = true;
+				})
+			, Services(Fixture.Services)
+			, World(Fixture.World)
+		{
 			// `AsNpc` rather than a blind downcast: the living-NPC leaf is what carries the senses,
 			// memory and cognition every case here drives.
-			FElysiumEntity* FighterEnt = World.FindByName(TEXT("fighter"));
-			FElysiumEntity* TargetEnt = World.FindByName(TEXT("target"));
-			Fighter = FighterEnt ? FighterEnt->AsNpc() : nullptr;
-			Target = TargetEnt ? TargetEnt->AsNpc() : nullptr;
-			Player = World.FindPlayer();
+			Fighter = Fixture.Npc(TEXT("fighter"));
+			Target = Fixture.Npc(TEXT("target"));
+			Player = Fixture.Player();
 			if (Player)
 			{
 				// Out of every reach and cone: this suite is about NPC-versus-NPC combat, and a
@@ -240,13 +224,7 @@ namespace
 		// Nothing here wants an NPC's own think competing with the pass a case is driving.
 		void Quiet()
 		{
-			for (FElysiumNpc* Npc : { Fighter, Target })
-			{
-				if (Npc)
-				{
-					Npc->NextThink = ELYSIUM_NEVER_THINK;
-				}
-			}
+			FElysiumNpcWorldFixture::Quiet({ Fighter, Target });
 		}
 
 		// Two ordinary thinks: the first crosses the admission barrier, the second resolves the
@@ -285,20 +263,7 @@ namespace
 		// uses, so a test asserts through the same surface a developer would look at.
 		FString Debug(const FElysiumEntity* Entity, const TCHAR* Key) const
 		{
-			if (Entity == nullptr)
-			{
-				return FString();
-			}
-			TArray<TPair<FString, FString>> Rows;
-			Entity->GetDebugState(Rows);
-			for (const TPair<FString, FString>& Row : Rows)
-			{
-				if (Row.Key == Key)
-				{
-					return Row.Value;
-				}
-			}
-			return FString();
+			return FElysiumNpcWorldFixture::Debug(Entity, Key);
 		}
 
 		FElysiumRecordingNpcMotor* MotorFor(const FElysiumNpc* Npc) const
@@ -848,7 +813,7 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 
 	// The body-owner arbiter: the `Schedule` owner is live for the first time.
 	TestTrue(TEXT("combat movement claims the Schedule body owner"),
-		F.Debug(F.Fighter, TEXT("Body owner")).StartsWith(TEXT("Schedule")));
+		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 	TestTrue(TEXT("the path was issued at the enemy's feet"),
 		Motor->RequestedFeet.Equals(F.Target->Origin));
 	TestTrue(TEXT("...at the schedule's recovered tolerance of 24 Source units"),
@@ -877,7 +842,7 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	F.Fighter->Cognition.Conditions.Reset();
 	F.Fighter->ThinkStanceOrIdle(10.3);
 	TestTrue(TEXT("the ended program hands the body back"),
-		F.Debug(F.Fighter, TEXT("Body owner")).StartsWith(TEXT("None")));
+		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::None);
 	TestTrue(TEXT("...and stops the request it was holding"), F.Services.Saw(TEXT("NpcMotor Stop")));
 
 	// Back in the band, the attack window opens.
@@ -1131,7 +1096,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 			&F.Fighter->Cognition.Conditions));
 	F.Fighter->UpdateIdealState(20.0);
 	TestTrue(TEXT("a committed enemy takes the NPC to combat"),
-		F.Debug(F.Fighter, TEXT("Mind")).Contains(TEXT("current=Combat")));
+		F.Fighter->GetMind().State() == EElysiumNpcState::Combat);
 	TestNotEqual(TEXT("...and combat selects a fight program, not the idle it just left"),
 		F.Fighter->SelectSchedule(), EId::IdleDisposition);
 	return true;
@@ -1221,7 +1186,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 		ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.0, Delay, &Victim.Cognition.Conditions));
 	Victim.UpdateIdealState(1.0);
 	TestTrue(TEXT("the ideal-state pass takes the struck bystander to combat"),
-		F.Debug(&Victim, TEXT("Mind")).Contains(TEXT("current=Combat")));
+		Victim.GetMind().State() == EElysiumNpcState::Combat);
 	TestEqual(TEXT("...and combat selection picks the melee swing, not an idle"),
 		Victim.SelectSchedule(), EId::MeleeAttack1);
 
@@ -1448,7 +1413,7 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 		TestTrue(TEXT("the retreat moves directly away from the enemy"),
 			Motor->RequestedFeet.X < F.Fighter->Origin.X);
 		TestTrue(TEXT("...and claims the Schedule body owner to do it"),
-			F.Debug(F.Fighter, TEXT("Body owner")).StartsWith(TEXT("Schedule")));
+			F.Fighter->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 	}
 
 	// --- The fail path: nowhere navigable to retreat to ------------------------------------------
@@ -1657,10 +1622,10 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	TestTrue(TEXT("every animation-channel claim the character held goes back"),
 		F.Services.Saw(TEXT("ReleaseBodyAnimClaims")));
 	TestTrue(TEXT("the mind is dead, current and ideal both"),
-		F.Debug(F.Fighter, TEXT("Mind")).Contains(TEXT("current=Dead"))
-			&& F.Debug(F.Fighter, TEXT("Mind")).Contains(TEXT("ideal=Dead")));
-	TestEqual(TEXT("...and it owns nothing"),
-		F.Debug(F.Fighter, TEXT("Body owner")).Left(4), FString(TEXT("None")));
+		F.Fighter->GetMind().State() == EElysiumNpcState::Dead
+			&& F.Fighter->GetMind().IdealState() == EElysiumNpcState::Dead);
+	TestTrue(TEXT("...and it owns nothing"),
+		F.Fighter->GetMind().Owner() == EElysiumBodyOwner::None);
 	TestTrue(TEXT("the body is frozen where it stands"), Motor->bFrozen);
 	TestTrue(TEXT("...and stops answering the character channel"),
 		Motor->bIgnoreCharacterCollision);
@@ -1839,7 +1804,7 @@ bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
 	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
 
 	TestTrue(TEXT("the restored mind is dead"),
-		G.Debug(G.Fighter, TEXT("Mind")).Contains(TEXT("current=Dead")));
+		G.Fighter->GetMind().State() == EElysiumNpcState::Dead);
 	TestTrue(TEXT("the rebuilt body is frozen again by the restore itself"), Motor->bFrozen);
 	TestTrue(TEXT("...and stops answering the character channel again"),
 		Motor->bIgnoreCharacterCollision);

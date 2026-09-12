@@ -29,6 +29,7 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 namespace ElysiumAiScriptedScheduleTests
@@ -78,43 +79,29 @@ namespace
 		FElysiumPlayer* Player = nullptr;
 		FElysiumEntityHandle DirectorHandle;
 
-		explicit FAiScheduleFixture(const FSetup& Setup)
-			: World(nullptr, nullptr, Services.Bundle())
+		// The row set every case shares: the directed guard, the victim it can be pointed at, the
+		// `point_target` goal, the `aiscripted_schedule` director itself, and two patrol points.
+		// `World.Load`/`SpawnPlayer`/`Activate` still happen in the constructor body below rather
+		// than through `FElysiumNpcWorldFixture`, because the first `Tick` — the admission barrier —
+		// is conditional here (`bSkipAdmission`), unlike every other fixture's fixed sequence.
+		static FElysiumNpcWorldBuilder BuildWorld(const FSetup& Setup)
 		{
-			ElysiumRng::SeedAll(0x41534348);
-			Services.bProvideNpcMotor = true;
+			FElysiumNpcWorldBuilder Builder(TEXT("__aischedule_test__"), 0x41534348);
 
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__aischedule_test__");
-
-			FElysiumEntityDef GuardDef;
-			GuardDef.Classname = TEXT("npc_VHumanCombatant");
-			GuardDef.TargetName = TEXT("guard");
-			GuardDef.Origin = FVector::ZeroVector;
+			FElysiumEntityDef& GuardDef = Builder.AddNpc(TEXT("guard"));
 			GuardDef.Keys.Add(TEXT("model"), GModel);
 			GuardDef.Keys.Add(TEXT("vision"), TEXT("4000"));
 			GuardDef.Keys.Add(TEXT("hearing"), TEXT("1.0"));
-			Defs.Defs.Add(MoveTemp(GuardDef));
 
-			FElysiumEntityDef VictimDef;
-			VictimDef.Classname = TEXT("npc_VHumanCombatant");
-			VictimDef.TargetName = TEXT("victim");
-			VictimDef.Origin = FVector(100.0, 0.0, 0.0);
+			FElysiumEntityDef& VictimDef = Builder.AddNpc(TEXT("victim"), FVector(100.0, 0.0, 0.0));
 			VictimDef.Keys.Add(TEXT("model"), GModel);
-			Defs.Defs.Add(MoveTemp(VictimDef));
 
 			// `point_target` is the corpus's own goal classname on four of the six named rows. It has
 			// no registered leaf, which is exactly the point: a goal is a POSITION, not a behaviour.
-			FElysiumEntityDef GoalDef;
-			GoalDef.Classname = TEXT("point_target");
-			GoalDef.TargetName = TEXT("goal_a");
-			GoalDef.Origin = GGoalOrigin;
-			Defs.Defs.Add(MoveTemp(GoalDef));
+			Builder.AddEntity(TEXT("point_target"), TEXT("goal_a"), GGoalOrigin);
 
-			FElysiumEntityDef DirectorDef;
-			DirectorDef.Classname = TEXT("aiscripted_schedule");
-			DirectorDef.TargetName = TEXT("director");
-			DirectorDef.Origin = FVector(0.0, 400.0, 0.0);
+			FElysiumEntityDef& DirectorDef = Builder.AddEntity(TEXT("aiscripted_schedule"),
+				TEXT("director"), FVector(0.0, 400.0, 0.0));
 			DirectorDef.Keys.Add(TEXT("m_iszEntity"), TEXT("guard"));
 			DirectorDef.Keys.Add(TEXT("goalent"), Setup.GoalName);
 			DirectorDef.Keys.Add(TEXT("schedule"), FString::FromInt(Setup.Mode));
@@ -124,18 +111,23 @@ namespace
 			{
 				DirectorDef.Keys.Add(TEXT("spawnflags"), FString::FromInt(Setup.SpawnFlags));
 			}
-			Defs.Defs.Add(MoveTemp(DirectorDef));
 
 			for (int32 PointIndex = 1; PointIndex <= 2; ++PointIndex)
 			{
-				FElysiumEntityDef Point;
-				Point.Classname = TEXT("info_node_patrol_point");
-				Point.TargetName = FString::Printf(TEXT("route_%d"), PointIndex);
-				Point.Origin = FVector(0.0, static_cast<double>(PointIndex) * -200.0, 0.0);
-				Defs.Defs.Add(MoveTemp(Point));
+				Builder.AddEntity(TEXT("info_node_patrol_point"),
+					*FString::Printf(TEXT("route_%d"), PointIndex),
+					FVector(0.0, static_cast<double>(PointIndex) * -200.0, 0.0));
 			}
+			return Builder;
+		}
 
-			World.Load(MoveTemp(Defs));
+		explicit FAiScheduleFixture(const FSetup& Setup)
+			: World(nullptr, nullptr, Services.Bundle())
+		{
+			Services.bProvideNpcMotor = true;
+
+			FElysiumNpcWorldBuilder Builder = BuildWorld(Setup);
+			World.Load(MoveTemp(Builder.Defs));
 			World.SpawnPlayer();
 			World.Activate(0.0);
 			if (!Setup.bSkipAdmission)
@@ -209,13 +201,7 @@ namespace
 
 		void Quiet()
 		{
-			for (FElysiumNpc* Npc : { Guard, Victim })
-			{
-				if (Npc != nullptr)
-				{
-					Npc->NextThink = ELYSIUM_NEVER_THINK;
-				}
-			}
+			FElysiumNpcWorldFixture::Quiet({ Guard, Victim });
 		}
 
 
@@ -253,20 +239,7 @@ namespace
 
 		FString Debug(const FElysiumEntity* Entity, const TCHAR* Key) const
 		{
-			if (Entity == nullptr)
-			{
-				return FString();
-			}
-			TArray<TPair<FString, FString>> Rows;
-			Entity->GetDebugState(Rows);
-			for (const TPair<FString, FString>& Row : Rows)
-			{
-				if (Row.Key == Key)
-				{
-					return Row.Value;
-				}
-			}
-			return FString();
+			return FElysiumNpcWorldFixture::Debug(Entity, Key);
 		}
 	};
 }
@@ -383,17 +356,17 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		TestTrue(TEXT("the authored force state parses through the recovered mapping"),
 			F.Debug(F.Director, TEXT("Force state")).Contains(TEXT("2 -> Alert")));
 		TestTrue(TEXT("nothing is pushed before the wire fires"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+			!F.Guard->ScriptedScheduleOrder.IsSet());
 
 		F.FireStartSchedule();
 
 		TestTrue(TEXT("the push takes the body under the ScriptedSchedule owner"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("ScriptedSchedule")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule);
 		TestTrue(TEXT("the pushed order is visible in one row"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")).Contains(TEXT("mode 2")));
+			F.Guard->ScriptedScheduleOrder.IsSet() && F.Guard->ScriptedScheduleOrder.Mode == 2);
 		// The state push is a STATE, not a hold: the arbiter must not overwrite it with `Scripted`.
 		TestTrue(TEXT("forcestate 2 put the mind in ALERT, not in a scripted hold"),
-			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Alert")));
+			F.Guard->GetMind().State() == EElysiumNpcState::Alert);
 
 		F.Step(0.1);
 		FElysiumRecordingNpcMotor* Motor = F.MotorFor(F.Guard);
@@ -412,12 +385,12 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		F.Step(0.2);
 		F.Step(0.3);
 		TestTrue(TEXT("the order is dropped once its program ends"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+			!F.Guard->ScriptedScheduleOrder.IsSet());
 		TestTrue(TEXT("...and the body goes back"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("None")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
 		// `forcestate` was a state push and not a temporary hold, so it OUTLIVES the program.
 		TestTrue(TEXT("the pushed state survives the program that came with it"),
-			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Alert")));
+			F.Guard->GetMind().State() == EElysiumNpcState::Alert);
 	}
 
 	// Mode 1 walks, which is the CHOSEN half of the pair.
@@ -437,7 +410,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 				Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::WalkSpeed);
 		}
 		TestTrue(TEXT("mode 1 with forcestate 0 pushes no state"),
-			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Idle")));
+			F.Guard->GetMind().State() == EElysiumNpcState::Idle);
 	}
 
 	// Mode 4/5: the follow-path family runs its own program.
@@ -463,7 +436,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 		F.Step(0.2);
 		F.Step(0.3);
 		TestTrue(TEXT("an exhausted route ends the follow-path program"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+			!F.Guard->ScriptedScheduleOrder.IsSet());
 	}
 	return true;
 }
@@ -516,12 +489,12 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 
 	// `forcestate 3` is COMBAT, and mode 3 supplied the enemy that state needs.
 	TestTrue(TEXT("forcestate 3 put the mind in combat"),
-		F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Combat")));
+		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 	// Mode 3 pushes policy only: it claims no body.
 	TestTrue(TEXT("mode 3 claims no body — it is a policy push, not a movement order"),
-		F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("None")));
+		F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
 	TestTrue(TEXT("...and leaves no order behind"),
-		F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+		!F.Guard->ScriptedScheduleOrder.IsSet());
 
 	// Ordinary combat selection follows from the state the director pushed.
 	const EId Selected = F.Guard->SelectSchedule();
@@ -553,12 +526,12 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		}
 		F.FireStartSchedule();
 		TestTrue(TEXT("a missing goal pushes no order"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+			!F.Guard->ScriptedScheduleOrder.IsSet());
 		TestTrue(TEXT("...and claims no body"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("None")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
 		// "logs and stops" — including the state, which the director never got far enough to push.
 		TestTrue(TEXT("...and does not push the forced state either"),
-			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Idle")));
+			F.Guard->GetMind().State() == EElysiumNpcState::Idle);
 		// The second fire is latched, not repeated.
 		F.FireStartSchedule();
 	}
@@ -586,9 +559,9 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		}
 		F.FireStartSchedule();
 		TestTrue(TEXT("a state-only row pushes the state"),
-			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Idle")));
+			F.Guard->GetMind().State() == EElysiumNpcState::Idle);
 		TestTrue(TEXT("...and no order"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+			!F.Guard->ScriptedScheduleOrder.IsSet());
 	}
 
 	// A body that will not take the route reports it once.
@@ -609,9 +582,9 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		F.FireStartSchedule();
 		F.Step(0.1);
 		TestTrue(TEXT("a refused route ends the order rather than holding the body"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+			!F.Guard->ScriptedScheduleOrder.IsSet());
 		TestTrue(TEXT("...and gives the body back"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("None")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
 	}
 
 	// A director that fires before the NPC's first think is DEFERRED, not lost.
@@ -629,18 +602,18 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		}
 		F.FireStartSchedule();
 		TestTrue(TEXT("an un-admitted mind keeps the push waiting"),
-			F.Debug(F.Guard, TEXT("Mind")).StartsWith(TEXT("armed")));
+			F.Guard->GetMind().Admission() == FElysiumNpcMind::EAdmission::Armed);
 		TestTrue(TEXT("...and claims no body while it waits"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("None")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
 
 		F.Step(0.1);   // the admission think, which establishes Idle and returns
 		F.Step(0.2);   // the replay
 		TestTrue(TEXT("the deferred order lands once admission has run"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")).Contains(TEXT("mode 2")));
+			F.Guard->ScriptedScheduleOrder.IsSet() && F.Guard->ScriptedScheduleOrder.Mode == 2);
 		// The point of deferring the WHOLE push: admission establishes idle, so a forced state
 		// applied ahead of it would have been wiped by the barrier it was racing.
 		TestTrue(TEXT("...carrying the forced state the admission barrier would have wiped"),
-			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Alert")));
+			F.Guard->GetMind().State() == EElysiumNpcState::Alert);
 	}
 
 	// Spawn flag 0x800 suppresses exactly that warning.
@@ -663,7 +636,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		F.FireStartSchedule();
 		F.Step(0.1);
 		TestTrue(TEXT("the refusal still ends the order silently"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+			!F.Guard->ScriptedScheduleOrder.IsSet());
 	}
 	return true;
 }
@@ -749,13 +722,13 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 			return false;
 		}
 		TestTrue(TEXT("the patrol executor owns the body first"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("Patrol")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
 
 		F.FireStartSchedule();
 		TestTrue(TEXT("the director displaces it"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("ScriptedSchedule")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule);
 		TestTrue(TEXT("...and the route is PARKED rather than lost"),
-			F.Debug(F.Guard, TEXT("Body owner")).Contains(TEXT("parked=Patrol")));
+			F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
 
 		F.Step(0.1);
 		FElysiumRecordingNpcMotor* Motor = F.MotorFor(F.Guard);
@@ -770,7 +743,7 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 		F.Step(0.2);
 		F.Step(0.3);
 		TestTrue(TEXT("the route comes back when the program ends"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("Patrol")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
 		Motor->SampleStatus = EElysiumNpcMoveStatus::Moving;
 		F.Step(0.4);
 		TestTrue(TEXT("...and the resumed route re-issues its own leg"),
@@ -789,21 +762,21 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 		}
 		F.FireStartSchedule();
 		TestTrue(TEXT("the director holds the body"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("ScriptedSchedule")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::ScriptedSchedule);
 
 		TestTrue(TEXT("a beat takes it outright"),
 			F.Guard->ClaimScriptBody(TEXT("test beat")));
 		TestTrue(TEXT("...and the arbiter says so"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("Sequence")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Sequence);
 		// A director's order is DROPPED rather than parked: `aiscripted_schedule` has no resume.
 		TestTrue(TEXT("the pushed order leaves with the body"),
-			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
+			!F.Guard->ScriptedScheduleOrder.IsSet());
 		TestEqual(TEXT("...and so does the program it was running"),
 			F.Guard->Schedule.Current, EId::None);
 
 		F.Guard->ReleaseScriptBody(TEXT("test beat ended"));
 		TestTrue(TEXT("the beat's release restores an unowned body"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("None")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::None);
 	}
 
 	// Three deep: a beat over a combat claim over a patrol route.
@@ -823,17 +796,17 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 		F.Guard->UpdateIdealState(0.5);
 		F.Step(0.6);
 		TestTrue(TEXT("the combat claim took the route"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("Schedule"))
-			&& F.Debug(F.Guard, TEXT("Body owner")).Contains(TEXT("parked=Patrol")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Schedule
+			&& F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
 
 		TestTrue(TEXT("a beat takes it from the combat claim"),
 			F.Guard->ClaimScriptBody(TEXT("test beat")));
 		TestTrue(TEXT("...and the ROUTE is what stays parked, not the schedule"),
-			F.Debug(F.Guard, TEXT("Body owner")).Contains(TEXT("parked=Patrol")));
+			F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
 
 		F.Guard->ReleaseScriptBody(TEXT("test beat ended"));
 		TestTrue(TEXT("the route survives the whole stack and comes back"),
-			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("Patrol")));
+			F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
 	}
 	return true;
 }
@@ -856,14 +829,14 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 		return false;
 	}
 	TestTrue(TEXT("the guard starts on its route"),
-		F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("Patrol")));
+		F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
 
 	// Commit an enemy through the real ideal-state pass, exactly as `FCombatFixture` does.
 	F.Guard->Relationships.SetEntity(F.Victim->Handle, EElysiumRelationship::Hate, 5);
 	F.Guard->Senses.Memory.Enemy = F.Victim->Handle;
 	F.Guard->UpdateIdealState(0.5);
 	TestTrue(TEXT("the acquisition promotes the mind to combat"),
-		F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Combat")));
+		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 
 	// A committed enemy must reach combat selection: the melee selector answers `CAN_MELEE_ATTACK1`
 	// with `SCHED_TROIKA_MELEE_ATTACK1`, whose `TASK_FACE_ENEMY` claims the body and turns it. A
@@ -883,9 +856,9 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	TestTrue(TEXT("a patrolling NPC in combat reaches its combat program"),
 		F.Services.Saw(TEXT("NpcMotor Face")));
 	TestTrue(TEXT("...and the program's movement claim displaced the route"),
-		F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("Schedule")));
+		F.Guard->GetMind().Owner() == EElysiumBodyOwner::Schedule);
 	TestTrue(TEXT("...with the route PARKED rather than lost"),
-		F.Debug(F.Guard, TEXT("Body owner")).Contains(TEXT("parked=Patrol")));
+		F.Guard->GetMind().SuspendedOwner() == EElysiumBodyOwner::Patrol);
 
 	// The enemy dies. The transaction clears it, the ideal state falls back, and the route resumes.
 	F.Victim->Kill();
@@ -896,9 +869,9 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	TestFalse(TEXT("the dead enemy is no longer committed"),
 		F.Guard->Senses.Memory.Enemy.IsSet() && F.Guard->Senses.Memory.Enemy == F.Victim->Handle);
 	TestFalse(TEXT("the mind has left combat"),
-		F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Combat")));
+		F.Guard->GetMind().State() == EElysiumNpcState::Combat);
 	TestTrue(TEXT("the parked patrol route owns the body again"),
-		F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("Patrol")));
+		F.Guard->GetMind().Owner() == EElysiumBodyOwner::Patrol);
 	return true;
 }
 
