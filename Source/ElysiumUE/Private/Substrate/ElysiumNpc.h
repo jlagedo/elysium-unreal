@@ -536,6 +536,30 @@ public:
 	virtual void ScheduleDone() override;
 	virtual int32 TaskFailureReason() const override { return ScheduleHost.PendingFailureReason; }
 	FElysiumNpcScheduleHost ScheduleHost;
+
+	// --- The think cadence's own state (`Substrate/ElysiumNpcThinkCadence.h`) --------------------
+	// Slot 614 `ResetThinkTimers()` (`0x102c23f0`), dispatched virtually by `FeedInterrupt` before
+	// the trance, by the possession arm, and by the `TeleportToEntity` input's AI tail. It sets the
+	// four stamps AND `m_flNextThink` to now, so the effect takes hold on the same frame. This is
+	// NOT what `TaskFail` (`0x1029adb0`) does: that one writes the four and deliberately leaves
+	// `m_flNextThink` alone, and the difference is observable -- see `FElysiumNpc::TaskFail`.
+	void ResetThinkTimers(double Now);
+	// `m_scriptState in {4,5,6}`, the third term of `ShouldThinkFrequently()` (`0x102c2430`) --
+	// the aiscripted states in which a beat is actively driving this body. Mapped rather than
+	// transcribed: this runtime spells the same fact as a scripted owner holding the body or a
+	// scripted move in flight.
+	bool IsScriptDriven() const
+	{
+		return ScriptOwner.IsSet() || ScriptPhase != EScriptPhase::None;
+	}
+	// `m_flTeleportMoveTimer` (+0x65dc, keyfield `teleport_move_timer`). Inside this window
+	// `ShouldThinkFrequently()` is unconditionally true. UNRECOVERED producer: a `StartTask`
+	// (`0x102a1910`) arm this runtime has not ported writes it, so the window is never open.
+	double TeleportMoveUntil = 0.0;
+	// `m_bForceFrequentThink` (+0x63f0). Its only writer in the image is the bare setter
+	// `0x101aa750`, which has no recovered caller, so the flag stays false.
+	bool bForceFrequentThink = false;
+
 	// CBaseEntity::SetAttackExtents 0x1009af40; attack partition only, never the motor capsule.
 	void SetAttackExtents(const FVector& MarginCm) { ScheduleHost.AttackExtentsCm = MarginCm; }
 	FBox AttackBounds(const FBox& CollisionBounds) const

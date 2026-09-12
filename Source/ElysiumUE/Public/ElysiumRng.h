@@ -39,6 +39,11 @@ enum class EElysiumRngStream : uint8
 	CameraFindBestShot, // `CBaseCineCam::FindBestShot` `FUN_1006e4c0`'s uniform pick over the
 	               // candidate shots that passed both predicates (`RandomInt(0, count-1)`), the one
 	               // draw in the scripted-camera subsystem
+	NpcThinkCadence, // the jitter the three distance-driven think laws add at their ceiling:
+	               // `RandomFloat(0, 0.8)` in `CalcNextUpdateThink` (`0x10290720`), `(0, 0.3)` in
+	               // `CalcNextNormalThink` (`0x10290b60`) and `(0, 0.4)` in `CalcNextAIThink`
+	               // (`0x10291230`). Its own stream because it draws once per NPC per think and
+	               // would otherwise walk every other stream's position off the map
 	Count
 };
 

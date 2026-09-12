@@ -3265,7 +3265,25 @@ void FElysiumNpc::Activate()
 	Senses.ResolveTuning(*this);
 	Senses.StartSoundCursorAtHead(*this);
 	Mind.ArmAdmission();
-	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+	// `NPCInit` `0x1029a0b0` sets all EIGHT think stamps to curtime and seeds `m_bInPlayerPVS` and
+	// `m_bInPlayerLOS` true, so a fresh NPC is due on every clock and its first cadence pass reads
+	// "visible" rather than waiting 2 s for `SetPlayerLOS` to say so.
+	const double Now = World ? World->NowSeconds() : 0.0;
+	ScheduleHost.ResetThinkTimers(Now);
+	ScheduleHost.LastUpdate = ScheduleHost.LastNormal = Now;
+	ScheduleHost.LastMove = ScheduleHost.LastAI = Now;
+	Senses.Memory.bPlayerInPvs = true;
+	Senses.Memory.bPlayerLos = true;
+	NextThink = static_cast<float>(Now);
+}
+
+void FElysiumNpc::ResetThinkTimers(double Now)
+{
+	// Slot 614 `0x102c23f0`: the four `Next` stamps and `m_flNextThink`, all to curtime. The
+	// `Last` mirrors are deliberately untouched -- retail leaves them, so the interval the next
+	// `Calc*` reports is measured from the stamp the reset overwrote.
+	ScheduleHost.ResetThinkTimers(Now);
+	NextThink = static_cast<float>(Now);
 }
 
 bool FElysiumNpc::BypassesKnockbackEligibility() const
