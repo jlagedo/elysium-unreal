@@ -10,6 +10,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcScheduleHost.h"
+#include "Substrate/ElysiumNpcThinkCadence.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumSchedule.h"
 
@@ -144,6 +145,20 @@ void FElysiumNpcDebugData::Build(const FElysiumNpc& Npc, const FElysiumEntityWor
 		InterruptHits = Gathered.Intersection(Program->Interrupts).Describe();
 	}
 
+	{
+		const double CadenceNow = Npc.World ? Npc.World->NowSeconds() : 0.0;
+		const double Frame = Npc.World ? Npc.World->FrameSeconds()
+			: ElysiumWorldClock::DefaultFrameSeconds;
+		NextUpdateIn = Npc.ScheduleHost.NextUpdate - CadenceNow;
+		NextNormalIn = Npc.ScheduleHost.NextNormal - CadenceNow;
+		NextMoveIn = Npc.ScheduleHost.NextMove - CadenceNow;
+		NextAiIn = Npc.ScheduleHost.NextAI - CadenceNow;
+		bReducedThink = !ElysiumNpcThink::IsDue(Npc.ScheduleHost.NextAI, CadenceNow, Frame);
+		bInPlayerPvs = Npc.Senses.Memory.bPlayerInPvs;
+		bInPlayerLos = Npc.Senses.Memory.bPlayerLos;
+		bThinkFrequently = ElysiumNpcThink::ShouldThinkFrequently(Npc);
+	}
+
 	const FElysiumNpcMemory& Memory = Npc.Senses.Memory;
 	SenseOrigin = Npc.EyePosition();
 	SenseForward = FElysiumNpcSenses::ViewForward(Npc);
@@ -251,6 +266,8 @@ void FElysiumNpcDebugData::Serialize(FArchive& Ar)
 		return;
 	}
 	Ar << Conditions << Interrupts << InterruptHits << GatheredAt;
+	Ar << NextUpdateIn << NextNormalIn << NextMoveIn << NextAiIn;
+	Ar << bReducedThink << bInPlayerPvs << bInPlayerLos << bThinkFrequently;
 	Ar << SenseOrigin << SenseForward << ConeApex << VisionRadiusCm << ViewConeHalfAngleRadians;
 	Ar << HearingScalar << bHasHearingRadius << HearingOrigin << HearingRadiusCm << HearingCategory;
 	Ar << bHasEnemy << Enemy << EnemyPosition << bEnemyOccluded << EnemyLosFailures;

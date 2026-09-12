@@ -72,6 +72,19 @@ struct FElysiumNpcDebugData
 	FString InterruptHits;
 	double GatheredAt = -1.0;
 
+	// The think cadence's four clocks, as remaining seconds, plus the two bytes the laws read and
+	// whether the AI clock is currently declining to think. This is the whole of what makes the
+	// cadence readable from outside: a body's rate is not a number it stores, it is the distance
+	// between its stamps and the clock.
+	double NextUpdateIn = 0.0;
+	double NextNormalIn = 0.0;
+	double NextMoveIn = 0.0;
+	double NextAiIn = 0.0;
+	bool bReducedThink = false;
+	bool bInPlayerPvs = true;
+	bool bInPlayerLos = true;
+	bool bThinkFrequently = false;
+
 	FVector SenseOrigin = FVector::ZeroVector;
 	FVector SenseForward = FVector::ForwardVector;
 	FVector ConeApex = FVector::ZeroVector;

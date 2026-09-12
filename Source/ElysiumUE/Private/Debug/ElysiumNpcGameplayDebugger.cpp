@@ -113,6 +113,13 @@ void FElysiumNpcGameplayDebuggerCategory::DrawData(APlayerController*,
 		*DataPack.CurrentTask, *DataPack.CurrentTaskOperand));
 	CanvasContext.Print(FColor::White, FString::Printf(TEXT("Conditions: %s  interrupts: %s  hit: %s"),
 		*DataPack.Conditions, *DataPack.Interrupts, *DataPack.InterruptHits));
+	CanvasContext.Print(FColor::White, FString::Printf(
+		TEXT("Cadence: upd %.2fs norm %.2fs ai %.2fs mv %.3fs  %s%s%s%s"),
+		DataPack.NextUpdateIn, DataPack.NextNormalIn, DataPack.NextAiIn, DataPack.NextMoveIn,
+		DataPack.bReducedThink ? TEXT("{yellow}REDUCED{white} ") : TEXT(""),
+		DataPack.bInPlayerPvs ? TEXT("pvs ") : TEXT("{grey}no-pvs{white} "),
+		DataPack.bInPlayerLos ? TEXT("los ") : TEXT("{grey}no-los{white} "),
+		DataPack.bThinkFrequently ? TEXT("frequent") : TEXT("")));
 	CanvasContext.Print(FColor::White, FString::Printf(TEXT("Sense: vision %.0fcm cone %.1fdeg hearing %.2fx"),
 		DataPack.VisionRadiusCm, FMath::RadiansToDegrees(DataPack.ViewConeHalfAngleRadians * 2.0f),
 		DataPack.HearingScalar));
