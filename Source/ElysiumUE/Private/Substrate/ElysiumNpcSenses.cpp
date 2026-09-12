@@ -222,11 +222,11 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	uint8 InRange = bPlayerInRange ? 1 : 0;
 	uint8 OuterBand = bPlayerInOuterBand ? 1 : 0;
 	uint8 InCone = bPlayerInCone ? 1 : 0;
-	uint8 PlayerLos = bPlayerLos ? 1 : 0;
+	uint8 PlayerVisible = bPlayerVisible ? 1 : 0;
 	Ar << InRange;
 	Ar << OuterBand;
 	Ar << InCone;
-	Ar << PlayerLos;
+	Ar << PlayerVisible;
 	Ar << PlayerLosLastClearTime;
 	Ar << PlayerLosNextUpdateTime;
 	Ar << StealthVisionOverrideUntil;
@@ -286,7 +286,7 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 		bPlayerInRange = InRange != 0;
 		bPlayerInOuterBand = OuterBand != 0;
 		bPlayerInCone = InCone != 0;
-		bPlayerLos = PlayerLos != 0;
+		bPlayerVisible = PlayerVisible != 0;
 		bIgnoreUnknown = IgnoreUnknown != 0;
 		bMadeInitialUnknownResponse = MadeInitialUnknownResponse != 0;
 		EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0,
@@ -477,7 +477,7 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		if (Player == nullptr || Player->IsInert())
 		{
 			Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
-			Memory.bPlayerInRange = Memory.bPlayerInOuterBand = Memory.bPlayerInCone = Memory.bPlayerLos = false;
+			Memory.bPlayerInRange = Memory.bPlayerInOuterBand = Memory.bPlayerInCone = Memory.bPlayerVisible = false;
 		}
 		else
 		{
@@ -495,7 +495,7 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 			{
 				Memory.PlayerLosLastClearTime = Now;
 			}
-			Memory.bPlayerLos = bClear || (Memory.bPlayerInCone && Memory.PlayerLosLastClearTime >= 0.0
+			Memory.bPlayerVisible = bClear || (Memory.bPlayerInCone && Memory.PlayerLosLastClearTime >= 0.0
 				&& Now - Memory.PlayerLosLastClearTime <= ElysiumNpcSense::BlockedInConeGraceSeconds);
 			ElysiumNpcWitness::OnClosestPlayerUpdated(Npc, *Player, Now);
 		}

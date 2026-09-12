@@ -457,7 +457,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 		F.Hate(F.Player, 5);
 		F.Hate(F.ThugA, 5);
 		F.Guard->Senses.TickSight(*F.Guard, 10.0);
-		TestTrue(TEXT("the sight pass sees the player"), F.Guard->Senses.Memory.bPlayerLos);
+		TestTrue(TEXT("the sight pass sees the player"), F.Guard->Senses.Memory.bPlayerVisible);
 
 		TestTrue(TEXT("a visible candidate displaces a nearer unseen incumbent"),
 			ElysiumNpcEnemy::BestEnemy(*F.Guard) == F.Player->Handle);
@@ -465,7 +465,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 		// With the player unseen, the plain distance rule returns: the nearer thug wins.
 		F.Player->Origin = FVector(Cm(-2000.f), 0.0, 0.0);   // behind the guard, out of cone
 		F.Guard->Senses.TickSight(*F.Guard, 20.0);
-		TestFalse(TEXT("the player is no longer seen"), F.Guard->Senses.Memory.bPlayerLos);
+		TestFalse(TEXT("the player is no longer seen"), F.Guard->Senses.Memory.bPlayerVisible);
 		TestTrue(TEXT("between two unseen candidates the nearer one wins"),
 			ElysiumNpcEnemy::BestEnemy(*F.Guard) == F.ThugA->Handle);
 
@@ -474,7 +474,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 		// the only ordering in which this rule is distinguishable from the one above.
 		F.Player->Origin = FVector(Cm(2000.f), 0.0, 0.0);
 		F.Guard->Senses.TickSight(*F.Guard, 30.0);
-		TestTrue(TEXT("the player is visible again"), F.Guard->Senses.Memory.bPlayerLos);
+		TestTrue(TEXT("the player is visible again"), F.Guard->Senses.Memory.bPlayerVisible);
 
 		FElysiumEntityDef LateDef;
 		LateDef.Classname = TEXT("npc_VHumanCombatant");

@@ -485,10 +485,11 @@ void GatherLawConditions(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Ou
 	FElysiumPlayer* Player = Memory.ClosestPlayer.IsSet() ? Npc.World->FindPlayer() : nullptr;
 	const bool bClosestPlayerValid = Player != nullptr && !Player->IsInert()
 		&& Player->Handle == Memory.ClosestPlayer;
-	// `COND_SEE_PLAYER`'s equivalent is the senses' committed player-LOS latch. It is already false
+	// `COND_SEE_PLAYER`'s equivalent is the senses' committed sighting latch. It is already false
 	// unless the player is in range AND in cone (`FElysiumNpcSenses::TickSight`), so it is the whole
-	// of the recovered condition rather than one term of it.
-	if (bClosestPlayerValid && Memory.bPlayerLos)
+	// of the recovered condition rather than one term of it. Deliberately NOT `bPlayerLos`, which
+	// is the cadence's cone-free input and is true for a player standing behind this NPC.
+	if (bClosestPlayerValid && Memory.bPlayerVisible)
 	{
 		RunDirectChannel(Npc, *Player, EChannel::Criminal, Now, Observed[0]);
 		RunDirectChannel(Npc, *Player, EChannel::Supernatural, Now, Observed[1]);

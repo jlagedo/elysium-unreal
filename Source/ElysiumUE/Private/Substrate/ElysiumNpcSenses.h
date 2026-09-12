@@ -192,7 +192,16 @@ struct FElysiumNpcMemory
 	bool bPlayerInRange = false;               // within the effective visual radius
 	bool bPlayerInOuterBand = false;           // between 0.7x and 1.0x of it
 	bool bPlayerInCone = false;
-	bool bPlayerLos = false;
+	// The cached sighting answer: range AND cone AND a clear segment. This is the port's whole
+	// `COND_SEE_PLAYER` stand-in — the law lane and the melee-notice route read it, and it is false
+	// unless the player is in front of this NPC and near enough to matter.
+	bool bPlayerVisible = false;
+	// `m_bInPlayerPVS` (+0x6278) and `m_bInPlayerLOS` (+0x6279). These are the CADENCE's inputs,
+	// not a sighting: retail's `SetPlayerLOS` (`0x10291610`) carries no cone term, so `bPlayerLos`
+	// is true for a player standing behind this NPC with a clear line to its eye. Reading it as
+	// "sees the player" is the mistake the split above exists to prevent.
+	bool bPlayerInPvs = true;
+	bool bPlayerLos = true;
 	double PlayerLosLastClearTime = -1.0;
 	double PlayerLosNextUpdateTime = -1.0;     // negative means "due now"
 	// `m_flStealthVisionOverrideTime` (+0x6604), max-written by the surviving-damage tail.

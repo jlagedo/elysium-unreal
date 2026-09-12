@@ -274,7 +274,7 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 	// Retail raises `SEE_HATE`/`SEE_FEAR` inside the sense pass -- `CAI_Senses::Look`, under
 	// `CAI_BaseNPC::PerformSensing` (`0x1026e4f0`), which `m_iIsOblivious` gates whole. This runtime
 	// raises them here, from the LOS memory the sense pass wrote, and that memory does not go stale
-	// on its own: an oblivious body that stopped sensing with `bPlayerLos` set would otherwise keep
+	// on its own: an oblivious body that stopped sensing with `bPlayerVisible` set would otherwise keep
 	// re-raising a sighting it is no longer having, and the enemy transaction would drag a
 	// mesmerized victim into combat off it. So the gate retail applies to the producer is applied
 	// to the classification. `DONT_INVESTIGATE` is deliberately NOT tested here: it gates the
@@ -831,7 +831,7 @@ bool ElysiumNpcCond::NoticeMeleeAttack(FElysiumNpc& Victim, const FElysiumEntity
 	const bool bNear = FVector::Dist(Victim.Origin, AttackerOrigin) <= AcceptanceCm;
 	// The visibility route, at the senses' single-observer scope: the only actor this NPC tracks sight
 	// of is the player.
-	const bool bVisible = Memory.bPlayerLos && Memory.ClosestPlayer.IsSet()
+	const bool bVisible = Memory.bPlayerVisible && Memory.ClosestPlayer.IsSet()
 		&& Memory.ClosestPlayer == Attacker;
 	if (!bNear && !bVisible)
 	{

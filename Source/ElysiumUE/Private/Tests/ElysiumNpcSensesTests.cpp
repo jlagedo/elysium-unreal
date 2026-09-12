@@ -300,7 +300,7 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		F.Services.Calls.Reset();
 		F.Guard->Senses.TickSight(*F.Guard, 10.0);
 
-		TestTrue(TEXT("an in-cone target inside 512 units is seen"), F.Guard->Senses.Memory.bPlayerLos);
+		TestTrue(TEXT("an in-cone target inside 512 units is seen"), F.Guard->Senses.Memory.bPlayerVisible);
 		TestTrue(TEXT("actual Look still traces inside the bookkeeping bypass"),
 			F.Services.Saw(TEXT("QueryLineOfSight")));
 		TestTrue(TEXT("the closest-player cache carries the handle"),
@@ -316,13 +316,13 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		F.Guard->Senses.TickSight(*F.Guard, 11.0);
 		TestTrue(TEXT("a tick inside the 2 s cadence leaves the cache alone"),
 			NearlyEqual(F.Guard->Senses.Memory.ClosestPlayerDistanceCm, Cm(100.f), 1.0f)
-			&& F.Guard->Senses.Memory.bPlayerLos);
+			&& F.Guard->Senses.Memory.bPlayerVisible);
 
 		// Past the cadence it recomputes, and a target behind the observer is out of cone.
 		F.Guard->Senses.TickSight(*F.Guard, 12.5);
 		TestFalse(TEXT("a target behind the observer is out of cone"),
 			F.Guard->Senses.Memory.bPlayerInCone);
-		TestFalse(TEXT("...and therefore not seen"), F.Guard->Senses.Memory.bPlayerLos);
+		TestFalse(TEXT("...and therefore not seen"), F.Guard->Senses.Memory.bPlayerVisible);
 	}
 
 	// --- Beyond 512 units: the far trace decides, and blocked-in-cone keeps 8 s of grace ---------
@@ -337,7 +337,7 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		F.Guard->Senses.TickSight(*F.Guard, 100.0);
 		TestTrue(TEXT("beyond 512 units the engine is asked for the segment"),
 			F.Services.Saw(TEXT("QueryLineOfSight")));
-		TestTrue(TEXT("a clear far segment is sight"), F.Guard->Senses.Memory.bPlayerLos);
+		TestTrue(TEXT("a clear far segment is sight"), F.Guard->Senses.Memory.bPlayerVisible);
 		TestTrue(TEXT("...and stamps the last-clear time"),
 			NearlyEqual(static_cast<float>(F.Guard->Senses.Memory.PlayerLosLastClearTime), 100.0f));
 
@@ -345,17 +345,17 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		F.Services.bLineOfSightClear = false;
 		F.Guard->Senses.TickSight(*F.Guard, 104.0);
 		TestTrue(TEXT("blocked but in cone: sight is held inside the 8 s grace"),
-			F.Guard->Senses.Memory.bPlayerLos);
+			F.Guard->Senses.Memory.bPlayerVisible);
 		F.Guard->Senses.TickSight(*F.Guard, 108.0);
-		TestTrue(TEXT("...right up to the edge of it"), F.Guard->Senses.Memory.bPlayerLos);
+		TestTrue(TEXT("...right up to the edge of it"), F.Guard->Senses.Memory.bPlayerVisible);
 		F.Guard->Senses.TickSight(*F.Guard, 110.0);
 		TestFalse(TEXT("...and drops once the grace has run out"),
-			F.Guard->Senses.Memory.bPlayerLos);
+			F.Guard->Senses.Memory.bPlayerVisible);
 
 		// The wall comes down: an ordinary clear trace restores sight and the clock.
 		F.Services.bLineOfSightClear = true;
 		F.Guard->Senses.TickSight(*F.Guard, 112.5);
-		TestTrue(TEXT("a clear segment restores sight"), F.Guard->Senses.Memory.bPlayerLos);
+		TestTrue(TEXT("a clear segment restores sight"), F.Guard->Senses.Memory.bPlayerVisible);
 	}
 
 	// --- Range admission and the outer band -------------------------------------------------------
@@ -379,7 +379,7 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		F.Guard->Senses.TickSight(*F.Guard, 20.0);
 		TestFalse(TEXT("a target past the effective radius is not admitted"),
 			F.Guard->Senses.Memory.bPlayerInRange);
-		TestFalse(TEXT("...and is not seen"), F.Guard->Senses.Memory.bPlayerLos);
+		TestFalse(TEXT("...and is not seen"), F.Guard->Senses.Memory.bPlayerVisible);
 		TestFalse(TEXT("...without spending a trace on it"),
 			F.Services.Saw(TEXT("QueryLineOfSight")));
 	}
@@ -739,17 +739,17 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 		F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
 		F.Guard->bHidden = true;
 		F.Guard->Senses.Tick(*F.Guard, 10.0);
-		TestFalse(TEXT("a hidden body does not see"), F.Guard->Senses.Memory.bPlayerLos);
+		TestFalse(TEXT("a hidden body does not see"), F.Guard->Senses.Memory.bPlayerVisible);
 
 		F.Guard->bHidden = false;
 		F.Guard->bDead = true;
 		F.Guard->Senses.Tick(*F.Guard, 20.0);
-		TestFalse(TEXT("a dead body does not see"), F.Guard->Senses.Memory.bPlayerLos);
+		TestFalse(TEXT("a dead body does not see"), F.Guard->Senses.Memory.bPlayerVisible);
 
 		// Alive and unhidden, the same pass does see — so the two above are the gate, not the setup.
 		F.Guard->bDead = false;
 		F.Guard->Senses.Tick(*F.Guard, 30.0);
-		TestTrue(TEXT("...and a live one does"), F.Guard->Senses.Memory.bPlayerLos);
+		TestTrue(TEXT("...and a live one does"), F.Guard->Senses.Memory.bPlayerVisible);
 	}
 	return true;
 }

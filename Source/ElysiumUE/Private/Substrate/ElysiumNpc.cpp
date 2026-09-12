@@ -3829,7 +3829,7 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	const FElysiumNpcMemory& Mem = Senses.Memory;
 	Out.Emplace(TEXT("Closest player"), Mem.ClosestPlayer.IsSet()
 		? FString::Printf(TEXT("%.0fcm, %s%s%s"), Mem.ClosestPlayerDistanceCm,
-			Mem.bPlayerLos ? TEXT("SEEN") : TEXT("unseen"),
+			Mem.bPlayerVisible ? TEXT("SEEN") : TEXT("unseen"),
 			Mem.bPlayerInCone ? TEXT(", in cone") : TEXT(", out of cone"),
 			Mem.bPlayerInOuterBand ? TEXT(", outer band") : TEXT(""))
 		: TEXT("(none)"));

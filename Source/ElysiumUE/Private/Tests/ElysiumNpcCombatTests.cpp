@@ -1075,7 +1075,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 	F.Player->Origin = FVector(Cm(200.0), 0.0, 0.0);
 	F.Fighter->Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Hate, 5);
 	F.Fighter->Senses.Memory.ClosestPlayer = F.Player->Handle;
-	F.Fighter->Senses.Memory.bPlayerLos = true;
+	F.Fighter->Senses.Memory.bPlayerVisible = true;
 	F.Fighter->Senses.Memory.bPlayerInCone = true;
 	F.Fighter->Senses.Memory.bPlayerInRange = true;
 
