@@ -140,7 +140,9 @@ model / effort tier recommended for it.
   0x1028a380` case 4 and its `"Script failed"` exit; the translation by `m_fMoveTo`; the task arms
   above; `CineCleanup 0x1027d170`; `m_bSequenceFinished` raised by the animation advancing inside
   the think, so a stopped clock never raises it.
-  Job: the state and target fields on the NPC (`ScheduleHost.MoveTarget` is `m_hTargetEnt`);
+  Job: the state field on the NPC; the cine written through `FElysiumNpc::SetTarget`
+  (`m_hTargetEnt`, landed with 0002/10c; `ScheduleHost.MoveTarget` is Troika's
+  `m_hMoveTargetEnt`, a different field that `TaskFail` and `OnScheduleChange` clear);
   `SelectSchedule`'s Scripted arm translating by the cine's mode, else cleanup and the idle
   disposition (named: `SCHED_IDLE_STAND` is not registered and Troika's next selection is 0x6b);
   the think routing that ticks the program for a cine-owned body while a scene-owned one keeps

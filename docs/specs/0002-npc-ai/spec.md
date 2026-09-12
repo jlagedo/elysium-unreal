@@ -275,13 +275,19 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Job: the sweep, the five conditions, the roll.
   Oracle: § "The three `GatherConditions` sweeps and the interest predicate".
   Size: M. Effort: Sonnet / high.
-- [ ] **10c. The comfort sweep.**
-  Retail: `0x102b1a20`, idle only, every 0.2–0.4 s; `AddToComfortList` `0x10323630` /
-  `RemoveFromComfortList` `0x10323770`, ≤1024 units, ≤3 per target; `COMFORT` 0x27;
-  `BuildScheduleTestBits` withholds it while `COWERING`.
-  Job: the sweep and the condition over the comfort list 8 already keeps.
-  Oracle: § "The three `GatherConditions` sweeps and the interest predicate".
-  Size: S. Effort: Sonnet / low.
+- [x] **10c. The comfort sweep.**
+  Retail: `0x102b1a20`: `m_flNextComfortCheckTime` +0xe90 tested and re-armed `RandomFloat(0.2,
+  0.4)` ahead of the idle test, so a non-idle NPC re-arms and draws; idle: the nearest
+  comfort-list member (`0x10323630` / `0x10323770`) at `<= 1024` units, self skipped, a tie to
+  the later entry; `!IsBusyWithDiscipline` and an installed schedule; a running `0x12f` compares
+  `m_hTargetEnt` with the comforter and `TaskComplete(false)` (`0x10273e80`) on a change; an NPC
+  comforter must share the connected squad (`+0x94` → `+0x5bb0 < 1 ? +0x5da4 : 0`, both sides);
+  the comforter's `m_iComfortingCount` +0xe94 `>= 3` skips with no fallback; `COMFORT` 0x27 and
+  `SetTarget` (`0x10279cc0`, `m_hTargetEnt` +0x5ce4); the tail completes a running `0x12f` in
+  every other case. `BuildScheduleTestBits` withholds it while `COWERING`. `m_hTargetEnt` feeds
+  the gaze cascade's target arm. Both fields saved (`ComfortSweep` schema).
+  Oracle: § "The comfort sweep `0x102b1a20`, walked". The squad test answers through 17's null
+  squad; the `0x12f` arms fire once 10i registers the program.
 - [ ] **25. The kernel's failure route and the random wait.**
   Retail: a program with no `TASK_SET_FAIL_SCHEDULE` fails through `GetFailSchedule`
   (`0x1028abe0`): `m_failSchedule` (+0x5c54, zeroed by every `SetSchedule 0x10280e50`) or base
@@ -395,6 +401,76 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Oracle: § "Interesting places: the selector, the programs, the wait" (incl. "The failed
   walk, walked"), § "Interesting-place eligibility".
   Size: L. Effort: Opus / high.
+- [ ] **26. `GetSchedule`, the pre-selector.**
+  Retail: `GetNewSchedule` (`0x1028a260`) dispatches slot 437 (`CAI_BaseNPCTroika::GetSchedule`
+  `0x102ae920`) and, only on 0, slot 438 (`SelectSchedule` `0x102af660`, the state cases 10d,
+  10g, 11, 21a port). `0x102ae920` in order: `m_iForcedSchedule` consumed and returned; the
+  connected-squad `flags2 & 0x2000` arm (17: `+0x65e4 != -1` and not `frenziedFlags & 0x80` →
+  0xeb, else `SquadNewEnemy` `0x103161a0` with the enemy); `WAS_BUMPED` 0x38 → `0x101e3df0`
+  (`DAT_10739a4c`) and a running 0x14a → `0x101e3ee0`; base `0x1028a2a0`: `NPC_FREEZE` 0x75 →
+  0x3a, `ON_FIRE` 0x30 → 0x151, `FLOATING_OFF_GROUND` 0x73 → gravity 1.0, slot 0x340(0), 0x3e;
+  state 2: `SUPERNATURAL/CRIMINAL_ATTACK_LEVEL` 0x22/0x20 through `HasInterruptCondition`
+  `0x10269d30` → `ReportSupernaturalAct` `0x1017f4a0` / `ReportCriminalAct` `0x1017f2a0` when
+  the closest player is the offender, `SetEnemy` slot 0x950 and slot 0x954(offender, 5);
+  `ON_FIRE` → 0x151; no enemy → ideal state 3 (1 under `no_alert_state`) and re-run;
+  `ATTACK_UNKNOWN` `flags1 & 0x800000` cleared → 0x5b unless `flags2` bit 7 or frenzied (10f);
+  `NEW_ENEMY` 0x54 → 0xea `START_COMBAT` unless frenzied. Any state: `PLAYER_ON_HEAD` 0x3b and
+  not busy → cleared; with no live dialogue partner, `DAT_1092450c`'s mode 0/1/2 → 0x7b/0x79/0x7a,
+  mode 3 → `RandomInt(0, 99) < 80 ? 0x79 : 0x7a`. State 0xe: the criminal half, `ON_FIRE`, no
+  enemy → state 3/1. Then the base again; then `flags2 & 2` → `flags1 &= ~8`, `flags2 &= ~2`,
+  navigator goal type (`+0x5d34` → `+0x18`) 3 → 0xfc `FINISH_CLIMB`, 1 → 0xfd `FINISH_JUMP`;
+  combat + `stay_entrenched` + slot 0x940 → `0x102b7690(1,0,0,0)` (12b); `flags1 & 2` cleared →
+  0xf1 `STARTLED`; idle: `KNOCKBACK` 0x28 → 0x14c, `COMFORT` 0x27 → 0x12f, `D_CALM` → 0x130
+  `CALMED`, `D_FOLLOW` → 0x131 `FOLLOW`, `D_POSSESSED` → 0x131, a live dialogue partner → 0x6a;
+  combat: `KNOCKBACK` → 0x14c; alert: `0x102b8a10` (`ENEMY_DEAD` 0x58 with a
+  `SelectWeightedSequence(0x61)` hit → 8); `m_fSavePositionWalk` → cleared, 0x89; else 0.
+  Job: the pre-selector as the kernel's first selection step, ahead of the state switch; the
+  law branch (`ElysiumNpcWitness::SelectLawSchedule`, its position CHOSEN today) moved into
+  retail's state-2/0xe arms; the idle chain's six arms — 0x14c is 0005's knockback, 0x12f is
+  10i, 0x130/0x131 registered from their blobs (`0x105df780` / `0x105df4f8`) over 0006's
+  `D_CALM`/`D_FOLLOW` flags and 16c's `D_POSSESSED`, 0x6a over the dialogue partner; the
+  three base arms; 0xfc/0xfd over the motor's goal type; 0xf1; 0x89 over `bSavePositionWalk`.
+  Arms whose producer is another story's (the squad arm, 12b's chooser, 10f's 0x5b) take that
+  story's seam until it lands.
+  Provides: selection to 10i, 16c, 0006 (`CALMED`/`FOLLOW`), 0005 (the knockback install).
+  Consumes: 17, 12b, 10f, 0004 (the dialogue partner), 0006 (the flags).
+  Oracle: § "`GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`". Unrecovered:
+  `DAT_10739a4c` and its two calls, `DAT_1092450c` and its mode, `+0x65e4`, the names of
+  0x3a/0x3e/0x6a/0x89/0x14a/0x151, the 0x7b/0x79/0x7a programs.
+  Size: L. Effort: Opus / high; corpus pass on the unrecovered items first.
+- [ ] **10i. The comfort program.**
+  Retail: `SCHED_TROIKA_COMFORT` 0x12f (blob `0x105df9d0`), selected by 26 on `COMFORT` in
+  idle: `SET_NPC_FLAG DONT_INVESTIGATE; SET_NPC_FLAG NO_DIALOG; SET_FAIL_SCHEDULE Idle_Stand;
+  SET_TOLERANCE_DISTANCE 60; GET_PATH_TO_TARGET; RUN_TO_TARGET; WAIT_FOR_MOVEMENT; FACE_TARGET;
+  PLAY_COMFORT_INTO; DO_COMFORT_LOOP; PLAY_COMFORT_OUTOF; WAIT 4; WAIT_PVS`; interrupts
+  `NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE GIVE_WAY HEAR_DANGER`.
+  Tasks `GET_PATH_TO_TARGET` 0x15, `RUN_TO_TARGET` 9, `FACE_TARGET` 0x31, `PLAY_COMFORT_INTO`
+  0xec, `DO_COMFORT_LOOP` 0xed, `PLAY_COMFORT_OUTOF` 0xee over `ACT_COMFORT{,2,3}_{INTO,IDLE,
+  OUTOF}`. While it runs, `CAI_BaseNPC::GatherConditions` (`0x1026ec30`) plays the idle sound
+  through slot 0x7dc instead of 0x7a8, and `0x1027a420` rolls `RandomInt(0, 20)` instead of
+  `(0, 999)`. `COND_GIVE_WAY` 0x68 has readers (base `SelectSchedule` `0x1028a380`,
+  `CNPC_VZombie` slot 438) and no `SetCondition` site with the literal. `Idle_Stand` is base
+  schedule 1, list unrecovered, 25's treatment.
+  Job: the program registered; the six tasks, the three comfort arms read off Troika
+  `StartTask` `0x102a1910` / `RunTask` `0x102aacf0` (cases 0xec–0xee) first; the two 0x12f
+  readers; `GIVE_WAY` as an identity with no producer; the fail route through 25.
+  Consumes: 10c (the target), 26 (selection), 0003/1 (`RUN_TO_TARGET`), 24 (the refusal), 25.
+  Oracle: § "The comfort sweep `0x102b1a20`, walked" (What reads the result). Unrecovered: the
+  three comfort task arms, `GIVE_WAY`'s producer, `Idle_Stand`'s list.
+  Size: M. Effort: Opus / medium; corpus pass on the three task arms first.
+- [ ] **10j. `CheckTarget`.**
+  Retail: `CAI_BaseNPC::GatherConditions` (`0x1026ec30`), after `ChooseEnemy`, on a live
+  `m_hTargetEnt`: `CAI_Memory::CheckTarget` `0x10271d10` clears `HAVE_TARGET_LOS` 0x4b and
+  `TARGET_OCCLUDED` 0x49, sets 0x4b when `FVisible(target, 0x2804091)` else 0x49; then
+  `0x10271b10`: with a navigator goal (`+0x5d34`, goal type not 1 or 3, `0x102ee620 == 1`)
+  whose entity (`0x102ee160`) is the target and whose flags (`0x102ee640`) carry 4, a target
+  farther than `_DAT_104454c8` from the goal point (`0x102ee140`) re-paths (`0x10007b4e`); a
+  goal on another entity is re-pointed at the target (`0x102ed310`).
+  Job: the two conditions and the goal refresh, over 10c's target and 0003/2's cine.
+  Consumes: 10c, the motor. Provides: 0x4b/0x49 to 10i and 0003/2.
+  Oracle: § "The comfort sweep `0x102b1a20`, walked" (What reads the result). Unrecovered:
+  `_DAT_104454c8`, the goal flag 4's name, whether slot 0x364 is `WorldSpaceCenter`.
+  Size: S. Effort: Sonnet / medium.
 - [ ] **10d. The alert selectors and the ladder.**
   Retail: `SelectSchedule` (`0x102af660`) case 3 runs regardless of what the NPC was doing:
   an investigate program replaces a patrol or interesting-place program through

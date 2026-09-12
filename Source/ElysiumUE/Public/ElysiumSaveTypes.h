@@ -91,6 +91,8 @@ struct FElysiumSaveVersion
 		// The see-unknown sweep's "stopped seeing it" grace timer beside the other see-unknown fields,
 		// and the memory's two dead latch copies dropped: a mid-record change, so the floor moves.
 		SeeUnknownSweep = 37,
+		// The comfort sweep's re-arm clock and the NPC's `m_hTargetEnt`, appended to the NPC leaf.
+		ComfortSweep = 38,
 
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1

@@ -462,11 +462,12 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	ElysiumNpcCond::GatherSight(Npc, Now, Cond);
 
 	// `CAI_BaseNPCTroika::GatherConditions`' (`0x102b27f0`) three consecutive sweeps, in retail's own
-	// order: see-unknown (`0x102b15c0`), comfort (`0x102b1a20`, story 10c, not built), then sound
-	// (`0x102b1cd0`). Both run after `GatherSight`: the see-unknown sweep reads the `SEE_UNKNOWN`
-	// condition that just landed, and the sound sweep's `SEE_SOUND_SOURCE` tail asks whether a sight
-	// condition already stands for the committed sound's owner.
+	// order: see-unknown (`0x102b15c0`), comfort (`0x102b1a20`), then sound (`0x102b1cd0`). All three
+	// run after `GatherSight`: the see-unknown sweep reads the `SEE_UNKNOWN` condition that just
+	// landed, and the sound sweep's `SEE_SOUND_SOURCE` tail asks whether a sight condition already
+	// stands for the committed sound's owner.
 	ElysiumNpcCond::GatherSeeUnknown(Npc, Now, Cond);
+	ElysiumNpcCond::GatherComfort(Npc, Now, Cond);
 	ElysiumNpcCond::GatherSounds(Npc, Now, Cond);
 
 	// The player-law lanes join step 1.

@@ -1078,6 +1078,8 @@ public:
 	// 0x1033c6b0's persistent word; 0x10323630/0x10323770's target counter.
 	uint32 MiscFlags = 0;
 	int32 ComfortingCount = 0;
+	// `m_flNextComfortCheckTime` (+0xe90), the comfort sweep's re-arm (`ElysiumNpcCond::GatherComfort`).
+	double NextComfortCheckTime = 0.0;
 	void AddToComfortList();
 	void RemoveFromComfortList();
 	void SerializeDisciplineFlags(FElysiumSaveArchive& Ar);
@@ -1808,9 +1810,8 @@ public:
 	// NPC leaf overrides. Kept as questions rather than fields so the cascade stays assertable
 	// on a bare character, and so a leaf that has no navigator does not have to fake one.
 	//
-	// `m_hTargetEnt` is the scripted-sequence target HL2 sets through `SetTarget`; nothing in
-	// this runtime writes such a field yet, so the arm is present and answers nothing on every
-	// class until something does.
+	// `m_hTargetEnt` is `CAI_BaseNPC`'s target handle (`SetTarget`); the NPC leaf answers it, and
+	// the comfort sweep is its one writer in this runtime.
 	virtual const FElysiumEntity* GazeTargetEntity() const { return nullptr; }
 	virtual const FElysiumEntity* GazeEnemy() const { return nullptr; }
 	// The two DIRECT arms: retail hands these to the eyes without integration and returns before

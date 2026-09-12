@@ -25,6 +25,10 @@ struct FElysiumNpcScheduleHost
 	float InsideInterruptDistanceSqr = 0.f;
 	float OutsideInterruptDistanceSqr = 0.f;
 	double InterruptTime = 0.0;
+	// `CAI_BaseNPCTroika::m_hMoveTargetEnt`: -1 at spawn (`0x1029a0b0`), released by `TaskFail`
+	// (`0x1029adb0`) and `OnScheduleChange` (`0x102a0940`), read by Troika `StartTask` (`0x102a1910`).
+	// NOT `CAI_BaseNPC::m_hTargetEnt` (+0x5ce4), which is `FElysiumNpc::TargetEnt` and is never
+	// cleared by either.
 	FElysiumEntityHandle MoveTarget;
 	FElysiumEntityHandle KickProp;
 	int32 HintNode = INDEX_NONE;

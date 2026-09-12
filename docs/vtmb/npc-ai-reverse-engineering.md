@@ -530,6 +530,53 @@ Interrupts  COND_NEW_ENEMY COND_SEE_ENEMY COND_SQUAD_SEE_ENEMY COND_SEE_FEAR
             COND_INVESTIGATE_SIGHT COND_IGNORE_UNKNOWN COND_DETECTED_ATTACK COND_PLAYER_ON_HEAD
 ```
 
+### `GetSchedule` `0x102ae920` runs ahead of `SelectSchedule`
+
+`GetNewSchedule` (`0x1028a260`) dispatches slot 437 (`CAI_BaseNPCTroika::GetSchedule`
+`0x102ae920`, 55 classes) and, only when it answers 0, slot 438 (`SelectSchedule` `0x102af660`,
+the state cases above). A non-zero pre-selector answer therefore pre-empts every state case. Read
+off the decompilation (story 26 ports it); `HasCondition` is `0x10269aa0`, `HasInterruptCondition`
+(needs the bit in the running mask) `0x10269d30`.
+
+1. `+0x1b2c = 2` (the selector trace), `m_InvestigateSound` refreshed (`0x101b9880`).
+2. `m_iForcedSchedule` non-zero → consumed and returned.
+3. Connected to a squad (`m_iSquadDisconnected < 1 && m_pSquad`) and `flags2 & 0x2000`: clear the
+   bit; `+0x65e4 != -1` and not `frenziedFlags & 0x80` → 0xeb; else `SquadNewEnemy`
+   (`0x103161a0`) with `GetEnemy()` when set.
+4. `HasInterruptCondition(WAS_BUMPED 0x38)` → `0x101e3df0(&DAT_10739a4c, this)`; a running
+   schedule translating to 0x14a → `0x101e3ee0(&DAT_10739a4c, this)`. Both UNRECOVERED.
+5. State 2: `HasInterruptCondition(SUPERNATURAL_ATTACK_LEVEL 0x22)` → when `m_hClosestPlayer` is
+   `m_hSupernaturalOffender`, `ReportSupernaturalAct` (`0x1017f4a0`) and
+   `m_iPLSupernaturalActProcessed = 0x1017e740(player)`; then slot 0x950 (`SetEnemy`) and slot
+   0x954(offender, 5) on the offender. `CRIMINAL_ATTACK_LEVEL 0x20` mirrors it with
+   `ReportCriminalAct` (`0x1017f2a0`) and the obfuscated criminal level `+0x6364`.
+   `HasCondition(ON_FIRE 0x30)` → 0x151. `GetEnemy() == NULL` → `SetIdealState(no_alert_state ?
+   1 : 3)` (`0x1026e340`) and `return GetNewSchedule()` (re-entry). `flags1 & 0x800000`
+   (`ATTACK_UNKNOWN`) → cleared; `flags2 & 0x80 == 0` and not frenzied 0x80 → 0x5b, else
+   `flags2 &= ~0x80`. `HasCondition(NEW_ENEMY 0x54)` and not frenzied 0x80 → 0xea
+   `START_COMBAT`.
+6. Any state: `HasCondition(PLAYER_ON_HEAD 0x3b)` and `!IsBusyWithDiscipline()` → cleared; with
+   no live `m_hDialogPartner`, `DAT_1092450c` (an interface; slot 1 false and `[0xb] < 4`
+   selects a mode, else 0) → mode 0 → 0x7b, 1 → 0x79, 2 → 0x7a, 3 → `RandomInt(0, 99) < 80 ?
+   0x79 : 0x7a`. UNRECOVERED: the interface and the three programs.
+7. State 0xe: the criminal half of 5, `ON_FIRE` → 0x151, no enemy → the same ideal-state re-entry.
+8. Base `0x1028a2a0` (`+0x1b2c = 1`): `FLOATING_OFF_GROUND 0x73` → gravity 1.0 and slot
+   0x340(0); `NPC_FREEZE 0x75` → 0x3a; `ON_FIRE 0x30` → 0x151; `FLOATING_OFF_GROUND` → 0x3e.
+   Non-zero returns.
+9. `flags2 & 2` → `flags1 &= ~8`, `flags2 &= ~2`; navigator goal type (`+0x5d34` → `+0x18`,
+   `0x1027d990`) 3 → 0xfc `FINISH_CLIMB`, 1 → 0xfd `FINISH_JUMP`.
+10. State 2, `m_bStayEntrenched`, slot 0x940 true → `0x102b7690(1, 0, 0, 0)` non-zero returns
+    (the cover chooser).
+11. `flags1 & 2` → cleared, 0xf1 `STARTLED`.
+12. State 1 (idle): `KNOCKBACK 0x28` → 0x14c; `COMFORT 0x27` → 0x12f; `D_CALM 0x10000` → 0x130
+    `CALMED`; `D_FOLLOW 0x100000` → 0x131 `FOLLOW`; `D_POSSESSED 0x40000` → 0x131; a live
+    `m_hDialogPartner` → 0x6a. State 2: `KNOCKBACK` → 0x14c. State 3: `0x102b8a10` — `ENEMY_DEAD
+    0x58` and `SelectWeightedSequence(ACT 0x61) != -1` → 8.
+13. `m_fSavePositionWalk` → cleared, 0x89. Else 0, and `SelectSchedule` runs.
+
+The port's law branch (`ElysiumNpcWitness::SelectLawSchedule`) sits at the top of `SelectSchedule`
+by a CHOSEN position; retail's is step 5/7 here. `[VtMB]`
+
 ### `m_bReturnToInitialPos` is a one-shot armed only by alert or combat
 
 `CAI_BaseNPCTroika + 0x6494` decides between those two terminal answers, and it carries **no
@@ -1325,9 +1372,10 @@ of the two previously named iterates a list:
   `m_bFullInvestigate` (`+0x6340`), then a 2-D closing-speed classification against `20.0f` into
   `COND_UNKNOWN_ADVANCING/HOLDING/RETREATING` and `COND_INVESTIGATE_SIGHT` (0x26). Retail quirk:
   `HOLDING` needs exact float equality and is effectively dead.
-- **`0x102b1a20` — the comfort list**, idle only, rate-limited 0.2–0.4 s: walks the global
-  `AddToComfortList`/`RemoveFromComfortList` array (`0x10323630`/`0x10323770`), nearest within 1024
-  units, at most 3 comforters per target, sets `COND_COMFORT` (0x27).
+- **`0x102b1a20` — the comfort list**, rate-limited 0.2–0.4 s (re-armed in every state), searched
+  only in idle: walks the global `AddToComfortList`/`RemoveFromComfortList` array
+  (`0x10323630`/`0x10323770`), nearest at or within 1024 units, at most 3 comforted NPCs per
+  comforter, sets `COND_COMFORT` (0x27) and `m_hTargetEnt`. Walked whole below.
 - **`0x102b1cd0` — sound**: the six fixed `CSound` records (`m_LastSoundWorld` `+0x61e4`,
   `PhysicsDanger` `+0x6134`, `Danger` `+0x6108`, `Player` `+0x61b8`, `BulletImpact` `+0x618c`,
   `Combat` `+0x6160`), gated on `m_flNextInvestigateSoundTime` (`+0x623c`). Each arm:
@@ -1435,8 +1483,93 @@ speed edge and the grace duration respectively, matching the summary above.
 
 Job done as `ElysiumNpcCond::GatherSeeUnknown`, called from `ElysiumNpcEnemy::GatherConditions`
 immediately after `GatherSight` (which raises `SEE_UNKNOWN` from `TickSight`'s outer-band write) and
-before `GatherSounds`, matching retail's own see-unknown / comfort / sound order — comfort (story
-10c) is the still-missing middle step. `[VtMB]`
+before `GatherComfort`, matching retail's own see-unknown / comfort / sound order. `[VtMB]`
+
+#### The comfort sweep `0x102b1a20`, walked
+
+Read off the disassembly (the decompiled C hides the order of the idle test and the `<=`).
+
+**Clock, then state.** `FCOMP [ESI+0xe90]` at `0x102b1a30`: `curtime < m_flNextComfortCheckTime`
+returns, touching nothing. Otherwise `RandomFloat(0.2, 0.4)` (`0x102b1a55`) and the re-arm `+0xe90 =
+curtime + draw` (`0x102b1a67`) run **before** `CMP [ESI+0x5cc0],1 / JNZ 0x102b1c0f` (`0x102b1a60`).
+A due NPC re-arms and consumes the draw in every state; a non-idle one goes straight to the tail.
+
+**The search.** Walks the global comfort-target array (`DAT_10937af4` / count `DAT_10937b00`,
+written only by `AddToComfortList` / `RemoveFromComfortList` `0x10323630` / `0x10323770`, story 8)
+in array order, resolving each handle with no null check (a stale entry would fault). Skips `this`.
+`GetAbsOrigin` (slot 220) on both sides, full 3-D distance, then `FCOM best / TEST AH,0x41 / JP skip`
+(`0x102b1af6`): the jump is taken only for "greater" or unordered, so a candidate is kept at
+**`distance <= best`**. The best is seeded `0x44800000` (1024.0): a comforter at exactly 1024 units
+qualifies, nothing beyond does, and a tie goes to the **later** array entry. An empty array skips
+the loop and falls to the tail.
+
+**Found one.** `IsBusyWithDiscipline()` (`0x1033e2b0`) or `m_pSchedule (+0x5c38) == NULL` → tail.
+Then the running schedule's id through slot 447 compared with `0x12f`, `SCHED_TROIKA_COMFORT`:
+
+- **Running it:** `m_hTargetEnt (+0x5ce4)` still resolving to this nearest comforter → return.
+  Otherwise `0x10273e80(this, false)` and return. `0x10273e80` is `TaskComplete(false)`: `+0x5c44`
+  (`m_ScheduleState.fTaskStatus`) `= 4` (`TASKSTATUS_COMPLETE`) unless `COND_TASK_FAILED 0x5c`
+  stands. It completes the current task, it does not fail the schedule.
+- **Not running it:** the squad test. `[comforter+0x94]` is the entity's cached `CAI_BaseNPC*`
+  (null for a non-NPC): `CAI_ChangeTarget::InputActivate` (`0x101c99c0`) reads it to clear an NPC's
+  goal entity (`+0x5de8`), the shape of Source's `MyNPCPointer()->SetGoalEnt(NULL)`. When non-null,
+  both sides compute `m_iSquadDisconnected (+0x5bb0) < 1 ? m_pSquad (+0x5da4) : NULL` and a mismatch
+  returns. `+0x5da4` is the squad pointer: its readers pass it to the `CAI_Squad` member calls
+  (`0x103158f0`, `0x10316660`, `0x103161a0`) and read a name at `+4`. A player comforter skips the
+  test. Then `CMP [comforter+0xe94],3 / JGE` returns (no fallback to the next-nearest); otherwise
+  increment `m_iComfortingCount`, a `VPROF` scope (`DAT_10924a6c`), `SetCondition(COMFORT 0x27)` and
+  `SetTarget(comforter)` (`0x10279cc0`: `m_hTargetEnt = handle`, or `-1` for null).
+
+**The tail (`0x102b1c0f`).** Not idle, no candidate, busy, or no schedule: a running `0x12f` gets
+`TaskComplete(false)`.
+
+**What reads the result.** `GetSchedule` (`0x102ae920`) idle chain returns `0x12f` on `COMFORT`
+(after `KNOCKBACK` → `0x14c`). The program, verbatim from the blob:
+
+    SCHED_TROIKA_COMFORT
+      TASK_SET_NPC_FLAG NPCFlag:DONT_INVESTIGATE; TASK_SET_NPC_FLAG NPCFlag:NO_DIALOG;
+      TASK_SET_FAIL_SCHEDULE SCHEDULE:Idle_Stand; TASK_SET_TOLERANCE_DISTANCE 60;
+      TASK_GET_PATH_TO_TARGET 0; TASK_RUN_TO_TARGET 0; TASK_WAIT_FOR_MOVEMENT 0; TASK_FACE_TARGET 0;
+      TASK_PLAY_COMFORT_INTO 0; TASK_DO_COMFORT_LOOP 0; TASK_PLAY_COMFORT_OUTOF 0; TASK_WAIT 4;
+      TASK_WAIT_PVS 0
+    Interrupts: NEW_ENEMY SEE_ENEMY SQUAD_SEE_ENEMY SEE_FEAR LIGHT_DAMAGE HEAVY_DAMAGE GIVE_WAY
+      HEAR_DANGER
+
+While `0x12f` runs, `CAI_BaseNPC::GatherConditions` (`0x1026ec30`) plays the idle sound through slot
+`0x7dc` instead of `0x7a8`, and `0x1027a420` rolls `RandomInt(0, 20)` instead of `(0, 999)`.
+`m_hTargetEnt` is read every think by `CAI_BaseNPC::GatherConditions` → `CAI_Memory::CheckTarget`
+(`0x10271d10`: clears `0x4b`/`0x49`, sets `0x4b` when the target is `FVisible` under mask
+`0x2804091`, else `0x49`; then `0x10271b10` refreshes a navigator goal that targets it), and by the
+eye maintainer's target arm (`0x1026b810`).
+
+**The port.** `ElysiumNpcCond::GatherComfort` is the whole sweep: the clock/re-arm/idle order, the
+`<=` search, both `0x12f` arms (`TaskComplete(false)` is `Schedule.bTaskCompletedExternally`), the
+squad test through `FElysiumNpc::ConnectedSquad`, the cap, `COMFORT` and `SetTarget`.
+`FElysiumNpc::GazeTargetEntity` answers the target, so an idle NPC's eyes take its comforter. Save
+schema `ComfortSweep` carries `m_flNextComfortCheckTime` and `m_hTargetEnt`.
+
+Not in the port yet, each with its story in `docs/specs/0002-npc-ai/spec.md`:
+
+- **No squad object** (17). `ConnectedSquad` answers null for every NPC, so the squad test always
+  passes.
+- **No `COMFORT` consumer.** The `GetSchedule` idle-chain arm is 26; the program, tasks
+  `GET_PATH_TO_TARGET 0x15` / `RUN_TO_TARGET 9` / `FACE_TARGET 0x31` / `PLAY_COMFORT_INTO 0xec` /
+  `DO_COMFORT_LOOP 0xed` / `PLAY_COMFORT_OUTOF 0xee`, `COND_GIVE_WAY 0x68` (readers `0x1028a380`
+  and `CNPC_VZombie` slot 438; no `SetCondition` site carries the literal), the `Idle_Stand` fail
+  route and the two `0x12f` readers are 10i. Until then both `0x12f` arms of the sweep never fire.
+- **No `CheckTarget`** (10j). `0x4b`/`0x49` and the goal refresh (`0x10271b10`: a navigator goal
+  on the target whose flags carry 4 re-paths when the target moved more than `_DAT_104454c8`; a
+  goal on another entity is re-pointed at the target) are not gathered.
+
+`ScheduleHost.MoveTarget` is NOT this field: it is Troika's `m_hMoveTargetEnt`, -1 at spawn
+(`0x1029a0b0`) and released by `TaskFail` (`0x1029adb0`) and `OnScheduleChange` (`0x102a0940`),
+neither of which touches `m_hTargetEnt`. `SetTarget` (`0x10279cc0`) has 16 direct callers: this
+sweep, the cine family (`CCineNPC`/`CCineAI` slot 583, `CineCleanup 0x1027d170`, 0003/2),
+`StartTask` (base and werewolf), `DoPossession 0x102c51a0` (16c), the follower selector
+`0x102b93c0` (16a), `CScriptedTarget`, `CSceneEntity` slot 261, `0x1027c300`, `0x102aa210`,
+`CNPC_VZombie` slot 420.
+
+Called from `ElysiumNpcEnemy::GatherConditions` between `GatherSeeUnknown` and `GatherSounds`. `[VtMB]`
 
 #### The sound sweep `0x102b1cd0`, walked
 

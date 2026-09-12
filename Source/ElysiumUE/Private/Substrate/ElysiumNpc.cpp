@@ -2836,6 +2836,12 @@ void FElysiumNpc::RunPath()
 
 // --- The gaze cascade's NPC arms ---
 
+const FElysiumEntity* FElysiumNpc::GazeTargetEntity() const
+{
+	// `m_hTargetEnt`, resolved; a stale handle answers nothing, as retail's handle test does.
+	return World != nullptr ? World->Resolve(TargetEnt) : nullptr;
+}
+
 const FElysiumEntity* FElysiumNpc::GazeEnemy() const
 {
 	// `GetEnemy()`: the committed enemy, dead or alive — the cascade itself refuses an inert one,
@@ -3771,6 +3777,16 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	SerializeDisciplineBlock(Ar);
 	SerializeDisciplineFlags(Ar);
 	ScheduleHost.Serialize(Ar, World);
+	if (Ar.Version() >= FElysiumSaveVersion::ComfortSweep)
+	{
+		// `m_flNextComfortCheckTime` and `m_hTargetEnt`, both saved by retail's datamaps.
+		Ar << NextComfortCheckTime;
+		Ar << TargetEnt;
+		if (Ar.IsLoading() && World)
+		{
+			TargetEnt = World->RebaseSavedHandle(TargetEnt);
+		}
+	}
 
 	if (Ar.IsLoading())
 	{

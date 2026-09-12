@@ -735,8 +735,12 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// `SeeUnknownSweep` writes the see-unknown sweep's grace timer mid-record in the NPC memory and
 	// drops the two dead latch copies there, so it moves the floor: a `SoundSweep` payload is
 	// refused.
+	//
+	// `ComfortSweep` appends the comfort sweep's `m_flNextComfortCheckTime` and the NPC's
+	// `m_hTargetEnt` to the END of the NPC leaf behind its own version. Additive: a `SeeUnknownSweep`
+	// payload restores a sweep due at once and no target, the spawn defaults.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::SeeUnknownSweep);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::ComfortSweep);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),

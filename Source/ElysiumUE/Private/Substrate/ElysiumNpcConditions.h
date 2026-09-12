@@ -121,11 +121,11 @@ enum class EElysiumNpcCond : uint8
 	// schedule of a non-busy, non-investigating NPC; `SelectSchedule` state 8 consumes it.
 	InvestigateLevel = 0x1e,
 
-	// The four `BuildScheduleTestBits` (`0x102ad140`) names beside the law conditions. Their
-	// producers are not built yet -- `COMFORT` is the comfort-list sweep `FUN_102b1a20`,
-	// `SQUAD_SEE_ENEMY` the squad layer, `HEAR_FLINCH` and `NPC_FREEZE` unrecovered -- but the
-	// overlay names them and a mask that carries an identity the runtime cannot spell would be a
-	// mask that silently drops a term.
+	// The four `BuildScheduleTestBits` (`0x102ad140`) names beside the law conditions. `COMFORT` is
+	// the comfort-list sweep `FUN_102b1a20` (story 10c, `GatherComfort`, below); the other three are
+	// not built yet -- `SQUAD_SEE_ENEMY` the squad layer, `HEAR_FLINCH` and `NPC_FREEZE` unrecovered
+	// -- but the overlay names them and a mask that carries an identity the runtime cannot spell
+	// would be a mask that silently drops a term.
 	Comfort       = 0x27,
 	SquadSeeEnemy = 0x31,
 	HearFlinch    = 0x72,
@@ -330,7 +330,7 @@ namespace ElysiumNpcCond
 
 	/**
 	 * `FUN_102b15c0`, the first of `CAI_BaseNPCTroika::GatherConditions`' three sweeps (before the
-	 * comfort sweep `0x102b1a20`, not built: story 10c, and `GatherSounds` below).
+	 * comfort sweep `GatherComfort` and `GatherSounds`, both below).
 	 *
 	 * The see-unknown channel only tracks one entity, `Memory.BestSeeUnknown`, and is player-only by
 	 * construction: retail reads the target's cached `CBasePlayer*`, which is null for anything
@@ -361,10 +361,44 @@ namespace ElysiumNpcCond
 	 */
 	void GatherSeeUnknown(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
 
+	// The comfort sweep's constants, `FUN_102b1a20` (story 10c).
+	//
+	// The search's seed "best distance" (`0x44800000`), never widened: nothing beyond 1024 units is
+	// chosen, and a candidate at exactly 1024 is (the compare is `<=`).
+	inline constexpr double ComfortRangeUnits = 1024.0;
+	// `RandomFloat(0.2, 0.4)`, the re-arm of `m_flNextComfortCheckTime` (`+0xe90`) on every due pass.
+	inline constexpr double ComfortSweepMinSeconds = 0.2;
+	inline constexpr double ComfortSweepMaxSeconds = 0.4;
+	// `CMP [comforter+0xe94],3 / JGE`: a comforter already crediting 3 targets is skipped with no
+	// fallback. `m_iComfortingCount` is zeroed only by `AddToComfortList` / `RemoveFromComfortList`
+	// and never decremented, so it is a per-membership tally, not a live occupancy.
+	inline constexpr int32 ComfortMaxComfortedTargets = 3;
+	// `SCHED_TROIKA_COMFORT`, the program `GetSchedule` (`0x102ae920`) selects on `COND_COMFORT` in
+	// idle. Not registered in this runtime, so the two arms that test for it never fire yet.
+	inline constexpr int32 ComfortScheduleNumber = 0x12f;
+
+	/**
+	 * `FUN_102b1a20`, the second of `CAI_BaseNPCTroika::GatherConditions`' three sweeps (after
+	 * `GatherSeeUnknown` above, before `GatherSounds` below). Walked:
+	 *
+	 *  1. `curtime < m_flNextComfortCheckTime` returns; otherwise re-arm `curtime + RandomFloat(0.2,
+	 *     0.4)`. The idle test comes AFTER the re-arm, so a non-idle NPC still re-arms and draws.
+	 *  2. Not idle: the tail (6).
+	 *  3. The nearest `ComfortTargets` member, self skipped, 3-D distance `<=` the running best
+	 *     (seeded 1024; a tie goes to the later entry). None, `IsBusyWithDiscipline()`, or no
+	 *     schedule installed: the tail (6).
+	 *  4. A running `SCHED_TROIKA_COMFORT`: return when `m_hTargetEnt` still resolves to that
+	 *     comforter, else `TaskComplete(false)` (`0x10273e80`) and return.
+	 *  5. A comforter that is an NPC must share this NPC's connected squad (`+0x5bb0 < 1 ? +0x5da4 :
+	 *     NULL` on both sides), else return. `m_iComfortingCount >= 3` returns. Otherwise increment
+	 *     it, `SetCondition(COMFORT 0x27)` and `SetTarget(comforter)`.
+	 *  6. The tail: a running `SCHED_TROIKA_COMFORT` gets `TaskComplete(false)`.
+	 */
+	void GatherComfort(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out);
+
 	/**
 	 * `FUN_102b1cd0`, the third of `CAI_BaseNPCTroika::GatherConditions`' three sweeps (after the
-	 * see-unknown sweep `0x102b15c0` and the comfort sweep `0x102b1a20`, the latter of which is not
-	 * built: story 10c).
+	 * see-unknown sweep `0x102b15c0` and the comfort sweep `GatherComfort` above).
 	 *
 	 * It turns raw `HEAR_*` into the one condition alert selection can act on. Walked:
 	 *

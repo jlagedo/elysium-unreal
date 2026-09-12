@@ -636,6 +636,16 @@ public:
 	void DisconnectFromSquad();
 	void ReconnectToSquad();
 
+	// `m_iSquadDisconnected < 1 ? m_pSquad : NULL` (`+0x5bb0`, `+0x5da4`), the squad an NPC answers
+	// to while connected. This substrate has no squad object (0002/17), so `m_pSquad` is null on
+	// every NPC and this answers nothing; a squad layer replaces the body, not the callers.
+	const void* ConnectedSquad() const { return nullptr; }
+
+	// `CAI_BaseNPC::m_hTargetEnt` (`+0x5ce4`) and its setter `0x10279cc0`. Written by the comfort
+	// sweep; read by the gaze cascade's target arm (`GazeTargetEntity`).
+	void SetTarget(const FElysiumEntityHandle& NewTarget) { TargetEnt = NewTarget; }
+	const FElysiumEntityHandle& GetTarget() const { return TargetEnt; }
+
 	virtual bool GetPathToEnemy(float ToleranceUnits) override;
 
 	virtual void RunPath() override;
@@ -856,6 +866,7 @@ public:
 	// The gaze cascade's NPC-only subjects (`CAI_BaseNPC`'s eye maintainer, `0x1026b810`).
 	// `GetEnemy()` is the committed enemy; the navigator's goal is the destination of the move in
 	// flight; the heard sound is the last stimulus the hearing gather promoted to a HEAR_* condition.
+	virtual const FElysiumEntity* GazeTargetEntity() const override;
 	virtual const FElysiumEntity* GazeEnemy() const override;
 	virtual bool GazeNavigationGoal(FVector& OutPoint) const override;
 	virtual bool GazeHeardSound(FVector& OutPoint) const override;
@@ -1050,6 +1061,8 @@ private:
 	FElysiumBodyOwnerToken DialogueBodyOwner;
 	TArray<FString> PatrolNames;
 	TArray<FVector> PatrolPoints;
+	// `m_hTargetEnt` (`+0x5ce4`); see `SetTarget`.
+	FElysiumEntityHandle TargetEnt;
 	bool bPatrolActive = false;
 	// A scripted beat has taken this NPC and has not given it back, and whether the arbiter claim
 	// behind that request is in hand. The two differ only while a claim is deferred: the beat-queue

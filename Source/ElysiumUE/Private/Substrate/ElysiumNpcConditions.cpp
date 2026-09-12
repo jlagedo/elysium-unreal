@@ -558,6 +558,107 @@ void ElysiumNpcCond::GatherSeeUnknown(FElysiumNpc& Npc, double Now, FElysiumNpcC
 	}
 }
 
+namespace
+{
+	// `CAI_BaseNPC::TaskComplete(false)` (`0x10273e80`): `m_ScheduleState.fTaskStatus = COMPLETE`
+	// unless `COND_TASK_FAILED` already stands.
+	void CompleteTaskUnlessFailed(FElysiumNpc& Npc, const FElysiumNpcConditions& Conditions)
+	{
+		if (!Conditions.Has(EElysiumNpcCond::TaskFailed))
+		{
+			Npc.Schedule.bTaskCompletedExternally = true;
+		}
+	}
+
+	// `GetScheduleId(m_pSchedule->id)` through slot 447 compared against `SCHED_TROIKA_COMFORT`.
+	bool IsRunningComfortSchedule(const FElysiumNpc& Npc)
+	{
+		return Npc.Schedule.IsRunning()
+			&& ElysiumScheduleNumber(Npc.Schedule.Current) == ElysiumNpcCond::ComfortScheduleNumber;
+	}
+}
+
+void ElysiumNpcCond::GatherComfort(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out)
+{
+	// The clock first, then the re-arm, then the idle test (`0x102b1a30` / `0x102b1a67` /
+	// `0x102b1a60`): a due NPC re-arms and draws in every state.
+	if (Now < Npc.NextComfortCheckTime)
+	{
+		return;
+	}
+	Npc.NextComfortCheckTime = Now + ElysiumRng::Stream(EElysiumRngStream::NpcSchedule)
+		.FRandRange(static_cast<float>(ComfortSweepMinSeconds), static_cast<float>(ComfortSweepMaxSeconds));
+
+	FElysiumEntityWorld* World = Npc.World;
+	if (Npc.GetMind().State() == EElysiumNpcState::Idle && World != nullptr)
+	{
+		// 1. The nearest comfort-list member, self skipped. `FCOM` / `TEST AH,0x41` / `JP` at
+		//    `0x102b1af6` keeps a candidate at `distance <= best`: 1024 itself qualifies and a tie goes
+		//    to the later entry. Retail dereferences a stale handle and faults; story 8 removes a
+		//    character from the list on death and removal, so `Resolve` skipping one never differs.
+		FElysiumCombatCharacter* Nearest = nullptr;
+		double NearestDistance = ComfortRangeUnits;
+		for (const FElysiumEntityHandle& CandidateHandle : World->ComfortTargets())
+		{
+			FElysiumEntity* Candidate = World->Resolve(CandidateHandle);
+			if (Candidate == nullptr || Candidate->Handle == Npc.Handle)
+			{
+				continue;
+			}
+			FElysiumCombatCharacter* Character = Candidate->AsCombatCharacter();
+			if (Character == nullptr)
+			{
+				continue;
+			}
+			const double Distance = FVector::Distance(Npc.Origin, Candidate->Origin);
+			if (Distance <= NearestDistance)
+			{
+				NearestDistance = Distance;
+				Nearest = Character;
+			}
+		}
+
+		if (Nearest != nullptr && !Npc.IsBusyWithDiscipline() && Npc.Schedule.IsRunning())
+		{
+			// 2. Already comforting: nothing while the same comforter is nearest, the task completed
+			//    when a different one is.
+			if (IsRunningComfortSchedule(Npc))
+			{
+				if (World->Resolve(Npc.GetTarget()) != Nearest)
+				{
+					CompleteTaskUnlessFailed(Npc, Out);
+				}
+				return;
+			}
+
+			// 3. A comforter that is an NPC (`+0x94`, the entity's cached `CAI_BaseNPC*`) must answer
+			//    to the same connected squad as this one; a player comforter skips the test.
+			if (const FElysiumNpc* ComforterNpc = Nearest->AsNpc();
+				ComforterNpc != nullptr && ComforterNpc->ConnectedSquad() != Npc.ConnectedSquad())
+			{
+				return;
+			}
+
+			// 4. The comforter's own cap, `m_iComfortingCount >= 3` (`+0xe94`), no fallback.
+			if (Nearest->ComfortingCount >= ComfortMaxComfortedTargets)
+			{
+				return;
+			}
+			++Nearest->ComfortingCount;
+			Out.Set(EElysiumNpcCond::Comfort);
+			Npc.SetTarget(Nearest->Handle);
+			return;
+		}
+	}
+
+	// 5. The tail (`0x102b1c0f`), reached when not idle, with no candidate, busy, or with no schedule:
+	//    a running comfort schedule has its task completed.
+	if (IsRunningComfortSchedule(Npc))
+	{
+		CompleteTaskUnlessFailed(Npc, Out);
+	}
+}
+
 void ElysiumNpcCond::GatherSounds(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Out)
 {
 	FElysiumEntityWorld* World = Npc.World;
