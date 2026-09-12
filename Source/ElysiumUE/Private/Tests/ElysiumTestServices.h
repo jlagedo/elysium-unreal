@@ -165,6 +165,29 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 		bIgnoreCharacterCollision = bIgnore;
 		Record(FString::Printf(TEXT("NpcMotor SetIgnoreCharacterCollision %d"), bIgnore ? 1 : 0));
 	}
+	// The think's silence, edge-guarded like the production body's: a case counts the edges, and
+	// a refused think that re-stated the hold every frame would be a different fact. `bMoving`
+	// survives a hold -- the request is parked, not dropped -- which is what a case asserts.
+	bool bHeld = false;
+	bool bAnimationHeld = false;
+	virtual void SetHeld(bool bInHeld) override
+	{
+		if (bHeld == bInHeld)
+		{
+			return;
+		}
+		bHeld = bInHeld;
+		Record(FString::Printf(TEXT("NpcMotor SetHeld %d"), bHeld ? 1 : 0));
+	}
+	virtual void SetAnimationHeld(bool bInHeld) override
+	{
+		if (bAnimationHeld == bInHeld)
+		{
+			return;
+		}
+		bAnimationHeld = bInHeld;
+		Record(FString::Printf(TEXT("NpcMotor SetAnimationHeld %d"), bAnimationHeld ? 1 : 0));
+	}
 	// The stub has no movement component to derive one from, so it reports a body standing still at
 	// the yaw it was placed at. What a substrate test asserts is the request contract, not motion.
 	// The ballistic pair, MODELLED rather than recorded.
@@ -963,6 +986,20 @@ struct FElysiumRecordingServices final
 		return FBox(FeetOriginCm - Half,
 			FeetOriginCm + Half + FVector(0.0f, 0.0f, ElysiumMove::StandHeight));
 	}
+	// The player's solid contacts this frame, as the production query drains them off the NPC
+	// bodies' own `NotifyHit` records. A case pushes handles here; the poll beside `SyncFromBody`
+	// takes them on the next tick, so the array is empty again after one.
+	TArray<FElysiumEntityHandle> PlayerTouchContacts;
+	virtual void DrainPlayerTouchContacts(TArray<FElysiumEntityHandle>& Out) override
+	{
+		Out = PlayerTouchContacts;
+		if (!PlayerTouchContacts.IsEmpty())
+		{
+			Record(FString::Printf(TEXT("DrainPlayerTouchContacts %d"), PlayerTouchContacts.Num()));
+			PlayerTouchContacts.Reset();
+		}
+	}
+
 	void PlaceSwingBody(const FElysiumEntityHandle& Body, const FVector& FeetOriginCm)
 	{
 		SwingBodies.Add(Body, StandHullAt(FeetOriginCm));

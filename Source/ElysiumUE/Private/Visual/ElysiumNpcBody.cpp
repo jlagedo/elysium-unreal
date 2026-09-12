@@ -14,6 +14,7 @@
 #include "ElysiumGroundSurface.h"    // the surfaceprop under the feet, this body's own trace
 #include "ElysiumMapActor.h"
 #include "ElysiumMoveSolve.h"        // ElysiumMove::U -- the Source unit the trace depth is in
+#include "ElysiumPawn.h"             // the player's hull, the one toucher `NotifyHit` records
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpcGait.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -109,6 +110,12 @@ void AElysiumNpcBody::SetModelStem(const FString& InStem, USkeletalMeshComponent
 	ModelStem = InStem;
 	Visual = InVisual;
 	AnimVariant = FMath::Max(0, InVariant);
+	// The hold is the body's state, not the mesh's: a model swapped under a silent think stays
+	// held until the think that releases it runs.
+	if (bAnimationHeld && InVisual != nullptr)
+	{
+		InVisual->GlobalAnimRateScale = 0.0f;
+	}
 	EnsureAnimDriver();
 	// A model swap is a new body: the latch, the last request and the previous model's tables all go.
 	AnimDriver->Reset();
@@ -470,6 +477,13 @@ void AElysiumNpcBody::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	ServiceNavigationJump();
+	// A held body is a body whose think is not running: no move step (so no ground refresh, as
+	// retail's `MoveEnact` never runs) and no turn-in-place. `bFaceRequested` survives the hold
+	// and the turn resumes on release, as the retail motor's ideal yaw does.
+	if (bHeld)
+	{
+		return;
+	}
 	// Retail refreshes the NPC's ground surface once per move step and nowhere else
 	// (`CAI_Navigator::MoveEnact 0x102ef870` -> `0x10270290` -> `+0x5b90`), so a body that is not
 	// travelling pays for no trace and keeps the answer its last leg left — which is also what
@@ -517,20 +531,75 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 
 	Movement->Activate();
 	bNavigationJumpFailed = false;
+	bRequestAlreadyAtGoal = false;
 	Movement->MaxWalkSpeed = FMath::Max(1.0f, SpeedCmPerSecond);
 	RequestedFeet = FeetDestination;
 	RequestedAcceptanceCm = FMath::Max(1.0f, AcceptanceRadiusCm);
 	RequestedGaitKind = GaitKind;
+	UPathFollowingComponent* Following = AI->GetPathFollowingComponent();
+	// Bound BEFORE the request: the finishes this exists to catch happen inside `MoveToLocation`.
+	BindMoveFinished(Following);
 	const EPathFollowingRequestResult::Type Result = AI->MoveToLocation(
 		FeetDestination, RequestedAcceptanceCm, /*bStopOnOverlap=*/false,
 		/*bUsePathfinding=*/true, /*bProjectDestinationToNavigation=*/true,
 		/*bCanStrafe=*/false, nullptr, bAllowPartialPath);
-	bMoveRequested = Result != EPathFollowingRequestResult::Failed;
-	if (!bMoveRequested)
+	if (Result == EPathFollowingRequestResult::Failed)
 	{
 		Stop();
+		return false;
 	}
-	return bMoveRequested;
+	if (Result == EPathFollowingRequestResult::AlreadyAtGoal)
+	{
+		// `AAIController::MoveTo` finished this one itself (`RequestMoveWithImmediateFinish(Success)`,
+		// `AIController.cpp`): the follower is Idle and there is nothing to pause or resume. The
+		// body stands inside the goal's reach, so the request is answered as arrived, not as lost.
+		bMoveRequested = true;
+		bRequestAlreadyAtGoal = true;
+		return true;
+	}
+	// `RequestSuccessful` is the request's ID being valid, not the request being alive. The crowd
+	// follower can end it synchronously inside `RequestMove` -- `UCrowdFollowingComponent::
+	// SetMoveSegment` calls `OnPathFinished(Aborted, InvalidPath)` on an empty corridor, a missing
+	// crowd manager or a nav-data mismatch -- and hands back an Idle follower under a successful
+	// result. Reading that as "in flight" is how a route died within a frame with its whole
+	// distance left and nothing said why; a dead request is a refused one, and the caller decides
+	// what a refusal means (the beat's fallback today, a `TaskFail 0xc` under the schedule).
+	if (Following != nullptr && Following->GetStatus() == EPathFollowingStatus::Idle)
+	{
+		UE_LOG(LogElysiumNpcEnt, Verbose,
+			TEXT("%s: move request to %s ended inside the request (%s); refused"),
+			*GetName(), *FeetDestination.ToString(),
+			LastMoveResult.IsEmpty() ? TEXT("no result reported") : *LastMoveResult);
+		Stop();
+		return false;
+	}
+	bMoveRequested = true;
+	if (bHeld)
+	{
+		// A request made on a held body is accepted and parked, as a retail route laid on a body
+		// whose think never reaches `PerformMovement`: it starts travelling on release.
+		PauseFollowing();
+	}
+	return true;
+}
+
+void AElysiumNpcBody::BindMoveFinished(UPathFollowingComponent* Following)
+{
+	if (bMoveFinishedBound || Following == nullptr)
+	{
+		return;
+	}
+	Following->OnRequestFinished.AddUObject(this, &AElysiumNpcBody::OnMoveRequestFinished);
+	bMoveFinishedBound = true;
+}
+
+void AElysiumNpcBody::OnMoveRequestFinished(FAIRequestID RequestID, const FPathFollowingResult& Result)
+{
+	const UWorld* World = GetWorld();
+	LastMoveResult = FString::Printf(TEXT("%s (request %u, world time %.2fs)"), *Result.ToString(),
+		RequestID.GetID(), World ? World->GetTimeSeconds() : 0.0f);
+	UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: move request finished: %s"), *GetName(),
+		*LastMoveResult);
 }
 
 void AElysiumNpcBody::Face(float YawDegrees)
@@ -561,6 +630,7 @@ void AElysiumNpcBody::Stop()
 		Movement->Deactivate();
 	}
 	bMoveRequested = false;
+	bRequestAlreadyAtGoal = false;
 	bFaceRequested = false;
 	// The leg is over; there is nothing left to re-derive against a later fan change.
 	RequestedGaitKind.Reset();
@@ -582,6 +652,89 @@ void AElysiumNpcBody::SetEnabled(bool bEnabled)
 {
 	bRequestedEnabled = bEnabled;
 	ApplyEnabledState();
+}
+
+void AElysiumNpcBody::SetHeld(bool bInHeld)
+{
+	if (bHeld == bInHeld)
+	{
+		return;
+	}
+	bHeld = bInHeld;
+	if (bHeld)
+	{
+		PauseFollowing();
+	}
+	else
+	{
+		ResumeFollowing();
+	}
+}
+
+void AElysiumNpcBody::PauseFollowing()
+{
+	// The request is KEPT: `PauseMove` parks the follower on its current path segment (and the
+	// crowd component parks the Detour agent with it, so a held pedestrian stays an obstacle the
+	// others path around) and `ResumeMove` picks the same request up where it stood. `Stop()`
+	// would abort it, which is the scene's freeze, not the think's silence.
+	AAIController* AI = Cast<AAIController>(GetController());
+	UPathFollowingComponent* Following = AI ? AI->GetPathFollowingComponent() : nullptr;
+	if (Following == nullptr)
+	{
+		return;
+	}
+	const EPathFollowingStatus::Type Status = Following->GetStatus();
+	if (Status != EPathFollowingStatus::Moving && Status != EPathFollowingStatus::Waiting)
+	{
+		return;
+	}
+	// Retail's body simply does not move on the frame its think declines, so the velocity is
+	// zeroed outright -- through `PauseMove(Reset)`, whose `StopMovementKeepPathing` is the ONE
+	// way to zero a character's velocity without losing the request. `StopMovementImmediately`
+	// is not: it runs `UNavMovementComponent::StopActiveMovement`, which under
+	// `bStopMovementAbortPaths` (default true) aborts the outstanding request with
+	// `MovementStop`, and a paused request is not Idle, so it dies (`Aborted[UserAbort
+	// MovementStop]` in the follower's own report; sp_tutorial_1's thug_1 under `AIEnable 0`,
+	// 2026-09-12 -- the walk-out failure the old sp_theatre run showed). Only on the ground: a
+	// launched or jumping body is airborne on engine physics that retail's think does not own
+	// either, and zeroing it mid-arc would hang it in the air, so its velocity is kept. It lands,
+	// and `FinishNavigationJump` re-pauses a resumed follower.
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	const bool bOnGround = Movement != nullptr && Movement->IsMovingOnGround();
+	Following->PauseMove(FAIRequestID::CurrentRequest,
+		bOnGround ? EPathFollowingVelocityMode::Reset : EPathFollowingVelocityMode::Keep);
+}
+
+void AElysiumNpcBody::ResumeFollowing()
+{
+	AAIController* AI = Cast<AAIController>(GetController());
+	UPathFollowingComponent* Following = AI ? AI->GetPathFollowingComponent() : nullptr;
+	if (Following != nullptr && Following->GetStatus() == EPathFollowingStatus::Paused)
+	{
+		// The body did not move while held, so it is still on its path and the follower resumes
+		// the same request rather than re-planning one.
+		Following->ResumeMove(FAIRequestID::CurrentRequest);
+	}
+}
+
+void AElysiumNpcBody::SetAnimationHeld(bool bInHeld)
+{
+	if (bAnimationHeld == bInHeld)
+	{
+		return;
+	}
+	bAnimationHeld = bInHeld;
+	// The clock, not the evaluation. `GlobalAnimRateScale` scales the delta `UpdateAnimation`
+	// hands the graph and its montages, and a zero delta still runs the update -- so the cinematic
+	// proxy's explicit seeks (`FElysiumBipedAnimProxy::Seek`/`PlayDirect`, which a choreo scene and
+	// a dialogue drive per frame on a cast that IS AI-disabled) keep landing. `bPauseAnims`, the
+	// corpse's `HoldBodyFinalPose`, would stop the evaluation itself and break that path. A
+	// one-shot under a stopped clock reports "still playing" and completes on release, which is
+	// retail's own answer for a sequence the think stopped advancing.
+	if (USkeletalMeshComponent* Body = Visual.Get())
+	{
+		Body->GlobalAnimRateScale = bAnimationHeld ? 0.0f : 1.0f;
+	}
 }
 
 void AElysiumNpcBody::SetFrozen(bool bInFrozen)
@@ -751,8 +904,13 @@ FElysiumLocomotionSample AElysiumNpcBody::SampleLocomotion() const
 	//
 	// Only while a leg is in flight: `MaxWalkSpeed` keeps its last value after a stop, and a body
 	// standing still has commanded nothing.
+	//
+	// And not while held: the request is parked, and a commanded speed on a body that is not
+	// travelling would have the driver classify it as moving and publish a gait over the idle the
+	// refused think just asked for.
 	const UCharacterMovementComponent* Movement = GetCharacterMovement();
-	Out.CommandedSpeed = (bMoveRequested && Movement != nullptr) ? Movement->MaxWalkSpeed : 0.0f;
+	Out.CommandedSpeed = (bMoveRequested && !bHeld && Movement != nullptr)
+		? Movement->MaxWalkSpeed : 0.0f;
 
 	// **The cache, not a trace.** `FromCharacterMovement` cannot fill this — the engine's floor
 	// sweeps run without `bReturnPhysicalMaterial` — and this call is a getter that a think and an
@@ -785,6 +943,12 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 	if (!bMoveRequested)
 	{
 		return bFaceRequested ? EElysiumNpcMoveStatus::Moving : EElysiumNpcMoveStatus::Idle;
+	}
+	if (bRequestAlreadyAtGoal)
+	{
+		// The engine finished this request inside `MoveToLocation`; the body was already there.
+		Stop();
+		return EElysiumNpcMoveStatus::Reached;
 	}
 
 	const float Horizontal = FVector::Dist2D(OutFeetOrigin, RequestedFeet);
@@ -944,6 +1108,22 @@ void AElysiumNpcBody::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other,
 		bBallisticContacted = true;
 		BallisticContactNormal = HitNormal;
 	}
+	// The player's touch handler `0x10147690`'s input, recorded and polled rather than pushed.
+	// `DispatchBlockingHit` reaches this for a swept blocking hit in BOTH directions -- the
+	// player's hull moving into this capsule (`bSelfMoved` false) and this body moving into the
+	// hull (`bSelfMoved` true) -- which is also both directions retail's `PhysicsImpact` touches.
+	// Ungated: retail touches whether or not the body is launched.
+	if (Other != nullptr && Other->IsA<AElysiumPawn>())
+	{
+		bPlayerContactPending = true;
+	}
+}
+
+bool AElysiumNpcBody::ConsumePlayerContact()
+{
+	const bool bPending = bPlayerContactPending;
+	bPlayerContactPending = false;
+	return bPending;
 }
 
 bool AElysiumNpcBody::ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const

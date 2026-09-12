@@ -1915,6 +1915,9 @@ void FElysiumCombatCharacter::GetDebugState(TArray<TPair<FString, FString>>& Out
 		? FString(TEXT("(none)"))
 		: FString::Printf(TEXT("%s  (%d rows)"), *FString::Join(Effects, TEXT(", ")),
 			EffectLayer.IsValid() ? EffectLayer->NumRows() : 0));
+	// `m_iMiscFlags`, the persistent word `AddMiscFlag` ORs into: the discipline tables' misc
+	// masks and the touch handler's `Obf_Bumped_Object 0x100`.
+	Out.Emplace(TEXT("Misc flags"), FString::Printf(TEXT("0x%x"), MiscFlags));
 	Out.Emplace(TEXT("WillTalk"), bWillTalk ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Disposition"), Disposition.IsEmpty() ? TEXT("(none)") : Disposition);
 	// The discipline block: which of the thirteen are active, and how many targeted

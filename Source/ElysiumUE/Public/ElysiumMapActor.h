@@ -396,6 +396,7 @@ public:
 		FBox& OutWorld) const override;
 	virtual void QuerySwingContacts(const FElysiumSwingSweep& Sweep,
 		TArray<FElysiumEntityHandle>& OutHits) const override;
+	virtual void DrainPlayerTouchContacts(TArray<FElysiumEntityHandle>& Out) override;
 	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 		FElysiumClipPhase& Out) override;
 	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,

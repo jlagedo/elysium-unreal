@@ -227,6 +227,18 @@ public:
 	// Pass through other characters and the player for a scripted beat's duration
 	// (`scripted_sequence` spawnflag 4096). World collision is retained.
 	virtual void SetIgnoreCharacterCollision(bool bIgnore) = 0;
+	// "No think integrates this body." Retail's `NPCThink` `0x10292de0` returns early for
+	// `m_bDisableAI` and for the AI console gate `0x1026c3d0`, and a retail body moves ONLY from
+	// inside its think (`PerformMovement`), so the return alone freezes it in place with its route
+	// and its collision intact. This runtime's bodies move on the actor tick, so the same silence
+	// has to be stated to the motor: the outstanding move request is PAUSED, not dropped, and
+	// resumes on release; the body stays solid and stays a crowd obstacle. Distinct from
+	// `SetFrozen`, which is the scene's `MOVETYPE_NONE + SOLID_NONE` and drops the request.
+	virtual void SetHeld(bool bHeld) {}
+	// The other half of the same silence: `PostRun` is where the NPC's own animation advances, so a
+	// refused think also leaves the pose where it was. Stops the body's animation clock; explicit
+	// seeks (the cinematic path a scene or a dialogue drives) still apply under it.
+	virtual void SetAnimationHeld(bool bHeld) {}
 	// The body's live feet/yaw plus what its outstanding request is doing. A turn-in-place reports
 	// Moving until it is aligned, then falls back to Idle — there is only one request at a time.
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) = 0;
@@ -235,6 +247,12 @@ public:
 	// standing asks here instead of stealing that edge from the executor waiting on it. The
 	// world's per-frame record sync is the caller.
 	virtual void SampleTransform(FVector& OutFeetOrigin, float& OutYawDegrees) const = 0;
+	// Debug read: how the engine's path follower ended this body's most recent request (result
+	// code, flags, when), or empty when none has ended. A request can die INSIDE the call that
+	// made it -- the crowd follower aborts synchronously on an empty corridor or a nav-data
+	// mismatch, and `AlreadyAtGoal` finishes at once -- and `Sample` then reports `Failed` with the
+	// whole distance left; this is the line that says why. Nothing decides on it.
+	virtual FString DescribeLastMoveResult() const { return FString(); }
 
 	// This body's own authored travel speed for one gait at one facing-relative direction, cm/s —
 	// the cell of that gait's resolved fan the body is about to play. It is the number a travel
@@ -1077,6 +1095,17 @@ public:
 		TArray<FElysiumEntityHandle>& OutHits) const
 	{
 		OutHits.Reset();
+	}
+
+	// The NPC bodies the player's hull was in solid contact with since the last drain -- the
+	// player's touch handler `0x10147690`'s input, which Source raises every frame a move sweep
+	// blocks on another entity, in either direction. POLLED, once per frame beside the player's
+	// body sync, and DRAINED: a contact is reported once per frame of contact, which is exactly
+	// how often retail's `Touch` fires. The body records the hit in its own `NotifyHit` and the
+	// substrate asks; nothing is pushed. Headless: nobody touches anybody.
+	virtual void DrainPlayerTouchContacts(TArray<FElysiumEntityHandle>& Out)
+	{
+		Out.Reset();
 	}
 
 	// How lit is this point, normalized 0 (dark) to 1 (fully lit)?

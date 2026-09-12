@@ -193,6 +193,21 @@ void AElysiumMapActor::ReleaseNpcReaction(USkeletalMeshComponent* Body)
 	}
 }
 
+void AElysiumMapActor::DrainPlayerTouchContacts(TArray<FElysiumEntityHandle>& Out)
+{
+	// No entity walk and no component -> entity map: every NPC body carries its own handle, and
+	// the contact is the body's own `NotifyHit` record. Drained here so a contact is reported
+	// once per frame of contact, which is how often retail's `Touch` fires.
+	Out.Reset();
+	for (AElysiumNpcBody* Body : NpcMotors)
+	{
+		if (Body != nullptr && Body->ConsumePlayerContact())
+		{
+			Out.Add(Body->GetOwningEntity());
+		}
+	}
+}
+
 EElysiumHeldReactionState AElysiumMapActor::QueryNpcReactionHold(
 	USkeletalMeshComponent* Body) const
 {

@@ -562,10 +562,11 @@ public:
 			ScheduleHost.LastAI = Now;
 	}
 	// `COND_WAS_BUMPED`'s NPC-side producer, the second half of the player's touch handler
-	// `0x10147690`. **SEAM**: no caller. The bump EVENT is the locomotion layer's -- see
-	// `ElysiumDisciplines::NotifyBumped`, which states the same absence -- and this is the arm the
-	// producer calls when it lands.
-	void OnBumped(double Now);
+	// `0x10147690`. Called from `FElysiumPlayer::PollTouchContacts` once per frame of solid
+	// contact, after the player-side half (`Obf_Bumped_Object`, `ElysiumDisciplines::NotifyBumped`),
+	// which is the handler's own order. True when the bit was recorded, false when the running
+	// program's mask refused it.
+	bool OnBumped(double Now);
 	// `m_scriptState in {4,5,6}`, the third term of `ShouldThinkFrequently()` (`0x102c2430`) --
 	// the aiscripted states in which a beat is actively driving this body. Mapped rather than
 	// transcribed: this runtime spells the same fact as a scripted owner holding the body or a
@@ -612,6 +613,15 @@ public:
 	// -- and re-armed on the way back out.
 	void SetDisableAi(bool bDisable);
 	bool IsAiDisabled() const { return bDisableAi; }
+	// "No think integrates this body", stated to the motor in its two halves. A retail body moves
+	// and animates only from inside `NPCThink` (`PerformMovement`, `PostRun`), so the two early
+	// returns -- `m_bDisableAI` and the AI console gate -- freeze it by doing nothing; this
+	// runtime's bodies run on the actor tick, so `Think` says it on the way out and takes it back
+	// on the first pass that gets through both gates. Forwarders with no state of their own: the
+	// motor's edge guard is the idempotence, and a motor rebuilt under a silent think is re-held by
+	// the next refused one.
+	void SetBodyHeld(bool bHeld);
+	void SetBodyAnimationHeld(bool bHeld);
 
 	// CBaseEntity::SetAttackExtents 0x1009af40; attack partition only, never the motor capsule.
 	void SetAttackExtents(const FVector& MarginCm) { ScheduleHost.AttackExtentsCm = MarginCm; }

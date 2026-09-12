@@ -116,6 +116,12 @@ void AElysiumNpcBody::FinishNavigationJump(bool bSucceeded)
 	else if (Link)
 	{
 		Link->ResumePathFollowing(this);
+		if (bHeld)
+		{
+			// The landing resumed a follower on a body whose think is still silent; park it again
+			// where it landed, as the hold would have on the ground.
+			PauseFollowing();
+		}
 	}
 }
 

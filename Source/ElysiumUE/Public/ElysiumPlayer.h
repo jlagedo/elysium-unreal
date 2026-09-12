@@ -2375,6 +2375,10 @@ public:
 	// tick). Writes the fields directly — going through SetRuntimeOrigin would teleport the pawn
 	// back to where it already is, every frame.
 	void SyncFromBody();
+	// The player's touch handler `0x10147690`, once a frame right after `SyncFromBody`: for every
+	// NPC body the hull was in solid contact with this frame, the toucher's `Obf_Bumped_Object`,
+	// the bump lane's discipline interrupt, then the NPC's own `OnBumped` (mask-guarded there).
+	void PollTouchContacts(double Now);
 
 	// The pawn follows the entity: a write to origin/angles places the body.
 	// If !playercontroller is live, explicit writes also update its teardown anchor; SyncFromBody's

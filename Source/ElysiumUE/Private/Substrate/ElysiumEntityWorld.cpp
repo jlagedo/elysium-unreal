@@ -1515,9 +1515,17 @@ void FElysiumEntityWorld::Tick(double Now)
 	// measuring distance, a landmark offset, `pc.GetOrigin()`) sees where the player actually is.
 	// The body moved earlier in THIS frame (step 4), which is the relationship retail has: the move
 	// writes the player's origin out of the packet drain, and every think in `GameFrame` reads it.
+	// Every moving NPC's record first, once per frame -- the think cadence's named divergence, and
+	// the reason it is per frame rather than per think is the cadence itself: a body out of the
+	// player's PVS may not think for seconds, and every distance law and sense reads `Origin`.
+	SyncMovingNpcRecords();
 	if (FElysiumPlayer* PlayerEnt = FindPlayer())
 	{
 		PlayerEnt->SyncFromBody();
+		// The player's touch handler `0x10147690`, once per frame and right after the move whose
+		// contacts it reports -- Source raises `Touch` out of the player's own move step, ahead of
+		// every think in the frame.
+		PlayerEnt->PollTouchContacts(Now);
 		// The player's step clock, immediately after the body's state is sampled and on the
 		// POST-MOVE pass — which is where `CGameMovement::PlayerMove` (`0x101274a0`) runs
 		// `UpdateStepSound`, at the far end of the move whose speed and ground contact it reads.

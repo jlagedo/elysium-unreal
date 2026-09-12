@@ -3111,7 +3111,10 @@ on `0x<offset/4>]`.
   the cvar flipped. `debug_allow_move_facing` (`0x10924f70`, ctor `0x1028c720`, default `"1"`,
   "If this is on, NPCs will move facing the NPC when they run for cover") is `DAT_10924f74`;
   readers `0x10278cb0/d20/d90` (facing forwarders), `NPCThink`, `0x102b93c0`,
-  `CNPC_VAndreiBlood::PreTranslate_Human`.
+  `CNPC_VAndreiBlood::PreTranslate_Human`. `0x10278d90` is slot 517 on every NPC class: under the
+  cvar it forwards its five arguments to `CAI_Motor` slot 12 (`m_pMotor +0x30`), the motor's
+  facing target; `NPCThink` calls it with `(enemy, the memory's last-known position, 1.0, 0.8, 0)`
+  when `flags2` carries `MOVE_FACE_ENEMY 0x400`.
 - **`m_bfNPCFrenziedFlags` (+0x5b84)**: `FIELD_INTEGER`, saved, no external name, **no name
   table anywhere** (only `NPCFlag:` `0x1030cbd0` and `MiscFlag:` `0x1030d850` parsers exist) —
   UNRECOVERED authored names. Writers: base init `0x10273390` → 0 (VCamera/VNewscaster/
@@ -3390,7 +3393,8 @@ dialogue/script. There are no `ai_think_*` cadence cvars.
 **`SetClosestPlayer`**: nearest player by 3-D distance, seed `20000.0`, → `m_hClosestPlayer`,
 `m_flPlayerDist`. **`SetPlayerLOS`**: forced `PVS = LOS = 1` when `m_bfNPCStateFlags & 0x8`
 (UNRECOVERED name), `frenzied & 0x8`, or no player; else at most every 2.0 s: `PVS = engine
-PVS test 0x101d1a90`; in PVS and `dist < 512` → `LOS = 1` without a trace; else eye-to-eye trace
+PVS test 0x101d1a90`; in PVS and `dist ≤ 512` (equality takes this arm) → `LOS = 1` without a
+trace; else eye-to-eye trace
 mask `0x4091`; then `if (!LOS && PVS && curtime − m_flLastInPlayerLOS < 8.0) LOS = 1`.
 
 **One `NPCThink` (`0x10292de0`), in order**: `NPCThinkDebugPre`; `flags2 &= ~SCHEDULE_CHANGED`;
@@ -3403,11 +3407,20 @@ when none) and the `MOVE_FACE_ENEMY` facing under `debug_allow_move_facing`; `An
 `SetCondition(0x29)`); shoot-target override; a 1 % `"Scream_Death"` under `frenzied & 0x8000`;
 `updateDue`; `ResolveStandingOnHead`; fall-to-ground unless `DONT_FALL_TO_GROUND`; `move_yaw`
 pose; `DISAPPEAR 0x20000000` removal when out of the player's PVS or unseen; the AI console gate
-`0x1026c3d0` (refusal → `m_flNextThink = curtime + 0.1`, return); **`bReduced =
-!IsThinkDue(NextAI)`**; `RunAlternateAI(bReduced)` (`0x1028fd80`) and, if it returns 0,
+`0x1026c3d0` (2026-09-12, walked: with the node graph built (`DAT_1093408c`) and `g_AIDisabled`
+bit 0 set, the refuse arm dispatches **slot 310 `SetActivity(1 = ACT_IDLE)`** — Troika
+`0x10295750` falls through to `CAI_BaseNPC::SetActivity 0x102725d0`, which writes the ideal, resets
+the sequence and fires slot 465 `OnChangeActivity` through `SetActivityAndSequence 0x10272490` — and
+returns false; `NPCThink` then returns without writing `m_flNextThink`, so every NPC snaps to idle
+and holds position and pose until `SetAIEnabled(true)` re-bases it. With the graph NOT built the
+gate draws its 5 s overlay and takes the same `SetActivity` arm, and `NPCThink` writes
+`m_flNextThink = curtime + 0.1` instead. The `ai_step` bit-1 arm refuses without the idle write);
+**`bReduced = !IsThinkDue(NextAI)`**; `RunAlternateAI(bReduced)` (`0x1028fd80`) and, if it returns 0,
 `RunAI(bReduced)` (slot 432); `PostRun` → `PerformMovement(interval)`; `CalcNextMoveThink`;
 `CalcNextAIThink`. Then (whether or not normal was due): if `updateDue` → `UpdateCharacter`
-(slot 312) and `FinishTalking` when `m_bIsTalking && !IsInDialog()`; `CalcNextUpdateThink`;
+(slot 312) and `FinishTalking` when `m_bIsTalking` and `0x102c0aa0` answers false (not
+`IsInDialog` `0x102c1170`: it is "the dialogue handle `+0x6554` resolves and its `+0x498` byte is
+set, or `curtime < m_flTalkEnd +0x64cc`"); `CalcNextUpdateThink`;
 `CalcNextNormalThink`; **`m_flNextThink = min(NextUpdate, NextNormal)`**; `m_bJumping +0x6498` →
 `curtime + 0.01`; the debug overlay.
 
@@ -3442,7 +3455,23 @@ a player */ && (npc = other->+0x98) /* other is a Troika NPC */) { if
 (ConditionInterruptsCurrentSchedule(npc, 0x38)) { ai-trace hook; SetCondition(npc, 0x38); } } }`.
 The guard is the recovered behaviour and it is observable: the bit is never raised on an NPC whose
 running program does not list `WAS_BUMPED` in its interrupt mask. Its one reader in the image is
-`CAI_BaseNPCTroika::GetSchedule` `0x102ae920`, in combat.
+`CAI_BaseNPCTroika::GetSchedule` `0x102ae920`, in combat. Source raises `Touch` out of the player's
+own move step, every frame a move sweep blocks on the other entity, in either direction.
+
+*Port (2026-09-12).* The contact is recorded on the NPC body (`AElysiumNpcBody::NotifyHit`, which
+the engine reaches for a swept blocking hit whether the player's hull moved into the capsule or the
+capsule into the hull) and drained once per frame through `IElysiumEmbodiment::
+DrainPlayerTouchContacts` by `FElysiumPlayer::PollTouchContacts`, right after `SyncFromBody`; per
+touched NPC it writes the player's `Obf_Bumped_Object`, runs `ElysiumDisciplines::NotifyBumped`
+on the player (the port's stand-in for the flag's retail reader, 0007's) and calls
+`FElysiumNpc::OnBumped`, which carries the mask guard; when the guard admits the bit, the same
+reader runs on the NPC, because every authored `ShouldRemove_OnWasBumped 1` row (`disciplinetgt_*`:
+Nightwisp Ravens, Bloodsucker Communion, Hysteria, Trance, two more) is a target effect and the
+effect that breaks sits on the touched NPC — whether retail keys that removal on the condition or on
+a misc flag of the victim's own is 0007's to recover. Verified in `sm_hub_1` 2026-09-12: one log line
+per contact frame, `0x100` on the player, the NPC bit refused by every shipped program's mask. Unrecovered: whether retail's `CategorizePosition` also touches a non-world
+ground entity (a player standing still on an NPC's head); non-NPC touchers (`+0x9c` set, `+0x98`
+clear) take only the first arm and are not drained.
 
 **Port (0005 story 15).** `Substrate/ElysiumNpcThinkCadence.h` carries `IsDue`, the four laws over
 `FElysiumNpcScheduleHost`'s eight stamps, and `ShouldThinkFrequently`; `FElysiumNpc::Think` is
@@ -3454,7 +3483,38 @@ the code:
   hops but is never wrong. This runtime's bodies are integrated by a movement component on the
   actor tick while `Origin` is written only from a think, and an unseen body may not think for
   seconds. `FElysiumEntityWorld::SyncMovingNpcRecords` refreshes every NPC's record once per frame,
-  beside the player's own `SyncFromBody`.
+  from `Tick` immediately before the player's own `SyncFromBody` (2026-09-12: it had been called
+  from `Activate` alone, so a hidden body's record went stale for its whole cadence interval).
+- **The silence is stated to the body.** For the same reason, a retail think that returns early
+  (`m_bDisableAI`, the AI console gate) freezes its body by running no `PerformMovement` and no
+  `PostRun`, while this runtime's body would walk on. `IElysiumNpcMotor::SetHeld` (the path
+  follower paused with its request kept, velocity zeroed on the ground, collision and the crowd
+  agent intact — not `SetFrozen`, which is the scene's `SOLID_NONE`) and `SetAnimationHeld` (the
+  mesh's `GlobalAnimRateScale` to 0, under which the cinematic proxy's explicit seeks still land)
+  are set by `FElysiumNpc::Think` on the two early returns and cleared by the first pass that
+  gets through both gates. The `m_bDisableAI` arm holds both; the gate arm plays `ACT_IDLE`
+  (`PlayActivity`, through claim arbitration) and holds movement only, so the port's idle LOOPS
+  where retail holds its first frame — a named visual-only modernization, because a stopped clock
+  would park the blend into idle mid-stride and would stop the feed victim's feeder-synced clip.
+  `OnKilled` and dormancy release both holds.
+  A route laid on a held body parks at the motor the same way (`AElysiumNpcBody::MoveTo` pauses
+  the new request). The hold's first cut killed the very request it parked: after `PauseMove`
+  it zeroed the velocity with `StopMovementImmediately`, whose `StopActiveMovement` aborts the
+  outstanding request (`bStopMovementAbortPaths`, `Aborted[UserAbort MovementStop]` in the
+  follower's own report), so a scripted beat's walk on a held body died with its whole distance
+  left and the beat teleported the NPC (sp_theatre's walk-out, sp_tutorial_1's `thug_1` under
+  `AIEnable 0`, 2026-09-12). The velocity is now zeroed through `PauseMove(Reset)` alone
+  (`StopMovementKeepPathing`), airborne bodies keep theirs (`Keep`). Two engine finishes that
+  happen inside the request call are also read now — `AAIController::MoveTo`'s `AlreadyAtGoal`
+  is answered as arrived, and a follower the crowd component aborted synchronously in
+  `SetMoveSegment` (empty corridor, nav-data mismatch) under a successful result is answered as
+  refused — and the engine's own finish (`OnRequestFinished`) is kept as `Last move result` in
+  the NPC debugger. Confirmed in game (sp_tutorial_1, `thug_1`, 2026-09-12): under `AIEnable 0`
+  the beat's route parks with its whole distance left and no finish reported; on `AIEnable 1` the
+  same request resumes, the body walks the 683 cm, settles at the mark and the beat fires
+  `OnEndSequence` on arrival. The one divergence of the hold that remains is not the hold's: the
+  `scripted_sequence` beat drives its travel from its own think, where retail's walk is a
+  schedule inside `NPCThink` behind both gates — spec 0012 owns it.
 - **A reduced pass re-derives the damage lane.** Retail sets `LIGHT_DAMAGE`/`HEAVY_DAMAGE` inside
   the damage transaction, so the bit is live on a reduced think; this runtime rebuilds its whole
   condition set each full pass and reconstructs the one-pass life from `Cognition.GatheredAt`,
@@ -3485,7 +3545,11 @@ patrol and interesting-place inputs, the dialogue END, and `OnKilled`. The AI co
 `0x1026c3d0` is in `Think` (`World->IsAiEnabled()`), the state byte is derived
 (`FElysiumNpc::NpcStateFlags`), `DISAPPEAR` is run, and the enemy triple is written on every
 normal-due think. `m_bfNPCStateFlags` bit 3 is no longer unrecovered: it is the state byte's own
-bit, carried by combat, alert, script and the hunt/flee pair.
+bit, carried by combat, alert, script and the hunt/flee pair. Removed later the same day: four
+port-only resets on the load path (the patrol and interesting-place restore branches and the
+`bRemoveOnHearCombat` restore arm of `FElysiumNpc::Serialize`) — retail restores its saved stamps
+and resets nothing, and three of the four were dead code under the `ScheduleHost` block that
+restores the eight stamps last.
 
 **The remaining items, closed (2026-09-12).** `m_flTeleportMoveTimer` `+0x65dc` has no code
 writer at all: the literal-offset grep over every decompiled function returns only its reader,
@@ -3520,10 +3584,15 @@ bit 6 is set (only `0x7f`: the hunt/flee pair) — the enemy the squad producer 
 state. `CAI_BaseNPC+0x98` is the entity's own `CAI_BaseNPCTroika*` (null on a non-Troika entity;
 `+0xa8` the same for `CBasePlayer*`), by every read in this section.
 
-Still stated as seams, each owned elsewhere: `WAS_BUMPED`'s bump event (this runtime's motor
-reports no character-vs-character contact) and the `NPCThink` arms listed at `FElysiumNpc::Think`
+Still stated as seams, each owned elsewhere: the `NPCThink` arms listed at `FElysiumNpc::Think`
 with their owning stories (hint upkeep and `COND_HINT_INVALID`, the shoot-target override, the
-death-scream roll, `ResolveStandingOnHead`, fall-to-ground, `move_yaw`, the boss registry).
+death-scream roll, `ResolveStandingOnHead`, fall-to-ground, `move_yaw`, the boss registry), and
+the `MOVE_FACE_ENEMY` (`flags2 0x400`) move-facing under `debug_allow_move_facing` (default `"1"`,
+so live in retail): slot 517 `0x10278d90` forwards `(enemy, its last-known position, 1.0, 0.8, 0)`
+to `CAI_Motor` slot 12, the motor's facing target for a leg in flight — 0006's motor, with the
+turn pose. `WAS_BUMPED`'s bump event is no longer a seam (see the touch handler above). The
+scripted beat's travel, outputs and failure retry belong to the NPC's own schedule in retail
+(`SCHED_TROIKA_SCRIPTED_*`, `NPC_STATE_SCRIPT`) and run from the beat's think here — spec 0012.
 
 ## Squads, decoded (2026-09-08)
 

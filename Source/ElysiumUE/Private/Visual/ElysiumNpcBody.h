@@ -8,6 +8,10 @@
 #include "VisualLogger/VisualLoggerDebugSnapshotInterface.h"
 #include "ElysiumNpcBody.generated.h"
 
+struct FAIRequestID;
+struct FPathFollowingResult;
+class UPathFollowingComponent;
+
 class AElysiumMapActor;
 class AElysiumNpcBody;
 class ANavLinkProxy;
@@ -127,7 +131,14 @@ public:
 	virtual void SetEnabled(bool bEnabled) override;
 	virtual void SetFrozen(bool bFrozen) override;
 	virtual void SetIgnoreCharacterCollision(bool bIgnore) override;
+	virtual void SetHeld(bool bHeld) override;
+	virtual void SetAnimationHeld(bool bHeld) override;
+	// Whether the player's hull blocked on this body since the last call, then cleared. Recorded by
+	// `NotifyHit` in both directions (the player's sweep into this capsule, this body's sweep into
+	// the player's hull) and drained by the map actor's `DrainPlayerTouchContacts`.
+	bool ConsumePlayerContact();
 	virtual void SampleTransform(FVector& OutFeetOrigin, float& OutYawDegrees) const override;
+	virtual FString DescribeLastMoveResult() const override { return LastMoveResult; }
 	virtual EElysiumNpcMoveStatus Sample(FVector& OutFeetOrigin, float& OutYawDegrees) override;
 	virtual FElysiumLocomotionSample SampleLocomotion() const override;
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override;
@@ -220,6 +231,11 @@ private:
 	// caller-authored speed, which `AnimTick` must never overwrite (the equip-mid-leg fix).
 	TOptional<EElysiumNpcGaitKind> RequestedGaitKind;
 	bool bMoveRequested = false;
+	// `MoveToLocation` answered `AlreadyAtGoal`: the engine finished the request inside the call
+	// (`RequestMoveWithImmediateFinish(Success)`), so no request stands and the follower is Idle,
+	// yet the body IS where it was asked to be. `Sample` reports that as Reached once; the
+	// distance test alone could not, because the engine's reach test adds the agent radius.
+	bool bRequestAlreadyAtGoal = false;
 	bool bFaceRequested = false;
 	bool bRequestedEnabled = true;
 	bool bRuntimeReady = false;
@@ -227,6 +243,24 @@ private:
 	// screen; an ignoring body still collides with the world, just not with other characters.
 	bool bFrozen = false;
 	bool bIgnoreCharacterCollision = false;
+	// The think's silence, in two halves (`IElysiumNpcMotor::SetHeld` / `SetAnimationHeld`): the
+	// path follower is paused with its request kept, and the mesh's animation clock is stopped.
+	// Neither hides, un-solids or drops anything, which is what separates them from `bFrozen`.
+	bool bHeld = false;
+	bool bAnimationHeld = false;
+	void PauseFollowing();
+	void ResumeFollowing();
+	// The engine's own word on how the last request ended, bound once per spawned controller and
+	// kept as text for the debugger (`IElysiumNpcMotor::DescribeLastMoveResult`). Recorded, never
+	// acted on: the substrate decides from `Sample`, which reads the follower's status.
+	void BindMoveFinished(UPathFollowingComponent* Following);
+	void OnMoveRequestFinished(FAIRequestID RequestID, const FPathFollowingResult& Result);
+	bool bMoveFinishedBound = false;
+	FString LastMoveResult;
+	// A blocking contact with the player's hull since the last `ConsumePlayerContact`. Set by
+	// `NotifyHit`, read by the map actor's per-frame drain. Not gated on anything: retail's
+	// `Touch` fires on every solid contact, launched or walking.
+	bool bPlayerContactPending = false;
 	// Reported once: a body that cannot reach its character keys every request on no classname and
 	// empty hands, and nothing downstream of that is wrong enough to notice.
 	bool bWarnedNoTranslationContext = false;

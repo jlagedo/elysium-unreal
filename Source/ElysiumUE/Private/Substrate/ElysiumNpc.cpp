@@ -349,6 +349,10 @@ void FElysiumNpc::OnKilled()
 	//    later un-freezes a body must not also make a corpse start blocking the player again.
 	SetBodyFrozen(true);
 	SetIgnoreCharacterCollision(true);
+	// A body killed under a silent think gives the hold back: the death clip has to advance, and
+	// `ThinkDead` runs above both gates, so a corpse is never held again.
+	SetBodyHeld(false);
+	SetBodyAnimationHeld(false);
 
 	// 4. The death schedule, selected from the death commit itself — "death sound/solid-body policy
 	//    leads to the death schedule". It is started directly rather than through `SelectSchedule`,
@@ -814,8 +818,15 @@ void FElysiumNpc::Think()
 	// `if (m_bDisableAI) return`, at `NPCThink`'s own position. Retail leaves `m_flNextThink`
 	// alone here; this runtime's `RunThinks` cleared it before entering, so the silence is stated.
 	// `SetDisableAi(false)` re-arms through `ResetThinkTimers`.
+	//
+	// The return is also the freeze: retail's body moves and animates only from inside this
+	// function, so a think that ends here leaves it where it stands, in the pose it has, with its
+	// route intact -- and this runtime's body, which runs on the actor tick, has to be told both
+	// halves. Released by the first pass that gets through both gates, below.
 	if (bDisableAi)
 	{
+		SetBodyHeld(true);
+		SetBodyAnimationHeld(true);
 		NextThink = ELYSIUM_NEVER_THINK;
 		return;
 	}
@@ -864,6 +875,11 @@ void FElysiumNpc::Think()
 		//  - `ResolveStandingOnHead`, fall-to-ground unless `DONT_FALL_TO_GROUND`, the `move_yaw`
 		//    pose under `debug_allow_move_facing`: the movement component and anim graph own the
 		//    body's contact, gravity and turn pose (named modernization, 0006's motor).
+		//  - the `MOVE_FACE_ENEMY` (`flags2 0x400`) move-facing under the same cvar (default `"1"`,
+		//    so live in retail): slot 517 `0x10278d90` forwards `(enemy, its last-known position,
+		//    1.0, 0.8, 0)` to `CAI_Motor` slot 12, the motor's facing target while a leg is in
+		//    flight. 0006's motor, with the turn pose above: this runtime's motor has no
+		//    facing-while-moving request yet, and the flag's writers are the combat programs.
 		// `DISAPPEAR 0x20000000` is run: the flag word (8) has consumers, and this is one of them.
 		if (NpcFlags.Has(EElysiumNpcFlag2::DISAPPEAR) && ShouldDisappearNow())
 		{
@@ -872,14 +888,34 @@ void FElysiumNpc::Think()
 		}
 		// The AI console gate `0x1026c3d0`. Retail's `g_AIDisabled` bit 0 (`DAT_1092053c`) is set
 		// by `SetAIEnabled(false)` `0x10265680`, which a player's `FeedBegin` and the level-change
-		// fade both call. A refused think runs none of `RunAI`, `PerformMovement` or the four laws
-		// and returns without writing `m_flNextThink` -- with the node graph built (`DAT_1093408c`,
-		// always true here) that is "stop thinking until `SetAIEnabled(true)` re-bases every NPC".
+		// fade both call. On the refuse arm the gate first dispatches slot 310 `SetActivity` with
+		// `1` = `ACT_IDLE` (`0x10295750` -> `0x102725d0` -> `SetActivityAndSequence 0x10272490`:
+		// the ideal written, the sequence reset, slot 465 `OnChangeActivity`), then the think runs
+		// none of `RunAI`, `PerformMovement`, `PostRun` or the four laws and returns without
+		// writing `m_flNextThink` -- with the node graph built (`DAT_1093408c`, always true here)
+		// that is "stand idle and stop thinking until `SetAIEnabled(true)` re-bases every NPC".
+		//
+		// The idle is `PlayActivity`, retail's `SetActivity` through this runtime's claim
+		// arbitration: a body a grapple or a scene owns refuses the clip and keeps its owner's,
+		// while the ideal is written either way. The movement hold is retail's. The animation
+		// clock is deliberately NOT stopped on this arm (it is on the `m_bDisableAI` one): with a
+		// stopped clock the blend into idle would park at 0 % and the body would stand mid-stride,
+		// and a feed victim's clip, which the feeder syncs every pulse, must keep advancing. So the
+		// port's idle LOOPS where retail holds its first frame -- a named visual-only
+		// modernization; nothing the bytecode reads differs (the ideal is idle, nothing moves, an
+		// idle loop raises no gameplay anim event).
 		if (World != nullptr && !World->IsAiEnabled())
 		{
+			PlayActivity(TEXT("ACT_IDLE"));
+			SetBodyHeld(true);
 			NextThink = ELYSIUM_NEVER_THINK;
 			return;
 		}
+		// Through both gates: the body is integrated by this think again. Retail's release is
+		// nothing more than `PerformMovement` and `PostRun` running, so it is taken back here,
+		// ahead of anything below that could issue a move.
+		SetBodyHeld(false);
+		SetBodyAnimationHeld(false);
 
 		// `bReduced = !IsThinkDue(NextAI)`: the AI clock declining to think. Read after the normal
 		// gate and before the pass it governs.
@@ -1155,12 +1191,14 @@ void FElysiumNpc::RunConditionPass(double Now, bool bReduced)
 	}
 }
 
-void FElysiumNpc::OnBumped(double Now)
+bool FElysiumNpc::OnBumped(double Now)
 {
 	// The NPC half of the player's touch handler `0x10147690`. Its whole body, in order: the
 	// toucher takes `MiscFlag 0x100` (`Obf_Bumped_Object`); then, only when the toucher is a player
 	// (`+0xa8`) and the touched thing is a Troika NPC (`+0x98`), `ConditionInterruptsCurrent
-	// Schedule(WAS_BUMPED)` (`0x10269c70`) is consulted and the bit set only if it passes.
+	// Schedule(WAS_BUMPED)` (`0x10269c70`) is consulted and the bit set only if it passes. The
+	// player half runs in `FElysiumPlayer::PollTouchContacts`, which calls this once per frame of
+	// contact, off the bodies' own `NotifyHit` records.
 	//
 	// That guard is the recovered fact worth having: retail does NOT raise `WAS_BUMPED`
 	// unconditionally. The bit never stands on an NPC whose running program does not list it, so
@@ -1168,9 +1206,10 @@ void FElysiumNpc::OnBumped(double Now)
 	// this answers without a second producer being invented.
 	if (!ElysiumSchedule::MaskHasCondition(Schedule, *this, EElysiumNpcCond::WasBumped))
 	{
-		return;
+		return false;
 	}
 	Senses.Memory.LastBumpTime = Now;
+	return true;
 }
 
 bool FElysiumNpc::TickScriptWatchdog()
@@ -3595,6 +3634,22 @@ void FElysiumNpc::SetDisableAi(bool bDisable)
 	}
 }
 
+void FElysiumNpc::SetBodyHeld(bool bHeld)
+{
+	if (Motor)
+	{
+		Motor->SetHeld(bHeld);
+	}
+}
+
+void FElysiumNpc::SetBodyAnimationHeld(bool bHeld)
+{
+	if (Motor)
+	{
+		Motor->SetAnimationHeld(bHeld);
+	}
+}
+
 void FElysiumNpc::ResetThinkTimers(double Now)
 {
 	// Slot 614 `0x102c23f0`: the four `Next` stamps and `m_flNextThink`, all to curtime. The
@@ -3673,6 +3728,10 @@ void FElysiumNpc::OnDormancyChanged()
 	if (IsInert())
 	{
 		ReleaseAllBodyOwnership(bDead ? TEXT("death") : TEXT("dormancy"), bDead);
+		// A hidden body is off screen and off its route anyway; the hold must not outlive the
+		// silence that placed it, or the unhide would wake a body that cannot move.
+		SetBodyHeld(false);
+		SetBodyAnimationHeld(false);
 	}
 	else
 	{
@@ -3772,10 +3831,6 @@ bool FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
 		bPatrolActive = Active != 0 && ResolvePatrolPoints();
 		bMoveIssued = false;
 		bWalkingAnimation = false;
-		if (bPatrolActive)
-		{
-			ResetThinkTimers(World ? World->NowSeconds() : 0.0);
-		}
 		return false; // compatibility with snapshots written before ambient-place state existed
 	}
 	uint8 SavedAmbientPhase = static_cast<uint8>(AmbientPhase);
@@ -3793,12 +3848,15 @@ bool FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
 		bWalkingAnimation = false;
 		AmbientPhase = static_cast<EAmbientPhase>(SavedAmbientPhase);
 		bAmbientArrived = SavedAmbientArrived != 0;
+		// No clock is touched on either branch: the saved cadence is the authoritative one (see
+		// `SerializeScheduleBlock`), `ScheduleHost.Serialize` restores the eight stamps after every
+		// block here, and `ApplyEntityRecord` restamps the saved `NextThink` after the leaf. Retail
+		// restores its stamps the same way and resets nothing on a load.
 		if (bPatrolActive)
 		{
 			CurrentSpotIndex = INDEX_NONE;
 			AmbientPhase = EAmbientPhase::None;
 			bAmbientArrived = false;
-			ResetThinkTimers(World ? World->NowSeconds() : 0.0);
 		}
 		if (!bPatrolActive && AmbientPhase != EAmbientPhase::None)
 		{
@@ -3809,7 +3867,6 @@ bool FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
 				AmbientPhase = EAmbientPhase::None;
 				bAmbientArrived = false;
 			}
-			ResetThinkTimers(World ? World->NowSeconds() : 0.0);
 		}
 	}
 	return true;
@@ -4080,17 +4137,9 @@ void FElysiumNpc::SerializeDisciplineBlock(FElysiumSaveArchive& Ar)
 				Health = RestoredHealth;
 				MaxHealth = RestoredMaxHealth;
 			}
-			// A restored row keeps its `bRemoveOnHearCombat` listener, and the poll that services it
-			// runs from this character's own think, so the think is armed here — the same statement
-			// the patrol and ambient branches above make, and with the same caveat: the snapshot
-			// applier restamps the SAVED think after this returns and is the authoritative one
-			// there. This arms the direct-leaf path and can only ever move the deadline earlier.
-			if (Disciplines.TargetEffects.ContainsByPredicate(
-				[](const FElysiumActiveDisciplineEffect& Effect)
-				{ return Effect.bRemoveOnHearCombat; }))
-			{
-				ResetThinkTimers(World ? World->NowSeconds() : 0.0);
-			}
+			// A restored row keeps its `bRemoveOnHearCombat` listener and the think that services it
+			// keeps its SAVED cadence: no clock is armed here (see `SerializeScheduleBlock`). The
+			// listener's poll runs on the next saved think, as it would have in retail.
 		}
 	}
 	else if (Ar.IsLoading())
@@ -4148,6 +4197,11 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
 	Out.Emplace(TEXT("Body"), Visual ? TEXT("skeletal (standing)") : TEXT("(none)"));
 	Out.Emplace(TEXT("Motor"), Motor ? TEXT("Unreal character + Detour crowd") : TEXT("(none)"));
+	if (const FString LastMove = Motor ? Motor->DescribeLastMoveResult() : FString();
+		!LastMove.IsEmpty())
+	{
+		Out.Emplace(TEXT("Last move result"), LastMove);
+	}
 	const TCHAR* Admission = Mind.Admission() == FElysiumNpcMind::EAdmission::Spawned
 		? TEXT("spawned") : (Mind.Admission() == FElysiumNpcMind::EAdmission::Armed
 			? TEXT("armed") : TEXT("admitted"));
@@ -4304,6 +4358,11 @@ void FElysiumPlayerControllerNpc::GetDebugState(TArray<TPair<FString, FString>>&
 	Out.Emplace(TEXT("Model"), Model.IsEmpty() ? TEXT("(none)") : Model);
 	Out.Emplace(TEXT("Body"), Visual ? TEXT("skeletal") : TEXT("(none)"));
 	Out.Emplace(TEXT("Motor"), Motor ? TEXT("Unreal character + Detour crowd") : TEXT("(none)"));
+	if (const FString LastMove = Motor ? Motor->DescribeLastMoveResult() : FString();
+		!LastMove.IsEmpty())
+	{
+		Out.Emplace(TEXT("Last move result"), LastMove);
+	}
 }
 
 void FElysiumPlayerControllerNpc::BuildOwnMotor()

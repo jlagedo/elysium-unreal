@@ -25,6 +25,7 @@
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Substrate/ElysiumGameSound.h"      // the six PLAYER_* category names
 #include "Substrate/ElysiumLaw.h"
+#include "Substrate/ElysiumMiscFlags.h"      // Obf_Bumped_Object, the touch handler's first write
 #include "Substrate/ElysiumNpcConditions.h"  // WeaponCapability — the block predicate's `0x18000` term
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -1049,6 +1050,55 @@ void FElysiumPlayer::StoreGlobalEmailFlags(const FString& TerminalName, const TA
 	// `memcpy(record->flags, in, 0x80 * 4)` — LOCAL WINS, no merge.
 	Found->Flags = InFlags;
 	Found->Flags.SetNumZeroed(FElysiumGlobalEmailRecord::FlagCount);
+}
+
+void FElysiumPlayer::PollTouchContacts(double Now)
+{
+	// `0x10147690`, the player's `Touch`, in its recovered order per touched character:
+	//   if (other->+0x9c) {                       // the touched thing is a combat character
+	//     this->AddMiscFlag(0x100);              // Obf_Bumped_Object, sticky
+	//     if (this->+0xa8 && other->+0x98)       // I am a player, it is a Troika NPC
+	//       if (ConditionInterruptsCurrentSchedule(npc, WAS_BUMPED)) SetCondition(npc, WAS_BUMPED);
+	//   }
+	// Source raises it every frame a move sweep blocks on the other entity, in either direction;
+	// the embodiment's drain answers exactly those frames. Only NPC bodies are drained: a prop or
+	// a non-NPC character (`+0x9c` set, `+0x98` clear) would take the first arm and not the second,
+	// and this runtime has no such toucher to report yet. Whether retail's `CategorizePosition`
+	// also touches a non-world ground entity (a player standing still on an NPC's head) is
+	// unrecovered: the corpus names neither it nor `AddToTouched`.
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		return;
+	}
+	TArray<FElysiumEntityHandle> Contacts;
+	Embodiment->DrainPlayerTouchContacts(Contacts);
+	for (const FElysiumEntityHandle& Contact : Contacts)
+	{
+		FElysiumEntity* Other = World->Resolve(Contact);
+		FElysiumNpc* Npc = Other ? Other->AsNpc() : nullptr;
+		if (Npc == nullptr || Npc->IsInert())
+		{
+			continue;
+		}
+		ElysiumMiscFlags::Set(MiscFlags, ElysiumMiscFlags::ObfBumpedObject);
+		// The port's reader of that bit, invoked at the producer: the discipline effects that
+		// authored `ShouldRemove_OnWasBumped`. Retail's own read site is 0007's to recover.
+		ElysiumDisciplines::NotifyBumped(*this);
+		const bool bRecorded = Npc->OnBumped(Now);
+		// The touched NPC's side of the same reader. Every authored `ShouldRemove_OnWasBumped 1`
+		// row is a TARGET effect (Hysteria, Trance, Nightwisp Ravens...), so the effect that breaks
+		// sits on the NPC, and it is run on the one NPC-side event retail raises here -- the
+		// mask-admitted `WAS_BUMPED`. Whether retail's effect reader keys on that condition or on a
+		// misc flag of the victim's own is 0007's to recover; this follows the handler.
+		if (bRecorded)
+		{
+			ElysiumDisciplines::NotifyBumped(*Npc);
+		}
+		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s bumped %s (misc 0x%x, WAS_BUMPED %s)"),
+			*DebugString(), *Npc->DebugString(), MiscFlags,
+			bRecorded ? TEXT("recorded") : TEXT("refused by the mask"));
+	}
 }
 
 void FElysiumPlayer::SyncFromBody()

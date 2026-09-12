@@ -15,6 +15,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumAiScriptedSchedule.h"
+#include "Substrate/ElysiumMiscFlags.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcThinkCadence.h"
@@ -464,8 +465,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkAiGateTest,
 bool FElysiumThinkAiGateTest::RunTest(const FString&)
 {
 	FElysiumNpcWorldBuilder Builder(TEXT("__npcaigate_test__"), 0x41494741);
-	Builder.AddNpc(TEXT("guard"));
-	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	// A model, so the headless world builds a visual and a motor for the guard: what a refused
+	// think does to the BODY is read off the recording doubles, beside what it does to the clock.
+	Builder.AddNpc(TEXT("guard")).Keys.Add(TEXT("model"),
+		TEXT("models/character/npc/unique/jack/Jack.mdl"));
+	FElysiumNpcWorldFixture F(MoveTemp(Builder), [](FElysiumRecordingServices& S)
+	{
+		S.bProvideNpcMotor = true;
+		S.bNpcActivitiesResolve = true;
+	});
 	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
 	FElysiumPlayer* Player = F.Player();
 	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("player"), Player))
@@ -476,15 +484,38 @@ bool FElysiumThinkAiGateTest::RunTest(const FString&)
 	F.Advance(1.0);
 	TestTrue(TEXT("a body in view thinks on the pin"),
 		Guard->NextThink != ELYSIUM_NEVER_THINK && Guard->NextThink - F.World.NowSeconds() <= 0.1 + 1e-3);
+	// The motor is built on the body's first think, so it is fetched after one.
+	FElysiumRecordingNpcMotor* Motor = F.Services.LastNpcMotor();
+	if (!TestNotNull(TEXT("the guard has a motor"), Motor))
+	{
+		return false;
+	}
+	// A leg in flight, so the hold has a request to keep.
+	Motor->MoveTo(FVector(500.0 * ElysiumMove::U, 0.0, 0.0), 16.f, 100.f);
+	const int32 MovesBefore = F.Services.Count(TEXT("NpcMotor MoveTo"));
 
 	F.World.SetAiEnabled(false);
 	F.Advance(2.0);
 	TestEqual(TEXT("with the AI disabled, a normal-due think refuses and does not re-arm"),
 		Guard->NextThink, ELYSIUM_NEVER_THINK);
+	// The refuse arm of `0x1026c3d0`: slot 310 `SetActivity(ACT_IDLE)`, then a think that
+	// integrates nothing -- the route kept, the animation clock left running (the named
+	// visual-only modernization: the idle loops where retail holds its first frame).
+	TestTrue(TEXT("...the refused think asks the body for ACT_IDLE"),
+		F.Services.Calls.ContainsByPredicate([](const FString& Call)
+		{
+			return Call.StartsWith(TEXT("ResolveNpcActivityClip"))
+				&& Call.Contains(TEXT(" ACT_IDLE "));
+		}));
+	TestTrue(TEXT("...and holds the body"), Motor->bHeld);
+	TestFalse(TEXT("...without stopping its animation clock"), Motor->bAnimationHeld);
+	TestTrue(TEXT("...with the leg parked rather than dropped"), Motor->bMoving);
 	const double Before = Guard->ScheduleHost.NextNormal;
 	F.Advance(3.0);
 	TestTrue(TEXT("...and no law runs while it is silent"),
 		FMath::IsNearlyEqual(Guard->ScheduleHost.NextNormal, Before, 1e-6));
+	TestEqual(TEXT("...the hold stated once per refusal, not per frame"),
+		F.Services.Count(TEXT("NpcMotor SetHeld 1")), 1);
 
 	F.World.SetAiEnabled(true);
 	const double At = F.World.NowSeconds();
@@ -493,6 +524,20 @@ bool FElysiumThinkAiGateTest::RunTest(const FString&)
 	F.Advance(At + 0.5);
 	TestTrue(TEXT("...and it is thinking again"),
 		Guard->NextThink != ELYSIUM_NEVER_THINK && Guard->ScheduleHost.NextNormal > At);
+	TestFalse(TEXT("...with the body released by the first think through the gate"), Motor->bHeld);
+	TestEqual(TEXT("...and the parked leg resumed, not re-issued"),
+		F.Services.Count(TEXT("NpcMotor MoveTo")), MovesBefore);
+
+	// `m_bDisableAI`'s arm holds both halves: the pose too, because there the held sequence's
+	// remaining progress is what a task reads on release.
+	Guard->SetDisableAi(true);
+	F.Advance(F.World.NowSeconds() + 0.5);
+	TestTrue(TEXT("a disabled AI holds the body"), Motor->bHeld);
+	TestTrue(TEXT("...and its animation clock"), Motor->bAnimationHeld);
+	Guard->SetDisableAi(false);
+	F.Advance(F.World.NowSeconds() + 0.5);
+	TestFalse(TEXT("re-enabling the AI releases the body"), Motor->bHeld);
+	TestFalse(TEXT("...and its clock"), Motor->bAnimationHeld);
 	return true;
 }
 
@@ -594,6 +639,25 @@ bool FElysiumThinkWasBumpedTest::RunTest(const FString&)
 	ElysiumNpcCond::GatherBump(*Guard, 6.0, Second);
 	TestFalse(TEXT("...and is gone by the pass after it"),
 		Second.Has(EElysiumNpcCond::WasBumped));
+
+	// The producer: the player's touch handler `0x10147690`, drained off the bodies once a frame
+	// beside `SyncFromBody`. The player-side half lands; the NPC-side half meets the same mask
+	// refusal as above, and since no shipped program lists `WAS_BUMPED` the positive arm has
+	// nothing to stand on here and is not asserted.
+	FElysiumPlayer* Player = F.Player();
+	if (!TestNotNull(TEXT("player"), Player))
+	{
+		return false;
+	}
+	Guard->Senses.Memory.LastBumpTime = -1.0;
+	F.Services.PlayerTouchContacts.Add(Guard->Handle);
+	F.Advance(F.World.NowSeconds() + 0.05);
+	TestTrue(TEXT("the frame's contacts are drained by the poll"),
+		F.Services.PlayerTouchContacts.IsEmpty() && F.Services.Saw(TEXT("DrainPlayerTouchContacts")));
+	TestTrue(TEXT("...the toucher takes Obf_Bumped_Object"),
+		ElysiumMiscFlags::Has(Player->MiscFlags, ElysiumMiscFlags::ObfBumpedObject));
+	TestTrue(TEXT("...and a guard whose program lists no WAS_BUMPED still records no bump"),
+		Guard->Senses.Memory.LastBumpTime < 0.0);
 	return true;
 }
 
