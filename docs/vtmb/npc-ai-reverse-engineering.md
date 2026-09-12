@@ -2562,7 +2562,7 @@ integer distance, visibility = `senses->DidSeeEntity` (`0x1030fb10`) or `FVisibl
 relationship table (`ElysiumNpcEnemy.cpp`), so a `D_HT` player anywhere on the map was a
 candidate the moment an NPC spawned; verified live on `sp_tutorial_1` 2026-09-08 (`thug_1`
 committed the player at ~2380 units with 0 sightings and 10 failed LOS checks, and ran to him).
-The record store above is the missing subsystem; see `docs/specs/0005-park-stealth/spec.md`.
+The record store above is the missing subsystem; see `docs/specs/0002-npc-ai/spec.md`.
 
 ## Dialogue does not gate bystanders (2026-09-08)
 
@@ -2676,7 +2676,7 @@ used as a substitute.
   active stat `0xe` or `1`, or the ready observer detection record admitting the distance.
   Those observer stats do not cause concealment; the earlier summary inverted this branch.
   The port reads the active sheet and tracked BrainWipe effect. The cloak `+0x14dc` and
-  detection record `+0x97/+0xac` are explicit fields whose effect producers remain in 0007.
+  detection record `+0x97/+0xac` are explicit fields whose effect producers remain in 0006.
 - `OnLooked` `0x1026a2c0` skips the current best unknown (or last unknown under
   `IGNORE_UNKNOWN`) before the player and relationship arms. All three D_HT priority branches
   write enemy memory. `D_CALM` is on the **observer**; its D_HT diversion reaches the D_FR arm
@@ -2774,6 +2774,31 @@ writers are `InputEnable` (`0x102db420`) and `InputDisable` (`0x102db440`).
 10)`; **`m_flWaitFinished (+0x5db4) = curtime + RandomFloat(m_fMinStayTime +0x568, m_fMaxStayTime
 +0x56c)`** — the same field every `TASK_WAIT*` uses, no clamp, no swap (`ip_20`'s authored
 `10/5` is a shipped inversion); `match_orientation +0x570` sets the yaw from the marker.
+
+**The failed walk, walked (2026-09-12).** `TASK_GET_PATH_TO_INTERESTING_PLACE` is Troika
+`StartTask` (`0x102a1910`) case `0x31`: no held place (`+0x62ec == 0`) → `TaskFail(0x22)`;
+otherwise `AI_NavGoal_t{type 8, dest = m_vecInterestingPlace, tolerance [0x1049a1ac], flags −1}`
+into navigator `SetGoal` (`0x102ecd20`), and a refusal is `TaskFail(0x0c)` "Don't have a route".
+`TaskFail`'s step 1 (`0x102b53d0`) releases the visit, so the place is free again at once. The
+program's declared route is `SCHED_TROIKA_WALK_TO_INTERESTING_PLACE_FAILED` (`0x105e6520`):
+`SET_ACTIVITY ACT_IDLE; WAIT 5; WAIT_RANDOM 5; SET_SCHEDULE SETUP` — with `TASK_WAIT_RANDOM`'s
+0.1 floor, **one route attempt every 5.1–10 s**, standing in `ACT_IDLE` between them. The pick
+(`0x102db590` / eligibility `0x102dad60`) keeps no memory of a failed place, so the same
+top-rated node is chosen again every time; nothing gives up and nothing excludes it. **Port
+divergence (owned by 0002/11, which retires the executor):** `FElysiumNpc::ThinkAmbient` has no
+`_FAILED` arm — a refused route puts the place in a port-only `FailedSpotIndices`, releases the
+claim, and the next think claims the next candidate; when every candidate has failed the list is
+cleared and the cycle restarts, **one refused route per think**. Witness on `sp_tutorial_1`
+(2026-09-12, with the body's `refused:` diagnostic below): `Jack` (`interesting_place_groups 32`
+→ `ip_by_window`, `ip_lean_1`, both across the map) alternates the two at the 0.1 s cadence;
+`mercenary_upstairs` (`8` → `sentry3_ip_arms_crossed` one floor down, `ip_melee_guy` ×2 in the
+warehouse) cycles the three on its 16 s cadence. Every one of those routes is refused because the
+runtime navmesh does not connect the NPC's area to the node (a partial path ends 160–240 m
+short), not because a node is off the mesh. Retail refuses them too, and by its own rule: the
+`.ain` graph has no node within 6000 units of Jack's spawn and none at the Society hub
+(`navigation-jump-links.md` § "Tutorial connectivity"), so `SetGoal` fails and retail stands
+those NPCs idle with the 5–10 s retry. The port's mesh agrees by geometry, not by contract —
+spec 0002 story 24.
 
 ## The `INVESTIGATE` family, decoded (2026-09-08)
 
@@ -2873,6 +2898,20 @@ IGNORE_UNKNOWN DETECTED_ATTACK PLAYER_ON_HEAD`; `0x66 _WALK` uses `WALK_PATH` wi
 `0x68 _HUNT` uses `WALK_PATH_HUNT`. These three are **patrol** programs: `SelectSchedule` case 1
 returns `*(uint*)(m_sppPatrolPath(+0x6590) + 4)`, the path object's own id, one of the three
 `INVESTIGATE_NODE` or three `FOLLOW_PATROL_PATH` (0x65/0x67/0x69) ids.
+The `FOLLOW_PATROL_PATH` blobs (`0x105fb5c0` / `_WALK 0x105fb100` / `_HUNT 0x105fac40`, byte-read
+2026-09-12) are the same task lists as the `INVESTIGATE_NODE` three, program for program, and
+**none of the six sets a fail schedule**. `TASK_GET_PATH_TO_PATROL_POINT` is Troika `StartTask`
+case `0x13`: no path object → `TaskFail(0x1d)`; a node id of −1 returns without completing; else
+the node's position for the hull (`0x102fb0d0`) becomes `AI_NavGoal_t{type 4 LOCATION, tolerance
+[0x1049a1ac], flags −1}` into navigator `SetGoal` (`0x102ecd20`), and a refusal is
+`DevWarning("%s can't reach patrol point")` + `TaskFail(0x0c)`. A program without a fail schedule
+routes through `GetFailSchedule` (`0x1028abe0`): `m_failSchedule` (`+0x5c54`, zeroed by every
+`SetSchedule 0x10280e50`) or **base schedule `0x43`**, the last id before the Troika block starts
+at `0x44`. UNRECOVERED: `0x43`'s task list — the base (`CAI_BaseNPC`) programs are not text blobs
+in `vampire.dll` (629 `Schedule` blobs, all Troika/`V*`/crow/manbat/tzimisce/test); only its name
+table `0x105d1488` (`SCHED_NONE` first) survives. Port divergence, owned by 0002/10g: `ThinkPatrol`
+re-issues the same point's route every think on a refusal, and the kernel's `Fail == None →
+State.Clear()` (`ElysiumSchedule.cpp`) re-selects at once where retail runs `0x43`.
 `0x80 HUNT_INVESTIGATE`: `SET_FAIL_SCHEDULE SCHED_TROIKA_HUNT_LOOK_AROUND; STOP_MOVING;
 SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_BESTSOUND; FACE_IDEAL; SET_TOLERANCE_DISTANCE 5;
 WALK_PATH_HUNT; WAIT_FOR_MOVEMENT; SET_SCHEDULE HUNT_LOOK_AROUND`; interrupts `NEW_ENEMY
@@ -3023,7 +3062,7 @@ teardown), reached through the effect-expiry table. The sibling key `"MiscFlag"`
 words: a HitGroup sets flags on the target with no task, and `OnScheduleChange`'s masks will
 clear them like any other.
 
-**Apply/expiry implementation detail (2026-09-08, spec 0005 requirement 8).** Re-reading the
+**Apply/expiry implementation detail (2026-09-08, spec 0002 story 8).** Re-reading the
 whole bodies corrects two shorthand descriptions above. `0x101de660` writes `MiscFlag` first
 (`AddMiscFlag`, `0x1033c6b0`, plain OR), then the NPC mask, before health and schedule channels.
 `0x101def10` clears the original NPC mask with `&= ~mask`, including the word-two routing bit;
@@ -3463,17 +3502,17 @@ the engine reaches for a swept blocking hit whether the player's hull moved into
 capsule into the hull) and drained once per frame through `IElysiumEmbodiment::
 DrainPlayerTouchContacts` by `FElysiumPlayer::PollTouchContacts`, right after `SyncFromBody`; per
 touched NPC it writes the player's `Obf_Bumped_Object`, runs `ElysiumDisciplines::NotifyBumped`
-on the player (the port's stand-in for the flag's retail reader, 0007's) and calls
+on the player (the port's stand-in for the flag's retail reader, 0006's) and calls
 `FElysiumNpc::OnBumped`, which carries the mask guard; when the guard admits the bit, the same
 reader runs on the NPC, because every authored `ShouldRemove_OnWasBumped 1` row (`disciplinetgt_*`:
 Nightwisp Ravens, Bloodsucker Communion, Hysteria, Trance, two more) is a target effect and the
 effect that breaks sits on the touched NPC — whether retail keys that removal on the condition or on
-a misc flag of the victim's own is 0007's to recover. Verified in `sm_hub_1` 2026-09-12: one log line
+a misc flag of the victim's own is 0006's to recover. Verified in `sm_hub_1` 2026-09-12: one log line
 per contact frame, `0x100` on the player, the NPC bit refused by every shipped program's mask. Unrecovered: whether retail's `CategorizePosition` also touches a non-world
 ground entity (a player standing still on an NPC's head); non-NPC touchers (`+0x9c` set, `+0x98`
 clear) take only the first arm and are not drained.
 
-**Port (0005 story 15).** `Substrate/ElysiumNpcThinkCadence.h` carries `IsDue`, the four laws over
+**Port (0002 story 15).** `Substrate/ElysiumNpcThinkCadence.h` carries `IsDue`, the four laws over
 `FElysiumNpcScheduleHost`'s eight stamps, and `ShouldThinkFrequently`; `FElysiumNpc::Think` is
 `NPCThink`'s shape and the only writer of `NextThink`. Three things differ and each is stated at
 the code:
@@ -3509,12 +3548,15 @@ the code:
   is answered as arrived, and a follower the crowd component aborted synchronously in
   `SetMoveSegment` (empty corridor, nav-data mismatch) under a successful result is answered as
   refused — and the engine's own finish (`OnRequestFinished`) is kept as `Last move result` in
-  the NPC debugger. Confirmed in game (sp_tutorial_1, `thug_1`, 2026-09-12): under `AIEnable 0`
+  the NPC debugger. A request the controller refuses outright (`Invalid[]`) is asked why
+  (`AElysiumNpcBody::DescribeRefusedRoute`, appended to `Last move result` and a Verbose
+  `refused:` line): the goal off the navmesh, this body off it, or the mesh not connecting them
+  (the partial path's length and its distance short). Confirmed in game (sp_tutorial_1, `thug_1`, 2026-09-12): under `AIEnable 0`
   the beat's route parks with its whole distance left and no finish reported; on `AIEnable 1` the
   same request resumes, the body walks the 683 cm, settles at the mark and the beat fires
   `OnEndSequence` on arrival. The one divergence of the hold that remains is not the hold's: the
   `scripted_sequence` beat drives its travel from its own think, where retail's walk is a
-  schedule inside `NPCThink` behind both gates — spec 0012 owns it.
+  schedule inside `NPCThink` behind both gates — spec 0003 owns it.
 - **A reduced pass re-derives the damage lane.** Retail sets `LIGHT_DAMAGE`/`HEAVY_DAMAGE` inside
   the damage transaction, so the bit is live on a reduced think; this runtime rebuilds its whole
   condition set each full pass and reconstructs the one-pass life from `Cognition.GatheredAt`,
@@ -3589,10 +3631,10 @@ with their owning stories (hint upkeep and `COND_HINT_INVALID`, the shoot-target
 death-scream roll, `ResolveStandingOnHead`, fall-to-ground, `move_yaw`, the boss registry), and
 the `MOVE_FACE_ENEMY` (`flags2 0x400`) move-facing under `debug_allow_move_facing` (default `"1"`,
 so live in retail): slot 517 `0x10278d90` forwards `(enemy, its last-known position, 1.0, 0.8, 0)`
-to `CAI_Motor` slot 12, the motor's facing target for a leg in flight — 0006's motor, with the
+to `CAI_Motor` slot 12, the motor's facing target for a leg in flight — 0002's motor, with the
 turn pose. `WAS_BUMPED`'s bump event is no longer a seam (see the touch handler above). The
 scripted beat's travel, outputs and failure retry belong to the NPC's own schedule in retail
-(`SCHED_TROIKA_SCRIPTED_*`, `NPC_STATE_SCRIPT`) and run from the beat's think here — spec 0012.
+(`SCHED_TROIKA_SCRIPTED_*`, `NPC_STATE_SCRIPT`) and run from the beat's think here — spec 0003.
 
 ## Squads, decoded (2026-09-08)
 

@@ -1,6 +1,6 @@
 # AIN jump links and the navigator jump state
 
-Recovered 2026-09-08 for `0005-park-stealth` requirement 19. Addresses below are in retail
+Recovered 2026-09-08 for `0002-npc-ai` story 19. Addresses below are in retail
 `vampire.dll`; the V2 witness is `nav-graphs/sp_tutorial_1.glb`.
 
 ## Serialized connection
@@ -81,3 +81,36 @@ tests cover the raw tutorial rows, wrong hulls, disabled/stale masks, duplicate 
 invalid endpoints, floor offsets, unit conversion and invalidation. Native automation exercises
 the smart-link callback, physical flight/landing and stop-during-jump state; a rendered tutorial
 playthrough remains a distinct acceptance step.
+
+## Tutorial connectivity: the graph's components (2026-09-12)
+
+Reachability in retail is the graph, not the geometry: a navigator `SetGoal` (`0x102ecd20`)
+with no node path for the hull fails, and every path task answers that with `TaskFail(0x0c)`
+"Don't have a route" (`TASK_GET_PATH_TO_INTERESTING_PLACE`, Troika `StartTask 0x102a1910` case
+`0x31`; `TASK_GET_PATH_TO_PATROL_POINT`, case `0x13`, after `"%s can't reach patrol point"`).
+Union of the 234 links over hull 0 (ground bit 1 or jump bit 2, `linkInfo & 0x1000` never set
+here; 17 links carry no hull-0 motion) splits the 116 nodes into **ten components** of 27, 23,
+18, 16, 10, 7, 6, 3, 3 and 3 nodes. Witness positions against it (Source units):
+
+| entity | origin | nearest node | distance | component |
+|---|---|---|---|---|
+| `Jack` (spawn) | 144 7352 −199 | 61 | 6012 | 3 nodes |
+| `ip_by_window` | 85 132 112 | 46 | 9 | 3 nodes |
+| `ip_lean_1` | −221 −258 −32 | 114 | 16 | 27 nodes |
+| `pt1` (`thug_1`) | −507 −84 −40 | 15 | 9 | 27 nodes |
+| `ip_melee_guy` ×2 | −1709 468 −200 | 57 / 58 | 6 / 11 | 16 nodes |
+| `mercenary_upstairs`, `sentry2`, `monk_upstairs_podium`, `sentry3_ip_arms_crossed` | −7139 3492 7055 … | 105 | 8963–9429 | none |
+
+Jack's start area has no node within 6000 units and the Society hub at the far end has none
+at all, so in retail Jack's walk to either group-32 place and every hunter's patrol or visit
+fails at `SetGoal` and runs the program's failure route (`_FAILED`'s 5.1–10 s retry for a
+place; the default fail schedule `0x43` for a patrol). The port's runtime Recast mesh
+(`ElysiumMapActorLifecycle.cpp`, a projection of the `.hulls` sidecar — world brushes of
+player-blocking contents, monsterclip excluded — at the engine's default agent: radius 34 cm,
+height 144 cm, step 35 cm) refuses the same routes on `sp_tutorial_1` as partial paths ending
+160–240 m short, which matches retail's answer here by coincidence of geometry, not by
+contract: nothing ties the mesh's connectivity to the graph's. Retail hull 0 stands
+`(-13,-13,0)..(13,13,72)` (66 × 183 cm) and steps 18 units (45.7 cm). UNRECOVERED: whether
+`MONSTERCLIP` cut links at graph build, and whether door brushes cut the port's mesh (retail's
+links pass through doors; the NPC opens them, `m_hBlockedDoor` / `SelectDoorObstructionSchedule
+0x102b7370`). Spec 0002 story 24 owns the reconciliation.

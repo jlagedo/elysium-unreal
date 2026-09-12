@@ -11,6 +11,7 @@
 struct FAIRequestID;
 struct FPathFollowingResult;
 class UPathFollowingComponent;
+class AAIController;
 
 class AElysiumMapActor;
 class AElysiumNpcBody;
@@ -257,6 +258,10 @@ private:
 	void OnMoveRequestFinished(FAIRequestID RequestID, const FPathFollowingResult& Result);
 	bool bMoveFinishedBound = false;
 	FString LastMoveResult;
+	// Why a request the controller refused outright (`EPathFollowingRequestResult::Failed`) had no
+	// route: the goal or this body off the navmesh, or the mesh not connecting them (a partial
+	// path only). Asked only on that branch, so it costs nothing on an accepted request.
+	FString DescribeRefusedRoute(const AAIController& AI, const FVector& FeetDestination) const;
 	// A blocking contact with the player's hull since the last `ConsumePlayerContact`. Set by
 	// `NotifyHit`, read by the map actor's per-frame drain. Not gated on anything: retail's
 	// `Touch` fires on every solid contact, launched or walking.

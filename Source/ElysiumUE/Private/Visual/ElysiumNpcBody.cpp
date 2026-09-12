@@ -545,6 +545,12 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 		/*bCanStrafe=*/false, nullptr, bAllowPartialPath);
 	if (Result == EPathFollowingRequestResult::Failed)
 	{
+		// `RequestMoveWithImmediateFinish(Invalid)` already wrote `Invalid[]` above; the engine
+		// never says which of its three refusals it was, so ask the navmesh directly.
+		const FString Why = DescribeRefusedRoute(*AI, FeetDestination);
+		LastMoveResult += TEXT(" -- ") + Why;
+		UE_LOG(LogElysiumNpcEnt, Verbose, TEXT("%s: move request to %s refused: %s"),
+			*GetName(), *FeetDestination.ToString(), *Why);
 		Stop();
 		return false;
 	}
@@ -581,6 +587,46 @@ bool AElysiumNpcBody::MoveTo(const FVector& FeetDestination, float AcceptanceRad
 		PauseFollowing();
 	}
 	return true;
+}
+
+FString AElysiumNpcBody::DescribeRefusedRoute(const AAIController& AI, const FVector& FeetDestination) const
+{
+	UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	if (NavSys == nullptr)
+	{
+		return TEXT("no navigation system");
+	}
+	const FNavAgentProperties& Agent = AI.GetNavAgentPropertiesRef();
+	const ANavigationData* NavData = NavSys->GetNavDataForProps(Agent, AI.GetNavAgentLocation());
+	if (NavData == nullptr)
+	{
+		return TEXT("no nav data for this agent");
+	}
+	FNavLocation GoalOnMesh;
+	if (!NavSys->ProjectPointToNavigation(FeetDestination, GoalOnMesh, INVALID_NAVEXTENT, &Agent))
+	{
+		return TEXT("the goal is off the navmesh");
+	}
+	FNavLocation SelfOnMesh;
+	if (!NavSys->ProjectPointToNavigation(AI.GetNavAgentLocation(), SelfOnMesh, INVALID_NAVEXTENT, &Agent))
+	{
+		return TEXT("this body is off the navmesh");
+	}
+	FPathFindingQuery Query(&AI, *NavData, SelfOnMesh.Location, GoalOnMesh.Location);
+	Query.SetAllowPartialPaths(true);
+	const FPathFindingResult Found = NavSys->FindPathSync(Agent, Query);
+	if (!Found.IsSuccessful() || !Found.Path.IsValid())
+	{
+		return FString::Printf(TEXT("no path at all (query result %d)"), static_cast<int32>(Found.Result));
+	}
+	const FNavigationPath& Path = *Found.Path;
+	if (Path.IsPartial())
+	{
+		const FVector End = Path.GetPathPoints().Num() > 0 ? Path.GetPathPoints().Last().Location : SelfOnMesh.Location;
+		return FString::Printf(TEXT("the navmesh does not connect them: a partial path of %.0f cm ends %.0f cm from the goal"),
+			Path.GetLength(), FVector::Dist(End, GoalOnMesh.Location));
+	}
+	return FString::Printf(TEXT("a full path of %.0f cm exists; the refusal came from elsewhere"), Path.GetLength());
 }
 
 void AElysiumNpcBody::BindMoveFinished(UPathFollowingComponent* Following)
