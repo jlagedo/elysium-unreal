@@ -74,7 +74,8 @@ level-select hub, not tutorial content.
 In build order. A story is done when every behaviour it lists is in the
 substrate and its recovery is written in the oracle section it names. Numbers are stable ids
 cited by other documents; a split keeps the number and adds a letter. Each open story carries
-the retail contract the code must match, the job, and what it consumes or provides.
+the retail contract the code must match, the job, what it consumes or provides, and a size
+(XS–XL) with the model / effort tier recommended for it.
 
 - [x] **1. Target surface and the light query.** The light row and `Sneaking` publish the vision,
   cone and hearing scalars; `trigger_stealth_mod` is a balanced overlap modifier. The light query
@@ -231,6 +232,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   PVS/LOS true), the subclass writers of `m_flNextAIThink` (`CNPC_VCamera`, `CNPC_VNewscaster`),
   `CAI_BaseNPC+0x98`'s entity, slot 578 (the survivor callback), slot 168 (the `GetEnemy`
   variant).
+  Size: XL. Effort: Fable / high; corpus pass on the unrecovered items first.
 - [ ] **10a. The sound sweep.**
   Retail: `0x102b1cd0` over the seven sound records (incl. `Flinch` +0x6210); gate
   `m_flNextInvestigateSoundTime` +0x623c re-armed 2.0 s, 20.0 s for a stranger's sound;
@@ -241,6 +243,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   Job: the sweep in `GatherConditions`, the gate, the three conditions, `CommitBestSound`.
   Oracle: § "The three `GatherConditions` sweeps and the interest predicate", § "The
   `INVESTIGATE` family, decoded" (selection).
+  Size: M. Effort: Sonnet / high.
 - [ ] **10b. The see-unknown sweep.**
   Retail: `0x102b15c0`: `m_hBestSeeUnknown` +0x6088 with 1.5 s grace +0x6084,
   `m_vecLastSeeUnknownPos` +0x6090; the one-shot `MADE_INITIAL_RESPONSE` roll over
@@ -249,12 +252,14 @@ the retail contract the code must match, the job, and what it consumes or provid
   HOLDING / RETREATING` 0x05–0x07 (`HOLDING` dead, reproduced); `INVESTIGATE_SIGHT` 0x26.
   Job: the sweep, the five conditions, the roll.
   Oracle: § "The three `GatherConditions` sweeps and the interest predicate".
+  Size: M. Effort: Sonnet / high.
 - [ ] **10c. The comfort sweep.**
   Retail: `0x102b1a20`, idle only, every 0.2–0.4 s; `AddToComfortList` `0x10323630` /
   `RemoveFromComfortList` `0x10323770`, ≤1024 units, ≤3 per target; `COMFORT` 0x27;
   `BuildScheduleTestBits` withholds it while `COWERING`.
   Job: the sweep and the condition over the comfort list 8 already keeps.
   Oracle: § "The three `GatherConditions` sweeps and the interest predicate".
+  Size: S. Effort: Sonnet / low.
 - [ ] **10g. The patrol programs.**
   Retail: 0x64 / 0x66 / 0x68 `INVESTIGATE_NODE` / `_WALK` / `_HUNT`; `SelectSchedule` case 1
   returns the patrol path object's own id (`m_sppPatrolPath` +0x6590 → `+4`), one of these
@@ -273,6 +278,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   10d; no selector returns `None` to defer to an executor after this story, and no routing
   branch is added to `ThinkSchedulePolicy` to bridge one.
   Oracle: § "The `INVESTIGATE` family, decoded", § "Followers, patrols, and loitering".
+  Size: L. Effort: Opus / high.
 - [ ] **11. Interesting places: the selector arms.**
   Retail: arms `0xff SETUP` / `0x100 WALK` / `0x102 CROSSWALK` / `0x105 LOITER` / `0x106
   INTERACT`; the last two unreachable (no setter for `SHOULD_LOITER`, no caller pairs NPCs for
@@ -291,6 +297,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   operands in the schedule block. Same decision as 10g.
   Oracle: § "Interesting places: the selector, the programs, the wait", § "Interesting-place
   eligibility".
+  Size: L. Effort: Opus / high.
 - [ ] **10d. The alert selectors and the ladder.**
   Retail: `SelectSchedule` (`0x102af660`) case 3 runs regardless of what the NPC was doing:
   an investigate program replaces a patrol or interesting-place program through
@@ -312,6 +319,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   ladder's targets; `HasInterruptCondition` on the kernel; the +0x60b0 / +0x60dc split, before
   `FUN_102b9060` is wired.
   Oracle: § "The `INVESTIGATE` family, decoded" (Selection).
+  Size: L. Effort: Opus / high.
 - [ ] **10e. The sound-investigation programs.**
   Retail: 0x50, 0x51, 0x52, 0x53, 0x54, 0x58 with their task lists and interrupt sets; 0x53
   and 0x54 are dead in code, reachable by name only. No `INVESTIGATE` program declares
@@ -321,6 +329,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   `ADD_EVENT_EXPRESSION` 0xbe, `PLAY_COWER` 0xe6, `ALERT_LOOK_AT_UNKNOWN_ATTACKER` 0x148, and
   `ALERT_LOOK_AROUND` as their fail and exit schedule.
   Oracle: § "The `INVESTIGATE` family, decoded" (The programs, verbatim; Tasks the port lacks).
+  Size: M–L. Effort: Opus / medium.
 - [ ] **10f. The unknown-investigation programs.**
   Retail: 0x59–0x63 with their task lists and interrupt sets; 0x61 and 0x63 dead in code;
   0x5b from `GetSchedule` (`0x102ae920`) in combat only under `ATTACK_UNKNOWN`; 0x62 and 0x58
@@ -331,11 +340,13 @@ the retail contract the code must match, the job, and what it consumes or provid
   `CLEAR_NPC_FLAG` 0x101, `GET_PATH_TO_LASTPOSITION` 0x1c, `WALK_PATH` 0x23, `FACE_LASTANGLE`
   0x11d, `CLEAR_LASTPOSITION` 0x18, `FORGET` 0x6d, `PLAY_SEQUENCE` 0x52.
   Oracle: § "The `INVESTIGATE` family, decoded".
+  Size: L. Effort: Opus / high.
 - [ ] **10h. The hunt-investigation programs.**
   Retail: 0x7f, 0x80, 0x81, 0x82 and the hunt-state case 0xb order (raw `HEAR_*` accepted
   there, unlike alert). Reached in retail only by script, by name, or by `DoFrenzy` (16c).
   Job: the four programs; case 0xb behind the `"0"` default.
   Oracle: § "The `INVESTIGATE` family, decoded" (Case 0xb).
+  Size: M. Effort: Sonnet / high.
 - [ ] **12a. The reaction keyfields.**
   Retail: `percent_occluded_*` normalized at Spawn to a cumulative ladder, `_chase` forced to
   100 and never compared, rolled only in the ranged occluded selector `0x102b8320`;
@@ -346,15 +357,18 @@ the retail contract the code must match, the job, and what it consumes or provid
   Job: the parse, the normalization, the readers named.
   Oracle: § "The navigation and reaction keyfields", § "The cover and kick chooser, and the
   combat leftovers". Unrecovered: what authors hint type 800.
+  Size: S–M. Effort: Sonnet / medium.
 - [ ] **12b. The cover and kick chooser.**
   Retail: `0x102b7690` gated on `CanSeekCover` slot 592 and `allow_kick_hint_use`; the
   physics-prop kick 0xa9 with its 10° predicate and the one-shot `npc_kickable` byte; the kick
   hints 0xa7/0xa8; `COND_KICK_PROP_INVALID` has no producer.
   Job: the chooser, the kick program and its hints, the kickable byte.
   Oracle: § "The cover and kick chooser, and the combat leftovers".
+  Size: M. Effort: Opus / medium.
 - [ ] **13b. The leak in the defect catalogue.**
   Job: the `TaskFail` obliviousness leak as an entry in `docs/vtmb/retail-defects.md`, from
   the oracle section above.
+  Size: XS. Effort: Haiku / low.
 - [ ] **16a. Followers.**
   Retail: keyfields `follower_boss` (+0x6478 → `m_hFollowerBoss` +0x647c) and `follower_type`
   (+0x6480); `SetFollowerBoss` (`0x102c44e0`, refuses self and squad members) through the
@@ -371,6 +385,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   programs and three tasks.
   Oracle: § "`m_hFollowerBoss` — the follower controller", § "Followers, patrols, and
   loitering".
+  Size: L. Effort: Opus / high.
 - [ ] **16b. The composed relationship and the human ideal state.**
   Retail: `IRelationType` (`0x10299da0`): self → D_ER; a `D_INSANE` target with my closest
   player not hated and not my enemy → D_HT; target's boss hated or my enemy → D_HT; my boss ==
@@ -384,6 +399,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   Provides: the composed relation to 0006, 0007 and the target HUD.
   Oracle: § "`m_hFollowerBoss` — the follower controller", § "Relationship table, exactly
   decoded".
+  Size: M. Effort: Opus / medium.
 - [ ] **16c. Possession and frenzy.**
   Retail: `Dominate_Possession`'s `DoPossession` byte runs `0x102c51a0`: squad disconnect,
   `SetEnemy(NULL)`, `flags2 |= D_POSSESSED | D_DISCONNECT_SQUAD`, `"player D_LI 99"`,
@@ -396,6 +412,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   Consumes: the HitGroup apply path from 0007.
   Oracle: § "Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload".
   Settled as not in the image: the `m_bfNPCFrenziedFlags` bit names.
+  Size: M. Effort: Opus / medium.
 - [ ] **17. Squads.**
   Retail: one shared `AI_Enemies` memory. Joining (`squadname` + `bits_CAP_SQUAD`, `InitSquad`
   `0x10273d30` / `SetSquad` `0x1029a930`) points `m_pEnemies` at `squad+8`; `GetEnemies()`
@@ -412,6 +429,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   Job: the squad object sharing 5's record store, the disconnect refcount replacing the seams
   in 7 and 8, the condition, the two tasks, the `SquadSeesPlayer` stub replaced.
   Oracle: § "Squads, decoded". Unrecovered: `m_iMySquadSlot`'s offset.
+  Size: L–XL. Effort: Opus / high; corpus pass on `m_iMySquadSlot` first.
 - [ ] **21a. The flee state.**
   Retail: `m_NPCState == 8`, entered only in `CAI_BaseNPCTroika::SelectIdealState`
   (`0x102ad660`) from idle and alert on `COND_SUPERNATURAL_FLEE_LEVEL` 0x21 or
@@ -430,6 +448,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   Oracle: § "The flee state and the cower, disoriented and lost programs". Unrecovered: the
   criminal level `+0x6364`, the `sound_volume_table.txt` rows for the flee sound, hint type
   names 0x2774/0x27d8, the base `SCHED_COWER` id.
+  Size: L. Effort: Opus / high; corpus pass on the unrecovered items first.
 - [ ] **21b. The cower, disoriented and lost programs.**
   Retail: 0x70/0x71 `FLEE_AND_COWER_TURN_TO_PLAYER(_NEAR)`, 0x72 `_SCREAM`, 0x73
   `FLEE_AND_COWER`, 0x74/0x75 `_STALL(_FAILED)`, 0x76 `_NO_ENEMY`, 0x77/0x78 `COWER(_HINT)`,
@@ -443,6 +462,7 @@ the retail contract the code must match, the job, and what it consumes or provid
   0xa6, `PLAY_COWER` 0xe6, `SET_COWER` 0xe7, `LOOK_AT_PLAYER` 0xfb, `RUN_PATH_FLEE` 0x103,
   `FLIP_NEXT_IDEAL_YAW` 0x106, `WAIT_PVS`; the 0xe1/0xe3 completion branch 8 left waiting.
   Oracle: § "The flee state and the cower, disoriented and lost programs".
+  Size: L. Effort: Opus / high.
 - [ ] **21c. The incapacitated victim's consumers.**
   Retail: `AttemptFeed` (`0x10168910`) reads the victim's ideal activity (+0xff0), auto-accepts
   on `ACT_DISPOSITION_MESMERIZED 0x104e / ACT_DISORIENTED 0x1068 / ACT_LOST 0x1069 / ACT_COWER
@@ -454,11 +474,13 @@ the retail contract the code must match, the job, and what it consumes or provid
   Provides: the `ONE_HIT_KILL` seam to 0006's damage.
   Oracle: § "The flee state and the cower, disoriented and lost programs" (Activities and the
   feed; Flags the family writes); `feeding.md` § "Step 4, decoded".
+  Size: S–M. Effort: Sonnet / medium.
 - [ ] **22. `sp_tutorial_1` on the V2 lane.**
   Job: the map baked on the V2 lane so the light query reads its 396 worldlights (1) and the
   nine hull-0 Jump links `22, 24, 30, 88, 110, 115, 147, 163, 218` exist as link actors (19).
   Until then 13's stuck-on-top failure is unreachable in the tutorial.
 
+  Size: S–M. Effort: Sonnet / medium.
 ## Seams
 - Provides: the awareness seam (`Cognition.Conditions`, the enemy memory, `Senses.Memory`,
   `IsOblivious()`, `ShouldInvestigate`) to 0006 and 0008; the stealth scalars; the failure path
