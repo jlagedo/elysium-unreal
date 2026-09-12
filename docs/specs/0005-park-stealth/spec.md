@@ -71,15 +71,11 @@ The seven Society hunters and `sentry2` at the far end of the BSP are an Unoffic
 level-select hub, not tutorial content.
 
 ## Stories
-In build order within each theme. Across themes the open order is 15 first, then 10a, 10b,
-10c, 10g, 11, 10d, 10e, 10f, 10h, 12a, 12b, 13b, 16a, 16b, 16c, 17, 21a, 21b, 21c, 22
-(decided 2026-09-12: the cadence before any program family, the executors retired before
-any selector). A story is done when every behaviour it lists is in the
+In build order. A story is done when every behaviour it lists is in the
 substrate and its recovery is written in the oracle section it names. Numbers are stable ids
 cited by other documents; a split keeps the number and adds a letter. Each open story carries
 the retail contract the code must match, the job, and what it consumes or provides.
 
-### Stealth
 - [x] **1. Target surface and the light query.** The light row and `Sneaking` publish the vision,
   cone and hearing scalars; `trigger_stealth_mod` is a balanced overlap modifier. The light query
   is a live per-worldlight evaluation: Source falloff by light type, the cone/angle term, the live
@@ -116,8 +112,6 @@ the retail contract the code must match, the job, and what it consumes or provid
 - [x] **4. The committed observer snapshot.** Gameplay publishes searching/detected to the HUD
   after the NPC state commits; the HUD runs no trace and no detection. Oracle: `stealth.md`
   § "HUD observability is not authority".
-
-### Senses and memory
 - [x] **5. The enemy memory** (`CAI_Memory`). Records at `mem+0xc` (handle, last position,
   anchor, velocity, last-seen time, nav nodes, position-only byte, eluded byte) written by
   `UpdateEnemyMemory` (slot 544, `0x102709c0`) from `OnLooked`'s `D_HT`/`D_FR` arms;
@@ -181,6 +175,62 @@ the retail contract the code must match, the job, and what it consumes or provid
   `DONT_INVESTIGATE|IN_FLEE_SCHED`, `stay_entrenched`, null and my follower boss; the base
   table (`0x102c8ce0`, 119 entries). Oracle: § "The three `GatherConditions` sweeps and the
   interest predicate", § "The base condition table".
+- [x] **13. `TaskFail`** (slot 448). Base `0x10273fc0`: reason table `0x106152b0` (0x00–0x29)
+  to +0x5c50, clear `m_bShouldMove`, `COND_TASK_FAILED` 0x5c. Troika `0x1029adb0` first:
+  interesting-place teardown, clear `PRESERVE_PATH` unless nav type CLIMB/JUMP, motor reset,
+  four think stamps := curtime, goal tolerance and interrupt distances 0, move target and kick
+  prop released, `m_afMemory &= 0x0fffffff`, `flags2 &= 0x7fffe24f`, `flags1 &= 0xa3f40178`
+  (`MADE_OBLIVIOUS` cleared, +0x5bb4 not decremented: retail's bounded leak, reproduced with a
+  trace row), `SLEEP_BOUNDING_BOX` restore through the attack extents, `ClearHintNode(5.0)`.
+  `COND_SCHEDULE_DONE` 0x5d. `TASK_STOP_MOVING`'s `FAIL_STUCK_ONTOP` 0x1c: goal active at
+  StartTask, then `NAV_JUMP`, not on ground, `|v| ≤ 0.01` at RunTask. Oracle: § "`TaskFail`
+  and stopped special navigation, walked".
+- [x] **14. `TASK_SET_ACTIVITY` completes on a miss** (arm `0x102a1c0f`, no fail path); the
+  miss is a trace row. Oracle: § "Nothing in schedule data clears these bits — the schedule
+  *change* does".
+- [x] **19. Jump links.** `NavLinkProxy`s from the decoded `.ain` links with retail's
+  disabled-bit and capability filter; the motor reports `Jump` while traversing one and
+  `Ground` before arrival or failure. Oracle: `navigation-jump-links.md`; the Unreal flight
+  service is a named modernization.
+- [x] **20. The trance.** `FeedInterrupt` (`0x1033a9e0`) on a victim with `BloodPool ≥ 1` and
+  `IRelationType(attacker) != D_HT`: think timers := curtime, `SetSchedule(0xfb
+  SCHED_TROIKA_MESMERIZED)` (`MAKE_OBLIVIOUS TRUE; SET_NPC_FLAG D_IS_BUSY, DONT_INVESTIGATE,
+  NO_DIALOG; SET_ACTIVITY ACT_DISPOSITION_MESMERIZED; WAIT 30; WAIT_RANDOM 120`, damage
+  interrupts, `DELAY_INTERRUPTS`); after `LeaveGrappleState`; replaced by 0x6b when
+  `IsBusyWithDiscipline()`. `DELAY_INTERRUPTS` is one think of immunity re-armed by every
+  install; `SetSchedule` zeroes the condition set; `MaintainSchedule` bound 10; effective mask
+  = authored ∪ `BuildScheduleTestBits` ∪ `NPC_FREEZE`. Oracle: § "Incapacitation, feeding,
+  grapple, and death", § "`DELAY_INTERRUPTS`, decoded", § "`SetSchedule` clears the condition
+  set".
+- [x] **23. The NPC debugger** (visual-only modernization, out of Shipping, reads only).
+  Job: an `FGameplayDebuggerCategory` "ElysiumNPC" whose `CollectData` packs mind state,
+  schedule/task, conditions, enemy memory, sense radii and the trace, and whose `DrawData`
+  draws the vision circle and cone, hearing radius, enemy LOS line and held place; an
+  `IVisualLoggerDebugSnapshotInterface` on the body actor with `UE_VLOG` shapes at sense
+  admission, enemy choice and schedule install.
+- [ ] **15. The think cadence.**
+  Retail: four stamps with four interval laws (`CalcNextUpdateThink` `0x10290720`, `Normal`
+  `0x10290b60`, `Move` `0x10290fc0`, `AI` `0x10291230`), distance/PVS/LOS-driven, none reading
+  NPC state; due when `(stamp − curtime) ≤ frametime`; `NPCThink` (`0x10292de0`) runs its
+  body only when the normal think is due and passes `bReduced = !IsThinkDue(NextAI)` to
+  `RunAI` (`0x1026f110`: no `GatherConditions`, `MaintainSchedule` bound 1, no clear of
+  `LIGHT/HEAVY_DAMAGE` / `WAS_BUMPED`); `m_flNextThink = min(NextUpdate, NextNormal)`;
+  `SCHEDULE_CHANGED`, LOS and dialogue pin normal and AI to 0.1 s; `SetPlayerLOS` at most every
+  2 s with the 512-unit bypass and 8 s hysteresis. The port runs one `NextThink`, bound 10
+  always, no `WasBumped`; 13 already resets the four stamps.
+  Job: the four stamps and laws on the NPC, `IsThinkDue` per stamp, the reduced mode gating the
+  condition pass and the completion bound, the pins, `WAS_BUMPED`; every literal `NextThink`
+  write in `ElysiumNpc.cpp` (44 sites, 0.05–2.0 s) replaced by a stamp write, so no cadence
+  literal remains when the story closes; the shared test fixture stops pinning `NextThink` to
+  never and cases advance the world clock instead, so the cadence is under test rather than
+  bypassed.
+  Provides: the clock every later program family runs on (10d–10h, 16, 17, 21): `DELAY_INTERRUPTS`'
+  "one think", the sweeps' reduced-mode gating, the follower distance checks and the squad's
+  0.2 s sighting window are all stated in thinks.
+  Oracle: § "The think cadence, decoded". Unrecovered: `m_bfNPCStateFlags` bit 3 (forces
+  PVS/LOS true), the subclass writers of `m_flNextAIThink` (`CNPC_VCamera`, `CNPC_VNewscaster`),
+  `CAI_BaseNPC+0x98`'s entity, slot 578 (the survivor callback), slot 168 (the `GetEnemy`
+  variant).
 - [ ] **10a. The sound sweep.**
   Retail: `0x102b1cd0` over the seven sound records (incl. `Flinch` +0x6210); gate
   `m_flNextInvestigateSoundTime` +0x623c re-armed 2.0 s, 20.0 s for a stranger's sound;
@@ -302,47 +352,9 @@ the retail contract the code must match, the job, and what it consumes or provid
   hints 0xa7/0xa8; `COND_KICK_PROP_INVALID` has no producer.
   Job: the chooser, the kick program and its hints, the kickable byte.
   Oracle: § "The cover and kick chooser, and the combat leftovers".
-
-### The schedule host
-- [x] **13. `TaskFail`** (slot 448). Base `0x10273fc0`: reason table `0x106152b0` (0x00–0x29)
-  to +0x5c50, clear `m_bShouldMove`, `COND_TASK_FAILED` 0x5c. Troika `0x1029adb0` first:
-  interesting-place teardown, clear `PRESERVE_PATH` unless nav type CLIMB/JUMP, motor reset,
-  four think stamps := curtime, goal tolerance and interrupt distances 0, move target and kick
-  prop released, `m_afMemory &= 0x0fffffff`, `flags2 &= 0x7fffe24f`, `flags1 &= 0xa3f40178`
-  (`MADE_OBLIVIOUS` cleared, +0x5bb4 not decremented: retail's bounded leak, reproduced with a
-  trace row), `SLEEP_BOUNDING_BOX` restore through the attack extents, `ClearHintNode(5.0)`.
-  `COND_SCHEDULE_DONE` 0x5d. `TASK_STOP_MOVING`'s `FAIL_STUCK_ONTOP` 0x1c: goal active at
-  StartTask, then `NAV_JUMP`, not on ground, `|v| ≤ 0.01` at RunTask. Oracle: § "`TaskFail`
-  and stopped special navigation, walked".
 - [ ] **13b. The leak in the defect catalogue.**
   Job: the `TaskFail` obliviousness leak as an entry in `docs/vtmb/retail-defects.md`, from
   the oracle section above.
-- [x] **14. `TASK_SET_ACTIVITY` completes on a miss** (arm `0x102a1c0f`, no fail path); the
-  miss is a trace row. Oracle: § "Nothing in schedule data clears these bits — the schedule
-  *change* does".
-- [ ] **15. The think cadence.**
-  Retail: four stamps with four interval laws (`CalcNextUpdateThink` `0x10290720`, `Normal`
-  `0x10290b60`, `Move` `0x10290fc0`, `AI` `0x10291230`), distance/PVS/LOS-driven, none reading
-  NPC state; due when `(stamp − curtime) ≤ frametime`; `NPCThink` (`0x10292de0`) runs its
-  body only when the normal think is due and passes `bReduced = !IsThinkDue(NextAI)` to
-  `RunAI` (`0x1026f110`: no `GatherConditions`, `MaintainSchedule` bound 1, no clear of
-  `LIGHT/HEAVY_DAMAGE` / `WAS_BUMPED`); `m_flNextThink = min(NextUpdate, NextNormal)`;
-  `SCHEDULE_CHANGED`, LOS and dialogue pin normal and AI to 0.1 s; `SetPlayerLOS` at most every
-  2 s with the 512-unit bypass and 8 s hysteresis. The port runs one `NextThink`, bound 10
-  always, no `WasBumped`; 13 already resets the four stamps.
-  Job: the four stamps and laws on the NPC, `IsThinkDue` per stamp, the reduced mode gating the
-  condition pass and the completion bound, the pins, `WAS_BUMPED`; every literal `NextThink`
-  write in `ElysiumNpc.cpp` (44 sites, 0.05–2.0 s) replaced by a stamp write, so no cadence
-  literal remains when the story closes; the shared test fixture stops pinning `NextThink` to
-  never and cases advance the world clock instead, so the cadence is under test rather than
-  bypassed.
-  Provides: the clock every later program family runs on (10d–10h, 16, 17, 21): `DELAY_INTERRUPTS`'
-  "one think", the sweeps' reduced-mode gating, the follower distance checks and the squad's
-  0.2 s sighting window are all stated in thinks.
-  Oracle: § "The think cadence, decoded". Unrecovered: `m_bfNPCStateFlags` bit 3 (forces
-  PVS/LOS true), the subclass writers of `m_flNextAIThink` (`CNPC_VCamera`, `CNPC_VNewscaster`),
-  `CAI_BaseNPC+0x98`'s entity, slot 578 (the survivor callback), slot 168 (the `GetEnemy`
-  variant).
 - [ ] **16a. Followers.**
   Retail: keyfields `follower_boss` (+0x6478 → `m_hFollowerBoss` +0x647c) and `follower_type`
   (+0x6480); `SetFollowerBoss` (`0x102c44e0`, refuses self and squad members) through the
@@ -400,22 +412,6 @@ the retail contract the code must match, the job, and what it consumes or provid
   Job: the squad object sharing 5's record store, the disconnect refcount replacing the seams
   in 7 and 8, the condition, the two tasks, the `SquadSeesPlayer` stub replaced.
   Oracle: § "Squads, decoded". Unrecovered: `m_iMySquadSlot`'s offset.
-- [x] **19. Jump links.** `NavLinkProxy`s from the decoded `.ain` links with retail's
-  disabled-bit and capability filter; the motor reports `Jump` while traversing one and
-  `Ground` before arrival or failure. Oracle: `navigation-jump-links.md`; the Unreal flight
-  service is a named modernization.
-
-### Incapacitation
-- [x] **20. The trance.** `FeedInterrupt` (`0x1033a9e0`) on a victim with `BloodPool ≥ 1` and
-  `IRelationType(attacker) != D_HT`: think timers := curtime, `SetSchedule(0xfb
-  SCHED_TROIKA_MESMERIZED)` (`MAKE_OBLIVIOUS TRUE; SET_NPC_FLAG D_IS_BUSY, DONT_INVESTIGATE,
-  NO_DIALOG; SET_ACTIVITY ACT_DISPOSITION_MESMERIZED; WAIT 30; WAIT_RANDOM 120`, damage
-  interrupts, `DELAY_INTERRUPTS`); after `LeaveGrappleState`; replaced by 0x6b when
-  `IsBusyWithDiscipline()`. `DELAY_INTERRUPTS` is one think of immunity re-armed by every
-  install; `SetSchedule` zeroes the condition set; `MaintainSchedule` bound 10; effective mask
-  = authored ∪ `BuildScheduleTestBits` ∪ `NPC_FREEZE`. Oracle: § "Incapacitation, feeding,
-  grapple, and death", § "`DELAY_INTERRUPTS`, decoded", § "`SetSchedule` clears the condition
-  set".
 - [ ] **21a. The flee state.**
   Retail: `m_NPCState == 8`, entered only in `CAI_BaseNPCTroika::SelectIdealState`
   (`0x102ad660`) from idle and alert on `COND_SUPERNATURAL_FLEE_LEVEL` 0x21 or
@@ -458,18 +454,10 @@ the retail contract the code must match, the job, and what it consumes or provid
   Provides: the `ONE_HIT_KILL` seam to 0006's damage.
   Oracle: § "The flee state and the cower, disoriented and lost programs" (Activities and the
   feed; Flags the family writes); `feeding.md` § "Step 4, decoded".
-
-### Content and tooling
 - [ ] **22. `sp_tutorial_1` on the V2 lane.**
   Job: the map baked on the V2 lane so the light query reads its 396 worldlights (1) and the
   nine hull-0 Jump links `22, 24, 30, 88, 110, 115, 147, 163, 218` exist as link actors (19).
   Until then 13's stuck-on-top failure is unreachable in the tutorial.
-- [x] **23. The NPC debugger** (visual-only modernization, out of Shipping, reads only).
-  Job: an `FGameplayDebuggerCategory` "ElysiumNPC" whose `CollectData` packs mind state,
-  schedule/task, conditions, enemy memory, sense radii and the trace, and whose `DrawData`
-  draws the vision circle and cone, hearing radius, enemy LOS line and held place; an
-  `IVisualLoggerDebugSnapshotInterface` on the body actor with `UE_VLOG` shapes at sense
-  admission, enemy choice and schedule install.
 
 ## Seams
 - Provides: the awareness seam (`Cognition.Conditions`, the enemy memory, `Senses.Memory`,
