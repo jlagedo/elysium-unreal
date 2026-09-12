@@ -259,11 +259,14 @@ namespace ElysiumSchedule
 	// Test-only: install an interrupt mask on a registered program for the lifetime of the scope,
 	// restoring the previous one on destruction.
 	//
-	// It exists because every registered program's recovered mask is empty (nothing in the survey
-	// names one), so the kernel's interrupt path would otherwise have no content-free driver at
-	// all — and "the code is unreachable" is not the same claim as "the code is right". Nothing
-	// outside a test may install a mask: a mask is authored data, and inventing one at runtime is
-	// the behavioural change the empty defaults exist to refuse.
+	// It exists so a kernel case can drive the interrupt path against a mask of its own choosing
+	// rather than against whatever the registered program authors: the idle pair here carries a
+	// CHOSEN mask, the door programs an empty one, and the combat families in
+	// `ElysiumNpcCombatSchedules.cpp` either a decoded mask or the CHOSEN `MinimalCombatMask`, so a
+	// case that wants to prove "this
+	// condition, and only this condition, ends the program" needs a mask it controls. Nothing
+	// outside a test may install one: a mask is authored data, and inventing one at runtime is a
+	// behavioural change.
 	struct FInterruptMaskScope
 	{
 		FInterruptMaskScope(EElysiumScheduleId Id, const FElysiumNpcConditions& Mask);

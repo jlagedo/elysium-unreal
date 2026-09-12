@@ -34,9 +34,13 @@ namespace ElysiumNpcSense
 	inline constexpr double BlockedInConeGraceSeconds = 8.0;
 	// At or below this distance an in-cone target is seen with no trace at all.
 	inline constexpr float NearBypassUnits = 512.0f;
-	// A target between this fraction of the effective radius and the whole of it sets the outer
-	// band. The band is carried, not consumed: its attention/investigation consumer (`0x102b3e00`)
-	// has no recovered authored name, so nothing reads it yet.
+	// A target between this fraction of the effective radius and the whole of it is in the outer
+	// band. Two readers: the closest-player cache carries it as `bPlayerInOuterBand` (debug only),
+	// and `TickSight` consumes it as the see-unknown path (`0x102b3e00`): a candidate seen in the
+	// band, absent a range bypass, a damage override or `NO_UNKNOWN_VISION`, and passing
+	// `ShouldInvestigate`, writes the `BestSeeUnknown` / `LastSeeUnknown` memory and its two
+	// timers, may set `ATTACK_UNKNOWN`, and fires `OnUnknownVisionPlayer`. The `SEE_UNKNOWN`
+	// condition itself is the see-unknown sweep's (story 10b), read off that memory.
 	inline constexpr float OuterBandFraction = 0.7f;
 	// `GatherEnemyConditions` increments a failure counter up to ten. Below ten the committed
 	// enemy retains `HAVE_ENEMY_LOS`; at ten it becomes `ENEMY_OCCLUDED`.

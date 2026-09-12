@@ -375,8 +375,11 @@ namespace ElysiumNpcCond
 	bool IsHearFamily(EElysiumNpcCond Cond);
 
 	// --- The producers ------------------------------------------------------------------------------
-	// Each reads saved memory plus the live world and sets bits; none clears. `PreviousGatherTime`
-	// is the edge: a stimulus stamped after the previous pass is new to this one.
+	// Each reads saved memory plus the live world and sets bits. The four base producers below never
+	// clear; `GatherSounds` is the one exception and owns its three products outright — it clears
+	// `INVESTIGATE_SOUND` and `HEAR_FLANK_SOUND` unconditionally and `SEE_SOUND_SOURCE` in its
+	// tail, exactly as `FUN_102b1cd0` does (see its own header). `PreviousGatherTime` is the edge: a
+	// stimulus stamped after the previous pass is new to this one.
 
 	// `LIGHT_DAMAGE` / `HEAVY_DAMAGE` / `REPEATED_DAMAGE` from the last committed packet.
 	void GatherDamage(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
