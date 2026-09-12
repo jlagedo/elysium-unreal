@@ -223,11 +223,17 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	uint8 OuterBand = bPlayerInOuterBand ? 1 : 0;
 	uint8 InCone = bPlayerInCone ? 1 : 0;
 	uint8 PlayerVisible = bPlayerVisible ? 1 : 0;
+	uint8 PlayerInPvs = bPlayerInPvs ? 1 : 0;
+	uint8 PlayerLos = bPlayerLos ? 1 : 0;
 	Ar << InRange;
 	Ar << OuterBand;
 	Ar << InCone;
 	Ar << PlayerVisible;
+	Ar << PlayerInPvs;
+	Ar << PlayerLos;
+	Ar << SightingLastClearTime;
 	Ar << PlayerLosLastClearTime;
+	Ar << PlayerPvsLastClearTime;
 	Ar << PlayerLosNextUpdateTime;
 	Ar << StealthVisionOverrideUntil;
 	Ar << BestSeeUnknown;
@@ -287,6 +293,8 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 		bPlayerInOuterBand = OuterBand != 0;
 		bPlayerInCone = InCone != 0;
 		bPlayerVisible = PlayerVisible != 0;
+		bPlayerInPvs = PlayerInPvs != 0;
+		bPlayerLos = PlayerLos != 0;
 		bIgnoreUnknown = IgnoreUnknown != 0;
 		bMadeInitialUnknownResponse = MadeInitialUnknownResponse != 0;
 		EnemyLosFailures = FMath::Clamp(EnemyLosFailures, 0,
@@ -461,6 +469,115 @@ bool FElysiumNpcSenses::IsVisible(const FElysiumNpc& Npc, const FElysiumEntity& 
 		&& SegmentClear(Npc.World, Npc.EyePosition(), Candidate.EyePosition());
 }
 
+// `SetClosestPlayer` `0x10293a80`. Retail walks every client slot and keeps the nearest by 3-D
+// distance, seeded at `20000.0` — a search bound, not a clamp, so a player farther than that
+// leaves the handle invalid while the distance sits at the seed. `NPCThink` stores the return into
+// `m_flPlayerDist` and the tail publishes the pair to the player's observer surface, which is the
+// call this port answers with the witness channel's own closest-player entry point.
+//
+// Ungated: retail's 2-second cache is on `SetPlayerLOS` alone. This runs on the NORMAL think.
+void FElysiumNpcSenses::SetClosestPlayer(FElysiumNpc& Npc, double Now)
+{
+	FElysiumEntityWorld* World = Npc.World;
+	if (World == nullptr)
+	{
+		return;
+	}
+	FElysiumPlayer* Player = World->FindPlayer();
+	const float SearchCm = ElysiumNpcSense::ClosestPlayerSearchUnits * ElysiumMove::U;
+	const float DistanceCm = Player != nullptr && !Player->IsInert()
+		? static_cast<float>(FVector::Dist(Npc.Origin, Player->Origin)) : SearchCm;
+	if (Player == nullptr || Player->IsInert() || DistanceCm >= SearchCm)
+	{
+		Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
+		Memory.ClosestPlayerDistanceCm = SearchCm;
+		return;
+	}
+	Memory.ClosestPlayer = Player->Handle;
+	Memory.ClosestPlayerDistanceCm = DistanceCm;
+	ElysiumNpcWitness::OnClosestPlayerUpdated(Npc, *Player, Now);
+}
+
+// `SetPlayerLOS` `0x10291610`, walked. Note what is NOT here: a cone test. Retail's cached LOS is
+// true for a player standing behind this NPC with a clear line to its eye, which is why the port's
+// sighting answer is the separate `bPlayerVisible` and this pair feeds only the think cadence and
+// `NPCThink`'s `DISAPPEAR` arm.
+void FElysiumNpcSenses::SetPlayerLos(FElysiumNpc& Npc, double Now)
+{
+	FElysiumEntityWorld* World = Npc.World;
+	if (World == nullptr)
+	{
+		return;
+	}
+	auto ForceVisible = [&]()
+	{
+		Memory.bPlayerInPvs = true;
+		Memory.bPlayerLos = true;
+		Memory.PlayerPvsLastClearTime = Now;
+		Memory.PlayerLosLastClearTime = Now;
+	};
+	// `m_bfNPCStateFlags & 0x8` — UNRECOVERED name, and no producer in this substrate either, so
+	// the arm is stated and answers false. `m_bfNPCFrenziedFlags & 0x8` is set by both discipline
+	// arms (`0x3b1c` and `0x9fbd`); 16c is its producer and the read is live the day it lands.
+	if (Npc.NpcFlags.HasNpcState(FElysiumNpcFlags::StateAlwaysInPlayerView)
+		|| Npc.NpcFlags.HasFrenzied(FElysiumNpcFlags::FrenziedAlwaysInPlayerView))
+	{
+		ForceVisible();
+	}
+	else if (Memory.PlayerLosNextUpdateTime <= 0.0 || Now >= Memory.PlayerLosNextUpdateTime)
+	{
+		Memory.PlayerLosNextUpdateTime = Now + ElysiumNpcSense::PlayerLosCadenceSeconds;
+		FElysiumPlayer* Player = Memory.ClosestPlayer.IsSet() ? World->FindPlayer() : nullptr;
+		if (Player == nullptr || Player->IsInert() || Player->Handle != Memory.ClosestPlayer)
+		{
+			// No closest player is the sentinel arm, not a detection: retail seeds both bytes true
+			// here exactly as `NPCInit` does.
+			ForceVisible();
+		}
+		else
+		{
+			const IElysiumEmbodiment* Embodiment = World->Embodiment();
+			Memory.bPlayerInPvs = Embodiment == nullptr
+				|| Embodiment->ArePointsInSamePvs(Player->Origin, Npc.Origin);
+			if (!Memory.bPlayerInPvs)
+			{
+				Memory.bPlayerLos = false;
+			}
+			else
+			{
+				Memory.PlayerPvsLastClearTime = Now;
+				// At or inside 512 units LOS is true with no trace at all (`dist < 512` and
+				// `dist == 512` take the same arm in `0x10291610`).
+				if (Memory.ClosestPlayerDistanceCm
+					<= ElysiumNpcSense::NearBypassUnits * ElysiumMove::U)
+				{
+					Memory.bPlayerLos = true;
+					Memory.PlayerLosLastClearTime = Now;
+				}
+				else
+				{
+					// The eye-to-eye trace, retail's mask `0x4091`. The engine seam answers the
+					// one world term; the mask itself is the embodiment's business.
+					Memory.bPlayerLos =
+						SegmentClear(World, Npc.EyePosition(), Player->EyePosition());
+					if (Memory.bPlayerLos)
+					{
+						Memory.PlayerLosLastClearTime = Now;
+					}
+				}
+			}
+		}
+	}
+	// The hysteresis, and it runs on EVERY call — including one the 2 s gate declined. A body that
+	// has just lost its line but is still in the same PVS keeps LOS for eight seconds past the last
+	// clear one, which is what stops the cadence oscillating as a player walks behind a pillar.
+	if (!Memory.bPlayerLos && Memory.bPlayerInPvs && Memory.PlayerLosLastClearTime >= 0.0
+		&& Now - Memory.PlayerLosLastClearTime < ElysiumNpcSense::BlockedInConeGraceSeconds)
+	{
+		Memory.bPlayerLos = true;
+	}
+}
+
 void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 {
 	FElysiumEntityWorld* World = Npc.World;
@@ -468,37 +585,34 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 	{
 		return;
 	}
-	// `SetClosestPlayer`/PVS/LOS is a 2-second performance cache, never the Look gate.  Its
-	// cached answer remains for HUD/witness consumers only; actual observations below are fresh.
+	// The port's `COND_SEE_PLAYER` reconstruction. It belongs to the sense pass, not to
+	// `SetPlayerLOS`'s 2 s cache: retail rebuilds its sighting on every `Look`, and unlike the
+	// cache this keeps the cone term. It resolves the player itself for the same reason `Look`
+	// does — a sighting is an observation this pass makes, not a cached pair it reads back.
 	FElysiumPlayer* Player = World->FindPlayer();
-	if (Memory.PlayerLosNextUpdateTime <= 0.0 || Now >= Memory.PlayerLosNextUpdateTime)
+	if (Player == nullptr || Player->IsInert())
 	{
-		Memory.PlayerLosNextUpdateTime = Now + ElysiumNpcSense::PlayerLosCadenceSeconds;
-		if (Player == nullptr || Player->IsInert())
+		Memory.bPlayerInRange = Memory.bPlayerInOuterBand = Memory.bPlayerInCone = false;
+		Memory.bPlayerVisible = false;
+	}
+	else
+	{
+		const float DistanceCm = static_cast<float>(FVector::Dist(Npc.Origin, Player->Origin));
+		const float RadiusCm = Perception.VisionDistanceCm * TargetVisionScalar(*Player);
+		const float NearBypassCm = ElysiumNpcSense::NearBypassUnits * ElysiumMove::U;
+		Memory.bPlayerInRange = DistanceCm <= RadiusCm;
+		Memory.bPlayerInOuterBand = Memory.bPlayerInRange
+			&& DistanceCm > ElysiumNpcSense::OuterBandFraction * RadiusCm;
+		Memory.bPlayerInCone = IsInViewCone(Npc, Player->EyePosition(), TargetConeScalar(*Player));
+		const bool bClear = Memory.bPlayerInCone && Memory.bPlayerInRange
+			&& (DistanceCm <= NearBypassCm
+				|| SegmentClear(World, Npc.EyePosition(), Player->EyePosition()));
+		if (bClear && DistanceCm > NearBypassCm)
 		{
-			Memory.ClosestPlayer = FElysiumEntityHandle::Invalid();
-			Memory.bPlayerInRange = Memory.bPlayerInOuterBand = Memory.bPlayerInCone = Memory.bPlayerVisible = false;
+			Memory.SightingLastClearTime = Now;
 		}
-		else
-		{
-			Memory.ClosestPlayer = Player->Handle;
-			Memory.ClosestPlayerDistanceCm = FVector::Dist(Npc.Origin, Player->Origin);
-			const float RadiusCm = Perception.VisionDistanceCm * TargetVisionScalar(*Player);
-			Memory.bPlayerInRange = Memory.ClosestPlayerDistanceCm <= RadiusCm;
-			Memory.bPlayerInOuterBand = Memory.bPlayerInRange
-				&& Memory.ClosestPlayerDistanceCm > ElysiumNpcSense::OuterBandFraction * RadiusCm;
-			Memory.bPlayerInCone = IsInViewCone(Npc, Player->EyePosition(), TargetConeScalar(*Player));
-			const bool bClear = Memory.bPlayerInCone && Memory.bPlayerInRange
-				&& (Memory.ClosestPlayerDistanceCm <= ElysiumNpcSense::NearBypassUnits * ElysiumMove::U
-					|| SegmentClear(World, Npc.EyePosition(), Player->EyePosition()));
-			if (bClear && Memory.ClosestPlayerDistanceCm > ElysiumNpcSense::NearBypassUnits * ElysiumMove::U)
-			{
-				Memory.PlayerLosLastClearTime = Now;
-			}
-			Memory.bPlayerVisible = bClear || (Memory.bPlayerInCone && Memory.PlayerLosLastClearTime >= 0.0
-				&& Now - Memory.PlayerLosLastClearTime <= ElysiumNpcSense::BlockedInConeGraceSeconds);
-			ElysiumNpcWitness::OnClosestPlayerUpdated(Npc, *Player, Now);
-		}
+		Memory.bPlayerVisible = bClear || (Memory.bPlayerInCone && Memory.SightingLastClearTime >= 0.0
+			&& Now - Memory.SightingLastClearTime <= ElysiumNpcSense::BlockedInConeGraceSeconds);
 	}
 
 	SeenThisPass.Reset();

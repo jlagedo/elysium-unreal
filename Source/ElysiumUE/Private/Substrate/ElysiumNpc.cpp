@@ -816,6 +816,12 @@ void FElysiumNpc::Think()
 	}
 	ResolveLoadout();
 	ReplayDeferredScriptedOrder();
+	// `SetClosestPlayer` (`0x10293a80`) then `SetPlayerLOS` (`0x10291610`), in `NPCThink`'s own
+	// order and OUTSIDE the sense pass, which is where retail runs them: they answer on the normal
+	// think while `CAI_Senses::Look` answers on the AI think. Neither is gated by obliviousness --
+	// `m_iIsOblivious` gates `PerformSensing`, not these -- and neither is a sighting.
+	Senses.SetClosestPlayer(*this, World ? World->NowSeconds() : 0.0);
+	Senses.SetPlayerLos(*this, World ? World->NowSeconds() : 0.0);
 	RunConditionPass();
 	// Retail's `OnStateChange` edge (vtable slot 463), after the pass that can move the state and
 	// after `ResolveLoadout` above — the first fire has to see the weapon the loadout equipped, or a

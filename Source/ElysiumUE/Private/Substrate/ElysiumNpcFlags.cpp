@@ -154,6 +154,8 @@ void FElysiumNpcFlags::Serialize(FElysiumSaveArchive& Ar)
 	Ar << Word1;
 	Ar << Word2;
 	Ar << ObliviousCount;
+	Ar << FrenziedWord;
+	Ar << NpcStateWord;
 }
 
 FString FElysiumNpcFlags::Describe() const

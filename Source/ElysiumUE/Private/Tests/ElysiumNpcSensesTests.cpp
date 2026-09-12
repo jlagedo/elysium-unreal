@@ -298,6 +298,7 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		}
 		F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);   // straight ahead, well inside 512
 		F.Services.Calls.Reset();
+		F.Guard->Senses.SetClosestPlayer(*F.Guard, 10.0);
 		F.Guard->Senses.TickSight(*F.Guard, 10.0);
 
 		TestTrue(TEXT("an in-cone target inside 512 units is seen"), F.Guard->Senses.Memory.bPlayerVisible);
@@ -311,18 +312,99 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		TestFalse(TEXT("...and well inside the outer band"),
 			F.Guard->Senses.Memory.bPlayerInOuterBand);
 
-		// The cadence: moving the player and re-ticking inside 2 s does NOT recompute.
+		// The sighting is NOT on `SetPlayerLOS`'s 2 s cache. Retail rebuilds it on every `Look`,
+		// so a target that steps behind the observer is out of cone on the very next pass.
 		F.Player->Origin = FVector(Cm(-100.f), 0.0, 0.0);   // directly behind the guard
 		F.Guard->Senses.TickSight(*F.Guard, 11.0);
-		TestTrue(TEXT("a tick inside the 2 s cadence leaves the cache alone"),
-			NearlyEqual(F.Guard->Senses.Memory.ClosestPlayerDistanceCm, Cm(100.f), 1.0f)
-			&& F.Guard->Senses.Memory.bPlayerVisible);
-
-		// Past the cadence it recomputes, and a target behind the observer is out of cone.
-		F.Guard->Senses.TickSight(*F.Guard, 12.5);
 		TestFalse(TEXT("a target behind the observer is out of cone"),
 			F.Guard->Senses.Memory.bPlayerInCone);
-		TestFalse(TEXT("...and therefore not seen"), F.Guard->Senses.Memory.bPlayerVisible);
+		TestFalse(TEXT("...and therefore not seen on the same pass it moved"),
+			F.Guard->Senses.Memory.bPlayerVisible);
+	}
+
+	// --- `SetClosestPlayer` `0x10293a80` --------------------------------------------------------
+	{
+		FSensesFixture F;
+		if (F.Guard == nullptr || F.Player == nullptr)
+		{
+			return false;
+		}
+		// Ungated: retail's 2 s cache is on `SetPlayerLOS` alone, so the pair is current on every
+		// normal think and the three distance-driven interval laws never read a stale one.
+		F.Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
+		F.Guard->Senses.SetClosestPlayer(*F.Guard, 1.0);
+		TestTrue(TEXT("the pair is the nearest player"),
+			F.Guard->Senses.Memory.ClosestPlayer == F.Player->Handle);
+		F.Player->Origin = FVector(Cm(300.f), 0.0, 0.0);
+		F.Guard->Senses.SetClosestPlayer(*F.Guard, 1.1);
+		TestTrue(TEXT("and it is re-measured with no cadence in the way"),
+			NearlyEqual(F.Guard->Senses.Memory.ClosestPlayerDistanceCm, Cm(300.f), 1.0f));
+
+		// The `20000.0` seed is a search bound, not a clamp: past it the handle goes invalid and
+		// the distance sits at the seed, which is the "no closest player" arm of every law.
+		F.Player->Origin = FVector(Cm(25000.f), 0.0, 0.0);
+		F.Guard->Senses.SetClosestPlayer(*F.Guard, 1.2);
+		TestFalse(TEXT("a player past the search bound is not the closest player"),
+			F.Guard->Senses.Memory.ClosestPlayer.IsSet());
+		TestTrue(TEXT("...and the distance reads the seed"),
+			NearlyEqual(F.Guard->Senses.Memory.ClosestPlayerDistanceCm,
+				ElysiumNpcSense::ClosestPlayerSearchUnits * ElysiumMove::U, 1.0f));
+	}
+
+	// --- `SetPlayerLOS` `0x10291610`: no cone, a PVS term, 2 s / 512 / 8 s ----------------------
+	{
+		FSensesFixture F;
+		if (F.Guard == nullptr || F.Player == nullptr)
+		{
+			return false;
+		}
+		// Directly BEHIND the guard, and past the near bypass so the trace decides. Retail's cached
+		// LOS carries no cone term at all, which is the whole reason it is not the sighting.
+		F.Player->Origin = FVector(Cm(-1000.f), 0.0, 0.0);
+		F.Guard->Senses.SetClosestPlayer(*F.Guard, 1.0);
+		F.Guard->Senses.SetPlayerLos(*F.Guard, 1.0);
+		TestTrue(TEXT("a player behind the observer still has cached LOS"),
+			F.Guard->Senses.Memory.bPlayerLos);
+		TestFalse(TEXT("...while the sighting stays false"),
+			F.Guard->Senses.Memory.bPlayerVisible);
+
+		// The 2 s gate. A wall goes up but the refresh is not due, so nothing is re-asked.
+		F.Services.bLineOfSightClear = false;
+		F.Services.Calls.Reset();
+		F.Guard->Senses.SetPlayerLos(*F.Guard, 2.0);
+		TestFalse(TEXT("inside the 2 s cadence no segment is asked for"),
+			F.Services.Saw(TEXT("QueryLineOfSight")));
+
+		// Past the gate the trace runs and fails -- but the 8 s hysteresis holds LOS up, because
+		// the body is still in the same PVS.
+		F.Guard->Senses.SetPlayerLos(*F.Guard, 4.0);
+		TestTrue(TEXT("blocked in the same PVS keeps LOS inside the 8 s grace"),
+			F.Guard->Senses.Memory.bPlayerLos);
+		F.Guard->Senses.SetPlayerLos(*F.Guard, 10.0);
+		TestFalse(TEXT("...and drops once the grace has run out"),
+			F.Guard->Senses.Memory.bPlayerLos);
+
+		// Out of PVS: no trace, no grace. The hysteresis is explicitly PVS-gated.
+		F.Services.bLineOfSightClear = true;
+		F.Guard->Senses.SetPlayerLos(*F.Guard, 12.0);
+		TestTrue(TEXT("a clear segment restores cached LOS"), F.Guard->Senses.Memory.bPlayerLos);
+		F.Services.PvsQuery = [](const FVector&, const FVector&) { return false; };
+		F.Guard->Senses.SetPlayerLos(*F.Guard, 14.0);
+		TestFalse(TEXT("out of PVS is out of LOS with no grace"),
+			F.Guard->Senses.Memory.bPlayerLos);
+		TestFalse(TEXT("...and the PVS byte says so"), F.Guard->Senses.Memory.bPlayerInPvs);
+
+		// Inside 512 units LOS is true with no trace at all.
+		F.Services.PvsQuery = nullptr;
+		F.Services.bLineOfSightClear = false;
+		F.Player->Origin = FVector(Cm(-100.f), 0.0, 0.0);
+		F.Guard->Senses.SetClosestPlayer(*F.Guard, 16.0);
+		F.Services.Calls.Reset();
+		F.Guard->Senses.SetPlayerLos(*F.Guard, 16.0);
+		TestTrue(TEXT("inside 512 units LOS is true without a trace"),
+			F.Guard->Senses.Memory.bPlayerLos);
+		TestFalse(TEXT("...and no segment was asked for"),
+			F.Services.Saw(TEXT("QueryLineOfSight")));
 	}
 
 	// --- Beyond 512 units: the far trace decides, and blocked-in-cone keeps 8 s of grace ---------
@@ -338,8 +420,8 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		TestTrue(TEXT("beyond 512 units the engine is asked for the segment"),
 			F.Services.Saw(TEXT("QueryLineOfSight")));
 		TestTrue(TEXT("a clear far segment is sight"), F.Guard->Senses.Memory.bPlayerVisible);
-		TestTrue(TEXT("...and stamps the last-clear time"),
-			NearlyEqual(static_cast<float>(F.Guard->Senses.Memory.PlayerLosLastClearTime), 100.0f));
+		TestTrue(TEXT("...and stamps the sighting's own last-clear time"),
+			NearlyEqual(static_cast<float>(F.Guard->Senses.Memory.SightingLastClearTime), 100.0f));
 
 		// A wall goes up. The player is still in cone, so sight is preserved for eight seconds.
 		F.Services.bLineOfSightClear = false;

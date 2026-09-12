@@ -219,10 +219,31 @@ public:
 	static bool ParseName(const FString& Name, EElysiumNpcFlag& OutWord1, EElysiumNpcFlag2& OutWord2);
 	static const TCHAR* LexToString(EElysiumNpcFlag Flag);
 
+	// --- The two `CAI_BaseNPCTroika` words that are NOT part of the vocabulary above -------------
+	// No task addresses `m_bfNPCFrenziedFlags` or `m_bfNPCStateFlags`, so neither carries a name
+	// table; they live here because they are per-NPC bit state saved and cleared beside the other
+	// two. Both are read-only in this runtime today and both readers say so at the call site.
+	//
+	// Frenzied: 16c's two discipline arms write it whole -- `0x3b1c` for `DoPossession`
+	// (`0x102c51a0`), `0x9fbd` for `DoFrenzy` (`0x102c5310`). Bit meanings come from their readers:
+	// `0x8` always-PVS/LOS (`CalcNextNormalThink`, `CalcNextAIThink`, `SetPlayerLOS`), `0x10`
+	// "does not witness", `0x800` the frenzy friend, `0x8000` `NPCThink`'s 1% death-scream roll.
+	static constexpr uint32 FrenziedAlwaysInPlayerView = 0x00000008;
+	// State: bit 3 forces PVS and LOS true in `SetPlayerLOS` (`0x10291610`). Its NAME is
+	// UNRECOVERED and so is its producer, so the word exists and the bit is never set.
+	static constexpr uint32 StateAlwaysInPlayerView = 0x00000008;
+	bool HasFrenzied(uint32 Mask) const { return (FrenziedWord & Mask) != 0; }
+	bool HasNpcState(uint32 Mask) const { return (NpcStateWord & Mask) != 0; }
+	// 16c's writer. Retail assigns the whole word rather than OR-ing, and so does this.
+	void SetFrenziedWord(uint32 Value) { FrenziedWord = Value; }
+
 private:
 	// `m_bfAINPCFlags` / `m_bfAINPCFlags2`.
 	uint32 Word1 = 0;
 	uint32 Word2 = 0;
 	// `CAI_BaseNPC::m_iIsOblivious`, `+0x5bb4`.
 	int32 ObliviousCount = 0;
+	// `m_bfNPCFrenziedFlags` / `m_bfNPCStateFlags`.
+	uint32 FrenziedWord = 0;
+	uint32 NpcStateWord = 0;
 };

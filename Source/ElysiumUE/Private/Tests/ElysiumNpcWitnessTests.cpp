@@ -118,6 +118,11 @@ namespace
 		{
 			if (Guard)
 			{
+				// `NPCThink`'s own order. The law lane joins on the closest-player pair, which is
+				// the normal think's to write (`SetClosestPlayer` `0x10293a80`), not the sense
+				// pass's -- so a case that drives the pass by hand has to drive that too.
+				Guard->Senses.SetClosestPlayer(*Guard, Now);
+				Guard->Senses.SetPlayerLos(*Guard, Now);
 				Guard->Senses.TickSight(*Guard, Now);
 			}
 		}
@@ -445,7 +450,7 @@ bool FElysiumNpcWitnessNosferatuTest::RunTest(const FString&)
 	TestFalse(TEXT("a Brujah closest player opens no Nosferatu window"),
 		EW::IsWindowOpen(F.Guard->Witness.NosferatuIgnoreUntil, 0.0));
 
-	// The real caller: `SetClosestPlayer`'s own body, which is `TickSight`.
+	// The real caller: `SetClosestPlayer` (`0x10293a80`), which the normal think runs.
 	F.Player->Sheet.SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Clan,
 		FElysiumSheet::ClanFromName(TEXT("Nosferatu")));
 	F.Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;

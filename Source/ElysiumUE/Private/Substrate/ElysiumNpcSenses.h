@@ -29,6 +29,10 @@ namespace ElysiumNpcSense
 {
 	// `SetPlayerLOS` refreshes its cached player sight on this cadence, not per think.
 	inline constexpr double PlayerLosCadenceSeconds = 2.0;
+	// `SetClosestPlayer`'s seed (`0x10293a80`, `20000.0`). It is a search bound, not a clamp: a
+	// player farther than this leaves the handle invalid and the distance sitting at the seed,
+	// which is the "no closest player" arm every think-cadence law tests for.
+	inline constexpr float ClosestPlayerSearchUnits = 20000.0f;
 	// Blocked while the player is still in cone: LOS is preserved this long past the last clear
 	// far trace.
 	inline constexpr double BlockedInConeGraceSeconds = 8.0;
@@ -196,14 +200,19 @@ struct FElysiumNpcMemory
 	// `COND_SEE_PLAYER` stand-in — the law lane and the melee-notice route read it, and it is false
 	// unless the player is in front of this NPC and near enough to matter.
 	bool bPlayerVisible = false;
+	// The sighting's own grace stamp. Separate from `PlayerLosLastClearTime` because the two
+	// answers no longer share a producer: this one is stamped by a clear far segment TO AN IN-CONE
+	// player, the other by `SetPlayerLOS` with no cone term at all.
+	double SightingLastClearTime = -1.0;
 	// `m_bInPlayerPVS` (+0x6278) and `m_bInPlayerLOS` (+0x6279). These are the CADENCE's inputs,
 	// not a sighting: retail's `SetPlayerLOS` (`0x10291610`) carries no cone term, so `bPlayerLos`
 	// is true for a player standing behind this NPC with a clear line to its eye. Reading it as
 	// "sees the player" is the mistake the split above exists to prevent.
 	bool bPlayerInPvs = true;
 	bool bPlayerLos = true;
-	double PlayerLosLastClearTime = -1.0;
-	double PlayerLosNextUpdateTime = -1.0;     // negative means "due now"
+	double PlayerLosLastClearTime = -1.0;      // `m_flLastInPlayerLOS` +0x6280
+	double PlayerPvsLastClearTime = -1.0;      // `m_flLastInPlayerPVS`; written, no reader recovered
+	double PlayerLosNextUpdateTime = -1.0;     // `m_flNextPlayerLOS`; negative means "due now"
 	// `m_flStealthVisionOverrideTime` (+0x6604), max-written by the surviving-damage tail.
 	// It bypasses only the normal visual range gate; cone, concealment and trace remain live.
 	double StealthVisionOverrideUntil = -1.0;
@@ -250,6 +259,14 @@ public:
 	// cadences; the separate closest-player LOS cache remains 2 s. Hearing and the committed-enemy
 	// debounce run every think. Safe with no motor, no body and no services.
 	void Tick(FElysiumNpc& Npc, double Now);
+
+	// `SetClosestPlayer` (`0x10293a80`) and `SetPlayerLOS` (`0x10291610`). NOT part of the sense
+	// pass: retail calls both from `NPCThink` on the NORMAL clock, while `CAI_Senses::Look` runs
+	// inside `GatherConditions` on the AI clock. The split is load-bearing — `m_flPlayerDist` is
+	// an input to three of the four think-interval laws, so a reduced pass that skipped gathering
+	// would otherwise leave the cadence driving itself off a distance nobody re-measured.
+	void SetClosestPlayer(FElysiumNpc& Npc, double Now);
+	void SetPlayerLos(FElysiumNpc& Npc, double Now);
 
 	// The three halves, exposed so a test can drive one without the others.
 	void TickSight(FElysiumNpc& Npc, double Now);
