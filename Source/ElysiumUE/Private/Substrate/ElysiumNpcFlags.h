@@ -229,13 +229,23 @@ public:
 	// `0x8` always-PVS/LOS (`CalcNextNormalThink`, `CalcNextAIThink`, `SetPlayerLOS`), `0x10`
 	// "does not witness", `0x800` the frenzy friend, `0x8000` `NPCThink`'s 1% death-scream roll.
 	static constexpr uint32 FrenziedAlwaysInPlayerView = 0x00000008;
-	// State: bit 3 forces PVS and LOS true in `SetPlayerLOS` (`0x10291610`). Its NAME is
-	// UNRECOVERED and so is its producer, so the word exists and the bit is never set.
-	static constexpr uint32 StateAlwaysInPlayerView = 0x00000008;
 	bool HasFrenzied(uint32 Mask) const { return (FrenziedWord & Mask) != 0; }
-	bool HasNpcState(uint32 Mask) const { return (NpcStateWord & Mask) != 0; }
 	// 16c's writer. Retail assigns the whole word rather than OR-ing, and so does this.
 	void SetFrenziedWord(uint32 Value) { FrenziedWord = Value; }
+
+	// --- `m_bfNPCStateFlags`, the per-state capability byte -------------------------------------
+	// `0x1026e3e0`, called on every state change with the new `m_NPCState`, assigns the whole byte
+	// from this table (retail ids: 1 idle, 2 combat, 3 alert, 4 script, 7 dead, 8 flee, 0xb hunt):
+	//   default 0x30; 1 -> 0x31; 2 -> 0x8f; 3 -> 0x39; 4 -> 0x08; 5/6/0xc -> 0x00;
+	//   7/9/0xa/0xd -> 0x04; 8 -> 0x85; 0xb/0xe -> 0x7f.
+	// Bit readers recovered so far: `0x08` forces PVS and LOS true in `SetPlayerLOS` (`0x10291610`,
+	// so an alert, combat or scripted body is never throttled by distance); `0x10` admits
+	// `HEAR_FLINCH` and `0x20` the two attack levels in `CacheInterruptConditions`. The byte is a
+	// pure function of the state, so it is derived rather than stored (`FElysiumNpc::NpcStateFlags`).
+	static constexpr uint8 StateAlwaysInPlayerView = 0x08;
+	static constexpr uint8 StateAdmitsHearFlinch = 0x10;
+	static constexpr uint8 StateAdmitsAttackLevels = 0x20;
+	static uint8 NpcStateFlagsForRetailState(int32 RetailState);
 
 private:
 	// `m_bfAINPCFlags` / `m_bfAINPCFlags2`.
@@ -243,7 +253,6 @@ private:
 	uint32 Word2 = 0;
 	// `CAI_BaseNPC::m_iIsOblivious`, `+0x5bb4`.
 	int32 ObliviousCount = 0;
-	// `m_bfNPCFrenziedFlags` / `m_bfNPCStateFlags`.
+	// `m_bfNPCFrenziedFlags`.
 	uint32 FrenziedWord = 0;
-	uint32 NpcStateWord = 0;
 };

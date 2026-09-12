@@ -2108,6 +2108,19 @@ public:
 	// FUN_1017ff40's admitted D_HT assessment. Eligibility reads this independent of the HUD.
 	FElysiumEntityHandle LastHostileAssessment;
 	double LastHostileAssessmentTime = -1.0;
+	// `+0x1d28..+0x1d38`: five `curtime` stamps indexed by the assessing NPC's `IRelationType`
+	// (D_ER 0, D_HT 1, D_FR 2, D_LI 3, D_NU 4), written by `0x1017ff40` from `OnLooked`
+	// (`0x1026a2c0`) for every NPC that sees this player. `0x101800a0` reads the latest of the
+	// five; `FeedBegin` disables the map's AI only when that is more than 3 s old. Zeroed at
+	// `CBasePlayer` spawn (`vfunc103` `0x1016d260`), so for the first three seconds of a map the
+	// gate reads "assessed just now". Session state.
+	double LastSeenByNpcTime[5] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+	double LatestSeenByNpcTime() const
+	{
+		double Latest = 0.0;
+		for (double Time : LastSeenByNpcTime) Latest = FMath::Max(Latest, Time);
+		return Latest;
+	}
 	bool WasRecentlyObservedByHostile(double Now) const;
 	bool IsInStealthPosture() const;
 

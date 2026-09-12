@@ -14,6 +14,7 @@
 #include "Substrate/ElysiumNpcScheduleHost.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumAiScriptedSchedule.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcThinkCadence.h"
@@ -313,6 +314,244 @@ bool FElysiumThinkCadenceLiveTest::RunTest(const FString&)
 	TestTrue(TEXT("the entity think is the earlier of the two written clocks"),
 		FMath::IsNearlyEqual(static_cast<double>(Guard->NextThink),
 			FMath::Min(Guard->ScheduleHost.NextUpdate, Guard->ScheduleHost.NextNormal), 1e-3));
+	// The in-think install pin, on the same hidden body: this guard's idle program reselects
+	// inside every think (no activity resolver), so `OnScheduleChange` sets `SCHEDULE_CHANGED`
+	// inside the think and the normal law reads it before it is cleared -- 0.1 s out of PVS,
+	// where the distance branch alone would have chosen seconds.
+	TestTrue(TEXT("a program installed inside the think pins the hidden body's normal clock"),
+		Guard->ScheduleHost.NextNormal - Now <= 0.1 + 1e-3);
+	return true;
+}
+
+// The slot-614 sites, each against the port's own door, and the non-sites that used to reset.
+namespace
+{
+	// Push every stamp off `Now` so a re-base is a write and never a coincidence.
+	void Prime(FElysiumNpc& Npc, double Now)
+	{
+		Npc.ScheduleHost.NextUpdate = Npc.ScheduleHost.NextNormal =
+			Npc.ScheduleHost.NextMove = Npc.ScheduleHost.NextAI = Now + 50.0;
+		Npc.ScheduleHost.LastUpdate = Npc.ScheduleHost.LastNormal =
+			Npc.ScheduleHost.LastMove = Npc.ScheduleHost.LastAI = 1.0;
+		Npc.NextThink = static_cast<float>(Now + 50.0);
+	}
+	bool NextStampsAt(const FElysiumNpc& Npc, double At)
+	{
+		const FElysiumNpcScheduleHost& H = Npc.ScheduleHost;
+		return FMath::IsNearlyEqual(H.NextUpdate, At, 1e-6) && FMath::IsNearlyEqual(H.NextNormal, At, 1e-6)
+			&& FMath::IsNearlyEqual(H.NextMove, At, 1e-6) && FMath::IsNearlyEqual(H.NextAI, At, 1e-6);
+	}
+	bool LastStampsAt(const FElysiumNpc& Npc, double At)
+	{
+		const FElysiumNpcScheduleHost& H = Npc.ScheduleHost;
+		return FMath::IsNearlyEqual(H.LastUpdate, At, 1e-6) && FMath::IsNearlyEqual(H.LastNormal, At, 1e-6)
+			&& FMath::IsNearlyEqual(H.LastMove, At, 1e-6) && FMath::IsNearlyEqual(H.LastAI, At, 1e-6);
+	}
+	bool Untouched(const FElysiumNpc& Npc, double Now)
+	{
+		return NextStampsAt(Npc, Now + 50.0) && FMath::IsNearlyEqual(Npc.ScheduleHost.LastNormal, 1.0, 1e-6);
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkResetSitesTest,
+	"Elysium.Substrate.NpcThinkCadence.ResetSites", GElysiumTestFlags)
+bool FElysiumThinkResetSitesTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("__npcreset_test__"), 0x52455345);
+	Builder.AddNpc(TEXT("guard"));
+	Builder.AddNpc(TEXT("far"), FVector(3000.0 * ElysiumMove::U, 0.0, 0.0));
+	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
+	FElysiumNpc* Far = F.Npc(TEXT("far"));
+	FElysiumPlayer* Player = F.Player();
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("far"), Far)
+		|| !TestNotNull(TEXT("player"), Player))
+	{
+		return false;
+	}
+	Player->Origin = FVector(100.0 * ElysiumMove::U, 0.0, 0.0);
+	F.Advance(1.0);
+	FElysiumNpcWorldFixture::Quiet({ Guard, Far });   // so no think of their own rewrites a stamp
+	const double Now = F.World.NowSeconds();
+
+	// --- Sites ------------------------------------------------------------------------------
+	// `SetDisableAI` `0x1029f300`: the 1 -> 0 edge only.
+	Prime(*Guard, Now);
+	Guard->SetDisableAi(true);
+	TestTrue(TEXT("disabling the AI touches no stamp"), Untouched(*Guard, Now));
+	Guard->SetDisableAi(false);
+	TestTrue(TEXT("re-enabling it is slot 614"), NextStampsAt(*Guard, Now));
+	TestTrue(TEXT("...on the Next stamps only"), FMath::IsNearlyEqual(Guard->ScheduleHost.LastNormal, 1.0, 1e-6));
+	Guard->SetDisableAi(true);
+
+	// `LeaveGrappleState` `0x102b5d90`: the base body then slot 614.
+	Prime(*Guard, Now);
+	Guard->LeaveGrappleState();
+	TestTrue(TEXT("leaving a grapple is slot 614"), NextStampsAt(*Guard, Now));
+
+	// Dialogue START: the three `StartPlayerDialog*` inputs and `PlayerUse` all re-base before
+	// installing; the port's one door is the dialogue body session.
+	Prime(*Guard, Now);
+	const FElysiumBodyOwnerToken Token = Guard->BeginDialogueBodySession();
+	TestTrue(TEXT("a dialogue session begins with slot 614"), NextStampsAt(*Guard, Now));
+	Prime(*Guard, Now);
+	Guard->EndDialogueBodySession(Token, /*bSilent=*/true);
+	TestTrue(TEXT("...and ends with no reset at all"), Untouched(*Guard, Now));
+
+	// `InputDisableThink` `0x1029f2a0`: a bool variant through, anything else means false.
+	Guard->SetDisableAi(false);
+	Prime(*Guard, Now);
+	FElysiumInputArgs DisableArgs;
+	DisableArgs.Param = FElysiumVariant::Bool(true);
+	Guard->InputDisableThink(DisableArgs);
+	TestTrue(TEXT("DisableThink 1 disables the AI"), Guard->IsAiDisabled());
+	FElysiumInputArgs StringArgs;
+	StringArgs.Param = FElysiumVariant::String(TEXT("1"));
+	Guard->InputDisableThink(StringArgs);
+	TestFalse(TEXT("a non-bool variant re-enables it (retail passes false)"), Guard->IsAiDisabled());
+	TestTrue(TEXT("...which is the 1 -> 0 edge, so slot 614"), NextStampsAt(*Guard, Now));
+	Guard->SetDisableAi(true);
+
+	// The spoken-line player `0x102c0520`: talking until the line ends, and slot 614.
+	Prime(*Guard, Now);
+	Guard->OnDialogFilePlayed(2.5);
+	TestTrue(TEXT("a played line is slot 614"), NextStampsAt(*Guard, Now));
+	TestTrue(TEXT("...and the body is talking until it ends"),
+		Guard->IsTalking(Now + 2.4) && !Guard->IsTalking(Now + 2.6));
+	TestTrue(TEXT("...which pins ShouldThinkFrequently"), ElysiumNpcThink::ShouldThinkFrequently(*Guard));
+	Guard->TalkingUntil = -1.0;
+
+	// The teleport broadcast `0x1028d820`: slot 583 on every NPC, 2048 units around the point.
+	Prime(*Guard, Now);
+	Prime(*Far, Now);
+	F.World.WakeNpcsNear(FVector::ZeroVector);
+	TestTrue(TEXT("an NPC within 2048 units of the teleport point takes slot 614"), NextStampsAt(*Guard, Now));
+	TestTrue(TEXT("...and one 3000 units away does not"), Untouched(*Far, Now));
+
+	// `SetAIEnabled` `0x10265680`: off touches nothing; on re-bases EVERY NPC's eight stamps.
+	Prime(*Guard, Now);
+	Prime(*Far, Now);
+	F.World.SetAiEnabled(false);
+	TestTrue(TEXT("disabling the map's AI touches no stamp"), Untouched(*Guard, Now) && Untouched(*Far, Now));
+	F.World.SetAiEnabled(true);
+	TestTrue(TEXT("enabling it re-bases every NPC's Next stamps"), NextStampsAt(*Guard, Now) && NextStampsAt(*Far, Now));
+	TestTrue(TEXT("...and their Last stamps (slot 584's shape)"), LastStampsAt(*Guard, Now) && LastStampsAt(*Far, Now));
+
+	// --- Non-sites --------------------------------------------------------------------------
+	// `aiscripted_schedule`: `0x101a98c0` -> `SetSchedule` `0x10280e50`, no stamp anywhere.
+	Prime(*Guard, Now);
+	FElysiumScriptedScheduleOrder Order;
+	Order.Mode = 0;
+	Guard->BeginScriptedSchedule(Order, /*bHasForcedState=*/true, EElysiumNpcState::Alert);
+	TestTrue(TEXT("an aiscripted_schedule push touches no stamp"), Untouched(*Guard, Now));
+	// The patrol and interesting-place inputs, and a named-schedule input.
+	Prime(*Guard, Now);
+	FElysiumInputArgs One;
+	One.Param = FElysiumVariant::Int(1);
+	Guard->InputUseInteresting(One);
+	TestTrue(TEXT("UseInteresting touches no stamp"), Untouched(*Guard, Now));
+	FElysiumInputArgs Named;
+	Named.Param = FElysiumVariant::String(TEXT("SCHED_IDLE_STAND"));
+	Guard->InputNamedSchedule(Named);
+	TestTrue(TEXT("a ChangeSchedule input touches no stamp"), Untouched(*Guard, Now));
+	return true;
+}
+
+// The AI console gate `0x1026c3d0` inside `NPCThink`, and what re-enabling does to a body it
+// silenced.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkAiGateTest,
+	"Elysium.Substrate.NpcThinkCadence.AiGate", GElysiumTestFlags)
+bool FElysiumThinkAiGateTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("__npcaigate_test__"), 0x41494741);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
+	FElysiumPlayer* Player = F.Player();
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("player"), Player))
+	{
+		return false;
+	}
+	Player->Origin = FVector(100.0 * ElysiumMove::U, 0.0, 0.0);
+	F.Advance(1.0);
+	TestTrue(TEXT("a body in view thinks on the pin"),
+		Guard->NextThink != ELYSIUM_NEVER_THINK && Guard->NextThink - F.World.NowSeconds() <= 0.1 + 1e-3);
+
+	F.World.SetAiEnabled(false);
+	F.Advance(2.0);
+	TestEqual(TEXT("with the AI disabled, a normal-due think refuses and does not re-arm"),
+		Guard->NextThink, ELYSIUM_NEVER_THINK);
+	const double Before = Guard->ScheduleHost.NextNormal;
+	F.Advance(3.0);
+	TestTrue(TEXT("...and no law runs while it is silent"),
+		FMath::IsNearlyEqual(Guard->ScheduleHost.NextNormal, Before, 1e-6));
+
+	F.World.SetAiEnabled(true);
+	const double At = F.World.NowSeconds();
+	TestTrue(TEXT("re-enabling puts the body on every clock at once"),
+		NextStampsAt(*Guard, At) && LastStampsAt(*Guard, At));
+	F.Advance(At + 0.5);
+	TestTrue(TEXT("...and it is thinking again"),
+		Guard->NextThink != ELYSIUM_NEVER_THINK && Guard->ScheduleHost.NextNormal > At);
+	return true;
+}
+
+// `TASK_WAIT_PVS` (`0x102aacf0`, task 5) and the state byte's PVS/LOS force.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumThinkWaitPvsAndStateByteTest,
+	"Elysium.Substrate.NpcThinkCadence.WaitPvsAndStateByte", GElysiumTestFlags)
+bool FElysiumThinkWaitPvsAndStateByteTest::RunTest(const FString&)
+{
+	FElysiumNpcWorldBuilder Builder(TEXT("__npcwaitpvs_test__"), 0x57505653);
+	Builder.AddNpc(TEXT("guard"));
+	FElysiumNpcWorldFixture F(MoveTemp(Builder));
+	FElysiumNpc* Guard = F.Npc(TEXT("guard"));
+	FElysiumPlayer* Player = F.Player();
+	if (!TestNotNull(TEXT("guard"), Guard) || !TestNotNull(TEXT("player"), Player))
+	{
+		return false;
+	}
+	Player->Origin = FVector(1000.0 * ElysiumMove::U, 0.0, 0.0);
+	F.Advance(1.0);   // `SetClosestPlayer` has run: the task's PVS test has a player to ask about
+	FElysiumNpcWorldFixture::Quiet({ Guard });
+	const double Now = F.World.NowSeconds();
+
+	// --- WAIT_PVS ---------------------------------------------------------------------------
+	F.Services.PvsQuery = [](const FVector&, const FVector&) { return false; };
+	Prime(*Guard, Now);
+	TestFalse(TEXT("out of the player's PVS the task keeps waiting"), Guard->WaitPvs());
+	TestTrue(TEXT("...and touches no stamp"), Untouched(*Guard, Now));
+	F.Services.PvsQuery = nullptr;
+	TestTrue(TEXT("in PVS the task completes"), Guard->WaitPvs());
+	TestTrue(TEXT("...re-basing all eight stamps"), NextStampsAt(*Guard, Now) && LastStampsAt(*Guard, Now));
+	F.Services.PvsQuery = [](const FVector&, const FVector&) { return false; };
+	Guard->SpawnFlags |= 0x400;   // SF_NPC_ALWAYSTHINK
+	Prime(*Guard, Now);
+	TestTrue(TEXT("SF_NPC_ALWAYSTHINK completes at once, out of PVS"), Guard->WaitPvs());
+	TestTrue(TEXT("...with no clock work"), Untouched(*Guard, Now));
+	Guard->SpawnFlags &= ~0x400;
+
+	// --- The state byte `0x1026e3e0` -------------------------------------------------------
+	// The state is pushed through the director's forced-state door, the one public writer a
+	// case has; the AI is quiet, so nothing re-selects it.
+	auto ForceState = [Guard](EElysiumNpcState State)
+	{
+		FElysiumScriptedScheduleOrder Order;
+		Order.Mode = 0;
+		Guard->BeginScriptedSchedule(Order, /*bHasForcedState=*/true, State);
+	};
+	TestEqual(TEXT("idle is 0x31"), static_cast<int32>(Guard->NpcStateFlags()), 0x31);
+	Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
+	Guard->Senses.SetPlayerLos(*Guard, Now);
+	TestFalse(TEXT("an idle body out of the player's PVS reads it"), Guard->Senses.Memory.bPlayerInPvs);
+	ForceState(EElysiumNpcState::Alert);
+	TestEqual(TEXT("alert is 0x39"), static_cast<int32>(Guard->NpcStateFlags()), 0x39);
+	Guard->Senses.Memory.PlayerLosNextUpdateTime = -1.0;
+	Guard->Senses.SetPlayerLos(*Guard, Now + 3.0);
+	TestTrue(TEXT("an alert body is forced into the player's PVS and LOS by bit 3"),
+		Guard->Senses.Memory.bPlayerInPvs && Guard->Senses.Memory.bPlayerLos);
+	ForceState(EElysiumNpcState::Combat);
+	TestEqual(TEXT("combat is 0x8f"), static_cast<int32>(Guard->NpcStateFlags()), 0x8f);
+	ForceState(EElysiumNpcState::Idle);
 	return true;
 }
 

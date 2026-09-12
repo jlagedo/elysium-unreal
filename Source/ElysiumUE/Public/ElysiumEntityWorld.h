@@ -719,6 +719,23 @@ public:
 	// every stamp forever — the cadence would be present in the code and absent from every test
 	// that drives it.
 	double FrameSeconds() const { return LastFrameSeconds; }
+
+	// --- The map-wide AI gate ---------------------------------------------------------------
+	// Retail's `g_AIDisabled` bit 0 (`DAT_1092053c`), written by `SetAIEnabled(bool)`
+	// `0x10265680` and read by the AI console gate `0x1026c3d0` inside every `NPCThink`. While
+	// it is set no NPC runs its AI, moves or re-arms its clock. Producers: a player's `FeedBegin`
+	// (off) and `FeedInterrupt` (on), `CWorldEvents::InputAIEnable`, the level-change fade
+	// (`0x1023c760` off, its stage-1 think on) and the `ai_toggle`-shaped console command
+	// `0x10085180`. Enabling walks every `FL_NPC` entity: a Troika body gets slot 614 plus every
+	// `Last` stamp := now (this runtime's NPCs are all Troika-shaped); the base-NPC arm
+	// (`m_flNextThink = curtime - 0.1`) has no body here to take it.
+	bool IsAiEnabled() const { return bAiEnabled; }
+	void SetAiEnabled(bool bEnabled);
+	// `0x1028d820(point)`: slot 583 on every NPC -- each one within 2048 units of the point takes
+	// slot 614. Called by `CBasePlayer::Teleport` `0x101606a0`, the `teleport_player` command
+	// `0x101803a0` and `CPointTeleport::InputTeleport` `0x1018dc00`.
+	void WakeNpcsNear(const FVector& PointCm);
+
 	int32 UnknownTargets() const { return UnknownTargetCount; }
 	int32 UnknownInputs() const { return UnknownInputCount; }
 	// Service passes that hit the drain cap and deferred a still-due tail (the one enumerated
@@ -1107,4 +1124,6 @@ private:
 	// it would report every frame as zero-length.
 	double LastFrameMeasuredAt = 0.0;
 	bool bHasMeasuredFrame = false;
+	// `g_AIDisabled` bit 0, inverted. A fresh world starts enabled, as retail's global does.
+	bool bAiEnabled = true;
 };

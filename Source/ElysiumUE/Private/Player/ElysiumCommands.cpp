@@ -51,6 +51,9 @@ bool ElysiumCommands::TeleportPlayer(FElysiumEntityWorld& World, const FString& 
 		const FVector Destination(
 			FCString::Atod(*Tokens[0]), FCString::Atod(*Tokens[1]), FCString::Atod(*Tokens[2]));
 		Player->SetRuntimeTransform(Destination, Player->Angles);
+		// `teleport_player` `0x101803a0`, every arm: `0x1028d820(destination)` wakes the NPCs
+		// within 2048 units of where the player lands.
+		World.WakeNpcsNear(Destination);
 		UE_LOG(LogElysiumCmd, Display, TEXT("teleport_player -> %s"), *Destination.ToString());
 		return true;
 	}
@@ -61,6 +64,7 @@ bool ElysiumCommands::TeleportPlayer(FElysiumEntityWorld& World, const FString& 
 		const FVector SourceAngles(
 			FCString::Atod(*Tokens[3]), FCString::Atod(*Tokens[4]), FCString::Atod(*Tokens[5]));
 		Player->SetRuntimeTransform(Destination, SourceAngles);
+		World.WakeNpcsNear(Destination);
 		UE_LOG(LogElysiumCmd, Display, TEXT("teleport_player -> %s angles %s"),
 			*Destination.ToString(), *SourceAngles.ToString());
 		return true;
@@ -81,6 +85,7 @@ bool ElysiumCommands::TeleportPlayer(FElysiumEntityWorld& World, const FString& 
 	}
 
 	Player->SetRuntimeTransform(Destination->Origin, Destination->Angles);
+	World.WakeNpcsNear(Destination->Origin);
 	UE_LOG(LogElysiumCmd, Display, TEXT("teleport_player -> %s at %s"),
 		*Tokens[0], *Destination->Origin.ToString());
 	return true;

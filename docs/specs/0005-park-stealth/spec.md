@@ -219,20 +219,40 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `SCHEDULE_CHANGED`, LOS and dialogue pin normal and AI to 0.1 s; `SetPlayerLOS` at most every
   2 s with the 512-unit bypass and 8 s hysteresis. The port runs one `NextThink`, bound 10
   always, no `WasBumped`; 13 already resets the four stamps.
+  The clock is re-based by slot 614 `ResetThinkTimers` (`0x102c23f0`: the four `Next` and
+  `m_flNextThink` := curtime) at 34 sites, and by its two wrappers slot 583 (`0x1028d860`, within
+  2048 units of a point, a broadcast from every player teleport) and slot 584 (`0x1028d910`, plus
+  every `Last` stamp; `TASK_WAIT_PVS`'s completion, the node-graph rebuild). `SetSchedule`,
+  `ForceScheduleChange` and `aiscripted_schedule` write no stamp: an install from outside a think
+  waits for the cadence. The AI console gate `0x1026c3d0` refuses every `NPCThink` while
+  `g_AIDisabled` bit 0 is set (`SetAIEnabled` `0x10265680`: a player's `FeedBegin` in a map with
+  `m_nAreaType ≠ 0` unobserved for 3 s, the level-change fade, `events_world` `AIEnable`), and
+  enabling re-bases every NPC with the slot-584 form. `m_bfNPCStateFlags` (`0x1026e3e0`, a pure
+  function of `m_NPCState`: idle `0x31`, combat `0x8f`, alert `0x39`, script `0x08`, flee
+  `0x85`, hunt `0x7f`) carries bit 3, which forces PVS and LOS true in `SetPlayerLOS`.
   Job: the four stamps and laws on the NPC, `IsThinkDue` per stamp, the reduced mode gating the
-  condition pass and the completion bound, the pins, `WAS_BUMPED`; every literal `NextThink`
-  write in `ElysiumNpc.cpp` (44 sites, 0.05–2.0 s) replaced by a stamp write, so no cadence
-  literal remains when the story closes; the shared test fixture stops pinning `NextThink` to
-  never and cases advance the world clock instead, so the cadence is under test rather than
-  bypassed.
+  condition pass and the completion bound, the pins, `WAS_BUMPED`; every reset in the port at a
+  retail site and at no other (the dialogue START, the spoken-line player and `m_bIsTalking`,
+  `LeaveGrappleState`, `SetDisableAI` and the `DisableThink` input on NPC and maker, the
+  discipline `AI_Schedule` arm, the scene cast's `DisableAI` save/restore, `WAIT_PVS`, the
+  teleport broadcast, the map-wide AI gate with its producers); the state byte and its PVS/LOS
+  force; `DISAPPEAR` and the enemy distance triple in `NPCThink`; the sighting rebuilt on every
+  pass with no grace; the shared test fixture drives the clock rather than pinning it.
   Provides: the clock every later program family runs on (10d–10h, 16, 17, 21): `DELAY_INTERRUPTS`'
   "one think", the sweeps' reduced-mode gating, the follower distance checks and the squad's
-  0.2 s sighting window are all stated in thinks.
-  Oracle: § "The think cadence, decoded". Unrecovered: `m_bfNPCStateFlags` bit 3 (forces
-  PVS/LOS true), the subclass writers of `m_flNextAIThink` (`CNPC_VCamera`, `CNPC_VNewscaster`),
-  `CAI_BaseNPC+0x98`'s entity, slot 578 (the survivor callback), slot 168 (the `GetEnemy`
-  variant).
-  Size: XL. Effort: Fable / high; corpus pass on the unrecovered items first.
+  0.2 s sighting window are all stated in thinks; `FElysiumEntityWorld::SetAiEnabled` /
+  `WakeNpcsNear` and `FElysiumNpc::ResetAllThinkStamps` to 0004, 0006, 0007, 11, 16c, 21a.
+  Oracle: § "The think cadence, decoded" (Writers; Slot 614 dispatch sites; Port, the reset
+  sites). Closed 2026-09-12: `m_flTeleportMoveTimer` is the `teleport_move_timer` keyfield alone
+  (827 rows, three authored `2`); `m_bForceFrequentThink`'s setter has no caller; `UpdateCharacter`
+  is the boss registry over `CBaseCombatCharacter::UpdateCharacter` `0x103246d0`;
+  `m_bIsBCCTargetable` is 1 on every NPC but `CNPC_VCamera`; the toggle is `ai_disable`
+  (`0x100851f0`); the werewolf gates are `werewolf_show_debug` and its hint-draw sibling; slot
+  578 is an empty virtual; slot 168's Troika body returns `m_hLastEnemy` under state bit 6 (hunt
+  or flee `0x7f`); `CAI_BaseNPC+0x98` is the Troika self-pointer. Deferred to their owners: the
+  `NPCThink` hint upkeep (12b), shoot-target override (0009), death-scream roll (16c), the
+  motor's contact/gravity/turn-pose arms (0006), the boss registry (a boss story).
+  Size: XL. Effort: Fable / high.
 - [ ] **10a. The sound sweep.**
   Retail: `0x102b1cd0` over the seven sound records (incl. `Flinch` +0x6210); gate
   `m_flNextInvestigateSoundTime` +0x623c re-armed 2.0 s, 20.0 s for a stranger's sound;
@@ -286,7 +306,10 @@ the retail contract the code must match, the job, what it consumes or provides, 
   index lists → masks, empty `interesting_place_groups` matches nothing; eligibility
   `0x102dad60`; `RandomFloat(min_time, max_time)` into `m_flWaitFinished`; `Enable`/`Disable`
   on the place. The visit is a schedule: an alert or combat program replaces it through
-  `SetSchedule` and case 1 re-selects a place when that program ends.
+  `SetSchedule` and case 1 re-selects a place when that program ends. The place's disable/kill
+  walk over its visitors (`0x102daac0`): a visitor carrying `DISAPPEAR` gets `flags2 |=
+  0x80000008`, any other `TaskFail(0x23)` (slot 448); both arms then dispatch slot 614
+  (`ResetThinkTimers`) on the visitor.
   Job: each of the three reachable arms and its program compared against retail and ported;
   the masks; the wait; the arms read in the idle selector (step 4), running under the
   ordinary `Schedule` body owner. Retires the port's ambient executor (`ThinkAmbient`,
@@ -361,8 +384,13 @@ the retail contract the code must match, the job, what it consumes or provides, 
 - [ ] **12b. The cover and kick chooser.**
   Retail: `0x102b7690` gated on `CanSeekCover` slot 592 and `allow_kick_hint_use`; the
   physics-prop kick 0xa9 with its 10° predicate and the one-shot `npc_kickable` byte; the kick
-  hints 0xa7/0xa8; `COND_KICK_PROP_INVALID` has no producer.
-  Job: the chooser, the kick program and its hints, the kickable byte.
+  hints 0xa7/0xa8; `COND_KICK_PROP_INVALID` has no producer. `NPCThink`'s hint upkeep
+  (`0x10292de0`, on every normal-due think): `m_flOccludedDelay` := the cover value with a hint
+  held, else the normal one; a hint that fails `FValidateHintType` (slot 566), or, unless
+  `stay_entrenched`, one whose cover object is my enemy while `COND 0x2e || 0x48` holds →
+  `ClearHintNode(5.0)` + `SetCondition(COND_HINT_INVALID 0x29)`.
+  Job: the chooser, the kick program and its hints, the kickable byte, the hint upkeep arm and
+  `COND_HINT_INVALID` (its other producers are `0x102d30b9` and the hint store's own).
   Oracle: § "The cover and kick chooser, and the combat leftovers".
   Size: M. Effort: Opus / medium.
 - [ ] **13b. The leak in the defect catalogue.**
@@ -407,7 +435,10 @@ the retail contract the code must match, the job, what it consumes or provides, 
   caster, `frenziedFlags = 0x3b1c`, acquire the nearest hated entity (`0x102b4cc0`). `DoFrenzy`
   (`Dementation_Berserk` / `_Bedlam`) runs `0x102c5310`: same teardown, `D_INSANE`, hunt state,
   investigate modes 6, `frenziedFlags = 0x9fbd`, no follower. The HitGroup's `AI_Schedule`
-  installs before either. The port parses and carries both bytes.
+  installs before either. `DoPossession` dispatches slot 614 (`ResetThinkTimers`) at its start;
+  `DoFrenzy` never does, so a possessed NPC acts on this frame and a frenzied one on its next
+  cadence think. `NPCThink`'s 1 % `"Scream_Death"` roll runs under `frenziedFlags & 0x8000`.
+  The port parses and carries both bytes.
   Job: both arms executed on apply, over 16a and 17.
   Consumes: the HitGroup apply path from 0007.
   Oracle: § "Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload".
@@ -434,7 +465,10 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Retail: `m_NPCState == 8`, entered only in `CAI_BaseNPCTroika::SelectIdealState`
   (`0x102ad660`) from idle and alert on `COND_SUPERNATURAL_FLEE_LEVEL` 0x21 or
   `COND_CRIMINAL_FLEE_LEVEL` 0x1f, setting `INITIAL_FLEE` 0x100; terminal (case 8 returns 8),
-  `m_bfNPCStateFlags = 0x85`. `SelectSchedule` case 8 in order: `COVER_FAILURE` 0x39 → 0x73;
+  `m_bfNPCStateFlags = 0x85` (state 8; `0x7f` for the hunt/flee pair 0xb/0xe, which carries the
+  PVS/LOS-force bit 3 that 0x85 does not). `InputFleeAndDie` `0x1029f210` (→ 0x6f) and
+  `InputFaint` `0x1029f250` (→ 0xfa) each dispatch slot 614 (`ResetThinkTimers`) before their
+  install. `SelectSchedule` case 8 in order: `COVER_FAILURE` 0x39 → 0x73;
   no stimulus → (`DETECTED_ATTACK` → 0x56; `INVESTIGATE_SOUND` → re-arm, clear `INITIAL_FLEE`,
   `CommitBestSound`, 0x48; else 0x77); `INITIAL_FLEE` clear → 0x73; else the one-shot pass:
   clear it, `m_flNextFleeSoundTime = curtime + RandomFloat(10, 20)`, the flee vocalisation

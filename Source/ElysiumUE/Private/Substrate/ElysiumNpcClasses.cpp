@@ -93,6 +93,9 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// carries 40 wires across three NPC families; all use the same shared leaf implementation here.
 	D.Input(TEXT("TeleportToEntity"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputTeleportToEntity(Args); });
+	// `CAI_BaseNPCTroika::InputDisableThink` `0x1029f2a0` -> `SetDisableAI` `0x1029f300`.
+	D.Input(TEXT("DisableThink"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpc&>(E).InputDisableThink(Args); });
 
 	// The remaining map-fired gap is 8 `SetScriptedDiscipline` wires across the exported maps, all
 	// of them aimed at an `npc_*` receiver.
@@ -176,6 +179,9 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	// history: a guard who has fought the player before looks around more often.
 	ElysiumAddClassField(D, TEXT("m_iEnemySightings"), &FElysiumNpc::EnemySightings, EElysiumField::Save);
 
+	// `teleport_move_timer` -> `m_flTeleportMoveTimer` (+0x65dc): the third arm of
+	// `ShouldThinkFrequently()`. A keyfield with no code writer; see the member.
+	ElysiumAddClassField(D, TEXT("teleport_move_timer"), &FElysiumNpc::TeleportMoveTimer, EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("npc_perception"), &FElysiumNpc::AuthoredPerception, EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("vision"),         &FElysiumNpc::AuthoredVision,     EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("hearing"),        &FElysiumNpc::AuthoredHearing,    EElysiumField::Save);
@@ -239,6 +245,9 @@ static void BuildNpcMakerClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumNpcMaker&>(E).InputDisable(Args); });
 	D.Input(TEXT("Toggle"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpcMaker&>(E).InputToggle(Args); });
+	// The maker is a Troika NPC in retail; its `DisableThink` is inherited onto every child.
+	D.Input(TEXT("DisableThink"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
+		{ static_cast<FElysiumNpcMaker&>(E).InputDisableThink(Args); });
 
 	using FM = FElysiumNpcMaker;
 	ElysiumAddClassField(D, TEXT("NPCType"),           &FM::NpcType);

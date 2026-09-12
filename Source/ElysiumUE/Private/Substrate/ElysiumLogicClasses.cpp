@@ -638,6 +638,10 @@ public:
 		// at the terminal he was hacking.
 		if (Ent->Handle == World->PlayerHandle())
 		{
+			// `CPointTeleport::InputTeleport` `0x1018dc00` also calls `0x1028d820(destination)`:
+			// slot 583 on every NPC, which re-bases the clock of each one within 2048 units of
+			// the point the player just appeared at.
+			World->WakeNpcsNear(CachedOrigin);
 			if (FElysiumPlayer* Player = World->FindPlayer())
 			{
 				if (Player->FeedState.IsPaired()) Player->BreakFeed();

@@ -503,6 +503,11 @@ public:
 	virtual float RunSpecialIdleActivity(double Now) override;
 
 	virtual bool IsBodyVisible() const override;
+	// `TASK_WAIT_PVS`'s `RunTask` arm (`0x102aacf0`, task 5): `SF_NPC_ALWAYSTHINK 0x400` or
+	// `ShouldThinkFrequently()` completes at once; else the engine PVS test `0x101d1a90` against
+	// the closest player -- false keeps waiting, true re-bases the whole clock (slot 614 plus every
+	// `Last` stamp) so the body does not fire a burst of overdue thinks on the frame it wakes.
+	virtual bool WaitPvs() override;
 
 	virtual float PlayActivity(const FString& Activity) override;
 	virtual bool IsIdealActivityCurrent() const override;
@@ -544,6 +549,18 @@ public:
 	// NOT what `TaskFail` (`0x1029adb0`) does: that one writes the four and deliberately leaves
 	// `m_flNextThink` alone, and the difference is observable -- see `FElysiumNpc::TaskFail`.
 	void ResetThinkTimers(double Now);
+	// The entity think alone (`m_flNextThink := curtime`), no stamp. The death handoff's entry:
+	// `ThinkDead` polls on its own named 0.1 s and is on none of the four clocks, so the commit
+	// arms the entity think and nothing else.
+	void ArmThinkNow(double Now);
+	// Slot 584 `0x1028d910`: slot 614 and then every `Last` mirror := now. The broadcast form
+	// (`SetAIEnabled(true)`, the node-graph rebuild) and `TASK_WAIT_PVS`'s completion use it.
+	void ResetAllThinkStamps(double Now)
+	{
+		ResetThinkTimers(Now);
+		ScheduleHost.LastUpdate = ScheduleHost.LastNormal = ScheduleHost.LastMove =
+			ScheduleHost.LastAI = Now;
+	}
 	// `COND_WAS_BUMPED`'s NPC-side producer, the second half of the player's touch handler
 	// `0x10147690`. **SEAM**: no caller. The bump EVENT is the locomotion layer's -- see
 	// `ElysiumDisciplines::NotifyBumped`, which states the same absence -- and this is the arm the
@@ -557,13 +574,36 @@ public:
 	{
 		return ScriptOwner.IsSet() || ScriptPhase != EScriptPhase::None;
 	}
-	// `m_flTeleportMoveTimer` (+0x65dc, keyfield `teleport_move_timer`). Inside this window
-	// `ShouldThinkFrequently()` is unconditionally true. UNRECOVERED producer: a `StartTask`
-	// (`0x102a1910`) arm this runtime has not ported writes it, so the window is never open.
-	double TeleportMoveUntil = 0.0;
+	// `m_flTeleportMoveTimer` (+0x65dc), the keyfield `teleport_move_timer` and nothing else: no
+	// function in the image writes the field (the literal-offset grep finds only its reader,
+	// `ShouldThinkFrequently` `0x102c2430`). It is an ABSOLUTE curtime: while `curtime <= it` the
+	// body is pinned to the frequent-think floor. Authored on 827 NPC rows across 75 maps, `0` on
+	// all but three (`2`: one in `la_crackhouse_1`, two in `sm_diner_1`), so the window is open
+	// for those three bodies during the map's first two seconds and for no one else.
+	float TeleportMoveTimer = 0.f;
 	// `m_bForceFrequentThink` (+0x63f0). Its only writer in the image is the bare setter
-	// `0x101aa750`, which has no recovered caller, so the flag stays false.
+	// `0x101aa750`, which has no caller; its only reader is `ShouldThinkFrequently`. Never set.
 	bool bForceFrequentThink = false;
+	// `m_bIsTalking` (+0x64c0) and its end time (+0x64cc), written together by the spoken-line
+	// player `0x102c0520` (`InputPlayDialogFile` passes a zero duration; a scene passes the
+	// line's). `IsInDialog()` reads the flag, so a talking body is on the 0.01 s floor until the
+	// line ends. The stamp form is the same fact without a separate `FinishTalking` sweep.
+	double TalkingUntil = -1.0;
+	bool IsTalking(double Now) const { return Now <= TalkingUntil; }
+	virtual void OnDialogFilePlayed(double DurationSeconds) override;
+	// `m_bfNPCStateFlags`, the per-state capability byte `0x1026e3e0` writes on every state
+	// change. A pure function of the state here rather than a second stored word: the byte has no
+	// writer but the state change, so reading it off the state can never be stale.
+	uint8 NpcStateFlags() const;
+	// `NPCThink`'s enemy triple (`+0x6268/+0x626c/+0x6270`), refreshed on every normal-due think
+	// from the committed enemy and its memory record; `5000.0` when there is none.
+	void UpdateEnemyDistances();
+	// `NPCThink`'s `DISAPPEAR` test: out of the closest player's PVS (`0x101d1a90`), or not
+	// `FVisible` to that player (mask `0x2804091`, eye to eye). True removes the body.
+	bool ShouldDisappearNow() const;
+	// `CAI_BaseNPCTroika::InputDisableThink` `0x1029f2a0`: a bool input feeds `SetDisableAI`; any
+	// other variant type feeds it `false`.
+	void InputDisableThink(const FElysiumInputArgs& Args);
 
 	// `m_bDisableAI` (+0x6080). `NPCThink` (`0x10292de0`) tests it immediately after clearing
 	// `SCHEDULE_CHANGED` and returns: no senses, no conditions, no schedule, no cadence. Retail

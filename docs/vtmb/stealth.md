@@ -267,8 +267,10 @@ The PP6 implementation needs all of these boundaries, not only a stealth score:
 - recompute the player target surface on its cadence, retaining the three-sample light cycle;
 - keep observer baseline, target range scalar, target cone scalar, sound-radius reduction, current
   sight, memory, committed enemy, and outputs as distinct state;
-- preserve the two-second closest-player LOS cache, 512-unit near bypass, eight-second in-cone grace,
-  and ten-failed-check committed-enemy LOS debounce;
+- preserve the two-second closest-player LOS cache, 512-unit near bypass, the eight-second LOS
+  hysteresis (`SetPlayerLOS` `0x10291610`'s `m_flLastInPlayerLOS` hold on the CADENCE's LOS byte,
+  which has no cone term and is not a sighting — `Look` rebuilds the seen set with no grace at
+  all; corrected 2026-09-12), and ten-failed-check committed-enemy LOS debounce;
 - make `trigger_stealth_mod` a balanced overlap contribution whose effective read is clamped;
 - enqueue found/lost outputs through ordinary entity I/O rather than calling script consequences in
   the sensing stack; and

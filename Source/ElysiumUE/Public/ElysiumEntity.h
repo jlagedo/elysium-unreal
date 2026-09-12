@@ -657,6 +657,10 @@ public:
 	// `virtual void Think() override`, and an overload would have every one of them hide the other
 	// signature.
 	virtual void ThinkAt(double Now) { Think(); }
+	// After `PlayDialogFile` has queued the line. A Troika NPC's line player (`0x102c0520`)
+	// marks itself talking for the line's duration and re-bases its think clock; nothing else
+	// answers.
+	virtual void OnDialogFilePlayed(double DurationSeconds) {}
 
 	// A playing choreographed scene blocks NPC-maker admission. The world derives the global gate
 	// from live entities so overlapping scenes and save restoration need no separate latch.

@@ -78,7 +78,11 @@ graph, ranged weapons) is witnessed later on `sm_hub_1`.
 10. **Grounded knockback.** The verified retail gate: margin-band entry, alive ∧
     `¬Disallow_Knockbacks` eligibility, asymmetric direction bands, NPC-only yaw snap, zero RNG in
     the gate path. Landed with the single `NORMAL_HIGH_{dir}` candidate and the hit-buildup gate
-    as named stand-ins (see #12).
+    as named stand-ins (see #12). Open from 0005/15's reset-site recovery: the NPC knockback
+    start `0x102a01b0` (gated on `0x1028a190` and `!IsInDialog`, `SelectHeaviestSequence`,
+    `m_knockbackType`) dispatches slot 614 `ResetThinkTimers` before installing `0x14d` / `0x14c`,
+    so a knocked-back NPC thinks on the frame of the hit; the port's knockback path has no such
+    reset yet (`FElysiumNpc::ResetThinkTimers`).
 11. **Flying knockback chain (open).** `docs/vtmb/combat-and-damage.md` → "Launch is a velocity
     assignment, in two stages" / "How a flying chain ends": launch is an assignment computed on
     the flying branch, applied the *next* think (one-think delay is part of the behaviour);

@@ -12,6 +12,10 @@ struct FElysiumNpcScheduleHost
 {
 	double NextUpdate = 0.0, NextNormal = 0.0, NextMove = 0.0, NextAI = 0.0;
 	double LastUpdate = 0.0, LastNormal = 0.0, LastMove = 0.0, LastAI = 0.0;
+	// `m_flEnemyDist +0x6268`, `m_flEnemyHeightDiff +0x626c`, `m_flEnemyLastKnownDist +0x6270`,
+	// in SOURCE UNITS as retail's combat selectors compare them; `5000.0` with no live enemy.
+	// Session state: `NPCThink` rewrites all three on every normal-due think.
+	float EnemyDistUnits = 5000.f, EnemyHeightDiffUnits = 5000.f, EnemyLastKnownDistUnits = 5000.f;
 	int32 FailureReason = 0;
 	int32 PendingFailureReason = 0; // consumed in the same maintenance pass; never saved
 	uint32 MemoryBits = 0;

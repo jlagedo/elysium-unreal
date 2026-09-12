@@ -161,6 +161,9 @@ void FElysiumEntity::PlayDialogFile(const FString& AuthoredPath)
 		FString::Printf(TEXT("direct:%u:%d"), Handle.Epoch, Handle.Index);
 	World->Lines()->PlayDirect(Session, AuthoredPath, SoundOwner->Origin,
 		SoundOwner->GetSkeletalBody(), EElysiumAudioCategory::Auto);
+	// `InputPlayDialogFile` (`0x102c2890`) hands the line player a zero duration; only a scene
+	// (`CSceneEntity` `0x10081700`) passes the line's own length.
+	OnDialogFilePlayed(0.0);
 }
 
 void FElysiumEntity::SetSoundOverrideEnt(const FString& EntityName)

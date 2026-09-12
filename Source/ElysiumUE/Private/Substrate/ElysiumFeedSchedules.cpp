@@ -1,6 +1,7 @@
 #include "Substrate/ElysiumFeedSchedules.h"
 
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"   // FElysiumCombatCharacter, the feeder/victim base
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
@@ -123,10 +124,12 @@ bool ElysiumFeedSchedules::BeginPostFeedTrance(FElysiumCombatCharacter& Victim,
 		return false;
 	}
 
-	// The install. `StartNamedSchedule` is retail's own shape for this call and not a convenience:
-	// it refuses on a dead NPC, releases whatever claim the running program held, starts the named
-	// program through the ordinary kernel, and stamps `NextThink` to now — which is what retail's
-	// slot-614 think-timer reset (`0x102c23f0`) does immediately before its `SetSchedule`.
+	// The install. `FeedInterrupt` `0x1033a9e0` dispatches slot 614 (`ResetThinkTimers`
+	// `0x102c23f0`) on the victim's Troika pointer immediately before its `SetSchedule(0xfb)`,
+	// so the trance takes hold on this frame; then `StartNamedSchedule`, retail's own shape for
+	// the install: it refuses on a dead NPC, releases whatever claim the running program held and
+	// starts the named program through the ordinary kernel.
+	Npc->ResetThinkTimers(Npc->World ? Npc->World->NowSeconds() : 0.0);
 	return Npc->StartNamedSchedule(ElysiumScheduleName(EElysiumScheduleId::Mesmerized),
 		TEXT("CBaseCombatCharacter.FeedInterrupt"), Attacker.DebugString());
 }

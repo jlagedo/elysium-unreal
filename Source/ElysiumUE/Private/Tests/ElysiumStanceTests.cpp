@@ -305,6 +305,9 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 		Services.ClipSeconds = 2.0f;   // every stance clip reports the same length
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
+		// A player, as every retail map has one: `TASK_WAIT_PVS` (`0x102aacf0`) asks the engine
+		// PVS test about `m_hClosestPlayer`, and with none the idle program never completes.
+		World.SpawnPlayer();
 		World.Activate(0.0);
 
 		double Now = 0.0;
@@ -345,6 +348,9 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 		Services.DispositionRow = NeutralTuning();
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
+		// A player, as every retail map has one: `TASK_WAIT_PVS` (`0x102aacf0`) asks the engine
+		// PVS test about `m_hClosestPlayer`, and with none the idle program never completes.
+		World.SpawnPlayer();
 		World.Activate(0.0);
 
 		double Now = 0.0;
@@ -398,6 +404,9 @@ bool FElysiumStanceCrossDispositionTransitionTest::RunTest(const FString&)
 	// which is the ordinary case B4 exists for.
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	World.Load(MoveTemp(Defs));
+		// A player, as every retail map has one: `TASK_WAIT_PVS` (`0x102aacf0`) asks the engine
+		// PVS test about `m_hClosestPlayer`, and with none the idle program never completes.
+		World.SpawnPlayer();
 	World.Activate(0.0);
 	double Now = 0.0;
 	for (int32 i = 0; i < 4; ++i) { World.Tick(Now); Now += 0.1; }

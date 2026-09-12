@@ -231,7 +231,6 @@ void FElysiumNpcMemory::Serialize(FElysiumSaveArchive& Ar)
 	Ar << PlayerVisible;
 	Ar << PlayerInPvs;
 	Ar << PlayerLos;
-	Ar << SightingLastClearTime;
 	Ar << LastBumpTime;
 	Ar << PlayerLosLastClearTime;
 	Ar << PlayerPvsLastClearTime;
@@ -517,10 +516,12 @@ void FElysiumNpcSenses::SetPlayerLos(FElysiumNpc& Npc, double Now)
 		Memory.PlayerPvsLastClearTime = Now;
 		Memory.PlayerLosLastClearTime = Now;
 	};
-	// `m_bfNPCStateFlags & 0x8` — UNRECOVERED name, and no producer in this substrate either, so
-	// the arm is stated and answers false. `m_bfNPCFrenziedFlags & 0x8` is set by both discipline
-	// arms (`0x3b1c` and `0x9fbd`); 16c is its producer and the read is live the day it lands.
-	if (Npc.NpcFlags.HasNpcState(FElysiumNpcFlags::StateAlwaysInPlayerView)
+	// `m_bfNPCStateFlags & 0x8`: the per-state byte `0x1026e3e0` carries it for combat (`0x8f`),
+	// alert (`0x39`), script (`0x8`) and the hunt/flee pair (`0x7f`), never for idle (`0x31`), so
+	// a body that is alert, fighting or scripted is treated as in view wherever the player is.
+	// `m_bfNPCFrenziedFlags & 0x8` is set by both discipline arms (`0x3b1c` and `0x9fbd`); 16c is
+	// its producer and the read is live the day it lands.
+	if ((Npc.NpcStateFlags() & FElysiumNpcFlags::StateAlwaysInPlayerView) != 0
 		|| Npc.NpcFlags.HasFrenzied(FElysiumNpcFlags::FrenziedAlwaysInPlayerView))
 	{
 		ForceVisible();
@@ -573,7 +574,7 @@ void FElysiumNpcSenses::SetPlayerLos(FElysiumNpc& Npc, double Now)
 	// has just lost its line but is still in the same PVS keeps LOS for eight seconds past the last
 	// clear one, which is what stops the cadence oscillating as a player walks behind a pillar.
 	if (!Memory.bPlayerLos && Memory.bPlayerInPvs && Memory.PlayerLosLastClearTime >= 0.0
-		&& Now - Memory.PlayerLosLastClearTime < ElysiumNpcSense::BlockedInConeGraceSeconds)
+		&& Now - Memory.PlayerLosLastClearTime < ElysiumNpcSense::PlayerLosHysteresisSeconds)
 	{
 		Memory.bPlayerLos = true;
 	}
@@ -605,15 +606,13 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 		Memory.bPlayerInOuterBand = Memory.bPlayerInRange
 			&& DistanceCm > ElysiumNpcSense::OuterBandFraction * RadiusCm;
 		Memory.bPlayerInCone = IsInViewCone(Npc, Player->EyePosition(), TargetConeScalar(*Player));
-		const bool bClear = Memory.bPlayerInCone && Memory.bPlayerInRange
+		// No grace of any kind: retail's only eight-second hold is `SetPlayerLOS`'s hysteresis on
+		// the cadence byte, and `Look` has no memory between passes. A player who steps behind a
+		// pillar in front of this NPC is unseen on the very next pass; what survives the loss is
+		// the enemy memory record, not the sighting.
+		Memory.bPlayerVisible = Memory.bPlayerInCone && Memory.bPlayerInRange
 			&& (DistanceCm <= NearBypassCm
 				|| SegmentClear(World, Npc.EyePosition(), Player->EyePosition()));
-		if (bClear && DistanceCm > NearBypassCm)
-		{
-			Memory.SightingLastClearTime = Now;
-		}
-		Memory.bPlayerVisible = bClear || (Memory.bPlayerInCone && Memory.SightingLastClearTime >= 0.0
-			&& Now - Memory.SightingLastClearTime <= ElysiumNpcSense::BlockedInConeGraceSeconds);
 	}
 
 	SeenThisPass.Reset();

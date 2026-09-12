@@ -29,7 +29,13 @@ from, and closes into `DialogPostProcess` as before.
    dialogue's Voice arm, or the cine-camera teardown in `CDialog::Release`, `0x100e5240`) and what
    it writes to the actor's origin/pose. Until recovered, the port must not guess a fix; it must
    name the seam and cite the retail address once found. Acceptance: Jack's feet are grounded
-   immediately on cutscene end, before the player can `+use` him.
+   immediately on cutscene end, before the player can `+use` him. Recovered on the way (0005/15,
+   2026-09-12): the scene's cast setup `0x10081ed0` saves each actor's `m_bDisableAI` and sets it
+   on the `position_start == 1` arm, and `OnSceneFinished`'s walk `0x100847e0` restores it for
+   every actor that is in no cine and no dialogue, dispatches slot 614 `ResetThinkTimers`, runs
+   `PhysicsRunThink(0)` and re-arms `m_flNextThink = curtime + 1.5 × frametime` if the think left
+   it behind `m_flLastThink`; ported in `ElysiumChoreoScene.cpp` (`SaveAndPlaceActors`,
+   `RestoreActorAi`). It writes nothing to origin or pose, so it is not the grounding path.
 2. **Entry by use.** `CBasePlayer::PlayerUse` (`0x10167850`) resolves the use target, tests
    `WillTalk`, clears the NPC schedule, pushes AI schedule `0x6a`, calls the real StartDialog
    (vtable slot 414, `FUN_10178280`). Guards: a live player, no live partner (`player+0xfe8`),

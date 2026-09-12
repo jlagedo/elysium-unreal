@@ -33,9 +33,10 @@ namespace ElysiumNpcSense
 	// player farther than this leaves the handle invalid and the distance sitting at the seed,
 	// which is the "no closest player" arm every think-cadence law tests for.
 	inline constexpr float ClosestPlayerSearchUnits = 20000.0f;
-	// Blocked while the player is still in cone: LOS is preserved this long past the last clear
-	// far trace.
-	inline constexpr double BlockedInConeGraceSeconds = 8.0;
+	// `SetPlayerLOS`'s hysteresis (`0x10291610`, tail): `!LOS && PVS && curtime -
+	// m_flLastInPlayerLOS < 8.0` keeps the cadence's LOS byte true. It is the CADENCE's grace and
+	// nothing else's -- `CAI_Senses::Look` rebuilds the sighting on every pass with no memory.
+	inline constexpr double PlayerLosHysteresisSeconds = 8.0;
 	// At or below this distance an in-cone target is seen with no trace at all.
 	inline constexpr float NearBypassUnits = 512.0f;
 	// A target between this fraction of the effective radius and the whole of it is in the outer
@@ -200,10 +201,6 @@ struct FElysiumNpcMemory
 	// `COND_SEE_PLAYER` stand-in — the law lane and the melee-notice route read it, and it is false
 	// unless the player is in front of this NPC and near enough to matter.
 	bool bPlayerVisible = false;
-	// The sighting's own grace stamp. Separate from `PlayerLosLastClearTime` because the two
-	// answers no longer share a producer: this one is stamped by a clear far segment TO AN IN-CONE
-	// player, the other by `SetPlayerLOS` with no cone term at all.
-	double SightingLastClearTime = -1.0;
 	// `COND_WAS_BUMPED`'s commit time. `FElysiumNpc::OnBumped` writes it; `ElysiumNpcCond::
 	// GatherBump` turns it into the condition for exactly one full pass.
 	double LastBumpTime = -1.0;

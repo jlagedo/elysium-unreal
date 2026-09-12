@@ -7,6 +7,7 @@
 #include "ElysiumSessionSubsystem.h"
 #include "ElysiumLineService.h"
 #include "ElysiumMapCollisionPayload.h"
+#include "ElysiumMoveSolve.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumScriptHost.h"
 #include "ElysiumStub.h"
@@ -1724,6 +1725,56 @@ void FElysiumEntityWorld::SyncMovingNpcRecords()
 		if (FElysiumNpc* Npc = EntPtr ? EntPtr->AsNpc() : nullptr)
 		{
 			Npc->SyncMovingRecord();
+		}
+	}
+}
+
+void FElysiumEntityWorld::SetAiEnabled(bool bEnabled)
+{
+	// `SetAIEnabled` `0x10265680`. Disabling sets the bit and prints; enabling clears it and
+	// walks the `FL_NPC` list re-basing every Troika body's whole clock, because a refused
+	// `NPCThink` left `m_flNextThink` unwritten and the body would otherwise never think again.
+	// Already-in-that-state is a message and nothing else, in both directions.
+	if (bAiEnabled == bEnabled)
+	{
+		UE_LOG(LogElysiumWorld, Display, TEXT("%s"),
+			bEnabled ? TEXT("AI Already Enabled.") : TEXT("AI Already Disabled."));
+		return;
+	}
+	bAiEnabled = bEnabled;
+	if (!bEnabled)
+	{
+		UE_LOG(LogElysiumWorld, Display, TEXT("AI Disabled."));
+		return;
+	}
+	const double Now = NowSeconds();
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityList)
+	{
+		if (FElysiumNpc* Npc = EntPtr ? EntPtr->AsNpc() : nullptr)
+		{
+			if (!Npc->IsInert())
+			{
+				Npc->ResetAllThinkStamps(Now);
+			}
+		}
+	}
+	UE_LOG(LogElysiumWorld, Display, TEXT("AI Enabled."));
+}
+
+void FElysiumEntityWorld::WakeNpcsNear(const FVector& PointCm)
+{
+	// `0x1028d820`: for each entity with a Troika pointer, slot 583 `0x1028d860` -- `dist²
+	// (origin, point) <= 2048²` (`_DAT_1049adfc` = 4194304.0, equality resets) -> slot 614.
+	const double Now = NowSeconds();
+	const double RadiusCm = 2048.0 * ElysiumMove::U;
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityList)
+	{
+		if (FElysiumNpc* Npc = EntPtr ? EntPtr->AsNpc() : nullptr)
+		{
+			if (!Npc->IsInert() && FVector::DistSquared(Npc->Origin, PointCm) <= RadiusCm * RadiusCm)
+			{
+				Npc->ResetThinkTimers(Now);
+			}
 		}
 	}
 }

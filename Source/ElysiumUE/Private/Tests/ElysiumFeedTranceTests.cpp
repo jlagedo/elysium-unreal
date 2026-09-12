@@ -18,6 +18,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumSheetSlots.h"
+#include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumRelationships.h"
@@ -51,6 +52,9 @@ namespace
 			bool bPatrol = false;
 			// The victim already hates the feeder -- retail's one refusal of the trance.
 			bool bHostile = false;
+			// A `worldspawn` with `safearea 1` and its `events_world` leaf, so `CWorld::m_nAreaType`
+			// is nonzero -- the map-wide AI gate `FeedBegin` reads.
+			bool bSafeArea = false;
 		};
 
 		FElysiumRecordingServices Services;
@@ -66,6 +70,17 @@ namespace
 
 			FElysiumEntityDefs Defs;
 			Defs.MapName = TEXT("__feed_trance_test__");
+			if (Setup.bSafeArea)
+			{
+				FElysiumEntityDef WorldSpawn;
+				WorldSpawn.Classname = TEXT("worldspawn");
+				WorldSpawn.Keys.Add(TEXT("safearea"), TEXT("1"));
+				Defs.Defs.Add(MoveTemp(WorldSpawn));
+				FElysiumEntityDef WorldEvents;
+				WorldEvents.Classname = TEXT("events_world");
+				WorldEvents.TargetName = TEXT("world");
+				Defs.Defs.Add(MoveTemp(WorldEvents));
+			}
 
 			FElysiumEntityDef GuardDef;
 			GuardDef.Classname = TEXT("npc_VHumanCombatant");
@@ -447,6 +462,115 @@ bool FElysiumFeedTrancePatrolTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("the patrol route resumes after the trance"),
 		F.Services.Count(TEXT("NpcMotor MoveTo")) > MovesBefore);
+	return true;
+}
+
+// The map-wide AI gate around a player's feed. `FeedBegin` `0x10339d90`: a player feeder, in a
+// map whose `CWorld::m_nAreaType` is nonzero, whom no NPC has assessed for 3 s, calls
+// `SetAIEnabled(false)` `0x10265680`; `FeedInterrupt` `0x1033a9e0` calls `SetAIEnabled(true)`
+// on the way out, which re-bases every NPC's whole clock (slot 614 plus the `Last` stamps).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTranceAiGateTest,
+	"Elysium.Substrate.FeedTrance.AiGate", GElysiumTestFlags)
+bool FElysiumFeedTranceAiGateTest::RunTest(const FString&)
+{
+	FTranceFixture::FSetup Setup;
+	Setup.bSafeArea = true;
+	FTranceFixture F(Setup);
+	if (!TestNotNull(TEXT("guard"), F.Guard) || !TestNotNull(TEXT("player"), F.Player))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the map's area type is nonzero"),
+		ElysiumLaw::WorldAreaType(F.World) != 0);
+	TestTrue(TEXT("the AI starts enabled"), F.World.IsAiEnabled());
+	TestTrue(TEXT("nobody has assessed the player: the stamps are the spawn's zeros"),
+		F.Player->LatestSeenByNpcTime() == 0.0);
+
+	// Past the map's first three seconds -- the zeroed stamps read as "assessed at t=0", so a feed
+	// before t=3 never closes the gate (retail's own opening window).
+	double Now = 0.0;
+	for (int32 i = 0; i < 50; ++i)
+	{
+		Now += 0.1;
+		F.World.RunPlayerThink(Now);
+		F.World.Tick(Now);
+	}
+	// The ordinary feed, watched from the outside: the anim event's `FeedBegin` is what closes
+	// the gate, not `AttemptFeed`.
+	F.Guard->Disposition = TEXT("cower");
+	F.Player->AttemptFeed(*F.Guard);
+	for (int32 i = 0; i < 10; ++i)
+	{
+		Now += 0.1;
+		F.World.RunPlayerThink(Now);
+		F.World.Tick(Now);
+	}
+	TestTrue(TEXT("the feed began"), F.Player->FeedState.IsTransacting());
+	TestFalse(TEXT("an unobserved feed in a typed area disables the map's AI"),
+		F.World.IsAiEnabled());
+
+	// Push the victim's stamps off `Now`, so the re-base is observable as a write and not as a
+	// coincidence.
+	F.Guard->ScheduleHost.NextNormal = Now + 50.0;
+	F.Guard->ScheduleHost.LastNormal = 1.0;
+	F.Player->FeedInterrupt();
+	TestTrue(TEXT("the interrupt re-enables the AI"), F.World.IsAiEnabled());
+	const double At = F.World.NowSeconds();
+	TestTrue(TEXT("...and re-bases every NPC's Next stamps"),
+		FMath::IsNearlyEqual(F.Guard->ScheduleHost.NextNormal, At, 1e-6));
+	TestTrue(TEXT("...and its Last stamps too (slot 584's shape)"),
+		FMath::IsNearlyEqual(F.Guard->ScheduleHost.LastNormal, At, 1e-6));
+	return true;
+}
+
+// The gate's two refusals: an observed feeder, and a combat-typed area.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTranceAiGateRefusalsTest,
+	"Elysium.Substrate.FeedTrance.AiGateRefusals", GElysiumTestFlags)
+bool FElysiumFeedTranceAiGateRefusalsTest::RunTest(const FString&)
+{
+	// An untyped map (no `worldspawn` policy at all reads as area 0, retail's combat type).
+	{
+		FTranceFixture::FSetup Plain;
+		FTranceFixture F(Plain);
+		if (!TestNotNull(TEXT("guard"), F.Guard) || !TestNotNull(TEXT("player"), F.Player))
+		{
+			return false;
+		}
+		double Now = 0.0;
+		F.FeedAndInterrupt(Now);
+		TestTrue(TEXT("a feed in an area-0 map never touches the AI"), F.World.IsAiEnabled());
+	}
+	// A typed map, but an NPC assessed the player less than 3 s ago.
+	{
+		FTranceFixture::FSetup Setup;
+		Setup.bSafeArea = true;
+		FTranceFixture F(Setup);
+		if (!TestNotNull(TEXT("guard"), F.Guard) || !TestNotNull(TEXT("player"), F.Player))
+		{
+			return false;
+		}
+		double Now = 0.0;
+		for (int32 i = 0; i < 50; ++i)
+		{
+			Now += 0.1;
+			F.World.RunPlayerThink(Now);
+			F.World.Tick(Now);
+		}
+		F.Player->LastSeenByNpcTime[4] = Now;   // D_NU, just now
+		F.Guard->Disposition = TEXT("cower");
+		F.Player->AttemptFeed(*F.Guard);
+		for (int32 i = 0; i < 10; ++i)
+		{
+			Now += 0.1;
+			F.World.RunPlayerThink(Now);
+			F.World.Tick(Now);
+		}
+		TestTrue(TEXT("the feed began"), F.Player->FeedState.IsTransacting());
+		TestTrue(TEXT("a feed seen inside the last 3 s leaves the AI running"),
+			F.World.IsAiEnabled());
+		F.Player->FeedInterrupt();
+		TestTrue(TEXT("...and the interrupt has nothing to re-enable"), F.World.IsAiEnabled());
+	}
 	return true;
 }
 

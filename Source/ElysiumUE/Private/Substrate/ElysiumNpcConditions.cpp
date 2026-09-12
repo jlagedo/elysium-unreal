@@ -319,7 +319,26 @@ void ElysiumNpcCond::GatherSight(FElysiumNpc& Npc, double Now, FElysiumNpcCondit
 		const FElysiumEntityHandle Skip = Npc.NpcFlags.Has(EElysiumNpcFlag::IGNORE_UNKNOWN)
 			? Memory.LastSeeUnknown : Memory.BestSeeUnknown;
 		if (Handle == Skip) continue;
-		if (Handle == World->PlayerHandle()) Out.Set(EElysiumNpcCond::SeePlayer);
+		if (Handle == World->PlayerHandle())
+		{
+			Out.Set(EElysiumNpcCond::SeePlayer);
+			// `0x1017ff40(player, this, relation)`: the player's per-relation "last assessed by an
+			// NPC" stamp, written for EVERY relation type before the D_HT/D_FR arms below. Retail
+			// gates it on `m_bIsBCCTargetable`, a flag with no port field and no recovered clearer,
+			// so it reads true here.
+			if (FElysiumPlayer* SeenPlayer = World->FindPlayer())
+			{
+				int32 RelationIndex = 4;   // D_NU
+				switch (Relation)
+				{
+				case EElysiumRelationship::Hate:    RelationIndex = 1; break;
+				case EElysiumRelationship::Fear:    RelationIndex = 2; break;
+				case EElysiumRelationship::Like:    RelationIndex = 3; break;
+				case EElysiumRelationship::Neutral: RelationIndex = 4; break;
+				}
+				SeenPlayer->LastSeenByNpcTime[RelationIndex] = Now;
+			}
+		}
 		if (Handle == World->PlayerHandle() && Relation == EElysiumRelationship::Hate
 			&& (!Npc.Def || !Npc.Def->Classname.Equals(TEXT("npc_VRat"), ESearchCase::IgnoreCase)))
 		{

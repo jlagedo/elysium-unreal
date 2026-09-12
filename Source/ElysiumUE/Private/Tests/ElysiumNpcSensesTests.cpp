@@ -407,7 +407,9 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 			F.Services.Saw(TEXT("QueryLineOfSight")));
 	}
 
-	// --- Beyond 512 units: the far trace decides, and blocked-in-cone keeps 8 s of grace ---------
+	// --- Beyond 512 units: the far trace decides, and it decides on EVERY pass ------------------
+	// `CAI_Senses::Look` rebuilds the seen set each time it runs; the only eight-second hold in
+	// retail is `SetPlayerLOS`'s hysteresis on the cadence byte, which is not a sighting.
 	{
 		FSensesFixture F;
 		if (F.Guard == nullptr || F.Player == nullptr)
@@ -420,23 +422,18 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 		TestTrue(TEXT("beyond 512 units the engine is asked for the segment"),
 			F.Services.Saw(TEXT("QueryLineOfSight")));
 		TestTrue(TEXT("a clear far segment is sight"), F.Guard->Senses.Memory.bPlayerVisible);
-		TestTrue(TEXT("...and stamps the sighting's own last-clear time"),
-			NearlyEqual(static_cast<float>(F.Guard->Senses.Memory.SightingLastClearTime), 100.0f));
 
-		// A wall goes up. The player is still in cone, so sight is preserved for eight seconds.
+		// A wall goes up. The player is still in cone; the sighting is gone on the next pass.
 		F.Services.bLineOfSightClear = false;
-		F.Guard->Senses.TickSight(*F.Guard, 104.0);
-		TestTrue(TEXT("blocked but in cone: sight is held inside the 8 s grace"),
+		F.Guard->Senses.TickSight(*F.Guard, 100.15);
+		TestFalse(TEXT("blocked but in cone: the sighting drops on the very next pass"),
 			F.Guard->Senses.Memory.bPlayerVisible);
-		F.Guard->Senses.TickSight(*F.Guard, 108.0);
-		TestTrue(TEXT("...right up to the edge of it"), F.Guard->Senses.Memory.bPlayerVisible);
-		F.Guard->Senses.TickSight(*F.Guard, 110.0);
-		TestFalse(TEXT("...and drops once the grace has run out"),
-			F.Guard->Senses.Memory.bPlayerVisible);
+		TestTrue(TEXT("...while the cone term itself still holds"),
+			F.Guard->Senses.Memory.bPlayerInCone);
 
-		// The wall comes down: an ordinary clear trace restores sight and the clock.
+		// The wall comes down: an ordinary clear trace restores sight.
 		F.Services.bLineOfSightClear = true;
-		F.Guard->Senses.TickSight(*F.Guard, 112.5);
+		F.Guard->Senses.TickSight(*F.Guard, 100.3);
 		TestTrue(TEXT("a clear segment restores sight"), F.Guard->Senses.Memory.bPlayerVisible);
 	}
 

@@ -760,6 +760,11 @@ private:
 		{
 			Maps->RequestLandmarkTravel(DestMap, LandmarkName, Offset, Yaw);
 			bChanging = true;
+			// `FadeoutLevelChange` `0x1023c760`: with a landmark and a destination the fade
+			// starts and `SetAIEnabled(false)` `0x10265680` runs at once -- every NPC in the
+			// outgoing map stops thinking for the fade. The stage-1 think `0x1023ca30` re-enables
+			// on the frame the map changes, which a fresh world's default already is.
+			World->SetAiEnabled(false);
 		}
 	}
 };

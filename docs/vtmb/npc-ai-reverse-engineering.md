@@ -2368,8 +2368,12 @@ The body is one switch on the new state:
 
 * **1 (`NPC_STATE_IDLE`)** — `GetActiveWeapon()->Hide()` (vtable `+0x108`, `CBaseEntity::Hide`
   `0x1009d2a0`), then chain to `CAI_BaseNPCTroika::OnStateChange`;
-* **2 (`NPC_STATE_ALERT`), 3 (`NPC_STATE_COMBAT`), 11** — `GetActiveWeapon()->Unhide()` (vtable
-  `+0x10c`, `CBaseEntity::Unhide` `0x1009d380`), then chain;
+* **2 (`NPC_STATE_COMBAT`), 3 (`NPC_STATE_ALERT`), 11 (hunt)** — `GetActiveWeapon()->Unhide()`
+  (vtable `+0x10c`, `CBaseEntity::Unhide` `0x1009d380`), then chain. (Corrected 2026-09-12: VtMB
+  numbers combat 2 and alert 3, the reverse of the SDK enum. `CNPC_VHuman::SelectIdealState`
+  `0x103851e0` runs the "Combat state with no enemy" arm on `m_NPCState == 2` and returns 3 from
+  it; the state byte `0x1026e3e0` gives 2 → `0x8f` and 3 → `0x39`; `SelectSchedule`'s case 3 is
+  the alert selector.)
 * everything else — chain, writing nothing.
 
 Both arms are guarded by `GetActiveWeapon() != 0`. So "an armed class holsters while idle and draws
@@ -3205,11 +3209,162 @@ and the NPC would stop gathering conditions entirely.
 **Writers.** `NPCInit` `0x1029a0b0` sets all eight to `curtime` and seeds `PVS = LOS = 1`
 (a fresh NPC is due on every clock). The four `Calc*`. **`TaskFail` `0x1029adb0`** sets the four
 `Next` stamps to `curtime` (not the `Last` ones): a failure forces a full think next frame.
-**`0x102c23f0` = slot 614 `ResetThinkTimers()`** (all four `Next` + `m_flNextThink` := curtime),
-dispatched virtually by `FeedInterrupt` before the trance and by the possession arm — the effect
-takes hold on the same frame. Subclass writers of `+0x6250`:
-`CNPC_VCamera` `0x10369120`/`0x103692c0`, `CNPC_VNewscaster::vfunc431` `0x103a05b0`
-(UNRECOVERED arithmetic).
+**`0x102c23f0` = slot 614 (`+0x998`) `ResetThinkTimers()`**, 39 bytes and nothing else: `FLD
+curtime; FST m_flNextThink +0x17c; FST +0x6244; FST +0x6248; FST +0x624c; FSTP +0x6250` — the four
+`Next` plus the engine's own next-think := curtime, so the effect takes hold on the same frame. It
+has no direct caller and is reached only through the slot. Two `CAI_BaseNPCTroika` virtuals wrap
+it. **Slot 583 `+0x91c` = `0x1028d860`**: `dist²(GetAbsOrigin(), point) <= 2048²`
+(`_DAT_1049adfc` = `4194304.0`; `FCOMP` + `TEST AH,0x41` + `JP`, so equality resets) → slot 614.
+**Slot 584 `+0x920` = `0x1028d910`**: slot 614, then `m_flLastThink` and
+`m_flLast{Update,Normal,Move,AI}Think` := `curtime` — the only writer of the `Last` stamps outside
+`NPCInit` and the four laws. Neither is ever dispatched on one NPC: `0x1028d820(point)` walks the
+entity list `&DAT_106eb5d8` (filter `0x40`) and fires slot 583 on every entity's Troika pointer
+`+0x98`, and `0x1028d8d0()` does the same for slot 584. `0x1028d820`'s callers are
+`CBasePlayer::Teleport` `0x101606a0` (slot 181, after `CBaseEntity::Teleport`, only when a
+destination was given), the `teleport_player` console command `0x101803a0` (all three arms — by
+entity name, by `X Y Z`, by `X Y Z` plus angles) and `CPointTeleport::InputTeleport` `0x1018dc00`:
+a teleport wakes every NPC within 2048 units of the destination. `0x1028d8d0`'s one caller is
+`0x102f6a50`, the node-graph rebuild think (`"Node Graph out of Date. Rebuilding..."`) — every NPC
+in the map is re-based once the graph is valid again. Subclass writers:
+`CNPC_VNewscaster::vfunc431` `0x103a05b0` is the newscaster's think, and before calling
+`CAI_BaseNPCTroika::NPCThink` it pins `+0x624c` and `+0x6250` to `curtime + 1.0` and their `Last`
+stamps to `curtime` — a hard 1 s floor on move and AI (the arithmetic previously UNRECOVERED).
+`CNPC_VCamera` `0x103692c0` is that class's `NPCInit` override, the same all-eight := `curtime`;
+`CNPC_VCamera` `0x10369120` is its think and runs none of the laws — `CacheInterruptConditions`,
+the AI console gate `0x1026c3d0` (refusal → `m_flNextThink = curtime + 0.1`), `RunAI(0)` (slot
+432), then `Last := Next` for all four and all four `Next` plus `m_flNextThink` := `curtime + 0.2`.
+That is the whole ledger: `vtmb_grep` on the literals `0x6244|0x6248|0x624c|0x6250` returns exactly
+`NPCInit`, `TaskFail`, `NPCThink`, the four laws with their `IsThinkDue` thunks, `0x102c23f0` and
+`0x103a05b0`, and nothing else. `vtmb_readers +0x6244 cls CAI_BaseNPCTroika` is *not* that ledger —
+it misses `0x102c23f0` (ECX-relative, untyped) and every subclass-typed access (`0x103a05b0`,
+`0x10369120`, `0x103692c0`); ask for the subclass by name, or grep the literal. `m_flNextThink
++0x17c` is a `CBaseEntity` field with engine-wide writers (`ThinkSet`); inside this hierarchy they
+are `NPCThink`, `0x102c23f0`, `CNPC_VCamera` `0x10369120`, and the post-spawn pass `0x102998c0`
+(`ThinkSet(0)` + `m_flNextThink = 0x7f7fffff` when `0x100b5190` parks the NPC). The `0x102c1ec0`
+row `vtmb_readers +0x17c` returns is not a write at all — it is the vtable dispatch at `+0x17c` in
+that function.
+
+**Slot 614 dispatch sites (2026-09-12).** `vtmb_grep` `\+ 0x998\)\)` over `vampire.dll` gives 53
+functions, 19 of them ILT/COMDAT thunk copies: **34 distinct sites**, and every one of them is a
+moment where the NPC's whole clock is re-based so the work queued alongside it runs on the same
+frame. Grouped by owner, with the receiver:
+- *Species thinks that never sleep* (receiver `this`, at the tail of slot 431 `NPCThink`).
+  `CNPC_VWolfMorph` / `CNPC_VPlayerController` `0x103a4700` — 19 bytes: `CALL` the base
+  `NPCThink`, then `JMP dword ptr [EAX + 0x998]`; both classes think every frame forever.
+  `CNPC_VWerewolf::NPCThink` `0x103cb590` has two: the same tail at `0x103cb71c`, and an early-out
+  at `0x103cb644` that resets and returns *before* the base think, behind an unnamed ConVar-shaped
+  global `0x1093f95c` (the `vfunc1()` false and `+0x2c` non-null idiom used for debug cvars
+  elsewhere) — that arm only draws hint debug (`0x103cb4b0` walks the hint list from `DAT_10925450`
+  and switches on the cvar's value 1–6 over the werewolf's `Is{Imperative,Valid}*Hint` predicates),
+  so the whole real think is skipped and the cadence stamped anyway. The tail is reached by every
+  other path including the `ai_disable` one: the decompiler's damage is the `GetTick() % 5` jump
+  table at `0x103cb754`, whose five arms (`UpdateConditionCanTeleport`, `…EnemyUnreachable`,
+  `…DeathTriggered`, `…CanSpecialMove`, `CheckStuck(1)` — one expensive condition per frame) all
+  rejoin at `0x103cb6cf`, not return. `CNPC_VZombie::NPCThink` `0x103dfa20`: after the base think,
+  `FLD [ESI+0x17c]` →
+  `__ftol` → `TEST EAX,EAX` / `JG`, so `(int)m_flNextThink <= 0` → reset — a guard against a
+  cleared clock. `CNPC_VZombie::vfunc301` `0x103dfbb0`, the death hook: not gibbing, not
+  ragdolling, and a weighted sequence exists for activity `0x21` → `SetSchedule(0x162, true)`,
+  `ThinkSet`, reset.
+- *Entity inputs* (receiver `this`; all the same recipe — reset, stamp `AI_BaseNPCTroika.cpp`,
+  `SetSchedule`). `InputStartPlayerDialog` `0x1029ef80` (line `0x2677`),
+  `InputStartPlayerDialogRemote` `0x1029f060`, `InputStartPlayerDialogUnforced` `0x1029f120`:
+  `FinishTalking`, reset, `m_bForceDialogStart = 1`, `SetSchedule(0x6d)`. `InputFleeAndDie`
+  `0x1029f210` (line `0x26b5`) → `SetSchedule(0x6f)`. `InputFaint` `0x1029f250` (line `0x26c2`) →
+  `SetSchedule(0xfa)`. `InputTeleportToEntity` `0x102c24a0`: origin and angles from the target,
+  `Relink`, reset, `ForceTransmit`.
+- *Troika NPC methods* (receiver `this`). `SetDisableAI(bool)` `0x1029f300` — on the `1 → 0` edge
+  only, then `m_bDisableAI +0x6080 = value`. Knockback start `0x102a01b0` (line `0x29b5`): gated on
+  `0x1028a190` and `!IsInDialog`, `SelectHeaviestSequence`, `m_knockbackType`, reset, then
+  `SetSchedule(0x14d)` or `(0x14c)`. `RunTask` `0x102aacf0`, task **`5` `TASK_WAIT_PVS`** (name
+  registered at `0x10317086`; the arm is jump-table target 2 at `0x102aad7e`, index-table byte 3 →
+  id `3 + 2`): spawnflag `0x400` or `ShouldThinkFrequently()` → `TaskComplete(false)` at once; else
+  the engine PVS test `0x101d1a90(m_hClosestPlayer, this)` — false leaves the task running, true
+  dispatches slot 614 at `0x102aadde` and then stamps `m_flLastThink` and all four `Last` (the
+  slot-584 body inlined) before `TaskComplete(false)`, so an NPC the player walks up on does not
+  fire a burst of overdue thinks on the frame it wakes. `LeaveGrappleState` `0x102b5d90` (slot 380,
+  19 bytes): base `0x1026ce30` then `JMP` slot 614; reached from `CBaseCombatCharacter::EndGrapple`
+  `0x10329560`. The spoken-line player `0x102c0520` (`m_bIsTalking +0x64c0`, talk-end `+0x64cc`):
+  reset at the end. `ScriptUnhide` `0x102c1ec0`: `CBaseEntity::ScriptUnhide`, reset, re-arm the
+  active weapon, then save solid/movetype/effects/`m_bfAINPCFlags` back into `m_hCine` at
+  `+0x5f78..+0x5f8c`. **`0x102c51a0` is `DoPossession`** (line `0x6e42`), the discipline arm named
+  by its own vdata key: `0x101dfa00` parses the per-level record with
+  `GetBool("DoPossession") → +0x370` and `GetBool("DoFrenzy") → +0x371`, and `0x101dfc20` dispatches
+  `0x102c51a0` or `0x102c5310` on `victim + 0x98`. It tears the victim down and rebuilds it as a
+  thrall — misc flag `0x800`, `0x1026d050`, `0x102b52a0(1,1)`, `flags2 |= 0x80840000`,
+  `SetRelationship("player D_LI 99")`, follower boss `"player"` / type `"Combat"`,
+  `SetIdealState(1)` `0x1026e340`, `SetEnemy` `0x10279cc0`, caster handle → `+0x60ac` — then
+  resets, so the new brain re-evaluates on the next tick instead of honouring the timers of the
+  schedule it just destroyed; `+0x5b84 = 0x3b1c`, slot 595. Its sibling **`DoFrenzy` `0x102c5310`
+  (line `0x6e7f`) runs the same teardown and never resets**, so a frenzy waits for the cadence.
+- *On another entity's Troika pointer `+0x98`.* `CBaseCombatCharacter::FeedInterrupt` `0x1033a9e0`
+  — the victim, before `SetSchedule(0xfb)`. `CBasePlayer::PlayerUse` `0x10167850` — the used
+  entity's NPC when slot 287 (`+0x49c`) allows; stamps `player.cpp` line `0x1508` then
+  `SetSchedule(0x6a)`. The discipline-effect applier `0x101de660` (`v_discipline.cpp`) — the
+  victim, when the effect record names a schedule at `+0x34`: reset, then `0x1029f370` (schedule by
+  name) → `0x102ae750`. *(This is the site the oracle previously called "HitGroup apply"; it is
+  not.)* `0x100847e0` — walks a name list, resolves each through slot `0x42c`, `SetDisableAI`, then
+  reset, `PhysicsRunThink`, and repairs `m_flNextThink` when it has fallen to or below
+  `m_flLastThink`; recurses into child lists of type `0xb`. `CAI_InterestingPlace` `0x102daac0`
+  (`AI_Interest*.cpp` line `0x309`) — every registered visitor: `DISAPPEAR 0x20000000` →
+  `flags2 |= 0x80000008`, else `TaskFail(0x23)` (slot 448); the reset runs on **both** arms.
+- *Bodies created and immediately clocked* (receiver is the new entity's Troika pointer).
+  `GetControllerNPC(classname)` `0x10161a70` and the lazy `npc_VPlaceholder` body `0x10161d20`,
+  both in `player.cpp`: create, copy origin/angles/model/hull from the owner, `m_fEffects |= 0x60`,
+  reset. The Hengeyokai transformation `0x103831c0` (`npc_VHengeyokai`, `SetSchedule(0x16f)`), the
+  Ming Xiao transformation `0x1039a750` (`npc_VMingXiao`, `SetSchedule(0x157)`, two transform
+  emitters) and `CNPC_VVampireBoss::TransformationStart` `0x103c60a0` — the same recipe. The Ming
+  Xiao tentacle spawn `0x10397410` (from `0x10395750`): `SetSchedule(0x16c)`, `IsAreaClear`, create
+  from the `TentacleGenerator` pool `&DAT_1093bb9c` (registered `0x10390d00`), `SetAbsVelocity`,
+  reset, handle → `+0x66a8[i]`. The tentacle → proxy hand-off `0x10397c70` (from `0x1039ef10`):
+  create from the `ProxyGenerator` pool `&DAT_1093bc54` (`0x10390d80`) at the tentacle's origin,
+  reset, then remove the tentacle. The `scripted_sequence` possess path `CCineNPC::vfunc583`
+  `0x101a7880` and `CCineAI::vfunc583` `0x101a9080` — the target's Troika pointer, saving its
+  `+0x52e` flags.
+- *Broadcasts.* The two slot 583/584 helpers above, plus the console `SetAIEnabled(true)`
+  `0x10265680` (`"AI Enabled.\n"` / `"AI Already Enabled.\n"` / `"AI Disabled.\n"` /
+  `"AI Already Disabled.\n"`): on the re-enable edge it clears bit 0 of the AI mask `0x1092053c` —
+  the same mask the AI gate `0x1026c3d0` reads — then walks `&DAT_106eb5d8` (list selector `0x20`,
+  against `0x40` for the teleport broadcast) and, for every entity with a Troika pointer,
+  dispatches slot 614 and stamps `m_flLastThink +0x178` and `+0x6254..+0x6260` := curtime (the
+  slot-584 body inlined a third time); entities without one get `m_flNextThink = curtime − 0.1`
+  instead. Disabling AI only sets the bit and touches no clock. Its callers matter: `"AI Enabled"`
+  is not only a console word — `CWorldEvents::InputAIEnable` `0x1023e290`,
+  `CBaseCombatCharacter::FeedBegin` `0x10339d90` (disables) and
+  `CBaseCombatCharacter::FeedInterrupt` `0x1033a9e0` (re-enables) drive it, so a feed both freezes
+  and, on interrupt, re-bases the clock of **every** NPC in the map — on top of the single-victim
+  reset `FeedInterrupt` already does through `+0x98`.
+
+**Negatives.** `aiscripted_schedule` never resets. `CCineAISchedule::vfunc586` `0x101a98c0` (its
+StartSchedule) → `SetIdealState` `0x1026e340`, then mode 1/2 `ScheduledMoveToGoalEntity`
+`0x102800c0`, mode 3 `SetEnemy` + `SetCondition(0x54)`, mode 4/5 `ScheduledFollowPath`
+`0x102801e0`; all of them land in `SetSchedule` `0x10280de0` → `0x10280e50`, which writes
+conditions and schedule fields only. `ForceScheduleChange` `0x102ae490` writes no stamp either. So
+a schedule installed from outside a think waits for the cadence — only the 34 sites above cut the
+wait.
+
+**The corpus limit that hid this.** `vtmb_callers 0x102c23f0` reports 0 callers and `vtmb_slot 614`
+finds no vtable, because the corpus captured vtables only to slot 600; the sites come from
+`vtmb_grep` on the dispatch text instead. The same index caveat runs the other way at slots
+583/584: `+0x91c` and `+0x920` also carry `PossessEntity()` and
+`StartSequence(pTarget, iszSeq, bCompleteOnEmpty)` on the `CCine*` script entities
+(`CCineNPC::InputMoveToPosition` `0x101a72b0`, `CCineNPC::InputBeginSequence` `0x101a7390`, the
+script's NPC-acquisition think `0x101a8070`, the sequence-done path `0x101a8460`/`0x101a8640`) and
+the expresser factory on `CAI_BaseNPC` (`0x10312cd0`, storing into `+0x5f48`; base bodies
+`0x10312d40` and `0x10260dc0`). Those are POSSIBLE callers of `0x1028d860`/`0x1028d910` in
+`vtmb_callers` and reach neither: the only receivers proven to be Troika NPCs are the `+0x98`
+dereferences inside `0x1028d820` and `0x1028d8d0`.
+
+**UNRECOVERED.** The two ConVar-shaped globals the werewolf think reads have no captured
+constructor, so their *names* are unknown even though their roles are not: `0x1093f95c` is the
+hint-draw selector (values 1–6) behind the early-out, and `0x1093f73c` gates `EnableDebugStuff`
+`0x103dbad0` and is also read by `CNPC_VWerewolf::TeleportOut` `0x103d4a60`, `TeleportIn`
+`0x103d4d60` and `UpdateFakeHull` `0x103d93b0`. `CNPC_VWerewolf` slot `+0x960` (index 600), called
+with `GetEnemy()` just before the tail reset, is past the corpus's vtable cut and has no name. The
+meaning of the entity-list selector (`0x20` vs `0x40`) passed to the walker at `&DAT_106eb5d8`, the
+value `0x3b1c` written to `+0x5b84` by `DoPossession`, and the identity of `0x100847e0`'s owner (a
+name-list container walked through `0x1007a2a0`/`0x1007a2c0`, recursing on element type `0xb`) are
+likewise not yet named.
 
 **The interval laws** (constants from the DLL; epilogue for each: `*out = Next − Last; Last =
 Next; Next = max(Next, curtime) + i`):
@@ -3309,11 +3464,66 @@ the code:
   program at a named 0.1 s, because routing it through the distance laws would delay the ragdoll
   handoff for a body the player is not near.
 
-Unrecovered and stated as seams: `m_bfNPCStateFlags` bit 3 (its name and its producer),
-`m_flTeleportMoveTimer`'s writer (a `StartTask` `0x102a1910` arm), `m_bForceFrequentThink`'s caller
-(`0x101aa750` has none), `UpdateCharacter`'s body beyond the `FinishTalking` tail, the subclass
-writers of `m_flNextAIThink` (`CNPC_VCamera`, `CNPC_VNewscaster`), and `WAS_BUMPED`'s bump event
-(this runtime's motor reports no character-vs-character contact).
+**Port, the reset sites (2026-09-12).** After the dispatch-site recovery above, the port's
+`ResetThinkTimers` calls were reconciled one by one. Kept, each at its retail site: `SetDisableAi`
+(the 1→0 edge, `0x1029f300`), `InputTeleportToEntity`, `LeaveGrappleState` (`0x102b5d90`),
+`OnDormancyChanged`'s wake (`ScriptUnhide` `0x102c1ec0`), the dialogue body session's start (the
+three `StartPlayerDialog*` inputs and `PlayerUse`, four retail doors onto one port door), the
+spoken-line player (`FElysiumNpc::OnDialogFilePlayed`, `0x102c0520`, which also carries
+`m_bIsTalking` as `TalkingUntil`), the discipline applier's `AI_Schedule` arm and `FeedInterrupt`'s
+trance install (both "slot 614, then `SetSchedule`", now at the callers rather than inside
+`StartNamedSchedule`, because the `ChangeSchedule`/`StartSchedule` inputs are not sites),
+`TASK_WAIT_PVS`'s completion (`FElysiumNpc::WaitPvs`, the slot-584 form), the teleport broadcast
+(`FElysiumEntityWorld::WakeNpcsNear`, slot 583 from `point_teleport` and `teleport_player`), the
+map-wide `SetAIEnabled` (`FElysiumEntityWorld::SetAiEnabled`, the slot-584 form on every NPC, with
+its three producers: a player's `FeedBegin` under the area-type and 3 s unobserved gate,
+`FeedInterrupt`, `events_world`'s `AIEnable`, and the level-change fade), the scene cast
+(`SetDisableAi(true)` at `position_start`, restored with slot 614 at `OnSceneFinished`), and the
+maker's `DisableThink` inherited onto its children. Removed, because no retail site exists:
+`aiscripted_schedule`'s pushes, the `ChangeSchedule` input, the disposition-transition miss, the
+patrol and interesting-place inputs, the dialogue END, and `OnKilled`. The AI console gate
+`0x1026c3d0` is in `Think` (`World->IsAiEnabled()`), the state byte is derived
+(`FElysiumNpc::NpcStateFlags`), `DISAPPEAR` is run, and the enemy triple is written on every
+normal-due think. `m_bfNPCStateFlags` bit 3 is no longer unrecovered: it is the state byte's own
+bit, carried by combat, alert, script and the hunt/flee pair.
+
+**The remaining items, closed (2026-09-12).** `m_flTeleportMoveTimer` `+0x65dc` has no code
+writer at all: the literal-offset grep over every decompiled function returns only its reader,
+`ShouldThinkFrequently` `0x102c2430`, so the earlier "a `StartTask` arm" note was wrong. Its one
+writer is the datamap keyfield `teleport_move_timer` (`0x105d6034`), an absolute curtime; the V2
+entity exports carry it on 827 NPC rows across 75 maps, `0` on 824 and `2` on three (one in
+`la_crackhouse_1`, two in `sm_diner_1`), so the frequent-think window is open for those three
+bodies during their map's first two seconds and for nobody else. `m_bForceFrequentThink` `+0x63f0`:
+its setter `0x101aa750` has no caller and its only reader is the same function — never set.
+`UpdateCharacter` (slot 312): the Troika body `0x10298070` is the boss registry — a
+`m_bIsBossMonster` body whose slot-464 answer is 2 stores its handle in the two-slot global
+`DAT_109247e0` (`DAT_10924fb8` counts, `+0x6497` remembers), and a registered body that is no
+longer a boss compacts itself out — then `CBaseCombatCharacter::UpdateCharacter` `0x103246d0`:
+`UpdateDisciplineVisuals`, slot 313, `UpdateVampHeal_HOT`, `UpdateExpressions` (a player, or an
+NPC whose slot-513 word carries `0x800000`), `MaintainScriptedEyeDirection` or slot 333, slots 314
+and 315, and the `m_nRenderFX` `0x1a` / `0x25` expiries `_DAT_10449198` seconds after
+`m_flEffectStartTime`. `m_bIsBCCTargetable`: set to 1 by `NPCInit` `0x1029a0b0`,
+`CNPC_VWerewolf::Spawn` and `CNPC_VPlaceholder`; cleared only by `CNPC_VCamera`'s init
+`0x103692c0` and by the cine entity's own `0x101a6f10` (not an NPC) — every real NPC reads 1. The
+console toggle `0x10085180` is **`ai_disable`** (registered by `0x100851f0`, help "Bi-passes all
+AI logic routines"); `ai_step` / `ai_resume` (`0x10085890` / `0x10085950`) drive bit 1. The
+werewolf gates are `cvar_werewolf_show_debug` (`0x1093f738`, read through its parent pointer
+`DAT_1093f73c` in `NPCThink`, `TeleportIn`/`Out`, `UpdateFakeHull`) and `cvar_werewolf_draw_hints`
+(`0x1093f958`, the 1–6 selector over the six hint predicates in `0x103cb4b0`); the other seven
+`werewolf_*` ConVars are `disregard_player_vision`, `draw_nodes`, `draw_last_teleport`,
+`draw_last_move`, `draw_nearest_hint`, `print_haspath`, `teleport_out_time`,
+`force_teleport_in_time`, `teleport_in_time`, `pursuit_distance`,
+`translated_enemy_position_tolerance`, `footstep_shakes`. Slot 578 (`RemoveFromSquad`'s survivor
+callback) is `CAI_BaseNPC::FUN_101a6cc0`, an empty virtual on all 77 classes. Slot 168's Troika
+body `0x102b5360` is `GetEnemy()`, or `m_hLastEnemy` when that is null and `m_bfNPCStateFlags`
+bit 6 is set (only `0x7f`: the hunt/flee pair) — the enemy the squad producer walks in the hunt
+state. `CAI_BaseNPC+0x98` is the entity's own `CAI_BaseNPCTroika*` (null on a non-Troika entity;
+`+0xa8` the same for `CBasePlayer*`), by every read in this section.
+
+Still stated as seams, each owned elsewhere: `WAS_BUMPED`'s bump event (this runtime's motor
+reports no character-vs-character contact) and the `NPCThink` arms listed at `FElysiumNpc::Think`
+with their owning stories (hint upkeep and `COND_HINT_INVALID`, the shoot-target override, the
+death-scream roll, `ResolveStandingOnHead`, fall-to-ground, `move_yaw`, the boss registry).
 
 ## Squads, decoded (2026-09-08)
 

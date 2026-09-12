@@ -6,6 +6,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcLog.h"
 
 const TCHAR* FElysiumNpcMaker::AttemptName(EAttempt Attempt)
@@ -144,6 +145,11 @@ FElysiumNpcMaker::EAttempt FElysiumNpcMaker::TrySpawn(bool bBypass)
 	static const FName OnSpawnNpc(TEXT("OnSpawnNPC"));
 	FireOutput(OnSpawnNpc, Handle);
 	ChildEntity->SpawnFlags = bFade ? 0x204 : 4;
+	// `MakeNPC` `0x1034b7b0`, right after the spawnflags: `child->SetDisableAI(this->GetDisableAI())`.
+	if (FElysiumNpc* ChildNpc = ChildEntity->AsNpc())
+	{
+		ChildNpc->SetDisableAi(bDisableAi);
+	}
 	World->CallEntitySpawn(*ChildEntity);
 	if (ChildEntity->IsDead())
 	{
@@ -188,6 +194,13 @@ void FElysiumNpcMaker::InputToggle(const FElysiumInputArgs& Args)
 {
 	if (bDisabled) { InputEnable(Args); }
 	else { InputDisable(Args); }
+}
+
+void FElysiumNpcMaker::InputDisableThink(const FElysiumInputArgs& Args)
+{
+	// `InputDisableThink` `0x1029f2a0` on the maker itself: a bool variant is stored, anything
+	// else stores false. The value reaches the children at `MakeNPC`.
+	bDisableAi = Args.Param.Type == EElysiumVariantType::Bool && Args.Param.AsBool;
 }
 
 void FElysiumNpcMaker::Think()

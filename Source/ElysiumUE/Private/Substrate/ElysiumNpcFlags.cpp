@@ -155,7 +155,23 @@ void FElysiumNpcFlags::Serialize(FElysiumSaveArchive& Ar)
 	Ar << Word2;
 	Ar << ObliviousCount;
 	Ar << FrenziedWord;
-	Ar << NpcStateWord;
+}
+
+uint8 FElysiumNpcFlags::NpcStateFlagsForRetailState(int32 RetailState)
+{
+	// `0x1026e3e0`, verbatim.
+	switch (RetailState)
+	{
+	case 1: return 0x31;
+	case 2: return 0x8f;
+	case 3: return 0x39;
+	case 4: return 0x08;
+	case 5: case 6: case 0xc: return 0x00;
+	case 7: case 9: case 0xa: case 0xd: return 0x04;
+	case 8: return 0x85;
+	case 0xb: case 0xe: return 0x7f;
+	default: return 0x30;
+	}
 }
 
 FString FElysiumNpcFlags::Describe() const

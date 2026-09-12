@@ -410,7 +410,7 @@ namespace
 			return EElysiumTaskResult::Running;
 		}
 		case EElysiumTask::WaitPvs:
-			return Runner.IsBodyVisible() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
+			return Runner.WaitPvs() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 
 		case EElysiumTask::SetActivity:
 		{
@@ -596,7 +596,7 @@ namespace
 	{
 		if (Step.Task == EElysiumTask::WaitPvs)
 		{
-			return Runner.IsBodyVisible() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
+			return Runner.WaitPvs() ? EElysiumTaskResult::Complete : EElysiumTaskResult::Running;
 		}
 		if (Step.Task == EElysiumTask::StopMoving) return Runner.StopMovingTask();
 		if (Step.Task == EElysiumTask::WaitForMovement)

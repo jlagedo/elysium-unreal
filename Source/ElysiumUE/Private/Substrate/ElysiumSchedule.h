@@ -337,8 +337,12 @@ public:
 	// `TASK_SPECIAL_IDLE_ACTIVITY` -- run one disposition stance selection. Returns the chosen
 	// clip's length in seconds, or a negative value when this body has no stance machine.
 	virtual float RunSpecialIdleActivity(double Now) = 0;
-	// `TASK_WAIT_PVS` -- is the body visible to the player right now?
+	// Is the body visible to the player right now? (The renderer's answer; not a task body.)
 	virtual bool IsBodyVisible() const = 0;
+	// `TASK_WAIT_PVS`'s `RunTask` arm (`0x102aacf0`, task 5). True completes the task. A runner
+	// with a Troika clock re-bases it on the way out; the default is the plain visibility answer
+	// so a fixture without one keeps its old shape.
+	virtual bool WaitPvs() { return IsBodyVisible(); }
 	// `TASK_SET_ACTIVITY` -- request a named ACT_*. Returns its length, or negative when
 	// unresolvable. Either answer starts the task: Troika RunTask decides completion by whether the
 	// body's CURRENT base-channel clip identity reached the resolved IDEAL identity, with a one-second

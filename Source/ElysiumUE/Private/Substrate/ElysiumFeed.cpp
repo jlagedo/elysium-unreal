@@ -52,6 +52,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumFeedSchedules.h"   // the surviving victim's post-feed trance
+#include "Substrate/ElysiumLaw.h"             // `CWorld::m_nAreaType`, the AI-disable gate's read
 #include "Substrate/ElysiumDiceTables.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLaw.h"        // pulse / interrupt law producers
@@ -758,6 +759,21 @@ bool FElysiumCombatCharacter::FeedBegin(FElysiumCombatCharacter& Victim)
 	Victim.FireOutput(GOnFedUponBegin, Handle);
 	PlayFeedLoopAudio(Victim);
 
+	// `FeedBegin` `0x10339d90`'s tail, on the not-already-grappled arm: a PLAYER feeder, in a map
+	// whose `CWorld::m_nAreaType` (+0x49c) is nonzero, whom no NPC has assessed for more than
+	// 3.0 s (`0x101800a0`: the latest of the five `OnLooked` stamps at `+0x1d28`), calls
+	// `SetAIEnabled(false)` `0x10265680` -- every NPC in the map stops thinking for the length
+	// of the feed. An observed feed, or one in a combat-typed area, leaves the AI running.
+	if (World && World->PlayerHandle() == Handle)
+	{
+		const FElysiumPlayer* Feeder = World->FindPlayer();
+		if (Feeder && ElysiumLaw::WorldAreaType(*World) != 0
+			&& Now - Feeder->LatestSeenByNpcTime() > 3.0)
+		{
+			World->SetAiEnabled(false);
+		}
+	}
+
 	UE_LOG(LogElysiumFeed, Display,
 		TEXT("INFO - Feed started: %s (blood=%d, next=%.2fs)"),
 		*Victim.DebugString(), B, FeedState.Interval);
@@ -876,6 +892,11 @@ void FElysiumCombatCharacter::FeedInterrupt()
 	// Guarded on a LIVE transaction and on the feeder half: `CompleteFeedTransaction` is
 	// idempotent and is also reached on the victim, so without this guard a repeated teardown
 	// would count a second incident for an interruption that already happened.
+	// `FeedInterrupt` `0x1033a9e0`, the victim-valid arm's tail: once the victim handle is
+	// cleared, a PLAYER feeder re-enables the AI if `FeedBegin` disabled it (`IsAIEnabled`
+	// `0x10265800`, then `SetAIEnabled(true)`), which re-bases every NPC's clock on this frame.
+	const bool bPlayerFeederPaired = FeedState.IsPaired() && !FeedState.bVictim
+		&& !FeedState.bInterrupting && World && World->PlayerHandle() == Handle;
 	if (FeedState.IsPaired() && !FeedState.bVictim && !FeedState.bInterrupting)
 	{
 		if (FElysiumPlayer* PlayerFeeder = (World && World->FindPlayer() == this)
@@ -895,6 +916,10 @@ void FElysiumCombatCharacter::FeedInterrupt()
 		}
 	}
 	CompleteFeedTransaction(/*bKeepReleaseTail*/ false);
+	if (bPlayerFeederPaired && !World->IsAiEnabled())
+	{
+		World->SetAiEnabled(true);
+	}
 }
 
 void FElysiumCombatCharacter::CompleteFeedTransaction(bool bKeepReleaseTail)

@@ -75,9 +75,11 @@ bool ElysiumNpcThink::ShouldThinkFrequently(const FElysiumNpc& Npc)
 	// map to the Normal law's 0.01 s floor -- 100 Hz per body.
 
 	// `IsInDialog()` `0x102c1170` is four terms: `m_bIsTalking`, a queued dialogue string, the
-	// dialogue partner handle and `+0x6554`. This runtime carries one session bit that is set for
-	// the whole of all four.
-	if (Npc.Dialogue.bInDialog)
+	// dialogue partner handle and `+0x6554`. This runtime carries one session bit for the last
+	// three and a talk-end stamp for the first: `m_bIsTalking` is set by the spoken-line player
+	// `0x102c0520` with its own end time (`+0x64cc`), outside any dialogue session.
+	const double Now = Npc.World ? Npc.World->NowSeconds() : 0.0;
+	if (Npc.Dialogue.bInDialog || Npc.IsTalking(Now))
 	{
 		return true;
 	}
@@ -85,8 +87,7 @@ bool ElysiumNpcThink::ShouldThinkFrequently(const FElysiumNpc& Npc)
 	{
 		return true;
 	}
-	const double Now = Npc.World ? Npc.World->NowSeconds() : 0.0;
-	return Now <= Npc.TeleportMoveUntil ? true : Npc.bForceFrequentThink;
+	return Now <= static_cast<double>(Npc.TeleportMoveTimer) ? true : Npc.bForceFrequentThink;
 }
 
 double ElysiumNpcThink::UpdateInterval(const FInputs& In)
@@ -129,7 +130,8 @@ double ElysiumNpcThink::NormalInterval(const FInputs& In)
 	if (In.bHasClosestPlayer)
 	{
 		Interval = (static_cast<double>(In.PlayerDistUnits) - 2048.0) * 3.0 / 4096.0;
-		if (Interval > 3.0)
+		// `v > 3` and `v == 3` are separate arms in `0x10290b60` and both jitter, so `>=`.
+		if (Interval >= 3.0)
 		{
 			Interval = 3.0 + Jitter(0.3);
 		}

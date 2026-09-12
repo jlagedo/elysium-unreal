@@ -991,6 +991,10 @@ namespace
 			return false;
 		}
 		TGuardValue<bool> ScheduleGuard(GApplyingDisciplineSchedule, true);
+		// `0x101de660`'s `AI_Schedule` arm: slot 614 on the target's Troika pointer FIRST, then
+		// `SetSchedule(byName)` only if it is still alive. The re-base happens whether or not the
+		// install then takes.
+		Npc->ResetThinkTimers(Npc->World ? Npc->World->NowSeconds() : 0.0);
 		return Npc->StartNamedSchedule(Hit.AiSchedule,
 			FString::Printf(TEXT("DisciplineTgt.%s/%s.AI_Schedule(%s)"),
 				*Record.InternalName, *Hit.Name, *Hit.AiSchedule),

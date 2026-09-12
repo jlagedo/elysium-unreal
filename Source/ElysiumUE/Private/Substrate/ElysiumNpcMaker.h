@@ -23,6 +23,11 @@ public:
 	bool bNoDrop = false;           // base CNPCMaker declares it but does not consume it
 	bool bViewCone = false;
 	int32 MinPcDistance = 0;        // Source units
+	// `CNPCMaker` is a `CAI_BaseNPCTroika` in retail, so it carries `m_bDisableAI` and the
+	// `DisableThink` input, and `MakeNPC` `0x1034b7b0` copies its own value onto every child
+	// (`0x1029f2e0` -> `0x1029f300`). The maker itself never thinks as an NPC here.
+	bool bDisableAi = false;
+	void InputDisableThink(const FElysiumInputArgs& Args);
 
 	enum class EAttempt : uint8
 	{

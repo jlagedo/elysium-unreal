@@ -237,7 +237,17 @@ public:
 	void InputSetCopGrace(const FElysiumInputArgs& A)           { CopGrace = A.Param.ToFloat(); }
 	void InputSetNosferatuTolerant(const FElysiumInputArgs& A)  { bNosferatuTolerant = A.Param.ToInt() != 0; }
 	void InputSetNoFrenzyArea(const FElysiumInputArgs& A)       { bNoFrenzyArea = A.Param.ToInt() != 0; }
-	void InputAIEnable(const FElysiumInputArgs& A)              { bAIEnabled = A.Param.ToInt() != 0; }
+	// `CWorldEvents::InputAIEnable` `0x1023e290`: a bool variant is passed to `SetAIEnabled`
+	// `0x10265680`; any other variant type disables. The world owns the flag (`g_AIDisabled`
+	// bit 0); this leaf only mirrors it for its debug row.
+	void InputAIEnable(const FElysiumInputArgs& A)
+	{
+		bAIEnabled = A.Param.Type == EElysiumVariantType::Bool && A.Param.AsBool;
+		if (World)
+		{
+			World->SetAiEnabled(bAIEnabled);
+		}
+	}
 	void InputFadeGlobalWetness(const FElysiumInputArgs& A)
 	{
 		if (World)

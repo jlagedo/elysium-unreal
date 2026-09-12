@@ -47,6 +47,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumLipTrack.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumSceneData.h"
 #include "Substrate/ElysiumScenePlayer.h"
 #include "Visual/ElysiumExpressionTable.h"
@@ -249,6 +250,8 @@ public:
 		FVector SavedAngles = FVector::ZeroVector;
 		bool bSaved = false;
 		bool bBodyFrozen = false;           // position_start immobilised it and owes it a thaw
+		bool bAiSaved = false;              // `m_bDisableAI` was read into SavedAiDisabled
+		bool bSavedAiDisabled = false;      // the actor's own `m_bDisableAI` before the scene
 		bool bPlayingClip = false;          // we started a clip on it and owe it a reset
 		bool bClaimed = false;              // we stamped ScriptOwner on it and owe it a release
 		bool bCachedBip01 = false;
@@ -534,6 +537,15 @@ public:
 				Bound[i].SavedOrigin = A->Origin;
 				Bound[i].SavedAngles = A->Angles;
 				Bound[i].bSaved = true;
+				// `0x10081ed0`: the actor's `m_bDisableAI` (`0x1029f2e0`) is saved beside its
+				// transform, then, on this same `position_start == 1` arm, `SetDisableAI(true)`
+				// (`0x1029f300`): a scene's cast does not think at all while it plays.
+				if (FElysiumNpc* Npc = A->AsNpc())
+				{
+					Bound[i].bSavedAiDisabled = Npc->IsAiDisabled();
+					Bound[i].bAiSaved = true;
+					Npc->SetDisableAi(true);
+				}
 				A->SetRuntimeOrigin(Origin);
 				A->SetRuntimeAngles(Angles);
 				// The placement is the only one the scene makes. What holds the actor here for the
@@ -646,7 +658,34 @@ public:
 			if (FElysiumEntity* A = ActorAt(i))
 			{
 				A->SetBodyFrozen(false);
+				RestoreActorAi(i, *A);
 			}
+		}
+	}
+
+	// `OnSceneFinished`'s cast walk `0x100847e0`, per actor: only one that is neither in a cine
+	// (`m_hCine`) nor in a dialogue (`m_hDialogPartner`) is touched -- `SetDisableAI(saved)`,
+	// slot 614, `PhysicsRunThink(0)` so a due think runs on this frame, and if that left
+	// `m_flNextThink < m_flLastThink` the think is re-armed at `curtime + 1.5 * frametime`
+	// (`_DAT_1044f02c` = 1.5). `SetDisableAi(false)` here carries slot 614 on its own 1->0 edge,
+	// and `RunThinks` clears `NextThink` before a think and the tail rewrites it, so the two
+	// engine-side steps have nothing left to do beyond stating them.
+	void RestoreActorAi(int32 Index, FElysiumEntity& A)
+	{
+		if (!Bound[Index].bAiSaved)
+		{
+			return;
+		}
+		Bound[Index].bAiSaved = false;
+		FElysiumNpc* Npc = A.AsNpc();
+		if (Npc == nullptr || Npc->ScriptOwner.IsSet() || Npc->Dialogue.bInDialog)
+		{
+			return;
+		}
+		Npc->SetDisableAi(Bound[Index].bSavedAiDisabled);
+		if (!Bound[Index].bSavedAiDisabled && World)
+		{
+			Npc->ResetThinkTimers(World->NowSeconds());
 		}
 	}
 

@@ -456,7 +456,7 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	Cond.Reset();
 
 	// 1. Senses and the hostile-category conditions.
-	ElysiumNpcCond::GatherBump(Npc, Npc.Cognition.GatheredAt, Cond);
+	ElysiumNpcCond::GatherBump(Npc, Previous, Cond);
 	ElysiumNpcCond::GatherDamage(Npc, Previous, Cond);
 	ElysiumNpcCond::GatherHearing(Npc, Previous, Cond);
 	ElysiumNpcCond::GatherSight(Npc, Now, Cond);

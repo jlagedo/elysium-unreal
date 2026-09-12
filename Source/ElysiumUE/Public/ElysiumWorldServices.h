@@ -1103,6 +1103,12 @@ public:
 	// The headless/null answer is **true**, and so is the answer for a point that resolves to no
 	// cluster: `NPCInit` (`0x1029a0b0`) seeds `m_bInPlayerPVS = 1`, so "visible" is the state an
 	// NPC starts in and the one that costs it nothing.
+	//
+	// SEAM SHAPE, stated: retail's `0x101d1a90` takes the PVS of the player's EYE position
+	// (slot 193, cached per eye) and tests the NPC's whole surrounding BOX against it
+	// (`CheckBoxInPVS`), after redirecting a parented NPC (movetype 11/12) to its parent. This
+	// asks two points, the player's origin and the NPC's origin. The box term only differs for a
+	// body straddling a cluster boundary, and the eye term for a crouch that changes cluster.
 	virtual bool ArePointsInSamePvs(const FVector& APointCm, const FVector& BPointCm) const
 	{
 		return true;

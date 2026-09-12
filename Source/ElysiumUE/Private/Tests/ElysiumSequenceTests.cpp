@@ -1107,6 +1107,10 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 		Services.ClipSeconds = 2.0f;   // every clip, the beat's `m_iszPlay` included
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MoveTemp(Defs));
+		// A player, as every retail map has one: the idle program's `TASK_WAIT_PVS` asks the
+		// engine PVS test about `m_hClosestPlayer`, and with none it never completes -- the stance
+		// machine could not resume after the beat because the idle program never cycled.
+		World.SpawnPlayer();
 		World.Activate(0.0);
 
 		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
