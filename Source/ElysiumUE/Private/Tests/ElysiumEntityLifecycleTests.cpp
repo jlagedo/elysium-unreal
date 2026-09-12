@@ -1053,6 +1053,47 @@ bool FElysiumIOChainTest::RunTest(const FString&)
 	return true;
 }
 
+// `gpGlobals->frametime`. The NPC think cadence's due test is `(stamp - Now) <= FrameSeconds()`,
+// so the clamp is the difference between a cadence that is observable under a stepped clock and
+// one that reports every stamp due forever.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldFrameSecondsTest,
+	"Elysium.Substrate.WorldFrameSeconds", GElysiumTestFlags)
+bool FElysiumWorldFrameSecondsTest::RunTest(const FString&)
+{
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__frame_seconds__");
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	TestEqual(TEXT("before any tick the frame is the seeded default"),
+		World.FrameSeconds(), ElysiumWorldClock::DefaultFrameSeconds);
+
+	// The first tick has no previous one to measure against. `Activate` stamped `LastTickNow`, and
+	// measuring against that would report a zero-length frame.
+	World.Tick(0.0);
+	TestEqual(TEXT("the first tick keeps the default rather than measuring against Activate"),
+		World.FrameSeconds(), ElysiumWorldClock::DefaultFrameSeconds);
+
+	World.Tick(1.0 / 60.0);
+	TestEqual(TEXT("an ordinary frame is reported as measured"),
+		World.FrameSeconds(), 1.0 / 60.0, 1e-9);
+
+	// Two ticks at the same clock -- the fixtures' admission pair. A zero epsilon would leave a
+	// stamp written exactly at `Now` not due on the tick that wrote it.
+	World.Tick(1.0 / 60.0);
+	TestEqual(TEXT("a zero-length step is floored"),
+		World.FrameSeconds(), ElysiumWorldClock::MinFrameSeconds, 1e-9);
+
+	// A headless case stepping the clock by whole seconds. Without the ceiling every stamp within
+	// ten seconds of the clock would answer due.
+	World.Tick(10.0);
+	TestEqual(TEXT("a ten-second step is capped"),
+		World.FrameSeconds(), ElysiumWorldClock::MaxFrameSeconds, 1e-9);
+
+	return true;
+}
+
 } // namespace ElysiumEntityLifecycleTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

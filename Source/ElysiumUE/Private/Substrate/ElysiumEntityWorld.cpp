@@ -1492,6 +1492,16 @@ void FElysiumEntityWorld::Tick(double Now)
 		return;
 	}
 	LastTickNow = Now;
+	// `gpGlobals->frametime`, measured before anything this frame can read it and clamped the way
+	// Source clamps its own. It sits above the trigger-resolution gate deliberately: a suppressed
+	// frame is still a frame, and letting the gap accumulate across a run of them would hand the
+	// NPC think cadence one enormous epsilon on the frame resolution comes back.
+	LastFrameSeconds = bHasMeasuredFrame
+		? FMath::Clamp(Now - LastFrameMeasuredAt, ElysiumWorldClock::MinFrameSeconds,
+			ElysiumWorldClock::MaxFrameSeconds)
+		: ElysiumWorldClock::DefaultFrameSeconds;
+	LastFrameMeasuredAt = Now;
+	bHasMeasuredFrame = true;
 	if (!IsTriggerResolutionEnabled())
 	{
 		return;

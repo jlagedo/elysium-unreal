@@ -40,6 +40,18 @@ class USkeletalMeshComponent;
 class UStaticMeshComponent;
 class FElysiumEntityWorld;
 
+// Source clamps `gpGlobals->frametime` and so does `FElysiumEntityWorld::FrameSeconds()`. The
+// floor keeps two ticks at the same clock (a fixture's `Tick(0.0); Tick(0.0);` admission pair)
+// from producing a zero epsilon, which would leave a stamp written exactly at `Now` not due on
+// the very tick that wrote it. The ceiling is what keeps the NPC think cadence observable under a
+// coarsely stepped clock.
+namespace ElysiumWorldClock
+{
+	inline constexpr double MinFrameSeconds = 1.0 / 128.0;
+	inline constexpr double MaxFrameSeconds = 0.1;
+	inline constexpr double DefaultFrameSeconds = 1.0 / 60.0;
+}
+
 // The world's side of the override channel's two outbound needs: turning an EHANDLE into the
 // entity's camera-source interface (`handleLive` + the slot-46..53 vtable) and dropping the live
 // cine shot when the VIEW entity is set. Held by value on the world so the channel never stores a
@@ -697,6 +709,16 @@ public:
 	// Not a service — nothing reads behaviour off it.
 	AActor* GetOwnerActor() const { return Owner; }
 	double NowSeconds() const;
+	// `gpGlobals->frametime`. The NPC think cadence's due test is `(stamp - Now) <= FrameSeconds()`
+	// (`IsThinkDue` `0x10290660`), so this is the epsilon that decides whether a stamp landing
+	// between two ticks counts as due on the earlier one.
+	//
+	// CLAMPED, as Source clamps its own. Two reasons and both matter: the first tick after a load
+	// screen would otherwise hand the cadence a delta big enough to make every stamp due at once,
+	// and a headless case that steps the clock by whole seconds would make the due test true for
+	// every stamp forever — the cadence would be present in the code and absent from every test
+	// that drives it.
+	double FrameSeconds() const { return LastFrameSeconds; }
 	int32 UnknownTargets() const { return UnknownTargetCount; }
 	int32 UnknownInputs() const { return UnknownInputCount; }
 	// Service passes that hit the drain cap and deferred a still-due tail (the one enumerated
@@ -1074,4 +1096,13 @@ private:
 	// The last time this world was ticked. NowSeconds() reads it when there is no game state to
 	// hold the clock.
 	double LastTickNow = 0.0;
+	// The clamped gap between the last two ticks. Seeded rather than zero, because the first tick
+	// has no previous one to measure against and a zero epsilon is not a shorter frame — it is a
+	// due test that answers no to a stamp standing exactly at the clock.
+	double LastFrameSeconds = ElysiumWorldClock::DefaultFrameSeconds;
+	// Measured from `Tick` alone, and therefore NOT from `LastTickNow`: `Activate` and the pre-move
+	// `RunPlayerThink` stamp that one too, both with this same frame's clock, so measuring against
+	// it would report every frame as zero-length.
+	double LastFrameMeasuredAt = 0.0;
+	bool bHasMeasuredFrame = false;
 };
