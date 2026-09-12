@@ -2289,7 +2289,7 @@ public:
 
 	// `FUN_10178280` remembers whether the active weapon was drawable (`player+0x1e01`) and
 	// switches to `item_w_unarmed`; `FUN_10178400` puts it back at `CDialog::Release`. Both are
-	// driven from `FElysiumNpc::BeginDialog` / `InputEndDialog`, the two doors of a session.
+	// driven from `FElysiumNpcDialogue::Begin` / `End`, the two doors of a session.
 	//
 	// `DialogHolsteredWeapon` is the weapon that was active when the conversation opened, and
 	// `bDialogWeaponWasDrawable` is retail's remembered `+0x1e01` byte.

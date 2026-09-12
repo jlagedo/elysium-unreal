@@ -1389,8 +1389,8 @@ void FElysiumEntityWorld::EndDialogSession(bool bSilent)
 
 	if (!bSilent && Closing.IsSet())
 	{
-		// Route EndDialog to exactly the owning NPC (its InputEndDialog clears bInDialog and fires
-		// OnDialogEnd -> DialogPostProcess). Queued through chokepoint 2 like every other input, with
+		// Route EndDialog to exactly the owning NPC (its FElysiumNpcDialogue::End clears bInDialog and
+		// fires OnDialogEnd -> DialogPostProcess). Queued through chokepoint 2 like every other input, with
 		// the owner as `!self` so no name lookup can hit a same-named entity. The param carries the
 		// closed session's serial so the NPC can tell this bookkeeping close from a script-fired
 		// `EndDialog` (which must reach the world's teardown itself) and from a stale close arriving

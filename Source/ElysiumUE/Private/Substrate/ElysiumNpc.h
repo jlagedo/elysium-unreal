@@ -10,6 +10,7 @@
 #include "Substrate/ElysiumInterestingPlace.h"
 #include "Substrate/ElysiumNpcCombatSchedules.h"
 #include "Substrate/ElysiumNpcConditions.h"
+#include "Substrate/ElysiumNpcDialogue.h"
 #include "Substrate/ElysiumNpcEnemyMemory.h"
 #include "Substrate/ElysiumNpcMind.h"
 #include "Substrate/ElysiumNpcSenses.h"
@@ -43,21 +44,12 @@ public:
 	FElysiumNpc() { bWillTalk = true; }
 
 	bool  bUseInteresting = false;    // use_interesting — the NPC is a look/use target (seeded from the key)
-	bool  bInDialog = false;          // a dialog session is open (OnDialogBegin fired, OnDialogEnd pending)
-	int32 DialogFlags = 0;            // raw arg on ordinary/unforced; Remote ignores its variant
-	int32 DecodedDialogFlags = 0;     // no bit is named until RE46 closes it
-	EElysiumDialogOpenerKind DialogOpener = EElysiumDialogOpenerKind::Remote;
+	// The dialogue and use-to-talk state. `Substrate/ElysiumNpcDialogue.h`.
+	FElysiumNpcDialogue Dialogue;
 	FString DefaultCamera;            // definition-derived Tier-1 `default_camera`, never save state
 	FString PlayerReaction;           // player_reaction — authored `D_* priority` seed
 	FElysiumRelationships Relationships;
 	int32 TimesTalked = 0;            // times_talked — dialogue interaction count (engine-written; script-read)
-
-	// `m_bForceDialogStart` (`npc+0x6495`). `FUN_10178280` refuses a conversation when this is
-	// CLEAR and the player-side refusal predicate holds; a set byte opens regardless. The forced
-	// openers (`StartPlayerDialog`, `StartPlayerDialogRemote`) set it, `StartPlayerDialogUnforced`
-	// clears it, and `+use` never touches it — so use and unforced are the two gated entries.
-	// Session state: retail's byte is not in the datamap's save block either.
-	bool bForceDialogStart = false;
 
 	// VtMB's disposition stance machine (`docs/vtmb/animation_and_movers.md`). The index and the
 	// clock are retail's own saved pair; the two latches beside them are not saved, because retail's
@@ -659,34 +651,46 @@ public:
 
 	virtual void EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bool bSilent) override;
 
-	void BeginDialog(EElysiumDialogOpenerKind Opener, int32 RawFlags,
-		const FElysiumInputArgs& Args);
+	// Read-only reach into the dialogue body claim for `FElysiumNpcDialogue`, which cannot reach
+	// the private token directly (no friend is added for a plain-C++ value member).
+	const FElysiumBodyOwnerToken& GetDialogueBodyOwner() const { return DialogueBodyOwner; }
 
-	// --- Use-to-talk (`CBasePlayer::PlayerUse`, `0x10167850`) ---------------------------------
-	//
-	// Retail resolves the use target, tests the character's `WillTalk` latch (virtual `+0x49c`,
-	// set by `InputWillTalk` `0x103418f0`), clears the schedule, pushes AI schedule `0x6a` and
-	// calls player vtable slot 414. Here the eligibility half is `CanPlayerFocus` (so the reticle
-	// and the prompt agree with what pressing use will do) and the transaction half is
-	// `BeginPlayerUse`, which routes into the same `BeginDialog` primitive the inputs use.
+	// The three operations `BeginDialog` ran before opening a session, split out because they
+	// touch private leaf state (`FinishAmbientUse`, `Motor`) that `FElysiumNpcDialogue` cannot
+	// reach: end the ambient visit, stop an active patrol move, then take the Dialogue body claim.
+	bool PrepareBodyForDialogue();
 
-	// The authored `dialogname`. Empty when this NPC carries no conversation.
-	FString DialogName() const;
+	// `FElysiumNpcDialogue::Begin`.
+	void BeginDialog(EElysiumDialogOpenerKind Opener, int32 RawFlags, const FElysiumInputArgs& Args)
+	{
+		Dialogue.Begin(*this, Opener, RawFlags, Args);
+	}
 
-	// True when there is a conversation to open at all. Deliberately independent of `bWillTalk`:
-	// the class verb is "this thing talks", the eligibility is `CanPlayerFocus`'s.
-	virtual bool IsUsable() const override;
+	// --- Use-to-talk (`CBasePlayer::PlayerUse`, `0x10167850`) — `Substrate/ElysiumNpcDialogue.h` ---
 
-	// `bWillTalk && !bInDialog && !IsInert() && !IsBusyWithDiscipline()` and the AINPCFlags2 bit.
-	virtual bool CanPlayerFocus(const FElysiumUseContext& Context) const override;
+	// `FElysiumNpcDialogue::Name`.
+	FString DialogName() const { return Dialogue.Name(*this); }
 
-	// Open the conversation, or refuse with the M-REFUSE notification. Always returns a terminal
-	// result: dialogue owns the body through its own token, so no +use session may linger.
-	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context) override;
+	// `FElysiumNpcDialogue::IsUsable`.
+	virtual bool IsUsable() const override { return Dialogue.IsUsable(*this); }
 
-	// The talk glyph (`hud/Context_Icons/Talk_Male` / `Talk_Female`, use_icon 15 / 14) when the
-	// definition authored no `use_icon` of its own.
-	virtual int32 ResolveUseIcon(const FElysiumEntityHandle& Activator) const override;
+	// `FElysiumNpcDialogue::CanPlayerFocus`.
+	virtual bool CanPlayerFocus(const FElysiumUseContext& Context) const override
+	{
+		return Dialogue.CanPlayerFocus(*this, Context);
+	}
+
+	// `FElysiumNpcDialogue::BeginPlayerUse`.
+	virtual FElysiumUseBeginResult BeginPlayerUse(const FElysiumUseContext& Context) override
+	{
+		return Dialogue.BeginPlayerUse(*this, Context);
+	}
+
+	// `FElysiumNpcDialogue::ResolveUseIcon`.
+	virtual int32 ResolveUseIcon(const FElysiumEntityHandle& Activator) const override
+	{
+		return Dialogue.ResolveUseIcon(*this, Activator);
+	}
 
 	/**
 	 * The dialogue-suppression guard on every conversation entry — RECOVERED as TWO bits, not one.
@@ -710,28 +714,26 @@ public:
 			|| NpcFlags.Has(EElysiumNpcFlag2::NO_DIALOG_PERSISTENT);
 	}
 
-	// The whole `FUN_10178280` refusal test from this NPC's side: nullptr when the conversation may
-	// open, otherwise the reason. `bForceDialogStart` short-circuits it, as retail's byte does.
-	const TCHAR* DialogEntryRefusalReason() const;
+	// `FElysiumNpcDialogue::EntryRefusalReason`.
+	const TCHAR* DialogEntryRefusalReason() const { return Dialogue.EntryRefusalReason(*this); }
 
-	// K1: each Tier-1 name enters through its own handler. Only after that handler has applied the
-	// recovered parameter posture does it join the shared dialogue-session primitive above.
-	void InputStartPlayerDialog(const FElysiumInputArgs& Args);
+	// `FElysiumNpcDialogue::StartForced`.
+	void InputStartPlayerDialog(const FElysiumInputArgs& Args) { Dialogue.StartForced(*this, Args); }
 
-	void InputStartPlayerDialogRemote(const FElysiumInputArgs& Args);
+	// `FElysiumNpcDialogue::StartRemote`.
+	void InputStartPlayerDialogRemote(const FElysiumInputArgs& Args) { Dialogue.StartRemote(*this, Args); }
 
-	void InputStartPlayerDialogUnforced(const FElysiumInputArgs& Args);
+	// `FElysiumNpcDialogue::StartUnforced`.
+	void InputStartPlayerDialogUnforced(const FElysiumInputArgs& Args) { Dialogue.StartUnforced(*this, Args); }
 
-	// The dialog session ends: increment times_talked and fire OnDialogEnd. Reached both by the runner
-	// (World::EndDialogSession routes EndDialog to `!self` when the conversation closes) and by a manual
-	// ent_fire. Jack's OnDialogEnd wires DialogPostProcess(), which reads the `G` flags the dialogue's
-	// field-5 actions wrote and warps the player.
-	void InputEndDialog(const FElysiumInputArgs& Args);
+	// `FElysiumNpcDialogue::End`.
+	void InputEndDialog(const FElysiumInputArgs& Args) { Dialogue.End(*this, Args); }
 
-	// Load this NPC's `dialogname` `.dlg`, open a branch conversation bound to the installed script host,
-	// and hand it to the world (the visual-novel box renders it; the runner fires EndDialog on close).
-	// Returns false when there is no dialogue to run, leaving bInDialog latched for the manual seam.
-	bool OpenConversation(const FElysiumEntityHandle& Activator, EElysiumDialogOpenerKind Opener);
+	// `FElysiumNpcDialogue::OpenConversation`.
+	bool OpenConversation(const FElysiumEntityHandle& Activator, EElysiumDialogOpenerKind Opener)
+	{
+		return Dialogue.OpenConversation(*this, Activator, Opener);
+	}
 
 	// The sheet, from `stats.txt`'s defaults overlaid with this NPC's `stattemplate`. That overlay
 	// is the whole of an NPC's health track: `npctemplate*` authors `Max_Health` as a literal, and a

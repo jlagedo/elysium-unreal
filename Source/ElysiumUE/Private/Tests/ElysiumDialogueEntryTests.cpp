@@ -197,7 +197,7 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 	TestFalse(TEXT("WillTalk 0 refuses the focus"), Npc->CanPlayerFocus(Context));
 	TestEqual(TEXT("...and pressing use on it does nothing"),
 		PressUse(World, *Npc).Outcome, EElysiumUseOutcome::Unavailable);
-	TestFalse(TEXT("...leaving no session open"), Npc->bInDialog);
+	TestFalse(TEXT("...leaving no session open"), Npc->Dialogue.bInDialog);
 
 	World.AcceptInput(Npc->Handle, FName(TEXT("WillTalk")), FElysiumVariant::Int(1),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
@@ -212,12 +212,12 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 		Opened.Outcome, EElysiumUseOutcome::Completed);
 	TestEqual(TEXT("...and starts no captured session kind"),
 		Opened.SessionKind, EElysiumUseSessionKind::None);
-	TestTrue(TEXT("the conversation is open"), Npc->bInDialog);
-	TestEqual(TEXT("the opener is recorded as PlayerUse"), Npc->DialogOpener,
+	TestTrue(TEXT("the conversation is open"), Npc->Dialogue.bInDialog);
+	TestEqual(TEXT("the opener is recorded as PlayerUse"), Npc->Dialogue.DialogOpener,
 		EElysiumDialogOpenerKind::Use);
 	TestTrue(TEXT("dialogue holds the body through its own owner token"),
 		DebugRow(*Npc, TEXT("Body owner")).Contains(TEXT("Dialogue")));
-	TestFalse(TEXT("+use does not set m_bForceDialogStart"), Npc->bForceDialogStart);
+	TestFalse(TEXT("+use does not set m_bForceDialogStart"), Npc->Dialogue.bForceDialogStart);
 	World.Tick(0.0);
 	TestEqual(TEXT("OnDialogBegin fired exactly once"), CounterValue(World, GBeginCounter), 1.0f);
 	TestFalse(TEXT("an NPC already in dialogue is no longer focusable"),
@@ -227,7 +227,7 @@ bool FElysiumNpcUseStartsDialogTest::RunTest(const FString&)
 	World.AcceptInput(Npc->Handle, FName(TEXT("EndDialog")), FElysiumVariant::Void(),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
 	World.Tick(0.0);
-	TestFalse(TEXT("EndDialog closes the session"), Npc->bInDialog);
+	TestFalse(TEXT("EndDialog closes the session"), Npc->Dialogue.bInDialog);
 	TestEqual(TEXT("OnDialogEnd fired exactly once"), CounterValue(World, GEndCounter), 1.0f);
 	TestEqual(TEXT("times_talked counted the conversation"), Npc->TimesTalked, 1);
 	TestFalse(TEXT("the body claim is released"),
@@ -281,7 +281,7 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 		World.BeginPlayerUseSession(Npc->Handle, World.PlayerHandle());
 	TestEqual(TEXT("a refused use reports Unavailable"), Refused.Outcome,
 		EElysiumUseOutcome::Unavailable);
-	TestFalse(TEXT("...and no conversation opened"), Npc->bInDialog);
+	TestFalse(TEXT("...and no conversation opened"), Npc->Dialogue.bInDialog);
 	TestEqual(TEXT("M-REFUSE posts exactly one HUD notification"),
 		Services.Notifications.Num(), 1);
 	if (Services.Notifications.IsValidIndex(0))
@@ -295,17 +295,17 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 	World.AcceptInput(Npc->Handle, FName(TEXT("StartPlayerDialogUnforced")),
 		FElysiumVariant::Int(0), FElysiumEntityHandle::Invalid(),
 		FElysiumEntityHandle::Invalid());
-	TestFalse(TEXT("StartPlayerDialogUnforced honours the predicate"), Npc->bInDialog);
+	TestFalse(TEXT("StartPlayerDialogUnforced honours the predicate"), Npc->Dialogue.bInDialog);
 	TestEqual(TEXT("...and says nothing on the HUD"), Services.Notifications.Num(), 0);
 
 	// --- A forced opener sets `m_bForceDialogStart` and bypasses the predicate --------------
 	World.AcceptInput(Npc->Handle, FName(TEXT("StartPlayerDialog")), FElysiumVariant::Int(0),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-	TestTrue(TEXT("a forced start opens through a standing refusal"), Npc->bInDialog);
-	TestTrue(TEXT("...because it set the force byte"), Npc->bForceDialogStart);
+	TestTrue(TEXT("a forced start opens through a standing refusal"), Npc->Dialogue.bInDialog);
+	TestTrue(TEXT("...because it set the force byte"), Npc->Dialogue.bForceDialogStart);
 	World.AcceptInput(Npc->Handle, FName(TEXT("EndDialog")), FElysiumVariant::Void(),
 		FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
-	TestFalse(TEXT("the close clears the force byte"), Npc->bForceDialogStart);
+	TestFalse(TEXT("the close clears the force byte"), Npc->Dialogue.bForceDialogStart);
 
 	// --- `ClearDialogCombatTimers` reaches the player ---------------------------------------
 	// Fired at the map's `events_player` bus, which is how `pcevents` fires it off Jack's
@@ -322,7 +322,7 @@ bool FElysiumDialogRefusalPredicateTest::RunTest(const FString&)
 		World.BeginPlayerUseSession(Npc->Handle, World.PlayerHandle());
 	TestEqual(TEXT("use is admitted once the timers are cleared"), Admitted.Outcome,
 		EElysiumUseOutcome::Completed);
-	TestTrue(TEXT("...and the conversation opened"), Npc->bInDialog);
+	TestTrue(TEXT("...and the conversation opened"), Npc->Dialogue.bInDialog);
 	TestEqual(TEXT("...with nothing posted to the HUD"), Services.Notifications.Num(), 0);
 
 	// --- The seam arms are read, not dropped -------------------------------------------------
