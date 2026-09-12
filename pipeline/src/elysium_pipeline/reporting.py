@@ -82,11 +82,23 @@ class RunReport:
         result.pop("_started_monotonic", None)
         return result
 
-    def write(self, log_root: Path) -> Path:
-        log_root.mkdir(parents=True, exist_ok=True)
+    def artifact_stem(self) -> str:
+        """The filename stem this run's report and console log share.
+
+        Both artifacts land beside each other under the log root, and an agent handed one
+        path has to be able to guess the other. Deriving the stem once here is what keeps
+        them from drifting: the two spellings used to differ, so a command whose name held
+        an underscore or a slash wrote `20260911T233524Z-export_v2-map.log` next to
+        `20260911T233524Z-export-v2-map.json`.
+        """
+
         stamp = datetime.fromisoformat(self.started_at).strftime("%Y%m%dT%H%M%S.%fZ")
         slug = re.sub(r"[^a-z0-9]+", "-", self.command.lower()).strip("-") or "run"
-        destination = log_root / f"{stamp}-{slug}.json"
+        return f"{stamp}-{slug}"
+
+    def write(self, log_root: Path) -> Path:
+        log_root.mkdir(parents=True, exist_ok=True)
+        destination = log_root / f"{self.artifact_stem()}.json"
         destination.write_text(
             json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

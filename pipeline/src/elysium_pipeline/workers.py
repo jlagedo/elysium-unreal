@@ -27,6 +27,7 @@ from concurrent.futures import ProcessPoolExecutor
 import contextlib
 import io
 import os
+import sys
 from typing import Any
 
 
@@ -69,6 +70,51 @@ def even_chunks(items: Sequence[Any], count: int) -> list[list[Any]]:
     return chunks
 
 
+class Captured:
+    """A worker callable with its stdout captured, so the parent can replay it.
+
+    A worker process inherits the operating system's stdout handle, not the parent's
+    `sys.stdout` object, so on a spawn platform nothing the CLI installs there is in force
+    inside a worker. Every per-item decode failure the shards report -- `! prop decode
+    failed`, `! <label> decode failed`, the material fallbacks in `formats/mdl.py` -- was
+    therefore written straight past the console filter and past the run log, unrecoverable
+    afterwards. Capturing here and replaying in the parent is what makes those diagnostics
+    reachable, and it groups each shard's output instead of interleaving four of them.
+
+    A class rather than a closure because the submitted callable has to pickle. Applied at
+    the pool boundary rather than inside each worker so it covers every one of them, and the
+    next one nobody remembers to wrap.
+    """
+
+    def __init__(self, function: Callable[..., Any]):
+        self.function = function
+
+    def __call__(self, *args: Any) -> tuple[Any, str]:
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer):
+                result = self.function(*args)
+        except BaseException as error:
+            # A shard that dies never returns, so what it printed on the way down would go
+            # with it -- and those lines are the ones that explain the death. They ride back
+            # on the exception instead; `BaseException.__reduce__` carries `__dict__`, so the
+            # attribute survives being pickled out of the worker.
+            error.captured_output = buffer.getvalue()
+            raise
+        return result, buffer.getvalue()
+
+
+def replay(text: str) -> None:
+    """Write a worker's captured output to the parent's stdout, where the log and filter are.
+
+    A worker that ended mid-line would otherwise glue its last line onto the parent's next
+    one, so a missing final newline is supplied here."""
+
+    if not text:
+        return
+    sys.stdout.write(text if text.endswith("\n") else text + "\n")
+
+
 def map_chunks(
     function: Callable[[list[Any]], Any],
     items: Iterable[Any],
@@ -96,10 +142,23 @@ def map_chunks(
 
     total = sum(len(chunk) for chunk in chunks)
     print(f"  {label}: {total} item(s) across {len(chunks)} worker(s)", flush=True)
+    # Replayed through the parent's `sys.stdout`, which is where the console filter and the
+    # run log are. Without this the inline path above and the pooled path here disagree about
+    # whether a shard's diagnostics exist at all, purely on the job count. Consumed lazily so
+    # a shard reports the moment it lands rather than after the slowest one -- and so a shard
+    # that raises does not take the completed shards' output down with it.
+    results = []
     with ProcessPoolExecutor(
         max_workers=len(chunks), initializer=initializer, initargs=initargs
     ) as pool:
-        return list(pool.map(function, chunks))
+        try:
+            for result, captured in pool.map(Captured(function), chunks):
+                replay(captured)
+                results.append(result)
+        except BaseException as error:
+            replay(getattr(error, "captured_output", ""))
+            raise
+    return results
 
 
 #: Loaded once per worker process. ``[None]`` is a real answer -- `load_anorms` warns and the

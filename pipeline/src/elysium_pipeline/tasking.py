@@ -268,8 +268,18 @@ class TaskProgress:
 
     def _console(self, line: str) -> None:
         self._clear_status()
-        self._stdout.write(line + "\n")
-        self._stdout.flush()
+        # Everything reaching here has already passed this class's own filter: the `!` marker,
+        # `_WARNING_LIMIT`, the failure tail, the closing tally. When the CLI is above us its
+        # stdout is a filter too, tuned for raw decoder chatter, and running these lines
+        # through it a second time drops all of them -- including a failed task's output tail,
+        # the one thing a failure has to say. `write_signal` is the CLI's "already curated"
+        # door; found by name so this module keeps knowing nothing about that one.
+        write_signal = getattr(self._stdout, "write_signal", None)
+        if write_signal is not None:
+            write_signal(line)
+        else:
+            self._stdout.write(line + "\n")
+            self._stdout.flush()
         self._draw_status()
 
 

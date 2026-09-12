@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from contextlib import nullcontext
-from dataclasses import dataclass
+from collections import Counter, deque
+from contextlib import contextmanager, nullcontext, redirect_stdout
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -33,6 +35,10 @@ from elysium_pipeline.workspace_lock import WorkspaceLease, assert_project_idle
 
 
 console = Console()
+#: Where prose goes when stdout is reserved for a machine. `--json` promises that stdout
+#: holds one JSON object and nothing else, so every progress line, child echo and error
+#: has to leave by the other door.
+err_console = Console(stderr=True)
 PASSTHROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
 app = typer.Typer(
     name="elysium",
@@ -69,6 +75,18 @@ class CliState:
     game: Path | None
     work: Path | None
     ue: Path | None
+    verbose: bool = False
+    #: Set by the commands that offer `--json`, read by `_execute`, which owns the envelope.
+    json_output: bool = False
+    #: What a command wants inside that envelope. `_summary` fills it while printing the
+    #: same facts as prose, so the two views cannot describe different runs.
+    payload: dict[str, Any] = field(default_factory=dict)
+    #: Set by a command whose `--json` product is a document rather than a run status, so
+    #: `_execute` keeps its hands off stdout instead of appending a second object.
+    json_emitted: bool = False
+    #: Writes one line into this run's log. Set by `_execute` while the handle is open, so a
+    #: command's own verdict lands in the record as well as on the console.
+    log_sink: Callable[[str], None] | None = None
 
     def resolve(
         self,
@@ -101,28 +119,72 @@ def root(
     ue: Path | None = typer.Option(
         None, "--ue", help="Unreal Engine 5.8 installation root."
     ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v",
+        help="Echo every child process line instead of the filtered summary.",
+    ),
 ) -> None:
-    ctx.obj = CliState(game=game, work=work, ue=ue)
+    # `--verbose` is a root option rather than one on each command for two reasons: there are
+    # around a hundred commands, and many of them carry `PASSTHROUGH`, which would forward a
+    # trailing `--verbose` into the Unreal command line instead of consuming it here. The
+    # environment variable is the form a wrapper script or an agent harness can set once.
+    ctx.obj = CliState(
+        game=game,
+        work=work,
+        ue=ue,
+        verbose=verbose or os.environ.get("ELYSIUM_VERBOSE", "").strip().lower()
+        not in ("", "0", "false", "no", "off"),
+    )
+
+
+def _names_verbose(ctx: typer.Context) -> bool:
+    """Whether a verbosity flag was typed after the subcommand, wherever it landed."""
+
+    candidates: list[str] = list(getattr(ctx, "args", ()) or ())
+    for value in (getattr(ctx, "params", None) or {}).values():
+        if isinstance(value, str):
+            candidates.append(value)
+        elif isinstance(value, (list, tuple)):
+            candidates.extend(item for item in value if isinstance(item, str))
+    return bool({"--verbose", "-v"} & set(candidates))
 
 
 def _state(ctx: typer.Context) -> CliState:
     if not isinstance(ctx.obj, CliState):
         raise RuntimeError("CLI state was not initialized")
+    # `--verbose` is a root option, and most commands forward what they do not recognise to
+    # Unreal. Typed after the subcommand it silently becomes a child argument, so the console
+    # would keep advertising an escape hatch that did nothing. Two places have to be checked:
+    # commands with `PASSTHROUGH` collect it in `ctx.args`, while a command whose signature
+    # ends in a variadic `Argument` -- `run play <map> <extra...>` -- swallows it as a
+    # positional instead. A command with neither has already had it rejected by click.
+    if not ctx.obj.verbose and _names_verbose(ctx):
+        raise typer.BadParameter(
+            "--verbose is a root option: write `elysium --verbose <command> ...`, "
+            "not `elysium <command> --verbose`"
+        )
     return ctx.obj
 
 
-#: What an export/verify command's child processes may say on the console. Editor
-#: commandlets stream thousands of engine lines; the run log keeps every one, the
-#: console keeps the signal -- our own script output (LogPython) and any engine
-#: warning or error.
+#: What a command's child processes may say on the console. Editor commandlets stream
+#: thousands of engine lines; the run log keeps every one, the console keeps the signal --
+#: our own script output (LogPython) and any warning or error.
+#:
+#: Two vocabularies, because two kinds of child. The engine writes `Category: Severity:`.
+#: `build` runs a *compiler*, whose diagnostics look nothing like that: MSVC writes
+#: `foo.cpp(95,28): error C2259:`, the linker writes `LINK : fatal error LNK1181:`, and
+#: clang writes `foo.cpp:95:28: error:` -- all lowercase, none carrying a log category. A
+#: filter that knows only the engine's shape shows nothing at all for a failed build.
 _CHILD_SIGNAL = re.compile(
-    r"LogPython|Fatal error|Assertion failed|: Error:|: Warning:|^Error:")
+    r"LogPython|Fatal error|Assertion failed|: Error:|: Warning:|^Error:"
+    r"|\): (?:error|warning|fatal error) |: (?:error|warning): |error LNK")
 
 #: ``_CHILD_SIGNAL``'s literal alternatives as plain substrings; ``^Error:``
 #: anchors to the line start, so ``startswith`` carries it below. Ordinary
 #: engine lines fail every substring test and never reach the regex.
 _CHILD_SIGNAL_LITERALS = (
-    "LogPython", "Fatal error", "Assertion failed", ": Error:", ": Warning:")
+    "LogPython", "Fatal error", "Assertion failed", ": Error:", ": Warning:",
+    "): error ", "): warning ", "): fatal error ", ": error: ", ": warning: ", "error LNK")
 
 
 def _child_signal(line: str) -> bool:
@@ -133,36 +195,266 @@ def _child_signal(line: str) -> bool:
     return _CHILD_SIGNAL.search(line) is not None
 
 
+#: The substrings that make a signal line an error rather than a warning, across both
+#: vocabularies. Severity decides who gets quoted when the console runs out of room, so a
+#: gap here costs an agent the one line it needed.
+_ERROR_MARKERS = ("Fatal error", "Assertion failed", ": Error:", "): error ",
+                  "): fatal error ", ": error: ", "error LNK")
+_WARNING_MARKERS = (": Warning:", "): warning ", ": warning: ")
+
+
+def _echo_severity(line: str) -> str:
+    """`error`, `warning` or `info` -- what must not queue behind what."""
+
+    text = line.lstrip()
+    if line.startswith("Error:") or text[:6].lower().startswith("error:"):
+        return "error"
+    if any(marker in line for marker in _ERROR_MARKERS):
+        return "error"
+    if any(marker in line for marker in _WARNING_MARKERS):
+        return "warning"
+    if text.startswith("!") or text[:8].lower().startswith("warning:"):
+        return "warning"
+    return "info"
+
+
+def _local_signal(line: str) -> bool:
+    """Whether a line the pipeline printed in this process is console signal.
+
+    The offline decoders speak a different vocabulary from an Unreal child: no log category,
+    no severity token. They mark a warning or a failure by putting `!` in front of the line,
+    and a per-item warning is spelled `warning: <item>: <detail>`. Everything else they print
+    is progress -- one row per exported unit, four thousand of them for `textures-glb` --
+    which the status line counts instead of quoting.
+    """
+
+    text = line.lstrip()[:10].lower()
+    # `warning -` is the spelling `unreal.prune_test_reports` and `process.py`'s mirror
+    # failure use; `warning:` is the exporters'. Both are the same statement.
+    return text.startswith(("!", "warning:", "error:", "warning -", "error -"))
+
+
+def _console_signal(line: str) -> bool:
+    """Either vocabulary. One command can produce both: `export map` decodes in this process
+    and launches an editor, and both halves reach the same echo."""
+
+    return _child_signal(line) or _local_signal(line)
+
+
+#: How many distinct signal lines the console quotes before it stops quoting and starts
+#: counting. Past this the run is better served by a category tally and the log path than
+#: by the four hundredth variation of one warning.
+_ECHO_DISTINCT_LIMIT = 40
+
+#: Errors quote against their own budget rather than competing with warnings for the one
+#: above. Measured on this project's failing test runs, the first `: Error:` line ranks
+#: 101st to 192nd among distinct signal lines -- behind a wall of `LogElysiumWeapon` and
+#: `LogElysiumNpcEnt` warnings -- so a single shared budget shows a failing run everything
+#: except why it failed.
+_ECHO_ERROR_LIMIT = 20
+
+#: How many categories the tally names before it defers to the log.
+_ECHO_CATEGORY_LIMIT = 8
+
+#: How many signal lines a failed command quotes back as evidence. A lean console must not
+#: mean a blind failure: without this a failing build reports only its exit code.
+_ECHO_EVIDENCE_LINES = 30
+
+#: The `[2026.09.11-23.35.41:233][555]` stamp Unreal writes in front of every log line.
+_LOG_STAMP = re.compile(r"^\[[^\]]*\]\[[ 0-9]*\]")
+
+#: Under automation Unreal emits each warning twice: once from the category that raised it,
+#: and once mirrored through `LogAutomationController` with the severity moved to the front
+#: and a `[log]` marker appended. These three patterns rewrite both spellings to the same
+#: text, so the mirror is recognised as a repeat of its own original rather than doubling
+#: the console. Measured on a 19,098-line run: 1,795 warnings, 501 of them distinct.
+#: The mirror is rewritten into the shape of its own original -- category first, then the
+#: severity it was raised at -- rather than having the severity deleted. Deleting it would
+#: make `LogFoo: Warning: nav mesh missing` and `LogFoo: Error: nav mesh missing` one key,
+#: so whichever arrived second would be silently counted as a repeat of the first and never
+#: printed. An escalation is exactly the event this console must not lose.
+_AUTOMATION_MIRROR = re.compile(r"^LogAutomationController: (Warning|Error|Display): (\w+): ")
+_MIRROR_MARKER = re.compile(r"\s*\[(?:log|warning|error|display)\]\s*$", re.IGNORECASE)
+_SEVERITY = re.compile(r"^(\w+): (Warning|Error|Display): ")
+
+#: `LogPython` is in the signal vocabulary to carry our own editor scripts, which speak
+#: through `unreal.log()` and come out as `LogPython: [import-characters] ...`. The engine
+#: uses the same category at Display verbosity to narrate every plugin's `init_unreal.py`,
+#: which is boot plumbing no caller asked about -- around thirty lines in front of every
+#: editor run, enough to push the real failure out of a bounded evidence tail. Anything
+#: Python actually raises arrives as `LogPython: Error:`/`Warning:` and is caught by those
+#: alternatives instead, so nothing actionable is lost here.
+#: Matched as a substring against the raw line: the timestamp precedes it, and `_echo_key`
+#: has already dropped the `Display:` token by the time a key exists.
+_ECHO_BOILERPLATE = "LogPython: Display: "
+
+
+def _echo_key(line: str) -> str:
+    """What makes two child lines the same event: no stamp, no severity, no mirror."""
+
+    text = _LOG_STAMP.sub("", line).strip()
+    text = _AUTOMATION_MIRROR.sub(r"\2: \1: ", text)
+    text = _MIRROR_MARKER.sub("", text)
+    return _SEVERITY.sub(r"\1|\2: ", text).strip()
+
+
+def _echo_category(key: str) -> str:
+    """The label a normalised line is tallied under once the console stops quoting.
+
+    An Unreal line names its own category and is grouped by it. An offline warning does not:
+    it is spelled `warning: <item>: <detail>`, so splitting on the first colon would file all
+    sixty thousand of `fonts-glb`'s under one label called `warning`. Those are grouped by
+    the opening clause of the detail instead, which is the part that repeats across items.
+
+    This labels the tally only. The dedupe key is untouched, so two warnings that differ
+    anywhere are still counted, and printed, as two.
+    """
+
+    head, _, rest = key.partition(":")
+    # `_echo_key` keeps the severity as `Category|Severity`; the tally groups by category.
+    head = head.split("|", 1)[0]
+    if head.strip().lower() in ("warning", "error") and rest:
+        _item, _, detail = rest.strip().partition(":")
+        clause = " ".join(detail.partition(":")[0].split()[:6])[:40].strip()
+        if clause:
+            return f"{head.strip().lower()}: {clause}"
+    return head if head and len(head) <= 40 else "(uncategorised)"
+
+
 class _ChildEcho:
-    """The filtered console echo for export/verify children, with a live status.
+    """The filtered console echo for a child process, with a live status.
 
-    Signal lines (our scripts' LogPython output, engine warnings/errors) print
-    normally. Everything else feeds a single rewritten status line -- elapsed
-    time, how many log lines have streamed, and the most recent one -- redrawn
-    by a ticker so a quiet editor phase never looks stalled. Terminal only;
-    redirected output gets the signal lines and nothing else."""
+    Signal lines (our scripts' LogPython output, engine warnings/errors) print, but only
+    the first time each one is said: a repeat and its `LogAutomationController` mirror both
+    fold into a count against the line already shown. Past `_ECHO_DISTINCT_LIMIT` distinct
+    lines the echo stops quoting altogether and keeps a per-category tally instead.
+    Everything else feeds a single rewritten status line -- elapsed time, how many log lines
+    have streamed, and the most recent one -- redrawn by a ticker so a quiet editor phase
+    never looks stalled. Terminal only; redirected output gets the surviving lines and
+    nothing else.
 
-    def __init__(self):
-        self._tty = bool(getattr(sys.stdout, "isatty", lambda: False)())
+    Closing prints what was withheld and how to get it back. That footer is the contract:
+    the run log on disk holds every line, so the console can afford to be this quiet only
+    for as long as it says out loud that it is being quiet."""
+
+    def __init__(self, out: Console | None = None, label: str = "working"):
+        self._out = out or console
+        # The status line used to say "editor" for everything. It now runs for `deps sync`
+        # and the offline GLB seams too, which never launch one.
+        self._label = label
+        self._stream = self._out.file
+        self._tty = bool(getattr(self._stream, "isatty", lambda: False)())
         self._lock = threading.Lock()
         self._started = time.monotonic()
         self._count = 0
         self._last = ""
         self._status_len = 0
         self._stop = threading.Event()
+        self._seen: Counter[str] = Counter()
+        self._categories: Counter[str] = Counter()
+        self._distinct_categories: Counter[str] = Counter()
+        self._printed = 0
+        self._printed_errors = 0
+        self._withheld = 0
+        self._repeats = 0
+        self._warnings = 0
+        self._errors = 0
+        # First occurrences only: a crash buried under four hundred repeats of one warning
+        # is still reachable, which it would not be in a tail of raw lines. Errors keep a
+        # second deque of their own, because a run with two hundred distinct warnings would
+        # otherwise evict the failure out of a shared one before the command even ends.
+        self._evidence: deque[str] = deque(maxlen=_ECHO_EVIDENCE_LINES)
+        self._error_evidence: deque[str] = deque(maxlen=_ECHO_EVIDENCE_LINES)
+        #: Already-curated lines, kept head-first. See `passthrough`.
+        self._curated: list[str] = []
         if self._tty:
             threading.Thread(target=self._tick, daemon=True).start()
 
     def __call__(self, line: str) -> None:
-        if _child_signal(line):
+        if _ECHO_BOILERPLATE in line or not _console_signal(line):
             with self._lock:
-                self._clear()
-                console.print(line, markup=False)
-                self._draw()
+                self._count += 1
+                self._last = line.strip()
             return
+        key = _echo_key(line)
+        severity = _echo_severity(line)
         with self._lock:
-            self._count += 1
-            self._last = line.strip()
+            self._categories[_echo_category(key)] += 1
+            if self._seen[key]:
+                self._seen[key] += 1
+                self._repeats += 1
+                self._count += 1
+                return
+            self._seen[key] = 1
+            self._distinct_categories[_echo_category(key)] += 1
+            # Counted per distinct event, not per line: the automation mirror says every
+            # warning twice, and a caller branching on this number wants events.
+            if severity == "error":
+                self._errors += 1
+                self._error_evidence.append(line.strip())
+            else:
+                if severity == "warning":
+                    self._warnings += 1
+                self._evidence.append(line.strip())
+            if severity == "error":
+                exhausted = self._printed_errors >= _ECHO_ERROR_LIMIT
+            else:
+                exhausted = self._printed >= _ECHO_DISTINCT_LIMIT
+            if exhausted:
+                self._withheld += 1
+                self._count += 1
+                return
+            if severity == "error":
+                self._printed_errors += 1
+            else:
+                self._printed += 1
+            self._clear()
+            self._out.print(line, markup=False, soft_wrap=True)
+            self._draw()
+
+    def passthrough(self, line: str) -> None:
+        """Print a line whose producer has already decided it is worth showing.
+
+        Not classified and not counted as suppressed: it was never a candidate for
+        suppression. It does become evidence, because the thing that sends curated lines
+        here -- the export task graph -- sends a failed task's output tail among them.
+
+        Kept head-first, unlike the other two stores. A curated burst leads with what
+        identifies it: `TaskProgress` emits `[7/120] la_hub_1  FAILED  12.4s` and then
+        thirty lines of body, so a tail-biased store drops the only line naming the task
+        that failed."""
+
+        with self._lock:
+            if len(self._curated) < _ECHO_EVIDENCE_LINES:
+                self._curated.append(line.strip())
+            self._clear()
+            self._out.print(line, markup=False, soft_wrap=True)
+            self._draw()
+
+    def counts(self) -> dict[str, int]:
+        """What the echo saw, for a `--json` envelope."""
+
+        with self._lock:
+            return {
+                "warnings": self._warnings,
+                "errors": self._errors,
+                "suppressed_lines": self._count,
+            }
+
+    def evidence(self) -> list[str]:
+        """The distinct signal lines quoted back when the command failed.
+
+        Errors first and in full: they are why the command failed. Curated lines next, since
+        a producer that filtered its own output has already made this judgement. Ordinary
+        warnings fill whatever room is left, oldest dropped, so a run with one error and
+        three hundred warnings still reports the error."""
+
+        with self._lock:
+            picked = list(self._error_evidence) + self._curated
+            room = max(0, _ECHO_EVIDENCE_LINES - len(picked))
+            if room:
+                picked += list(self._evidence)[-room:]
+            return picked[:_ECHO_EVIDENCE_LINES]
 
     def _tick(self) -> None:
         while not self._stop.wait(1.0):
@@ -173,27 +465,219 @@ class _ChildEcho:
         if not self._tty:
             return
         minutes, seconds = divmod(int(time.monotonic() - self._started), 60)
-        text = f"\u00bb editor {minutes:02d}:{seconds:02d} \u00b7 {self._count} log lines"
+        text = f"\u00bb {self._label} {minutes:02d}:{seconds:02d} \u00b7 {self._count} log lines"
         if self._last:
             text += " \u00b7 " + self._last
         width = shutil.get_terminal_size(fallback=(120, 25)).columns - 1
         text = text[:width]
         pad = max(0, self._status_len - len(text))
-        sys.stdout.write("\r" + text + " " * pad + "\r" + text)
-        sys.stdout.flush()
+        self._stream.write("\r" + text + " " * pad + "\r" + text)
+        self._stream.flush()
         self._status_len = len(text)
 
     def _clear(self) -> None:
         if self._status_len:
-            sys.stdout.write("\r" + " " * self._status_len + "\r")
-            sys.stdout.flush()
+            self._stream.write("\r" + " " * self._status_len + "\r")
+            self._stream.flush()
             self._status_len = 0
+
+    def _footer(self) -> None:
+        """Say what was withheld. Silent truncation is worse than none."""
+
+        if self._withheld:
+            ranked = self._categories.most_common(_ECHO_CATEGORY_LIMIT)
+            for category, total in ranked:
+                distinct = self._distinct_categories[category]
+                self._out.print(
+                    f"[dim]!  {category}: {total} line(s), {distinct} distinct[/dim]"
+                )
+            remaining = len(self._categories) - len(ranked)
+            if remaining > 0:
+                self._out.print(f"[dim]  ... and {remaining} more[/dim]")
+        parts = []
+        if self._count:
+            parts.append(f"{self._count:,} lines suppressed")
+        if self._repeats:
+            parts.append(f"{self._repeats:,} repeats collapsed")
+        if self._withheld:
+            parts.append(f"{self._withheld:,} distinct not shown")
+        if parts:
+            self._out.print(
+                "[dim]\u2026 " + " \u00b7 ".join(parts) + " \u00b7 --verbose for all[/dim]"
+            )
 
     def close(self) -> None:
         self._stop.set()
         with self._lock:
             self._clear()
             self._tty = False
+            self._footer()
+
+
+class _StdoutTee(io.TextIOBase):
+    """`sys.stdout` for the length of one command's in-process work.
+
+    The GLB seams and `export_manager` report with bare `print()` -- one row per unit, some
+    thousands of rows for a corpus seam -- and because they run in this process rather than
+    a child, that output reached neither the run log nor the filter. It went to the terminal
+    and was then gone: a warning printed during `export_v2 textures-glb` could not be
+    recovered afterwards at any verbosity. Teeing here puts those lines on the same footing
+    as a child's: every one to the log, the signal to the console.
+
+    Bare `print()` arrives in fragments -- the text, then the newline as its own call -- so
+    lines are reassembled here before either destination sees them."""
+
+    def __init__(self, log, sink: Callable[[str], None],
+                 signal_sink: Callable[[str], None] | None = None):
+        self._log = log
+        self._sink = sink
+        self._signal_sink = signal_sink or sink
+        self._pending = ""
+
+    def write_signal(self, line: str) -> None:
+        """A line whose producer has already decided it is worth showing.
+
+        Logged and printed without classification. This filter is tuned for raw decoder and
+        engine chatter; a nested reporter that has already capped, deduped and elided its own
+        output -- `tasking.TaskProgress` is the one -- must not be filtered a second time
+        against a vocabulary meant for something else. Duck-typed on purpose: `tasking` finds
+        this with `getattr` and never imports this module."""
+
+        if self._log is not None:
+            self._log.write(line + "\n")
+        self._signal_sink(line)
+
+    @property
+    def encoding(self) -> str:
+        return "utf-8"
+
+    def writable(self) -> bool:
+        return True
+
+    def isatty(self) -> bool:
+        # Also load-bearing for `tasking.TaskProgress`, which starts its own status ticker
+        # when its stdout is a terminal. Two tickers rewriting one line would fight.
+        return False
+
+    def fileno(self) -> int:
+        raise io.UnsupportedOperation(
+            "the console tee is line-oriented and owns no file descriptor; a child that "
+            "needs the real stdout should be run through ProcessRunner, or the whole "
+            "command through --verbose"
+        )
+
+    @property
+    def buffer(self):
+        raise io.UnsupportedOperation(
+            "the console tee is text-only; a binary write would bypass line reassembly "
+            "and interleave inside another line"
+        )
+
+    def write(self, text: str) -> int:
+        if not text:
+            return 0
+        self._pending += text
+        while True:
+            newline = self._pending.find("\n")
+            if newline < 0:
+                break
+            line, self._pending = self._pending[:newline], self._pending[newline + 1:]
+            self._emit(line)
+        return len(text)
+
+    def flush(self) -> None:
+        """Flushes the log, not the pending line.
+
+        `print(..., flush=True)` must not force a partial line out ahead of its newline, or a
+        status line lands mid-sentence. The log is a different matter: an offline export runs
+        no child process, so `ProcessRunner`'s interval flush never fires and without this
+        nothing reaches disk until the handle closes."""
+
+        if self._log is not None:
+            self._log.flush()
+
+    def _emit(self, line: str) -> None:
+        line = line.rstrip("\r")
+        if self._log is not None:
+            self._log.write(line + "\n")
+        self._sink(line)
+
+    def finish(self) -> None:
+        """Release a trailing line that never got its newline."""
+
+        if self._pending:
+            pending, self._pending = self._pending, ""
+            self._emit(pending)
+
+
+@contextmanager
+def _teed_stdout(log, sink: Callable[[str], None],
+                 signal_sink: Callable[[str], None] | None = None):
+    """Route bare `print()` through the run log and the filter for the length of an action."""
+
+    tee = _StdoutTee(log, sink, signal_sink)
+    real = sys.stdout
+    saved = console._file
+    # Rich resolves `sys.stdout` at write time, so without this the command's own summary
+    # would be swallowed by the tee along with the decoder chatter it is summarising.
+    # Pinning the console to the real stream keeps the verdict where a caller can read it.
+    console._file = real
+    try:
+        with redirect_stdout(tee):
+            yield
+    finally:
+        console._file = saved
+        tee.finish()
+
+
+def _summary(state: CliState, human: str, **fields: Any) -> None:
+    """One summary line for a person and the same facts as JSON fields.
+
+    Both views come from one call site on purpose: a `--json` payload assembled separately
+    from the prose is a payload that eventually disagrees with it."""
+
+    state.payload.update(fields)
+    if state.log_sink is not None:
+        # The console pin keeps this line out of the filter; without this it would also stay
+        # out of the log, and a run log missing "610 of 610 test(s) executed" is a log
+        # missing the answer.
+        state.log_sink(human)
+    if not state.json_output:
+        console.print(human)
+
+
+def _emit_json(
+    report: RunReport,
+    payload: dict[str, Any],
+    log_path: Path | None,
+    report_path: Path | None,
+    evidence: list[str],
+    detail: str = "",
+) -> None:
+    """The one object a `--json` run writes to stdout.
+
+    The envelope is emitted here rather than by each command so that a failure is structured
+    too -- the shape an agent branches on has to exist on the path where something went
+    wrong, which is the whole reason it asked for JSON."""
+
+    envelope: dict[str, Any] = {
+        "command": report.command,
+        "status": report.status,
+        "exit_code": report.exit_code,
+        "duration_seconds": round(report.metadata.get("duration_seconds", 0.0), 3),
+        "log": str(log_path) if log_path else None,
+        "report": str(report_path) if report_path else None,
+    }
+    if detail:
+        envelope["detail"] = detail
+    if evidence:
+        envelope["evidence"] = evidence
+    # `setdefault`, not `update`: `status`, `exit_code` and the artifact paths are what a
+    # caller branches on, and one command passing `status=` to `_summary` must not be able to
+    # rewrite them from underneath it.
+    for key, value in payload.items():
+        envelope.setdefault(key, value)
+    typer.echo(json.dumps(envelope, indent=2, sort_keys=True, default=str))
 
 
 def _execute(
@@ -205,16 +689,26 @@ def _execute(
     require_game: bool = False,
     require_work: bool = True,
     require_ue: bool = False,
-    quiet_report: bool = False,
     activity: bool = False,
 ) -> Any:
     report = RunReport(command=name, arguments=sys.argv[1:])
+    state.payload.clear()
+    # In JSON mode stdout belongs to the envelope alone, so the child echo, the progress
+    # lines and the error all move to stderr rather than being silenced -- a person
+    # debugging a `--json` run still needs to see what happened.
+    out = err_console if state.json_output else console
     config: ProjectConfig | None = None
     log_handle = None
+    log_path: Path | None = None
     child_echo: _ChildEcho | None = None
     report_path: Path | None = None
     started = datetime.now(timezone.utc).isoformat()
     before = time.monotonic()
+    result: Any = None
+    failed = False
+    code = 0
+    detail = ""
+    failure_output = ""
     try:
         config = state.resolve(
             require_game=require_game,
@@ -223,24 +717,31 @@ def _execute(
         )
         if config.log_root is not None:
             config.log_root.mkdir(parents=True, exist_ok=True)
-            stamp = datetime.fromisoformat(report.started_at).strftime(
-                "%Y%m%dT%H%M%S.%fZ"
-            )
-            slug = name.replace(" ", "-").replace("/", "-")
-            log_handle = (config.log_root / f"{stamp}-{slug}.log").open(
-                "w", encoding="utf-8", newline="\n"
-            )
+            log_path = config.log_root / f"{report.artifact_stem()}.log"
+            log_handle = log_path.open("w", encoding="utf-8", newline="\n")
+            report.metadata["log"] = str(log_path)
+            state.log_sink = lambda text, handle=log_handle: handle.write(text + "\n")
+        # Every child gets the filtered echo, not just export and verify: the run log keeps
+        # every line, so the console owes only the signal. `--verbose` puts the raw stream
+        # back. One sink serves both the child stream and this process's own `print()`, so a
+        # command that decodes here and launches an editor reports through one filter.
+        sink: Callable[[str], None] | None = None
+        signal_sink: Callable[[str], None] | None = None
+        # Also when there is no log to write: `--json` promises stdout holds one object, and
+        # without the tee an action's bare `print()` lands in front of it. `doctor --repo-only`
+        # is exactly that shape -- it needs no work root, so it has no log root either.
+        if log_handle is not None or state.json_output:
+            if state.verbose:
+                sink = signal_sink = lambda line: out.print(
+                    line, markup=False, soft_wrap=True)
+            else:
+                child_echo = _ChildEcho(out, label=name.split(" ", 1)[0])
+                sink, signal_sink = child_echo, child_echo.passthrough
         runner = ProcessRunner(
             cwd=config.repo_root,
             environment=os.environ.copy(),
             log=log_handle,
-            output_sink=(
-                None
-                if log_handle is None
-                else (child_echo := _ChildEcho())
-                if name.split(" ", 1)[0] in {"export", "verify"}
-                else lambda line: console.print(line, markup=False)
-            ),
+            output_sink=sink,
         )
         lease = nullcontext()
         if activity:
@@ -252,7 +753,9 @@ def _execute(
                     config.repo_root,
                 )
         with lease:
-            result = action(config, runner)
+            with (nullcontext() if sink is None
+                  else _teed_stdout(log_handle, sink, signal_sink)):
+                result = action(config, runner)
         report.add_task(
             name,
             status="ok",
@@ -260,47 +763,94 @@ def _execute(
             duration_seconds=time.monotonic() - before,
         )
         report.finish()
-        if config.log_root is not None:
-            report_path = report.write(config.log_root)
-        if report_path and not quiet_report:
-            console.print(f"[dim]run report: {report_path}[/dim]")
-        return result
     except ConfigError as exc:
-        code = int(ExitCode.USAGE_OR_CONFIG)
-        detail = str(exc)
+        failed, code, detail = True, int(ExitCode.USAGE_OR_CONFIG), str(exc)
     except ProcessFailure as exc:
-        code = int(exc.category)
-        detail = str(exc)
+        failed, code, detail = True, int(exc.category), str(exc)
+        failure_output = exc.result.output
     except DependencyError as exc:
-        code = int(ExitCode.DEPENDENCY_OR_TOOLCHAIN)
-        detail = str(exc)
+        failed, code, detail = True, int(ExitCode.DEPENDENCY_OR_TOOLCHAIN), str(exc)
     except typer.Exit:
         raise
     except Exception as exc:
+        failed = True
         code = int(getattr(exc, "exit_code", category))
         detail = str(exc) or type(exc).__name__
     finally:
         if child_echo is not None:
             child_echo.close()
+        # Not every way out of that block is an exception this function handles: `typer.Exit`
+        # is re-raised just above, and `KeyboardInterrupt` and `SystemExit` are not
+        # `Exception` so they were never caught. All three leave without reaching the trailer
+        # below, which is what closes the log on every other path -- and a run log left open
+        # on Ctrl+C is a run log whose tail never reaches disk. Since the trailer cannot also
+        # have run, this closes it exactly once.
+        if sys.exc_info()[0] is not None:
+            state.log_sink = None
+            if log_handle is not None:
+                log_handle.close()
+
+    # `ProcessFailure` says only that the child exited non-zero. On its own that is not
+    # actionable, and it is all a filtered console would leave behind, so the last distinct
+    # signal lines come back with it as bounded evidence.
+    evidence: list[str] = []
+    if failed:
+        if child_echo is not None:
+            evidence = child_echo.evidence()
+        # Not `elif`: the echo now exists for every command, so an `elif` here would be dead
+        # code on the one path it was written for. When the filter's vocabulary does not
+        # cover a child -- a toolchain nobody has taught it yet -- the raw tail is what
+        # stands between a caller and an exit code with no explanation.
+        if not evidence and failure_output:
+            evidence = failure_output.splitlines()[-_ECHO_EVIDENCE_LINES:]
+        report.add_task(
+            name,
+            status="failed",
+            started_at=started,
+            duration_seconds=time.monotonic() - before,
+            detail=detail,
+        )
+        report.finish(exit_code=code)
+    if config is not None and config.log_root is not None:
+        try:
+            report_path = report.write(config.log_root)
+        except OSError as exc:
+            # The run report is a convenience. The verdict below is not, so an unwritable log
+            # root must not replace a real answer with a traceback.
+            out.print(f"[dim]run report unavailable: {exc}[/dim]", soft_wrap=True)
+    if child_echo is not None:
+        counts = child_echo.counts()
+        # A command that spawned nothing, or a child that said nothing, adds no key: an
+        # envelope of zeroes is noise an agent has to read past on every run.
+        if any(counts.values()):
+            state.payload.setdefault("child", counts)
+
+    # The log stays open past the echo so the verdict can go into it. A log whose last word
+    # is a truncated warning, with the failure only on a console that has since scrolled, is
+    # not a record of the run.
+    try:
+        if failed:
+            if state.log_sink is not None:
+                state.log_sink(f"error: {detail}")
+                for line in evidence:
+                    state.log_sink("  " + line)
+            out.print("[red]error:[/red] ", end="")
+            out.print(detail, markup=False, soft_wrap=True)
+            for line in evidence:
+                out.print("  " + line, markup=False, soft_wrap=True)
+        if report_path:
+            out.print(f"[dim]run report: {report_path}[/dim]", soft_wrap=True)
+        if log_path:
+            out.print(f"[dim]log: {log_path}[/dim]", soft_wrap=True)
+    finally:
+        state.log_sink = None
         if log_handle is not None:
             log_handle.close()
-
-    report.add_task(
-        name,
-        status="failed",
-        started_at=started,
-        duration_seconds=time.monotonic() - before,
-        detail=detail,
-    )
-    report.finish(exit_code=code)
-    if config is not None and config.log_root is not None:
-        report_path = report.write(config.log_root)
-    if not quiet_report:
-        console.print("[red]error:[/red] ", end="")
-        console.print(detail, markup=False)
-    if report_path and not quiet_report:
-        console.print(f"[dim]run report: {report_path}[/dim]")
-    raise typer.Exit(code)
+    if state.json_output and not state.json_emitted:
+        _emit_json(report, state.payload, log_path, report_path, evidence, detail)
+    if failed:
+        raise typer.Exit(code)
+    return result
 
 
 def _shared_cache_root(config: ProjectConfig) -> Path | None:
@@ -440,6 +990,9 @@ def doctor(
     json_output: bool = typer.Option(False, "--json"),
     history: bool = typer.Option(False, "--history"),
 ) -> None:
+    state = _state(ctx)
+    state.json_output = json_output
+
     def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
         policy = _load_policy(config)
         errors, warnings = policy.audit(history=history, repo_only=repo_only)
@@ -450,15 +1003,10 @@ def doctor(
             sentinel_warning = _corpus_index_sentinel_report(config)
             if sentinel_warning is not None:
                 warnings = [*warnings, sentinel_warning]
-        if json_output:
-            typer.echo(
-                json.dumps(
-                    {"ok": not errors, "errors": errors, "warnings": warnings},
-                    indent=2,
-                    sort_keys=True,
-                )
-            )
-        else:
+        state.payload.update(
+            {"ok": not errors, "errors": errors, "warnings": warnings}
+        )
+        if not json_output:
             for warning in warnings:
                 console.print(f"[yellow]warning:[/yellow] {warning}")
             for error in errors:
@@ -476,7 +1024,6 @@ def doctor(
         ExitCode.VALIDATION,
         action,
         require_work=not repo_only,
-        quiet_report=json_output,
     )
 
 
@@ -489,6 +1036,7 @@ def build_command(
     rebuild: bool = typer.Option(False, "--rebuild"),
     clean: bool = typer.Option(False, "--clean"),
     analyze: bool = typer.Option(False, "--analyze"),
+    json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     selected = [
         name for name, enabled in (
@@ -500,14 +1048,23 @@ def build_command(
     if len(selected) > 1:
         raise typer.BadParameter("--rebuild, --clean, and --analyze are mutually exclusive")
     mode = selected[0] if selected else ""
+    state = _state(ctx)
+    state.json_output = json_output
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
 
         unreal.build(config, runner, mode, ctx.args)
+        # UnrealBuildTool says nothing a caller can branch on once its output is filtered,
+        # so the command states its own verdict.
+        _summary(
+            state,
+            f"build ok: ElysiumUEEditor Win64 Development ({mode or 'incremental'})",
+            mode=mode or "incremental",
+        )
 
     _execute(
-        _state(ctx),
+        state,
         "build",
         ExitCode.BUILD,
         action,
@@ -557,6 +1114,8 @@ def _export_profile_command(
     particles: bool,
     verify: bool,
 ) -> None:
+    state = _state(ctx)
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
 
@@ -569,11 +1128,17 @@ def _export_profile_command(
             jobs=jobs,
             particles=particles,
             verify=verify,
+            per_task=state.verbose,
         )
-        console.print(f"{profile} export complete: {len(maps)} map(s)")
+        _summary(
+            state,
+            f"{profile} export complete: {len(maps)} map(s)",
+            profile=profile,
+            maps=len(maps),
+        )
 
     _execute(
-        _state(ctx),
+        state,
         f"export {profile}",
         ExitCode.OFFLINE_EXPORT,
         action,
@@ -674,7 +1239,10 @@ def verify_characters(
     native: bool = typer.Option(False, "--native", help="Read saved native products (the default when no comparison mode is selected)."),
     fidelity: bool = typer.Option(False, "--fidelity", help="Also compare full geometry snapshots and retained animation samples; deferred fidelity gate."),
     geometry_only: bool = typer.Option(False, "--geometry-only", help="Compare existing hashed native geometry snapshots without launching Unreal."),
+    json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    state = _state(ctx)
+    state.json_output = json_output
     native = native or (legacy_root is None and not geometry_only)
     if fidelity and not native:
         raise typer.BadParameter("--fidelity requires native verification")
@@ -692,7 +1260,14 @@ def verify_characters(
 
             root = stage_root or staging_root(config.work_root)
             geometry = verify_geometry_stage(root, config.export_v2_root)
-            console.print(f"captured geometry: {geometry['counts'].get('meshesCompared', 0)} meshes; {root / 'native_geometry_report.json'}")
+            _summary(
+                state,
+                f"captured geometry: {geometry['counts'].get('meshesCompared', 0)} meshes; {root / 'native_geometry_report.json'}",
+                mode="geometry-only",
+                meshes=geometry["counts"].get("meshesCompared", 0),
+                passed=bool(geometry["passed"]),
+                geometry_report=str(root / "native_geometry_report.json"),
+            )
             if not geometry["passed"]:
                 raise RuntimeError("captured geometry verification failed; see native_geometry_report.json")
             return
@@ -719,9 +1294,18 @@ def verify_characters(
                 geometry = verify_geometry_stage(root, config.export_v2_root)
                 if not geometry["passed"]:
                     raise RuntimeError("native character geometry verification failed; see native_geometry_report.json")
-            console.print(f"native core products: {report['meshes']} meshes, {report['skeletons']} skeletons, "
-                          f"{report['clips']} clips, {report['blendSpaces']} blend spaces; "
-                          f"fidelity comparison {'requested' if fidelity else 'deferred'}")
+            _summary(
+                state,
+                f"native core products: {report['meshes']} meshes, {report['skeletons']} skeletons, "
+                f"{report['clips']} clips, {report['blendSpaces']} blend spaces; "
+                f"fidelity comparison {'requested' if fidelity else 'deferred'}",
+                mode="native",
+                meshes=report["meshes"],
+                skeletons=report["skeletons"],
+                clips=report["clips"],
+                blend_spaces=report["blendSpaces"],
+                fidelity=bool(fidelity),
+            )
             return
         if legacy_root is not None:
             from elysium_pipeline.validation.skeletal_diff import compare_trees, compare_staged_payloads
@@ -734,13 +1318,21 @@ def verify_characters(
             report_path = config.work_root / "import" / "characters" / "product_diff.json"
             report_path.parent.mkdir(parents=True, exist_ok=True)
             report_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
-            console.print(f"skeletal products: {result['compared']} compared, {result['failed']} failed; {report_path}")
+            _summary(
+                state,
+                f"skeletal products: {result['compared']} compared, {result['failed']} failed; {report_path}",
+                mode="legacy",
+                compared=result["compared"],
+                failed=result["failed"],
+                passed=bool(result["passed"]),
+                diff_report=str(report_path),
+            )
             if not result["passed"]:
                 raise RuntimeError("skeletal product comparison failed")
             return
 
     _execute(
-        _state(ctx),
+        state,
         "verify characters",
         ExitCode.OFFLINE_EXPORT,
         action,
@@ -752,8 +1344,14 @@ def verify_characters(
 
 
 @verify_app.command("model-catalogues")
-def verify_model_catalogues(ctx: typer.Context) -> None:
+def verify_model_catalogues(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
     """Verify saved merged model catalogues and references in a fresh editor."""
+    state = _state(ctx)
+    state.json_output = json_output
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
         from elysium_pipeline.importers.model_catalogues import staging_root
@@ -765,15 +1363,25 @@ def verify_model_catalogues(ctx: typer.Context) -> None:
         report = _read_json(receipt)
         if not report or not report.get("complete") or report.get("failed"):
             raise RuntimeError("native model catalogue verification failed; see model_catalogues_verify_report.json")
-        console.print("model catalogues and references verified in a fresh editor")
+        _summary(
+            state,
+            "model catalogues and references verified in a fresh editor",
+            verified=True,
+        )
 
-    _execute(_state(ctx), "verify model-catalogues", ExitCode.UNREAL_OR_BAKE, action,
+    _execute(state, "verify model-catalogues", ExitCode.UNREAL_OR_BAKE, action,
              require_work=True, require_ue=True, activity=True)
 
 
 @verify_app.command("expression-tables")
-def verify_expression_tables(ctx: typer.Context) -> None:
+def verify_expression_tables(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
     """Reload every cooked expression table and compare all retained fields."""
+    state = _state(ctx)
+    state.json_output = json_output
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
         from elysium_pipeline.importers.expression_tables import staging_root
@@ -785,9 +1393,13 @@ def verify_expression_tables(ctx: typer.Context) -> None:
         report = _read_json(receipt)
         if not report or not report.get("complete") or report.get("failed"):
             raise RuntimeError("native expression verification failed or returned no complete report")
-        console.print(f"expression tables: {report['verified']} native products verified in a fresh editor")
+        _summary(
+            state,
+            f"expression tables: {report['verified']} native products verified in a fresh editor",
+            verified=report["verified"],
+        )
 
-    _execute(_state(ctx), "verify expression-tables", ExitCode.UNREAL_OR_BAKE, action,
+    _execute(state, "verify expression-tables", ExitCode.UNREAL_OR_BAKE, action,
              require_work=True, require_ue=True, activity=True)
 
 
@@ -795,15 +1407,24 @@ def verify_expression_tables(ctx: typer.Context) -> None:
 def verify_maps(
     ctx: typer.Context,
     maps: list[str] = typer.Argument(None, help="Maps to check. Omit for every baked level."),
+    json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    state = _state(ctx)
+    state.json_output = json_output
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
 
         names = export_manager.verify_maps(config, runner, maps)
-        console.print(f"map verify complete: {len(names)} map(s)")
+        _summary(
+            state,
+            f"map verify complete: {len(names)} map(s)",
+            maps=list(names),
+            verified=len(names),
+        )
 
     _execute(
-        _state(ctx),
+        state,
         "verify maps",
         ExitCode.OFFLINE_EXPORT,
         action,
@@ -2026,10 +2647,12 @@ def bake_sounds(
         for row in staged.empty[:10]:
             console.print(f"[yellow]  empty: {row['unit']} ({row['reason']})[/yellow]",
                           markup=True)
-        for row in staged.placeholders:
+        for row in staged.placeholders[:10]:
             console.print(
                 f"[yellow]  {row['disposition']}: {row['unit']} -> {row['assetPath']} "
                 f"({row['sampleCount']} silent samples; {row['reason']})[/yellow]", markup=True)
+        if len(staged.placeholders) > 10:
+            console.print(f"  ... and {len(staged.placeholders) - 10} more")
         if stage_only:
             if staged.failures:
                 raise RuntimeError(f"{len(staged.failures)} sound unit(s) could not be staged")
@@ -3175,6 +3798,8 @@ def reconstruct(
     a claim about them -- verifying them is `uv run elysium test`, a separate command.
     """
 
+    state = _state(ctx)
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager, unreal
 
@@ -3187,11 +3812,12 @@ def reconstruct(
             "all",
             clean=True,
             force=True,
+            per_task=state.verbose,
         )
-        console.print(f"reconstruction complete: {len(maps)} map(s)")
+        _summary(state, f"reconstruction complete: {len(maps)} map(s)", maps=len(maps))
 
     _execute(
-        _state(ctx),
+        state,
         "reconstruct",
         ExitCode.VALIDATION,
         action,
@@ -3257,18 +3883,25 @@ def blender_report(
     Needs no Blender: the add-on's core is deliberately free of `bpy` so this runs here.
     """
 
+    state = _state(ctx)
+    # The product here is the report document itself, not a run status, so this keeps its
+    # own shape and only borrows the stream discipline: stdout is the document, prose is
+    # stderr. Without this the run-report and log lines land in the middle of the JSON.
+    state.json_output = json_output
+
     def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
         from elysium_pipeline import blender
 
         summary, data, destination = blender.corpus_report(config, write=not json_output)
         if json_output:
             typer.echo(json.dumps(data, indent=2, sort_keys=True))
+            state.json_emitted = True
             return
         console.print(summary)
         if destination is not None:
             console.print(f"report written to {destination}")
 
-    _execute(_state(ctx), "blender report", ExitCode.VALIDATION, action, activity=True)
+    _execute(state, "blender report", ExitCode.VALIDATION, action, activity=True)
 
 
 @app.command("test")
@@ -3278,27 +3911,41 @@ def test_command(
     stems: list[str] = typer.Option(
         None, "--stem", help="Widen the per-model parity slice (repeatable)."
     ),
+    json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    state = _state(ctx)
+    state.json_output = json_output
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
 
         summary = unreal.run_tests(config, runner, filter_name, parity_stems=stems or ())
-        console.print(f"automation report: {summary['report_path']}")
         # A test that declines to run still reports Success, so the executed count is the only
         # honest measure of what a green tier covered.
-        console.print(
+        _summary(
+            state,
             f"{summary['executed']} of {summary['total']} test(s) executed"
             f" in {summary['seconds']:.1f}s"
             + (f"; {summary['abstained']} abstained (prerequisite unavailable)"
-               if summary["abstained"] else "")
+               if summary["abstained"] else ""),
+            filter=filter_name,
+            total=summary["total"],
+            executed=summary["executed"],
+            abstained=summary["abstained"],
+            failed=summary["failed"],
+            seconds=summary["seconds"],
+            abstentions=summary["abstentions"],
+            automation_report=summary["report_path"],
         )
-        for name in summary["abstentions"][:8]:
-            console.print(f"  abstained: {name}")
-        if len(summary["abstentions"]) > 8:
-            console.print(f"  ... and {len(summary['abstentions']) - 8} more")
+        if not json_output:
+            console.print(f"automation report: {summary['report_path']}", soft_wrap=True)
+            for name in summary["abstentions"][:8]:
+                console.print(f"  abstained: {name}")
+            if len(summary["abstentions"]) > 8:
+                console.print(f"  ... and {len(summary['abstentions']) - 8} more")
 
     _execute(
-        _state(ctx),
+        state,
         "test",
         ExitCode.VALIDATION,
         action,

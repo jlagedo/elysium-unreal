@@ -362,6 +362,7 @@ def run_offline_profile(
     clean: bool,
     force: bool,
     jobs: int,
+    per_task: bool = True,
 ) -> tuple[list[str], dict[str, TaskResult]]:
     _require_export_config(config)
     if clean:
@@ -395,6 +396,9 @@ def run_offline_profile(
     progress = TaskProgress(
         total=len(maps) + len(bundles),
         log_path=config.log_root / f"{stamp}-export-tasks.log",
+        # A lean run says only what went wrong; `--verbose` restores the row per task. Every
+        # row is in the task log either way.
+        per_task=per_task,
     )
     # One digest cache for every scoped fingerprint this run computes -- constructed after the
     # clean, parsed once, written once at the end, instead of a parse-and-rewrite per call.
@@ -1176,6 +1180,7 @@ def export_profile(
     jobs: int | None = None,
     particles: bool = False,
     verify: bool = False,
+    per_task: bool = True,
 ) -> list[str]:
     from elysium_pipeline.exporters.export_all import bundles_for_profile
 
@@ -1188,6 +1193,7 @@ def export_profile(
         clean=clean,
         force=force,
         jobs=jobs,
+        per_task=per_task,
     )
     # One digest cache for every launch-gate fingerprint below, constructed after the offline
     # phase (a --clean run wipes the store with the rest of the export root). Each gate
@@ -1433,12 +1439,25 @@ def _print_pakfile_failures(label: str, index: dict) -> None:
 def _run_glb_pool(label: str, worker, items: list[str], output_root: Path, jobs: int) -> list[dict]:
     print(f"  {label}: {len(items)} unit(s) across {jobs} worker(s)", flush=True)
     rows = []
+    # `Captured` wraps at the pool boundary, so anything a worker prints comes back with its
+    # row instead of going out the inherited OS handle, past the console filter and past the
+    # run log. The GLB workers are nearly silent -- `mdl_skel.load_anorms` warning that a
+    # model exports without morph targets is the one line that reaches here -- but wrapping
+    # the boundary covers all eighteen of them, and the next one nobody thinks to wrap.
+    captured_worker = workers.Captured(worker)
     with ProcessPoolExecutor(max_workers=jobs) as pool:
-        futures = [pool.submit(worker, item, str(output_root)) for item in items]
+        futures = [pool.submit(captured_worker, item, str(output_root)) for item in items]
         for ordinal, future in enumerate(as_completed(futures), 1):
-            row = future.result()
+            try:
+                row, captured = future.result()
+            except BaseException as error:
+                # These workers catch their own failures into `error`, so reaching here means
+                # the pool itself broke. Whatever the worker managed to say still stands.
+                workers.replay(getattr(error, "captured_output", ""))
+                raise
             rows.append(row)
             _print_glb_row(label, ordinal, len(items), row)
+            workers.replay(captured)
     return rows
 
 
