@@ -870,15 +870,15 @@ void FElysiumNpc::Think()
 		//  - hint upkeep -- `m_flOccludedDelay` from cover/normal, and `ClearHintNode(5.0)` +
 		//    `SetCondition(COND_HINT_INVALID 0x29)` when the hint is invalid or its cover object is
 		//    my enemy: 12a/12b, with the hint store.
-		//  - the shoot-target override (`+0x6444` -> `m_hShootTargetOverride`): 0009.
+		//  - the shoot-target override (`+0x6444` -> `m_hShootTargetOverride`): 0008 (ranged-bottles).
 		//  - the 1 % `"Scream_Death"` roll under `frenzied & 0x8000`: 16c, with the frenzy word.
 		//  - `ResolveStandingOnHead`, fall-to-ground unless `DONT_FALL_TO_GROUND`, the `move_yaw`
 		//    pose under `debug_allow_move_facing`: the movement component and anim graph own the
-		//    body's contact, gravity and turn pose (named modernization, 0006's motor).
+		//    body's contact, gravity and turn pose (named modernization, the motor, 0002's navigator half).
 		//  - the `MOVE_FACE_ENEMY` (`flags2 0x400`) move-facing under the same cvar (default `"1"`,
 		//    so live in retail): slot 517 `0x10278d90` forwards `(enemy, its last-known position,
 		//    1.0, 0.8, 0)` to `CAI_Motor` slot 12, the motor's facing target while a leg is in
-		//    flight. 0006's motor, with the turn pose above: this runtime's motor has no
+		//    flight. The motor (0002's navigator half), with the turn pose above: this runtime's motor has no
 		//    facing-while-moving request yet, and the flag's writers are the combat programs.
 		// `DISAPPEAR 0x20000000` is run: the flag word (8) has consumers, and this is one of them.
 		if (NpcFlags.Has(EElysiumNpcFlag2::DISAPPEAR) && ShouldDisappearNow())
@@ -1008,10 +1008,10 @@ void FElysiumNpc::UpdateCharacter(double)
 	// `m_bIsBossMonster` body registers its handle in the two-slot global table `DAT_109247e0`
 	// (`DAT_10924fb8` counts) once its slot-464 answer is 2, and a body that was registered and is
 	// no longer a boss removes itself; then `CBaseCombatCharacter::UpdateCharacter` `0x103246d0`:
-	// `UpdateDisciplineVisuals` (0007), slot 313, `UpdateVampHeal_HOT` (0006's regen),
+	// `UpdateDisciplineVisuals` (0006), slot 313, `UpdateVampHeal_HOT` (0005's regen),
 	// `UpdateExpressions` for a player or an NPC whose slot-513 word carries `0x800000`, the
 	// scripted eye direction or slot 333, slots 314 and 315, and the `m_nRenderFX` 0x1a / 0x25
-	// expiries after `_DAT_10449198` seconds (the fade-out and fade-in render effects, 0007).
+	// expiries after `_DAT_10449198` seconds (the fade-out and fade-in render effects, 0006).
 	// Every one of those is owned and driven elsewhere in this runtime (the discipline visuals,
 	// the heal pulse, the expression and gaze passes run on their own owners' clocks), so this arm
 	// is deliberately empty here; the boss registry has no reader in the port until a boss story

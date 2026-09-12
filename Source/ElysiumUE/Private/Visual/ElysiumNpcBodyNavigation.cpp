@@ -55,7 +55,7 @@ bool AElysiumNpcBody::BeginNavigationJump(ANavLinkProxy* Link, const FVector& De
 	const FVector Destination = DestinationFeet + FVector(0, 0,
 		GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 	FVector Velocity;
-	// Navigation/flight service modernization authorized by spec 0005: Unreal's own arc
+	// Navigation/flight service modernization authorized by spec 0002 (npc-ai): Unreal's own arc
 	// solver and CharacterMovement integrate the capsule. No entity timer or task is advanced.
 	if (!UGameplayStatics::SuggestProjectileVelocity_CustomArc(this, Velocity, Start,
 		Destination, Movement->GetGravityZ()) || Velocity.ContainsNaN()

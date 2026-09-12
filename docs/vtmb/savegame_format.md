@@ -9,7 +9,7 @@ to the engine's `CSaveRestore` machinery and the Source datamap, and the invento
 symbol table, not reconstructions. Class names come from MSVC RTTI in `Vampire/dlls/vampire.dll`
 (`research/tooling/ghidra/driver/run.ps1 -Script DumpGrep -ScriptArgs "cls=SaveRestore listcls=1"`). Open items are
 listed at the end. The dated witness audit, port comparison and implementation requirements are
-in `docs/specs/0011-save-game/spec.md`; that document is not a complete datamap type dictionary.
+in `docs/specs/0017-save-game/spec.md`; that document is not a complete datamap type dictionary.
 
 Related: `docs/vtmb/python_bridge.md` (the CPython embedding and `G`), `docs/vtmb/entity_io.md` (the datamap and the
 I/O bus), `docs/vtmb/level_transitions.md` (the three spawn mechanisms), `docs/vtmb/vdata-catalog.md` (the rulebook tables the sheet indexes).
@@ -459,7 +459,7 @@ through a restricted unpickler that refuses any class construction.
 
 `research/tooling/probes/sav_to_json.py` decodes a whole save into one JSON document with every
 byte accounted for (`uv run elysium research sav_to_json <file.sav> <out.json> [--audit]`);
-`docs/specs/0011-save-game/save_example.json` is its output for a three-map tutorial save (`Vampire-015.sav`,
+`docs/specs/0017-save-game/save_example.json` is its output for a three-map tutorial save (`Vampire-015.sav`,
 `sp_tutorial_1` current, `sp_theatre` and `sp_genesisdevice_1` frozen).
 
 ## Typing a record, and the raw writes between records
@@ -538,7 +538,7 @@ append raw data after the last class group:
 | `m_pPyObj` (PEvent) | `CPyObjStrSaveRestoreDataOps` | raw `bool`, raw `int` strlen, the Python source string + NUL |
 
 The current implementation comparison and import requirements are in
-`docs/specs/0011-save-game/spec.md`. Decoder byte coverage does not establish the meaning or
+`docs/specs/0017-save-game/spec.md`. Decoder byte coverage does not establish the meaning or
 type of every key: the research decoder still uses name/size heuristics where datamap typing
 is unavailable.
 
@@ -547,7 +547,7 @@ is unavailable.
 Input: `E:\elysium-work\Vampire-015.sav`, 320,883 bytes, SHA-256
 `3d478bdcdb863e2897968df885639af796c45b87b4b12b7f08075faef199b38d`.
 Rerunning `uv run elysium research sav_to_json` produced a byte-identical copy of
-`docs/specs/0011-save-game/save_example.json`: 7,288,381 bytes, SHA-256
+`docs/specs/0017-save-game/save_example.json`: 7,288,381 bytes, SHA-256
 `4a0b2feb6782c58f4079860078a44ded3c72097d96294433211a039a7fc10292`.
 Output/report scratch is `E:\elysium-work\research\saves\0011-audit\`.
 The decoder reports zero unparsed bytes; its `--audit` still reports type fallbacks.

@@ -128,7 +128,7 @@ places start disabled, so enable state is behavioral data rather than an editor-
 | Root key | File(s) | What |
 |---|---|---|
 | `StealthData` | `stealth.txt` | selected 11×11 light/Sneaking visual-range and cone matrices plus hearing-distance and light-threshold vectors; runtime transaction: `stealth.md` |
-| `StealthKillRules` | `stealthkillrules.txt` | deaf-zone table, `FindVictim` admission; HUD/commitment remain 0005-3c |
+| `StealthKillRules` | `stealthkillrules.txt` | deaf-zone table, `FindVictim` admission; HUD/commitment remain 0002/3c |
 
 ### Audio / FX
 

@@ -457,7 +457,7 @@ FElysiumVoiceHandle UElysiumAudioSubsystem::Submit(const FElysiumAudioRequest& R
 	if (Row.bMissing)
 	{
 		// A reference with no asset is a diagnostic and a failed voice, never a negative cache and
-		// never a substitution (spec 0002 §2). Completed on the next line so the ledger sees the
+		// never a substitution (spec 0011, the catalog contract). Completed on the next line so the ledger sees the
 		// same submit → complete shape a missing file used to produce.
 		UE_LOG(LogElysiumAudio, Warning,
 			TEXT("sound '%s' resolves to %s, which the bake does not carry"),
@@ -528,7 +528,7 @@ void UElysiumAudioSubsystem::RealizeVoice(
 	UWorld* World = GetWorld();
 	// `bLooping` is the ASSET's, off the unit's own `smpl`/`cue ` region — never the request's.
 	// Retail's mixer wrap is a property of the media, and `Request.bLooping` stays what it always
-	// was here: the ledger's own completion semantics (spec 0002 §7).
+	// was here: the ledger's own completion semantics (spec 0011, the ambient_generic contract).
 	USoundWave* Wave = LoadedWave;
 	if (!World)
 	{

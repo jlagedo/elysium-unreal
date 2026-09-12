@@ -1083,14 +1083,14 @@ void FElysiumPlayer::PollTouchContacts(double Now)
 		}
 		ElysiumMiscFlags::Set(MiscFlags, ElysiumMiscFlags::ObfBumpedObject);
 		// The port's reader of that bit, invoked at the producer: the discipline effects that
-		// authored `ShouldRemove_OnWasBumped`. Retail's own read site is 0007's to recover.
+		// authored `ShouldRemove_OnWasBumped`. Retail's own read site is 0006's (first-disciplines) to recover.
 		ElysiumDisciplines::NotifyBumped(*this);
 		const bool bRecorded = Npc->OnBumped(Now);
 		// The touched NPC's side of the same reader. Every authored `ShouldRemove_OnWasBumped 1`
 		// row is a TARGET effect (Hysteria, Trance, Nightwisp Ravens...), so the effect that breaks
 		// sits on the NPC, and it is run on the one NPC-side event retail raises here -- the
 		// mask-admitted `WAS_BUMPED`. Whether retail's effect reader keys on that condition or on a
-		// misc flag of the victim's own is 0007's to recover; this follows the handler.
+		// misc flag of the victim's own is 0006's (first-disciplines) to recover; this follows the handler.
 		if (bRecorded)
 		{
 			ElysiumDisciplines::NotifyBumped(*Npc);

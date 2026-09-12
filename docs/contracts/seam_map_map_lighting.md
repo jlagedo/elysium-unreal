@@ -488,7 +488,7 @@ unregistered component, so it is not driven there), and a revert returns to the 
 
 ### Switched lights and lightstyles (R6.2)
 
-**Gameplay-light consumer (0005 requirement 1, 2026-09-08).** The map bake additionally authors
+**Gameplay-light consumer (0002 story 1, 2026-09-08).** The map bake additionally authors
 `DA_<map>_LightQuery` from the V2 lighting, root and visibility units. This native asset retains
 every raw worldlight RGB/type/style/cluster/attenuation/cone row, including rows with no Unreal
 light actor. Positions and planes are Unreal centimetres; linear/quadratic attenuation coefficients

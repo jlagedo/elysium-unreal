@@ -1,4 +1,4 @@
-# 0012 scripted-sequence — the cutscene beat as the NPC's own schedule
+# 0003 scripted-sequence — the cutscene beat as the NPC's own schedule
 
 ## Witness
 `sp_theatre`'s courtroom walk-out: `scene_over_relay` → `walk_out_relay` starts seven
@@ -8,7 +8,8 @@ Isaac, Therese, VV, Skelter and Nines ~19 m from the stands to the exit while th
 `walk_out_fade_relay` kills the beats. `sp_tutorial_1`'s Jack chain (`script_1b` … `script_7b`,
 `sJack_from_elevator`), the sabbat loop (`sSabbat1_0 → …`, `m_fMoveTo 3`) and the security guard's
 feed (`sTalkguy_move`, `_move1`, `_die`, `sTalkguy_engage`), whose `OnEndSequence` wires open the
-doors and start the conversations. Played against retail: a beat on an NPC whose AI is disabled
+doors and start the conversations, and whose last beat's cleanup leaves Jack standing on the
+ground (the float 0004 reports). Played against retail: a beat on an NPC whose AI is disabled
 waits with nothing fired; a beat whose route fails idles and walks again; `OnBeginSequence` fires
 when the NPC stands on its mark, not when the input arrives; a beat targeting an NPC that does
 not exist yet looks for it every second and fires nothing.
@@ -18,9 +19,11 @@ not exist yet looks for it every second and fires nothing.
 cleanup, and the NPC side that runs them: `NPC_STATE_SCRIPT`, `m_scriptState`, the scripted
 schedules and their tasks.
 
-Owned elsewhere and consumed here: the think cadence and the body hold — **0005** (15); the
-motor, its facing and the navigation jump — **0006**; choreographed scenes and their cast claim —
-**0003**; dialogue's right to cancel a beat — **0004**; the oblivious refcount — **0005** (7).
+Owned elsewhere and consumed here: the think cadence and the body hold — **0002** (15); the
+kernel's failure route and the random wait — **0002** (25); the motor, its facing, the jump
+links and the route refusal — **0002** (19, 24); choreographed scenes, their cast claim and the
+`npc_VPlayerController` stand-in — **0010**; dialogue's right to cancel a beat — **0004**; the
+oblivious refcount — **0002** (7).
 
 ## Sources
 - Oracle: `docs/vtmb/entity_io.md` § "Scripted sequences", `docs/vtmb/npc-ai-reverse-engineering.md`
@@ -121,13 +124,13 @@ model / effort tier recommended for it.
   Retail: tasks `TASK_WALK_TO_TARGET 8`, `TASK_RUN_TO_TARGET 9`, `TASK_SCRIPT_CUSTOM_MOVE_TO_TARGET
   10`, `TASK_PLANT_ON_SCRIPT 0x65`, `TASK_FACE_SCRIPT 0x66`, `TASK_ENABLE_SCRIPT 100`,
   `TASK_WAIT_FOR_SCRIPT 0x60`, `TASK_PLAY_SCRIPT 0x62`, `TASK_PLAY_SCRIPT_POST_IDLE 99`; schedules
-  `0xf2 / 0xf4 / 0xf6 / 0xf8 / 0xf9` and the three `_FAILED`, task lists and interrupts as above;
-  `ClearSchedule 0x10280d30` reached from inside a task; `TASK_WAIT_RANDOM`'s 0.1 floor.
+  `0xf2 / 0xf4 / 0xf6 / 0xf8 / 0xf9` and the three `_FAILED`, task lists and interrupts as above.
   Job: the identities in `EElysiumTask` / `EElysiumScheduleId` with runner verbs that default to
   failing by name; the eight programs registered verbatim in their own registration file beside
-  the feed and combat families; a runner-requested schedule clear the tick honours after the
-  task; `RandomSeconds` drawing `[0.1, Max]`. `TASK_SET_TOLERANCE_DISTANCE 2` rides the existing
-  operand; the `+0x688` scaler is unrecovered, so the motor's acceptance floor stays and is named.
+  the feed and combat families. `TASK_SET_TOLERANCE_DISTANCE 2` rides the existing operand; the
+  `+0x688` scaler is unrecovered, so the motor's acceptance floor stays and is named. The
+  task-side `ClearSchedule` and `TASK_WAIT_RANDOM`'s 0.1 floor are 0002/25's.
+  Consumes: 0002/25.
   Provides: the vocabulary 2 runs and 4 reuses.
   Oracle: § "Schedules and tasks" (the scripted family), § `TASK_WAIT_RANDOM`.
   Size: M. Effort: Sonnet / high.
@@ -148,7 +151,8 @@ model / effort tier recommended for it.
   watchdog that released an abandoned move retired (the tasks' `"Cine died!"` and selection's
   `"Script failed"` are retail's exits); a segment-finished read on the embodiment that a held
   animation clock does not raise; the stall, deadline and crowd-settle constants removed.
-  Consumes: 0005/15's hold (a route on a held body parks at the motor); 0006's motor.
+  Consumes: 0002/15's hold (a route on a held body parks at the motor); 0002's motor and route
+  refusal (24), so a refused route is `TaskFail 0xc` → `_FAILED` exactly where retail's is.
   Oracle: § "`NPC_STATE_SCRIPT`, walked" (new), entity_io § "Scripted sequences".
   Size: L. Effort: Opus / high.
 - [ ] **3. The cine.**
@@ -170,6 +174,8 @@ model / effort tier recommended for it.
   `entity_io.md` corrections: `OnEndSequence` under 256, bits `0x80`/`0x2000`, `PossessEntity`'s
   naming (`0x101a9080` is the `CCineAI` twin, not `StartSequence`), pre-idle timing, the queue.
   Consumes: 0004's cancel for dialogue (through `CancelScript`).
+  Provides: `CineCleanup`'s grounding to 0004/3; the possess-shaped claim 0010/6 reuses for a
+  scene's cast.
   Oracle: entity_io § "Scripted sequences".
   Size: L. Effort: Opus / high.
 - [ ] **4. Targets retail never has.**
@@ -178,15 +184,19 @@ model / effort tier recommended for it.
   Job: the port's motor-only stand-in and a bodiless record run the same task list from the
   cine's own think over 1's verbs on the scripted character, with retail's failure retry and no
   give-up; a bodiless record is placed on the mark — the one modernization, named at the site.
+  Consumes: the `npc_VPlayerController` stand-in 0010 keeps.
   Oracle: entity_io § "Scripted sequences" (Port).
   Size: M. Effort: Sonnet / high.
 
 ## Seams
-- Provides: the cine (possess, cancel, outputs) to 0004's dialogue start and to 0003's scene
-  hand-offs; `NPC_STATE_SCRIPT` to every program family that tests the state byte (0005's
-  `m_bfNPCStateFlags` script `0x08`).
-- Consumes: the body hold and the cadence from 0005 (15), the motor and facing from 0006, the
-  oblivious refcount from 0005 (7), the montage-slot run and its claim from 0003.
+- Provides: the cine (possess, cancel, outputs) to 0004's dialogue start and to 0010's scene
+  hand-offs; `NPC_STATE_SCRIPT` to every program family that tests the state byte (0002's
+  `m_bfNPCStateFlags` script `0x08`); `CineCleanup`'s grounding to 0004.
+- Consumes: the body hold and the cadence from 0002 (15), the kernel's failure route and the
+  random wait from 0002 (25), the motor and the route refusal from 0002 (24), the oblivious
+  refcount from 0002 (7), the montage-slot run, its claim and the player stand-in from 0010.
+- Open at the 0010 border: what retail does when a beat possesses an actor a choreographed scene
+  holds — recovered under 0010/6 before either side is chosen.
 - Open recoveries, stated in code and oracle rather than guessed: the `m_startTime` write in
   `BeginSequence 0x101a7390` for beats that do not travel; `_DAT_104493d0`, the self-remove delay;
   the `+0x688` tolerance scaler; `CCineNPC::vfunc586 0x101a8840` (its own `FixScriptNPCSchedule`);

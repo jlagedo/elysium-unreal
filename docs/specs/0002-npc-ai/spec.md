@@ -1,4 +1,4 @@
-# 0005 park-stealth — NPC AI
+# 0002 npc-ai — NPC AI: what an NPC senses, remembers, decides, schedules and walks, witnessed by the tutorial's stealth lessons
 
 ## Witness
 `sp_tutorial_1`'s stealth lessons played against retail. The sneak-past lesson on `thug_1`: he
@@ -11,9 +11,11 @@ enemy and fires `OnFoundPlayer` into the "spotted" sign. The stealth-kill lesson
 The whole of NPC AI: everything an NPC senses, remembers, decides, schedules and navigates, in
 retail's order. Four themes: stealth, senses and memory, the schedule host, incapacitation.
 
-Owned elsewhere and consumed here: weapons, damage, death — **0006**; firearms — **0009**;
-disciplines' own effects and costs — **0007**; conversation UI and the `.dlg` runtime — **0004**
-(this spec provides the `NO_DIALOG` refusal and the partner's sense freeze).
+Owned elsewhere and consumed here: weapons, damage, death — **0005**; firearms — **0008**;
+disciplines' own effects and costs — **0006**; conversation UI and the `.dlg` runtime — **0004**
+(this spec provides the `NO_DIALOG` refusal and the partner's sense freeze); the
+`scripted_sequence` beat and `NPC_STATE_SCRIPT` — **0003** (this spec provides the hold, the
+kernel and the route refusal it runs on).
 
 ## Sources
 - Oracle: `docs/vtmb/npc-ai-reverse-engineering.md` (the NPC AI oracle), `docs/vtmb/stealth.md`,
@@ -107,7 +109,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `m_GrappleType` role pair; the victim's death is synchronized to the action; the tutorial's
   lesson completes on the victim's `OnDeath`.
   Job: input commitment, the grapple type 3 pair, the synchronized death, the output.
-  Consumes: the grapple state machine and death from 0006.
+  Consumes: the grapple state machine and death from 0005.
   Oracle: `stealth.md` § "HUD publication and input commitment", § "The grapple role pair and
   the `m_GrappleType` enum", § "Tutorial lesson completion".
 - [x] **4. The committed observer snapshot.** Gameplay publishes searching/detected to the HUD
@@ -132,7 +134,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `FVisible` (`0x102b4760`) as a range bypass. Oracle: § "The sense pass for a hated player,
   walked", § "Hearing, walked", § "`ambient_generic` as an AI sound source", § "Sense and
   investigate leftovers, closed". Named seams: the cone-apex ConVar (`0x10937a8c`, no writer in
-  `.text`) and the 2-D cone mode (`0x10936f74`); 0007's cloak/detection-record producers.
+  `.text`) and the 2-D cone mode (`0x10936f74`); 0006's cloak/detection-record producers.
   Settled as not in the image: `+0x6081`.
 - [x] **6b. The Troika cone override.**
   Retail: `FInViewCone` is slot 363 and every caller dispatches it virtually, so on a VtMB NPC
@@ -241,7 +243,7 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Provides: the clock every later program family runs on (10d–10h, 16, 17, 21): `DELAY_INTERRUPTS`'
   "one think", the sweeps' reduced-mode gating, the follower distance checks and the squad's
   0.2 s sighting window are all stated in thinks; `FElysiumEntityWorld::SetAiEnabled` /
-  `WakeNpcsNear` and `FElysiumNpc::ResetAllThinkStamps` to 0004, 0006, 0007, 11, 16c, 21a.
+  `WakeNpcsNear` and `FElysiumNpc::ResetAllThinkStamps` to 0003, 0004, 0005, 0006, 11, 16c, 21a.
   Oracle: § "The think cadence, decoded" (Writers; Slot 614 dispatch sites; Port, the reset
   sites). Closed 2026-09-12: `m_flTeleportMoveTimer` is the `teleport_move_timer` keyfield alone
   (827 rows, three authored `2`); `m_bForceFrequentThink`'s setter has no caller; `UpdateCharacter`
@@ -250,8 +252,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   (`0x100851f0`); the werewolf gates are `werewolf_show_debug` and its hint-draw sibling; slot
   578 is an empty virtual; slot 168's Troika body returns `m_hLastEnemy` under state bit 6 (hunt
   or flee `0x7f`); `CAI_BaseNPC+0x98` is the Troika self-pointer. Deferred to their owners: the
-  `NPCThink` hint upkeep (12b), shoot-target override (0009), death-scream roll (16c), the
-  motor's contact/gravity/turn-pose arms (0006), the boss registry (a boss story).
+  `NPCThink` hint upkeep (12b), shoot-target override (0008), death-scream roll (16c), the
+  motor's contact/gravity/turn-pose arms (the motor, this spec's navigator half, no story yet), the boss registry (a boss story).
   Size: XL. Effort: Fable / high.
 - [ ] **10a. The sound sweep.**
   Retail: `0x102b1cd0` over the seven sound records (incl. `Flinch` +0x6210); gate
@@ -280,24 +282,87 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Job: the sweep and the condition over the comfort list 8 already keeps.
   Oracle: § "The three `GatherConditions` sweeps and the interest predicate".
   Size: S. Effort: Sonnet / low.
+- [ ] **25. The kernel's failure route and the random wait.**
+  Retail: a program with no `TASK_SET_FAIL_SCHEDULE` fails through `GetFailSchedule`
+  (`0x1028abe0`): `m_failSchedule` (+0x5c54, zeroed by every `SetSchedule 0x10280e50`) or base
+  schedule **0x43**, the last id before the Troika block at `0x44`; its task list is UNRECOVERED
+  (the base programs are not text blobs in `vampire.dll`; only the name table `0x105d1488`
+  survives). `TASK_WAIT_RANDOM` draws `RandomFloat(0.1, arg)`. `ClearSchedule 0x10280d30` is
+  reached from inside a task (the scripted family's empty play, 0003).
+  Job: the `Fail == None → State.Clear()` arm of `ElysiumSchedule.cpp` replaced by the 0x43
+  route — an idle stand of one think while 0x43's list is unrecovered, stated so at the site;
+  `RandomSeconds` drawing `[0.1, Max]`; a runner-requested schedule clear the tick honours after
+  the task.
+  Provides: the failure route every program family runs on (10g, 11, 10e, 10f, 21, 0003/1).
+  Oracle: § "The `INVESTIGATE` family, decoded" (the patrol paragraph), § `TASK_WAIT_RANDOM`.
+  Size: S. Effort: Sonnet / high.
+- [ ] **22. `sp_tutorial_1` on the V2 lane.**
+  Job: the map baked on the V2 lane so the light query reads its 396 worldlights (1), the nine
+  hull-0 Jump links `22, 24, 30, 88, 110, 115, 147, 163, 218` exist as link actors (19) and 24's
+  link check has a graph to walk. Until then 13's stuck-on-top failure is unreachable in the
+  tutorial.
+  Size: S–M. Effort: Sonnet / medium.
+- [ ] **24. Reachability: the graph's components on the runtime mesh.**
+  Retail: a route exists when the `.ain` graph has a node path for the hull, and for nothing
+  else — navigator `SetGoal` (`0x102ecd20`) refuses otherwise and every path task answers
+  `TaskFail(0x0c)`. The tutorial graph is ten components (27/23/18/16/10/7/6/3/3/3 nodes);
+  Jack's start area has no node within 6000 units and the Society hub none at all, so in
+  retail Jack's walk to `ip_by_window` / `ip_lean_1` and every hunter's route fails at `SetGoal`
+  and runs the program's failure route. Hull 0 stands `(-13,-13,0)..(13,13,72)` (66 × 183 cm),
+  steps 18 units (45.7 cm); links carry per-hull ground/jump masks, `linkInfo & 0x1000` is
+  off; doors are not graph cuts (the NPC opens them: `m_hBlockedDoor`,
+  `SelectDoorObstructionSchedule 0x102b7370`, `IGNORE_DOOR_FAILURE`). UNRECOVERED: whether
+  `MONSTERCLIP` cut links at graph build.
+  Port: a Recast projection of the `.hulls` sidecar (world brushes, player-blocking contents,
+  monsterclip excluded) at the engine's default agent (radius 34, height 144, step 35 cm),
+  built at activation; the nine hull-0 jump links are proxies (19). Its connectivity is tied
+  to nothing retail authored: on `sp_tutorial_1` it refuses Jack's and the hunters' routes as
+  retail does, by coincidence of geometry (partial paths 160–240 m short, 2026-09-12); a
+  retail ground link over a 45.7 cm riser is a false refusal at step 35, and a mesh that joins
+  two retail components walks an NPC where retail stands him idle.
+  Job: the agent from hull 0 in `DefaultEngine.ini`'s `RecastNavMesh` block; a game-side
+  check that every enabled hull-0 ground link of the map is walkable on the built mesh
+  (`FindPathSync` over the link list, reported like 19's staging); the reachability gate — a
+  request whose start and goal fall in different hull-0 components (nearest node per end, the
+  components baked beside 19's links) is refused before Recast is asked, so `TaskFail 0x0c`
+  fires where retail's does, the mesh supplying only the geometry inside a component; door
+  brushes verified not to cut the mesh, monsterclip's role stated. Decision for the owner: the
+  gate is the retail contract; naming wider reachability a modernization instead means NPCs
+  retail stands idle (Jack at the tutorial start) walk off in the port.
+  Provides: the refusal 10g, 11, 10e/10f and 0003's walks fail through. Consumes: 19's bake.
+  Oracle: `navigation-jump-links.md` § "Tutorial connectivity: the graph's components".
+  Size: M. Effort: Opus / high.
 - [ ] **10g. The patrol programs.**
   Retail: 0x64 / 0x66 / 0x68 `INVESTIGATE_NODE` / `_WALK` / `_HUNT`; `SelectSchedule` case 1
   returns the patrol path object's own id (`m_sppPatrolPath` +0x6590 → `+4`), one of these
-  three or `FOLLOW_PATROL_PATH` 0x65/0x67/0x69. Patrol is a schedule like any other: an alert
-  or combat program replaces it through `SetSchedule`, and case 1 re-selects it from the path
-  object when that program ends.
+  three or `FOLLOW_PATROL_PATH` 0x65/0x67/0x69 — the same six task lists
+  (`SET_TOLERANCE_DISTANCE 20; GET_PATH_TO_PATROL_POINT; [SET_NPC_FLAG FORCE_RELAXED_ANIMS;
+  RUN_PATH | WALK_PATH | WALK_PATH_HUNT]; WAIT_FOR_MOVEMENT; FACE_PATROL_INTEREST;
+  DO_PATROL_INTEREST_ACTIVITY; NEXT_PATROL_POINT`), none setting a fail schedule. Patrol is a
+  schedule like any other: an alert or combat program replaces it through `SetSchedule`, and
+  case 1 re-selects it from the path object when that program ends. `GET_PATH_TO_PATROL_POINT`
+  (Troika `StartTask` case 0x13): no path object → `TaskFail(0x1d)`; node id −1 returns
+  without completing; else the node's hull position (`0x102fb0d0`) into `SetGoal 0x102ecd20`,
+  a refusal → `"%s can't reach patrol point"` + `TaskFail(0x0c)`. The failure route is
+  `GetFailSchedule` (`0x1028abe0`): `m_failSchedule` (+0x5c54, zeroed by every `SetSchedule`)
+  or base schedule **0x43**, whose task list is UNRECOVERED (the base programs are not text
+  blobs in `vampire.dll`) — a named seam until it is: the port runs it as an idle stand of one
+  think and states so.
   Job: the three programs and `GET_PATH_TO_PATROL_POINT` 0x7a, `NEXT_PATROL_POINT` 0x7d,
   `FACE_PATROL_INTEREST` 0xb3, `DO_PATROL_INTEREST_ACTIVITY` 0xb5, `FACE_IDEAL` 0x2b; the
   path object's id read in the idle selector (step 3), running under the ordinary `Schedule`
-  body owner. Retires the port's patrol executor (`ThinkPatrol`, `IssuePatrolMove`,
+  body owner; the kernel's `Fail == None → State.Clear()` (`ElysiumSchedule.cpp`) replaced by
+  the 0x43 route. Retires the port's patrol executor (`ThinkPatrol`, `IssuePatrolMove`,
   `bPatrolActive` / `bMoveIssued` / `bWalkingAnimation`, the `Patrol` body owner and its
-  suspend/resume path in `ThinkSchedulePolicy`) and the idle and alert selectors' `None`
-  return on `bPatrolActive`; the saved route state moves into the schedule block. Save files
-  are disposable.
+  suspend/resume path in `ThinkSchedulePolicy`) and with it its every-think re-issue of a
+  refused point (2026-09-12), and the idle and alert selectors' `None` return on
+  `bPatrolActive`; the saved route state moves into the schedule block. Save files are
+  disposable.
   Decided 2026-09-12: patrol and interesting places (11) become kernel programs here, before
   10d; no selector returns `None` to defer to an executor after this story, and no routing
   branch is added to `ThinkSchedulePolicy` to bridge one.
-  Oracle: § "The `INVESTIGATE` family, decoded", § "Followers, patrols, and loitering".
+  Oracle: § "The `INVESTIGATE` family, decoded" (the patrol paragraph), § "Followers, patrols,
+  and loitering".
   Size: L. Effort: Opus / high.
 - [ ] **11. Interesting places: the selector arms.**
   Retail: arms `0xff SETUP` / `0x100 WALK` / `0x102 CROSSWALK` / `0x105 LOITER` / `0x106
@@ -309,17 +374,26 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `SetSchedule` and case 1 re-selects a place when that program ends. The place's disable/kill
   walk over its visitors (`0x102daac0`): a visitor carrying `DISAPPEAR` gets `flags2 |=
   0x80000008`, any other `TaskFail(0x23)` (slot 448); both arms then dispatch slot 614
-  (`ResetThinkTimers`) on the visitor.
-  Job: each of the three reachable arms and its program compared against retail and ported;
-  the masks; the wait; the arms read in the idle selector (step 4), running under the
-  ordinary `Schedule` body owner. Retires the port's ambient executor (`ThinkAmbient`,
-  `EAmbientPhase`, `ClaimAmbientSpot` / `BeginAmbientUse` / `BeginAmbientLeave` /
-  `FinishAmbientUse`, the `Ambient` body owner and its finish-on-claim path in
-  `ThinkSchedulePolicy`) and the idle and alert selectors' `None` return on
-  `bUseInteresting`; the held place index and the wait deadline become the program's
-  operands in the schedule block. Same decision as 10g.
-  Oracle: § "Interesting places: the selector, the programs, the wait", § "Interesting-place
-  eligibility".
+  (`ResetThinkTimers`) on the visitor. The failed walk: `GET_PATH_TO_INTERESTING_PLACE`
+  (Troika `StartTask` case 0x31) → no held place `TaskFail(0x22)`, `SetGoal 0x102ecd20`
+  refused `TaskFail(0x0c)`; `TaskFail`'s step 1 (`0x102b53d0`) releases the visit; the
+  program's route is `_FAILED` (`0x105e6520`: `SET_ACTIVITY ACT_IDLE; WAIT 5; WAIT_RANDOM 5;
+  SET_SCHEDULE SETUP`) — one attempt every 5.1–10 s, idle between, the pick keeping no memory
+  of a failed place, so the same top-rated node again, forever.
+  Job: each of the three reachable arms and its program compared against retail and ported,
+  `_FAILED` included; the masks; the wait; the arms read in the idle selector (step 4),
+  running under the ordinary `Schedule` body owner. Retires the port's ambient executor
+  (`ThinkAmbient`, `EAmbientPhase`, `ClaimAmbientSpot` / `BeginAmbientUse` /
+  `BeginAmbientLeave` / `FinishAmbientUse`, the `Ambient` body owner and its finish-on-claim
+  path in `ThinkSchedulePolicy`) — and with it the port-only `FailedSpotIndices` and its
+  every-think retry (2026-09-12: `Jack`, groups 32, alternates `ip_by_window` / `ip_lean_1` at
+  0.1 s; `mercenary_upstairs`, groups 8, cycles its three on 16 s) — and the idle and alert
+  selectors' `None` return on `bUseInteresting`; the held place index and the wait deadline
+  become the program's operands in the schedule block. Same decision as 10g. Consumes 24: the
+  refusal those witnesses hit is retail's own (no node path), and stays so only through the
+  gate.
+  Oracle: § "Interesting places: the selector, the programs, the wait" (incl. "The failed
+  walk, walked"), § "Interesting-place eligibility".
   Size: L. Effort: Opus / high.
 - [ ] **10d. The alert selectors and the ladder.**
   Retail: `SelectSchedule` (`0x102af660`) case 3 runs regardless of what the NPC was doing:
@@ -424,25 +498,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   as ally. The port has a flat relationship table.
   Job: the composition routed through the feed guard and `GatherSight`; the ideal-state arm;
   the ally read.
-  Provides: the composed relation to 0006, 0007 and the target HUD.
+  Provides: the composed relation to 0005, 0006 and the target HUD.
   Oracle: § "`m_hFollowerBoss` — the follower controller", § "Relationship table, exactly
   decoded".
-  Size: M. Effort: Opus / medium.
-- [ ] **16c. Possession and frenzy.**
-  Retail: `Dominate_Possession`'s `DoPossession` byte runs `0x102c51a0`: squad disconnect,
-  `SetEnemy(NULL)`, `flags2 |= D_POSSESSED | D_DISCONNECT_SQUAD`, `"player D_LI 99"`,
-  `SetFollowerBoss(caster)` + `SetFollowerType("Combat")`, ideal state 1, target/friend =
-  caster, `frenziedFlags = 0x3b1c`, acquire the nearest hated entity (`0x102b4cc0`). `DoFrenzy`
-  (`Dementation_Berserk` / `_Bedlam`) runs `0x102c5310`: same teardown, `D_INSANE`, hunt state,
-  investigate modes 6, `frenziedFlags = 0x9fbd`, no follower. The HitGroup's `AI_Schedule`
-  installs before either. `DoPossession` dispatches slot 614 (`ResetThinkTimers`) at its start;
-  `DoFrenzy` never does, so a possessed NPC acts on this frame and a frenzied one on its next
-  cadence think. `NPCThink`'s 1 % `"Scream_Death"` roll runs under `frenziedFlags & 0x8000`.
-  The port parses and carries both bytes.
-  Job: both arms executed on apply, over 16a and 17.
-  Consumes: the HitGroup apply path from 0007.
-  Oracle: § "Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload".
-  Settled as not in the image: the `m_bfNPCFrenziedFlags` bit names.
   Size: M. Effort: Opus / medium.
 - [ ] **17. Squads.**
   Retail: one shared `AI_Enemies` memory. Joining (`squadname` + `bits_CAP_SQUAD`, `InitSquad`
@@ -456,11 +514,28 @@ the retail contract the code must match, the job, what it consumes or provides, 
   `GetMember` returns NULL for all when member 0 is disconnected; `Event_Killed` compacts;
   membership rebuilt on restore from `squadname`. `SQUAD_NEW_ENEMY` and
   `IGNORE_SQUAD_SEE_ENEMY` have no readers (drop the port's clear under the latter); the
-  strategy-slot namespace ships dead (do not build).
+  strategy-slot namespace ships dead (do not build). The tutorial's `squad_warehouse` (`thug_2`,
+  `thug_3`) is the witness.
   Job: the squad object sharing 5's record store, the disconnect refcount replacing the seams
   in 7 and 8, the condition, the two tasks, the `SquadSeesPlayer` stub replaced.
   Oracle: § "Squads, decoded". Unrecovered: `m_iMySquadSlot`'s offset.
   Size: L–XL. Effort: Opus / high; corpus pass on `m_iMySquadSlot` first.
+- [ ] **16c. Possession and frenzy.**
+  Retail: `Dominate_Possession`'s `DoPossession` byte runs `0x102c51a0`: squad disconnect,
+  `SetEnemy(NULL)`, `flags2 |= D_POSSESSED | D_DISCONNECT_SQUAD`, `"player D_LI 99"`,
+  `SetFollowerBoss(caster)` + `SetFollowerType("Combat")`, ideal state 1, target/friend =
+  caster, `frenziedFlags = 0x3b1c`, acquire the nearest hated entity (`0x102b4cc0`). `DoFrenzy`
+  (`Dementation_Berserk` / `_Bedlam`) runs `0x102c5310`: same teardown, `D_INSANE`, hunt state,
+  investigate modes 6, `frenziedFlags = 0x9fbd`, no follower. The HitGroup's `AI_Schedule`
+  installs before either. `DoPossession` dispatches slot 614 (`ResetThinkTimers`) at its start;
+  `DoFrenzy` never does, so a possessed NPC acts on this frame and a frenzied one on its next
+  cadence think. `NPCThink`'s 1 % `"Scream_Death"` roll runs under `frenziedFlags & 0x8000`.
+  The port parses and carries both bytes.
+  Job: both arms executed on apply, over 16a and 17.
+  Consumes: the HitGroup apply path from 0006.
+  Oracle: § "Disciplines that possess or frenzy an NPC; the `AI_NPCFlag` payload".
+  Settled as not in the image: the `m_bfNPCFrenziedFlags` bit names.
+  Size: M. Effort: Opus / medium.
 - [ ] **21a. The flee state.**
   Retail: `m_NPCState == 8`, entered only in `CAI_BaseNPCTroika::SelectIdealState`
   (`0x102ad660`) from idle and alert on `COND_SUPERNATURAL_FLEE_LEVEL` 0x21 or
@@ -505,21 +580,17 @@ the retail contract the code must match, the job, what it consumes or provides, 
   10) withholds `COMFORT` in `BuildScheduleTestBits` and quarters hearing.
   Job: `IsFeedAutoAcceptState` answering from the ideal activity instead of the disposition
   name; the `ONE_HIT_KILL` read in the damage path; the `COWERING` overlay read.
-  Provides: the `ONE_HIT_KILL` seam to 0006's damage.
+  Provides: the `ONE_HIT_KILL` seam to 0005's damage.
   Oracle: § "The flee state and the cower, disoriented and lost programs" (Activities and the
   feed; Flags the family writes); `feeding.md` § "Step 4, decoded".
   Size: S–M. Effort: Sonnet / medium.
-- [ ] **22. `sp_tutorial_1` on the V2 lane.**
-  Job: the map baked on the V2 lane so the light query reads its 396 worldlights (1) and the
-  nine hull-0 Jump links `22, 24, 30, 88, 110, 115, 147, 163, 218` exist as link actors (19).
-  Until then 13's stuck-on-top failure is unreachable in the tutorial.
 
-  Size: S–M. Effort: Sonnet / medium.
 ## Seams
 - Provides: the awareness seam (`Cognition.Conditions`, the enemy memory, `Senses.Memory`,
-  `IsOblivious()`, `ShouldInvestigate`) to 0006 and 0008; the stealth scalars; the failure path
-  (13) and the cadence (15) every later program family runs on (0006, 0007); the composed
-  relation (16b) to 0006, 0007 and the target HUD; the trance and the flag word to the feed
+  `IsOblivious()`, `ShouldInvestigate`) to 0005 and 0007; the stealth scalars; the failure path
+  (13), the cadence (15) and the route refusal (24) every later program family runs on (0005,
+  0006, 0003); the composed
+  relation (16b) to 0005, 0006 and the target HUD; the trance and the flag word to the feed
   and dialogue gates (0004).
-- Consumes: the HitGroup apply path and the cloak/detection-record producers from 0007 (6a,
-  16c); the grapple state machine and damage from 0006 (3c, 21c).
+- Consumes: the HitGroup apply path and the cloak/detection-record producers from 0006 (6a,
+  16c); the grapple state machine and damage from 0005 (3c, 21c).

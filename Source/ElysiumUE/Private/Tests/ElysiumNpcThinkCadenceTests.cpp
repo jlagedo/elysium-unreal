@@ -1,4 +1,4 @@
-// Content-free Substrate automation for 0005 story 15 — the NPC think cadence's four interval
+// Content-free Substrate automation for 0002 (npc-ai) story 15 — the NPC think cadence's four interval
 // laws and their shared due test, driven as pure arithmetic over `ElysiumNpcThink::FInputs`.
 //
 // Every number here is a constant recovered from the DLL and recorded in

@@ -757,7 +757,7 @@ equality at one second is eligible. The torch's byte `+0x871` is class capabilit
 `CWeaponMelee` constructor `0x103e9ac0` writes 1; `CWeaponUnarmed` constructor `0x103f53f0`
 writes 0; several blunt weapon `vfunc103` methods clear it. A torch on the melee class retains 1.
 
-**Port data seam and query (0005 requirement 1).** The V2 map bake now authors
+**Port data seam and query (0002 story 1).** The V2 map bake now authors
 `DA_<map>_LightQuery`: original worldlight rows (including rows that place no rendering actor),
 the BSP node/leaf partition and decompressed PVS, mask-`0x4191` world convexes, displacement
 triangles, and the `SURF_SKY` boundaries of those world brushes. Positions, planes and falloff

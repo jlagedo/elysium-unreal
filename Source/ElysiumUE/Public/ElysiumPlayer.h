@@ -437,7 +437,7 @@ struct FElysiumActiveDisciplineEffect
 struct FElysiumDisciplineState
 {
 	// Obfuscate's 0x10146a80 (+0x14dc) visibility latch and the observer's
-	// 0x10146b20 target record (+0x97/+0xac). Spec 0007 supplies their producers;
+	// 0x10146b20 target record (+0x97/+0xac). Spec 0006 (first-disciplines) supplies their producers;
 	// absent a recovered effect source these answer nothing, rather than deriving a cloak
 	// from the active rank alone. Senses still consume the real active sheet and effects.
 	bool bObfuscateCloaked = false;
