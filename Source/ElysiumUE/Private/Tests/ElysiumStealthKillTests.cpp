@@ -24,6 +24,7 @@
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealthKillRules.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 namespace ElysiumStealthKillTests
@@ -91,31 +92,25 @@ namespace
 
 	struct FKillFixture
 	{
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World;
+		FElysiumFeatTable Feats = MakeFeats();
+		FElysiumItemTable Items = MakeItems();
+		ElysiumSheetRules::FBoundTables PreviousTables;
+		// Declared after the three tables above, so the builder's RNG seed now runs after them
+		// rather than before as the old constructor body did. None of the three draws from the
+		// stream, so no case observes the reorder.
+		FElysiumNpcWorldFixture Fixture;
+		FElysiumRecordingServices& Services;
+		FElysiumEntityWorld& World;
 		FElysiumNpc* Guard = nullptr;
 		FElysiumPlayer* Player = nullptr;
 		FElysiumStealthKillRules Rules;
-		FElysiumFeatTable Feats;
-		FElysiumItemTable Items;
 
-		explicit FKillFixture(const TCHAR* DialogName = nullptr, bool bTutorialMaker = false)
-			: World(nullptr, nullptr, Services.Bundle())
+		// The guard row: an ordinary combatant, or — for the tutorial cohort — the `npc_maker` that
+		// spawns one plus its own `OnDeath` re-arm and death counter, built exactly as the map does.
+		static FElysiumNpcWorldBuilder BuildWorld(const TCHAR* DialogName, bool bTutorialMaker)
 		{
-			ElysiumRng::SeedAll(0x534B494C);
-			Services.bNpcActivitiesResolve = true;
-			Services.ResolvedNpcActivityLabel = TEXT("stealth_pair_test");
-			Services.ResolvedNpcActivityOwner = TEXT("stealth_bank_test");
-			Feats = MakeFeats();
-			Items = MakeItems();
-			PreviousTables = ElysiumSheetRules::BoundTables();
-			auto Bound = PreviousTables;
-			Bound.Feats = &Feats;
-			ElysiumSheetRules::BindTables(Bound);
-			ElysiumItems::Install(Items);
+			FElysiumNpcWorldBuilder Builder(TEXT("__stealthkill_test__"), 0x534B494C);
 
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__stealthkill_test__");
 			FElysiumEntityDef GuardDef;
 			GuardDef.Classname = TEXT("npc_VHumanCombatant");
 			GuardDef.TargetName = TEXT("guard");
@@ -144,29 +139,40 @@ namespace
 				NextMaker.Keys[TEXT("NPCTargetname")] = TEXT("thug_4");
 				NextMaker.Outputs.Reset();
 				NextMaker.Origin = FVector(1000, 0, 0);
-				Defs.Defs.Add(MoveTemp(NextMaker));
-				FElysiumEntityDef Counter;
-				Counter.Classname = TEXT("math_counter");
-				Counter.TargetName = TEXT("death_count");
-				Defs.Defs.Add(MoveTemp(Counter));
+				Builder.Defs.Defs.Add(MoveTemp(NextMaker));
+				Builder.AddCounter(TEXT("death_count"));
 			}
 			if (DialogName)
 			{
 				GuardDef.Keys.Add(TEXT("dialogname"), DialogName);
 			}
-			Defs.Defs.Add(MoveTemp(GuardDef));
-			World.Load(MoveTemp(Defs));
-			World.SpawnPlayer();
-			World.Activate(0.0);
-			World.Tick(0.0);
+			Builder.Defs.Defs.Add(MoveTemp(GuardDef));
+			return Builder;
+		}
+
+		explicit FKillFixture(const TCHAR* DialogName = nullptr, bool bTutorialMaker = false)
+			: PreviousTables(ElysiumSheetRules::BoundTables())
+			, Fixture(BuildWorld(DialogName, bTutorialMaker), [this](FElysiumRecordingServices& S)
+				{
+					S.bNpcActivitiesResolve = true;
+					S.ResolvedNpcActivityLabel = TEXT("stealth_pair_test");
+					S.ResolvedNpcActivityOwner = TEXT("stealth_bank_test");
+					auto Bound = PreviousTables;
+					Bound.Feats = &Feats;
+					ElysiumSheetRules::BindTables(Bound);
+					ElysiumItems::Install(Items);
+				})
+			, Services(Fixture.Services)
+			, World(Fixture.World)
+		{
 			if (bTutorialMaker)
 			{
 				World.EnqueueInput(TEXT("stealth_victim_maker"), TEXT("Spawn"), FElysiumVariant::Void(),
 					0.0, World.PlayerHandle(), World.PlayerHandle());
 				World.Tick(0.0);
 			}
-			Guard = static_cast<FElysiumNpc*>(World.FindByName(TEXT("guard")));
-			Player = World.FindPlayer();
+			Guard = Fixture.Npc(TEXT("guard"));
+			Player = Fixture.Player();
 			if (Guard)
 			{
 				Guard->NextThink = ELYSIUM_NEVER_THINK;
@@ -224,8 +230,6 @@ namespace
 			Player->Angles = FVector(0.f, 180.f, 0.f);
 			Services.bPlayerDucking = true;
 		}
-
-		ElysiumSheetRules::FBoundTables PreviousTables;
 	};
 }
 

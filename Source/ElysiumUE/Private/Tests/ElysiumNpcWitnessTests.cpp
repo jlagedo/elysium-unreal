@@ -36,6 +36,7 @@
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 #include "Serialization/MemoryReader.h"
@@ -60,75 +61,55 @@ namespace
 	// `events_world` for the law outputs to have a bus.
 	struct FWitnessFixture
 	{
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World;
+		FElysiumNpcWorldFixture Fixture;
+		FElysiumRecordingServices& Services;
+		FElysiumEntityWorld& World;
 		FElysiumNpc* Guard = nullptr;
 		FElysiumNpc* Victim = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
-		explicit FWitnessFixture(int32 SafeArea = 1)
-			: World(nullptr, nullptr, Services.Bundle())
+		static FElysiumNpcWorldBuilder BuildWorld(int32 SafeArea)
 		{
-			ElysiumRng::SeedAll(0x57495453);
+			FElysiumNpcWorldBuilder Builder(TEXT("__npcwitness_test__"), 0x57495453);
 
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__npcwitness_test__");
-
-			FElysiumEntityDef WorldSpawn;
-			WorldSpawn.Classname = TEXT("worldspawn");
+			FElysiumEntityDef& WorldSpawn = Builder.AddEntity(TEXT("worldspawn"), TEXT(""));
 			WorldSpawn.Keys.Add(TEXT("safearea"), FString::FromInt(SafeArea));
-			Defs.Defs.Add(MoveTemp(WorldSpawn));
 
-			FElysiumEntityDef WorldEvents;
-			WorldEvents.Classname = TEXT("events_world");
-			WorldEvents.TargetName = TEXT("world");
-			Defs.Defs.Add(MoveTemp(WorldEvents));
+			Builder.AddEntity(TEXT("events_world"), TEXT("world"));
 
 			// `vision`/`hearing` are authored so the derive path (and the rulebook it would want)
 			// stays out of every case that is not about perception. 4000 Source units of sight.
 			for (const TCHAR* Name : { TEXT("guard"), TEXT("victim") })
 			{
-				FElysiumEntityDef Npc;
-				Npc.Classname = TEXT("npc_VHumanCombatant");
-				Npc.TargetName = Name;
-				Npc.Origin = FVector::ZeroVector;
+				FElysiumEntityDef& Npc = Builder.AddNpc(Name);
 				Npc.Keys.Add(TEXT("vision"), TEXT("4000"));
 				Npc.Keys.Add(TEXT("hearing"), TEXT("1.0"));
-				Defs.Defs.Add(MoveTemp(Npc));
 			}
+			return Builder;
+		}
 
-			World.Load(MoveTemp(Defs));
-			World.SpawnPlayer();
-			World.Activate(0.0);
-			World.Tick(0.0);
-
-			Guard = static_cast<FElysiumNpc*>(World.FindByName(TEXT("guard")));
-			Victim = static_cast<FElysiumNpc*>(World.FindByName(TEXT("victim")));
-			Player = World.FindPlayer();
+		explicit FWitnessFixture(int32 SafeArea = 1)
+			: Fixture(BuildWorld(SafeArea))
+			, Services(Fixture.Services)
+			, World(Fixture.World)
+		{
+			Guard = Fixture.Npc(TEXT("guard"));
+			Victim = Fixture.Npc(TEXT("victim"));
+			Player = Fixture.Player();
 			if (Player)
 			{
 				// Inside the recovered 512-unit near bypass, so the sight cache is committed with no
 				// trace at all and a case that blocks the trace still has a seen player.
 				Player->Origin = FVector(Cm(100.f), 0.0, 0.0);
 			}
-			if (Guard)
-			{
-				Guard->MaxHealth = 100;
-				Guard->Schedule.Clear();
-			}
+			FElysiumNpcWorldFixture::PrepareForKernelDrive(Guard);
 			Quiet();
 		}
 
 		// Nothing here wants an NPC's own think competing with the pass a case is driving.
 		void Quiet()
 		{
-			for (FElysiumNpc* Npc : { Guard, Victim })
-			{
-				if (Npc)
-				{
-					Npc->NextThink = ELYSIUM_NEVER_THINK;
-				}
-			}
+			FElysiumNpcWorldFixture::Quiet({ Guard, Victim });
 		}
 
 		// Commit the sight cache, then run the whole recovered decision-pass input side — which is

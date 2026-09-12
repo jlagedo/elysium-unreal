@@ -33,6 +33,7 @@
 #include "Substrate/ElysiumStealth.h"
 #include "Substrate/ElysiumStealthTables.h"
 #include "Substrate/ElysiumStealthTrigger.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumRulebookTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
@@ -206,37 +207,38 @@ namespace
 		FElysiumPlayer* Player = nullptr;
 		FElysiumNpc* Guard = nullptr;
 
-		explicit FStealthFixture(float GuardVisionUnits = 4000.f)
-			: World(nullptr, nullptr, Services.Bundle())
+		// The guard row and the two `trigger_stealth_mod` volumes. `World.Load`/`SpawnPlayer`/
+		// `Activate` still happen in the constructor body below rather than through
+		// `FElysiumNpcWorldFixture`, because this fixture deliberately never ticks the world it
+		// stands up (see the comment on `Guard` below), unlike every other fixture's fixed sequence.
+		static FElysiumNpcWorldBuilder BuildWorld(float GuardVisionUnits)
 		{
-			ElysiumRng::SeedAll(0x53544C48);
-			Bind();
+			FElysiumNpcWorldBuilder Builder(TEXT("__stealth_test__"), 0x53544C48);
 
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__stealth_test__");
-
-			FElysiumEntityDef GuardDef;
-			GuardDef.Classname = TEXT("npc_VHumanCombatant");
-			GuardDef.TargetName = TEXT("guard");
-			GuardDef.Origin = FVector::ZeroVector;
+			FElysiumEntityDef& GuardDef = Builder.AddNpc(TEXT("guard"));
 			GuardDef.Keys.Add(TEXT("vision"), FString::SanitizeFloat(GuardVisionUnits));
 			GuardDef.Keys.Add(TEXT("hearing"), TEXT("1.0"));
 			// `player_reaction` is the authored `<relation> <priority>` pair.
 			GuardDef.Keys.Add(TEXT("player_reaction"), TEXT("D_HT 5"));
-			Defs.Defs.Add(MoveTemp(GuardDef));
 
-			auto AddVolume = [&Defs](const TCHAR* Name, int32 Modifier)
+			auto AddVolume = [&Builder](const TCHAR* Name, int32 Modifier)
 			{
-				FElysiumEntityDef Volume;
-				Volume.Classname = TEXT("trigger_stealth_mod");
-				Volume.TargetName = Name;
+				FElysiumEntityDef& Volume = Builder.AddEntity(TEXT("trigger_stealth_mod"), Name);
 				Volume.Keys.Add(TEXT("stealth_modifier"), FString::FromInt(Modifier));
-				Defs.Defs.Add(MoveTemp(Volume));
 			};
 			AddVolume(TEXT("vol_a"), 2);
 			AddVolume(TEXT("vol_b"), 3);
+			return Builder;
+		}
 
-			World.Load(MoveTemp(Defs));
+		explicit FStealthFixture(float GuardVisionUnits = 4000.f)
+			: World(nullptr, nullptr, Services.Bundle())
+		{
+			// The builder seeds the RNG stream; binding the tables after it keeps the original
+			// seed-then-bind order.
+			FElysiumNpcWorldBuilder Builder = BuildWorld(GuardVisionUnits);
+			Bind();
+			World.Load(MoveTemp(Builder.Defs));
 			World.SpawnPlayer();
 			World.Activate(0.0);
 			World.GameSounds().SetVolumeTable(&Volumes);

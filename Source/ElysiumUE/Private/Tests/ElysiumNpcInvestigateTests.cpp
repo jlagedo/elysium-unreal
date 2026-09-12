@@ -20,6 +20,7 @@
 #include "Substrate/ElysiumNpcConditions.h"
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumRelationships.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 namespace ElysiumNpcInvestigateTests
@@ -35,35 +36,31 @@ namespace
 	// relations, flags and memory, never a body.
 	struct FInvestigateFixture
 	{
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World;
+		FElysiumNpcWorldFixture Fixture;
+		FElysiumRecordingServices& Services;
+		FElysiumEntityWorld& World;
 		FElysiumNpc* Npc = nullptr;
 		FElysiumNpc* Other = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
-		FInvestigateFixture()
-			: World(nullptr, nullptr, Services.Bundle())
+		static FElysiumNpcWorldBuilder BuildWorld()
 		{
-			ElysiumRng::SeedAll(0x494e5647);
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__investigate_test__");
+			FElysiumNpcWorldBuilder Builder(TEXT("__investigate_test__"), 0x494e5647);
 			for (const TCHAR* Name : { TEXT("npc"), TEXT("other") })
 			{
-				FElysiumEntityDef Def;
-				Def.Classname = TEXT("npc_VHumanCombatant");
-				Def.TargetName = Name;
-				Def.Origin = FVector::ZeroVector;
-				Defs.Defs.Add(MoveTemp(Def));
+				Builder.AddNpc(Name);
 			}
-			World.Load(MoveTemp(Defs));
-			World.SpawnPlayer();
-			World.Activate(0.0);
-			World.Tick(0.0);
-			FElysiumEntity* NpcEnt = World.FindByName(TEXT("npc"));
-			FElysiumEntity* OtherEnt = World.FindByName(TEXT("other"));
-			Npc = NpcEnt ? NpcEnt->AsNpc() : nullptr;
-			Other = OtherEnt ? OtherEnt->AsNpc() : nullptr;
-			Player = World.FindPlayer();
+			return Builder;
+		}
+
+		FInvestigateFixture()
+			: Fixture(BuildWorld())
+			, Services(Fixture.Services)
+			, World(Fixture.World)
+		{
+			Npc = Fixture.Npc(TEXT("npc"));
+			Other = Fixture.Npc(TEXT("other"));
+			Player = Fixture.Player();
 		}
 
 		void Relate(const FElysiumEntity& Target, EElysiumRelationship Value)

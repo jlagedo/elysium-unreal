@@ -29,6 +29,7 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 namespace ElysiumNpcSoundSweepTests
@@ -45,40 +46,33 @@ namespace
 	// never touches a body, so nothing here needs a model.
 	struct FSweepFixture
 	{
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World;
+		FElysiumNpcWorldFixture Fixture;
+		FElysiumRecordingServices& Services;
+		FElysiumEntityWorld& World;
 		FElysiumNpc* Npc = nullptr;
 		FElysiumNpc* Owner = nullptr;      // the entity that made the sounds
 		FElysiumNpc* Second = nullptr;     // a second owner, for the last-wins case
 		FElysiumPlayer* Player = nullptr;
 
-		FSweepFixture()
-			: World(nullptr, nullptr, Services.Bundle())
+		static FElysiumNpcWorldBuilder BuildWorld()
 		{
-			ElysiumRng::SeedAll(0x534e4453);
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__sound_sweep_test__");
+			FElysiumNpcWorldBuilder Builder(TEXT("__sound_sweep_test__"), 0x534e4453);
 			for (const TCHAR* Name : { TEXT("npc"), TEXT("owner"), TEXT("second") })
 			{
-				FElysiumEntityDef Def;
-				Def.Classname = TEXT("npc_VHumanCombatant");
-				Def.TargetName = Name;
-				Def.Origin = FVector::ZeroVector;
-				Defs.Defs.Add(MoveTemp(Def));
+				Builder.AddNpc(Name);
 			}
-			World.Load(MoveTemp(Defs));
-			World.SpawnPlayer();
-			World.Activate(0.0);
-			World.Tick(0.0);
-			const auto Find = [this](const TCHAR* Name) -> FElysiumNpc*
-			{
-				FElysiumEntity* Entity = World.FindByName(Name);
-				return Entity ? Entity->AsNpc() : nullptr;
-			};
-			Npc = Find(TEXT("npc"));
-			Owner = Find(TEXT("owner"));
-			Second = Find(TEXT("second"));
-			Player = World.FindPlayer();
+			return Builder;
+		}
+
+		FSweepFixture()
+			: Fixture(BuildWorld())
+			, Services(Fixture.Services)
+			, World(Fixture.World)
+		{
+			Npc = Fixture.Npc(TEXT("npc"));
+			Owner = Fixture.Npc(TEXT("owner"));
+			Second = Fixture.Npc(TEXT("second"));
+			Player = Fixture.Player();
 			if (Npc != nullptr)
 			{
 				// Facing +X, at the origin: a sound at negative X is behind.

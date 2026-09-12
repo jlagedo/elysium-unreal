@@ -34,6 +34,7 @@
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSoundVolumeTable.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 #include "Serialization/MemoryReader.h"
@@ -132,60 +133,43 @@ namespace
 	// headless fallback — stays out of every case that is not about it.
 	struct FSensesFixture
 	{
-		FElysiumRecordingServices Services;
-		FElysiumEntityWorld World;
+		FElysiumNpcWorldFixture Fixture;
+		FElysiumRecordingServices& Services;
+		FElysiumEntityWorld& World;
 		FElysiumNpc* Guard = nullptr;
 		FElysiumPlayer* Player = nullptr;
 
-		explicit FSensesFixture(float VisionUnits = 4000.f, float HearingScalar = 1.0f)
-			: World(nullptr, nullptr, Services.Bundle())
+		static FElysiumNpcWorldBuilder BuildWorld(float VisionUnits, float HearingScalar)
 		{
-			ElysiumRng::SeedAll(0x53454E53);
+			FElysiumNpcWorldBuilder Builder(TEXT("__npcsenses_test__"), 0x53454E53);
 
-			FElysiumEntityDefs Defs;
-			Defs.MapName = TEXT("__npcsenses_test__");
-
-			FElysiumEntityDef GuardDef;
-			GuardDef.Classname = TEXT("npc_VHumanCombatant");
-			GuardDef.TargetName = TEXT("guard");
-			GuardDef.Origin = FVector::ZeroVector;
+			FElysiumEntityDef& GuardDef = Builder.AddNpc(TEXT("guard"));
 			GuardDef.Keys.Add(TEXT("vision"), FString::SanitizeFloat(VisionUnits));
 			GuardDef.Keys.Add(TEXT("hearing"), FString::SanitizeFloat(HearingScalar));
-			auto Wire = [&GuardDef](const TCHAR* Output, const TCHAR* Counter)
-			{
-				FElysiumOutputDef Row;
-				Row.Name = Output;
-				Row.Target = Counter;
-				Row.Input = TEXT("Add");
-				Row.Param = TEXT("1");
-				GuardDef.Outputs.Add(MoveTemp(Row));
-			};
-			Wire(TEXT("OnFoundEnemy"),    TEXT("c_foundenemy"));
-			Wire(TEXT("OnFoundPlayer"),   TEXT("c_foundplayer"));
-			Wire(TEXT("OnLostEnemyLOS"),  TEXT("c_lostenemylos"));
-			Wire(TEXT("OnLostPlayerLOS"), TEXT("c_lostplayerlos"));
-			Wire(TEXT("OnHearCombat"),    TEXT("c_hearcombat"));
-			Wire(TEXT("OnHearPlayer"),    TEXT("c_hearplayer"));
-			Wire(TEXT("OnHearWorld"),     TEXT("c_hearworld"));
-			Defs.Defs.Add(MoveTemp(GuardDef));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnFoundEnemy"),    TEXT("c_foundenemy"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnFoundPlayer"),   TEXT("c_foundplayer"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnLostEnemyLOS"),  TEXT("c_lostenemylos"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnLostPlayerLOS"), TEXT("c_lostplayerlos"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnHearCombat"),    TEXT("c_hearcombat"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnHearPlayer"),    TEXT("c_hearplayer"));
+			Builder.WireOutput(TEXT("guard"), TEXT("OnHearWorld"),     TEXT("c_hearworld"));
 
 			for (const TCHAR* Name : { TEXT("c_foundenemy"), TEXT("c_foundplayer"),
 				TEXT("c_lostenemylos"), TEXT("c_lostplayerlos"), TEXT("c_hearcombat"),
 				TEXT("c_hearplayer"), TEXT("c_hearworld") })
 			{
-				FElysiumEntityDef Counter;
-				Counter.Classname = TEXT("math_counter");
-				Counter.TargetName = Name;
-				Defs.Defs.Add(MoveTemp(Counter));
+				Builder.AddCounter(Name);
 			}
+			return Builder;
+		}
 
-			World.Load(MoveTemp(Defs));
-			World.SpawnPlayer();
-			World.Activate(0.0);
-			World.Tick(0.0);
-
-			Guard = static_cast<FElysiumNpc*>(World.FindByName(TEXT("guard")));
-			Player = World.FindPlayer();
+		explicit FSensesFixture(float VisionUnits = 4000.f, float HearingScalar = 1.0f)
+			: Fixture(BuildWorld(VisionUnits, HearingScalar))
+			, Services(Fixture.Services)
+			, World(Fixture.World)
+		{
+			Guard = Fixture.Npc(TEXT("guard"));
+			Player = Fixture.Player();
 		}
 
 		// Let the queue deliver without letting the guard's own think re-run the senses: every
@@ -201,21 +185,7 @@ namespace
 
 		float Counter(const TCHAR* Name)
 		{
-			const FElysiumEntity* Ent = World.FindByName(Name);
-			if (Ent == nullptr)
-			{
-				return -1.f;
-			}
-			TArray<TPair<FString, FString>> Rows;
-			Ent->GetDebugState(Rows);
-			for (const TPair<FString, FString>& Row : Rows)
-			{
-				if (Row.Key == TEXT("Value"))
-				{
-					return FCString::Atof(*Row.Value);
-				}
-			}
-			return -1.f;
+			return Fixture.Counter(Name);
 		}
 	};
 }
