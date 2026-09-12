@@ -83,9 +83,6 @@ static FElysiumEntityDefs TerminalAndTeleport()
 	Defs.Defs.Add(MoveTemp(Teleport));
 	return Defs;
 }
-}
-
-using namespace ElysiumTerminalPinTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalConeTest,
 	"Elysium.Substrate.TerminalCone", GPinFlags)
@@ -514,5 +511,7 @@ bool FElysiumTerminalForcedExitTest::RunTest(const FString&)
 	}
 	return true;
 }
+
+}   // namespace ElysiumTerminalPinTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

@@ -10,15 +10,14 @@
 #if WITH_EDITORONLY_DATA
 #include "UObject/MetaData.h"
 #endif
-
-using namespace ElysiumJson;
-
 const FName UElysiumModelProvenance::TagAssetId(TEXT("ElysiumAssetId"));
 const FName UElysiumModelProvenance::TagModelShape(TEXT("ElysiumModelShape"));
 const FName UElysiumModelProvenance::TagNanite(TEXT("ElysiumNanite"));
 
 namespace
 {
+	using namespace ElysiumJson;
+
 	/**
 	 * A JSON field's value as text regardless of its JSON type, mirroring
 	 * `ElysiumMaterialProvenance.cpp`'s own `StringifyField` -- the Coverage map stringifies
@@ -315,6 +314,8 @@ namespace
 
 void UElysiumModelProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 {
+	using namespace ElysiumJson;
+
 	// --- identity ---
 	AssetId = Str(O, TEXT("assetId"));
 	ModelPath = Str(O, TEXT("modelPath"));

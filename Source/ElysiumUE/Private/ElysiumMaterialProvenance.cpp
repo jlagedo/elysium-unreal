@@ -10,9 +10,6 @@
 #if WITH_EDITORONLY_DATA
 #include "UObject/MetaData.h"
 #endif
-
-using namespace ElysiumJson;
-
 const FName UElysiumMaterialProvenance::TagAssetId(TEXT("ElysiumAssetId"));
 const FName UElysiumMaterialProvenance::TagShaderProgram(TEXT("ElysiumShaderProgram"));
 const FName UElysiumMaterialProvenance::TagMaster(TEXT("ElysiumMaster"));
@@ -20,6 +17,8 @@ const FName UElysiumMaterialProvenance::TagSurfaceClass(TEXT("ElysiumSurfaceClas
 
 namespace
 {
+	using namespace ElysiumJson;
+
 	/**
 	 * A JSON field's value as text regardless of its JSON type: `pipeline/importers/materials.py`'s
 	 * `parameters[].value` carries the VMT's own scalar/string value straight through
@@ -255,6 +254,8 @@ namespace
 
 void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 {
+	using namespace ElysiumJson;
+
 	// --- identity --- AssetPath, UnitGlb, SourceSha256 and (further below) SurfacePropertyAsset
 	// are not part of the provenance sidecar `stage_unit` writes -- they live on the manifest
 	// entry, and `pipeline/unreal/import_materials.py` merges them into this same JSON object as

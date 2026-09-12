@@ -299,8 +299,6 @@ namespace ElysiumCameraShotsImpl
 	}
 }
 
-using namespace ElysiumCameraShotsImpl;
-
 FString ElysiumCameraShots::NormalizeKey(const FString& ShotFile)
 {
 	FString Normalized = ShotFile.TrimStartAndEnd();
@@ -334,8 +332,8 @@ bool ElysiumCameraShots::ParseAllText(const FString& Text, TArray<FElysiumCamera
 		}
 		FElysiumCameraShotDef Def;
 		Def.Name = Kid.Key;
-		ParseAnchor(Shot->Child(TEXT("Start")), *Def.Name, Def.Start);
-		ParseAnchor(Shot->Child(TEXT("End")), *Def.Name, Def.End);
+		ElysiumCameraShotsImpl::ParseAnchor(Shot->Child(TEXT("Start")), *Def.Name, Def.Start);
+		ElysiumCameraShotsImpl::ParseAnchor(Shot->Child(TEXT("End")), *Def.Name, Def.End);
 		if (const ElysiumKeyValues::FKvNode* Target = Shot->Child(TEXT("Target")))
 		{
 			// `flags |= 1 << (count + 2); count++` per sub-block found, exactly as retail: the flag
@@ -349,16 +347,16 @@ bool ElysiumCameraShots::ParseAllText(const FString& Text, TArray<FElysiumCamera
 			};
 			if (const ElysiumKeyValues::FKvNode* Point1 = Target->Child(TEXT("Point1")))
 			{
-				ParseAnchor(Point1, *Def.Name, Def.Target1);
+				ElysiumCameraShotsImpl::ParseAnchor(Point1, *Def.Name, Def.Target1);
 				RaisePresence();
 			}
 			if (const ElysiumKeyValues::FKvNode* Point2 = Target->Child(TEXT("Point2")))
 			{
-				ParseAnchor(Point2, *Def.Name, Def.Target2);
+				ElysiumCameraShotsImpl::ParseAnchor(Point2, *Def.Name, Def.Target2);
 				RaisePresence();
 			}
 		}
-		ParseConstraints(Shot->Child(TEXT("CameraConstraints")), Def.Constraints);
+		ElysiumCameraShotsImpl::ParseConstraints(Shot->Child(TEXT("CameraConstraints")), Def.Constraints);
 		Out.Add(MoveTemp(Def));
 	}
 	return Out.Num() > 0;
@@ -419,14 +417,14 @@ namespace ElysiumCameraShotsImpl
 
 const FElysiumCameraShotDef* ElysiumCameraShots::Load(const FString& ShotFile)
 {
-	const FShotList* List = LoadFile(ShotFile);
+	const ElysiumCameraShotsImpl::FShotList* List = ElysiumCameraShotsImpl::LoadFile(ShotFile);
 	return (List && List->Num() > 0) ? &(*List)[0] : nullptr;
 }
 
 const FElysiumCameraShotDef* ElysiumCameraShots::LoadNamed(const FString& ShotFile,
 	const FString& ShotName)
 {
-	const FShotList* List = LoadFile(ShotFile);
+	const ElysiumCameraShotsImpl::FShotList* List = ElysiumCameraShotsImpl::LoadFile(ShotFile);
 	if (!List || ShotName.IsEmpty())
 	{
 		return nullptr;
@@ -441,7 +439,7 @@ const FElysiumCameraShotDef* ElysiumCameraShots::LoadNamed(const FString& ShotFi
 
 void ElysiumCameraShots::FlushCache()
 {
-	Cache().Reset();
+	ElysiumCameraShotsImpl::Cache().Reset();
 }
 
 void ElysiumCameraShots::Install(const FString& ShotFile, const FElysiumCameraShotDef& Def)
@@ -457,9 +455,9 @@ void ElysiumCameraShots::InstallNamed(const FString& ShotFile,
 	{
 		return;
 	}
-	TSharedRef<FShotList> List = MakeShared<FShotList>();
+	TSharedRef<ElysiumCameraShotsImpl::FShotList> List = MakeShared<ElysiumCameraShotsImpl::FShotList>();
 	List->Append(Defs.GetData(), Defs.Num());
-	Cache().Add(Key, List);
+	ElysiumCameraShotsImpl::Cache().Add(Key, List);
 }
 
 void ElysiumCameraShots::InstallMiss(const FString& ShotFile)
@@ -472,7 +470,7 @@ void ElysiumCameraShots::InstallMiss(const FString& ShotFile)
 	// The remembered-miss representation is `LoadFile`'s own: a null list under the key, which is
 	// what it writes for a file that does not open. Seeding it here makes `Load`/`LoadNamed` take
 	// the identical early-out without a disk read.
-	Cache().Add(Key, TSharedPtr<FShotList>());
+	ElysiumCameraShotsImpl::Cache().Add(Key, TSharedPtr<ElysiumCameraShotsImpl::FShotList>());
 }
 
 const TCHAR* ElysiumCameraShots::LexToString(EElysiumShotPosition Position)

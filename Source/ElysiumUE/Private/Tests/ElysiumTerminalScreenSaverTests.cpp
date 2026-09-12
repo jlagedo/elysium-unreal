@@ -65,9 +65,6 @@ static FLabelHit FindLabel(const FElysiumTerminalScreenBuffer& Screen, const FSt
 	}
 	return Hit;
 }
-}
-
-using namespace ElysiumTerminalScreenSaverTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalScreenSaverTest,
 	"Elysium.Substrate.TerminalScreenSaver", GScreenSaverFlags)
@@ -228,5 +225,7 @@ bool FElysiumTerminalScreenSaverTest::RunTest(const FString&)
 	TestEqual(TEXT("the type-4 clear leaves the label as the only row with text"), NonBlankRows, 1);
 	return true;
 }
+
+}   // namespace ElysiumTerminalScreenSaverTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

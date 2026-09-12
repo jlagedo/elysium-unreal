@@ -83,9 +83,6 @@ static FElysiumTerminalDefinition RouterDefinition()
 	Definition.Directories.Add(MoveTemp(Blocked));
 	return Definition;
 }
-}
-
-using namespace ElysiumTerminalRouterTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalRouterTest,
 	"Elysium.Substrate.TerminalRouter", GRouterFlags)
@@ -456,5 +453,7 @@ bool FElysiumTerminalHudHintTest::RunTest(const FString&)
 	TestTrue(TEXT("so nothing resolves"), Terminal->HudHintLine().IsEmpty());
 	return true;
 }
+
+}   // namespace ElysiumTerminalRouterTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

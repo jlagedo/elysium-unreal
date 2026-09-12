@@ -20,9 +20,6 @@
 #endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumTextureProvenance, Log, All);
-
-using namespace ElysiumJson;
-
 const FName UElysiumTextureProvenance::TagAssetId(TEXT("ElysiumAssetId"));
 const FName UElysiumTextureProvenance::TagSourceFormat(TEXT("ElysiumSourceFormat"));
 const FName UElysiumTextureProvenance::TagRole(TEXT("ElysiumRole"));
@@ -41,6 +38,8 @@ namespace
 
 void UElysiumTextureProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 {
+	using namespace ElysiumJson;
+
 	AssetId = Str(O, TEXT("assetId"));
 	TexturePath = Str(O, TEXT("texturePath"));
 	AssetPath = Str(O, TEXT("assetPath"));

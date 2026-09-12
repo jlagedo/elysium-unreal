@@ -14,10 +14,10 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSign, Log, All);
 
-using ElysiumKeyValues::FKvNode;
-
 namespace
 {
+	using ElysiumKeyValues::FKvNode;
+
 	// `[245, 245, 245, 200]` (or bare `245 245 245 200`) -> linear 0..1. Missing components keep
 	// the supplied default, so a short list degrades instead of zeroing the colour.
 	FLinearColor ParseRGBA(const FString& S, const FLinearColor& Default)
@@ -219,7 +219,7 @@ bool FElysiumSignData::Load(const FString& DefinitionFile, FElysiumSignData& Out
 			return false;
 		}
 
-		const TSharedPtr<FKvNode> Root = ElysiumKeyValues::ParseText(Text);
+		const TSharedPtr<ElysiumKeyValues::FKvNode> Root = ElysiumKeyValues::ParseText(Text);
 		if (!Root.IsValid())
 		{
 			return false;
@@ -228,7 +228,7 @@ bool FElysiumSignData::Load(const FString& DefinitionFile, FElysiumSignData& Out
 		// A dispatch wrapper is a file of `Sign` blocks (24 of the 278 ship this way,
 		// newspaper_all.txt being the pattern). Take the first whose dependency evaluates true.
 		bool bRedirected = false;
-		for (const TPair<FString, TSharedPtr<FKvNode>>& Kid : Root->Kids)
+		for (const TPair<FString, TSharedPtr<ElysiumKeyValues::FKvNode>>& Kid : Root->Kids)
 		{
 			if (Kid.Key != TEXT("sign") || !Kid.Value.IsValid())
 			{
@@ -258,7 +258,7 @@ bool FElysiumSignData::Load(const FString& DefinitionFile, FElysiumSignData& Out
 			continue;
 		}
 
-		const FKvNode* Data = Root->Child(TEXT("SignData"));
+		const ElysiumKeyValues::FKvNode* Data = Root->Child(TEXT("SignData"));
 		if (!Data)
 		{
 			// Some files (the NewspaperData set) root under another name; nothing to draw here yet.

@@ -61,9 +61,6 @@ static FElysiumTerminalView IdleView(const FElysiumEntityHandle& Owner, uint32 R
 	View.ScreenRows[9] = FString(TEXT("            screen saver")).RightPad(View.Columns);
 	return View;
 }
-}
-
-using namespace ElysiumTerminalProjectionTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalProjectionOwnershipTest,
 	"Elysium.Substrate.Terminal.ProjectionOwnership", GProjectionFlags)
@@ -364,5 +361,7 @@ bool FElysiumTerminalProjectionRedrawTest::RunTest(const FString&)
 	Presentation->ReleaseAllTerminalProjections();
 	return true;
 }
+
+}   // namespace ElysiumTerminalProjectionTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

@@ -69,9 +69,6 @@ static FCharacterEvent Typed(TCHAR Character)
 {
 	return FCharacterEvent(Character, FModifierKeysState(), 0, false);
 }
-}
-
-using namespace ElysiumTerminalKeyTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalKeysTest,
 	"Elysium.Substrate.Terminal.Keys", GKeyFlags)
@@ -653,5 +650,7 @@ bool FElysiumTerminalIntentsTest::RunTest(const FString&)
 	(void)Slate;
 	return !HasAnyErrors();
 }
+
+}   // namespace ElysiumTerminalKeyTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

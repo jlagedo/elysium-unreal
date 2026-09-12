@@ -246,9 +246,6 @@ static FElysiumEntityDef TerminalDef(const TCHAR* Name, bool bGlobalEmail)
 	Def.Keys.Add(TEXT("global_email"), bGlobalEmail ? TEXT("1") : TEXT("0"));
 	return Def;
 }
-}
-
-using namespace ElysiumTerminalEmailTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalEmailTest,
 	"Elysium.Substrate.TerminalEmail", GMailFlags)
@@ -890,5 +887,7 @@ bool FElysiumTerminalEmailTest::RunTest(const FString&)
 	}
 	return true;
 }
+
+}   // namespace ElysiumTerminalEmailTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

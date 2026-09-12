@@ -413,19 +413,17 @@ namespace ElysiumDlgExprImpl
 	}
 }
 
-using namespace ElysiumDlgExprImpl;
-
 FString ElysiumDlgExpr::ConditionToPython(const FString& Raw)
 {
 	// Condition joins: `&` -> logical `and`, `|` -> logical `or`.
-	return Normalize(Raw, TEXT("and"), TEXT("or"));
+	return ElysiumDlgExprImpl::Normalize(Raw, TEXT("and"), TEXT("or"));
 }
 
 FString ElysiumDlgExpr::ActionToPython(const FString& Raw)
 {
 	// Action joins: `&` -> statement separator `;` (7 rows corpus-wide use `&` between statements).
 	// `|` never separates actions; leave it (a stray one falls to host error-to-false).
-	return Normalize(Raw, TEXT(";"), TEXT("|"));
+	return ElysiumDlgExprImpl::Normalize(Raw, TEXT(";"), TEXT("|"));
 }
 
 // The col-4 dependency — `CDialogDependency::Parse` / `ParseDep` / `TestSimple` / `Test`.
@@ -755,7 +753,6 @@ namespace ElysiumDlgDepTest
 		}
 	}
 }
-using ElysiumDlgDepTest::TestSimpleImpl;
 
 FElysiumDlgGateResult FElysiumDlgDependency::Explain(const IElysiumDlgSheet* Sheet,
 	FPythonFn PythonFn) const
@@ -782,9 +779,9 @@ FElysiumDlgGateResult FElysiumDlgDependency::Explain(const IElysiumDlgSheet* She
 	};
 
 	int32 Have = 0;
-	const bool bSimple = TestSimpleImpl(*this, Sheet, /*bForcePass*/ false, Have);
+	const bool bSimple = ElysiumDlgDepTest::TestSimpleImpl(*this, Sheet, /*bForcePass*/ false, Have);
 	int32 ForcedHave = 0;
-	const bool bSimpleForced = TestSimpleImpl(*this, Sheet, /*bForcePass*/ true, ForcedHave);
+	const bool bSimpleForced = ElysiumDlgDepTest::TestSimpleImpl(*this, Sheet, /*bForcePass*/ true, ForcedHave);
 
 	auto Combine = [&](bool bSimpleAnswer) -> bool
 	{
@@ -843,21 +840,21 @@ bool FElysiumDlgDependency::Test(const IElysiumDlgSheet* Sheet, FPythonFn Python
 	switch (Compound)
 	{
 	case EElysiumDlgCompound::SkillOnly:
-		return TestSimpleImpl(*this, Sheet, false, Have);
+		return ElysiumDlgDepTest::TestSimpleImpl(*this, Sheet, false, Have);
 	case EElysiumDlgCompound::PythonOnly:
 		return bHasPython && PythonFn(Python);
 	case EElysiumDlgCompound::And:
 		if (Precedence == EElysiumDlgPrecedence::SkillFirst)
 		{
-			return TestSimpleImpl(*this, Sheet, false, Have) && PythonFn(Python);
+			return ElysiumDlgDepTest::TestSimpleImpl(*this, Sheet, false, Have) && PythonFn(Python);
 		}
-		return PythonFn(Python) && TestSimpleImpl(*this, Sheet, false, Have);
+		return PythonFn(Python) && ElysiumDlgDepTest::TestSimpleImpl(*this, Sheet, false, Have);
 	case EElysiumDlgCompound::Or:
 		if (Precedence == EElysiumDlgPrecedence::SkillFirst)
 		{
-			return TestSimpleImpl(*this, Sheet, false, Have) || PythonFn(Python);
+			return ElysiumDlgDepTest::TestSimpleImpl(*this, Sheet, false, Have) || PythonFn(Python);
 		}
-		return PythonFn(Python) || TestSimpleImpl(*this, Sheet, false, Have);
+		return PythonFn(Python) || ElysiumDlgDepTest::TestSimpleImpl(*this, Sheet, false, Have);
 	}
 	return false;
 }

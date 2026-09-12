@@ -142,9 +142,6 @@ static FElysiumCameraCinematic* AdoptedCamera(FElysiumEntityWorld& World)
 {
 	return CineOf(World, World.CineCameraEntity());
 }
-}
-
-using namespace ElysiumCameraCinematicTests;
 
 // ------------------------------------------------------------------------------------------------
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraCinematicTest,
@@ -1611,5 +1608,7 @@ bool FElysiumCameraAnimatedTest::RunTest(const FString&)
 	}
 	return true;
 }
+
+}   // namespace ElysiumCameraCinematicTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

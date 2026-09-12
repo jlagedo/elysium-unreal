@@ -49,9 +49,6 @@ static void PutText(FElysiumTerminalView& View, int32 Column, int32 Row, const T
 // The project's render target: retail's 512x512 client texture at 2x. `FUN_100c77f0` refuses any
 // other shape (`0x100c7806` / `0x100c7818` both compare `0x200`).
 static const FVector2D Surface1024Square(1024.0, 1024.0);
-}
-
-using namespace ElysiumTerminalCellTests;
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalCellMetricsTest,
 	"Elysium.Substrate.Terminal.CellMetrics", GCellFlags)
@@ -289,5 +286,7 @@ bool FElysiumTerminalCellPaintTest::RunTest(const FString&)
 	}
 	return true;
 }
+
+}   // namespace ElysiumTerminalCellTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS
