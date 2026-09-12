@@ -126,21 +126,33 @@ chooses the nearest present player by Euclidean distance, stores its handle and 
 publishes the NPC/distance pair to the player's HUD observer surface. This nearest-player cache is
 not hostility admission and does not itself fire a found output.
 
-`SetPlayerLOS` (`0x10291610`) refreshes its cached player sight on a **2.0-second** cadence:
+`SetPlayerLOS` (`0x10291610`) refreshes its cached player sight on a **2.0-second** cadence.
+**Corrected 2026-09-12** — an earlier revision of this list had step 2 calling
+`CBaseCombatCharacter::FInViewCone` and step 3 caching LOS false when out of cone. It does not:
+the function body has no cone term at all, and it has a PVS term the list was missing. The walk in
+`npc-ai-reverse-engineering.md` § "The think cadence, decoded" is the authority; the arms, in order:
 
-1. Resolve the closest-player handle.
-2. Call `CBaseCombatCharacter::FInViewCone` (`0x10326750`). The observer's cone threshold and the
-   target player's `m_flStealthVisionCone` are applied in that test.
-3. If out of cone, cache LOS false.
-4. If in cone and distance is at or below **512 units**, cache LOS true without a trace.
-5. Beyond 512 units, trace from the NPC eye-side point to the player-side point with mask `0x4091`;
-   fraction below one, start-solid, or all-solid means blocked.
-6. Whenever the far trace is clear, update the last-clear-LOS time. If it becomes blocked while the
-   player remains in cone, preserve LOS for **8.0 seconds** after that last clear time.
+1. `m_bfNPCStateFlags & 0x8` (name unrecovered) or `m_bfNPCFrenziedFlags & 0x8` → force
+   `PVS = LOS = 1` and stamp both last-clear times. No gate, no trace.
+2. Otherwise, and only when `curtime >= m_flNextPlayerLOS`, re-arm that stamp `+2.0` and refresh.
+3. No valid closest player → the same forced-true sentinel as (1).
+4. `PVS` := the engine cluster test `0x101d1a90(player, npc)`. Out of PVS caches LOS false with no
+   trace.
+5. In PVS and `m_flPlayerDist` at or below **512 units** → LOS true with no trace.
+6. Beyond 512 units, trace from the NPC eye-side point to the player-side point with mask `0x4091`;
+   fraction below one, start-solid, or all-solid means blocked. A clear trace stamps
+   `m_flLastInPlayerLOS`.
+7. The tail runs on EVERY call, including one the 2 s gate declined: `if (!LOS && PVS && curtime −
+   m_flLastInPlayerLOS < 8.0) LOS = 1`.
 
-Special disabled/no-player branches initialize the cached cone and LOS bytes true with current
-timestamps. They are sentinel/default branches under their surrounding guards, not evidence that
-an NPC without a player has detected one. Consumers preserve the handle and state gates.
+The forced-true branches in (1) and (3) are sentinel/default branches under their surrounding
+guards, not evidence that an NPC without a player has detected one. Consumers preserve the handle
+and state gates.
+
+Because there is no cone term, the cached `m_bInPlayerLOS` is TRUE for a player standing behind an
+NPC with a clear line to its eye. It is a think-cadence input and the `DISAPPEAR` arm's, not a
+sighting — which is why the port keeps the range/cone/trace answer separately as
+`FElysiumNpcMemory::bPlayerVisible` and feeds only that to the law lane.
 
 ### Sight is not memory or enemy assignment
 

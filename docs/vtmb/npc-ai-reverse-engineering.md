@@ -3191,7 +3191,16 @@ All eight stamps are `CAI_BaseNPCTroika`-only: `m_flNextUpdateThink +0x6244`, `N
 312). `0x1029bd40` is the `ai` debug distance overlay, not a writer.
 
 **Due test** `IsThinkDue(stamp)` `0x10290660`: `(stamp − curtime) ≤ frametime` (equality is due;
-`FCOMP` + `TEST AH,0x41`). The move gate `0x102906e0` is `return true`.
+`FCOMP` + `TEST AH,0x41`). Its four per-stamp thunks are update `0x102906a0`, normal `0x102906c0`,
+move `0x102906e0` (`return true`) and AI `0x10290700`.
+
+**The three gated laws are SELF-GATING** (2026-09-12). `CalcNextUpdateThink` opens with
+`IsThinkDue(NextUpdate)` and returns without writing anything when it is false; the normal and AI
+laws do the same against their own stamps. `CalcNextMoveThink` alone has no gate. This is
+load-bearing rather than an optimisation: `m_flNextThink` is `min(NextUpdate, NextNormal)` and the
+update law floors at 0.03 s against the normal law's 0.1 s, so most wakeups are the update clock's
+alone — and without the self-gate each of those would push the normal and AI stamps forward too,
+and the NPC would stop gathering conditions entirely.
 
 **Writers.** `NPCInit` `0x1029a0b0` sets all eight to `curtime` and seeds `PVS = LOS = 1`
 (a fresh NPC is due on every clock). The four `Calc*`. **`TaskFail` `0x1029adb0`** sets the four
@@ -3236,7 +3245,7 @@ when none) and the `MOVE_FACE_ENEMY` facing under `debug_allow_move_facing`; `An
 `+0x6290/+0x629c`; `SetPlayerLOS`; `CacheInterruptConditions`; `AutoMovement` under
 `ANIM_MOVEMENT 0x4000`; hint upkeep (`m_flOccludedDelay` from cover/normal; invalid hint, or
 `!stay_entrenched && m_hHintCoverObject == enemy && (0x2e || 0x48)` → `ClearHintNode(5.0)` +
-`TaskFail(0x29)`); shoot-target override; a 1 % `"Scream_Death"` under `frenzied & 0x8000`;
+`SetCondition(0x29)`); shoot-target override; a 1 % `"Scream_Death"` under `frenzied & 0x8000`;
 `updateDue`; `ResolveStandingOnHead`; fall-to-ground unless `DONT_FALL_TO_GROUND`; `move_yaw`
 pose; `DISAPPEAR 0x20000000` removal when out of the player's PVS or unseen; the AI console gate
 `0x1026c3d0` (refusal → `m_flNextThink = curtime + 0.1`, return); **`bReduced =
@@ -3253,6 +3262,58 @@ only if `!bReduced && m_hDialogPartner invalid`; the head probe `0x1026ab50`; `P
 `if (!bReduced)` clear `LIGHT_DAMAGE 0x4c`, `HEAVY_DAMAGE 0x4d`, `WAS_BUMPED 0x38`. The base
 `CAI_BaseNPC::NPCThink` `0x1026ca80` is a flat `curtime + 0.1` with `RunAI(0)`; no Troika NPC
 runs it.
+
+**Two corrections from the walk (2026-09-12).**
+
+1. **`updateDue` is computed UNCONDITIONALLY**, between the two normal-due blocks and on both
+   paths — `updateElapsed = curtime − m_flLastUpdateThink` then `IsThinkDue(NextUpdate)`
+   (`0x102906a0`), before the branch that skips the rest of the body. Its position in the listing
+   above is an artifact of the linearised decompilation. It has to be: the update clock floors at
+   0.03 s against the normal clock's 0.1 s, so `min(NextUpdate, NextNormal)` is the update stamp
+   most of the time, and a wakeup on it alone would otherwise advance the update clock without ever
+   running the work it exists to schedule. `UpdateCharacter` takes `updateElapsed` as its argument,
+   read before `CalcNextUpdateThink` overwrites the local with `Next − Last`.
+2. **`0x10269a20` is `SetCondition(int)`**, not `TaskFail` — it ORs `1 << (id − 1000000000)` into
+   the condition bitfield at `+0x5c5c`, through the same global/local id resolver
+   (`0x102ea2d0`) every condition call uses. So the hint-release arm above raises condition `0x29`;
+   it does not fail the task. The sibling readers are `HasCondition` `0x10269d30`,
+   `ConditionInterruptsCurrentSchedule` `0x10269c70` (which additionally requires
+   `m_pSchedule +0x5c38` and tests the schedule mask `+0x5c74` then the test-bits overlay
+   `+0x5c8c`) and the clear `0x10269b50`.
+
+**`COND_WAS_BUMPED` 0x38's producer (2026-09-12).** `0x10147690`, the player's touch handler:
+`if (other->+0x9c) { this->AddMiscFlag(0x100 /* Obf_Bumped_Object */); if (this->+0xa8 /* this is
+a player */ && (npc = other->+0x98) /* other is a Troika NPC */) { if
+(ConditionInterruptsCurrentSchedule(npc, 0x38)) { ai-trace hook; SetCondition(npc, 0x38); } } }`.
+The guard is the recovered behaviour and it is observable: the bit is never raised on an NPC whose
+running program does not list `WAS_BUMPED` in its interrupt mask. Its one reader in the image is
+`CAI_BaseNPCTroika::GetSchedule` `0x102ae920`, in combat.
+
+**Port (0005 story 15).** `Substrate/ElysiumNpcThinkCadence.h` carries `IsDue`, the four laws over
+`FElysiumNpcScheduleHost`'s eight stamps, and `ShouldThinkFrequently`; `FElysiumNpc::Think` is
+`NPCThink`'s shape and the only writer of `NextThink`. Three things differ and each is stated at
+the code:
+
+- **The record is synced on the frame, not the think.** Retail's entity origin IS the body —
+  `PerformMovement(interval)` integrates the whole elapsed interval inside `NPCThink`, so a far NPC
+  hops but is never wrong. This runtime's bodies are integrated by a movement component on the
+  actor tick while `Origin` is written only from a think, and an unseen body may not think for
+  seconds. `FElysiumEntityWorld::SyncMovingNpcRecords` refreshes every NPC's record once per frame,
+  beside the player's own `SyncFromBody`.
+- **A reduced pass re-derives the damage lane.** Retail sets `LIGHT_DAMAGE`/`HEAVY_DAMAGE` inside
+  the damage transaction, so the bit is live on a reduced think; this runtime rebuilds its whole
+  condition set each full pass and reconstructs the one-pass life from `Cognition.GatheredAt`,
+  which a frozen set cannot express. `ElysiumNpcCond::GatherDamage` and `GatherBump` therefore run
+  on a reduced pass too, without advancing `GatheredAt`.
+- **A corpse is on no clock.** `ThinkDead` runs ahead of the cadence and polls its own death
+  program at a named 0.1 s, because routing it through the distance laws would delay the ragdoll
+  handoff for a body the player is not near.
+
+Unrecovered and stated as seams: `m_bfNPCStateFlags` bit 3 (its name and its producer),
+`m_flTeleportMoveTimer`'s writer (a `StartTask` `0x102a1910` arm), `m_bForceFrequentThink`'s caller
+(`0x101aa750` has none), `UpdateCharacter`'s body beyond the `FinishTalking` tail, the subclass
+writers of `m_flNextAIThink` (`CNPC_VCamera`, `CNPC_VNewscaster`), and `WAS_BUMPED`'s bump event
+(this runtime's motor reports no character-vs-character contact).
 
 ## Squads, decoded (2026-09-08)
 
