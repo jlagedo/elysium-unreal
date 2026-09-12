@@ -560,6 +560,14 @@ public:
 	// `0x101aa750`, which has no recovered caller, so the flag stays false.
 	bool bForceFrequentThink = false;
 
+	// `m_bDisableAI` (+0x6080). `NPCThink` (`0x10292de0`) tests it immediately after clearing
+	// `SCHEDULE_CHANGED` and returns: no senses, no conditions, no schedule, no cadence. Retail
+	// leaves `m_flNextThink` alone on that return, but this runtime's `RunThinks` has already
+	// consumed it before entering `Think()`, so the silence has to be stated rather than inherited
+	// -- and re-armed on the way back out.
+	void SetDisableAi(bool bDisable);
+	bool IsAiDisabled() const { return bDisableAi; }
+
 	// CBaseEntity::SetAttackExtents 0x1009af40; attack partition only, never the motor capsule.
 	void SetAttackExtents(const FVector& MarginCm) { ScheduleHost.AttackExtentsCm = MarginCm; }
 	FBox AttackBounds(const FBox& CollisionBounds) const
@@ -973,6 +981,8 @@ private:
 	// Whether the death handoff has already run. Session state, not save state: it is derivable from
 	// the mind's dead state, and a restored corpse re-runs the handoff on the body the load rebuilt.
 	bool bDeathHandoffDone = false;
+	// `m_bDisableAI` (+0x6080). Session state, like retail's: not in the datamap's save block.
+	bool bDisableAi = false;
 	// The interesting-place visit's phase machine and the state riding on it.
 	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
 	EAmbientPhase AmbientPhase = EAmbientPhase::None;

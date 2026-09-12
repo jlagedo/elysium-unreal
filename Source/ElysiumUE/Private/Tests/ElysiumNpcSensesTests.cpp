@@ -176,10 +176,7 @@ namespace
 		// case here drives the pass it is asserting explicitly.
 		void Flush(double Now)
 		{
-			if (Guard)
-			{
-				Guard->NextThink = ELYSIUM_NEVER_THINK;
-			}
+			FElysiumNpcWorldFixture::Quiet({ Guard });
 			World.Tick(Now);
 		}
 
@@ -783,9 +780,9 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 
 		// Admission first: the ordinary think path has to be past its barrier for this to be a
 		// statement about suppression rather than about admission.
-		F.Guard->NextThink = 0.0f;
+		FElysiumNpcWorldFixture::Wake({ F.Guard }, 1.0);
 		F.World.Tick(1.0);
-		F.Guard->NextThink = 0.0f;
+		FElysiumNpcWorldFixture::Wake({ F.Guard }, 2.0);
 		F.World.Tick(2.0);
 
 		// The sound must be newer than the last Listen, whose timestamp is exactly 2.0.
@@ -793,7 +790,7 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 		F.World.EmitGameSound(FVector(Cm(50.f), 0.0, 0.0), FName(TEXT("PLAYER_GUNSHOT_BASE")),
 			0.f, FElysiumEntityHandle::Invalid(), 0.f, ElysiumGameSounds::Combat);
 		F.Guard->ScriptOwner = F.Guard->Handle;   // a beat owns the body
-		F.Guard->NextThink = 0.0f;
+		FElysiumNpcWorldFixture::Wake({ F.Guard }, 3.0);
 		F.World.Tick(3.0);
 		F.World.Tick(3.1);
 		TestEqual(TEXT("a script-owned body gathers no conditions"),
@@ -801,10 +798,10 @@ bool FElysiumNpcSensesSuppressionTest::RunTest(const FString&)
 
 		// Handing the body back resumes it: the stimulus is still inside the retention window.
 		F.Guard->ScriptOwner = FElysiumEntityHandle::Invalid();
-		F.Guard->NextThink = 0.0f;
+		FElysiumNpcWorldFixture::Wake({ F.Guard }, 4.0);
 		F.World.Tick(4.0);
 		F.World.Tick(4.1);
-		F.Guard->NextThink = 0.0f;
+		FElysiumNpcWorldFixture::Wake({ F.Guard }, 4.91);
 		F.World.Tick(4.91);
 		F.World.Tick(4.92);
 		TestEqual(TEXT("...and hearing resumes once the beat releases it"),

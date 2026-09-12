@@ -233,13 +233,7 @@ namespace
 		{
 			for (int32 i = 0; i < 2; ++i)
 			{
-				for (FElysiumNpc* Npc : { Fighter, Target })
-				{
-					if (Npc)
-					{
-						Npc->NextThink = 0.0f;
-					}
-				}
+				FElysiumNpcWorldFixture::Wake({ Fighter, Target }, 0.0);
 				World.Tick(0.0);
 			}
 			Quiet();

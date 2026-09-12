@@ -8,6 +8,8 @@
 // class's A/B, not the animating node's.
 
 #include "Substrate/ElysiumNpc.h"
+#include <cmath>
+
 
 #include "ElysiumAnimEvent.h"
 #include "ElysiumAnimationIntent.h"
@@ -802,6 +804,14 @@ void FElysiumNpc::Think()
 	// still running on it, and when that ends the body stops thinking altogether.
 	if (ThinkDead())
 	{
+		return;
+	}
+	// `if (m_bDisableAI) return`, at `NPCThink`'s own position. Retail leaves `m_flNextThink`
+	// alone here; this runtime's `RunThinks` cleared it before entering, so the silence is stated.
+	// `SetDisableAi(false)` re-arms through `ResetThinkTimers`.
+	if (bDisableAi)
+	{
+		NextThink = ELYSIUM_NEVER_THINK;
 		return;
 	}
 	// RunAlternateAI: the attacker owns a mode-3 pair; do not sense or replace its animation.
@@ -3277,13 +3287,38 @@ void FElysiumNpc::Activate()
 	NextThink = static_cast<float>(Now);
 }
 
+void FElysiumNpc::SetDisableAi(bool bDisable)
+{
+	if (bDisableAi == bDisable)
+	{
+		return;
+	}
+	bDisableAi = bDisable;
+	// Coming back on, the body is due on every clock again -- the same state `NPCInit` leaves a
+	// fresh NPC in. Going off, `Think`'s own gate parks `NextThink`; doing it here as well would
+	// silence a body that is mid-think.
+	if (!bDisableAi)
+	{
+		ResetThinkTimers(World ? World->NowSeconds() : 0.0);
+	}
+}
+
 void FElysiumNpc::ResetThinkTimers(double Now)
 {
 	// Slot 614 `0x102c23f0`: the four `Next` stamps and `m_flNextThink`, all to curtime. The
 	// `Last` mirrors are deliberately untouched -- retail leaves them, so the interval the next
 	// `Calc*` reports is measured from the stamp the reset overwrote.
 	ScheduleHost.ResetThinkTimers(Now);
-	NextThink = static_cast<float>(Now);
+	// `NextThink` is a float and the world clock a double, so `float(Now)` rounds ABOVE `Now` for
+	// most values -- and `RunThinks`' `NextThink > Now` test would then skip the very think this
+	// reset exists to arm. One ULP down where it does. (Retail has no such problem: both are
+	// floats there.)
+	float Armed = static_cast<float>(Now);
+	if (static_cast<double>(Armed) > Now)
+	{
+		Armed = std::nextafterf(Armed, -FLT_MAX);
+	}
+	NextThink = Armed;
 }
 
 bool FElysiumNpc::BypassesKnockbackEligibility() const

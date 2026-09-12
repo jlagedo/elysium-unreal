@@ -22,6 +22,7 @@
 #include "Substrate/ElysiumNpcFlags.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSchedule.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
 
@@ -155,19 +156,13 @@ namespace
 
 		void Quiet()
 		{
-			if (Guard != nullptr)
-			{
-				Guard->NextThink = ELYSIUM_NEVER_THINK;
-			}
+			FElysiumNpcWorldFixture::Quiet({ Guard });
 		}
 
 		// One forced think of the guard at `Now`.
 		void Step(double Now)
 		{
-			if (Guard != nullptr)
-			{
-				Guard->NextThink = 0.0f;
-			}
+			FElysiumNpcWorldFixture::Wake({ Guard }, Now);
 			World.Tick(Now);
 			Quiet();
 		}

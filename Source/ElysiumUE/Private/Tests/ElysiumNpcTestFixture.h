@@ -176,15 +176,51 @@ struct FElysiumNpcWorldFixture
 		return Entity ? FCString::Atof(*Debug(Entity, TEXT("Value"))) : -1.f;
 	}
 
-	// Nothing here wants an NPC's own think competing with the pass a case is driving.
+	// Nothing here wants an NPC's own think competing with the pass a case is driving. That is
+	// retail's `m_bDisableAI` (+0x6080), which `NPCThink` tests immediately after clearing
+	// `SCHEDULE_CHANGED` -- and stating it that way matters now that `NextThink` is the think
+	// cadence's own output: a pinned think is a lie about the clock, a disabled AI is a fact about
+	// the NPC. `Wake` is the other half, for a case that then wants exactly one real think.
 	static void Quiet(std::initializer_list<FElysiumNpc*> Npcs)
 	{
 		for (FElysiumNpc* Npc : Npcs)
 		{
 			if (Npc != nullptr)
 			{
-				Npc->NextThink = ELYSIUM_NEVER_THINK;
+				Npc->SetDisableAi(true);
 			}
+		}
+	}
+
+	// Hand the AI back and put all four clocks on `Now`, which is slot 614's own effect
+	// (`ResetThinkTimers` `0x102c23f0`). A case that used to force a think by writing
+	// `NextThink = 0` says this instead.
+	static void Wake(std::initializer_list<FElysiumNpc*> Npcs, double Now)
+	{
+		for (FElysiumNpc* Npc : Npcs)
+		{
+			if (Npc != nullptr)
+			{
+				Npc->SetDisableAi(false);
+				Npc->ResetThinkTimers(Now);
+			}
+		}
+	}
+
+	// Step the world to `To` at frame granularity. The think cadence's due test is
+	// `(stamp - Now) <= FrameSeconds()`, so a case that jumped the clock in one call would run
+	// every think on the clamped 0.1 s epsilon and could never observe a stamp being skipped.
+	void Advance(double To, double StepSeconds = ElysiumWorldClock::DefaultFrameSeconds)
+	{
+		double Now = World.NowSeconds();
+		while (Now + StepSeconds < To)
+		{
+			Now += StepSeconds;
+			World.Tick(Now);
+		}
+		if (Now < To)
+		{
+			World.Tick(To);
 		}
 	}
 

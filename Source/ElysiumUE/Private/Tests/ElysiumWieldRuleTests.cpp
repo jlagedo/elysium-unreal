@@ -24,6 +24,7 @@
 #include "Substrate/ElysiumNpcLoadout.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumWieldRules.h"
+#include "Tests/ElysiumNpcTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 namespace ElysiumWieldRuleTests
@@ -457,7 +458,7 @@ bool FElysiumWieldNpcLoadoutTest::RunTest(const FString&)
 	// loadout — the real production path, as `Elysium.Substrate.NpcCombat.Loadout` drives it.
 	for (int32 i = 0; i < 2; ++i)
 	{
-		Guard->NextThink = 0.0f;
+		FElysiumNpcWorldFixture::Wake({ Guard }, 0.0);
 		World.Tick(0.0);
 	}
 

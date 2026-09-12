@@ -173,10 +173,7 @@ namespace
 			}
 			Guard = Fixture.Npc(TEXT("guard"));
 			Player = Fixture.Player();
-			if (Guard)
-			{
-				Guard->NextThink = ELYSIUM_NEVER_THINK;
-			}
+			FElysiumNpcWorldFixture::Quiet({ Guard });
 
 			Rules.DeafArcDegrees[0] = 60.f;
 			for (int32 Index = 1; Index < 20; ++Index)

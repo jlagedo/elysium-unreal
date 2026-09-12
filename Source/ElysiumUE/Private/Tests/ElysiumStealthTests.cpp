@@ -249,7 +249,7 @@ namespace
 				// The world is deliberately not ticked: every case here drives the one pass it is
 				// asserting, and a guard think behind its back would offer an observer from a
 				// position the case has not placed yet.
-				Guard->NextThink = ELYSIUM_NEVER_THINK;
+				Guard->SetDisableAi(true);
 			}
 			Player = World.FindPlayer();
 			if (Player)

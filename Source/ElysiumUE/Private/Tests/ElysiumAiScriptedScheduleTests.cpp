@@ -188,15 +188,9 @@ namespace
 		FAiScheduleFixture(const FAiScheduleFixture&) = delete;
 		FAiScheduleFixture& operator=(const FAiScheduleFixture&) = delete;
 
-		void Wake()
+		void Wake(double Now = 0.0)
 		{
-			for (FElysiumNpc* Npc : { Guard, Victim })
-			{
-				if (Npc != nullptr)
-				{
-					Npc->NextThink = 0.0f;
-				}
-			}
+			FElysiumNpcWorldFixture::Wake({ Guard, Victim }, Now);
 		}
 
 		void Quiet()
@@ -207,14 +201,9 @@ namespace
 
 		void Step(double Now)
 		{
-			if (Guard != nullptr)
-			{
-				// Unconditionally due, which is what every other NPC fixture writes. `NextThink` is a
-				// float and the tick clock a double, so `float(Now)` rounds ABOVE `Now` for most
-				// values and `RunThinks`' `NextThink > Now` test would skip the very think this call
-				// exists to run.
-				Guard->NextThink = 0.0f;
-			}
+			// Hand the AI back and put all four clocks on the caller's `Now`, so the tick below
+			// runs exactly one full think (`ResetThinkTimers` `0x102c23f0`).
+			FElysiumNpcWorldFixture::Wake({ Guard }, Now);
 			World.Tick(Now);
 			Quiet();
 		}

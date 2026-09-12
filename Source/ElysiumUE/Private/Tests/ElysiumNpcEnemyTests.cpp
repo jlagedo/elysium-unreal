@@ -486,7 +486,7 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 		{
 			return false;
 		}
-		LateEntity->NextThink = ELYSIUM_NEVER_THINK;
+		LateEntity->NextThink = ELYSIUM_NEVER_THINK;   // a plain entity, not an NPC: no AI to disable
 		F.Hate(LateEntity, 5);
 		TestTrue(TEXT("a closer unseen candidate does NOT displace a visible incumbent"),
 			ElysiumNpcEnemy::BestEnemy(*F.Guard) == F.Player->Handle);
@@ -960,9 +960,9 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	}
 	// Admission first: the ordinary think path has to be past its barrier for any of this to be a
 	// statement about the decision pass rather than about admission.
-	F.Guard->NextThink = 0.0f;
+	FElysiumNpcWorldFixture::Wake({ F.Guard }, 1.0);
 	F.World.Tick(1.0);
-	F.Guard->NextThink = 0.0f;
+	FElysiumNpcWorldFixture::Wake({ F.Guard }, 2.0);
 	F.World.Tick(2.0);
 	F.Quiet();
 
