@@ -18,7 +18,7 @@ disciplines' own effects and costs — **0006**; conversation UI and the `.dlg` 
 kernel and the route refusal it runs on).
 
 ## Sources
-- Oracle: `docs/vtmb/npc-ai-reverse-engineering.md` (the NPC AI oracle), `docs/vtmb/stealth.md`,
+- Oracle: `docs/vtmb/npc-ai/README.md` (the NPC AI oracle), `docs/vtmb/stealth.md`,
   `docs/vtmb/navigation-jump-links.md`, `docs/vtmb/feeding.md`, `docs/vtmb/footsteps.md`,
   `docs/vtmb/entity_io.md`, `docs/vtmb/activity_enum.md`, `docs/vtmb/animation_and_movers.md`,
   `docs/vtmb/disciplines.md`, `docs/vtmb/lighting.md`, `docs/vtmb/vdata-catalog.md`,
@@ -77,8 +77,128 @@ In build order. A story is done when every behaviour it lists is in the
 substrate and its recovery is written in the oracle section it names. Numbers are stable ids
 cited by other documents; a split keeps the number and adds a letter. Each open story carries
 the retail contract the code must match, the job, what it consumes or provides, and a size
-(XS–XL) with the model / effort tier recommended for it.
+(XS–XL) with the model / effort tier recommended for it. Sizes are read off the kernel ledger
+(`## Build order` below), not guessed: a story is sized after its closure is known.
 
+- [x] **29. The kernel ledger.** Retail: the whole `CAI_BaseNPC` family in `vampire.dll` — 77
+  classes, 600 primary-vtable slots, the 835-offset `CAI_BaseNPCTroika` layout, and the 5,050
+  functions reachable from the slot bodies, `NPCThink 0x10292de0` and `RunAI 0x1026f110` —
+  read out of the whole-body corpus in one pass. Job (landed): `uv run elysium research
+  kernel_ledger` writes `docs/vtmb/npc-kernel/` (classes, slots, fields with writers and readers,
+  functions with citations, the call graph, the layered build order, the kernel's entry points
+  from other subsystems, coverage, the naming backlog, and the address → oracle-section index);
+  `--check` verifies the committed tables; `pipeline/tests/test_kernel_ledger.py` holds the
+  derivations and the 25a facts as oracles against the real corpus. The prose oracle was split
+  into `docs/vtmb/npc-ai/` by subsystem, headers unchanged, and
+  `pipeline/tests/test_oracle_citations.py` refuses a dangling `§ "…"` or path citation.
+  Provides: the closure, layer and producer facts every story below is sized and ordered by.
+  Oracle: `docs/vtmb/npc-kernel/README.md`. Unrecovered: READ/WRITE direction is a regex over
+  the decompiled C; 78 closure bodies are damaged decompilations; 2,970 are still `FUN_`.
+  Size: M. Effort: Fable / high.
+- [ ] **29a. The naming pass.**
+  Retail: of the closure's 5,050 functions, 2,970 are `FUN_`; of the 2,490 *core* functions (a
+  family or helper method, or a body touching an offset past `CBaseCombatCharacter`'s layout
+  `+0x19b0`) 1,073 are — 725 in layers 0–4, 141 in 5–9, 116 in 10–18, 90 in 19–26. The image
+  names 129 through the doc overlay (`corpus names`, `research/tooling/ghidra/driver/names.tsv`,
+  tier + evidence per row); `corpus harvest` proposes rows from addresses the docs pair with a
+  name. Three evidence sources the harvest does not read yet: the Source SDK 2003 class
+  declaration order (a vtable's slot order *is* the header's virtual order, so every slot whose
+  neighbours are named names itself — verified against the 129), the `file:line` stamps the
+  selector trace writes (`AI_BaseNPC.cpp:682`, `scripted.cpp:0x3ca`…) which pin a body to a
+  source file, and DevMsg strings.
+  Gap: `unnamed.md` ranks the backlog; nothing proposes names from slot order or stamps.
+  Job: extend `corpus harvest` with the slot-order pass over the SDK class declarations
+  (`$ELYSIUM_WORK_ROOT/research/reference-source/Bloodlines SDK/`) and the stamp pass; review the proposal file as
+  text (a row is a question, not a name); `corpus names --apply`; regenerate the ledger. Names
+  are identity only — no behaviour is read beyond what names it. Acceptance: core `FUN_` count
+  under 200 in `coverage.md`; every slot of `CAI_BaseNPC` 0–583 named or marked "no SDK twin".
+  Consumes: 29. Provides: readable checklists to 29b–29e; `functions.md` rows a story can cite
+  by name. Oracle: `npc-kernel/unnamed.md` (the count is the record). Unrecovered: nothing —
+  a name the evidence cannot settle stays `FUN_` and says why in the overlay's evidence column.
+  Size: M. Effort: Sonnet / medium — mechanical, reviewed as text.
+- [ ] **29b. The shape: every field and every slot declared.**
+  Retail: `fields.md` — the 835-offset `CAI_BaseNPCTroika` layout (`CAI_BaseNPC`'s 620 are its
+  prefix), plus the species-only offsets and the undeclared `field_0x…` words the walk touches;
+  `slots.md` — 600 primary-vtable slots, 347 with a single body across the family, the rest with
+  a Troika body and up to 27 species overrides; `classes.md` — the 77-class tree and the entity
+  classnames each claims.
+  Gap: `FElysiumNpc` (`ElysiumNpc.h`) cites ~30 offsets and ~25 slots in comments only, nothing
+  asserts them; `FElysiumNpcMind` has no retail counterpart at all (`m_NPCState +0x5cc0` /
+  `m_IdealNPCState +0x5cc4` are not declared anywhere); nine sites call `Schedule.Clear()` where
+  retail calls `ClearSchedule`; `ElysiumStub::Fired` keys on free text with no address or story
+  field. `FElysiumNpc` is `final` and species are data (`ElysiumNpcClasses.cpp`), which is right
+  and stays.
+  Job: a generator beside `gen_action_tables.py` reads the ledger tables and emits
+  `ElysiumNpcKernelShape.cpp` — the census (offset → member, slot → virtual, class → base) the
+  runtime asserts in an `ElysiumActionTableTests`-shaped test — and the shape itself lands by
+  hand from the census: every Troika offset a named member on the struct that owns its concern
+  (`ScheduleHost`, `Cognition`, `Senses`, `NpcFlags`, the leaf), existing members kept and
+  mapped, new ones default-initialised and unwritten; every slot a virtual on `FElysiumNpc` with
+  its address in the declaration comment and its base body as the default, or a named stub that
+  tallies `elysium.stubs` — which gains structured `Address` and `Story` columns so the tally
+  joins `functions.md`. Species overrides are rows in the class registry (class → slot →
+  address), not subclasses. The nine raw `Schedule.Clear()` sites become the one
+  `ClearSchedule` (25a's first job, done here because it is shape).
+  Consumes: 29, 29a. Provides: the object every later story fills instead of re-shaping — the
+  end of "seam shaped by guess, rewired by the next story".
+  Oracle: `npc-kernel/fields.md`, `slots.md`, `classes.md`; the census file is the record.
+  Unrecovered: nothing new — the shape is a transcription. Size: L. Effort: Opus / high.
+- [ ] **29c. The primitives: layers 0–9, in bulk.**
+  Retail: 1,695 core functions in the first ten layers of `order.md` — 1,156 are ≤ 64 bytes
+  (accessors, predicates, one-field setters), 924 touch no NPC field, 1,325 fill a family slot
+  (mostly species overrides of tiny virtuals: `IsX()`, `GetY()`), 21 are damaged decompilations.
+  Job: `kernel_ledger` gains `--checklist <band>`, which emits `npc-kernel/checklist-0-9.md`: one row per
+  function (address, name, size, slots, fields written/read, callers, damaged) with an empty
+  *verdict* column; the story fills every verdict with one of four words and does what the word
+  says. **rule** — port the body verbatim onto 29b's virtual with one test derived from the
+  decompiled C (the vision's feel layer: formulas, thresholds, call order); **mechanism** — Unreal
+  already provides it (a trace, a physics query, an audio call, a string op); name the service
+  seam it maps to and record it, port nothing; **present** — the port already has it; cite the
+  function; **dead** — no caller in the closure and no slot: recorded. Work by band as
+  checkpoints, 0–4 (1,453) then 5–9 (242); damaged rows go to `corpus asm` one at a time and are
+  never bulk-verdicted. Acceptance: no empty verdict; every `rule` row has a test; the
+  `coverage.md` "cited by neither" count for layers 0–9 is zero.
+  Consumes: 29b. Provides: every leaf a later story's body calls, already present; the feature
+  stories below lose their low-layer work (the per-story split is in `## Build order`).
+  Oracle: the checklist is the record; a `rule` row whose body is > 64 bytes gets a walked
+  paragraph in the subsystem file its fields belong to.
+  Unrecovered: the 21 damaged bodies until read from the listing. Size: XL — bulk, each row
+  trivial. Effort: Sonnet / medium in bulk; Opus for the damaged rows and any verdict argued.
+- [ ] **29d. The middle: layers 10–18.**
+  Retail: 347 core functions — the three `GatherConditions` sweeps (10a–10c, landed), the
+  see-unknown sweep's neighbours, `CAI_Memory` and the sense helpers, hint and navigator
+  helpers, `SetEnemy 0x10279a50`, the flag-word writers — 116 unnamed, 4 damaged, 17 port-cited.
+  Job: the same checklist form (`--checklist 10-18`); bodies > 64 bytes are walked into their
+  subsystem file (`senses.md`, `social.md`, `conditions-and-states.md`) with the section
+  convention (address in the header, `**Unrecovered:**` at the end); bodies ≤ 64 bytes take a
+  verdict as in 29c. Acceptance as 29c.
+  Consumes: 29c. Provides: the producers every gather and selector reads (`fields.md` *Producers
+  later* for layers 19–26 drops to zero). Oracle: the subsystem files. Unrecovered: the 4
+  damaged bodies. Size: L. Effort: Opus / high for the walked bodies, Sonnet for the rest.
+- [ ] **29e. The loop and the state machine: layers 19–26.**
+  Retail: 354 core functions, 90 unnamed, 8 damaged, 106 already cited by the oracle — the
+  interpreter itself: `SetState 0x1026e340`, `SelectIdealState 0x1026f660` / Troika `0x102ad660`
+  / `CNPC_VHuman 0x103851e0`, `NPCInit 0x10273390` / `0x1029a0b0` and the species inits,
+  `TranslateSchedule 0x102b12f0` and its twenty species overrides, `MaintainSchedule 0x102817c0`
+  and every exit, `GatherConditions 0x1026ec30` / Troika `0x102b27f0`, `RunAI 0x1026f110` /
+  `0x1028fcc0`, `StartTask 0x102827f0` / `0x102a1910` and `RunTask 0x10288780` / `0x102aacf0`
+  arm by arm, `SelectSchedule` (Troika `0x102af660`, VHuman `0x10384ee0`, base `0x1028a260` —
+  damaged), `GetSchedule 0x102ae920`, `TaskFail` and the `CNPC_VSabbatLeader 0x103a9400`
+  override, `NPCThink 0x10292de0`.
+  Gap: about half is walked (25, 15, 10a–c, the idle branch, `GetSchedule`); the rest is the
+  open stories 25b, 25c, 26, 16b's ideal state, 10d's selector, and 21c's loop consumers.
+  Job: walked, not bulk — one section per function in `schedule-kernel.md`,
+  `conditions-and-states.md` or `lifecycle.md`, every arm, every field it reads, its priority
+  order, what it writes, ported onto 29b's virtuals with the tests the walk implies. This story
+  **absorbs** 25b (slot 440 and the frenzied pre-table), 25c (`MaintainSchedule`'s exits), 26
+  (`GetSchedule`'s eight high-layer bodies), 16b's `SelectIdealState`, 10d's `SelectSchedule`
+  case 3; those stories keep their numbers for their remaining program and wiring work and say
+  so. Order within: `SetState` → `SelectIdealState` → `NPCInit` → `TranslateSchedule` →
+  `MaintainSchedule` exits → `GatherConditions` → `RunAI` → the task arms → `SelectSchedule` /
+  `GetSchedule` → `NPCThink`.
+  Consumes: 29d. Provides: the interpreter every program family runs on, finished once.
+  Oracle: `schedule-kernel.md`, `conditions-and-states.md`, `lifecycle.md`. Unrecovered: the 8
+  damaged bodies (`0x1028a260` first). Size: XL. Effort: Opus or Fable / high.
 - [x] **1. Target surface and the light query.** The light row and `Sneaking` publish the vision,
   cone and hearing scalars; `trigger_stealth_mod` is a balanced overlap modifier. The light query
   is a live per-worldlight evaluation: Source falloff by light type, the cone/angle term, the live
@@ -346,8 +466,16 @@ the retail contract the code must match, the job, what it consumes or provides, 
   seam or named as a later story's; the `StartTask`-vs-`RunTask` timing difference where the
   port's task bodies need it.
   Consumes: 25. Oracle: § "The kernel's failure route and the base programs, walked".
+  Recovery banked 2026-09-13 (all twelve callers walked, in that section): `NPCInit` clears
+  unconditionally on every class; Troika's grapple entry clears after the queued-burn refusal
+  (`+0x65a8` ← `CreateDamageEffects 0x10330d00`), the dialogue abort and the cine cancel, and
+  base entry `0x1026cdc0` is not type-gated (the port's stealth-only gate is a divergence);
+  `OnRestore`'s `DiscardScheduleState` keep-rules; `npc_reset` reloads nothing; the CopGenerator
+  chain to `+0x63e0`; `0x10084260` and `0x102c6ff0` are dead. The port work is the wiring above.
   Size: S. Effort: Sonnet / medium.
 - [ ] **25b. Species `TranslateSchedule` overrides and the frenzied pre-table.**
+  Absorbed by 29e (slot 440 and its twenty overrides are layer-21/22 bodies); this story keeps
+  the index below and the registration of `0xc9`/`0xcc`/`0xf0` with their melee family.
   Retail: slot 440 is filled by `CAI_BaseNPCTroika 0x102b12f0` on 62 classes and overridden by
   `CNPC_VAsianVampire 0x10362910`, `CNPC_VBach 0x10363a30`, `CNPC_VChangBros 0x1036b460`,
   `CNPC_VCop 0x10372150`, `CNPC_VDog 0x10374370`, `CNPC_VFrenzyShadow 0x10375f20`,
@@ -366,6 +494,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Consumes: 25. Oracle: § "Species slot-435 overrides all chain" gains a slot-440 twin.
   Size: XS now (the index), grows per species. Effort: Sonnet / low.
 - [ ] **25c. `MaintainSchedule`'s other exits.**
+  Absorbed by 29e (`MaintainSchedule 0x102817c0` is walked whole there); this story keeps the
+  door-block gate, which waits on 11's door selector.
   Retail: `m_pSchedule == NULL` → `GetNewSchedule 0x102814d0` + install in the same loop; an
   installed schedule with zero tasks → `"ERROR: Missing or invalid schedule"` and `SetState(1)`
   through slot `0x4d8`; the `ai_step` debug return; the door-block local from flags2 `0x200`
@@ -553,6 +683,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   shipped map authors one.
   Size: S–M. Effort: Fable / medium; corpus pass on the node keys first.
 - [ ] **26. `GetSchedule`, the pre-selector.**
+  Absorbed by 29e for its eight layer-19+ bodies (`0x102ae920`, base `0x1028a380`, the ideal-state
+  arms); this story keeps the six leaf helpers (29c's verdicts) and the arms' consumer wiring.
   Retail: `GetNewSchedule` (`0x1028a260`) dispatches slot 437 (`CAI_BaseNPCTroika::GetSchedule`
   `0x102ae920`) and, only on 0, slot 438 (`SelectSchedule` `0x102af660`, the state cases 10d,
   10g, 11, 21a port; its `default:` is base `0x1028a380`, whose invalid-state and
@@ -679,6 +811,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   (`GetAbsOrigin`) or slot 220 — a re-read of `0x102b1a20`'s asm, not on this story's path.
   Size: S. Effort: Sonnet / medium.
 - [ ] **10d. The alert selectors and the ladder.**
+  Absorbed by 29e for `SelectSchedule` case 3; this story keeps the alert programs' blobs and
+  the ladder's registration.
   Retail: `SelectSchedule` (`0x102af660`) case 3 runs regardless of what the NPC was doing:
   an investigate program replaces a patrol or interesting-place program through
   `SetSchedule`, and case 1 re-selects that program when the investigation ends (10g, 11).
@@ -917,6 +1051,8 @@ the retail contract the code must match, the job, what it consumes or provides, 
   the accumulator's offset, `TASKS_FACE_TARGET`'s bit and reader.
   Size: L–XL. Effort: Fable / high; corpus pass on the `DIST:` tasks first.
 - [ ] **16b. The composed relationship and the human ideal state.**
+  Absorbed by 29e for `SelectIdealState` (`0x1026f660` / `0x102ad660` / VHuman `0x103851e0`);
+  this story keeps the composed relationship and its consumers.
   Retail: `IRelationType` (`0x10299da0`): self → D_ER; a `D_INSANE` target with my closest
   player not hated and not my enemy → D_HT; target's boss hated or my enemy → D_HT; my boss ==
   target → D_LI; else inherit `boss->IRelationType(target)`, upgraded to D_HT if either hates
@@ -1051,6 +1187,9 @@ the retail contract the code must match, the job, what it consumes or provides, 
   motor read.
   Size: L. Effort: Opus / high.
 - [ ] **21c. The incapacitated victim's consumers.**
+  Absorbed by 29e for its seventeen loop-side bodies (`SetState`, `GatherConditions`, `RunAI`,
+  the task arms, `NPCThink`); this story keeps the victim-side consumers and the `ONE_HIT_KILL`
+  seam.
   Retail: `AttemptFeed` (`0x10168910`) reads the victim's ideal activity (+0xff0), auto-accepts
   on `ACT_DISPOSITION_MESMERIZED 0x104e / ACT_DISORIENTED 0x1068 / ACT_LOST 0x1069 / ACT_COWER
   0x1098` only, so a cowering NPC auto-accepts one time in three. `ONE_HIT_KILL` (bit 30) has
@@ -1068,6 +1207,87 @@ the retail contract the code must match, the job, what it consumes or provides, 
   Oracle: § "The flee state and the cower, disoriented and lost programs" (Activities and the
   feed; Flags the family writes); `feeding.md` § "Step 4, decoded". Unrecovered: nothing.
   Size: S. Effort: Sonnet / medium.
+
+## Build order
+Derived from `docs/vtmb/npc-kernel/order.md` (2026-09-13): the closure's call graph layered so a
+function sits after everything it calls. Layer 0 is the leaves; the think is the top. The
+kernel's spine, by layer:
+
+| Layer | Function |
+|---|---|
+| 0 | `ClearSchedule 0x10280d30`; base `SelectSchedule 0x1028a260` (damaged) |
+| 2–3 | the sound sweep `0x102b1cd0`, the comfort sweep `0x102b1a20` |
+| 13 | the see-unknown sweep `0x102b15c0` |
+| 19–20 | `SetState 0x1026e340`; `NPCInit 0x10273390` |
+| 21–22 | `SelectIdealState 0x1026f660` / Troika `0x102ad660`; `MaintainSchedule 0x102817c0`; `RunTask 0x10288780`; Troika `NPCInit 0x1029a0b0` |
+| 23–24 | `GatherConditions 0x1026ec30`; Troika `RunTask 0x102aacf0`; `StartTask 0x102827f0`; `RunAI 0x1026f110` |
+| 25–26 | `GetSchedule 0x102ae920`; Troika `SelectSchedule 0x102af660`; Troika `StartTask 0x102a1910`; `NPCThink 0x10292de0` |
+
+Two rules follow. A story whose closure reaches a higher layer than a story it consumes is
+ordered after it; the list above keeps that order. A story is *recovery-complete* when every
+function its `Retail:` cites is in the closure with a name and an undamaged body; until then
+its size is provisional. The open stories, as the ledger reads them (functions cited by the
+story's `Retail:` text; `FUN_` = still unnamed):
+
+| Story | Cited | In closure | Max layer | `FUN_` | Damaged |
+|---|---|---|---|---|---|
+| 25a `ClearSchedule` producers | 14 | 10 | 22 | 7 | 0 |
+| 25b species `TranslateSchedule` | 22 | 22 | 22 | 3 | 0 |
+| 25c `MaintainSchedule` exits | 1 | 1 | 3 | 1 | 0 |
+| 24 reachability | 3 | 2 | 20 | 1 | 0 |
+| 10g patrol programs | 8 | 5 | 21 | 5 | 0 |
+| 11 interesting places | 8 | 7 | 20 | 7 | 0 |
+| 27 patrol-point interest | 12 | 8 | 9 | 8 | 0 |
+| 26 `GetSchedule` | 16 | 14 | 25 | 11 | 1 |
+| 28 player-on-head | 2 | 1 | 25 | 1 | 0 |
+| 10i comfort program | 9 | 5 | 23 | 3 | 1 |
+| 10j `CheckTarget` | 11 | 11 | 23 | 10 | 0 |
+| 10d alert selectors | 3 | 1 | 25 | 0 | 0 |
+| 10f unknown-investigation | 3 | 1 | 25 | 1 | 0 |
+| 12b cover and kick | 5 | 3 | 26 | 2 | 0 |
+| 10h hunt-investigation | 2 | 2 | 21 | 2 | 0 |
+| 16a followers | 7 | 4 | 20 | 4 | 0 |
+| 16b composed relationship | 3 | 2 | 23 | 1 | 0 |
+| 17 squads | 7 | 6 | 20 | 6 | 0 |
+| 16c possession and frenzy | 3 | 3 | 21 | 3 | 0 |
+| 21a flee | 10 | 8 | 24 | 5 | 0 |
+| 21c incapacitated consumers | 2 | 1 | 24 | 1 | 0 |
+
+Stories citing no function (22, 10e, 12a, 10k, 13b, 21b) are pipeline or program-blob work, or
+cite their programs by schedule id; they are sized by hand. Cited functions outside the closure
+are the other subsystems' producers (`entries.md` names them) — a story that consumes one names
+the owning spec.
+
+### The sequence, optimized on the ledger (2026-09-13)
+
+The closure's *core* — a family or helper method, or a body touching an NPC-range offset — is
+2,490 functions. By layer band: 0–4 has 1,453 (725 unnamed), 5–9 has 242, 10–14 has 175, 15–19
+has 172, 20–24 has 230, 25–29 has 218. 1,382 of the 2,490 are ≤ 64 bytes. That distribution is
+the argument for building the kernel bottom-up in bulk rather than feature by feature: the bottom
+two bands are shape and accessors, the top two are the interpreter, and every feature story
+today re-walks pieces of both. So:
+
+1. **29a → 29b → 29c → 29d → 29e**, in that order. Each is a layer band; each enters
+   implementation with its checklist generated from the ledger and leaves with its
+   `coverage.md` count at zero for its band.
+2. The open feature stories shrink to what sits **above** the bands already built. The split of
+   each story's cited functions between layers ≤ 9 (29c's) and > 9, from the ledger today:
+   25a 3/9 · 25b 1/21 · 25c 1/0 · 24 1/1 · 10g 2/3 · 11 6/1 · 27 8/0 · 26 6/8 · 28 0/1 ·
+   10i 3/2 · 10j 6/5 · 10d 0/1 · 10f 0/1 · 12b 2/1 · 10h 0/2 · 16a 1/3 · 16b 0/2 · 17 5/1 ·
+   16c 0/3 · 21a 4/4 · 21c 4/17. After 29c, 27 and 11 are wiring only; after 29e, 25b, 25c, 26,
+   10d and 21c's loop half are done and those stories keep only their program blobs, species
+   rows and consumer wiring.
+3. What remains after 29e is **programs and wiring**, and it is ordered by consumer: 25a (the
+   `ClearSchedule` wiring, now one story's worth), the program families in the order the
+   selectors reach them (10d, 10e, 10f, 10h, 10g, 10i/10j, 10k, 11/27, 12a/12b), the social
+   families (16a, 17, 16c, 21a–c), the graph (24, 22), then 28 and 13b.
+4. The tutorial cut comes between 29e and step 3: a reachability query over the ledger (planned
+   as `kernel_ledger --reach`) seeded from `sp_tutorial_1`'s population selects which programs
+   and species rows 0004–0009 actually need, and step 3 is run on that subset first.
+
+The rule the sequence encodes: **a story enters implementation only when its closure is
+recovery-complete** — every cited function named, undamaged, and in a band already built or in
+the story itself. A story that fails the rule is a recovery story first.
 
 ## Seams
 - Provides: the awareness seam (`Cognition.Conditions`, the enemy memory, `Senses.Memory`,

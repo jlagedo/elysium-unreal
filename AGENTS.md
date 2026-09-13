@@ -45,9 +45,11 @@ A reported defect is a question about VtMB, never a request for a patch.
 
 - Treat every visual or gameplay problem as a possible unimplemented VtMB behaviour,
   an unbuilt subsystem, or a missing wire into one. Do not fix the symptom.
-- Before changing code, recover what retail does: the `vtmb-corpus` decompilation
-  (the function, its virtual slot, who overrides it, the fields it reads, the callers),
-  then `docs/vtmb/*.md` for what is already recovered. Cite addresses.
+- Before changing code, recover what retail does. For an NPC question start from the
+  kernel ledger, `docs/vtmb/npc-kernel/` (`functions.md`, `fields.md`, `slots.md`,
+  `entries.md`: what a function touches, who writes a field, who fills a slot, who calls in
+  from outside), then the walked prose in `docs/vtmb/npc-ai/` (`index.md` maps an address to
+  its section), then the `vtmb-corpus` decompilation for what neither holds. Cite addresses.
 - Compare the whole retail behaviour against the port. The deliverable is the port of
   that behaviour: every arm, every state it reads, its priority order, and what it
   writes — with the substrate sources it needs (senses, navigator, sounds, memory)
